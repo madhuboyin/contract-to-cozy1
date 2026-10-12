@@ -249,8 +249,11 @@ test('confirming runs the page\'s gate, then creates the case and its first inpu
     assert.equal(outcome.result.status, 'COMPLETED');
     const receipt = outcome.result.blocks[0];
     assert.equal(receipt.title, 'Review started');
-    assert.match(receipt.description, /not been analyzed/);
-    assert.deepEqual(receipt.actions.map((a) => [a.id, a.operationId, a.entityType, a.entityId]), [['negotiation-shield-review', 'NEGOTIATION_SHIELD_CASES', 'NEGOTIATION_SHIELD_CASE', 'case-new']]);
+    assert.match(receipt.description, /not been analyzed yet/);
+    assert.deepEqual(receipt.actions.map((a) => [a.id, a.operationId, a.entityType, a.entityId]), [
+      ['negotiation-shield-review', 'NEGOTIATION_SHIELD_CASES', 'NEGOTIATION_SHIELD_CASE', 'case-new'],
+      ['negotiation-shield-analyze', 'NEGOTIATION_SHIELD_CASE_ANALYZE', 'NEGOTIATION_SHIELD_CASE', 'case-new'],
+    ]);
   } finally { stubs.restore(); }
 });
 

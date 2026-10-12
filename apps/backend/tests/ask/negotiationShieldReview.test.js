@@ -91,9 +91,12 @@ test('the review never carries raw input text, document keys, file URLs or deskt
     for (const forbidden of ['RAW EXTRACTED DOCUMENT TEXT', 'secret/key.pdf', 'files.example', 'raw description', '/dashboard', 'http']) {
       assert.equal(serialized.includes(forbidden), false, forbidden);
     }
-    // The query reads the case, its latest analysis and its latest draft only: no inputs, documents or buyer finding links.
+    // The query reads the case, its latest analysis and its latest draft, and only the NEWEST INPUT'S TIMESTAMP (whether a run is possible and whether
+    // the details changed since the analysis): never an input's text or data, documents or buyer finding links.
     const [query] = s.queries;
-    assert.deepEqual(Object.keys(query.include).sort(), ['analyses', 'drafts']);
+    assert.deepEqual(Object.keys(query.include).sort(), ['analyses', 'drafts', 'inputs']);
+    assert.deepEqual(query.include.inputs.select, { updatedAt: true });
+    assert.equal(query.include.inputs.take, 1);
     assert.deepEqual(query.where, { id: 'case-1', propertyId: 'prop-1' });
   } finally { s.restore(); }
 });

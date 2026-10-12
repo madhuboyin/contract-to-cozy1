@@ -115,6 +115,8 @@ export type AskOperationId =
   // Start a Negotiation Shield review (slice 2a): a confirmation-gated command reached by the declared "Start a review" action, a scenario choice row or a
   // typed "start a negotiation review". Never reached by fuzzy retrieval.
   | 'NEGOTIATION_SHIELD_CASE_START'
+  // Run a Negotiation Shield analysis (slice 2b): confirmation-gated, reached only by the declared Run the analysis action on a review.
+  | 'NEGOTIATION_SHIELD_CASE_ANALYZE'
   | 'HOME_UPGRADE_SCENARIOS'
   | 'DIY_PROJECTS'
   // DIY project guide (docs/architecture/ASK_COZY_DIY_PROJECT_GUIDE_PLAN.md): a read-only, launch-only walk through ONE DIY project, reached from the row action on DIY_PROJECTS.
@@ -335,6 +337,8 @@ export const ASK_INTERNAL_OPERATION_IDS: ReadonlySet<AskOperationId> = new Set<A
   'MATERIAL_SPEC_ADD',
   // Reached by the declared Start a review action, a scenario choice row, or the deterministic typed-start pattern; never by fuzzy retrieval.
   'NEGOTIATION_SHIELD_CASE_START',
+  // Reached only by the declared Run the analysis action on a review or a started review's receipt; no message pattern.
+  'NEGOTIATION_SHIELD_CASE_ANALYZE',
   'PROJECT_TRACKER_CREATE',
   'PROJECT_TRACKER_COMMAND',
   'HOME_PLANT_ADD',
@@ -636,6 +640,7 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   PROPERTY_PURCHASE_DATE_SET: definition('PROPERTY_PURCHASE_DATE_SET', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'property-purchase-date.set', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   MATERIAL_SPEC_ADD: definition('MATERIAL_SPEC_ADD', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'material-spec.add', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   NEGOTIATION_SHIELD_CASE_START: definition('NEGOTIATION_SHIELD_CASE_START', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'negotiation-shield.start', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS', 'LIMITATION']),
+  NEGOTIATION_SHIELD_CASE_ANALYZE: definition('NEGOTIATION_SHIELD_CASE_ANALYZE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'negotiation-shield.analyze', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   HOME_HABITS_GENERATE: definition('HOME_HABITS_GENERATE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'home-habits.generate', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   DO_NOTHING_SIMULATION_RUN: definition('DO_NOTHING_SIMULATION_RUN', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'do-nothing-simulator.run', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   SERVICE_PRICE_CHECK_RUN: definition('SERVICE_PRICE_CHECK_RUN', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'service-price-radar.check', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),

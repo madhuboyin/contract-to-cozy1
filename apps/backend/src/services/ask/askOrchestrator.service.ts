@@ -95,6 +95,7 @@ import './handlers/plantRecommendations.handler';
 import './handlers/ownershipCostCommands.handler';
 import './handlers/reserveFundCommands.handler';
 import './handlers/negotiationShieldStart.handler';
+import './handlers/negotiationShieldAnalyze.handler';
 export { executeOperationCore, executeOperation, refreshAskExecutionAfterConflict, refreshAskSourceExecution, ASK_MUTATION_IMPACT_MAP, siblingOperationIdsForBuyerTaskMutation, selectSiblingRefreshTargets, capReconciledChildExecutions, reconcileAskExecutionSideEffects } from './execution/executeOperation';
 export { oracleApplianceLabel, oracleLifespanItem, applianceFailureRiskFromView, maintenanceBudgetFromView } from './handlers/applianceOracleBudget.handler';
 export { neighborhoodChangeFeedFromView } from './handlers/aroundYourHome.handler';

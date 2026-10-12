@@ -1,6 +1,6 @@
 # Ask Cozy — Negotiation Shield slice 2 (write path): design
 
-**Status:** Decisions D1–D7 and D9 accepted and D8 revised by the owner (2026-10-12; section 7). D9 and D6 are built and verified (sections 8 and 8a). 2a is built (section 8b); 2b is not.
+**Status:** Decisions D1–D7 and D9 accepted and D8 revised by the owner (2026-10-12; section 7). D9 and D6 are built and verified (sections 8 and 8a). 2a and 2b are built (sections 8b and 8c).
 **Date:** October 12, 2026
 **Parent:** `docs/product/ASK_COZY_ALL_TOOLS_PARITY_IMPLEMENTATION.md` ("Negotiation Shield", recommended order item 1); slice 1 shipped as FRD v1.294 (`a416b23f`).
 **Method:** `docs/architecture/AUDIT_METHODOLOGY.md`. Every factual claim below is labelled **code-traced** (read in source, not run), **executed** (run), or **inferred**. Nothing here is executed against a database or browser (this repository has none). The executed checks are the slice 1 tests recorded in the FRD and the D9 router authorization test (section 8).
@@ -143,6 +143,15 @@ Start from selected confirmed inspection findings; request-for-repair vs credit;
 - **Typed start:** `isNegotiationShieldStartRequest` routes "start/create/begin a negotiation review|case" ahead of the list read; a message that names one scenario goes straight to its form.
 - **Owner step:** `prisma db push` before the new backend serves traffic (FRD v1.297 explains why the order matters).
 - **Not verified:** the rendered form, a real database, and the `db push` itself.
+
+## 8c. 2b — run the analysis (built; FRD v1.298)
+
+- **Built as designed:** declared-action only; confirmation-gated; the page's gate; `analyzeCase`; the shared completion function (D6) with the launching journey; the receipt is the slice 1 review.
+- **Concrete choices:** "Run it again" is offered only when the saved details changed after the last analysis (the reader returns the newest input's `updatedAt`, nothing else); a review with no saved details offers nothing; the receipt begins with an "Analysis saved" progress line.
+- **Idempotency:** a retry is recognised by an analysis generated at or after the execution began (the `MATERIAL_SPEC_ADD` precedent) and is shown, not re-run, with no second journey completion. Accepted edge: a crash between the analysis and the completion leaves the guided step open.
+- **No schema change** in this slice.
+- **Not done / next:** 2c (edit details; this is also what makes "details changed after the analysis" reachable from inside Ask), then attach/parse and buyer mode as their own designs.
+- **Not verified:** a real database and a real guidance journey store; the rendered receipt.
 
 ## 9. Other defects found while reading (not fixed)
 

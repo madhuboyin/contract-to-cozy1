@@ -7,6 +7,7 @@ import { HouseholdRole } from '@prisma/client';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { ensurePropertyAccess } from '../askHandlerSupport';
 import { NEGOTIATION_SHIELD_START_ACTION_ID, NEGOTIATION_SHIELD_START_MESSAGE } from '../support/negotiationShieldStart';
+import { NEGOTIATION_SHIELD_ANALYZE_ACTION_ID, NEGOTIATION_SHIELD_ANALYZE_MESSAGE } from '../support/negotiationShieldAnalyze';
 import { humanDate, money, readableCode } from '../askFormatting';
 import { getNegotiationShieldCaseReviewForProperty, listNegotiationShieldCasesForProperty, type NegotiationShieldCaseReviewDTO } from '../../negotiationShieldCaseList';
 import type { NegotiationShieldCaseSummaryDTO } from '../../negotiationShield.types';
@@ -155,7 +156,14 @@ export function chunkNegotiationDraft(body: string, max = 1100): string[] {
   return chunks;
 }
 
-export function negotiationShieldReviewFromView(review: NegotiationShieldCaseReviewDTO | null): AskOperationResult {
+// "Run the analysis" is offered to a contributor or owner when it is useful: the case has saved details and either no analysis yet or details saved
+// after the last one. A viewer reads the review; nothing is offered that they could not do.
+const runAnalysisAction = (caseId: string, label: string) => ({
+  id: NEGOTIATION_SHIELD_ANALYZE_ACTION_ID, label, interactionType: 'START_WORKFLOW' as const, message: NEGOTIATION_SHIELD_ANALYZE_MESSAGE,
+  operationId: 'NEGOTIATION_SHIELD_CASE_ANALYZE' as const, entityType: NEGOTIATION_SHIELD_CASE_ENTITY, entityId: caseId, style: 'PRIMARY' as const,
+});
+
+export function negotiationShieldReviewFromView(review: NegotiationShieldCaseReviewDTO | null, canRun = false): AskOperationResult {
   if (!review) {
     return {
       status: 'NOT_APPLICABLE', reasonCode: 'NEGOTIATION_SHIELD_CASE_NOT_FOUND',
@@ -170,6 +178,8 @@ export function negotiationShieldReviewFromView(review: NegotiationShieldCaseRev
   const scenario = NEGOTIATION_SCENARIO_LABELS[item.scenarioType] ?? readableCode(item.scenarioType);
   const pricing = (analysis?.pricingAssessment ?? null) as Record<string, unknown> | null;
   const confidenceLabel = pricing && typeof pricing.confidenceLabel === 'string' ? NEGOTIATION_LEVEL_LABELS[pricing.confidenceLabel] ?? null : null;
+  // The saved details changed after this analysis was run, so its findings and draft describe older details.
+  const stale = Boolean(analysis && review.inputsUpdatedAt && new Date(review.inputsUpdatedAt).getTime() > new Date(analysis.generatedAt).getTime());
   const supportLine = [
     scenario,
     item.perspective === 'BUYER' ? 'Buyer mode' : null,
@@ -180,8 +190,13 @@ export function negotiationShieldReviewFromView(review: NegotiationShieldCaseRev
   if (!analysis) {
     blocks.push({
       type: 'SUMMARY', id: 'negotiation-shield-review-summary', title: item.title,
-      body: 'This review has not been analyzed yet, so there are no findings, leverage points or draft message to show. Running an analysis is not currently available in Ask.',
-      tone: 'DEFAULT', supportLine: [scenario, `Updated ${humanDate(new Date(item.updatedAt))}`].join(' · '), actions: [backToReviews],
+      body: !review.hasInput
+        ? 'This review has not been analyzed yet, and it has no saved details to analyze, so there are no findings, leverage points or draft message to show.'
+        : canRun
+          ? 'This review has not been analyzed yet, so there are no findings, leverage points or draft message to show. Run the analysis to prepare them from the details you saved.'
+          : 'This review has not been analyzed yet, so there are no findings, leverage points or draft message to show. A contributor or owner can run the analysis.',
+      tone: 'DEFAULT', supportLine: [scenario, `Updated ${humanDate(new Date(item.updatedAt))}`].join(' · '),
+      actions: canRun && review.hasInput ? [runAnalysisAction(item.id, 'Run the analysis'), backToReviews] : [backToReviews],
     });
     blocks.push(NEGOTIATION_BOUNDARY);
     return { status: 'ANSWERED', reasonCode: 'NEGOTIATION_SHIELD_REVIEW_NOT_ANALYZED', blocks, suggestions: [] };
@@ -189,7 +204,8 @@ export function negotiationShieldReviewFromView(review: NegotiationShieldCaseRev
   blocks.push({
     type: 'SUMMARY', id: 'negotiation-shield-review-summary', title: item.title,
     body: text(analysis.summary, 1500) || 'This review has been analyzed. The findings, leverage and recommended steps are below.',
-    tone: 'DEFAULT', supportLine, actions: [backToReviews],
+    tone: 'DEFAULT', supportLine,
+    actions: canRun && stale ? [runAnalysisAction(item.id, 'Run it again'), backToReviews] : [backToReviews],
   });
 
   // The figures the assessment itself used, so the recommendation can be understood. Only normalized numbers, never the raw input text.
@@ -229,6 +245,13 @@ export function negotiationShieldReviewFromView(review: NegotiationShieldCaseRev
   listBlock('negotiation-shield-findings', 'What the review found', asList(analysis.findings));
   listBlock('negotiation-shield-leverage', 'Where you have leverage', asList(analysis.negotiationLeverage));
   listBlock('negotiation-shield-next-steps', 'Recommended next steps', asList(analysis.recommendedActions));
+  if (stale) {
+    blocks.push({
+      type: 'LIMITATION', id: 'negotiation-shield-stale', severity: 'INFO', title: 'The details changed after this analysis',
+      body: canRun ? 'The saved details changed after this analysis was run. Run it again to refresh the findings and the draft.'
+        : 'The saved details changed after this analysis was run, so the findings and the draft describe the earlier details. A contributor or owner can run it again.',
+    });
+  }
   if (analysis.confidenceExplanation) {
     blocks.push({ type: 'LIMITATION', id: 'negotiation-shield-confidence', title: 'How confident this is', body: text(analysis.confidenceExplanation, 600), severity: 'INFO' });
   }
@@ -254,9 +277,10 @@ export function negotiationShieldReviewFromView(review: NegotiationShieldCaseRev
 }
 
 async function negotiationShieldCasesResult(propertyId: string, launch?: { entityType?: string | null; entityId?: string | null } | null, canStart = false): Promise<AskOperationResult> {
+  // The same contributor floor decides whether a start (list) or a run (review) is offered.
   // The operation registry enforces the viewer floor (the canonical read's own floor); the review is scoped to this property.
   if (launch?.entityType === NEGOTIATION_SHIELD_CASE_ENTITY && launch.entityId) {
-    return negotiationShieldReviewFromView(await getNegotiationShieldCaseReviewForProperty(propertyId, launch.entityId));
+    return negotiationShieldReviewFromView(await getNegotiationShieldCaseReviewForProperty(propertyId, launch.entityId), canStart);
   }
   return negotiationShieldCasesFromView(await listNegotiationShieldCasesForProperty(propertyId), propertyId, canStart);
 }

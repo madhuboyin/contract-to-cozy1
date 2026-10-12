@@ -25,6 +25,8 @@ const OPERATION_BOUNDARIES: Partial<Record<AskOperationId, ReadonlySet<string>>>
   HOME_DIGITAL_WILL: new Set(['digital-will-boundary']),
   PLANT_CARE_OUTLOOK: new Set(['plant-care-boundary']),
   NEGOTIATION_SHIELD_CASES: new Set(['negotiation-shield-boundary']),
+  // The analysis receipt is the review, which carries the same boundary.
+  NEGOTIATION_SHIELD_CASE_ANALYZE: new Set(['negotiation-shield-boundary']),
   HOME_UPGRADE_SCENARIOS: new Set(['home-upgrade-boundary']),
   DIY_PROJECTS: new Set(['diy-boundary']),
   DIY_PROJECT_GUIDE: new Set(['diy-step-safety', 'diy-guide-withdrawn', 'diy-guide-corrected', 'diy-project-guide-boundary', 'diy-task-link']),
@@ -167,9 +169,11 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   // FRD v1.64 gave INCIDENT_CONTINUATION two page links; Ask no longer links to desktop pages, so it offers starting a claim instead.
   INCIDENT_CONTINUATION: new Set(['claim-file-start']),
   // The row's Review action (opens one case's analysis and draft) and the review's way back to the list; the draft itself is text, not an action.
-  NEGOTIATION_SHIELD_CASES: new Set(['negotiation-shield-review', 'negotiation-shield-back', 'negotiation-shield-start']),
+  NEGOTIATION_SHIELD_CASES: new Set(['negotiation-shield-review', 'negotiation-shield-back', 'negotiation-shield-start', 'negotiation-shield-analyze']),
   // The receipt of a started review offers the slice 1 read of that case.
-  NEGOTIATION_SHIELD_CASE_START: new Set(['negotiation-shield-review']),
+  NEGOTIATION_SHIELD_CASE_START: new Set(['negotiation-shield-review', 'negotiation-shield-analyze']),
+  // The receipt is the review, whose way back and re-run actions it carries.
+  NEGOTIATION_SHIELD_CASE_ANALYZE: new Set(['negotiation-shield-back', 'negotiation-shield-analyze']),
   PROPERTY_BRIEFS_LIST: new Set(['property-brief-preview', 'property-brief-prepare', 'property-brief-share', 'property-brief-republish', 'property-brief-test-share', 'property-brief-revoke-share']),
   // FRD v1.44: neither seller-prep operation had an entry, so every action they emitted (even the checklist link) was
   // stripped. The decision item actions are shown inline only when the item's live state allows them.

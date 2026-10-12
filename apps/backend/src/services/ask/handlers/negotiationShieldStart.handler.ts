@@ -18,6 +18,7 @@ import { registerConfirmCapabilityHandler, type ConfirmCapabilityContext, type C
 import { reconcileAskExecutionSideEffects } from '../execution/executeOperation';
 import { ensurePropertyAccess } from '../askHandlerSupport';
 import { humanDate, money } from '../askFormatting';
+import { NEGOTIATION_SHIELD_ANALYZE_ACTION_ID, NEGOTIATION_SHIELD_ANALYZE_MESSAGE } from '../support/negotiationShieldAnalyze';
 import { assertProjectComplianceApplicable } from '../../projectCompliance/context';
 import {
   inferNegotiationStartScenario, isNegotiationShieldStartRequest, isNegotiationStartScenario, NEGOTIATION_SHIELD_CASE_ENTITY_TYPE,
@@ -219,11 +220,14 @@ async function confirmNegotiationShieldStart(ctx: ConfirmCapabilityContext): Pro
     status: 'COMPLETED', reasonCode: 'NEGOTIATION_SHIELD_REVIEW_STARTED',
     blocks: [{
       type: 'WORKFLOW_PROGRESS', id: `negotiation-shield-started-${caseId}`, title: 'Review started', status: 'COMPLETED',
-      description: 'Saved as a draft review. It has not been analyzed and nothing has been sent.',
+      description: 'Saved as a draft review. It has not been analyzed yet and nothing has been sent.',
       details: [{ label: 'Review', value: input.title }, { label: 'Type', value: spec.label }],
       actions: [{
         id: 'negotiation-shield-review', label: 'Review', interactionType: 'START_WORKFLOW' as const, message: REVIEW_MESSAGE, operationId: 'NEGOTIATION_SHIELD_CASES',
-        entityType: NEGOTIATION_SHIELD_CASE_ENTITY_TYPE, entityId: caseId, style: 'PRIMARY' as const,
+        entityType: NEGOTIATION_SHIELD_CASE_ENTITY_TYPE, entityId: caseId, style: 'SECONDARY' as const,
+      }, {
+        id: NEGOTIATION_SHIELD_ANALYZE_ACTION_ID, label: 'Run the analysis', interactionType: 'START_WORKFLOW' as const, message: NEGOTIATION_SHIELD_ANALYZE_MESSAGE,
+        operationId: 'NEGOTIATION_SHIELD_CASE_ANALYZE', entityType: NEGOTIATION_SHIELD_CASE_ENTITY_TYPE, entityId: caseId, style: 'PRIMARY' as const,
       }],
     }],
     suggestions: [],

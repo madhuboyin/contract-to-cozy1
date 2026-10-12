@@ -81,12 +81,18 @@ export type NegotiationShieldCaseReviewDTO = {
   case: NegotiationShieldCaseSummaryDTO;
   latestAnalysis: NegotiationShieldAnalysisDTO | null;
   latestDraft: NegotiationShieldDraftDTO | null;
+  /**
+   * Whether the case has any saved input, and when the newest was last saved. Timestamps only: the input's text and structured data are never
+   * selected. It tells Ask whether an analysis can be run and whether the saved details changed after the last one.
+   */
+  hasInput: boolean;
+  inputsUpdatedAt: string | null;
 };
 
 /**
  * One case's stored analysis and latest draft, scoped to the property (a case of another property is "not found", not "forbidden").
- * The same ordering as NegotiationShieldService.getCaseDetail, but it selects no inputs, no documents and no buyer finding links, so
- * raw input text, document storage keys and file URLs are never loaded. Returns null when the case is not on this property.
+ * The same ordering as NegotiationShieldService.getCaseDetail, but it selects no input content, no documents and no buyer finding links (only
+ * the newest input's updatedAt), so raw input text, document storage keys and file URLs are never loaded. Returns null when the case is not on this property.
  */
 export async function getNegotiationShieldCaseReviewForProperty(propertyId: string, caseId: string): Promise<NegotiationShieldCaseReviewDTO | null> {
   const caseModel = (prisma as any).negotiationShieldCase;
@@ -98,10 +104,14 @@ export async function getNegotiationShieldCaseReviewForProperty(propertyId: stri
     include: {
       analyses: { orderBy: [{ generatedAt: 'desc' }, { createdAt: 'desc' }], take: 1 },
       drafts: { orderBy: [{ isLatest: 'desc' }, { createdAt: 'desc' }], take: 1 },
+      inputs: { select: { updatedAt: true }, orderBy: [{ updatedAt: 'desc' }], take: 1 },
     },
   });
   if (!record) return null;
+  const newestInput = Array.isArray(record.inputs) && record.inputs[0] ? record.inputs[0] : null;
   return {
+    hasInput: Boolean(newestInput),
+    inputsUpdatedAt: newestInput ? asIsoString(newestInput.updatedAt) : null,
     case: serializeNegotiationShieldCase(record),
     latestAnalysis: Array.isArray(record.analyses) && record.analyses[0] ? serializeNegotiationShieldAnalysis(record.analyses[0]) : null,
     latestDraft: Array.isArray(record.drafts) && record.drafts[0] ? serializeNegotiationShieldDraft(record.drafts[0]) : null,

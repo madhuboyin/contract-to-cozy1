@@ -278,6 +278,7 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   HOME_JOURNEY_SET: 'How you are using this home is reviewed and then recorded after your confirmation.',
   MATERIAL_SPEC_ADD: 'The material is reviewed and then recorded for this home after your confirmation.',
   NEGOTIATION_SHIELD_CASE_START: 'Your negotiation review is saved as a draft only after you review and confirm it; it is not analyzed or sent.',
+  NEGOTIATION_SHIELD_CASE_ANALYZE: 'The analysis runs and its findings and draft are saved only after you confirm; nothing is sent to anyone.',
   HOME_PLANT_ADD: 'The plant is reviewed and then added to this home after your confirmation.',
   ROOM_PLANT_RECOMMENDATIONS: 'Room preferences are reviewed and ranked plant recommendations are generated after your confirmation.',
   OWNERSHIP_COST_COMMAND: 'An ownership-cost planning choice is reviewed and recorded only after confirmation.',
