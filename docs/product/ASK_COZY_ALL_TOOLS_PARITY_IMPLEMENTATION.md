@@ -45,7 +45,10 @@ Three further tools are an intentional boundary and eight are implemented, so th
 | Residual gap | A bounded desktop control that Ask does not yet offer |
 | Intentional boundary | Deliberately not provided in Ask, with a recorded reason |
 | Needs verification | Believed built or missing, but not checked against the code |
-| Needs product decision | A product choice is required before any build |
+| Decided boundary | A recorded product decision keeps this out of Ask; reopen only deliberately |
+| Needs product decision | Building it would add new domain behavior, reverse a privacy or safety boundary, or has no canonical workflow to reuse |
+
+**A missing Ask command is a product decision only when it introduces new domain behavior, reverses an established privacy or safety boundary, or lacks an authoritative canonical workflow.** "Not currently available in Ask" describes present capability and does not by itself need approval; otherwise it is a *Residual gap* (parity or implementation work). The four-section classification is in [Open items by kind](#open-items-by-kind).
 
 **Verification** says how the row was established: a code read with a date and the evidence used, or *Not re-verified* where the row is carried forward from an earlier review. A row that was not re-verified must not be quoted as current fact.
 
@@ -190,7 +193,7 @@ This inventory is a prioritization register, not a claim that every listed deskt
 | Tool | Status | Current Ask coverage | Primary parity work | Verified and evidence |
 | --- | --- | --- | --- | --- |
 | Negotiation Shield | Residual gap; archive is Needs product decision | Lists cases (read-only, with no desktop links) | Case detail; create a case and start a buyer negotiation; save the input; attach and parse a document; run the analysis and draft; record the buyer outcome | **Verified 2026-10-12**; see the section above |
-| Home Continuity Plan | Residual gap | Read-only summary | Add/edit contacts, access notes, shutoff details and instructions; review missing sections; export. The read deliberately keeps access notes and contacts out of conversation (FRD v1.54), so collecting them is a product decision | Not re-verified. Source: earlier review; FRD v1.252 |
+| Home Continuity Plan | Needs product decision (privacy) for sensitive capture; other edits Residual gap | Read-only summary | Add/edit contacts, access notes, shutoff details and instructions; review missing sections; export. The read deliberately keeps access notes and contacts out of conversation (FRD v1.54), so collecting them is a product decision | Not re-verified. Source: earlier review; FRD v1.252 |
 | Financing | Residual gap | Mortgage-detail capture exists through refinance, but financing as a whole is incomplete | Full financing-profile review/correction; loans and liens; payment/balance updates; scenario management | Not re-verified |
 | Permits | Residual gap | No complete tool-specific conversational journey | Search/add a permit; update status; attach documents; connect to a project; close/correct | Not re-verified |
 | Price Finalization | Residual gap | Lists saved records | Create/finalize; update accepted terms; connect booking/project; archive/delete. Depends on quote selection (see Quote Comparison) | Not re-verified |
@@ -215,8 +218,8 @@ Project Tracker appeared in the original P0 list as "lists projects." It is remo
 | Home Risk Replay | Residual gap | Historical-event detail; evidence/correction; filters; relevant follow-ups | Not re-verified |
 | Neighborhood Change Radar | Residual gap | Filters; source detail; tracked areas/preferences; relevant follow-ups | Not re-verified |
 | Home Briefing / Home Gazette | Residual gap | Briefing preferences, editions, saved state and complete article actions | Not re-verified |
-| Appliance Oracle | Needs product decision | Calculated risk exists; replacement recommendations are not currently available in Ask pending a product decision | Not re-verified |
-| Maintenance Budget Planner | Needs product decision | Forecast exists; full assumptions and AI-tip disposition are not currently available in Ask pending a product decision | Not re-verified |
+| Appliance Oracle | Decided boundary (FRD v1.70, option A, 2026-09-24) | Calculated risk is shown; model-generated replacement picks are excluded by decision, with tests that fail on a model call from Ask | Not re-verified; decision cited from the FRD |
+| Maintenance Budget Planner | AI tips: Decided boundary (FRD v1.70). Editable deterministic assumptions: Residual gap | Forecast exists; AI tips are excluded by the v1.70 decision; whether editable deterministic assumptions are separable from it has not been checked | Not re-verified |
 
 ### P2 — central job mostly covered; bounded controls remain (14 tools)
 
@@ -258,7 +261,7 @@ Several other handlers still build `/dashboard/properties/...` links. The answer
 | The create phrasing "Create a quote comparison (workspace)" routed to `INVENTORY_ITEM_CREATE` instead of `QUOTE_COMPARISON_CREATE` | Fixed 2026-10-12 | The quote-comparison create match now runs before the generic "create <anything>" inventory match in `askOperationRegistry.ts`; `quoteComparisonCreateRouting.test.js` covers eight phrasings and the unaffected inventory and review phrasings; the `askGovernance` golden prompt passes |
 | Project Tracker: list and receipt links | Fixed | Commit `6c06840b`; appendix |
 | The generic "add/record/create <anything>" inventory match claimed other record types: "Create an insurance claim", "Create a guided plan" and "Add a household member" bypassed their commands, and projects, plants, material specs, briefs, checklists, documents, deposits and similar produced an inventory-item form | Fixed 2026-10-12 | `inventoryCreatePattern` in `askOperationRegistry.ts` now also excludes those nouns within four words of the verb; `inventoryCreateRouting.test.js` (3 tests) fails on the old pattern. Groups still open: the intended command for "Add a closing task" (buyer task or maintenance) and message routes for Reserve Fund contributions are product questions (Needs product decision) |
-| Handler-wide sweep (2026-10-12): see [Handler sweep](#handler-sweep-2026-10-12) | Classified, not fixed | Static scan of `services/ask`; results below |
+| Handler-wide sweep (2026-10-12): see [Handler sweep](#handler-sweep-2026-10-12) | Fixed 2026-10-12 (sweep complete); three items left on purpose, listed after the batches | `askNoDesktopLinksGuard` holds 9 path literals in 3 files and 1 copy match in 1 file |
 
 The handler-wide sweep that classified the remaining handlers is recorded in [Handler sweep](#handler-sweep-2026-10-12). `services/ask/support/capture.ts` returns desktop fallback paths for several operations' capture fallbacks (for example `QUOTE_COMPARISON_REVIEW` returns `/tools/quote-comparison`); those are included in the sweep's category A.
 
@@ -325,17 +328,62 @@ A static scan of `services/ask` (handlers, support, execution and the top-level 
 | HVAC decision, Inspection and Property Summary | 2026-10-12 | `hvacDecision.handler.ts` emitted three `open-home-actions` links (built by `specialistHomeOperationsHref`) and row links on candidates and outstanding items, and told the user to "open the Specialist panel" or the "in-app decision panel". `inspection.handler.ts` emitted five `open-inspection` / `open-finding` link actions and per-finding hub row links through `inspectionHubHref`. `propertySummary.handler.ts` emitted `open-property-record` ("Review missing details" / "Review home details") and linked its area rows to capture fallback pages. Removed every page action and row link, the two helpers and `inspectionHubHref`'s export; the HVAC copy now says the Specialist's questions are answered by replying in Ask. Findings were already inline records, and area details are added through the Ask area-capture rows, so nothing a user could do was removed. Retired allowlist ids: `open-inspection`, `open-finding`, `open-property-record`, the PROPERTY_SUMMARY collection links, `open-warranties` (warranty confirm) and `open-inventory` for the HVAC operations. | `inspectionHubCapabilitySlice` and `propertySummaryOverview` updated to assert no action and no `/dashboard/` path; `propertySummaryEmptyHome`, `areaCaptureRuntime`, `hvacDecisionDisclosureBlocks`, `inspectionFindingDeck` pass; `askNoDesktopLinksGuard` baselines lowered (3 path, 6 copy; it would fail on the previous handlers); backend `tsc --noEmit` clean. `hvacDecisionRouting` (1), `askGovernance`, `askInteractionCoverageMatrix`, `askRoutingCalibration`, `askTrustArchitecture`, `capabilityHandlerRegistry` and two measurement tests fail identically on HEAD before this change. No new HVAC-specific behavioral test was added; HVAC is covered by the guard only. |
 | Shared plumbing | 2026-10-12 | `conversationalCapture.ts` (Sell / Hold / Rent goal blocks) emitted `open-sell-hold-rent`, two `open-seller-prep` actions and a seller-prep row link; `capabilityDiscovery.ts` emitted `explore-tools` and `explore-available-tools` to the tools hub; `askCapture.ts` emitted two `open-property-record` actions on the area-capture permission and allowlist refusals (and told the user to add details "from your home record"); `askConcierge.ts` built a `/dashboard` home href for the priority list. Removed all of them and the area-capture fallback helpers (`areaCaptureFallbackHref`, anchors); the priority list's `href` now points at the Ask conversation because the contract still requires the field, and stored capture requests with no fallback now get none instead of a computed desktop form. The three page-only AI analyzer cards (Value Tracker, Energy Audit, Visual Inspector) now say the analysis "is not available inside Ask yet" instead of "on its own page". | `zeroOperationReclassificationSlice`, `capabilityDiscoveryStarterReadiness` (updated to assert no action and no tools path), `conversationalCapture` 75/75, `askNoDesktopLinksGuard` 3/3 with baselines lowered; 34 related suites fail identically before and after (4 failures: `askGovernance`, `askInteractionCoverageMatrix`, `healthGapCapture`, `homeRecordAdds`); backend `tsc --noEmit` clean. No new behavioral tests for the Concierge href, `conversationalCapture` blocks or the area-capture refusals. |
 
-**Left on purpose after the shared plumbing round (needs an owner decision):**
+**Left on purpose after the shared plumbing round:** none of these is a defect; the second is not documented as decided and needs an owner to confirm.
 
 - `askFocusedGuidance.ts` (5 paths): it *parses* incoming desktop hrefs from Home Action CTAs to route them into Ask; they are inputs, not links Ask emits, so removing them would stop those CTAs from landing in Ask.
 - `support/capture.ts` `captureFallbackHref` (3 paths) feeds the "Correct home information" menu item (`HOME_RECORD` correction in `askFeedback.ts`), which redirects the user to the desktop page for the operation. That is an explicit, user-chosen escape hatch rather than an answer link, so it is not stripped by the trust pass. Decide whether it should stay, or become an in-Ask correction.
 - `projectTracker.handler.ts` (1 path, 1 copy match): the closeout recipient link, shown as copyable text; unchanged.
 
+## Open items by kind
+
+Classified 2026-10-12 after the handler sweep, from an external review of the first draft of this list, which had called every unbuilt Ask command a pending product decision. Statements that could not be verified against the FRDs are marked.
+
+### 1. Product decisions genuinely required
+
+| Item | Why it is a decision | Verified |
+| --- | --- | --- |
+| Record the professional close (Buyer Closing) | Consequential: depends on identification, funds and wire-fraud checks. The Buyer FRD records explicit professional close as a desktop capability; that it is formally *open* for Ask was not found in the Ask FRD | Partly: the open status is the reviewer's statement, not located |
+| Home Continuity Plan sensitive capture (access notes, contacts, shutoff details) | The read deliberately keeps these out of conversation (FRD v1.54); adding writes reverses that policy | Yes: this register and FRD v1.54 |
+| Emergency Help troubleshooter | Safety: needs explicit scope, escalation language, prohibited advice and emergency-service boundaries; claim continuation currently says it is unavailable | Yes |
+| Negotiation Shield archive | `ARCHIVED` is a readable state with no canonical writer or desktop action, so archiving is new behavior, not parity | Yes: see the Negotiation Shield section |
+
+### 2. Previously decided boundaries (reopen only deliberately)
+
+| Item | Decision | Verified |
+| --- | --- | --- |
+| Appliance Oracle replacement picks; Budget Planner AI tips | FRD v1.70, option A, 2026-09-24: show calculated risk and forecast, exclude model-generated recommendations | Yes: FRD v1.70 |
+| Value Tracker, Energy Audit, Visual Inspector | Intentional boundary until they have durable canonical results and governed conversational lifecycles | Yes: this register |
+| "Correct home information" redirect to the desktop page | Reported as retained by owner decision as an explicit user-chosen escape hatch | **Not verified:** no FRD statement was found; owner to confirm |
+| `askFocusedGuidance.ts` incoming-href parsing | Inputs from Home Action CTAs, not links Ask emits | Yes: code read |
+
+### 3. Residual parity backlog (desktop behavior and canonical writes exist)
+
+| Item | Note |
+| --- | --- |
+| Price Finalization writes | Sequencing, mainly the dependency on quote selection in Quote Comparison |
+| Coverage comparison writes (verified policy, quote, keep/shop decision) | Must preserve owner-only access and evidence verification |
+| Refinance Loan Estimates (add offers, record decision) | Safeguards for document sensitivity and lender-term fidelity |
+| Start a renovation case | Ordinary parity work |
+| Property Tax appeal lifecycle | Needs jurisdiction and evidence disclaimers and confirmation |
+| Guidance journey step tools | Inventory per step: some need adapters to existing tools, only genuinely new behavior needs a decision |
+| Budget Planner editable deterministic assumptions | Separable from the settled AI-tip exclusion only if it passes the check above |
+| Rows in the P0, P1 and P2 tables above | Carried forward, not re-verified |
+
+Reuse of an existing service does not establish low cost: coverage writes involve policy verification and provenance, Loan Estimates may involve sensitive upload and extraction, and appeals are jurisdiction-sensitive.
+
+### 4. Routing and UX defects
+
+| Item | Note |
+| --- | --- |
+| Reserve Fund direct-message routing | The governed contribution command already exists; this is a routing gap with no new domain behavior. Suggested first target |
+| "Add a closing task" | Ambiguous; needs an intent or clarification decision, not a capability decision |
+
 ## Recommended implementation order (advisory)
 
 This order is a suggestion, not a commitment. It has no owner and no committed dates; promoting it to a roadmap requires an owner and a status per slice.
 
-1. Negotiation Shield and Home Continuity Plan.
+0. Reserve Fund direct routing (a routing defect with an existing command; see [Open items by kind](#open-items-by-kind)).
+1. Negotiation Shield and Home Continuity Plan (the latter's sensitive capture only after the privacy decision).
 2. Financing, Permits and Price Finalization.
 3. Home Digital Twin and Quote Comparison.
 4. Break-Even, Capital Timeline and Sell / Hold / Rent.

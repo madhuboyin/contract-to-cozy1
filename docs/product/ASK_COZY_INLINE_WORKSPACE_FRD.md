@@ -1,9 +1,11 @@
 # Ask Cozy — Inline Workspace Product Requirements Document
 
-**Version:** 1.288
+**Version:** 1.289
 **Date:** October 12, 2026
 **Status:** Approved product direction; implementation is partial and tracked by requirement
 **Scope:** Ask Cozy interaction across homeowner-facing domains on desktop and mobile, including lightweight capability discovery and Ask-native completion
+
+**Revision 1.289 — all-tools register reclassified into four kinds of open item (documentation only; 2026-10-12; `docs/product/ASK_COZY_ALL_TOOLS_PARITY_IMPLEMENTATION.md`, "Open items by kind"):** the first list of "pending product decisions" treated every unbuilt Ask command as one. The register now separates (1) genuine product decisions: professional close, Continuity Plan sensitive capture, Emergency Help, Negotiation Shield archive; (2) previously decided boundaries: Gemini output under v1.70, upload analyzers, the correction escape hatch (undocumented, owner to confirm); (3) residual parity backlog; (4) routing defects: Reserve Fund direct routing and closing-task disambiguation. Adds a "Decided boundary" status, defines "Needs product decision" narrowly, and marks the handler sweep row fixed. No code changed.
 
 **Revision 1.288 — shared plumbing no longer links to desktop pages (IW-TRAD-002; owner direction, 2026-10-12; `docs/product/ASK_COZY_ALL_TOOLS_PARITY_IMPLEMENTATION.md`, "Batches completed"):** the fifteenth batch. **Found:** Sell / Hold / Rent goal blocks carried workspace and seller-prep links, capability discovery carried tools-hub links, the area-capture refusals carried `open-property-record`, and the Concierge priority list built a `/dashboard` href. **Built:** none emits a desktop link; the area-capture fallback helpers are gone; three page-only analyzer cards say the analysis is not available inside Ask yet. **Left on purpose:** `askFocusedGuidance` (it parses incoming Home Action hrefs), the HOME_RECORD correction redirect in `askFeedback` (an explicit escape hatch; owner decision), and the project-closeout recipient text. *Executed:* `zeroOperationReclassificationSlice`, `capabilityDiscoveryStarterReadiness`, `conversationalCapture`, `askNoDesktopLinksGuard` 3/3 with baselines lowered, 34 related suites unchanged against HEAD, backend `tsc --noEmit` clean. *Not run:* a real browser or database, the full `tests/ask` suite.
 
