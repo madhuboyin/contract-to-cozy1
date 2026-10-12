@@ -7,6 +7,8 @@
 **Prototype:** [Ask Cozy launch validation](prototypes/ask-cozy-launch-validation.html) (validated clickable prototype)
 **Primary requirements:** `ASK_COZY_INLINE_WORKSPACE_FRD.md`, `ASK_COZY_INTERACTION_MODEL_UI_FRD.md`, and `ASK_COZY_PRIMARY_INTERFACE_REDESIGN.md`
 
+Cross-tool desktop parity, implementation status, remaining P0/P1/P2 gaps, and the shared compact-form recommendations are consolidated in [`ASK_COZY_ALL_TOOLS_PARITY_IMPLEMENTATION.md`](ASK_COZY_ALL_TOOLS_PARITY_IMPLEMENTATION.md). This document remains the deeper prototype-to-presentation audit.
+
 ## 1. Executive conclusion
 
 The current implementation does not need a new conversation runtime. It already has the difficult foundations: property-safe sessions, typed response blocks, inline capture, confirmation, idempotent execution, pending-outcome recovery, evidence and provenance, result refresh, continuation, responsive history, and accessible voice input.

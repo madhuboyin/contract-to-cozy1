@@ -2,7 +2,7 @@
 
 ## Purpose and document ownership
 
-This document records the desktop-to-conversation parity audit for Project Tracker and maps each identified gap to its Ask Cozy implementation.
+This document is the Project Tracker detail appendix to the all-tools register in [`ASK_COZY_ALL_TOOLS_PARITY_IMPLEMENTATION.md`](ASK_COZY_ALL_TOOLS_PARITY_IMPLEMENTATION.md). It records the desktop-to-conversation parity audit for Project Tracker and maps each identified gap to its Ask Cozy implementation.
 
 The authoritative product requirements remain in [`LIVE_PROJECT_EXECUTION_TRACKER.md`](../functional/LIVE_PROJECT_EXECUTION_TRACKER.md). This companion is intentionally separate because it records a channel-specific audit, implementation status, code ownership, validation evidence, and residual differences. New product behavior belongs in the FRD first; this document should then be updated to describe how Ask Cozy exposes that behavior.
 

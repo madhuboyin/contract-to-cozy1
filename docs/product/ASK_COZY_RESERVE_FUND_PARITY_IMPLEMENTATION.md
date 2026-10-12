@@ -1,5 +1,7 @@
 # Ask Cozy Reserve Fund parity
 
+This is the Reserve Fund detail appendix to the all-tools register in [`ASK_COZY_ALL_TOOLS_PARITY_IMPLEMENTATION.md`](ASK_COZY_ALL_TOOLS_PARITY_IMPLEMENTATION.md).
+
 Ask Cozy's `CAPITAL_RESERVE_PLAN` now includes the canonical Reserve Fund state and workflows previously available only in the traditional Reserve Fund Planner.
 
 The read result includes current balance, total active target, funded percentage, monthly recommendation, near-term shortfall, current planning posture, the calculation method, active and retired allocations, recent contribution history, and pending expense-reconciliation suggestions. The existing capital-window timeline and 5/10-year horizon control remain available.

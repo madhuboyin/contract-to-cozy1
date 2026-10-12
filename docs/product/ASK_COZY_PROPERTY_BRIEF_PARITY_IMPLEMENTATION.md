@@ -1,5 +1,7 @@
 # Ask Cozy Property Brief parity
 
+This is the Property Brief detail appendix to the all-tools register in [`ASK_COZY_ALL_TOOLS_PARITY_IMPLEMENTATION.md`](ASK_COZY_ALL_TOOLS_PARITY_IMPLEMENTATION.md).
+
 Ask Cozy's Property Brief capability now supports the complete governed lifecycle previously available only on the traditional Property Brief page.
 
 `PROPERTY_BRIEFS_LIST` remains the viewer-safe read. It lists saved briefs and can now open the exact frozen recipient snapshot inline. The preview preserves included and excluded sections, source labels, verification states, as-of dates, sensitive-section labels, the limitation statement, and controlled-link history. Recipient names and email addresses remain out of the conversation transcript.
