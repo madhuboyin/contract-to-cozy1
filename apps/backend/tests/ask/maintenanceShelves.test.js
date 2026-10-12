@@ -217,3 +217,54 @@ test('the maintenance answer offers the in-Ask recommended-task list to a contri
   });
   assert.ok(checked.result.blocks.find((block) => block.id === 'maintenance-groups').actions.some((candidate) => candidate.id === 'maintenance-templates-browse'), 'kept by the answer checker');
 });
+
+// Maintenance batch of the handler sweep (docs/product/ASK_COZY_ALL_TOOLS_PARITY_IMPLEMENTATION.md): Ask links to no desktop Maintenance
+// page (owner decision, 2026-10-10), so the status answers carry no page action, no row link and no "carries over to the page" copy.
+test('the maintenance status answers link to no desktop page, whatever the filter, scope or role', async () => {
+  const tasks = () => [
+    task('filter', { title: 'Replace HVAC filter', nextDueDate: relative(-12) }),
+    task('flush', { title: 'Flush water heater', nextDueDate: relative(5) }),
+    task('done', { title: 'Service furnace', status: 'COMPLETED', lastCompletedDate: relative(-40) }),
+  ];
+  for (const [message, role] of [
+    ['What maintenance is pending?', 'OWNER'],
+    ['Only show overdue tasks', 'OWNER'],
+    ['Show my HVAC maintenance this month', 'OWNER'],
+    ['What maintenance is pending?', 'VIEWER'],
+    ['Create a maintenance task', 'OWNER'],
+  ]) {
+    install(tasks(), role);
+    const result = await invoke(message, role);
+    const text = JSON.stringify(result);
+    assert.equal(text.includes('/dashboard/'), false, `${message} (${role})`);
+    assert.equal(/carry over to the Maintenance page|View all in Maintenance|Open Maintenance/.test(text), false, `${message} (${role})`);
+    for (const block of result.blocks) {
+      for (const action of block.actions ?? []) assert.equal(action.href, undefined, `${message} ${block.id}`);
+      for (const section of block.sections ?? []) for (const item of section.items) assert.ok(item.href == null, `${message} ${item.id}`);
+    }
+  }
+});
+
+test('creating a task offers the in-conversation workflow and no page link, and a viewer is told who can create one', async () => {
+  const withCreateReads = (role) => {
+    install([], role);
+    const base = prismaModule.prisma;
+    prismaModule.prisma = new Proxy({
+      property: { findUnique: async () => ({ timezone: 'America/New_York' }) },
+      propertyMaintenanceTask: { findMany: async () => [] },
+    }, { get(target, model) { if (model === 'then') return undefined; if (model in target) return target[model]; return base[model]; } });
+  };
+  withCreateReads('OWNER');
+  const owner = await capabilityInvoke('MAINTENANCE_TASK_CREATE', { userId: 'u1', propertyId: 'p1', message: 'Add a task to replace the HVAC filter next month' }, {
+    propertyAccess: { role: 'OWNER', userId: 'u1', propertyId: 'p1' },
+  });
+  assert.equal(JSON.stringify(owner).includes('/dashboard/'), false);
+  assert.ok(['NEEDS_CONTEXT', 'NEEDS_CONFIRMATION'].includes(owner.status), owner.status);
+  withCreateReads('VIEWER');
+  const viewer = await capabilityInvoke('MAINTENANCE_TASK_CREATE', { userId: 'u1', propertyId: 'p1', message: 'Add a task to replace the HVAC filter next month' }, {
+    propertyAccess: { role: 'VIEWER', userId: 'u1', propertyId: 'p1' },
+  });
+  assert.equal(viewer.reasonCode, 'ASK_PERMISSION_REQUIRED');
+  assert.deepEqual(viewer.blocks[0].actions, []);
+  assert.equal(JSON.stringify(viewer).includes('/dashboard/'), false);
+});

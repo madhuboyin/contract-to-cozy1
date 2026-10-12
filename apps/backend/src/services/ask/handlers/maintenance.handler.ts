@@ -247,14 +247,13 @@ export async function maintenanceTaskCreateResult(
   template?: { id: string; prefill?: Partial<MaintenanceTaskWorkflowInput> } | null,
 ): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
-  const maintenanceHref = `/dashboard/maintenance?propertyId=${encodeURIComponent(propertyId)}`;
   if (access.role === HouseholdRole.VIEWER) {
     return {
       status: 'BLOCKED', reasonCode: 'ASK_PERMISSION_REQUIRED',
       blocks: [{
         type: 'SUMMARY', id: 'maintenance-create-permission', title: 'A contributor or owner needs to create this task',
         body: 'Creating a maintenance task changes the shared home record. Viewers can review tasks but cannot add or modify them.',
-        tone: 'CAUTION', actions: [{ id: 'open-maintenance', label: 'Review maintenance', href: maintenanceHref, style: 'SECONDARY' }],
+        tone: 'CAUTION', actions: [],
       }],
       suggestions: [],
     };
@@ -276,7 +275,7 @@ export async function maintenanceTaskCreateResult(
       blocks: [{
         type: 'SUMMARY', id: 'maintenance-create-input', title: template ? 'Review the recommended task' : 'Add the task details',
         body: 'Nothing has been created yet. Add the minimum useful details, then review the task before it is saved.',
-        tone: 'DEFAULT', actions: [{ id: 'open-maintenance', label: 'Open Maintenance instead', href: maintenanceHref, style: 'SECONDARY' }],
+        tone: 'DEFAULT', actions: [],
       }],
       captureRequests: [{
         requirementId: `maintenance-task-${workflowVersion.slice(0, 20)}`,
@@ -328,7 +327,7 @@ export async function maintenanceTaskCreateResult(
     blocks: [{
       type: 'SUMMARY', id: 'maintenance-create-review', title: 'Review this maintenance task',
       body: 'No task has been created yet. Confirm the shared-home record below or cancel without saving.',
-      tone: 'DEFAULT', actions: [{ id: 'open-maintenance', label: 'Open Maintenance', href: maintenanceHref, style: 'SECONDARY' }],
+      tone: 'DEFAULT', actions: [],
     }],
     confirmation: {
       confirmationId: `maintenance-task-${propertyId}-${confirmationVersion}`,
@@ -471,14 +470,13 @@ export async function maintenanceTaskCompleteResult(
   sourceExecutionId?: string | null,
 ): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
-  const maintenanceHref = `/dashboard/maintenance?propertyId=${encodeURIComponent(propertyId)}`;
   if (access.role === HouseholdRole.VIEWER) {
     return {
       status: 'BLOCKED', reasonCode: 'ASK_PERMISSION_REQUIRED',
       blocks: [{
         type: 'SUMMARY', id: 'maintenance-complete-permission', title: 'A contributor or owner needs to complete this task',
         body: 'Completing a task changes the shared Maintenance record and may update recurring schedules and Home Actions. Viewers remain read-only.',
-        tone: 'CAUTION', actions: [{ id: 'open-maintenance', label: 'Review maintenance', href: maintenanceHref, style: 'SECONDARY' }],
+        tone: 'CAUTION', actions: [],
       }],
       suggestions: [],
     };
@@ -495,7 +493,7 @@ export async function maintenanceTaskCompleteResult(
       blocks: [{
         type: 'SUMMARY', id: 'maintenance-complete-empty', title: 'No open maintenance task is available to complete',
         body: 'No pending, in-progress, or needs-review task is recorded for this home. Ask will not create a completion without a canonical task.',
-        tone: 'DEFAULT', actions: [{ id: 'open-maintenance', label: 'Open maintenance', href: maintenanceHref, style: 'PRIMARY' }],
+        tone: 'DEFAULT', actions: [],
       }],
       suggestions: [],
     };
@@ -520,7 +518,7 @@ export async function maintenanceTaskCompleteResult(
         body: matched
           ? 'This project follow-up requires an outcome before completion. Nothing has been changed yet.'
           : 'Ask could not identify one open task with enough confidence. Select the exact canonical task; nothing will change until you confirm.',
-        tone: 'DEFAULT', actions: [{ id: 'open-maintenance', label: 'Open Maintenance instead', href: maintenanceHref, style: 'SECONDARY' }],
+        tone: 'DEFAULT', actions: [],
       }],
       captureRequests: [{
         requirementId: `maintenance-complete-${workflowVersion.slice(0, 20)}`,
@@ -557,7 +555,7 @@ export async function maintenanceTaskCompleteResult(
     blocks: [{
       type: 'SUMMARY', id: 'maintenance-complete-review', title: `Review completion for ${selected.title}`,
       body: `No status has changed yet.${selected.isRecurring && selected.frequency ? ' Confirming will complete this occurrence and calculate the next due date.' : ''}`,
-      tone: 'DEFAULT', actions: [{ id: 'open-task', label: 'Open task', href: `${maintenanceHref}&taskId=${encodeURIComponent(selected.id)}&from=ask`, style: 'SECONDARY' }],
+      tone: 'DEFAULT', actions: [],
     }],
     confirmation: {
       confirmationId: `maintenance-complete-${selected.id}-${confirmationVersion}`,
@@ -657,7 +655,6 @@ export async function maintenanceTaskUpdateResult(userId: string, propertyId: st
   if (typedTarget.kind === 'STALE') return staleSuggestedActionResult();
   const match = typedTarget.kind === 'TARGET' ? typedTarget.row
     : (launchTaskId ? tasks.find((task) => task.id === launchTaskId) ?? null : null) ?? maintenanceCompletionMatch(subject, tasks);
-  const maintenanceHref = `/dashboard/maintenance?propertyId=${encodeURIComponent(propertyId)}`;
   if (!match) {
     return {
       status: 'NEEDS_ENTITY', reasonCode: 'MAINTENANCE_TASK_SELECTION_REQUIRED',
@@ -667,8 +664,8 @@ export async function maintenanceTaskUpdateResult(userId: string, propertyId: st
         description: 'Ask found more than one possible task. Use its exact title in your next message; nothing has changed.',
         sections: [{ id: 'tasks', title: 'Maintenance tasks', count: tasks.length, items: tasks.slice(0, 20).map((task) => ({
           id: task.id, title: task.title, description: task.nextDueDate ? `Due ${humanDate(task.nextDueDate)}` : 'No due date',
-          meta: [task.priority, task.status], status: task.status, href: `${maintenanceHref}&taskId=${encodeURIComponent(task.id)}`,
-        })) }], actions: [{ id: 'open-maintenance', label: 'Open Maintenance', href: maintenanceHref, style: 'SECONDARY' }],
+          meta: [task.priority, task.status], status: task.status, href: null,
+        })) }], actions: [],
       }], suggestions: [],
     };
   }
@@ -719,7 +716,7 @@ export async function maintenanceTaskUpdateResult(userId: string, propertyId: st
     // came from a "Reschedule" row action) can be refreshed in place after
     // the mutation succeeds -- see confirmMaintenanceTaskUpdate.
     parameters: { maintenanceUpdate: parsed, maintenanceTaskVersion: maintenanceTaskVersion(match), sourceExecutionId: sourceExecutionId ?? null, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() },
-    blocks: [{ type: 'SUMMARY', id: 'maintenance-update-review', title: `Review this ${actionLabel}`, body: 'No shared-home record has changed yet.', tone: 'DEFAULT', actions: [{ id: 'open-task', label: 'Open task', href: `${maintenanceHref}&taskId=${encodeURIComponent(match.id)}`, style: 'SECONDARY' }] }],
+    blocks: [{ type: 'SUMMARY', id: 'maintenance-update-review', title: `Review this ${actionLabel}`, body: 'No shared-home record has changed yet.', tone: 'DEFAULT', actions: [] }],
     confirmation: {
       confirmationId: `maintenance-update-${match.id}-1`, version: 1, title: `${actionLabel.charAt(0).toUpperCase()}${actionLabel.slice(1)} ${match.title}?`,
       description: action === 'DELETE'
@@ -939,27 +936,6 @@ export async function maintenanceResult(
     .filter((task) => !highPriorityOnly || ['URGENT', 'HIGH'].includes(task.priority));
   const showCompleted = !cancelledOnly && (wantsCompleted || (!wantsOpen && !creationFocus));
   const showOpen = !cancelledOnly && (wantsOpen || (!wantsCompleted && !creationFocus) || (wantsCompleted && wantsOpen));
-  // FRD ASK_COZY_INTERACTION_MODEL_UI_FRD §9.3/§11 (HAND-001/002): the
-  // Maintenance page reads `priority=true`, `filter=overdue`, and now also
-  // `filter=due-soon` and `system=<phrase>` (MaintenancePageClient.tsx /
-  // taskDisplay.ts, added for this handoff). Date-range ("this month") and
-  // room scope still have no destination-page equivalent and are disclosed
-  // in the block description below instead (HAND-002: acknowledge, don't
-  // silently drop) rather than silently ignored on arrival.
-  const maintenanceHrefParams = new URLSearchParams({ propertyId });
-  if (highPriorityOnly) maintenanceHrefParams.set('priority', 'true');
-  if (overdueOnly) maintenanceHrefParams.set('filter', 'overdue');
-  else if (dueSoonOnly) maintenanceHrefParams.set('filter', 'due-soon');
-  // External review [P1]: sending only scopeTerms[0] ("hvac") meant a
-  // furnace/air-conditioner/heat-pump/boiler task that matched Ask's own
-  // OR-of-synonyms scope could vanish from the Maintenance page, which
-  // only checked the literal word "hvac". Sending the whole alias group
-  // lets splitAndSortTasks match on any of the same synonyms Ask itself
-  // used, closing most of the gap within the fields the Maintenance page
-  // actually has client-side (category/room/season are not among them --
-  // disclosed below, not silently dropped).
-  if (scopeTerms.length) maintenanceHrefParams.set('system', scopeTerms.join(','));
-  const maintenanceHref = `/dashboard/maintenance?${maintenanceHrefParams.toString()}`;
   const canManage = access.role !== HouseholdRole.VIEWER;
 
   const recordItem = (task: typeof tasks[number], kind: 'OPEN' | 'COMPLETED' | 'CANCELLED') => {
@@ -981,7 +957,7 @@ export async function maintenanceResult(
         cost ? `${kind === 'COMPLETED' ? 'Actual' : 'Estimated'} cost ${cost}` : null,
         task.isRecurring && task.frequency ? `Repeats ${task.frequency.toLowerCase().replace(/_/g, ' ')}` : null,
       ].filter((value): value is string => Boolean(value)),
-      href: `${maintenanceHref}&taskId=${encodeURIComponent(task.id)}&from=ask`,
+      href: null,
       // ASK_COZY_INTERACTION_MODEL_UI_FRD §9.2 (MAINT-005/006): item-level
       // Complete/Reschedule -- entityType/id let the frontend send these
       // back as launchContext, which launchMaintenanceTaskId resolves to
@@ -1080,7 +1056,6 @@ export async function maintenanceResult(
         { id: MAINTENANCE_TEMPLATES_BROWSE_ACTION.id, label: MAINTENANCE_TEMPLATES_BROWSE_ACTION.label, interactionType: 'START_WORKFLOW' as const, message: MAINTENANCE_TEMPLATES_BROWSE_ACTION.message, operationId: 'MAINTENANCE_TEMPLATES_BROWSE', style: 'SECONDARY' as const },
       ]
       : [
-        { id: 'open-maintenance', label: 'Open maintenance', href: maintenanceHref, style: 'PRIMARY' },
         ...(missingPurchaseDate && canManage ? [{ id: 'add-purchase-date', label: 'Add purchase date', interactionType: 'START_WORKFLOW' as const, message: PURCHASE_DATE_SET_MESSAGE, operationId: 'PROPERTY_PURCHASE_DATE_SET', style: 'SECONDARY' as const }] : []),
       ],
   }];
@@ -1115,29 +1090,10 @@ export async function maintenanceResult(
     // "urgent" here is the existing canonical interpretation (URGENT or HIGH
     // priority, not URGENT alone), so it is labeled accurately rather than
     // implying a narrower or newly-invented urgency score.
-    description: `${highPriorityOnly ? 'Priority filter: urgent and high priority. ' : ''}${timeframe ? `Date filter: ${timeframe.label} in ${timeZone.replace(/_/g, ' ')}. ` : ''}${scopeTerms.length ? `System/category filter: ${scopeTerms[0]}. ` : ''}${roomScope ? `Room filter: ${roomScope}. ` : ''}Showing ${MAX_RESULT_ITEMS}-item server pages when a section exceeds that size.${
-      // ASK_COZY_INTERACTION_MODEL_UI_FRD HAND-002: the Maintenance page
-      // now receives priority/overdue/due-soon/system, but has no
-      // date-range or room filter UI at all -- disclose that explicitly
-      // rather than letting "Open Maintenance" silently drop them.
-      (timeframe || roomScope) ? ` ${[timeframe && 'the date filter', roomScope && 'the room filter'].filter(Boolean).join(' and ')} will not carry over to the Maintenance page.` : ''
-    }${
-      // External review [P1]/HAND-002/A16: the system/category filter DOES
-      // carry over (unlike date/room above), but as an approximate keyword
-      // match against different fields than Ask itself checks (category,
-      // room, and season aren't available to the Maintenance page's own
-      // filter) -- disclosed as an approximation rather than implying an
-      // exact, guaranteed-identical result set on both sides.
-      scopeTerms.length ? ' The system/category filter carries over as an approximate keyword match there, so a few tasks may appear or disappear.' : ''
-    }`,
-    // MAINT-003: "+N more" (AskWorkspace's GROUPED_LIST renderer) always
-    // links off actions[0] -- previously that was the conditional
-    // "Create a task" action (or nothing for a VIEWER), so any section past
-    // MAX_RESULT_ITEMS had no real full-result access. A dedicated
-    // view-all-in-filter link is always first now; "Create a task" (when
-    // permitted) stays available as a secondary action.
+    description: `${highPriorityOnly ? 'Priority filter: urgent and high priority. ' : ''}${timeframe ? `Date filter: ${timeframe.label} in ${timeZone.replace(/_/g, ' ')}. ` : ''}${scopeTerms.length ? `System/category filter: ${scopeTerms[0]}. ` : ''}${roomScope ? `Room filter: ${roomScope}. ` : ''}Showing ${MAX_RESULT_ITEMS}-item server pages when a section exceeds that size.`,
+    // MAINT-003: Ask links to no Maintenance page, so a section past MAX_RESULT_ITEMS reads "+N more not shown here" and the filter chips
+    // narrow the result; "Create a task" (when permitted) stays available as an action.
     sections, actions: [
-      { id: 'view-all-maintenance', label: 'View all in Maintenance', href: maintenanceHref, style: 'SECONDARY' },
       ...(canManage ? [
         { id: 'create-maintenance', label: 'Create a task', interactionType: 'START_WORKFLOW' as const, message: 'Create a maintenance task', operationId: 'MAINTENANCE_TASK_CREATE', style: 'PRIMARY' as const },
         { id: MAINTENANCE_TEMPLATES_BROWSE_ACTION.id, label: MAINTENANCE_TEMPLATES_BROWSE_ACTION.label, interactionType: 'START_WORKFLOW' as const, message: MAINTENANCE_TEMPLATES_BROWSE_ACTION.message, operationId: 'MAINTENANCE_TEMPLATES_BROWSE', style: 'SECONDARY' as const },
@@ -1224,7 +1180,6 @@ const MAINTENANCE_FORECAST_PRIORITY_LABELS: Record<number, string> = {
 
 async function maintenanceForecastResult(userId: string, propertyId: string): Promise<AskOperationResult> {
   await ensurePropertyAccess(userId, propertyId);
-  const href = `/dashboard/properties/${encodeURIComponent(propertyId)}/maintenance`;
 
   let predictions = await listForecast(propertyId);
   // listForecast never lazily generates (confirmed by reading it) -- unlike
@@ -1249,7 +1204,7 @@ async function maintenanceForecastResult(userId: string, propertyId: string): Pr
         id: 'maintenance-forecast-empty',
         title: 'No maintenance forecast available yet',
         body: 'Ask found no verified HVAC, roof, or water-heater inventory items to forecast maintenance for. Verify these items in your inventory to unlock predictions.',
-        actions: [{ id: 'open-maintenance', label: 'Open Maintenance', href, style: 'PRIMARY' }],
+        actions: [],
       }],
       suggestions: [],
     };
@@ -1264,7 +1219,7 @@ async function maintenanceForecastResult(userId: string, propertyId: string): Pr
       ? `${overdueCount} already overdue based on this forecast.`
       : `Next predicted: ${predictions[0].taskName} around ${humanDate(predictions[0].predictedDate)}.`,
     tone: overdueCount ? 'CAUTION' : 'DEFAULT',
-    actions: [{ id: 'open-maintenance', label: 'Open Maintenance', href, style: 'SECONDARY' }],
+    actions: [],
   }, {
     type: 'GROUPED_LIST', filters: [],
     id: 'maintenance-forecast-items',
@@ -1284,7 +1239,7 @@ async function maintenanceForecastResult(userId: string, propertyId: string): Pr
           `${prediction.status === 'OVERDUE' ? 'Overdue since' : 'Predicted'} ${humanDate(prediction.predictedDate)}`,
         ].filter((value): value is string => Boolean(value)),
         status: prediction.status,
-        href,
+        href: null,
       })),
     }],
     actions: [],
