@@ -122,7 +122,8 @@ test('an explicit completeness question is unaffected: it still gets the ring, t
   const result = await invoke('How complete is my home record?');
   assert.ok(result.blocks.some((block) => block.id === 'property-completeness-progress'));
   assert.ok(result.blocks.some((block) => block.id === 'property-completeness'));
-  assert.notEqual(summaryOf(result).actions.length, 0);
+  assert.deepEqual(summaryOf(result).actions, [], 'Ask links to no desktop property page');
+  assert.ok(!JSON.stringify(result.blocks).includes('/dashboard/'), 'no desktop path anywhere in the answer, rows included');
 });
 
 // FRD Appendix C.10: the facts grid.

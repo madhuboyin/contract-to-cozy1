@@ -17,7 +17,7 @@ import { normalizeAnswers } from '../../../modules/propertyContext/application/c
 import { getPropertyContext } from '../../../modules/propertyContext/application/getPropertyContext';
 import { getPropertyRecordOverview } from '../../propertyRecordOverview.service';
 import { humanDate } from '../askFormatting';
-import { AREA_CAPTURE_ANCHORS, AREA_CAPTURE_MESSAGES, areaCaptureFallbackHref, areaCaptureProgress, areaFallbackAnchor, areaLabel, areaProgressBlock, ensurePropertyAccess, isAreaCaptureScope, PROPERTY_SCOPE_LABELS, readablePropertyValue } from '../askHandlerSupport';
+import { AREA_CAPTURE_MESSAGES, areaCaptureProgress, areaLabel, areaProgressBlock, ensurePropertyAccess, isAreaCaptureScope, PROPERTY_SCOPE_LABELS, readablePropertyValue } from '../askHandlerSupport';
 import { ROOM_ADD_MESSAGE, roomRenameItemActions } from '../handlers/homeRecordWrites.handler';
 import { INVENTORY_ADD_MESSAGE } from '../handlers/inventory.handler';
 import { roomMapFacts } from '../support/roomMap';
@@ -52,7 +52,7 @@ export function propertyCompletenessProgress(
     nextSteps: incompleteScopes.slice(0, 3).map((scope) => ({
       id: scope.scope, title: PROPERTY_SCOPE_LABELS[scope.scope] ?? readablePropertyValue(scope.scope),
       description: `${scope.knownFacts} of ${scope.totalFacts} facts known`,
-      meta: [], status: `${scope.completenessPercent}% COMPLETE`, href: areaCaptureFallbackHref(propertyId, scope.scope),
+      meta: [], status: `${scope.completenessPercent}% COMPLETE`, href: null,
       entityType: 'PROPERTY_CONTEXT_AREA',
       actions: areaCaptureRowActions(scope.scope, canManage, scope.missingFactKeys.length + scope.conflictedFactKeys.length + scope.staleFactKeys.length),
     })),
@@ -136,7 +136,6 @@ export function propertyOverviewStatusObservation(pendingDetailCount: number): s
 }
 
 async function propertySummaryResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
-  const propertyHref = `/dashboard/properties/${encodeURIComponent(propertyId)}`;
   const completenessFocus = isPropertyCompletenessRequest(message);
   const roomFocus = /\b(?:show|list|view|see|review)\b.{0,35}\b(?:my|our|the|this)?\s*(?:home|house|property)?\b.{0,20}\brooms?\b|\b(?:show|list|view|see|review)\b.{0,35}\brooms?\b|\b(?:home|house|property)\b.{0,20}\bby room\b/i.test(message);
   const [access, overview, evaluation, property] = await Promise.all([
@@ -229,9 +228,8 @@ async function propertySummaryResult(userId: string, propertyId: string, message
       ? completenessBody
       : statusObservation ?? '',
     tone: roomFocus ? (rooms ? 'DEFAULT' : 'CAUTION') : completenessFocus && (degradedSections.length || pendingDetailCount > 0 || (percent != null && percent < 100)) ? 'CAUTION' : 'DEFAULT',
-    actions: roomFocus || vagueOverview
-      ? []
-      : [{ id: 'open-property-record', label: pendingDetailCount > 0 ? 'Review missing details' : 'Review home details', href: propertyHref, style: 'PRIMARY' }],
+    // Ask links to no desktop property page (owner decision 2026-10-10); missing details are added through the area capture rows below.
+    actions: [],
   }];
 
   if (vagueOverview && factRows.length > 0) {
@@ -293,7 +291,7 @@ async function propertySummaryResult(userId: string, propertyId: string, message
           id: scope.scope, title: PROPERTY_SCOPE_LABELS[scope.scope] ?? readablePropertyValue(scope.scope),
           description: `${scope.knownFacts} of ${scope.totalFacts} facts known`,
           meta: [`${scope.missingFactKeys.length} missing`, `${scope.conflictedFactKeys.length} conflicted`, `${scope.staleFactKeys.length} stale`],
-          status: `${scope.completenessPercent}% COMPLETE`, href: areaCaptureFallbackHref(propertyId, scope.scope),
+          status: `${scope.completenessPercent}% COMPLETE`, href: null,
           entityType: 'PROPERTY_CONTEXT_AREA',
           actions: areaCaptureRowActions(scope.scope, canImproveContext, scope.missingFactKeys.length + scope.conflictedFactKeys.length + scope.staleFactKeys.length),
         })),

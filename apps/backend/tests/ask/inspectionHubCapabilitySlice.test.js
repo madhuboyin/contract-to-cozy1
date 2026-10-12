@@ -9,7 +9,7 @@ require('ts-node/register');
 
 const prismaModule = require('../../src/lib/prisma.ts');
 const {
-  INSPECTION_FINDING_ACTIONS, inspectionFindingItemActions, inspectionHubHref, editInspectionFindingResolveConfirmation,
+  INSPECTION_FINDING_ACTIONS, inspectionFindingItemActions, editInspectionFindingResolveConfirmation,
 } = require('../../src/services/ask/askOrchestrator.service.ts');
 const { capabilityInvoke } = require('../../src/services/ask/capabilityHandlerRegistry.ts');
 const { confirmCapabilityInvoke } = require('../../src/services/ask/confirmCapabilityHandlerRegistry.ts');
@@ -116,13 +116,13 @@ test('finding rows carry identity, their report, a working report link and every
   const [row] = contributor.sections[0].items;
   assert.equal(row.entityType, 'INSPECTION_FINDING');
   assert.equal(row.parentId, 'report-1');
-  assert.equal(row.href, '/dashboard/properties/p1/inspection-hub/report-1?findingId=finding-1');
+  assert.equal(row.href, null, 'Ask links to no desktop Inspection Hub page');
   assert.deepEqual(row.actions.map((action) => action.id), ['finding-accept', 'finding-dismiss', 'finding-resolve']);
-  assert.equal(contributor.actions[0].href, '/dashboard/properties/p1/inspection-hub/open-items');
+  assert.deepEqual(contributor.actions, [], 'no desktop Inspection Hub link action');
+  assert.ok(!JSON.stringify(contributor).includes('/dashboard/'));
   assert.ok(!JSON.stringify(contributor).includes('/inspection"') && !JSON.stringify(contributor).includes('/inspection?'), 'no link to the nonexistent /inspection route');
   accessRole = 'VIEWER';
   assert.deepEqual((await list()).sections[0].items[0].actions, []);
-  assert.equal(inspectionHubHref('p1'), '/dashboard/properties/p1/inspection-hub/open-items');
 });
 
 test('the typed finding actions are whitelisted and the desktop hub link is not', () => {

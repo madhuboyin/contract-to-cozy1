@@ -575,11 +575,6 @@ const RESTART_INTENT = /\b(?:start|restart|re[- ]?run|begin|kick off|redo)\b/i;
 
 const RESUME_INTENT = /\b(?:resume|continue|pick up|carry on|keep going)\b/i;
 
-function specialistHomeOperationsHref(propertyId: string, homeActionId?: string): string {
-  const base = `/dashboard/properties/${encodeURIComponent(propertyId)}/home-operations`;
-  return homeActionId ? `${base}?focusActionId=${encodeURIComponent(homeActionId)}` : base;
-}
-
 function currentSpecialistTurn(message: string): string {
   return message.split('Homeowner follow-up:').at(-1)?.trim() || message;
 }
@@ -630,8 +625,8 @@ function specialistUnavailableRedirect(propertyId: string, reason: string): AskO
       type: 'EMPTY_STATE',
       id: 'hvac-specialist-no-action',
       title: 'No flagged HVAC repair-or-replace action to work from',
-      body: `${reason} Ask can start a durable repair-or-replace decision instead, or you can open Home Actions to engage a flagged one.`,
-      actions: [{ id: 'open-home-actions', label: 'View Home Actions', href: specialistHomeOperationsHref(propertyId), style: 'PRIMARY' }],
+      body: `${reason} Ask can start a durable repair-or-replace decision instead, or Home Actions can flag one.`,
+      actions: [],
     }],
     suggestions: [],
   };
@@ -640,7 +635,6 @@ function specialistUnavailableRedirect(propertyId: string, reason: string): AskO
 function specialistProjectionBlocks(
   headline: string,
   projection: AgentRunStatusProjection,
-  correctionHref: string,
 ): AskPresentationBlock[] {
   const blocks: AskPresentationBlock[] = [];
   const verdictLabel = projection.verdict
@@ -651,7 +645,7 @@ function specialistProjectionBlocks(
     blocks.push({
       type: 'SUMMARY', id: 'hvac-specialist-recommendation', tone: 'DEFAULT',
       title: `Repair or replace: ${headline}`,
-      body: `The HVAC Specialist's current recommendation is to ${verdictLabel.toLowerCase()}${projection.confidenceLabel ? ` (${projection.confidenceLabel.toLowerCase()} confidence)` : ''}. This continues the same decision thread as the in-app panel; no purchase or provider is selected.`,
+      body: `The HVAC Specialist's current recommendation is to ${verdictLabel.toLowerCase()}${projection.confidenceLabel ? ` (${projection.confidenceLabel.toLowerCase()} confidence)` : ''}. This is the same decision thread the HVAC Specialist works from; no purchase or provider is selected.`,
       actions: [],
     });
     if (projection.explanation.length) {
@@ -665,18 +659,18 @@ function specialistProjectionBlocks(
     blocks.push({
       type: 'SUMMARY', id: 'hvac-specialist-needs-input', tone: 'CAUTION',
       title: `The HVAC Specialist needs more information for ${headline}`,
-      body: 'Reply in Ask with the requested fact, or open the Specialist panel to enter facts and upload supporting documents. The same canonical run will continue.',
-      actions: [{ id: 'open-specialist-panel', label: 'Open Specialist panel', href: correctionHref, style: 'PRIMARY' }],
+      body: 'Reply in Ask with the requested fact. The same canonical run will continue.',
+      actions: [],
     });
     if (projection.outstanding.length) {
       blocks.push({
         type: 'GROUPED_LIST', filters: [], id: 'hvac-specialist-outstanding',
-        title: 'Still needed', description: 'Correct these on the home record.',
+        title: 'Still needed', description: 'The Specialist needs these before it can continue.',
         sections: [{
           id: 'outstanding', title: 'Outstanding items', count: projection.outstanding.length,
           items: projection.outstanding.map((item) => ({
             id: item.key, title: item.label, description: item.kind === 'DOCUMENT' ? 'Document' : 'Fact',
-            meta: [], status: null, href: correctionHref,
+            meta: [], status: null, href: null,
           })),
         }],
         actions: [],
@@ -686,13 +680,13 @@ function specialistProjectionBlocks(
     blocks.push({
       type: 'LIMITATION', id: 'hvac-specialist-abstained', severity: 'CAUTION',
       title: `The HVAC Specialist did not reach a recommendation for ${headline}`,
-      body: `The bounded review stopped without a verdict${projection.abstentionReason ? ` (${projection.abstentionReason.replace(/_/g, ' ').toLowerCase()})` : ''}. The canonical decision thread is unchanged; open the in-app panel to continue.`,
+      body: `The bounded review stopped without a verdict${projection.abstentionReason ? ` (${projection.abstentionReason.replace(/_/g, ' ').toLowerCase()})` : ''}. The canonical decision thread is unchanged.`,
     });
   } else {
     blocks.push({
       type: 'SUMMARY', id: 'hvac-specialist-working', tone: 'DEFAULT',
       title: `The HVAC Specialist is reviewing ${headline}`,
-      body: 'The bounded review is still in progress. Check back shortly or open the in-app decision panel.',
+      body: 'The bounded review is still in progress. Check back shortly.',
       actions: [],
     });
   }
@@ -731,7 +725,7 @@ export async function hvacSpecialistEngageResult(
         type: 'SUMMARY', id: 'hvac-specialist-feed-unavailable', tone: 'CAUTION',
         title: 'Home Actions are temporarily unavailable',
         body: 'Ask could not load the governed action feed needed to engage the HVAC Specialist. It will not substitute a raw recommendation.',
-        actions: [{ id: 'open-home-actions', label: 'View Home Actions', href: specialistHomeOperationsHref(propertyId), style: 'PRIMARY' }],
+        actions: [],
       }],
       suggestions: [],
     };
@@ -790,10 +784,10 @@ export async function hvacSpecialistEngageResult(
               items: hvacActions.map((candidate) => ({
                 id: candidate.id, title: candidate.presentation?.headline ?? candidate.recommendedAction,
                 description: candidate.signal, meta: [], status: null,
-                href: specialistHomeOperationsHref(propertyId, candidate.id),
+                href: null,
               })),
             }],
-            actions: [{ id: 'open-home-actions', label: 'Open Home Actions', href: specialistHomeOperationsHref(propertyId), style: 'SECONDARY' }],
+            actions: [],
           }],
           suggestions: [],
         };
@@ -884,7 +878,7 @@ export async function hvacSpecialistEngageResult(
       mutated = advanced.mutated;
     }
 
-    const blocks = specialistProjectionBlocks(headline, projection, specialistHomeOperationsHref(propertyId, action.id));
+    const blocks = specialistProjectionBlocks(headline, projection);
     const answered = projection.phase === 'RECOMMENDATION_READY';
     return {
       status: answered ? 'ANSWERED' : 'READY_WITH_LIMITATIONS',
@@ -921,7 +915,7 @@ export async function hvacSpecialistEngageResult(
         blocks: [{
           type: 'LIMITATION', id: 'hvac-specialist-conflict', severity: 'CAUTION',
           title: 'This HVAC decision was updated elsewhere',
-          body: 'The Specialist run changed while Ask was reading it. Open the in-app decision panel to see the current state.',
+          body: 'The Specialist run changed while Ask was reading it. Ask again to see the current state.',
         }],
         suggestions: [],
       };

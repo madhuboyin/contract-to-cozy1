@@ -94,9 +94,8 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   // + the claim transition item actions (FRD v1.42); the inline claim detail shows only those legal from the live status.
   // FRD v1.43: INSPECTION_FINDINGS had no entry, so even its "Open Inspection Hub" link was stripped; the finding
   // actions are shown in the inline detail only when the live state allows them.
-  INSPECTION_FINDINGS: new Set(['open-inspection', 'finding-accept', 'finding-dismiss', 'finding-resolve']),
+  INSPECTION_FINDINGS: new Set(['finding-accept', 'finding-dismiss', 'finding-resolve']),
   RECALL_REVIEW: new Set(['recall-confirm', 'recall-dismiss', 'recall-resolve']),
-  INSPECTION_FINDING_UPDATE: new Set(['open-inspection', 'open-finding']),
   // The Open Documents link was never declared, so the validator removed it from the answer and from its empty state (found in Documents D-1).
   INCIDENT_CLAIM_STATUS: new Set(['claim-file-start', 'claim-start', 'claim-submit', 'claim-under-review', 'claim-approve', 'claim-deny', 'claim-close']),
   SAVINGS_OPPORTUNITIES: new Set(['review-all-savings']),
@@ -123,11 +122,9 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   DO_NOTHING_SIMULATION_RUN: new Set(),
   SERVICE_PRICE_CHECK_RUN: new Set(),
   INVENTORY_ITEM_CREATE: new Set(['open-rooms', 'view-inventory-item']),
-  PROPERTY_CONTEXT_AREA_CAPTURE: new Set(['open-property-record', 'continue-area-capture']),
-  // Every action id PROPERTY_SUMMARY actually emits: the record link, one secondary "open the full collection"
-  // link per section, and the contributor-only inline "Add a warranty" workflow action.
-  PROPERTY_SUMMARY: new Set(['open-property-record', 'open-inventory', 'open-household', 'open-warranties', 'open-rooms', 'open-documents', 'open-home-timeline', 'add-warranty', 'add-timeline-event', 'add-room', 'add-inventory-item']),
-  CAPTURE_WARRANTY_CONFIRM: new Set(['open-warranties', 'open-property-record']),
+  PROPERTY_CONTEXT_AREA_CAPTURE: new Set(['continue-area-capture']),
+  // Every action id PROPERTY_SUMMARY actually emits: the contributor-only inline add workflow actions (Ask links to no desktop page).
+  PROPERTY_SUMMARY: new Set(['add-warranty', 'add-timeline-event', 'add-room', 'add-inventory-item']),
   CAPTURE_EVENT_CONFIRM: new Set(['open-timeline', 'open-home-timeline']),
   CAPABILITY_DISCOVERY: new Set(['explore-available-tools', 'explore-tools']),
   REPLACEMENT_GUIDANCE: new Set(['open-inventory', 'open-repair-replace', 'show-inventory', 'add-inventory-item']),
@@ -183,8 +180,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   PROPERTY_BRIEF_COMMAND: new Set(['property-brief-show-current', 'property-brief-open-share']),
   // Item actions on the feed's events (FRD v1.40); the inline detail shows the ones valid for the live state.
   HOME_EVENT_RADAR_FEED: new Set(['radar-include-dismissed', 'radar-save', 'radar-unsave', 'radar-dismiss', 'radar-restore', 'radar-mark-done', 'radar-feedback', 'radar-plan-task', 'radar-notification-settings']),
-  HVAC_DECISION_START: new Set(['open-inventory', 'add-inventory-item', 'view-inventory-item']),
-  HVAC_DECISION_CONTINUE: new Set(['open-inventory']),
+  HVAC_DECISION_START: new Set(['add-inventory-item', 'view-inventory-item']),
   // FRD v1.46: + the blocking-task item action; the inline task detail shows it only while the live task is open.
   BUYER_DEADLINES: new Set(['buyer-task-complete']),
 };
