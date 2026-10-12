@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { authenticate, requireMfa, requireRole } from '../middleware/auth.middleware';
-import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
+import { propertyAuthMiddleware, requireHouseholdRole } from '../middleware/propertyAuth.middleware';
 import { validateBody, validate } from '../middleware/validate.middleware';
 import { apiRateLimiter, expensiveAiRateLimiter } from '../middleware/rateLimiter.middleware';
 import { validateImageArrayUpload } from '../utils/documentValidator.util';
@@ -60,6 +60,8 @@ import {
   AdminPatchDataSourceStatusSchema,
 } from '../validators/permitTracker.validators';
 
+// Reads stay at VIEWER. Every route that writes (and the ones that fetch or generate on the household's behalf) requires at least CONTRIBUTOR:
+// propertyAuthMiddleware only proves membership, so without the floor a VIEWER could change shared records over HTTP.
 const router = Router();
 
 router.use(apiRateLimiter);
@@ -84,7 +86,7 @@ const readinessUpload = multer({
 });
 
 // ── Open Data Fetch ────────────────────────────────────────────────────────────
-router.post('/properties/:propertyId/permits/fetch', propertyAuthMiddleware, triggerPermitFetch);
+router.post('/properties/:propertyId/permits/fetch', propertyAuthMiddleware, requireHouseholdRole('CONTRIBUTOR'), triggerPermitFetch);
 router.get('/properties/:propertyId/permits/fetch/status', propertyAuthMiddleware, getPermitFetchStatus);
 
 // ── Permit Records ─────────────────────────────────────────────────────────────
@@ -102,6 +104,7 @@ router.get(
 router.post(
   '/properties/:propertyId/permits',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(CreateManualPermitSchema),
   createManualPermit,
 );
@@ -109,16 +112,18 @@ router.get('/properties/:propertyId/permits/:permitId', propertyAuthMiddleware, 
 router.patch(
   '/properties/:propertyId/permits/:permitId',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(UpdatePermitSchema),
   updatePermit,
 );
 router.post(
   '/properties/:propertyId/permits/:permitId/official-status',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(RecordOfficialPermitStatusSchema),
   recordOfficialPermitStatus,
 );
-router.delete('/properties/:propertyId/permits/:permitId', propertyAuthMiddleware, deletePermit);
+router.delete('/properties/:propertyId/permits/:permitId', propertyAuthMiddleware, requireHouseholdRole('CONTRIBUTOR'), deletePermit);
 
 // ── Inspection Milestones ──────────────────────────────────────────────────────
 router.get(
@@ -129,18 +134,21 @@ router.get(
 router.post(
   '/properties/:propertyId/permits/:permitId/inspections',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(AddInspectionMilestoneSchema),
   addInspectionMilestone,
 );
 router.patch(
   '/properties/:propertyId/permits/:permitId/inspections/:milestoneId',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(UpdateInspectionMilestoneSchema),
   updateInspectionMilestone,
 );
 router.delete(
   '/properties/:propertyId/permits/:permitId/inspections/:milestoneId',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   deleteInspectionMilestone,
 );
 
@@ -148,6 +156,7 @@ router.delete(
 router.post(
   '/properties/:propertyId/permits/:permitId/inspections/:milestoneId/readiness-checks',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   expensiveAiRateLimiter,
   readinessUpload.array('photos', 12),
   validateImageArrayUpload,
@@ -174,11 +183,13 @@ router.get(
 router.post(
   '/properties/:propertyId/permits/flags/scan',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   runDetectionScan,
 );
 router.post(
   '/properties/:propertyId/permits/flags',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(CreateManualFlagSchema),
   createManualFlag,
 );
@@ -186,19 +197,21 @@ router.get('/properties/:propertyId/permits/flags/:flagId', propertyAuthMiddlewa
 router.patch(
   '/properties/:propertyId/permits/flags/:flagId',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(UpdateFlagSchema),
   updatePermitFlag,
 );
 router.post(
   '/properties/:propertyId/permits/flags/:flagId/remediation-case',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(CreateRemediationCaseSchema),
   createFlagRemediationCase,
 );
 
 // ── Disclosure Export ──────────────────────────────────────────────────────────
 router.get('/properties/:propertyId/permits/disclosure', propertyAuthMiddleware, listDisclosureExports);
-router.post('/properties/:propertyId/permits/disclosure', propertyAuthMiddleware, requestDisclosureExport);
+router.post('/properties/:propertyId/permits/disclosure', propertyAuthMiddleware, requireHouseholdRole('CONTRIBUTOR'), requestDisclosureExport);
 router.get(
   '/properties/:propertyId/permits/disclosure/:exportId',
   propertyAuthMiddleware,

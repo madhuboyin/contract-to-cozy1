@@ -1,7 +1,7 @@
 // apps/backend/src/routes/financing.routes.ts
 import { Router } from 'express';
 import { authenticate, requireMfa, requireRole } from '../middleware/auth.middleware';
-import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
+import { propertyAuthMiddleware, requireHouseholdRole } from '../middleware/propertyAuth.middleware';
 import { validateBody } from '../middleware/validate.middleware';
 import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
 import { requireCapability } from '../middleware/adminCapability.middleware';
@@ -31,6 +31,9 @@ import {
   UpdateRateConfigSchema,
 } from '../validators/financing.validators';
 
+// Reads stay at VIEWER. Every route that writes (and the ones that fetch or generate on the household's behalf) requires at least CONTRIBUTOR:
+// propertyAuthMiddleware only proves membership, so without the floor a VIEWER could change shared records over HTTP.
+// POST /financing/calculate is a stateless calculator (it persists nothing), so it stays open to a viewer.
 const router = Router();
 
 router.use(apiRateLimiter);
@@ -41,6 +44,7 @@ router.get('/properties/:propertyId/financing/profile', propertyAuthMiddleware, 
 router.put(
   '/properties/:propertyId/financing/profile',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(UpsertFinancingProfileSchema),
   upsertFinancingProfile,
 );
@@ -50,6 +54,7 @@ router.get('/properties/:propertyId/financing/equity', propertyAuthMiddleware, g
 router.post(
   '/properties/:propertyId/financing/equity/refresh',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   refreshEquityPosition,
 );
 router.get(
@@ -71,6 +76,7 @@ router.get('/properties/:propertyId/financing/scenarios', propertyAuthMiddleware
 router.post(
   '/properties/:propertyId/financing/scenarios',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(CreateScenarioSchema),
   createFinancingScenario,
 );
@@ -82,12 +88,14 @@ router.get(
 router.patch(
   '/properties/:propertyId/financing/scenarios/:scenarioId',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(UpdateScenarioSchema),
   updateFinancingScenario,
 );
 router.delete(
   '/properties/:propertyId/financing/scenarios/:scenarioId',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   archiveFinancingScenario,
 );
 
