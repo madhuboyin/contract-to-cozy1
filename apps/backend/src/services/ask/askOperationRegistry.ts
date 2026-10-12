@@ -848,7 +848,11 @@ const inventoryItemCorrectPattern = new RegExp(
 // Free-text inventory creation is intentionally deterministic rather than fuzzy: require an explicit write verb at
 // the start, exclude other governed record types and detail-correction nouns, then let the handler resolve the room
 // against this property's canonical room list. The handler never treats arbitrary trailing text as a room.
-const inventoryCreatePattern = /^\s*(?:please\s+)?(?:add|record|create)\s+(?!(?:(?:a|an|some|the|new)\s+)?(?:room|maintenance(?:\s+task)?|task|home\s+event|event|warranty|purchase\s+date|condition|brand|model|serial|notes?|cost|price)\b).{1,180}[.!?]*\s*$/i;
+// "add|record|create <anything>" is the inventory command unless the thing being created is another record type. The first lookahead
+// names those types when they directly follow the verb; the second finds the same nouns after up to four qualifiers
+// ("an insurance claim", "a household member", "a seasonal home care checklist", "a $500 reserve contribution"), so those reach
+// their own command or a guidance answer instead of an inventory-item form.
+const inventoryCreatePattern = /^\s*(?:please\s+)?(?:add|record|create)\s+(?!(?:(?:a|an|some|the|new)\s+)?(?:room|maintenance(?:\s+task)?|task|home\s+event|event|warranty|purchase\s+date|condition|brand|model|serial|notes?|cost|price)\b)(?!(?:\S+\s+){0,4}(?:claims?|projects?|plans?|guidance|journeys?|household\s+members?|members?|closing\s+tasks?|deposits?|contributions?|withdrawals?|briefs?|documents?|checklists?|habits?|plants?|materials?|negotiations?|quote\s+comparisons?|comparison\s+workspaces?|reminders?)\b).{1,180}[.!?]*\s*$/i;
 // Timeline event title/date correction (Phase 3 write slice 2). Requires an
 // explicit correction verb, title/date/name, and the words "timeline event"
 // or "home event" -- checked before the maintenance/inventory patterns.
