@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { authenticate } from '../middleware/auth.middleware';
-import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
+import { propertyAuthMiddleware, requireHouseholdRole } from '../middleware/propertyAuth.middleware';
 import { validateBody, validate } from '../middleware/validate.middleware';
 import { apiRateLimiter, uploadRateLimiter } from '../middleware/rateLimiter.middleware';
 import { validateImageUpload } from '../utils/documentValidator.util';
@@ -70,6 +70,7 @@ router.get('/properties/:propertyId/materials/exports', propertyAuthMiddleware, 
 router.post(
   '/properties/:propertyId/materials/exports',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(requestExportBodySchema),
   requestExport
 );
@@ -92,6 +93,7 @@ router.get(
 router.post(
   '/properties/:propertyId/materials',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(createSpecBodySchema),
   createSpec
 );
@@ -101,6 +103,7 @@ router.get('/properties/:propertyId/materials/:specId', propertyAuthMiddleware, 
 router.patch(
   '/properties/:propertyId/materials/:specId',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(updateSpecBodySchema),
   updateSpec
 );
@@ -108,6 +111,7 @@ router.patch(
 router.post(
   '/properties/:propertyId/materials/:specId/lifecycle',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(transitionMaterialLifecycleBodySchema),
   transitionMaterialLifecycle,
 );
@@ -115,6 +119,7 @@ router.post(
 router.post(
   '/properties/:propertyId/materials/:specId/substitutions',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(substituteMaterialBodySchema),
   substituteMaterial,
 );
@@ -122,6 +127,7 @@ router.post(
 router.post(
   '/properties/:propertyId/materials/:specId/extractions',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(createMaterialExtractionBodySchema),
   createMaterialExtraction,
 );
@@ -129,6 +135,7 @@ router.post(
 router.post(
   '/properties/:propertyId/materials/:specId/extractions/:reviewId/review',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(reviewMaterialExtractionBodySchema),
   reviewMaterialExtraction,
 );
@@ -139,13 +146,14 @@ router.get(
   getMaterialRepairReorder,
 );
 
-router.delete('/properties/:propertyId/materials/:specId', propertyAuthMiddleware, deleteSpec);
+router.delete('/properties/:propertyId/materials/:specId', propertyAuthMiddleware, requireHouseholdRole('CONTRIBUTOR'), deleteSpec);
 
 // ── Photos ────────────────────────────────────────────────────────────────────
 
 router.post(
   '/properties/:propertyId/materials/:specId/photos',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(addPhotoBodySchema),
   addPhoto
 );
@@ -153,6 +161,7 @@ router.post(
 router.post(
   '/properties/:propertyId/materials/:specId/photos/upload',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   uploadRateLimiter,
   photoUpload.single('photo'),
   validateImageUpload,
@@ -162,12 +171,14 @@ router.post(
 router.delete(
   '/properties/:propertyId/materials/:specId/photos/:photoId',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   deletePhoto
 );
 
 router.patch(
   '/properties/:propertyId/materials/:specId/photos/reorder',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(reorderPhotosBodySchema),
   reorderPhotos
 );
