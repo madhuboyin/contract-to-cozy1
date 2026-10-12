@@ -113,8 +113,8 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
     'ownership-cost-change-no-action', 'ownership-cost-change-resolve', 'ownership-cost-change-dismiss', 'ownership-cost-change-reopen', 'ownership-cost-toggle-notification',
   ]),
   OWNERSHIP_COST_COMMAND: new Set(['ownership-cost-show-current']),
-  INVENTORY_LOOKUP: new Set(['add-inventory', 'search-inventory', 'open-inventory', 'add-inventory-item']),
-  INVENTORY_ITEM_CORRECT: new Set(['open-inventory', 'view-inventory-item']),
+  INVENTORY_LOOKUP: new Set(['add-inventory', 'show-inventory', 'add-inventory-item']),
+  INVENTORY_ITEM_CORRECT: new Set(['view-inventory-item']),
   HOME_EVENT_CORRECT: new Set(['open-timeline', 'open-home-timeline']),
   HOME_EVENT_VISIBILITY: new Set(['open-timeline', 'open-home-timeline']),
   WARRANTY_CORRECT: new Set(['open-warranties']),
@@ -128,7 +128,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   HOME_HABITS_GENERATE: new Set(),
   DO_NOTHING_SIMULATION_RUN: new Set(),
   SERVICE_PRICE_CHECK_RUN: new Set(),
-  INVENTORY_ITEM_CREATE: new Set(['open-inventory', 'open-rooms', 'view-inventory-item']),
+  INVENTORY_ITEM_CREATE: new Set(['open-rooms', 'view-inventory-item']),
   PROPERTY_CONTEXT_AREA_CAPTURE: new Set(['open-property-record', 'continue-area-capture']),
   // Every action id PROPERTY_SUMMARY actually emits: the record link, one secondary "open the full collection"
   // link per section, and the contributor-only inline "Add a warranty" workflow action.

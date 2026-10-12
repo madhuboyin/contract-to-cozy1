@@ -15,7 +15,7 @@ import { InventoryService, ROOM_REQUIRED_CATEGORIES } from '../../inventory.serv
 import { type CorrectionOption } from '../askCorrectionFields';
 import { humanDate } from '../askFormatting';
 import { durableFreeTextClarification, ensurePropertyAccess, exactEntityMatch, homeEventCorrectionItemActions, INVENTORY_CATEGORY_VALUES, InventoryCreateInputSchema, InventoryItemCorrectionInputSchema, isValidDateEditInput, MAX_RESULT_ITEMS } from '../askHandlerSupport';
-import { INVENTORY_ADD_MESSAGE, inventoryAddItemAction } from './inventoryAskActions';
+import { INVENTORY_ADD_MESSAGE, inventoryAddItemAction, inventoryShowAllAction } from './inventoryAskActions';
 import { isIncompleteInventoryRequest, isLifecycleInventoryRequest } from '../askInventoryIntent';
 import { type AskViewState } from '../support/executionState';
 import { loadAskViewState } from './maintenance.handler';
@@ -58,10 +58,6 @@ function inventoryMissingFacts(item: Awaited<ReturnType<InventoryService['listIt
 }
 
 export const INVENTORY_MISSING_DETAILS_SUGGESTION = 'Add or update missing details';
-
-function inventoryItemHref(propertyId: string, itemId: string): string {
-  return `/dashboard/properties/${encodeURIComponent(propertyId)}/inventory?tab=items&openItemId=${encodeURIComponent(itemId)}`;
-}
 
 const inventoryCount = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
 
@@ -194,7 +190,6 @@ async function inventoryLookupResult(
   targetItemId?: string | null,
 ): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
-  const inventoryHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/inventory?tab=items`;
   const allItems = await inventoryService.listItems(propertyId, {});
   const recordVersion = createHash('sha256').update(JSON.stringify(allItems.map((item) => ({ id: item.id, updatedAt: item.updatedAt })))).digest('hex');
   if (!allItems.length) {
@@ -270,7 +265,7 @@ async function inventoryLookupResult(
         type: 'SUMMARY', id: 'inventory-summary', title: 'No inventory records match these filters', headline: 'No items match these filters.',
         supportLine: `This home has ${allItems.length} visible inventory item${allItems.length === 1 ? '' : 's'}. Widen or clear a filter to see them.`,
         body: `This home has ${allItems.length} visible inventory item${allItems.length === 1 ? '' : 's'}, but none match the selected filters.`, tone: 'DEFAULT',
-        actions: [{ id: 'open-inventory', label: 'Open home inventory', href: inventoryHref, style: 'PRIMARY' }],
+        actions: [],
       }, {
         type: 'GROUPED_LIST', id: 'inventory-results',
         title: isIncompleteInventoryRequest(message) ? 'Incomplete inventory records' : isLifecycleInventoryRequest(message) ? 'Recorded lifecycle dates approaching' : 'Inventory details',
@@ -278,7 +273,6 @@ async function inventoryLookupResult(
         sections: [{ id: 'items', title: 'Living Home Record', count: 0, items: [] }],
         actions: [
           ...(access.role !== HouseholdRole.VIEWER ? [inventoryAddItemAction()] : []),
-          { id: 'open-inventory-list', label: 'Open home inventory', href: inventoryHref, style: 'SECONDARY' },
         ],
       }],
       suggestions: [],
@@ -293,7 +287,7 @@ async function inventoryLookupResult(
         type: 'SUMMARY', id: 'inventory-no-match', title: `I could not find ${focus}`,
         body: `This home has ${allItems.length} visible inventory item${allItems.length === 1 ? '' : 's'}, but none match this request. Ask will not infer an unrecorded appliance or system from general property data.`,
         tone: 'DEFAULT',
-        actions: [{ id: 'search-inventory', label: 'Search home inventory', href: inventoryHref, style: 'PRIMARY' }],
+        actions: [inventoryShowAllAction()],
       }],
       suggestions: [],
     };
@@ -318,7 +312,7 @@ async function inventoryLookupResult(
           items: matches.slice(0, MAX_RESULT_ITEMS).map((item) => ({
             id: item.id, title: item.name, entityType: 'INVENTORY_ITEM', actions: inventoryCorrectionItemActions(access.role !== HouseholdRole.VIEWER), description: [item.brand ?? item.manufacturer, item.model ?? item.modelNumber].filter(Boolean).join(' ') || null,
             meta: [item.room?.name, item.category.toLowerCase().replace(/_/g, ' '), `Updated ${humanDate(item.updatedAt) ?? 'date unavailable'}`].filter((value): value is string => Boolean(value)),
-            status: item.condition, href: inventoryItemHref(propertyId, item.id),
+            status: item.condition, href: null,
           })),
         }],
         actions: [],
@@ -378,7 +372,7 @@ async function inventoryLookupResult(
       missingCount: matches.filter((item) => inventoryMissingFacts(item).length > 0).length,
       lifecycleCount: matches.filter((item) => item.expectedExpiryDate && item.expectedExpiryDate <= inventoryLifecycleHorizon()).length,
     })),
-    actions: [{ id: 'open-inventory', label: 'Open home inventory', href: inventoryHref, style: 'PRIMARY' }],
+    actions: [],
   }, {
     // ASK_COZY_INLINE_WORKSPACE_FRD Phase 3: block id 'inventory-results' is
     // matched by GroupedListBlock.tsx to render InventoryResultList instead
@@ -418,14 +412,13 @@ async function inventoryLookupResult(
             `${item.documents.length} document${item.documents.length === 1 ? '' : 's'}`,
             item.isVerified ? 'Verified record' : 'Not verified',
           ].filter((value): value is string => Boolean(value)),
-          status: item.condition, href: inventoryItemHref(propertyId, item.id),
+          status: item.condition, href: null,
         };
       }),
     }],
     // I-1: "Add an item" is the one dominant step; the full inventory page is a quiet secondary link (shown by the calm answer only).
     actions: [
       ...(access.role !== HouseholdRole.VIEWER ? [inventoryAddItemAction()] : []),
-      { id: 'open-inventory-list', label: 'Open home inventory', href: inventoryHref, style: 'SECONDARY' },
     ],
   }];
 
@@ -452,7 +445,7 @@ async function inventoryLookupResult(
         items: events.map((event) => ({
           id: event.id, title: event.title, entityType: 'HOME_EVENT', actions: homeEventCorrectionItemActions(access.role !== HouseholdRole.VIEWER), description: event.summary,
           meta: [humanDate(event.occurredAt) ?? 'Date unavailable', event.type.toLowerCase().replace(/_/g, ' '), event.verificationStatus.toLowerCase().replace(/_/g, ' '), event.sourceBadge.toLowerCase().replace(/_/g, ' ')],
-          status: event.datePrecision, href: inventoryItemHref(propertyId, selectedItem.id),
+          status: event.datePrecision, href: null,
         })),
       }],
       actions: [],
@@ -596,7 +589,7 @@ export async function inventoryCompleteDetailsResult(userId: string, propertyId:
   const access = await ensurePropertyAccess(userId, propertyId);
   if (access.role === HouseholdRole.VIEWER) return { status: 'BLOCKED', reasonCode: 'ASK_PERMISSION_REQUIRED', blocks: [{ type: 'SUMMARY', id: 'inventory-complete-permission', title: 'A contributor or owner can update this item', body: 'Your role can view inventory details but cannot change them.', tone: 'CAUTION', actions: [] }], suggestions: [] };
   const item = await prisma.inventoryItem.findFirst({ where: { id: itemId, propertyId } });
-  if (!item) return { status: 'BLOCKED', reasonCode: 'INVENTORY_ITEM_NOT_FOUND', blocks: [{ type: 'SUMMARY', id: 'inventory-complete-missing', title: 'This inventory item is no longer available', body: 'Open the current inventory and choose another item.', tone: 'CAUTION', actions: [] }], suggestions: [] };
+  if (!item) return { status: 'BLOCKED', reasonCode: 'INVENTORY_ITEM_NOT_FOUND', blocks: [{ type: 'SUMMARY', id: 'inventory-complete-missing', title: 'This inventory item is no longer available', body: 'Show your home inventory and choose another item.', tone: 'CAUTION', actions: [] }], suggestions: [] };
   const contextVersion = inventoryItemContextVersion(item);
   const missing = inventoryCompletionFields(item as unknown as Record<string, unknown>);
   if (!answer) {
@@ -889,7 +882,6 @@ export function inventoryCorrectionConfirmation(item: { id: string; name: string
 
 async function inventoryItemCorrectResult(userId: string, propertyId: string, message: string, launchContext?: CreateAskExecutionRequest['launchContext']): Promise<AskOperationResult> {
   await ensurePropertyAccess(userId, propertyId);
-  const inventoryHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/inventory?tab=items`;
   const items = await inventoryService.listItems(propertyId, {});
   // A selected suggestion's item is authoritative: gone or changed since it was offered means stale, never a title match.
   const typedTarget = resolveTypedActionTarget(items, launchContext, {
@@ -908,7 +900,7 @@ async function inventoryItemCorrectResult(userId: string, propertyId: string, me
           id: item.id, title: item.name, entityType: 'INVENTORY_ITEM', description: null,
           meta: [item.room?.name, item.category.toLowerCase().replace(/_/g, ' ')].filter((value): value is string => Boolean(value)), status: item.condition, href: null,
         })) }],
-        actions: [{ id: 'open-inventory', label: 'Open home inventory', href: inventoryHref, style: 'SECONDARY' }],
+        actions: [],
       }],
       suggestions: [],
     };
@@ -941,7 +933,7 @@ async function inventoryItemCorrectResult(userId: string, propertyId: string, me
       inventoryCorrection: input, inventoryCorrectionContextVersion: contextVersion, sourceExecutionId: launchContext?.sourceExecutionId ?? null,
       confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString(),
     },
-    blocks: [{ type: 'SUMMARY', id: 'inventory-correct-review', title: `Review this ${INVENTORY_CORRECTION_FIELDS[field].label} correction`, body: 'No shared-home record has changed yet. Enter the corrected value, then confirm.', tone: 'DEFAULT', actions: [{ id: 'open-inventory', label: 'Open home inventory', href: inventoryHref, style: 'SECONDARY' }] }],
+    blocks: [{ type: 'SUMMARY', id: 'inventory-correct-review', title: `Review this ${INVENTORY_CORRECTION_FIELDS[field].label} correction`, body: 'No shared-home record has changed yet. Enter the corrected value, then confirm.', tone: 'DEFAULT', actions: [] }],
     confirmation: inventoryCorrectionConfirmation(selected, field, current, proposed, 1, expiresAt, dynamicOptions),
     suggestions: [],
   };
@@ -1064,17 +1056,15 @@ export async function inventoryCreateBlocker(propertyId: string, input: Inventor
 
 export async function inventoryItemCreateResult(userId: string, propertyId: string, suppliedInput: InventoryCreateInput | undefined, sourceExecutionId: string | null, initialRoomId?: string | null, initialSeed?: InventoryCreateSeed): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
-  const inventoryHref = `/dashboard/properties/${encodeURIComponent(propertyId)}/inventory?tab=items`;
   if (access.role === HouseholdRole.VIEWER) {
     return {
       status: 'BLOCKED', reasonCode: 'ASK_PERMISSION_REQUIRED',
-      blocks: [{ type: 'SUMMARY', id: 'inventory-add-permission', title: 'A contributor or owner can add an item', body: 'Your role can view the inventory but not add to it. Nothing has changed.', tone: 'CAUTION', actions: [{ id: 'open-inventory', label: 'Open home inventory', href: inventoryHref, style: 'SECONDARY' }] }],
+      blocks: [{ type: 'SUMMARY', id: 'inventory-add-permission', title: 'A contributor or owner can add an item', body: 'Your role can view the inventory but not add to it. Nothing has changed.', tone: 'CAUTION', actions: [] }],
       suggestions: [],
     };
   }
   const rooms = await inventoryCreateRooms(propertyId);
   const contextVersion = inventoryCreateVersionFor(propertyId, rooms);
-  const openInventory = { id: 'open-inventory', label: 'Open inventory instead', href: inventoryHref, style: 'SECONDARY' as const };
   if (!suppliedInput) {
     const roomId = initialRoomId && rooms.some((room) => room.id === initialRoomId) ? initialRoomId : initialSeed?.entered.roomId;
     const entered = { ...initialSeed?.entered, ...(roomId ? { roomId } : {}) };
@@ -1087,7 +1077,7 @@ export async function inventoryItemCreateResult(userId: string, propertyId: stri
     return {
       status: 'NEEDS_CONTEXT', reasonCode: 'INVENTORY_CREATE_INPUT_REQUIRED', contextVersion,
       parameters: { sourceExecutionId },
-      blocks: [{ type: 'SUMMARY', id: 'inventory-create-input', title: initialSeed?.unresolvedRoomName ? 'Choose a recorded room' : needsItemName ? 'Which item should I record?' : 'Review the item details', body: `${body} Nothing has been added yet.`, tone: initialSeed?.unresolvedRoomName ? 'CAUTION' : 'DEFAULT', actions: [openInventory] }],
+      blocks: [{ type: 'SUMMARY', id: 'inventory-create-input', title: initialSeed?.unresolvedRoomName ? 'Choose a recorded room' : needsItemName ? 'Which item should I record?' : 'Review the item details', body: `${body} Nothing has been added yet.`, tone: initialSeed?.unresolvedRoomName ? 'CAUTION' : 'DEFAULT', actions: [] }],
       captureRequests: [inventoryCreateCaptureRequest(contextVersion, rooms, entered)], suggestions: [],
     };
   }
@@ -1096,7 +1086,7 @@ export async function inventoryItemCreateResult(userId: string, propertyId: stri
     return {
       status: 'NEEDS_CONTEXT', reasonCode: blocker.code, contextVersion,
       parameters: { sourceExecutionId },
-      blocks: [{ type: 'SUMMARY', id: 'inventory-create-blocked', title: blocker.title, body: blocker.body, tone: 'CAUTION', actions: [openInventory] }],
+      blocks: [{ type: 'SUMMARY', id: 'inventory-create-blocked', title: blocker.title, body: blocker.body, tone: 'CAUTION', actions: [] }],
       captureRequests: [inventoryCreateCaptureRequest(contextVersion, rooms, suppliedInput)], suggestions: [],
     };
   }
@@ -1105,7 +1095,7 @@ export async function inventoryItemCreateResult(userId: string, propertyId: stri
   return {
     status: 'NEEDS_CONFIRMATION', reasonCode: 'INVENTORY_CREATE_CONFIRMATION_REQUIRED', contextVersion,
     parameters: { inventoryCreate: suppliedInput, inventoryCreateContextVersion: contextVersion, sourceExecutionId, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() },
-    blocks: [{ type: 'SUMMARY', id: 'inventory-create-review', title: 'Review this item', body: 'You entered these details. Nothing is added until you confirm.', tone: 'DEFAULT', actions: [openInventory] }],
+    blocks: [{ type: 'SUMMARY', id: 'inventory-create-review', title: 'Review this item', body: 'You entered these details. Nothing is added until you confirm.', tone: 'DEFAULT', actions: [] }],
     confirmation: {
       confirmationId: `inventory-create-${createHash('sha256').update(`${propertyId}:${suppliedInput.name}:${suppliedInput.category}`).digest('hex').slice(0, 12)}-1`, version: 1,
       title: `Add "${suppliedInput.name}" to your inventory?`,

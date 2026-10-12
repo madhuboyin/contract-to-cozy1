@@ -50,7 +50,6 @@ const PATH_BASELINE = {
   'handlers/homeUpgradePlanner.handler.ts': 1,
   'handlers/hvacDecision.handler.ts': 1,
   'handlers/inspection.handler.ts': 1,
-  'handlers/inventory.handler.ts': 4,
   'handlers/miscHandlers.handler.ts': 3,
   'handlers/projectTracker.handler.ts': 1,
   'handlers/propertyBrief.handler.ts': 1,

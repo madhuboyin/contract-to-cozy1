@@ -251,3 +251,59 @@ test('the declared "View this item" message resolves that exact item, not the wh
     assert.deepEqual(ids(result), ["heatpump"]);
   } finally { restore(); }
 });
+
+// Inventory batch of the handler sweep (docs/product/ASK_COZY_ALL_TOOLS_PARITY_IMPLEMENTATION.md): Ask links to no desktop Inventory page
+// (owner decision, 2026-10-10). Every inventory answer keeps its rows as inline INVENTORY_ITEM records and carries no page action or link.
+const noPageLinks = (result, label) => {
+  assert.equal(JSON.stringify(result).includes('/dashboard/'), false, label);
+  for (const block of result.blocks) {
+    for (const action of block.actions ?? []) assert.equal(action.href, undefined, `${label} ${block.id} ${action.id}`);
+    for (const section of block.sections ?? []) for (const entry of section.items) assert.ok(entry.href == null, `${label} ${entry.id}`);
+  }
+};
+
+test('inventory answers link to no desktop page: list, single item, no match, filter with no match, and an empty home', async () => {
+  install();
+  try {
+    for (const message of ['Show my inventory', 'Show my furnace', 'Which items are missing details?']) noPageLinks(await run(message), message);
+    const none = await run('Show my chandelier');
+    assert.equal(none.reasonCode, 'INVENTORY_MATCH_NOT_FOUND');
+    noPageLinks(none, 'no match');
+    // The way forward from "nothing matched" is showing the whole inventory inside Ask, not searching a page.
+    assert.deepEqual(none.blocks[0].actions.map((action) => [action.id, action.interactionType, action.operationId]), [['show-inventory', 'START_WORKFLOW', 'INVENTORY_LOOKUP']]);
+  } finally { restore(); }
+  install([]);
+  try {
+    const empty = await run('Show my inventory');
+    assert.equal(empty.reasonCode, 'INVENTORY_NOT_RECORDED');
+    noPageLinks(empty, 'empty');
+    assert.deepEqual(empty.blocks[0].actions.map((action) => action.operationId), ['INVENTORY_ITEM_CREATE']);
+  } finally { restore(); }
+});
+
+test('a filter that matches nothing keeps its chips and carries no page link', async () => {
+  install();
+  try {
+    priorViewState = view('ALL', null, 1);
+    const result = await run('Only show items with missing details', 'exec-prior');
+    const plumbing = await run('Only show roof items', 'exec-prior');
+    noPageLinks(result, 'refined');
+    noPageLinks(plumbing, 'refined 2');
+  } finally { restore(); }
+});
+
+test('adding or correcting an item links to no desktop page, and a viewer is told who can add one', async () => {
+  install();
+  try {
+    propertyAccess.resolvePropertyAccess = async () => ({ role: 'VIEWER', userId: 'u1', propertyId: 'p1' });
+    const viewer = await capabilityInvoke('INVENTORY_ITEM_CREATE', { userId: 'u1', propertyId: 'p1', message: 'Add a Samsung dishwasher' }, { propertyAccess: { role: 'VIEWER', userId: 'u1', propertyId: 'p1' } });
+    assert.equal(viewer.reasonCode, 'ASK_PERMISSION_REQUIRED');
+    assert.deepEqual(viewer.blocks[0].actions, []);
+    noPageLinks(viewer, 'viewer add');
+    propertyAccess.resolvePropertyAccess = async () => ({ role: 'CONTRIBUTOR', userId: 'u1', propertyId: 'p1' });
+    const target = await capabilityInvoke('INVENTORY_ITEM_CORRECT', { userId: 'u1', propertyId: 'p1', message: 'Correct the brand of an item' });
+    assert.equal(target.reasonCode, 'INVENTORY_ITEM_TARGET_REQUIRED');
+    assert.deepEqual(target.blocks[0].actions, []);
+    noPageLinks(target, 'correct target');
+  } finally { restore(); }
+});
