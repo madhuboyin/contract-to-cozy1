@@ -127,6 +127,8 @@ export type AskOperationId =
   // Start a renovation case (register section 3): a confirmation-gated command reached by the declared Start a renovation case action on the readiness
   // answer or a typed "start a renovation case"; never by fuzzy retrieval.
   | 'RENOVATION_CASE_START'
+  // Add a seasonal checklist task to maintenance, snooze it, set it aside, or bring it back (register P2 Seasonal Home Care). Confirmation-gated, declared-action only.
+  | 'SEASONAL_ITEM_COMMAND'
   // Snooze or reschedule a Home Operations work item, or accept the routine low-risk candidates in bulk (register P2 Maintenance and Home Operations). Confirmation-gated, declared-action only.
   | 'HOME_WORK_ITEM_COMMAND'
   // List the home's open Home Operations work items with state, due date and snooze (register P2 Maintenance and Home Operations). Read-only.
@@ -423,6 +425,7 @@ export const ASK_INTERNAL_OPERATION_IDS: ReadonlySet<AskOperationId> = new Set<A
   'NEGOTIATION_SHIELD_CASE_ATTACH',
   // Reached by the declared action or the deterministic typed-start pattern; never by fuzzy retrieval.
   'RENOVATION_CASE_START',
+  'SEASONAL_ITEM_COMMAND',
   'HOME_WORK_ITEM_COMMAND',
   'INSPECTION_FINDING_DECISION_COMMAND',
   'INSPECTION_REPORT_COMMAND',
@@ -749,6 +752,7 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   MATERIAL_SPEC_ADD: definition('MATERIAL_SPEC_ADD', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'material-spec.add', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   NEGOTIATION_SHIELD_CASE_START: definition('NEGOTIATION_SHIELD_CASE_START', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'negotiation-shield.start', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   RENOVATION_CASE_START: definition('RENOVATION_CASE_START', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'renovation-case.start', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
+  SEASONAL_ITEM_COMMAND: definition('SEASONAL_ITEM_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'seasonal-item.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   HOME_WORK_ITEM_COMMAND: definition('HOME_WORK_ITEM_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'home-work-item.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   HOME_WORK_ITEMS: definition('HOME_WORK_ITEMS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'home-work-items.list', ['SUMMARY', 'GROUPED_LIST', 'EMPTY_STATE', 'BOUNDARY']),
   INSPECTION_NEGOTIATION_PACKAGE: definition('INSPECTION_NEGOTIATION_PACKAGE', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'inspection-negotiation-package.build', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),

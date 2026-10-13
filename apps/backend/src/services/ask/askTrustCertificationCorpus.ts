@@ -282,6 +282,7 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   NEGOTIATION_SHIELD_CASE_UPDATE: 'The changes to your review\'s saved details are listed and saved only after you confirm; the analysis is not re-run.',
   NEGOTIATION_SHIELD_CASE_ATTACH: 'The record you pick is shown, with who can see it, and is attached to your review only after you confirm; the file is not read.',
   RENOVATION_CASE_START: 'Your renovation case is shown and saved only after you confirm; nothing is applied for or started.',
+  SEASONAL_ITEM_COMMAND: 'The seasonal task change is shown for review and applied only after you confirm.',
   HOME_WORK_ITEM_COMMAND: 'The change is shown for review and applied only after you confirm.',
   HOME_WORK_ITEMS: 'Your open work items are listed with their state, due date and snooze.',
   INSPECTION_NEGOTIATION_PACKAGE: 'A negotiation package is built from this inspection report: a choice per open finding, then the credit total and the repair and as-is lists; nothing is saved or sent.',

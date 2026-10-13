@@ -238,7 +238,7 @@ Project Tracker appeared in the original P0 list as "lists projects." It is remo
 | Guidance Overview | Residual gap | Create, continue, skip and dismiss exist; richer plan editing is limited | Not re-verified |
 | Repair or Replace | Needs verification | Registry carries `REPLACEMENT_GUIDANCE` and the HVAC decision platform; no operation named for the item-level repair/replace analysis was found by name search, so coverage is unconfirmed and must be read per desktop route in its own slice | Not re-verified (2026-10-12 name search only) |
 | Documents and Home Records | Residual gap | Strong detail, upload, extraction review and promotion; specialized uploads retain owning workflows | Not re-verified |
-| Seasonal Home Care | Residual gap | Setup exists; direct checklist complete/snooze/dismiss remains open | Not re-verified |
+| Seasonal Home Care | Residual gap | Setup exists. **Since (v1.343):** add to maintenance, snooze, set aside and bring back on each seasonal task; completion is the linked maintenance task's. Still not in Ask: add all critical tasks, remove from maintenance, dismiss a checklist | Not re-verified |
 
 ## Intentional boundaries: upload-driven and visual analyzers
 

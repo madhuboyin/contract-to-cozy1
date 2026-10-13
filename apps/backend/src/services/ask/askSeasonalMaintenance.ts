@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { SEASONAL_ITEM_ACTION_IDS, SEASONAL_ITEM_MESSAGES, seasonalItemKinds } from './support/seasonalItemCommand';
 import { seasonalLeadSentence, seasonalTaskFacts, seasonalTemplateByKey } from './support/seasonalHomeCare';
 import type { AskOperationResult } from './askOperationRegistry';
 import type {
@@ -129,6 +130,9 @@ export function buildSeasonalMaintenanceResult(input: {
   context: SeasonalChecklistContext | null;
   contextAvailable: boolean;
   now?: Date;
+  /** A contributor or owner, and the home's primary account holder (the seasonal services filter on it). Both default to none. */
+  canManage?: boolean;
+  isPrimaryHolder?: boolean;
 }): AskOperationResult | null {
   const intent = parseSeasonalMaintenanceIntent(input.message);
   if (!intent.requested) return null;
@@ -222,6 +226,14 @@ export function buildSeasonalMaintenanceResult(input: {
         detail: statusFacts.map((fact) => `${fact.label}: ${fact.value}`).join('\n'),
         tone: isUrgent({ item }) ? 'CAUTION' as const : 'DEFAULT' as const,
         status, href: null, countLabel: String(number),
+        actions: seasonalItemKinds(
+          { status: item.status, priority: item.priority, maintenanceTaskId: item.maintenanceTask?.id ?? null, completed: status === 'COMPLETED' },
+          { canManage: Boolean(input.canManage), isPrimaryHolder: Boolean(input.isPrimaryHolder) },
+        ).map((kind) => ({
+          id: SEASONAL_ITEM_ACTION_IDS[kind], label: kind === 'ADD' ? 'Add to maintenance' : kind === 'SNOOZE' ? 'Snooze' : kind === 'DISMISS' ? 'Set aside' : 'Bring back',
+          message: SEASONAL_ITEM_MESSAGES[kind], interactionType: 'MUTATE_RECORD' as const, operationId: 'SEASONAL_ITEM_COMMAND' as const,
+          style: kind === 'ADD' ? 'PRIMARY' as const : 'QUIET' as const,
+        })),
       };
     };
     const group = (id: string, groupTitle: string, caption: string, records: typeof matches) => records.length

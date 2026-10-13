@@ -25,7 +25,7 @@ import { calendarAwareTimeZone, humanDate } from '../askFormatting';
 import { AskViewState, durableFreeTextClarification, ensurePropertyAccess, MaintenanceCompletionWorkflowInput, MaintenanceCompletionWorkflowInputSchema, MaintenanceTaskUpdateInputSchema, MaintenanceTaskWorkflowInput, MaintenanceTaskWorkflowInputSchema, MAX_RESULT_ITEMS, safeTimezone } from '../askHandlerSupport';
 import { formatAskMaintenanceDescription, formatAskMaintenanceScope, formatAskMaintenanceTitle } from '../askMaintenancePresentation';
 import { extractMaintenanceTaskTitle } from '../askMaintenanceTaskInput';
-import { buildSeasonalMaintenanceResult } from '../askSeasonalMaintenance';
+import { buildSeasonalMaintenanceResult, parseSeasonalMaintenanceIntent } from '../askSeasonalMaintenance';
 
 type MaintenanceTimeframe = {
   label: string;
@@ -896,6 +896,11 @@ export async function maintenanceResult(
     context: seasonalContext,
     contextAvailable: seasonalContextAvailable,
     now,
+    canManage: access.role !== HouseholdRole.VIEWER,
+    // Only a seasonal answer shows the item controls, so only it needs to know whether this is the primary account holder.
+    isPrimaryHolder: access.role !== HouseholdRole.VIEWER && seasonalContextAvailable && parseSeasonalMaintenanceIntent(message).requested
+      ? Boolean(await prisma.property.findFirst({ where: { id: propertyId, homeownerProfile: { userId } }, select: { id: true } }))
+      : false,
   });
   if (seasonalResult) return seasonalResult;
   const { effectiveMessage, isClearAllFilters } = mergeMaintenanceViewContinuation(priorViewState, message, viewIntent);

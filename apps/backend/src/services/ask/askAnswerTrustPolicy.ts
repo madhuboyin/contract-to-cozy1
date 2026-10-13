@@ -95,7 +95,7 @@ const OPERATION_BOUNDARIES: Partial<Record<AskOperationId, ReadonlySet<string>>>
 };
 
 const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<string>>>> = {
-  MAINTENANCE_STATUS: new Set(['create-maintenance', 'maintenance-templates-browse', 'add-purchase-date', 'seasonal-retry', 'seasonal-show-pending', 'seasonal-show-completed', 'seasonal-show-dismissed', 'seasonal-show-maintenance']),
+  MAINTENANCE_STATUS: new Set(['create-maintenance', 'maintenance-templates-browse', 'add-purchase-date', 'seasonal-retry', 'seasonal-show-pending', 'seasonal-show-completed', 'seasonal-show-dismissed', 'seasonal-show-maintenance', 'seasonal-item-add', 'seasonal-item-snooze', 'seasonal-item-dismiss', 'seasonal-item-restore']),
   // + the claim transition item actions (FRD v1.42); the inline claim detail shows only those legal from the live status.
   // FRD v1.43: INSPECTION_FINDINGS had no entry, so even its "Open Inspection Hub" link was stripped; the finding
   // actions are shown in the inline detail only when the live state allows them.
@@ -182,6 +182,8 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   NEGOTIATION_SHIELD_CASE_ATTACH: new Set(['negotiation-shield-review', 'negotiation-shield-analyze']),
   // The readiness answer's empty state offers the start; the receipt of a started case offers that case's readiness check.
   RENOVATION_CASE_START: new Set(['renovation-case-readiness']),
+  // Add a seasonal checklist task to maintenance, snooze it, set it aside, or bring it back (register P2 Seasonal Home Care). Confirmation-gated, declared-action only.
+  SEASONAL_ITEM_COMMAND: new Set(['seasonal-item-back']),
   // Snooze or reschedule a Home Operations work item, or accept the routine low-risk candidates in bulk (register P2 Maintenance and Home Operations). Confirmation-gated, declared-action only.
   HOME_WORK_ITEM_COMMAND: new Set(['home-work-items-back']),
   // List the home's open Home Operations work items with state, due date and snooze (register P2 Maintenance and Home Operations). Read-only.

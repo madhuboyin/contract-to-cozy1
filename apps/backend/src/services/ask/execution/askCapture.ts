@@ -75,6 +75,8 @@ import { parseSaleCaseAnswer, saleCaseFormKindFromCaptureKey } from '../support/
 import { saleCaseCommandResult } from '../handlers/sellerPrepCaseCommands.handler';
 import { negotiationPackageResult } from '../handlers/inspectionNegotiationPackage.handler';
 import { workItemCommandResult } from '../handlers/homeWorkItemCommands.handler';
+import { seasonalItemResult } from '../handlers/seasonalItemCommands.handler';
+import { SEASONAL_SNOOZE_CAPTURE_KEY, parseSeasonalSnoozeAnswer } from '../support/seasonalItemCommand';
 import { parseWorkItemAnswer, workItemFormKindFromCaptureKey } from '../support/homeWorkItemCommand';
 import { NEGOTIATION_PACKAGE_CAPTURE_KEY } from '../support/inspectionReportCommand';
 import { HABIT_COACH_PREFERENCES_CAPTURE_KEY, parseHabitCoachPreferencesAnswer } from '../support/habitCoachPreferencesCommand';
@@ -1499,6 +1501,21 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     captureId = input.idempotencyKey;
     capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
     canonicalOwner = 'OperationalWorkItem';
+  } else if (execution.operationId === 'SEASONAL_ITEM_COMMAND') {
+    if (input.captureKey !== SEASONAL_SNOOZE_CAPTURE_KEY) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    const access = await ensurePropertyAccess(userId, execution.propertyId);
+    if (access.role === HouseholdRole.VIEWER) throw Object.assign(new Error('A contributor or owner is required to change seasonal tasks.'), { code: 'ASK_PERMISSION_REQUIRED' });
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson) ? execution.parametersJson as Record<string, unknown> : {};
+    const siLaunch = storedParameters.seasonalItemLaunch && typeof storedParameters.seasonalItemLaunch === 'object' && !Array.isArray(storedParameters.seasonalItemLaunch)
+      ? storedParameters.seasonalItemLaunch as { kind?: unknown; entityId?: unknown; sourceExecutionId?: unknown } : null;
+    if (!siLaunch || siLaunch.kind !== 'SNOOZE' || typeof siLaunch.entityId !== 'string') throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    if (!parseSeasonalSnoozeAnswer(input.answer).success) throw Object.assign(new Error('Choose how long to snooze.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+    result = await seasonalItemResult(userId, execution.propertyId, {
+      kind: 'SNOOZE', entityId: siLaunch.entityId, sourceExecutionId: typeof siLaunch.sourceExecutionId === 'string' ? siLaunch.sourceExecutionId : null,
+    }, input.answer as Record<string, unknown>);
+    captureId = input.idempotencyKey;
+    capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
+    canonicalOwner = 'SeasonalChecklistItem';
   } else if (execution.operationId === 'CLAIM_ACTIVITY_COMMAND') {
     if (input.captureKey !== CLAIM_NOTE_CAPTURE_KEY) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
     const access = await ensurePropertyAccess(userId, execution.propertyId);
