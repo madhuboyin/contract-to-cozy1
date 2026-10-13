@@ -182,6 +182,9 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   NEGOTIATION_SHIELD_CASE_ATTACH: new Set(['negotiation-shield-review', 'negotiation-shield-analyze']),
   // The readiness answer's empty state offers the start; the receipt of a started case offers that case's readiness check.
   RENOVATION_CASE_START: new Set(['renovation-case-readiness']),
+  // Prepare the member's briefing, change their briefing settings, and mark an update seen, dismissed or not useful (register P1 Home Briefing). Confirmation-gated, declared-action only; the briefing is the caller's own.
+  HOME_BRIEFING_VIEW: new Set(['home-briefing-generate', 'home-briefing-preferences', 'home-briefing-seen', 'home-briefing-dismiss', 'home-briefing-not-useful']),
+  HOME_BRIEFING_COMMAND: new Set(['home-briefing-back']),
   // Follow, dismiss or mark not relevant a local change (register P1 Neighborhood Change Radar). A person's own reading, stored per user and match, so a viewer may set it. Confirmation-gated, declared-action only.
   NEIGHBORHOOD_CHANGE_FEED: new Set(['neighborhood-follow', 'neighborhood-dismiss', 'neighborhood-not-relevant']),
   NEIGHBORHOOD_INTERACTION_COMMAND: new Set(['neighborhood-back']),

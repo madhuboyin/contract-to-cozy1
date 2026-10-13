@@ -350,7 +350,15 @@ async function sourceDetailForChange(change: {
   });
 }
 
-async function preferenceFor(propertyId: string, userId: string) {
+async function preferenceFor(propertyId: string, userId: string, options: { readOnly?: boolean } = {}) {
+  if (options.readOnly) {
+    // A read never creates the row: the defaults are shown as they would be created, and the first write or generation makes it real.
+    const existing = await prisma.homeBriefingPreference.findUnique({ where: { propertyId_userId: { propertyId, userId } } });
+    return existing ?? {
+      id: null, propertyId, userId, cadence: HomeBriefingCadence.WEEKLY, topics: [] as string[], channels: [HomeBriefingChannel.IN_APP],
+      enabled: true, createdAt: null, updatedAt: null,
+    };
+  }
   return prisma.homeBriefingPreference.upsert({
     where: { propertyId_userId: { propertyId, userId } },
     create: {
@@ -781,9 +789,9 @@ export async function generateHomeBriefing(input: {
   return delivery;
 }
 
-export async function getHomeBriefingView(propertyId: string, userId: string) {
+export async function getHomeBriefingView(propertyId: string, userId: string, options: { readOnly?: boolean } = {}) {
   const [preference, deliveries] = await Promise.all([
-    preferenceFor(propertyId, userId),
+    preferenceFor(propertyId, userId, options),
     prisma.homeBriefingDelivery.findMany({
       where: { propertyId, userId },
       orderBy: { generatedAt: 'desc' },

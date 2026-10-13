@@ -65,6 +65,8 @@ import { parseReadinessFormAnswer, readinessFormKindFromCaptureKey } from '../su
 import { readinessCommandResult } from '../handlers/renovationReadinessCommands.handler';
 import { PAST_HAZARD_CAPTURE_KEY, PAST_HAZARD_INVALID_MESSAGES, parsePastHazardOutcomeAnswer } from '../support/pastHazardOutcomeCommand';
 import { pastHazardCommandResult } from '../handlers/pastHazardOutcomeCommands.handler';
+import { BRIEFING_PREFERENCES_CAPTURE_KEY, parseBriefingPreferencesAnswer } from '../support/homeBriefingCommand';
+import { briefingCommandResult } from '../handlers/homeBriefingCommands.handler';
 import { COVERAGE_DECISION_CAPTURE_KEY, parseCoverageDecisionAnswer, type CoverageCommandKind } from '../support/coverageCommand';
 import { parseUpgradeFormAnswer, upgradeFormKindFromCaptureKey, type UpgradeCommandKind } from '../support/homeUpgradeCommand';
 import { parsePermitFormAnswer, permitFormKindFromCaptureKey, type PermitCommandKind } from '../support/permitTrackerCommand';
@@ -1305,6 +1307,24 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     captureId = input.idempotencyKey;
     capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
     canonicalOwner = 'PropertyHazardOutcome';
+  } else if (execution.operationId === 'HOME_BRIEFING_COMMAND') {
+    if (input.captureKey !== BRIEFING_PREFERENCES_CAPTURE_KEY) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    const access = await ensurePropertyAccess(userId, execution.propertyId);
+    if (access.role === HouseholdRole.VIEWER) throw Object.assign(new Error('A contributor or owner is required to change the briefing in Ask.'), { code: 'ASK_PERMISSION_REQUIRED' });
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson) ? execution.parametersJson as Record<string, unknown> : {};
+    const briefingLaunch = storedParameters.briefingCommandLaunch && typeof storedParameters.briefingCommandLaunch === 'object' && !Array.isArray(storedParameters.briefingCommandLaunch)
+      ? storedParameters.briefingCommandLaunch as { kind?: unknown; entityId?: unknown; sourceExecutionId?: unknown } : null;
+    if (!briefingLaunch || briefingLaunch.kind !== 'PREFERENCES' || typeof briefingLaunch.entityId !== 'string') {
+      throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    }
+    const briefingAnswer = parseBriefingPreferencesAnswer(input.answer);
+    if (!briefingAnswer.success) throw Object.assign(new Error('Choose on or off, how often, and at least one place to send it.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+    result = await briefingCommandResult(userId, execution.propertyId, {
+      kind: 'PREFERENCES', entityId: briefingLaunch.entityId, sourceExecutionId: typeof briefingLaunch.sourceExecutionId === 'string' ? briefingLaunch.sourceExecutionId : null,
+    }, briefingAnswer.data);
+    captureId = input.idempotencyKey;
+    capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
+    canonicalOwner = 'HomeBriefingPreference';
   } else if (execution.operationId === 'PROPERTY_BRIEF_COMMAND') {
     if (![PROPERTY_BRIEF_PREPARE_CAPTURE_KEY, PROPERTY_BRIEF_SHARE_CAPTURE_KEY].includes(input.captureKey) || input.expectedContextVersion !== 'property-brief-live') throw Object.assign(new Error('This Property Brief form is no longer active.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
     const access = await ensurePropertyAccess(userId, execution.propertyId);

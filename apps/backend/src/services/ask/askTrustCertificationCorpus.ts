@@ -282,6 +282,8 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   NEGOTIATION_SHIELD_CASE_UPDATE: 'The changes to your review\'s saved details are listed and saved only after you confirm; the analysis is not re-run.',
   NEGOTIATION_SHIELD_CASE_ATTACH: 'The record you pick is shown, with who can see it, and is attached to your review only after you confirm; the file is not read.',
   RENOVATION_CASE_START: 'Your renovation case is shown and saved only after you confirm; nothing is applied for or started.',
+  HOME_BRIEFING_COMMAND: 'The change is shown for review and made only after you confirm; it is your own briefing and changes nothing for anyone else.',
+  HOME_BRIEFING_VIEW: 'Your own briefing is shown: your settings, and the latest updates about your home with which you have seen.',
   NEIGHBORHOOD_INTERACTION_COMMAND: 'Your view of the change is shown for review and set only after you confirm; it changes nothing for anyone else.',
   PAST_HAZARD_OUTCOME_COMMAND: 'Your observation is shown for review and recorded only after you confirm; it is your observation, not a finding of damage.',
   RENOVATION_READINESS_COMMAND: 'The step is shown for review and made only after you confirm; readiness never establishes that work is compliant.',

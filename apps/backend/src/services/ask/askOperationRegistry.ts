@@ -127,6 +127,10 @@ export type AskOperationId =
   // Start a renovation case (register section 3): a confirmation-gated command reached by the declared Start a renovation case action on the readiness
   // answer or a typed "start a renovation case"; never by fuzzy retrieval.
   | 'RENOVATION_CASE_START'
+  // Prepare the member's briefing, change their briefing settings, and mark an update seen, dismissed or not useful (register P1 Home Briefing). Confirmation-gated, declared-action only; the briefing is the caller's own.
+  | 'HOME_BRIEFING_COMMAND'
+  // Read the household member's own home briefing: settings, the latest briefing's updates and their reading state (register P1 Home Briefing). Read-only; never creates a preference row or a briefing.
+  | 'HOME_BRIEFING_VIEW'
   // Follow, dismiss or mark not relevant a local change (register P1 Neighborhood Change Radar). A person's own reading, stored per user and match, so a viewer may set it. Confirmation-gated, declared-action only.
   | 'NEIGHBORHOOD_INTERACTION_COMMAND'
   // Record what the household observed after a matched hazard event (register P1 Home Risk Replay). Confirmation-gated, declared-action only; behind the route's reviewed-source-coverage gate.
@@ -387,6 +391,7 @@ export const ASK_INTERNAL_OPERATION_IDS: ReadonlySet<AskOperationId> = new Set<A
   'NEGOTIATION_SHIELD_CASE_ATTACH',
   // Reached by the declared action or the deterministic typed-start pattern; never by fuzzy retrieval.
   'RENOVATION_CASE_START',
+  'HOME_BRIEFING_COMMAND',
   'NEIGHBORHOOD_INTERACTION_COMMAND',
   'PAST_HAZARD_OUTCOME_COMMAND',
   'RENOVATION_READINESS_COMMAND',
@@ -702,6 +707,8 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   MATERIAL_SPEC_ADD: definition('MATERIAL_SPEC_ADD', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'material-spec.add', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   NEGOTIATION_SHIELD_CASE_START: definition('NEGOTIATION_SHIELD_CASE_START', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'negotiation-shield.start', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   RENOVATION_CASE_START: definition('RENOVATION_CASE_START', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'renovation-case.start', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
+  HOME_BRIEFING_COMMAND: definition('HOME_BRIEFING_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'home-briefing.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
+  HOME_BRIEFING_VIEW: definition('HOME_BRIEFING_VIEW', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'home-briefing.view', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
   NEIGHBORHOOD_INTERACTION_COMMAND: definition('NEIGHBORHOOD_INTERACTION_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'neighborhood-interaction.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   PAST_HAZARD_OUTCOME_COMMAND: definition('PAST_HAZARD_OUTCOME_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'past-hazard.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   RENOVATION_READINESS_COMMAND: definition('RENOVATION_READINESS_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'renovation-readiness.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
@@ -1233,6 +1240,7 @@ const roomPlantRecommendationPattern = /\b(?:recommend|suggest|find|pick|choose|
 const homeDigitalWillPattern = /\b(?:home )?continuity plan\b|\bdigital will\b|\bhome (?:handoff|hand-off|hand off) plan\b|\btrusted contacts?\b.{0,30}\b(?:home|house|plan)\b|\b(?:if|when) (?:someone|somebody|anyone) (?:else )?(?:takes? over|has to take over|needs to run)\b.{0,30}\b(?:home|house|place)\b/i;
 const homeDigitalWillOtherIntentPattern = /\b(?:estate|probate|attorney|lawyer|legal will|last will|testament|inherit(?:ance)?)\b/i;
 const homeHabitsPattern = /\bhabit coach\b|\bhome[- ]care habits?\b|\bhome habits?\b|\bhabits?\b.{0,40}\b(?:home|house|property|place)\b|\b(?:home|house|property)\b.{0,40}\bhabits?\b/i;
+const homeBriefingPattern = /\b(?:(?:my|the) home briefing|home briefing (?:settings|preferences)|(?:my|the) briefing(?: settings| preferences)?|briefing settings)\b/i;
 const homeStatusBoardPattern = /\bstatus board\b|\b(?:condition|health|state) of (?:my|our|the) (?:appliances|systems|home systems|equipment|home items)\b|\bwhich (?:of (?:my|our) )?(?:appliances|systems|home systems|equipment)\b.{0,30}\b(?:need (?:attention|action)|should i (?:monitor|watch)|are in (?:good|bad|poor) (?:shape|condition))\b|\bhow are (?:my|our) (?:appliances|systems|home systems) (?:doing|holding up)\b/i;
 const pastHazardExposurePattern = /\b(?:home )?risk replay\b|\bpast (?:hazards?|storms?|floods?|flooding|wildfires?|disasters?|hazard exposure)\b|\b(?:has|have|did)\s+(?:my|this|our|the)\s+(?:home|house|property)\s+(?:ever\s+)?(?:been|gone)\s+(?:hit|affected|flooded|exposed|through)\b|\b(?:hazards?|disasters?|storms?|floods?|wildfires?|hurricanes?)\b.{0,30}\b(?:has|have)\b.{0,20}\b(?:home|house|property)\b.{0,15}\b(?:been|seen|faced)\b|\bin (?:a|the) flood zone\b/i;
 const pastHazardOtherIntentPattern = /\b(?:claim|file|filing|insurance|insurer|policy|coverage|report(?:ing)? (?:the )?damage)\b/i;
@@ -1531,6 +1539,9 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   }
   if (homeHabitsPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('HOME_HABITS', 0.96);
+  }
+  if (homeBriefingPattern.test(message) && !explicitCapabilityPattern.test(message)) {
+    return resolved('HOME_BRIEFING_VIEW', 0.96);
   }
   if (homeStatusBoardPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('HOME_STATUS_BOARD', 0.96);
