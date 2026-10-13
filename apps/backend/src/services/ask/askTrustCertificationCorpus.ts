@@ -282,6 +282,7 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   NEGOTIATION_SHIELD_CASE_UPDATE: 'The changes to your review\'s saved details are listed and saved only after you confirm; the analysis is not re-run.',
   NEGOTIATION_SHIELD_CASE_ATTACH: 'The record you pick is shown, with who can see it, and is attached to your review only after you confirm; the file is not read.',
   RENOVATION_CASE_START: 'Your renovation case is shown and saved only after you confirm; nothing is applied for or started.',
+  PERMIT_TRACKER_STATUS: 'Your recorded permits are listed with their official status, open inspections and any flags for work that may have needed a permit.',
   NEGOTIATION_SHIELD_BUYER_COMMAND: 'Your negotiation step is shown, with what it will change, and saved only after you confirm; nothing is sent to the seller.',
   PRICE_FINALIZATION_COMMAND: 'Your price record change is shown and saved only after you confirm; nothing is booked, paid or sent to a vendor.',
   QUOTE_COMPARISON_COMMAND: 'Your proposal change is shown and saved only after you confirm; nothing is accepted, booked or sent to a provider.',

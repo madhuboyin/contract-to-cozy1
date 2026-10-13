@@ -148,6 +148,7 @@ export class PermitTrackerService {
         workTypes: true,
         description: true,
         status: true,
+        reportedStatus: true,
         source: true,
         issueDate: true,
         finaledDate: true,
