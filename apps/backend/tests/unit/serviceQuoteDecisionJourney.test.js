@@ -73,3 +73,68 @@ test('canonical property page presents the unified decision journey', () => {
   assert.match(client, /Defer decision/);
   assert.doesNotMatch(client, /Recommended quote/);
 });
+
+// Slice 1b of the Quote Comparison Home Record import design: the advance can run on a transaction the caller owns, behaviour unchanged.
+const { prisma } = require('../../src/lib/prisma.ts');
+const journey = require('../../src/services/serviceQuoteDecisionJourney.service.ts');
+const analytics = require('../../src/services/serviceQuoteDecisionAnalytics.service.ts');
+
+function fakeTx(workspace) {
+  const writes = [];
+  const state = { ...workspace };
+  const tx = {
+    quoteComparisonWorkspace: {
+      findFirst: async () => state,
+      update: async (args) => { writes.push(['workspace.update', args.data.journeyStage]); state.journeyStage = args.data.journeyStage; return state; },
+      findUnique: async () => ({ ...state, transitions: [], contextLinks: [] }),
+    },
+    serviceQuoteDecisionTransition: { create: async (args) => { writes.push(['transition', args.data.fromStage, args.data.toStage]); return {}; } },
+    serviceQuoteDecisionContextLink: { upsert: async (args) => { writes.push(['link', args.create.entityType, args.create.entityId]); return {}; } },
+    homeEvent: { findFirst: async () => null, create: async () => ({}) },
+  };
+  return { tx, writes };
+}
+const base = { id: 'ws-1', journeyStage: 'SCOPE_REVIEW', outcome: 'OPEN', inventoryItemId: null, guidanceJourneyId: null };
+const input = { propertyId: 'prop-1', workspaceId: 'ws-1', actorUserId: 'u1', toStage: 'COMPARISON', reason: 'x' };
+
+test('the in-transaction advance writes on the caller\'s transaction, opens none of its own and emits no analytics', async () => {
+  const { tx, writes } = fakeTx(base);
+  const savedTx = prisma.$transaction; const savedEmit = analytics.emitServiceQuoteDecisionAnalytics;
+  let opened = 0; const emitted = [];
+  prisma.$transaction = async () => { opened += 1; throw new Error('must not open a transaction'); };
+  analytics.emitServiceQuoteDecisionAnalytics = (event) => emitted.push(event);
+  try {
+    const out = await journey.advanceServiceQuoteDecisionInTransaction(tx, { ...input, relatedEntityType: 'DOCUMENT', relatedEntityId: 'doc-1' });
+    assert.equal(out.transitionRecorded, true);
+    assert.deepEqual(writes, [['workspace.update', 'COMPARISON'], ['transition', 'SCOPE_REVIEW', 'COMPARISON'], ['link', 'DOCUMENT', 'doc-1']]);
+    assert.equal(opened, 0);
+    assert.equal(emitted.length, 0, 'analytics wait for the caller\'s commit');
+    journey.emitServiceQuoteDecisionAdvanceAnalytics(input, out.result, out.transitionRecorded);
+    assert.equal(emitted.length, 1);
+    assert.equal(emitted[0].eventName, analytics.ServiceQuoteDecisionEvent.COMPARISON_REACHED);
+  } finally { prisma.$transaction = savedTx; analytics.emitServiceQuoteDecisionAnalytics = savedEmit; }
+});
+
+test('the exported advance still runs in one transaction and emits analytics once, after it', async () => {
+  const { tx, writes } = fakeTx(base);
+  const savedTx = prisma.$transaction; const savedEmit = analytics.emitServiceQuoteDecisionAnalytics;
+  const order = [];
+  prisma.$transaction = async (fn) => { order.push('transaction'); const value = await fn(tx); order.push('committed'); return value; };
+  analytics.emitServiceQuoteDecisionAnalytics = () => order.push('analytics');
+  try {
+    const result = await journey.advanceServiceQuoteDecision(input);
+    assert.equal(result.journeyStage, 'COMPARISON');
+    assert.deepEqual(order, ['transaction', 'committed', 'analytics']);
+    assert.equal(writes.length, 2);
+  } finally { prisma.$transaction = savedTx; analytics.emitServiceQuoteDecisionAnalytics = savedEmit; }
+});
+
+test('a repeat to the same stage and outcome records nothing and emits no analytics; an invalid move throws before any write', async () => {
+  let fake = fakeTx({ ...base, journeyStage: 'COMPARISON' });
+  const same = await journey.advanceServiceQuoteDecisionInTransaction(fake.tx, input);
+  assert.equal(same.transitionRecorded, false);
+  assert.equal(fake.writes.length, 0);
+  fake = fakeTx({ ...base, journeyStage: 'CLOSED', outcome: 'DECLINED' });
+  await assert.rejects(() => journey.advanceServiceQuoteDecisionInTransaction(fake.tx, { ...input, toStage: 'QUOTE_INTAKE' }), (e) => e.code === 'SERVICE_QUOTE_INVALID_TRANSITION');
+  assert.equal(fake.writes.length, 0);
+});

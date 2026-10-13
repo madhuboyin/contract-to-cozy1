@@ -91,9 +91,14 @@ function homeTimelineDescriptor(
   return null;
 }
 
-export async function advanceServiceQuoteDecision(input: AdvanceServiceQuoteDecisionInput) {
+/**
+ * The advance itself, on a transaction the caller owns, so a caller that creates the quote and its provenance in the same transaction can advance
+ * the journey atomically. Analytics are not emitted here: a caller emits them with emitServiceQuoteDecisionAdvanceAnalytics only after its own
+ * transaction has committed. `transitionRecorded` is false when the call was a no-op (same stage and outcome).
+ */
+export async function advanceServiceQuoteDecisionInTransaction(tx: any, input: AdvanceServiceQuoteDecisionInput) {
   let transitionRecorded = false;
-  const result = await database.$transaction(async (tx: any) => {
+  const result = await (async () => {
     const workspace = await tx.quoteComparisonWorkspace.findFirst({
       where: { id: input.workspaceId, propertyId: input.propertyId },
       select: {
@@ -238,8 +243,16 @@ export async function advanceServiceQuoteDecision(input: AdvanceServiceQuoteDeci
         contextLinks: { orderBy: { createdAt: 'asc' } },
       },
     });
-  });
+  })();
+  return { result, transitionRecorded };
+}
 
+/** The product analytics for a committed advance. Call it after the transaction that ran the advance has committed. */
+export function emitServiceQuoteDecisionAdvanceAnalytics(
+  input: AdvanceServiceQuoteDecisionInput,
+  result: any,
+  transitionRecorded: boolean,
+) {
   const finalPriceAllowed = outcomeConsentAllows(result, 'finalPrice');
   const suppliedFinalPrice = Number(input.metadataJson?.finalPrice);
   const finalPrice = finalPriceAllowed && Number.isFinite(suppliedFinalPrice)
@@ -287,6 +300,13 @@ export async function advanceServiceQuoteDecision(input: AdvanceServiceQuoteDeci
       valueNumeric: finalPrice,
     });
   }
+}
+
+export async function advanceServiceQuoteDecision(input: AdvanceServiceQuoteDecisionInput) {
+  const { result, transitionRecorded } = await database.$transaction(
+    (tx: any) => advanceServiceQuoteDecisionInTransaction(tx, input),
+  );
+  emitServiceQuoteDecisionAdvanceAnalytics(input, result, transitionRecorded);
   return result;
 }
 
