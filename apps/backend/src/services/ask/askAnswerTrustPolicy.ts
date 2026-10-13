@@ -182,6 +182,10 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   NEGOTIATION_SHIELD_CASE_ATTACH: new Set(['negotiation-shield-review', 'negotiation-shield-analyze']),
   // The readiness answer's empty state offers the start; the receipt of a started case offers that case's readiness check.
   RENOVATION_CASE_START: new Set(['renovation-case-readiness']),
+  // Record the buyer's closing insurance: requirements, quotes, the chosen quote, the binding and proof status (register P2 Buyer Closing). Confirmation-gated, declared-action only.
+  BUYER_INSURANCE_COMMAND: new Set(['buyer-insurance-back']),
+  // Show the buyer's homeowners insurance for closing: requirements, quotes, the chosen quote, the bound policy and proof status (register P2 Buyer Closing). Read-only.
+  BUYER_INSURANCE_READINESS: new Set(['buyer-insurance-back', 'buyer-insurance-requirement-add', 'buyer-insurance-requirement-update', 'buyer-insurance-quote-add', 'buyer-insurance-quote-select', 'buyer-insurance-bind', 'buyer-insurance-proof']),
   // Add and update lender conditions and title or escrow issues (register P2 Buyer Closing). Confirmation-gated, declared-action only.
   BUYER_CLOSING_ITEM_COMMAND: new Set(['buyer-closing-item-back']),
   // Plan and record the buyer's final walkthrough: the plan, observations, issues and completion (register P2 Buyer Closing). Confirmation-gated, declared-action only.

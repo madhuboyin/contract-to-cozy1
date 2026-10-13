@@ -78,6 +78,8 @@ import { workItemCommandResult } from '../handlers/homeWorkItemCommands.handler'
 import { seasonalItemResult } from '../handlers/seasonalItemCommands.handler';
 import { walkthroughCommandResult } from '../handlers/buyerWalkthroughCommands.handler';
 import { closingItemResult } from '../handlers/buyerClosingItemCommands.handler';
+import { insuranceCommandResult } from '../handlers/buyerInsuranceCommands.handler';
+import { insuranceFormKindFromCaptureKey, parseInsuranceAnswer } from '../support/buyerInsuranceCommand';
 import { closingItemKindFromCaptureKey, parseClosingItemAnswer } from '../support/buyerClosingItemCommand';
 import { parseWalkthroughAnswer, walkthroughFormKindFromCaptureKey } from '../support/buyerWalkthroughCommand';
 import { diyProjectNoteResult, diySkillProfileResult } from '../handlers/diyCommands.handler';
@@ -1581,6 +1583,22 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     captureId = input.idempotencyKey;
     capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
     canonicalOwner = 'BuyerClosingItem';
+  } else if (execution.operationId === 'BUYER_INSURANCE_COMMAND') {
+    const biKind = insuranceFormKindFromCaptureKey(input.captureKey);
+    if (!biKind) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    const access = await ensurePropertyAccess(userId, execution.propertyId);
+    if (access.role === HouseholdRole.VIEWER) throw Object.assign(new Error('A contributor or owner is required to change this.'), { code: 'ASK_PERMISSION_REQUIRED' });
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson) ? execution.parametersJson as Record<string, unknown> : {};
+    const biLaunch = storedParameters.insuranceLaunch && typeof storedParameters.insuranceLaunch === 'object' && !Array.isArray(storedParameters.insuranceLaunch)
+      ? storedParameters.insuranceLaunch as { kind?: unknown; entityId?: unknown; sourceExecutionId?: unknown } : null;
+    if (!biLaunch || biLaunch.kind !== biKind) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    if (!parseInsuranceAnswer(biKind, input.answer).success) throw Object.assign(new Error('Fill in what the form asks for.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+    result = await insuranceCommandResult(userId, execution.propertyId, {
+      kind: biKind, entityId: typeof biLaunch.entityId === 'string' ? biLaunch.entityId : null, sourceExecutionId: typeof biLaunch.sourceExecutionId === 'string' ? biLaunch.sourceExecutionId : null,
+    }, input.answer as Record<string, unknown>);
+    captureId = input.idempotencyKey;
+    capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
+    canonicalOwner = 'BuyerInsuranceWorkspace';
   } else if (execution.operationId === 'CLAIM_ACTIVITY_COMMAND') {
     if (input.captureKey !== CLAIM_NOTE_CAPTURE_KEY) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
     const access = await ensurePropertyAccess(userId, execution.propertyId);

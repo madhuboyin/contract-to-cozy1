@@ -127,6 +127,10 @@ export type AskOperationId =
   // Start a renovation case (register section 3): a confirmation-gated command reached by the declared Start a renovation case action on the readiness
   // answer or a typed "start a renovation case"; never by fuzzy retrieval.
   | 'RENOVATION_CASE_START'
+  // Record the buyer's closing insurance: requirements, quotes, the chosen quote, the binding and proof status (register P2 Buyer Closing). Confirmation-gated, declared-action only.
+  | 'BUYER_INSURANCE_COMMAND'
+  // Show the buyer's homeowners insurance for closing: requirements, quotes, the chosen quote, the bound policy and proof status (register P2 Buyer Closing). Read-only.
+  | 'BUYER_INSURANCE_READINESS'
   // Add and update lender conditions and title or escrow issues (register P2 Buyer Closing). Confirmation-gated, declared-action only.
   | 'BUYER_CLOSING_ITEM_COMMAND'
   // Plan and record the buyer's final walkthrough: the plan, observations, issues and completion (register P2 Buyer Closing). Confirmation-gated, declared-action only.
@@ -433,6 +437,7 @@ export const ASK_INTERNAL_OPERATION_IDS: ReadonlySet<AskOperationId> = new Set<A
   'NEGOTIATION_SHIELD_CASE_ATTACH',
   // Reached by the declared action or the deterministic typed-start pattern; never by fuzzy retrieval.
   'RENOVATION_CASE_START',
+  'BUYER_INSURANCE_COMMAND',
   'BUYER_CLOSING_ITEM_COMMAND',
   'BUYER_WALKTHROUGH_COMMAND',
   'DIY_PROJECT_NOTE_COMMAND',
@@ -764,6 +769,8 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   MATERIAL_SPEC_ADD: definition('MATERIAL_SPEC_ADD', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'material-spec.add', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   NEGOTIATION_SHIELD_CASE_START: definition('NEGOTIATION_SHIELD_CASE_START', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'negotiation-shield.start', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   RENOVATION_CASE_START: definition('RENOVATION_CASE_START', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'renovation-case.start', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
+  BUYER_INSURANCE_COMMAND: definition('BUYER_INSURANCE_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'buyer-insurance.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
+  BUYER_INSURANCE_READINESS: definition('BUYER_INSURANCE_READINESS', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'buyer.insurance-readiness', ['SUMMARY', 'GROUPED_LIST', 'BOUNDARY']),
   BUYER_CLOSING_ITEM_COMMAND: definition('BUYER_CLOSING_ITEM_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'buyer-closing-item.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   BUYER_WALKTHROUGH_COMMAND: definition('BUYER_WALKTHROUGH_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'buyer-walkthrough.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   DIY_PROJECT_NOTE_COMMAND: definition('DIY_PROJECT_NOTE_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'diy-project-note.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
@@ -987,6 +994,7 @@ const buyerDisclosureFundsReadinessPattern = /\bclosing disclosure\b.{0,50}\b(?:
 const buyerClosingDayReadinessPattern = /\bclosing day\b.{0,50}\b(?:ready|readiness|need|checklist|prepare)\b|\bwhat do i need\b.{0,40}\bclosing day\b|\b(?:prepare|get ready)\b.{0,40}\bclosing day\b/i;
 const buyerContractTimelinePattern = /\bcontract\b.{0,50}\b(?:dates?|terms?|timeline|contingenc(?:y|ies))\b.{0,40}\b(?:confirm|need|still|closing)\b|\bwhich contract dates?\b.{0,40}\bconfirm\b|\b(?:confirmed|recorded)\b.{0,30}\bcontract\b.{0,30}\b(?:timeline|dates?|terms?)\b|\bcontingenc(?:y|ies)\b.{0,50}\bcontract\b|\bcontract\b.{0,50}\bcontingenc(?:y|ies)\b/i;
 const buyerNegotiationReadinessPattern = /\bwhat should i discuss\b.{0,40}\b(?:my )?agent\b.{0,40}\binspection\b|\bnegotiation\b.{0,40}\b(?:readiness|status|discuss)\b.{0,40}\b(?:closing|purchase|inspection)\b|\bseller (?:response|negotiation)\b.{0,40}\bstatus\b/i;
+const buyerInsuranceReadinessPattern = /\b(?:insurance (?:binder|quotes?)|(?:homeowners?|home) insurance (?:readiness|requirements?)|insurance (?:requirements?|proof|quotes?) (?:for|before) (?:my )?(?:closing|purchase)|(?:closing|purchase) insurance)\b/i;
 const buyerCostReadinessPattern = /\bwhat could cost me money\b.{0,40}\b(?:first 90 days|closing|move[- ]in)\b|\bnear[- ]term costs?\b.{0,40}\bpurchase\b|\bwhat (?:will|could)\b.{0,30}\bcost\b.{0,40}\bthis (?:purchase|closing)\b|\bwhat (?:will|could)\b.{0,20}\bthis (?:purchase|closing)\b.{0,20}\bcost\b/i;
 const buyerFindingDispositionPattern = /\b(?:move|classify|mark)\b.{0,50}\bfinding\b.{0,50}\b(?:post[- ]close|negotiation|dismiss|verified)\b|\bfinding\b.{0,50}\binto (?:my )?post[- ]close plan\b/i;
 const buyerLifecycleUpdatePattern = /\bcancel\b.{0,40}\b(?:this|my)\b.{0,20}\b(?:purchase|buyer plan|closing)\b|\bwe closed today\b|\b(?:change|update|move)\b.{0,40}\b(?:target )?closing date\b.{0,40}\bto\b|\b(?:pause|resume)\b.{0,40}\b(?:this|my)\b.{0,20}\b(?:purchase|buyer plan|deal)\b/i;
@@ -1403,6 +1411,9 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   }
   if (buyerNegotiationReadinessPattern.test(message)) {
     return resolved('BUYER_NEGOTIATION_READINESS', 0.95);
+  }
+  if (buyerInsuranceReadinessPattern.test(message)) {
+    return resolved('BUYER_INSURANCE_READINESS', 0.94);
   }
   if (buyerCostReadinessPattern.test(message)) {
     return resolved('BUYER_COST_READINESS', 0.95);
