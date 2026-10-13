@@ -702,34 +702,40 @@ export async function computeStatuses(propertyId: string): Promise<void> {
 // listBoard
 // ---------------------------------------------------------------------------
 
-export async function listBoard(propertyId: string, query: ListBoardQuery, userId?: string | null) {
-  // Keep board registry and category mappings synced on every load.
-  await ensureHomeItems(propertyId);
+/**
+ * `options.readOnly` makes the read write nothing: no board rows are created and no stale status is recomputed (that is the explicit recompute). The page's
+ * route keeps its original behavior (it passes no option); Ask reads read-only, so asking about the board never changes it.
+ */
+export async function listBoard(propertyId: string, query: ListBoardQuery, userId?: string | null, options: { readOnly?: boolean } = {}) {
+  if (!options.readOnly) {
+    // Keep board registry and category mappings synced on every load.
+    await ensureHomeItems(propertyId);
 
-  // Recompute if board is stale OR if there are newly created/uncomputed rows.
-  const [recentStatus, hasUncomputedStatus] = await Promise.all([
-    prisma.homeItemStatus.findFirst({
-      where: {
-        homeItem: { propertyId },
-        computedAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
-      },
-      select: { id: true },
-    }),
-    prisma.homeItemStatus.findFirst({
-      where: {
-        homeItem: { propertyId },
-        OR: [
-          { computedAt: null },
-          { computedCondition: null },
-          { computedRecommendation: null },
-        ],
-      },
-      select: { id: true },
-    }),
-  ]);
+    // Recompute if board is stale OR if there are newly created/uncomputed rows.
+    const [recentStatus, hasUncomputedStatus] = await Promise.all([
+      prisma.homeItemStatus.findFirst({
+        where: {
+          homeItem: { propertyId },
+          computedAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+        },
+        select: { id: true },
+      }),
+      prisma.homeItemStatus.findFirst({
+        where: {
+          homeItem: { propertyId },
+          OR: [
+            { computedAt: null },
+            { computedCondition: null },
+            { computedRecommendation: null },
+          ],
+        },
+        select: { id: true },
+      }),
+    ]);
 
-  if (!recentStatus || hasUncomputedStatus) {
-    await computeStatuses(propertyId);
+    if (!recentStatus || hasUncomputedStatus) {
+      await computeStatuses(propertyId);
+    }
   }
 
   const { q, groupBy, condition, categoryKey, pinnedOnly, includeHidden, page, limit } = query;

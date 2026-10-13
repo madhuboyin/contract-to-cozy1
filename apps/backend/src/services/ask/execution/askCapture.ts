@@ -55,6 +55,8 @@ import { upgradeCommandResult } from '../handlers/homeUpgradeCommands.handler';
 import { coverageCommandResult } from '../handlers/coverageCommands.handler';
 import { capitalCommandResult } from '../handlers/capitalTimelineCommands.handler';
 import { CAPITAL_ADJUST_CAPTURE_KEY, parseCapitalAdjustAnswer } from '../support/capitalTimelineCommand';
+import { STATUS_BOARD_CORRECT_CAPTURE_KEY, parseStatusBoardCorrectAnswer } from '../support/statusBoardCommand';
+import { statusBoardCommandResult } from '../handlers/statusBoardCommands.handler';
 import { COVERAGE_DECISION_CAPTURE_KEY, parseCoverageDecisionAnswer, type CoverageCommandKind } from '../support/coverageCommand';
 import { parseUpgradeFormAnswer, upgradeFormKindFromCaptureKey, type UpgradeCommandKind } from '../support/homeUpgradeCommand';
 import { parsePermitFormAnswer, permitFormKindFromCaptureKey, type PermitCommandKind } from '../support/permitTrackerCommand';
@@ -1194,6 +1196,26 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     captureId = input.idempotencyKey;
     capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
     canonicalOwner = 'HomeCapitalTimeline';
+  } else if (execution.operationId === 'STATUS_BOARD_COMMAND') {
+    if (input.captureKey !== STATUS_BOARD_CORRECT_CAPTURE_KEY) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    const access = await ensurePropertyAccess(userId, execution.propertyId);
+    if (access.role === HouseholdRole.VIEWER) throw Object.assign(new Error('A contributor or owner is required to change the status board.'), { code: 'ASK_PERMISSION_REQUIRED' });
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson) ? execution.parametersJson as Record<string, unknown> : {};
+    const boardLaunch = storedParameters.statusBoardCommandLaunch && typeof storedParameters.statusBoardCommandLaunch === 'object' && !Array.isArray(storedParameters.statusBoardCommandLaunch)
+      ? storedParameters.statusBoardCommandLaunch as { kind?: unknown; entityId?: unknown; sourceExecutionId?: unknown } : null;
+    if (!boardLaunch || boardLaunch.kind !== 'CORRECT' || typeof boardLaunch.entityId !== 'string') {
+      throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    }
+    const boardAnswer = parseStatusBoardCorrectAnswer(input.answer);
+    if (!boardAnswer.success) {
+      throw Object.assign(new Error(boardAnswer.reason === 'NOTHING' ? 'Fill in at least one thing to change.' : 'Check the form and try again.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+    }
+    result = await statusBoardCommandResult(userId, execution.propertyId, {
+      kind: 'CORRECT', entityId: boardLaunch.entityId, sourceExecutionId: typeof boardLaunch.sourceExecutionId === 'string' ? boardLaunch.sourceExecutionId : null,
+    }, boardAnswer.data);
+    captureId = input.idempotencyKey;
+    capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
+    canonicalOwner = 'HomeItemStatus';
   } else if (execution.operationId === 'PROPERTY_BRIEF_COMMAND') {
     if (![PROPERTY_BRIEF_PREPARE_CAPTURE_KEY, PROPERTY_BRIEF_SHARE_CAPTURE_KEY].includes(input.captureKey) || input.expectedContextVersion !== 'property-brief-live') throw Object.assign(new Error('This Property Brief form is no longer active.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
     const access = await ensurePropertyAccess(userId, execution.propertyId);

@@ -57,9 +57,10 @@ test.afterEach(restore);
 
 test('the operation reads listBoard like the page route, for the route\'s maximum page of visible items', async () => {
   await capabilityInvoke('HOME_STATUS_BOARD', { userId: 'u1', propertyId: 'p1', message: 'Show my status board' });
-  const [propertyId, query, userId] = calls[0];
+  const [propertyId, query, userId, options] = calls[0];
   assert.equal(propertyId, 'p1');
   assert.equal(userId, 'u1');
+  assert.deepEqual(options, { readOnly: true }, 'the Ask read never creates rows or recomputes (FRD v1.319)');
   assert.equal(query.limit, STATUS_BOARD_ASK_LIMIT);
   assert.equal(query.page, 1);
   assert.equal(query.includeHidden, false);

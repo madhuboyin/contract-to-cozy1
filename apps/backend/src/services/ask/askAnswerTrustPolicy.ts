@@ -181,6 +181,8 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   NEGOTIATION_SHIELD_CASE_ATTACH: new Set(['negotiation-shield-review', 'negotiation-shield-analyze']),
   // The readiness answer's empty state offers the start; the receipt of a started case offers that case's readiness check.
   RENOVATION_CASE_START: new Set(['renovation-case-readiness']),
+  // Correct a Status Board item's estimated condition, recommendation, dates and note, pin or hide it, and refresh the board (register P1 Status Board). Confirmation-gated, declared-action only; never by fuzzy retrieval.
+  STATUS_BOARD_COMMAND: new Set(['status-board-back']),
   // Adjust what the Capital Timeline assumes for an item (register P1 Capital Timeline): planned date or window, cost range, remaining life, leave it off, or a note; and remove an adjustment. Confirmation-gated, declared-action only; never by fuzzy retrieval.
   CAPITAL_TIMELINE_COMMAND: new Set(['capital-timeline-back']),
   // Coverage Intelligence writes (register P0): prepare the coverage review, start a comparison against the verified policy, and record the keep / change / shop / defer decision. Owner-only, confirmation-gated, declared-action only; never by fuzzy retrieval.
@@ -209,6 +211,8 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   // The price records answer offers Record an accepted price (a SUMMARY action) and Finalize / Change the terms on a draft row.
   PRICE_FINALIZATIONS_LIST: new Set(['price-finalization-start-manual', 'price-finalization-finalize', 'price-finalization-edit']),
   // The permit list offers Add a permit (a SUMMARY action) and Change / Remove on a row to a contributor or owner.
+  // The status board's next steps (FRD v1.319): refresh the board, correct one item; the install-date capture kept from the earlier slice.
+  HOME_STATUS_BOARD: new Set(['status-board-refresh', 'status-board-correct', 'correct-installedOn']),
   PERMIT_TRACKER_STATUS: new Set(['permit-tracker-add', 'permit-tracker-edit', 'permit-tracker-remove']),
   // The comparison answer offers Start a comparison / Record my decision, and the review answer offers Review my coverage, to a contributor or owner.
   COVERAGE_COMPARISON_STATUS: new Set(['coverage-start-comparison', 'coverage-record-decision']),

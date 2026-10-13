@@ -4,6 +4,10 @@ import { listBoardQuerySchema } from '../../../validators/homeStatusBoard.valida
 import type { AskOperationResult } from '../askOperationRegistry';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { readableCode } from '../askFormatting';
+import { ensurePropertyAccess } from '../askHandlerSupport';
+import {
+  STATUS_BOARD_COMMAND_ACTION_IDS, STATUS_BOARD_COMMAND_MESSAGES, STATUS_BOARD_ITEM_ENTITY_TYPE, STATUS_BOARD_PROPERTY_ENTITY_TYPE,
+} from '../support/statusBoardCommand';
 
 // Status Board handler (HOME_STATUS_BOARD, adapter `status-board.read`). Moved out of askOrchestrator.service.ts as the
 // pilot of its decomposition (FRD v1.97, docs/architecture/ASK_ORCHESTRATOR_DECOMPOSITION_REVIEW.md): the body is
@@ -12,6 +16,8 @@ import { readableCode } from '../askFormatting';
 // Status Board capability-card slice (FRD v1.51): the fourth new operation for a capability with none. Reads listBoard,
 // the same call the page's route makes, for the first 100 visible items (the route's maximum page). Like the route,
 // listBoard first creates missing board rows and recomputes stale derived statuses. Read-only.
+// FRD v1.319: the Ask read no longer creates rows or recomputes (listBoard readOnly): refreshing is the explicit "Refresh the board" action, which a
+// contributor or owner confirms. Correcting an item (condition, recommendation, dates, note, pin, hide) is a row action, behind the same floor.
 type StatusBoardView = Awaited<ReturnType<typeof listBoard>>;
 const STATUS_BOARD_CONDITIONS = [
   { key: 'ACTION_NEEDED', title: 'Needs action' },
@@ -53,7 +59,7 @@ export function statusBoardMeta(item: any): string[] {
   return entries.length > 6 ? entries.filter((_, index) => index !== 1) : entries;
 }
 
-export function statusBoardFromView(view: StatusBoardView, propertyId: string): AskOperationResult {
+export function statusBoardFromView(view: StatusBoardView, propertyId: string, canChange = false): AskOperationResult {
   const items: any[] = view.items ?? [];
   const total: number = view.pagination?.total ?? items.length;
   const count = (condition: string) => items.filter((item) => item.condition === condition).length;
@@ -70,9 +76,14 @@ export function statusBoardFromView(view: StatusBoardView, propertyId: string): 
       : 'Nothing is on the Status Board yet',
     body: total
       ? `On your Status Board, across ${total} recorded appliance${total === 1 ? '' : 's'} and system${total === 1 ? '' : 's'}${truncated ? ` (counts cover the ${items.length} shown)` : ''}.`
-      : 'The Status Board tracks appliances and systems recorded in Inventory. Add them there to see their condition here.',
+      : canChange
+        ? 'The Status Board tracks appliances and systems recorded in Inventory. If you have recorded some, refresh the board to bring them in; otherwise add them there to see their condition here.'
+        : 'The Status Board tracks appliances and systems recorded in Inventory. Add them there to see their condition here.',
     tone: count('ACTION_NEEDED') ? 'CAUTION' : 'DEFAULT',
-    actions: [],
+    actions: canChange ? [{
+      id: STATUS_BOARD_COMMAND_ACTION_IDS.REFRESH, label: 'Refresh the board', interactionType: 'START_WORKFLOW' as const, message: STATUS_BOARD_COMMAND_MESSAGES.REFRESH,
+      operationId: 'STATUS_BOARD_COMMAND' as const, entityType: STATUS_BOARD_PROPERTY_ENTITY_TYPE, entityId: propertyId, style: 'SECONDARY' as const,
+    }] : [],
   }];
   if (limitations.length) blocks.push({ type: 'LIMITATION', id: 'status-board-limits', title: 'What this does not cover', body: limitations.join(' '), severity: 'INFO' });
   const sections = STATUS_BOARD_CONDITIONS.map(({ key, title }) => {
@@ -89,6 +100,14 @@ export function statusBoardFromView(view: StatusBoardView, propertyId: string): 
         href: null,
         ...statusBoardShelfFacts(item),
         ...statusBoardCaptureFields(item),
+        // An item that needs its install date keeps that capture (it dispatches with the inventory id); every other item can be corrected.
+        ...(canChange && !item.needsInstallDateForPrediction ? {
+          entityType: STATUS_BOARD_ITEM_ENTITY_TYPE,
+          actions: [{
+            id: STATUS_BOARD_COMMAND_ACTION_IDS.CORRECT, label: 'Correct this item', message: STATUS_BOARD_COMMAND_MESSAGES.CORRECT,
+            operationId: 'STATUS_BOARD_COMMAND' as const, interactionType: 'MUTATE_RECORD' as const, style: 'SECONDARY' as const,
+          }],
+        } : {}),
       })),
     };
   }).filter((section) => section.count > 0);
@@ -110,9 +129,12 @@ export function statusBoardFromView(view: StatusBoardView, propertyId: string): 
   };
 }
 
-async function homeStatusBoardResult(userId: string, propertyId: string): Promise<AskOperationResult> {
-  const view = await listBoard(propertyId, listBoardQuerySchema.parse({ limit: String(STATUS_BOARD_ASK_LIMIT) }), userId);
-  return statusBoardFromView(view, propertyId);
+async function homeStatusBoardResult(userId: string, propertyId: string, canChange: boolean): Promise<AskOperationResult> {
+  const view = await listBoard(propertyId, listBoardQuerySchema.parse({ limit: String(STATUS_BOARD_ASK_LIMIT) }), userId, { readOnly: true });
+  return statusBoardFromView(view, propertyId, canChange);
 }
 
-registerCapabilityHandler('status-board.read', async (envelope) => homeStatusBoardResult(envelope.userId, envelope.propertyId!));
+registerCapabilityHandler('status-board.read', async (envelope, deps) => {
+  const access = deps.propertyAccess ?? await ensurePropertyAccess(envelope.userId, envelope.propertyId!);
+  return homeStatusBoardResult(envelope.userId, envelope.propertyId!, access.role !== 'VIEWER');
+});

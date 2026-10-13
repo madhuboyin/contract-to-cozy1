@@ -127,6 +127,8 @@ export type AskOperationId =
   // Start a renovation case (register section 3): a confirmation-gated command reached by the declared Start a renovation case action on the readiness
   // answer or a typed "start a renovation case"; never by fuzzy retrieval.
   | 'RENOVATION_CASE_START'
+  // Correct a Status Board item's estimated condition, recommendation, dates and note, pin or hide it, and refresh the board (register P1 Status Board). Confirmation-gated, declared-action only; never by fuzzy retrieval.
+  | 'STATUS_BOARD_COMMAND'
   // Adjust what the Capital Timeline assumes for an item (register P1 Capital Timeline): planned date or window, cost range, remaining life, leave it off, or a note; and remove an adjustment. Confirmation-gated, declared-action only; never by fuzzy retrieval.
   | 'CAPITAL_TIMELINE_COMMAND'
   // Coverage Intelligence writes (register P0): prepare the coverage review, start a comparison against the verified policy, and record the keep / change / shop / defer decision. Owner-only, confirmation-gated, declared-action only; never by fuzzy retrieval.
@@ -375,6 +377,7 @@ export const ASK_INTERNAL_OPERATION_IDS: ReadonlySet<AskOperationId> = new Set<A
   'NEGOTIATION_SHIELD_CASE_ATTACH',
   // Reached by the declared action or the deterministic typed-start pattern; never by fuzzy retrieval.
   'RENOVATION_CASE_START',
+  'STATUS_BOARD_COMMAND',
   'CAPITAL_TIMELINE_COMMAND',
   'COVERAGE_COMMAND',
   'HOME_UPGRADE_COMMAND',
@@ -684,6 +687,7 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   MATERIAL_SPEC_ADD: definition('MATERIAL_SPEC_ADD', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'material-spec.add', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   NEGOTIATION_SHIELD_CASE_START: definition('NEGOTIATION_SHIELD_CASE_START', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'negotiation-shield.start', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   RENOVATION_CASE_START: definition('RENOVATION_CASE_START', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'renovation-case.start', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
+  STATUS_BOARD_COMMAND: definition('STATUS_BOARD_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'status-board.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   CAPITAL_TIMELINE_COMMAND: definition('CAPITAL_TIMELINE_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'capital-timeline.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   COVERAGE_COMMAND: definition('COVERAGE_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'coverage.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   COVERAGE_REVIEW_STATUS: definition('COVERAGE_REVIEW_STATUS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'coverage.review-status', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),

@@ -214,7 +214,7 @@ Project Tracker appeared in the original P0 list as "lists projects." It is remo
 | Property Tax | Residual gap | Record review/correction; evidence management; appeal lifecycle and decision tracking | Not re-verified |
 | Savings & Benefits | Residual gap | Eligibility review; application/checklist progress; pursued/dismissed opportunities; outcomes | Not re-verified |
 | Renovation Risk Advisor | Residual gap | Per-item acknowledge/resolve; evidence; permit/HOA continuation; readiness refresh | Not re-verified |
-| Status Board | Residual gap | Filters, grouping, refresh and direct underlying-record actions | Not re-verified |
+| Status Board | Partial: refresh and item corrections implemented (FRD v1.319) | Filters and grouping; hiding the page's refresh and override controls from viewers | Not browser- or database-verified |
 | Home Risk Replay | Residual gap | Historical-event detail; evidence/correction; filters; relevant follow-ups | Not re-verified |
 | Neighborhood Change Radar | Residual gap | Filters; source detail; tracked areas/preferences; relevant follow-ups | Not re-verified |
 | Home Briefing / Home Gazette | Residual gap | Briefing preferences, editions, saved state and complete article actions | Not re-verified |
