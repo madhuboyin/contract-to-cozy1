@@ -125,6 +125,8 @@ export type AskOperationId =
   // Start a renovation case (register section 3): a confirmation-gated command reached by the declared Start a renovation case action on the readiness
   // answer or a typed "start a renovation case"; never by fuzzy retrieval.
   | 'RENOVATION_CASE_START'
+  // Record, change and finalize an accepted price (register P0 Price Finalization): from a Negotiation Shield review, a selected quote proposal or by hand. Confirmation-gated, declared-action only; never by fuzzy retrieval.
+  | 'PRICE_FINALIZATION_COMMAND'
   // Manage the proposals of a quote comparison (register P0 Quote Comparison): add, select, reject or return, remove. Confirmation-gated, reached only by declared actions on the review; never by fuzzy retrieval.
   | 'QUOTE_COMPARISON_COMMAND'
   | 'HOME_UPGRADE_SCENARIOS'
@@ -355,6 +357,7 @@ export const ASK_INTERNAL_OPERATION_IDS: ReadonlySet<AskOperationId> = new Set<A
   'NEGOTIATION_SHIELD_CASE_ATTACH',
   // Reached by the declared action or the deterministic typed-start pattern; never by fuzzy retrieval.
   'RENOVATION_CASE_START',
+  'PRICE_FINALIZATION_COMMAND',
   'QUOTE_COMPARISON_COMMAND',
   'PROJECT_TRACKER_CREATE',
   'PROJECT_TRACKER_COMMAND',
@@ -658,6 +661,7 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   MATERIAL_SPEC_ADD: definition('MATERIAL_SPEC_ADD', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'material-spec.add', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   NEGOTIATION_SHIELD_CASE_START: definition('NEGOTIATION_SHIELD_CASE_START', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'negotiation-shield.start', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   RENOVATION_CASE_START: definition('RENOVATION_CASE_START', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'renovation-case.start', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
+  PRICE_FINALIZATION_COMMAND: definition('PRICE_FINALIZATION_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'price-finalization.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   QUOTE_COMPARISON_COMMAND: definition('QUOTE_COMPARISON_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'quote-comparison.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   NEGOTIATION_SHIELD_CASE_ATTACH: definition('NEGOTIATION_SHIELD_CASE_ATTACH', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'negotiation-shield.attach', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   NEGOTIATION_SHIELD_CASE_UPDATE: definition('NEGOTIATION_SHIELD_CASE_UPDATE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'negotiation-shield.update', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),

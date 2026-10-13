@@ -11,6 +11,7 @@ import { NEGOTIATION_SHIELD_ANALYZE_ACTION_ID, NEGOTIATION_SHIELD_ANALYZE_MESSAG
 import { NEGOTIATION_SHIELD_EDIT_ACTION_ID, NEGOTIATION_SHIELD_EDIT_MESSAGE } from '../support/negotiationShieldEdit';
 import { isNegotiationStartScenario } from '../support/negotiationShieldStart';
 import { NEGOTIATION_DOCUMENT_TYPE_LABELS, NEGOTIATION_SHIELD_ATTACH_ACTION_ID, NEGOTIATION_SHIELD_ATTACH_MESSAGE } from '../support/negotiationShieldAttach';
+import { PRICE_COMMAND_ACTION_IDS, PRICE_COMMAND_MESSAGES } from '../support/priceFinalizationCommand';
 import { humanDate, money, readableCode } from '../askFormatting';
 import { getNegotiationShieldCaseReviewForProperty, listNegotiationShieldCasesForProperty, type NegotiationShieldCaseReviewDTO } from '../../negotiationShieldCaseList';
 import type { NegotiationShieldCaseSummaryDTO } from '../../negotiationShield.types';
@@ -38,6 +39,8 @@ const NEGOTIATION_SCENARIO_LABELS: Record<string, string> = {
 };
 const NEGOTIATION_STATUS_LABELS: Record<string, string> = { DRAFT: 'Draft', READY_FOR_REVIEW: 'Ready for review', ANALYZED: 'Analyzed', ARCHIVED: 'Archived' };
 export const NEGOTIATION_SHIELD_CASE_ENTITY = 'NEGOTIATION_SHIELD_CASE';
+// The scenarios about a vendor's price, where recording the accepted price is the next step (the page's own continuation to Price Finalization).
+const NEGOTIATION_VENDOR_PRICE_SCENARIOS = new Set(['CONTRACTOR_QUOTE_REVIEW', 'CONTRACTOR_URGENCY_PRESSURE']);
 export const NEGOTIATION_SHIELD_REVIEW_MESSAGE = 'Review this negotiation case.';
 export const NEGOTIATION_SHIELD_LIST_MESSAGE = 'Show my negotiation shield cases';
 const NEGOTIATION_PRICING_LABELS: Record<string, string> = {
@@ -197,6 +200,19 @@ function documentsBlock(review: NegotiationShieldCaseReviewDTO, canAttach: boole
   };
 }
 
+/** Next step for a vendor-price review: record the price you accepted. Offered to a contributor or owner; the record is the primary owner's, which the command says. */
+function finalizeBlock(review: NegotiationShieldCaseReviewDTO, canChange: boolean): AskPresentationBlock | null {
+  if (!canChange || !NEGOTIATION_VENDOR_PRICE_SCENARIOS.has(String(review.case.scenarioType))) return null;
+  return {
+    type: 'SUMMARY', id: 'negotiation-shield-finalize', title: 'Settled on a price?', tone: 'DEFAULT',
+    body: 'When you have agreed a price with the vendor, record it so the accepted price and terms are kept with this review. Nothing is booked or sent.',
+    actions: [{
+      id: PRICE_COMMAND_ACTION_IDS.START_NS, label: 'Record the accepted price', interactionType: 'START_WORKFLOW' as const, message: PRICE_COMMAND_MESSAGES.START_NS,
+      operationId: 'PRICE_FINALIZATION_COMMAND' as const, entityType: NEGOTIATION_SHIELD_CASE_ENTITY, entityId: review.case.id, style: 'SECONDARY' as const,
+    }],
+  };
+}
+
 export function negotiationShieldReviewFromView(review: NegotiationShieldCaseReviewDTO | null, canRun = false): AskOperationResult {
   if (!review) {
     return {
@@ -239,6 +255,8 @@ export function negotiationShieldReviewFromView(review: NegotiationShieldCaseRev
     });
     const notAnalyzedDocuments = documentsBlock(review, canEdit);
     if (notAnalyzedDocuments) blocks.push(notAnalyzedDocuments);
+    const notAnalyzedFinalize = finalizeBlock(review, canEdit);
+    if (notAnalyzedFinalize) blocks.push(notAnalyzedFinalize);
     blocks.push(NEGOTIATION_BOUNDARY);
     return { status: 'ANSWERED', reasonCode: 'NEGOTIATION_SHIELD_REVIEW_NOT_ANALYZED', blocks, suggestions: [] };
   }
@@ -290,6 +308,8 @@ export function negotiationShieldReviewFromView(review: NegotiationShieldCaseRev
   listBlock('negotiation-shield-findings', 'What the review found', asList(analysis.findings));
   listBlock('negotiation-shield-leverage', 'Where you have leverage', asList(analysis.negotiationLeverage));
   listBlock('negotiation-shield-next-steps', 'Recommended next steps', asList(analysis.recommendedActions));
+  const finalizeNext = finalizeBlock(review, canEdit);
+  if (finalizeNext) blocks.push(finalizeNext);
   if (stale) {
     blocks.push({
       type: 'LIMITATION', id: 'negotiation-shield-stale', severity: 'INFO', title: 'The details changed after this analysis',

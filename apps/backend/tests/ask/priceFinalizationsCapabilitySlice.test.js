@@ -74,7 +74,8 @@ test('records are grouped by status with vendor, service, accepted and quoted pr
   const [summary, list] = result.blocks;
   assert.equal(summary.title, '3 price finalizations recorded');
   assert.equal(summary.body, '1 finalized and 1 still a draft.');
-  assert.deepEqual(summary.actions, [], 'Ask links to no desktop Price Finalization page');
+  // The only action is the in-Ask start (FRD v1.311); no action navigates to a desktop Price Finalization page.
+  assert.deepEqual(summary.actions.map((action) => [action.id, action.operationId, Boolean(action.href)]), [['price-finalization-start-manual', 'PRICE_FINALIZATION_COMMAND', false]]);
   assert.equal(JSON.stringify(result).includes('/dashboard/'), false);
   assert.deepEqual(list.sections.map((section) => [section.title, section.items.map((item) => item.title)]), [
     ['Finalized', ['Bright Electric']],
@@ -98,8 +99,8 @@ test('a full page of 20 is disclosed; nothing recorded is not an all-clear', () 
   const none = priceFinalizationsFromView([], 'p1');
   assert.equal(none.reasonCode, 'PRICE_FINALIZATIONS_EMPTY');
   assert.equal(none.blocks[0].title, 'No price finalizations yet');
-  assert.deepEqual(none.blocks[0].actions, [], 'the empty state links nowhere');
-  assert.match(none.blocks[0].body, /not currently available in Ask/);
+  assert.deepEqual(none.blocks[0].actions, [], 'the empty state links nowhere and a reader without write access is offered nothing');
+  assert.match(none.blocks[0].body, /A contributor or owner can record one/);
   assert.equal(JSON.stringify(none).includes('Open it to save one'), false);
   assert.equal(none.blocks.at(-1).title, 'As recorded, not a signed contract');
 });
@@ -109,7 +110,7 @@ test('every block and the boundary survive the answer-trust validator, and nothi
   const result = { ...raw, parameters: { answerTrustEvidence: { schemaVersion: '1.0', sources: [{ sourceId: 'price-finalization.records', operationId: 'PRICE_FINALIZATIONS_LIST', status: 'COMPLETE', scope: 'FULL', freshness: 'CURRENT', observedAt: '2026-09-24T00:00:00.000Z' }] } } };
   const { result: validated } = validateAskAnswerTrust({ question: 'Show my price finalizations', operationId: 'PRICE_FINALIZATIONS_LIST', result, propertyId: 'p1' });
   assert.deepEqual(validated.blocks.map((block) => block.id), result.blocks.map((block) => block.id));
-  assert.deepEqual(result.blocks[0].actions, []);
+  assert.deepEqual(result.blocks[0].actions.map((action) => action.id), ['price-finalization-start-manual']);
   assert.equal(JSON.stringify(result).includes('/dashboard/'), false);
 });
 
@@ -139,7 +140,7 @@ test('the list and every state say what Ask cannot do instead of pointing at the
   const result = await invoke();
   const text = JSON.stringify(result);
   assert.equal(/Open Price Finalization|Price Finalization page|open-price-finalization/.test(text), false);
-  assert.match(result.blocks.find((block) => block.id === 'price-finalization-items').description, /not currently available in Ask/);
+  assert.match(result.blocks.find((block) => block.id === 'price-finalization-items').description, /Booking is not currently available in Ask/);
   const blocked = priceFinalizationsFromView('PRIMARY_OWNER_ONLY', 'p1');
   assert.equal(JSON.stringify(blocked).includes('/dashboard/'), false);
 });

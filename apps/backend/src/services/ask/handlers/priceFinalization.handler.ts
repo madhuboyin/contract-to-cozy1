@@ -6,7 +6,9 @@ import { type AskOperationResult } from '../askOperationRegistry';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { APIError } from '../../../middleware/error.middleware';
 import { priceFinalizationService } from '../../priceFinalization.service';
+import { ensurePropertyAccess } from '../askHandlerSupport';
 import { humanDate, titleCase } from '../askFormatting';
+import { PRICE_COMMAND_ACTION_IDS, PRICE_COMMAND_MESSAGES, PRICE_FINALIZATION_ENTITY_TYPE, PRICE_FINALIZATION_PROPERTY_ENTITY_TYPE } from '../support/priceFinalizationCommand';
 
 // Price Finalization capability-card slice (FRD v1.67): the eighteenth new operation for a capability with none (the
 // v1.47 "needs a product decision" label did not hold once the page was traced). Reads
@@ -26,7 +28,12 @@ const finalizationMoney = (value: number | null | undefined) => (value == null
   ? null
   : `$${value.toLocaleString('en-US', { minimumFractionDigits: Number.isInteger(value) ? 0 : 2, maximumFractionDigits: 2 })}`);
 
-export function priceFinalizationsFromView(records: readonly PriceFinalizationView[] | 'PRIMARY_OWNER_ONLY', propertyId: string): AskOperationResult {
+export function priceFinalizationsFromView(records: readonly PriceFinalizationView[] | 'PRIMARY_OWNER_ONLY', propertyId: string, canChange = false): AskOperationResult {
+  // Recording a price is a contributor's action on the primary owner's record; a viewer is offered nothing it would refuse.
+  const startAction = canChange ? [{
+    id: PRICE_COMMAND_ACTION_IDS.START_MANUAL, label: 'Record an accepted price', interactionType: 'START_WORKFLOW' as const, message: PRICE_COMMAND_MESSAGES.START_MANUAL,
+    operationId: 'PRICE_FINALIZATION_COMMAND' as const, entityType: PRICE_FINALIZATION_PROPERTY_ENTITY_TYPE, entityId: propertyId, style: 'PRIMARY' as const,
+  }] : [];
   const boundary: AskPresentationBlock = {
     type: 'BOUNDARY', id: 'price-finalization-boundary', title: 'As recorded, not a signed contract',
     body: 'These are the prices and terms the household recorded. The written agreement with the vendor controls, so check it before paying or booking.',
@@ -48,8 +55,10 @@ export function priceFinalizationsFromView(records: readonly PriceFinalizationVi
       status: 'ANSWERED', reasonCode: 'PRICE_FINALIZATIONS_EMPTY',
       blocks: [{
         type: 'SUMMARY', id: 'price-finalization-summary', title: 'No price finalizations yet',
-        body: 'Price Finalization records the price and terms you accept from a vendor before booking the work. Saving one is not currently available in Ask.',
-        tone: 'DEFAULT', actions: [],
+        body: canChange
+          ? 'Price Finalization records the price and terms you accept from a vendor before booking the work. Record one from a negotiation review or a selected quote, or enter one now.'
+          : 'Price Finalization records the price and terms you accept from a vendor before booking the work. A contributor or owner can record one.',
+        tone: 'DEFAULT', actions: startAction,
       }, boundary],
       suggestions: [],
     };
@@ -74,6 +83,13 @@ export function priceFinalizationsFromView(records: readonly PriceFinalizationVi
         PRICE_FINALIZATION_SOURCE_LABELS[record.sourceType] ?? null,
       ].filter((value): value is string => Boolean(value)),
       status: record.status === 'FINALIZED' ? 'Finalized' : record.status === 'ARCHIVED' ? 'Archived' : 'Draft',
+      href: null,
+      entityType: PRICE_FINALIZATION_ENTITY_TYPE,
+      // Only an open draft is changed or finalized; a finalized or archived record has no row action.
+      actions: canChange && record.status === 'DRAFT' ? [
+        { id: PRICE_COMMAND_ACTION_IDS.FINALIZE, label: 'Finalize', message: PRICE_COMMAND_MESSAGES.FINALIZE, operationId: 'PRICE_FINALIZATION_COMMAND', interactionType: 'MUTATE_RECORD' as const, style: 'PRIMARY' as const },
+        { id: PRICE_COMMAND_ACTION_IDS.EDIT, label: 'Change the terms', message: PRICE_COMMAND_MESSAGES.EDIT, operationId: 'PRICE_FINALIZATION_COMMAND', interactionType: 'MUTATE_RECORD' as const, style: 'SECONDARY' as const },
+      ] : [],
     };
   };
   const groups = [
@@ -85,7 +101,7 @@ export function priceFinalizationsFromView(records: readonly PriceFinalizationVi
     type: 'SUMMARY', id: 'price-finalization-summary',
     title: `${records.length} price finalization${records.length === 1 ? '' : 's'} recorded`,
     body: `${finalized} finalized and ${drafts} still ${drafts === 1 ? 'a draft' : 'drafts'}.`,
-    tone: 'DEFAULT', actions: [],
+    tone: 'DEFAULT', actions: startAction,
   }];
   if (records.length >= PRICE_FINALIZATION_ASK_LIMIT) {
     blocks.push({
@@ -95,7 +111,9 @@ export function priceFinalizationsFromView(records: readonly PriceFinalizationVi
   }
   blocks.push({
     type: 'GROUPED_LIST', filters: [], id: 'price-finalization-items', title: 'Recorded prices and terms',
-    description: 'Newest first. Editing a draft, finalizing it and continuing to booking are not currently available in Ask.',
+    description: canChange
+      ? 'Newest first. Change a draft\u2019s terms or finalize it. Booking is not currently available in Ask.'
+      : 'Newest first. A contributor or owner can change or finalize a draft. Booking is not currently available in Ask.',
     sections: groups
       .map(([status, title]) => ({ status, title, items: records.filter((record) => record.status === status).map(row) }))
       .filter((section) => section.items.length > 0)
@@ -105,14 +123,17 @@ export function priceFinalizationsFromView(records: readonly PriceFinalizationVi
   return { status: 'ANSWERED', reasonCode: 'PRICE_FINALIZATIONS_READY', blocks, suggestions: [] };
 }
 
-async function priceFinalizationsResult(propertyId: string, userId: string): Promise<AskOperationResult> {
+async function priceFinalizationsResult(propertyId: string, userId: string, canChange: boolean): Promise<AskOperationResult> {
   try {
     const { items } = await priceFinalizationService.listForProperty(propertyId, userId, PRICE_FINALIZATION_ASK_LIMIT);
-    return priceFinalizationsFromView(items, propertyId);
+    return priceFinalizationsFromView(items, propertyId, canChange);
   } catch (error) {
     if (error instanceof APIError && error.code === 'PROPERTY_ACCESS_DENIED') return priceFinalizationsFromView('PRIMARY_OWNER_ONLY', propertyId);
     throw error;
   }
 }
 
-registerCapabilityHandler('price-finalization.records', async (envelope) => priceFinalizationsResult(envelope.propertyId!, envelope.userId));
+registerCapabilityHandler('price-finalization.records', async (envelope, deps) => {
+  const access = deps.propertyAccess ?? await ensurePropertyAccess(envelope.userId, envelope.propertyId!);
+  return priceFinalizationsResult(envelope.propertyId!, envelope.userId, access.role !== 'VIEWER');
+});

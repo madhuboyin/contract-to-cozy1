@@ -282,6 +282,7 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   NEGOTIATION_SHIELD_CASE_UPDATE: 'The changes to your review\'s saved details are listed and saved only after you confirm; the analysis is not re-run.',
   NEGOTIATION_SHIELD_CASE_ATTACH: 'The record you pick is shown, with who can see it, and is attached to your review only after you confirm; the file is not read.',
   RENOVATION_CASE_START: 'Your renovation case is shown and saved only after you confirm; nothing is applied for or started.',
+  PRICE_FINALIZATION_COMMAND: 'Your price record change is shown and saved only after you confirm; nothing is booked, paid or sent to a vendor.',
   QUOTE_COMPARISON_COMMAND: 'Your proposal change is shown and saved only after you confirm; nothing is accepted, booked or sent to a provider.',
   HOME_PLANT_ADD: 'The plant is reviewed and then added to this home after your confirmation.',
   ROOM_PLANT_RECOMMENDATIONS: 'Room preferences are reviewed and ranked plant recommendations are generated after your confirmation.',

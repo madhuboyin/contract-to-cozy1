@@ -48,6 +48,8 @@ import { getNegotiationShieldEditableInputForProperty } from '../../negotiationS
 import { negotiationShieldAttachOffer, negotiationShieldAttachResult } from '../handlers/negotiationShieldAttach.handler';
 import { quoteCommandResult } from '../handlers/quoteComparisonCommands.handler';
 import { parseQuoteFormAnswer, quoteFormKindFromCaptureKey } from '../support/quoteComparisonCommand';
+import { priceCommandResult } from '../handlers/priceFinalizationCommands.handler';
+import { parsePriceFormAnswer, priceFormKindForCommand, priceFormKindFromCaptureKey, type PriceCommandKind } from '../support/priceFinalizationCommand';
 import { NEGOTIATION_SHIELD_ATTACH_CAPTURE_KEY, parseNegotiationAttachAnswer } from '../support/negotiationShieldAttach';
 import { renovationCaseStartContextVersion, renovationCaseStartResult } from '../handlers/renovationCaseStart.handler';
 import { parseRenovationCaseStartAnswer, RENOVATION_CASE_START_CAPTURE_KEY } from '../support/renovationCaseStart';
@@ -1051,6 +1053,29 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     captureId = input.idempotencyKey;
     capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
     canonicalOwner = 'QuoteComparison';
+  } else if (execution.operationId === 'PRICE_FINALIZATION_COMMAND') {
+    const priceForm = priceFormKindFromCaptureKey(input.captureKey);
+    if (!priceForm) throw Object.assign(new Error('This price form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    const access = await ensurePropertyAccess(userId, execution.propertyId);
+    if (access.role === HouseholdRole.VIEWER) throw Object.assign(new Error('A contributor or owner is required to record a price.'), { code: 'ASK_PERMISSION_REQUIRED' });
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson) ? execution.parametersJson as Record<string, unknown> : {};
+    const priceLaunch = storedParameters.priceCommandLaunch && typeof storedParameters.priceCommandLaunch === 'object' && !Array.isArray(storedParameters.priceCommandLaunch)
+      ? storedParameters.priceCommandLaunch as { kind?: unknown; entityId?: unknown; sourceExecutionId?: unknown } : null;
+    // The form must be the one the stored launch opened (a start form cannot be replayed as a finalize, nor the reverse).
+    if (!priceLaunch || typeof priceLaunch.kind !== 'string' || typeof priceLaunch.entityId !== 'string'
+      || priceFormKindForCommand(priceLaunch.kind as PriceCommandKind) !== priceForm) {
+      throw Object.assign(new Error('This price form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    }
+    const priceAnswer = parsePriceFormAnswer(priceForm, input.answer);
+    if (!priceAnswer.success) {
+      throw Object.assign(new Error(priceAnswer.reason === 'VENDOR_REQUIRED' ? 'Enter the vendor to start a price record.' : 'Check the prices and terms: an accepted price must be more than zero.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+    }
+    result = await priceCommandResult(userId, execution.propertyId, {
+      kind: priceLaunch.kind as PriceCommandKind, entityId: priceLaunch.entityId, sourceExecutionId: typeof priceLaunch.sourceExecutionId === 'string' ? priceLaunch.sourceExecutionId : null,
+    }, priceAnswer.data);
+    captureId = input.idempotencyKey;
+    capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
+    canonicalOwner = 'PriceFinalization';
   } else if (execution.operationId === 'PROPERTY_BRIEF_COMMAND') {
     if (![PROPERTY_BRIEF_PREPARE_CAPTURE_KEY, PROPERTY_BRIEF_SHARE_CAPTURE_KEY].includes(input.captureKey) || input.expectedContextVersion !== 'property-brief-live') throw Object.assign(new Error('This Property Brief form is no longer active.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
     const access = await ensurePropertyAccess(userId, execution.propertyId);

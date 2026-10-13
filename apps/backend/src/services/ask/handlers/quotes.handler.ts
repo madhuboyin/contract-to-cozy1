@@ -9,6 +9,7 @@ import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { getQuoteComparisonWorkspace, getWorkspaceComparability } from '../../quoteComparison.service';
 import { money } from '../askFormatting';
 import { askContextFingerprint, durableFreeTextClarification, QuoteWorkspaceCommandInputSchema, ensurePropertyAccess } from '../askHandlerSupport';
+import { PRICE_COMMAND_ACTION_IDS, PRICE_COMMAND_MESSAGES } from '../support/priceFinalizationCommand';
 import { QUOTE_COMMAND_ACTION_IDS, QUOTE_COMMAND_MESSAGES, QUOTE_ENTITY_TYPE, QUOTE_WORKSPACE_ENTITY_TYPE } from '../support/quoteComparisonCommand';
 
 export async function quoteWorkspaceContextVersion(propertyId: string): Promise<string> {
@@ -140,7 +141,7 @@ export function quoteReviewComparison(
 }
 
 async function quoteComparisonReviewResult(propertyId: string, canChange = false): Promise<AskOperationResult> {
-  const latest = await prisma.quoteComparisonWorkspace.findFirst({ where: { propertyId }, orderBy: { updatedAt: 'desc' }, select: { id: true, outcome: true, journeyStage: true } });
+  const latest = await prisma.quoteComparisonWorkspace.findFirst({ where: { propertyId }, orderBy: { updatedAt: 'desc' }, select: { id: true, outcome: true, journeyStage: true, selectedQuoteId: true } });
   if (!latest) return {
     status: 'READY_WITH_LIMITATIONS', reasonCode: 'QUOTE_COMPARISON_NOT_STARTED',
     blocks: [{ type: 'SUMMARY', id: 'quote-review-empty', title: 'No quote comparison is recorded yet', body: 'Create a workspace, then record at least two proposals. Ask will not compare unrecorded prices or infer missing scope and terms.', tone: 'CAUTION', actions: [{ id: 'create-comparison', label: 'Create comparison workspace', interactionType: 'START_WORKFLOW', message: 'Start a quote comparison workspace', operationId: 'QUOTE_COMPARISON_CREATE', style: 'PRIMARY' }] }],
@@ -166,7 +167,11 @@ async function quoteComparisonReviewResult(propertyId: string, canChange = false
     }, {
       id: QUOTE_COMMAND_ACTION_IDS.CLOSE, label: 'Close this decision', interactionType: 'START_WORKFLOW' as const, message: QUOTE_COMMAND_MESSAGES.CLOSE,
       operationId: 'QUOTE_COMPARISON_COMMAND' as const, entityType: QUOTE_WORKSPACE_ENTITY_TYPE, entityId: latest.id, style: 'QUIET' as const,
-    }] : [],
+    }, ...(latest.selectedQuoteId ? [{
+      // A selected proposal continues into final terms (Price Finalization), the page's own next step.
+      id: PRICE_COMMAND_ACTION_IDS.START_QUOTE, label: 'Record the final price', interactionType: 'START_WORKFLOW' as const, message: PRICE_COMMAND_MESSAGES.START_QUOTE,
+      operationId: 'PRICE_FINALIZATION_COMMAND' as const, entityType: QUOTE_WORKSPACE_ENTITY_TYPE, entityId: latest.id, style: 'SECONDARY' as const,
+    }] : [])] : [],
   }];
   // IW-PRES-016 (FRD v1.76): two to four quotes still in play render as a comparison strip; one quote, or five and
   // more, keep the table below with every quote.

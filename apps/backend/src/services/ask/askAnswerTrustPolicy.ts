@@ -169,15 +169,17 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   // FRD v1.64 gave INCIDENT_CONTINUATION two page links; Ask no longer links to desktop pages, so it offers starting a claim instead.
   INCIDENT_CONTINUATION: new Set(['claim-file-start']),
   // The row's Review action (opens one case's analysis and draft) and the review's way back to the list; the draft itself is text, not an action.
-  NEGOTIATION_SHIELD_CASES: new Set(['negotiation-shield-review', 'negotiation-shield-back', 'negotiation-shield-start', 'negotiation-shield-analyze', 'negotiation-shield-edit', 'negotiation-shield-attach']),
+  NEGOTIATION_SHIELD_CASES: new Set(['negotiation-shield-review', 'negotiation-shield-back', 'negotiation-shield-start', 'negotiation-shield-analyze', 'negotiation-shield-edit', 'negotiation-shield-attach', 'price-finalization-start-negotiation']),
   // The receipt of a started review offers the slice 1 read of that case.
   NEGOTIATION_SHIELD_CASE_START: new Set(['negotiation-shield-review', 'negotiation-shield-analyze']),
   // The receipt is the review, whose way back and re-run actions it carries.
-  NEGOTIATION_SHIELD_CASE_ANALYZE: new Set(['negotiation-shield-back', 'negotiation-shield-analyze', 'negotiation-shield-edit', 'negotiation-shield-attach']),
+  NEGOTIATION_SHIELD_CASE_ANALYZE: new Set(['negotiation-shield-back', 'negotiation-shield-analyze', 'negotiation-shield-edit', 'negotiation-shield-attach', 'price-finalization-start-negotiation']),
   // The receipt of an attached document offers the read of that review and a run of its analysis.
   NEGOTIATION_SHIELD_CASE_ATTACH: new Set(['negotiation-shield-review', 'negotiation-shield-analyze']),
   // The readiness answer's empty state offers the start; the receipt of a started case offers that case's readiness check.
   RENOVATION_CASE_START: new Set(['renovation-case-readiness']),
+  // Record, change and finalize an accepted price (register P0 Price Finalization): from a Negotiation Shield review, a selected quote proposal or by hand. Confirmation-gated, declared-action only; never by fuzzy retrieval.
+  PRICE_FINALIZATION_COMMAND: new Set(['price-finalization-finalize', 'price-finalization-edit', 'price-finalization-back']),
   // Manage the proposals of a quote comparison (register P0 Quote Comparison): add, select, reject or return, remove. Confirmation-gated, reached only by declared actions on the review; never by fuzzy retrieval.
   QUOTE_COMPARISON_COMMAND: new Set(['quote-comparison-back']),
   // The readiness answer's empty state offers Start a renovation case to a contributor or owner (a SUMMARY action, so a missing id is stripped).
@@ -190,7 +192,9 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   SELLER_PREP_CHECKLIST: new Set(['sale-item-pursue', 'sale-item-unpursue', 'sale-item-waive', 'sale-item-reopen']),
   GUIDANCE_JOURNEY_CREATE: new Set(['open-journey']),
   QUOTE_COMPARISON_CREATE: new Set(['open-workspace']),
-  QUOTE_COMPARISON_REVIEW: new Set(['create-comparison', 'quote-comparison-add-quote', 'quote-comparison-select-quote', 'quote-comparison-reject-quote', 'quote-comparison-restore-quote', 'quote-comparison-remove-quote', 'quote-comparison-edit-quote', 'quote-comparison-confirm-quote', 'quote-comparison-clarify-quote', 'quote-comparison-resolve-clarification', 'quote-comparison-close-decision']),
+  QUOTE_COMPARISON_REVIEW: new Set(['create-comparison', 'quote-comparison-add-quote', 'quote-comparison-select-quote', 'quote-comparison-reject-quote', 'quote-comparison-restore-quote', 'quote-comparison-remove-quote', 'quote-comparison-edit-quote', 'quote-comparison-confirm-quote', 'quote-comparison-clarify-quote', 'quote-comparison-resolve-clarification', 'quote-comparison-close-decision', 'price-finalization-start-quote']),
+  // The price records answer offers Record an accepted price (a SUMMARY action) and Finalize / Change the terms on a draft row.
+  PRICE_FINALIZATIONS_LIST: new Set(['price-finalization-start-manual', 'price-finalization-finalize', 'price-finalization-edit']),
   HOME_DEADLINE_MONITOR: new Set(['resolve-coverage-conflict']),
   // The page-link ids (open-inventory, open-timeline, open-reserve, open-reserve-fund) were retired with the desktop-link sweep.
   CAPITAL_RESERVE_PLAN: new Set(['add-inventory-item', 'rerun-horizon-5', 'rerun-horizon-10', 'reserve-fund-add-contribution', 'reserve-fund-remove-contribution', 'reserve-fund-recalculate', 'reserve-fund-posture-conservative', 'reserve-fund-posture-moderate', 'reserve-fund-posture-aggressive', 'reserve-fund-accept-reconciliation']),
