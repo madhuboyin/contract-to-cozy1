@@ -182,6 +182,8 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   NEGOTIATION_SHIELD_CASE_ATTACH: new Set(['negotiation-shield-review', 'negotiation-shield-analyze']),
   // The readiness answer's empty state offers the start; the receipt of a started case offers that case's readiness check.
   RENOVATION_CASE_START: new Set(['renovation-case-readiness']),
+  // Draft, edit and confirm the buyer's contract revision, field by field (register P2 Buyer Closing). Confirmation-gated, declared-action only.
+  BUYER_CONTRACT_COMMAND: new Set(['buyer-contract-back']),
   // Record the buyer's closing insurance: requirements, quotes, the chosen quote, the binding and proof status (register P2 Buyer Closing). Confirmation-gated, declared-action only.
   BUYER_INSURANCE_COMMAND: new Set(['buyer-insurance-back']),
   // Show the buyer's homeowners insurance for closing: requirements, quotes, the chosen quote, the bound policy and proof status (register P2 Buyer Closing). Read-only.
@@ -191,6 +193,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   // Plan and record the buyer's final walkthrough: the plan, observations, issues and completion (register P2 Buyer Closing). Confirmation-gated, declared-action only.
   BUYER_WALKTHROUGH_COMMAND: new Set(['buyer-walkthrough-back']),
   // Lender-condition and title-issue controls on the financing and title readiness answers (FRD v1.346).
+  BUYER_CONTRACT_TIMELINE: new Set(['buyer-contract-draft-start', 'buyer-contract-draft-edit', 'buyer-contract-contingency-update', 'buyer-contract-confirm']),
   BUYER_FINANCING_READINESS: new Set(['closing-lender-condition-add', 'closing-lender-condition-update', 'closing-lender-appraisal', 'closing-lender-underwriting']),
   BUYER_TITLE_ESCROW_READINESS: new Set(['closing-title-issue-add', 'closing-title-issue-update']),
   // Final-walkthrough readiness answer: the plan, observation and completion actions and the observation and issue row actions (FRD v1.345).

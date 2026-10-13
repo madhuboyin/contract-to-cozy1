@@ -10,6 +10,7 @@ import type { BuyerClosingHomeLaneKey } from '../../../productFramework/buyerAcq
 import { BuyerPurchaseLenderReadinessService } from '../../buyerPurchaseLenderReadiness.service';
 import { BuyerTitleEscrowService } from '../../buyerTitleEscrow.service';
 import { BuyerWalkthroughService } from '../../buyerWalkthrough.service';
+import { CONTRACT_ACTION_IDS, CONTRACT_ENTITY_TYPE, CONTRACT_MESSAGES, type ContractKind } from '../support/buyerContractCommand';
 import { CLOSING_ITEM_ACTION_IDS, CLOSING_ITEM_ENTITY_TYPES, CLOSING_ITEM_MESSAGES, closingItemUpdatable, type ClosingItemKind } from '../support/buyerClosingItemCommand';
 import {
   ISSUE_STATUS_LABELS, OBSERVATION_CATEGORIES, OBSERVATION_STATUS_LABELS, WALKTHROUGH_ACTION_IDS, WALKTHROUGH_ENTITY_TYPES, WALKTHROUGH_MESSAGES, issueKinds, observationKinds,
@@ -1043,13 +1044,34 @@ async function buyerContractTimelineResult(userId: string, propertyId: string): 
   if (data.presentationMode === 'CANDIDATE' || !data.overview) {
     return buyerNotActiveResult(propertyId, data.contextVersion, 'This purchase property does not have an active Buyer Plan yet, so there is no contract to review.');
   }
+  const canChange = (await ensurePropertyAccess(userId, propertyId)).role !== HouseholdRole.VIEWER;
   const contractData = await BuyerContractService.get(userId, propertyId);
   const workspace = contractData.workspace as unknown as { revisions: Array<{ id: string; status: string; targetClosingDate: string | null; acceptedAt: string | null; contingencies: Array<{ id: string; label: string; status: string; dueAt: string | null }> }> } | null;
   const current = workspace?.revisions.find((revision) => revision.status === 'CONFIRMED') ?? null;
+  // Contract revision controls (FRD v1.349): declared actions; the command re-checks everything and keeps per-field confirmation.
+  type DraftView = { id: string; revisionNumber: number; targetClosingDate: string | null; acceptedAt: string | null; contingencies: Array<{ id: string; label: string; status: string; dueAt: string | null }> };
+  const draft = (workspace?.revisions.find((revision) => revision.status === 'DRAFT') ?? null) as unknown as DraftView | null;
+  const contractAction = (kind: ContractKind, labelText: string) => ({
+    id: CONTRACT_ACTION_IDS[kind], label: labelText, message: CONTRACT_MESSAGES[kind], interactionType: 'START_WORKFLOW' as const, operationId: 'BUYER_CONTRACT_COMMAND' as const, style: 'SECONDARY' as const,
+  });
+  const contingencyAction = () => ({
+    id: CONTRACT_ACTION_IDS.CONTINGENCY_UPDATE, label: 'Update this contingency', message: CONTRACT_MESSAGES.CONTINGENCY_UPDATE, interactionType: 'MUTATE_RECORD' as const,
+    operationId: 'BUYER_CONTRACT_COMMAND' as const, style: 'SECONDARY' as const,
+  });
+  const contractActions = !canChange ? [] : draft
+    ? [contractAction('DRAFT_EDIT', 'Edit the draft'), contractAction('CONFIRM', 'Confirm the draft')]
+    : [contractAction('DRAFT_START', 'Start a revision')];
+  const draftBlock = draft ? [{
+    type: 'GROUPED_LIST' as const, filters: [], id: 'buyer-contract-draft', title: `Draft revision ${draft.revisionNumber}`, description: 'Not part of your plan until you confirm it against the signed contract.',
+    sections: [{ id: 'draft', title: 'Contingencies in the draft', count: draft.contingencies.length, items: draft.contingencies.slice(0, 15).map((item) => ({
+      id: item.id, title: item.label, description: null, meta: [item.dueAt ? `Due ${humanDate(new Date(item.dueAt))}` : null].filter((value): value is string => Boolean(value)),
+      status: item.status, href: null, entityType: CONTRACT_ENTITY_TYPE, actions: canChange ? [contingencyAction()] : [],
+    })) }], actions: [],
+  }] : [];
   if (!current) {
     return {
       status: 'READY_WITH_LIMITATIONS', reasonCode: 'BUYER_CONTRACT_NOT_CONFIRMED',
-      blocks: [{ type: 'SUMMARY', id: 'buyer-contract-unconfirmed', title: 'No confirmed contract revision is recorded yet', body: 'Upload or record the accepted contract and confirm its extracted dates and terms.', tone: 'CAUTION', actions: [] }],
+      blocks: [{ type: 'SUMMARY', id: 'buyer-contract-unconfirmed', title: 'No confirmed contract revision is recorded yet', body: 'Upload or record the accepted contract and confirm its extracted dates and terms.', tone: 'CAUTION', actions: contractActions }, ...draftBlock],
       suggestions: [],
     };
   }
@@ -1060,8 +1082,8 @@ async function buyerContractTimelineResult(userId: string, propertyId: string): 
     title: conflicts.length ? 'The confirmed contract conflicts with another recorded date' : (openContingencies.length ? `${openContingencies.length} contract contingenc${openContingencies.length === 1 ? 'y is' : 'ies are'} still open` : 'No contract contingency is currently open'),
     body: conflicts.join(' ') || `Accepted ${current.acceptedAt ? humanDate(new Date(current.acceptedAt)) : 'date not recorded'}, target closing ${current.targetClosingDate ? humanDate(new Date(current.targetClosingDate)) : 'not recorded'}.`,
     tone: conflicts.length || openContingencies.length ? 'CAUTION' : 'DEFAULT',
-    actions: [],
-  }];
+    actions: contractActions,
+  }, ...draftBlock];
   if (openContingencies.length) {
     blocks.push({
       type: 'GROUPED_LIST', filters: [], id: 'buyer-contract-contingencies', title: 'Open contingencies', description: 'From the confirmed contract revision.',

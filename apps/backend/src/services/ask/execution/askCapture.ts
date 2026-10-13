@@ -79,6 +79,8 @@ import { seasonalItemResult } from '../handlers/seasonalItemCommands.handler';
 import { walkthroughCommandResult } from '../handlers/buyerWalkthroughCommands.handler';
 import { closingItemResult } from '../handlers/buyerClosingItemCommands.handler';
 import { insuranceCommandResult } from '../handlers/buyerInsuranceCommands.handler';
+import { contractCommandResult } from '../handlers/buyerContractCommands.handler';
+import { contractFormKindFromCaptureKey, parseContractAnswer } from '../support/buyerContractCommand';
 import { insuranceFormKindFromCaptureKey, parseInsuranceAnswer } from '../support/buyerInsuranceCommand';
 import { closingItemKindFromCaptureKey, parseClosingItemAnswer } from '../support/buyerClosingItemCommand';
 import { parseWalkthroughAnswer, walkthroughFormKindFromCaptureKey } from '../support/buyerWalkthroughCommand';
@@ -1599,6 +1601,22 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     captureId = input.idempotencyKey;
     capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
     canonicalOwner = 'BuyerInsuranceWorkspace';
+  } else if (execution.operationId === 'BUYER_CONTRACT_COMMAND') {
+    const bcKind = contractFormKindFromCaptureKey(input.captureKey);
+    if (!bcKind) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    const access = await ensurePropertyAccess(userId, execution.propertyId);
+    if (access.role === HouseholdRole.VIEWER) throw Object.assign(new Error('A contributor or owner is required to change this.'), { code: 'ASK_PERMISSION_REQUIRED' });
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson) ? execution.parametersJson as Record<string, unknown> : {};
+    const bcLaunch = storedParameters.contractLaunch && typeof storedParameters.contractLaunch === 'object' && !Array.isArray(storedParameters.contractLaunch)
+      ? storedParameters.contractLaunch as { kind?: unknown; entityId?: unknown; sourceExecutionId?: unknown } : null;
+    if (!bcLaunch || bcLaunch.kind !== bcKind) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    if (!parseContractAnswer(bcKind, input.answer).success) throw Object.assign(new Error('Fill in what the form asks for.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+    result = await contractCommandResult(userId, execution.propertyId, {
+      kind: bcKind, entityId: typeof bcLaunch.entityId === 'string' ? bcLaunch.entityId : null, sourceExecutionId: typeof bcLaunch.sourceExecutionId === 'string' ? bcLaunch.sourceExecutionId : null,
+    }, input.answer as Record<string, unknown>);
+    captureId = input.idempotencyKey;
+    capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
+    canonicalOwner = 'BuyerContractRevision';
   } else if (execution.operationId === 'CLAIM_ACTIVITY_COMMAND') {
     if (input.captureKey !== CLAIM_NOTE_CAPTURE_KEY) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
     const access = await ensurePropertyAccess(userId, execution.propertyId);
