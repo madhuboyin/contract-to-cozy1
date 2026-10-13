@@ -226,17 +226,17 @@ Project Tracker appeared in the original P0 list as "lists projects." It is remo
 | Tool | Status | Remaining bounded controls | Verified |
 | --- | --- | --- | --- |
 | Maintenance and Home Operations | Residual gap | Strong task creation, completion, rescheduling and template browsing; some bulk/settings controls remain | Not re-verified |
-| Home Habit Coach | Needs verification | Generation, review and habit actions exist; checklist-item completion remains owned by Maintenance | Not re-verified |
+| Home Habit Coach | Residual gap (small) | **Verified 2026-10-12 (code-traced: `HOME_HABITS`, `HOME_HABIT_UPDATE`, `HOME_HABITS_GENERATE` against the 14 desktop routes):** list, spotlight, history, generate and the per-habit actions (adopt, complete, snooze, skip, dismiss, reopen) exist; checklist-item completion remains owned by Maintenance. Not found in Ask: the property-wide coach preferences (enable, surface count) | **Verified 2026-10-12** (code-traced) |
 | Claims | Residual gap | Filing, status and lifecycle transitions are confirmation-gated; attachment and checklist ergonomics remain fragmented | Not re-verified |
-| Inspection Hub | Needs verification | Findings and accept/dismiss/resolve have good parity; report filters and bulk review need validation | Not re-verified |
+| Inspection Hub | Residual gap | **Verified 2026-10-12 (code-traced: `INSPECTION_FINDINGS`, `INSPECTION_FINDING_UPDATE` against the 17 desktop routes):** findings read and accept/dismiss/resolve exist. Not in Ask: report confirm with write-back preview, open items across reports, report comparison, negotiation package, fix/disclose decisions and the work-disposition of a finding. Report upload and analysis stay an analyzer boundary | **Verified 2026-10-12** (code-traced) |
 | Seller Prep | Residual gap | Checklist decisions work; some evidence and report-level controls remain | Not re-verified |
 | Buyer Closing | Residual gap | Extensive operations exist; advanced deferred-buyer and document-center workflows are not currently available in Ask | Not re-verified |
 | DIY | Residual gap | Template, project and step operations are strong; planning visuals and bulk editing are not currently available in Ask | Not re-verified |
 | Service Price Radar | Residual gap | Quote checking works inline; saved-check correction/deletion and richer history remain | Not re-verified |
 | Do-Nothing Simulator | Residual gap | Ask can run and read simulations; complete scenario creation/editing is not reproduced | Not re-verified |
-| HOA Compliance | Needs verification | Records are readable/actionable; association setup and full approval/violation management need review | Not re-verified |
+| HOA Compliance | Residual gap (larger than recorded) | **Verified 2026-10-12 (code-traced: only `HOA_COMPLIANCE_STATUS` exists, a read of association, approvals and violations):** Ask has no write. Not in Ask: association create/update, approval record create/update/delete, violation create/update | **Verified 2026-10-12** (code-traced) |
 | Guidance Overview | Residual gap | Create, continue, skip and dismiss exist; richer plan editing is limited | Not re-verified |
-| Repair or Replace | Needs verification | Comparatively mature scenario, decision and outcome coverage | Not re-verified |
+| Repair or Replace | Needs verification | Registry carries `REPLACEMENT_GUIDANCE` and the HVAC decision platform; no operation named for the item-level repair/replace analysis was found by name search, so coverage is unconfirmed and must be read per desktop route in its own slice | Not re-verified (2026-10-12 name search only) |
 | Documents and Home Records | Residual gap | Strong detail, upload, extraction review and promotion; specialized uploads retain owning workflows | Not re-verified |
 | Seasonal Home Care | Residual gap | Setup exists; direct checklist complete/snooze/dismiss remains open | Not re-verified |
 
