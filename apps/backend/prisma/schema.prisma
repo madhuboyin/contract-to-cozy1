@@ -17595,6 +17595,13 @@ enum RenovationReadinessItemStatus {
   SATISFIED
 }
 
+// Which store an evidence document id on a readiness item points at. The id alone is ambiguous (Home Records and the legacy Document
+// table both use uuids), so it is recorded with the id. Null: no evidence, or an id recorded before this field existed (see the backfill).
+enum RenovationEvidenceSource {
+  HOME_RECORD
+  LEGACY_DOCUMENT
+}
+
 enum RenovationReadinessEventType {
   EVALUATED
   ITEM_SATISFIED
@@ -17622,6 +17629,7 @@ model RenovationStartReadinessItem {
   dueAt                    DateTime
   evidenceRequired         String @db.Text
   evidenceDocumentId       String?
+  evidenceSource           RenovationEvidenceSource?
   evidenceReference        String?
   sourceType               String
   sourceId                 String

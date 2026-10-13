@@ -1,8 +1,10 @@
-import { Prisma, type RenovationReadinessItemCategory } from '@prisma/client';
+import { Prisma, type HouseholdRole, type RenovationEvidenceSource, type RenovationReadinessItemCategory } from '@prisma/client';
 import { prisma } from '../config/database';
 import { logger } from '../lib/logger';
 import { APIError } from '../middleware/error.middleware';
 import * as projectTrackerService from './projectTracker.service';
+import { resolvePropertyAccess } from './propertyAccess.service';
+import { resolvePropertyDocuments } from './propertyDocuments/propertyDocumentInventory.service';
 import { linkContributor } from './renovationCase.service';
 import { resolveAndUpsertWorkItem } from '../modules/homeOperations/application/resolveWorkItem.usecase';
 import { transitionWorkItem } from '../modules/homeOperations/application/transitionWorkItem.usecase';
@@ -29,6 +31,8 @@ type Candidate = {
   dueAt: Date;
   evidenceRequired: string;
   evidenceDocumentId?: string | null;
+  /** Which store `evidenceDocumentId` points at. Requirement and compliance-condition sources are Home Records; scope documents are still legacy. */
+  evidenceSource?: RenovationEvidenceSource | null;
   evidenceReference: string;
   sourceType: string;
   sourceId: string;
@@ -232,6 +236,7 @@ export async function evaluateReadiness(
         ? 'The sourced non-applicability determination.'
         : 'Evidence that the determined requirement has been completed.',
       evidenceDocumentId: requirement.sourceDocumentId,
+      evidenceSource: requirement.sourceDocumentId ? 'HOME_RECORD' : null,
       evidenceReference: requirement.sourceUrl
         ?? requirement.sourceSection
         ?? requirement.confirmedByOrg
@@ -262,6 +267,7 @@ export async function evaluateReadiness(
       dueAt: condition.dueAt ?? dueAt,
       evidenceRequired: 'Verified evidence attached to the source condition.',
       evidenceDocumentId: condition.sourceDocumentId,
+      evidenceSource: condition.sourceDocumentId ? 'HOME_RECORD' : null,
       evidenceReference: condition.sourceReference ?? `Compliance condition ${condition.id}`,
       sourceType: 'RENOVATION_COMPLIANCE_CONDITION',
       sourceId: condition.id,
@@ -320,6 +326,8 @@ export async function evaluateReadiness(
     dueAt,
     evidenceRequired: 'The agreed price and governing contract/scope document.',
     evidenceDocumentId: scope.specificationDocumentIds[0],
+    // Scope documents are validated against the legacy store until the scope write path moves (renovationCase.service assertDocumentsInProperty).
+    evidenceSource: scope.specificationDocumentIds[0] ? 'LEGACY_DOCUMENT' : null,
     evidenceReference: scope.specificationDocumentIds.length
       ? `${scope.specificationDocumentIds.length} scope/contract document(s)`
       : `Scope version ${scope.version}`,
@@ -390,6 +398,9 @@ export async function evaluateReadiness(
           evidenceDocumentId: prior?.manuallySatisfiedAt
             ? prior.evidenceDocumentId
             : candidate.evidenceDocumentId,
+          evidenceSource: prior?.manuallySatisfiedAt
+            ? prior.evidenceSource
+            : candidate.evidenceSource ?? null,
           evidenceReference: candidate.evidenceReference,
           sourceType: candidate.sourceType,
           sourceId: candidate.sourceId,
@@ -506,18 +517,23 @@ export async function updateReadinessItem(
       'RENOVATION_READINESS_SOURCE_CONTROLLED',
     );
   }
+  // Evidence is a Home Record the acting member can see (record-level visibility applies), resolved now rather than trusted from an earlier
+  // read. A legacy Document id is still accepted for the desktop form's free-text id until that form picks Home Records; it is stored with its
+  // source so the two can never be confused, and is removable once no caller sends one.
+  let evidenceSource: RenovationEvidenceSource | null = null;
   if (input.status === 'SATISFIED') {
-    const evidence = await prisma.document.findFirst({
-      where: { id: input.evidenceDocumentId, propertyId },
-      select: { id: true },
-    });
-    if (!evidence) {
+    const access = await resolvePropertyAccess(actorUserId, propertyId);
+    const role = access?.role as HouseholdRole | undefined;
+    if (!role) throw new APIError('Property not found or access denied.', 404, 'PROPERTY_NOT_FOUND');
+    const [resolved] = await resolvePropertyDocuments({ propertyId, role, ids: [input.evidenceDocumentId], includeLegacy: true });
+    if (!resolved) {
       throw new APIError(
-        'Readiness evidence must belong to this property.',
+        'Readiness evidence must be a document on file for this property that you can see.',
         409,
         'RENOVATION_READINESS_EVIDENCE_SCOPE_MISMATCH',
       );
     }
+    evidenceSource = resolved.source;
   }
   await prisma.$transaction([
     prisma.renovationStartReadinessItem.update({
@@ -526,6 +542,7 @@ export async function updateReadinessItem(
         ? {
             status: 'SATISFIED',
             evidenceDocumentId: input.evidenceDocumentId,
+            evidenceSource,
             manuallySatisfiedAt: new Date(),
             manuallySatisfiedByUserId: actorUserId,
             satisfactionNotes: input.satisfactionNotes,
@@ -550,7 +567,7 @@ export async function updateReadinessItem(
         actorUserId,
         reason: input.satisfactionNotes,
         payload: input.status === 'SATISFIED'
-          ? json({ evidenceDocumentId: input.evidenceDocumentId })
+          ? json({ evidenceDocumentId: input.evidenceDocumentId, evidenceSource })
           : undefined,
       },
     }),
