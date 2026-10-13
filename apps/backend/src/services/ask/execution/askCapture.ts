@@ -74,6 +74,8 @@ import { doNothingScenarioResult } from '../handlers/doNothingScenarioCommands.h
 import { parseSaleCaseAnswer, saleCaseFormKindFromCaptureKey } from '../support/sellerPrepCaseCommand';
 import { saleCaseCommandResult } from '../handlers/sellerPrepCaseCommands.handler';
 import { negotiationPackageResult } from '../handlers/inspectionNegotiationPackage.handler';
+import { workItemCommandResult } from '../handlers/homeWorkItemCommands.handler';
+import { parseWorkItemAnswer, workItemFormKindFromCaptureKey } from '../support/homeWorkItemCommand';
 import { NEGOTIATION_PACKAGE_CAPTURE_KEY } from '../support/inspectionReportCommand';
 import { HABIT_COACH_PREFERENCES_CAPTURE_KEY, parseHabitCoachPreferencesAnswer } from '../support/habitCoachPreferencesCommand';
 import { habitCoachPreferencesResult } from '../handlers/habitCoachPreferencesCommands.handler';
@@ -1477,6 +1479,26 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     captureId = input.idempotencyKey;
     capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
     canonicalOwner = 'InspectionNegotiationPackage';
+  } else if (execution.operationId === 'HOME_WORK_ITEM_COMMAND') {
+    const wiKind = workItemFormKindFromCaptureKey(input.captureKey);
+    if (!wiKind) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    const access = await ensurePropertyAccess(userId, execution.propertyId);
+    if (access.role === HouseholdRole.VIEWER) throw Object.assign(new Error('A contributor or owner is required to change work items.'), { code: 'ASK_PERMISSION_REQUIRED' });
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson) ? execution.parametersJson as Record<string, unknown> : {};
+    const wiLaunch = storedParameters.workItemLaunch && typeof storedParameters.workItemLaunch === 'object' && !Array.isArray(storedParameters.workItemLaunch)
+      ? storedParameters.workItemLaunch as { kind?: unknown; entityId?: unknown; sourceExecutionId?: unknown } : null;
+    if (!wiLaunch || wiLaunch.kind !== wiKind || typeof wiLaunch.entityId !== 'string') {
+      throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    }
+    if (!parseWorkItemAnswer(wiKind, input.answer).success) {
+      throw Object.assign(new Error(wiKind === 'SNOOZE' ? 'Choose how long to snooze.' : 'Choose a due date.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+    }
+    result = await workItemCommandResult(userId, execution.propertyId, {
+      kind: wiKind, entityId: wiLaunch.entityId, sourceExecutionId: typeof wiLaunch.sourceExecutionId === 'string' ? wiLaunch.sourceExecutionId : null,
+    }, input.answer as Record<string, unknown>);
+    captureId = input.idempotencyKey;
+    capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
+    canonicalOwner = 'OperationalWorkItem';
   } else if (execution.operationId === 'CLAIM_ACTIVITY_COMMAND') {
     if (input.captureKey !== CLAIM_NOTE_CAPTURE_KEY) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
     const access = await ensurePropertyAccess(userId, execution.propertyId);
