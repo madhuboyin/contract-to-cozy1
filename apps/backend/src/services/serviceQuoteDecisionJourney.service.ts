@@ -181,6 +181,16 @@ export async function advanceServiceQuoteDecisionInTransaction(tx: any, input: A
     });
     transitionRecorded = true;
     if (input.relatedEntityType && input.relatedEntityId) {
+      // A Home Record id is checked here, inside the caller's transaction, because this link step has no other validation: the id must be a
+      // record of this property that is not trashed (design §3.6).
+      if (input.relatedEntityType === 'HOME_RECORD') {
+        const record = await tx.propertyRecord.findFirst({
+          where: { id: input.relatedEntityId, propertyId: input.propertyId, lifecycleStatus: { not: 'TRASHED' } }, select: { id: true },
+        });
+        if (!record) {
+          throw new APIError('The linked decision context does not belong to this property.', 400, 'SERVICE_QUOTE_CONTEXT_SCOPE_MISMATCH');
+        }
+      }
       await tx.serviceQuoteDecisionContextLink.upsert({
         where: {
           workspaceId_entityType_entityId: {
@@ -332,6 +342,7 @@ export async function linkServiceQuoteDecisionContext(input: {
   const propertyScopedModels: Partial<Record<ServiceQuoteDecisionEntityType, string>> = {
     INVENTORY_ITEM: 'inventoryItem',
     DOCUMENT: 'document',
+    HOME_RECORD: 'propertyRecord',
     INCIDENT: 'incident',
     SERVICE_RADAR_CHECK: 'serviceRadarCheck',
     GUIDANCE_JOURNEY: 'guidanceJourney',

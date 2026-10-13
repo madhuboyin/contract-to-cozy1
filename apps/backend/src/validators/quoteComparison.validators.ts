@@ -155,3 +155,11 @@ export const serviceQuoteOutcomeConsentSchema = z.object({
 });
 
 export { confirmQuoteReviewSchema } from '../services/quoteReview';
+
+// Importing a quote from a Home Record version (design §3.1, §3.9). The version is optional (the record's current one); a newer version of a
+// document already in the comparison needs an explicit choice.
+export const createQuoteFromRecordSchema = z.object({
+  recordId: z.string().uuid(),
+  versionId: z.string().uuid().optional().nullable(),
+  onNewerVersion: z.enum(['REPLACE', 'RETAIN_BOTH']).optional().nullable(),
+}).strict();

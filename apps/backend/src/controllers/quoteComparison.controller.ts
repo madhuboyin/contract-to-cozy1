@@ -1,3 +1,4 @@
+import { createQuoteProposalFromRecord } from '../services/quoteHomeRecordImport.service';
 import { NextFunction, Response } from 'express';
 import { CustomRequest } from '../types';
 import { APIError } from '../middleware/error.middleware';
@@ -197,6 +198,39 @@ export async function getQuoteReviewHandler(req: CustomRequest, res: Response, n
   try {
     const data = await getQuoteReview(req.params.propertyId, req.params.workspaceId, req.params.quoteId);
     res.json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function addQuoteFromRecord(req: CustomRequest, res: Response, next: NextFunction) {
+  try {
+    await assertQuoteComparisonMutationAllowed(req.params.propertyId, req.user!.userId);
+    const result = await createQuoteProposalFromRecord({
+      propertyId: req.params.propertyId,
+      workspaceId: req.params.workspaceId,
+      userId: req.user!.userId,
+      role: req.householdRole!,
+      recordId: req.body.recordId,
+      versionId: req.body.versionId ?? null,
+      onNewerVersion: req.body.onNewerVersion ?? null,
+    });
+    if (!result.alreadyImported) {
+      emitServiceQuoteDecisionAnalytics({
+        eventName: ServiceQuoteDecisionEvent.INTAKE_RECORDED,
+        eventType: ProductAnalyticsEventType.ACTION_COMPLETED,
+        userId: req.user!.userId,
+        propertyId: req.params.propertyId,
+        workspaceId: req.params.workspaceId,
+        metadata: {
+          intakeType: 'home_record_extraction',
+          readinessStage: result.quote.readinessStage,
+          readinessScore: result.quote.readinessScore,
+          missingFactCount: Array.isArray(result.quote.missingFactsJson) ? result.quote.missingFactsJson.length : 0,
+        },
+      });
+    }
+    res.status(result.alreadyImported ? 200 : 201).json({ success: true, data: result });
   } catch (error) {
     next(error);
   }

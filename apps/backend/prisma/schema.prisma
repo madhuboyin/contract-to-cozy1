@@ -2007,6 +2007,8 @@ enum ServiceQuoteDecisionOutcome {
 enum ServiceQuoteDecisionEntityType {
   INVENTORY_ITEM
   DOCUMENT
+  // A Home Record (property_records), the canonical document store; DOCUMENT stays for the legacy table (Quote Comparison import design §3.6).
+  HOME_RECORD
   INCIDENT
   SERVICE_RADAR_CHECK
   GUIDANCE_JOURNEY
@@ -2246,6 +2248,8 @@ enum PropertyRecordLinkEntityType {
   EXPENSE
   HIDDEN_ASSET_MATCH_OUTCOME
   HOME_SAVINGS_OPPORTUNITY_OUTCOME
+  // A Quote Comparison proposal imported from this record: deleting the record shows up in its deletion impact (import design §3.5).
+  SERVICE_QUOTE
   OTHER
 }
 
@@ -5209,6 +5213,7 @@ model PropertyRecord {
   propertyTaxAppealEvidence        PropertyTaxAppealEvidence[]            @relation("PropertyTaxAppealEvidenceDocument")
   propertyTaxAppealComparables     PropertyTaxAppealComparable[]          @relation("PropertyTaxAppealComparableDocument")
   propertyTaxAppealFilingConfirmations PropertyTaxAppealCase[]            @relation("PropertyTaxAppealFilingConfirmation")
+  quoteSources                     QuoteHomeRecordSource[]
 
   @@index([propertyId, lifecycleStatus, updatedAt(sort: Desc)])
   @@index([propertyId, recordType])
@@ -5249,6 +5254,7 @@ model PropertyRecordVersion {
   supersededBy      PropertyRecordVersion[]   @relation("PropertyRecordVersionSupersession")
   links             PropertyRecordLink[]
   extractedFacts    ExtractedFactCandidate[]
+  quoteSources      QuoteHomeRecordSource[]
 
   @@unique([recordId, versionNumber])
   @@index([recordId, createdAt(sort: Desc)])
@@ -11934,6 +11940,7 @@ model QuoteComparisonQuote {
   lineItems        QuoteComparisonLineItem[]
   terms            QuoteComparisonTerm[]
   extractions      QuoteComparisonExtraction[]
+  homeRecordSource QuoteHomeRecordSource?
   factConfirmations QuoteComparisonFactConfirmation[]
   clarifications   QuoteComparisonClarification[]
 
@@ -12049,6 +12056,37 @@ model QuoteComparisonTerm {
 
   @@index([quoteId, type])
   @@map("quote_comparison_terms")
+}
+
+// Where a quote imported from a Home Record came from: the exact record version, and what produced the facts (Quote Comparison import design §3.5,
+// P2). Separate from QuoteComparisonExtraction, which keeps its required link to the legacy Document table. The one-import-per-version rule is the
+// unique index. On purge the record and version references become null (SetNull) and the worker removes the unconfirmed content first; the quote
+// keeps the facts a person confirmed or corrected (D-Q7).
+model QuoteHomeRecordSource {
+  id                      String    @id @default(uuid())
+  quoteId                 String    @unique
+  workspaceId             String
+  propertyId              String
+  propertyRecordId        String?
+  propertyRecordVersionId String?
+  extractorId             String
+  extractorVersion        String
+  schemaVersion           String
+  modelId                 String?
+  extractedAt             DateTime
+  importedByUserId        String
+  supersededByQuoteId     String?
+  sourceRemovedAt         DateTime?
+  createdAt               DateTime  @default(now())
+
+  quote   QuoteComparisonQuote   @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  record  PropertyRecord?        @relation(fields: [propertyRecordId], references: [id], onDelete: SetNull)
+  version PropertyRecordVersion? @relation(fields: [propertyRecordVersionId], references: [id], onDelete: SetNull)
+
+  @@unique([workspaceId, propertyRecordVersionId])
+  @@index([propertyRecordId])
+  @@index([propertyId])
+  @@map("quote_home_record_sources")
 }
 
 model QuoteComparisonExtraction {

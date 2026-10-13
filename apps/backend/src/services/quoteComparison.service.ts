@@ -72,7 +72,7 @@ export interface QuoteProposalInput {
 
 export type UpdateQuoteProposalInput = Partial<QuoteProposalInput>;
 
-const quoteInclude = {
+export const quoteInclude = {
   lineItems: { orderBy: { sortOrder: 'asc' } },
   terms: { orderBy: { createdAt: 'asc' } },
   extractions: {
@@ -85,7 +85,7 @@ const quoteInclude = {
 
 const database = prisma as any;
 
-async function getWorkspaceOrThrow(propertyId: string, workspaceId: string) {
+export async function getWorkspaceOrThrow(propertyId: string, workspaceId: string) {
   const workspace = await database.quoteComparisonWorkspace.findFirst({
     where: { id: workspaceId, propertyId },
   });
@@ -105,7 +105,7 @@ function assertOpenWorkspace(workspace: any) {
   }
 }
 
-function assertReviewMutable(workspace: any) {
+export function assertReviewMutable(workspace: any) {
   assertOpenWorkspace(workspace);
   if (['FINALIZATION', 'BOOKING', 'SCHEDULED', 'COMPLETED', 'CLOSED'].includes(workspace.journeyStage)) {
     throw new APIError(
@@ -142,7 +142,7 @@ function readinessData(input: QuoteProposalInput, homeownerConfirmedAt?: Date | 
   };
 }
 
-function proposalCreateData(input: QuoteProposalInput) {
+export function proposalCreateData(input: QuoteProposalInput) {
   return {
     vendorName: input.vendorName.trim(),
     quoteAmount: input.quoteAmount,

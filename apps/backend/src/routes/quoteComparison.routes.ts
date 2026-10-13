@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import {
   addQuoteFromDocument,
+  addQuoteFromRecord,
   addQuoteProposal,
   confirmQuote,
   getComparability,
@@ -24,6 +25,7 @@ import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
 import { validateBody } from '../middleware/validate.middleware';
 import {
   confirmQuoteReviewSchema,
+  createQuoteFromRecordSchema,
   createQuoteFromDocumentSchema,
   createQuoteProposalSchema,
   getOrCreateQuoteWorkspaceSchema,
@@ -124,6 +126,14 @@ router.post(
   requireHouseholdRole('CONTRIBUTOR'),
   validateBody(createQuoteFromDocumentSchema),
   addQuoteFromDocument,
+);
+
+router.post(
+  '/properties/:propertyId/quote-comparison/workspaces/:workspaceId/quotes/from-record',
+  propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
+  validateBody(createQuoteFromRecordSchema),
+  addQuoteFromRecord,
 );
 
 router.post(

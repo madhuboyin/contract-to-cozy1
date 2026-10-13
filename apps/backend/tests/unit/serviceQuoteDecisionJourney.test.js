@@ -138,3 +138,17 @@ test('a repeat to the same stage and outcome records nothing and emits no analyt
   await assert.rejects(() => journey.advanceServiceQuoteDecisionInTransaction(fake.tx, { ...input, toStage: 'QUOTE_INTAKE' }), (e) => e.code === 'SERVICE_QUOTE_INVALID_TRANSITION');
   assert.equal(fake.writes.length, 0);
 });
+
+test('a Home Record context link is validated inside the caller\'s transaction; a record of another property or a trashed one is refused before any write', async () => {
+  const { tx, writes } = fakeTx(base);
+  tx.propertyRecord = { findFirst: async (args) => { writes.push(['record.check', args.where.propertyId, args.where.lifecycleStatus]); return null; } };
+  await assert.rejects(
+    () => journey.advanceServiceQuoteDecisionInTransaction(tx, { ...input, relatedEntityType: 'HOME_RECORD', relatedEntityId: 'rec-x' }),
+    (e) => e.code === 'SERVICE_QUOTE_CONTEXT_SCOPE_MISMATCH',
+  );
+  assert.deepEqual(writes.find(([k]) => k === 'record.check'), ['record.check', 'prop-1', { not: 'TRASHED' }]);
+  const ok = fakeTx(base);
+  ok.tx.propertyRecord = { findFirst: async () => ({ id: 'rec-1' }) };
+  await journey.advanceServiceQuoteDecisionInTransaction(ok.tx, { ...input, relatedEntityType: 'HOME_RECORD', relatedEntityId: 'rec-1' });
+  assert.deepEqual(ok.writes.find(([k]) => k === 'link'), ['link', 'HOME_RECORD', 'rec-1']);
+});

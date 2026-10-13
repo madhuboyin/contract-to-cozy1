@@ -61,6 +61,7 @@ export type ServiceRadarLinkedEntityType =
   | 'SYSTEM'
   | 'APPLIANCE'
   | 'DOCUMENT'
+  | 'HOME_RECORD'
   | 'INCIDENT'
   | 'ROOM'
   | 'OTHER';

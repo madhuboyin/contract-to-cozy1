@@ -22,6 +22,7 @@ export type ServiceQuoteDecisionOutcome =
 export type ServiceQuoteDecisionEntityType =
   | 'INVENTORY_ITEM'
   | 'DOCUMENT'
+  | 'HOME_RECORD'
   | 'INCIDENT'
   | 'SERVICE_RADAR_CHECK'
   | 'GUIDANCE_JOURNEY'
