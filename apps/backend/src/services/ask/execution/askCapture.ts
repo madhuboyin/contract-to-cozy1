@@ -1321,8 +1321,8 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     canonicalOwner = 'PropertyHazardOutcome';
   } else if (execution.operationId === 'HOME_BRIEFING_COMMAND') {
     if (input.captureKey !== BRIEFING_PREFERENCES_CAPTURE_KEY) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
-    const access = await ensurePropertyAccess(userId, execution.propertyId);
-    if (access.role === HouseholdRole.VIEWER) throw Object.assign(new Error('A contributor or owner is required to change the briefing in Ask.'), { code: 'ASK_PERMISSION_REQUIRED' });
+    // CALLER_SCOPED (FRD v1.329): the briefing is the caller's own; membership is enforced by ensurePropertyAccess.
+    await ensurePropertyAccess(userId, execution.propertyId);
     const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson) ? execution.parametersJson as Record<string, unknown> : {};
     const briefingLaunch = storedParameters.briefingCommandLaunch && typeof storedParameters.briefingCommandLaunch === 'object' && !Array.isArray(storedParameters.briefingCommandLaunch)
       ? storedParameters.briefingCommandLaunch as { kind?: unknown; entityId?: unknown; sourceExecutionId?: unknown } : null;

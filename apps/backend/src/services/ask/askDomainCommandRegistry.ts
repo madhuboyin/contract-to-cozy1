@@ -109,13 +109,21 @@ export const ASK_DOMAIN_COMMAND_IDS = [
 ] as const;
 
 export type AskDomainCommandId = typeof ASK_DOMAIN_COMMAND_IDS[number];
-export type AskCommandRole = 'CONTRIBUTOR' | 'OWNER';
+export type AskCommandRole = 'VIEWER' | 'CONTRIBUTOR' | 'OWNER';
+/**
+ * How a command is authorized (owner ruling 2026-10-13, FRD v1.329). PROPERTY_ROLE is the household role floor and is never VIEWER. CALLER_SCOPED is the only
+ * class that admits a viewer, and only for state scoped exclusively to the authenticated account: the user id comes from the session, never from the
+ * request or the command parameters; no property-shared row changes; no other member's notifications, preferences or reading state changes. A command
+ * must declare it by being built with callerScopedCommand, and `command` cannot produce a VIEWER floor.
+ */
+export type AskCommandAuthorization = 'PROPERTY_ROLE' | 'CALLER_SCOPED';
 
 export interface AskDomainCommandDefinition {
   id: AskDomainCommandId;
   operationId: string;
   adapterKey: string;
   roleFloor: AskCommandRole;
+  authorization: AskCommandAuthorization;
   material: boolean;
   artifactType: string;
   supportsCancelBeforeExecution: boolean;
@@ -131,7 +139,7 @@ const command = (
   id: AskDomainCommandId,
   operationId: string,
   adapterKey: string,
-  roleFloor: AskCommandRole,
+  roleFloor: Exclude<AskCommandRole, 'VIEWER'>,
   artifactType: string,
   correctionModes: AskDomainCommandDefinition['correctionModes'] = [],
   cancellation: AskDomainCommandDefinition['cancellation'],
@@ -140,12 +148,23 @@ const command = (
   operationId,
   adapterKey,
   roleFloor,
+  authorization: 'PROPERTY_ROLE',
   material: true,
   artifactType,
   supportsCancelBeforeExecution: true,
   correctionModes,
   cancellation,
 });
+
+/** A command whose every write is to state scoped exclusively to the caller's own account. The floor is VIEWER by construction. */
+const callerScopedCommand = (
+  id: AskDomainCommandId,
+  operationId: string,
+  adapterKey: string,
+  artifactType: string,
+  correctionModes: AskDomainCommandDefinition['correctionModes'] = [],
+  cancellation: AskDomainCommandDefinition['cancellation'],
+): AskDomainCommandDefinition => ({ ...command(id, operationId, adapterKey, 'CONTRIBUTOR', artifactType, correctionModes, cancellation), roleFloor: 'VIEWER', authorization: 'CALLER_SCOPED' });
 
 export const ASK_DOMAIN_COMMAND_REGISTRY: Readonly<Record<AskDomainCommandId, AskDomainCommandDefinition>> = Object.freeze({
   MAINTENANCE_CREATE: command('MAINTENANCE_CREATE', 'MAINTENANCE_TASK_CREATE', 'maintenance.create', 'CONTRIBUTOR', 'PROPERTY_MAINTENANCE_TASK', ['EDIT', 'STOP'], { title: 'Maintenance task not created', body: 'No task or shared home record was changed.', suggestion: 'What maintenance is pending?' }),
@@ -179,8 +198,8 @@ export const ASK_DOMAIN_COMMAND_REGISTRY: Readonly<Record<AskDomainCommandId, As
   MATERIAL_SPEC_ADD: command('MATERIAL_SPEC_ADD', 'MATERIAL_SPEC_ADD', 'material-spec.add', 'CONTRIBUTOR', 'MATERIAL_SPEC', ['EDIT', 'STOP'], { title: 'Material not recorded', body: 'No material was recorded.', suggestion: 'Show my material specs' }),
   RENOVATION_CASE_START: command('RENOVATION_CASE_START', 'RENOVATION_CASE_START', 'renovation-case.start', 'CONTRIBUTOR', 'RENOVATION_CASE', ['EDIT', 'STOP'], { title: 'Renovation case not started', body: 'No renovation case was saved.', suggestion: 'Is my renovation ready to start?' }),
   HOA_COMPLIANCE_COMMAND: command('HOA_COMPLIANCE_COMMAND', 'HOA_COMPLIANCE_COMMAND', 'hoa-compliance.command', 'CONTRIBUTOR', 'HOA_RECORD', ['EDIT', 'STOP'], { title: 'HOA record not changed', body: 'No HOA record was changed.', suggestion: 'Show my HOA compliance' }),
-  HOME_BRIEFING_COMMAND: command('HOME_BRIEFING_COMMAND', 'HOME_BRIEFING_COMMAND', 'home-briefing.command', 'CONTRIBUTOR', 'HOME_BRIEFING', ['EDIT', 'STOP'], { title: 'Briefing not changed', body: 'Your briefing was not changed.', suggestion: 'Show my home briefing' }),
-  NEIGHBORHOOD_INTERACTION_COMMAND: command('NEIGHBORHOOD_INTERACTION_COMMAND', 'NEIGHBORHOOD_INTERACTION_COMMAND', 'neighborhood-interaction.command', 'CONTRIBUTOR', 'PROPERTY_LOCAL_OBSERVATION_STATE', ['EDIT', 'STOP'], { title: 'Change not updated', body: 'Your view of this local change was not changed.', suggestion: 'Show what is changing around my home' }),
+  HOME_BRIEFING_COMMAND: callerScopedCommand('HOME_BRIEFING_COMMAND', 'HOME_BRIEFING_COMMAND', 'home-briefing.command', 'HOME_BRIEFING', ['EDIT', 'STOP'], { title: 'Briefing not changed', body: 'Your briefing was not changed.', suggestion: 'Show my home briefing' }),
+  NEIGHBORHOOD_INTERACTION_COMMAND: callerScopedCommand('NEIGHBORHOOD_INTERACTION_COMMAND', 'NEIGHBORHOOD_INTERACTION_COMMAND', 'neighborhood-interaction.command', 'PROPERTY_LOCAL_OBSERVATION_STATE', ['EDIT', 'STOP'], { title: 'Change not updated', body: 'Your view of this local change was not changed.', suggestion: 'Show what is changing around my home' }),
   PAST_HAZARD_OUTCOME_COMMAND: command('PAST_HAZARD_OUTCOME_COMMAND', 'PAST_HAZARD_OUTCOME_COMMAND', 'past-hazard.command', 'CONTRIBUTOR', 'PROPERTY_HAZARD_OUTCOME', ['EDIT', 'STOP'], { title: 'Observation not recorded', body: 'No observation was recorded.', suggestion: 'Show my past hazard exposure' }),
   RENOVATION_READINESS_COMMAND: command('RENOVATION_READINESS_COMMAND', 'RENOVATION_READINESS_COMMAND', 'renovation-readiness.command', 'CONTRIBUTOR', 'RENOVATION_READINESS_ITEM', ['EDIT', 'STOP'], { title: 'Readiness not changed', body: 'No readiness item was changed.', suggestion: 'Show my renovation permit readiness' }),
   SAVINGS_BENEFIT_COMMAND: command('SAVINGS_BENEFIT_COMMAND', 'SAVINGS_BENEFIT_COMMAND', 'savings-benefit.command', 'CONTRIBUTOR', 'SAVINGS_BENEFIT_ACTION', ['EDIT', 'STOP'], { title: 'Savings not changed', body: 'No savings record was changed.', suggestion: 'Show my savings opportunities' }),

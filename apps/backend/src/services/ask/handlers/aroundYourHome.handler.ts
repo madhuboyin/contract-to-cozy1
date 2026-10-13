@@ -99,6 +99,7 @@ async function neighborhoodChangeFeedResult(userId: string, propertyId: string, 
 }
 
 registerCapabilityHandler('neighborhood-change.feed', async (envelope, deps) => {
-  const access = deps.propertyAccess ?? await ensurePropertyAccess(envelope.userId, envelope.propertyId!);
-  return neighborhoodChangeFeedResult(envelope.userId, envelope.propertyId!, access.role !== 'VIEWER');
+  // CALLER_SCOPED (FRD v1.329): a reading of a change is stored per user, so any member may set their own.
+  await (deps.propertyAccess ?? ensurePropertyAccess(envelope.userId, envelope.propertyId!));
+  return neighborhoodChangeFeedResult(envelope.userId, envelope.propertyId!, true);
 });

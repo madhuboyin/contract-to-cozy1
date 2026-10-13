@@ -53,7 +53,8 @@ const launch = (over = {}) => ({ operationId: OP, surface: 'ASK_PAGE', entityId:
 
 test('declared-action only; refreshes and a wrong entity are refused; a gone or already-set change is said, not confirmed', async () => {
   for (const message of Object.values(M)) assert.notEqual(resolveAskRoutingCascade(message, { localRoutingEnabled: true }).operation?.operationId, OP, message);
-  assert.equal(getAskDomainCommandByOperation(OP).roleFloor, 'CONTRIBUTOR');
+  assert.equal(getAskDomainCommandByOperation(OP).roleFloor, 'VIEWER');
+  assert.equal(getAskDomainCommandByOperation(OP).authorization, 'CALLER_SCOPED');
   const restoreRole = withRole('CONTRIBUTOR'); let restore = withView();
   try {
     assert.equal((await invoke(M.FOLLOW, launch({ surface: 'ASK_REFRESH' }))).reasonCode, 'ASK_NEIGHBORHOOD_COMMAND_NOT_DIRECTLY_ROUTABLE');
@@ -93,10 +94,24 @@ test('the answer offers each change the steps its reading allows, and the ids ar
   assert.deepEqual(rows[1].actions.map((a) => a.id), ['neighborhood-dismiss', 'neighborhood-not-relevant']);
   assert.equal(rows[0].entityType, command.NEIGHBORHOOD_RECORD_ENTITY_TYPE);
   const viewerRows = neighborhoodChangeFeedFromView(view([item()]), 'prop-1', false).blocks.find((b) => b.id === 'neighborhood-changes').sections[0].items;
-  assert.deepEqual(viewerRows[0].actions, [], 'a viewer is offered nothing it would refuse');
+  assert.deepEqual(viewerRows[0].actions, [], 'the pure view offers nothing without canChange; the handler passes true for a caller-scoped reading');
   const applicable = (id, operationId) => isAskActionApplicable({
     action: { id, label: 'x', interactionType: 'MUTATE_RECORD', message: 'm', operationId, style: 'SECONDARY' }, operationId, propertyId: 'prop-1', householdRole: 'CONTRIBUTOR', authoritativeSourceAvailable: true,
   });
   for (const id of Object.values(command.NEIGHBORHOOD_COMMAND_ACTION_IDS)) assert.equal(applicable(id, 'NEIGHBORHOOD_CHANGE_FEED'), true, id);
   assert.equal(applicable('neighborhood-back', OP), true);
+});
+
+test('hostile ids: the reading is set for the session user whatever the parameters carry', async () => {
+  const restore = withView();
+  const saved = { s: ayh.setAroundYourHomeInteraction, e: executeOperation.reconcileAskExecutionSideEffects };
+  const calls = [];
+  ayh.setAroundYourHomeInteraction = async (arg) => { calls.push(arg); return {}; };
+  executeOperation.reconcileAskExecutionSideEffects = async () => ({ attemptedAndFailed: false, refreshedExecutions: [] });
+  try {
+    const version = sha(`neighborhood:FOLLOW:${MATCH}:DEFAULT:3`);
+    await confirmCapabilityInvoke(OP, ctx({ neighborhoodCommand: { kind: 'FOLLOW', entityId: MATCH, userId: 'victim' }, neighborhoodContextVersion: version, userId: 'victim' }));
+    assert.equal(calls[0].userId, 'user-1');
+    assert.equal(calls[0].propertyId, 'prop-1');
+  } finally { ayh.setAroundYourHomeInteraction = saved.s; executeOperation.reconcileAskExecutionSideEffects = saved.e; restore(); }
 });

@@ -4,7 +4,6 @@
 // review card and a confirmation. A briefing is the caller's own (preferences, deliveries and item readings are stored per user), so none of this
 // changes anything for another member. Sharing selected items creates a public link and is not offered here.
 import { createHash } from 'node:crypto';
-import { HouseholdRole } from '@prisma/client';
 import { prisma } from '../../../lib/prisma';
 import { type AskCaptureRequest } from '../../../productFramework/ask/ask.contract';
 import { type AskOperationResult } from '../askOperationRegistry';
@@ -26,9 +25,6 @@ const database = prisma as any;
 export interface BriefingCommandLaunch { kind: BriefingCommandKind; entityId: string; sourceExecutionId: string | null }
 
 const backToBriefing = { id: 'home-briefing-back', label: 'Back to my briefing', interactionType: 'START_WORKFLOW' as const, message: 'Show my home briefing', operationId: 'HOME_BRIEFING_VIEW' as const, style: 'SECONDARY' as const };
-const blocked = (reasonCode: string, title: string, body: string): AskOperationResult => ({
-  status: 'BLOCKED', reasonCode, blocks: [{ type: 'SUMMARY', id: 'home-briefing-command-blocked', title, body, tone: 'CAUTION', actions: [] }], suggestions: [],
-});
 const unavailable = (reasonCode: string, title: string, body: string): AskOperationResult => ({
   status: 'NOT_APPLICABLE', reasonCode, blocks: [{ type: 'SUMMARY', id: 'home-briefing-command-unavailable', title, body, tone: 'DEFAULT', actions: [backToBriefing] }], suggestions: [],
 });
@@ -69,8 +65,9 @@ function preferencesCapture(contextVersion: string, entered: Record<string, unkn
 }
 
 export async function briefingCommandResult(userId: string, propertyId: string, launch: BriefingCommandLaunch, supplied?: BriefingPreferencesForm): Promise<AskOperationResult> {
-  const access = await ensurePropertyAccess(userId, propertyId);
-  if (access.role === HouseholdRole.VIEWER) return blocked('ASK_PERMISSION_REQUIRED', 'A contributor or owner can change the briefing in Ask', 'Your role can view this home but not change it from Ask. Nothing has changed.');
+  // CALLER_SCOPED (FRD v1.329): a briefing is the caller's own, so any member with access to the property may change theirs. The caller is the
+  // authenticated userId; the entity ids below are only ever looked up inside that caller's own deliveries.
+  await ensurePropertyAccess(userId, propertyId);
   const kind = launch.kind;
   const expiresAt = new Date(Date.now() + CONFIRMATION_MINUTES * 60 * 1000);
   const base = { sourceExecutionId: launch.sourceExecutionId, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() };

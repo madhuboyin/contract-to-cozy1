@@ -57,7 +57,7 @@ test('the answer offers settings and a fresh briefing and per-item readings to a
   const seen = homeBriefingFromView(view({ current: { ...view().current, items: [{ ...view().current.items[0], seenAt: new Date() }] } }), 'prop-1', true);
   assert.deepEqual(seen.blocks.find((b) => b.id === 'home-briefing-items').sections[0].items[0].actions, []);
   const viewer = homeBriefingFromView(view(), 'prop-1', false);
-  assert.deepEqual(viewer.blocks[0].actions, []);
+  assert.deepEqual(viewer.blocks[0].actions, [], 'the pure view offers nothing without canChange; the handler passes true for a caller-scoped briefing');
   const off = homeBriefingFromView(view({ preference: { enabled: false, cadence: 'WEEKLY', topics: [], channels: ['IN_APP'] }, current: null }), 'prop-1', true);
   assert.deepEqual(off.blocks[0].actions.map((a) => a.id), ['home-briefing-preferences']);
   const applicable = (id, operationId) => isAskActionApplicable({
@@ -82,13 +82,14 @@ function withData() {
 const invoke = (message, launchContext) => capabilityInvoke(OP, { userId: 'user-1', propertyId: 'prop-1', message, launchContext });
 const launch = (kind, entityId, over = {}) => ({ operationId: OP, surface: 'ASK_PAGE', entityId, entityType: command.briefingCommandEntityType(kind), ...over });
 
-test('declared-action only; viewers refused; settings open a form seeded with defaults; generate and item readings ask for confirmation', async () => {
-  assert.equal(getAskDomainCommandByOperation(OP).roleFloor, 'CONTRIBUTOR');
+test('declared-action only; a viewer may change their own briefing; settings open a form seeded with defaults; generate and item readings ask for confirmation', async () => {
+  assert.equal(getAskDomainCommandByOperation(OP).roleFloor, 'VIEWER');
+  assert.equal(getAskDomainCommandByOperation(OP).authorization, 'CALLER_SCOPED');
   const restore = withData();
   const as = async (role, m, l) => { const r = withRole(role); try { return await invoke(m, l); } finally { r(); } };
   try {
     assert.equal((await as('CONTRIBUTOR', M.GENERATE, launch('GENERATE', 'prop-1', { surface: 'ASK_REFRESH' }))).reasonCode, 'ASK_HOME_BRIEFING_COMMAND_NOT_DIRECTLY_ROUTABLE');
-    assert.equal((await as('VIEWER', M.GENERATE, launch('GENERATE', 'prop-1'))).reasonCode, 'ASK_PERMISSION_REQUIRED');
+    assert.equal((await as('VIEWER', M.GENERATE, launch('GENERATE', 'prop-1'))).status, 'NEEDS_CONFIRMATION', 'a viewer prepares their own briefing');
     const form = await as('CONTRIBUTOR', M.PREFERENCES, launch('PREFERENCES', 'prop-1'));
     assert.equal(form.status, 'NEEDS_CONTEXT');
     assert.equal(form.captureRequests[0].currentAnswer.cadence, 'WEEKLY');
@@ -119,4 +120,28 @@ test('confirming calls the canonical functions with the route\'s input; a stale 
     await assert.rejects(() => confirmCapabilityInvoke(OP, ctx({ briefingCommand: { kind: 'SEEN', entityId: ITEM }, briefingContextVersion: 'old' })), (e) => e.code === 'ASK_CONTEXT_VERSION_CONFLICT');
     assert.equal(calls.length, 2);
   } finally { for (const n of names) service[n] = saved[n]; executeOperation.reconcileAskExecutionSideEffects = savedReconcile; restore(); }
+});
+
+test('hostile ids: another member\'s item is not found, and the write is always for the session user', async () => {
+  const saved = prisma.homeBriefingItem;
+  const wheres = [];
+  prisma.homeBriefingItem = { findFirst: async (a) => { wheres.push(a.where); return null; } };
+  const restoreRole = withRole('VIEWER');
+  try {
+    const r = await invoke(M.DISMISS, launch('DISMISS', 'someone-elses-item-id'));
+    assert.equal(r.reasonCode, 'HOME_BRIEFING_ITEM_NOT_FOUND');
+    assert.deepEqual(wheres[0], { id: 'someone-elses-item-id', delivery: { propertyId: 'prop-1', userId: 'user-1' } });
+  } finally { prisma.homeBriefingItem = saved; restoreRole(); }
+  const names = ['updateHomeBriefingPreference', 'recordHomeBriefingItemOutcome'];
+  const savedFns = Object.fromEntries(names.map((n) => [n, service[n]]));
+  const calls = [];
+  for (const n of names) service[n] = async (a) => { calls.push(a); return {}; };
+  const savedReconcile = executeOperation.reconcileAskExecutionSideEffects;
+  executeOperation.reconcileAskExecutionSideEffects = async () => ({ attemptedAndFailed: false, refreshedExecutions: [] });
+  const restore = withData();
+  try {
+    await confirmCapabilityInvoke(OP, { ...ctx({ briefingCommand: { kind: 'PREFERENCES', entityId: 'prop-1', userId: 'victim' }, briefingContextVersion: sha('briefing-preferences:none'), briefingForm: { enabled: 'YES', cadence: 'WEEKLY', channels: ['IN_APP'] } }), userId: 'user-1' });
+    assert.equal(calls.length >= 1, true);
+    assert.ok(calls.every((c) => c.userId === 'user-1'), 'a hostile userId in the parameters is ignored');
+  } finally { for (const n of names) service[n] = savedFns[n]; executeOperation.reconcileAskExecutionSideEffects = savedReconcile; restore(); }
 });
