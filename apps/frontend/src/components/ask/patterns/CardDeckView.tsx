@@ -138,7 +138,12 @@ export function CardDeckView({ items, swipeRightActionId, swipeLeftActionId, onI
     );
   }
 
-  const shown = (item.actions ?? []).slice(0, DECK_MAX_BUTTONS);
+  const itemActions = item.actions ?? [];
+  const hasOverflow = itemActions.length > DECK_MAX_BUTTONS;
+  // Keep the deck compact without dropping a declared action: when an item
+  // exceeds the direct-button budget, reserve the last slot for an overflow.
+  const shown = itemActions.slice(0, hasOverflow ? DECK_MAX_BUTTONS - 1 : DECK_MAX_BUTTONS);
+  const overflow = hasOverflow ? itemActions.slice(DECK_MAX_BUTTONS - 1) : [];
   const rightLabel = actionById(swipeRightActionId)?.label;
   const leftLabel = actionById(swipeLeftActionId)?.label;
   const decided = decisions[item.id];
@@ -184,6 +189,12 @@ export function CardDeckView({ items, swipeRightActionId, swipeLeftActionId, onI
             {action.label}{batchMode && !isBatched(action) ? ' …' : ''}
           </button>
         ))}
+        {overflow.length > 0 && <details className="relative">
+          <summary className="flex min-h-9 cursor-pointer list-none items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">More actions</summary>
+          <div className="absolute right-0 z-10 mt-1 min-w-44 space-y-1 rounded-lg border border-slate-200 bg-white p-1.5 shadow-lg">
+            {overflow.map((action) => <button key={action.id} type="button" disabled={disabled} onClick={() => choose(action)} className="block min-h-9 w-full rounded-md px-2.5 py-1.5 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">{action.label}{batchMode && !isBatched(action) ? ' …' : ''}</button>)}
+          </div>
+        </details>}
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <button type="button" onClick={back} disabled={index === 0} className="min-h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 disabled:opacity-40">Back</button>

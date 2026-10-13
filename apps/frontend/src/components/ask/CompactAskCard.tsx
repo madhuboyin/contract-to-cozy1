@@ -68,7 +68,7 @@ export function CompactAskCard({
       </div>
       <h4 className={cn('line-clamp-2 text-base font-semibold leading-5 text-slate-950', density === 'dense' ? 'mt-2' : 'mt-3')}>{title}</h4>
       {summary && <div className="mt-1 line-clamp-2 text-sm leading-5 text-slate-600">{summary}</div>}
-      {meta && <div className="mt-2 line-clamp-1 text-xs text-slate-500">{meta}</div>}
+      {meta && <div className="mt-2 text-xs leading-4 text-slate-500">{meta}</div>}
       {(action || secondary) && (
         <div className={cn('flex flex-wrap items-center justify-between gap-2', density === 'dense' ? 'pt-2' : 'pt-3')}>
           <div className="min-w-0">{action}</div>

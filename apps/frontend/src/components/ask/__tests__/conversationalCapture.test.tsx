@@ -145,6 +145,8 @@ describe('grouped workflow capture', () => {
     expect(screen.getByText('Used to prepare this change; nothing is saved until you confirm.')).toBeInTheDocument();
     expect(screen.queryByText(/after you continue/)).toBeNull();
     expect(screen.getByText('Step 1 of 2')).toBeInTheDocument();
+    expect(screen.getByLabelText('Loan amount ($)').closest('fieldset')).toHaveClass('border-0');
+    expect(screen.getByLabelText('Loan amount ($)').closest('fieldset')).not.toHaveClass('p-4');
     expect(screen.queryByLabelText('Cash to close ($)')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Next: Cash to close' }));
     expect(screen.getByLabelText('Cash to close ($)')).toBeInTheDocument();

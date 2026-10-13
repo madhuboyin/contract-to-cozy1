@@ -504,7 +504,11 @@ export function InlineCaptureCard({
   const compactProjectCommand = schema.type === 'GROUP' && request.captureKey === 'PROJECT_TRACKER_COMMAND_INPUTS';
   const formGroups = schema.type === 'GROUP' ? schema.groups ?? [] : [];
   const activeGroup = formGroups[activeGroupIndex] ?? null;
-  const compactWorkflow = compactMaintenanceTask || compactInventoryCreate || compactInventoryCompletion || compactMaterialSpec || compactPlantAdvisor || compactOwnershipScenario || compactEventAdd || compactProjectCreate || compactProjectCommand;
+  // Every structured workflow uses the shared compact field treatment. The
+  // named flags below only own exceptional column spans; compactness itself is
+  // structural, so a new tool cannot accidentally fall back to one padded
+  // white card per field merely because its capture key was not added here.
+  const compactWorkflow = schema.type === 'GROUP';
   const missingRequired = activeFields.some((field) => {
     if (!field.required) return false;
     const value = values[field.key];

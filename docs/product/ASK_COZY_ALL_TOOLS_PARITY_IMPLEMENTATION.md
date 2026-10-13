@@ -90,6 +90,8 @@ These requirements apply across every tool, not just Project Tracker:
 
 The shared renderer now supports compact borderless field groups plus `NUMBER`, `MONEY`, `LONG_TEXT`, date, select, and multi-select controls. The Add Timeline Event and Start Project workflows are acceptance examples for the density rules, not special exceptions.
 
+**UI review follow-up (2026-10-13):** compact field treatment is now structural for every `GROUP` workflow rather than limited to a capture-key allowlist, so newly added and existing buyer, financing, and other grouped forms cannot regress to a separately padded card per field. Calm priority cards retain their declared ranking reason, confidence, deadline, and unavailable/stale/completed/suppressed state instead of dropping those facts for density. One-at-a-time decks keep at most two direct actions plus a compact **More actions** menu when needed, preserving every server-declared action without widening the card.
+
 ## Implemented tools
 
 Status is *Implemented* for the central job of each tool below; the Remaining column lists bounded work and labels each item with its status.

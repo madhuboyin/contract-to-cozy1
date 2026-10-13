@@ -52,7 +52,20 @@ export const PriorityListBlock: AskBlockRenderer<'PRIORITY_LIST'> = ({ block, ex
         <p className="mt-2 text-sm text-slate-600">No ranked item is currently available on this channel. This does not mean the home needs no attention — it means the governed feed has nothing eligible to show right now.</p>
       ) : (
         <ol className={calm ? 'grid gap-2 sm:grid-cols-2 xl:grid-cols-3' : 'mt-4 space-y-3'}>
-          {block.items.map((item, index) => (
+          {block.items.map((item, index) => {
+            const lifecycle = [
+              item.unavailable && 'Unavailable',
+              item.stale && 'Stale',
+              item.completed && 'Completed',
+              item.suppressed && 'Suppressed',
+            ].filter((label): label is string => Boolean(label));
+            const reason = item.comparativeReasonCodes.map((code) => code.replace(/_/g, ' ').toLowerCase()).join(', ');
+            const compactMeta = [
+              ...lifecycle,
+              item.confidenceLabel ? `${item.confidenceLabel.toLowerCase()} confidence` : null,
+              item.deadlineAt ? `Due ${new Date(item.deadlineAt).toLocaleDateString()}` : null,
+            ].filter((label): label is string => Boolean(label)).join(' · ');
+            return (
             <li key={item.homeActionId} className={cn(!calm && 'rounded-xl border border-slate-200 p-3')}>
               {calm ? <CompactAskCard
                 title={item.title}
@@ -60,7 +73,8 @@ export const PriorityListBlock: AskBlockRenderer<'PRIORITY_LIST'> = ({ block, ex
                 fallbackIcon={ClipboardCheck}
                 tone={item.consumerPriority === 'DO_NOW' ? 'CRITICAL' : item.consumerPriority === 'PLAN_SOON' ? 'CAUTION' : item.consumerPriority === 'NO_ACTION' ? 'POSITIVE' : 'DEFAULT'}
                 badge={<span className={cn('rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-wide', categoryBadge[item.consumerPriority])}>{categoryLabel[item.consumerPriority]}</span>}
-                meta={item.deadlineAt ? <>Due {new Date(item.deadlineAt).toLocaleDateString()}</> : undefined}
+                summary={reason ? <>Ranked here because: {reason}.</> : item.watchState ?? undefined}
+                meta={compactMeta || undefined}
                 action={item.inlineLaunch ? <button type="button" disabled={itemActionsDisabled} onClick={() => onItemAction('HOME_ACTION', item.homeActionId, item.inlineLaunch!.message, item.inlineLaunch!.operationId, item.inlineLaunch!.interactionType, undefined, item.homeActionId)} className="min-h-10 rounded-lg bg-teal-700 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50">Review in Ask</button> : item.cta ? <ActionLink action={item.cta} /> : item.watchState && <p className="text-sm text-slate-700">{item.watchState}</p>}
                 secondary={<HomeActionUsefulnessButtons executionId={executionId} homeActionId={item.homeActionId} />}
               /> : <>
@@ -86,7 +100,8 @@ export const PriorityListBlock: AskBlockRenderer<'PRIORITY_LIST'> = ({ block, ex
               </div>
               </>}
             </li>
-          ))}
+            );
+          })}
         </ol>
       )}
       {block.truncated && <p className="mt-3 text-xs text-slate-500">More ranked items exist than are shown here. Ask “What else needs my attention?” to continue.</p>}

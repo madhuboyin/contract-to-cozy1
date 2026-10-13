@@ -55,13 +55,15 @@ describe('Home Action shelves', () => {
         homeActionId: 'a1', title: 'Replace the HVAC filter', consumerPriority: 'DO_NOW', comparativeReasonCodes: ['HIGHER_URGENCY'], confidenceLabel: 'HIGH', deadlineAt: null, dependencyRefs: [],
         cta: { id: 'a1', label: 'Open Maintenance', href: '/dashboard/maintenance?propertyId=home', style: 'PRIMARY' },
         inlineLaunch: { interactionType: 'CONVERSATION_CONTINUE', operationId: 'HOME_ACTIONS', message: 'What should I do next for “Replace the HVAC filter”?' },
-        watchState: null, suppressed: false, completed: false, unavailable: false, stale: false,
+        watchState: null, suppressed: false, completed: false, unavailable: true, stale: true,
       }],
     };
     render(<CalmChromeContext.Provider value><CalmAnswerContext.Provider value>
       <BlockView block={priority} executionId="e" propertyId="home" onItemAction={onItemAction} itemActionsDisabled={false} onFilterClick={() => undefined} onCollectionPage={() => undefined} onAccessLost={() => undefined} />
     </CalmAnswerContext.Provider></CalmChromeContext.Provider>);
     expect(screen.queryByRole('link', { name: 'Open Maintenance' })).toBeNull();
+    expect(screen.getByText('Ranked here because: higher urgency.')).toBeInTheDocument();
+    expect(screen.getByText(/Unavailable · Stale · high confidence/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Review in Ask' }));
     expect(onItemAction).toHaveBeenCalledWith('HOME_ACTION', 'a1', 'What should I do next for “Replace the HVAC filter”?', 'HOME_ACTIONS', 'CONVERSATION_CONTINUE', undefined, 'a1');
   });

@@ -178,6 +178,26 @@ describe('card deck', () => {
     expect(container.querySelector('[data-display-pattern="deck"]')).not.toBeInTheDocument();
     expect(container.querySelectorAll('[data-ask-task-id]')).toHaveLength(2);
   });
+
+  test('keeps every declared action reachable when a card has more than three', async () => {
+    const onItemAction = jest.fn();
+    const actions = [
+      action('accept', 'Add to plan', 'PRIMARY'),
+      action('dismiss', 'Not relevant'),
+      action('monitor', 'Monitor'),
+      action('assign', 'Assign'),
+    ];
+    const manyActions = list({ presentation: { pattern: 'DECK', swipeRightActionId: 'accept', swipeLeftActionId: 'dismiss' } }, [
+      { id: 'open', title: 'Needs review', count: 1, items: [item('breaker', { title: 'Finding breaker', actions })] },
+    ]);
+    render(<Harness block={manyActions} onItemAction={onItemAction} />);
+    expect(await screen.findByRole('button', { name: 'Add to plan' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Not relevant' })).toBeInTheDocument();
+    fireEvent.click(screen.getByText('More actions'));
+    expect(screen.getByRole('button', { name: 'Monitor' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Assign' }));
+    expect(onItemAction).toHaveBeenCalledWith('THING', 'breaker', 'Assign message', 'INSPECTION_FINDINGS', 'CONVERSATION_CONTINUE');
+  });
 });
 
 describe('room map', () => {
