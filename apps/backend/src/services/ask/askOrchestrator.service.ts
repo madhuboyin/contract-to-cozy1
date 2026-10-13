@@ -103,6 +103,7 @@ import './handlers/homeRecordStateCommands.handler';
 import './handlers/buyerContractCommands.handler';
 import './handlers/buyerClosingDisclosureCommands.handler';
 import './handlers/buyerLoanEstimateCommands.handler';
+import './handlers/buyerPlanSetupCommands.handler';
 import './handlers/buyerLoanEstimates.handler';
 import './handlers/buyerInsuranceCommands.handler';
 import './handlers/buyerInsurance.handler';

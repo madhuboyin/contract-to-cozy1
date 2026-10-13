@@ -286,6 +286,7 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   BUYER_CONTRACT_COMMAND: 'The contract revision change is shown for review and recorded only after you confirm; nothing is reviewed or waived for you.',
   BUYER_CLOSING_DISCLOSURE_COMMAND: 'The Closing Disclosure change is shown for review and recorded only after you confirm; nothing is sent, wired or told to anyone.',
   BUYER_LOAN_ESTIMATE_COMMAND: 'The lender offer change is shown for review and recorded only after you confirm; nothing is applied for, locked or sent to a lender.',
+  BUYER_PLAN_SETUP_COMMAND: 'The purchase plan change is shown for review and recorded only after you confirm; nobody is contacted and nothing is scheduled.',
   BUYER_LOAN_ESTIMATES: 'Your lender offers and Loan Estimate revisions are shown with the selected offer.',
   BUYER_INSURANCE_COMMAND: 'The insurance change is shown for review and recorded only after you confirm; nothing is bought or bound.',
   BUYER_INSURANCE_READINESS: 'Your closing insurance requirements, quotes and bound policy are shown with the proof status.',

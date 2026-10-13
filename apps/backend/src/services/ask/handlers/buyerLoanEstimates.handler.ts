@@ -8,6 +8,7 @@ import { ensurePropertyAccess } from '../askHandlerSupport';
 import { humanDate } from '../askFormatting';
 import { BuyerPurchaseLoanEstimateService } from '../../buyerPurchaseLoanEstimate.service';
 import { LE_ACTION_IDS, LE_ENTITY_TYPE, LE_MESSAGES, REVISION_STATUS_LABELS, type LeKind } from '../support/buyerLoanEstimateCommand';
+import { SETUP_ACTION_IDS, SETUP_MESSAGES } from '../support/buyerPlanSetupCommand';
 
 const dollars = (cents: number | null | undefined) => (cents == null ? null : `$${Math.round(cents / 100).toLocaleString('en-US')}`);
 const rate = (bps: number | null | undefined) => (bps == null ? null : `${(bps / 100).toFixed(2)}%`);
@@ -37,7 +38,11 @@ export function buyerLoanEstimatesFromView(view: LoanEstimateView, canChange: bo
     severity: 'INFO', suggestions: [],
   };
   const financed = view.purchasePath === 'FINANCED';
-  const top = canChange && financed ? [summaryAction('OFFER_ADD', 'Add a lender offer')] : [];
+  const pathAction = {
+    id: SETUP_ACTION_IDS.PATH_SET, label: financed ? 'Change how I am paying' : 'Set how I am paying', message: SETUP_MESSAGES.PATH_SET, interactionType: 'START_WORKFLOW' as const,
+    operationId: 'BUYER_PLAN_SETUP_COMMAND' as const, style: 'SECONDARY' as const,
+  };
+  const top = canChange ? [...(financed ? [summaryAction('OFFER_ADD', 'Add a lender offer')] : []), pathAction] : [];
   if (!view.offers.length) {
     return {
       status: 'READY_WITH_LIMITATIONS', reasonCode: financed ? 'BUYER_LOAN_ESTIMATES_NONE' : 'BUYER_LOAN_ESTIMATES_NOT_FINANCED',

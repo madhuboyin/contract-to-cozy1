@@ -137,6 +137,8 @@ export type AskOperationId =
   | 'BUYER_LOAN_ESTIMATE_COMMAND'
   // Show the buyer's purchase Loan Estimates: each lender offer's draft and confirmed revisions and the selected offer (register P2 Buyer Closing). Read-only.
   | 'BUYER_LOAN_ESTIMATES'
+  // Record how the purchase is paid for, the inspection plan and the title or escrow contact (register P2 Buyer Closing). Confirmation-gated, declared-action only.
+  | 'BUYER_PLAN_SETUP_COMMAND'
   // Record the buyer's closing insurance: requirements, quotes, the chosen quote, the binding and proof status (register P2 Buyer Closing). Confirmation-gated, declared-action only.
   | 'BUYER_INSURANCE_COMMAND'
   // Show the buyer's homeowners insurance for closing: requirements, quotes, the chosen quote, the bound policy and proof status (register P2 Buyer Closing). Read-only.
@@ -451,6 +453,7 @@ export const ASK_INTERNAL_OPERATION_IDS: ReadonlySet<AskOperationId> = new Set<A
   'BUYER_CONTRACT_COMMAND',
   'BUYER_CLOSING_DISCLOSURE_COMMAND',
   'BUYER_LOAN_ESTIMATE_COMMAND',
+  'BUYER_PLAN_SETUP_COMMAND',
   'BUYER_INSURANCE_COMMAND',
   'BUYER_CLOSING_ITEM_COMMAND',
   'BUYER_WALKTHROUGH_COMMAND',
@@ -787,6 +790,7 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   BUYER_CONTRACT_COMMAND: definition('BUYER_CONTRACT_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'buyer-contract.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   BUYER_CLOSING_DISCLOSURE_COMMAND: definition('BUYER_CLOSING_DISCLOSURE_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'buyer-closing-disclosure.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   BUYER_LOAN_ESTIMATE_COMMAND: definition('BUYER_LOAN_ESTIMATE_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'buyer-loan-estimate.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
+  BUYER_PLAN_SETUP_COMMAND: definition('BUYER_PLAN_SETUP_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'buyer-plan-setup.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   BUYER_LOAN_ESTIMATES: definition('BUYER_LOAN_ESTIMATES', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'buyer.loan-estimates', ['SUMMARY', 'GROUPED_LIST', 'BOUNDARY']),
   BUYER_INSURANCE_COMMAND: definition('BUYER_INSURANCE_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'buyer-insurance.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   BUYER_INSURANCE_READINESS: definition('BUYER_INSURANCE_READINESS', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'buyer.insurance-readiness', ['SUMMARY', 'GROUPED_LIST', 'BOUNDARY']),

@@ -146,7 +146,7 @@ test('the offers answer offers the controls by state, to contributors only, and 
   assert.deepEqual(ids(buyerLoanEstimatesFromView(view, false)), []);
   const empty = buyerLoanEstimatesFromView(snapshot([]), true);
   assert.equal(empty.blocks[0].actions[0].id, 'buyer-le-offer-add');
-  assert.equal(buyerLoanEstimatesFromView(snapshot([], { purchasePath: 'CASH' }), true).blocks[0].actions.length, 0);
+  assert.deepEqual(buyerLoanEstimatesFromView(snapshot([], { purchasePath: 'CASH' }), true).blocks[0].actions.map((a) => a.id), ['buyer-setup-path']);
   const applicable = (id, operationId) => isAskActionApplicable({
     action: { id, label: 'x', interactionType: 'START_WORKFLOW', message: 'm', operationId, style: 'QUIET' }, operationId, propertyId: 'prop-1', householdRole: 'CONTRIBUTOR', authoritativeSourceAvailable: true,
   });

@@ -10,6 +10,7 @@ import type { BuyerClosingHomeLaneKey } from '../../../productFramework/buyerAcq
 import { BuyerPurchaseLenderReadinessService } from '../../buyerPurchaseLenderReadiness.service';
 import { BuyerTitleEscrowService } from '../../buyerTitleEscrow.service';
 import { BuyerWalkthroughService } from '../../buyerWalkthrough.service';
+import { SETUP_ACTION_IDS, SETUP_MESSAGES } from '../support/buyerPlanSetupCommand';
 import { CD_ACTION_IDS, CD_MESSAGES, type CdKind } from '../support/buyerClosingDisclosureCommand';
 import { CONTRACT_ACTION_IDS, CONTRACT_ENTITY_TYPE, CONTRACT_MESSAGES, type ContractKind } from '../support/buyerContractCommand';
 import { CLOSING_ITEM_ACTION_IDS, CLOSING_ITEM_ENTITY_TYPES, CLOSING_ITEM_MESSAGES, closingItemUpdatable, type ClosingItemKind } from '../support/buyerClosingItemCommand';
@@ -425,7 +426,10 @@ async function buyerInspectionReviewResult(userId: string, propertyId: string): 
           ? 'Each finding needs a decision: seller negotiation, accepted post-close work, verified fact, or dismissed with reason. Ask can draft a decision, and nothing is recorded until you confirm it.'
           : `${overview.evidence.inspectionReportCount} inspection report${overview.evidence.inspectionReportCount === 1 ? '' : 's'} recorded for this purchase.`,
         tone: openFindings > 0 ? 'CAUTION' : 'DEFAULT',
-        actions: [],
+        actions: (await ensurePropertyAccess(userId, propertyId)).role !== HouseholdRole.VIEWER ? [{
+          id: SETUP_ACTION_IDS.INSPECTION_PLAN, label: 'Update my inspection plan', message: SETUP_MESSAGES.INSPECTION_PLAN, interactionType: 'START_WORKFLOW' as const,
+          operationId: 'BUYER_PLAN_SETUP_COMMAND' as const, style: 'SECONDARY' as const,
+        }] : [],
       },
       BUYER_PROFESSIONAL_BOUNDARY,
     ],
@@ -810,10 +814,14 @@ async function buyerTitleEscrowReadinessResult(userId: string, propertyId: strin
     return buyerNotActiveResult(propertyId, data.contextVersion, 'This purchase property does not have an active Buyer Plan yet, so there is no title or escrow readiness to review.');
   }
   const titleData = await BuyerTitleEscrowService.get(userId, propertyId);
+  const titleContactActions = (await ensurePropertyAccess(userId, propertyId)).role !== HouseholdRole.VIEWER ? [{
+    id: SETUP_ACTION_IDS.TITLE_CONTACT, label: titleData.contact ? 'Update the title or escrow contact' : 'Add the title or escrow contact', message: SETUP_MESSAGES.TITLE_CONTACT,
+    interactionType: 'START_WORKFLOW' as const, operationId: 'BUYER_PLAN_SETUP_COMMAND' as const, style: 'SECONDARY' as const,
+  }] : [];
   if (!titleData.workspace) {
     return {
       status: 'READY_WITH_LIMITATIONS', reasonCode: 'BUYER_TITLE_ESCROW_NOT_RECORDED',
-      blocks: [{ type: 'SUMMARY', id: 'buyer-title-unrecorded', title: 'Title and escrow readiness has not been recorded yet', body: 'Add the responsible title, attorney, or escrow contact to start tracking readiness.', tone: 'CAUTION', actions: [] }],
+      blocks: [{ type: 'SUMMARY', id: 'buyer-title-unrecorded', title: 'Title and escrow readiness has not been recorded yet', body: 'Add the responsible title, attorney, or escrow contact to start tracking readiness.', tone: 'CAUTION', actions: titleContactActions }],
       suggestions: [],
     };
   }
@@ -826,7 +834,7 @@ async function buyerTitleEscrowReadinessResult(userId: string, propertyId: strin
     title: openBlockingIssues.length ? `${openBlockingIssues.length} title/escrow issue${openBlockingIssues.length === 1 ? '' : 's'} still block closing` : 'No blocking title or escrow issue is currently open',
     body: `Title review: ${workspace.titleReviewStatus.toLowerCase().replace(/_/g, ' ')}.${workspace.closingAppointmentAt ? ` Closing appointment recorded for ${humanDate(new Date(workspace.closingAppointmentAt))}.` : ' No closing appointment recorded yet.'}`,
     tone: openBlockingIssues.length ? 'CAUTION' : 'DEFAULT',
-    actions: canChange ? [closingItemSummaryAction('TITLE_ADD', 'Add a title or escrow issue')] : [],
+    actions: canChange ? [closingItemSummaryAction('TITLE_ADD', 'Add a title or escrow issue'), ...titleContactActions] : [],
   }];
   if (openIssues.length) {
     blocks.push({

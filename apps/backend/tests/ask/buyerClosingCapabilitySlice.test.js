@@ -118,7 +118,13 @@ test('the buyer status, document and inspection answers carry no desktop link', 
     assert.ok(result.blocks.length > 0, operationId);
     const text = JSON.stringify(result);
     assert.equal(text.includes('/dashboard/'), false, operationId);
-    for (const block of result.blocks) assert.deepEqual(block.actions ?? [], [], `${operationId} ${block.id}`);
+    // An action is an Ask command (a declared operation, no href); the inspection answer offers the inspection plan update (FRD v1.353).
+    for (const block of result.blocks) {
+      for (const action of block.actions ?? []) {
+        assert.equal(action.href, undefined, `${operationId} ${block.id}`);
+        assert.equal(action.operationId, 'BUYER_PLAN_SETUP_COMMAND', `${operationId} ${block.id}`);
+      }
+    }
   }
 });
 

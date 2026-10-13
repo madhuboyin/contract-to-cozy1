@@ -82,6 +82,8 @@ import { insuranceCommandResult } from '../handlers/buyerInsuranceCommands.handl
 import { contractCommandResult } from '../handlers/buyerContractCommands.handler';
 import { cdCommandResult } from '../handlers/buyerClosingDisclosureCommands.handler';
 import { leCommandResult } from '../handlers/buyerLoanEstimateCommands.handler';
+import { setupCommandResult } from '../handlers/buyerPlanSetupCommands.handler';
+import { parseSetupAnswer, setupKindFromCaptureKey } from '../support/buyerPlanSetupCommand';
 import { leFormKindFromCaptureKey, parseLeAnswer } from '../support/buyerLoanEstimateCommand';
 import { cdFormKindFromCaptureKey, parseCdAnswer } from '../support/buyerClosingDisclosureCommand';
 import { homeRecordStateResult } from '../handlers/homeRecordStateCommands.handler';
@@ -1671,6 +1673,22 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     captureId = input.idempotencyKey;
     capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
     canonicalOwner = 'BuyerPurchaseLoanEstimateRevision';
+  } else if (execution.operationId === 'BUYER_PLAN_SETUP_COMMAND') {
+    const setupKind = setupKindFromCaptureKey(input.captureKey);
+    if (!setupKind) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    const access = await ensurePropertyAccess(userId, execution.propertyId);
+    if (access.role === HouseholdRole.VIEWER) throw Object.assign(new Error('A contributor or owner is required to change this.'), { code: 'ASK_PERMISSION_REQUIRED' });
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson) ? execution.parametersJson as Record<string, unknown> : {};
+    const setupLaunch = storedParameters.setupLaunch && typeof storedParameters.setupLaunch === 'object' && !Array.isArray(storedParameters.setupLaunch)
+      ? storedParameters.setupLaunch as { kind?: unknown; sourceExecutionId?: unknown } : null;
+    if (!setupLaunch || setupLaunch.kind !== setupKind) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    if (!parseSetupAnswer(setupKind, input.answer).success) throw Object.assign(new Error('Fill in what the form asks for.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+    result = await setupCommandResult(userId, execution.propertyId, {
+      kind: setupKind, sourceExecutionId: typeof setupLaunch.sourceExecutionId === 'string' ? setupLaunch.sourceExecutionId : null,
+    }, input.answer as Record<string, unknown>);
+    captureId = input.idempotencyKey;
+    capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
+    canonicalOwner = 'BuyerPurchaseSetup';
   } else if (execution.operationId === 'CLAIM_ACTIVITY_COMMAND') {
     if (input.captureKey !== CLAIM_NOTE_CAPTURE_KEY) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
     const access = await ensurePropertyAccess(userId, execution.propertyId);
