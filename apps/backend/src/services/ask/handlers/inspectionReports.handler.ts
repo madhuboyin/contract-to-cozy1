@@ -10,7 +10,7 @@ import { humanDate } from '../askFormatting';
 import * as hubService from '../../inspectionHub.service';
 import {
   INSPECTION_REPORT_ACTION_IDS, INSPECTION_REPORT_ENTITY_TYPE, INSPECTION_REPORT_MESSAGES, INSPECTION_REPORT_STATUS_LABELS, INSPECTION_REPORT_TYPE_LABELS,
-  inspectionReportCanConfirm, previousConfirmedReportId, inspectionReportNegotiationEligible, NEGOTIATION_PACKAGE_ACTION_ID, NEGOTIATION_PACKAGE_MESSAGE,
+  inspectionReportCanConfirm, inspectionReportCanArchive, previousConfirmedReportId, inspectionReportNegotiationEligible, NEGOTIATION_PACKAGE_ACTION_ID, NEGOTIATION_PACKAGE_MESSAGE,
 } from '../support/inspectionReportCommand';
 import { INSPECTION_FINDINGS_OF_REPORT_ACTION_ID, INSPECTION_FINDINGS_OF_REPORT_MESSAGE } from '../support/inspectionFindingDecisionCommand';
 
@@ -51,6 +51,10 @@ export function inspectionReportsFromRows(rows: ReportRow[], canChange: boolean)
       ...(row.status === 'CONFIRMED' ? [{
         id: INSPECTION_FINDINGS_OF_REPORT_ACTION_ID, label: 'See its findings', message: INSPECTION_FINDINGS_OF_REPORT_MESSAGE,
         interactionType: 'CONVERSATION_CONTINUE' as const, operationId: 'INSPECTION_REPORT_FINDINGS' as const, style: 'SECONDARY' as const,
+      }] : []),
+      ...(canChange && inspectionReportCanArchive(row.status) ? [{
+        id: INSPECTION_REPORT_ACTION_IDS.ARCHIVE, label: 'Archive this report', message: INSPECTION_REPORT_MESSAGES.ARCHIVE,
+        interactionType: 'MUTATE_RECORD' as const, operationId: 'INSPECTION_REPORT_COMMAND' as const, style: 'QUIET' as const,
       }] : []),
       ...(previousConfirmedReportId(reports, row.id) ? [{
         id: INSPECTION_REPORT_ACTION_IDS.COMPARE, label: 'Compare with the previous report', message: INSPECTION_REPORT_MESSAGES.COMPARE,

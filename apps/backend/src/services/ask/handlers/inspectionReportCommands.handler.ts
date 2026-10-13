@@ -11,8 +11,10 @@ import { reconcileAskExecutionSideEffects } from '../execution/executeOperation'
 import { ensurePropertyAccess } from '../askHandlerSupport';
 import { humanDate } from '../askFormatting';
 import { applyWriteBacks, getWriteBackPreview } from '../../inspectionWriteBack.service';
+import { archiveReport } from '../../inspectionHub.service';
 import {
-  INSPECTION_REPORT_ENTITY_TYPE, INSPECTION_REPORT_MESSAGES, INSPECTION_REPORT_TYPE_LABELS, inspectionReportCanConfirm, inspectionReportKindFromMessage,
+  INSPECTION_REPORT_ENTITY_TYPE, INSPECTION_REPORT_MESSAGES, INSPECTION_REPORT_TYPE_LABELS, inspectionReportCanArchive, inspectionReportCanConfirm, inspectionReportKindFromMessage,
+  type InspectionReportKind,
 } from '../support/inspectionReportCommand';
 
 const sha = (text: string) => createHash('sha256').update(text).digest('hex');
@@ -35,13 +37,16 @@ async function reviewFindings(reportId: string) {
 const reportVersion = (report: { id: string; status: string; updatedAt: Date }, findings: Array<{ id: string; status: string; updatedAt: Date }>) =>
   sha(`inspection-report:${report.id}:${report.status}:${report.updatedAt.toISOString()}:${findings.map((f) => `${f.id}:${f.status}:${f.updatedAt.toISOString()}`).join('|')}`);
 
-export async function inspectionReportCommandResult(userId: string, propertyId: string, launch: { entityId: string; sourceExecutionId: string | null }): Promise<AskOperationResult> {
+export async function inspectionReportCommandResult(
+  userId: string, propertyId: string, launch: { entityId: string; sourceExecutionId: string | null; kind?: 'CONFIRM' | 'ARCHIVE' },
+): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
   if (access.role === HouseholdRole.VIEWER) {
     return { status: 'BLOCKED', reasonCode: 'ASK_PERMISSION_REQUIRED', blocks: [{ type: 'SUMMARY', id: 'inspection-report-permission', title: 'A contributor or owner can confirm a report', body: 'Your role can view this home but not change it. Nothing has changed.', tone: 'CAUTION', actions: [] }], suggestions: [] };
   }
   const report = await loadReport(propertyId, launch.entityId);
   if (!report) return unavailable('INSPECTION_REPORT_NOT_FOUND', 'That report is no longer available', 'Ask could not find that inspection report. Nothing has changed.');
+  if (launch.kind === 'ARCHIVE') return archiveReview(report, propertyId, launch.sourceExecutionId);
   if (!inspectionReportCanConfirm(report.status)) {
     return unavailable('INSPECTION_REPORT_NOT_REVIEWABLE', report.status === 'CONFIRMED' ? 'That report is already confirmed' : 'That report is not ready to confirm',
       report.status === 'PROCESSING' ? 'It is still being read. Nothing has changed.' : 'Nothing has changed.');
@@ -79,13 +84,45 @@ export async function inspectionReportCommandResult(userId: string, propertyId: 
   };
 }
 
+async function archiveReview(report: { id: string; reportType: string; inspectionDate: Date; status: string; updatedAt: Date }, propertyId: string, sourceExecutionId: string | null): Promise<AskOperationResult> {
+  if (!inspectionReportCanArchive(report.status)) {
+    return unavailable('INSPECTION_REPORT_NOT_ARCHIVABLE', report.status === 'ARCHIVED' ? 'That report is already archived' : 'That report is still being read',
+      report.status === 'PROCESSING' ? 'Wait until it has been read. Nothing has changed.' : 'Nothing has changed.');
+  }
+  const [open, findings] = await Promise.all([
+    (prisma as any).inspectionFinding.count({ where: { reportId: report.id, status: 'OPEN' } }) as Promise<number>,
+    reviewFindings(report.id),
+  ]);
+  const contextVersion = reportVersion(report, findings);
+  const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+  const typeLabel = INSPECTION_REPORT_TYPE_LABELS[report.reportType] ?? 'Inspection';
+  const when = humanDate(report.inspectionDate) ?? 'undated';
+  return {
+    status: 'NEEDS_CONFIRMATION', reasonCode: 'INSPECTION_REPORT_ARCHIVE_CONFIRMATION_REQUIRED', contextVersion,
+    parameters: {
+      inspectionReportCommand: { kind: 'ARCHIVE', entityId: report.id }, inspectionReportContextVersion: contextVersion,
+      sourceExecutionId, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString(),
+    },
+    blocks: [{ type: 'SUMMARY', id: 'inspection-report-archive-review', title: `Archive ${typeLabel}, ${when}?`, body: 'Nothing changes until you confirm.', tone: 'CAUTION', actions: [] }],
+    confirmation: {
+      confirmationId: `inspection-report-archive-${sha(report.id).slice(0, 12)}-1`, version: 1, title: 'Archive this inspection report?',
+      description: `Archiving removes the report from your inspection reports and from the counts that include it. Its ${open} open finding${open === 1 ? '' : 's'} stay on file but you will not see the report here again, and Ask cannot restore it. Nothing is deleted and nobody is contacted.`,
+      fields: [{ label: 'Report', value: `${typeLabel}, ${when}` }, { label: 'Status', value: report.status === 'CONFIRMED' ? 'Confirmed' : 'Waiting for review' }, { label: 'Open findings', value: String(open) }],
+      editableFields: [], confirmLabel: 'Archive the report',
+      consentText: 'I understand this report will no longer be listed and Ask cannot restore it.', expiresAt: expiresAt.toISOString(),
+    },
+    suggestions: [],
+  };
+}
+
 registerCapabilityHandler('inspection-report.command', async (envelope) => {
   const launch = envelope.launchContext;
-  if (!inspectionReportKindFromMessage(envelope.message) || envelope.message !== INSPECTION_REPORT_MESSAGES.CONFIRM || launch?.operationId !== 'INSPECTION_REPORT_COMMAND'
+  const messageKind: InspectionReportKind | null = inspectionReportKindFromMessage(envelope.message);
+  if (!messageKind || (messageKind !== 'CONFIRM' && messageKind !== 'ARCHIVE') || launch?.operationId !== 'INSPECTION_REPORT_COMMAND'
     || launch.surface === 'ASK_REFRESH' || launch.entityType !== INSPECTION_REPORT_ENTITY_TYPE || !launch.entityId) {
     return unavailable('ASK_INSPECTION_REPORT_NOT_DIRECTLY_ROUTABLE', 'Open your inspection reports first', 'A report is confirmed from your list of inspection reports. Nothing has changed.');
   }
-  return inspectionReportCommandResult(envelope.userId, envelope.propertyId!, { entityId: launch.entityId, sourceExecutionId: launch.sourceExecutionId ?? null });
+  return inspectionReportCommandResult(envelope.userId, envelope.propertyId!, { entityId: launch.entityId, sourceExecutionId: launch.sourceExecutionId ?? null, kind: messageKind });
 });
 
 const stale = (message: string, code = 'ASK_CONFIRMATION_NOT_ACTIVE') => Object.assign(new Error(message), { code });
@@ -93,19 +130,37 @@ const stale = (message: string, code = 'ASK_CONFIRMATION_NOT_ACTIVE') => Object.
 async function confirmInspectionReport(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
   const { execution, userId, parameters } = ctx;
   const command = parameters.inspectionReportCommand as { kind?: unknown; entityId?: unknown } | undefined;
-  if (command?.kind !== 'CONFIRM' || typeof command.entityId !== 'string') throw stale('The change to make is invalid.');
+  if ((command?.kind !== 'CONFIRM' && command?.kind !== 'ARCHIVE') || typeof command.entityId !== 'string') throw stale('The change to make is invalid.');
   const propertyId = execution.propertyId;
   let written = 0;
+  const archiving = command.kind === 'ARCHIVE';
   try {
     const report = await loadReport(propertyId, command.entityId);
     if (!report) throw stale('That report is no longer available.');
-    if (!inspectionReportCanConfirm(report.status)) throw stale('That report is no longer waiting for review.');
+    if (archiving ? !inspectionReportCanArchive(report.status) : !inspectionReportCanConfirm(report.status)) throw stale(archiving ? 'That report can no longer be archived.' : 'That report is no longer waiting for review.');
     const findings = await reviewFindings(report.id);
     if (parameters.inspectionReportContextVersion !== reportVersion(report, findings)) throw stale('This report changed while the confirmation was open. Review it again and try again.', 'ASK_CONTEXT_VERSION_CONFLICT');
-    written = (await applyWriteBacks(report.id, propertyId, userId)).writeBackCount;
+    if (archiving) await archiveReport(report.id, propertyId);
+    else written = (await applyWriteBacks(report.id, propertyId, userId)).writeBackCount;
   } catch (error) {
     if (error instanceof Error && (!(error as { code?: unknown }).code || (error as { statusCode?: unknown }).statusCode)) throw stale(error.message);
     throw error;
+  }
+  if (archiving) {
+    const archived: AskOperationResult = {
+      status: 'COMPLETED', reasonCode: 'INSPECTION_REPORT_ARCHIVED',
+      blocks: [{
+        type: 'WORKFLOW_PROGRESS', id: `inspection-report-archived-${command.entityId}`, title: 'Inspection report archived', status: 'COMPLETED',
+        description: 'It no longer appears in your inspection reports. Nothing was deleted and nobody was contacted.', details: [], actions: [{ ...reportsAction, style: 'PRIMARY' as const }],
+      }],
+      suggestions: [],
+    };
+    const archiveRefresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
+    if (archiveRefresh.attemptedAndFailed) {
+      archived.blocks.push({ type: 'LIMITATION', id: `inspection-report-refresh-failed-${command.entityId}`, severity: 'CAUTION', title: 'Saved; view could not refresh',
+        body: 'The report was archived. The answer you were viewing could not refresh automatically, so ask for it again to see it.' });
+    }
+    return { result: archived, artifactType: 'INSPECTION_REPORT', artifactId: command.entityId, refreshedExecutions: archiveRefresh.refreshedExecutions };
   }
   const result: AskOperationResult = {
     status: 'COMPLETED', reasonCode: 'INSPECTION_REPORT_CONFIRMED',

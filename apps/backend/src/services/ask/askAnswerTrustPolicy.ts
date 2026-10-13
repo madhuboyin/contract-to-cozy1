@@ -232,7 +232,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   // Compare a confirmed inspection report with the confirmed one before it (register P2 Inspection Hub). Read-only; launched from a report row.
   INSPECTION_REPORT_COMPARE: new Set(['inspection-reports-back']),
   // List the home's inspection reports with their state and what can be done next (register P2 Inspection Hub). Read-only.
-  INSPECTION_REPORTS: new Set(['inspection-reports-back', 'inspection-report-confirm', 'inspection-report-compare', 'inspection-report-findings', 'inspection-report-negotiation']),
+  INSPECTION_REPORTS: new Set(['inspection-reports-back', 'inspection-report-confirm', 'inspection-report-compare', 'inspection-report-findings', 'inspection-report-negotiation', 'inspection-report-archive']),
   // Start the sale case, set its target dates and prep budget range, and record its stage (register P2 Seller Prep). Confirmation-gated, declared-action only; lists, contracts or closes nothing.
   SELLER_PREP_CASE_COMMAND: new Set(['seller-prep-back']),
   // Mark a claim checklist item done, not applicable or open again, and add a note to a claim's timeline (register P2 Claims). Confirmation-gated, declared-action only.

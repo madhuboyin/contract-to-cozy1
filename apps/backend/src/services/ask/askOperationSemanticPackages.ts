@@ -128,7 +128,7 @@ const jobs: Record<AskOperationId, string> = {
   INSPECTION_NEGOTIATION_PACKAGE: 'build a negotiation package from a pre-purchase inspection report',
   INSPECTION_FINDING_DECISION_COMMAND: 'keep an eye on an inspection finding, or record the plan to fix or disclose it, after confirmation',
   INSPECTION_REPORT_FINDINGS: 'list the findings in one inspection report and what can be decided for each',
-  INSPECTION_REPORT_COMMAND: 'review and confirm an inspection report, after confirmation',
+  INSPECTION_REPORT_COMMAND: 'review and confirm an inspection report, or archive one, after confirmation',
   INSPECTION_REPORT_COMPARE: 'compare a confirmed inspection report with the one before it',
   INSPECTION_REPORTS: 'list the home\'s inspection reports and what can be done with each',
   SELLER_PREP_CASE_COMMAND: 'start the sale case, set its dates or budget range, or record its stage, after confirmation',

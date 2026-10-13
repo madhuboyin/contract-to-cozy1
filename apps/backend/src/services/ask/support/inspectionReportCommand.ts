@@ -8,9 +8,10 @@ export const INSPECTION_REPORT_ENTITY_TYPE = 'INSPECTION_REPORT';
 export const INSPECTION_REPORT_MESSAGES = {
   CONFIRM: 'Review this inspection report before it is trusted.',
   COMPARE: 'Compare this inspection report with the one before it.',
+  ARCHIVE: 'Archive this inspection report.',
 } as const;
 export type InspectionReportKind = keyof typeof INSPECTION_REPORT_MESSAGES;
-export const INSPECTION_REPORT_ACTION_IDS = { CONFIRM: 'inspection-report-confirm', COMPARE: 'inspection-report-compare' } as const;
+export const INSPECTION_REPORT_ACTION_IDS = { CONFIRM: 'inspection-report-confirm', COMPARE: 'inspection-report-compare', ARCHIVE: 'inspection-report-archive' } as const;
 export const inspectionReportKindFromMessage = (message: string): InspectionReportKind | null =>
   ((Object.entries(INSPECTION_REPORT_MESSAGES) as Array<[InspectionReportKind, string]>).find(([, value]) => value === message)?.[0]) ?? null;
 
@@ -22,6 +23,8 @@ export const INSPECTION_REPORT_STATUS_LABELS: Record<string, string> = { PROCESS
 
 /** Confirmation is only offered once the analyzer has finished and nobody has confirmed or archived the report. */
 export const inspectionReportCanConfirm = (status: string) => status === 'REVIEW_PENDING';
+/** A report that has been read (waiting for review, or confirmed) can be archived; one still being read, or already archived, cannot (FRD v1.354). */
+export const inspectionReportCanArchive = (status: string) => status === 'REVIEW_PENDING' || status === 'CONFIRMED';
 /** Only confirmed reports are compared, and a report needs an earlier confirmed one to be compared with. */
 export function previousConfirmedReportId(
   reports: ReadonlyArray<{ id: string; status: string; inspectionDate: Date }>, reportId: string,

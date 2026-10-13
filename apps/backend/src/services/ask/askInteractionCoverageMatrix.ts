@@ -1483,7 +1483,7 @@ export const ASK_INTERACTION_COVERAGE_MATRIX: Readonly<Record<AskOperationId, As
     messageRoutable: true,
     confirmationCapable: false,
     correctionModes: [],
-    note: 'Register P2 Inspection Hub (FRD v1.339). Lists the home\'s inspection reports (not archived), newest first, with type, date, inspector, state and finding counts. A report waiting for review offers Review and confirm to a contributor or owner (INSPECTION_REPORT_COMMAND); a confirmed report with an earlier confirmed one offers Compare with the previous report to any member (INSPECTION_REPORT_COMPARE). Uploading and reading a report, archiving, the negotiation package and the fix-or-disclose decisions are not here yet.',
+    note: 'Register P2 Inspection Hub (FRD v1.339). Lists the home\'s inspection reports (not archived), newest first, with type, date, inspector, state and finding counts. A report waiting for review offers Review and confirm to a contributor or owner (INSPECTION_REPORT_COMMAND); a confirmed report with an earlier confirmed one offers Compare with the previous report to any member (INSPECTION_REPORT_COMPARE). Archiving (FRD v1.354) is offered on a report that has been read; the review says it hides the report and cannot be restored in Ask. Uploading and reading a report is not here.',
     uiSurface: { status: 'TRACED', notes: 'Shared generic renderer: SUMMARY, GROUPED_LIST with row actions.' },
     freshnessSource: { status: 'TRACED', notes: 'No contextVersion; read live on each request.' },
     idempotency: { status: 'TRACED', notes: 'Pure read.' },

@@ -41,7 +41,7 @@ function install(role, { reports = [report()], fs = findings } = {}) {
     findMany: async ({ where }) => reports.filter((r) => (!where.status || (where.status.not ? r.status !== where.status.not : r.status === where.status))),
     findFirst: async ({ where }) => reports.find((r) => r.id === where.id) ?? null,
   };
-  prisma.inspectionFinding = { findMany: async () => fs };
+  prisma.inspectionFinding = { findMany: async () => fs, count: async ({ where }) => fs.filter((f) => !where.status || f.status === where.status).length };
   writeBack.getWriteBackPreview = async () => ({ digitalTwinUpdates: 2, permitFlagsToCreate: 1, coverageGapsToFlag: 0, findingCount: fs.length });
   writeBack.applyWriteBacks = async (...a) => { calls.push(['apply', ...a]); return { writeBackCount: 4 }; };
   hubService.compareReports = async (...a) => { calls.push(['compare', ...a]); return { reportA: { reportType: 'PRE_PURCHASE', inspectionDate: new Date('2026-01-01') }, reportB: { reportType: 'ANNUAL', inspectionDate: new Date('2026-08-01') }, resolved: [{ id: 'a', homeSystem: 'ROOF', subsystem: null, severity: 'MAJOR', inspectorDescription: 'Fixed' }], persisted: [], newFindings: [], worsened: [] }; };
@@ -69,9 +69,9 @@ test('the list offers confirm to a contributor on a report waiting for review, a
   ];
   const ids = (viewer) => Object.fromEntries(inspectionReportsFromRows(rows, !viewer).blocks[1].sections[0].items.map((i) => [i.id, i.actions.map((a) => a.id)]));
   const contributor = ids(false);
-  assert.deepEqual(contributor[R1], ['inspection-report-confirm']);
-  assert.deepEqual(contributor[R2], ['inspection-report-negotiation', 'inspection-report-findings', 'inspection-report-compare']);
-  assert.deepEqual(contributor.r3, ['inspection-report-negotiation', 'inspection-report-findings']);
+  assert.deepEqual(contributor[R1], ['inspection-report-confirm', 'inspection-report-archive']);
+  assert.deepEqual(contributor[R2], ['inspection-report-negotiation', 'inspection-report-findings', 'inspection-report-archive', 'inspection-report-compare']);
+  assert.deepEqual(contributor.r3, ['inspection-report-negotiation', 'inspection-report-findings', 'inspection-report-archive']);
   assert.deepEqual(contributor.r5, []);
   assert.equal('r4' in contributor, false, 'archived reports are not listed');
   const viewer = ids(true);
@@ -142,4 +142,31 @@ test('the action ids are allowlisted on the list and the back action on the othe
   for (const id of Object.values(command.INSPECTION_REPORT_ACTION_IDS)) assert.equal(applicable(id, 'INSPECTION_REPORTS'), true, id);
   assert.equal(applicable('inspection-reports-back', CMD), true);
   assert.equal(applicable('inspection-reports-back', 'INSPECTION_REPORT_COMPARE'), true);
+});
+
+test('archiving (FRD v1.354): offered on a read report to contributors only; the review says it hides the report; the confirmation calls the route\'s archiveReport', async () => {
+  const rows = [report({ status: 'CONFIRMED' }), report({ id: R2, status: 'PROCESSING' })];
+  const ids = (result, who) => result.blocks.flatMap((b) => (b.type === 'GROUPED_LIST' ? b.sections.flatMap((s) => s.items.filter((i) => i.id === who).flatMap((i) => i.actions.map((a) => a.id))) : []));
+  assert.ok(ids(inspectionReportsFromRows(rows, true), R1).includes('inspection-report-archive'));
+  assert.equal(ids(inspectionReportsFromRows(rows, true), R2).includes('inspection-report-archive'), false);
+  assert.equal(ids(inspectionReportsFromRows(rows, false), R1).includes('inspection-report-archive'), false);
+  assert.equal(isAskActionApplicable({ action: { id: 'inspection-report-archive', label: 'x', interactionType: 'MUTATE_RECORD', message: M.ARCHIVE, operationId: CMD, style: 'QUIET' }, operationId: 'INSPECTION_REPORTS', propertyId: 'prop-1', householdRole: 'CONTRIBUTOR', authoritativeSourceAvailable: true }), true);
+  assert.notEqual(resolveAskRoutingCascade(M.ARCHIVE, { localRoutingEnabled: true }).operation?.operationId, CMD);
+  const w = install('CONTRIBUTOR', { reports: [report({ status: 'CONFIRMED' }), report({ id: R2, status: 'PROCESSING' })] });
+  const savedArchive = hubService.archiveReport;
+  hubService.archiveReport = async (...a) => { w.calls.push(['archive', ...a]); return {}; };
+  try {
+    const review = await invoke(CMD, M.ARCHIVE, launch(CMD));
+    assert.equal(review.status, 'NEEDS_CONFIRMATION');
+    assert.match(review.confirmation.description, /Ask cannot restore it/);
+    assert.equal(review.parameters.inspectionReportCommand.kind, 'ARCHIVE');
+    assert.equal((await invoke(CMD, M.ARCHIVE, launch(CMD, { entityId: R2 }))).reasonCode, 'INSPECTION_REPORT_NOT_ARCHIVABLE');
+    assert.equal(w.calls.length, 0);
+    const done = await confirmCapabilityInvoke(CMD, ctx(review.parameters));
+    assert.equal(done.result.reasonCode, 'INSPECTION_REPORT_ARCHIVED');
+    assert.deepEqual(w.calls, [['archive', R1, 'prop-1']]);
+    await assert.rejects(() => confirmCapabilityInvoke(CMD, ctx({ ...review.parameters, inspectionReportContextVersion: 'old' })), (e) => e.code === 'ASK_CONTEXT_VERSION_CONFLICT');
+  } finally { hubService.archiveReport = savedArchive; w.restore(); }
+  const viewer = install('VIEWER');
+  try { assert.equal((await invoke(CMD, M.ARCHIVE, launch(CMD))).reasonCode, 'ASK_PERMISSION_REQUIRED'); } finally { viewer.restore(); }
 });
