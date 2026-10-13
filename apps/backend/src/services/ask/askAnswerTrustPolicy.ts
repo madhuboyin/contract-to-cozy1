@@ -186,6 +186,8 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   HOME_RECORD_STATE_COMMAND: new Set(['home-record-back']),
   // Draft, edit and confirm the buyer's contract revision, field by field (register P2 Buyer Closing). Confirmation-gated, declared-action only.
   BUYER_CONTRACT_COMMAND: new Set(['buyer-contract-back']),
+  // Draft, edit and confirm the buyer's Closing Disclosure revision field by field and record funds readiness (register P2 Buyer Closing). Confirmation-gated, declared-action only.
+  BUYER_CLOSING_DISCLOSURE_COMMAND: new Set(['buyer-cd-back', 'buyer-cd-wire-boundary']),
   // Record the buyer's closing insurance: requirements, quotes, the chosen quote, the binding and proof status (register P2 Buyer Closing). Confirmation-gated, declared-action only.
   BUYER_INSURANCE_COMMAND: new Set(['buyer-insurance-back']),
   // Show the buyer's homeowners insurance for closing: requirements, quotes, the chosen quote, the bound policy and proof status (register P2 Buyer Closing). Read-only.
@@ -196,6 +198,8 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   BUYER_WALKTHROUGH_COMMAND: new Set(['buyer-walkthrough-back']),
   // Lender-condition and title-issue controls on the financing and title readiness answers (FRD v1.346).
   DOCUMENT_LOOKUP: new Set(['home-record-archive', 'home-record-verification', 'home-record-effective-period']),
+  // Closing Disclosure and funds readiness controls on the disclosure answer (FRD v1.351).
+  BUYER_DISCLOSURE_FUNDS_READINESS: new Set(['buyer-cd-draft-start', 'buyer-cd-draft-edit', 'buyer-cd-confirm', 'buyer-cd-funds-update']),
   BUYER_CONTRACT_TIMELINE: new Set(['buyer-contract-draft-start', 'buyer-contract-draft-edit', 'buyer-contract-contingency-update', 'buyer-contract-confirm']),
   BUYER_FINANCING_READINESS: new Set(['closing-lender-condition-add', 'closing-lender-condition-update', 'closing-lender-appraisal', 'closing-lender-underwriting']),
   BUYER_TITLE_ESCROW_READINESS: new Set(['closing-title-issue-add', 'closing-title-issue-update']),

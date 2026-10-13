@@ -101,6 +101,7 @@ import './handlers/negotiationShieldAttach.handler';
 import './handlers/renovationCaseStart.handler';
 import './handlers/homeRecordStateCommands.handler';
 import './handlers/buyerContractCommands.handler';
+import './handlers/buyerClosingDisclosureCommands.handler';
 import './handlers/buyerInsuranceCommands.handler';
 import './handlers/buyerInsurance.handler';
 import './handlers/buyerClosingItemCommands.handler';

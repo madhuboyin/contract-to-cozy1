@@ -284,6 +284,7 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   RENOVATION_CASE_START: 'Your renovation case is shown and saved only after you confirm; nothing is applied for or started.',
   HOME_RECORD_STATE_COMMAND: 'The record change is shown for review and recorded only after you confirm.',
   BUYER_CONTRACT_COMMAND: 'The contract revision change is shown for review and recorded only after you confirm; nothing is reviewed or waived for you.',
+  BUYER_CLOSING_DISCLOSURE_COMMAND: 'The Closing Disclosure change is shown for review and recorded only after you confirm; nothing is sent, wired or told to anyone.',
   BUYER_INSURANCE_COMMAND: 'The insurance change is shown for review and recorded only after you confirm; nothing is bought or bound.',
   BUYER_INSURANCE_READINESS: 'Your closing insurance requirements, quotes and bound policy are shown with the proof status.',
   BUYER_CLOSING_ITEM_COMMAND: 'The condition or issue change is shown for review and recorded only after you confirm.',

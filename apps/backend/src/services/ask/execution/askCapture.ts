@@ -80,6 +80,8 @@ import { walkthroughCommandResult } from '../handlers/buyerWalkthroughCommands.h
 import { closingItemResult } from '../handlers/buyerClosingItemCommands.handler';
 import { insuranceCommandResult } from '../handlers/buyerInsuranceCommands.handler';
 import { contractCommandResult } from '../handlers/buyerContractCommands.handler';
+import { cdCommandResult } from '../handlers/buyerClosingDisclosureCommands.handler';
+import { cdFormKindFromCaptureKey, parseCdAnswer } from '../support/buyerClosingDisclosureCommand';
 import { homeRecordStateResult } from '../handlers/homeRecordStateCommands.handler';
 import { homeRecordFormKindFromCaptureKey, parseHomeRecordAnswer } from '../support/homeRecordStateCommand';
 import { contractFormKindFromCaptureKey, parseContractAnswer } from '../support/buyerContractCommand';
@@ -1635,6 +1637,22 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     captureId = input.idempotencyKey;
     capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
     canonicalOwner = 'PropertyRecord';
+  } else if (execution.operationId === 'BUYER_CLOSING_DISCLOSURE_COMMAND') {
+    const cdKind = cdFormKindFromCaptureKey(input.captureKey);
+    if (!cdKind) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    const access = await ensurePropertyAccess(userId, execution.propertyId);
+    if (access.role === HouseholdRole.VIEWER) throw Object.assign(new Error('A contributor or owner is required to change this.'), { code: 'ASK_PERMISSION_REQUIRED' });
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson) ? execution.parametersJson as Record<string, unknown> : {};
+    const cdLaunch = storedParameters.cdLaunch && typeof storedParameters.cdLaunch === 'object' && !Array.isArray(storedParameters.cdLaunch)
+      ? storedParameters.cdLaunch as { kind?: unknown; sourceExecutionId?: unknown } : null;
+    if (!cdLaunch || cdLaunch.kind !== cdKind) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    if (!parseCdAnswer(cdKind, input.answer).success) throw Object.assign(new Error('Fill in what the form asks for.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+    result = await cdCommandResult(userId, execution.propertyId, {
+      kind: cdKind, sourceExecutionId: typeof cdLaunch.sourceExecutionId === 'string' ? cdLaunch.sourceExecutionId : null,
+    }, input.answer as Record<string, unknown>);
+    captureId = input.idempotencyKey;
+    capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
+    canonicalOwner = 'BuyerClosingDisclosureRevision';
   } else if (execution.operationId === 'CLAIM_ACTIVITY_COMMAND') {
     if (input.captureKey !== CLAIM_NOTE_CAPTURE_KEY) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
     const access = await ensurePropertyAccess(userId, execution.propertyId);

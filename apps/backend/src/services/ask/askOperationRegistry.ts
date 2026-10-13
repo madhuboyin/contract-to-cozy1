@@ -131,6 +131,8 @@ export type AskOperationId =
   | 'HOME_RECORD_STATE_COMMAND'
   // Draft, edit and confirm the buyer's contract revision, field by field (register P2 Buyer Closing). Confirmation-gated, declared-action only.
   | 'BUYER_CONTRACT_COMMAND'
+  // Draft, edit and confirm the buyer's Closing Disclosure revision field by field and record funds readiness (register P2 Buyer Closing). Confirmation-gated, declared-action only.
+  | 'BUYER_CLOSING_DISCLOSURE_COMMAND'
   // Record the buyer's closing insurance: requirements, quotes, the chosen quote, the binding and proof status (register P2 Buyer Closing). Confirmation-gated, declared-action only.
   | 'BUYER_INSURANCE_COMMAND'
   // Show the buyer's homeowners insurance for closing: requirements, quotes, the chosen quote, the bound policy and proof status (register P2 Buyer Closing). Read-only.
@@ -443,6 +445,7 @@ export const ASK_INTERNAL_OPERATION_IDS: ReadonlySet<AskOperationId> = new Set<A
   'RENOVATION_CASE_START',
   'HOME_RECORD_STATE_COMMAND',
   'BUYER_CONTRACT_COMMAND',
+  'BUYER_CLOSING_DISCLOSURE_COMMAND',
   'BUYER_INSURANCE_COMMAND',
   'BUYER_CLOSING_ITEM_COMMAND',
   'BUYER_WALKTHROUGH_COMMAND',
@@ -777,6 +780,7 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   RENOVATION_CASE_START: definition('RENOVATION_CASE_START', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'renovation-case.start', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   HOME_RECORD_STATE_COMMAND: definition('HOME_RECORD_STATE_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'home-record-state.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   BUYER_CONTRACT_COMMAND: definition('BUYER_CONTRACT_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'buyer-contract.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
+  BUYER_CLOSING_DISCLOSURE_COMMAND: definition('BUYER_CLOSING_DISCLOSURE_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'buyer-closing-disclosure.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   BUYER_INSURANCE_COMMAND: definition('BUYER_INSURANCE_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'buyer-insurance.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   BUYER_INSURANCE_READINESS: definition('BUYER_INSURANCE_READINESS', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'buyer.insurance-readiness', ['SUMMARY', 'GROUPED_LIST', 'BOUNDARY']),
   BUYER_CLOSING_ITEM_COMMAND: definition('BUYER_CLOSING_ITEM_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'buyer-closing-item.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),

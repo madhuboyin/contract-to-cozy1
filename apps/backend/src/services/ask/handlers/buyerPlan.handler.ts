@@ -10,6 +10,7 @@ import type { BuyerClosingHomeLaneKey } from '../../../productFramework/buyerAcq
 import { BuyerPurchaseLenderReadinessService } from '../../buyerPurchaseLenderReadiness.service';
 import { BuyerTitleEscrowService } from '../../buyerTitleEscrow.service';
 import { BuyerWalkthroughService } from '../../buyerWalkthrough.service';
+import { CD_ACTION_IDS, CD_MESSAGES, type CdKind } from '../support/buyerClosingDisclosureCommand';
 import { CONTRACT_ACTION_IDS, CONTRACT_ENTITY_TYPE, CONTRACT_MESSAGES, type ContractKind } from '../support/buyerContractCommand';
 import { CLOSING_ITEM_ACTION_IDS, CLOSING_ITEM_ENTITY_TYPES, CLOSING_ITEM_MESSAGES, closingItemUpdatable, type ClosingItemKind } from '../support/buyerClosingItemCommand';
 import {
@@ -930,11 +931,21 @@ async function buyerDisclosureFundsReadinessResult(userId: string, propertyId: s
     return buyerNotActiveResult(propertyId, data.contextVersion, 'This purchase property does not have an active Buyer Plan yet, so there is no Closing Disclosure to review.');
   }
   const disclosureData = await BuyerClosingDisclosureService.get(userId, propertyId);
-  const workspace = disclosureData.workspace as unknown as { fundsReady: boolean; instructionsVerified: boolean; questionsResolved: boolean } | null;
+  const workspace = disclosureData.workspace as unknown as { fundsReady: boolean; instructionsVerified: boolean; questionsResolved: boolean; revisions: Array<{ status: string }> } | null;
+  // Closing Disclosure controls (FRD v1.351): declared actions; the command re-checks everything and keeps per-figure confirmation and the wire safeguards.
+  const canChange = (await ensurePropertyAccess(userId, propertyId)).role !== HouseholdRole.VIEWER;
+  const cdAction = (kind: CdKind, labelText: string) => ({
+    id: CD_ACTION_IDS[kind], label: labelText, message: CD_MESSAGES[kind], interactionType: 'START_WORKFLOW' as const, operationId: 'BUYER_CLOSING_DISCLOSURE_COMMAND' as const, style: 'SECONDARY' as const,
+  });
+  const hasDraft = Boolean(workspace?.revisions.some((revision) => revision.status === 'DRAFT'));
+  const cdActions = !canChange ? [] : [
+    ...(hasDraft ? [cdAction('DRAFT_EDIT', 'Edit the draft'), cdAction('CONFIRM', 'Confirm the draft figures')] : [cdAction('DRAFT_START', 'Start a revision')]),
+    ...(workspace ? [cdAction('FUNDS_UPDATE', 'Update funds readiness')] : []),
+  ];
   if (!workspace) {
     return {
       status: 'READY_WITH_LIMITATIONS', reasonCode: 'BUYER_DISCLOSURE_NOT_RECORDED',
-      blocks: [{ type: 'SUMMARY', id: 'buyer-disclosure-unrecorded', title: 'No Closing Disclosure has been recorded yet', body: 'Upload or manually enter the latest Closing Disclosure once your lender or closing professional sends it.', tone: 'CAUTION', actions: [] }],
+      blocks: [{ type: 'SUMMARY', id: 'buyer-disclosure-unrecorded', title: 'No Closing Disclosure has been recorded yet', body: 'Upload or manually enter the latest Closing Disclosure once your lender or closing professional sends it.', tone: 'CAUTION', actions: cdActions }],
       suggestions: [],
     };
   }
@@ -947,7 +958,7 @@ async function buyerDisclosureFundsReadinessResult(userId: string, propertyId: s
     title: outstanding.length ? `${outstanding.length} item${outstanding.length === 1 ? '' : 's'} still open before funds are ready` : 'Funds and Closing Disclosure review are recorded as ready',
     body: outstanding.length ? `Still open: ${outstanding.join(', ')}.` : 'Funds method, wire-instruction verification, and questions are all recorded as resolved.',
     tone: outstanding.length ? 'CAUTION' : 'DEFAULT',
-    actions: [],
+    actions: cdActions,
   }, {
     type: 'BOUNDARY', id: 'buyer-disclosure-wire-boundary', title: 'Wire-fraud protection', body: 'Never trust changed emailed wire instructions. Independently verify funds instructions using a known phone number. ContractToCozy never supplies or validates destination account details.', severity: 'CAUTION', suggestions: [],
   }];
