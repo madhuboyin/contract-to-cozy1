@@ -133,6 +133,10 @@ export type AskOperationId =
   | 'BUYER_CONTRACT_COMMAND'
   // Draft, edit and confirm the buyer's Closing Disclosure revision field by field and record funds readiness (register P2 Buyer Closing). Confirmation-gated, declared-action only.
   | 'BUYER_CLOSING_DISCLOSURE_COMMAND'
+  // Add, edit, confirm and select the buyer's purchase Loan Estimates, figure by figure (register P2 Buyer Closing). Confirmation-gated, declared-action only.
+  | 'BUYER_LOAN_ESTIMATE_COMMAND'
+  // Show the buyer's purchase Loan Estimates: each lender offer's draft and confirmed revisions and the selected offer (register P2 Buyer Closing). Read-only.
+  | 'BUYER_LOAN_ESTIMATES'
   // Record the buyer's closing insurance: requirements, quotes, the chosen quote, the binding and proof status (register P2 Buyer Closing). Confirmation-gated, declared-action only.
   | 'BUYER_INSURANCE_COMMAND'
   // Show the buyer's homeowners insurance for closing: requirements, quotes, the chosen quote, the bound policy and proof status (register P2 Buyer Closing). Read-only.
@@ -446,6 +450,7 @@ export const ASK_INTERNAL_OPERATION_IDS: ReadonlySet<AskOperationId> = new Set<A
   'HOME_RECORD_STATE_COMMAND',
   'BUYER_CONTRACT_COMMAND',
   'BUYER_CLOSING_DISCLOSURE_COMMAND',
+  'BUYER_LOAN_ESTIMATE_COMMAND',
   'BUYER_INSURANCE_COMMAND',
   'BUYER_CLOSING_ITEM_COMMAND',
   'BUYER_WALKTHROUGH_COMMAND',
@@ -781,6 +786,8 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   HOME_RECORD_STATE_COMMAND: definition('HOME_RECORD_STATE_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'home-record-state.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   BUYER_CONTRACT_COMMAND: definition('BUYER_CONTRACT_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'buyer-contract.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   BUYER_CLOSING_DISCLOSURE_COMMAND: definition('BUYER_CLOSING_DISCLOSURE_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'buyer-closing-disclosure.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
+  BUYER_LOAN_ESTIMATE_COMMAND: definition('BUYER_LOAN_ESTIMATE_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'buyer-loan-estimate.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
+  BUYER_LOAN_ESTIMATES: definition('BUYER_LOAN_ESTIMATES', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'buyer.loan-estimates', ['SUMMARY', 'GROUPED_LIST', 'BOUNDARY']),
   BUYER_INSURANCE_COMMAND: definition('BUYER_INSURANCE_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'buyer-insurance.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   BUYER_INSURANCE_READINESS: definition('BUYER_INSURANCE_READINESS', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'buyer.insurance-readiness', ['SUMMARY', 'GROUPED_LIST', 'BOUNDARY']),
   BUYER_CLOSING_ITEM_COMMAND: definition('BUYER_CLOSING_ITEM_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'buyer-closing-item.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
@@ -1007,6 +1014,7 @@ const buyerClosingDayReadinessPattern = /\bclosing day\b.{0,50}\b(?:ready|readin
 const buyerContractTimelinePattern = /\bcontract\b.{0,50}\b(?:dates?|terms?|timeline|contingenc(?:y|ies))\b.{0,40}\b(?:confirm|need|still|closing)\b|\bwhich contract dates?\b.{0,40}\bconfirm\b|\b(?:confirmed|recorded)\b.{0,30}\bcontract\b.{0,30}\b(?:timeline|dates?|terms?)\b|\bcontingenc(?:y|ies)\b.{0,50}\bcontract\b|\bcontract\b.{0,50}\bcontingenc(?:y|ies)\b/i;
 const buyerNegotiationReadinessPattern = /\bwhat should i discuss\b.{0,40}\b(?:my )?agent\b.{0,40}\binspection\b|\bnegotiation\b.{0,40}\b(?:readiness|status|discuss)\b.{0,40}\b(?:closing|purchase|inspection)\b|\bseller (?:response|negotiation)\b.{0,40}\bstatus\b/i;
 const buyerInsuranceReadinessPattern = /\b(?:insurance (?:binder|quotes?)|(?:homeowners?|home) insurance (?:readiness|requirements?)|insurance (?:requirements?|proof|quotes?) (?:for|before) (?:my )?(?:closing|purchase)|(?:closing|purchase) insurance)\b/i;
+const buyerLoanEstimatesPattern = /\b(?:purchase|mortgage) loan estimates?\b|\b(?:my|the|compare|show|review)\b.{0,20}\b(?:lender|mortgage|loan) offers?\b|\bcompare\b.{0,20}\b(?:my )?loan estimates?\b|\b(?:show|review|list)\b.{0,15}\b(?:my )?loan estimates?\b/i;
 const buyerCostReadinessPattern = /\bwhat could cost me money\b.{0,40}\b(?:first 90 days|closing|move[- ]in)\b|\bnear[- ]term costs?\b.{0,40}\bpurchase\b|\bwhat (?:will|could)\b.{0,30}\bcost\b.{0,40}\bthis (?:purchase|closing)\b|\bwhat (?:will|could)\b.{0,20}\bthis (?:purchase|closing)\b.{0,20}\bcost\b/i;
 const buyerFindingDispositionPattern = /\b(?:move|classify|mark)\b.{0,50}\bfinding\b.{0,50}\b(?:post[- ]close|negotiation|dismiss|verified)\b|\bfinding\b.{0,50}\binto (?:my )?post[- ]close plan\b/i;
 const buyerLifecycleUpdatePattern = /\bcancel\b.{0,40}\b(?:this|my)\b.{0,20}\b(?:purchase|buyer plan|closing)\b|\bwe closed today\b|\b(?:change|update|move)\b.{0,40}\b(?:target )?closing date\b.{0,40}\bto\b|\b(?:pause|resume)\b.{0,40}\b(?:this|my)\b.{0,20}\b(?:purchase|buyer plan|deal)\b/i;
@@ -1426,6 +1434,9 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   }
   if (buyerInsuranceReadinessPattern.test(message)) {
     return resolved('BUYER_INSURANCE_READINESS', 0.94);
+  }
+  if (buyerLoanEstimatesPattern.test(message) && !/\brefinanc|\brefi\b/i.test(message)) {
+    return resolved('BUYER_LOAN_ESTIMATES', 0.94);
   }
   if (buyerCostReadinessPattern.test(message)) {
     return resolved('BUYER_COST_READINESS', 0.95);

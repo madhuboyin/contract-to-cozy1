@@ -81,6 +81,8 @@ import { closingItemResult } from '../handlers/buyerClosingItemCommands.handler'
 import { insuranceCommandResult } from '../handlers/buyerInsuranceCommands.handler';
 import { contractCommandResult } from '../handlers/buyerContractCommands.handler';
 import { cdCommandResult } from '../handlers/buyerClosingDisclosureCommands.handler';
+import { leCommandResult } from '../handlers/buyerLoanEstimateCommands.handler';
+import { leFormKindFromCaptureKey, parseLeAnswer } from '../support/buyerLoanEstimateCommand';
 import { cdFormKindFromCaptureKey, parseCdAnswer } from '../support/buyerClosingDisclosureCommand';
 import { homeRecordStateResult } from '../handlers/homeRecordStateCommands.handler';
 import { homeRecordFormKindFromCaptureKey, parseHomeRecordAnswer } from '../support/homeRecordStateCommand';
@@ -1653,6 +1655,22 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     captureId = input.idempotencyKey;
     capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
     canonicalOwner = 'BuyerClosingDisclosureRevision';
+  } else if (execution.operationId === 'BUYER_LOAN_ESTIMATE_COMMAND') {
+    const leKind = leFormKindFromCaptureKey(input.captureKey);
+    if (!leKind) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    const access = await ensurePropertyAccess(userId, execution.propertyId);
+    if (access.role === HouseholdRole.VIEWER) throw Object.assign(new Error('A contributor or owner is required to change this.'), { code: 'ASK_PERMISSION_REQUIRED' });
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson) ? execution.parametersJson as Record<string, unknown> : {};
+    const leLaunch = storedParameters.leLaunch && typeof storedParameters.leLaunch === 'object' && !Array.isArray(storedParameters.leLaunch)
+      ? storedParameters.leLaunch as { kind?: unknown; entityId?: unknown; sourceExecutionId?: unknown } : null;
+    if (!leLaunch || leLaunch.kind !== leKind) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    if (!parseLeAnswer(leKind, input.answer).success) throw Object.assign(new Error('Fill in what the form asks for.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+    result = await leCommandResult(userId, execution.propertyId, {
+      kind: leKind, entityId: typeof leLaunch.entityId === 'string' ? leLaunch.entityId : null, sourceExecutionId: typeof leLaunch.sourceExecutionId === 'string' ? leLaunch.sourceExecutionId : null,
+    }, input.answer as Record<string, unknown>);
+    captureId = input.idempotencyKey;
+    capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
+    canonicalOwner = 'BuyerPurchaseLoanEstimateRevision';
   } else if (execution.operationId === 'CLAIM_ACTIVITY_COMMAND') {
     if (input.captureKey !== CLAIM_NOTE_CAPTURE_KEY) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
     const access = await ensurePropertyAccess(userId, execution.propertyId);
