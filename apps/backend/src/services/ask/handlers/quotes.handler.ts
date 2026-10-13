@@ -165,6 +165,9 @@ async function quoteComparisonReviewResult(propertyId: string, canChange = false
       id: QUOTE_COMMAND_ACTION_IDS.ADD, label: 'Add a proposal', interactionType: 'START_WORKFLOW' as const, message: QUOTE_COMMAND_MESSAGES.ADD,
       operationId: 'QUOTE_COMPARISON_COMMAND' as const, entityType: QUOTE_WORKSPACE_ENTITY_TYPE, entityId: latest.id, style: 'PRIMARY' as const,
     }, {
+      id: QUOTE_COMMAND_ACTION_IDS.IMPORT, label: 'Add one from a document', interactionType: 'START_WORKFLOW' as const, message: QUOTE_COMMAND_MESSAGES.IMPORT,
+      operationId: 'QUOTE_COMPARISON_COMMAND' as const, entityType: QUOTE_WORKSPACE_ENTITY_TYPE, entityId: latest.id, style: 'SECONDARY' as const,
+    }, {
       id: QUOTE_COMMAND_ACTION_IDS.CLOSE, label: 'Close this decision', interactionType: 'START_WORKFLOW' as const, message: QUOTE_COMMAND_MESSAGES.CLOSE,
       operationId: 'QUOTE_COMPARISON_COMMAND' as const, entityType: QUOTE_WORKSPACE_ENTITY_TYPE, entityId: latest.id, style: 'QUIET' as const,
     }, ...(latest.selectedQuoteId ? [{

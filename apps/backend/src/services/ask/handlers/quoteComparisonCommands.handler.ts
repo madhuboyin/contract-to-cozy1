@@ -26,10 +26,11 @@ import {
 import { assertProjectComplianceDecisionsApplicable } from '../../projectCompliance/context';
 import { emitServiceQuoteDecisionAnalytics, ServiceQuoteDecisionEvent } from '../../serviceQuoteDecisionAnalytics.service';
 import { confirmQuoteReviewSchema, type QuoteReview } from '../../quoteReview';
+import { visibleRecordWhere } from '../../homeRecordsAccess';
 import {
   parseQuoteAddAnswer, parseQuoteFormAnswer, QUOTE_CLOSE_OUTCOME_LABELS, QUOTE_CLOSE_OUTCOMES, QUOTE_COMMAND_MESSAGES, QUOTE_ENTITY_TYPE,
   QUOTE_FORM_CAPTURE_KEYS, QUOTE_WORKSPACE_ENTITY_TYPE, quoteAddProposalInput, quoteCommandKindFromMessage, quoteCommandTargetsWorkspace, quoteEditChanges,
-  type QuoteAddInput, type QuoteCommandKind, type QuoteCurrentValues, type QuoteFormData, type QuoteFormKind,
+  type QuoteAddInput, type QuoteImportInput, type QuoteCommandKind, type QuoteCurrentValues, type QuoteFormData, type QuoteFormKind,
 } from '../support/quoteComparisonCommand';
 
 const CONFIRMATION_MINUTES = 30;
@@ -127,10 +128,31 @@ export const quoteCommandContextVersion = (workspace: WorkspaceRow, quote?: Quot
 const closedMessage = 'This quote decision is closed. Start a new comparison to evaluate revised proposals.';
 const lockedStages = ['FINALIZATION', 'BOOKING', 'SCHEDULED', 'COMPLETED', 'CLOSED'];
 
-function formCapture(kind: QuoteFormKind, contextVersion: string, entered?: Record<string, unknown>, quote?: QuoteRow): AskCaptureRequest {
+interface ImportableRecord { id: string; title: string; recordType: string; updatedAt: Date; currentVersionId: string | null }
+const RECORD_TYPE_LABELS: Record<string, string> = { QUOTE: 'Quote or estimate', CONTRACT: 'Contract', OTHER: 'Other document' };
+/** Household-shared, active Home Records that may hold a quote (design §3.3): an owner-only record is never offered, even to an owner. */
+async function importableRecords(propertyId: string, role: HouseholdRole): Promise<ImportableRecord[]> {
+  return database.propertyRecord.findMany({
+    where: { propertyId, lifecycleStatus: 'ACTIVE', visibility: 'HOUSEHOLD', recordType: { in: ['QUOTE', 'CONTRACT', 'OTHER'] }, ...visibleRecordWhere(role) },
+    orderBy: { updatedAt: 'desc' }, take: 25, select: { id: true, title: true, recordType: true, updatedAt: true, currentVersionId: true },
+  });
+}
+
+function formCapture(kind: QuoteFormKind, contextVersion: string, entered?: Record<string, unknown>, quote?: QuoteRow, records: ImportableRecord[] = [], choiceRequired = false): AskCaptureRequest {
   const base = { classification: 'WORKFLOW_INPUT' as const, state: 'UNKNOWN' as const, allowNotSure: false, sensitivity: 'FINANCIAL' as const, confirmationText: null, expectedContextVersion: contextVersion };
   const text = (key: string, label: string, max: number, required = false) => ({ key, label, required, inputSchema: { type: 'SHORT_TEXT' as const, maxLength: max } });
   const clean = (value?: Record<string, unknown>) => Object.fromEntries(Object.entries(value ?? {}).filter(([, v]) => v !== null && v !== undefined && v !== ''));
+  if (kind === 'IMPORT') {
+    return { ...base, requirementId: 'quote-comparison-import-inputs', captureKey: QUOTE_FORM_CAPTURE_KEYS.IMPORT, title: 'Add a proposal from a document',
+      question: 'Which document is the quote?',
+      helpText: 'Only quotes already on file that your whole household can see are listed. Ask reads the document and adds what it finds as an unconfirmed proposal; you review every value before anything is confirmed.',
+      inputSchema: { type: 'GROUP', fields: [
+        { key: 'recordId', label: 'Document', required: true, inputSchema: { type: 'SINGLE_SELECT', options: records.map((record) => ({ label: `${record.title} (${RECORD_TYPE_LABELS[record.recordType] ?? 'Document'}, updated ${humanDate(record.updatedAt) ?? 'earlier'})`, value: record.id })) } },
+        { key: 'onNewerVersion', label: 'An earlier version of this document is already here. What should happen to it?', required: choiceRequired,
+          inputSchema: { type: 'SINGLE_SELECT', options: [{ label: 'Replace that proposal with this version', value: 'REPLACE' }, { label: 'Keep both proposals', value: 'RETAIN_BOTH' }] } },
+      ] } as unknown as AskCaptureRequest['inputSchema'],
+      currentAnswer: clean(entered), destinationLabel: 'Used to prepare this change; nothing is saved until you confirm' };
+  }
   if (kind === 'CLARIFY') {
     return { ...base, requirementId: 'quote-comparison-clarify-inputs', captureKey: QUOTE_FORM_CAPTURE_KEYS.CLARIFY, title: 'Ask the provider a question',
       question: `What do you need to know about ${quote?.vendorName ?? 'this'} proposal?`,
@@ -190,7 +212,52 @@ export async function quoteCommandResult(userId: string, propertyId: string, lau
     if (!workspace) return unavailable('QUOTE_WORKSPACE_NOT_FOUND', 'That comparison is no longer available', 'Ask could not find that quote comparison for this home. Nothing has changed.');
     if (workspace.outcome !== 'OPEN') return unavailable('QUOTE_WORKSPACE_CLOSED', 'This quote decision is closed', `${closedMessage} Nothing has changed.`);
     const contextVersion = quoteCommandContextVersion(workspace);
-    const formKind: QuoteFormKind = kind === 'CLOSE' ? 'CLOSE' : 'ADD';
+    const formKind: QuoteFormKind = kind === 'CLOSE' ? 'CLOSE' : kind === 'IMPORT' ? 'IMPORT' : 'ADD';
+    if (kind === 'IMPORT') {
+      if (lockedStages.includes(workspace.journeyStage)) return unavailable('QUOTE_PROPOSALS_LOCKED', 'Proposal controls are locked', 'Proposals cannot be changed after final-term review begins. Nothing has changed.');
+      const records = await importableRecords(propertyId, access.role);
+      if (!records.length) {
+        return unavailable('QUOTE_NO_DOCUMENT_ON_FILE', 'No quote is on file to add',
+          'Add the quote to your home records as a quote or estimate first, shared with your household, then come back. Ask cannot upload a file. Nothing has changed.');
+      }
+      const contextVersion = quoteCommandContextVersion(workspace);
+      const choice = supplied as QuoteImportInput | undefined;
+      if (!choice) {
+        return {
+          status: 'NEEDS_CONTEXT', reasonCode: 'QUOTE_IMPORT_INPUT_REQUIRED', contextVersion, parameters: launchParameters,
+          blocks: [{ type: 'SUMMARY', id: 'quote-import-input', title: 'Add a proposal from a document', body: 'Nothing has been saved yet. Choose the document, then review what will happen.', tone: 'DEFAULT', actions: [] }],
+          captureRequests: [formCapture('IMPORT', contextVersion, undefined, undefined, records)], suggestions: [],
+        };
+      }
+      const record = records.find((entry) => entry.id === choice.recordId);
+      if (!record) return unavailable('QUOTE_IMPORT_DOCUMENT_NOT_OFFERED', 'Choose a document from the list', 'That document is not one your whole household can see, or it is not a quote on file. Nothing has changed.');
+      const earlier = await database.quoteHomeRecordSource.findMany({
+        where: { workspaceId: workspace.id, propertyRecordId: record.id, supersededByQuoteId: null }, select: { quoteId: true, propertyRecordVersionId: true },
+      }) as Array<{ quoteId: string; propertyRecordVersionId: string | null }>;
+      if (earlier.some((entry) => entry.propertyRecordVersionId === record.currentVersionId)) {
+        return unavailable('QUOTE_ALREADY_IMPORTED', 'That document is already in this comparison', 'Its current version is already one of your proposals. Nothing has changed.');
+      }
+      if (earlier.length && !choice.onNewerVersion) {
+        return {
+          status: 'NEEDS_CONTEXT', reasonCode: 'QUOTE_IMPORT_VERSION_CHOICE_REQUIRED', contextVersion, parameters: launchParameters,
+          blocks: [{ type: 'SUMMARY', id: 'quote-import-choice', title: 'An earlier version is already here', body: 'Choose whether the new version replaces that proposal or sits beside it.', tone: 'CAUTION', actions: [] }],
+          captureRequests: [formCapture('IMPORT', contextVersion, { recordId: record.id }, undefined, records, true)], suggestions: [],
+        };
+      }
+      return {
+        status: 'NEEDS_CONFIRMATION', reasonCode: 'QUOTE_IMPORT_CONFIRMATION_REQUIRED', contextVersion,
+        parameters: { quoteImport: { recordId: record.id, onNewerVersion: earlier.length ? choice.onNewerVersion : null }, quoteCommand: { kind: 'IMPORT', entityId: workspace.id }, quoteCommandContextVersion: contextVersion, ...base },
+        blocks: [{ type: 'SUMMARY', id: 'quote-import-review', title: `Add a proposal from ${record.title}?`, body: 'Nothing is read or saved until you confirm.', tone: 'DEFAULT', actions: [] }],
+        confirmation: {
+          confirmationId: `quote-import-${sha(`${propertyId}:${workspace.id}:${record.id}:${record.currentVersionId}`).slice(0, 12)}-1`, version: 1, title: `Add a proposal from ${record.title}?`,
+          description: 'Ask reads this document and adds what it finds as a proposal. Nothing is confirmed: you review every value afterwards and confirm them yourself. If the document does not show a provider and a price, no proposal is made. Nobody is contacted.',
+          fields: [{ label: 'Document', value: record.title }, { label: 'Kind', value: RECORD_TYPE_LABELS[record.recordType] ?? 'Document' },
+            ...(earlier.length ? [{ label: 'Earlier version here', value: choice.onNewerVersion === 'REPLACE' ? 'Replace that proposal' : 'Keep both' }] : [])],
+          editableFields: [], confirmLabel: 'Read and add', consentText: 'I authorize adding a proposal read from this document to the shared quote comparison.', expiresAt: expiresAt.toISOString(),
+        },
+        captureRequests: [formCapture('IMPORT', contextVersion, choice as unknown as Record<string, unknown>, undefined, records, earlier.length > 0)], suggestions: [],
+      };
+    }
     if (!supplied) {
       return {
         status: 'NEEDS_CONTEXT', reasonCode: kind === 'CLOSE' ? 'QUOTE_CLOSE_INPUT_REQUIRED' : 'QUOTE_ADD_INPUT_REQUIRED', contextVersion, parameters: launchParameters,
@@ -435,6 +502,22 @@ async function confirmQuoteCommand(ctx: ConfirmCapabilityContext): Promise<Confi
         ? 'The proposal is comparison-ready.'
         : 'The proposal is saved. It is not compared until its scope facts are confirmed.';
       details.push({ label: 'Provider', value: checked.data.vendorName }, { label: 'Total quoted', value: money(checked.data.quoteAmount) });
+    } else if (kind === 'IMPORT') {
+      const stored = parameters.quoteImport as { recordId?: unknown; onNewerVersion?: unknown } | undefined;
+      const checked = parseQuoteFormAnswer('IMPORT', stored);
+      if (!checked.success) throw stale('The document to add is invalid.');
+      const choice = checked.data as QuoteImportInput;
+      // Loaded here, not at the top: the import pulls in the document analyzer, which needs its model key to load.
+      const { createQuoteProposalFromRecord } = await import('../../quoteHomeRecordImport.service');
+      const imported = await createQuoteProposalFromRecord({
+        propertyId, workspaceId: workspace.id, userId, role: ctx.access.role as HouseholdRole, recordId: choice.recordId, onNewerVersion: choice.onNewerVersion,
+      });
+      artifactId = imported.quote.id;
+      details.push({ label: 'Provider', value: imported.quote.vendorName });
+      title = imported.alreadyImported ? 'That document was already in the comparison' : 'Proposal added from the document';
+      description = imported.alreadyImported
+        ? 'Its current version is already one of your proposals. Nothing was added.'
+        : `${(imported.quote.lineItems ?? []).length} line item${(imported.quote.lineItems ?? []).length === 1 ? '' : 's'} and ${(imported.quote.terms ?? []).length} term${(imported.quote.terms ?? []).length === 1 ? '' : 's'} were read. Nothing is confirmed yet: use Confirm the facts on the proposal to review every value.`;
     } else if (kind === 'CLOSE') {
       const checked = parseQuoteFormAnswer('CLOSE', parameters.quoteClose);
       if (!checked.success) throw stale('The way to close this decision is invalid.');

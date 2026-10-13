@@ -16,7 +16,8 @@ import {
   confirmQuoteProposal,
   createQuoteClarification,
   createQuoteProposal,
-  createQuoteProposalFromDocument,
+  createQuoteProposalFromRecord,
+  quoteImportErrorCode,
   getQuoteComparability,
   getQuoteReview,
   getQuoteComparisonWorkspace,
@@ -41,6 +42,7 @@ import {
   updateServiceQuoteOutcomeConsent,
 } from '../service-price-radar/servicePriceRadarApi';
 import { api } from '@/lib/api/client';
+import { uploadRecordForWorkflow } from '../home-records/homeRecordsApi';
 import { QuoteReviewDialog } from './QuoteReviewDialog';
 import { usePropertyWriteAccess } from '@/lib/property/usePropertyWriteAccess';
 import { createNegotiationShieldCase } from '../negotiation-shield/negotiationShieldApi';
@@ -471,6 +473,38 @@ export default function QuoteComparisonWorkspaceClient() {
     }
   };
 
+  // Quote import from a Home Record (import design slice 5): the file is added to Home Records as a quote, then imported from that record. The quote
+  // arrives unconfirmed and is confirmed through the review dialog. A file that is not yet validated is retried briefly; a newer version of a
+  // document already in the comparison asks the person to replace it or keep both.
+  const [importChoice, setImportChoice] = React.useState<{ recordId: string } | null>(null);
+  const importFromRecord = async (recordId: string, onNewerVersion: 'REPLACE' | 'RETAIN_BOTH' | null) => {
+    if (!workspaceId) return;
+    const maxAttempts = 8;
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      try {
+        const result = await createQuoteProposalFromRecord(propertyId, workspaceId, { recordId, onNewerVersion });
+        const extractedQuote = mapProposalToQuote(result.quote);
+        setQuotes((previous) => sortCandidates([extractedQuote, ...previous.filter((quote) => quote.id !== extractedQuote.id && quote.id !== result.replacedQuoteId)], defaultCategory));
+        setSelectedQuoteIds((previous) => [extractedQuote.id, ...previous.filter((id) => id !== extractedQuote.id && id !== result.replacedQuoteId)].slice(0, 3));
+        setComparability(await getQuoteComparability(propertyId, workspaceId));
+        setManualInputError(result.alreadyImported ? 'That document is already in this comparison.' : null);
+        return;
+      } catch (importError: any) {
+        const code = quoteImportErrorCode(importError);
+        if (code === 'QUOTE_SOURCE_NOT_CLEAN' && attempt < maxAttempts) {
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+          continue;
+        }
+        if (code === 'QUOTE_SOURCE_VERSION_CHOICE_REQUIRED') {
+          setImportChoice({ recordId });
+          return;
+        }
+        setManualInputError(importError?.message || 'Unable to read this quote document.');
+        return;
+      }
+    }
+  };
+
   const uploadQuoteDocument = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = '';
@@ -478,22 +512,23 @@ export default function QuoteComparisonWorkspaceClient() {
     setUploadingQuote(true);
     setManualInputError(null);
     try {
-      const analyzed = await api.analyzeDocument(file, propertyId);
-      if (!('data' in analyzed)) {
-        throw new Error(analyzed.error?.message || analyzed.message || 'Document analysis failed.');
-      }
-      const documentId = analyzed.data?.document?.id;
-      if (!documentId) throw new Error('Document analysis did not return a saved document.');
-      const proposal = await createQuoteProposalFromDocument(propertyId, workspaceId, documentId);
-      const extractedQuote = mapProposalToQuote(proposal);
-      setQuotes((previous) => sortCandidates([extractedQuote, ...previous], defaultCategory));
-      setSelectedQuoteIds((previous) => [extractedQuote.id, ...previous].slice(0, 3));
-      setComparability(await getQuoteComparability(propertyId, workspaceId));
+      const recordId = await uploadRecordForWorkflow(propertyId, {
+        file, title: file.name.replace(/\.[^.]+$/, '') || 'Quote', recordType: 'QUOTE', sensitivity: 'FINANCIAL',
+      });
+      await importFromRecord(recordId, null);
     } catch (uploadError: any) {
-      setManualInputError(uploadError?.message || 'Unable to analyze this quote document.');
+      setManualInputError(uploadError?.message || 'Unable to add this quote document.');
     } finally {
       setUploadingQuote(false);
     }
+  };
+
+  const chooseImport = async (choice: 'REPLACE' | 'RETAIN_BOTH') => {
+    const pending = importChoice;
+    setImportChoice(null);
+    if (!pending) return;
+    setUploadingQuote(true);
+    try { await importFromRecord(pending.recordId, choice); } finally { setUploadingQuote(false); }
   };
 
   // The confirmation contract (FRD v1.360): confirming opens a review of every value, and the confirm names exactly what was shown.
@@ -1261,10 +1296,10 @@ export default function QuoteComparisonWorkspaceClient() {
           <div id="upload-quote" className="scroll-mt-24">
           <ScenarioInputCard
             title="Upload a Quote Document"
-            subtitle="Analyze a PDF or image, keep extraction provenance, then confirm the extracted facts."
+            subtitle="Add a PDF or image of the quote, review everything that was read from it, then confirm."
           >
             <label className="inline-flex min-h-[40px] cursor-pointer items-center justify-center rounded-xl border border-black/10 px-3 text-sm hover:bg-black/5">
-              {uploadingQuote ? 'Analyzing quote…' : 'Choose quote document'}
+              {uploadingQuote ? 'Reading quote…' : 'Choose quote document'}
               <input
                 type="file"
                 accept=".pdf,image/*"
@@ -1461,7 +1496,22 @@ export default function QuoteComparisonWorkspaceClient() {
       }
       footer={null}
     />
-    <QuoteReviewDialog
+    <Dialog open={Boolean(importChoice)} onOpenChange={(next) => { if (!next) setImportChoice(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>This document is already in the comparison</DialogTitle>
+            <DialogDescription>
+              An earlier version of this document is already one of your proposals. Replace that proposal with this version, or keep both so you can compare them.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setImportChoice(null)}>Cancel</Button>
+            <Button type="button" variant="outline" onClick={() => void chooseImport('RETAIN_BOTH')}>Keep both</Button>
+            <Button type="button" onClick={() => void chooseImport('REPLACE')}>Replace the earlier proposal</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <QuoteReviewDialog
         open={Boolean(reviewingQuoteId)}
         vendorName={quotes.find((quote) => quote.id === reviewingQuoteId)?.vendorName ?? 'this'}
         review={quoteReview}

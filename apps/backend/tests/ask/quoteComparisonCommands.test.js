@@ -23,6 +23,8 @@ const analytics = require('../../src/services/serviceQuoteDecisionAnalytics.serv
 const command = require('../../src/services/ask/support/quoteComparisonCommand.ts');
 const handler = require('../../src/services/ask/handlers/quoteComparisonCommands.handler.ts');
 
+const nodeCrypto = require('node:crypto');
+const sha = (text) => nodeCrypto.createHash('sha256').update(text).digest('hex');
 const OP = 'QUOTE_COMPARISON_COMMAND';
 const M = command.QUOTE_COMMAND_MESSAGES;
 const WORKSPACE = { id: 'ws-1', outcome: 'OPEN', journeyStage: 'SCOPE_REVIEW', serviceCategory: 'ROOFING', scopeSummary: 'Roof', updatedAt: new Date('2026-10-01T00:00:00Z'), selectedQuoteId: null };
@@ -261,7 +263,7 @@ test('the review offers Add a proposal and per-proposal controls to a contributo
     const result = await review('CONTRIBUTOR');
     const summary = result.blocks.find((b) => b.id === 'quote-review-summary');
     assert.deepEqual(summary.actions.map((a) => [a.id, a.operationId, a.message, a.entityType, a.entityId]),
-      [['quote-comparison-add-quote', OP, M.ADD, command.QUOTE_WORKSPACE_ENTITY_TYPE, 'ws-1'], ['quote-comparison-close-decision', OP, M.CLOSE, command.QUOTE_WORKSPACE_ENTITY_TYPE, 'ws-1']]);
+      [['quote-comparison-add-quote', OP, M.ADD, command.QUOTE_WORKSPACE_ENTITY_TYPE, 'ws-1'], ['quote-comparison-import-quote', OP, M.IMPORT, command.QUOTE_WORKSPACE_ENTITY_TYPE, 'ws-1'], ['quote-comparison-close-decision', OP, M.CLOSE, command.QUOTE_WORKSPACE_ENTITY_TYPE, 'ws-1']]);
     const manage = result.blocks.find((b) => b.id === 'quote-review-manage');
     const byId = Object.fromEntries(manage.sections[0].items.map((i) => [i.id, i]));
     assert.equal(byId['q-1'].entityType, command.QUOTE_ENTITY_TYPE);
@@ -443,4 +445,74 @@ test('a form can only be submitted as the command that opened it', () => {
   assert.equal(command.parseQuoteFormAnswer('CLARIFY', { question: 'hi' }).success, false, 'a question needs three characters');
   assert.equal(command.parseQuoteFormAnswer('CLOSE', { outcome: 'CANCELLED' }).success, false);
   assert.equal(command.parseQuoteFormAnswer('RESOLVE', { response: '' }).success, false);
+});
+
+// ───────────────────────────── add a proposal from a document on file (import design slice 5, FRD v1.363) ─────────────────────────────
+
+test('Add from a document lists only household-shared quote records, asks for a choice when an earlier version is here, and reviews before reading anything', async () => {
+  const restoreRole = withRole('CONTRIBUTOR'); const restoreData = withData();
+  const saved = { rec: prisma.propertyRecord, src: prisma.quoteHomeRecordSource };
+  const records = [
+    { id: 'rec-1', title: 'Acme quote', recordType: 'QUOTE', updatedAt: new Date('2026-09-01'), currentVersionId: 'ver-2' },
+    { id: 'rec-2', title: 'Other', recordType: 'OTHER', updatedAt: new Date('2026-08-01'), currentVersionId: 'ver-9' },
+  ];
+  let seenWhere = null; let earlier = [];
+  prisma.propertyRecord = { findMany: async (args) => { seenWhere = args.where; return records; } };
+  prisma.quoteHomeRecordSource = { findMany: async () => earlier };
+  try {
+    const form = await invoke(M.IMPORT, launchFor('IMPORT', 'ws-1'));
+    assert.equal(form.status, 'NEEDS_CONTEXT');
+    assert.equal(seenWhere.visibility, 'HOUSEHOLD');
+    assert.equal(seenWhere.lifecycleStatus, 'ACTIVE');
+    assert.deepEqual(seenWhere.recordType.in, ['QUOTE', 'CONTRACT', 'OTHER']);
+    assert.deepEqual(form.captureRequests[0].inputSchema.fields[0].inputSchema.options.map((o) => o.value), ['rec-1', 'rec-2']);
+    assert.equal(form.captureRequests[0].captureKey, command.QUOTE_FORM_CAPTURE_KEYS.IMPORT);
+
+    const review = await handler.quoteCommandResult('user-1', 'prop-1', { kind: 'IMPORT', entityId: 'ws-1', sourceExecutionId: null }, { recordId: 'rec-1', onNewerVersion: null });
+    assert.equal(review.status, 'NEEDS_CONFIRMATION');
+    assert.match(review.confirmation.description, /Nothing is confirmed: you review every value afterwards/);
+    assert.deepEqual(review.parameters.quoteImport, { recordId: 'rec-1', onNewerVersion: null });
+
+    const notOffered = await handler.quoteCommandResult('user-1', 'prop-1', { kind: 'IMPORT', entityId: 'ws-1', sourceExecutionId: null }, { recordId: 'rec-private', onNewerVersion: null });
+    assert.equal(notOffered.reasonCode, 'QUOTE_IMPORT_DOCUMENT_NOT_OFFERED');
+
+    earlier = [{ quoteId: 'q-old', propertyRecordVersionId: 'ver-1' }];
+    const choice = await handler.quoteCommandResult('user-1', 'prop-1', { kind: 'IMPORT', entityId: 'ws-1', sourceExecutionId: null }, { recordId: 'rec-1', onNewerVersion: null });
+    assert.equal(choice.reasonCode, 'QUOTE_IMPORT_VERSION_CHOICE_REQUIRED');
+    assert.equal(choice.captureRequests[0].inputSchema.fields[1].required, true);
+    const replace = await handler.quoteCommandResult('user-1', 'prop-1', { kind: 'IMPORT', entityId: 'ws-1', sourceExecutionId: null }, { recordId: 'rec-1', onNewerVersion: 'REPLACE' });
+    assert.equal(replace.parameters.quoteImport.onNewerVersion, 'REPLACE');
+
+    earlier = [{ quoteId: 'q-old', propertyRecordVersionId: 'ver-2' }];
+    const same = await handler.quoteCommandResult('user-1', 'prop-1', { kind: 'IMPORT', entityId: 'ws-1', sourceExecutionId: null }, { recordId: 'rec-1', onNewerVersion: null });
+    assert.equal(same.reasonCode, 'QUOTE_ALREADY_IMPORTED');
+
+    records.length = 0;
+    assert.equal((await invoke(M.IMPORT, launchFor('IMPORT', 'ws-1'))).reasonCode, 'QUOTE_NO_DOCUMENT_ON_FILE');
+    assert.equal((await invoke(M.IMPORT, launchFor('IMPORT', 'ws-1'), 'VIEWER')).reasonCode, 'ASK_PERMISSION_REQUIRED');
+  } finally { prisma.propertyRecord = saved.rec; prisma.quoteHomeRecordSource = saved.src; restoreData(); restoreRole(); }
+});
+
+test('confirming the import calls the import service with the household role and the chosen record, once', async () => {
+  const importPath = require.resolve('../../src/services/quoteHomeRecordImport.service.ts');
+  const savedCache = require.cache[importPath];
+  const calls = [];
+  require.cache[importPath] = { id: importPath, filename: importPath, loaded: true, exports: {
+    createQuoteProposalFromRecord: async (input) => { calls.push(input); return { quote: { id: 'q-new', vendorName: 'Acme HVAC', lineItems: [{}, {}], terms: [{}] }, alreadyImported: false, replacedQuoteId: null }; },
+  } };
+  const restoreData = withData(); const w = installWrites();
+  try {
+    const out = await confirmCapabilityInvoke(OP, ctx({
+      quoteCommand: { kind: 'IMPORT', entityId: 'ws-1' }, quoteCommandContextVersion: sha(`quote-command:ws-1:${WORKSPACE.updatedAt.toISOString()}:`),
+      quoteImport: { recordId: 'rec-1', onNewerVersion: 'REPLACE' },
+    }));
+    assert.equal(calls.length, 1);
+    assert.deepEqual([calls[0].propertyId, calls[0].workspaceId, calls[0].recordId, calls[0].onNewerVersion, calls[0].role], ['prop-1', 'ws-1', 'rec-1', 'REPLACE', 'CONTRIBUTOR']);
+    assert.equal(out.result.blocks[0].title, 'Proposal added from the document');
+    assert.match(out.result.blocks[0].description, /2 line items and 1 term were read\. Nothing is confirmed yet/);
+    await assert.rejects(() => confirmCapabilityInvoke(OP, ctx({
+      quoteCommand: { kind: 'IMPORT', entityId: 'ws-1' }, quoteCommandContextVersion: sha(`quote-command:ws-1:${WORKSPACE.updatedAt.toISOString()}:`), quoteImport: {},
+    })), (e) => e.code === 'ASK_CONFIRMATION_NOT_ACTIVE');
+    assert.equal(calls.length, 1);
+  } finally { if (savedCache) require.cache[importPath] = savedCache; else delete require.cache[importPath]; w.restore(); restoreData(); }
 });

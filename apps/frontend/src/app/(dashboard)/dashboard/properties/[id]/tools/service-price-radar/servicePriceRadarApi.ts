@@ -481,6 +481,29 @@ export async function createQuoteProposal(
   return res.data.quote;
 }
 
+export type QuoteFromRecordResult = { quote: QuoteProposalSummary; alreadyImported: boolean; replacedQuoteId: string | null };
+
+/**
+ * Imports a quote from a Home Record version (import design slice 4). The quote arrives unconfirmed; the review step is the affirmation. The
+ * service names its refusals with codes: QUOTE_SOURCE_INCOMPLETE, QUOTE_SOURCE_NOT_CLEAN, QUOTE_SOURCE_VERSION_CHOICE_REQUIRED and others.
+ */
+export async function createQuoteProposalFromRecord(
+  propertyId: string,
+  workspaceId: string,
+  input: { recordId: string; versionId?: string | null; onNewerVersion?: 'REPLACE' | 'RETAIN_BOTH' | null }
+): Promise<QuoteFromRecordResult> {
+  const res = await api.post<QuoteFromRecordResult>(
+    `/api/properties/${propertyId}/quote-comparison/workspaces/${workspaceId}/quotes/from-record`,
+    input
+  );
+  return res.data;
+}
+
+export function quoteImportErrorCode(error: unknown): string | null {
+  const payload = (error as { payload?: { error?: { code?: string } } } | null)?.payload;
+  return payload?.error?.code ?? null;
+}
+
 export async function createQuoteProposalFromDocument(
   propertyId: string,
   workspaceId: string,

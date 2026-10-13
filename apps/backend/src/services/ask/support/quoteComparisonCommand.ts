@@ -11,6 +11,7 @@ export const QUOTE_ENTITY_TYPE = 'QUOTE_COMPARISON_QUOTE';
 
 export const QUOTE_COMMAND_MESSAGES = {
   ADD: 'Add a proposal to this quote comparison.',
+  IMPORT: 'Add a proposal from a document on file.',
   SELECT: 'Select this proposal for the decision.',
   REJECT: 'Reject this proposal.',
   RESTORE: 'Return this proposal to consideration.',
@@ -25,6 +26,7 @@ export type QuoteCommandKind = keyof typeof QUOTE_COMMAND_MESSAGES;
 
 export const QUOTE_COMMAND_ACTION_IDS = {
   ADD: 'quote-comparison-add-quote',
+  IMPORT: 'quote-comparison-import-quote',
   SELECT: 'quote-comparison-select-quote',
   REJECT: 'quote-comparison-reject-quote',
   RESTORE: 'quote-comparison-restore-quote',
@@ -37,7 +39,7 @@ export const QUOTE_COMMAND_ACTION_IDS = {
 } as const;
 
 /** The decision itself is the target of Add and Close; every other command targets one proposal. */
-export const quoteCommandTargetsWorkspace = (kind: QuoteCommandKind): boolean => kind === 'ADD' || kind === 'CLOSE';
+export const quoteCommandTargetsWorkspace = (kind: QuoteCommandKind): boolean => kind === 'ADD' || kind === 'CLOSE' || kind === 'IMPORT';
 
 export function quoteCommandKindFromMessage(message: string): QuoteCommandKind | null {
   const found = (Object.entries(QUOTE_COMMAND_MESSAGES) as Array<[QuoteCommandKind, string]>).find(([, value]) => value === message);
@@ -48,6 +50,7 @@ export const QUOTE_ADD_CAPTURE_KEY = 'QUOTE_COMPARISON_ADD_QUOTE';
 /** Every command that opens a form, and the capture key its form carries. */
 export const QUOTE_FORM_CAPTURE_KEYS = {
   ADD: QUOTE_ADD_CAPTURE_KEY,
+  IMPORT: 'QUOTE_COMPARISON_IMPORT',
   EDIT: 'QUOTE_COMPARISON_EDIT_QUOTE',
   CLARIFY: 'QUOTE_COMPARISON_CLARIFY',
   RESOLVE: 'QUOTE_COMPARISON_RESOLVE',
@@ -129,10 +132,20 @@ export const QuoteCloseInputSchema = z.object({
   reason: z.preprocess(blank, z.string().trim().max(1000).nullable()).optional(),
 }).strict();
 
-export type QuoteFormData = QuoteAddInput | { question: string } | { response: string } | { outcome: 'DECLINED' | 'DEFERRED'; reason: string | null };
+export const QuoteImportInputSchema = z.object({
+  recordId: z.string().trim().min(1).max(100),
+  onNewerVersion: z.preprocess(blank, z.enum(['REPLACE', 'RETAIN_BOTH']).nullable()).optional(),
+}).strict();
+export interface QuoteImportInput { recordId: string; onNewerVersion: 'REPLACE' | 'RETAIN_BOTH' | null }
+
+export type QuoteFormData = QuoteImportInput | QuoteAddInput | { question: string } | { response: string } | { outcome: 'DECLINED' | 'DEFERRED'; reason: string | null };
 
 /** Validates a submitted form (or a stored confirmation parameter) for the command that opened it. */
 export function parseQuoteFormAnswer(kind: QuoteFormKind, answer: unknown): { success: true; data: QuoteFormData } | { success: false; reason: 'INVALID' | 'DATES' } {
+  if (kind === 'IMPORT') {
+    const parsed = QuoteImportInputSchema.safeParse(answer);
+    return parsed.success ? { success: true, data: { recordId: parsed.data.recordId, onNewerVersion: (parsed.data.onNewerVersion ?? null) as 'REPLACE' | 'RETAIN_BOTH' | null } } : { success: false, reason: 'INVALID' };
+  }
   if (kind === 'ADD' || kind === 'EDIT') return parseQuoteAddAnswer(answer);
   if (kind === 'CLARIFY') {
     const parsed = QuoteClarifyInputSchema.safeParse(answer);
