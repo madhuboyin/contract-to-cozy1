@@ -127,6 +127,10 @@ export type AskOperationId =
   // Start a renovation case (register section 3): a confirmation-gated command reached by the declared Start a renovation case action on the readiness
   // answer or a typed "start a renovation case"; never by fuzzy retrieval.
   | 'RENOVATION_CASE_START'
+  // Coverage Intelligence writes (register P0): prepare the coverage review, start a comparison against the verified policy, and record the keep / change / shop / defer decision. Owner-only, confirmation-gated, declared-action only; never by fuzzy retrieval.
+  | 'COVERAGE_COMMAND'
+  // Read the coverage review: the questions worth asking about the confirmed facts on the household's policy (register P0 Coverage Intelligence). Read-only; never generates a review.
+  | 'COVERAGE_REVIEW_STATUS'
   // Manage a saved Home Upgrade Planner option (register P0 Home Digital Twin / Upgrade Planner): record the decision, rename, archive or restore, recalculate (queued job) and delete an archived option. Confirmation-gated, declared-action only; never by fuzzy retrieval.
   | 'HOME_UPGRADE_COMMAND'
   // Add, change and remove a permit record (register P0 Permits, slice PM-B). Records the REPORTED status; the official status is the authority's and is not set here. Confirmation-gated, declared-action only; never by fuzzy retrieval.
@@ -369,6 +373,7 @@ export const ASK_INTERNAL_OPERATION_IDS: ReadonlySet<AskOperationId> = new Set<A
   'NEGOTIATION_SHIELD_CASE_ATTACH',
   // Reached by the declared action or the deterministic typed-start pattern; never by fuzzy retrieval.
   'RENOVATION_CASE_START',
+  'COVERAGE_COMMAND',
   'HOME_UPGRADE_COMMAND',
   'PERMIT_TRACKER_COMMAND',
   'NEGOTIATION_SHIELD_BUYER_COMMAND',
@@ -676,6 +681,8 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   MATERIAL_SPEC_ADD: definition('MATERIAL_SPEC_ADD', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'material-spec.add', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   NEGOTIATION_SHIELD_CASE_START: definition('NEGOTIATION_SHIELD_CASE_START', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'negotiation-shield.start', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   RENOVATION_CASE_START: definition('RENOVATION_CASE_START', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'renovation-case.start', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
+  COVERAGE_COMMAND: definition('COVERAGE_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'coverage.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
+  COVERAGE_REVIEW_STATUS: definition('COVERAGE_REVIEW_STATUS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'coverage.review-status', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
   HOME_UPGRADE_COMMAND: definition('HOME_UPGRADE_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'home-digital-twin.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   PERMIT_TRACKER_COMMAND: definition('PERMIT_TRACKER_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'permits.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   FINANCING_OVERVIEW: definition('FINANCING_OVERVIEW', 'DECISION_ANALYSIS', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'financing.overview', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
@@ -976,6 +983,8 @@ const warrantyLookupPattern = new RegExp([
 // token was already silently routing away from WARRANTY_LOOKUP before that recalibration too (code-
 // traced, not a regression this change introduced -- see the same-numbered FRD note for detail).
 const warrantyLookupOtherIntentPattern = /\b(?:claims?|(?:file|filing) (?:a|an|my|our)|add|new|create|record a|save|buy|purchase|renew|cancel|extend|extended|register|transfer|correct|fix|change|update|edit|rename|delete|remove|missing|without|uncovered|gaps?|lack(?:s|ing)?|exposure|insurance|policy|premium|repair|replace|worth|should i|remind|notify|alert|warn|monitor|price|cost|quote|compare|coverage (?:analysis|review))\b/i;
+// The policy review: the questions worth asking about the confirmed facts on the household's policy (not item coverage gaps, not a comparison).
+const coverageReviewPattern = /\b(?:coverage review|insurance review|policy review|review (?:my )?(?:homeowners? |home )?(?:insurance|policy|coverage)|questions? (?:to|should i) ask (?:my )?(?:insurer|insurance|agent)|what should i ask my (?:insurer|insurance|agent))\b/i;
 const coveragePattern = /\b(missing coverage|coverage gaps?|uncovered|warranty coverage|insurance coverage|items? (?:without|missing) (?:a )?(?:warranty|coverage)|warrant(?:y|ies) (?:are )?(?:expire|expiring|expiry)|coverage (?:is )?(?:expire|expiring|expiry)|evidence (?:for|of) (?:my )?(?:expensive|high[ -]?value)? ?(?:appliances?|items?|systems?)|gaps? (?:have|with|show(?:ing)?) (?:the )?(?:largest|highest|biggest|most) exposure)\b/i;
 // Deliberately checked before coveragePattern in the cascade below:
 // "compare my insurance coverage" contains coveragePattern's own bare
@@ -1427,6 +1436,9 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   }
   if (maintenanceForecastPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('MAINTENANCE_FORECAST', 0.96);
+  }
+  if (coverageReviewPattern.test(message) && !coverageComparisonPattern.test(message) && !explicitCapabilityPattern.test(message)) {
+    return resolved('COVERAGE_REVIEW_STATUS', 0.96);
   }
   if (coverageComparisonPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('COVERAGE_COMPARISON_STATUS', 0.96);

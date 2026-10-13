@@ -52,6 +52,8 @@ import { priceCommandResult } from '../handlers/priceFinalizationCommands.handle
 import { buyerNegotiationResult } from '../handlers/negotiationShieldBuyerCommands.handler';
 import { permitCommandResult } from '../handlers/permitTrackerCommands.handler';
 import { upgradeCommandResult } from '../handlers/homeUpgradeCommands.handler';
+import { coverageCommandResult } from '../handlers/coverageCommands.handler';
+import { COVERAGE_DECISION_CAPTURE_KEY, parseCoverageDecisionAnswer, type CoverageCommandKind } from '../support/coverageCommand';
 import { parseUpgradeFormAnswer, upgradeFormKindFromCaptureKey, type UpgradeCommandKind } from '../support/homeUpgradeCommand';
 import { parsePermitFormAnswer, permitFormKindFromCaptureKey, type PermitCommandKind } from '../support/permitTrackerCommand';
 import { buyerNegotiationKindFromCaptureKey, parseBuyerNegotiationAnswer } from '../support/negotiationShieldBuyer';
@@ -1147,6 +1149,26 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     captureId = input.idempotencyKey;
     capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
     canonicalOwner = 'HomeDigitalTwinScenario';
+  } else if (execution.operationId === 'COVERAGE_COMMAND') {
+    if (input.captureKey !== COVERAGE_DECISION_CAPTURE_KEY) throw Object.assign(new Error('This coverage form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    const access = await ensurePropertyAccess(userId, execution.propertyId);
+    if (access.role === HouseholdRole.VIEWER) throw Object.assign(new Error('A contributor or owner is required to change coverage records.'), { code: 'ASK_PERMISSION_REQUIRED' });
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson) ? execution.parametersJson as Record<string, unknown> : {};
+    const coverageLaunch = storedParameters.coverageCommandLaunch && typeof storedParameters.coverageCommandLaunch === 'object' && !Array.isArray(storedParameters.coverageCommandLaunch)
+      ? storedParameters.coverageCommandLaunch as { kind?: unknown; entityId?: unknown; sourceExecutionId?: unknown } : null;
+    if (!coverageLaunch || coverageLaunch.kind !== 'DECIDE' || typeof coverageLaunch.entityId !== 'string') {
+      throw Object.assign(new Error('This coverage form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    }
+    const coverageAnswer = parseCoverageDecisionAnswer(input.answer);
+    if (!coverageAnswer.success) {
+      throw Object.assign(new Error(coverageAnswer.reason === 'OPTION_REQUIRED' ? 'Choose the option you would switch to.' : 'Choose what you want to do about your coverage.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+    }
+    result = await coverageCommandResult(userId, execution.propertyId, {
+      kind: coverageLaunch.kind as CoverageCommandKind, entityId: coverageLaunch.entityId, sourceExecutionId: typeof coverageLaunch.sourceExecutionId === 'string' ? coverageLaunch.sourceExecutionId : null,
+    }, coverageAnswer.data);
+    captureId = input.idempotencyKey;
+    capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
+    canonicalOwner = 'CoverageComparison';
   } else if (execution.operationId === 'PROPERTY_BRIEF_COMMAND') {
     if (![PROPERTY_BRIEF_PREPARE_CAPTURE_KEY, PROPERTY_BRIEF_SHARE_CAPTURE_KEY].includes(input.captureKey) || input.expectedContextVersion !== 'property-brief-live') throw Object.assign(new Error('This Property Brief form is no longer active.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
     const access = await ensurePropertyAccess(userId, execution.propertyId);

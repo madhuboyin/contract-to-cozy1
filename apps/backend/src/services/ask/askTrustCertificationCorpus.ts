@@ -282,6 +282,8 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   NEGOTIATION_SHIELD_CASE_UPDATE: 'The changes to your review\'s saved details are listed and saved only after you confirm; the analysis is not re-run.',
   NEGOTIATION_SHIELD_CASE_ATTACH: 'The record you pick is shown, with who can see it, and is attached to your review only after you confirm; the file is not read.',
   RENOVATION_CASE_START: 'Your renovation case is shown and saved only after you confirm; nothing is applied for or started.',
+  COVERAGE_COMMAND: 'Your coverage step is shown and saved only after you confirm; no policy is changed and no insurer is contacted.',
+  COVERAGE_REVIEW_STATUS: 'Your coverage review lists questions worth asking about the confirmed facts on your policy, and what is still missing; it does not say what a claim would pay.',
   HOME_UPGRADE_COMMAND: 'Your upgrade option change is shown and saved only after you confirm; a decision does not start any work.',
   PERMIT_TRACKER_COMMAND: 'Your permit change is shown and saved only after you confirm; the official status is not changed and nothing is filed or sent.',
   FINANCING_OVERVIEW: 'Your equity and mortgage details are shown, and a named project cost is compared across ways to pay using illustrative national average rates.',

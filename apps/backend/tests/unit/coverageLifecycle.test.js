@@ -96,7 +96,8 @@ test('disabled coverage action policy suppresses only coverage actions', () => {
 
 test('durable decision resolves the source action and preserves verified lineage', () => {
   const lifecycle = read('apps/backend/src/services/coverageLifecycle.service.ts');
-  const controller = read('apps/backend/src/controllers/coverageAnalysis.controller.ts');
+  // The decision's effects live in coverageDecisionOperations (FRD v1.317), which the route and Ask both call.
+  const controller = read('apps/backend/src/controllers/coverageAnalysis.controller.ts') + read('apps/backend/src/services/coverageDecisionOperations.ts');
   const comparison = read('apps/backend/src/services/coverageComparison.service.ts');
 
   assert.match(lifecycle, /actionType: 'USER_MARKED_COMPLETE'/);

@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { type AskCaptureRequest, type AskPresentationBlock } from '../../../productFramework/ask/ask.contract';
 import { getCoverageReviewItems, type CoverageReviewGroup } from '../../coverageGap.service';
 import { findCoverageComparison } from '../../coverageComparison.service';
+import { COVERAGE_COMMAND_ACTION_IDS, COVERAGE_COMMAND_MESSAGES, COVERAGE_COMPARISON_ENTITY_TYPE, COVERAGE_PROPERTY_ENTITY_TYPE } from '../support/coverageCommand';
 import { type AskOperationResult } from '../askOperationRegistry';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { evaluateFeatureContext } from '../../../modules/propertyContext/application/evaluateFeatureContext';
@@ -246,7 +247,7 @@ export function coverageComparisonStrip(
   };
 }
 
-async function coverageComparisonStatusResult(userId: string, propertyId: string): Promise<AskOperationResult> {
+async function coverageComparisonStatusResult(userId: string, propertyId: string, canChange = false): Promise<AskOperationResult> {
   await ensurePropertyAccess(userId, propertyId);
 
   let result: Awaited<ReturnType<typeof findCoverageComparison>>;
@@ -295,9 +296,14 @@ async function coverageComparisonStatusResult(userId: string, propertyId: string
         type: 'SUMMARY',
         id: 'coverage-comparison-not-started',
         title: 'No coverage comparison started yet',
-        body: 'Your verified policy is on file, but no comparison against it has been started. Starting one is not currently available in Ask.',
+        body: canChange
+          ? 'Your verified policy is on file, but no comparison against it has been started. Start one to line quotes or other policy terms up against it.'
+          : 'Your verified policy is on file, but no comparison against it has been started. A contributor or owner can start one.',
         tone: 'DEFAULT',
-        actions: [],
+        actions: canChange ? [{
+          id: COVERAGE_COMMAND_ACTION_IDS.START, label: 'Start a comparison', interactionType: 'START_WORKFLOW' as const, message: COVERAGE_COMMAND_MESSAGES.START,
+          operationId: 'COVERAGE_COMMAND' as const, entityType: COVERAGE_PROPERTY_ENTITY_TYPE, entityId: propertyId, style: 'PRIMARY' as const,
+        }] : [],
       }],
       suggestions: [],
     };
@@ -320,9 +326,12 @@ async function coverageComparisonStatusResult(userId: string, propertyId: string
       ? `Decided ${humanDate(latestDecision.decidedAt)}${latestDecision.rationale ? `: “${latestDecision.rationale}”` : '.'}`
       : alternativeOptions.length
         ? `Overall status: ${COVERAGE_COMPARISON_EQUIVALENCE_LABELS[comparison.equivalenceStatus] ?? comparison.equivalenceStatus}.`
-        : 'Adding a quote or another policy term to compare against your current coverage, and recording a keep/shop decision, are not currently available in Ask.',
+        : 'Adding a quote or another policy term to compare against your current coverage is not currently available in Ask; you can still record a keep, shop or decide-later decision.',
     tone: latestDecision ? 'POSITIVE' : alternativeOptions.length ? 'DEFAULT' : 'DEFAULT',
-    actions: [],
+    actions: canChange && !latestDecision && comparison.status === 'DRAFT' ? [{
+      id: COVERAGE_COMMAND_ACTION_IDS.DECIDE, label: 'Record my decision', interactionType: 'START_WORKFLOW' as const, message: COVERAGE_COMMAND_MESSAGES.DECIDE,
+      operationId: 'COVERAGE_COMMAND' as const, entityType: COVERAGE_COMPARISON_ENTITY_TYPE, entityId: comparison.id, style: 'PRIMARY' as const,
+    }] : [],
   }];
 
   const allOptions = currentOption ? [currentOption, ...alternativeOptions] : alternativeOptions;
@@ -375,4 +384,7 @@ registerCapabilityHandler('coverage.review', async (envelope) => coverageResult(
   envelope.launchContext?.entityType === 'INVENTORY_ITEM' ? envelope.launchContext.entityId : null,
 ));
 
-registerCapabilityHandler('coverage.comparison-status', async (envelope) => coverageComparisonStatusResult(envelope.userId, envelope.propertyId!));
+registerCapabilityHandler('coverage.comparison-status', async (envelope, deps) => {
+  const access = deps.propertyAccess ?? await ensurePropertyAccess(envelope.userId, envelope.propertyId!);
+  return coverageComparisonStatusResult(envelope.userId, envelope.propertyId!, access.role !== 'VIEWER');
+});

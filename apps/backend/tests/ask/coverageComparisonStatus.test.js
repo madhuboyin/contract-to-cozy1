@@ -125,7 +125,7 @@ test('coverageComparisonStatusResult renders a GROUPED_LIST of options and surfa
 test('the capability handler and captureFallbackHref registrations both exist for COVERAGE_COMPARISON_STATUS', () => {
   assert.match(
     orchestratorSource,
-    /registerCapabilityHandler\('coverage\.comparison-status', async \(envelope\) => coverageComparisonStatusResult\(envelope\.userId, envelope\.propertyId!\)\);/,
+    /registerCapabilityHandler\('coverage\.comparison-status', async \(envelope, deps\) => \{[\s\S]*coverageComparisonStatusResult\(envelope\.userId, envelope\.propertyId!, access\.role !== 'VIEWER'\);/,
   );
   assert.match(orchestratorSource, /case 'COVERAGE_COMPARISON_STATUS': return `\$\{base\}\/tools\/coverage-options`;/);
 });

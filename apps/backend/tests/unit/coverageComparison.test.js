@@ -127,7 +127,8 @@ test('the reviewed equivalence set covers material protection classes', () => {
 test('comparison UI and service preserve decision, evidence, and advice boundaries', () => {
   const ui = read('apps/frontend/src/components/coverage/CoverageComparisonPanel.tsx');
   const service = read('apps/backend/src/services/coverageComparison.service.ts');
-  const controller = read('apps/backend/src/controllers/coverageAnalysis.controller.ts');
+  // The decision's effects live in coverageDecisionOperations (FRD v1.317), which the route and Ask both call.
+  const controller = read('apps/backend/src/controllers/coverageAnalysis.controller.ts') + read('apps/backend/src/services/coverageDecisionOperations.ts');
   const definition = read(
     'apps/backend/src/productFramework/capabilities/definitions/saveOptimize.ts',
   );

@@ -53,6 +53,7 @@ const OPERATION_BOUNDARIES: Partial<Record<AskOperationId, ReadonlySet<string>>>
   HOA_COMPLIANCE_STATUS: new Set(['hoa-compliance-boundary']),
   PRICE_FINALIZATIONS_LIST: new Set(['price-finalization-boundary']),
   PERMIT_TRACKER_STATUS: new Set(['permit-tracker-boundary']),
+  COVERAGE_REVIEW_STATUS: new Set(['coverage-review-boundary']),
   FINANCING_OVERVIEW: new Set(['financing-boundary']),
   DO_NOTHING_SIMULATION: new Set(['do-nothing-boundary']),
   WARRANTY_LOOKUP: new Set(['warranty-boundary']),
@@ -180,6 +181,8 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   NEGOTIATION_SHIELD_CASE_ATTACH: new Set(['negotiation-shield-review', 'negotiation-shield-analyze']),
   // The readiness answer's empty state offers the start; the receipt of a started case offers that case's readiness check.
   RENOVATION_CASE_START: new Set(['renovation-case-readiness']),
+  // Coverage Intelligence writes (register P0): prepare the coverage review, start a comparison against the verified policy, and record the keep / change / shop / defer decision. Owner-only, confirmation-gated, declared-action only; never by fuzzy retrieval.
+  COVERAGE_COMMAND: new Set(['coverage-back', 'coverage-back-review']),
   // Manage a saved Home Upgrade Planner option (register P0 Home Digital Twin / Upgrade Planner): record the decision, rename, archive or restore, recalculate (queued job) and delete an archived option. Confirmation-gated, declared-action only; never by fuzzy retrieval.
   HOME_UPGRADE_COMMAND: new Set(['home-upgrade-back']),
   // Add, change and remove a permit record (register P0 Permits, slice PM-B). Records the REPORTED status; the official status is the authority's and is not set here. Confirmation-gated, declared-action only; never by fuzzy retrieval.
@@ -205,6 +208,9 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   PRICE_FINALIZATIONS_LIST: new Set(['price-finalization-start-manual', 'price-finalization-finalize', 'price-finalization-edit']),
   // The permit list offers Add a permit (a SUMMARY action) and Change / Remove on a row to a contributor or owner.
   PERMIT_TRACKER_STATUS: new Set(['permit-tracker-add', 'permit-tracker-edit', 'permit-tracker-remove']),
+  // The comparison answer offers Start a comparison / Record my decision, and the review answer offers Review my coverage, to a contributor or owner.
+  COVERAGE_COMPARISON_STATUS: new Set(['coverage-start-comparison', 'coverage-record-decision']),
+  COVERAGE_REVIEW_STATUS: new Set(['coverage-generate-review']),
   // The upgrade options answer's Manage options rows offer these to a contributor or owner.
   HOME_UPGRADE_SCENARIOS: new Set(['home-upgrade-decide', 'home-upgrade-compute', 'home-upgrade-rename', 'home-upgrade-archive', 'home-upgrade-restore', 'home-upgrade-delete']),
   // The buyer negotiation list's rows offer Start negotiating and Record the seller response to a contributor or owner.

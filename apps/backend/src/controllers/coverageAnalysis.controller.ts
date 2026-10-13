@@ -6,7 +6,6 @@ import {
   CoverageIntelligenceService,
   CoverageSimulationInput,
 } from '../services/coverageAnalysis.service';
-import { guidanceJourneyService } from '../services/guidanceEngine/guidanceJourney.service';
 import { logger } from '../lib/logger';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 import { InventoryService } from '../services/inventory.service';
@@ -18,10 +17,8 @@ import {
   addCoverageComparisonOption,
   getOrCreateCoverageComparison,
   findCoverageComparison,
-  recordCoverageDecision,
 } from '../services/coverageComparison.service';
-import { recordCapabilityCompletionAndResolveNext } from '../services/capabilityCompletion.service';
-import { resolveCoverageHomeActionFromDecision } from '../services/coverageLifecycle.service';
+import { recordCoverageDecisionWithEffects } from '../services/coverageDecisionOperations';
 
 const service = new CoverageIntelligenceService();
 const inventoryService = new InventoryService();
@@ -106,82 +103,10 @@ export async function recordCoverageComparisonDecision(req: CustomRequest, res: 
     if (!userId) {
       return res.status(401).json({ success: false, message: 'Authentication required.' });
     }
-    const result = await recordCoverageDecision(
-      req.params.propertyId,
-      req.params.comparisonId,
-      userId,
-      req.body
-    );
+    const result = await recordCoverageDecisionWithEffects(req.params.propertyId, req.params.comparisonId, userId, req.body);
     if (result.idempotentReplay) {
       return res.status(200).json({ success: true, data: result });
     }
-
-    try {
-      await resolveCoverageHomeActionFromDecision({
-        propertyId: req.params.propertyId,
-        userId,
-        sourceActionId: result.decision.sourceActionId,
-        decisionId: result.decision.id,
-      });
-    } catch (resolutionError) {
-      logger.warn({ resolutionError }, '[COVERAGE] Home Action resolution hook failed');
-    }
-
-    if (req.body.guidanceJourneyId) {
-      try {
-        await guidanceJourneyService.recordToolCompletion({
-          propertyId: req.params.propertyId,
-          actorUserId: userId,
-          journeyId: req.body.guidanceJourneyId,
-          signalIntentFamily: 'coverage_decision',
-          issueDomain: 'INSURANCE',
-          sourceToolKey: 'coverage-intelligence',
-          sourceEntityType: 'COVERAGE_DECISION',
-          sourceEntityId: result.decision.id,
-          stepKey: req.body.guidanceStepKey || 'compare_options',
-          status: 'COMPLETED',
-          producedData: {
-            proofType: 'coverage_decision',
-            proofId: result.decision.id,
-            comparisonId: req.params.comparisonId,
-            decision: result.decision.decision,
-            homeEventId: result.homeEvent.id,
-          },
-        });
-      } catch (guidanceError) {
-        logger.warn({ guidanceError }, '[GUIDANCE] coverage decision hook failed');
-      }
-    }
-
-    try {
-      await recordCapabilityCompletionAndResolveNext({
-        propertyId: req.params.propertyId,
-        userId,
-        capabilityId: 'coverage-intelligence',
-        completionKind: 'DECISION_RECORDED',
-        outputEntityType: 'COVERAGE_DECISION',
-        outputEntityId: result.decision.id,
-        sourceActionId: req.body.sourceActionId ?? null,
-        journeyId: req.body.guidanceJourneyId ?? null,
-        surface: 'coverage-comparison',
-      });
-    } catch (completionError) {
-      logger.warn({ completionError }, '[CAPABILITY] coverage decision lifecycle hook failed');
-    }
-
-    analyticsEmitter.track({
-      eventType: AnalyticsEvent.ACTION_COMPLETED,
-      userId,
-      propertyId: req.params.propertyId,
-      moduleKey: AnalyticsModule.FINANCIAL,
-      featureKey: AnalyticsFeature.COVERAGE_ANALYSIS,
-      metadataJson: {
-        actionType: 'coverage_decision_recorded',
-        comparisonId: req.params.comparisonId,
-        decision: result.decision.decision,
-        sourceActionId: req.body.sourceActionId ?? null,
-      },
-    });
     return res.status(201).json({ success: true, data: result });
   } catch (error: any) {
     logger.error({ err: error }, 'Error recording coverage decision');

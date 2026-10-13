@@ -103,7 +103,9 @@ test('secondary coverage surfaces use neutral record and scenario states', () =>
 
 test('coverage guidance cannot complete from a generated review result', () => {
   const inline = source('../../../frontend/src/components/guidance/CoverageCheckInline.tsx');
+  // The decision's effects live in coverageDecisionOperations (FRD v1.317), which the route and Ask both call.
   const controller = source('../../src/controllers/coverageAnalysis.controller.ts');
+  const decisionEffects = source('../../src/services/coverageDecisionOperations.ts');
   const propertyRun = controller.slice(
     controller.indexOf('export async function runCoverageAnalysis'),
     controller.indexOf('export async function simulateCoverageAnalysis'),
@@ -119,7 +121,7 @@ test('coverage guidance cannot complete from a generated review result', () => {
   assert.doesNotMatch(propertyRun, /recordToolCompletion|status: 'COMPLETED'/);
   assert.doesNotMatch(itemRun, /recordToolCompletion|status: 'COMPLETED'/);
   assert.match(controller, /export async function recordCoverageComparisonDecision/);
-  assert.match(controller, /completionKind: 'DECISION_RECORDED'/);
+  assert.match(decisionEffects, /completionKind: 'DECISION_RECORDED'/);
 });
 
 test('ungrounded coverage advisor and legacy output contract are removed', () => {
