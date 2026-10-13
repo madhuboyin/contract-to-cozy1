@@ -133,3 +133,83 @@ test('the decision ids are allowlisted on the findings list and the back action 
   assert.equal(applicable('inspection-report-findings', 'INSPECTION_REPORTS'), true);
   assert.equal(applicable('inspection-reports-back', CMD), true);
 });
+
+// ── v1.341: open-items filters and the negotiation package ─────────────────────────────────────────────────────
+const report = require('../../src/services/ask/support/inspectionReportCommand.ts');
+const { negotiationVersion } = require('../../src/services/ask/handlers/inspectionNegotiationPackage.handler.ts');
+
+test('the open findings answer reads severity and system filters from the message and passes them to the query', async () => {
+  assert.deepEqual(command.inspectionFindingFilters('Show my major roof inspection findings'), { severity: 'MAJOR', homeSystem: 'ROOF', label: 'major roof' });
+  assert.deepEqual(command.inspectionFindingFilters('Show my open inspection findings'), { severity: null, homeSystem: null, label: '' });
+  let seenWhere;
+  const saved = { a: propertyAccess.resolvePropertyAccess, f: prisma.inspectionFinding };
+  propertyAccess.resolvePropertyAccess = async () => ({ role: 'CONTRIBUTOR', userId: 'u1', propertyId: 'prop-1' });
+  prisma.inspectionFinding = { findMany: async ({ where }) => { seenWhere = where; return []; } };
+  try {
+    const out = await invoke('INSPECTION_FINDINGS', 'Show my safety plumbing inspection findings', undefined);
+    assert.equal(seenWhere.severity, 'SAFETY');
+    assert.equal(seenWhere.homeSystem, 'PLUMBING');
+    assert.match(out.blocks[0].title, /safety plumbing/);
+  } finally { propertyAccess.resolvePropertyAccess = saved.a; prisma.inspectionFinding = saved.f; }
+});
+
+const NEG = 'INSPECTION_NEGOTIATION_PACKAGE';
+const negFindings = [
+  { id: 'n1', homeSystem: 'ROOF', subsystem: null, severity: 'MAJOR', inspectorDescription: 'Flashing', updatedAt: T },
+  { id: 'n2', homeSystem: 'HVAC', subsystem: 'Furnace', severity: 'MINOR', inspectorDescription: 'Filter', updatedAt: T },
+];
+function installNeg(role, { reportType = 'PRE_PURCHASE', status = 'CONFIRMED', open = negFindings } = {}) {
+  const saved = { a: propertyAccess.resolvePropertyAccess, f: prisma.inspectionFinding, r: prisma.inspectionReport, g: hubService.generateNegotiationPackage };
+  const calls = [];
+  propertyAccess.resolvePropertyAccess = async () => ({ role, userId: 'u1', propertyId: 'prop-1' });
+  prisma.inspectionReport = { findFirst: async () => ({ id: 'r1', reportType, status, inspectionDate: new Date('2026-08-01T12:00:00Z') }) };
+  prisma.inspectionFinding = { findMany: async () => open };
+  hubService.generateNegotiationPackage = async (...a) => {
+    calls.push(a);
+    return {
+      negotiateCredit: [{ findingId: 'n1', homeSystem: 'ROOF', subsystem: null, severity: 'MAJOR', inspectorDescription: 'Flashing', estimatedCostCentsLow: 100000, estimatedCostCentsHigh: 200000 }],
+      requestRepair: [], acceptAsIs: [{ findingId: 'n2', homeSystem: 'HVAC', subsystem: 'Furnace', severity: 'MINOR', inspectorDescription: 'Filter', estimatedCostCentsLow: null, estimatedCostCentsHigh: null }],
+      requestedCreditTotalCents: 150000, requestedCreditTotalDollars: '1500.00',
+    };
+  };
+  return { calls, restore() { propertyAccess.resolvePropertyAccess = saved.a; prisma.inspectionFinding = saved.f; prisma.inspectionReport = saved.r; hubService.generateNegotiationPackage = saved.g; } };
+}
+const negLaunch = (over = {}) => launch(NEG, 'INSPECTION_REPORT', 'r1', over);
+
+test('the negotiation package opens a one-choice-per-finding form, then calculates; nothing is saved; it needs a confirmed pre-purchase report', async () => {
+  const { negotiationPackageResult } = require('../../src/services/ask/handlers/inspectionNegotiationPackage.handler.ts');
+  let w = installNeg('VIEWER');
+  try { assert.equal((await invoke(NEG, report.NEGOTIATION_PACKAGE_MESSAGE, negLaunch())).reasonCode, 'ASK_PERMISSION_REQUIRED'); } finally { w.restore(); }
+  w = installNeg('CONTRIBUTOR');
+  try {
+    assert.equal((await invoke(NEG, report.NEGOTIATION_PACKAGE_MESSAGE, negLaunch({ surface: 'ASK_REFRESH' }))).reasonCode, 'ASK_INSPECTION_NEGOTIATION_NOT_DIRECTLY_ROUTABLE');
+    const form = await invoke(NEG, report.NEGOTIATION_PACKAGE_MESSAGE, negLaunch());
+    assert.equal(form.status, 'NEEDS_CONTEXT');
+    assert.deepEqual(form.captureRequests[0].inputSchema.fields.map((f) => f.key), ['f0', 'f1']);
+    assert.deepEqual(form.parameters.negotiationLaunch.findingIds, ['n1', 'n2']);
+    const version2 = negotiationVersion('r1', negFindings);
+    const done = await negotiationPackageResult('u1', 'prop-1', { entityId: 'r1', sourceExecutionId: null }, { answer: { f0: 'negotiate_credit', f1: 'accept_as_is' }, expectedContextVersion: version2, findingIds: ['n1', 'n2'] });
+    assert.equal(done.status, 'ANSWERED');
+    assert.deepEqual(w.calls[0], ['r1', 'prop-1', ['n1', 'n2'], { n1: 'negotiate_credit', n2: 'accept_as_is' }]);
+    assert.match(done.blocks[0].title, /\$1,500/);
+    const staleForm = await negotiationPackageResult('u1', 'prop-1', { entityId: 'r1', sourceExecutionId: null }, { answer: { f0: 'negotiate_credit', f1: 'accept_as_is' }, expectedContextVersion: 'old', findingIds: ['n1', 'n2'] });
+    assert.equal(staleForm.status, 'NEEDS_CONTEXT');
+    const incomplete = await negotiationPackageResult('u1', 'prop-1', { entityId: 'r1', sourceExecutionId: null }, { answer: { f0: 'negotiate_credit' }, expectedContextVersion: version2, findingIds: ['n1', 'n2'] });
+    assert.equal(incomplete.status, 'NEEDS_CONTEXT');
+    assert.equal(w.calls.length, 1, 'stale or incomplete answers do not calculate');
+  } finally { w.restore(); }
+  for (const opts of [{ reportType: 'PRE_LISTING' }, { status: 'REVIEW_PENDING' }]) {
+    w = installNeg('CONTRIBUTOR', opts);
+    try { assert.equal((await invoke(NEG, report.NEGOTIATION_PACKAGE_MESSAGE, negLaunch())).reasonCode, 'INSPECTION_NEGOTIATION_NOT_AVAILABLE'); } finally { w.restore(); }
+  }
+  w = installNeg('CONTRIBUTOR', { open: [] });
+  try { assert.equal((await invoke(NEG, report.NEGOTIATION_PACKAGE_MESSAGE, negLaunch())).reasonCode, 'INSPECTION_NEGOTIATION_NO_OPEN_FINDINGS'); } finally { w.restore(); }
+});
+
+test('the answer shape: positional keys parse, anything else does not; the action id is allowlisted on the reports list', () => {
+  assert.equal(report.parseNegotiationAnswer({ f0: 'request_repair', f1: 'accept_as_is' }, 2).success, true);
+  assert.equal(report.parseNegotiationAnswer({ f0: 'request_repair' }, 2).success, false);
+  assert.equal(report.parseNegotiationAnswer({ f0: 'x', f1: 'accept_as_is' }, 2).success, false);
+  assert.equal(report.parseNegotiationAnswer({ f0: 'request_repair', f1: 'accept_as_is', extra: 1 }, 2).success, false);
+  assert.equal(isAskActionApplicable({ action: { id: report.NEGOTIATION_PACKAGE_ACTION_ID, label: 'x', interactionType: 'CONVERSATION_CONTINUE', message: 'm', operationId: NEG, style: 'QUIET' }, operationId: 'INSPECTION_REPORTS', propertyId: 'prop-1', householdRole: 'CONTRIBUTOR', authoritativeSourceAvailable: true }), true);
+});

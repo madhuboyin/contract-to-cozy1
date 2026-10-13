@@ -10,6 +10,7 @@ import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { type CorrectionOption } from '../askCorrectionFields';
 import { humanDate } from '../askFormatting';
 import { ensurePropertyAccess, exactEntityMatch, InspectionResolution } from '../askHandlerSupport';
+import { inspectionFindingFilters } from '../support/inspectionFindingDecisionCommand';
 
 // Inspection-hub capability-card slice (FRD v1.43). The three confirmed INSPECTION_FINDING_UPDATE actions, declared on
 // each finding row; the inline detail (InspectionFindingResultList) shows only those the finding's LIVE state allows.
@@ -64,21 +65,25 @@ export function inspectionFindingDeckFacts(finding: { severity: string; estimate
   };
 }
 
-async function inspectionFindingsResult(userId: string, propertyId: string): Promise<AskOperationResult> {
+async function inspectionFindingsResult(userId: string, propertyId: string, message = ''): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
+  const filters = inspectionFindingFilters(message);
   const findings = await prisma.inspectionFinding.findMany({
-    where: { propertyId, status: { in: ['OPEN', 'ACCEPTED_AS_IS'] }, report: { status: 'CONFIRMED' } },
+    where: {
+      propertyId, status: { in: ['OPEN', 'ACCEPTED_AS_IS'] }, report: { status: 'CONFIRMED' },
+      ...(filters.severity ? { severity: filters.severity as never } : {}), ...(filters.homeSystem ? { homeSystem: filters.homeSystem as never } : {}),
+    },
     orderBy: [{ severity: 'asc' }, { updatedAt: 'desc' }], take: 50,
     include: { report: { select: { inspectionDate: true, inspectorName: true } } },
   });
   const findingActions = inspectionFindingItemActions(access.role);
   if (findings.length === 0) return {
     status: 'ANSWERED', reasonCode: 'NO_OPEN_INSPECTION_FINDINGS',
-    blocks: [{ type: 'EMPTY_STATE', id: 'inspection-findings-empty', title: 'No open confirmed inspection findings', body: 'Ask found no unresolved findings from a homeowner-confirmed inspection report.', actions: [] }], suggestions: [],
+    blocks: [{ type: 'EMPTY_STATE', id: 'inspection-findings-empty', title: filters.label ? `No open ${filters.label} inspection findings` : 'No open confirmed inspection findings', body: filters.label ? `Ask found no unresolved ${filters.label} findings from a homeowner-confirmed inspection report.` : 'Ask found no unresolved findings from a homeowner-confirmed inspection report.', actions: [] }], suggestions: [],
   };
   return {
     status: 'ANSWERED', reasonCode: 'INSPECTION_FINDINGS_FOUND',
-    blocks: [{ type: 'GROUPED_LIST', filters: [], ...(findingActions.length ? { presentation: INSPECTION_FINDING_DECK_PRESENTATION } : {}), id: 'inspection-findings', title: 'Open inspection findings', description: 'These findings come only from confirmed inspection reports. Open a finding to accept it as work, dismiss it, or mark it resolved.', sections: [{ id: 'open', title: 'Needs review', count: findings.length, items: findings.map((finding) => ({ id: finding.id, title: `${finding.homeSystem}: ${finding.inspectorDescription}`, description: `${String(finding.severity).toLowerCase()} · ${finding.report.inspectorName ?? 'Inspector'} · ${humanDate(finding.report.inspectionDate) ?? 'date unavailable'}`, meta: [`Disposition: ${String(finding.workDisposition).toLowerCase().replace(/_/g, ' ')}`], status: String(finding.status), href: null, entityType: 'INSPECTION_FINDING', parentId: finding.reportId, actions: inspectionFindingItemActionsFor(access.role, finding), ...inspectionFindingDeckFacts(finding, humanDate(finding.report.inspectionDate) ?? null) })) }], actions: [] }],
+    blocks: [{ type: 'GROUPED_LIST', filters: [], ...(findingActions.length ? { presentation: INSPECTION_FINDING_DECK_PRESENTATION } : {}), id: 'inspection-findings', title: filters.label ? `Open ${filters.label} inspection findings` : 'Open inspection findings', description: 'These findings come only from confirmed inspection reports. Open a finding to accept it as work, dismiss it, or mark it resolved.', sections: [{ id: 'open', title: 'Needs review', count: findings.length, items: findings.map((finding) => ({ id: finding.id, title: `${finding.homeSystem}: ${finding.inspectorDescription}`, description: `${String(finding.severity).toLowerCase()} · ${finding.report.inspectorName ?? 'Inspector'} · ${humanDate(finding.report.inspectionDate) ?? 'date unavailable'}`, meta: [`Disposition: ${String(finding.workDisposition).toLowerCase().replace(/_/g, ' ')}`], status: String(finding.status), href: null, entityType: 'INSPECTION_FINDING', parentId: finding.reportId, actions: inspectionFindingItemActionsFor(access.role, finding), ...inspectionFindingDeckFacts(finding, humanDate(finding.report.inspectionDate) ?? null) })) }], actions: [] }],
     // No chips: the deck's own Accept / Dismiss / Resolve controls are the actions, and a chip here showed a raw finding id and reached viewers.
     suggestions: [],
   };
@@ -196,6 +201,6 @@ async function inspectionFindingUpdateResult(propertyId: string, message: string
   };
 }
 
-registerCapabilityHandler('inspection-findings.review', async (envelope) => inspectionFindingsResult(envelope.userId, envelope.propertyId!));
+registerCapabilityHandler('inspection-findings.review', async (envelope) => inspectionFindingsResult(envelope.userId, envelope.propertyId!, envelope.message));
 
 registerCapabilityHandler('inspection-findings.update', async (envelope) => inspectionFindingUpdateResult(envelope.propertyId!, envelope.message, envelope.launchContext));

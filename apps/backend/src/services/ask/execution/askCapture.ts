@@ -73,6 +73,8 @@ import { doNothingFormKindFromCaptureKey, parseDoNothingScenarioAnswer } from '.
 import { doNothingScenarioResult } from '../handlers/doNothingScenarioCommands.handler';
 import { parseSaleCaseAnswer, saleCaseFormKindFromCaptureKey } from '../support/sellerPrepCaseCommand';
 import { saleCaseCommandResult } from '../handlers/sellerPrepCaseCommands.handler';
+import { negotiationPackageResult } from '../handlers/inspectionNegotiationPackage.handler';
+import { NEGOTIATION_PACKAGE_CAPTURE_KEY } from '../support/inspectionReportCommand';
 import { HABIT_COACH_PREFERENCES_CAPTURE_KEY, parseHabitCoachPreferencesAnswer } from '../support/habitCoachPreferencesCommand';
 import { habitCoachPreferencesResult } from '../handlers/habitCoachPreferencesCommands.handler';
 import { FINANCING_PROFILE_CAPTURE_KEY, parseFinancingProfileAnswer } from '../support/financingProfileCommand';
@@ -1459,6 +1461,22 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     captureId = input.idempotencyKey;
     capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
     canonicalOwner = 'PropertySaleCase';
+  } else if (execution.operationId === 'INSPECTION_NEGOTIATION_PACKAGE') {
+    if (input.captureKey !== NEGOTIATION_PACKAGE_CAPTURE_KEY) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    const access = await ensurePropertyAccess(userId, execution.propertyId);
+    if (access.role === HouseholdRole.VIEWER) throw Object.assign(new Error('A contributor or owner is required to build a negotiation package.'), { code: 'ASK_PERMISSION_REQUIRED' });
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson) ? execution.parametersJson as Record<string, unknown> : {};
+    const negLaunch = storedParameters.negotiationLaunch && typeof storedParameters.negotiationLaunch === 'object' && !Array.isArray(storedParameters.negotiationLaunch)
+      ? storedParameters.negotiationLaunch as { entityId?: unknown; findingIds?: unknown; sourceExecutionId?: unknown } : null;
+    if (!negLaunch || typeof negLaunch.entityId !== 'string' || !Array.isArray(negLaunch.findingIds) || !negLaunch.findingIds.every((id) => typeof id === 'string')) {
+      throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    }
+    result = await negotiationPackageResult(userId, execution.propertyId, {
+      entityId: negLaunch.entityId, sourceExecutionId: typeof negLaunch.sourceExecutionId === 'string' ? negLaunch.sourceExecutionId : null,
+    }, { answer: input.answer as Record<string, unknown>, expectedContextVersion: input.expectedContextVersion, findingIds: negLaunch.findingIds as string[] });
+    captureId = input.idempotencyKey;
+    capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
+    canonicalOwner = 'InspectionNegotiationPackage';
   } else if (execution.operationId === 'CLAIM_ACTIVITY_COMMAND') {
     if (input.captureKey !== CLAIM_NOTE_CAPTURE_KEY) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
     const access = await ensurePropertyAccess(userId, execution.propertyId);

@@ -54,3 +54,22 @@ export function inspectionFindingDecisionKinds(report: ReportState, finding: Fin
   }
   return kinds;
 }
+
+// ── open-items filters (FRD v1.341) ────────────────────────────────────────────────────────────────────────────
+const SEVERITY_WORDS: Array<[RegExp, string, string]> = [
+  [/\bsafety\b/i, 'SAFETY', 'safety'], [/\bmajor\b/i, 'MAJOR', 'major'], [/\bminor\b/i, 'MINOR', 'minor'],
+  [/\bmonitor(?:ing)?\b/i, 'MONITOR', 'monitor'], [/\binformational\b/i, 'INFORMATIONAL', 'informational'],
+];
+const SYSTEM_WORDS: Array<[RegExp, string, string]> = [
+  [/\broof(?:ing)?\b/i, 'ROOF', 'roof'], [/\bexterior\b/i, 'EXTERIOR', 'exterior'], [/\bfoundation\b/i, 'FOUNDATION', 'foundation'],
+  [/\b(?:basement|crawl ?space)\b/i, 'BASEMENT_CRAWLSPACE', 'basement or crawlspace'], [/\bstructural\b/i, 'STRUCTURAL', 'structural'],
+  [/\belectrical\b/i, 'ELECTRICAL', 'electrical'], [/\bplumbing\b/i, 'PLUMBING', 'plumbing'], [/\bhvac\b|\bheating\b|\bcooling\b/i, 'HVAC', 'HVAC'],
+  [/\binterior\b/i, 'INTERIOR', 'interior'], [/\battic\b|\binsulation\b/i, 'ATTIC_INSULATION', 'attic and insulation'],
+  [/\bappliances?\b/i, 'APPLIANCES', 'appliance'], [/\bgarage\b/i, 'GARAGE', 'garage'], [/\bgrading\b|\bdrainage\b/i, 'SITE_GRADING', 'site grading'],
+];
+/** The severity and home-system filters the page's open-items list offers, read from what the person typed. A message with neither is unfiltered. */
+export function inspectionFindingFilters(message: string): { severity: string | null; homeSystem: string | null; label: string } {
+  const sev = SEVERITY_WORDS.find(([pattern]) => pattern.test(message));
+  const sys = SYSTEM_WORDS.find(([pattern]) => pattern.test(message));
+  return { severity: sev?.[1] ?? null, homeSystem: sys?.[1] ?? null, label: [sev?.[2], sys?.[2]].filter(Boolean).join(' ') };
+}

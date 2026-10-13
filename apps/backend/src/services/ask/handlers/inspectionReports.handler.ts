@@ -10,7 +10,7 @@ import { humanDate } from '../askFormatting';
 import * as hubService from '../../inspectionHub.service';
 import {
   INSPECTION_REPORT_ACTION_IDS, INSPECTION_REPORT_ENTITY_TYPE, INSPECTION_REPORT_MESSAGES, INSPECTION_REPORT_STATUS_LABELS, INSPECTION_REPORT_TYPE_LABELS,
-  inspectionReportCanConfirm, previousConfirmedReportId,
+  inspectionReportCanConfirm, previousConfirmedReportId, inspectionReportNegotiationEligible, NEGOTIATION_PACKAGE_ACTION_ID, NEGOTIATION_PACKAGE_MESSAGE,
 } from '../support/inspectionReportCommand';
 import { INSPECTION_FINDINGS_OF_REPORT_ACTION_ID, INSPECTION_FINDINGS_OF_REPORT_MESSAGE } from '../support/inspectionFindingDecisionCommand';
 
@@ -43,6 +43,10 @@ export function inspectionReportsFromRows(rows: ReportRow[], canChange: boolean)
       ...(canChange && inspectionReportCanConfirm(row.status) ? [{
         id: INSPECTION_REPORT_ACTION_IDS.CONFIRM, label: 'Review and confirm', message: INSPECTION_REPORT_MESSAGES.CONFIRM,
         interactionType: 'MUTATE_RECORD' as const, operationId: 'INSPECTION_REPORT_COMMAND' as const, style: 'PRIMARY' as const,
+      }] : []),
+      ...(canChange && inspectionReportNegotiationEligible(row) ? [{
+        id: NEGOTIATION_PACKAGE_ACTION_ID, label: 'Build a negotiation package', message: NEGOTIATION_PACKAGE_MESSAGE,
+        interactionType: 'CONVERSATION_CONTINUE' as const, operationId: 'INSPECTION_NEGOTIATION_PACKAGE' as const, style: 'SECONDARY' as const,
       }] : []),
       ...(row.status === 'CONFIRMED' ? [{
         id: INSPECTION_FINDINGS_OF_REPORT_ACTION_ID, label: 'See its findings', message: INSPECTION_FINDINGS_OF_REPORT_MESSAGE,

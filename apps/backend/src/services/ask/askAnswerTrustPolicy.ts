@@ -182,6 +182,8 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   NEGOTIATION_SHIELD_CASE_ATTACH: new Set(['negotiation-shield-review', 'negotiation-shield-analyze']),
   // The readiness answer's empty state offers the start; the receipt of a started case offers that case's readiness check.
   RENOVATION_CASE_START: new Set(['renovation-case-readiness']),
+  // Build a negotiation package from a confirmed pre-purchase inspection report: choose a decision per open finding and see the credit total (register P2 Inspection Hub). Calculation only; saves nothing.
+  INSPECTION_NEGOTIATION_PACKAGE: new Set(['inspection-reports-back']),
   // Keep an eye on an inspection finding, or record the seller's plan to fix or disclose it (register P2 Inspection Hub). Confirmation-gated, declared-action only.
   INSPECTION_FINDING_DECISION_COMMAND: new Set(['inspection-reports-back']),
   // List the findings in one confirmed inspection report with their state and decisions (register P2 Inspection Hub). Read-only; launched from a report row.
@@ -191,7 +193,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   // Compare a confirmed inspection report with the confirmed one before it (register P2 Inspection Hub). Read-only; launched from a report row.
   INSPECTION_REPORT_COMPARE: new Set(['inspection-reports-back']),
   // List the home's inspection reports with their state and what can be done next (register P2 Inspection Hub). Read-only.
-  INSPECTION_REPORTS: new Set(['inspection-reports-back', 'inspection-report-confirm', 'inspection-report-compare', 'inspection-report-findings']),
+  INSPECTION_REPORTS: new Set(['inspection-reports-back', 'inspection-report-confirm', 'inspection-report-compare', 'inspection-report-findings', 'inspection-report-negotiation']),
   // Start the sale case, set its target dates and prep budget range, and record its stage (register P2 Seller Prep). Confirmation-gated, declared-action only; lists, contracts or closes nothing.
   SELLER_PREP_CASE_COMMAND: new Set(['seller-prep-back']),
   // Mark a claim checklist item done, not applicable or open again, and add a note to a claim's timeline (register P2 Claims). Confirmation-gated, declared-action only.

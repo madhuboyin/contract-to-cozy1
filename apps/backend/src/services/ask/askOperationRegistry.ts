@@ -127,6 +127,8 @@ export type AskOperationId =
   // Start a renovation case (register section 3): a confirmation-gated command reached by the declared Start a renovation case action on the readiness
   // answer or a typed "start a renovation case"; never by fuzzy retrieval.
   | 'RENOVATION_CASE_START'
+  // Build a negotiation package from a confirmed pre-purchase inspection report: choose a decision per open finding and see the credit total (register P2 Inspection Hub). Calculation only; saves nothing.
+  | 'INSPECTION_NEGOTIATION_PACKAGE'
   // Keep an eye on an inspection finding, or record the seller's plan to fix or disclose it (register P2 Inspection Hub). Confirmation-gated, declared-action only.
   | 'INSPECTION_FINDING_DECISION_COMMAND'
   // List the findings in one confirmed inspection report with their state and decisions (register P2 Inspection Hub). Read-only; launched from a report row.
@@ -742,6 +744,7 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   MATERIAL_SPEC_ADD: definition('MATERIAL_SPEC_ADD', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'material-spec.add', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   NEGOTIATION_SHIELD_CASE_START: definition('NEGOTIATION_SHIELD_CASE_START', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'negotiation-shield.start', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   RENOVATION_CASE_START: definition('RENOVATION_CASE_START', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'renovation-case.start', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
+  INSPECTION_NEGOTIATION_PACKAGE: definition('INSPECTION_NEGOTIATION_PACKAGE', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'inspection-negotiation-package.build', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
   INSPECTION_FINDING_DECISION_COMMAND: definition('INSPECTION_FINDING_DECISION_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'inspection-finding-decision.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   INSPECTION_REPORT_FINDINGS: definition('INSPECTION_REPORT_FINDINGS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'inspection-report-findings.view', ['SUMMARY', 'GROUPED_LIST', 'EMPTY_STATE', 'BOUNDARY']),
   INSPECTION_REPORT_COMMAND: definition('INSPECTION_REPORT_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'inspection-report.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
