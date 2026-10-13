@@ -514,7 +514,7 @@ async function confirmQuoteComparisonCreate(ctx: ConfirmCapabilityContext): Prom
       status: 'COMPLETED', reasonCode: created.reused ? 'QUOTE_COMPARISON_REUSED' : 'QUOTE_COMPARISON_CREATED',
       blocks: [{
         type: 'WORKFLOW_PROGRESS', id: `quote-workspace-${created.workspace.id}`, title: created.reused ? 'Existing comparison workspace opened' : 'Quote comparison workspace created', status: 'COMPLETED',
-        description: 'No provider or quote was selected. Adding proposals to it is not currently available in Ask.',
+        description: 'No provider or quote was selected. Add the quotes you have, then review the comparison.',
         details: [{ label: 'Service', value: candidate.data.serviceCategory.toLowerCase().replace(/_/g, ' ') }, { label: 'Status', value: created.workspace.status.toLowerCase() }],
         actions: [receiptFollowUpAction('QUOTES')],
       }, {

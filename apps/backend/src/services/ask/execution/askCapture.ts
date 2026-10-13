@@ -46,6 +46,8 @@ import { negotiationShieldEditContextVersion, negotiationShieldEditResult } from
 import { NEGOTIATION_SHIELD_EDIT_CAPTURE_KEY, parseNegotiationEditAnswer } from '../support/negotiationShieldEdit';
 import { getNegotiationShieldEditableInputForProperty } from '../../negotiationShieldCaseList';
 import { negotiationShieldAttachOffer, negotiationShieldAttachResult } from '../handlers/negotiationShieldAttach.handler';
+import { quoteCommandResult } from '../handlers/quoteComparisonCommands.handler';
+import { parseQuoteAddAnswer, QUOTE_ADD_CAPTURE_KEY } from '../support/quoteComparisonCommand';
 import { NEGOTIATION_SHIELD_ATTACH_CAPTURE_KEY, parseNegotiationAttachAnswer } from '../support/negotiationShieldAttach';
 import { renovationCaseStartContextVersion, renovationCaseStartResult } from '../handlers/renovationCaseStart.handler';
 import { parseRenovationCaseStartAnswer, RENOVATION_CASE_START_CAPTURE_KEY } from '../support/renovationCaseStart';
@@ -326,7 +328,7 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     // anything.
     // The Home Event Radar forms (FRD v1.41) are the same: their canned message is only honored with its declared
     // launchContext, which a replay does not have, so re-executing would replace the review card with a boundary.
-    if (execution.operationId === 'CAPTURE_FACT_CONFIRM' || execution.operationId === 'CAPTURE_EVENT_CONFIRM' || execution.operationId === 'CAPTURE_WARRANTY_CONFIRM' || execution.operationId === 'HOME_EVENT_RADAR_TASK' || execution.operationId === 'HOME_EVENT_RADAR_PREFERENCES' || execution.operationId === 'OWNERSHIP_COST_COMMAND' || execution.operationId === 'RESERVE_FUND_COMMAND' || execution.operationId === 'PROPERTY_BRIEF_COMMAND' || execution.operationId === 'PROJECT_TRACKER_CREATE') {
+    if (execution.operationId === 'CAPTURE_FACT_CONFIRM' || execution.operationId === 'CAPTURE_EVENT_CONFIRM' || execution.operationId === 'CAPTURE_WARRANTY_CONFIRM' || execution.operationId === 'HOME_EVENT_RADAR_TASK' || execution.operationId === 'HOME_EVENT_RADAR_PREFERENCES' || execution.operationId === 'OWNERSHIP_COST_COMMAND' || execution.operationId === 'RESERVE_FUND_COMMAND' || execution.operationId === 'QUOTE_COMPARISON_COMMAND' || execution.operationId === 'PROPERTY_BRIEF_COMMAND' || execution.operationId === 'PROJECT_TRACKER_CREATE') {
       askInlineCapturesTotal.inc({ operation: execution.operationId, outcome: 'RESUMED' });
       return mapPersistedExecution(execution, await propertySummary(execution.propertyId));
     }
@@ -349,7 +351,7 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     if (replayed.captureRequests?.length) askInlineCapturesTotal.inc({ operation: execution.operationId ?? 'UNKNOWN', outcome: 'PROMPTED' }, replayed.captureRequests.length);
     return mapPersistedExecution(resumed, await propertySummary(execution.propertyId));
   }
-  if (execution.operationId !== 'PROJECT_TRACKER_CREATE' && !['REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS', 'HOUSEHOLD_INVITATION', 'MAINTENANCE_TASK_CREATE', 'MAINTENANCE_TASK_COMPLETE', 'ROOM_CREATE', 'PROPERTY_PURCHASE_DATE_SET', 'HOME_JOURNEY_SET', 'MATERIAL_SPEC_ADD', 'HOME_PLANT_ADD', 'ROOM_PLANT_RECOMMENDATIONS', 'DO_NOTHING_SIMULATION_RUN', 'SERVICE_PRICE_CHECK_RUN', 'INVENTORY_ITEM_CREATE', 'HOME_EVENT_RADAR_TASK', 'HOME_EVENT_RADAR_PREFERENCES', 'PROPERTY_CONTEXT_AREA_CAPTURE', 'CLAIM_FILE', 'HOME_DEADLINE_MONITOR', 'CAPITAL_RESERVE_PLAN', 'PROPERTY_TAX_APPEAL_READINESS', 'SAVINGS_OPPORTUNITIES', 'SELL_HOLD_RENT_ANALYSIS', 'OWNERSHIP_COSTS', 'OWNERSHIP_COST_COMMAND', 'RESERVE_FUND_COMMAND', 'NEGOTIATION_SHIELD_CASE_START', 'NEGOTIATION_SHIELD_CASE_UPDATE', 'NEGOTIATION_SHIELD_CASE_ATTACH', 'RENOVATION_CASE_START', 'PROPERTY_BRIEF_COMMAND', 'INVENTORY_LOOKUP', 'PROPERTY_SUMMARY', 'HOME_ACTIONS', 'COVERAGE_GAPS', 'CAPTURE_FACT_CONFIRM', 'CAPTURE_EVENT_CONFIRM', 'CAPTURE_WARRANTY_CONFIRM', 'INVENTORY_ITEM_CORRECT'].includes(execution.operationId ?? '')) {
+  if (execution.operationId !== 'PROJECT_TRACKER_CREATE' && !['REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS', 'HOUSEHOLD_INVITATION', 'MAINTENANCE_TASK_CREATE', 'MAINTENANCE_TASK_COMPLETE', 'ROOM_CREATE', 'PROPERTY_PURCHASE_DATE_SET', 'HOME_JOURNEY_SET', 'MATERIAL_SPEC_ADD', 'HOME_PLANT_ADD', 'ROOM_PLANT_RECOMMENDATIONS', 'DO_NOTHING_SIMULATION_RUN', 'SERVICE_PRICE_CHECK_RUN', 'INVENTORY_ITEM_CREATE', 'HOME_EVENT_RADAR_TASK', 'HOME_EVENT_RADAR_PREFERENCES', 'PROPERTY_CONTEXT_AREA_CAPTURE', 'CLAIM_FILE', 'HOME_DEADLINE_MONITOR', 'CAPITAL_RESERVE_PLAN', 'PROPERTY_TAX_APPEAL_READINESS', 'SAVINGS_OPPORTUNITIES', 'SELL_HOLD_RENT_ANALYSIS', 'OWNERSHIP_COSTS', 'OWNERSHIP_COST_COMMAND', 'RESERVE_FUND_COMMAND', 'NEGOTIATION_SHIELD_CASE_START', 'NEGOTIATION_SHIELD_CASE_UPDATE', 'NEGOTIATION_SHIELD_CASE_ATTACH', 'RENOVATION_CASE_START', 'QUOTE_COMPARISON_COMMAND', 'PROPERTY_BRIEF_COMMAND', 'INVENTORY_LOOKUP', 'PROPERTY_SUMMARY', 'HOME_ACTIONS', 'COVERAGE_GAPS', 'CAPTURE_FACT_CONFIRM', 'CAPTURE_EVENT_CONFIRM', 'CAPTURE_WARRANTY_CONFIRM', 'INVENTORY_ITEM_CORRECT'].includes(execution.operationId ?? '')) {
     const error = new Error('This execution does not have an active inline capture.');
     (error as Error & { code?: string }).code = 'ASK_CAPTURE_NOT_ACTIVE';
     throw error;
@@ -1025,6 +1027,28 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     captureId = input.idempotencyKey;
     capturedContextVersion = 'reserve-fund-live';
     canonicalOwner = 'HomeReserveFundContribution';
+  } else if (execution.operationId === 'QUOTE_COMPARISON_COMMAND') {
+    if (input.captureKey !== QUOTE_ADD_CAPTURE_KEY) {
+      throw Object.assign(new Error('This proposal form is no longer active. Choose Add a proposal again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    }
+    const access = await ensurePropertyAccess(userId, execution.propertyId);
+    if (access.role === HouseholdRole.VIEWER) throw Object.assign(new Error('A contributor or owner is required to change a quote comparison.'), { code: 'ASK_PERMISSION_REQUIRED' });
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson) ? execution.parametersJson as Record<string, unknown> : {};
+    const quoteLaunch = storedParameters.quoteCommandLaunch && typeof storedParameters.quoteCommandLaunch === 'object' && !Array.isArray(storedParameters.quoteCommandLaunch)
+      ? storedParameters.quoteCommandLaunch as { kind?: unknown; entityId?: unknown; sourceExecutionId?: unknown } : null;
+    if (quoteLaunch?.kind !== 'ADD' || typeof quoteLaunch.entityId !== 'string') {
+      throw Object.assign(new Error('This proposal form is no longer active. Choose Add a proposal again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    }
+    const quoteAnswer = parseQuoteAddAnswer(input.answer);
+    if (!quoteAnswer.success) {
+      throw Object.assign(new Error(quoteAnswer.reason === 'DATES' ? 'The quote cannot expire before its date.' : 'Enter the provider and a total of zero or more.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+    }
+    result = await quoteCommandResult(userId, execution.propertyId, {
+      kind: 'ADD', entityId: quoteLaunch.entityId, sourceExecutionId: typeof quoteLaunch.sourceExecutionId === 'string' ? quoteLaunch.sourceExecutionId : null,
+    }, quoteAnswer.data);
+    captureId = input.idempotencyKey;
+    capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
+    canonicalOwner = 'QuoteComparison';
   } else if (execution.operationId === 'PROPERTY_BRIEF_COMMAND') {
     if (![PROPERTY_BRIEF_PREPARE_CAPTURE_KEY, PROPERTY_BRIEF_SHARE_CAPTURE_KEY].includes(input.captureKey) || input.expectedContextVersion !== 'property-brief-live') throw Object.assign(new Error('This Property Brief form is no longer active.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
     const access = await ensurePropertyAccess(userId, execution.propertyId);

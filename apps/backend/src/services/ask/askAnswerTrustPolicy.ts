@@ -178,6 +178,8 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   NEGOTIATION_SHIELD_CASE_ATTACH: new Set(['negotiation-shield-review', 'negotiation-shield-analyze']),
   // The readiness answer's empty state offers the start; the receipt of a started case offers that case's readiness check.
   RENOVATION_CASE_START: new Set(['renovation-case-readiness']),
+  // Manage the proposals of a quote comparison (register P0 Quote Comparison): add, select, reject or return, remove. Confirmation-gated, reached only by declared actions on the review; never by fuzzy retrieval.
+  QUOTE_COMPARISON_COMMAND: new Set(['quote-comparison-back']),
   // The readiness answer's empty state offers Start a renovation case to a contributor or owner (a SUMMARY action, so a missing id is stripped).
   RENOVATION_PERMIT_READINESS: new Set(['renovation-case-start']),
   // The receipt of saved details offers the read of that review and a run of its analysis.
@@ -188,7 +190,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   SELLER_PREP_CHECKLIST: new Set(['sale-item-pursue', 'sale-item-unpursue', 'sale-item-waive', 'sale-item-reopen']),
   GUIDANCE_JOURNEY_CREATE: new Set(['open-journey']),
   QUOTE_COMPARISON_CREATE: new Set(['open-workspace']),
-  QUOTE_COMPARISON_REVIEW: new Set(['create-comparison']),
+  QUOTE_COMPARISON_REVIEW: new Set(['create-comparison', 'quote-comparison-add-quote', 'quote-comparison-select-quote', 'quote-comparison-reject-quote', 'quote-comparison-restore-quote', 'quote-comparison-remove-quote']),
   HOME_DEADLINE_MONITOR: new Set(['resolve-coverage-conflict']),
   // The page-link ids (open-inventory, open-timeline, open-reserve, open-reserve-fund) were retired with the desktop-link sweep.
   CAPITAL_RESERVE_PLAN: new Set(['add-inventory-item', 'rerun-horizon-5', 'rerun-horizon-10', 'reserve-fund-add-contribution', 'reserve-fund-remove-contribution', 'reserve-fund-recalculate', 'reserve-fund-posture-conservative', 'reserve-fund-posture-moderate', 'reserve-fund-posture-aggressive', 'reserve-fund-accept-reconciliation']),

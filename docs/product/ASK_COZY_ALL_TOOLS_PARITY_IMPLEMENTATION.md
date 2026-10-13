@@ -150,13 +150,13 @@ The Ask handlers import only those three service functions.
 | --- | --- | --- |
 | Get or create a workspace | `getOrCreateQuoteComparisonWorkspace` | Implemented |
 | Read workspace and comparability | `getQuoteComparisonWorkspace`, `getWorkspaceComparability` | Implemented (latest workspace only) |
-| Add a quote | `createQuoteProposal` | Residual gap |
+| Add a quote | `createQuoteProposal` | Implemented (FRD v1.309) |
 | Edit a quote | `updateQuoteProposal` | Residual gap |
-| Remove a quote | `deleteQuoteProposal` | Residual gap |
+| Remove a quote | `deleteQuoteProposal` | Implemented (FRD v1.309) |
 | Import a quote from a document, then confirm it | `createQuoteProposalFromDocument`, `confirmQuoteProposal` | Residual gap |
-| Record a disposition on a quote | `setQuoteProposalDisposition` | Residual gap |
+| Record a disposition on a quote | `setQuoteProposalDisposition` | Implemented (FRD v1.309: reject and return to consideration) |
 | Raise and resolve clarifications | `createQuoteClarification`, `resolveQuoteClarification` | Residual gap |
-| Select a quote for the decision | `selectQuoteForDecision` | Residual gap |
+| Select a quote for the decision | `selectQuoteForDecision` | Implemented (FRD v1.309) |
 | Transition the workspace state | `transitionQuoteDecision` | Residual gap |
 | Link decision context | `addQuoteDecisionContextLink` | Residual gap |
 | Outcome-measurement consent | `setServiceQuoteOutcomeMeasurementConsent` | Residual gap |

@@ -8,7 +8,8 @@ import { type AskOperationResult } from '../askOperationRegistry';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { getQuoteComparisonWorkspace, getWorkspaceComparability } from '../../quoteComparison.service';
 import { money } from '../askFormatting';
-import { askContextFingerprint, durableFreeTextClarification, QuoteWorkspaceCommandInputSchema } from '../askHandlerSupport';
+import { askContextFingerprint, durableFreeTextClarification, QuoteWorkspaceCommandInputSchema, ensurePropertyAccess } from '../askHandlerSupport';
+import { QUOTE_COMMAND_ACTION_IDS, QUOTE_COMMAND_MESSAGES, QUOTE_ENTITY_TYPE, QUOTE_WORKSPACE_ENTITY_TYPE } from '../support/quoteComparisonCommand';
 
 export async function quoteWorkspaceContextVersion(propertyId: string): Promise<string> {
   const workspaces = await prisma.quoteComparisonWorkspace.findMany({ where: { propertyId }, select: { id: true, status: true, updatedAt: true }, orderBy: { id: 'asc' } });
@@ -138,8 +139,8 @@ export function quoteReviewComparison(
   };
 }
 
-async function quoteComparisonReviewResult(propertyId: string): Promise<AskOperationResult> {
-  const latest = await prisma.quoteComparisonWorkspace.findFirst({ where: { propertyId }, orderBy: { updatedAt: 'desc' }, select: { id: true } });
+async function quoteComparisonReviewResult(propertyId: string, canChange = false): Promise<AskOperationResult> {
+  const latest = await prisma.quoteComparisonWorkspace.findFirst({ where: { propertyId }, orderBy: { updatedAt: 'desc' }, select: { id: true, outcome: true, journeyStage: true } });
   if (!latest) return {
     status: 'READY_WITH_LIMITATIONS', reasonCode: 'QUOTE_COMPARISON_NOT_STARTED',
     blocks: [{ type: 'SUMMARY', id: 'quote-review-empty', title: 'No quote comparison is recorded yet', body: 'Create a workspace, then record at least two proposals. Ask will not compare unrecorded prices or infer missing scope and terms.', tone: 'CAUTION', actions: [{ id: 'create-comparison', label: 'Create comparison workspace', interactionType: 'START_WORKFLOW', message: 'Start a quote comparison workspace', operationId: 'QUOTE_COMPARISON_CREATE', style: 'PRIMARY' }] }],
@@ -157,7 +158,12 @@ async function quoteComparisonReviewResult(propertyId: string): Promise<AskOpera
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY', id: 'quote-review-summary', title: quotes.length < 2 ? 'Add another proposal before comparing' : comparability.status === 'COMPARABLE' ? `${quotes.length} proposals are ready for a scope-aligned review` : 'The recorded proposals are not safely comparable yet',
     body: `${comparability.reasons.join(' ')}${lowest != null && highest != null ? ` Recorded prices range from ${money(lowest)} to ${money(highest)}.` : ''} A lower total is not automatically a better fit; scope, exclusions, warranty, licensing, insurance, payment terms, and homeowner-confirmed facts remain material.`,
-    tone: comparability.status === 'COMPARABLE' ? 'DEFAULT' : 'CAUTION', actions: [],
+    tone: comparability.status === 'COMPARABLE' ? 'DEFAULT' : 'CAUTION',
+    // A contributor or owner can record another proposal while the decision is open; a viewer is offered nothing it would refuse.
+    actions: canChange && latest.outcome === 'OPEN' ? [{
+      id: QUOTE_COMMAND_ACTION_IDS.ADD, label: 'Add a proposal', interactionType: 'START_WORKFLOW' as const, message: QUOTE_COMMAND_MESSAGES.ADD,
+      operationId: 'QUOTE_COMPARISON_COMMAND' as const, entityType: QUOTE_WORKSPACE_ENTITY_TYPE, entityId: latest.id, style: 'PRIMARY' as const,
+    }] : [],
   }];
   // IW-PRES-016 (FRD v1.76): two to four quotes still in play render as a comparison strip; one quote, or five and
   // more, keep the table below with every quote.
@@ -168,7 +174,31 @@ async function quoteComparisonReviewResult(propertyId: string): Promise<AskOpera
     columns: [{ key: 'vendor', label: 'Provider' }, { key: 'amount', label: 'Price' }, { key: 'readiness', label: 'Readiness' }, { key: 'scope', label: 'Scope' }],
     rows: quotes.map((quote) => ({ id: quote.id, values: { vendor: quote.vendorName, amount: `${quote.currency ?? 'USD'} ${Number(quote.quoteAmount).toLocaleString(undefined, { maximumFractionDigits: 2 })}`, readiness: comparisonReady.has(quote.id) ? 'Comparison ready' : String(quote.readinessStage ?? 'Needs review').toLowerCase().replace(/_/g, ' '), scope: quote.scopeSummary ?? quote.serviceLabelRaw ?? 'Scope not confirmed' } })), actions: [],
   });
-  blocks.push({ type: 'GROUPED_LIST', filters: [], id: 'quote-review-gaps', title: 'Comparison controls', description: 'These are the scope or fact gaps the recorded proposals still have. Ask cannot resolve them yet.', sections: [{ id: 'controls', title: comparability.status === 'COMPARABLE' ? 'Aligned comparison' : 'What still needs attention', count: Math.max(1, comparability.reasons.length), items: comparability.reasons.map((reason, index) => ({ id: `quote-reason-${index}`, title: reason, description: null, meta: [], status: comparability.status, href: null })) }], actions: [] });
+  const locked = latest.outcome !== 'OPEN' || ['FINALIZATION', 'BOOKING', 'SCHEDULED', 'COMPLETED', 'CLOSED'].includes(String(latest.journeyStage));
+  if (canChange && !locked && quotes.length) {
+    const item = (quote: any) => {
+      const rejected = quote.decision === 'REJECTED';
+      const ready = comparisonReady.has(quote.id);
+      const act = (id: string, label: string, message: string, style: 'PRIMARY' | 'SECONDARY' | 'QUIET' = 'SECONDARY') =>
+        ({ id, label, message, operationId: 'QUOTE_COMPARISON_COMMAND', interactionType: 'MUTATE_RECORD' as const, style });
+      return {
+        id: quote.id, title: quote.vendorName, description: null,
+        meta: [`${quote.currency ?? 'USD'} ${Number(quote.quoteAmount).toLocaleString('en-US', { maximumFractionDigits: 2 })}`, rejected ? 'Rejected' : quote.isSelected ? 'Selected' : ready ? 'Comparison ready' : 'Needs facts confirmed'],
+        status: null, href: null, entityType: QUOTE_ENTITY_TYPE,
+        actions: [
+          ...(ready && !rejected && !quote.isSelected ? [act(QUOTE_COMMAND_ACTION_IDS.SELECT, 'Select', QUOTE_COMMAND_MESSAGES.SELECT, 'PRIMARY')] : []),
+          rejected ? act(QUOTE_COMMAND_ACTION_IDS.RESTORE, 'Return to consideration', QUOTE_COMMAND_MESSAGES.RESTORE) : act(QUOTE_COMMAND_ACTION_IDS.REJECT, 'Reject', QUOTE_COMMAND_MESSAGES.REJECT),
+          act(QUOTE_COMMAND_ACTION_IDS.REMOVE, 'Remove', QUOTE_COMMAND_MESSAGES.REMOVE, 'QUIET'),
+        ],
+      };
+    };
+    blocks.push({
+      type: 'GROUPED_LIST', filters: [], id: 'quote-review-manage', title: 'Manage proposals',
+      description: 'Select the proposal you prefer, reject one you have ruled out, or remove one. Each change is reviewed before it is saved, and nothing is accepted or sent to a provider.',
+      sections: [{ id: 'quote-review-manage-all', title: 'Proposals', count: quotes.length, items: quotes.slice(0, 25).map(item) }], actions: [],
+    });
+  }
+  blocks.push({ type: 'GROUPED_LIST', filters: [], id: 'quote-review-gaps', title: 'Comparison controls', description: 'These are the scope or fact gaps the recorded proposals still have. Confirming a proposal\u2019s facts is not currently available in Ask.', sections: [{ id: 'controls', title: comparability.status === 'COMPARABLE' ? 'Aligned comparison' : 'What still needs attention', count: Math.max(1, comparability.reasons.length), items: comparability.reasons.map((reason, index) => ({ id: `quote-reason-${index}`, title: reason, description: null, meta: [], status: comparability.status, href: null })) }], actions: [] });
   blocks.push({ type: 'EVIDENCE', id: 'quote-review-evidence', title: 'Proposal freshness', items: quotes.slice(0, 20).map((quote) => ({ label: quote.vendorName, source: quote.sourceType ? `Quote · ${String(quote.sourceType).toLowerCase()}` : 'Recorded quote', observedAt: quote.updatedAt?.toISOString?.() ?? quote.createdAt?.toISOString?.() ?? null })) });
   blocks.push({ type: 'BOUNDARY', id: 'quote-review-boundary', title: 'Comparison support—not provider endorsement', body: 'Verify scope, credentials, insurance, references, permits, warranties, payment milestones, and final terms. Ask does not accept a quote, rank provider trust, or guarantee workmanship.', severity: 'INFO', suggestions: [] });
   return { status: comparability.status === 'COMPARABLE' ? 'ANSWERED' : 'READY_WITH_LIMITATIONS', reasonCode: comparability.status === 'COMPARABLE' ? undefined : `QUOTE_${comparability.status}`, contextVersion: workspace.updatedAt?.toISOString?.() ?? null, blocks, suggestions: [] };
@@ -176,4 +206,7 @@ async function quoteComparisonReviewResult(propertyId: string): Promise<AskOpera
 
 registerCapabilityHandler('quote-comparison.create', async (envelope) => quoteComparisonCreateResult(envelope.propertyId!, envelope.message));
 
-registerCapabilityHandler('quote-comparison.review', async (envelope) => quoteComparisonReviewResult(envelope.propertyId!));
+registerCapabilityHandler('quote-comparison.review', async (envelope, deps) => {
+  const access = deps.propertyAccess ?? await ensurePropertyAccess(envelope.userId, envelope.propertyId!);
+  return quoteComparisonReviewResult(envelope.propertyId!, access.role !== 'VIEWER');
+});
