@@ -10,11 +10,12 @@ type GroupedListBlock = Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>;
 type TimelineBlock = Extract<AskPresentationBlock, { type: 'TIMELINE' }>;
 type ComparisonOption = Extract<AskPresentationBlock, { type: 'COMPARISON' }>['options'][number];
 
-export type GroupedListPattern = 'CHOICE_GRID' | 'SHELVES' | 'DECK' | 'ROOM_MAP';
+export type GroupedListPattern = 'CHOICE_GRID' | 'BUDGET_BREAKDOWN' | 'SHELVES' | 'DECK' | 'ROOM_MAP';
 
 export type GroupedListPatternDecision =
   | { pattern: null; offersChoice: boolean; reason: 'NO_PATTERN' | 'NO_ITEMS' | 'ITEMS_WITHOUT_ACTIONS' | 'TOO_MANY_FOR_DECK' | 'CHOICE_GRID_INCOMPATIBLE' | 'HOMEOWNER_CHOSE_LIST' }
   | { pattern: 'CHOICE_GRID'; offersChoice: false; reason: 'DECLARED' }
+  | { pattern: 'BUDGET_BREAKDOWN'; offersChoice: false; reason: 'DECLARED' }
   | { pattern: 'SHELVES' | 'ROOM_MAP'; offersChoice: true; reason: 'DECLARED' }
   | { pattern: 'DECK'; offersChoice: true; reason: 'DECLARED'; swipeRightActionId: string | null; swipeLeftActionId: string | null; batch: AskDeckBatch | null };
 
@@ -42,6 +43,9 @@ export function resolveGroupedListPattern(block: GroupedListBlock, preference: G
     if (!compatible) return { pattern: null, offersChoice: false, reason: 'CHOICE_GRID_INCOMPATIBLE' };
     return { pattern: 'CHOICE_GRID', offersChoice: false, reason: 'DECLARED' };
   }
+  if (declared.pattern === 'BUDGET_BREAKDOWN') {
+    return { pattern: 'BUDGET_BREAKDOWN', offersChoice: false, reason: 'DECLARED' };
+  }
   if (declared.pattern === 'DECK') {
     // IW-PRES-015: a deck is offered only when every item carries declared actions.
     if (!items.every((item) => (item.actions?.length ?? 0) > 0)) return { pattern: null, offersChoice: false, reason: 'ITEMS_WITHOUT_ACTIONS' };
@@ -61,7 +65,7 @@ export function resolveGroupedListPattern(block: GroupedListBlock, preference: G
   return { pattern: declared.pattern, offersChoice: true, reason: 'DECLARED' };
 }
 
-export const PATTERN_LABELS: Record<GroupedListPattern, string> = { CHOICE_GRID: 'Choices', SHELVES: 'Shelves', DECK: 'One at a time', ROOM_MAP: 'Room map' };
+export const PATTERN_LABELS: Record<GroupedListPattern, string> = { CHOICE_GRID: 'Choices', BUDGET_BREAKDOWN: 'Budget breakdown', SHELVES: 'Shelves', DECK: 'One at a time', ROOM_MAP: 'Room map' };
 
 /** IW-PRES-016: several declared badges when present, else the single legacy badge. */
 export function comparisonBadges(option: ComparisonOption): AskComparisonBadge[] {

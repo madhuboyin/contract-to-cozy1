@@ -94,6 +94,8 @@ The shared renderer now supports compact borderless field groups plus `NUMBER`, 
 
 Short, mutually exclusive workflow menus may declare the shared `CHOICE_GRID` presentation. It renders one compact full-tile control per option in a one-column mobile/two-column wider layout, keeps the save boundary once in the block introduction, and falls back to the ordinary grouped list unless every item has exactly one action, no navigation link, and the set remains bounded to twelve options. Negotiation Shield scenario selection is the first adopter.
 
+Financial category forecasts may declare `BUDGET_BREAKDOWN`. It renders the primary category comparison as compact rows with server-declared amounts and proportional bars, removes generic Auto/List/Cards controls, and progressively discloses later detail sections. Budget Planner uses it to keep its twelve-month forecast available without placing all nineteen records in the initial conversation view.
+
 ## Implemented tools
 
 Status is *Implemented* for the central job of each tool below; the Remaining column lists bounded work and labels each item with its status.

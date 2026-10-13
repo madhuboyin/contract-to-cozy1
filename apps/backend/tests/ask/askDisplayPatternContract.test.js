@@ -21,7 +21,7 @@ test('existing blocks parse unchanged: no display-pattern keys are added by defa
   assert.equal('chips' in summary, false);
   const list = AskPresentationBlockSchema.parse(groupedList());
   assert.equal('presentation' in list, false);
-  for (const key of ['tone', 'timingLabel', 'amountLabel', 'floorLevel', 'countLabel', 'badgeLabel']) {
+  for (const key of ['tone', 'timingLabel', 'amountLabel', 'proportionPercent', 'floorLevel', 'countLabel', 'badgeLabel']) {
     assert.equal(key in list.sections[0].items[0], false, key);
   }
   const timeline = AskPresentationBlockSchema.parse({ type: 'TIMELINE', id: 't', title: 'History', items: [{ id: 'e1', label: 'Roof', date: '2020-08' }] });
@@ -35,9 +35,12 @@ test('answer chips: at most four, tone defaults to DEFAULT', () => {
   assert.equal(AskPresentationBlockSchema.safeParse({ type: 'SUMMARY', id: 's', title: 'Answer', body: 'b', chips: five }).success, false);
 });
 
-test('grouped-list presentation hint: the four declared patterns parse and anything else is refused', () => {
+test('grouped-list presentation hint: the declared patterns parse and anything else is refused', () => {
   const choices = AskPresentationBlockSchema.parse(groupedList({ presentation: { pattern: 'CHOICE_GRID' } }, { actions: [itemAction('start')] }));
   assert.equal(choices.presentation.pattern, 'CHOICE_GRID');
+  const budget = AskPresentationBlockSchema.parse(groupedList({ presentation: { pattern: 'BUDGET_BREAKDOWN' } }, { amountLabel: '$400 a year', proportionPercent: 25 }));
+  assert.equal(budget.presentation.pattern, 'BUDGET_BREAKDOWN');
+  assert.equal(budget.sections[0].items[0].proportionPercent, 25);
   const shelves = AskPresentationBlockSchema.parse(groupedList({ presentation: { pattern: 'SHELVES' } }, { tone: 'CAUTION', timingLabel: 'Oct 3', amountLabel: '$150' }));
   assert.equal(shelves.presentation.pattern, 'SHELVES');
   assert.equal(shelves.sections[0].items[0].timingLabel, 'Oct 3');
@@ -48,6 +51,7 @@ test('grouped-list presentation hint: the four declared patterns parse and anyth
   assert.equal(AskPresentationBlockSchema.safeParse(groupedList({ presentation: { pattern: 'CAROUSEL' } })).success, false);
   assert.equal(AskPresentationBlockSchema.safeParse(groupedList({}, { floorLevel: 1.5 })).success, false);
   assert.equal(AskPresentationBlockSchema.safeParse(groupedList({}, { tone: 'LOUD' })).success, false);
+  assert.equal(AskPresentationBlockSchema.safeParse(groupedList({}, { proportionPercent: 101 })).success, false);
 });
 
 test('comparison options may carry up to three declared badges beside the legacy single badge', () => {

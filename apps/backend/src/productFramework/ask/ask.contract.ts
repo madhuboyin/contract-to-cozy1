@@ -162,6 +162,9 @@ const GroupedListItemSchema = z.object({
   tone: AskDisplayToneSchema.optional(),
   timingLabel: z.string().trim().min(1).max(80).nullable().optional(),
   amountLabel: z.string().trim().min(1).max(80).nullable().optional(),
+  // A declared 0-100 share for proportional comparisons such as a budget breakdown. Renderers must not infer this
+  // value from a human-readable description or status label.
+  proportionPercent: z.number().min(0).max(100).nullable().optional(),
   floorLevel: z.number().int().min(-5).max(200).nullable().optional(),
   countLabel: z.string().trim().min(1).max(60).nullable().optional(),
   badgeLabel: z.string().trim().min(1).max(60).nullable().optional(),
@@ -175,6 +178,9 @@ const GroupedListPresentationSchema = z.discriminatedUnion('pattern', [
   // A bounded set of mutually exclusive workflow choices. Every item must carry one action; the client verifies
   // that shape before turning the whole compact tile into the control and falls back to the ordinary list if it drifts.
   z.object({ pattern: z.literal('CHOICE_GRID') }),
+  // A compact proportional breakdown. The first section is the primary comparison; later sections are progressively
+  // disclosed so a long financial forecast does not become a page-sized stack of cards.
+  z.object({ pattern: z.literal('BUDGET_BREAKDOWN') }),
   z.object({ pattern: z.literal('SHELVES') }),
   z.object({
     pattern: z.literal('DECK'),

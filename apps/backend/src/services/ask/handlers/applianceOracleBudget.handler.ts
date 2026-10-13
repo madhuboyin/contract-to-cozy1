@@ -130,11 +130,7 @@ export function maintenanceBudgetFromView(forecast: BudgetForecastView | 'PRIMAR
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY', id: 'budget-forecast-summary',
     title: `About ${wholeDollars(forecast.totalAnnualCost)} a year for upkeep`,
-    body: [
-      `That is about ${wholeDollars(forecast.monthlyAverage)} a month on average${busiest ? `, highest in ${busiest.month} (${wholeDollars(busiest.total)})` : ''}.`,
-      `Confidence ${forecast.confidenceLevel}%.`,
-      'Money-saving tips are not currently available in Ask.',
-    ].join(' '),
+    body: `${wholeDollars(forecast.monthlyAverage)} per month on average${busiest ? ` · Highest in ${busiest.month}: ${wholeDollars(busiest.total)}` : ''} · ${forecast.confidenceLevel}% confidence.`,
     tone: 'DEFAULT', actions: [],
   }];
   if (forecast.yearBuiltAssumed) {
@@ -146,10 +142,11 @@ export function maintenanceBudgetFromView(forecast: BudgetForecastView | 'PRIMAR
   }
   blocks.push({
     type: 'GROUPED_LIST', filters: [], id: 'budget-forecast-items', title: 'Where the upkeep budget goes',
-    description: 'By category, then month by month.',
+    description: 'Estimated annual upkeep by category.',
+    presentation: { pattern: 'BUDGET_BREAKDOWN' },
     sections: [
       { id: 'budget-forecast-categories', title: 'By category', count: forecast.categoryBreakdowns.length, items: forecast.categoryBreakdowns.map((category, index) => ({
-        id: `category-${index}`, title: category.category, description: `${wholeDollars(category.annualCost)} a year (${category.percentage}%)`, meta: category.items.slice(0, 4), status: `${category.percentage}%`,
+        id: `category-${index}`, title: category.category, amountLabel: `${wholeDollars(category.annualCost)} a year`, proportionPercent: category.percentage, meta: category.items.slice(0, 4), status: `${category.percentage}%`,
       })) },
       { id: 'budget-forecast-months', title: 'By month', count: forecast.monthlyForecasts.length, items: forecast.monthlyForecasts.map((month) => ({
         id: `month-${month.month.toLowerCase()}`, title: month.month, description: `${wholeDollars(month.total)}: routine ${wholeDollars(month.routine)}, preventive ${wholeDollars(month.preventive)}, unexpected ${wholeDollars(month.unexpected)}`, meta: month.tasks.slice(0, 3), status: wholeDollars(month.total),

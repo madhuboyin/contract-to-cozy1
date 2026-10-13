@@ -161,10 +161,13 @@ test('Budget Planner: the calculated yearly and monthly forecast by category and
   assert.equal(aiCalls, 0);
   const [summary, list] = result.blocks;
   assert.match(summary.title, /^About \$[\d,]+ a year for upkeep$/);
-  assert.match(summary.body, /^That is about \$[\d,]+ a month on average, highest in \w+ \(\$[\d,]+\)\. Confidence 70%\. Money-saving tips are not currently available in Ask\.$/);
+  assert.match(summary.body, /^\$[\d,]+ per month on average · Highest in \w+: \$[\d,]+ · 70% confidence\.$/);
   assert.deepEqual(summary.actions, [], 'Ask links to no Budget Planner page');
   assert.equal(result.blocks.some((block) => block.id === 'budget-forecast-assumed-age'), false);
   assert.deepEqual(list.sections.map((section) => section.title), ['By category', 'By month']);
+  assert.deepEqual(list.presentation, { pattern: 'BUDGET_BREAKDOWN' });
+  assert.equal(list.sections[0].items[0].amountLabel.endsWith(' a year'), true);
+  assert.equal(typeof list.sections[0].items[0].proportionPercent, 'number');
   assert.equal(list.sections[1].count, 12);
   assert.equal(result.blocks.at(-1).title, 'A typical-cost estimate, not your spending');
 });

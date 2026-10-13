@@ -64,6 +64,7 @@ export interface AskGroupedListItem {
   tone?: AskDisplayTone;
   timingLabel?: string | null;
   amountLabel?: string | null;
+  proportionPercent?: number | null;
   floorLevel?: number | null;
   countLabel?: string | null;
   badgeLabel?: string | null;
@@ -71,6 +72,7 @@ export interface AskGroupedListItem {
 }
 export type AskGroupedListPresentation =
   | { pattern: 'CHOICE_GRID' }
+  | { pattern: 'BUDGET_BREAKDOWN' }
   | { pattern: 'SHELVES' }
   | { pattern: 'DECK'; swipeRightActionId?: string | null; swipeLeftActionId?: string | null; batch?: AskDeckBatch | null }
   | { pattern: 'ROOM_MAP'; focused?: boolean };

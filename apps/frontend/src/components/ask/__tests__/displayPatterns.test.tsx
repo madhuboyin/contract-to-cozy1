@@ -126,6 +126,41 @@ describe('choice grid', () => {
   });
 });
 
+describe('budget breakdown', () => {
+  const budget = list({
+    title: 'Where the upkeep budget goes', description: 'Estimated annual upkeep by category.', presentation: { pattern: 'BUDGET_BREAKDOWN' },
+  }, [
+    { id: 'categories', title: 'By category', count: 2, items: [
+      item('hvac', { title: 'HVAC', amountLabel: '$586 a year', proportionPercent: 25, status: '25%', meta: ['Seasonal maintenance', 'Filter replacements'] }),
+      item('plumbing', { title: 'Plumbing', amountLabel: '$352 a year', proportionPercent: 15, status: '15%', meta: ['Drain cleaning', 'Leak repairs'] }),
+    ] },
+    { id: 'months', title: 'By month', count: 2, items: [
+      item('january', { title: 'January', description: '$180: routine $80, preventive $70, unexpected $30', status: '$180' }),
+      item('february', { title: 'February', description: '$140: routine $60, preventive $50, unexpected $30', status: '$140' }),
+    ] },
+  ]);
+
+  test('shows compact proportional categories and progressively discloses monthly details', () => {
+    const { container } = render(<Harness block={budget} />);
+    expect(container.querySelector('[data-display-pattern="budget_breakdown"]')).toBeInTheDocument();
+    expect(container.querySelector('[data-budget-breakdown] > ul')?.querySelectorAll('[data-budget-row]')).toHaveLength(2);
+    expect(screen.getByRole('progressbar', { name: 'HVAC: 25% of the upkeep budget' })).toHaveAttribute('aria-valuenow', '25');
+    expect(screen.getByText('$586 a year')).toBeVisible();
+    expect(screen.getByText('Seasonal maintenance · Filter replacements')).toBeVisible();
+    expect(screen.getByText('Show by month details')).toBeVisible();
+    expect(screen.getByText('Show by month details').closest('details')).not.toHaveAttribute('open');
+    fireEvent.click(screen.getByText('Show by month details'));
+    expect(screen.getByText('January')).toBeVisible();
+    expect(container.querySelectorAll('[data-budget-row]')).toHaveLength(4);
+    expect(screen.queryByRole('button', { name: 'Auto' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'List' })).not.toBeInTheDocument();
+  });
+
+  test('the pattern resolver does not offer generic layout choices', () => {
+    expect(resolveGroupedListPattern(budget, 'AUTO')).toEqual({ pattern: 'BUDGET_BREAKDOWN', offersChoice: false, reason: 'DECLARED' });
+  });
+});
+
 describe('shelves', () => {
   const block = list({ presentation: { pattern: 'SHELVES' }, actions: [{ id: 'open-maintenance', label: 'Open Maintenance', href: '/dashboard/maintenance?propertyId=home', style: 'SECONDARY' }] }, [
     { id: 'overdue', title: 'Overdue', count: 2, items: [
