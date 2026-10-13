@@ -146,7 +146,7 @@ const jobs: Record<AskOperationId, string> = {
   RENOVATION_READINESS_COMMAND: 'refresh a renovation case\'s readiness, acknowledge or withdraw the risk of an open item, or reopen a satisfied item, after confirmation',
   SAVINGS_BENEFIT_COMMAND: 'save, dismiss, stop pursuing or record the outcome of a savings or benefit opportunity, after confirmation',
   PROPERTY_TAX_APPEAL_COMMAND: 'start, prepare, record the filing, response and decision of a property tax appeal case, or add a reminder, after confirmation',
-  PROPERTY_TAX_COMPARABLE_COMMAND: 'add a comparable sale, or class, exemption or condition evidence from a link, to my property tax appeal evidence, after confirmation',
+  PROPERTY_TAX_COMPARABLE_COMMAND: 'add a comparable sale, class, exemption or condition evidence, or confirmed facts from a tax notice or bill on file, to my property tax appeal, after confirmation',
   STATUS_BOARD_COMMAND: 'correct a status board item\'s estimated condition, recommendation, dates or note, or refresh the board, after confirmation',
   CAPITAL_TIMELINE_COMMAND: 'adjust what the capital timeline assumes for an item, or remove an adjustment, after confirmation',
   COVERAGE_COMMAND: 'prepare the coverage review, start a coverage comparison, or record a keep, change, shop or defer decision about the insurance policy, after confirmation',

@@ -15,6 +15,8 @@ import { propertyTaxAppealReadinessService } from '../../propertyTax/propertyTax
 import { COMPARABLE_CAPTURE_KEY, COMPARABLE_MESSAGE, comparableKey, parseComparableAnswer, type ComparableAnswer } from '../support/propertyTaxComparableCommand';
 import { evidenceKindFromMessage } from '../support/propertyTaxEvidenceCommand';
 import { confirmEvidence, evidenceCommandResult } from './propertyTaxEvidenceCommands.handler';
+import { DOCUMENT_FACTS_MESSAGE } from '../support/propertyTaxDocumentFactsCommand';
+import { confirmDocumentFacts, documentFactsResult } from './propertyTaxDocumentFactsCommands.handler';
 
 const sha = (text: string) => createHash('sha256').update(text).digest('hex');
 const stale = (message: string, code = 'ASK_CONFIRMATION_NOT_ACTIVE') => Object.assign(new Error(message), { code });
@@ -95,6 +97,9 @@ registerCapabilityHandler('property-tax.comparable-command', async (envelope) =>
   if (evidenceKind && launch?.operationId === 'PROPERTY_TAX_COMPARABLE_COMMAND' && launch.surface !== 'ASK_REFRESH') {
     return evidenceCommandResult(envelope.userId, envelope.propertyId!, { kind: evidenceKind, sourceExecutionId: launch.sourceExecutionId ?? null });
   }
+  if (envelope.message === DOCUMENT_FACTS_MESSAGE && launch?.operationId === 'PROPERTY_TAX_COMPARABLE_COMMAND' && launch.surface !== 'ASK_REFRESH') {
+    return documentFactsResult(envelope.userId, envelope.propertyId!, { sourceExecutionId: launch.sourceExecutionId ?? null });
+  }
   if (envelope.message !== COMPARABLE_MESSAGE || launch?.operationId !== 'PROPERTY_TAX_COMPARABLE_COMMAND' || launch.surface === 'ASK_REFRESH') {
     return unavailable('ASK_PROPERTY_TAX_COMPARABLE_NOT_DIRECTLY_ROUTABLE', 'Open your appeal first', 'A comparable is added from your appeal readiness. Nothing has changed.');
   }
@@ -103,6 +108,7 @@ registerCapabilityHandler('property-tax.comparable-command', async (envelope) =>
 
 async function confirmComparable(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
   if (ctx.parameters.evidenceKind) return confirmEvidence(ctx);
+  if (ctx.parameters.documentFactsForm) return confirmDocumentFacts(ctx);
   const { execution, userId, parameters } = ctx;
   const propertyId = execution.propertyId;
   try {

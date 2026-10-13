@@ -12,8 +12,8 @@ import {
   getPropertyTaxRules,
   getPropertyTaxActions,
   uploadPropertyTaxDocument,
-  stagePropertyTaxDocumentFields,
-  confirmPropertyTaxDocument,
+  stageAndConfirmPropertyTaxDocument,
+  confirmPropertyTaxDocumentFromRecord,
   decidePropertyTaxAction,
   getPropertyTaxAppealReadiness,
   savePropertyTaxAppealComparable,
@@ -167,6 +167,13 @@ export default function PropertyTaxClient() {
   const [documentBillAmount, setDocumentBillAmount] = useState('');
   const [documentClassification, setDocumentClassification] = useState('');
   const [documentExemptions, setDocumentExemptions] = useState('');
+  const [documentValuationDate, setDocumentValuationDate] = useState('');
+  const [documentAssessmentRatio, setDocumentAssessmentRatio] = useState('');
+  const [documentEffectiveTaxRate, setDocumentEffectiveTaxRate] = useState('');
+  // A tax document already in Home Records, used instead of an upload (owner ruling D-T3; the workflow affirmation is D-T4).
+  const [existingTaxRecordId, setExistingTaxRecordId] = useState('');
+  const [existingRecordAffirmed, setExistingRecordAffirmed] = useState(false);
+  const [useExistingRecord, setUseExistingRecord] = useState(false);
   const [actionNotes, setActionNotes] = useState<Record<string, string>>({});
   const [actionReferences, setActionReferences] = useState<Record<string, string>>({});
   const [actionBusyId, setActionBusyId] = useState<string | null>(null);
@@ -178,6 +185,12 @@ export default function PropertyTaxClient() {
   const [appealEvidenceRecordId, setAppealEvidenceRecordId] = useState('');
   const [homeRecords, setHomeRecords] = useState<AppealEvidenceRecordInput[]>([]);
   const evidenceRecordChoices = appealEvidenceRecordOptions(homeRecords);
+  // Only a TAX_DOCUMENT record that is active, scanned clean and not already confirmed or rejected; the service decides (owner ruling D-T3).
+  const existingTaxDocuments = homeRecords.filter((record) =>
+    record.recordType === 'TAX_DOCUMENT'
+    && record.lifecycleStatus === 'ACTIVE'
+    && record.currentVersion?.scanStatus === 'CLEAN'
+    && !intakes.some((intake) => intake.document.id === record.id && (intake.status === 'CONFIRMED' || intake.status === 'REJECTED')));
   const [appealClaimedClass, setAppealClaimedClass] = useState('');
   const [appealClassMismatch, setAppealClassMismatch] = useState(false);
   const [appealExemptionProgram, setAppealExemptionProgram] = useState('');
@@ -315,6 +328,9 @@ export default function PropertyTaxClient() {
         taxDocumentKind,
       );
       setActiveTaxIntakeId(intake.id);
+      setUseExistingRecord(false);
+      setExistingTaxRecordId('');
+      setExistingRecordAffirmed(false);
       setIntakes((current) => [intake, ...current]);
       setTaxDocumentFile(null);
       setTaxDocumentReviewConfirmed(false);
@@ -326,7 +342,7 @@ export default function PropertyTaxClient() {
   }
 
   async function confirmTaxDocumentFacts() {
-    if (!activeTaxIntakeId || !taxDocumentReviewConfirmed) return;
+    if ((!activeTaxIntakeId && !(useExistingRecord && existingTaxRecordId && existingRecordAffirmed)) || !taxDocumentReviewConfirmed) return;
     const numeric = (value: string) => value.trim() ? Number(value) : undefined;
     const fields: Array<{ fieldKey: string; value: unknown }> = [
       { fieldKey: 'taxYear', value: Number(documentTaxYear) },
@@ -345,6 +361,15 @@ export default function PropertyTaxClient() {
       ...(documentClassification.trim()
         ? [{ fieldKey: 'classification', value: documentClassification.trim() }]
         : []),
+      ...(documentValuationDate
+        ? [{ fieldKey: 'valuationDate', value: documentValuationDate }]
+        : []),
+      ...(documentAssessmentRatio.trim()
+        ? [{ fieldKey: 'assessmentRatio', value: numeric(documentAssessmentRatio) }]
+        : []),
+      ...(documentEffectiveTaxRate.trim()
+        ? [{ fieldKey: 'effectiveTaxRate', value: numeric(documentEffectiveTaxRate) }]
+        : []),
       ...(documentExemptions.trim()
         ? [{
             fieldKey: 'exemptions',
@@ -355,21 +380,15 @@ export default function PropertyTaxClient() {
     setTaxDocumentBusy(true);
     setRecordError(null);
     try {
-      const staged = await stagePropertyTaxDocumentFields(
-        propertyId,
-        activeTaxIntakeId,
-        fields,
-      );
-      const confirmed = await confirmPropertyTaxDocument(
-        propertyId,
-        activeTaxIntakeId,
-        staged.fields.map((field) => ({
-          fieldKey: field.fieldKey,
-          status: 'CONFIRMED',
-        })),
-      );
+      // One transaction for the whole action (owner ruling D-T6).
+      const confirmed = useExistingRecord && existingTaxRecordId
+        ? await confirmPropertyTaxDocumentFromRecord(propertyId, { recordId: existingTaxRecordId, kind: taxDocumentKind, fields })
+        : await stageAndConfirmPropertyTaxDocument(propertyId, activeTaxIntakeId as string, fields);
       setRecord(confirmed.record);
       setActiveTaxIntakeId(null);
+      setUseExistingRecord(false);
+      setExistingTaxRecordId('');
+      setExistingRecordAffirmed(false);
       setTaxDocumentReviewConfirmed(false);
       const [nextIntakes, nextActions] = await Promise.all([
         getPropertyTaxDocumentIntakes(propertyId),
@@ -1227,7 +1246,35 @@ export default function PropertyTaxClient() {
           {taxDocumentBusy ? 'Working…' : 'Store in Vault and review'}
         </button>
 
-        {activeTaxIntakeId && (
+        <div className="mt-5 rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+          <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Or use a tax document already in your home records</h3>
+          <label className="mt-2 block text-xs text-slate-600 dark:text-slate-300" htmlFor="existing-tax-record">Tax document</label>
+          <select
+            id="existing-tax-record"
+            value={existingTaxRecordId}
+            onChange={(event) => { setExistingTaxRecordId(event.target.value); setUseExistingRecord(Boolean(event.target.value)); setActiveTaxIntakeId(null); }}
+            className="mt-1 min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 dark:border-slate-700 dark:bg-slate-900"
+          >
+            <option value="">{existingTaxDocuments.length ? 'Choose a document' : 'No tax documents waiting'}</option>
+            {existingTaxDocuments.map((record) => (
+              <option key={record.id} value={record.id}>{record.title}</option>
+            ))}
+          </select>
+          <label className="mt-3 flex items-start gap-2 text-sm text-slate-700 dark:text-slate-300">
+            <input
+              type="checkbox"
+              checked={existingRecordAffirmed}
+              onChange={(event) => setExistingRecordAffirmed(event.target.checked)}
+              className="mt-1"
+            />
+            <span>
+              Use this Home Record for manual Property Tax review, create the confirmed tax facts I enter below, and mark the record verified.
+              ContractToCozy has not automatically read or verified the document.
+            </span>
+          </label>
+        </div>
+
+        {(activeTaxIntakeId || (useExistingRecord && existingTaxRecordId && existingRecordAffirmed)) && (
           <div className="mt-5 rounded-xl border border-teal-200 bg-teal-50/60 p-4 dark:border-teal-900 dark:bg-teal-950/20">
             <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
               Confirm document facts
@@ -1243,6 +1290,9 @@ export default function PropertyTaxClient() {
                 ['Taxable value', documentTaxableValue, setDocumentTaxableValue, 'number'],
                 ['Bill amount', documentBillAmount, setDocumentBillAmount, 'number'],
                 ['Classification', documentClassification, setDocumentClassification, 'text'],
+                ['Valuation date', documentValuationDate, setDocumentValuationDate, 'date'],
+                ['Assessment ratio (0 to 1)', documentAssessmentRatio, setDocumentAssessmentRatio, 'number'],
+                ['Effective tax rate (0 to 1)', documentEffectiveTaxRate, setDocumentEffectiveTaxRate, 'number'],
                 ['Exemptions (comma-separated)', documentExemptions, setDocumentExemptions, 'text'],
               ].map(([label, value, setter, type]) => (
                 <label key={String(label)} className="text-sm">

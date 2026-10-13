@@ -368,6 +368,58 @@ const confirmTaxFieldsSchema = z.object({
   }).strict()).min(1).max(20),
 }).strict();
 
+const stageAndConfirmSchema = z.object({
+  fields: stageTaxFieldsSchema.shape.fields,
+  expectedUpdatedAt: z.iso.datetime().optional(),
+}).strict();
+
+// Owner ruling D-T6: stage and confirm are one transaction, so a failure leaves nothing partial and a changed intake is refused.
+export async function stageAndConfirmPropertyTaxDocument(req: CustomRequest, res: Response, next: NextFunction) {
+  try {
+    const parsed = stageAndConfirmSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ success: false, message: 'Invalid structured tax fields', errors: parsed.error.issues });
+      return;
+    }
+    const intake = await propertyTaxDocumentIntakeService.stageAndConfirm({
+      intakeId: req.params.intakeId, propertyId: req.params.propertyId, userId: req.user!.userId, fields: parsed.data.fields,
+      expectedUpdatedAt: parsed.data.expectedUpdatedAt ? new Date(parsed.data.expectedUpdatedAt) : null,
+    });
+    const record = await propertyTaxRecordService.getCenter(req.params.propertyId, req.user!.userId);
+    res.json({ success: true, data: { intake, record } });
+  } catch (error) {
+    next(error);
+  }
+}
+
+const confirmFromRecordSchema = z.object({
+  recordId: z.string().uuid(),
+  kind: taxDocumentKindSchema,
+  // Owner ruling D-T4: a workflow affirmation, not the storage consent.
+  affirmed: z.literal(true),
+  fields: stageTaxFieldsSchema.shape.fields,
+  expectedIntakeUpdatedAt: z.iso.datetime().optional(),
+}).strict();
+
+export async function confirmPropertyTaxDocumentFromRecord(req: CustomRequest, res: Response, next: NextFunction) {
+  try {
+    const parsed = confirmFromRecordSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ success: false, message: 'Invalid tax document request', errors: parsed.error.issues });
+      return;
+    }
+    const intake = await propertyTaxDocumentIntakeService.confirmFromRecord({
+      propertyId: req.params.propertyId, userId: req.user!.userId, recordId: parsed.data.recordId, kind: parsed.data.kind, affirmed: true,
+      fields: parsed.data.fields,
+      expectedIntakeUpdatedAt: parsed.data.expectedIntakeUpdatedAt ? new Date(parsed.data.expectedIntakeUpdatedAt) : null,
+    });
+    const record = await propertyTaxRecordService.getCenter(req.params.propertyId, req.user!.userId);
+    res.json({ success: true, data: { intake, record } });
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function confirmPropertyTaxDocument(req: CustomRequest, res: Response, next: NextFunction) {
   try {
     const parsed = confirmTaxFieldsSchema.safeParse(req.body);

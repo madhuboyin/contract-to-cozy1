@@ -82,6 +82,24 @@ router.post(
   controller.confirmPropertyTaxDocument,
 );
 router.post(
+  '/properties/:propertyId/property-tax/intakes/:intakeId/confirm-values',
+  authenticate,
+  restrictToHomeowner,
+  apiRateLimiter,
+  propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
+  controller.stageAndConfirmPropertyTaxDocument,
+);
+router.post(
+  '/properties/:propertyId/property-tax/intakes/from-record',
+  authenticate,
+  restrictToHomeowner,
+  apiRateLimiter,
+  propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
+  controller.confirmPropertyTaxDocumentFromRecord,
+);
+router.post(
   '/properties/:propertyId/property-tax/actions/refresh',
   authenticate,
   restrictToHomeowner,

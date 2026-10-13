@@ -3,6 +3,7 @@
 // re-exports the names below so existing imports keep working.
 import { COMPARABLE_ACTION_ID, COMPARABLE_MESSAGE } from '../support/propertyTaxComparableCommand';
 import { EVIDENCE_ACTION_IDS, EVIDENCE_MESSAGES, conditionKindForGround } from '../support/propertyTaxEvidenceCommand';
+import { DOCUMENT_FACTS_ACTION_ID, DOCUMENT_FACTS_MESSAGE } from '../support/propertyTaxDocumentFactsCommand';
 import { HouseholdRole } from '@prisma/client';
 import { prisma } from '../../../lib/prisma';
 import { type AskPresentationBlock } from '../../../productFramework/ask/ask.contract';
@@ -303,6 +304,10 @@ async function propertyTaxAppealReadinessResult(userId: string, propertyId: stri
     {
       id: EVIDENCE_ACTION_IDS.CONDITION, label: 'Add supporting condition evidence (optional)', interactionType: 'START_WORKFLOW' as const,
       message: EVIDENCE_MESSAGES[conditionKindForGround(ground)], operationId: 'PROPERTY_TAX_COMPARABLE_COMMAND' as const, style: 'QUIET' as const,
+    }, {
+      // FRD v1.370: confirmed tax facts from a tax notice or bill already in the home records.
+      id: DOCUMENT_FACTS_ACTION_ID, label: 'Confirm facts from a tax notice or bill', interactionType: 'START_WORKFLOW' as const, message: DOCUMENT_FACTS_MESSAGE,
+      operationId: 'PROPERTY_TAX_COMPARABLE_COMMAND' as const, style: 'QUIET' as const,
     }] : [],
   }];
   if (readiness.canonical) blocks.push({ type: 'TABLE', id: 'tax-canonical-facts', title: 'Canonical tax facts used', description: 'Unknown facts remain unknown and are never treated as zero.', columns: [{ key: 'fact', label: 'Fact' }, { key: 'value', label: 'Recorded value' }], rows: [

@@ -43,6 +43,8 @@ test('a covered jurisdiction with gaps, and one with no reviewed rules, link now
     ['property-tax-appeal-start', 'PROPERTY_TAX_APPEAL_COMMAND', null], ['property-tax-comparable-add', 'PROPERTY_TAX_COMPARABLE_COMMAND', null],
     // FRD v1.367: the assessed-value ground is offered only the optional condition statement; class and exemption evidence are offered on their own grounds.
     ['property-tax-evidence-condition', 'PROPERTY_TAX_COMPARABLE_COMMAND', null],
+    // FRD v1.370: confirmed tax facts from a tax notice or bill already in the home records.
+    ['property-tax-document-facts', 'PROPERTY_TAX_COMPARABLE_COMMAND', null],
   ]);
   for (const block of gaps.blocks) for (const section of block.sections ?? []) for (const entry of section.items) assert.ok(entry.href == null, entry.id);
   assert.ok(gaps.captureRequests.length > 0, 'the capture card is still offered');

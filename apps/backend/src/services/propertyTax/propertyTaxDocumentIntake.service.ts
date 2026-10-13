@@ -7,6 +7,11 @@ import { emitPropertyChangeWithTransaction } from '../../propertyChanges/propert
 import { linkPropertyTaxEntity } from './propertyTaxRecordLinks';
 
 export const PROPERTY_TAX_PRIVACY_CONSENT_VERSION = 'property-tax-vault-v1';
+// Owner ruling D-T4: using a document that is already in Home Records is not a storage consent. It is a fresh workflow affirmation ("use this record for
+// manual Property Tax review, create the confirmed facts shown, mark the record verified; nothing was read or verified automatically"), recorded
+// under its own version.
+export const PROPERTY_TAX_EXISTING_RECORD_AFFIRMATION_VERSION = 'property-tax-existing-record-v1';
+export type TaxDocumentKind = 'ASSESSMENT_NOTICE' | 'TAX_BILL' | 'EXEMPTION_NOTICE' | 'CORRECTION_NOTICE' | 'OTHER';
 
 const ASSESSMENT_FIELDS = new Set([
   'stage',
@@ -175,7 +180,7 @@ export class PropertyTaxDocumentIntakeService {
     propertyId: string;
     userId: string;
     role: HouseholdRole;
-    kind: 'ASSESSMENT_NOTICE' | 'TAX_BILL' | 'EXEMPTION_NOTICE' | 'CORRECTION_NOTICE' | 'OTHER';
+    kind: TaxDocumentKind;
     privacyConsent: boolean;
     file: Express.Multer.File;
   }) {
@@ -293,63 +298,7 @@ export class PropertyTaxDocumentIntakeService {
       method: 'MANUAL',
       extractedAt: now,
     });
-    const updated = await this.db.$transaction(async (tx) => {
-      for (const field of fields) {
-        if (!ALL_FIELDS.has(field.fieldKey)) {
-          throw new Error(`Unsupported property tax field: ${field.fieldKey}`);
-        }
-        const confidence = field.confidence ?? 1;
-        if (!Number.isFinite(confidence) || confidence < 0 || confidence > 1) {
-          throw new Error(`Invalid confidence for ${field.fieldKey}`);
-        }
-        await tx.propertyTaxExtractedField.upsert({
-          where: {
-            intakeId_fieldKey: {
-              intakeId,
-              fieldKey: field.fieldKey,
-            },
-          },
-          create: {
-            intakeId,
-            fieldKey: field.fieldKey,
-            proposedValueJson: inputJson(field.value),
-            confidence,
-            status: 'PROPOSED',
-            pageNumber: field.pageNumber,
-            boundingBoxJson: field.boundingBox === undefined
-              ? undefined
-              : inputJson(field.boundingBox),
-            sourceText: field.sourceText,
-            sourceTextHash: sourceTextHash(field.sourceText),
-          },
-          update: {
-            proposedValueJson: inputJson(field.value),
-            confidence,
-            status: 'PROPOSED',
-            correctedValueJson: Prisma.JsonNull,
-            pageNumber: field.pageNumber,
-            boundingBoxJson: field.boundingBox === undefined
-              ? undefined
-              : inputJson(field.boundingBox),
-            sourceText: field.sourceText,
-            sourceTextHash: sourceTextHash(field.sourceText),
-          },
-        });
-      }
-      return tx.propertyTaxDocumentIntake.update({
-        where: { id: intakeId },
-        data: {
-          status: 'NEEDS_REVIEW',
-          extractionMethod: 'MANUAL',
-          extractionProvider: null,
-          extractionModel: null,
-          extractionStartedAt: now,
-          extractionCompletedAt: now,
-          extractionError: null,
-        },
-        include: { document: true, fields: { orderBy: { fieldKey: 'asc' } } },
-      });
-    });
+    const updated = await this.db.$transaction((tx) => this.stageFieldsInTx(tx, intakeId, fields, now));
     return { ...updated, extractionEnvelope };
   }
 
@@ -360,7 +309,11 @@ export class PropertyTaxDocumentIntakeService {
     decisions: FieldDecision[],
     now = new Date(),
   ) {
-    return this.db.$transaction(async (tx) => {
+    return this.db.$transaction((tx) => this.confirmInTx(tx, intakeId, propertyId, userId, decisions, now));
+  }
+
+  private async confirmInTx(tx: any, intakeId: string, propertyId: string, userId: string, decisions: FieldDecision[], now: Date) {
+    {
       const intake = await tx.propertyTaxDocumentIntake.findFirst({
         where: {
           id: intakeId,
@@ -634,7 +587,140 @@ export class PropertyTaxDocumentIntakeService {
         },
         include: { document: true, fields: true },
       });
+    }
+  }
+
+  /**
+   * Owner ruling D-T6: the user's one action (stage the typed values, apply the decisions, create the canonical records and evidence, mark the intake
+   * and the record) is one transaction, so no partial state is observable and a confirmation can be refused as stale. `expectedUpdatedAt` is the intake's
+   * last update when the values were reviewed.
+   */
+  async stageAndConfirm(input: {
+    intakeId: string; propertyId: string; userId: string; fields: StagedField[]; expectedUpdatedAt?: Date | null; now?: Date;
+  }) {
+    if (input.fields.length === 0) throw new Error('At least one field is required');
+    const now = input.now ?? new Date();
+    return this.db.$transaction(async (tx) => {
+      const intake = await tx.propertyTaxDocumentIntake.findFirst({
+        where: { id: input.intakeId, propertyId: input.propertyId, property: { homeownerProfile: { userId: input.userId } } },
+        select: { id: true, status: true, documentId: true, updatedAt: true },
+      });
+      if (!intake) throw new Error('Tax document intake not found');
+      if (intake.status === 'CONFIRMED' || intake.status === 'REJECTED') throw new Error('Confirmed or rejected intake cannot be restaged');
+      if (input.expectedUpdatedAt && intake.updatedAt.getTime() !== input.expectedUpdatedAt.getTime()) {
+        throw new Error('This tax document changed after the values were reviewed');
+      }
+      await this.stageFieldsInTx(tx, intake.id, input.fields, now);
+      return this.confirmInTx(
+        tx, intake.id, input.propertyId, input.userId,
+        input.fields.map((field) => ({ fieldKey: field.fieldKey, status: 'CONFIRMED' as const })), now,
+      );
     });
+  }
+
+  /**
+   * A tax notice or bill that is already a Home Record (owner ruling D-T3: type TAX_DOCUMENT only) becomes confirmed tax facts in one transaction
+   * (D-T6): the intake is created (or the unconfirmed one reused), staged and confirmed together. The person's affirmation is recorded under its own
+   * version, not the storage consent (D-T4): the record was already stored, so storage consent would be inaccurate.
+   */
+  async confirmFromRecord(input: {
+    propertyId: string; userId: string; recordId: string; kind: TaxDocumentKind; affirmed: boolean; fields: StagedField[];
+    expectedIntakeUpdatedAt?: Date | null; now?: Date;
+  }) {
+    if (!input.affirmed) throw new Error('The workflow affirmation is required before a tax document on file is used');
+    if (input.fields.length === 0) throw new Error('At least one field is required');
+    const now = input.now ?? new Date();
+    return this.db.$transaction(async (tx) => {
+      const property = await tx.property.findFirst({ where: { id: input.propertyId, homeownerProfile: { userId: input.userId } }, select: { id: true } });
+      if (!property) throw new Error('Property not found');
+      const record = await tx.propertyRecord.findFirst({
+        where: { id: input.recordId, propertyId: input.propertyId, recordType: 'TAX_DOCUMENT', lifecycleStatus: 'ACTIVE', currentVersion: { is: { scanStatus: 'CLEAN' } } },
+        select: { id: true, currentVersionId: true },
+      });
+      if (!record) throw new Error('The document must be an active tax document in Home Records with a clean scan');
+      let intake = await tx.propertyTaxDocumentIntake.findUnique({ where: { documentId: record.id }, select: { id: true, status: true, updatedAt: true } });
+      if (intake?.status === 'CONFIRMED' || intake?.status === 'REJECTED') throw new Error('This tax document has already been confirmed or rejected');
+      if (intake && input.expectedIntakeUpdatedAt && intake.updatedAt.getTime() !== input.expectedIntakeUpdatedAt.getTime()) {
+        throw new Error('This tax document changed after the values were reviewed');
+      }
+      if (!intake) {
+        intake = await tx.propertyTaxDocumentIntake.create({
+          data: {
+            propertyId: input.propertyId, documentId: record.id, kind: input.kind, status: 'UPLOADED', storageMode: 'VAULT', extractionMethod: 'MANUAL',
+            privacyConsentVersion: PROPERTY_TAX_EXISTING_RECORD_AFFIRMATION_VERSION, privacyConsentedAt: now,
+          },
+          select: { id: true, status: true, updatedAt: true },
+        });
+        await this.linkEntity(tx, {
+          recordId: record.id, versionId: record.currentVersionId ?? null, entityType: 'PROPERTY_TAX_INTAKE', entityId: intake.id,
+          purpose: 'SOURCE', label: 'Property tax document intake', userId: input.userId,
+        });
+      }
+      await this.stageFieldsInTx(tx, intake.id, input.fields, now);
+      return this.confirmInTx(
+        tx, intake.id, input.propertyId, input.userId,
+        input.fields.map((field) => ({ fieldKey: field.fieldKey, status: 'CONFIRMED' as const })), now,
+      );
+    });
+  }
+
+  private async stageFieldsInTx(tx: any, intakeId: string, fields: StagedField[], now: Date) {
+    // The body of stageManualFields' transaction, so one transaction can stage and confirm (owner ruling D-T6).
+      for (const field of fields) {
+        if (!ALL_FIELDS.has(field.fieldKey)) {
+          throw new Error(`Unsupported property tax field: ${field.fieldKey}`);
+        }
+        const confidence = field.confidence ?? 1;
+        if (!Number.isFinite(confidence) || confidence < 0 || confidence > 1) {
+          throw new Error(`Invalid confidence for ${field.fieldKey}`);
+        }
+        await tx.propertyTaxExtractedField.upsert({
+          where: {
+            intakeId_fieldKey: {
+              intakeId,
+              fieldKey: field.fieldKey,
+            },
+          },
+          create: {
+            intakeId,
+            fieldKey: field.fieldKey,
+            proposedValueJson: inputJson(field.value),
+            confidence,
+            status: 'PROPOSED',
+            pageNumber: field.pageNumber,
+            boundingBoxJson: field.boundingBox === undefined
+              ? undefined
+              : inputJson(field.boundingBox),
+            sourceText: field.sourceText,
+            sourceTextHash: sourceTextHash(field.sourceText),
+          },
+          update: {
+            proposedValueJson: inputJson(field.value),
+            confidence,
+            status: 'PROPOSED',
+            correctedValueJson: Prisma.JsonNull,
+            pageNumber: field.pageNumber,
+            boundingBoxJson: field.boundingBox === undefined
+              ? undefined
+              : inputJson(field.boundingBox),
+            sourceText: field.sourceText,
+            sourceTextHash: sourceTextHash(field.sourceText),
+          },
+        });
+      }
+      return tx.propertyTaxDocumentIntake.update({
+        where: { id: intakeId },
+        data: {
+          status: 'NEEDS_REVIEW',
+          extractionMethod: 'MANUAL',
+          extractionProvider: null,
+          extractionModel: null,
+          extractionStartedAt: now,
+          extractionCompletedAt: now,
+          extractionError: null,
+        },
+        include: { document: true, fields: { orderBy: { fieldKey: 'asc' } } },
+      });
   }
 }
 

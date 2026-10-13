@@ -564,6 +564,36 @@ export async function confirmPropertyTaxDocument(
   };
 }
 
+// Owner ruling D-T6: the values are staged and confirmed in one transaction, so a failure leaves nothing partial.
+export async function stageAndConfirmPropertyTaxDocument(
+  propertyId: string,
+  intakeId: string,
+  fields: Array<{ fieldKey: string; value: unknown }>,
+): Promise<{ intake: PropertyTaxDocumentIntakeDTO; record: PropertyTaxCenterRecordDTO }> {
+  const res = await api.post(
+    `/api/properties/${propertyId}/property-tax/intakes/${intakeId}/confirm-values`,
+    { fields },
+  );
+  return res.data as { intake: PropertyTaxDocumentIntakeDTO; record: PropertyTaxCenterRecordDTO };
+}
+
+// A tax document already in Home Records (type TAX_DOCUMENT) becomes confirmed tax facts without uploading it again. `affirmed` is the person's workflow
+// affirmation (owner ruling D-T4), not the storage consent.
+export async function confirmPropertyTaxDocumentFromRecord(
+  propertyId: string,
+  input: {
+    recordId: string;
+    kind: PropertyTaxDocumentIntakeDTO['kind'];
+    fields: Array<{ fieldKey: string; value: unknown }>;
+  },
+): Promise<{ intake: PropertyTaxDocumentIntakeDTO; record: PropertyTaxCenterRecordDTO }> {
+  const res = await api.post(
+    `/api/properties/${propertyId}/property-tax/intakes/from-record`,
+    { ...input, affirmed: true },
+  );
+  return res.data as { intake: PropertyTaxDocumentIntakeDTO; record: PropertyTaxCenterRecordDTO };
+}
+
 export async function getPropertyTaxActions(
   propertyId: string,
 ): Promise<PropertyTaxActionsDTO> {
