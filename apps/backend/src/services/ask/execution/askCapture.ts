@@ -63,6 +63,8 @@ import { SAVINGS_OUTCOME_CAPTURE_KEY, SAVINGS_OUTCOME_INVALID_MESSAGES, parseSav
 import { savingsCommandResult } from '../handlers/savingsBenefitCommands.handler';
 import { parseReadinessFormAnswer, readinessFormKindFromCaptureKey } from '../support/renovationReadinessCommand';
 import { readinessCommandResult } from '../handlers/renovationReadinessCommands.handler';
+import { PAST_HAZARD_CAPTURE_KEY, PAST_HAZARD_INVALID_MESSAGES, parsePastHazardOutcomeAnswer } from '../support/pastHazardOutcomeCommand';
+import { pastHazardCommandResult } from '../handlers/pastHazardOutcomeCommands.handler';
 import { COVERAGE_DECISION_CAPTURE_KEY, parseCoverageDecisionAnswer, type CoverageCommandKind } from '../support/coverageCommand';
 import { parseUpgradeFormAnswer, upgradeFormKindFromCaptureKey, type UpgradeCommandKind } from '../support/homeUpgradeCommand';
 import { parsePermitFormAnswer, permitFormKindFromCaptureKey, type PermitCommandKind } from '../support/permitTrackerCommand';
@@ -1285,6 +1287,24 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     captureId = input.idempotencyKey;
     capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
     canonicalOwner = 'RenovationStartReadinessItem';
+  } else if (execution.operationId === 'PAST_HAZARD_OUTCOME_COMMAND') {
+    if (input.captureKey !== PAST_HAZARD_CAPTURE_KEY) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    const access = await ensurePropertyAccess(userId, execution.propertyId);
+    if (access.role === HouseholdRole.VIEWER) throw Object.assign(new Error('A contributor or owner is required to record what was observed.'), { code: 'ASK_PERMISSION_REQUIRED' });
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson) ? execution.parametersJson as Record<string, unknown> : {};
+    const hazardLaunch = storedParameters.pastHazardLaunch && typeof storedParameters.pastHazardLaunch === 'object' && !Array.isArray(storedParameters.pastHazardLaunch)
+      ? storedParameters.pastHazardLaunch as { entityId?: unknown; sourceExecutionId?: unknown } : null;
+    if (!hazardLaunch || typeof hazardLaunch.entityId !== 'string') {
+      throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    }
+    const hazardAnswer = parsePastHazardOutcomeAnswer(input.answer);
+    if (!hazardAnswer.success) throw Object.assign(new Error(PAST_HAZARD_INVALID_MESSAGES[hazardAnswer.reason]), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+    result = await pastHazardCommandResult(userId, execution.propertyId, {
+      entityId: hazardLaunch.entityId, sourceExecutionId: typeof hazardLaunch.sourceExecutionId === 'string' ? hazardLaunch.sourceExecutionId : null,
+    }, hazardAnswer.data);
+    captureId = input.idempotencyKey;
+    capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
+    canonicalOwner = 'PropertyHazardOutcome';
   } else if (execution.operationId === 'PROPERTY_BRIEF_COMMAND') {
     if (![PROPERTY_BRIEF_PREPARE_CAPTURE_KEY, PROPERTY_BRIEF_SHARE_CAPTURE_KEY].includes(input.captureKey) || input.expectedContextVersion !== 'property-brief-live') throw Object.assign(new Error('This Property Brief form is no longer active.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
     const access = await ensurePropertyAccess(userId, execution.propertyId);

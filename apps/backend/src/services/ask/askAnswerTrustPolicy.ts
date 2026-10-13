@@ -182,6 +182,9 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   NEGOTIATION_SHIELD_CASE_ATTACH: new Set(['negotiation-shield-review', 'negotiation-shield-analyze']),
   // The readiness answer's empty state offers the start; the receipt of a started case offers that case's readiness check.
   RENOVATION_CASE_START: new Set(['renovation-case-readiness']),
+  // Record what the household observed after a matched hazard event (register P1 Home Risk Replay). Confirmation-gated, declared-action only; behind the route's reviewed-source-coverage gate.
+  PAST_HAZARD_EXPOSURE: new Set(['past-hazard-record-outcome']),
+  PAST_HAZARD_OUTCOME_COMMAND: new Set(['past-hazard-back']),
   // Refresh a renovation case's readiness, acknowledge or withdraw the risk of an open item, and reopen an item that was marked satisfied (register P1 Renovation Risk Advisor). Confirmation-gated, declared-action only; acknowledging a risk is owner-only.
   RENOVATION_READINESS_COMMAND: new Set(['renovation-readiness-back']),
   // Save, dismiss, stop pursuing and record the outcome of a savings or benefit opportunity (register P1 Savings & Benefits). Confirmation-gated, declared-action only; primary owner only. Sensitive facts and partner handoffs are not here.

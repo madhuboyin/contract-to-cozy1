@@ -7,6 +7,8 @@ import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { getPastHazardExposure } from '../../../propertyIntelligence/pastHazardExposure.service';
 import { humanDate, readableCode } from '../askFormatting';
 import { isReviewedIntelligenceCoverageAvailable } from '../../../middleware/intelligenceCoverage.middleware';
+import { ensurePropertyAccess } from '../askHandlerSupport';
+import { PAST_HAZARD_COMMAND_ACTION_ID, PAST_HAZARD_COMMAND_MESSAGE, PAST_HAZARD_RECORD_ENTITY_TYPE } from '../support/pastHazardOutcomeCommand';
 
 // Home Risk Replay capability-card slice (FRD v1.50): the third new operation for a capability with none. Reads
 // getPastHazardExposure, the same call the page's route makes (all dates and hazard types), behind the same
@@ -18,7 +20,7 @@ const HAZARD_EFFECT_LABELS: Record<string, string> = {
   OBSERVED_EFFECT_CONFIRMED: 'Household reported an observed effect',
 };
 
-export function pastHazardExposureFromView(view: PastHazardView, propertyId: string): AskOperationResult {
+export function pastHazardExposureFromView(view: PastHazardView, propertyId: string, canChange = false): AskOperationResult {
   const past = view.pastEvents;
   const longTerm = view.longTermContext;
   const withEffect = [...past, ...longTerm].filter((item) => item.propertyEffect.status === 'OBSERVED_EFFECT_CONFIRMED').length;
@@ -36,6 +38,12 @@ export function pastHazardExposureFromView(view: PastHazardView, propertyId: str
     ],
     status: String(item.propertyEffect.status),
     href: null,
+    // FRD v1.325: what the household saw is recorded from the record itself, by a contributor or owner.
+    entityType: PAST_HAZARD_RECORD_ENTITY_TYPE,
+    actions: canChange ? [{
+      id: PAST_HAZARD_COMMAND_ACTION_ID, label: item.propertyEffect.status === 'UNKNOWN' ? 'Record what I observed' : 'Update what I observed', message: PAST_HAZARD_COMMAND_MESSAGE,
+      operationId: 'PAST_HAZARD_OUTCOME_COMMAND' as const, interactionType: 'MUTATE_RECORD' as const, style: 'SECONDARY' as const,
+    }] : [],
   });
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY', id: 'past-hazard-summary',
@@ -86,7 +94,7 @@ export function pastHazardExposureFromView(view: PastHazardView, propertyId: str
   };
 }
 
-async function pastHazardExposureResult(propertyId: string): Promise<AskOperationResult> {
+async function pastHazardExposureResult(propertyId: string, canChange: boolean): Promise<AskOperationResult> {
   // The page's route answers 503 REVIEWED_SOURCE_COVERAGE_REQUIRED in this case; Ask says the same, never an all-clear.
   if (!isReviewedIntelligenceCoverageAvailable('HOME_RISK_REPLAY')) {
     return {
@@ -95,7 +103,10 @@ async function pastHazardExposureResult(propertyId: string): Promise<AskOperatio
       suggestions: [],
     };
   }
-  return pastHazardExposureFromView(await getPastHazardExposure(propertyId), propertyId);
+  return pastHazardExposureFromView(await getPastHazardExposure(propertyId), propertyId, canChange);
 }
 
-registerCapabilityHandler('home-risk-replay.exposure', async (envelope) => pastHazardExposureResult(envelope.propertyId!));
+registerCapabilityHandler('home-risk-replay.exposure', async (envelope, deps) => {
+  const access = deps.propertyAccess ?? await ensurePropertyAccess(envelope.userId, envelope.propertyId!);
+  return pastHazardExposureResult(envelope.propertyId!, access.role !== 'VIEWER');
+});

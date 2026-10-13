@@ -127,6 +127,8 @@ export type AskOperationId =
   // Start a renovation case (register section 3): a confirmation-gated command reached by the declared Start a renovation case action on the readiness
   // answer or a typed "start a renovation case"; never by fuzzy retrieval.
   | 'RENOVATION_CASE_START'
+  // Record what the household observed after a matched hazard event (register P1 Home Risk Replay). Confirmation-gated, declared-action only; behind the route's reviewed-source-coverage gate.
+  | 'PAST_HAZARD_OUTCOME_COMMAND'
   // Refresh a renovation case's readiness, acknowledge or withdraw the risk of an open item, and reopen an item that was marked satisfied (register P1 Renovation Risk Advisor). Confirmation-gated, declared-action only; acknowledging a risk is owner-only.
   | 'RENOVATION_READINESS_COMMAND'
   // Save, dismiss, stop pursuing and record the outcome of a savings or benefit opportunity (register P1 Savings & Benefits). Confirmation-gated, declared-action only; primary owner only. Sensitive facts and partner handoffs are not here.
@@ -383,6 +385,7 @@ export const ASK_INTERNAL_OPERATION_IDS: ReadonlySet<AskOperationId> = new Set<A
   'NEGOTIATION_SHIELD_CASE_ATTACH',
   // Reached by the declared action or the deterministic typed-start pattern; never by fuzzy retrieval.
   'RENOVATION_CASE_START',
+  'PAST_HAZARD_OUTCOME_COMMAND',
   'RENOVATION_READINESS_COMMAND',
   'SAVINGS_BENEFIT_COMMAND',
   'PROPERTY_TAX_APPEAL_COMMAND',
@@ -696,6 +699,7 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   MATERIAL_SPEC_ADD: definition('MATERIAL_SPEC_ADD', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'material-spec.add', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   NEGOTIATION_SHIELD_CASE_START: definition('NEGOTIATION_SHIELD_CASE_START', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'negotiation-shield.start', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   RENOVATION_CASE_START: definition('RENOVATION_CASE_START', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'renovation-case.start', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
+  PAST_HAZARD_OUTCOME_COMMAND: definition('PAST_HAZARD_OUTCOME_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'past-hazard.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   RENOVATION_READINESS_COMMAND: definition('RENOVATION_READINESS_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'renovation-readiness.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   SAVINGS_BENEFIT_COMMAND: definition('SAVINGS_BENEFIT_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'savings-benefit.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   PROPERTY_TAX_APPEAL_COMMAND: definition('PROPERTY_TAX_APPEAL_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'property-tax.appeal-command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
