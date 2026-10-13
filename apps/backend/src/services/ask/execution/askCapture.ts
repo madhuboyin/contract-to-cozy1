@@ -51,6 +51,8 @@ import { parseQuoteFormAnswer, quoteFormKindFromCaptureKey } from '../support/qu
 import { priceCommandResult } from '../handlers/priceFinalizationCommands.handler';
 import { buyerNegotiationResult } from '../handlers/negotiationShieldBuyerCommands.handler';
 import { permitCommandResult } from '../handlers/permitTrackerCommands.handler';
+import { upgradeCommandResult } from '../handlers/homeUpgradeCommands.handler';
+import { parseUpgradeFormAnswer, upgradeFormKindFromCaptureKey, type UpgradeCommandKind } from '../support/homeUpgradeCommand';
 import { parsePermitFormAnswer, permitFormKindFromCaptureKey, type PermitCommandKind } from '../support/permitTrackerCommand';
 import { buyerNegotiationKindFromCaptureKey, parseBuyerNegotiationAnswer } from '../support/negotiationShieldBuyer';
 import { parsePriceFormAnswer, priceFormKindForCommand, priceFormKindFromCaptureKey, type PriceCommandKind } from '../support/priceFinalizationCommand';
@@ -1123,6 +1125,28 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     captureId = input.idempotencyKey;
     capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
     canonicalOwner = 'PermitTracker';
+  } else if (execution.operationId === 'HOME_UPGRADE_COMMAND') {
+    const upgradeForm = upgradeFormKindFromCaptureKey(input.captureKey);
+    if (!upgradeForm) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    const access = await ensurePropertyAccess(userId, execution.propertyId);
+    if (access.role === HouseholdRole.VIEWER) throw Object.assign(new Error('A contributor or owner is required to change an upgrade option.'), { code: 'ASK_PERMISSION_REQUIRED' });
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson) ? execution.parametersJson as Record<string, unknown> : {};
+    const upgradeLaunch = storedParameters.homeUpgradeLaunch && typeof storedParameters.homeUpgradeLaunch === 'object' && !Array.isArray(storedParameters.homeUpgradeLaunch)
+      ? storedParameters.homeUpgradeLaunch as { kind?: unknown; entityId?: unknown; sourceExecutionId?: unknown } : null;
+    // The form must be the one the stored launch opened (a decision form cannot be replayed as a rename, nor the reverse).
+    if (!upgradeLaunch || upgradeLaunch.kind !== upgradeForm || typeof upgradeLaunch.entityId !== 'string') {
+      throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    }
+    const upgradeAnswer = parseUpgradeFormAnswer(upgradeForm, input.answer);
+    if (!upgradeAnswer.success) {
+      throw Object.assign(new Error(upgradeAnswer.reason === 'REASON_REQUIRED' ? 'Say why you are deferring or rejecting this option.' : 'Check the form: choose a decision or give the option a name.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+    }
+    result = await upgradeCommandResult(userId, execution.propertyId, {
+      kind: upgradeLaunch.kind as UpgradeCommandKind, entityId: upgradeLaunch.entityId, sourceExecutionId: typeof upgradeLaunch.sourceExecutionId === 'string' ? upgradeLaunch.sourceExecutionId : null,
+    }, upgradeAnswer.data);
+    captureId = input.idempotencyKey;
+    capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
+    canonicalOwner = 'HomeDigitalTwinScenario';
   } else if (execution.operationId === 'PROPERTY_BRIEF_COMMAND') {
     if (![PROPERTY_BRIEF_PREPARE_CAPTURE_KEY, PROPERTY_BRIEF_SHARE_CAPTURE_KEY].includes(input.captureKey) || input.expectedContextVersion !== 'property-brief-live') throw Object.assign(new Error('This Property Brief form is no longer active.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
     const access = await ensurePropertyAccess(userId, execution.propertyId);

@@ -180,6 +180,8 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   NEGOTIATION_SHIELD_CASE_ATTACH: new Set(['negotiation-shield-review', 'negotiation-shield-analyze']),
   // The readiness answer's empty state offers the start; the receipt of a started case offers that case's readiness check.
   RENOVATION_CASE_START: new Set(['renovation-case-readiness']),
+  // Manage a saved Home Upgrade Planner option (register P0 Home Digital Twin / Upgrade Planner): record the decision, rename, archive or restore, recalculate (queued job) and delete an archived option. Confirmation-gated, declared-action only; never by fuzzy retrieval.
+  HOME_UPGRADE_COMMAND: new Set(['home-upgrade-back']),
   // Add, change and remove a permit record (register P0 Permits, slice PM-B). Records the REPORTED status; the official status is the authority's and is not set here. Confirmation-gated, declared-action only; never by fuzzy retrieval.
   PERMIT_TRACKER_COMMAND: new Set(['permit-tracker-back']),
   // Buyer-mode Negotiation Shield (register P0): start negotiating an inspection finding with the seller and record the seller's response and outcome. Confirmation-gated, declared-action only; never by fuzzy retrieval.
@@ -203,6 +205,8 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   PRICE_FINALIZATIONS_LIST: new Set(['price-finalization-start-manual', 'price-finalization-finalize', 'price-finalization-edit']),
   // The permit list offers Add a permit (a SUMMARY action) and Change / Remove on a row to a contributor or owner.
   PERMIT_TRACKER_STATUS: new Set(['permit-tracker-add', 'permit-tracker-edit', 'permit-tracker-remove']),
+  // The upgrade options answer's Manage options rows offer these to a contributor or owner.
+  HOME_UPGRADE_SCENARIOS: new Set(['home-upgrade-decide', 'home-upgrade-compute', 'home-upgrade-rename', 'home-upgrade-archive', 'home-upgrade-restore', 'home-upgrade-delete']),
   // The buyer negotiation list's rows offer Start negotiating and Record the seller response to a contributor or owner.
   BUYER_NEGOTIATION_READINESS: new Set(['buyer-negotiation-start', 'buyer-negotiation-outcome']),
   HOME_DEADLINE_MONITOR: new Set(['resolve-coverage-conflict']),

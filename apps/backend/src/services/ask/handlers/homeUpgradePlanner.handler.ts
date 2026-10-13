@@ -7,6 +7,8 @@ import { type AskOperationResult } from '../askOperationRegistry';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { readableCode } from '../askFormatting';
 import { HomeDigitalTwinScenarioService } from '../../homeDigitalTwinScenario.service';
+import { ensurePropertyAccess } from '../askHandlerSupport';
+import { UPGRADE_COMMAND_ACTION_IDS, UPGRADE_COMMAND_MESSAGES, UPGRADE_SCENARIO_ENTITY_TYPE } from '../support/homeUpgradeCommand';
 
 // Home Upgrade Planner (home-digital-twin) capability-card slice (FRD v1.57): the ninth new operation for a capability
 // with none. Reads HomeDigitalTwinScenarioService.listScenarios, the call GET
@@ -92,7 +94,9 @@ export function homeUpgradeComparison(
   };
 }
 
-export function homeUpgradeScenariosFromView(scenarios: readonly UpgradeScenarioView[] | null, propertyId: string, now = new Date()): AskOperationResult {
+export function homeUpgradeScenariosFromView(
+  scenarios: readonly UpgradeScenarioView[] | null, propertyId: string, now = new Date(), manage: { canChange: boolean; archived: readonly UpgradeScenarioView[] } = { canChange: false, archived: [] },
+): AskOperationResult {
   const activeRun = (scenario: UpgradeScenarioView) => Boolean(scenario.latestRun
     && (scenario.latestRun.status === 'QUEUED' || scenario.latestRun.status === 'RUNNING')
     && new Date(scenario.latestRun.startedAt).getTime() >= now.getTime() - UPGRADE_ACTIVE_RUN_WINDOW_MS);
@@ -133,7 +137,7 @@ export function homeUpgradeScenariosFromView(scenarios: readonly UpgradeScenario
     title: `${scenarios.length} saved upgrade option${scenarios.length === 1 ? '' : 's'} across ${ordered.length} ${ordered.length === 1 ? 'system' : 'systems'}`,
     body: [
       `${ready} with results ready${selected ? `, ${selected} selected` : ''}.`,
-      outOfDate ? `${outOfDate} ${outOfDate === 1 ? 'has' : 'have'} results that are out of date because the home's records changed; recalculating them is not currently available in Ask.` : null,
+      outOfDate ? `${outOfDate} ${outOfDate === 1 ? 'has' : 'have'} results that are out of date because the home's records changed; ${manage.canChange ? 'use Recalculate on an option to refresh it' : 'a contributor or owner can recalculate them'}.` : null,
     ].filter(Boolean).join(' '),
     tone: outOfDate ? 'CAUTION' : 'DEFAULT',
     actions: [],
@@ -172,15 +176,49 @@ export function homeUpgradeScenariosFromView(scenarios: readonly UpgradeScenario
     })),
     actions: [],
   });
+  if (manage.canChange) {
+    const act = (id: string, label: string, message: string, style: 'PRIMARY' | 'SECONDARY' | 'QUIET' = 'SECONDARY') =>
+      ({ id, label, message, operationId: 'HOME_UPGRADE_COMMAND', interactionType: 'MUTATE_RECORD' as const, style });
+    const row = (scenario: UpgradeScenarioView, archived: boolean) => ({
+      id: scenario.id, title: scenario.name, description: null,
+      meta: [UPGRADE_SCENARIO_TYPE_LABELS[scenario.scenarioType] ?? readableCode(scenario.scenarioType), ...(UPGRADE_DECISION_LABELS[scenario.decisionStatus] ? [UPGRADE_DECISION_LABELS[scenario.decisionStatus]] : [])],
+      status: archived ? 'Archived' : activeRun(scenario) ? 'Calculating' : scenario.status === 'COMPUTED' && scenario.staleAt ? 'Results out of date' : UPGRADE_SCENARIO_STATUS_LABELS[scenario.status] ?? readableCode(scenario.status),
+      href: null, entityType: UPGRADE_SCENARIO_ENTITY_TYPE,
+      actions: archived
+        ? [act(UPGRADE_COMMAND_ACTION_IDS.RESTORE, 'Restore', UPGRADE_COMMAND_MESSAGES.RESTORE, 'PRIMARY'), act(UPGRADE_COMMAND_ACTION_IDS.DELETE, 'Delete', UPGRADE_COMMAND_MESSAGES.DELETE, 'QUIET')]
+        : [
+          act(UPGRADE_COMMAND_ACTION_IDS.DECIDE, 'Record my decision', UPGRADE_COMMAND_MESSAGES.DECIDE, 'PRIMARY'),
+          ...(activeRun(scenario) ? [] : [act(UPGRADE_COMMAND_ACTION_IDS.COMPUTE, scenario.status === 'COMPUTED' && !scenario.staleAt ? 'Recalculate' : 'Calculate', UPGRADE_COMMAND_MESSAGES.COMPUTE)]),
+          act(UPGRADE_COMMAND_ACTION_IDS.RENAME, 'Rename', UPGRADE_COMMAND_MESSAGES.RENAME),
+          act(UPGRADE_COMMAND_ACTION_IDS.ARCHIVE, 'Archive', UPGRADE_COMMAND_MESSAGES.ARCHIVE, 'QUIET'),
+        ],
+    });
+    blocks.push({
+      type: 'GROUPED_LIST', filters: [], id: 'home-upgrade-manage', title: 'Manage options',
+      description: 'Record your decision, recalculate, rename or archive an option. Each change is reviewed before it is saved, and a decision does not start any work.',
+      sections: [
+        { id: 'home-upgrade-manage-active', title: 'Active options', count: scenarios.length, items: scenarios.slice(0, 20).map((scenario) => row(scenario, false)) },
+        ...(manage.archived.length ? [{ id: 'home-upgrade-manage-archived', title: 'Archived', count: manage.archived.length, items: manage.archived.slice(0, 20).map((scenario) => row(scenario, true)) }] : []),
+      ],
+      actions: [],
+    });
+  }
   blocks.push(boundary);
   return { status: 'ANSWERED', reasonCode: outOfDate ? 'HOME_UPGRADE_RESULTS_STALE' : 'HOME_UPGRADE_SCENARIOS_READY', blocks, suggestions: [] };
 }
 
-async function homeUpgradeScenariosResult(propertyId: string): Promise<AskOperationResult> {
+async function homeUpgradeScenariosResult(propertyId: string, canChange: boolean): Promise<AskOperationResult> {
   // The scenarios route's controller looks the twin up the same way; Ask never creates one (that is the page's init).
   const twin = await prisma.homeDigitalTwin.findUnique({ where: { propertyId }, select: { id: true } });
   if (!twin) return homeUpgradeScenariosFromView(null, propertyId);
-  return homeUpgradeScenariosFromView(await new HomeDigitalTwinScenarioService().listScenarios(twin.id, {}), propertyId);
+  const service = new HomeDigitalTwinScenarioService();
+  const active = await service.listScenarios(twin.id, {});
+  // Archived options are listed only to a contributor or owner, for the Restore and Delete actions.
+  const archived = canChange ? (await service.listScenarios(twin.id, { includeArchived: true })).filter((scenario) => scenario.isArchived) : [];
+  return homeUpgradeScenariosFromView(active, propertyId, new Date(), { canChange, archived });
 }
 
-registerCapabilityHandler('home-digital-twin.scenarios', async (envelope) => homeUpgradeScenariosResult(envelope.propertyId!));
+registerCapabilityHandler('home-digital-twin.scenarios', async (envelope, deps) => {
+  const access = deps.propertyAccess ?? await ensurePropertyAccess(envelope.userId, envelope.propertyId!);
+  return homeUpgradeScenariosResult(envelope.propertyId!, access.role !== 'VIEWER');
+});

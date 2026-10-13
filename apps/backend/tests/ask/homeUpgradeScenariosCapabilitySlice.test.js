@@ -87,7 +87,7 @@ test('the real listScenarios query is the route\'s: this twin, archived left out
 test('options are grouped by system in the page\'s order, with the page\'s labels and only computed figures', () => {
   const result = homeUpgradeScenariosFromView(scenarios(), 'p1', NOW);
   assert.equal(result.blocks[0].title, '4 saved upgrade options across 3 systems');
-  assert.equal(result.blocks[0].body, '2 with results ready, 1 selected. 1 has results that are out of date because the home\'s records changed; recalculating them is not currently available in Ask.');
+  assert.equal(result.blocks[0].body, '2 with results ready, 1 selected. 1 has results that are out of date because the home\'s records changed; a contributor or owner can recalculate them.');
   assert.equal(result.reasonCode, 'HOME_UPGRADE_RESULTS_STALE');
   // FRD v1.89: the system with two options is a strip; the systems with one option stay in the list, in the page's order.
   const list = result.blocks.find((block) => block.id === 'home-upgrade-options');
