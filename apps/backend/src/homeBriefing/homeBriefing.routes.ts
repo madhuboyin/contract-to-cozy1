@@ -1,7 +1,7 @@
 import { NextFunction, Request, Response, Router } from 'express';
 import { z } from 'zod';
 import { authenticate } from '../middleware/auth.middleware';
-import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
+import { propertyAuthMiddleware, requireHouseholdRole } from '../middleware/propertyAuth.middleware';
 import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
 import { validateBody } from '../middleware/validate.middleware';
 import { CustomRequest } from '../types';
@@ -153,6 +153,7 @@ router.post(
   '/properties/:propertyId/home-briefing/deliveries/:deliveryId/share',
   authenticate,
   propertyAuthMiddleware,
+  requireHouseholdRole('OWNER'),
   validateBody(createHomeBriefingShareSchema),
   async (req: CustomRequest, res: Response, next: NextFunction) => {
     try {
@@ -177,6 +178,7 @@ router.post(
   '/properties/:propertyId/home-briefing/shares/:shareId/revoke',
   authenticate,
   propertyAuthMiddleware,
+  requireHouseholdRole('OWNER'),
   async (req: CustomRequest, res: Response, next: NextFunction) => {
     try {
       const userId = req.user?.userId;

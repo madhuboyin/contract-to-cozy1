@@ -5,17 +5,21 @@ import { type AskPresentationBlock } from '../../../productFramework/ask/ask.con
 import { type AskOperationResult } from '../askOperationRegistry';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { getHomeBriefingView } from '../../../homeBriefing/homeBriefing.service';
+import { prisma } from '../../../lib/prisma';
 import { ensurePropertyAccess } from '../askHandlerSupport';
 import { humanDate } from '../askFormatting';
 import {
   BRIEFING_CADENCE_LABELS, BRIEFING_CHANNEL_LABELS, BRIEFING_COMMAND_ACTION_IDS, BRIEFING_COMMAND_MESSAGES, BRIEFING_ITEM_ENTITY_TYPE, BRIEFING_PROPERTY_ENTITY_TYPE,
-  BRIEFING_TOPIC_LABELS,
+  BRIEFING_TOPIC_LABELS, BRIEFING_SHARE_ACTION_IDS, BRIEFING_SHARE_ENTITY_TYPE, BRIEFING_SHARE_MESSAGES,
 } from '../support/homeBriefingCommand';
+
+/** A live public link, for the owner: what it shows, until when, and who has opened it (the access history). */
+export interface BriefingLiveShare { id: string; expiresAt: Date; viewCount: number; lastViewedAt: Date | null; itemCount: number }
 
 type BriefingView = Awaited<ReturnType<typeof getHomeBriefingView>>;
 const MATERIALITY_LABELS: Record<string, string> = { HIGH: 'Important', MEDIUM: 'Worth a look', LOW: 'For your information' };
 
-export function homeBriefingFromView(view: BriefingView, propertyId: string, canChange = false): AskOperationResult {
+export function homeBriefingFromView(view: BriefingView, propertyId: string, canChange = false, owner: { isOwner: boolean; shares: readonly BriefingLiveShare[] } = { isOwner: false, shares: [] }): AskOperationResult {
   const { preference, current } = view;
   const items = current?.items ?? [];
   const unread = view.unreadMaterialCount;
@@ -34,8 +38,33 @@ export function homeBriefingFromView(view: BriefingView, propertyId: string, can
     actions: canChange ? [
       ...(preference.enabled ? [action('GENERATE', current ? 'Prepare a fresh briefing' : 'Prepare my briefing', 'PRIMARY')] : []),
       action('PREFERENCES', 'Change settings', 'SECONDARY'),
+      // Owner ruling 2026-10-13 (FRD v1.331): a public link is an owner's act.
+      ...(owner.isOwner && items.some((item) => item.shareEligible) ? [{
+        id: BRIEFING_SHARE_ACTION_IDS.CREATE, label: 'Share selected updates', interactionType: 'START_WORKFLOW' as const, message: BRIEFING_SHARE_MESSAGES.CREATE,
+        operationId: 'HOME_BRIEFING_SHARE_COMMAND' as const, entityType: BRIEFING_SHARE_ENTITY_TYPE, entityId: propertyId, style: 'SECONDARY' as const,
+      }] : []),
     ] : [],
   }];
+  if (owner.isOwner && owner.shares.length) {
+    blocks.push({
+      type: 'GROUPED_LIST', filters: [], id: 'home-briefing-live-shares', title: 'Links you are sharing',
+      description: 'Anyone with a link can read the updates it shows until it expires or you stop sharing it.',
+      sections: [{
+        id: 'briefing-live-shares', title: 'Live links', count: owner.shares.length,
+        items: owner.shares.map((share) => ({
+          id: share.id, title: `${share.itemCount} update${share.itemCount === 1 ? '' : 's'}`,
+          description: `Expires ${humanDate(share.expiresAt) ?? 'soon'}`,
+          meta: [`Opened ${share.viewCount} time${share.viewCount === 1 ? '' : 's'}`, share.lastViewedAt ? `Last opened ${humanDate(share.lastViewedAt)}` : 'Never opened'],
+          status: 'ACTIVE', href: null, entityType: BRIEFING_SHARE_ENTITY_TYPE,
+          actions: [{
+            id: BRIEFING_SHARE_ACTION_IDS.REVOKE, label: 'Stop sharing', message: BRIEFING_SHARE_MESSAGES.REVOKE, operationId: 'HOME_BRIEFING_SHARE_COMMAND' as const,
+            interactionType: 'MUTATE_RECORD' as const, style: 'QUIET' as const,
+          }],
+        })),
+      }],
+      actions: [],
+    });
+  }
   if (items.length) {
     const open = (item: (typeof items)[number]) => !item.seenAt && !item.actedAt && !item.dismissedAt && !item.notUsefulAt;
     const itemActions = (item: (typeof items)[number]) => (canChange && open(item) ? ([
@@ -74,8 +103,16 @@ export function homeBriefingFromView(view: BriefingView, propertyId: string, can
 }
 
 registerCapabilityHandler('home-briefing.view', async (envelope, deps) => {
-  await (deps.propertyAccess ?? ensurePropertyAccess(envelope.userId, envelope.propertyId!));
+  const access = await (deps.propertyAccess ?? ensurePropertyAccess(envelope.userId, envelope.propertyId!));
   const view = await getHomeBriefingView(envelope.propertyId!, envelope.userId, { readOnly: true });
-  // CALLER_SCOPED: the briefing is the caller's own, so every member who can see it may change theirs.
-  return homeBriefingFromView(view, envelope.propertyId!, true);
+  const isOwner = access.role === 'OWNER';
+  const shares = isOwner ? ((await (prisma as any).homeBriefingShare.findMany({
+    where: { propertyId: envelope.propertyId!, createdByUserId: envelope.userId, status: 'ACTIVE', expiresAt: { gt: new Date() } },
+    orderBy: { createdAt: 'desc' }, take: 10,
+    select: { id: true, expiresAt: true, viewCount: true, lastViewedAt: true, _count: { select: { items: true } } },
+  })) as Array<{ id: string; expiresAt: Date; viewCount: number; lastViewedAt: Date | null; _count: { items: number } }>).map((share) => ({
+    id: share.id, expiresAt: share.expiresAt, viewCount: share.viewCount, lastViewedAt: share.lastViewedAt, itemCount: share._count.items,
+  })) : [];
+  // The briefing is the caller's own (CALLER_SCOPED, FRD v1.329), so every member may change theirs; a public link is the owner's alone.
+  return homeBriefingFromView(view, envelope.propertyId!, true, { isOwner, shares });
 });

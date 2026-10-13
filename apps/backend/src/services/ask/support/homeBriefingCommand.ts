@@ -48,3 +48,27 @@ export function parseBriefingPreferencesAnswer(answer: unknown): { success: true
 /** What the canonical updateHomeBriefingPreference takes. */
 export const briefingPreferencesInput = (form: BriefingPreferencesForm) =>
   ({ enabled: form.enabled === 'YES', cadence: form.cadence, topics: form.topics, channels: form.channels });
+
+// ---- Sharing selected updates (owner ruling 2026-10-13, FRD v1.331) ---------------------------------------------------------------------------
+// A share is a public, expiring link to explicitly selected, share-eligible updates of one briefing. It is not caller-scoped (it discloses household
+// information to anyone with the link), so it is an owner's act, in its own operation with the owner floor.
+export const BRIEFING_SHARE_ENTITY_TYPE = 'HOME_BRIEFING_SHARE';
+export const BRIEFING_SHARE_MESSAGES = {
+  CREATE: 'Share selected updates from my home briefing.',
+  REVOKE: 'Stop sharing this home briefing link.',
+} as const;
+export type BriefingShareKind = keyof typeof BRIEFING_SHARE_MESSAGES;
+export const BRIEFING_SHARE_ACTION_IDS = { CREATE: 'home-briefing-share', REVOKE: 'home-briefing-share-revoke' } as const;
+export const briefingShareKindFromMessage = (message: string): BriefingShareKind | null =>
+  ((Object.entries(BRIEFING_SHARE_MESSAGES) as Array<[BriefingShareKind, string]>).find(([, value]) => value === message)?.[0]) ?? null;
+export const BRIEFING_SHARE_CAPTURE_KEY = 'HOME_BRIEFING_SHARE';
+export const BRIEFING_SHARE_EXPIRY_DAYS = [1, 7, 14, 30] as const;
+export const BriefingShareInputSchema = z.object({
+  itemIds: z.array(z.string().uuid()).min(1).max(10),
+  expiresInDays: z.coerce.number().int().refine((value) => (BRIEFING_SHARE_EXPIRY_DAYS as readonly number[]).includes(value)).default(7),
+}).strict();
+export type BriefingShareForm = z.infer<typeof BriefingShareInputSchema>;
+export function parseBriefingShareAnswer(answer: unknown): { success: true; data: BriefingShareForm } | { success: false } {
+  const parsed = BriefingShareInputSchema.safeParse(answer);
+  return parsed.success ? { success: true, data: { ...parsed.data, itemIds: [...new Set(parsed.data.itemIds)] } } : { success: false };
+}

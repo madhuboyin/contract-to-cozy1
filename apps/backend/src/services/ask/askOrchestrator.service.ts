@@ -99,6 +99,7 @@ import './handlers/negotiationShieldAnalyze.handler';
 import './handlers/negotiationShieldEdit.handler';
 import './handlers/negotiationShieldAttach.handler';
 import './handlers/renovationCaseStart.handler';
+import './handlers/homeBriefingShareCommands.handler';
 import './handlers/hoaComplianceCommands.handler';
 import './handlers/homeBriefingCommands.handler';
 import './handlers/homeBriefing.handler';
