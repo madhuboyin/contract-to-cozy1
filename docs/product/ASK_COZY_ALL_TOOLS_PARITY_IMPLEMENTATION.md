@@ -232,7 +232,7 @@ Project Tracker appeared in the original P0 list as "lists projects." It is remo
 | Seller Prep | Residual gap | Checklist decisions work; some evidence and report-level controls remain | Not re-verified |
 | Buyer Closing | Residual gap | Extensive operations exist; advanced deferred-buyer and document-center workflows are not currently available in Ask | Not re-verified |
 | DIY | Residual gap | Template, project and step operations are strong; planning visuals and bulk editing are not currently available in Ask | Not re-verified |
-| Service Price Radar | Residual gap | Quote checking works inline; saved-check correction/deletion and richer history remain | Not re-verified |
+| Service Price Radar | **Closed 2026-10-13 (code-traced):** no desktop gap. The desktop router has list, read, track-event and save-check only; there is no edit or delete of a saved check. Ask runs and lists checks. The save route now requires a contributor (FRD v1.335). | Nothing to implement | Code-traced |
 | Do-Nothing Simulator | Residual gap | Ask can run and read simulations; complete scenario creation/editing is not reproduced | Not re-verified |
 | HOA Compliance | Partial: association, approval requests as reported, and violation notices implemented (FRD v1.328) | Recording an association decision with its evidence; attaching documents; renovation-advisor link | Not browser- or database-verified |
 | Guidance Overview | Residual gap | Create, continue, skip and dismiss exist; richer plan editing is limited | Not re-verified |

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth.middleware';
-import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
+import { propertyAuthMiddleware, requireHouseholdRole } from '../middleware/propertyAuth.middleware';
 import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
 import { validateBody } from '../middleware/validate.middleware';
 import {
@@ -41,6 +41,8 @@ router.post(
 router.post(
   '/properties/:propertyId/service-price-radar/checks',
   propertyAuthMiddleware,
+  // A saved check is a record on the household's property (FRD v1.335).
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(createServicePriceRadarBodySchema),
   createServicePriceRadarCheck
 );
