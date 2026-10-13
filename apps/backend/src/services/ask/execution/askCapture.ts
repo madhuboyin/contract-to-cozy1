@@ -47,7 +47,7 @@ import { NEGOTIATION_SHIELD_EDIT_CAPTURE_KEY, parseNegotiationEditAnswer } from 
 import { getNegotiationShieldEditableInputForProperty } from '../../negotiationShieldCaseList';
 import { negotiationShieldAttachOffer, negotiationShieldAttachResult } from '../handlers/negotiationShieldAttach.handler';
 import { quoteCommandResult } from '../handlers/quoteComparisonCommands.handler';
-import { parseQuoteAddAnswer, QUOTE_ADD_CAPTURE_KEY } from '../support/quoteComparisonCommand';
+import { parseQuoteFormAnswer, quoteFormKindFromCaptureKey } from '../support/quoteComparisonCommand';
 import { NEGOTIATION_SHIELD_ATTACH_CAPTURE_KEY, parseNegotiationAttachAnswer } from '../support/negotiationShieldAttach';
 import { renovationCaseStartContextVersion, renovationCaseStartResult } from '../handlers/renovationCaseStart.handler';
 import { parseRenovationCaseStartAnswer, RENOVATION_CASE_START_CAPTURE_KEY } from '../support/renovationCaseStart';
@@ -1028,23 +1028,25 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     capturedContextVersion = 'reserve-fund-live';
     canonicalOwner = 'HomeReserveFundContribution';
   } else if (execution.operationId === 'QUOTE_COMPARISON_COMMAND') {
-    if (input.captureKey !== QUOTE_ADD_CAPTURE_KEY) {
-      throw Object.assign(new Error('This proposal form is no longer active. Choose Add a proposal again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    const formKind = quoteFormKindFromCaptureKey(input.captureKey);
+    if (!formKind) {
+      throw Object.assign(new Error('This quote form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
     }
     const access = await ensurePropertyAccess(userId, execution.propertyId);
     if (access.role === HouseholdRole.VIEWER) throw Object.assign(new Error('A contributor or owner is required to change a quote comparison.'), { code: 'ASK_PERMISSION_REQUIRED' });
     const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson) ? execution.parametersJson as Record<string, unknown> : {};
     const quoteLaunch = storedParameters.quoteCommandLaunch && typeof storedParameters.quoteCommandLaunch === 'object' && !Array.isArray(storedParameters.quoteCommandLaunch)
       ? storedParameters.quoteCommandLaunch as { kind?: unknown; entityId?: unknown; sourceExecutionId?: unknown } : null;
-    if (quoteLaunch?.kind !== 'ADD' || typeof quoteLaunch.entityId !== 'string') {
-      throw Object.assign(new Error('This proposal form is no longer active. Choose Add a proposal again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    // The form must be the one the stored launch opened (an Add form cannot be replayed as a Change, nor the reverse).
+    if (!quoteLaunch || quoteLaunch.kind !== formKind || typeof quoteLaunch.entityId !== 'string') {
+      throw Object.assign(new Error('This quote form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
     }
-    const quoteAnswer = parseQuoteAddAnswer(input.answer);
+    const quoteAnswer = parseQuoteFormAnswer(formKind, input.answer);
     if (!quoteAnswer.success) {
-      throw Object.assign(new Error(quoteAnswer.reason === 'DATES' ? 'The quote cannot expire before its date.' : 'Enter the provider and a total of zero or more.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+      throw Object.assign(new Error(quoteAnswer.reason === 'DATES' ? 'The quote cannot expire before its date.' : 'Check the details: a provider and a total are needed, and answers cannot be empty.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
     }
     result = await quoteCommandResult(userId, execution.propertyId, {
-      kind: 'ADD', entityId: quoteLaunch.entityId, sourceExecutionId: typeof quoteLaunch.sourceExecutionId === 'string' ? quoteLaunch.sourceExecutionId : null,
+      kind: formKind, entityId: quoteLaunch.entityId, sourceExecutionId: typeof quoteLaunch.sourceExecutionId === 'string' ? quoteLaunch.sourceExecutionId : null,
     }, quoteAnswer.data);
     captureId = input.idempotencyKey;
     capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;

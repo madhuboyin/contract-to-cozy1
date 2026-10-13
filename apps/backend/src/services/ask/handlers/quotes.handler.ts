@@ -163,6 +163,9 @@ async function quoteComparisonReviewResult(propertyId: string, canChange = false
     actions: canChange && latest.outcome === 'OPEN' ? [{
       id: QUOTE_COMMAND_ACTION_IDS.ADD, label: 'Add a proposal', interactionType: 'START_WORKFLOW' as const, message: QUOTE_COMMAND_MESSAGES.ADD,
       operationId: 'QUOTE_COMPARISON_COMMAND' as const, entityType: QUOTE_WORKSPACE_ENTITY_TYPE, entityId: latest.id, style: 'PRIMARY' as const,
+    }, {
+      id: QUOTE_COMMAND_ACTION_IDS.CLOSE, label: 'Close this decision', interactionType: 'START_WORKFLOW' as const, message: QUOTE_COMMAND_MESSAGES.CLOSE,
+      operationId: 'QUOTE_COMPARISON_COMMAND' as const, entityType: QUOTE_WORKSPACE_ENTITY_TYPE, entityId: latest.id, style: 'QUIET' as const,
     }] : [],
   }];
   // IW-PRES-016 (FRD v1.76): two to four quotes still in play render as a comparison strip; one quote, or five and
@@ -179,14 +182,23 @@ async function quoteComparisonReviewResult(propertyId: string, canChange = false
     const item = (quote: any) => {
       const rejected = quote.decision === 'REJECTED';
       const ready = comparisonReady.has(quote.id);
+      const open = ((quote.clarifications ?? []) as Array<{ status: string }>).filter((entry) => entry.status === 'OPEN').length;
       const act = (id: string, label: string, message: string, style: 'PRIMARY' | 'SECONDARY' | 'QUIET' = 'SECONDARY') =>
         ({ id, label, message, operationId: 'QUOTE_COMPARISON_COMMAND', interactionType: 'MUTATE_RECORD' as const, style });
       return {
         id: quote.id, title: quote.vendorName, description: null,
-        meta: [`${quote.currency ?? 'USD'} ${Number(quote.quoteAmount).toLocaleString('en-US', { maximumFractionDigits: 2 })}`, rejected ? 'Rejected' : quote.isSelected ? 'Selected' : ready ? 'Comparison ready' : 'Needs facts confirmed'],
+        meta: [
+          `${quote.currency ?? 'USD'} ${Number(quote.quoteAmount).toLocaleString('en-US', { maximumFractionDigits: 2 })}`,
+          rejected ? 'Rejected' : quote.isSelected ? 'Selected' : ready ? 'Comparison ready' : quote.homeownerConfirmedAt ? 'Facts confirmed, not yet comparable' : 'Facts not confirmed',
+          ...(open ? [`${open} open question${open === 1 ? '' : 's'}`] : []),
+        ],
         status: null, href: null, entityType: QUOTE_ENTITY_TYPE,
         actions: [
           ...(ready && !rejected && !quote.isSelected ? [act(QUOTE_COMMAND_ACTION_IDS.SELECT, 'Select', QUOTE_COMMAND_MESSAGES.SELECT, 'PRIMARY')] : []),
+          ...(!quote.homeownerConfirmedAt && !rejected ? [act(QUOTE_COMMAND_ACTION_IDS.CONFIRM, 'Confirm the facts', QUOTE_COMMAND_MESSAGES.CONFIRM, ready ? 'SECONDARY' : 'PRIMARY')] : []),
+          act(QUOTE_COMMAND_ACTION_IDS.EDIT, 'Change details', QUOTE_COMMAND_MESSAGES.EDIT),
+          act(QUOTE_COMMAND_ACTION_IDS.CLARIFY, 'Ask a question', QUOTE_COMMAND_MESSAGES.CLARIFY),
+          ...(open ? [act(QUOTE_COMMAND_ACTION_IDS.RESOLVE, 'Record the answer', QUOTE_COMMAND_MESSAGES.RESOLVE)] : []),
           rejected ? act(QUOTE_COMMAND_ACTION_IDS.RESTORE, 'Return to consideration', QUOTE_COMMAND_MESSAGES.RESTORE) : act(QUOTE_COMMAND_ACTION_IDS.REJECT, 'Reject', QUOTE_COMMAND_MESSAGES.REJECT),
           act(QUOTE_COMMAND_ACTION_IDS.REMOVE, 'Remove', QUOTE_COMMAND_MESSAGES.REMOVE, 'QUIET'),
         ],
@@ -194,11 +206,11 @@ async function quoteComparisonReviewResult(propertyId: string, canChange = false
     };
     blocks.push({
       type: 'GROUPED_LIST', filters: [], id: 'quote-review-manage', title: 'Manage proposals',
-      description: 'Select the proposal you prefer, reject one you have ruled out, or remove one. Each change is reviewed before it is saved, and nothing is accepted or sent to a provider.',
+      description: 'Confirm a proposal\u2019s facts, change them, record a question or the provider\u2019s answer, select the one you prefer, reject one you have ruled out, or remove one. Each change is reviewed before it is saved, and nothing is accepted or sent to a provider.',
       sections: [{ id: 'quote-review-manage-all', title: 'Proposals', count: quotes.length, items: quotes.slice(0, 25).map(item) }], actions: [],
     });
   }
-  blocks.push({ type: 'GROUPED_LIST', filters: [], id: 'quote-review-gaps', title: 'Comparison controls', description: 'These are the scope or fact gaps the recorded proposals still have. Confirming a proposal\u2019s facts is not currently available in Ask.', sections: [{ id: 'controls', title: comparability.status === 'COMPARABLE' ? 'Aligned comparison' : 'What still needs attention', count: Math.max(1, comparability.reasons.length), items: comparability.reasons.map((reason, index) => ({ id: `quote-reason-${index}`, title: reason, description: null, meta: [], status: comparability.status, href: null })) }], actions: [] });
+  blocks.push({ type: 'GROUPED_LIST', filters: [], id: 'quote-review-gaps', title: 'Comparison controls', description: 'These are the scope or fact gaps the recorded proposals still have. Use Confirm the facts, or Change details, on the proposal.', sections: [{ id: 'controls', title: comparability.status === 'COMPARABLE' ? 'Aligned comparison' : 'What still needs attention', count: Math.max(1, comparability.reasons.length), items: comparability.reasons.map((reason, index) => ({ id: `quote-reason-${index}`, title: reason, description: null, meta: [], status: comparability.status, href: null })) }], actions: [] });
   blocks.push({ type: 'EVIDENCE', id: 'quote-review-evidence', title: 'Proposal freshness', items: quotes.slice(0, 20).map((quote) => ({ label: quote.vendorName, source: quote.sourceType ? `Quote · ${String(quote.sourceType).toLowerCase()}` : 'Recorded quote', observedAt: quote.updatedAt?.toISOString?.() ?? quote.createdAt?.toISOString?.() ?? null })) });
   blocks.push({ type: 'BOUNDARY', id: 'quote-review-boundary', title: 'Comparison support—not provider endorsement', body: 'Verify scope, credentials, insurance, references, permits, warranties, payment milestones, and final terms. Ask does not accept a quote, rank provider trust, or guarantee workmanship.', severity: 'INFO', suggestions: [] });
   return { status: comparability.status === 'COMPARABLE' ? 'ANSWERED' : 'READY_WITH_LIMITATIONS', reasonCode: comparability.status === 'COMPARABLE' ? undefined : `QUOTE_${comparability.status}`, contextVersion: workspace.updatedAt?.toISOString?.() ?? null, blocks, suggestions: [] };

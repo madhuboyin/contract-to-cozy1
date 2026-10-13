@@ -135,7 +135,7 @@ Both rows were checked on October 12, 2026 by reading the Ask handlers, the desk
 
 **Policy conflict (fixed 2026-10-12):** the answer used to emit an `open-negotiation-shield` action and a per-row `?caseId=` link to the desktop tool page, and its copy said "Open a review for its analysis and draft" and "the rest are on the Negotiation Shield page". The trust policy removed those hrefs, so the user was told to open something that could not be opened. The handler now emits no action and no row link, and its copy says that a review's analysis and draft are not currently available in Ask. The trust-policy allowlist entry was removed.
 
-### Quote Comparison — P0, status: Partial (create and read only)
+### Quote Comparison — P0, status: Partial (create, read, and manage proposals; document import, outcome consent and continuation into finalization remain)
 
 **Implemented in Ask** (`quotes.handler.ts`, `workflowConfirm.handler.ts`):
 
@@ -151,13 +151,13 @@ The Ask handlers import only those three service functions.
 | Get or create a workspace | `getOrCreateQuoteComparisonWorkspace` | Implemented |
 | Read workspace and comparability | `getQuoteComparisonWorkspace`, `getWorkspaceComparability` | Implemented (latest workspace only) |
 | Add a quote | `createQuoteProposal` | Implemented (FRD v1.309) |
-| Edit a quote | `updateQuoteProposal` | Residual gap |
+| Edit a quote | `updateQuoteProposal` | Implemented (FRD v1.310) |
 | Remove a quote | `deleteQuoteProposal` | Implemented (FRD v1.309) |
-| Import a quote from a document, then confirm it | `createQuoteProposalFromDocument`, `confirmQuoteProposal` | Residual gap |
+| Import a quote from a document, then confirm it | `createQuoteProposalFromDocument`, `confirmQuoteProposal` | Confirm: implemented (FRD v1.310). Import: Residual gap, blocked on the legacy `Document` table the import reads (Home Records are not accepted) |
 | Record a disposition on a quote | `setQuoteProposalDisposition` | Implemented (FRD v1.309: reject and return to consideration) |
-| Raise and resolve clarifications | `createQuoteClarification`, `resolveQuoteClarification` | Residual gap |
+| Raise and resolve clarifications | `createQuoteClarification`, `resolveQuoteClarification` | Implemented (FRD v1.310) |
 | Select a quote for the decision | `selectQuoteForDecision` | Implemented (FRD v1.309) |
-| Transition the workspace state | `transitionQuoteDecision` | Residual gap |
+| Transition the workspace state | `transitionQuoteDecision` | Implemented (FRD v1.310: close as declined or deferred, the only manual transition) |
 | Link decision context | `addQuoteDecisionContextLink` | Residual gap |
 | Outcome-measurement consent | `setServiceQuoteOutcomeMeasurementConsent` | Residual gap |
 

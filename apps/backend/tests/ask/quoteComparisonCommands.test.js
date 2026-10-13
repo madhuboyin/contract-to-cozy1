@@ -26,7 +26,9 @@ const handler = require('../../src/services/ask/handlers/quoteComparisonCommands
 const OP = 'QUOTE_COMPARISON_COMMAND';
 const M = command.QUOTE_COMMAND_MESSAGES;
 const WORKSPACE = { id: 'ws-1', outcome: 'OPEN', journeyStage: 'SCOPE_REVIEW', serviceCategory: 'ROOFING', scopeSummary: 'Roof', updatedAt: new Date('2026-10-01T00:00:00Z'), selectedQuoteId: null };
-const QUOTE = { id: 'q-1', vendorName: 'Acme Roofing', quoteAmount: 12000, currency: 'USD', decision: 'UNDECIDED', isSelected: false, readinessStage: 'COMPARISON_READY', updatedAt: new Date('2026-10-02T00:00:00Z'), workspaceId: 'ws-1' };
+const QUOTE = { id: 'q-1', vendorName: 'Acme Roofing', quoteAmount: 12000, currency: 'USD', decision: 'UNDECIDED', isSelected: false, readinessStage: 'COMPARISON_READY', updatedAt: new Date('2026-10-02T00:00:00Z'), workspaceId: 'ws-1',
+  scopeSummary: 'Tear off', quoteDate: new Date('2026-09-01T12:00:00Z'), expirationDate: null, notes: null, homeownerConfirmedAt: null,
+  terms: [{ type: 'WARRANTY', label: 'Warranty', value: '5 years', included: null }, { type: 'INCLUSION', label: null, value: 'Disposal', included: true }], clarifications: [] };
 
 function withRole(role) {
   const saved = propertyAccess.resolvePropertyAccess;
@@ -40,7 +42,7 @@ function withData({ workspace = WORKSPACE, quote = QUOTE } = {}) {
   return () => { prisma.quoteComparisonWorkspace = saved.ws; prisma.quoteComparisonQuote = saved.q; };
 }
 const invoke = (message, launchContext, role = 'CONTRIBUTOR') => capabilityInvoke(OP, { userId: 'user-1', propertyId: 'prop-1', message, launchContext }, { propertyAccess: { role } });
-const launchFor = (kind, entityId, over = {}) => ({ operationId: OP, surface: 'ASK_PAGE', entityType: kind === 'ADD' ? command.QUOTE_WORKSPACE_ENTITY_TYPE : command.QUOTE_ENTITY_TYPE, entityId, ...over });
+const launchFor = (kind, entityId, over = {}) => ({ operationId: OP, surface: 'ASK_PAGE', entityType: command.quoteCommandTargetsWorkspace(kind) ? command.QUOTE_WORKSPACE_ENTITY_TYPE : command.QUOTE_ENTITY_TYPE, entityId, ...over });
 
 // ───────────────────────────── the form's input ─────────────────────────────
 
@@ -245,8 +247,9 @@ async function review(role, outcome = 'OPEN') {
   quoteService.getQuoteComparisonWorkspace = async () => ({ updatedAt: new Date('2026-10-01T00:00:00Z'), quotes: [
     { id: 'q-1', vendorName: 'Acme', quoteAmount: 100, currency: 'USD', decision: 'UNDECIDED', isSelected: false, readinessStage: 'COMPARISON_READY', terms: [] },
     { id: 'q-2', vendorName: 'Beta', quoteAmount: 120, currency: 'USD', decision: 'REJECTED', isSelected: false, readinessStage: 'NEEDS_SCOPE_REVIEW', terms: [] },
+    { id: 'q-3', vendorName: 'Gamma', quoteAmount: 130, currency: 'USD', decision: 'UNDECIDED', isSelected: false, readinessStage: 'COMPARISON_READY', homeownerConfirmedAt: new Date(), terms: [], clarifications: [{ status: 'OPEN' }] },
   ] });
-  quoteService.getWorkspaceComparability = async () => ({ status: 'COMPARABLE', eligibleQuoteIds: ['q-1'], reasons: [] });
+  quoteService.getWorkspaceComparability = async () => ({ status: 'COMPARABLE', eligibleQuoteIds: ['q-1', 'q-3'], reasons: [] });
   try {
     return await capabilityInvoke('QUOTE_COMPARISON_REVIEW', { userId: 'user-1', propertyId: 'prop-1', message: 'Compare my service quotes', launchContext: null }, { propertyAccess: { role } });
   } finally { prisma.quoteComparisonWorkspace = savedWs; quoteService.getQuoteComparisonWorkspace = savedGet; quoteService.getWorkspaceComparability = savedCompare; }
@@ -258,12 +261,17 @@ test('the review offers Add a proposal and per-proposal controls to a contributo
     const result = await review('CONTRIBUTOR');
     const summary = result.blocks.find((b) => b.id === 'quote-review-summary');
     assert.deepEqual(summary.actions.map((a) => [a.id, a.operationId, a.message, a.entityType, a.entityId]),
-      [['quote-comparison-add-quote', OP, M.ADD, command.QUOTE_WORKSPACE_ENTITY_TYPE, 'ws-1']]);
+      [['quote-comparison-add-quote', OP, M.ADD, command.QUOTE_WORKSPACE_ENTITY_TYPE, 'ws-1'], ['quote-comparison-close-decision', OP, M.CLOSE, command.QUOTE_WORKSPACE_ENTITY_TYPE, 'ws-1']]);
     const manage = result.blocks.find((b) => b.id === 'quote-review-manage');
     const byId = Object.fromEntries(manage.sections[0].items.map((i) => [i.id, i]));
     assert.equal(byId['q-1'].entityType, command.QUOTE_ENTITY_TYPE);
-    assert.deepEqual(byId['q-1'].actions.map((a) => a.id), ['quote-comparison-select-quote', 'quote-comparison-reject-quote', 'quote-comparison-remove-quote']);
-    assert.deepEqual(byId['q-2'].actions.map((a) => a.id), ['quote-comparison-restore-quote', 'quote-comparison-remove-quote'], 'a rejected, not-ready proposal can be returned or removed, not selected');
+    assert.deepEqual(byId['q-1'].actions.map((a) => a.id), ['quote-comparison-select-quote', 'quote-comparison-confirm-quote', 'quote-comparison-edit-quote',
+      'quote-comparison-clarify-quote', 'quote-comparison-reject-quote', 'quote-comparison-remove-quote']);
+    assert.deepEqual(byId['q-2'].actions.map((a) => a.id), ['quote-comparison-edit-quote', 'quote-comparison-clarify-quote', 'quote-comparison-restore-quote', 'quote-comparison-remove-quote'],
+      'a rejected, not-ready proposal can be changed, questioned, returned or removed, not selected or confirmed');
+    assert.ok(byId['q-3'].meta.includes('1 open question'));
+    assert.ok(byId['q-3'].actions.some((a) => a.id === 'quote-comparison-resolve-clarification'));
+    assert.equal(byId['q-3'].actions.some((a) => a.id === 'quote-comparison-confirm-quote'), false, 'already confirmed');
     assert.ok(byId['q-1'].actions.every((a) => a.operationId === OP));
 
     for (const [role, outcome] of [['VIEWER', 'OPEN'], ['CONTRIBUTOR', 'DECLINED']]) {
@@ -272,4 +280,138 @@ test('the review offers Add a proposal and per-proposal controls to a contributo
       assert.equal(other.blocks.some((b) => b.id === 'quote-review-manage'), false, `${role}/${outcome}`);
     }
   } finally { restore(); }
+});
+
+// ───────────────────────────── change, confirm, question, answer, close ─────────────────────────────
+
+test('Change opens the form with what is recorded; the review lists exactly what changes and says what a save clears; no change is refused', async () => {
+  const restoreRole = withRole('CONTRIBUTOR'); const restoreData = withData();
+  try {
+    const open = await invoke(M.EDIT, launchFor('EDIT', 'q-1'));
+    assert.equal(open.status, 'NEEDS_CONTEXT');
+    assert.equal(open.captureRequests[0].captureKey, command.QUOTE_FORM_CAPTURE_KEYS.EDIT);
+    assert.deepEqual(open.captureRequests[0].currentAnswer, { vendorName: 'Acme Roofing', quoteAmount: 12000, scopeSummary: 'Tear off', quoteDate: '2026-09-01', warranty: '5 years' });
+
+    const parsed = command.parseQuoteAddAnswer({ vendorName: 'Acme Roofing', quoteAmount: 11500, scopeSummary: 'Tear off', quoteDate: '2026-09-01', warranty: '10 years' });
+    const review = await handler.quoteCommandResult('user-1', 'prop-1', { kind: 'EDIT', entityId: 'q-1', sourceExecutionId: null }, parsed.data);
+    assert.equal(review.status, 'NEEDS_CONFIRMATION');
+    const fields = Object.fromEntries(review.confirmation.fields.map((f) => [f.label, f.value]));
+    assert.equal(fields['Total quoted'], '$12,000 \u2192 $11,500');
+    assert.equal(fields.Warranty, '5 years \u2192 10 years');
+    assert.equal('Provider' in fields && fields.Provider.includes('\u2192'), false, 'an unchanged field is not listed as a change');
+    assert.match(review.confirmation.description, /clears the confirmed facts of this proposal and the selection and rejections/);
+
+    const same = command.parseQuoteAddAnswer({ vendorName: 'Acme Roofing', quoteAmount: 12000, scopeSummary: 'Tear off', quoteDate: '2026-09-01', warranty: '5 years' });
+    const none = await handler.quoteCommandResult('user-1', 'prop-1', { kind: 'EDIT', entityId: 'q-1', sourceExecutionId: null }, same.data);
+    assert.equal(none.reasonCode, 'QUOTE_EDIT_NO_CHANGE');
+  } finally { restoreData(); restoreRole(); }
+});
+
+test('confirming a Change sends only the changed fields, and keeps the other terms when the warranty changes', async () => {
+  const restoreData = withData(); const w = installWrites();
+  const original = quoteService.updateQuoteProposal; const calls = [];
+  quoteService.updateQuoteProposal = async (...a) => { calls.push(a); return { readinessStage: 'NEEDS_SCOPE_REVIEW' }; };
+  try {
+    await confirmCapabilityInvoke(OP, ctx({
+      quoteEdit: { vendorName: 'Acme Roofing', quoteAmount: 11500, scopeSummary: 'Tear off', quoteDate: '2026-09-01', expirationDate: null, warranty: '10 years', notes: null },
+      quoteCommand: { kind: 'EDIT', entityId: 'q-1' }, quoteCommandContextVersion: versionFor(WORKSPACE, QUOTE),
+    }));
+    assert.equal(calls.length, 1);
+    const [propertyId, workspaceId, quoteId, userId, input] = calls[0];
+    assert.deepEqual([propertyId, workspaceId, quoteId, userId], ['prop-1', 'ws-1', 'q-1', 'user-1']);
+    assert.deepEqual(Object.keys(input).sort(), ['quoteAmount', 'terms']);
+    assert.equal(input.quoteAmount, 11500);
+    assert.deepEqual(input.terms.map((t) => [t.type, t.value]), [['INCLUSION', 'Disposal'], ['WARRANTY', '10 years']]);
+  } finally { quoteService.updateQuoteProposal = original; w.restore(); restoreData(); }
+});
+
+test('Confirm the facts reviews what is recorded, is refused when already confirmed, and confirms through the canonical function', async () => {
+  const restoreRole = withRole('CONTRIBUTOR');
+  try {
+    let restoreData = withData();
+    const review = await invoke(M.CONFIRM, launchFor('CONFIRM', 'q-1'));
+    assert.equal(review.status, 'NEEDS_CONFIRMATION');
+    assert.match(review.confirmation.description, /match the quote you were given/);
+    restoreData();
+    restoreData = withData({ quote: { ...QUOTE, homeownerConfirmedAt: new Date() } });
+    assert.equal((await invoke(M.CONFIRM, launchFor('CONFIRM', 'q-1'))).reasonCode, 'QUOTE_ALREADY_CONFIRMED');
+    restoreData();
+  } finally { restoreRole(); }
+  const restoreData2 = withData(); const w = installWrites();
+  const original = quoteService.confirmQuoteProposal; const calls = [];
+  quoteService.confirmQuoteProposal = async (...a) => { calls.push(a); return { readinessStage: 'COMPARISON_READY', readinessScore: 90 }; };
+  try {
+    const out = await confirmCapabilityInvoke(OP, ctx({ quoteCommand: { kind: 'CONFIRM', entityId: 'q-1' }, quoteCommandContextVersion: versionFor(WORKSPACE, QUOTE) }));
+    assert.deepEqual(calls, [['prop-1', 'ws-1', 'q-1', 'user-1']]);
+    assert.equal(out.result.blocks[0].title, 'Facts confirmed');
+  } finally { quoteService.confirmQuoteProposal = original; w.restore(); restoreData2(); }
+});
+
+test('a question is recorded (not sent) and an answer resolves the oldest open question', async () => {
+  const restoreRole = withRole('CONTRIBUTOR');
+  const withOpen = { ...QUOTE, clarifications: [{ id: 'c-1', question: 'Is disposal included?', status: 'OPEN', createdAt: new Date() }] };
+  try {
+    let restoreData = withData();
+    const form = await invoke(M.CLARIFY, launchFor('CLARIFY', 'q-1'));
+    assert.equal(form.status, 'NEEDS_CONTEXT');
+    assert.equal(form.captureRequests[0].captureKey, command.QUOTE_FORM_CAPTURE_KEYS.CLARIFY);
+    const review = await handler.quoteCommandResult('user-1', 'prop-1', { kind: 'CLARIFY', entityId: 'q-1', sourceExecutionId: null }, { question: 'Is disposal included?' });
+    assert.match(review.confirmation.description, /Nothing is sent/);
+    assert.equal(review.parameters.quoteClarify.question, 'Is disposal included?');
+    assert.equal((await invoke(M.RESOLVE, launchFor('RESOLVE', 'q-1'))).reasonCode, 'QUOTE_NO_OPEN_QUESTION');
+    restoreData();
+
+    restoreData = withData({ quote: withOpen });
+    const answerForm = await invoke(M.RESOLVE, launchFor('RESOLVE', 'q-1'));
+    assert.equal(answerForm.status, 'NEEDS_CONTEXT');
+    assert.match(answerForm.blocks[0].body, /Is disposal included\?/);
+    const answerReview = await handler.quoteCommandResult('user-1', 'prop-1', { kind: 'RESOLVE', entityId: 'q-1', sourceExecutionId: null }, { response: 'Yes, hauled away.' });
+    assert.deepEqual(answerReview.parameters.quoteResolve, { response: 'Yes, hauled away.', clarificationId: 'c-1' });
+    restoreData();
+  } finally { restoreRole(); }
+
+  const restoreData2 = withData({ quote: withOpen }); const w = installWrites();
+  const saved = { c: quoteService.createQuoteClarification, r: quoteService.resolveQuoteClarification }; const calls = [];
+  quoteService.createQuoteClarification = async (...a) => { calls.push(['clarify', ...a]); return { id: 'c-new' }; };
+  quoteService.resolveQuoteClarification = async (...a) => { calls.push(['resolve', ...a]); return {}; };
+  try {
+    const version = versionFor(WORKSPACE, withOpen);
+    await confirmCapabilityInvoke(OP, ctx({ quoteClarify: { question: 'Is disposal included?' }, quoteCommand: { kind: 'CLARIFY', entityId: 'q-1' }, quoteCommandContextVersion: version }));
+    await confirmCapabilityInvoke(OP, ctx({ quoteResolve: { response: 'Yes.', clarificationId: 'c-1' }, quoteCommand: { kind: 'RESOLVE', entityId: 'q-1' }, quoteCommandContextVersion: version }));
+    assert.deepEqual(calls, [
+      ['clarify', 'prop-1', 'ws-1', 'q-1', 'user-1', 'Is disposal included?'],
+      ['resolve', 'prop-1', 'ws-1', 'q-1', 'c-1', 'user-1', 'Yes.'],
+    ]);
+  } finally { Object.assign(quoteService, { createQuoteClarification: saved.c, resolveQuoteClarification: saved.r }); w.restore(); restoreData2(); }
+});
+
+test('Close this decision takes a way out, is reviewed, and closes through the canonical transition', async () => {
+  const restoreRole = withRole('CONTRIBUTOR');
+  try {
+    const restoreData = withData();
+    const form = await invoke(M.CLOSE, launchFor('CLOSE', 'ws-1'));
+    assert.equal(form.status, 'NEEDS_CONTEXT');
+    assert.deepEqual(form.captureRequests[0].inputSchema.fields[0].inputSchema.options.map((o) => o.value), ['DECLINED', 'DEFERRED']);
+    const review = await handler.quoteCommandResult('user-1', 'prop-1', { kind: 'CLOSE', entityId: 'ws-1', sourceExecutionId: null }, { outcome: 'DEFERRED', reason: 'Waiting on a third quote' });
+    assert.equal(review.status, 'NEEDS_CONFIRMATION');
+    assert.match(review.confirmation.description, /does not cancel anything/);
+    restoreData();
+  } finally { restoreRole(); }
+  const restoreData2 = withData(); const w = installWrites();
+  const original = quoteService.transitionQuoteDecision; const calls = [];
+  quoteService.transitionQuoteDecision = async (...a) => { calls.push(a); return {}; };
+  try {
+    await confirmCapabilityInvoke(OP, ctx({ quoteClose: { outcome: 'DECLINED', reason: null }, quoteCommand: { kind: 'CLOSE', entityId: 'ws-1' }, quoteCommandContextVersion: versionFor(WORKSPACE, null) }));
+    assert.deepEqual(calls, [['prop-1', 'ws-1', 'user-1', { toStage: 'CLOSED', outcome: 'DECLINED', reason: null }]]);
+    await assert.rejects(() => confirmCapabilityInvoke(OP, ctx({ quoteClose: { outcome: 'CANCELLED' }, quoteCommand: { kind: 'CLOSE', entityId: 'ws-1' }, quoteCommandContextVersion: versionFor(WORKSPACE, null) })),
+      (e) => e.code === 'ASK_CONFIRMATION_NOT_ACTIVE');
+  } finally { quoteService.transitionQuoteDecision = original; w.restore(); restoreData2(); }
+});
+
+test('a form can only be submitted as the command that opened it', () => {
+  assert.equal(command.quoteFormKindFromCaptureKey(command.QUOTE_FORM_CAPTURE_KEYS.EDIT), 'EDIT');
+  assert.equal(command.quoteFormKindFromCaptureKey('NOT_A_FORM'), null);
+  assert.equal(command.parseQuoteFormAnswer('CLARIFY', { question: 'hi' }).success, false, 'a question needs three characters');
+  assert.equal(command.parseQuoteFormAnswer('CLOSE', { outcome: 'CANCELLED' }).success, false);
+  assert.equal(command.parseQuoteFormAnswer('RESOLVE', { response: '' }).success, false);
 });

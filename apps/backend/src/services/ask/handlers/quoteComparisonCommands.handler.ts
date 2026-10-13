@@ -1,13 +1,13 @@
-// Manage the proposals of a quote comparison inside Ask (register P0 "Quote Comparison"; FRD v1.309).
+// Manage the proposals of a quote comparison inside Ask (register P0 "Quote Comparison"; FRD v1.309 and v1.310).
 //
-// Reached only by declared actions on the Quote Comparison review: "Add a proposal" (summary action on the workspace), and per-proposal Select,
-// Reject / Return to consideration, and Remove (row actions). Every write goes through the canonical quoteComparison.service functions the desktop
-// routes call (createQuoteProposal, selectQuoteForDecision, setQuoteProposalDisposition, deleteQuoteProposal), after the same project-compliance
-// applicability check the controller runs, behind a review card and a confirmation. Nothing is accepted, booked or sent to a provider here.
+// Reached only by declared actions on the Quote Comparison review. Summary actions carry the decision: Add a proposal and Close this decision.
+// Per-proposal row actions carry the proposal (the message tells them apart): Select, Change, Confirm the facts, Ask the provider a question,
+// Record the provider's answer, Reject / Return to consideration, and Remove. Every write goes through the canonical quoteComparison.service functions
+// the desktop routes call, after the same project-compliance applicability check the controller runs, behind a review card and a confirmation.
+// Nothing is accepted, booked or sent to a provider here: a question is recorded for the household, not sent.
 //
-// Not here (separate slices): editing a proposal, importing one from a document, clarifications, the workspace transition, and continuing into
-// finalization. Selecting only records the homeowner's shortlist choice for the next stage; the canonical service refuses a proposal that is not
-// comparison-ready or not part of a comparable set, and Ask says so before offering the confirmation.
+// Not here (separate slices): importing a proposal from a document, and the continuation into finalization. Selecting only records the homeowner's
+// shortlist choice for the next stage.
 import { createHash } from 'node:crypto';
 import { HouseholdRole } from '@prisma/client';
 import { prisma } from '../../../lib/prisma';
@@ -20,13 +20,15 @@ import { reconcileAskExecutionSideEffects } from '../execution/executeOperation'
 import { ensurePropertyAccess } from '../askHandlerSupport';
 import { humanDate, money } from '../askFormatting';
 import {
-  createQuoteProposal, deleteQuoteProposal, getWorkspaceComparability, selectQuoteForDecision, setQuoteProposalDisposition,
+  confirmQuoteProposal, createQuoteClarification, createQuoteProposal, deleteQuoteProposal, getWorkspaceComparability, resolveQuoteClarification,
+  selectQuoteForDecision, setQuoteProposalDisposition, transitionQuoteDecision, updateQuoteProposal,
 } from '../../quoteComparison.service';
 import { assertProjectComplianceDecisionsApplicable } from '../../projectCompliance/context';
 import { emitServiceQuoteDecisionAnalytics, ServiceQuoteDecisionEvent } from '../../serviceQuoteDecisionAnalytics.service';
 import {
-  parseQuoteAddAnswer, QUOTE_ADD_CAPTURE_KEY, QUOTE_COMMAND_MESSAGES, QUOTE_ENTITY_TYPE, QUOTE_WORKSPACE_ENTITY_TYPE, quoteAddProposalInput,
-  quoteCommandKindFromMessage, type QuoteAddInput, type QuoteCommandKind,
+  parseQuoteAddAnswer, parseQuoteFormAnswer, QUOTE_CLOSE_OUTCOME_LABELS, QUOTE_CLOSE_OUTCOMES, QUOTE_COMMAND_MESSAGES, QUOTE_ENTITY_TYPE,
+  QUOTE_FORM_CAPTURE_KEYS, QUOTE_WORKSPACE_ENTITY_TYPE, quoteAddProposalInput, quoteCommandKindFromMessage, quoteCommandTargetsWorkspace, quoteEditChanges,
+  type QuoteAddInput, type QuoteCommandKind, type QuoteCurrentValues, type QuoteFormData, type QuoteFormKind,
 } from '../support/quoteComparisonCommand';
 
 const CONFIRMATION_MINUTES = 30;
@@ -44,7 +46,7 @@ const permissionBlocked = (): AskOperationResult => ({
 });
 const notRoutable = (): AskOperationResult => ({
   status: 'NOT_APPLICABLE', reasonCode: 'ASK_QUOTE_COMMAND_NOT_DIRECTLY_ROUTABLE',
-  blocks: [{ type: 'SUMMARY', id: 'quote-command-not-routable', title: 'Open the comparison first', body: 'Proposals are added, selected or removed from the quote comparison. Nothing has changed.', tone: 'DEFAULT', actions: [backToReview] }],
+  blocks: [{ type: 'SUMMARY', id: 'quote-command-not-routable', title: 'Open the comparison first', body: 'Proposals are changed from the quote comparison. Nothing has changed.', tone: 'DEFAULT', actions: [backToReview] }],
   suggestions: [],
 });
 const unavailable = (reasonCode: string, title: string, body: string): AskOperationResult => ({
@@ -54,9 +56,20 @@ const unavailable = (reasonCode: string, title: string, body: string): AskOperat
 });
 
 type WorkspaceRow = { id: string; outcome: string; journeyStage: string; serviceCategory: string | null; scopeSummary: string | null; updatedAt: Date; selectedQuoteId: string | null };
-type QuoteRow = { id: string; vendorName: string; quoteAmount: unknown; currency: string | null; decision: string | null; isSelected: boolean; readinessStage: string | null; updatedAt: Date; workspaceId: string };
+type QuoteRow = {
+  id: string; vendorName: string; quoteAmount: unknown; currency: string | null; decision: string | null; isSelected: boolean; readinessStage: string | null;
+  updatedAt: Date; workspaceId: string; scopeSummary: string | null; quoteDate: Date | null; expirationDate: Date | null; notes: string | null;
+  homeownerConfirmedAt: Date | null; terms: Array<{ type: string; label: string | null; value: string; included: boolean | null }>;
+  clarifications: Array<{ id: string; question: string; status: string; createdAt: Date }>;
+};
 
 const workspaceSelect = { id: true, outcome: true, journeyStage: true, serviceCategory: true, scopeSummary: true, updatedAt: true, selectedQuoteId: true };
+const quoteSelect = {
+  id: true, vendorName: true, quoteAmount: true, currency: true, decision: true, isSelected: true, readinessStage: true, updatedAt: true, workspaceId: true,
+  scopeSummary: true, quoteDate: true, expirationDate: true, notes: true, homeownerConfirmedAt: true,
+  terms: { select: { type: true, label: true, value: true, included: true }, orderBy: { createdAt: 'asc' } },
+  clarifications: { select: { id: true, question: true, status: true, createdAt: true }, orderBy: { createdAt: 'asc' } },
+};
 
 async function loadWorkspace(propertyId: string, workspaceId: string): Promise<WorkspaceRow | null> {
   return database.quoteComparisonWorkspace.findFirst({ where: { id: workspaceId, propertyId }, select: workspaceSelect });
@@ -64,27 +77,63 @@ async function loadWorkspace(propertyId: string, workspaceId: string): Promise<W
 async function loadQuote(propertyId: string, quoteId: string): Promise<{ quote: QuoteRow; workspace: WorkspaceRow } | null> {
   const quote = await database.quoteComparisonQuote.findFirst({
     where: { id: quoteId, workspace: { propertyId } },
-    select: { id: true, vendorName: true, quoteAmount: true, currency: true, decision: true, isSelected: true, readinessStage: true, updatedAt: true, workspaceId: true,
-      workspace: { select: workspaceSelect } },
+    select: { ...quoteSelect, workspace: { select: workspaceSelect } },
   });
   if (!quote) return null;
   const { workspace, ...rest } = quote;
   return { quote: rest as QuoteRow, workspace: workspace as WorkspaceRow };
 }
 
-/** Bound to the workspace's and the proposal's last change, so a confirmation opened before either changed is refused as out of date. */
+const isoDate = (value: Date | null) => (value ? value.toISOString().slice(0, 10) : null);
+const warrantyOf = (quote: QuoteRow) => quote.terms.find((term) => term.type === 'WARRANTY')?.value ?? null;
+const currentValues = (quote: QuoteRow): QuoteCurrentValues => ({
+  vendorName: quote.vendorName, quoteAmount: Number(quote.quoteAmount), scopeSummary: quote.scopeSummary, quoteDate: isoDate(quote.quoteDate),
+  expirationDate: isoDate(quote.expirationDate), warranty: warrantyOf(quote), notes: quote.notes,
+});
+const openClarification = (quote: QuoteRow) => quote.clarifications.find((entry) => entry.status === 'OPEN') ?? null;
+
+/** Bound to the workspace's and the proposal's last change (and its questions), so a confirmation opened before either changed is refused as out of date. */
 export const quoteCommandContextVersion = (workspace: WorkspaceRow, quote?: QuoteRow | null) =>
-  sha(`quote-command:${workspace.id}:${workspace.updatedAt.toISOString()}:${quote ? `${quote.id}:${quote.updatedAt.toISOString()}:${quote.decision}:${quote.isSelected}` : ''}`);
+  sha(`quote-command:${workspace.id}:${workspace.updatedAt.toISOString()}:${quote
+    ? `${quote.id}:${quote.updatedAt.toISOString()}:${quote.decision}:${quote.isSelected}:${quote.clarifications.map((c) => `${c.id}${c.status}`).join(',')}` : ''}`);
 
 const closedMessage = 'This quote decision is closed. Start a new comparison to evaluate revised proposals.';
 const lockedStages = ['FINALIZATION', 'BOOKING', 'SCHEDULED', 'COMPLETED', 'CLOSED'];
 
-function addCapture(workspace: WorkspaceRow, contextVersion: string, entered?: QuoteAddInput): AskCaptureRequest {
-  const text = (key: string, label: string, max: number, required = false, help?: string) => ({ key, label, ...(help ? { helpText: help } : {}), required, inputSchema: { type: 'SHORT_TEXT' as const, maxLength: max } });
+function formCapture(kind: QuoteFormKind, contextVersion: string, entered?: Record<string, unknown>, quote?: QuoteRow): AskCaptureRequest {
+  const base = { classification: 'WORKFLOW_INPUT' as const, state: 'UNKNOWN' as const, allowNotSure: false, sensitivity: 'FINANCIAL' as const, confirmationText: null, expectedContextVersion: contextVersion };
+  const text = (key: string, label: string, max: number, required = false) => ({ key, label, required, inputSchema: { type: 'SHORT_TEXT' as const, maxLength: max } });
+  const clean = (value?: Record<string, unknown>) => Object.fromEntries(Object.entries(value ?? {}).filter(([, v]) => v !== null && v !== undefined && v !== ''));
+  if (kind === 'CLARIFY') {
+    return { ...base, requirementId: 'quote-comparison-clarify-inputs', captureKey: QUOTE_FORM_CAPTURE_KEYS.CLARIFY, title: 'Ask the provider a question',
+      question: `What do you need to know about ${quote?.vendorName ?? 'this'} proposal?`,
+      helpText: 'The question is recorded with the proposal for your household. It is not sent to the provider.',
+      inputSchema: { type: 'GROUP', fields: [{ key: 'question', label: 'Your question', required: true, inputSchema: { type: 'LONG_TEXT', maxLength: 2000 } }] } as unknown as AskCaptureRequest['inputSchema'],
+      currentAnswer: clean(entered), destinationLabel: 'Recorded with the proposal after confirmation' };
+  }
+  if (kind === 'RESOLVE') {
+    return { ...base, requirementId: 'quote-comparison-resolve-inputs', captureKey: QUOTE_FORM_CAPTURE_KEYS.RESOLVE, title: 'Record the provider’s answer',
+      question: 'What did the provider answer?', helpText: 'Record what you were told. It marks the question answered.',
+      inputSchema: { type: 'GROUP', fields: [{ key: 'response', label: 'The answer', required: true, inputSchema: { type: 'LONG_TEXT', maxLength: 4000 } }] } as unknown as AskCaptureRequest['inputSchema'],
+      currentAnswer: clean(entered), destinationLabel: 'Recorded with the question after confirmation' };
+  }
+  if (kind === 'CLOSE') {
+    return { ...base, requirementId: 'quote-comparison-close-inputs', captureKey: QUOTE_FORM_CAPTURE_KEYS.CLOSE, title: 'Close this quote decision',
+      question: 'How are you leaving this decision?', helpText: 'Closing ends this comparison; revised quotes start a new one. Nothing is cancelled or sent.',
+      inputSchema: { type: 'GROUP', fields: [
+        { key: 'outcome', label: 'Outcome', required: true, inputSchema: { type: 'SINGLE_SELECT', options: QUOTE_CLOSE_OUTCOMES.map((value) => ({ label: QUOTE_CLOSE_OUTCOME_LABELS[value], value })) } },
+        { key: 'reason', label: 'Why (optional)', required: false, inputSchema: { type: 'LONG_TEXT', maxLength: 1000 } },
+      ] } as unknown as AskCaptureRequest['inputSchema'],
+      currentAnswer: clean(entered), destinationLabel: 'Closes the decision after confirmation' };
+  }
+  const isEdit = kind === 'EDIT';
   return {
-    requirementId: 'quote-comparison-add-inputs', captureKey: QUOTE_ADD_CAPTURE_KEY, classification: 'WORKFLOW_INPUT', state: 'UNKNOWN',
-    title: 'Add a proposal', question: 'What did the provider quote?',
-    helpText: 'Enter what is on the quote. Nothing is saved until you confirm, and a proposal is not compared until its scope facts are confirmed.',
+    ...base, requirementId: isEdit ? 'quote-comparison-edit-inputs' : 'quote-comparison-add-inputs', captureKey: isEdit ? QUOTE_FORM_CAPTURE_KEYS.EDIT : QUOTE_FORM_CAPTURE_KEYS.ADD,
+    title: isEdit ? `Change ${quote?.vendorName ?? 'this'} proposal` : 'Add a proposal',
+    question: isEdit ? 'What should change?' : 'What did the provider quote?',
+    helpText: isEdit
+      ? 'Change only what is wrong. Saving a change clears the confirmed facts, selection and rejections for this comparison so it can be reviewed again.'
+      : 'Enter what is on the quote. Nothing is saved until you confirm, and a proposal is not compared until its scope facts are confirmed.',
     inputSchema: { type: 'GROUP', fields: [
       text('vendorName', 'Provider', 300, true),
       { key: 'quoteAmount', label: 'Total quoted ($)', required: true, inputSchema: { type: 'NUMBER', min: 0, max: 100_000_000 } },
@@ -94,112 +143,209 @@ function addCapture(workspace: WorkspaceRow, contextVersion: string, entered?: Q
       text('warranty', 'Warranty', 500),
       { key: 'notes', label: 'Notes', required: false, inputSchema: { type: 'LONG_TEXT', maxLength: 2000 } },
     ] } as unknown as AskCaptureRequest['inputSchema'],
-    currentAnswer: entered ? Object.fromEntries(Object.entries(entered).filter(([, value]) => value !== null && value !== undefined && value !== '')) : {},
-    allowNotSure: false, sensitivity: 'FINANCIAL', destinationLabel: 'Used to prepare this proposal; nothing is saved until you confirm', confirmationText: null,
-    expectedContextVersion: contextVersion,
+    currentAnswer: clean(entered), destinationLabel: 'Used to prepare this change; nothing is saved until you confirm',
   };
 }
 
-export async function quoteCommandResult(userId: string, propertyId: string, launch: QuoteCommandLaunch, supplied?: QuoteAddInput): Promise<AskOperationResult> {
+export async function quoteCommandResult(userId: string, propertyId: string, launch: QuoteCommandLaunch, supplied?: QuoteFormData): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
   if (access.role === HouseholdRole.VIEWER) return permissionBlocked();
   const expiresAt = new Date(Date.now() + CONFIRMATION_MINUTES * 60 * 1000);
   const base = { sourceExecutionId: launch.sourceExecutionId, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() };
+  const kind = launch.kind;
+  const detail = (label: string, value: string | null) => (value ? [{ label, value }] : []);
+  const date = (value: string | null) => (value ? humanDate(new Date(`${value}T12:00:00.000Z`)) ?? value : null);
+  const launchParameters = { quoteCommandLaunch: { kind, entityId: launch.entityId, sourceExecutionId: launch.sourceExecutionId } };
 
-  if (launch.kind === 'ADD') {
+  // ── the commands that target the decision ───────────────────────────────────────────────────────────────────────────────────────────────────
+  if (quoteCommandTargetsWorkspace(kind)) {
     const workspace = await loadWorkspace(propertyId, launch.entityId);
     if (!workspace) return unavailable('QUOTE_WORKSPACE_NOT_FOUND', 'That comparison is no longer available', 'Ask could not find that quote comparison for this home. Nothing has changed.');
     if (workspace.outcome !== 'OPEN') return unavailable('QUOTE_WORKSPACE_CLOSED', 'This quote decision is closed', `${closedMessage} Nothing has changed.`);
     const contextVersion = quoteCommandContextVersion(workspace);
-    const parameters = { quoteCommandLaunch: { kind: 'ADD', entityId: workspace.id, sourceExecutionId: launch.sourceExecutionId } };
+    const formKind: QuoteFormKind = kind === 'CLOSE' ? 'CLOSE' : 'ADD';
     if (!supplied) {
       return {
-        status: 'NEEDS_CONTEXT', reasonCode: 'QUOTE_ADD_INPUT_REQUIRED', contextVersion, parameters,
-        blocks: [{ type: 'SUMMARY', id: 'quote-add-input', title: 'Add a proposal', body: 'Nothing has been saved yet. Enter what is on the quote, then review it before it is saved.', tone: 'DEFAULT', actions: [] }],
-        captureRequests: [addCapture(workspace, contextVersion)], suggestions: [],
+        status: 'NEEDS_CONTEXT', reasonCode: kind === 'CLOSE' ? 'QUOTE_CLOSE_INPUT_REQUIRED' : 'QUOTE_ADD_INPUT_REQUIRED', contextVersion, parameters: launchParameters,
+        blocks: [{ type: 'SUMMARY', id: 'quote-command-input', title: kind === 'CLOSE' ? 'Close this quote decision' : 'Add a proposal', body: 'Nothing has been saved yet. Enter the details, then review them before they are saved.', tone: 'DEFAULT', actions: [] }],
+        captureRequests: [formCapture(formKind, contextVersion)], suggestions: [],
       };
     }
-    const detail = (label: string, value: string | null) => (value ? [{ label, value }] : []);
-    const date = (value: string | null) => (value ? humanDate(new Date(`${value}T12:00:00.000Z`)) ?? value : null);
+    if (kind === 'CLOSE') {
+      const closing = supplied as { outcome: 'DECLINED' | 'DEFERRED'; reason: string | null };
+      return {
+        status: 'NEEDS_CONFIRMATION', reasonCode: 'QUOTE_CLOSE_CONFIRMATION_REQUIRED', contextVersion,
+        parameters: { quoteClose: closing, quoteCommand: { kind, entityId: workspace.id }, quoteCommandContextVersion: contextVersion, ...base },
+        blocks: [{ type: 'SUMMARY', id: 'quote-close-review', title: 'Review closing this decision', body: 'Nothing is closed until you confirm.', tone: 'CAUTION', actions: [] }],
+        confirmation: {
+          confirmationId: `quote-close-${sha(`${propertyId}:${workspace.id}:${closing.outcome}`).slice(0, 12)}-1`, version: 1, title: 'Close this quote decision?',
+          description: 'This ends the comparison. It does not cancel anything or contact any provider; revised quotes start a new comparison.',
+          fields: [{ label: 'Outcome', value: QUOTE_CLOSE_OUTCOME_LABELS[closing.outcome] ?? closing.outcome }, ...detail('Why', closing.reason)],
+          editableFields: [], confirmLabel: 'Close decision', consentText: 'I authorize closing this shared quote decision.', expiresAt: expiresAt.toISOString(),
+        },
+        captureRequests: [formCapture('CLOSE', contextVersion, closing)], suggestions: [],
+      };
+    }
+    const proposal = supplied as QuoteAddInput;
     return {
       status: 'NEEDS_CONFIRMATION', reasonCode: 'QUOTE_ADD_CONFIRMATION_REQUIRED', contextVersion,
-      parameters: { quoteAdd: supplied, quoteCommand: { kind: 'ADD', entityId: workspace.id }, quoteCommandContextVersion: contextVersion, ...base },
+      parameters: { quoteAdd: proposal, quoteCommand: { kind: 'ADD', entityId: workspace.id }, quoteCommandContextVersion: contextVersion, ...base },
       blocks: [{ type: 'SUMMARY', id: 'quote-add-review', title: 'Review this proposal', body: 'You entered these details. Nothing is saved until you confirm.', tone: 'DEFAULT', actions: [] }],
       confirmation: {
-        confirmationId: `quote-add-${sha(`${propertyId}:${workspace.id}:${supplied.vendorName}:${supplied.quoteAmount}`).slice(0, 12)}-1`, version: 1,
-        title: `Add ${supplied.vendorName}'s proposal?`,
+        confirmationId: `quote-add-${sha(`${propertyId}:${workspace.id}:${proposal.vendorName}:${proposal.quoteAmount}`).slice(0, 12)}-1`, version: 1,
+        title: `Add ${proposal.vendorName}'s proposal?`,
         description: 'This records the proposal in the quote comparison. It does not select a provider, accept the quote or contact anyone.',
         fields: [
-          { label: 'Provider', value: supplied.vendorName }, { label: 'Total quoted', value: money(supplied.quoteAmount) },
-          ...detail('Covers', supplied.scopeSummary), ...detail('Quote date', date(supplied.quoteDate)), ...detail('Expires', date(supplied.expirationDate)),
-          ...detail('Warranty', supplied.warranty), ...detail('Notes', supplied.notes),
+          { label: 'Provider', value: proposal.vendorName }, { label: 'Total quoted', value: money(proposal.quoteAmount) },
+          ...detail('Covers', proposal.scopeSummary), ...detail('Quote date', date(proposal.quoteDate)), ...detail('Expires', date(proposal.expirationDate)),
+          ...detail('Warranty', proposal.warranty), ...detail('Notes', proposal.notes),
         ],
         editableFields: [], confirmLabel: 'Add proposal', consentText: 'I authorize adding this proposal to the shared quote comparison.', expiresAt: expiresAt.toISOString(),
       },
-      captureRequests: [addCapture(workspace, contextVersion, supplied)], suggestions: [],
+      captureRequests: [formCapture('ADD', contextVersion, proposal as unknown as Record<string, unknown>)], suggestions: [],
     };
   }
 
+  // ── the commands that target one proposal ───────────────────────────────────────────────────────────────────────────────────────────────────
   const loaded = await loadQuote(propertyId, launch.entityId);
   if (!loaded) return unavailable('QUOTE_NOT_FOUND', 'That proposal is no longer available', 'Ask could not find that proposal. It may have been removed. Nothing has changed.');
   const { quote, workspace } = loaded;
   if (workspace.outcome !== 'OPEN') return unavailable('QUOTE_WORKSPACE_CLOSED', 'This quote decision is closed', `${closedMessage} Nothing has changed.`);
-  if (launch.kind !== 'SELECT' && lockedStages.includes(workspace.journeyStage)) {
+  if (kind !== 'SELECT' && kind !== 'EDIT' && kind !== 'CONFIRM' && lockedStages.includes(workspace.journeyStage)) {
     return unavailable('QUOTE_PROPOSALS_LOCKED', 'Proposal controls are locked', 'Proposals cannot be changed after final-term review begins. Nothing has changed.');
   }
   const contextVersion = quoteCommandContextVersion(workspace, quote);
   const amount = Number(quote.quoteAmount);
   const fields = [{ label: 'Provider', value: quote.vendorName }, ...(Number.isFinite(amount) ? [{ label: 'Total quoted', value: money(amount) }] : [])];
-  let title: string; let description: string; let confirmLabel: string; let tone: 'DEFAULT' | 'CAUTION' = 'DEFAULT';
-  if (launch.kind === 'SELECT') {
+  const confirmation = (title: string, description: string, confirmLabel: string, extra: Array<{ label: string; value: string }> = [], tone: 'DEFAULT' | 'CAUTION' = 'DEFAULT',
+    parameters: Record<string, unknown> = {}, capture?: AskCaptureRequest): AskOperationResult => ({
+    status: 'NEEDS_CONFIRMATION', reasonCode: 'QUOTE_COMMAND_CONFIRMATION_REQUIRED', contextVersion,
+    parameters: { quoteCommand: { kind, entityId: quote.id }, quoteCommandContextVersion: contextVersion, ...parameters, ...base },
+    blocks: [{ type: 'SUMMARY', id: 'quote-command-review', title, body: description, tone, actions: [] }],
+    confirmation: {
+      confirmationId: `quote-command-${sha(`${propertyId}:${kind}:${quote.id}:${JSON.stringify(parameters)}`).slice(0, 12)}-1`, version: 1, title, description, fields: [...fields, ...extra],
+      editableFields: [], confirmLabel, consentText: 'I authorize this change to the shared quote comparison.', expiresAt: expiresAt.toISOString(),
+    },
+    ...(capture ? { captureRequests: [capture] } : {}),
+    suggestions: [],
+  });
+
+  if (kind === 'SELECT') {
     if (quote.readinessStage !== 'COMPARISON_READY') {
       return unavailable('QUOTE_NOT_COMPARISON_READY', 'This proposal cannot be selected yet',
-        'Only a comparison-ready proposal can be selected: its scope facts must be confirmed first. Confirming a proposal’s facts is not currently available in Ask. Nothing has changed.');
+        'Only a comparison-ready proposal can be selected: its scope facts must be confirmed first. Use Confirm the facts on the proposal once they are right. Nothing has changed.');
     }
     const comparability = await getWorkspaceComparability(propertyId, workspace.id);
     if (comparability.status !== 'COMPARABLE' || !comparability.eligibleQuoteIds.includes(quote.id)) {
       return unavailable('QUOTE_NOT_COMPARABLE', 'This proposal is not part of a comparable set yet',
         `${comparability.reasons.join(' ') || 'The recorded proposals are not safely comparable.'} Nothing has changed.`);
     }
-    title = `Select ${quote.vendorName}'s proposal?`;
-    description = 'This records your choice for the next decision stage and clears any earlier choice. It does not accept the quote, book anyone or contact the provider.';
-    confirmLabel = 'Select proposal';
-  } else if (launch.kind === 'REJECT') {
-    title = `Reject ${quote.vendorName}'s proposal?`;
-    description = quote.isSelected
-      ? 'This is the selected proposal: rejecting it clears the selection. You can return it to consideration later.'
-      : 'It stays in the record and can be returned to consideration later.';
-    confirmLabel = 'Reject proposal'; tone = 'CAUTION';
-  } else if (launch.kind === 'RESTORE') {
-    title = `Return ${quote.vendorName}'s proposal to consideration?`;
-    description = 'The proposal is considered again with the others.';
-    confirmLabel = 'Return to consideration';
-  } else {
-    title = `Remove ${quote.vendorName}'s proposal?`;
-    description = 'The proposal and its recorded facts are deleted from this comparison. This cannot be undone.';
-    confirmLabel = 'Remove proposal'; tone = 'CAUTION';
+    return confirmation(`Select ${quote.vendorName}'s proposal?`,
+      'This records your choice for the next decision stage and clears any earlier choice. It does not accept the quote, book anyone or contact the provider.', 'Select proposal');
   }
-  return {
-    status: 'NEEDS_CONFIRMATION', reasonCode: 'QUOTE_COMMAND_CONFIRMATION_REQUIRED', contextVersion,
-    parameters: { quoteCommand: { kind: launch.kind, entityId: quote.id }, quoteCommandContextVersion: contextVersion, ...base },
-    blocks: [{ type: 'SUMMARY', id: 'quote-command-review', title, body: description, tone, actions: [] }],
-    confirmation: {
-      confirmationId: `quote-command-${sha(`${propertyId}:${launch.kind}:${quote.id}`).slice(0, 12)}-1`, version: 1, title, description, fields,
-      editableFields: [], confirmLabel, consentText: 'I authorize this change to the shared quote comparison.', expiresAt: expiresAt.toISOString(),
-    },
-    suggestions: [],
+  if (kind === 'REJECT') {
+    return confirmation(`Reject ${quote.vendorName}'s proposal?`,
+      quote.isSelected ? 'This is the selected proposal: rejecting it clears the selection. You can return it to consideration later.' : 'It stays in the record and can be returned to consideration later.',
+      'Reject proposal', [], 'CAUTION');
+  }
+  if (kind === 'RESTORE') return confirmation(`Return ${quote.vendorName}'s proposal to consideration?`, 'The proposal is considered again with the others.', 'Return to consideration');
+  if (kind === 'REMOVE') {
+    return confirmation(`Remove ${quote.vendorName}'s proposal?`, 'The proposal and its recorded facts are deleted from this comparison. This cannot be undone.', 'Remove proposal', [], 'CAUTION');
+  }
+  if (kind === 'CONFIRM') {
+    if (quote.homeownerConfirmedAt) {
+      return unavailable('QUOTE_ALREADY_CONFIRMED', 'These facts are already confirmed', 'You confirmed this proposal’s facts earlier. Change the proposal to re-confirm it after a correction. Nothing has changed.');
+    }
+    const terms = quote.terms.filter((term) => term.type !== 'WARRANTY').length;
+    return confirmation(`Confirm ${quote.vendorName}'s facts?`,
+      'You are saying the recorded provider, total, scope, dates and terms match the quote you were given. A proposal is compared only once its facts are confirmed.',
+      'Confirm facts', [...detail('Covers', quote.scopeSummary), ...detail('Quote date', isoDate(quote.quoteDate) ? date(isoDate(quote.quoteDate)) : null),
+        ...detail('Expires', isoDate(quote.expirationDate) ? date(isoDate(quote.expirationDate)) : null), ...detail('Warranty', warrantyOf(quote)),
+        ...(terms ? [{ label: 'Other terms recorded', value: String(terms) }] : [])]);
+  }
+  if (kind === 'CLARIFY') {
+    const current = quote.clarifications.filter((entry) => entry.status === 'OPEN').length;
+    if (!supplied) {
+      return {
+        status: 'NEEDS_CONTEXT', reasonCode: 'QUOTE_CLARIFY_INPUT_REQUIRED', contextVersion, parameters: launchParameters,
+        blocks: [{ type: 'SUMMARY', id: 'quote-clarify-input', title: `Ask ${quote.vendorName} a question`, body: `${current ? `${current} question${current === 1 ? ' is' : 's are'} already open. ` : ''}The question is recorded with the proposal; it is not sent to the provider.`, tone: 'DEFAULT', actions: [] }],
+        captureRequests: [formCapture('CLARIFY', contextVersion, undefined, quote)], suggestions: [],
+      };
+    }
+    const { question } = supplied as { question: string };
+    return confirmation(`Record a question for ${quote.vendorName}?`, 'The question is saved with the proposal for your household and the decision returns to scope review. Nothing is sent.', 'Record question',
+      [{ label: 'Question', value: question }], 'DEFAULT', { quoteClarify: { question } }, formCapture('CLARIFY', contextVersion, { question }, quote));
+  }
+  if (kind === 'RESOLVE') {
+    const open = openClarification(quote);
+    if (!open) return unavailable('QUOTE_NO_OPEN_QUESTION', 'No open question on this proposal', 'There is no unanswered question to record an answer for. Nothing has changed.');
+    if (!supplied) {
+      return {
+        status: 'NEEDS_CONTEXT', reasonCode: 'QUOTE_RESOLVE_INPUT_REQUIRED', contextVersion, parameters: launchParameters,
+        blocks: [{ type: 'SUMMARY', id: 'quote-resolve-input', title: `Record ${quote.vendorName}'s answer`, body: `Question: ${open.question}`, tone: 'DEFAULT', actions: [] }],
+        captureRequests: [formCapture('RESOLVE', contextVersion, undefined, quote)], suggestions: [],
+      };
+    }
+    const { response } = supplied as { response: string };
+    return confirmation(`Record the answer to this question?`, 'The answer is saved and the question is marked resolved.', 'Record answer',
+      [{ label: 'Question', value: open.question }, { label: 'Answer', value: response }], 'DEFAULT', { quoteResolve: { response, clarificationId: open.id } },
+      formCapture('RESOLVE', contextVersion, { response }, quote));
+  }
+
+  // EDIT
+  const before = currentValues(quote);
+  if (!supplied) {
+    return {
+      status: 'NEEDS_CONTEXT', reasonCode: 'QUOTE_EDIT_INPUT_REQUIRED', contextVersion, parameters: launchParameters,
+      blocks: [{ type: 'SUMMARY', id: 'quote-edit-input', title: `Change ${quote.vendorName}'s proposal`, body: 'The form shows what is recorded. Change what is wrong, then review the changes before they are saved.', tone: 'DEFAULT', actions: [] }],
+      captureRequests: [formCapture('EDIT', contextVersion, before as unknown as Record<string, unknown>, quote)], suggestions: [],
+    };
+  }
+  const changes = quoteEditChanges(before, supplied as QuoteAddInput);
+  if (!changes.length) {
+    return unavailable('QUOTE_EDIT_NO_CHANGE', 'Nothing to change', 'The details match what is already recorded. Nothing has changed.');
+  }
+  const show = (change: { field: string; before: string | null; after: string | null }, side: 'before' | 'after') => {
+    const raw = change[side];
+    if (raw === null) return 'None';
+    if (change.field === 'quoteAmount') return money(Number(raw));
+    if (change.field === 'quoteDate' || change.field === 'expirationDate') return date(raw) ?? raw;
+    return raw;
   };
+  return confirmation(`Save these changes to ${quote.vendorName}'s proposal?`,
+    'Saving clears the confirmed facts of this proposal and the selection and rejections across this comparison, so the proposals can be reviewed again together.', 'Save changes',
+    changes.map((change) => ({ label: change.label, value: `${show(change, 'before')} → ${show(change, 'after')}` })), 'CAUTION',
+    { quoteEdit: supplied }, formCapture('EDIT', contextVersion, supplied as unknown as Record<string, unknown>, quote));
 }
 
 registerCapabilityHandler('quote-comparison.command', async (envelope) => {
   const launch = envelope.launchContext;
   const kind = quoteCommandKindFromMessage(envelope.message);
-  const entityType = kind === 'ADD' ? QUOTE_WORKSPACE_ENTITY_TYPE : QUOTE_ENTITY_TYPE;
-  if (!kind || launch?.operationId !== 'QUOTE_COMPARISON_COMMAND' || launch.surface === 'ASK_REFRESH' || launch.entityType !== entityType || !launch.entityId) return notRoutable();
+  if (!kind || launch?.operationId !== 'QUOTE_COMPARISON_COMMAND' || launch.surface === 'ASK_REFRESH' || !launch.entityId) return notRoutable();
+  const entityType = quoteCommandTargetsWorkspace(kind) ? QUOTE_WORKSPACE_ENTITY_TYPE : QUOTE_ENTITY_TYPE;
+  if (launch.entityType !== entityType) return notRoutable();
   return quoteCommandResult(envelope.userId, envelope.propertyId!, { kind, entityId: launch.entityId, sourceExecutionId: launch.sourceExecutionId ?? null });
 });
 
 const stale = (message: string, code = 'ASK_CONFIRMATION_NOT_ACTIVE') => Object.assign(new Error(message), { code });
+
+/** The partial update the canonical updateQuoteProposal takes: only the changed fields, and the whole terms list only when the warranty changed. */
+function editUpdateInput(quote: QuoteRow, next: QuoteAddInput) {
+  const before = currentValues(quote);
+  const changed = new Set(quoteEditChanges(before, next).map((change) => change.field));
+  const input: Record<string, unknown> = {};
+  if (changed.has('vendorName')) input.vendorName = next.vendorName;
+  if (changed.has('quoteAmount')) input.quoteAmount = next.quoteAmount;
+  if (changed.has('scopeSummary')) input.scopeSummary = next.scopeSummary;
+  if (changed.has('quoteDate')) input.quoteDate = next.quoteDate ? `${next.quoteDate}T12:00:00.000Z` : null;
+  if (changed.has('expirationDate')) input.expirationDate = next.expirationDate ? `${next.expirationDate}T12:00:00.000Z` : null;
+  if (changed.has('notes')) input.notes = next.notes;
+  if (changed.has('warranty')) {
+    const others = quote.terms.filter((term) => term.type !== 'WARRANTY').map((term) => ({ type: term.type, label: term.label, value: term.value, included: term.included }));
+    input.terms = [...others, ...(next.warranty ? [{ type: 'WARRANTY', label: 'Warranty', value: next.warranty, included: null }] : [])];
+  }
+  return input;
+}
 
 async function confirmQuoteCommand(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
   const { execution, userId, parameters } = ctx;
@@ -212,7 +358,7 @@ async function confirmQuoteCommand(ctx: ConfirmCapabilityContext): Promise<Confi
   // Re-read the records the confirmation was prepared against; refuse if either changed while it was open.
   let workspace: WorkspaceRow | null;
   let quote: QuoteRow | null = null;
-  if (kind === 'ADD') {
+  if (quoteCommandTargetsWorkspace(kind)) {
     workspace = await loadWorkspace(propertyId, entityId);
   } else {
     const loaded = await loadQuote(propertyId, entityId);
@@ -231,7 +377,7 @@ async function confirmQuoteCommand(ctx: ConfirmCapabilityContext): Promise<Confi
       { serviceCategory: (workspace.serviceCategory ?? 'UNSPECIFIED') as never }, ['quoteComparison', 'providerBooking']);
 
     let title: string; let description: string; let artifactType = 'QUOTE_COMPARISON_QUOTE'; let artifactId = entityId;
-    const details: Array<{ label: string; value: string }> = [];
+    const details: Array<{ label: string; value: string }> = quote ? [{ label: 'Provider', value: quote.vendorName }] : [];
     if (kind === 'ADD') {
       const checked = parseQuoteAddAnswer(parameters.quoteAdd);
       if (!checked.success) throw stale('The proposal to add is invalid.');
@@ -249,19 +395,61 @@ async function confirmQuoteCommand(ctx: ConfirmCapabilityContext): Promise<Confi
         ? 'The proposal is comparison-ready.'
         : 'The proposal is saved. It is not compared until its scope facts are confirmed.';
       details.push({ label: 'Provider', value: checked.data.vendorName }, { label: 'Total quoted', value: money(checked.data.quoteAmount) });
+    } else if (kind === 'CLOSE') {
+      const checked = parseQuoteFormAnswer('CLOSE', parameters.quoteClose);
+      if (!checked.success) throw stale('The way to close this decision is invalid.');
+      const closing = checked.data as { outcome: 'DECLINED' | 'DEFERRED'; reason: string | null };
+      await transitionQuoteDecision(propertyId, workspace.id, userId, { toStage: 'CLOSED', outcome: closing.outcome, reason: closing.reason });
+      artifactType = 'QUOTE_COMPARISON_WORKSPACE';
+      title = 'Quote decision closed'; description = 'The comparison is closed. Nothing was cancelled or sent; revised quotes start a new comparison.';
+      details.push({ label: 'Outcome', value: QUOTE_CLOSE_OUTCOME_LABELS[closing.outcome] ?? closing.outcome });
     } else if (kind === 'SELECT') {
       await selectQuoteForDecision(propertyId, workspace.id, entityId, userId);
       title = 'Proposal selected'; description = 'Your choice is recorded for the next decision stage. Nothing was accepted or booked.';
-      details.push({ label: 'Provider', value: quote!.vendorName });
     } else if (kind === 'REJECT' || kind === 'RESTORE') {
       await setQuoteProposalDisposition(propertyId, workspace.id, entityId, userId, kind === 'REJECT' ? 'REJECTED' : 'UNDECIDED');
       title = kind === 'REJECT' ? 'Proposal rejected' : 'Proposal returned to consideration';
       description = kind === 'REJECT' ? 'It stays in the record and can be returned later.' : 'It is considered with the others again.';
-      details.push({ label: 'Provider', value: quote!.vendorName });
-    } else {
+    } else if (kind === 'REMOVE') {
       await deleteQuoteProposal(propertyId, workspace.id, entityId, userId);
       title = 'Proposal removed'; description = 'The proposal was deleted from this comparison.';
-      details.push({ label: 'Provider', value: quote!.vendorName });
+    } else if (kind === 'CONFIRM') {
+      const confirmed = await confirmQuoteProposal(propertyId, workspace.id, entityId, userId);
+      emitServiceQuoteDecisionAnalytics({
+        eventName: ServiceQuoteDecisionEvent.READINESS_ASSESSED, userId, propertyId, workspaceId: workspace.id,
+        metadata: { readinessStage: confirmed.readinessStage, readinessScore: confirmed.readinessScore, homeownerConfirmed: true, surface: 'ask' },
+      });
+      title = 'Facts confirmed';
+      description = confirmed.readinessStage === 'COMPARISON_READY'
+        ? 'The proposal is comparison-ready.'
+        : 'The facts are confirmed. The proposal still has facts missing before it can be compared.';
+    } else if (kind === 'CLARIFY') {
+      const checked = parseQuoteFormAnswer('CLARIFY', parameters.quoteClarify);
+      if (!checked.success) throw stale('The question to record is invalid.');
+      const created = await createQuoteClarification(propertyId, workspace.id, entityId, userId, (checked.data as { question: string }).question);
+      emitServiceQuoteDecisionAnalytics({
+        eventName: ServiceQuoteDecisionEvent.CLARIFICATION_REQUESTED, userId, propertyId, workspaceId: workspace.id,
+        metadata: { quoteId: entityId, clarificationId: created.id, surface: 'ask' },
+      });
+      title = 'Question recorded'; description = 'It is saved with the proposal. Nothing was sent to the provider.';
+      details.push({ label: 'Question', value: (checked.data as { question: string }).question });
+    } else if (kind === 'RESOLVE') {
+      const stored = parameters.quoteResolve as { response?: unknown; clarificationId?: unknown } | undefined;
+      const checked = parseQuoteFormAnswer('RESOLVE', { response: stored?.response });
+      if (!checked.success || typeof stored?.clarificationId !== 'string') throw stale('The answer to record is invalid.');
+      await resolveQuoteClarification(propertyId, workspace.id, entityId, stored.clarificationId, userId, (checked.data as { response: string }).response);
+      title = 'Answer recorded'; description = 'The question is marked resolved.';
+      details.push({ label: 'Answer', value: (checked.data as { response: string }).response });
+    } else {
+      const checked = parseQuoteAddAnswer(parameters.quoteEdit);
+      if (!checked.success) throw stale('The changes to save are invalid.');
+      const update = editUpdateInput(quote!, checked.data);
+      if (!Object.keys(update).length) throw stale('There is nothing to change.');
+      const updated = await updateQuoteProposal(propertyId, workspace.id, entityId, userId, update as never);
+      title = 'Proposal changed';
+      description = updated.readinessStage === 'COMPARISON_READY'
+        ? 'The changes are saved. Confirm the facts again before comparing.'
+        : 'The changes are saved. The confirmed facts, selection and rejections in this comparison were cleared for review.';
     }
 
     const result: AskOperationResult = {
