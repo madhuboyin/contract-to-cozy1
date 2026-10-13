@@ -17,6 +17,7 @@ import { buyerPlanContextProvider } from '../../skills/context/buyerPlanContext.
 import { type AskOperationResult } from '../askOperationRegistry';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { humanDate, money } from '../askFormatting';
+import { BUYER_FINDING_ENTITY_TYPE, BUYER_NEGOTIATION_ACTION_IDS, BUYER_NEGOTIATION_MESSAGES } from '../support/negotiationShieldBuyer';
 import { AskViewState, BUYER_FINDING_DISPOSITION_LABELS, durableFreeTextClarification, ensurePropertyAccess, safeTimezone } from '../askHandlerSupport';
 import { extractMaintenanceDueDate, loadAskViewState, maintenanceCompletionMatch, maintenanceUpdateAction, maintenanceUpdateSubject } from '../handlers/maintenance.handler';
 
@@ -1030,7 +1031,7 @@ async function buyerContractTimelineResult(userId: string, propertyId: string): 
   };
 }
 
-async function buyerNegotiationReadinessResult(userId: string, propertyId: string): Promise<AskOperationResult> {
+async function buyerNegotiationReadinessResult(userId: string, propertyId: string, canChange = false): Promise<AskOperationResult> {
   const context = await loadBuyerPlanContext(userId, propertyId);
   if (context.status !== 'AVAILABLE' || !context.data) return buyerNotActiveResult(propertyId, null, 'Ask could not load this purchase’s negotiation readiness right now.');
   const { data } = context;
@@ -1061,6 +1062,11 @@ async function buyerNegotiationReadinessResult(userId: string, propertyId: strin
       sections: [{ id: 'findings', title: 'Findings', count: findings.length, items: findings.slice(0, 10).map((finding) => ({
         id: finding.id, title: finding.homeSystem, description: finding.inspectorDescription?.slice(0, 140) ?? null,
         meta: [finding.severity], status: finding.negotiationCaseLinks[0]?.sellerResponse ?? 'PENDING', href: null,
+        // A contributor or owner can start negotiating a finding, then record what the seller said and the result.
+        entityType: BUYER_FINDING_ENTITY_TYPE,
+        actions: canChange ? [finding.negotiationCaseLinks.length
+          ? { id: BUYER_NEGOTIATION_ACTION_IDS.OUTCOME, label: 'Record the seller response', message: BUYER_NEGOTIATION_MESSAGES.OUTCOME, operationId: 'NEGOTIATION_SHIELD_BUYER_COMMAND', interactionType: 'MUTATE_RECORD' as const, style: 'PRIMARY' as const }
+          : { id: BUYER_NEGOTIATION_ACTION_IDS.START, label: 'Start negotiating', message: BUYER_NEGOTIATION_MESSAGES.START, operationId: 'NEGOTIATION_SHIELD_BUYER_COMMAND', interactionType: 'MUTATE_RECORD' as const, style: 'PRIMARY' as const }] : [],
       })) }], actions: [],
     });
   }
@@ -1321,7 +1327,10 @@ registerCapabilityHandler('buyer.closing-day-readiness', async (envelope) => buy
 
 registerCapabilityHandler('buyer.contract-timeline', async (envelope) => buyerContractTimelineResult(envelope.userId, envelope.propertyId!));
 
-registerCapabilityHandler('buyer.negotiation-readiness', async (envelope) => buyerNegotiationReadinessResult(envelope.userId, envelope.propertyId!));
+registerCapabilityHandler('buyer.negotiation-readiness', async (envelope, deps) => {
+  const access = deps.propertyAccess ?? await ensurePropertyAccess(envelope.userId, envelope.propertyId!);
+  return buyerNegotiationReadinessResult(envelope.userId, envelope.propertyId!, access.role !== 'VIEWER');
+});
 
 registerCapabilityHandler('buyer.cost-readiness', async (envelope) => buyerCostReadinessResult(envelope.userId, envelope.propertyId!));
 

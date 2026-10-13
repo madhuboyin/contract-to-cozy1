@@ -711,6 +711,7 @@ export const ASK_MUTATION_IMPACT_MAP: Partial<Record<AskOperationId, readonly As
   NEGOTIATION_SHIELD_CASE_ATTACH: ['NEGOTIATION_SHIELD_CASES'],
   // A started case ends the readiness answer's "no active renovation case" state.
   RENOVATION_CASE_START: ['RENOVATION_PERMIT_READINESS'],
+  NEGOTIATION_SHIELD_BUYER_COMMAND: ['BUYER_NEGOTIATION_READINESS', 'BUYER_INSPECTION_REVIEW'],
   PRICE_FINALIZATION_COMMAND: ['PRICE_FINALIZATIONS_LIST', 'QUOTE_COMPARISON_REVIEW'],
   QUOTE_COMPARISON_COMMAND: ['QUOTE_COMPARISON_REVIEW'],
   // A new plant changes the care outlook, which was empty or shorter before it.

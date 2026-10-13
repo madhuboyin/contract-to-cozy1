@@ -49,6 +49,8 @@ import { negotiationShieldAttachOffer, negotiationShieldAttachResult } from '../
 import { quoteCommandResult } from '../handlers/quoteComparisonCommands.handler';
 import { parseQuoteFormAnswer, quoteFormKindFromCaptureKey } from '../support/quoteComparisonCommand';
 import { priceCommandResult } from '../handlers/priceFinalizationCommands.handler';
+import { buyerNegotiationResult } from '../handlers/negotiationShieldBuyerCommands.handler';
+import { buyerNegotiationKindFromCaptureKey, parseBuyerNegotiationAnswer } from '../support/negotiationShieldBuyer';
 import { parsePriceFormAnswer, priceFormKindForCommand, priceFormKindFromCaptureKey, type PriceCommandKind } from '../support/priceFinalizationCommand';
 import { NEGOTIATION_SHIELD_ATTACH_CAPTURE_KEY, parseNegotiationAttachAnswer } from '../support/negotiationShieldAttach';
 import { renovationCaseStartContextVersion, renovationCaseStartResult } from '../handlers/renovationCaseStart.handler';
@@ -1076,6 +1078,27 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     captureId = input.idempotencyKey;
     capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
     canonicalOwner = 'PriceFinalization';
+  } else if (execution.operationId === 'NEGOTIATION_SHIELD_BUYER_COMMAND') {
+    const buyerForm = buyerNegotiationKindFromCaptureKey(input.captureKey);
+    if (!buyerForm) throw Object.assign(new Error('This negotiation form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    const access = await ensurePropertyAccess(userId, execution.propertyId);
+    if (access.role === HouseholdRole.VIEWER) throw Object.assign(new Error('A contributor or owner is required to change a negotiation.'), { code: 'ASK_PERMISSION_REQUIRED' });
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson) ? execution.parametersJson as Record<string, unknown> : {};
+    const buyerLaunch = storedParameters.buyerNegotiationLaunch && typeof storedParameters.buyerNegotiationLaunch === 'object' && !Array.isArray(storedParameters.buyerNegotiationLaunch)
+      ? storedParameters.buyerNegotiationLaunch as { kind?: unknown; entityId?: unknown; sourceExecutionId?: unknown } : null;
+    if (!buyerLaunch || buyerLaunch.kind !== buyerForm || typeof buyerLaunch.entityId !== 'string') {
+      throw Object.assign(new Error('This negotiation form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    }
+    const buyerAnswer = parseBuyerNegotiationAnswer(buyerForm, input.answer);
+    if (!buyerAnswer.success) {
+      throw Object.assign(new Error(buyerAnswer.reason === 'CREDIT_REQUIRED' ? 'Enter the credit the seller agreed to.' : 'Check the form: choose what you are asking for or the seller\u2019s response and outcome.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+    }
+    result = await buyerNegotiationResult(userId, execution.propertyId, {
+      kind: buyerForm, entityId: buyerLaunch.entityId, sourceExecutionId: typeof buyerLaunch.sourceExecutionId === 'string' ? buyerLaunch.sourceExecutionId : null,
+    }, buyerAnswer.data);
+    captureId = input.idempotencyKey;
+    capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
+    canonicalOwner = 'NegotiationShieldBuyer';
   } else if (execution.operationId === 'PROPERTY_BRIEF_COMMAND') {
     if (![PROPERTY_BRIEF_PREPARE_CAPTURE_KEY, PROPERTY_BRIEF_SHARE_CAPTURE_KEY].includes(input.captureKey) || input.expectedContextVersion !== 'property-brief-live') throw Object.assign(new Error('This Property Brief form is no longer active.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
     const access = await ensurePropertyAccess(userId, execution.propertyId);
