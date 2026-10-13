@@ -599,10 +599,15 @@ export class HomeHabitCoachService {
   ) {
     await assertHabitAccess(propertyId, habitId);
 
-    // Debounce: skip if a VIEWED action was recorded in the last hour
+    // A view is the caller's own record: it needs a caller, is stored under that caller, and is debounced per caller, so one member's view can
+    // never suppress (or be mistaken for) another member's.
+    if (!userId) throw new APIError('Authentication required.', 401, 'AUTH_REQUIRED');
+
+    // Debounce: skip if this caller recorded a VIEWED action in the last hour
     const recentView = await prisma.propertyHabitAction.findFirst({
       where: {
         propertyHabitId: habitId,
+        userId,
         actionType: 'VIEWED',
         createdAt: { gte: new Date(Date.now() - 60 * 60 * 1000) },
       },
@@ -626,14 +631,25 @@ export class HomeHabitCoachService {
   // ── Preferences ──────────────────────────────────────────────────────────
 
   async getPreferences(propertyId: string) {
-    // Create default record if none exists (lazy initialization)
-    const prefs = await prisma.propertyHabitPreference.upsert({
-      where: { propertyId },
-      create: { propertyId },
-      update: {},
-    });
+    // Strictly read-only: a property with no saved preferences gets the schema defaults, not a row created by a page view. The row is created by
+    // the first updatePreferences (a CONTRIBUTOR action).
+    const prefs = await prisma.propertyHabitPreference.findUnique({ where: { propertyId } });
+    if (prefs) return { preferences: prefs };
 
-    return { preferences: prefs };
+    return {
+      preferences: {
+        id: null,
+        propertyId,
+        isEnabled: true,
+        preferredSurfaceCount: null,
+        snoozeDefaultsJson: null,
+        quietHoursJson: null,
+        hiddenCategoriesJson: null,
+        personalizationJson: null,
+        createdAt: null,
+        updatedAt: null,
+      },
+    };
   }
 
   async updatePreferences(

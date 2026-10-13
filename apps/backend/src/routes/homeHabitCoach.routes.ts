@@ -2,7 +2,7 @@
 
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth.middleware';
-import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
+import { propertyAuthMiddleware, requireHouseholdRole } from '../middleware/propertyAuth.middleware';
 import { validateBody, validate } from '../middleware/validate.middleware';
 import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
 
@@ -78,6 +78,7 @@ router.get(
 router.post(
   '/properties/:propertyId/home-habits/generate',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   generateHabits,
 );
 
@@ -86,12 +87,14 @@ router.post(
 router.post(
   '/properties/:propertyId/home-habits/:habitId/adopt',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   adoptHabit,
 );
 
 router.post(
   '/properties/:propertyId/home-habits/:habitId/complete',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(completeHabitBodySchema),
   completeHabit,
 );
@@ -99,6 +102,7 @@ router.post(
 router.post(
   '/properties/:propertyId/home-habits/:habitId/snooze',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(snoozeHabitBodySchema),
   snoozeHabit,
 );
@@ -106,6 +110,7 @@ router.post(
 router.post(
   '/properties/:propertyId/home-habits/:habitId/skip',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(skipHabitBodySchema),
   skipHabit,
 );
@@ -113,6 +118,7 @@ router.post(
 router.post(
   '/properties/:propertyId/home-habits/:habitId/dismiss',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(dismissHabitBodySchema),
   dismissHabit,
 );
@@ -120,6 +126,7 @@ router.post(
 router.post(
   '/properties/:propertyId/home-habits/:habitId/reopen',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   reopenHabit,
 );
 
@@ -134,6 +141,7 @@ router.post(
 router.patch(
   '/properties/:propertyId/home-habits/preferences',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(updatePreferencesBodySchema),
   updatePreferences,
 );

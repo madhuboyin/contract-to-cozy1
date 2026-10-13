@@ -5,6 +5,7 @@ import { CustomRequest } from '../types';
 import { IncidentStatus, IncidentEventType } from '@prisma/client';
 import { evaluateIncident } from '../services/incidents/incident.evaluator';
 import { orchestrateIncident } from '../services/incidents/incident.orchestrator';
+import { ROLE_RANK } from '../services/propertyAccess.service';
 import { prisma } from '../lib/prisma';
 import { IncidentExecutionService } from '../services/incidents/incident.execution.service';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
@@ -415,13 +416,16 @@ export const updateIncidentPreferences = async (req: CustomRequest, res: Respons
       },
     });
 
-    // If pinned, cancel any pending auto-resolution
+    // If pinned, cancel pending auto-resolution. A pin is the caller's own preference: a viewer may only cancel the notifications addressed to
+    // them; cancelling everyone's changes other members' experience, so that stays with CONTRIBUTOR and above.
     if (isPinned) {
+      const canAffectHousehold = Boolean(req.householdRole && ROLE_RANK[req.householdRole] >= ROLE_RANK.CONTRIBUTOR);
       await prisma.incidentAutoResolutionNotification.updateMany({
         where: {
           incidentId,
           executedAt: null,
           canceledAt: null,
+          ...(canAffectHousehold ? {} : { userId }),
         },
         data: {
           canceledAt: new Date(),

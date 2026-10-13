@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { authenticate } from '../middleware/auth.middleware';
-import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
+import { propertyAuthMiddleware, requireHouseholdRole } from '../middleware/propertyAuth.middleware';
 import { validateBody } from '../middleware/validate.middleware';
 import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
 import {
@@ -60,6 +60,7 @@ router.get('/properties/:propertyId/inspection-hub/reports', propertyAuthMiddlew
 router.post(
   '/properties/:propertyId/inspection-hub/reports',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   upload.single('file'),
   validateBody(UploadReportBodySchema),
   uploadReport,
@@ -68,6 +69,7 @@ router.post(
 router.post(
   '/properties/:propertyId/inspection-hub/reports/:reportId/findings/:findingId/work-disposition',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(InspectionFindingWorkDispositionSchema),
   dispositionFindingAsWork,
 );
@@ -81,6 +83,7 @@ router.get(
 router.delete(
   '/properties/:propertyId/inspection-hub/reports/:reportId',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   archiveReport,
 );
 
@@ -94,6 +97,7 @@ router.get(
 router.patch(
   '/properties/:propertyId/inspection-hub/reports/:reportId/findings/:findingId',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(UpdateFindingSchema),
   updateFinding,
 );
@@ -101,6 +105,7 @@ router.patch(
 router.post(
   '/properties/:propertyId/inspection-hub/reports/:reportId/findings/:findingId/dismiss',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(DismissFindingSchema),
   dismissFinding,
 );
@@ -108,6 +113,7 @@ router.post(
 router.post(
   '/properties/:propertyId/inspection-hub/reports/:reportId/findings/:findingId/accept-as-work',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   acceptFindingAsWork,
 );
 
@@ -121,6 +127,7 @@ router.get(
 router.post(
   '/properties/:propertyId/inspection-hub/reports/:reportId/confirm',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   confirmReport,
 );
 
@@ -134,6 +141,7 @@ router.get(
 router.post(
   '/properties/:propertyId/inspection-hub/findings/:findingId/resolve',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(ResolveFindingSchema),
   resolveFinding,
 );
@@ -149,6 +157,7 @@ router.get(
 router.post(
   '/properties/:propertyId/inspection-hub/reports/:reportId/negotiation-package',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(NegotiationPackageSchema),
   generateNegotiationPackage,
 );
@@ -163,6 +172,7 @@ router.get(
 router.patch(
   '/properties/:propertyId/inspection-hub/reports/:reportId/fix-disclose',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(FixDisclosureDecisionsSchema),
   saveFixDisclosureDecisions,
 );

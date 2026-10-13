@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { authenticate } from '../middleware/auth.middleware';
-import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
+import { propertyAuthMiddleware, requireHouseholdRole } from '../middleware/propertyAuth.middleware';
 import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
 import { validate, validateBody } from '../middleware/validate.middleware';
 import {
@@ -203,6 +203,7 @@ router.post(
   '/properties/:propertyId/guidance/signals/resolve',
   validate(propertyParamsSchema),
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(resolveSignalBodySchema),
   resolveGuidanceSignal
 );
@@ -223,6 +224,7 @@ router.post(
   '/properties/:propertyId/guidance/steps/:stepId/complete',
   validate(propertyStepParamsSchema),
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(completeStepBodySchema),
   completeGuidanceStep
 );
@@ -231,6 +233,7 @@ router.post(
   '/properties/:propertyId/guidance/steps/:stepId/skip',
   validate(propertyStepParamsSchema),
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(skipStepBodySchema),
   skipGuidanceStep
 );
@@ -239,6 +242,7 @@ router.post(
   '/properties/:propertyId/guidance/steps/:stepId/block',
   validate(propertyStepParamsSchema),
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(blockStepBodySchema),
   blockGuidanceStep
 );
@@ -247,6 +251,7 @@ router.post(
   '/properties/:propertyId/guidance/tool-completions',
   validate(propertyParamsSchema),
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(toolCompletionBodySchema),
   recordGuidanceToolCompletion
 );
@@ -256,6 +261,7 @@ router.post(
   '/properties/:propertyId/guidance/journeys/start',
   validate(propertyParamsSchema),
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(startJourneyBodySchema),
   startGuidanceJourney
 );
@@ -264,6 +270,7 @@ router.post(
   '/properties/:propertyId/guidance/journeys/:journeyId/dismiss',
   validate(propertyJourneyParamsSchema),
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(dismissJourneyBodySchema),
   dismissGuidanceJourney
 );
@@ -272,6 +279,7 @@ router.post(
   '/properties/:propertyId/guidance/journeys/:journeyId/branch-from-repair-replace',
   validate(propertyJourneyParamsSchema),
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(branchRepairReplaceBodySchema),
   branchGuidanceRepairReplace
 );
@@ -280,6 +288,7 @@ router.post(
   '/properties/:propertyId/guidance/model-shortlist',
   validate(propertyParamsSchema),
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(modelShortlistBodySchema),
   generateGuidanceModelShortlist
 );
@@ -288,6 +297,7 @@ router.post(
   '/properties/:propertyId/guidance/vendor-suggestions',
   validate(propertyParamsSchema),
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(vendorSuggestionsBodySchema),
   generateGuidanceVendorSuggestions
 );
@@ -296,6 +306,7 @@ router.post(
   '/properties/:propertyId/guidance/journeys/:journeyId/change-issue',
   validate(propertyJourneyParamsSchema),
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(changeIssueBodySchema),
   changeGuidanceJourneyIssue
 );

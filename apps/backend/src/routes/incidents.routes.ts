@@ -21,7 +21,7 @@ import {
   cancelAutoResolution,
 } from '../controllers/incidents.controller';
 
-import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
+import { propertyAuthMiddleware, requireHouseholdRole } from '../middleware/propertyAuth.middleware';
 import { authenticate } from '../middleware/auth.middleware';
 
 const router = Router();
@@ -40,6 +40,7 @@ router.post(
   '/properties/:propertyId/incidents',
   authenticate,
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   upsertIncident
 );
 
@@ -61,6 +62,7 @@ router.post(
   '/properties/:propertyId/incidents/:incidentId/signals',
   authenticate,
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   addSignal
 );
 
@@ -74,6 +76,7 @@ router.post(
   '/properties/:propertyId/incidents/:incidentId/actions',
   authenticate,
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   createIncidentAction
 );
 
@@ -81,6 +84,7 @@ router.post(
   '/properties/:propertyId/incidents/:incidentId/actions/:actionId/confirm-created',
   authenticate,
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   confirmIncidentActionCreated
 );
 
@@ -88,6 +92,7 @@ router.post(
   '/properties/:propertyId/incidents/:incidentId/actions/:actionId/execute',
   authenticate,
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   executeIncidentAction
 );
 
@@ -98,6 +103,7 @@ router.post(
   '/properties/:propertyId/incidents/:incidentId/ack',
   authenticate,
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   acknowledgeIncident
 );
 
@@ -105,6 +111,7 @@ router.patch(
   '/properties/:propertyId/incidents/:incidentId/status',
   authenticate,
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   setIncidentStatus
 );
 
@@ -117,6 +124,7 @@ router.post(
   '/properties/:propertyId/incidents/:incidentId/evaluate',
   authenticate,
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   evaluateIncidentNow
 );
 
@@ -124,6 +132,7 @@ router.post(
   '/properties/:propertyId/incidents/:incidentId/orchestrate',
   authenticate,
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   orchestrateIncidentNow
 );
 
@@ -145,6 +154,7 @@ router.post(
   '/properties/:propertyId/incident-suppression-rules',
   authenticate,
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   createSuppressionRule
 );
 
@@ -152,6 +162,7 @@ router.post(
   '/properties/:propertyId/incidents/:incidentId/reevaluate',
   authenticate,
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   reevaluateIncidentNow
 );
 
