@@ -129,6 +129,7 @@ const RECORD_TYPE_LABELS: Record<PropertyRecordType, string> = {
   DISCLOSURE: 'Disclosure',
   SURVEY: 'Survey',
   CLOSING_DOCUMENT: 'Closing Document',
+  QUOTE: 'Quote or estimate',
   OTHER: 'Other',
 };
 

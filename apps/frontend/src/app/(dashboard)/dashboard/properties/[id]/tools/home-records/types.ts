@@ -15,6 +15,7 @@ export type PropertyRecordType =
   | 'DISCLOSURE'
   | 'SURVEY'
   | 'CLOSING_DOCUMENT'
+  | 'QUOTE'
   | 'OTHER';
 
 export type PropertyRecordSensitivity =

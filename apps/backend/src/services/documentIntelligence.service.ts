@@ -6,6 +6,7 @@ import { logger } from '../lib/logger';
 import { APIError } from '../middleware/error.middleware';
 import { AICircuitBreaker, AICircuitOpenError, AITimeoutError, withTimeout } from '../lib/aiResilience';
 import { executeGovernedAIRequest, resolveGovernedAIModel } from './ai/aiRequestGovernance.service';
+import { parseServiceQuoteResponse, SERVICE_QUOTE_ANALYSIS_PROMPT, type ServiceQuoteParse } from './serviceQuoteExtraction';
 
 export interface DocumentInsights {
   documentType: 'WARRANTY' | 'RECEIPT' | 'MANUAL' | 'INSPECTION' | 'INVOICE' | 'INSURANCE' | 'UNKNOWN';
@@ -351,6 +352,27 @@ export class DocumentIntelligenceService {
       if (typeof value === 'string' && value.trim()) candidateFields[key] = value.trim();
     }
     return { candidateFields, confidence };
+  }
+
+  // Quote extraction (Quote Comparison import design §3.2): a typed, validated reply, not the general document insights. Like analyzeMaterialPhoto,
+  // upstream failures (timeout, open circuit) propagate to the caller, which owns the failure boundary; an unreadable or off-schema reply is a
+  // FAILED parse, never an empty quote.
+  async analyzeServiceQuote(fileBuffer: Buffer, mimeType: string): Promise<ServiceQuoteParse & { modelId: string }> {
+    const base64Data = fileBuffer.toString('base64');
+    const model = resolveGovernedAIModel('FAST');
+    const response = await documentIntelligenceCircuit.execute(async () =>
+      withTimeout(
+        async () => executeGovernedAIRequest({ routeId: 'ai:document-intelligence', model, structuredOutputRequired: true, structuredOutputConfigured: true, work: () => this.ai.models.generateContent({
+          model,
+          contents: [{ role: 'user', parts: [{ text: SERVICE_QUOTE_ANALYSIS_PROMPT }, { inlineData: { mimeType, data: base64Data } }] }],
+          config: { maxOutputTokens: 6000, temperature: 0, responseMimeType: 'application/json' },
+        }) }),
+        { timeoutMs: DOCUMENT_AI_TIMEOUT_MS * 3, operation: 'service_quote_analysis' },
+      )
+    );
+    const parse = parseServiceQuoteResponse(response.text);
+    if (parse.status === 'FAILED') logger.warn({ reason: parse.reason }, '[DOC-INTELLIGENCE] Quote extraction reply was not usable');
+    return { ...parse, modelId: String(model) };
   }
 
 }

@@ -54,7 +54,7 @@ const RECORD_KIND_LABEL: Record<PropertyRecordType, string> = {
   WARRANTY: 'Warranties', RECEIPT: 'Receipts', MANUAL: 'Manuals', INSPECTION_REPORT: 'Inspection reports', INVOICE: 'Invoices',
   CONTRACT: 'Contracts', PERMIT: 'Permits', INSURANCE_POLICY: 'Insurance policies', CLAIM: 'Claims', PHOTO: 'Photos',
   DEED: 'Deeds', TAX_DOCUMENT: 'Tax documents', UTILITY: 'Utility records', DISCLOSURE: 'Disclosures', SURVEY: 'Surveys',
-  CLOSING_DOCUMENT: 'Closing documents', OTHER: 'Other',
+  CLOSING_DOCUMENT: 'Closing documents', QUOTE: 'Quotes and estimates', OTHER: 'Other',
 };
 
 // Legacy kinds that have a Home Records equivalent share its key (so the same kind of document groups together whichever store holds it);

@@ -22,6 +22,7 @@ import { syncPropertyRecordWorkItem } from '../modules/homeOperations/adapters/p
 import { stageExtractedPolicyTerm } from './insurancePolicyRecord.service';
 import { emitPropertyChangeWithTransaction } from '../propertyChanges/propertyChange.service';
 import { recordDocumentPromotionOutcome } from './decisionPlatform/outcomeObservationService';
+import { quoteMinimumEvidence, serviceQuoteCandidates, serviceQuoteToExtractionEnvelope } from './serviceQuoteExtraction';
 
 // Best-effort bridge into Home Operations (Slice 4 of the continuity
 // plan) — re-reads the record's freshly recomputed needsReview/
@@ -251,24 +252,30 @@ export class HomeRecordsExtractionService {
         'PROPERTY_RECORD_VERSION_NOT_CLEAN',
       );
     }
-    // Only WARRANTY, RECEIPT, and INSURANCE_POLICY have a promotion contract
-    // implemented — see file header.
-    if (
-      version.record.recordType !== 'WARRANTY'
-      && version.record.recordType !== 'RECEIPT'
-      && version.record.recordType !== 'INSURANCE_POLICY'
-    ) {
+    // WARRANTY, RECEIPT and INSURANCE_POLICY have a promotion contract implemented. QUOTE (and an existing CONTRACT or OTHER record that is really a
+    // quote) is extracted for Quote Comparison's import, which creates the quote; INVOICE is billed work, not a proposal, and is refused.
+    const recordType = version.record.recordType;
+    if (recordType === 'INVOICE') {
       throw new APIError(
-        'AI review is available for warranty, receipt, and insurance policy records in this release.',
+        'An invoice is a bill for work already done, not a quote. Mark the file as a quote if it is a proposal for work not yet done.',
+        422,
+        'PROPERTY_RECORD_EXTRACTION_INVOICE_NOT_QUOTE',
+      );
+    }
+    if (recordType !== 'WARRANTY' && recordType !== 'RECEIPT' && recordType !== 'INSURANCE_POLICY' && recordType !== 'QUOTE' && recordType !== 'CONTRACT' && recordType !== 'OTHER') {
+      throw new APIError(
+        'AI review is available for warranty, receipt, insurance policy and quote records in this release.',
         422,
         'PROPERTY_RECORD_EXTRACTION_UNSUPPORTED_TYPE',
       );
     }
-    const targetDomain = version.record.recordType === 'WARRANTY'
+    const targetDomain = recordType === 'WARRANTY'
       ? 'WARRANTY' as const
-      : version.record.recordType === 'RECEIPT'
+      : recordType === 'RECEIPT'
         ? 'EXPENSE' as const
-        : 'INSURANCE_POLICY' as const;
+        : recordType === 'INSURANCE_POLICY'
+          ? 'INSURANCE_POLICY' as const
+          : 'SERVICE_QUOTE' as const;
 
     // Idempotent: re-running analysis on an already-analyzed version would
     // either duplicate candidates or silently discard homeowner review
@@ -287,6 +294,9 @@ export class HomeRecordsExtractionService {
     }
 
     const buffer = await downloadObjectBuffer(bucket, version.storageKey);
+    if (targetDomain === 'SERVICE_QUOTE') {
+      return this.runQuoteExtraction({ propertyId: input.propertyId, recordId: input.recordId, version, buffer, recordType });
+    }
     const insights = await documentIntelligenceService.analyzeDocument(buffer, version.mimeType);
     // Home Intelligence Functional Completeness FRD §8.7 (HI-DOC-001),
     // Phase 5 work item 3 — the common ExtractionEnvelope this extraction
@@ -337,6 +347,48 @@ export class HomeRecordsExtractionService {
       where: { propertyRecordVersionId: version.id },
       orderBy: { createdAt: 'asc' },
     });
+    await syncRecordWorkItem(input.propertyId, input.recordId);
+    return created;
+  }
+
+  /**
+   * Quote extraction for one version (Quote Comparison import design §3.2, §3.9). A file that is not classified as a quote with enough confidence,
+   * or that is unreadable, is refused and stores nothing, so it can be tried again after the record's type is corrected. A quote that is missing a
+   * required fact is stored with what was found and a warning in the envelope, so the person can see exactly what is missing; the import (not
+   * this step) refuses to create a quote from it.
+   */
+  private async runQuoteExtraction(input: {
+    propertyId: string; recordId: string; buffer: Buffer; recordType: string;
+    version: { id: string; mimeType: string; originalFileName: string };
+  }): Promise<ExtractedFactCandidate[]> {
+    const parse = await documentIntelligenceService.analyzeServiceQuote(input.buffer, input.version.mimeType);
+    const envelope = serviceQuoteToExtractionEnvelope(parse, { documentVersionId: input.version.id, modelId: parse.modelId });
+    if (parse.status === 'FAILED' || envelope.parseStatus === 'FAILED') {
+      throw new APIError(
+        'This document could not be read automatically. Enter the details manually instead.',
+        422,
+        'PROPERTY_RECORD_EXTRACTION_UNREADABLE',
+      );
+    }
+    const evidence = quoteMinimumEvidence(parse.extraction);
+    if (!evidence.classifiedAsQuote) {
+      throw new APIError(
+        `This does not look like a quote or estimate (it reads as ${parse.extraction.documentKind.toLowerCase()}). `
+        + (input.recordType === 'QUOTE' ? 'Check that the right file was added.' : 'Change the record to the right type if it is something else.'),
+        422,
+        'PROPERTY_RECORD_EXTRACTION_NOT_A_QUOTE',
+      );
+    }
+    const citation = `AI extraction from "${input.version.originalFileName}"`;
+    const rows = [
+      { propertyRecordVersionId: input.version.id, targetDomain: 'SERVICE_QUOTE' as const, fieldKey: DOCUMENT_TYPE_FIELD_KEY, proposedValue: envelope.candidateEntityType, sourceCitation: citation, confidence: parse.extraction.confidence },
+      ...serviceQuoteCandidates(parse.extraction).map((candidate) => ({
+        propertyRecordVersionId: input.version.id, targetDomain: 'SERVICE_QUOTE' as const, fieldKey: candidate.fieldKey, proposedValue: candidate.proposedValue,
+        sourceCitation: candidate.sourceCitation ? `${citation}, ${candidate.sourceCitation}` : citation, confidence: parse.extraction.confidence,
+      })),
+    ];
+    await prisma.extractedFactCandidate.createMany({ data: rows });
+    const created = await prisma.extractedFactCandidate.findMany({ where: { propertyRecordVersionId: input.version.id }, orderBy: { createdAt: 'asc' } });
     await syncRecordWorkItem(input.propertyId, input.recordId);
     return created;
   }

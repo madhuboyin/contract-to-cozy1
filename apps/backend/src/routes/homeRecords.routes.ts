@@ -31,7 +31,7 @@ const upload = multer({
 const recordTypeSchema = z.enum([
   'WARRANTY', 'RECEIPT', 'MANUAL', 'INSPECTION_REPORT', 'INVOICE',
   'CONTRACT', 'PERMIT', 'INSURANCE_POLICY', 'CLAIM', 'PHOTO',
-  'DEED', 'TAX_DOCUMENT', 'UTILITY', 'DISCLOSURE', 'SURVEY', 'CLOSING_DOCUMENT',
+  'DEED', 'TAX_DOCUMENT', 'UTILITY', 'DISCLOSURE', 'SURVEY', 'CLOSING_DOCUMENT', 'QUOTE',
   'OTHER',
 ]);
 const sensitivitySchema = z.enum([

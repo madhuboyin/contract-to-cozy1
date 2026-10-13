@@ -2193,6 +2193,8 @@ enum PropertyRecordType {
   DISCLOSURE
   SURVEY
   CLOSING_DOCUMENT
+  // A contractor's or provider's proposal, estimate or bid for work not yet done (Quote Comparison import design, D-Q3).
+  QUOTE
   OTHER
 }
 
@@ -2284,6 +2286,8 @@ enum ExtractedFactTargetDomain {
   WARRANTY
   EXPENSE
   INSURANCE_POLICY
+  // Quote facts: provider, total, dates, scope, line items and terms (Quote Comparison import design, D-Q1).
+  SERVICE_QUOTE
   OTHER
 }
 
