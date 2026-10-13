@@ -67,6 +67,8 @@ import { PAST_HAZARD_CAPTURE_KEY, PAST_HAZARD_INVALID_MESSAGES, parsePastHazardO
 import { pastHazardCommandResult } from '../handlers/pastHazardOutcomeCommands.handler';
 import { BRIEFING_PREFERENCES_CAPTURE_KEY, parseBriefingPreferencesAnswer } from '../support/homeBriefingCommand';
 import { briefingCommandResult } from '../handlers/homeBriefingCommands.handler';
+import { CLAIM_NOTE_CAPTURE_KEY, parseClaimNoteAnswer } from '../support/claimActivityCommand';
+import { claimActivityResult } from '../handlers/claimActivity.handler';
 import { doNothingFormKindFromCaptureKey, parseDoNothingScenarioAnswer } from '../support/doNothingScenarioCommand';
 import { doNothingScenarioResult } from '../handlers/doNothingScenarioCommands.handler';
 import { HABIT_COACH_PREFERENCES_CAPTURE_KEY, parseHabitCoachPreferencesAnswer } from '../support/habitCoachPreferencesCommand';
@@ -1437,6 +1439,24 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     captureId = input.idempotencyKey;
     capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
     canonicalOwner = 'DoNothingScenario';
+  } else if (execution.operationId === 'CLAIM_ACTIVITY_COMMAND') {
+    if (input.captureKey !== CLAIM_NOTE_CAPTURE_KEY) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    const access = await ensurePropertyAccess(userId, execution.propertyId);
+    if (access.role === HouseholdRole.VIEWER) throw Object.assign(new Error('A contributor or owner is required to change a claim.'), { code: 'ASK_PERMISSION_REQUIRED' });
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson) ? execution.parametersJson as Record<string, unknown> : {};
+    const claimLaunch = storedParameters.claimActivityLaunch && typeof storedParameters.claimActivityLaunch === 'object' && !Array.isArray(storedParameters.claimActivityLaunch)
+      ? storedParameters.claimActivityLaunch as { kind?: unknown; entityId?: unknown; sourceExecutionId?: unknown } : null;
+    if (!claimLaunch || claimLaunch.kind !== 'NOTE' || typeof claimLaunch.entityId !== 'string') {
+      throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    }
+    const claimNote = parseClaimNoteAnswer(input.answer);
+    if (!claimNote.success) throw Object.assign(new Error('Write a note of at least three characters.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+    result = await claimActivityResult(userId, execution.propertyId, {
+      kind: 'NOTE', entityId: claimLaunch.entityId, sourceExecutionId: typeof claimLaunch.sourceExecutionId === 'string' ? claimLaunch.sourceExecutionId : null,
+    }, claimNote.data);
+    captureId = input.idempotencyKey;
+    capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
+    canonicalOwner = 'ClaimTimelineEvent';
   } else if (execution.operationId === 'PROPERTY_BRIEF_COMMAND') {
     if (![PROPERTY_BRIEF_PREPARE_CAPTURE_KEY, PROPERTY_BRIEF_SHARE_CAPTURE_KEY].includes(input.captureKey) || input.expectedContextVersion !== 'property-brief-live') throw Object.assign(new Error('This Property Brief form is no longer active.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
     const access = await ensurePropertyAccess(userId, execution.propertyId);

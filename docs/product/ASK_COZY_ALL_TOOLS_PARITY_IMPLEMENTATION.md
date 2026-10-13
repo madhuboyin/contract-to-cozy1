@@ -227,7 +227,7 @@ Project Tracker appeared in the original P0 list as "lists projects." It is remo
 | --- | --- | --- | --- |
 | Maintenance and Home Operations | Residual gap | Strong task creation, completion, rescheduling and template browsing; some bulk/settings controls remain | Not re-verified |
 | Home Habit Coach | Implemented (FRD v1.334 adds the property-wide settings; the per-habit actions already existed) | Snooze defaults, quiet hours, personalization (not exposed as a household decision) | Not browser- or database-verified |
-| Claims | Residual gap | Filing, status and lifecycle transitions are confirmation-gated; attachment and checklist ergonomics remain fragmented | Not re-verified |
+| Claims | Implemented (FRD v1.337 adds the checklist read, tick and reopen, and notes; filing, status and lifecycle already existed) | Document upload and attachment (binary and a record picker); regenerate checklist (destructive) | Not browser- or database-verified |
 | Inspection Hub | Residual gap | **Verified 2026-10-12 (code-traced: `INSPECTION_FINDINGS`, `INSPECTION_FINDING_UPDATE` against the 17 desktop routes):** findings read and accept/dismiss/resolve exist. Not in Ask: report confirm with write-back preview, open items across reports, report comparison, negotiation package, fix/disclose decisions and the work-disposition of a finding. Report upload and analysis stay an analyzer boundary | **Verified 2026-10-12** (code-traced) |
 | Seller Prep | Residual gap | Checklist decisions work; some evidence and report-level controls remain | Not re-verified |
 | Buyer Closing | Residual gap | Extensive operations exist; advanced deferred-buyer and document-center workflows are not currently available in Ask | Not re-verified |

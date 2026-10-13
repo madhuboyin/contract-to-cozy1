@@ -8,6 +8,7 @@ import { prisma } from '../../../lib/prisma';
 import { type AskPresentationBlock, type CreateAskExecutionRequest } from '../../../productFramework/ask/ask.contract';
 import { type AskOperationResult } from '../askOperationRegistry';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
+import { CLAIM_CHECKLIST_ACTION_ID, CLAIM_CHECKLIST_MESSAGE } from '../support/claimActivityCommand';
 import { humanDate, readableCode } from '../askFormatting';
 import { ensurePropertyAccess, exactEntityMatch } from '../askHandlerSupport';
 import { type AskViewState } from '../support/executionState';
@@ -206,9 +207,11 @@ export const CLAIM_TRANSITION_ACTIONS = [
 ] as const;
 
 export function claimItemActions(role: HouseholdRole) {
+  // FRD v1.337: the checklist is a read any member may open; its steps and the claim's status changes are contributor commands.
+  const checklist = { id: CLAIM_CHECKLIST_ACTION_ID, label: 'Checklist', message: CLAIM_CHECKLIST_MESSAGE, style: 'SECONDARY' as const, interactionType: 'CONVERSATION_CONTINUE' as const, operationId: 'CLAIM_CHECKLIST_VIEW' as const };
   // CLAIM_TRANSITION is a CONTRIBUTOR domain command; viewers get read-only detail.
-  if (role === HouseholdRole.VIEWER) return [];
-  return CLAIM_TRANSITION_ACTIONS.map(({ id, label, message }) => ({ id, label, message, style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'CLAIM_TRANSITION' }));
+  if (role === HouseholdRole.VIEWER) return [checklist];
+  return [...CLAIM_TRANSITION_ACTIONS.map(({ id, label, message }) => ({ id, label, message, style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'CLAIM_TRANSITION' as const })), checklist];
 }
 
 const claimCount = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;

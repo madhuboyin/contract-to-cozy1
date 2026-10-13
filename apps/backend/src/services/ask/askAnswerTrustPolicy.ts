@@ -102,7 +102,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   INSPECTION_FINDINGS: new Set(['finding-accept', 'finding-dismiss', 'finding-resolve']),
   RECALL_REVIEW: new Set(['recall-confirm', 'recall-dismiss', 'recall-resolve']),
   // The Open Documents link was never declared, so the validator removed it from the answer and from its empty state (found in Documents D-1).
-  INCIDENT_CLAIM_STATUS: new Set(['claim-file-start', 'claim-start', 'claim-submit', 'claim-under-review', 'claim-approve', 'claim-deny', 'claim-close']),
+  INCIDENT_CLAIM_STATUS: new Set(['claim-file-start', 'claim-start', 'claim-submit', 'claim-under-review', 'claim-approve', 'claim-deny', 'claim-close', 'claim-checklist']),
   // Plus the row steps (FRD v1.323): save, dismiss, stop pursuing, record the outcome.
   SAVINGS_OPPORTUNITIES: new Set(['review-all-savings', 'savings-benefit-save', 'savings-benefit-dismiss', 'savings-benefit-stop', 'savings-benefit-outcome']),
   OWNERSHIP_COSTS: new Set([
@@ -182,6 +182,9 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   NEGOTIATION_SHIELD_CASE_ATTACH: new Set(['negotiation-shield-review', 'negotiation-shield-analyze']),
   // The readiness answer's empty state offers the start; the receipt of a started case offers that case's readiness check.
   RENOVATION_CASE_START: new Set(['renovation-case-readiness']),
+  // Mark a claim checklist item done, not applicable or open again, and add a note to a claim's timeline (register P2 Claims). Confirmation-gated, declared-action only.
+  CLAIM_CHECKLIST_VIEW: new Set(['claim-note', 'claim-checklist-done', 'claim-checklist-not-applicable', 'claim-checklist-reopen']),
+  CLAIM_ACTIVITY_COMMAND: new Set(['claims-back']),
   // Save, change and delete Do-Nothing Simulator scenarios (register P2 Do-Nothing Simulator). Confirmation-gated, declared-action only; saving a scenario runs nothing.
   DO_NOTHING_SCENARIO_COMMAND: new Set(['do-nothing-back']),
   // Change the Home Habit Coach's property-wide settings: on or off, how many habits it shows, which kinds it hides (register P2 Home Habit Coach). Confirmation-gated, declared-action only.

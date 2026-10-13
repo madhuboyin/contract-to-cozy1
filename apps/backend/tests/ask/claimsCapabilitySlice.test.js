@@ -86,14 +86,16 @@ test('claim rows carry CLAIM identity and every transition action for contributo
   assert.equal(rows.length, 2);
   for (const row of rows) {
     assert.equal(row.entityType, 'CLAIM');
-    assert.deepEqual(row.actions.map((action) => action.id), CLAIM_TRANSITION_ACTIONS.map((action) => action.id));
-    assert.ok(row.actions.every((action) => action.operationId === 'CLAIM_TRANSITION' && action.interactionType === 'MUTATE_RECORD'));
+    // Every transition, then the checklist read (FRD v1.337).
+    assert.deepEqual(row.actions.map((action) => action.id), [...CLAIM_TRANSITION_ACTIONS.map((action) => action.id), 'claim-checklist']);
+    assert.ok(row.actions.filter((action) => action.id !== 'claim-checklist').every((action) => action.operationId === 'CLAIM_TRANSITION' && action.interactionType === 'MUTATE_RECORD'));
     assert.equal(row.href, null, 'Ask links to no desktop claim page; the row opens its own inline detail');
   }
   accessRole = 'VIEWER';
   const viewer = await list();
-  assert.ok(viewer.sections.flatMap((section) => section.items).every((row) => row.actions.length === 0));
-  assert.deepEqual(claimItemActions('VIEWER'), []);
+  // A viewer reads the checklist and changes nothing.
+  assert.ok(viewer.sections.flatMap((section) => section.items).every((row) => row.actions.length === 1 && row.actions[0].id === 'claim-checklist'));
+  assert.deepEqual(claimItemActions('VIEWER').map((action) => action.id), ['claim-checklist']);
 });
 
 test('every claim action survives the answer-trust whitelist for the claims read', () => {

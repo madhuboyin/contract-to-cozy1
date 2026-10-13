@@ -80,12 +80,12 @@ test('no list carries a page link or a filled action, and claim rows still carry
   assert.equal(JSON.stringify(result).includes('/dashboard/'), false);
   assert.ok(!list(result).actions.some((action) => action.interactionType === 'START_WORKFLOW'), 'no claim action is offered from the answer');
   const claimItem = list(result).sections.flatMap((section) => section.items).find((item) => item.entityType === 'CLAIM');
-  assert.ok(claimItem.actions.length > 0 && claimItem.actions.every((action) => action.operationId === 'CLAIM_TRANSITION'));
+  assert.ok(claimItem.actions.length > 0 && claimItem.actions.every((action) => ['CLAIM_TRANSITION', 'CLAIM_CHECKLIST_VIEW'].includes(action.operationId)));
   const incidentItem = list(result).sections.flatMap((section) => section.items).find((item) => item.id === 'i1');
   assert.equal(incidentItem.actions, undefined);
   role = 'VIEWER';
   const viewer = await run('Show my incidents and claims');
-  assert.ok(list(viewer).sections.flatMap((section) => section.items).filter((item) => item.entityType === 'CLAIM').every((item) => item.actions.length === 0), 'a viewer gets read-only rows');
+  assert.ok(list(viewer).sections.flatMap((section) => section.items).filter((item) => item.entityType === 'CLAIM').every((item) => item.actions.every((action) => action.operationId === 'CLAIM_CHECKLIST_VIEW')), 'a viewer gets read-only rows (the checklist read only)');
   const claimsOnly = await run('Show my claims');
   assert.deepEqual(list(claimsOnly).actions, [], 'a claims question links no page either');
 });
