@@ -1,6 +1,6 @@
 # Quote Comparison: importing a quote from a Home Record — design
 
-**Status:** Owner rulings recorded (§0); slice 1 read-only audit done (§6). Nothing in this document is built. No implementation ships until the confirmation contract in §3.4 is accepted as written.
+**Status:** Design accepted by the owner (§0, October 13, 2026): all decisions D-Q1 to D-Q7 are final and the confirmation contract in §3.4 is approved. Slice 1 read-only audit done (§6). Nothing in this document is built. Slice 1b is limited to the transaction-aware journey refactor (§5).
 **Date:** October 13, 2026
 **Scope:** How `createQuoteProposalFromDocument` (Quote Comparison, "add a quote from a document") moves from the legacy `Document` table to Home Records, and what that requires of extraction, review, provenance and the decision journey.
 **Not in scope:** Property Tax intake, Coverage add-quote, the Project Tracker's own document store, and removing the legacy `Document` model.
@@ -18,8 +18,9 @@ Every statement about existing behaviour is one of: **code-traced** (read in the
 | D-Q2 review location | **Amend** | The workspace is the authoritative affirmation point, **only once it can display and correct every extracted fact**; generic Home Records review stays optional. Gated by D-Q6 (§3.4). |
 | D-Q3 record types | **Amend** | Add `QUOTE` as a first-class `PropertyRecordType`; keep accepting `CONTRACT` and `OTHER` when classification confidently says quote; refuse `INVOICE` by default (§3.3). |
 | D-Q4 visibility | **Accept** | The service enforces `HOUSEHOLD` visibility and also validates property, record/version relationship, lifecycle and scan status (§3.1). |
-| D-Q5 provenance | **Amend** | The audit comes first. P1 is acceptable only if every reader tolerates a null legacy id and the invariant can be enforced safely; otherwise a separate Home Record provenance model (§3.5, §6). |
-| D-Q6 bulk confirmation | **Deferral rejected** | Must be resolved before the richer extractor ships, and it gates D-Q2 (§3.4). |
+| D-Q5 provenance | **Final: P2** | A separate Home Record provenance model. The legacy `QuoteComparisonExtraction` and its required `document` relation are left intact (§3.5). |
+| D-Q6 bulk confirmation | **Deferral rejected; contract approved** | Must be resolved before the richer extractor ships, and it gates D-Q2 (§3.4). |
+| D-Q7 purged source | **Final: retain affirmed facts** | Confirmed and corrected facts survive a purge; everything else extracted is removed (§3.5). |
 
 Five requirements are launch-blocking, not incidental (§3.9): idempotency, atomicity, no empty-quote fallback, version behaviour, and classification confidence.
 
@@ -123,24 +124,32 @@ A single "Confirm quote" button is acceptable: it affirms the complete, visible 
 
 **Consequence for sequencing.** The richer extractor (slice 2) does not ship before the contract is implemented (slice 3). Until then the existing bulk confirm applies only to the shell imports it applies to today.
 
-### 3.5 Provenance (D-Q5, amended; decided after the audit in §6)
+### 3.5 Provenance (D-Q5 final: P2; D-Q7 final)
 
-`QuoteComparisonExtraction` is the provenance row. The durable evidence source is the **exact `PropertyRecordVersion`**, not the record.
+**Decision.** A separate Home Record provenance model. The legacy `QuoteComparisonExtraction`, its non-null `documentId` and its `document` relation are not changed, so `quoteInclude` and `quoteDecisionUi.ts` are not touched and the legacy contract is not weakened. Why P2 over extending the row: it leaves legacy readers intact; the "one import per record version per workspace" rule becomes a plain unique index on one table; it avoids a nullable legacy relationship and a check constraint `prisma db push` cannot create; and it keeps two provenance systems with different deletion semantics apart, which makes retiring the legacy one a deletion rather than a migration.
 
-**Option P1: extend the row.** `source` discriminator (`LEGACY_DOCUMENT | HOME_RECORD`), `documentId` nullable, new nullable `propertyRecordId` and `propertyRecordVersionId`, a uniqueness rule on `(workspaceId-of-quote, propertyRecordVersionId)`, application-level validation at every write boundary, and, if the owner wants the invariant below the service layer, a `CHECK` that exactly one source column is set and matches the discriminator, **supplied as a user-managed database change**: `prisma db push` does not create it from the Prisma schema.
+**Model (field-level, names indicative).** `QuoteHomeRecordSource`: `id`, `quoteId` (required, cascade with the quote), `workspaceId` (denormalized from the quote so the unique index is one table), `propertyRecordId` and `propertyRecordVersionId` (optional foreign keys, `SetNull`), `extractorId`, `extractorVersion`, `schemaVersion` (`quote-proposal-v1`), `modelId`, `extractedAt`, `importedByUserId`, `createdAt`, `supersededByQuoteId` (optional, for the replace choice of §3.9(4)), and a `sourceRemovedAt` timestamp set when the source is purged. Unique index on `(workspaceId, propertyRecordVersionId)`. The exact version is the durable evidence source, not the record. Application code validates every write; no database `CHECK` is needed because there is no second source column.
 
-**Option P2: a separate Home Record provenance model.** A new table keyed to the quote and the version; the legacy table is untouched.
+**The deletion-impact link.** A `PropertyRecordLink` is also written so that deleting the source appears in the deletion impact decision (the impact is computed from links only; a `SetNull` foreign key is invisible to it, §6). The link model has separate fields and none is overloaded: `recordId` is the **source record**, `versionId` is the **exact version** (the link model already has this optional field with its own foreign key), `entityType` is a new `SERVICE_QUOTE` value, `entityId` is the **quote id**, `purpose` is `SOURCE`. The uniqueness already on the link model, `(recordId, entityType, entityId, purpose)`, makes a second link for the same record and quote impossible. A later version of the same record imported into the same quote is not possible (a quote has one source); a different quote gets its own link.
 
-**What the audit found for this choice (§6):** the legacy `document` relation is read unconditionally by one include (`quoteInclude`) that backs every quote read, and the frontend dereferences `extraction.document.name` without a null check. P1 therefore requires changing that include and that frontend line in the same slice, and the DOCUMENT-typed journey link. The audit found **three** in-repo readers, which is small enough for P1 to be viable. The deciding risk is not the reader count but that the uniqueness rule spans a join (the quote carries the workspace, the extraction carries the version), which a plain unique index cannot express. **Recommendation: P2**, with `workspaceId` and `propertyRecordVersionId` both on the new table so the idempotency rule is a plain unique index and no legacy reader changes. The owner may still choose P1.
+**What survives a purge (D-Q7).** Source deletion does not undo a person's affirmation.
 
-**Retention and deletion.** Trashing a record offers an impact decision only for `PropertyRecordLink` rows (code-traced, `homeRecords.service.ts`); a foreign key with `SetNull` is invisible to that decision, and the purge job hard-deletes the record (`propertyRecord.delete`), after which provenance would be a pair of null ids. This design therefore also writes a `PropertyRecordLink` (a new `SERVICE_QUOTE` link entity type, purpose `SOURCE`, with the version id), following the savings-outcome precedent in the records plan §17.4, so that deleting a quote's source shows up in the deletion impact. The provenance row keeps immutable source metadata (version id, `sha256`, original file name, extractor id and version) so that, if the household chooses to remove the link and purge, what the quote came from is still stated. Whether a quote whose source was purged keeps its confirmed facts (recommended: yes, they were affirmed by a person) is **D-Q7**.
+| Kept | Removed |
+|---|---|
+| The quote, usable for comparison and for the historical decision | Raw extraction content (`rawResultJson` equivalent), source excerpts and source text on facts, line items and terms |
+| Facts, line items and terms the person **confirmed or corrected** (with their confirmation status, who and when) | Facts, line items and terms still **extracted and unconfirmed**: they are removed from the proposal, not left as trusted values, and readiness is recomputed |
+| Minimal provenance: `extractorId`, `extractorVersion`, `schemaVersion`, `modelId`, `extractedAt`, and the opaque source and version references (which become null) | The original file name (it may contain personal information), any URL, any storage key, any document payload, and the file's content hash (not needed to describe what produced the facts) |
 
-Idempotency is scoped to the operation, not to current state (AUDIT_METHODOLOGY item 14): importing the same record **version** into the same workspace returns the existing quote with an "already imported" result.
+The workspace shows "Source record removed" and disables source preview. `sourceRemovedAt` records when.
+
+**Mechanism required and not yet designed in detail.** A `SetNull` foreign key does not run any cleanup; the purge worker deletes the record with `propertyRecord.delete` (code-traced). Something must run the removal above at purge time, in the same transaction as, or strictly before, the delete: either the purge runner calls a quote-side function that takes the record id, or a database-level mechanism is added. The first is preferred (explicit, testable, in the repo's usual style) and is part of slice 4. If the purge is **blocked** by a legal hold or retention date, nothing is removed.
+
+Idempotency is scoped to the operation, not to current state (AUDIT_METHODOLOGY item 14): the unique index on `(workspaceId, propertyRecordVersionId)` is matched regardless of whether the earlier quote has since been superseded; a superseded quote's row still exists, so a replay finds it and returns "already imported".
 
 ### 3.6 Decision journey and atomicity
 
-- Add `HOME_RECORD` to `ServiceQuoteDecisionEntityType`; validate it with `resolvePropertyDocuments` (Home Records only); leave the legacy `DOCUMENT` validation as is. Because `advanceServiceQuoteDecision` upserts its own context link without validating it (§1.4), validation for the new type must live in that function's link step as well, not only in the explicit link function.
-- **Atomicity (launch-blocking).** The quote create, the provenance row, the `PropertyRecordLink`, the context link and the stage advance are one transaction. `advanceServiceQuoteDecision` opens its own `$transaction`, so it cannot be nested; the audit found **no transaction-aware variant**. Slice 1b extracts its body into a function that takes a `tx` and keeps the exported function as a wrapper.
+- Add `HOME_RECORD` to `ServiceQuoteDecisionEntityType` **in the same slice as its validated caller** (slice 4); validate it with `resolvePropertyDocuments` (Home Records only); leave the legacy `DOCUMENT` validation as is. Because `advanceServiceQuoteDecision` upserts its own context link without validating it (§1.4), validation for the new type must live in that function's link step as well, not only in the explicit link function.
+- **Atomicity (launch-blocking).** The quote create, the provenance row, the `PropertyRecordLink`, the context link and the stage advance are one transaction. `advanceServiceQuoteDecision` opens its own `$transaction`, so it cannot be nested; the audit found **no transaction-aware variant**. Slice 1b extracts its body into a function that takes a `tx` and keeps the exported function as a wrapper, with behaviour unchanged; it adds no entity type and no new caller.
 
 ### 3.7 Stale, unsupported and failed extraction (R4)
 
@@ -175,19 +184,18 @@ Idempotency is scoped to the operation, not to current state (AUDIT_METHODOLOGY 
 | D-Q2 | Workspace confirmation is the affirmation, once it shows and can correct every fact | **Amended**, gated by D-Q6 |
 | D-Q3 | Add `QUOTE` record type; accept `CONTRACT`/`OTHER` when classified; refuse `INVOICE` by default | **Amended** |
 | D-Q4 | Service enforces household visibility plus property, version, lifecycle and scan checks | **Accepted** |
-| D-Q5 | Provenance: P1 only if readers and invariant are safe, else a separate model | **Amended**; audit recommends P2 (§3.5), owner to finalize |
-| D-Q6 | Bulk confirmation must be resolved before the richer extractor ships | **Deferral rejected**; contract in §3.4 awaiting acceptance |
-| D-Q7 | Does a quote keep its confirmed facts when its source record is purged (recommended: yes) | Open |
+| D-Q5 | Provenance: a separate Home Record provenance model (P2) | **Final: P2** |
+| D-Q6 | Bulk confirmation must be resolved before the richer extractor ships | **Deferral rejected; contract in §3.4 approved** |
+| D-Q7 | A quote keeps its confirmed and corrected facts when its source record is purged; the rest of the extraction is removed | **Final: yes** |
 
 ## 5. Slices (each independently shippable, in order)
 
-1. **Read-only audit (done, §6).** Then **1b**: the transaction-aware journey variant and the `HOME_RECORD` entity type, with `quoteInclude` and the frontend line made null-tolerant. *Exit:* `tsc` clean; existing quote and journey tests pass; owner runs `prisma db push` for the enum value.
+1. **Read-only audit (done, §6).** Then **1b: the transaction-aware journey refactor only.** `advanceServiceQuoteDecision`'s body moves into a function that takes a `tx`; the exported function stays as a wrapper with unchanged behaviour. No entity type, no schema, no new caller. *Exit:* `tsc` clean; the existing quote and journey tests pass unchanged.
 2. **Confirmation contract (§3.4)**, implemented against the existing shell imports first: the review shows every fact, line item and term; confirm carries the displayed set; rejected values are removed; readiness recomputed from reviewed values. *Exit:* tests that a value not in the request is never confirmed and that a stale set is refused. **No extractor change ships before this slice.**
-3. **Schema:** `QUOTE` record type, `SERVICE_QUOTE` domain and link entity type, the provenance model (P1 or P2), with the owner-run database constraint if P1.
-4. **Quote extraction domain** (prompt, typed response schema, candidate mapping, envelope validation, minimum-evidence rule). *Exit:* fixture-envelope tests; a documented live-model fixture evaluation of extraction quality (multi-page line items, terms, totals, page attribution), which does not block the architecture.
-5. **Import service** with §3.1, §3.7, §3.9. *Exit:* a test per refusal and per launch-blocking requirement, including replay and the newer-version choice.
-6. **Desktop and Ask.** *Exit:* component and command tests; legacy path still passes.
-7. **Retire the legacy branch** when no caller sends a legacy id (not scheduled).
+3. **Quote extraction.** `QUOTE` record type, `SERVICE_QUOTE` extraction domain, prompt, typed response schema, candidate mapping, envelope validation and the minimum-evidence rule. *Exit:* fixture-envelope tests; a documented live-model fixture evaluation of extraction quality (multi-page line items, terms, totals, page attribution), which does not block the architecture. This slice creates no quote.
+4. **Import, provenance and journey, together.** The `QuoteHomeRecordSource` model, the `SERVICE_QUOTE` link type, the `HOME_RECORD` journey entity type with its validated branch (in the link function and in the advance function's link step), the unique index on `(workspaceId, propertyRecordVersionId)`, the import service with §3.1, §3.7 and §3.9, and the purge-time removal of §3.5. *Exit:* a test per refusal and per launch-blocking requirement, including replay, the newer-version choice, atomic rollback, and purge behaviour (kept, removed, blocked). The new enum values and the model ship with their validated caller and tests, never before them.
+5. **Desktop and Ask.** *Exit:* component and command tests; legacy path still passes.
+6. **Retire the legacy branch** when no caller sends a legacy id (not scheduled).
 
 ## 6. Adversarial pass and open items
 
@@ -198,7 +206,7 @@ Claims in this document that could be falsified, and the scenario that would do 
 - **"`runExtraction` rejects every other type" (§1.3).** Falsified by another entry point that extracts quote candidates. Checked: `ExtractedFactTargetDomain` has no quote value and the three branches in `runExtraction` are the only mappings.
 - **"A Home Record id would be refused by the journey link" (§1.4).** Code-traced: the `DOCUMENT` branch queries `prisma.document` by id and property. Would be falsified by a Home Record id also existing in `documents`, which the inventory service's own header rules out ("a document lives in exactly one of them"); that is a stated convention, not a database constraint, and was not checked against data.
 - **"Importing twice creates two quotes" (§1.4).** Code-traced from the absence of a uniqueness check and constraint; not executed.
-- **"Existing imports need no migration" (§1.4).** Holds only if every reader keeps a legacy branch (§3.5, P1). Not verified; it is the reader audit's job.
+- **"Existing imports need no migration" (§1.4).** With P2 the legacy table and its readers are unchanged, so existing imports are untouched by construction; it would be falsified only by a change to `quoteInclude` or the legacy model, which this design does not make.
 
 ### Slice 1 audit results (read-only; code-traced, October 13, 2026)
 
@@ -214,11 +222,11 @@ Searches were `grep -rn` over `apps/backend/src`, `apps/workers/src` and `apps/f
 | Transaction-aware journey operations | **None.** `advanceServiceQuoteDecision` opens its own `$transaction` and takes no `tx`; `linkServiceQuoteDecisionContext` uses the client directly. |
 | Raw SQL or workers touching the table | None found. |
 
-Conclusion for D-Q5: three in-repo readers and no worker or SQL dependency make P1 viable on reader count alone; the uniqueness rule spanning a join and the invisibility of `SetNull` to deletion impact favour P2 plus a `PropertyRecordLink`. The owner finalizes.
+Conclusion for D-Q5 (final: P2): three in-repo readers and no worker or SQL dependency made P1 viable on reader count alone, but P1 would have required making a required legacy relation nullable and changing `quoteInclude` and `quoteDecisionUi.ts`, and its uniqueness rule spans a join. P2 changes none of the legacy readers.
 
 **Open items not resolved here:**
 
-- D-Q7 (what a quote keeps when its source is purged) and the final P1/P2 choice.
+- The purge-time mechanism of §3.5 (a quote-side function called by the purge runner, versus a database mechanism), to be settled in slice 4.
 - Whether `promoteServiceQuote` runs inside the same transaction as candidate state changes in `HomeRecordsExtractionService` (the existing promotions were not read for this).
 - Behaviour on a multi-page quote where line items span pages (the envelope has `page` per field; how the model is asked to split them is a prompt decision made in slice 2).
 - Cost and rate limits of a second extraction prompt per upload.
