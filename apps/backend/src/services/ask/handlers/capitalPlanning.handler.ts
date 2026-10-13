@@ -1,6 +1,7 @@
 // Moved out of askOrchestrator.service.ts unchanged (decomposition, FRD v1.98;
 // docs/architecture/ASK_ORCHESTRATOR_DECOMPOSITION_REVIEW.md). The handler registers itself, and the orchestrator
 // re-exports the names below so existing imports keep working.
+import { COMPARABLE_ACTION_ID, COMPARABLE_MESSAGE } from '../support/propertyTaxComparableCommand';
 import { HouseholdRole } from '@prisma/client';
 import { prisma } from '../../../lib/prisma';
 import { type AskPresentationBlock } from '../../../productFramework/ask/ask.contract';
@@ -283,6 +284,10 @@ async function propertyTaxAppealReadinessResult(userId: string, propertyId: stri
     actions: access.role !== HouseholdRole.VIEWER ? [{
       id: APPEAL_COMMAND_ACTION_IDS.START, label: 'Start an appeal case', interactionType: 'START_WORKFLOW' as const, message: APPEAL_COMMAND_MESSAGES.START,
       operationId: 'PROPERTY_TAX_APPEAL_COMMAND' as const, entityType: APPEAL_PROPERTY_ENTITY_TYPE, entityId: propertyId, style: readiness.status === 'READY' ? 'PRIMARY' as const : 'SECONDARY' as const,
+    }, {
+      // FRD v1.355: a comparable sale the household found, added to the appeal evidence.
+      id: COMPARABLE_ACTION_ID, label: 'Add a comparable sale', interactionType: 'START_WORKFLOW' as const, message: COMPARABLE_MESSAGE,
+      operationId: 'PROPERTY_TAX_COMPARABLE_COMMAND' as const, style: 'SECONDARY' as const,
     }] : [],
   }];
   if (readiness.canonical) blocks.push({ type: 'TABLE', id: 'tax-canonical-facts', title: 'Canonical tax facts used', description: 'Unknown facts remain unknown and are never treated as zero.', columns: [{ key: 'fact', label: 'Fact' }, { key: 'value', label: 'Recorded value' }], rows: [

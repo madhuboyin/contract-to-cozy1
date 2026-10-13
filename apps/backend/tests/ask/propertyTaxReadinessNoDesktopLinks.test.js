@@ -37,9 +37,11 @@ test('a covered jurisdiction with gaps, and one with no reviewed rules, link now
   });
   const gaps = await ask();
   assert.equal(JSON.stringify(gaps).includes('/dashboard/'), false);
-  // FRD v1.322: the only action is the in-Ask start of a case (no href); the readiness check re-runs before anything is saved.
+  // FRD v1.322 and v1.355: the actions are the in-Ask start of a case and the in-Ask comparable (no href); the readiness check re-runs before anything is saved.
   const summaryActions = gaps.blocks.find((block) => block.id === 'tax-readiness-summary').actions;
-  assert.deepEqual(summaryActions.map((action) => [action.id, action.operationId, action.href ?? null]), [['property-tax-appeal-start', 'PROPERTY_TAX_APPEAL_COMMAND', null]]);
+  assert.deepEqual(summaryActions.map((action) => [action.id, action.operationId, action.href ?? null]), [
+    ['property-tax-appeal-start', 'PROPERTY_TAX_APPEAL_COMMAND', null], ['property-tax-comparable-add', 'PROPERTY_TAX_COMPARABLE_COMMAND', null],
+  ]);
   for (const block of gaps.blocks) for (const section of block.sections ?? []) for (const entry of section.items) assert.ok(entry.href == null, entry.id);
   assert.ok(gaps.captureRequests.length > 0, 'the capture card is still offered');
   assert.equal(gaps.captureRequests.every((request) => request.fallbackHref === undefined || request.fallbackHref === null), true);

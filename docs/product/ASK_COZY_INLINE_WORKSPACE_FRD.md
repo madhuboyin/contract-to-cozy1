@@ -1,9 +1,13 @@
 # Ask Cozy — Inline Workspace Product Requirements Document
 
-**Version:** 1.354
+**Version:** 1.355
 **Date:** October 12, 2026
 **Status:** Approved product direction; implementation is partial and tracked by requirement
 **Scope:** Ask Cozy interaction across homeowner-facing domains on desktop and mobile, including lightweight capability discovery and Ask-native completion
+
+**Revision 1.355 — Property Tax: add a comparable sale (parity register P2 "Property Tax"; 2026-10-13):** Comparable sales could be entered on the Property Tax page but not from Ask. New `PROPERTY_TAX_COMPARABLE_COMMAND` (confirmation-gated, contributor floor, declared-action only; registered across the Ask registries and the governance list; no schema change), offered as **Add a comparable sale** on the appeal readiness answer. It asks the address, sale date (never in the future), price, property class and, optionally, living area, lot size and condition, then calls `propertyTaxAppealReadinessService.upsertComparable`, the comparable route's own call. The key is derived from the address and sale date, so the same sale replaces its earlier entry rather than adding a copy. The review says Cozy does not verify the sale or compute an adjustment for it and nothing is filed; an uncovered jurisdiction is explained rather than erroring. Not here: adjustments, a source link or document, the appeal evidence entries and the document intakes (they need a record picker and the reviewed rule's evidence shape). Nothing is browser or database verified.
+
+**Not built, with the reason (2026-10-13):** Renovation "mark a readiness item satisfied" needs an evidence document, and `updateReadinessItem` validates it against the legacy `Document` table, which Home Records are not in (the same constraint that blocks Quote Comparison import); Permits "record an official status" is deliberately never set from Ask (v1.315); Renovation project handoff is owner-only and creates a project record, which needs its own design.
 
 **Revision 1.354 — Inspection Hub: archive a report (parity register P2 "Inspection Hub"; 2026-10-13):** The reports answer could confirm and compare a report but not archive it. `INSPECTION_REPORT_COMMAND` gains an **Archive this report** action (contributor floor, declared-action only, `MUTATE_RECORD` row action on a report that has been read: waiting for review or confirmed; a report still being read, or already archived, is refused). The review says archiving removes the report from the inspection reports and from the counts that include it, that its open findings stay on file, that nothing is deleted and nobody is contacted, and that Ask cannot restore it (the Inspection Hub has no restore). The confirmation is bound to the report's status, last update and open findings and calls `archiveReport`, the route's own call. No new operation, so no registry change beyond the allowlisted action id. Nothing is browser or database verified.
 

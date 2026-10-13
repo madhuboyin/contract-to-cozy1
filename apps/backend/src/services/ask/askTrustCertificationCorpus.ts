@@ -318,6 +318,7 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   RENOVATION_READINESS_COMMAND: 'The step is shown for review and made only after you confirm; readiness never establishes that work is compliant.',
   SAVINGS_BENEFIT_COMMAND: 'The change is shown for review and made only after you confirm; nothing is applied for or sent anywhere.',
   PROPERTY_TAX_APPEAL_COMMAND: 'The step is shown for review and recorded only after you confirm; Cozy never files with the authority.',
+  PROPERTY_TAX_COMPARABLE_COMMAND: 'The comparable sale is shown for review and added to your appeal evidence only after you confirm; Cozy does not verify it or file anything.',
   STATUS_BOARD_COMMAND: 'Your correction is shown beside the estimate and saved only after you confirm; the estimate is not erased.',
   CAPITAL_TIMELINE_COMMAND: 'Your timeline adjustment is shown and saved only after you confirm; the timeline uses it the next time it is run and no contractor is contacted.',
   COVERAGE_COMMAND: 'Your coverage step is shown and saved only after you confirm; no policy is changed and no insurer is contacted.',

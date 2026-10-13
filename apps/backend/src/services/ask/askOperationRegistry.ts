@@ -199,6 +199,8 @@ export type AskOperationId =
   | 'SAVINGS_BENEFIT_COMMAND'
   // Start a property tax appeal case, prepare its packet, record the filing, a response or hearing, a reminder and the decision (register P1 Property Tax). Confirmation-gated, declared-action only; primary owner only; Cozy prepares and records, it never files.
   | 'PROPERTY_TAX_APPEAL_COMMAND'
+  // Add a comparable sale to the property tax appeal evidence (register P2 Property Tax). Confirmation-gated, declared-action only.
+  | 'PROPERTY_TAX_COMPARABLE_COMMAND'
   // Correct a Status Board item's estimated condition, recommendation, dates and note, pin or hide it, and refresh the board (register P1 Status Board). Confirmation-gated, declared-action only; never by fuzzy retrieval.
   | 'STATUS_BOARD_COMMAND'
   // Adjust what the Capital Timeline assumes for an item (register P1 Capital Timeline): planned date or window, cost range, remaining life, leave it off, or a note; and remove an adjustment. Confirmation-gated, declared-action only; never by fuzzy retrieval.
@@ -476,6 +478,7 @@ export const ASK_INTERNAL_OPERATION_IDS: ReadonlySet<AskOperationId> = new Set<A
   'RENOVATION_READINESS_COMMAND',
   'SAVINGS_BENEFIT_COMMAND',
   'PROPERTY_TAX_APPEAL_COMMAND',
+  'PROPERTY_TAX_COMPARABLE_COMMAND',
   'STATUS_BOARD_COMMAND',
   'CAPITAL_TIMELINE_COMMAND',
   'COVERAGE_COMMAND',
@@ -822,6 +825,7 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   RENOVATION_READINESS_COMMAND: definition('RENOVATION_READINESS_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'renovation-readiness.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   SAVINGS_BENEFIT_COMMAND: definition('SAVINGS_BENEFIT_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'savings-benefit.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   PROPERTY_TAX_APPEAL_COMMAND: definition('PROPERTY_TAX_APPEAL_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'property-tax.appeal-command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
+  PROPERTY_TAX_COMPARABLE_COMMAND: definition('PROPERTY_TAX_COMPARABLE_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'property-tax.comparable-command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   STATUS_BOARD_COMMAND: definition('STATUS_BOARD_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'status-board.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   CAPITAL_TIMELINE_COMMAND: definition('CAPITAL_TIMELINE_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'capital-timeline.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   COVERAGE_COMMAND: definition('COVERAGE_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'coverage.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),

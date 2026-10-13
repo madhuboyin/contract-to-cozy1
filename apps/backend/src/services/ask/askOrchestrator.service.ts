@@ -133,6 +133,7 @@ import './handlers/pastHazardOutcomeCommands.handler';
 import './handlers/renovationReadinessCommands.handler';
 import './handlers/savingsBenefitCommands.handler';
 import './handlers/propertyTaxAppealCommands.handler';
+import './handlers/propertyTaxComparableCommands.handler';
 import './handlers/statusBoardCommands.handler';
 import './handlers/capitalTimelineCommands.handler';
 import './handlers/coverageCommands.handler';
