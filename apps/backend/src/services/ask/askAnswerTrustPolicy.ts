@@ -53,6 +53,7 @@ const OPERATION_BOUNDARIES: Partial<Record<AskOperationId, ReadonlySet<string>>>
   HOA_COMPLIANCE_STATUS: new Set(['hoa-compliance-boundary']),
   PRICE_FINALIZATIONS_LIST: new Set(['price-finalization-boundary']),
   PERMIT_TRACKER_STATUS: new Set(['permit-tracker-boundary']),
+  FINANCING_OVERVIEW: new Set(['financing-boundary']),
   DO_NOTHING_SIMULATION: new Set(['do-nothing-boundary']),
   WARRANTY_LOOKUP: new Set(['warranty-boundary']),
   INCIDENT_CLAIM_STATUS: new Set(['claim-status-boundary']),

@@ -109,6 +109,7 @@ const POLICIES: readonly AskAudiencePolicy[] = [
   definePolicy('NEGOTIATION_SHIELD_CASE_UPDATE', ALL_MODES),
   definePolicy('NEGOTIATION_SHIELD_CASE_ATTACH', ALL_MODES),
   definePolicy('RENOVATION_CASE_START', KNOWN_MODES),
+  definePolicy('FINANCING_OVERVIEW', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('PERMIT_TRACKER_STATUS', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('NEGOTIATION_SHIELD_BUYER_COMMAND', KNOWN_MODES),
   definePolicy('PRICE_FINALIZATION_COMMAND', KNOWN_MODES),

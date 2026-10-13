@@ -161,7 +161,8 @@ export async function markPropertyAsHavingNoMortgage(propertyId: string) {
 
 // ─── Equity Position ──────────────────────────────────────────────────────────
 
-async function computeEquity(propertyId: string, propertyContextVersion?: string | null) {
+/** The equity numbers for a property from its profile and best value estimate. Pure read: it writes nothing. */
+async function buildEquityData(propertyId: string, propertyContextVersion?: string | null) {
   const profile = await prisma.propertyFinancingProfile.findUnique({ where: { propertyId } });
 
   // Get best available property value estimate
@@ -218,6 +219,12 @@ async function computeEquity(propertyId: string, propertyContextVersion?: string
     propertyContextVersion: propertyContextVersion ?? null,
   };
 
+  return equityData;
+}
+
+/** Computes and PERSISTS a snapshot (the explicit refresh). */
+async function computeEquity(propertyId: string, propertyContextVersion?: string | null) {
+  const equityData = await buildEquityData(propertyId, propertyContextVersion);
   try {
     return await prisma.equityPosition.create({ data: equityData });
   } catch (dbErr) {
@@ -238,10 +245,13 @@ export async function getLatestEquity(propertyId: string, propertyContextVersion
     orderBy: { computedAt: 'desc' },
   });
 
-  if (!latest) return computeEquity(propertyId, propertyContextVersion);
+  // A read never writes: with no snapshot, or a stale one, the current numbers are computed and returned without being saved (the shape the
+  // "could not save" fallback already returns). A snapshot is saved only by the explicit refresh (refreshEquity).
+  const ephemeral = async () => ({ id: 'ephemeral', computedAt: new Date(), ...(await buildEquityData(propertyId, propertyContextVersion)) } as any);
+  if (!latest) return ephemeral();
 
   const ageMs = Date.now() - latest.computedAt.getTime();
-  if (ageMs > STALE_EQUITY_DAYS * 24 * 60 * 60 * 1000) return computeEquity(propertyId, propertyContextVersion);
+  if (ageMs > STALE_EQUITY_DAYS * 24 * 60 * 60 * 1000) return ephemeral();
 
   return latest;
 }

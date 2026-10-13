@@ -7,6 +7,7 @@ import { parseReserveFundMessage } from './support/reserveFundMessage';
 import { isNegotiationShieldStartRequest } from './support/negotiationShieldStart';
 import { isRenovationCaseStartRequest } from './support/renovationCaseStart';
 import { isPermitTrackerReadRequest } from './support/permitTrackerRead';
+import { isFinancingRequest } from './support/financingRead';
 
 export type AskIntentFamily =
   | 'RECORD_QUERY'
@@ -126,6 +127,8 @@ export type AskOperationId =
   // Start a renovation case (register section 3): a confirmation-gated command reached by the declared Start a renovation case action on the readiness
   // answer or a typed "start a renovation case"; never by fuzzy retrieval.
   | 'RENOVATION_CASE_START'
+  // Read the home's financing picture (mortgage details, equity position, saved scenarios) and compare ways to pay for a named project cost with the page's stateless calculator (register P0 Financing, slices FN-A and FN-B). Read-only; a read never saves an equity snapshot.
+  | 'FINANCING_OVERVIEW'
   // Read the home's permit records, inspections and unpermitted-work flags, keeping the authority's official status apart from what the household reported (register P0 Permits, slice PM-A). Read-only; no write.
   | 'PERMIT_TRACKER_STATUS'
   // Buyer-mode Negotiation Shield (register P0): start negotiating an inspection finding with the seller and record the seller's response and outcome. Confirmation-gated, declared-action only; never by fuzzy retrieval.
@@ -667,6 +670,7 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   MATERIAL_SPEC_ADD: definition('MATERIAL_SPEC_ADD', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'material-spec.add', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   NEGOTIATION_SHIELD_CASE_START: definition('NEGOTIATION_SHIELD_CASE_START', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'negotiation-shield.start', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   RENOVATION_CASE_START: definition('RENOVATION_CASE_START', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'renovation-case.start', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
+  FINANCING_OVERVIEW: definition('FINANCING_OVERVIEW', 'DECISION_ANALYSIS', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'financing.overview', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
   PERMIT_TRACKER_STATUS: definition('PERMIT_TRACKER_STATUS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'permits.status', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
   NEGOTIATION_SHIELD_BUYER_COMMAND: definition('NEGOTIATION_SHIELD_BUYER_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'negotiation-shield.buyer', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   PRICE_FINALIZATION_COMMAND: definition('PRICE_FINALIZATION_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'price-finalization.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
@@ -1389,6 +1393,10 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   // "Start a renovation case" is its own command; without this, "start" + "renovation" below reads it as "can I start my renovation".
   if (isRenovationCaseStartRequest(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('RENOVATION_CASE_START', 0.96);
+  }
+  // Equity, a HELOC and "what would a $X project cost to finance" are the Financing read and calculator; refinancing the existing mortgage is excluded.
+  if (isFinancingRequest(message) && !explicitCapabilityPattern.test(message)) {
+    return resolved('FINANCING_OVERVIEW', 0.96);
   }
   // "Show my permits" lists the recorded permits; "do I need a permit" / "is my renovation ready" stays the readiness question below.
   if (isPermitTrackerReadRequest(message) && !explicitCapabilityPattern.test(message)) {

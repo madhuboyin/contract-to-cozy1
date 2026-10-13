@@ -99,6 +99,7 @@ import './handlers/negotiationShieldAnalyze.handler';
 import './handlers/negotiationShieldEdit.handler';
 import './handlers/negotiationShieldAttach.handler';
 import './handlers/renovationCaseStart.handler';
+import './handlers/financing.handler';
 import './handlers/permitTracker.handler';
 import './handlers/negotiationShieldBuyerCommands.handler';
 import './handlers/priceFinalizationCommands.handler';
