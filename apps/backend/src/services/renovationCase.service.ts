@@ -572,6 +572,36 @@ async function targetPropertyId(linkType: RenovationCaseLinkType, targetId: stri
   }
 }
 
+/**
+ * Links a Project to a case on the caller's transaction client (the renovation handoff), with the same event `linkContributor` writes. The caller has
+ * just created the Project on the same client, so its property and the case's scope version are already known to match.
+ */
+export async function linkProjectToCaseInTx(
+  tx: Prisma.TransactionClient,
+  input: { propertyId: string; renovationCaseId: string; actorUserId: string; projectId: string; scopeVersionId: string; metadata?: unknown },
+) {
+  const link = await tx.renovationCaseLink.create({
+    data: {
+      renovationCaseId: input.renovationCaseId,
+      propertyId: input.propertyId,
+      scopeVersionId: input.scopeVersionId,
+      linkType: 'PROJECT',
+      targetId: input.projectId,
+      ...(input.metadata !== undefined && { metadata: json(input.metadata) }),
+      createdByUserId: input.actorUserId,
+    },
+  });
+  await appendEvent(tx, {
+    renovationCaseId: input.renovationCaseId,
+    propertyId: input.propertyId,
+    actorUserId: input.actorUserId,
+    eventType: 'CONTRIBUTOR_LINKED',
+    scopeVersionId: input.scopeVersionId,
+    payload: { linkId: link.id, linkType: 'PROJECT', targetId: input.projectId },
+  });
+  return link;
+}
+
 export async function linkContributor(
   propertyId: string,
   renovationCaseId: string,

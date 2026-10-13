@@ -59,7 +59,8 @@ export async function handoffRenovationProject(req: Request, res: Response, next
       req.user!.userId,
       req.body,
     );
-    res.status(201).json({ success: true, data });
+// 201 only when this request created the Project; a replay or an already-created Project is a 200 whose `handoff` says what happened.
+    res.status((data as { handoff?: { outcome?: string } }).handoff?.outcome === 'CREATED' ? 201 : 200).json({ success: true, data });
   } catch (error) { next(error); }
 }
 

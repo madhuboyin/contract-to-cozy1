@@ -740,7 +740,12 @@ export async function listProjects(propertyId: string) {
   });
 }
 
-export async function createProject(propertyId: string, data: any) {
+/**
+ * The Project and its initial milestones, written on the caller's transaction client so a caller that must make more writes atomic with the create (the
+ * renovation handoff: status, blocked milestones, case link, lifecycle and events) can do so. It opens no transaction of its own and runs no
+ * post-commit synchronization; `afterProjectCreated` does, after the caller commits.
+ */
+export async function createProjectInTx(tx: Prisma.TransactionClient, propertyId: string, data: any) {
   const { milestones: initialMilestones, ...projectData } = data;
 
   const activeStatuses: ProjectRecordStatus[] = ['DRAFT', 'PLANNING', 'IN_PROGRESS', 'PAUSED', 'DISPUTED'];
@@ -753,7 +758,6 @@ export async function createProject(propertyId: string, data: any) {
     : projectData.bookingId
       ? { bookingId: projectData.bookingId }
       : null;
-  const project = await withSerializableDedupe(async (tx) => {
     const [journey, inventoryItem, priceFinalization, booking, provider, renovationCase] = await Promise.all([
       projectData.guidanceJourneyId
         ? tx.guidanceJourney.findFirst({
@@ -945,13 +949,19 @@ export async function createProject(propertyId: string, data: any) {
       });
     }
     return created;
-  });
+}
 
+/** The post-commit synchronization of work items that `createProject` runs; best effort by design, so it is separate from the transaction. */
+export async function afterProjectCreated(propertyId: string, project: { id: string; fulfillmentMode: any; guidanceJourneyId: string | null; sourceEntityType: string | null; sourceEntityId: string | null }) {
   const responsibleParty = responsiblePartyForFulfillmentMode(project.fulfillmentMode);
   await syncJourneyWorkItemForProjectEvent(propertyId, project.guidanceJourneyId, project.id, 'HANDOFF', null, responsibleParty);
   await syncFindingWorkItemForProjectHandoff(propertyId, project.sourceEntityType, project.sourceEntityId, project.id, responsibleParty);
   await syncMaintenanceTaskWorkItemForProjectHandoff(propertyId, project.sourceEntityType, project.sourceEntityId, project.id, responsibleParty);
+}
 
+export async function createProject(propertyId: string, data: any) {
+  const project = await withSerializableDedupe((tx) => createProjectInTx(tx, propertyId, data));
+  await afterProjectCreated(propertyId, project);
   return getProjectDetail(project.id, propertyId);
 }
 

@@ -5,7 +5,9 @@ import { APIError } from '../middleware/error.middleware';
 import * as projectTrackerService from './projectTracker.service';
 import { resolvePropertyAccess } from './propertyAccess.service';
 import { resolvePropertyDocuments } from './propertyDocuments/propertyDocumentInventory.service';
-import { linkContributor } from './renovationCase.service';
+import { linkContributor, linkProjectToCaseInTx } from './renovationCase.service';
+import { withSerializableDedupe } from './projectCompliance/serializableDedupe';
+import { createHash } from 'node:crypto';
 import { resolveAndUpsertWorkItem } from '../modules/homeOperations/application/resolveWorkItem.usecase';
 import { transitionWorkItem } from '../modules/homeOperations/application/transitionWorkItem.usecase';
 import { linkWorkExecution } from '../modules/homeOperations/infrastructure/workItemRepository';
@@ -749,13 +751,14 @@ export async function handoffToProject(
   actorUserId: string,
   input: any,
 ) {
-  const existingProject = await prisma.projectRecord.findUnique({
-    where: { renovationCaseId },
-  });
-  if (existingProject) {
-    return projectTrackerService.getProjectDetail(existingProject.id, propertyId);
-  }
+  // Scoping first (owner ruling on D-H8): the case must belong to this property before anything about it is returned, so the replay path never
+  // bypasses access validation. The route has already required the household OWNER role.
   const { renovationCase, scope } = await loadContext(propertyId, renovationCaseId);
+  const payloadHash = handoffPayloadHash(input);
+  const existingProject = await prisma.projectRecord.findFirst({ where: { renovationCaseId, propertyId } });
+  if (existingProject) {
+    return existingHandoffResult(propertyId, renovationCaseId, existingProject, input, payloadHash, actorUserId);
+  }
   const readiness = await getReadiness(propertyId, renovationCaseId);
   const summary = readiness.summary as any;
   const bypassReadiness = input.intakeMode !== 'PLANNED';
@@ -819,9 +822,15 @@ export async function handoffToProject(
   const legacyInheritable = new Set(inheritedRows.map((row) => row.id));
   const inheritedDocumentIds = candidateInherited.filter((id) => legacyInheritable.has(id));
   const notCarriedOver = candidateInherited.length - inheritedDocumentIds.length;
-  let project: Awaited<ReturnType<typeof projectTrackerService.createProject>>;
-  try {
-    project = await projectTrackerService.createProject(propertyId, {
+  const projectStatus = input.intakeMode === 'ALREADY_STARTED' ? 'IN_PROGRESS' : 'PLANNING';
+  const nextLifecycle = input.intakeMode === 'ALREADY_STARTED'
+    ? 'IN_EXECUTION'
+    : input.intakeMode === 'HISTORICAL'
+      ? renovationCase.lifecycle
+      : renovationCase.lifecycle === 'PREPARING_TO_START'
+        ? 'READY_TO_START'
+        : renovationCase.lifecycle;
+  const projectData = {
     name: renovationCase.name,
     projectType: input.projectType,
     contractorName,
@@ -893,90 +902,159 @@ export async function handoffToProject(
         requiresPhotoEvidence: true,
         position: index,
       })),
+  };
+
+  // Owner ruling D-H1: the Project and everything that makes it a handoff commit together or not at all. Every helper below writes on this transaction
+  // client; none opens its own transaction. Only the best-effort work item synchronization runs after commit.
+  let project: Awaited<ReturnType<typeof projectTrackerService.createProjectInTx>>;
+  try {
+    project = await withSerializableDedupe(async (tx) => {
+      const created = await projectTrackerService.createProjectInTx(tx, propertyId, projectData);
+      await tx.projectRecord.update({ where: { id: created.id }, data: { status: projectStatus } });
+      if (openConditions.length) {
+        await tx.projectMilestone.updateMany({ where: { projectId: created.id }, data: { status: 'BLOCKED' } });
+      }
+      await linkProjectToCaseInTx(tx, {
+        propertyId, renovationCaseId, actorUserId, projectId: created.id, scopeVersionId: scope.id,
+        metadata: { role: 'EXECUTION_HANDOFF', intakeMode: input.intakeMode, idempotencyKey: input.idempotencyKey },
+      });
+      await tx.renovationCase.update({ where: { id: renovationCaseId }, data: { lifecycle: nextLifecycle } });
+      await tx.renovationReadinessEvent.create({
+        data: {
+          renovationCaseId,
+          propertyId,
+          scopeVersionId: scope.id,
+          eventType: 'PROJECT_HANDOFF',
+          actorUserId,
+          reason: input.historicalReason,
+          // The key and a hash of the normalized request let a later call tell a replay from a conflicting request (owner ruling on D-H8).
+          payload: json({
+            projectId: created.id,
+            intakeMode: input.intakeMode,
+            readinessState: summary.state,
+            readinessBypassed: bypassReadiness,
+            idempotencyKey: input.idempotencyKey,
+            payloadHash,
+          }),
+        },
+      });
+      await tx.renovationCaseEvent.create({
+        data: {
+          renovationCaseId,
+          propertyId,
+          actorUserId,
+          eventType: 'PROJECT_HANDOFF_STARTED',
+          fromLifecycle: renovationCase.lifecycle,
+          toLifecycle: nextLifecycle,
+          scopeVersionId: scope.id,
+          idempotencyKey: `project-handoff:${input.idempotencyKey}`,
+          payload: json({
+            projectId: created.id,
+            intakeMode: input.intakeMode,
+            readinessState: summary.state,
+            readinessBypassed: bypassReadiness,
+          }),
+        },
+      });
+      return created;
     });
   } catch (error: any) {
     if (error?.code === 'P2002' || error?.code === 'ACTIVE_PROJECT_DUPLICATE') {
-      const concurrent = await prisma.projectRecord.findUnique({ where: { renovationCaseId } });
-      if (concurrent) return projectTrackerService.getProjectDetail(concurrent.id, propertyId);
+      // A concurrent request created it first. Nothing of this request committed (it is one transaction), so this is the "already created" case.
+      const concurrent = await prisma.projectRecord.findFirst({ where: { renovationCaseId, propertyId } });
+      if (concurrent) return existingHandoffResult(propertyId, renovationCaseId, concurrent, input, payloadHash, actorUserId);
     }
     throw error;
   }
-  const projectStatus = input.intakeMode === 'ALREADY_STARTED' ? 'IN_PROGRESS' : 'PLANNING';
-  const updatedProject = await prisma.projectRecord.update({
-    where: { id: project.id },
-    data: { status: projectStatus },
-  });
-  if (openConditions.length) {
-    await prisma.projectMilestone.updateMany({
-      where: { projectId: project.id },
-      data: { status: 'BLOCKED' },
-    });
+  // Post-commit, best effort: the work-item synchronizations. Failure is logged and reported in the receipt; the existing-project path retries it.
+  try { await projectTrackerService.afterProjectCreated(propertyId, project); } catch (err) {
+    logger.error({ err, propertyId, projectId: project.id }, '[RenovationReadiness] Failed to synchronize project handoff work items');
   }
-  await linkContributor(propertyId, renovationCaseId, actorUserId, {
-    linkType: 'PROJECT',
-    targetId: project.id,
-    scopeVersionId: scope.id,
-    metadata: {
-      role: 'EXECUTION_HANDOFF',
-      intakeMode: input.intakeMode,
-      idempotencyKey: input.idempotencyKey,
-    },
-  });
-  const nextLifecycle = input.intakeMode === 'ALREADY_STARTED'
-    ? 'IN_EXECUTION'
-    : input.intakeMode === 'HISTORICAL'
-      ? renovationCase.lifecycle
-      : renovationCase.lifecycle === 'PREPARING_TO_START'
-        ? 'READY_TO_START'
-        : renovationCase.lifecycle;
-  await prisma.$transaction([
-    prisma.renovationCase.update({
-      where: { id: renovationCaseId },
-      data: { lifecycle: nextLifecycle },
-    }),
-    prisma.renovationReadinessEvent.create({
-      data: {
-        renovationCaseId,
-        propertyId,
-        scopeVersionId: scope.id,
-        eventType: 'PROJECT_HANDOFF',
-        actorUserId,
-        reason: input.historicalReason,
-        payload: json({
-          projectId: project.id,
-          intakeMode: input.intakeMode,
-          readinessState: summary.state,
-          readinessBypassed: bypassReadiness,
-          idempotencyKey: input.idempotencyKey,
-        }),
-      },
-    }),
-    prisma.renovationCaseEvent.create({
-      data: {
-        renovationCaseId,
-        propertyId,
-        actorUserId,
-        eventType: 'PROJECT_HANDOFF_STARTED',
-        fromLifecycle: renovationCase.lifecycle,
-        toLifecycle: nextLifecycle,
-        scopeVersionId: scope.id,
-        idempotencyKey: `project-handoff:${input.idempotencyKey}`,
-        payload: json({
-          projectId: project.id,
-          intakeMode: input.intakeMode,
-          readinessState: summary.state,
-          readinessBypassed: bypassReadiness,
-        }),
-      },
-    }),
-  ]);
-  // Home Operations §15: a secondary sync alongside the project handoff
-  // already committed above — best-effort, must never block the handoff
-  // that already succeeded.
+  const workItemSynced = await syncProjectWorkItem(propertyId, { ...project, updatedAt: new Date() }, actorUserId);
+  const detail = await projectTrackerService.getProjectDetail(project.id, propertyId);
+  return { ...detail, handoff: { outcome: 'CREATED' as const, projectId: project.id, appliedSubmittedValues: true, workItemSynced } };
+}
+
+export type RenovationHandoffOutcome = 'CREATED' | 'IDEMPOTENT_REPLAY' | 'ALREADY_CREATED';
+
+/** A stable hash of the request's values, never of its key, so the same request with another key is distinguishable from a changed request. */
+export function handoffPayloadHash(input: any): string {
+  const normalized = {
+    projectType: input.projectType, fulfillmentMode: input.fulfillmentMode, fundingMode: input.fundingMode,
+    contractorId: input.contractorId ?? null, contractorName: input.contractorName ?? null, contractorLicense: input.contractorLicense ?? null,
+    contractorPhone: input.contractorPhone ?? null, contractorEmail: input.contractorEmail ?? null, contractAmountCents: input.contractAmountCents ?? null,
+    contractDocumentKey: input.contractDocumentKey ?? null, contractDocumentIds: [...new Set<string>(input.contractDocumentIds ?? [])].sort(),
+    startDate: input.startDate, expectedEndDate: input.expectedEndDate ?? null, intakeMode: input.intakeMode, historicalReason: input.historicalReason ?? null,
+  };
+  return createHash('sha256').update(JSON.stringify(normalized)).digest('hex');
+}
+
+/** Best-effort Home Operations synchronization. Returns whether it succeeded, so a receipt never claims a work item that does not exist. */
+async function syncProjectWorkItem(
+  propertyId: string,
+  project: { id: string; name: string; description: string | null; startDate: Date; expectedEndDate: Date | null; updatedAt: Date },
+  actorUserId: string,
+): Promise<boolean> {
   try {
-    await ensureProjectWorkItem(propertyId, updatedProject, actorUserId);
+    await ensureProjectWorkItem(propertyId, project, actorUserId);
+    return true;
   } catch (err) {
     logger.error({ err, propertyId, projectId: project.id }, '[RenovationReadiness] Failed to sync the project execution work item');
+    return false;
   }
-  return projectTrackerService.getProjectDetail(project.id, propertyId);
+}
+
+/**
+ * The case already has a Project (owner ruling on D-H8). Three outcomes, never a second Project:
+ *   - same key and same normalized values: an idempotent replay;
+ *   - same key and different values: an idempotency conflict (409), which usually means a stale or malformed retry;
+ *   - a different key: the Project was already created and the submitted values were not applied.
+ * A Project with no recorded handoff is an incomplete handoff from before the transaction fix, and is reported rather than completed here, because the
+ * values the missing steps need (intake mode, readiness state) were never stored; the governed repair completes it. The work item synchronization is
+ * always retried, so a swallowed earlier failure is not permanent.
+ */
+export async function existingHandoffResult(
+  propertyId: string,
+  renovationCaseId: string,
+  project: { id: string; name: string; description: string | null; startDate: Date; expectedEndDate: Date | null; updatedAt: Date },
+  input: any,
+  payloadHash: string,
+  actorUserId: string,
+  deps: { syncWorkItem: typeof syncProjectWorkItem } = { syncWorkItem: syncProjectWorkItem },
+) {
+  const event = await prisma.renovationReadinessEvent.findFirst({
+    where: { renovationCaseId, propertyId, eventType: 'PROJECT_HANDOFF' },
+    orderBy: { occurredAt: 'desc' },
+    select: { payload: true },
+  });
+  if (!event) {
+    throw new APIError(
+      'A Project exists for this renovation case but its handoff did not complete. It needs the governed repair; nothing was changed.',
+      409,
+      'RENOVATION_HANDOFF_INCOMPLETE',
+      { projectId: project.id },
+    );
+  }
+  const stored = (event.payload ?? {}) as { idempotencyKey?: string; payloadHash?: string };
+  if (stored.idempotencyKey === input.idempotencyKey && stored.payloadHash && stored.payloadHash !== payloadHash) {
+    throw new APIError(
+      'This idempotency key was already used with different values. Nothing was changed.',
+      409,
+      'RENOVATION_HANDOFF_IDEMPOTENCY_CONFLICT',
+      { projectId: project.id },
+    );
+  }
+  const workItemSynced = await deps.syncWorkItem(propertyId, project, actorUserId);
+  const detail = await projectTrackerService.getProjectDetail(project.id, propertyId);
+  const replay = stored.idempotencyKey === input.idempotencyKey;
+  return {
+    ...detail,
+    handoff: {
+      outcome: (replay ? 'IDEMPOTENT_REPLAY' : 'ALREADY_CREATED') as RenovationHandoffOutcome,
+      projectId: project.id,
+      // For a different key the submitted values were not applied; the Project is as it was first created.
+      appliedSubmittedValues: false,
+      workItemSynced,
+    },
+  };
 }
