@@ -4,6 +4,7 @@ import { APIError } from '../middleware/error.middleware';
 import { getOrCreateQuoteWorkspaceSchema } from '../validators/quoteComparison.validators';
 import {
   confirmQuoteProposal,
+  getQuoteReview,
   createQuoteProposal,
   createQuoteProposalFromDocument,
   getOrCreateQuoteComparisonWorkspace,
@@ -192,6 +193,15 @@ export async function addQuoteFromDocument(req: CustomRequest, res: Response, ne
   }
 }
 
+export async function getQuoteReviewHandler(req: CustomRequest, res: Response, next: NextFunction) {
+  try {
+    const data = await getQuoteReview(req.params.propertyId, req.params.workspaceId, req.params.quoteId);
+    res.json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function confirmQuote(req: CustomRequest, res: Response, next: NextFunction) {
   try {
     await assertQuoteComparisonMutationAllowed(req.params.propertyId, req.user!.userId);
@@ -200,6 +210,7 @@ export async function confirmQuote(req: CustomRequest, res: Response, next: Next
       req.params.workspaceId,
       req.params.quoteId,
       req.user!.userId,
+      req.body,
     );
     emitServiceQuoteDecisionAnalytics({
       eventName: ServiceQuoteDecisionEvent.READINESS_ASSESSED,

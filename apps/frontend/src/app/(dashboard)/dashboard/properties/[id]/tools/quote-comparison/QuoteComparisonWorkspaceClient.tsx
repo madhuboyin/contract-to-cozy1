@@ -18,6 +18,7 @@ import {
   createQuoteProposal,
   createQuoteProposalFromDocument,
   getQuoteComparability,
+  getQuoteReview,
   getQuoteComparisonWorkspace,
   listServicePriceRadarChecks,
   getProjectComplianceContext,
@@ -27,6 +28,8 @@ import {
   resolveQuoteClarification,
   setQuoteDisposition,
   type QuoteComparabilityResult,
+  type ConfirmQuoteReviewRequest,
+  type QuoteReview,
   type QuoteComparisonWorkspaceSummary,
   type QuoteProposalReadinessStage,
   type QuoteProposalSummary,
@@ -38,6 +41,7 @@ import {
   updateServiceQuoteOutcomeConsent,
 } from '../service-price-radar/servicePriceRadarApi';
 import { api } from '@/lib/api/client';
+import { QuoteReviewDialog } from './QuoteReviewDialog';
 import { usePropertyWriteAccess } from '@/lib/property/usePropertyWriteAccess';
 import { createNegotiationShieldCase } from '../negotiation-shield/negotiationShieldApi';
 import { createPriceFinalizationDraft } from '@/lib/api/priceFinalizationApi';
@@ -492,15 +496,56 @@ export default function QuoteComparisonWorkspaceClient() {
     }
   };
 
-  const confirmExtractedQuote = async (quoteId: string) => {
+  // The confirmation contract (FRD v1.360): confirming opens a review of every value, and the confirm names exactly what was shown.
+  const [reviewingQuoteId, setReviewingQuoteId] = React.useState<string | null>(null);
+  const [quoteReview, setQuoteReview] = React.useState<QuoteReview | null>(null);
+  const [reviewLoading, setReviewLoading] = React.useState(false);
+  const [reviewBusy, setReviewBusy] = React.useState(false);
+  const [reviewError, setReviewError] = React.useState<string | null>(null);
+
+  const loadReview = async (quoteId: string) => {
     if (!workspaceId) return;
+    setReviewLoading(true);
+    setReviewError(null);
     try {
-      const proposal = await confirmQuoteProposal(propertyId, workspaceId, quoteId);
+      const data = await getQuoteReview(propertyId, workspaceId, quoteId);
+      setQuoteReview(data.review);
+    } catch (reviewLoadError: any) {
+      setQuoteReview(null);
+      setReviewError(reviewLoadError?.message || 'Unable to load what will be confirmed.');
+    } finally {
+      setReviewLoading(false);
+    }
+  };
+
+  const confirmExtractedQuote = async (quoteId: string) => {
+    setReviewingQuoteId(quoteId);
+    setQuoteReview(null);
+    await loadReview(quoteId);
+  };
+
+  const closeReview = () => {
+    setReviewingQuoteId(null);
+    setQuoteReview(null);
+    setReviewError(null);
+  };
+
+  const submitReview = async (request: ConfirmQuoteReviewRequest) => {
+    if (!workspaceId || !reviewingQuoteId) return;
+    setReviewBusy(true);
+    setReviewError(null);
+    try {
+      const proposal = await confirmQuoteProposal(propertyId, workspaceId, reviewingQuoteId, request);
       const confirmed = mapProposalToQuote(proposal);
-      setQuotes((previous) => previous.map((quote) => quote.id === quoteId ? confirmed : quote));
+      setQuotes((previous) => previous.map((quote) => quote.id === reviewingQuoteId ? confirmed : quote));
       setComparability(await getQuoteComparability(propertyId, workspaceId));
+      closeReview();
     } catch (confirmError: any) {
-      setError(confirmError?.message || 'Unable to confirm extracted facts.');
+      // A proposal that changed after it was shown is reloaded, so the person confirms what is true now, not what they saw.
+      setReviewError(confirmError?.message || 'Unable to confirm this quote.');
+      if (String(confirmError?.message ?? '').toLowerCase().includes('review the proposal again')) await loadReview(reviewingQuoteId);
+    } finally {
+      setReviewBusy(false);
     }
   };
 
@@ -1416,7 +1461,17 @@ export default function QuoteComparisonWorkspaceClient() {
       }
       footer={null}
     />
-    <Dialog
+    <QuoteReviewDialog
+        open={Boolean(reviewingQuoteId)}
+        vendorName={quotes.find((quote) => quote.id === reviewingQuoteId)?.vendorName ?? 'this'}
+        review={quoteReview}
+        loading={reviewLoading}
+        busy={reviewBusy}
+        error={reviewError}
+        onCancel={closeReview}
+        onConfirm={submitReview}
+      />
+      <Dialog
       open={Boolean(editingQuote)}
       onOpenChange={(open) => {
         if (!open) {

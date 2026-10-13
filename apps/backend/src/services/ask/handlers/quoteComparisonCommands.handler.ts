@@ -20,11 +20,12 @@ import { reconcileAskExecutionSideEffects } from '../execution/executeOperation'
 import { ensurePropertyAccess } from '../askHandlerSupport';
 import { humanDate, money } from '../askFormatting';
 import {
-  confirmQuoteProposal, createQuoteClarification, createQuoteProposal, deleteQuoteProposal, getWorkspaceComparability, resolveQuoteClarification,
+  confirmQuoteProposal, createQuoteClarification, createQuoteProposal, deleteQuoteProposal, getQuoteReview, getWorkspaceComparability, resolveQuoteClarification,
   selectQuoteForDecision, setQuoteProposalDisposition, transitionQuoteDecision, updateQuoteProposal,
 } from '../../quoteComparison.service';
 import { assertProjectComplianceDecisionsApplicable } from '../../projectCompliance/context';
 import { emitServiceQuoteDecisionAnalytics, ServiceQuoteDecisionEvent } from '../../serviceQuoteDecisionAnalytics.service';
+import { confirmQuoteReviewSchema, type QuoteReview } from '../../quoteReview';
 import {
   parseQuoteAddAnswer, parseQuoteFormAnswer, QUOTE_CLOSE_OUTCOME_LABELS, QUOTE_CLOSE_OUTCOMES, QUOTE_COMMAND_MESSAGES, QUOTE_ENTITY_TYPE,
   QUOTE_FORM_CAPTURE_KEYS, QUOTE_WORKSPACE_ENTITY_TYPE, quoteAddProposalInput, quoteCommandKindFromMessage, quoteCommandTargetsWorkspace, quoteEditChanges,
@@ -85,6 +86,32 @@ async function loadQuote(propertyId: string, quoteId: string): Promise<{ quote: 
 }
 
 const isoDate = (value: Date | null) => (value ? value.toISOString().slice(0, 10) : null);
+const STATE_LABELS: Record<string, string> = {
+  EXTRACTED_UNCONFIRMED: 'As extracted', HOMEOWNER_CONFIRMED: 'Confirmed', HOMEOWNER_CORRECTED: 'Corrected by you', NOT_APPLICABLE: 'Not applicable',
+};
+const valueText = (value: unknown) => (value === null || value === undefined || value === '' ? 'Not recorded' : typeof value === 'boolean' ? (value ? 'Yes' : 'No') : String(value));
+
+/** Every value a confirmation would affirm, in the order the person reads them: headline facts, line items, terms. Nothing is summarized away. */
+function reviewValuesBlock(review: QuoteReview): AskOperationResult['blocks'][number] {
+  const state = (value: string) => STATE_LABELS[value] ?? value;
+  const sections = [
+    { id: 'headline', title: 'The proposal', count: review.headline.length, items: review.headline.map((fact) => ({
+      id: `headline-${fact.key}`, title: fact.label, description: fact.key === 'quoteAmount' && typeof fact.value === 'number' ? money(fact.value) : valueText(fact.value),
+      meta: [] as string[], status: state(review.facts.find((entry) => entry.fieldKey === fact.key)?.state ?? 'EXTRACTED_UNCONFIRMED'), href: null, entityType: null, actions: [] as never[],
+    })) },
+    ...(review.lineItems.length ? [{ id: 'line-items', title: 'Line items', count: review.lineItems.length, items: review.lineItems.map((item, index) => ({
+      id: item.id, title: `${index + 1}. ${item.description}`,
+      description: [item.quantity !== null ? `${item.quantity}${item.unit ? ` ${item.unit}` : ''}` : null, item.unitPrice !== null ? `at ${money(item.unitPrice)}` : null, item.total !== null ? `total ${money(item.total)}` : null]
+        .filter(Boolean).join(' · ') || 'No figures recorded',
+      meta: [item.kind.toLowerCase()], status: state(item.state), href: null, entityType: null, actions: [] as never[],
+    })) }] : []),
+    ...(review.terms.length ? [{ id: 'terms', title: 'Terms', count: review.terms.length, items: review.terms.map((term, index) => ({
+      id: term.id, title: `${index + 1}. ${term.label ?? term.type.toLowerCase().replace(/_/g, ' ')}`,
+      description: `${term.value}${term.included === false ? ' (not included)' : ''}`, meta: [term.type.toLowerCase()], status: state(term.state), href: null, entityType: null, actions: [] as never[],
+    })) }] : []),
+  ];
+  return { type: 'GROUPED_LIST', filters: [], id: 'quote-review-values', title: 'Everything this confirmation covers', description: 'Only what is listed here is confirmed.', sections, actions: [] } as never;
+}
 const warrantyOf = (quote: QuoteRow) => quote.terms.find((term) => term.type === 'WARRANTY')?.value ?? null;
 const currentValues = (quote: QuoteRow): QuoteCurrentValues => ({
   vendorName: quote.vendorName, quoteAmount: Number(quote.quoteAmount), scopeSummary: quote.scopeSummary, quoteDate: isoDate(quote.quoteDate),
@@ -256,12 +283,25 @@ export async function quoteCommandResult(userId: string, propertyId: string, lau
     if (quote.homeownerConfirmedAt) {
       return unavailable('QUOTE_ALREADY_CONFIRMED', 'These facts are already confirmed', 'You confirmed this proposal’s facts earlier. Change the proposal to re-confirm it after a correction. Nothing has changed.');
     }
-    const terms = quote.terms.filter((term) => term.type !== 'WARRANTY').length;
-    return confirmation(`Confirm ${quote.vendorName}'s facts?`,
-      'You are saying the recorded provider, total, scope, dates and terms match the quote you were given. A proposal is compared only once its facts are confirmed.',
-      'Confirm facts', [...detail('Covers', quote.scopeSummary), ...detail('Quote date', isoDate(quote.quoteDate) ? date(isoDate(quote.quoteDate)) : null),
-        ...detail('Expires', isoDate(quote.expirationDate) ? date(isoDate(quote.expirationDate)) : null), ...detail('Warranty', warrantyOf(quote)),
-        ...(terms ? [{ label: 'Other terms recorded', value: String(terms) }] : [])]);
+    // The confirmation contract (FRD v1.360): every value a confirmation would affirm is shown before it, and the request names exactly those values.
+    const { review } = await getQuoteReview(propertyId, workspace.id, quote.id);
+    if (review.lineItems.length > 100 || review.terms.length > 100) {
+      return unavailable('QUOTE_TOO_LARGE_TO_REVIEW', 'This proposal is too long to review here',
+        'It has more than 100 line items or terms, so Ask cannot show every value before you confirm. Nothing has changed.');
+    }
+    const result = confirmation(`Confirm ${quote.vendorName}'s facts?`,
+      `You are saying every value listed below matches the quote you were given: ${review.counts.lineItems} line item${review.counts.lineItems === 1 ? '' : 's'}, ${review.counts.terms} term${review.counts.terms === 1 ? '' : 's'} and the headline facts. `
+      + 'Nothing that is not listed is confirmed. Ask cannot change or remove a line item or term; if something listed is wrong, do not confirm, and change the proposal first. A proposal is compared only once its facts are confirmed.',
+      'Confirm everything listed',
+      [{ label: 'Line items', value: String(review.counts.lineItems) }, { label: 'Terms', value: String(review.counts.terms) },
+        { label: 'Still as extracted', value: String(review.counts.unconfirmed) }, { label: 'Corrected by you', value: String(review.counts.corrected) }],
+      'DEFAULT',
+      { quoteReviewRequest: {
+        reviewFingerprint: review.fingerprint, lineItemIds: review.lineItems.map((item) => item.id), termIds: review.terms.map((term) => term.id),
+        factKeys: review.facts.map((fact) => fact.fieldKey), rejectedLineItemIds: [], rejectedTermIds: [],
+      } });
+    result.blocks.push(reviewValuesBlock(review));
+    return result;
   }
   if (kind === 'CLARIFY') {
     const current = quote.clarifications.filter((entry) => entry.status === 'OPEN').length;
@@ -414,7 +454,9 @@ async function confirmQuoteCommand(ctx: ConfirmCapabilityContext): Promise<Confi
       await deleteQuoteProposal(propertyId, workspace.id, entityId, userId);
       title = 'Proposal removed'; description = 'The proposal was deleted from this comparison.';
     } else if (kind === 'CONFIRM') {
-      const confirmed = await confirmQuoteProposal(propertyId, workspace.id, entityId, userId);
+      const checkedRequest = confirmQuoteReviewSchema.safeParse(parameters.quoteReviewRequest);
+      if (!checkedRequest.success) throw stale('What to confirm is no longer valid. Review the proposal again.');
+      const confirmed = await confirmQuoteProposal(propertyId, workspace.id, entityId, userId, checkedRequest.data);
       emitServiceQuoteDecisionAnalytics({
         eventName: ServiceQuoteDecisionEvent.READINESS_ASSESSED, userId, propertyId, workspaceId: workspace.id,
         metadata: { readinessStage: confirmed.readinessStage, readinessScore: confirmed.readinessScore, homeownerConfirmed: true, surface: 'ask' },

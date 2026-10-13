@@ -153,3 +153,5 @@ export const serviceQuoteOutcomeConsentSchema = z.object({
     });
   }
 });
+
+export { confirmQuoteReviewSchema } from '../services/quoteReview';

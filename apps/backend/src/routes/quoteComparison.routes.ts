@@ -4,6 +4,7 @@ import {
   addQuoteProposal,
   confirmQuote,
   getComparability,
+  getQuoteReviewHandler,
   getOrCreateWorkspace,
   lookupWorkspace,
   getWorkspace,
@@ -22,6 +23,7 @@ import { propertyAuthMiddleware, requireHouseholdRole } from '../middleware/prop
 import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
 import { validateBody } from '../middleware/validate.middleware';
 import {
+  confirmQuoteReviewSchema,
   createQuoteFromDocumentSchema,
   createQuoteProposalSchema,
   getOrCreateQuoteWorkspaceSchema,
@@ -128,7 +130,15 @@ router.post(
   '/properties/:propertyId/quote-comparison/workspaces/:workspaceId/quotes/:quoteId/confirm',
   propertyAuthMiddleware,
   requireHouseholdRole('CONTRIBUTOR'),
+  validateBody(confirmQuoteReviewSchema),
   confirmQuote,
+);
+
+// What a confirmation would affirm: every value, its state and a fingerprint of that set (FRD v1.360).
+router.get(
+  '/properties/:propertyId/quote-comparison/workspaces/:workspaceId/quotes/:quoteId/review',
+  propertyAuthMiddleware,
+  getQuoteReviewHandler,
 );
 
 router.get(

@@ -492,14 +492,44 @@ export async function createQuoteProposalFromDocument(
   return res.data.quote;
 }
 
+export type QuoteReviewValueState = 'EXTRACTED_UNCONFIRMED' | 'HOMEOWNER_CONFIRMED' | 'HOMEOWNER_CORRECTED' | 'NOT_APPLICABLE';
+
+/** Everything a confirmation affirms, with its state and a fingerprint of that set (FRD v1.360). */
+export type QuoteReview = {
+  fingerprint: string;
+  headline: Array<{ key: string; label: string; value: string | number | boolean | null }>;
+  facts: Array<{ fieldKey: string; state: QuoteReviewValueState; extractedValue: unknown; confirmedValue: unknown }>;
+  lineItems: Array<{ id: string; kind: string; description: string; quantity: number | null; unit: string | null; unitPrice: number | null; total: number | null; state: QuoteReviewValueState; sourceText: string | null; sourcePage: number | null }>;
+  terms: Array<{ id: string; type: string; label: string | null; value: string; included: boolean | null; state: QuoteReviewValueState; sourceText: string | null; sourcePage: number | null }>;
+  counts: { facts: number; lineItems: number; terms: number; unconfirmed: number; corrected: number; confirmed: number };
+};
+
+export type ConfirmQuoteReviewRequest = {
+  reviewFingerprint: string;
+  lineItemIds: string[];
+  termIds: string[];
+  factKeys: string[];
+  rejectedLineItemIds: string[];
+  rejectedTermIds: string[];
+};
+
+export async function getQuoteReview(propertyId: string, workspaceId: string, quoteId: string): Promise<{ quoteId: string; homeownerConfirmedAt: string | null; review: QuoteReview }> {
+  const res = await api.get<{ quoteId: string; homeownerConfirmedAt: string | null; review: QuoteReview }>(
+    `/api/properties/${propertyId}/quote-comparison/workspaces/${workspaceId}/quotes/${quoteId}/review`
+  );
+  return res.data;
+}
+
+/** Confirms exactly the values named in the request, which must be the set the review displayed. */
 export async function confirmQuoteProposal(
   propertyId: string,
   workspaceId: string,
-  quoteId: string
+  quoteId: string,
+  request: ConfirmQuoteReviewRequest
 ): Promise<QuoteProposalSummary> {
   const res = await api.post<{ quote: QuoteProposalSummary }>(
     `/api/properties/${propertyId}/quote-comparison/workspaces/${workspaceId}/quotes/${quoteId}/confirm`,
-    {}
+    request
   );
   return res.data.quote;
 }

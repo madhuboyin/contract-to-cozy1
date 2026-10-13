@@ -1,9 +1,11 @@
 import {
+  Prisma,
   ProductAnalyticsEventType,
   QuoteComparisonWorkspaceStatus,
   ServiceCategory,
 } from '@prisma/client';
 import { prisma } from '../lib/prisma';
+import { buildQuoteReview, factStatesAfterEdit, markLineItemCorrections, markTermCorrections, reviewRequestProblem, type ConfirmQuoteReviewRequest } from './quoteReview';
 import { APIError } from '../middleware/error.middleware';
 import {
   evaluateQuoteComparability,
@@ -353,7 +355,7 @@ export async function updateQuoteProposal(
   assertOpenWorkspace(workspace);
   const current = await database.quoteComparisonQuote.findFirst({
     where: { id: quoteId, workspaceId },
-    include: { lineItems: { orderBy: { sortOrder: 'asc' } }, terms: true },
+    include: { lineItems: { orderBy: { sortOrder: 'asc' } }, terms: true, factConfirmations: true },
   });
   if (!current) throw new APIError('Quote proposal not found.', 404, 'QUOTE_NOT_FOUND');
 
@@ -382,7 +384,7 @@ export async function updateQuoteProposal(
     providerInsuranceVerified: input.providerInsuranceVerified === undefined
       ? current.providerInsuranceVerified
       : input.providerInsuranceVerified,
-    lineItems: input.lineItems ?? current.lineItems.map((item: any) => ({
+    lineItems: input.lineItems ? markLineItemCorrections(current.lineItems, input.lineItems as any) : current.lineItems.map((item: any) => ({
       kind: item.kind,
       description: item.description,
       quantity: item.quantity === null ? null : Number(item.quantity),
@@ -394,7 +396,7 @@ export async function updateQuoteProposal(
       sourceText: item.sourceText,
       sourcePage: item.sourcePage,
     })),
-    terms: input.terms ?? current.terms.map((term: any) => ({
+    terms: input.terms ? markTermCorrections(current.terms, input.terms as any) : current.terms.map((term: any) => ({
       type: term.type,
       label: term.label,
       value: term.value,
@@ -426,10 +428,18 @@ export async function updateQuoteProposal(
   const updated = await database.$transaction(async (tx: any) => {
     if (input.lineItems) await tx.quoteComparisonLineItem.deleteMany({ where: { quoteId } });
     if (input.terms) await tx.quoteComparisonTerm.deleteMany({ where: { quoteId } });
-    await tx.quoteComparisonFactConfirmation.updateMany({
-      where: { quoteId },
-      data: { status: 'EXTRACTED_UNCONFIRMED', confirmedByUserId: null, confirmedAt: null },
+    // An edit clears every affirmation. A fact the person changed is stored as their correction (the extracted value stays beside it); a fact
+    // they left alone goes back to waiting for affirmation.
+    const factStates = factStatesAfterEdit(current.factConfirmations ?? [], {
+      vendorName: merged.vendorName, quoteAmount: merged.quoteAmount, quoteDate: merged.quoteDate, serviceCategory: merged.serviceCategory,
+      scopeKind: merged.scopeKind, scopeSummary: merged.scopeSummary,
     });
+    for (const fact of factStates) {
+      await tx.quoteComparisonFactConfirmation.updateMany({
+        where: { quoteId, fieldKey: fact.fieldKey },
+        data: { status: fact.status, confirmedValueJson: fact.confirmedValueJson === null || fact.confirmedValueJson === undefined ? Prisma.DbNull : fact.confirmedValueJson, confirmedByUserId: null, confirmedAt: null },
+      });
+    }
     return tx.quoteComparisonQuote.update({
       where: { id: quoteId },
       data: {
@@ -665,24 +675,45 @@ function quoteToFacts(quote: any): QuoteProposalFacts {
   };
 }
 
+/**
+ * What the review step shows for one proposal: every value a confirmation would affirm, with its state, and a fingerprint of that set. The confirm
+ * request must carry this fingerprint and the identifiers shown (see quoteReview.ts).
+ */
+export async function getQuoteReview(propertyId: string, workspaceId: string, quoteId: string) {
+  await getWorkspaceOrThrow(propertyId, workspaceId);
+  const quote = await database.quoteComparisonQuote.findFirst({ where: { id: quoteId, workspaceId }, include: quoteInclude });
+  if (!quote) throw new APIError('Quote proposal not found.', 404, 'QUOTE_NOT_FOUND');
+  return { quoteId: quote.id, homeownerConfirmedAt: quote.homeownerConfirmedAt, review: buildQuoteReview(quote) };
+}
+
 export async function confirmQuoteProposal(
   propertyId: string,
   workspaceId: string,
   quoteId: string,
   userId: string,
+  request: ConfirmQuoteReviewRequest,
 ) {
   const workspace = await getWorkspaceOrThrow(propertyId, workspaceId);
   assertOpenWorkspace(workspace);
-  const quote = await database.quoteComparisonQuote.findFirst({
-    where: { id: quoteId, workspaceId },
-    include: quoteInclude,
-  });
-  if (!quote) throw new APIError('Quote proposal not found.', 404, 'QUOTE_NOT_FOUND');
-
   const confirmedAt = new Date();
-  const facts = quoteToFacts({ ...quote, homeownerConfirmedAt: confirmedAt });
-  const readiness = evaluateQuoteReadiness(facts);
   const confirmed = await database.$transaction(async (tx: any) => {
+    // Read inside the transaction so the set that is checked is the set that is confirmed.
+    const quote = await tx.quoteComparisonQuote.findFirst({ where: { id: quoteId, workspaceId }, include: quoteInclude });
+    if (!quote) throw new APIError('Quote proposal not found.', 404, 'QUOTE_NOT_FOUND');
+    const problem = reviewRequestProblem(buildQuoteReview(quote), request);
+    if (problem) {
+      throw new APIError(`${problem} Review the proposal again before confirming.`, 409, 'QUOTE_REVIEW_STALE');
+    }
+    // A removed value is not confirmed and does not count toward readiness.
+    if (request.rejectedLineItemIds.length) {
+      await tx.quoteComparisonLineItem.deleteMany({ where: { quoteId, id: { in: request.rejectedLineItemIds } } });
+    }
+    if (request.rejectedTermIds.length) {
+      await tx.quoteComparisonTerm.deleteMany({ where: { quoteId, id: { in: request.rejectedTermIds } } });
+    }
+    const remaining = await tx.quoteComparisonQuote.findFirst({ where: { id: quoteId, workspaceId }, include: quoteInclude });
+    // Readiness is computed from the reviewed values: what remains after removal, not what was extracted.
+    const readiness = evaluateQuoteReadiness(quoteToFacts({ ...remaining, homeownerConfirmedAt: confirmedAt }));
     await tx.quoteComparisonLineItem.updateMany({
       where: { quoteId, confirmationStatus: 'EXTRACTED_UNCONFIRMED' },
       data: { confirmationStatus: 'HOMEOWNER_CONFIRMED' },
@@ -691,9 +722,14 @@ export async function confirmQuoteProposal(
       where: { quoteId, confirmationStatus: 'EXTRACTED_UNCONFIRMED' },
       data: { confirmationStatus: 'HOMEOWNER_CONFIRMED' },
     });
+    // Facts: an unconfirmed fact is affirmed as extracted; a corrected fact keeps its corrected state and is stamped as affirmed.
     await tx.quoteComparisonFactConfirmation.updateMany({
       where: { quoteId, status: 'EXTRACTED_UNCONFIRMED' },
       data: { status: 'HOMEOWNER_CONFIRMED', confirmedByUserId: userId, confirmedAt },
+    });
+    await tx.quoteComparisonFactConfirmation.updateMany({
+      where: { quoteId, status: 'HOMEOWNER_CORRECTED' },
+      data: { confirmedByUserId: userId, confirmedAt },
     });
     await tx.quoteComparisonExtraction.updateMany({
       where: { quoteId, status: 'EXTRACTED' },

@@ -325,25 +325,54 @@ test('confirming a Change sends only the changed fields, and keeps the other ter
   } finally { quoteService.updateQuoteProposal = original; w.restore(); restoreData(); }
 });
 
-test('Confirm the facts reviews what is recorded, is refused when already confirmed, and confirms through the canonical function', async () => {
+const REVIEW = {
+  fingerprint: 'f'.repeat(64),
+  headline: [{ key: 'vendorName', label: 'Provider', value: 'Acme HVAC' }, { key: 'quoteAmount', label: 'Total', value: 8200 }, { key: 'scopeSummary', label: 'Scope', value: 'Replace furnace' }],
+  facts: [{ fieldKey: 'vendorName', state: 'EXTRACTED_UNCONFIRMED', extractedValue: 'Acme HVAC', confirmedValue: null }, { fieldKey: 'quoteAmount', state: 'HOMEOWNER_CORRECTED', extractedValue: 8000, confirmedValue: 8200 }],
+  lineItems: [{ id: 'li-1', kind: 'EQUIPMENT', description: 'Furnace unit', quantity: 1, unit: 'ea', unitPrice: 6000, total: 6000, state: 'EXTRACTED_UNCONFIRMED', sourceText: null, sourcePage: null },
+    { id: 'li-2', kind: 'LABOR', description: 'Installation', quantity: null, unit: null, unitPrice: null, total: 2200, state: 'HOMEOWNER_CONFIRMED', sourceText: null, sourcePage: null }],
+  terms: [{ id: 't-1', type: 'WARRANTY', label: null, value: '10 years parts', included: true, state: 'EXTRACTED_UNCONFIRMED', sourceText: null, sourcePage: null }],
+  counts: { facts: 2, lineItems: 2, terms: 1, unconfirmed: 3, corrected: 1, confirmed: 1 },
+};
+
+test('Confirm the facts shows every value it would confirm, is refused when already confirmed, and confirms exactly that set through the canonical function', async () => {
+  const savedReview = quoteService.getQuoteReview;
+  quoteService.getQuoteReview = async () => ({ quoteId: 'q-1', homeownerConfirmedAt: null, review: REVIEW });
   const restoreRole = withRole('CONTRIBUTOR');
   try {
     let restoreData = withData();
     const review = await invoke(M.CONFIRM, launchFor('CONFIRM', 'q-1'));
     assert.equal(review.status, 'NEEDS_CONFIRMATION');
-    assert.match(review.confirmation.description, /match the quote you were given/);
+    assert.match(review.confirmation.description, /every value listed below/);
+    assert.match(review.confirmation.description, /cannot change or remove a line item or term/);
+    const list = review.blocks.find((block) => block.id === 'quote-review-values');
+    const titles = list.sections.flatMap((section) => section.items.map((item) => item.title));
+    assert.ok(titles.includes('1. Furnace unit') && titles.includes('2. Installation') && titles.some((title) => /warranty/i.test(title)), 'every line item and term is listed');
+    assert.equal(list.sections.find((section) => section.id === 'line-items').items.find((item) => item.id === 'li-2').status, 'Confirmed');
+    assert.equal(list.sections[0].items.find((item) => item.id === 'headline-quoteAmount').status, 'Corrected by you');
+    assert.deepEqual(review.parameters.quoteReviewRequest, {
+      reviewFingerprint: REVIEW.fingerprint, lineItemIds: ['li-1', 'li-2'], termIds: ['t-1'], factKeys: ['vendorName', 'quoteAmount'], rejectedLineItemIds: [], rejectedTermIds: [],
+    });
     restoreData();
     restoreData = withData({ quote: { ...QUOTE, homeownerConfirmedAt: new Date() } });
     assert.equal((await invoke(M.CONFIRM, launchFor('CONFIRM', 'q-1'))).reasonCode, 'QUOTE_ALREADY_CONFIRMED');
     restoreData();
-  } finally { restoreRole(); }
+    const big = { ...REVIEW, lineItems: Array.from({ length: 101 }, (_, i) => ({ ...REVIEW.lineItems[0], id: `li-${i}` })) };
+    quoteService.getQuoteReview = async () => ({ quoteId: 'q-1', homeownerConfirmedAt: null, review: big });
+    restoreData = withData();
+    assert.equal((await invoke(M.CONFIRM, launchFor('CONFIRM', 'q-1'))).reasonCode, 'QUOTE_TOO_LARGE_TO_REVIEW');
+    restoreData();
+  } finally { quoteService.getQuoteReview = savedReview; restoreRole(); }
   const restoreData2 = withData(); const w = installWrites();
   const original = quoteService.confirmQuoteProposal; const calls = [];
   quoteService.confirmQuoteProposal = async (...a) => { calls.push(a); return { readinessStage: 'COMPARISON_READY', readinessScore: 90 }; };
+  const request = { reviewFingerprint: 'a'.repeat(64), lineItemIds: ['li-1'], termIds: [], factKeys: [], rejectedLineItemIds: [], rejectedTermIds: [] };
   try {
-    const out = await confirmCapabilityInvoke(OP, ctx({ quoteCommand: { kind: 'CONFIRM', entityId: 'q-1' }, quoteCommandContextVersion: versionFor(WORKSPACE, QUOTE) }));
-    assert.deepEqual(calls, [['prop-1', 'ws-1', 'q-1', 'user-1']]);
+    const out = await confirmCapabilityInvoke(OP, ctx({ quoteCommand: { kind: 'CONFIRM', entityId: 'q-1' }, quoteCommandContextVersion: versionFor(WORKSPACE, QUOTE), quoteReviewRequest: request }));
+    assert.deepEqual(calls, [['prop-1', 'ws-1', 'q-1', 'user-1', request]]);
     assert.equal(out.result.blocks[0].title, 'Facts confirmed');
+    await assert.rejects(() => confirmCapabilityInvoke(OP, ctx({ quoteCommand: { kind: 'CONFIRM', entityId: 'q-1' }, quoteCommandContextVersion: versionFor(WORKSPACE, QUOTE) })), (e) => e.code === 'ASK_CONFIRMATION_NOT_ACTIVE');
+    assert.equal(calls.length, 1, 'no request, nothing confirmed');
   } finally { quoteService.confirmQuoteProposal = original; w.restore(); restoreData2(); }
 });
 
