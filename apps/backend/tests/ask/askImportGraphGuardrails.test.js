@@ -99,13 +99,26 @@ test('layering: support modules import only support modules; handlers never impo
   assert.deepEqual(breaches, []);
 });
 
-test('askHandlerSupport.ts only re-exports the support modules, and re-exports every one of them', () => {
+test('askHandlerSupport.ts only re-exports support modules, and no support module is orphaned', () => {
   const source = readFileSync(join(ASK_DIR, 'askHandlerSupport.ts'), 'utf8');
   const code = source.split('\n').filter((line) => line.trim() && !line.trim().startsWith('//'));
   assert.deepEqual(code.filter((line) => !/^export \* from '\.\/support\/\w+';$/.test(line)), [], 'the facade holds no code of its own');
-  const exported = new Set(code.map((line) => line.match(/support\/(\w+)/)[1]));
   const present = tsFiles(join(ASK_DIR, 'support')).map((file) => rel(file).slice('support/'.length, -3));
-  assert.deepEqual([...exported].sort(), present.sort());
+  const exported = [...new Set(code.map((line) => line.match(/support\/(\w+)/)[1]))];
+  assert.deepEqual(exported.filter((name) => !present.includes(name)), [], 'the facade re-exports only modules that exist');
+  // The facade carries the shared support modules of FRD v1.110. A domain command module (a buyer, quote or renovation command's pure forms and
+  // validation) is imported directly by its handler: re-exporting dozens of them would only create name collisions. Such a module must still be
+  // used: some file other than the facade, or another support module, imports it.
+  const importers = new Map(present.map((name) => [name, 0]));
+  for (const [file, targets] of graph) {
+    if (file.endsWith('askHandlerSupport.ts')) continue;
+    for (const target of targets) {
+      const name = rel(target).startsWith('support/') ? rel(target).slice('support/'.length, -3) : null;
+      if (name && importers.has(name) && target !== file) importers.set(name, importers.get(name) + 1);
+    }
+  }
+  const orphans = present.filter((name) => !exported.includes(name) && importers.get(name) === 0);
+  assert.deepEqual(orphans, [], 'a support module that is neither re-exported nor imported is dead code');
 });
 
 test('no support module grows back into a bucket', () => {
