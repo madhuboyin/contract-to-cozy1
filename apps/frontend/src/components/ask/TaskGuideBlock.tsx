@@ -54,6 +54,17 @@ export const TaskGuideBlock: AskBlockRenderer<'TASK_GUIDE'> = ({ block }) => {
     const ActionIcon = ACTION_ICONS[action.id];
     return <ActionLink key={action.id} action={action} icon={ActionIcon ? <ActionIcon className="h-4 w-4" aria-hidden="true" /> : undefined} />;
   };
+  const noteCard = (note: (typeof block.notes)[number]) => {
+    const NoteIcon = NOTE_ICONS[note.id] ?? Info;
+    const rowAction = note.actionId ? byId.get(note.actionId) : undefined;
+    return (
+      <section key={note.id} data-task-guide-note={note.id} className="flex flex-wrap items-start gap-3 rounded-xl bg-slate-50 p-3 sm:flex-nowrap">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white text-teal-700" aria-hidden="true"><NoteIcon className="h-4 w-4" /></span>
+        <div className="min-w-0 flex-1"><h4 className="text-sm font-semibold text-slate-950">{note.title}</h4><p className="mt-0.5 text-xs leading-5 text-slate-600">{note.body}</p></div>
+        {rowAction && <div className="shrink-0 self-center"><ActionLink action={{ ...rowAction, style: 'SECONDARY' }} /></div>}
+      </section>
+    );
+  };
   return (
     <article data-task-guide={block.id} className="max-w-[800px] rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
       <header className="flex items-start gap-4">
@@ -133,8 +144,10 @@ export const TaskGuideBlock: AskBlockRenderer<'TASK_GUIDE'> = ({ block }) => {
         )}
 
         {guideMode && block.outline && block.outline.length > 0 && (
-          <section data-task-guide-outline-section="" className="rounded-xl bg-slate-50 p-3">
-            <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">All steps</h4>
+          <details data-task-guide-outline-section="" className="group rounded-xl bg-slate-50 p-3">
+            <summary className="cursor-pointer list-none text-xs font-semibold uppercase tracking-wide text-slate-600 marker:hidden focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-700">
+              <span className="inline-flex items-center gap-1.5">All steps ({block.outline.length})<ChevronRight className="h-3.5 w-3.5 transition-transform group-open:rotate-90" aria-hidden="true" /></span>
+            </summary>
             <ol data-task-guide-outline="" aria-label="Steps in this project" className="mt-2 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
               {block.outline.map((entry, index) => {
                 const state = OUTLINE_STATE[entry.state];
@@ -153,27 +166,27 @@ export const TaskGuideBlock: AskBlockRenderer<'TASK_GUIDE'> = ({ block }) => {
                 );
               })}
             </ol>
-          </section>
+          </details>
         )}
 
         {block.history.length > 0 && (
-          <section data-task-guide-history="" aria-label="Recent activity" className="rounded-xl bg-slate-50 p-3">
-            <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Recent activity</h4>
+          <details data-task-guide-history="" className="group rounded-xl bg-slate-50 p-3">
+            <summary className="cursor-pointer list-none text-xs font-semibold uppercase tracking-wide text-slate-600 marker:hidden focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-700">
+              <span className="inline-flex items-center gap-1.5">Recent activity ({block.history.length})<ChevronRight className="h-3.5 w-3.5 transition-transform group-open:rotate-90" aria-hidden="true" /></span>
+            </summary>
             <ul className="mt-1.5 space-y-0.5 text-sm text-slate-700">{block.history.map((entry, index) => <li key={`${entry.label}-${index}`}>{entry.label} <span className="text-slate-500">· {entry.value}</span></li>)}</ul>
-          </section>
+          </details>
         )}
 
-        {block.notes.map((note) => {
-          const NoteIcon = NOTE_ICONS[note.id] ?? Info;
-          const rowAction = note.actionId ? byId.get(note.actionId) : undefined;
-          return (
-            <section key={note.id} data-task-guide-note={note.id} className="flex flex-wrap items-start gap-3 rounded-xl bg-slate-50 p-3 sm:flex-nowrap">
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white text-teal-700" aria-hidden="true"><NoteIcon className="h-4 w-4" /></span>
-              <div className="min-w-0 flex-1"><h4 className="text-sm font-semibold text-slate-950">{note.title}</h4><p className="mt-0.5 text-xs leading-5 text-slate-600">{note.body}</p></div>
-              {rowAction && <div className="shrink-0 self-center"><ActionLink action={{ ...rowAction, style: 'SECONDARY' }} /></div>}
-            </section>
-          );
-        })}
+        {block.notes.slice(0, 2).map(noteCard)}
+        {block.notes.length > 2 && (
+          <details data-task-guide-more-context="" className="group rounded-xl border border-slate-200 px-3 py-2.5">
+            <summary className="cursor-pointer list-none text-sm font-semibold text-slate-700 marker:hidden focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-700">
+              <span className="inline-flex items-center gap-1.5">More context ({block.notes.length - 2})<ChevronRight className="h-4 w-4 transition-transform group-open:rotate-90" aria-hidden="true" /></span>
+            </summary>
+            <div className="mt-2 space-y-2">{block.notes.slice(2).map(noteCard)}</div>
+          </details>
+        )}
       </div>
 
       {footer.length > 0 && <div data-task-guide-actions="" className="mt-4 flex flex-wrap gap-2">{footer.map(footerButton)}</div>}

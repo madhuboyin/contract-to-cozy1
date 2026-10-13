@@ -155,6 +155,21 @@ describe('card deck', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Back' }));
     // A skipped card says so; nothing was sent for it.
     expect(screen.getByText('Skipped for now')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add to plan' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Change choice' }));
+    expect(screen.getByRole('button', { name: 'Add to plan' })).toBeEnabled();
+  });
+
+  test('revisiting a sent choice cannot dispatch it a second time', async () => {
+    const onItemAction = jest.fn();
+    render(<Harness block={block} onItemAction={onItemAction} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Add to plan' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    expect(screen.getByText('Already sent: Add to plan')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add to plan' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Change choice' })).toBeNull();
+    fireEvent.keyDown(screen.getByRole('group', { name: /Finding breaker/ }), { key: 'ArrowRight' });
+    expect(onItemAction).toHaveBeenCalledTimes(1);
   });
 
   test('arrow keys perform the declared swipe actions, and the end shows what was sent', async () => {

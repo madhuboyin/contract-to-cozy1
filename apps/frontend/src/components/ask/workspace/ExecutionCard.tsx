@@ -10,7 +10,6 @@ import { ResultRevalidationBoundary } from '../ResultRevalidationBoundary';
 import { hasResponseContext, ResponseContextSummary } from '../EvidenceContextPanel';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { calmArtifactBlocks, isCalmAdopter, useCalmAnswers } from '@/features/ask/calmAnswers';
-import { canAskConversationally } from '@/features/ask/conversationalCapture';
 import { AskBlockActionContext } from '../blocks/context';
 import { CalmAnswerContext, CalmChromeContext, CalmReceiptContext, CalmSecondaryContext } from '../blocks/calmContext';
 import { BlockSequence, BlockView } from '../blocks/registry';
@@ -161,7 +160,7 @@ export function ExecutionCard({
   const shownSuggestions = calmChrome ? [] : visibleSuggestions;
   // IW-CONV-001 (FRD v1.112): while Cozy is asking a question or asking for confirmation, that question is the message; a plain lead-in
   // summary (default tone, no chips) that says the same thing in other words is not drawn above it.
-  const cardIsTheMessage = calmChrome && (execution.captureRequests.some(canAskConversationally) || (execution.status === 'NEEDS_CONFIRMATION' && Boolean(execution.confirmation)));
+  const cardIsTheMessage = calmChrome && (execution.captureRequests.length > 0 || (execution.status === 'NEEDS_CONFIRMATION' && Boolean(execution.confirmation)));
   const messageBlocks = cardIsTheMessage ? execution.blocks.filter((block) => !(block.type === 'SUMMARY' && block.tone === 'DEFAULT' && !block.chips?.length)) : execution.blocks;
   // IW-CONV-047: HOME_ACTIONS previously drew both its ranked PRIORITY_LIST and the same records again as shelves.
   // In the adopted calm anatomy the ranked list is the one primary artifact; the classic view keeps both for compatibility.

@@ -77,7 +77,10 @@ export function ShelfCard({ item, onOpen, selected = false, disabled = false, tr
     <button type="button" onClick={onOpen} data-ask-shelf-item={item.id} disabled={disabled} aria-current={selected ? 'true' : undefined} {...triggerProps}
       className={cn('relative flex h-full w-full flex-col gap-2 overflow-hidden rounded-xl border p-3 pl-4 text-left hover:border-teal-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-600 disabled:opacity-60', selected ? 'border-teal-600 bg-teal-50 ring-1 ring-teal-600' : 'border-slate-200 bg-white')}>
       <span className={cn('absolute inset-y-0 left-0 w-1', TONE_STRIPE[tone])} aria-hidden="true" />
-      <span className={cn('text-sm font-semibold leading-5 text-slate-950', calm && 'line-clamp-2 min-h-[2.5rem]')}>{item.title}</span>
+      <span className="flex items-start justify-between gap-2">
+        <span className={cn('min-w-0 text-sm font-semibold leading-5 text-slate-950', calm && 'line-clamp-2 min-h-[2.5rem]')}>{item.title}</span>
+        {(item.badgeLabel || item.status) && <span className="shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-600">{item.badgeLabel ?? item.status!.replace(/_/g, ' ')}</span>}
+      </span>
       {!item.timingLabel && !item.amountLabel && item.description && <span className="line-clamp-2 text-xs text-slate-600">{item.description}</span>}
       <span className="mt-auto flex items-center justify-between gap-2 text-xs">
         {shortTiming ? <span className={cn('font-semibold', calm && 'truncate', tone === 'CRITICAL' ? 'text-red-700' : tone === 'CAUTION' ? 'text-amber-800' : 'text-slate-700')}>{shortTiming}</span> : <span />}

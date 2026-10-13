@@ -65,6 +65,7 @@ describe('stepped guide: progress', () => {
 describe('stepped guide: outline', () => {
   it('lists every step in order, each with its state in words, and marks exactly the current one aria-current="step"', () => {
     const view = card([guide()]);
+    (article(view).querySelector('[data-task-guide-outline-section]') as HTMLDetailsElement).open = true;
     const list = within(article(view)).getByRole('list', { name: 'Steps in this project' });
     const items = within(list).getAllByRole('listitem');
     expect(items.map((item) => item.getAttribute('data-step-state'))).toEqual(['DONE', 'SKIPPED', 'CURRENT', 'UPCOMING']);
@@ -100,6 +101,14 @@ describe('stepped guide: outline', () => {
     const list = article(view).querySelector('[data-task-guide-outline]') as HTMLElement;
     expect(list.className).toContain('grid-cols-1'); expect(list.className).toContain('sm:grid-cols-2');
     expect((article(view).querySelector('header') as HTMLElement).className).toContain('items-start');
+  });
+
+  it('keeps the complete outline collapsed behind a count until requested', () => {
+    const view = card([guide()]);
+    const disclosure = article(view).querySelector('[data-task-guide-outline-section]') as HTMLDetailsElement;
+    expect(disclosure.tagName).toBe('DETAILS');
+    expect(disclosure).not.toHaveAttribute('open');
+    expect(within(disclosure).getByText('All steps (4)')).toBeInTheDocument();
   });
 
   it('an empty outline renders no outline section and an absent one is not guide mode', () => {
@@ -159,6 +168,21 @@ describe('a block without the new fields is unchanged', () => {
     expect(article(old).querySelector('[data-task-guide-progress]')).toBeNull();
     expect(article(old).querySelector('[data-task-guide-outline-section]')).toBeNull();
     expect(article(old).querySelector('[data-task-guide-actions]')).toHaveTextContent('Open this project');
+  });
+});
+
+describe('task guide progressive disclosure', () => {
+  it('collapses activity and context beyond the first two notes', () => {
+    const notes = [1, 2, 3, 4].map((number) => ({ id: `note-${number}`, title: `Note ${number}`, body: `Detail ${number}` }));
+    const view = card([guide({ history: [{ label: 'Prepared', value: 'Today' }], notes })]);
+    const history = article(view).querySelector('[data-task-guide-history]') as HTMLDetailsElement;
+    const more = article(view).querySelector('[data-task-guide-more-context]') as HTMLDetailsElement;
+    expect(history.tagName).toBe('DETAILS');
+    expect(history).not.toHaveAttribute('open');
+    expect(within(history).getByText('Recent activity (1)')).toBeInTheDocument();
+    expect(article(view).querySelectorAll('[data-task-guide-note]')).toHaveLength(4);
+    expect(more).not.toHaveAttribute('open');
+    expect(within(more).getByText('More context (2)')).toBeInTheDocument();
   });
 });
 

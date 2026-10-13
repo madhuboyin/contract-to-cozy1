@@ -38,6 +38,7 @@ describe('Home Action shelves', () => {
     expect(screen.getByRole('list', { name: 'Plan, 1 item' })).toBeInTheDocument();
     const card = screen.getByRole('button', { name: /Replace the HVAC filter/ });
     expect(card).toHaveTextContent('Due Oct 3, 2026');
+    expect(card).toHaveTextContent('OPEN');
     fireEvent.click(card);
     const sheet = await screen.findByRole('dialog', { name: 'Replace the HVAC filter' });
     expect(within(sheet).getByText('A clogged filter strains the system.')).toBeInTheDocument();

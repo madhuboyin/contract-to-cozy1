@@ -62,6 +62,20 @@ describe('calm shell, any domain', () => {
     expect(within(menu).getByRole('menuitem', { name: /Pin/ })).toBeInTheDocument();
   });
 
+  it('lets a long form be the message without repeating its default summary lead-in', () => {
+    window.localStorage.setItem(CALM_ANSWERS_STORAGE_KEY, '1');
+    const summary = { type: 'SUMMARY', id: 'lead-in', title: 'A few more details', body: 'Complete the form below.', tone: 'DEFAULT', actions: [] } as AskPresentationBlock;
+    const request = {
+      requirementId: 'long-form', captureKey: 'LONG_FORM', classification: 'WORKFLOW_INPUT', state: 'UNKNOWN', title: 'Project details',
+      question: 'Tell us about the project.', helpText: null, allowNotSure: false, sensitivity: 'STANDARD', destinationLabel: 'Reviewed before saving',
+      fallbackHref: null, confirmationText: null, expectedContextVersion: 'v1', presentation: 'FORM',
+      inputSchema: { type: 'GROUP', fields: Array.from({ length: 5 }, (_, index) => ({ key: `field-${index}`, label: `Field ${index + 1}`, required: false, inputSchema: { type: 'SHORT_TEXT', maxLength: 100 } })) },
+    } as AskExecutionResponse['captureRequests'][number];
+    card(execution({ status: 'NEEDS_INPUT', blocks: [summary], captureRequests: [request] } as unknown as Partial<AskExecutionResponse>));
+    expect(screen.queryByText('A few more details')).toBeNull();
+    expect(screen.getByText('Project details')).toBeInTheDocument();
+  });
+
   it('keeps the current shell, state cards and wording when the setting is off', async () => {
     window.localStorage.setItem(CALM_ANSWERS_STORAGE_KEY, '0');
     const { container } = card(execution(), ['Try again']);

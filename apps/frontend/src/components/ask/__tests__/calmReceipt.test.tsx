@@ -70,6 +70,12 @@ describe('calm review and unknown outcome', () => {
     expect(screen.getByRole('button', { name: 'Create task' })).toBeDisabled();
   });
 
+  it('lays review fields out as a compact two-column grid on wider screens', () => {
+    const fields = Array.from({ length: 6 }, (_, index) => ({ label: `Field ${index + 1}`, value: `Value ${index + 1}` }));
+    const { container } = card(execution({ status: 'NEEDS_CONFIRMATION', confirmation: { ...confirmation, fields }, blocks: [] } as Partial<AskExecutionResponse>));
+    expect(container.querySelector('[data-confirmation-fields]')).toHaveClass('sm:grid-cols-2');
+  });
+
   it('a reschedule with no date opens its date picker and blocks Confirm until a date is saved', () => {
     const reschedule = { ...confirmation, title: 'Reschedule Chimney cleaning?', confirmLabel: 'Confirm reschedule', editableFields: [{ key: 'nextDueDate', label: 'New due date', type: 'DATE', value: '' }] };
     card(execution({ status: 'NEEDS_CONFIRMATION', confirmation: reschedule, blocks: [] } as unknown as Partial<AskExecutionResponse>));

@@ -267,12 +267,12 @@ export function ConfirmationCard({ executionId, confirmation, onCompleted, autoF
       {/* ACUI-005: the stage in plain words. The consent box and the confirm button below are the "Confirm" step. */}
       {calm && <p className="text-xs font-medium text-slate-500" data-conversational-stage="review">Review · nothing is saved until you confirm</p>}
       <h3 className={calm ? 'text-[17px] font-medium leading-snug text-slate-900' : 'mt-1 font-semibold text-slate-950'}>{confirmation.title}</h3><p className={calm ? 'text-sm leading-5 text-slate-600' : 'mt-1 text-sm leading-5 text-slate-700'}>{confirmation.description}</p>
-      <dl className={calm ? 'divide-y divide-slate-100 border-y border-slate-100' : 'mt-4 divide-y divide-violet-100 rounded-xl border border-violet-100 bg-white px-3'}>
-        {confirmation.fields.map((field) => <div key={field.label} className="grid gap-1 py-2.5 text-sm sm:grid-cols-[9rem_1fr]"><dt className="text-slate-500">{field.label}</dt><dd className="font-medium text-slate-800">{field.value}</dd></div>)}
+      <dl data-confirmation-fields="" className={cn('grid gap-x-5 sm:grid-cols-2', calm ? 'border-y border-slate-100' : 'mt-4 rounded-xl border border-violet-100 bg-white px-3')}>
+        {confirmation.fields.map((field) => <div key={field.label} className="min-w-0 border-b border-slate-100 py-2.5 text-sm last:border-b-0 sm:[&:nth-last-child(-n+2)]:border-b-0"><dt className="text-xs text-slate-500">{field.label}</dt><dd className="mt-0.5 whitespace-pre-wrap font-medium text-slate-800">{field.value}</dd></div>)}
         {confirmation.editableFields.map((field) => (
-          <div key={field.key} className="grid gap-1 py-2.5 text-sm sm:grid-cols-[9rem_1fr]">
-            <dt className="text-slate-500">{field.label}</dt>
-            <dd>
+          <div key={field.key} className="min-w-0 border-b border-slate-100 py-2.5 text-sm last:border-b-0 sm:col-span-2">
+            <dt className="text-xs text-slate-500">{field.label}</dt>
+            <dd className="mt-0.5">
               {editingKey === field.key ? (
                 <div className="flex flex-wrap items-center gap-2">
                   <EditableFieldInput field={field} value={editValues[field.key] ?? field.value} onChange={(next) => setEditValues((current) => ({ ...current, [field.key]: next }))} />

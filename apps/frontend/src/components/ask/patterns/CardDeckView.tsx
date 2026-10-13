@@ -64,6 +64,15 @@ export function CardDeckView({ items, swipeRightActionId, swipeLeftActionId, onI
     record({ itemId: item.id, actionId: action.id, label: action.label, sent: true });
   };
   const skip = () => { if (item) record({ itemId: item.id, actionId: null, label: null, sent: false }); };
+  const changeChoice = () => {
+    if (!item) return;
+    setDecisions((previous) => {
+      const next = { ...previous };
+      delete next[item.id];
+      return next;
+    });
+    setDragX(0);
+  };
   const back = () => {
     setIndex((current) => Math.max(0, current - 1));
     setDragX(0);
@@ -147,6 +156,7 @@ export function CardDeckView({ items, swipeRightActionId, swipeLeftActionId, onI
   const rightLabel = actionById(swipeRightActionId)?.label;
   const leftLabel = actionById(swipeLeftActionId)?.label;
   const decided = decisions[item.id];
+  const decisionLocked = Boolean(decided);
   return (
     <div className="space-y-3 p-4">
       <div className="flex items-center justify-between text-xs text-slate-500">
@@ -160,15 +170,15 @@ export function CardDeckView({ items, swipeRightActionId, swipeLeftActionId, onI
         tabIndex={0}
         role="group"
         aria-roledescription="card"
-        aria-label={`${item.title}, ${index + 1} of ${items.length}.${rightLabel ? ` Right arrow: ${rightLabel}.` : ''}${leftLabel ? ` Left arrow: ${leftLabel}.` : ''}`}
+        aria-label={`${item.title}, ${index + 1} of ${items.length}.${!decisionLocked && rightLabel ? ` Right arrow: ${rightLabel}.` : ''}${!decisionLocked && leftLabel ? ` Left arrow: ${leftLabel}.` : ''}`}
         data-ask-deck-item={item.id}
-        onKeyDown={onKeyDown}
-        onPointerDown={onPointerDown}
+        onKeyDown={decisionLocked ? undefined : onKeyDown}
+        onPointerDown={decisionLocked ? undefined : onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
         style={{ transform: dragX ? `translateX(${dragX}px) rotate(${dragX / 24}deg)` : undefined, touchAction: swipeEnabled ? 'pan-y' : undefined }}
-        className={cn('relative min-h-[11rem] select-none space-y-2 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-teal-600', swipeEnabled && 'cursor-grab')}
+        className={cn('relative min-h-[11rem] select-none space-y-2 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-teal-600', swipeEnabled && !decisionLocked && 'cursor-grab')}
       >
         {rightLabel && dragX > 20 && <span className="absolute right-3 top-3 rounded-md bg-teal-50 px-2 py-1 text-xs font-bold text-teal-800">{rightLabel}</span>}
         {leftLabel && dragX < -20 && <span className="absolute left-3 top-3 rounded-md bg-slate-100 px-2 py-1 text-xs font-bold text-slate-700">{leftLabel}</span>}
@@ -182,7 +192,7 @@ export function CardDeckView({ items, swipeRightActionId, swipeLeftActionId, onI
       </div>
       <div className="flex flex-wrap gap-2">
         {shown.map((action) => (
-          <button key={action.id} type="button" disabled={disabled} onClick={() => choose(action)}
+          <button key={action.id} type="button" disabled={disabled || decisionLocked} onClick={() => choose(action)}
             className={cn('min-h-9 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50',
               // Radar R-3 (FRD v1.134): inside an adopted calm answer the answer's own step is the one filled control, so the card's swipe-right action is quiet.
               action.id === swipeRightActionId && !calmAnswer ? 'bg-teal-700 text-white hover:bg-teal-800' : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50')}>
@@ -192,14 +202,16 @@ export function CardDeckView({ items, swipeRightActionId, swipeLeftActionId, onI
         {overflow.length > 0 && <details className="relative">
           <summary className="flex min-h-9 cursor-pointer list-none items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">More actions</summary>
           <div className="absolute right-0 z-10 mt-1 min-w-44 space-y-1 rounded-lg border border-slate-200 bg-white p-1.5 shadow-lg">
-            {overflow.map((action) => <button key={action.id} type="button" disabled={disabled} onClick={() => choose(action)} className="block min-h-9 w-full rounded-md px-2.5 py-1.5 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">{action.label}{batchMode && !isBatched(action) ? ' …' : ''}</button>)}
+            {overflow.map((action) => <button key={action.id} type="button" disabled={disabled || decisionLocked} onClick={() => choose(action)} className="block min-h-9 w-full rounded-md px-2.5 py-1.5 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">{action.label}{batchMode && !isBatched(action) ? ' …' : ''}</button>)}
           </div>
         </details>}
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <button type="button" onClick={back} disabled={index === 0} className="min-h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 disabled:opacity-40">Back</button>
-        <button type="button" onClick={skip} className="min-h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700">Skip for now</button>
-        {swipeEnabled && <span className="text-xs text-slate-500">You can also swipe the card or use the arrow keys.</span>}
+        {decisionLocked && !decided?.sent
+          ? <button type="button" onClick={changeChoice} className="min-h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-teal-800">Change choice</button>
+          : !decisionLocked && <button type="button" onClick={skip} className="min-h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700">Skip for now</button>}
+        {swipeEnabled && !decisionLocked && <span className="text-xs text-slate-500">You can also swipe the card or use the arrow keys.</span>}
       </div>
       {batchMode && <p className="text-xs text-slate-500">Nothing is saved until you review and confirm at the end.{shown.some((action) => !isBatched(action)) ? ' Actions marked … open their own confirmation.' : ''}</p>}
     </div>
