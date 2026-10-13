@@ -181,6 +181,8 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   NEGOTIATION_SHIELD_CASE_ATTACH: new Set(['negotiation-shield-review', 'negotiation-shield-analyze']),
   // The readiness answer's empty state offers the start; the receipt of a started case offers that case's readiness check.
   RENOVATION_CASE_START: new Set(['renovation-case-readiness']),
+  // Adjust what the Capital Timeline assumes for an item (register P1 Capital Timeline): planned date or window, cost range, remaining life, leave it off, or a note; and remove an adjustment. Confirmation-gated, declared-action only; never by fuzzy retrieval.
+  CAPITAL_TIMELINE_COMMAND: new Set(['capital-timeline-back']),
   // Coverage Intelligence writes (register P0): prepare the coverage review, start a comparison against the verified policy, and record the keep / change / shop / defer decision. Owner-only, confirmation-gated, declared-action only; never by fuzzy retrieval.
   COVERAGE_COMMAND: new Set(['coverage-back', 'coverage-back-review']),
   // Manage a saved Home Upgrade Planner option (register P0 Home Digital Twin / Upgrade Planner): record the decision, rename, archive or restore, recalculate (queued job) and delete an archived option. Confirmation-gated, declared-action only; never by fuzzy retrieval.
@@ -217,7 +219,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   BUYER_NEGOTIATION_READINESS: new Set(['buyer-negotiation-start', 'buyer-negotiation-outcome']),
   HOME_DEADLINE_MONITOR: new Set(['resolve-coverage-conflict']),
   // The page-link ids (open-inventory, open-timeline, open-reserve, open-reserve-fund) were retired with the desktop-link sweep.
-  CAPITAL_RESERVE_PLAN: new Set(['add-inventory-item', 'rerun-horizon-5', 'rerun-horizon-10', 'reserve-fund-add-contribution', 'reserve-fund-remove-contribution', 'reserve-fund-recalculate', 'reserve-fund-posture-conservative', 'reserve-fund-posture-moderate', 'reserve-fund-posture-aggressive', 'reserve-fund-accept-reconciliation']),
+  CAPITAL_RESERVE_PLAN: new Set(['add-inventory-item', 'rerun-horizon-5', 'rerun-horizon-10', 'reserve-fund-add-contribution', 'reserve-fund-remove-contribution', 'reserve-fund-recalculate', 'reserve-fund-posture-conservative', 'reserve-fund-posture-moderate', 'reserve-fund-posture-aggressive', 'reserve-fund-accept-reconciliation', 'capital-timeline-adjust', 'capital-timeline-remove-adjustment']),
   // The typed "change my reserve plan" choice and the posture picker offer the plan-wide actions that need no target entry.
   RESERVE_FUND_COMMAND: new Set(['reserve-fund-show-current', 'reserve-fund-add-contribution', 'reserve-fund-recalculate', 'reserve-fund-choose-posture', 'reserve-fund-posture-conservative', 'reserve-fund-posture-moderate', 'reserve-fund-posture-aggressive']),
   PROPERTY_BRIEF_COMMAND: new Set(['property-brief-show-current', 'property-brief-open-share']),

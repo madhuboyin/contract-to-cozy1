@@ -99,6 +99,7 @@ import './handlers/negotiationShieldAnalyze.handler';
 import './handlers/negotiationShieldEdit.handler';
 import './handlers/negotiationShieldAttach.handler';
 import './handlers/renovationCaseStart.handler';
+import './handlers/capitalTimelineCommands.handler';
 import './handlers/coverageCommands.handler';
 import './handlers/coverageReview.handler';
 import './handlers/homeUpgradeCommands.handler';

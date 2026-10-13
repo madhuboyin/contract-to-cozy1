@@ -53,6 +53,8 @@ import { buyerNegotiationResult } from '../handlers/negotiationShieldBuyerComman
 import { permitCommandResult } from '../handlers/permitTrackerCommands.handler';
 import { upgradeCommandResult } from '../handlers/homeUpgradeCommands.handler';
 import { coverageCommandResult } from '../handlers/coverageCommands.handler';
+import { capitalCommandResult } from '../handlers/capitalTimelineCommands.handler';
+import { CAPITAL_ADJUST_CAPTURE_KEY, parseCapitalAdjustAnswer } from '../support/capitalTimelineCommand';
 import { COVERAGE_DECISION_CAPTURE_KEY, parseCoverageDecisionAnswer, type CoverageCommandKind } from '../support/coverageCommand';
 import { parseUpgradeFormAnswer, upgradeFormKindFromCaptureKey, type UpgradeCommandKind } from '../support/homeUpgradeCommand';
 import { parsePermitFormAnswer, permitFormKindFromCaptureKey, type PermitCommandKind } from '../support/permitTrackerCommand';
@@ -1169,6 +1171,29 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     captureId = input.idempotencyKey;
     capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
     canonicalOwner = 'CoverageComparison';
+  } else if (execution.operationId === 'CAPITAL_TIMELINE_COMMAND') {
+    if (input.captureKey !== CAPITAL_ADJUST_CAPTURE_KEY) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    const access = await ensurePropertyAccess(userId, execution.propertyId);
+    if (access.role === HouseholdRole.VIEWER) throw Object.assign(new Error('A contributor or owner is required to adjust the capital timeline.'), { code: 'ASK_PERMISSION_REQUIRED' });
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson) ? execution.parametersJson as Record<string, unknown> : {};
+    const capitalLaunch = storedParameters.capitalCommandLaunch && typeof storedParameters.capitalCommandLaunch === 'object' && !Array.isArray(storedParameters.capitalCommandLaunch)
+      ? storedParameters.capitalCommandLaunch as { kind?: unknown; entityId?: unknown; sourceExecutionId?: unknown } : null;
+    if (!capitalLaunch || capitalLaunch.kind !== 'ADD' || typeof capitalLaunch.entityId !== 'string') {
+      throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    }
+    const capitalAnswer = parseCapitalAdjustAnswer(input.answer);
+    if (!capitalAnswer.success) {
+      const message = capitalAnswer.reason === 'ITEM_REQUIRED' ? 'Choose the item this applies to.'
+        : capitalAnswer.reason === 'ORDER' ? 'The end must be on or after the start, and the highest cost not below the lowest.'
+          : capitalAnswer.reason === 'FIELDS_REQUIRED' ? 'Fill in the fields for the adjustment you chose.' : 'Check the form and try again.';
+      throw Object.assign(new Error(message), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+    }
+    result = await capitalCommandResult(userId, execution.propertyId, {
+      kind: 'ADD', entityId: capitalLaunch.entityId, sourceExecutionId: typeof capitalLaunch.sourceExecutionId === 'string' ? capitalLaunch.sourceExecutionId : null,
+    }, capitalAnswer.data);
+    captureId = input.idempotencyKey;
+    capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
+    canonicalOwner = 'HomeCapitalTimeline';
   } else if (execution.operationId === 'PROPERTY_BRIEF_COMMAND') {
     if (![PROPERTY_BRIEF_PREPARE_CAPTURE_KEY, PROPERTY_BRIEF_SHARE_CAPTURE_KEY].includes(input.captureKey) || input.expectedContextVersion !== 'property-brief-live') throw Object.assign(new Error('This Property Brief form is no longer active.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
     const access = await ensurePropertyAccess(userId, execution.propertyId);

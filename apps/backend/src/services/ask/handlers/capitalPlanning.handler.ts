@@ -23,6 +23,7 @@ import { RESERVE_FUND_ACTION_IDS, RESERVE_FUND_COMMAND_MESSAGE } from '../suppor
 import { RENOVATION_CASE_START_ACTION_ID, RENOVATION_CASE_START_MESSAGE } from '../support/renovationCaseStart';
 
 const homeCapitalTimelineService = new HomeCapitalTimelineService();
+import { CAPITAL_COMMAND_ACTION_IDS, CAPITAL_COMMAND_MESSAGES, CAPITAL_OVERRIDE_ENTITY_TYPE, CAPITAL_OVERRIDE_SHORT_LABELS, CAPITAL_PROPERTY_ENTITY_TYPE } from '../support/capitalTimelineCommand';
 
 const permitTrackerService = new PermitTrackerService();
 
@@ -66,6 +67,38 @@ export function capitalTimelineBlock(
       ],
     })),
   };
+}
+
+// Capital Timeline (register P1; FRD v1.318): the household's own corrections to what the timeline assumes, with Remove, and a way to add one. A reader
+// sees what was corrected; Add and Remove are offered to a contributor or owner only.
+async function capitalAdjustmentsBlocks(propertyId: string, canManage: boolean): Promise<AskPresentationBlock[]> {
+  const overrides = await homeCapitalTimelineService.listOverrides(propertyId);
+  const ids = [...new Set(overrides.map((o: any) => o.inventoryItemId).filter((id: unknown): id is string => typeof id === 'string'))];
+  const names = ids.length
+    ? new Map<string, string>((await prisma.inventoryItem.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } })).map((item) => [item.id, item.name ?? 'Item']))
+    : new Map<string, string>();
+  const addAction = canManage ? [{
+    id: CAPITAL_COMMAND_ACTION_IDS.ADD, label: 'Adjust an item', interactionType: 'START_WORKFLOW' as const, message: CAPITAL_COMMAND_MESSAGES.ADD,
+    operationId: 'CAPITAL_TIMELINE_COMMAND' as const, entityType: CAPITAL_PROPERTY_ENTITY_TYPE, entityId: propertyId, style: 'SECONDARY' as const,
+  }] : [];
+  if (!overrides.length && !canManage) return [];
+  return [{
+    type: 'GROUPED_LIST', filters: [], id: 'capital-timeline-adjustments', title: 'Your adjustments to the timeline',
+    description: overrides.length
+      ? 'Corrections you made to what the timeline assumes. The timeline uses them the next time it is run.'
+      : 'You have not adjusted what the timeline assumes. A planned date, a cost range or leaving an item off are examples.',
+    sections: overrides.length ? [{
+      id: 'capital-timeline-adjustments-all', title: 'Adjustments', count: overrides.length,
+      items: overrides.slice(0, 25).map((override: any) => ({
+        id: String(override.id), title: override.inventoryItemId ? names.get(String(override.inventoryItemId)) ?? 'Item' : 'Whole home',
+        description: override.note ? String(override.note) : null,
+        meta: [CAPITAL_OVERRIDE_SHORT_LABELS[String(override.type)] ?? String(override.type), `Added ${humanDate(new Date(override.createdAt))}`], status: null, href: null,
+        entityType: CAPITAL_OVERRIDE_ENTITY_TYPE,
+        actions: canManage ? [{ id: CAPITAL_COMMAND_ACTION_IDS.REMOVE, label: 'Remove', message: CAPITAL_COMMAND_MESSAGES.REMOVE, operationId: 'CAPITAL_TIMELINE_COMMAND', interactionType: 'MUTATE_RECORD' as const, style: 'QUIET' as const }] : [],
+      })),
+    }] : [],
+    actions: addAction,
+  }];
 }
 
 async function capitalReservePlanResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
@@ -123,6 +156,7 @@ async function capitalReservePlanResult(userId: string, propertyId: string, mess
   const retiredLineItems: any[] = allLineItems.filter((line: any) => line.status !== 'ACTIVE');
   const contributions: any[] = contributionPage.items ?? [];
   const canManage = access.role !== HouseholdRole.VIEWER;
+  const capitalAdjustmentBlocks = await capitalAdjustmentsBlocks(propertyId, canManage);
   type ReserveItemAction = NonNullable<Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>['sections'][number]['items'][number]['actions']>[number];
   const commandAction = (id: string, label: string, style: 'PRIMARY' | 'SECONDARY' | 'QUIET' = 'SECONDARY'): ReserveItemAction => ({ id, label, interactionType: 'MUTATE_RECORD', message: RESERVE_FUND_COMMAND_MESSAGE, operationId: 'RESERVE_FUND_COMMAND', style });
   if (!analysis || !Array.isArray(analysis.items) || analysis.items.length === 0) return {
@@ -148,6 +182,7 @@ async function capitalReservePlanResult(userId: string, propertyId: string, mess
   },
   { type: 'GROUPED_LIST', filters: [], id: 'reserve-planning-controls', title: 'Manage the reserve plan', description: `The current posture is ${String(fund.posture).toLowerCase()}. Conservative uses the high estimate, moderate uses the midpoint, and aggressive uses the low estimate. Recommended monthly funding is the sum of each smoothable target divided by its months remaining; needs due within six months are shown as shortfall instead.`, sections: [{ id: 'fund-actions', title: 'Balance and calculation', count: 2, items: [{ id: 'add-contribution', title: 'Log a balance change', description: 'Record a deposit, withdrawal, or balance correction. No money is transferred.', meta: ['Self-reported ledger'], status: 'AVAILABLE', entityType: 'RESERVE_FUND', ...(canManage ? { actions: [commandAction(RESERVE_FUND_ACTION_IDS.ADD_CONTRIBUTION, 'Log contribution', 'PRIMARY')] } : {}) }, { id: 'recalculate', title: 'Recalculate from current records', description: 'Refresh targets and allocations from the canonical Capital Timeline and property context.', meta: [fund.lastRecalculatedAt ? `Last recalculated ${humanDate(new Date(fund.lastRecalculatedAt))}` : 'Not recalculated yet'], status: 'AVAILABLE', entityType: 'RESERVE_FUND', ...(canManage ? { actions: [commandAction(RESERVE_FUND_ACTION_IDS.RECALCULATE, 'Recalculate plan')] } : {}) }] }, { id: 'postures', title: 'Choose how estimates are planned', count: 3, items: (['CONSERVATIVE', 'MODERATE', 'AGGRESSIVE'] as const).map((posture) => ({ id: posture, title: posture[0] + posture.slice(1).toLowerCase(), description: posture === 'CONSERVATIVE' ? 'Plans from the high end of each cost range.' : posture === 'MODERATE' ? 'Plans from the midpoint of each cost range.' : 'Plans from the low end of each cost range.', meta: [fund.posture === posture ? 'Current posture' : 'Available'], status: fund.posture === posture ? 'CURRENT' : 'AVAILABLE', entityType: 'RESERVE_FUND_POSTURE', ...(canManage && fund.posture !== posture ? { actions: [commandAction(RESERVE_FUND_ACTION_IDS[`POSTURE_${posture}`], `Use ${posture.toLowerCase()}`)] } : {}) })) }], actions: [] },
   capitalTimelineBlock(upcoming, items.length),
+  ...capitalAdjustmentBlocks,
   // Home Capital Timeline reference journey (FRD Appendix D), first inline-detail slice: entityType routes these
   // through ReserveAllocationResultList (GroupedListBlock.tsx) instead of the generic href-only renderer, opening
   // canonical detail inline -- a fresh re-fetch via the existing GET .../reserve-fund/line-items list endpoint
