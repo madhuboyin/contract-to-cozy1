@@ -175,3 +175,42 @@ test('the ids are allowlisted for the answer that emits them', () => {
   for (const id of Object.values(command.READINESS_COMMAND_ACTION_IDS)) assert.equal(applicable(id, 'RENOVATION_PERMIT_READINESS'), true, id);
   assert.equal(applicable('renovation-readiness-back', OP), true);
 });
+
+test('mark satisfied (FRD v1.358): only for a manually satisfiable open item; the picker offers only household-visible Home Records; the service gets the chosen record', async () => {
+  const kinds = (o) => handler.readinessItemKinds({ status: 'OPEN', overrideAllowed: false, overrideAcknowledgedAt: null, manualSatisfactionAllowed: false, manuallySatisfiedAt: null, ...o });
+  assert.deepEqual(kinds({ manualSatisfactionAllowed: true }), ['SATISFY']);
+  assert.deepEqual(kinds({ manualSatisfactionAllowed: true, overrideAllowed: true }), ['SATISFY', 'ACKNOWLEDGE']);
+  assert.deepEqual(kinds({}), [], 'a source-controlled item cannot be satisfied by hand');
+  assert.deepEqual(command.readinessServiceInput('SATISFY', { evidenceDocumentId: 'rec-1', notes: 'Matches the permit.' }), { status: 'SATISFIED', evidenceDocumentId: 'rec-1', satisfactionNotes: 'Matches the permit.' });
+  assert.equal(command.parseReadinessFormAnswer('SATISFY', { evidenceDocumentId: 'rec-1' }).success, false);
+
+  const inventory = require('../../src/services/propertyDocuments/propertyDocumentInventory.service.ts');
+  const entry = (over) => ({ id: 'rec-1', source: 'HOME_RECORD', title: 'Permit approval', kind: 'PERMIT', kindLabel: 'Permit', addedAt: new Date('2026-08-01'), sensitivity: 'STANDARD', visibility: 'HOUSEHOLD', lifecycle: 'ACTIVE', ...over });
+  const savedList = inventory.listPropertyDocuments;
+  let items = [entry(), entry({ id: 'rec-private', title: 'Owner only', visibility: 'OWNER_ONLY' }), entry({ id: 'doc-legacy', source: 'LEGACY_DOCUMENT' })];
+  inventory.listPropertyDocuments = async () => ({ items });
+  const restoreRole = withRole('CONTRIBUTOR'); const restore = withData({ item: baseItem({ overrideAllowed: false, manualSatisfactionAllowed: true }) });
+  const w = installService();
+  try {
+    const form = await invoke(M.SATISFY, launch('SATISFY', ITEM), 'CONTRIBUTOR');
+    assert.equal(form.status, 'NEEDS_CONTEXT');
+    const options = form.captureRequests[0].inputSchema.fields[0].inputSchema.options.map((o) => o.value);
+    assert.deepEqual(options, ['rec-1'], 'no owner-only record and no legacy document is offered');
+    const stepOne = await invoke(M.SATISFY, launch('SATISFY', ITEM), 'CONTRIBUTOR');
+    assert.ok(stepOne.contextVersion);
+    const review = await handler.readinessCommandResult('user-1', 'prop-1', { kind: 'SATISFY', entityId: ITEM, sourceExecutionId: null }, { evidenceDocumentId: 'rec-1', notes: 'Matches the permit.' });
+    assert.equal(review.status, 'NEEDS_CONFIRMATION');
+    assert.match(review.confirmation.description, /everyone on this case can see/);
+    assert.match(review.confirmation.description, /does not read or verify/);
+    const hidden = await handler.readinessCommandResult('user-1', 'prop-1', { kind: 'SATISFY', entityId: ITEM, sourceExecutionId: null }, { evidenceDocumentId: 'rec-private', notes: 'x' });
+    assert.equal(hidden.reasonCode, 'RENOVATION_READINESS_EVIDENCE_NOT_OFFERED');
+    assert.equal(w.calls.length, 0);
+    const version = sha(`readiness:SATISFY:${ITEM}:OPEN::${UPDATED.toISOString()}`);
+    await confirmCapabilityInvoke(OP, ctx({ readinessCommand: { kind: 'SATISFY', entityId: ITEM }, readinessContextVersion: version, readinessForm: { evidenceDocumentId: 'rec-1', notes: 'Matches the permit.' } }, 'CONTRIBUTOR'));
+    assert.deepEqual(w.calls[0], ['updateReadinessItem', 'prop-1', CASE, ITEM, 'user-1', { status: 'SATISFIED', evidenceDocumentId: 'rec-1', satisfactionNotes: 'Matches the permit.' }]);
+    items = [];
+    await assert.rejects(() => confirmCapabilityInvoke(OP, ctx({ readinessCommand: { kind: 'SATISFY', entityId: ITEM }, readinessContextVersion: version, readinessForm: { evidenceDocumentId: 'rec-1', notes: 'Matches the permit.' } }, 'CONTRIBUTOR')), (e) => e.code === 'ASK_CONFIRMATION_NOT_ACTIVE');
+    assert.equal((await invoke(M.SATISFY, launch('SATISFY', ITEM), 'CONTRIBUTOR')).reasonCode, 'RENOVATION_READINESS_NO_EVIDENCE_RECORD');
+    assert.equal(w.calls.length, 1);
+  } finally { inventory.listPropertyDocuments = savedList; w.restore(); restore(); restoreRole(); }
+});

@@ -336,7 +336,7 @@ export function renovationReadinessProgress(
 
 const READINESS_COMMAND_ACTIONS = READINESS_COMMAND_ACTION_IDS;
 const READINESS_ITEM_LABELS: Record<ReadinessCommandKind, string> = {
-  REFRESH: 'Refresh readiness', ACKNOWLEDGE: 'Acknowledge the risk', REVOKE: 'Withdraw the acknowledgement', REOPEN: 'Reopen',
+  REFRESH: 'Refresh readiness', ACKNOWLEDGE: 'Acknowledge the risk', REVOKE: 'Withdraw the acknowledgement', REOPEN: 'Reopen', SATISFY: 'Mark satisfied with a document',
 };
 
 async function renovationPermitReadinessResult(propertyId: string, message: string, canStart = false, isOwner = false): Promise<AskOperationResult> {

@@ -11,6 +11,9 @@ import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { registerConfirmCapabilityHandler, type ConfirmCapabilityContext, type ConfirmCapabilityResult } from '../confirmCapabilityHandlerRegistry';
 import { reconcileAskExecutionSideEffects } from '../execution/executeOperation';
 import { ensurePropertyAccess } from '../askHandlerSupport';
+import { listPropertyDocuments } from '../../propertyDocuments/propertyDocumentInventory.service';
+import { offerableNegotiationDocuments, type NegotiationAttachCandidate } from '../support/negotiationShieldAttach';
+import { humanDate } from '../askFormatting';
 import { evaluateReadiness, governOverride, updateReadinessItem } from '../../renovationReadiness.service';
 import {
   READINESS_COMMAND_MESSAGES, READINESS_FORM_CAPTURE_KEYS, readinessCommandEntityType, readinessCommandKindFromMessage, readinessKindNeedsOwner, readinessServiceInput,
@@ -54,12 +57,23 @@ const caseVersion = (renovationCase: { id: string; updatedAt: Date }) => sha(`re
 
 /** What an item allows now (the service re-checks): the one place shared by the answer's row actions and the confirmation. */
 export function readinessItemKinds(item: Pick<ItemRow, 'status' | 'overrideAllowed' | 'overrideAcknowledgedAt' | 'manualSatisfactionAllowed' | 'manuallySatisfiedAt'>): ReadinessCommandKind[] {
-  if (item.status === 'OPEN' && item.overrideAllowed) return item.overrideAcknowledgedAt ? ['REVOKE'] : ['ACKNOWLEDGE'];
+  if (item.status === 'OPEN' && item.overrideAllowed) return [...(item.manualSatisfactionAllowed ? ['SATISFY' as const] : []), ...(item.overrideAcknowledgedAt ? ['REVOKE' as const] : ['ACKNOWLEDGE' as const])];
+  if (item.status === 'OPEN' && item.manualSatisfactionAllowed) return ['SATISFY'];
   if (item.status === 'SATISFIED' && item.manualSatisfactionAllowed && item.manuallySatisfiedAt) return ['REOPEN'];
   return [];
 }
 
-function formCapture(kind: ReadinessFormKind, contextVersion: string, label: string, entered: ReadinessFormValues = {}): AskCaptureRequest {
+/** Home Records the whole household can see: a readiness case is shared, so an owner-only record is never offered, even to an owner. */
+async function evidenceOptions(propertyId: string, role: HouseholdRole) {
+  const inventory = await listPropertyDocuments({ propertyId, role });
+  const candidates: NegotiationAttachCandidate[] = inventory.items.filter((entry) => entry.source === 'HOME_RECORD').map((entry) => ({
+    id: entry.id, title: entry.title, kind: entry.kind, kindLabel: entry.kindLabel, addedAt: entry.addedAt, sensitivity: entry.sensitivity, visibility: entry.visibility, lifecycle: entry.lifecycle,
+  }));
+  return offerableNegotiationDocuments(candidates, new Set());
+}
+const optionLabel = (option: NegotiationAttachCandidate) => `${option.title} (${option.kindLabel}, added ${humanDate(option.addedAt) ?? 'earlier'})`;
+
+function formCapture(kind: ReadinessFormKind, contextVersion: string, label: string, entered: ReadinessFormValues = {}, options: NegotiationAttachCandidate[] = []): AskCaptureRequest {
   const clean = Object.fromEntries(Object.entries(entered).filter(([, v]) => v !== null && v !== undefined && v !== ''));
   const text = (key: string, name: string, help: string, max = 5000) => ({ key, label: name, helpText: help, required: true, inputSchema: { type: 'LONG_TEXT' as const, maxLength: max } });
   const specs: Record<ReadinessFormKind, { title: string; question: string; helpText: string; fields: unknown[] }> = {
@@ -76,6 +90,14 @@ function formCapture(kind: ReadinessFormKind, contextVersion: string, label: str
     REOPEN: {
       title: `Reopen: ${label}`, question: 'What changed?',
       helpText: 'The item goes back to open and its evidence no longer counts until it is satisfied again.', fields: [text('notes', 'What changed', 'It is kept with the item.')],
+    },
+    SATISFY: {
+      title: `Mark satisfied: ${label}`, question: 'Which document shows this is done, and what did you check?',
+      helpText: 'Only documents your whole household can already see are listed, because everyone on this case can see its evidence. Nothing is saved until you confirm, and the document is not read or verified.',
+      fields: [
+        { key: 'evidenceDocumentId', label: 'Document', required: true, inputSchema: { type: 'SINGLE_SELECT' as const, options: options.map((option) => ({ label: optionLabel(option), value: option.id })) } },
+        text('notes', 'What you checked', 'It is kept with the item.'),
+      ],
     },
   };
   const spec = specs[kind];
@@ -124,15 +146,28 @@ export async function readinessCommandResult(userId: string, propertyId: string,
   if (!readinessItemKinds(item).includes(kind)) return unavailable('RENOVATION_READINESS_STEP_NOT_AVAILABLE', 'That step is not available now', 'The item is not in a state that allows this, or its rules do not permit it. Nothing has changed.');
   const contextVersion = itemVersion(kind, item);
   const formKind = kind as ReadinessFormKind;
+  const evidence = kind === 'SATISFY' ? await evidenceOptions(propertyId, access.role) : null;
+  if (evidence && !evidence.options.length) {
+    return unavailable('RENOVATION_READINESS_NO_EVIDENCE_RECORD', 'There is no document to attach yet',
+      `A readiness item is satisfied with a document on file that your whole household can see. ${evidence.excludedPrivate ? `${evidence.excludedPrivate} owner-only record${evidence.excludedPrivate === 1 ? ' is' : 's are'} not offered. ` : ''}Add the document to your home records first. Nothing has changed.`);
+  }
   if (!supplied) {
     return {
       status: 'NEEDS_CONTEXT', reasonCode: `RENOVATION_READINESS_${kind}_INPUT_REQUIRED`, contextVersion,
       parameters: { readinessCommandLaunch: { kind, entityId: item.id, sourceExecutionId: launch.sourceExecutionId } },
       blocks: [{ type: 'SUMMARY', id: 'readiness-step-input', title: item.title, body: `${item.reason ?? 'This item is open.'} Nothing has been saved yet.`, tone: 'DEFAULT', actions: [] }],
-      captureRequests: [formCapture(formKind, contextVersion, item.title)], suggestions: [],
+      captureRequests: [formCapture(formKind, contextVersion, item.title, {}, evidence?.options ?? [])], suggestions: [],
     };
   }
-  const spec = kind === 'ACKNOWLEDGE'
+  const chosen = evidence ? evidence.options.find((option) => option.id === supplied.evidenceDocumentId) ?? null : null;
+  if (evidence && !chosen) return unavailable('RENOVATION_READINESS_EVIDENCE_NOT_OFFERED', 'Choose a document from the list', 'That document is not one your whole household can see. Nothing has changed.');
+  const spec = kind === 'SATISFY' && chosen
+    ? {
+      title: `Mark "${item.title}" satisfied?`, confirmLabel: 'Mark it satisfied',
+      description: `This records that you checked this item against the document below, which everyone on this case can see. Ask does not read or verify the file. ${BOUNDARY}`,
+      fields: [{ label: 'Item', value: item.title }, { label: 'Document', value: chosen.title }, { label: 'Kind', value: chosen.kindLabel }, { label: 'What you checked', value: String(supplied.notes) }],
+    }
+    : kind === 'ACKNOWLEDGE'
     ? {
       title: `Acknowledge the risk of "${item.title}"?`, confirmLabel: 'Acknowledge the risk',
       description: `This records that you are proceeding with this item still open and accept the risk. It does not satisfy the item, and ${BOUNDARY.charAt(0).toLowerCase()}${BOUNDARY.slice(1)}`,
@@ -152,7 +187,7 @@ export async function readinessCommandResult(userId: string, propertyId: string,
     parameters: { readinessForm: supplied, readinessCommand: { kind, entityId: item.id }, readinessContextVersion: contextVersion, ...base },
     blocks: [{ type: 'SUMMARY', id: 'readiness-step-review', title: spec.title, body: 'Nothing is saved until you confirm.', tone: kind === 'ACKNOWLEDGE' ? 'CAUTION' : 'DEFAULT', actions: [] }],
     confirmation: confirmation(`${kind.toLowerCase()}-${sha(`${item.id}:${JSON.stringify(supplied)}`).slice(0, 12)}`, spec),
-    captureRequests: [formCapture(formKind, contextVersion, item.title, supplied)], suggestions: [],
+    captureRequests: [formCapture(formKind, contextVersion, item.title, supplied, evidence?.options ?? [])], suggestions: [],
   };
 }
 
@@ -189,12 +224,16 @@ async function confirmReadinessCommand(ctx: ConfirmCapabilityContext): Promise<C
       const formKind = kind as ReadinessFormKind;
       const checked = parseReadinessFormAnswer(formKind, parameters.readinessForm);
       if (!checked.success) throw stale('The details to save are invalid.');
+      if (kind === 'SATISFY') {
+        const offered = await evidenceOptions(propertyId, ctx.access.role);
+        if (!offered.options.some((option) => option.id === checked.data.evidenceDocumentId)) throw stale('That document is no longer one your whole household can see. Review it again and try again.');
+      }
       const input = readinessServiceInput(formKind, checked.data);
-      if (kind === 'REOPEN') await updateReadinessItem(propertyId, item.renovationCaseId, item.id, userId, input);
+      if (kind === 'REOPEN' || kind === 'SATISFY') await updateReadinessItem(propertyId, item.renovationCaseId, item.id, userId, input);
       else await governOverride(propertyId, item.renovationCaseId, item.id, userId, input);
       artifactId = item.id;
-      title = kind === 'ACKNOWLEDGE' ? 'Risk acknowledged' : kind === 'REVOKE' ? 'Acknowledgement withdrawn' : 'Item reopened';
-      description = kind === 'ACKNOWLEDGE' ? 'It is recorded with your reason. The item is still open.' : kind === 'REVOKE' ? 'The item is an open blocker again.' : 'The item is open again.';
+      title = kind === 'ACKNOWLEDGE' ? 'Risk acknowledged' : kind === 'REVOKE' ? 'Acknowledgement withdrawn' : kind === 'SATISFY' ? 'Item marked satisfied' : 'Item reopened';
+      description = kind === 'ACKNOWLEDGE' ? 'It is recorded with your reason. The item is still open.' : kind === 'REVOKE' ? 'The item is an open blocker again.' : kind === 'SATISFY' ? 'It is recorded with the document you chose. Nothing was read or verified.' : 'The item is open again.';
     }
   } catch (error) {
     // The service's refusals (APIError) are written for a person; Ask codes pass through.

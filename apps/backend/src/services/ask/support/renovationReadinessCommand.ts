@@ -3,8 +3,8 @@
 //
 // What a household can do to a readiness item: refresh the whole evaluation, acknowledge an open blocker that the rules allow to be overridden (an owner's
 // decision, with a reason and an explicit risk acknowledgement), revoke that acknowledgement, or reopen an item that was manually marked satisfied. Marking an
-// item satisfied needs an evidence document from the property's record; that stays on the page. Authority, safety and source-controlled blockers cannot be
-// overridden, and the service says so.
+// item satisfied needs an evidence document from the property's record (FRD v1.358: a Home Record the whole household can see, picked from a list, since the
+// case is shared). Authority, safety and source-controlled blockers cannot be overridden, and the service says so.
 import { z } from 'zod';
 
 export const RENOVATION_READINESS_CASE_ENTITY_TYPE = 'RENOVATION_READINESS_CASE';
@@ -14,10 +14,11 @@ export const READINESS_COMMAND_MESSAGES = {
   ACKNOWLEDGE: 'Acknowledge the risk of this open readiness item.',
   REVOKE: 'Withdraw the acknowledgement on this readiness item.',
   REOPEN: 'Reopen this readiness item.',
+  SATISFY: 'Mark this readiness item satisfied with a document.',
 } as const;
 export type ReadinessCommandKind = keyof typeof READINESS_COMMAND_MESSAGES;
 export const READINESS_COMMAND_ACTION_IDS = {
-  REFRESH: 'renovation-readiness-refresh', ACKNOWLEDGE: 'renovation-readiness-acknowledge', REVOKE: 'renovation-readiness-revoke', REOPEN: 'renovation-readiness-reopen',
+  REFRESH: 'renovation-readiness-refresh', ACKNOWLEDGE: 'renovation-readiness-acknowledge', REVOKE: 'renovation-readiness-revoke', REOPEN: 'renovation-readiness-reopen', SATISFY: 'renovation-readiness-satisfy',
 } as const;
 export const readinessCommandKindFromMessage = (message: string): ReadinessCommandKind | null =>
   ((Object.entries(READINESS_COMMAND_MESSAGES) as Array<[ReadinessCommandKind, string]>).find(([, value]) => value === message)?.[0]) ?? null;
@@ -25,9 +26,9 @@ export const readinessCommandEntityType = (kind: ReadinessCommandKind) => (kind 
 /** Acknowledging a risk is an owner's decision; the route is owner-only. */
 export const readinessKindNeedsOwner = (kind: ReadinessCommandKind) => kind === 'ACKNOWLEDGE' || kind === 'REVOKE';
 
-export type ReadinessFormKind = 'ACKNOWLEDGE' | 'REVOKE' | 'REOPEN';
+export type ReadinessFormKind = 'ACKNOWLEDGE' | 'REVOKE' | 'REOPEN' | 'SATISFY';
 export const READINESS_FORM_CAPTURE_KEYS: Record<ReadinessFormKind, string> = {
-  ACKNOWLEDGE: 'RENOVATION_READINESS_ACKNOWLEDGE', REVOKE: 'RENOVATION_READINESS_REVOKE', REOPEN: 'RENOVATION_READINESS_REOPEN',
+  ACKNOWLEDGE: 'RENOVATION_READINESS_ACKNOWLEDGE', REVOKE: 'RENOVATION_READINESS_REVOKE', REOPEN: 'RENOVATION_READINESS_REOPEN', SATISFY: 'RENOVATION_READINESS_SATISFY',
 };
 export const readinessFormKindFromCaptureKey = (key: string): ReadinessFormKind | null =>
   ((Object.entries(READINESS_FORM_CAPTURE_KEYS) as Array<[ReadinessFormKind, string]>).find(([, value]) => value === key)?.[0]) ?? null;
@@ -36,6 +37,7 @@ export const READINESS_FORM_SCHEMAS = {
   ACKNOWLEDGE: z.object({ reason: z.string().trim().min(20).max(5000), riskAcknowledged: z.literal('YES') }).strict(),
   REVOKE: z.object({ reason: z.string().trim().min(10).max(5000) }).strict(),
   REOPEN: z.object({ notes: z.string().trim().min(1).max(5000) }).strict(),
+  SATISFY: z.object({ evidenceDocumentId: z.string().trim().min(1).max(160), notes: z.string().trim().min(1).max(5000) }).strict(),
 } as const;
 export type ReadinessFormValues = Record<string, unknown>;
 export function parseReadinessFormAnswer(kind: ReadinessFormKind, answer: unknown): { success: true; data: ReadinessFormValues } | { success: false } {
@@ -47,5 +49,6 @@ export function parseReadinessFormAnswer(kind: ReadinessFormKind, answer: unknow
 export function readinessServiceInput(kind: ReadinessFormKind, form: ReadinessFormValues) {
   if (kind === 'ACKNOWLEDGE') return { action: 'ACKNOWLEDGE' as const, reason: String(form.reason), riskAcknowledged: true as const };
   if (kind === 'REVOKE') return { action: 'REVOKE' as const, reason: String(form.reason) };
+  if (kind === 'SATISFY') return { status: 'SATISFIED' as const, evidenceDocumentId: String(form.evidenceDocumentId), satisfactionNotes: String(form.notes) };
   return { status: 'OPEN' as const, satisfactionNotes: String(form.notes) };
 }

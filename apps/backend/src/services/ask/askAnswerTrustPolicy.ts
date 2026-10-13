@@ -285,7 +285,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   QUOTE_COMPARISON_COMMAND: new Set(['quote-comparison-back']),
   // The readiness answer's empty state offers Start a renovation case to a contributor or owner (a SUMMARY action, so a missing id is stripped).
   // Plus the readiness controls (FRD v1.324): refresh, acknowledge or withdraw the risk of an open item, reopen a satisfied one.
-  RENOVATION_PERMIT_READINESS: new Set(['renovation-case-start', 'renovation-readiness-refresh', 'renovation-readiness-acknowledge', 'renovation-readiness-revoke', 'renovation-readiness-reopen']),
+  RENOVATION_PERMIT_READINESS: new Set(['renovation-case-start', 'renovation-readiness-refresh', 'renovation-readiness-acknowledge', 'renovation-readiness-revoke', 'renovation-readiness-reopen', 'renovation-readiness-satisfy']),
   // The receipt of saved details offers the read of that review and a run of its analysis.
   NEGOTIATION_SHIELD_CASE_UPDATE: new Set(['negotiation-shield-review', 'negotiation-shield-analyze']),
   PROPERTY_BRIEFS_LIST: new Set(['property-brief-preview', 'property-brief-prepare', 'property-brief-share', 'property-brief-republish', 'property-brief-test-share', 'property-brief-revoke-share']),
