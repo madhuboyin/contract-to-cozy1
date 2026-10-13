@@ -216,7 +216,7 @@ Project Tracker appeared in the original P0 list as "lists projects." It is remo
 | Renovation Risk Advisor | Partial: refresh, acknowledge, withdraw and reopen implemented (FRD v1.324) | Mark satisfied with evidence; project handoff; compliance records/conditions; HOA document reviews | Not browser- or database-verified |
 | Status Board | Partial: refresh and item corrections implemented (FRD v1.319) | Filters and grouping; hiding the page's refresh and override controls from viewers | Not browser- or database-verified |
 | Home Risk Replay | Partial: record and update what was observed implemented (FRD v1.325) | Evidence linking (needs a record picker); date and hazard-type filters | Not browser- or database-verified |
-| Neighborhood Change Radar | Residual gap | Filters; source detail; tracked areas/preferences; relevant follow-ups | Not re-verified |
+| Neighborhood Change Radar | Partial: follow, dismiss and not relevant implemented (FRD v1.326) | Filters and event detail (read presentation); viewer-capable Ask commands (framework) | Not browser- or database-verified |
 | Home Briefing / Home Gazette | Residual gap | Briefing preferences, editions, saved state and complete article actions | Not re-verified |
 | Appliance Oracle | Decided boundary (FRD v1.70, option A, 2026-09-24) | Calculated risk is shown; model-generated replacement picks are excluded by decision, with tests that fail on a model call from Ask | Not re-verified; decision cited from the FRD |
 | Maintenance Budget Planner | AI tips: Decided boundary (FRD v1.70). Editable deterministic assumptions: Residual gap | Forecast exists; AI tips are excluded by the v1.70 decision; whether editable deterministic assumptions are separable from it has not been checked | Not re-verified |

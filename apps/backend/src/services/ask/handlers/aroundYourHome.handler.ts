@@ -6,6 +6,10 @@ import { type AskOperationResult } from '../askOperationRegistry';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { getAroundYourHome } from '../../../propertyIntelligence/aroundYourHome.service';
 import { humanDate, readableCode } from '../askFormatting';
+import { ensurePropertyAccess } from '../askHandlerSupport';
+import {
+  NEIGHBORHOOD_COMMAND_ACTION_IDS, NEIGHBORHOOD_COMMAND_MESSAGES, NEIGHBORHOOD_KIND_LABELS, NEIGHBORHOOD_RECORD_ENTITY_TYPE, neighborhoodKindsFor,
+} from '../support/neighborhoodInteractionCommand';
 
 // Around Your Home capability-card slice (FRD v1.49): the second new operation for a capability with none. Reads
 // getAroundYourHome, the same call the page's route makes, in the server's environment as that route does. Read-only.
@@ -14,7 +18,7 @@ const NEIGHBORHOOD_FAMILY_LABELS: Record<string, string> = {
   PLANNING: 'Planning and development', INFRASTRUCTURE: 'Infrastructure', LAND_USE: 'Land use', FLOOD_MAP: 'Flood maps', SCHOOL: 'Schools',
 };
 
-export function neighborhoodChangeFeedFromView(view: AroundYourHomeView, propertyId: string): AskOperationResult {
+export function neighborhoodChangeFeedFromView(view: AroundYourHomeView, propertyId: string, canChange = false): AskOperationResult {
   // The page ranks dismissed and not-relevant items last; Ask counts them rather than listing them.
   const set = (item: AroundYourHomeView['items'][number]) => item.interaction.disposition === 'DISMISSED' || item.interaction.disposition === 'NOT_RELEVANT';
   const active = view.items.filter((item) => !set(item));
@@ -59,6 +63,12 @@ export function neighborhoodChangeFeedFromView(view: AroundYourHomeView, propert
             ],
             status: String(item.observation.lifecycleStatus),
             href: null,
+            // FRD v1.326: a person's own reading of the change (stored per user), so any member may set it.
+            entityType: NEIGHBORHOOD_RECORD_ENTITY_TYPE,
+            actions: (canChange ? neighborhoodKindsFor(String(item.interaction.disposition)) : []).map((kind) => ({
+              id: NEIGHBORHOOD_COMMAND_ACTION_IDS[kind], label: kind === 'FOLLOW' ? 'Follow' : kind === 'DISMISS' ? 'Dismiss' : 'Not relevant', message: NEIGHBORHOOD_COMMAND_MESSAGES[kind],
+              operationId: 'NEIGHBORHOOD_INTERACTION_COMMAND' as const, interactionType: 'MUTATE_RECORD' as const, style: kind === 'FOLLOW' ? 'SECONDARY' as const : 'QUIET' as const,
+            })),
           })),
         };
       }),
@@ -84,8 +94,11 @@ export function neighborhoodChangeFeedFromView(view: AroundYourHomeView, propert
   };
 }
 
-async function neighborhoodChangeFeedResult(userId: string, propertyId: string): Promise<AskOperationResult> {
-  return neighborhoodChangeFeedFromView(await getAroundYourHome(propertyId, userId, process.env.NODE_ENV ?? 'development'), propertyId);
+async function neighborhoodChangeFeedResult(userId: string, propertyId: string, canChange: boolean): Promise<AskOperationResult> {
+  return neighborhoodChangeFeedFromView(await getAroundYourHome(propertyId, userId, process.env.NODE_ENV ?? 'development'), propertyId, canChange);
 }
 
-registerCapabilityHandler('neighborhood-change.feed', async (envelope) => neighborhoodChangeFeedResult(envelope.userId, envelope.propertyId!));
+registerCapabilityHandler('neighborhood-change.feed', async (envelope, deps) => {
+  const access = deps.propertyAccess ?? await ensurePropertyAccess(envelope.userId, envelope.propertyId!);
+  return neighborhoodChangeFeedResult(envelope.userId, envelope.propertyId!, access.role !== 'VIEWER');
+});

@@ -182,6 +182,9 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   NEGOTIATION_SHIELD_CASE_ATTACH: new Set(['negotiation-shield-review', 'negotiation-shield-analyze']),
   // The readiness answer's empty state offers the start; the receipt of a started case offers that case's readiness check.
   RENOVATION_CASE_START: new Set(['renovation-case-readiness']),
+  // Follow, dismiss or mark not relevant a local change (register P1 Neighborhood Change Radar). A person's own reading, stored per user and match, so a viewer may set it. Confirmation-gated, declared-action only.
+  NEIGHBORHOOD_CHANGE_FEED: new Set(['neighborhood-follow', 'neighborhood-dismiss', 'neighborhood-not-relevant']),
+  NEIGHBORHOOD_INTERACTION_COMMAND: new Set(['neighborhood-back']),
   // Record what the household observed after a matched hazard event (register P1 Home Risk Replay). Confirmation-gated, declared-action only; behind the route's reviewed-source-coverage gate.
   PAST_HAZARD_EXPOSURE: new Set(['past-hazard-record-outcome']),
   PAST_HAZARD_OUTCOME_COMMAND: new Set(['past-hazard-back']),
