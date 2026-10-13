@@ -42,6 +42,7 @@ type FieldEvidenceRow = {
   sourceDataSourceId: string | null;
   sourceExternalId: string | null;
   sourceUrl: string | null;
+  sourceRemovedAt?: Date | null;
 };
 
 function toObservation(row: FieldEvidenceRow): PropertyTaxFieldObservation {
@@ -58,6 +59,7 @@ function toObservation(row: FieldEvidenceRow): PropertyTaxFieldObservation {
     sourceDataSourceId: row.sourceDataSourceId,
     sourceExternalId: row.sourceExternalId,
     sourceUrl: row.sourceUrl,
+    sourceRemovedAt: row.sourceRemovedAt?.toISOString() ?? null,
   };
 }
 
@@ -116,6 +118,7 @@ function serializeRecord(record: {
   radarProviderEventId?: string | null;
   sourceExternalId: string | null;
   sourceUrl: string | null;
+  sourceRemovedAt?: Date | null;
   dataSource: { id: string; name: string } | null;
   documents: Array<{
     role: string;
@@ -126,7 +129,9 @@ function serializeRecord(record: {
     id: record.id,
     taxYear: record.taxYear,
     sourceType: record.sourceType,
-    confidence: record.confidence,
+    // Never presented above MEDIUM once the source document is gone (owner ruling D-T5); the stored value is unchanged.
+    confidence: record.sourceType === 'DOCUMENT' && record.sourceRemovedAt && (record.confidence === 'HIGH' || record.confidence === 'VERIFIED') ? 'MEDIUM' : record.confidence,
+    sourceRemovedAt: record.sourceRemovedAt?.toISOString() ?? null,
     status: record.status,
     observedAt: record.observedAt.toISOString(),
     stage: record.stage ?? null,

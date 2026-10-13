@@ -4,6 +4,7 @@ import { propertyTaxRecordService } from './propertyTaxRecord.service';
 import { propertyTaxRuleService } from './propertyTaxRule.service';
 import { assertHttpUrl } from './propertyTaxUrl';
 import { assertEvidenceRecordEligible } from './propertyTaxEvidenceSource';
+import { linkPropertyTaxEntity, unlinkPropertyTaxEntity } from './propertyTaxRecordLinks';
 import { assertPropertyDocumentsExist } from '../propertyDocuments/propertyDocumentInventory.service';
 
 type AppealGround = 'ASSESSED_VALUE' | 'TAX_CLASS' | 'EXEMPTION';
@@ -117,15 +118,18 @@ export class PropertyTaxAppealReadinessService {
       throw new Error('The selected appeal ground is not covered by the reviewed rule');
     }
     assertHttpUrl(input.sourceUrl, 'The source link must be an http or https address');
+    let sourceVersionId: string | null = null;
     if (input.supportingDocumentId) {
       // Owner ruling D-T2: an active, household-visible Home Record with a clean current version and a record type that can support an appeal.
-      await assertEvidenceRecordEligible(
+      sourceVersionId = await assertEvidenceRecordEligible(
         input.propertyId, input.supportingDocumentId,
         'Supporting document must be an active Home Record, visible to the whole household, with a clean scan',
       );
     }
     const now = new Date();
-    return this.db.propertyTaxAppealEvidence.upsert({
+    // The evidence row and the link that makes it show in the record's deletion impact commit together (design §3.3).
+    return this.db.$transaction(async (tx: any) => {
+    const evidence = await tx.propertyTaxAppealEvidence.upsert({
       where: {
         propertyId_evidenceKey: {
           propertyId: input.propertyId,
@@ -155,9 +159,20 @@ export class PropertyTaxAppealReadinessService {
         factsJson: json(input.facts),
         sourceUrl: input.sourceUrl?.trim() || null,
         supportingDocumentId: input.supportingDocumentId ?? null,
+        // A new source is a present source, so an earlier "source removed" marker no longer applies.
+        sourceRemovedAt: null,
         confirmedAt: now,
         confirmedByUserId: input.userId,
       },
+    });
+    await unlinkPropertyTaxEntity(tx, 'PROPERTY_TAX_APPEAL_EVIDENCE', evidence.id, input.supportingDocumentId ?? null);
+    if (input.supportingDocumentId) {
+      await linkPropertyTaxEntity(tx, {
+        recordId: input.supportingDocumentId, versionId: sourceVersionId, entityType: 'PROPERTY_TAX_APPEAL_EVIDENCE', entityId: evidence.id,
+        purpose: 'EVIDENCE', label: input.title.trim(), userId: input.userId,
+      });
+    }
+    return evidence;
     });
   }
 
@@ -649,6 +664,8 @@ export class PropertyTaxAppealReadinessService {
         facts: row.factsJson,
         sourceUrl: row.sourceUrl,
         supportingDocumentId: row.supportingDocumentId,
+        // Set when the source document was permanently deleted; the homeowner's statement stays but is unsourced.
+        sourceRemovedAt: row.sourceRemovedAt ? row.sourceRemovedAt.toISOString() : null,
         confirmedAt: row.confirmedAt.toISOString(),
       })),
       comparables: comparableResults,

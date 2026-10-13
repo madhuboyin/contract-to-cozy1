@@ -10,6 +10,7 @@ import { prisma } from '../lib/prisma';
 import { deleteObject } from '../storage/deleteObject';
 import { logger } from '../lib/logger';
 import { removeQuoteSourceContent } from '@worker-shared/services/quoteSourcePurge';
+import { removePropertyTaxSourceContent } from '@worker-shared/services/propertyTax/propertyTaxSourcePurge';
 
 const CLEAN_INTERVAL_MS = Number(process.env.PROPERTY_RECORD_PURGE_CLEAN_MS || 60_000);
 
@@ -65,6 +66,8 @@ export async function propertyRecordPurgeTick(): Promise<void> {
       // version are already gone by this point.
       await prisma.$transaction(async (tx) => {
         await removeQuoteSourceContent(tx, job.recordId);
+        // Confirmed property tax values stay and are marked source-removed (owner ruling D-T5); it runs before the delete, which nulls their references.
+        await removePropertyTaxSourceContent(tx, job.recordId);
         await tx.propertyRecord.delete({ where: { id: job.recordId } });
       });
 

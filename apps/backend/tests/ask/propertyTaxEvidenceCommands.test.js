@@ -61,7 +61,8 @@ test('the source link is an http or https address, parsed rather than pattern-ma
 
 test('the canonical service refuses a non-web link before any write, for evidence and for a comparable', async () => {
   let writes = 0;
-  const db = { propertyTaxAppealEvidence: { upsert: async () => { writes += 1; return {}; } }, propertyTaxAppealComparable: { upsert: async () => { writes += 1; return {}; } } };
+  const db = { propertyTaxAppealEvidence: { upsert: async () => { writes += 1; return { id: 'ev-1' }; } }, propertyTaxAppealComparable: { upsert: async () => { writes += 1; return {}; } },
+    propertyRecordLink: { upsert: async () => ({}), deleteMany: async () => ({}) }, $transaction: async (callback) => callback(db) };
   const rules = { getForProperty: async () => ({ coverage: 'REVIEWED', profile: { id: 'rule-1', appealGrounds: { grounds: [{ code: 'TAX_CLASS' }] } } }) };
   const service = new PropertyTaxAppealReadinessService(db, rules, {});
   await assert.rejects(() => service.upsertEvidence({ propertyId: 'p', userId: 'u', role: 'OWNER', evidenceKey: 'k', ground: 'TAX_CLASS', type: 'FACTUAL_ERROR', title: 'Title', facts: {}, sourceUrl: 'javascript:alert(1)' }), /http or https/);
@@ -191,16 +192,23 @@ test('the canonical service uses the same eligibility for a supporting document,
   const saved = prisma.propertyRecord;
   let writes = 0;
   const rules = { getForProperty: async () => ({ coverage: 'REVIEWED', profile: { id: 'rule-1', appealGrounds: { grounds: [{ code: 'TAX_CLASS' }] } } }) };
-  const db = { propertyTaxAppealEvidence: { upsert: async (args) => { writes += 1; return args; } } };
+  const links = [];
+  const db = { propertyTaxAppealEvidence: { upsert: async (args) => { writes += 1; return { id: 'ev-1', ...args }; } },
+    propertyRecordLink: { upsert: async (args) => { links.push(args.create); return {}; }, deleteMany: async (args) => { links.push({ deleted: args.where }); return {}; } },
+    $transaction: async (callback) => callback(db) };
   const service = new PropertyTaxAppealReadinessService(db, rules, {});
   const input = { propertyId: 'p', userId: 'u', role: 'OWNER', evidenceKey: 'k', ground: 'TAX_CLASS', type: 'FACTUAL_ERROR', title: 'Title', facts: {}, supportingDocumentId: 'rec-1' };
   try {
     prisma.propertyRecord = { findFirst: async () => null };
     await assert.rejects(() => service.upsertEvidence(input), /whole household/);
     assert.equal(writes, 0);
-    prisma.propertyRecord = { findFirst: async () => ({ id: 'rec-1' }) };
+    prisma.propertyRecord = { findFirst: async () => ({ id: 'rec-1', currentVersionId: 'ver-1' }) };
     await service.upsertEvidence(input);
     assert.equal(writes, 1);
+    // The record shows the evidence in its deletion impact, bound to the exact version it was checked against (design §3.3).
+    const created = links.find((link) => link.entityType);
+    assert.deepEqual([created.recordId, created.versionId, created.entityType, created.entityId, created.purpose], ['rec-1', 'ver-1', 'PROPERTY_TAX_APPEAL_EVIDENCE', 'ev-1', 'EVIDENCE']);
+    assert.deepEqual(links.find((link) => link.deleted).deleted, { entityType: 'PROPERTY_TAX_APPEAL_EVIDENCE', entityId: 'ev-1', recordId: { not: 'rec-1' } });
   } finally { prisma.propertyRecord = saved; }
 });
 

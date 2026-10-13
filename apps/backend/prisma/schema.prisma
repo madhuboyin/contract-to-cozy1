@@ -2250,6 +2250,12 @@ enum PropertyRecordLinkEntityType {
   HOME_SAVINGS_OPPORTUNITY_OUTCOME
   // A Quote Comparison proposal imported from this record: deleting the record shows up in its deletion impact (import design §3.5).
   SERVICE_QUOTE
+  // Property tax records that depend on this record as their source (design docs/architecture/PROPERTY_TAX_EVIDENCE_AND_INTAKE_IN_ASK_DESIGN.md
+  // section 3.3): a document intake, the assessment and bill it confirmed, and appeal evidence that cites it. Deleting the record shows them in its impact.
+  PROPERTY_TAX_INTAKE
+  PROPERTY_TAX_ASSESSMENT
+  PROPERTY_TAX_BILL
+  PROPERTY_TAX_APPEAL_EVIDENCE
   OTHER
 }
 
@@ -23013,6 +23019,9 @@ model PropertyTaxAppealEvidence {
   factsJson           Json
   sourceUrl           String?
   supportingDocumentId String?
+  // Set by the purge worker when the source document was permanently deleted. The homeowner's confirmed value stays and is presented as
+  // "homeowner confirmed; source document removed", no longer as document-backed high confidence.
+  sourceRemovedAt     DateTime?
   confirmedAt         DateTime
   confirmedByUserId   String
   createdAt           DateTime @default(now())
@@ -23253,6 +23262,9 @@ model PropertyTaxAssessmentRecord {
   capsJson              Json?
   sourceExternalId     String?
   sourceUrl            String?
+  // Set by the purge worker when the source document was permanently deleted. The homeowner's confirmed value stays and is presented as
+  // "homeowner confirmed; source document removed", no longer as document-backed high confidence.
+  sourceRemovedAt      DateTime?
   rawDataJson          Json?
   supersededById       String?
   createdAt            DateTime @default(now())
@@ -23304,6 +23316,9 @@ model PropertyTaxBillRecord {
   dueDatesJson         Json?
   sourceExternalId     String?
   sourceUrl            String?
+  // Set by the purge worker when the source document was permanently deleted. The homeowner's confirmed value stays and is presented as
+  // "homeowner confirmed; source document removed", no longer as document-backed high confidence.
+  sourceRemovedAt      DateTime?
   rawDataJson          Json?
   supersededById       String?
   createdAt            DateTime @default(now())
@@ -23348,6 +23363,9 @@ model PropertyTaxFieldEvidence {
   sourceDataSourceId   String?
   sourceExternalId     String?
   sourceUrl            String?
+  // Set by the purge worker when the source document was permanently deleted. The homeowner's confirmed value stays and is presented as
+  // "homeowner confirmed; source document removed", no longer as document-backed high confidence.
+  sourceRemovedAt      DateTime?
   observedAt           DateTime @default(now())
   effectiveAt          DateTime?
   confirmedAt          DateTime?

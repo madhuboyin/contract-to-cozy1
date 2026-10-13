@@ -41,11 +41,23 @@ function isActive(observation: PropertyTaxFieldObservation): boolean {
     && observation.reviewStatus !== 'REJECTED';
 }
 
+/**
+ * Confidence is what was true when the value was confirmed against a document. Once that document is permanently deleted it is no longer backed by
+ * anything a person can open, so it is never presented above MEDIUM (owner ruling D-T5). The stored value is not changed.
+ */
+export function effectiveConfidence(observation: PropertyTaxFieldObservation): PropertyTaxEvidenceConfidence {
+  if (observation.sourceType === 'DOCUMENT' && observation.sourceRemovedAt
+    && CONFIDENCE_RANK[observation.confidence] > CONFIDENCE_RANK.MEDIUM) return 'MEDIUM';
+  return observation.confidence;
+}
+
 function observationCanonicalState(
   observation: PropertyTaxFieldObservation,
 ): PropertyTaxCanonicalState {
   if (observation.sourceType === 'OFFICIAL_SOURCE') return 'OFFICIAL';
   if (observation.sourceType === 'HOMEOWNER_REPORTED') return 'HOMEOWNER_REPORTED';
+  if (observation.sourceRemovedAt
+    && (observation.reviewStatus === 'VERIFIED' || observation.reviewStatus === 'HOMEOWNER_CONFIRMED')) return 'HOMEOWNER_CONFIRMED_SOURCE_REMOVED';
   return observation.reviewStatus === 'VERIFIED'
     || observation.reviewStatus === 'HOMEOWNER_CONFIRMED'
     ? 'DOCUMENT_CONFIRMED'
@@ -56,7 +68,7 @@ function strongestObservation(
   observations: PropertyTaxFieldObservation[],
 ): PropertyTaxFieldObservation {
   return [...observations].sort((left, right) => {
-    const confidence = CONFIDENCE_RANK[right.confidence] - CONFIDENCE_RANK[left.confidence];
+    const confidence = CONFIDENCE_RANK[effectiveConfidence(right)] - CONFIDENCE_RANK[effectiveConfidence(left)];
     if (confidence !== 0) return confidence;
     const source = SOURCE_RANK[right.sourceType] - SOURCE_RANK[left.sourceType];
     if (source !== 0) return source;
@@ -108,7 +120,7 @@ export function reconcilePropertyTaxField(
     fieldKey,
     state: 'KNOWN',
     value: strongest.value,
-    confidence: strongest.confidence,
+    confidence: effectiveConfidence(strongest),
     canonicalState: observationCanonicalState(strongest),
     observations: active,
   };

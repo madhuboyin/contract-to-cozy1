@@ -2,6 +2,8 @@ export type PropertyTaxCanonicalState =
   | 'UNKNOWN'
   | 'OFFICIAL'
   | 'DOCUMENT_CONFIRMED'
+  // The homeowner confirmed it from a document that has since been permanently deleted (owner ruling D-T5).
+  | 'HOMEOWNER_CONFIRMED_SOURCE_REMOVED'
   | 'DOCUMENT_UNCONFIRMED'
   | 'HOMEOWNER_REPORTED'
   | 'MIXED'
@@ -40,6 +42,7 @@ export type PropertyTaxFieldObservation = {
   sourceDataSourceId: string | null;
   sourceExternalId: string | null;
   sourceUrl: string | null;
+  sourceRemovedAt: string | null;
 };
 
 export type ReconciledPropertyTaxField = {

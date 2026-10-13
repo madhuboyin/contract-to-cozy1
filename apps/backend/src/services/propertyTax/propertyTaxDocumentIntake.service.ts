@@ -4,6 +4,7 @@ import { prisma } from '../../lib/prisma';
 import { homeRecordsService } from '../homeRecords.service';
 import { propertyTaxFieldsToExtractionEnvelope } from './propertyTaxExtractionEnvelope.adapter';
 import { emitPropertyChangeWithTransaction } from '../../propertyChanges/propertyChange.service';
+import { linkPropertyTaxEntity } from './propertyTaxRecordLinks';
 
 export const PROPERTY_TAX_PRIVACY_CONSENT_VERSION = 'property-tax-vault-v1';
 
@@ -46,6 +47,12 @@ type FieldDecision = {
   status: 'CONFIRMED' | 'CORRECTED' | 'REJECTED';
   correctedValue?: unknown;
 };
+
+/** The exact version a link points at. Absent in a client that has no such record (a null link version is allowed). */
+async function currentVersionId(tx: any, recordId: string): Promise<string | null> {
+  const row = await tx.propertyRecord?.findUnique?.({ where: { id: recordId }, select: { currentVersionId: true } });
+  return row?.currentVersionId ?? null;
+}
 
 function inputJson(value: unknown): Prisma.InputJsonValue {
   return value as Prisma.InputJsonValue;
@@ -161,6 +168,7 @@ export class PropertyTaxDocumentIntakeService {
         visibility: 'HOUSEHOLD',
       }),
     private readonly emitChange = emitPropertyChangeWithTransaction,
+    private readonly linkEntity: typeof linkPropertyTaxEntity = linkPropertyTaxEntity,
   ) {}
 
   async createVaultIntake(input: {
@@ -201,7 +209,7 @@ export class PropertyTaxDocumentIntakeService {
     });
 
     return this.db.$transaction(async (tx) => {
-      return tx.propertyTaxDocumentIntake.create({
+      const intake = await tx.propertyTaxDocumentIntake.create({
         data: {
           propertyId: property.id,
           documentId: created.record.id,
@@ -214,6 +222,12 @@ export class PropertyTaxDocumentIntakeService {
         },
         include: { document: true, fields: true },
       });
+      // Deleting the record shows this intake in its deletion impact (design §3.3).
+      await this.linkEntity(tx, {
+        recordId: created.record.id, versionId: await currentVersionId(tx, created.record.id), entityType: 'PROPERTY_TAX_INTAKE',
+        entityId: intake.id, purpose: 'SOURCE', label: 'Property tax document intake', userId: input.userId,
+      });
+      return intake;
     });
   }
 
@@ -545,6 +559,16 @@ export class PropertyTaxDocumentIntakeService {
             role: 'TAX_BILL',
           },
         });
+      }
+
+      // The canonical records confirmed from this document depend on it (design §3.3): deleting it shows them in its impact.
+      const documentVersionId = await currentVersionId(tx, intake.documentId);
+      for (const [entityType, entityId, label] of [
+        ['PROPERTY_TAX_ASSESSMENT', assessmentRecordId, 'Property tax assessment'],
+        ['PROPERTY_TAX_BILL', billRecordId, 'Property tax bill'],
+      ] as const) {
+        if (!entityId) continue;
+        await this.linkEntity(tx, { recordId: intake.documentId, versionId: documentVersionId, entityType, entityId, purpose: 'SOURCE', label, userId });
       }
 
       for (const [fieldKey, value] of values) {

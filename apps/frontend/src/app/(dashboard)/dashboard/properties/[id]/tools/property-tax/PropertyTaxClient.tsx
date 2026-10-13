@@ -83,6 +83,7 @@ function canonicalStateLabel(state?: PropertyTaxCenterRecordDTO['state']) {
     UNKNOWN: 'No canonical record',
     OFFICIAL: 'Official source',
     DOCUMENT_CONFIRMED: 'Confirmed document',
+    HOMEOWNER_CONFIRMED_SOURCE_REMOVED: 'Homeowner confirmed; source document removed',
     DOCUMENT_UNCONFIRMED: 'Document needs review',
     HOMEOWNER_REPORTED: 'Homeowner reported',
     MIXED: 'Mixed sources',

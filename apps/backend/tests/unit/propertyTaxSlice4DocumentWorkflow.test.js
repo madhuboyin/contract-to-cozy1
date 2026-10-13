@@ -67,6 +67,8 @@ test('tax document upload creates a Home Record and records consent provenance',
       calls.createRecord.push(input);
       return { record: { id: 'record-1' } };
     },
+    undefined,
+    async (_tx, link) => { calls.links = [...(calls.links ?? []), link]; },
   );
 
   const result = await service.createVaultIntake({
@@ -90,6 +92,7 @@ test('tax document upload creates a Home Record and records consent provenance',
     PROPERTY_TAX_PRIVACY_CONSENT_VERSION,
   );
   assert.equal(calls.intake[0].data.documentId, 'record-1');
+  assert.deepEqual(calls.links.map((link) => [link.recordId, link.entityType, link.entityId, link.purpose]), [['record-1', 'PROPERTY_TAX_INTAKE', 'intake-1', 'SOURCE']]);
   assert.equal(calls.createRecord[0].role, 'OWNER');
   assert.equal(calls.createRecord[0].propertyId, 'property-1');
 });
@@ -251,6 +254,8 @@ test('homeowner confirmation creates document-backed canonical assessment and bi
     },
   }, undefined, async (_tx, input) => {
     calls.propertyChange = input;
+  }, async (_tx, link) => {
+    calls.links = [...(calls.links ?? []), link];
   });
 
   const result = await service.confirm(
@@ -276,6 +281,11 @@ test('homeowner confirmation creates document-backed canonical assessment and bi
   assert.equal(calls.document[0].data.verificationStatus, 'VERIFIED');
   assert.equal(result.confirmedAssessmentRecordId, 'assessment-1');
   assert.equal(result.confirmedBillRecordId, 'bill-1');
+  // The record the numbers came from shows them in its deletion impact (design §3.3).
+  assert.deepEqual(calls.links.map((link) => [link.recordId, link.entityType, link.entityId, link.purpose]), [
+    ['document-1', 'PROPERTY_TAX_ASSESSMENT', 'assessment-1', 'SOURCE'],
+    ['document-1', 'PROPERTY_TAX_BILL', 'bill-1', 'SOURCE'],
+  ]);
   assert.equal(calls.propertyChange.changeType, 'DOCUMENT_PROMOTED');
   assert.deepEqual(calls.propertyChange.changedFactKeys, [
     'financial.propertyTaxAssessment',

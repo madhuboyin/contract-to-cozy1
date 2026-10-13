@@ -34,8 +34,9 @@ export async function listEligibleEvidenceRecords(propertyId: string): Promise<{
   return { options: rows.map((row) => ({ ...row, isOther: row.recordType === 'OTHER' })), excludedPrivate };
 }
 
-/** Throws the caller's message unless the record is one that may back evidence for this property. */
-export async function assertEvidenceRecordEligible(propertyId: string, recordId: string, message = 'Supporting document is not eligible as appeal evidence'): Promise<void> {
-  const found = await prisma.propertyRecord.findFirst({ where: { ...eligibleWhere(propertyId), id: recordId }, select: { id: true } });
+/** Throws the caller's message unless the record is one that may back evidence for this property; returns the exact current version it was checked against. */
+export async function assertEvidenceRecordEligible(propertyId: string, recordId: string, message = 'Supporting document is not eligible as appeal evidence'): Promise<string | null> {
+  const found = await prisma.propertyRecord.findFirst({ where: { ...eligibleWhere(propertyId), id: recordId }, select: { id: true, currentVersionId: true } });
   if (!found) throw new Error(message);
+  return found.currentVersionId ?? null;
 }
