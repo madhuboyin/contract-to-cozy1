@@ -100,7 +100,8 @@ test('decision persistence owns history while verified close updates canonical F
   );
   assert.match(source, /refinanceDecisionHistory\.create/);
   assert.match(source, /clientMutationId/);
-  assert.match(source, /propertyFinancingProfile\.upsert/);
+  assert.match(source, /updateFinancingProfile\(/);
+  assert.match(source, /surface: 'REFINANCE_COMPLETION'/);
   assert.match(source, /priorMortgage/);
   assert.match(source, /newMortgage/);
   assert.match(source, /canonicalFinancingWritebackCompleted/);

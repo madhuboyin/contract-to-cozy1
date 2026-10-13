@@ -1,4 +1,5 @@
 // apps/backend/src/controllers/financing.controller.ts
+import { listFinancingProfileChanges } from '../services/financingProfile/financingProfileWriter';
 import { Response, NextFunction } from 'express';
 import { CustomRequest } from '../types';
 import { RateConfigType } from '@prisma/client';
@@ -40,10 +41,25 @@ export async function getFinancingProfile(req: CustomRequest, res: Response, nex
   }
 }
 
+/** The field-level change history of the financing profile. Owner only (the route's floor); values are the household's own mortgage facts. */
+export async function getFinancingProfileHistory(req: CustomRequest, res: Response, next: NextFunction) {
+  try {
+    const limit = Number(req.query.limit);
+    const changes = await listFinancingProfileChanges(req.params.propertyId, { limit: Number.isFinite(limit) ? limit : undefined });
+    res.json({ success: true, data: { changes } });
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function upsertFinancingProfile(req: CustomRequest, res: Response, next: NextFunction) {
   try {
     const userId = requireUserId(req);
-    const profile = await svc.upsertProfile(req.params.propertyId, req.body);
+    // `expectedUpdatedAt` binds the save to the version the page read; `acknowledgeBalanceExceedsOriginal` confirms a balance above the original is intended.
+    const { expectedUpdatedAt, acknowledgeBalanceExceedsOriginal, ...payload } = req.body as Record<string, any>;
+    const profile = await svc.upsertProfile(req.params.propertyId, payload, {
+      actor: { kind: 'USER', userId, role: req.householdRole }, surface: 'DESKTOP_ROUTE', expectedUpdatedAt, acknowledgeBalanceExceedsOriginal: acknowledgeBalanceExceedsOriginal === true,
+    });
     const propertyContext = await getCurrentFinancialContextEnvelope(req.params.propertyId, userId, 'FINANCING_CENTER');
     res.json({ success: true, data: { profile, propertyContext } });
   } catch (err) {

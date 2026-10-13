@@ -1,3 +1,4 @@
+import { updateFinancingProfile } from '../services/financingProfile/financingProfileWriter';
 import {
   DomainEventType,
   Prisma,
@@ -441,29 +442,20 @@ export async function recordRefinanceDecision(input: {
 
     if (input.body.completedMortgage) {
       const mortgage = input.body.completedMortgage;
-      await tx.propertyFinancingProfile.upsert({
-        where: { propertyId: input.propertyId },
-        create: {
-          propertyId: input.propertyId,
+      // The same canonical, owner-only, logged writer as every other surface (FRD v1.332), inside this decision's transaction. The previous upsert wrote the
+      // new loan's facts without regard to role or to a NO_MORTGAGE profile; a completed refinance is a MORTGAGED profile by definition.
+      await updateFinancingProfile({
+        propertyId: input.propertyId, actor: { kind: 'USER', userId: input.userId }, surface: 'REFINANCE_COMPLETION', tx,
+        changes: {
           mortgageStatus: PropertyMortgageStatus.MORTGAGED,
           currentMortgageBalanceCents: Math.round(mortgage.currentMortgageBalanceUsd * 100),
           interestRateBps: Math.round(mortgage.interestRatePct * 100),
           remainingTermMonths: mortgage.remainingTermMonths,
-          monthlyPaymentCents: mortgage.monthlyPaymentUsd == null
-            ? undefined
-            : Math.round(mortgage.monthlyPaymentUsd * 100),
+          ...(mortgage.monthlyPaymentUsd == null ? {} : { monthlyPaymentCents: Math.round(mortgage.monthlyPaymentUsd * 100) }),
           mortgageBalanceAsOfDate: new Date(mortgage.mortgageBalanceAsOfDate),
         },
-        update: {
-          mortgageStatus: PropertyMortgageStatus.MORTGAGED,
-          currentMortgageBalanceCents: Math.round(mortgage.currentMortgageBalanceUsd * 100),
-          interestRateBps: Math.round(mortgage.interestRatePct * 100),
-          remainingTermMonths: mortgage.remainingTermMonths,
-          ...(mortgage.monthlyPaymentUsd == null ? {} : {
-            monthlyPaymentCents: Math.round(mortgage.monthlyPaymentUsd * 100),
-          }),
-          mortgageBalanceAsOfDate: new Date(mortgage.mortgageBalanceAsOfDate),
-        },
+        // A refinance can legitimately leave a balance above the old original (rolled-in costs); the household is completing it deliberately.
+        acknowledgeBalanceExceedsOriginal: true,
       });
     }
 

@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { api } from '@/lib/api/client';
+import { usePropertyWriteAccess } from '@/lib/property/usePropertyWriteAccess';
 import { MobilePageContainer } from '@/components/mobile/dashboard/MobilePrimitives';
 import MortgageProfileForm from '@/components/features/financing/MortgageProfileForm';
 import type { PropertyFinancingProfile } from '@/types';
@@ -13,6 +14,8 @@ export default function FinancingProfilePage() {
   const params = useParams<{ id: string }>();
   const propertyId = params.id;
   const router = useRouter();
+  // The financing profile is owner-only (owner ruling 2026-10-13); the server refuses anyone else.
+  const { canManage } = usePropertyWriteAccess(propertyId);
 
   const [profile, setProfile] = useState<PropertyFinancingProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -33,7 +36,17 @@ export default function FinancingProfilePage() {
     setSaving(true);
     setError(null);
     try {
-      const updated = await api.upsertFinancingProfile(propertyId, payload);
+      const bound = { ...payload, ...(profile?.updatedAt ? { expectedUpdatedAt: profile.updatedAt } : {}) };
+      let updated;
+      try {
+        updated = await api.upsertFinancingProfile(propertyId, bound);
+      } catch (first: any) {
+        // A balance above the original can be right (capitalized interest); it is saved only when the owner says so.
+        if (first?.payload?.error?.code === 'BALANCE_EXCEEDS_ORIGINAL' || /higher than the original balance/i.test(first?.message ?? '')) {
+          if (!window.confirm('The current balance is higher than the original balance. That can be right, for example with capitalized interest. Save it anyway?')) throw first;
+          updated = await api.upsertFinancingProfile(propertyId, { ...bound, acknowledgeBalanceExceedsOriginal: true });
+        } else throw first;
+      }
       setProfile(updated);
       setSaved(true);
       setTimeout(() => {
@@ -86,7 +99,13 @@ export default function FinancingProfilePage() {
               {error}
             </div>
           )}
-          <MortgageProfileForm initial={profile} onSave={handleSave} saving={saving} />
+          {canManage ? (
+            <MortgageProfileForm initial={profile} onSave={handleSave} saving={saving} />
+          ) : (
+            <div className="rounded-xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
+              Only the home&apos;s owner can change the financing profile.
+            </div>
+          )}
         </>
       )}
     </MobilePageContainer>

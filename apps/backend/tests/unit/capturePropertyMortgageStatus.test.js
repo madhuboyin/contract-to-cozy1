@@ -20,7 +20,7 @@ const tick = () => new Promise((resolve) => setImmediate(resolve));
 function createFakeStore(seed = {}) {
   const store = {
     profile: seed.profile === undefined ? null : seed.profile, // { propertyId, mortgageStatus, ...details }
-    evidence: [], changes: [], idSeq: 0,
+    evidence: [], changes: [], profileChanges: [], idSeq: 0,
     locks: new Map(), // propertyId -> promise chain tail
     replayKeys: new Set(),
   };
@@ -30,7 +30,7 @@ function createFakeStore(seed = {}) {
     return (row[k] ?? null) === v;
   });
   const deps = (over = {}) => ({
-    resolveAccess: async () => ({ role: 'CONTRIBUTOR' }),
+    resolveAccess: async () => ({ role: 'OWNER' }),
     readProfile: async () => (store.profile ? { ...store.profile } : null),
     loadContextVersion: async () => 'ctx-v1',
     now: () => new Date('2026-10-04T12:00:00.000Z'),
@@ -81,6 +81,8 @@ function createFakeStore(seed = {}) {
             return { count: 0 };
           }
         },
+        // The audit read (FRD v1.332): the profile's id for the change log.
+        async findUnique() { return store.profile ? { id: 'profile-1', ...store.profile } : null; },
         async updateMany({ where, data }) {
           await acquire(where.propertyId); // row lock, held until the transaction ends
           await tick();
@@ -90,6 +92,10 @@ function createFakeStore(seed = {}) {
           tx.undo.push(() => { store.profile = before; });
           return { count: 1 };
         },
+      };
+      // The profile's field-level change log is written in the same transaction, so a rollback undoes it too.
+      tx.propertyFinancingProfileChange = {
+        async createMany({ data }) { store.profileChanges.push(...data); tx.undo.push(() => { store.profileChanges.length -= data.length; }); return { count: data.length }; },
       };
       try {
         const result = await callback(tx);
@@ -262,9 +268,9 @@ test('idempotent replay: the same captureExecutionId returns ALREADY_SET and doe
 
 // ---- authorization and input -------------------------------------------------------------------------------------------------------
 
-test('authorization and input: below CONTRIBUTOR is denied before any write; only MORTGAGED and NO_MORTGAGE are accepted answers', async () => {
+test('authorization and input: below OWNER (the financing profile is owner-only, FRD v1.332) is denied before any write; only MORTGAGED and NO_MORTGAGE are accepted answers', async () => {
   const { store, deps } = createFakeStore({ profile: { propertyId: PROPERTY, mortgageStatus: 'UNKNOWN', hasSecondMortgage: false, hasPMI: false } });
-  for (const role of ['VIEWER', null]) {
+  for (const role of ['CONTRIBUTOR', 'VIEWER', null]) {
     await assert.rejects(() => capture({ ...deps(), resolveAccess: async () => (role ? { role } : null) }, 'MORTGAGED'), /./);
   }
   assert.equal(store.profile.mortgageStatus, 'UNKNOWN');

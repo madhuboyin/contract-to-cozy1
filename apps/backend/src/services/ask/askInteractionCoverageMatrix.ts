@@ -1071,7 +1071,7 @@ export const ASK_INTERACTION_COVERAGE_MATRIX: Readonly<Record<AskOperationId, As
     track: 'Records and capture',
     rollClass: 'CONFIRMED_MUTATION',
     canonicalOwner: 'property-purchase-date.set',
-    roleFloor: 'CONTRIBUTOR',
+    roleFloor: 'OWNER',
     messageRoutable: false,
     confirmationCapable: true,
     correctionModes: ['EDIT', 'STOP'],

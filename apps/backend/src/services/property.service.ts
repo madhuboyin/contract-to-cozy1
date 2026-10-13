@@ -1,3 +1,4 @@
+import { updateFinancingProfile } from './financingProfile/financingProfileWriter';
 // apps/backend/src/services/property.service.ts
 
 import { Property, DwellingType, OwnershipForm, PropertyUse, OccupancyStatus, OutdoorSpaceType, HeatingType, CoolingType, WaterHeaterType, RoofType, FoundationType, BasementConfiguration, Prisma, Warranty, DocumentType, PropertyResponsibilityScope, ResponsibleParty, Season } from '@prisma/client';
@@ -720,14 +721,10 @@ export async function createProperty(userId: string, data: CreatePropertyData): 
 
   if (data.purchasePriceCents !== undefined || data.purchaseDate !== undefined) {
     await runPostCreateStep(property.id, 'financing-profile', () =>
-      prisma.propertyFinancingProfile.upsert({
-        where: { propertyId: property.id },
-        create: {
-          propertyId: property.id,
-          purchasePriceCents: data.purchasePriceCents ?? null,
-          purchaseDate: data.purchaseDate ?? null,
-        },
-        update: {
+      // The creator is the property's primary owner (the membership is created with the property). One canonical, logged writer (FRD v1.332).
+      updateFinancingProfile({
+        propertyId: property.id, actor: { kind: 'USER', userId, role: 'OWNER' }, surface: 'PROPERTY_CREATE',
+        changes: {
           ...(data.purchasePriceCents !== undefined ? { purchasePriceCents: data.purchasePriceCents } : {}),
           ...(data.purchaseDate !== undefined ? { purchaseDate: data.purchaseDate } : {}),
         },
@@ -1259,14 +1256,10 @@ export async function updateProperty(
   }
 
   if (data.purchasePriceCents !== undefined || data.purchaseDate !== undefined) {
-    await prisma.propertyFinancingProfile.upsert({
-      where: { propertyId },
-      create: {
-        propertyId,
-        purchasePriceCents: data.purchasePriceCents ?? null,
-        purchaseDate: data.purchaseDate ?? null,
-      },
-      update: {
+    // Ownership of the property was verified above (the caller's homeowner profile owns it): the owner-only profile writer applies.
+    await updateFinancingProfile({
+      propertyId, actor: { kind: 'USER', userId, role: 'OWNER' }, surface: 'PROPERTY_EDIT',
+      changes: {
         ...(data.purchasePriceCents !== undefined ? { purchasePriceCents: data.purchasePriceCents } : {}),
         ...(data.purchaseDate !== undefined ? { purchaseDate: data.purchaseDate } : {}),
       },

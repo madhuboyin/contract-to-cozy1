@@ -99,7 +99,9 @@ test('mortgage consumers are routed through PropertyFinancingProfile', () => {
   assert.doesNotMatch(adapter, /PropertyFinanceSnapshot/);
 
   const financing = read('../../src/services/financing.service.ts');
-  assert.match(financing, /propertyFinancingProfile\.upsert/);
+  // The persisted profile has one canonical, owner-only, logged writer (FRD v1.332); the service delegates to it.
+  assert.match(financing, /updateFinancingProfile/);
+  assert.match(read('../../src/services/financingProfile/financingProfileWriter.ts'), /propertyFinancingProfile\.(create|updateMany)/);
 
   const refinance = read('../../src/refinanceRadar/refinanceRadar.service.ts');
   assert.match(refinance, /propertyFinancingProfile\.findUnique/);

@@ -31,7 +31,7 @@ let recordedJourneyState;
 
 test.beforeEach(() => {
   calls = { profile: [], journey: [] };
-  accessRole = 'CONTRIBUTOR';
+  accessRole = 'OWNER';
   recordedPurchase = null;
   recordedJourneyState = null;
   const models = {
@@ -61,7 +61,7 @@ const envelope = (operationId, message, launchContext) => ({ userId: 'u1', prope
 const declared = (operationId) => ({ surface: 'ASK_WORKSPACE', operationId, sourceExecutionId: 'source-1' });
 const execution = (operationId) => ({ id: 'exec-1', propertyId: 'p1', sessionId: 's1', userId: 'u1', operationId, createdAt: new Date('2026-10-10T00:00:00.000Z') });
 const confirm = (operationId, parameters) => confirmCapabilityInvoke(operationId, {
-  userId: 'u1', execution: execution(operationId), parameters, access: { role: 'CONTRIBUTOR' }, command: getAskDomainCommandByOperation(operationId),
+  userId: 'u1', execution: execution(operationId), parameters, access: { role: 'OWNER' }, command: getAskDomainCommandByOperation(operationId),
 });
 
 // ───────────────────────────── purchase date ─────────────────────────────
@@ -121,7 +121,8 @@ test('purchase date: a valid entry becomes a review card bound to the recorded d
 test('purchase date: confirming writes only the purchase date through the financing service and reports a receipt', async () => {
   const { result, artifactType, artifactId } = await confirm('PROPERTY_PURCHASE_DATE_SET', { purchaseDateSet: { purchaseDate: '2019-06-14' }, sourceExecutionId: 'source-1', confirmationVersion: 1 });
   assert.equal(calls.profile.length, 1);
-  assert.deepEqual(calls.profile[0], ['p1', { purchaseDate: '2019-06-14T12:00:00.000Z' }], 'no other profile field is sent');
+  assert.deepEqual(calls.profile[0].slice(0, 2), ['p1', { purchaseDate: '2019-06-14T12:00:00.000Z' }], 'no other profile field is sent');
+  assert.deepEqual(calls.profile[0][2], { actor: { kind: 'USER', userId: 'u1' }, surface: 'ASK' }, 'the canonical writer is told who writes and through which surface');
   assert.equal(result.status, 'COMPLETED');
   assert.equal(result.reasonCode, 'PURCHASE_DATE_RECORDED');
   assert.deepEqual(result.blocks[0].actions, [], 'the receipt keeps the homeowner in Ask');

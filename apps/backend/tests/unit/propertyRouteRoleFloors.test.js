@@ -81,9 +81,11 @@ const TOOLS = [
   {
     name: 'Financing', router: financingRouter,
     mutations: [
-      ['PUT', `${base}/financing/profile`], ['POST', `${base}/financing/equity/refresh`], ['POST', `${base}/financing/scenarios`],
+      ['POST', `${base}/financing/equity/refresh`], ['POST', `${base}/financing/scenarios`],
       ['PATCH', `${base}/financing/scenarios/${ID}`], ['DELETE', `${base}/financing/scenarios/${ID}`],
     ],
+    // The persisted financing profile is owner-only as a whole (owner ruling 2026-10-13, FRD v1.332), and so is its change history.
+    ownerOnly: [['PUT', `${base}/financing/profile`], ['GET', `${base}/financing/profile/history`]],
     // POST /financing/calculate is a stateless calculator: it persists nothing, so a viewer may use it.
     reads: [
       ['GET', `${base}/financing/profile`], ['GET', `${base}/financing/equity`], ['GET', `${base}/financing/equity/history`],
@@ -127,6 +129,13 @@ for (const tool of TOOLS) {
       for (const [method, path] of tool.mutations) {
         assert.notEqual(await call(tool, method, path, role), 403, `${method} ${path}: ${role}`);
       }
+    }
+  });
+
+  test(`${tool.name}: owner-only routes reject a contributor and a viewer and accept an owner`, async () => {
+    for (const [method, path] of tool.ownerOnly ?? []) {
+      for (const role of ['VIEWER', 'CONTRIBUTOR', undefined]) assert.equal(await call(tool, method, path, role), 403, `${method} ${path}: ${role ?? 'no role'}`);
+      assert.notEqual(await call(tool, method, path, 'OWNER'), 403, `${method} ${path}: owner`);
     }
   });
 

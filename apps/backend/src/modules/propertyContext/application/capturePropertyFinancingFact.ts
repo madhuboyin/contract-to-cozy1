@@ -19,6 +19,7 @@ import { z } from 'zod';
 import { prisma } from '../../../lib/prisma';
 import { propertyContextCapturesTotal } from '../../../lib/metrics';
 import { resolvePropertyAccess, ROLE_RANK } from '../../../services/propertyAccess.service';
+import { recordFinancingProfileChanges, type FinancingActor, type FinancingProfileSurface } from '../../../services/financingProfile/financingProfileWriter';
 import { getFactDefinition } from '../catalog/factCatalog';
 import { getPropertyContext, PropertyContextAccessDeniedError } from './getPropertyContext';
 import { emitPropertyChangeWithTransaction } from '../../../propertyChanges/propertyChange.service';
@@ -67,7 +68,27 @@ function isNonFirsthandAttribution(attribution: AskCaptureAttribution | null | u
  * Returns whether the STATUS changed, so the caller can announce `financial.mortgageStatus` as well. Two rounds absorb a status that
  * moves between the two conditional updates. Must be called inside the caller's transaction.
  */
-export async function writeMortgageRateGuarded(tx: Prisma.TransactionClient, propertyId: string, interestRateBps: number): Promise<{ statusChanged: boolean }> {
+export async function writeMortgageRateGuarded(
+  tx: Prisma.TransactionClient, propertyId: string, interestRateBps: number, audit?: { actor: FinancingActor; surface: FinancingProfileSurface },
+): Promise<{ statusChanged: boolean }> {
+  // The financing profile is owner-only and every change is logged (FRD v1.332); the conditional writes below are unchanged, and the log is written in
+  // the same transaction from what the guarded write actually did.
+  const before = audit ? await tx.propertyFinancingProfile.findUnique({ where: { propertyId }, select: { interestRateBps: true, mortgageStatus: true } }) : null;
+  const result = await writeMortgageRateGuardedCore(tx, propertyId, interestRateBps);
+  if (audit) {
+    const profile = await tx.propertyFinancingProfile.findUnique({ where: { propertyId }, select: { id: true } });
+    if (profile) {
+      const changes = [
+        ...(before?.interestRateBps !== interestRateBps ? [{ field: 'interestRateBps' as const, before: before?.interestRateBps ?? null, after: interestRateBps }] : []),
+        ...(result.statusChanged ? [{ field: 'mortgageStatus' as const, before: before?.mortgageStatus ?? 'UNKNOWN', after: 'MORTGAGED' }] : []),
+      ];
+      await recordFinancingProfileChanges(tx, { propertyId, profileId: profile.id, actor: audit.actor, surface: audit.surface, changes });
+    }
+  }
+  return result;
+}
+
+async function writeMortgageRateGuardedCore(tx: Prisma.TransactionClient, propertyId: string, interestRateBps: number): Promise<{ statusChanged: boolean }> {
   const created = await tx.propertyFinancingProfile.createMany({
     data: [{ propertyId, mortgageStatus: 'MORTGAGED', interestRateBps }],
     skipDuplicates: true,
@@ -99,6 +120,8 @@ export interface RecordMortgageRateInput {
   sourceType: PropertyFactSourceType;
   captureExecutionId: string | null;
   captureChannel: string | null;
+  /** Who wrote the rate and through which surface, for the profile's change log. */
+  audit?: { actor: FinancingActor; surface: FinancingProfileSurface };
 }
 
 /**
@@ -112,7 +135,7 @@ export async function recordMortgageRate(
   input: RecordMortgageRateInput,
   emitChange: typeof emitPropertyChangeWithTransaction = emitPropertyChangeWithTransaction,
 ): Promise<{ statusChanged: boolean }> {
-  const { statusChanged } = await writeMortgageRateGuarded(tx, input.propertyId, input.interestRateBps);
+  const { statusChanged } = await writeMortgageRateGuarded(tx, input.propertyId, input.interestRateBps, input.audit);
   if (statusChanged) {
     const statusEvidence = await tx.propertyFactEvidence.create({
       data: {
@@ -151,7 +174,8 @@ export async function capturePropertyFinancingFact(
 ) {
   const definition = getFactDefinition(FINANCING_CAPTURE_FACT_KEY);
   const access = await resolvePropertyAccess(userId, propertyId);
-  if (!access || ROLE_RANK[access.role] < ROLE_RANK.CONTRIBUTOR) throw new PropertyContextAccessDeniedError();
+  // The financing profile is owner-only (owner ruling 2026-10-13, FRD v1.332): so is capturing its mortgage rate.
+  if (!access || ROLE_RANK[access.role] < ROLE_RANK.OWNER) throw new PropertyContextAccessDeniedError();
 
   const input = capturePropertyFinancingFactInputSchema.parse(rawInput);
   const nonFirsthand = isNonFirsthandAttribution(input.attribution);
@@ -196,6 +220,7 @@ export async function capturePropertyFinancingFact(
       await recordMortgageRate(tx, {
         propertyId, interestRateBps, observedAt, rateEvidence: { id: evidence.id, confidence: evidence.confidence },
         sourceType: input.sourceType, captureExecutionId: input.captureExecutionId ?? null, captureChannel: input.captureChannel ?? null,
+        audit: { actor: { kind: 'USER', userId }, surface: 'MORTGAGE_RATE_CAPTURE' },
       });
     });
     propertyContextCapturesTotal.inc({ scope: definition.scope, fact_key: FINANCING_CAPTURE_FACT_KEY, outcome: 'success' });

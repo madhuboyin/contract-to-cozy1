@@ -1,3 +1,4 @@
+import { updateFinancingProfile, type FinancingActor, type FinancingProfileSurface } from './financingProfile/financingProfileWriter';
 // apps/backend/src/services/financing.service.ts
 import { prisma } from '../lib/prisma';
 import {
@@ -78,85 +79,64 @@ export async function getProfile(propertyId: string) {
   return prisma.propertyFinancingProfile.findUnique({ where: { propertyId } });
 }
 
-export async function upsertProfile(
-  propertyId: string,
-  payload: {
-    mortgageStatus?: PropertyMortgageStatus;
-    purchasePriceCents?: number;
-    purchaseDate?: string;
-    mortgageType?: string;
-    originalMortgageBalanceCents?: number;
-    currentMortgageBalanceCents?: number;
-    mortgageBalanceAsOfDate?: string;
-    interestRateBps?: number;
-    remainingTermMonths?: number;
-    monthlyPaymentCents?: number;
-    hasSecondMortgage?: boolean;
-    secondMortgageBalanceCents?: number;
-    hasPMI?: boolean;
-  },
-) {
-  const containsMortgageFacts = [
-    payload.mortgageType,
-    payload.originalMortgageBalanceCents,
-    payload.currentMortgageBalanceCents,
-    payload.interestRateBps,
-    payload.remainingTermMonths,
-    payload.monthlyPaymentCents,
-  ].some((value) => value !== undefined);
-  const data: any = {
-    mortgageStatus: payload.mortgageStatus ??
-      (containsMortgageFacts ? PropertyMortgageStatus.MORTGAGED : undefined),
-    ...(payload.purchasePriceCents !== undefined && { purchasePriceCents: payload.purchasePriceCents }),
-    ...(payload.purchaseDate && { purchaseDate: new Date(payload.purchaseDate) }),
-    ...(payload.mortgageType && { mortgageType: payload.mortgageType }),
-    ...(payload.originalMortgageBalanceCents !== undefined && {
-      originalMortgageBalanceCents: payload.originalMortgageBalanceCents,
-    }),
-    ...(payload.currentMortgageBalanceCents !== undefined && {
-      currentMortgageBalanceCents: payload.currentMortgageBalanceCents,
-    }),
-    ...(payload.mortgageBalanceAsOfDate && {
-      mortgageBalanceAsOfDate: new Date(payload.mortgageBalanceAsOfDate),
-    }),
-    ...(payload.interestRateBps !== undefined && { interestRateBps: payload.interestRateBps }),
-    ...(payload.remainingTermMonths !== undefined && { remainingTermMonths: payload.remainingTermMonths }),
-    ...(payload.monthlyPaymentCents !== undefined && { monthlyPaymentCents: payload.monthlyPaymentCents }),
-    ...(payload.hasSecondMortgage !== undefined && { hasSecondMortgage: payload.hasSecondMortgage }),
-    ...(payload.secondMortgageBalanceCents !== undefined && {
-      secondMortgageBalanceCents: payload.secondMortgageBalanceCents,
-    }),
-    ...(payload.hasPMI !== undefined && { hasPMI: payload.hasPMI }),
-  };
-
-  return prisma.propertyFinancingProfile.upsert({
-    where: { propertyId },
-    create: { propertyId, ...data },
-    update: data,
-  });
+export interface FinancingProfilePayload {
+  mortgageStatus?: PropertyMortgageStatus;
+  purchasePriceCents?: number;
+  purchaseDate?: string;
+  mortgageType?: string;
+  originalMortgageBalanceCents?: number;
+  currentMortgageBalanceCents?: number;
+  mortgageBalanceAsOfDate?: string;
+  interestRateBps?: number;
+  remainingTermMonths?: number;
+  monthlyPaymentCents?: number;
+  hasSecondMortgage?: boolean;
+  secondMortgageBalanceCents?: number;
+  hasPMI?: boolean;
 }
 
-export async function markPropertyAsHavingNoMortgage(propertyId: string) {
-  return prisma.propertyFinancingProfile.upsert({
-    where: { propertyId },
-    create: {
-      propertyId,
-      mortgageStatus: PropertyMortgageStatus.NO_MORTGAGE,
-    },
-    update: {
-      mortgageStatus: PropertyMortgageStatus.NO_MORTGAGE,
-      mortgageType: null,
-      originalMortgageBalanceCents: null,
-      currentMortgageBalanceCents: null,
-      mortgageBalanceAsOfDate: null,
-      interestRateBps: null,
-      remainingTermMonths: null,
-      monthlyPaymentCents: null,
-      hasSecondMortgage: false,
-      secondMortgageBalanceCents: null,
-      hasPMI: false,
+/** Who is writing, through which surface, and (optionally) which version of the profile they read. Required: there is no anonymous write. */
+export interface FinancingProfileWriteContext {
+  actor: FinancingActor;
+  surface: FinancingProfileSurface;
+  expectedUpdatedAt?: Date | string | null;
+  acknowledgeBalanceExceedsOriginal?: boolean;
+}
+
+/**
+ * The page's profile write. Every write is the canonical writer's (FRD v1.332): owner-only inside the writer, version-checked, NO_MORTGAGE-atomic,
+ * field-logged. The payload's shape and the "loan facts promote the profile to MORTGAGED" rule are unchanged.
+ */
+export async function upsertProfile(propertyId: string, payload: FinancingProfilePayload, context: FinancingProfileWriteContext) {
+  const { profile } = await updateFinancingProfile({
+    propertyId, actor: context.actor, surface: context.surface, expectedUpdatedAt: context.expectedUpdatedAt,
+    acknowledgeBalanceExceedsOriginal: context.acknowledgeBalanceExceedsOriginal,
+    changes: {
+      ...(payload.mortgageStatus !== undefined && { mortgageStatus: payload.mortgageStatus }),
+      ...(payload.purchasePriceCents !== undefined && { purchasePriceCents: payload.purchasePriceCents }),
+      ...(payload.purchaseDate && { purchaseDate: new Date(payload.purchaseDate) }),
+      ...(payload.mortgageType && { mortgageType: payload.mortgageType as never }),
+      ...(payload.originalMortgageBalanceCents !== undefined && { originalMortgageBalanceCents: payload.originalMortgageBalanceCents }),
+      ...(payload.currentMortgageBalanceCents !== undefined && { currentMortgageBalanceCents: payload.currentMortgageBalanceCents }),
+      ...(payload.mortgageBalanceAsOfDate && { mortgageBalanceAsOfDate: new Date(payload.mortgageBalanceAsOfDate) }),
+      ...(payload.interestRateBps !== undefined && { interestRateBps: payload.interestRateBps }),
+      ...(payload.remainingTermMonths !== undefined && { remainingTermMonths: payload.remainingTermMonths }),
+      ...(payload.monthlyPaymentCents !== undefined && { monthlyPaymentCents: payload.monthlyPaymentCents }),
+      ...(payload.hasSecondMortgage !== undefined && { hasSecondMortgage: payload.hasSecondMortgage }),
+      ...(payload.secondMortgageBalanceCents !== undefined && { secondMortgageBalanceCents: payload.secondMortgageBalanceCents }),
+      ...(payload.hasPMI !== undefined && { hasPMI: payload.hasPMI }),
     },
   });
+  return profile;
+}
+
+/** "This home has no mortgage": the status and every loan fact it contradicts change together, in one logged write. */
+export async function markPropertyAsHavingNoMortgage(propertyId: string, context: FinancingProfileWriteContext) {
+  const { profile } = await updateFinancingProfile({
+    propertyId, actor: context.actor, surface: context.surface, expectedUpdatedAt: context.expectedUpdatedAt,
+    changes: { mortgageStatus: PropertyMortgageStatus.NO_MORTGAGE },
+  });
+  return profile;
 }
 
 // ─── Equity Position ──────────────────────────────────────────────────────────

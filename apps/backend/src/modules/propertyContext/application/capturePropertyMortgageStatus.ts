@@ -19,6 +19,7 @@ import { z } from 'zod';
 import { prisma } from '../../../lib/prisma';
 import { propertyContextCapturesTotal } from '../../../lib/metrics';
 import { resolvePropertyAccess, ROLE_RANK } from '../../../services/propertyAccess.service';
+import { recordFinancingProfileChanges } from '../../../services/financingProfile/financingProfileWriter';
 import { emitPropertyChangeWithTransaction } from '../../../propertyChanges/propertyChange.service';
 import { getFactDefinition } from '../catalog/factCatalog';
 import { getPropertyContext, PropertyContextAccessDeniedError } from './getPropertyContext';
@@ -96,7 +97,8 @@ export async function capturePropertyMortgageStatus(
 ): Promise<MortgageStatusResult> {
   const definition = getFactDefinition(MORTGAGE_STATUS_FACT_KEY);
   const access = await deps.resolveAccess(userId, propertyId);
-  if (!access || ROLE_RANK[access.role] < ROLE_RANK.CONTRIBUTOR) throw new PropertyContextAccessDeniedError();
+  // The financing profile is owner-only (owner ruling 2026-10-13, FRD v1.332): so is capturing its mortgage status.
+  if (!access || ROLE_RANK[access.role] < ROLE_RANK.OWNER) throw new PropertyContextAccessDeniedError();
   const input = inputSchema.parse(rawInput);
   const observedAt = deps.now();
   let outcome: MortgageStatusOutcome = 'CAPTURED';
@@ -127,6 +129,14 @@ export async function capturePropertyMortgageStatus(
         data: { mortgageStatus: input.status },
       });
       if (transitioned.count !== 1) throw new TransitionRefused();
+      // The precondition was UNKNOWN, so the logged change is exact. Written in the same transaction as the transition.
+      const profileRow = await tx.propertyFinancingProfile.findUnique({ where: { propertyId }, select: { id: true } });
+      if (profileRow) {
+        await recordFinancingProfileChanges(tx, {
+          propertyId, profileId: profileRow.id, actor: { kind: 'USER', userId }, surface: 'MORTGAGE_STATUS_CAPTURE',
+          changes: [{ field: 'mortgageStatus', before: 'UNKNOWN', after: input.status }],
+        });
+      }
       // 5. Emit, then commit.
       await deps.emitChange(tx, {
         propertyId, sourceType: 'PROPERTY_FACT', sourceEntityId: evidence.id, sourceRevision: observedAt.toISOString(),

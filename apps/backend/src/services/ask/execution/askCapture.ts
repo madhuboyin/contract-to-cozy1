@@ -1693,6 +1693,12 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
       (error as Error & { code?: string }).code = 'ASK_CAPTURE_NOT_ACTIVE';
       throw error;
     }
+    // The financing profile is owner-only (owner ruling 2026-10-13, FRD v1.332); say so before taking the answer rather than failing at the write.
+    if ((await ensurePropertyAccess(userId, execution.propertyId)).role !== HouseholdRole.OWNER) {
+      const error = new Error('Only an owner can change the financing profile.');
+      (error as Error & { code?: string }).code = 'ASK_PERMISSION_REQUIRED';
+      throw error;
+    }
     if (input.sensitiveDataConfirmed !== true) {
       const error = new Error('Confirm the mortgage details before saving them to the Financing Profile.');
       (error as Error & { code?: string }).code = 'ASK_CAPTURE_CONFIRMATION_REQUIRED';
@@ -1753,7 +1759,7 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
         interestRateBps: Math.round(candidate.data.interestRatePct * 100),
         remainingTermMonths: Math.max(1, Math.round(candidate.data.remainingTermYears * 12)),
         monthlyPaymentCents: candidate.data.monthlyPaymentUsd === undefined ? undefined : Math.round(candidate.data.monthlyPaymentUsd * 100),
-      });
+      }, { actor: { kind: 'USER', userId }, surface: 'ASK', expectedUpdatedAt: profile?.updatedAt ?? null });
     }
     const nextContext = await getFinancialContextDecisions(execution.propertyId, userId, 'REFINANCE_RADAR');
     captureId = input.idempotencyKey;

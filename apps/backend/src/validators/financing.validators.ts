@@ -23,6 +23,9 @@ export const UpsertFinancingProfileSchema = z.object({
   hasSecondMortgage: z.boolean().optional(),
   secondMortgageBalanceCents: z.number().int().min(0).optional(),
   hasPMI: z.boolean().optional(),
+  // Bind the save to the version the page read, and confirm a balance above the original is intended (FRD v1.332).
+  expectedUpdatedAt: z.string().datetime({ offset: true }).optional(),
+  acknowledgeBalanceExceedsOriginal: z.boolean().optional(),
 });
 
 export const CalculateSchema = z.object({

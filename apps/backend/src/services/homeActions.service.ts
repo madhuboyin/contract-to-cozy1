@@ -2011,7 +2011,7 @@ export async function executeHomeActionCommand(
     action.id === `refinance-data-required:${propertyId}` &&
     input.command === 'NO_MORTGAGE'
   ) {
-    await markPropertyAsHavingNoMortgage(propertyId);
+    await markPropertyAsHavingNoMortgage(propertyId, { actor: { kind: 'USER', userId }, surface: 'DESKTOP_ROUTE' });
   }
 
   if (action.id.startsWith(ACTIVATION_ID_PREFIX)) {

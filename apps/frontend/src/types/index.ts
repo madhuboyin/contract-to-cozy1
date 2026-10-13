@@ -6132,6 +6132,10 @@ export interface FinancingProfilePayload {
   hasSecondMortgage?: boolean;
   secondMortgageBalanceCents?: number;
   hasPMI?: boolean;
+  /** The profile's `updatedAt` as the page read it: a save over a newer profile is refused. */
+  expectedUpdatedAt?: string;
+  /** Confirms a current balance above the original balance is intended. */
+  acknowledgeBalanceExceedsOriginal?: boolean;
 }
 
 export interface CreateScenarioPayload {

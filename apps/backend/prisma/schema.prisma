@@ -19577,8 +19577,35 @@ model PropertyFinancingProfile {
   updatedAt DateTime @updatedAt
 
   property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  changes  PropertyFinancingProfileChange[]
 
   @@map("property_financing_profiles")
+}
+
+// One row per field changed by one write to the financing profile (owner ruling 2026-10-13). The profile is the canonical, owner-only record of the
+// household's mortgage and purchase facts, so every change keeps who made it, through which surface, and the before and after values. Readable by owners only.
+model PropertyFinancingProfileChange {
+  id            String   @id @default(cuid())
+  propertyId    String
+  profileId     String
+  // Groups the fields changed by one write.
+  batchId       String
+  fieldKey      String
+  beforeValue   Json?
+  afterValue    Json?
+  // USER, or SYSTEM for a trusted background synchronization (which must state a reason).
+  actorKind     String
+  actorUserId   String?
+  systemReason  String?
+  // DESKTOP_ROUTE, PROPERTY_CREATE, PROPERTY_EDIT, REFINANCE_COMPLETION, MORTGAGE_STATUS_CAPTURE, MORTGAGE_RATE_CAPTURE, ASK, SYSTEM
+  sourceSurface String
+  createdAt     DateTime @default(now())
+
+  profile PropertyFinancingProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId, createdAt(sort: Desc)])
+  @@index([profileId, fieldKey])
+  @@map("property_financing_profile_changes")
 }
 
 // One row per RateConfigType. Updated by admins when market rates shift.

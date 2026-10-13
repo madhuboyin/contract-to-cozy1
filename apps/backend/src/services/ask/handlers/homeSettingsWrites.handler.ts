@@ -125,7 +125,7 @@ async function confirmPurchaseDate(ctx: ConfirmCapabilityContext): Promise<Confi
   const propertyId = execution.propertyId;
   const { purchaseDate } = candidate.data;
   // Same-value upsert is a no-op, so a lease-reclaim retry of this confirmation records nothing twice.
-  await upsertProfile(propertyId, { purchaseDate: new Date(`${purchaseDate}T12:00:00.000Z`).toISOString() });
+  await upsertProfile(propertyId, { purchaseDate: new Date(`${purchaseDate}T12:00:00.000Z`).toISOString() }, { actor: { kind: 'USER', userId }, surface: 'ASK' });
   const label = humanDate(new Date(`${purchaseDate}T12:00:00.000Z`)) ?? purchaseDate;
   const result: AskOperationResult = {
     status: 'COMPLETED', reasonCode: 'PURCHASE_DATE_RECORDED',

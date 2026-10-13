@@ -10,6 +10,7 @@ import { UserRole } from '../types/auth.types';
 import {
   getFinancingProfile,
   upsertFinancingProfile,
+  getFinancingProfileHistory,
   getEquityPosition,
   refreshEquityPosition,
   getEquityHistory,
@@ -44,9 +45,16 @@ router.get('/properties/:propertyId/financing/profile', propertyAuthMiddleware, 
 router.put(
   '/properties/:propertyId/financing/profile',
   propertyAuthMiddleware,
-  requireHouseholdRole('CONTRIBUTOR'),
+  // The persisted financing profile is owner-only as a whole (owner ruling 2026-10-13); the canonical writer enforces it too.
+  requireHouseholdRole('OWNER'),
   validateBody(UpsertFinancingProfileSchema),
   upsertFinancingProfile,
+);
+router.get(
+  '/properties/:propertyId/financing/profile/history',
+  propertyAuthMiddleware,
+  requireHouseholdRole('OWNER'),
+  getFinancingProfileHistory,
 );
 
 // ─── Equity Position ──────────────────────────────────────────────────────────
