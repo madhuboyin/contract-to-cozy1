@@ -1,7 +1,9 @@
 // Moved out of askOrchestrator.service.ts unchanged (decomposition phase 1, FRD v1.98;
 // docs/architecture/ASK_ORCHESTRATOR_DECOMPOSITION_REVIEW.md). The handler registers itself, and the orchestrator
 // re-exports the names below so existing imports keep working.
+import { HouseholdRole } from '@prisma/client';
 import { type AskPresentationBlock } from '../../../productFramework/ask/ask.contract';
+import { DIY_NOTE_ACTION_ID, DIY_NOTE_MESSAGE, DIY_PROFILE_ACTION_ID, DIY_PROFILE_MESSAGE, diyProjectTakesNote } from '../support/diyCommand';
 import { type AskOperationResult } from '../askOperationRegistry';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { readableCode } from '../askFormatting';
@@ -24,7 +26,12 @@ const DIY_CATEGORY_LABELS: Record<string, string> = {
 };
 const DIY_VERDICT_LABELS: Record<string, string> = { DIY_RECOMMENDED: 'DIY Recommended', BORDERLINE: 'Borderline', HIRE_RECOMMENDED: 'Hire Recommended', HIRE_REQUIRED: 'Hire Required' };
 
-export function diyProjectsFromView(view: DiyProjectListView, propertyId: string): AskOperationResult {
+export function diyProjectsFromView(view: DiyProjectListView, propertyId: string, canChange = false): AskOperationResult {
+  // The caller's own skill levels (FRD v1.344): any member may set their own profile.
+  const profileAction = {
+    id: DIY_PROFILE_ACTION_ID, label: 'Set my skill levels', interactionType: 'START_WORKFLOW' as const, message: DIY_PROFILE_MESSAGE,
+    operationId: 'DIY_SKILL_PROFILE_COMMAND' as const, style: 'QUIET' as const,
+  };
   // Step 8: the declared launch of the read-only browse of reviewed templates this home can start (viewers may browse; only a contributor or owner is offered Start inside it).
   const browseAction = {
     id: DIY_TEMPLATE_BROWSE_ACTION.id, label: DIY_TEMPLATE_BROWSE_ACTION.label, interactionType: 'START_WORKFLOW' as const, message: DIY_TEMPLATE_BROWSE_ACTION.message,
@@ -43,7 +50,7 @@ export function diyProjectsFromView(view: DiyProjectListView, propertyId: string
       blocks: [{
         type: 'SUMMARY', id: 'diy-summary', title: 'No DIY projects in progress',
         body: 'You have no DIY projects in planning or in progress. See the reviewed low-risk projects you can start.',
-        tone: 'DEFAULT', actions: [{ ...browseAction, style: 'PRIMARY' as const }],
+        tone: 'DEFAULT', actions: [{ ...browseAction, style: 'PRIMARY' as const }, profileAction],
       }, boundary],
       suggestions: [],
     };
@@ -59,7 +66,7 @@ export function diyProjectsFromView(view: DiyProjectListView, propertyId: string
       hireFlagged ? `${hireFlagged} ${hireFlagged === 1 ? 'was' : 'were'} assessed as better hired out.` : null,
     ].filter(Boolean).join(' '),
     tone: hireFlagged ? 'CAUTION' : 'DEFAULT',
-    actions: [],
+    actions: [profileAction],
   }];
   if (view.nextCursor) {
     blocks.push({
@@ -83,12 +90,18 @@ export function diyProjectsFromView(view: DiyProjectListView, propertyId: string
         status: DIY_STATUS_LABELS[item.status] ?? readableCode(item.status),
         // DIY project guide (ASK_COZY_DIY_PROJECT_GUIDE_PLAN): only a project started from a reviewed template version can be guided, so only it offers the
         // action. The guide itself re-checks everything and refuses with a page link, so this is a courtesy, not the gate. The item id is the project id.
-        ...(item.templateId && !item.aiGuideId && item.templateRevisionId ? {
+        ...((item.templateId && !item.aiGuideId && item.templateRevisionId) || canChange ? {
           entityType: 'DIY_PROJECT',
-          actions: [{
-            id: 'guide-diy-project', label: 'Guide me through this project', message: 'Guide me through this project.', style: 'SECONDARY' as const,
-            interactionType: 'CONVERSATION_CONTINUE' as const, operationId: 'DIY_PROJECT_GUIDE',
-          }],
+          actions: [
+            ...(item.templateId && !item.aiGuideId && item.templateRevisionId ? [{
+              id: 'guide-diy-project', label: 'Guide me through this project', message: 'Guide me through this project.', style: 'SECONDARY' as const,
+              interactionType: 'CONVERSATION_CONTINUE' as const, operationId: 'DIY_PROJECT_GUIDE',
+            }] : []),
+            ...(canChange && diyProjectTakesNote(item.status) ? [{
+              id: DIY_NOTE_ACTION_ID, label: 'Add a note', message: DIY_NOTE_MESSAGE, style: 'QUIET' as const,
+              interactionType: 'MUTATE_RECORD' as const, operationId: 'DIY_PROJECT_NOTE_COMMAND' as const,
+            }] : []),
+          ],
         } : {}),
       })),
     }],
@@ -104,8 +117,9 @@ export function diyProjectsFromView(view: DiyProjectListView, propertyId: string
   return { status: 'ANSWERED', reasonCode: 'DIY_PROJECTS_READY', blocks, suggestions: [], suggestedNextActionCandidates };
 }
 
-async function diyProjectsResult(propertyId: string): Promise<AskOperationResult> {
-  return diyProjectsFromView(await diyService.listProjects(propertyId, { status: DIY_ACTIVE_STATUSES }), propertyId);
+// The framework resolves the caller's access for the operation's floor and hands it to the handler; a viewer sees the list without the note controls.
+async function diyProjectsResult(propertyId: string, role: HouseholdRole | undefined): Promise<AskOperationResult> {
+  return diyProjectsFromView(await diyService.listProjects(propertyId, { status: DIY_ACTIVE_STATUSES }), propertyId, role !== undefined && role !== HouseholdRole.VIEWER);
 }
 
-registerCapabilityHandler('diy.projects', async (envelope) => diyProjectsResult(envelope.propertyId!));
+registerCapabilityHandler('diy.projects', async (envelope, deps) => diyProjectsResult(envelope.propertyId!, (await deps?.propertyAccess)?.role));

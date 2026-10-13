@@ -84,7 +84,8 @@ test('projects are summarized and listed with the page\'s labels, step progress 
   ]);
   assert.equal(list.sections[0].items[0].href, undefined, 'Ask is self-sufficient: no row links out to the desktop page');
   assert.equal(result.blocks.some((block) => block.id === 'diy-limit'), false);
-  assert.deepEqual(result.blocks[0].actions, [], 'no link out to the DIY Project Center');
+  // FRD v1.344: the only action on the summary is the caller's own skill levels (a declared Ask command); there is still no link out to the DIY Project Center.
+  assert.deepEqual(result.blocks[0].actions.map((action) => [action.id, action.operationId, action.href]), [['diy-skill-profile', 'DIY_SKILL_PROFILE_COMMAND', undefined]]);
 });
 
 test('a second page is disclosed; no active projects is not an all-clear', () => {

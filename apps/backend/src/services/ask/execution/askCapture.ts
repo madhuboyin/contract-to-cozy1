@@ -76,6 +76,8 @@ import { saleCaseCommandResult } from '../handlers/sellerPrepCaseCommands.handle
 import { negotiationPackageResult } from '../handlers/inspectionNegotiationPackage.handler';
 import { workItemCommandResult } from '../handlers/homeWorkItemCommands.handler';
 import { seasonalItemResult } from '../handlers/seasonalItemCommands.handler';
+import { diyProjectNoteResult, diySkillProfileResult } from '../handlers/diyCommands.handler';
+import { DIY_NOTE_CAPTURE_KEY, DIY_PROFILE_CAPTURE_KEY, parseDiyNoteAnswer, parseDiySkillProfileAnswer } from '../support/diyCommand';
 import { SEASONAL_SNOOZE_CAPTURE_KEY, parseSeasonalSnoozeAnswer } from '../support/seasonalItemCommand';
 import { parseWorkItemAnswer, workItemFormKindFromCaptureKey } from '../support/homeWorkItemCommand';
 import { NEGOTIATION_PACKAGE_CAPTURE_KEY } from '../support/inspectionReportCommand';
@@ -1516,6 +1518,33 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     captureId = input.idempotencyKey;
     capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
     canonicalOwner = 'SeasonalChecklistItem';
+  } else if (execution.operationId === 'DIY_SKILL_PROFILE_COMMAND') {
+    if (input.captureKey !== DIY_PROFILE_CAPTURE_KEY) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    await ensurePropertyAccess(userId, execution.propertyId);
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson) ? execution.parametersJson as Record<string, unknown> : {};
+    const dpLaunch = storedParameters.diyProfileLaunch && typeof storedParameters.diyProfileLaunch === 'object' && !Array.isArray(storedParameters.diyProfileLaunch)
+      ? storedParameters.diyProfileLaunch as { sourceExecutionId?: unknown } : null;
+    if (!dpLaunch) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    if (!parseDiySkillProfileAnswer(input.answer).success) throw Object.assign(new Error('Choose beginner, intermediate or advanced for every area.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+    result = await diySkillProfileResult(userId, execution.propertyId, { sourceExecutionId: typeof dpLaunch.sourceExecutionId === 'string' ? dpLaunch.sourceExecutionId : null }, input.answer as Record<string, unknown>);
+    captureId = input.idempotencyKey;
+    capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
+    canonicalOwner = 'DiySkillProfile';
+  } else if (execution.operationId === 'DIY_PROJECT_NOTE_COMMAND') {
+    if (input.captureKey !== DIY_NOTE_CAPTURE_KEY) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    const access = await ensurePropertyAccess(userId, execution.propertyId);
+    if (access.role === HouseholdRole.VIEWER) throw Object.assign(new Error('A contributor or owner is required to add a note.'), { code: 'ASK_PERMISSION_REQUIRED' });
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson) ? execution.parametersJson as Record<string, unknown> : {};
+    const dnLaunch2 = storedParameters.diyNoteLaunch && typeof storedParameters.diyNoteLaunch === 'object' && !Array.isArray(storedParameters.diyNoteLaunch)
+      ? storedParameters.diyNoteLaunch as { entityId?: unknown; sourceExecutionId?: unknown } : null;
+    if (!dnLaunch2 || typeof dnLaunch2.entityId !== 'string') throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    if (!parseDiyNoteAnswer(input.answer).success) throw Object.assign(new Error('Write a note of at least three characters.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+    result = await diyProjectNoteResult(userId, execution.propertyId, {
+      entityId: dnLaunch2.entityId, sourceExecutionId: typeof dnLaunch2.sourceExecutionId === 'string' ? dnLaunch2.sourceExecutionId : null,
+    }, input.answer as Record<string, unknown>);
+    captureId = input.idempotencyKey;
+    capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
+    canonicalOwner = 'DiyProject';
   } else if (execution.operationId === 'CLAIM_ACTIVITY_COMMAND') {
     if (input.captureKey !== CLAIM_NOTE_CAPTURE_KEY) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
     const access = await ensurePropertyAccess(userId, execution.propertyId);

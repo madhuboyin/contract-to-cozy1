@@ -144,7 +144,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   HOME_HABITS: new Set(['generate-home-habits', 'habit-adopt', 'habit-complete', 'habit-snooze', 'habit-skip', 'habit-dismiss', 'habits-back-to-list', 'habits-review-first', 'habits-show-maintenance', 'home-habit-coach-settings']),
   HOME_HABIT_UPDATE: new Set(['habits-back-to-list']),
   PLANT_CARE_OUTLOOK: new Set(['find-plants-for-room', 'add-home-plant']),
-  DIY_PROJECTS: new Set(['diy-template-browse']),
+  DIY_PROJECTS: new Set(['diy-template-browse', 'diy-skill-profile', 'diy-project-note']),
   DIY_PROJECT_GUIDE: new Set(['diy-step-complete', 'diy-step-skip', 'diy-step-previous', 'diy-step-back', 'diy-step-reopen', 'diy-review-last-step', 'diy-project-finish', 'diy-project-more', 'diy-project-stop', 'diy-project-handoff', 'diy-record-again', 'diy-task-record-again']),
   DIY_PROJECT_START: new Set(['diy-start-guide']),
   DIY_STEP_UPDATE: new Set(['diy-continue-guide']),
@@ -182,6 +182,10 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   NEGOTIATION_SHIELD_CASE_ATTACH: new Set(['negotiation-shield-review', 'negotiation-shield-analyze']),
   // The readiness answer's empty state offers the start; the receipt of a started case offers that case's readiness check.
   RENOVATION_CASE_START: new Set(['renovation-case-readiness']),
+  // Add a note to a DIY project in planning or in progress (register P2 DIY). Confirmation-gated, declared-action only.
+  DIY_PROJECT_NOTE_COMMAND: new Set(['diy-projects-back']),
+  // Set the caller's own DIY skill levels (register P2 DIY). One profile per user, so a viewer may set it. Confirmation-gated, declared-action only.
+  DIY_SKILL_PROFILE_COMMAND: new Set(['diy-projects-back']),
   // Add a seasonal checklist task to maintenance, snooze it, set it aside, or bring it back (register P2 Seasonal Home Care). Confirmation-gated, declared-action only.
   SEASONAL_ITEM_COMMAND: new Set(['seasonal-item-back']),
   // Snooze or reschedule a Home Operations work item, or accept the routine low-risk candidates in bulk (register P2 Maintenance and Home Operations). Confirmation-gated, declared-action only.
