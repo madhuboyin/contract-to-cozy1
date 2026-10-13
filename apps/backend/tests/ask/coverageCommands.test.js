@@ -189,3 +189,86 @@ test('the comparison answer offers Start (empty state) and Record my decision (o
   assert.equal(applicable('coverage-generate-review', 'COVERAGE_REVIEW_STATUS'), true);
   for (const id of ['coverage-back', 'coverage-back-review']) assert.equal(applicable(id, OP), true, id);
 });
+
+// FRD v1.366: add a quote to a comparison from a Home Record.
+const quote = require('../../src/services/ask/support/coverageQuoteCommand.ts');
+const inventory = require('../../src/services/propertyDocuments/propertyDocumentInventory.service.ts');
+const RECORD = { id: 'rec-1', source: 'HOME_RECORD', title: 'Beta quote.pdf', kind: 'QUOTE', kindLabel: 'Quote', addedAt: new Date('2026-09-01'), lifecycle: 'ACTIVE', visibility: 'HOUSEHOLD', sensitivity: 'INSURANCE' };
+function withInventory(items) {
+  const saved = inventory.listPropertyDocuments;
+  inventory.listPropertyDocuments = async () => ({ items });
+  return () => { inventory.listPropertyDocuments = saved; };
+}
+
+test('the quote form becomes the desktop panel\'s facts: amounts in USD, text terms, an endorsements list, and pending unless checked', () => {
+  const parsed = quote.parseCoverageQuoteAnswer({
+    sourceRecordId: 'rec-1', label: 'Beta HO-3', carrierName: 'Beta', allPerilDeductible: '2500', dwellingLimit: 400000, annualPremium: '', policyForm: 'HO-3',
+    endorsements: 'Water backup, Scheduled jewelry ,', sourcePage: '2', checked: 'YES',
+  });
+  assert.equal(parsed.success, true);
+  assert.deepEqual(parsed.data.facts.map((f) => [f.factKey, f.valueType, f.confirmationStatus, f.sourcePage]), [
+    ['ALL_PERIL_DEDUCTIBLE', 'AMOUNT', 'CONFIRMED', 2], ['DWELLING_LIMIT', 'AMOUNT', 'CONFIRMED', 2], ['POLICY_FORM', 'TEXT', 'CONFIRMED', 2], ['ENDORSEMENTS', 'JSON', 'CONFIRMED', 2],
+  ]);
+  assert.deepEqual(parsed.data.facts.at(-1).jsonValue, ['Water backup', 'Scheduled jewelry']);
+  assert.equal(quote.parseCoverageQuoteAnswer({ sourceRecordId: 'rec-1', label: 'x', dwellingLimit: 1 }).data.facts[0].confirmationStatus, 'PENDING');
+  assert.deepEqual(quote.parseCoverageQuoteAnswer({ sourceRecordId: 'rec-1', label: 'x' }), { success: false, reason: 'NO_FACTS' });
+  assert.equal(quote.parseCoverageQuoteAnswer({ sourceRecordId: 'rec-1', label: 'x', dwellingLimit: -5 }).success, false);
+  assert.equal(quote.parseCoverageQuoteAnswer({ sourceRecordId: 'rec-1', label: 'x', dwellingLimit: 1, status: 'DONE' }).success, false);
+});
+
+test('add a quote: needs a document on file, offers only active records, reviews every value, and refuses a record that is not offered or a decided comparison', async () => {
+  const restoreRole = withRole('CONTRIBUTOR'); let restore = withData(); let restoreInv = withInventory([]);
+  try {
+    assert.equal((await invoke(M.ADD_QUOTE, launchFor('ADD_QUOTE', 'cmp-1'))).reasonCode, 'COVERAGE_QUOTE_NO_DOCUMENT');
+    restoreInv();
+    restoreInv = withInventory([RECORD, { ...RECORD, id: 'rec-2', lifecycle: 'ARCHIVED' }, { ...RECORD, id: 'leg-1', source: 'LEGACY_DOCUMENT' }]);
+    const form = await invoke(M.ADD_QUOTE, launchFor('ADD_QUOTE', 'cmp-1'));
+    assert.equal(form.status, 'NEEDS_CONTEXT');
+    const fields = form.captureRequests[0].inputSchema.fields;
+    assert.equal(form.captureRequests[0].captureKey, quote.COVERAGE_QUOTE_CAPTURE_KEY);
+    assert.deepEqual(fields[0].inputSchema.options.map((o) => o.value), ['rec-1']);
+    const launch = { kind: 'ADD_QUOTE', entityId: 'cmp-1', sourceExecutionId: null };
+    const answer = quote.parseCoverageQuoteAnswer({ sourceRecordId: 'rec-1', label: 'Beta HO-3', carrierName: 'Beta', dwellingLimit: 400000, checked: 'NO' }).data;
+    const review = await handler.coverageCommandResult('user-1', 'prop-1', launch, undefined, answer);
+    assert.equal(review.status, 'NEEDS_CONFIRMATION');
+    assert.deepEqual(review.confirmation.fields.map((f) => f.label), ['Option', 'Carrier', 'Document', 'Dwelling limit', 'Checked against the document']);
+    assert.match(review.confirmation.description, /does not contact an insurer, change your policy or recommend a carrier/);
+    assert.equal(review.confirmation.fields.at(-1).value, 'No: kept as pending');
+    const other = await handler.coverageCommandResult('user-1', 'prop-1', launch, undefined, { ...answer, sourceRecordId: 'rec-2' });
+    assert.equal(other.reasonCode, 'COVERAGE_QUOTE_DOCUMENT_NOT_OFFERED');
+    restore();
+    restore = withData({ comparison: { ...COMPARISON, status: 'DECIDED' } });
+    assert.equal((await invoke(M.ADD_QUOTE, launchFor('ADD_QUOTE', 'cmp-1'))).reasonCode, 'COVERAGE_DECISION_ALREADY_RECORDED');
+  } finally { restoreInv(); restore(); restoreRole(); }
+});
+
+test('confirming an added quote calls the canonical option function with the facts; a stale comparison, a removed document or a tampered quote is refused', async () => {
+  const restore = withData(); const restoreInv = withInventory([RECORD]);
+  const saved = comparisonService.addCoverageComparisonOption; const calls = [];
+  comparisonService.addCoverageComparisonOption = async (...a) => { calls.push(a); return { id: 'opt-1' }; };
+  const savedR = executeOperation.reconcileAskExecutionSideEffects;
+  executeOperation.reconcileAskExecutionSideEffects = async () => ({ attemptedAndFailed: false, refreshedExecutions: [] });
+  try {
+    const version = require('node:crypto').createHash('sha256').update(`coverage-decision:cmp-1:${COMPARISON.updatedAt.toISOString()}:DRAFT:${COMPARISON.options.map((o) => `${o.id}${o.equivalenceStatus}`).join(',')}`).digest('hex');
+    const data = quote.parseCoverageQuoteAnswer({ sourceRecordId: 'rec-1', label: 'Beta HO-3', carrierName: 'Beta', dwellingLimit: 400000, checked: 'YES' }).data;
+    const base = { coverageCommand: { kind: 'ADD_QUOTE', entityId: 'cmp-1' }, coverageContextVersion: version, coverageQuote: data };
+    const out = await confirmCapabilityInvoke(OP, ctx(base));
+    assert.equal(out.artifactType, 'COVERAGE_COMPARISON_OPTION');
+    assert.deepEqual(calls[0].slice(0, 3), ['prop-1', 'cmp-1', 'user-1']);
+    assert.deepEqual(calls[0][3], { optionType: 'QUOTE_DOCUMENT', label: 'Beta HO-3', carrierName: 'Beta', sourceDocumentId: 'rec-1', facts: [
+      { factKey: 'DWELLING_LIMIT', valueType: 'AMOUNT', amountValue: 400000, currency: 'USD', confirmationStatus: 'CONFIRMED', sourcePage: null }] });
+    await assert.rejects(() => confirmCapabilityInvoke(OP, ctx({ ...base, coverageContextVersion: 'old' })), (e) => e.code === 'ASK_CONTEXT_VERSION_CONFLICT');
+    await assert.rejects(() => confirmCapabilityInvoke(OP, ctx({ ...base, coverageQuote: { ...data, facts: [] } })), (e) => e.code === 'ASK_CONFIRMATION_NOT_ACTIVE');
+    await assert.rejects(() => confirmCapabilityInvoke(OP, ctx({ ...base, coverageQuote: { ...data, sourceRecordId: 'rec-9' } })), (e) => e.code === 'ASK_CONFIRMATION_NOT_ACTIVE');
+    assert.equal(calls.length, 1);
+  } finally { comparisonService.addCoverageComparisonOption = saved; executeOperation.reconcileAskExecutionSideEffects = savedR; restoreInv(); restore(); }
+});
+
+test('Add a quote is offered on the open comparison and its action id is allowlisted', () => {
+  const source = require('node:fs').readFileSync(require.resolve('../../src/services/ask/handlers/coverage.handler.ts'), 'utf8');
+  assert.match(source, /COVERAGE_COMMAND_ACTION_IDS\.ADD_QUOTE/);
+  assert.equal(isAskActionApplicable({
+    action: { id: 'coverage-add-quote', label: 'x', interactionType: 'START_WORKFLOW', message: 'm', operationId: 'COVERAGE_COMPARISON_STATUS', style: 'PRIMARY' },
+    operationId: 'COVERAGE_COMPARISON_STATUS', propertyId: 'prop-1', householdRole: 'CONTRIBUTOR', authoritativeSourceAvailable: true,
+  }), true);
+});

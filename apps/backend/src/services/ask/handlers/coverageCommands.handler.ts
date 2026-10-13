@@ -2,8 +2,8 @@
 // keep / change / shop / defer decision. Every write goes through the canonical coverage services after the same owner-only authorization they apply:
 // getOrCreateCoverageReview, getOrCreateCoverageComparison and recordCoverageDecisionWithEffects (the Home Action resolution, guided-journey and
 // capability completion, and analytics the decision route runs, shared rather than copied). A decision is the homeowner's own record: it does not change a
-// policy, contact an insurer or bind coverage. Not here: adding a quote or another policy term to a comparison (document evidence), and the property-level
-// coverage analysis run and simulation.
+// policy, contact an insurer or bind coverage. Adding a quote (FRD v1.366) goes through addCoverageComparisonOption, the route's own call, from a Home Record
+// the owner picks. Not here: adding another verified policy term, and the property-level coverage analysis run and simulation.
 import { createHash } from 'node:crypto';
 import { HouseholdRole } from '@prisma/client';
 import { prisma } from '../../../lib/prisma';
@@ -14,7 +14,9 @@ import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { registerConfirmCapabilityHandler, type ConfirmCapabilityContext, type ConfirmCapabilityResult } from '../confirmCapabilityHandlerRegistry';
 import { reconcileAskExecutionSideEffects } from '../execution/executeOperation';
 import { ensurePropertyAccess } from '../askHandlerSupport';
-import { getOrCreateCoverageComparison } from '../../coverageComparison.service';
+import { addCoverageComparisonOption, getOrCreateCoverageComparison } from '../../coverageComparison.service';
+import { listPropertyDocuments } from '../../propertyDocuments/propertyDocumentInventory.service';
+import { humanDate } from '../askFormatting';
 import { getOrCreateCoverageReview } from '../../coverageReview.service';
 import { recordCoverageDecisionWithEffects } from '../../coverageDecisionOperations';
 import {
@@ -22,6 +24,9 @@ import {
   COVERAGE_DECISION_OPTION_LABELS, COVERAGE_PROPERTY_ENTITY_TYPE, coverageCommandKindFromMessage, coverageCommandTargetsProperty, parseCoverageDecisionAnswer,
   type CoverageCommandKind, type CoverageDecisionInput,
 } from '../support/coverageCommand';
+import {
+  COVERAGE_QUOTE_AMOUNT_FIELDS, COVERAGE_QUOTE_CAPTURE_KEY, coverageQuoteFactLabel, coverageQuoteFactValue, parseCoverageQuoteAnswer, type CoverageQuoteInput,
+} from '../support/coverageQuoteCommand';
 
 const CONFIRMATION_MINUTES = 30;
 const sha = (text: string) => createHash('sha256').update(text).digest('hex');
@@ -89,7 +94,53 @@ function decisionCapture(comparison: ComparisonRow, contextVersion: string, ente
   };
 }
 
-export async function coverageCommandResult(userId: string, propertyId: string, launch: CoverageCommandLaunch, supplied?: CoverageDecisionInput): Promise<AskOperationResult> {
+const MAX_QUOTE_SOURCES = 50;
+/** Home Records the owner can attach as a quote source. The comparison is the primary owner's, so the canonical service checks the inventory as OWNER; archived records are not offered. */
+async function quoteSources(propertyId: string) {
+  const inventory = await listPropertyDocuments({ propertyId, role: HouseholdRole.OWNER });
+  return inventory.items
+    .filter((entry) => entry.source === 'HOME_RECORD' && entry.lifecycle !== 'ARCHIVED')
+    .sort((left, right) => right.addedAt.getTime() - left.addedAt.getTime())
+    .slice(0, MAX_QUOTE_SOURCES);
+}
+
+function quoteCapture(sources: Awaited<ReturnType<typeof quoteSources>>, contextVersion: string, entered?: Record<string, unknown>): AskCaptureRequest {
+  const clean = Object.fromEntries(Object.entries(entered ?? {}).filter(([, v]) => v !== null && v !== undefined && v !== ''));
+  const money = (key: string, label: string) => ({ key, label: `${label} ($)`, required: false, inputSchema: { type: 'NUMBER' as const, min: 0, max: 1_000_000_000 } });
+  return {
+    requirementId: 'coverage-quote-inputs', captureKey: COVERAGE_QUOTE_CAPTURE_KEY, classification: 'WORKFLOW_INPUT', state: 'UNKNOWN', title: 'Add a quote to compare',
+    question: 'Which document is the quote, and what does it say?',
+    helpText: 'Enter only what the document states. Ask does not read the file. Values you have not checked against it are kept as pending and do not count toward equivalence. Nothing is saved until you confirm.',
+    inputSchema: { type: 'GROUP', fields: [
+      { key: 'sourceRecordId', label: 'Quote document', required: true, inputSchema: { type: 'SINGLE_SELECT', options: sources.map((s) => ({ label: `${s.title} (${s.kindLabel}, added ${humanDate(s.addedAt) ?? 'earlier'})`, value: s.id })) } },
+      { key: 'label', label: 'Name for this option', required: true, inputSchema: { type: 'SHORT_TEXT', maxLength: 120 } },
+      { key: 'carrierName', label: 'Carrier', required: false, inputSchema: { type: 'SHORT_TEXT', maxLength: 160 } },
+      ...COVERAGE_QUOTE_AMOUNT_FIELDS.map(([, key, label]) => money(key, label)),
+      { key: 'policyForm', label: 'Policy form', required: false, inputSchema: { type: 'SHORT_TEXT', maxLength: 500 } },
+      { key: 'valuationBasis', label: 'Valuation basis', required: false, inputSchema: { type: 'SHORT_TEXT', maxLength: 500 } },
+      { key: 'endorsements', label: 'Endorsements (separate with commas)', required: false, inputSchema: { type: 'SHORT_TEXT', maxLength: 500 } },
+      { key: 'sourcePage', label: 'Page of the document', required: false, inputSchema: { type: 'NUMBER', min: 1, max: 10_000 } },
+      { key: 'checked', label: 'I checked these values against the document', required: false, inputSchema: { type: 'SINGLE_SELECT', options: [{ label: 'Yes, I checked them', value: 'YES' }, { label: 'Not yet', value: 'NO' }] } },
+    ] } as unknown as AskCaptureRequest['inputSchema'],
+    currentAnswer: clean, allowNotSure: false, sensitivity: 'FINANCIAL', destinationLabel: 'Adds the option to the comparison after confirmation', confirmationText: null,
+    expectedContextVersion: contextVersion,
+  };
+}
+
+/** The form's own answer shape, to seed the capture again from a validated quote. */
+function flattenQuote(quote: CoverageQuoteInput): Record<string, unknown> {
+  const out: Record<string, unknown> = { sourceRecordId: quote.sourceRecordId, label: quote.label, carrierName: quote.carrierName, sourcePage: quote.sourcePage, checked: quote.checked ? 'YES' : 'NO' };
+  for (const fact of quote.facts) {
+    const field = COVERAGE_QUOTE_AMOUNT_FIELDS.find(([key]) => key === fact.factKey)?.[1];
+    if (field) out[field] = fact.amountValue;
+    else if (fact.factKey === 'POLICY_FORM') out.policyForm = fact.textValue;
+    else if (fact.factKey === 'VALUATION_BASIS') out.valuationBasis = fact.textValue;
+    else if (fact.factKey === 'ENDORSEMENTS') out.endorsements = (fact.jsonValue ?? []).join(', ');
+  }
+  return out;
+}
+
+export async function coverageCommandResult(userId: string, propertyId: string, launch: CoverageCommandLaunch, supplied?: CoverageDecisionInput, suppliedQuote?: CoverageQuoteInput): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
   if (access.role === HouseholdRole.VIEWER) return permissionBlocked();
   if (!(await isPrimaryOwner(userId, propertyId))) return ownerOnly();
@@ -116,6 +167,37 @@ export async function coverageCommandResult(userId: string, propertyId: string, 
   if (kind === 'REVIEW') {
     const contextVersion = sha(`coverage-review:${propertyId}`);
     return confirm(contextVersion, 'Review my coverage?', 'This prepares a short list of questions from the confirmed facts on your policy, replacing the earlier review. It reaches no conclusion about what a claim would pay and contacts no one.', 'Prepare review', [], {});
+  }
+  if (kind === 'ADD_QUOTE') {
+    const comparison = await loadComparison(propertyId, launch.entityId);
+    if (!comparison) return unavailable('COVERAGE_COMPARISON_NOT_FOUND', 'That comparison is no longer available', 'Ask could not find that coverage comparison. Nothing has changed.');
+    if (comparison.status !== 'DRAFT' || comparison.decisions.length) {
+      return unavailable('COVERAGE_DECISION_ALREADY_RECORDED', 'A decision is already recorded', 'This comparison already has a decision, so a quote cannot be added to it. Nothing has changed.');
+    }
+    const sources = await quoteSources(propertyId);
+    if (!sources.length) {
+      return unavailable('COVERAGE_QUOTE_NO_DOCUMENT', 'Add the quote to your home records first',
+        'A quote is added from a document on file, and there is none. Ask cannot upload a file: add it to your home records, then ask again. Nothing has changed.');
+    }
+    const contextVersion = comparisonVersion(comparison);
+    const launchParameters = { coverageCommandLaunch: { kind, entityId: comparison.id, sourceExecutionId: launch.sourceExecutionId } };
+    if (!suppliedQuote) {
+      return {
+        status: 'NEEDS_CONTEXT', reasonCode: 'COVERAGE_QUOTE_INPUT_REQUIRED', contextVersion, parameters: launchParameters,
+        blocks: [{ type: 'SUMMARY', id: 'coverage-quote-input', title: 'Add a quote to compare', body: 'Choose the document and enter what it states. Nothing is saved until you review and confirm.', tone: 'DEFAULT', actions: [] }],
+        captureRequests: [quoteCapture(sources, contextVersion)], suggestions: [],
+      };
+    }
+    const source = sources.find((entry) => entry.id === suppliedQuote.sourceRecordId);
+    if (!source) return unavailable('COVERAGE_QUOTE_DOCUMENT_NOT_OFFERED', 'Choose a document from the list', 'That document is not one on file for this home. Nothing has changed.');
+    return confirm(contextVersion, `Add "${suppliedQuote.label}" to the comparison?`,
+      'This adds the quote to your comparison so it can be lined up with your verified policy. Ask did not read the document. It does not contact an insurer, change your policy or recommend a carrier. Values not checked against the document stay pending and do not count toward equivalence.',
+      'Add quote',
+      [{ label: 'Option', value: suppliedQuote.label }, ...(suppliedQuote.carrierName ? [{ label: 'Carrier', value: suppliedQuote.carrierName }] : []), { label: 'Document', value: source.title },
+        ...suppliedQuote.facts.map((fact) => ({ label: coverageQuoteFactLabel(fact.factKey), value: coverageQuoteFactValue(fact) })),
+        ...(suppliedQuote.sourcePage ? [{ label: 'Page', value: String(suppliedQuote.sourcePage) }] : []),
+        { label: 'Checked against the document', value: suppliedQuote.checked ? 'Yes' : 'No: kept as pending' }],
+      { coverageQuote: suppliedQuote }, quoteCapture(sources, contextVersion, flattenQuote(suppliedQuote)));
   }
   // DECIDE
   const comparison = await loadComparison(propertyId, launch.entityId);
@@ -180,6 +262,24 @@ async function confirmCoverageCommand(ctx: ConfirmCapabilityContext): Promise<Co
       artifactType = 'COVERAGE_REVIEW'; artifactId = (review as { id?: string }).id ?? artifactId;
       title = 'Coverage review ready'; description = 'The questions are prepared from the confirmed facts on your policy. It reaches no conclusion about what a claim would pay.';
       actions.push(backToReview);
+    } else if (kind === 'ADD_QUOTE') {
+      const comparison = await loadComparison(propertyId, command.entityId);
+      if (!comparison || comparison.status !== 'DRAFT' || comparison.decisions.length) throw stale('That comparison is no longer open.');
+      if (parameters.coverageContextVersion !== comparisonVersion(comparison)) {
+        throw stale('This comparison changed while the confirmation was open. Review it again and try again.', 'ASK_CONTEXT_VERSION_CONFLICT');
+      }
+      const checked = parseCoverageQuoteAnswer(flattenQuote(parameters.coverageQuote as CoverageQuoteInput));
+      if (!checked.success) throw stale('The quote to add is invalid.');
+      const sources = await quoteSources(propertyId);
+      if (!sources.some((entry) => entry.id === checked.data.sourceRecordId)) throw stale('That document is no longer on file. Review it again and try again.');
+      const option = await addCoverageComparisonOption(propertyId, comparison.id, userId, {
+        optionType: 'QUOTE_DOCUMENT', label: checked.data.label, carrierName: checked.data.carrierName, sourceDocumentId: checked.data.sourceRecordId,
+        facts: checked.data.facts.map((fact) => ({ ...fact })),
+      });
+      artifactType = 'COVERAGE_COMPARISON_OPTION'; artifactId = option.id;
+      title = 'Quote added to the comparison';
+      description = 'It is lined up with your verified policy. No insurer was contacted and your policy was not changed. Values you did not check stay pending until you confirm them.';
+      actions.push({ ...backToComparison, label: 'See the comparison', style: 'PRIMARY' });
     } else {
       const comparison = await loadComparison(propertyId, command.entityId);
       if (!comparison) throw stale('That comparison is no longer available.');

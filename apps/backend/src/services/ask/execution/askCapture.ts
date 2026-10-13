@@ -108,6 +108,7 @@ import { briefingShareResult } from '../handlers/homeBriefingShareCommands.handl
 import { hoaFormKindFromCaptureKey, parseHoaFormAnswer } from '../support/hoaComplianceCommand';
 import { hoaCommandResult } from '../handlers/hoaComplianceCommands.handler';
 import { COVERAGE_DECISION_CAPTURE_KEY, parseCoverageDecisionAnswer, type CoverageCommandKind } from '../support/coverageCommand';
+import { COVERAGE_QUOTE_CAPTURE_KEY, parseCoverageQuoteAnswer } from '../support/coverageQuoteCommand';
 import { parseUpgradeFormAnswer, upgradeFormKindFromCaptureKey, type UpgradeCommandKind } from '../support/homeUpgradeCommand';
 import { parsePermitFormAnswer, permitFormKindFromCaptureKey, type PermitCommandKind } from '../support/permitTrackerCommand';
 import { buyerNegotiationKindFromCaptureKey, parseBuyerNegotiationAnswer } from '../support/negotiationShieldBuyer';
@@ -1214,22 +1215,32 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
     canonicalOwner = 'HomeDigitalTwinScenario';
   } else if (execution.operationId === 'COVERAGE_COMMAND') {
-    if (input.captureKey !== COVERAGE_DECISION_CAPTURE_KEY) throw Object.assign(new Error('This coverage form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    const coverageQuoteForm = input.captureKey === COVERAGE_QUOTE_CAPTURE_KEY;
+    if (input.captureKey !== COVERAGE_DECISION_CAPTURE_KEY && !coverageQuoteForm) throw Object.assign(new Error('This coverage form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
     const access = await ensurePropertyAccess(userId, execution.propertyId);
     if (access.role === HouseholdRole.VIEWER) throw Object.assign(new Error('A contributor or owner is required to change coverage records.'), { code: 'ASK_PERMISSION_REQUIRED' });
     const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson) ? execution.parametersJson as Record<string, unknown> : {};
     const coverageLaunch = storedParameters.coverageCommandLaunch && typeof storedParameters.coverageCommandLaunch === 'object' && !Array.isArray(storedParameters.coverageCommandLaunch)
       ? storedParameters.coverageCommandLaunch as { kind?: unknown; entityId?: unknown; sourceExecutionId?: unknown } : null;
-    if (!coverageLaunch || coverageLaunch.kind !== 'DECIDE' || typeof coverageLaunch.entityId !== 'string') {
+    if (!coverageLaunch || coverageLaunch.kind !== (coverageQuoteForm ? 'ADD_QUOTE' : 'DECIDE') || typeof coverageLaunch.entityId !== 'string') {
       throw Object.assign(new Error('This coverage form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
     }
-    const coverageAnswer = parseCoverageDecisionAnswer(input.answer);
-    if (!coverageAnswer.success) {
-      throw Object.assign(new Error(coverageAnswer.reason === 'OPTION_REQUIRED' ? 'Choose the option you would switch to.' : 'Choose what you want to do about your coverage.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
-    }
-    result = await coverageCommandResult(userId, execution.propertyId, {
+    const coverageLaunchArg = {
       kind: coverageLaunch.kind as CoverageCommandKind, entityId: coverageLaunch.entityId, sourceExecutionId: typeof coverageLaunch.sourceExecutionId === 'string' ? coverageLaunch.sourceExecutionId : null,
-    }, coverageAnswer.data);
+    };
+    if (coverageQuoteForm) {
+      const quoteAnswer = parseCoverageQuoteAnswer(input.answer);
+      if (!quoteAnswer.success) {
+        throw Object.assign(new Error(quoteAnswer.reason === 'NO_FACTS' ? 'Enter at least one value from the quote.' : 'Check the form: choose the document and name the option.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+      }
+      result = await coverageCommandResult(userId, execution.propertyId, coverageLaunchArg, undefined, quoteAnswer.data);
+    } else {
+      const coverageAnswer = parseCoverageDecisionAnswer(input.answer);
+      if (!coverageAnswer.success) {
+        throw Object.assign(new Error(coverageAnswer.reason === 'OPTION_REQUIRED' ? 'Choose the option you would switch to.' : 'Choose what you want to do about your coverage.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+      }
+      result = await coverageCommandResult(userId, execution.propertyId, coverageLaunchArg, coverageAnswer.data);
+    }
     captureId = input.idempotencyKey;
     capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
     canonicalOwner = 'CoverageComparison';

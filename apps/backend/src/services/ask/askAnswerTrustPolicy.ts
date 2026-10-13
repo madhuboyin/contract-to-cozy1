@@ -302,7 +302,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   HOME_STATUS_BOARD: new Set(['status-board-refresh', 'status-board-correct', 'correct-installedOn']),
   PERMIT_TRACKER_STATUS: new Set(['permit-tracker-add', 'permit-tracker-edit', 'permit-tracker-remove']),
   // The comparison answer offers Start a comparison / Record my decision, and the review answer offers Review my coverage, to a contributor or owner.
-  COVERAGE_COMPARISON_STATUS: new Set(['coverage-start-comparison', 'coverage-record-decision']),
+  COVERAGE_COMPARISON_STATUS: new Set(['coverage-start-comparison', 'coverage-record-decision', 'coverage-add-quote']),
   COVERAGE_REVIEW_STATUS: new Set(['coverage-generate-review']),
   // The upgrade options answer's Manage options rows offer these to a contributor or owner.
   HOME_UPGRADE_SCENARIOS: new Set(['home-upgrade-decide', 'home-upgrade-compute', 'home-upgrade-rename', 'home-upgrade-archive', 'home-upgrade-restore', 'home-upgrade-delete']),

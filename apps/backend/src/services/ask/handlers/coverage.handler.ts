@@ -326,11 +326,16 @@ async function coverageComparisonStatusResult(userId: string, propertyId: string
       ? `Decided ${humanDate(latestDecision.decidedAt)}${latestDecision.rationale ? `: “${latestDecision.rationale}”` : '.'}`
       : alternativeOptions.length
         ? `Overall status: ${COVERAGE_COMPARISON_EQUIVALENCE_LABELS[comparison.equivalenceStatus] ?? comparison.equivalenceStatus}.`
-        : 'Adding a quote or another policy term to compare against your current coverage is not currently available in Ask; you can still record a keep, shop or decide-later decision.',
+        : canChange
+          ? 'Add a quote from a document on your home records to line it up against your current coverage, or record a keep, shop or decide-later decision. Adding another verified policy term is not currently available in Ask.'
+          : 'Adding a quote or another policy term to compare against your current coverage is not currently available in Ask; a contributor or owner can record a keep, shop or decide-later decision.',
     tone: latestDecision ? 'POSITIVE' : alternativeOptions.length ? 'DEFAULT' : 'DEFAULT',
     actions: canChange && !latestDecision && comparison.status === 'DRAFT' ? [{
+      id: COVERAGE_COMMAND_ACTION_IDS.ADD_QUOTE, label: 'Add a quote', interactionType: 'START_WORKFLOW' as const, message: COVERAGE_COMMAND_MESSAGES.ADD_QUOTE,
+      operationId: 'COVERAGE_COMMAND' as const, entityType: COVERAGE_COMPARISON_ENTITY_TYPE, entityId: comparison.id, style: alternativeOptions.length ? 'SECONDARY' as const : 'PRIMARY' as const,
+    }, {
       id: COVERAGE_COMMAND_ACTION_IDS.DECIDE, label: 'Record my decision', interactionType: 'START_WORKFLOW' as const, message: COVERAGE_COMMAND_MESSAGES.DECIDE,
-      operationId: 'COVERAGE_COMMAND' as const, entityType: COVERAGE_COMPARISON_ENTITY_TYPE, entityId: comparison.id, style: 'PRIMARY' as const,
+      operationId: 'COVERAGE_COMMAND' as const, entityType: COVERAGE_COMPARISON_ENTITY_TYPE, entityId: comparison.id, style: alternativeOptions.length ? 'PRIMARY' as const : 'SECONDARY' as const,
     }] : [],
   }];
 

@@ -3,7 +3,7 @@
 //
 // Owner-only, as coverage comparison and review are: both services authorize the home's primary owner, so Ask discloses that instead of offering a form
 // it would refuse. A decision to CHANGE needs the option chosen, and, unless that option is equivalent, the reason the tradeoff is accepted, exactly as the
-// canonical service requires. Adding a quote or another policy term to compare needs document evidence and is a separate slice.
+// canonical service requires. A quote is added from a document on file (support/coverageQuoteCommand.ts); adding another verified policy term is not offered.
 import { z } from 'zod';
 
 export const COVERAGE_PROPERTY_ENTITY_TYPE = 'COVERAGE_PROPERTY';
@@ -12,9 +12,10 @@ export const COVERAGE_COMMAND_MESSAGES = {
   START: 'Start a coverage comparison against my verified policy.',
   REVIEW: 'Review my coverage with the confirmed policy facts.',
   DECIDE: 'Record my coverage decision.',
+  ADD_QUOTE: 'Add a quote to my coverage comparison.',
 } as const;
 export type CoverageCommandKind = keyof typeof COVERAGE_COMMAND_MESSAGES;
-export const COVERAGE_COMMAND_ACTION_IDS = { START: 'coverage-start-comparison', REVIEW: 'coverage-generate-review', DECIDE: 'coverage-record-decision' } as const;
+export const COVERAGE_COMMAND_ACTION_IDS = { START: 'coverage-start-comparison', REVIEW: 'coverage-generate-review', DECIDE: 'coverage-record-decision', ADD_QUOTE: 'coverage-add-quote' } as const;
 export const coverageCommandKindFromMessage = (message: string): CoverageCommandKind | null =>
   ((Object.entries(COVERAGE_COMMAND_MESSAGES) as Array<[CoverageCommandKind, string]>).find(([, value]) => value === message)?.[0]) ?? null;
 export const coverageCommandTargetsProperty = (kind: CoverageCommandKind) => kind === 'START' || kind === 'REVIEW';
