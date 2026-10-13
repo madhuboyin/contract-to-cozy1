@@ -39,6 +39,18 @@ type Candidate = {
   sourceObservedAt?: Date | null;
 };
 
+/**
+ * Which store an evidence id points at, looked up rather than assumed: scope documents are stored as bare ids. A Home Record wins (it is canonical and
+ * ids are uuids, so an id is in one store); an id in neither (deleted evidence) is null.
+ */
+async function classifyEvidenceId(propertyId: string, id: string | null | undefined): Promise<RenovationEvidenceSource | null> {
+  if (!id) return null;
+  const record = await prisma.propertyRecord.findFirst({ where: { id, propertyId, lifecycleStatus: { not: 'TRASHED' } }, select: { id: true } });
+  if (record) return 'HOME_RECORD';
+  const legacy = await prisma.document.findFirst({ where: { id, propertyId }, select: { id: true } });
+  return legacy ? 'LEGACY_DOCUMENT' : null;
+}
+
 function json(value: unknown): Prisma.InputJsonValue {
   return value as Prisma.InputJsonValue;
 }
@@ -326,8 +338,8 @@ export async function evaluateReadiness(
     dueAt,
     evidenceRequired: 'The agreed price and governing contract/scope document.',
     evidenceDocumentId: scope.specificationDocumentIds[0],
-    // Scope documents are validated against the legacy store until the scope write path moves (renovationCase.service assertDocumentsInProperty).
-    evidenceSource: scope.specificationDocumentIds[0] ? 'LEGACY_DOCUMENT' : null,
+    // Scope documents are bare ids (Home Records, or legacy until they are all moved), so the store is looked up.
+    evidenceSource: await classifyEvidenceId(propertyId, scope.specificationDocumentIds[0]),
     evidenceReference: scope.specificationDocumentIds.length
       ? `${scope.specificationDocumentIds.length} scope/contract document(s)`
       : `Scope version ${scope.version}`,
@@ -798,11 +810,15 @@ export async function handoffToProject(
       : 0);
   const contractorName = input.contractorName ?? quoteWorkspace?.selectedVendorName ?? undefined;
   const contractorLicense = input.contractorLicense ?? quote?.providerLicenseNumber ?? undefined;
-  const inheritedDocumentIds = [...new Set([
-    ...scope.drawingDocumentIds,
-    ...scope.specificationDocumentIds,
-    ...documents,
-  ])];
+  // The project's contract documents are still read from the legacy store, so only ids that are legacy Documents can be carried over. A scope
+  // document that is a Home Record stays on the case and is named in the project description rather than silently dropped.
+  const candidateInherited = [...new Set([...scope.drawingDocumentIds, ...scope.specificationDocumentIds, ...documents])];
+  const inheritedRows = candidateInherited.length
+    ? await prisma.document.findMany({ where: { id: { in: candidateInherited }, propertyId }, select: { id: true } })
+    : [];
+  const legacyInheritable = new Set(inheritedRows.map((row) => row.id));
+  const inheritedDocumentIds = candidateInherited.filter((id) => legacyInheritable.has(id));
+  const notCarriedOver = candidateInherited.length - inheritedDocumentIds.length;
   let project: Awaited<ReturnType<typeof projectTrackerService.createProject>>;
   try {
     project = await projectTrackerService.createProject(propertyId, {
@@ -817,6 +833,7 @@ export async function handoffToProject(
       scope.summary ?? renovationCase.objective ?? 'Renovation project',
       `Source scope: version ${scope.version}.`,
       'Readiness organizes records and does not establish legal compliance.',
+      ...(notCarriedOver ? [`${notCarriedOver} scope document${notCarriedOver === 1 ? ' is a Home Record and stays' : 's are Home Records and stay'} on the renovation case.`] : []),
     ].join(' '),
     sourceType: 'MANUAL',
     sourceActionId: `renovation-handoff:${input.idempotencyKey}`,

@@ -7,6 +7,7 @@ import {
 import { prisma } from '../config/database';
 import { APIError } from '../middleware/error.middleware';
 import { resolvePropertyAccess } from './propertyAccess.service';
+import { resolvePropertyDocuments } from './propertyDocuments/propertyDocumentInventory.service';
 import {
   canTransitionRenovationCase,
   diffRenovationScope,
@@ -101,7 +102,7 @@ export async function createRenovationCase(propertyId: string, actorUserId: stri
   const initialScopeDocumentIds = data.initialScope
     ? [...data.initialScope.drawingDocumentIds, ...data.initialScope.specificationDocumentIds]
     : [];
-  await assertDocumentsInProperty(propertyId, initialScopeDocumentIds);
+  await assertDocumentsInProperty(propertyId, actorUserId, initialScopeDocumentIds);
 
   const created = await prisma.$transaction(async (tx) => {
     const renovationCase = await tx.renovationCase.create({
@@ -380,13 +381,20 @@ function scopeSnapshot(scope: any): ScopeSnapshot {
   };
 }
 
-async function assertDocumentsInProperty(propertyId: string, documentIds: string[]) {
+/**
+ * A scope document is a Home Record the acting member can see (record-level visibility applies), or, until scope documents are all moved, a legacy
+ * Document of the property. The ids carry no store marker, so a reader that needs the store looks the id up (see classifyEvidenceId in the readiness
+ * service). Home Records is the canonical store; the legacy branch goes away when no caller sends one.
+ */
+async function assertDocumentsInProperty(propertyId: string, actorUserId: string, documentIds: string[]) {
   const uniqueIds = [...new Set(documentIds)];
   if (uniqueIds.length === 0) return;
-  const count = await prisma.document.count({ where: { id: { in: uniqueIds }, propertyId } });
-  if (count !== uniqueIds.length) {
+  const access = await resolvePropertyAccess(actorUserId, propertyId);
+  if (!access) throw new APIError('Property not found or access denied.', 404, 'PROPERTY_NOT_FOUND');
+  const resolved = await resolvePropertyDocuments({ propertyId, role: access.role, ids: uniqueIds, includeLegacy: true });
+  if (resolved.length !== uniqueIds.length) {
     throw new APIError(
-      'Every scope document must belong to the same property.',
+      'Every scope document must be a document on file for this property that you can see.',
       409,
       'RENOVATION_SCOPE_DOCUMENT_MISMATCH',
     );
@@ -421,6 +429,7 @@ export async function createScopeVersion(
   }
   await assertDocumentsInProperty(
     propertyId,
+    actorUserId,
     [...data.drawingDocumentIds, ...data.specificationDocumentIds],
   );
   const comparison = diffRenovationScope(scopeSnapshot(previous), scopeSnapshot(data));
