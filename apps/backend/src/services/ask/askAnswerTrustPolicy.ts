@@ -182,6 +182,9 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   NEGOTIATION_SHIELD_CASE_ATTACH: new Set(['negotiation-shield-review', 'negotiation-shield-analyze']),
   // The readiness answer's empty state offers the start; the receipt of a started case offers that case's readiness check.
   RENOVATION_CASE_START: new Set(['renovation-case-readiness']),
+  // Set up or update the HOA details, add, change or remove an approval request as reported, and report a violation notice (register P2 HOA Compliance). Confirmation-gated, declared-action only; an association decision with its evidence stays on the page.
+  HOA_COMPLIANCE_STATUS: new Set(['hoa-association', 'hoa-approval-add', 'hoa-approval-edit', 'hoa-approval-remove', 'hoa-violation-report']),
+  HOA_COMPLIANCE_COMMAND: new Set(['hoa-back']),
   // Prepare the member's briefing, change their briefing settings, and mark an update seen, dismissed or not useful (register P1 Home Briefing). Confirmation-gated, declared-action only; the briefing is the caller's own.
   HOME_BRIEFING_VIEW: new Set(['home-briefing-generate', 'home-briefing-preferences', 'home-briefing-seen', 'home-briefing-dismiss', 'home-briefing-not-useful']),
   HOME_BRIEFING_COMMAND: new Set(['home-briefing-back']),

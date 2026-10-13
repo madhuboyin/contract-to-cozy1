@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth.middleware';
-import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
+import { propertyAuthMiddleware, requireHouseholdRole } from '../middleware/propertyAuth.middleware';
 import { validateBody } from '../middleware/validate.middleware';
 import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
 
@@ -32,6 +32,7 @@ router.get('/properties/:propertyId/hoa', propertyAuthMiddleware, getAssociation
 router.put(
   '/properties/:propertyId/hoa',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(UpsertAssociationSchema),
   upsertAssociation,
 );
@@ -41,22 +42,25 @@ router.get('/properties/:propertyId/hoa/approvals', propertyAuthMiddleware, list
 router.post(
   '/properties/:propertyId/hoa/approvals',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(CreateApprovalRecordSchema),
   createApprovalRecord,
 );
 router.patch(
   '/properties/:propertyId/hoa/approvals/:id',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(UpdateApprovalRecordSchema),
   updateApprovalRecord,
 );
-router.delete('/properties/:propertyId/hoa/approvals/:id', propertyAuthMiddleware, deleteApprovalRecord);
+router.delete('/properties/:propertyId/hoa/approvals/:id', propertyAuthMiddleware, requireHouseholdRole('CONTRIBUTOR'), deleteApprovalRecord);
 
 // ── Violations ──────────────────────────────────────────────────────────────
 router.get('/properties/:propertyId/hoa/violations', propertyAuthMiddleware, listViolations);
 router.post(
   '/properties/:propertyId/hoa/violations',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(ReportViolationSchema),
   reportViolation,
 );

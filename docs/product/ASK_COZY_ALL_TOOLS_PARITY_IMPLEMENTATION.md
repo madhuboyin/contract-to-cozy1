@@ -219,7 +219,7 @@ Project Tracker appeared in the original P0 list as "lists projects." It is remo
 | Neighborhood Change Radar | Partial: follow, dismiss and not relevant implemented (FRD v1.326) | Filters and event detail (read presentation); viewer-capable Ask commands (framework) | Not browser- or database-verified |
 | Home Briefing / Home Gazette | Partial: read, prepare, settings and update readings implemented (FRD v1.327; Gazette retired) | Sharing selected updates (owner decision); acted-on outcome | Not browser- or database-verified |
 | Appliance Oracle | Decided boundary (FRD v1.70, option A, 2026-09-24) | Calculated risk is shown; model-generated replacement picks are excluded by decision, with tests that fail on a model call from Ask | Not re-verified; decision cited from the FRD |
-| Maintenance Budget Planner | AI tips: Decided boundary (FRD v1.70). Editable deterministic assumptions: Residual gap | Forecast exists; AI tips are excluded by the v1.70 decision; whether editable deterministic assumptions are separable from it has not been checked | Not re-verified |
+| Maintenance Budget Planner | **Closed 2026-10-13 (code-traced):** no desktop gap. AI tips: decided boundary (FRD v1.70). The desktop page has no editable assumptions: `GET /forecast/:propertyId` takes no overrides (`calculationContext` is always CANONICAL) and `BudgetForecaster.tsx` only toggles a monthly or category view and expands a month, both of which Ask shows (`By category`, `By month`). | Nothing to implement | Code-traced, not browser-verified |
 
 ### P2 — central job mostly covered; bounded controls remain (14 tools)
 
@@ -234,7 +234,7 @@ Project Tracker appeared in the original P0 list as "lists projects." It is remo
 | DIY | Residual gap | Template, project and step operations are strong; planning visuals and bulk editing are not currently available in Ask | Not re-verified |
 | Service Price Radar | Residual gap | Quote checking works inline; saved-check correction/deletion and richer history remain | Not re-verified |
 | Do-Nothing Simulator | Residual gap | Ask can run and read simulations; complete scenario creation/editing is not reproduced | Not re-verified |
-| HOA Compliance | Residual gap (larger than recorded) | **Verified 2026-10-12 (code-traced: only `HOA_COMPLIANCE_STATUS` exists, a read of association, approvals and violations):** Ask has no write. Not in Ask: association create/update, approval record create/update/delete, violation create/update | **Verified 2026-10-12** (code-traced) |
+| HOA Compliance | Partial: association, approval requests as reported, and violation notices implemented (FRD v1.328) | Recording an association decision with its evidence; attaching documents; renovation-advisor link | Not browser- or database-verified |
 | Guidance Overview | Residual gap | Create, continue, skip and dismiss exist; richer plan editing is limited | Not re-verified |
 | Repair or Replace | Needs verification | Registry carries `REPLACEMENT_GUIDANCE` and the HVAC decision platform; no operation named for the item-level repair/replace analysis was found by name search, so coverage is unconfirmed and must be read per desktop route in its own slice | Not re-verified (2026-10-12 name search only) |
 | Documents and Home Records | Residual gap | Strong detail, upload, extraction review and promotion; specialized uploads retain owning workflows | Not re-verified |

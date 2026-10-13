@@ -34,14 +34,18 @@ test('HOA approval editor preserves inputs and resumes after inline capture', ()
 });
 
 test('HOA execution preserves association precedence then enforces shared and owner policies', () => {
+  // The gate lives in hoaComplianceOperations (FRD v1.328), which the route and Ask both call; the controller must go through it.
   const controller = read('../../src/controllers/hoaCompliance.controller.ts');
-  const createStart = controller.indexOf('export async function createApprovalRecord');
-  const association = controller.indexOf("['hoaCompliance']", createStart);
-  const shared = controller.indexOf('evaluateFeatureContext', association);
-  const owner = controller.indexOf("['ownerProjectExecution']", shared);
-  const canonical = controller.indexOf('hoaComplianceService.createApprovalRecord', owner);
+  assert.match(controller, /createHoaApprovalRecordWithEffects/);
+  assert.equal(controller.indexOf('hoaComplianceService.createApprovalRecord'), -1, 'the controller no longer creates a record around the gate');
+  const operations = read('../../src/services/hoaComplianceOperations.ts');
+  const createStart = operations.indexOf('export async function createHoaApprovalRecordWithEffects');
+  const association = operations.indexOf("['hoaCompliance']", createStart);
+  const shared = operations.indexOf('evaluateFeatureContext', association);
+  const owner = operations.indexOf("['ownerProjectExecution']", shared);
+  const canonical = operations.indexOf('hoaComplianceService.createApprovalRecord', owner);
   assert.ok(createStart >= 0 && association > createStart && shared > association && owner > shared && canonical > owner);
-  assert.match(controller, /PROPERTY_CONTEXT_INCOMPLETE/);
+  assert.match(operations, /PROPERTY_CONTEXT_INCOMPLETE/);
 });
 
 test('HOA shared adoption retains the canonical association-backed approval writer', () => {

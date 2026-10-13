@@ -6,6 +6,8 @@ import { type AskOperationResult } from '../askOperationRegistry';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { hoaComplianceService } from '../../hoaCompliance.service';
 import { humanDate, readableCode } from '../askFormatting';
+import { ensurePropertyAccess } from '../askHandlerSupport';
+import { HOA_APPROVAL_ENTITY_TYPE, HOA_COMMAND_ACTION_IDS, HOA_COMMAND_MESSAGES, HOA_PROPERTY_ENTITY_TYPE, type HoaCommandKind } from '../support/hoaComplianceCommand';
 
 // HOA Compliance capability-card slice (FRD v1.66): the seventeenth new operation for a capability with none (the v1.47
 // "needs a product decision" label did not hold once the page was traced). Reads HoaComplianceService getAssociation,
@@ -41,7 +43,12 @@ export function hoaComplianceFromView(
   view: { association: HoaAssociationView; approvals: readonly HoaApprovalView[]; violations: readonly HoaViolationView[] },
   propertyId: string,
   now: Date = new Date(),
+  canChange = false,
 ): AskOperationResult {
+  const summaryAction = (kind: Extract<HoaCommandKind, 'ASSOCIATION' | 'APPROVAL_ADD' | 'VIOLATION'>, label: string, style: 'PRIMARY' | 'SECONDARY') => ({
+    id: HOA_COMMAND_ACTION_IDS[kind], label, interactionType: 'START_WORKFLOW' as const, message: HOA_COMMAND_MESSAGES[kind], operationId: 'HOA_COMPLIANCE_COMMAND' as const,
+    entityType: HOA_PROPERTY_ENTITY_TYPE, entityId: propertyId, style,
+  });
   const boundary: AskPresentationBlock = {
     type: 'BOUNDARY', id: 'hoa-compliance-boundary', title: 'A reported status is not an approval',
     body: 'Statuses marked "You reported" are what the household entered. Only a decision on record from the association (or its documents) shows what was approved, and the association\'s own records control. Confirm with the association before starting work.',
@@ -54,7 +61,7 @@ export function hoaComplianceFromView(
       blocks: [{
         type: 'SUMMARY', id: 'hoa-compliance-summary', title: 'No HOA recorded for this home',
         body: 'HOA Compliance keeps your association, dues, approval requests and any violation notices in one place. If this home has an HOA, adding the association is not currently available in Ask.',
-        tone: 'DEFAULT', actions: [],
+        tone: 'DEFAULT', actions: canChange ? [summaryAction('ASSOCIATION', 'Set up my HOA', 'PRIMARY')] : [],
       }, boundary],
       suggestions: [],
     };
@@ -95,6 +102,12 @@ export function hoaComplianceFromView(
         ? HOA_APPROVAL_STATUS_LABELS[String(record.decisionStatus)] ?? readableCode(String(record.decisionStatus))
         : 'Not confirmed',
       href: null,
+      // FRD v1.328: the household's own reported status is theirs to change; an association decision is not changed here.
+      entityType: HOA_APPROVAL_ENTITY_TYPE,
+      actions: canChange ? (['APPROVAL_EDIT', 'APPROVAL_REMOVE'] as const).map((kind) => ({
+        id: HOA_COMMAND_ACTION_IDS[kind], label: kind === 'APPROVAL_EDIT' ? 'Change' : 'Remove', message: HOA_COMMAND_MESSAGES[kind], operationId: 'HOA_COMPLIANCE_COMMAND' as const,
+        interactionType: 'MUTATE_RECORD' as const, style: kind === 'APPROVAL_EDIT' ? 'SECONDARY' as const : 'QUIET' as const,
+      })) : [],
     };
   };
   const dues = association?.duesAmountCents != null
@@ -116,12 +129,16 @@ export function hoaComplianceFromView(
       open.length ? `${open.length} open violation${open.length === 1 ? '' : 's'}.` : 'No open violations.',
     ].filter(Boolean).join(' '),
     tone: open.length ? 'CAUTION' : 'DEFAULT',
-    actions: [],
+    actions: canChange ? [
+      summaryAction('ASSOCIATION', association ? 'Update HOA details' : 'Set up my HOA', 'SECONDARY'),
+      ...(association ? [summaryAction('APPROVAL_ADD', 'Add an approval request', 'SECONDARY')] : []),
+      summaryAction('VIOLATION', 'Report a violation', 'SECONDARY'),
+    ] : [],
   }];
   if (sections.length) {
     blocks.push({
       type: 'GROUPED_LIST', filters: [], id: 'hoa-compliance-items', title: 'HOA records',
-      description: 'Open a violation for its guidance and next steps, or HOA Compliance to update a request.',
+      description: 'Each approval shows what you reported and, separately, what the association decided.',
       sections, actions: [],
     });
   }
@@ -129,13 +146,16 @@ export function hoaComplianceFromView(
   return { status: 'ANSWERED', reasonCode: 'HOA_COMPLIANCE_READY', blocks, suggestions: [] };
 }
 
-async function hoaComplianceResult(propertyId: string): Promise<AskOperationResult> {
+async function hoaComplianceResult(propertyId: string, canChange: boolean): Promise<AskOperationResult> {
   const [association, approvals, violations] = await Promise.all([
     hoaComplianceService.getAssociation(propertyId),
     hoaComplianceService.listApprovalRecords(propertyId),
     hoaComplianceService.listViolations(propertyId),
   ]);
-  return hoaComplianceFromView({ association, approvals, violations }, propertyId);
+  return hoaComplianceFromView({ association, approvals, violations }, propertyId, new Date(), canChange);
 }
 
-registerCapabilityHandler('hoa-compliance.status', async (envelope) => hoaComplianceResult(envelope.propertyId!));
+registerCapabilityHandler('hoa-compliance.status', async (envelope, deps) => {
+  const access = deps.propertyAccess ?? await ensurePropertyAccess(envelope.userId, envelope.propertyId!);
+  return hoaComplianceResult(envelope.propertyId!, access.role !== 'VIEWER');
+});

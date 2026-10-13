@@ -67,6 +67,8 @@ import { PAST_HAZARD_CAPTURE_KEY, PAST_HAZARD_INVALID_MESSAGES, parsePastHazardO
 import { pastHazardCommandResult } from '../handlers/pastHazardOutcomeCommands.handler';
 import { BRIEFING_PREFERENCES_CAPTURE_KEY, parseBriefingPreferencesAnswer } from '../support/homeBriefingCommand';
 import { briefingCommandResult } from '../handlers/homeBriefingCommands.handler';
+import { hoaFormKindFromCaptureKey, parseHoaFormAnswer } from '../support/hoaComplianceCommand';
+import { hoaCommandResult } from '../handlers/hoaComplianceCommands.handler';
 import { COVERAGE_DECISION_CAPTURE_KEY, parseCoverageDecisionAnswer, type CoverageCommandKind } from '../support/coverageCommand';
 import { parseUpgradeFormAnswer, upgradeFormKindFromCaptureKey, type UpgradeCommandKind } from '../support/homeUpgradeCommand';
 import { parsePermitFormAnswer, permitFormKindFromCaptureKey, type PermitCommandKind } from '../support/permitTrackerCommand';
@@ -1325,6 +1327,27 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     captureId = input.idempotencyKey;
     capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
     canonicalOwner = 'HomeBriefingPreference';
+  } else if (execution.operationId === 'HOA_COMPLIANCE_COMMAND') {
+    const hoaKind = hoaFormKindFromCaptureKey(input.captureKey);
+    if (!hoaKind) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    const access = await ensurePropertyAccess(userId, execution.propertyId);
+    if (access.role === HouseholdRole.VIEWER) throw Object.assign(new Error('A contributor or owner is required to change HOA records.'), { code: 'ASK_PERMISSION_REQUIRED' });
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson) ? execution.parametersJson as Record<string, unknown> : {};
+    const hoaLaunch = storedParameters.hoaCommandLaunch && typeof storedParameters.hoaCommandLaunch === 'object' && !Array.isArray(storedParameters.hoaCommandLaunch)
+      ? storedParameters.hoaCommandLaunch as { kind?: unknown; entityId?: unknown; sourceExecutionId?: unknown } : null;
+    if (!hoaLaunch || hoaLaunch.kind !== hoaKind || typeof hoaLaunch.entityId !== 'string') {
+      throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    }
+    const hoaAnswer = parseHoaFormAnswer(hoaKind, input.answer);
+    if (!hoaAnswer.success) {
+      throw Object.assign(new Error(hoaAnswer.reason === 'NOTHING' ? 'Change at least one thing.' : 'Check the form and try again.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+    }
+    result = await hoaCommandResult(userId, execution.propertyId, {
+      kind: hoaKind, entityId: hoaLaunch.entityId, sourceExecutionId: typeof hoaLaunch.sourceExecutionId === 'string' ? hoaLaunch.sourceExecutionId : null,
+    }, hoaAnswer.data);
+    captureId = input.idempotencyKey;
+    capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
+    canonicalOwner = 'HoaCompliance';
   } else if (execution.operationId === 'PROPERTY_BRIEF_COMMAND') {
     if (![PROPERTY_BRIEF_PREPARE_CAPTURE_KEY, PROPERTY_BRIEF_SHARE_CAPTURE_KEY].includes(input.captureKey) || input.expectedContextVersion !== 'property-brief-live') throw Object.assign(new Error('This Property Brief form is no longer active.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
     const access = await ensurePropertyAccess(userId, execution.propertyId);
