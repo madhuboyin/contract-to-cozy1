@@ -67,6 +67,8 @@ import { PAST_HAZARD_CAPTURE_KEY, PAST_HAZARD_INVALID_MESSAGES, parsePastHazardO
 import { pastHazardCommandResult } from '../handlers/pastHazardOutcomeCommands.handler';
 import { BRIEFING_PREFERENCES_CAPTURE_KEY, parseBriefingPreferencesAnswer } from '../support/homeBriefingCommand';
 import { briefingCommandResult } from '../handlers/homeBriefingCommands.handler';
+import { FINANCING_PROFILE_CAPTURE_KEY, parseFinancingProfileAnswer } from '../support/financingProfileCommand';
+import { financingProfileCommandResult } from '../handlers/financingProfileCommands.handler';
 import { BRIEFING_SHARE_CAPTURE_KEY, parseBriefingShareAnswer } from '../support/homeBriefingCommand';
 import { briefingShareResult } from '../handlers/homeBriefingShareCommands.handler';
 import { hoaFormKindFromCaptureKey, parseHoaFormAnswer } from '../support/hoaComplianceCommand';
@@ -1378,6 +1380,26 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     captureId = input.idempotencyKey;
     capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
     canonicalOwner = 'HomeBriefingShare';
+  } else if (execution.operationId === 'FINANCING_PROFILE_COMMAND') {
+    if (input.captureKey !== FINANCING_PROFILE_CAPTURE_KEY) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    const access = await ensurePropertyAccess(userId, execution.propertyId);
+    if (access.role !== HouseholdRole.OWNER) throw Object.assign(new Error('Only an owner can change the financing profile.'), { code: 'ASK_PERMISSION_REQUIRED' });
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson) ? execution.parametersJson as Record<string, unknown> : {};
+    const profileLaunch = storedParameters.financingProfileLaunch && typeof storedParameters.financingProfileLaunch === 'object' && !Array.isArray(storedParameters.financingProfileLaunch)
+      ? storedParameters.financingProfileLaunch as { entityId?: unknown; sourceExecutionId?: unknown } : null;
+    if (!profileLaunch || typeof profileLaunch.entityId !== 'string') {
+      throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    }
+    const profileAnswer = parseFinancingProfileAnswer(input.answer);
+    if (!profileAnswer.success) {
+      throw Object.assign(new Error(profileAnswer.reason === 'NOTHING' ? 'Change at least one thing.' : 'Check the amounts, dates and rate and try again.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+    }
+    result = await financingProfileCommandResult(userId, execution.propertyId, {
+      entityId: profileLaunch.entityId, sourceExecutionId: typeof profileLaunch.sourceExecutionId === 'string' ? profileLaunch.sourceExecutionId : null,
+    }, input.answer as Record<string, unknown>);
+    captureId = input.idempotencyKey;
+    capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
+    canonicalOwner = 'PropertyFinancingProfile';
   } else if (execution.operationId === 'PROPERTY_BRIEF_COMMAND') {
     if (![PROPERTY_BRIEF_PREPARE_CAPTURE_KEY, PROPERTY_BRIEF_SHARE_CAPTURE_KEY].includes(input.captureKey) || input.expectedContextVersion !== 'property-brief-live') throw Object.assign(new Error('This Property Brief form is no longer active.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
     const access = await ensurePropertyAccess(userId, execution.propertyId);

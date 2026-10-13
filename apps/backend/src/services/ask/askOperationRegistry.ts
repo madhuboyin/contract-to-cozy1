@@ -127,6 +127,8 @@ export type AskOperationId =
   // Start a renovation case (register section 3): a confirmation-gated command reached by the declared Start a renovation case action on the readiness
   // answer or a typed "start a renovation case"; never by fuzzy retrieval.
   | 'RENOVATION_CASE_START'
+  // Change the home's recorded mortgage and purchase facts (the financing profile). Owner only; confirmation-gated; declared-action only; exact before and after in the confirmation, redacted receipt (owner ruling 2026-10-13).
+  | 'FINANCING_PROFILE_COMMAND'
   // Create or stop a public, expiring link to explicitly selected, share-eligible Home Briefing updates (register P1 Home Briefing; owner ruling 2026-10-13). Owner only; confirmation-gated; declared-action only.
   | 'HOME_BRIEFING_SHARE_COMMAND'
   // Set up or update the HOA details, add, change or remove an approval request as reported, and report a violation notice (register P2 HOA Compliance). Confirmation-gated, declared-action only; an association decision with its evidence stays on the page.
@@ -395,6 +397,7 @@ export const ASK_INTERNAL_OPERATION_IDS: ReadonlySet<AskOperationId> = new Set<A
   'NEGOTIATION_SHIELD_CASE_ATTACH',
   // Reached by the declared action or the deterministic typed-start pattern; never by fuzzy retrieval.
   'RENOVATION_CASE_START',
+  'FINANCING_PROFILE_COMMAND',
   'HOME_BRIEFING_SHARE_COMMAND',
   'HOA_COMPLIANCE_COMMAND',
   'HOME_BRIEFING_COMMAND',
@@ -713,6 +716,7 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   MATERIAL_SPEC_ADD: definition('MATERIAL_SPEC_ADD', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'material-spec.add', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   NEGOTIATION_SHIELD_CASE_START: definition('NEGOTIATION_SHIELD_CASE_START', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'negotiation-shield.start', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   RENOVATION_CASE_START: definition('RENOVATION_CASE_START', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'renovation-case.start', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
+  FINANCING_PROFILE_COMMAND: definition('FINANCING_PROFILE_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'OWNER', 'financing-profile.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   HOME_BRIEFING_SHARE_COMMAND: definition('HOME_BRIEFING_SHARE_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'OWNER', 'home-briefing.share', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   HOA_COMPLIANCE_COMMAND: definition('HOA_COMPLIANCE_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'hoa-compliance.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   HOME_BRIEFING_COMMAND: definition('HOME_BRIEFING_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'home-briefing.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),

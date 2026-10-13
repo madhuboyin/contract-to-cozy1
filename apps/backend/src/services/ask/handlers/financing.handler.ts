@@ -8,6 +8,8 @@
 import { type AskPresentationBlock } from '../../../productFramework/ask/ask.contract';
 import { type AskOperationResult } from '../askOperationRegistry';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
+import { ensurePropertyAccess } from '../askHandlerSupport';
+import { FINANCING_PROFILE_ACTION_ID, FINANCING_PROFILE_COMMAND_MESSAGE, FINANCING_PROFILE_ENTITY_TYPE } from '../support/financingProfileCommand';
 import { humanDate, money } from '../askFormatting';
 import { calculate, getLatestEquity, getProfile, listScenarios } from '../../financing.service';
 import type { FinancingResultSet } from '../../financingCalculator.service';
@@ -30,7 +32,7 @@ const BOUNDARY: AskPresentationBlock = {
 };
 
 /** Pure: the answer from the reads, exported for tests. `calc` is present when the message named a project cost. */
-export function financingFromView(input: { profile: Profile; equity: Equity | null; scenarios: readonly Scenario[]; calc: FinancingResultSet | null; amountDollars: number | null }): AskOperationResult {
+export function financingFromView(input: { profile: Profile; equity: Equity | null; scenarios: readonly Scenario[]; calc: FinancingResultSet | null; amountDollars: number | null; propertyId?: string; isOwner?: boolean }): AskOperationResult {
   const { profile, equity, scenarios, calc, amountDollars } = input;
   const blocks: AskPresentationBlock[] = [];
   const hasProfile = Boolean(profile && profile.mortgageStatus !== 'UNKNOWN');
@@ -42,8 +44,13 @@ export function financingFromView(input: { profile: Profile; equity: Equity | nu
     title: calc ? `Financing a ${money(calc.projectCostCents / 100)} project` : equityLine ? `About ${Number(equity!.equityPercent)}% equity in your home` : 'No financing details recorded yet',
     body: calc
       ? `Five ways to pay for it, side by side. ${calc.helocEligible ? `Your equity looks sufficient for a HELOC up to ${money(calc.helocCapacityCents / 100)}.` : 'Your recorded equity does not look sufficient for a HELOC, so that option is shown for comparison only.'}`
-      : equityLine ?? 'Add your home value and mortgage details to see your equity and what you could borrow. Editing the financing details is not currently available in Ask; asking about refinancing records a mortgage.',
-    tone: 'DEFAULT', actions: [],
+      : equityLine ?? 'Add your home value and mortgage details to see your equity and what you could borrow.',
+    tone: 'DEFAULT',
+    // The financing profile is owner-only on every surface (owner ruling 2026-10-13, FRD v1.333).
+    actions: input.isOwner && input.propertyId ? [{
+      id: FINANCING_PROFILE_ACTION_ID, label: 'Update my mortgage and purchase details', interactionType: 'START_WORKFLOW' as const, message: FINANCING_PROFILE_COMMAND_MESSAGE,
+      operationId: 'FINANCING_PROFILE_COMMAND' as const, entityType: FINANCING_PROFILE_ENTITY_TYPE, entityId: input.propertyId, style: 'SECONDARY' as const,
+    }] : [],
   });
 
   // The numbers behind the answer.
@@ -126,8 +133,9 @@ export function financingFromView(input: { profile: Profile; equity: Equity | nu
   return { status: 'ANSWERED', reasonCode: hasProfile || calc ? undefined : 'FINANCING_PROFILE_MISSING', blocks, suggestions: [] };
 }
 
-registerCapabilityHandler('financing.overview', async (envelope) => {
+registerCapabilityHandler('financing.overview', async (envelope, deps) => {
   const propertyId = envelope.propertyId!;
+  const access = await (deps.propertyAccess ?? ensurePropertyAccess(envelope.userId, propertyId));
   const amountDollars = parseFinancingAmountDollars(envelope.message);
   const [profile, equity, scenarios, calc] = await Promise.all([
     getProfile(propertyId),
@@ -135,5 +143,5 @@ registerCapabilityHandler('financing.overview', async (envelope) => {
     listScenarios(propertyId),
     amountDollars === null ? Promise.resolve(null) : calculate(propertyId, amountDollars * 100),
   ]);
-  return financingFromView({ profile, equity, scenarios, calc, amountDollars });
+  return financingFromView({ profile, equity, scenarios, calc, amountDollars, propertyId, isOwner: access.role === 'OWNER' });
 });

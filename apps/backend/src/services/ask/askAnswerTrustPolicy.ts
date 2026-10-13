@@ -182,6 +182,9 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   NEGOTIATION_SHIELD_CASE_ATTACH: new Set(['negotiation-shield-review', 'negotiation-shield-analyze']),
   // The readiness answer's empty state offers the start; the receipt of a started case offers that case's readiness check.
   RENOVATION_CASE_START: new Set(['renovation-case-readiness']),
+  // Change the home's recorded mortgage and purchase facts (the financing profile). Owner only; confirmation-gated; declared-action only; exact before and after in the confirmation, redacted receipt (owner ruling 2026-10-13).
+  FINANCING_OVERVIEW: new Set(['financing-profile-update']),
+  FINANCING_PROFILE_COMMAND: new Set(['financing-profile-back']),
   // Create or stop a public, expiring link to explicitly selected, share-eligible Home Briefing updates (register P1 Home Briefing; owner ruling 2026-10-13). Owner only; confirmation-gated; declared-action only.
   HOME_BRIEFING_SHARE_COMMAND: new Set(['home-briefing-back', 'home-briefing-open-share']),
   // Set up or update the HOA details, add, change or remove an approval request as reported, and report a violation notice (register P2 HOA Compliance). Confirmation-gated, declared-action only; an association decision with its evidence stays on the page.
