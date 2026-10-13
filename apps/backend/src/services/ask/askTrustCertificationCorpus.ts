@@ -282,6 +282,7 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   NEGOTIATION_SHIELD_CASE_UPDATE: 'The changes to your review\'s saved details are listed and saved only after you confirm; the analysis is not re-run.',
   NEGOTIATION_SHIELD_CASE_ATTACH: 'The record you pick is shown, with who can see it, and is attached to your review only after you confirm; the file is not read.',
   RENOVATION_CASE_START: 'Your renovation case is shown and saved only after you confirm; nothing is applied for or started.',
+  HOME_RECORD_STATE_COMMAND: 'The record change is shown for review and recorded only after you confirm.',
   BUYER_CONTRACT_COMMAND: 'The contract revision change is shown for review and recorded only after you confirm; nothing is reviewed or waived for you.',
   BUYER_INSURANCE_COMMAND: 'The insurance change is shown for review and recorded only after you confirm; nothing is bought or bound.',
   BUYER_INSURANCE_READINESS: 'Your closing insurance requirements, quotes and bound policy are shown with the proof status.',

@@ -80,6 +80,8 @@ import { walkthroughCommandResult } from '../handlers/buyerWalkthroughCommands.h
 import { closingItemResult } from '../handlers/buyerClosingItemCommands.handler';
 import { insuranceCommandResult } from '../handlers/buyerInsuranceCommands.handler';
 import { contractCommandResult } from '../handlers/buyerContractCommands.handler';
+import { homeRecordStateResult } from '../handlers/homeRecordStateCommands.handler';
+import { homeRecordFormKindFromCaptureKey, parseHomeRecordAnswer } from '../support/homeRecordStateCommand';
 import { contractFormKindFromCaptureKey, parseContractAnswer } from '../support/buyerContractCommand';
 import { insuranceFormKindFromCaptureKey, parseInsuranceAnswer } from '../support/buyerInsuranceCommand';
 import { closingItemKindFromCaptureKey, parseClosingItemAnswer } from '../support/buyerClosingItemCommand';
@@ -1617,6 +1619,22 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     captureId = input.idempotencyKey;
     capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
     canonicalOwner = 'BuyerContractRevision';
+  } else if (execution.operationId === 'HOME_RECORD_STATE_COMMAND') {
+    const hrKind = homeRecordFormKindFromCaptureKey(input.captureKey);
+    if (!hrKind) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    const access = await ensurePropertyAccess(userId, execution.propertyId);
+    if (access.role === HouseholdRole.VIEWER) throw Object.assign(new Error('A contributor or owner is required to change a record.'), { code: 'ASK_PERMISSION_REQUIRED' });
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson) ? execution.parametersJson as Record<string, unknown> : {};
+    const hrLaunch = storedParameters.homeRecordLaunch && typeof storedParameters.homeRecordLaunch === 'object' && !Array.isArray(storedParameters.homeRecordLaunch)
+      ? storedParameters.homeRecordLaunch as { kind?: unknown; entityId?: unknown; sourceExecutionId?: unknown } : null;
+    if (!hrLaunch || hrLaunch.kind !== hrKind || typeof hrLaunch.entityId !== 'string') throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    if (!parseHomeRecordAnswer(hrKind, input.answer).success) throw Object.assign(new Error('Fill in what the form asks for.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+    result = await homeRecordStateResult(userId, execution.propertyId, {
+      kind: hrKind, entityId: hrLaunch.entityId, sourceExecutionId: typeof hrLaunch.sourceExecutionId === 'string' ? hrLaunch.sourceExecutionId : null,
+    }, input.answer as Record<string, unknown>);
+    captureId = input.idempotencyKey;
+    capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
+    canonicalOwner = 'PropertyRecord';
   } else if (execution.operationId === 'CLAIM_ACTIVITY_COMMAND') {
     if (input.captureKey !== CLAIM_NOTE_CAPTURE_KEY) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
     const access = await ensurePropertyAccess(userId, execution.propertyId);
