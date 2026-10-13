@@ -82,6 +82,8 @@ import { insuranceCommandResult } from '../handlers/buyerInsuranceCommands.handl
 import { contractCommandResult } from '../handlers/buyerContractCommands.handler';
 import { comparableCommandResult } from '../handlers/propertyTaxComparableCommands.handler';
 import { COMPARABLE_CAPTURE_KEY, parseComparableAnswer } from '../support/propertyTaxComparableCommand';
+import { EVIDENCE_CAPTURE_KEY, EVIDENCE_MESSAGES, parseEvidenceAnswer, type EvidenceKind } from '../support/propertyTaxEvidenceCommand';
+import { evidenceCommandResult } from '../handlers/propertyTaxEvidenceCommands.handler';
 import { cdCommandResult } from '../handlers/buyerClosingDisclosureCommands.handler';
 import { leCommandResult } from '../handlers/buyerLoanEstimateCommands.handler';
 import { setupCommandResult } from '../handlers/buyerPlanSetupCommands.handler';
@@ -1702,6 +1704,27 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     captureId = input.idempotencyKey;
     capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
     canonicalOwner = 'BuyerPurchaseSetup';
+  } else if (execution.operationId === 'PROPERTY_TAX_COMPARABLE_COMMAND' && input.captureKey === EVIDENCE_CAPTURE_KEY) {
+    const access = await ensurePropertyAccess(userId, execution.propertyId);
+    if (access.role === HouseholdRole.VIEWER) throw Object.assign(new Error('A contributor or owner is required to add evidence.'), { code: 'ASK_PERMISSION_REQUIRED' });
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson) ? execution.parametersJson as Record<string, unknown> : {};
+    const evidenceLaunch = storedParameters.evidenceLaunch && typeof storedParameters.evidenceLaunch === 'object' && !Array.isArray(storedParameters.evidenceLaunch)
+      ? storedParameters.evidenceLaunch as { kind?: unknown; sourceExecutionId?: unknown } : null;
+    if (!evidenceLaunch || typeof evidenceLaunch.kind !== 'string' || !(evidenceLaunch.kind in EVIDENCE_MESSAGES)) {
+      throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    }
+    const evidenceKind = evidenceLaunch.kind as EvidenceKind;
+    const evidenceAnswer = parseEvidenceAnswer(evidenceKind, input.answer);
+    // A decision outside the reviewed rule's list is re-checked against the rule by the handler; the shape is checked here.
+    if (!evidenceAnswer.success && evidenceAnswer.reason !== 'DECISION') {
+      throw Object.assign(new Error(evidenceAnswer.reason === 'URL' ? 'Use a web address that starts with https.' : evidenceAnswer.reason === 'NO_MISMATCH' ? 'If the official record matches, there is no factual error to record.' : evidenceAnswer.reason === 'FUTURE' ? 'A notice cannot be dated in the future.' : 'Check the form and try again.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+    }
+    result = await evidenceCommandResult(userId, execution.propertyId, {
+      kind: evidenceKind, sourceExecutionId: typeof evidenceLaunch.sourceExecutionId === 'string' ? evidenceLaunch.sourceExecutionId : null,
+    }, input.answer as Record<string, unknown>);
+    captureId = input.idempotencyKey;
+    capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
+    canonicalOwner = 'PropertyTaxAppealEvidence';
   } else if (execution.operationId === 'PROPERTY_TAX_COMPARABLE_COMMAND') {
     if (input.captureKey !== COMPARABLE_CAPTURE_KEY) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
     const access = await ensurePropertyAccess(userId, execution.propertyId);

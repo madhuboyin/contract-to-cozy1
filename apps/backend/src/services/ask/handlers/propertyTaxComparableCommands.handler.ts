@@ -13,6 +13,8 @@ import { ensurePropertyAccess } from '../askHandlerSupport';
 import { humanDate, money } from '../askFormatting';
 import { propertyTaxAppealReadinessService } from '../../propertyTax/propertyTaxAppealReadiness.service';
 import { COMPARABLE_CAPTURE_KEY, COMPARABLE_MESSAGE, comparableKey, parseComparableAnswer, type ComparableAnswer } from '../support/propertyTaxComparableCommand';
+import { evidenceKindFromMessage } from '../support/propertyTaxEvidenceCommand';
+import { confirmEvidence, evidenceCommandResult } from './propertyTaxEvidenceCommands.handler';
 
 const sha = (text: string) => createHash('sha256').update(text).digest('hex');
 const stale = (message: string, code = 'ASK_CONFIRMATION_NOT_ACTIVE') => Object.assign(new Error(message), { code });
@@ -88,6 +90,11 @@ export async function comparableCommandResult(userId: string, propertyId: string
 
 registerCapabilityHandler('property-tax.comparable-command', async (envelope) => {
   const launch = envelope.launchContext;
+  // FRD v1.367: appeal evidence from a link is the same operation's second kind of record, reached by its own declared messages.
+  const evidenceKind = evidenceKindFromMessage(envelope.message);
+  if (evidenceKind && launch?.operationId === 'PROPERTY_TAX_COMPARABLE_COMMAND' && launch.surface !== 'ASK_REFRESH') {
+    return evidenceCommandResult(envelope.userId, envelope.propertyId!, { kind: evidenceKind, sourceExecutionId: launch.sourceExecutionId ?? null });
+  }
   if (envelope.message !== COMPARABLE_MESSAGE || launch?.operationId !== 'PROPERTY_TAX_COMPARABLE_COMMAND' || launch.surface === 'ASK_REFRESH') {
     return unavailable('ASK_PROPERTY_TAX_COMPARABLE_NOT_DIRECTLY_ROUTABLE', 'Open your appeal first', 'A comparable is added from your appeal readiness. Nothing has changed.');
   }
@@ -95,6 +102,7 @@ registerCapabilityHandler('property-tax.comparable-command', async (envelope) =>
 });
 
 async function confirmComparable(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
+  if (ctx.parameters.evidenceKind) return confirmEvidence(ctx);
   const { execution, userId, parameters } = ctx;
   const propertyId = execution.propertyId;
   try {

@@ -2,6 +2,7 @@ import type { Prisma, HouseholdRole } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { propertyTaxRecordService } from './propertyTaxRecord.service';
 import { propertyTaxRuleService } from './propertyTaxRule.service';
+import { assertHttpUrl } from './propertyTaxUrl';
 import { assertPropertyDocumentsExist } from '../propertyDocuments/propertyDocumentInventory.service';
 
 type AppealGround = 'ASSESSED_VALUE' | 'TAX_CLASS' | 'EXEMPTION';
@@ -114,6 +115,7 @@ export class PropertyTaxAppealReadinessService {
     if (!configuredGround) {
       throw new Error('The selected appeal ground is not covered by the reviewed rule');
     }
+    assertHttpUrl(input.sourceUrl, 'The source link must be an http or https address');
     if (input.supportingDocumentId) {
       await assertPropertyDocumentsExist(
         { propertyId: input.propertyId, role: input.role, ids: [input.supportingDocumentId] },
@@ -189,6 +191,7 @@ export class PropertyTaxAppealReadinessService {
     const saleDate = new Date(input.saleDate);
     if (!Number.isFinite(saleDate.getTime())) throw new Error('saleDate is invalid');
     if (saleDate.getTime() > Date.now()) throw new Error('saleDate cannot be in the future');
+    assertHttpUrl(input.sourceUrl, 'The source link must be an http or https address');
     if (input.sourceDocumentId) {
       await assertPropertyDocumentsExist(
         { propertyId: input.propertyId, role: input.role, ids: [input.sourceDocumentId] },

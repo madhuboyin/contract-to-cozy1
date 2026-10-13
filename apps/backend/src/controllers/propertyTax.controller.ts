@@ -14,6 +14,7 @@ import { propertyTaxHomeownerActionService } from '../services/propertyTax/prope
 import { propertyTaxAppealReadinessService } from '../services/propertyTax/propertyTaxAppealReadiness.service';
 import { propertyTaxAppealCaseService } from '../services/propertyTax/propertyTaxAppealCase.service';
 import { propertyTaxOperationsService } from '../services/propertyTax/propertyTaxOperations.service';
+import { isHttpUrl } from '../services/propertyTax/propertyTaxUrl';
 
 const service = new PropertyTaxService();
 
@@ -511,7 +512,7 @@ const propertyTaxAppealEvidenceSchema = z.object({
   title: z.string().trim().min(3).max(200),
   description: z.string().trim().max(2_000).optional(),
   facts: z.record(z.string(), z.unknown()),
-  sourceUrl: z.url().max(2_000).optional(),
+  sourceUrl: z.url().max(2_000).refine(isHttpUrl, 'The source link must be an http or https address').optional(),
   supportingDocumentId: z.string().uuid().optional(),
 }).strict();
 
@@ -559,7 +560,7 @@ const propertyTaxAppealComparableSchema = z.object({
   livingAreaSqFt: z.number().finite().positive().max(1_000_000).optional(),
   lotSizeSqFt: z.number().finite().positive().max(10_000_000).optional(),
   condition: z.string().trim().max(300).optional(),
-  sourceUrl: z.url().max(2_000).optional(),
+  sourceUrl: z.url().max(2_000).refine(isHttpUrl, 'The source link must be an http or https address').optional(),
   sourceDocumentId: z.string().uuid().optional(),
   adjustments: comparableAdjustmentSchema.optional(),
 }).strict();

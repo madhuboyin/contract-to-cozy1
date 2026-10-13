@@ -2,6 +2,7 @@
 // docs/architecture/ASK_ORCHESTRATOR_DECOMPOSITION_REVIEW.md). The handler registers itself, and the orchestrator
 // re-exports the names below so existing imports keep working.
 import { COMPARABLE_ACTION_ID, COMPARABLE_MESSAGE } from '../support/propertyTaxComparableCommand';
+import { EVIDENCE_ACTION_IDS, EVIDENCE_MESSAGES, conditionKindForGround } from '../support/propertyTaxEvidenceCommand';
 import { HouseholdRole } from '@prisma/client';
 import { prisma } from '../../../lib/prisma';
 import { type AskPresentationBlock } from '../../../productFramework/ask/ask.contract';
@@ -288,6 +289,20 @@ async function propertyTaxAppealReadinessResult(userId: string, propertyId: stri
       // FRD v1.355: a comparable sale the household found, added to the appeal evidence.
       id: COMPARABLE_ACTION_ID, label: 'Add a comparable sale', interactionType: 'START_WORKFLOW' as const, message: COMPARABLE_MESSAGE,
       operationId: 'PROPERTY_TAX_COMPARABLE_COMMAND' as const, style: 'SECONDARY' as const,
+    },
+    // FRD v1.367: the evidence the selected ground needs, from a link. The assessed-value ground needs comparables, not an evidence row, so it is offered only
+    // the optional condition statement.
+    ...(ground === 'TAX_CLASS' ? [{
+      id: EVIDENCE_ACTION_IDS.CLASS, label: 'Add class evidence', interactionType: 'START_WORKFLOW' as const, message: EVIDENCE_MESSAGES.CLASS,
+      operationId: 'PROPERTY_TAX_COMPARABLE_COMMAND' as const, style: 'SECONDARY' as const,
+    }] : []),
+    ...(ground === 'EXEMPTION' ? [{
+      id: EVIDENCE_ACTION_IDS.EXEMPTION, label: 'Add the exemption decision', interactionType: 'START_WORKFLOW' as const, message: EVIDENCE_MESSAGES.EXEMPTION,
+      operationId: 'PROPERTY_TAX_COMPARABLE_COMMAND' as const, style: 'SECONDARY' as const,
+    }] : []),
+    {
+      id: EVIDENCE_ACTION_IDS.CONDITION, label: 'Add supporting condition evidence (optional)', interactionType: 'START_WORKFLOW' as const,
+      message: EVIDENCE_MESSAGES[conditionKindForGround(ground)], operationId: 'PROPERTY_TAX_COMPARABLE_COMMAND' as const, style: 'QUIET' as const,
     }] : [],
   }];
   if (readiness.canonical) blocks.push({ type: 'TABLE', id: 'tax-canonical-facts', title: 'Canonical tax facts used', description: 'Unknown facts remain unknown and are never treated as zero.', columns: [{ key: 'fact', label: 'Fact' }, { key: 'value', label: 'Recorded value' }], rows: [

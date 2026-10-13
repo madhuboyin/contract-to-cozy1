@@ -173,6 +173,7 @@ export default function PropertyTaxClient() {
   const [appealEvidenceDescription, setAppealEvidenceDescription] = useState('');
   const [appealEvidenceSourceUrl, setAppealEvidenceSourceUrl] = useState('');
   const [appealClaimedClass, setAppealClaimedClass] = useState('');
+  const [appealClassMismatch, setAppealClassMismatch] = useState(false);
   const [appealExemptionProgram, setAppealExemptionProgram] = useState('');
   const [appealExemptionDecision, setAppealExemptionDecision] = useState('DENIED');
   const [appealNoticeDate, setAppealNoticeDate] = useState('');
@@ -434,6 +435,8 @@ export default function PropertyTaxClient() {
 
   async function saveAppealEvidence() {
     if (!appealEvidenceSourceUrl.trim()) return;
+    // The official-record mismatch is the person's own statement, never assumed.
+    if (appealGround === 'TAX_CLASS' && !appealClassMismatch) return;
     setAppealBusy(true);
     setRecordError(null);
     try {
@@ -454,7 +457,7 @@ export default function PropertyTaxClient() {
           type: 'FACTUAL_ERROR',
           facts: {
             claimedClassification: appealClaimedClass.trim(),
-            officialRecordMismatch: true,
+            officialRecordMismatch: appealClassMismatch,
           },
         });
       } else if (appealGround === 'EXEMPTION') {
@@ -1629,6 +1632,17 @@ export default function PropertyTaxClient() {
                     className="mt-3 min-h-11 w-full rounded-xl border border-amber-300 bg-white px-3 text-sm text-slate-900 dark:border-amber-800 dark:bg-slate-900 dark:text-slate-100"
                   />
                 )}
+                {appealGround === 'TAX_CLASS' && (
+                  <label className="mt-3 flex items-start gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={appealClassMismatch}
+                      onChange={(event) => setAppealClassMismatch(event.target.checked)}
+                      className="mt-1"
+                    />
+                    <span>The official record shows a different class than the one I entered.</span>
+                  </label>
+                )}
                 {appealGround === 'EXEMPTION' && (
                   <div className="mt-3 grid gap-2 sm:grid-cols-2">
                     <input
@@ -1674,7 +1688,7 @@ export default function PropertyTaxClient() {
                   disabled={
                     appealBusy
                     || !appealEvidenceSourceUrl.trim()
-                    || (appealGround === 'TAX_CLASS' && !appealClaimedClass.trim())
+                    || (appealGround === 'TAX_CLASS' && (!appealClaimedClass.trim() || !appealClassMismatch))
                     || (
                       appealGround === 'EXEMPTION'
                       && (!appealExemptionProgram.trim() || !appealNoticeDate)
