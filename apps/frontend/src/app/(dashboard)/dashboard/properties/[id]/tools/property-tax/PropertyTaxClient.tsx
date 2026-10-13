@@ -44,6 +44,8 @@ import HomeToolHeader from '@/components/tools/HomeToolHeader';
 import { PropertyContextCapturePanel } from '@/components/property-context/PropertyContextCapturePanel';
 import { propertyTaxTrust } from '@/lib/trust/trustPresets';
 import { track } from '@/lib/analytics/events';
+import { api as homeApi } from '@/lib/api/client';
+import { appealEvidenceRecordOptions, type AppealEvidenceRecordInput } from '@/lib/propertyTax/appealEvidenceRecords';
 
 function money(value: number | null | undefined, currency = 'USD') {
   if (value === null || value === undefined) return '—';
@@ -172,6 +174,9 @@ export default function PropertyTaxClient() {
   const [appealBusy, setAppealBusy] = useState(false);
   const [appealEvidenceDescription, setAppealEvidenceDescription] = useState('');
   const [appealEvidenceSourceUrl, setAppealEvidenceSourceUrl] = useState('');
+  const [appealEvidenceRecordId, setAppealEvidenceRecordId] = useState('');
+  const [homeRecords, setHomeRecords] = useState<AppealEvidenceRecordInput[]>([]);
+  const evidenceRecordChoices = appealEvidenceRecordOptions(homeRecords);
   const [appealClaimedClass, setAppealClaimedClass] = useState('');
   const [appealClassMismatch, setAppealClassMismatch] = useState(false);
   const [appealExemptionProgram, setAppealExemptionProgram] = useState('');
@@ -434,7 +439,8 @@ export default function PropertyTaxClient() {
   }
 
   async function saveAppealEvidence() {
-    if (!appealEvidenceSourceUrl.trim()) return;
+    // Exactly one source: a web address or a Home Record.
+    if (Boolean(appealEvidenceSourceUrl.trim()) === Boolean(appealEvidenceRecordId)) return;
     // The official-record mismatch is the person's own statement, never assumed.
     if (appealGround === 'TAX_CLASS' && !appealClassMismatch) return;
     setAppealBusy(true);
@@ -449,7 +455,9 @@ export default function PropertyTaxClient() {
             ? 'Exemption decision notice'
             : 'Condition or valuation evidence',
         description: appealEvidenceDescription.trim() || undefined,
-        sourceUrl: appealEvidenceSourceUrl.trim(),
+        ...(appealEvidenceRecordId
+          ? { supportingDocumentId: appealEvidenceRecordId }
+          : { sourceUrl: appealEvidenceSourceUrl.trim() }),
       };
       if (appealGround === 'TAX_CLASS') {
         await savePropertyTaxAppealEvidence(propertyId, {
@@ -794,6 +802,16 @@ export default function PropertyTaxClient() {
     // Loading an estimate is not workflow completion. Completion requires a
     // recorded decision or external tax action.
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [propertyId]);
+
+  // The documents a household member can already see; the service decides which may back evidence.
+  useEffect(() => {
+    if (!propertyId) return;
+    let cancelled = false;
+    void homeApi.listPropertyRecords(propertyId)
+      .then((response) => { if (!cancelled && response.success && response.data) setHomeRecords(response.data.records); })
+      .catch(() => { if (!cancelled) setHomeRecords([]); });
+    return () => { cancelled = true; };
   }, [propertyId]);
 
   useEffect(() => {
@@ -1682,12 +1700,30 @@ export default function PropertyTaxClient() {
                   placeholder="Official or supporting source URL"
                   className="mt-2 min-h-11 w-full rounded-xl border border-amber-300 bg-white px-3 text-sm text-slate-900 dark:border-amber-800 dark:bg-slate-900 dark:text-slate-100"
                 />
+                <label className="mt-2 block text-xs font-medium" htmlFor="appeal-evidence-record">
+                  Or a document in your home records
+                </label>
+                <select
+                  id="appeal-evidence-record"
+                  value={appealEvidenceRecordId}
+                  onChange={(event) => setAppealEvidenceRecordId(event.target.value)}
+                  className="mt-1 min-h-11 w-full rounded-xl border border-amber-300 bg-white px-3 text-sm text-slate-900 dark:border-amber-800 dark:bg-slate-900 dark:text-slate-100"
+                >
+                  <option value="">{evidenceRecordChoices.options.length ? 'No document' : 'No eligible documents'}</option>
+                  {evidenceRecordChoices.options.map((option) => (
+                    <option key={option.id} value={option.id}>{option.label}</option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs">
+                  Give either a link or a document, not both. Only active documents your whole household can see, with a clean scan, are listed.
+                  {evidenceRecordChoices.excludedPrivate ? ` ${evidenceRecordChoices.excludedPrivate} owner-only document${evidenceRecordChoices.excludedPrivate === 1 ? ' is' : 's are'} not listed.` : ''}
+                </p>
                 <button
                   type="button"
                   onClick={() => void saveAppealEvidence()}
                   disabled={
                     appealBusy
-                    || !appealEvidenceSourceUrl.trim()
+                    || Boolean(appealEvidenceSourceUrl.trim()) === Boolean(appealEvidenceRecordId)
                     || (appealGround === 'TAX_CLASS' && (!appealClaimedClass.trim() || !appealClassMismatch))
                     || (
                       appealGround === 'EXEMPTION'

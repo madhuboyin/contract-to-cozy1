@@ -1717,7 +1717,7 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     const evidenceAnswer = parseEvidenceAnswer(evidenceKind, input.answer);
     // A decision outside the reviewed rule's list is re-checked against the rule by the handler; the shape is checked here.
     if (!evidenceAnswer.success && evidenceAnswer.reason !== 'DECISION') {
-      throw Object.assign(new Error(evidenceAnswer.reason === 'URL' ? 'Use a web address that starts with https.' : evidenceAnswer.reason === 'NO_MISMATCH' ? 'If the official record matches, there is no factual error to record.' : evidenceAnswer.reason === 'FUTURE' ? 'A notice cannot be dated in the future.' : 'Check the form and try again.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+      throw Object.assign(new Error(evidenceAnswer.reason === 'URL' ? 'Use a web address that starts with https.' : evidenceAnswer.reason === 'SOURCE' ? 'Give either a link or a document from your home records.' : evidenceAnswer.reason === 'NO_MISMATCH' ? 'If the official record matches, there is no factual error to record.' : evidenceAnswer.reason === 'FUTURE' ? 'A notice cannot be dated in the future.' : 'Check the form and try again.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
     }
     result = await evidenceCommandResult(userId, execution.propertyId, {
       kind: evidenceKind, sourceExecutionId: typeof evidenceLaunch.sourceExecutionId === 'string' ? evidenceLaunch.sourceExecutionId : null,

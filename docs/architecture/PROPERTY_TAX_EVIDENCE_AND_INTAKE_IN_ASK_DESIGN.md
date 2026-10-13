@@ -1,6 +1,6 @@
 # Property Tax: appeal evidence and document intake in Ask — design
 
-**Status:** Decisions D-T1 to D-T8 ruled by the owner on October 13, 2026 (§7, which supersedes §4 and the parts of §3 it amends). Slice 1 (URL evidence parity) is built (FRD v1.367); slices 2 to 4 are not.
+**Status:** Decisions D-T1 to D-T8 ruled by the owner on October 13, 2026 (§7, which supersedes §4 and the parts of §3 it amends). Slices 1 (URL evidence parity, FRD v1.367) and 2 (Home Record evidence, v1.368) are built; slices 3 and 4 are not.
 **Date:** October 13, 2026
 **Scope:** What it would take for Ask to (a) record the appeal evidence that a reviewed ground requires and (b) turn a tax notice or bill that is already a Home Record into confirmed canonical tax facts, and what has to change on the desktop and in the services to make that safe.
 **Not in scope:** Comparables (shipped, FRD v1.355), the appeal case lifecycle (shipped, v1.322), the homeowner-reported values path (`POST …/property-tax/record/homeowner`, §1.6), homeowner actions (`PUT …/actions/:actionId`), AI extraction of tax documents, and the Renovation project handoff.

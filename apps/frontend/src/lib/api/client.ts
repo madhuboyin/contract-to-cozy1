@@ -2614,6 +2614,7 @@ class APIClient {
       sensitivity?: string;
       lifecycleStatus?: string;
       createdAt?: string;
+      currentVersion?: { scanStatus?: string } | null;
     }>;
   }>> {
     return this.request(`/api/properties/${propertyId}/records`);

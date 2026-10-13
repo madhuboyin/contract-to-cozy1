@@ -21,6 +21,7 @@ const { propertyTaxAppealReadinessService: Readiness, PropertyTaxAppealReadiness
 const { isHttpUrl } = require('../../src/services/propertyTax/propertyTaxUrl.ts');
 const command = require('../../src/services/ask/support/propertyTaxEvidenceCommand.ts');
 const { evidenceCommandResult } = require('../../src/services/ask/handlers/propertyTaxEvidenceCommands.handler.ts');
+const source = require('../../src/services/propertyTax/propertyTaxEvidenceSource.ts');
 
 const OP = 'PROPERTY_TAX_COMPARABLE_COMMAND';
 const sha = (text) => crypto.createHash('sha256').update(text).digest('hex');
@@ -30,17 +31,20 @@ const RULE = { id: 'rule-1', title: 'Reviewed rule', version: 3 };
 const readiness = (over = {}) => ({ status: 'NOT_READY', ruleProfile: RULE, reviewedGrounds: [{ code: 'ASSESSED_VALUE' }, { code: 'TAX_CLASS' }, { code: 'EXEMPTION' }], ground: { requirements: { acceptedDecisionTypes: ['DENIED', 'REVOKED'] } }, ...over });
 const classAnswer = (over = {}) => ({ claimedClassification: 'Class 1', officialRecordMismatch: 'YES', sourceUrl: 'https://example.gov/record/1', ...over });
 
-function install(role, { primary = true, existing = null, evaluate = readiness() } = {}) {
-  const saved = { a: propertyAccess.resolvePropertyAccess, p: prisma.property, ev: prisma.propertyTaxAppealEvidence, ex: Readiness.evaluate, up: Readiness.upsertEvidence, r: executeOperation.reconcileAskExecutionSideEffects };
+const RECORD = { id: 'rec-1', title: 'Notice of value.pdf', recordType: 'TAX_DOCUMENT', sensitivity: 'LEGAL', createdAt: new Date('2026-05-01T00:00:00Z') };
+
+function install(role, { primary = true, existing = null, evaluate = readiness(), records = [], privateCount = 0, eligibleFound = true } = {}) {
+  const saved = { pr: prisma.propertyRecord, a: propertyAccess.resolvePropertyAccess, p: prisma.property, ev: prisma.propertyTaxAppealEvidence, ex: Readiness.evaluate, up: Readiness.upsertEvidence, r: executeOperation.reconcileAskExecutionSideEffects };
   const calls = [];
   propertyAccess.resolvePropertyAccess = async () => ({ role, userId: 'u1', propertyId: 'prop-1' });
   prisma.property = { findFirst: async () => (primary ? { id: 'prop-1' } : null) };
   prisma.propertyTaxAppealEvidence = { findUnique: async () => existing };
+  prisma.propertyRecord = { findMany: async () => records, count: async () => privateCount, findFirst: async () => (eligibleFound ? { id: 'rec-1' } : null) };
   Readiness.evaluate = async () => evaluate;
   Readiness.upsertEvidence = async (input) => { calls.push(input); return {}; };
   executeOperation.reconcileAskExecutionSideEffects = async () => ({ attemptedAndFailed: false, refreshedExecutions: [] });
   return { calls, restore() {
-    propertyAccess.resolvePropertyAccess = saved.a; prisma.property = saved.p; prisma.propertyTaxAppealEvidence = saved.ev;
+    prisma.propertyRecord = saved.pr; propertyAccess.resolvePropertyAccess = saved.a; prisma.property = saved.p; prisma.propertyTaxAppealEvidence = saved.ev;
     Readiness.evaluate = saved.ex; Readiness.upsertEvidence = saved.up; executeOperation.reconcileAskExecutionSideEffects = saved.r;
   } };
 }
@@ -155,4 +159,67 @@ test('the evidence actions are allowlisted on the appeal answer and offered by g
       operationId: 'PROPERTY_TAX_APPEAL_READINESS', propertyId: 'prop-1', householdRole: 'CONTRIBUTOR', authoritativeSourceAvailable: true,
     }), true, id);
   }
+});
+
+test('exactly one source: a link or a Home Record, never both and never neither', () => {
+  const p = command.parseEvidenceAnswer;
+  assert.equal(p('CLASS', classAnswer({ sourceUrl: undefined })).reason, 'SOURCE');
+  assert.equal(p('CLASS', classAnswer({ sourceRecordId: 'rec-1' })).reason, 'SOURCE');
+  const record = p('CLASS', classAnswer({ sourceUrl: '', sourceRecordId: 'rec-1' }));
+  assert.deepEqual([record.success, record.data.sourceUrl, record.data.sourceRecordId], [true, null, 'rec-1']);
+});
+
+test('owner ruling D-T2: the service enforces household visibility, active, clean scan and a supporting type, and does not filter on sensitivity', async () => {
+  const saved = prisma.propertyRecord;
+  let where = null;
+  prisma.propertyRecord = { findFirst: async (args) => { where = args.where; return null; }, findMany: async (args) => { where = args.where; return [RECORD]; }, count: async () => 2 };
+  try {
+    await assert.rejects(() => source.assertEvidenceRecordEligible('prop-1', 'rec-1'), /not eligible/);
+    assert.equal(where.propertyId, 'prop-1');
+    assert.equal(where.id, 'rec-1');
+    assert.equal(where.lifecycleStatus, 'ACTIVE');
+    assert.equal(where.visibility, 'HOUSEHOLD');
+    assert.deepEqual(where.currentVersion, { is: { scanStatus: 'CLEAN' } });
+    assert.ok(where.recordType.in.includes('TAX_DOCUMENT') && where.recordType.in.includes('OTHER') && !where.recordType.in.includes('QUOTE'));
+    assert.equal('sensitivity' in where, false, 'a LEGAL, PERSONAL or other label does not make a record ineligible');
+    const listed = await source.listEligibleEvidenceRecords('prop-1');
+    assert.deepEqual([listed.options.length, listed.excludedPrivate, listed.options[0].isOther], [1, 2, false]);
+  } finally { prisma.propertyRecord = saved; }
+});
+
+test('the canonical service uses the same eligibility for a supporting document, so the desktop and Ask cannot differ', async () => {
+  const saved = prisma.propertyRecord;
+  let writes = 0;
+  const rules = { getForProperty: async () => ({ coverage: 'REVIEWED', profile: { id: 'rule-1', appealGrounds: { grounds: [{ code: 'TAX_CLASS' }] } } }) };
+  const db = { propertyTaxAppealEvidence: { upsert: async (args) => { writes += 1; return args; } } };
+  const service = new PropertyTaxAppealReadinessService(db, rules, {});
+  const input = { propertyId: 'p', userId: 'u', role: 'OWNER', evidenceKey: 'k', ground: 'TAX_CLASS', type: 'FACTUAL_ERROR', title: 'Title', facts: {}, supportingDocumentId: 'rec-1' };
+  try {
+    prisma.propertyRecord = { findFirst: async () => null };
+    await assert.rejects(() => service.upsertEvidence(input), /whole household/);
+    assert.equal(writes, 0);
+    prisma.propertyRecord = { findFirst: async () => ({ id: 'rec-1' }) };
+    await service.upsertEvidence(input);
+    assert.equal(writes, 1);
+  } finally { prisma.propertyRecord = saved; }
+});
+
+test('Ask offers eligible records with the sensitivity shown, says how many owner-only were left out, and saves the record as the supporting document', async () => {
+  const w = install('CONTRIBUTOR', { records: [RECORD], privateCount: 2 });
+  try {
+    const form = await invoke(M.CLASS);
+    const field = form.captureRequests[0].inputSchema.fields.find((f) => f.key === 'sourceRecordId');
+    assert.deepEqual(field.inputSchema.options.map((o) => o.value), ['rec-1']);
+    assert.match(field.inputSchema.options[0].label, /Legal/);
+    const review = await evidenceCommandResult('u1', 'prop-1', lc('CLASS'), classAnswer({ sourceUrl: '', sourceRecordId: 'rec-1' }));
+    assert.equal(review.status, 'NEEDS_CONFIRMATION');
+    assert.equal(review.confirmation.fields.find((f) => f.label === 'Source document').value.includes('Notice of value.pdf'), true);
+    const notOffered = await evidenceCommandResult('u1', 'prop-1', lc('CLASS'), classAnswer({ sourceUrl: '', sourceRecordId: 'rec-9' }));
+    assert.equal(notOffered.reasonCode, 'PROPERTY_TAX_EVIDENCE_RECORD_NOT_OFFERED');
+    assert.match(notOffered.blocks[0].body, /2 owner-only records are not offered/);
+    const parameters = { evidenceKind: 'CLASS', evidenceForm: classAnswer({ sourceUrl: '', sourceRecordId: 'rec-1' }), evidenceContextVersion: version('tax_class-primary', null) };
+    await confirmCapabilityInvoke(OP, ctx(parameters));
+    assert.equal(w.calls[0].supportingDocumentId, 'rec-1');
+    assert.equal('sourceUrl' in w.calls[0], false);
+  } finally { w.restore(); }
 });

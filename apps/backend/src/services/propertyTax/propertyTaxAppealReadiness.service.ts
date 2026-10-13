@@ -3,6 +3,7 @@ import { prisma } from '../../lib/prisma';
 import { propertyTaxRecordService } from './propertyTaxRecord.service';
 import { propertyTaxRuleService } from './propertyTaxRule.service';
 import { assertHttpUrl } from './propertyTaxUrl';
+import { assertEvidenceRecordEligible } from './propertyTaxEvidenceSource';
 import { assertPropertyDocumentsExist } from '../propertyDocuments/propertyDocumentInventory.service';
 
 type AppealGround = 'ASSESSED_VALUE' | 'TAX_CLASS' | 'EXEMPTION';
@@ -117,9 +118,10 @@ export class PropertyTaxAppealReadinessService {
     }
     assertHttpUrl(input.sourceUrl, 'The source link must be an http or https address');
     if (input.supportingDocumentId) {
-      await assertPropertyDocumentsExist(
-        { propertyId: input.propertyId, role: input.role, ids: [input.supportingDocumentId] },
-        () => new Error('Supporting document not found for this property'),
+      // Owner ruling D-T2: an active, household-visible Home Record with a clean current version and a record type that can support an appeal.
+      await assertEvidenceRecordEligible(
+        input.propertyId, input.supportingDocumentId,
+        'Supporting document must be an active Home Record, visible to the whole household, with a clean scan',
       );
     }
     const now = new Date();

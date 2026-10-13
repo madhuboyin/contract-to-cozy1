@@ -44,19 +44,21 @@ const exactDate = z.union([
   z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   z.object({ precision: z.literal('EXACT_DATE'), value: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).strict().transform((v) => v.value),
 ]);
-const sourceUrl = z.string().trim().max(2_000);
+// Exactly one source (FRD v1.368): a web address, or a Home Record on file (eligibility is the service's, propertyTaxEvidenceSource.ts).
+const sourceUrl = z.preprocess(blank, z.string().trim().max(2_000).optional());
+const sourceRecordId = z.preprocess(blank, z.string().trim().min(1).max(160).optional());
 const description = z.preprocess(blank, z.string().trim().max(2_000).optional());
 const schemas = {
-  FACTUAL_ERROR: z.object({ sourceUrl, description, claimedClassification: z.string().trim().min(1).max(120), officialRecordMismatch: z.enum(['YES', 'NO']) }).strict(),
-  EXEMPTION_DECISION: z.object({ sourceUrl, description, programName: z.string().trim().min(1).max(200), decisionType: z.string().trim().min(1).max(40), noticeDate: exactDate }).strict(),
-  CONDITION: z.object({ sourceUrl, description: z.string().trim().min(3).max(2_000) }).strict(),
+  FACTUAL_ERROR: z.object({ sourceUrl, sourceRecordId, description, claimedClassification: z.string().trim().min(1).max(120), officialRecordMismatch: z.enum(['YES', 'NO']) }).strict(),
+  EXEMPTION_DECISION: z.object({ sourceUrl, sourceRecordId, description, programName: z.string().trim().min(1).max(200), decisionType: z.string().trim().min(1).max(40), noticeDate: exactDate }).strict(),
+  CONDITION: z.object({ sourceUrl, sourceRecordId, description: z.string().trim().min(3).max(2_000) }).strict(),
 };
 
 export interface EvidenceDraft {
   evidenceKey: string; ground: AppealGround; type: EvidenceType; title: string;
-  description: string | null; facts: Record<string, unknown>; sourceUrl: string; summary: Array<{ label: string; value: string }>;
+  description: string | null; facts: Record<string, unknown>; sourceUrl: string | null; sourceRecordId: string | null; summary: Array<{ label: string; value: string }>;
 }
-export type EvidenceParse = { success: true; data: EvidenceDraft } | { success: false; reason: 'INVALID' | 'URL' | 'NO_MISMATCH' | 'FUTURE' | 'DECISION' };
+export type EvidenceParse = { success: true; data: EvidenceDraft } | { success: false; reason: 'INVALID' | 'URL' | 'SOURCE' | 'NO_MISMATCH' | 'FUTURE' | 'DECISION' };
 
 /** Validates a submitted form (or a stored confirmation parameter). `acceptedDecisions` is the reviewed rule's list for the exemption ground. */
 export function parseEvidenceAnswer(kind: EvidenceKind, answer: unknown, acceptedDecisions: readonly string[] = Object.keys(EVIDENCE_DECISION_LABELS), today = new Date().toISOString().slice(0, 10)): EvidenceParse {
@@ -64,8 +66,14 @@ export function parseEvidenceAnswer(kind: EvidenceKind, answer: unknown, accepte
   const parsed = schemas[spec.type].safeParse(answer);
   if (!parsed.success) return { success: false, reason: 'INVALID' };
   const d = parsed.data as Record<string, any>;
-  if (!isHttpUrl(d.sourceUrl)) return { success: false, reason: 'URL' };
-  const common = { evidenceKey: spec.evidenceKey, ground: spec.ground, type: spec.type, title: spec.title, sourceUrl: d.sourceUrl as string };
+  const hasUrl = typeof d.sourceUrl === 'string' && d.sourceUrl.length > 0;
+  const hasRecord = typeof d.sourceRecordId === 'string' && d.sourceRecordId.length > 0;
+  if (hasUrl === hasRecord) return { success: false, reason: 'SOURCE' };
+  if (hasUrl && !isHttpUrl(d.sourceUrl)) return { success: false, reason: 'URL' };
+  const common = {
+    evidenceKey: spec.evidenceKey, ground: spec.ground, type: spec.type, title: spec.title,
+    sourceUrl: hasUrl ? d.sourceUrl as string : null, sourceRecordId: hasRecord ? d.sourceRecordId as string : null,
+  };
   if (spec.type === 'FACTUAL_ERROR') {
     // The desktop used to store this as true without asking. A "no" means nothing supports a factual-error claim, so nothing is stored.
     if (d.officialRecordMismatch !== 'YES') return { success: false, reason: 'NO_MISMATCH' };

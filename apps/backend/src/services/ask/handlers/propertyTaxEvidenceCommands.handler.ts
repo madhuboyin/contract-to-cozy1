@@ -12,6 +12,8 @@ import { type ConfirmCapabilityContext, type ConfirmCapabilityResult } from '../
 import { reconcileAskExecutionSideEffects } from '../execution/executeOperation';
 import { ensurePropertyAccess } from '../askHandlerSupport';
 import { propertyTaxAppealReadinessService } from '../../propertyTax/propertyTaxAppealReadiness.service';
+import { listEligibleEvidenceRecords, type EvidenceRecordOption } from '../../propertyTax/propertyTaxEvidenceSource';
+import { humanDate } from '../askFormatting';
 import {
   EVIDENCE_CAPTURE_KEY, EVIDENCE_DECISION_LABELS, EVIDENCE_KIND_SPEC, EVIDENCE_MESSAGES, parseEvidenceAnswer, type EvidenceDraft, type EvidenceKind,
 } from '../support/propertyTaxEvidenceCommand';
@@ -40,27 +42,39 @@ async function isPrimaryOwner(userId: string, propertyId: string) {
   return Boolean(await database.property.findFirst({ where: { id: propertyId, homeownerProfile: { userId } }, select: { id: true } }));
 }
 
-function formCapture(kind: EvidenceKind, contextVersion: string, decisions: readonly string[], entered: Record<string, unknown> = {}): AskCaptureRequest {
+const SENSITIVITY_LABELS: Record<string, string> = {
+  STANDARD: 'Standard', PERSONAL: 'Personal', FINANCIAL: 'Financial', INSURANCE: 'Insurance', CLAIM: 'Claim', SECURITY: 'Security', LEGAL: 'Legal',
+};
+const recordKindLabel = (option: EvidenceRecordOption) => (option.isOther ? 'Other supporting evidence' : option.recordType.toLowerCase().replace(/_/g, ' '));
+/** The sensitivity label is shown, never filtered on (owner ruling D-T2). */
+const recordLabel = (option: EvidenceRecordOption) =>
+  `${option.title} (${recordKindLabel(option)}, ${SENSITIVITY_LABELS[option.sensitivity] ?? option.sensitivity}, added ${humanDate(option.createdAt) ?? 'earlier'})`;
+
+function formCapture(kind: EvidenceKind, contextVersion: string, decisions: readonly string[], records: readonly EvidenceRecordOption[], entered: Record<string, unknown> = {}): AskCaptureRequest {
   const spec = EVIDENCE_KIND_SPEC[kind];
   const text = (key: string, label: string, max: number, required = true, help?: string) => ({ key, label, helpText: help, required, inputSchema: { type: 'SHORT_TEXT' as const, maxLength: max } });
-  const source = text('sourceUrl', 'Link to the notice or record (https)', 2_000, true, 'A web address you can open. Cozy does not read it.');
+  const source = [
+    text('sourceUrl', 'Link to the notice or record (https)', 2_000, false, 'Give either a link or a document from your home records, not both. Cozy does not read either.'),
+    ...(records.length ? [{ key: 'sourceRecordId', label: 'Or a document in your home records', required: false,
+      inputSchema: { type: 'SINGLE_SELECT' as const, options: records.map((record) => ({ label: recordLabel(record), value: record.id })) } }] : []),
+  ];
   const fields: unknown[] = spec.type === 'FACTUAL_ERROR' ? [
     text('claimedClassification', 'The tax class you say is correct', 120),
     { key: 'officialRecordMismatch', label: 'Does the official record show a different class?', required: true, inputSchema: { type: 'SINGLE_SELECT' as const, options: [{ label: 'Yes, the official record shows a different class', value: 'YES' }, { label: 'No, it matches', value: 'NO' }] } },
-    text('description', 'What you found (optional)', 2_000, false), source,
+    text('description', 'What you found (optional)', 2_000, false), ...source,
   ] : spec.type === 'EXEMPTION_DECISION' ? [
     text('programName', 'Exemption program', 200),
     { key: 'decisionType', label: 'What the notice says', required: true, inputSchema: { type: 'SINGLE_SELECT' as const, options: decisions.map((value) => ({ label: EVIDENCE_DECISION_LABELS[value] ?? value, value })) } },
     { key: 'noticeDate', label: 'Notice date', required: true, inputSchema: { type: 'APPROXIMATE_DATE' as const, allowedPrecisions: ['EXACT_DATE'], allowFuture: false } },
-    text('description', 'Anything to add (optional)', 2_000, false), source,
+    text('description', 'Anything to add (optional)', 2_000, false), ...source,
   ] : [
-    text('description', 'The condition as of the valuation date', 2_000, true, 'State what was true of the property on the valuation date.'), source,
+    text('description', 'The condition as of the valuation date', 2_000, true, 'State what was true of the property on the valuation date.'), ...source,
   ];
   return {
     requirementId: 'property-tax-evidence-inputs', captureKey: EVIDENCE_CAPTURE_KEY, classification: 'WORKFLOW_INPUT', state: 'UNKNOWN',
     title: spec.type === 'CONDITION' ? 'Add supporting condition evidence' : spec.type === 'FACTUAL_ERROR' ? 'Add tax class evidence' : 'Add the exemption decision',
     question: 'What does the record say, and where can it be seen?',
-    helpText: 'Enter only what the source shows. Saving it counts it as confirmed, and it replaces the evidence you saved earlier for this. Cozy does not read the link and nothing is filed.',
+    helpText: 'Enter only what the source shows. Saving it counts it as confirmed, and it replaces the evidence you saved earlier for this. Cozy does not read the link or the document and nothing is filed.',
     inputSchema: { type: 'GROUP', fields } as unknown as AskCaptureRequest['inputSchema'],
     currentAnswer: Object.fromEntries(Object.entries(entered).filter(([, v]) => v !== null && v !== undefined && v !== '')), allowNotSure: false, sensitivity: 'FINANCIAL',
     destinationLabel: 'Used to prepare this change; nothing is saved until you confirm', confirmationText: null, expectedContextVersion: contextVersion,
@@ -89,17 +103,19 @@ export async function evidenceCommandResult(userId: string, propertyId: string, 
   const accepted: string[] = Array.isArray(readiness.ground?.requirements?.acceptedDecisionTypes) ? readiness.ground.requirements.acceptedDecisionTypes.map(String) : Object.keys(EVIDENCE_DECISION_LABELS);
   const existing = await existingEvidence(propertyId, spec.evidenceKey);
   const contextVersion = versionOf(propertyId, spec.evidenceKey, readiness.ruleProfile.id, existing);
+  const eligible = await listEligibleEvidenceRecords(propertyId);
   const launchParameters = { evidenceLaunch: { kind: launch.kind, sourceExecutionId: launch.sourceExecutionId } };
   if (!supplied) {
     return {
       status: 'NEEDS_CONTEXT', reasonCode: 'PROPERTY_TAX_EVIDENCE_INPUT_REQUIRED', contextVersion, parameters: launchParameters,
       blocks: [{ type: 'SUMMARY', id: 'property-tax-evidence-input', title: `Add ${spec.label}`, body: 'Nothing has been saved yet; you will review it first.', tone: 'DEFAULT', actions: [] }],
-      captureRequests: [formCapture(launch.kind, contextVersion, accepted)], suggestions: [],
+      captureRequests: [formCapture(launch.kind, contextVersion, accepted, eligible.options)], suggestions: [],
     };
   }
   const parsed = parseEvidenceAnswer(launch.kind, supplied, accepted);
   if (!parsed.success) {
     const reason = {
+      SOURCE: ['Give one source', 'Give either a link or a document from your home records, not both and not neither. Nothing has changed.'],
       URL: ['Use a web address', 'The source must be an http or https address you can open. Nothing has changed.'],
       NO_MISMATCH: ['That does not support a factual-error claim', 'If the official record matches the class you stated, there is no factual error to record. Nothing has changed.'],
       FUTURE: ['Check the notice date', 'A notice cannot be dated in the future. Nothing has changed.'],
@@ -109,6 +125,11 @@ export async function evidenceCommandResult(userId: string, propertyId: string, 
     return unavailable(`PROPERTY_TAX_EVIDENCE_${parsed.reason === 'INVALID' ? 'INPUT_INVALID' : parsed.reason}`, reason[0], reason[1]);
   }
   const d: EvidenceDraft = parsed.data;
+  const chosen = d.sourceRecordId ? eligible.options.find((record) => record.id === d.sourceRecordId) : null;
+  if (d.sourceRecordId && !chosen) {
+    return unavailable('PROPERTY_TAX_EVIDENCE_RECORD_NOT_OFFERED', 'Choose a document from the list',
+      `That document is not one your whole household can see with a clean scan.${eligible.excludedPrivate ? ` ${eligible.excludedPrivate} owner-only record${eligible.excludedPrivate === 1 ? ' is' : 's are'} not offered.` : ''} Nothing has changed.`);
+  }
   const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
   const optional = d.type === 'CONDITION';
   return {
@@ -119,14 +140,15 @@ export async function evidenceCommandResult(userId: string, propertyId: string, 
       confirmationId: `property-tax-evidence-${sha(`${launch.kind}:${JSON.stringify(supplied)}`).slice(0, 12)}-1`, version: 1, title: `Save this ${spec.label}?`,
       description: `${optional
         ? 'This is optional supporting evidence. It does not by itself satisfy the assessed-value ground, which needs qualified comparables.'
-        : 'This is the evidence the reviewed rule asks for on this ground.'} Saving counts it as confirmed. Cozy did not read the link and nothing is filed.${existing ? ' It replaces the evidence you saved earlier for this.' : ''}`,
+        : 'This is the evidence the reviewed rule asks for on this ground.'} Saving counts it as confirmed. Cozy did not read the ${d.sourceUrl ? 'link' : 'document'} and nothing is filed.${existing ? ' It replaces the evidence you saved earlier for this.' : ''}`,
       fields: [
-        ...d.summary, ...(d.description && d.type !== 'CONDITION' ? [{ label: 'Notes', value: d.description }] : []), { label: 'Source', value: d.sourceUrl },
+        ...d.summary, ...(d.description && d.type !== 'CONDITION' ? [{ label: 'Notes', value: d.description }] : []),
+        d.sourceUrl ? { label: 'Source', value: d.sourceUrl } : { label: 'Source document', value: recordLabel(chosen as EvidenceRecordOption) },
         ...(existing ? [{ label: 'Replaces', value: `${factsLine(existing.factsJson)}${existing.sourceUrl ? ` (${existing.sourceUrl})` : ''}` }] : []),
       ],
       editableFields: [], confirmLabel: 'Save the evidence', consentText: 'I authorize saving this evidence to my property tax appeal.', expiresAt: expiresAt.toISOString(),
     },
-    captureRequests: [formCapture(launch.kind, contextVersion, accepted, supplied)], suggestions: [],
+    captureRequests: [formCapture(launch.kind, contextVersion, accepted, eligible.options, supplied)], suggestions: [],
   };
 }
 
@@ -151,7 +173,8 @@ export async function confirmEvidence(ctx: ConfirmCapabilityContext): Promise<Co
     const access = await ensurePropertyAccess(userId, propertyId);
     await propertyTaxAppealReadinessService.upsertEvidence({
       propertyId, userId, role: access.role, evidenceKey: d.evidenceKey, ground: d.ground, type: d.type, title: d.title,
-      ...(d.description ? { description: d.description } : {}), facts: d.facts, sourceUrl: d.sourceUrl,
+      ...(d.description ? { description: d.description } : {}), facts: d.facts,
+      ...(d.sourceUrl ? { sourceUrl: d.sourceUrl } : {}), ...(d.sourceRecordId ? { supportingDocumentId: d.sourceRecordId } : {}),
     });
   } catch (error) {
     if (error instanceof Error && (!(error as { code?: unknown }).code || (error as { statusCode?: unknown }).statusCode)) throw stale(error.message);
@@ -159,7 +182,7 @@ export async function confirmEvidence(ctx: ConfirmCapabilityContext): Promise<Co
   }
   const result: AskOperationResult = {
     status: 'COMPLETED', reasonCode: 'PROPERTY_TAX_EVIDENCE_SAVED',
-    blocks: [{ type: 'WORKFLOW_PROGRESS', id: `property-tax-evidence-${propertyId}`, title: 'Evidence saved', status: 'COMPLETED', description: 'It counts as confirmed in your appeal readiness. Cozy did not read the link and nothing was filed.', details: [], actions: [{ ...back, style: 'PRIMARY' as const }] }],
+    blocks: [{ type: 'WORKFLOW_PROGRESS', id: `property-tax-evidence-${propertyId}`, title: 'Evidence saved', status: 'COMPLETED', description: 'It counts as confirmed in your appeal readiness. Cozy did not read the source and nothing was filed.', details: [], actions: [{ ...back, style: 'PRIMARY' as const }] }],
     suggestions: [],
   };
   const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
