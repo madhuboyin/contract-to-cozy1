@@ -1,6 +1,7 @@
 // Moved out of askOrchestrator.service.ts unchanged (decomposition, FRD v1.98;
 // docs/architecture/ASK_ORCHESTRATOR_DECOMPOSITION_REVIEW.md). The handler registers itself, and the orchestrator
 // re-exports the names below so existing imports keep working.
+import { SALE_CASE_ACTION_IDS, SALE_CASE_MESSAGES, legalNextStatuses, type SaleCaseKind } from '../support/sellerPrepCaseCommand';
 import { HouseholdRole } from '@prisma/client';
 import { createHash } from 'node:crypto';
 import { prisma } from '../../../lib/prisma';
@@ -313,6 +314,21 @@ export function sellerPrepItemActions(role: HouseholdRole) {
   return SELLER_PREP_ITEM_ACTIONS.map(({ id, label, message }) => ({ id, label, message, style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'SELLER_PREP_ITEM_DECISION' }));
 }
 
+/** The case-level actions (FRD v1.338): start, dates, budget range, next stage. Contributors and owners only; the next stage only while there is one. */
+export function sellerPrepCaseActions(role: HouseholdRole, status: string | null, canCreate: boolean) {
+  if (role === HouseholdRole.VIEWER) return [];
+  const action = (kind: SaleCaseKind, label: string) => ({
+    id: SALE_CASE_ACTION_IDS[kind], label, message: SALE_CASE_MESSAGES[kind], style: 'SECONDARY' as const,
+    interactionType: 'START_WORKFLOW' as const, operationId: 'SELLER_PREP_CASE_COMMAND' as const,
+  });
+  if (!status) return canCreate ? [action('START', 'Start a sale case')] : [];
+  return [
+    action('DATES', 'Set target dates'),
+    action('BUDGET', 'Set prep budget range'),
+    ...(legalNextStatuses(status).length ? [action('STATUS', 'Update sale stage')] : []),
+  ];
+}
+
 async function sellerPrepChecklistResult(userId: string, propertyId: string): Promise<AskOperationResult> {
   const overview = await PropertySaleCaseService.getCase(userId, propertyId);
 
@@ -325,16 +341,17 @@ async function sellerPrepChecklistResult(userId: string, propertyId: string): Pr
         id: 'seller-prep-no-case',
         title: 'No active sale case yet',
         body: overview.canCreate
-          ? 'A sale case gives a personalized seller-prep checklist -- repairs, records, and cosmetic work prioritized for this home. Starting one is not currently available in Ask.'
+          ? 'A sale case gives a personalized seller-prep checklist -- repairs, records, and cosmetic work prioritized for this home. You can start one now.'
           : 'A seller-prep checklist becomes available once this property is marked for sale.',
         tone: 'DEFAULT',
-        actions: [],
+        actions: overview.canCreate ? sellerPrepCaseActions((await ensurePropertyAccess(userId, propertyId)).role, null, true) : [],
       }],
       suggestions: [],
     };
   }
 
   const access = await ensurePropertyAccess(userId, propertyId);
+  const caseActions = sellerPrepCaseActions(access.role, overview.saleCase.status || 'PREPARING', overview.canCreate);
   const itemActions = sellerPrepItemActions(access.role);
   const openItems = overview.readinessItems.filter((item) => item.status === 'OPEN');
   const pursuingItems = overview.readinessItems.filter((item) => item.status === 'PURSUING');
@@ -367,10 +384,9 @@ async function sellerPrepChecklistResult(userId: string, propertyId: string): Pr
       ? `${openItems.length} open item${openItems.length === 1 ? '' : 's'}${pursuingItems.length ? `, ${pursuingItems.length} already in progress` : ''}${waivedCount ? `, ${waivedCount} waived` : ''}.`
       : `No open items right now${waivedCount ? ` (${waivedCount} waived)` : ''}. This home is in good shape to list.`,
     tone: 'DEFAULT',
-    // This response is the canonical sale-readiness checklist, including
-    // progress, item details, and every supported item decision. Do not add a
-    // redundant CTA that exits Ask for the desktop rendering of the same data.
-    actions: [],
+    // This response is the canonical sale-readiness checklist, including progress, item details and every supported decision,
+    // and (FRD v1.338) the case's own dates, budget range and stage. No CTA that exits Ask for the desktop rendering of the same data.
+    actions: caseActions,
   }];
 
   // IW-PRES-020 (FRD v1.80): the sale case's own readiness figure as a ring, with the must-address counts and the next
@@ -492,7 +508,7 @@ async function sellerPrepItemDecisionResult(userId: string, propertyId: string, 
         type: 'SUMMARY',
         id: 'seller-prep-decision-no-case',
         title: 'No active sale case yet',
-        body: 'There is no sale case to decide checklist items on, and starting one is not currently available in Ask.',
+        body: 'There is no sale case to decide checklist items on. Start one from your seller prep checklist first.',
         tone: 'DEFAULT',
         actions: [],
       }],

@@ -127,6 +127,8 @@ export type AskOperationId =
   // Start a renovation case (register section 3): a confirmation-gated command reached by the declared Start a renovation case action on the readiness
   // answer or a typed "start a renovation case"; never by fuzzy retrieval.
   | 'RENOVATION_CASE_START'
+  // Start the sale case, set its target dates and prep budget range, and record its stage (register P2 Seller Prep). Confirmation-gated, declared-action only; lists, contracts or closes nothing.
+  | 'SELLER_PREP_CASE_COMMAND'
   // Mark a claim checklist item done, not applicable or open again, and add a note to a claim's timeline (register P2 Claims). Confirmation-gated, declared-action only.
   | 'CLAIM_ACTIVITY_COMMAND'
   // Read a claim's checklist: each item's status and what it asks for (register P2 Claims). Read-only; launched from a claim row.
@@ -405,6 +407,7 @@ export const ASK_INTERNAL_OPERATION_IDS: ReadonlySet<AskOperationId> = new Set<A
   'NEGOTIATION_SHIELD_CASE_ATTACH',
   // Reached by the declared action or the deterministic typed-start pattern; never by fuzzy retrieval.
   'RENOVATION_CASE_START',
+  'SELLER_PREP_CASE_COMMAND',
   'CLAIM_ACTIVITY_COMMAND',
   'DO_NOTHING_SCENARIO_COMMAND',
   'HOME_HABIT_PREFERENCES_COMMAND',
@@ -727,6 +730,7 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   MATERIAL_SPEC_ADD: definition('MATERIAL_SPEC_ADD', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'material-spec.add', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   NEGOTIATION_SHIELD_CASE_START: definition('NEGOTIATION_SHIELD_CASE_START', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'negotiation-shield.start', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   RENOVATION_CASE_START: definition('RENOVATION_CASE_START', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'renovation-case.start', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
+  SELLER_PREP_CASE_COMMAND: definition('SELLER_PREP_CASE_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'seller-prep-case.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   CLAIM_ACTIVITY_COMMAND: definition('CLAIM_ACTIVITY_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'claim-activity.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   CLAIM_CHECKLIST_VIEW: definition('CLAIM_CHECKLIST_VIEW', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'claim-checklist.view', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
   DO_NOTHING_SCENARIO_COMMAND: definition('DO_NOTHING_SCENARIO_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'do-nothing-scenario.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),

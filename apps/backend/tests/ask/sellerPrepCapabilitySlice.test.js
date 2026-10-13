@@ -141,8 +141,9 @@ test('the no-sale-case answers and the decision proposal link to no desktop page
   for (const [operationId, message] of [['SELLER_PREP_CHECKLIST', 'Check my sale readiness'], ['SELLER_PREP_ITEM_DECISION', 'Waive the paint item']]) {
     const result = await noCase(operationId, message);
     assert.equal(result.reasonCode, 'SELLER_PREP_NO_ACTIVE_CASE', operationId);
-    assert.deepEqual(result.blocks[0].actions, [], operationId);
-    assert.match(result.blocks[0].body, /not currently available in Ask/, operationId);
+    // FRD v1.338: the checklist answer offers to start the case in Ask; the item-decision answer only points back to the checklist.
+    assert.deepEqual(result.blocks[0].actions.map((action) => action.id), operationId === 'SELLER_PREP_CHECKLIST' ? ['seller-prep-case-start'] : [], operationId);
+    assert.doesNotMatch(result.blocks[0].body, /not currently available in Ask/, operationId);
     assert.equal(JSON.stringify(result).includes('/dashboard/'), false, operationId);
   }
   install();

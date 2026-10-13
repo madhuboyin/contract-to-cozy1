@@ -71,6 +71,8 @@ import { CLAIM_NOTE_CAPTURE_KEY, parseClaimNoteAnswer } from '../support/claimAc
 import { claimActivityResult } from '../handlers/claimActivity.handler';
 import { doNothingFormKindFromCaptureKey, parseDoNothingScenarioAnswer } from '../support/doNothingScenarioCommand';
 import { doNothingScenarioResult } from '../handlers/doNothingScenarioCommands.handler';
+import { parseSaleCaseAnswer, saleCaseFormKindFromCaptureKey } from '../support/sellerPrepCaseCommand';
+import { saleCaseCommandResult } from '../handlers/sellerPrepCaseCommands.handler';
 import { HABIT_COACH_PREFERENCES_CAPTURE_KEY, parseHabitCoachPreferencesAnswer } from '../support/habitCoachPreferencesCommand';
 import { habitCoachPreferencesResult } from '../handlers/habitCoachPreferencesCommands.handler';
 import { FINANCING_PROFILE_CAPTURE_KEY, parseFinancingProfileAnswer } from '../support/financingProfileCommand';
@@ -1439,6 +1441,24 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     captureId = input.idempotencyKey;
     capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
     canonicalOwner = 'DoNothingScenario';
+  } else if (execution.operationId === 'SELLER_PREP_CASE_COMMAND') {
+    const scKind = saleCaseFormKindFromCaptureKey(input.captureKey);
+    if (!scKind) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    const access = await ensurePropertyAccess(userId, execution.propertyId);
+    if (access.role === HouseholdRole.VIEWER) throw Object.assign(new Error('A contributor or owner is required to change the sale case.'), { code: 'ASK_PERMISSION_REQUIRED' });
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson) ? execution.parametersJson as Record<string, unknown> : {};
+    const scLaunch = storedParameters.saleCaseLaunch && typeof storedParameters.saleCaseLaunch === 'object' && !Array.isArray(storedParameters.saleCaseLaunch)
+      ? storedParameters.saleCaseLaunch as { kind?: unknown; sourceExecutionId?: unknown } : null;
+    if (!scLaunch || scLaunch.kind !== scKind) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    if (!parseSaleCaseAnswer(scKind, input.answer).success) {
+      throw Object.assign(new Error('Fill in what changes; a closing date cannot be before the listing date.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+    }
+    result = await saleCaseCommandResult(userId, execution.propertyId, {
+      kind: scKind, sourceExecutionId: typeof scLaunch.sourceExecutionId === 'string' ? scLaunch.sourceExecutionId : null,
+    }, input.answer as Record<string, unknown>);
+    captureId = input.idempotencyKey;
+    capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
+    canonicalOwner = 'PropertySaleCase';
   } else if (execution.operationId === 'CLAIM_ACTIVITY_COMMAND') {
     if (input.captureKey !== CLAIM_NOTE_CAPTURE_KEY) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
     const access = await ensurePropertyAccess(userId, execution.propertyId);

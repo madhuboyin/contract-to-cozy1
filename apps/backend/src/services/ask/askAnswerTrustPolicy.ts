@@ -182,6 +182,8 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   NEGOTIATION_SHIELD_CASE_ATTACH: new Set(['negotiation-shield-review', 'negotiation-shield-analyze']),
   // The readiness answer's empty state offers the start; the receipt of a started case offers that case's readiness check.
   RENOVATION_CASE_START: new Set(['renovation-case-readiness']),
+  // Start the sale case, set its target dates and prep budget range, and record its stage (register P2 Seller Prep). Confirmation-gated, declared-action only; lists, contracts or closes nothing.
+  SELLER_PREP_CASE_COMMAND: new Set(['seller-prep-back']),
   // Mark a claim checklist item done, not applicable or open again, and add a note to a claim's timeline (register P2 Claims). Confirmation-gated, declared-action only.
   CLAIM_CHECKLIST_VIEW: new Set(['claim-note', 'claim-checklist-done', 'claim-checklist-not-applicable', 'claim-checklist-reopen']),
   CLAIM_ACTIVITY_COMMAND: new Set(['claims-back']),
@@ -237,7 +239,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   PROPERTY_BRIEFS_LIST: new Set(['property-brief-preview', 'property-brief-prepare', 'property-brief-share', 'property-brief-republish', 'property-brief-test-share', 'property-brief-revoke-share']),
   // FRD v1.44: neither seller-prep operation had an entry, so every action they emitted (even the checklist link) was
   // stripped. The decision item actions are shown inline only when the item's live state allows them.
-  SELLER_PREP_CHECKLIST: new Set(['sale-item-pursue', 'sale-item-unpursue', 'sale-item-waive', 'sale-item-reopen']),
+  SELLER_PREP_CHECKLIST: new Set(['sale-item-pursue', 'sale-item-unpursue', 'sale-item-waive', 'sale-item-reopen', 'seller-prep-case-start', 'seller-prep-case-dates', 'seller-prep-case-budget', 'seller-prep-case-status']),
   GUIDANCE_JOURNEY_CREATE: new Set(['open-journey']),
   QUOTE_COMPARISON_CREATE: new Set(['open-workspace']),
   QUOTE_COMPARISON_REVIEW: new Set(['create-comparison', 'quote-comparison-add-quote', 'quote-comparison-select-quote', 'quote-comparison-reject-quote', 'quote-comparison-restore-quote', 'quote-comparison-remove-quote', 'quote-comparison-edit-quote', 'quote-comparison-confirm-quote', 'quote-comparison-clarify-quote', 'quote-comparison-resolve-clarification', 'quote-comparison-close-decision', 'price-finalization-start-quote']),
