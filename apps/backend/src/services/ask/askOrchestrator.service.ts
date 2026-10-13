@@ -99,6 +99,7 @@ import './handlers/negotiationShieldAnalyze.handler';
 import './handlers/negotiationShieldEdit.handler';
 import './handlers/negotiationShieldAttach.handler';
 import './handlers/renovationCaseStart.handler';
+import './handlers/renovationReadinessCommands.handler';
 import './handlers/savingsBenefitCommands.handler';
 import './handlers/propertyTaxAppealCommands.handler';
 import './handlers/statusBoardCommands.handler';

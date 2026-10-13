@@ -61,6 +61,8 @@ import { appealFormKindFromCaptureKey, parseAppealFormAnswer } from '../support/
 import { appealCommandResult } from '../handlers/propertyTaxAppealCommands.handler';
 import { SAVINGS_OUTCOME_CAPTURE_KEY, SAVINGS_OUTCOME_INVALID_MESSAGES, parseSavingsOutcomeAnswer, parseSavingsRowId } from '../support/savingsBenefitCommand';
 import { savingsCommandResult } from '../handlers/savingsBenefitCommands.handler';
+import { parseReadinessFormAnswer, readinessFormKindFromCaptureKey } from '../support/renovationReadinessCommand';
+import { readinessCommandResult } from '../handlers/renovationReadinessCommands.handler';
 import { COVERAGE_DECISION_CAPTURE_KEY, parseCoverageDecisionAnswer, type CoverageCommandKind } from '../support/coverageCommand';
 import { parseUpgradeFormAnswer, upgradeFormKindFromCaptureKey, type UpgradeCommandKind } from '../support/homeUpgradeCommand';
 import { parsePermitFormAnswer, permitFormKindFromCaptureKey, type PermitCommandKind } from '../support/permitTrackerCommand';
@@ -1262,6 +1264,27 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     captureId = input.idempotencyKey;
     capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
     canonicalOwner = 'SavingsBenefitAction';
+  } else if (execution.operationId === 'RENOVATION_READINESS_COMMAND') {
+    const readinessKind = readinessFormKindFromCaptureKey(input.captureKey);
+    if (!readinessKind) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    const access = await ensurePropertyAccess(userId, execution.propertyId);
+    if (access.role === HouseholdRole.VIEWER) throw Object.assign(new Error('A contributor or owner is required to change readiness.'), { code: 'ASK_PERMISSION_REQUIRED' });
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson) ? execution.parametersJson as Record<string, unknown> : {};
+    const readinessLaunch = storedParameters.readinessCommandLaunch && typeof storedParameters.readinessCommandLaunch === 'object' && !Array.isArray(storedParameters.readinessCommandLaunch)
+      ? storedParameters.readinessCommandLaunch as { kind?: unknown; entityId?: unknown; sourceExecutionId?: unknown } : null;
+    if (!readinessLaunch || readinessLaunch.kind !== readinessKind || typeof readinessLaunch.entityId !== 'string') {
+      throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    }
+    const readinessAnswer = parseReadinessFormAnswer(readinessKind, input.answer);
+    if (!readinessAnswer.success) {
+      throw Object.assign(new Error('Check the form and try again: a reason needs enough detail to be useful later.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+    }
+    result = await readinessCommandResult(userId, execution.propertyId, {
+      kind: readinessKind, entityId: readinessLaunch.entityId, sourceExecutionId: typeof readinessLaunch.sourceExecutionId === 'string' ? readinessLaunch.sourceExecutionId : null,
+    }, readinessAnswer.data);
+    captureId = input.idempotencyKey;
+    capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
+    canonicalOwner = 'RenovationStartReadinessItem';
   } else if (execution.operationId === 'PROPERTY_BRIEF_COMMAND') {
     if (![PROPERTY_BRIEF_PREPARE_CAPTURE_KEY, PROPERTY_BRIEF_SHARE_CAPTURE_KEY].includes(input.captureKey) || input.expectedContextVersion !== 'property-brief-live') throw Object.assign(new Error('This Property Brief form is no longer active.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
     const access = await ensurePropertyAccess(userId, execution.propertyId);

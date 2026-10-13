@@ -182,6 +182,8 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   NEGOTIATION_SHIELD_CASE_ATTACH: new Set(['negotiation-shield-review', 'negotiation-shield-analyze']),
   // The readiness answer's empty state offers the start; the receipt of a started case offers that case's readiness check.
   RENOVATION_CASE_START: new Set(['renovation-case-readiness']),
+  // Refresh a renovation case's readiness, acknowledge or withdraw the risk of an open item, and reopen an item that was marked satisfied (register P1 Renovation Risk Advisor). Confirmation-gated, declared-action only; acknowledging a risk is owner-only.
+  RENOVATION_READINESS_COMMAND: new Set(['renovation-readiness-back']),
   // Save, dismiss, stop pursuing and record the outcome of a savings or benefit opportunity (register P1 Savings & Benefits). Confirmation-gated, declared-action only; primary owner only. Sensitive facts and partner handoffs are not here.
   SAVINGS_BENEFIT_COMMAND: new Set(['savings-benefit-back']),
   // Start a property tax appeal case, prepare its packet, record the filing, a response or hearing, a reminder and the decision (register P1 Property Tax). Confirmation-gated, declared-action only; primary owner only; Cozy prepares and records, it never files.
@@ -204,7 +206,8 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   // Manage the proposals of a quote comparison (register P0 Quote Comparison): add, select, reject or return, remove. Confirmation-gated, reached only by declared actions on the review; never by fuzzy retrieval.
   QUOTE_COMPARISON_COMMAND: new Set(['quote-comparison-back']),
   // The readiness answer's empty state offers Start a renovation case to a contributor or owner (a SUMMARY action, so a missing id is stripped).
-  RENOVATION_PERMIT_READINESS: new Set(['renovation-case-start']),
+  // Plus the readiness controls (FRD v1.324): refresh, acknowledge or withdraw the risk of an open item, reopen a satisfied one.
+  RENOVATION_PERMIT_READINESS: new Set(['renovation-case-start', 'renovation-readiness-refresh', 'renovation-readiness-acknowledge', 'renovation-readiness-revoke', 'renovation-readiness-reopen']),
   // The receipt of saved details offers the read of that review and a run of its analysis.
   NEGOTIATION_SHIELD_CASE_UPDATE: new Set(['negotiation-shield-review', 'negotiation-shield-analyze']),
   PROPERTY_BRIEFS_LIST: new Set(['property-brief-preview', 'property-brief-prepare', 'property-brief-share', 'property-brief-republish', 'property-brief-test-share', 'property-brief-revoke-share']),

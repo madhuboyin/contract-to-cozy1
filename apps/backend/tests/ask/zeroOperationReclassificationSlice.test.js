@@ -52,7 +52,8 @@ const hrefs = (result) => result.blocks.flatMap((block) => (block.actions ?? [])
 
 test('the renovation readiness answer links to no desktop page: not the case page and not /projects', async () => {
   const result = await readiness();
-  assert.deepEqual(hrefs(result), []);
+  // FRD v1.324: the only action is the in-Ask refresh of the readiness check; nothing carries a page link.
+  assert.deepEqual(hrefs(result), [['renovation-readiness-refresh', undefined]]);
   assert.equal(JSON.stringify(result).includes('/dashboard/'), false);
 });
 

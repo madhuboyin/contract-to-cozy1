@@ -213,7 +213,7 @@ Project Tracker appeared in the original P0 list as "lists projects." It is remo
 | Sell / Hold / Rent | Partial: what-if assumptions implemented (FRD v1.321) | Saved scenarios and side-by-side revisions; debt overrides; durable goal/decision continuity; outcome tracking | Not browser- or database-verified |
 | Property Tax | Partial: appeal lifecycle implemented (FRD v1.322) | Evidence and comparables management; intakes and document upload; record review/correction; the action list | Not browser- or database-verified |
 | Savings & Benefits | Partial: save, dismiss, stop and outcomes implemented (FRD v1.323) | Sensitive eligibility facts and partner handoffs (owner decision); follow-up date and checklist progress | Not browser- or database-verified |
-| Renovation Risk Advisor | Residual gap | Per-item acknowledge/resolve; evidence; permit/HOA continuation; readiness refresh | Not re-verified |
+| Renovation Risk Advisor | Partial: refresh, acknowledge, withdraw and reopen implemented (FRD v1.324) | Mark satisfied with evidence; project handoff; compliance records/conditions; HOA document reviews | Not browser- or database-verified |
 | Status Board | Partial: refresh and item corrections implemented (FRD v1.319) | Filters and grouping; hiding the page's refresh and override controls from viewers | Not browser- or database-verified |
 | Home Risk Replay | Residual gap | Historical-event detail; evidence/correction; filters; relevant follow-ups | Not re-verified |
 | Neighborhood Change Radar | Residual gap | Filters; source detail; tracked areas/preferences; relevant follow-ups | Not re-verified |

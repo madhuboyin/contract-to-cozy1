@@ -26,6 +26,10 @@ import { PermitTrackerService } from '../../permitTracker.service';
 import { getAskPropertyTimezone } from '../askExecutionContext';
 import { RESERVE_FUND_ACTION_IDS, RESERVE_FUND_COMMAND_MESSAGE } from '../support/reserveFundConstants';
 import { RENOVATION_CASE_START_ACTION_ID, RENOVATION_CASE_START_MESSAGE } from '../support/renovationCaseStart';
+import {
+  READINESS_COMMAND_ACTION_IDS, READINESS_COMMAND_MESSAGES, RENOVATION_READINESS_CASE_ENTITY_TYPE, RENOVATION_READINESS_ITEM_ENTITY_TYPE, type ReadinessCommandKind,
+} from '../support/renovationReadinessCommand';
+import { readinessItemKinds } from './renovationReadinessCommands.handler';
 
 const homeCapitalTimelineService = new HomeCapitalTimelineService();
 import { CAPITAL_COMMAND_ACTION_IDS, CAPITAL_COMMAND_MESSAGES, CAPITAL_OVERRIDE_ENTITY_TYPE, CAPITAL_OVERRIDE_SHORT_LABELS, CAPITAL_PROPERTY_ENTITY_TYPE } from '../support/capitalTimelineCommand';
@@ -325,7 +329,12 @@ export function renovationReadinessProgress(
   };
 }
 
-async function renovationPermitReadinessResult(propertyId: string, message: string, canStart = false): Promise<AskOperationResult> {
+const READINESS_COMMAND_ACTIONS = READINESS_COMMAND_ACTION_IDS;
+const READINESS_ITEM_LABELS: Record<ReadinessCommandKind, string> = {
+  REFRESH: 'Refresh readiness', ACKNOWLEDGE: 'Acknowledge the risk', REVOKE: 'Withdraw the acknowledgement', REOPEN: 'Reopen',
+};
+
+async function renovationPermitReadinessResult(propertyId: string, message: string, canStart = false, isOwner = false): Promise<AskOperationResult> {
   const [cases, permitSummary] = await Promise.all([listRenovationCases(propertyId), permitTrackerService.getPermitSummary(propertyId)]);
   if (!cases.length) return {
     status: 'NEEDS_CONTEXT', reasonCode: 'RENOVATION_CASE_REQUIRED',
@@ -339,7 +348,13 @@ async function renovationPermitReadinessResult(propertyId: string, message: stri
   const items: any[] = readiness.items ?? [];
   const blockers = items.filter((item) => item.isBlocking && item.status !== 'SATISFIED');
   const open = items.filter((item) => item.status !== 'SATISFIED');
-  const blocks: AskPresentationBlock[] = [{ type: 'SUMMARY', id: 'renovation-readiness-summary', title: summary.state === 'READY' ? `${selected.name} is recorded as ready to start` : summary.state === 'NOT_EVALUATED' ? `${selected.name} needs a current readiness evaluation` : `${blockers.length} blocking item${blockers.length === 1 ? '' : 's'} remain for ${selected.name}`, body: `${summary.disclaimer ?? 'This organizes canonical project records and does not establish legal compliance.'} Permit Tracker: ${permitSummary.activePermits} active permit${permitSummary.activePermits === 1 ? '' : 's'}, ${permitSummary.finaledPermits} finaled, and ${permitSummary.openFlags} unresolved flag${permitSummary.openFlags === 1 ? '' : 's'}.`, tone: summary.state === 'READY' && permitSummary.openFlags === 0 ? 'DEFAULT' : 'CAUTION', actions: [] }];
+  const blocks: AskPresentationBlock[] = [{ type: 'SUMMARY', id: 'renovation-readiness-summary', title: summary.state === 'READY' ? `${selected.name} is recorded as ready to start` : summary.state === 'NOT_EVALUATED' ? `${selected.name} needs a current readiness evaluation` : `${blockers.length} blocking item${blockers.length === 1 ? '' : 's'} remain for ${selected.name}`, body: `${summary.disclaimer ?? 'This organizes canonical project records and does not establish legal compliance.'} Permit Tracker: ${permitSummary.activePermits} active permit${permitSummary.activePermits === 1 ? '' : 's'}, ${permitSummary.finaledPermits} finaled, and ${permitSummary.openFlags} unresolved flag${permitSummary.openFlags === 1 ? '' : 's'}.`, tone: summary.state === 'READY' && permitSummary.openFlags === 0 ? 'DEFAULT' : 'CAUTION',
+    // FRD v1.324: re-evaluating readiness is a contributor's step on the case.
+    actions: canStart ? [{
+      id: READINESS_COMMAND_ACTIONS.REFRESH, label: summary.state === 'NOT_EVALUATED' ? 'Run the readiness check' : 'Refresh readiness', interactionType: 'START_WORKFLOW' as const,
+      message: READINESS_COMMAND_MESSAGES.REFRESH, operationId: 'RENOVATION_READINESS_COMMAND' as const, entityType: RENOVATION_READINESS_CASE_ENTITY_TYPE, entityId: selected.id,
+      style: summary.state === 'NOT_EVALUATED' ? 'PRIMARY' as const : 'SECONDARY' as const,
+    }] : [] }];
   // IW-PRES-020 (FRD v1.94): the blocking items as a ring, ahead of the checklist.
   const ring = renovationReadinessProgress(items);
   if (ring) blocks.push(ring);
@@ -354,6 +369,11 @@ async function renovationPermitReadinessResult(propertyId: string, message: stri
         id: item.id, title: item.title, description: item.reason ?? null,
         meta: [blocking ? 'Blocks starting' : 'Open', ...(item.overrideAcknowledgedAt ? ['Acknowledged'] : [])],
         status: item.status, href: null, tone: blocking ? 'CAUTION' as const : 'DEFAULT' as const, countLabel: String(number), ...(facts ? { detail: facts } : {}),
+        entityType: RENOVATION_READINESS_ITEM_ENTITY_TYPE,
+        actions: readinessItemKinds(item).filter((kind) => canStart && (isOwner || (kind !== 'ACKNOWLEDGE' && kind !== 'REVOKE'))).map((kind: ReadinessCommandKind) => ({
+          id: READINESS_COMMAND_ACTIONS[kind], label: READINESS_ITEM_LABELS[kind], message: READINESS_COMMAND_MESSAGES[kind], operationId: 'RENOVATION_READINESS_COMMAND' as const,
+          interactionType: 'MUTATE_RECORD' as const, style: 'SECONDARY' as const,
+        })),
       };
     };
     const blockingItems = blockers.slice(0, 20).map((item) => renovationItem(item, true));
@@ -392,7 +412,7 @@ registerCapabilityHandler('property-tax.appeal-readiness', async (envelope) => p
 
 registerCapabilityHandler('renovation-permit.readiness', async (envelope, deps) => {
   const access = deps.propertyAccess ?? await ensurePropertyAccess(envelope.userId, envelope.propertyId!);
-  return renovationPermitReadinessResult(envelope.propertyId!, envelope.message, access.role !== HouseholdRole.VIEWER);
+  return renovationPermitReadinessResult(envelope.propertyId!, envelope.message, access.role !== HouseholdRole.VIEWER, access.role === HouseholdRole.OWNER);
 });
 
 registerCapabilityHandler('major-event.entry', async (envelope) => majorEventEntryResult(envelope.userId, envelope.propertyId!, envelope.message));
