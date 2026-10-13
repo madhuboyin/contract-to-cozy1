@@ -282,6 +282,7 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   NEGOTIATION_SHIELD_CASE_UPDATE: 'The changes to your review\'s saved details are listed and saved only after you confirm; the analysis is not re-run.',
   NEGOTIATION_SHIELD_CASE_ATTACH: 'The record you pick is shown, with who can see it, and is attached to your review only after you confirm; the file is not read.',
   RENOVATION_CASE_START: 'Your renovation case is shown and saved only after you confirm; nothing is applied for or started.',
+  BUYER_WALKTHROUGH_COMMAND: 'The walkthrough change is shown for review and recorded only after you confirm.',
   DIY_PROJECT_NOTE_COMMAND: 'The note is shown for review and added only after you confirm.',
   DIY_SKILL_PROFILE_COMMAND: 'Your skill levels are shown for review and saved only after you confirm.',
   SEASONAL_ITEM_COMMAND: 'The seasonal task change is shown for review and applied only after you confirm.',

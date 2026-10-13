@@ -10,6 +10,11 @@ import type { BuyerClosingHomeLaneKey } from '../../../productFramework/buyerAcq
 import { BuyerPurchaseLenderReadinessService } from '../../buyerPurchaseLenderReadiness.service';
 import { BuyerTitleEscrowService } from '../../buyerTitleEscrow.service';
 import { BuyerWalkthroughService } from '../../buyerWalkthrough.service';
+import {
+  ISSUE_STATUS_LABELS, OBSERVATION_CATEGORIES, OBSERVATION_STATUS_LABELS, WALKTHROUGH_ACTION_IDS, WALKTHROUGH_ENTITY_TYPES, WALKTHROUGH_MESSAGES, issueKinds, observationKinds,
+  walkthroughCompletionBlockers, type WalkthroughKind,
+} from '../support/buyerWalkthroughCommand';
+const WALKTHROUGH_OBSERVATION_CATEGORY_LABELS: Record<string, string> = Object.fromEntries(OBSERVATION_CATEGORIES);
 import { BuyerClosingDisclosureService } from '../../buyerClosingDisclosure.service';
 import { BuyerClosingDayService } from '../../buyerClosingDay.service';
 import { BuyerContractService } from '../../buyerContract.service';
@@ -835,28 +840,60 @@ async function buyerWalkthroughReadinessResult(userId: string, propertyId: strin
   if (data.presentationMode === 'CANDIDATE' || !data.overview) {
     return buyerNotActiveResult(propertyId, data.contextVersion, 'This purchase property does not have an active Buyer Plan yet, so there is no walkthrough to prepare.');
   }
+  const canChange = (await ensurePropertyAccess(userId, propertyId)).role !== HouseholdRole.VIEWER;
   const walkthroughData = await BuyerWalkthroughService.get(userId, propertyId);
-  const workspace = walkthroughData.workspace as unknown as { scheduledAt: string | null; completedAt: string | null; issues: Array<{ id: string; title: string; blocking: boolean; status: string }> } | null;
+  type WalkthroughView = {
+    scheduledAt: string | null; completedAt: string | null;
+    observations: Array<{ id: string; area: string; category: string; status: string; notes: string | null }>;
+    issues: Array<{ id: string; title: string; blocking: boolean; status: string; sourceObservationId: string | null }>;
+  };
+  const workspace = walkthroughData.workspace as unknown as WalkthroughView | null;
+  // The Final Walkthrough controls (FRD v1.345): declared actions on this answer; the commands re-check everything.
+  const summaryAction = (kind: WalkthroughKind, labelText: string, style: 'PRIMARY' | 'SECONDARY') => ({
+    id: WALKTHROUGH_ACTION_IDS[kind], label: labelText, message: WALKTHROUGH_MESSAGES[kind], interactionType: 'START_WORKFLOW' as const, operationId: 'BUYER_WALKTHROUGH_COMMAND' as const, style,
+  });
+  const rowAction = (kind: WalkthroughKind, labelText: string, style: 'PRIMARY' | 'SECONDARY') => ({
+    id: WALKTHROUGH_ACTION_IDS[kind], label: labelText, message: WALKTHROUGH_MESSAGES[kind], interactionType: 'MUTATE_RECORD' as const, operationId: 'BUYER_WALKTHROUGH_COMMAND' as const, style,
+  });
+  const summaryActions = canChange ? [
+    summaryAction('OBSERVATION_ADD', 'Record an observation', 'PRIMARY'),
+    summaryAction('WORKSPACE', 'Update the plan', 'SECONDARY'),
+    ...(workspace && !workspace.completedAt && walkthroughCompletionBlockers(workspace as never).length === 0 ? [summaryAction('COMPLETE', 'Mark the walkthrough complete', 'SECONDARY')] : []),
+  ] : [];
   if (!workspace) {
     return {
       status: 'READY_WITH_LIMITATIONS', reasonCode: 'BUYER_WALKTHROUGH_NOT_SCHEDULED',
-      blocks: [{ type: 'SUMMARY', id: 'buyer-walkthrough-unscheduled', title: 'The final walkthrough has not been scheduled yet', body: 'Schedule the walkthrough close to closing and record attendees before it happens.', tone: 'CAUTION', actions: [] }],
+      blocks: [{ type: 'SUMMARY', id: 'buyer-walkthrough-unscheduled', title: 'The final walkthrough has not been scheduled yet', body: 'Schedule the walkthrough close to closing and record attendees before it happens.', tone: 'CAUTION', actions: summaryActions }],
       suggestions: [],
     };
   }
-  const openIssues = workspace.issues.filter((issue) => !['RESOLVED', 'ROUTED'].includes(issue.status));
+  // An issue is open until it is routed to a professional, resolved or accepted as is (the page's own completion rule).
+  const openIssues = workspace.issues.filter((issue) => issue.status === 'OPEN');
+  const withIssue = new Set(workspace.issues.map((issue) => issue.sourceObservationId).filter(Boolean));
   const blocks: AskOperationResult['blocks'] = [{
     type: 'SUMMARY', id: 'buyer-walkthrough-summary',
-    title: openIssues.length ? `${openIssues.length} walkthrough issue${openIssues.length === 1 ? '' : 's'} still unresolved` : (workspace.completedAt ? 'The final walkthrough is complete with no open issues' : 'The final walkthrough is scheduled with no issues recorded yet'),
+    title: openIssues.length ? `${openIssues.length} walkthrough issue${openIssues.length === 1 ? '' : 's'} still unresolved` : (workspace.completedAt ? 'The final walkthrough is complete with no open issues' : 'The final walkthrough is in progress with no open issues'),
     body: workspace.scheduledAt ? `Scheduled for ${humanDate(new Date(workspace.scheduledAt))}.` : 'No walkthrough date is recorded yet.',
     tone: openIssues.length ? 'CAUTION' : 'DEFAULT',
-    actions: [],
+    actions: summaryActions,
   }];
-  if (openIssues.length) {
+  if (workspace.observations.length) {
     blocks.push({
-      type: 'GROUPED_LIST', filters: [], id: 'buyer-walkthrough-issues', title: 'Unresolved walkthrough issues', description: 'From the recorded walkthrough.',
-      sections: [{ id: 'issues', title: 'Issues', count: openIssues.length, items: openIssues.slice(0, 10).map((issue) => ({
-        id: issue.id, title: issue.title, description: null, meta: issue.blocking ? ['Blocking'] : [], status: issue.status, href: null,
+      type: 'GROUPED_LIST', filters: [], id: 'buyer-walkthrough-observations', title: 'What you have checked', description: 'Recorded for the final walkthrough.',
+      sections: [{ id: 'observations', title: 'Observations', count: workspace.observations.length, items: workspace.observations.slice(0, 25).map((observation) => ({
+        id: observation.id, title: observation.area, description: observation.notes, meta: [WALKTHROUGH_OBSERVATION_CATEGORY_LABELS[observation.category] ?? observation.category],
+        status: OBSERVATION_STATUS_LABELS[observation.status] ?? observation.status, href: null, entityType: WALKTHROUGH_ENTITY_TYPES.OBSERVATION,
+        actions: canChange ? observationKinds(observation, withIssue.has(observation.id), Boolean(workspace.completedAt)).map((kind) => rowAction(kind, kind === 'OBSERVATION_REVIEW' ? 'Record the result' : 'Record an issue', kind === 'OBSERVATION_REVIEW' ? 'SECONDARY' : 'PRIMARY')) : [],
+      })) }], actions: [],
+    });
+  }
+  if (workspace.issues.length) {
+    blocks.push({
+      type: 'GROUPED_LIST', filters: [], id: 'buyer-walkthrough-issues', title: 'Walkthrough issues', description: 'From the recorded walkthrough.',
+      sections: [{ id: 'issues', title: 'Issues', count: workspace.issues.length, items: workspace.issues.slice(0, 15).map((issue) => ({
+        id: issue.id, title: issue.title, description: null, meta: issue.blocking ? ['Holds up closing'] : [], status: ISSUE_STATUS_LABELS[issue.status] ?? issue.status, href: null,
+        entityType: WALKTHROUGH_ENTITY_TYPES.ISSUE,
+        actions: canChange ? issueKinds(issue).map(() => rowAction('ISSUE_UPDATE', 'Record what is being done', 'PRIMARY')) : [],
       })) }], actions: [],
     });
   }

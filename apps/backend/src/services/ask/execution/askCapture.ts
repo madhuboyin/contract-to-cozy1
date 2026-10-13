@@ -76,6 +76,8 @@ import { saleCaseCommandResult } from '../handlers/sellerPrepCaseCommands.handle
 import { negotiationPackageResult } from '../handlers/inspectionNegotiationPackage.handler';
 import { workItemCommandResult } from '../handlers/homeWorkItemCommands.handler';
 import { seasonalItemResult } from '../handlers/seasonalItemCommands.handler';
+import { walkthroughCommandResult } from '../handlers/buyerWalkthroughCommands.handler';
+import { parseWalkthroughAnswer, walkthroughFormKindFromCaptureKey } from '../support/buyerWalkthroughCommand';
 import { diyProjectNoteResult, diySkillProfileResult } from '../handlers/diyCommands.handler';
 import { DIY_NOTE_CAPTURE_KEY, DIY_PROFILE_CAPTURE_KEY, parseDiyNoteAnswer, parseDiySkillProfileAnswer } from '../support/diyCommand';
 import { SEASONAL_SNOOZE_CAPTURE_KEY, parseSeasonalSnoozeAnswer } from '../support/seasonalItemCommand';
@@ -1545,6 +1547,22 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     captureId = input.idempotencyKey;
     capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
     canonicalOwner = 'DiyProject';
+  } else if (execution.operationId === 'BUYER_WALKTHROUGH_COMMAND') {
+    const bwKind = walkthroughFormKindFromCaptureKey(input.captureKey);
+    if (!bwKind) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    const access = await ensurePropertyAccess(userId, execution.propertyId);
+    if (access.role === HouseholdRole.VIEWER) throw Object.assign(new Error('A contributor or owner is required to change the walkthrough.'), { code: 'ASK_PERMISSION_REQUIRED' });
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson) ? execution.parametersJson as Record<string, unknown> : {};
+    const bwLaunch = storedParameters.walkthroughLaunch && typeof storedParameters.walkthroughLaunch === 'object' && !Array.isArray(storedParameters.walkthroughLaunch)
+      ? storedParameters.walkthroughLaunch as { kind?: unknown; entityId?: unknown; sourceExecutionId?: unknown } : null;
+    if (!bwLaunch || bwLaunch.kind !== bwKind) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    if (!parseWalkthroughAnswer(bwKind, input.answer).success) throw Object.assign(new Error('Fill in what the form asks for.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+    result = await walkthroughCommandResult(userId, execution.propertyId, {
+      kind: bwKind, entityId: typeof bwLaunch.entityId === 'string' ? bwLaunch.entityId : null, sourceExecutionId: typeof bwLaunch.sourceExecutionId === 'string' ? bwLaunch.sourceExecutionId : null,
+    }, input.answer as Record<string, unknown>);
+    captureId = input.idempotencyKey;
+    capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
+    canonicalOwner = 'BuyerWalkthroughWorkspace';
   } else if (execution.operationId === 'CLAIM_ACTIVITY_COMMAND') {
     if (input.captureKey !== CLAIM_NOTE_CAPTURE_KEY) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
     const access = await ensurePropertyAccess(userId, execution.propertyId);

@@ -182,6 +182,10 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   NEGOTIATION_SHIELD_CASE_ATTACH: new Set(['negotiation-shield-review', 'negotiation-shield-analyze']),
   // The readiness answer's empty state offers the start; the receipt of a started case offers that case's readiness check.
   RENOVATION_CASE_START: new Set(['renovation-case-readiness']),
+  // Plan and record the buyer's final walkthrough: the plan, observations, issues and completion (register P2 Buyer Closing). Confirmation-gated, declared-action only.
+  BUYER_WALKTHROUGH_COMMAND: new Set(['buyer-walkthrough-back']),
+  // Final-walkthrough readiness answer: the plan, observation and completion actions and the observation and issue row actions (FRD v1.345).
+  BUYER_WALKTHROUGH_READINESS: new Set(['walkthrough-plan', 'walkthrough-observation-add', 'walkthrough-observation-review', 'walkthrough-issue-add', 'walkthrough-issue-update', 'walkthrough-complete']),
   // Add a note to a DIY project in planning or in progress (register P2 DIY). Confirmation-gated, declared-action only.
   DIY_PROJECT_NOTE_COMMAND: new Set(['diy-projects-back']),
   // Set the caller's own DIY skill levels (register P2 DIY). One profile per user, so a viewer may set it. Confirmation-gated, declared-action only.
