@@ -9,7 +9,7 @@ import { homeReserveFundService } from '../../homeReserveFund.service';
 import { homeReserveFundReconciliationService } from '../../homeReserveFundReconciliation.service';
 import { getFinancialContextDecisions } from '../../financialContext/context';
 import { ReserveFundContributionInputSchema } from '../support/commandInputs';
-import { RESERVE_FUND_ACTION_IDS, RESERVE_FUND_COMMAND_MESSAGE, RESERVE_FUND_CONTRIBUTION_CAPTURE_KEY } from '../support/reserveFundConstants';
+import { RESERVE_FUND_ACTION_IDS, RESERVE_FUND_BALANCE_CAPTURE_KEY, RESERVE_FUND_COMMAND_MESSAGE, RESERVE_FUND_CONTRIBUTION_CAPTURE_KEY } from '../support/reserveFundConstants';
 import { parseReserveFundMessage, type ReserveFundContributionMessage } from '../support/reserveFundMessage';
 import { evaluateFeatureContext } from '../../../modules/propertyContext/application/evaluateFeatureContext';
 
@@ -17,6 +17,23 @@ const sha = (value: string) => createHash('sha256').update(value).digest('hex');
 const expiry = () => new Date(Date.now() + 30 * 60 * 1000).toISOString();
 type Launch = { actionId?: string | null; entityId?: string | null; sourceExecutionId?: string | null } | null | undefined;
 type Contribution = ReturnType<typeof ReserveFundContributionInputSchema.parse>;
+/** A stated balance (FRD v1.329): the figure the person says the reserve fund holds. Zero is a legitimate balance. */
+export interface ReserveFundBalanceTarget { targetDollars: number; note: string | null }
+const usd = (cents: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(cents / 100);
+const currentBalanceCents = async (propertyId: string): Promise<number> => Number((await homeReserveFundService.getSummary(propertyId)).currentBalanceCents ?? 0);
+
+function balanceCapture(prefillDollars?: number | null): AskCaptureRequest {
+  return {
+    requirementId: 'reserve-fund-balance-input', captureKey: RESERVE_FUND_BALANCE_CAPTURE_KEY, classification: 'WORKFLOW_INPUT', state: 'UNKNOWN', presentation: 'FORM',
+    title: 'Set the reserve fund balance', question: 'What does your reserve fund hold now?',
+    helpText: 'Ask works out the difference from the balance on record and logs it as a balance correction. This does not connect to a bank or move money.',
+    inputSchema: { type: 'GROUP', fields: [
+      { key: 'targetDollars', label: 'Balance now ($)', required: true, inputSchema: { type: 'NUMBER', min: 0, max: 100_000_000 } },
+      { key: 'note', label: 'Note', required: false, inputSchema: { type: 'LONG_TEXT', maxLength: 500 } },
+    ] }, currentAnswer: prefillDollars != null ? { targetDollars: prefillDollars } : {}, allowNotSure: false, sensitivity: 'FINANCIAL',
+    destinationLabel: 'Logs a self-reported balance correction after confirmation', confirmationText: null, expectedContextVersion: 'reserve-fund-live',
+  };
+}
 
 const showFundAction = { id: 'reserve-fund-show-current', label: 'Show updated reserve fund', interactionType: 'START_WORKFLOW' as const, message: 'How is my reserve fund doing?', operationId: 'CAPITAL_RESERVE_PLAN' as const, style: 'SECONDARY' as const };
 
@@ -48,6 +65,7 @@ const choiceAction = (id: string, label: string, style: 'PRIMARY' | 'SECONDARY' 
 // "Change my reserve plan" names no change. The three changes are offered as the same governed actions the reserve-plan answer's buttons launch.
 const changeChoice = (): AskOperationResult => ({ status: 'COMPLETED', reasonCode: 'RESERVE_FUND_ACTION_CHOICE', blocks: [{ type: 'SUMMARY', id: 'reserve-fund-change-choice', title: 'What would you like to change?', body: 'Nothing changes until you choose an option and confirm it.', tone: 'DEFAULT', actions: [
   choiceAction(RESERVE_FUND_ACTION_IDS.ADD_CONTRIBUTION, 'Log a balance change'),
+  choiceAction(RESERVE_FUND_ACTION_IDS.SET_BALANCE, 'Set the balance to a figure'),
   choiceAction(RESERVE_FUND_ACTION_IDS.RECALCULATE, 'Recalculate the plan'),
   choiceAction(RESERVE_FUND_ACTION_IDS.CHOOSE_POSTURE, 'Change planning posture'),
 ] }], suggestions: [] });
@@ -60,19 +78,39 @@ const postureChoice = (): AskOperationResult => ({ status: 'COMPLETED', reasonCo
 
 const blocked = (): AskOperationResult => ({ status: 'BLOCKED', reasonCode: 'ASK_PERMISSION_REQUIRED', blocks: [{ type: 'SUMMARY', id: 'reserve-fund-command-permission', title: 'A contributor or owner is required', body: 'You can review the reserve plan, but your role cannot change its shared balance or planning settings.', tone: 'CAUTION', actions: [] }], suggestions: [] });
 
-export async function reserveFundCommandResult(userId: string, propertyId: string, launch: Launch, supplied?: Contribution, prefill?: ReserveFundContributionMessage | null): Promise<AskOperationResult> {
+export async function reserveFundCommandResult(userId: string, propertyId: string, launch: Launch, supplied?: Contribution, prefill?: ReserveFundContributionMessage | null, balance?: ReserveFundBalanceTarget | null, balancePrefill?: number | null): Promise<AskOperationResult> {
   if ((await ensurePropertyAccess(userId, propertyId)).role === HouseholdRole.VIEWER) return blocked();
   const actionId = launch?.actionId ?? '';
   const entityId = launch?.entityId ?? '';
   if (!Object.values(RESERVE_FUND_ACTION_IDS).includes(actionId as never)) return { status: 'NOT_APPLICABLE', reasonCode: 'RESERVE_FUND_ACTION_REQUIRED', blocks: [{ type: 'SUMMARY', id: 'reserve-fund-command-launch', title: 'Choose an action from the reserve-fund answer', body: 'Nothing changed.', tone: 'DEFAULT', actions: [] }], suggestions: [] };
   if (actionId === RESERVE_FUND_ACTION_IDS.CHOOSE_POSTURE) return postureChoice();
+  if (actionId === RESERVE_FUND_ACTION_IDS.SET_BALANCE && !balance) {
+    return {
+      status: 'NEEDS_CONTEXT', reasonCode: 'RESERVE_FUND_BALANCE_REQUIRED', parameters: { reserveFundLaunch: launch },
+      blocks: [{ type: 'SUMMARY', id: 'reserve-fund-balance-input', title: 'Set the reserve fund balance', body: 'Say what the fund holds now. Nothing is logged until you review and confirm.', tone: 'DEFAULT', actions: [] }],
+      captureRequests: [balanceCapture(balancePrefill)], suggestions: [],
+    };
+  }
   if (actionId === RESERVE_FUND_ACTION_IDS.ADD_CONTRIBUTION && !supplied) return { status: 'NEEDS_CONTEXT', reasonCode: 'RESERVE_FUND_CONTRIBUTION_REQUIRED', parameters: { reserveFundLaunch: launch }, blocks: [{ type: 'SUMMARY', id: 'reserve-fund-contribution-input', title: 'Log a reserve-fund entry', body: 'Enter the self-reported balance change, then review it before it is recorded.', tone: 'DEFAULT', actions: [] }], captureRequests: [contributionCapture(prefill)], suggestions: [] };
 
   const command: Record<string, unknown> = { actionId, entityId };
   let title = 'Update the reserve fund?';
   let description = 'Nothing changes until you confirm.';
   const fields: Array<{ label: string; value: string }> = [];
-  if (actionId === RESERVE_FUND_ACTION_IDS.ADD_CONTRIBUTION && supplied) {
+  if (actionId === RESERVE_FUND_ACTION_IDS.SET_BALANCE && balance) {
+    // Re-read the canonical balance, show the arithmetic, and do nothing when it already matches (FRD v1.329).
+    const baselineCents = await currentBalanceCents(propertyId);
+    const targetCents = Math.round(balance.targetDollars * 100);
+    const deltaCents = targetCents - baselineCents;
+    if (deltaCents === 0) {
+      return { status: 'NOT_APPLICABLE', reasonCode: 'RESERVE_FUND_BALANCE_ALREADY_SET', blocks: [{ type: 'SUMMARY', id: 'reserve-fund-balance-unchanged', title: `The reserve fund already holds ${usd(baselineCents)}`, body: 'Nothing needs correcting, so nothing was logged.', tone: 'DEFAULT', actions: [showFundAction] }], suggestions: [] };
+    }
+    command.balance = { targetCents, baselineCents, note: balance.note };
+    title = `Set the reserve fund balance to ${usd(targetCents)}?`;
+    description = `This logs one balance correction of ${deltaCents > 0 ? 'an increase' : 'a decrease'} of ${usd(Math.abs(deltaCents))}. It is not a deposit or a withdrawal, it changes only the self-reported balance, and no money moves.`;
+    fields.push({ label: 'Balance on record', value: usd(baselineCents) }, { label: 'Balance you stated', value: usd(targetCents) },
+      { label: 'Correction', value: `${deltaCents > 0 ? '+' : '\u2212'}${usd(Math.abs(deltaCents))} (${deltaCents > 0 ? 'increase' : 'decrease'})` });
+  } else if (actionId === RESERVE_FUND_ACTION_IDS.ADD_CONTRIBUTION && supplied) {
     command.input = supplied;
     const signed = supplied.type === 'WITHDRAWAL' || (supplied.type === 'BALANCE_CORRECTION' && supplied.direction === 'DECREASE') ? -supplied.amountDollars : supplied.amountDollars;
     title = `Log a ${supplied.type.toLowerCase().replace('_', ' ')} of ${new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Math.abs(signed))}?`;
@@ -97,6 +135,11 @@ registerCapabilityHandler('reserve-fund.command', async (envelope) => {
       const sourceExecutionId = launch?.sourceExecutionId ?? null;
       const resolve = (actionId: string, supplied?: Contribution, prefill?: ReserveFundContributionMessage) =>
         reserveFundCommandResult(envelope.userId, envelope.propertyId!, { actionId, entityId: null, sourceExecutionId }, supplied, prefill);
+      if (typed.kind === 'SET_BALANCE') {
+        // A stated figure goes straight to the arithmetic review; without one the form asks for it.
+        return reserveFundCommandResult(envelope.userId, envelope.propertyId!, { actionId: RESERVE_FUND_ACTION_IDS.SET_BALANCE, entityId: null, sourceExecutionId },
+          undefined, null, typed.targetDollars != null ? { targetDollars: typed.targetDollars, note: null } : null, typed.targetDollars);
+      }
       if (typed.kind === 'CONTRIBUTION') return resolve(RESERVE_FUND_ACTION_IDS.ADD_CONTRIBUTION, undefined, { type: typed.type, amountDollars: typed.amountDollars });
       if (typed.kind === 'RECALCULATE') return resolve(RESERVE_FUND_ACTION_IDS.RECALCULATE);
       if (typed.kind === 'POSTURE') return resolve(`reserve-fund-posture-${typed.posture.toLowerCase()}`);
@@ -112,7 +155,7 @@ registerCapabilityHandler('reserve-fund.command', async (envelope) => {
 async function confirmReserveFundCommand(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
   const { execution, parameters, userId } = ctx;
   const propertyId = execution.propertyId;
-  const command = parameters.reserveFundCommand as { actionId: string; entityId?: string; posture?: HomeReserveFundPosture; input?: Contribution };
+  const command = parameters.reserveFundCommand as { actionId: string; entityId?: string; posture?: HomeReserveFundPosture; input?: Contribution; balance?: { targetCents: number; baselineCents: number; note: string | null } };
   let artifactType = 'HOME_RESERVE_FUND';
   let artifactId = propertyId;
   let title = 'Reserve Fund updated';
@@ -120,7 +163,21 @@ async function confirmReserveFundCommand(ctx: ConfirmCapabilityContext): Promise
     const evaluation = await evaluateFeatureContext(propertyId, userId, { featureKey: 'RESERVE_FUND', operationKey: 'RECALCULATE' });
     if (!evaluation.canExecute) throw Object.assign(new Error('Required property context is incomplete. Review the missing home details, then try again.'), { code: 'PROPERTY_CONTEXT_REQUIRED' });
   }
-  if (command.actionId === RESERVE_FUND_ACTION_IDS.ADD_CONTRIBUTION) {
+  if (command.actionId === RESERVE_FUND_ACTION_IDS.SET_BALANCE) {
+    const stated = command.balance;
+    if (!stated || !Number.isInteger(stated.targetCents) || !Number.isInteger(stated.baselineCents) || stated.targetCents < 0) {
+      throw Object.assign(new Error('The balance to set is invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+    }
+    // Revalidate at execution: the correction was computed against a balance that must still be the balance.
+    const nowCents = await currentBalanceCents(propertyId);
+    if (nowCents !== stated.baselineCents) {
+      throw Object.assign(new Error(`The reserve fund balance changed to ${usd(nowCents)} while the confirmation was open. Review it again and try again.`), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
+    }
+    const delta = stated.targetCents - nowCents;
+    if (delta === 0) throw Object.assign(new Error('The balance already matches, so nothing was logged.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+    const contribution = await homeReserveFundService.addContribution(propertyId, { type: 'BALANCE_CORRECTION', amountCents: delta, occurredAt: new Date(), note: stated.note ?? 'Balance set from Ask' });
+    artifactType = 'HOME_RESERVE_FUND_CONTRIBUTION'; artifactId = contribution.id; title = 'Reserve balance corrected';
+  } else if (command.actionId === RESERVE_FUND_ACTION_IDS.ADD_CONTRIBUTION) {
     const input = ReserveFundContributionInputSchema.parse(command.input);
     const negative = input.type === 'WITHDRAWAL' || (input.type === 'BALANCE_CORRECTION' && input.direction === 'DECREASE');
     const contribution = await homeReserveFundService.addContribution(propertyId, { type: input.type, amountCents: Math.round(input.amountDollars * 100) * (negative ? -1 : 1), occurredAt: input.occurredAt ? new Date(`${input.occurredAt}T12:00:00.000Z`) : undefined, note: input.note });

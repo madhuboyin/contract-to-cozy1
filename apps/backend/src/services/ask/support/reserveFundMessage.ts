@@ -77,6 +77,7 @@ export function parseReserveFundContributionMessage(message: string): ReserveFun
 export type ReserveFundPostureWord = 'CONSERVATIVE' | 'MODERATE' | 'AGGRESSIVE';
 export type ReserveFundTypedRequest =
   | ({ kind: 'CONTRIBUTION' } & ReserveFundContributionMessage)
+  | { kind: 'SET_BALANCE'; targetDollars: number | null }
   | { kind: 'RECALCULATE' }
   | { kind: 'POSTURE'; posture: ReserveFundPostureWord }
   | { kind: 'POSTURE_UNSPECIFIED' }
@@ -99,6 +100,11 @@ const postureUnspecifiedForms = [
   new RegExp(String.raw`^${POLITE}(?:change|update|set|adjust|switch)\s+${PLAN}\s+(?:planning\s+)?posture$`, 'i'),
   new RegExp(String.raw`^${POLITE}(?:change|update|set|adjust|switch)\s+the\s+(?:planning\s+)?posture\s+(?:of|for)\s+${PLAN}$`, 'i'),
 ];
+// "set my reserve fund to $5,000", "set my reserve fund balance to 5000 dollars", "my reserve fund balance is $5,000": a balance target (a correction of the difference).
+const setBalanceForms = [
+  new RegExp(String.raw`^${POLITE}(?:set|change|update|correct|make)\s+${FUND}(?:\s+balance)?\s+(?:to|at|as)\s+(?:be\s+)?(?:exactly\s+)?(\$\s*\d[\d,]*(?:\.\d+)?\s*(?:k|thousand)?|\d[\d,]*(?:\.\d+)?\s*(?:dollars?|bucks|usd))$`, 'i'),
+  new RegExp(String.raw`^${FUND}\s+balance\s+(?:is|should\s+be|is\s+actually)\s+(\$\s*\d[\d,]*(?:\.\d+)?\s*(?:k|thousand)?|\d[\d,]*(?:\.\d+)?\s*(?:dollars?|bucks|usd))$`, 'i'),
+];
 // "change my reserve plan", "manage my reserve fund": a change with no named change.
 const chooseForm = new RegExp(String.raw`^${POLITE}(?:change|update|edit|adjust|manage|modify|tweak)\s+${PLAN}$`, 'i');
 
@@ -106,6 +112,10 @@ const chooseForm = new RegExp(String.raw`^${POLITE}(?:change|update|edit|adjust|
 export function parseReserveFundMessage(message: string): ReserveFundTypedRequest | null {
   const text = normalize(message);
   if (!text || text.length > 240) return null;
+  for (const form of setBalanceForms) {
+    const match = text.match(form);
+    if (match) return { kind: 'SET_BALANCE', targetDollars: reserveFundAmountFromText(match[1]) };
+  }
   const contribution = parseReserveFundContributionMessage(text);
   if (contribution) return { kind: 'CONTRIBUTION', ...contribution };
   if (recalculateForm.test(text)) return { kind: 'RECALCULATE' };

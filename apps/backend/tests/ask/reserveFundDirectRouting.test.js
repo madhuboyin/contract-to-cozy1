@@ -36,6 +36,10 @@ test('a typed deposit or withdrawal reaches the governed Reserve Fund command, n
   ]) assert.equal(route(message), 'RESERVE_FUND_COMMAND', message);
 });
 
+test('a stated balance is a governed balance correction (FRD v1.329), not a read', () => {
+  for (const message of ['set my reserve fund balance to $5,000', 'Set my reserve fund to $5,000', 'my reserve fund balance is $5,000']) assert.equal(route(message), 'RESERVE_FUND_COMMAND', message);
+});
+
 test('reads, questions, plan changes and other records are not turned into a ledger entry', () => {
   const stays = [
     ['Show my reserve fund', 'CAPITAL_RESERVE_PLAN'],
@@ -43,7 +47,6 @@ test('reads, questions, plan changes and other records are not turned into a led
     ['should I add $500 to my reserve fund?', 'CAPITAL_RESERVE_PLAN'],
     ['how much should I put in my reserve fund each month?', 'CAPITAL_RESERVE_PLAN'],
     ['what happens if I withdraw $300 from my reserve fund?', 'CAPITAL_RESERVE_PLAN'],
-    ['set my reserve fund balance to $5,000', 'CAPITAL_RESERVE_PLAN'],
     ['add a water heater to my inventory', 'INVENTORY_ITEM_CREATE'],
     ['add $500 water heater to the garage', 'INVENTORY_ITEM_CREATE'],
   ];
@@ -169,15 +172,15 @@ test('typed recalculate and a named posture go straight to the same confirmation
   } finally { restore(); }
 });
 
-test('"change my reserve plan" answers with the three governed choices and writes nothing', async () => {
+test('"change my reserve plan" answers with the four governed choices and writes nothing', async () => {
   const { restore } = withRole('CONTRIBUTOR');
   try {
     const result = await invoke('Change my reserve plan');
     assert.equal(result.confirmation ?? null, null);
     assert.equal(result.parameters?.reserveFundCommand, undefined);
     const actions = result.blocks[0].actions;
-    assert.deepEqual(actions.map((a) => a.label), ['Log a balance change', 'Recalculate the plan', 'Change planning posture']);
-    assert.deepEqual(actions.map((a) => a.id), [RESERVE_FUND_ACTION_IDS.ADD_CONTRIBUTION, RESERVE_FUND_ACTION_IDS.RECALCULATE, RESERVE_FUND_ACTION_IDS.CHOOSE_POSTURE]);
+    assert.deepEqual(actions.map((a) => a.label), ['Log a balance change', 'Set the balance to a figure', 'Recalculate the plan', 'Change planning posture']);
+    assert.deepEqual(actions.map((a) => a.id), [RESERVE_FUND_ACTION_IDS.ADD_CONTRIBUTION, RESERVE_FUND_ACTION_IDS.SET_BALANCE, RESERVE_FUND_ACTION_IDS.RECALCULATE, RESERVE_FUND_ACTION_IDS.CHOOSE_POSTURE]);
     // The client launches a block action with action.actionId (not action.id) and requires START_WORKFLOW; without them a click is the
     // "Choose an action" dead end again.
     for (const action of actions) {
@@ -189,8 +192,9 @@ test('"change my reserve plan" answers with the three governed choices and write
     // Each choice, launched exactly as the client launches it, reaches its governed step.
     const launched = async (action) => invoke(action.message, 'CONTRIBUTOR', { launchContext: { operationId: action.operationId, actionId: action.actionId, entityId: null, surface: 'ASK_PAGE' } });
     assert.equal((await launched(actions[0])).reasonCode, 'RESERVE_FUND_CONTRIBUTION_REQUIRED');
-    assert.equal((await launched(actions[1])).status, 'NEEDS_CONFIRMATION');
-    assert.equal((await launched(actions[2])).reasonCode, 'RESERVE_FUND_POSTURE_CHOICE');
+    assert.equal((await launched(actions[1])).reasonCode, 'RESERVE_FUND_BALANCE_REQUIRED');
+    assert.equal((await launched(actions[2])).status, 'NEEDS_CONFIRMATION');
+    assert.equal((await launched(actions[3])).reasonCode, 'RESERVE_FUND_POSTURE_CHOICE');
 
     // Choosing "Change planning posture" asks for the posture, as the declared action would.
     const picker = await invoke(RESERVE_FUND_COMMAND_MESSAGE, 'CONTRIBUTOR', { launchContext: { operationId: 'RESERVE_FUND_COMMAND', actionId: RESERVE_FUND_ACTION_IDS.CHOOSE_POSTURE, entityId: null, surface: 'ASK_ACTION' } });
@@ -214,7 +218,7 @@ test('every action the choices offer survives the answer-trust allowlist (a miss
       ...(await invoke('Change my reserve plan')).blocks[0].actions,
       ...(await invoke('change my reserve planning posture')).blocks[0].actions,
     ];
-    assert.equal(offered.length, 6);
+    assert.equal(offered.length, 7);
     for (const action of offered) {
       assert.equal(isAskActionApplicable({ action, operationId: 'RESERVE_FUND_COMMAND', propertyId: 'prop-1', householdRole: 'CONTRIBUTOR', authoritativeSourceAvailable: true }), true, action.id);
     }
