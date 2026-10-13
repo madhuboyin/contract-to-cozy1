@@ -7,7 +7,9 @@
 import { type AskPresentationBlock } from '../../../productFramework/ask/ask.contract';
 import { type AskOperationResult } from '../askOperationRegistry';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
+import { ensurePropertyAccess } from '../askHandlerSupport';
 import { humanDate } from '../askFormatting';
+import { PERMIT_COMMAND_ACTION_IDS, PERMIT_COMMAND_MESSAGES, PERMIT_ENTITY_TYPE, PERMIT_PROPERTY_ENTITY_TYPE } from '../support/permitTrackerCommand';
 import { permitTrackerService } from '../../permitTracker.service';
 import {
   PERMIT_CATEGORY_LABELS, PERMIT_FLAG_STATUS_LABELS, PERMIT_OFFICIAL_STATUS_LABELS, PERMIT_OPEN_FLAG_STATUSES, PERMIT_REPORTED_STATUS_LABELS, PERMIT_RISK_LABELS,
@@ -29,14 +31,19 @@ const BOUNDARY: AskPresentationBlock = {
 const when = (iso: string | null | undefined) => (iso ? humanDate(new Date(iso)) : null);
 
 /** Pure: the answer from the three reads, exported for tests. */
-export function permitTrackerFromView(permits: readonly PermitItem[], summary: PermitSummary, flags: readonly FlagItem[], hasMorePermits = false): AskOperationResult {
+export function permitTrackerFromView(permits: readonly PermitItem[], summary: PermitSummary, flags: readonly FlagItem[], hasMorePermits = false, canChange = false, propertyId = ''): AskOperationResult {
+  // A contributor or owner can add a permit and change or remove one; a viewer is offered nothing it would refuse.
+  const addAction = canChange && propertyId ? [{
+    id: PERMIT_COMMAND_ACTION_IDS.ADD, label: 'Add a permit', interactionType: 'START_WORKFLOW' as const, message: PERMIT_COMMAND_MESSAGES.ADD,
+    operationId: 'PERMIT_TRACKER_COMMAND' as const, entityType: PERMIT_PROPERTY_ENTITY_TYPE, entityId: propertyId, style: 'PRIMARY' as const,
+  }] : [];
   if (!permits.length && !flags.length) {
     return {
       status: 'ANSWERED', reasonCode: 'PERMIT_TRACKER_EMPTY',
       blocks: [{
         type: 'SUMMARY', id: 'permit-tracker-summary', title: 'No permits are recorded for this home',
-        body: 'Nothing is recorded here, which is not the same as nothing having been permitted: records may exist with the permitting office that have not been added. Adding a permit is not currently available in Ask.',
-        tone: 'DEFAULT', actions: [],
+        body: 'Nothing is recorded here, which is not the same as nothing having been permitted: records may exist with the permitting office that have not been added. '+(canChange ? 'Add one you know about.' : 'A contributor or owner can add one.'),
+        tone: 'DEFAULT', actions: addAction,
       }, BOUNDARY],
       suggestions: [],
     };
@@ -61,6 +68,11 @@ export function permitTrackerFromView(permits: readonly PermitItem[], summary: P
         permit.isVerified ? 'Verified record' : null,
       ].filter((value): value is string => Boolean(value)).slice(0, 6),
       status: official, href: null,
+      entityType: PERMIT_ENTITY_TYPE,
+      actions: canChange ? [
+        { id: PERMIT_COMMAND_ACTION_IDS.EDIT, label: 'Change details', message: PERMIT_COMMAND_MESSAGES.EDIT, operationId: 'PERMIT_TRACKER_COMMAND', interactionType: 'MUTATE_RECORD' as const, style: 'SECONDARY' as const },
+        { id: PERMIT_COMMAND_ACTION_IDS.REMOVE, label: 'Remove', message: PERMIT_COMMAND_MESSAGES.REMOVE, operationId: 'PERMIT_TRACKER_COMMAND', interactionType: 'MUTATE_RECORD' as const, style: 'QUIET' as const },
+      ] : [],
     };
   };
   const closed = new Set(['FINALED', 'EXPIRED', 'VOIDED']);
@@ -75,7 +87,7 @@ export function permitTrackerFromView(permits: readonly PermitItem[], summary: P
       openInspections ? `${openInspections} ${openInspections === 1 ? 'has' : 'have'} inspections still open.` : null,
       summary.openFlags ? 'Flags mark work that may have needed a permit and has no matching record.' : null,
     ].filter(Boolean).join(' '),
-    tone: summary.openFlags || openInspections ? 'CAUTION' : 'DEFAULT', actions: [],
+    tone: summary.openFlags || openInspections ? 'CAUTION' : 'DEFAULT', actions: addAction,
   }];
   if (hasMorePermits) {
     blocks.push({ type: 'LIMITATION', id: 'permit-tracker-limit', title: `Showing the first ${PERMIT_ASK_LIMIT}`, body: 'More permit records exist than are listed here.', severity: 'INFO' });
@@ -109,12 +121,13 @@ export function permitTrackerFromView(permits: readonly PermitItem[], summary: P
   return { status: 'ANSWERED', reasonCode: undefined, blocks, suggestions: [] };
 }
 
-registerCapabilityHandler('permits.status', async (envelope) => {
+registerCapabilityHandler('permits.status', async (envelope, deps) => {
   const propertyId = envelope.propertyId!;
+  const access = deps.propertyAccess ?? await ensurePropertyAccess(envelope.userId, propertyId);
   const [list, summary, flags] = await Promise.all([
     permitTrackerService.listPermits(propertyId, { limit: PERMIT_ASK_LIMIT }),
     permitTrackerService.getPermitSummary(propertyId),
     permitTrackerService.listFlags(propertyId, { status: [...PERMIT_OPEN_FLAG_STATUSES], limit: FLAG_ASK_LIMIT }),
   ]);
-  return permitTrackerFromView(list.items as PermitItem[], summary, flags.items, Boolean(list.nextCursor));
+  return permitTrackerFromView(list.items as PermitItem[], summary, flags.items, Boolean(list.nextCursor), access.role !== 'VIEWER', propertyId);
 });

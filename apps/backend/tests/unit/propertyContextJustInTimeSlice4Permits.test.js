@@ -40,11 +40,16 @@ test('Add Permit preserves the form and resumes after inline capture', () => {
 });
 
 test('permit execution enforces shared readiness before existing compliance and canonical creation', () => {
+  // The gate lives in permitTrackerOperations (FRD v1.315), which the route and Ask both call; the controller must go through it.
   const controller = read('../../src/controllers/permitTracker.controller.ts');
   const createStart = controller.indexOf('export async function createManualPermit');
-  const shared = controller.indexOf('evaluateFeatureContext', createStart);
-  const established = controller.indexOf('assertProjectComplianceApplicable', shared);
-  const canonical = controller.indexOf('permitTrackerService.createManualPermit', established);
-  assert.ok(createStart >= 0 && shared > createStart && established > shared && canonical > established);
-  assert.match(controller, /PROPERTY_CONTEXT_INCOMPLETE/);
+  assert.ok(createStart >= 0 && controller.indexOf('createManualPermitWithEffects', createStart) > createStart);
+  assert.equal(controller.indexOf('permitTrackerService.createManualPermit'), -1, 'the controller no longer creates a permit around the gate');
+  const operations = read('../../src/services/permitTrackerOperations.ts');
+  const start = operations.indexOf('export async function createManualPermitWithEffects');
+  const shared = operations.indexOf('evaluateFeatureContext', start);
+  const established = operations.indexOf('assertProjectComplianceApplicable', shared);
+  const canonical = operations.indexOf('permitTrackerService.createManualPermit', established);
+  assert.ok(start >= 0 && shared > start && established > shared && canonical > established);
+  assert.match(operations, /PROPERTY_CONTEXT_INCOMPLETE/);
 });

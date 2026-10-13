@@ -50,6 +50,8 @@ import { quoteCommandResult } from '../handlers/quoteComparisonCommands.handler'
 import { parseQuoteFormAnswer, quoteFormKindFromCaptureKey } from '../support/quoteComparisonCommand';
 import { priceCommandResult } from '../handlers/priceFinalizationCommands.handler';
 import { buyerNegotiationResult } from '../handlers/negotiationShieldBuyerCommands.handler';
+import { permitCommandResult } from '../handlers/permitTrackerCommands.handler';
+import { parsePermitFormAnswer, permitFormKindFromCaptureKey, type PermitCommandKind } from '../support/permitTrackerCommand';
 import { buyerNegotiationKindFromCaptureKey, parseBuyerNegotiationAnswer } from '../support/negotiationShieldBuyer';
 import { parsePriceFormAnswer, priceFormKindForCommand, priceFormKindFromCaptureKey, type PriceCommandKind } from '../support/priceFinalizationCommand';
 import { NEGOTIATION_SHIELD_ATTACH_CAPTURE_KEY, parseNegotiationAttachAnswer } from '../support/negotiationShieldAttach';
@@ -1099,6 +1101,28 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     captureId = input.idempotencyKey;
     capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
     canonicalOwner = 'NegotiationShieldBuyer';
+  } else if (execution.operationId === 'PERMIT_TRACKER_COMMAND') {
+    const permitForm = permitFormKindFromCaptureKey(input.captureKey);
+    if (!permitForm) throw Object.assign(new Error('This permit form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    const access = await ensurePropertyAccess(userId, execution.propertyId);
+    if (access.role === HouseholdRole.VIEWER) throw Object.assign(new Error('A contributor or owner is required to change permit records.'), { code: 'ASK_PERMISSION_REQUIRED' });
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson) ? execution.parametersJson as Record<string, unknown> : {};
+    const permitLaunch = storedParameters.permitCommandLaunch && typeof storedParameters.permitCommandLaunch === 'object' && !Array.isArray(storedParameters.permitCommandLaunch)
+      ? storedParameters.permitCommandLaunch as { kind?: unknown; entityId?: unknown; sourceExecutionId?: unknown } : null;
+    // The form must be the one the stored launch opened (an Add form cannot be replayed as a Change, nor the reverse).
+    if (!permitLaunch || permitLaunch.kind !== permitForm || typeof permitLaunch.entityId !== 'string') {
+      throw Object.assign(new Error('This permit form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    }
+    const permitAnswer = parsePermitFormAnswer(input.answer);
+    if (!permitAnswer.success) {
+      throw Object.assign(new Error(permitAnswer.reason === 'DATES' ? 'The dates must be in order: applied, then issued, then expires.' : 'Choose the kind of permit and the work, and check the dates and cost.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+    }
+    result = await permitCommandResult(userId, execution.propertyId, {
+      kind: permitLaunch.kind as PermitCommandKind, entityId: permitLaunch.entityId, sourceExecutionId: typeof permitLaunch.sourceExecutionId === 'string' ? permitLaunch.sourceExecutionId : null,
+    }, permitAnswer.data);
+    captureId = input.idempotencyKey;
+    capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
+    canonicalOwner = 'PermitTracker';
   } else if (execution.operationId === 'PROPERTY_BRIEF_COMMAND') {
     if (![PROPERTY_BRIEF_PREPARE_CAPTURE_KEY, PROPERTY_BRIEF_SHARE_CAPTURE_KEY].includes(input.captureKey) || input.expectedContextVersion !== 'property-brief-live') throw Object.assign(new Error('This Property Brief form is no longer active.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
     const access = await ensurePropertyAccess(userId, execution.propertyId);

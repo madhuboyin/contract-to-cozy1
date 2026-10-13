@@ -127,6 +127,8 @@ export type AskOperationId =
   // Start a renovation case (register section 3): a confirmation-gated command reached by the declared Start a renovation case action on the readiness
   // answer or a typed "start a renovation case"; never by fuzzy retrieval.
   | 'RENOVATION_CASE_START'
+  // Add, change and remove a permit record (register P0 Permits, slice PM-B). Records the REPORTED status; the official status is the authority's and is not set here. Confirmation-gated, declared-action only; never by fuzzy retrieval.
+  | 'PERMIT_TRACKER_COMMAND'
   // Read the home's financing picture (mortgage details, equity position, saved scenarios) and compare ways to pay for a named project cost with the page's stateless calculator (register P0 Financing, slices FN-A and FN-B). Read-only; a read never saves an equity snapshot.
   | 'FINANCING_OVERVIEW'
   // Read the home's permit records, inspections and unpermitted-work flags, keeping the authority's official status apart from what the household reported (register P0 Permits, slice PM-A). Read-only; no write.
@@ -365,6 +367,7 @@ export const ASK_INTERNAL_OPERATION_IDS: ReadonlySet<AskOperationId> = new Set<A
   'NEGOTIATION_SHIELD_CASE_ATTACH',
   // Reached by the declared action or the deterministic typed-start pattern; never by fuzzy retrieval.
   'RENOVATION_CASE_START',
+  'PERMIT_TRACKER_COMMAND',
   'NEGOTIATION_SHIELD_BUYER_COMMAND',
   'PRICE_FINALIZATION_COMMAND',
   'QUOTE_COMPARISON_COMMAND',
@@ -670,6 +673,7 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   MATERIAL_SPEC_ADD: definition('MATERIAL_SPEC_ADD', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'material-spec.add', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   NEGOTIATION_SHIELD_CASE_START: definition('NEGOTIATION_SHIELD_CASE_START', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'negotiation-shield.start', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   RENOVATION_CASE_START: definition('RENOVATION_CASE_START', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'renovation-case.start', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
+  PERMIT_TRACKER_COMMAND: definition('PERMIT_TRACKER_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'permits.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   FINANCING_OVERVIEW: definition('FINANCING_OVERVIEW', 'DECISION_ANALYSIS', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'financing.overview', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
   PERMIT_TRACKER_STATUS: definition('PERMIT_TRACKER_STATUS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'permits.status', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
   NEGOTIATION_SHIELD_BUYER_COMMAND: definition('NEGOTIATION_SHIELD_BUYER_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'negotiation-shield.buyer', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),

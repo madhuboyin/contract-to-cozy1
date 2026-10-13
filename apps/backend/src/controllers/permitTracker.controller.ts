@@ -10,9 +10,7 @@ import {
   assertProjectComplianceApplicable,
   getProjectComplianceEnvelope,
 } from '../services/projectCompliance/context';
-import { evaluateFeatureContext } from '../modules/propertyContext/application/evaluateFeatureContext';
-import { recordToolLifecycleEvents } from '../services/analytics/toolLifecycle';
-import { permitRecordCompletionEvent } from '../services/analytics/permitHoaLifecycle';
+import { createManualPermitWithEffects, deletePermitWithEffects, updatePermitWithEffects } from '../services/permitTrackerOperations';
 
 // ── Open Data Fetch ────────────────────────────────────────────────────────────
 
@@ -71,59 +69,13 @@ export async function listPermits(req: Request, res: Response, next: NextFunctio
 
 export async function createManualPermit(req: Request, res: Response, next: NextFunction) {
   try {
-    const operationInput = { workTypes: req.body.workTypes ?? [] };
-    const evaluation = await evaluateFeatureContext(req.params.propertyId, req.user!.userId, {
-      featureKey: 'PERMITS',
-      operationKey: 'CREATE_MANUAL_PERMIT',
-      operationInput,
-    });
-    if (!evaluation.canExecute) {
-      throw new APIError(
-        'Complete the required property responsibility before adding this permit.',
-        409,
-        'PROPERTY_CONTEXT_INCOMPLETE',
-        { evaluation },
-      );
-    }
-    await assertProjectComplianceApplicable(
-      req.params.propertyId,
-      req.user!.userId,
-      'PERMIT_TRACKER',
-      { permitWorkTypes: operationInput.workTypes },
-      'permitTracking',
-    );
-    const permit = await permitTrackerService.createManualPermit(
-      req.params.propertyId,
-      req.user!.userId,
-      req.body,
-    );
+    const permit = await createManualPermitWithEffects(req.params.propertyId, req.user!.userId, req.body);
     const propertyContext = await getProjectComplianceEnvelope(
       req.params.propertyId,
       req.user!.userId,
       'PERMIT_TRACKER',
       { permitWorkTypes: req.body.workTypes ?? [] },
     );
-
-    analyticsEmitter.track({
-      eventType: AnalyticsEvent.ACTION_COMPLETED,
-      userId: req.user?.userId,
-      propertyId: req.params.propertyId,
-      moduleKey: AnalyticsModule.PROJECT_MGMT,
-      featureKey: AnalyticsFeature.PERMIT_TRACKER,
-      metadataJson: { actionType: 'create_manual_permit', permitId: (permit as any)?.id },
-    });
-    void recordToolLifecycleEvents({
-      userId: req.user!.userId,
-      propertyId: req.params.propertyId,
-      events: [permitRecordCompletionEvent({
-        recordId: (permit as any).id,
-        sourceActionId: req.body.sourceActionId,
-        sourceEntityType: req.body.sourceEntityType,
-        sourceEntityId: req.body.sourceEntityId,
-        sourceJourneyId: req.body.sourceJourneyId,
-      })],
-    });
-
     res.status(201).json({ success: true, data: { permit, propertyContext } });
   } catch (err) { next(err); }
 }
@@ -140,22 +92,7 @@ export async function getPermitDetail(req: Request, res: Response, next: NextFun
 
 export async function updatePermit(req: Request, res: Response, next: NextFunction) {
   try {
-    const permit = await permitTrackerService.updatePermit(
-      req.params.permitId,
-      req.params.propertyId,
-      req.user!.userId,
-      req.body,
-    );
-
-    analyticsEmitter.track({
-      eventType: AnalyticsEvent.ACTION_COMPLETED,
-      userId: req.user?.userId,
-      propertyId: req.params.propertyId,
-      moduleKey: AnalyticsModule.PROJECT_MGMT,
-      featureKey: AnalyticsFeature.PERMIT_TRACKER,
-      metadataJson: { actionType: 'update_permit', permitId: req.params.permitId },
-    });
-
+    const permit = await updatePermitWithEffects(req.params.propertyId, req.user!.userId, req.params.permitId, req.body);
     res.json({ success: true, data: { permit } });
   } catch (err) { next(err); }
 }
@@ -175,17 +112,7 @@ export async function recordOfficialPermitStatus(req: Request, res: Response, ne
 
 export async function deletePermit(req: Request, res: Response, next: NextFunction) {
   try {
-    await permitTrackerService.softDeletePermit(req.params.permitId, req.params.propertyId);
-
-    analyticsEmitter.track({
-      eventType: AnalyticsEvent.ACTION_COMPLETED,
-      userId: req.user?.userId,
-      propertyId: req.params.propertyId,
-      moduleKey: AnalyticsModule.PROJECT_MGMT,
-      featureKey: AnalyticsFeature.PERMIT_TRACKER,
-      metadataJson: { actionType: 'delete_permit', permitId: req.params.permitId },
-    });
-
+    await deletePermitWithEffects(req.params.propertyId, req.user!.userId, req.params.permitId);
     res.status(204).send();
   } catch (err) { next(err); }
 }
