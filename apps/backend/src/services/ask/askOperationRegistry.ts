@@ -127,6 +127,12 @@ export type AskOperationId =
   // Start a renovation case (register section 3): a confirmation-gated command reached by the declared Start a renovation case action on the readiness
   // answer or a typed "start a renovation case"; never by fuzzy retrieval.
   | 'RENOVATION_CASE_START'
+  // Review and confirm an inspection report, with the write-back preview shown first (register P2 Inspection Hub). Confirmation-gated, declared-action only.
+  | 'INSPECTION_REPORT_COMMAND'
+  // Compare a confirmed inspection report with the confirmed one before it (register P2 Inspection Hub). Read-only; launched from a report row.
+  | 'INSPECTION_REPORT_COMPARE'
+  // List the home's inspection reports with their state and what can be done next (register P2 Inspection Hub). Read-only.
+  | 'INSPECTION_REPORTS'
   // Start the sale case, set its target dates and prep budget range, and record its stage (register P2 Seller Prep). Confirmation-gated, declared-action only; lists, contracts or closes nothing.
   | 'SELLER_PREP_CASE_COMMAND'
   // Mark a claim checklist item done, not applicable or open again, and add a note to a claim's timeline (register P2 Claims). Confirmation-gated, declared-action only.
@@ -407,6 +413,7 @@ export const ASK_INTERNAL_OPERATION_IDS: ReadonlySet<AskOperationId> = new Set<A
   'NEGOTIATION_SHIELD_CASE_ATTACH',
   // Reached by the declared action or the deterministic typed-start pattern; never by fuzzy retrieval.
   'RENOVATION_CASE_START',
+  'INSPECTION_REPORT_COMMAND',
   'SELLER_PREP_CASE_COMMAND',
   'CLAIM_ACTIVITY_COMMAND',
   'DO_NOTHING_SCENARIO_COMMAND',
@@ -730,6 +737,9 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   MATERIAL_SPEC_ADD: definition('MATERIAL_SPEC_ADD', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'material-spec.add', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   NEGOTIATION_SHIELD_CASE_START: definition('NEGOTIATION_SHIELD_CASE_START', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'negotiation-shield.start', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   RENOVATION_CASE_START: definition('RENOVATION_CASE_START', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'renovation-case.start', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
+  INSPECTION_REPORT_COMMAND: definition('INSPECTION_REPORT_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'inspection-report.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
+  INSPECTION_REPORT_COMPARE: definition('INSPECTION_REPORT_COMPARE', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'inspection-report-compare.view', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
+  INSPECTION_REPORTS: definition('INSPECTION_REPORTS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'inspection-reports.list', ['SUMMARY', 'GROUPED_LIST', 'EMPTY_STATE', 'BOUNDARY']),
   SELLER_PREP_CASE_COMMAND: definition('SELLER_PREP_CASE_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'seller-prep-case.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   CLAIM_ACTIVITY_COMMAND: definition('CLAIM_ACTIVITY_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'claim-activity.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   CLAIM_CHECKLIST_VIEW: definition('CLAIM_CHECKLIST_VIEW', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'claim-checklist.view', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
@@ -1071,6 +1081,7 @@ const claimFilePattern = /\b(?:file|start|create|open|prepare)\b.{0,60}\b(?:insu
 const claimTransitionPattern = /\b(?:submit|advance|move|transition|approve|deny|close|reopen)\b.{0,80}\bclaim\b|\bclaim\b.{0,80}\b(?:submit|submitted|under review|approve|approved|deny|denied|close|closed)\b/i;
 const incidentContinuationPattern = /\b(?:emergency|incident)\b.{0,80}\b(?:over|contained|resolved|document|record|follow up|claim)\b|\b(?:document|record|follow up on)\b.{0,60}\b(?:emergency|incident)\b/i;
 const inspectionFindingUpdatePattern = /\b(?:accept|dismiss|resolve|close|track)\b.{0,80}\binspection (?:finding|issue)\b|\binspection (?:finding|issue)\b.{0,80}\b(?:accept|dismiss|resolve|close|track)\b/i;
+const inspectionReportsPattern = /\b(?:show|list|review|which|what|see|open)\b.{0,50}\binspection reports?\b/i;
 const inspectionFindingsPattern = /\b(?:show|review|list|what|open|unresolved)\b.{0,70}\binspection (?:findings?|issues?)\b|\bwhat did (?:the |my )?inspection find\b/i;
 // Checked before recallReviewPattern below (same order as inspection's update-before-review cascade):
 // "confirm/dismiss/resolve/close" never appears in recallReviewPattern's own trigger verbs
@@ -1524,6 +1535,7 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   }
   if (inspectionFindingUpdatePattern.test(message)) return resolved('INSPECTION_FINDING_UPDATE', 0.98);
   if (inspectionFindingsPattern.test(message)) return resolved('INSPECTION_FINDINGS', 0.96);
+  if (inspectionReportsPattern.test(message)) return resolved('INSPECTION_REPORTS', 0.95);
   if (recallMatchUpdatePattern.test(message)) return resolved('RECALL_MATCH_UPDATE', 0.98);
   if (recallReviewPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('RECALL_REVIEW', 0.96);

@@ -182,6 +182,12 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   NEGOTIATION_SHIELD_CASE_ATTACH: new Set(['negotiation-shield-review', 'negotiation-shield-analyze']),
   // The readiness answer's empty state offers the start; the receipt of a started case offers that case's readiness check.
   RENOVATION_CASE_START: new Set(['renovation-case-readiness']),
+  // Review and confirm an inspection report, with the write-back preview shown first (register P2 Inspection Hub). Confirmation-gated, declared-action only.
+  INSPECTION_REPORT_COMMAND: new Set(['inspection-reports-back']),
+  // Compare a confirmed inspection report with the confirmed one before it (register P2 Inspection Hub). Read-only; launched from a report row.
+  INSPECTION_REPORT_COMPARE: new Set(['inspection-reports-back']),
+  // List the home's inspection reports with their state and what can be done next (register P2 Inspection Hub). Read-only.
+  INSPECTION_REPORTS: new Set(['inspection-reports-back', 'inspection-report-confirm', 'inspection-report-compare']),
   // Start the sale case, set its target dates and prep budget range, and record its stage (register P2 Seller Prep). Confirmation-gated, declared-action only; lists, contracts or closes nothing.
   SELLER_PREP_CASE_COMMAND: new Set(['seller-prep-back']),
   // Mark a claim checklist item done, not applicable or open again, and add a note to a claim's timeline (register P2 Claims). Confirmation-gated, declared-action only.
