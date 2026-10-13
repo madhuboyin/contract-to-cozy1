@@ -777,7 +777,7 @@ async function buyerFinancingReadinessResult(userId: string, propertyId: string)
     title: blockingConditions.length ? `${blockingConditions.length} lender condition${blockingConditions.length === 1 ? '' : 's'} still block closing` : 'No blocking lender condition is currently open',
     body: `Appraisal: ${readiness.appraisalStatus.toLowerCase().replace(/_/g, ' ')}. Underwriting: ${readiness.underwritingStatus.toLowerCase().replace(/_/g, ' ')}.${readiness.clearToCloseRecordedAt ? ' Clear-to-close is recorded.' : ' Clear-to-close is not yet recorded.'}`,
     tone: blockingConditions.length ? 'CAUTION' : 'DEFAULT',
-    actions: canChange ? [closingItemSummaryAction('LENDER_ADD', 'Add a lender condition')] : [],
+    actions: canChange ? [closingItemSummaryAction('LENDER_ADD', 'Add a lender condition'), closingItemSummaryAction('LENDER_APPRAISAL', 'Update appraisal status'), closingItemSummaryAction('LENDER_UNDERWRITING', 'Update underwriting status')] : [],
   }];
   if (unresolvedConditions.length) {
     blocks.push({

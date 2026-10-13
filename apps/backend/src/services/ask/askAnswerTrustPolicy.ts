@@ -187,7 +187,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   // Plan and record the buyer's final walkthrough: the plan, observations, issues and completion (register P2 Buyer Closing). Confirmation-gated, declared-action only.
   BUYER_WALKTHROUGH_COMMAND: new Set(['buyer-walkthrough-back']),
   // Lender-condition and title-issue controls on the financing and title readiness answers (FRD v1.346).
-  BUYER_FINANCING_READINESS: new Set(['closing-lender-condition-add', 'closing-lender-condition-update']),
+  BUYER_FINANCING_READINESS: new Set(['closing-lender-condition-add', 'closing-lender-condition-update', 'closing-lender-appraisal', 'closing-lender-underwriting']),
   BUYER_TITLE_ESCROW_READINESS: new Set(['closing-title-issue-add', 'closing-title-issue-update']),
   // Final-walkthrough readiness answer: the plan, observation and completion actions and the observation and issue row actions (FRD v1.345).
   BUYER_WALKTHROUGH_READINESS: new Set(['walkthrough-plan', 'walkthrough-observation-add', 'walkthrough-observation-review', 'walkthrough-issue-add', 'walkthrough-issue-update', 'walkthrough-complete']),
