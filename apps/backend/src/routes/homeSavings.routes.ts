@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { authenticate } from '../middleware/auth.middleware';
-import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
+import { propertyAuthMiddleware, requireHouseholdRole } from '../middleware/propertyAuth.middleware';
 import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
 import { validateBody } from '../middleware/validate.middleware';
 import {
@@ -79,6 +79,7 @@ router.get('/properties/:propertyId/home-savings/:categoryKey', propertyAuthMidd
 router.post(
   '/properties/:propertyId/home-savings/:categoryKey/account',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(upsertAccountBodySchema),
   upsertHomeSavingsAccount
 );
@@ -86,6 +87,7 @@ router.post(
 router.post(
   '/properties/:propertyId/home-savings/run',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(runComparisonBodySchema),
   runHomeSavingsComparison
 );

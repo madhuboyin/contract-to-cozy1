@@ -59,6 +59,8 @@ import { STATUS_BOARD_CORRECT_CAPTURE_KEY, parseStatusBoardCorrectAnswer } from 
 import { statusBoardCommandResult } from '../handlers/statusBoardCommands.handler';
 import { appealFormKindFromCaptureKey, parseAppealFormAnswer } from '../support/propertyTaxAppealCommand';
 import { appealCommandResult } from '../handlers/propertyTaxAppealCommands.handler';
+import { SAVINGS_OUTCOME_CAPTURE_KEY, SAVINGS_OUTCOME_INVALID_MESSAGES, parseSavingsOutcomeAnswer, parseSavingsRowId } from '../support/savingsBenefitCommand';
+import { savingsCommandResult } from '../handlers/savingsBenefitCommands.handler';
 import { COVERAGE_DECISION_CAPTURE_KEY, parseCoverageDecisionAnswer, type CoverageCommandKind } from '../support/coverageCommand';
 import { parseUpgradeFormAnswer, upgradeFormKindFromCaptureKey, type UpgradeCommandKind } from '../support/homeUpgradeCommand';
 import { parsePermitFormAnswer, permitFormKindFromCaptureKey, type PermitCommandKind } from '../support/permitTrackerCommand';
@@ -1239,6 +1241,27 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     captureId = input.idempotencyKey;
     capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
     canonicalOwner = 'PropertyTaxAppealCase';
+  } else if (execution.operationId === 'SAVINGS_BENEFIT_COMMAND') {
+    if (input.captureKey !== SAVINGS_OUTCOME_CAPTURE_KEY) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    const access = await ensurePropertyAccess(userId, execution.propertyId);
+    if (access.role === HouseholdRole.VIEWER) throw Object.assign(new Error('A contributor or owner is required to change savings records.'), { code: 'ASK_PERMISSION_REQUIRED' });
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson) ? execution.parametersJson as Record<string, unknown> : {};
+    const savingsLaunch = storedParameters.savingsCommandLaunch && typeof storedParameters.savingsCommandLaunch === 'object' && !Array.isArray(storedParameters.savingsCommandLaunch)
+      ? storedParameters.savingsCommandLaunch as { kind?: unknown; entityId?: unknown; sourceExecutionId?: unknown } : null;
+    const savingsTarget = savingsLaunch && typeof savingsLaunch.entityId === 'string' ? parseSavingsRowId(savingsLaunch.entityId) : null;
+    if (!savingsLaunch || savingsLaunch.kind !== 'OUTCOME' || !savingsTarget) {
+      throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    }
+    const savingsAnswer = parseSavingsOutcomeAnswer(savingsTarget.family, input.answer);
+    if (!savingsAnswer.success) {
+      throw Object.assign(new Error(SAVINGS_OUTCOME_INVALID_MESSAGES[savingsAnswer.reason]), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+    }
+    result = await savingsCommandResult(userId, execution.propertyId, {
+      kind: 'OUTCOME', entityId: String(savingsLaunch.entityId), sourceExecutionId: typeof savingsLaunch.sourceExecutionId === 'string' ? savingsLaunch.sourceExecutionId : null,
+    }, savingsAnswer.data);
+    captureId = input.idempotencyKey;
+    capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
+    canonicalOwner = 'SavingsBenefitAction';
   } else if (execution.operationId === 'PROPERTY_BRIEF_COMMAND') {
     if (![PROPERTY_BRIEF_PREPARE_CAPTURE_KEY, PROPERTY_BRIEF_SHARE_CAPTURE_KEY].includes(input.captureKey) || input.expectedContextVersion !== 'property-brief-live') throw Object.assign(new Error('This Property Brief form is no longer active.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
     const access = await ensurePropertyAccess(userId, execution.propertyId);

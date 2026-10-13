@@ -103,7 +103,8 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   RECALL_REVIEW: new Set(['recall-confirm', 'recall-dismiss', 'recall-resolve']),
   // The Open Documents link was never declared, so the validator removed it from the answer and from its empty state (found in Documents D-1).
   INCIDENT_CLAIM_STATUS: new Set(['claim-file-start', 'claim-start', 'claim-submit', 'claim-under-review', 'claim-approve', 'claim-deny', 'claim-close']),
-  SAVINGS_OPPORTUNITIES: new Set(['review-all-savings']),
+  // Plus the row steps (FRD v1.323): save, dismiss, stop pursuing, record the outcome.
+  SAVINGS_OPPORTUNITIES: new Set(['review-all-savings', 'savings-benefit-save', 'savings-benefit-dismiss', 'savings-benefit-stop', 'savings-benefit-outcome']),
   OWNERSHIP_COSTS: new Set([
     'ownership-cost-view-current', 'ownership-cost-view-changes', 'ownership-cost-view-forecast', 'ownership-cost-view-variability', 'ownership-cost-refresh-sources',
     'ownership-cost-review-property_tax', 'ownership-cost-review-insurance', 'ownership-cost-review-hoa', 'ownership-cost-review-utilities',
@@ -181,6 +182,8 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   NEGOTIATION_SHIELD_CASE_ATTACH: new Set(['negotiation-shield-review', 'negotiation-shield-analyze']),
   // The readiness answer's empty state offers the start; the receipt of a started case offers that case's readiness check.
   RENOVATION_CASE_START: new Set(['renovation-case-readiness']),
+  // Save, dismiss, stop pursuing and record the outcome of a savings or benefit opportunity (register P1 Savings & Benefits). Confirmation-gated, declared-action only; primary owner only. Sensitive facts and partner handoffs are not here.
+  SAVINGS_BENEFIT_COMMAND: new Set(['savings-benefit-back']),
   // Start a property tax appeal case, prepare its packet, record the filing, a response or hearing, a reminder and the decision (register P1 Property Tax). Confirmation-gated, declared-action only; primary owner only; Cozy prepares and records, it never files.
   PROPERTY_TAX_APPEAL_READINESS: new Set(['property-tax-appeal-start', 'property-tax-appeal-packet', 'property-tax-appeal-filing', 'property-tax-appeal-event', 'property-tax-appeal-reminder-add', 'property-tax-appeal-reminder-done', 'property-tax-appeal-reminder-dismiss', 'property-tax-appeal-determination']),
   PROPERTY_TAX_APPEAL_COMMAND: new Set(['property-tax-appeal-back']),

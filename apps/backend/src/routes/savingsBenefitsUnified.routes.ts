@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth.middleware';
-import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
+import { propertyAuthMiddleware, requireHouseholdRole } from '../middleware/propertyAuth.middleware';
 import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
 import { getSavingsBenefitsUnifiedForProperty } from '../controllers/savingsBenefitsUnified.controller';
 import {
@@ -69,6 +69,7 @@ const factBody = z.object({
 router.post(
   '/properties/:propertyId/savings-benefits/opportunities/:opportunityId/facts',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(factBody),
   postSavingsBenefitsOpportunityFact,
 );
@@ -90,6 +91,7 @@ const actionBody = z.object({
 router.post(
   '/properties/:propertyId/savings-benefits/opportunities/:opportunityId/actions',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(actionBody),
   postSavingsBenefitsOpportunityAction,
 );
@@ -110,6 +112,7 @@ const actionUpdateBody = z.object({
 router.patch(
   '/properties/:propertyId/savings-benefits/actions/:actionId',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(actionUpdateBody),
   patchSavingsBenefitsAction,
 );
@@ -132,6 +135,7 @@ const outcomeBody = z.object({
 router.post(
   '/properties/:propertyId/savings-benefits/actions/:actionId/outcome',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(outcomeBody),
   postSavingsBenefitsActionOutcome,
 );
@@ -142,6 +146,7 @@ const outcomeRevocationBody = z.object({
 router.post(
   '/properties/:propertyId/savings-benefits/actions/:actionId/outcomes/:outcomeId/revoke',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(outcomeRevocationBody),
   postSavingsBenefitsActionOutcomeRevocation,
 );
@@ -152,6 +157,7 @@ const handoffRevocationBody = z.object({
 router.post(
   '/properties/:propertyId/savings-benefits/actions/:actionId/handoff/revoke',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(handoffRevocationBody),
   postSavingsBenefitHandoffRevocation,
 );
@@ -163,6 +169,7 @@ const partnerComplaintBody = z.object({
 router.post(
   '/properties/:propertyId/savings-benefits/actions/:actionId/handoff/complaints',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(partnerComplaintBody),
   postSavingsBenefitPartnerComplaint,
 );

@@ -17,6 +17,10 @@ import { ownershipCostDecisionService } from '../../ownershipCosts/ownershipCost
 import type { OwnershipCostCategory } from '../../ownershipCosts/ownershipCost.contract';
 import { humanDate, money } from '../askFormatting';
 import { ensurePropertyAccess } from '../askHandlerSupport';
+import { prisma } from '../../../lib/prisma';
+import {
+  SAVINGS_AVAILABLE_ENTITY_TYPE, SAVINGS_COMMAND_ACTION_IDS, SAVINGS_COMMAND_MESSAGES, SAVINGS_IN_PROGRESS_ENTITY_TYPE, type SavingsCommandKind,
+} from '../support/savingsBenefitCommand';
 import { OWNERSHIP_COST_ACTION_IDS, OWNERSHIP_COST_COMMAND_MESSAGE } from '../support/ownershipCostConstants';
 
 const homeSavingsService = new HomeSavingsService();
@@ -45,6 +49,12 @@ async function savingsOpportunitiesResult(userId: string, propertyId: string, me
 
   const activeRequirement = context.requirements[0];
   const canImproveContext = access.role !== HouseholdRole.VIEWER;
+  // FRD v1.323: saving, dismissing and following up an opportunity is a contributor's change to the primary owner's record (the canonical service's own boundary).
+  const canChangeSavings = canImproveContext
+    && Boolean(await (prisma as any).property.findFirst({ where: { id: propertyId, homeownerProfile: { userId } }, select: { id: true } }));
+  const savingsAction = (kind: SavingsCommandKind, label: string, style: 'PRIMARY' | 'SECONDARY' | 'QUIET') => ({
+    id: SAVINGS_COMMAND_ACTION_IDS[kind], label, message: SAVINGS_COMMAND_MESSAGES[kind], operationId: 'SAVINGS_BENEFIT_COMMAND' as const, interactionType: 'MUTATE_RECORD' as const, style,
+  });
   const captureSupported = activeRequirement
     && canImproveContext
     && activeRequirement.capture.actionKey !== 'PERMISSION_REQUIRED'
@@ -84,6 +94,11 @@ async function savingsOpportunitiesResult(userId: string, propertyId: string, me
         ].filter((value): value is string => Boolean(value)),
         status: opportunity.status,
         href: null,
+        entityType: SAVINGS_AVAILABLE_ENTITY_TYPE,
+        actions: canChangeSavings ? [
+          ...(['NEW', 'VIEWED'].includes(String(opportunity.status)) ? [savingsAction('SAVE', 'Save for later', 'SECONDARY')] : []),
+          ...(['NEW', 'VIEWED', 'SAVED'].includes(String(opportunity.status)) ? [savingsAction('DISMISS', 'Dismiss', 'QUIET')] : []),
+        ] : [],
         paybackMonths: opportunity.estimatedPaybackMonths,
       };
     })
@@ -104,6 +119,11 @@ async function savingsOpportunitiesResult(userId: string, propertyId: string, me
       meta: [value ? `Estimated ${value}` : 'Value not quantified', match.eligibilityLabel, match.sourceLabel, match.freshnessNote].filter((value): value is string => Boolean(value)),
       status: match.status,
       href: null,
+      entityType: SAVINGS_AVAILABLE_ENTITY_TYPE,
+      actions: canChangeSavings ? [
+        ...(String(match.status) === 'DETECTED' ? [savingsAction('SAVE', 'Save for later', 'SECONDARY')] : []),
+        ...(['DETECTED', 'VIEWED'].includes(String(match.status)) ? [savingsAction('DISMISS', 'Dismiss', 'QUIET')] : []),
+      ] : [],
     };
   });
 
@@ -118,6 +138,10 @@ async function savingsOpportunitiesResult(userId: string, propertyId: string, me
     ].filter((value): value is string => Boolean(value)),
     status: item.statusLabel,
     href: null,
+    entityType: SAVINGS_IN_PROGRESS_ENTITY_TYPE,
+    actions: canChangeSavings && item.canonicalAction?.state === 'STARTED' ? [
+      savingsAction('OUTCOME', 'Record what happened', 'PRIMARY'), savingsAction('STOP', 'Stop pursuing', 'QUIET'),
+    ] : [],
   }));
 
   const realized = unified.realized.slice(0, 8).map((item) => ({

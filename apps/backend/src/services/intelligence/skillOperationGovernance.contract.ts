@@ -97,6 +97,7 @@ export const KNOWN_UNGOVERNED_OPERATIONS: readonly AskOperationId[] = [
   'NEGOTIATION_SHIELD_CASE_ATTACH',
   // Renovation case start (declared-action or typed, confirmation-gated, skill-less like the readiness read's neighbours). It must stay in this list or the boot check fails.
   'RENOVATION_CASE_START',
+  'SAVINGS_BENEFIT_COMMAND',
   'PROPERTY_TAX_APPEAL_COMMAND',
   'STATUS_BOARD_COMMAND',
   'CAPITAL_TIMELINE_COMMAND',
