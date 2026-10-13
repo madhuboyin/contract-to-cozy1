@@ -1,5 +1,6 @@
 "use client";
 
+import { usePropertyWriteAccess } from "@/lib/property/usePropertyWriteAccess";
 import { Fragment, useState, useMemo, type ElementType } from "react";
 import { useParams, usePathname, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -268,6 +269,9 @@ export default function StatusBoardClient() {
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const propertyId = params.id as string;
+  // A viewer can read the board but the server refuses changes to it; do not offer controls that predictably fail.
+  const { canWrite } = usePropertyWriteAccess(propertyId);
+  const viewerNote = "Only a contributor or owner can change the board.";
   const backHref = useMemo(
     () =>
       resolveDashboardBackHref(
@@ -446,11 +450,13 @@ export default function StatusBoardClient() {
 
   function handleTogglePin(item: StatusBoardItemDTO) {
     recordOperationalGuidanceProgress(item, item.isPinned ? 'unpin_item' : 'pin_item');
+    if (!canWrite) return;
     patchMutation.mutate({ homeItemId: item.id, payload: { isPinned: !item.isPinned } });
   }
 
   function handleToggleHide(item: StatusBoardItemDTO) {
     recordOperationalGuidanceProgress(item, item.isHidden ? 'show_item' : 'hide_item');
+    if (!canWrite) return;
     patchMutation.mutate({ homeItemId: item.id, payload: { isHidden: !item.isHidden } });
   }
 
@@ -482,6 +488,7 @@ export default function StatusBoardClient() {
     } else {
       payload.overrideNotes = null;
     }
+    if (!canWrite) return;
     patchMutation.mutate({ homeItemId: itemId, payload });
   }
 
@@ -617,6 +624,7 @@ export default function StatusBoardClient() {
     onToggleHide: handleToggleHide,
     onViewItem: handleViewItem,
     onSaveOverride: (itemId: string, payload) => {
+      if (!canWrite) return;
       patchMutation.mutate({ homeItemId: itemId, payload });
     },
   }), [expandedId, handleViewItem, patchMutation]);
@@ -1183,7 +1191,7 @@ export default function StatusBoardClient() {
                       recordOperationalGuidanceProgress(item, 'save_status_override');
                       handleSaveOverride(item.id);
                     }}
-                    disabled={patchMutation.isPending}
+                    disabled={patchMutation.isPending || !canWrite}
                   >
                     {patchMutation.isPending ? (
                       <>
@@ -1312,10 +1320,10 @@ export default function StatusBoardClient() {
                     <Button size="sm" variant="outline">Risk</Button>
                   </Link>
                 ) : null}
-                <Button size="sm" variant={item.isPinned ? "default" : "outline"} onClick={() => handleTogglePin(item)}>
+                <Button size="sm" variant={item.isPinned ? "default" : "outline"} disabled={!canWrite} title={canWrite ? undefined : viewerNote} onClick={() => handleTogglePin(item)}>
                   {item.isPinned ? "Pinned" : "Pin"}
                 </Button>
-                <Button size="sm" variant="outline" onClick={() => handleToggleHide(item)}>
+                <Button size="sm" variant="outline" disabled={!canWrite} title={canWrite ? undefined : viewerNote} onClick={() => handleToggleHide(item)}>
                   {item.isHidden ? "Show" : "Hide"}
                 </Button>
                 <Button size="sm" variant="outline" onClick={() => handleExpand(item)}>
@@ -1382,7 +1390,7 @@ export default function StatusBoardClient() {
                   recordOperationalGuidanceProgress(item, 'save_status_override');
                   handleSaveOverride(item.id);
                 }}
-                disabled={patchMutation.isPending}
+                disabled={patchMutation.isPending || !canWrite}
               >
                 {patchMutation.isPending ? "Saving..." : "Save Override"}
               </Button>
@@ -1416,7 +1424,8 @@ export default function StatusBoardClient() {
                   <Button
                     variant="outline"
                     size="sm"
-                    disabled={recomputeMutation.isPending}
+                    disabled={recomputeMutation.isPending || !canWrite}
+                    title={canWrite ? undefined : viewerNote}
                     onClick={() => recomputeMutation.mutate()}
                   >
                     <RefreshCw className={cn("mr-1 h-3.5 w-3.5", recomputeMutation.isPending && "animate-spin")} />
@@ -1775,7 +1784,8 @@ export default function StatusBoardClient() {
               <Button
                 variant="outline"
                 className="w-full sm:w-auto"
-                disabled={recomputeMutation.isPending}
+                disabled={recomputeMutation.isPending || !canWrite}
+                    title={canWrite ? undefined : viewerNote}
                 onClick={() => recomputeMutation.mutate()}
               >
                 <RefreshCw className={cn("mr-1.5 h-3.5 w-3.5", recomputeMutation.isPending && "animate-spin")} />
