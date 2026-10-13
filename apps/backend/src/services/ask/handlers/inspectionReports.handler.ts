@@ -12,6 +12,7 @@ import {
   INSPECTION_REPORT_ACTION_IDS, INSPECTION_REPORT_ENTITY_TYPE, INSPECTION_REPORT_MESSAGES, INSPECTION_REPORT_STATUS_LABELS, INSPECTION_REPORT_TYPE_LABELS,
   inspectionReportCanConfirm, previousConfirmedReportId,
 } from '../support/inspectionReportCommand';
+import { INSPECTION_FINDINGS_OF_REPORT_ACTION_ID, INSPECTION_FINDINGS_OF_REPORT_MESSAGE } from '../support/inspectionFindingDecisionCommand';
 
 const reportsAction = { id: 'inspection-reports-back', label: 'Back to my inspection reports', interactionType: 'START_WORKFLOW' as const, message: 'Show my inspection reports', operationId: 'INSPECTION_REPORTS' as const, style: 'SECONDARY' as const };
 const unavailable = (reasonCode: string, title: string, body: string): AskOperationResult => ({
@@ -42,6 +43,10 @@ export function inspectionReportsFromRows(rows: ReportRow[], canChange: boolean)
       ...(canChange && inspectionReportCanConfirm(row.status) ? [{
         id: INSPECTION_REPORT_ACTION_IDS.CONFIRM, label: 'Review and confirm', message: INSPECTION_REPORT_MESSAGES.CONFIRM,
         interactionType: 'MUTATE_RECORD' as const, operationId: 'INSPECTION_REPORT_COMMAND' as const, style: 'PRIMARY' as const,
+      }] : []),
+      ...(row.status === 'CONFIRMED' ? [{
+        id: INSPECTION_FINDINGS_OF_REPORT_ACTION_ID, label: 'See its findings', message: INSPECTION_FINDINGS_OF_REPORT_MESSAGE,
+        interactionType: 'CONVERSATION_CONTINUE' as const, operationId: 'INSPECTION_REPORT_FINDINGS' as const, style: 'SECONDARY' as const,
       }] : []),
       ...(previousConfirmedReportId(reports, row.id) ? [{
         id: INSPECTION_REPORT_ACTION_IDS.COMPARE, label: 'Compare with the previous report', message: INSPECTION_REPORT_MESSAGES.COMPARE,

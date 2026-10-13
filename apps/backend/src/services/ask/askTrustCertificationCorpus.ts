@@ -282,6 +282,8 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   NEGOTIATION_SHIELD_CASE_UPDATE: 'The changes to your review\'s saved details are listed and saved only after you confirm; the analysis is not re-run.',
   NEGOTIATION_SHIELD_CASE_ATTACH: 'The record you pick is shown, with who can see it, and is attached to your review only after you confirm; the file is not read.',
   RENOVATION_CASE_START: 'Your renovation case is shown and saved only after you confirm; nothing is applied for or started.',
+  INSPECTION_FINDING_DECISION_COMMAND: 'The decision is shown for review and recorded only after you confirm; nothing is sent to anyone.',
+  INSPECTION_REPORT_FINDINGS: 'The findings in this report are listed with their state and the decisions each allows.',
   INSPECTION_REPORT_COMMAND: 'The report is shown for review with what confirming writes back, and confirmed only after you confirm.',
   INSPECTION_REPORT_COMPARE: 'What was resolved, what persists, what is new and what got worse is shown for the two reports.',
   INSPECTION_REPORTS: 'Your inspection reports are listed with their state and the next step for each.',
