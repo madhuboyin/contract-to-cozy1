@@ -282,6 +282,7 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   NEGOTIATION_SHIELD_CASE_UPDATE: 'The changes to your review\'s saved details are listed and saved only after you confirm; the analysis is not re-run.',
   NEGOTIATION_SHIELD_CASE_ATTACH: 'The record you pick is shown, with who can see it, and is attached to your review only after you confirm; the file is not read.',
   RENOVATION_CASE_START: 'Your renovation case is shown and saved only after you confirm; nothing is applied for or started.',
+  DO_NOTHING_SCENARIO_COMMAND: 'The scenario is shown for review and saved only after you confirm; saving runs no simulation.',
   HOME_HABIT_PREFERENCES_COMMAND: 'The coach settings are shown for review, and saved only after you confirm.',
   FINANCING_PROFILE_COMMAND: 'The exact before and after of each mortgage or purchase detail is shown for review, and it is saved only after you confirm.',
   HOME_BRIEFING_SHARE_COMMAND: 'The exact updates that become public are shown for review, and the link is created only after you confirm.',

@@ -82,7 +82,7 @@ test('the latest run is summarized with cost range, risk change, likelihood, con
   assert.equal(summary.title, 'If upkeep is put off for 12 months');
   assert.equal(summary.body, 'Estimated extra cost: $3,200 to $7,800. Risk score rises by 14. Incident likelihood: High. Confidence: Medium. Run Sep 15, 2026 for "Skip a year".');
   assert.equal(summary.tone, 'CAUTION');
-  assert.deepEqual(summary.actions.map((action) => [action.id, action.operationId, action.interactionType, action.href]), [['run-do-nothing', 'DO_NOTHING_SIMULATION_RUN', 'START_WORKFLOW', undefined]], 'run it again, inside Ask');
+  assert.deepEqual(summary.actions.map((action) => [action.id, action.operationId, action.interactionType, action.href]), [['run-do-nothing', 'DO_NOTHING_SIMULATION_RUN', 'START_WORKFLOW', undefined], ['do-nothing-scenario-create', 'DO_NOTHING_SCENARIO_COMMAND', 'START_WORKFLOW', undefined]], 'run it again, or add a scenario (FRD v1.336), inside Ask');
   assert.equal(result.blocks.some((block) => block.id === 'do-nothing-status'), false);
   assert.deepEqual(list.sections.map((section) => [section.title, section.items.map((item) => item.title)]), [
     ['Biggest avoidable losses', ['Leak damage']],

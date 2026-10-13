@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { authenticate } from '../middleware/auth.middleware';
-import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
+import { propertyAuthMiddleware, requireHouseholdRole } from '../middleware/propertyAuth.middleware';
 import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
 import { validateBody } from '../middleware/validate.middleware';
 import {
@@ -60,6 +60,7 @@ router.get(
 router.post(
   '/properties/:propertyId/do-nothing/scenarios',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(createScenarioBodySchema),
   createDoNothingScenario
 );
@@ -67,6 +68,7 @@ router.post(
 router.patch(
   '/properties/:propertyId/do-nothing/scenarios/:scenarioId',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(updateScenarioBodySchema),
   updateDoNothingScenario
 );
@@ -74,6 +76,7 @@ router.patch(
 router.delete(
   '/properties/:propertyId/do-nothing/scenarios/:scenarioId',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   deleteDoNothingScenario
 );
 

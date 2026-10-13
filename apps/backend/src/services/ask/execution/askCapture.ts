@@ -67,6 +67,8 @@ import { PAST_HAZARD_CAPTURE_KEY, PAST_HAZARD_INVALID_MESSAGES, parsePastHazardO
 import { pastHazardCommandResult } from '../handlers/pastHazardOutcomeCommands.handler';
 import { BRIEFING_PREFERENCES_CAPTURE_KEY, parseBriefingPreferencesAnswer } from '../support/homeBriefingCommand';
 import { briefingCommandResult } from '../handlers/homeBriefingCommands.handler';
+import { doNothingFormKindFromCaptureKey, parseDoNothingScenarioAnswer } from '../support/doNothingScenarioCommand';
+import { doNothingScenarioResult } from '../handlers/doNothingScenarioCommands.handler';
 import { HABIT_COACH_PREFERENCES_CAPTURE_KEY, parseHabitCoachPreferencesAnswer } from '../support/habitCoachPreferencesCommand';
 import { habitCoachPreferencesResult } from '../handlers/habitCoachPreferencesCommands.handler';
 import { FINANCING_PROFILE_CAPTURE_KEY, parseFinancingProfileAnswer } from '../support/financingProfileCommand';
@@ -1415,6 +1417,26 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     captureId = input.idempotencyKey;
     capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
     canonicalOwner = 'PropertyHabitPreference';
+  } else if (execution.operationId === 'DO_NOTHING_SCENARIO_COMMAND') {
+    const dnKind = doNothingFormKindFromCaptureKey(input.captureKey);
+    if (!dnKind) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    const access = await ensurePropertyAccess(userId, execution.propertyId);
+    if (access.role === HouseholdRole.VIEWER) throw Object.assign(new Error('A contributor or owner is required to change scenarios.'), { code: 'ASK_PERMISSION_REQUIRED' });
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson) ? execution.parametersJson as Record<string, unknown> : {};
+    const dnLaunch = storedParameters.doNothingLaunch && typeof storedParameters.doNothingLaunch === 'object' && !Array.isArray(storedParameters.doNothingLaunch)
+      ? storedParameters.doNothingLaunch as { kind?: unknown; entityId?: unknown; sourceExecutionId?: unknown } : null;
+    if (!dnLaunch || dnLaunch.kind !== dnKind || typeof dnLaunch.entityId !== 'string') {
+      throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    }
+    if (!parseDoNothingScenarioAnswer(dnKind, input.answer).success) {
+      throw Object.assign(new Error('Give the scenario a name and a horizon of 6, 12, 24 or 36 months; change at least one thing when editing.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+    }
+    result = await doNothingScenarioResult(userId, execution.propertyId, {
+      kind: dnKind, entityId: dnLaunch.entityId, sourceExecutionId: typeof dnLaunch.sourceExecutionId === 'string' ? dnLaunch.sourceExecutionId : null,
+    }, input.answer as Record<string, unknown>);
+    captureId = input.idempotencyKey;
+    capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
+    canonicalOwner = 'DoNothingScenario';
   } else if (execution.operationId === 'PROPERTY_BRIEF_COMMAND') {
     if (![PROPERTY_BRIEF_PREPARE_CAPTURE_KEY, PROPERTY_BRIEF_SHARE_CAPTURE_KEY].includes(input.captureKey) || input.expectedContextVersion !== 'property-brief-live') throw Object.assign(new Error('This Property Brief form is no longer active.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
     const access = await ensurePropertyAccess(userId, execution.propertyId);

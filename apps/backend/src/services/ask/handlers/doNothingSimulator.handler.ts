@@ -4,6 +4,10 @@
 import { type AskPresentationBlock } from '../../../productFramework/ask/ask.contract';
 import { type AskOperationResult } from '../askOperationRegistry';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
+import { ensurePropertyAccess } from '../askHandlerSupport';
+import {
+  DO_NOTHING_PROPERTY_ENTITY_TYPE, DO_NOTHING_SCENARIO_ACTION_IDS, DO_NOTHING_SCENARIO_ENTITY_TYPE, DO_NOTHING_SCENARIO_MESSAGES,
+} from '../support/doNothingScenarioCommand';
 import { DoNothingSimulatorService } from '../../doNothingSimulator.service';
 import { humanDate } from '../askFormatting';
 import { DO_NOTHING_RUN_ACTION_ID, DO_NOTHING_RUN_MESSAGE } from '../support/homeToolRunConstants';
@@ -15,7 +19,7 @@ import { DO_NOTHING_RUN_ACTION_ID, DO_NOTHING_RUN_MESSAGE } from '../support/hom
 // floor: the routes admit any member, but assertPropertyForUser only admits the primary homeowner profile and throws a
 // plain Error, which the page turns into a 500; Ask says who can see it. getLatestRun refuses while coverage records
 // conflict (also a 500 on the page); Ask says to resolve them first. A stale, failed or low-confidence run is disclosed,
-// not presented as current. Reading never runs a simulation: running, saving and editing scenarios stay on the page.
+// not presented as current. Reading never runs a simulation. Saving, changing and deleting a scenario are the confirmed DO_NOTHING_SCENARIO_COMMAND (FRD v1.336).
 type DoNothingRunView = Extract<Awaited<ReturnType<DoNothingSimulatorService['getLatestRun']>>, { exists: true }>['run'];
 type DoNothingScenarioView = Awaited<ReturnType<DoNothingSimulatorService['listScenarios']>>['scenarios'][number];
 const doNothingMoney = (cents: number | null | undefined) => (cents == null ? null : `$${Math.round(cents / 100).toLocaleString('en-US')}`);
@@ -24,7 +28,13 @@ const DO_NOTHING_SEVERITY_LABELS: Record<string, string> = { LOW: 'Low', MEDIUM:
 export function doNothingSimulationFromView(
   view: { run: DoNothingRunView | null; scenarios: readonly DoNothingScenarioView[] } | 'PRIMARY_OWNER_ONLY' | 'COVERAGE_CONFLICT',
   propertyId: string,
+  canChange = false,
 ): AskOperationResult {
+  // FRD v1.336: saving and changing scenarios is a contributor's step on the primary owner's record.
+  const addScenario = canChange ? [{
+    id: DO_NOTHING_SCENARIO_ACTION_IDS.CREATE, label: 'Add a scenario', interactionType: 'START_WORKFLOW' as const, message: DO_NOTHING_SCENARIO_MESSAGES.CREATE,
+    operationId: 'DO_NOTHING_SCENARIO_COMMAND' as const, entityType: DO_NOTHING_PROPERTY_ENTITY_TYPE, entityId: propertyId, style: 'SECONDARY' as const,
+  }] : [];
   // The answer reaches only the home's primary account holder, who can run the simulation from it, inside Ask.
   const runAction = (label: string) => ({ id: DO_NOTHING_RUN_ACTION_ID, label, interactionType: 'START_WORKFLOW' as const, message: DO_NOTHING_RUN_MESSAGE, operationId: 'DO_NOTHING_SIMULATION_RUN', style: 'PRIMARY' as const });
   const boundary: AskPresentationBlock = {
@@ -65,12 +75,17 @@ export function doNothingSimulationFromView(
       scenario.inputOverrides.riskTolerance ? `${DO_NOTHING_SEVERITY_LABELS[scenario.inputOverrides.riskTolerance] ?? scenario.inputOverrides.riskTolerance} risk tolerance` : null,
     ].filter((value): value is string => Boolean(value)),
     status: 'Saved',
+    entityType: DO_NOTHING_SCENARIO_ENTITY_TYPE,
+    actions: canChange ? (['EDIT', 'DELETE'] as const).map((kind) => ({
+      id: DO_NOTHING_SCENARIO_ACTION_IDS[kind], label: kind === 'EDIT' ? 'Change' : 'Delete', message: DO_NOTHING_SCENARIO_MESSAGES[kind],
+      operationId: 'DO_NOTHING_SCENARIO_COMMAND' as const, interactionType: 'MUTATE_RECORD' as const, style: kind === 'EDIT' ? 'SECONDARY' as const : 'QUIET' as const,
+    })) : [],
   }));
   if (!run) {
     const blocks: AskPresentationBlock[] = [{
       type: 'SUMMARY', id: 'do-nothing-summary', title: 'No do-nothing simulation run yet',
       body: `The Do-Nothing Simulator estimates what putting off home upkeep could cost over 6 to 36 months.${scenarios.length ? ` ${scenarios.length} scenario${scenarios.length === 1 ? ' is' : 's are'} saved.` : ''} Run one below; nothing runs until you confirm.`,
-      tone: 'DEFAULT', actions: [runAction('Run a simulation')],
+      tone: 'DEFAULT', actions: [runAction('Run a simulation'), ...addScenario],
     }];
     if (scenarioItems.length) {
       blocks.push({ type: 'GROUPED_LIST', filters: [], id: 'do-nothing-items', title: 'Saved scenarios', description: 'Saved with their assumptions; none has been run yet.', sections: [{ id: 'do-nothing-scenarios', title: 'Saved scenarios', count: scenarioItems.length, items: scenarioItems }], actions: [] });
@@ -92,7 +107,7 @@ export function doNothingSimulationFromView(
       `Run ${humanDate(new Date(run.computedAt))}${scenarioName ? ` for "${scenarioName}"` : ''}.`,
     ].filter(Boolean).join(' '),
     tone: run.incidentLikelihood === 'HIGH' ? 'CAUTION' : 'DEFAULT',
-    actions: [runAction('Run it again')],
+    actions: [runAction('Run it again'), ...addScenario],
   }];
   if (run.status !== 'READY') {
     blocks.push({
@@ -130,12 +145,12 @@ export function doNothingSimulationFromView(
   return { status: 'ANSWERED', reasonCode: 'DO_NOTHING_READY', blocks, suggestions: [] };
 }
 
-async function doNothingSimulationResult(propertyId: string, userId: string): Promise<AskOperationResult> {
+async function doNothingSimulationResult(propertyId: string, userId: string, canChange: boolean): Promise<AskOperationResult> {
   const service = new DoNothingSimulatorService();
   try {
     const { scenarios } = await service.listScenarios(propertyId, userId);
     const latest = await service.getLatestRun(propertyId, userId);
-    return doNothingSimulationFromView({ run: latest.exists ? latest.run : null, scenarios }, propertyId);
+    return doNothingSimulationFromView({ run: latest.exists ? latest.run : null, scenarios }, propertyId, canChange);
   } catch (error) {
     if ((error as { code?: string })?.code === 'COVERAGE_CONFLICT_REVIEW_REQUIRED') return doNothingSimulationFromView('COVERAGE_CONFLICT', propertyId);
     if (error instanceof Error && error.message === 'Property not found or access denied.') return doNothingSimulationFromView('PRIMARY_OWNER_ONLY', propertyId);
@@ -143,4 +158,7 @@ async function doNothingSimulationResult(propertyId: string, userId: string): Pr
   }
 }
 
-registerCapabilityHandler('do-nothing-simulator.latest', async (envelope) => doNothingSimulationResult(envelope.propertyId!, envelope.userId));
+registerCapabilityHandler('do-nothing-simulator.latest', async (envelope, deps) => {
+  const access = await (deps.propertyAccess ?? ensurePropertyAccess(envelope.userId, envelope.propertyId!));
+  return doNothingSimulationResult(envelope.propertyId!, envelope.userId, access.role !== 'VIEWER');
+});

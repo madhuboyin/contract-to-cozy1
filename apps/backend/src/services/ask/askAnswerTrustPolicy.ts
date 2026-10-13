@@ -166,7 +166,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   HOME_BASICS_GUIDE: new Set(),
   // The attached-document receipt: an inventory item opens inline in Ask; a warranty keeps its page link.
   CAPTURE_EVIDENCE_CONFIRM: new Set(['view-inventory-item', 'open-attached-record']),
-  DO_NOTHING_SIMULATION: new Set(['run-do-nothing']),
+  DO_NOTHING_SIMULATION: new Set(['run-do-nothing', 'do-nothing-scenario-create', 'do-nothing-scenario-edit', 'do-nothing-scenario-delete']),
   WARRANTY_LOOKUP: new Set(['add-warranty']),
   // FRD v1.78: plus the inline "Add purchase date" capture on appliances with no age.
   APPLIANCE_FAILURE_RISK: new Set(['correct-purchasedOn']),
@@ -182,6 +182,8 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   NEGOTIATION_SHIELD_CASE_ATTACH: new Set(['negotiation-shield-review', 'negotiation-shield-analyze']),
   // The readiness answer's empty state offers the start; the receipt of a started case offers that case's readiness check.
   RENOVATION_CASE_START: new Set(['renovation-case-readiness']),
+  // Save, change and delete Do-Nothing Simulator scenarios (register P2 Do-Nothing Simulator). Confirmation-gated, declared-action only; saving a scenario runs nothing.
+  DO_NOTHING_SCENARIO_COMMAND: new Set(['do-nothing-back']),
   // Change the Home Habit Coach's property-wide settings: on or off, how many habits it shows, which kinds it hides (register P2 Home Habit Coach). Confirmation-gated, declared-action only.
   HOME_HABIT_PREFERENCES_COMMAND: new Set(['home-habits-back']),
   // Change the home's recorded mortgage and purchase facts (the financing profile). Owner only; confirmation-gated; declared-action only; exact before and after in the confirmation, redacted receipt (owner ruling 2026-10-13).
