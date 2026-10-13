@@ -181,6 +181,9 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   NEGOTIATION_SHIELD_CASE_ATTACH: new Set(['negotiation-shield-review', 'negotiation-shield-analyze']),
   // The readiness answer's empty state offers the start; the receipt of a started case offers that case's readiness check.
   RENOVATION_CASE_START: new Set(['renovation-case-readiness']),
+  // Start a property tax appeal case, prepare its packet, record the filing, a response or hearing, a reminder and the decision (register P1 Property Tax). Confirmation-gated, declared-action only; primary owner only; Cozy prepares and records, it never files.
+  PROPERTY_TAX_APPEAL_READINESS: new Set(['property-tax-appeal-start', 'property-tax-appeal-packet', 'property-tax-appeal-filing', 'property-tax-appeal-event', 'property-tax-appeal-reminder-add', 'property-tax-appeal-reminder-done', 'property-tax-appeal-reminder-dismiss', 'property-tax-appeal-determination']),
+  PROPERTY_TAX_APPEAL_COMMAND: new Set(['property-tax-appeal-back']),
   // Correct a Status Board item's estimated condition, recommendation, dates and note, pin or hide it, and refresh the board (register P1 Status Board). Confirmation-gated, declared-action only; never by fuzzy retrieval.
   STATUS_BOARD_COMMAND: new Set(['status-board-back']),
   // Adjust what the Capital Timeline assumes for an item (register P1 Capital Timeline): planned date or window, cost range, remaining life, leave it off, or a note; and remove an adjustment. Confirmation-gated, declared-action only; never by fuzzy retrieval.

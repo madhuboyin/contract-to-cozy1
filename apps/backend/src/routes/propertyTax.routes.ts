@@ -3,7 +3,7 @@ import { Router } from 'express';
 import multer from 'multer';
 import { authenticate, restrictToHomeowner } from '../middleware/auth.middleware';
 import { requireMfa, requireRole } from '../middleware/auth.middleware';
-import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
+import { propertyAuthMiddleware, requireHouseholdRole } from '../middleware/propertyAuth.middleware';
 import { apiRateLimiter, uploadRateLimiter } from '../middleware/rateLimiter.middleware';
 import { requireCapability } from '../middleware/adminCapability.middleware';
 import { UserRole } from '../types/auth.types';
@@ -58,6 +58,7 @@ router.post(
   restrictToHomeowner,
   uploadRateLimiter,
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   taxDocumentUpload.single('file'),
   validateDocumentUpload,
   controller.uploadPropertyTaxDocument,
@@ -68,6 +69,7 @@ router.put(
   restrictToHomeowner,
   apiRateLimiter,
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   controller.stagePropertyTaxDocumentFields,
 );
 router.post(
@@ -76,6 +78,7 @@ router.post(
   restrictToHomeowner,
   apiRateLimiter,
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   controller.confirmPropertyTaxDocument,
 );
 router.post(
@@ -84,6 +87,7 @@ router.post(
   restrictToHomeowner,
   apiRateLimiter,
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   controller.listPropertyTaxActions,
 );
 router.put(
@@ -92,6 +96,7 @@ router.put(
   restrictToHomeowner,
   apiRateLimiter,
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   controller.decidePropertyTaxAction,
 );
 router.get(
@@ -108,6 +113,7 @@ router.put(
   restrictToHomeowner,
   apiRateLimiter,
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   controller.upsertPropertyTaxAppealEvidence,
 );
 router.put(
@@ -116,6 +122,7 @@ router.put(
   restrictToHomeowner,
   apiRateLimiter,
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   controller.upsertPropertyTaxAppealComparable,
 );
 router.get(
@@ -132,6 +139,7 @@ router.post(
   restrictToHomeowner,
   apiRateLimiter,
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   controller.createPropertyTaxAppealCase,
 );
 router.put(
@@ -140,6 +148,7 @@ router.put(
   restrictToHomeowner,
   apiRateLimiter,
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   controller.updatePropertyTaxAppealPacket,
 );
 router.post(
@@ -148,6 +157,7 @@ router.post(
   restrictToHomeowner,
   apiRateLimiter,
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   controller.confirmPropertyTaxAppealFiling,
 );
 router.post(
@@ -156,6 +166,7 @@ router.post(
   restrictToHomeowner,
   apiRateLimiter,
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   controller.trackPropertyTaxAppealEvent,
 );
 router.put(
@@ -164,6 +175,7 @@ router.put(
   restrictToHomeowner,
   apiRateLimiter,
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   controller.upsertPropertyTaxAppealReminder,
 );
 router.put(
@@ -172,6 +184,7 @@ router.put(
   restrictToHomeowner,
   apiRateLimiter,
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   controller.decidePropertyTaxAppealReminder,
 );
 router.post(
@@ -180,6 +193,7 @@ router.post(
   restrictToHomeowner,
   apiRateLimiter,
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   controller.determinePropertyTaxAppealCase,
 );
 
@@ -246,6 +260,7 @@ router.post(
   restrictToHomeowner,
   apiRateLimiter,
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   controller.recordHomeownerPropertyTaxValues
 );
 

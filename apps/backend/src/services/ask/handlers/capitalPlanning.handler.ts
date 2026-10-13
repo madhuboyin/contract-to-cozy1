@@ -15,6 +15,11 @@ import { inventoryAddItemAction } from './inventoryAskActions';
 import { askCaptureRequest, capabilityResult, ensurePropertyAccess, isCapitalTimelineAnalysisStale, parseCapitalTimelineHorizonRequest } from '../askHandlerSupport';
 import { HomeCapitalTimelineService } from '../../homeCapitalTimeline.service';
 import { propertyTaxAppealReadinessService } from '../../propertyTax/propertyTaxAppealReadiness.service';
+import { propertyTaxAppealCaseService } from '../../propertyTax/propertyTaxAppealCase.service';
+import {
+  APPEAL_CASE_ENTITY_TYPE, APPEAL_COMMAND_ACTION_IDS, APPEAL_COMMAND_MESSAGES, APPEAL_DETERMINATION_LABELS, APPEAL_GROUND_LABELS, APPEAL_PROPERTY_ENTITY_TYPE,
+  APPEAL_REMINDER_ENTITY_TYPE, APPEAL_STATUS_LABELS, appealCaseAvailableKinds, type AppealCommandKind,
+} from '../support/propertyTaxAppealCommand';
 import { listRenovationCases } from '../../renovationCase.service';
 import { getReadiness as getRenovationReadiness } from '../../renovationReadiness.service';
 import { PermitTrackerService } from '../../permitTracker.service';
@@ -203,6 +208,57 @@ async function capitalReservePlanResult(userId: string, propertyId: string, mess
   return { status: captureRequests.length || analysis.confidence === 'LOW' ? 'READY_WITH_LIMITATIONS' : 'ANSWERED', reasonCode: captureRequests.length ? 'CAPITAL_PLAN_CONTEXT_OPTIONAL' : analysis.confidence === 'LOW' ? 'CAPITAL_PLAN_LOW_CONFIDENCE' : undefined, contextVersion: capitalContext.contextVersion, parameters: { phase5CaptureFeature: captureFeature }, captureRequests, blocks, suggestions: [] };
 }
 
+// FRD v1.322: the household's appeal cases beside the readiness check, each with the one step it can take now. The service serves the primary owner only
+// (a lookup by homeowner profile that otherwise throws), so for anyone else the section is simply absent.
+const APPEAL_STEP_LABELS: Partial<Record<AppealCommandKind, { label: string; style: 'PRIMARY' | 'SECONDARY' | 'QUIET' }>> = {
+  PACKET: { label: 'Prepare the packet', style: 'SECONDARY' }, FILING: { label: 'Record that I filed', style: 'PRIMARY' },
+  EVENT: { label: 'Record a response or hearing', style: 'SECONDARY' }, DETERMINATION: { label: 'Record the decision', style: 'SECONDARY' },
+  REMINDER_ADD: { label: 'Add a reminder', style: 'QUIET' },
+};
+export async function propertyTaxAppealCaseBlocks(userId: string, propertyId: string, canChange: boolean): Promise<AskPresentationBlock[]> {
+  let cases: any[];
+  try { cases = await propertyTaxAppealCaseService.list(propertyId, userId); } catch { return []; }
+  if (!cases.length) return [];
+  const action = (kind: AppealCommandKind, label: string, style: 'PRIMARY' | 'SECONDARY' | 'QUIET') => ({
+    id: APPEAL_COMMAND_ACTION_IDS[kind], label, message: APPEAL_COMMAND_MESSAGES[kind], operationId: 'PROPERTY_TAX_APPEAL_COMMAND' as const, interactionType: 'MUTATE_RECORD' as const, style,
+  });
+  const when = (iso: unknown) => (typeof iso === 'string' ? humanDate(new Date(iso)) : null);
+  const caseItems = cases.map((record) => {
+    const open = (record.reminders ?? []).filter((reminder: any) => reminder.status === 'PENDING').length;
+    return {
+      id: record.id, title: record.title,
+      description: [APPEAL_STATUS_LABELS[record.status] ?? record.status, APPEAL_GROUND_LABELS[record.ground] ?? null, record.taxYear ? `Tax year ${record.taxYear}` : null].filter(Boolean).join(' \u00b7 '),
+      meta: [
+        record.filedAt ? `Filed ${when(record.filedAt)}${record.externalFilingReference ? ` (${record.externalFilingReference})` : ''}` : null,
+        record.hearingAt ? `Hearing ${when(record.hearingAt)}` : null,
+        record.determination ? `Decision: ${APPEAL_DETERMINATION_LABELS[record.determination] ?? record.determination}` : null,
+        record.refundAmount != null ? `Refund ${money(record.refundAmount)}` : null,
+        open ? `${open} open reminder${open === 1 ? '' : 's'}` : null,
+      ].filter((value): value is string => Boolean(value)),
+      status: record.status, href: null, entityType: APPEAL_CASE_ENTITY_TYPE,
+      actions: canChange
+        ? appealCaseAvailableKinds({ status: record.status, filedAt: record.filedAt, packetStatus: record.packet?.status ?? null })
+          .flatMap((kind) => { const spec = APPEAL_STEP_LABELS[kind]; return spec ? [action(kind, spec.label, spec.style)] : []; })
+        : [],
+    };
+  });
+  const reminderItems = cases.flatMap((record) => (record.reminders ?? []).filter((reminder: any) => reminder.status === 'PENDING').map((reminder: any) => ({
+    id: reminder.id, title: reminder.title, description: `Due ${when(reminder.dueAt) ?? 'soon'} \u00b7 ${record.title}`, meta: [], status: 'PENDING', href: null, entityType: APPEAL_REMINDER_ENTITY_TYPE,
+    actions: canChange ? [action('REMINDER_DONE', 'Mark done', 'PRIMARY'), action('REMINDER_DISMISS', 'Dismiss', 'QUIET')] : [],
+  })));
+  return [{
+    type: 'GROUPED_LIST', filters: [], id: 'tax-appeal-cases', title: 'Your appeal cases',
+    description: canChange
+      ? 'Cozy prepares the appeal and records what you did. File on the official site yourself; each step below only records it after you confirm.'
+      : 'A contributor or owner can take the next step on a case.',
+    sections: [
+      { id: 'tax-appeal-case-list', title: 'Cases', count: caseItems.length, items: caseItems },
+      ...(reminderItems.length ? [{ id: 'tax-appeal-reminders', title: 'Open reminders', count: reminderItems.length, items: reminderItems }] : []),
+    ],
+    actions: [],
+  }];
+}
+
 async function propertyTaxAppealReadinessResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
   const ground = /\b(?:tax class|classification)\b/i.test(message) ? 'TAX_CLASS' as const : /\bexemption\b/i.test(message) ? 'EXEMPTION' as const : 'ASSESSED_VALUE' as const;
@@ -219,7 +275,11 @@ async function propertyTaxAppealReadinessResult(userId: string, propertyId: stri
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY', id: 'tax-readiness-summary', title: readiness.status === 'READY' ? `${readiness.ground?.label ?? ground}: preparation requirements are present` : readiness.status === 'NO_SUPPORTED_GROUND' ? 'The current evidence does not support this reviewed ground' : `${readiness.gaps.length} readiness gap${readiness.gaps.length === 1 ? '' : 's'} remain`,
     body: `${readiness.reason ?? ''}${atStake ? ` The sourced planning range for annual tax at stake is ${money(atStake.low)}–${money(atStake.high)}.` : ''} Readiness does not predict appeal success.`,
-    tone: readiness.status === 'READY' ? 'DEFAULT' : 'CAUTION', actions: [],
+    tone: readiness.status === 'READY' ? 'DEFAULT' : 'CAUTION',
+    actions: access.role !== HouseholdRole.VIEWER ? [{
+      id: APPEAL_COMMAND_ACTION_IDS.START, label: 'Start an appeal case', interactionType: 'START_WORKFLOW' as const, message: APPEAL_COMMAND_MESSAGES.START,
+      operationId: 'PROPERTY_TAX_APPEAL_COMMAND' as const, entityType: APPEAL_PROPERTY_ENTITY_TYPE, entityId: propertyId, style: readiness.status === 'READY' ? 'PRIMARY' as const : 'SECONDARY' as const,
+    }] : [],
   }];
   if (readiness.canonical) blocks.push({ type: 'TABLE', id: 'tax-canonical-facts', title: 'Canonical tax facts used', description: 'Unknown facts remain unknown and are never treated as zero.', columns: [{ key: 'fact', label: 'Fact' }, { key: 'value', label: 'Recorded value' }], rows: [
     ['Tax year', readiness.canonical.taxYear], ['Classification', readiness.canonical.classification], ['Assessed value', readiness.canonical.totalAssessedValue == null ? null : money(readiness.canonical.totalAssessedValue)], ['Taxable value', readiness.canonical.taxableValue == null ? null : money(readiness.canonical.taxableValue)], ['Effective tax rate', readiness.canonical.effectiveTaxRate == null ? null : `${(readiness.canonical.effectiveTaxRate * 100).toFixed(3)}%`],
@@ -227,6 +287,7 @@ async function propertyTaxAppealReadinessResult(userId: string, propertyId: stri
   // Plan layout (FRD Appendix C.9): numbered cards; open gaps read as the urgent group, confirmed evidence as the calm one.
   blocks.push({ type: 'GROUPED_LIST', filters: [], id: 'tax-readiness-gaps', title: readiness.gaps.length ? 'What is still needed' : 'Evidence package', description: `Estimated preparation effort: ${String(readiness.effort).toLowerCase()}.`, sections: [{ id: 'gaps', title: readiness.gaps.length ? 'Readiness gaps' : 'Confirmed evidence', count: readiness.gaps.length || readiness.evidence.length, items: readiness.gaps.length ? readiness.gaps.map((gap: string, index: number) => ({ id: `tax-gap-${index}`, title: gap, description: null, meta: ['Still needed'], status: 'OPEN', href: null, tone: 'CAUTION' as const, countLabel: String(index + 1) })) : readiness.evidence.map((evidence: any, index: number) => ({ id: evidence.id, title: evidence.title, description: evidence.description ?? null, meta: ['Confirmed', String(evidence.type).toLowerCase().replace(/_/g, ' ')], status: 'CONFIRMED', href: null, countLabel: String(index + 1) })) }], actions: [] });
   if (readiness.evidence.length || readiness.ruleProfile) blocks.push({ type: 'EVIDENCE', id: 'tax-readiness-evidence', title: 'Rule and evidence provenance', items: [{ label: readiness.ruleProfile?.title ?? 'Reviewed appeal rule', source: readiness.ruleProfile ? `Rule ${readiness.ruleProfile.version}` : 'Property Tax Center', observedAt: readiness.ruleProfile?.reviewedAt?.toISOString?.() ?? readiness.ruleProfile?.reviewedAt ?? readiness.evaluatedAt }, ...readiness.evidence.slice(0, 15).map((evidence: any) => ({ label: evidence.title, source: evidence.sourceUrl ? 'Sourced appeal evidence' : 'Vault-supported appeal evidence', observedAt: evidence.confirmedAt }))] });
+  blocks.push(...await propertyTaxAppealCaseBlocks(userId, propertyId, access.role !== HouseholdRole.VIEWER));
   blocks.push({ type: 'BOUNDARY', id: 'tax-readiness-boundary', title: 'Preparation support—not tax, appraisal, or legal advice', body: readiness.professionalBoundary, severity: 'INFO', suggestions: [] });
   return { status: readiness.status === 'READY' && !captureRequests.length ? 'ANSWERED' : 'READY_WITH_LIMITATIONS', reasonCode: readiness.status === 'READY' ? (captureRequests.length ? 'PROPERTY_TAX_CONTEXT_OPTIONAL' : undefined) : `PROPERTY_TAX_${readiness.status}`, contextVersion: context.contextVersion, captureRequests, blocks, suggestions: [] };
 }

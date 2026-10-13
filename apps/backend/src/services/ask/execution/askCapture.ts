@@ -57,6 +57,8 @@ import { capitalCommandResult } from '../handlers/capitalTimelineCommands.handle
 import { CAPITAL_ADJUST_CAPTURE_KEY, parseCapitalAdjustAnswer } from '../support/capitalTimelineCommand';
 import { STATUS_BOARD_CORRECT_CAPTURE_KEY, parseStatusBoardCorrectAnswer } from '../support/statusBoardCommand';
 import { statusBoardCommandResult } from '../handlers/statusBoardCommands.handler';
+import { appealFormKindFromCaptureKey, parseAppealFormAnswer } from '../support/propertyTaxAppealCommand';
+import { appealCommandResult } from '../handlers/propertyTaxAppealCommands.handler';
 import { COVERAGE_DECISION_CAPTURE_KEY, parseCoverageDecisionAnswer, type CoverageCommandKind } from '../support/coverageCommand';
 import { parseUpgradeFormAnswer, upgradeFormKindFromCaptureKey, type UpgradeCommandKind } from '../support/homeUpgradeCommand';
 import { parsePermitFormAnswer, permitFormKindFromCaptureKey, type PermitCommandKind } from '../support/permitTrackerCommand';
@@ -1216,6 +1218,27 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     captureId = input.idempotencyKey;
     capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
     canonicalOwner = 'HomeItemStatus';
+  } else if (execution.operationId === 'PROPERTY_TAX_APPEAL_COMMAND') {
+    const appealKind = appealFormKindFromCaptureKey(input.captureKey);
+    if (!appealKind) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    const access = await ensurePropertyAccess(userId, execution.propertyId);
+    if (access.role === HouseholdRole.VIEWER) throw Object.assign(new Error('A contributor or owner is required to change the appeal.'), { code: 'ASK_PERMISSION_REQUIRED' });
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson) ? execution.parametersJson as Record<string, unknown> : {};
+    const appealLaunch = storedParameters.propertyTaxAppealLaunch && typeof storedParameters.propertyTaxAppealLaunch === 'object' && !Array.isArray(storedParameters.propertyTaxAppealLaunch)
+      ? storedParameters.propertyTaxAppealLaunch as { kind?: unknown; entityId?: unknown; sourceExecutionId?: unknown } : null;
+    if (!appealLaunch || appealLaunch.kind !== appealKind || typeof appealLaunch.entityId !== 'string') {
+      throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    }
+    const appealAnswer = parseAppealFormAnswer(appealKind, input.answer);
+    if (!appealAnswer.success) {
+      throw Object.assign(new Error(appealAnswer.reason === 'FUTURE' ? 'That date cannot be in the future.' : 'Check the form and try again.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+    }
+    result = await appealCommandResult(userId, execution.propertyId, {
+      kind: appealKind, entityId: appealLaunch.entityId, sourceExecutionId: typeof appealLaunch.sourceExecutionId === 'string' ? appealLaunch.sourceExecutionId : null,
+    }, appealAnswer.data);
+    captureId = input.idempotencyKey;
+    capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
+    canonicalOwner = 'PropertyTaxAppealCase';
   } else if (execution.operationId === 'PROPERTY_BRIEF_COMMAND') {
     if (![PROPERTY_BRIEF_PREPARE_CAPTURE_KEY, PROPERTY_BRIEF_SHARE_CAPTURE_KEY].includes(input.captureKey) || input.expectedContextVersion !== 'property-brief-live') throw Object.assign(new Error('This Property Brief form is no longer active.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
     const access = await ensurePropertyAccess(userId, execution.propertyId);
