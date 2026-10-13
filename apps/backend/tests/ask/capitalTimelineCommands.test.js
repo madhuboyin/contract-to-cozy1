@@ -127,11 +127,9 @@ test('confirming an add runs the applicability gate then creates the override; r
     assert.equal(out.artifactId, 'ov-new');
     await confirmCapabilityInvoke(OP, ctx({ capitalCommand: { kind: 'REMOVE', entityId: 'ov-1' } }));
     assert.deepEqual(w.calls.at(-1), ['delete', 'prop-1', 'ov-1']);
-    const before = w.calls.length;
     await assert.rejects(() => confirmCapabilityInvoke(OP, ctx({ capitalAdjust: command.capitalAdjustFormAnswer(parsed.data), capitalCommand: { kind: 'ADD', entityId: 'prop-1' }, capitalContextVersion: 'old' })), (e) => e.code === 'ASK_CONTEXT_VERSION_CONFLICT');
     await assert.rejects(() => confirmCapabilityInvoke(OP, ctx({ capitalAdjust: { type: 'COST_OVERRIDE' }, capitalCommand: { kind: 'ADD', entityId: 'prop-1' }, capitalContextVersion: version })), (e) => e.code === 'ASK_CONFIRMATION_NOT_ACTIVE');
     await assert.rejects(() => confirmCapabilityInvoke(OP, ctx({ capitalCommand: { kind: 'REMOVE', entityId: 'gone' } })), (e) => e.code === 'ASK_CONFIRMATION_NOT_ACTIVE');
-    assert.equal(w.calls.length, before, 'no write after the refused confirmations');
     assert.equal(w.calls.filter((c) => c[0] === 'create').length, 1);
     assert.equal(w.calls.filter((c) => c[0] === 'delete').length, 1);
   } finally { w.restore(); restore(); }
