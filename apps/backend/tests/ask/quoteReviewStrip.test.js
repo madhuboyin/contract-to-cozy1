@@ -112,8 +112,8 @@ test.afterEach(() => {
   quoteService.getQuoteComparisonWorkspace = originals.get;
   quoteService.getWorkspaceComparability = originals.check;
 });
-const invoke = () => capabilityInvoke('QUOTE_COMPARISON_REVIEW', { userId: 'u1', propertyId: 'p1', message: 'Compare my roofing quotes' }, {
-  propertyAccess: { role: 'OWNER', userId: 'u1', propertyId: 'p1' },
+const invoke = (role = 'OWNER') => capabilityInvoke('QUOTE_COMPARISON_REVIEW', { userId: 'u1', propertyId: 'p1', message: 'Compare my roofing quotes' }, {
+  propertyAccess: { role, userId: 'u1', propertyId: 'p1' },
 });
 
 test('the real handler emits the strip for three quotes, keeps the controls, and the answer checker passes it intact', async () => {
@@ -188,4 +188,7 @@ test('the review answer links to no desktop page; an empty workspace list starts
   // The action's own message must route to the command it starts, or the user lands somewhere else.
   assert.equal(resolveAskRoutingCascade(action.message, { localRoutingEnabled: true }).operation?.operationId, 'QUOTE_COMPARISON_CREATE');
   assert.equal(JSON.stringify(empty).includes('/dashboard/'), false);
+  const viewer = await invoke('VIEWER');
+  assert.deepEqual(viewer.blocks[0].actions, []);
+  assert.match(viewer.blocks[0].body, /contributor or owner can create one/);
 });

@@ -105,70 +105,21 @@ Status is *Implemented* for the central job of each tool below; the Remaining co
 | Mortgage Refinance Radar | Static table with no useful continuation and monitor management could disappear with the original conversation | Canonical refinance analysis; recorded-vs-benchmark comparison; illustrative scenario comparison; missing mortgage capture; active/paused monitor display plus pause/resume/stop | Inline threshold editing, notification-link cleanup, and broader financing-profile management (Residual gap). The earlier review recorded an alert-settings handoff; the handler contains `/dashboard/properties` strings that the trust policy would strip, so the alert-settings path is Needs verification (see [Known policy conflicts in code](#known-policy-conflicts-in-code)) | Not re-verified. Source: earlier review |
 | Project Tracker | Project list was a dead end; creation and active execution were desktop-only; forms were excessively tall | Create and review projects; lifecycle; project edit; milestones with ordering and dependencies; payments; change orders; progress with archive search, filters and pagination; issues with escalation, notes and dispute packages; material specs; reconciliation; governed completion; closeout share; inline document selection and upload; compact responsive forms | Closeout share-link revocation is not exposed in Ask; all other documented Project Tracker parity work is implemented (Residual gap, API-only) | **Verified 2026-10-12** against code and tests. Commit `6c06840b`; appendix: Project Tracker parity implementation, section "Status verification (2026-10-12)" |
 
-## Verified in this pass: Negotiation Shield and Quote Comparison
+## Verified implementation summaries: Negotiation Shield and Quote Comparison
 
-Both rows were checked on October 12, 2026 by reading the Ask handlers, the desktop routes, the controller-to-service mapping and the canonical services. No tests or browser were run; this is a code read.
+These summaries reconcile the current Ask handlers, canonical services, and the approved Inline Workspace FRD revisions through v1.363. Focused Ask tests cover the command paths; no browser, database, upload, or live extraction run is claimed.
 
-### Negotiation Shield — P0, status: Partial (list, case review, start a review, run the analysis, edit details and attach a record; upload, parse and buyer mode remain)
+### Negotiation Shield — status: Partial
 
-**Implemented in Ask:** one read, `NEGOTIATION_SHIELD_CASES` (viewer floor), served by `negotiationShield.handler.ts` through `listNegotiationShieldCasesForProperty`. It lists up to 50 cases newest first, grouped open and archived, with scenario, status, buyer mode, last-analysis date and update date. It has an empty state and a limit notice. Ask does not import the Negotiation Shield service: nothing in `services/ask` references or calls `createCase`, `startBuyerNegotiation`, `recordBuyerNegotiationOutcome`, `saveManualInput`, `attachDocumentMetadata`, `parseCaseDocument` or `analyzeCase`.
+Ask lists and reviews cases; starts contractor-quote, premium-increase, claim-settlement, and contractor-urgency reviews; edits their saved manual details; attaches an eligible household-shared Home Record; runs the rules-based analysis and shows the saved findings and unsent draft; starts buyer negotiation from an inspection finding and records the seller response and outcome; and can continue an eligible review into Price Finalization. The operations reuse `NegotiationShieldService` and the same applicability and role checks as the traditional routes, with review, confirmation, execution-time revalidation, and reconciliation back to the case list.
 
-**Desktop capability** (`negotiationShield.routes.ts`, `negotiationShield.service.ts`, `NegotiationShieldToolClient.tsx`):
+Remaining gaps are uploading a new file from Ask and parsing an attached record into case inputs. Sending a generated draft remains outside Ask. Archive is not a desktop capability and remains a separate product decision.
 
-| Desktop capability | Route | In Ask |
-| --- | --- | --- |
-| List cases | `GET …/cases` | Implemented |
-| Case detail: stored analysis and latest draft | `GET …/cases/:caseId` | **Implemented 2026-10-12 (FRD v1.294)**: the row's Review action. Raw inputs, documents and buyer findings are deliberately not shown (buyer findings remain a Residual gap) |
-| Create a case (five scenarios: contractor quote, premium increase, claim settlement, buyer inspection, contractor urgency) | `POST …/cases` | **Implemented 2026-10-12 (FRD v1.297) for four scenarios** (quote, premium, claim settlement, urgency): form, review, confirmation, one transaction with the first input, execution-bound idempotency. Buyer inspection stays Residual (buyer mode) |
-| Start a buyer negotiation from inspection findings | `POST …/buyer-cases` | Residual gap |
-| Save or update the case input | `PUT …/cases/:caseId/input` | **Implemented 2026-10-12 (FRD v1.299)** for the four startable scenarios: Edit / Add details with a before → after review card, merged so page-only fields are kept; raw text, title and parsed inputs are not editable in Ask |
-| Attach a document, and parse it | `POST …/documents`, `…/parse` | **Attach implemented 2026-10-12 (FRD v1.301)**: an existing household-visible Home Record, with the document's role, confirmation and a Documents list on the review. Upload from Ask and parse remain Residual (designed in ASK_COZY_NEGOTIATION_SHIELD_DOCUMENTS_DESIGN.md) |
-| Run the analysis, which also produces the draft | `POST …/cases/:caseId/analyze` | **Implemented 2026-10-12 (FRD v1.298)**: confirmation-gated, same gate and service, shared journey completion; the receipt is the review |
-| Record the buyer's seller-response and outcome | `PUT …/cases/:caseId/buyer-outcome` | Residual gap |
+### Quote Comparison — status: Partial
 
-**Routing:** a message that names Negotiation Shield together with start, create, new or add is deliberately kept off the case-list read (`askOperationRegistry.ts`), so a request to start a review is not answered with the list.
+Ask creates or reuses a workspace; reviews the latest workspace and its comparability; adds, edits, removes, confirms, selects, rejects, and restores proposals; records and resolves clarifications; closes a decision as declined or deferred; imports an unconfirmed proposal from an eligible household-shared Home Record; and continues a selected proposal into Price Finalization. Confirmation affirms the exact reviewed headline facts, line items, terms, and extracted facts through the v1.360 fingerprint contract. Home Record import uses `createQuoteProposalFromRecord` and leaves every extracted value unconfirmed until reviewed.
 
-**Corrections to earlier wording:**
-
-- The earlier P0 text listed "add offers", "record negotiation updates", "draft generation" and "close or archive" as separate parity work. On the desktop there is no separate offer, update or draft endpoint: offers and quotes are the case *input*, and the draft is created inside the analysis (`persistAnalysisResult`).
-- **Close or archive is not a desktop capability.** `ARCHIVED` exists as a status value and as a display label, but no route, service method or client action writes it. Archiving would be new product behavior, not parity, and is recorded as *Needs product decision*.
-
-**Policy conflict (fixed 2026-10-12):** the answer used to emit an `open-negotiation-shield` action and a per-row `?caseId=` link to the desktop tool page, and its copy said "Open a review for its analysis and draft" and "the rest are on the Negotiation Shield page". The trust policy removed those hrefs, so the user was told to open something that could not be opened. The handler now emits no action and no row link, and its copy says that a review's analysis and draft are not currently available in Ask. The trust-policy allowlist entry was removed.
-
-### Quote Comparison — P0, status: Partial (create, read, and manage proposals; document import, outcome consent and continuation into finalization remain)
-
-**Implemented in Ask** (`quotes.handler.ts`, `workflowConfirm.handler.ts`):
-
-- `QUOTE_COMPARISON_CREATE`: a confirmation-gated command (contributor floor) that calls `getOrCreateQuoteComparisonWorkspace`. It infers a service category from the message, asks for one if absent, and either creates a draft workspace or reuses an existing one. It selects no provider and accepts no quote.
-- `QUOTE_COMPARISON_REVIEW`: a read (viewer floor) of the most recently updated workspace through `getQuoteComparisonWorkspace` and `getWorkspaceComparability`, rendered as a comparison strip for two to four quotes in play, or a table otherwise, with a lowest-price badge only when the workspace is comparable.
-
-The Ask handlers import only those three service functions.
-
-**Desktop capability** (`quoteComparison.routes.ts`, `quoteComparison.service.ts`):
-
-| Desktop capability | Service function | In Ask |
-| --- | --- | --- |
-| Get or create a workspace | `getOrCreateQuoteComparisonWorkspace` | Implemented |
-| Read workspace and comparability | `getQuoteComparisonWorkspace`, `getWorkspaceComparability` | Implemented (latest workspace only) |
-| Add a quote | `createQuoteProposal` | Implemented (FRD v1.309) |
-| Edit a quote | `updateQuoteProposal` | Implemented (FRD v1.310) |
-| Remove a quote | `deleteQuoteProposal` | Implemented (FRD v1.309) |
-| Import a quote from a document, then confirm it | `createQuoteProposalFromDocument`, `confirmQuoteProposal` | Confirm: implemented (FRD v1.310). Import: Residual gap, blocked on the legacy `Document` table the import reads (Home Records are not accepted) |
-| Record a disposition on a quote | `setQuoteProposalDisposition` | Implemented (FRD v1.309: reject and return to consideration) |
-| Raise and resolve clarifications | `createQuoteClarification`, `resolveQuoteClarification` | Implemented (FRD v1.310) |
-| Select a quote for the decision | `selectQuoteForDecision` | Implemented (FRD v1.309) |
-| Transition the workspace state | `transitionQuoteDecision` | Implemented (FRD v1.310: close as declined or deferred, the only manual transition) |
-| Link decision context | `addQuoteDecisionContextLink` | Residual gap |
-| Outcome-measurement consent | `setServiceQuoteOutcomeMeasurementConsent` | Residual gap |
-
-**Corrections to earlier wording:**
-
-- There is no workspace edit or delete route. The earlier list's "workspace edit/delete" is not a desktop capability.
-- The review reads only the latest workspace. A property with several open workspaces cannot review the others in Ask. Status: *Residual gap*.
-- After creating a workspace, the receipt used to say "Add comparable proposals in the governed workspace" although Ask has no way to add a proposal. The copy now says plainly that adding proposals is not currently available in Ask; the capability itself remains a *Residual gap*.
-- Continuation into booking, project or price finalization depends on selecting a quote, which Ask cannot do.
-
-**Policy conflict (fixed 2026-10-12):** the review answer used to emit an `open-comparison` action and row links to the desktop quote-comparison page, a "Create comparison workspace" action that was a desktop link, and a description telling the user to "open the quote comparison" to see rejected quotes. The review now carries no link; the empty state starts `QUOTE_COMPARISON_CREATE` inside Ask (a `START_WORKFLOW` action whose message routes to that command); and the copy no longer sends the user to a page. The create receipt now says adding proposals is not currently available in Ask. The unused `quoteComparisonWorkspaceHref` helper and its test were removed.
+Remaining gaps are choosing among multiple workspaces rather than only the latest, decision-context links, outcome-measurement consent, and continuation into booking or a project. Ask cannot upload a quote file; the file must already be in Home Records. There is no workspace edit or delete desktop capability.
 
 ## Cross-tool implementation principles used
 
@@ -192,14 +143,14 @@ This inventory is a prioritization register, not a claim that every listed deskt
 
 | Tool | Status | Current Ask coverage | Primary parity work | Verified and evidence |
 | --- | --- | --- | --- | --- |
-| Negotiation Shield | Residual gap; archive is Needs product decision | Lists cases, reviews one case's stored analysis and draft (FRD v1.294), starts a review for four scenarios (FRD v1.297) runs its analysis (FRD v1.298) and edits its saved details (FRD v1.299); no desktop links | Buyer negotiation start and outcome implemented (FRD v1.312); parse and upload a document remain | **Verified 2026-10-12**; see the section above |
+| Negotiation Shield | Residual gap; archive is Needs product decision | Lists and reviews cases; starts and edits four manual scenarios; attaches a Home Record; runs analysis; shows the unsent draft; starts buyer negotiation and records its outcome; continues to Price Finalization | Uploading a new file and parsing an attached record into case inputs | **Reconciled 2026-10-13** against the handlers, services and FRD v1.294–v1.312; see the section above |
 | Home Continuity Plan | Needs product decision (privacy) for sensitive capture; other edits Residual gap | Read-only summary | Add/edit contacts, access notes, shutoff details and instructions; review missing sections; export. The read deliberately keeps access notes and contacts out of conversation (FRD v1.54), so collecting them is a product decision | Not re-verified. Source: earlier review; FRD v1.252 |
 | Financing | Implemented (FRD v1.314 read and calculator; v1.332 canonical owner-only profile writer on every surface; v1.333 profile edit in Ask) | Saving a calculation as a scenario; archiving a scenario | Not browser- or database-verified |
 | Permits | Partial: read (FRD v1.313) and add, change, remove (FRD v1.315) implemented | Permit list with official versus reported status, open inspections and flags; add a permit as reported, change its reported details, remove it (the official status is never set from Ask) | Record an official status with evidence; inspection milestones; flag scan, add and update; remediation case; readiness checks (photo upload, AI); disclosure export; open-data fetch | **Re-verified 2026-10-12**; read and write built 2026-10-12 |
 | Price Finalization | Implemented (FRD v1.311); archive is not a desktop capability | Lists saved records; records an accepted price from a Negotiation Shield review, a selected quote proposal or by hand; changes a draft's terms; finalizes (with the shared gate, journey completion and analytics, and the Quote Comparison cross-tool write) | Booking attach (the booking flow), editing a finalized record | **Verified 2026-10-12** (code read; tests that run the real handler against fakes; not browser- or database-verified) |
 | Home Digital Twin / Upgrade Planner | Partial: manage saved options implemented (FRD v1.316) | Lists saved options by system; record a decision, rename, archive, restore, recalculate, delete an archived one | Create an option (per-type input payload); the project handoff; component comparison options | Built 2026-10-12 |
 | Coverage Intelligence | Partial: review, start comparison and decision implemented (FRD v1.317) | Strong reads and some conflict resolution; the policy review questions (`COVERAGE_REVIEW_STATUS`); prepare or refresh the review, start a comparison and record the keep / change / shop / defer decision (`COVERAGE_COMMAND`, owner-only) | Add a quote or policy term to a comparison (document evidence); property-level analysis run and simulation; renewal workflow | Built 2026-10-12 |
-| Quote Comparison | Residual gap | Creates or reuses a workspace; reads and compares the latest workspace | Add, edit, remove and import quotes; clarifications; dispositions; select a quote; transition the workspace; continue to booking, project or finalization; review any workspace, not only the latest | **Verified 2026-10-12**; see the section above |
+| Quote Comparison | Residual gap | Creates or reuses a workspace; reads the latest workspace; adds, edits, removes, confirms and imports proposals; manages clarifications and dispositions; selects a proposal; closes a decision; continues to Price Finalization | Review a non-latest workspace; decision-context links; outcome consent; booking or project continuation | **Reconciled 2026-10-13** against the handlers, services and FRD v1.309–v1.310 and v1.360–v1.363; see the section above |
 | Emergency Help | Needs product decision | Claim/incident continuation covers after-the-event records | A governed diagnostic flow that preserves emergency boundaries and never substitutes for emergency services | Not re-verified |
 
 Project Tracker appeared in the original P0 list as "lists projects." It is removed from this table because its central create, review, execution, completion and closeout workflows have since been implemented and verified. Its one remaining gap is recorded above.
@@ -230,7 +181,7 @@ Project Tracker appeared in the original P0 list as "lists projects." It is remo
 | Claims | Implemented (FRD v1.337 adds the checklist read, tick and reopen, and notes; filing, status and lifecycle already existed) | Document upload and attachment (binary and a record picker); regenerate checklist (destructive) | Not browser- or database-verified |
 | Inspection Hub | Residual gap | **Verified 2026-10-12 (code-traced: `INSPECTION_FINDINGS`, `INSPECTION_FINDING_UPDATE` against the 17 desktop routes):** findings read and accept/dismiss/resolve exist. **Since (v1.339):** report list, comparison with the previous report, and review-and-confirm with the write-back preview are in Ask. **Since (v1.340):** a report's findings list, Monitor, and the seller's fix/disclose plan are in Ask. **Since (v1.341):** open-items severity and system filters, and the negotiation package, are in Ask. Still not in Ask: report archive, and the duplicate / correction-requested dispositions; upload stays an analyzer boundary. Report upload and analysis stay an analyzer boundary | **Verified 2026-10-12** (code-traced) |
 | Seller Prep | Residual gap | Checklist decisions, and (v1.338) start case, target dates, budget range and stage work; buyer-package hand-off and notable-upgrades confirmation remain on the page | Not re-verified |
-| Buyer Closing | Residual gap | Extensive operations exist. **Since (v1.345):** the final walkthrough's plan, observations, issues and completion. **Since (v1.346):** lender conditions and title or escrow issues. **Since (v1.347):** appraisal and underwriting status. Still not in Ask: (v1.352 done: purchase Loan Estimates, add, revise, edit, per-figure confirm and select), contract revisions' documents, names, items and contingency list (v1.349 done: draft, edit, contingency status and per-field confirmation), (v1.348 done: closing insurance requirements, quotes, binding and proof), (v1.351 done: the Closing Disclosure revisions with per-figure confirmation and funds readiness), (v1.353 done: payment path, inspection plan and title or escrow contact), and professional close (held by owner ruling) | Not re-verified |
+| Buyer Closing | Residual gap | Extensive operations exist. v1.345–v1.353 add final-walkthrough planning and completion; lender conditions; appraisal and underwriting status; insurance requirements, quotes, binding and proof; contract drafts, edits, contingency status and per-field confirmation; Closing Disclosure revisions and funds readiness; Loan Estimate add/revise/edit/confirm/select; and payment path, inspection plan and title or escrow contact | Contract source documents, buyer and seller names, included/excluded items, agreed repairs, adding or removing contingencies, supporting documents on several closing records, and professional close (held by owner ruling) | Implemented slices have focused tests; not browser- or database-verified |
 | DIY | Residual gap | Template, project and step operations are strong. **Since (v1.344):** the person's own skill levels (caller-scoped) and a note on a project. Still not in Ask: the DIY decision tool, AI guide generation, project photos, planning visuals and bulk step editing | Not re-verified |
 | Service Price Radar | **Closed 2026-10-13 (code-traced):** no desktop gap. The desktop router has list, read, track-event and save-check only; there is no edit or delete of a saved check. Ask runs and lists checks. The save route now requires a contributor (FRD v1.335). | Nothing to implement | Code-traced |
 | Do-Nothing Simulator | Implemented (FRD v1.336: save, change and delete scenarios; run and read already existed) | The 'ignore these risks' list | Not browser- or database-verified |
@@ -360,10 +311,8 @@ Classified 2026-10-12 after the handler sweep, from an external review of the fi
 
 | Item | Note |
 | --- | --- |
-| Price Finalization writes | Sequencing, mainly the dependency on quote selection in Quote Comparison |
 | Coverage comparison writes (verified policy, quote, keep/shop decision) | Must preserve owner-only access and evidence verification |
 | Refinance Loan Estimates (add offers, record decision) | Safeguards for document sensitivity and lender-term fidelity |
-| Start a renovation case | **Done 2026-10-12 (FRD v1.303)** for the direct start through the canonical `createRenovationCase` (contributor and above; idempotent per execution). The exploration (goals → options → create plan) and the retroactive review remain open as separate slices |
 | Property Tax appeal lifecycle | Needs jurisdiction and evidence disclaimers and confirmation |
 | Guidance journey step tools | Inventory per step: some need adapters to existing tools, only genuinely new behavior needs a decision |
 | Budget Planner editable deterministic assumptions | Separable from the settled AI-tip exclusion only if it passes the check above |
@@ -386,13 +335,13 @@ This order is a suggestion, not a commitment. It has no owner and no committed d
 
 0. ~~Reserve Fund direct routing~~ — contributions (FRD v1.290) and typed recalculate/posture/unnamed change (FRD v1.291) done; balance-to-target remains a decision (see [Open items by kind](#open-items-by-kind)).
 1. Negotiation Shield and Home Continuity Plan (the latter's sensitive capture only after the privacy decision).
-2. Financing, Permits and Price Finalization.
-3. Home Digital Twin and Quote Comparison.
+2. Permits and remaining Financing scenario controls.
+3. Home Digital Twin and remaining Quote Comparison booking/project continuation.
 4. Break-Even, Capital Timeline and Sell / Hold / Rent.
 5. Coverage Intelligence, Property Tax and Savings & Benefits.
 6. Remaining P2 control-level gaps.
 
-Verification showed two dependencies the order does not yet reflect: Price Finalization depends on quote selection, which Quote Comparison does not yet offer in Ask, and the handler link sweep above should precede any slice that extends those handlers.
+Quote selection and continuation into Price Finalization are implemented. Remaining sequencing dependencies are booking/project continuation from Quote Comparison and the owning workflows for evidence or uploads that Ask deliberately does not duplicate.
 
 Each slice must begin by reading the tool FRD, traditional implementation, canonical service and current Ask contract. Do not infer parity from operation names alone: several earlier reviews found operations that sounded related but read different records, and the Negotiation Shield case list is a read of cases, not a case workflow.
 

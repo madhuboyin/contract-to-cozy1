@@ -60,7 +60,7 @@ const startReviewAction = {
 export function negotiationShieldCasesFromView(cases: readonly NegotiationShieldCaseView[], propertyId: string, canStart = false): AskOperationResult {
   const boundary: AskPresentationBlock = {
     type: 'BOUNDARY', id: 'negotiation-shield-boundary', title: 'Preparation help, not legal or insurance advice',
-    body: 'Negotiation Shield helps you prepare for a quote, premium, claim or inspection conversation. It is not legal, insurance or pricing advice, and nothing is sent to the other party from here. Ask lists your reviews and shows each one\u2019s analysis and draft; starting a review is available to a contributor or owner; running the analysis and sending are not currently available in Ask.',
+    body: 'Negotiation Shield helps you prepare for a quote, premium, claim or inspection conversation. It is not legal, insurance or pricing advice, and nothing is sent to the other party from here. Ask lists your reviews, shows each one\u2019s analysis and draft, and lets a contributor or owner start a review and run its analysis. Sending the generated draft is not currently available in Ask.',
     severity: 'INFO', suggestions: [],
   };
   if (!cases.length) {

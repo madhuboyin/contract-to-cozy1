@@ -1,7 +1,7 @@
 // Moved out of askOrchestrator.service.ts unchanged (decomposition, FRD v1.98;
 // docs/architecture/ASK_ORCHESTRATOR_DECOMPOSITION_REVIEW.md). The handler registers itself, and the orchestrator
 // re-exports the names below so existing imports keep working.
-import { RefinanceRateMonitorProduct, RefinanceScenarioTerm } from '@prisma/client';
+import { HouseholdRole, RefinanceRateMonitorProduct, RefinanceScenarioTerm } from '@prisma/client';
 import { logger } from '../../../lib/logger';
 import { type AskPresentationBlock } from '../../../productFramework/ask/ask.contract';
 import { type AskOperationResult } from '../askOperationRegistry';
@@ -17,7 +17,8 @@ import { listSavedRefinanceLoanEstimateComparisons } from '../../../refinanceRad
 import { BreakEvenService, type BreakEvenDTO } from '../../breakEven.service';
 import { money } from '../askFormatting';
 import { BREAK_EVEN_WHAT_IF_LABELS, parseBreakEvenWhatIf, type BreakEvenWhatIf } from '../support/breakEvenWhatIf';
-import { askContextFingerprint, durableFreeTextClarification } from '../askHandlerSupport';
+import { askContextFingerprint, durableFreeTextClarification, ensurePropertyAccess } from '../askHandlerSupport';
+import { FINANCING_PROFILE_ACTION_ID, FINANCING_PROFILE_COMMAND_MESSAGE, FINANCING_PROFILE_ENTITY_TYPE } from '../support/financingProfileCommand';
 
 const refinanceRadarService = new RefinanceRadarService();
 
@@ -394,15 +395,23 @@ export function refinanceScenarioComparison(
 async function refinanceAnalysisResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
   const journeyIntent = refinanceJourneyIntent(message);
   if (journeyIntent) return refinanceJourneyResult(propertyId, journeyIntent);
-  const [profile, financialContext, marketSnapshot] = await Promise.all([
+  const [profile, financialContext, marketSnapshot, access] = await Promise.all([
     getProfile(propertyId),
     getFinancialContextDecisions(propertyId, userId, 'REFINANCE_RADAR'),
     mortgageRateService.getLatestSnapshot(),
+    ensurePropertyAccess(userId, propertyId),
   ]);
+  const profileActions = access.role === HouseholdRole.OWNER ? [{
+    id: FINANCING_PROFILE_ACTION_ID, label: 'Update my mortgage and purchase details', interactionType: 'START_WORKFLOW' as const,
+    message: FINANCING_PROFILE_COMMAND_MESSAGE, operationId: 'FINANCING_PROFILE_COMMAND' as const,
+    entityType: FINANCING_PROFILE_ENTITY_TYPE, entityId: propertyId, style: 'SECONDARY' as const,
+  }] : [];
   if (profile?.mortgageStatus === 'NO_MORTGAGE') {
     return {
       status: 'NOT_APPLICABLE', reasonCode: 'NO_MORTGAGE',
-      blocks: [{ type: 'SUMMARY', id: 'refinance-not-applicable', title: 'No mortgage is recorded for this home', body: 'A mortgage refinance analysis does not apply unless the financing profile shows an active mortgage, and correcting that profile is not currently available in Ask.', tone: 'DEFAULT', actions: [] }],
+      blocks: [{ type: 'SUMMARY', id: 'refinance-not-applicable', title: 'No mortgage is recorded for this home', body: access.role === HouseholdRole.OWNER
+        ? 'A mortgage refinance analysis does not apply unless the financing profile shows an active mortgage. If this record is wrong, update the mortgage details here.'
+        : 'A mortgage refinance analysis does not apply unless the financing profile shows an active mortgage. Only an owner can change the home\u2019s financing profile.', tone: 'DEFAULT', actions: profileActions }],
       suggestions: [],
     };
   }
@@ -454,7 +463,9 @@ async function refinanceAnalysisResult(userId: string, propertyId: string, messa
 
   const result = await refinanceRadarService.evaluateProperty(propertyId, financialContext.contextVersion);
   if (!result.available) {
-    return { status: 'UNAVAILABLE', reasonCode: result.reason, contextVersion: financialContext.contextVersion, blocks: [{ type: 'SUMMARY', id: 'refinance-analysis-unavailable', title: 'The refinance analysis is not ready', body: 'Ask could not complete a property-specific comparison. Try again later; reviewing the financing profile is not currently available in Ask.', tone: 'CAUTION', actions: [] }], suggestions: [] };
+    return { status: 'UNAVAILABLE', reasonCode: result.reason, contextVersion: financialContext.contextVersion, blocks: [{ type: 'SUMMARY', id: 'refinance-analysis-unavailable', title: 'The refinance analysis is not ready', body: access.role === HouseholdRole.OWNER
+      ? 'Ask could not complete a property-specific comparison. Review the financing profile here, or try the analysis again later.'
+      : 'Ask could not complete a property-specific comparison. Only an owner can review or change the home\u2019s financing profile; try the analysis again later.', tone: 'CAUTION', actions: profileActions }], suggestions: [] };
   }
 
   // F02 fix (see parseRefinanceScenarioEdit above): a real, isolated what-if

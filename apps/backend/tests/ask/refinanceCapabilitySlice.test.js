@@ -22,6 +22,7 @@ const originals = { prisma: prismaModule.prisma, getProfile: financing.getProfil
 let monitors;
 let monitorQueries;
 let monitorReadFails;
+let accessRole;
 
 const monitorRow = (overrides) => ({
   id: 'monitor-30', userId: 'u1', propertyId: 'p1', product: 'FIXED_30_YEAR', thresholdBps: 550, channel: 'EMAIL', cadence: 'IMMEDIATE',
@@ -33,6 +34,7 @@ function install() {
   monitors = [monitorRow()];
   monitorQueries = [];
   monitorReadFails = false;
+  accessRole = 'OWNER';
   const models = {
     askExecution: { findMany: async () => [] },
     refinanceRateMonitor: {
@@ -53,7 +55,7 @@ function install() {
   financing.getProfile = async () => ({ mortgageStatus: 'NO_MORTGAGE' });
   financialContext.getFinancialContextDecisions = async () => ({ contextVersion: 'ctx-1', decisions: [] });
   MortgageRateService.prototype.getLatestSnapshot = async () => null;
-  propertyAccess.resolvePropertyAccess = async () => ({ role: 'OWNER', userId: 'u1', propertyId: 'p1' });
+  propertyAccess.resolvePropertyAccess = async () => ({ role: accessRole, userId: 'u1', propertyId: 'p1' });
 }
 
 function restore() {
@@ -121,7 +123,7 @@ const loanEstimates = require('../../src/refinanceRadar/refinanceLoanEstimateSna
 const decisionService = require('../../src/refinanceRadar/refinanceDecision.service.ts');
 const { RefinanceRadarService } = require('../../src/refinanceRadar/refinanceRadar.service.ts');
 
-test('the no-mortgage answer, and the Loan Estimate and decision journeys, link nowhere and say what Ask cannot do', async () => {
+test('the no-mortgage answer offers the owner the governed profile editor, while Loan Estimate and decision journeys link nowhere', async () => {
   const originalsLocal = { list: loanEstimates.listSavedRefinanceLoanEstimateComparisons, decision: decisionService.getCurrentRefinanceDecision, scenarios: RefinanceRadarService.prototype.getSavedScenarios };
   RefinanceRadarService.prototype.getSavedScenarios = async () => [];
   loanEstimates.listSavedRefinanceLoanEstimateComparisons = async () => [];
@@ -129,8 +131,14 @@ test('the no-mortgage answer, and the Loan Estimate and decision journeys, link 
   try {
     const noMortgage = await analyze();
     assert.equal(noMortgage.status, 'NOT_APPLICABLE');
-    assert.deepEqual(noMortgage.blocks[0].actions, []);
-    assert.match(noMortgage.blocks[0].body, /not currently available in Ask/);
+    assert.equal(noMortgage.blocks[0].actions[0].operationId, 'FINANCING_PROFILE_COMMAND');
+    assert.equal(noMortgage.blocks[0].actions[0].id, 'financing-profile-update');
+    assert.match(noMortgage.blocks[0].body, /update the mortgage details here/);
+    accessRole = 'CONTRIBUTOR';
+    const contributor = await analyze();
+    assert.deepEqual(contributor.blocks[0].actions, []);
+    assert.match(contributor.blocks[0].body, /Only an owner can change/);
+    accessRole = 'OWNER';
     assert.equal(JSON.stringify(noMortgage).includes('/dashboard/'), false);
     for (const message of ['Compare my Loan Estimates from two lenders', 'Record my refinance decision']) {
       const result = await capabilityInvoke('REFINANCE_ANALYSIS', { userId: 'u1', propertyId: 'p1', message }, { propertyAccess: { role: 'OWNER', userId: 'u1', propertyId: 'p1' } });

@@ -144,7 +144,9 @@ async function quoteComparisonReviewResult(propertyId: string, canChange = false
   const latest = await prisma.quoteComparisonWorkspace.findFirst({ where: { propertyId }, orderBy: { updatedAt: 'desc' }, select: { id: true, outcome: true, journeyStage: true, selectedQuoteId: true } });
   if (!latest) return {
     status: 'READY_WITH_LIMITATIONS', reasonCode: 'QUOTE_COMPARISON_NOT_STARTED',
-    blocks: [{ type: 'SUMMARY', id: 'quote-review-empty', title: 'No quote comparison is recorded yet', body: 'Create a workspace, then record at least two proposals. Ask will not compare unrecorded prices or infer missing scope and terms.', tone: 'CAUTION', actions: [{ id: 'create-comparison', label: 'Create comparison workspace', interactionType: 'START_WORKFLOW', message: 'Start a quote comparison workspace', operationId: 'QUOTE_COMPARISON_CREATE', style: 'PRIMARY' }] }],
+    blocks: [{ type: 'SUMMARY', id: 'quote-review-empty', title: 'No quote comparison is recorded yet', body: canChange
+      ? 'Create a workspace, then record at least two proposals. Ask will not compare unrecorded prices or infer missing scope and terms.'
+      : 'No workspace has been started. A contributor or owner can create one and record proposals; Ask will not compare unrecorded prices or infer missing scope and terms.', tone: 'CAUTION', actions: canChange ? [{ id: 'create-comparison', label: 'Create comparison workspace', interactionType: 'START_WORKFLOW', message: 'Start a quote comparison workspace', operationId: 'QUOTE_COMPARISON_CREATE', style: 'PRIMARY' }] : [] }],
     suggestions: [],
   };
   const [workspace, comparability] = await Promise.all([

@@ -137,7 +137,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   // FRD v1.45: the analysis also shows the homeowner's own rate monitors (MONITOR renders its own pause/resume/stop).
   REFINANCE_ANALYSIS: new Set([
     'refinance-test-scenario', 'refinance-start-monitor', 'refinance-compare-offers',
-    'refinance-record-decision', 'refinance-adjust-scenario',
+    'refinance-record-decision', 'refinance-adjust-scenario', 'financing-profile-update',
   ]),
   BREAK_EVEN_ANALYSIS: new Set(['rerun-break-even-5', 'rerun-break-even-10']),
   // The review's declared actions (each opens a confirmation) and its way back to the list.

@@ -6,8 +6,8 @@
 // the desktop routes call, after the same project-compliance applicability check the controller runs, behind a review card and a confirmation.
 // Nothing is accepted, booked or sent to a provider here: a question is recorded for the household, not sent.
 //
-// Not here (separate slices): importing a proposal from a document, and the continuation into finalization. Selecting only records the homeowner's
-// shortlist choice for the next stage.
+// The same command also imports an unconfirmed proposal from an eligible household-shared Home Record. Finalization is a separate declared command;
+// selecting here records the homeowner's shortlist choice and enables that next stage.
 import { createHash } from 'node:crypto';
 import { HouseholdRole } from '@prisma/client';
 import { prisma } from '../../../lib/prisma';

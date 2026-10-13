@@ -143,6 +143,8 @@ test('appraisal and underwriting: the service\'s required details and date order
     assert.equal((await run('LENDER_APPRAISAL', null, { status: 'SCHEDULED' })).reasonCode, 'BUYER_CLOSING_ITEM_INPUT_INVALID');
     assert.equal((await run('LENDER_APPRAISAL', null, { status: 'COMPLETED' })).reasonCode, 'BUYER_CLOSING_ITEM_INPUT_INVALID');
     assert.equal((await run('LENDER_APPRAISAL', null, { status: 'ISSUE_REPORTED' })).reasonCode, 'BUYER_CLOSING_ITEM_INPUT_INVALID');
+    const issue = await run('LENDER_APPRAISAL', null, { status: 'ISSUE_REPORTED', issueNotes: 'The reported value is below the contract price.' });
+    assert.equal(issue.confirmation.fields.find((field) => field.label === 'Reported problem').value, 'The reported value is below the contract price.');
     assert.match((await run('LENDER_APPRAISAL', null, { status: 'SCHEDULED', scheduledDate: '2026-08-01' })).blocks[0].body, /cannot be before it was ordered/);
     const ok = await run('LENDER_APPRAISAL', null, { status: 'SCHEDULED', scheduledDate: '2026-10-05' });
     assert.equal(ok.status, 'NEEDS_CONFIRMATION');

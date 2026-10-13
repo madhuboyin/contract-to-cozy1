@@ -134,6 +134,9 @@ export async function closingItemResult(
         ...(d.orderedDate ? [{ label: 'Ordered', value: `${day(readiness?.appraisalOrderedAt)} \u2192 ${day(ordered)}` }] : []),
         ...(d.scheduledDate ? [{ label: 'Appointment', value: `${day(readiness?.appraisalScheduledAt)} \u2192 ${day(scheduled)}` }] : []),
         ...(d.completedDate ? [{ label: 'Completed', value: `${day(readiness?.appraisalCompletedAt)} \u2192 ${day(completed)}` }] : []),
+        ...(d.issueNotes ? [{ label: 'Reported problem', value: readiness?.appraisalIssueNotes
+          ? `${readiness.appraisalIssueNotes} \u2192 ${d.issueNotes}`
+          : d.issueNotes }] : []),
       ];
     }
     return null;
