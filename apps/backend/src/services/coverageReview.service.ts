@@ -33,16 +33,24 @@ export async function markCoverageReviewsStale(propertyId: string) {
   });
 }
 
-export async function getOrCreateCoverageReview(
-  propertyId: string,
-  userId: string,
-  options: {
-    triggerType?: string;
-    triggerEntityType?: string;
-    triggerEntityId?: string;
-    evaluatedAt?: Date;
-  } = {}
-) {
+const reviewInclude = {
+  policyTerm: {
+    include: {
+      insurancePolicy: {
+        select: { id: true, carrierName: true, policyNumber: true },
+      },
+      sourceDocument: { select: { id: true, title: true } },
+    },
+  },
+  questions: {
+    where: { isPrimary: true },
+    orderBy: [{ priority: 'asc' as const }, { createdAt: 'asc' as const }],
+    take: 3,
+  },
+};
+
+/** Everything the review is computed from, and its fingerprint. Read-only: shared by the read path and the explicit (re)generation. */
+async function loadReviewInputs(propertyId: string, userId: string) {
   const property = await prisma.property.findFirst({
     where: { id: propertyId, homeownerProfile: { userId } },
     select: { id: true, updatedAt: true },
@@ -101,6 +109,54 @@ export async function getOrCreateCoverageReview(
       : null,
     ruleVersion: COVERAGE_REVIEW_RULE_VERSION,
   });
+
+  return { policyTerm, hasUnresolvedConflict, inputFingerprint };
+}
+
+/**
+ * Read-only: the current review for this property, or null when none has been generated for the present facts. It never creates, expires or
+ * marks anything, so a page view (any role) leaves no trace. Generation is the explicit getOrCreateCoverageReview.
+ */
+export async function findCurrentCoverageReview(
+  propertyId: string,
+  userId: string,
+  options: { evaluatedAt?: Date } = {}
+) {
+  const { inputFingerprint } = await loadReviewInputs(propertyId, userId);
+  const evaluatedAt = options.evaluatedAt ?? new Date();
+  const current = await prisma.coverageReview.findFirst({
+    where: {
+      propertyId,
+      status: 'READY',
+      reviewVersion: COVERAGE_REVIEW_RULE_VERSION,
+      inputFingerprint,
+      OR: [{ expiresAt: null }, { expiresAt: { gt: evaluatedAt } }],
+    },
+    orderBy: { generatedAt: 'desc' },
+    include: reviewInclude,
+  });
+  if (current) return { review: current, isCurrent: true };
+
+  // Nothing current: show the most recent review as out of date rather than nothing, so the page can say what changed. Reading it writes nothing.
+  const latest = await prisma.coverageReview.findFirst({
+    where: { propertyId },
+    orderBy: { generatedAt: 'desc' },
+    include: reviewInclude,
+  });
+  return { review: latest, isCurrent: false };
+}
+
+export async function getOrCreateCoverageReview(
+  propertyId: string,
+  userId: string,
+  options: {
+    triggerType?: string;
+    triggerEntityType?: string;
+    triggerEntityId?: string;
+    evaluatedAt?: Date;
+  } = {}
+) {
+  const { policyTerm, hasUnresolvedConflict, inputFingerprint } = await loadReviewInputs(propertyId, userId);
   const evaluatedAt = options.evaluatedAt ?? new Date();
 
   const existing = await prisma.coverageReview.findFirst({

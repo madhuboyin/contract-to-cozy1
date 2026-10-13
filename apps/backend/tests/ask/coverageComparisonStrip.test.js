@@ -15,19 +15,19 @@ const { attachAskAuthoritativeSourceEvidence, completedAskAuthoritativeSourceEvi
 const coverageComparison = require('../../src/services/coverageComparison.service.ts');
 const propertyAccess = require('../../src/services/propertyAccess.service.ts');
 
-const originals = { prisma: prismaModule.prisma, read: coverageComparison.getOrCreateCoverageComparison, access: propertyAccess.resolvePropertyAccess };
+const originals = { prisma: prismaModule.prisma, read: coverageComparison.findCoverageComparison, access: propertyAccess.resolvePropertyAccess };
 let options;
 test.beforeEach(() => {
   prismaModule.prisma = new Proxy({}, { get(_t, model) { if (model === 'then') return undefined; throw new Error(`Unexpected prisma.${String(model)} access`); } });
   propertyAccess.resolvePropertyAccess = async () => ({ role: 'OWNER', userId: 'u1', propertyId: 'p1' });
-  coverageComparison.getOrCreateCoverageComparison = async () => ({
+  coverageComparison.findCoverageComparison = async () => ({
     state: 'READY',
     comparison: { id: 'cmp-1', status: 'OPEN', equivalenceStatus: 'NON_EQUIVALENT', options, decisions: [] },
   });
 });
 test.afterEach(() => {
   prismaModule.prisma = originals.prisma;
-  coverageComparison.getOrCreateCoverageComparison = originals.read;
+  coverageComparison.findCoverageComparison = originals.read;
   propertyAccess.resolvePropertyAccess = originals.access;
 });
 

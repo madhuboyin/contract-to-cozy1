@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+import { usePropertyWriteAccess } from '@/lib/property/usePropertyWriteAccess';
 import {
+  generateCoverageReview,
   getCoverageReview,
   type CoverageReviewDTO,
   type CoverageReviewQuestionDTO,
@@ -25,29 +27,49 @@ function evidenceSummary(question: CoverageReviewQuestionDTO) {
 
 export default function CoverageReviewQuestionsPanel({ propertyId }: { propertyId: string }) {
   const searchParams = useSearchParams();
+  const { canWrite } = usePropertyWriteAccess(propertyId);
   const [review, setReview] = useState<CoverageReviewDTO | null>(null);
+  const [isCurrent, setIsCurrent] = useState(true);
+  const [generating, setGenerating] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const triggerEntityId =
+    searchParams.get('itemId') ??
+    searchParams.get('inventoryItemId') ??
+    searchParams.get('sourceEntityId');
+
+  // Opening the panel only reads. Generating a review is an explicit action for a household contributor or owner.
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const triggerEntityId =
-        searchParams.get('itemId') ??
-        searchParams.get('inventoryItemId') ??
-        searchParams.get('sourceEntityId');
-      const nextReview = await getCoverageReview(propertyId, {
-        triggerEntityType: triggerEntityId ? 'INVENTORY_ITEM' : null,
-        triggerEntityId,
-      });
-      setReview(nextReview);
+      const next = await getCoverageReview(propertyId);
+      setReview(next.review);
+      setIsCurrent(next.isCurrent);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Coverage review is unavailable.');
     } finally {
       setLoading(false);
     }
-  }, [propertyId, searchParams]);
+  }, [propertyId]);
+
+  const generate = useCallback(async () => {
+    setGenerating(true);
+    setError(null);
+    try {
+      const next = await generateCoverageReview(propertyId, {
+        triggerEntityType: triggerEntityId ? 'INVENTORY_ITEM' : null,
+        triggerEntityId,
+      });
+      setReview(next);
+      setIsCurrent(true);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'The review could not be generated.');
+    } finally {
+      setGenerating(false);
+    }
+  }, [propertyId, triggerEntityId]);
 
   useEffect(() => {
     void load();
@@ -57,6 +79,29 @@ export default function CoverageReviewQuestionsPanel({ propertyId }: { propertyI
     return (
       <section className="rounded-xl border border-border bg-card p-4" aria-busy="true">
         <p className="text-sm text-muted-foreground">Reviewing confirmed policy facts…</p>
+      </section>
+    );
+  }
+
+  if (!review && !error) {
+    return (
+      <section className="rounded-xl border border-border bg-card p-4">
+        <h2 className="text-sm font-semibold">No coverage review yet</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          A review compares the confirmed policy facts on file against a short list of questions worth asking.
+        </p>
+        {canWrite ? (
+          <button
+            type="button"
+            disabled={generating}
+            onClick={() => void generate()}
+            className="mt-3 rounded-md border border-border px-3 py-2 text-sm font-medium"
+          >
+            {generating ? 'Reviewing…' : 'Review my coverage'}
+          </button>
+        ) : (
+          <p className="mt-2 text-xs text-muted-foreground">A household contributor or owner can generate the review.</p>
+        )}
       </section>
     );
   }
@@ -84,6 +129,21 @@ export default function CoverageReviewQuestionsPanel({ propertyId }: { propertyI
 
   return (
     <section className="space-y-4">
+      {!isCurrent ? (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900" role="status">
+          This review is out of date: the policy facts on file have changed since it was generated.
+          {canWrite ? (
+            <button
+              type="button"
+              disabled={generating}
+              onClick={() => void generate()}
+              className="ml-2 rounded-md border border-amber-400 px-2 py-1 text-xs font-medium"
+            >
+              {generating ? 'Refreshing…' : 'Refresh review'}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
       <div className="rounded-xl border border-border bg-card p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>

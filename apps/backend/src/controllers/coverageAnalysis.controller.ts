@@ -12,11 +12,12 @@ import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } f
 import { InventoryService } from '../services/inventory.service';
 import { evaluateFeatureContext } from '../modules/propertyContext/application/evaluateFeatureContext';
 import { APIError } from '../middleware/error.middleware';
-import { getOrCreateCoverageReview } from '../services/coverageReview.service';
+import { findCurrentCoverageReview, getOrCreateCoverageReview } from '../services/coverageReview.service';
 import { getInsurancePolicyHistory } from '../services/insurancePolicyHistory.service';
 import {
   addCoverageComparisonOption,
   getOrCreateCoverageComparison,
+  findCoverageComparison,
   recordCoverageDecision,
 } from '../services/coverageComparison.service';
 import { recordCapabilityCompletionAndResolveNext } from '../services/capabilityCompletion.service';
@@ -25,17 +26,14 @@ import { resolveCoverageHomeActionFromDecision } from '../services/coverageLifec
 const service = new CoverageIntelligenceService();
 const inventoryService = new InventoryService();
 
+/** GET: strictly read-only for every role. Starting a comparison is the explicit POST below. */
 export async function getCoverageComparisonWorkspace(req: CustomRequest, res: Response) {
   try {
     const userId = req.user?.userId;
     if (!userId) {
       return res.status(401).json({ success: false, message: 'Authentication required.' });
     }
-    const result = await getOrCreateCoverageComparison(req.params.propertyId, userId, {
-      guidanceJourneyId:
-        typeof req.query.guidanceJourneyId === 'string' ? req.query.guidanceJourneyId : null,
-      guidanceStepKey:
-        typeof req.query.guidanceStepKey === 'string' ? req.query.guidanceStepKey : null,
+    const result = await findCoverageComparison(req.params.propertyId, userId, {
       sourceActionId:
         typeof req.query.sourceActionId === 'string' ? req.query.sourceActionId : null,
     });
@@ -47,6 +45,33 @@ export async function getCoverageComparisonWorkspace(req: CustomRequest, res: Re
       success: false,
       code: error instanceof APIError ? error.code : undefined,
       message: error?.message || 'Failed to fetch coverage comparison.',
+    });
+  }
+}
+
+/** POST: the explicit mutation that creates (or links) the comparison workspace. CONTRIBUTOR floor on the route. */
+export async function startCoverageComparison(req: CustomRequest, res: Response) {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Authentication required.' });
+    }
+    const result = await getOrCreateCoverageComparison(req.params.propertyId, userId, {
+      guidanceJourneyId:
+        typeof req.body?.guidanceJourneyId === 'string' ? req.body?.guidanceJourneyId : null,
+      guidanceStepKey:
+        typeof req.body?.guidanceStepKey === 'string' ? req.body?.guidanceStepKey : null,
+      sourceActionId:
+        typeof req.body?.sourceActionId === 'string' ? req.body?.sourceActionId : null,
+    });
+    return res.json({ success: true, data: result });
+  } catch (error: any) {
+    logger.error({ err: error }, 'Error starting coverage comparison');
+    const statusCode = error instanceof APIError ? error.statusCode : 500;
+    return res.status(statusCode).json({
+      success: false,
+      code: error instanceof APIError ? error.code : undefined,
+      message: error?.message || 'Failed to start coverage comparison.',
     });
   }
 }
@@ -189,7 +214,29 @@ export async function getInsuranceHistory(req: CustomRequest, res: Response) {
   }
 }
 
+/** GET: strictly read-only for every role (never generates, expires or marks a review). Generation is the explicit POST below. */
 export async function getCoverageReview(req: CustomRequest, res: Response) {
+  try {
+    const propertyId = req.params.propertyId;
+    const userId = req.user?.userId;
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Authentication required.' });
+    }
+    const { review, isCurrent } = await findCurrentCoverageReview(propertyId, userId);
+    return res.json({ success: true, data: { review, isCurrent } });
+  } catch (error: any) {
+    logger.error({ err: error }, 'Error fetching coverage review');
+    const statusCode = error instanceof APIError ? error.statusCode : 500;
+    return res.status(statusCode).json({
+      success: false,
+      code: error instanceof APIError ? error.code : undefined,
+      message: error?.message || 'Failed to fetch coverage review.',
+    });
+  }
+}
+
+/** POST: the explicit mutation that generates (or reuses) the review for the present facts. CONTRIBUTOR floor on the route. */
+export async function generateCoverageReview(req: CustomRequest, res: Response) {
   try {
     const propertyId = req.params.propertyId;
     const userId = req.user?.userId;
@@ -198,13 +245,13 @@ export async function getCoverageReview(req: CustomRequest, res: Response) {
     }
     const review = await getOrCreateCoverageReview(propertyId, userId, {
       triggerType:
-        typeof req.query.triggerType === 'string' ? req.query.triggerType : 'WORKSPACE_OPEN',
+        typeof req.body?.triggerType === 'string' ? req.body?.triggerType : 'WORKSPACE_OPEN',
       triggerEntityType:
-        typeof req.query.triggerEntityType === 'string' ? req.query.triggerEntityType : undefined,
+        typeof req.body?.triggerEntityType === 'string' ? req.body?.triggerEntityType : undefined,
       triggerEntityId:
-        typeof req.query.triggerEntityId === 'string' ? req.query.triggerEntityId : undefined,
+        typeof req.body?.triggerEntityId === 'string' ? req.body?.triggerEntityId : undefined,
     });
-    return res.json({ success: true, data: { review } });
+    return res.status(201).json({ success: true, data: { review, isCurrent: true } });
   } catch (error: any) {
     logger.error({ err: error }, 'Error fetching coverage review');
     const statusCode = error instanceof APIError ? error.statusCode : 500;

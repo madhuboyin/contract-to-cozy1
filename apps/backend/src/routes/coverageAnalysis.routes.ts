@@ -1,14 +1,16 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { authenticate } from '../middleware/auth.middleware';
-import { propertyAuthMiddleware } from '../middleware/propertyAuth.middleware';
+import { propertyAuthMiddleware, requireHouseholdRole } from '../middleware/propertyAuth.middleware';
 import { apiRateLimiter } from '../middleware/rateLimiter.middleware';
 import { validateBody } from '../middleware/validate.middleware';
 import {
   getCoverageAnalysis,
   addCoverageOption,
   getCoverageComparisonWorkspace,
+  startCoverageComparison,
   getCoverageReview,
+  generateCoverageReview,
   getInsuranceHistory,
   recordCoverageComparisonDecision,
   runCoverageAnalysis,
@@ -86,6 +88,14 @@ router.get(
   getCoverageComparisonWorkspace
 );
 
+// Starting a comparison writes: an explicit mutation, never a side effect of the GET above.
+router.post(
+  '/properties/:propertyId/coverage-comparison',
+  propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
+  startCoverageComparison
+);
+
 router.post(
   '/properties/:propertyId/coverage-comparisons/:comparisonId/options',
   propertyAuthMiddleware,
@@ -104,6 +114,14 @@ router.get(
   '/properties/:propertyId/coverage-review',
   propertyAuthMiddleware,
   getCoverageReview
+);
+
+// Generating a review writes (it creates a review and retires the previous one): an explicit mutation, never a side effect of the GET above.
+router.post(
+  '/properties/:propertyId/coverage-review',
+  propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
+  generateCoverageReview
 );
 
 router.get(

@@ -224,6 +224,39 @@ async function refreshComparisonStatus(comparisonId: string) {
   });
 }
 
+/**
+ * Read-only: the current comparison workspace, or NOT_STARTED when none exists yet for the verified baseline. It never creates a comparison and never
+ * back-fills its guidance links, so a page view (any role) leaves no trace. Starting one is the explicit getOrCreateCoverageComparison.
+ */
+export async function findCoverageComparison(
+  propertyId: string,
+  userId: string,
+  context: { sourceActionId?: string | null } = {}
+) {
+  await authorizeProperty(propertyId, userId);
+  const baseline = await prisma.insurancePolicyTerm.findFirst({
+    where: { propertyId, verificationStatus: 'VERIFIED' },
+    orderBy: [{ termStart: 'desc' }, { createdAt: 'desc' }],
+    select: { id: true },
+  });
+  if (!baseline) return { state: 'BASELINE_REQUIRED' as const, comparison: null };
+
+  const existing = await prisma.coverageComparison.findFirst({
+    where: {
+      propertyId,
+      baselinePolicyTermId: baseline.id,
+      ...(context.sourceActionId
+        ? { status: 'DRAFT', OR: [{ sourceActionId: context.sourceActionId }, { sourceActionId: null }] }
+        : {}),
+    },
+    orderBy: { updatedAt: 'desc' },
+    include: comparisonInclude,
+  });
+  return existing
+    ? { state: 'READY' as const, comparison: existing }
+    : { state: 'NOT_STARTED' as const, comparison: null };
+}
+
 export async function getOrCreateCoverageComparison(
   propertyId: string,
   userId: string,

@@ -364,16 +364,30 @@ export async function getCoverageAnalysis(
   return res.data;
 }
 
+/**
+ * Read-only: the current review, or the most recent one flagged out of date, or null when none was ever generated. A page view never generates
+ * one; use generateCoverageReview (a CONTRIBUTOR action) for that.
+ */
 export async function getCoverageReview(
+  propertyId: string
+): Promise<{ review: CoverageReviewDTO | null; isCurrent: boolean }> {
+  const res = await api.get<{ review: CoverageReviewDTO | null; isCurrent: boolean }>(
+    `/api/properties/${propertyId}/coverage-review`
+  );
+  return { review: res.data.review, isCurrent: res.data.isCurrent };
+}
+
+export async function generateCoverageReview(
   propertyId: string,
   context?: { triggerEntityType?: string | null; triggerEntityId?: string | null }
 ): Promise<CoverageReviewDTO> {
-  const params = new URLSearchParams();
-  if (context?.triggerEntityType) params.set('triggerEntityType', context.triggerEntityType);
-  if (context?.triggerEntityId) params.set('triggerEntityId', context.triggerEntityId);
-  const query = params.toString();
-  const res = await api.get<{ review: CoverageReviewDTO }>(
-    `/api/properties/${propertyId}/coverage-review${query ? `?${query}` : ''}`
+  const res = await api.post<{ review: CoverageReviewDTO }>(
+    `/api/properties/${propertyId}/coverage-review`,
+    {
+      triggerType: 'WORKSPACE_OPEN',
+      triggerEntityType: context?.triggerEntityType ?? undefined,
+      triggerEntityId: context?.triggerEntityId ?? undefined,
+    }
   );
   return res.data.review;
 }
@@ -394,16 +408,34 @@ export async function getCoverageComparisonWorkspace(
     guidanceStepKey?: string | null;
     sourceActionId?: string | null;
   }
-): Promise<{ state: 'BASELINE_REQUIRED' | 'READY'; comparison: CoverageComparisonDTO | null }> {
+): Promise<{ state: 'BASELINE_REQUIRED' | 'NOT_STARTED' | 'READY'; comparison: CoverageComparisonDTO | null }> {
+  // Read-only: only the source action narrows the lookup. Starting a comparison is startCoverageComparison.
   const params = new URLSearchParams();
-  if (context?.guidanceJourneyId) params.set('guidanceJourneyId', context.guidanceJourneyId);
-  if (context?.guidanceStepKey) params.set('guidanceStepKey', context.guidanceStepKey);
   if (context?.sourceActionId) params.set('sourceActionId', context.sourceActionId);
   const query = params.toString();
   const res = await api.get<{
-    state: 'BASELINE_REQUIRED' | 'READY';
+    state: 'BASELINE_REQUIRED' | 'NOT_STARTED' | 'READY';
     comparison: CoverageComparisonDTO | null;
   }>(`/api/properties/${propertyId}/coverage-comparison${query ? `?${query}` : ''}`);
+  return res.data;
+}
+
+export async function startCoverageComparison(
+  propertyId: string,
+  context?: {
+    guidanceJourneyId?: string | null;
+    guidanceStepKey?: string | null;
+    sourceActionId?: string | null;
+  }
+): Promise<{ state: 'BASELINE_REQUIRED' | 'READY'; comparison: CoverageComparisonDTO | null }> {
+  const res = await api.post<{
+    state: 'BASELINE_REQUIRED' | 'READY';
+    comparison: CoverageComparisonDTO | null;
+  }>(`/api/properties/${propertyId}/coverage-comparison`, {
+    guidanceJourneyId: context?.guidanceJourneyId ?? undefined,
+    guidanceStepKey: context?.guidanceStepKey ?? undefined,
+    sourceActionId: context?.sourceActionId ?? undefined,
+  });
   return res.data;
 }
 

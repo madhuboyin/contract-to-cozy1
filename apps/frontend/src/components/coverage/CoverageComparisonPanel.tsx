@@ -2,9 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '@/lib/api/client';
+import { usePropertyWriteAccess } from '@/lib/property/usePropertyWriteAccess';
 import {
   addCoverageComparisonOption,
   getCoverageComparisonWorkspace,
+  startCoverageComparison,
   recordCoverageDecision,
   type CoverageComparisonDTO,
   type CoverageComparisonFactDTO,
@@ -66,7 +68,8 @@ export default function CoverageComparisonPanel({
   sourceActionId?: string | null;
 }) {
   const [comparison, setComparison] = useState<CoverageComparisonDTO | null>(null);
-  const [state, setState] = useState<'LOADING' | 'BASELINE_REQUIRED' | 'READY' | 'ERROR'>('LOADING');
+  const { canWrite } = usePropertyWriteAccess(propertyId);
+  const [state, setState] = useState<'LOADING' | 'BASELINE_REQUIRED' | 'NOT_STARTED' | 'READY' | 'ERROR'>('LOADING');
   const [documents, setDocuments] = useState<PropertyRecordOption[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -85,11 +88,8 @@ export default function CoverageComparisonPanel({
     setError(null);
     try {
       const [workspace, documentResponse] = await Promise.all([
-        getCoverageComparisonWorkspace(propertyId, {
-          guidanceJourneyId,
-          guidanceStepKey,
-          sourceActionId,
-        }),
+        // Read-only lookup: opening the page never creates a comparison.
+        getCoverageComparisonWorkspace(propertyId, { sourceActionId }),
         api.listPropertyRecords(propertyId),
       ]);
       setComparison(workspace.comparison);
@@ -99,7 +99,7 @@ export default function CoverageComparisonPanel({
       setError(loadError?.message ?? 'Unable to load the comparison.');
       setState('ERROR');
     }
-  }, [guidanceJourneyId, guidanceStepKey, propertyId, sourceActionId]);
+  }, [propertyId, sourceActionId]);
 
   useEffect(() => {
     void load();
@@ -207,6 +207,40 @@ export default function CoverageComparisonPanel({
 
   if (state === 'LOADING') {
     return <section className="rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground">Loading policy choices…</section>;
+  }
+  if (state === 'NOT_STARTED') {
+    return (
+      <section className="rounded-xl border border-dashed border-border bg-card p-5">
+        <h2 className="font-semibold">No comparison started yet</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Your verified policy is on file. Start a comparison to line quotes up against it.
+        </p>
+        {error ? <p className="mt-2 text-sm text-destructive">{error}</p> : null}
+        {canWrite ? (
+          <button
+            type="button"
+            disabled={saving}
+            className="mt-3 rounded-md border border-border px-3 py-2 text-sm font-medium"
+            onClick={async () => {
+              setSaving(true);
+              setError(null);
+              try {
+                await startCoverageComparison(propertyId, { guidanceJourneyId, guidanceStepKey, sourceActionId });
+                await load();
+              } catch (startError: any) {
+                setError(startError?.message ?? 'Unable to start the comparison.');
+              } finally {
+                setSaving(false);
+              }
+            }}
+          >
+            {saving ? 'Starting…' : 'Start comparison'}
+          </button>
+        ) : (
+          <p className="mt-2 text-xs text-muted-foreground">A household contributor or owner can start the comparison.</p>
+        )}
+      </section>
+    );
   }
   if (state === 'BASELINE_REQUIRED') {
     return (

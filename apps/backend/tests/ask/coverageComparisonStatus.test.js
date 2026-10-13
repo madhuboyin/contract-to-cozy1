@@ -10,7 +10,7 @@ require('ts-node/register');
 // insurance candidate). Distinct from COVERAGE_GAPS's per-inventory-item
 // coverage review: reads the per-policy CoverageComparison (current
 // verified policy vs. alternative quotes/terms, equivalence status, any
-// recorded decision) via the same getOrCreateCoverageComparison call the
+// recorded decision) via the same findCoverageComparison call the
 // existing GET /coverage-comparison route already makes. Read-only --
 // adding an option or recording a decision are separate, document-
 // dependent, multi-step writes, deliberately out of scope for this slice.
@@ -75,7 +75,7 @@ test('the full hierarchical skill router resolves COVERAGE_COMPARISON_STATUS to 
 });
 
 // Source-governance tests for coverageComparisonStatusResult, which touches
-// the database directly (getOrCreateCoverageComparison) and has no
+// the database directly (findCoverageComparison) and has no
 // runtime-mocked test harness in this codebase for this class of function
 // (same established gap as sellerPrepChecklistResult -- see that file's
 // header for the convention this mirrors).
@@ -88,9 +88,9 @@ function handlerBody() {
   return orchestratorSource.slice(start, end + 2);
 }
 
-test('coverageComparisonStatusResult reads getOrCreateCoverageComparison and never calls a write method -- this slice is read-only', () => {
+test('coverageComparisonStatusResult reads findCoverageComparison and never calls a write method -- this slice is read-only', () => {
   const body = handlerBody();
-  assert.match(body, /getOrCreateCoverageComparison\(propertyId, userId\)/);
+  assert.match(body, /findCoverageComparison\(propertyId, userId\)/);
   for (const writeMethod of ['addCoverageComparisonOption', 'recordCoverageDecision']) {
     assert.doesNotMatch(body, new RegExp(`${writeMethod}\\(`), `must not call the write method ${writeMethod}`);
   }

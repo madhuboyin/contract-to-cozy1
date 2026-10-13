@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { type AskCaptureRequest, type AskPresentationBlock } from '../../../productFramework/ask/ask.contract';
 import { getCoverageReviewItems, type CoverageReviewGroup } from '../../coverageGap.service';
-import { getOrCreateCoverageComparison } from '../../coverageComparison.service';
+import { findCoverageComparison } from '../../coverageComparison.service';
 import { type AskOperationResult } from '../askOperationRegistry';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { evaluateFeatureContext } from '../../../modules/propertyContext/application/evaluateFeatureContext';
@@ -161,8 +161,9 @@ async function coverageResult(userId: string, propertyId: string, message: strin
 // per-inventory-item coverage confirmation -- this reads the per-policy
 // CoverageComparison (current verified policy vs. alternative options/
 // quotes, equivalence status, and any recorded KEEP/CHANGE/SHOP/DEFER/
-// PROFESSIONAL_REVIEW decision), the same getOrCreateCoverageComparison
-// call getCoverageComparisonWorkspace's own GET route already makes.
+// PROFESSIONAL_REVIEW decision), through findCoverageComparison -- the same
+// read-only lookup getCoverageComparisonWorkspace's own GET route makes. It
+// never creates a comparison (that is the explicit getOrCreateCoverageComparison).
 // Deliberately read-only: addCoverageComparisonOption (attach a quote/
 // term) and recordCoverageDecision are both document/quote-dependent,
 // stateful, multi-step writes, out of scope for this first slice.
@@ -248,9 +249,9 @@ export function coverageComparisonStrip(
 async function coverageComparisonStatusResult(userId: string, propertyId: string): Promise<AskOperationResult> {
   await ensurePropertyAccess(userId, propertyId);
 
-  let result: Awaited<ReturnType<typeof getOrCreateCoverageComparison>>;
+  let result: Awaited<ReturnType<typeof findCoverageComparison>>;
   try {
-    result = await getOrCreateCoverageComparison(propertyId, userId);
+    result = await findCoverageComparison(propertyId, userId);
   } catch (error) {
     if (error instanceof APIError && error.code === 'PROPERTY_NOT_FOUND') {
       return {
@@ -279,6 +280,22 @@ async function coverageComparisonStatusResult(userId: string, propertyId: string
         id: 'coverage-comparison-baseline-required',
         title: 'No verified policy on file yet',
         body: 'Coverage comparison needs a verified current insurance policy term before it can compare anything against it. Adding and verifying a policy is not currently available in Ask.',
+        tone: 'DEFAULT',
+        actions: [],
+      }],
+      suggestions: [],
+    };
+  }
+
+  if (result.state === 'NOT_STARTED' || !result.comparison) {
+    return {
+      status: 'NOT_APPLICABLE',
+      reasonCode: 'COVERAGE_COMPARISON_NOT_STARTED',
+      blocks: [{
+        type: 'SUMMARY',
+        id: 'coverage-comparison-not-started',
+        title: 'No coverage comparison started yet',
+        body: 'Your verified policy is on file, but no comparison against it has been started. Starting one is not currently available in Ask.',
         tone: 'DEFAULT',
         actions: [],
       }],
