@@ -2606,7 +2606,15 @@ class APIClient {
    * homeRecordsApi.ts/types.ts for the full PropertyRecordSummary shape.
    */
   async listPropertyRecords(propertyId: string): Promise<APIResponse<{
-    records: Array<{ id: string; title: string; recordType: string }>;
+    records: Array<{
+      id: string;
+      title: string;
+      recordType: string;
+      visibility?: string;
+      sensitivity?: string;
+      lifecycleStatus?: string;
+      createdAt?: string;
+    }>;
   }>> {
     return this.request(`/api/properties/${propertyId}/records`);
   }

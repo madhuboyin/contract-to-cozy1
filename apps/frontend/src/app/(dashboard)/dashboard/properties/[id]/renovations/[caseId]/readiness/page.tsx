@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { AlertTriangle, CheckCircle2, ClipboardCheck, Loader2, ShieldAlert } from 'lucide-react';
 import { api } from '@/lib/api/client';
@@ -10,6 +10,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { MobilePageIntro, StatusChip } from '@/components/mobile/dashboard/MobilePrimitives';
+import { readinessEvidenceOptions, type EvidenceRecordInput } from '@/lib/renovation/readinessEvidenceRecords';
 
 type ReadinessState =
   | 'NOT_EVALUATED'
@@ -76,6 +77,8 @@ export default function RenovationReadinessPage() {
   const [readiness, setReadiness] = useState<Readiness | null>(null);
   const [fulfillmentMode, setFulfillmentMode] = useState<'PROVIDER' | 'DIY'>('PROVIDER');
   const [evidence, setEvidence] = useState<Record<string, string>>({});
+  const [homeRecords, setHomeRecords] = useState<EvidenceRecordInput[]>([]);
+  const evidenceChoices = useMemo(() => readinessEvidenceOptions(homeRecords), [homeRecords]);
   const [overrideReasons, setOverrideReasons] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
@@ -123,6 +126,15 @@ export default function RenovationReadinessPage() {
   }, [caseId, propertyId]);
 
   useEffect(() => { void load(); }, [load]);
+
+  // The records a household member can already see; the picker narrows these to what a shared case may cite.
+  useEffect(() => {
+    let cancelled = false;
+    void api.listPropertyRecords(propertyId)
+      .then(response => { if (!cancelled && response.success && response.data) setHomeRecords(response.data.records); })
+      .catch(() => { if (!cancelled) setHomeRecords([]); });
+    return () => { cancelled = true; };
+  }, [propertyId]);
 
   async function evaluate() {
     setWorking(true);
@@ -296,11 +308,23 @@ export default function RenovationReadinessPage() {
                     {!satisfied && item.manualSatisfactionAllowed ? (
                       <div className="grid gap-2 sm:grid-cols-[1fr_auto] sm:items-end">
                         <div>
-                          <Label>Verification document ID</Label>
-                          <Input
+                          <Label htmlFor={`evidence-${item.id}`}>Verification document</Label>
+                          <select
+                            id={`evidence-${item.id}`}
+                            className="min-h-[44px] w-full rounded-md border border-slate-300 bg-white px-3 text-sm"
                             value={evidence[item.id] || ''}
                             onChange={event => setEvidence(current => ({ ...current, [item.id]: event.target.value }))}
-                          />
+                          >
+                            <option value="">{evidenceChoices.options.length ? 'Choose a Home Record' : 'No eligible Home Records'}</option>
+                            {evidenceChoices.options.map(option => (
+                              <option key={option.id} value={option.id}>{option.title} ({label(option.recordType)})</option>
+                            ))}
+                          </select>
+                          <p className="mt-1 text-xs text-slate-600">
+                            Only active records your whole household can see are listed, because everyone on this case sees its evidence.
+                            {evidenceChoices.excludedPrivate ? ` ${evidenceChoices.excludedPrivate} owner-only record${evidenceChoices.excludedPrivate === 1 ? ' is' : 's are'} not listed.` : ''}
+                            {' '}The document is not read or verified. Add files in Home Records first.
+                          </p>
                         </div>
                         <Button variant="outline" disabled={working || !evidence[item.id]?.trim()} onClick={() => satisfy(item)}>
                           Verify satisfied
