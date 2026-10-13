@@ -99,6 +99,7 @@ import './handlers/negotiationShieldAnalyze.handler';
 import './handlers/negotiationShieldEdit.handler';
 import './handlers/negotiationShieldAttach.handler';
 import './handlers/renovationCaseStart.handler';
+import './handlers/buyerClosingItemCommands.handler';
 import './handlers/buyerWalkthroughCommands.handler';
 import './handlers/diyCommands.handler';
 import './handlers/seasonalItemCommands.handler';

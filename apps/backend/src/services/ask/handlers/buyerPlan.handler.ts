@@ -10,11 +10,19 @@ import type { BuyerClosingHomeLaneKey } from '../../../productFramework/buyerAcq
 import { BuyerPurchaseLenderReadinessService } from '../../buyerPurchaseLenderReadiness.service';
 import { BuyerTitleEscrowService } from '../../buyerTitleEscrow.service';
 import { BuyerWalkthroughService } from '../../buyerWalkthrough.service';
+import { CLOSING_ITEM_ACTION_IDS, CLOSING_ITEM_ENTITY_TYPES, CLOSING_ITEM_MESSAGES, closingItemUpdatable, type ClosingItemKind } from '../support/buyerClosingItemCommand';
 import {
   ISSUE_STATUS_LABELS, OBSERVATION_CATEGORIES, OBSERVATION_STATUS_LABELS, WALKTHROUGH_ACTION_IDS, WALKTHROUGH_ENTITY_TYPES, WALKTHROUGH_MESSAGES, issueKinds, observationKinds,
   walkthroughCompletionBlockers, type WalkthroughKind,
 } from '../support/buyerWalkthroughCommand';
 const WALKTHROUGH_OBSERVATION_CATEGORY_LABELS: Record<string, string> = Object.fromEntries(OBSERVATION_CATEGORIES);
+// Lender-condition and title-issue controls (FRD v1.346): declared actions on the readiness answers; the command re-checks everything.
+const closingItemSummaryAction = (kind: ClosingItemKind, labelText: string) => ({
+  id: CLOSING_ITEM_ACTION_IDS[kind], label: labelText, message: CLOSING_ITEM_MESSAGES[kind], interactionType: 'START_WORKFLOW' as const, operationId: 'BUYER_CLOSING_ITEM_COMMAND' as const, style: 'SECONDARY' as const,
+});
+const closingItemRowAction = (kind: ClosingItemKind, labelText: string) => ({
+  id: CLOSING_ITEM_ACTION_IDS[kind], label: labelText, message: CLOSING_ITEM_MESSAGES[kind], interactionType: 'MUTATE_RECORD' as const, operationId: 'BUYER_CLOSING_ITEM_COMMAND' as const, style: 'SECONDARY' as const,
+});
 import { BuyerClosingDisclosureService } from '../../buyerClosingDisclosure.service';
 import { BuyerClosingDayService } from '../../buyerClosingDay.service';
 import { BuyerContractService } from '../../buyerContract.service';
@@ -762,20 +770,23 @@ async function buyerFinancingReadinessResult(userId: string, propertyId: string)
   }
   const readiness = readinessData.readiness as unknown as { appraisalStatus: string; underwritingStatus: string; clearToCloseRecordedAt: string | null; conditions: Array<{ id: string; title: string; notes: string | null; dueAt: string | null; blocking: boolean; status: string }> };
   const blockingConditions = readiness.conditions.filter((condition) => condition.blocking && !['SATISFIED', 'WAIVED'].includes(condition.status));
+  const canChange = (await ensurePropertyAccess(userId, propertyId)).role !== HouseholdRole.VIEWER;
+  const unresolvedConditions = readiness.conditions.filter((condition) => closingItemUpdatable('LENDER', condition.status)).sort((left, right) => Number(right.blocking) - Number(left.blocking));
   const blocks: AskOperationResult['blocks'] = [{
     type: 'SUMMARY', id: 'buyer-financing-summary',
     title: blockingConditions.length ? `${blockingConditions.length} lender condition${blockingConditions.length === 1 ? '' : 's'} still block closing` : 'No blocking lender condition is currently open',
     body: `Appraisal: ${readiness.appraisalStatus.toLowerCase().replace(/_/g, ' ')}. Underwriting: ${readiness.underwritingStatus.toLowerCase().replace(/_/g, ' ')}.${readiness.clearToCloseRecordedAt ? ' Clear-to-close is recorded.' : ' Clear-to-close is not yet recorded.'}`,
     tone: blockingConditions.length ? 'CAUTION' : 'DEFAULT',
-    actions: [],
+    actions: canChange ? [closingItemSummaryAction('LENDER_ADD', 'Add a lender condition')] : [],
   }];
-  if (blockingConditions.length) {
+  if (unresolvedConditions.length) {
     blocks.push({
-      type: 'GROUPED_LIST', filters: [], id: 'buyer-financing-conditions', title: 'Blocking lender conditions', description: 'From the recorded lender readiness.',
-      sections: [{ id: 'conditions', title: 'Conditions', count: blockingConditions.length, items: blockingConditions.slice(0, 10).map((condition) => ({
+      type: 'GROUPED_LIST', filters: [], id: 'buyer-financing-conditions', title: blockingConditions.length ? 'Lender conditions, blocking first' : 'Open lender conditions', description: 'From the recorded lender readiness.',
+      sections: [{ id: 'conditions', title: 'Conditions', count: unresolvedConditions.length, items: unresolvedConditions.slice(0, 10).map((condition) => ({
         id: condition.id, title: condition.title, description: condition.notes,
-        meta: [condition.dueAt ? `Due ${humanDate(new Date(condition.dueAt))}` : null].filter((value): value is string => Boolean(value)),
-        status: condition.status, href: null,
+        meta: [condition.blocking ? 'Holds up closing' : null, condition.dueAt ? `Due ${humanDate(new Date(condition.dueAt))}` : null].filter((value): value is string => Boolean(value)),
+        status: condition.status, href: null, entityType: CLOSING_ITEM_ENTITY_TYPES.LENDER,
+        actions: canChange ? [closingItemRowAction('LENDER_UPDATE', 'Update where it stands')] : [],
       })) }], actions: [],
     });
   }
@@ -806,20 +817,23 @@ async function buyerTitleEscrowReadinessResult(userId: string, propertyId: strin
   }
   const workspace = titleData.workspace as unknown as { titleReviewStatus: string; closingAppointmentAt: string | null; issues: Array<{ id: string; title: string; dueAt: string | null; blocking: boolean; status: string }> };
   const openBlockingIssues = workspace.issues.filter((issue) => issue.blocking && !['RESOLVED', 'WAIVED'].includes(issue.status));
+  const canChange = (await ensurePropertyAccess(userId, propertyId)).role !== HouseholdRole.VIEWER;
+  const openIssues = workspace.issues.filter((issue) => closingItemUpdatable('TITLE', issue.status)).sort((left, right) => Number(right.blocking) - Number(left.blocking));
   const blocks: AskOperationResult['blocks'] = [{
     type: 'SUMMARY', id: 'buyer-title-summary',
     title: openBlockingIssues.length ? `${openBlockingIssues.length} title/escrow issue${openBlockingIssues.length === 1 ? '' : 's'} still block closing` : 'No blocking title or escrow issue is currently open',
     body: `Title review: ${workspace.titleReviewStatus.toLowerCase().replace(/_/g, ' ')}.${workspace.closingAppointmentAt ? ` Closing appointment recorded for ${humanDate(new Date(workspace.closingAppointmentAt))}.` : ' No closing appointment recorded yet.'}`,
     tone: openBlockingIssues.length ? 'CAUTION' : 'DEFAULT',
-    actions: [],
+    actions: canChange ? [closingItemSummaryAction('TITLE_ADD', 'Add a title or escrow issue')] : [],
   }];
-  if (openBlockingIssues.length) {
+  if (openIssues.length) {
     blocks.push({
-      type: 'GROUPED_LIST', filters: [], id: 'buyer-title-issues', title: 'Blocking title/escrow issues', description: 'From the recorded title and escrow workspace.',
-      sections: [{ id: 'issues', title: 'Issues', count: openBlockingIssues.length, items: openBlockingIssues.slice(0, 10).map((issue) => ({
+      type: 'GROUPED_LIST', filters: [], id: 'buyer-title-issues', title: openBlockingIssues.length ? 'Title/escrow issues, blocking first' : 'Open title/escrow issues', description: 'From the recorded title and escrow workspace.',
+      sections: [{ id: 'issues', title: 'Issues', count: openIssues.length, items: openIssues.slice(0, 10).map((issue) => ({
         id: issue.id, title: issue.title, description: null,
-        meta: [issue.dueAt ? `Due ${humanDate(new Date(issue.dueAt))}` : null].filter((value): value is string => Boolean(value)),
-        status: issue.status, href: null,
+        meta: [issue.blocking ? 'Holds up closing' : null, issue.dueAt ? `Due ${humanDate(new Date(issue.dueAt))}` : null].filter((value): value is string => Boolean(value)),
+        status: issue.status, href: null, entityType: CLOSING_ITEM_ENTITY_TYPES.TITLE,
+        actions: canChange ? [closingItemRowAction('TITLE_UPDATE', 'Update where it stands')] : [],
       })) }], actions: [],
     });
   }

@@ -182,8 +182,13 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   NEGOTIATION_SHIELD_CASE_ATTACH: new Set(['negotiation-shield-review', 'negotiation-shield-analyze']),
   // The readiness answer's empty state offers the start; the receipt of a started case offers that case's readiness check.
   RENOVATION_CASE_START: new Set(['renovation-case-readiness']),
+  // Add and update lender conditions and title or escrow issues (register P2 Buyer Closing). Confirmation-gated, declared-action only.
+  BUYER_CLOSING_ITEM_COMMAND: new Set(['buyer-closing-item-back']),
   // Plan and record the buyer's final walkthrough: the plan, observations, issues and completion (register P2 Buyer Closing). Confirmation-gated, declared-action only.
   BUYER_WALKTHROUGH_COMMAND: new Set(['buyer-walkthrough-back']),
+  // Lender-condition and title-issue controls on the financing and title readiness answers (FRD v1.346).
+  BUYER_FINANCING_READINESS: new Set(['closing-lender-condition-add', 'closing-lender-condition-update']),
+  BUYER_TITLE_ESCROW_READINESS: new Set(['closing-title-issue-add', 'closing-title-issue-update']),
   // Final-walkthrough readiness answer: the plan, observation and completion actions and the observation and issue row actions (FRD v1.345).
   BUYER_WALKTHROUGH_READINESS: new Set(['walkthrough-plan', 'walkthrough-observation-add', 'walkthrough-observation-review', 'walkthrough-issue-add', 'walkthrough-issue-update', 'walkthrough-complete']),
   // Add a note to a DIY project in planning or in progress (register P2 DIY). Confirmation-gated, declared-action only.
