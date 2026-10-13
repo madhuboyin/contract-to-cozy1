@@ -34,6 +34,8 @@ export type BreakEvenInput = {
   mortgageAnnualRate?: number;
   remainingTermMonths?: number;
   monthlyPayment?: number;
+  /** True applies the overrides to this projection only: no reusable assumption set is saved (the Ask what-if). */
+  ephemeral?: boolean;
 };
 
 type Impact = 'LOW' | 'MEDIUM' | 'HIGH';
@@ -477,6 +479,7 @@ export class BreakEvenService {
         maintenanceGrowthRate: inferredExpenseGrowth,
       },
       createdByUserId: userId ?? null,
+      persistOverrides: !input.ephemeral,
     });
 
     appreciationRate = financialContext.assumptions.appreciationRate;
@@ -488,7 +491,10 @@ export class BreakEvenService {
     if (input.expenseGrowthRate !== undefined) {
       notes.push('Used client-provided expenseGrowthRate override for projection.');
     }
-    if (hasFinancialOverrideInput) {
+    if (hasFinancialOverrideInput && input.ephemeral) {
+      notes.push('What-if assumptions were applied to this projection only; nothing was saved.');
+      confidence = bumpConfidence(confidence, 'MEDIUM');
+    } else if (hasFinancialOverrideInput) {
       notes.push('Financial overrides were persisted into a reusable AssumptionSet.');
       confidence = bumpConfidence(confidence, 'MEDIUM');
     }

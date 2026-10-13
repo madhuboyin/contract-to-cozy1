@@ -208,7 +208,7 @@ Project Tracker appeared in the original P0 list as "lists projects." It is remo
 
 | Tool | Status | Remaining parity work | Verified |
 | --- | --- | --- | --- |
-| Break-Even | Residual gap | Editable appreciation, cost-growth and horizon assumptions; saved scenarios; sensitivity controls and recalculation. Ask supports the standard five- or ten-year analysis only | Not re-verified |
+| Break-Even | Partial: what-if assumptions implemented (FRD v1.320) | Saved scenarios and existing assumption sets; mortgage-balance, rate, term and payment overrides; a form for the assumptions | Not browser- or database-verified |
 | Capital Timeline | Partial: window / cost / life / exclusion adjustments implemented (FRD v1.318) | Complete event browsing/filtering; planning assumptions; inclusion/exclusion and supported refinements (adjustments: planned date or window, cost range, remaining life, leave off, note) | Event browsing/filtering; window correction beyond overrides; running the timeline; editing an adjustment in place | Built 2026-10-12 |
 | Sell / Hold / Rent | Residual gap | Rich scenario assumptions; side-by-side revisions; durable goal/decision continuity; outcome tracking | Not re-verified |
 | Property Tax | Residual gap | Record review/correction; evidence management; appeal lifecycle and decision tracking | Not re-verified |

@@ -16,6 +16,7 @@ import { getCurrentRefinanceDecision } from '../../../refinanceRadar/refinanceDe
 import { listSavedRefinanceLoanEstimateComparisons } from '../../../refinanceRadar/refinanceLoanEstimateSnapshot.service';
 import { BreakEvenService, type BreakEvenDTO } from '../../breakEven.service';
 import { money } from '../askFormatting';
+import { BREAK_EVEN_WHAT_IF_LABELS, parseBreakEvenWhatIf, type BreakEvenWhatIf } from '../support/breakEvenWhatIf';
 import { askContextFingerprint, durableFreeTextClarification } from '../askHandlerSupport';
 
 const refinanceRadarService = new RefinanceRadarService();
@@ -231,7 +232,7 @@ export function breakEvenAnalysisFromDto(dto: BreakEvenDTO, propertyId: string):
   const limited = notes.length > 0 || dto.meta.confidence === 'LOW';
   const otherYears = years === 10 ? 5 : 10;
   const blocks: AskPresentationBlock[] = [{
-    type: 'SUMMARY', id: 'break-even-summary', title, body: `${body} Confidence: ${dto.meta.confidence.toLowerCase()}.`,
+    type: 'SUMMARY', id: 'break-even-summary', title, body: `${body} Confidence: ${dto.meta.confidence.toLowerCase()}. To test other assumptions, ask \u201Cwhat if appreciation is 5%?\u201D; nothing you try is saved.`,
     tone: breakEven.status === 'NOT_REACHED' ? 'CAUTION' : 'DEFAULT',
     actions: [
       { id: `rerun-break-even-${otherYears}`, label: `Show ${otherYears}-year horizon`, interactionType: 'START_WORKFLOW' as const, message: `Show my home break-even analysis for a ${otherYears}-year horizon.`, operationId: 'BREAK_EVEN_ANALYSIS', style: 'SECONDARY' as const },
@@ -284,8 +285,53 @@ export function breakEvenAnalysisFromDto(dto: BreakEvenDTO, propertyId: string):
   };
 }
 
+// FRD v1.320: the page's editable assumptions. A hypothetical ("what if appreciation is 5%") is computed with those values for this answer only
+// (`ephemeral`: the route would save each set as a reusable assumption set, Ask saves nothing) and shown beside the unchanged standard projection.
+export function breakEvenWhatIfFromDtos(standard: BreakEvenDTO, scenario: BreakEvenDTO, overrides: BreakEvenWhatIf, propertyId: string): AskOperationResult {
+  const result = breakEvenAnalysisFromDto(scenario, propertyId);
+  const years = scenario.input.years;
+  const when = (dto: BreakEvenDTO) => (dto.breakEven.status === 'ALREADY_BREAKEVEN' ? 'Already broken even'
+    : dto.breakEven.breakEvenYearIndex == null ? `Not within ${years} years` : `Year ${dto.breakEven.breakEvenYearIndex} (${dto.breakEven.breakEvenCalendarYear})`);
+  const percent = (value: number) => `${(value * 100).toFixed(value * 100 % 1 === 0 ? 0 : 1)}%`;
+  const assumed = (Object.keys(overrides) as Array<keyof BreakEvenWhatIf>).map((key) => {
+    const value = overrides[key] as number;
+    return { id: `break-even-what-if-${key}`, values: { assumption: BREAK_EVEN_WHAT_IF_LABELS[key], value: key === 'homeValueNow' ? money(value) : percent(value) } };
+  });
+  const [summary, ...rest] = result.blocks;
+  const blocks: AskPresentationBlock[] = [
+    summary.type === 'SUMMARY' ? { ...summary, title: `What if: ${summary.title}`, actions: [] } : summary,
+    {
+      type: 'TABLE', id: 'break-even-what-if-assumptions', title: 'The assumptions you changed',
+      description: 'Everything else is the standard projection. Nothing was saved, and your recorded assumptions are unchanged.',
+      columns: [{ key: 'assumption', label: 'Assumption' }, { key: 'value', label: 'Used here' }], rows: assumed, actions: [],
+    },
+    {
+      type: 'TABLE', id: 'break-even-what-if-comparison', title: 'Your what-if against the standard projection',
+      columns: [{ key: 'measure', label: '' }, { key: 'standard', label: 'Standard' }, { key: 'whatIf', label: 'Your what-if' }],
+      rows: [
+        { id: 'break-even-what-if-when', values: { measure: 'Breaks even', standard: when(standard), whatIf: when(scenario) } },
+        { id: 'break-even-what-if-net', values: { measure: `Net at year ${years}`, standard: money(standard.rollup.netAtHorizon), whatIf: money(scenario.rollup.netAtHorizon) } },
+        { id: 'break-even-what-if-costs', values: { measure: 'Cumulative costs', standard: money(standard.rollup.cumulativeExpensesAtHorizon), whatIf: money(scenario.rollup.cumulativeExpensesAtHorizon) } },
+        { id: 'break-even-what-if-appreciation', values: { measure: 'Cumulative appreciation', standard: money(standard.rollup.cumulativeAppreciationAtHorizon), whatIf: money(scenario.rollup.cumulativeAppreciationAtHorizon) } },
+      ],
+      actions: [],
+    },
+    ...rest.filter((block) => block.id !== 'break-even-limitations' || block.type !== 'LIMITATION' || !/persisted/i.test(block.body)),
+  ];
+  return { ...result, reasonCode: `BREAK_EVEN_WHAT_IF_${scenario.breakEven.status}`, blocks };
+}
+
 async function breakEvenAnalysisResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
-  const dto = await breakEvenService.compute(propertyId, { years: breakEvenHorizonYears(message) }, userId);
+  const years = breakEvenHorizonYears(message);
+  const whatIf = parseBreakEvenWhatIf(message);
+  if (whatIf) {
+    const [standard, scenario] = await Promise.all([
+      breakEvenService.compute(propertyId, { years }, userId),
+      breakEvenService.compute(propertyId, { years, ...whatIf, ephemeral: true }, userId),
+    ]);
+    return breakEvenWhatIfFromDtos(standard, scenario, whatIf, propertyId);
+  }
+  const dto = await breakEvenService.compute(propertyId, { years }, userId);
   return breakEvenAnalysisFromDto(dto, propertyId);
 }
 

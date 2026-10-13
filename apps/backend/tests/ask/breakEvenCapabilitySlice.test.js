@@ -130,3 +130,46 @@ test('the operation is fully registered: read-only viewer definition, its own sk
   assert.equal(launch.operationId, 'BREAK_EVEN_ANALYSIS');
   assert.equal(resolveAskRoutingCascade(launch.message, { localRoutingEnabled: true }).operation.operationId, 'BREAK_EVEN_ANALYSIS');
 });
+
+test('a what-if computes the standard and the changed projection, the changed one for this answer only, and shows them side by side (FRD v1.320)', async () => {
+  BreakEvenService.prototype.compute = async (...args) => {
+    computeCalls.push(args);
+    const changed = args[1].ephemeral === true;
+    return dto({
+      input: { ...dto().input, years: args[1].years },
+      breakEven: changed ? { status: 'PROJECTED', reached: true, breakEvenYearIndex: 3, breakEvenCalendarYear: 2029, netAtBreakEven: 500 } : dto().breakEven,
+      rollup: changed ? { netAtHorizon: 99000, cumulativeExpensesAtHorizon: 140000, cumulativeAppreciationAtHorizon: 239000 } : dto().rollup,
+    });
+  };
+  const result = await capabilityInvoke('BREAK_EVEN_ANALYSIS', { userId: 'u1', propertyId: 'p1', message: 'What if appreciation is 6% for my break-even over 10 years?' });
+  assert.equal(computeCalls.length, 2);
+  assert.deepEqual(computeCalls[0], ['p1', { years: 10 }, 'u1']);
+  assert.deepEqual(computeCalls[1], ['p1', { years: 10, appreciationRate: 0.06, ephemeral: true }, 'u1']);
+  assert.equal(result.reasonCode, 'BREAK_EVEN_WHAT_IF_PROJECTED');
+  assert.match(result.blocks[0].title, /^What if: Projected to break even in 2029/);
+  const comparison = result.blocks.find((block) => block.id === 'break-even-what-if-comparison');
+  assert.equal(comparison.rows[0].values.standard, 'Year 6 (2032)');
+  assert.equal(comparison.rows[0].values.whatIf, 'Year 3 (2029)');
+  assert.deepEqual(result.blocks.find((block) => block.id === 'break-even-what-if-assumptions').rows[0].values, { assumption: 'Home value growth per year', value: '6%' });
+  const ids = result.blocks.map((block) => block.id);
+  assert.equal(new Set(ids).size, ids.length, 'block ids are unique');
+  // The pipeline attaches the adapter's source evidence before validation.
+  const evidenced = { ...result, parameters: { answerTrustEvidence: { schemaVersion: '1.0', sources: [{ sourceId: 'break-even.analysis', operationId: 'BREAK_EVEN_ANALYSIS', status: 'COMPLETE', scope: 'FULL', freshness: 'CURRENT', observedAt: '2026-09-23T00:00:00.000Z' }] } } };
+  const { result: validated } = validateAskAnswerTrust({ question: 'What if appreciation is 6% for my break-even?', operationId: 'BREAK_EVEN_ANALYSIS', result: evidenced, propertyId: 'p1' });
+  assert.deepEqual(validated.blocks.map((block) => block.id), result.blocks.map((block) => block.id), 'the what-if answer survives the answer-trust validator');
+});
+
+test('no hypothetical, no override: the plain request does not ask for an ephemeral projection', async () => {
+  await capabilityInvoke('BREAK_EVEN_ANALYSIS', { userId: 'u1', propertyId: 'p1', message: 'When will my home break even?' });
+  assert.equal(computeCalls.length, 1);
+  assert.equal(computeCalls[0][1].ephemeral, undefined);
+});
+
+test('the service applies ephemeral overrides without saving an assumption set', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const service = fs.readFileSync(path.resolve(__dirname, '../../src/services/breakEven.service.ts'), 'utf8');
+  const assumption = fs.readFileSync(path.resolve(__dirname, '../../src/services/financialAssumption.service.ts'), 'utf8');
+  assert.match(service, /persistOverrides: !input\.ephemeral/);
+  assert.match(assumption, /input\.persistOverrides !== false && hasAssumptionOverrides\(requestOverrides\)/);
+});

@@ -39,6 +39,8 @@ export type ResolveFinancialAssumptionsInput = {
   legacyFallbacks?: FinancialAssumptionInput;
   scenarioKey?: string | null;
   createdByUserId?: string | null;
+  /** Default true: request overrides are saved as a reusable assumption set. False applies them to this resolution only (an Ask what-if). */
+  persistOverrides?: boolean;
 };
 
 export type ResolveFinancialAssumptionsResult = {
@@ -276,7 +278,7 @@ export class FinancialAssumptionService {
     }
 
     const assumptions = merged as FinancialAssumptions;
-    if (hasAssumptionOverrides(requestOverrides)) {
+    if (input.persistOverrides !== false && hasAssumptionOverrides(requestOverrides)) {
       const created = await this.assumptionSetService.create({
         propertyId: input.propertyId,
         toolKey: input.toolKey,
