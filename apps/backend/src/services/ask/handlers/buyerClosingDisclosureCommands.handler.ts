@@ -62,6 +62,19 @@ function formCapture(kind: CdFormKind, contextVersion: string, draft: Revision |
   const percent = (key: string, label: string) => ({ key, label, required: false, inputSchema: { type: 'NUMBER' as const, min: 0, max: 50 } });
   const yesNo = (key: string, label: string) => ({ key, label, required: false, inputSchema: { type: 'SINGLE_SELECT' as const, options: [{ label: 'Yes', value: 'YES' }, { label: 'No', value: 'NO' }] } });
   const options = (labels: Record<string, string>) => Object.entries(labels).map(([value, label]) => ({ label, value }));
+  const groupsFor: Record<CdFormKind, Array<{ id: string; title: string; description?: string; fieldKeys: string[] }> | undefined> = {
+    DRAFT_EDIT: [
+      { id: 'loan', title: 'The loan', description: 'Issued date, amount and rate.', fieldKeys: ['issuedDate', 'loanAmount', 'noteRate', 'apr'] },
+      { id: 'costs', title: 'Monthly payment and costs', fieldKeys: ['monthlyPayment', 'loanCosts', 'lenderCredits', 'prepaidAndEscrow'] },
+      { id: 'close', title: 'Cash to close', fieldKeys: ['sellerCredits', 'cashToClose', 'cashToCloseDirection', 'changeExplanation'] },
+    ],
+    CONFIRM: undefined,
+    FUNDS_UPDATE: [
+      { id: 'funds', title: 'Funds', fieldKeys: ['fundsMethod', 'fundsExpectedDate', 'fundsReady'] },
+      { id: 'verification', title: 'Verifying the instructions', description: 'Only you can verify them, by a channel you trust.', fieldKeys: ['verificationChannel', 'instructionsVerified'] },
+      { id: 'questions', title: 'Questions', fieldKeys: ['questionsResolved', 'newQuestion'] },
+    ],
+  };
   const specs = {
     DRAFT_EDIT: { title: 'Edit your Closing Disclosure draft', question: 'Enter the figures as they appear on the document. Leave the rest blank.', seed: {}, fields: [
       day('issuedDate', 'Issued date'), money('loanAmount', 'Loan amount ($)'), percent('noteRate', 'Interest rate (%)'), percent('apr', 'APR (%)'),
@@ -86,7 +99,7 @@ function formCapture(kind: CdFormKind, contextVersion: string, draft: Revision |
   return {
     requirementId: `buyer-cd-${kind.toLowerCase().replace(/_/g, '-')}-inputs`, captureKey: CD_CAPTURE_KEYS[kind], classification: 'WORKFLOW_INPUT', state: 'UNKNOWN',
     title: spec.title, question: spec.question, helpText: 'ContractToCozy does not review your Closing Disclosure and never stores account or routing numbers. Nothing is saved until you confirm.',
-    inputSchema: { type: 'GROUP', fields: spec.fields } as unknown as AskCaptureRequest['inputSchema'], currentAnswer: entered ?? spec.seed, allowNotSure: false, sensitivity: 'STANDARD',
+    inputSchema: { type: 'GROUP', fields: spec.fields, ...(groupsFor[kind] ? { groups: groupsFor[kind] } : {}) } as unknown as AskCaptureRequest['inputSchema'], currentAnswer: entered ?? spec.seed, allowNotSure: false, sensitivity: 'STANDARD',
     destinationLabel: 'Used to prepare this change; nothing is saved until you confirm', confirmationText: null, expectedContextVersion: contextVersion,
   };
 }

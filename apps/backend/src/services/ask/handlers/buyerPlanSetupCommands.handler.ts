@@ -87,7 +87,11 @@ function formCapture(snap: Snapshot, contextVersion: string, entered?: Record<st
   return {
     requirementId: `buyer-setup-${snap.kind.toLowerCase().replace(/_/g, '-')}-inputs`, captureKey: SETUP_CAPTURE_KEYS[snap.kind], classification: 'WORKFLOW_INPUT', state: 'UNKNOWN',
     title: spec.title, question: spec.question, helpText: 'ContractToCozy does not contact anyone or accept bank details. Nothing is saved until you confirm.',
-    inputSchema: { type: 'GROUP', fields: spec.fields } as unknown as AskCaptureRequest['inputSchema'], currentAnswer: entered ?? spec.seed, allowNotSure: false, sensitivity: 'STANDARD',
+    inputSchema: { type: 'GROUP', fields: spec.fields, ...(snap.kind === 'INSPECTION_PLAN' ? { groups: [
+      { id: 'dates', title: 'Dates', fieldKeys: ['scheduledDate', 'appointmentCompletedDate', 'reportDueDate', 'contingencyDueDate'] },
+      { id: 'scope', title: 'Scope and questions', fieldKeys: ['accessNotes', 'scopeNotes', 'specialistScopes', 'newQuestion'] },
+      { id: 'reinspection', title: 'Reinspection', fieldKeys: ['reinspectionRequired', 'reinspectionScheduledDate', 'reinspectionCompletedDate'] },
+    ] } : {}) } as unknown as AskCaptureRequest['inputSchema'], currentAnswer: entered ?? spec.seed, allowNotSure: false, sensitivity: 'STANDARD',
     destinationLabel: 'Used to prepare this change; nothing is saved until you confirm', confirmationText: null, expectedContextVersion: contextVersion,
   };
 }

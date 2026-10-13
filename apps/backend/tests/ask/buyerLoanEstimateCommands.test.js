@@ -89,6 +89,10 @@ test('forms validate; confirmation is per figure with no blanket confirm; select
   try {
     const add = await run('OFFER_ADD', null, { lenderName: 'Second Bank', loanAmount: 300000, noteRate: 6.5 });
     assert.equal(add.status, 'NEEDS_CONFIRMATION');
+    const addForm = await invoke('OFFER_ADD', launch({ entityId: null, entityType: null }));
+    const addGroups = addForm.captureRequests[0].inputSchema.groups;
+    const listedKeys = new Set(addGroups.flatMap((g) => g.fieldKeys));
+    assert.ok(addForm.captureRequests[0].inputSchema.fields.every((f) => listedKeys.has(f.key)), 'every field, including the lender, belongs to a step');
     assert.match(add.confirmation.description, /not part of your comparison until you confirm/);
     const form = await invoke('CONFIRM', launch({ entityId: 'd1' }));
     assert.equal(form.status, 'NEEDS_CONTEXT');

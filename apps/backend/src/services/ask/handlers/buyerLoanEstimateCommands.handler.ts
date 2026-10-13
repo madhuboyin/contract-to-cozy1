@@ -66,6 +66,15 @@ function formCapture(kind: LeFormKind, contextVersion: string, revision: Revisio
     select('cashToCloseDirection', 'Cash to close is', false, [{ label: 'Paid by me', value: 'FROM_BORROWER' }, { label: 'Paid to me', value: 'TO_BORROWER' }]),
     select('rateLockStatus', 'Rate lock', false, Object.entries(LOCK_STATUS_LABELS).map(([value, label]) => ({ label, value }))), day('rateLockExpirationDate', 'Rate lock expires'),
   ];
+  const figureGroups = [
+    { id: 'loan', title: 'The loan', description: 'Issued date, amount, term and rate.', fieldKeys: ['issuedDate', 'loanAmount', 'termYears', 'loanType', 'noteRate', 'apr'] },
+    { id: 'monthly', title: 'Monthly payment', fieldKeys: ['principalAndInterest', 'mortgageInsurance', 'monthlyPayment'] },
+    { id: 'costs', title: 'Costs and cash to close', fieldKeys: ['loanCosts', 'lenderCredits', 'discountPointsPct', 'discountPoints', 'prepaidAndEscrow', 'cashToClose', 'cashToCloseDirection'] },
+    { id: 'lock', title: 'Rate lock', fieldKeys: ['rateLockStatus', 'rateLockExpirationDate'] },
+  ];
+  const groupsFor = (which: LeFormKind) => (which === 'OFFER_ADD'
+    ? figureGroups.map((group, index) => (index === 0 ? { ...group, fieldKeys: ['lenderName', ...group.fieldKeys] } : group))
+    : which === 'DRAFT_EDIT' ? figureGroups : undefined);
   const specs = {
     OFFER_ADD: { title: 'Add a lender offer', question: 'Enter the lender and the figures from the Loan Estimate. Leave anything you do not have blank.', seed: {}, fields: [
       { key: 'lenderName', label: 'Lender', required: true, inputSchema: { type: 'SHORT_TEXT' as const, maxLength: 200 } }, ...figureFields,
@@ -83,7 +92,7 @@ function formCapture(kind: LeFormKind, contextVersion: string, revision: Revisio
   return {
     requirementId: `buyer-le-${kind.toLowerCase().replace(/_/g, '-')}-inputs`, captureKey: LE_CAPTURE_KEYS[kind], classification: 'WORKFLOW_INPUT', state: 'UNKNOWN',
     title: spec.title, question: spec.question, helpText: 'ContractToCozy does not review your Loan Estimate or contact any lender. Nothing is saved until you confirm.',
-    inputSchema: { type: 'GROUP', fields: spec.fields } as unknown as AskCaptureRequest['inputSchema'], currentAnswer: entered ?? spec.seed, allowNotSure: false, sensitivity: 'STANDARD',
+    inputSchema: { type: 'GROUP', fields: spec.fields, ...(groupsFor(kind) ? { groups: groupsFor(kind) } : {}) } as unknown as AskCaptureRequest['inputSchema'], currentAnswer: entered ?? spec.seed, allowNotSure: false, sensitivity: 'STANDARD',
     destinationLabel: 'Used to prepare this change; nothing is saved until you confirm', confirmationText: null, expectedContextVersion: contextVersion,
   };
 }

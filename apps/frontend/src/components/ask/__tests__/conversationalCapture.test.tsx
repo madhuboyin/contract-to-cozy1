@@ -124,4 +124,30 @@ describe('grouped workflow capture', () => {
     expect(screen.getByRole('button', { name: 'Continue to review' })).toBeInTheDocument();
     expect(screen.getAllByRole('listitem').filter((item) => item.getAttribute('aria-current') === 'step')).toHaveLength(1);
   });
+
+  it('says a workflow form is reviewed next, without the awkward "after you continue" suffix, and steps a long figures form', () => {
+    const longRequest = {
+      requirementId: 'buyer-cd-draft-edit-inputs', captureKey: 'BUYER_CD_DRAFT_EDIT', classification: 'WORKFLOW_INPUT', state: 'UNKNOWN', title: 'Edit your Closing Disclosure draft',
+      question: 'Enter the figures as they appear on the document.', allowNotSure: false, sensitivity: 'STANDARD', expectedContextVersion: 'v1', confirmationText: null,
+      destinationLabel: 'Used to prepare this change; nothing is saved until you confirm',
+      inputSchema: { type: 'GROUP', groups: [
+        { id: 'loan', title: 'The loan', fieldKeys: ['loanAmount', 'noteRate', 'apr', 'issuedDate'] },
+        { id: 'close', title: 'Cash to close', fieldKeys: ['cashToClose'] },
+      ], fields: [
+        { key: 'loanAmount', label: 'Loan amount ($)', required: false, inputSchema: { type: 'NUMBER', min: 0, max: 1_000_000_000 } },
+        { key: 'noteRate', label: 'Interest rate (%)', required: false, inputSchema: { type: 'NUMBER', min: 0, max: 50 } },
+        { key: 'apr', label: 'APR (%)', required: false, inputSchema: { type: 'NUMBER', min: 0, max: 50 } },
+        { key: 'issuedDate', label: 'Issued date', required: false, inputSchema: { type: 'APPROXIMATE_DATE', allowedPrecisions: ['EXACT_DATE'], allowFuture: true } },
+        { key: 'cashToClose', label: 'Cash to close ($)', required: false, inputSchema: { type: 'NUMBER', min: 0, max: 1_000_000_000 } },
+      ] }, currentAnswer: {},
+    } as unknown as AskCaptureRequest;
+    render(<InlineCaptureCard executionId="cd-execution" request={longRequest} onCompleted={jest.fn()} />);
+    expect(screen.getByText('Used to prepare this change; nothing is saved until you confirm.')).toBeInTheDocument();
+    expect(screen.queryByText(/after you continue/)).toBeNull();
+    expect(screen.getByText('Step 1 of 2')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Cash to close ($)')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Next: Cash to close' }));
+    expect(screen.getByLabelText('Cash to close ($)')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Continue to review' })).toBeInTheDocument();
+  });
 });

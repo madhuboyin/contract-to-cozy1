@@ -110,6 +110,11 @@ test('the edit review shows before and after; confirmation is per figure with no
     assert.equal(edit.status, 'NEEDS_CONFIRMATION');
     assert.match(edit.confirmation.fields.find((f) => f.label === 'Cash to close').value, /\$45,000 → \$4,700/);
     assert.match(edit.confirmation.description, /changes the draft only/);
+    const editForm = await invoke('DRAFT_EDIT', launch());
+    const groups = editForm.captureRequests[0].inputSchema.groups;
+    assert.equal(groups.length, 3, 'a twelve-field form is stepped');
+    const listed = new Set(groups.flatMap((g) => g.fieldKeys));
+    assert.ok(editForm.captureRequests[0].inputSchema.fields.every((f) => listed.has(f.key)), 'every field belongs to a step');
     const form = await invoke('CONFIRM', launch());
     assert.equal(form.status, 'NEEDS_CONTEXT');
     assert.equal(form.captureRequests[0].inputSchema.fields[0].inputSchema.options.length, 10);

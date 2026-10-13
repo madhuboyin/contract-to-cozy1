@@ -62,6 +62,8 @@ test('declared-action only; contributor floor; viewers refused; each form opens'
     for (const kind of Object.keys(M)) assert.equal((await invoke(kind, launch())).status, 'NEEDS_CONTEXT', kind);
     const form = await invoke('INSPECTION_PLAN', launch());
     assert.deepEqual(form.captureRequests[0].currentAnswer, { specialistScopes: ['RADON'] });
+    const listed = new Set(form.captureRequests[0].inputSchema.groups.flatMap((g) => g.fieldKeys));
+    assert.ok(form.captureRequests[0].inputSchema.fields.every((f) => listed.has(f.key)), 'every field belongs to a step');
   } finally { w.restore(); }
 });
 
