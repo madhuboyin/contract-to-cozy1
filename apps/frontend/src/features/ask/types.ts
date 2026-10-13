@@ -70,6 +70,7 @@ export interface AskGroupedListItem {
   detail?: string | null;
 }
 export type AskGroupedListPresentation =
+  | { pattern: 'CHOICE_GRID' }
   | { pattern: 'SHELVES' }
   | { pattern: 'DECK'; swipeRightActionId?: string | null; swipeLeftActionId?: string | null; batch?: AskDeckBatch | null }
   | { pattern: 'ROOM_MAP'; focused?: boolean };

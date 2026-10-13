@@ -54,6 +54,7 @@ function scenarioChoice(): AskOperationResult {
     blocks: [{
       type: 'GROUPED_LIST', filters: [], id: 'negotiation-shield-scenarios', title: 'What would you like to review?',
       description: 'Choose one. You will enter what you know and review it before anything is saved.',
+      presentation: { pattern: 'CHOICE_GRID' },
       sections: [{
         id: 'negotiation-shield-scenarios-all', title: 'Reviews you can start', count: NEGOTIATION_START_SCENARIOS.length,
         items: NEGOTIATION_START_SCENARIOS.map((scenario) => ({

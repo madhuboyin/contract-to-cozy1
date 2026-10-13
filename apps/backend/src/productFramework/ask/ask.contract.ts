@@ -172,6 +172,9 @@ const GroupedListItemSchema = z.object({
 // IW-PRES-022: the server declares which shared pattern a grouped list uses. The client uses it only when the
 // block's data fits the pattern, and otherwise renders the ordinary grouped list (IW-PRES-012).
 const GroupedListPresentationSchema = z.discriminatedUnion('pattern', [
+  // A bounded set of mutually exclusive workflow choices. Every item must carry one action; the client verifies
+  // that shape before turning the whole compact tile into the control and falls back to the ordinary list if it drifts.
+  z.object({ pattern: z.literal('CHOICE_GRID') }),
   z.object({ pattern: z.literal('SHELVES') }),
   z.object({
     pattern: z.literal('DECK'),

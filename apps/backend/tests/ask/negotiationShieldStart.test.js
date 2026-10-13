@@ -118,6 +118,7 @@ test('Start a review with no scenario asks which of the four, as rows that launc
     const result = await invoke(start.NEGOTIATION_SHIELD_START_MESSAGE, DECLARED);
     assert.equal(result.status, 'NEEDS_CONTEXT');
     assert.equal(result.reasonCode, 'NEGOTIATION_SHIELD_SCENARIO_REQUIRED');
+    assert.deepEqual(result.blocks[0].presentation, { pattern: 'CHOICE_GRID' });
     const items = result.blocks[0].sections[0].items;
     assert.deepEqual(items.map((item) => item.id), [...start.NEGOTIATION_START_SCENARIOS]);
     for (const item of items) {

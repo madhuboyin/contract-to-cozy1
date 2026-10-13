@@ -35,7 +35,9 @@ test('answer chips: at most four, tone defaults to DEFAULT', () => {
   assert.equal(AskPresentationBlockSchema.safeParse({ type: 'SUMMARY', id: 's', title: 'Answer', body: 'b', chips: five }).success, false);
 });
 
-test('grouped-list presentation hint: the three declared patterns parse and anything else is refused', () => {
+test('grouped-list presentation hint: the four declared patterns parse and anything else is refused', () => {
+  const choices = AskPresentationBlockSchema.parse(groupedList({ presentation: { pattern: 'CHOICE_GRID' } }, { actions: [itemAction('start')] }));
+  assert.equal(choices.presentation.pattern, 'CHOICE_GRID');
   const shelves = AskPresentationBlockSchema.parse(groupedList({ presentation: { pattern: 'SHELVES' } }, { tone: 'CAUTION', timingLabel: 'Oct 3', amountLabel: '$150' }));
   assert.equal(shelves.presentation.pattern, 'SHELVES');
   assert.equal(shelves.sections[0].items[0].timingLabel, 'Oct 3');

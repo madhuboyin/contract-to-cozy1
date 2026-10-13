@@ -10,15 +10,17 @@ type GroupedListBlock = Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>;
 type TimelineBlock = Extract<AskPresentationBlock, { type: 'TIMELINE' }>;
 type ComparisonOption = Extract<AskPresentationBlock, { type: 'COMPARISON' }>['options'][number];
 
-export type GroupedListPattern = 'SHELVES' | 'DECK' | 'ROOM_MAP';
+export type GroupedListPattern = 'CHOICE_GRID' | 'SHELVES' | 'DECK' | 'ROOM_MAP';
 
 export type GroupedListPatternDecision =
-  | { pattern: null; offersChoice: boolean; reason: 'NO_PATTERN' | 'NO_ITEMS' | 'ITEMS_WITHOUT_ACTIONS' | 'TOO_MANY_FOR_DECK' | 'HOMEOWNER_CHOSE_LIST' }
+  | { pattern: null; offersChoice: boolean; reason: 'NO_PATTERN' | 'NO_ITEMS' | 'ITEMS_WITHOUT_ACTIONS' | 'TOO_MANY_FOR_DECK' | 'CHOICE_GRID_INCOMPATIBLE' | 'HOMEOWNER_CHOSE_LIST' }
+  | { pattern: 'CHOICE_GRID'; offersChoice: false; reason: 'DECLARED' }
   | { pattern: 'SHELVES' | 'ROOM_MAP'; offersChoice: true; reason: 'DECLARED' }
   | { pattern: 'DECK'; offersChoice: true; reason: 'DECLARED'; swipeRightActionId: string | null; swipeLeftActionId: string | null; batch: AskDeckBatch | null };
 
 /** A deck shows one card at a time, so it is only offered for a bounded set a homeowner can work through. */
 export const DECK_MAX_ITEMS = 30;
+export const CHOICE_GRID_MAX_ITEMS = 12;
 
 export function groupedListItems(block: GroupedListBlock): AskGroupedListItem[] {
   return block.sections.flatMap((section) => section.items);
@@ -34,6 +36,12 @@ export function resolveGroupedListPattern(block: GroupedListBlock, preference: G
   if (!declared) return { pattern: null, offersChoice: false, reason: 'NO_PATTERN' };
   const items = groupedListItems(block);
   if (items.length === 0) return { pattern: null, offersChoice: false, reason: 'NO_ITEMS' };
+  if (declared.pattern === 'CHOICE_GRID') {
+    const compatible = items.length <= CHOICE_GRID_MAX_ITEMS
+      && items.every((item) => !item.href && item.actions?.length === 1);
+    if (!compatible) return { pattern: null, offersChoice: false, reason: 'CHOICE_GRID_INCOMPATIBLE' };
+    return { pattern: 'CHOICE_GRID', offersChoice: false, reason: 'DECLARED' };
+  }
   if (declared.pattern === 'DECK') {
     // IW-PRES-015: a deck is offered only when every item carries declared actions.
     if (!items.every((item) => (item.actions?.length ?? 0) > 0)) return { pattern: null, offersChoice: false, reason: 'ITEMS_WITHOUT_ACTIONS' };
@@ -53,7 +61,7 @@ export function resolveGroupedListPattern(block: GroupedListBlock, preference: G
   return { pattern: declared.pattern, offersChoice: true, reason: 'DECLARED' };
 }
 
-export const PATTERN_LABELS: Record<GroupedListPattern, string> = { SHELVES: 'Shelves', DECK: 'One at a time', ROOM_MAP: 'Room map' };
+export const PATTERN_LABELS: Record<GroupedListPattern, string> = { CHOICE_GRID: 'Choices', SHELVES: 'Shelves', DECK: 'One at a time', ROOM_MAP: 'Room map' };
 
 /** IW-PRES-016: several declared badges when present, else the single legacy badge. */
 export function comparisonBadges(option: ComparisonOption): AskComparisonBadge[] {

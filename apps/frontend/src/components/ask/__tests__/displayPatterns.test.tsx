@@ -54,6 +54,15 @@ describe('pattern resolver', () => {
     expect(resolveGroupedListPattern(partial, 'AUTO')).toMatchObject({ pattern: 'DECK', swipeRightActionId: 'accept', swipeLeftActionId: null });
   });
 
+  test('a choice grid requires one action per item, no links, and a bounded item count', () => {
+    const choice = (entries: AskGroupedListItem[]) => list({ presentation: { pattern: 'CHOICE_GRID' } }, [{ id: 'choices', title: 'Choices', count: entries.length, items: entries }]);
+    expect(resolveGroupedListPattern(choice([item('one', { actions: [action('start', 'Start')] })]), 'AUTO')).toMatchObject({ pattern: 'CHOICE_GRID', offersChoice: false });
+    expect(resolveGroupedListPattern(choice([item('one')]), 'AUTO')).toMatchObject({ pattern: null, reason: 'CHOICE_GRID_INCOMPATIBLE' });
+    expect(resolveGroupedListPattern(choice([item('one', { href: '/somewhere', actions: [action('start', 'Start')] })]), 'AUTO')).toMatchObject({ pattern: null, reason: 'CHOICE_GRID_INCOMPATIBLE' });
+    const many = Array.from({ length: 13 }, (_, index) => item(String(index), { actions: [action('start', 'Start')] }));
+    expect(resolveGroupedListPattern(choice(many), 'AUTO')).toMatchObject({ pattern: null, reason: 'CHOICE_GRID_INCOMPATIBLE' });
+  });
+
   test('timeline dates keep their recorded precision and never invent a day', () => {
     expect(timelinePoint('a', '2022-03', 'MONTH')).toMatchObject({ label: 'Mar 2022' });
     expect(timelinePoint('a', '2022-03-14T10:00:00Z', 'MONTH')).toMatchObject({ label: 'Mar 2022' });
@@ -84,6 +93,36 @@ describe('pattern resolver', () => {
     expect(comparisonBadges({ id: 'o', label: 'O', attributes: [], actions: [], badge })).toEqual([badge]);
     expect(comparisonBadges({ id: 'o', label: 'O', attributes: [], actions: [], badge, badges: [] })).toEqual([badge]);
     expect(comparisonBadges({ id: 'o', label: 'O', attributes: [], actions: [] })).toEqual([]);
+  });
+});
+
+describe('choice grid', () => {
+  const choices = list({
+    title: 'What would you like to review?', description: 'Choose one. Nothing is saved yet.', presentation: { pattern: 'CHOICE_GRID' },
+  }, [{ id: 'reviews', title: 'Reviews you can start', count: 4, items: [
+    item('quote', { title: 'Contractor quote review', description: 'Check a quote before accepting it.', actions: [action('start', 'Start', 'PRIMARY')] }),
+    item('premium', { title: 'Insurance premium increase', description: 'Review a renewal increase.', actions: [action('start', 'Start', 'PRIMARY')] }),
+    item('claim', { title: 'Insurance claim settlement', description: 'Compare a settlement with your estimate.', actions: [action('start', 'Start', 'PRIMARY')] }),
+    item('urgency', { title: 'Contractor urgency pressure', description: 'Test a do-it-now recommendation.', actions: [action('start', 'Start', 'PRIMARY')] }),
+  ] }]);
+
+  test('uses responsive compact tiles and makes each whole option the single action', async () => {
+    const onItemAction = jest.fn();
+    const { container } = render(<Harness block={choices} onItemAction={onItemAction} />);
+    await waitFor(() => expect(container.querySelector('[data-display-pattern="choice_grid"]')).toBeInTheDocument());
+    const listElement = screen.getByRole('list');
+    expect(listElement).toHaveClass('grid-cols-1', 'sm:grid-cols-2');
+    expect(screen.getByText('4 options')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'List' })).toBeNull();
+    const quote = screen.getByRole('button', { name: /Contractor quote review.*Check a quote.*Start/ });
+    expect(quote).toHaveClass('min-h-[4.5rem]');
+    fireEvent.click(quote);
+    expect(onItemAction).toHaveBeenCalledWith('THING', 'quote', 'Start message', 'INSPECTION_FINDINGS', 'CONVERSATION_CONTINUE');
+  });
+
+  test('disables the whole option when item actions are disabled', () => {
+    render(<GroupedListBlock block={choices} executionId="e" propertyId="home" onItemAction={jest.fn()} itemActionsDisabled onFilterClick={() => undefined} onCollectionPage={() => undefined} onAccessLost={() => undefined} />);
+    expect(screen.getByRole('button', { name: /Contractor quote review/ })).toBeDisabled();
   });
 });
 

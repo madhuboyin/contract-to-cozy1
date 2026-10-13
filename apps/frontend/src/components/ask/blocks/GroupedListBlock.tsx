@@ -7,6 +7,7 @@ import { resolveGroupedListView, type GroupedListPresentationPreference } from '
 import { ResultViewContext } from '@/features/ask/useResultView';
 import { groupedListItems, PATTERN_LABELS, resolveGroupedListPattern } from '@/features/ask/displayPatterns';
 import { CardDeckView } from '../patterns/CardDeckView';
+import { ChoiceGridView } from '../patterns/ChoiceGridView';
 import { PatternFrame } from '../patterns/PatternParts';
 import { RoomMapView } from '../patterns/RoomMapView';
 import { ShelvesView } from '../patterns/ShelvesView';
@@ -428,8 +429,9 @@ export const GroupedListBlock: AskBlockRenderer<'GROUPED_LIST'> = (props) => {
     const { block, itemActionsDisabled, onFilterClick, onItemAction, onBatchItemAction } = props;
     return (
       <PatternFrame title={block.title} description={block.description} pattern={decision.pattern.toLowerCase()} patternLabel={PATTERN_LABELS[decision.pattern]}
-        onChooseList={controls ? () => setPreference('LIST') : undefined} filters={block.filters} onFilterClick={onFilterClick}
+        onChooseList={decision.pattern !== 'CHOICE_GRID' && controls ? () => setPreference('LIST') : undefined} filters={block.filters} onFilterClick={onFilterClick}
         disabled={itemActionsDisabled} actions={block.actions}>
+        {decision.pattern === 'CHOICE_GRID' && <ChoiceGridView sections={block.sections} onItemAction={onItemAction} disabled={itemActionsDisabled} />}
         {decision.pattern === 'SHELVES' && <ShelvesView sections={block.sections} moreAction={block.actions[0]} onItemAction={onItemAction} disabled={itemActionsDisabled} />}
         {decision.pattern === 'DECK' && <CardDeckView items={groupedListItems(block)} swipeRightActionId={decision.swipeRightActionId} swipeLeftActionId={decision.swipeLeftActionId} onItemAction={onItemAction} disabled={itemActionsDisabled}
           batch={decision.batch} onBatch={decision.batch && onBatchItemAction ? (decisions) => onBatchItemAction({ operationId: decision.batch!.operationId, entityType: decision.batch!.entityType, message: decision.batch!.message, decisions }) : undefined} />}
