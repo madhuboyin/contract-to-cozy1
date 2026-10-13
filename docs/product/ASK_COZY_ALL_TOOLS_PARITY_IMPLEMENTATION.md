@@ -210,7 +210,7 @@ Project Tracker appeared in the original P0 list as "lists projects." It is remo
 | --- | --- | --- | --- |
 | Break-Even | Partial: what-if assumptions implemented (FRD v1.320) | Saved scenarios and existing assumption sets; mortgage-balance, rate, term and payment overrides; a form for the assumptions | Not browser- or database-verified |
 | Capital Timeline | Partial: window / cost / life / exclusion adjustments implemented (FRD v1.318) | Complete event browsing/filtering; planning assumptions; inclusion/exclusion and supported refinements (adjustments: planned date or window, cost range, remaining life, leave off, note) | Event browsing/filtering; window correction beyond overrides; running the timeline; editing an adjustment in place | Built 2026-10-12 |
-| Sell / Hold / Rent | Residual gap | Rich scenario assumptions; side-by-side revisions; durable goal/decision continuity; outcome tracking | Not re-verified |
+| Sell / Hold / Rent | Partial: what-if assumptions implemented (FRD v1.321) | Saved scenarios and side-by-side revisions; debt overrides; durable goal/decision continuity; outcome tracking | Not browser- or database-verified |
 | Property Tax | Residual gap | Record review/correction; evidence management; appeal lifecycle and decision tracking | Not re-verified |
 | Savings & Benefits | Residual gap | Eligibility review; application/checklist progress; pursued/dismissed opportunities; outcomes | Not re-verified |
 | Renovation Risk Advisor | Residual gap | Per-item acknowledge/resolve; evidence; permit/HOA continuation; readiness refresh | Not re-verified |

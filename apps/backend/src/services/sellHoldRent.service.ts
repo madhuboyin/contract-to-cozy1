@@ -40,6 +40,9 @@ export type SellHoldRentInput = {
   vacancyRate?: number;          // decimal
   managementRate?: number;       // decimal
 
+  /** True applies the overrides to this estimate only: no reusable assumption set is saved (the Ask what-if). */
+  ephemeral?: boolean;
+
   // Debt overrides (optional; normally sourced from PropertyFinancingProfile)
   mortgageBalance?: number;
   mortgageAnnualRate?: number;   // decimal
@@ -358,6 +361,7 @@ export class SellHoldRentService {
         sellingCostPercent: toolOv['sellingCostRate'],
       },
       createdByUserId: userId ?? null,
+      persistOverrides: !input.ephemeral,
     });
 
     const appreciationRate = clamp(financialContext.assumptions.appreciationRate, 0, 0.15);
@@ -638,7 +642,9 @@ export class SellHoldRentService {
         dataSources,
         notes: [
           `Tool overrides (ToolOverride) are applied automatically for ${TOOL_KEY}.`,
-          hasFinancialOverrideInput
+          hasFinancialOverrideInput && input.ephemeral
+            ? 'What-if assumptions were applied to this estimate only; nothing was saved.'
+            : hasFinancialOverrideInput
             ? 'Financial overrides were persisted to a new AssumptionSet for cross-tool scenario continuity.'
             : 'No new financial overrides were submitted; existing shared defaults were reused.',
           financialContext.savingsRealizationAnnual !== null && financialContext.savingsRealizationAnnual > 0

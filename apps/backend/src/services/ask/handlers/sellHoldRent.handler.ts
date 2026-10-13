@@ -14,6 +14,7 @@ import { money } from '../askFormatting';
 import { ensurePropertyAccess, exactEntityMatch } from '../askHandlerSupport';
 import { decisionProgressBlock, whyNowBlock } from '../decisionThreadPresentationBlocks';
 import { sellHoldRentDecisionFamilyAdapter } from '../../decisionPlatform/domainSnapshotAdapters';
+import { SELL_HOLD_RENT_WHAT_IF_LABELS, isSellHoldRentMoneyKey, parseSellHoldRentWhatIf, type SellHoldRentWhatIf } from '../support/sellHoldRentWhatIf';
 
 const sellHoldRentService = new SellHoldRentService();
 
@@ -57,6 +58,60 @@ export function sellHoldRentComparison(analysis: Awaited<ReturnType<typeof sellH
     ],
     actions: [],
   };
+}
+
+// FRD v1.321: the page's editable assumptions. A hypothetical ("what if I rent it for $3,200 and vacancy is 8%") is computed with those values for this
+// answer only (`ephemeral`: the page route would save each set as a reusable assumption set, Ask saves nothing) and shown beside the unchanged standard
+// estimate. No capture, no thread: the household's recorded context and plan are not touched.
+type SellHoldRentAnalysis = Awaited<ReturnType<typeof sellHoldRentService.estimate>>;
+export function sellHoldRentWhatIfFromAnalyses(standard: SellHoldRentAnalysis, scenario: SellHoldRentAnalysis, overrides: SellHoldRentWhatIf): AskOperationResult {
+  const years = scenario.input.years;
+  const winner = (analysis: SellHoldRentAnalysis) => (analysis.recommendation.winner === 'SELL' ? 'Selling' : analysis.recommendation.winner === 'HOLD' ? 'Holding' : 'Renting it out');
+  const percent = (value: number) => `${(value * 100).toFixed(value * 100 % 1 === 0 ? 0 : 1)}%`;
+  const assumed = (Object.keys(overrides) as Array<keyof SellHoldRentWhatIf>).map((key) => ({
+    id: `sell-hold-rent-what-if-${key}`,
+    values: { assumption: SELL_HOLD_RENT_WHAT_IF_LABELS[key], value: isSellHoldRentMoneyKey(key) ? money(overrides[key] as number) : percent(overrides[key] as number) },
+  }));
+  const lowConfidence = scenario.recommendation.confidence !== 'HIGH';
+  return {
+    status: 'READY_WITH_LIMITATIONS', reasonCode: 'SELL_HOLD_RENT_WHAT_IF',
+    blocks: [{
+      type: 'SUMMARY', id: 'sell-hold-rent-what-if-summary', title: `What if: the ${years}-year sell, hold and rent comparison`,
+      body: `With the assumptions you changed, the model\u2019s directional indicator points to ${winner(scenario).toLowerCase()}; the standard estimate points to ${winner(standard).toLowerCase()}. This is a planning what-if, not a conclusion that now is the right time to sell. Nothing was saved, and your recorded assumptions and plan are unchanged.${lowConfidence ? ' Confidence in the estimate is limited.' : ''}`,
+      tone: 'CAUTION', actions: [],
+    }, {
+      type: 'TABLE', id: 'sell-hold-rent-what-if-assumptions', title: 'The assumptions you changed',
+      description: 'Everything else is the standard estimate.',
+      columns: [{ key: 'assumption', label: 'Assumption' }, { key: 'value', label: 'Used here' }], rows: assumed, actions: [],
+    }, {
+      type: 'TABLE', id: 'sell-hold-rent-what-if-comparison', title: 'Your what-if against the standard estimate',
+      columns: [{ key: 'measure', label: '' }, { key: 'standard', label: 'Standard' }, { key: 'whatIf', label: 'Your what-if' }],
+      rows: [
+        { id: 'sell-hold-rent-what-if-sell', values: { measure: 'Sell: modeled net proceeds', standard: money(standard.scenarios.sell.netProceeds), whatIf: money(scenario.scenarios.sell.netProceeds) } },
+        { id: 'sell-hold-rent-what-if-hold', values: { measure: 'Hold: modeled net change', standard: money(standard.scenarios.hold.net), whatIf: money(scenario.scenarios.hold.net) } },
+        { id: 'sell-hold-rent-what-if-rent', values: { measure: 'Rent: modeled net change', standard: money(standard.scenarios.rent.net), whatIf: money(scenario.scenarios.rent.net) } },
+        { id: 'sell-hold-rent-what-if-indicator', values: { measure: 'Model indicator', standard: winner(standard), whatIf: winner(scenario) } },
+      ],
+      actions: [],
+    }, sellHoldRentComparison(scenario, years), {
+      type: 'EVIDENCE', id: 'sell-hold-rent-what-if-evidence', title: 'Sources used',
+      items: scenario.meta.dataSources.map((source, index) => ({ label: index === 0 ? 'Ownership costs and forecast' : `Planning input source ${index + 1}`, source, observedAt: scenario.meta.generatedAt })),
+    }, {
+      type: 'BOUNDARY', id: 'sell-hold-rent-boundary', title: 'Planning comparison\u2014not financial, tax, legal, or valuation advice',
+      body: 'A sale decision can depend on current local demand, a professional valuation, transaction costs, taxes, financing, rental rules, landlord workload, replacement housing, and personal timing. Validate those inputs with qualified professionals.',
+      severity: 'INFO', suggestions: [],
+    }],
+    suggestions: [],
+  };
+}
+
+async function sellHoldRentWhatIfResult(userId: string, propertyId: string, message: string, overrides: SellHoldRentWhatIf): Promise<AskOperationResult> {
+  const years = /\b(?:10|ten)[- ]?years?\b/i.test(message) ? 10 : 5;
+  const [standard, scenario] = await Promise.all([
+    sellHoldRentService.estimate(propertyId, { years }, userId),
+    sellHoldRentService.estimate(propertyId, { years, ...overrides, ephemeral: true }, userId),
+  ]);
+  return sellHoldRentWhatIfFromAnalyses(standard, scenario, overrides);
 }
 
 async function sellHoldRentAnalysisResult(userId: string, propertyId: string): Promise<AskOperationResult> {
@@ -134,7 +189,7 @@ async function sellHoldRentAnalysisResult(userId: string, propertyId: string): P
     type: 'GROUPED_LIST', filters: [],
     id: 'sell-hold-rent-assumptions',
     title: 'Assumptions that materially affect the answer',
-    description: 'These are modeled defaults and recorded facts; adjusting them is not currently available in Ask. Weigh them before relying on the comparison for a major decision.',
+    description: 'These are modeled defaults and recorded facts. To test others, ask \u201Cwhat if I rent it for $3,200 and appreciation is 4%?\u201D; nothing you try is saved. Weigh them before relying on the comparison for a major decision.',
     sections: [{
       id: 'assumptions', title: 'Current planning inputs', count: limitations.length,
       items: limitations.map((title, index) => ({ id: `assumption-${index + 1}`, title, description: null, meta: [], status: null, href: null })),
@@ -515,7 +570,10 @@ async function sellerPrepItemDecisionResult(userId: string, propertyId: string, 
   };
 }
 
-registerCapabilityHandler('sale-case.analysis', async (envelope) => sellHoldRentAnalysisResult(envelope.userId, envelope.propertyId!));
+registerCapabilityHandler('sale-case.analysis', async (envelope) => {
+  const whatIf = parseSellHoldRentWhatIf(envelope.message);
+  return whatIf ? sellHoldRentWhatIfResult(envelope.userId, envelope.propertyId!, envelope.message, whatIf) : sellHoldRentAnalysisResult(envelope.userId, envelope.propertyId!);
+});
 
 registerCapabilityHandler('seller-prep.checklist', async (envelope) => sellerPrepChecklistResult(envelope.userId, envelope.propertyId!));
 
