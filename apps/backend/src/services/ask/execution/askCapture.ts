@@ -67,6 +67,8 @@ import { PAST_HAZARD_CAPTURE_KEY, PAST_HAZARD_INVALID_MESSAGES, parsePastHazardO
 import { pastHazardCommandResult } from '../handlers/pastHazardOutcomeCommands.handler';
 import { BRIEFING_PREFERENCES_CAPTURE_KEY, parseBriefingPreferencesAnswer } from '../support/homeBriefingCommand';
 import { briefingCommandResult } from '../handlers/homeBriefingCommands.handler';
+import { HABIT_COACH_PREFERENCES_CAPTURE_KEY, parseHabitCoachPreferencesAnswer } from '../support/habitCoachPreferencesCommand';
+import { habitCoachPreferencesResult } from '../handlers/habitCoachPreferencesCommands.handler';
 import { FINANCING_PROFILE_CAPTURE_KEY, parseFinancingProfileAnswer } from '../support/financingProfileCommand';
 import { financingProfileCommandResult } from '../handlers/financingProfileCommands.handler';
 import { BRIEFING_SHARE_CAPTURE_KEY, parseBriefingShareAnswer } from '../support/homeBriefingCommand';
@@ -1400,6 +1402,19 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     captureId = input.idempotencyKey;
     capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
     canonicalOwner = 'PropertyFinancingProfile';
+  } else if (execution.operationId === 'HOME_HABIT_PREFERENCES_COMMAND') {
+    if (input.captureKey !== HABIT_COACH_PREFERENCES_CAPTURE_KEY) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    const access = await ensurePropertyAccess(userId, execution.propertyId);
+    if (access.role === HouseholdRole.VIEWER) throw Object.assign(new Error('A contributor or owner is required to change the coach settings.'), { code: 'ASK_PERMISSION_REQUIRED' });
+    const habitAnswer = parseHabitCoachPreferencesAnswer(input.answer);
+    if (!habitAnswer.success) throw Object.assign(new Error('Choose on or off, and a number of habits from 1 to 20 if you set one.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson) ? execution.parametersJson as Record<string, unknown> : {};
+    const habitLaunch = storedParameters.habitCoachSettingsLaunch as { sourceExecutionId?: unknown } | undefined;
+    if (!habitLaunch) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    result = await habitCoachPreferencesResult(userId, execution.propertyId, typeof habitLaunch.sourceExecutionId === 'string' ? habitLaunch.sourceExecutionId : null, habitAnswer.data);
+    captureId = input.idempotencyKey;
+    capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
+    canonicalOwner = 'PropertyHabitPreference';
   } else if (execution.operationId === 'PROPERTY_BRIEF_COMMAND') {
     if (![PROPERTY_BRIEF_PREPARE_CAPTURE_KEY, PROPERTY_BRIEF_SHARE_CAPTURE_KEY].includes(input.captureKey) || input.expectedContextVersion !== 'property-brief-live') throw Object.assign(new Error('This Property Brief form is no longer active.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
     const access = await ensurePropertyAccess(userId, execution.propertyId);

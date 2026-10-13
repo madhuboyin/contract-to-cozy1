@@ -105,7 +105,8 @@ test('a habit row opens the review inside Ask: no link, an entity type, and a Re
 test('the empty state offers Suggest habits only to someone who can change the home, and no link', () => {
   const empty = (canGenerate) => homeHabitsFromView({ habits: [], hasMore: false, nextCursor: null }, 'p1', NOW, canGenerate);
   assert.deepEqual(empty(false).blocks[0].actions, []);
-  assert.deepEqual(empty(true).blocks[0].actions.map((action) => action.operationId), ['HOME_HABITS_GENERATE']);
+  // FRD v1.334: the coach settings are the contributor's other step; neither carries a link.
+  assert.deepEqual(empty(true).blocks[0].actions.map((action) => action.operationId), ['HOME_HABITS_GENERATE', 'HOME_HABIT_PREFERENCES_COMMAND']);
   assert.doesNotMatch(JSON.stringify(empty(true).blocks), /\/dashboard\/|"href"/);
 });
 

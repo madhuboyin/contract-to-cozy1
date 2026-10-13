@@ -141,7 +141,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   ]),
   BREAK_EVEN_ANALYSIS: new Set(['rerun-break-even-5', 'rerun-break-even-10']),
   // The review's declared actions (each opens a confirmation) and its way back to the list.
-  HOME_HABITS: new Set(['generate-home-habits', 'habit-adopt', 'habit-complete', 'habit-snooze', 'habit-skip', 'habit-dismiss', 'habits-back-to-list', 'habits-review-first', 'habits-show-maintenance']),
+  HOME_HABITS: new Set(['generate-home-habits', 'habit-adopt', 'habit-complete', 'habit-snooze', 'habit-skip', 'habit-dismiss', 'habits-back-to-list', 'habits-review-first', 'habits-show-maintenance', 'home-habit-coach-settings']),
   HOME_HABIT_UPDATE: new Set(['habits-back-to-list']),
   PLANT_CARE_OUTLOOK: new Set(['find-plants-for-room', 'add-home-plant']),
   DIY_PROJECTS: new Set(['diy-template-browse']),
@@ -182,6 +182,8 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   NEGOTIATION_SHIELD_CASE_ATTACH: new Set(['negotiation-shield-review', 'negotiation-shield-analyze']),
   // The readiness answer's empty state offers the start; the receipt of a started case offers that case's readiness check.
   RENOVATION_CASE_START: new Set(['renovation-case-readiness']),
+  // Change the Home Habit Coach's property-wide settings: on or off, how many habits it shows, which kinds it hides (register P2 Home Habit Coach). Confirmation-gated, declared-action only.
+  HOME_HABIT_PREFERENCES_COMMAND: new Set(['home-habits-back']),
   // Change the home's recorded mortgage and purchase facts (the financing profile). Owner only; confirmation-gated; declared-action only; exact before and after in the confirmation, redacted receipt (owner ruling 2026-10-13).
   FINANCING_OVERVIEW: new Set(['financing-profile-update']),
   FINANCING_PROFILE_COMMAND: new Set(['financing-profile-back']),

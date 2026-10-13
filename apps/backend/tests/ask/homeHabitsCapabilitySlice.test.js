@@ -129,7 +129,8 @@ test('every block and the boundary survive the answer-trust validator, and the e
   assert.deepEqual(viewer.actions, []);
   assert.match(viewer.body, /contributor or owner of this home can ask for some/);
   const contributor = homeHabitsFromView(view({ habits: [] }), 'p1', NOW, true).blocks[0];
-  assert.deepEqual(contributor.actions.map((action) => [action.id, action.interactionType, action.operationId, action.href]), [['generate-home-habits', 'START_WORKFLOW', 'HOME_HABITS_GENERATE', undefined]]);
+  assert.deepEqual(contributor.actions.map((action) => [action.id, action.interactionType, action.operationId, action.href]),
+    [['generate-home-habits', 'START_WORKFLOW', 'HOME_HABITS_GENERATE', undefined], ['home-habit-coach-settings', 'START_WORKFLOW', 'HOME_HABIT_PREFERENCES_COMMAND', undefined]]);
   assert.match(contributor.body, /nothing is added until you confirm/);
   assert.doesNotMatch(contributor.body, /open it/i);
   assert.deepEqual(homeHabitsFromView(view({ habits: [{ ...view().habits?.[0] }].filter(Boolean) }), 'p1', NOW, true).blocks[0].actions.filter((action) => action.id === 'generate-home-habits'), [], 'with habits listed there is nothing to generate here');

@@ -6,6 +6,7 @@ import { createHash } from 'node:crypto';
 import { type AskPresentationBlock, type CreateAskExecutionRequest } from '../../../productFramework/ask/ask.contract';
 import { type AskOperationResult } from '../askOperationRegistry';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
+import { HABIT_COACH_PREFERENCES_ACTION_ID, HABIT_COACH_PREFERENCES_MESSAGE, HABIT_COACH_PROPERTY_ENTITY_TYPE } from '../support/habitCoachPreferencesCommand';
 import { registerConfirmCapabilityHandler, type ConfirmCapabilityContext, type ConfirmCapabilityResult } from '../confirmCapabilityHandlerRegistry';
 import { humanDate, readableCode } from '../askFormatting';
 import { ensurePropertyAccess } from '../askHandlerSupport';
@@ -166,7 +167,11 @@ export function homeHabitsFromView(view: HomeHabitsView, propertyId: string, now
         : 'The Home Habit Coach suggests small routines from your home\'s systems, age, climate and season. None are suggested yet, and a contributor or owner of this home can ask for some; this does not mean nothing needs care.',
     tone: 'DEFAULT',
     // A contributor or owner can ask for suggestions from the empty answer, inside Ask; with habits listed there is nothing to add here.
-    actions: !habits.length && canGenerate ? [{ id: HOME_HABITS_GENERATE_ACTION_ID, label: 'Suggest habits', interactionType: 'START_WORKFLOW' as const, message: HOME_HABITS_GENERATE_MESSAGE, operationId: 'HOME_HABITS_GENERATE', style: 'PRIMARY' as const }] : [],
+    actions: [
+      ...(!habits.length && canGenerate ? [{ id: HOME_HABITS_GENERATE_ACTION_ID, label: 'Suggest habits', interactionType: 'START_WORKFLOW' as const, message: HOME_HABITS_GENERATE_MESSAGE, operationId: 'HOME_HABITS_GENERATE' as const, style: 'PRIMARY' as const }] : []),
+      // FRD v1.334: the coach's property-wide settings are a contributor's change.
+      ...(canGenerate ? [{ id: HABIT_COACH_PREFERENCES_ACTION_ID, label: 'Change coach settings', interactionType: 'START_WORKFLOW' as const, message: HABIT_COACH_PREFERENCES_MESSAGE, operationId: 'HOME_HABIT_PREFERENCES_COMMAND' as const, entityType: HABIT_COACH_PROPERTY_ENTITY_TYPE, entityId: propertyId, style: 'QUIET' as const }] : []),
+    ],
   }];
   if (view.hasMore) {
     blocks.push({ type: 'LIMITATION', id: 'home-habits-limits', title: 'What this does not cover', body: `Showing the first ${habits.length} habits in ranked order; the rest are in the Home Habit Coach.`, severity: 'INFO' });
