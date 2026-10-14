@@ -6269,7 +6269,8 @@ class APIClient {
     expectedEndDate?: string;
     homeSystemsAffected?: string[];
     serviceCategory?: string;
-    contractDocumentKey?: string;
+    /** A Home Record id (owner ruling D-P1); a storage key is no longer accepted. */
+    contractDocumentIds?: string[];
     milestones?: Array<{ name: string; position: number; milestoneType?: string; scheduledDate?: string; requiresPhotoEvidence?: boolean }>;
   }): Promise<import('@/types').ProjectRecord> {
     const res = await this.post<import('@/types').ProjectRecord>(`/api/properties/${propertyId}/projects`, payload);
@@ -6394,7 +6395,7 @@ class APIClient {
     return res.data;
   }
 
-  async markPaymentPaid(propertyId: string, projectId: string, paymentId: string, payload?: { paidDate?: string; paymentMethod?: string; receiptDocumentKey?: string }): Promise<import('@/types').ProjectPayment> {
+  async markPaymentPaid(propertyId: string, projectId: string, paymentId: string, payload?: { paidDate?: string; paymentMethod?: string; receiptDocumentId?: string }): Promise<import('@/types').ProjectPayment> {
     const res = await this.post<import('@/types').ProjectPayment>(`/api/properties/${propertyId}/projects/${projectId}/payments/${paymentId}/mark-paid`, payload ?? {});
     if (!res.data) throw new APIError('Failed to mark payment paid', 500);
     return res.data;
@@ -6503,7 +6504,7 @@ class APIClient {
   }
 
   async createProjectLogEntry(propertyId: string, projectId: string, payload: {
-    entryDate: string; entryType: string; notes?: string; photoKeys?: string[];
+    entryDate: string; entryType: string; notes?: string; photoDocumentIds?: string[];
     milestoneId?: string; roomId?: string; materialType?: string; materialBrand?: string;
     materialModel?: string; materialColor?: string; materialSupplier?: string; materialQuantity?: string;
   }): Promise<import('@/types').ProjectProgressLog> {
@@ -6524,7 +6525,7 @@ class APIClient {
 
   async createProjectIssue(propertyId: string, projectId: string, payload: {
     title: string; description: string; severity: string; category: string;
-    blocksPayment?: boolean; attachmentKeys?: string[];
+    blocksPayment?: boolean; evidenceDocumentIds?: string[];
   }): Promise<import('@/types').ProjectIssue> {
     const res = await this.post<import('@/types').ProjectIssue>(`/api/properties/${propertyId}/projects/${projectId}/issues`, payload);
     if (!res.data) throw new APIError('Failed to create issue', 500);

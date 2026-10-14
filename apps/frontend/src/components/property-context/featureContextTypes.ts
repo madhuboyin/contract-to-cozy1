@@ -10,7 +10,7 @@ export type ScalarCaptureInputSchema =
   | { type: 'BOOLEAN'; trueLabel: string; falseLabel: string }
   | { type: 'SINGLE_SELECT'; options: Array<{ label: string; value: string }> }
   | { type: 'MULTI_SELECT'; options: Array<{ label: string; value: string }>; maxItems?: number }
-  | { type: 'DOCUMENT_MULTI_SELECT'; options: Array<{ label: string; value: string }>; maxItems?: number; allowUpload?: boolean }
+  | { type: 'DOCUMENT_MULTI_SELECT'; options: Array<{ label: string; value: string }>; maxItems?: number; allowUpload?: boolean; uploadTarget?: 'HOME_RECORDS' }
   | { type: 'INTEGER' | 'DECIMAL'; min?: number; max?: number; unit?: string }
   | { type: 'NUMBER'; min?: number; max?: number }
   | { type: 'MONEY'; currency: string; min?: number; max?: number }

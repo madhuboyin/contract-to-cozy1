@@ -47,7 +47,6 @@ export const HandoffRenovationProjectSchema = z.object({
   contractorPhone: z.string().trim().min(1).max(30).optional(),
   contractorEmail: z.string().email().optional(),
   contractAmountCents: z.number().int().min(0).optional(),
-  contractDocumentKey: z.string().trim().min(1).optional(),
   contractDocumentIds: z.array(z.string().trim().min(1)).max(100).default([]),
   startDate: z.string().date(),
   expectedEndDate: z.string().date().optional(),

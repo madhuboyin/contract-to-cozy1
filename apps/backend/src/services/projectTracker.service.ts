@@ -982,6 +982,10 @@ export async function afterProjectCreated(propertyId: string, project: { id: str
 }
 
 export async function createProject(propertyId: string, data: any) {
+  // A new project's contract document is a new write: an eligible Home Record of this property, never a legacy id or a key (owner rulings D-P3, D-P6).
+  if (Array.isArray(data.contractDocumentIds) && data.contractDocumentIds.length) {
+    await assertProjectDocuments(propertyId, data.contractDocumentIds, { message: 'The contract document is unavailable for this property.', code: 'PROJECT_CONTRACT_DOCUMENT_UNAVAILABLE' });
+  }
   const project = await withSerializableDedupe((tx) => createProjectInTx(tx, propertyId, data));
   await afterProjectCreated(propertyId, project);
   return getProjectDetail(project.id, propertyId);

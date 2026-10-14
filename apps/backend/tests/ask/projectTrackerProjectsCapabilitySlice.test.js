@@ -156,8 +156,10 @@ test('project completion is one confirmation workflow presented in four governed
   assert.deepEqual(punchListNotes.when, { fieldKey: 'punchList', operator: 'EQUALS', value: 'NOT_APPLICABLE' });
   assert.equal(capture.destinationLabel, 'Completes the verified project and creates its closeout package after confirmation');
   assert.equal(capture.inputSchema.fields.find((field) => field.key === 'warrantyDocumentIds').inputSchema.type, 'DOCUMENT_MULTI_SELECT');
-  // Owner ruling D-P5: no upload from Ask until project uploads go to Home Records through the canonical upload service; the shared Ask route stores a legacy Document.
-  assert.equal(capture.inputSchema.fields.find((field) => field.key === 'proofDocumentIds').inputSchema.allowUpload, undefined);
+  // Owner ruling D-P5: an upload from a project field is stored as a Home Record through the canonical upload, not the Ask evidence route (a legacy Document).
+  const proofField = capture.inputSchema.fields.find((field) => field.key === 'proofDocumentIds');
+  assert.equal(proofField.inputSchema.allowUpload, true);
+  assert.equal(proofField.inputSchema.uploadTarget, 'HOME_RECORDS');
 });
 
 test('milestone editing exposes ordering, dependency, and delayed-status controls', () => {

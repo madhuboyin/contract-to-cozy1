@@ -63,7 +63,7 @@ export function CaptureFieldControl({ field, value, disabled, allowNotSure = fal
           const selected = current.includes(option.value);
           return <button key={option.value} type="button" aria-pressed={selected} disabled={disabled} onClick={() => onChange(selected ? current.filter((item) => item !== option.value) : [...current, option.value].slice(0, schema.maxItems))} className={`mr-2 rounded-xl border px-3 py-2 text-sm font-semibold ${selected ? 'border-teal-700 bg-teal-700 text-white' : 'border-slate-200 bg-white text-slate-700'}`}>{option.label}</button>;
         })}
-        {schema.allowUpload ? <AttachEvidenceControl event={{ entityType: 'PROJECT_RECORD', id: field.key, title: field.label }} propertyId={propertyId} disabled={disabled} label="Upload document" onAttached={(documentId) => {
+        {schema.allowUpload ? <AttachEvidenceControl event={{ entityType: 'PROJECT_RECORD', id: field.key, title: field.label }} propertyId={propertyId} store={schema.uploadTarget === 'HOME_RECORDS' ? 'HOME_RECORDS' : undefined} disabled={disabled} label="Upload document" onAttached={(documentId) => {
           const current = Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
           onChange([...current.filter((id) => id !== documentId), documentId].slice(0, schema.maxItems));
         }} /> : null}

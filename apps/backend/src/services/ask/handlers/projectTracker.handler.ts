@@ -236,8 +236,9 @@ export async function projectTrackerCreateContextVersion(propertyId: string): Pr
 }
 
 type ProjectDocumentOption = { value: string; label: string };
-// No upload control: an Ask upload goes to the legacy Document table, which a project must not cite (owner ruling D-P5 moves project uploads to Home Records).
-const projectDocumentField = (key: string, label: string, options: ProjectDocumentOption[], maxItems = 1) => ({ key, label, required: false, inputSchema: { type: 'DOCUMENT_MULTI_SELECT' as const, options, maxItems } });
+// An upload from a project field is stored as a Home Record through the canonical workflow upload, never through the Ask evidence route, which stores a legacy
+// Document a project must not cite (owner ruling D-P5). The client reads uploadTarget to choose the store.
+const projectDocumentField = (key: string, label: string, options: ProjectDocumentOption[], maxItems = 1) => ({ key, label, required: false, inputSchema: { type: 'DOCUMENT_MULTI_SELECT' as const, options, maxItems, allowUpload: true, uploadTarget: 'HOME_RECORDS' as const } });
 // A photo is a stored key (legacy) or a Home Record id (owner ruling D-P1); both are photo evidence.
 const photoCount = (log: { photoKeys?: string[]; photoDocumentIds?: string[] }) => (log.photoKeys?.length ?? 0) + (log.photoDocumentIds?.length ?? 0);
 const SENSITIVITY_LABELS: Record<string, string> = { STANDARD: 'Standard', PERSONAL: 'Personal', FINANCIAL: 'Financial', INSURANCE: 'Insurance', CLAIM: 'Claim', SECURITY: 'Security', LEGAL: 'Legal' };

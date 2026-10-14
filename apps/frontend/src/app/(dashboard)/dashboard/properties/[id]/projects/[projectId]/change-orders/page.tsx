@@ -1,5 +1,6 @@
 'use client';
 
+import { ProjectDocumentPicker } from '@/components/projects/ProjectDocumentPicker';
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -369,7 +370,7 @@ function ComplianceReviewForm({ order, propertyId, projectId, onSaved }: {
   const hoaRequired = order.hoaReapprovalStatus !== 'NOT_APPLICABLE';
   const [permitStatus, setPermitStatus] = useState<'REQUESTED' | 'CONFIRMED'>('REQUESTED');
   const [hoaStatus, setHoaStatus] = useState<'REQUESTED' | 'CONFIRMED'>('REQUESTED');
-  const [evidence, setEvidence] = useState('');
+  const [evidence, setEvidence] = useState<string[]>([]);
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -382,7 +383,7 @@ function ComplianceReviewForm({ order, propertyId, projectId, onSaved }: {
       await api.reviewChangeOrderCompliance(propertyId, projectId, order.id, {
         amendedPermitStatus: permitRequired ? permitStatus : 'NOT_APPLICABLE',
         hoaReapprovalStatus: hoaRequired ? hoaStatus : 'NOT_APPLICABLE',
-        evidenceDocumentIds: evidence.split(',').map(value => value.trim()).filter(Boolean),
+        evidenceDocumentIds: evidence,
         reviewNotes: notes.trim(),
       });
       onSaved();
@@ -413,7 +414,7 @@ function ComplianceReviewForm({ order, propertyId, projectId, onSaved }: {
           </select>
         </label>
       )}
-      <Input value={evidence} onChange={e => setEvidence(e.target.value)} placeholder="Evidence document IDs, comma-separated" />
+      <ProjectDocumentPicker propertyId={propertyId} value={evidence} onChange={setEvidence} label="Authority or association evidence" uploadTitle="Change order compliance evidence" />
       <Textarea required value={notes} onChange={e => setNotes(e.target.value)} rows={2} placeholder="Authority contact, reference, and review notes" />
       <Button type="submit" size="sm" className="h-8 w-full text-xs" disabled={saving}>
         {saving ? 'Saving…' : 'Save compliance review'}

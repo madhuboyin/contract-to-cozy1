@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react';
 import { Loader2, Paperclip } from 'lucide-react';
 import { api } from '@/lib/api/client';
+import { uploadRecordForWorkflow } from '@/app/(dashboard)/dashboard/properties/[id]/tools/home-records/homeRecordsApi';
 
 // ASK_COZY_INLINE_WORKSPACE_FRD Phase 3 (evidence upload) and v1.99 (inventory items and warranties). A file is picked and
 // uploaded out of band (POST .../evidence-upload) BEFORE anything is dispatched to Ask, because CAPTURE_EVIDENCE_CONFIRM's
@@ -18,7 +19,7 @@ export const EVIDENCE_ATTACH_MESSAGES = {
 export const EVIDENCE_UPLOAD_ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'application/pdf'];
 export const EVIDENCE_UPLOAD_MAX_BYTES = 10 * 1024 * 1024;
 
-export function AttachEvidenceControl({ event, propertyId, disabled, onAttached, label = 'Attach evidence', variant = 'inline' }: {
+export function AttachEvidenceControl({ event, propertyId, disabled, onAttached, label = 'Attach evidence', variant = 'inline', store = 'ASK_EVIDENCE' }: {
   event: { entityType: string | null | undefined; id: string; title: string };
   propertyId?: string;
   disabled?: boolean;
@@ -26,6 +27,11 @@ export function AttachEvidenceControl({ event, propertyId, disabled, onAttached,
   label?: string;
   /** ACUI-004: 'composer' is the compact form beside the message box; the upload and validation are the same. */
   variant?: 'inline' | 'composer';
+  /**
+   * Where the file is stored. The default is the Ask evidence route (a legacy document, as every existing caller expects). A project document is stored as a
+   * Home Record through the canonical workflow upload and the callback receives the record id (owner ruling D-P5).
+   */
+  store?: 'ASK_EVIDENCE' | 'HOME_RECORDS';
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState<'IDLE' | 'UPLOADING' | 'ERROR'>('IDLE');
@@ -38,6 +44,14 @@ export function AttachEvidenceControl({ event, propertyId, disabled, onAttached,
     if (file.size > EVIDENCE_UPLOAD_MAX_BYTES) { setError('That file is larger than 10MB.'); setStatus('ERROR'); return; }
     setStatus('UPLOADING');
     try {
+      if (store === 'HOME_RECORDS') {
+        const recordId = await uploadRecordForWorkflow(propertyId, {
+          file, title: file.name, description: `Project document: ${event.title}`, recordType: 'OTHER', sensitivity: 'STANDARD',
+        });
+        setStatus('IDLE');
+        onAttached(recordId);
+        return;
+      }
       const response = await api.uploadAskEvidence(propertyId, file);
       if (!response.success || !response.data) throw new Error(response.message || 'The file could not be uploaded.');
       setStatus('IDLE');

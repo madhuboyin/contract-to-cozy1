@@ -119,7 +119,7 @@ export const CreateProjectSchema = z.object({
   expectedEndDate: z.string().date().optional(),
   homeSystemsAffected: z.array(inventoryItemCategory).default([]),
   serviceCategory: z.string().optional(),
-  contractDocumentKey: z.string().optional(),
+  contractDocumentIds: z.array(z.string().min(1)).max(1).optional(),
   // Initial milestones (from accepted template or custom)
   milestones: z.array(z.object({
     name: z.string().min(1).max(200),
@@ -179,7 +179,7 @@ export const UpdateProjectSchema = z.object({
   expectedEndDate: z.string().date().optional(),
   homeSystemsAffected: z.array(inventoryItemCategory).optional(),
   serviceCategory: z.string().optional(),
-  contractDocumentKey: z.string().optional(),
+  contractDocumentIds: z.array(z.string().min(1)).max(1).optional(),
   status: z.enum(['PLANNING', 'IN_PROGRESS', 'PAUSED']).optional(),
   permitApplicability: requirementApplicability.optional(),
   permitApplicabilityBasis: z.string().trim().min(1).max(2000).nullable().optional(),
@@ -240,7 +240,7 @@ export const UpdatePaymentSchema = z.object({
 export const MarkPaymentPaidSchema = z.object({
   paidDate: z.string().date().optional(),
   paymentMethod: z.string().max(100).optional(),
-  receiptDocumentKey: z.string().optional(),
+  receiptDocumentId: z.string().min(1).optional(),
 });
 
 // ── Change Orders ─────────────────────────────────────────────────────────────
@@ -278,7 +278,7 @@ export const CreateChangeOrderSchema = z.object({
   category: changeOrderCategory,
   costDeltaCents: z.number().int(),
   proposedByName: z.string().min(1).max(200),
-  supportingDocumentKey: z.string().optional(),
+  supportingDocumentId: z.string().min(1).optional(),
   notes: z.string().max(2000).optional(),
   complianceImpact: ChangeOrderComplianceImpactSchema,
 });
@@ -289,7 +289,7 @@ export const UpdateChangeOrderSchema = z.object({
   category: changeOrderCategory.optional(),
   costDeltaCents: z.number().int().optional(),
   proposedByName: z.string().min(1).max(200).optional(),
-  supportingDocumentKey: z.string().optional(),
+  supportingDocumentId: z.string().min(1).nullable().optional(),
   notes: z.string().max(2000).optional(),
   complianceImpact: ChangeOrderComplianceImpactSchema.optional(),
 });
@@ -309,7 +309,7 @@ export const CreateLogEntrySchema = z.object({
   entryDate: z.string().date(),
   entryType: logEntryType,
   notes: z.string().max(5000).optional(),
-  photoKeys: z.array(z.string()).default([]),
+  photoDocumentIds: z.array(z.string().min(1)).max(50).default([]),
   milestoneId: z.string().optional(),
   roomId: z.string().optional(),
   materialType: z.string().max(100).optional(),
@@ -339,7 +339,7 @@ export const CreateIssueSchema = z.object({
   severity: issueSeverity,
   category: issueCategory,
   blocksPayment: z.boolean().optional(),
-  attachmentKeys: z.array(z.string()).default([]),
+  // (attachments are evidenceDocumentIds, below)
   // Home Record ids (owner ruling D-P3); the service refuses anything that is not an eligible record of this property.
   evidenceDocumentIds: z.array(z.string().min(1)).max(50).default([]),
 });
@@ -351,7 +351,7 @@ export const UpdateIssueSchema = z.object({
   category: issueCategory.optional(),
   status: issueStatus.optional(),
   blocksPayment: z.boolean().optional(),
-  attachmentKeys: z.array(z.string()).optional(),
+  // (attachments are evidenceDocumentIds, below)
   evidenceDocumentIds: z.array(z.string().min(1)).max(50).optional(),
 });
 

@@ -62,7 +62,9 @@ test('a Home Record id passes the validation that project completion uses; a mis
 
 test('Ask project document fields store Home Record ids on columns that hold them, never a copied storage key, and never offer a legacy upload', () => {
   const source = require('node:fs').readFileSync(require.resolve('../../src/services/ask/handlers/projectTracker.handler.ts'), 'utf8');
-  assert.equal(/allowUpload: true/.test(source), false, 'no upload control until project uploads go to Home Records');
+  // An upload from a project field goes to Home Records through the canonical upload (owner ruling D-P5); it is never the Ask evidence route.
+  assert.match(source, /allowUpload: true, uploadTarget: 'HOME_RECORDS' as const/);
+  assert.equal(/allowUpload: true(?!, uploadTarget)/.test(source), false);
   // Slice 1 gave each of these its own id column, so the fields are back and write ids (owner ruling D-P1).
   assert.match(source, /receiptDocumentId: receipt\.id/);
   assert.match(source, /supportingDocumentId: supportingDocument\.id/);

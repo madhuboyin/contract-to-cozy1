@@ -4,6 +4,7 @@ import { api } from '@/lib/api/client';
 
 // ASK_COZY_INLINE_WORKSPACE_FRD v1.99: the shared upload control used for timeline events, inventory items and warranties.
 jest.mock('@/lib/api/client', () => ({ api: { uploadAskEvidence: jest.fn() } }));
+jest.mock('@/app/(dashboard)/dashboard/properties/[id]/tools/home-records/homeRecordsApi', () => ({ uploadRecordForWorkflow: jest.fn() }));
 const upload = api.uploadAskEvidence as jest.MockedFunction<typeof api.uploadAskEvidence>;
 
 beforeEach(() => jest.clearAllMocks());
@@ -43,4 +44,21 @@ test('an unsupported type, an oversized file, no home, or a failed upload shows 
   fireEvent.change(screen.getByLabelText('Attach evidence file for Acme'), { target: { files: [file('ok.pdf', 'application/pdf')] } });
   await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('home could not be determined'));
   expect(onAttached).not.toHaveBeenCalled();
+});
+
+describe('AttachEvidenceControl store (owner ruling D-P5)', () => {
+  it('stores a project document as a Home Record through the canonical upload and returns its id, never calling the Ask evidence route', async () => {
+    const workflow = jest.requireMock('@/app/(dashboard)/dashboard/properties/[id]/tools/home-records/homeRecordsApi') as { uploadRecordForWorkflow: jest.Mock };
+    workflow.uploadRecordForWorkflow.mockResolvedValue('record-7');
+    const askUpload = jest.spyOn(api, 'uploadAskEvidence');
+    const onAttached = jest.fn();
+    const { container } = render(
+      <AttachEvidenceControl event={{ entityType: 'PROJECT_RECORD', id: 'k', title: 'Receipt' }} propertyId="p1" store="HOME_RECORDS" onAttached={onAttached} />,
+    );
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [new File(['x'], 'receipt.pdf', { type: 'application/pdf' })] } });
+    await waitFor(() => expect(onAttached).toHaveBeenCalledWith('record-7'));
+    expect(askUpload).not.toHaveBeenCalled();
+    expect(workflow.uploadRecordForWorkflow).toHaveBeenCalledWith('p1', expect.objectContaining({ title: 'receipt.pdf', recordType: 'OTHER' }));
+  });
 });
