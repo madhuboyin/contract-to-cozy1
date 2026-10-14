@@ -14,10 +14,11 @@ import { ensurePropertyAccess } from '../askHandlerSupport';
 import { listPropertyDocuments } from '../../propertyDocuments/propertyDocumentInventory.service';
 import { offerableNegotiationDocuments, type NegotiationAttachCandidate } from '../support/negotiationShieldAttach';
 import { humanDate } from '../askFormatting';
-import { evaluateReadiness, governOverride, updateReadinessItem } from '../../renovationReadiness.service';
+import { evaluateReadiness, governOverride, handoffToProject, loadHandoffPrefill, updateReadinessItem } from '../../renovationReadiness.service';
 import {
-  READINESS_COMMAND_MESSAGES, READINESS_FORM_CAPTURE_KEYS, readinessCommandEntityType, readinessCommandKindFromMessage, readinessKindNeedsOwner, readinessServiceInput,
-  parseReadinessFormAnswer, type ReadinessCommandKind, type ReadinessFormKind, type ReadinessFormValues,
+  HANDOFF_FUNDING_LABELS, HANDOFF_PROJECT_TYPES, READINESS_COMMAND_MESSAGES, READINESS_FORM_CAPTURE_KEYS, handoffServiceInput, readinessCommandEntityType,
+  readinessCommandKindFromMessage, readinessKindNeedsOwner, readinessServiceInput, parseReadinessFormAnswer, type ReadinessCommandKind, type ReadinessFormKind,
+  type ReadinessFormValues, type ReadinessItemFormKind,
 } from '../support/renovationReadinessCommand';
 
 const CONFIRMATION_MINUTES = 30;
@@ -73,10 +74,10 @@ async function evidenceOptions(propertyId: string, role: HouseholdRole) {
 }
 const optionLabel = (option: NegotiationAttachCandidate) => `${option.title} (${option.kindLabel}, added ${humanDate(option.addedAt) ?? 'earlier'})`;
 
-function formCapture(kind: ReadinessFormKind, contextVersion: string, label: string, entered: ReadinessFormValues = {}, options: NegotiationAttachCandidate[] = []): AskCaptureRequest {
+function formCapture(kind: ReadinessItemFormKind, contextVersion: string, label: string, entered: ReadinessFormValues = {}, options: NegotiationAttachCandidate[] = []): AskCaptureRequest {
   const clean = Object.fromEntries(Object.entries(entered).filter(([, v]) => v !== null && v !== undefined && v !== ''));
   const text = (key: string, name: string, help: string, max = 5000) => ({ key, label: name, helpText: help, required: true, inputSchema: { type: 'LONG_TEXT' as const, maxLength: max } });
-  const specs: Record<ReadinessFormKind, { title: string; question: string; helpText: string; fields: unknown[] }> = {
+  const specs: Record<ReadinessItemFormKind, { title: string; question: string; helpText: string; fields: unknown[] }> = {
     ACKNOWLEDGE: {
       title: `Acknowledge the risk: ${label}`, question: 'Why are you proceeding with this open?',
       helpText: 'This records that you are going ahead with this item still open and accept the risk. It does not make the item satisfied or the work compliant.',
@@ -109,12 +110,48 @@ function formCapture(kind: ReadinessFormKind, contextVersion: string, label: str
   };
 }
 
+const projectTypeLabel = (value: string) => value.toLowerCase().replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());
+const dollars = (cents: number) => `$${(cents / 100).toLocaleString('en-US', { minimumFractionDigits: cents % 100 ? 2 : 0 })}`;
+type HandoffPrefill = Awaited<ReturnType<typeof loadHandoffPrefill>>;
+
+function handoffCapture(prefill: HandoffPrefill, contextVersion: string, entered: ReadinessFormValues = {}): AskCaptureRequest {
+  const clean = Object.fromEntries(Object.entries({
+    // A prefill is a suggestion from the scope or the selected quote, shown so it can be changed; nothing is saved until the review is confirmed.
+    contractorName: prefill.contractorName, contractorLicense: prefill.contractorLicense,
+    contractAmount: prefill.contractAmountCents === null ? null : prefill.contractAmountCents / 100, fundingMode: 'UNDECIDED', ...entered,
+  }).filter(([, v]) => v !== null && v !== undefined && v !== ''));
+  const provider = prefill.fulfillmentMode === 'PROVIDER';
+  return {
+    requirementId: 'renovation-readiness-handoff-inputs', captureKey: READINESS_FORM_CAPTURE_KEYS.HANDOFF, classification: 'WORKFLOW_INPUT', state: 'UNKNOWN',
+    title: `Create the execution project for ${prefill.caseName}`, question: 'What should the project start with?',
+    helpText: `The approved scope, open conditions and evidence requirements are carried into one Project. Nothing is saved until you review and confirm. ${BOUNDARY}`,
+    inputSchema: { type: 'GROUP', fields: [
+      { key: 'projectType', label: 'Project type', required: true, inputSchema: { type: 'SINGLE_SELECT', options: HANDOFF_PROJECT_TYPES.map((value) => ({ label: projectTypeLabel(value), value })) } },
+      { key: 'contractorName', label: provider ? 'Contractor or company' : 'Contractor or company (optional, you are doing this work)', required: provider,
+        helpText: prefill.contractorName ? 'Prefilled from the quote selected for this case.' : undefined, inputSchema: { type: 'SHORT_TEXT', maxLength: 200 } },
+      { key: 'contractorLicense', label: 'Contractor licence (optional)', required: false, inputSchema: { type: 'SHORT_TEXT', maxLength: 100 } },
+      { key: 'contractAmount', label: 'Contract amount ($)', required: false,
+        helpText: prefill.contractAmountSource
+          ? `Prefilled from ${prefill.contractAmountSource === 'SCOPE' ? 'the approved scope' : 'the selected quote'}. Leave blank only if it is not known: it is then recorded as not set, not as $0.`
+          : 'Leave blank if it is not known yet: it is recorded as not set, not as $0. Enter 0 only for a project with no cost.',
+        inputSchema: { type: 'NUMBER', min: 0, max: 1_000_000_000 } },
+      { key: 'fundingMode', label: 'How will it be paid for?', required: true, inputSchema: { type: 'SINGLE_SELECT', options: Object.entries(HANDOFF_FUNDING_LABELS).map(([value, label]) => ({ label, value })) } },
+      { key: 'startDate', label: 'Start date', required: true, inputSchema: { type: 'APPROXIMATE_DATE', allowedPrecisions: ['EXACT_DATE'], allowFuture: true } },
+      { key: 'expectedEndDate', label: 'Expected end date (optional)', required: false, inputSchema: { type: 'APPROXIMATE_DATE', allowedPrecisions: ['EXACT_DATE'], allowFuture: true } },
+    ] } as unknown as AskCaptureRequest['inputSchema'],
+    currentAnswer: clean, allowNotSure: false, sensitivity: 'FINANCIAL', destinationLabel: 'Used to prepare this change; nothing is saved until you confirm',
+    confirmationText: null, expectedContextVersion: contextVersion,
+  };
+}
+
 export async function readinessCommandResult(userId: string, propertyId: string, launch: ReadinessCommandLaunch, supplied?: ReadinessFormValues): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
   if (access.role === HouseholdRole.VIEWER) return blocked('ASK_PERMISSION_REQUIRED', 'A contributor or owner can change readiness', 'Your role can view this home but not change it. Nothing has changed.');
   const kind = launch.kind;
   if (readinessKindNeedsOwner(kind) && access.role !== HouseholdRole.OWNER) {
-    return blocked('ASK_OWNER_REQUIRED', 'Only an owner can acknowledge a risk', 'Accepting the risk of proceeding with an open item is an owner’s decision. Nothing has changed.');
+    return kind === 'HANDOFF'
+      ? blocked('ASK_OWNER_REQUIRED', 'Only an owner can create the project', 'Creating the execution project from a renovation case is an owner’s decision. Nothing has changed.')
+      : blocked('ASK_OWNER_REQUIRED', 'Only an owner can acknowledge a risk', 'Accepting the risk of proceeding with an open item is an owner’s decision. Nothing has changed.');
   }
   const expiresAt = new Date(Date.now() + CONFIRMATION_MINUTES * 60 * 1000);
   const base = { sourceExecutionId: launch.sourceExecutionId, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() };
@@ -141,11 +178,71 @@ export async function readinessCommandResult(userId: string, propertyId: string,
     };
   }
 
+  if (kind === 'HANDOFF') {
+    let prefill: HandoffPrefill;
+    try { prefill = await loadHandoffPrefill(propertyId, launch.entityId); } catch {
+      return unavailable('RENOVATION_CASE_NOT_FOUND', 'That renovation case is no longer available', 'Ask could not find that case. Nothing has changed.');
+    }
+    if (prefill.project) {
+      return unavailable('RENOVATION_PROJECT_ALREADY_CREATED', 'A project already exists for this case',
+        `${prefill.project.name ? `“${prefill.project.name}” was` : 'A project was'} already created from this renovation case, so nothing new is applied. Nothing has changed.`);
+    }
+    if (prefill.readinessState === 'NOT_EVALUATED' || prefill.readinessStale) {
+      return unavailable('RENOVATION_READINESS_NOT_CURRENT', 'Refresh readiness first',
+        'The readiness check is out of date or has not been run for the current scope. Refresh it, then create the project. Nothing has changed.');
+    }
+    if (!['READY', 'READY_WITH_ACKNOWLEDGED_OPEN_ITEMS'].includes(prefill.readinessState)) {
+      return unavailable('RENOVATION_PROJECT_NOT_READY', 'Readiness has open blockers',
+        'Resolve or explicitly acknowledge every permitted blocker before creating the project. Ask only creates a planned start; already-started and historical projects are created from the desktop. Nothing has changed.');
+    }
+    const contextVersion = prefill.version;
+    const launchParameters = { readinessCommandLaunch: { kind, entityId: launch.entityId, sourceExecutionId: launch.sourceExecutionId } };
+    if (!supplied) {
+      return {
+        status: 'NEEDS_CONTEXT', reasonCode: 'RENOVATION_READINESS_HANDOFF_INPUT_REQUIRED', contextVersion, parameters: launchParameters,
+        blocks: [{ type: 'SUMMARY', id: 'readiness-handoff-input', title: `Create the execution project for ${prefill.caseName}`, body: 'Nothing has been saved yet; you will review everything first.', tone: 'DEFAULT', actions: [] }],
+        captureRequests: [handoffCapture(prefill, contextVersion)], suggestions: [],
+      };
+    }
+    const parsed = parseReadinessFormAnswer('HANDOFF', supplied);
+    if (!parsed.success) return unavailable('RENOVATION_HANDOFF_INPUT_INVALID', 'Check the details', 'Fill in the project type, funding and a start date; the end date cannot be before the start. Nothing has changed.');
+    const form = parsed.data;
+    if (prefill.fulfillmentMode === 'PROVIDER' && typeof form.contractorName !== 'string') {
+      return unavailable('RENOVATION_HANDOFF_CONTRACTOR_REQUIRED', 'Name the contractor', 'A provider-led project needs the contractor or company name. Nothing has changed.');
+    }
+    // The amount the project will actually carry: what was entered (or prefilled), else the scope, else the selected quote, else unknown (never zero).
+    const resolvedCents = typeof form.contractAmount === 'number' ? Math.round(form.contractAmount * 100) : prefill.contractAmountCents;
+    const amountSource = typeof form.contractAmount === 'number' ? 'Entered' : prefill.contractAmountSource === 'SCOPE' ? 'From the approved scope' : prefill.contractAmountSource === 'QUOTE' ? 'From the selected quote' : null;
+    return {
+      status: 'NEEDS_CONFIRMATION', reasonCode: 'RENOVATION_READINESS_HANDOFF_CONFIRMATION_REQUIRED', contextVersion,
+      parameters: { readinessForm: supplied, readinessCommand: { kind, entityId: launch.entityId }, readinessContextVersion: contextVersion, ...base },
+      blocks: [{ type: 'SUMMARY', id: 'readiness-handoff-review', title: `Create the project for ${prefill.caseName}?`, body: 'Nothing is saved until you confirm.', tone: 'DEFAULT', actions: [] }],
+      confirmation: confirmation(`handoff-${sha(`${launch.entityId}:${JSON.stringify(supplied)}`).slice(0, 12)}`, {
+        title: `Create the project for ${prefill.caseName}?`, confirmLabel: 'Create the project',
+        description: `This creates one Project from the approved scope (version ${prefill.scopeVersion}) and links it to this case, in one step: its open conditions become blocked milestones and its open dependencies are carried over. No contractor is contacted and nothing is booked. Scope documents that are Home Records stay on the case. A project is created once per case; if one appears first, nothing you entered here is applied. ${BOUNDARY}`,
+        fields: [
+          { label: 'Case', value: prefill.caseName },
+          { label: 'Project type', value: projectTypeLabel(String(form.projectType)) },
+          { label: 'Work done by', value: prefill.fulfillmentMode === 'DIY' ? 'You (DIY)' : 'A provider' },
+          ...(typeof form.contractorName === 'string' ? [{ label: 'Contractor', value: String(form.contractorName) }] : []),
+          ...(typeof form.contractorLicense === 'string' ? [{ label: 'Licence', value: String(form.contractorLicense) }] : []),
+          { label: 'Contract amount', value: resolvedCents === null ? 'Not set (recorded as unknown, not $0)' : `${dollars(resolvedCents)}${amountSource ? ` · ${amountSource}` : ''}` },
+          { label: 'Funding', value: HANDOFF_FUNDING_LABELS[String(form.fundingMode)] ?? String(form.fundingMode) },
+          { label: 'Start date', value: humanDate(new Date(`${form.startDate}T12:00:00.000Z`)) ?? String(form.startDate) },
+          ...(typeof form.expectedEndDate === 'string' ? [{ label: 'Expected end', value: humanDate(new Date(`${form.expectedEndDate}T12:00:00.000Z`)) ?? String(form.expectedEndDate) }] : []),
+          { label: 'Open conditions to block', value: String(prefill.openConditionCount) },
+          { label: 'Open dependencies carried over', value: String(prefill.openDependencyCount) },
+        ],
+      }),
+      captureRequests: [handoffCapture(prefill, contextVersion, supplied)], suggestions: [],
+    };
+  }
+
   const item = await loadItem(propertyId, launch.entityId);
   if (!item) return unavailable('RENOVATION_READINESS_ITEM_NOT_FOUND', 'That item is no longer available', 'Ask could not find that readiness item. Nothing has changed.');
   if (!readinessItemKinds(item).includes(kind)) return unavailable('RENOVATION_READINESS_STEP_NOT_AVAILABLE', 'That step is not available now', 'The item is not in a state that allows this, or its rules do not permit it. Nothing has changed.');
   const contextVersion = itemVersion(kind, item);
-  const formKind = kind as ReadinessFormKind;
+  const formKind = kind as ReadinessItemFormKind;
   const evidence = kind === 'SATISFY' ? await evidenceOptions(propertyId, access.role) : null;
   if (evidence && !evidence.options.length) {
     return unavailable('RENOVATION_READINESS_NO_EVIDENCE_RECORD', 'There is no document to attach yet',
@@ -208,7 +305,7 @@ async function confirmReadinessCommand(ctx: ConfirmCapabilityContext): Promise<C
   if (!kind || !(kind in READINESS_COMMAND_MESSAGES) || typeof command?.entityId !== 'string') throw stale('The change to make is invalid.');
   if (readinessKindNeedsOwner(kind) && ctx.access.role !== HouseholdRole.OWNER) throw stale('Only an owner can acknowledge a risk.', 'ASK_PERMISSION_REQUIRED');
   const propertyId = execution.propertyId;
-  let title: string; let description: string; let artifactId = command.entityId;
+  let title: string; let description: string; let artifactId = command.entityId; let artifactType = 'RENOVATION_READINESS_ITEM'; let workItemSynced: boolean | undefined;
   try {
     if (kind === 'REFRESH') {
       const renovationCase = await loadCase(propertyId, command.entityId);
@@ -216,12 +313,34 @@ async function confirmReadinessCommand(ctx: ConfirmCapabilityContext): Promise<C
       if (parameters.readinessContextVersion !== caseVersion(renovationCase)) throw stale('This case changed while the confirmation was open. Review it again and try again.', 'ASK_CONTEXT_VERSION_CONFLICT');
       await evaluateReadiness(propertyId, renovationCase.id, userId, parameters.readinessMode === 'DIY' ? 'DIY' : 'PROVIDER');
       title = 'Readiness refreshed'; description = 'Every item is re-evaluated from the case’s current records.';
+    } else if (kind === 'HANDOFF') {
+      const prefill = await loadHandoffPrefill(propertyId, command.entityId);
+      if (parameters.readinessContextVersion !== prefill.version) {
+        throw stale('This case changed while the confirmation was open (its readiness, scope, selected quote or project). Review it again and try again.', 'ASK_CONTEXT_VERSION_CONFLICT');
+      }
+      const checked = parseReadinessFormAnswer('HANDOFF', parameters.readinessForm);
+      if (!checked.success) throw stale('The details to save are invalid.');
+      // One key per execution: a repeat of this same confirmation is an idempotent replay, never a second request (owner ruling on D-H8).
+      const outcome: any = await handoffToProject(propertyId, command.entityId, userId, handoffServiceInput(checked.data, prefill.fulfillmentMode, `ask:${execution.id}:handoff`));
+      const handoff = outcome?.handoff as { outcome?: string; workItemSynced?: boolean } | undefined;
+      artifactType = 'PROJECT_RECORD'; artifactId = String(outcome?.id ?? command.entityId);
+      if (handoff?.outcome === 'ALREADY_CREATED') {
+        title = 'A project already existed';
+        description = 'It was created before this request, so nothing you entered here was applied. The project is as it was first created.';
+      } else if (handoff?.outcome === 'IDEMPOTENT_REPLAY') {
+        title = 'Project already created by this request';
+        description = 'This confirmation had already created the project; nothing was changed again.';
+      } else {
+        title = 'Project created and linked';
+        description = 'The approved scope, its open conditions and its evidence requirements are carried into the project, and the case is linked to it. No contractor was contacted.';
+      }
+      workItemSynced = handoff?.workItemSynced;
     } else {
       const item = await loadItem(propertyId, command.entityId);
       if (!item) throw stale('That readiness item is no longer available.');
       if (parameters.readinessContextVersion !== itemVersion(kind, item)) throw stale('This item changed while the confirmation was open. Review it again and try again.', 'ASK_CONTEXT_VERSION_CONFLICT');
       if (!readinessItemKinds(item).includes(kind)) throw stale('That step is not available for this item now.');
-      const formKind = kind as ReadinessFormKind;
+      const formKind = kind as ReadinessItemFormKind;
       const checked = parseReadinessFormAnswer(formKind, parameters.readinessForm);
       if (!checked.success) throw stale('The details to save are invalid.');
       if (kind === 'SATISFY') {
@@ -253,6 +372,12 @@ async function confirmReadinessCommand(ctx: ConfirmCapabilityContext): Promise<C
       body: 'The change was saved. The answer you were viewing could not refresh automatically, so ask for it again to see it.',
     });
   }
-  return { result, artifactType: 'RENOVATION_READINESS_ITEM', artifactId, refreshedExecutions: refresh.refreshedExecutions };
+  if (workItemSynced === false) {
+    result.blocks.push({
+      type: 'LIMITATION', id: `readiness-handoff-work-item-${artifactId}`, severity: 'CAUTION', title: 'The project is created; its work item is not synchronized yet',
+      body: 'The project and its link were saved. The Home Operations work item could not be created just now; repeating this request retries it, and nothing else needs to be redone.',
+    });
+  }
+  return { result, artifactType, artifactId, refreshedExecutions: refresh.refreshedExecutions };
 }
 registerConfirmCapabilityHandler('renovation-readiness.command', confirmReadinessCommand);

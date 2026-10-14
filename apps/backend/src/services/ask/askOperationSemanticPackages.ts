@@ -143,7 +143,7 @@ const jobs: Record<AskOperationId, string> = {
   HOME_BRIEFING_VIEW: 'show the household member\'s own home briefing: their settings and the latest updates about the home',
   NEIGHBORHOOD_INTERACTION_COMMAND: 'follow, dismiss or mark not relevant a local change near the home, after confirmation',
   PAST_HAZARD_OUTCOME_COMMAND: 'record what the household observed after a matched hazard event, after confirmation',
-  RENOVATION_READINESS_COMMAND: 'refresh a renovation case\'s readiness, acknowledge or withdraw the risk of an open item, or reopen a satisfied item, after confirmation',
+  RENOVATION_READINESS_COMMAND: 'refresh a renovation case\'s readiness, acknowledge or withdraw the risk of an open item, reopen a satisfied item, or create the execution project from a ready case, after confirmation',
   SAVINGS_BENEFIT_COMMAND: 'save, dismiss, stop pursuing or record the outcome of a savings or benefit opportunity, after confirmation',
   PROPERTY_TAX_APPEAL_COMMAND: 'start, prepare, record the filing, response and decision of a property tax appeal case, or add a reminder, after confirmation',
   PROPERTY_TAX_COMPARABLE_COMMAND: 'add a comparable sale, class, exemption or condition evidence, or confirmed facts from a tax notice or bill on file, to my property tax appeal, after confirmation',

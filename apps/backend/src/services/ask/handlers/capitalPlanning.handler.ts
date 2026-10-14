@@ -357,6 +357,7 @@ export function renovationReadinessProgress(
 const READINESS_COMMAND_ACTIONS = READINESS_COMMAND_ACTION_IDS;
 const READINESS_ITEM_LABELS: Record<ReadinessCommandKind, string> = {
   REFRESH: 'Refresh readiness', ACKNOWLEDGE: 'Acknowledge the risk', REVOKE: 'Withdraw the acknowledgement', REOPEN: 'Reopen', SATISFY: 'Mark satisfied with a document',
+  HANDOFF: 'Create the execution project',
 };
 
 async function renovationPermitReadinessResult(propertyId: string, message: string, canStart = false, isOwner = false): Promise<AskOperationResult> {
@@ -379,7 +380,12 @@ async function renovationPermitReadinessResult(propertyId: string, message: stri
       id: READINESS_COMMAND_ACTIONS.REFRESH, label: summary.state === 'NOT_EVALUATED' ? 'Run the readiness check' : 'Refresh readiness', interactionType: 'START_WORKFLOW' as const,
       message: READINESS_COMMAND_MESSAGES.REFRESH, operationId: 'RENOVATION_READINESS_COMMAND' as const, entityType: RENOVATION_READINESS_CASE_ENTITY_TYPE, entityId: selected.id,
       style: summary.state === 'NOT_EVALUATED' ? 'PRIMARY' as const : 'SECONDARY' as const,
-    }] : [] }];
+    }, ...(isOwner && !readiness.project && ['READY', 'READY_WITH_ACKNOWLEDGED_OPEN_ITEMS'].includes(summary.state) ? [{
+      // FRD v1.374: creating the execution Project from a ready case is an owner's step; the answer offers it only when readiness allows a planned start.
+      id: READINESS_COMMAND_ACTIONS.HANDOFF, label: READINESS_ITEM_LABELS.HANDOFF, interactionType: 'START_WORKFLOW' as const,
+      message: READINESS_COMMAND_MESSAGES.HANDOFF, operationId: 'RENOVATION_READINESS_COMMAND' as const, entityType: RENOVATION_READINESS_CASE_ENTITY_TYPE, entityId: selected.id,
+      style: 'PRIMARY' as const,
+    }] : [])] : [] }];
   // IW-PRES-020 (FRD v1.94): the blocking items as a ring, ahead of the checklist.
   const ring = renovationReadinessProgress(items);
   if (ring) blocks.push(ring);

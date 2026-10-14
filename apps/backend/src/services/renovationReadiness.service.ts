@@ -928,6 +928,48 @@ export async function handoffToProject(
   return { ...detail, handoff: { outcome: 'CREATED' as const, projectId: project.id, appliedSubmittedValues: true, workItemSynced } };
 }
 
+/**
+ * What a handoff would be built from, read without writing: the case, its current scope, the readiness evaluation, and the selected quote the form is
+ * prefilled from. `version` binds a confirmation to all of it (case id and last update, scope version, readiness evaluation, fulfillment mode, selected
+ * quote id and version, and the absence of a Project), so any change since the review makes the confirmation stale (owner ruling on slice 4).
+ */
+export async function loadHandoffPrefill(propertyId: string, renovationCaseId: string) {
+  const { renovationCase, scope } = await loadContext(propertyId, renovationCaseId);
+  const readiness = await getReadiness(propertyId, renovationCaseId);
+  const summary = readiness.summary as { state: string; fulfillmentMode?: string; stale?: boolean };
+  const workspace = await selectedQuoteForCase(propertyId, renovationCase.links);
+  const quote = workspace?.selectedQuote ?? null;
+  const quoteCents = workspace?.selectedQuoteAmount ? Math.round(Number(workspace.selectedQuoteAmount) * 100) : null;
+  const scopeCents = scope.contractCostCents ?? null;
+  const items = readiness.items as Array<{ id: string; status: string; overrideAcknowledgedAt: Date | null; updatedAt?: Date }>;
+  const readinessVersion = createHash('sha256').update(items.map((item) => `${item.id}:${item.status}:${item.overrideAcknowledgedAt?.toISOString() ?? ''}:${item.updatedAt?.toISOString() ?? ''}`).join('|')).digest('hex');
+  const fulfillmentMode: 'PROVIDER' | 'DIY' = summary.fulfillmentMode === 'DIY' ? 'DIY' : 'PROVIDER';
+  const project = (readiness as { project?: { id: string } | null }).project ?? null;
+  const version = createHash('sha256').update([
+    renovationCaseId, renovationCase.updatedAt.toISOString(), scope.id, summary.state, summary.stale ? 'stale' : 'current', fulfillmentMode, readinessVersion,
+    workspace?.id ?? 'no-workspace', quote?.id ?? 'no-quote', (quote as { updatedAt?: Date } | null)?.updatedAt?.toISOString() ?? '', project ? `project:${project.id}` : 'no-project',
+  ].join('|')).digest('hex');
+  return {
+    caseName: renovationCase.name,
+    lifecycle: renovationCase.lifecycle as string,
+    scopeVersionId: scope.id,
+    scopeVersion: scope.version as number,
+    readinessState: summary.state,
+    readinessStale: Boolean(summary.stale),
+    fulfillmentMode,
+    project: project as { id: string; name?: string; status?: string } | null,
+    contractAmountCents: scopeCents ?? quoteCents,
+    contractAmountSource: scopeCents !== null ? 'SCOPE' as const : quoteCents !== null ? 'QUOTE' as const : null,
+    contractorName: workspace?.selectedVendorName ?? null,
+    contractorLicense: (quote as { providerLicenseNumber?: string | null } | null)?.providerLicenseNumber ?? null,
+    quoteId: quote?.id ?? null,
+    openConditionCount: renovationCase.complianceConditions
+      .filter((condition) => condition.scopeVersionId === scope.id && !['SATISFIED', 'WAIVED_WITH_ACKNOWLEDGMENT'].includes(condition.status)).length,
+    openDependencyCount: items.filter((item) => item.status === 'OPEN').length,
+    version,
+  };
+}
+
 export type RenovationHandoffOutcome = 'CREATED' | 'IDEMPOTENT_REPLAY' | 'ALREADY_CREATED';
 
 export type HandoffIntakeMode = 'PLANNED' | 'ALREADY_STARTED' | 'HISTORICAL';
