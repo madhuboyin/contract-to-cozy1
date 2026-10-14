@@ -68,13 +68,14 @@ export default function ProjectDashboardPage() {
   if (!project) return null;
 
   const p = project;
-  const remaining = p.currentContractAmountCents - p.paidToDateCents;
+  const contractKnown = p.currentContractAmountCents != null;
+  const remaining = p.currentContractAmountCents == null ? null : p.currentContractAmountCents - p.paidToDateCents;
   const nextMilestone = p.milestones?.find(m => !['COMPLETE', 'DISPUTED'].includes(m.status));
   const openIssues = p.issues?.filter(i => i.status !== 'RESOLVED') ?? [];
   const blockingIssues = openIssues.filter(i => i.severity === 'BLOCKING');
   const daysLeft = daysUntil(p.expectedEndDate);
 
-  const pct = p.currentContractAmountCents > 0
+  const pct = p.currentContractAmountCents != null && p.currentContractAmountCents > 0
     ? Math.round((p.paidToDateCents / p.currentContractAmountCents) * 100)
     : 0;
 
@@ -171,7 +172,7 @@ export default function ProjectDashboardPage() {
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <KpiTile
           label="Contract"
-          value={fmtMoney(p.currentContractAmountCents)}
+          value={contractKnown ? fmtMoney(p.currentContractAmountCents as number) : 'Not set'}
           sub={p.approvedChangeOrderDeltaCents !== 0 ? `${p.approvedChangeOrderDeltaCents > 0 ? '+' : ''}${fmtMoney(Math.abs(p.approvedChangeOrderDeltaCents))} CO` : undefined}
         />
         <KpiTile
@@ -181,8 +182,9 @@ export default function ProjectDashboardPage() {
         />
         <KpiTile
           label="Remaining"
-          value={fmtMoney(remaining)}
-          tone={remaining < 0 ? 'danger' : undefined}
+          value={remaining == null ? 'Unknown' : fmtMoney(remaining)}
+          sub={remaining == null ? 'Set the contract amount' : undefined}
+          tone={remaining != null && remaining < 0 ? 'danger' : undefined}
         />
         <KpiTile
           label={daysLeft != null && daysLeft < 0 ? 'Days overdue' : 'Days left'}
@@ -193,7 +195,7 @@ export default function ProjectDashboardPage() {
       </div>
 
       {/* Progress bar */}
-      {p.currentContractAmountCents > 0 && (
+      {p.currentContractAmountCents != null && p.currentContractAmountCents > 0 && (
         <MobileCard variant="compact" className="space-y-2">
           <div className="flex justify-between text-xs text-slate-600">
             <span>Payment progress</span>
@@ -247,7 +249,7 @@ export default function ProjectDashboardPage() {
           {[
             ['Execution', p.contractorName ?? (p.fulfillmentMode === 'DIY' ? 'DIY / household' : 'Provider not recorded')],
             ['Path', p.executionPath ? p.executionPath.toLowerCase() : null],
-            ['Funding', p.fundingMode?.toLowerCase().replace('_', ' ')],
+            ['Funding', p.fundingMode === 'UNDECIDED' ? 'Not decided yet' : p.fundingMode?.toLowerCase().replace('_', ' ')],
             ['License', p.contractorLicense],
             ['Phone', p.contractorPhone],
             ['Email', p.contractorEmail],

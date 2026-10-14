@@ -142,7 +142,8 @@ export default function ProjectsHubPage() {
 }
 
 function ProjectCard({ project: p, propertyId, dimmed }: { project: ProjectRecord; propertyId: string; dimmed?: boolean }) {
-  const remaining = p.currentContractAmountCents - p.paidToDateCents;
+  // An unknown contract amount has no remaining balance; it is shown as not set rather than as a number.
+  const remaining = p.currentContractAmountCents == null ? null : p.currentContractAmountCents - p.paidToDateCents;
   return (
     <Link href={`/dashboard/properties/${propertyId}/projects/${p.id}`} className="block">
       <MobileCard variant="compact" className={`flex items-center gap-3 hover:bg-slate-50 transition-colors ${dimmed ? 'opacity-50' : ''}`}>
@@ -155,9 +156,9 @@ function ProjectCard({ project: p, propertyId, dimmed }: { project: ProjectRecor
             {PROJECT_TYPE_LABELS[p.projectType] ?? p.projectType} · {p.contractorName ?? (p.fulfillmentMode === 'DIY' ? 'DIY / household' : 'Provider not recorded')}
           </p>
           <div className="flex flex-wrap gap-3 text-xs text-slate-600">
-            <span>Contract: {fmtMoney(p.currentContractAmountCents)}</span>
+            <span>Contract: {p.currentContractAmountCents == null ? 'Not set' : fmtMoney(p.currentContractAmountCents)}</span>
             <span>Paid: {fmtMoney(p.paidToDateCents)}</span>
-            {p.status !== 'COMPLETED' && <span>Remaining: {fmtMoney(remaining)}</span>}
+            {p.status !== 'COMPLETED' && remaining != null && <span>Remaining: {fmtMoney(remaining)}</span>}
             {p.expectedEndDate && p.status !== 'COMPLETED' && (
               <span>Due: {fmtDate(p.expectedEndDate)}</span>
             )}

@@ -85,6 +85,8 @@ export default function RenovationReadinessPage() {
   const [error, setError] = useState('');
   const [handoff, setHandoff] = useState({
     projectType: 'CUSTOM',
+    // Owner ruling D-H7: funding is not assumed; the person chooses, or leaves it undecided.
+    fundingMode: 'UNDECIDED',
     contractorName: '',
     contractorLicense: '',
     contractAmount: '',
@@ -198,7 +200,7 @@ export default function RenovationReadinessPage() {
       const response = await api.handoffRenovationProject(propertyId, caseId, {
         projectType: handoff.projectType,
         fulfillmentMode,
-        fundingMode: 'SELF_PAID',
+        fundingMode: handoff.fundingMode as 'UNDECIDED' | 'SELF_PAID' | 'COVERED' | 'MIXED',
         ...(fulfillmentMode === 'PROVIDER' && {
           contractorName: handoff.contractorName,
           ...(handoff.contractorLicense && { contractorLicense: handoff.contractorLicense }),
@@ -392,7 +394,20 @@ export default function RenovationReadinessPage() {
                       <div><Label>Contractor license</Label><Input value={handoff.contractorLicense} onChange={event => setHandoff(current => ({ ...current, contractorLicense: event.target.value }))} /></div>
                     </>
                   ) : null}
-                  <div><Label>Contract amount (USD)</Label><Input type="number" min="0" step="0.01" value={handoff.contractAmount} onChange={event => setHandoff(current => ({ ...current, contractAmount: event.target.value }))} /></div>
+                  <div>
+                    <Label>Funding</Label>
+                    <select className="h-10 w-full rounded-md border px-3" value={handoff.fundingMode} onChange={event => setHandoff(current => ({ ...current, fundingMode: event.target.value }))}>
+                      <option value="UNDECIDED">Not decided yet</option>
+                      <option value="SELF_PAID">Self-paid</option>
+                      <option value="COVERED">Covered (insurance or warranty)</option>
+                      <option value="MIXED">Mixed</option>
+                    </select>
+                  </div>
+                  <div>
+                    <Label>Contract amount (USD)</Label>
+                    <Input type="number" min="0" step="0.01" value={handoff.contractAmount} onChange={event => setHandoff(current => ({ ...current, contractAmount: event.target.value }))} />
+                    <p className="mt-1 text-xs text-slate-600">Leave blank if it is not known yet. It is recorded as not set, not as $0; enter 0 only for a project with no cost.</p>
+                  </div>
                   <div><Label>Start date</Label><Input type="date" value={handoff.startDate} onChange={event => setHandoff(current => ({ ...current, startDate: event.target.value }))} /></div>
                   <div><Label>Expected end date</Label><Input type="date" value={handoff.expectedEndDate} onChange={event => setHandoff(current => ({ ...current, expectedEndDate: event.target.value }))} /></div>
                   {handoff.intakeMode !== 'PLANNED' ? (

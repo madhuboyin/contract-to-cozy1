@@ -7270,7 +7270,7 @@ export interface ProjectRecord {
   bookingId?: string | null;
   executionPath?: 'REPAIR' | 'REPLACEMENT' | null;
   fulfillmentMode: 'PROVIDER' | 'DIY';
-  fundingMode: 'SELF_PAID' | 'COVERED' | 'MIXED';
+  fundingMode: 'UNDECIDED' | 'SELF_PAID' | 'COVERED' | 'MIXED';
   complexity: 'MINOR' | 'MAJOR';
   recommendationVersion?: string | null;
   renovationCaseId?: string | null;
@@ -7317,9 +7317,11 @@ export interface ProjectRecord {
   providerRankingRationale?: string | null;
   commercialDisclosure?: Record<string, unknown> | null;
   credentialCheck?: Record<string, unknown> | null;
-  contractAmountCents: number;
+  /** null is an unknown amount; 0 is a known zero-dollar project. */
+  contractAmountCents: number | null;
   approvedChangeOrderDeltaCents: number;
-  currentContractAmountCents: number;
+  /** null while the contract amount is unknown. */
+  currentContractAmountCents: number | null;
   paidToDateCents: number;
   startDate: string;
   expectedEndDate?: string | null;

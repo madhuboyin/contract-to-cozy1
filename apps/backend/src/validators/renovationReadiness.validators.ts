@@ -39,7 +39,8 @@ const projectType = z.enum([
 export const HandoffRenovationProjectSchema = z.object({
   projectType,
   fulfillmentMode: z.enum(['PROVIDER', 'DIY']).default('PROVIDER'),
-  fundingMode: z.enum(['SELF_PAID', 'COVERED', 'MIXED']).default('SELF_PAID'),
+  // Owner ruling D-H7: an omitted funding mode is undecided, not self-paid.
+  fundingMode: z.enum(['UNDECIDED', 'SELF_PAID', 'COVERED', 'MIXED']).default('UNDECIDED'),
   contractorId: z.string().trim().min(1).optional(),
   contractorName: z.string().trim().min(1).max(200).optional(),
   contractorLicense: z.string().trim().min(1).max(100).optional(),

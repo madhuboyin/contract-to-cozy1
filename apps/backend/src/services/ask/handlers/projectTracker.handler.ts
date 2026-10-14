@@ -82,9 +82,9 @@ export function trackedProjectsFromView(projects: readonly TrackedProjectView[],
     description: null,
     meta: [
       `${PROJECT_TYPE_LABELS[project.projectType] ?? readableCode(project.projectType)} · ${project.contractorName ?? (project.fulfillmentMode === 'DIY' ? 'DIY / household' : 'Provider not recorded')}`,
-      `Contract ${projectMoney(project.currentContractAmountCents)}`,
+      project.currentContractAmountCents == null ? 'Contract amount not set' : `Contract ${projectMoney(project.currentContractAmountCents)}`,
       `Paid ${projectMoney(project.paidToDateCents)}`,
-      ...(project.status !== 'COMPLETED' ? [`Remaining ${projectMoney((project.currentContractAmountCents ?? 0) - (project.paidToDateCents ?? 0))}`] : []),
+      ...(project.status !== 'COMPLETED' && project.currentContractAmountCents != null ? [`Remaining ${projectMoney(project.currentContractAmountCents - (project.paidToDateCents ?? 0))}`] : []),
       ...(project.expectedEndDate && project.status !== 'COMPLETED' ? [`Due ${humanDate(new Date(project.expectedEndDate))}`] : []),
       ...(project.warrantyExpiresAt && project.status === 'COMPLETED' ? [`Warranty expires ${humanDate(new Date(project.warrantyExpiresAt))}`] : []),
     ],
@@ -130,7 +130,8 @@ function moneyWithCents(cents: number | null | undefined): string {
 
 export function projectDetailFromView(project: ProjectDetailView, logs: Awaited<ReturnType<typeof listLogEntries>>['entries'], canManage: boolean, alignment?: Awaited<ReturnType<typeof getProjectExecutionAlignment>>, collectionOffsets: Record<string, number> = {}, closeout?: Awaited<ReturnType<typeof getCloseoutPackage>> | null, shareLinks: Awaited<ReturnType<typeof listCloseoutShareLinks>> = []): AskOperationResult {
   const materials = project.materialSpecs ?? [];
-  const remaining = project.currentContractAmountCents - project.paidToDateCents;
+  // An unknown contract amount has no remaining balance (owner ruling D-H5); it is shown as not set, not as the amount paid.
+  const remaining = project.currentContractAmountCents == null ? null : project.currentContractAmountCents - project.paidToDateCents;
   const openIssues = project.issues.filter((issue) => issue.status !== 'RESOLVED');
   const completedMilestones = project.milestones.filter((milestone) => milestone.status === 'COMPLETE').length;
   const commandAction = (id: string, label: string, entityType = 'PROJECT_RECORD', entityId = project.id, style: 'PRIMARY' | 'SECONDARY' | 'QUIET' = 'SECONDARY') => ({ id, label, interactionType: 'START_WORKFLOW' as const, message: PROJECT_TRACKER_COMMAND_MESSAGE, operationId: 'PROJECT_TRACKER_COMMAND', entityType, entityId, style });
@@ -178,9 +179,9 @@ export function projectDetailFromView(project: ProjectDetailView, logs: Awaited<
   return { status: 'ANSWERED', reasonCode: 'PROJECT_TRACKER_DETAIL_READY', parameters: { projectId: project.id, viewState }, blocks: [
     { type: 'SUMMARY', id: 'project-detail-summary', title: project.name, body: `${PROJECT_TYPE_LABELS[project.projectType] ?? readableCode(project.projectType)} · ${project.contractorName ?? (project.fulfillmentMode === 'DIY' ? 'DIY / household' : 'Provider not recorded')}. ${completedMilestones} of ${project.milestones.length} milestones complete; ${openIssues.length} open issue${openIssues.length === 1 ? '' : 's'}.`, tone: openIssues.some((issue) => issue.severity === 'BLOCKING') ? 'CAUTION' : 'DEFAULT', actions: lifecycleActions },
     { type: 'TABLE', id: 'project-detail-financials', title: 'Contract and payment position', description: 'Recorded project amounts; approved change orders are included in the current contract.', columns: [{ key: 'metric', label: 'Metric' }, { key: 'amount', label: 'Amount' }], rows: [
-      { id: 'contract', values: { metric: 'Current contract', amount: moneyWithCents(project.currentContractAmountCents) } },
+      { id: 'contract', values: { metric: 'Current contract', amount: project.currentContractAmountCents == null ? 'Not set' : moneyWithCents(project.currentContractAmountCents) } },
       { id: 'paid', values: { metric: 'Paid to date', amount: moneyWithCents(project.paidToDateCents) } },
-      { id: 'remaining', values: { metric: 'Remaining', amount: moneyWithCents(remaining) } },
+      { id: 'remaining', values: { metric: 'Remaining', amount: remaining == null ? 'Unknown until the contract amount is set' : moneyWithCents(remaining) } },
     ], actions: [] },
     ...(alignment?.projections?.length ? [{ type: 'TABLE' as const, id: 'project-execution-alignment', title: 'Execution alignment diagnostics', description: 'Per-projection synchronization state for linked execution records.', columns: [{ key: 'projection', label: 'Projection' }, { key: 'source', label: 'Source' }, { key: 'status', label: 'Status' }, { key: 'diagnostic', label: 'Last reconciliation' }], rows: alignment.projections.map((projection) => ({ id: projection.id, values: { projection: projection.name, source: `${readableCode(projection.executionSourceType)} · ${projection.executionSourceId}`, status: readableCode(projection.reconciliationStatus), diagnostic: [projection.lastReconciledAt ? humanDate(projection.lastReconciledAt) : 'Never', `${projection.reconciliationAttempts} attempt${projection.reconciliationAttempts === 1 ? '' : 's'}`, projection.reconciliationError].filter(Boolean).join(' · ') } })), actions: [] }] : []),
     ...(closeout ? [{ type: 'GROUPED_LIST' as const, id: 'project-closeout-preview', title: 'Closeout package', description: `Generated ${closeout.closeoutPackageGeneratedAt ? humanDate(closeout.closeoutPackageGeneratedAt) : 'date unknown'} · ${closeout.writeBacks.length} home-record write-back${closeout.writeBacks.length === 1 ? '' : 's'}. Share links expose the immutable package snapshot only.`, filters: [], sections: [{ id: 'project-closeout-shares', title: 'Share-link history', count: shareLinks.length, items: shareLinks.map((link) => item(link.id, `Created ${humanDate(link.createdAt)}`, link.lastViewedAt ? `Last viewed ${humanDate(link.lastViewedAt)}` : 'Never viewed', [`${link.viewCount} view${link.viewCount === 1 ? '' : 's'}`, link.expiresAt ? `Expires ${humanDate(link.expiresAt)}` : 'No expiry', link.revokedAt ? `Revoked ${humanDate(link.revokedAt)}` : ''], readableCode(link.status))) }], actions: [] }] : []),

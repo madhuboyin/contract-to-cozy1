@@ -322,3 +322,17 @@ test('the service refuses to edit a paid payment, not only the Ask handler', asy
   };
   await assert.rejects(() => projectTrackerModule.updatePayment('pay1', 'kitchen', 'p1', { description: 'changed' }), (error) => error.code === 'PAYMENT_PAID');
 });
+
+test('owner ruling D-H5: an unknown contract amount reads as not set, a known zero reads as $0, and nothing is computed from the unknown', () => {
+  const unknown = { ...project('fence', { currentContractAmountCents: null, paidToDateCents: 5_000, status: 'PLANNING' }), milestones: [], payments: [], changeOrders: [], issues: [], _count: { progressLogs: 0, writeBacks: 0 } };
+  const detail = projectDetailFromView(unknown, [], true);
+  const table = detail.blocks.find((block) => block.id === 'project-detail-financials');
+  assert.equal(table.rows.find((row) => row.id === 'contract').values.amount, 'Not set');
+  assert.match(table.rows.find((row) => row.id === 'remaining').values.amount, /Unknown until the contract amount is set/);
+  const zero = projectDetailFromView({ ...unknown, currentContractAmountCents: 0, paidToDateCents: 0 }, [], true);
+  assert.equal(zero.blocks.find((block) => block.id === 'project-detail-financials').rows.find((row) => row.id === 'contract').values.amount, '$0.00');
+  const list = trackedProjectsFromView([project('fence', { currentContractAmountCents: null, paidToDateCents: 0, status: 'PLANNING' })], 'p1');
+  const meta = JSON.stringify(list);
+  assert.match(meta, /Contract amount not set/);
+  assert.doesNotMatch(meta, /Remaining/);
+});

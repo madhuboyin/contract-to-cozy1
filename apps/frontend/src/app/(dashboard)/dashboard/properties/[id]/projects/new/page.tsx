@@ -32,7 +32,7 @@ type ProjectFormState = {
   expectedEndDate: string;
   executionPath: 'REPAIR' | 'REPLACEMENT';
   fulfillmentMode: 'PROVIDER' | 'DIY';
-  fundingMode: 'SELF_PAID' | 'COVERED' | 'MIXED';
+  fundingMode: 'UNDECIDED' | 'SELF_PAID' | 'COVERED' | 'MIXED';
   complexity: 'MINOR' | 'MAJOR';
   providerRankingRationale: string;
   commercialRelationshipType: 'NONE' | 'SPONSORED' | 'REFERRAL_FEE' | 'COMMISSION' | 'OWNED' | 'AFFILIATE' | 'OTHER';
@@ -76,7 +76,8 @@ export default function NewProjectPage() {
     expectedEndDate: '',
     executionPath: 'REPAIR',
     fulfillmentMode: 'PROVIDER',
-    fundingMode: 'SELF_PAID',
+    // Owner ruling D-H7: funding is not assumed on the homeowner's behalf.
+    fundingMode: 'UNDECIDED',
     complexity: 'MAJOR',
     providerRankingRationale: '',
     commercialRelationshipType: 'NONE',
@@ -296,6 +297,7 @@ export default function NewProjectPage() {
             <div className="space-y-1.5">
               <Label htmlFor="fundingMode">Funding</Label>
               <select id="fundingMode" value={form.fundingMode} onChange={e => set('fundingMode', e.target.value)} className="h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+                <option value="UNDECIDED">Not decided yet</option>
                 <option value="SELF_PAID">Self-paid</option>
                 <option value="COVERED">Covered</option>
                 <option value="MIXED">Mixed</option>

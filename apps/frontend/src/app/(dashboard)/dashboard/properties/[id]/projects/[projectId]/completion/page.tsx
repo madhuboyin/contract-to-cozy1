@@ -151,7 +151,8 @@ export default function CompletionPage() {
       });
       setForm(current => ({
         ...current,
-        actualCost: current.actualCost || String((projectData.currentContractAmountCents ?? 0) / 100),
+        // An unknown contract amount is not prefilled as a final cost.
+        actualCost: current.actualCost || (projectData.currentContractAmountCents == null ? '' : String(projectData.currentContractAmountCents / 100)),
         providerOutcome: projectData.fulfillmentMode === 'DIY' ? 'NOT_APPLICABLE' : current.providerOutcome,
       }));
     } catch (e: any) {

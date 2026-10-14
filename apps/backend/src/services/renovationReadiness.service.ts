@@ -806,11 +806,13 @@ export async function handoffToProject(
   );
   const permit = projectRequirementProjection(renovationCase.requirements, 'PERMIT');
   const hoa = projectRequirementProjection(renovationCase.requirements, 'HOA');
-  const contractAmountCents = input.contractAmountCents
+  // Owner ruling D-H5: with no amount from the request, the scope or a selected quote the amount is unknown (null), never zero. A zero the person
+  // typed, or the scope recorded, is a known zero and is kept.
+  const contractAmountCents: number | null = input.contractAmountCents
     ?? scope.contractCostCents
     ?? (quoteWorkspace?.selectedQuoteAmount
       ? Math.round(Number(quoteWorkspace.selectedQuoteAmount) * 100)
-      : 0);
+      : null);
   const contractorName = input.contractorName ?? quoteWorkspace?.selectedVendorName ?? undefined;
   const contractorLicense = input.contractorLicense ?? quote?.providerLicenseNumber ?? undefined;
   // The project's contract documents are still read from the legacy store, so only ids that are legacy Documents can be carried over. A scope

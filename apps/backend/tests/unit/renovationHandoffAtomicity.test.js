@@ -147,6 +147,23 @@ test('the Project, status, link, lifecycle and both events are written on the on
   } finally { f.restore(); }
 });
 
+test('owner rulings D-H5 and D-H7: an amount nobody supplied is stored as unknown, a typed zero stays zero, and funding is not assumed', async () => {
+  let f = fixture();
+  try {
+    await service.handoffToProject('prop-1', 'case-1', 'u1', input({ fundingMode: 'UNDECIDED' }));
+    const created = f.tx.calls.find(([model, method]) => model === 'projectRecord' && method === 'create')[2].data;
+    assert.equal(created.contractAmountCents, null);
+    assert.equal(created.currentContractAmountCents, null);
+    assert.equal(created.fundingMode, 'UNDECIDED');
+  } finally { f.restore(); }
+  f = fixture();
+  try {
+    await service.handoffToProject('prop-1', 'case-1', 'u1', input({ fundingMode: 'UNDECIDED', contractAmountCents: 0 }));
+    const created = f.tx.calls.find(([model, method]) => model === 'projectRecord' && method === 'create')[2].data;
+    assert.equal(created.contractAmountCents, 0, 'a zero the person entered is a known zero');
+  } finally { f.restore(); }
+});
+
 test('a failure while linking the case writes nothing outside the transaction and reports nothing as created', async () => {
   const f = fixture({ failLink: true });
   try {

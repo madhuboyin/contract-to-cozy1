@@ -103,7 +103,7 @@ export async function createProject(req: Request, res: Response, next: NextFunct
             projectId: (data as any).id,
             executionPath: req.body.executionPath ?? null,
             fulfillmentMode: req.body.fulfillmentMode ?? 'PROVIDER',
-            fundingMode: req.body.fundingMode ?? 'SELF_PAID',
+            fundingMode: req.body.fundingMode ?? 'UNDECIDED',
             complexity: req.body.complexity ?? 'MAJOR',
           },
         });
@@ -611,7 +611,9 @@ export async function confirmCompletion(req: Request, res: Response, next: NextF
         providerOutcome: req.body.providerOutcome,
         priceVarianceCents: req.body.actualCostCents === undefined
           ? null
-          : req.body.actualCostCents - (completedProject?.currentContractAmountCents ?? 0),
+          : completedProject?.currentContractAmountCents == null
+            ? null // an unknown contract amount has no variance (owner ruling D-H5)
+            : req.body.actualCostCents - completedProject.currentContractAmountCents,
         recommendationOverridden: req.body.recommendationOverridden,
         blockedDays: completedProject?.createdAt && completedProject?.verifiedAt
           ? Math.max(0, Math.round((new Date(completedProject.verifiedAt).getTime() - new Date(completedProject.createdAt).getTime()) / 86_400_000))

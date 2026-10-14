@@ -21198,6 +21198,8 @@ enum ProjectFulfillmentMode {
 }
 
 enum ProjectFundingMode {
+  // Not yet decided (owner ruling D-H7): never recorded as SELF_PAID on the homeowner's behalf. Existing rows keep the value they have.
+  UNDECIDED
   SELF_PAID
   COVERED
   MIXED
@@ -21429,7 +21431,7 @@ model ProjectRecord {
   // Phase 3 major-moment context keeps the execution alternatives explicit.
   executionPath         ProjectExecutionPath?
   fulfillmentMode       ProjectFulfillmentMode @default(PROVIDER)
-  fundingMode           ProjectFundingMode     @default(SELF_PAID)
+  fundingMode           ProjectFundingMode     @default(UNDECIDED)
   complexity            ProjectComplexity      @default(MAJOR)
   recommendationVersion String?
   sourceActionId        String?
@@ -21462,9 +21464,11 @@ model ProjectRecord {
   bookingId           String? // set when sourceType = BOOKING
 
   // Financial tracking (all amounts in cents)
-  contractAmountCents           Int @default(0)
+  // Owner ruling D-H5: null is an unknown amount and 0 is a known zero-dollar project; zero is never a stand-in for unknown. Rows written before this
+  // change may hold 0 for an amount that was never known; they are not rewritten (no row can be told apart from a real zero).
+  contractAmountCents           Int?
   approvedChangeOrderDeltaCents Int @default(0) // sum of APPROVED change order deltas; updated on each approval
-  currentContractAmountCents    Int @default(0) // contractAmountCents + approvedChangeOrderDeltaCents
+  currentContractAmountCents    Int? // contractAmountCents + approvedChangeOrderDeltaCents; null while contractAmountCents is unknown
   paidToDateCents               Int @default(0) // sum of PAID payment amounts
 
   // Timeline

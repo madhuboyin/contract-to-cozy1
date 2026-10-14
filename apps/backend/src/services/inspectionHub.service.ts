@@ -172,11 +172,13 @@ export async function acceptFindingAsWork(
       sourceEntityId: finding.id,
       inventoryItemId: finding.inventoryItemId ?? undefined,
       fulfillmentMode: 'PROVIDER',
-      fundingMode: 'SELF_PAID',
+      // Owner ruling D-H7: a repair project made from a finding has no funding decision yet.
+      fundingMode: 'UNDECIDED',
       complexity: 'MAJOR',
       permitApplicability: 'UNKNOWN',
       hoaApplicability: 'UNKNOWN',
-      contractAmountCents: 0,
+      // Owner ruling D-H5: no contract exists yet, so the amount is unknown, not zero.
+      contractAmountCents: null,
       startDate: new Date().toISOString().slice(0, 10),
       homeSystemsAffected: [],
       milestones: [

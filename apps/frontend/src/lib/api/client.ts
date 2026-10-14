@@ -6243,7 +6243,7 @@ class APIClient {
     bookingId?: string;
     executionPath?: 'REPAIR' | 'REPLACEMENT';
     fulfillmentMode?: 'PROVIDER' | 'DIY';
-    fundingMode?: 'SELF_PAID' | 'COVERED' | 'MIXED';
+    fundingMode?: 'UNDECIDED' | 'SELF_PAID' | 'COVERED' | 'MIXED';
     complexity?: 'MINOR' | 'MAJOR';
     recommendationVersion?: string;
     sourceActionId?: string;
@@ -6264,7 +6264,7 @@ class APIClient {
       selectionCriteria: string[];
       nonCommercialAlternatives: string[];
     };
-    contractAmountCents: number;
+    contractAmountCents?: number | null;
     startDate: string;
     expectedEndDate?: string;
     homeSystemsAffected?: string[];

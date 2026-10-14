@@ -480,7 +480,7 @@ async function assertIssue(issueId: string, projectId: string) {
 }
 
 // Recalculate currentContractAmountCents from source of truth
-async function recalcProjectTotals(projectId: string) {
+export async function recalcProjectTotals(projectId: string) {
   const [project, approvedOrders, paidPayments] = await Promise.all([
     prisma.projectRecord.findUnique({
       where: { id: projectId },
@@ -505,7 +505,8 @@ async function recalcProjectTotals(projectId: string) {
     where: { id: projectId },
     data: {
       approvedChangeOrderDeltaCents: approvedDelta,
-      currentContractAmountCents: project.contractAmountCents + approvedDelta,
+      // An unknown base has no current total; the approved delta is still recorded on its own field (owner ruling D-H5).
+      currentContractAmountCents: project.contractAmountCents == null ? null : project.contractAmountCents + approvedDelta,
       paidToDateCents: paid,
     },
   });
@@ -883,7 +884,7 @@ export async function createProjectInTx(tx: Prisma.TransactionClient, propertyId
         bookingId: projectData.bookingId,
         executionPath: projectData.executionPath,
         fulfillmentMode: projectData.fulfillmentMode ?? 'PROVIDER',
-        fundingMode: projectData.fundingMode ?? 'SELF_PAID',
+        fundingMode: projectData.fundingMode ?? 'UNDECIDED',
         complexity: projectData.complexity ?? 'MAJOR',
         recommendationVersion: projectData.recommendationVersion ?? journey?.templateVersion,
         sourceActionId: projectData.sourceActionId,
@@ -923,8 +924,9 @@ export async function createProjectInTx(tx: Prisma.TransactionClient, propertyId
           userSuppliedProvider: true,
           status: 'NOT_PLATFORM_VERIFIED',
         },
-        contractAmountCents: projectData.contractAmountCents,
-        currentContractAmountCents: projectData.contractAmountCents,
+        // Owner ruling D-H5: an amount that was not supplied is stored as unknown (null), never as zero.
+        contractAmountCents: projectData.contractAmountCents ?? null,
+        currentContractAmountCents: projectData.contractAmountCents ?? null,
         startDate: new Date(projectData.startDate),
         expectedEndDate: projectData.expectedEndDate ? new Date(projectData.expectedEndDate) : undefined,
         homeSystemsAffected: (projectData.homeSystemsAffected ?? []) as InventoryItemCategory[],
@@ -2753,7 +2755,7 @@ export async function confirmCompletion(projectId: string, propertyId: string, u
             outcomeStatus: data.outcomeStatus,
             verifiedOutcome: true,
             timelinessVarianceDays,
-            priceVarianceCents: data.actualCostCents - existing.currentContractAmountCents,
+            priceVarianceCents: existing.currentContractAmountCents == null ? null : data.actualCostCents - existing.currentContractAmountCents,
             status: 'PENDING',
           },
           update: {
@@ -2763,7 +2765,7 @@ export async function confirmCompletion(projectId: string, propertyId: string, u
             outcomeStatus: data.outcomeStatus,
             verifiedOutcome: true,
             timelinessVarianceDays,
-            priceVarianceCents: data.actualCostCents - existing.currentContractAmountCents,
+            priceVarianceCents: existing.currentContractAmountCents == null ? null : data.actualCostCents - existing.currentContractAmountCents,
           },
         });
         providerReviewId = review.id;

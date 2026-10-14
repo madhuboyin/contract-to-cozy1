@@ -518,7 +518,7 @@ export async function loadOwnershipCostSourceBundle(
 
   for (const project of projects) {
     const amount = project.actualCostCents
-      ?? (project.currentContractAmountCents > 0
+      ?? (project.currentContractAmountCents != null && project.currentContractAmountCents > 0
         ? project.currentContractAmountCents
         : null);
     const projectDate = project.actualEndDate ?? project.startDate;

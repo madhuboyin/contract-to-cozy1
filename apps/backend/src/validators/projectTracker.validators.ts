@@ -99,7 +99,8 @@ export const CreateProjectSchema = z.object({
   bookingId: z.string().optional(),
   executionPath: z.enum(['REPAIR', 'REPLACEMENT']).optional(),
   fulfillmentMode: z.enum(['PROVIDER', 'DIY']).default('PROVIDER'),
-  fundingMode: z.enum(['SELF_PAID', 'COVERED', 'MIXED']).default('SELF_PAID'),
+  // Owner ruling D-H7: an omitted funding mode is undecided, not self-paid.
+  fundingMode: z.enum(['UNDECIDED', 'SELF_PAID', 'COVERED', 'MIXED']).default('UNDECIDED'),
   complexity: z.enum(['MINOR', 'MAJOR']).default('MAJOR'),
   recommendationVersion: z.string().max(120).optional(),
   sourceActionId: z.string().trim().min(1).max(160).optional(),
@@ -112,7 +113,8 @@ export const CreateProjectSchema = z.object({
   hoaApplicabilityBasis: z.string().trim().min(1).max(2000).optional(),
   providerRankingRationale: z.string().min(1).max(1000).optional(),
   commercialDisclosure: CommercialDisclosureSchema.optional(),
-  contractAmountCents: z.number().int().min(0),
+  // Owner ruling D-H5: omitted or null is an unknown amount; 0 is a known zero-dollar project.
+  contractAmountCents: z.number().int().min(0).nullable().optional(),
   startDate: z.string().date(),
   expectedEndDate: z.string().date().optional(),
   homeSystemsAffected: z.array(inventoryItemCategory).default([]),
