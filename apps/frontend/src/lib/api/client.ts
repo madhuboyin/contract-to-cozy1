@@ -6321,7 +6321,7 @@ class APIClient {
     actualCostCents: number;
     recommendationComprehensionConfirmed: true;
     notes?: string;
-    proofDocuments?: Array<{ proofKey: string; documentId?: string; type: 'INVOICE' | 'PERMIT' | 'PHOTO' | 'OTHER'; name: string; fileUrl?: string; fileSize?: number; mimeType?: string; kind?: 'PHOTO' | 'RECEIPT' | 'INVOICE' | 'PDF' | 'BEFORE' | 'AFTER' | 'OTHER' }>;
+    proofDocuments?: Array<{ proofKey: string; documentId: string; type: 'INVOICE' | 'PERMIT' | 'PHOTO' | 'OTHER'; name: string; fileSize?: number; mimeType?: string; kind?: 'PHOTO' | 'RECEIPT' | 'INVOICE' | 'PDF' | 'BEFORE' | 'AFTER' | 'OTHER' }>;
   }): Promise<{ homeEventId: string }> {
     const res = await this.post<{ homeEventId: string }>(`/api/properties/${propertyId}/projects/minor-completion`, payload);
     if (!res.data) throw new APIError('Failed to record minor work', 500);
@@ -6566,15 +6566,13 @@ class APIClient {
     recommendationComprehensionConfirmed: boolean;
     modelNumber?: string;
     serialNumber?: string;
-    proofDocuments?: Array<{ proofKey: string; documentId?: string; type: 'INVOICE' | 'PERMIT' | 'PHOTO' | 'OTHER'; name: string; fileUrl?: string; fileSize?: number; mimeType?: string; kind?: 'PHOTO' | 'RECEIPT' | 'INVOICE' | 'PDF' | 'BEFORE' | 'AFTER' | 'OTHER' }>;
+    proofDocuments?: Array<{ proofKey: string; documentId: string; type: 'INVOICE' | 'PERMIT' | 'PHOTO' | 'OTHER'; name: string; fileSize?: number; mimeType?: string; kind?: 'PHOTO' | 'RECEIPT' | 'INVOICE' | 'PDF' | 'BEFORE' | 'AFTER' | 'OTHER' }>;
     contractorRatingQuality?: number;
     contractorRatingTimeline?: number;
     contractorRatingComms?: number;
     contractorRatingBudget?: number;
     contractorReviewText?: string;
     warrantyPeriodMonths?: number;
-    warrantyDocumentKey?: string;
-    completionRecordKey?: string;
     nextMaintenanceDate?: string;
     nextInspectionDate?: string;
     replacementHorizonDate?: string;

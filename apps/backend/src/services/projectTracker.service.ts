@@ -2446,34 +2446,8 @@ export async function completeMinorWork(propertyId: string, userId: string, data
         documentIds.push(record.id);
         continue;
       }
-      // No caller passes a proof without a documentId today (ProjectProofUploader.tsx always uploads
-      // through Home Records first) — pinned on the legacy Document table rather than converted, since
-      // there is no live path to verify a Home Records equivalent against.
-      const document = await tx.document.upsert({
-        where: { projectProofKey: `minor:${journey.id}:${proof.proofKey}` },
-        create: {
-          propertyId,
-          projectProofKey: `minor:${journey.id}:${proof.proofKey}`,
-          inventoryItemId: item.id,
-          uploadedBy: userId,
-          type: proof.type,
-          name: proof.name,
-          fileUrl: proof.fileUrl!,
-          fileSize: proof.fileSize,
-          mimeType: proof.mimeType,
-          verificationStatus: 'VERIFIED',
-          verifiedAt: new Date(),
-          verifiedByUserId: userId,
-          metadata: { journeyId: journey.id, proofKind: proof.kind, minorWork: true },
-        },
-        update: { fileUrl: proof.fileUrl!, fileSize: proof.fileSize, mimeType: proof.mimeType, verificationStatus: 'VERIFIED', verifiedAt: new Date(), verifiedByUserId: userId },
-      });
-      documentIds.push(document.id);
-      await tx.homeEventDocument.upsert({
-        where: { eventId_documentId: { eventId: event.id, documentId: document.id } },
-        create: { eventId: event.id, documentId: document.id, kind: proof.kind, caption: proof.name },
-        update: { kind: proof.kind, caption: proof.name },
-      });
+      // Slice 4 (D-P1): a proof is a Home Record. The legacy Document upsert was removed; a proof without an id is refused.
+      throw new APIError('Each proof must be a Home Record. Upload it to Home Records first, then choose it here.', 409, 'INVALID_PROOF_DOCUMENT');
     }
 
     await tx.inventoryItem.update({
@@ -2651,8 +2625,6 @@ export async function confirmCompletion(projectId: string, propertyId: string, u
         contractorReviewText: data.contractorReviewText,
         warrantyPeriodMonths: data.warrantyPeriodMonths,
         warrantyExpiresAt,
-        warrantyDocumentKey: data.warrantyDocumentKey,
-        completionRecordKey: data.completionRecordKey,
       },
     });
 
@@ -2722,12 +2694,6 @@ export async function confirmCompletion(projectId: string, propertyId: string, u
     }
 
     const proofDocuments = [...data.proofDocuments];
-    if (data.warrantyDocumentKey && !proofDocuments.some((proof: any) => proof.proofKey === 'warranty')) {
-      proofDocuments.push({ proofKey: 'warranty', type: 'OTHER', name: 'Project warranty', fileUrl: data.warrantyDocumentKey, fileSize: 0, mimeType: 'application/octet-stream', kind: 'PDF' });
-    }
-    if (data.completionRecordKey && !proofDocuments.some((proof: any) => proof.proofKey === 'completion-record')) {
-      proofDocuments.push({ proofKey: 'completion-record', type: 'OTHER', name: 'Project completion record', fileUrl: data.completionRecordKey, fileSize: 0, mimeType: 'application/octet-stream', kind: 'PDF' });
-    }
     const documentIds: string[] = [];
     const proofRecordIdByKey = new Map<string, string>();
     for (const proof of proofDocuments) {
@@ -2760,44 +2726,9 @@ export async function confirmCompletion(projectId: string, propertyId: string, u
         proofRecordIdByKey.set(proof.proofKey, record.id);
         continue;
       }
-      // No caller passes a proof without a documentId today (ProjectProofUploader.tsx always uploads
-      // through Home Records first, and warrantyDocumentKey/completionRecordKey have no live caller
-      // either) — pinned on the legacy Document table rather than converted, since there is no live
-      // path to verify a Home Records equivalent against.
-      const document = await tx.document.upsert({
-        where: { projectProofKey: `${projectId}:${proof.proofKey}` },
-        create: {
-          propertyId,
-          projectId,
-          projectProofKey: `${projectId}:${proof.proofKey}`,
-          inventoryItemId: existing.inventoryItemId,
-          uploadedBy: userId,
-          type: proof.type,
-          name: proof.name,
-          fileUrl: proof.fileUrl!,
-          fileSize: proof.fileSize,
-          mimeType: proof.mimeType,
-          verificationStatus: verifiedSuccess ? 'VERIFIED' : 'UNVERIFIED',
-          verifiedAt: verifiedSuccess ? new Date() : undefined,
-          verifiedByUserId: verifiedSuccess ? userId : undefined,
-          metadata: { projectId, proofKind: proof.kind, outcomeStatus: data.outcomeStatus },
-        },
-        update: {
-          fileUrl: proof.fileUrl!,
-          fileSize: proof.fileSize,
-          mimeType: proof.mimeType,
-          verificationStatus: verifiedSuccess ? 'VERIFIED' : 'UNVERIFIED',
-          verifiedAt: verifiedSuccess ? new Date() : null,
-          verifiedByUserId: verifiedSuccess ? userId : null,
-          metadata: { projectId, proofKind: proof.kind, outcomeStatus: data.outcomeStatus },
-        },
-      });
-      documentIds.push(document.id);
-      await tx.homeEventDocument.upsert({
-        where: { eventId_documentId: { eventId: event.id, documentId: document.id } },
-        create: { eventId: event.id, documentId: document.id, kind: proof.kind, caption: proof.name },
-        update: { kind: proof.kind, caption: proof.name },
-      });
+      // Slice 4 (D-P1): a proof is a Home Record. The legacy Document upsert, and the warrantyDocumentKey / completionRecordKey
+      // shortcuts that fed it, were removed; a proof without an id is refused.
+      throw new APIError('Each proof must be a Home Record. Upload it to Home Records first, then choose it here.', 409, 'INVALID_PROOF_DOCUMENT');
     }
 
     let expenseId: string | null = null;
@@ -2851,8 +2782,6 @@ export async function confirmCompletion(projectId: string, propertyId: string, u
             propertyId, recordId: warrantyRecordId, entityType: 'WARRANTY', entityId: warranty.id,
             purpose: 'WARRANTY', userId,
           });
-        } else {
-          await tx.document.updateMany({ where: { id: { in: documentIds }, projectProofKey: `${projectId}:warranty` }, data: { warrantyId: warranty.id } });
         }
       }
 

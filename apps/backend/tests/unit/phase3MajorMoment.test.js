@@ -103,7 +103,7 @@ test('minor work can close the journey without creating a ProjectRecord', () => 
 test('verified project closure transactionally writes proof, home history, expense, inventory, warranty, materials, and future care', () => {
   const service = read('../../src/services/projectTracker.service.ts');
   assert.match(service, /prisma\.\$transaction\(async \(tx\)/);
-  for (const model of ['homeEvent.upsert', 'document.upsert', 'expense.upsert', 'warranty.upsert', 'inventoryItem.update', 'materialSpec.upsert', 'propertyMaintenanceTask.upsert']) {
+  for (const model of ['homeEvent.upsert', 'expense.upsert', 'warranty.upsert', 'inventoryItem.update', 'materialSpec.upsert', 'propertyMaintenanceTask.upsert']) {
     assert.match(service, new RegExp(model.replace('.', '\\.')));
   }
   assert.match(service, /writeBackAppliedAt && existing\.outcomeStatus === 'VERIFIED_SUCCESS'/);
@@ -138,9 +138,9 @@ test('completion links shared uploaded documents instead of requiring proof URLs
   const service = read('../../src/services/projectTracker.service.ts');
   const uploader = read('../../../frontend/src/components/projects/ProjectProofUploader.tsx');
   const completionPage = read('../../../frontend/src/app/(dashboard)/dashboard/properties/[id]/projects/[projectId]/completion/page.tsx');
-  assert.match(validator, /documentId: z\.string\(\)\.optional/);
+  assert.match(validator, /documentId: z\.string\(\)\.min\(1\)/);
   assert.match(service, /INVALID_PROOF_DOCUMENT/);
-  assert.match(service, /projectProofKey: `\$\{projectId\}:\$\{proof\.proofKey\}`/);
+  assert.doesNotMatch(service, /tx\.document\.upsert/);
   assert.match(uploader, /uploadRecordForWorkflow/);
   assert.match(service, /linkRecordToEntityInTransaction/);
   assert.match(completionPage, /ProjectProofUploader/);
