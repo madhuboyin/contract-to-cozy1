@@ -2256,6 +2256,12 @@ enum PropertyRecordLinkEntityType {
   PROPERTY_TAX_ASSESSMENT
   PROPERTY_TAX_BILL
   PROPERTY_TAX_APPEAL_EVIDENCE
+  // Project Tracker children (docs/architecture/PROJECT_TRACKER_DOCUMENT_STORE_DESIGN.md, owner ruling D-P2). PROJECT already exists.
+  PROJECT_PAYMENT
+  PROJECT_CHANGE_ORDER
+  PROJECT_PROGRESS_LOG
+  PROJECT_ISSUE
+  PROJECT_ISSUE_NOTE
   OTHER
 }
 
@@ -21639,6 +21645,8 @@ model ProjectPayment {
   paidDate           DateTime? @db.Date
   paymentMethod      String?
   receiptDocumentKey String?
+  // The Home Record id is the durable reference (owner ruling D-P1); the link is its projection. The key above is a legacy copy and is no longer written.
+  receiptDocumentId  String?
   notes              String?   @db.Text
 
   createdAt DateTime @default(now())
@@ -21667,6 +21675,7 @@ model ProjectChangeOrder {
 
   proposedByName        String
   supportingDocumentKey String?
+  supportingDocumentId  String?
   approvedByUserId      String?
   approvedAt            DateTime?
   notes                 String?   @db.Text
@@ -21676,6 +21685,8 @@ model ProjectChangeOrder {
   complianceImpact          Json?
   complianceReviewNotes     String? @db.Text
   complianceEvidenceDocumentIds String[] @default([])
+  // Evidence is bound to the exact version chosen and the binding does not move: { "<recordId>": "<versionId>" }.
+  complianceEvidenceVersionIds Json?
   complianceReviewedByUserId String?
   complianceReviewedAt       DateTime?
   amendedPermitStatus        ProjectComplianceApprovalStatus @default(NOT_APPLICABLE)
@@ -21709,6 +21720,7 @@ model ProjectProgressLog {
 
   notes     String?  @db.Text
   photoKeys String[] // S3 keys
+  photoDocumentIds String[] @default([])
 
   // Optional room tag — links the photo to Room Insights
   roomId String?
@@ -21758,6 +21770,7 @@ model ProjectIssue {
 
   attachmentKeys String[] // S3 keys for photos and documents used as evidence
   evidenceDocumentIds String[] @default([])
+  evidenceVersionIds  Json?
   responsibleParty ProjectIssueResponsibleParty @default(SHARED)
   sourceEntityType String?
   sourceEntityId   String?
@@ -21785,6 +21798,7 @@ model ProjectIssueNote {
   projectId   String
   notes       String @db.Text
   evidenceDocumentIds String[] @default([])
+  evidenceVersionIds  Json?
   createdByUserId String
   createdAt   DateTime @default(now())
 

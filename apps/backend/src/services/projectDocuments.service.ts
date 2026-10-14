@@ -52,22 +52,23 @@ export interface ProjectDocumentResolution {
 export async function resolveProjectDocuments(
   propertyId: string,
   ids: readonly (string | null | undefined)[],
-  options: { transitionalLegacyIds?: readonly string[] } = {},
+  options: { transitionalLegacyIds?: readonly string[]; db?: any } = {},
 ): Promise<ProjectDocumentResolution> {
+  const db = options.db ?? prisma;
   const requested = [...new Set(ids.filter((id): id is string => typeof id === 'string' && id.length > 0))];
   if (!requested.length) return { documents: [], unavailable: [] };
-  const records = await prisma.propertyRecord.findMany({
+  const records = await db.propertyRecord.findMany({
     where: { ...eligibleWhere(propertyId), id: { in: requested } },
     select: { id: true, title: true, recordType: true, sensitivity: true, currentVersionId: true, currentVersion: { select: { mimeType: true } } },
   });
-  const found = new Map<string, ProjectDocumentRef>(records.map((row) => [row.id, {
+  const found = new Map<string, ProjectDocumentRef>(records.map((row: any) => [row.id, {
     id: row.id, source: 'HOME_RECORD', title: row.title, recordType: row.recordType, sensitivity: row.sensitivity,
     versionId: row.currentVersionId ?? null, mimeType: row.currentVersion?.mimeType ?? null,
   }]));
   const legacyAllowed = requested.filter((id) => !found.has(id) && (options.transitionalLegacyIds ?? []).includes(id));
   if (legacyAllowed.length) {
-    const legacy = await prisma.document.findMany({ where: { id: { in: legacyAllowed }, propertyId, deletedAt: null }, select: { id: true, name: true, mimeType: true } });
-    for (const row of legacy) {
+    const legacy = await db.document.findMany({ where: { id: { in: legacyAllowed }, propertyId, deletedAt: null }, select: { id: true, name: true, mimeType: true } });
+    for (const row of legacy as Array<{ id: string; name: string; mimeType: string | null }>) {
       found.set(row.id, { id: row.id, source: 'LEGACY_DOCUMENT', title: row.name, recordType: null, sensitivity: null, versionId: null, mimeType: row.mimeType });
     }
   }
@@ -82,7 +83,7 @@ export async function assertProjectDocuments(
   propertyId: string,
   ids: readonly (string | null | undefined)[],
   failure: { message: string; status?: number; code: string },
-  options: { transitionalLegacyIds?: readonly string[] } = {},
+  options: { transitionalLegacyIds?: readonly string[]; db?: any } = {},
 ): Promise<ProjectDocumentRef[]> {
   const result = await resolveProjectDocuments(propertyId, ids, options);
   if (result.unavailable.length) {

@@ -1,6 +1,6 @@
 # Project Tracker: moving the project document store to Home Records — design
 
-**Status:** Decisions D-P1 to D-P8 ruled by the owner on October 13, 2026 (§7, which supersedes §4 and the parts of §3 it amends). Slice 0 (correctness and inventory) is built (FRD v1.375); slices 1 to 4 are not.
+**Status:** Decisions D-P1 to D-P8 ruled by the owner on October 13, 2026 (§7, which supersedes §4 and the parts of §3 it amends). Slices 0 (correctness and inventory, FRD v1.375) and 1 (links, child entity types and the dual-write transaction, v1.376) are built; slices 2 to 4 are not.
 **Date:** October 13, 2026
 **Scope:** Every place a Project (`ProjectRecord`) and its children (payments, change orders, progress logs, issues, issue notes, dispute packages) refer to a document, what store each one reads and writes today, and how they move to Home Records without leaving dangling references.
 **Not in scope:** Removing the legacy `Document` model (the Documents-retirement arc's "retire last" step, `HOME_CONTINUITY_AND_RECORDS_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md` §17.6), Material Specs' own document fields (a separate domain with its own validator), and the renovation case's scope documents (v1.359).
@@ -157,3 +157,25 @@ For the PDF: never fall back to printing a storage key; print "Contract document
 ### 7.2 The `uploadedBy` finding
 
 `Document.uploadedBy` is commented as a user id. The legacy document routes, the Ask evidence upload and the `documentAuth` uploader check (`document.uploadedBy === homeownerProfile.id`) use the **homeowner profile id**; `providerCredential` compares it to a **user id**; the dispute-package writer stores a **user id**. Changing the evidence-upload writer to a user id, as ruled, would make `documentAuth` stop recognising the uploader of every new Ask upload, and the "my documents" list (`where: { uploadedBy: homeownerProfile.id }`) would stop listing them. So the writers were left as they are and the inventory classifies the existing values (user id, profile id, both, neither). **Decision needed:** keep the profile-id convention for the legacy routes and correct the column comment and the dispute writer; or change every writer and reader together as one slice.
+
+### 7.3 Slice 1 as built (FRD v1.376)
+
+**Canonical source, declared (D-P1):** the Home Record id stored on the project's own row (and, for evidence, the exact version in a stored map) is the workflow's durable reference. The link is the deletion-impact projection. Every writer creates or changes both in one database transaction through `syncProjectDocumentLinks`, so a write fails if the link cannot be written; readers use the stored reference; `findProjectDocumentLinkProblems` is the repair check.
+
+**Schema (edited, not pushed):** five `PropertyRecordLinkEntityType` values (`PROJECT_PAYMENT`, `PROJECT_CHANGE_ORDER`, `PROJECT_PROGRESS_LOG`, `PROJECT_ISSUE`, `PROJECT_ISSUE_NOTE`); id columns for the three references that only had a key (`ProjectPayment.receiptDocumentId`, `ProjectChangeOrder.supportingDocumentId`, `ProjectProgressLog.photoDocumentIds`); and version maps for evidence (`ProjectChangeOrder.complianceEvidenceVersionIds`, `ProjectIssue.evidenceVersionIds`, `ProjectIssueNote.evidenceVersionIds`).
+
+**The link-uniqueness question, decided per use (the `(recordId, entityType, entityId, purpose)` key has no `versionId` and is left as it is, because quote, savings and tax code upsert on it):**
+
+| Use | Rule | Why |
+|---|---|---|
+| Contract document, payment receipt, change-order supporting document, progress photos | `REPLACE`: another record removes the old link; the same record's link moves to the version it was chosen at | the current document is the one that matters |
+| Issue evidence, issue-note evidence, change-order compliance evidence | `KEEP_BOUND_VERSION`: a record already cited keeps its bound version; new records bind to the version chosen; unlisted records lose their link | the evidence is what was shown when it was cited. Multiple versions of one record never coexist on one entity, and each note or issue is its own entity, so a later note binds the record's version at that time |
+| Dispute package | slice 2 | its snapshot already records each evidence item's `versionId` |
+
+**Writers:** contract documents (create, edit, handoff), payment receipt (mark paid), change-order supporting document (create, edit) and compliance evidence (review; cleared with the review when the impact changes), progress photos, issue evidence (create, edit), issue-note evidence. The Ask fields removed in slice 0 are back and write the id columns. The milestone photo gate and the photo count now count Home Record photos too, which would otherwise have made a photo chosen in Ask invisible to the gate; the desktop log page and Ask's log list count both. The gate does not check that a Home Record photo still exists after a purge.
+
+**Repair:** `scripts/repair-project-document-links.ts` is a dry run by default and, with `--apply`, creates missing links, moves a mismatched link to the version the entity bound, removes orphan links, binds evidence written before version maps existed to the version its link has (or the current one, and says so), and re-checks.
+
+**Interim state from slice 0 closes here:** ids written between the two slices have no link until the repair is run.
+
+**Not built:** the dispute package as a Home Record (slice 2), desktop pickers and Home Record uploads from Ask (slice 3), retirement of the transitional path (slice 4). The key columns are no longer written by Ask; the desktop's typed-key paths remain until slice 3.

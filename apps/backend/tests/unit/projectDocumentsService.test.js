@@ -67,12 +67,14 @@ test('a legacy document is accepted only when named as already stored, in this p
 
 test('an issue note and a change-order compliance review refuse evidence that is not an eligible record of this property', async () => {
   const w = world({ records: [rec('a')] });
-  const saved = { p: prisma.projectRecord, i: prisma.projectIssue, c: prisma.projectChangeOrder, n: prisma.projectIssueNote };
+  const saved = { p: prisma.projectRecord, i: prisma.projectIssue, c: prisma.projectChangeOrder, n: prisma.projectIssueNote, t: prisma.$transaction, l: prisma.propertyRecordLink };
+  prisma.propertyRecordLink = { findMany: async () => [], create: async () => ({}), update: async () => ({}), deleteMany: async () => ({}) };
+  prisma.$transaction = async (callback) => callback(prisma);
   const projectRow = { id: 'proj-1', propertyId: 'prop-1', status: 'IN_PROGRESS', projectType: 'CUSTOM', contractAmountCents: 0, approvedChangeOrderDeltaCents: 0, renovationCaseId: null };
   const writes = [];
   prisma.projectRecord = { findUnique: async () => projectRow };
   prisma.projectIssue = { findUnique: async () => ({ id: 'iss-1', projectId: 'proj-1', status: 'OPEN', severity: 'MINOR', blocksPayment: false, sourceEntityType: null, sourceEntityId: null, evidenceDocumentIds: [] }) };
-  prisma.projectIssueNote = { create: async (args) => { writes.push(args.data); return { id: 'n-1' }; } };
+  prisma.projectIssueNote = { create: async (args) => { writes.push(args.data); return { id: 'n-1' }; }, update: async () => ({ id: 'n-1' }) };
   prisma.projectChangeOrder = { findUnique: async () => ({
     id: 'co-1', projectId: 'proj-1', status: 'PROPOSED', costDeltaCents: 0, complianceStatus: 'IMPACT_RECORDED', complianceImpact: { explanation: 'x' },
     amendedPermitStatus: 'NOT_APPLICABLE', hoaReapprovalStatus: 'NOT_APPLICABLE', complianceEvidenceDocumentIds: [],
@@ -80,13 +82,13 @@ test('an issue note and a change-order compliance review refuse evidence that is
   try {
     await assert.rejects(() => tracker.addIssueNote('iss-1', 'proj-1', 'prop-1', 'u1', { notes: 'x', evidenceDocumentIds: ['missing'] }), (e) => e.code === 'PROJECT_ISSUE_NOTE_DOCUMENT_UNAVAILABLE');
     await tracker.addIssueNote('iss-1', 'proj-1', 'prop-1', 'u1', { notes: 'x', evidenceDocumentIds: ['a'] });
-    assert.deepEqual(writes.pop().evidenceDocumentIds, ['a']);
+    assert.deepEqual(writes.shift().evidenceDocumentIds, ['a']);
     await assert.rejects(
       () => tracker.reviewChangeOrderCompliance('co-1', 'proj-1', 'prop-1', 'u1', { amendedPermitStatus: 'CONFIRMED', hoaReapprovalStatus: 'CONFIRMED', evidenceDocumentIds: ['typed-by-hand'], reviewNotes: 'ok' }),
       (e) => e.code === 'CHANGE_ORDER_COMPLIANCE_EVIDENCE_UNAVAILABLE' && e.statusCode === 409,
     );
     assert.equal(writes.length, 0, 'nothing was stored');
-  } finally { Object.assign(prisma, { projectRecord: saved.p, projectIssue: saved.i, projectChangeOrder: saved.c, projectIssueNote: saved.n }); w.restore(); }
+  } finally { Object.assign(prisma, { projectRecord: saved.p, projectIssue: saved.i, projectChangeOrder: saved.c, projectIssueNote: saved.n, $transaction: saved.t, propertyRecordLink: saved.l }); w.restore(); }
 });
 
 test('the dispute package names the contract document and never prints a storage key', async () => {

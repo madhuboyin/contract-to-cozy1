@@ -113,7 +113,8 @@ export default function LogPage() {
 
 function LogEntryCard({ entry: e }: { entry: ProjectProgressLog }) {
   const tone = ENTRY_TYPE_TONE[e.entryType] ?? 'info';
-  const hasPhotos = e.photoKeys && e.photoKeys.length > 0;
+  const photoCount = (e.photoKeys?.length ?? 0) + (e.photoDocumentIds?.length ?? 0);
+  const hasPhotos = photoCount > 0;
 
   return (
     <MobileCard variant="compact" className="space-y-2">
@@ -136,7 +137,7 @@ function LogEntryCard({ entry: e }: { entry: ProjectProgressLog }) {
       {hasPhotos && (
         <p className="text-xs text-slate-500 flex items-center gap-1">
           <Camera className="h-3 w-3" />
-          {e.photoKeys.length} photo{e.photoKeys.length !== 1 ? 's' : ''} stored
+          {photoCount} photo{photoCount !== 1 ? 's' : ''} stored
         </p>
       )}
 

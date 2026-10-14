@@ -963,6 +963,11 @@ export class HomeRecordsService {
         case 'PROPERTY_BRIEF': return prisma.propertyBrief.findFirst({ where: { id: entityId, propertyId }, select: { id: true } });
         case 'EXPENSE': return prisma.expense.findFirst({ where: { id: entityId, propertyId }, select: { id: true } });
         case 'HIDDEN_ASSET_MATCH_OUTCOME': return prisma.hiddenAssetMatchOutcome.findFirst({ where: { id: entityId, match: { propertyId } }, select: { id: true } });
+        case 'PROJECT_PAYMENT': return prisma.projectPayment.findFirst({ where: { id: entityId, project: { propertyId } }, select: { id: true } });
+        case 'PROJECT_CHANGE_ORDER': return prisma.projectChangeOrder.findFirst({ where: { id: entityId, project: { propertyId } }, select: { id: true } });
+        case 'PROJECT_PROGRESS_LOG': return prisma.projectProgressLog.findFirst({ where: { id: entityId, project: { propertyId } }, select: { id: true } });
+        case 'PROJECT_ISSUE': return prisma.projectIssue.findFirst({ where: { id: entityId, project: { propertyId } }, select: { id: true } });
+        case 'PROJECT_ISSUE_NOTE': return prisma.projectIssueNote.findFirst({ where: { id: entityId, project: { propertyId } }, select: { id: true } });
         case 'PROPERTY_TAX_INTAKE': return prisma.propertyTaxDocumentIntake.findFirst({ where: { id: entityId, propertyId }, select: { id: true } });
         case 'PROPERTY_TAX_ASSESSMENT': return prisma.propertyTaxAssessmentRecord.findFirst({ where: { id: entityId, propertyId }, select: { id: true } });
         case 'PROPERTY_TAX_BILL': return prisma.propertyTaxBillRecord.findFirst({ where: { id: entityId, propertyId }, select: { id: true } });

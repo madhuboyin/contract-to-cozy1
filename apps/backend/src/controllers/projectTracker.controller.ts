@@ -84,7 +84,7 @@ export async function createProject(req: Request, res: Response, next: NextFunct
       work,
       'ownerProjectExecution',
     );
-    const data = await svc.createProject(req.params.propertyId, req.body);
+    const data = await svc.createProject(req.params.propertyId, { ...req.body, actingUserId: req.user!.userId });
     if (req.body.guidanceJourneyId) {
       try {
         await guidanceJourneyService.recordToolCompletion({
@@ -164,7 +164,7 @@ export async function getReconciliationLedger(req: Request, res: Response, next:
 
 export async function updateProject(req: Request, res: Response, next: NextFunction) {
   try {
-    const data = await svc.updateProject(req.params.projectId, req.params.propertyId, req.body);
+    const data = await svc.updateProject(req.params.projectId, req.params.propertyId, { ...req.body, actingUserId: req.user!.userId });
     res.json({ success: true, data });
   } catch (err) { next(err); }
 }
@@ -295,7 +295,7 @@ export async function updatePayment(req: Request, res: Response, next: NextFunct
 export async function markPaymentPaid(req: Request, res: Response, next: NextFunction) {
   try {
     const data = await svc.markPaymentPaid(
-      req.params.paymentId, req.params.projectId, req.params.propertyId, req.body,
+      req.params.paymentId, req.params.projectId, req.params.propertyId, { ...req.body, actingUserId: req.user!.userId },
     );
     res.json({ success: true, data });
   } catch (err) { next(err); }
@@ -319,7 +319,7 @@ export async function listChangeOrders(req: Request, res: Response, next: NextFu
 
 export async function createChangeOrder(req: Request, res: Response, next: NextFunction) {
   try {
-    const data = await svc.createChangeOrder(req.params.projectId, req.params.propertyId, req.body);
+    const data = await svc.createChangeOrder(req.params.projectId, req.params.propertyId, { ...req.body, actingUserId: req.user!.userId });
     res.status(201).json({ success: true, data });
   } catch (err) { next(err); }
 }
@@ -327,7 +327,7 @@ export async function createChangeOrder(req: Request, res: Response, next: NextF
 export async function updateChangeOrder(req: Request, res: Response, next: NextFunction) {
   try {
     const data = await svc.updateChangeOrder(
-      req.params.changeOrderId, req.params.projectId, req.params.propertyId, req.body,
+      req.params.changeOrderId, req.params.projectId, req.params.propertyId, { ...req.body, actingUserId: req.user!.userId },
     );
     res.json({ success: true, data });
   } catch (err) { next(err); }
@@ -430,7 +430,7 @@ export async function listIssues(req: Request, res: Response, next: NextFunction
 
 export async function createIssue(req: Request, res: Response, next: NextFunction) {
   try {
-    const data = await svc.createIssue(req.params.projectId, req.params.propertyId, req.body);
+    const data = await svc.createIssue(req.params.projectId, req.params.propertyId, { ...req.body, actingUserId: req.user!.userId });
     res.status(201).json({ success: true, data });
   } catch (err) { next(err); }
 }
@@ -438,7 +438,7 @@ export async function createIssue(req: Request, res: Response, next: NextFunctio
 export async function updateIssue(req: Request, res: Response, next: NextFunction) {
   try {
     const data = await svc.updateIssue(
-      req.params.issueId, req.params.projectId, req.params.propertyId, req.body,
+      req.params.issueId, req.params.projectId, req.params.propertyId, { ...req.body, actingUserId: req.user!.userId },
     );
     res.json({ success: true, data });
   } catch (err) { next(err); }

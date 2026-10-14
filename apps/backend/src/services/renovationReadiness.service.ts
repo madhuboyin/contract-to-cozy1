@@ -857,6 +857,7 @@ export async function handoffToProject(
     expectedEndDate: input.expectedEndDate,
     homeSystemsAffected: homeSystems(renovationCase.systemsAffected),
     contractDocumentKey: input.contractDocumentKey,
+    actingUserId: actorUserId,
     renovationCaseId,
     renovationScopeVersionId: scope.id,
     renovationScopeSnapshot: {

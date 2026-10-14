@@ -42,6 +42,7 @@ import {
 } from './projectCompliance/closeoutPolicy';
 import { createHash, randomBytes } from 'node:crypto';
 import { assertProjectDocuments, resolveProjectDocuments } from './projectDocuments.service';
+import { syncProjectDocumentLinks } from './projectDocumentLinks';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { uploadPdfBuffer } from './storage/reportStorage';
 import { recordReconciliationFailure } from '../modules/homeOperations/infrastructure/reconciliationRepository';
@@ -58,6 +59,8 @@ export {
   syncJourneyWorkItemForProjectEvent,
   syncProjectExecutionWorkItemOnCompletion,
 } from './projectWorkItemReconciliation.service';
+
+const actorOf = (data: { actingUserId?: string } | undefined) => data?.actingUserId ?? 'system';
 
 // ── Guards ────────────────────────────────────────────────────────────────────
 
@@ -454,6 +457,7 @@ async function assertChangeOrder(changeOrderId: string, projectId: string) {
       amendedPermitStatus: true,
       hoaReapprovalStatus: true,
       complianceEvidenceDocumentIds: true,
+      complianceEvidenceVersionIds: true,
     },
   });
   if (!co || co.projectId !== projectId) {
@@ -474,6 +478,7 @@ async function assertIssue(issueId: string, projectId: string) {
       sourceEntityType: true,
       sourceEntityId: true,
       evidenceDocumentIds: true,
+      evidenceVersionIds: true,
     },
   });
   if (!issue || issue.projectId !== projectId) {
@@ -939,6 +944,16 @@ export async function createProjectInTx(tx: Prisma.TransactionClient, propertyId
       },
     });
 
+    // The contract document's link is written in the same transaction as the project (owner ruling D-P1). Validation is the caller's; a legacy id carried
+    // from a scope stays stored without a link.
+    if (Array.isArray(projectData.contractDocumentIds) && projectData.contractDocumentIds.length) {
+      const resolved = await resolveProjectDocuments(propertyId, projectData.contractDocumentIds, { db: tx, transitionalLegacyIds: projectData.contractDocumentIds });
+      await syncProjectDocumentLinks(tx, {
+        entityType: 'PROJECT', entityId: created.id, purpose: 'SOURCE', userId: projectData.actingUserId ?? projectData.createdByUserId ?? 'system', mode: 'REPLACE', label: 'Contract document',
+        documents: resolved.documents.filter((document) => document.source === 'HOME_RECORD').map((document) => ({ id: document.id, versionId: document.versionId })),
+      });
+    }
+
     if (initialMilestones?.length) {
       await tx.projectMilestone.createMany({
         data: initialMilestones.map((m: any) => ({
@@ -1027,7 +1042,8 @@ export async function updateProject(projectId: string, propertyId: string, data:
   assertProjectRequirementApplicability('Permit', permitApplicability, permitApplicabilityBasis);
   assertProjectRequirementApplicability('HOA', hoaApplicability, hoaApplicabilityBasis);
 
-  return prisma.projectRecord.update({
+  return prisma.$transaction(async (tx) => {
+  const updatedProject = await tx.projectRecord.update({
     where: { id: projectId },
     data: {
       ...(data.name && { name: data.name }),
@@ -1048,6 +1064,16 @@ export async function updateProject(projectId: string, propertyId: string, data:
       ...(data.hoaApplicability !== undefined && { hoaApplicability, hoaApplicabilityBasis }),
       ...(data.hoaApplicabilityBasis !== undefined && data.hoaApplicability === undefined && { hoaApplicabilityBasis }),
     },
+  });
+  if (contractDocumentIds !== undefined) {
+    // The stored ids and their links change together (owner ruling D-P1). Only Home Records have links; a legacy id already stored stays without one.
+    const resolved = await resolveProjectDocuments(propertyId, contractDocumentIds, { db: tx, transitionalLegacyIds: contractDocumentIds });
+    await syncProjectDocumentLinks(tx, {
+      entityType: 'PROJECT', entityId: projectId, purpose: 'SOURCE', userId: actorOf(data), mode: 'REPLACE', label: 'Contract document',
+      documents: resolved.documents.filter((document) => document.source === 'HOME_RECORD').map((document) => ({ id: document.id, versionId: document.versionId })),
+    });
+  }
+  return updatedProject;
   });
 }
 
@@ -1191,7 +1217,8 @@ export async function completeMilestone(
       where: {
         projectId,
         milestoneId,
-        photoKeys: { isEmpty: false },
+        // A photo is a stored key (legacy) or a Home Record id (owner ruling D-P1); either is photo evidence.
+        OR: [{ photoKeys: { isEmpty: false } }, { photoDocumentIds: { isEmpty: false } }],
       },
     });
     if (photoCount === 0) {
@@ -1309,14 +1336,27 @@ export async function markPaymentPaid(
     }
   }
 
-  const updated = await prisma.projectPayment.update({
-    where: { id: paymentId },
-    data: {
-      status: 'PAID',
-      paidDate: data.paidDate ? new Date(data.paidDate) : new Date(),
-      paymentMethod: data.paymentMethod,
-      receiptDocumentKey: data.receiptDocumentKey,
-    },
+  // A receipt is a Home Record id (owner ruling D-P1); the link that lists the payment in the record's deletion impact is written in the same transaction.
+  const receipt = data.receiptDocumentId
+    ? await assertProjectDocuments(propertyId, [data.receiptDocumentId], { message: 'The receipt is unavailable for this property.', code: 'PROJECT_PAYMENT_RECEIPT_UNAVAILABLE' })
+    : [];
+  const updated = await prisma.$transaction(async (tx) => {
+    const row = await tx.projectPayment.update({
+      where: { id: paymentId },
+      data: {
+        status: 'PAID',
+        paidDate: data.paidDate ? new Date(data.paidDate) : new Date(),
+        paymentMethod: data.paymentMethod,
+        ...(receipt.length ? { receiptDocumentId: receipt[0].id } : {}),
+      },
+    });
+    if (receipt.length) {
+      await syncProjectDocumentLinks(tx, {
+        entityType: 'PROJECT_PAYMENT', entityId: paymentId, purpose: 'RECEIPT', userId: actorOf(data), mode: 'REPLACE', label: 'Payment receipt',
+        documents: receipt.map((document) => ({ id: document.id, versionId: document.versionId })),
+      });
+    }
+    return row;
   });
 
   await recalcProjectTotals(projectId);
@@ -1395,24 +1435,37 @@ export async function createChangeOrder(projectId: string, propertyId: string, d
     _max: { changeNumber: true },
   });
   const changeNumber = (max._max.changeNumber ?? 0) + 1;
+  const supporting = data.supportingDocumentId
+    ? await assertProjectDocuments(propertyId, [data.supportingDocumentId], { message: 'The supporting document is unavailable for this property.', code: 'PROJECT_CHANGE_ORDER_DOCUMENT_UNAVAILABLE' })
+    : [];
 
-  return prisma.projectChangeOrder.create({
-    data: {
-      projectId,
-      changeNumber,
-      title: data.title,
-      description: data.description,
-      category: data.category,
-      costDeltaCents: data.costDeltaCents,
-      status: 'PROPOSED',
-      proposedByName: data.proposedByName,
-      supportingDocumentKey: data.supportingDocumentKey,
-      notes: data.notes,
-      complianceImpact: data.complianceImpact,
-      complianceStatus: impactAssessment.complianceStatus,
-      amendedPermitStatus: impactAssessment.permitRecheckRequired ? 'REQUIRED' : 'NOT_APPLICABLE',
-      hoaReapprovalStatus: impactAssessment.hoaReapprovalRequired ? 'REQUIRED' : 'NOT_APPLICABLE',
-    },
+  return prisma.$transaction(async (tx) => {
+    const order = await tx.projectChangeOrder.create({
+      data: {
+        projectId,
+        changeNumber,
+        title: data.title,
+        description: data.description,
+        category: data.category,
+        costDeltaCents: data.costDeltaCents,
+        status: 'PROPOSED',
+        proposedByName: data.proposedByName,
+        supportingDocumentKey: data.supportingDocumentKey,
+        ...(supporting.length ? { supportingDocumentId: supporting[0].id } : {}),
+        notes: data.notes,
+        complianceImpact: data.complianceImpact,
+        complianceStatus: impactAssessment.complianceStatus,
+        amendedPermitStatus: impactAssessment.permitRecheckRequired ? 'REQUIRED' : 'NOT_APPLICABLE',
+        hoaReapprovalStatus: impactAssessment.hoaReapprovalRequired ? 'REQUIRED' : 'NOT_APPLICABLE',
+      },
+    });
+    if (supporting.length) {
+      await syncProjectDocumentLinks(tx, {
+        entityType: 'PROJECT_CHANGE_ORDER', entityId: order.id, purpose: 'ATTACHMENT', userId: actorOf(data), mode: 'REPLACE', label: 'Change order supporting document',
+        documents: supporting.map((document) => ({ id: document.id, versionId: document.versionId })),
+      });
+    }
+    return order;
   });
 }
 
@@ -1428,27 +1481,47 @@ export async function updateChangeOrder(
     ? evaluateChangeOrderComplianceImpact(data.complianceImpact)
     : null;
 
-  return prisma.projectChangeOrder.update({
-    where: { id: changeOrderId },
-    data: {
-      ...(data.title && { title: data.title }),
-      ...(data.description && { description: data.description }),
-      ...(data.category && { category: data.category }),
-      ...(data.costDeltaCents !== undefined && { costDeltaCents: data.costDeltaCents }),
-      ...(data.proposedByName && { proposedByName: data.proposedByName }),
-      ...(data.supportingDocumentKey !== undefined && { supportingDocumentKey: data.supportingDocumentKey }),
-      ...(data.notes !== undefined && { notes: data.notes }),
-      ...(data.complianceImpact !== undefined && {
-        complianceImpact: data.complianceImpact,
-        complianceStatus: impactAssessment!.complianceStatus,
-        amendedPermitStatus: impactAssessment!.permitRecheckRequired ? 'REQUIRED' : 'NOT_APPLICABLE',
-        hoaReapprovalStatus: impactAssessment!.hoaReapprovalRequired ? 'REQUIRED' : 'NOT_APPLICABLE',
-        complianceReviewNotes: null,
-        complianceEvidenceDocumentIds: [],
-        complianceReviewedByUserId: null,
-        complianceReviewedAt: null,
-      }),
-    },
+  // undefined leaves the supporting document alone; null removes it; an id replaces it (and must be an eligible Home Record).
+  const supporting = data.supportingDocumentId
+    ? await assertProjectDocuments(propertyId, [data.supportingDocumentId], { message: 'The supporting document is unavailable for this property.', code: 'PROJECT_CHANGE_ORDER_DOCUMENT_UNAVAILABLE' })
+    : [];
+
+  return prisma.$transaction(async (tx) => {
+    const order = await tx.projectChangeOrder.update({
+      where: { id: changeOrderId },
+      data: {
+        ...(data.title && { title: data.title }),
+        ...(data.description && { description: data.description }),
+        ...(data.category && { category: data.category }),
+        ...(data.costDeltaCents !== undefined && { costDeltaCents: data.costDeltaCents }),
+        ...(data.proposedByName && { proposedByName: data.proposedByName }),
+        ...(data.supportingDocumentKey !== undefined && { supportingDocumentKey: data.supportingDocumentKey }),
+        ...(data.supportingDocumentId !== undefined && { supportingDocumentId: supporting[0]?.id ?? null }),
+        ...(data.notes !== undefined && { notes: data.notes }),
+        ...(data.complianceImpact !== undefined && {
+          complianceImpact: data.complianceImpact,
+          complianceStatus: impactAssessment!.complianceStatus,
+          amendedPermitStatus: impactAssessment!.permitRecheckRequired ? 'REQUIRED' : 'NOT_APPLICABLE',
+          hoaReapprovalStatus: impactAssessment!.hoaReapprovalRequired ? 'REQUIRED' : 'NOT_APPLICABLE',
+          complianceReviewNotes: null,
+          complianceEvidenceDocumentIds: [],
+          complianceEvidenceVersionIds: Prisma.DbNull,
+          complianceReviewedByUserId: null,
+          complianceReviewedAt: null,
+        }),
+      },
+    });
+    if (data.supportingDocumentId !== undefined) {
+      await syncProjectDocumentLinks(tx, {
+        entityType: 'PROJECT_CHANGE_ORDER', entityId: changeOrderId, purpose: 'ATTACHMENT', userId: actorOf(data), mode: 'REPLACE', label: 'Change order supporting document',
+        documents: supporting.map((document) => ({ id: document.id, versionId: document.versionId })),
+      });
+    }
+    // Changing the structured impact clears the earlier compliance review, so its evidence links are removed with it.
+    if (data.complianceImpact !== undefined) {
+      await syncProjectDocumentLinks(tx, { entityType: 'PROJECT_CHANGE_ORDER', entityId: changeOrderId, purpose: 'EVIDENCE', userId: actorOf(data), mode: 'KEEP_BOUND_VERSION', documents: [] });
+    }
+    return order;
   });
 }
 
@@ -1487,7 +1560,7 @@ export async function reviewChangeOrderCompliance(
   const evidenceIds: string[] = [...new Set<string>(data.evidenceDocumentIds ?? [])];
   // The evidence was stored as typed, so an id that belonged to no document, or to another property, could complete a recheck. It must be an eligible
   // Home Record of this property. Ids already stored on this change order stay accepted when they are legacy documents of the same property (owner ruling D-P6).
-  await assertProjectDocuments(propertyId, evidenceIds, {
+  const evidenceDocuments = await assertProjectDocuments(propertyId, evidenceIds, {
     message: 'Compliance evidence must be documents on file for this property that your household can see.', status: 409, code: 'CHANGE_ORDER_COMPLIANCE_EVIDENCE_UNAVAILABLE',
   }, { transitionalLegacyIds: co.complianceEvidenceDocumentIds ?? [] });
   const recheckComplete = (
@@ -1503,17 +1576,27 @@ export async function reviewChangeOrderCompliance(
     );
   }
 
-  return prisma.projectChangeOrder.update({
-    where: { id: changeOrderId },
-    data: {
-      amendedPermitStatus: permitStatus,
-      hoaReapprovalStatus: hoaStatus,
-      complianceStatus: recheckComplete ? 'RECHECK_COMPLETE' : assessment.complianceStatus,
-      complianceReviewNotes: data.reviewNotes,
-      complianceEvidenceDocumentIds: evidenceIds,
-      complianceReviewedByUserId: userId,
-      complianceReviewedAt: new Date(),
-    },
+  // The evidence id and the exact version it was bound to are stored with the review, and the link is written with them (owner ruling D-P1). A record
+  // already cited keeps the version it was bound to.
+  return prisma.$transaction(async (tx) => {
+    const bound = await syncProjectDocumentLinks(tx, {
+      entityType: 'PROJECT_CHANGE_ORDER', entityId: changeOrderId, purpose: 'EVIDENCE', userId, mode: 'KEEP_BOUND_VERSION', label: 'Compliance review evidence',
+      boundVersions: (co.complianceEvidenceVersionIds as Record<string, string | null> | null) ?? null,
+      documents: evidenceDocuments.filter((document) => document.source === 'HOME_RECORD').map((document) => ({ id: document.id, versionId: document.versionId })),
+    });
+    return tx.projectChangeOrder.update({
+      where: { id: changeOrderId },
+      data: {
+        amendedPermitStatus: permitStatus,
+        hoaReapprovalStatus: hoaStatus,
+        complianceStatus: recheckComplete ? 'RECHECK_COMPLETE' : assessment.complianceStatus,
+        complianceReviewNotes: data.reviewNotes,
+        complianceEvidenceDocumentIds: evidenceIds,
+        complianceEvidenceVersionIds: bound,
+        complianceReviewedByUserId: userId,
+        complianceReviewedAt: new Date(),
+      },
+    });
   });
 }
 
@@ -1681,6 +1764,8 @@ export async function createLogEntry(projectId: string, propertyId: string, user
     where: { id: projectId, propertyId },
     select: { renovationScopeVersionId: true, inventoryItemId: true },
   });
+  // Photos are Home Record ids (owner ruling D-P1); the links are written in the same transaction as the entry.
+  const photos = await assertProjectDocuments(propertyId, data.photoDocumentIds ?? [], { message: 'One or more progress photos are unavailable for this property.', code: 'PROJECT_LOG_DOCUMENT_UNAVAILABLE' });
   return prisma.$transaction(async (tx) => {
     const entry = await tx.projectProgressLog.create({
       data: {
@@ -1690,6 +1775,7 @@ export async function createLogEntry(projectId: string, propertyId: string, user
         entryType: data.entryType,
         notes: data.notes,
         photoKeys: data.photoKeys ?? [],
+        photoDocumentIds: photos.map((document) => document.id),
         roomId: data.roomId,
         materialType: data.materialType,
         materialBrand: data.materialBrand,
@@ -1704,6 +1790,12 @@ export async function createLogEntry(projectId: string, propertyId: string, user
         room: { select: { id: true, name: true } },
       },
     });
+    if (photos.length) {
+      await syncProjectDocumentLinks(tx, {
+        entityType: 'PROJECT_PROGRESS_LOG', entityId: entry.id, purpose: 'ATTACHMENT', userId, mode: 'REPLACE', label: 'Progress photo',
+        documents: photos.map((document) => ({ id: document.id, versionId: document.versionId })),
+      });
+    }
     if (data.materialType) {
       const supportedCategories = new Set([
         'PAINT', 'TILE', 'FLOORING', 'GROUT', 'COUNTERTOP', 'CABINET',
@@ -1777,20 +1869,28 @@ export async function createIssue(projectId: string, propertyId: string, data: a
   const blocksPayment = data.blocksPayment ?? isBlocking;
   // Home Records only (owner ruling D-P3); an attachment is a new write, so nothing legacy is carried.
   const evidenceDocumentIds = [...new Set<string>(data.evidenceDocumentIds ?? [])];
-  await assertProjectDocuments(propertyId, evidenceDocumentIds, { message: 'One or more issue documents are unavailable for this property.', code: 'PROJECT_ISSUE_DOCUMENT_UNAVAILABLE' });
+  const issueEvidence = await assertProjectDocuments(propertyId, evidenceDocumentIds, { message: 'One or more issue documents are unavailable for this property.', code: 'PROJECT_ISSUE_DOCUMENT_UNAVAILABLE' });
 
-  const issue = await prisma.projectIssue.create({
-    data: {
-      projectId,
-      title: data.title,
-      description: data.description,
-      severity: data.severity as ProjectIssueSeverity,
-      category: data.category,
-      status: 'OPEN',
-      blocksPayment,
-      attachmentKeys: data.attachmentKeys ?? [],
-      evidenceDocumentIds: evidenceDocumentIds ?? [],
-    },
+  const issue = await prisma.$transaction(async (tx) => {
+    const created = await tx.projectIssue.create({
+      data: {
+        projectId,
+        title: data.title,
+        description: data.description,
+        severity: data.severity as ProjectIssueSeverity,
+        category: data.category,
+        status: 'OPEN',
+        blocksPayment,
+        attachmentKeys: data.attachmentKeys ?? [],
+        evidenceDocumentIds: evidenceDocumentIds ?? [],
+      },
+    });
+    if (!issueEvidence.length) return created;
+    const bound = await syncProjectDocumentLinks(tx, {
+      entityType: 'PROJECT_ISSUE', entityId: created.id, purpose: 'EVIDENCE', userId: actorOf(data), mode: 'KEEP_BOUND_VERSION', label: 'Issue evidence',
+      documents: issueEvidence.map((document) => ({ id: document.id, versionId: document.versionId })),
+    });
+    return tx.projectIssue.update({ where: { id: created.id }, data: { evidenceVersionIds: bound } });
   });
 
   if (isBlocking) {
@@ -1813,23 +1913,33 @@ export async function updateIssue(issueId: string, projectId: string, propertyId
   }
 
   // Evidence may only change to eligible Home Records; a legacy id already stored on this issue stays accepted and is never newly offered (D-P6).
-  if (data.evidenceDocumentIds) {
-    await assertProjectDocuments(propertyId, data.evidenceDocumentIds, { message: 'One or more issue documents are unavailable for this property.', code: 'PROJECT_ISSUE_DOCUMENT_UNAVAILABLE' },
-      { transitionalLegacyIds: issue.evidenceDocumentIds ?? [] });
-  }
+  const nextEvidence = data.evidenceDocumentIds
+    ? await assertProjectDocuments(propertyId, data.evidenceDocumentIds, { message: 'One or more issue documents are unavailable for this property.', code: 'PROJECT_ISSUE_DOCUMENT_UNAVAILABLE' },
+      { transitionalLegacyIds: issue.evidenceDocumentIds ?? [] })
+    : null;
 
-  return prisma.projectIssue.update({
-    where: { id: issueId },
-    data: {
-      ...(data.evidenceDocumentIds && { evidenceDocumentIds: [...new Set<string>(data.evidenceDocumentIds)] }),
-      ...(data.title && { title: data.title }),
-      ...(data.description && { description: data.description }),
-      ...(data.severity && { severity: data.severity }),
-      ...(data.category && { category: data.category }),
-      ...(data.status && { status: data.status as ProjectIssueStatus }),
-      ...(data.blocksPayment !== undefined && { blocksPayment: data.blocksPayment }),
-      ...(data.attachmentKeys && { attachmentKeys: data.attachmentKeys }),
-    },
+  return prisma.$transaction(async (tx) => {
+    const updated = await tx.projectIssue.update({
+      where: { id: issueId },
+      data: {
+        ...(data.evidenceDocumentIds && { evidenceDocumentIds: [...new Set<string>(data.evidenceDocumentIds)] }),
+        ...(data.title && { title: data.title }),
+        ...(data.description && { description: data.description }),
+        ...(data.severity && { severity: data.severity }),
+        ...(data.category && { category: data.category }),
+        ...(data.status && { status: data.status as ProjectIssueStatus }),
+        ...(data.blocksPayment !== undefined && { blocksPayment: data.blocksPayment }),
+        ...(data.attachmentKeys && { attachmentKeys: data.attachmentKeys }),
+      },
+    });
+    if (!nextEvidence) return updated;
+    // A record already cited keeps the version it was bound to; only new records are bound to the version they were chosen at.
+    const bound = await syncProjectDocumentLinks(tx, {
+      entityType: 'PROJECT_ISSUE', entityId: issueId, purpose: 'EVIDENCE', userId: actorOf(data), mode: 'KEEP_BOUND_VERSION', label: 'Issue evidence',
+      boundVersions: (issue.evidenceVersionIds as Record<string, string | null> | null) ?? null,
+      documents: nextEvidence.filter((document) => document.source === 'HOME_RECORD').map((document) => ({ id: document.id, versionId: document.versionId })),
+    });
+    return tx.projectIssue.update({ where: { id: issueId }, data: { evidenceVersionIds: bound } });
   });
 }
 
@@ -1885,8 +1995,17 @@ export async function addIssueNote(issueId: string, projectId: string, propertyI
   await assertIssue(issueId, projectId);
   const evidenceDocumentIds = [...new Set(data.evidenceDocumentIds ?? [])];
   // Home Records only (owner ruling D-P3): active, household-visible, clean, in this property. An issue note is a new write, so nothing legacy is carried.
-  await assertProjectDocuments(propertyId, evidenceDocumentIds, { message: 'One or more issue-note documents are unavailable for this property.', code: 'PROJECT_ISSUE_NOTE_DOCUMENT_UNAVAILABLE' });
-  return prisma.projectIssueNote.create({ data: { issueId, projectId, notes: data.notes, evidenceDocumentIds, createdByUserId: userId } });
+  const evidence = await assertProjectDocuments(propertyId, evidenceDocumentIds, { message: 'One or more issue-note documents are unavailable for this property.', code: 'PROJECT_ISSUE_NOTE_DOCUMENT_UNAVAILABLE' });
+  // The note is append-only, so the version each document was bound to is stored with it and the links are written in the same transaction (D-P1).
+  return prisma.$transaction(async (tx) => {
+    const note = await tx.projectIssueNote.create({ data: { issueId, projectId, notes: data.notes, evidenceDocumentIds, createdByUserId: userId } });
+    if (!evidence.length) return note;
+    const bound = await syncProjectDocumentLinks(tx, {
+      entityType: 'PROJECT_ISSUE_NOTE', entityId: note.id, purpose: 'EVIDENCE', userId, mode: 'KEEP_BOUND_VERSION', label: 'Issue note evidence',
+      documents: evidence.map((document) => ({ id: document.id, versionId: document.versionId })),
+    });
+    return tx.projectIssueNote.update({ where: { id: note.id }, data: { evidenceVersionIds: bound } });
+  });
 }
 
 /**
@@ -2053,7 +2172,7 @@ export async function getCompletionChecklist(projectId: string, propertyId: stri
       orderBy: { createdAt: 'desc' },
     }),
     prisma.projectProgressLog.count({
-      where: { projectId, photoKeys: { isEmpty: false } },
+      where: { projectId, OR: [{ photoKeys: { isEmpty: false } }, { photoDocumentIds: { isEmpty: false } }] },
     }),
     prisma.projectProgressLog.count({
       where: { projectId, materialType: { not: null } },

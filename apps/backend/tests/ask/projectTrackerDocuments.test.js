@@ -60,13 +60,14 @@ test('a Home Record id passes the validation that project completion uses; a mis
   } finally { w.restore(); }
 });
 
-test('Ask project forms no longer offer document fields that can only store a copied storage key, and never offer an upload to the legacy route', () => {
+test('Ask project document fields store Home Record ids on columns that hold them, never a copied storage key, and never offer a legacy upload', () => {
   const source = require('node:fs').readFileSync(require.resolve('../../src/services/ask/handlers/projectTracker.handler.ts'), 'utf8');
   assert.equal(/allowUpload: true/.test(source), false, 'no upload control until project uploads go to Home Records');
-  const between = (from, to) => source.slice(source.indexOf(from), source.indexOf(to, source.indexOf(from)));
-  assert.equal(between('PROJECT_TRACKER_ACTION_IDS.MARK_PAYMENT_PAID) return', 'PROJECT_TRACKER_ACTION_IDS.ADD_PAYMENT) return').includes('receiptDocumentIds'), false, 'a payment receipt has no Home Record reference column yet');
-  assert.equal(/projectDocumentField\('photoDocumentIds'/.test(source), false, 'a progress photo has no Home Record reference column yet');
-  assert.equal(/projectDocumentField\('supportingDocumentIds'/.test(source), false, 'change-order support has no Home Record reference column yet');
+  // Slice 1 gave each of these its own id column, so the fields are back and write ids (owner ruling D-P1).
+  assert.match(source, /receiptDocumentId: receipt\.id/);
+  assert.match(source, /supportingDocumentId: supportingDocument\.id/);
+  assert.match(source, /photoDocumentIds: photos\.map\(\(document\) => document\.id\)/);
+  assert.equal(/\b(receiptDocumentKey|supportingDocumentKey|photoKeys|attachmentKeys):/.test(source.replace(/\/\/.*$/gm, '')), false, 'no key column is written from Ask');
   assert.equal(/\.fileUrl/.test(source.replace(/\/\/.*$/gm, '')), false, 'no storage key is copied from a document');
 });
 

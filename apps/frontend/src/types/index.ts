@@ -7053,6 +7053,8 @@ export interface InspectionFinding {
   resolutionCostCents?: number;
   warrantyExpiresAt?: string;
   photoKeys: string[];
+  /** Home Record ids of photos (owner ruling D-P1). */
+  photoDocumentIds?: string[];
   createdAt: string;
   updatedAt: string;
   // populated on open-items fetch
@@ -7222,6 +7224,8 @@ export interface ProjectProgressLog {
   entryType: ProjectProgressLogEntryType;
   notes?: string | null;
   photoKeys: string[];
+  /** Home Record ids of photos (owner ruling D-P1). */
+  photoDocumentIds?: string[];
   roomId?: string | null;
   materialType?: string | null;
   materialBrand?: string | null;
