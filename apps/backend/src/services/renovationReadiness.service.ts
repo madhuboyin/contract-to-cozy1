@@ -824,14 +824,6 @@ export async function handoffToProject(
   const legacyInheritable = new Set(inheritedRows.map((row) => row.id));
   const inheritedDocumentIds = candidateInherited.filter((id) => legacyInheritable.has(id));
   const notCarriedOver = candidateInherited.length - inheritedDocumentIds.length;
-  const projectStatus = input.intakeMode === 'ALREADY_STARTED' ? 'IN_PROGRESS' : 'PLANNING';
-  const nextLifecycle = input.intakeMode === 'ALREADY_STARTED'
-    ? 'IN_EXECUTION'
-    : input.intakeMode === 'HISTORICAL'
-      ? renovationCase.lifecycle
-      : renovationCase.lifecycle === 'PREPARING_TO_START'
-        ? 'READY_TO_START'
-        : renovationCase.lifecycle;
   const projectData = {
     name: renovationCase.name,
     projectType: input.projectType,
@@ -912,51 +904,10 @@ export async function handoffToProject(
   try {
     project = await withSerializableDedupe(async (tx) => {
       const created = await projectTrackerService.createProjectInTx(tx, propertyId, projectData);
-      await tx.projectRecord.update({ where: { id: created.id }, data: { status: projectStatus } });
-      if (openConditions.length) {
-        await tx.projectMilestone.updateMany({ where: { projectId: created.id }, data: { status: 'BLOCKED' } });
-      }
-      await linkProjectToCaseInTx(tx, {
-        propertyId, renovationCaseId, actorUserId, projectId: created.id, scopeVersionId: scope.id,
-        metadata: { role: 'EXECUTION_HANDOFF', intakeMode: input.intakeMode, idempotencyKey: input.idempotencyKey },
-      });
-      await tx.renovationCase.update({ where: { id: renovationCaseId }, data: { lifecycle: nextLifecycle } });
-      await tx.renovationReadinessEvent.create({
-        data: {
-          renovationCaseId,
-          propertyId,
-          scopeVersionId: scope.id,
-          eventType: 'PROJECT_HANDOFF',
-          actorUserId,
-          reason: input.historicalReason,
-          // The key and a hash of the normalized request let a later call tell a replay from a conflicting request (owner ruling on D-H8).
-          payload: json({
-            projectId: created.id,
-            intakeMode: input.intakeMode,
-            readinessState: summary.state,
-            readinessBypassed: bypassReadiness,
-            idempotencyKey: input.idempotencyKey,
-            payloadHash,
-          }),
-        },
-      });
-      await tx.renovationCaseEvent.create({
-        data: {
-          renovationCaseId,
-          propertyId,
-          actorUserId,
-          eventType: 'PROJECT_HANDOFF_STARTED',
-          fromLifecycle: renovationCase.lifecycle,
-          toLifecycle: nextLifecycle,
-          scopeVersionId: scope.id,
-          idempotencyKey: `project-handoff:${input.idempotencyKey}`,
-          payload: json({
-            projectId: created.id,
-            intakeMode: input.intakeMode,
-            readinessState: summary.state,
-            readinessBypassed: bypassReadiness,
-          }),
-        },
+      await completeHandoffInTx(tx, {
+        propertyId, renovationCaseId, actorUserId, projectId: created.id, scopeVersionId: scope.id, intakeMode: input.intakeMode,
+        historicalReason: input.historicalReason ?? null, idempotencyKey: input.idempotencyKey, payloadHash, readinessState: summary.state,
+        readinessBypassed: bypassReadiness, caseLifecycle: renovationCase.lifecycle, blockMilestones: openConditions.length > 0,
       });
       return created;
     });
@@ -979,6 +930,105 @@ export async function handoffToProject(
 
 export type RenovationHandoffOutcome = 'CREATED' | 'IDEMPOTENT_REPLAY' | 'ALREADY_CREATED';
 
+export type HandoffIntakeMode = 'PLANNED' | 'ALREADY_STARTED' | 'HISTORICAL';
+export type HandoffStep = 'STATUS' | 'MILESTONES_BLOCKED' | 'CASE_LINK' | 'CASE_LIFECYCLE' | 'READINESS_EVENT' | 'CASE_EVENT';
+
+export const handoffProjectStatus = (intakeMode: HandoffIntakeMode) => (intakeMode === 'ALREADY_STARTED' ? 'IN_PROGRESS' as const : 'PLANNING' as const);
+export const handoffNextLifecycle = (intakeMode: HandoffIntakeMode, lifecycle: string) =>
+  intakeMode === 'ALREADY_STARTED' ? 'IN_EXECUTION'
+    : intakeMode === 'HISTORICAL' ? lifecycle
+      : lifecycle === 'PREPARING_TO_START' ? 'READY_TO_START' : lifecycle;
+
+/**
+ * Everything that makes a created Project a handoff, on the caller's transaction client (owner ruling D-H1). It is the one implementation used by a new
+ * handoff and by the governed repair of an old partial one, so the two can never drift (D-H6). Each step checks what is already there and does only what
+ * is missing, so running it again changes nothing; it returns the steps it applied. It opens no transaction and calls no helper that does.
+ */
+export async function completeHandoffInTx(
+  tx: Prisma.TransactionClient,
+  p: {
+    propertyId: string; renovationCaseId: string; actorUserId: string; projectId: string; scopeVersionId: string; intakeMode: HandoffIntakeMode;
+    historicalReason?: string | null; idempotencyKey: string; payloadHash: string | null; readinessState: string; readinessBypassed: boolean;
+    caseLifecycle: string; blockMilestones: boolean; repair?: boolean;
+  },
+): Promise<HandoffStep[]> {
+  const applied: HandoffStep[] = [];
+  const nextLifecycle = handoffNextLifecycle(p.intakeMode, p.caseLifecycle);
+
+  // A Project still in its creation status has not been through the handoff; one that has moved on is left alone.
+  const status = await tx.projectRecord.updateMany({ where: { id: p.projectId, status: 'DRAFT' }, data: { status: handoffProjectStatus(p.intakeMode) } });
+  if (status.count > 0) applied.push('STATUS');
+  if (p.blockMilestones) {
+    const blocked = await tx.projectMilestone.updateMany({ where: { projectId: p.projectId, status: 'UPCOMING' }, data: { status: 'BLOCKED' } });
+    if (blocked.count > 0) applied.push('MILESTONES_BLOCKED');
+  }
+  const link = await tx.renovationCaseLink.findFirst({ where: { renovationCaseId: p.renovationCaseId, linkType: 'PROJECT', targetId: p.projectId }, select: { id: true } });
+  if (!link) {
+    await linkProjectToCaseInTx(tx, {
+      propertyId: p.propertyId, renovationCaseId: p.renovationCaseId, actorUserId: p.actorUserId, projectId: p.projectId, scopeVersionId: p.scopeVersionId,
+      metadata: { role: 'EXECUTION_HANDOFF', intakeMode: p.intakeMode, idempotencyKey: p.idempotencyKey, ...(p.repair ? { repaired: true } : {}) },
+    });
+    applied.push('CASE_LINK');
+  }
+  if (nextLifecycle !== p.caseLifecycle) {
+    await tx.renovationCase.update({ where: { id: p.renovationCaseId }, data: { lifecycle: nextLifecycle as any } });
+    applied.push('CASE_LIFECYCLE');
+  }
+  const readinessEvents = await tx.renovationReadinessEvent.findMany({
+    where: { renovationCaseId: p.renovationCaseId, eventType: 'PROJECT_HANDOFF' }, select: { payload: true },
+  });
+  if (!readinessEvents.some((event) => (event.payload as { projectId?: string } | null)?.projectId === p.projectId)) {
+    await tx.renovationReadinessEvent.create({
+      data: {
+        renovationCaseId: p.renovationCaseId,
+        propertyId: p.propertyId,
+        scopeVersionId: p.scopeVersionId,
+        eventType: 'PROJECT_HANDOFF',
+        actorUserId: p.actorUserId,
+        reason: p.historicalReason ?? undefined,
+        // The key and a hash of the normalized request let a later call tell a replay from a conflicting request (owner ruling on D-H8). A repaired
+        // handoff has no request to hash, so it records that it was repaired instead.
+        payload: json({
+          projectId: p.projectId,
+          intakeMode: p.intakeMode,
+          readinessState: p.readinessState,
+          readinessBypassed: p.readinessBypassed,
+          idempotencyKey: p.idempotencyKey,
+          ...(p.payloadHash ? { payloadHash: p.payloadHash } : {}),
+          ...(p.repair ? { repaired: true } : {}),
+        }),
+      },
+    });
+    applied.push('READINESS_EVENT');
+  }
+  const caseEvent = await tx.renovationCaseEvent.findFirst({
+    where: { renovationCaseId: p.renovationCaseId, idempotencyKey: `project-handoff:${p.idempotencyKey}` }, select: { id: true },
+  });
+  if (!caseEvent) {
+    await tx.renovationCaseEvent.create({
+      data: {
+        renovationCaseId: p.renovationCaseId,
+        propertyId: p.propertyId,
+        actorUserId: p.actorUserId,
+        eventType: 'PROJECT_HANDOFF_STARTED',
+        fromLifecycle: p.caseLifecycle as any,
+        toLifecycle: nextLifecycle as any,
+        scopeVersionId: p.scopeVersionId,
+        idempotencyKey: `project-handoff:${p.idempotencyKey}`,
+        payload: json({
+          projectId: p.projectId,
+          intakeMode: p.intakeMode,
+          readinessState: p.readinessState,
+          readinessBypassed: p.readinessBypassed,
+          ...(p.repair ? { repaired: true } : {}),
+        }),
+      },
+    });
+    applied.push('CASE_EVENT');
+  }
+  return applied;
+}
+
 /** A stable hash of the request's values, never of its key, so the same request with another key is distinguishable from a changed request. */
 export function handoffPayloadHash(input: any): string {
   const normalized = {
@@ -992,7 +1042,7 @@ export function handoffPayloadHash(input: any): string {
 }
 
 /** Best-effort Home Operations synchronization. Returns whether it succeeded, so a receipt never claims a work item that does not exist. */
-async function syncProjectWorkItem(
+export async function syncProjectWorkItem(
   propertyId: string,
   project: { id: string; name: string; description: string | null; startDate: Date; expectedEndDate: Date | null; updatedAt: Date },
   actorUserId: string,

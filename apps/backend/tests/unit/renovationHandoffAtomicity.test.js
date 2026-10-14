@@ -91,11 +91,12 @@ function fixture({ failLink = false } = {}) {
     findFirst: record('projectRecord', 'findFirst', null),
     create: record('projectRecord', 'create', { id: 'proj-1', name: 'Kitchen', description: null, startDate: new Date('2026-11-01'), expectedEndDate: null, updatedAt: new Date(), fulfillmentMode: 'PROVIDER', guidanceJourneyId: null, sourceEntityType: 'RENOVATION_CASE', sourceEntityId: 'case-1' }),
     update: record('projectRecord', 'update', {}),
+    updateMany: record('projectRecord', 'updateMany', { count: 1 }),
   };
-  tx.projectMilestone = { createMany: record('projectMilestone', 'createMany', {}), updateMany: record('projectMilestone', 'updateMany', {}) };
-  tx.renovationCaseLink = { create: failLink ? async () => { throw new Error('link failed'); } : record('renovationCaseLink', 'create', { id: 'link-1' }) };
-  tx.renovationCaseEvent = { create: record('renovationCaseEvent', 'create', {}) };
-  tx.renovationReadinessEvent = { create: record('renovationReadinessEvent', 'create', {}) };
+  tx.projectMilestone = { createMany: record('projectMilestone', 'createMany', {}), updateMany: record('projectMilestone', 'updateMany', { count: 1 }) };
+  tx.renovationCaseLink = { findFirst: record('renovationCaseLink', 'findFirst', null), create: failLink ? async () => { throw new Error('link failed'); } : record('renovationCaseLink', 'create', { id: 'link-1' }) };
+  tx.renovationCaseEvent = { findFirst: record('renovationCaseEvent', 'findFirst', null), create: record('renovationCaseEvent', 'create', {}) };
+  tx.renovationReadinessEvent = { findMany: record('renovationReadinessEvent', 'findMany', []), create: record('renovationReadinessEvent', 'create', {}) };
   let detailReads = 0;
   const scope = { id: 'scope-1', version: 1, approvalStatus: 'APPROVED', drawingDocumentIds: [], specificationDocumentIds: [], workItems: [], contractCostCents: null, summary: 'Kitchen' };
   set('renovationCase', {
@@ -135,11 +136,11 @@ test('the Project, status, link, lifecycle and both events are written on the on
     const written = f.tx.calls.map(([model, method]) => `${model}.${method}`);
     // There are no open conditions in this fixture, so no milestones are written or blocked.
     for (const expected of [
-      'projectRecord.create', 'projectRecord.update', 'renovationCaseLink.create', 'renovationCaseEvent.create', 'renovationCase.update', 'renovationReadinessEvent.create',
+      'projectRecord.create', 'projectRecord.updateMany', 'renovationCaseLink.create', 'renovationCaseEvent.create', 'renovationCase.update', 'renovationReadinessEvent.create',
     ]) {
       assert.ok(written.includes(expected), `${expected} runs on the transaction client`);
     }
-    const readinessEvent = f.tx.calls.find(([model]) => model === 'renovationReadinessEvent')[2].data;
+    const readinessEvent = f.tx.calls.find(([model, method]) => model === 'renovationReadinessEvent' && method === 'create')[2].data;
     assert.equal(readinessEvent.payload.idempotencyKey, 'key-1');
     assert.match(readinessEvent.payload.payloadHash, /^[a-f0-9]{64}$/);
     const lifecycle = f.tx.calls.find(([model, method]) => model === 'renovationCase' && method === 'update')[2].data.lifecycle;
@@ -183,10 +184,16 @@ test('the handoff opens no second transaction and calls no helper that does (sou
   const body = source.slice(start, end);
   assert.ok(body.includes('withSerializableDedupe'));
   assert.ok(body.includes('createProjectInTx(tx'));
-  assert.ok(body.includes('linkProjectToCaseInTx(tx'));
+  assert.ok(body.includes('completeHandoffInTx(tx'));
   assert.equal(body.includes('linkContributor('), false, 'linkContributor opens its own transaction');
   assert.equal(/prisma\.\$transaction/.test(body), false);
   assert.equal(/prisma\.projectRecord\.update\(/.test(body), false);
+  // The shared completion step writes only on the transaction client and opens no transaction of its own.
+  const cStart = source.indexOf('export async function completeHandoffInTx');
+  const completion = source.slice(cStart, source.indexOf('export type RenovationHandoffOutcome') > cStart ? source.length : source.length).slice(0, 6000);
+  assert.ok(completion.includes('linkProjectToCaseInTx(tx'));
+  assert.equal(completion.includes('linkContributor('), false);
+  assert.equal(/prisma\.\$transaction|prisma\.projectRecord\./.test(completion), false);
   // The existing-project check comes after the case is scoped to the property.
   assert.ok(body.indexOf('loadContext(propertyId, renovationCaseId)') < body.indexOf('existingHandoffResult('));
 });
