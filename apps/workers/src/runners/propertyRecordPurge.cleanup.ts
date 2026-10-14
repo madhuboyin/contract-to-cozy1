@@ -11,6 +11,7 @@ import { deleteObject } from '../storage/deleteObject';
 import { logger } from '../lib/logger';
 import { removeQuoteSourceContent } from '@worker-shared/services/quoteSourcePurge';
 import { removePropertyTaxSourceContent } from '@worker-shared/services/propertyTax/propertyTaxSourcePurge';
+import { retryOrphanedObjectCleanup } from '@worker-shared/services/storage/orphanedObjects';
 
 const CLEAN_INTERVAL_MS = Number(process.env.PROPERTY_RECORD_PURGE_CLEAN_MS || 60_000);
 
@@ -19,6 +20,13 @@ export async function propertyRecordPurgeTick(): Promise<void> {
   if (!bucket) return;
 
   const now = new Date();
+
+  // Objects staged for a database change that then failed, whose immediate removal failed: retried here until they are gone (owner ruling D-P4).
+  try {
+    await retryOrphanedObjectCleanup(prisma as never, (key) => deleteObject(bucket, key));
+  } catch (error) {
+    logger.error({ err: error }, '[property-record-purge] orphaned object retry failed');
+  }
 
   await prisma.propertyRecordPurgeJob.updateMany({
     where: { state: 'PENDING', eligibleAt: { lte: now } },

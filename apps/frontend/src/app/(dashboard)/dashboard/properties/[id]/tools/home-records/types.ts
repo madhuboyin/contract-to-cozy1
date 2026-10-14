@@ -16,6 +16,7 @@ export type PropertyRecordType =
   | 'SURVEY'
   | 'CLOSING_DOCUMENT'
   | 'QUOTE'
+  | 'PROJECT_DISPUTE_PACKAGE'
   | 'OTHER';
 
 export type PropertyRecordSensitivity =

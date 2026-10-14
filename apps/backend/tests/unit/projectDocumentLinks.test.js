@@ -137,6 +137,7 @@ test('the repair check names exactly what drifted and the repair makes the proje
   set('projectProgressLog', { findMany: async () => [] });
   set('projectIssue', { findMany: async () => Object.values(issues), findUnique: async ({ where }) => issues[where.id] ?? null, update: async ({ where, data }) => { Object.assign(issues[where.id], data); return {}; } });
   set('projectIssueNote', { findMany: async () => [] });
+  set('projectDisputePackage', { findMany: async () => [] });
   set('propertyRecord', { findMany: async ({ where }) => ['rec-1', 'rec-2'].filter((id) => where.id.in.includes(id)).map((id) => ({ id, currentVersionId: `${id}-cur` })) });
   set('propertyRecordLink', links);
   try {

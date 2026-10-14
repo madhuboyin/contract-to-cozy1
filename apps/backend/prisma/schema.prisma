@@ -2197,6 +2197,8 @@ enum PropertyRecordType {
   CLOSING_DOCUMENT
   // A contractor's or provider's proposal, estimate or bid for work not yet done (Quote Comparison import design, D-Q3).
   QUOTE
+  // A generated, immutable export of a project dispute (Project Tracker document-store design, owner ruling D-P4). Never uploaded by a person.
+  PROJECT_DISPUTE_PACKAGE
   OTHER
 }
 
@@ -5325,6 +5327,22 @@ model PropertyRecordLink {
   @@index([entityType, entityId])
   @@index([versionId])
   @@map("property_record_links")
+}
+
+// An object that was written to storage for a database change that then failed (owner ruling D-P4: object storage cannot join a database transaction).
+// Deleting it is attempted immediately; if that fails the key is kept here and the purge worker retries it until it is gone.
+model OrphanedStorageObject {
+  id            String    @id @default(uuid())
+  storageKey    String    @unique
+  reason        String
+  attempts      Int       @default(0)
+  lastError     String?
+  createdAt     DateTime  @default(now())
+  lastAttemptAt DateTime?
+  resolvedAt    DateTime?
+
+  @@index([resolvedAt, createdAt])
+  @@map("orphaned_storage_objects")
 }
 
 model PropertyRecordPurgeJob {

@@ -29,13 +29,14 @@ const versionMap = (value: unknown): Record<string, string | null> => (value && 
 async function collectExpected(filter: { propertyId?: string; projectId?: string }): Promise<Expected[]> {
   const projectWhere = { ...(filter.propertyId ? { propertyId: filter.propertyId } : {}), ...(filter.projectId ? { id: filter.projectId } : {}) };
   const childWhere = { project: projectWhere };
-  const [projects, payments, orders, logs, issues, notes] = await Promise.all([
+  const [projects, payments, orders, logs, issues, notes, packages] = await Promise.all([
     prisma.projectRecord.findMany({ where: projectWhere, select: { id: true, contractDocumentIds: true } }),
     prisma.projectPayment.findMany({ where: { ...childWhere, receiptDocumentId: { not: null } }, select: { id: true, receiptDocumentId: true } }),
     prisma.projectChangeOrder.findMany({ where: childWhere, select: { id: true, supportingDocumentId: true, complianceEvidenceDocumentIds: true, complianceEvidenceVersionIds: true } }),
     prisma.projectProgressLog.findMany({ where: { ...childWhere, photoDocumentIds: { isEmpty: false } }, select: { id: true, photoDocumentIds: true } }),
     prisma.projectIssue.findMany({ where: { ...childWhere, evidenceDocumentIds: { isEmpty: false } }, select: { id: true, evidenceDocumentIds: true, evidenceVersionIds: true } }),
     prisma.projectIssueNote.findMany({ where: { ...childWhere, evidenceDocumentIds: { isEmpty: false } }, select: { id: true, evidenceDocumentIds: true, evidenceVersionIds: true } }),
+    prisma.projectDisputePackage.findMany({ where: childWhere, select: { issueId: true, documentId: true } }),
   ]);
   const out: Expected[] = [];
   const add = (entityType: ProjectLinkEntity, entityId: string, purpose: ProjectLinkPurpose, ids: string[], versions: Record<string, string | null> | null, immutable: boolean) => {
@@ -50,6 +51,8 @@ async function collectExpected(filter: { propertyId?: string; projectId?: string
   for (const row of logs) add('PROJECT_PROGRESS_LOG', row.id, 'ATTACHMENT', row.photoDocumentIds, null, false);
   for (const row of issues) add('PROJECT_ISSUE', row.id, 'EVIDENCE', row.evidenceDocumentIds, versionMap(row.evidenceVersionIds), true);
   for (const row of notes) add('PROJECT_ISSUE_NOTE', row.id, 'EVIDENCE', row.evidenceDocumentIds, versionMap(row.evidenceVersionIds), true);
+  // A dispute package is its own Home Record, linked to the issue it was made for (each version has its own record; legacy packages hold a legacy id and are skipped).
+  for (const row of packages) add('PROJECT_ISSUE', row.issueId, 'SOURCE', [row.documentId], null, false);
   return out;
 }
 

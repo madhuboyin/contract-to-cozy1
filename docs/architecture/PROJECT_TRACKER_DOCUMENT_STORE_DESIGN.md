@@ -1,6 +1,6 @@
 # Project Tracker: moving the project document store to Home Records — design
 
-**Status:** Decisions D-P1 to D-P8 ruled by the owner on October 13, 2026 (§7, which supersedes §4 and the parts of §3 it amends). Slices 0 (correctness and inventory, FRD v1.375) and 1 (links, child entity types and the dual-write transaction, v1.376) are built; slices 2 to 4 are not.
+**Status:** Decisions D-P1 to D-P8 ruled by the owner on October 13, 2026 (§7, which supersedes §4 and the parts of §3 it amends). Slices 0 (correctness and inventory, FRD v1.375) 1 (links, child entity types and the dual-write transaction, v1.376) and 2 (the dispute package as a Home Record, v1.377) are built; slices 3 and 4 are not.
 **Date:** October 13, 2026
 **Scope:** Every place a Project (`ProjectRecord`) and its children (payments, change orders, progress logs, issues, issue notes, dispute packages) refer to a document, what store each one reads and writes today, and how they move to Home Records without leaving dangling references.
 **Not in scope:** Removing the legacy `Document` model (the Documents-retirement arc's "retire last" step, `HOME_CONTINUITY_AND_RECORDS_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md` §17.6), Material Specs' own document fields (a separate domain with its own validator), and the renovation case's scope documents (v1.359).
@@ -179,3 +179,15 @@ For the PDF: never fall back to printing a storage key; print "Contract document
 **Interim state from slice 0 closes here:** ids written between the two slices have no link until the repair is run.
 
 **Not built:** the dispute package as a Home Record (slice 2), desktop pickers and Home Record uploads from Ask (slice 3), retirement of the transitional path (slice 4). The key columns are no longer written by Ask; the desktop's typed-key paths remain until slice 3.
+
+### 7.4 Slice 2 as built (FRD v1.377)
+
+**Sequence (D-P4, corrected from §3.3):** render the PDF; stage the object through `homeRecordsService.stageGeneratedDocument` (pre-allocated record and version ids, the canonical storage key, the checksum header); then one database transaction creates the Home Record (`PROJECT_DISPUTE_PACKAGE`, `LEGAL`, household-visible, verified by the system at generation), its first and current version (`CLEAN`, integrity `VERIFIED`, the object's etag), the `ProjectDisputePackage` row (`documentId` is the record id, `storageKey` the version's object) and the link (`PROJECT_ISSUE`, purpose `SOURCE`, bound to the version). No transaction is open during rendering or upload. If the transaction fails, `discardStagedObject` deletes the object, or records its key in `OrphanedStorageObject` when deletion fails; the purge worker's tick retries recorded keys until they are gone (`retryOrphanedObjectCleanup`). A failure to even record the key is logged with the key.
+
+**Schema (edited, not pushed):** `PropertyRecordType.PROJECT_DISPUTE_PACKAGE` and the `OrphanedStorageObject` table. The record type is not in the Home Records upload route's list, so a person cannot create one; the Home Records page labels it "Project dispute package".
+
+**What changed for the legacy store:** `generateDisputePackage` no longer creates a `Document` row; the dispute-package path was the project service's last unconditional legacy writer (the completion fallback for a keyless proof remains until slice 4). Existing packages keep their legacy `documentId` and are not rewritten (D-P6); the link audit skips them as legacy and checks new ones.
+
+**Link rule:** each package version is its own record with its own `SOURCE` link to the issue, so the helper's replace semantics are not used (they would remove earlier versions' links). The repair check now expects the link for every package whose `documentId` is a Home Record.
+
+**Not covered:** the evidence documents a package cites are not linked (the package is not a link entity type, D-P2); their versions are in the immutable snapshot. Purging a package record leaves the package row's `documentId` dangling, which the deletion-impact link exists to disclose beforehand.

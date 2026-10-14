@@ -446,6 +446,64 @@ export class HomeRecordsService {
     });
   }
 
+  /**
+   * A generated document (a dispute package) is uploaded BEFORE the database change, because object storage cannot join a transaction (owner ruling D-P4).
+   * This only stores the object and returns what the transaction needs; the caller commits the record with `createGeneratedRecordInTx` and removes the
+   * object if that fails. No database transaction is held open while a document is rendered or uploaded.
+   */
+  async stageGeneratedDocument(input: { propertyId: string; userId: string; buffer: Buffer; fileName: string; mimeType: string }) {
+    const recordId = randomUUID();
+    const versionId = randomUUID();
+    const checksum = sha256(input.buffer);
+    const key = storageKey({ propertyId: input.propertyId, recordId, versionId, fileName: input.fileName });
+    const stored = await uploadPropertyRecordVersionBuffer({
+      buffer: input.buffer, storageKey: key, fileName: input.fileName, mimeType: input.mimeType, propertyId: input.propertyId,
+      recordId, versionId, checksumSha256: checksum, userId: input.userId,
+    });
+    return {
+      recordId, versionId, storageKey: key, storageEtag: stored.storageEtag, sha256: checksum, fileSizeBytes: input.buffer.length,
+      fileName: input.fileName, mimeType: input.mimeType,
+    };
+  }
+
+  /** Creates the record and its first (current) version for an object already staged, on the caller's transaction client. */
+  async createGeneratedRecordInTx(
+    tx: any,
+    input: {
+      staged: Awaited<ReturnType<HomeRecordsService['stageGeneratedDocument']>>;
+      propertyId: string; userId: string; title: string; description?: string | null;
+      recordType: PropertyRecordType; sensitivity: PropertyRecordSensitivity; generatedAt: Date;
+    },
+  ) {
+    const { staged } = input;
+    await tx.propertyRecord.create({
+      data: {
+        id: staged.recordId,
+        propertyId: input.propertyId,
+        title: input.title,
+        description: input.description ?? null,
+        recordType: input.recordType,
+        sensitivity: input.sensitivity,
+        // A generated project document is shared with the household like the project it describes.
+        visibility: 'HOUSEHOLD',
+        // The system generated it from the project's own records at this moment, and the checksum is recorded; it is not a person's attestation about a file.
+        verificationStatus: 'VERIFIED',
+        verifiedAt: input.generatedAt,
+        verifiedByUserId: input.userId,
+        createdByUserId: input.userId,
+        versions: {
+          create: {
+            id: staged.versionId, versionNumber: 1, storageKey: staged.storageKey, originalFileName: staged.fileName, mimeType: staged.mimeType,
+            fileSizeBytes: staged.fileSizeBytes, sha256: staged.sha256, uploadedByUserId: input.userId, scanStatus: 'CLEAN',
+            integrityStatus: 'VERIFIED', storageEtag: staged.storageEtag,
+          },
+        },
+      },
+    });
+    await tx.propertyRecord.update({ where: { id: staged.recordId }, data: { currentVersionId: staged.versionId } });
+    return { recordId: staged.recordId, versionId: staged.versionId };
+  }
+
   async create(input: CreateRecordInput) {
     assertVisibilitySelectable(input.visibility);
     const checksum = sha256(input.file.buffer);

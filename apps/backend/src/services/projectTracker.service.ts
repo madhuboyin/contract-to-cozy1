@@ -44,7 +44,9 @@ import { createHash, randomBytes } from 'node:crypto';
 import { assertProjectDocuments, resolveProjectDocuments } from './projectDocuments.service';
 import { syncProjectDocumentLinks } from './projectDocumentLinks';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
-import { uploadPdfBuffer } from './storage/reportStorage';
+import { deleteDocumentObject } from './storage/reportStorage';
+import { discardStagedObject } from './storage/orphanedObjects';
+import { homeRecordsService } from './homeRecords.service';
 import { recordReconciliationFailure } from '../modules/homeOperations/infrastructure/reconciliationRepository';
 import { PropertyMaintenanceTaskService } from './PropertyMaintenanceTask.service';
 import {
@@ -2100,11 +2102,37 @@ export async function generateDisputePackage(issueId: string, projectId: string,
   const checksumSha256 = createHash('sha256').update(buffer).digest('hex');
   const version = (prior?.version ?? 0) + 1;
   const fileName = `project-dispute-${projectId}-v${version}.pdf`;
-  const uploaded = await uploadPdfBuffer({ buffer, fileName, checksumSha256, propertyId, userId });
-  return prisma.$transaction(async (tx) => {
-    const document = await tx.document.create({ data: { propertyId, projectId, uploadedBy: userId, type: 'OTHER', name: fileName, description: `Immutable dispute package for ${issueRecord.title}`, fileUrl: uploaded.key, fileSize: uploaded.fileSizeBytes, mimeType: 'application/pdf', sha256: checksumSha256, verificationStatus: 'VERIFIED', verifiedAt: generatedAt, verifiedByUserId: userId, metadata: { immutable: true, issueId, version, generatedAt: generatedAt.toISOString() } } });
-    return tx.projectDisputePackage.create({ data: { projectId, propertyId, issueId, version, documentId: document.id, storageKey: uploaded.key, checksumSha256, snapshot: snapshot as Prisma.InputJsonValue, generatedByUserId: userId, generatedAt } });
-  });
+  // Owner ruling D-P4: render and upload first, with no database transaction open, then one transaction for the Home Record and its version, the package
+  // row and the link. If that transaction fails the staged object is removed, or recorded for retry when the removal fails.
+  const staged = await homeRecordsService.stageGeneratedDocument({ propertyId, userId, buffer, fileName, mimeType: 'application/pdf' });
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const created = await homeRecordsService.createGeneratedRecordInTx(tx, {
+        staged, propertyId, userId, generatedAt,
+        title: `Dispute package v${version}: ${issueRecord.title}`.slice(0, 240),
+        description: `Immutable dispute package for the project issue "${issueRecord.title}", generated ${generatedAt.toISOString()} (sha256 ${checksumSha256}).`,
+        recordType: 'PROJECT_DISPUTE_PACKAGE',
+        sensitivity: 'LEGAL',
+      });
+      const pkg = await tx.projectDisputePackage.create({
+        data: {
+          projectId, propertyId, issueId, version, documentId: created.recordId, storageKey: staged.storageKey, checksumSha256,
+          snapshot: snapshot as Prisma.InputJsonValue, generatedByUserId: userId, generatedAt,
+        },
+      });
+      // The record's deletion impact lists the issue the package was made for. Each version is its own record, so each has its own link.
+      await tx.propertyRecordLink.create({
+        data: {
+          recordId: created.recordId, versionId: created.versionId, entityType: 'PROJECT_ISSUE', entityId: issueId, purpose: 'SOURCE',
+          label: `Dispute package v${version}`, createdByUserId: userId,
+        },
+      });
+      return pkg;
+    });
+  } catch (error) {
+    await discardStagedObject(prisma as never, deleteDocumentObject, staged.storageKey, 'DISPUTE_PACKAGE_TRANSACTION_FAILED');
+    throw error;
+  }
 }
 
 // ── Completion ────────────────────────────────────────────────────────────────

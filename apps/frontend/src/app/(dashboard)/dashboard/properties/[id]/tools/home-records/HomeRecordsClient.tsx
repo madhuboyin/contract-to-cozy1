@@ -130,6 +130,7 @@ const RECORD_TYPE_LABELS: Record<PropertyRecordType, string> = {
   SURVEY: 'Survey',
   CLOSING_DOCUMENT: 'Closing Document',
   QUOTE: 'Quote or estimate',
+  PROJECT_DISPUTE_PACKAGE: 'Project dispute package',
   OTHER: 'Other',
 };
 
