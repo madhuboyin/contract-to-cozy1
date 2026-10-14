@@ -125,6 +125,41 @@ describe('grouped workflow capture', () => {
     expect(screen.getAllByRole('listitem').filter((item) => item.getAttribute('aria-current') === 'step')).toHaveLength(1);
   });
 
+  it('shows Project Tracker setup as four focused stages instead of one wall of fields', () => {
+    const projectRequest = {
+      requirementId: 'project-create', captureKey: 'PROJECT_TRACKER_CREATE_INPUTS', classification: 'WORKFLOW_INPUT', state: 'UNKNOWN',
+      title: 'Start a project', question: 'What work are you planning?', helpText: null, allowNotSure: false, sensitivity: 'STANDARD',
+      destinationLabel: 'Nothing is created until you confirm', fallbackHref: null, confirmationText: null, expectedContextVersion: 'v1', presentation: 'FORM',
+      inputSchema: { type: 'GROUP', groups: [
+        { id: 'project', title: 'Project', fieldKeys: ['name', 'projectType'] },
+        { id: 'team-budget', title: 'Team and budget', fieldKeys: ['fulfillmentMode', 'contractorName', 'contractAmountDollars'] },
+        { id: 'schedule', title: 'Schedule and milestone', fieldKeys: ['startDate', 'initialMilestoneName'] },
+        { id: 'requirements', title: 'Requirements and documents', fieldKeys: ['permitApplicability', 'hoaApplicability'] },
+      ], fields: [
+        { key: 'name', label: 'Project name', required: true, inputSchema: { type: 'SHORT_TEXT', maxLength: 200 } },
+        { key: 'projectType', label: 'Project type', required: true, inputSchema: { type: 'SINGLE_SELECT', options: [{ value: 'ROOF', label: 'Roof replacement' }, { value: 'CUSTOM', label: 'Custom project' }] } },
+        { key: 'fulfillmentMode', label: 'Who will do the work?', required: true, inputSchema: { type: 'SINGLE_SELECT', options: [{ value: 'PROVIDER', label: 'Contractor / provider' }, { value: 'DIY', label: 'DIY / household' }] } },
+        { key: 'contractorName', label: 'Contractor or company', required: true, when: { fieldKey: 'fulfillmentMode', operator: 'EQUALS', value: 'PROVIDER' }, inputSchema: { type: 'SHORT_TEXT', maxLength: 200 } },
+        { key: 'contractAmountDollars', label: 'Contract or project amount ($)', required: true, inputSchema: { type: 'NUMBER', min: 0, max: 100000000 } },
+        { key: 'startDate', label: 'Start date', required: true, inputSchema: { type: 'SHORT_TEXT', maxLength: 20 } },
+        { key: 'initialMilestoneName', label: 'First milestone', required: true, inputSchema: { type: 'SHORT_TEXT', maxLength: 200 } },
+        { key: 'permitApplicability', label: 'Permit', required: true, inputSchema: { type: 'SINGLE_SELECT', options: [{ value: 'UNKNOWN', label: 'Not sure yet' }] } },
+        { key: 'hoaApplicability', label: 'HOA approval', required: true, inputSchema: { type: 'SINGLE_SELECT', options: [{ value: 'UNKNOWN', label: 'Not sure yet' }] } },
+      ] }, currentAnswer: { projectType: 'CUSTOM', fulfillmentMode: 'PROVIDER', permitApplicability: 'UNKNOWN', hoaApplicability: 'UNKNOWN' },
+    } as unknown as AskCaptureRequest;
+    const { container } = render(<InlineCaptureCard executionId="project-create-execution" request={projectRequest} onCompleted={jest.fn()} />);
+
+    expect(screen.getByText('Step 1 of 4')).toBeInTheDocument();
+    expect(screen.getByLabelText('Project name')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Contractor or company')).toBeNull();
+    expect(container.querySelector('[data-compact-capture="project-create"] > div')).toHaveClass('md:col-span-6');
+    fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'Replace the roof' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Next: Team and budget' }));
+    expect(screen.getByText('Step 2 of 4')).toBeInTheDocument();
+    expect(screen.getByLabelText('Contractor or company')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Start date')).toBeNull();
+  });
+
   it('says a workflow form is reviewed next, without the awkward "after you continue" suffix, and steps a long figures form', () => {
     const longRequest = {
       requirementId: 'buyer-cd-draft-edit-inputs', captureKey: 'BUYER_CD_DRAFT_EDIT', classification: 'WORKFLOW_INPUT', state: 'UNKNOWN', title: 'Edit your Closing Disclosure draft',

@@ -260,7 +260,12 @@ function projectCaptureRequest(contextVersion: string, entered?: Partial<Project
   return { requirementId: 'project-tracker-create-inputs', captureKey: PROJECT_TRACKER_CREATE_CAPTURE_KEY, classification: 'WORKFLOW_INPUT', state: 'UNKNOWN', presentation: 'FORM',
     title: 'Start a project', question: 'What work are you planning, and what is the first milestone?',
     helpText: 'This creates the same tracked project used by the desktop Project Tracker. Include one real milestone so the project starts with an actionable plan.',
-    inputSchema: { type: 'GROUP', fields: [
+    inputSchema: { type: 'GROUP', groups: [
+      { id: 'project', title: 'Project', description: 'Name the work and choose the closest project type.', fieldKeys: ['name', 'projectType'] },
+      { id: 'team-budget', title: 'Team and budget', description: 'Who is doing the work and the amount you are planning around.', fieldKeys: ['fulfillmentMode', 'contractorName', 'contractAmountDollars'] },
+      { id: 'schedule', title: 'Schedule and milestone', description: 'Set the working dates and the first concrete checkpoint.', fieldKeys: ['startDate', 'expectedEndDate', 'initialMilestoneName', 'initialMilestoneDate'] },
+      { id: 'requirements', title: 'Requirements and documents', description: 'Record permit and HOA decisions, then attach a contract if you have one.', fieldKeys: ['permitApplicability', 'permitApplicabilityBasis', 'hoaApplicability', 'hoaApplicabilityBasis', 'contractDocumentIds'] },
+    ], fields: [
       { key: 'name', label: 'Project name', required: true, inputSchema: { type: 'SHORT_TEXT', maxLength: 200 } },
       { key: 'projectType', label: 'Project type', required: true, inputSchema: { type: 'SINGLE_SELECT', options: PROJECT_OPTIONS } },
       { key: 'fulfillmentMode', label: 'Who will do the work?', required: true, inputSchema: { type: 'SINGLE_SELECT', options: [{ value: 'PROVIDER', label: 'Contractor / provider' }, { value: 'DIY', label: 'DIY / household' }] } },
