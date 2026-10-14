@@ -1,3 +1,4 @@
+import { resolveProjectDocuments } from './projectDocuments.service';
 import {
   MaterialCategory,
   MaterialLifecycleStatus,
@@ -629,10 +630,16 @@ export class MaterialSpecService {
 
   private async assertDocumentsBelong(propertyId: string, documentIds: string[]) {
     if (documentIds.length === 0) return;
-    const count = await prisma.document.count({
-      where: { propertyId, id: { in: [...new Set(documentIds)] } },
-    });
-    if (count !== new Set(documentIds).size) {
+    // A material's documents may be eligible Home Records (what Ask now offers) or a legacy document of this property (what a desktop typed id may
+    // still name). Nothing here newly offers a legacy document; this domain's own migration is separate.
+    const wanted = [...new Set(documentIds)];
+    const resolved = await resolveProjectDocuments(propertyId, wanted);
+    const remaining = resolved.unavailable;
+    const legacyCount = remaining.length
+      ? await prisma.document.count({ where: { propertyId, id: { in: remaining } } })
+      : 0;
+    const count = resolved.documents.length + legacyCount;
+    if (count !== wanted.length) {
       throw new APIError(
         'Every material evidence document must belong to the same property.',
         409,

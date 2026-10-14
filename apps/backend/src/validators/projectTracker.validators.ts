@@ -340,6 +340,8 @@ export const CreateIssueSchema = z.object({
   category: issueCategory,
   blocksPayment: z.boolean().optional(),
   attachmentKeys: z.array(z.string()).default([]),
+  // Home Record ids (owner ruling D-P3); the service refuses anything that is not an eligible record of this property.
+  evidenceDocumentIds: z.array(z.string().min(1)).max(50).default([]),
 });
 
 export const UpdateIssueSchema = z.object({
@@ -350,6 +352,7 @@ export const UpdateIssueSchema = z.object({
   status: issueStatus.optional(),
   blocksPayment: z.boolean().optional(),
   attachmentKeys: z.array(z.string()).optional(),
+  evidenceDocumentIds: z.array(z.string().min(1)).max(50).optional(),
 });
 
 export const ResolveIssueSchema = z.object({

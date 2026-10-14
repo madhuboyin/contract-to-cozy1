@@ -1,6 +1,6 @@
 # Project Tracker: moving the project document store to Home Records — design
 
-**Status:** Proposed. Nothing in this document is built. It needs the owner decisions in §4 before slice 0.
+**Status:** Decisions D-P1 to D-P8 ruled by the owner on October 13, 2026 (§7, which supersedes §4 and the parts of §3 it amends). Slice 0 (correctness and inventory) is built (FRD v1.375); slices 1 to 4 are not.
 **Date:** October 13, 2026
 **Scope:** Every place a Project (`ProjectRecord`) and its children (payments, change orders, progress logs, issues, issue notes, dispute packages) refer to a document, what store each one reads and writes today, and how they move to Home Records without leaving dangling references.
 **Not in scope:** Removing the legacy `Document` model (the Documents-retirement arc's "retire last" step, `HOME_CONTINUITY_AND_RECORDS_CAPABILITY_AUDIT_AND_IMPLEMENTATION_PLAN.md` §17.6), Material Specs' own document fields (a separate domain with its own validator), and the renovation case's scope documents (v1.359).
@@ -128,3 +128,32 @@ Each slice carries its own FRD revision and tests. Nothing here is verified agai
 - "the desktop has no caller for receiptDocumentKey" (§1.1): grep of the frontend source finds the client type and no component that sets it.
 - "A household whose documents are Home Records sees an empty list" (§1.5): from `projectDocumentOptions` reading only `prisma.document`; Home Records visibility in that picker was not exercised.
 - Corrected during drafting: an earlier note (FRD v1.359) said the Project Tracker "reads Document rows for name, file and size". The code shows it reads only the Ask handler's `fileUrl`, `name`, `fileSize` and `mimeType` at the moment of selection, to copy a key; no stored column is later dereferenced to a Document row.
+
+## 7. Owner rulings (October 13, 2026) and what changed because of them
+
+| Decision | Ruling | Direction |
+|---|---|---|
+| D-P1 | **Amend** | Home Record id plus link only with a declared canonical source and atomic dual writes. The stored id and version are the workflow's durable reference; the `PropertyRecordLink` is the deletion-impact and reverse-navigation projection. Both are written in one database transaction, a write fails if either cannot be created, readers use the stored id and version and verify the link, and a repair check finds missing or mismatched links. The link's uniqueness is `(recordId, entityType, entityId, purpose)` with no `versionId`, and the transaction helper is a no-op on conflict, so choosing a newer version for the same entity and purpose would not update the binding: decide per use whether replacing evidence updates the link's `versionId` (contracts, receipts, current attachments) or several versions coexist and `versionId` joins the uniqueness (historical evidence in a dispute or a completion declaration). |
+| D-P2 | Accept | Add the five child entity types. |
+| D-P3 | Accept | Household-visible, active, clean, any type; sensitivity shown, not filtered. |
+| D-P4 | **Amend** | A dedicated `PROJECT_DISPUTE_PACKAGE` record type, not `OTHER`, with a `LEGAL` or `CLAIM` sensitivity and an immutable generated version. Object storage cannot join a database transaction, so: render and upload the PDF; in one database transaction create the Home Record and version, the package row and the link; if that fails delete or enqueue cleanup of the orphaned object, and record a failed cleanup for retry. Never hold a transaction open while rendering or uploading. This corrects §3.3's "same transaction". |
+| D-P5 | Accept | Project uploads go to Home Records through the canonical upload service. |
+| D-P6 | **Amend** | No automatic rewrite, but the read-only inventory runs in slice 0. Classes: valid Home Record and version; valid legacy; missing or dangling; raw key resolving to an object only; raw key resolving to no object; ambiguous or duplicated. A legacy reference is accepted only if it is already stored on that exact record, belongs to the same property, no new write reproduces it, and it is never offered as a new option. |
+| D-P7 | Accept | Fix completion and evidence validation first. |
+| D-P8 | Accept | Store a user id consistently and audit existing mixed values. See §7.2: the codebase's own convention is not what the column comment says, so the writer change was not made without the owner knowing. |
+
+For the PDF: never fall back to printing a storage key; print "Contract document unavailable" or "Contract document removed".
+
+### 7.1 Slice 0 as built (FRD v1.375)
+
+- **One resolver:** `projectDocuments.service.ts` (`listProjectDocumentOptions`, `resolveProjectDocuments`, `assertProjectDocuments`) with the D-P3 rule; a legacy id is accepted only through `transitionalLegacyIds` (the ids already stored on that exact record) and never listed.
+- **Ask:** options and validation read Home Records; the selected ids are what completion looks up, so the §1.3 failure is fixed (the regression test failed 4 of 4 before the change); a warranty document goes in as the `warranty` proof, not as a storage key; contract documents are stored as `contractDocumentIds` on create and edit; issue attachments are stored as `evidenceDocumentIds`. The upload control is removed from project document fields because the shared route stores a legacy Document (D-P5 is slice 3).
+- **Fields removed from Ask until slice 1:** payment receipt, change-order supporting document and progress photos. Their only stored shape is a copied storage key and there is no id column to hold a Home Record reference; storing the id in a key column would be a lie. The forms say photos are not attached from Ask yet. This is a deliberate, disclosed regression of three optional fields, not an oversight.
+- **Services:** issue notes, issue create and update, change-order compliance review (previously unvalidated) and the dispute package's evidence use the resolver; a recheck cannot be completed with typed ids that resolve to nothing in this property. Completion proofs (both loops) require an active, household-visible, clean Home Record of the property. The handoff's `contractDocumentIds` and Material Specs' document check accept eligible Home Records (Material Specs also still accept a legacy document of the property, because that domain's own migration is separate and its desktop form takes typed ids).
+- **Dispute package:** the snapshot is `project-dispute-package-v2` and carries the contract document's label and state instead of a key, and each evidence item's exact `versionId`. The PDF prints the document's title, "Contract document unavailable" or "Contract document removed", never a key.
+- **Inventory:** `prisma/project-document-reference-inventory.pgadmin.sql` (read only) classifies every id and key column and the `uploadedBy` kinds.
+- **Not built in slice 0:** links, entity types and the dual-write transaction (slice 1); ids written by slice 0 therefore have no link until slice 1's backfill and repair check, which is an interim state the ruling on D-P1 would not accept as a final one; the dispute package as a Home Record and the cleanup of its object (slice 2); desktop pickers and Home Record uploads from Ask (slice 3).
+
+### 7.2 The `uploadedBy` finding
+
+`Document.uploadedBy` is commented as a user id. The legacy document routes, the Ask evidence upload and the `documentAuth` uploader check (`document.uploadedBy === homeownerProfile.id`) use the **homeowner profile id**; `providerCredential` compares it to a **user id**; the dispute-package writer stores a **user id**. Changing the evidence-upload writer to a user id, as ruled, would make `documentAuth` stop recognising the uploader of every new Ask upload, and the "my documents" list (`where: { uploadedBy: homeownerProfile.id }`) would stop listing them. So the writers were left as they are and the inventory classifies the existing values (user id, profile id, both, neither). **Decision needed:** keep the profile-id convention for the legacy routes and correct the column comment and the dispute writer; or change every writer and reader together as one slice.

@@ -8,6 +8,7 @@ import { resolvePropertyDocuments } from './propertyDocuments/propertyDocumentIn
 import { linkContributor, linkProjectToCaseInTx } from './renovationCase.service';
 import { withSerializableDedupe } from './projectCompliance/serializableDedupe';
 import { createHash } from 'node:crypto';
+import { resolveProjectDocuments } from './projectDocuments.service';
 import { resolveAndUpsertWorkItem } from '../modules/homeOperations/application/resolveWorkItem.usecase';
 import { transitionWorkItem } from '../modules/homeOperations/application/transitionWorkItem.usecase';
 import { linkWorkExecution } from '../modules/homeOperations/infrastructure/workItemRepository';
@@ -779,7 +780,9 @@ export async function handoffToProject(
   }
   const documents = [...new Set<string>((input.contractDocumentIds ?? []) as string[])];
   if (documents.length) {
-    const count = await prisma.document.count({ where: { id: { in: documents }, propertyId } });
+    // Home Records only (owner ruling D-P3): a handoff request is a new write, so no legacy document is accepted.
+    const resolved = await resolveProjectDocuments(propertyId, documents);
+    const count = resolved.documents.length;
     if (count !== documents.length) {
       throw new APIError(
         'Every handoff document must belong to this property.',

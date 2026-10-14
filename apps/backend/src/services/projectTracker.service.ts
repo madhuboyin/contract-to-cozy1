@@ -41,6 +41,7 @@ import {
   VERIFIED_CLOSEOUT_REFRESH_TARGETS,
 } from './projectCompliance/closeoutPolicy';
 import { createHash, randomBytes } from 'node:crypto';
+import { assertProjectDocuments, resolveProjectDocuments } from './projectDocuments.service';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { uploadPdfBuffer } from './storage/reportStorage';
 import { recordReconciliationFailure } from '../modules/homeOperations/infrastructure/reconciliationRepository';
@@ -452,6 +453,7 @@ async function assertChangeOrder(changeOrderId: string, projectId: string) {
       complianceImpact: true,
       amendedPermitStatus: true,
       hoaReapprovalStatus: true,
+      complianceEvidenceDocumentIds: true,
     },
   });
   if (!co || co.projectId !== projectId) {
@@ -471,6 +473,7 @@ async function assertIssue(issueId: string, projectId: string) {
       blocksPayment: true,
       sourceEntityType: true,
       sourceEntityId: true,
+      evidenceDocumentIds: true,
     },
   });
   if (!issue || issue.projectId !== projectId) {
@@ -1001,6 +1004,14 @@ export async function listProjectWriteBacks(projectId: string, propertyId: strin
 
 export async function updateProject(projectId: string, propertyId: string, data: any) {
   const existing = await assertProject(projectId, propertyId);
+  // The contract document is a Home Record id (owner ruling D-P1); a legacy id already stored on this project stays accepted and is never newly offered.
+  let contractDocumentIds: string[] | undefined;
+  if (data.contractDocumentIds !== undefined) {
+    contractDocumentIds = [...new Set<string>(data.contractDocumentIds)];
+    const stored = await prisma.projectRecord.findUnique({ where: { id: projectId }, select: { contractDocumentIds: true } });
+    await assertProjectDocuments(propertyId, contractDocumentIds, { message: 'The contract document is unavailable for this property.', code: 'PROJECT_CONTRACT_DOCUMENT_UNAVAILABLE' },
+      { transitionalLegacyIds: stored?.contractDocumentIds ?? [] });
+  }
   const permitApplicability = data.permitApplicability ?? existing.permitApplicability;
   const permitApplicabilityBasis = data.permitApplicability === 'UNKNOWN'
     ? null
@@ -1030,6 +1041,7 @@ export async function updateProject(projectId: string, propertyId: string, data:
       ...(data.homeSystemsAffected && { homeSystemsAffected: data.homeSystemsAffected }),
       ...(data.serviceCategory !== undefined && { serviceCategory: data.serviceCategory }),
       ...(data.contractDocumentKey !== undefined && { contractDocumentKey: data.contractDocumentKey }),
+      ...(contractDocumentIds !== undefined && { contractDocumentIds }),
       ...(data.status && { status: data.status as ProjectRecordStatus }),
       ...(data.permitApplicability !== undefined && { permitApplicability, permitApplicabilityBasis }),
       ...(data.permitApplicabilityBasis !== undefined && data.permitApplicability === undefined && { permitApplicabilityBasis }),
@@ -1472,7 +1484,12 @@ export async function reviewChangeOrderCompliance(
   const hoaStatus = assessment.hoaReapprovalRequired
     ? data.hoaReapprovalStatus
     : 'NOT_APPLICABLE';
-  const evidenceIds: string[] = data.evidenceDocumentIds ?? [];
+  const evidenceIds: string[] = [...new Set<string>(data.evidenceDocumentIds ?? [])];
+  // The evidence was stored as typed, so an id that belonged to no document, or to another property, could complete a recheck. It must be an eligible
+  // Home Record of this property. Ids already stored on this change order stay accepted when they are legacy documents of the same property (owner ruling D-P6).
+  await assertProjectDocuments(propertyId, evidenceIds, {
+    message: 'Compliance evidence must be documents on file for this property that your household can see.', status: 409, code: 'CHANGE_ORDER_COMPLIANCE_EVIDENCE_UNAVAILABLE',
+  }, { transitionalLegacyIds: co.complianceEvidenceDocumentIds ?? [] });
   const recheckComplete = (
     (!assessment.permitRecheckRequired || permitStatus === 'CONFIRMED')
     && (!assessment.hoaReapprovalRequired || hoaStatus === 'CONFIRMED')
@@ -1758,6 +1775,9 @@ export async function createIssue(projectId: string, propertyId: string, data: a
 
   const isBlocking = data.severity === 'BLOCKING';
   const blocksPayment = data.blocksPayment ?? isBlocking;
+  // Home Records only (owner ruling D-P3); an attachment is a new write, so nothing legacy is carried.
+  const evidenceDocumentIds = [...new Set<string>(data.evidenceDocumentIds ?? [])];
+  await assertProjectDocuments(propertyId, evidenceDocumentIds, { message: 'One or more issue documents are unavailable for this property.', code: 'PROJECT_ISSUE_DOCUMENT_UNAVAILABLE' });
 
   const issue = await prisma.projectIssue.create({
     data: {
@@ -1769,6 +1789,7 @@ export async function createIssue(projectId: string, propertyId: string, data: a
       status: 'OPEN',
       blocksPayment,
       attachmentKeys: data.attachmentKeys ?? [],
+      evidenceDocumentIds: evidenceDocumentIds ?? [],
     },
   });
 
@@ -1791,9 +1812,16 @@ export async function updateIssue(issueId: string, projectId: string, propertyId
     );
   }
 
+  // Evidence may only change to eligible Home Records; a legacy id already stored on this issue stays accepted and is never newly offered (D-P6).
+  if (data.evidenceDocumentIds) {
+    await assertProjectDocuments(propertyId, data.evidenceDocumentIds, { message: 'One or more issue documents are unavailable for this property.', code: 'PROJECT_ISSUE_DOCUMENT_UNAVAILABLE' },
+      { transitionalLegacyIds: issue.evidenceDocumentIds ?? [] });
+  }
+
   return prisma.projectIssue.update({
     where: { id: issueId },
     data: {
+      ...(data.evidenceDocumentIds && { evidenceDocumentIds: [...new Set<string>(data.evidenceDocumentIds)] }),
       ...(data.title && { title: data.title }),
       ...(data.description && { description: data.description }),
       ...(data.severity && { severity: data.severity }),
@@ -1856,11 +1884,36 @@ export async function addIssueNote(issueId: string, projectId: string, propertyI
   await assertProject(projectId, propertyId);
   await assertIssue(issueId, projectId);
   const evidenceDocumentIds = [...new Set(data.evidenceDocumentIds ?? [])];
-  if (evidenceDocumentIds.length) {
-    const count = await prisma.document.count({ where: { id: { in: evidenceDocumentIds }, propertyId, deletedAt: null } });
-    if (count !== evidenceDocumentIds.length) throw new APIError('One or more issue-note documents are unavailable for this property.', 400, 'PROJECT_ISSUE_NOTE_DOCUMENT_INVALID');
-  }
+  // Home Records only (owner ruling D-P3): active, household-visible, clean, in this property. An issue note is a new write, so nothing legacy is carried.
+  await assertProjectDocuments(propertyId, evidenceDocumentIds, { message: 'One or more issue-note documents are unavailable for this property.', code: 'PROJECT_ISSUE_NOTE_DOCUMENT_UNAVAILABLE' });
   return prisma.projectIssueNote.create({ data: { issueId, projectId, notes: data.notes, evidenceDocumentIds, createdByUserId: userId } });
+}
+
+/**
+ * What the dispute package says about the contract document. It names the document and never prints a storage key. A reference that no longer
+ * resolves says so, so a counterparty is not handed an object key and the package does not silently look complete.
+ */
+export async function describeContractDocument(
+  propertyId: string,
+  project: { contractDocumentKey: string | null; contractDocumentIds: string[] },
+): Promise<{ label: string; state: 'NONE' | 'NAMED' | 'REMOVED'; id: string | null }> {
+  const ids = project.contractDocumentIds ?? [];
+  if (ids.length) {
+    const resolved = await resolveProjectDocuments(propertyId, ids, { transitionalLegacyIds: ids });
+    const first = resolved.documents[0];
+    if (first) return { label: first.title, state: 'NAMED', id: first.id };
+  }
+  const key = project.contractDocumentKey;
+  if (key) {
+    const [legacy, version] = await Promise.all([
+      prisma.document.findFirst({ where: { propertyId, fileUrl: key, deletedAt: null }, select: { id: true, name: true } }),
+      prisma.propertyRecordVersion.findFirst({ where: { storageKey: key, record: { propertyId, lifecycleStatus: { not: 'TRASHED' } } }, select: { record: { select: { id: true, title: true } } } }),
+    ]);
+    if (version?.record) return { label: version.record.title, state: 'NAMED', id: version.record.id };
+    if (legacy) return { label: legacy.name, state: 'NAMED', id: legacy.id };
+    return { label: 'Contract document removed', state: 'REMOVED', id: null };
+  }
+  return ids.length ? { label: 'Contract document unavailable', state: 'REMOVED', id: null } : { label: 'No contract document recorded', state: 'NONE', id: null };
 }
 
 async function renderDisputePackagePdf(snapshot: any): Promise<Buffer> {
@@ -1871,7 +1924,7 @@ async function renderDisputePackagePdf(snapshot: any): Promise<Buffer> {
     { text: 'Project Dispute Package', heading: true },
     { text: `Generated: ${snapshot.generatedAt}` },
     { text: `Project: ${snapshot.project.name}` },
-    { text: `Contract record: ${snapshot.project.contractDocumentKey ?? 'No contract document recorded'}` },
+    { text: `Contract record: ${snapshot.project.contractDocument?.label ?? 'No contract document recorded'}` },
     { text: `Escalated issue: ${snapshot.issue.title}` },
     { text: `Issue details: ${snapshot.issue.description}` },
     { text: 'Milestones', heading: true },
@@ -1885,7 +1938,7 @@ async function renderDisputePackagePdf(snapshot: any): Promise<Buffer> {
     { text: 'Issue timeline', heading: true },
     ...snapshot.issueTimeline.map((item: any) => ({ text: `${item.createdAt}: ${item.notes}` })),
     { text: 'Selected evidence', heading: true },
-    ...snapshot.evidence.map((item: any) => ({ text: `${item.name} (${item.mimeType}) - document ${item.id}` })),
+    ...snapshot.evidence.map((item: any) => ({ text: `${item.name} (${item.mimeType}) - document ${item.id}${item.versionId ? ` version ${item.versionId}` : ''}` })),
   ];
   let page = pdf.addPage([612, 792]);
   let y = 756;
@@ -1916,13 +1969,14 @@ export async function generateDisputePackage(issueId: string, projectId: string,
   const [record, notes, evidence, prior] = await Promise.all([
     prisma.projectRecord.findUniqueOrThrow({ where: { id: projectId }, include: { milestones: { orderBy: [{ scheduledDate: 'asc' }, { position: 'asc' }] }, payments: { orderBy: { createdAt: 'asc' } }, changeOrders: { orderBy: { changeNumber: 'asc' } }, issues: { orderBy: { createdAt: 'asc' } } } }),
     prisma.projectIssueNote.findMany({ where: { issueId, projectId }, orderBy: { createdAt: 'asc' } }),
-    prisma.document.findMany({ where: { id: { in: [...new Set(selectedEvidenceDocumentIds)] }, propertyId, deletedAt: null }, select: { id: true, name: true, mimeType: true } }),
+    resolveProjectDocuments(propertyId, selectedEvidenceDocumentIds),
     prisma.projectDisputePackage.findFirst({ where: { issueId }, orderBy: { version: 'desc' }, select: { version: true } }),
   ]);
-  if (evidence.length !== new Set(selectedEvidenceDocumentIds).size) throw new APIError('One or more selected evidence documents are unavailable for this property.', 400, 'PROJECT_DISPUTE_EVIDENCE_INVALID');
+  if (evidence.unavailable.length) throw new APIError('One or more selected evidence documents are unavailable for this property.', 400, 'PROJECT_DISPUTE_EVIDENCE_INVALID', { unavailable: evidence.unavailable });
+  const contractDocument = await describeContractDocument(propertyId, record);
   const generatedAt = new Date();
   const issueRecord = record.issues.find((item) => item.id === issueId)!;
-  const snapshot = { schemaVersion: 'project-dispute-package-v1', generatedAt: generatedAt.toISOString(), project: { id: record.id, name: record.name, projectType: record.projectType, contractDocumentKey: record.contractDocumentKey }, issue: issueRecord, milestones: record.milestones, payments: record.payments, changeOrders: record.changeOrders, issues: record.issues, issueTimeline: [{ createdAt: issueRecord.createdAt.toISOString(), notes: issueRecord.description }, ...notes.map((note) => ({ createdAt: note.createdAt.toISOString(), notes: note.notes, evidenceDocumentIds: note.evidenceDocumentIds }))], evidence };
+  const snapshot = { schemaVersion: 'project-dispute-package-v2', generatedAt: generatedAt.toISOString(), project: { id: record.id, name: record.name, projectType: record.projectType, contractDocument }, issue: issueRecord, milestones: record.milestones, payments: record.payments, changeOrders: record.changeOrders, issues: record.issues, issueTimeline: [{ createdAt: issueRecord.createdAt.toISOString(), notes: issueRecord.description }, ...notes.map((note) => ({ createdAt: note.createdAt.toISOString(), notes: note.notes, evidenceDocumentIds: note.evidenceDocumentIds }))], evidence: evidence.documents.map((document) => ({ id: document.id, name: document.title, mimeType: document.mimeType ?? 'unknown', versionId: document.versionId })) };
   const buffer = await renderDisputePackagePdf(snapshot);
   const checksumSha256 = createHash('sha256').update(buffer).digest('hex');
   const version = (prior?.version ?? 0) + 1;
@@ -2221,12 +2275,14 @@ export async function completeMinorWork(propertyId: string, userId: string, data
         // Live path: ProjectProofUploader.tsx uploads through Home Records first and passes back a
         // PropertyRecord id here — verify it, mark it verified, and link it to this HomeEvent as
         // evidence instead of writing a legacy Document row.
+        // Owner ruling D-P3: the same eligibility as every other project document, in this property and visible to the household (an owner-only
+        // record would be cited as proof of work the household cannot open).
         const record = await tx.propertyRecord.findFirst({
-          where: { id: proof.documentId, propertyId, lifecycleStatus: { not: 'TRASHED' } },
+          where: { id: proof.documentId, propertyId, lifecycleStatus: 'ACTIVE', visibility: 'HOUSEHOLD', currentVersion: { is: { scanStatus: 'CLEAN' } } },
           select: { id: true },
         });
         if (!record) {
-          throw new APIError('Uploaded proof document was not found for this property.', 409, 'INVALID_PROOF_DOCUMENT');
+          throw new APIError('Proof documents must be active Home Records of this property that your household can see, with a clean scan.', 409, 'INVALID_PROOF_DOCUMENT');
         }
         await tx.propertyRecord.update({
           where: { id: record.id },
@@ -2528,12 +2584,14 @@ export async function confirmCompletion(projectId: string, propertyId: string, u
         // Live path: ProjectProofUploader.tsx uploads through Home Records first and passes back a
         // PropertyRecord id here — verify it, mark it verified, and link it to this HomeEvent as
         // evidence instead of writing a legacy Document row.
+        // Owner ruling D-P3: the same eligibility as every other project document, in this property and visible to the household (an owner-only
+        // record would be cited as proof of work the household cannot open).
         const record = await tx.propertyRecord.findFirst({
-          where: { id: proof.documentId, propertyId, lifecycleStatus: { not: 'TRASHED' } },
+          where: { id: proof.documentId, propertyId, lifecycleStatus: 'ACTIVE', visibility: 'HOUSEHOLD', currentVersion: { is: { scanStatus: 'CLEAN' } } },
           select: { id: true },
         });
         if (!record) {
-          throw new APIError('Uploaded proof document was not found for this property.', 409, 'INVALID_PROOF_DOCUMENT');
+          throw new APIError('Proof documents must be active Home Records of this property that your household can see, with a clean scan.', 409, 'INVALID_PROOF_DOCUMENT');
         }
         await tx.propertyRecord.update({
           where: { id: record.id },
