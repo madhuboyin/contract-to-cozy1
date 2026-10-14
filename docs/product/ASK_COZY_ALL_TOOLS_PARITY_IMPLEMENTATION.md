@@ -96,7 +96,7 @@ Short, mutually exclusive workflow menus may declare the shared `CHOICE_GRID` pr
 
 Financial category forecasts may declare `BUDGET_BREAKDOWN`. It renders the primary category comparison as compact rows with server-declared amounts and proportional bars, removes generic Auto/List/Cards controls, and progressively discloses later detail sections. Budget Planner uses it to keep its twelve-month forecast available without placing all nineteen records in the initial conversation view.
 
-Factual and action-oriented grouped lists may declare `listDensity: DENSE`. Dense lists remove the generic Auto/List/Cards selector, keep each record's status and primary action beside its content, and move additional actions into **More**. Status Board list fallback and both Home Upgrade Planner collections use this treatment so their records remain conversational rows rather than vertically stacked cards.
+Factual and action-oriented grouped lists may declare `listDensity: DENSE`. Dense lists remove the generic Auto/List/Cards selector, use a two-line record (title plus short condition, then truncated supporting metadata), keep the primary action on that same horizontal row, omit a record status already communicated by its section heading, and move additional actions into **More**. Status Board list fallback and both Home Upgrade Planner collections use this treatment so their records remain conversational rows rather than vertically stacked cards.
 
 ## Implemented tools
 

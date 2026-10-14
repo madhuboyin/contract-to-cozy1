@@ -77,7 +77,7 @@ test('Project Tracker rows progressively disclose descriptions and secondary met
   expect(screen.queryByText(/Inspect framing and rough-ins/)).not.toBeInTheDocument();
 });
 
-test('producer-declared dense rows remove layout controls and keep one action beside the record', () => {
+test('producer-declared dense rows use two-line records and remove repeated section statuses', () => {
   const onItemAction = jest.fn();
   const dense: GroupedList = {
     ...block,
@@ -99,7 +99,12 @@ test('producer-declared dense rows remove layout controls and keep one action be
   expect(screen.getByRole('button', { name: 'Correct this item' })).toBeVisible();
   expect(screen.getByText('More')).toBeVisible();
   expect(screen.getByRole('button', { name: 'Archive' })).toBeInTheDocument();
-  expect(view.container.querySelector('[data-ask-task-id="dishwasher"]')).toHaveClass('py-2.5');
+  const row = view.container.querySelector('[data-ask-task-id="dishwasher"]');
+  expect(row).toHaveClass('py-2');
+  expect(row?.querySelector('[data-dense-primary-line]')).toHaveTextContent('Dishwasher98% of expected life');
+  expect(row?.querySelector('.truncate')).toHaveTextContent('replace soon · 11.8 yr old · Warranty active');
+  expect(row?.querySelector('[data-item-status]')).not.toBeInTheDocument();
+  expect(row?.querySelector('[data-dense-row-content]')).toContainElement(screen.getByRole('button', { name: 'Correct this item' }));
 });
 
 test('Project Tracker sections expose independent server-page controls', () => {

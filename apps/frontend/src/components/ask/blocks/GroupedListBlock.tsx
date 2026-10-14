@@ -249,15 +249,19 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
                   const denseActions = dense ? (item.actions ?? []) : [];
                   const dominantDenseAction = denseActions.find((action) => action.style === 'PRIMARY') ?? denseActions[0];
                   const overflowDenseActions = denseActions.filter((action) => action !== dominantDenseAction);
-                  return <li key={item.id} data-ask-task-id={item.id} tabIndex={-1} className={cn('border outline-offset-2', dense ? 'border-x-0 border-b-0 border-t-0 px-2 py-2.5' : 'rounded-xl', !dense && (presentation === 'COMPACT_LIST' ? 'px-3 py-2' : 'p-3'), selected ? 'border-teal-600 bg-teal-50' : presentation === 'COMPACT_LIST' ? 'border-transparent bg-white' : 'border-transparent bg-slate-50')}>
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        {item.href ? <AskContextLink className="font-medium text-slate-950 hover:text-teal-700" href={item.href}>{item.title}</AskContextLink> : <p className="font-medium text-slate-950">{item.title}</p>}
-                        {item.description && <p className={cn('text-sm leading-5 text-slate-600', dense ? 'mt-0.5' : 'mt-1')}>{item.description}</p>}
-                        {item.meta.length > 0 && <p className={cn('text-xs text-slate-500', dense ? 'mt-1' : 'mt-2')}>{item.meta.join(' · ')}</p>}
+                  const statusLabel = item.status?.replace(/_/g, ' ');
+                  const visibleStatus = statusLabel?.trim().toLowerCase() === section.title.trim().toLowerCase() ? null : statusLabel;
+                  return <li key={item.id} data-ask-task-id={item.id} tabIndex={-1} className={cn('border outline-offset-2', dense ? 'border-x-0 border-b-0 border-t-0 px-2 py-2' : 'rounded-xl', !dense && (presentation === 'COMPACT_LIST' ? 'px-3 py-2' : 'p-3'), selected ? 'border-teal-600 bg-teal-50' : presentation === 'COMPACT_LIST' ? 'border-transparent bg-white' : 'border-transparent bg-slate-50')}>
+                    {dense ? <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3" data-dense-row-content="">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-baseline gap-x-2" data-dense-primary-line="">
+                          {item.href ? <AskContextLink className="font-medium text-slate-950 hover:text-teal-700" href={item.href}>{item.title}</AskContextLink> : <p className="font-medium text-slate-950">{item.title}</p>}
+                          {item.description && <p className="text-xs leading-5 text-slate-600">{item.description}</p>}
+                        </div>
+                        {item.meta.length > 0 && <p className="mt-0.5 truncate text-xs text-slate-500" title={item.meta.join(' · ')}>{item.meta.join(' · ')}</p>}
                       </div>
-                      {(item.status || dominantDenseAction) && <div className="flex shrink-0 flex-col items-end gap-1.5">
-                        {item.status && <span className="rounded-full bg-white px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">{item.status.replace(/_/g, ' ')}</span>}
+                      {(visibleStatus || dominantDenseAction) && <div className="flex shrink-0 items-center gap-1.5">
+                        {visibleStatus && <span data-item-status={visibleStatus.toLowerCase()} className="rounded-full bg-white px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">{visibleStatus}</span>}
                         {dominantDenseAction && <div className="flex items-center gap-1.5">
                           <button type="button" disabled={itemActionsDisabled} onClick={() => onItemAction(item.entityType, item.id, dominantDenseAction.message, dominantDenseAction.operationId, dominantDenseAction.interactionType)} className={cn('min-h-8 rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors disabled:opacity-50', dominantDenseAction.style === 'PRIMARY' ? 'bg-teal-700 text-white hover:bg-teal-800' : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50')}>{dominantDenseAction.label}</button>
                           {overflowDenseActions.length > 0 && <details className="relative">
@@ -268,7 +272,14 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
                           </details>}
                         </div>}
                       </div>}
-                    </div>
+                    </div> : <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        {item.href ? <AskContextLink className="font-medium text-slate-950 hover:text-teal-700" href={item.href}>{item.title}</AskContextLink> : <p className="font-medium text-slate-950">{item.title}</p>}
+                        {item.description && <p className="mt-1 text-sm leading-5 text-slate-600">{item.description}</p>}
+                        {item.meta.length > 0 && <p className="mt-2 text-xs text-slate-500">{item.meta.join(' · ')}</p>}
+                      </div>
+                      {item.status && <span className="rounded-full bg-white px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">{item.status.replace(/_/g, ' ')}</span>}
+                    </div>}
                     {hasInlineDetails && (
                       <div className="mt-2">
                         <button
