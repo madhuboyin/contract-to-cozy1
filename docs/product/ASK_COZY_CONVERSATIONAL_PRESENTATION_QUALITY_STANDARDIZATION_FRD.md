@@ -6,7 +6,7 @@
 
 **Date:** October 14, 2026
 
-**Status:** Proposed for implementation planning
+**Status:** Living implementation specification
 
 **Decision:** Extend the existing Ask Cozy presentation infrastructure; do not create a separate presentation engine.
 
@@ -54,7 +54,7 @@ The six audit documents under `docs/architecture/ask-cozy/presentation-audit/` r
 - `PRESENTATION_PATTERN_MATRIX.md`
 - `ARCHITECTURE_RECOMMENDATION.md`
 
-They are not duplicated here. This FRD is authoritative for approved implementation requirements; the audits remain authoritative for the observations and code evidence recorded at the time of review.
+They are not duplicated here. This FRD is the current implementation specification and may be refined as implementation evidence improves it; the audits remain authoritative for the observations and code evidence recorded at the time of review.
 
 ### 2.3 Current baseline
 
@@ -68,6 +68,29 @@ Static audit evidence found:
 - 196 deterministic operation contracts and one remote-generation operation contract.
 
 These are working-tree registry counts, not proof of deployed availability. Runtime controls, account eligibility, property context, role policy, Skill health, adapters, and dependencies may reduce availability for a particular homeowner.
+
+### 2.4 Development-stage implementation principles
+
+ContractToCozy is in active development and testing with no production homeowners. Implementation prioritizes development velocity, architectural simplicity, practical validation, and iterative improvement. The five phases in this FRD are an implementation sequence, not approval milestones.
+
+1. **No formal approval gates.** This FRD is a living specification. Update it when implementation reveals a clearer, simpler, or better-supported requirement.
+2. **No unnecessary backward-compatibility engineering.** Preserve current functional contracts where practical. Do not create migration frameworks, adapters, or compatibility layers solely for obsolete development responses or historical test data.
+3. **Test-driven iteration.** Implement a coherent increment, run relevant automated checks, review representative conversations and screenshots, and correct issues before expanding the change.
+4. **Minimal documentation overhead.** Keep requirement IDs, concise implementation notes, validation results, and a prioritized limitation backlog. Do not create formal exception registers, approval workflows, sign-off records, or review calendars.
+5. **Reuse before abstraction.** Extend existing contracts, renderers, state, and interaction infrastructure. Add a shared abstraction only when concrete implementation across multiple producers or a required journey demonstrates the need.
+6. **Practical UX validation.** Use representative homeowner questions, multi-turn conversations, and desktop/mobile screenshots. Do not substitute process artifacts for inspecting the actual experience.
+7. **Fix defects immediately.** Confirmed correctness, security, authorization, and data-integrity defects do not wait for a phase approval.
+8. **Allow architectural refinement.** Refactor existing implementation when it simplifies the system or improves consistency. Avoid parallel implementations and compatibility layers without a concrete need.
+9. **Progressive adoption.** Validate shared changes with the three representative tools, then extend them to other applicable operations.
+10. **Keep implementation focused.** Do not add enterprise-scale release governance, rollout machinery, or organizational process before real product needs justify it.
+
+The working loop is:
+
+```text
+Implement → Test → Review UX → Refine
+```
+
+The following remain strict engineering safeguards: truthful status and recommendation output; property access and authorization; confirmation for consequential actions; data integrity and idempotency; extension of the existing Ask architecture rather than a competing framework; and regression protection for existing capabilities.
 
 ---
 
@@ -96,7 +119,7 @@ Success is not the presence of a summary block, card, or action. Success is that
 - Trust, evidence, freshness, uncertainty, and estimate-basis presentation.
 - Action hierarchy and contextual continuation.
 - Cross-operation and cross-Skill conversation continuity.
-- Compatibility with stored responses and current result/view state.
+- Compatibility with current functional response contracts and current result/view state, without unnecessary migration machinery for obsolete development data.
 - Quality evaluation, fixtures, journey tests, responsive review, and accessibility.
 - The first five representative validation scenarios.
 
@@ -131,7 +154,7 @@ Success is not the presence of a summary block, card, or action. Success is that
 
 **PRES-PR-008 — Safe degradation.** Missing data, dependency failure, unsupported interaction, access loss, and stale results must fail visibly and honestly.
 
-**PRES-PR-009 — Incremental evolution.** New shared semantics are additive, backward-compatible where needed for stored responses, and introduced only when demonstrated by multiple producers or a required journey.
+**PRES-PR-009 — Incremental evolution.** Prefer additive shared semantics when they keep current functional contracts simple. Breaking cleanup is allowed during development when it materially simplifies the system and affected code/tests are updated together; do not preserve obsolete development formats without a concrete dependency.
 
 ---
 
@@ -141,7 +164,7 @@ Success is not the presence of a summary block, card, or action. Success is that
 |---|---|
 | Canonical facts and source records | Domain service |
 | Risk, urgency, priority, and eligibility | Domain logic or governed decision service |
-| Recommendation and rationale | Producer or approved reasoning layer |
+| Recommendation and rationale | Producer or governed reasoning layer |
 | Narrative hierarchy and declared pattern/profile | Ask operation producer under this FRD |
 | Schema validation and operation-specific block allow-list | Existing Ask contracts and trust validation |
 | Visual rendering and responsive transformation | Shared frontend renderer |
@@ -414,17 +437,17 @@ Required first:
 
 ---
 
-## 16. Compatibility and history
+## 16. Current-contract compatibility and history
 
-**PRES-COMP-001:** Contract additions are optional and additive unless a separately approved schema-version change is necessary.
+**PRES-COMP-001:** Prefer optional additive changes when they are the simplest way to preserve current functional contracts. A direct contract cleanup is allowed when it is simpler and all current producers, consumers, fixtures, and tests are updated in the same increment.
 
-**PRES-COMP-002:** Stored responses lacking new fields render through documented conservative defaults without inventing semantics.
+**PRES-COMP-002:** Current supported stored-response fixtures lacking new optional fields render through conservative defaults without inventing semantics. Obsolete development-only formats may be retired instead of accumulating compatibility code.
 
 **PRES-COMP-003:** Newer unsupported block/schema versions use the existing safe fallback and never expose raw payloads.
 
 **PRES-COMP-004:** `originalResponse`, current blocks, local view state, refreshed result, and persisted business changes remain distinct.
 
-**PRES-COMP-005:** Refreshing an old result must not silently replace the meaning of its historical answer. The UI discloses refreshed/current data according to existing lifecycle rules.
+**PRES-COMP-005:** For response history the product currently supports, refreshing an old result must not silently replace the meaning of its historical answer. The UI discloses refreshed/current data according to existing lifecycle rules. This does not require migration support for abandoned development data.
 
 ---
 
@@ -440,7 +463,7 @@ Required first:
 
 **PRES-UI-005:** Performance optimization and lazy loading are evidence-driven. Do not split renderers solely because the registry is large.
 
-**PRES-UI-006:** Runtime validation must include narrow mobile, standard desktop, large collections, long labels, empty/error states, and at least one assistive-technology review before broad rollout is considered complete.
+**PRES-UI-006:** Runtime validation must include narrow mobile, standard desktop, large collections, long labels, empty/error states, and at least one assistive-technology review before broad adoption across applicable tools is considered complete.
 
 ---
 
@@ -458,7 +481,7 @@ LLMs do not own:
 
 - authorization or operation availability;
 - canonical facts;
-- risk/priority rules unless an approved governed decision service explicitly does so;
+- risk/priority rules unless a governed decision service explicitly does so;
 - renderer selection;
 - action identity;
 - persistence or completion state.
@@ -501,11 +524,13 @@ LLMs do not own:
 
 ### 19.4 Runtime review
 
-The first three vertical slices require representative browser fixtures and screenshots on desktop and narrow mobile. Before broad rollout, the five journeys require targeted runtime validation against an available controlled environment. Runtime checks must not be claimed when only fixtures or static rendering were used.
+The first three vertical slices require representative browser fixtures and screenshots on desktop and narrow mobile. Before broad adoption across applicable tools, the five journeys require targeted runtime validation against an available controlled environment. Runtime checks must not be claimed when only fixtures or static rendering were used.
 
 ---
 
-## 20. Delivery phases and exit criteria
+## 20. Implementation sequence and completion checks
+
+The phases below organize work and dependencies. They are not approval gates or release sign-offs. Work proceeds when the relevant implementation is coherent, applicable tests pass, and focused UX review finds no unresolved correctness, security, data-integrity, or material usability defect.
 
 ### Phase 1 — Correctness and baseline
 
@@ -517,7 +542,7 @@ Scope:
 - Misleading collection counts discovered in the first slices.
 - Baseline fixtures/screenshots for the three initial slices.
 
-Exit:
+Completion check:
 
 - confirmed correctness defects are fixed;
 - focused regression and governance suites pass;
@@ -534,7 +559,7 @@ Scope:
 - action hierarchy;
 - stored-response fallbacks.
 
-Exit:
+Completion check:
 
 - three representative producers use the shared semantics;
 - no producer relies on a new block-id workaround for the shared need;
@@ -552,7 +577,7 @@ Scope:
 - nine-pattern behavioral fixtures;
 - quality rubric evaluation.
 
-Exit:
+Completion check:
 
 - the three initial slices pass every applicable quality criterion;
 - simple-answer restraint and large-result behavior are both demonstrated;
@@ -568,7 +593,7 @@ Scope:
 - multi-turn versions of the first three slices;
 - cross-operation/Skill context preservation.
 
-Exit:
+Completion check:
 
 - five journeys pass the §14 acceptance questions;
 - no unnecessary entity repetition in valid contexts;
@@ -583,9 +608,9 @@ Scope:
 - remove demonstrated duplicate/block-id workarounds incrementally;
 - accessibility, performance, responsive, empty/error, and consistency review.
 
-Exit:
+Completion check:
 
-- applicable operations meet shared standards or have documented exceptions;
+- applicable operations meet shared standards or known limitations are recorded in the prioritized backlog;
 - runtime validation covers the representative matrix;
 - documentation and implementation status are current;
 - no parallel presentation authority exists.
@@ -607,7 +632,7 @@ Exit:
 - Trust/freshness/basis for material recommendations.
 - Intent-sensitive presentation profiles.
 - Cross-tool continuation in required journeys.
-- Runtime/mobile/accessibility validation before broad rollout.
+- Runtime/mobile/accessibility validation before broad adoption across applicable tools.
 
 ### P2
 
@@ -659,15 +684,15 @@ These measures support review; they do not replace qualitative homeowner-experie
 - Dedicated Conversational Presentation Engine.
 - LLM-driven renderer or component selection.
 - New presentation-only database state.
-- Wholesale migration of all 197 operations.
+- Wholesale migration of all 197 operations before representative patterns are validated.
 - Universal implementation of all interaction types.
-- Generalized stateful guides beyond their approved domain workflow designs.
+- Generalized stateful guides beyond their defined domain workflow designs.
 - Broad visual redesign before the first five journeys are validated.
 - Compatibility machinery solely for nonexistent production users, unless stored development fixtures or current contracts require it.
 
 ---
 
-## 25. Definition of done
+## 25. Implementation completion
 
 This FRD is implemented when:
 
@@ -676,13 +701,13 @@ This FRD is implemented when:
 3. The first three vertical slices pass the Conversational Quality Contract.
 4. All five representative journeys pass cross-tool continuation and action acceptance.
 5. Desktop, narrow-mobile, accessibility, fallback, and large-result behavior is validated and honestly reported.
-6. Applicable operation migrations have documented coverage or exceptions.
+6. Applicable operation updates have documented coverage; remaining limitations are in the prioritized backlog.
 7. Existing authorization, confirmation, idempotency, reconciliation, Skill, and canonical-domain behavior remains intact.
 8. No separate presentation engine or competing business-logic layer has been introduced.
 
 ---
 
-## Appendix A — Traceability
+## Appendix A — Concise traceability
 
 | FRD area | Audit evidence | Existing authority |
 |---|---|---|
@@ -696,4 +721,4 @@ This FRD is implemented when:
 
 ## Appendix B — Implementation-planning rule
 
-Each phase receives one short implementation plan that references requirement IDs from this FRD, names exact producers/renderers/contracts, states stored-response behavior, and records validation actually run. Phase plans must not restate or weaken the product requirements. Verification notes remain separate evidence of what was executed.
+Use a short implementation note for each phase or coherent increment. It references requirement IDs from this FRD, names the affected producers/renderers/contracts, states current-contract behavior, records validation actually run, and lists known limitations in the ordinary prioritized backlog. It is not an approval or sign-off artifact and must not restate the full FRD.
