@@ -148,7 +148,7 @@ export function homeUpgradeScenariosFromView(
   for (const { strip } of strips) if (strip) blocks.push(strip);
   const listed = strips.filter(({ strip }) => !strip).map(({ group }) => group);
   if (listed.length) blocks.push({
-    type: 'GROUPED_LIST', filters: [], id: 'home-upgrade-options', title: 'Upgrade options by system', description: 'Grouped by home system.',
+    type: 'GROUPED_LIST', filters: [], id: 'home-upgrade-options', title: 'Upgrade options by system', description: 'Grouped by home system.', listDensity: 'DENSE',
     sections: listed.map((group) => ({
       id: `home-upgrade-${group.key}`, title: group.label, count: group.rows.length,
       items: group.rows.map((scenario) => {
@@ -195,6 +195,7 @@ export function homeUpgradeScenariosFromView(
     });
     blocks.push({
       type: 'GROUPED_LIST', filters: [], id: 'home-upgrade-manage', title: 'Manage options',
+      listDensity: 'DENSE',
       description: 'Record your decision, recalculate, rename or archive an option. Each change is reviewed before it is saved, and a decision does not start any work.',
       sections: [
         { id: 'home-upgrade-manage-active', title: 'Active options', count: scenarios.length, items: scenarios.slice(0, 20).map((scenario) => row(scenario, false)) },

@@ -219,6 +219,8 @@ const GroupedListBlockSchema = z.object({
   id: z.string(),
   title: z.string(),
   description: z.string().nullable().optional(),
+  // Producer-owned density for factual/action rows that should scan like a conversational list rather than cards.
+  listDensity: z.literal('DENSE').optional(),
   sections: z.array(z.object({
     id: z.string(),
     title: z.string(),

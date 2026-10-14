@@ -77,6 +77,31 @@ test('Project Tracker rows progressively disclose descriptions and secondary met
   expect(screen.queryByText(/Inspect framing and rough-ins/)).not.toBeInTheDocument();
 });
 
+test('producer-declared dense rows remove layout controls and keep one action beside the record', () => {
+  const onItemAction = jest.fn();
+  const dense: GroupedList = {
+    ...block,
+    listDensity: 'DENSE',
+    sections: [{ id: 'monitor', title: 'Monitor', count: 1, items: [{
+      id: 'dishwasher', entityType: 'STATUS_BOARD_ITEM', title: 'Dishwasher', description: '98% of expected life',
+      meta: ['replace soon', '11.8 yr old', 'Warranty active'], status: 'MONITOR',
+      actions: [
+        { id: 'correct', label: 'Correct this item', message: 'Correct it', operationId: 'STATUS_BOARD_COMMAND', interactionType: 'MUTATE_RECORD', style: 'SECONDARY' },
+        { id: 'archive', label: 'Archive', message: 'Archive it', operationId: 'STATUS_BOARD_COMMAND', interactionType: 'MUTATE_RECORD', style: 'QUIET' },
+      ],
+    }] }],
+  };
+  const view = render(<GenericGroupedListBlock block={dense} executionId="execution" propertyId="home" onItemAction={onItemAction} itemActionsDisabled={false} onFilterClick={() => undefined} onCollectionPage={() => undefined} onAccessLost={() => undefined} />);
+
+  expect(view.container.querySelector('[data-list-density="dense"]')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Auto' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Cards' })).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Correct this item' })).toBeVisible();
+  expect(screen.getByText('More')).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Archive' })).toBeInTheDocument();
+  expect(view.container.querySelector('[data-ask-task-id="dishwasher"]')).toHaveClass('py-2.5');
+});
+
 test('Project Tracker sections expose independent server-page controls', () => {
   const onCollectionPage = jest.fn();
   const paged: GroupedList = {

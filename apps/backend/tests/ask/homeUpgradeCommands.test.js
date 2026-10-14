@@ -156,6 +156,7 @@ const view = (over = {}) => ({
 test('the upgrade answer offers a contributor Manage options (decide, calculate, rename, archive; restore and delete for archived) and a viewer nothing; ids are allowlisted', () => {
   const owner = homeUpgradeScenariosFromView([view()], 'prop-1', new Date(), { canChange: true, archived: [view({ id: 's-2', name: 'Old plan', isArchived: true })] });
   const manage = owner.blocks.find((b) => b.id === 'home-upgrade-manage');
+  assert.equal(manage.listDensity, 'DENSE');
   const items = Object.fromEntries(manage.sections.flatMap((s) => s.items).map((i) => [i.id, i]));
   assert.deepEqual(items['s-1'].actions.map((a) => a.id), ['home-upgrade-decide', 'home-upgrade-compute', 'home-upgrade-rename', 'home-upgrade-archive']);
   assert.equal(items['s-1'].entityType, command.UPGRADE_SCENARIO_ENTITY_TYPE);

@@ -21,11 +21,17 @@ test('existing blocks parse unchanged: no display-pattern keys are added by defa
   assert.equal('chips' in summary, false);
   const list = AskPresentationBlockSchema.parse(groupedList());
   assert.equal('presentation' in list, false);
+  assert.equal('listDensity' in list, false);
   for (const key of ['tone', 'timingLabel', 'amountLabel', 'proportionPercent', 'floorLevel', 'countLabel', 'badgeLabel']) {
     assert.equal(key in list.sections[0].items[0], false, key);
   }
   const timeline = AskPresentationBlockSchema.parse({ type: 'TIMELINE', id: 't', title: 'History', items: [{ id: 'e1', label: 'Roof', date: '2020-08' }] });
   assert.deepEqual(Object.keys(timeline.items[0]).sort(), ['date', 'id', 'label']);
+});
+
+test('grouped lists accept only the declared dense list treatment', () => {
+  assert.equal(AskPresentationBlockSchema.parse(groupedList({ listDensity: 'DENSE' })).listDensity, 'DENSE');
+  assert.equal(AskPresentationBlockSchema.safeParse(groupedList({ listDensity: 'SPACIOUS' })).success, false);
 });
 
 test('answer chips: at most four, tone defaults to DEFAULT', () => {

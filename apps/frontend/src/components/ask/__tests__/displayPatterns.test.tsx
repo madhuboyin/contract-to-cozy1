@@ -204,6 +204,16 @@ describe('shelves', () => {
     expect(restored.container.querySelector('[data-display-pattern="shelves"]')).toBeInTheDocument();
   });
 
+  test('a dense shelves fallback shows one view control and compact rows', async () => {
+    const dense = { ...block, listDensity: 'DENSE' as const };
+    const { container } = render(<Harness block={dense} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'List' }));
+    expect(await screen.findByRole('button', { name: 'Show as shelves' })).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Auto' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Cards' })).not.toBeInTheDocument();
+    expect(container.querySelector('[data-list-density="dense"]')).toBeInTheDocument();
+  });
+
   test('without a declared pattern the grouped list renders exactly as before', () => {
     const plain = { ...block, presentation: undefined };
     const { container } = render(<GroupedListBlock block={plain} executionId="e" propertyId="home" onItemAction={jest.fn()} itemActionsDisabled={false} onFilterClick={() => undefined} onCollectionPage={() => undefined} onAccessLost={() => undefined} />);

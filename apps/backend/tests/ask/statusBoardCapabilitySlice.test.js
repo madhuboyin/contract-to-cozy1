@@ -72,6 +72,7 @@ test('items are grouped by condition with their reasons, age, warranty, maintena
   assert.equal(result.status, 'ANSWERED');
   assert.equal(result.blocks[0].title, '1 need action, 1 to monitor, 1 in good shape');
   const list = result.blocks.find((block) => block.id === 'status-board-items');
+  assert.equal(list.listDensity, 'DENSE');
   assert.deepEqual(list.sections.map((section) => [section.title, section.items.map((row) => row.id)]), [['Needs action', ['a']], ['Monitor', ['m']], ['In good shape', ['g']]]);
   const [urgent] = list.sections[0].items;
   assert.equal(urgent.description, 'Past expected life (10yr)');

@@ -181,14 +181,15 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
     );
   }
   const preference = controls?.view.groupedListModes[block.id] ?? 'AUTO';
-  const decision = resolveGroupedListView(block, preference);
+  const dense = block.listDensity === 'DENSE';
+  const decision = dense ? { mode: 'COMPACT_LIST' as const, offersChoice: false } : resolveGroupedListView(block, preference);
   const presentation = decision.mode;
   const setPreference = (mode: GroupedListPresentationPreference) => controls?.change((view) => ({
     ...view, groupedListModes: { ...view.groupedListModes, [block.id]: mode },
   }));
   return (
-    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white" data-grouped-list-presentation={presentation.toLowerCase()}>
-      <div className="border-b border-slate-100 px-4 py-3">
+    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white" data-grouped-list-presentation={presentation.toLowerCase()} data-list-density={dense ? 'dense' : undefined}>
+      <div className={cn('border-b border-slate-100', dense ? 'px-3 py-2.5' : 'px-4 py-3')}>
         <h3 className="font-semibold text-slate-950">{block.title}</h3>
         {block.description && <p className="mt-1 text-xs text-slate-500">{block.description}</p>}
         {decision.offersChoice && controls && <div className="mt-3 flex flex-wrap items-center gap-1" role="group" aria-label={`View ${block.title}`}>
@@ -223,8 +224,8 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
           const hiddenItemCount = canExpand ? section.items.length - declaredVisibleCount! : 0;
           const listId = `${block.id}-${section.id}-items`;
           return (
-          <div key={section.id} className="p-4">
-            <div className="mb-3 flex items-center justify-between">
+          <div key={section.id} className={dense ? 'px-3 py-2.5' : 'p-4'}>
+            <div className={cn('flex items-center justify-between', dense ? 'mb-1.5' : 'mb-3')}>
               <div>
                 <h4 className="text-sm font-semibold text-slate-800">{section.title}</h4>
                 {section.caption && <p className="mt-0.5 text-xs text-slate-500">{section.caption}</p>}
@@ -234,7 +235,7 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
             {section.items.length === 0 ? <p className="text-sm text-slate-500">None recorded.</p> : (
               <ul id={listId} className={cn(
                 block.id === 'project-detail-records' && 'grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3',
-                block.id !== 'project-detail-records' && (presentation === 'COMPACT_LIST' ? 'space-y-1' : 'space-y-3'),
+                block.id !== 'project-detail-records' && (dense ? 'divide-y divide-slate-100' : presentation === 'COMPACT_LIST' ? 'space-y-1' : 'space-y-3'),
               )} data-project-record-grid={block.id === 'project-detail-records' ? '' : undefined}>
                 {visibleItems.map((sourceItem) => {
                   const item = block.id === 'maintenance-groups' ? formatLegacyAskMaintenanceItem(sourceItem) : sourceItem;
@@ -245,14 +246,28 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
                   const projectActions = block.id === 'project-detail-records' ? (item.actions ?? []) : [];
                   const dominantProjectAction = projectActions.find((action) => action.style === 'PRIMARY') ?? projectActions[0];
                   const overflowProjectActions = projectActions.filter((action) => action !== dominantProjectAction);
-                  return <li key={item.id} data-ask-task-id={item.id} tabIndex={-1} className={cn('rounded-xl border outline-offset-2', presentation === 'COMPACT_LIST' ? 'px-3 py-2' : 'p-3', selected ? 'border-teal-600 bg-teal-50' : presentation === 'COMPACT_LIST' ? 'border-transparent bg-white' : 'border-transparent bg-slate-50')}>
+                  const denseActions = dense ? (item.actions ?? []) : [];
+                  const dominantDenseAction = denseActions.find((action) => action.style === 'PRIMARY') ?? denseActions[0];
+                  const overflowDenseActions = denseActions.filter((action) => action !== dominantDenseAction);
+                  return <li key={item.id} data-ask-task-id={item.id} tabIndex={-1} className={cn('border outline-offset-2', dense ? 'border-x-0 border-b-0 border-t-0 px-2 py-2.5' : 'rounded-xl', !dense && (presentation === 'COMPACT_LIST' ? 'px-3 py-2' : 'p-3'), selected ? 'border-teal-600 bg-teal-50' : presentation === 'COMPACT_LIST' ? 'border-transparent bg-white' : 'border-transparent bg-slate-50')}>
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         {item.href ? <AskContextLink className="font-medium text-slate-950 hover:text-teal-700" href={item.href}>{item.title}</AskContextLink> : <p className="font-medium text-slate-950">{item.title}</p>}
-                        {item.description && <p className="mt-1 text-sm leading-5 text-slate-600">{item.description}</p>}
-                        {item.meta.length > 0 && <p className="mt-2 text-xs text-slate-500">{item.meta.join(' · ')}</p>}
+                        {item.description && <p className={cn('text-sm leading-5 text-slate-600', dense ? 'mt-0.5' : 'mt-1')}>{item.description}</p>}
+                        {item.meta.length > 0 && <p className={cn('text-xs text-slate-500', dense ? 'mt-1' : 'mt-2')}>{item.meta.join(' · ')}</p>}
                       </div>
-                      {item.status && <span className="shrink-0 rounded-full bg-white px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">{item.status.replace(/_/g, ' ')}</span>}
+                      {(item.status || dominantDenseAction) && <div className="flex shrink-0 flex-col items-end gap-1.5">
+                        {item.status && <span className="rounded-full bg-white px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">{item.status.replace(/_/g, ' ')}</span>}
+                        {dominantDenseAction && <div className="flex items-center gap-1.5">
+                          <button type="button" disabled={itemActionsDisabled} onClick={() => onItemAction(item.entityType, item.id, dominantDenseAction.message, dominantDenseAction.operationId, dominantDenseAction.interactionType)} className={cn('min-h-8 rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors disabled:opacity-50', dominantDenseAction.style === 'PRIMARY' ? 'bg-teal-700 text-white hover:bg-teal-800' : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50')}>{dominantDenseAction.label}</button>
+                          {overflowDenseActions.length > 0 && <details className="relative">
+                            <summary className="flex min-h-8 cursor-pointer list-none items-center rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50">More</summary>
+                            <div className="absolute right-0 z-10 mt-1 min-w-36 space-y-1 rounded-lg border border-slate-200 bg-white p-1.5 shadow-lg">
+                              {overflowDenseActions.map((itemAction) => <button key={itemAction.id} type="button" disabled={itemActionsDisabled} onClick={() => onItemAction(item.entityType, item.id, itemAction.message, itemAction.operationId, itemAction.interactionType)} className="block min-h-8 w-full rounded-md px-2.5 py-1 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">{itemAction.label}</button>)}
+                            </div>
+                          </details>}
+                        </div>}
+                      </div>}
                     </div>
                     {hasInlineDetails && (
                       <div className="mt-2">
@@ -269,7 +284,7 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
                         {itemDetailsExpanded && <p id={`${block.id}-${section.id}-${item.id}-details`} className="whitespace-pre-line rounded-lg bg-white px-3 py-2 text-xs leading-5 text-slate-600">{item.detail}</p>}
                       </div>
                     )}
-                    {block.id !== 'project-detail-records' && item.actions && item.actions.length > 0 && (
+                    {!dense && block.id !== 'project-detail-records' && item.actions && item.actions.length > 0 && (
                       <div className="mt-3 flex flex-wrap gap-2">
                         {item.actions.map((itemAction) => (
                           <button

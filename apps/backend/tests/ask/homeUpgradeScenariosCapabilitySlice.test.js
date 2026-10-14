@@ -91,6 +91,7 @@ test('options are grouped by system in the page\'s order, with the page\'s label
   assert.equal(result.reasonCode, 'HOME_UPGRADE_RESULTS_STALE');
   // FRD v1.89: the system with two options is a strip; the systems with one option stay in the list, in the page's order.
   const list = result.blocks.find((block) => block.id === 'home-upgrade-options');
+  assert.equal(list.listDensity, 'DENSE');
   const strip = result.blocks.find((block) => block.id === 'home-upgrade-options-wh');
   assert.deepEqual(result.blocks.map((block) => block.id), ['home-upgrade-summary', 'home-upgrade-options-wh', 'home-upgrade-options', 'home-upgrade-boundary']);
   // Selected first, then a calculation in progress (pinned), then the newest.

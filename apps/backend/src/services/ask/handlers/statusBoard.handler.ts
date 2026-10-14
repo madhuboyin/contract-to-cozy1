@@ -113,7 +113,7 @@ export function statusBoardFromView(view: StatusBoardView, propertyId: string, c
   }).filter((section) => section.count > 0);
   if (sections.length) {
     blocks.push({ type: 'GROUPED_LIST', filters: [], id: 'status-board-items', title: 'Appliances and systems by condition', // IW-PRES-014 / IW-PRES-022: the Status Board renders as shelves (FRD v1.84); the cards are read-only.
-      presentation: { pattern: 'SHELVES' }, description: 'Each with why, from age, warranty and maintenance records.', sections,
+      presentation: { pattern: 'SHELVES' }, listDensity: 'DENSE', description: 'Each with why, from age, warranty and maintenance records.', sections,
       actions: [] });
   }
   blocks.push({
