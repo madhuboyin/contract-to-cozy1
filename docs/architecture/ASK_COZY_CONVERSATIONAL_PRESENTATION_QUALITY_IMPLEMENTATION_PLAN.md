@@ -1,0 +1,1009 @@
+# Ask Cozy Conversational Presentation Quality & Standardization — Full Implementation Plan
+
+**Date:** October 14, 2026
+
+**Status:** Living implementation plan
+
+**Product authority:** `docs/product/ASK_COZY_CONVERSATIONAL_PRESENTATION_QUALITY_STANDARDIZATION_FRD.md`
+
+**Evidence:** `docs/architecture/ask-cozy/presentation-audit/`
+
+**Implementation posture:** ContractToCozy has no production homeowners. Implement, test, review representative UX, and refine. Preserve security, authorization, confirmation, data integrity, idempotency, and current functional behavior; do not build enterprise rollout or migration machinery.
+
+---
+
+## 1. Objective
+
+Extend the existing Ask Cozy operation, response-block, renderer, result-state, and action infrastructure so applicable answers consistently:
+
+1. answer the homeowner's question first;
+2. explain what materially affects the answer;
+3. disclose secondary records without misleading counts or excessive density;
+4. show sources, freshness, assumptions, and uncertainty where they affect trust;
+5. offer the next useful authorized action when one exists; and
+6. preserve entity and decision context across realistic multi-turn journeys.
+
+This plan covers all five FRD phases. It is an implementation sequence, not a set of approval gates.
+
+---
+
+## 2. Non-goals
+
+- No separate presentation engine or service.
+- No LLM-selected renderer or arbitrary component payload.
+- No Prisma change is expected. If implementation proves persistent state is genuinely required, update the schema and contracts but do not create migration scripts.
+- No all-at-once migration of 197 operations.
+- No compatibility framework for obsolete development responses.
+- No generalized implementation of every item-action type.
+- No replacement of the Skill Platform, operation registry, confirmation flows, or result identity model.
+- No runtime environment, Docker, database, or browser-infrastructure troubleshooting solely for this work.
+
+---
+
+## 3. Verified architecture to preserve
+
+| Concern | Existing authority |
+|---|---|
+| Operation identity, family, role floor, adapter, block allow-list | `apps/backend/src/services/ask/askOperationRegistry.ts` |
+| Handler registration and policy guard | `apps/backend/src/services/ask/capabilityHandlerRegistry.ts` |
+| Backend response schema | `apps/backend/src/productFramework/ask/ask.contract.ts` |
+| Frontend response mirror | `apps/frontend/src/features/ask/types.ts` |
+| Top-level renderer selection | `apps/frontend/src/components/ask/blocks/registry.tsx` |
+| Grouped-list patterns and specialized results | `apps/frontend/src/components/ask/blocks/GroupedListBlock.tsx` and `components/ask/patterns/` |
+| View/conversation/business action distinction | `apps/frontend/src/features/ask/interactionDispatch.ts` |
+| Local result state | `apps/frontend/src/features/ask/resultViewState.ts`, `useResultView.ts` |
+| Original/current response and result identity | `AskExecutionResponse`, execution lifecycle modules |
+| Contextual suggested actions | `apps/backend/src/services/ask/suggestedActions/` |
+| Cross-Skill handoff | `apps/backend/src/services/skills/skillHandoff.ts` |
+| Authorization and confirmation | existing operation definitions, domain command registry, confirmation handlers |
+
+---
+
+## 4. Shared implementation decisions
+
+These decisions apply across phases unless code evidence requires a simpler approach.
+
+### 4.1 Semantic ownership
+
+- Domain services continue to own canonical facts.
+- Domain logic or governed decision services own risk, urgency, priority, and recommendation eligibility.
+- Ask producers own the direct answer, rationale, presentation profile, ordering, limitations, and action nominations.
+- Shared renderers own layout, disclosure, responsive transformation, keyboard/focus behavior, and local view choices.
+- The client never calculates business urgency from dates, percentages, labels, or record order.
+
+### 4.2 Proposed contract evolution
+
+The exact names are finalized during Phase 2 after checking current producers, but the preferred minimal shape is:
+
+```ts
+type AskPresentationProfile =
+  | 'DIRECT_ANSWER'
+  | 'COLLECTION'
+  | 'ATTENTION'
+  | 'COMPARE'
+  | 'GUIDE';
+
+type AskCollectionPage = {
+  sourceTotal?: number | null;
+  fetchedCount: number;
+  deliveredCount: number;
+  nextPageAvailable: boolean;
+  deliveryTruncated: boolean;
+};
+
+type AskCollectionSection = {
+  id: string;
+  title: string;
+  count: number; // retained only if its meaning remains unambiguous
+  sourceTotal?: number | null;
+  deliveredCount?: number;
+  initialVisibleCount?: number;
+  nextOffset?: number | null;
+  deliveryTruncated?: boolean;
+  items: AskGroupedListItem[];
+};
+```
+
+Implementation should prefer extending existing `GROUPED_LIST` sections, `TABLE.totalCount`, and current cursor/offset mechanisms over adding a new top-level block. If one shared collection object can serve both table and grouped-list shapes without making either awkward, use it; otherwise keep small shape-specific fields with identical documented semantics.
+
+Do not persist `AskPresentationProfile` merely for taxonomy. Add it to the response contract only if producer validation or rendering cannot reliably enforce the FRD without it. A server-side quality-evaluation input may carry the profile without changing the durable response schema.
+
+### 4.3 Compatibility posture
+
+- Update backend and frontend mirrors together.
+- Keep conservative defaults for current supported response fixtures.
+- Retire obsolete development fixtures instead of adding adapters when no current dependency requires them.
+- Preserve the runtime unsupported-block fallback.
+- Do not create a schema-version migration system for this effort.
+
+### 4.4 Implementation loop
+
+For every coherent increment:
+
+```text
+Read producer and requirement
+→ Add or adjust focused failing test
+→ Implement smallest shared/domain change
+→ Run focused backend/frontend checks
+→ Review representative output
+→ Correct findings
+→ Update concise implementation status/backlog
+```
+
+---
+
+## 5. Work breakdown and dependency graph
+
+```mermaid
+flowchart TD
+  P1A[1A Status Board correctness] --> P2A[2A Collection semantics]
+  P1B[1B Governance tests] --> P2D[2D Contract validation]
+  P1C[1C Baseline fixtures] --> P3A[3A Quality evaluator]
+  P2A --> P3B[3B Three vertical slices]
+  P2B[2B Trust semantics] --> P3B
+  P2C[2C Action hierarchy] --> P3B
+  P2D --> P3A
+  P3A --> P4A[4A Cross-tool context]
+  P3B --> P4B[4B Five journeys]
+  P4A --> P4B
+  P4B --> P5A[5A Pattern-based adoption]
+  P5A --> P5B[5B Visual/accessibility QA]
+```
+
+Phase 1 can begin immediately. Within Phase 2, collection semantics and trust metadata can be developed independently once the backend/frontend field names are agreed in code. Phase 3 depends on the shared contracts. Phase 4 depends on representative producers using them. Phase 5 begins only after the shared approach works across all five journeys.
+
+---
+
+## 6. Phase 1 — Correctness and baseline
+
+### 6.1 Outcomes
+
+- Status Board never presents unknown condition as Good.
+- Registry governance checks reflect the live registry without recurring hard-coded drift.
+- Source-reading tests understand the decomposed orchestrator.
+- The first three representative slices have deterministic baseline fixtures and screenshots or static render artifacts.
+- Known collection-count defects in those slices are recorded or corrected before shared-contract work.
+
+### 6.2 Work item 1A — Status Board UNKNOWN/GOOD correction
+
+#### Current defect
+
+`homeStatusBoard.service.ts` exposes `dataStatus: 'UNKNOWN'` and excludes missing-date items from `summary.good`. `statusBoard.handler.ts` rebuilds counts and sections from `condition`, so an unknown item may appear in both Good and the frontend-derived Missing info group.
+
+#### Files and symbols
+
+- `apps/backend/src/services/ask/handlers/statusBoard.handler.ts`
+  - `STATUS_BOARD_CONDITIONS`
+  - `statusBoardFromView`
+  - `statusBoardCaptureFields`
+- `apps/backend/src/services/homeStatusBoard.service.ts`
+  - `computeDataStatus`
+  - `listBoard` result mapping and `summary`
+- `apps/frontend/src/components/ask/patterns/StatusAccordionView.tsx`
+- `apps/frontend/src/features/ask/types.ts`
+- `apps/backend/src/productFramework/ask/ask.contract.ts` only if a typed UNKNOWN section signal is needed
+
+#### Implementation
+
+1. Treat missing-information/UNKNOWN as a mutually exclusive presentation category in the Ask producer.
+2. Prefer a real server-authored `Missing information` section to the renderer synthesizing a second collection from `needsInfo`.
+3. Build summary counts from the service summary or one shared classification pass; do not independently count Good with `condition === 'GOOD'`.
+4. Keep the existing Add install date action on exact `INVENTORY_ITEM` identity.
+5. Keep contributor/owner correction and refresh commands unchanged.
+6. Preserve the estimated-condition boundary.
+7. Remove client-side duplication logic after the server declares the category, unless needed temporarily within the same commit for fixture compatibility.
+
+#### Tests
+
+- Extend `apps/backend/tests/ask/statusBoardCapabilitySlice.test.js` with:
+  - unknown item excluded from Good count and section;
+  - unknown item included once in Missing information;
+  - mixture of unknown, Good, Monitor, and Needs action;
+  - zero known-good items does not produce an all-clear;
+  - exact correction action remains.
+- Extend `apps/frontend/src/components/ask/__tests__/displayPatterns.test.tsx` or add a focused `statusAccordion` test:
+  - mutually exclusive tabs/sections;
+  - correct accessible count;
+  - keyboard tab/accordion behavior remains;
+  - missing item action remains reachable.
+- Keep `apps/backend/tests/ask/statusBoardCommands.test.js` green.
+
+### 6.3 Work item 1B — Governance drift corrections
+
+#### Files
+
+- `apps/backend/tests/ask/askGovernance.test.js`
+- `apps/backend/tests/helpers/askOrchestratorSources.js`
+- `apps/backend/src/services/ask/askOperationRegistry.ts`
+- `apps/backend/src/services/ask/askDomainCommandRegistry.ts`
+- `apps/backend/src/services/ask/handlers/capitalPlanning.handler.ts`
+
+#### Implementation
+
+1. Replace stale exact assertions for 142 operations and 63 material commands.
+2. Prefer derived invariants:
+   - registry is non-empty;
+   - every union/definition/coverage entry agrees;
+   - every material command has required policy metadata;
+   - handler and confirmation coverage validators return no issues.
+3. Retain an exact count only if it detects a meaningful omission that type and registry validation cannot; if retained, update it with an explicit reason.
+4. Change the capital-timeline source assertion to read the handler source through the existing decomposition-aware helper instead of the facade.
+5. Do not weaken security or confirmation assertions to make the suite pass.
+
+#### Tests
+
+- Run `tests/ask/askGovernance.test.js` alone.
+- Run registry/coverage suites:
+  - `askInteractionCoverageMatrix.test.js`
+  - `capabilityHandlerRegistry.test.js`
+  - `confirmCapabilityHandlerRegistry.test.js`
+  - `askTrustArchitecture.test.js`
+
+### 6.4 Work item 1C — Baseline fixtures and practical UX evidence
+
+#### Representative slices
+
+1. Status Board.
+2. HVAC repair/replace or refinance comparison. Prefer HVAC if it offers deterministic fixtures without external-rate setup; use refinance where its existing pure fixtures give better financial trust coverage.
+3. Maintenance status plus seasonal care.
+
+#### Files to inspect/reuse
+
+- Backend:
+  - `handlers/statusBoard.handler.ts`
+  - `handlers/hvacDecision.handler.ts`, `decisionThreadPresentationBlocks.ts`, or `handlers/refinance.handler.ts`
+  - `handlers/maintenance.handler.ts`
+  - `support/seasonalHomeCare.ts`, `handlers/seasonalHomeCare.handler.ts`
+- Frontend:
+  - block/pattern components already used by these results
+  - existing Ask acceptance fixture page and E2E fixtures
+  - component tests under `components/ask/__tests__`
+
+#### Implementation
+
+1. Add stable fixture builders for the response shapes if existing fixtures are not reusable.
+2. Capture baseline outputs for:
+   - ordinary result;
+   - missing/partial data;
+   - empty state;
+   - large result;
+   - narrow mobile and desktop layout when the existing fixture harness supports it.
+3. Do not start services or configure a new browser environment. If existing fixture E2E is unavailable, record component/static evidence and defer actual browser screenshots to Phase 3.
+4. Record known limitations in a concise backlog section in this plan or the existing audit, not a formal exception register.
+
+### 6.5 Phase 1 validation
+
+Backend, from `apps/backend`:
+
+```bash
+node --test \
+  tests/ask/statusBoardCapabilitySlice.test.js \
+  tests/ask/statusBoardCommands.test.js \
+  tests/ask/askGovernance.test.js \
+  tests/ask/askInteractionCoverageMatrix.test.js \
+  tests/ask/capabilityHandlerRegistry.test.js \
+  tests/ask/confirmCapabilityHandlerRegistry.test.js
+npm run typecheck
+```
+
+Frontend, from `apps/frontend`:
+
+```bash
+npx jest --runInBand \
+  src/components/ask/__tests__/displayPatterns.test.tsx \
+  src/features/ask/__tests__/interactionDispatch.test.ts \
+  src/features/ask/__tests__/resultViewState.test.ts
+npx tsc --noEmit
+```
+
+Adjust exact test paths to the focused files actually changed. Do not run broad suites merely for ceremony; expand when shared code changes justify it.
+
+### 6.6 Phase 1 completion check
+
+- Status Board UNKNOWN/GOOD regression is covered and fixed.
+- Governance suite passes without reducing its safeguards.
+- No production code outside the affected paths changes unintentionally.
+- Baseline evidence exists for all three slices.
+- Remaining Phase 1 limitations are prioritized.
+
+---
+
+## 7. Phase 2 — Shared presentation contracts
+
+### 7.1 Outcomes
+
+- Collection counts have one honest vocabulary.
+- Material recommendations can declare basis, freshness, uncertainty, and rationale consistently.
+- Action hierarchy is explicit without moving business logic to the client.
+- Three producers adopt the shared semantics without new block-id workarounds.
+
+### 7.2 Work item 2A — Collection semantics
+
+#### Files and symbols
+
+- `apps/backend/src/productFramework/ask/ask.contract.ts`
+  - grouped-list section schema
+  - `TABLE` schema
+  - response/block schemas
+- `apps/frontend/src/features/ask/types.ts`
+- `apps/frontend/src/components/ask/blocks/GroupedListBlock.tsx`
+- `apps/frontend/src/components/ask/blocks/TableBlock.tsx`
+- `apps/frontend/src/features/ask/resultViewState.ts`
+- `apps/frontend/src/features/ask/useResultView.ts`
+- `apps/backend/src/services/ask/execution/executeOperation.ts`
+- Collection producers:
+  - `handlers/statusBoard.handler.ts`
+  - `handlers/inventory.handler.ts`
+  - `handlers/documents.handler.ts`
+  - `handlers/maintenance.handler.ts`
+  - `handlers/homeEventRadar.handler.ts`
+
+#### Implementation sequence
+
+1. Inventory current paging models:
+   - local `initialVisibleCount` disclosure;
+   - offset-based collection continuation;
+   - cursor-based Radar continuation;
+   - `TABLE.totalCount`;
+   - section `count` with sliced `items`.
+2. Choose the smallest fields that distinguish source, fetched, delivered, visible, and next-page state.
+3. Add Zod validation and frontend mirror types together.
+4. Add renderer copy/controls:
+   - “Showing X of Y” only when Y is the relevant known total;
+   - “Show N more” only for delivered-but-hidden rows;
+   - “Load more” or equivalent only when an authoritative next request exists;
+   - limitation text when delivery is bounded and no inline retrieval is supported.
+5. Preserve `viewState.resultId`, `collectionOffsets`, revision, original response, and refresh semantics.
+6. Migrate Status Board first, then one offset collection and one cursor collection. Recommended:
+   - Status Board;
+   - Inventory or Documents;
+   - Home Event Radar.
+7. Migrate Maintenance only after confirming its specialized priority-stack batching uses the same meanings.
+
+#### Tests
+
+- Backend schema acceptance/rejection for valid and contradictory count combinations.
+- Producer tests at 0, 1, 5, 20, 50, and 100+.
+- Frontend tests distinguishing Show more versus Load more.
+- Result-state tests for local visibility versus server offset/cursor.
+- Refresh/refinement tests preserving original response and stable result identity.
+
+### 7.3 Work item 2B — Trust and rationale semantics
+
+#### Preferred approach
+
+Reuse existing blocks before adding fields:
+
+- `EVIDENCE` for claim-linked sources;
+- `ASSUMPTIONS` for material decision assumptions;
+- `LIMITATION`/`BOUNDARY` for uncertainty and scope;
+- `WHY_NOW` for timing/rationale;
+- `SUMMARY` support line/chips for compact basis where already supported.
+
+Add a new shared field only when at least two initial producers cannot express a requirement without brittle prose or block IDs.
+
+#### Files
+
+- `apps/backend/src/productFramework/ask/ask.contract.ts`
+- `apps/frontend/src/features/ask/types.ts`
+- `apps/backend/src/services/ask/decisionThreadPresentationBlocks.ts`
+- `apps/frontend/src/components/ask/blocks/ContextualBlocks.tsx`
+- `apps/frontend/src/components/ask/blocks/DecisionBlocks.tsx`
+- `apps/frontend/src/components/ask/blocks/CoreBlocks.tsx`
+- Producer handlers for HVAC/refinance and Status Board.
+
+#### Implementation
+
+1. Define a producer checklist for material outputs:
+   - recommendation/conclusion;
+   - concise rationale;
+   - basis/as-of or freshness;
+   - assumptions;
+   - uncertainty/limitation;
+   - source mapping where a claim depends on evidence.
+2. Add a pure validator/evaluator under `apps/backend/src/services/ask/presentation/` only if existing answer-trust validators cannot express these checks cleanly. Suggested module:
+   - `presentationQuality.contract.ts` for evaluation inputs and issue codes;
+   - no execution side effects and no persistence.
+3. Do not reject simple low-risk answers for lacking an evidence block.
+4. Apply stricter checks only to declared material decision fixtures/operations.
+5. Keep raw confidence values internal; render governed labels/copy.
+
+### 7.4 Work item 2C — Action hierarchy
+
+#### Files
+
+- `apps/backend/src/productFramework/ask/ask.contract.ts`
+- `apps/backend/src/services/ask/suggestedActions/finalizeSuggestedNextActions.ts`
+- `suggestedNextActionCandidate.ts`, `suggestedNextActionRanking.ts`, `suggestedNextActionDeduplication.ts`
+- `apps/frontend/src/components/ask/workspace/ExecutionCard.tsx`
+- `apps/frontend/src/components/ask/blocks/context.tsx`
+- `apps/frontend/src/features/ask/interactionDispatch.ts`
+
+#### Implementation
+
+1. Preserve server-declared `PRIMARY`, `SECONDARY`, and `QUIET` styles.
+2. Add a quality check that normal answers have no more than one visible primary action across the immediate response surface, except explicit confirmation/balanced-choice/emergency cases.
+3. Ensure contextual `CONTINUE` actions precede generic discovery.
+4. Consolidate overflow actions in shared UI when multiple secondary actions create clutter.
+5. Do not implement unsupported interaction types unless one of the five journeys requires them.
+6. Confirm every business action still supplies registered operation and target identity and passes existing authorization/confirmation.
+
+### 7.5 Work item 2D — Profile/result-shape validation
+
+#### Decision point
+
+Start with an evaluator input inferred from the fixture/producer test, not a persisted response field. Add `presentationProfile` to the response only if runtime behavior needs it for renderer selection or contract validation.
+
+#### Suggested modules
+
+- `apps/backend/src/services/ask/presentation/presentationQuality.contract.ts`
+- `apps/backend/src/services/ask/presentation/evaluatePresentationQuality.ts`
+- `apps/backend/tests/ask/presentationQualityContract.test.js`
+
+#### Evaluator responsibilities
+
+- `DIRECT_ANSWER`: first meaningful narrative answers or names blocker; collection optional.
+- `COLLECTION`: honest collection semantics present.
+- `ATTENTION`: priority and reason producer-declared; unknown not good.
+- `COMPARE`: alternatives plus assumptions/limitations and recommendation rationale when present.
+- `GUIDE`: objective/progress source present; no invented state.
+
+The evaluator returns structured issues for tests and development diagnostics. It must not rewrite the result or block execution at runtime in this phase.
+
+### 7.6 Phase 2 validation
+
+- Backend contract and producer tests for the three adopters.
+- Frontend renderer and result-state tests.
+- Ask answer-trust and interaction-coverage suites.
+- Backend/frontend typechecks.
+- `git diff --check`.
+- No Prisma generation unless the schema unexpectedly changes.
+
+### 7.7 Phase 2 completion check
+
+- Status Board plus two other collection models use honest shared semantics.
+- Material comparison slice uses shared trust semantics.
+- No new block-id special case was added for a cross-tool need.
+- Current supported fixtures render safely.
+- Known limitations are in the ordinary backlog.
+
+---
+
+## 8. Phase 3 — Conversational experience quality
+
+### 8.1 Outcomes
+
+- The first three slices pass the Conversational Quality Contract.
+- All nine presentation patterns have deterministic behavioral fixtures.
+- Simple questions remain simple; large results remain honest and explorable.
+- Representative desktop/mobile outputs are reviewed and corrected.
+
+### 8.2 Work item 3A — Quality fixture harness
+
+#### Suggested structure
+
+```text
+apps/backend/tests/ask/presentationQuality/
+  fixtures/
+  directAnswer.test.js
+  attention.test.js
+  collection.test.js
+  compare.test.js
+  guide.test.js
+  recovery.test.js
+```
+
+Reuse existing test conventions if the repository favors flat files; do not create a directory merely for aesthetics.
+
+Each fixture declares:
+
+- homeowner message and context;
+- selected operation;
+- expected profile/pattern;
+- applicable quality dimensions;
+- required direct answer or blocker;
+- expected priority/rationale;
+- collection semantics;
+- trust/basis requirements;
+- expected action outcome keys;
+- follow-up entity/context identity;
+- expected degradation state.
+
+The harness should call real pure handlers/builders with stubbed canonical dependencies where existing tests already do so. It should not snapshot entire payloads when focused semantic assertions are more stable.
+
+### 8.3 Work item 3B — Status Board experience
+
+Beyond Phase 1 correctness:
+
+1. Lead with the material condition and missing-data impact.
+2. Use compact initial disclosure by condition.
+3. Distinguish correction from refresh and from local expand.
+4. Keep estimation boundary close enough to the condition claim.
+5. Validate 5/20/50/100+ items and narrow layout.
+
+Primary files remain `statusBoard.handler.ts`, `StatusAccordionView.tsx`, and shared collection components.
+
+### 8.4 Work item 3C — HVAC or refinance comparison
+
+#### HVAC files
+
+- `apps/backend/src/services/ask/handlers/hvacDecision.handler.ts`
+- `apps/backend/src/services/ask/decisionThreadPresentationBlocks.ts`
+- domain snapshot/decision adapters
+- frontend comparison and decision blocks
+
+#### Refinance files
+
+- `apps/backend/src/services/ask/handlers/refinance.handler.ts`
+- refinance services and monitor flow
+- `ComparisonStripBlock.tsx`, table/metric/evidence renderers
+
+#### Implementation
+
+1. Choose one as the primary Phase 3 comparison based on deterministic fixture coverage; keep the other as a regression adopter.
+2. Lead with conclusion/tradeoff.
+3. Show decision-driving differences before secondary metrics.
+4. Attach assumptions, basis date, freshness, and limitations.
+5. Preserve scenario/action confirmation behavior.
+6. Validate insufficient-evidence and balanced/no-recommendation cases.
+
+### 8.5 Work item 3D — Maintenance and seasonal care
+
+#### Files
+
+- `apps/backend/src/services/ask/handlers/maintenance.handler.ts`
+- `apps/backend/src/services/ask/support/seasonalHomeCare.ts`
+- `apps/backend/src/services/ask/handlers/seasonalHomeCare.handler.ts`
+- `apps/frontend/src/components/ask/MaintenanceResultList.tsx`
+- `SeasonalPlanResultList.tsx`, `SeasonalAnswerCards.tsx`, `TaskGuideBlock.tsx`
+
+#### Implementation
+
+1. Preserve server-owned priority and urgency.
+2. Keep initial task set compact and explain why leading items matter.
+3. Distinguish an informational guide from persistent task progress.
+4. Keep setup/task creation proposed until confirmation.
+5. Ensure contextual continuations outrank unrelated starters.
+6. Validate empty checklist, general guidance, property-specific checklist, and missing-context cases.
+
+### 8.6 Work item 3E — Nine-pattern coverage
+
+Map at least one existing producer to each pattern and add focused behavioral assertions:
+
+| Pattern | Initial fixture candidate |
+|---|---|
+| Direct answer/status | warranty expiration or property summary fact |
+| Prioritized action list | home actions or maintenance |
+| Record explorer | inventory/documents |
+| Comparison/financial | HVAC/refinance |
+| Timeline/milestone | buyer deadlines or home timeline |
+| Guide | seasonal/task guide/DIY guide |
+| Document/evidence | document promotion or inspection |
+| Monitor/proactive | refinance monitor or proactive insight |
+| Empty/error/recovery | capability unavailable or no records |
+
+Do not redesign all candidates. The fixture proves shared behavior and identifies later adoption needs.
+
+### 8.7 Practical UX review
+
+Use the existing Ask acceptance fixture or component-render path to capture:
+
+- desktop and narrow mobile;
+- ordinary, empty, missing-data, and large-result states;
+- long labels and multiple actions;
+- focus after expand, filter, refresh, and paging;
+- non-color distinction for urgent/unknown/error states.
+
+If browser infrastructure is not already available, use component-render evidence and record browser validation as Phase 5 backlog. Do not spend time configuring an environment solely for screenshots.
+
+### 8.8 Phase 3 completion check
+
+- Three slices pass applicable quality criteria.
+- Nine patterns have at least one behavioral fixture.
+- No material trust requirement depends only on prose convention.
+- Screenshot/component evidence is reviewed and material issues corrected.
+- Shared tests protect simple-answer restraint and large-result honesty.
+
+---
+
+## 9. Phase 4 — End-to-end journey validation
+
+### 9.1 Outcomes
+
+- Five journeys preserve property/entity/result/decision context.
+- Cross-operation transitions do not force unnecessary entity repetition.
+- Stale, deleted, ambiguous, and access-lost subjects recover safely.
+- Business actions remain authorized and confirmation-governed.
+
+### 9.2 Work item 4A — Continuation context audit and minimal extensions
+
+#### Files
+
+- `apps/backend/src/services/ask/execution/createAskExecution.ts`
+- `apps/backend/src/services/ask/execution/executeOperation.ts`
+- `apps/backend/src/services/ask/askFollowUpResolver.ts` or current follow-up rewrite module
+- `apps/backend/src/services/ask/suggestedActions/`
+- `apps/backend/src/services/skills/skillHandoff.ts`
+- `apps/backend/src/productFramework/ask/ask.contract.ts`
+- `apps/frontend/src/components/ask/workspace/ExecutionCard.tsx`
+- `apps/frontend/src/features/ask/conversationView.ts`
+- `apps/frontend/src/features/ask/resultViewState.ts`
+
+#### Implementation
+
+1. Inventory existing continuity fields:
+   - source execution;
+   - entity type/id;
+   - property;
+   - decision thread;
+   - work item/journey;
+   - result id/revision;
+   - return destination and Skill handoff references.
+2. Reuse those fields before adding any new context envelope.
+3. Ensure suggested actions materialize exact entity context from server-owned candidates.
+4. Revalidate target existence/access before executing a cross-tool follow-up.
+5. Clarify only when multiple valid entities remain or the prior entity is invalid.
+6. Keep local filters/layout outside conversation history.
+7. Preserve simultaneous results through stable result and entity identity, not message proximity.
+
+### 9.3 Journey 1 — Status Board
+
+Conversation outline:
+
+1. “How is everything around my home?”
+2. Expand an unknown item.
+3. Add its install date.
+4. Confirm the correction.
+5. Refresh the board.
+
+Assertions:
+
+- unknown not Good;
+- exact item identity retained;
+- view expansion creates no execution;
+- correction creates governed execution/confirmation;
+- refresh reconciles current result without rewriting original response;
+- role/access failures are visible.
+
+### 9.4 Journey 2 — HVAC/refinance decision
+
+Conversation outline:
+
+1. Ask for recommendation.
+2. Ask why.
+3. Change one scenario assumption.
+4. Ask what action to take.
+
+Assertions:
+
+- subject and decision thread retained;
+- evidence/assumptions remain distinguishable;
+- scenario is not persisted as fact;
+- recommendation change is explained;
+- consequential action remains confirmable and authorized.
+
+### 9.5 Journey 3 — Maintenance/seasonal care
+
+Conversation outline:
+
+1. Ask what needs attention this season.
+2. Ask about the leading task.
+3. Request setup/addition to tasks.
+4. Confirm or cancel.
+
+Assertions:
+
+- priority source retained;
+- general versus property-specific guidance stated honestly;
+- focused help does not falsely complete work;
+- task creation remains proposed until confirmation;
+- cancellation changes nothing.
+
+### 9.6 Journey 4 — Warranty lookup to repair/replace
+
+Conversation outline:
+
+1. “Which appliance should I replace first, and why?”
+2. “Is it still under warranty?”
+3. “What if I repair it instead?”
+
+Likely files:
+
+- `handlers/inventory.handler.ts`
+- `handlers/warranties.handler.ts`
+- replacement guidance handler in `miscHandlers.handler.ts` or its current decomposed owner
+- suggested-action candidate/finalizer modules
+- Warranty and inventory result components
+
+Assertions:
+
+- selected appliance retained by exact inventory identity;
+- warranty operation resolves linked warranty without repeated naming;
+- repair/replace uses the same appliance and relevant maintenance/history context;
+- missing/ambiguous link requests one clarification;
+- evidence conflicts remain visible;
+- no inferred warranty coverage.
+
+### 9.7 Journey 5 — Home Buyer closing guidance
+
+Conversation outline:
+
+1. Ask closing readiness.
+2. Ask what is due next.
+3. Inspect one task/document gap.
+4. complete/update the task through its governed action.
+5. ask what changed.
+
+Likely files:
+
+- `apps/backend/src/services/ask/handlers/buyerPlan.handler.ts`
+- buyer command/confirm handlers
+- `apps/frontend/src/components/ask/BuyerTaskResultList.tsx`
+- timeline/progress renderers
+- existing buyer acceptance and continuity tests
+
+Assertions:
+
+- property buyer context retained;
+- deadlines retain date precision/freshness;
+- missing/conflicting context is not treated as ready;
+- task action uses exact task identity and role floor;
+- current result reconciles while original answer remains available;
+- sequential questions do not restart the buyer workflow.
+
+### 9.8 Tests
+
+Reuse/extend existing suites where possible:
+
+- backend warranty, replacement guidance, buyer-plan, follow-up, suggested-action, handoff, and execution-history tests;
+- frontend continuity tests for inventory, warranty, home events, room, buyer tasks, and result view;
+- E2E only through an already-available fixture harness.
+
+Add one deterministic multi-turn test per journey at the backend contract level and one frontend interaction/continuity test for journeys with meaningful local view behavior.
+
+### 9.9 Phase 4 completion check
+
+- Five journeys pass without unnecessary entity repetition.
+- Cross-tool actions carry exact server-owned identity.
+- Stale/access-lost/ambiguous cases are covered.
+- No journey bypasses authorization or confirmation.
+- Remaining journey gaps are prioritized for Phase 5.
+
+---
+
+## 10. Phase 5 — Broader adoption and visual QA
+
+### 10.1 Outcomes
+
+- Shared semantics expand by pattern and homeowner risk, not by arbitrary operation order.
+- Repeated block-id behavior is reduced where shared contracts now express the need.
+- Applicable results are responsive, accessible, performant, and consistent.
+- Known limitations remain visible in a simple backlog.
+
+### 10.2 Adoption order
+
+#### Wave A — Highest trust/correctness impact
+
+- financial decisions and estimates;
+- coverage, claims, inspection, recall, and safety results;
+- attention/status summaries;
+- buyer deadlines and readiness.
+
+#### Wave B — High-volume collections
+
+- inventory;
+- documents;
+- warranties;
+- home timeline/events;
+- projects and work items;
+- Radar and Home Actions.
+
+#### Wave C — Guides, monitors, and specialized workflows
+
+- DIY and guidance journeys;
+- monitors/proactive insights;
+- seller prep, renovation, permits, HOA;
+- other domain-specific result components.
+
+Commands that produce only compact receipts need quality checks but generally do not need rich pattern migration.
+
+### 10.3 Producer migration procedure
+
+For each applicable operation:
+
+1. Classify intent/profile and primary pattern.
+2. Verify direct answer or blocker.
+3. Verify material rationale and trust metadata.
+4. Adopt collection semantics if records are shown.
+5. Verify primary/secondary action hierarchy.
+6. Verify follow-up context and entity identity.
+7. Add focused fixture assertions.
+8. Remove obsolete block-id workaround only when its replacement covers the same behavior.
+
+### 10.4 Grouped-list coupling reduction
+
+#### File
+
+- `apps/frontend/src/components/ask/blocks/GroupedListBlock.tsx`
+
+#### Approach
+
+1. Inventory each fixed block-id branch and specialized imported result list.
+2. Classify it as:
+   - genuinely domain-specific interaction;
+   - shared semantic pattern now expressible by typed fields;
+   - compatibility-only branch with no current producer;
+   - detail/workspace behavior that belongs in a registered pattern component.
+3. Move only repeated, semantically shared behavior.
+4. Keep genuinely domain-specific renderers where they add real value.
+5. Delete dead compatibility branches when current fixtures prove they are unused.
+6. Avoid a wholesale rewrite of `GroupedListBlock`.
+
+### 10.5 Accessibility and responsive QA
+
+Review representative instances of all nine patterns for:
+
+- keyboard order and visible focus;
+- correct roles, labels, `aria-expanded`, `aria-selected`, and live updates;
+- focus after filter, refresh, page, confirmation, and error;
+- non-color communication of urgency, unknown, success, and failure;
+- 44px-equivalent touch targets under existing design standards;
+- no horizontal page overflow;
+- long labels, localization-like expansion, and 200% zoom;
+- reduced motion;
+- screen-reader reading order for summary, result, trust, and actions.
+
+Use component tests for deterministic accessibility attributes and an existing browser/assistive-technology setup for practical review. Do not build a new QA platform for this effort.
+
+### 10.6 Performance
+
+Measure before optimizing:
+
+- response payload size at 5/20/50/100+ records;
+- render time for large grouped lists/tables;
+- bundle contribution of specialized Ask components;
+- refresh and paging perceived latency.
+
+Only introduce lazy loading or code splitting if measurements identify a material cost. Preserve the safe fallback while a lazy renderer loads or fails.
+
+### 10.7 Documentation cleanup
+
+- Update FRD implementation status concisely.
+- Update the audit's known findings when a confirmed defect is resolved.
+- Correct stale counts in governing/current documents encountered during implementation.
+- Do not rewrite historical audits to pretend they observed the new implementation.
+- Keep one prioritized limitations/backlog section.
+
+### 10.8 Phase 5 completion check
+
+- Applicable operations are covered or have a clear backlog item.
+- All nine patterns have responsive/accessibility evidence.
+- Shared changes introduce no new competing presentation authority.
+- Performance work is measurement-backed.
+- Focused and relevant broader regression suites pass.
+
+---
+
+## 11. Test and validation matrix
+
+| Layer | What it proves | Primary checks |
+|---|---|---|
+| Contract | Valid shapes and invariants | Zod schemas, backend/frontend type parity |
+| Producer | Correct answer, priority, counts, trust, actions | focused Node tests |
+| Renderer | Hierarchy, disclosure, actions, accessibility attributes | Jest/React tests |
+| Result state | local view vs conversation vs refresh | feature tests |
+| Continuation | entity/property/thread retention | multi-turn backend tests |
+| Authorization | role floor, confirmation, idempotency | existing governance/confirm suites |
+| Journey | coherent cross-tool homeowner outcome | deterministic fixtures, existing E2E where available |
+| Visual | mobile/desktop density and interaction | representative screenshots/manual review |
+
+### 11.1 Required negative cases
+
+- unknown data presented as Good;
+- source total larger than delivered rows;
+- Show more with no delivered hidden rows;
+- next page claimed with no authoritative cursor/offset;
+- material recommendation without rationale/basis;
+- two visible primary actions in a normal answer;
+- follow-up targeting a deleted/inaccessible entity;
+- ambiguous same-type entities;
+- role downgrade between result and action;
+- refresh after source changed;
+- LLM/remote generation unavailable;
+- unsupported block/schema version;
+- empty, partial, and retryable failure.
+
+---
+
+## 12. Anticipated file map
+
+### 12.1 Existing files likely to change
+
+Backend:
+
+- `apps/backend/src/productFramework/ask/ask.contract.ts`
+- `apps/backend/src/services/ask/handlers/statusBoard.handler.ts`
+- `apps/backend/src/services/ask/handlers/maintenance.handler.ts`
+- `apps/backend/src/services/ask/handlers/seasonalHomeCare.handler.ts`
+- `apps/backend/src/services/ask/support/seasonalHomeCare.ts`
+- `apps/backend/src/services/ask/handlers/hvacDecision.handler.ts`
+- `apps/backend/src/services/ask/handlers/refinance.handler.ts`
+- `apps/backend/src/services/ask/decisionThreadPresentationBlocks.ts`
+- selected inventory/document/Radar/warranty/buyer handlers
+- `apps/backend/src/services/ask/suggestedActions/*`
+- execution/continuation modules only where journey tests demonstrate a gap
+
+Frontend:
+
+- `apps/frontend/src/features/ask/types.ts`
+- `apps/frontend/src/features/ask/resultViewState.ts`
+- `apps/frontend/src/features/ask/useResultView.ts`
+- `apps/frontend/src/features/ask/interactionDispatch.ts` only for required interactions
+- `apps/frontend/src/components/ask/blocks/GroupedListBlock.tsx`
+- `apps/frontend/src/components/ask/blocks/TableBlock.tsx`
+- core/contextual/decision blocks as needed
+- `apps/frontend/src/components/ask/patterns/StatusAccordionView.tsx`
+- existing specialized result components for the five journeys
+
+### 12.2 Possible new files
+
+Create only if they simplify repeated implementation:
+
+- `apps/backend/src/services/ask/presentation/presentationQuality.contract.ts`
+- `apps/backend/src/services/ask/presentation/evaluatePresentationQuality.ts`
+- a shared frontend collection-status/footer component under `components/ask/patterns/`
+- focused quality/journey test files
+
+No new database model, service boundary, plugin runtime, or renderer registry is planned.
+
+---
+
+## 13. Risks and mitigation
+
+| Risk | Mitigation |
+|---|---|
+| Count fields become another inconsistent vocabulary | Define semantics once and test contradictory states. |
+| Quality evaluator becomes runtime bureaucracy | Keep it pure and test/development-oriented initially. |
+| Frontend infers priority | Require producer-owned priority/reason fields. |
+| Shared renderer change damages specialized tools | Migrate three representative slices first and retain focused regression tests. |
+| Continuity reuses stale identity | Revalidate entity and access server-side. |
+| Compatibility code accumulates | Support current contracts; retire obsolete development fixtures directly. |
+| Screenshots displace implementation | Use them for focused UX review, not approval artifacts. |
+| Phase 5 becomes a 197-operation rewrite | Adopt by pattern/risk and leave compact receipts alone when already adequate. |
+| LLM behavior makes tests unstable | Assert structured semantics and use deterministic fallback fixtures. |
+
+---
+
+## 14. Backlog initialized by this plan
+
+| Priority | Item | Planned phase |
+|---|---|---:|
+| P0 | Status Board UNKNOWN overlaps Good | 1 |
+| P1 | Stale governance counts and decomposed-source assertion | 1 |
+| P1 | Honest collection delivery/visibility semantics | 2 |
+| P1 | Material recommendation basis/freshness/rationale | 2–3 |
+| P1 | First three slices meet quality contract | 3 |
+| P1 | Warranty → repair/replace continuity | 4 |
+| P1 | Buyer closing multi-turn continuity | 4 |
+| P1 | Mobile/accessibility validation before broad adoption | 3–5 |
+| P2 | Reduce shared grouped-list block-id coupling | 5 |
+| P2 | Implement only journey-required unsupported interactions | 4–5 |
+| P3 | Measurement-backed lazy loading/bundle work | 5 |
+
+---
+
+## 15. Final completion criteria
+
+The plan is complete when:
+
+1. confirmed correctness/governance defects are fixed;
+2. collection, trust, and action semantics are shared by representative producers;
+3. the first three vertical slices pass the quality contract;
+4. all five multi-turn journeys preserve valid context and governed actions;
+5. broader applicable tools adopt proven patterns incrementally;
+6. responsive, accessibility, fallback, and large-result behavior is practically reviewed;
+7. relevant automated tests and static checks pass;
+8. remaining limitations are in the ordinary prioritized backlog; and
+9. the solution still uses the existing Ask architecture without a competing engine or unnecessary migration layer.
+
+After each code increment, run the relevant lightweight validation, correct findings, update concise status/backlog notes, and run `graphify update .` as the final repository-maintenance step.
