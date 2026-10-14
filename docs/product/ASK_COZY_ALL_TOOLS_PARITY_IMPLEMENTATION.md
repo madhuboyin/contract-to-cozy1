@@ -96,7 +96,9 @@ Short, mutually exclusive workflow menus may declare the shared `CHOICE_GRID` pr
 
 Financial category forecasts may declare `BUDGET_BREAKDOWN`. It renders the primary category comparison as compact rows with server-declared amounts and proportional bars, removes generic Auto/List/Cards controls, and progressively discloses later detail sections. Budget Planner uses it to keep its twelve-month forecast available without placing all nineteen records in the initial conversation view.
 
-Factual and action-oriented grouped lists may declare `listDensity: DENSE`. Dense lists remove the generic Auto/List/Cards selector, use a two-line record (title plus short condition, then truncated supporting metadata), keep the primary action on that same horizontal row, omit a record status already communicated by its section heading, and move additional actions into **More**. Status Board list fallback and both Home Upgrade Planner collections use this treatment so their records remain conversational rows rather than vertically stacked cards.
+Factual and action-oriented grouped lists may declare `listDensity: DENSE`. Dense lists remove the generic Auto/List/Cards selector, use a two-line record (title plus short condition, then truncated supporting metadata), keep the primary action on that same horizontal row, omit a record status already communicated by its section heading, and move additional actions into **More**. Both Home Upgrade Planner collections use this treatment so their records remain conversational rows rather than vertically stacked cards.
+
+Status Board now declares the purpose-built `STATUS_ACCORDION` presentation instead of generic shelves or dense rows. It uses mutually exclusive condition tabs, compact accordion records with the first record locally disclosed, and a separate **Missing info** filter because missing dates can overlap any condition. Existing **Correct this item** and **Add install date** actions remain attached to their canonical record identities; the renderer does not invent planning actions or desktop navigation.
 
 ## Implemented tools
 

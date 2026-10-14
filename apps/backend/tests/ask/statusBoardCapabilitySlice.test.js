@@ -72,7 +72,7 @@ test('items are grouped by condition with their reasons, age, warranty, maintena
   assert.equal(result.status, 'ANSWERED');
   assert.equal(result.blocks[0].title, '1 need action, 1 to monitor, 1 in good shape');
   const list = result.blocks.find((block) => block.id === 'status-board-items');
-  assert.equal(list.listDensity, 'DENSE');
+  assert.deepEqual(list.presentation, { pattern: 'STATUS_ACCORDION' });
   assert.deepEqual(list.sections.map((section) => [section.title, section.items.map((row) => row.id)]), [['Needs action', ['a']], ['Monitor', ['m']], ['In good shape', ['g']]]);
   const [urgent] = list.sections[0].items;
   assert.equal(urgent.description, 'Past expected life (10yr)');
@@ -120,8 +120,8 @@ test('the operation is fully registered: its own skill, the bridge, and the card
   assert.equal(resolveAskRoutingCascade(launch.message, { localRoutingEnabled: true }).operation.operationId, 'HOME_STATUS_BOARD');
 });
 
-// ASK_COZY_INLINE_WORKSPACE_FRD §11.10 (IW-PRES-014, FRD v1.84): the Status Board as read-only shelves by condition.
-test('shelf facts: only Needs action is a caution; timing is the recorded age, or says the install date is missing', () => {
+// ASK_COZY_INLINE_WORKSPACE_FRD §11.10: the Status Board accordion retains the shared display facts.
+test('status facts: only Needs action is a caution; timing is the recorded age, or says the install date is missing', () => {
   const { statusBoardShelfFacts } = require('../../src/services/ask/askOrchestrator.service.ts');
   assert.deepEqual(statusBoardShelfFacts({ condition: 'ACTION_NEEDED', ageYears: 12.5 }), { tone: 'CAUTION', timingLabel: '12.5 yr old' });
   assert.deepEqual(statusBoardShelfFacts({ condition: 'MONITOR', ageYears: 0 }), { tone: 'DEFAULT', timingLabel: '0 yr old' });
@@ -129,17 +129,22 @@ test('shelf facts: only Needs action is a caution; timing is the recorded age, o
   assert.deepEqual(statusBoardShelfFacts({ condition: 'GOOD', ageYears: null }), { tone: 'DEFAULT', timingLabel: null });
 });
 
-test('the condition list declares shelves with card facts and no page link, and satisfies the contract', () => {
+test('the condition list declares the status accordion with display facts and no page link, and satisfies the contract', () => {
   const { AskPresentationBlockSchema } = require('../../src/productFramework/ask/ask.contract.ts');
   const list = statusBoardFromView(view(), 'p1').blocks.find((block) => block.id === 'status-board-items');
-  assert.deepEqual(list.presentation, { pattern: 'SHELVES' });
+  assert.deepEqual(list.presentation, { pattern: 'STATUS_ACCORDION' });
   assert.deepEqual(list.sections.map((section) => section.items[0].tone), ['CAUTION', 'DEFAULT', 'DEFAULT']);
   assert.equal(list.sections[0].items[0].timingLabel, '12.5 yr old');
   assert.deepEqual(list.actions, []);
   AskPresentationBlockSchema.parse(list);
 });
 
-test('the full answer checker, with answer relevance on, keeps the shelves answer with a code-like item name', () => {
+test('the status accordion retains empty condition tabs so its counts remain comparable', () => {
+  const list = statusBoardFromView(view({ items: [item('m', 'MONITOR')], pagination: { page: 1, limit: 100, total: 1, totalPages: 1 } }), 'p1').blocks.find((block) => block.id === 'status-board-items');
+  assert.deepEqual(list.sections.map((section) => [section.title, section.count]), [['Needs action', 0], ['Monitor', 1], ['In good shape', 0]]);
+});
+
+test('the full answer checker, with answer relevance on, keeps the accordion answer with a code-like item name', () => {
   const { validateAskAnswerTrustPipeline } = require('../../src/services/ask/askAnswerTrustValidator.ts');
   const { attachAskAuthoritativeSourceEvidence, completedAskAuthoritativeSourceEvidence } = require('../../src/services/ask/askAnswerTrustPolicy.ts');
   const result = attachAskAuthoritativeSourceEvidence(statusBoardFromView(view({ items: [item('a', 'ACTION_NEEDED', { displayName: 'HVAC_FURNACE' })], pagination: { page: 1, limit: 100, total: 1, totalPages: 1 } }), 'p1'), [completedAskAuthoritativeSourceEvidence('HOME_STATUS_BOARD')]);
@@ -160,6 +165,9 @@ test('an item missing its install date carries an inline "Add install date" capt
   require('../../src/productFramework/ask/ask.contract.ts').AskPresentationBlockSchema.parse(list);
   const cards = list.sections.flatMap((section) => section.items);
   const [a, b, c] = ['inv-a', 'b', 'c'].map((id) => cards.find((card) => card.id === id));
+  assert.equal(a.needsInfo, true);
+  assert.equal(b.needsInfo, true);
+  assert.equal(c.needsInfo, false);
   assert.equal(a.entityType, 'INVENTORY_ITEM');
   assert.deepEqual(a.actions.map((action) => [action.label, action.operationId, action.interactionType, action.message]), [['Add install date', 'INVENTORY_ITEM_CORRECT', 'MUTATE_RECORD', 'Correct the install date of this inventory item.']]);
   assert.equal(b.actions, undefined, 'without an inventory item there is nothing to correct');

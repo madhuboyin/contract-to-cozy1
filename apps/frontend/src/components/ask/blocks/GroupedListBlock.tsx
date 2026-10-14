@@ -12,6 +12,7 @@ import { BudgetBreakdownView } from '../patterns/BudgetBreakdownView';
 import { PatternFrame } from '../patterns/PatternParts';
 import { RoomMapView } from '../patterns/RoomMapView';
 import { ShelvesView } from '../patterns/ShelvesView';
+import { StatusAccordionView } from '../patterns/StatusAccordionView';
 import { DocumentResultList } from '../DocumentResultList';
 import { HomeEventResultList } from '../HomeEventResultList';
 import { HouseholdResultList } from '../HouseholdResultList';
@@ -460,6 +461,7 @@ export const GroupedListBlock: AskBlockRenderer<'GROUPED_LIST'> = (props) => {
         disabled={itemActionsDisabled} actions={block.actions}>
         {decision.pattern === 'CHOICE_GRID' && <ChoiceGridView sections={block.sections} onItemAction={onItemAction} disabled={itemActionsDisabled} />}
         {decision.pattern === 'BUDGET_BREAKDOWN' && <BudgetBreakdownView sections={block.sections} />}
+        {decision.pattern === 'STATUS_ACCORDION' && <StatusAccordionView sections={block.sections} onItemAction={onItemAction} disabled={itemActionsDisabled} />}
         {decision.pattern === 'SHELVES' && <ShelvesView sections={block.sections} moreAction={block.actions[0]} onItemAction={onItemAction} disabled={itemActionsDisabled} />}
         {decision.pattern === 'DECK' && <CardDeckView items={groupedListItems(block)} swipeRightActionId={decision.swipeRightActionId} swipeLeftActionId={decision.swipeLeftActionId} onItemAction={onItemAction} disabled={itemActionsDisabled}
           batch={decision.batch} onBatch={decision.batch && onBatchItemAction ? (decisions) => onBatchItemAction({ operationId: decision.batch!.operationId, entityType: decision.batch!.entityType, message: decision.batch!.message, decisions }) : undefined} />}

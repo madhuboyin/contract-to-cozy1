@@ -161,6 +161,46 @@ describe('budget breakdown', () => {
   });
 });
 
+describe('status accordion', () => {
+  const correct = action('correct', 'Correct this item');
+  const status = list({
+    id: 'status-board-items', title: 'Explore your home status', description: 'Each with why.', presentation: { pattern: 'STATUS_ACCORDION' },
+  }, [
+    { id: 'status-board-action-needed', title: 'Needs action', count: 0, items: [] },
+    { id: 'status-board-monitor', title: 'Monitor', count: 3, items: [
+      item('dishwasher', { title: 'Dishwasher', timingLabel: '11.8 yr old', description: '98% of expected life', meta: ['Warranty: active', 'Kitchen'], actions: [correct] }),
+      item('range', { title: 'Oven Range', timingLabel: '10.4 yr old', description: '86% of expected life', actions: [correct] }),
+      item('water-heater', { title: 'Water heater', timingLabel: 'Install date needed', description: 'Condition cannot be predicted yet.', needsInfo: true, actions: [action('date', 'Add install date', 'PRIMARY')] }),
+    ] },
+    { id: 'status-board-good', title: 'In good shape', count: 1, items: [item('furnace', { title: 'Furnace', timingLabel: '4 yr old' })] },
+  ]);
+
+  test('uses condition tabs, local accordion disclosure, and an overlapping missing-info filter', () => {
+    const onItemAction = jest.fn();
+    const { container } = render(<Harness block={status} onItemAction={onItemAction} />);
+    expect(container.querySelector('[data-display-pattern="status_accordion"]')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Needs action (0)' })).toHaveAttribute('aria-selected', 'false');
+    expect(screen.getByRole('tab', { name: 'Monitor (3)' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: 'Good (1)' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Missing info (1)' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('button', { name: /Dishwasher.*11.8 yr old.*98% of expected life/ })).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByText('Warranty: active · Kitchen')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Correct this item' }));
+    expect(onItemAction).toHaveBeenCalledWith('THING', 'dishwasher', 'Correct this item message', 'INSPECTION_FINDINGS', 'CONVERSATION_CONTINUE');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Missing info (1)' }));
+    expect(screen.getByRole('button', { name: 'Missing info (1)' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /Water heater/ })).toBeVisible();
+    expect(screen.queryByRole('button', { name: /Dishwasher/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Auto' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'List' })).not.toBeInTheDocument();
+  });
+
+  test('the pattern resolver keeps the purpose-built presentation instead of offering generic layouts', () => {
+    expect(resolveGroupedListPattern(status, 'AUTO')).toEqual({ pattern: 'STATUS_ACCORDION', offersChoice: false, reason: 'DECLARED' });
+  });
+});
+
 describe('shelves', () => {
   const block = list({ presentation: { pattern: 'SHELVES' }, actions: [{ id: 'open-maintenance', label: 'Open Maintenance', href: '/dashboard/maintenance?propertyId=home', style: 'SECONDARY' }] }, [
     { id: 'overdue', title: 'Overdue', count: 2, items: [

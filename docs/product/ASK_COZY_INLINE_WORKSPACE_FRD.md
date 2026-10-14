@@ -1,9 +1,11 @@
 # Ask Cozy — Inline Workspace Product Requirements Document
 
-**Version:** 1.379
-**Date:** October 13, 2026
+**Version:** 1.380
+**Date:** October 14, 2026
 **Status:** Approved product direction; implementation is partial and tracked by requirement
 **Scope:** Ask Cozy interaction across homeowner-facing domains on desktop and mobile, including lightweight capability discovery and Ask-native completion
+
+**Revision 1.380 — Status Board compact accordion presentation (2026-10-14):** The Ask Status Board now declares `STATUS_ACCORDION` instead of generic shelves/dense-list fallback. Its three condition tabs remain visible even at zero so the counts are comparable; the first record in the selected condition is expanded and the rest are compact rows. Expansion is local UI state and reveals the recorded reason, supporting metadata, and the existing governed **Correct this item** or **Add install date** action without starting another read. Records missing an install or purchase date also appear through a separate **Missing info** filter because that fact overlaps, rather than replaces, their condition. The renderer provides 44px tab, row, and action targets, keyboard-native buttons, focus indicators and ARIA tab/accordion state. It does not add desktop links or invent planning actions. Backend producer/contract tests and focused frontend interaction tests cover the declaration, zero-count tabs, overlapping filter, disclosure, and canonical action dispatch. Not browser-verified.
 
 **Revision 1.379 — Projects: the legacy proof write paths are retired (slice 4 of `docs/architecture/PROJECT_TRACKER_DOCUMENT_STORE_DESIGN.md`; 2026-10-13):** Completion and minor-work completion no longer create a legacy `Document` or `HomeEventDocument` for a proof, and no longer set a document's `warrantyId`. A proof must be an eligible Home Record (same property, active, household-visible, clean scan) or the request is refused with `INVALID_PROOF_DOCUMENT`; both `proofDocuments` schemas require `documentId` and drop `fileUrl`. `warrantyDocumentKey` and `completionRecordKey` are no longer accepted. **Kept:** the transitional resolver and the legacy key lookup for references already stored; deleting them waits on `prisma/project-document-reference-inventory.pgadmin.sql` returning zero (owner-run). **Tests:** `phase3MajorMoment` source assertions updated; backend `tsc --noEmit` clean; project document and Ask project tests pass (40). One pre-existing failure in that file (verified-closure schema case) is unchanged; the DB acceptance test still uses legacy proofs and is skipped without a database. Nothing is browser or database verified.
 

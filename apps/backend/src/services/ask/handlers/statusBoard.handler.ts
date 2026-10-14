@@ -97,6 +97,7 @@ export function statusBoardFromView(view: StatusBoardView, propertyId: string, c
         // category is the one a card can do without (FRD v1.84: before, such an item failed the contract).
         meta: statusBoardMeta(item),
         status: String(item.condition),
+        needsInfo: Boolean(item.needsInstallDateForPrediction),
         href: null,
         ...statusBoardShelfFacts(item),
         ...statusBoardCaptureFields(item),
@@ -110,10 +111,10 @@ export function statusBoardFromView(view: StatusBoardView, propertyId: string, c
         } : {}),
       })),
     };
-  }).filter((section) => section.count > 0);
-  if (sections.length) {
-    blocks.push({ type: 'GROUPED_LIST', filters: [], id: 'status-board-items', title: 'Appliances and systems by condition', // IW-PRES-014 / IW-PRES-022: the Status Board renders as shelves (FRD v1.84); the cards are read-only.
-      presentation: { pattern: 'SHELVES' }, listDensity: 'DENSE', description: 'Each with why, from age, warranty and maintenance records.', sections,
+  });
+  if (items.length) {
+    blocks.push({ type: 'GROUPED_LIST', filters: [], id: 'status-board-items', title: 'Explore your home status',
+      presentation: { pattern: 'STATUS_ACCORDION' }, description: 'Each with why, from age, warranty and maintenance records.', sections,
       actions: [] });
   }
   blocks.push({

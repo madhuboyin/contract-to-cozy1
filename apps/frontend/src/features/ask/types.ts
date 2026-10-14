@@ -68,11 +68,13 @@ export interface AskGroupedListItem {
   floorLevel?: number | null;
   countLabel?: string | null;
   badgeLabel?: string | null;
+  needsInfo?: boolean;
   detail?: string | null;
 }
 export type AskGroupedListPresentation =
   | { pattern: 'CHOICE_GRID' }
   | { pattern: 'BUDGET_BREAKDOWN' }
+  | { pattern: 'STATUS_ACCORDION' }
   | { pattern: 'SHELVES' }
   | { pattern: 'DECK'; swipeRightActionId?: string | null; swipeLeftActionId?: string | null; batch?: AskDeckBatch | null }
   | { pattern: 'ROOM_MAP'; focused?: boolean };

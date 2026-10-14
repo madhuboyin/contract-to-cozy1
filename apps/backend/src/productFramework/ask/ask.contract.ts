@@ -168,6 +168,9 @@ const GroupedListItemSchema = z.object({
   floorLevel: z.number().int().min(-5).max(200).nullable().optional(),
   countLabel: z.string().trim().min(1).max(60).nullable().optional(),
   badgeLabel: z.string().trim().min(1).max(60).nullable().optional(),
+  // Orthogonal to the item's condition: Status Board uses this to expose records whose condition
+  // cannot be fully assessed without an install or purchase date.
+  needsInfo: z.boolean().optional(),
   // Longer text revealed on demand (a seasonal task's "how to do it"). Additive: a renderer that does not know it ignores it.
   detail: z.string().trim().min(1).max(1200).nullable().optional(),
 });
@@ -181,6 +184,8 @@ const GroupedListPresentationSchema = z.discriminatedUnion('pattern', [
   // A compact proportional breakdown. The first section is the primary comparison; later sections are progressively
   // disclosed so a long financial forecast does not become a page-sized stack of cards.
   z.object({ pattern: z.literal('BUDGET_BREAKDOWN') }),
+  // A compact, condition-tabbed list whose records disclose supporting facts and actions in place.
+  z.object({ pattern: z.literal('STATUS_ACCORDION') }),
   z.object({ pattern: z.literal('SHELVES') }),
   z.object({
     pattern: z.literal('DECK'),
