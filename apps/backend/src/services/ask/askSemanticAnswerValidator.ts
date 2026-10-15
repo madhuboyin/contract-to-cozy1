@@ -13,6 +13,7 @@ import { matchesSellerPrepChecklistAnswerContract } from './askSellerPrepIntent'
 import { matchesRefinanceScenarioAnswerContract } from './askRefinanceScenarioIntent';
 import { matchesCapitalPlanAnswerContract } from './askCapitalPlanIntent';
 import { matchesHomeChangeSummaryAnswerContract } from './askHomeChangeIntent';
+import { matchesStatusBoardAnswerContract } from './askStatusBoardIntent';
 import { matchesPropertySummaryAnswerContract } from './askPropertySummaryIntent';
 import { matchesCoverageGapsAnswerContract } from './askCoverageIntent';
 
@@ -134,6 +135,14 @@ export function validateAskSemanticAnswerRelevance(input: {
   }
   if (input.operationId === 'HOME_CHANGE_SUMMARY'
     && matchesHomeChangeSummaryAnswerContract(input.result)) {
+    return finish({
+      outcome: 'PASS', selectedOperationId: input.operationId, competingOperationId: null,
+      selectedOperationScore: 1, competingOperationScore: 0, questionAnswerScore: 1,
+      reasonCodes: ['CANONICAL_TYPED_ANSWER_CONTRACT_MATCH'],
+    });
+  }
+  if (input.operationId === 'HOME_STATUS_BOARD'
+    && matchesStatusBoardAnswerContract(input.result)) {
     return finish({
       outcome: 'PASS', selectedOperationId: input.operationId, competingOperationId: null,
       selectedOperationScore: 1, competingOperationScore: 0, questionAnswerScore: 1,

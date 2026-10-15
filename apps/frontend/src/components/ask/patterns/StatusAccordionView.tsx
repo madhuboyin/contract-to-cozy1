@@ -9,7 +9,7 @@ import type { ItemActionHandler } from './PatternParts';
 type GroupedListBlock = Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>;
 type Section = GroupedListBlock['sections'][number];
 
-const tabLabel = (title: string) => title === 'In good shape' ? 'Good' : title;
+const tabLabel = (title: string) => title === 'In good shape' ? 'Good' : title === 'Missing information' ? 'Missing info' : title;
 
 function itemSummary(item: AskGroupedListItem): string | null {
   return [item.timingLabel, item.description].filter(Boolean).join(' · ') || null;
@@ -21,13 +21,11 @@ export function StatusAccordionView({ sections, onItemAction, disabled }: {
   disabled: boolean;
 }) {
   const firstSection = sections.find((section) => section.items.length > 0) ?? sections[0];
-  const missingItems = sections.flatMap((section) => section.items).filter((item) => item.needsInfo);
   const [activeKey, setActiveKey] = useState(firstSection?.id ?? '');
   const [expandedId, setExpandedId] = useState<string | null>(firstSection?.items[0]?.id ?? null);
-  const missingActive = activeKey === 'status-board-needs-info';
   const activeSection = sections.find((section) => section.id === activeKey) ?? firstSection;
-  const activeItems = missingActive ? missingItems : activeSection?.items ?? [];
-  const activeLabel = missingActive ? 'Missing info' : tabLabel(activeSection?.title ?? 'Status');
+  const activeItems = activeSection?.items ?? [];
+  const activeLabel = tabLabel(activeSection?.title ?? 'Status');
 
   const select = (key: string, items: AskGroupedListItem[]) => {
     setActiveKey(key);
@@ -36,21 +34,15 @@ export function StatusAccordionView({ sections, onItemAction, disabled }: {
 
   return (
     <div data-status-accordion="">
-      <div className="grid grid-cols-1 border-b border-slate-100 sm:grid-cols-3" role="tablist" aria-label="Home status condition">
+      <div className="grid grid-cols-1 border-b border-slate-100 sm:grid-flow-col sm:auto-cols-fr" role="tablist" aria-label="Home status condition">
         {sections.map((section) => {
-          const selected = !missingActive && section.id === activeSection?.id;
+          const selected = section.id === activeSection?.id;
           return <button key={section.id} type="button" role="tab" aria-selected={selected} aria-controls="status-accordion-panel" onClick={() => select(section.id, section.items)}
             className={cn('min-h-11 border-b-2 px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-teal-600', selected ? 'border-teal-700 bg-teal-50/50 text-slate-950' : 'border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-800')}>
             {tabLabel(section.title)} <span className="tabular-nums">({section.count})</span>
           </button>;
         })}
       </div>
-      {missingItems.length > 0 && <div className="border-b border-slate-100 px-3 py-2">
-        <button type="button" aria-pressed={missingActive} onClick={() => select('status-board-needs-info', missingItems)}
-          className={cn('min-h-9 rounded-full border px-3 text-xs font-semibold transition-colors', missingActive ? 'border-amber-300 bg-amber-50 text-amber-900' : 'border-slate-200 bg-white text-slate-600 hover:border-amber-300 hover:text-amber-900')}>
-          Missing info ({missingItems.length})
-        </button>
-      </div>}
       <ul id="status-accordion-panel" role="tabpanel" aria-label={`${activeLabel} items`} className="space-y-2 p-3">
         {activeItems.map((item) => {
           const expanded = expandedId === item.id;

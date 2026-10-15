@@ -24,6 +24,12 @@ const STATUS_BOARD_CONDITIONS = [
   { key: 'MONITOR', title: 'Monitor' },
   { key: 'GOOD', title: 'In good shape' },
 ] as const;
+// FRD Presentation Quality 1A: an item whose condition cannot be predicted (no install date) is UNKNOWN, never "in good
+// shape". The board service only flags it while its stored condition is GOOD, so it is classified once here, server-side:
+// an actionable or monitored item that also lacks a date stays in its (more urgent) condition section.
+export const STATUS_BOARD_MISSING_INFO_SECTION_ID = 'status-board-needs-info';
+export const statusBoardIsUnknown = (item: { condition?: unknown; needsInstallDateForPrediction?: boolean | null }): boolean =>
+  Boolean(item.needsInstallDateForPrediction) && item.condition === 'GOOD';
 export const STATUS_BOARD_ASK_LIMIT = 100;
 
 // IW-PRES-014 (FRD v1.84): the shelf-card facts for one Status Board item. Only "Needs action" is a caution; the
@@ -62,7 +68,8 @@ export function statusBoardMeta(item: any): string[] {
 export function statusBoardFromView(view: StatusBoardView, propertyId: string, canChange = false): AskOperationResult {
   const items: any[] = view.items ?? [];
   const total: number = view.pagination?.total ?? items.length;
-  const count = (condition: string) => items.filter((item) => item.condition === condition).length;
+  const unknownCount = items.filter(statusBoardIsUnknown).length;
+  const count = (condition: string) => items.filter((item) => item.condition === condition && !statusBoardIsUnknown(item)).length;
   const needsDate = items.filter((item) => item.needsInstallDateForPrediction).length;
   const truncated = total > items.length;
   const limitations = [
@@ -86,10 +93,16 @@ export function statusBoardFromView(view: StatusBoardView, propertyId: string, c
     }] : [],
   }];
   if (limitations.length) blocks.push({ type: 'LIMITATION', id: 'status-board-limits', title: 'What this does not cover', body: limitations.join(' '), severity: 'INFO' });
-  const sections = STATUS_BOARD_CONDITIONS.map(({ key, title }) => {
-    const rows = items.filter((item) => item.condition === key);
+  const sectionDefs = [
+    ...STATUS_BOARD_CONDITIONS.map(({ key, title }) => ({
+      id: `status-board-${key.toLowerCase().replace(/_/g, '-')}`, title,
+      rows: items.filter((item) => item.condition === key && !statusBoardIsUnknown(item)),
+    })),
+    ...(unknownCount ? [{ id: STATUS_BOARD_MISSING_INFO_SECTION_ID, title: 'Missing information', rows: items.filter(statusBoardIsUnknown) }] : []),
+  ];
+  const sections = sectionDefs.map(({ id, title, rows }) => {
     return {
-      id: `status-board-${key.toLowerCase().replace(/_/g, '-')}`, title, count: rows.length,
+      id, title, count: rows.length,
       items: rows.slice(0, 25).map((item) => ({
         title: item.displayName || readableCode(item.category),
         description: (item.computedReasons ?? []).filter((reason: any) => reason?.code !== 'ALL_CLEAR' && reason?.detail).map((reason: any) => reason.detail).join('; ') || null,

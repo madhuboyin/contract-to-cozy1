@@ -992,6 +992,37 @@ No new database model, service boundary, plugin runtime, or renderer registry is
 
 ---
 
+## 14.1 Phase 1 implementation status (2026-10-14)
+
+**1A — Status Board UNKNOWN/GOOD: done.** `statusBoard.handler.ts` now classifies an item once (`statusBoardIsUnknown`: install date missing while its condition is GOOD, which is the only case the board service flags). The server authors a mutually exclusive `status-board-needs-info` section titled "Missing information"; the Good section and the summary's Good count exclude it. `StatusAccordionView` no longer synthesizes an overlapping "Missing info" chip: it renders the server's sections as tabs. The "Add install date" action still dispatches on the exact `INVENTORY_ITEM`.
+
+Side effect to know about: removing unknown items from the Good section lowered the answer-relevance text overlap for "Show my status board" from 0.1209 to ~0.118 against a 0.12 corroboration threshold, which flipped an existing test to NEEDS_CLARIFICATION. Rewording did not fix it reliably, so `askStatusBoardIntent.ts` adds a typed answer-contract match (the same mechanism as HOME_CHANGE_SUMMARY and others): the adapter's own envelope, led by `status-board-summary`, with each block's id and type matched (summary→SUMMARY, limits→LIMITATION, items→GROUPED_LIST, boundary→BOUNDARY), passes relevance. Owner-accepted. Source lineage and the other trust checks still run.
+
+**1B — Governance drift: done.** Hand-kept counts were replaced by derived invariants in `askGovernance`, `askInteractionCoverageMatrix`, `capabilityHandlerRegistry`, and `confirmCapabilityHandlerRegistry`. Removing the stale counts exposed three real assertions that had been masked, handled as follows:
+
+| Finding | Resolution |
+|---|---|
+| 3 commands have a `VIEWER` role floor (`DIY_SKILL_PROFILE_COMMAND`, `HOME_BRIEFING_COMMAND`, `NEIGHBORHOOD_INTERACTION_COMMAND`) | Intentional `callerScoped` helper (`authorization: 'CALLER_SCOPED'`). The test now requires VIEWER floors to be caller-scoped; any other floor must be CONTRIBUTOR/OWNER. |
+| `NEGOTIATION_SHIELD_CASE_ANALYZE` declares no correction modes | Named exception, owner-confirmed: an append-only recomputation command. Pending runs cancel through confirmation; corrections are made by editing the case (`NEGOTIATION_SHIELD_CASE_UPDATE`) and running a new analysis, and earlier analyses are retained. |
+| 44 COMMAND-family operations are non-routable but absent from the hand-kept list | COMMAND family is derived as non-routable; every non-command non-routable operation must still be listed. |
+| The Stage 2 coverage test branched on a hand-kept TRACED list that had fallen behind (e.g. `NEGOTIATION_SHIELD_CASE_START` was TRACED in the matrix but not listed) | Every operation must be TRACED with notes of at least 10 characters, matching the sibling "fully traced" test. No matrix data changed. |
+
+The capital-timeline source assertion now matches `capitalTimelineBlock(upcoming, items.length)`; the truncation-disclosure assertion was already correct.
+
+**1C — Baseline: done (static).** `apps/backend/tests/ask/presentationQualityBaseline.test.js` pins the current output of the real pure builders: Status Board at 0/1/5/20/50/100 and a 140-total board; the seasonal plan; the refinance scenario strip. No browser screenshots were captured (no environment work, per the plan); existing Playwright specs and snapshots for maintenance and seasonal remain the browser evidence.
+
+Slice choice for Phase 3C: **refinance** is the primary comparison (pure, deterministic builders `refinanceScenarioComparison` and `breakEvenAnalysisFromDto` with existing fixtures); HVAC has no handler-level Ask fixture, so it is the regression adopter (`tests/decisionPlatform/hvacDecisionRouting.test.js`).
+
+### Known limitations found in Phase 1 (feed Phase 2/3)
+
+| Priority | Finding | Planned |
+|---|---|---|
+| P1 | A Status Board section reports its true count but delivers at most 25 rows, with no per-section delivered/next-page signal (baseline test pins this) | 2A |
+| P1 | Refinance scenario strip has two options and no recommendation, rationale, assumptions, basis date, or freshness | 2B/3C |
+| P1 | The main refinance analysis (`refinanceAnalysisResult`) is async and DB-composed, so it has no pure baseline fixture | 3A |
+| P2 | Answer-relevance validation is razor-thin for record-dependent answers (0.1209 vs 0.12); other operations may be one data change from the same flip | 3A |
+| P2 | `negotiationShieldReview.test.tsx` fails `tsc` (missing `onCollectionPage`, `onAccessLost`) and `displayPatterns` "room map" test fails; both pre-date this work | backlog |
+
 ## 15. Final completion criteria
 
 The plan is complete when:

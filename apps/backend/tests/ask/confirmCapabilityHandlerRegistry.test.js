@@ -14,7 +14,7 @@ const { validateConfirmCapabilityHandlerRegistry } = require('../../src/services
 // validateConfirmCapabilityHandlerRegistry.
 require('../../src/services/ask/askOrchestrator.service.ts');
 
-test('every one of the 42 confirmation-required Ask commands resolves to a registered confirm capability handler', () => {
+test('every one of the confirmation-required Ask commands resolves to a registered confirm capability handler', () => {
   const commandIds = Object.keys(ASK_DOMAIN_COMMAND_REGISTRY);
   // 25 from Phase 2's original if/else-chain migration + CAPTURE_FACT_CONFIRM/
   // CAPTURE_EVENT_CONFIRM (this revision; implementation plan §8; FRD §19/§20)
@@ -30,7 +30,8 @@ test('every one of the 42 confirmation-required Ask commands resolves to a regis
   // + DIY_PROJECT_COMPLETE and DIY_PROJECT_ABANDON (DIY project commands, step 7B).
   // + DIY_COMPLETION_RECOVER (DIY completion recovery, step 7C).
   // + DIY_PROJECT_START (step 8, project creation from Ask).
-  assert.equal(commandIds.length, 61); // + OWNERSHIP_COST_COMMAND
+  // Derived, not counted: validateConfirmCapabilityHandlerRegistry() reports any confirmation-required command without a handler.
+  assert.ok(commandIds.length > 0);
   assert.deepEqual(validateConfirmCapabilityHandlerRegistry(), []);
 });
 

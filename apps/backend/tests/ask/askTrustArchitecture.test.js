@@ -45,7 +45,11 @@ test('operations that must never be reached by fuzzy retrieval are absent from r
   const internalOperations = Object.values(ASK_OPERATION_DEFINITIONS)
     .filter((definition) => !definition.messageRoutable)
     .map((definition) => definition.operationId);
-  assert.deepEqual(new Set(internalOperations), new Set([
+  // COMMAND-family operations are write commands reached only by a declared action or an explicit pattern, so every one is
+  // non-routable by design and is derived rather than listed (the hand-kept list had drifted by 44 commands). Every other
+  // non-routable operation must still be named below, so a read that silently becomes unreachable by message fails here.
+  const nonCommandInternal = internalOperations.filter((id) => ASK_OPERATION_DEFINITIONS[id].family !== 'COMMAND');
+  const expectedNonCommandInternal = new Set([
     // Orchestration-only capture operations: created by the conversational-extraction pipeline or a declared action.
     'CAPTURE_FACT_CONFIRM',
     'CAPTURE_EVENT_CONFIRM',
@@ -104,7 +108,10 @@ test('operations that must never be reached by fuzzy retrieval are absent from r
     'HOME_HABIT_UPDATE',
     // Seasonal checklist setup: reached only from the declared Add these to my tasks action on the seasonal answer.
     'SEASONAL_CHECKLIST_SETUP',
-  ]));
+  ]);
+  // The list also names some COMMAND-family operations (kept for their reasons above); they only need to still be non-routable.
+  for (const id of expectedNonCommandInternal) assert.ok(internalOperations.includes(id), `${id} is listed as internal but is message-routable or missing`);
+  assert.deepEqual(new Set(nonCommandInternal.filter((id) => !expectedNonCommandInternal.has(id))), new Set(), 'a non-command operation became unreachable by message without being listed');
   const candidates = retrieveAskOperationCandidates("I'm thinking about selling next year", { topK: 100 });
   assert.equal(candidates.some((candidate) => internalOperations.includes(candidate.operationId)), false);
 });

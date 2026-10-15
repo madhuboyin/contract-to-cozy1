@@ -179,3 +179,37 @@ test('an item missing its install date carries an inline "Add install date" capt
   assert.equal(checked.result.status, 'READY_WITH_LIMITATIONS', JSON.stringify(checked.semantic));
   assert.equal(checked.semantic.outcome, 'PASS');
 });
+
+test('an unknown-condition item is excluded from Good and counted once, in its own Missing information section', () => {
+  const items = [
+    item('a', 'ACTION_NEEDED'), item('m', 'MONITOR'), item('g', 'GOOD'),
+    item('u', 'GOOD', { ageYears: null, needsInstallDateForPrediction: true, inventoryItemId: 'inv-u' }),
+  ];
+  const result = statusBoardFromView(view({ items, pagination: { page: 1, limit: 100, total: 4, totalPages: 1 } }), 'p1');
+  const list = result.blocks.find((block) => block.id === 'status-board-items');
+  assert.deepEqual(list.sections.map((section) => [section.id, section.count, section.items.map((row) => row.id)]), [
+    ['status-board-action-needed', 1, ['a']], ['status-board-monitor', 1, ['m']], ['status-board-good', 1, ['g']], ['status-board-needs-info', 1, ['inv-u']],
+  ]);
+  assert.equal(result.blocks[0].title, '1 need action, 1 to monitor, 1 in good shape');
+  const unknown = list.sections[3].items[0];
+  assert.deepEqual(unknown.actions.map((action) => [action.label, action.operationId]), [['Add install date', 'INVENTORY_ITEM_CORRECT']]);
+  require('../../src/productFramework/ask/ask.contract.ts').AskPresentationBlockSchema.parse(list);
+});
+
+test('with no known-good items the board makes no all-clear claim and shows unknown items as missing information', () => {
+  const items = [item('u1', 'GOOD', { needsInstallDateForPrediction: true }), item('u2', 'GOOD', { needsInstallDateForPrediction: true })];
+  const result = statusBoardFromView(view({ items, pagination: { page: 1, limit: 100, total: 2, totalPages: 1 } }), 'p1');
+  assert.equal(result.blocks[0].title, '0 need action, 0 to monitor, 0 in good shape');
+  const list = result.blocks.find((block) => block.id === 'status-board-items');
+  assert.equal(list.sections.find((section) => section.id === 'status-board-good').count, 0);
+  assert.equal(result.reasonCode, 'STATUS_BOARD_REVIEWED');
+});
+
+test('the typed status board contract matches each block id to its type, so a known id with another type is not the envelope', () => {
+  const { matchesStatusBoardAnswerContract } = require('../../src/services/ask/askStatusBoardIntent.ts');
+  const real = statusBoardFromView(view(), 'p1');
+  assert.equal(matchesStatusBoardAnswerContract(real), true);
+  const wrongType = { ...real, blocks: real.blocks.map((block) => block.id === 'status-board-items' ? { ...block, type: 'TABLE' } : block) };
+  assert.equal(matchesStatusBoardAnswerContract(wrongType), false);
+  assert.equal(matchesStatusBoardAnswerContract({ ...real, blocks: [...real.blocks, { type: 'SUMMARY', id: 'other', title: 't', body: 'b', actions: [] }] }), false);
+});

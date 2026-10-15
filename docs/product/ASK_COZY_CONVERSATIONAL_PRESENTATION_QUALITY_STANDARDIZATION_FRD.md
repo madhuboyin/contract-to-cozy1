@@ -692,6 +692,10 @@ These measures support review; they do not replace qualitative homeowner-experie
 
 ---
 
+### 24.1 Implementation status (2026-10-14)
+
+Phase 1 is implemented: the Status Board no longer presents unknown condition as Good (the server authors a mutually exclusive "Missing information" section), registry governance checks use derived invariants instead of hand-kept counts, and a static baseline of the Status Board, seasonal plan and refinance scenario strip is pinned in `apps/backend/tests/ask/presentationQualityBaseline.test.js`. Details, findings and the Phase 2 backlog are in `docs/architecture/ASK_COZY_CONVERSATIONAL_PRESENTATION_QUALITY_IMPLEMENTATION_PLAN.md` section 14.1. Phases 2-5 are not started.
+
 ## 25. Implementation completion
 
 This FRD is implemented when:
