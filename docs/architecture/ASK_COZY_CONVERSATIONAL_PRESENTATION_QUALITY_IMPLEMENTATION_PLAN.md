@@ -1052,6 +1052,40 @@ Not migrated yet: Documents, Home Events, Maintenance (its priority-stack batchi
 | P2 | The evaluator is not yet wired into producer fixtures broadly (three slices only) | 3A |
 | P2 | Pre-existing failures seen in the skill-related sweep (all fail identically on a clean tree): `refinanceScenarioEditParsing` (5), `askRoutingCalibration` (2), `skillAdapterRegistry`, `skillTaxonomyExpansion`, `exactFourStarterPoolMeasurement`, `presentationIdentityStarterMeasurement`, `starterEmptyHomeReadiness`, `starterRegistryPinned`, `healthGapCapture`, `homeRecordAdds`, `homeToolRuns`, `sellerPrepProgress` | backlog |
 
+## 14.3 Phase 3 implementation status (2026-10-14)
+
+**3A: fixture harness: done.** `apps/backend/tests/helpers/presentationQualityHarness.js` runs a declared fixture (pattern, profile, message, operation, expectations) against a real pure builder and asserts: every block parses, the first block answers first, required trust blocks exist, every block type is allowed for the operation, the evaluator reports exactly the expected issues, and the degradation state. Assertions are semantic, not payload snapshots.
+
+**3E: nine patterns: done.** `tests/ask/presentationQualityFixtures.test.js` has one fixture per pattern:
+
+| Pattern | Fixture (real builder) |
+|---|---|
+| Direct answer/status | maintenance task importance |
+| Prioritized list | Status Board; seasonal plan |
+| Record explorer | material specs |
+| Comparison/financial | refinance scenario answer |
+| Timeline | home timeline |
+| Guide | seasonal task walkthrough |
+| Document/evidence | inspection report comparison |
+| Monitor/proactive | refinance rate monitor (real block builder inside a composed result) |
+| Empty/error/recovery | empty Status Board; retryable failure |
+
+Simple-answer restraint and large-result honesty are asserted separately.
+
+**3B: Status Board: done.** The summary now leads with the most urgent item and its recorded reason (`statusBoardLead`), says plainly when nothing could be rated (never an all-clear), and keeps the estimation basis beside the claim. An item name that reads like an internal key is not quoted. Correction (`MUTATE_RECORD`), refresh (`START_WORKFLOW`) and local expansion (no action) remain distinct. With four tabs the condition tabs form two columns on narrow screens instead of four stacked buttons.
+
+**3C: refinance comparison: done for the scenario answer.** The inline scenario branch is now the pure `refinanceScenarioAnswer` (and `refinanceScenarioTradeoff`). It leads with the tradeoff computed only from engine outputs (payment change, up-front cost, recovery time or none, lifetime interest), then the engine's own stated reason, then the disclaimer; the strip, details, assumptions, dated sources and boundary follow. Confirmation behavior is unchanged. Cases covered: payment decrease, payment increase, no cost recovery within the horizon, balanced. Defect fixed: `askRefinanceScenarioIntent` omitted `refinance-scenario-details` (and, after Phase 2, `refinance-scenario-assumptions`), so a real scenario answer never matched its typed contract; ids are now matched with their block types. HVAC remains the regression adopter.
+
+**3D: maintenance and seasonal care: done for seasonal; maintenance covered by existing suites.** The seasonal plan declares the tasks it left out (`collection`), keeps setup a proposal until confirmed, says when a home already has its checklist, names the national default when no region can be mapped, and labels general guidance as general. The maintenance list result is DB-composed with no pure builder, so it is covered by the existing maintenance suites (all pass) rather than the harness.
+
+### Phase 3 findings
+
+| Priority | Finding | Planned |
+|---|---|---|
+| P1 | The maintenance list answer has no pure builder, so it cannot join the fixture harness without extracting one | backlog |
+| P2 | Real browser screenshots were not captured (no environment work, per the plan); component tests and the existing Playwright specs remain the browser evidence | Phase 5 |
+| P2 | The break-even analysis (also a comparison) has not been given the tradeoff-first lead | Phase 5 Wave A |
+
 ## 15. Final completion criteria
 
 The plan is complete when:

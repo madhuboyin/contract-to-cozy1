@@ -43,7 +43,7 @@ export function StatusAccordionView({ sections, collection, onItemAction, disabl
 
   return (
     <div data-status-accordion="">
-      <div className="grid grid-cols-1 border-b border-slate-100 sm:grid-flow-col sm:auto-cols-fr" role="tablist" aria-label="Home status condition">
+      <div className={cn('grid border-b border-slate-100 sm:grid-flow-col sm:auto-cols-fr', sections.length > 3 ? 'grid-cols-2' : 'grid-cols-1')} role="tablist" aria-label="Home status condition">
         {sections.map((section) => {
           const selected = section.id === activeSection?.id;
           return <button key={section.id} type="button" role="tab" aria-selected={selected} aria-controls="status-accordion-panel" onClick={() => select(section.id, section.items)}

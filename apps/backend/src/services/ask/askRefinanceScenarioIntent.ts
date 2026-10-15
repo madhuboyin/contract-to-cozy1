@@ -1,13 +1,16 @@
 import type { AskOperationResult } from './askOperationRegistry';
 
-const REFINANCE_SCENARIO_BLOCK_IDS = new Set([
-  'refinance-scenario-summary',
-  'refinance-scenario-table',
-  'refinance-scenario-evidence',
-  'refinance-scenario-boundary',
-  'related-capabilities',
-  'ask-next-actions',
-]);
+// Each adapter-owned block id with the one type it carries. 'refinance-scenario-details' and 'refinance-scenario-assumptions' were
+// missing from the earlier id set, so a real scenario answer never matched this contract (Presentation Quality 3C).
+const REFINANCE_SCENARIO_BLOCK_TYPES: Readonly<Record<string, string>> = {
+  'refinance-scenario-summary': 'SUMMARY',
+  'refinance-scenario-table': 'COMPARISON',
+  'refinance-scenario-details': 'TABLE',
+  'refinance-scenario-assumptions': 'ASSUMPTIONS',
+  'refinance-scenario-evidence': 'EVIDENCE',
+  'refinance-scenario-boundary': 'BOUNDARY',
+};
+const AUXILIARY_BLOCK_IDS = new Set(['related-capabilities', 'ask-next-actions']);
 
 /**
  * The hypothetical refinance scenario is built from the homeowner's own rate and term and the canonical comparison:
@@ -19,5 +22,5 @@ const REFINANCE_SCENARIO_BLOCK_IDS = new Set([
 export function matchesRefinanceScenarioAnswerContract(result: AskOperationResult): boolean {
   if (!['ANSWERED', 'READY_WITH_LIMITATIONS'].includes(result.status)) return false;
   const hasSummary = result.blocks.some((block) => block.type === 'SUMMARY' && block.id === 'refinance-scenario-summary');
-  return hasSummary && result.blocks.every((block) => REFINANCE_SCENARIO_BLOCK_IDS.has(block.id));
+  return hasSummary && result.blocks.every((block) => AUXILIARY_BLOCK_IDS.has(block.id) || REFINANCE_SCENARIO_BLOCK_TYPES[block.id] === block.type);
 }

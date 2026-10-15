@@ -2,6 +2,7 @@
 // location columns (zip code), an optional saved climate region, the date, and the LOCAL seasonal template catalog. It reads no recorded
 // home data, makes no external call, and decides nothing about the home; it lists the general tasks that apply to a climate region in a
 // season, restricted to templates that need no recorded asset. Not registered as an operation yet.
+import { collectionDescriptor } from './collectionDescriptor';
 import climateData from '../../../data/zipToClimateRegion.json';
 import seasonalTemplates from '../../../data/seasonalTaskTemplates.json';
 import { type AskPresentationBlock } from '../../../productFramework/ask/ask.contract';
@@ -262,7 +263,11 @@ export function buildSeasonalHomeCareResult(input: SeasonalHomeCareInput): AskOp
     status: 'ANSWERED', reasonCode: 'SEASONAL_HOME_CARE_READY',
     blocks: [
       { type: 'SUMMARY', id: 'seasonal-home-care-summary', title, body: `${judgment}${truncated} ${capitalize(seasonWord)} is ${relation} season for your area.${regionNote}`, tone: 'DEFAULT', actions: [] },
-      { type: 'GROUPED_LIST', id: 'seasonal-home-care-tasks', title: `${capitalize(seasonWord)} tasks`, actions: [], filters: [], sections },
+      {
+        type: 'GROUPED_LIST', id: 'seasonal-home-care-tasks', title: `${capitalize(seasonWord)} tasks`, actions: [], filters: [], sections,
+        // Presentation Quality 3D: the plan shows the top MAX_ITEMS of the catalog's tasks; the catalog is the whole source and has no continuation.
+        collection: collectionDescriptor({ sourceTotal: tasks.length, fetchedCount: tasks.length, sections, nextPageAvailable: false }),
+      },
       aboutBoundary(),
       { type: 'SUMMARY', id: 'seasonal-home-care-next', title: 'What would you like to do next?', body: nextBody, tone: 'DEFAULT', actions: next },
     ],

@@ -67,6 +67,34 @@ export function statusBoardMeta(item: any): string[] {
   return entries.length > 6 ? entries.filter((_, index) => index !== 1) : entries;
 }
 
+// Presentation Quality 3B: the summary body leads with what matters (the most urgent item, named with its recorded reason), says
+// plainly when nothing could be rated, and keeps the estimation basis beside the claim instead of only in the closing boundary.
+// A title that reads like an internal key is record data, not language, so it is never quoted (the answer checker rejects it).
+const INTERNAL_KEY_LIKE = /\b[A-Z]{3,}_[A-Z0-9_]{2,}\b/;
+export function statusBoardLead(input: { items: any[]; actionNeeded: number; monitor: number; good: number; unknown: number; total: number; truncated: boolean }): string {
+  const { items, actionNeeded, monitor, good, unknown, total, truncated } = input;
+  const plural = (n: number, one: string, many: string) => (n === 1 ? one : many);
+  let lead: string;
+  if (actionNeeded > 0) {
+    const top = items.find((item) => item.condition === 'ACTION_NEEDED' && !statusBoardIsUnknown(item));
+    const name = top ? String(top.displayName || readableCode(top.category)) : '';
+    const reason = top ? (top.computedReasons ?? []).find((entry: any) => entry?.code !== 'ALL_CLEAR' && entry?.detail)?.detail : null;
+    lead = name && !INTERNAL_KEY_LIKE.test(name)
+      ? `Start with ${name}${reason && !INTERNAL_KEY_LIKE.test(String(reason)) ? `: ${String(reason).replace(/[.]+$/, '')}` : ''}.`
+      : `${actionNeeded} ${plural(actionNeeded, 'item needs', 'items need')} action first.`;
+  } else if (monitor > 0) {
+    lead = `Nothing needs action right now; ${monitor} ${plural(monitor, 'item is', 'items are')} worth keeping an eye on.`;
+  } else if (good > 0) {
+    lead = unknown > 0
+      ? `Nothing needs action among the ${good} ${plural(good, 'item', 'items')} with a recorded age.`
+      : 'Nothing needs action or monitoring right now.';
+  } else {
+    lead = 'None of these items has enough recorded dates to be rated yet.';
+  }
+  const unrated = unknown > 0 && good + monitor + actionNeeded > 0 ? ` ${unknown} ${plural(unknown, 'is', 'are')} not rated yet because ${plural(unknown, 'its', 'their')} install or purchase date is missing.` : '';
+  return `${lead}${unrated} Condition is estimated from recorded age, expected life, warranty and maintenance, across ${total} recorded ${plural(total, 'item', 'items')}${truncated ? ` (counts cover the ${items.length} shown)` : ''}.`;
+}
+
 export function statusBoardFromView(view: StatusBoardView, propertyId: string, canChange = false): AskOperationResult {
   const items: any[] = view.items ?? [];
   const total: number = view.pagination?.total ?? items.length;
@@ -84,7 +112,7 @@ export function statusBoardFromView(view: StatusBoardView, propertyId: string, c
       ? `${count('ACTION_NEEDED')} need action, ${count('MONITOR')} to monitor, ${count('GOOD')} in good shape`
       : 'Nothing is on the Status Board yet',
     body: total
-      ? `On your Status Board, across ${total} recorded appliance${total === 1 ? '' : 's'} and system${total === 1 ? '' : 's'}${truncated ? ` (counts cover the ${items.length} shown)` : ''}.`
+      ? statusBoardLead({ items, actionNeeded: count('ACTION_NEEDED'), monitor: count('MONITOR'), good: count('GOOD'), unknown: unknownCount, total, truncated })
       : canChange
         ? 'The Status Board tracks appliances and systems recorded in Inventory. If you have recorded some, refresh the board to bring them in; otherwise add them there to see their condition here.'
         : 'The Status Board tracks appliances and systems recorded in Inventory. Add them there to see their condition here.',

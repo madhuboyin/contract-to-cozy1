@@ -41,8 +41,10 @@ test('the scenario branch renders the canonical comparison alongside the scenari
   const scenarioBranchStart = body.indexOf('if (scenarioEdit) {');
   assert.ok(scenarioBranchStart >= 0, 'expected to find the scenarioEdit branch');
   const scenarioBranch = body.slice(scenarioBranchStart);
-  // The branch hands the canonical `result` and the hypothetical `scenario` to the strip builder, in that order.
-  assert.match(scenarioBranch, /refinanceScenarioComparison\(\s*result, scenario, targetRatePct, termLabel,/);
+  // The branch hands the canonical `result` (as `current`) and the hypothetical `scenario` to the pure answer builder, which passes
+  // them to the strip builder in that order (Presentation Quality 3C moved the blocks out of this function).
+  assert.match(scenarioBranch, /refinanceScenarioAnswer\(\{\s*current: result, scenario,/);
+  assert.match(orchestratorSource, /refinanceScenarioComparison\(current, scenario, targetRatePct, termLabel\)/);
   assert.doesNotMatch(scenarioBranch, /id: 'refinance-scenario-current-comparison'/, 'the separate current-comparison table was folded into the strip');
 });
 
@@ -127,9 +129,14 @@ test('the answer checker, with answer relevance on, keeps a scenario answer that
 test('the typed scenario contract accepts only the scenario envelope, led by its own summary', () => {
   const { matchesRefinanceScenarioAnswerContract } = require('../../src/services/ask/askRefinanceScenarioIntent.ts');
   const summary = { type: 'SUMMARY', id: 'refinance-scenario-summary', title: 'x', body: 'y', tone: 'DEFAULT', actions: [] };
-  const table = { type: 'TABLE', id: 'refinance-scenario-table', title: 'x', columns: [], rows: [], actions: [] };
+  // The strip carries the id 'refinance-scenario-table' as a COMPARISON block; an id with another type is not this envelope.
+  const table = { type: 'COMPARISON', id: 'refinance-scenario-table', title: 'x', options: [], actions: [] };
   assert.equal(matchesRefinanceScenarioAnswerContract({ status: 'ANSWERED', blocks: [summary, table] }), true);
   assert.equal(matchesRefinanceScenarioAnswerContract({ status: 'NEEDS_CONFIRMATION', blocks: [summary, table] }), false);
   assert.equal(matchesRefinanceScenarioAnswerContract({ status: 'ANSWERED', blocks: [table] }), false);
   assert.equal(matchesRefinanceScenarioAnswerContract({ status: 'ANSWERED', blocks: [summary, { ...table, id: 'something-else' }] }), false);
+  assert.equal(matchesRefinanceScenarioAnswerContract({ status: 'ANSWERED', blocks: [summary, { ...table, type: 'TABLE' }] }), false, 'a known id with the wrong type');
+  for (const [id, type] of [['refinance-scenario-details', 'TABLE'], ['refinance-scenario-assumptions', 'ASSUMPTIONS'], ['refinance-scenario-evidence', 'EVIDENCE'], ['refinance-scenario-boundary', 'BOUNDARY']]) {
+    assert.equal(matchesRefinanceScenarioAnswerContract({ status: 'ANSWERED', blocks: [summary, table, { type, id }] }), true, id);
+  }
 });

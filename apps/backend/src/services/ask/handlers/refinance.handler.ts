@@ -418,6 +418,84 @@ export function refinanceScenarioComparison(
   };
 }
 
+// Presentation Quality 3C: the hypothetical-scenario answer as a pure builder (it was inline in refinanceAnalysisResult). It leads with
+// the tradeoff the engine's own numbers show, then the engine's stated reason, then the disclaimer; the strip, details, assumptions,
+// dated sources and boundary follow. Nothing here computes a number the scenario engine did not.
+type RefinanceScenarioNumbers = {
+  newMonthlyPayment: number; currentMonthlyPayment: number; monthlySavings: number; lifetimeSavings: number; closingCostUsd: number;
+  breakEvenMonths: number | null; estimatedAprPct: number; cashToCloseUsd: number; totalInterestNewLoan: number;
+  totalInterestRemainingCurrent: number; payoffDeltaMonths: number; recommendationExplanation: string; objective: string; recommendedTerm: string;
+};
+
+export function refinanceScenarioTradeoff(s: Pick<RefinanceScenarioNumbers, 'monthlySavings' | 'lifetimeSavings' | 'closingCostUsd' | 'breakEvenMonths'>, targetRatePct: number, termLabel: string): { title: string; lead: string } {
+  const payment = s.monthlySavings > 0
+    ? `lowers your modeled payment by ${money(s.monthlySavings)} a month`
+    : s.monthlySavings < 0 ? `raises your modeled payment by ${money(Math.abs(s.monthlySavings))} a month` : 'leaves your modeled payment about the same';
+  const recover = s.breakEvenMonths == null
+    ? 'does not recover them within the modeled period'
+    : `recovers them in about ${s.breakEvenMonths} month${s.breakEvenMonths === 1 ? '' : 's'}`;
+  const lifetime = s.lifetimeSavings >= 0 ? `${money(s.lifetimeSavings)} less` : `${money(Math.abs(s.lifetimeSavings))} more`;
+  return {
+    title: `At ${targetRatePct.toFixed(3)}% for ${termLabel}, this scenario ${payment}`,
+    lead: `It costs about ${money(s.closingCostUsd)} up front and ${recover}. Over the life of the loan the model shows ${lifetime} in interest after those costs.`,
+  };
+}
+
+export function refinanceScenarioAnswer(input: {
+  current: Parameters<typeof refinanceScenarioComparison>[0];
+  scenario: RefinanceScenarioNumbers;
+  scenarioEdit: RefinanceScenarioEdit;
+  targetRatePct: number;
+  termLabel: string;
+  benchmark: { date: string; source: string; sourceRef: string | null };
+  mortgageObservedAt: string | null;
+  mortgageUpdatedAt: string;
+  contextVersion: string;
+}): AskOperationResult {
+  const { current, scenario, scenarioEdit, targetRatePct, termLabel, benchmark } = input;
+  const tradeoff = refinanceScenarioTradeoff(scenario, targetRatePct, termLabel);
+  return {
+    status: 'ANSWERED', contextVersion: input.contextVersion,
+    blocks: [{
+      type: 'SUMMARY', id: 'refinance-scenario-summary',
+      title: tradeoff.title,
+      body: `${tradeoff.lead} ${scenario.recommendationExplanation} This is a hypothetical recalculation only: nothing was saved, and your recorded mortgage rate and term are unchanged. Your current comparison is shown below, unchanged.`,
+      tone: 'DEFAULT',
+      actions: [
+        refinanceWorkflowAction('refinance-adjust-scenario', 'Adjust this scenario', `What if I refinanced at ${targetRatePct}% for ${termLabel} with $6,000 closing costs?`, 'REFINANCE_ANALYSIS', 'PRIMARY'),
+        refinanceWorkflowAction('refinance-compare-offers', 'Compare Loan Estimates', 'Help me compare official Loan Estimates for this refinance.'),
+        refinanceWorkflowAction('refinance-record-decision', 'Record my decision', 'Help me record what I plan to do about refinancing.'),
+      ],
+    }, refinanceScenarioComparison(current, scenario, targetRatePct, termLabel), {
+      type: 'TABLE', id: 'refinance-scenario-details', title: 'Scenario details and tradeoffs',
+      description: 'The same deterministic scenario engine used by Mortgage Refinance Radar.',
+      columns: [{ key: 'metric', label: 'Metric' }, { key: 'value', label: 'Scenario' }, { key: 'context', label: 'What it means' }],
+      rows: [
+        { id: 'new-payment', values: { metric: 'New principal and interest', value: money(scenario.newMonthlyPayment), context: `Current estimate: ${money(scenario.currentMonthlyPayment)}` } },
+        { id: 'estimated-apr', values: { metric: 'Modeled APR', value: `${scenario.estimatedAprPct.toFixed(3)}%`, context: 'Includes modeled net upfront costs' } },
+        { id: 'cash-to-close', values: { metric: 'Estimated cash to close', value: money(scenario.cashToCloseUsd), context: 'Planning estimate, not a lender disclosure' } },
+        { id: 'interest', values: { metric: 'Estimated total interest', value: money(scenario.totalInterestNewLoan), context: `Current remaining estimate: ${money(scenario.totalInterestRemainingCurrent)}` } },
+        { id: 'payoff', values: { metric: 'Payoff timing change', value: `${Math.abs(scenario.payoffDeltaMonths)} months ${scenario.payoffDeltaMonths <= 0 ? 'sooner' : 'later'}`, context: 'Compared with your current remaining term' } },
+        { id: 'objective', values: { metric: 'Planning objective', value: scenario.objective.replace(/_/g, ' ').toLowerCase(), context: `Recommended term: ${scenario.recommendedTerm.replace(/_/g, ' ').toLowerCase()}` } },
+      ], actions: [],
+    }, {
+      type: 'ASSUMPTIONS', id: 'refinance-scenario-assumptions', title: 'What this scenario assumes',
+      items: refinanceScenarioAssumptions({ edit: scenarioEdit, targetRatePct, termLabel, benchmarkDate: benchmark.date, mortgageAsOf: input.mortgageObservedAt }),
+    }, {
+      type: 'EVIDENCE', id: 'refinance-scenario-evidence', title: 'Sources used',
+      items: [
+        { label: 'Current mortgage details', source: 'Property Financing Profile', observedAt: input.mortgageObservedAt ?? input.mortgageUpdatedAt },
+        { label: '30-year market benchmark', source: `${benchmark.source}${benchmark.sourceRef ? ` \u00b7 ${benchmark.sourceRef}` : ''}`, observedAt: `${benchmark.date}T00:00:00.000Z` },
+      ],
+    }, {
+      type: 'BOUNDARY', id: 'refinance-scenario-boundary', title: 'Illustrative scenario\u2014not a lender quote or a saved plan',
+      body: 'This models the rate, term, costs, credits, points, principal, recast, cash-out, credit band, and objective you stated. Actual eligibility, APR, and closing costs depend on lender underwriting. Nothing here changes your recorded mortgage facts or enables rate monitoring.',
+      severity: 'INFO', suggestions: [],
+    }],
+    suggestions: [],
+  };
+}
+
 async function refinanceAnalysisResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
   const journeyIntent = refinanceJourneyIntent(message);
   if (journeyIntent) return refinanceJourneyResult(propertyId, journeyIntent);
@@ -527,51 +605,13 @@ async function refinanceAnalysisResult(userId: string, propertyId: string, messa
         saveScenario: false,
         propertyContextVersion: financialContext.contextVersion,
       });
-      return {
-        status: 'ANSWERED', contextVersion: financialContext.contextVersion,
-        blocks: [{
-          type: 'SUMMARY', id: 'refinance-scenario-summary',
-          title: `Illustrative ${termLabel} scenario at ${targetRatePct.toFixed(3)}%`,
-          body: 'This is a hypothetical recalculation only. Nothing was saved, and your recorded mortgage rate and term are unchanged. The current comparison is shown below, unchanged, alongside it.',
-          tone: 'DEFAULT',
-          actions: [
-            refinanceWorkflowAction('refinance-adjust-scenario', 'Adjust this scenario', `What if I refinanced at ${targetRatePct}% for ${termLabel} with $6,000 closing costs?`, 'REFINANCE_ANALYSIS', 'PRIMARY'),
-            refinanceWorkflowAction('refinance-compare-offers', 'Compare Loan Estimates', 'Help me compare official Loan Estimates for this refinance.'),
-            refinanceWorkflowAction('refinance-record-decision', 'Record my decision', 'Help me record what I plan to do about refinancing.'),
-          ],
-        }, refinanceScenarioComparison(
-          result, scenario, targetRatePct, termLabel,
-        ), {
-          type: 'TABLE', id: 'refinance-scenario-details', title: 'Scenario details and tradeoffs',
-          description: 'The same deterministic scenario engine used by Mortgage Refinance Radar.',
-          columns: [{ key: 'metric', label: 'Metric' }, { key: 'value', label: 'Scenario' }, { key: 'context', label: 'What it means' }],
-          rows: [
-            { id: 'new-payment', values: { metric: 'New principal and interest', value: money(scenario.newMonthlyPayment), context: `Current estimate: ${money(scenario.currentMonthlyPayment)}` } },
-            { id: 'estimated-apr', values: { metric: 'Modeled APR', value: `${scenario.estimatedAprPct.toFixed(3)}%`, context: 'Includes modeled net upfront costs' } },
-            { id: 'cash-to-close', values: { metric: 'Estimated cash to close', value: money(scenario.cashToCloseUsd), context: 'Planning estimate, not a lender disclosure' } },
-            { id: 'interest', values: { metric: 'Estimated total interest', value: money(scenario.totalInterestNewLoan), context: `Current remaining estimate: ${money(scenario.totalInterestRemainingCurrent)}` } },
-            { id: 'payoff', values: { metric: 'Payoff timing change', value: `${Math.abs(scenario.payoffDeltaMonths)} months ${scenario.payoffDeltaMonths <= 0 ? 'sooner' : 'later'}`, context: scenario.recommendationExplanation } },
-            { id: 'objective', values: { metric: 'Planning objective', value: scenario.objective.replace(/_/g, ' ').toLowerCase(), context: `Recommended term: ${scenario.recommendedTerm.replace(/_/g, ' ').toLowerCase()}` } },
-          ], actions: [],
-        }, {
-          type: 'ASSUMPTIONS', id: 'refinance-scenario-assumptions', title: 'What this scenario assumes',
-          items: refinanceScenarioAssumptions({
-            edit: scenarioEdit, targetRatePct, termLabel, benchmarkDate: marketSnapshot.date,
-            mortgageAsOf: profile!.mortgageBalanceAsOfDate?.toISOString() ?? null,
-          }),
-        }, {
-          type: 'EVIDENCE', id: 'refinance-scenario-evidence', title: 'Sources used',
-          items: [
-            { label: 'Current mortgage details', source: 'Property Financing Profile', observedAt: profile!.mortgageBalanceAsOfDate?.toISOString() ?? profile!.updatedAt.toISOString() },
-            { label: '30-year market benchmark', source: `${marketSnapshot.source}${marketSnapshot.sourceRef ? ` \u00b7 ${marketSnapshot.sourceRef}` : ''}`, observedAt: `${marketSnapshot.date}T00:00:00.000Z` },
-          ],
-        }, {
-          type: 'BOUNDARY', id: 'refinance-scenario-boundary', title: 'Illustrative scenario—not a lender quote or a saved plan',
-          body: 'This models the rate, term, costs, credits, points, principal, recast, cash-out, credit band, and objective you stated. Actual eligibility, APR, and closing costs depend on lender underwriting. Nothing here changes your recorded mortgage facts or enables rate monitoring.',
-          severity: 'INFO', suggestions: [],
-        }],
-        suggestions: [],
-      };
+      return refinanceScenarioAnswer({
+        current: result, scenario, scenarioEdit, targetRatePct, termLabel,
+        benchmark: { date: marketSnapshot.date, source: marketSnapshot.source, sourceRef: marketSnapshot.sourceRef ?? null },
+        mortgageObservedAt: profile!.mortgageBalanceAsOfDate?.toISOString() ?? null,
+        mortgageUpdatedAt: profile!.updatedAt.toISOString(),
+        contextVersion: financialContext.contextVersion,
+      });
     } catch (error) {
       // Best-effort: a scenario computation failure must not break the
       // ordinary canonical-analysis read this turn would otherwise return.
