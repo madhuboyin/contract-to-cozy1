@@ -15,32 +15,25 @@ const MAX_DEPTH = 6;
 const MAX_NODES = 2000;
 
 /**
- * A structured action rendered in the answer is already the contextual next-action surface for that result. The finalizer uses this
- * signal to avoid padding the composer with unrelated curated starters. This deliberately reads only declared action metadata; labels,
- * messages and block types are never used to infer intent.
+ * A response-level structured action is already the contextual next-action surface for that result. Only actions owned directly by a
+ * top-level presentation block qualify: an action nested on a list item, table row or other record is a control for that record, not a
+ * replacement for continuing the conversation after the whole answer. Nested controls still publish identities through
+ * collectPresentationIdentities, so an equivalent compact action is deduplicated without suppressing the rest of the governed row.
+ *
+ * This deliberately reads only declared action metadata; labels and messages are never used to infer intent.
  */
 export function hasContextualPresentationActions(blocks: readonly Json[]): boolean {
-  let found = false;
-  let visited = 0;
-  const walk = (node: Json, depth: number): void => {
-    if (found || depth > MAX_DEPTH || visited >= MAX_NODES || !node || typeof node !== 'object') return;
-    visited += 1;
-    if (Array.isArray(node)) { for (const entry of node) walk(entry, depth + 1); return; }
-    const record = node as Record<string, Json>;
-    if (Array.isArray(record.actions) && record.actions.some((action) => {
+  return blocks.some((block) => {
+    if (!block || typeof block !== 'object' || Array.isArray(block)) return false;
+    const record = block as Record<string, Json>;
+    return Array.isArray(record.actions) && record.actions.some((action) => {
       const candidate = action as Record<string, Json> | null;
       return Boolean(candidate
         && typeof candidate.operationId === 'string'
         && typeof candidate.interactionType === 'string'
         && COMPACT_INTERACTIONS.has(candidate.interactionType));
-    })) {
-      found = true;
-      return;
-    }
-    for (const value of Object.values(record)) walk(value, depth + 1);
-  };
-  walk(blocks, 0);
-  return found;
+    });
+  });
 }
 
 export function collectPresentationIdentities(blocks: readonly Json[], propertyId: string | null): Set<string> {

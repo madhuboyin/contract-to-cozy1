@@ -102,6 +102,25 @@ test('a settled answer with declared contextual workflow controls does not get a
   assert.equal(r.offers.length, 0, 'no starter offers are recorded when the rich result owns the next action');
 });
 
+test('nested record controls do not suppress the answer-level governed continuation row', async () => {
+  const r = await run({
+    result: {
+      blocks: [{
+        type: 'GROUPED_LIST', actions: [], sections: [{
+          id: 'records', title: 'Records', items: [{
+            id: 'record-1', title: 'Water heater', actions: [{
+              id: 'open-record', label: 'Open this record', message: 'Show my water heater record.',
+              interactionType: 'CONVERSATION_CONTINUE', operationId: 'INVENTORY_LOOKUP',
+            }],
+          }],
+        }],
+      }],
+    },
+  });
+  assertFour(r, 'nested record controls');
+  assert.equal(r.report.exactFour.applicability, 'EXACT_FOUR');
+});
+
 test('optional Property Summary capture and seller-prep controls retain four governed escape routes', async () => {
   const propertySummary = await run({
     role: 'CONTRIBUTOR', operationId: 'PROPERTY_SUMMARY', status: 'READY_WITH_LIMITATIONS',
