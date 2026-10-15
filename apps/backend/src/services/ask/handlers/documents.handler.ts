@@ -1,6 +1,7 @@
 // Moved out of askOrchestrator.service.ts unchanged (decomposition, FRD v1.98;
 // docs/architecture/ASK_ORCHESTRATOR_DECOMPOSITION_REVIEW.md). The handler registers itself, and the orchestrator
 // re-exports the names below so existing imports keep working.
+import { collectionDescriptor } from '../support/collectionDescriptor';
 import { createHash, randomUUID } from 'node:crypto';
 import { HouseholdRole } from '@prisma/client';
 import { prisma } from '../../../lib/prisma';
@@ -305,6 +306,13 @@ async function documentLookupResult(userId: string, propertyId: string, message:
     })),
     actions: [],
   }, DOCUMENT_LOOKUP_BOUNDARY];
+  // Presentation Quality 5: every matched document was read; at most 20 per type are delivered and this handler has no continuation,
+  // so the list says "Showing X of Y" and offers no Next control that nothing could serve.
+  const documentList = blocks.find((block) => block.id === 'document-lookup-groups');
+  if (documentList?.type === 'GROUPED_LIST') {
+    const readTotal = [...grouped.values()].reduce((sum, group) => sum + group.docs.length, 0);
+    documentList.collection = collectionDescriptor({ sourceTotal: readTotal, fetchedCount: readTotal, sections: documentList.sections, nextPageAvailable: false });
+  }
 
   return {
     status: 'ANSWERED',

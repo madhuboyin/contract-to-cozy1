@@ -19,7 +19,11 @@ export type DecisionProgressSnapshot = { verdictCode: string; reasonCodes: strin
 
 export function decisionProgressBlock(
   id: string, title: string, thread: DecisionProgressThread, snapshot: DecisionProgressSnapshot,
-  actions: { id: string; label: string; href?: string; style: 'PRIMARY' | 'SECONDARY' | 'QUIET' }[],
+  actions: {
+    id: string; label: string; href?: string; style: 'PRIMARY' | 'SECONDARY' | 'QUIET';
+    // A typed Ask action (same shape as a SUMMARY action) so a decision card can carry the item's exact identity onward.
+    interactionType?: 'START_WORKFLOW'; message?: string; operationId?: string; entityType?: string; entityId?: string;
+  }[],
 ): AskPresentationBlock {
   return {
     type: 'DECISION_PROGRESS', id, title,

@@ -235,3 +235,59 @@ test('3D: general guidance is labelled general and the walkthrough invents no pr
   assert.deepEqual(guide.history, [], 'a walkthrough of a general task has no completion history');
   assert.ok(!('progress' in guide) && !('status' in guide), 'and no progress or status field');
 });
+
+// ---- Phase 5: adoption audit of Wave A builders -----------------------------------------------------------------------------------
+
+const { breakEvenAnalysisFromDto } = require('../../src/services/ask/askOrchestrator.service.ts');
+const { coverageReviewFromView } = require('../../src/services/ask/handlers/coverageReview.handler.ts');
+
+const breakEvenDto = (overrides = {}) => ({
+  ownershipCostContext: { calculationFingerprint: 'fp-1' },
+  input: { propertyId: 'p1', years: 10, addressLabel: '1 Main St', state: 'MA', zipCode: '02108', overrides: {} },
+  current: { homeValueNow: 500000, appreciationRate: 0.035, annualExpensesNow: 12000, debtMode: 'OFF' },
+  projection: [{ year: 2027, annualExpenses: 12000, annualAppreciationGain: 17500, cumulativeExpenses: 12000, cumulativeAppreciationGain: 17500, netCumulative: 5500 }],
+  breakEven: { status: 'PROJECTED', reached: true, breakEvenYearIndex: 6, breakEvenCalendarYear: 2032, netAtBreakEven: 1000 },
+  sensitivity: { conservative: { breakEvenYearIndex: null, netAtHorizon: -8000 }, base: { breakEvenYearIndex: 6, netAtHorizon: 42000 }, optimistic: { breakEvenYearIndex: 4, netAtHorizon: 90000 } },
+  events: [], rollup: { netAtHorizon: 42000, cumulativeExpensesAtHorizon: 140000, cumulativeAppreciationAtHorizon: 182000 },
+  drivers: [{ factor: 'Appreciation', impact: 'HIGH', explanation: 'Local appreciation outpaces cost growth.' }],
+  meta: { generatedAt: '2026-09-23T00:00:00.000Z', dataSources: ['Internal property profile'], notes: [], confidence: 'MEDIUM' },
+  ...overrides,
+});
+
+test('5 audit: break-even already leads with its conclusion and carries dated evidence, so it passes COMPARE unchanged', () => {
+  runFixture({
+    id: 'audit-break-even', pattern: 'COMPARISON', profile: 'COMPARE', message: 'When does my home break even?', operationId: 'BREAK_EVEN_ANALYSIS',
+    build: () => breakEvenAnalysisFromDto(breakEvenDto(), 'p1'),
+    expect: { directAnswer: /Projected to break even in 2032/, requiredBlockTypes: ['TABLE', 'EVIDENCE', 'BOUNDARY'] },
+  });
+});
+
+test('5 audit: break-even with the engine\u2019s own disclosed gaps is READY_WITH_LIMITATIONS and says what is missing', () => {
+  const result = breakEvenAnalysisFromDto(breakEvenDto({ meta: { generatedAt: '2026-09-23T00:00:00.000Z', dataSources: ['Internal property profile'], notes: ['No purchase price is recorded, so $350,000 is assumed.'], confidence: 'LOW' } }), 'p1');
+  assert.equal(result.status, 'READY_WITH_LIMITATIONS');
+  assert.ok(result.blocks.some((block) => block.type === 'LIMITATION' && /\$350,000 is assumed/.test(block.body)));
+});
+
+test('5 audit: coverage review is a prioritized list with a reason for each question and one primary action; none-yet and out-of-date say so', () => {
+  const review = {
+    overallState: 'QUESTIONS', scopeStatus: 'PARTIAL', generatedAt: new Date('2026-09-01'),
+    policyTerm: { insurancePolicy: { carrierName: 'Acme', policyNumber: 'P-1' }, sourceDocument: { title: 'Declarations' } },
+    questions: [{ id: 'q-1', plainLanguageQuestion: 'Is your wind or hail deductible different?', whyItMatters: 'It can be a percentage.', priority: 1, questionType: 'FACT',
+      missingEvidenceJson: [{ factKey: 'WIND_HAIL_DEDUCTIBLE' }], professionalBoundary: 'Ask your insurer or agent to confirm.' }],
+  };
+  runFixture({
+    id: 'audit-coverage-review', pattern: 'PRIORITIZED_LIST', profile: 'ATTENTION', message: 'Show my coverage review',
+    build: () => coverageReviewFromView({ review, isCurrent: true }, true, 'p1'),
+    expect: { directAnswer: /1 question to review/, requiredBlockTypes: ['GROUPED_LIST', 'BOUNDARY'] },
+  });
+  const none = coverageReviewFromView({ review: null, isCurrent: false }, true, 'p1');
+  assert.equal(none.reasonCode, 'COVERAGE_REVIEW_NOT_GENERATED');
+  const stale = coverageReviewFromView({ review, isCurrent: false }, false, 'p1');
+  assert.equal(stale.reasonCode, 'COVERAGE_REVIEW_OUT_OF_DATE');
+});
+
+test('5 measurement guard: a 100-row Status Board payload stays well under the response budget (measured about 57 KB)', () => {
+  const items = Array.from({ length: 100 }, (_, index) => row(`m${index}`, ['ACTION_NEEDED', 'MONITOR', 'GOOD'][index % 3]));
+  const bytes = Buffer.byteLength(JSON.stringify(board(items)));
+  assert.ok(bytes < 150 * 1024, `${bytes} bytes`);
+});

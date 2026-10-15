@@ -113,7 +113,12 @@ export async function hvacDecisionStartResult(userId: string, propertyId: string
   const selection = await decisionThreadService.selectHvacDecisionThread(propertyId, item.id);
   if (selection.kind === 'UNIQUE') {
     const { thread, change, triggerReasonCodes } = await decisionThreadService.continueHvacDecisionThread(selection.thread.id, propertyId, executionId);
-    const blocks: AskPresentationBlock[] = [decisionProgressBlock('hvac-decision-progress', `Repair or replace: ${item.name}`, thread, thread.currentRecommendationSnapshot, [])];
+    // Presentation Quality 5: the same typed, item-carrying warranty follow-up the generic repair-or-replace answer offers.
+    const warrantyAction = {
+      id: 'repair-replace-check-warranty', label: 'Is it under warranty?', interactionType: 'START_WORKFLOW' as const,
+      message: `Is ${item.name} still under warranty?`, operationId: 'WARRANTY_LOOKUP', entityType: 'INVENTORY_ITEM', entityId: item.id, style: 'SECONDARY' as const,
+    };
+    const blocks: AskPresentationBlock[] = [decisionProgressBlock('hvac-decision-progress', `Repair or replace: ${item.name}`, thread, thread.currentRecommendationSnapshot, [warrantyAction])];
     if (change && thread.currentRecommendationSnapshot) {
       blocks.push(whyNowBlock('hvac-decision-why-now', thread.currentRecommendationSnapshot, triggerReasonCodes));
       blocks.push(recommendationChangeBlock('hvac-decision-change', thread.id, change));

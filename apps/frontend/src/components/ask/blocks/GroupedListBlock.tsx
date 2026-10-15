@@ -14,6 +14,7 @@ import { RoomMapView } from '../patterns/RoomMapView';
 import { ShelvesView } from '../patterns/ShelvesView';
 import { StatusAccordionView } from '../patterns/StatusAccordionView';
 import { CollectionStatusNote } from '../patterns/CollectionStatusNote';
+import { sectionHasNextPage } from '@/features/ask/collectionStatus';
 import { DocumentResultList } from '../DocumentResultList';
 import { HomeEventResultList } from '../HomeEventResultList';
 import { HouseholdResultList } from '../HouseholdResultList';
@@ -341,10 +342,11 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
                 {expanded ? 'Show fewer' : `Show ${hiddenItemCount} more`}
               </button>
             )}
-            {block.id === 'project-detail-records' && section.offset !== undefined && (section.offset > 0 || section.offset + section.items.length < section.count) && (
+            {/* Presentation Quality 5: keyed on the section's own declared window, not on one block id. Blocks with their own list component never reach this renderer. */}
+            {section.offset !== undefined && (section.offset > 0 || sectionHasNextPage(block, section)) && (
               <div className="mt-3 flex gap-2">
                 {section.offset > 0 && <button type="button" disabled={itemActionsDisabled} onClick={() => onCollectionPage(section.id, 'PREVIOUS')} className="min-h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 disabled:opacity-50">Previous page<span className="sr-only"> of {section.title}</span></button>}
-                {section.offset + section.items.length < section.count && <button type="button" disabled={itemActionsDisabled} onClick={() => onCollectionPage(section.id, 'NEXT')} className="min-h-9 rounded-lg bg-teal-700 px-3 text-xs font-semibold text-white disabled:opacity-50">Next page<span className="sr-only"> of {section.title}</span></button>}
+                {sectionHasNextPage(block, section) && <button type="button" disabled={itemActionsDisabled} onClick={() => onCollectionPage(section.id, 'NEXT')} className="min-h-9 rounded-lg bg-teal-700 px-3 text-xs font-semibold text-white disabled:opacity-50">Next page<span className="sr-only"> of {section.title}</span></button>}
               </div>
             )}
             {section.offset === undefined && section.count > section.items.length && (
@@ -356,6 +358,7 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
           );
         })}
       </div>
+      <CollectionStatusNote collection={block.collection} />
       {block.actions.length > 0 && (
         <div className="flex flex-wrap gap-2 border-t border-slate-100 bg-slate-50/70 px-4 py-3">
           {block.actions.map((action) => <ActionLink key={action.id} action={action} />)}

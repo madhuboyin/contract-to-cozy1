@@ -245,3 +245,18 @@ test('J5 buyer: a deadline with no recorded due date states none, and sequential
   assert.equal(second.revision, first.revision + 1);
   assert.equal(ASK_OPERATION_DEFINITIONS.BUYER_DEADLINES.family === 'COMMAND', false);
 });
+
+test('J4 warranty: an HVAC decision card carries the same item-scoped warranty action, and it is allowed for that operation', () => {
+  const { decisionProgressBlock } = require('../../src/services/ask/decisionThreadPresentationBlocks.ts');
+  const action = {
+    id: 'repair-replace-check-warranty', label: 'Is it under warranty?', interactionType: 'START_WORKFLOW', message: 'Is Furnace still under warranty?',
+    operationId: 'WARRANTY_LOOKUP', entityType: 'INVENTORY_ITEM', entityId: 'inv-hvac', style: 'SECONDARY',
+  };
+  const block = decisionProgressBlock('hvac-decision-progress', 'Repair or replace: Furnace',
+    { id: 't1', lifecycleStatus: 'RECOMMENDATION_AVAILABLE', contextStatus: 'CURRENT', contextIssueCodes: [] }, null, [action]);
+  const parsed = AskPresentationBlockSchema.parse(block);
+  assert.deepEqual([parsed.actions[0].operationId, parsed.actions[0].entityType, parsed.actions[0].entityId], ['WARRANTY_LOOKUP', 'INVENTORY_ITEM', 'inv-hvac']);
+  for (const operationId of ['HVAC_DECISION_START', 'REPLACEMENT_GUIDANCE']) {
+    assert.equal(isAskActionApplicable({ action, operationId, propertyId: 'p1', householdRole: 'VIEWER', authoritativeSourceAvailable: true }), true, operationId);
+  }
+});

@@ -1,6 +1,7 @@
 'use client';
 
 import { sectionHasNextPage } from '@/features/ask/collectionStatus';
+import { CollectionStatusNote } from './patterns/CollectionStatusNote';
 import { useCalmAnswer, useCalmChrome } from './blocks/calmContext';
 import { ReactNode, useContext, useEffect, useRef, useState } from 'react';
 import { ExternalLink, Loader2, X } from 'lucide-react';
@@ -203,6 +204,7 @@ export function DocumentResultList({ block, propertyId, onFilter, onPage, onAcce
         </nav>}
       </div>;
     })}
+    <CollectionStatusNote collection={block.collection} />
     {/* A Home Record reads through the record route (record-level visibility applies); a transitional legacy document through the document route. */}
     {detailDocumentId && detailItem && (detailItem.entityType === 'PROPERTY_RECORD'
       ? <PropertyRecordAskDetail key={detailDocumentId} recordId={detailDocumentId} expectedPropertyId={propertyId} fallbackTitle={detailItem.title} href={detailItem.href ?? null} onAccessLost={onAccessLost} onClose={closeDetail} link={link} />

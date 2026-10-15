@@ -44,6 +44,21 @@ Ask Cozy is beyond “chat plus dashboards”: many producers emit answer-first 
 | 9 | CP-09 | P2 | Unverified risk | Several renderer paths use horizontal tables or dense cards; component code is responsive, but real narrow-width and assistive-technology behavior was not exercised in this audit. | Table/comparison/detail tools | M |
 | 10 | CP-10 | P3 | Documentation gap | Older audits and FRD status notes contain obsolete operation counts and historical architecture descriptions. | Architecture docs | S |
 
+### Resolution status (added 2026-10-14; the findings above are the original audit and are not rewritten)
+
+| ID | Status | Where |
+|---|---|---|
+| CP-01 | Resolved. Unknown is a server-authored, mutually exclusive section and is excluded from Good. | Plan section 14.1 |
+| CP-02 | Resolved. Counts were replaced by derived invariants; masked assertions were exposed and handled. | Plan section 14.1 |
+| CP-03 | Resolved for Status Board, Inventory, Documents, Home Event Radar and the seasonal plan (a producer-declared `collection` descriptor and a Next control gated on it). Maintenance, Home Events and other collections are not yet migrated. | Plan sections 14.2, 14.5 |
+| CP-04 | Partly addressed. Each fixed block id was classified; the one id-keyed pager became field-keyed; three ids with no current producer are retained pending an owner decision. | Plan section 14.5 |
+| CP-05 | Addressed by a test-time evaluator and nine pattern fixtures; not a runtime guarantee. | Plan sections 14.2, 14.3 |
+| CP-06 | Not changed; still deliberate. | none |
+| CP-07 | Resolved for the refinance scenario (assumptions, dated benchmark); other decision tools unchanged. | Plan section 14.2 |
+| CP-08 | Not changed; profiles are a test-time input, not a persisted contract. | Plan section 4.2 |
+| CP-09 | Partly addressed by deterministic attribute tests; real browser and assistive-technology review remains manual. | Plan section 14.5 |
+| CP-10 | Partly addressed; stale counts in the governing tests were corrected. Historical audits were left as written. | Plan section 14.1 |
+
 ## Root-cause summary
 
 Presentation responsibility is intentionally split: domain handlers own facts, judgment, order, and actions; the contract validates shapes and operation-specific block allow-lists; shared renderers own visual behavior; result state owns local exploration. Most inconsistencies arise where producer semantics are underspecified or where `GROUPED_LIST` became a catch-all for domain-specific interaction.

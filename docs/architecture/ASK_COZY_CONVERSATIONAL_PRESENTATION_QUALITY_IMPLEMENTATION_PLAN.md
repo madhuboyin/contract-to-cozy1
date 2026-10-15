@@ -1084,7 +1084,7 @@ Simple-answer restraint and large-result honesty are asserted separately.
 |---|---|---|
 | P1 | The maintenance list answer has no pure builder, so it cannot join the fixture harness without extracting one | backlog |
 | P2 | Real browser screenshots were not captured (no environment work, per the plan); component tests and the existing Playwright specs remain the browser evidence | Phase 5 |
-| P2 | The break-even analysis (also a comparison) has not been given the tradeoff-first lead | Phase 5 Wave A |
+| P2 | ~~The break-even analysis has not been given the tradeoff-first lead~~ Corrected in Phase 5: it already leads with its conclusion and passes the COMPARE profile unchanged | closed |
 
 ## 14.4 Phase 4 implementation status (2026-10-14)
 
@@ -1111,6 +1111,61 @@ Earlier fixtures used an invalid seasonal focus value (`CURRENT_SEASON`); the ty
 | P1 | The journeys are contract-level; no multi-turn run was made against a real backend | owner verification |
 | P2 | A free-text "is it still under warranty?" with no launched item still lists the whole home | Phase 5 |
 | P2 | Cross-tool actions revalidate item existence at execution, not at render, so a stale card is recovered, not hidden | Phase 5 |
+
+## 14.5 Phase 5 implementation status (2026-10-14)
+
+Phase 5 is adoption by pattern and risk, not an operation-by-operation rewrite. What was done, and what deliberately was not:
+
+**Adoption.**
+
+| Item | Result |
+|---|---|
+| Documents (Wave B) | Declares its collection (every matched document read, at most 20 per type delivered, no continuation); shows "Showing X of Y" and no Next control that nothing could serve |
+| Break-even (Wave A) | Audited: already conclusion-first with dated evidence and a boundary; added as a fixture, no code change |
+| Coverage review (Wave A) | Audited: prioritized list with a reason per question and one primary action; none-yet and out-of-date states covered; no code change |
+| HVAC decision (Phase 4 P1) | The decision card now carries the same item-scoped "Is it under warranty?" action as the generic repair-or-replace answer; allowlisted |
+| Generic grouped list | Note for a declared collection; the Previous/Next pager is keyed on the section's own declared window rather than one block id |
+
+**Grouped-list coupling (CP-04).** Every fixed block id in `GroupedListBlock.tsx` was classified against current backend producers:
+
+| Class | Ids |
+|---|---|
+| Domain-specific interaction with a current producer (kept) | `focused-home-action-guidance`, `project-detail-records` (layout and actions), `maintenance-groups`, `property-rooms`, `inspection-findings`, `seller-prep-open-items`, `home-event-radar-feed`, `document-lookup-groups`, `warranty-results`, `reserve-allocations`, `buyer-deadlines-list`, `incident-claim-list` |
+| Shared behavior now expressed by typed fields (changed) | the project-record pager: now keyed on `section.offset` and the descriptor |
+| Compatibility-only: no current producer in `apps/backend/src` | `property-documents`, `property-household`, `property-warranties` |
+
+The three compatibility-only ids were **not deleted**. Property Summary stopped embedding those collections (P-2), but previously stored executions may still carry them, and this repository has twice falsified a "confirmed dead" claim. Removing them degrades such a stored answer to the generic list rather than breaking it. That is an owner decision, listed below.
+
+**Accessibility and responsive.** `askPatternAccessibility.test.tsx` checks the Status Board accordion's attributes: labelled tablist, each tab controlling an existing labelled panel, `aria-expanded` with its controlled element, focus retained on Show more, urgency and unknown carried by text and counts rather than colour, and two-column tabs on narrow screens. Not exercised: a real browser at narrow width, 200% zoom, reduced motion, screen-reader reading order. Those remain a manual review.
+
+**Performance (measured, nothing optimized).**
+
+| Measure | Result |
+|---|---|
+| Status Board payload, 5 / 20 / 50 / 100 rows | 4.4 KB / 12.6 KB / 29.2 KB / 56.8 KB (about 570 bytes per row at scale) |
+| Render, 100-row section (jsdom) | about 19 ms compact (6 rows), about 28 ms with all 100 rows |
+| Bundle contribution, refresh and paging latency | not measured (needs a build and a live backend) |
+
+No lazy loading or code splitting is justified by these numbers. A guard test keeps the 100-row payload under 150 KB.
+
+**Coverage.** The harness and evaluator now cover nine patterns plus break-even and coverage review. About 190 operations have not been individually audited; Waves B and C beyond the items above remain on the backlog.
+
+### Remaining backlog (prioritized)
+
+| Priority | Item |
+|---|---|
+| P1 | Real browser review at narrow width, 200% zoom, reduced motion, and a screen reader for the nine patterns |
+| P1 | A multi-turn run of the five journeys against a real backend |
+| P2 | Migrate Maintenance, Home Events and the remaining offset collections to the descriptor (confirm Maintenance's priority-stack batching first) |
+| P2 | A free-text "is it still under warranty?" with no launched item still lists the whole home |
+| P2 | Extract a pure builder for the maintenance list so it can join the fixture harness |
+| P2 | Wave C guides, monitors and specialized workflows; remaining Wave A and B tools not yet audited |
+| P3 | Bundle size and latency measurement once a build and backend are available |
+
+### Owner decisions
+
+1. Remove the compatibility-only `property-documents`, `property-household` and `property-warranties` branches (and their components and tests), accepting that previously stored answers render as the generic list, or keep them.
+2. Whether to clean up the pre-existing failing test files listed in section 14.2 as a separate effort.
 
 ## 15. Final completion criteria
 
