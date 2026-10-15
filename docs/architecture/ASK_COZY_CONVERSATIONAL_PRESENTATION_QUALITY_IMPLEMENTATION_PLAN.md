@@ -2,7 +2,7 @@
 
 **Date:** October 14, 2026
 
-**Status:** Living implementation plan
+**Status:** Living implementation plan. Phases 1-3 complete; Phase 4 contract implementation complete with runtime journey validation pending; Phase 5 partially complete. Overall: substantially implemented, not fully complete (section 14.6).
 
 **Product authority:** `docs/product/ASK_COZY_CONVERSATIONAL_PRESENTATION_QUALITY_STANDARDIZATION_FRD.md`
 
@@ -1086,7 +1086,7 @@ Simple-answer restraint and large-result honesty are asserted separately.
 | P2 | Real browser screenshots were not captured (no environment work, per the plan); component tests and the existing Playwright specs remain the browser evidence | Phase 5 |
 | P2 | ~~The break-even analysis has not been given the tradeoff-first lead~~ Corrected in Phase 5: it already leads with its conclusion and passes the COMPARE profile unchanged | closed |
 
-## 14.4 Phase 4 implementation status (2026-10-14)
+## 14.4 Phase 4 status (2026-10-14): contract implementation complete; runtime journey validation pending
 
 **4A: continuity audit.** Existing continuity fields were reused; no new context envelope was added. The launch context already carries `entityType`, `entityId`, `actionId`, `operationId`, `decisionThreadId`, `workItemId`, `journeyId`, `contextVersion`, `sourceExecutionId` (in-place refresh), `handoffFromExecutionId` (telemetry) and `outcomeKey`; `ASK_MUTATION_IMPACT_MAP` plus `reconcileAskExecutionSideEffects` reconcile still-visible reads after a confirmed command, refreshing reads only (`selectSiblingRefreshTargets` never re-runs a command). Result identity is carried by `viewState.resultId`.
 
@@ -1112,7 +1112,7 @@ Earlier fixtures used an invalid seasonal focus value (`CURRENT_SEASON`); the ty
 | P2 | A free-text "is it still under warranty?" with no launched item still lists the whole home | Phase 5 |
 | P2 | Cross-tool actions revalidate item existence at execution, not at render, so a stale card is recovered, not hidden | Phase 5 |
 
-## 14.5 Phase 5 implementation status (2026-10-14)
+## 14.5 Phase 5 status (2026-10-14): partially complete (see 14.6 for the review follow-up)
 
 Phase 5 is adoption by pattern and risk, not an operation-by-operation rewrite. What was done, and what deliberately was not:
 
@@ -1166,6 +1166,36 @@ No lazy loading or code splitting is justified by these numbers. A guard test ke
 
 1. Remove the compatibility-only `property-documents`, `property-household` and `property-warranties` branches (and their components and tests), accepting that previously stored answers render as the generic list, or keep them.
 2. Whether to clean up the pre-existing failing test files listed in section 14.2 as a separate effort.
+
+## 14.6 Review follow-up and overall status (2026-10-14)
+
+An independent review found the implementation sound for the representative slices and the full plan not yet complete. The status is recorded as the review recommended, and each finding was acted on or left explicitly open.
+
+| Finding | Response |
+|---|---|
+| P1: Phase 5 was marked implemented before runtime validation | Relabelled partially complete. Runtime review (narrow mobile, desktop, long labels, empty/error, assistive technology, zoom, reduced motion) is not done and is the first open item |
+| P1: journeys lack controlled-runtime validation | Phase 4 is relabelled "contract implementation complete; runtime validation pending". No multi-turn run against a real backend exists |
+| P1: about 190 operations unaudited | Operation-level adoption ledger generated from the registry (`ASK_PRESENTATION_ADOPTION_LEDGER.md`, `adoptionLedger.ts`, drift-guard test). Every one of the 197 operations has one class: 16 already compliant, 53 collection adoption, 12 trust adoption, 103 compact receipt, 10 specialized review later, 3 not applicable |
+| P1: a frontend check failed | The stale room-map test was corrected to assert the intentional all-rooms default, then Floor 1 and Floor 2. `displayPatterns` is 29/29 |
+| P2: collection semantics partly adopted | A descriptor is now derived at the capability boundary for any grouped list that withholds rows without declaring them: a server window yields the source total and a next page only while a window ends before its count; withheld rows with no window yield a truncated descriptor with an unknown source total and no continuation. A producer's own declaration is never overwritten. This brings Maintenance, Project Tracker, Home Events and the remaining lists onto one vocabulary without 53 bespoke edits. Producer-declared descriptors for the 53 operations remain preferable where a true source total is known |
+| P2: accessibility evidence only on Status Board | `askPatternFamiliesAccessibility.test.tsx` covers comparison, table, timeline, guide, record explorer and empty/error recovery. It found one real gap, fixed: an `ERROR_STATE` had no alert semantics, so an assistive-technology user was not told a request failed. It now has `role="alert"`. A practical assistive-technology pass is still manual |
+| P2: performance incomplete | Unchanged: payload and render time are measured; bundle contribution and live refresh and paging latency need a build and a live backend |
+
+### Final completion criteria, as of this review
+
+| # | Criterion | Status |
+|---|---|---|
+| 1 | Correctness and governance defects fixed | Met |
+| 2 | Collection, trust and action semantics shared by representative producers | Met |
+| 3 | First three slices pass the quality contract | Met |
+| 4 | Five journeys preserve context and governed actions | Met at the contract level; runtime run pending |
+| 5 | Broader tools adopt proven patterns incrementally | Partly: ledger and derived collection descriptors in place; 53 collection, 12 trust and 10 specialized operations are still to review individually |
+| 6 | Responsive, accessibility, fallback and large-result behavior practically reviewed | Partly: deterministic attribute tests for all pattern families; real browser and assistive-technology review not done |
+| 7 | Relevant automated tests and static checks pass | Met for this work. The full Ask suite (2643 tests) has 17 failures, all in 12 files that fail identically on a clean tree (section 14.2). One frontend `tsc` error pre-exists |
+| 8 | Limitations in the ordinary backlog | Met (sections 14.5 and 14.6) |
+| 9 | Existing architecture, no competing engine | Met |
+
+**Overall:** substantially implemented, not fully complete. Open: the runtime review (criterion 6), the live-backend journey run (criterion 4), per-operation review of the ledger's open classes (criterion 5), and the owner decisions in section 14.5.
 
 ## 15. Final completion criteria
 

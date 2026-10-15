@@ -379,8 +379,12 @@ describe('room map', () => {
       item('primary', { title: 'Primary bedroom', floorLevel: 2, countLabel: '5 items' }),
     ] }]);
     render(<Harness block={block} />);
-    expect(await screen.findByRole('list', { name: 'Floor 1, 2 rooms' })).toBeInTheDocument();
+    // Every room is visible by default (the component documents "all visible by default with optional floor filters").
+    expect(await screen.findByRole('list', { name: 'All rooms, 3 rooms' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /All rooms/ })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByText('1 open')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Floor 1/ }));
+    expect(screen.getByRole('list', { name: 'Floor 1, 2 rooms' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Floor 2/ }));
     expect(screen.getByRole('list', { name: 'Floor 2, 1 room' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Primary bedroom/ }));

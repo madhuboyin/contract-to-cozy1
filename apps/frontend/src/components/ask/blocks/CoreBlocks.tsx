@@ -222,7 +222,8 @@ function StateBlock({ block }: { block: StateBlockType }) {
   const calm = useCalmChrome();
   if (calm) {
     return (
-      <section data-calm-state={block.type.toLowerCase()} className={cn('border-l-2 pl-3', CALM_STATE_RULE[block.type])}>
+      // An error is announced to assistive technology when it appears; an empty state or limitation is read in place.
+      <section data-calm-state={block.type.toLowerCase()} role={block.type === 'ERROR_STATE' ? 'alert' : undefined} className={cn('border-l-2 pl-3', CALM_STATE_RULE[block.type])}>
         <h3 className="text-base font-medium text-slate-900">{block.title}</h3>
         <p className="mt-1 text-sm leading-6 text-slate-600">{block.body}</p>
         {actions.length > 0 && <div className="mt-3 flex flex-wrap gap-2">{actions.map((action) => <ActionLink key={action.id} action={action} />)}</div>}
@@ -230,7 +231,7 @@ function StateBlock({ block }: { block: StateBlockType }) {
     );
   }
   return (
-    <section className={cn('rounded-2xl border p-4', block.type === 'ERROR_STATE' ? 'border-red-200 bg-red-50' : block.type === 'LIMITATION' ? 'border-amber-200 bg-amber-50' : 'border-slate-200 bg-slate-50')}>
+    <section role={block.type === 'ERROR_STATE' ? 'alert' : undefined} className={cn('rounded-2xl border p-4', block.type === 'ERROR_STATE' ? 'border-red-200 bg-red-50' : block.type === 'LIMITATION' ? 'border-amber-200 bg-amber-50' : 'border-slate-200 bg-slate-50')}>
       <h3 className="font-semibold text-slate-950">{block.title}</h3>
       <p className="mt-2 text-sm leading-6 text-slate-700">{block.body}</p>
       {actions.length > 0 && <div className="mt-4 flex flex-wrap gap-2">{actions.map((action) => <ActionLink key={action.id} action={action} />)}</div>}

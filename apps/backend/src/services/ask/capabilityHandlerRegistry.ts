@@ -1,3 +1,4 @@
+import { withDerivedCollectionDescriptors } from './support/collectionDescriptor';
 import type { HouseholdRole } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { readAskOperationalControls } from '../../config/askOperationalControls';
@@ -229,7 +230,9 @@ async function invokeGuarded(
 
   const handler = registry.get(adapterKey);
   if (!handler) throw new AskCapabilityHandlerMissingError(operationId, adapterKey);
-  return handler(envelope, deps);
+  // Presentation Quality 5: a list that withholds rows without declaring it gets its collection derived from its own counts, so
+  // no renderer shows a Next control or a count its handler cannot back.
+  return withDerivedCollectionDescriptors(await handler(envelope, deps));
 }
 
 // Mirrors validateSkillAdapterDefinitions's adapter-to-operation integrity
