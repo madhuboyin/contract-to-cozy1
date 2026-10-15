@@ -53,7 +53,7 @@ const FIXTURES = [
   },
   {
     id: 'prioritized-list-seasonal-plan', pattern: 'PRIORITIZED_LIST', profile: 'ATTENTION', message: 'What do I need to do this fall?', operationId: 'SEASONAL_HOME_CARE',
-    build: () => buildSeasonalHomeCareResult({ zipCode: '60601', now: NOW, focus: 'CURRENT_SEASON', setup: { canSetUp: true, checklist: null } }),
+    build: () => buildSeasonalHomeCareResult({ zipCode: '60601', now: NOW, focus: 'THIS_SEASON', setup: { canSetUp: true, checklist: null } }),
     expect: { directAnswer: /matter most|None of the/, requiredBlockTypes: ['GROUPED_LIST', 'BOUNDARY'] },
   },
   {
@@ -201,7 +201,7 @@ test('3B: correction, refresh and local expansion stay three different things', 
 // ---- 3D: maintenance and seasonal care -----------------------------------------------------------------------------------------
 
 test('3D: the seasonal plan is compact, declares what it left out, and keeps setup a proposal until confirmed', () => {
-  const result = buildSeasonalHomeCareResult({ zipCode: '60601', now: NOW, focus: 'CURRENT_SEASON', setup: { canSetUp: true, checklist: null } });
+  const result = buildSeasonalHomeCareResult({ zipCode: '60601', now: NOW, focus: 'THIS_SEASON', setup: { canSetUp: true, checklist: null } });
   const list = result.blocks.find((block) => block.id === 'seasonal-home-care-tasks');
   const shown = list.sections.reduce((sum, section) => sum + section.items.length, 0);
   assert.ok(shown <= 8, 'at most eight tasks are shown');
@@ -214,7 +214,7 @@ test('3D: the seasonal plan is compact, declares what it left out, and keeps set
 });
 
 test('3D: a home that already has its checklist is told so, and is not offered setup again', () => {
-  const result = buildSeasonalHomeCareResult({ zipCode: '60601', now: NOW, focus: 'CURRENT_SEASON', setup: { canSetUp: true, checklist: { totalTasks: 9, tasksAdded: 6 } } });
+  const result = buildSeasonalHomeCareResult({ zipCode: '60601', now: NOW, focus: 'THIS_SEASON', setup: { canSetUp: true, checklist: { totalTasks: 9, tasksAdded: 6 } } });
   const next = result.blocks.find((block) => block.id === 'seasonal-home-care-next');
   assert.match(next.body, /already set up with 9 tasks, 6 in Maintenance/);
   assert.equal(next.actions.some((action) => action.id === 'seasonal-add-tasks'), false);
@@ -222,13 +222,13 @@ test('3D: a home that already has its checklist is told so, and is not offered s
 });
 
 test('3D: missing location context is said, not guessed: the national default is named and the page to change it is pointed at', () => {
-  const result = buildSeasonalHomeCareResult({ zipCode: '00000', now: NOW, focus: 'CURRENT_SEASON' });
+  const result = buildSeasonalHomeCareResult({ zipCode: '00000', now: NOW, focus: 'THIS_SEASON' });
   assert.match(result.blocks[0].body, /could not map this zip code to a climate region, so this uses the national default/);
   assert.equal(result.blocks.find((block) => block.id === 'seasonal-home-care-next').actions.some((action) => action.id === 'seasonal-add-tasks'), false, 'no write is offered without setup context');
 });
 
 test('3D: general guidance is labelled general and the walkthrough invents no progress', () => {
-  const result = buildSeasonalHomeCareResult({ zipCode: '60601', now: NOW, focus: 'CURRENT_SEASON' });
+  const result = buildSeasonalHomeCareResult({ zipCode: '60601', now: NOW, focus: 'THIS_SEASON' });
   const boundary = result.blocks.find((block) => block.type === 'BOUNDARY');
   assert.match(boundary.body, /general guidance for your climate, not an assessment of this home/);
   const guide = buildSeasonalTaskWalkthrough({ zipCode: '08536', now: new Date(2026, 9, 5), focus: 'NEXT_SEASON', taskKey: 'WINTER_FURNACE_FILTER_CHANGE' }).blocks[0];

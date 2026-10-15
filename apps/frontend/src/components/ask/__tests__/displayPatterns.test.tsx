@@ -217,6 +217,17 @@ describe('status accordion', () => {
     expect(container.querySelectorAll('[data-status-accordion-item]')).toHaveLength(3);
   });
 
+  test('expanding, collapsing and switching tabs are local view changes: none sends an action', () => {
+    const onItemAction = jest.fn();
+    render(<Harness block={status} onItemAction={onItemAction} />);
+    fireEvent.click(screen.getByRole('button', { name: /Dishwasher/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Dishwasher/ }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Good (1)' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Missing info (1)' }));
+    fireEvent.click(screen.getByRole('button', { name: /Water heater/ }));
+    expect(onItemAction).not.toHaveBeenCalled();
+  });
+
   test('the pattern resolver keeps the purpose-built presentation instead of offering generic layouts', () => {
     expect(resolveGroupedListPattern(status, 'AUTO')).toEqual({ pattern: 'STATUS_ACCORDION', offersChoice: false, reason: 'DECLARED' });
   });

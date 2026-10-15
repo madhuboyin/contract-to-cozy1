@@ -133,7 +133,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   PROPERTY_SUMMARY: new Set(['add-warranty', 'add-timeline-event', 'add-room', 'add-inventory-item']),
   CAPTURE_EVENT_CONFIRM: new Set(['open-timeline', 'open-home-timeline']),
   CAPABILITY_DISCOVERY: new Set(['explore-available-tools', 'explore-tools']),
-  REPLACEMENT_GUIDANCE: new Set(['open-inventory', 'open-repair-replace', 'show-inventory', 'add-inventory-item']),
+  REPLACEMENT_GUIDANCE: new Set(['open-inventory', 'open-repair-replace', 'show-inventory', 'add-inventory-item', 'repair-replace-check-warranty']),
   // FRD v1.45: the analysis also shows the homeowner's own rate monitors (MONITOR renders its own pause/resume/stop).
   REFINANCE_ANALYSIS: new Set([
     'refinance-test-scenario', 'refinance-start-monitor', 'refinance-compare-offers',
@@ -167,7 +167,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   // The attached-document receipt: an inventory item opens inline in Ask; a warranty keeps its page link.
   CAPTURE_EVIDENCE_CONFIRM: new Set(['view-inventory-item', 'open-attached-record']),
   DO_NOTHING_SIMULATION: new Set(['run-do-nothing', 'do-nothing-scenario-create', 'do-nothing-scenario-edit', 'do-nothing-scenario-delete']),
-  WARRANTY_LOOKUP: new Set(['add-warranty']),
+  WARRANTY_LOOKUP: new Set(['add-warranty', 'warranty-item-repair-replace', 'warranty-show-all']),
   // FRD v1.78: plus the inline "Add purchase date" capture on appliances with no age.
   APPLIANCE_FAILURE_RISK: new Set(['correct-purchasedOn']),
   // FRD v1.64 gave INCIDENT_CONTINUATION two page links; Ask no longer links to desktop pages, so it offers starting a claim instead.

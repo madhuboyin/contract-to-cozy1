@@ -34,7 +34,7 @@ test('the real Status Board passes its COLLECTION and ATTENTION profiles', () =>
 });
 
 test('the real seasonal plan passes as ATTENTION with exactly one primary action', () => {
-  const result = buildSeasonalHomeCareResult({ zipCode: '60601', now: new Date('2026-10-14T12:00:00Z'), focus: 'CURRENT_SEASON', setup: { canSetUp: true, checklist: null } });
+  const result = buildSeasonalHomeCareResult({ zipCode: '60601', now: new Date('2026-10-14T12:00:00Z'), focus: 'THIS_SEASON', setup: { canSetUp: true, checklist: null } });
   assert.deepEqual(codes({ profile: 'ATTENTION', result }), []);
 });
 

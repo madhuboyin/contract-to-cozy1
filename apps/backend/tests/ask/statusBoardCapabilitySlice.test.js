@@ -160,7 +160,8 @@ test('an item missing its install date carries an inline "Add install date" capt
     item('b', 'GOOD', { ageYears: null, needsInstallDateForPrediction: true, inventoryItemId: null }),
     item('c', 'GOOD'),
   ];
-  const raw = statusBoardFromView(view({ items, pagination: { page: 1, limit: 100, total: 3, totalPages: 1 } }), 'p1');
+  // A contributor: the capture writes the inventory item, so it is offered only to someone who can (a viewer sees the gap, not the action).
+  const raw = statusBoardFromView(view({ items, pagination: { page: 1, limit: 100, total: 3, totalPages: 1 } }), 'p1', true);
   const list = raw.blocks.find((block) => block.id === 'status-board-items');
   require('../../src/productFramework/ask/ask.contract.ts').AskPresentationBlockSchema.parse(list);
   const cards = list.sections.flatMap((section) => section.items);
@@ -171,8 +172,11 @@ test('an item missing its install date carries an inline "Add install date" capt
   assert.equal(a.entityType, 'INVENTORY_ITEM');
   assert.deepEqual(a.actions.map((action) => [action.label, action.operationId, action.interactionType, action.message]), [['Add install date', 'INVENTORY_ITEM_CORRECT', 'MUTATE_RECORD', 'Correct the install date of this inventory item.']]);
   assert.equal(b.actions, undefined, 'without an inventory item there is nothing to correct');
-  assert.equal(c.actions, undefined, 'a dated item has no capture');
-  assert.equal(c.entityType, undefined);
+  assert.deepEqual(c.actions.map((action) => action.id), ['status-board-correct'], 'a dated item has the board correction, not the date capture');
+  assert.equal(c.entityType, 'STATUS_BOARD_ITEM');
+  const viewerCards = statusBoardFromView(view({ items, pagination: { page: 1, limit: 100, total: 3, totalPages: 1 } }), 'p1', false)
+    .blocks.find((block) => block.id === 'status-board-items').sections.flatMap((section) => section.items);
+  assert.ok(viewerCards.every((card) => card.actions === undefined), 'a viewer is offered no action');
   const result = attachAskAuthoritativeSourceEvidence(raw, [completedAskAuthoritativeSourceEvidence('HOME_STATUS_BOARD')]);
   const checked = validateAskAnswerTrustPipeline({ question: 'Show my status board', operationId: 'HOME_STATUS_BOARD', propertyId: 'p1', semanticEnabled: true, result });
   // The missing-date limitation makes the answer READY_WITH_LIMITATIONS; the checker must still pass it.
@@ -185,7 +189,7 @@ test('an unknown-condition item is excluded from Good and counted once, in its o
     item('a', 'ACTION_NEEDED'), item('m', 'MONITOR'), item('g', 'GOOD'),
     item('u', 'GOOD', { ageYears: null, needsInstallDateForPrediction: true, inventoryItemId: 'inv-u' }),
   ];
-  const result = statusBoardFromView(view({ items, pagination: { page: 1, limit: 100, total: 4, totalPages: 1 } }), 'p1');
+  const result = statusBoardFromView(view({ items, pagination: { page: 1, limit: 100, total: 4, totalPages: 1 } }), 'p1', true);
   const list = result.blocks.find((block) => block.id === 'status-board-items');
   assert.deepEqual(list.sections.map((section) => [section.id, section.count, section.items.map((row) => row.id)]), [
     ['status-board-action-needed', 1, ['a']], ['status-board-monitor', 1, ['m']], ['status-board-good', 1, ['g']], ['status-board-needs-info', 1, ['inv-u']],

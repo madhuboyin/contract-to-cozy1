@@ -66,7 +66,7 @@ test('Status Board baseline: unknown items are partial data, not Good (Phase 1A)
 });
 
 test('Seasonal baseline: the plan leads with the judgment, groups by producer priority, and keeps setup a proposal', () => {
-  const result = buildSeasonalHomeCareResult({ zipCode: '60601', now: new Date('2026-10-14T12:00:00Z'), focus: 'CURRENT_SEASON', setup: { canSetUp: true, checklist: null } });
+  const result = buildSeasonalHomeCareResult({ zipCode: '60601', now: new Date('2026-10-14T12:00:00Z'), focus: 'THIS_SEASON', setup: { canSetUp: true, checklist: null } });
   assert.equal(result.status, 'ANSWERED');
   assert.equal(result.blocks[0].id, 'seasonal-home-care-summary');
   assert.match(result.blocks[0].body, /matter most|None of the/);
@@ -79,7 +79,7 @@ test('Seasonal baseline: the plan leads with the judgment, groups by producer pr
 });
 
 test('Seasonal baseline: general guidance is labelled general by the boundary block', () => {
-  const result = buildSeasonalHomeCareResult({ zipCode: null, now: new Date('2026-01-10T12:00:00Z'), focus: 'CURRENT_SEASON' });
+  const result = buildSeasonalHomeCareResult({ zipCode: null, now: new Date('2026-01-10T12:00:00Z'), focus: 'THIS_SEASON' });
   assert.ok(result.blocks.some((block) => block.type === 'BOUNDARY'));
 });
 

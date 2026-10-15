@@ -59,7 +59,7 @@ function refinanceNextActions(favorable: boolean, triggerRatePct: number | null)
       ];
 }
 
-function refinanceJourneyIntent(message: string): 'COMPARE_OFFERS' | 'RECORD_DECISION' | 'RATE_HISTORY' | null {
+export function refinanceJourneyIntent(message: string): 'COMPARE_OFFERS' | 'RECORD_DECISION' | 'RATE_HISTORY' | null {
   if (/\b(?:compare|review|upload|official)\b.*\b(?:loan estimates?|lender offers?|quotes?)\b/i.test(message)) return 'COMPARE_OFFERS';
   if (/\b(?:record|update|review|help me)\b.*\b(?:refinance )?(?:decision|plan|what i plan)\b/i.test(message)) return 'RECORD_DECISION';
   if (/\b(?:rate|market)\b.*\b(?:history|trend|movement|changed)\b/i.test(message)) return 'RATE_HISTORY';

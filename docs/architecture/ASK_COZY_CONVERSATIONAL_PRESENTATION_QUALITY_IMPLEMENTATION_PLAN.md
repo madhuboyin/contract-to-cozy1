@@ -1086,6 +1086,32 @@ Simple-answer restraint and large-result honesty are asserted separately.
 | P2 | Real browser screenshots were not captured (no environment work, per the plan); component tests and the existing Playwright specs remain the browser evidence | Phase 5 |
 | P2 | The break-even analysis (also a comparison) has not been given the tradeoff-first lead | Phase 5 Wave A |
 
+## 14.4 Phase 4 implementation status (2026-10-14)
+
+**4A: continuity audit.** Existing continuity fields were reused; no new context envelope was added. The launch context already carries `entityType`, `entityId`, `actionId`, `operationId`, `decisionThreadId`, `workItemId`, `journeyId`, `contextVersion`, `sourceExecutionId` (in-place refresh), `handoffFromExecutionId` (telemetry) and `outcomeKey`; `ASK_MUTATION_IMPACT_MAP` plus `reconcileAskExecutionSideEffects` reconcile still-visible reads after a confirmed command, refreshing reads only (`selectSiblingRefreshTargets` never re-runs a command). Result identity is carried by `viewState.resultId`.
+
+**4B: journeys.** `apps/backend/tests/ask/presentationQualityJourneys.test.js` drives each next turn from the previous result's own declared action and asserts identity, operation registration, role floor, confirmation and reconciliation.
+
+| Journey | Gap found | Fix |
+|---|---|---|
+| 1 Status Board | `INVENTORY_ITEM_CORRECT` and `WARRANTY_CORRECT` did not list `HOME_STATUS_BOARD` as a sibling, so an earlier board went stale after an install date or warranty was corrected elsewhere | Added to `ASK_MUTATION_IMPACT_MAP` |
+| 1 Status Board | A viewer was shown "Add install date" although the server refuses it | The capture is offered only when the role can change; the viewer still sees the gap |
+| 2 Refinance | none: the adjust action reproduces the same rate, term and costs; nothing is saved; the write stays an owner-confirmed command | `refinanceJourneyIntent` exported for the test |
+| 3 Seasonal | none: the walkthrough is the plan's leading task and returns to the same plan; setup is a confirmed command whose cancellation changes nothing | none |
+| 4 Warranty to repair/replace | `warranty.lookup` ignored the selected item and listed the whole home; no action carried the item from the verdict to its warranty | Item-scoped warranty answer (both of the item's warranty links, "no warranty recorded" without assuming coverage, "item no longer in your record" recovery); typed actions in both directions carrying the exact `INVENTORY_ITEM` id; ids allowlisted |
+| 5 Buyer closing | none: the row carries the exact task, completion is a confirmed contributor command, `BUYER_PLAN_STATUS`/`BUYER_DEADLINES` reconcile, no invented due date, one result identity across turns | none |
+
+Earlier fixtures used an invalid seasonal focus value (`CURRENT_SEASON`); the type is `THIS_SEASON | NEXT_SEASON`. They were corrected.
+
+### Phase 4 findings
+
+| Priority | Finding | Planned |
+|---|---|---|
+| P1 | HVAC items bypass the item-scoped warranty action (the repair-or-replace answer for HVAC is the decision-thread start, which does not carry it) | Phase 5 Wave A |
+| P1 | The journeys are contract-level; no multi-turn run was made against a real backend | owner verification |
+| P2 | A free-text "is it still under warranty?" with no launched item still lists the whole home | Phase 5 |
+| P2 | Cross-tool actions revalidate item existence at execution, not at render, so a stale card is recovered, not hidden | Phase 5 |
+
 ## 15. Final completion criteria
 
 The plan is complete when:

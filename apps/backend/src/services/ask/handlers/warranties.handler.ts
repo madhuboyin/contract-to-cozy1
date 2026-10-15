@@ -343,10 +343,74 @@ async function warrantiesResult(userId: string, propertyId: string, message: str
   return warrantiesFromRecords({ message, propertyId, records: rows, canWrite, ownedIds, priorViewState });
 }
 
-registerCapabilityHandler('warranty.lookup', async (envelope) => warrantiesResult(
-  envelope.userId, envelope.propertyId!, envelope.message,
-  await loadWarrantyViewState(envelope.launchContext?.sourceExecutionId, envelope.userId),
-));
+// Presentation Quality 4: a warranty question asked about one recorded item (launched from its repair-or-replace answer with the
+// item's exact identity) answers for that item only. It never infers coverage: no linked warranty is said plainly, and a missing or
+// moved item is said too, instead of silently listing the whole home.
+export function itemWarrantyFromRecords(input: {
+  item: { id: string; name: string }; propertyId: string; records: readonly WarrantyRecord[]; canWrite: boolean; ownedIds: ReadonlySet<string>; now?: Date;
+}): AskOperationResult {
+  const { item, propertyId, records, canWrite, ownedIds } = input;
+  const repairAction = {
+    id: 'warranty-item-repair-replace', label: 'Repair or replace this?', interactionType: 'START_WORKFLOW' as const,
+    message: `Should I repair or replace ${item.name}?`, operationId: 'REPLACEMENT_GUIDANCE', entityType: 'INVENTORY_ITEM', entityId: item.id, style: 'SECONDARY' as const,
+  };
+  if (records.length === 0) {
+    return {
+      status: 'READY_WITH_LIMITATIONS', reasonCode: 'WARRANTY_NOT_RECORDED_FOR_ITEM',
+      blocks: [{
+        type: 'SUMMARY', id: 'warranty-item-empty', title: `No warranty is recorded for ${item.name}`,
+        body: 'An empty record does not mean it is not covered; it only means no warranty is linked to this item here, so Ask will not assume coverage either way.',
+        tone: 'CAUTION', actions: [repairAction],
+      }, BOUNDARY],
+      suggestions: [],
+    };
+  }
+  const base = warrantiesFromRecords({ message: 'Show my warranties', propertyId, records, canWrite, ownedIds, now: input.now });
+  return {
+    ...base,
+    blocks: base.blocks.map((block, index) => (index === 0 && block.type === 'SUMMARY'
+      ? { ...block, title: `${item.name}: ${block.title}`, actions: [...block.actions, repairAction].slice(0, 3) }
+      : block)),
+  };
+}
+
+async function itemWarrantyResult(userId: string, propertyId: string, itemId: string): Promise<AskOperationResult> {
+  const access = await ensurePropertyAccess(userId, propertyId);
+  const item = await prisma.inventoryItem.findFirst({ where: { id: itemId, propertyId }, select: { id: true, name: true, warrantyId: true } });
+  if (!item) {
+    return {
+      status: 'READY_WITH_LIMITATIONS', reasonCode: 'WARRANTY_ITEM_NOT_FOUND',
+      blocks: [{
+        type: 'SUMMARY', id: 'warranty-item-missing', title: 'That item is no longer in your home record',
+        body: 'It may have been removed or moved. Nothing was assumed about its coverage.',
+        tone: 'CAUTION', actions: [{ id: 'warranty-show-all', label: 'Show my warranties', interactionType: 'START_WORKFLOW', message: 'Show my warranties', operationId: 'WARRANTY_LOOKUP', style: 'SECONDARY' }],
+      }, BOUNDARY],
+      suggestions: [],
+    };
+  }
+  const canWrite = access.role !== HouseholdRole.VIEWER;
+  const records = await prisma.warranty.findMany({
+    where: { propertyId, OR: [{ inventoryItemId: item.id }, ...(item.warrantyId ? [{ id: item.warrantyId }] : [])] },
+    orderBy: [{ expiryDate: 'asc' }, { id: 'asc' }],
+    select: {
+      id: true, propertyId: true, providerName: true, category: true, coverageDetails: true, startDate: true, expiryDate: true, updatedAt: true,
+      inventoryItem: { select: { name: true } }, documents: { select: { id: true } },
+    },
+  });
+  const ownedIds = canWrite
+    ? new Set((await prisma.warranty.findMany({ where: { propertyId, homeownerProfile: { userId }, id: { in: records.map((row) => row.id) } }, select: { id: true } })).map((row) => row.id))
+    : new Set<string>();
+  return itemWarrantyFromRecords({ item, propertyId, records, canWrite, ownedIds });
+}
+
+registerCapabilityHandler('warranty.lookup', async (envelope) => {
+  const launch = envelope.launchContext;
+  if (launch?.entityType === 'INVENTORY_ITEM' && launch.entityId) return itemWarrantyResult(envelope.userId, envelope.propertyId!, launch.entityId);
+  return warrantiesResult(
+    envelope.userId, envelope.propertyId!, envelope.message,
+    await loadWarrantyViewState(envelope.launchContext?.sourceExecutionId, envelope.userId),
+  );
+});
 
 /** The reminder task id the deadline monitor keys on, shared with `confirmHomeDeadlineMonitor` so "already set up" means the same thing. */
 export const warrantyReminderActionKey = (warrantyId: string): string => `ask-deadline:WARRANTY:${warrantyId}`;

@@ -688,11 +688,12 @@ export const ASK_MUTATION_IMPACT_MAP: Partial<Record<AskOperationId, readonly As
   // Corrected inventory facts are shown on the inventory lists and Property Summary, and can change
   // the confidence/eligibility of Home Actions derived from that exact item. Refresh HOME_ACTIONS too
   // so a focused missing-detail continuation recomputes the originating recommendation after save.
-  INVENTORY_ITEM_CORRECT: ['INVENTORY_LOOKUP', 'PROPERTY_SUMMARY', 'HOME_ACTIONS'],
+  // The Status Board reads each item's recorded install date and warranty when it is read, so an earlier board answer goes stale too.
+  INVENTORY_ITEM_CORRECT: ['INVENTORY_LOOKUP', 'PROPERTY_SUMMARY', 'HOME_ACTIONS', 'HOME_STATUS_BOARD'],
   // The corrected revision replaces the event row shown in the item-history and Property Summary timeline lists.
   HOME_EVENT_CORRECT: ['INVENTORY_LOOKUP', 'PROPERTY_SUMMARY'],
   // Warranty rows are carried by PROPERTY_SUMMARY's property-warranties collection.
-  WARRANTY_CORRECT: ['PROPERTY_SUMMARY'],
+  WARRANTY_CORRECT: ['PROPERTY_SUMMARY', 'HOME_STATUS_BOARD'],
   // Room names appear in the Property Summary rooms collection and on inventory item rows.
   ROOM_RENAME: ['PROPERTY_SUMMARY', 'INVENTORY_LOOKUP'],
   // A new room appears in the Property Summary rooms collection and can be chosen for inventory items.

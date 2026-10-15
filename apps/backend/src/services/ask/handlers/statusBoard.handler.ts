@@ -146,7 +146,9 @@ export function statusBoardFromView(view: StatusBoardView, propertyId: string, c
         needsInfo: Boolean(item.needsInstallDateForPrediction),
         href: null,
         ...statusBoardShelfFacts(item),
-        ...statusBoardCaptureFields(item),
+        // The install-date capture writes the inventory item, which a viewer cannot do: offer it only to someone who can, so a
+        // viewer is not shown an action the server would refuse.
+        ...(canChange ? statusBoardCaptureFields(item) : { id: item.id }),
         // An item that needs its install date keeps that capture (it dispatches with the inventory id); every other item can be corrected.
         ...(canChange && !item.needsInstallDateForPrediction ? {
           entityType: STATUS_BOARD_ITEM_ENTITY_TYPE,
