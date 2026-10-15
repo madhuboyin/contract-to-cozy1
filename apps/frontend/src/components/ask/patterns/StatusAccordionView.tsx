@@ -5,6 +5,8 @@ import { ChevronDown, ChevronUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { AskGroupedListItem, AskPresentationBlock } from '@/features/ask/types';
 import type { ItemActionHandler } from './PatternParts';
+import { CollectionStatusNote } from './CollectionStatusNote';
+import type { AskCollectionDescriptor } from '@/features/ask/types';
 
 type GroupedListBlock = Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>;
 type Section = GroupedListBlock['sections'][number];
@@ -15,16 +17,23 @@ function itemSummary(item: AskGroupedListItem): string | null {
   return [item.timingLabel, item.description].filter(Boolean).join(' · ') || null;
 }
 
-export function StatusAccordionView({ sections, onItemAction, disabled }: {
+export function StatusAccordionView({ sections, collection, onItemAction, disabled }: {
   sections: Section[];
+  collection?: AskCollectionDescriptor;
   onItemAction: ItemActionHandler;
   disabled: boolean;
 }) {
   const firstSection = sections.find((section) => section.items.length > 0) ?? sections[0];
   const [activeKey, setActiveKey] = useState(firstSection?.id ?? '');
+  const [showAll, setShowAll] = useState<Record<string, boolean>>({});
   const [expandedId, setExpandedId] = useState<string | null>(firstSection?.items[0]?.id ?? null);
   const activeSection = sections.find((section) => section.id === activeKey) ?? firstSection;
-  const activeItems = activeSection?.items ?? [];
+  const allItems = activeSection?.items ?? [];
+  // The producer's disclosure boundary (initialVisibleCount) is a local view choice: the rest are already delivered.
+  const limit = activeSection?.initialVisibleCount;
+  const expandedList = !limit || showAll[activeSection?.id ?? ''] || allItems.length <= limit;
+  const activeItems = expandedList ? allItems : allItems.slice(0, limit);
+  const hiddenCount = allItems.length - activeItems.length;
   const activeLabel = tabLabel(activeSection?.title ?? 'Status');
 
   const select = (key: string, items: AskGroupedListItem[]) => {
@@ -70,6 +79,13 @@ export function StatusAccordionView({ sections, onItemAction, disabled }: {
           </li>;
         })}
       </ul>
+      {(hiddenCount > 0 || (limit && showAll[activeSection?.id ?? ''] && allItems.length > limit)) && <div className="px-3 pb-3">
+        <button type="button" onClick={() => setShowAll((current) => ({ ...current, [activeSection?.id ?? '']: !current[activeSection?.id ?? ''] }))}
+          className="min-h-11 text-sm font-semibold text-teal-800 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-600">
+          {hiddenCount > 0 ? `Show ${hiddenCount} more` : 'Show fewer'}
+        </button>
+      </div>}
+      <CollectionStatusNote collection={collection} className="px-3 pb-3 text-xs text-slate-500" />
     </div>
   );
 }

@@ -128,6 +128,32 @@ export async function refinanceMonitorContextVersion(userId: string, propertyId:
   return askContextFingerprint({ preference, snapshotId: snapshot?.id ?? null, snapshotDate: snapshot?.date ?? null });
 }
 
+// Presentation Quality 2B: what a refinance scenario assumed, and whether each input is the homeowner's own figure or a default, so the
+// strip's numbers are never read as a quote. Pure: it reads only the parsed edit and the values the engine was given.
+export function refinanceScenarioAssumptions(input: {
+  edit: RefinanceScenarioEdit; targetRatePct: number; termLabel: string; benchmarkDate: string; mortgageAsOf: string | null;
+}): string[] {
+  const { edit, targetRatePct, termLabel, benchmarkDate, mortgageAsOf } = input;
+  const stated = (value: unknown) => value !== undefined && value !== null;
+  const dollars = (label: string, value: number | null | undefined) => (value != null ? [`${label}: ${money(value)}, as you stated.`] : []);
+  return [
+    stated(edit.targetRatePct)
+      ? `Target rate ${targetRatePct.toFixed(3)}%, the rate you gave. It is not a lender quote.`
+      : `Target rate ${targetRatePct.toFixed(3)}%, the latest 30-year benchmark as of ${benchmarkDate}, because you gave none. It is not a lender quote.`,
+    stated(edit.targetTerm) ? `Term ${termLabel}, as you stated.` : `Term ${termLabel}, assumed because you gave none.`,
+    edit.closingCostAmount != null ? `Closing costs: ${money(edit.closingCostAmount)}, as you stated.` : 'Closing costs: the scenario engine\u2019s default planning assumption, because you gave none.',
+    ...dollars('Additional fees', edit.additionalFeesAmount),
+    ...dollars('Lender credits', edit.lenderCreditsAmount),
+    ...dollars('Escrow funding', edit.escrowFundingAmount),
+    ...dollars('Prepayment penalty', edit.prepaymentPenaltyAmount),
+    ...dollars('Extra principal', edit.extraPrincipalAmount),
+    ...dollars('Recast principal', edit.recastPrincipalAmount),
+    ...dollars('Cash out', edit.cashOutAmount),
+    ...(stated(edit.discountPoints) ? [`Discount points: ${edit.discountPoints}, as you stated.`] : []),
+    `Your recorded mortgage balance, rate and remaining term are used as recorded${mortgageAsOf ? ` (as of ${mortgageAsOf.slice(0, 10)})` : ''}; asking this changed none of them.`,
+  ];
+}
+
 // FRD ASK_COZY_CROSS_DOMAIN_INTERACTION_ROLLOUT_FRD.md Phase 3 exit
 // criterion / F02 fix (docs/architecture/ASK_COZY_PHASE3_PHASE7_FINANCIAL_ACCEPTANCE_VERIFICATION.md):
 // REFINANCE_ANALYSIS previously had no way to edit a scenario assumption at
@@ -528,8 +554,17 @@ async function refinanceAnalysisResult(userId: string, propertyId: string, messa
             { id: 'objective', values: { metric: 'Planning objective', value: scenario.objective.replace(/_/g, ' ').toLowerCase(), context: `Recommended term: ${scenario.recommendedTerm.replace(/_/g, ' ').toLowerCase()}` } },
           ], actions: [],
         }, {
+          type: 'ASSUMPTIONS', id: 'refinance-scenario-assumptions', title: 'What this scenario assumes',
+          items: refinanceScenarioAssumptions({
+            edit: scenarioEdit, targetRatePct, termLabel, benchmarkDate: marketSnapshot.date,
+            mortgageAsOf: profile!.mortgageBalanceAsOfDate?.toISOString() ?? null,
+          }),
+        }, {
           type: 'EVIDENCE', id: 'refinance-scenario-evidence', title: 'Sources used',
-          items: [{ label: 'Current mortgage details', source: 'Property Financing Profile', observedAt: profile!.mortgageBalanceAsOfDate?.toISOString() ?? profile!.updatedAt.toISOString() }],
+          items: [
+            { label: 'Current mortgage details', source: 'Property Financing Profile', observedAt: profile!.mortgageBalanceAsOfDate?.toISOString() ?? profile!.updatedAt.toISOString() },
+            { label: '30-year market benchmark', source: `${marketSnapshot.source}${marketSnapshot.sourceRef ? ` \u00b7 ${marketSnapshot.sourceRef}` : ''}`, observedAt: `${marketSnapshot.date}T00:00:00.000Z` },
+          ],
         }, {
           type: 'BOUNDARY', id: 'refinance-scenario-boundary', title: 'Illustrative scenario—not a lender quote or a saved plan',
           body: 'This models the rate, term, costs, credits, points, principal, recast, cash-out, credit band, and objective you stated. Actual eligibility, APR, and closing costs depend on lender underwriting. Nothing here changes your recorded mortgage facts or enables rate monitoring.',

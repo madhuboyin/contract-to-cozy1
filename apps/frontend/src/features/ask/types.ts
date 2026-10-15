@@ -30,6 +30,15 @@ export interface AskAction {
 // distinct from the label/message a human reads.
 export type AskItemActionInteractionType = 'CONVERSATION_CONTINUE' | 'FILTER_RESULT' | 'MUTATE_RECORD' | 'NAVIGATE' | 'CONFIRM' | 'EDIT_PROPOSAL' | 'REFRESH' | 'DISMISS' | 'REMIND_LATER';
 
+// Presentation Quality 2A: a producer-declared account of how much of a collection this block carries. Mirrors the backend contract.
+export interface AskCollectionDescriptor {
+  sourceTotal: number | null;
+  fetchedCount: number;
+  deliveredCount: number;
+  nextPageAvailable: boolean;
+  deliveryTruncated: boolean;
+}
+
 export interface AskGroupedListItemAction {
   id: string;
   label: string;
@@ -101,7 +110,7 @@ export type AskPresentationBlock =
   }
   | { type: 'SUMMARY'; id: string; title: string; body: string; tone: 'DEFAULT' | 'POSITIVE' | 'CAUTION' | 'CRITICAL'; actions: AskAction[]; chips?: AskAnswerChip[]; headline?: string; supportLine?: string }
   | { type: 'PROACTIVE_INSIGHT'; id: string; title: string; body: string; tone: 'DEFAULT' | 'POSITIVE' | 'CAUTION' | 'CRITICAL'; triggerSource: string; actions: AskAction[] }
-  | { type: 'GROUPED_LIST'; id: string; title: string; description?: string | null; listDensity?: 'DENSE'; sections: Array<{ id: string; title: string; caption?: string | null; count: number; offset?: number; initialVisibleCount?: number; items: AskGroupedListItem[] }>; actions: AskAction[]; filters: AskGroupedListFilter[]; presentation?: AskGroupedListPresentation }
+  | { type: 'GROUPED_LIST'; id: string; title: string; description?: string | null; listDensity?: 'DENSE'; sections: Array<{ id: string; title: string; caption?: string | null; count: number; offset?: number; initialVisibleCount?: number; items: AskGroupedListItem[] }>; actions: AskAction[]; filters: AskGroupedListFilter[]; presentation?: AskGroupedListPresentation; collection?: AskCollectionDescriptor }
   | { type: 'TABLE'; id: string; title: string; description?: string | null; preferredPresentation?: 'AUTO' | 'TABLE' | 'CARDS'; columns: Array<{ key: string; label: string }>; rows: Array<{ id: string; values: Record<string, string> }>; totalCount?: number; actions: AskAction[] }
   | { type: 'CAPABILITY_LIST'; id: string; title: string; description?: string | null; capabilities: Array<{ id: string; label: string; description: string; expectedOutput: string; href: string; inlineLaunch: { interactionType: 'CONVERSATION_CONTINUE'; operationId: string; message: string } | null; inlineBoundary: string; readiness: 'READY' | 'NEEDS_PROPERTY' | 'NEEDS_CONTEXT' | 'UNAVAILABLE' | 'AVAILABLE'; readinessLabel: string | null; readinessReasons: string[]; releaseStage: 'ACTIVE' | 'BETA' }> }
   | { type: 'EVIDENCE'; id: string; title: string; items: Array<{ label: string; source: string | null; observedAt: string | null; claim?: { targetBlockId: string; targetItemId: string | null; text: string } | null }> }

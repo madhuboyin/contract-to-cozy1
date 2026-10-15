@@ -13,6 +13,7 @@ import { PatternFrame } from '../patterns/PatternParts';
 import { RoomMapView } from '../patterns/RoomMapView';
 import { ShelvesView } from '../patterns/ShelvesView';
 import { StatusAccordionView } from '../patterns/StatusAccordionView';
+import { CollectionStatusNote } from '../patterns/CollectionStatusNote';
 import { DocumentResultList } from '../DocumentResultList';
 import { HomeEventResultList } from '../HomeEventResultList';
 import { HouseholdResultList } from '../HouseholdResultList';
@@ -448,10 +449,13 @@ export const GroupedListBlock: AskBlockRenderer<'GROUPED_LIST'> = (props) => {
   if (props.block.id === 'home-event-radar-feed') {
     const { block, propertyId, itemActionsDisabled, onFilterClick, onItemAction, onAccessLost } = props;
     const declaresDeck = block.presentation?.pattern === 'DECK';
-    return <RadarEventResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onFilter={onFilterClick} onAction={onItemAction} onAccessLost={onAccessLost}
-      link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>}
-      deck={decision.pattern === 'DECK' ? { swipeRightActionId: decision.swipeRightActionId, swipeLeftActionId: decision.swipeLeftActionId } : null}
-      onChooseLayout={declaresDeck && decision.offersChoice && controls ? (layout) => setPreference(layout === 'LIST' ? 'LIST' : 'AUTO') : undefined} />;
+    return <>
+      <RadarEventResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onFilter={onFilterClick} onAction={onItemAction} onAccessLost={onAccessLost}
+        link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>}
+        deck={decision.pattern === 'DECK' ? { swipeRightActionId: decision.swipeRightActionId, swipeLeftActionId: decision.swipeLeftActionId } : null}
+        onChooseLayout={declaresDeck && decision.offersChoice && controls ? (layout) => setPreference(layout === 'LIST' ? 'LIST' : 'AUTO') : undefined} />
+      <CollectionStatusNote collection={block.collection} />
+    </>;
   }
   if (decision.pattern) {
     const { block, itemActionsDisabled, onFilterClick, onItemAction, onBatchItemAction } = props;
@@ -461,7 +465,7 @@ export const GroupedListBlock: AskBlockRenderer<'GROUPED_LIST'> = (props) => {
         disabled={itemActionsDisabled} actions={block.actions}>
         {decision.pattern === 'CHOICE_GRID' && <ChoiceGridView sections={block.sections} onItemAction={onItemAction} disabled={itemActionsDisabled} />}
         {decision.pattern === 'BUDGET_BREAKDOWN' && <BudgetBreakdownView sections={block.sections} />}
-        {decision.pattern === 'STATUS_ACCORDION' && <StatusAccordionView sections={block.sections} onItemAction={onItemAction} disabled={itemActionsDisabled} />}
+        {decision.pattern === 'STATUS_ACCORDION' && <StatusAccordionView sections={block.sections} collection={block.collection} onItemAction={onItemAction} disabled={itemActionsDisabled} />}
         {decision.pattern === 'SHELVES' && <ShelvesView sections={block.sections} moreAction={block.actions[0]} onItemAction={onItemAction} disabled={itemActionsDisabled} />}
         {decision.pattern === 'DECK' && <CardDeckView items={groupedListItems(block)} swipeRightActionId={decision.swipeRightActionId} swipeLeftActionId={decision.swipeLeftActionId} onItemAction={onItemAction} disabled={itemActionsDisabled}
           batch={decision.batch} onBatch={decision.batch && onBatchItemAction ? (decisions) => onBatchItemAction({ operationId: decision.batch!.operationId, entityType: decision.batch!.entityType, message: decision.batch!.message, decisions }) : undefined} />}

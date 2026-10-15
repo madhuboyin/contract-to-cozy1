@@ -14,6 +14,7 @@ import { classifiedApplianceType, formatMajorApplianceType, inferMajorApplianceT
 import { InventoryService, ROOM_REQUIRED_CATEGORIES } from '../../inventory.service';
 import { type CorrectionOption } from '../askCorrectionFields';
 import { humanDate } from '../askFormatting';
+import { collectionDescriptor } from '../support/collectionDescriptor';
 import { durableFreeTextClarification, ensurePropertyAccess, exactEntityMatch, homeEventCorrectionItemActions, INVENTORY_CATEGORY_VALUES, InventoryCreateInputSchema, InventoryItemCorrectionInputSchema, isValidDateEditInput, MAX_RESULT_ITEMS } from '../askHandlerSupport';
 import { INVENTORY_ADD_MESSAGE, inventoryAddItemAction, inventoryShowAllAction } from './inventoryAskActions';
 import { isIncompleteInventoryRequest, isLifecycleInventoryRequest } from '../askInventoryIntent';
@@ -421,6 +422,10 @@ async function inventoryLookupResult(
       ...(access.role !== HouseholdRole.VIEWER ? [inventoryAddItemAction()] : []),
     ],
   }];
+  // Presentation Quality 2A: the whole filtered set was read; at most MAX_RESULT_ITEMS are delivered and this handler has no
+  // continuation, so a larger set is truncated with no next page (the list shows "Showing X of Y", not a Next control).
+  const resultsBlock = blocks[0];
+  if (resultsBlock.type === 'GROUPED_LIST') resultsBlock.collection = collectionDescriptor({ sourceTotal: matches.length, fetchedCount: matches.length, sections: resultsBlock.sections, nextPageAvailable: false });
 
   if (historyFocus && selectedItem) {
     const events = await prisma.homeEvent.findMany({

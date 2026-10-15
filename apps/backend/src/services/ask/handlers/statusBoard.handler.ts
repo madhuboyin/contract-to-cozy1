@@ -5,6 +5,7 @@ import type { AskOperationResult } from '../askOperationRegistry';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { readableCode } from '../askFormatting';
 import { ensurePropertyAccess } from '../askHandlerSupport';
+import { collectionDescriptor } from '../support/collectionDescriptor';
 import {
   STATUS_BOARD_COMMAND_ACTION_IDS, STATUS_BOARD_COMMAND_MESSAGES, STATUS_BOARD_ITEM_ENTITY_TYPE, STATUS_BOARD_PROPERTY_ENTITY_TYPE,
 } from '../support/statusBoardCommand';
@@ -31,6 +32,7 @@ export const STATUS_BOARD_MISSING_INFO_SECTION_ID = 'status-board-needs-info';
 export const statusBoardIsUnknown = (item: { condition?: unknown; needsInstallDateForPrediction?: boolean | null }): boolean =>
   Boolean(item.needsInstallDateForPrediction) && item.condition === 'GOOD';
 export const STATUS_BOARD_ASK_LIMIT = 100;
+const STATUS_BOARD_INITIAL_VISIBLE = 6;
 
 // IW-PRES-014 (FRD v1.84): the shelf-card facts for one Status Board item. Only "Needs action" is a caution; the
 // timing line is the recorded age, or says the install date is missing. No cost is recorded here.
@@ -103,7 +105,10 @@ export function statusBoardFromView(view: StatusBoardView, propertyId: string, c
   const sections = sectionDefs.map(({ id, title, rows }) => {
     return {
       id, title, count: rows.length,
-      items: rows.slice(0, 25).map((item) => ({
+      // Every fetched row is delivered (the board read is at most 100, the block's per-section limit); the shelf stays compact
+      // through `initialVisibleCount` and a local "Show more", so a section's count is never larger than what it carries.
+      initialVisibleCount: STATUS_BOARD_INITIAL_VISIBLE,
+      items: rows.map((item) => ({
         title: item.displayName || readableCode(item.category),
         description: (item.computedReasons ?? []).filter((reason: any) => reason?.code !== 'ALL_CLEAR' && reason?.detail).map((reason: any) => reason.detail).join('; ') || null,
         // A card's meta holds at most six entries (the contract's limit). A fully recorded item has seven, and the
@@ -128,6 +133,8 @@ export function statusBoardFromView(view: StatusBoardView, propertyId: string, c
   if (items.length) {
     blocks.push({ type: 'GROUPED_LIST', filters: [], id: 'status-board-items', title: 'Explore your home status',
       presentation: { pattern: 'STATUS_ACCORDION' }, description: 'Each with why, from age, warranty and maintenance records.', sections,
+      // The Ask read is the board's first page only and has no inline continuation, so a board larger than that says so here.
+      collection: collectionDescriptor({ sourceTotal: total, fetchedCount: items.length, sections, nextPageAvailable: false }),
       actions: [] });
   }
   blocks.push({

@@ -200,6 +200,23 @@ describe('status accordion', () => {
     expect(screen.queryByRole('button', { name: 'List' })).not.toBeInTheDocument();
   });
 
+  test('delivers rows beyond the disclosure boundary behind a local Show more, and states a larger source honestly', () => {
+    const many = list({
+      id: 'status-board-items', title: 'Explore your home status', description: 'Each with why.', presentation: { pattern: 'STATUS_ACCORDION' },
+      collection: { sourceTotal: 140, fetchedCount: 8, deliveredCount: 8, nextPageAvailable: false, deliveryTruncated: false },
+    }, [
+      { id: 'status-board-monitor', title: 'Monitor', count: 8, initialVisibleCount: 3, items: Array.from({ length: 8 }, (_, i) => item(`m${i}`, { title: `Appliance ${i}` })) },
+    ]);
+    const { container } = render(<Harness block={many} />);
+    expect(container.querySelectorAll('[data-status-accordion-item]')).toHaveLength(3);
+    expect(screen.getByRole('tab', { name: 'Monitor (8)' })).toBeVisible();
+    expect(container.querySelector('[data-collection-note]')).toHaveTextContent('Showing 8 of 140.');
+    fireEvent.click(screen.getByRole('button', { name: 'Show 5 more' }));
+    expect(container.querySelectorAll('[data-status-accordion-item]')).toHaveLength(8);
+    fireEvent.click(screen.getByRole('button', { name: 'Show fewer' }));
+    expect(container.querySelectorAll('[data-status-accordion-item]')).toHaveLength(3);
+  });
+
   test('the pattern resolver keeps the purpose-built presentation instead of offering generic layouts', () => {
     expect(resolveGroupedListPattern(status, 'AUTO')).toEqual({ pattern: 'STATUS_ACCORDION', offersChoice: false, reason: 'DECLARED' });
   });

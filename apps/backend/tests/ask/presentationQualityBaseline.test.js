@@ -22,24 +22,24 @@ const board = (n, total = n, make = (i) => row(`i${i}`, ['ACTION_NEEDED', 'MONIT
 );
 const listOf = (result) => result.blocks.find((block) => block.id === 'status-board-items');
 
-test('Status Board baseline: every size parses, and section counts equal the rows in the source (never more than shown beyond the 25-row cap)', () => {
+test('Status Board baseline: every size parses, and a section delivers every row it counts (2A removed the 25-row cap)', () => {
   for (const n of [1, 5, 20, 50, 100]) {
     const result = board(n);
     const list = listOf(result);
     AskPresentationBlockSchema.parse(list);
     const counted = list.sections.reduce((sum, section) => sum + section.count, 0);
     assert.equal(counted, n, `${n} items: section counts add up to the items read`);
-    for (const section of list.sections) assert.ok(section.items.length <= 25, 'a section delivers at most 25 rows');
+    for (const section of list.sections) assert.equal(section.items.length, section.count);
   }
 });
 
-test('Status Board baseline: past 25 rows a section reports its true count but delivers 25, with no per-section signal of that (Phase 2A)', () => {
+test('Status Board baseline: 100 rows in one section are all delivered, disclosed locally by initialVisibleCount (2A)', () => {
   const list = listOf(board(100, 100, (i) => row(`m${i}`, 'MONITOR')));
   const monitor = list.sections.find((section) => section.id === 'status-board-monitor');
   assert.equal(monitor.count, 100);
-  assert.equal(monitor.items.length, 25);
-  // BASELINE: no sourceTotal/deliveredCount/nextPage fields exist on a section yet. Phase 2A adds them.
-  assert.deepEqual(Object.keys(monitor).sort(), ['count', 'id', 'items', 'title']);
+  assert.equal(monitor.items.length, 100);
+  assert.equal(monitor.initialVisibleCount, 6);
+  assert.equal(list.collection.deliveredCount, 100);
 });
 
 test('Status Board baseline: more than the route page says so in a limitation and in the summary body', () => {

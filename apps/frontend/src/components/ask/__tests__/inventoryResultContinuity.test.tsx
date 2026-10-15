@@ -139,6 +139,31 @@ test('server-paged inventory sections navigate inline and retain "Open home inve
   expect(screen.getByText('Open home inventory')).toBeInTheDocument();
 });
 
+test('a truncated inventory list without a declared continuation shows "Showing X of Y" and no Next control (2A)', () => {
+  const response = execution();
+  response.blocks = [{
+    ...block,
+    collection: { sourceTotal: 73, fetchedCount: 73, deliveredCount: 3, nextPageAvailable: false, deliveryTruncated: true },
+    sections: [{ ...block.sections[0], count: 73 }],
+  }];
+  const { container } = render(<List response={response} />);
+  expect(container.querySelector('[data-collection-note]')).toHaveTextContent('Showing 3 of 73.');
+  expect(screen.queryByRole('button', { name: /Next page of Living Home Record/ })).not.toBeInTheDocument();
+});
+
+test('a declared continuation still offers Next', () => {
+  const onPage = jest.fn();
+  const response = execution();
+  response.blocks = [{
+    ...block,
+    collection: { sourceTotal: 73, fetchedCount: 3, deliveredCount: 3, nextPageAvailable: true, deliveryTruncated: false },
+    sections: [{ ...block.sections[0], count: 73, offset: 0 }],
+  }];
+  render(<List response={response} onPage={onPage} />);
+  fireEvent.click(screen.getByRole('button', { name: /Next page of Living Home Record/ }));
+  expect(onPage).toHaveBeenCalledWith('items', 'NEXT');
+});
+
 test('inline inventory detail exposes declared correction actions and dispatches the exact item identity; none render without declared actions', async () => {
   window.history.replaceState({}, '', '/dashboard/ask?propertyId=home&sessionId=session');
   jest.spyOn(api, 'getInventoryItem').mockResolvedValue({ success: true, data: { item: canonicalItem() } } as Awaited<ReturnType<typeof api.getInventoryItem>>);

@@ -219,6 +219,19 @@ const GroupedListFilterSchema = z.object({
   active: z.boolean(),
 });
 
+// Presentation Quality 2A: one honest vocabulary for "how much of the collection is this". Producer-declared and optional
+// (a list without it keeps the older section `count` / `items.length` reading). `sourceTotal` is the authoritative size of the
+// collection in its source, null when the producer cannot know it; `fetchedCount` is what the producer read; `deliveredCount`
+// is what this block carries (the sum of its section items); `nextPageAvailable` is true only when an authoritative continuation
+// exists; `deliveryTruncated` is true when the producer read more than it delivered.
+const AskCollectionDescriptorSchema = z.object({
+  sourceTotal: z.number().int().nonnegative().nullable(),
+  fetchedCount: z.number().int().nonnegative(),
+  deliveredCount: z.number().int().nonnegative(),
+  nextPageAvailable: z.boolean(),
+  deliveryTruncated: z.boolean(),
+});
+
 const GroupedListBlockSchema = z.object({
   type: z.literal('GROUPED_LIST'),
   id: z.string(),
@@ -246,6 +259,17 @@ const GroupedListBlockSchema = z.object({
   // Sixteen: the Home Event Radar feed offers timing (4), source (all + 6), dismissed events (2) and a way back (1) = 14 when every source has events.
   filters: z.array(GroupedListFilterSchema).max(16).default([]),
   presentation: GroupedListPresentationSchema.optional(),
+  collection: AskCollectionDescriptorSchema.optional(),
+}).superRefine((block, ctx) => {
+  const collection = block.collection;
+  if (!collection) return;
+  const issue = (message: string) => ctx.addIssue({ code: 'custom', path: ['collection'], message });
+  const delivered = block.sections.reduce((sum, section) => sum + section.items.length, 0);
+  if (collection.deliveredCount !== delivered) issue(`deliveredCount ${collection.deliveredCount} must equal the ${delivered} items the sections carry.`);
+  if (collection.deliveredCount > collection.fetchedCount) issue('deliveredCount cannot exceed fetchedCount.');
+  if (collection.sourceTotal != null && collection.fetchedCount > collection.sourceTotal) issue('fetchedCount cannot exceed sourceTotal.');
+  if (collection.deliveryTruncated !== collection.deliveredCount < collection.fetchedCount) issue('deliveryTruncated must be true exactly when fewer items were delivered than fetched.');
+  if (collection.nextPageAvailable && collection.sourceTotal != null && collection.sourceTotal <= collection.deliveredCount) issue('nextPageAvailable cannot be true when the whole source was delivered.');
 });
 
 const TableBlockSchema = z.object({

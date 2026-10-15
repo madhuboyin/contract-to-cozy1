@@ -27,6 +27,7 @@ import { containsFilterContinuation } from '../askFollowUpContext';
 import { type AskViewState } from '../support/executionState';
 import { loadAskViewState } from './maintenance.handler';
 import { receiptFollowUpAction } from '../support/receiptFollowUps';
+import { collectionDescriptor } from '../support/collectionDescriptor';
 
 const RADAR_SOURCE_FAMILY_LABEL: Record<string, string> = {
   weather: 'Weather', air_quality: 'Air quality', disaster: 'Disaster', utility: 'Utility', tax: 'Tax', insurance: 'Insurance', other: 'Other',
@@ -300,6 +301,11 @@ async function homeEventRadarFeedResult(userId: string, propertyId: string, mess
     })) : [{ id: 'radar-no-match', title: 'No matching events', count: 0, items: [] }],
     actions: [...radarFeedBlockActions(access.role)],
   }];
+  // Presentation Quality 2A: `page.totalCount` is the feed's authoritative size; the cursor is the continuation.
+  const feedBlock = blocks.find((block) => block.id === 'home-event-radar-feed');
+  if (feedBlock?.type === 'GROUPED_LIST') {
+    feedBlock.collection = collectionDescriptor({ sourceTotal: page.totalCount, fetchedCount: items.length, sections: feedBlock.sections, nextPageAvailable: Boolean(page.pageInfo?.hasNextPage) });
+  }
   const degraded = page.feedState === 'PARTIAL_COVERAGE' || page.feedState === 'DEGRADED' || page.feedState === 'UNCOVERED';
   // A degraded feed already carries its own coverage boundary; the general one is added only when coverage is complete.
   if (!degraded) blocks.push(RADAR_FEED_BOUNDARY);

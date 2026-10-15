@@ -1023,6 +1023,35 @@ Slice choice for Phase 3C: **refinance** is the primary comparison (pure, determ
 | P2 | Answer-relevance validation is razor-thin for record-dependent answers (0.1209 vs 0.12); other operations may be one data change from the same flip | 3A |
 | P2 | `negotiationShieldReview.test.tsx` fails `tsc` (missing `onCollectionPage`, `onAccessLost`) and `displayPatterns` "room map" test fails; both pre-date this work | backlog |
 
+## 14.2 Phase 2 implementation status (2026-10-14)
+
+**2A: collection semantics: done for three adopters.** `GROUPED_LIST` gains an optional, producer-declared `collection` descriptor (`sourceTotal`, `fetchedCount`, `deliveredCount`, `nextPageAvailable`, `deliveryTruncated`). The schema rejects contradictory combinations (delivered must equal the section items, fetched cannot exceed the source, truncation must be declared, no next page when the whole source was delivered). Existing section `count` / `offset` / `initialVisibleCount` keep their meaning; no new top-level block, and `TABLE.totalCount` is unchanged.
+
+| Adopter | Declared |
+|---|---|
+| Status Board | Delivers every fetched row (the silent 25-row cap is gone); `initialVisibleCount` 6 with a local Show more in `StatusAccordionView`; `sourceTotal` is the board total, no continuation |
+| Inventory | `sourceTotal` = matches, delivered at most 50, no continuation, so the list shows "Showing X of Y" |
+| Home Event Radar | `sourceTotal` = feed `totalCount`, `nextPageAvailable` = cursor `hasNextPage` |
+
+Defect fixed on the way: the Inventory, Documents and Home Event lists showed a **Next** control whenever a section's `count` exceeded its rows, but only Maintenance and Project Tracker handle `ASK_COLLECTION_SECTION`. `sectionHasNextPage` now requires the producer's `nextPageAvailable` when a descriptor is present; producers without a descriptor keep the older rule until adopted.
+
+Not migrated yet: Documents, Home Events, Maintenance (its priority-stack batching must be confirmed to use the same meanings first), and the generic grouped-list "+N more not shown here" line.
+
+**2B: trust and rationale: done for the refinance scenario.** Reused existing blocks. The scenario answer now carries an `ASSUMPTIONS` block (`refinanceScenarioAssumptions`: each input labelled as the homeowner's own figure or a default, with the benchmark basis date) and a dated benchmark item in `EVIDENCE`. `ASSUMPTIONS` was added to the operation's `allowedBlockTypes` and the refinance skill manifest. No new response field was needed.
+
+**2C: action hierarchy: verified, one check added.** Server-declared `PRIMARY` / `SECONDARY` / `QUIET` are preserved; workflow actions already require `operationId` and `message` in the schema. Contextual `CONTINUE` already outranks discovery and the registry validator rejects tier overlap (now asserted in `presentationQualityContract.test.js`). New: the evaluator reports more than one visible primary action across block-level actions, with an explicit exception flag. Not done: overflow consolidation (no cluttered producer found among the three slices; revisit in Phase 3 review).
+
+**2D: evaluator: done.** `services/ask/presentation/` (`presentationQuality.contract.ts`, `evaluatePresentationQuality.ts`) is pure and returns structured issues; profile is a test input, not a persisted response field. Covered negatives: unknown shown as Good, descriptor contradictions, next page with no continuation, section count below delivered, table total below rows, two primary actions, no answer first, attention item without a reason, guide without a progress source, material comparison without basis or assumptions.
+
+### Phase 2 findings
+
+| Priority | Finding | Planned |
+|---|---|---|
+| P1 | Documents and Home Event lists still use the older count-versus-rows Next rule | Phase 5 Wave B |
+| P1 | A scenario answer still opens with its hypothetical disclaimer instead of the tradeoff; rationale sits in a table cell | 3C |
+| P2 | The evaluator is not yet wired into producer fixtures broadly (three slices only) | 3A |
+| P2 | Pre-existing failures seen in the skill-related sweep (all fail identically on a clean tree): `refinanceScenarioEditParsing` (5), `askRoutingCalibration` (2), `skillAdapterRegistry`, `skillTaxonomyExpansion`, `exactFourStarterPoolMeasurement`, `presentationIdentityStarterMeasurement`, `starterEmptyHomeReadiness`, `starterRegistryPinned`, `healthGapCapture`, `homeRecordAdds`, `homeToolRuns`, `sellerPrepProgress` | backlog |
+
 ## 15. Final completion criteria
 
 The plan is complete when:
