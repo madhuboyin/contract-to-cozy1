@@ -44,6 +44,11 @@ export interface PresentationQualityInput {
    * or an emergency. A fixture must say so; the evaluator never infers it.
    */
   allowMultiplePrimaryActions?: boolean;
+  /**
+   * Ids of list blocks that are themselves the comparison (a "ways to pay" list rather than a COMPARISON or TABLE block). Declared by
+   * the fixture, never inferred, so a COMPARE result still has to name what is being compared.
+   */
+  comparisonBlockIds?: readonly string[];
   /** Stricter checks apply to a declared material decision (default for COMPARE); a simple low-risk answer is never failed for lacking evidence. */
   material?: boolean;
 }

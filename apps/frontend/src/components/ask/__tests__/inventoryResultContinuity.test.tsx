@@ -147,7 +147,8 @@ test('a truncated inventory list without a declared continuation shows "Showing 
     sections: [{ ...block.sections[0], count: 73 }],
   }];
   const { container } = render(<List response={response} />);
-  expect(container.querySelector('[data-collection-note]')).toHaveTextContent('Showing 3 of 73.');
+  // The section states its own window; the list offers no Next control because the producer declared no continuation.
+  expect(container.textContent).toMatch(/Showing 1–3 of 73|Server results 1–3 of 73/);
   expect(screen.queryByRole('button', { name: /Next page of Living Home Record/ })).not.toBeInTheDocument();
 });
 

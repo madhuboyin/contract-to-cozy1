@@ -78,7 +78,8 @@ export function evaluatePresentationQuality(input: PresentationQualityInput): Pr
   }
 
   if (profile === 'COMPARE') {
-    if (!blocks.some((block) => block.type === 'COMPARISON' || block.type === 'SCENARIO_COMPARISON' || block.type === 'TABLE')) {
+    const declared = new Set(input.comparisonBlockIds ?? []);
+    if (!blocks.some((block) => block.type === 'COMPARISON' || block.type === 'SCENARIO_COMPARISON' || block.type === 'TABLE' || declared.has(block.id))) {
       add('COMPARISON_BLOCK_MISSING', 'A COMPARE result carries no comparison or table.');
     }
     if (input.material !== false) {

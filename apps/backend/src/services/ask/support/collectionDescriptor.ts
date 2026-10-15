@@ -32,14 +32,17 @@ type SectionLike = { count: number; offset?: number; items: readonly unknown[] }
 type BlockLike = { type: string; collection?: unknown; sections?: readonly SectionLike[] };
 
 /**
- * Presentation Quality 5: a producer that did not declare its own collection still withholds rows in two ways, and both are stated by
- * the producer's own per-section counts. This derives the descriptor from them, only when rows are withheld, so no list offers a
- * control or a count that its handler cannot back:
- *  - sections with a server window (`offset`): the handler pages, so the source total is the sum of counts and a next page exists
- *    while any window ends before its count (only Maintenance and Project Tracker emit offsets, and both serve the continuation);
- *  - sections with `count` above the rows delivered and no window: rows were read and not delivered, with no continuation. The source
- *    total is left unknown rather than asserted, because a block's sections are buckets of one result by convention, not a proof.
- * A block that already declares `collection`, or that withholds nothing, is returned unchanged.
+ * Presentation Quality 5: a producer that did not declare its own collection still withholds rows in two ways, and both are visible in
+ * the producer's own per-section counts. This derives a CONSERVATIVE descriptor, only when rows are withheld, so no list offers a
+ * Next control its handler cannot serve. It claims only what the producer's shape proves:
+ *  - sections with a server window (`offset`): the section `count` is the full collection the window moves through (only Maintenance
+ *    and Project Tracker emit offsets, and both serve the continuation), so the source total is the sum of counts and a next page
+ *    exists while a window ends before its count;
+ *  - sections with `count` above the rows delivered and no window: the descriptor claims NO fetched count beyond what was delivered
+ *    (`count` may be the producer's source total, not what it read), NO source total (sections are buckets, not a proven partition)
+ *    and NO truncation flag. It says one thing: there is no continuation. The list states each section's own "showing X of count".
+ * A block that already declares `collection`, or that withholds nothing, is returned unchanged. A producer that knows its true source
+ * total should declare it (see collectionDescriptor above).
  */
 export function withDerivedCollectionDescriptor<T extends BlockLike>(block: T): T {
   if (block.type !== 'GROUPED_LIST' || block.collection || !block.sections || block.sections.length === 0) return block;
@@ -49,11 +52,10 @@ export function withDerivedCollectionDescriptor<T extends BlockLike>(block: T): 
   if (counted <= delivered) return block;
   const windowed = sections.some((section) => section.offset !== undefined);
   if (windowed) {
-    const sourceTotal = counted;
     const moreAhead = sections.some((section) => section.offset !== undefined && section.offset + section.items.length < section.count);
-    return { ...block, collection: { sourceTotal, fetchedCount: delivered, deliveredCount: delivered, nextPageAvailable: moreAhead, deliveryTruncated: false } };
+    return { ...block, collection: { sourceTotal: counted, fetchedCount: delivered, deliveredCount: delivered, nextPageAvailable: moreAhead, deliveryTruncated: false } };
   }
-  return { ...block, collection: { sourceTotal: null, fetchedCount: counted, deliveredCount: delivered, nextPageAvailable: false, deliveryTruncated: true } };
+  return { ...block, collection: { sourceTotal: null, fetchedCount: delivered, deliveredCount: delivered, nextPageAvailable: false, deliveryTruncated: false } };
 }
 
 export function withDerivedCollectionDescriptors<R extends { blocks: readonly BlockLike[] }>(result: R): R {

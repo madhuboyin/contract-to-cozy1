@@ -1,7 +1,6 @@
 'use client';
 
 import { sectionHasNextPage } from '@/features/ask/collectionStatus';
-import { CollectionStatusNote } from './patterns/CollectionStatusNote';
 import { useCalmAnswer, useCalmChrome } from './blocks/calmContext';
 import { ReactNode, useContext, useEffect, useRef, useState } from 'react';
 import { ExternalLink, Loader2, X } from 'lucide-react';
@@ -235,7 +234,7 @@ export function InventoryResultList({ block, propertyId, disabled, onAction, onF
           </table>
         </div>
         {controls && visible < section.items.length && <button type="button" className="mt-3 min-h-10 text-sm font-semibold text-teal-800" onClick={() => controls.change((view) => ({ ...view, visibleCounts: { ...view.visibleCounts, [section.id]: Math.min(section.items.length, visible + 5) } }))}>Show more {section.title.toLowerCase()} items ({offset + Math.min(visible, section.items.length)} of {section.count} reached)</button>}
-        {(offset > 0 || sectionHasNextPage(block, section)) && <nav className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3" aria-label={`${section.title} pages`}>
+        {(offset > 0 || sectionHasNextPage(block, section) || section.count > offset + section.items.length) && <nav className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3" aria-label={`${section.title} pages`}>
           <p className="text-xs text-slate-500">{calmChrome ? 'Showing' : 'Server results'} {section.items.length ? offset + 1 : 0}–{offset + section.items.length} of {section.count}</p>
           <div className="flex gap-2">
             {offset > 0 && <button type="button" className="min-h-10 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800" onClick={() => onPage(section.id, 'PREVIOUS')}>Previous page<span className="sr-only"> of {section.title}</span></button>}
@@ -244,7 +243,6 @@ export function InventoryResultList({ block, propertyId, disabled, onAction, onF
         </nav>}
       </div>;
     })}
-    <CollectionStatusNote collection={block.collection} />
     {detailItemId && detailItem && <InventoryItemDetail key={detailItemId} itemId={detailItemId} expectedPropertyId={propertyId} fallbackItem={detailItem} disabled={disabled} onAction={onAction} onAccessLost={onAccessLost} onClose={closeDetail} />}
     {listActions.some((action) => action.href || action.interactionType === 'START_WORKFLOW') && <div data-ask-action-footer="" className="flex flex-wrap gap-2 px-4 py-3 text-sm font-semibold text-teal-800">{listActions.map((action) => action.href ? <span key={action.id}>{link(action.href, <>{action.label}<ExternalLink className="ml-1 inline h-3.5 w-3.5" aria-hidden="true" /></>)}</span> : action.interactionType === 'START_WORKFLOW' ? <ActionLink key={action.id} action={calm ? { ...action, style: action.id === primaryActionId ? 'PRIMARY' : 'SECONDARY' } : action} /> : null)}</div>}
   </section>;

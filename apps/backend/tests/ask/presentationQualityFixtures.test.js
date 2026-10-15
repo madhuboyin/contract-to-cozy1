@@ -291,3 +291,45 @@ test('5 measurement guard: a 100-row Status Board payload stays well under the r
   const bytes = Buffer.byteLength(JSON.stringify(board(items)));
   assert.ok(bytes < 150 * 1024, `${bytes} bytes`);
 });
+
+// ---- Phase 5 follow-up: financing overview (a trust-adoption operation) -----------------------------------------------------------
+
+const { financingFromView } = require('../../src/services/ask/handlers/financing.handler.ts');
+const { FinancingCalculatorService } = require('../../src/services/financingCalculator.service.ts');
+
+const FIN_PROFILE = { mortgageStatus: 'MORTGAGED', mortgageType: 'CONVENTIONAL', currentMortgageBalanceCents: 21000000, interestRateBps: 650, monthlyPaymentCents: 195000, remainingTermMonths: 300 };
+const FIN_EQUITY = { id: 'e-1', estimatedValueCents: 50000000, estimatedValueSource: 'APPRECIATION_TRACKER', equityCents: 29000000, equityPercent: '58', ltvPercent: '42', helocCapacityCents: 21500000, helocEligible: true, computedAt: new Date() };
+const FIN_CALC = new FinancingCalculatorService().computeAll(4_000_000, { helocRateBps: 900, helRateBps: 875, personalLoanMinRateBps: 1100, personalLoanMaxRateBps: 2000, contractorPromoMonths: 12, contractorOngoingAprBps: 2699, opportunityCostRateBps: 600 }, { helocEligible: true, helocCapacityCents: 21500000 }, '2026-10-01T00:00:00.000Z');
+
+test('5 audit: the financing overview answers first and a named project compares the ways to pay with a structured, dated rate basis', () => {
+  runFixture({
+    id: 'audit-financing-overview', pattern: 'DIRECT_ANSWER', profile: 'DIRECT_ANSWER', message: 'How is my financing?', operationId: 'FINANCING_OVERVIEW',
+    build: () => financingFromView({ profile: FIN_PROFILE, equity: FIN_EQUITY, scenarios: [], calc: null, amountDollars: null }),
+    expect: { directAnswer: /About 58% equity/, requiredBlockTypes: ['GROUPED_LIST', 'BOUNDARY'] },
+  });
+  runFixture({
+    id: 'audit-financing-project', pattern: 'COMPARISON', profile: 'COMPARE', message: 'What would a $40,000 project cost to finance?', operationId: 'FINANCING_OVERVIEW',
+    build: () => financingFromView({ profile: FIN_PROFILE, equity: FIN_EQUITY, scenarios: [], calc: FIN_CALC, amountDollars: 40000 }),
+    expect: {
+      directAnswer: /Financing a \$40,000 project/, requiredBlockTypes: ['GROUPED_LIST', 'EVIDENCE', 'BOUNDARY'], comparisonBlockIds: ['financing-options'],
+      check: (result) => {
+        const evidence = result.blocks.find((block) => block.id === 'financing-options-evidence');
+        assert.match(evidence.items[0].observedAt, /^2026-10-01/);
+      },
+    },
+  });
+});
+
+test('5 audit: a compact-receipt command can emit only compact blocks, and the runtime allow-list rejects a list on it', () => {
+  const { assertSkillResultBlocksAllowed } = require('../../src/services/ask/support/answerGuards.ts');
+  const { ASK_OPERATION_DEFINITIONS } = require('../../src/services/ask/askOperationRegistry.ts');
+  const { classifyAdoption } = require('../../src/services/ask/presentation/adoptionLedger.ts');
+  const compact = Object.keys(ASK_OPERATION_DEFINITIONS).filter((id) => classifyAdoption(id).adoptionClass === 'COMPACT_RECEIPT');
+  assert.ok(compact.length > 0);
+  for (const id of compact) {
+    assert.equal(ASK_OPERATION_DEFINITIONS[id].allowedBlockTypes.some((type) => ['GROUPED_LIST', 'TABLE', 'TIMELINE', 'PRIORITY_LIST'].includes(type)), false, id);
+  }
+  const operationId = compact[0];
+  const list = { type: 'GROUPED_LIST', id: 'x', title: 't', filters: [], actions: [], sections: [] };
+  assert.throws(() => assertSkillResultBlocksAllowed(operationId, { status: 'ANSWERED', blocks: [list], suggestions: [] }), /not allowed|allowed|GROUPED_LIST/i);
+});

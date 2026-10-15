@@ -111,6 +111,11 @@ export function financingFromView(input: { profile: Profile; equity: Equity | nu
       sections: [{ id: 'financing-options-all', title: `For ${money(calc.projectCostCents / 100)}`, count: options.length, items: options.map((option) => ({ ...option, href: null })) }],
       actions: [],
     });
+    // Presentation Quality 5: the date the comparison's rates are as of, as structured evidence rather than only prose in a description.
+    blocks.push({
+      type: 'EVIDENCE', id: 'financing-options-evidence', title: 'Rates used',
+      items: [{ label: 'Rate assumptions for the ways to pay', source: 'Financing calculator rate assumptions', observedAt: new Date(calc.ratesAsOf).toISOString() }],
+    });
   } else if (amountDollars === null) {
     blocks.push({
       type: 'LIMITATION', id: 'financing-amount-hint', severity: 'INFO', title: 'Ask about a specific project',

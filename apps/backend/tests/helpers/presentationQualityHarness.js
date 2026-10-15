@@ -25,7 +25,7 @@ const PATTERNS = [
  *     requiredBlockTypes?: string[],     // trust: evidence / assumptions / boundary
  *     degradation?: 'NONE' | 'EMPTY' | 'PARTIAL' | 'ERROR',
  *     issues?: string[],                 // evaluator codes expected (default none)
- *     allowMultiplePrimaryActions?: boolean, material?: boolean,
+ *     allowMultiplePrimaryActions?: boolean, material?: boolean, comparisonBlockIds?: string[],
  *     check?: (result) => void,          // fixture-specific assertions
  *   }
  * }
@@ -52,7 +52,7 @@ function runFixture(fixture) {
   }
 
   const issues = evaluatePresentationQuality({
-    profile: fixture.profile, result, allowMultiplePrimaryActions: want.allowMultiplePrimaryActions, material: want.material,
+    profile: fixture.profile, result, allowMultiplePrimaryActions: want.allowMultiplePrimaryActions, material: want.material, comparisonBlockIds: want.comparisonBlockIds,
   }).map((issue) => issue.code);
   assert.deepEqual(issues.sort(), [...(want.issues ?? [])].sort(), `${fixture.id}: presentation quality issues`);
 

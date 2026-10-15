@@ -38,6 +38,7 @@ export const REVIEWED_OPERATIONS: Readonly<Record<string, string>> = {
   HVAC_DECISION_START: 'item-carrying warranty follow-up on the decision card, journey 4',
   BUYER_DEADLINES: 'exact task identity, reconciliation, journey 5',
   BUYER_PLAN_STATUS: 'reconciliation, journey 5',
+  FINANCING_OVERVIEW: 'ways-to-pay comparison with structured rate evidence (Phase 5 follow-up); overview and project fixtures',
   INSPECTION_REPORT_COMPARE: 'document-evidence fixture',
 };
 
@@ -54,7 +55,12 @@ export function classifyAdoption(operationId: string): AdoptionEntry {
     return { operationId, adoptionClass: 'NOT_APPLICABLE', reason: 'A safety or scope boundary, not a presentation pattern; its copy is governed by the safety policy.' };
   }
   if (family === 'COMMAND') {
-    return { operationId, adoptionClass: 'COMPACT_RECEIPT', reason: 'A confirmed write or proposal; its result is a compact receipt or review card, so no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator.' };
+    // Verified against what a command may emit, not its family alone: the runtime checks every emitted block against this allow-list
+    // (assertSkillResultBlocksAllowed), so a command whose list cannot include a list, table or timeline can only return a compact result.
+    if (definition.allowedBlockTypes.some((type) => LIST_BLOCKS.includes(type))) {
+      return { operationId, adoptionClass: 'REQUIRES_COLLECTION_ADOPTION', reason: 'A command whose result may carry a list (for example a choice of target): collection semantics apply, and the boundary derives them until the producer declares its own.' };
+    }
+    return { operationId, adoptionClass: 'COMPACT_RECEIPT', reason: 'A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator.' };
   }
   if (family === 'DECISION_ANALYSIS' || family === 'MONITOR') {
     return { operationId, adoptionClass: 'REQUIRES_TRUST_ADOPTION', reason: 'A material decision or monitor: needs rationale, basis date, assumptions and limits checked against the COMPARE or monitor profile.' };
@@ -63,7 +69,7 @@ export function classifyAdoption(operationId: string): AdoptionEntry {
     return { operationId, adoptionClass: 'SPECIALIZED_REVIEW_LATER', reason: 'A guide, discovery or grounded-guidance workflow with its own presentation; review against the GUIDE profile later.' };
   }
   if (definition.allowedBlockTypes.some((type) => LIST_BLOCKS.includes(type))) {
-    return { operationId, adoptionClass: 'REQUIRES_COLLECTION_ADOPTION', reason: 'A read that can return a list or table: declare the collection (source total, delivered, continuation) and check the Next control.' };
+    return { operationId, adoptionClass: 'REQUIRES_COLLECTION_ADOPTION', reason: 'A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total.' };
   }
   return { operationId, adoptionClass: 'SPECIALIZED_REVIEW_LATER', reason: 'A read with no list or table block allowed: a direct-answer profile only, not yet audited.' };
 }

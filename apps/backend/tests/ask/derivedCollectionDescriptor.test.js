@@ -16,9 +16,10 @@ test('a list that withholds nothing is returned unchanged', () => {
   assert.equal(withDerivedCollectionDescriptor(block), block);
 });
 
-test('rows withheld with no window are declared truncated with an unknown source total and no continuation', () => {
+test('rows withheld with no window claim no fetched count, no source total and no truncation, only that there is no continuation', () => {
   const block = withDerivedCollectionDescriptor(list([{ id: 'a', title: 'A', count: 30, items: items(20, 'a') }, { id: 'b', title: 'B', count: 4, items: items(4, 'b') }]));
-  assert.deepEqual(block.collection, { sourceTotal: null, fetchedCount: 34, deliveredCount: 24, nextPageAvailable: false, deliveryTruncated: true });
+  // count may be the producer's source total rather than what it read, so fetched equals delivered and nothing larger is asserted.
+  assert.deepEqual(block.collection, { sourceTotal: null, fetchedCount: 24, deliveredCount: 24, nextPageAvailable: false, deliveryTruncated: false });
   AskPresentationBlockSchema.parse(block);
 });
 
@@ -43,5 +44,6 @@ test('a result with nothing to derive is returned as the same object', () => {
   const result = { status: 'ANSWERED', blocks: [list([{ id: 's', title: 'S', count: 1, items: items(1) }])] };
   assert.equal(withDerivedCollectionDescriptors(result), result);
   const truncated = { status: 'ANSWERED', blocks: [list([{ id: 's', title: 'S', count: 5, items: items(1) }])] };
-  assert.equal(withDerivedCollectionDescriptors(truncated).blocks[0].collection.deliveryTruncated, true);
+  assert.equal(withDerivedCollectionDescriptors(truncated).blocks[0].collection.nextPageAvailable, false);
+  assert.equal(withDerivedCollectionDescriptors(truncated).blocks[0].collection.fetchedCount, 1, 'no fetched count beyond what was delivered');
 });

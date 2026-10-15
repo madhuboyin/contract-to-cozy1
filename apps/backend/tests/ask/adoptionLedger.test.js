@@ -29,7 +29,11 @@ test('the classes follow the registry facts they claim to', () => {
   const byId = Object.fromEntries(buildAdoptionLedger().map((entry) => [entry.operationId, entry]));
   for (const definition of Object.values(ASK_OPERATION_DEFINITIONS)) {
     if (REVIEWED_OPERATIONS[definition.operationId]) assert.equal(byId[definition.operationId].adoptionClass, 'ALREADY_COMPLIANT');
-    else if (definition.family === 'COMMAND') assert.equal(byId[definition.operationId].adoptionClass, 'COMPACT_RECEIPT');
+    else if (definition.family === 'COMMAND') {
+      // Verified against what the command may emit, not its family alone.
+      const mayCarryList = definition.allowedBlockTypes.some((type) => ['GROUPED_LIST', 'TABLE', 'TIMELINE', 'PRIORITY_LIST'].includes(type));
+      assert.equal(byId[definition.operationId].adoptionClass, mayCarryList ? 'REQUIRES_COLLECTION_ADOPTION' : 'COMPACT_RECEIPT', definition.operationId);
+    }
     else if (['UNSAFE_OR_RESTRICTED', 'OUT_OF_SCOPE'].includes(definition.family)) assert.equal(byId[definition.operationId].adoptionClass, 'NOT_APPLICABLE');
   }
   assert.throws(() => classifyAdoption('NOT_AN_OPERATION'), /Unknown Ask operation/);
