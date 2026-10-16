@@ -11,6 +11,7 @@ import { DEFAULT_CANDIDATE_SIGNALS, DEFAULT_CANDIDATE_TRAITS, type SuggestedNext
 import { WARRANTY_ADD_MESSAGE, warrantyCorrectionItemActions } from '../handlers/homeRecordWrites.handler';
 import { MAX_RESULT_ITEMS, type AskViewState } from '../support/executionState';
 import { randomUUID } from 'node:crypto';
+import { collectionDescriptor } from '../support/collectionDescriptor';
 import { loadAskViewState } from './maintenance.handler';
 import { containsFilterContinuation } from '../askFollowUpContext';
 
@@ -309,6 +310,9 @@ export function warrantiesFromRecords(input: {
         actions: warrantyCorrectionItemActions(canWrite, ownedIds.has(entry.record.id)),
       })),
     }],
+    // Presentation Quality 3: the matched warranties are the whole collection for this request; the first MAX_RESULT_ITEMS are shown
+    // and no continuation exists, so the list says "Showing X of Y" and offers no Next control.
+    collection: collectionDescriptor({ sourceTotal: matched.length, fetchedCount: matched.length, sections: [{ items: shown }], nextPageAvailable: false }),
     actions: [
       ...(canWrite ? [addAction] : []),
     ],

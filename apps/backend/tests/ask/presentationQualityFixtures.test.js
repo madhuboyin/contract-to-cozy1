@@ -376,3 +376,72 @@ test('3D: a viewer gets no mutating row actions and no create action', () => {
   assert.deepEqual(list.sections.flatMap((section) => section.items).flatMap((item) => item.actions.map((action) => action.id)), ['why-important']);
   assert.equal(list.actions.length, 0);
 });
+
+// ---- 3D: refinance analysis (pure canonical builder) ----------------------------------------------------------------------------
+
+const { refinanceCanonicalAnswer } = require('../../src/services/ask/handlers/refinance.handler.ts');
+
+const canonicalRefinance = (overrides = {}) => refinanceCanonicalAnswer({
+  result: {
+    available: true, radarState: 'OPEN', radarSummary: 'A 0.75 point drop would save about $210 a month.', currentRatePct: 6.875, marketRatePct: 6.125, rateGapPct: 0.75,
+    triggerRatePct: 6.25, triggerRateExplanation: 'Needs a one-year payback.', monthlySavings: 210, lifetimeSavings: 41000, closingCostAssumptionUsd: 6400, breakEvenMonths: 28,
+    confidenceLevel: 'MEDIUM', ...(overrides.result ?? {}),
+  },
+  marketSnapshot: { date: '2026-10-09', source: 'FRED', sourceRef: 'MORTGAGE30US' },
+  profile: { mortgageBalanceAsOfDate: new Date('2026-09-01T00:00:00.000Z'), updatedAt: new Date('2026-09-02T00:00:00.000Z') },
+  contextVersion: 'ctx-1',
+});
+
+test('3D: the canonical refinance answer leads with its conclusion, dates its sources and says it is not an offer', () => {
+  const result = canonicalRefinance();
+  assert.equal(result.status, 'ANSWERED');
+  assert.equal(result.blocks[0].id, 'refinance-analysis-summary');
+  assert.match(result.blocks[0].title, /worth comparing now/);
+  const evidence = result.blocks.find((block) => block.type === 'EVIDENCE');
+  assert.ok(evidence.items.every((item) => item.observedAt));
+  assert.match(result.blocks.find((block) => block.id === 'refinance-boundary').title, /not a loan offer/);
+  assert.deepEqual(evaluatePresentationQuality({ profile: 'COMPARE', result, message: 'Should I refinance?', operationId: 'REFINANCE_ANALYSIS' }).map((issue) => issue.code), []);
+});
+
+test('3D: an unreached break-even and a missing trigger are said plainly, with at most one primary action', () => {
+  const result = canonicalRefinance({ result: { radarState: 'CLOSED', breakEvenMonths: null, triggerRatePct: null, confidenceLevel: null } });
+  assert.match(result.blocks[0].title, /do not meet/);
+  const table = result.blocks.find((block) => block.type === 'TABLE');
+  assert.equal(table.rows.find((row) => row.id === 'break-even').values.value, 'Not reached');
+  assert.equal(table.rows.find((row) => row.id === 'confidence').values.value, 'Not qualified');
+  assert.ok(!table.rows.some((row) => row.id === 'trigger-rate'));
+  assert.ok(result.blocks[0].actions.filter((action) => action.style === 'PRIMARY').length <= 1);
+});
+
+// ---- 3F: whole-home warranty lookup --------------------------------------------------------------------------------------------
+
+const { warrantiesFromRecords } = require('../../src/services/ask/handlers/warranties.handler.ts');
+
+const warranty = (id, extra = {}) => ({
+  id, propertyId: 'p1', providerName: `Provider ${id}`, category: 'APPLIANCE', coverageDetails: 'Parts and labor', startDate: new Date('2025-01-01T00:00:00.000Z'),
+  expiryDate: new Date('2027-01-01T00:00:00.000Z'), updatedAt: NOW, inventoryItem: null, documents: [], ...extra,
+});
+const warranties = (records) => warrantiesFromRecords({ message: 'What warranties do I have?', propertyId: 'p1', records, canWrite: true, ownedIds: new Set(), now: NOW });
+
+test('3F: the whole-home warranty answer declares its collection, leads with a status headline and passes the quality contract', () => {
+  const result = warranties([warranty('a'), warranty('b', { expiryDate: new Date('2026-11-15T00:00:00.000Z') })]);
+  const list = result.blocks.find((block) => block.id === 'warranty-results');
+  assert.equal(list.collection.sourceTotal, 2);
+  assert.equal(list.collection.deliveredCount, 2);
+  assert.equal(list.collection.nextPageAvailable, false);
+  assert.deepEqual(evaluatePresentationQuality({ profile: 'COLLECTION', result, message: 'What warranties do I have?', operationId: 'WARRANTY_LOOKUP' }).map((issue) => issue.code), []);
+});
+
+test('3F: more warranties than the cap are disclosed as shown-of-total with no Next control', () => {
+  const result = warranties(Array.from({ length: 55 }, (_, index) => warranty(`w${index}`)));
+  const list = result.blocks.find((block) => block.id === 'warranty-results');
+  assert.equal(list.collection.sourceTotal, 55);
+  assert.equal(list.collection.deliveredCount, 50);
+  assert.equal(list.collection.nextPageAvailable, false);
+});
+
+test('3F: an empty record says it is not a statement about coverage', () => {
+  const result = warranties([]);
+  assert.equal(result.status, 'READY_WITH_LIMITATIONS');
+  assert.match(result.blocks[0].body, /does not mean nothing is covered/);
+});

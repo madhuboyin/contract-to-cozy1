@@ -496,6 +496,55 @@ export function refinanceScenarioAnswer(input: {
   };
 }
 
+type RefinanceRadarEvaluation = Extract<Awaited<ReturnType<typeof refinanceRadarService.evaluateProperty>>, { available: true }>;
+
+/**
+ * The pure canonical comparison: the radar's evaluation, the governed benchmark and the financing profile's dates are all already read,
+ * so the answer-first summary, the loan-versus-benchmark table, the dated sources and the not-an-offer boundary can be built and checked
+ * without a database.
+ */
+export function refinanceCanonicalAnswer(input: {
+  result: RefinanceRadarEvaluation;
+  marketSnapshot: { date: string; source: string; sourceRef?: string | null };
+  profile: { mortgageBalanceAsOfDate: Date | null; updatedAt: Date };
+  contextVersion: string;
+}): AskOperationResult {
+  const { result, marketSnapshot, profile, contextVersion } = input;
+  const favorable = result.radarState === 'OPEN';
+  const rows = [
+    { id: 'current-rate', values: { metric: 'Your recorded mortgage rate', value: `${result.currentRatePct.toFixed(3)}%`, meaning: 'Existing loan note rate' } },
+    { id: 'market-rate', values: { metric: 'Market benchmark rate', value: `${result.marketRatePct.toFixed(3)}%`, meaning: `National 30-year benchmark as of ${marketSnapshot.date}` } },
+    { id: 'target-rate', values: { metric: 'Modeled target scenario rate', value: `${result.marketRatePct.toFixed(3)}%`, meaning: 'Illustrative target set to the latest benchmark—not a lender quote' } },
+    { id: 'rate-gap', values: { metric: 'Rate difference', value: `${result.rateGapPct.toFixed(3)} percentage points`, meaning: result.rateGapPct > 0 ? 'Existing rate is higher' : 'Existing rate is not higher' } },
+    ...(result.triggerRatePct == null ? [] : [{ id: 'trigger-rate', values: { metric: 'Radar review threshold', value: `${result.triggerRatePct.toFixed(3)}% or lower`, meaning: result.triggerRateExplanation } }]),
+    { id: 'monthly-savings', values: { metric: 'Modeled monthly savings', value: money(result.monthlySavings), meaning: 'Principal-and-interest estimate' } },
+    { id: 'lifetime-savings', values: { metric: 'Modeled lifetime savings', value: money(result.lifetimeSavings), meaning: 'Interest difference after modeled closing costs' } },
+    { id: 'closing-cost', values: { metric: 'Modeled closing costs', value: money(result.closingCostAssumptionUsd), meaning: 'Planning assumption' } },
+    { id: 'break-even', values: { metric: 'Estimated break-even', value: result.breakEvenMonths == null ? 'Not reached' : `${result.breakEvenMonths} months`, meaning: 'Time to recover modeled costs' } },
+    { id: 'confidence', values: { metric: 'Opportunity confidence', value: result.confidenceLevel ?? 'Not qualified', meaning: 'Based on modeled savings and break-even' } },
+  ];
+  return {
+    status: 'ANSWERED', contextVersion,
+    blocks: [{
+      type: 'SUMMARY', id: 'refinance-analysis-summary', title: favorable ? 'Refinancing may be worth comparing now' : 'Current conditions do not meet the radar’s actionable threshold',
+      body: result.radarSummary, tone: favorable ? 'POSITIVE' : 'DEFAULT',
+      actions: refinanceNextActions(favorable, result.triggerRatePct),
+    }, {
+      type: 'TABLE', id: 'refinance-analysis-table', title: 'Current loan versus governed benchmark',
+      description: 'The benchmark is not a personalized lender offer or guaranteed available rate.',
+      columns: [{ key: 'metric', label: 'Metric' }, { key: 'value', label: 'Estimate' }, { key: 'meaning', label: 'What it represents' }], rows, actions: [],
+    }, {
+      type: 'EVIDENCE', id: 'refinance-evidence', title: 'Sources used', items: [
+        { label: 'Current mortgage details', source: 'Property Financing Profile', observedAt: profile.mortgageBalanceAsOfDate?.toISOString() ?? profile.updatedAt.toISOString() },
+        { label: '30-year market benchmark', source: `${marketSnapshot.source}${marketSnapshot.sourceRef ? ` · ${marketSnapshot.sourceRef}` : ''}`, observedAt: `${marketSnapshot.date}T00:00:00.000Z` },
+      ],
+    }, {
+      type: 'BOUNDARY', id: 'refinance-boundary', title: 'Planning estimate—not a loan offer', body: 'Actual eligibility, APR, closing costs, taxes, insurance, points, credits, and available rates depend on lender underwriting and a formal Loan Estimate. Compare offers before making a financial commitment.', severity: 'INFO', suggestions: [],
+    }],
+    suggestions: [],
+  };
+}
+
 async function refinanceAnalysisResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
   const journeyIntent = refinanceJourneyIntent(message);
   if (journeyIntent) return refinanceJourneyResult(propertyId, journeyIntent);
@@ -619,39 +668,7 @@ async function refinanceAnalysisResult(userId: string, propertyId: string, messa
     }
   }
 
-  const favorable = result.radarState === 'OPEN';
-  const rows = [
-    { id: 'current-rate', values: { metric: 'Your recorded mortgage rate', value: `${result.currentRatePct.toFixed(3)}%`, meaning: 'Existing loan note rate' } },
-    { id: 'market-rate', values: { metric: 'Market benchmark rate', value: `${result.marketRatePct.toFixed(3)}%`, meaning: `National 30-year benchmark as of ${marketSnapshot.date}` } },
-    { id: 'target-rate', values: { metric: 'Modeled target scenario rate', value: `${result.marketRatePct.toFixed(3)}%`, meaning: 'Illustrative target set to the latest benchmark—not a lender quote' } },
-    { id: 'rate-gap', values: { metric: 'Rate difference', value: `${result.rateGapPct.toFixed(3)} percentage points`, meaning: result.rateGapPct > 0 ? 'Existing rate is higher' : 'Existing rate is not higher' } },
-    ...(result.triggerRatePct == null ? [] : [{ id: 'trigger-rate', values: { metric: 'Radar review threshold', value: `${result.triggerRatePct.toFixed(3)}% or lower`, meaning: result.triggerRateExplanation } }]),
-    { id: 'monthly-savings', values: { metric: 'Modeled monthly savings', value: money(result.monthlySavings), meaning: 'Principal-and-interest estimate' } },
-    { id: 'lifetime-savings', values: { metric: 'Modeled lifetime savings', value: money(result.lifetimeSavings), meaning: 'Interest difference after modeled closing costs' } },
-    { id: 'closing-cost', values: { metric: 'Modeled closing costs', value: money(result.closingCostAssumptionUsd), meaning: 'Planning assumption' } },
-    { id: 'break-even', values: { metric: 'Estimated break-even', value: result.breakEvenMonths == null ? 'Not reached' : `${result.breakEvenMonths} months`, meaning: 'Time to recover modeled costs' } },
-    { id: 'confidence', values: { metric: 'Opportunity confidence', value: result.confidenceLevel ?? 'Not qualified', meaning: 'Based on modeled savings and break-even' } },
-  ];
-  return {
-    status: 'ANSWERED', contextVersion: financialContext.contextVersion,
-    blocks: [{
-      type: 'SUMMARY', id: 'refinance-analysis-summary', title: favorable ? 'Refinancing may be worth comparing now' : 'Current conditions do not meet the radar’s actionable threshold',
-      body: result.radarSummary, tone: favorable ? 'POSITIVE' : 'DEFAULT',
-      actions: refinanceNextActions(favorable, result.triggerRatePct),
-    }, {
-      type: 'TABLE', id: 'refinance-analysis-table', title: 'Current loan versus governed benchmark',
-      description: 'The benchmark is not a personalized lender offer or guaranteed available rate.',
-      columns: [{ key: 'metric', label: 'Metric' }, { key: 'value', label: 'Estimate' }, { key: 'meaning', label: 'What it represents' }], rows, actions: [],
-    }, {
-      type: 'EVIDENCE', id: 'refinance-evidence', title: 'Sources used', items: [
-        { label: 'Current mortgage details', source: 'Property Financing Profile', observedAt: profile!.mortgageBalanceAsOfDate?.toISOString() ?? profile!.updatedAt.toISOString() },
-        { label: '30-year market benchmark', source: `${marketSnapshot.source}${marketSnapshot.sourceRef ? ` · ${marketSnapshot.sourceRef}` : ''}`, observedAt: `${marketSnapshot.date}T00:00:00.000Z` },
-      ],
-    }, {
-      type: 'BOUNDARY', id: 'refinance-boundary', title: 'Planning estimate—not a loan offer', body: 'Actual eligibility, APR, closing costs, taxes, insurance, points, credits, and available rates depend on lender underwriting and a formal Loan Estimate. Compare offers before making a financial commitment.', severity: 'INFO', suggestions: [],
-    }],
-    suggestions: [],
-  };
+  return refinanceCanonicalAnswer({ result, marketSnapshot, profile: profile!, contextVersion: financialContext.contextVersion });
 }
 
 function parseRateThreshold(message: string): number | null {
