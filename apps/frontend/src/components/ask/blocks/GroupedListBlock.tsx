@@ -1,7 +1,7 @@
 'use client';
 
 import { useContext, useState, type ComponentType } from 'react';
-import type { AskCollectionDescriptor } from '@/features/ask/types';
+import type { AskCollectionDescriptor, AskPresentationBlock } from '@/features/ask/types';
 import { cn } from '@/lib/utils';
 import { formatLegacyAskMaintenanceItem } from '@/features/ask/presentationCompatibility';
 import { resolveGroupedListView, type GroupedListPresentationPreference } from '@/features/ask/adaptivePresentation';
@@ -42,6 +42,36 @@ const INLINE_DETAIL_BLOCK_IDS: ReadonlySet<string> = new Set(['project-detail-re
 // own BlockView) so the generic GROUPED_LIST renderer's selection
 // marker/highlight can be tested directly, same convention as
 // MaintenanceResultList's own export.
+const MAX_INLINE_ITEM_ACTIONS = 2;
+const itemActionClass = (style: string | undefined) => cn(
+  'min-h-8 rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors disabled:opacity-50',
+  style === 'PRIMARY' ? 'bg-teal-700 text-white hover:bg-teal-800' : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50',
+);
+
+// Presentation Quality 2C: a row shows at most two actions inline; the rest sit behind "More" so a row never becomes a wall of pills.
+function ItemActionRow({ item, disabled, onItemAction }: {
+  item: Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>['sections'][number]['items'][number];
+  disabled: boolean;
+  onItemAction: Parameters<AskBlockRenderer<'GROUPED_LIST'>>[0]['onItemAction'];
+}) {
+  const actions = item.actions ?? [];
+  const ordered = [...actions.filter((action) => action.style === 'PRIMARY'), ...actions.filter((action) => action.style !== 'PRIMARY')];
+  const inline = ordered.slice(0, MAX_INLINE_ITEM_ACTIONS);
+  const overflow = ordered.slice(MAX_INLINE_ITEM_ACTIONS);
+  const run = (action: (typeof actions)[number]) => onItemAction(item.entityType, item.id, action.message, action.operationId, action.interactionType);
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-2">
+      {inline.map((action) => <button key={action.id} type="button" disabled={disabled} onClick={() => run(action)} className={itemActionClass(action.style)}>{action.label}</button>)}
+      {overflow.length > 0 && <details className="relative">
+        <summary className="flex min-h-8 cursor-pointer list-none items-center rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50">More<span className="sr-only"> actions for {item.title}</span></summary>
+        <div className="absolute left-0 z-10 mt-1 min-w-40 space-y-1 rounded-lg border border-slate-200 bg-white p-1.5 shadow-lg">
+          {overflow.map((action) => <button key={action.id} type="button" disabled={disabled} onClick={() => run(action)} className="block w-full rounded-md px-2.5 py-1.5 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">{action.label}</button>)}
+        </div>
+      </details>}
+    </div>
+  );
+}
+
 export function GenericGroupedListBlock({ block, executionId, propertyId, onItemAction, itemActionsDisabled, onFilterClick, onCollectionPage }: Parameters<AskBlockRenderer<'GROUPED_LIST'>>[0]) {
   const controls = useContext(ResultViewContext);
   const workflowControls = useContext(AskBlockActionContext);
@@ -144,22 +174,7 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
                   </div>
                   {item.description && <p className="mt-1 text-sm leading-5 text-slate-700">{item.description}</p>}
                   {item.actions && item.actions.length > 0 && (
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {item.actions.map((itemAction) => (
-                        <button
-                          key={itemAction.id}
-                          type="button"
-                          disabled={itemActionsDisabled}
-                          onClick={() => onItemAction(item.entityType, item.id, itemAction.message, itemAction.operationId, itemAction.interactionType)}
-                          className={cn(
-                            'min-h-8 rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors disabled:opacity-50',
-                            itemAction.style === 'PRIMARY' ? 'bg-teal-700 text-white hover:bg-teal-800' : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50',
-                          )}
-                        >
-                          {itemAction.label}
-                        </button>
-                      ))}
-                    </div>
+                    <ItemActionRow item={item} disabled={itemActionsDisabled} onItemAction={onItemAction} />
                   )}
                 </li>
               ))}
@@ -300,22 +315,7 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
                       </div>
                     )}
                     {!dense && block.id !== 'project-detail-records' && item.actions && item.actions.length > 0 && (
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {item.actions.map((itemAction) => (
-                          <button
-                            key={itemAction.id}
-                            type="button"
-                            disabled={itemActionsDisabled}
-                            onClick={() => onItemAction(item.entityType, item.id, itemAction.message, itemAction.operationId, itemAction.interactionType)}
-                            className={cn(
-                              'min-h-8 rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors disabled:opacity-50',
-                              itemAction.style === 'PRIMARY' ? 'bg-teal-700 text-white hover:bg-teal-800' : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50',
-                            )}
-                          >
-                            {itemAction.label}
-                          </button>
-                        ))}
-                      </div>
+                      <ItemActionRow item={item} disabled={itemActionsDisabled} onItemAction={onItemAction} />
                     )}
                     {dominantProjectAction && (
                       <div className="mt-3 flex items-center gap-2" data-project-record-actions="">
