@@ -26,6 +26,7 @@ import { AskViewState, durableFreeTextClarification, ensurePropertyAccess, Maint
 import { formatAskMaintenanceDescription, formatAskMaintenanceScope, formatAskMaintenanceTitle } from '../askMaintenancePresentation';
 import { extractMaintenanceTaskTitle } from '../askMaintenanceTaskInput';
 import { buildSeasonalMaintenanceResult, parseSeasonalMaintenanceIntent } from '../askSeasonalMaintenance';
+import { collectionDescriptor } from '../support/collectionDescriptor';
 
 type MaintenanceTimeframe = {
   label: string;
@@ -903,8 +904,31 @@ export async function maintenanceResult(
       : false,
   });
   if (seasonalResult) return seasonalResult;
+  return buildMaintenanceStatusResult({
+    message, priorViewState, viewIntent, pageRequest, tasks, totalTaskCount: canonicalTaskSet.totalTaskCount, timeZone,
+    purchaseDate: context.purchaseDate, canManage: access.role !== HouseholdRole.VIEWER, now,
+  });
+}
+
+/**
+ * The pure half of maintenanceResult: every database read has already happened, so the filtered, sectioned, windowed answer is built
+ * from plain task rows and can be exercised by the presentation-quality fixtures without a database.
+ */
+export function buildMaintenanceStatusResult(input: {
+  message: string;
+  priorViewState: AskViewState | null | undefined;
+  viewIntent: 'FILTER' | 'REFRESH' | 'PAGINATION';
+  pageRequest?: { sectionId: string; direction: 'NEXT' | 'PREVIOUS' } | null;
+  tasks: MaintenanceTaskContextTask[];
+  totalTaskCount: number;
+  timeZone: string;
+  purchaseDate: Date | null;
+  canManage: boolean;
+  now: Date;
+}): AskOperationResult {
+  const { message, priorViewState, viewIntent, pageRequest, tasks, totalTaskCount, timeZone, purchaseDate, canManage, now } = input;
   const { effectiveMessage, isClearAllFilters } = mergeMaintenanceViewContinuation(priorViewState, message, viewIntent);
-  const { timeframe, missingPurchaseDate } = resolveMaintenanceTimeframe(effectiveMessage, now, timeZone, context.purchaseDate);
+  const { timeframe, missingPurchaseDate } = resolveMaintenanceTimeframe(effectiveMessage, now, timeZone, purchaseDate);
   const wantsCompleted = /\b(?:completed|finished|done|completion|service history|what did (?:i|we) complete)\b/i.test(effectiveMessage);
   const wantsOpen = /\b(?:pending|remaining|still|open|overdue|due|upcoming|coming up|needs review|in progress|high priority|highest priority|priority tasks?|before (?:winter|spring|summer|fall|autumn))\b/i.test(effectiveMessage);
   const includeCancelled = /\b(?:cancelled|canceled|archived|dismissed|all records|including cancelled|including canceled)\b/i.test(effectiveMessage);
@@ -941,7 +965,6 @@ export async function maintenanceResult(
     .filter((task) => !highPriorityOnly || ['URGENT', 'HIGH'].includes(task.priority));
   const showCompleted = !cancelledOnly && (wantsCompleted || (!wantsOpen && !creationFocus));
   const showOpen = !cancelledOnly && (wantsOpen || (!wantsCompleted && !creationFocus) || (wantsCompleted && wantsOpen));
-  const canManage = access.role !== HouseholdRole.VIEWER;
 
   const recordItem = (task: typeof tasks[number], kind: 'OPEN' | 'COMPLETED' | 'CANCELLED') => {
     const overdue = kind === 'OPEN' && task.nextDueDate && task.nextDueDate < now;
@@ -1020,7 +1043,7 @@ export async function maintenanceResult(
     // External review [P2]: "No recorded maintenance tasks" and "tasks
     // exist but none match these filters" both used to render as the same
     // "No matching maintenance records were found," contrary to the
-    // required lifecycle distinction -- canonicalTaskSet.totalTaskCount (the
+    // required lifecycle distinction -- totalTaskCount (the
     // true canonical total; tasks/active/completed/etc. above are now
     // always the full collection, never a provider-bounded subset, per
     // MAINT-003/A02) distinguishes a property with zero tasks ever from one
@@ -1029,7 +1052,7 @@ export async function maintenanceResult(
       ? canManage ? 'Create the task in Maintenance' : 'A contributor or owner can create this task'
       : displayed
         ? `${displayed} maintenance record${displayed === 1 ? '' : 's'} match this request`
-        : canonicalTaskSet.totalTaskCount === 0
+        : totalTaskCount === 0
           ? 'No maintenance tasks are recorded for this home yet'
           : 'No maintenance tasks match these filters',
     body: creationFocus
@@ -1098,7 +1121,16 @@ export async function maintenanceResult(
     description: `${highPriorityOnly ? 'Priority filter: urgent and high priority. ' : ''}${timeframe ? `Date filter: ${timeframe.label} in ${timeZone.replace(/_/g, ' ')}. ` : ''}${scopeTerms.length ? `System/category filter: ${scopeTerms[0]}. ` : ''}${roomScope ? `Room filter: ${roomScope}. ` : ''}Showing ${MAX_RESULT_ITEMS}-item server pages when a section exceeds that size.`,
     // MAINT-003: Ask links to no Maintenance page, so a section past MAX_RESULT_ITEMS reads "+N more not shown here" and the filter chips
     // narrow the result; "Create a task" (when permitted) stays available as an action.
-    sections, actions: [
+    sections,
+    // Presentation Quality 3: every section is windowed over the full in-memory collection, so the source total is the sum of the
+    // section counts and a next page exists while any window ends before its count (the continuation is served by this handler).
+    collection: collectionDescriptor({
+      sourceTotal: sections.reduce((sum, section) => sum + section.count, 0),
+      fetchedCount: sections.reduce((sum, section) => sum + section.count, 0),
+      sections,
+      nextPageAvailable: sections.some((section) => section.offset + section.items.length < section.count),
+    }),
+    actions: [
       ...(canManage ? [
         { id: 'create-maintenance', label: 'Create a task', interactionType: 'START_WORKFLOW' as const, message: 'Create a maintenance task', operationId: 'MAINTENANCE_TASK_CREATE', style: 'PRIMARY' as const },
         { id: MAINTENANCE_TEMPLATES_BROWSE_ACTION.id, label: MAINTENANCE_TEMPLATES_BROWSE_ACTION.label, interactionType: 'START_WORKFLOW' as const, message: MAINTENANCE_TEMPLATES_BROWSE_ACTION.message, operationId: 'MAINTENANCE_TEMPLATES_BROWSE', style: 'SECONDARY' as const },

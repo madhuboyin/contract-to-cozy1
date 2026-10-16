@@ -333,3 +333,46 @@ test('5 audit: a compact-receipt command can emit only compact blocks, and the r
   const list = { type: 'GROUPED_LIST', id: 'x', title: 't', filters: [], actions: [], sections: [] };
   assert.throws(() => assertSkillResultBlocksAllowed(operationId, { status: 'ANSWERED', blocks: [list], suggestions: [] }), /not allowed|allowed|GROUPED_LIST/i);
 });
+
+// ---- 3D: maintenance status (pure builder) -------------------------------------------------------------------------------------
+
+const { buildMaintenanceStatusResult } = require('../../src/services/ask/handlers/maintenance.handler.ts');
+const { evaluatePresentationQuality } = require('../../src/services/ask/presentation/evaluatePresentationQuality.ts');
+
+const mtask = (id, extra = {}) => ({
+  id, title: `Task ${id}`, description: null, category: 'GENERAL', assetType: null, serviceCategory: null, season: null, status: 'PENDING', priority: 'MEDIUM',
+  source: 'USER', nextDueDate: new Date('2026-12-01T00:00:00.000Z'), lastCompletedDate: null, updatedAt: NOW, actualCost: null, estimatedCost: null,
+  isRecurring: false, frequency: null, inventoryItem: null, room: null, ...extra,
+});
+const maintenance = (tasks, overrides = {}) => buildMaintenanceStatusResult({
+  message: 'What maintenance is open?', priorViewState: null, viewIntent: 'FILTER', pageRequest: null, tasks, totalTaskCount: tasks.length,
+  timeZone: 'UTC', purchaseDate: null, canManage: true, now: NOW, ...overrides,
+});
+
+test('3D: the maintenance status declares its collection and pages only while a window ends before its count', () => {
+  const tasks = Array.from({ length: 60 }, (_, index) => mtask(`t${index}`, { nextDueDate: new Date('2026-12-01T00:00:00.000Z') }));
+  const result = maintenance(tasks);
+  const list = result.blocks.find((block) => block.id === 'maintenance-groups');
+  assert.equal(list.collection.sourceTotal, 60);
+  assert.equal(list.collection.deliveredCount, 50);
+  assert.equal(list.collection.nextPageAvailable, true);
+  const last = maintenance(tasks, { viewIntent: 'PAGINATION', priorViewState: { ...result.parameters.viewState }, pageRequest: { sectionId: list.sections[0].id, direction: 'NEXT' } });
+  const lastList = last.blocks.find((block) => block.id === 'maintenance-groups');
+  assert.equal(lastList.collection.nextPageAvailable, false);
+});
+
+test('3D: a short maintenance list declares no truncation and passes the quality contract', () => {
+  const result = maintenance([mtask('a', { nextDueDate: new Date('2026-10-01T00:00:00.000Z') }), mtask('b')]);
+  const list = result.blocks.find((block) => block.id === 'maintenance-groups');
+  assert.equal(list.collection.deliveredCount, 2);
+  assert.equal(list.collection.nextPageAvailable, false);
+  assert.equal(list.collection.deliveryTruncated, false);
+  assert.deepEqual(evaluatePresentationQuality({ profile: 'COLLECTION', result, message: 'What maintenance is open?', operationId: 'MAINTENANCE_STATUS' }).map((issue) => issue.code), []);
+});
+
+test('3D: a viewer gets no mutating row actions and no create action', () => {
+  const result = maintenance([mtask('a')], { canManage: false });
+  const list = result.blocks.find((block) => block.id === 'maintenance-groups');
+  assert.deepEqual(list.sections.flatMap((section) => section.items).flatMap((item) => item.actions.map((action) => action.id)), ['why-important']);
+  assert.equal(list.actions.length, 0);
+});
