@@ -7,6 +7,7 @@ import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { applianceOracleService } from '../../applianceOracle.service';
 import { budgetForecasterService } from '../../budgetForecaster.service';
 import { getAskPropertyTimezone } from '../askExecutionContext';
+import { collectionDescriptor } from '../support/collectionDescriptor';
 
 // Appliance Oracle and Budget Planner (FRD v1.70, product decision option A for the Gemini-backed tools): Ask shows only
 // the calculated part of each page, with the services' Gemini recommendations switched off, and links to the page for the
@@ -140,18 +141,25 @@ export function maintenanceBudgetFromView(forecast: BudgetForecastView | 'PRIMAR
       severity: 'CAUTION',
     });
   }
+  const budgetSections = [
+    { id: 'budget-forecast-categories', title: 'By category', count: forecast.categoryBreakdowns.length, items: forecast.categoryBreakdowns.map((category, index) => ({
+      id: `category-${index}`, title: category.category, amountLabel: `${wholeDollars(category.annualCost)} a year`, proportionPercent: category.percentage, meta: category.items.slice(0, 4), status: `${category.percentage}%`,
+    })) },
+    { id: 'budget-forecast-months', title: 'By month', count: forecast.monthlyForecasts.length, items: forecast.monthlyForecasts.map((month) => ({
+      id: `month-${month.month.toLowerCase()}`, title: month.month, description: `${wholeDollars(month.total)}: routine ${wholeDollars(month.routine)}, preventive ${wholeDollars(month.preventive)}, unexpected ${wholeDollars(month.unexpected)}`, meta: month.tasks.slice(0, 3), status: wholeDollars(month.total),
+    })) },
+  ].filter((section) => section.count > 0);
   blocks.push({
     type: 'GROUPED_LIST', filters: [], id: 'budget-forecast-items', title: 'Where the upkeep budget goes',
     description: 'Estimated annual upkeep by category.',
     presentation: { pattern: 'BUDGET_BREAKDOWN' },
-    sections: [
-      { id: 'budget-forecast-categories', title: 'By category', count: forecast.categoryBreakdowns.length, items: forecast.categoryBreakdowns.map((category, index) => ({
-        id: `category-${index}`, title: category.category, amountLabel: `${wholeDollars(category.annualCost)} a year`, proportionPercent: category.percentage, meta: category.items.slice(0, 4), status: `${category.percentage}%`,
-      })) },
-      { id: 'budget-forecast-months', title: 'By month', count: forecast.monthlyForecasts.length, items: forecast.monthlyForecasts.map((month) => ({
-        id: `month-${month.month.toLowerCase()}`, title: month.month, description: `${wholeDollars(month.total)}: routine ${wholeDollars(month.routine)}, preventive ${wholeDollars(month.preventive)}, unexpected ${wholeDollars(month.unexpected)}`, meta: month.tasks.slice(0, 3), status: wholeDollars(month.total),
-      })) },
-    ].filter((section) => section.count > 0),
+    sections: budgetSections,
+    collection: collectionDescriptor({
+      sourceTotal: forecast.categoryBreakdowns.length + forecast.monthlyForecasts.length,
+      fetchedCount: forecast.categoryBreakdowns.length + forecast.monthlyForecasts.length,
+      sections: budgetSections,
+      nextPageAvailable: false,
+    }),
     actions: [],
   }, {
     type: 'BOUNDARY', id: 'budget-forecast-boundary', title: 'A typical-cost estimate, not your spending',

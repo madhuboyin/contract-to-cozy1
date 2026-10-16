@@ -11,6 +11,7 @@ import { ensurePropertyAccess } from '../askHandlerSupport';
 import { MaintenanceService } from '../../maintenance.service';
 import { maintenanceTemplateActionKey } from '../../maintenance/applicabilityPolicy';
 import { MAINTENANCE_TEMPLATE_ADD_ACTION, MAINTENANCE_TEMPLATE_ENTITY_TYPE } from '../support/maintenanceTemplateConstants';
+import { collectionDescriptor } from '../support/collectionDescriptor';
 
 const MAX_TEMPLATES = 60;
 export const MAINTENANCE_TEMPLATES_BOUNDARY_ID = 'maintenance-templates-boundary';
@@ -35,7 +36,7 @@ export interface BrowsableTemplate {
 
 /** Pure: the card. `existingTemplateIds` are templates whose task is already on the home's list; `canAdd` is whether the person may change the home. */
 export function maintenanceTemplatesFromView(
-  templates: BrowsableTemplate[], existingTemplateIds: ReadonlySet<string>, canAdd: boolean,
+  templates: BrowsableTemplate[], existingTemplateIds: ReadonlySet<string>, canAdd: boolean, sourceTotal = templates.length,
 ): AskOperationResult {
   const boundary: AskPresentationBlock = {
     type: 'BOUNDARY', id: MAINTENANCE_TEMPLATES_BOUNDARY_ID, title: 'Suggestions, not an inspection',
@@ -93,9 +94,11 @@ export function maintenanceTemplatesFromView(
     ].filter(Boolean).join(' '),
     tone: 'DEFAULT', actions: [],
   }];
+  const listSections = sections.map((section) => ({ id: section.id, title: section.title, count: section.rows.length, items: section.rows }));
   blocks.push({
     type: 'GROUPED_LIST', filters: [], id: 'maintenance-templates-list', title: 'Recommended maintenance tasks', description: `${shown} task${shown === 1 ? '' : 's'}, in the order the catalogue lists them.`,
-    sections: sections.map((section) => ({ id: section.id, title: section.title, count: section.rows.length, items: section.rows })),
+    sections: listSections,
+    collection: collectionDescriptor({ sourceTotal, fetchedCount: templates.length, sections: listSections, nextPageAvailable: false }),
     actions: [],
   });
   blocks.push(boundary);
@@ -114,7 +117,7 @@ registerCapabilityHandler('maintenance.templates-browse', async (envelope) => {
     })
     : [];
   const onList = new Set(shown.filter((template) => tasks.some((task) => task.actionKey === maintenanceTemplateActionKey(template.id))).map((template) => template.id));
-  const result = maintenanceTemplatesFromView(shown, onList, access.role !== HouseholdRole.VIEWER);
+  const result = maintenanceTemplatesFromView(shown, onList, access.role !== HouseholdRole.VIEWER, templates.length);
   if (templates.length > MAX_TEMPLATES && result.blocks.every((block) => block.id !== 'maintenance-templates-limit')) {
     const index = result.blocks.findIndex((block) => block.id === 'maintenance-templates-list');
     result.blocks.splice(index < 0 ? result.blocks.length : index, 0, { type: 'LIMITATION', id: 'maintenance-templates-limit', title: `Showing the first ${MAX_TEMPLATES}`, body: 'There are more recommended tasks than are shown here.', severity: 'INFO' });

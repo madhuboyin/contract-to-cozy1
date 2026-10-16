@@ -389,8 +389,8 @@ async function buyerDocumentReadinessResult(userId: string, propertyId: string):
         id: 'buyer-document-readiness-evidence',
         title: 'Document readiness',
         items: [
-          { label: 'Recorded documents', source: 'Transaction Documents', observedAt: new Date().toISOString() },
-          { label: 'Verified', source: `${overview.evidence.verifiedDocumentCount} of ${overview.evidence.documentCount}`, observedAt: new Date().toISOString() },
+          { label: 'Recorded documents', source: 'Transaction Documents', observedAt: null },
+          { label: 'Verified', source: `${overview.evidence.verifiedDocumentCount} of ${overview.evidence.documentCount}`, observedAt: null },
         ],
       },
     ],
@@ -939,7 +939,7 @@ async function buyerDisclosureFundsReadinessResult(userId: string, propertyId: s
     return buyerNotActiveResult(propertyId, data.contextVersion, 'This purchase property does not have an active Buyer Plan yet, so there is no Closing Disclosure to review.');
   }
   const disclosureData = await BuyerClosingDisclosureService.get(userId, propertyId);
-  const workspace = disclosureData.workspace as unknown as { fundsReady: boolean; instructionsVerified: boolean; questionsResolved: boolean; revisions: Array<{ status: string }> } | null;
+  const workspace = disclosureData.workspace as unknown as { fundsReady: boolean; instructionsVerified: boolean; questionsResolved: boolean; updatedAt: Date | string; revisions: Array<{ status: string }> } | null;
   // Closing Disclosure controls (FRD v1.351): declared actions; the command re-checks everything and keeps per-figure confirmation and the wire safeguards.
   const canChange = (await ensurePropertyAccess(userId, propertyId)).role !== HouseholdRole.VIEWER;
   const cdAction = (kind: CdKind, labelText: string) => ({
@@ -967,6 +967,9 @@ async function buyerDisclosureFundsReadinessResult(userId: string, propertyId: s
     body: outstanding.length ? `Still open: ${outstanding.join(', ')}.` : 'Funds method, wire-instruction verification, and questions are all recorded as resolved.',
     tone: outstanding.length ? 'CAUTION' : 'DEFAULT',
     actions: cdActions,
+  }, {
+    type: 'EVIDENCE', id: 'buyer-disclosure-evidence', title: 'Closing readiness freshness',
+    items: [{ label: 'Closing Disclosure and funds workspace', source: 'Buyer Closing Disclosure', observedAt: workspace.updatedAt instanceof Date ? workspace.updatedAt.toISOString() : workspace.updatedAt }],
   }, {
     type: 'BOUNDARY', id: 'buyer-disclosure-wire-boundary', title: 'Wire-fraud protection', body: 'Never trust changed emailed wire instructions. Independently verify funds instructions using a known phone number. ContractToCozy never supplies or validates destination account details.', severity: 'CAUTION', suggestions: [],
   }];

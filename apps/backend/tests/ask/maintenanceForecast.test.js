@@ -94,6 +94,7 @@ test('maintenanceForecastResult returns NOT_APPLICABLE only when the forecast is
 test('maintenanceForecastResult renders a GROUPED_LIST with priority/date meta and a professional-inspection boundary', () => {
   const body = handlerBody();
   assert.match(body, /type: 'GROUPED_LIST'/);
+  assert.match(body, /collection: collectionDescriptor\(\{[\s\S]*sourceTotal: predictions\.length,[\s\S]*fetchedCount: predictions\.length/);
   assert.match(body, /type: 'BOUNDARY'/);
   assert.match(body, /MAINTENANCE_FORECAST_PRIORITY_LABELS\[prediction\.priority\]/);
 });

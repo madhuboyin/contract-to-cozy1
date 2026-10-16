@@ -1279,6 +1279,12 @@ async function maintenanceForecastResult(userId: string, propertyId: string): Pr
         href: null,
       })),
     }],
+    collection: collectionDescriptor({
+      sourceTotal: predictions.length,
+      fetchedCount: predictions.length,
+      sections: [{ items: predictions.slice(0, 20) }],
+      nextPageAvailable: false,
+    }),
     actions: [],
   }, {
     type: 'BOUNDARY',

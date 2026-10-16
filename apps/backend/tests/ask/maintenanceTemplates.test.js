@@ -77,6 +77,9 @@ test('the list separates what can be added, what is already on the list and what
   assert.ok(!JSON.stringify(result).includes('Septic tank pumping'), 'a template that does not apply is not listed');
   assert.match(result.blocks[0].body, /1 that do not apply to this home is left out|1 that does not apply|1 that do not apply/);
   assert.deepEqual(result.blocks.at(-1).id, 'maintenance-templates-boundary');
+  assert.deepEqual(result.blocks.find((block) => block.id === 'maintenance-templates-list').collection, {
+    sourceTotal: 4, fetchedCount: 4, deliveredCount: 3, nextPageAvailable: false, deliveryTruncated: true,
+  });
   for (const block of result.blocks) AskPresentationBlockSchema.parse(block);
   assert.doesNotMatch(JSON.stringify(result.blocks), /\/dashboard\/|"href"/, 'no desktop link anywhere');
 });

@@ -104,6 +104,15 @@ export async function capabilityResult(userId: string, propertyId: string | null
     };
   };
   const blocks: AskPresentationBlock[] = [{
+    type: 'SUMMARY',
+    id: 'capability-discovery-summary',
+    title: availableMatches.ambiguous ? 'I found a few tools that could fit' : `The best match is ${ranked[0]?.capability.label ?? 'shown below'}`,
+    body: availableMatches.ambiguous
+      ? 'Choose the goal that is closest to what you want to accomplish. Every option comes from the live capability registry and remains subject to its current readiness checks.'
+      : 'This match comes from reviewed homeowner language, current availability, and canonical readiness policy. Nothing has been started yet.',
+    tone: 'DEFAULT',
+    actions: [],
+  }, {
     type: 'CAPABILITY_LIST',
     id: 'capability-matches',
     title: availableMatches.ambiguous ? 'A few tools could fit—choose the closest goal' : 'Best match for your goal',

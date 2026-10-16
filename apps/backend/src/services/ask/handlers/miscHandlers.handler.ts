@@ -472,7 +472,7 @@ async function homeChangeSummaryResult(userId: string, propertyId: string): Prom
     };
   }
 
-  const blocks: AskPresentationBlock[] = await Promise.all(material.map(async ({ change, canonicalActionId, liveAction }) => {
+  const changeBlocks: AskPresentationBlock[] = await Promise.all(material.map(async ({ change, canonicalActionId, liveAction }) => {
     let detailOverride: string | null = null;
     if (change.sourceType === 'DECISION_PREFERENCE_VALUE') {
       const [detail] = await decisionPreferenceService.getPreferenceReferenceDetails([change.sourceRevision]);
@@ -500,6 +500,12 @@ async function homeChangeSummaryResult(userId: string, propertyId: string): Prom
       reviewAction,
     };
   }));
+  const blocks: AskPresentationBlock[] = [{
+    type: 'SUMMARY', id: 'home-change-summary',
+    title: `${changeBlocks.length} material change${changeBlocks.length === 1 ? '' : 's'} in the last 30 days`,
+    body: `These changes were reconciled against the current governed Home Action feed and deduplicated by canonical identity. This covers ${HOME_CHANGE_SUMMARY_COVERED_SOURCES.join(', ')}.`,
+    tone: 'DEFAULT', actions: [],
+  }, ...changeBlocks];
 
   return {
     status: 'ANSWERED', reasonCode: 'HOME_CHANGE_SUMMARY_FOUND',

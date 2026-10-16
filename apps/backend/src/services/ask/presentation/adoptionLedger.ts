@@ -52,6 +52,20 @@ export const REVIEWED_OPERATIONS: Readonly<Record<string, string>> = {
   SELL_HOLD_RENT_ANALYSIS: 'comparison and what-if fixtures cover the directional rationale, dated model sources, material assumptions and financial/tax/legal boundary',
   HOME_DEADLINE_MONITOR: 'monitor proposal resolves one canonical dated obligation and discloses due date, lead time, delivery channel, consent and no-change states before confirmation',
   REFINANCE_RATE_MONITOR: 'monitor proposal declares the governed benchmark, exact threshold, delivery cadence, quiet hours, source boundary and consent before confirmation',
+  BUYER_DISCLOSURE_FUNDS_READINESS: 'direct readiness answer carries canonical Closing Disclosure workspace freshness and the wire-fraud safety boundary',
+  BUYER_DOCUMENT_READINESS: 'direct document-readiness answer reports recorded/verified scope without fabricating an observation timestamp',
+  BUYER_INSPECTION_REVIEW: 'direct inspection answer states the exact open-material-finding rationale and preserves the buyer professional boundary',
+  CAPABILITY_DISCOVERY: 'answer-first discovery result explains the match basis before presenting live registry capabilities and readiness',
+  DIY_PROJECT_GUIDE: 'reviewed guide fixtures cover canonical project progress, current step, refusal/finished states and permission-aware actions',
+  GROUNDED_GUIDANCE: 'grounded answer declares property/general scope, source evidence when available, confidence limitations and a professional boundary',
+  GUIDANCE_JOURNEY_CREATE: 'workflow proposal requires a canonical item or approved service, then presents scope and plan type for confirmation before creation',
+  HOME_CHANGE_SUMMARY: 'answer-first 30-day summary scopes covered sources before canonical, deduplicated change blocks and preserves honest empty/unavailable states',
+  INCIDENT_CONTINUATION: 'answer-first continuation declares recorded workflow choices, canonical record freshness and an emergency-response boundary',
+  MAJOR_EVENT_ENTRY: 'event-specific answer wraps governed capability discovery with an explicit legal, tax, insurance, safety and professional boundary',
+  MAINTENANCE_STATUS: 'maintenance shelves declare exact canonical totals, delivered rows and server-window continuation state',
+  MAINTENANCE_FORECAST: 'forecast list declares the complete prediction total and honest first-20 delivery truncation with no unsupported continuation',
+  MAINTENANCE_BUDGET_FORECAST: 'budget breakdown declares complete category and month totals with no truncation or continuation',
+  MAINTENANCE_TEMPLATES_BROWSE: 'template catalogue declares source, fetched and delivered totals across applicability buckets without offering unsupported continuation',
 };
 
 const LIST_BLOCKS = ['GROUPED_LIST', 'TABLE', 'TIMELINE', 'PRIORITY_LIST'];

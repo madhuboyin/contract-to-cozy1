@@ -172,16 +172,22 @@ export const CLAIM_FILE_START_ACTION = {
 
 export function incidentContinuationFromRecords(
   _propertyId: string,
-  incidents: readonly { id: string; title: string; status: string }[],
-  claims: readonly { id: string; title: string; status: string }[],
+  incidents: readonly { id: string; title: string; status: string; updatedAt?: Date | string }[],
+  claims: readonly { id: string; title: string; status: string; updatedAt?: Date | string }[],
   canStartClaim = true,
 ): AskOperationResult {
+  const observedAt = (value: Date | string | undefined) => value instanceof Date ? value.toISOString() : value ?? null;
   return { status: 'ANSWERED', reasonCode: 'INCIDENT_CONTINUATION_READY', blocks: [
+    { type: 'SUMMARY', id: 'incident-continuation-summary', title: incidents.length || claims.length ? 'Continue from a recorded incident or claim' : 'No incident or claim follow-up is recorded yet', body: incidents.length || claims.length ? `${incidents.length} incident${incidents.length === 1 ? '' : 's'} and ${claims.length} claim${claims.length === 1 ? '' : 's'} are available below. Choose the existing record that owns the next step.` : 'You can start a draft claim after immediate danger has passed. Nothing is filed with an insurer from this screen.', tone: 'DEFAULT', actions: [] },
     { type: 'BOUNDARY', id: 'incident-continuation-boundary', title: 'Continue only after immediate danger has passed', severity: 'CAUTION', body: 'If anyone may still be in danger, contact emergency responders or the appropriate utility first. This workflow records what happened; it is not emergency response.', suggestions: [] },
     { type: 'GROUPED_LIST', filters: [], id: 'incident-continuation-records', title: 'Recorded incident and claim follow-up', description: 'Use an existing record or start a draft claim. Filing with an insurer remains a separate provider action. The Emergency Help AI troubleshooter is not currently available in Ask.', sections: [
       { id: 'incidents', title: 'Incidents', count: incidents.length, items: incidents.map((row) => ({ id: row.id, title: row.title, description: readableCode(String(row.status)), meta: [], status: String(row.status), href: null })) },
       { id: 'claims', title: 'Claims', count: claims.length, items: claims.map((row) => ({ id: row.id, title: row.title, description: readableCode(String(row.status)), meta: [], status: String(row.status), href: null })) },
     ], actions: canStartClaim ? [{ ...CLAIM_FILE_START_ACTION, style: 'PRIMARY' as const }] : [] },
+    ...(incidents.length || claims.length ? [{ type: 'EVIDENCE' as const, id: 'incident-continuation-evidence', title: 'Record freshness', items: [
+      ...incidents.map((row) => ({ label: row.title, source: 'Canonical Incident record', observedAt: observedAt(row.updatedAt) })),
+      ...claims.map((row) => ({ label: row.title, source: 'Canonical Claim record', observedAt: observedAt(row.updatedAt) })),
+    ] }] : []),
   ], suggestions: [] };
 }
 

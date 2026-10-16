@@ -11,11 +11,11 @@ contract-level journey, or explicit producer-contract review; it is not verified
 
 | Class | Operations |
 |---|---:|
-| Reviewed implementation (fixture, journey, or producer-contract review; not runtime-verified) | 28 |
-| Requires collection adoption | 73 |
+| Reviewed implementation (fixture, journey, or producer-contract review; not runtime-verified) | 42 |
+| Requires collection adoption | 69 |
 | Requires trust or rationale adoption | 0 |
 | Compact receipt: no rich migration needed | 83 |
-| Specialized workflow requiring later review | 10 |
+| Specialized workflow requiring later review | 0 |
 | Not applicable (boundary operations) | 3 |
 
 ## Reviewed implementation (fixture, journey, or producer-contract review; not runtime-verified)
@@ -24,11 +24,19 @@ contract-level journey, or explicit producer-contract review; it is not verified
 |---|---|
 | `BREAK_EVEN_ANALYSIS` | Covered in this effort: audited against the COMPARE profile; fixture. |
 | `BUYER_DEADLINES` | Covered in this effort: exact task identity, reconciliation, journey 5. |
+| `BUYER_DISCLOSURE_FUNDS_READINESS` | Covered in this effort: direct readiness answer carries canonical Closing Disclosure workspace freshness and the wire-fraud safety boundary. |
+| `BUYER_DOCUMENT_READINESS` | Covered in this effort: direct document-readiness answer reports recorded/verified scope without fabricating an observation timestamp. |
+| `BUYER_INSPECTION_REVIEW` | Covered in this effort: direct inspection answer states the exact open-material-finding rationale and preserves the buyer professional boundary. |
 | `BUYER_PLAN_STATUS` | Covered in this effort: reconciliation, journey 5. |
+| `CAPABILITY_DISCOVERY` | Covered in this effort: answer-first discovery result explains the match basis before presenting live registry capabilities and readiness. |
 | `CAPITAL_RESERVE_PLAN` | Covered in this effort: reserve-plan summary and timeline are covered by capital timeline fixtures and declare dated planning evidence plus a cost/timing boundary. |
 | `COVERAGE_REVIEW_STATUS` | Covered in this effort: audited against the ATTENTION profile; fixture. |
+| `DIY_PROJECT_GUIDE` | Covered in this effort: reviewed guide fixtures cover canonical project progress, current step, refusal/finished states and permission-aware actions. |
 | `DOCUMENT_LOOKUP` | Covered in this effort: collection descriptor (Phase 5). |
 | `FINANCING_OVERVIEW` | Covered in this effort: ways-to-pay comparison with structured rate evidence (Phase 5 follow-up); overview and project fixtures. |
+| `GROUNDED_GUIDANCE` | Covered in this effort: grounded answer declares property/general scope, source evidence when available, confidence limitations and a professional boundary. |
+| `GUIDANCE_JOURNEY_CREATE` | Covered in this effort: workflow proposal requires a canonical item or approved service, then presents scope and plan type for confirmation before creation. |
+| `HOME_CHANGE_SUMMARY` | Covered in this effort: answer-first 30-day summary scopes covered sources before canonical, deduplicated change blocks and preserves honest empty/unavailable states. |
 | `HOME_DEADLINE_MONITOR` | Covered in this effort: monitor proposal resolves one canonical dated obligation and discloses due date, lead time, delivery channel, consent and no-change states before confirmation. |
 | `HOME_EVENT_RADAR_FEED` | Covered in this effort: collection descriptor with cursor continuation (Phase 2). |
 | `HOME_STATUS_BOARD` | Covered in this effort: collection descriptor, unknown-is-not-good section, lead sentence; fixtures and journey 1. |
@@ -37,8 +45,14 @@ contract-level journey, or explicit producer-contract review; it is not verified
 | `HVAC_DECISION_SCENARIO` | Covered in this effort: completed scenario comparison now declares its dated Decision Platform engine basis and an explicit isolated-scenario limitation. |
 | `HVAC_DECISION_START` | Covered in this effort: item-carrying warranty follow-up on the decision card, journey 4. |
 | `HVAC_SPECIALIST_ENGAGE` | Covered in this effort: ready Specialist recommendation carries its canonical snapshot date, Decision Platform engine version, deterministic rationale and an explicit professional boundary. |
+| `INCIDENT_CONTINUATION` | Covered in this effort: answer-first continuation declares recorded workflow choices, canonical record freshness and an emergency-response boundary. |
 | `INSPECTION_REPORT_COMPARE` | Covered in this effort: document-evidence fixture. |
 | `INVENTORY_LOOKUP` | Covered in this effort: collection descriptor and gated Next control (Phase 2). |
+| `MAINTENANCE_BUDGET_FORECAST` | Covered in this effort: budget breakdown declares complete category and month totals with no truncation or continuation. |
+| `MAINTENANCE_FORECAST` | Covered in this effort: forecast list declares the complete prediction total and honest first-20 delivery truncation with no unsupported continuation. |
+| `MAINTENANCE_STATUS` | Covered in this effort: maintenance shelves declare exact canonical totals, delivered rows and server-window continuation state. |
+| `MAINTENANCE_TEMPLATES_BROWSE` | Covered in this effort: template catalogue declares source, fetched and delivered totals across applicability buckets without offering unsupported continuation. |
+| `MAJOR_EVENT_ENTRY` | Covered in this effort: event-specific answer wraps governed capability discovery with an explicit legal, tax, insurance, safety and professional boundary. |
 | `MATERIAL_SPECS_LIST` | Covered in this effort: record-explorer fixture. |
 | `PROPERTY_TAX_APPEAL_READINESS` | Covered in this effort: appeal-readiness fixtures cover gaps and canonical facts with reviewed-rule/evidence dates and a tax/appraisal/legal boundary. |
 | `QUOTE_COMPARISON_REVIEW` | Covered in this effort: quote-review fixtures cover scope-aligned comparison, per-quote freshness, recorded-evidence dates and the provider-endorsement boundary. |
@@ -100,11 +114,7 @@ contract-level journey, or explicit producer-contract review; it is not verified
 | `INTELLIGENCE_ENVELOPE_QUERY` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
 | `INVENTORY_ITEM_CORRECT` | A command whose result may carry a list (for example a choice of target): collection semantics apply, and the boundary derives them until the producer declares its own. |
 | `INVENTORY_ITEM_CREATE` | A command whose result may carry a list (for example a choice of target): collection semantics apply, and the boundary derives them until the producer declares its own. |
-| `MAINTENANCE_BUDGET_FORECAST` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
-| `MAINTENANCE_FORECAST` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
-| `MAINTENANCE_STATUS` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
 | `MAINTENANCE_TASK_UPDATE` | A command whose result may carry a list (for example a choice of target): collection semantics apply, and the boundary derives them until the producer declares its own. |
-| `MAINTENANCE_TEMPLATES_BROWSE` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
 | `NEGOTIATION_SHIELD_CASES` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
 | `NEGOTIATION_SHIELD_CASE_ANALYZE` | A command whose result may carry a list (for example a choice of target): collection semantics apply, and the boundary derives them until the producer declares its own. |
 | `NEGOTIATION_SHIELD_CASE_START` | A command whose result may carry a list (for example a choice of target): collection semantics apply, and the boundary derives them until the producer declares its own. |
@@ -226,16 +236,6 @@ contract-level journey, or explicit producer-contract review; it is not verified
 
 | Operation | Why |
 |---|---|
-| `BUYER_DISCLOSURE_FUNDS_READINESS` | A read with no list or table block allowed: a direct-answer profile only, not yet audited. |
-| `BUYER_DOCUMENT_READINESS` | A read with no list or table block allowed: a direct-answer profile only, not yet audited. |
-| `BUYER_INSPECTION_REVIEW` | A read with no list or table block allowed: a direct-answer profile only, not yet audited. |
-| `CAPABILITY_DISCOVERY` | A guide, discovery or grounded-guidance workflow with its own presentation; review against the GUIDE profile later. |
-| `DIY_PROJECT_GUIDE` | A read with no list or table block allowed: a direct-answer profile only, not yet audited. |
-| `GROUNDED_GUIDANCE` | A guide, discovery or grounded-guidance workflow with its own presentation; review against the GUIDE profile later. |
-| `GUIDANCE_JOURNEY_CREATE` | A guide, discovery or grounded-guidance workflow with its own presentation; review against the GUIDE profile later. |
-| `HOME_CHANGE_SUMMARY` | A read with no list or table block allowed: a direct-answer profile only, not yet audited. |
-| `INCIDENT_CONTINUATION` | A guide, discovery or grounded-guidance workflow with its own presentation; review against the GUIDE profile later. |
-| `MAJOR_EVENT_ENTRY` | A guide, discovery or grounded-guidance workflow with its own presentation; review against the GUIDE profile later. |
 
 ## Not applicable (boundary operations)
 
