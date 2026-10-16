@@ -623,6 +623,126 @@ export const OPERATION_SPECIFIC_CONTINUATION_RECIPES: Readonly<Partial<Record<As
     recipe('Review home work items', 'Show my home operations work items', 'HOME_WORK_ITEMS', 'REVIEW_HOME_WORK_ITEMS', 'HOME_DEADLINE_REVIEW_WORK_ITEMS'),
     recipe('Review pending maintenance', 'What maintenance is pending?', 'MAINTENANCE_STATUS', 'REVIEW_MAINTENANCE_STATUS', 'HOME_DEADLINE_REVIEW_MAINTENANCE'),
   ],
+  APPLIANCE_FAILURE_RISK: [
+    recipe('Review replacement guidance', 'Should I repair or replace a major home system?', 'REPLACEMENT_GUIDANCE', 'REVIEW_REPLACEMENT', 'APPLIANCE_RISK_REVIEW_REPLACEMENT'),
+    recipe('Review the status board', 'Show my status board', 'HOME_STATUS_BOARD', 'REVIEW_STATUS_BOARD', 'APPLIANCE_RISK_REVIEW_STATUS'),
+  ],
+  BREAK_EVEN_ANALYSIS: [
+    recipe('Review ownership costs', 'Show my home ownership costs', 'OWNERSHIP_COSTS', 'REVIEW_OWNERSHIP_COSTS', 'BREAK_EVEN_REVIEW_COSTS'),
+    recipe('Review sell, hold, or rent options', 'Should I sell, hold, or rent this home?', 'SELL_HOLD_RENT_ANALYSIS', 'CONTINUE_SELL_HOLD_RENT_PLAN', 'BREAK_EVEN_REVIEW_STRATEGY'),
+  ],
+  CAPTURE_EVIDENCE_CONFIRM: [
+    recipe('Review home documents', 'Show my home documents', 'DOCUMENT_LOOKUP', 'REVIEW_DOCUMENTS', 'EVIDENCE_CAPTURED_REVIEW_DOCUMENTS'),
+    recipe('Review the home timeline', 'Open my home timeline', 'HOME_TIMELINE_EVENTS', 'REVIEW_HOME_TIMELINE', 'EVIDENCE_CAPTURED_REVIEW_TIMELINE'),
+  ],
+  CAPTURE_FACT_CONFIRM: [
+    recipe('Review home summary', 'Show my home summary', 'PROPERTY_SUMMARY', 'REVIEW_HOME_SUMMARY', 'FACT_CAPTURED_REVIEW_SUMMARY'),
+    recipe('Review the status board', 'Show my status board', 'HOME_STATUS_BOARD', 'REVIEW_STATUS_BOARD', 'FACT_CAPTURED_REVIEW_STATUS'),
+  ],
+  DO_NOTHING_SCENARIO_COMMAND: [
+    recipe('Review the do-nothing simulation', 'Show my do-nothing simulation', 'DO_NOTHING_SIMULATION', 'REVIEW_DO_NOTHING_SIMULATION', 'DO_NOTHING_SCENARIO_REVIEW_SIMULATION'),
+    recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'DO_NOTHING_SCENARIO_REVIEW_ACTIONS'),
+  ],
+  DO_NOTHING_SIMULATION: [
+    recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'DO_NOTHING_REVIEW_ACTIONS'),
+    recipe('Review ownership costs', 'Show my home ownership costs', 'OWNERSHIP_COSTS', 'REVIEW_OWNERSHIP_COSTS', 'DO_NOTHING_REVIEW_COSTS'),
+  ],
+  DO_NOTHING_SIMULATION_RUN: [
+    recipe('Review the do-nothing simulation', 'Show my do-nothing simulation', 'DO_NOTHING_SIMULATION', 'REVIEW_DO_NOTHING_SIMULATION', 'DO_NOTHING_RUN_REVIEW_SIMULATION'),
+    recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'DO_NOTHING_RUN_REVIEW_ACTIONS'),
+  ],
+  HIRING_GUIDE: [
+    recipe('Review quote comparisons', 'Show my quote comparisons', 'QUOTE_COMPARISON_REVIEW', 'REVIEW_QUOTES', 'HIRING_GUIDE_REVIEW_QUOTES'),
+    recipe('Review service prices', 'Show my service price checks', 'SERVICE_PRICE_CHECKS', 'REVIEW_SERVICE_PRICES', 'HIRING_GUIDE_REVIEW_PRICES'),
+  ],
+  HOA_COMPLIANCE_COMMAND: [
+    recipe('Review HOA records', 'Show my HOA records', 'HOA_COMPLIANCE_STATUS', 'REVIEW_HOA_STATUS', 'HOA_UPDATED_REVIEW_STATUS'),
+    recipe('Review renovation readiness', 'Show my renovation permit readiness', 'RENOVATION_PERMIT_READINESS', 'REVIEW_RENOVATION_READINESS', 'HOA_UPDATED_REVIEW_RENOVATION'),
+  ],
+  HOA_COMPLIANCE_STATUS: [
+    recipe('Review renovation readiness', 'Show my renovation permit readiness', 'RENOVATION_PERMIT_READINESS', 'REVIEW_RENOVATION_READINESS', 'HOA_STATUS_REVIEW_RENOVATION'),
+    recipe('Review home documents', 'Show my home documents', 'DOCUMENT_LOOKUP', 'REVIEW_DOCUMENTS', 'HOA_STATUS_REVIEW_DOCUMENTS'),
+  ],
+  HOME_BASICS_GUIDE: [
+    recipe('Review the status board', 'Show my status board', 'HOME_STATUS_BOARD', 'REVIEW_STATUS_BOARD', 'HOME_BASICS_REVIEW_STATUS'),
+    recipe('Review pending maintenance', 'What maintenance is pending?', 'MAINTENANCE_STATUS', 'REVIEW_MAINTENANCE_STATUS', 'HOME_BASICS_REVIEW_MAINTENANCE'),
+  ],
+  HOME_DIGITAL_WILL: [
+    recipe('Review home documents', 'Show my home documents', 'DOCUMENT_LOOKUP', 'REVIEW_DOCUMENTS', 'HOME_CONTINUITY_REVIEW_DOCUMENTS'),
+    recipe('Review home summary', 'Show my home summary', 'PROPERTY_SUMMARY', 'REVIEW_HOME_SUMMARY', 'HOME_CONTINUITY_REVIEW_SUMMARY'),
+  ],
+  HOME_JOURNEY_SET: [
+    recipe('Review home summary', 'Show my home summary', 'PROPERTY_SUMMARY', 'REVIEW_HOME_SUMMARY', 'HOME_JOURNEY_REVIEW_SUMMARY'),
+    recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'HOME_JOURNEY_REVIEW_ACTIONS'),
+  ],
+  HOME_RECORD_STATE_COMMAND: [
+    recipe('Review home documents', 'Show my home documents', 'DOCUMENT_LOOKUP', 'REVIEW_DOCUMENTS', 'HOME_RECORD_UPDATED_REVIEW_DOCUMENTS'),
+    recipe('Review home summary', 'Show my home summary', 'PROPERTY_SUMMARY', 'REVIEW_HOME_SUMMARY', 'HOME_RECORD_UPDATED_REVIEW_SUMMARY'),
+  ],
+  HOME_UPGRADE_COMMAND: [
+    recipe('Review upgrade options', 'Show my upgrade planner options', 'HOME_UPGRADE_SCENARIOS', 'REVIEW_HOME_UPGRADES', 'HOME_UPGRADE_UPDATED_REVIEW_SCENARIOS'),
+    recipe('Review replacement guidance', 'Should I repair or replace a major home system?', 'REPLACEMENT_GUIDANCE', 'REVIEW_REPLACEMENT', 'HOME_UPGRADE_UPDATED_REVIEW_REPLACEMENT'),
+  ],
+  HOME_UPGRADE_SCENARIOS: [
+    recipe('Review replacement guidance', 'Should I repair or replace a major home system?', 'REPLACEMENT_GUIDANCE', 'REVIEW_REPLACEMENT', 'HOME_UPGRADES_REVIEW_REPLACEMENT'),
+    recipe('Review capital outlook', 'Show my capital reserve outlook', 'CAPITAL_RESERVE_PLAN', 'REVIEW_CAPITAL_OUTLOOK', 'HOME_UPGRADES_REVIEW_CAPITAL'),
+  ],
+  HOUSEHOLD_INVITATION: [
+    recipe('Review home continuity', 'Show my home continuity plan', 'HOME_DIGITAL_WILL', 'REVIEW_HOME_CONTINUITY', 'HOUSEHOLD_INVITE_REVIEW_CONTINUITY'),
+    recipe('Review home summary', 'Show my home summary', 'PROPERTY_SUMMARY', 'REVIEW_HOME_SUMMARY', 'HOUSEHOLD_INVITE_REVIEW_SUMMARY'),
+  ],
+  INTELLIGENCE_ENVELOPE_QUERY: [
+    recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'INTELLIGENCE_REVIEW_ACTIONS'),
+    recipe('Review monitored events', 'Show my home event radar feed', 'HOME_EVENT_RADAR_FEED', 'REVIEW_RADAR_FEED', 'INTELLIGENCE_REVIEW_RADAR'),
+  ],
+  MATERIAL_SPECS_LIST: [
+    recipe('Review home inventory', 'Show my home inventory', 'INVENTORY_LOOKUP', 'REVIEW_HOME_INVENTORY', 'MATERIAL_SPECS_REVIEW_INVENTORY'),
+    recipe('Review home documents', 'Show my home documents', 'DOCUMENT_LOOKUP', 'REVIEW_DOCUMENTS', 'MATERIAL_SPECS_REVIEW_DOCUMENTS'),
+  ],
+  MATERIAL_SPEC_ADD: [
+    recipe('Review material specs', 'Show my material specs', 'MATERIAL_SPECS_LIST', 'REVIEW_MATERIAL_SPECS', 'MATERIAL_ADDED_REVIEW_SPECS'),
+    recipe('Review home summary', 'Show my home summary', 'PROPERTY_SUMMARY', 'REVIEW_HOME_SUMMARY', 'MATERIAL_ADDED_REVIEW_SUMMARY'),
+  ],
+  NEIGHBORHOOD_CHANGE_FEED: [
+    recipe('Review monitored events', 'Show my home event radar feed', 'HOME_EVENT_RADAR_FEED', 'REVIEW_RADAR_FEED', 'NEIGHBORHOOD_REVIEW_RADAR'),
+    recipe('Review past hazard exposure', 'Show my home risk replay', 'PAST_HAZARD_EXPOSURE', 'REVIEW_PAST_HAZARDS', 'NEIGHBORHOOD_REVIEW_HAZARDS'),
+  ],
+  NEIGHBORHOOD_INTERACTION_COMMAND: [
+    recipe('Review neighborhood changes', 'Show my Around Your Home feed', 'NEIGHBORHOOD_CHANGE_FEED', 'REVIEW_NEIGHBORHOOD_CHANGES', 'NEIGHBORHOOD_UPDATED_REVIEW_FEED'),
+    recipe('Review monitored events', 'Show my home event radar feed', 'HOME_EVENT_RADAR_FEED', 'REVIEW_RADAR_FEED', 'NEIGHBORHOOD_UPDATED_REVIEW_RADAR'),
+  ],
+  OPERATIONAL_WORK_UPDATE: [
+    recipe('Review home work items', 'Show my home operations work items', 'HOME_WORK_ITEMS', 'REVIEW_HOME_WORK_ITEMS', 'OPERATIONAL_WORK_REVIEW_ITEMS'),
+    recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'OPERATIONAL_WORK_REVIEW_ACTIONS'),
+  ],
+  PAST_HAZARD_EXPOSURE: [
+    recipe('Review monitored events', 'Show my home event radar feed', 'HOME_EVENT_RADAR_FEED', 'REVIEW_RADAR_FEED', 'PAST_HAZARDS_REVIEW_RADAR'),
+    recipe('Review coverage gaps', 'Show coverage gaps for my recorded items', 'COVERAGE_GAPS', 'REVIEW_COVERAGE_GAPS', 'PAST_HAZARDS_REVIEW_COVERAGE'),
+  ],
+  PAST_HAZARD_OUTCOME_COMMAND: [
+    recipe('Review past hazard exposure', 'Show my home risk replay', 'PAST_HAZARD_EXPOSURE', 'REVIEW_PAST_HAZARDS', 'PAST_HAZARD_OUTCOME_REVIEW_EXPOSURE'),
+    recipe('Review the home timeline', 'Open my home timeline', 'HOME_TIMELINE_EVENTS', 'REVIEW_HOME_TIMELINE', 'PAST_HAZARD_OUTCOME_REVIEW_TIMELINE'),
+  ],
+  PROPERTY_BRIEFS_LIST: [
+    recipe('Review home summary', 'Show my home summary', 'PROPERTY_SUMMARY', 'REVIEW_HOME_SUMMARY', 'PROPERTY_BRIEFS_REVIEW_SUMMARY'),
+    recipe('Review the home timeline', 'Open my home timeline', 'HOME_TIMELINE_EVENTS', 'REVIEW_HOME_TIMELINE', 'PROPERTY_BRIEFS_REVIEW_TIMELINE'),
+  ],
+  PROPERTY_BRIEF_COMMAND: [
+    recipe('Review property briefs', 'Open my saved property briefs', 'PROPERTY_BRIEFS_LIST', 'REVIEW_PROPERTY_BRIEFS', 'PROPERTY_BRIEF_UPDATED_REVIEW_BRIEFS'),
+    recipe('Review home summary', 'Show my home summary', 'PROPERTY_SUMMARY', 'REVIEW_HOME_SUMMARY', 'PROPERTY_BRIEF_UPDATED_REVIEW_SUMMARY'),
+  ],
+  PROPERTY_CONTEXT_AREA_CAPTURE: [
+    recipe('Review home summary', 'Show my home summary', 'PROPERTY_SUMMARY', 'REVIEW_HOME_SUMMARY', 'PROPERTY_CONTEXT_REVIEW_SUMMARY'),
+    recipe('Review the status board', 'Show my status board', 'HOME_STATUS_BOARD', 'REVIEW_STATUS_BOARD', 'PROPERTY_CONTEXT_REVIEW_STATUS'),
+  ],
+  PROPERTY_PURCHASE_DATE_SET: [
+    recipe('Review home summary', 'Show my home summary', 'PROPERTY_SUMMARY', 'REVIEW_HOME_SUMMARY', 'PURCHASE_DATE_REVIEW_SUMMARY'),
+    recipe('Review maintenance forecast', 'What maintenance might be coming up?', 'MAINTENANCE_FORECAST', 'REVIEW_MAINTENANCE_FORECAST', 'PURCHASE_DATE_REVIEW_FORECAST'),
+  ],
+  RESERVE_FUND_COMMAND: [
+    recipe('Review capital outlook', 'Show my capital reserve outlook', 'CAPITAL_RESERVE_PLAN', 'REVIEW_CAPITAL_OUTLOOK', 'RESERVE_FUND_REVIEW_CAPITAL'),
+    recipe('Review ownership costs', 'Show my home ownership costs', 'OWNERSHIP_COSTS', 'REVIEW_OWNERSHIP_COSTS', 'RESERVE_FUND_REVIEW_COSTS'),
+  ],
 });
 
 export function operationSpecificContinuationOutcomeKeys(sourceOperationId: string): readonly string[] {

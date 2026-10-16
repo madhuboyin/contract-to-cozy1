@@ -53,7 +53,7 @@ test('recipe candidates are property-scoped governed continuations', () => {
   }
   assert.deepEqual(operationSpecificContinuationCandidates(null, PROPERTY_ID), []);
   assert.deepEqual(operationSpecificContinuationCandidates('MAINTENANCE_STATUS', null), []);
-  assert.deepEqual(operationSpecificContinuationCandidates('APPLIANCE_FAILURE_RISK', PROPERTY_ID), []);
+  assert.deepEqual(operationSpecificContinuationCandidates('CAPABILITY_DISCOVERY', PROPERTY_ID), []);
 });
 
 test('the operation-specific producer is registered as an essential result producer', () => {
@@ -206,6 +206,24 @@ test('home intelligence reads and command receipts all have tailored continuatio
     'HOME_EVENT_RADAR_FEED', 'HOME_EVENT_RADAR_STATE', 'HOME_EVENT_RADAR_MARK_DONE',
     'HOME_EVENT_RADAR_FEEDBACK', 'HOME_EVENT_RADAR_PREFERENCES', 'HOME_EVENT_RADAR_TASK',
     'HOME_WORK_ITEMS', 'HOME_WORK_ITEM_COMMAND', 'PROPERTY_SUMMARY', 'HOME_DEADLINE_MONITOR',
+  ];
+  for (const operationId of migratedOperations) {
+    const candidates = operationSpecificContinuationCandidates(operationId, PROPERTY_ID);
+    assert.ok(candidates.length >= 1, `${operationId}: missing tailored continuation`);
+    assert.ok(candidates.every((candidate) => candidate.sourceOperationId === operationId), operationId);
+  }
+});
+
+test('remaining specialist, record, simulation, and setup operations all have tailored continuations', () => {
+  const migratedOperations = [
+    'APPLIANCE_FAILURE_RISK', 'BREAK_EVEN_ANALYSIS', 'CAPTURE_EVIDENCE_CONFIRM', 'CAPTURE_FACT_CONFIRM',
+    'DO_NOTHING_SCENARIO_COMMAND', 'DO_NOTHING_SIMULATION', 'DO_NOTHING_SIMULATION_RUN', 'HIRING_GUIDE',
+    'HOA_COMPLIANCE_COMMAND', 'HOA_COMPLIANCE_STATUS', 'HOME_BASICS_GUIDE', 'HOME_DIGITAL_WILL',
+    'HOME_JOURNEY_SET', 'HOME_RECORD_STATE_COMMAND', 'HOME_UPGRADE_COMMAND', 'HOME_UPGRADE_SCENARIOS',
+    'HOUSEHOLD_INVITATION', 'INTELLIGENCE_ENVELOPE_QUERY', 'MATERIAL_SPECS_LIST', 'MATERIAL_SPEC_ADD',
+    'NEIGHBORHOOD_CHANGE_FEED', 'NEIGHBORHOOD_INTERACTION_COMMAND', 'OPERATIONAL_WORK_UPDATE',
+    'PAST_HAZARD_EXPOSURE', 'PAST_HAZARD_OUTCOME_COMMAND', 'PROPERTY_BRIEFS_LIST', 'PROPERTY_BRIEF_COMMAND',
+    'PROPERTY_CONTEXT_AREA_CAPTURE', 'PROPERTY_PURCHASE_DATE_SET', 'RESERVE_FUND_COMMAND',
   ];
   for (const operationId of migratedOperations) {
     const candidates = operationSpecificContinuationCandidates(operationId, PROPERTY_ID);

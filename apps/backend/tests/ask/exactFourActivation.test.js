@@ -33,7 +33,7 @@ async function availability({ role = 'VIEWER', mode = 'UNKNOWN', disabled = null
 }
 const okLifecycle = (over = {}) => async () => ({ cooldownKeys: new Set(), completedKeys: new Set(), lastOfferedAtMs: new Map(), ok: true, ...over });
 
-async function run({ role, mode, disabled, status = 'ANSWERED', message = 'Help me understand my home basics', operationId = 'HOME_BASICS_GUIDE', propertyId = PROPERTY,
+async function run({ role, mode, disabled, status = 'ANSWERED', message = 'What can Ask Cozy help me with?', operationId = 'CAPABILITY_DISCOVERY', propertyId = PROPERTY,
   current = null, recent = [], lifecycle = okLifecycle(), producers, nowMs, entityValidatorFor, result: resultOver = {} } = {}) {
   const offers = []; const calls = { lifecycle: 0, completeness: 0 };
   const avail = await availability({ role, mode, disabled });
@@ -182,7 +182,7 @@ test('a declared DIY result candidate survives the contextual exemption and beco
 test('the real finalizer shares one Property Context-backed state across profile, opportunity and completeness consumers', async () => {
   let sharedReads = 0;
   const out = await finalizeSuggestedNextActionsWithReport(
-    { result: { status: 'ANSWERED', blocks: [], suggestions: [] }, executionId: 'e1', userId: 'u1', sessionId: 's1', propertyId: PROPERTY, operationId: 'HOME_BASICS_GUIDE', message: 'Help me understand my home basics', completedSemanticKeyHashes: new Set() },
+    { result: { status: 'ANSWERED', blocks: [], suggestions: [] }, executionId: 'e1', userId: 'u1', sessionId: 's1', propertyId: PROPERTY, operationId: 'CAPABILITY_DISCOVERY', message: 'What can Ask Cozy help me with?', completedSemanticKeyHashes: new Set() },
     {
       clock: { now: () => NOW },
       loadSharedPropertyState: async () => {
@@ -213,7 +213,7 @@ test('every role x operating mode reaches four on an empty home', async () => {
 test('VERIFIED LAUNCH: the launched starter is excluded from its own answer and the row still reaches four (every starter as the launched one)', async () => {
   for (const current of ALL) {
     const r = await run({ current, role: 'VIEWER', operationId: current.operationId, message: current.message });
-    assertFour(r, `launched ${keyOf(current)}`, { starterOnly: current.operationId !== 'PROPERTY_SUMMARY' });
+    assertFour(r, `launched ${keyOf(current)}`, { starterOnly: !['PROPERTY_SUMMARY', 'HOME_BASICS_GUIDE', 'HIRING_GUIDE'].includes(current.operationId) });
     assert.ok(!keysShown(r).includes(keyOf(current)), `${keyOf(current)} is not re-offered on its own answer`);
   }
 });

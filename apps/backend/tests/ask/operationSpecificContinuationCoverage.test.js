@@ -49,11 +49,11 @@ test('reviewed contextual surfaces and state exemptions are explicit and registe
   }
 });
 
-test('the strict completion validator exposes the bounded migration backlog', () => {
+test('the strict completion validator passes with no migration backlog', () => {
   const ledger = buildOperationSpecificContinuationCoverage();
   const missing = ledger.filter((entry) => entry.coverageClass === 'MIGRATION_REQUIRED');
   const issues = validateOperationSpecificContinuationCoverage();
-  assert.ok(missing.length > 0, 'remove this backlog assertion when Phase 17 reaches zero');
-  assert.deepEqual(issues, missing.map((entry) => `${entry.operationId}: operation-specific continuation required`));
+  assert.deepEqual(missing, [], 'every applicable registered operation must have reviewed continuation coverage');
+  assert.deepEqual(issues, []);
 });
 
