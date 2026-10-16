@@ -80,6 +80,7 @@ test('Review shows the analysis, then the draft collapsed-by-design in its own b
     assert.match(part.detail, /itemize the labor and materials/);
     assert.equal(part.description ?? null, null, 'the body is only in the on-demand detail, never in the always-visible description');
     assert.deepEqual(draft.actions, []);
+    for (const block of result.blocks.filter((entry) => entry.type === 'GROUPED_LIST')) assert.ok(block.collection, block.id);
   } finally { s.restore(); }
 });
 
@@ -94,7 +95,8 @@ test('the review never carries raw input text, document keys, file URLs or deskt
     // The query reads the case, its latest analysis and its latest draft, and only the NEWEST INPUT'S TIMESTAMP (whether a run is possible and whether
     // the details changed since the analysis): never an input's text or data, documents or buyer finding links.
     const [query] = s.queries;
-    assert.deepEqual(Object.keys(query.include).sort(), ['analyses', 'documents', 'drafts', 'inputs']);
+    assert.deepEqual(Object.keys(query.include).sort(), ['_count', 'analyses', 'documents', 'drafts', 'inputs']);
+    assert.deepEqual(query.include._count, { select: { documents: true } });
     assert.deepEqual(query.include.inputs.select, { updatedAt: true });
     assert.equal(query.include.inputs.take, 1);
     // The attached documents are selected by link id, record id, role, title, visibility and scan state: never a storage key, file name, file link or content.

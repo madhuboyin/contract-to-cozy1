@@ -93,6 +93,8 @@ export type NegotiationShieldCaseReviewDTO = {
    * is returned as "Private document".
    */
   documents: Array<{ id: string; documentId: string; documentType: string; title: string; shared: boolean; ready: boolean }>;
+  /** Authoritative attachment count; `documents` itself is a bounded newest-first read. */
+  documentsTotal?: number;
 };
 
 /**
@@ -111,6 +113,7 @@ export async function getNegotiationShieldCaseReviewForProperty(propertyId: stri
       analyses: { orderBy: [{ generatedAt: 'desc' }, { createdAt: 'desc' }], take: 1 },
       drafts: { orderBy: [{ isLatest: 'desc' }, { createdAt: 'desc' }], take: 1 },
       inputs: { select: { updatedAt: true }, orderBy: [{ updatedAt: 'desc' }], take: 1 },
+      _count: { select: { documents: true } },
       documents: {
         select: {
           id: true, documentId: true, documentType: true,
@@ -139,6 +142,7 @@ export async function getNegotiationShieldCaseReviewForProperty(propertyId: stri
     hasInput: Boolean(newestInput),
     inputsUpdatedAt: newestInput ? asIsoString(newestInput.updatedAt) : null,
     documents,
+    documentsTotal: Number(record._count?.documents ?? documents.length),
     case: serializeNegotiationShieldCase(record),
     latestAnalysis: Array.isArray(record.analyses) && record.analyses[0] ? serializeNegotiationShieldAnalysis(record.analyses[0]) : null,
     latestDraft: Array.isArray(record.drafts) && record.drafts[0] ? serializeNegotiationShieldDraft(record.drafts[0]) : null,

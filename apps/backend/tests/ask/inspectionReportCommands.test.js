@@ -39,6 +39,7 @@ function install(role, { reports = [report()], fs = findings } = {}) {
   propertyAccess.resolvePropertyAccess = async () => ({ role, userId: 'u1', propertyId: 'prop-1' });
   prisma.inspectionReport = {
     findMany: async ({ where }) => reports.filter((r) => (!where.status || (where.status.not ? r.status !== where.status.not : r.status === where.status))),
+    count: async ({ where }) => reports.filter((r) => (!where.status || (where.status.not ? r.status !== where.status.not : r.status === where.status))).length,
     findFirst: async ({ where }) => reports.find((r) => r.id === where.id) ?? null,
   };
   prisma.inspectionFinding = { findMany: async () => fs, count: async ({ where }) => fs.filter((f) => !where.status || f.status === where.status).length };

@@ -12,6 +12,7 @@ import {
   INSPECTION_FINDING_DECISION_ACTION_IDS, INSPECTION_FINDING_DECISION_MESSAGES, INSPECTION_FINDING_ENTITY_TYPE, INSPECTION_FINDINGS_OF_REPORT_MESSAGE, INSPECTION_FIX_DISCLOSE_LABELS,
   inspectionFindingDecisionKinds, parseFixDisclosure, type InspectionFindingDecisionKind,
 } from '../support/inspectionFindingDecisionCommand';
+import { collectionDescriptor } from '../support/collectionDescriptor';
 
 const reportsAction = { id: 'inspection-reports-back', label: 'Back to my inspection reports', interactionType: 'START_WORKFLOW' as const, message: 'Show my inspection reports', operationId: 'INSPECTION_REPORTS' as const, style: 'SECONDARY' as const };
 const SEVERITY_LABELS: Record<string, string> = { SAFETY: 'Safety', MAJOR: 'Major', MINOR: 'Minor', MONITOR: 'Monitor', INFORMATIONAL: 'Informational' };
@@ -31,7 +32,7 @@ export interface FindingRow {
 }
 
 export function inspectionReportFindingsFromRows(
-  report: { reportType: string; status: string; inspectionDate: Date }, findings: FindingRow[], canChange: boolean,
+  report: { reportType: string; status: string; inspectionDate: Date }, findings: FindingRow[], canChange: boolean, sourceTotal = findings.length,
 ): AskOperationResult {
   const type = INSPECTION_REPORT_TYPE_LABELS[report.reportType] ?? 'Inspection';
   const when = humanDate(report.inspectionDate) ?? 'undated';
@@ -72,7 +73,8 @@ export function inspectionReportFindingsFromRows(
       body: `${findings.length} finding${findings.length === 1 ? '' : 's'}, ${open.length} still open.${report.reportType === 'PRE_LISTING' ? ' Because this is a pre-listing report, you can record whether you plan to fix or disclose each one.' : ''}`,
       tone: 'DEFAULT', actions: [reportsAction],
     },
-    { type: 'GROUPED_LIST', filters: [], id: 'inspection-report-findings', title: 'Findings', description: 'Most serious first.', sections, actions: [] },
+    { type: 'GROUPED_LIST', filters: [], id: 'inspection-report-findings', title: 'Findings', description: 'Most serious first.', sections,
+      collection: collectionDescriptor({ sourceTotal, fetchedCount: findings.length, sections, nextPageAvailable: false }), actions: [] },
   ];
   return { status: 'ANSWERED', reasonCode: 'INSPECTION_REPORT_FINDINGS_FOUND', blocks, suggestions: [] };
 }
@@ -90,9 +92,13 @@ registerCapabilityHandler('inspection-report-findings.view', async (envelope, de
   const report = await (prisma as any).inspectionReport.findFirst({ where: { id: launch.entityId, propertyId }, select: { id: true, reportType: true, status: true, inspectionDate: true } });
   if (!report) return notFound('INSPECTION_REPORT_NOT_FOUND', 'That report is no longer available', 'Ask could not find that inspection report.');
   if (report.status !== 'CONFIRMED') return notFound('INSPECTION_REPORT_NOT_CONFIRMED', 'Confirm the report first', 'A report’s findings are listed once you have reviewed and confirmed it.');
-  const findings = await (prisma as any).inspectionFinding.findMany({
-    where: { reportId: report.id }, orderBy: [{ severity: 'asc' }, { updatedAt: 'desc' }], take: 50,
-    select: { id: true, homeSystem: true, subsystem: true, severity: true, inspectorDescription: true, status: true, workDisposition: true, resolutionNotes: true, estimatedCostCentsLow: true, estimatedCostCentsHigh: true },
-  });
-  return inspectionReportFindingsFromRows(report, findings as FindingRow[], access.role !== HouseholdRole.VIEWER);
+  const where = { reportId: report.id };
+  const [findings, sourceTotal] = await Promise.all([
+    (prisma as any).inspectionFinding.findMany({
+      where, orderBy: [{ severity: 'asc' }, { updatedAt: 'desc' }], take: 50,
+      select: { id: true, homeSystem: true, subsystem: true, severity: true, inspectorDescription: true, status: true, workDisposition: true, resolutionNotes: true, estimatedCostCentsLow: true, estimatedCostCentsHigh: true },
+    }),
+    (prisma as any).inspectionFinding.count({ where }),
+  ]);
+  return inspectionReportFindingsFromRows(report, findings as FindingRow[], access.role !== HouseholdRole.VIEWER, sourceTotal);
 });

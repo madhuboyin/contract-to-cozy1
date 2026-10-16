@@ -15,6 +15,7 @@ import { PRICE_COMMAND_ACTION_IDS, PRICE_COMMAND_MESSAGES } from '../support/pri
 import { humanDate, money, readableCode } from '../askFormatting';
 import { getNegotiationShieldCaseReviewForProperty, listNegotiationShieldCasesForProperty, type NegotiationShieldCaseReviewDTO } from '../../negotiationShieldCaseList';
 import type { NegotiationShieldCaseSummaryDTO } from '../../negotiationShield.types';
+import { collectionDescriptor } from '../support/collectionDescriptor';
 
 // Negotiation Shield capability-card slice (FRD v1.56): the eighth new operation for a capability with none. Reads
 // listNegotiationShieldCasesForProperty, which NegotiationShieldService.listCasesForProperty (GET
@@ -113,12 +114,16 @@ export function negotiationShieldCasesFromView(cases: readonly NegotiationShield
   });
   const active = shown.filter((item) => item.status !== 'ARCHIVED');
   const archived = shown.filter((item) => item.status === 'ARCHIVED');
+  const activeTotal = cases.filter((item) => item.status !== 'ARCHIVED').length;
+  const archivedTotal = cases.length - activeTotal;
+  const sections = [
+    ...(active.length ? [{ id: 'negotiation-shield-open', title: 'Open', count: activeTotal, items: active.map(row) }] : []),
+    ...(archived.length ? [{ id: 'negotiation-shield-archived', title: 'Archived', count: archivedTotal, items: archived.map(row) }] : []),
+  ];
   blocks.push({
     type: 'GROUPED_LIST', filters: [], id: 'negotiation-shield-cases', title: 'Negotiation reviews', description: 'Newest first. Choose Review to read a review\u2019s analysis and draft.',
-    sections: [
-      ...(active.length ? [{ id: 'negotiation-shield-open', title: 'Open', count: active.length, items: active.map(row) }] : []),
-      ...(archived.length ? [{ id: 'negotiation-shield-archived', title: 'Archived', count: archived.length, items: archived.map(row) }] : []),
-    ],
+    sections,
+    collection: collectionDescriptor({ sourceTotal: cases.length, fetchedCount: cases.length, sections, nextPageAvailable: false }),
     actions: [],
   });
   blocks.push(boundary);
@@ -132,7 +137,7 @@ const NEGOTIATION_BOUNDARY: AskPresentationBlock = {
 };
 const backToReviews = { id: 'negotiation-shield-back', label: 'Back to my reviews', interactionType: 'START_WORKFLOW' as const, message: NEGOTIATION_SHIELD_LIST_MESSAGE, operationId: 'NEGOTIATION_SHIELD_CASES' as const, style: 'SECONDARY' as const };
 
-const asList = <T,>(value: unknown): T[] => (Array.isArray(value) ? (value as T[]).slice(0, 12) : []);
+const asList = <T,>(value: unknown): T[] => (Array.isArray(value) ? value as T[] : []);
 const text = (value: unknown, max = 600): string => (typeof value === 'string' ? value.trim().slice(0, max) : '');
 
 /** Splits a draft into pieces the grouped list's `detail` allows (1200 characters), at paragraph then sentence then word boundaries. */
@@ -181,6 +186,7 @@ const editDetailsAction = (caseId: string, hasInput: boolean) => ({
 // role and readiness only; never a file link, key, name or content.
 function documentsBlock(review: NegotiationShieldCaseReviewDTO, canAttach: boolean): AskPresentationBlock | null {
   const attached = review.documents ?? [];
+  const sourceTotal = review.documentsTotal ?? attached.length;
   if (!attached.length && !canAttach) return null;
   const items = attached.map((document) => ({
     id: document.id, title: document.title, description: null,
@@ -193,6 +199,7 @@ function documentsBlock(review: NegotiationShieldCaseReviewDTO, canAttach: boole
       ? 'Attached documents are counted in the analysis. Ask does not show their contents.'
       : 'Nothing is attached yet. A quote, notice or estimate attached to this review is counted in the analysis.',
     sections: [{ id: 'negotiation-shield-documents-list', title: 'Attached', count: items.length, items }],
+    collection: collectionDescriptor({ sourceTotal, fetchedCount: attached.length, sections: [{ items }], nextPageAvailable: false }),
     actions: canAttach ? [{
       id: NEGOTIATION_SHIELD_ATTACH_ACTION_ID, label: 'Attach a document', interactionType: 'START_WORKFLOW' as const, message: NEGOTIATION_SHIELD_ATTACH_MESSAGE,
       operationId: 'NEGOTIATION_SHIELD_CASE_ATTACH' as const, entityType: NEGOTIATION_SHIELD_CASE_ENTITY, entityId: review.case.id, style: 'SECONDARY' as const,
@@ -281,21 +288,23 @@ export function negotiationShieldReviewFromView(review: NegotiationShieldCaseRev
     ...figure('Gap', pricing?.gapAmount), ...figure('Gap', pricing?.gapPercentage, 'percent'), ...figure('Requested concession', pricing?.requestedConcessionAmount),
   ].slice(0, 6);
   if (pricing && typeof pricing.status === 'string') {
-    const rationale = asList<unknown>(pricing.rationale).map((entry) => text(entry, 300)).filter(Boolean);
+    const rawRationale = asList<unknown>(pricing.rationale);
+    const rationale = rawRationale.map((entry) => text(entry, 300)).filter(Boolean).slice(0, 5);
+    const items = [
+      { id: 'pricing-status', title: NEGOTIATION_PRICING_LABELS[pricing.status] ?? readableCode(pricing.status), description: null, meta: figures, status: confidenceLabel ? `${confidenceLabel} confidence` : null, href: null },
+      ...rationale.map((entry, index) => ({ id: `pricing-reason-${index}`, title: entry, description: null, meta: [] as string[], status: null, href: null })),
+    ];
     blocks.push({
       type: 'GROUPED_LIST', filters: [], id: 'negotiation-shield-pricing', title: 'Price check', description: text(pricing.summary, 400) || null,
       sections: [{
-        id: 'negotiation-shield-pricing-assessment', title: 'Assessment', count: 1 + rationale.length,
-        items: [
-          { id: 'pricing-status', title: NEGOTIATION_PRICING_LABELS[pricing.status] ?? readableCode(pricing.status), description: null, meta: figures, status: confidenceLabel ? `${confidenceLabel} confidence` : null, href: null },
-          ...rationale.slice(0, 5).map((entry, index) => ({ id: `pricing-reason-${index}`, title: entry, description: null, meta: [] as string[], status: null, href: null })),
-        ],
+        id: 'negotiation-shield-pricing-assessment', title: 'Assessment', count: 1 + rawRationale.length, items,
       }],
+      collection: collectionDescriptor({ sourceTotal: 1 + rawRationale.length, fetchedCount: 1 + rawRationale.length, sections: [{ items }], nextPageAvailable: false }),
       actions: [],
     });
   }
   const listBlock = (id: string, title: string, rawItems: Array<{ key?: unknown; title?: unknown; detail?: unknown; status?: unknown; strength?: unknown; priority?: unknown }>) => {
-    const items = rawItems.filter((entry) => text(entry.title)).map((entry, index) => {
+    const items = rawItems.filter((entry) => text(entry.title)).slice(0, 12).map((entry, index) => {
       const level = String(entry.status ?? entry.strength ?? entry.priority ?? '');
       return {
         id: `${id}-${typeof entry.key === 'string' && entry.key ? entry.key : index}`, title: text(entry.title, 200), description: text(entry.detail, 600) || null,
@@ -303,7 +312,8 @@ export function negotiationShieldReviewFromView(review: NegotiationShieldCaseRev
       };
     });
     if (!items.length) return;
-    blocks.push({ type: 'GROUPED_LIST', filters: [], id, title, sections: [{ id: `${id}-items`, title, count: items.length, items }], actions: [] });
+    blocks.push({ type: 'GROUPED_LIST', filters: [], id, title, sections: [{ id: `${id}-items`, title, count: rawItems.length, items }],
+      collection: collectionDescriptor({ sourceTotal: rawItems.length, fetchedCount: rawItems.length, sections: [{ items }], nextPageAvailable: false }), actions: [] });
   };
   listBlock('negotiation-shield-findings', 'What the review found', asList(analysis.findings));
   listBlock('negotiation-shield-leverage', 'Where you have leverage', asList(analysis.negotiationLeverage));
@@ -336,6 +346,7 @@ export function negotiationShieldReviewFromView(review: NegotiationShieldCaseRev
           status: 'Draft', href: null, detail: part,
         })),
       }],
+      collection: collectionDescriptor({ sourceTotal: parts.length, fetchedCount: parts.length, sections: [{ items: parts }], nextPageAvailable: false }),
       actions: [],
     });
   }

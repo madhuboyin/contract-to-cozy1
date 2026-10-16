@@ -35,6 +35,7 @@ function install() {
     askExecution: { findMany: async () => [] },
     inspectionFinding: {
       findMany: async () => [finding],
+      count: async () => 1,
       findFirst: async ({ where }) => (where.id === finding.id ? finding : null),
     },
   };

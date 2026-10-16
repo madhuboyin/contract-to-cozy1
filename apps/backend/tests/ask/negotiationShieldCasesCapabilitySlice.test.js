@@ -74,6 +74,7 @@ test('reviews are summarized by status and listed open then archived, with the p
   assert.equal(result.blocks[0].title, '3 open negotiation reviews');
   assert.equal(result.blocks[0].body, '1 ready for review, 1 analyzed, 1 in draft, 1 archived. Last updated Sep 20, 2026.');
   const list = result.blocks.find((block) => block.id === 'negotiation-shield-cases');
+  assert.deepEqual(list.collection, { sourceTotal: 4, fetchedCount: 4, deliveredCount: 4, nextPageAvailable: false, deliveryTruncated: false });
   assert.deepEqual(list.sections.map((section) => [section.title, section.items.map((row) => row.title)]), [
     ['Open', ['Roof replacement quote', 'Homeowners premium increase', 'Seller repair ask']],
     ['Archived', ['Old HVAC quote']],
@@ -94,6 +95,7 @@ test('more reviews than the limit are disclosed; no reviews is not an all-clear'
   const result = negotiationShieldCasesFromView(many, 'p1');
   assert.equal(result.blocks.find((block) => block.id === 'negotiation-shield-limit').body, `There are ${NEGOTIATION_SHIELD_ASK_LIMIT + 2} reviews in all. Ask lists the most recently updated; older ones are not shown.`);
   assert.equal(result.blocks.find((block) => block.id === 'negotiation-shield-cases').sections[0].items.length, NEGOTIATION_SHIELD_ASK_LIMIT);
+  assert.deepEqual(result.blocks.find((block) => block.id === 'negotiation-shield-cases').collection, { sourceTotal: NEGOTIATION_SHIELD_ASK_LIMIT + 2, fetchedCount: NEGOTIATION_SHIELD_ASK_LIMIT + 2, deliveredCount: NEGOTIATION_SHIELD_ASK_LIMIT, nextPageAvailable: false, deliveryTruncated: true });
   const none = negotiationShieldCasesFromView([], 'p1');
   assert.equal(none.reasonCode, 'NEGOTIATION_SHIELD_NO_CASES');
   assert.equal(none.blocks[0].title, 'No Negotiation Shield reviews yet');

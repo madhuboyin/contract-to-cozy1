@@ -82,6 +82,14 @@ export const REVIEWED_OPERATIONS: Readonly<Record<string, string>> = {
   COVERAGE_COMPARISON_STATUS: 'the grouped-list comparison branch declares the complete option total and bounded delivery; compact comparison-strip branches are lossless',
   COVERAGE_GAPS: 'the filtered item review declares its complete result total and per-group bounded delivery',
   INCIDENT_CLAIM_STATUS: 'the status view declares exact bucket-count source totals, bounded fetched rows and delivered rows for every filter state',
+  INSPECTION_FINDINGS: 'open confirmed findings declare their authoritative filtered total, bounded fetch and delivered deck rows',
+  INSPECTION_FINDING_UPDATE: 'both the ambiguous-target selection and batch-review branches declare their authoritative collection semantics',
+  INSPECTION_NEGOTIATION_PACKAGE: 'the negotiation package declares the authoritative open-finding total, bounded serious-finding fetch and delivered decisions',
+  INSPECTION_REPORTS: 'inspection reports declare their authoritative non-archived total, bounded fetch and delivered report rows',
+  INSPECTION_REPORT_FINDINGS: 'one report’s findings declare their authoritative total, bounded fetch and delivered outcome rows',
+  NEGOTIATION_SHIELD_CASES: 'case lists and every review subcollection declare source, fetched and delivered totals without unsupported continuation',
+  NEGOTIATION_SHIELD_CASE_ANALYZE: 'the confirmed analysis reuses the fully declared review collections in its completion receipt',
+  NEGOTIATION_SHIELD_CASE_START: 'the fixed scenario choice grid declares its complete lossless collection',
 };
 
 const LIST_BLOCKS = ['GROUPED_LIST', 'TABLE', 'TIMELINE', 'PRIORITY_LIST'];

@@ -35,7 +35,7 @@ function install(role, row = finding()) {
   const saved = { a: propertyAccess.resolvePropertyAccess, f: prisma.inspectionFinding, r: prisma.inspectionReport, d: hubService.dispositionFindingAsWork, s: hubService.saveFixDisclosureDecisions, e: executeOperation.reconcileAskExecutionSideEffects };
   const calls = [];
   propertyAccess.resolvePropertyAccess = async () => ({ role, userId: 'u1', propertyId: 'prop-1' });
-  prisma.inspectionFinding = { findFirst: async () => row, findMany: async () => (Array.isArray(row) ? row : [row]) };
+  prisma.inspectionFinding = { findFirst: async () => row, findMany: async () => (Array.isArray(row) ? row : [row]), count: async () => (Array.isArray(row) ? row.length : 1) };
   prisma.inspectionReport = { findFirst: async () => ({ id: 'r1', reportType: 'PRE_LISTING', status: 'CONFIRMED', inspectionDate: new Date('2026-08-01T12:00:00Z') }) };
   hubService.dispositionFindingAsWork = async (...a) => { calls.push(['disposition', ...a]); return {}; };
   hubService.saveFixDisclosureDecisions = async (...a) => { calls.push(['plan', ...a]); return { saved: 1 }; };
@@ -144,7 +144,7 @@ test('the open findings answer reads severity and system filters from the messag
   let seenWhere;
   const saved = { a: propertyAccess.resolvePropertyAccess, f: prisma.inspectionFinding };
   propertyAccess.resolvePropertyAccess = async () => ({ role: 'CONTRIBUTOR', userId: 'u1', propertyId: 'prop-1' });
-  prisma.inspectionFinding = { findMany: async ({ where }) => { seenWhere = where; return []; } };
+  prisma.inspectionFinding = { findMany: async ({ where }) => { seenWhere = where; return []; }, count: async () => 0 };
   try {
     const out = await invoke('INSPECTION_FINDINGS', 'Show my safety plumbing inspection findings', undefined);
     assert.equal(seenWhere.severity, 'SAFETY');
@@ -163,7 +163,7 @@ function installNeg(role, { reportType = 'PRE_PURCHASE', status = 'CONFIRMED', o
   const calls = [];
   propertyAccess.resolvePropertyAccess = async () => ({ role, userId: 'u1', propertyId: 'prop-1' });
   prisma.inspectionReport = { findFirst: async () => ({ id: 'r1', reportType, status, inspectionDate: new Date('2026-08-01T12:00:00Z') }) };
-  prisma.inspectionFinding = { findMany: async () => open };
+  prisma.inspectionFinding = { findMany: async () => open, count: async () => open.length };
   hubService.generateNegotiationPackage = async (...a) => {
     calls.push(a);
     return {
@@ -190,6 +190,7 @@ test('the negotiation package opens a one-choice-per-finding form, then calculat
     const version2 = negotiationVersion('r1', negFindings);
     const done = await negotiationPackageResult('u1', 'prop-1', { entityId: 'r1', sourceExecutionId: null }, { answer: { f0: 'negotiate_credit', f1: 'accept_as_is' }, expectedContextVersion: version2, findingIds: ['n1', 'n2'] });
     assert.equal(done.status, 'ANSWERED');
+    assert.deepEqual(done.blocks.find((block) => block.id === 'inspection-negotiation-lists').collection, { sourceTotal: 2, fetchedCount: 2, deliveredCount: 2, nextPageAvailable: false, deliveryTruncated: false });
     assert.deepEqual(w.calls[0], ['r1', 'prop-1', ['n1', 'n2'], { n1: 'negotiate_credit', n2: 'accept_as_is' }]);
     assert.match(done.blocks[0].title, /\$1,500/);
     const staleForm = await negotiationPackageResult('u1', 'prop-1', { entityId: 'r1', sourceExecutionId: null }, { answer: { f0: 'negotiate_credit', f1: 'accept_as_is' }, expectedContextVersion: 'old', findingIds: ['n1', 'n2'] });

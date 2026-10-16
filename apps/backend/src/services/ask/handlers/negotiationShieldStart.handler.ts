@@ -26,6 +26,7 @@ import {
   NEGOTIATION_START_SCENARIOS, NEGOTIATION_START_SCENARIO_SPECS, parseNegotiationStartAnswer,
   type NegotiationFieldSpec, type NegotiationStartInput, type NegotiationStartScenario,
 } from '../support/negotiationShieldStart';
+import { collectionDescriptor } from '../support/collectionDescriptor';
 
 const CONFIRMATION_MINUTES = 30;
 const REVIEW_MESSAGE = 'Review this negotiation case.';
@@ -49,6 +50,11 @@ const notRoutable = (): AskOperationResult => ({
 // ── Scenario choice ───────────────────────────────────────────────────────────────────────────────────────────
 
 function scenarioChoice(): AskOperationResult {
+  const items = NEGOTIATION_START_SCENARIOS.map((scenario) => ({
+    id: scenario, title: NEGOTIATION_START_SCENARIO_SPECS[scenario].label, description: NEGOTIATION_START_SCENARIO_SPECS[scenario].summary,
+    meta: [], status: null, href: null, entityType: NEGOTIATION_SHIELD_SCENARIO_ENTITY,
+    actions: [{ id: NEGOTIATION_SHIELD_SCENARIO_ACTION_ID, label: 'Start', message: NEGOTIATION_SHIELD_START_MESSAGE, operationId: 'NEGOTIATION_SHIELD_CASE_START' as const, interactionType: 'CONVERSATION_CONTINUE' as const, style: 'PRIMARY' as const }],
+  }));
   return {
     status: 'NEEDS_CONTEXT', reasonCode: 'NEGOTIATION_SHIELD_SCENARIO_REQUIRED',
     blocks: [{
@@ -57,12 +63,9 @@ function scenarioChoice(): AskOperationResult {
       presentation: { pattern: 'CHOICE_GRID' },
       sections: [{
         id: 'negotiation-shield-scenarios-all', title: 'Reviews you can start', count: NEGOTIATION_START_SCENARIOS.length,
-        items: NEGOTIATION_START_SCENARIOS.map((scenario) => ({
-          id: scenario, title: NEGOTIATION_START_SCENARIO_SPECS[scenario].label, description: NEGOTIATION_START_SCENARIO_SPECS[scenario].summary,
-          meta: [], status: null, href: null, entityType: NEGOTIATION_SHIELD_SCENARIO_ENTITY,
-          actions: [{ id: NEGOTIATION_SHIELD_SCENARIO_ACTION_ID, label: 'Start', message: NEGOTIATION_SHIELD_START_MESSAGE, operationId: 'NEGOTIATION_SHIELD_CASE_START', interactionType: 'CONVERSATION_CONTINUE' as const, style: 'PRIMARY' as const }],
-        })),
+        items,
       }],
+      collection: collectionDescriptor({ sourceTotal: items.length, fetchedCount: items.length, sections: [{ items }], nextPageAvailable: false }),
       actions: [],
     }],
     suggestions: [],

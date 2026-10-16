@@ -120,6 +120,7 @@ test('Start a review with no scenario asks which of the four, as rows that launc
     assert.equal(result.reasonCode, 'NEGOTIATION_SHIELD_SCENARIO_REQUIRED');
     assert.deepEqual(result.blocks[0].presentation, { pattern: 'CHOICE_GRID' });
     const items = result.blocks[0].sections[0].items;
+    assert.deepEqual(result.blocks[0].collection, { sourceTotal: 4, fetchedCount: 4, deliveredCount: 4, nextPageAvailable: false, deliveryTruncated: false });
     assert.deepEqual(items.map((item) => item.id), [...start.NEGOTIATION_START_SCENARIOS]);
     for (const item of items) {
       assert.equal(item.entityType, 'NEGOTIATION_SHIELD_SCENARIO');

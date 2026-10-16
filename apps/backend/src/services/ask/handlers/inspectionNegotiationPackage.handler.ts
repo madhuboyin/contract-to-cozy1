@@ -14,6 +14,7 @@ import {
   INSPECTION_REPORT_ENTITY_TYPE, NEGOTIATION_DECISION_LABELS, NEGOTIATION_DECISIONS, NEGOTIATION_MAX_FINDINGS, NEGOTIATION_PACKAGE_CAPTURE_KEY, NEGOTIATION_PACKAGE_MESSAGE,
   inspectionReportNegotiationEligible, negotiationFieldKey, parseNegotiationAnswer,
 } from '../support/inspectionReportCommand';
+import { collectionDescriptor } from '../support/collectionDescriptor';
 
 const sha = (text: string) => createHash('sha256').update(text).digest('hex');
 const reportsAction = { id: 'inspection-reports-back', label: 'Back to my inspection reports', interactionType: 'START_WORKFLOW' as const, message: 'Show my inspection reports', operationId: 'INSPECTION_REPORTS' as const, style: 'SECONDARY' as const };
@@ -58,10 +59,14 @@ export async function negotiationPackageResult(
   if (!inspectionReportNegotiationEligible(report)) {
     return stop('NOT_APPLICABLE', 'INSPECTION_NEGOTIATION_NOT_AVAILABLE', 'A negotiation package needs a confirmed pre-purchase report', 'Nothing has changed.');
   }
-  const findings = await (prisma as any).inspectionFinding.findMany({
-    where: { reportId: report.id, propertyId, status: 'OPEN' }, orderBy: [{ severity: 'asc' }, { createdAt: 'desc' }], take: NEGOTIATION_MAX_FINDINGS,
-    select: { id: true, homeSystem: true, subsystem: true, severity: true, inspectorDescription: true, updatedAt: true },
-  }) as OpenFinding[];
+  const where = { reportId: report.id, propertyId, status: 'OPEN' };
+  const [findings, sourceTotal] = await Promise.all([
+    (prisma as any).inspectionFinding.findMany({
+      where, orderBy: [{ severity: 'asc' }, { createdAt: 'desc' }], take: NEGOTIATION_MAX_FINDINGS,
+      select: { id: true, homeSystem: true, subsystem: true, severity: true, inspectorDescription: true, updatedAt: true },
+    }) as Promise<OpenFinding[]>,
+    (prisma as any).inspectionFinding.count({ where }),
+  ]);
   if (findings.length === 0) {
     return { status: 'ANSWERED', reasonCode: 'INSPECTION_NEGOTIATION_NO_OPEN_FINDINGS', blocks: [{ type: 'EMPTY_STATE', id: 'inspection-negotiation-empty', title: 'No open findings to negotiate', body: 'Every finding in this report has been decided. Nothing has changed.', actions: [reportsAction] }], suggestions: [] };
   }
@@ -71,7 +76,7 @@ export async function negotiationPackageResult(
     parameters: { negotiationLaunch: { entityId: report.id, findingIds: findings.map((f) => f.id), sourceExecutionId: launch.sourceExecutionId } },
     blocks: [{
       type: 'SUMMARY', id: 'inspection-negotiation-input', title: `Negotiation package, ${humanDate(report.inspectionDate) ?? 'undated'}`,
-      body: note ?? `${findings.length} open finding${findings.length === 1 ? '' : 's'}${findings.length === NEGOTIATION_MAX_FINDINGS ? ' (the most serious 25)' : ''}. Nothing is saved or sent.`, tone: note ? 'CAUTION' : 'DEFAULT', actions: [],
+      body: note ?? `${sourceTotal} open finding${sourceTotal === 1 ? '' : 's'}${sourceTotal > findings.length ? ` (showing the ${findings.length} most serious)` : ''}. Nothing is saved or sent.`, tone: note ? 'CAUTION' : 'DEFAULT', actions: [],
     }],
     captureRequests: [captureRequest(contextVersion, findings, entered)], suggestions: [],
   });
@@ -98,7 +103,8 @@ export async function negotiationPackageResult(
     tone: 'DEFAULT', actions: [reportsAction],
   }];
   const sections = [...section('credit', 'Ask for a credit', credit, 'Credit'), ...section('repair', 'Request a repair', repair, 'Repair'), ...section('as-is', 'Accept as is', asIs, 'As is')];
-  if (sections.length) blocks.push({ type: 'GROUPED_LIST', filters: [], id: 'inspection-negotiation-lists', title: 'Your package', description: null, sections, actions: [] });
+  if (sections.length) blocks.push({ type: 'GROUPED_LIST', filters: [], id: 'inspection-negotiation-lists', title: 'Your package', description: null, sections,
+    collection: collectionDescriptor({ sourceTotal, fetchedCount: findings.length, sections, nextPageAvailable: false }), actions: [] });
   return { status: 'ANSWERED', reasonCode: 'INSPECTION_NEGOTIATION_PACKAGE_READY', contextVersion, blocks, suggestions: [] };
 }
 

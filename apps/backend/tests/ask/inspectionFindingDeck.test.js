@@ -50,6 +50,7 @@ function install() {
     askExecution: { findMany: async () => [] },
     inspectionFinding: {
       findMany: async ({ where }) => findings.filter((entry) => !where.id?.in || where.id.in.includes(entry.id)),
+      count: async () => findings.length,
       findFirst: async ({ where }) => findings.find((entry) => entry.id === where.id && entry.reportId === where.reportId && entry.propertyId === where.propertyId) ?? null,
     },
   };
@@ -108,6 +109,7 @@ test('deck facts: safety is critical, major a caution; severity badge, inspectio
 test('the findings answer declares the deck with its batch for a contributor, and not for a viewer', async () => {
   const result = await listFindings();
   const list = result.blocks.find((block) => block.id === 'inspection-findings');
+  assert.deepEqual(list.collection, { sourceTotal: 3, fetchedCount: 3, deliveredCount: 3, nextPageAvailable: false, deliveryTruncated: false });
   assert.deepEqual(list.presentation, {
     pattern: 'DECK', swipeRightActionId: 'finding-accept', swipeLeftActionId: 'finding-dismiss',
     batch: { operationId: 'INSPECTION_FINDING_UPDATE', entityType: 'INSPECTION_FINDING', actionIds: ['finding-accept', 'finding-dismiss'], message: 'Review my inspection finding decisions.' },
@@ -140,6 +142,7 @@ test('a batch is proposed for one confirmation; nothing is written, and left-out
   assert.equal(result.confirmation.title, 'Confirm 2 findings?');
   assert.deepEqual(result.confirmation.fields, [{ label: 'Accept as work', value: '1 finding' }, { label: 'Dismiss', value: '1 finding' }]);
   const review = result.blocks.find((block) => block.id === 'inspection-finding-batch-decisions');
+  assert.deepEqual(review.collection, { sourceTotal: 2, fetchedCount: 2, deliveredCount: 2, nextPageAvailable: false, deliveryTruncated: false });
   assert.deepEqual(review.sections.map((section) => [section.title, section.items.map((item) => item.id)]), [['Accept as work', ['breaker']], ['Dismiss', ['crack']]]);
   const leftOut = result.blocks.find((block) => block.id === 'inspection-finding-batch-left-out');
   assert.equal(leftOut.title, '2 decisions were left out');

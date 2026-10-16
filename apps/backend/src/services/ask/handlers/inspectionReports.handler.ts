@@ -13,6 +13,7 @@ import {
   inspectionReportCanConfirm, inspectionReportCanArchive, previousConfirmedReportId, inspectionReportNegotiationEligible, NEGOTIATION_PACKAGE_ACTION_ID, NEGOTIATION_PACKAGE_MESSAGE,
 } from '../support/inspectionReportCommand';
 import { INSPECTION_FINDINGS_OF_REPORT_ACTION_ID, INSPECTION_FINDINGS_OF_REPORT_MESSAGE } from '../support/inspectionFindingDecisionCommand';
+import { collectionDescriptor } from '../support/collectionDescriptor';
 
 const reportsAction = { id: 'inspection-reports-back', label: 'Back to my inspection reports', interactionType: 'START_WORKFLOW' as const, message: 'Show my inspection reports', operationId: 'INSPECTION_REPORTS' as const, style: 'SECONDARY' as const };
 const unavailable = (reasonCode: string, title: string, body: string): AskOperationResult => ({
@@ -25,7 +26,7 @@ interface ReportRow {
   totalFindings: number; openFindings: number; safetyFindings: number; majorFindings: number;
 }
 
-export function inspectionReportsFromRows(rows: ReportRow[], canChange: boolean): AskOperationResult {
+export function inspectionReportsFromRows(rows: ReportRow[], canChange: boolean, sourceTotal = rows.length): AskOperationResult {
   const reports = rows.filter((row) => row.status !== 'ARCHIVED');
   if (reports.length === 0) {
     return {
@@ -74,18 +75,22 @@ export function inspectionReportsFromRows(rows: ReportRow[], canChange: boolean)
         : 'Confirmed reports feed your open findings. Adding a new report is done where reports are uploaded.',
       tone: 'DEFAULT', actions: [],
     },
-    { type: 'GROUPED_LIST', filters: [], id: 'inspection-reports', title: 'Reports', description: 'Newest first.', sections: [{ id: 'inspection-reports-all', title: 'Inspection reports', count: reports.length, items: reports.map(rowFor) }], actions: [] },
+    { type: 'GROUPED_LIST', filters: [], id: 'inspection-reports', title: 'Reports', description: 'Newest first.', sections: [{ id: 'inspection-reports-all', title: 'Inspection reports', count: sourceTotal, items: reports.map(rowFor) }], collection: collectionDescriptor({ sourceTotal, fetchedCount: rows.length, sections: [{ items: reports }], nextPageAvailable: false }), actions: [] },
   ];
   return { status: 'ANSWERED', reasonCode: 'INSPECTION_REPORTS_FOUND', blocks, suggestions: [] };
 }
 
 registerCapabilityHandler('inspection-reports.list', async (envelope, deps) => {
   const access = await (deps?.propertyAccess ?? ensurePropertyAccess(envelope.userId, envelope.propertyId!));
-  const rows = await (prisma as any).inspectionReport.findMany({
-    where: { propertyId: envelope.propertyId!, status: { not: 'ARCHIVED' } }, orderBy: { inspectionDate: 'desc' }, take: 25,
-    select: { id: true, reportType: true, inspectionDate: true, inspectorName: true, inspectorCompany: true, status: true, totalFindings: true, openFindings: true, safetyFindings: true, majorFindings: true },
-  });
-  return inspectionReportsFromRows(rows as ReportRow[], access.role !== HouseholdRole.VIEWER);
+  const where = { propertyId: envelope.propertyId!, status: { not: 'ARCHIVED' } };
+  const [rows, sourceTotal] = await Promise.all([
+    (prisma as any).inspectionReport.findMany({
+      where, orderBy: { inspectionDate: 'desc' }, take: 25,
+      select: { id: true, reportType: true, inspectionDate: true, inspectorName: true, inspectorCompany: true, status: true, totalFindings: true, openFindings: true, safetyFindings: true, majorFindings: true },
+    }),
+    (prisma as any).inspectionReport.count({ where }),
+  ]);
+  return inspectionReportsFromRows(rows as ReportRow[], access.role !== HouseholdRole.VIEWER, sourceTotal);
 });
 
 // ── compare ─────────────────────────────────────────────────────────────────────────────────────────────────────
