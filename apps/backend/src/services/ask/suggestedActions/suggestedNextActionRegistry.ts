@@ -142,6 +142,9 @@ export const SUGGESTED_ACTION_OUTCOMES: Readonly<Record<string, readonly string[
   DOCUMENT_PROMOTION_REVIEW: ['REVIEW_DOCUMENT_PROMOTIONS'],
   RECALL_REVIEW: ['REVIEW_RECALLS'],
   INCIDENT_CONTINUATION: ['CONTINUE_INCIDENT_WORK'],
+  INCIDENT_CLAIM_STATUS: ['REVIEW_CLAIM_STATUS'],
+  CLAIM_CHECKLIST_VIEW: ['REVIEW_CLAIM_CHECKLIST'],
+  INSPECTION_REPORTS: ['REVIEW_INSPECTION_REPORTS'],
   // Exact-four curated starters (inventory D-O4/D-O16): the two outcomes of the launch-only seasonal home-care read.
   SEASONAL_HOME_CARE: ['REVIEW_THIS_SEASON', 'PREPARE_NEXT_SEASON'],
   // The authored home-basics read's two outcomes (inventory D-O4).

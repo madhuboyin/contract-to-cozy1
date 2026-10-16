@@ -81,3 +81,45 @@ test('representative domain actions remain operation-specific', () => {
   );
   assert.equal(operationSpecificContinuationCandidates('INCIDENT_CLAIM_STATUS', PROPERTY_ID)[0].operationId, 'INCIDENT_CONTINUATION');
 });
+
+test('completed command receipts return to their owning domain reads', () => {
+  const expectedTargets = {
+    MAINTENANCE_TASK_CREATE: ['MAINTENANCE_STATUS', 'MAINTENANCE_FORECAST'],
+    MAINTENANCE_TASK_COMPLETE: ['MAINTENANCE_STATUS', 'HOME_ACTIONS'],
+    DOCUMENT_PROMOTION_CONFIRM: ['DOCUMENT_PROMOTION_REVIEW', 'DOCUMENT_LOOKUP'],
+    RECALL_MATCH_UPDATE: ['RECALL_REVIEW', 'HOME_ACTIONS'],
+    INSPECTION_FINDING_UPDATE: ['INSPECTION_FINDINGS', 'HOME_ACTIONS'],
+    INSPECTION_FINDING_DECISION_COMMAND: ['INSPECTION_FINDINGS', 'INSPECTION_REPORTS'],
+    INSPECTION_REPORT_COMMAND: ['INSPECTION_REPORTS', 'INSPECTION_FINDINGS'],
+    CLAIM_FILE: ['INCIDENT_CLAIM_STATUS', 'CLAIM_CHECKLIST_VIEW'],
+    CLAIM_TRANSITION: ['INCIDENT_CLAIM_STATUS', 'CLAIM_CHECKLIST_VIEW'],
+    CLAIM_ACTIVITY_COMMAND: ['INCIDENT_CLAIM_STATUS', 'CLAIM_CHECKLIST_VIEW'],
+  };
+  for (const [operationId, targets] of Object.entries(expectedTargets)) {
+    assert.deepEqual(
+      operationSpecificContinuationCandidates(operationId, PROPERTY_ID).map((candidate) => candidate.operationId),
+      targets,
+      operationId,
+    );
+  }
+});
+
+test('secondary domain reads continue into related status and workflow surfaces', () => {
+  const expectedTargets = {
+    MAINTENANCE_BUDGET_FORECAST: ['MAINTENANCE_FORECAST', 'MAINTENANCE_STATUS'],
+    MAINTENANCE_TEMPLATES_BROWSE: ['MAINTENANCE_STATUS', 'MAINTENANCE_FORECAST'],
+    INSPECTION_NEGOTIATION_PACKAGE: ['INSPECTION_FINDINGS', 'INSPECTION_REPORTS'],
+    INSPECTION_REPORTS: ['INSPECTION_FINDINGS', 'DOCUMENT_LOOKUP'],
+    INSPECTION_REPORT_FINDINGS: ['INSPECTION_REPORTS', 'INSPECTION_FINDINGS'],
+    INSPECTION_REPORT_COMPARE: ['INSPECTION_REPORTS', 'INSPECTION_FINDINGS'],
+    INCIDENT_CONTINUATION: ['INCIDENT_CLAIM_STATUS', 'CLAIM_CHECKLIST_VIEW'],
+    CLAIM_CHECKLIST_VIEW: ['INCIDENT_CLAIM_STATUS', 'INCIDENT_CONTINUATION'],
+  };
+  for (const [operationId, targets] of Object.entries(expectedTargets)) {
+    assert.deepEqual(
+      operationSpecificContinuationCandidates(operationId, PROPERTY_ID).map((candidate) => candidate.operationId),
+      targets,
+      operationId,
+    );
+  }
+});

@@ -33,7 +33,6 @@ test('every registered operation has exactly one continuation-coverage classific
 
 test('generic starters and recovery-only retries do not count as operation-specific coverage', () => {
   assert.ok(CURATED_STARTER_OUTCOME_KEYS.length > 0, 'the test must exercise a real generic starter inventory');
-  assert.deepEqual(governedOperationSpecificOutcomes('MAINTENANCE_TASK_CREATE'), []);
   assert.deepEqual(governedOperationSpecificOutcomes('REFINANCE_RATE_MONITOR'), []);
   assert.deepEqual(governedOperationSpecificOutcomes('QUOTE_COMPARISON_CREATE'), []);
 });
