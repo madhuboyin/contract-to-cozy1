@@ -14,7 +14,7 @@ const draftBlock: GroupedList = {
 };
 
 const renderBlock = (block: GroupedList, onItemAction = jest.fn()) => render(
-  <GenericGroupedListBlock block={block} executionId="execution" propertyId="home" onItemAction={onItemAction} itemActionsDisabled={false} onFilterClick={() => undefined} />,
+  <GenericGroupedListBlock block={block} executionId="execution" propertyId="home" onItemAction={onItemAction} itemActionsDisabled={false} onFilterClick={() => undefined} onCollectionPage={() => undefined} onAccessLost={() => undefined} />,
 );
 
 test('the draft is collapsed by default, labelled as unsent, and revealed on request', () => {

@@ -1,6 +1,7 @@
 'use client';
 
-import { useContext, useState } from 'react';
+import { useContext, useState, type ComponentType } from 'react';
+import type { AskCollectionDescriptor } from '@/features/ask/types';
 import { cn } from '@/lib/utils';
 import { formatLegacyAskMaintenanceItem } from '@/features/ask/presentationCompatibility';
 import { resolveGroupedListView, type GroupedListPresentationPreference } from '@/features/ask/adaptivePresentation';
@@ -389,6 +390,27 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
 // second reference-journey slice). All are still registered under the
 // single `GROUPED_LIST` type (see ./registry.tsx) -- the split is by block
 // id, not a second block type.
+
+// Presentation Quality 2A: specialized list renderers do not draw the shared "Showing X of Y." note themselves, so it is added once here.
+function withCollectionNote<P extends { block: { collection?: AskCollectionDescriptor } }>(Component: ComponentType<P>) {
+  return function NotedList(props: P) {
+    return <><Component {...props} /><CollectionStatusNote collection={props.block.collection} /></>;
+  };
+}
+const NotedMaintenanceResultList = withCollectionNote(MaintenanceResultList);
+const NotedRoomResultList = withCollectionNote(RoomResultList);
+const NotedInventoryResultList = withCollectionNote(InventoryResultList);
+const NotedHomeEventResultList = withCollectionNote(HomeEventResultList);
+const NotedDocumentResultList = withCollectionNote(DocumentResultList);
+const NotedHouseholdResultList = withCollectionNote(HouseholdResultList);
+const NotedWarrantyResultList = withCollectionNote(WarrantyResultList);
+const NotedReserveAllocationResultList = withCollectionNote(ReserveAllocationResultList);
+const NotedBuyerTaskResultList = withCollectionNote(BuyerTaskResultList);
+const NotedClaimResultList = withCollectionNote(ClaimResultList);
+const NotedSeasonalPlanResultList = withCollectionNote(SeasonalPlanResultList);
+const NotedInspectionFindingResultList = withCollectionNote(InspectionFindingResultList);
+const NotedSellerPrepItemResultList = withCollectionNote(SellerPrepItemResultList);
+
 const INVENTORY_ITEM_DETAIL_BLOCK_IDS = new Set(['inventory-results', 'inventory-entity-selection', 'property-inventory']);
 const HOME_EVENT_DETAIL_BLOCK_IDS = new Set(['inventory-history', 'property-recent-events']);
 
@@ -411,7 +433,7 @@ export const GroupedListBlock: AskBlockRenderer<'GROUPED_LIST'> = (props) => {
   if (props.block.id === 'maintenance-groups') {
     const { block, propertyId, itemActionsDisabled, onFilterClick, onCollectionPage, onItemAction, onWorkspaceExecutionComplete, onAccessLost } = props;
     const declaresShelves = block.presentation?.pattern === 'SHELVES';
-    return <MaintenanceResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onFilter={onFilterClick} onPage={onCollectionPage} onAction={onItemAction} onExecutionComplete={onWorkspaceExecutionComplete} onAccessLost={onAccessLost}
+    return <NotedMaintenanceResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onFilter={onFilterClick} onPage={onCollectionPage} onAction={onItemAction} onExecutionComplete={onWorkspaceExecutionComplete} onAccessLost={onAccessLost}
       link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>}
       layout={decision.pattern === 'SHELVES' ? 'SHELVES' : 'LIST'}
       onChooseLayout={declaresShelves && decision.offersChoice && controls ? (layout) => setPreference(layout === 'LIST' ? 'LIST' : 'AUTO') : undefined} />;
@@ -420,18 +442,18 @@ export const GroupedListBlock: AskBlockRenderer<'GROUPED_LIST'> = (props) => {
   if (props.block.id === 'property-rooms') {
     const { block, propertyId, itemActionsDisabled, onItemAction, onAccessLost } = props;
     const declaresMap = block.presentation?.pattern === 'ROOM_MAP';
-    return <RoomResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onAction={onItemAction} onAccessLost={onAccessLost}
+    return <NotedRoomResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onAction={onItemAction} onAccessLost={onAccessLost}
       link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>}
       layout={decision.pattern === 'ROOM_MAP' ? 'MAP' : 'LIST'}
       onChooseLayout={declaresMap && decision.offersChoice && controls ? (layout) => setPreference(layout === 'LIST' ? 'LIST' : 'AUTO') : undefined} />;
   }
   // The seasonal home-care plan is a read-only, numbered "do soon / can wait" list in both layouts; its next steps are the answer's own actions.
   if (FACT_SHEET_BLOCK_IDS.has(props.block.id)) return <FactSheetResultList block={props.block} />;
-  if (PLAN_LAYOUT_BLOCK_IDS.has(props.block.id)) return <SeasonalPlanResultList block={props.block} onItemAction={props.onItemAction} disabled={props.itemActionsDisabled} />;
+  if (PLAN_LAYOUT_BLOCK_IDS.has(props.block.id)) return <NotedSeasonalPlanResultList block={props.block} onItemAction={props.onItemAction} disabled={props.itemActionsDisabled} />;
   if (props.block.id === 'inspection-findings') {
     const { block, propertyId, itemActionsDisabled, onItemAction, onAccessLost, onBatchItemAction } = props;
     const declaresDeck = block.presentation?.pattern === 'DECK';
-    return <InspectionFindingResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onAction={onItemAction} onAccessLost={onAccessLost}
+    return <NotedInspectionFindingResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onAction={onItemAction} onAccessLost={onAccessLost}
       link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>}
       deck={decision.pattern === 'DECK' ? {
         swipeRightActionId: decision.swipeRightActionId, swipeLeftActionId: decision.swipeLeftActionId, batch: decision.batch,
@@ -443,7 +465,7 @@ export const GroupedListBlock: AskBlockRenderer<'GROUPED_LIST'> = (props) => {
   if (props.block.id === 'seller-prep-open-items') {
     const { block, propertyId, itemActionsDisabled, onItemAction, onAccessLost } = props;
     const declaresShelves = block.presentation?.pattern === 'SHELVES';
-    return <SellerPrepItemResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onAction={onItemAction} onAccessLost={onAccessLost}
+    return <NotedSellerPrepItemResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onAction={onItemAction} onAccessLost={onAccessLost}
       link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>}
       layout={decision.pattern === 'SHELVES' ? 'SHELVES' : 'LIST'}
       onChooseLayout={declaresShelves && decision.offersChoice && controls ? (layout) => setPreference(layout === 'LIST' ? 'LIST' : 'AUTO') : undefined} />;
@@ -473,6 +495,7 @@ export const GroupedListBlock: AskBlockRenderer<'GROUPED_LIST'> = (props) => {
         {decision.pattern === 'DECK' && <CardDeckView items={groupedListItems(block)} swipeRightActionId={decision.swipeRightActionId} swipeLeftActionId={decision.swipeLeftActionId} onItemAction={onItemAction} disabled={itemActionsDisabled}
           batch={decision.batch} onBatch={decision.batch && onBatchItemAction ? (decisions) => onBatchItemAction({ operationId: decision.batch!.operationId, entityType: decision.batch!.entityType, message: decision.batch!.message, decisions }) : undefined} />}
         {decision.pattern === 'ROOM_MAP' && <RoomMapView items={groupedListItems(block)} onItemAction={onItemAction} disabled={itemActionsDisabled} />}
+        {decision.pattern !== 'STATUS_ACCORDION' && <CollectionStatusNote collection={block.collection} />}
       </PatternFrame>
     );
   }
@@ -493,28 +516,28 @@ export const GroupedListBlock: AskBlockRenderer<'GROUPED_LIST'> = (props) => {
 const DeclaredListBlock: AskBlockRenderer<'GROUPED_LIST'> = (props) => {
   const { block, propertyId, itemActionsDisabled, onFilterClick, onCollectionPage, onItemAction, onAccessLost } = props;
   if (INVENTORY_ITEM_DETAIL_BLOCK_IDS.has(block.id)) {
-    return <InventoryResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onAction={onItemAction} onFilter={onFilterClick} onPage={onCollectionPage} onAccessLost={onAccessLost}
+    return <NotedInventoryResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onAction={onItemAction} onFilter={onFilterClick} onPage={onCollectionPage} onAccessLost={onAccessLost}
       link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
   }
   if (HOME_EVENT_DETAIL_BLOCK_IDS.has(block.id)) {
-    return <HomeEventResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onAction={onItemAction} onFilter={onFilterClick} onPage={onCollectionPage} onAccessLost={onAccessLost}
+    return <NotedHomeEventResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onAction={onItemAction} onFilter={onFilterClick} onPage={onCollectionPage} onAccessLost={onAccessLost}
       link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
   }
   if (block.id === 'property-rooms') {
-    return <RoomResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onAction={onItemAction} onAccessLost={onAccessLost}
+    return <NotedRoomResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onAction={onItemAction} onAccessLost={onAccessLost}
       link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
   }
   if (block.id === 'document-lookup-groups' || block.id === 'property-documents') {
-    return <DocumentResultList block={block} propertyId={propertyId} onFilter={onFilterClick} onPage={onCollectionPage} onAccessLost={onAccessLost}
+    return <NotedDocumentResultList block={block} propertyId={propertyId} onFilter={onFilterClick} onPage={onCollectionPage} onAccessLost={onAccessLost}
       link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
   }
   if (block.id === 'property-household') {
-    return <HouseholdResultList block={block} propertyId={propertyId} onAccessLost={onAccessLost}
+    return <NotedHouseholdResultList block={block} propertyId={propertyId} onAccessLost={onAccessLost}
       link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
   }
   // 'warranty-results' is the WARRANTY_LOOKUP answer (Warranties W-1); 'property-warranties' is the Property Summary section. Same rows, same detail.
   if (block.id === 'property-warranties' || block.id === 'warranty-results') {
-    return <WarrantyResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onAction={onItemAction} onFilter={onFilterClick} onAccessLost={onAccessLost}
+    return <NotedWarrantyResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onAction={onItemAction} onFilter={onFilterClick} onAccessLost={onAccessLost}
       link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
   }
   // Home Capital Timeline reference journey (FRD Appendix D), first inline-detail slice: reserve-allocations'
@@ -522,19 +545,19 @@ const DeclaredListBlock: AskBlockRenderer<'GROUPED_LIST'> = (props) => {
   // capital-timeline-table (a TABLE block, not GROUPED_LIST) got its own row-click-to-detail platform
   // capability separately -- see ./TableBlock.tsx, not this file.
   if (block.id === 'reserve-allocations') {
-    return <ReserveAllocationResultList block={block} propertyId={propertyId} onAccessLost={onAccessLost}
+    return <NotedReserveAllocationResultList block={block} propertyId={propertyId} onAccessLost={onAccessLost}
       link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
   }
   // Buyer-closing capability-card slice (FRD v1.46): blocking tasks open inline, with Mark complete while open.
   if (block.id === 'buyer-deadlines-list') {
-    return <BuyerTaskResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onFilter={onFilterClick} onAction={onItemAction} onAccessLost={onAccessLost}
+    return <NotedBuyerTaskResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onFilter={onFilterClick} onAction={onItemAction} onAccessLost={onAccessLost}
       link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
   }
   // Inspection-hub capability-card slice (FRD v1.43): findings open inline, re-read through their report.
   // Claims capability-card slice (FRD v1.42): claim rows open the canonical claim inline, with its legal status
   // changes as declared CLAIM_TRANSITION actions; incident rows keep their link.
   if (block.id === 'incident-claim-list') {
-    return <ClaimResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onAction={onItemAction} onFilter={onFilterClick} onAccessLost={onAccessLost}
+    return <NotedClaimResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onAction={onItemAction} onFilter={onFilterClick} onAccessLost={onAccessLost}
       link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
   }
   return <GenericGroupedListBlock {...props} />;

@@ -3,6 +3,7 @@
 import { ReactNode, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { BellOff, BellRing, ChevronLeft, ChevronRight, ExternalLink, Loader2, Pencil, Wrench, X } from 'lucide-react';
 import type { AskExecutionResponse, AskItemActionInteractionType, AskPresentationBlock } from '@/features/ask/types';
+import { sectionHasNextPage } from '@/features/ask/collectionStatus';
 import { ResultViewContext } from '@/features/ask/useResultView';
 import { api } from '@/lib/api/client';
 import { MAINTENANCE_SERVICE_CATEGORY_FILTER_OPTIONS } from '@/lib/config/serviceCategoryMapping';
@@ -424,11 +425,11 @@ export function MaintenanceResultList({ block, propertyId, disabled, onFilter, o
           onClick={() => controls.change((view) => ({ ...view, visibleCounts: { ...view.visibleCounts, [section.id]: Math.min(section.items.length, visible + 6) } }))}>
           Show {Math.min(6, section.items.length - visible)} more {section.title.toLowerCase()} tasks
         </button>}
-        {(offset > 0 || offset + section.items.length < section.count) && <nav className="mt-2 flex flex-wrap items-center justify-between gap-2" aria-label={`${section.title} pages`}>
+        {(offset > 0 || sectionHasNextPage(block, section)) && <nav className="mt-2 flex flex-wrap items-center justify-between gap-2" aria-label={`${section.title} pages`}>
           <p className="text-xs text-slate-500">Showing {section.items.length ? offset + 1 : 0}–{offset + section.items.length} of {section.count}</p>
           <div className="flex gap-2">
             {offset > 0 && <button type="button" disabled={disabled} className="min-h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 disabled:opacity-50" onClick={() => onPage(section.id, 'PREVIOUS')}>Previous<span className="sr-only"> page of {section.title}</span></button>}
-            {offset + section.items.length < section.count && <button type="button" disabled={disabled} className="min-h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 disabled:opacity-50" onClick={() => onPage(section.id, 'NEXT')}>Next<span className="sr-only"> page of {section.title}</span></button>}
+            {sectionHasNextPage(block, section) && <button type="button" disabled={disabled} className="min-h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 disabled:opacity-50" onClick={() => onPage(section.id, 'NEXT')}>Next<span className="sr-only"> page of {section.title}</span></button>}
           </div>
         </nav>}
       </section>;
@@ -485,11 +486,11 @@ export function MaintenanceResultList({ block, propertyId, disabled, onFilter, o
           })}
         </ul>
         {controls && visible < section.items.length && <button type="button" disabled={disabled} className="mt-3 min-h-10 text-sm font-semibold text-teal-800" onClick={() => controls.change((view) => ({ ...view, visibleCounts: { ...view.visibleCounts, [section.id]: Math.min(section.items.length, visible + 5) } }))}>Show more {section.title.toLowerCase()} tasks ({offset + Math.min(visible, section.items.length)} of {section.count} reached)</button>}
-        {(offset > 0 || offset + section.items.length < section.count) && <nav className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3" aria-label={`${section.title} pages`}>
+        {(offset > 0 || sectionHasNextPage(block, section)) && <nav className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3" aria-label={`${section.title} pages`}>
           <p className="text-xs text-slate-500">{calmChrome ? 'Showing' : 'Server results'} {section.items.length ? offset + 1 : 0}–{offset + section.items.length} of {section.count}</p>
           <div className="flex gap-2">
             {offset > 0 && <button type="button" disabled={disabled} className="min-h-10 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 disabled:opacity-50" onClick={() => onPage(section.id, 'PREVIOUS')}>Previous page<span className="sr-only"> of {section.title}</span></button>}
-            {offset + section.items.length < section.count && <button type="button" disabled={disabled} className={cn('min-h-10 rounded-xl px-3 py-2 text-sm font-semibold disabled:opacity-50', calm ? 'border border-slate-200 bg-white text-slate-800' : 'bg-teal-700 text-white')} onClick={() => onPage(section.id, 'NEXT')}>Next page<span className="sr-only"> of {section.title}</span></button>}
+            {sectionHasNextPage(block, section) && <button type="button" disabled={disabled} className={cn('min-h-10 rounded-xl px-3 py-2 text-sm font-semibold disabled:opacity-50', calm ? 'border border-slate-200 bg-white text-slate-800' : 'bg-teal-700 text-white')} onClick={() => onPage(section.id, 'NEXT')}>Next page<span className="sr-only"> of {section.title}</span></button>}
           </div>
         </nav>}
       </div>;
