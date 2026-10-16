@@ -149,7 +149,11 @@ test('optional Property Summary capture and seller-prep controls retain four gov
       }],
     },
   });
-  assertFour(sellerPrep, 'seller-prep optional controls');
+  assert.equal(sellerPrep.shown.length, SUGGESTED_NEXT_ACTION_LIMITS.maxShown, keysShown(sellerPrep).join(','));
+  assert.equal(new Set(keysShown(sellerPrep)).size, 4, 'seller-prep optional controls remain distinct');
+  assert.equal(sellerPrep.report.exactFour.shortage, 0);
+  assert.ok(keysShown(sellerPrep).includes('PROPERTY_SUMMARY:REVIEW_HOME_SUMMARY'));
+  assert.ok(keysShown(sellerPrep).includes('HOME_ACTIONS:REVIEW_HOME_ACTIONS'));
   assert.equal(sellerPrep.report.exactFour.applicability, 'EXACT_FOUR');
 });
 

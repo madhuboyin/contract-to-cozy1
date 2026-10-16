@@ -330,6 +330,118 @@ export const OPERATION_SPECIFIC_CONTINUATION_RECIPES: Readonly<Partial<Record<As
     recipe('Review finalized prices', 'Show my finalized service prices', 'PRICE_FINALIZATIONS_LIST', 'REVIEW_PRICE_FINALIZATIONS', 'PRICE_FINALIZED_REVIEW_RECORDS'),
     recipe('Review quote comparisons', 'Show my quote comparisons', 'QUOTE_COMPARISON_REVIEW', 'REVIEW_QUOTES', 'PRICE_FINALIZED_REVIEW_QUOTES'),
   ],
+  REPLACEMENT_GUIDANCE: [
+    recipe('Review home inventory', 'Show my home inventory', 'INVENTORY_LOOKUP', 'REVIEW_HOME_INVENTORY', 'REPLACEMENT_REVIEW_INVENTORY'),
+    recipe('Review recorded warranties', 'Show my recorded warranties', 'WARRANTY_LOOKUP', 'REVIEW_WARRANTIES', 'REPLACEMENT_REVIEW_WARRANTIES'),
+  ],
+  GUIDANCE_JOURNEYS_LIST: [
+    recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'GUIDANCE_LIST_REVIEW_HOME_ACTIONS'),
+    recipe('Review home summary', 'Show my home summary', 'PROPERTY_SUMMARY', 'REVIEW_HOME_SUMMARY', 'GUIDANCE_LIST_REVIEW_HOME'),
+  ],
+  GUIDANCE_JOURNEY_CONTINUE: [
+    recipe('Review guidance journeys', 'Show my guidance journeys', 'GUIDANCE_JOURNEYS_LIST', 'REVIEW_GUIDANCE_JOURNEYS', 'GUIDANCE_CONTINUE_REVIEW_JOURNEYS'),
+    recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'GUIDANCE_CONTINUE_REVIEW_HOME_ACTIONS'),
+  ],
+  GUIDANCE_STEP_SKIP: [
+    recipe('Review guidance journeys', 'Show my guidance journeys', 'GUIDANCE_JOURNEYS_LIST', 'REVIEW_GUIDANCE_JOURNEYS', 'GUIDANCE_SKIP_REVIEW_JOURNEYS'),
+    recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'GUIDANCE_SKIP_REVIEW_HOME_ACTIONS'),
+  ],
+  GUIDANCE_JOURNEY_DISMISS: [
+    recipe('Review guidance journeys', 'Show my guidance journeys', 'GUIDANCE_JOURNEYS_LIST', 'REVIEW_GUIDANCE_JOURNEYS', 'GUIDANCE_DISMISS_REVIEW_JOURNEYS'),
+    recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'GUIDANCE_DISMISS_REVIEW_HOME_ACTIONS'),
+  ],
+  GUIDANCE_JOURNEY_CREATE: [
+    recipe('Review guidance journeys', 'Show my guidance journeys', 'GUIDANCE_JOURNEYS_LIST', 'REVIEW_GUIDANCE_JOURNEYS', 'GUIDANCE_CREATED_REVIEW_JOURNEYS'),
+    recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'GUIDANCE_CREATED_REVIEW_HOME_ACTIONS'),
+  ],
+  NEGOTIATION_SHIELD_CASES: [
+    recipe('Review supporting documents', 'Show my home documents', 'DOCUMENT_LOOKUP', 'REVIEW_DOCUMENTS', 'NEGOTIATION_CASES_REVIEW_DOCUMENTS'),
+    recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'NEGOTIATION_CASES_REVIEW_HOME_ACTIONS'),
+  ],
+  NEGOTIATION_SHIELD_CASE_START: [
+    recipe('Review negotiation cases', 'Show my negotiation cases', 'NEGOTIATION_SHIELD_CASES', 'REVIEW_NEGOTIATION_CASES', 'NEGOTIATION_STARTED_REVIEW_CASES'),
+    recipe('Review supporting documents', 'Show my home documents', 'DOCUMENT_LOOKUP', 'REVIEW_DOCUMENTS', 'NEGOTIATION_STARTED_REVIEW_DOCUMENTS'),
+  ],
+  NEGOTIATION_SHIELD_BUYER_COMMAND: [
+    recipe('Review negotiation cases', 'Show my negotiation cases', 'NEGOTIATION_SHIELD_CASES', 'REVIEW_NEGOTIATION_CASES', 'NEGOTIATION_BUYER_REVIEW_CASES'),
+    recipe('Review supporting documents', 'Show my home documents', 'DOCUMENT_LOOKUP', 'REVIEW_DOCUMENTS', 'NEGOTIATION_BUYER_REVIEW_DOCUMENTS'),
+  ],
+  NEGOTIATION_SHIELD_CASE_ATTACH: [
+    recipe('Review negotiation cases', 'Show my negotiation cases', 'NEGOTIATION_SHIELD_CASES', 'REVIEW_NEGOTIATION_CASES', 'NEGOTIATION_ATTACHMENT_REVIEW_CASES'),
+    recipe('Review supporting documents', 'Show my home documents', 'DOCUMENT_LOOKUP', 'REVIEW_DOCUMENTS', 'NEGOTIATION_ATTACHMENT_REVIEW_DOCUMENTS'),
+  ],
+  NEGOTIATION_SHIELD_CASE_UPDATE: [
+    recipe('Review negotiation cases', 'Show my negotiation cases', 'NEGOTIATION_SHIELD_CASES', 'REVIEW_NEGOTIATION_CASES', 'NEGOTIATION_UPDATED_REVIEW_CASES'),
+    recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'NEGOTIATION_UPDATED_REVIEW_HOME_ACTIONS'),
+  ],
+  NEGOTIATION_SHIELD_CASE_ANALYZE: [
+    recipe('Review negotiation cases', 'Show my negotiation cases', 'NEGOTIATION_SHIELD_CASES', 'REVIEW_NEGOTIATION_CASES', 'NEGOTIATION_ANALYZED_REVIEW_CASES'),
+    recipe('Review supporting documents', 'Show my home documents', 'DOCUMENT_LOOKUP', 'REVIEW_DOCUMENTS', 'NEGOTIATION_ANALYZED_REVIEW_DOCUMENTS'),
+  ],
+  SELL_HOLD_RENT_ANALYSIS: [
+    recipe('Review home summary', 'Show my home summary', 'PROPERTY_SUMMARY', 'REVIEW_HOME_SUMMARY', 'SELL_HOLD_RENT_REVIEW_HOME'),
+    recipe('Review ownership costs', 'Show my home ownership costs', 'OWNERSHIP_COSTS', 'REVIEW_OWNERSHIP_COSTS', 'SELL_HOLD_RENT_REVIEW_COSTS'),
+  ],
+  SELL_HOLD_RENT_GOAL_CAPTURE: [
+    recipe('Continue sell, hold, or rent planning', 'Continue my sell, hold, or rent plan', 'SELL_HOLD_RENT_ANALYSIS', 'CONTINUE_SELL_HOLD_RENT_PLAN', 'SELL_HOLD_RENT_GOAL_CONTINUE'),
+    recipe('Review home summary', 'Show my home summary', 'PROPERTY_SUMMARY', 'REVIEW_HOME_SUMMARY', 'SELL_HOLD_RENT_GOAL_REVIEW_HOME'),
+  ],
+  SELLER_PREP_CHECKLIST: [
+    recipe('Review home summary', 'Show my home summary', 'PROPERTY_SUMMARY', 'REVIEW_HOME_SUMMARY', 'SELLER_PREP_REVIEW_HOME'),
+    recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'SELLER_PREP_REVIEW_HOME_ACTIONS'),
+  ],
+  SELLER_PREP_ITEM_DECISION: [
+    recipe('Review seller preparation', 'Show my seller preparation checklist', 'SELLER_PREP_CHECKLIST', 'REVIEW_SELLER_PREP', 'SELLER_ITEM_REVIEW_CHECKLIST'),
+    recipe('Review home summary', 'Show my home summary', 'PROPERTY_SUMMARY', 'REVIEW_HOME_SUMMARY', 'SELLER_ITEM_REVIEW_HOME'),
+  ],
+  SELLER_PREP_CASE_COMMAND: [
+    recipe('Review seller preparation', 'Show my seller preparation checklist', 'SELLER_PREP_CHECKLIST', 'REVIEW_SELLER_PREP', 'SELLER_CASE_REVIEW_CHECKLIST'),
+    recipe('Review home summary', 'Show my home summary', 'PROPERTY_SUMMARY', 'REVIEW_HOME_SUMMARY', 'SELLER_CASE_REVIEW_HOME'),
+  ],
+  MAJOR_EVENT_ENTRY: [
+    recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'MAJOR_EVENT_REVIEW_HOME_ACTIONS'),
+    recipe('Review home summary', 'Show my home summary', 'PROPERTY_SUMMARY', 'REVIEW_HOME_SUMMARY', 'MAJOR_EVENT_REVIEW_HOME'),
+  ],
+  HVAC_DECISION_START: [
+    recipe('Continue the HVAC decision', 'Continue my HVAC repair-or-replace decision', 'HVAC_DECISION_CONTINUE', 'CONTINUE_ACTIVE_HVAC_DECISION', 'HVAC_STARTED_CONTINUE'),
+    recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'HVAC_STARTED_REVIEW_HOME_ACTIONS'),
+  ],
+  HVAC_DECISION_CONTINUE: [
+    recipe('Compare an HVAC scenario', 'Show an HVAC repair-or-replace scenario', 'HVAC_DECISION_SCENARIO', 'REVIEW_HVAC_SCENARIO', 'HVAC_CONTINUE_REVIEW_SCENARIO'),
+    recipe('Review recorded HVAC outcome', 'Show my recorded HVAC decision outcome', 'HVAC_DECISION_OUTCOME_VIEW', 'REVIEW_HVAC_OUTCOME', 'HVAC_CONTINUE_REVIEW_OUTCOME'),
+  ],
+  HVAC_SPECIALIST_ENGAGE: [
+    recipe('Continue the HVAC decision', 'Continue my HVAC repair-or-replace decision', 'HVAC_DECISION_CONTINUE', 'CONTINUE_ACTIVE_HVAC_DECISION', 'HVAC_SPECIALIST_CONTINUE'),
+    recipe('Review recorded HVAC outcome', 'Show my recorded HVAC decision outcome', 'HVAC_DECISION_OUTCOME_VIEW', 'REVIEW_HVAC_OUTCOME', 'HVAC_SPECIALIST_REVIEW_OUTCOME'),
+  ],
+  HVAC_DECISION_SCENARIO: [
+    recipe('Continue the HVAC decision', 'Continue my HVAC repair-or-replace decision', 'HVAC_DECISION_CONTINUE', 'CONTINUE_ACTIVE_HVAC_DECISION', 'HVAC_SCENARIO_CONTINUE'),
+    recipe('Review recorded HVAC outcome', 'Show my recorded HVAC decision outcome', 'HVAC_DECISION_OUTCOME_VIEW', 'REVIEW_HVAC_OUTCOME', 'HVAC_SCENARIO_REVIEW_OUTCOME'),
+  ],
+  HVAC_DECISION_ABANDON: [
+    recipe('Review replacement guidance', 'Should I repair or replace a major home system?', 'REPLACEMENT_GUIDANCE', 'REVIEW_REPLACEMENT', 'HVAC_ABANDON_REVIEW_REPLACEMENT'),
+    recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'HVAC_ABANDON_REVIEW_HOME_ACTIONS'),
+  ],
+  HVAC_PREFERENCE_SAVE: [
+    recipe('Continue the HVAC decision', 'Continue my HVAC repair-or-replace decision', 'HVAC_DECISION_CONTINUE', 'CONTINUE_ACTIVE_HVAC_DECISION', 'HVAC_PREFERENCE_CONTINUE'),
+    recipe('Review replacement guidance', 'Should I repair or replace a major home system?', 'REPLACEMENT_GUIDANCE', 'REVIEW_REPLACEMENT', 'HVAC_PREFERENCE_REVIEW_REPLACEMENT'),
+  ],
+  HVAC_PREFERENCE_FORGET: [
+    recipe('Continue the HVAC decision', 'Continue my HVAC repair-or-replace decision', 'HVAC_DECISION_CONTINUE', 'CONTINUE_ACTIVE_HVAC_DECISION', 'HVAC_PREFERENCE_FORGOTTEN_CONTINUE'),
+    recipe('Review replacement guidance', 'Should I repair or replace a major home system?', 'REPLACEMENT_GUIDANCE', 'REVIEW_REPLACEMENT', 'HVAC_PREFERENCE_FORGOTTEN_REVIEW_REPLACEMENT'),
+  ],
+  HVAC_DECISION_OUTCOME_REPORT: [
+    recipe('Review recorded HVAC outcome', 'Show my recorded HVAC decision outcome', 'HVAC_DECISION_OUTCOME_VIEW', 'REVIEW_HVAC_OUTCOME', 'HVAC_OUTCOME_REPORTED_REVIEW'),
+    recipe('Continue the HVAC decision', 'Continue my HVAC repair-or-replace decision', 'HVAC_DECISION_CONTINUE', 'CONTINUE_ACTIVE_HVAC_DECISION', 'HVAC_OUTCOME_REPORTED_CONTINUE'),
+  ],
+  HVAC_DECISION_OUTCOME_VIEW: [
+    recipe('Continue the HVAC decision', 'Continue my HVAC repair-or-replace decision', 'HVAC_DECISION_CONTINUE', 'CONTINUE_ACTIVE_HVAC_DECISION', 'HVAC_OUTCOME_VIEW_CONTINUE'),
+    recipe('Review replacement guidance', 'Should I repair or replace a major home system?', 'REPLACEMENT_GUIDANCE', 'REVIEW_REPLACEMENT', 'HVAC_OUTCOME_VIEW_REPLACEMENT'),
+  ],
+  HVAC_DECISION_OUTCOME_UNLINK: [
+    recipe('Review recorded HVAC outcome', 'Show my recorded HVAC decision outcome', 'HVAC_DECISION_OUTCOME_VIEW', 'REVIEW_HVAC_OUTCOME', 'HVAC_OUTCOME_UNLINKED_REVIEW'),
+    recipe('Continue the HVAC decision', 'Continue my HVAC repair-or-replace decision', 'HVAC_DECISION_CONTINUE', 'CONTINUE_ACTIVE_HVAC_DECISION', 'HVAC_OUTCOME_UNLINKED_CONTINUE'),
+  ],
 });
 
 export function operationSpecificContinuationOutcomeKeys(sourceOperationId: string): readonly string[] {

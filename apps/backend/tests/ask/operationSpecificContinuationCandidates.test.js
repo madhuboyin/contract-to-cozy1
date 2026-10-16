@@ -159,3 +159,23 @@ test('general financial reads and receipts all have tailored continuations', () 
     assert.ok(candidates.every((candidate) => candidate.sourceOperationId === operationId), operationId);
   }
 });
+
+test('guidance, seller, negotiation, major-event, and HVAC operations all have tailored continuations', () => {
+  const migratedOperations = [
+    'REPLACEMENT_GUIDANCE',
+    'GUIDANCE_JOURNEYS_LIST', 'GUIDANCE_JOURNEY_CONTINUE', 'GUIDANCE_STEP_SKIP', 'GUIDANCE_JOURNEY_DISMISS', 'GUIDANCE_JOURNEY_CREATE',
+    'NEGOTIATION_SHIELD_CASES', 'NEGOTIATION_SHIELD_CASE_START', 'NEGOTIATION_SHIELD_BUYER_COMMAND',
+    'NEGOTIATION_SHIELD_CASE_ATTACH', 'NEGOTIATION_SHIELD_CASE_UPDATE', 'NEGOTIATION_SHIELD_CASE_ANALYZE',
+    'SELL_HOLD_RENT_ANALYSIS', 'SELL_HOLD_RENT_GOAL_CAPTURE',
+    'SELLER_PREP_CHECKLIST', 'SELLER_PREP_ITEM_DECISION', 'SELLER_PREP_CASE_COMMAND',
+    'MAJOR_EVENT_ENTRY',
+    'HVAC_DECISION_START', 'HVAC_DECISION_CONTINUE', 'HVAC_SPECIALIST_ENGAGE', 'HVAC_DECISION_SCENARIO',
+    'HVAC_DECISION_ABANDON', 'HVAC_PREFERENCE_SAVE', 'HVAC_PREFERENCE_FORGET',
+    'HVAC_DECISION_OUTCOME_REPORT', 'HVAC_DECISION_OUTCOME_VIEW', 'HVAC_DECISION_OUTCOME_UNLINK',
+  ];
+  for (const operationId of migratedOperations) {
+    const candidates = operationSpecificContinuationCandidates(operationId, PROPERTY_ID);
+    assert.ok(candidates.length >= 1, `${operationId}: missing tailored continuation`);
+    assert.ok(candidates.every((candidate) => candidate.sourceOperationId === operationId), operationId);
+  }
+});
