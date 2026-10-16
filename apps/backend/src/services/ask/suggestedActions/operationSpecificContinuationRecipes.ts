@@ -138,6 +138,102 @@ export const OPERATION_SPECIFIC_CONTINUATION_RECIPES: Readonly<Partial<Record<As
     recipe('Review claim status', 'Show my recorded claims', 'INCIDENT_CLAIM_STATUS', 'REVIEW_CLAIM_STATUS', 'CLAIM_ACTIVITY_REVIEW_STATUS'),
     recipe('Continue the claim checklist', 'Show the checklist for my active claim', 'CLAIM_CHECKLIST_VIEW', 'REVIEW_CLAIM_CHECKLIST', 'CLAIM_ACTIVITY_REVIEW_CHECKLIST'),
   ],
+  SEASONAL_CHECKLIST_SETUP: [
+    recipe('Review this season', 'What should I take care of around my home this season?', 'SEASONAL_HOME_CARE', 'REVIEW_THIS_SEASON', 'SEASONAL_SETUP_REVIEW_CURRENT'),
+    recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'SEASONAL_SETUP_REVIEW_HOME_ACTIONS'),
+  ],
+  SEASONAL_ITEM_COMMAND: [
+    recipe('Review this season', 'What should I take care of around my home this season?', 'SEASONAL_HOME_CARE', 'REVIEW_THIS_SEASON', 'SEASONAL_ITEM_REVIEW_CURRENT'),
+    recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'SEASONAL_ITEM_REVIEW_HOME_ACTIONS'),
+  ],
+  PROJECT_TRACKER_PROJECTS: [
+    recipe('Review DIY projects', 'Show my DIY projects', 'DIY_PROJECTS', 'REVIEW_DIY_PROJECTS', 'PROJECTS_REVIEW_DIY'),
+    recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'PROJECTS_REVIEW_HOME_ACTIONS'),
+  ],
+  PROJECT_TRACKER_CREATE: [
+    recipe('Review tracked projects', 'Show my tracked projects', 'PROJECT_TRACKER_PROJECTS', 'REVIEW_PROJECTS', 'PROJECT_CREATED_REVIEW_PROJECTS'),
+    recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'PROJECT_CREATED_REVIEW_HOME_ACTIONS'),
+  ],
+  PROJECT_TRACKER_COMMAND: [
+    recipe('Review tracked projects', 'Show my tracked projects', 'PROJECT_TRACKER_PROJECTS', 'REVIEW_PROJECTS', 'PROJECT_UPDATED_REVIEW_PROJECTS'),
+    recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'PROJECT_UPDATED_REVIEW_HOME_ACTIONS'),
+  ],
+  DIY_PROJECT_GUIDE: [
+    recipe('Review DIY projects', 'Show my DIY projects', 'DIY_PROJECTS', 'REVIEW_DIY_PROJECTS', 'DIY_GUIDE_REVIEW_PROJECTS'),
+    recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'DIY_GUIDE_REVIEW_HOME_ACTIONS'),
+  ],
+  DIY_STEP_UPDATE: [
+    recipe('Review DIY projects', 'Show my DIY projects', 'DIY_PROJECTS', 'REVIEW_DIY_PROJECTS', 'DIY_STEP_REVIEW_PROJECTS'),
+    recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'DIY_STEP_REVIEW_HOME_ACTIONS'),
+  ],
+  DIY_PROJECT_COMPLETE: [
+    recipe('Review DIY projects', 'Show my DIY projects', 'DIY_PROJECTS', 'REVIEW_DIY_PROJECTS', 'DIY_COMPLETE_REVIEW_PROJECTS'),
+    recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'DIY_COMPLETE_REVIEW_HOME_ACTIONS'),
+  ],
+  DIY_PROJECT_ABANDON: [
+    recipe('Review DIY projects', 'Show my DIY projects', 'DIY_PROJECTS', 'REVIEW_DIY_PROJECTS', 'DIY_ABANDON_REVIEW_PROJECTS'),
+    recipe('Browse reviewed project ideas', 'Show reviewed DIY project ideas', 'DIY_TEMPLATE_BROWSE', 'BROWSE_REVIEWED_PROJECTS', 'DIY_ABANDON_BROWSE_TEMPLATES'),
+  ],
+  DIY_PROJECT_START: [
+    recipe('Review DIY projects', 'Show my DIY projects', 'DIY_PROJECTS', 'REVIEW_DIY_PROJECTS', 'DIY_STARTED_REVIEW_PROJECTS'),
+    recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'DIY_STARTED_REVIEW_HOME_ACTIONS'),
+  ],
+  DIY_COMPLETION_RECOVER: [
+    recipe('Review DIY projects', 'Show my DIY projects', 'DIY_PROJECTS', 'REVIEW_DIY_PROJECTS', 'DIY_RECOVERY_REVIEW_PROJECTS'),
+    recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'DIY_RECOVERY_REVIEW_HOME_ACTIONS'),
+  ],
+  DIY_PROJECT_NOTE_COMMAND: [
+    recipe('Review DIY projects', 'Show my DIY projects', 'DIY_PROJECTS', 'REVIEW_DIY_PROJECTS', 'DIY_NOTE_REVIEW_PROJECTS'),
+    recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'DIY_NOTE_REVIEW_HOME_ACTIONS'),
+  ],
+  DIY_SKILL_PROFILE_COMMAND: [
+    recipe('Browse reviewed project ideas', 'Show reviewed DIY project ideas', 'DIY_TEMPLATE_BROWSE', 'BROWSE_REVIEWED_PROJECTS', 'DIY_SKILLS_BROWSE_TEMPLATES'),
+    recipe('Review DIY projects', 'Show my DIY projects', 'DIY_PROJECTS', 'REVIEW_DIY_PROJECTS', 'DIY_SKILLS_REVIEW_PROJECTS'),
+  ],
+  PLANT_CARE_OUTLOOK: [
+    recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'PLANT_CARE_REVIEW_HOME_ACTIONS'),
+    recipe('Review home inventory', 'Show my home inventory', 'INVENTORY_LOOKUP', 'REVIEW_HOME_INVENTORY', 'PLANT_CARE_REVIEW_INVENTORY'),
+  ],
+  ROOM_PLANT_RECOMMENDATIONS: [
+    recipe('Review plant care', 'Show my plant care outlook', 'PLANT_CARE_OUTLOOK', 'REVIEW_PLANT_CARE', 'PLANT_RECOMMENDATIONS_REVIEW_CARE'),
+    recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'PLANT_RECOMMENDATIONS_REVIEW_HOME_ACTIONS'),
+  ],
+  HOME_PLANT_ADD: [
+    recipe('Review plant care', 'Show my plant care outlook', 'PLANT_CARE_OUTLOOK', 'REVIEW_PLANT_CARE', 'PLANT_ADDED_REVIEW_CARE'),
+    recipe('Review home inventory', 'Show my home inventory', 'INVENTORY_LOOKUP', 'REVIEW_HOME_INVENTORY', 'PLANT_ADDED_REVIEW_INVENTORY'),
+  ],
+  HOME_HABIT_UPDATE: [
+    recipe('Review home habits', 'Show my home habits', 'HOME_HABITS', 'REVIEW_HOME_HABITS', 'HABIT_UPDATED_REVIEW_HABITS'),
+    recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'HABIT_UPDATED_REVIEW_HOME_ACTIONS'),
+  ],
+  HOME_HABIT_PREFERENCES_COMMAND: [
+    recipe('Review home habits', 'Show my home habits', 'HOME_HABITS', 'REVIEW_HOME_HABITS', 'HABIT_PREFERENCES_REVIEW_HABITS'),
+    recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'HABIT_PREFERENCES_REVIEW_HOME_ACTIONS'),
+  ],
+  HOME_HABITS_GENERATE: [
+    recipe('Review home habits', 'Show my home habits', 'HOME_HABITS', 'REVIEW_HOME_HABITS', 'HABITS_GENERATED_REVIEW_HABITS'),
+    recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'HABITS_GENERATED_REVIEW_HOME_ACTIONS'),
+  ],
+  RENOVATION_PERMIT_READINESS: [
+    recipe('Review permit status', 'Show my permit tracker status', 'PERMIT_TRACKER_STATUS', 'REVIEW_PERMITS', 'RENOVATION_READINESS_REVIEW_PERMITS'),
+    recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'RENOVATION_READINESS_REVIEW_HOME_ACTIONS'),
+  ],
+  RENOVATION_CASE_START: [
+    recipe('Review renovation readiness', 'Show my renovation permit readiness', 'RENOVATION_PERMIT_READINESS', 'REVIEW_RENOVATION_READINESS', 'RENOVATION_STARTED_REVIEW_READINESS'),
+    recipe('Review permit status', 'Show my permit tracker status', 'PERMIT_TRACKER_STATUS', 'REVIEW_PERMITS', 'RENOVATION_STARTED_REVIEW_PERMITS'),
+  ],
+  RENOVATION_READINESS_COMMAND: [
+    recipe('Review renovation readiness', 'Show my renovation permit readiness', 'RENOVATION_PERMIT_READINESS', 'REVIEW_RENOVATION_READINESS', 'RENOVATION_UPDATED_REVIEW_READINESS'),
+    recipe('Review permit status', 'Show my permit tracker status', 'PERMIT_TRACKER_STATUS', 'REVIEW_PERMITS', 'RENOVATION_UPDATED_REVIEW_PERMITS'),
+  ],
+  PERMIT_TRACKER_COMMAND: [
+    recipe('Review permit status', 'Show my permit tracker status', 'PERMIT_TRACKER_STATUS', 'REVIEW_PERMITS', 'PERMIT_UPDATED_REVIEW_STATUS'),
+    recipe('Review renovation readiness', 'Show my renovation permit readiness', 'RENOVATION_PERMIT_READINESS', 'REVIEW_RENOVATION_READINESS', 'PERMIT_UPDATED_REVIEW_READINESS'),
+  ],
+  PERMIT_TRACKER_STATUS: [
+    recipe('Review renovation readiness', 'Show my renovation permit readiness', 'RENOVATION_PERMIT_READINESS', 'REVIEW_RENOVATION_READINESS', 'PERMIT_STATUS_REVIEW_READINESS'),
+    recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'PERMIT_STATUS_REVIEW_HOME_ACTIONS'),
+  ],
 });
 
 export function operationSpecificContinuationOutcomeKeys(sourceOperationId: string): readonly string[] {

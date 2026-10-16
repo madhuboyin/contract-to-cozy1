@@ -123,3 +123,21 @@ test('secondary domain reads continue into related status and workflow surfaces'
     );
   }
 });
+
+test('projects, DIY, plants, habits, seasonal, renovation, and permit operations all have tailored continuations', () => {
+  const migratedOperations = [
+    'SEASONAL_CHECKLIST_SETUP', 'SEASONAL_ITEM_COMMAND',
+    'PROJECT_TRACKER_PROJECTS', 'PROJECT_TRACKER_CREATE', 'PROJECT_TRACKER_COMMAND',
+    'DIY_PROJECT_GUIDE', 'DIY_STEP_UPDATE', 'DIY_PROJECT_COMPLETE', 'DIY_PROJECT_ABANDON', 'DIY_PROJECT_START',
+    'DIY_COMPLETION_RECOVER', 'DIY_PROJECT_NOTE_COMMAND', 'DIY_SKILL_PROFILE_COMMAND',
+    'PLANT_CARE_OUTLOOK', 'ROOM_PLANT_RECOMMENDATIONS', 'HOME_PLANT_ADD',
+    'HOME_HABIT_UPDATE', 'HOME_HABIT_PREFERENCES_COMMAND', 'HOME_HABITS_GENERATE',
+    'RENOVATION_PERMIT_READINESS', 'RENOVATION_CASE_START', 'RENOVATION_READINESS_COMMAND',
+    'PERMIT_TRACKER_COMMAND', 'PERMIT_TRACKER_STATUS',
+  ];
+  for (const operationId of migratedOperations) {
+    const candidates = operationSpecificContinuationCandidates(operationId, PROPERTY_ID);
+    assert.ok(candidates.length >= 1, `${operationId}: missing tailored continuation`);
+    assert.ok(candidates.every((candidate) => candidate.sourceOperationId === operationId), operationId);
+  }
+});
