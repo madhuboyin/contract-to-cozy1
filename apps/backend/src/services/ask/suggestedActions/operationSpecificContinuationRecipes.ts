@@ -442,6 +442,114 @@ export const OPERATION_SPECIFIC_CONTINUATION_RECIPES: Readonly<Partial<Record<As
     recipe('Review recorded HVAC outcome', 'Show my recorded HVAC decision outcome', 'HVAC_DECISION_OUTCOME_VIEW', 'REVIEW_HVAC_OUTCOME', 'HVAC_OUTCOME_UNLINKED_REVIEW'),
     recipe('Continue the HVAC decision', 'Continue my HVAC repair-or-replace decision', 'HVAC_DECISION_CONTINUE', 'CONTINUE_ACTIVE_HVAC_DECISION', 'HVAC_OUTCOME_UNLINKED_CONTINUE'),
   ],
+  BUYER_PLAN_STATUS: [
+    recipe('Review closing deadlines', 'What is due before closing?', 'BUYER_DEADLINES', 'REVIEW_BUYER_DEADLINES', 'BUYER_PLAN_REVIEW_DEADLINES'),
+    recipe('Prepare for closing day', 'What do I need for closing day?', 'BUYER_CLOSING_DAY_READINESS', 'REVIEW_BUYER_CLOSING_DAY', 'BUYER_PLAN_REVIEW_CLOSING_DAY'),
+  ],
+  BUYER_DEADLINES: [
+    recipe('Review contract dates', 'Show my confirmed contract timeline', 'BUYER_CONTRACT_TIMELINE', 'REVIEW_BUYER_CONTRACT_TIMELINE', 'BUYER_DEADLINES_REVIEW_CONTRACT'),
+    recipe('Review the closing plan', 'What should I do next for this purchase?', 'BUYER_PLAN_STATUS', 'REVIEW_BUYER_PLAN', 'BUYER_DEADLINES_REVIEW_PLAN'),
+  ],
+  BUYER_DOCUMENT_READINESS: [
+    recipe('Review title and escrow', 'What is still open with title or escrow?', 'BUYER_TITLE_ESCROW_READINESS', 'REVIEW_BUYER_TITLE_ESCROW', 'BUYER_DOCUMENTS_REVIEW_TITLE'),
+    recipe('Review the closing plan', 'What should I do next for this purchase?', 'BUYER_PLAN_STATUS', 'REVIEW_BUYER_PLAN', 'BUYER_DOCUMENTS_REVIEW_PLAN'),
+  ],
+  BUYER_INSPECTION_REVIEW: [
+    recipe('Review negotiation readiness', 'What should I discuss with my agent about the inspection?', 'BUYER_NEGOTIATION_READINESS', 'REVIEW_BUYER_NEGOTIATION', 'BUYER_INSPECTION_REVIEW_NEGOTIATION'),
+    recipe('Review the closing plan', 'What should I do next for this purchase?', 'BUYER_PLAN_STATUS', 'REVIEW_BUYER_PLAN', 'BUYER_INSPECTION_REVIEW_PLAN'),
+  ],
+  BUYER_FINANCING_READINESS: [
+    recipe('Review loan estimates', 'Show my purchase Loan Estimates', 'BUYER_LOAN_ESTIMATES', 'REVIEW_BUYER_LOAN_ESTIMATES', 'BUYER_FINANCING_REVIEW_ESTIMATES'),
+    recipe('Review closing funds', 'Show my Closing Disclosure and funds readiness', 'BUYER_DISCLOSURE_FUNDS_READINESS', 'REVIEW_BUYER_DISCLOSURE_FUNDS', 'BUYER_FINANCING_REVIEW_FUNDS'),
+  ],
+  BUYER_TITLE_ESCROW_READINESS: [
+    recipe('Review closing documents', 'Which closing records am I still missing?', 'BUYER_DOCUMENT_READINESS', 'REVIEW_BUYER_DOCUMENTS', 'BUYER_TITLE_REVIEW_DOCUMENTS'),
+    recipe('Prepare for closing day', 'What do I need for closing day?', 'BUYER_CLOSING_DAY_READINESS', 'REVIEW_BUYER_CLOSING_DAY', 'BUYER_TITLE_REVIEW_CLOSING_DAY'),
+  ],
+  BUYER_WALKTHROUGH_READINESS: [
+    recipe('Prepare for closing day', 'What do I need for closing day?', 'BUYER_CLOSING_DAY_READINESS', 'REVIEW_BUYER_CLOSING_DAY', 'BUYER_WALKTHROUGH_REVIEW_CLOSING_DAY'),
+    recipe('Review inspection decisions', 'Which inspection findings still need a decision?', 'BUYER_INSPECTION_REVIEW', 'REVIEW_BUYER_INSPECTION', 'BUYER_WALKTHROUGH_REVIEW_INSPECTION'),
+  ],
+  BUYER_DISCLOSURE_FUNDS_READINESS: [
+    recipe('Review financing readiness', 'What financing item could delay closing?', 'BUYER_FINANCING_READINESS', 'REVIEW_BUYER_FINANCING', 'BUYER_FUNDS_REVIEW_FINANCING'),
+    recipe('Prepare for closing day', 'What do I need for closing day?', 'BUYER_CLOSING_DAY_READINESS', 'REVIEW_BUYER_CLOSING_DAY', 'BUYER_FUNDS_REVIEW_CLOSING_DAY'),
+  ],
+  BUYER_CLOSING_DAY_READINESS: [
+    recipe('Review closing deadlines', 'What is due before closing?', 'BUYER_DEADLINES', 'REVIEW_BUYER_DEADLINES', 'BUYER_CLOSING_DAY_REVIEW_DEADLINES'),
+    recipe('Review move readiness', 'What should I do before move-in?', 'BUYER_MOVE_STATUS', 'REVIEW_BUYER_MOVE', 'BUYER_CLOSING_DAY_REVIEW_MOVE'),
+  ],
+  BUYER_CONTRACT_TIMELINE: [
+    recipe('Review closing deadlines', 'What is due before closing?', 'BUYER_DEADLINES', 'REVIEW_BUYER_DEADLINES', 'BUYER_CONTRACT_REVIEW_DEADLINES'),
+    recipe('Review the closing plan', 'What should I do next for this purchase?', 'BUYER_PLAN_STATUS', 'REVIEW_BUYER_PLAN', 'BUYER_CONTRACT_REVIEW_PLAN'),
+  ],
+  BUYER_NEGOTIATION_READINESS: [
+    recipe('Review inspection decisions', 'Which inspection findings still need a decision?', 'BUYER_INSPECTION_REVIEW', 'REVIEW_BUYER_INSPECTION', 'BUYER_NEGOTIATION_REVIEW_INSPECTION'),
+    recipe('Review the closing plan', 'What should I do next for this purchase?', 'BUYER_PLAN_STATUS', 'REVIEW_BUYER_PLAN', 'BUYER_NEGOTIATION_REVIEW_PLAN'),
+  ],
+  BUYER_COST_READINESS: [
+    recipe('Review closing funds', 'Show my Closing Disclosure and funds readiness', 'BUYER_DISCLOSURE_FUNDS_READINESS', 'REVIEW_BUYER_DISCLOSURE_FUNDS', 'BUYER_COST_REVIEW_FUNDS'),
+    recipe('Review move readiness', 'What should I do before move-in?', 'BUYER_MOVE_STATUS', 'REVIEW_BUYER_MOVE', 'BUYER_COST_REVIEW_MOVE'),
+  ],
+  BUYER_MOVE_STATUS: [
+    recipe('Review closing deadlines', 'What is due before closing?', 'BUYER_DEADLINES', 'REVIEW_BUYER_DEADLINES', 'BUYER_MOVE_REVIEW_DEADLINES'),
+    recipe('Prepare for closing day', 'What do I need for closing day?', 'BUYER_CLOSING_DAY_READINESS', 'REVIEW_BUYER_CLOSING_DAY', 'BUYER_MOVE_REVIEW_CLOSING_DAY'),
+  ],
+  BUYER_LOAN_ESTIMATES: [
+    recipe('Review financing readiness', 'What financing item could delay closing?', 'BUYER_FINANCING_READINESS', 'REVIEW_BUYER_FINANCING', 'BUYER_ESTIMATES_REVIEW_FINANCING'),
+    recipe('Review closing funds', 'Show my Closing Disclosure and funds readiness', 'BUYER_DISCLOSURE_FUNDS_READINESS', 'REVIEW_BUYER_DISCLOSURE_FUNDS', 'BUYER_ESTIMATES_REVIEW_FUNDS'),
+  ],
+  BUYER_INSURANCE_READINESS: [
+    recipe('Review financing readiness', 'What financing item could delay closing?', 'BUYER_FINANCING_READINESS', 'REVIEW_BUYER_FINANCING', 'BUYER_INSURANCE_REVIEW_FINANCING'),
+    recipe('Review closing documents', 'Which closing records am I still missing?', 'BUYER_DOCUMENT_READINESS', 'REVIEW_BUYER_DOCUMENTS', 'BUYER_INSURANCE_REVIEW_DOCUMENTS'),
+  ],
+  BUYER_CONTRACT_COMMAND: [
+    recipe('Review contract dates', 'Show my confirmed contract timeline', 'BUYER_CONTRACT_TIMELINE', 'REVIEW_BUYER_CONTRACT_TIMELINE', 'BUYER_CONTRACT_UPDATED_REVIEW_TIMELINE'),
+    recipe('Review closing deadlines', 'What is due before closing?', 'BUYER_DEADLINES', 'REVIEW_BUYER_DEADLINES', 'BUYER_CONTRACT_UPDATED_REVIEW_DEADLINES'),
+  ],
+  BUYER_CLOSING_DISCLOSURE_COMMAND: [
+    recipe('Review closing funds', 'Show my Closing Disclosure and funds readiness', 'BUYER_DISCLOSURE_FUNDS_READINESS', 'REVIEW_BUYER_DISCLOSURE_FUNDS', 'BUYER_DISCLOSURE_UPDATED_REVIEW_FUNDS'),
+    recipe('Prepare for closing day', 'What do I need for closing day?', 'BUYER_CLOSING_DAY_READINESS', 'REVIEW_BUYER_CLOSING_DAY', 'BUYER_DISCLOSURE_UPDATED_REVIEW_CLOSING_DAY'),
+  ],
+  BUYER_LOAN_ESTIMATE_COMMAND: [
+    recipe('Review loan estimates', 'Show my purchase Loan Estimates', 'BUYER_LOAN_ESTIMATES', 'REVIEW_BUYER_LOAN_ESTIMATES', 'BUYER_ESTIMATE_UPDATED_REVIEW_ESTIMATES'),
+    recipe('Review financing readiness', 'What financing item could delay closing?', 'BUYER_FINANCING_READINESS', 'REVIEW_BUYER_FINANCING', 'BUYER_ESTIMATE_UPDATED_REVIEW_FINANCING'),
+  ],
+  BUYER_PLAN_SETUP_COMMAND: [
+    recipe('Review the closing plan', 'What should I do next for this purchase?', 'BUYER_PLAN_STATUS', 'REVIEW_BUYER_PLAN', 'BUYER_SETUP_REVIEW_PLAN'),
+    recipe('Review closing deadlines', 'What is due before closing?', 'BUYER_DEADLINES', 'REVIEW_BUYER_DEADLINES', 'BUYER_SETUP_REVIEW_DEADLINES'),
+  ],
+  BUYER_INSURANCE_COMMAND: [
+    recipe('Review closing insurance', 'Show my homeowners insurance readiness for closing', 'BUYER_INSURANCE_READINESS', 'REVIEW_BUYER_INSURANCE', 'BUYER_INSURANCE_UPDATED_REVIEW_READINESS'),
+    recipe('Review closing documents', 'Which closing records am I still missing?', 'BUYER_DOCUMENT_READINESS', 'REVIEW_BUYER_DOCUMENTS', 'BUYER_INSURANCE_UPDATED_REVIEW_DOCUMENTS'),
+  ],
+  BUYER_CLOSING_ITEM_COMMAND: [
+    recipe('Prepare for closing day', 'What do I need for closing day?', 'BUYER_CLOSING_DAY_READINESS', 'REVIEW_BUYER_CLOSING_DAY', 'BUYER_CLOSING_ITEM_REVIEW_CLOSING_DAY'),
+    recipe('Review the closing plan', 'What should I do next for this purchase?', 'BUYER_PLAN_STATUS', 'REVIEW_BUYER_PLAN', 'BUYER_CLOSING_ITEM_REVIEW_PLAN'),
+  ],
+  BUYER_WALKTHROUGH_COMMAND: [
+    recipe('Review walkthrough readiness', 'Show my final walkthrough readiness', 'BUYER_WALKTHROUGH_READINESS', 'REVIEW_BUYER_WALKTHROUGH', 'BUYER_WALKTHROUGH_UPDATED_REVIEW_READINESS'),
+    recipe('Prepare for closing day', 'What do I need for closing day?', 'BUYER_CLOSING_DAY_READINESS', 'REVIEW_BUYER_CLOSING_DAY', 'BUYER_WALKTHROUGH_UPDATED_REVIEW_CLOSING_DAY'),
+  ],
+  BUYER_TASK_COMPLETE: [
+    recipe('Review the closing plan', 'What should I do next for this purchase?', 'BUYER_PLAN_STATUS', 'REVIEW_BUYER_PLAN', 'BUYER_TASK_COMPLETED_REVIEW_PLAN'),
+    recipe('Review closing deadlines', 'What is still due before closing?', 'BUYER_DEADLINES', 'REVIEW_BUYER_DEADLINES', 'BUYER_TASK_COMPLETED_REVIEW_DEADLINES'),
+  ],
+  BUYER_TASK_CREATE: [
+    recipe('Review the closing plan', 'What should I do next for this purchase?', 'BUYER_PLAN_STATUS', 'REVIEW_BUYER_PLAN', 'BUYER_TASK_CREATED_REVIEW_PLAN'),
+    recipe('Review closing deadlines', 'What is due before closing?', 'BUYER_DEADLINES', 'REVIEW_BUYER_DEADLINES', 'BUYER_TASK_CREATED_REVIEW_DEADLINES'),
+  ],
+  BUYER_TASK_UPDATE: [
+    recipe('Review the closing plan', 'What should I do next for this purchase?', 'BUYER_PLAN_STATUS', 'REVIEW_BUYER_PLAN', 'BUYER_TASK_UPDATED_REVIEW_PLAN'),
+    recipe('Review closing deadlines', 'What is due before closing?', 'BUYER_DEADLINES', 'REVIEW_BUYER_DEADLINES', 'BUYER_TASK_UPDATED_REVIEW_DEADLINES'),
+  ],
+  BUYER_FINDING_DISPOSITION: [
+    recipe('Review inspection decisions', 'Which inspection findings still need a decision?', 'BUYER_INSPECTION_REVIEW', 'REVIEW_BUYER_INSPECTION', 'BUYER_FINDING_REVIEW_INSPECTION'),
+    recipe('Review negotiation readiness', 'What should I discuss with my agent about the inspection?', 'BUYER_NEGOTIATION_READINESS', 'REVIEW_BUYER_NEGOTIATION', 'BUYER_FINDING_REVIEW_NEGOTIATION'),
+  ],
+  BUYER_LIFECYCLE_UPDATE: [
+    recipe('Review the buyer journey', 'What should I do next for this purchase?', 'BUYER_PLAN_STATUS', 'REVIEW_BUYER_PLAN', 'BUYER_LIFECYCLE_REVIEW_PLAN'),
+    recipe('Review move readiness', 'What should I do before move-in?', 'BUYER_MOVE_STATUS', 'REVIEW_BUYER_MOVE', 'BUYER_LIFECYCLE_REVIEW_MOVE'),
+  ],
 });
 
 export function operationSpecificContinuationOutcomeKeys(sourceOperationId: string): readonly string[] {

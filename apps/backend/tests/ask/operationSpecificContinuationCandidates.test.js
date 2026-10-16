@@ -179,3 +179,22 @@ test('guidance, seller, negotiation, major-event, and HVAC operations all have t
     assert.ok(candidates.every((candidate) => candidate.sourceOperationId === operationId), operationId);
   }
 });
+
+test('buyer lifecycle reads and command receipts all have tailored closing continuations', () => {
+  const migratedOperations = [
+    'BUYER_PLAN_STATUS', 'BUYER_DEADLINES', 'BUYER_DOCUMENT_READINESS', 'BUYER_INSPECTION_REVIEW',
+    'BUYER_FINANCING_READINESS', 'BUYER_TITLE_ESCROW_READINESS', 'BUYER_WALKTHROUGH_READINESS',
+    'BUYER_DISCLOSURE_FUNDS_READINESS', 'BUYER_CLOSING_DAY_READINESS', 'BUYER_CONTRACT_TIMELINE',
+    'BUYER_NEGOTIATION_READINESS', 'BUYER_COST_READINESS', 'BUYER_MOVE_STATUS', 'BUYER_LOAN_ESTIMATES',
+    'BUYER_INSURANCE_READINESS', 'BUYER_CONTRACT_COMMAND', 'BUYER_CLOSING_DISCLOSURE_COMMAND',
+    'BUYER_LOAN_ESTIMATE_COMMAND', 'BUYER_PLAN_SETUP_COMMAND', 'BUYER_INSURANCE_COMMAND',
+    'BUYER_CLOSING_ITEM_COMMAND', 'BUYER_WALKTHROUGH_COMMAND', 'BUYER_TASK_COMPLETE', 'BUYER_TASK_CREATE',
+    'BUYER_TASK_UPDATE', 'BUYER_FINDING_DISPOSITION', 'BUYER_LIFECYCLE_UPDATE',
+  ];
+  for (const operationId of migratedOperations) {
+    const candidates = operationSpecificContinuationCandidates(operationId, PROPERTY_ID);
+    assert.ok(candidates.length >= 1, `${operationId}: missing tailored continuation`);
+    assert.ok(candidates.every((candidate) => candidate.sourceOperationId === operationId), operationId);
+    assert.ok(candidates.every((candidate) => candidate.operationId.startsWith('BUYER_')), `${operationId}: buyer flow escaped its closing journey`);
+  }
+});
