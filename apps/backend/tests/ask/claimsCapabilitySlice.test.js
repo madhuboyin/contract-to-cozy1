@@ -132,6 +132,7 @@ test('the claims capability card now launches inline into the claims-only read',
 test('the transition answers (choose a claim, not allowed, review) carry no page link or action', async () => {
   const targetless = await capabilityInvoke('CLAIM_TRANSITION', { userId: 'u1', propertyId: 'p1', message: 'Submit a claim' });
   assert.equal(targetless.reasonCode, 'CLAIM_TRANSITION_TARGET_REQUIRED');
+  assert.deepEqual(targetless.blocks[0].collection, { sourceTotal: 2, fetchedCount: 2, deliveredCount: 2, nextPageAvailable: false, deliveryTruncated: false });
   assert.deepEqual(targetless.blocks[0].actions, []);
   for (const item of targetless.blocks[0].sections.flatMap((section) => section.items)) assert.equal(item.href, null, item.id);
   claims[0].status = 'DRAFT';

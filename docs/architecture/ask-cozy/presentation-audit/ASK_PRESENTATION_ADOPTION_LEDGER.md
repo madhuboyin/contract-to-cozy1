@@ -11,8 +11,8 @@ contract-level journey, or explicit producer-contract review; it is not verified
 
 | Class | Operations |
 |---|---:|
-| Reviewed implementation (fixture, journey, or producer-contract review; not runtime-verified) | 53 |
-| Requires collection adoption | 58 |
+| Reviewed implementation (fixture, journey, or producer-contract review; not runtime-verified) | 58 |
+| Requires collection adoption | 53 |
 | Requires trust or rationale adoption | 0 |
 | Compact receipt: no rich migration needed | 83 |
 | Specialized workflow requiring later review | 0 |
@@ -41,6 +41,10 @@ contract-level journey, or explicit producer-contract review; it is not verified
 | `BUYER_WALKTHROUGH_READINESS` | Covered in this effort: walkthrough observations and issues independently declare their complete workspace totals and bounded delivery. |
 | `CAPABILITY_DISCOVERY` | Covered in this effort: answer-first discovery result explains the match basis before presenting live registry capabilities and readiness. |
 | `CAPITAL_RESERVE_PLAN` | Covered in this effort: reserve-plan summary and timeline are covered by capital timeline fixtures and declare dated planning evidence plus a cost/timing boundary. |
+| `CLAIM_CHECKLIST_VIEW` | Covered in this effort: claim checklist declares its authoritative item total, bounded fetched rows and delivered rows without unsupported continuation. |
+| `CLAIM_TRANSITION` | Covered in this effort: the ambiguous claim-target command declares the authoritative claim total and bounded fetched selection rows. |
+| `COVERAGE_COMPARISON_STATUS` | Covered in this effort: the grouped-list comparison branch declares the complete option total and bounded delivery; compact comparison-strip branches are lossless. |
+| `COVERAGE_GAPS` | Covered in this effort: the filtered item review declares its complete result total and per-group bounded delivery. |
 | `COVERAGE_REVIEW_STATUS` | Covered in this effort: audited against the ATTENTION profile; fixture. |
 | `DIY_PROJECT_GUIDE` | Covered in this effort: reviewed guide fixtures cover canonical project progress, current step, refusal/finished states and permission-aware actions. |
 | `DOCUMENT_LOOKUP` | Covered in this effort: collection descriptor (Phase 5). |
@@ -56,6 +60,7 @@ contract-level journey, or explicit producer-contract review; it is not verified
 | `HVAC_DECISION_SCENARIO` | Covered in this effort: completed scenario comparison now declares its dated Decision Platform engine basis and an explicit isolated-scenario limitation. |
 | `HVAC_DECISION_START` | Covered in this effort: item-carrying warranty follow-up on the decision card, journey 4. |
 | `HVAC_SPECIALIST_ENGAGE` | Covered in this effort: ready Specialist recommendation carries its canonical snapshot date, Decision Platform engine version, deterministic rationale and an explicit professional boundary. |
+| `INCIDENT_CLAIM_STATUS` | Covered in this effort: the status view declares exact bucket-count source totals, bounded fetched rows and delivered rows for every filter state. |
 | `INCIDENT_CONTINUATION` | Covered in this effort: answer-first continuation declares recorded workflow choices, canonical record freshness and an emergency-response boundary. |
 | `INSPECTION_REPORT_COMPARE` | Covered in this effort: document-evidence fixture. |
 | `INVENTORY_LOOKUP` | Covered in this effort: collection descriptor and gated Next control (Phase 2). |
@@ -81,10 +86,6 @@ contract-level journey, or explicit producer-contract review; it is not verified
 | Operation | Why |
 |---|---|
 | `APPLIANCE_FAILURE_RISK` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
-| `CLAIM_CHECKLIST_VIEW` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
-| `CLAIM_TRANSITION` | A command whose result may carry a list (for example a choice of target): collection semantics apply, and the boundary derives them until the producer declares its own. |
-| `COVERAGE_COMPARISON_STATUS` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
-| `COVERAGE_GAPS` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
 | `DIY_PROJECTS` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
 | `DIY_TEMPLATE_BROWSE` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
 | `DOCUMENT_PROMOTION_REVIEW` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
@@ -105,7 +106,6 @@ contract-level journey, or explicit producer-contract review; it is not verified
 | `HVAC_DECISION_OUTCOME_REPORT` | A command whose result may carry a list (for example a choice of target): collection semantics apply, and the boundary derives them until the producer declares its own. |
 | `HVAC_DECISION_OUTCOME_UNLINK` | A command whose result may carry a list (for example a choice of target): collection semantics apply, and the boundary derives them until the producer declares its own. |
 | `HVAC_DECISION_OUTCOME_VIEW` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
-| `INCIDENT_CLAIM_STATUS` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
 | `INSPECTION_FINDINGS` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
 | `INSPECTION_FINDING_UPDATE` | A command whose result may carry a list (for example a choice of target): collection semantics apply, and the boundary derives them until the producer declares its own. |
 | `INSPECTION_NEGOTIATION_PACKAGE` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |

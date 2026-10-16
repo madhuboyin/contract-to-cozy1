@@ -16,6 +16,7 @@ import {
   CHECKLIST_STATUS_FOR_KIND, CLAIM_ACTIVITY_ACTION_IDS, CLAIM_ACTIVITY_MESSAGES, CLAIM_CHECKLIST_ITEM_ENTITY_TYPE, CLAIM_CHECKLIST_MESSAGE, CLAIM_ENTITY_TYPE, CLAIM_NOTE_CAPTURE_KEY,
   claimActivityEntityType, claimActivityKindFromMessage, claimChecklistKinds, parseClaimNoteAnswer, type ClaimActivityKind,
 } from '../support/claimActivityCommand';
+import { collectionDescriptor } from '../support/collectionDescriptor';
 
 const sha = (text: string) => createHash('sha256').update(text).digest('hex');
 const database = prisma as any;
@@ -39,7 +40,7 @@ const itemVersion = (kind: ClaimActivityKind, item: { id: string; status: string
 const noteVersion = (claim: { id: string; lastActivityAt: Date | null }) => sha(`claim-note:${claim.id}:${claim.lastActivityAt?.toISOString() ?? ''}`);
 
 // ── the read ────────────────────────────────────────────────────────────────────────────────────────────────────
-export function claimChecklistFromRows(claim: { id: string; title: string }, items: ReadonlyArray<{ id: string; title: string; description: string | null; required: boolean; status: string }>, canChange: boolean): AskOperationResult {
+export function claimChecklistFromRows(claim: { id: string; title: string }, items: ReadonlyArray<{ id: string; title: string; description: string | null; required: boolean; status: string }>, canChange: boolean, sourceTotal = items.length): AskOperationResult {
   const done = items.filter((item) => item.status === 'DONE').length;
   const open = items.filter((item) => item.status === 'OPEN').length;
   const blocks: AskPresentationBlock[] = [{
@@ -68,6 +69,7 @@ export function claimChecklistFromRows(claim: { id: string; title: string }, ite
           })) : [],
         })),
       }],
+      collection: collectionDescriptor({ sourceTotal, fetchedCount: items.length, sections: [{ items }], nextPageAvailable: false }),
       actions: [],
     });
   }
@@ -82,10 +84,13 @@ registerCapabilityHandler('claim-checklist.view', async (envelope, deps) => {
   const access = await (deps.propertyAccess ?? ensurePropertyAccess(envelope.userId, envelope.propertyId!));
   const claim = await loadClaim(envelope.propertyId!, launch.entityId);
   if (!claim) return unavailable('CLAIM_NOT_FOUND', 'That claim is no longer available', 'Ask could not find that claim.');
-  const items = await database.claimChecklistItem.findMany({
-    where: { claimId: claim.id }, orderBy: { orderIndex: 'asc' }, take: 50, select: { id: true, title: true, description: true, required: true, status: true },
-  });
-  return claimChecklistFromRows(claim, items, access.role !== HouseholdRole.VIEWER);
+  const [items, sourceTotal] = await Promise.all([
+    database.claimChecklistItem.findMany({
+      where: { claimId: claim.id }, orderBy: { orderIndex: 'asc' }, take: 50, select: { id: true, title: true, description: true, required: true, status: true },
+    }),
+    database.claimChecklistItem.count({ where: { claimId: claim.id } }),
+  ]);
+  return claimChecklistFromRows(claim, items, access.role !== HouseholdRole.VIEWER, sourceTotal);
 });
 
 // ── the writes ──────────────────────────────────────────────────────────────────────────────────────────────────

@@ -77,6 +77,11 @@ export const REVIEWED_OPERATIONS: Readonly<Record<string, string>> = {
   BUYER_TASK_UPDATE: 'the ambiguous-target command declares the complete eligible task total and bounded selection list',
   BUYER_TITLE_ESCROW_READINESS: 'open title and escrow issues declare the complete workspace total and bounded delivery',
   BUYER_WALKTHROUGH_READINESS: 'walkthrough observations and issues independently declare their complete workspace totals and bounded delivery',
+  CLAIM_CHECKLIST_VIEW: 'claim checklist declares its authoritative item total, bounded fetched rows and delivered rows without unsupported continuation',
+  CLAIM_TRANSITION: 'the ambiguous claim-target command declares the authoritative claim total and bounded fetched selection rows',
+  COVERAGE_COMPARISON_STATUS: 'the grouped-list comparison branch declares the complete option total and bounded delivery; compact comparison-strip branches are lossless',
+  COVERAGE_GAPS: 'the filtered item review declares its complete result total and per-group bounded delivery',
+  INCIDENT_CLAIM_STATUS: 'the status view declares exact bucket-count source totals, bounded fetched rows and delivered rows for every filter state',
 };
 
 const LIST_BLOCKS = ['GROUPED_LIST', 'TABLE', 'TIMELINE', 'PRIORITY_LIST'];

@@ -40,6 +40,7 @@ test('coverage review rows open the inline inventory record and carry no desktop
   const list = result.blocks.find((block) => block.id === 'coverage-groups');
   const rows = list.sections.flatMap((section) => section.items);
   assert.equal(rows.length, 2);
+  assert.deepEqual(list.collection, { sourceTotal: 2, fetchedCount: 2, deliveredCount: 2, nextPageAvailable: false, deliveryTruncated: false });
   for (const row of rows) {
     assert.equal(row.entityType, 'INVENTORY_ITEM', row.id);
     assert.equal(row.href, null, row.id);

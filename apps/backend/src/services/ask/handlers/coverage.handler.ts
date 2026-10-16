@@ -14,6 +14,7 @@ import { evaluateFeatureContext } from '../../../modules/propertyContext/applica
 import { APIError } from '../../../middleware/error.middleware';
 import { humanDate, money } from '../askFormatting';
 import { ensurePropertyAccess, MAX_RESULT_ITEMS } from '../askHandlerSupport';
+import { collectionDescriptor } from '../support/collectionDescriptor';
 
 const COVERAGE_GROUP_LABELS: Record<CoverageReviewGroup, string> = {
   NO_COVERAGE: 'No coverage confirmed',
@@ -122,7 +123,9 @@ async function coverageResult(userId: string, propertyId: string, message: strin
   if (sections.length) blocks.push({
     type: 'GROUPED_LIST', filters: [], id: 'coverage-groups', title: 'Coverage review',
     description: `${expiryFocus ? 'Showing expired and soon-to-expire records. ' : evidenceFocus ? 'Showing unclear records and missing evidence. ' : ''}Managed-elsewhere and coverage-not-required items are excluded.`,
-    sections, actions: [],
+    sections,
+    collection: collectionDescriptor({ sourceTotal: focused.length, fetchedCount: focused.length, sections, nextPageAvailable: false }),
+    actions: [],
   });
   if (focused.length) blocks.push({
     type: 'EVIDENCE', id: 'coverage-evidence', title: 'Sources and freshness',
@@ -364,6 +367,7 @@ async function coverageComparisonStatusResult(userId: string, propertyId: string
           href: null,
         })),
       }],
+      collection: collectionDescriptor({ sourceTotal: allOptions.length, fetchedCount: allOptions.length, sections: [{ items: allOptions.slice(0, 20) }], nextPageAvailable: false }),
       actions: [],
     });
   }

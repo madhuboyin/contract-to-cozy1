@@ -64,6 +64,13 @@ test('the answer declares its headline and chips from the same records, and a re
   const result = await run('Show my incidents and claims');
   assert.equal(summary(result).headline, '1 active incident and 1 open claim.');
   assert.equal(summary(result).supportLine, '1 resolved incident and 1 closed claim also on file.');
+  assert.deepEqual(list(result).collection, {
+    sourceTotal: 4,
+    fetchedCount: 4,
+    deliveredCount: 4,
+    nextPageAvailable: false,
+    deliveryTruncated: false,
+  });
   const boundary = result.blocks.find((block) => block.id === 'claim-status-boundary');
   assert.equal(boundary.body, BOUNDARY_TEXT);
   assert.equal(boundary.severity, 'INFO');

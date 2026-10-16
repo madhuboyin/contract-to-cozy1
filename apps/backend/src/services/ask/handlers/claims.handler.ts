@@ -16,6 +16,7 @@ import { containsFilterContinuation } from '../askFollowUpContext';
 import { loadAskViewState } from './maintenance.handler';
 import type { ClaimStatus, ClaimType } from '../../../types/claims.types';
 import { isValidTransition as isValidClaimTransition } from '../../claims/claims.transitions';
+import { collectionDescriptor } from '../support/collectionDescriptor';
 
 // P04 fix (same defect independently found in Phase 8's Protection doc,
 // same root cause and same fix shape as B06's Buyer conflict descriptions
@@ -136,12 +137,15 @@ export async function claimFileResult(propertyId: string, message: string, suppl
 }
 
 async function claimTransitionResult(propertyId: string, message: string, launchContext?: CreateAskExecutionRequest['launchContext']): Promise<AskOperationResult> {
-  const claims = await prisma.claim.findMany({ where: { propertyId }, orderBy: { updatedAt: 'desc' }, take: 50, select: { id: true, title: true, status: true, updatedAt: true } });
+  const [claims, claimTotal] = await Promise.all([
+    prisma.claim.findMany({ where: { propertyId }, orderBy: { updatedAt: 'desc' }, take: 50, select: { id: true, title: true, status: true, updatedAt: true } }),
+    prisma.claim.count({ where: { propertyId } }),
+  ]);
   const selected = exactEntityMatch(claims, message, launchContext);
   const nextStatus = nextClaimStatus(message);
   if (!selected || !nextStatus) return {
     status: 'NEEDS_ENTITY', reasonCode: 'CLAIM_TRANSITION_TARGET_REQUIRED',
-    blocks: [{ type: 'GROUPED_LIST', filters: [], id: 'claim-transition-targets', title: 'Choose a claim and valid next status', description: 'Use the exact claim title and say submit, move to under review, approve, deny, or close. Ask will recheck the legal transition before saving.', sections: [{ id: 'claims', title: 'Recorded claims', count: claims.length, items: claims.map((claim) => ({ id: claim.id, title: claim.title, description: `Current status: ${String(claim.status).toLowerCase().replace(/_/g, ' ')}`, meta: [], status: String(claim.status), href: null })) }], actions: [] }], suggestions: [],
+    blocks: [{ type: 'GROUPED_LIST', filters: [], id: 'claim-transition-targets', title: 'Choose a claim and valid next status', description: 'Use the exact claim title and say submit, move to under review, approve, deny, or close. Ask will recheck the legal transition before saving.', sections: [{ id: 'claims', title: 'Recorded claims', count: claimTotal, items: claims.map((claim) => ({ id: claim.id, title: claim.title, description: `Current status: ${String(claim.status).toLowerCase().replace(/_/g, ' ')}`, meta: [], status: String(claim.status), href: null })) }], collection: collectionDescriptor({ sourceTotal: claimTotal, fetchedCount: claims.length, sections: [{ items: claims }], nextPageAvailable: false }), actions: [] }], suggestions: [],
   };
   if (!isValidClaimTransition(selected.status as ClaimStatus, nextStatus)) return {
     status: 'BLOCKED', reasonCode: 'CLAIM_TRANSITION_NOT_ALLOWED',
@@ -391,7 +395,8 @@ async function incidentClaimStatusResult(userId: string, propertyId: string, mes
       blocks: [{
         type: 'SUMMARY', id: 'incident-claim-summary', title: 'No recorded items match these filters', headline: 'Nothing matches these filters.',
         supportLine: 'Widen or clear a filter to see the records on file.', body: 'No incidents or claims match the selected filters.', tone: 'DEFAULT', actions: [],
-      }, { type: 'GROUPED_LIST', filters: chips, id: 'incident-claim-list', title: 'Incidents and claims', sections: [], actions: listActions }, CLAIM_STATUS_BOUNDARY],
+      }, { type: 'GROUPED_LIST', filters: chips, id: 'incident-claim-list', title: 'Incidents and claims', sections: [],
+        collection: collectionDescriptor({ sourceTotal: 0, fetchedCount: 0, sections: [], nextPageAvailable: false }), actions: listActions }, CLAIM_STATUS_BOUNDARY],
       suggestions: [],
     };
   }
@@ -425,7 +430,8 @@ async function incidentClaimStatusResult(userId: string, propertyId: string, mes
       },
       // The calm answer carries no filled step: status changes are declared row actions behind their own confirmation flow, and starting
       // a claim is the one list-level action. There are no links to the Claims or Incidents pages.
-      { type: 'GROUPED_LIST', filters: chips, id: 'incident-claim-list', title: claimFocus ? 'Claims' : incidentFocus ? 'Incidents' : 'Incidents and claims', sections, actions: listActions },
+      { type: 'GROUPED_LIST', filters: chips, id: 'incident-claim-list', title: claimFocus ? 'Claims' : incidentFocus ? 'Incidents' : 'Incidents and claims', sections,
+        collection: collectionDescriptor({ sourceTotal: totalRecords, fetchedCount: activeIncidents.length + resolvedIncidents.length + activeClaims.length + closedClaims.length, sections, nextPageAvailable: false }), actions: listActions },
       {
         type: 'EVIDENCE', id: 'incident-claim-evidence', title: 'Record freshness',
         items: [

@@ -47,6 +47,7 @@ function install(role, item = { id: ITEM, claimId: CLAIM, title: 'Photos of the 
   prisma.claimChecklistItem = {
     findFirst: async (a) => (item && a.where.id === item.id ? item : null),
     findMany: async () => [{ id: ITEM, title: 'Photos of the damage', description: 'Wide and close', required: true, status: 'OPEN' }, { id: 'i2', title: 'Repair estimate', description: null, required: false, status: 'DONE' }],
+    count: async () => 2,
   };
   ClaimsService.addTimelineEvent = async (...a) => { calls.push(['note', ...a]); return {}; };
   ClaimsService.updateChecklistItem = async (...a) => { calls.push(['item', ...a]); return {}; };
@@ -69,6 +70,7 @@ test('the checklist is read for any member; steps are offered to contributors; t
   } finally { w.restore(); }
   const pure = claimChecklistFromRows({ id: CLAIM, title: 'Storm damage' }, [{ id: ITEM, title: 'Photos', description: null, required: true, status: 'OPEN' }, { id: 'i2', title: 'Estimate', description: null, required: false, status: 'DONE' }], true);
   assert.deepEqual(pure.blocks[1].sections[0].items.map((i) => i.actions.map((a) => a.id)), [['claim-checklist-done', 'claim-checklist-not-applicable'], ['claim-checklist-reopen']]);
+  assert.deepEqual(pure.blocks[1].collection, { sourceTotal: 2, fetchedCount: 2, deliveredCount: 2, nextPageAvailable: false, deliveryTruncated: false });
   assert.deepEqual(pure.blocks[0].actions.map((a) => a.id), ['claim-note']);
 });
 

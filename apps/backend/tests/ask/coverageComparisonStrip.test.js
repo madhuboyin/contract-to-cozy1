@@ -81,7 +81,9 @@ test('the real handler declares the strip for the current policy plus an alterna
 test('a policy alone stays a grouped list', async () => {
   options = [option('cur', 'CURRENT_POLICY')];
   const result = await invoke();
-  assert.equal(result.blocks.find((block) => block.id === 'coverage-comparison-options').type, 'GROUPED_LIST');
+  const list = result.blocks.find((block) => block.id === 'coverage-comparison-options');
+  assert.equal(list.type, 'GROUPED_LIST');
+  assert.deepEqual(list.collection, { sourceTotal: 1, fetchedCount: 1, deliveredCount: 1, nextPageAvailable: false, deliveryTruncated: false });
 });
 
 test('COMPARISON is allowed for the operation in the registry and the coverage skill', () => {
