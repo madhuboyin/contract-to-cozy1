@@ -40,6 +40,7 @@ test('Ask executes the delivered action through one shared runtime identity and 
   const projection = {
     runId: 'run-1', agentId: 'hvac-repair-replace-specialist', agentVersion: '1.0.0',
     phase: 'RECOMMENDATION_READY', decisionThreadId: 'thread-1', currentRecommendationSnapshotId: 'snapshot-1',
+    recommendationGeneratedAt: '2026-10-16T12:00:00.000Z', recommendationEngineVersion: 'hvac-engine-7',
     verdict: 'REPLACE', confidenceLabel: 'HIGH', outstanding: [], explanation: [], abstentionReason: null,
     paused: false, casVersion: null, expectedOperation: null,
   };
@@ -66,6 +67,8 @@ test('Ask executes the delivered action through one shared runtime identity and 
   const second = await hvacSpecialistEngageResult('user-1', 'property-1', 'Why are you recommending replacement?', 'ask-execution-1', undefined, dependencies);
 
   assert.equal(first.parameters.decisionThreadId, 'thread-1');
+  assert.deepEqual(first.blocks.filter((block) => ['EVIDENCE', 'LIMITATION'].includes(block.type)).map((block) => block.id), ['hvac-specialist-evidence', 'hvac-specialist-boundary']);
+  assert.equal(first.blocks.find((block) => block.id === 'hvac-specialist-evidence').items[0].observedAt, projection.recommendationGeneratedAt);
   assert.equal(second.parameters.decisionThreadId, 'thread-1');
   assert.deepEqual(runtimeCalls.map((call) => call.operation), ['GET_STATUS', 'START_OR_RESUME', 'GET_STATUS']);
   assert.equal(runtimeCalls[0].homeActionOrigin.homeActionId, 'action-1');

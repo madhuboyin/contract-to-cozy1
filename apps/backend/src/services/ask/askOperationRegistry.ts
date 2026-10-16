@@ -870,8 +870,8 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   // START_OR_RESUME can create or advance the canonical DecisionThread; the
   // adapter surfaces only the bounded run-status projection + decisionThreadId
   // (§7.4), never raw AgentRun / AgentState rows.
-  HVAC_SPECIALIST_ENGAGE: definition('HVAC_SPECIALIST_ENGAGE', 'DECISION_ANALYSIS', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'decision-platform.hvac.specialist-engage', ['SUMMARY', 'GROUPED_LIST', 'ASSUMPTIONS', 'LIMITATION', 'EMPTY_STATE', 'BOUNDARY']),
-  HVAC_DECISION_SCENARIO: definition('HVAC_DECISION_SCENARIO', 'DECISION_ANALYSIS', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'decision-platform.hvac.scenario', ['SUMMARY', 'SCENARIO_COMPARISON', 'PREFERENCE_REFERENCE', 'LIMITATION', 'BOUNDARY']),
+  HVAC_SPECIALIST_ENGAGE: definition('HVAC_SPECIALIST_ENGAGE', 'DECISION_ANALYSIS', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'decision-platform.hvac.specialist-engage', ['SUMMARY', 'GROUPED_LIST', 'ASSUMPTIONS', 'EVIDENCE', 'LIMITATION', 'EMPTY_STATE', 'BOUNDARY']),
+  HVAC_DECISION_SCENARIO: definition('HVAC_DECISION_SCENARIO', 'DECISION_ANALYSIS', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'decision-platform.hvac.scenario', ['SUMMARY', 'SCENARIO_COMPARISON', 'PREFERENCE_REFERENCE', 'EVIDENCE', 'LIMITATION', 'BOUNDARY']),
   // IW-FRESH-003 fix: BOUNDARY added, same reason as above.
   HVAC_DECISION_ABANDON: definition('HVAC_DECISION_ABANDON', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'decision-platform.hvac.abandon', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
   // Ask Intelligence FRD Phase 8B — confirmed ownership-horizon

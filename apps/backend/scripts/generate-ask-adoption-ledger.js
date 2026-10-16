@@ -10,7 +10,7 @@ const out = path.resolve(__dirname, '../../../docs/architecture/ask-cozy/present
 const ledger = buildAdoptionLedger();
 const counts = Object.fromEntries(ADOPTION_CLASSES.map((cls) => [cls, ledger.filter((entry) => entry.adoptionClass === cls).length]));
 const LABEL = {
-  ALREADY_COMPLIANT: 'Already compliant (covered by a fixture or journey test; not runtime-verified)',
+  ALREADY_COMPLIANT: 'Reviewed implementation (fixture, journey, or producer-contract review; not runtime-verified)',
   REQUIRES_COLLECTION_ADOPTION: 'Requires collection adoption',
   REQUIRES_TRUST_ADOPTION: 'Requires trust or rationale adoption',
   COMPACT_RECEIPT: 'Compact receipt: no rich migration needed',
@@ -26,8 +26,8 @@ const lines = [
   '',
   'Each registered Ask operation has exactly one class. The class is derived from registry facts (family, allowed block types) plus an explicit',
   'list of operations this effort reviewed (`REVIEWED_OPERATIONS` in `apps/backend/src/services/ask/presentation/adoptionLedger.ts`). A test fails',
-  'when an operation has no class or this file is out of date. "Already compliant" means covered by a deterministic fixture or contract-level',
-  'journey test, not verified in a browser or against a live backend.',
+  'when an operation has no class or this file is out of date. "Reviewed implementation" means covered by a deterministic fixture,',
+  'contract-level journey, or explicit producer-contract review; it is not verified in a browser or against a live backend.',
   '',
   '| Class | Operations |',
   '|---|---:|',

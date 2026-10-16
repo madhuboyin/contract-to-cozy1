@@ -637,7 +637,7 @@ function specialistUnavailableRedirect(propertyId: string, reason: string): AskO
   };
 }
 
-function specialistProjectionBlocks(
+export function specialistProjectionBlocks(
   headline: string,
   projection: AgentRunStatusProjection,
 ): AskPresentationBlock[] {
@@ -660,6 +660,21 @@ function specialistProjectionBlocks(
         items: projection.explanation.map((claim) => claim.text).slice(0, 20),
       });
     }
+    if (projection.recommendationGeneratedAt && projection.recommendationEngineVersion) {
+      blocks.push({
+        type: 'EVIDENCE', id: 'hvac-specialist-evidence', title: 'Recommendation basis and freshness',
+        items: [{
+          label: 'Canonical HVAC recommendation',
+          source: `Decision Platform engine ${projection.recommendationEngineVersion}`,
+          observedAt: projection.recommendationGeneratedAt,
+        }],
+      });
+    }
+    blocks.push({
+      type: 'LIMITATION', id: 'hvac-specialist-boundary', severity: 'INFO',
+      title: 'Decision support—not a diagnosis or provider selection',
+      body: 'This recommendation uses the recorded system context and bounded decision rules. It does not inspect the equipment, verify a quote, select a provider, authorize work, or replace advice from a qualified HVAC professional.',
+    });
   } else if (projection.phase === 'NEEDS_CONTEXT' || projection.phase === 'NEEDS_DOCUMENT') {
     blocks.push({
       type: 'SUMMARY', id: 'hvac-specialist-needs-input', tone: 'CAUTION',

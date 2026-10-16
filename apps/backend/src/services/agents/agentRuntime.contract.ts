@@ -109,6 +109,9 @@ export interface AgentRunStatusProjection {
   phase: AgentRunPhase;
   decisionThreadId: string | null;
   currentRecommendationSnapshotId: string | null;
+  /** Canonical recommendation basis; present when the runtime can resolve the current snapshot. */
+  recommendationGeneratedAt?: string | null;
+  recommendationEngineVersion?: string | null;
   verdict: 'REPAIR' | 'REPLACE' | 'MONITOR' | null;
   confidenceLabel: 'HIGH' | 'MEDIUM' | 'LOW' | null;
   /** Present when phase is NEEDS_CONTEXT / NEEDS_DOCUMENT. */

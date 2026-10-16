@@ -105,6 +105,14 @@ test('sellerPrepChecklistResult returns NOT_APPLICABLE with no saleCase, and a c
   assert.match(body, /item\.status === 'OPEN'/);
 });
 
+test('sellerPrepChecklistResult declares its canonical freshness and professional boundary', () => {
+  const body = handlerBody();
+  assert.match(body, /type: 'EVIDENCE', id: 'seller-prep-evidence'/);
+  assert.match(body, /observedAt: overview\.saleCase\.updatedAt\.toISOString\(\)/);
+  assert.match(body, /type: 'BOUNDARY', id: 'seller-prep-boundary'/);
+  assert.match(body, /do not establish market value/);
+});
+
 test('the capability handler and captureFallbackHref registrations both exist for SELLER_PREP_CHECKLIST', () => {
   assert.match(
     orchestratorSource,

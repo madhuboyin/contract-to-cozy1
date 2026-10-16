@@ -6,38 +6,49 @@
 
 Each registered Ask operation has exactly one class. The class is derived from registry facts (family, allowed block types) plus an explicit
 list of operations this effort reviewed (`REVIEWED_OPERATIONS` in `apps/backend/src/services/ask/presentation/adoptionLedger.ts`). A test fails
-when an operation has no class or this file is out of date. "Already compliant" means covered by a deterministic fixture or contract-level
-journey test, not verified in a browser or against a live backend.
+when an operation has no class or this file is out of date. "Reviewed implementation" means covered by a deterministic fixture,
+contract-level journey, or explicit producer-contract review; it is not verified in a browser or against a live backend.
 
 | Class | Operations |
 |---|---:|
-| Already compliant (covered by a fixture or journey test; not runtime-verified) | 17 |
+| Reviewed implementation (fixture, journey, or producer-contract review; not runtime-verified) | 28 |
 | Requires collection adoption | 73 |
-| Requires trust or rationale adoption | 11 |
+| Requires trust or rationale adoption | 0 |
 | Compact receipt: no rich migration needed | 83 |
 | Specialized workflow requiring later review | 10 |
 | Not applicable (boundary operations) | 3 |
 
-## Already compliant (covered by a fixture or journey test; not runtime-verified)
+## Reviewed implementation (fixture, journey, or producer-contract review; not runtime-verified)
 
 | Operation | Why |
 |---|---|
 | `BREAK_EVEN_ANALYSIS` | Covered in this effort: audited against the COMPARE profile; fixture. |
 | `BUYER_DEADLINES` | Covered in this effort: exact task identity, reconciliation, journey 5. |
 | `BUYER_PLAN_STATUS` | Covered in this effort: reconciliation, journey 5. |
+| `CAPITAL_RESERVE_PLAN` | Covered in this effort: reserve-plan summary and timeline are covered by capital timeline fixtures and declare dated planning evidence plus a cost/timing boundary. |
 | `COVERAGE_REVIEW_STATUS` | Covered in this effort: audited against the ATTENTION profile; fixture. |
 | `DOCUMENT_LOOKUP` | Covered in this effort: collection descriptor (Phase 5). |
 | `FINANCING_OVERVIEW` | Covered in this effort: ways-to-pay comparison with structured rate evidence (Phase 5 follow-up); overview and project fixtures. |
+| `HOME_DEADLINE_MONITOR` | Covered in this effort: monitor proposal resolves one canonical dated obligation and discloses due date, lead time, delivery channel, consent and no-change states before confirmation. |
 | `HOME_EVENT_RADAR_FEED` | Covered in this effort: collection descriptor with cursor continuation (Phase 2). |
 | `HOME_STATUS_BOARD` | Covered in this effort: collection descriptor, unknown-is-not-good section, lead sentence; fixtures and journey 1. |
 | `HOME_TIMELINE_EVENTS` | Covered in this effort: timeline fixture. |
+| `HVAC_DECISION_CONTINUE` | Covered in this effort: decision-thread fixtures cover deterministic rationale, canonical-fact evidence, preference references, assumptions and limitations. |
+| `HVAC_DECISION_SCENARIO` | Covered in this effort: completed scenario comparison now declares its dated Decision Platform engine basis and an explicit isolated-scenario limitation. |
 | `HVAC_DECISION_START` | Covered in this effort: item-carrying warranty follow-up on the decision card, journey 4. |
+| `HVAC_SPECIALIST_ENGAGE` | Covered in this effort: ready Specialist recommendation carries its canonical snapshot date, Decision Platform engine version, deterministic rationale and an explicit professional boundary. |
 | `INSPECTION_REPORT_COMPARE` | Covered in this effort: document-evidence fixture. |
 | `INVENTORY_LOOKUP` | Covered in this effort: collection descriptor and gated Next control (Phase 2). |
 | `MATERIAL_SPECS_LIST` | Covered in this effort: record-explorer fixture. |
+| `PROPERTY_TAX_APPEAL_READINESS` | Covered in this effort: appeal-readiness fixtures cover gaps and canonical facts with reviewed-rule/evidence dates and a tax/appraisal/legal boundary. |
+| `QUOTE_COMPARISON_REVIEW` | Covered in this effort: quote-review fixtures cover scope-aligned comparison, per-quote freshness, recorded-evidence dates and the provider-endorsement boundary. |
 | `REFINANCE_ANALYSIS` | Covered in this effort: scenario answer: tradeoff lead, assumptions, dated benchmark; fixtures and journey 2 (the canonical analysis branch is not a pure builder). |
+| `REFINANCE_RATE_MONITOR` | Covered in this effort: monitor proposal declares the governed benchmark, exact threshold, delivery cadence, quiet hours, source boundary and consent before confirmation. |
+| `RENOVATION_PERMIT_READINESS` | Covered in this effort: renovation-readiness fixtures cover the blocking-item basis, dated readiness sources and the legal-compliance boundary. |
 | `REPLACEMENT_GUIDANCE` | Covered in this effort: item-carrying warranty follow-up, journey 4. |
 | `SEASONAL_HOME_CARE` | Covered in this effort: plan and walkthrough fixtures; declared truncation; journey 3. |
+| `SELLER_PREP_CHECKLIST` | Covered in this effort: checklist declares its progress basis, canonical Property Sale Case freshness and an explicit listing/disclosure boundary. |
+| `SELL_HOLD_RENT_ANALYSIS` | Covered in this effort: comparison and what-if fixtures cover the directional rationale, dated model sources, material assumptions and financial/tax/legal boundary. |
 | `WARRANTY_LOOKUP` | Covered in this effort: item-scoped answer, journey 4 (the whole-home list is not yet migrated). |
 
 ## Requires collection adoption
@@ -122,17 +133,6 @@ journey test, not verified in a browser or against a live backend.
 
 | Operation | Why |
 |---|---|
-| `CAPITAL_RESERVE_PLAN` | A material decision or monitor: needs rationale, basis date, assumptions and limits checked against the COMPARE or monitor profile. |
-| `HOME_DEADLINE_MONITOR` | A material decision or monitor: needs rationale, basis date, assumptions and limits checked against the COMPARE or monitor profile. |
-| `HVAC_DECISION_CONTINUE` | A material decision or monitor: needs rationale, basis date, assumptions and limits checked against the COMPARE or monitor profile. |
-| `HVAC_DECISION_SCENARIO` | A material decision or monitor: needs rationale, basis date, assumptions and limits checked against the COMPARE or monitor profile. |
-| `HVAC_SPECIALIST_ENGAGE` | A material decision or monitor: needs rationale, basis date, assumptions and limits checked against the COMPARE or monitor profile. |
-| `PROPERTY_TAX_APPEAL_READINESS` | A material decision or monitor: needs rationale, basis date, assumptions and limits checked against the COMPARE or monitor profile. |
-| `QUOTE_COMPARISON_REVIEW` | A material decision or monitor: needs rationale, basis date, assumptions and limits checked against the COMPARE or monitor profile. |
-| `REFINANCE_RATE_MONITOR` | A material decision or monitor: needs rationale, basis date, assumptions and limits checked against the COMPARE or monitor profile. |
-| `RENOVATION_PERMIT_READINESS` | A material decision or monitor: needs rationale, basis date, assumptions and limits checked against the COMPARE or monitor profile. |
-| `SELLER_PREP_CHECKLIST` | A material decision or monitor: needs rationale, basis date, assumptions and limits checked against the COMPARE or monitor profile. |
-| `SELL_HOLD_RENT_ANALYSIS` | A material decision or monitor: needs rationale, basis date, assumptions and limits checked against the COMPARE or monitor profile. |
 
 ## Compact receipt: no rich migration needed
 

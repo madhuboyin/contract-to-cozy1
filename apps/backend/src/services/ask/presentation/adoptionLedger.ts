@@ -1,7 +1,8 @@
 // Presentation Quality 5: a mechanical, drift-proof classification of every registered Ask operation against the presentation quality
 // plan. It reads only registry facts (family, allowed block types, routability) plus an explicit list of operations this effort
-// reviewed with the evidence for each. "Reviewed" means covered by a behavioral fixture or a contract-level journey test; it is not
-// runtime verification. The ledger is generated into docs by scripts/generate-ask-adoption-ledger.js, and a test fails if an
+// reviewed with the evidence for each. "Reviewed" means covered by a behavioral fixture, a contract-level journey test, or an
+// explicit producer-contract review recorded below; it is not runtime verification. The ledger is generated into docs by
+// scripts/generate-ask-adoption-ledger.js, and a test fails if an
 // operation is added without a class.
 import { ASK_OPERATION_DEFINITIONS, type AskOperationId } from '../askOperationRegistry';
 
@@ -40,6 +41,17 @@ export const REVIEWED_OPERATIONS: Readonly<Record<string, string>> = {
   BUYER_PLAN_STATUS: 'reconciliation, journey 5',
   FINANCING_OVERVIEW: 'ways-to-pay comparison with structured rate evidence (Phase 5 follow-up); overview and project fixtures',
   INSPECTION_REPORT_COMPARE: 'document-evidence fixture',
+  HVAC_DECISION_SCENARIO: 'completed scenario comparison now declares its dated Decision Platform engine basis and an explicit isolated-scenario limitation',
+  HVAC_SPECIALIST_ENGAGE: 'ready Specialist recommendation carries its canonical snapshot date, Decision Platform engine version, deterministic rationale and an explicit professional boundary',
+  SELLER_PREP_CHECKLIST: 'checklist declares its progress basis, canonical Property Sale Case freshness and an explicit listing/disclosure boundary',
+  CAPITAL_RESERVE_PLAN: 'reserve-plan summary and timeline are covered by capital timeline fixtures and declare dated planning evidence plus a cost/timing boundary',
+  HVAC_DECISION_CONTINUE: 'decision-thread fixtures cover deterministic rationale, canonical-fact evidence, preference references, assumptions and limitations',
+  PROPERTY_TAX_APPEAL_READINESS: 'appeal-readiness fixtures cover gaps and canonical facts with reviewed-rule/evidence dates and a tax/appraisal/legal boundary',
+  QUOTE_COMPARISON_REVIEW: 'quote-review fixtures cover scope-aligned comparison, per-quote freshness, recorded-evidence dates and the provider-endorsement boundary',
+  RENOVATION_PERMIT_READINESS: 'renovation-readiness fixtures cover the blocking-item basis, dated readiness sources and the legal-compliance boundary',
+  SELL_HOLD_RENT_ANALYSIS: 'comparison and what-if fixtures cover the directional rationale, dated model sources, material assumptions and financial/tax/legal boundary',
+  HOME_DEADLINE_MONITOR: 'monitor proposal resolves one canonical dated obligation and discloses due date, lead time, delivery channel, consent and no-change states before confirmation',
+  REFINANCE_RATE_MONITOR: 'monitor proposal declares the governed benchmark, exact threshold, delivery cadence, quiet hours, source boundary and consent before confirmation',
 };
 
 const LIST_BLOCKS = ['GROUPED_LIST', 'TABLE', 'TIMELINE', 'PRIORITY_LIST'];

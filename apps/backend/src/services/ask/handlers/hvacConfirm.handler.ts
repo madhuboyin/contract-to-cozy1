@@ -160,6 +160,18 @@ async function confirmHvacDecisionScenario(ctx: ConfirmCapabilityContext): Promi
           { label: scenario.label, verdictCode: scenarioSnapshot.verdictCode, reasonCodes: scenarioSnapshot.reasonCodes, limitationCodes: scenarioSnapshot.limitationCodes, assumptions: [{ label: 'Quote amount', value: `$${(candidate.data.quoteAmountCents / 100).toFixed(2)}` }, { label: 'Vendor', value: candidate.data.vendorLabel }] },
         ),
         ...await preferenceReferenceBlocksForSnapshot('hvac-scenario', scenarioSnapshot.preferenceReferenceIds),
+        {
+          type: 'EVIDENCE', id: 'hvac-scenario-evidence', title: 'Scenario basis and freshness',
+          items: [{
+            label: 'HVAC repair-or-replace scenario',
+            source: `Decision Platform engine ${scenarioSnapshot.engineVersion}`,
+            observedAt: scenarioSnapshot.generatedAt.toISOString(),
+          }],
+        },
+        {
+          type: 'LIMITATION', id: 'hvac-scenario-limitations', title: 'What this comparison does not decide', severity: 'INFO',
+          body: `This isolated scenario uses the recorded decision context and the quote amount you supplied. It does not overwrite the current recommendation, select a provider, verify the quote, or authorize work.${scenarioSnapshot.limitationCodes.length ? ` Model limits: ${scenarioSnapshot.limitationCodes.join(', ').toLowerCase().replace(/_/g, ' ')}.` : ''}`,
+        },
       ],
       confirmation: null, suggestions: [],
     };

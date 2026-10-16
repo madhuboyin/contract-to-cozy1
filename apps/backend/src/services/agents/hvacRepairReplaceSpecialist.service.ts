@@ -41,6 +41,8 @@ export interface SpecialistThreadState {
   ambiguous: boolean;
   decisionThreadId: string | null;
   currentRecommendationSnapshotId: string | null;
+  recommendationGeneratedAt?: string | null;
+  recommendationEngineVersion?: string | null;
   contextStatus: 'CURRENT' | 'STALE' | 'CONFLICTED' | null;
   verdict: 'REPAIR' | 'REPLACE' | 'MONITOR' | null;
   confidenceLabel: 'HIGH' | 'MEDIUM' | 'LOW' | null;
@@ -82,7 +84,7 @@ async function loadThreadStateFromLineage(lineage: {
   const snapshot = lineage.currentRecommendationSnapshotId
     ? await prisma.recommendationSnapshot.findUnique({
       where: { id: lineage.currentRecommendationSnapshotId },
-      select: { verdictCode: true, reasonCodes: true, limitationCodes: true, confidenceBreakdown: true },
+      select: { verdictCode: true, reasonCodes: true, limitationCodes: true, confidenceBreakdown: true, generatedAt: true, engineVersion: true },
     })
     : null;
   const verdict = snapshot && SUPPORTED_VERDICTS.has(snapshot.verdictCode)
@@ -92,6 +94,8 @@ async function loadThreadStateFromLineage(lineage: {
     ambiguous: false,
     decisionThreadId: lineage.decisionThreadId,
     currentRecommendationSnapshotId: lineage.currentRecommendationSnapshotId,
+    recommendationGeneratedAt: snapshot?.generatedAt.toISOString() ?? null,
+    recommendationEngineVersion: snapshot?.engineVersion ?? null,
     contextStatus: lineage.contextStatus,
     verdict,
     confidenceLabel: parseConfidenceLabel(snapshot?.confidenceBreakdown),

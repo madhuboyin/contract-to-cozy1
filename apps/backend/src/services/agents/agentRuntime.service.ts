@@ -401,6 +401,8 @@ async function readStatus(
             phase: abstentionReason ? 'ABSTAINED' : 'RECOMMENDATION_READY',
             decisionThreadId: state?.decisionThreadId ?? latest.decisionThreadId,
             currentRecommendationSnapshotId: abstentionReason ? null : state?.currentRecommendationSnapshotId ?? null,
+            recommendationGeneratedAt: abstentionReason ? null : state?.recommendationGeneratedAt ?? null,
+            recommendationEngineVersion: abstentionReason ? null : state?.recommendationEngineVersion ?? null,
             verdict: abstentionReason ? null : state?.verdict ?? null,
             confidenceLabel: abstentionReason ? null : state?.confidenceLabel ?? null,
             outstanding: [],

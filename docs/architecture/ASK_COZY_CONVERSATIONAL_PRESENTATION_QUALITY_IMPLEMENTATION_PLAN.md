@@ -1197,7 +1197,9 @@ An independent review found the implementation sound for the representative slic
 | 8 | Limitations in the ordinary backlog | Met (sections 14.5 and 14.6) |
 | 9 | Existing architecture, no competing engine | Met |
 
-**Overall:** substantially implemented, not fully complete. Open: the runtime review (criterion 6), the live-backend journey run (criterion 4), per-operation review of the ledger's open classes (criterion 5), and the owner decisions in section 14.5.
+**October 16 implementation follow-up.** Operation-specific continuation coverage is complete for all 197 registered operations (190 governed recipes, two reviewed contextual surfaces, and five bounded exemptions). The Phase 5 trust-adoption review is also complete: the two identified producer gaps were fixed (`HVAC_DECISION_SCENARIO` now emits a dated engine basis and isolated-scenario limitation; `HVAC_SPECIALIST_ENGAGE` carries canonical snapshot freshness, engine identity, rationale and a professional boundary; `SELLER_PREP_CHECKLIST` now declares its canonical case freshness and listing/disclosure boundary), and the remaining decision/monitor producers were reviewed against their existing fixtures, journey coverage or explicit proposal contracts. The adoption ledger now has zero trust/rationale operations left. The remaining implementation-only ledger backlog is 73 producer-declared collection adoptions and 10 specialized workflow reviews. Runtime/browser validation remains separate and user-owned.
+
+**Overall:** substantially implemented, not fully complete. Open: the runtime review (criterion 6), the live-backend journey run (criterion 4), per-operation review of the ledger's remaining open classes (criterion 5), and the owner decisions in section 14.5.
 
 ## 15. Final completion criteria
 

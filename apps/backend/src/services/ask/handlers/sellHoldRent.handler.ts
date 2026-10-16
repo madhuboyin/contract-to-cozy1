@@ -445,6 +445,20 @@ async function sellerPrepChecklistResult(userId: string, propertyId: string): Pr
     });
   }
 
+  blocks.push({
+    type: 'EVIDENCE', id: 'seller-prep-evidence', title: 'Checklist basis and freshness',
+    items: [{
+      label: 'Canonical seller-prep case and readiness items',
+      source: 'Property Sale Case',
+      observedAt: overview.saleCase.updatedAt.toISOString(),
+    }],
+  });
+  blocks.push({
+    type: 'BOUNDARY', id: 'seller-prep-boundary', title: 'Preparation guidance—not a listing or disclosure determination', severity: 'INFO',
+    body: 'Checklist priorities and cost ranges organize the recorded sale-preparation work. They do not establish market value, guarantee buyer response, replace required disclosures, or substitute for advice from qualified real-estate, legal, tax, inspection, or repair professionals.',
+    suggestions: [],
+  });
+
   return {
     status: 'ANSWERED',
     reasonCode: openItems.length ? 'SELLER_PREP_ITEMS_OPEN' : 'SELLER_PREP_NO_OPEN_ITEMS',
