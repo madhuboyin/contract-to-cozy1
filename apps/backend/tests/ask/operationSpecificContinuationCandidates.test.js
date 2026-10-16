@@ -53,7 +53,7 @@ test('recipe candidates are property-scoped governed continuations', () => {
   }
   assert.deepEqual(operationSpecificContinuationCandidates(null, PROPERTY_ID), []);
   assert.deepEqual(operationSpecificContinuationCandidates('MAINTENANCE_STATUS', null), []);
-  assert.deepEqual(operationSpecificContinuationCandidates('PROPERTY_SUMMARY', PROPERTY_ID), []);
+  assert.deepEqual(operationSpecificContinuationCandidates('APPLIANCE_FAILURE_RISK', PROPERTY_ID), []);
 });
 
 test('the operation-specific producer is registered as an essential result producer', () => {
@@ -196,5 +196,20 @@ test('buyer lifecycle reads and command receipts all have tailored closing conti
     assert.ok(candidates.length >= 1, `${operationId}: missing tailored continuation`);
     assert.ok(candidates.every((candidate) => candidate.sourceOperationId === operationId), operationId);
     assert.ok(candidates.every((candidate) => candidate.operationId.startsWith('BUYER_')), `${operationId}: buyer flow escaped its closing journey`);
+  }
+});
+
+test('home intelligence reads and command receipts all have tailored continuations', () => {
+  const migratedOperations = [
+    'HOME_STATUS_BOARD', 'STATUS_BOARD_COMMAND', 'HOME_TIMELINE_EVENTS', 'HOME_EVENT_VISIBILITY',
+    'HOME_CHANGE_SUMMARY', 'HOME_BRIEFING_VIEW', 'HOME_BRIEFING_COMMAND', 'HOME_BRIEFING_SHARE_COMMAND',
+    'HOME_EVENT_RADAR_FEED', 'HOME_EVENT_RADAR_STATE', 'HOME_EVENT_RADAR_MARK_DONE',
+    'HOME_EVENT_RADAR_FEEDBACK', 'HOME_EVENT_RADAR_PREFERENCES', 'HOME_EVENT_RADAR_TASK',
+    'HOME_WORK_ITEMS', 'HOME_WORK_ITEM_COMMAND', 'PROPERTY_SUMMARY', 'HOME_DEADLINE_MONITOR',
+  ];
+  for (const operationId of migratedOperations) {
+    const candidates = operationSpecificContinuationCandidates(operationId, PROPERTY_ID);
+    assert.ok(candidates.length >= 1, `${operationId}: missing tailored continuation`);
+    assert.ok(candidates.every((candidate) => candidate.sourceOperationId === operationId), operationId);
   }
 });

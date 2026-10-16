@@ -12,7 +12,7 @@ const { readAskOperationalControls } = require('../../src/config/askOperationalC
 const { evaluateAskOperationAvailability } = require('../../src/services/ask/support/answerGuards.ts');
 const { finalizeSuggestedNextActionsWithReport } = require('../../src/services/ask/suggestedActions/finalizeSuggestedNextActions.ts');
 const { SUGGESTED_NEXT_ACTION_PRODUCERS, starterProducers, actionableProfileProducer, operationSpecificContinuationProducer, skillHandoffProducer, urgentWorkProducer, homeOpportunityProducer, activePlanProducer, capabilityRecommendationProducer } = require('../../src/services/ask/suggestedActions/suggestedNextActionProducers.ts');
-const { SUGGESTED_NEXT_ACTION_LIMITS, CURATED_STARTER_OUTCOME_KEYS, REPEATABLE_OUTCOMES, PROMPT_HISTORY_EXEMPT_OUTCOMES, SUGGESTED_NEXT_ACTION_BUDGET } = require('../../src/services/ask/suggestedActions/suggestedNextActionRegistry.ts');
+const { SUGGESTED_NEXT_ACTION_LIMITS, CURATED_STARTER_OUTCOME_KEYS, REPEATABLE_OUTCOMES, PROMPT_HISTORY_EXEMPT_OUTCOMES, SUGGESTED_NEXT_ACTION_BUDGET, isRegisteredOutcome } = require('../../src/services/ask/suggestedActions/suggestedNextActionRegistry.ts');
 const { lifecycleKey, STARTER_ROTATION_MS } = require('../../src/services/ask/suggestedActions/suggestedNextActionExactFourRegistry.ts');
 const { suggestedNextActionSemanticKeyHash } = require('../../src/services/ask/suggestedActions/suggestedNextActionIdentity.ts');
 const starters = require('../../src/services/ask/suggestedActions/starterCandidates.ts');
@@ -58,12 +58,16 @@ async function run({ role, mode, disabled, status = 'ANSWERED', message = 'Help 
   return { ...out, offers, calls, shown: (out.result.suggestedNextActions ?? []) };
 }
 const keysShown = (r) => r.shown.map((a) => `${a.operationId}:${a.outcomeKey}`);
-/** The hard assertion: exactly four distinct starters, or the approved bounded diagnostic (never a silent short row). */
-function assertFour(r, label) {
+/** The hard assertion: exactly four distinct registered actions, or the approved bounded diagnostic (never a silent short row). */
+function assertFour(r, label, { starterOnly = true } = {}) {
   assert.equal(r.shown.length, SUGGESTED_NEXT_ACTION_LIMITS.maxShown, `${label}: ${keysShown(r).join(',')} :: ${JSON.stringify(r.report.exactFour)}`);
   assert.equal(new Set(keysShown(r)).size, 4, `${label}: four DISTINCT actions`);
   assert.equal(r.report.exactFour.applicability, 'EXACT_FOUR'); assert.equal(r.report.exactFour.shortage, 0, label);
-  for (const key of keysShown(r)) assert.ok(CURATED_STARTER_OUTCOME_KEYS.includes(key), `${label}: ${key} is an approved starter`);
+  for (const action of r.shown) {
+    const key = `${action.operationId}:${action.outcomeKey}`;
+    assert.ok(isRegisteredOutcome(action.operationId, action.outcomeKey), `${label}: ${key} is registered`);
+    if (starterOnly) assert.ok(CURATED_STARTER_OUTCOME_KEYS.includes(key), `${label}: ${key} is an approved starter`);
+  }
 }
 
 test('the registry is populated for activation: all four starter producers are registered and all seven outcomes are BOTH repeatable and prompt-history exempt', () => {
@@ -135,7 +139,7 @@ test('optional Property Summary capture and seller-prep controls retain four gov
       }],
     },
   });
-  assertFour(propertySummary, 'optional Property Summary capture');
+  assertFour(propertySummary, 'optional Property Summary capture', { starterOnly: false });
   assert.equal(propertySummary.report.exactFour.applicability, 'EXACT_FOUR');
 
   const sellerPrep = await run({
@@ -209,7 +213,7 @@ test('every role x operating mode reaches four on an empty home', async () => {
 test('VERIFIED LAUNCH: the launched starter is excluded from its own answer and the row still reaches four (every starter as the launched one)', async () => {
   for (const current of ALL) {
     const r = await run({ current, role: 'VIEWER', operationId: current.operationId, message: current.message });
-    assertFour(r, `launched ${keyOf(current)}`);
+    assertFour(r, `launched ${keyOf(current)}`, { starterOnly: current.operationId !== 'PROPERTY_SUMMARY' });
     assert.ok(!keysShown(r).includes(keyOf(current)), `${keyOf(current)} is not re-offered on its own answer`);
   }
 });

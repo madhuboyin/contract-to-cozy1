@@ -550,6 +550,79 @@ export const OPERATION_SPECIFIC_CONTINUATION_RECIPES: Readonly<Partial<Record<As
     recipe('Review the buyer journey', 'What should I do next for this purchase?', 'BUYER_PLAN_STATUS', 'REVIEW_BUYER_PLAN', 'BUYER_LIFECYCLE_REVIEW_PLAN'),
     recipe('Review move readiness', 'What should I do before move-in?', 'BUYER_MOVE_STATUS', 'REVIEW_BUYER_MOVE', 'BUYER_LIFECYCLE_REVIEW_MOVE'),
   ],
+  HOME_STATUS_BOARD: [
+    recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'STATUS_BOARD_REVIEW_HOME_ACTIONS'),
+    recipe('Review pending maintenance', 'What maintenance is pending?', 'MAINTENANCE_STATUS', 'REVIEW_MAINTENANCE_STATUS', 'STATUS_BOARD_REVIEW_MAINTENANCE'),
+    recipe('Review replacement guidance', 'Should I repair or replace a major home system?', 'REPLACEMENT_GUIDANCE', 'REVIEW_REPLACEMENT', 'STATUS_BOARD_REVIEW_REPLACEMENT'),
+  ],
+  STATUS_BOARD_COMMAND: [
+    recipe('Review the status board', 'Show my status board', 'HOME_STATUS_BOARD', 'REVIEW_STATUS_BOARD', 'STATUS_BOARD_UPDATED_REVIEW_BOARD'),
+    recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'STATUS_BOARD_UPDATED_REVIEW_ACTIONS'),
+  ],
+  HOME_TIMELINE_EVENTS: [
+    recipe('Review recent home changes', 'What changed around my home lately?', 'HOME_CHANGE_SUMMARY', 'REVIEW_HOME_CHANGES', 'HOME_TIMELINE_REVIEW_CHANGES'),
+    recipe('Review home summary', 'Show my home summary', 'PROPERTY_SUMMARY', 'REVIEW_HOME_SUMMARY', 'HOME_TIMELINE_REVIEW_SUMMARY'),
+  ],
+  HOME_EVENT_VISIBILITY: [
+    recipe('Review the home timeline', 'Open my home timeline', 'HOME_TIMELINE_EVENTS', 'REVIEW_HOME_TIMELINE', 'HOME_EVENT_VISIBILITY_REVIEW_TIMELINE'),
+    recipe('Review home summary', 'Show my home summary', 'PROPERTY_SUMMARY', 'REVIEW_HOME_SUMMARY', 'HOME_EVENT_VISIBILITY_REVIEW_SUMMARY'),
+  ],
+  HOME_CHANGE_SUMMARY: [
+    recipe('Review the home timeline', 'Open my home timeline', 'HOME_TIMELINE_EVENTS', 'REVIEW_HOME_TIMELINE', 'HOME_CHANGES_REVIEW_TIMELINE'),
+    recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'HOME_CHANGES_REVIEW_ACTIONS'),
+  ],
+  HOME_BRIEFING_VIEW: [
+    recipe('Review recent home changes', 'What changed around my home lately?', 'HOME_CHANGE_SUMMARY', 'REVIEW_HOME_CHANGES', 'HOME_BRIEFING_REVIEW_CHANGES'),
+    recipe('Review monitored events', 'Show my home event radar feed', 'HOME_EVENT_RADAR_FEED', 'REVIEW_RADAR_FEED', 'HOME_BRIEFING_REVIEW_RADAR'),
+  ],
+  HOME_BRIEFING_COMMAND: [
+    recipe('Review my home briefing', 'Show my home briefing', 'HOME_BRIEFING_VIEW', 'REVIEW_HOME_BRIEFING', 'HOME_BRIEFING_UPDATED_REVIEW_BRIEFING'),
+    recipe('Review recent home changes', 'What changed around my home lately?', 'HOME_CHANGE_SUMMARY', 'REVIEW_HOME_CHANGES', 'HOME_BRIEFING_UPDATED_REVIEW_CHANGES'),
+  ],
+  HOME_BRIEFING_SHARE_COMMAND: [
+    recipe('Review my home briefing', 'Show my home briefing', 'HOME_BRIEFING_VIEW', 'REVIEW_HOME_BRIEFING', 'HOME_BRIEFING_SHARE_REVIEW_BRIEFING'),
+    recipe('Review recent home changes', 'What changed around my home lately?', 'HOME_CHANGE_SUMMARY', 'REVIEW_HOME_CHANGES', 'HOME_BRIEFING_SHARE_REVIEW_CHANGES'),
+  ],
+  HOME_EVENT_RADAR_FEED: [
+    recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'RADAR_FEED_REVIEW_HOME_ACTIONS'),
+    recipe('Review home work items', 'Show my home operations work items', 'HOME_WORK_ITEMS', 'REVIEW_HOME_WORK_ITEMS', 'RADAR_FEED_REVIEW_WORK_ITEMS'),
+  ],
+  HOME_EVENT_RADAR_STATE: [
+    recipe('Review monitored events', 'Show my home event radar feed', 'HOME_EVENT_RADAR_FEED', 'REVIEW_RADAR_FEED', 'RADAR_STATE_REVIEW_FEED'),
+    recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'RADAR_STATE_REVIEW_ACTIONS'),
+  ],
+  HOME_EVENT_RADAR_MARK_DONE: [
+    recipe('Review monitored events', 'Show my home event radar feed', 'HOME_EVENT_RADAR_FEED', 'REVIEW_RADAR_FEED', 'RADAR_DONE_REVIEW_FEED'),
+    recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'RADAR_DONE_REVIEW_ACTIONS'),
+  ],
+  HOME_EVENT_RADAR_FEEDBACK: [
+    recipe('Review monitored events', 'Show my home event radar feed', 'HOME_EVENT_RADAR_FEED', 'REVIEW_RADAR_FEED', 'RADAR_FEEDBACK_REVIEW_FEED'),
+  ],
+  HOME_EVENT_RADAR_PREFERENCES: [
+    recipe('Review monitored events', 'Show my home event radar feed', 'HOME_EVENT_RADAR_FEED', 'REVIEW_RADAR_FEED', 'RADAR_PREFERENCES_REVIEW_FEED'),
+    recipe('Review my home briefing', 'Show my home briefing', 'HOME_BRIEFING_VIEW', 'REVIEW_HOME_BRIEFING', 'RADAR_PREFERENCES_REVIEW_BRIEFING'),
+  ],
+  HOME_EVENT_RADAR_TASK: [
+    recipe('Review monitored events', 'Show my home event radar feed', 'HOME_EVENT_RADAR_FEED', 'REVIEW_RADAR_FEED', 'RADAR_TASK_REVIEW_FEED'),
+    recipe('Review home work items', 'Show my home operations work items', 'HOME_WORK_ITEMS', 'REVIEW_HOME_WORK_ITEMS', 'RADAR_TASK_REVIEW_WORK_ITEMS'),
+  ],
+  HOME_WORK_ITEMS: [
+    recipe('Review pending maintenance', 'What maintenance is pending?', 'MAINTENANCE_STATUS', 'REVIEW_MAINTENANCE_STATUS', 'HOME_WORK_ITEMS_REVIEW_MAINTENANCE'),
+    recipe('Review open inspection findings', 'Show my open inspection findings', 'INSPECTION_FINDINGS', 'REVIEW_INSPECTION_FINDINGS', 'HOME_WORK_ITEMS_REVIEW_INSPECTIONS'),
+    recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'HOME_WORK_ITEMS_REVIEW_ACTIONS'),
+  ],
+  HOME_WORK_ITEM_COMMAND: [
+    recipe('Review home work items', 'Show my home operations work items', 'HOME_WORK_ITEMS', 'REVIEW_HOME_WORK_ITEMS', 'HOME_WORK_ITEM_UPDATED_REVIEW_ITEMS'),
+    recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'HOME_WORK_ITEM_UPDATED_REVIEW_ACTIONS'),
+  ],
+  PROPERTY_SUMMARY: [
+    recipe('Review the status board', 'Show my status board', 'HOME_STATUS_BOARD', 'REVIEW_STATUS_BOARD', 'PROPERTY_SUMMARY_REVIEW_STATUS'),
+    recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'PROPERTY_SUMMARY_REVIEW_ACTIONS'),
+  ],
+  HOME_DEADLINE_MONITOR: [
+    recipe('Review home work items', 'Show my home operations work items', 'HOME_WORK_ITEMS', 'REVIEW_HOME_WORK_ITEMS', 'HOME_DEADLINE_REVIEW_WORK_ITEMS'),
+    recipe('Review pending maintenance', 'What maintenance is pending?', 'MAINTENANCE_STATUS', 'REVIEW_MAINTENANCE_STATUS', 'HOME_DEADLINE_REVIEW_MAINTENANCE'),
+  ],
 });
 
 export function operationSpecificContinuationOutcomeKeys(sourceOperationId: string): readonly string[] {
