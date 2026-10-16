@@ -11,8 +11,8 @@ contract-level journey, or explicit producer-contract review; it is not verified
 
 | Class | Operations |
 |---|---:|
-| Reviewed implementation (fixture, journey, or producer-contract review; not runtime-verified) | 42 |
-| Requires collection adoption | 69 |
+| Reviewed implementation (fixture, journey, or producer-contract review; not runtime-verified) | 53 |
+| Requires collection adoption | 58 |
 | Requires trust or rationale adoption | 0 |
 | Compact receipt: no rich migration needed | 83 |
 | Specialized workflow requiring later review | 0 |
@@ -23,11 +23,22 @@ contract-level journey, or explicit producer-contract review; it is not verified
 | Operation | Why |
 |---|---|
 | `BREAK_EVEN_ANALYSIS` | Covered in this effort: audited against the COMPARE profile; fixture. |
+| `BUYER_CLOSING_DAY_READINESS` | Covered in this effort: closing-day blockers declare the complete canonical blocker total and honest bounded delivery with no unsupported continuation. |
+| `BUYER_CONTRACT_TIMELINE` | Covered in this effort: draft and confirmed contingency lists each declare their complete revision-scoped totals and bounded delivery. |
+| `BUYER_COST_READINESS` | Covered in this effort: recorded cost items declare the complete eligible task total and bounded delivery. |
 | `BUYER_DEADLINES` | Covered in this effort: exact task identity, reconciliation, journey 5. |
 | `BUYER_DISCLOSURE_FUNDS_READINESS` | Covered in this effort: direct readiness answer carries canonical Closing Disclosure workspace freshness and the wire-fraud safety boundary. |
 | `BUYER_DOCUMENT_READINESS` | Covered in this effort: direct document-readiness answer reports recorded/verified scope without fabricating an observation timestamp. |
+| `BUYER_FINANCING_READINESS` | Covered in this effort: unresolved lender conditions declare the complete readiness-workspace total and bounded delivery. |
 | `BUYER_INSPECTION_REVIEW` | Covered in this effort: direct inspection answer states the exact open-material-finding rationale and preserves the buyer professional boundary. |
+| `BUYER_INSURANCE_READINESS` | Covered in this effort: insurance quotes and requirements independently declare their complete workspace totals and bounded delivery. |
+| `BUYER_LOAN_ESTIMATES` | Covered in this effort: active offer revisions declare their complete comparison total and bounded delivery. |
+| `BUYER_MOVE_STATUS` | Covered in this effort: open move tasks declare the complete canonical filtered total and bounded delivery. |
+| `BUYER_NEGOTIATION_READINESS` | Covered in this effort: negotiation findings declare the complete canonical inspection-finding total and bounded delivery. |
 | `BUYER_PLAN_STATUS` | Covered in this effort: reconciliation, journey 5. |
+| `BUYER_TASK_UPDATE` | Covered in this effort: the ambiguous-target command declares the complete eligible task total and bounded selection list. |
+| `BUYER_TITLE_ESCROW_READINESS` | Covered in this effort: open title and escrow issues declare the complete workspace total and bounded delivery. |
+| `BUYER_WALKTHROUGH_READINESS` | Covered in this effort: walkthrough observations and issues independently declare their complete workspace totals and bounded delivery. |
 | `CAPABILITY_DISCOVERY` | Covered in this effort: answer-first discovery result explains the match basis before presenting live registry capabilities and readiness. |
 | `CAPITAL_RESERVE_PLAN` | Covered in this effort: reserve-plan summary and timeline are covered by capital timeline fixtures and declare dated planning evidence plus a cost/timing boundary. |
 | `COVERAGE_REVIEW_STATUS` | Covered in this effort: audited against the ATTENTION profile; fixture. |
@@ -70,17 +81,6 @@ contract-level journey, or explicit producer-contract review; it is not verified
 | Operation | Why |
 |---|---|
 | `APPLIANCE_FAILURE_RISK` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
-| `BUYER_CLOSING_DAY_READINESS` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
-| `BUYER_CONTRACT_TIMELINE` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
-| `BUYER_COST_READINESS` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
-| `BUYER_FINANCING_READINESS` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
-| `BUYER_INSURANCE_READINESS` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
-| `BUYER_LOAN_ESTIMATES` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
-| `BUYER_MOVE_STATUS` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
-| `BUYER_NEGOTIATION_READINESS` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
-| `BUYER_TASK_UPDATE` | A command whose result may carry a list (for example a choice of target): collection semantics apply, and the boundary derives them until the producer declares its own. |
-| `BUYER_TITLE_ESCROW_READINESS` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
-| `BUYER_WALKTHROUGH_READINESS` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
 | `CLAIM_CHECKLIST_VIEW` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
 | `CLAIM_TRANSITION` | A command whose result may carry a list (for example a choice of target): collection semantics apply, and the boundary derives them until the producer declares its own. |
 | `COVERAGE_COMPARISON_STATUS` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |

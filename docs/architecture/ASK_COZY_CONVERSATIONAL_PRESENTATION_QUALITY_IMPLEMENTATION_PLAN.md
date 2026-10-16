@@ -1203,6 +1203,8 @@ An independent review found the implementation sound for the representative slic
 
 **October 16 collection-adoption batch 1 — Maintenance.** The four maintenance reads are now producer-declared. Maintenance Status retains its exact full-set/server-window descriptor; Maintenance Forecast declares its complete prediction count and honest first-20 truncation without advertising a continuation; Budget Forecast declares every category and month delivered; and Template Browse distinguishes the full catalogue, the bounded fetch and the rows delivered after applicability filtering. The generated ledger now records 42 compliant operations and 69 remaining collection adoptions.
 
+**October 16 collection-adoption batch 2 — Buyer.** Eleven remaining Buyer-domain operations now declare collection semantics on all fourteen list blocks. The declarations cover task selection, move tasks, lender conditions, title issues, walkthrough observations and issues, closing-day blockers, draft and confirmed contingencies, negotiation findings, cost items, Loan Estimate revisions, insurance quotes and insurance requirements. Every producer reads its complete canonical array before applying a local display cap; each descriptor therefore reports exact source and fetched totals, honest delivered-row truncation, and no continuation because these handlers do not serve pagination. The generated ledger now records 53 compliant operations and 58 remaining collection adoptions.
+
 **Overall:** substantially implemented, not fully complete. Open: the runtime review (criterion 6), the live-backend journey run (criterion 4), per-operation review of the ledger's remaining open classes (criterion 5), and the owner decisions in section 14.5.
 
 ## 15. Final completion criteria

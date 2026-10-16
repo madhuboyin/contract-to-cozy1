@@ -66,6 +66,17 @@ export const REVIEWED_OPERATIONS: Readonly<Record<string, string>> = {
   MAINTENANCE_FORECAST: 'forecast list declares the complete prediction total and honest first-20 delivery truncation with no unsupported continuation',
   MAINTENANCE_BUDGET_FORECAST: 'budget breakdown declares complete category and month totals with no truncation or continuation',
   MAINTENANCE_TEMPLATES_BROWSE: 'template catalogue declares source, fetched and delivered totals across applicability buckets without offering unsupported continuation',
+  BUYER_CLOSING_DAY_READINESS: 'closing-day blockers declare the complete canonical blocker total and honest bounded delivery with no unsupported continuation',
+  BUYER_CONTRACT_TIMELINE: 'draft and confirmed contingency lists each declare their complete revision-scoped totals and bounded delivery',
+  BUYER_COST_READINESS: 'recorded cost items declare the complete eligible task total and bounded delivery',
+  BUYER_FINANCING_READINESS: 'unresolved lender conditions declare the complete readiness-workspace total and bounded delivery',
+  BUYER_INSURANCE_READINESS: 'insurance quotes and requirements independently declare their complete workspace totals and bounded delivery',
+  BUYER_LOAN_ESTIMATES: 'active offer revisions declare their complete comparison total and bounded delivery',
+  BUYER_MOVE_STATUS: 'open move tasks declare the complete canonical filtered total and bounded delivery',
+  BUYER_NEGOTIATION_READINESS: 'negotiation findings declare the complete canonical inspection-finding total and bounded delivery',
+  BUYER_TASK_UPDATE: 'the ambiguous-target command declares the complete eligible task total and bounded selection list',
+  BUYER_TITLE_ESCROW_READINESS: 'open title and escrow issues declare the complete workspace total and bounded delivery',
+  BUYER_WALKTHROUGH_READINESS: 'walkthrough observations and issues independently declare their complete workspace totals and bounded delivery',
 };
 
 const LIST_BLOCKS = ['GROUPED_LIST', 'TABLE', 'TIMELINE', 'PRIORITY_LIST'];

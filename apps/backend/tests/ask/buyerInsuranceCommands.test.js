@@ -74,6 +74,12 @@ test('the answer offers controls to contributors only, bind only when the servic
   assert.deepEqual(out(ws(), true).blocks.find((b) => b.id === 'buyer-insurance-quotes').sections[0].items[0].actions.map((a) => a.id), ['buyer-insurance-quote-select']);
   assert.deepEqual(out(chosen, true).blocks.find((b) => b.id === 'buyer-insurance-quotes').sections[0].items[0].actions, []);
   assert.deepEqual(out(ws(), true).blocks.find((b) => b.id === 'buyer-insurance-requirements').sections[0].items[0].actions.map((a) => a.id), ['buyer-insurance-requirement-update']);
+  assert.deepEqual(out(ws(), true).blocks.find((b) => b.id === 'buyer-insurance-quotes').collection, {
+    sourceTotal: 1, fetchedCount: 1, deliveredCount: 1, nextPageAvailable: false, deliveryTruncated: false,
+  });
+  assert.deepEqual(out(ws(), true).blocks.find((b) => b.id === 'buyer-insurance-requirements').collection, {
+    sourceTotal: 1, fetchedCount: 1, deliveredCount: 1, nextPageAvailable: false, deliveryTruncated: false,
+  });
   const noPremium = ws({ selectedQuoteId: 'q1', quotes: [quote({ status: 'SELECTED', annualPremiumCents: null })] });
   assert.ok(!out(noPremium, true).blocks[0].actions.some((a) => a.id === 'buyer-insurance-bind'));
   assert.match(out(ws(), true).blocks.at(-1).body, /does not buy, bind or cancel coverage/);

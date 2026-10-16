@@ -9,6 +9,7 @@ import { humanDate } from '../askFormatting';
 import { BuyerPurchaseLoanEstimateService } from '../../buyerPurchaseLoanEstimate.service';
 import { LE_ACTION_IDS, LE_ENTITY_TYPE, LE_MESSAGES, REVISION_STATUS_LABELS, type LeKind } from '../support/buyerLoanEstimateCommand';
 import { SETUP_ACTION_IDS, SETUP_MESSAGES } from '../support/buyerPlanSetupCommand';
+import { collectionDescriptor } from '../support/collectionDescriptor';
 
 const dollars = (cents: number | null | undefined) => (cents == null ? null : `$${Math.round(cents / 100).toLocaleString('en-US')}`);
 const rate = (bps: number | null | undefined) => (bps == null ? null : `${(bps / 100).toFixed(2)}%`);
@@ -82,7 +83,9 @@ export function buyerLoanEstimatesFromView(view: LoanEstimateView, canChange: bo
       type: 'SUMMARY', id: 'buyer-le-summary', title: selectedOffer ? `${selectedOffer.lenderName} is your selected offer` : 'Your lender offers', body, tone: 'DEFAULT', actions: top,
     }, {
       type: 'GROUPED_LIST', filters: [], id: 'buyer-le-offers', title: 'Offers and revisions', description: 'A draft is not part of your comparison until you confirm its figures.',
-      sections: [{ id: 'offers', title: 'Loan Estimates', count: items.length, items: items.slice(0, 15) }], actions: [],
+      sections: [{ id: 'offers', title: 'Loan Estimates', count: items.length, items: items.slice(0, 15) }],
+      collection: collectionDescriptor({ sourceTotal: items.length, fetchedCount: items.length, sections: [{ items: items.slice(0, 15) }], nextPageAvailable: false }),
+      actions: [],
     }, boundary],
     suggestions: [],
   };

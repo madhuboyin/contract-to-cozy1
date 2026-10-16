@@ -144,6 +144,9 @@ test('the offers answer offers the controls by state, to contributors only, and 
   const view = snapshot([offer([rev({ id: 'd2', status: 'DRAFT', revisionNumber: 2 }), rev({ id: 'r1' })]), offer([rev({ id: 'r3' })], { id: 'o2', lenderName: 'Second Bank' })], { selection: { offerId: 'o2', revisionId: 'r3', intentToProceedAt: null } });
   const ids = (result) => result.blocks.flatMap((b) => (b.type === 'GROUPED_LIST' ? b.sections.flatMap((s) => s.items.flatMap((i) => i.actions.map((a) => `${i.id}:${a.id}`))) : []));
   const actions = ids(buyerLoanEstimatesFromView(view, true));
+  assert.deepEqual(buyerLoanEstimatesFromView(view, true).blocks.find((b) => b.id === 'buyer-le-offers').collection, {
+    sourceTotal: 3, fetchedCount: 3, deliveredCount: 3, nextPageAvailable: false, deliveryTruncated: false,
+  });
   assert.ok(actions.includes('d2:buyer-le-draft-edit') && actions.includes('d2:buyer-le-confirm'));
   assert.ok(actions.includes('r1:buyer-le-select') && !actions.includes('r1:buyer-le-revision-start'));
   assert.ok(!actions.includes('r3:buyer-le-select') && actions.includes('r3:buyer-le-revision-start'));

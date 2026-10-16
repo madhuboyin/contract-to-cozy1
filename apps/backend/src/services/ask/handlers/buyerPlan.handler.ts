@@ -36,6 +36,14 @@ import { humanDate, money } from '../askFormatting';
 import { BUYER_FINDING_ENTITY_TYPE, BUYER_NEGOTIATION_ACTION_IDS, BUYER_NEGOTIATION_MESSAGES } from '../support/negotiationShieldBuyer';
 import { AskViewState, BUYER_FINDING_DISPOSITION_LABELS, durableFreeTextClarification, ensurePropertyAccess, safeTimezone } from '../askHandlerSupport';
 import { extractMaintenanceDueDate, loadAskViewState, maintenanceCompletionMatch, maintenanceUpdateAction, maintenanceUpdateSubject } from '../handlers/maintenance.handler';
+import { collectionDescriptor } from '../support/collectionDescriptor';
+
+const boundedCollection = (source: readonly unknown[], limit: number) => collectionDescriptor({
+  sourceTotal: source.length,
+  fetchedCount: source.length,
+  sections: [{ items: source.slice(0, limit) }],
+  nextPageAvailable: false,
+});
 
 // B06 fix (docs/architecture/ASK_COZY_PHASE6_BUYER_ACCEPTANCE_VERIFICATION.md):
 // confirmBuyerTaskUpdate/confirmBuyerTaskComplete previously threw a static
@@ -642,7 +650,7 @@ async function buyerTaskUpdateResult(userId: string, propertyId: string, message
         sections: [{ id: 'tasks', title: 'Buyer Plan tasks', count: openTasks.length, items: openTasks.slice(0, 20).map((task) => ({
           id: task.id, title: task.title, description: task.dueAt ? `Due ${humanDate(task.dueAt)}` : 'No due date',
           meta: [task.priority, task.status], status: task.status, href: null,
-        })) }], actions: [],
+        })) }], collection: boundedCollection(openTasks, 20), actions: [],
       }], suggestions: [],
     };
   }
@@ -732,7 +740,7 @@ async function buyerMoveStatusResult(userId: string, propertyId: string): Promis
         id: task.id, title: task.title, description: task.description,
         meta: [task.priority === 'NOW' ? 'Now' : task.priority, task.dueAt ? `Due ${humanDate(task.dueAt)}` : null].filter((value): value is string => Boolean(value)),
         status: task.status, href: null,
-      })) }],
+      })) }], collection: boundedCollection(open, 10),
       actions: [],
     });
   }
@@ -793,7 +801,7 @@ async function buyerFinancingReadinessResult(userId: string, propertyId: string)
         meta: [condition.blocking ? 'Holds up closing' : null, condition.dueAt ? `Due ${humanDate(new Date(condition.dueAt))}` : null].filter((value): value is string => Boolean(value)),
         status: condition.status, href: null, entityType: CLOSING_ITEM_ENTITY_TYPES.LENDER,
         actions: canChange ? [closingItemRowAction('LENDER_UPDATE', 'Update where it stands')] : [],
-      })) }], actions: [],
+      })) }], collection: boundedCollection(unresolvedConditions, 10), actions: [],
     });
   }
   blocks.push(BUYER_PROFESSIONAL_BOUNDARY);
@@ -844,7 +852,7 @@ async function buyerTitleEscrowReadinessResult(userId: string, propertyId: strin
         meta: [issue.blocking ? 'Holds up closing' : null, issue.dueAt ? `Due ${humanDate(new Date(issue.dueAt))}` : null].filter((value): value is string => Boolean(value)),
         status: issue.status, href: null, entityType: CLOSING_ITEM_ENTITY_TYPES.TITLE,
         actions: canChange ? [closingItemRowAction('TITLE_UPDATE', 'Update where it stands')] : [],
-      })) }], actions: [],
+      })) }], collection: boundedCollection(openIssues, 10), actions: [],
     });
   }
   blocks.push(BUYER_PROFESSIONAL_BOUNDARY);
@@ -908,7 +916,7 @@ async function buyerWalkthroughReadinessResult(userId: string, propertyId: strin
         id: observation.id, title: observation.area, description: observation.notes, meta: [WALKTHROUGH_OBSERVATION_CATEGORY_LABELS[observation.category] ?? observation.category],
         status: OBSERVATION_STATUS_LABELS[observation.status] ?? observation.status, href: null, entityType: WALKTHROUGH_ENTITY_TYPES.OBSERVATION,
         actions: canChange ? observationKinds(observation, withIssue.has(observation.id), Boolean(workspace.completedAt)).map((kind) => rowAction(kind, kind === 'OBSERVATION_REVIEW' ? 'Record the result' : 'Record an issue', kind === 'OBSERVATION_REVIEW' ? 'SECONDARY' : 'PRIMARY')) : [],
-      })) }], actions: [],
+      })) }], collection: boundedCollection(workspace.observations, 25), actions: [],
     });
   }
   if (workspace.issues.length) {
@@ -918,7 +926,7 @@ async function buyerWalkthroughReadinessResult(userId: string, propertyId: strin
         id: issue.id, title: issue.title, description: null, meta: issue.blocking ? ['Holds up closing'] : [], status: ISSUE_STATUS_LABELS[issue.status] ?? issue.status, href: null,
         entityType: WALKTHROUGH_ENTITY_TYPES.ISSUE,
         actions: canChange ? issueKinds(issue).map(() => rowAction('ISSUE_UPDATE', 'Record what is being done', 'PRIMARY')) : [],
-      })) }], actions: [],
+      })) }], collection: boundedCollection(workspace.issues, 15), actions: [],
     });
   }
   blocks.push({ type: 'BOUNDARY', id: 'buyer-walkthrough-boundary', title: 'Route unresolved issues to your professional', body: 'ContractToCozy does not tell you to close, delay, or withhold funds. Confirm unresolved walkthrough issues with your agent, attorney, or closing professional.', severity: 'INFO', suggestions: [] });
@@ -1046,7 +1054,7 @@ async function buyerClosingDayReadinessResult(userId: string, propertyId: string
       type: 'GROUPED_LIST', filters: [], id: 'buyer-closing-day-blockers', title: 'Blockers before closing day', description: 'Open or blocking tasks recorded on the Buyer Plan.',
       sections: [{ id: 'blockers', title: 'Blockers', count: blockers.length, items: blockers.slice(0, 10).map((blocker) => ({
         id: blocker.id, title: blocker.title, description: null, meta: [], status: blocker.status, href: null,
-      })) }], actions: [],
+      })) }], collection: boundedCollection(blockers, 10), actions: [],
     });
   }
   blocks.push({ type: 'BOUNDARY', id: 'buyer-closing-day-wire-boundary', title: 'Wire-fraud protection', body: 'Never trust changed emailed wire instructions. Independently verify funds instructions using a known phone number.', severity: 'CAUTION', suggestions: [] });
@@ -1088,7 +1096,7 @@ async function buyerContractTimelineResult(userId: string, propertyId: string): 
     sections: [{ id: 'draft', title: 'Contingencies in the draft', count: draft.contingencies.length, items: draft.contingencies.slice(0, 15).map((item) => ({
       id: item.id, title: item.label, description: null, meta: [item.dueAt ? `Due ${humanDate(new Date(item.dueAt))}` : null].filter((value): value is string => Boolean(value)),
       status: item.status, href: null, entityType: CONTRACT_ENTITY_TYPE, actions: canChange ? [contingencyAction()] : [],
-    })) }], actions: [],
+    })) }], collection: boundedCollection(draft.contingencies, 15), actions: [],
   }] : [];
   if (!current) {
     return {
@@ -1113,7 +1121,7 @@ async function buyerContractTimelineResult(userId: string, propertyId: string): 
         id: item.id, title: item.label, description: null,
         meta: [item.dueAt ? `Due ${humanDate(new Date(item.dueAt))}` : null].filter((value): value is string => Boolean(value)),
         status: item.status, href: null,
-      })) }], actions: [],
+      })) }], collection: boundedCollection(openContingencies, 10), actions: [],
     });
   }
   blocks.push(BUYER_PROFESSIONAL_BOUNDARY);
@@ -1162,7 +1170,7 @@ async function buyerNegotiationReadinessResult(userId: string, propertyId: strin
         actions: canChange ? [finding.negotiationCaseLinks.length
           ? { id: BUYER_NEGOTIATION_ACTION_IDS.OUTCOME, label: 'Record the seller response', message: BUYER_NEGOTIATION_MESSAGES.OUTCOME, operationId: 'NEGOTIATION_SHIELD_BUYER_COMMAND', interactionType: 'MUTATE_RECORD' as const, style: 'PRIMARY' as const }
           : { id: BUYER_NEGOTIATION_ACTION_IDS.START, label: 'Start negotiating', message: BUYER_NEGOTIATION_MESSAGES.START, operationId: 'NEGOTIATION_SHIELD_BUYER_COMMAND', interactionType: 'MUTATE_RECORD' as const, style: 'PRIMARY' as const }] : [],
-      })) }], actions: [],
+      })) }], collection: boundedCollection(findings, 10), actions: [],
     });
   }
   blocks.push(BUYER_PROFESSIONAL_BOUNDARY);
@@ -1198,7 +1206,7 @@ async function buyerCostReadinessResult(userId: string, propertyId: string): Pro
       type: 'GROUPED_LIST', filters: [], id: 'buyer-cost-items', title: 'Recorded cost items', description: 'Estimated costs from open Buyer Plan tasks.',
       sections: [{ id: 'costs', title: 'Costs', count: costedTasks.length, items: costedTasks.slice(0, 10).map((task) => ({
         id: task.id, title: task.title, description: null, meta: [money(task.estimatedCostCents ?? 0)], status: task.status, href: null,
-      })) }], actions: [],
+      })) }], collection: boundedCollection(costedTasks, 10), actions: [],
     });
   }
   blocks.push({ type: 'BOUNDARY', id: 'buyer-cost-boundary', title: 'Modelled estimate, not a quote', body: 'These figures are recorded or modelled estimates. Confirm actual costs with your provider, lender, or closing professional before relying on them financially.', severity: 'INFO', suggestions: [] });

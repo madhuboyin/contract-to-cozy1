@@ -11,6 +11,7 @@ import {
   INSURANCE_ACTION_IDS, INSURANCE_ENTITY_TYPES, INSURANCE_MESSAGES, PROOF_LABELS, QUOTE_STATUS_LABELS, REQUIREMENT_STATUS_LABELS, bindBlocker, quoteSelectable, requirementUpdatable,
   type InsuranceKind,
 } from '../support/buyerInsuranceCommand';
+import { collectionDescriptor } from '../support/collectionDescriptor';
 
 const dollars = (cents: number | null | undefined) => (cents == null ? null : `$${Math.round(cents / 100).toLocaleString('en-US')}`);
 
@@ -67,7 +68,7 @@ export function buyerInsuranceFromView(view: InsuranceView, canChange: boolean, 
         meta: [dollars(q.annualPremiumCents) ? `${dollars(q.annualPremiumCents)} a year` : null, dollars(q.deductibleCents) ? `${dollars(q.deductibleCents)} deductible` : null, q.validUntil ? `Valid until ${humanDate(new Date(q.validUntil))}` : null].filter((v): v is string => Boolean(v)),
         status: QUOTE_STATUS_LABELS[q.status] ?? q.status, href: null, entityType: INSURANCE_ENTITY_TYPES.QUOTE,
         actions: canChange && quoteSelectable(q.status) && !w.boundPolicyId ? [rowAction('QUOTE_SELECT', 'Choose this quote')] : [],
-      })) }], actions: [],
+      })) }], collection: collectionDescriptor({ sourceTotal: w.quotes.length, fetchedCount: w.quotes.length, sections: [{ items: w.quotes.slice(0, 10) }], nextPageAvailable: false }), actions: [],
     });
   }
   if (w.requirements.length) {
@@ -77,7 +78,7 @@ export function buyerInsuranceFromView(view: InsuranceView, canChange: boolean, 
         id: r.id, title: r.title, description: null, meta: [r.blocking ? 'Holds up closing' : null, r.dueAt ? `Due ${humanDate(new Date(r.dueAt))}` : null].filter((v): v is string => Boolean(v)),
         status: REQUIREMENT_STATUS_LABELS[r.status] ?? r.status, href: null, entityType: INSURANCE_ENTITY_TYPES.REQUIREMENT,
         actions: canChange && requirementUpdatable(r.status) ? [rowAction('REQUIREMENT_UPDATE', 'Update where it stands')] : [],
-      })) }], actions: [],
+      })) }], collection: collectionDescriptor({ sourceTotal: w.requirements.length, fetchedCount: w.requirements.length, sections: [{ items: w.requirements.slice(0, 10) }], nextPageAvailable: false }), actions: [],
     });
   }
   blocks.push(boundary);
