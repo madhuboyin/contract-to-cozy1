@@ -77,6 +77,7 @@ test('journeys are grouped by the page\'s urgency labels with asset, title, step
     ['Upcoming', ['Coverage decision']],
     ['When ready', ['Weather readiness issue']],
   ]);
+  assert.deepEqual(list.collection, { sourceTotal: 3, fetchedCount: 3, deliveredCount: 3, nextPageAvailable: false, deliveryTruncated: false });
   const [heater, coverage, storm] = list.sections.map((section) => section.items[0]);
   assert.equal(heater.description, 'Aging System · 1 of 3 steps done');
   assert.deepEqual(heater.meta, ['Next: Compare replacement quotes']);

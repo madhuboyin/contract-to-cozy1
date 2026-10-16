@@ -103,6 +103,10 @@ export const REVIEWED_OPERATIONS: Readonly<Record<string, string>> = {
   INTELLIGENCE_ENVELOPE_QUERY: 'the paged Envelope read declares fetched and delivered rows, an unknown global total, and the real continuation state',
   ROOM_CREATE: 'producer-contract review: the actual workflow emits capture, summary and confirmation blocks only; its broad command allow-list does not represent a list-producing path',
   INVENTORY_ITEM_CREATE: 'producer-contract review: the actual workflow emits capture, summary and confirmation blocks only; its broad command allow-list does not represent a list-producing path',
+  DIY_PROJECTS: 'active DIY projects pair their cursor-bounded read with the authoritative active-project count and advertise no unsupported continuation',
+  DIY_TEMPLATE_BROWSE: 'reviewed, eligible and applicable templates are evaluated as a complete source set before bounded delivery, with no unsupported continuation',
+  GUIDANCE_JOURNEYS_LIST: 'the fully surfaced, protection-reconciled journey set declares exact source, fetched and delivered totals by urgency',
+  GUIDANCE_JOURNEY_CONTINUE: 'one journey’s complete live step set declares exact source, fetched and delivered totals by status',
 };
 
 const LIST_BLOCKS = ['GROUPED_LIST', 'TABLE', 'TIMELINE', 'PRIORITY_LIST'];

@@ -10,6 +10,7 @@ import { readableCode } from '../askFormatting';
 import { diyService } from '../../diy.service';
 import { DIY_TEMPLATE_BROWSE_ACTION } from '../../diy/projectGuide';
 import { diyProjectGuideCandidate } from '../suggestedActions/diyProjectCandidates';
+import { collectionDescriptor } from '../support/collectionDescriptor';
 
 // DIY Project Center capability-card slice (FRD v1.58): the tenth new operation for a capability with none. Reads
 // diyService.listProjects with the page's own filter (planning and in progress, the service's default page of 20) --
@@ -26,7 +27,7 @@ const DIY_CATEGORY_LABELS: Record<string, string> = {
 };
 const DIY_VERDICT_LABELS: Record<string, string> = { DIY_RECOMMENDED: 'DIY Recommended', BORDERLINE: 'Borderline', HIRE_RECOMMENDED: 'Hire Recommended', HIRE_REQUIRED: 'Hire Required' };
 
-export function diyProjectsFromView(view: DiyProjectListView, propertyId: string, canChange = false): AskOperationResult {
+export function diyProjectsFromView(view: DiyProjectListView, propertyId: string, canChange = false, sourceTotal: number | null = null): AskOperationResult {
   // The caller's own skill levels (FRD v1.344): any member may set their own profile.
   const profileAction = {
     id: DIY_PROFILE_ACTION_ID, label: 'Set my skill levels', interactionType: 'START_WORKFLOW' as const, message: DIY_PROFILE_MESSAGE,
@@ -74,37 +75,37 @@ export function diyProjectsFromView(view: DiyProjectListView, propertyId: string
       body: 'You have more active DIY projects than this. Ask about one of them by name to see more.', severity: 'INFO',
     });
   }
+  const sections = [{
+    id: 'diy-active', title: 'Active projects', count: sourceTotal ?? items.length,
+    items: items.map((item) => ({
+      id: item.id,
+      title: item.title,
+      description: null,
+      meta: [
+        DIY_CATEGORY_LABELS[item.category] ?? readableCode(item.category),
+        `${item.completedStepCount}/${item.requiredStepCount} steps`,
+        ...(item.decisionVerdict ? [DIY_VERDICT_LABELS[item.decisionVerdict] ?? readableCode(item.decisionVerdict)] : []),
+      ],
+      status: DIY_STATUS_LABELS[item.status] ?? readableCode(item.status),
+      ...((item.templateId && !item.aiGuideId && item.templateRevisionId) || canChange ? {
+        entityType: 'DIY_PROJECT' as const,
+        actions: [
+          ...(item.templateId && !item.aiGuideId && item.templateRevisionId ? [{
+            id: 'guide-diy-project', label: 'Guide me through this project', message: 'Guide me through this project.', style: 'SECONDARY' as const,
+            interactionType: 'CONVERSATION_CONTINUE' as const, operationId: 'DIY_PROJECT_GUIDE' as const,
+          }] : []),
+          ...(canChange && diyProjectTakesNote(item.status) ? [{
+            id: DIY_NOTE_ACTION_ID, label: 'Add a note', message: DIY_NOTE_MESSAGE, style: 'QUIET' as const,
+            interactionType: 'MUTATE_RECORD' as const, operationId: 'DIY_PROJECT_NOTE_COMMAND' as const,
+          }] : []),
+        ],
+      } : {}),
+    })),
+  }];
   blocks.push({
     type: 'GROUPED_LIST', filters: [], id: 'diy-projects', title: 'Active DIY projects', description: 'Newest first.',
-    sections: [{
-      id: 'diy-active', title: 'Active projects', count: items.length,
-      items: items.map((item) => ({
-        id: item.id,
-        title: item.title,
-        description: null,
-        meta: [
-          DIY_CATEGORY_LABELS[item.category] ?? readableCode(item.category),
-          `${item.completedStepCount}/${item.requiredStepCount} steps`,
-          ...(item.decisionVerdict ? [DIY_VERDICT_LABELS[item.decisionVerdict] ?? readableCode(item.decisionVerdict)] : []),
-        ],
-        status: DIY_STATUS_LABELS[item.status] ?? readableCode(item.status),
-        // DIY project guide (ASK_COZY_DIY_PROJECT_GUIDE_PLAN): only a project started from a reviewed template version can be guided, so only it offers the
-        // action. The guide itself re-checks everything and refuses with a page link, so this is a courtesy, not the gate. The item id is the project id.
-        ...((item.templateId && !item.aiGuideId && item.templateRevisionId) || canChange ? {
-          entityType: 'DIY_PROJECT',
-          actions: [
-            ...(item.templateId && !item.aiGuideId && item.templateRevisionId ? [{
-              id: 'guide-diy-project', label: 'Guide me through this project', message: 'Guide me through this project.', style: 'SECONDARY' as const,
-              interactionType: 'CONVERSATION_CONTINUE' as const, operationId: 'DIY_PROJECT_GUIDE',
-            }] : []),
-            ...(canChange && diyProjectTakesNote(item.status) ? [{
-              id: DIY_NOTE_ACTION_ID, label: 'Add a note', message: DIY_NOTE_MESSAGE, style: 'QUIET' as const,
-              interactionType: 'MUTATE_RECORD' as const, operationId: 'DIY_PROJECT_NOTE_COMMAND' as const,
-            }] : []),
-          ],
-        } : {}),
-      })),
-    }],
+    sections,
+    collection: collectionDescriptor({ sourceTotal, fetchedCount: items.length, sections, nextPageAvailable: false }),
     actions: [{ ...browseAction, style: 'SECONDARY' as const }],
   });
   blocks.push(boundary);
@@ -119,7 +120,11 @@ export function diyProjectsFromView(view: DiyProjectListView, propertyId: string
 
 // The framework resolves the caller's access for the operation's floor and hands it to the handler; a viewer sees the list without the note controls.
 async function diyProjectsResult(propertyId: string, role: HouseholdRole | undefined): Promise<AskOperationResult> {
-  return diyProjectsFromView(await diyService.listProjects(propertyId, { status: DIY_ACTIVE_STATUSES }), propertyId, role !== undefined && role !== HouseholdRole.VIEWER);
+  const [view, sourceTotal] = await Promise.all([
+    diyService.listProjects(propertyId, { status: DIY_ACTIVE_STATUSES }),
+    diyService.countActiveProjects(propertyId),
+  ]);
+  return diyProjectsFromView(view, propertyId, role !== undefined && role !== HouseholdRole.VIEWER, sourceTotal);
 }
 
 registerCapabilityHandler('diy.projects', async (envelope, deps) => diyProjectsResult(envelope.propertyId!, (await deps?.propertyAccess)?.role));

@@ -174,6 +174,7 @@ test('a blocked current step shows its reason and a cautionary tone', () => {
   const summary = block(result, 'guidance-journey-summary');
   assert.equal(summary.tone, 'CAUTION');
   assert.match(summary.body, /Blocked: Add your renewal date first/);
+  assert.deepEqual(block(result, 'guidance-journey-steps').collection, { sourceTotal: 2, fetchedCount: 2, deliveredCount: 2, nextPageAvailable: false, deliveryTruncated: false });
 });
 
 test('guard targets follow the execution guard service\'s own step matching', () => {

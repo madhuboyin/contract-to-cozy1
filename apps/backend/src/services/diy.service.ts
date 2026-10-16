@@ -521,11 +521,11 @@ export class DiyService {
         publishedRevision: { is: { provenance: 'GOVERNED', safetyLevel: 'LOW', permitRequirement: { in: ['NOT_REQUIRED', 'LIKELY_NOT_REQUIRED'] } } },
       },
       orderBy: { publishedRevision: { title: 'asc' } },
-      take: options.templateId ? 1 : 60,
+      ...(options.templateId ? { take: 1 } : {}),
       include: PUBLISHED_REVISION_INCLUDE,
     });
     const reviewed = candidates.filter((template) => template.publishedRevision && evaluateTemplateStart(template.publishedRevision, { requireGoverned: true }).ok);
-    if (!reviewed.length) return { items: [], hasMore: false };
+    if (!reviewed.length) return { items: [], hasMore: false, sourceTotal: 0 };
     const context = await getPropertyContext(propertyId, { userId: actorUserId }, { scopes: ['EXTERIOR', 'RESPONSIBILITY', 'SYSTEMS', 'INVENTORY'] });
     const applicable = reviewed.filter((template) => evaluateDiyApplicability(context, template.publishedRevision!.category).status === 'APPLICABLE');
     const open = await prisma.diyProject.findMany({
@@ -546,7 +546,7 @@ export class DiyService {
         openProjectId: openByTemplate.get(template.id) ?? null,
       };
     });
-    return { items, hasMore: applicable.length > limit };
+    return { items, hasMore: applicable.length > limit, sourceTotal: applicable.length };
   }
 
   /** The number of this home's DIY projects in planning or in progress -- the same open set the DIY projects card lists, without its page limit. */

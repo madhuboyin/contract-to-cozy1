@@ -18,7 +18,7 @@ const { getSkillForOperation } = require('../../src/services/skills/skillRegistr
 const { ASK_OPERATION_CAPABILITY } = require('../../src/services/intelligence/capabilitySkillGuidanceBridge.registry.ts');
 const { diyService } = require('../../src/services/diy.service.ts');
 
-const originals = { prisma: prismaModule.prisma, list: diyService.listProjects };
+const originals = { prisma: prismaModule.prisma, list: diyService.listProjects, count: diyService.countActiveProjects };
 let calls;
 
 const project = (id, overrides = {}) => ({
@@ -44,11 +44,13 @@ function install() {
     },
   });
   diyService.listProjects = async (...args) => { calls.push(args); return view(); };
+  diyService.countActiveProjects = async () => 3;
 }
 
 function restore() {
   prismaModule.prisma = originals.prisma;
   diyService.listProjects = originals.list;
+  diyService.countActiveProjects = originals.count;
 }
 
 test.beforeEach(install);
@@ -72,11 +74,12 @@ test('the real list query is the page\'s: this property, those statuses, newest 
 });
 
 test('projects are summarized and listed with the page\'s labels, step progress and project links', () => {
-  const result = diyProjectsFromView(view(), 'p1');
+  const result = diyProjectsFromView(view(), 'p1', false, 8);
   assert.equal(result.blocks[0].title, '3 active DIY projects');
   assert.equal(result.blocks[0].body, '1 in progress, 2 in planning. 1 was assessed as better hired out.');
   assert.equal(result.blocks[0].tone, 'CAUTION');
   const list = result.blocks.find((block) => block.id === 'diy-projects');
+  assert.deepEqual(list.collection, { sourceTotal: 8, fetchedCount: 3, deliveredCount: 3, nextPageAvailable: false, deliveryTruncated: false });
   assert.deepEqual(list.sections[0].items.map((row) => [row.title, row.status, row.meta]), [
     ['Repaint the hallway', 'In Progress', ['Painting', '3/5 steps']],
     ['Re-caulk the tub', 'Planning', ['Plumbing', '0/4 steps', 'DIY Recommended']],

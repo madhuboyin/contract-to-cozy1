@@ -19,6 +19,7 @@ import {
   DIY_PROJECT_ENTITY_TYPE, DIY_PROJECT_START_ACTION, DIY_START_GUIDE_ACTION_ID, DIY_TEMPLATE_ENTITY_TYPE,
 } from '../../diy/projectGuide';
 import { diyProjectGuideCandidate, diyTemplateStartCandidate } from '../suggestedActions/diyProjectCandidates';
+import { collectionDescriptor } from '../support/collectionDescriptor';
 
 const BOUNDARY_ID = 'diy-template-boundary';
 const SUGGESTIONS = ['Show my DIY projects'];
@@ -43,7 +44,7 @@ const minutes = (value: number | null | undefined) => (!value ? null : value < 6
 // ---- browse (read-only) ---------------------------------------------------------------------------------------------------------------------------------
 
 /** Pure: the card. `canStart` is whether the person may change the property (a contributor or owner); only then do rows carry the start action. */
-export function diyTemplateBrowseFromItems(view: { items: StartableTemplate[]; hasMore: boolean }, propertyId: string, canStart: boolean): AskOperationResult {
+export function diyTemplateBrowseFromItems(view: { items: StartableTemplate[]; hasMore: boolean; sourceTotal?: number }, propertyId: string, canStart: boolean): AskOperationResult {
   const scope: AskPresentationBlock = {
     type: 'BOUNDARY', id: BOUNDARY_ID, title: 'Only reviewed, low-risk projects',
     body: 'Only reviewed templates that fit this home are offered here. Electrical panel or wiring work, gas lines, structural work, active leaks or flooding, and hazardous materials are for a licensed professional. Stop if anything feels unsafe.',
@@ -70,26 +71,27 @@ export function diyTemplateBrowseFromItems(view: { items: StartableTemplate[]; h
   if (view.hasMore) {
     blocks.push({ type: 'LIMITATION', id: 'diy-template-browse-limit', title: `Showing the first ${view.items.length}`, body: 'There are more reviewed projects than are shown here.', severity: 'INFO' });
   }
+  const sections = [{
+    id: 'diy-templates', title: 'Reviewed projects', count: view.sourceTotal ?? view.items.length,
+    items: view.items.map((item) => ({
+      id: item.openProjectId ?? item.id, title: item.title, description: item.shortDescription,
+      meta: [CATEGORY_LABELS[item.category] ?? item.category, `${item.stepCount} steps`, minutes(item.estimatedMinutes)].filter((value): value is string => Boolean(value)),
+      status: item.openProjectId ? 'Already started' : null,
+      entityType: item.openProjectId ? DIY_PROJECT_ENTITY_TYPE : DIY_TEMPLATE_ENTITY_TYPE,
+      ...(item.openProjectId
+        ? { actions: [{ id: 'guide-diy-project', label: 'Guide me through this project', message: 'Guide me through this project.', style: 'SECONDARY' as const, interactionType: 'CONVERSATION_CONTINUE' as const, operationId: 'DIY_PROJECT_GUIDE' as const }] }
+        : canStart ? {
+          actions: [{
+            id: DIY_PROJECT_START_ACTION.id, label: DIY_PROJECT_START_ACTION.label, message: DIY_PROJECT_START_ACTION.message, style: 'SECONDARY' as const,
+            interactionType: 'MUTATE_RECORD' as const, operationId: 'DIY_PROJECT_START' as const,
+          }],
+        } : {}),
+    })),
+  }];
   blocks.push({
     type: 'GROUPED_LIST', filters: [], id: 'diy-template-browse', title: 'Projects you can start', description: 'Reviewed templates that fit this home, in alphabetical order.',
-    sections: [{
-      id: 'diy-templates', title: 'Reviewed projects', count: view.items.length,
-      items: view.items.map((item) => ({
-        id: item.openProjectId ?? item.id, title: item.title, description: item.shortDescription,
-        meta: [CATEGORY_LABELS[item.category] ?? item.category, `${item.stepCount} steps`, minutes(item.estimatedMinutes)].filter((value): value is string => Boolean(value)),
-        status: item.openProjectId ? 'Already started' : null,
-        entityType: item.openProjectId ? DIY_PROJECT_ENTITY_TYPE : DIY_TEMPLATE_ENTITY_TYPE,
-        // A template with an open project offers the in-Ask guide for that project; otherwise a contributor or owner gets the start action (the row id is the template's).
-        ...(item.openProjectId
-          ? { actions: [{ id: 'guide-diy-project', label: 'Guide me through this project', message: 'Guide me through this project.', style: 'SECONDARY' as const, interactionType: 'CONVERSATION_CONTINUE' as const, operationId: 'DIY_PROJECT_GUIDE' }] }
-          : canStart ? {
-            actions: [{
-              id: DIY_PROJECT_START_ACTION.id, label: DIY_PROJECT_START_ACTION.label, message: DIY_PROJECT_START_ACTION.message, style: 'SECONDARY' as const,
-              interactionType: 'MUTATE_RECORD' as const, operationId: 'DIY_PROJECT_START',
-            }],
-          } : {}),
-      })),
-    }],
+    sections,
+    collection: collectionDescriptor({ sourceTotal: view.sourceTotal ?? null, fetchedCount: view.sourceTotal ?? view.items.length, sections, nextPageAvailable: false }),
     actions: [],
   });
   blocks.push(scope);

@@ -70,6 +70,7 @@ const confirm = (parameters, asRole = 'CONTRIBUTOR') => confirmCapabilityInvoke(
 });
 const codeOf = async (promise) => { try { await promise; return null; } catch (error) { return error.code ?? `NO_CODE:${error.message}`; } };
 const rowsOf = (result) => result.blocks.find((b) => b.type === 'GROUPED_LIST')?.sections.flatMap((section) => section.items) ?? [];
+const collectionOf = (result) => result.blocks.find((b) => b.type === 'GROUPED_LIST')?.collection;
 const validate = (operationId, result, householdRole) => validateAskAnswerTrust({
   question: 'q', operationId, propertyId: 'prop-1',
   result: { ...result, parameters: { ...(result.parameters ?? {}), audiencePresentation: { householdRole }, answerTrustEvidence: { schemaVersion: '1.0', sources: [{ sourceId: getAskOperationDefinition(operationId).adapterKey, operationId, status: 'COMPLETE', scope: 'FULL', freshness: 'CURRENT', observedAt: new Date().toISOString() }] } } },
@@ -107,6 +108,7 @@ test('typed wording of the browse question routes to the DIY projects card (whic
 test('browse lists a governed, applicable template with the start action for a contributor, and none for a viewer; the card and answer pass the block schema and trust policy', async () => {
   const result = await browse();
   assert.equal(result.reasonCode, 'DIY_TEMPLATE_BROWSE_READY');
+  assert.deepEqual(collectionOf(result), { sourceTotal: 1, fetchedCount: 1, deliveredCount: 1, nextPageAvailable: false, deliveryTruncated: false });
   const [row] = rowsOf(result);
   assert.deepEqual([row.id, row.title, row.entityType, row.status ?? null], ['t1', 'Repaint a hallway', 'DIY_TEMPLATE', null]);
   assert.deepEqual(row.actions, [{ id: 'diy-template-start', label: 'Start this project', message: 'Start this project.', style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId: 'DIY_PROJECT_START' }]);

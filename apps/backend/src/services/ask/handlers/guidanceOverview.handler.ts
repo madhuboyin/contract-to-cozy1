@@ -18,6 +18,7 @@ import { ensurePropertyAccess } from '../askHandlerSupport';
 import { guidanceStepResolverService } from '../../guidanceEngine/guidanceStepResolver.service';
 import { getStepSkipPolicy } from '../../guidanceEngine/guidanceTemplateRegistry';
 import { getGuidanceModels } from '../../guidanceEngine/guidanceTypes';
+import { collectionDescriptor } from '../support/collectionDescriptor';
 
 // Guidance Overview capability-card slice (FRD v1.65, product option A): reads guidanceJourneyService.getPropertyGuidance
 // and then drops journeys whose primary signal the protection-context reconciliation suppresses -- what
@@ -105,6 +106,10 @@ export function guidanceJourneysFromView(payload: Pick<GuidancePayload, 'journey
   });
   const actNow = rows.filter((row) => row.group === 'IMMEDIATE').length;
   const blocked = rows.filter((row) => row.blocked).length;
+  const sections = GUIDANCE_PRIORITY_GROUPS
+    .map(([key, label]) => ({ key, label, items: rows.filter((row) => row.group === key).map((row) => row.item) }))
+    .filter((section) => section.items.length > 0)
+    .map((section) => ({ id: `guidance-journeys-${section.key.toLowerCase()}`, title: section.label, count: section.items.length, items: section.items }));
   return {
     status: 'ANSWERED', reasonCode: 'GUIDANCE_JOURNEYS_READY',
     blocks: [{
@@ -119,10 +124,8 @@ export function guidanceJourneysFromView(payload: Pick<GuidancePayload, 'journey
     }, {
       type: 'GROUPED_LIST', filters: [], id: 'guidance-journeys-items', title: 'Guided journeys',
       description: 'By urgency. Open a journey to work through its next step.',
-      sections: GUIDANCE_PRIORITY_GROUPS
-        .map(([key, label]) => ({ key, label, items: rows.filter((row) => row.group === key).map((row) => row.item) }))
-        .filter((section) => section.items.length > 0)
-        .map((section) => ({ id: `guidance-journeys-${section.key.toLowerCase()}`, title: section.label, count: section.items.length, items: section.items })),
+      sections,
+      collection: collectionDescriptor({ sourceTotal: rows.length, fetchedCount: rows.length, sections, nextPageAvailable: false }),
       actions: [],
     }, boundary],
     suggestions: [],
@@ -262,9 +265,11 @@ export function guidanceJourneyContinuation(journey: any, propertyId: string, op
   const done = steps.filter((step) => step.status === 'COMPLETED');
   const todo = steps.filter((step) => ['IN_PROGRESS', 'BLOCKED', 'PENDING'].includes(step.status));
   const skipped = steps.filter((step) => step.status === 'SKIPPED');
+  const stepSections = [section('todo', 'Still to do', todo), section('done', 'Done', done), section('skipped', 'Skipped', skipped)].filter((entry) => entry.items.length > 0);
   blocks.push({
     type: 'GROUPED_LIST', filters: [], id: 'guidance-journey-steps', title: 'Steps', description: 'In order. Steps are finished in their own tool, where the proof is recorded.',
-    sections: [section('todo', 'Still to do', todo), section('done', 'Done', done), section('skipped', 'Skipped', skipped)].filter((entry) => entry.items.length > 0),
+    sections: stepSections,
+    collection: collectionDescriptor({ sourceTotal: steps.length, fetchedCount: steps.length, sections: stepSections, nextPageAvailable: false }),
     actions: [],
   });
 

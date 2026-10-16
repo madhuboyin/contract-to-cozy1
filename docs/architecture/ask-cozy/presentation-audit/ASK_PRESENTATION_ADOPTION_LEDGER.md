@@ -11,8 +11,8 @@ contract-level journey, or explicit producer-contract review; it is not verified
 
 | Class | Operations |
 |---|---:|
-| Reviewed implementation (fixture, journey, or producer-contract review; not runtime-verified) | 79 |
-| Requires collection adoption | 32 |
+| Reviewed implementation (fixture, journey, or producer-contract review; not runtime-verified) | 83 |
+| Requires collection adoption | 28 |
 | Requires trust or rationale adoption | 0 |
 | Compact receipt: no rich migration needed | 83 |
 | Specialized workflow requiring later review | 0 |
@@ -46,11 +46,15 @@ contract-level journey, or explicit producer-contract review; it is not verified
 | `COVERAGE_COMPARISON_STATUS` | Covered in this effort: the grouped-list comparison branch declares the complete option total and bounded delivery; compact comparison-strip branches are lossless. |
 | `COVERAGE_GAPS` | Covered in this effort: the filtered item review declares its complete result total and per-group bounded delivery. |
 | `COVERAGE_REVIEW_STATUS` | Covered in this effort: audited against the ATTENTION profile; fixture. |
+| `DIY_PROJECTS` | Covered in this effort: active DIY projects pair their cursor-bounded read with the authoritative active-project count and advertise no unsupported continuation. |
 | `DIY_PROJECT_GUIDE` | Covered in this effort: reviewed guide fixtures cover canonical project progress, current step, refusal/finished states and permission-aware actions. |
+| `DIY_TEMPLATE_BROWSE` | Covered in this effort: reviewed, eligible and applicable templates are evaluated as a complete source set before bounded delivery, with no unsupported continuation. |
 | `DOCUMENT_LOOKUP` | Covered in this effort: collection descriptor (Phase 5). |
 | `DOCUMENT_PROMOTION_REVIEW` | Covered in this effort: the bounded cross-domain review queue declares its authoritative database total and fetched candidates. |
 | `FINANCING_OVERVIEW` | Covered in this effort: ways-to-pay comparison with structured rate evidence (Phase 5 follow-up); overview and project fixtures. |
 | `GROUNDED_GUIDANCE` | Covered in this effort: grounded answer declares property/general scope, source evidence when available, confidence limitations and a professional boundary. |
+| `GUIDANCE_JOURNEYS_LIST` | Covered in this effort: the fully surfaced, protection-reconciled journey set declares exact source, fetched and delivered totals by urgency. |
+| `GUIDANCE_JOURNEY_CONTINUE` | Covered in this effort: one journey’s complete live step set declares exact source, fetched and delivered totals by status. |
 | `GUIDANCE_JOURNEY_CREATE` | Covered in this effort: workflow proposal requires a canonical item or approved service, then presents scope and plan type for confirmation before creation. |
 | `HOME_ACTIONS` | Covered in this effort: single-property and all-property action shelves declare exact source, fetched and delivered totals for their projected feeds. |
 | `HOME_CHANGE_SUMMARY` | Covered in this effort: answer-first 30-day summary scopes covered sources before canonical, deduplicated change blocks and preserves honest empty/unavailable states. |
@@ -107,11 +111,7 @@ contract-level journey, or explicit producer-contract review; it is not verified
 | Operation | Why |
 |---|---|
 | `APPLIANCE_FAILURE_RISK` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
-| `DIY_PROJECTS` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
-| `DIY_TEMPLATE_BROWSE` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
 | `DO_NOTHING_SIMULATION` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
-| `GUIDANCE_JOURNEYS_LIST` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
-| `GUIDANCE_JOURNEY_CONTINUE` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
 | `HIRING_GUIDE` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
 | `HOA_COMPLIANCE_STATUS` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
 | `HOME_BASICS_GUIDE` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
