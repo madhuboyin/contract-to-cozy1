@@ -1151,3 +1151,27 @@ Harness note for the home-basics slice: the starter-pool measurement draws its h
 **DIY contextual footer closure (October 8, 2026).** Follow-up deployment showed the exemption correctly removed generic starters but exposed the remaining DIY producer gap: reviewed template and active-project cards declared actions without nominating their exact next steps into the governed sticky footer. `DIY_TEMPLATE_BROWSE` now nominates up to four exact reviewed-template starts or existing-project continuations, and `DIY_PROJECTS` nominates reviewed active-project continuations. Each carries a registered outcome and `DIY_TEMPLATE` or `DIY_PROJECT` identity; batched validators recheck the current published revision or open property-scoped project before presentation. An open confirmation remains chip-free under the existing pending-interaction exemption. No schema or migration change is required.
 
 **Registry-wide continuation ownership correction (October 15, 2026).** Implementation review found that the contextual-result detector recursively treated a control nested on any list item, table row, task, or record as ownership of the entire answer's continuation surface. That over-broad exemption removed the governed row from many otherwise settled operations even though their embedded control addressed only one record. `CONTEXTUAL_ACTIONS_IN_RESULT` now requires a declared action owned directly by a top-level result block. Nested controls continue to publish semantic identities for cross-surface deduplication, but they no longer suppress unrelated valid continuation slots. This makes the shared exact-four pipeline the default for every settled property-scoped operation while preserving authored response-level surfaces such as Seasonal Care and Home Habits, plus the existing pending, recovery, property-less, and safety exemptions.
+
+## 17. Operation-specific continuation completion
+
+**Owner decision (October 15, 2026).** Shared exact-four infrastructure and generic fallback starters are not sufficient implementation coverage. Wherever a legitimate continuation exists, every operation must provide custom operation-specific actions comparable in relevance to Seasonal Home Care.
+
+The registry currently contains 197 operations: 47 record queries, 23 status summaries, 14 decision analyses, 3 workflow-guidance operations, 2 monitors, 103 commands, and 5 property-less discovery/boundary/general-guidance operations. Implementation proceeds by domain family, but the completion gate is registry-wide.
+
+Coverage rules:
+
+1. Every settled property-scoped read, status, analysis, monitor, or guidance operation declares at least one result-owned, entity-owned, workflow-owned, or directly related domain continuation.
+2. Every completed command returns to its exact owning read or active workflow when that continuation exists. Pending capture, clarification, and confirmation states remain focused on completing or cancelling the active interaction.
+3. Curated starters, profile gaps, generic capabilities, urgent work from another result, and unrelated home opportunities may fill remaining exact-four positions but never count as operation-specific coverage.
+4. Contextual block actions and governed compact candidates both count when they are typed, applicable, and owned by the current result. Raw string suggestions do not count.
+5. Safety/restricted boundaries, safe recovery, property selection, and genuinely terminal operations may be exempt only through an explicit bounded registry entry with a reason.
+6. A parity test covers every `ASK_OPERATION_DEFINITIONS` entry and fails when an applicable operation has neither custom coverage nor an explicit exemption.
+
+Implementation sequence:
+
+1. Add the exhaustive coverage registry and parity test.
+2. Migrate maintenance, Home Actions, inventory, documents, warranties, recalls, inspections, and claims.
+3. Migrate projects, DIY, permits, contractors, plants, habits, and seasonal workflows.
+4. Migrate coverage, financing, ownership costs, savings, tax, capital, refinance, quotes, and price-finalization analyses.
+5. Migrate buyer, seller, negotiation, renovation, major-event, guidance, and HVAC decision workflows.
+6. Remove any temporary missing-coverage inventory only after the parity test reaches zero uncovered applicable operations.
