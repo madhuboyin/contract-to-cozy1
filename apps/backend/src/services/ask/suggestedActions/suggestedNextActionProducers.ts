@@ -18,6 +18,10 @@ import { URGENT_WORK_PRODUCER_ID, loadUrgentHomeActionState, urgentWorkCandidate
 import { HOME_OPPORTUNITY_PRODUCER_ID, homeOpportunityCandidates, loadHomeOpportunityState } from './homeOpportunityCandidates';
 import { ACTIVE_PLAN_PRODUCER_ID, activePlanCandidates, loadActivePlanState } from './activePlanCandidates';
 import { CAPABILITY_RECOMMENDATION_PRODUCER_ID, capabilityRecommendationCandidates } from './capabilityRecommendationCandidates';
+import {
+  OPERATION_SPECIFIC_CONTINUATION_PRODUCER_ID,
+  operationSpecificContinuationCandidates,
+} from './operationSpecificContinuationCandidates';
 
 export interface ProducerContext {
   result: AskOperationResult;
@@ -47,6 +51,14 @@ export const resultCandidatesProducer: SuggestedNextActionProducer = {
   source: 'OPERATION_RESULT',
   essential: true,
   nominate: ({ result }) => result.suggestedNextActionCandidates ?? [],
+};
+
+/** Registry-authored continuations for settled operations that do not own handler-attached candidates yet. */
+export const operationSpecificContinuationProducer: SuggestedNextActionProducer = {
+  id: OPERATION_SPECIFIC_CONTINUATION_PRODUCER_ID,
+  source: 'OPERATION_RESULT',
+  essential: true,
+  nominate: ({ sourceOperationId, propertyId }) => operationSpecificContinuationCandidates(sourceOperationId, propertyId),
 };
 
 /**
@@ -117,6 +129,6 @@ export const SUGGESTED_NEXT_ACTION_PRODUCERS: readonly SuggestedNextActionProduc
   // Static starters are deliberately nominated before database-backed enrichment. They are still nonessential and may be
   // dropped when the deadline was already exhausted, but a slow optional read must not consume the entire budget before the
   // exact-four fallback inventory has even been collected.
-  resultCandidatesProducer, skillHandoffProducer, ...starterProducers,
+  resultCandidatesProducer, operationSpecificContinuationProducer, skillHandoffProducer, ...starterProducers,
   urgentWorkProducer, activePlanProducer, capabilityRecommendationProducer, actionableProfileProducer, homeOpportunityProducer,
 ];

@@ -11,7 +11,7 @@ const { prisma } = require('../../src/lib/prisma.ts');
 const { readAskOperationalControls } = require('../../src/config/askOperationalControls.ts');
 const { evaluateAskOperationAvailability } = require('../../src/services/ask/support/answerGuards.ts');
 const { finalizeSuggestedNextActionsWithReport } = require('../../src/services/ask/suggestedActions/finalizeSuggestedNextActions.ts');
-const { SUGGESTED_NEXT_ACTION_PRODUCERS, starterProducers, actionableProfileProducer, skillHandoffProducer, urgentWorkProducer, homeOpportunityProducer, activePlanProducer, capabilityRecommendationProducer } = require('../../src/services/ask/suggestedActions/suggestedNextActionProducers.ts');
+const { SUGGESTED_NEXT_ACTION_PRODUCERS, starterProducers, actionableProfileProducer, operationSpecificContinuationProducer, skillHandoffProducer, urgentWorkProducer, homeOpportunityProducer, activePlanProducer, capabilityRecommendationProducer } = require('../../src/services/ask/suggestedActions/suggestedNextActionProducers.ts');
 const { SUGGESTED_NEXT_ACTION_LIMITS, CURATED_STARTER_OUTCOME_KEYS, REPEATABLE_OUTCOMES, PROMPT_HISTORY_EXEMPT_OUTCOMES, SUGGESTED_NEXT_ACTION_BUDGET } = require('../../src/services/ask/suggestedActions/suggestedNextActionRegistry.ts');
 const { lifecycleKey, STARTER_ROTATION_MS } = require('../../src/services/ask/suggestedActions/suggestedNextActionExactFourRegistry.ts');
 const { suggestedNextActionSemanticKeyHash } = require('../../src/services/ask/suggestedActions/suggestedNextActionIdentity.ts');
@@ -33,7 +33,7 @@ async function availability({ role = 'VIEWER', mode = 'UNKNOWN', disabled = null
 }
 const okLifecycle = (over = {}) => async () => ({ cooldownKeys: new Set(), completedKeys: new Set(), lastOfferedAtMs: new Map(), ok: true, ...over });
 
-async function run({ role, mode, disabled, status = 'ANSWERED', message = 'What maintenance is pending?', operationId = 'MAINTENANCE_STATUS', propertyId = PROPERTY,
+async function run({ role, mode, disabled, status = 'ANSWERED', message = 'Help me understand my home basics', operationId = 'HOME_BASICS_GUIDE', propertyId = PROPERTY,
   current = null, recent = [], lifecycle = okLifecycle(), producers, nowMs, entityValidatorFor, result: resultOver = {} } = {}) {
   const offers = []; const calls = { lifecycle: 0, completeness: 0 };
   const avail = await availability({ role, mode, disabled });
@@ -67,7 +67,7 @@ function assertFour(r, label) {
 }
 
 test('the registry is populated for activation: all four starter producers are registered and all seven outcomes are BOTH repeatable and prompt-history exempt', () => {
-  assert.deepEqual(SUGGESTED_NEXT_ACTION_PRODUCERS.map((p) => p.id), ['operation-result.candidates', skillHandoffProducer.id, ...starterProducers.map((p) => p.id), urgentWorkProducer.id, activePlanProducer.id, capabilityRecommendationProducer.id, actionableProfileProducer.id, homeOpportunityProducer.id]);
+  assert.deepEqual(SUGGESTED_NEXT_ACTION_PRODUCERS.map((p) => p.id), ['operation-result.candidates', operationSpecificContinuationProducer.id, skillHandoffProducer.id, ...starterProducers.map((p) => p.id), urgentWorkProducer.id, activePlanProducer.id, capabilityRecommendationProducer.id, actionableProfileProducer.id, homeOpportunityProducer.id]);
   assert.equal(CURATED_STARTER_OUTCOME_KEYS.length, 7);
   for (const key of CURATED_STARTER_OUTCOME_KEYS) { assert.ok(REPEATABLE_OUTCOMES.has(key), key); assert.ok(PROMPT_HISTORY_EXEMPT_OUTCOMES.has(key), key); }
   for (const producer of starterProducers) assert.equal(producer.essential, false, 'starters remain optional when the deadline was already exhausted');
@@ -174,7 +174,7 @@ test('a declared DIY result candidate survives the contextual exemption and beco
 test('the real finalizer shares one Property Context-backed state across profile, opportunity and completeness consumers', async () => {
   let sharedReads = 0;
   const out = await finalizeSuggestedNextActionsWithReport(
-    { result: { status: 'ANSWERED', blocks: [], suggestions: [] }, executionId: 'e1', userId: 'u1', sessionId: 's1', propertyId: PROPERTY, operationId: 'MAINTENANCE_STATUS', message: 'What maintenance is pending?', completedSemanticKeyHashes: new Set() },
+    { result: { status: 'ANSWERED', blocks: [], suggestions: [] }, executionId: 'e1', userId: 'u1', sessionId: 's1', propertyId: PROPERTY, operationId: 'HOME_BASICS_GUIDE', message: 'Help me understand my home basics', completedSemanticKeyHashes: new Set() },
     {
       clock: { now: () => NOW },
       loadSharedPropertyState: async () => {
@@ -229,7 +229,7 @@ test('RECENT STARTER HISTORY: five just-asked starter messages plus the current 
   assertFour(await run({ recent }), 'five starters asked recently');
   const completed = new Set(ALL.map(hashOf));
   const out = await finalizeSuggestedNextActionsWithReport(
-    { result: { status: 'ANSWERED', blocks: [], suggestions: [] }, executionId: 'e1', userId: 'u1', sessionId: 's1', propertyId: PROPERTY, operationId: 'MAINTENANCE_STATUS', message: 'What maintenance is pending?', completedSemanticKeyHashes: completed },
+    { result: { status: 'ANSWERED', blocks: [], suggestions: [] }, executionId: 'e1', userId: 'u1', sessionId: 's1', propertyId: PROPERTY, operationId: 'HOME_BASICS_GUIDE', message: 'Help me understand my home basics', completedSemanticKeyHashes: completed },
     { clock: { now: () => NOW }, loadOperationAvailability: async () => availability(), loadExecutionExpiresAt: async () => null, loadCurrentOutcomeKeyHashes: async () => new Set(), loadLifecycleState: okLifecycle(), loadActionableProfileState: async () => ({ denominatorVersion: 'actionable-profile-1:BASE', audiences: [], audienceUncertain: false, fraction: 1, knownWeight: 1, totalWeight: 1, unresolved: [], unresolvedByArea: {} }), loadUrgentHomeActionState: async () => ({ nowCount: 0 }), loadHomeOpportunityState: async () => ({ contextVersion: 'v1', capitalItemsUpcoming: false, warrantyExpiring: false, openFindings: false }), loadActivePlanState: async () => ({ sellHoldRentActive: false }), recordOffers: async () => ({ attempted: 0, ok: true }), recordImpressions: () => {}, recordSuppression: () => {} },
   );
   assert.equal(out.result.suggestedNextActions.length, 4, 'every starter completed in the session: repeatable, so still four');
@@ -261,8 +261,8 @@ test('BUDGET-DROPPED OPPORTUNITY PRODUCER: a nonessential producer dropped for b
   let ticks = 0;
   const opportunity = { id: 'opportunity.fake', source: 'CAPABILITY_RECOMMENDATION', essential: false, nominate: () => [{ ...ALL[0], slotClass: 'HOME_OPPORTUNITY', operationId: 'WARRANTY_LOOKUP', outcomeKey: 'REVIEW_X' }] };
   // The clock stays inside the budget for the essential and starter producers, then jumps past it before the last producer.
-  // Calls: start, one per producer (result producer, four starters, the opportunity producer), then the finish.
-  const nowMs = () => { ticks += 1; return ticks <= 8 + starterProducers.length ? 0 : SUGGESTED_NEXT_ACTION_BUDGET.pipelineMs + 1; };
+  // Calls: start, one per registered producer (including both essential operation-result producers), the fake opportunity, then finish.
+  const nowMs = () => { ticks += 1; return ticks <= 9 + starterProducers.length ? 0 : SUGGESTED_NEXT_ACTION_BUDGET.pipelineMs + 1; };
   const r = await run({ producers: [...SUGGESTED_NEXT_ACTION_PRODUCERS, opportunity], nowMs });
   assert.deepEqual(r.report.droppedProducers, [{ producer: 'opportunity.fake', reason: 'BUDGET' }]);
   assertFour(r, 'budget-dropped opportunity');

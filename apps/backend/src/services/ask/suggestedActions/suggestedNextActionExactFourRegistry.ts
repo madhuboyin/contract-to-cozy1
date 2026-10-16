@@ -2,6 +2,7 @@
 // selection policy. Versioned registry data, never handler prose. Self-contained (no handler imports) like the main registry.
 import type { SuggestedNextAction } from '../../../productFramework/ask/ask.contract';
 import { SUGGESTED_ACTION_OUTCOMES } from './suggestedNextActionRegistry';
+import { operationSpecificContinuationOutcomeKeys } from './operationSpecificContinuationRecipes';
 
 export const SUGGESTED_NEXT_ACTION_EXACT_FOUR_POLICY_VERSION = 'sna-exact-four-1';
 
@@ -90,6 +91,10 @@ export const PRODUCER_SLOT_GRANTS: Readonly<Record<string, ProducerSlotGrant>> =
   // it has no goal source.
   'operation-result.candidates': {
     allowed: new Set(['CONTINUE_WORK', 'EXACT_RECORD', 'HOME_OPPORTUNITY']), fallback: 'HOME_OPPORTUNITY', mayClaimCurrentResultOwnership: true,
+    ownershipRequiresRegisteredRelationship: true,
+  },
+  'operation-result.domain-continuations': {
+    allowed: new Set(['CONTINUE_WORK']), fallback: 'HOME_OPPORTUNITY', mayClaimCurrentResultOwnership: true,
     ownershipRequiresRegisteredRelationship: true,
   },
   'profile.actionable-gaps': { allowed: new Set(['PROFILE_GAP']), fallback: 'PROFILE_GAP' },
@@ -238,9 +243,18 @@ export const RESULT_OWNERSHIP_RELATIONSHIPS: Readonly<Record<string, readonly st
   MAINTENANCE_TASK_CREATE: ['MAINTENANCE_TASK_CREATE:RESTART_AFTER_EXPIRY'],
   REFINANCE_RATE_MONITOR: ['REFINANCE_RATE_MONITOR:RESTART_AFTER_EXPIRY'],
   QUOTE_COMPARISON_CREATE: ['QUOTE_COMPARISON_CREATE:RESTART_AFTER_EXPIRY'],
-  INVENTORY_LOOKUP: ['INVENTORY_LOOKUP:REVIEW_CURRENT_RECORD'],
+  INVENTORY_LOOKUP: ['INVENTORY_LOOKUP:REVIEW_CURRENT_RECORD', ...operationSpecificContinuationOutcomeKeys('INVENTORY_LOOKUP')],
   DIY_TEMPLATE_BROWSE: ['DIY_PROJECT_START:START_REVIEWED_PROJECT', 'DIY_PROJECT_GUIDE:CONTINUE_REVIEWED_PROJECT'],
   DIY_PROJECTS: ['DIY_PROJECT_GUIDE:CONTINUE_REVIEWED_PROJECT'],
+  MAINTENANCE_STATUS: operationSpecificContinuationOutcomeKeys('MAINTENANCE_STATUS'),
+  MAINTENANCE_FORECAST: operationSpecificContinuationOutcomeKeys('MAINTENANCE_FORECAST'),
+  HOME_ACTIONS: operationSpecificContinuationOutcomeKeys('HOME_ACTIONS'),
+  WARRANTY_LOOKUP: operationSpecificContinuationOutcomeKeys('WARRANTY_LOOKUP'),
+  DOCUMENT_LOOKUP: operationSpecificContinuationOutcomeKeys('DOCUMENT_LOOKUP'),
+  DOCUMENT_PROMOTION_REVIEW: operationSpecificContinuationOutcomeKeys('DOCUMENT_PROMOTION_REVIEW'),
+  RECALL_REVIEW: operationSpecificContinuationOutcomeKeys('RECALL_REVIEW'),
+  INSPECTION_FINDINGS: operationSpecificContinuationOutcomeKeys('INSPECTION_FINDINGS'),
+  INCIDENT_CLAIM_STATUS: operationSpecificContinuationOutcomeKeys('INCIDENT_CLAIM_STATUS'),
 };
 
 /** Does the TRUSTED current execution operation own this candidate's target outcome? */
