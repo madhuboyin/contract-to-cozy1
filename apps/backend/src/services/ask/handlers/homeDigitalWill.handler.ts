@@ -6,6 +6,7 @@ import { type AskOperationResult } from '../askOperationRegistry';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { humanDate, readableCode } from '../askFormatting';
 import { HomeDigitalWillService, evaluateHomeDigitalWillHandoffReadiness } from '../../homeDigitalWill.service';
+import { collectionDescriptor } from '../support/collectionDescriptor';
 
 // Home Digital Will (Home Continuity Plan) capability-card slice (FRD v1.54): the sixth new operation for a capability
 // with none. Reads HomeDigitalWillService.getByProperty, the same call the page's route makes, behind the same
@@ -121,7 +122,8 @@ export function digitalWillFromView(will: DigitalWillView, propertyId: string): 
     }] : []),
   ];
   if (sections.length) {
-    blocks.push({ type: 'GROUPED_LIST', filters: [], id: 'digital-will-items', title: 'What the plan holds', description: 'Entry titles by section and who can see the plan. Entry details are not shown here.', sections, actions: [] });
+    blocks.push({ type: 'GROUPED_LIST', filters: [], id: 'digital-will-items', title: 'What the plan holds', description: 'Entry titles by section and who can see the plan. Entry details are not shown here.', sections,
+      collection: collectionDescriptor({ sourceTotal: entryCount + will.trustedContacts.length, fetchedCount: entryCount + will.trustedContacts.length, sections, nextPageAvailable: false }), actions: [] });
   }
   blocks.push(boundary);
   return {

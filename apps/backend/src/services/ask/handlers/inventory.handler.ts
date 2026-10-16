@@ -895,16 +895,18 @@ async function inventoryItemCorrectResult(userId: string, propertyId: string, me
   if (typedTarget.kind === 'STALE') return staleSuggestedActionResult({ propertyId, item: items.find((candidate) => candidate.id === launchContext?.entityId), sourceOperationId: 'INVENTORY_ITEM_CORRECT' });
   const selected = typedTarget.kind === 'TARGET' ? typedTarget.row : exactEntityMatch(items.map((item) => ({ ...item, title: item.name })), message, launchContext);
   if (!selected) {
+    const sections = [{ id: 'items', title: 'Inventory items', count: items.length, items: items.slice(0, 20).map((item) => ({
+      id: item.id, title: item.name, entityType: 'INVENTORY_ITEM' as const, description: null,
+      meta: [item.room?.name, item.category.toLowerCase().replace(/_/g, ' ')].filter((value): value is string => Boolean(value)), status: item.condition, href: null,
+    })) }];
     return {
       status: 'NEEDS_ENTITY', reasonCode: 'INVENTORY_ITEM_TARGET_REQUIRED',
       ...durableFreeTextClarification('INVENTORY_ITEM_CORRECT', 'Which inventory item should Ask correct? Use its exact name.'),
       blocks: [{
         type: 'GROUPED_LIST', filters: [], id: 'inventory-entity-selection', title: 'Choose the item to correct',
         description: 'Use the exact item name in your next message; nothing has changed.',
-        sections: [{ id: 'items', title: 'Inventory items', count: items.length, items: items.slice(0, 20).map((item) => ({
-          id: item.id, title: item.name, entityType: 'INVENTORY_ITEM', description: null,
-          meta: [item.room?.name, item.category.toLowerCase().replace(/_/g, ' ')].filter((value): value is string => Boolean(value)), status: item.condition, href: null,
-        })) }],
+        sections,
+        collection: collectionDescriptor({ sourceTotal: items.length, fetchedCount: items.length, sections, nextPageAvailable: false }),
         actions: [],
       }],
       suggestions: [],

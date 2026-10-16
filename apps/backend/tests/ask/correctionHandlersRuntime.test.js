@@ -130,6 +130,7 @@ const roomVersion = sha(`room-1:${roomUpdatedAt.toISOString()}`);
 const roomParams = (value = 'Chef kitchen', version = roomVersion) => ({ roomRename: { roomId: 'room-1', value }, roomRenameContextVersion: version, confirmationVersion: 2 });
 function roomModel({ name = 'Kitchen', clash = false, missing = false, type = 'KITCHEN', floorLevel = null } = {}) {
   models.inventoryRoom = {
+    count: async () => 2,
     findFirst: async ({ where }) => {
       if (where.id && where.id.not) return clash ? { id: 'room-other' } : null; // name-uniqueness probe
       return missing ? null : { id: 'room-1', propertyId: 'p1', name, type, floorLevel, updatedAt: roomUpdatedAt };
@@ -242,7 +243,7 @@ test('a proposal stored before type and floor level existed (no field) still con
 });
 
 const proposeRoom = async (message, entityId = 'room-1') => {
-  models.inventoryRoom = { findMany: async () => [{ id: 'room-1', name: 'Kitchen', type: 'KITCHEN', floorLevel: 1, updatedAt: roomUpdatedAt }, { id: 'room-2', name: 'Floor 2 office', type: 'OFFICE', floorLevel: null, updatedAt: roomUpdatedAt }] };
+  models.inventoryRoom = { count: async () => 2, findMany: async () => [{ id: 'room-1', name: 'Kitchen', type: 'KITCHEN', floorLevel: 1, updatedAt: roomUpdatedAt }, { id: 'room-2', name: 'Floor 2 office', type: 'OFFICE', floorLevel: null, updatedAt: roomUpdatedAt }] };
   return capabilityInvoke('ROOM_RENAME', { userId: 'u1', propertyId: 'p1', message, launchContext: { surface: 'ASK_WORKSPACE', entityType: 'INVENTORY_ROOM', entityId, operationId: 'ROOM_RENAME' } });
 };
 
@@ -351,7 +352,7 @@ test('HOME_EVENT_VISIBILITY: the resale-pack consent line names buyers and listi
 });
 
 test('HOME_EVENT_VISIBILITY: a read question about who can see an event does not route here, and PRIVATE events are excluded from the disambiguation list for a non-creator', async () => {
-  models.homeEvent = { findMany: async () => [{ id: 'event-1', title: 'Roof replacement', revision: 3, visibility: 'HOUSEHOLD', createdById: 'u9', occurredAt: new Date('2026-09-01T00:00:00.000Z') }] };
+  models.homeEvent = { count: async () => 1, findMany: async () => [{ id: 'event-1', title: 'Roof replacement', revision: 3, visibility: 'HOUSEHOLD', createdById: 'u9', occurredAt: new Date('2026-09-01T00:00:00.000Z') }] };
   const noEntity = await capabilityInvoke('HOME_EVENT_VISIBILITY', { userId: 'u1', propertyId: 'p1', message: HOME_EVENT_VISIBILITY_MESSAGE, launchContext: { surface: 'ASK_WORKSPACE' } });
   assert.equal(noEntity.reasonCode, 'HOME_EVENT_TARGET_REQUIRED');
   // The query itself is the exclusion; a PRIVATE row belonging to someone else must not appear in the disambiguation list.
@@ -366,7 +367,7 @@ function warrantyModel({ ownerUserId = 'u1', providerName = 'Acme Home Warranty'
     id: 'w1', propertyId: 'p1', providerName, startDate: new Date('2026-01-01T00:00:00.000Z'), expiryDate, updatedAt: warrantyUpdatedAt,
     category: 'HOME_WARRANTY_PLAN', policyNumber: 'POL-123', cost: '450', coverageDetails: 'HVAC and appliances.', homeownerProfile: { id: 'hp1', userId: ownerUserId },
   };
-  models.warranty = { findFirst: async () => row, findUniqueOrThrow: async () => row, findMany: async () => [row] };
+  models.warranty = { count: async () => 1, findFirst: async () => row, findUniqueOrThrow: async () => row, findMany: async () => [row] };
 }
 const warrantyParams = (field, value, version = warrantyVersion) => ({ warrantyCorrection: { warrantyId: 'w1', field, value }, warrantyCorrectionContextVersion: version, confirmationVersion: 2 });
 
@@ -446,7 +447,7 @@ test('INVENTORY_ITEM_CORRECT confirm rejects a missing date, a stale version and
 // ───────────────────────────── HOME_EVENT_CORRECT ─────────────────────────────
 const eventVersion = sha('event-1:3');
 function eventModel({ current = { id: 'event-1', title: 'Roof replacement', revision: 3, visibility: 'HOUSEHOLD', createdById: 'u9', datePrecision: 'EXACT_DATE', occurredAt: new Date('2026-09-01T00:00:00.000Z'), summary: 'Full tear-off.', amount: '18500', type: 'IMPROVEMENT', importance: 'NORMAL', roomId: null, inventoryItemId: null }, winner = null } = {}) {
-  models.homeEvent = { findFirst: async ({ where }) => (where.idempotencyKey ? winner : where.id === 'event-1' ? current : null), findMany: async () => [current] };
+  models.homeEvent = { count: async () => 1, findFirst: async ({ where }) => (where.idempotencyKey ? winner : where.id === 'event-1' ? current : null), findMany: async () => [current] };
 }
 const eventParams = (field, value, version = eventVersion) => ({ homeEventCorrection: { eventId: 'event-1', field, value }, homeEventCorrectionContextVersion: version, confirmationVersion: 2 });
 
@@ -499,7 +500,7 @@ test('HOME_EVENT_CORRECT confirm lets the creator correct their own PRIVATE even
 const KITCHEN = { id: 'room-1', name: 'Kitchen' };
 const WATER_HEATER = { id: 'item-1', name: 'Water heater' };
 function linkModels({ rooms = [KITCHEN], items = [WATER_HEATER], roomExists = true, itemExists = true } = {}) {
-  models.inventoryRoom = { findMany: async () => rooms, findFirst: async () => (roomExists ? { id: KITCHEN.id } : null) };
+  models.inventoryRoom = { count: async () => rooms.length, findMany: async () => rooms, findFirst: async () => (roomExists ? { id: KITCHEN.id } : null) };
   models.inventoryItem = { findMany: async () => items, findFirst: async () => (itemExists ? { id: WATER_HEATER.id } : null) };
 }
 const linkParams = (field, value, version = eventVersion) => ({ homeEventCorrection: { eventId: 'event-1', field, value }, homeEventCorrectionContextVersion: version, confirmationVersion: 2 });

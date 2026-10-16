@@ -11,8 +11,8 @@ contract-level journey, or explicit producer-contract review; it is not verified
 
 | Class | Operations |
 |---|---:|
-| Reviewed implementation (fixture, journey, or producer-contract review; not runtime-verified) | 66 |
-| Requires collection adoption | 45 |
+| Reviewed implementation (fixture, journey, or producer-contract review; not runtime-verified) | 79 |
+| Requires collection adoption | 32 |
 | Requires trust or rationale adoption | 0 |
 | Compact receipt: no rich migration needed | 83 |
 | Specialized workflow requiring later review | 0 |
@@ -48,12 +48,17 @@ contract-level journey, or explicit producer-contract review; it is not verified
 | `COVERAGE_REVIEW_STATUS` | Covered in this effort: audited against the ATTENTION profile; fixture. |
 | `DIY_PROJECT_GUIDE` | Covered in this effort: reviewed guide fixtures cover canonical project progress, current step, refusal/finished states and permission-aware actions. |
 | `DOCUMENT_LOOKUP` | Covered in this effort: collection descriptor (Phase 5). |
+| `DOCUMENT_PROMOTION_REVIEW` | Covered in this effort: the bounded cross-domain review queue declares its authoritative database total and fetched candidates. |
 | `FINANCING_OVERVIEW` | Covered in this effort: ways-to-pay comparison with structured rate evidence (Phase 5 follow-up); overview and project fixtures. |
 | `GROUNDED_GUIDANCE` | Covered in this effort: grounded answer declares property/general scope, source evidence when available, confidence limitations and a professional boundary. |
 | `GUIDANCE_JOURNEY_CREATE` | Covered in this effort: workflow proposal requires a canonical item or approved service, then presents scope and plan type for confirmation before creation. |
+| `HOME_ACTIONS` | Covered in this effort: single-property and all-property action shelves declare exact source, fetched and delivered totals for their projected feeds. |
 | `HOME_CHANGE_SUMMARY` | Covered in this effort: answer-first 30-day summary scopes covered sources before canonical, deduplicated change blocks and preserves honest empty/unavailable states. |
 | `HOME_DEADLINE_MONITOR` | Covered in this effort: monitor proposal resolves one canonical dated obligation and discloses due date, lead time, delivery channel, consent and no-change states before confirmation. |
+| `HOME_DIGITAL_WILL` | Covered in this effort: the enabled-entry and trusted-contact sections declare their complete in-memory totals. |
+| `HOME_EVENT_CORRECT` | Covered in this effort: the ambiguous-target command pairs its bounded event read with an authoritative visible-event count. |
 | `HOME_EVENT_RADAR_FEED` | Covered in this effort: collection descriptor with cursor continuation (Phase 2). |
+| `HOME_EVENT_VISIBILITY` | Covered in this effort: the ambiguous-target command pairs its bounded event read with an authoritative visible-event count. |
 | `HOME_STATUS_BOARD` | Covered in this effort: collection descriptor, unknown-is-not-good section, lead sentence; fixtures and journey 1. |
 | `HOME_TIMELINE_EVENTS` | Covered in this effort: timeline fixture. |
 | `HVAC_DECISION_CONTINUE` | Covered in this effort: decision-thread fixtures cover deterministic rationale, canonical-fact evidence, preference references, assumptions and limitations. |
@@ -68,6 +73,9 @@ contract-level journey, or explicit producer-contract review; it is not verified
 | `INSPECTION_REPORTS` | Covered in this effort: inspection reports declare their authoritative non-archived total, bounded fetch and delivered report rows. |
 | `INSPECTION_REPORT_COMPARE` | Covered in this effort: document-evidence fixture. |
 | `INSPECTION_REPORT_FINDINGS` | Covered in this effort: one report’s findings declare their authoritative total, bounded fetch and delivered outcome rows. |
+| `INTELLIGENCE_ENVELOPE_QUERY` | Covered in this effort: the paged Envelope read declares fetched and delivered rows, an unknown global total, and the real continuation state. |
+| `INVENTORY_ITEM_CORRECT` | Covered in this effort: the ambiguous-target command declares the complete inventory total and bounded selection rows. |
+| `INVENTORY_ITEM_CREATE` | Covered in this effort: producer-contract review: the actual workflow emits capture, summary and confirmation blocks only; its broad command allow-list does not represent a list-producing path. |
 | `INVENTORY_LOOKUP` | Covered in this effort: collection descriptor and gated Next control (Phase 2). |
 | `MAINTENANCE_BUDGET_FORECAST` | Covered in this effort: budget breakdown declares complete category and month totals with no truncation or continuation. |
 | `MAINTENANCE_FORECAST` | Covered in this effort: forecast list declares the complete prediction total and honest first-20 delivery truncation with no unsupported continuation. |
@@ -78,15 +86,20 @@ contract-level journey, or explicit producer-contract review; it is not verified
 | `NEGOTIATION_SHIELD_CASES` | Covered in this effort: case lists and every review subcollection declare source, fetched and delivered totals without unsupported continuation. |
 | `NEGOTIATION_SHIELD_CASE_ANALYZE` | Covered in this effort: the confirmed analysis reuses the fully declared review collections in its completion receipt. |
 | `NEGOTIATION_SHIELD_CASE_START` | Covered in this effort: the fixed scenario choice grid declares its complete lossless collection. |
+| `OPERATIONAL_WORK_UPDATE` | Covered in this effort: the ambiguous-target command declares the complete tracked-work total and bounded selection rows. |
+| `PROPERTY_SUMMARY` | Covered in this effort: room and completeness collections declare their authoritative totals and bounded delivery. |
 | `PROPERTY_TAX_APPEAL_READINESS` | Covered in this effort: appeal-readiness fixtures cover gaps and canonical facts with reviewed-rule/evidence dates and a tax/appraisal/legal boundary. |
 | `QUOTE_COMPARISON_REVIEW` | Covered in this effort: quote-review fixtures cover scope-aligned comparison, per-quote freshness, recorded-evidence dates and the provider-endorsement boundary. |
 | `REFINANCE_ANALYSIS` | Covered in this effort: scenario answer: tradeoff lead, assumptions, dated benchmark; fixtures and journey 2 (the canonical analysis branch is not a pure builder). |
 | `REFINANCE_RATE_MONITOR` | Covered in this effort: monitor proposal declares the governed benchmark, exact threshold, delivery cadence, quiet hours, source boundary and consent before confirmation. |
 | `RENOVATION_PERMIT_READINESS` | Covered in this effort: renovation-readiness fixtures cover the blocking-item basis, dated readiness sources and the legal-compliance boundary. |
 | `REPLACEMENT_GUIDANCE` | Covered in this effort: item-carrying warranty follow-up, journey 4. |
+| `ROOM_CREATE` | Covered in this effort: producer-contract review: the actual workflow emits capture, summary and confirmation blocks only; its broad command allow-list does not represent a list-producing path. |
+| `ROOM_RENAME` | Covered in this effort: the ambiguous-target command pairs its bounded room read with an authoritative room count. |
 | `SEASONAL_HOME_CARE` | Covered in this effort: plan and walkthrough fixtures; declared truncation; journey 3. |
 | `SELLER_PREP_CHECKLIST` | Covered in this effort: checklist declares its progress basis, canonical Property Sale Case freshness and an explicit listing/disclosure boundary. |
 | `SELL_HOLD_RENT_ANALYSIS` | Covered in this effort: comparison and what-if fixtures cover the directional rationale, dated model sources, material assumptions and financial/tax/legal boundary. |
+| `WARRANTY_CORRECT` | Covered in this effort: the ambiguous-target command declares the requester-owned warranty total and bounded fetched selection rows. |
 | `WARRANTY_LOOKUP` | Covered in this effort: item-scoped answer, journey 4 (the whole-home list is not yet migrated). |
 
 ## Requires collection adoption
@@ -96,30 +109,21 @@ contract-level journey, or explicit producer-contract review; it is not verified
 | `APPLIANCE_FAILURE_RISK` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
 | `DIY_PROJECTS` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
 | `DIY_TEMPLATE_BROWSE` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
-| `DOCUMENT_PROMOTION_REVIEW` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
 | `DO_NOTHING_SIMULATION` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
 | `GUIDANCE_JOURNEYS_LIST` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
 | `GUIDANCE_JOURNEY_CONTINUE` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
 | `HIRING_GUIDE` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
 | `HOA_COMPLIANCE_STATUS` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
-| `HOME_ACTIONS` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
 | `HOME_BASICS_GUIDE` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
 | `HOME_BRIEFING_VIEW` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
-| `HOME_DIGITAL_WILL` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
-| `HOME_EVENT_CORRECT` | A command whose result may carry a list (for example a choice of target): collection semantics apply, and the boundary derives them until the producer declares its own. |
-| `HOME_EVENT_VISIBILITY` | A command whose result may carry a list (for example a choice of target): collection semantics apply, and the boundary derives them until the producer declares its own. |
 | `HOME_HABITS` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
 | `HOME_UPGRADE_SCENARIOS` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
 | `HOME_WORK_ITEMS` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
 | `HVAC_DECISION_OUTCOME_REPORT` | A command whose result may carry a list (for example a choice of target): collection semantics apply, and the boundary derives them until the producer declares its own. |
 | `HVAC_DECISION_OUTCOME_UNLINK` | A command whose result may carry a list (for example a choice of target): collection semantics apply, and the boundary derives them until the producer declares its own. |
 | `HVAC_DECISION_OUTCOME_VIEW` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
-| `INTELLIGENCE_ENVELOPE_QUERY` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
-| `INVENTORY_ITEM_CORRECT` | A command whose result may carry a list (for example a choice of target): collection semantics apply, and the boundary derives them until the producer declares its own. |
-| `INVENTORY_ITEM_CREATE` | A command whose result may carry a list (for example a choice of target): collection semantics apply, and the boundary derives them until the producer declares its own. |
 | `MAINTENANCE_TASK_UPDATE` | A command whose result may carry a list (for example a choice of target): collection semantics apply, and the boundary derives them until the producer declares its own. |
 | `NEIGHBORHOOD_CHANGE_FEED` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
-| `OPERATIONAL_WORK_UPDATE` | A command whose result may carry a list (for example a choice of target): collection semantics apply, and the boundary derives them until the producer declares its own. |
 | `OWNERSHIP_COSTS` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
 | `PAST_HAZARD_EXPOSURE` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
 | `PERMIT_TRACKER_STATUS` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
@@ -127,17 +131,13 @@ contract-level journey, or explicit producer-contract review; it is not verified
 | `PRICE_FINALIZATIONS_LIST` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
 | `PROJECT_TRACKER_PROJECTS` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
 | `PROPERTY_BRIEFS_LIST` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
-| `PROPERTY_SUMMARY` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
 | `RECALL_MATCH_UPDATE` | A command whose result may carry a list (for example a choice of target): collection semantics apply, and the boundary derives them until the producer declares its own. |
 | `RECALL_REVIEW` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
-| `ROOM_CREATE` | A command whose result may carry a list (for example a choice of target): collection semantics apply, and the boundary derives them until the producer declares its own. |
 | `ROOM_PLANT_RECOMMENDATIONS` | A command whose result may carry a list (for example a choice of target): collection semantics apply, and the boundary derives them until the producer declares its own. |
-| `ROOM_RENAME` | A command whose result may carry a list (for example a choice of target): collection semantics apply, and the boundary derives them until the producer declares its own. |
 | `SAVINGS_OPPORTUNITIES` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
 | `SELLER_PREP_ITEM_DECISION` | A command whose result may carry a list (for example a choice of target): collection semantics apply, and the boundary derives them until the producer declares its own. |
 | `SELL_HOLD_RENT_GOAL_CAPTURE` | A command whose result may carry a list (for example a choice of target): collection semantics apply, and the boundary derives them until the producer declares its own. |
 | `SERVICE_PRICE_CHECKS` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
-| `WARRANTY_CORRECT` | A command whose result may carry a list (for example a choice of target): collection semantics apply, and the boundary derives them until the producer declares its own. |
 
 ## Requires trust or rationale adoption
 

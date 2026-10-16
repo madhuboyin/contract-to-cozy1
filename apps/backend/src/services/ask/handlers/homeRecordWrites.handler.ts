@@ -19,6 +19,7 @@ import { staleSuggestedActionResult } from '../suggestedActions/staleSuggestedAc
 import { correctionFieldForOutcome } from '../suggestedActions/suggestedNextActionRegistry';
 import { DEFAULT_CANDIDATE_SIGNALS, DEFAULT_CANDIDATE_TRAITS, type SuggestedNextActionCandidate } from '../suggestedActions/suggestedNextActionCandidate';
 import { durableFreeTextClarification, ensurePropertyAccess, exactEntityMatch, HOME_EVENT_CORRECTION_FIELDS, HOME_EVENT_LINK_FIELDS, HOME_EVENT_VISIBILITY_LABELS, HomeEventCorrectionField, HomeEventCorrectionInputSchema, HomeEventVisibilityInputSchema, HouseholdInvitationInputSchema, invitationRoleCopy, isValidDateEditInput, propertySummary, readablePropertyValue, ROOM_TYPE_VALUES, RoomCreateInputSchema, RoomRenameInputSchema, WarrantyCorrectionInputSchema } from '../askHandlerSupport';
+import { collectionDescriptor } from '../support/collectionDescriptor';
 
 export const householdService = new HouseholdService();
 
@@ -230,11 +231,12 @@ export function homeEventCorrectionConfirmation(event: { id: string; title: stri
 
 async function homeEventCorrectResult(userId: string, propertyId: string, message: string, launchContext?: CreateAskExecutionRequest['launchContext']): Promise<AskOperationResult> {
   await ensurePropertyAccess(userId, propertyId);
-  const events = await prisma.homeEvent.findMany({
-    where: { propertyId, isCurrent: true, deletedAt: null, OR: [{ visibility: { not: 'PRIVATE' } }, { createdById: userId }] },
+  const where = { propertyId, isCurrent: true, deletedAt: null, OR: [{ visibility: { not: 'PRIVATE' as const } }, { createdById: userId }] };
+  const [events, sourceTotal] = await Promise.all([prisma.homeEvent.findMany({
+    where,
     orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }], take: 200,
     select: { id: true, title: true, revision: true, occurredAt: true, datePrecision: true, summary: true, amount: true, type: true, importance: true, roomId: true, inventoryItemId: true },
-  });
+  }), prisma.homeEvent.count({ where })]);
   // A selected suggestion names its event and outcome. That target is authoritative: if the event was corrected (a new revision
   // has a new id), removed or hidden since it was offered, or changed, the suggestion is stale. Matching by title instead could
   // land on a different event with a similar name.
@@ -246,15 +248,17 @@ async function homeEventCorrectResult(userId: string, propertyId: string, messag
   }
   const selected = exactEntityMatch(events, message, launchContext);
   if (!selected) {
+    const sections = [{ id: 'events', title: 'Timeline events', count: sourceTotal, items: events.slice(0, 20).map((event) => ({
+      id: event.id, title: event.title, description: null, meta: [humanDate(event.occurredAt) ?? 'Date unavailable'], status: null, href: null,
+    })) }];
     return {
       status: 'NEEDS_ENTITY', reasonCode: 'HOME_EVENT_TARGET_REQUIRED',
       ...durableFreeTextClarification('HOME_EVENT_CORRECT', 'Which timeline event should Ask correct? Use its exact title.'),
       blocks: [{
         type: 'GROUPED_LIST', filters: [], id: 'home-event-selection', title: 'Choose the event to correct',
         description: 'Use the exact event title in your next message; nothing has changed.',
-        sections: [{ id: 'events', title: 'Timeline events', count: events.length, items: events.slice(0, 20).map((event) => ({
-          id: event.id, title: event.title, description: null, meta: [humanDate(event.occurredAt) ?? 'Date unavailable'], status: null, href: null,
-        })) }],
+        sections,
+        collection: collectionDescriptor({ sourceTotal, fetchedCount: events.length, sections, nextPageAvailable: false }),
         actions: [],
       }],
       suggestions: [],
@@ -331,22 +335,25 @@ export function homeEventVisibilityConfirmation(event: { id: string; title: stri
 
 async function homeEventVisibilityResult(userId: string, propertyId: string, message: string, launchContext?: CreateAskExecutionRequest['launchContext']): Promise<AskOperationResult> {
   await ensurePropertyAccess(userId, propertyId);
-  const events = await prisma.homeEvent.findMany({
-    where: { propertyId, isCurrent: true, deletedAt: null, OR: [{ visibility: { not: 'PRIVATE' } }, { createdById: userId }] },
+  const where = { propertyId, isCurrent: true, deletedAt: null, OR: [{ visibility: { not: 'PRIVATE' as const } }, { createdById: userId }] };
+  const [events, sourceTotal] = await Promise.all([prisma.homeEvent.findMany({
+    where,
     orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }], take: 200,
     select: { id: true, title: true, revision: true, visibility: true, createdById: true, occurredAt: true },
-  });
+  }), prisma.homeEvent.count({ where })]);
   const selected = exactEntityMatch(events, message, launchContext);
   if (!selected) {
+    const sections = [{ id: 'events', title: 'Timeline events', count: sourceTotal, items: events.slice(0, 20).map((event) => ({
+      id: event.id, title: event.title, description: null, meta: [humanDate(event.occurredAt) ?? 'Date unavailable'], status: null, href: null,
+    })) }];
     return {
       status: 'NEEDS_ENTITY', reasonCode: 'HOME_EVENT_TARGET_REQUIRED',
       ...durableFreeTextClarification('HOME_EVENT_VISIBILITY', 'Which timeline event should Ask change the visibility of? Use its exact title.'),
       blocks: [{
         type: 'GROUPED_LIST', filters: [], id: 'home-event-selection', title: 'Choose the event to change',
         description: 'Use the exact event title in your next message; nothing has changed.',
-        sections: [{ id: 'events', title: 'Timeline events', count: events.length, items: events.slice(0, 20).map((event) => ({
-          id: event.id, title: event.title, description: null, meta: [humanDate(event.occurredAt) ?? 'Date unavailable'], status: null, href: null,
-        })) }],
+        sections,
+        collection: collectionDescriptor({ sourceTotal, fetchedCount: events.length, sections, nextPageAvailable: false }),
         actions: [],
       }],
       suggestions: [],
@@ -595,22 +602,24 @@ export async function evidenceAttachResult(userId: string, propertyId: string, t
 
 async function warrantyCorrectResult(userId: string, propertyId: string, message: string, launchContext?: CreateAskExecutionRequest['launchContext']): Promise<AskOperationResult> {
   await ensurePropertyAccess(userId, propertyId);
-  const warranties = await prisma.warranty.findMany({
+  const [warranties, sourceTotal] = await Promise.all([prisma.warranty.findMany({
     where: { propertyId }, orderBy: { expiryDate: 'asc' }, take: 200,
     select: { id: true, providerName: true, startDate: true, expiryDate: true, updatedAt: true, category: true, policyNumber: true, cost: true, coverageDetails: true, homeownerProfile: { select: { userId: true } } },
-  });
+  }), prisma.warranty.count({ where: { propertyId, homeownerProfile: { userId } } })]);
   const selected = exactEntityMatch(warranties.map((warranty) => ({ ...warranty, title: warranty.providerName })), message, launchContext);
   if (!selected) {
     const mine = warranties.filter((warranty) => warranty.homeownerProfile.userId === userId);
+    const sections = [{ id: 'warranties', title: 'Your warranties', count: sourceTotal, items: mine.slice(0, 20).map((warranty) => ({
+      id: warranty.id, title: warranty.providerName, description: null, meta: [`Expires ${humanDate(warranty.expiryDate) ?? 'date unavailable'}`], status: null, href: null,
+    })) }];
     return {
       status: 'NEEDS_ENTITY', reasonCode: 'WARRANTY_TARGET_REQUIRED',
       ...durableFreeTextClarification('WARRANTY_CORRECT', 'Which warranty should Ask correct? Use its exact provider name.'),
       blocks: [{
         type: 'GROUPED_LIST', filters: [], id: 'warranty-selection', title: 'Choose the warranty to correct',
         description: 'Only warranties you added can be corrected here. Use the exact provider name in your next message; nothing has changed.',
-        sections: [{ id: 'warranties', title: 'Your warranties', count: mine.length, items: mine.slice(0, 20).map((warranty) => ({
-          id: warranty.id, title: warranty.providerName, description: null, meta: [`Expires ${humanDate(warranty.expiryDate) ?? 'date unavailable'}`], status: null, href: null,
-        })) }],
+        sections,
+        collection: collectionDescriptor({ sourceTotal, fetchedCount: mine.length, sections, nextPageAvailable: false }),
         actions: [],
       }],
       suggestions: [],
@@ -747,22 +756,24 @@ export function roomRenameConfirmation(room: { id: string; name: string }, field
 
 async function roomRenameResult(userId: string, propertyId: string, message: string, launchContext?: CreateAskExecutionRequest['launchContext']): Promise<AskOperationResult> {
   await ensurePropertyAccess(userId, propertyId);
-  const rooms = await prisma.inventoryRoom.findMany({
+  const [rooms, sourceTotal] = await Promise.all([prisma.inventoryRoom.findMany({
     where: { propertyId }, orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }], take: 200,
     select: { id: true, name: true, type: true, floorLevel: true, updatedAt: true },
-  });
+  }), prisma.inventoryRoom.count({ where: { propertyId } })]);
   const field = roomCorrectionField(message);
   const selected = exactEntityMatch(rooms.map((room) => ({ ...room, title: room.name })), message, launchContext);
   if (!selected) {
+    const sections = [{ id: 'rooms', title: 'Rooms', count: sourceTotal, items: rooms.slice(0, 20).map((room) => ({
+      id: room.id, title: room.name, description: null, meta: [readablePropertyValue(room.type)], status: null, href: null,
+    })) }];
     return {
       status: 'NEEDS_ENTITY', reasonCode: 'ROOM_TARGET_REQUIRED',
       ...durableFreeTextClarification('ROOM_RENAME', `Which room should Ask ${field === 'name' ? 'rename' : `change the ${ROOM_CORRECTION_FIELDS[field].label} of`}? Use its exact current name.`),
       blocks: [{
         type: 'GROUPED_LIST', filters: [], id: 'room-selection', title: field === 'name' ? 'Choose the room to rename' : `Choose the room whose ${ROOM_CORRECTION_FIELDS[field].label} to change`,
         description: 'Use the exact room name in your next message; nothing has changed.',
-        sections: [{ id: 'rooms', title: 'Rooms', count: rooms.length, items: rooms.slice(0, 20).map((room) => ({
-          id: room.id, title: room.name, description: null, meta: [readablePropertyValue(room.type)], status: null, href: null,
-        })) }],
+        sections,
+        collection: collectionDescriptor({ sourceTotal, fetchedCount: rooms.length, sections, nextPageAvailable: false }),
         actions: [],
       }],
       suggestions: [],

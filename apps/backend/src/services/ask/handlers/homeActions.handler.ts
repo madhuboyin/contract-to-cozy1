@@ -26,6 +26,7 @@ import {
   dashboardSectionRepresentativeActions,
   projectHomeActionDashboardSections,
 } from '../../homeActionDashboardProjection';
+import { collectionDescriptor } from '../support/collectionDescriptor';
 
 function homeActionEmptyCopy(reason: HomeActionEmptyStateReason | null): { title: string; body: string; tone: 'DEFAULT' | 'POSITIVE' | 'CAUTION' } {
   switch (reason) {
@@ -169,6 +170,7 @@ async function allPropertyHomeActionsResult(userId: string, anchorPropertyId: st
   }));
 
   const sections = perProperty.map(({ property, feed }) => buildAllPropertyHomeActionSection(property, feed));
+  const fetchedCollectionCount = sections.reduce((sum, section) => sum + Math.max(section.count, section.items.length), 0);
 
   const totalCount = perProperty.reduce((sum, { feed }) => sum + (feed?.actions.length ?? 0), 0);
   const unavailableCount = perProperty.filter(({ feed }) => !feed).length;
@@ -195,7 +197,9 @@ async function allPropertyHomeActionsResult(userId: string, anchorPropertyId: st
     }, {
       type: 'GROUPED_LIST', filters: [], id: 'home-actions-all-property-list', title: 'By property',
       description: 'Grouped strictly by property. Items from different properties are never combined, deduplicated together, or reranked against each other; opening or acting on an item always applies to the specific property it belongs to.',
-      sections, actions: [],
+      sections,
+      collection: collectionDescriptor({ sourceTotal: truncated ? null : fetchedCollectionCount, fetchedCount: fetchedCollectionCount, sections, nextPageAvailable: false }),
+      actions: [],
     }, {
       type: 'BOUNDARY', id: 'home-actions-all-property-boundary', title: 'All-property view',
       body: "This combines each property's own governed action feed for display only. It does not create a new ranked view, merge records across properties, or change which property an action applies to.",
@@ -415,11 +419,12 @@ async function homeActionsResult(userId: string, propertyId: string, message: st
       ? 'planAhead'
       : null;
   const dashboardSections = dashboardSection ? projectHomeActionDashboardSections(feed.actions) : null;
-  const selectedActions = dashboardSection && dashboardSections
+  const matchingActions = dashboardSection && dashboardSections
     ? dashboardSectionRepresentativeActions(feed.actions, dashboardSections[dashboardSection])
     : (priorityFilter
       ? feed.actions.filter((action) => priorityFilter.includes(action.priority))
-      : feed.actions).slice(0, topFocus ? 5 : MAX_RESULT_ITEMS);
+      : feed.actions);
+  const selectedActions = matchingActions.slice(0, topFocus ? 5 : MAX_RESULT_ITEMS);
   const empty = feed.actions.length === 0 ? homeActionEmptyCopy(feed.diagnostics.emptyStateReason) : null;
   const filteredEmpty = feed.actions.length > 0 && selectedActions.length === 0;
   const lowConfidence = selectedActions.some((action) => action.confidence.label === 'LOW');
@@ -523,6 +528,7 @@ async function homeActionsResult(userId: string, propertyId: string, message: st
           })),
         };
       }).filter((section) => section.count > 0),
+      collection: collectionDescriptor({ sourceTotal: matchingActions.length, fetchedCount: matchingActions.length, sections: priorities.map((priority) => ({ items: selectedActions.filter((action) => action.priority === priority) })).filter((section) => section.items.length > 0), nextPageAvailable: false }),
       actions: [],
     });
 

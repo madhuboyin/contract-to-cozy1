@@ -21,6 +21,7 @@ import { AREA_CAPTURE_MESSAGES, areaCaptureProgress, areaLabel, areaProgressBloc
 import { ROOM_ADD_MESSAGE, roomRenameItemActions } from '../handlers/homeRecordWrites.handler';
 import { INVENTORY_ADD_MESSAGE } from '../handlers/inventory.handler';
 import { roomMapFacts } from '../support/roomMap';
+import { collectionDescriptor } from '../support/collectionDescriptor';
 
 
 // IW-PRES-020 (FRD v1.91): the Property Context's own completeness as a ring. The percent is the domain's
@@ -271,6 +272,7 @@ async function propertySummaryResult(userId: string, propertyId: string, message
             };
           }),
         }],
+        collection: collectionDescriptor({ sourceTotal: rooms.count, fetchedCount: rooms.items.length, sections: [{ items: rooms.items.slice(0, 50) }], nextPageAvailable: false }),
         // No "Open Rooms" link: this is only ever reached through an explicit focused room question now, never embedded in a larger answer.
         actions: access.role !== HouseholdRole.VIEWER
           ? [{ id: 'add-room', label: 'Add a room', interactionType: 'START_WORKFLOW' as const, message: ROOM_ADD_MESSAGE, operationId: 'ROOM_CREATE', style: 'PRIMARY' as const }]
@@ -296,6 +298,7 @@ async function propertySummaryResult(userId: string, propertyId: string, message
           actions: areaCaptureRowActions(scope.scope, canImproveContext, scope.missingFactKeys.length + scope.conflictedFactKeys.length + scope.staleFactKeys.length),
         })),
       }],
+      collection: collectionDescriptor({ sourceTotal: incompleteScopes.length, fetchedCount: incompleteScopes.length, sections: [{ items: incompleteScopes }], nextPageAvailable: false }),
       actions: [],
     });
   }

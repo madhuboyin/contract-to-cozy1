@@ -90,6 +90,19 @@ export const REVIEWED_OPERATIONS: Readonly<Record<string, string>> = {
   NEGOTIATION_SHIELD_CASES: 'case lists and every review subcollection declare source, fetched and delivered totals without unsupported continuation',
   NEGOTIATION_SHIELD_CASE_ANALYZE: 'the confirmed analysis reuses the fully declared review collections in its completion receipt',
   NEGOTIATION_SHIELD_CASE_START: 'the fixed scenario choice grid declares its complete lossless collection',
+  DOCUMENT_PROMOTION_REVIEW: 'the bounded cross-domain review queue declares its authoritative database total and fetched candidates',
+  HOME_DIGITAL_WILL: 'the enabled-entry and trusted-contact sections declare their complete in-memory totals',
+  HOME_ACTIONS: 'single-property and all-property action shelves declare exact source, fetched and delivered totals for their projected feeds',
+  OPERATIONAL_WORK_UPDATE: 'the ambiguous-target command declares the complete tracked-work total and bounded selection rows',
+  PROPERTY_SUMMARY: 'room and completeness collections declare their authoritative totals and bounded delivery',
+  INVENTORY_ITEM_CORRECT: 'the ambiguous-target command declares the complete inventory total and bounded selection rows',
+  HOME_EVENT_CORRECT: 'the ambiguous-target command pairs its bounded event read with an authoritative visible-event count',
+  HOME_EVENT_VISIBILITY: 'the ambiguous-target command pairs its bounded event read with an authoritative visible-event count',
+  WARRANTY_CORRECT: 'the ambiguous-target command declares the requester-owned warranty total and bounded fetched selection rows',
+  ROOM_RENAME: 'the ambiguous-target command pairs its bounded room read with an authoritative room count',
+  INTELLIGENCE_ENVELOPE_QUERY: 'the paged Envelope read declares fetched and delivered rows, an unknown global total, and the real continuation state',
+  ROOM_CREATE: 'producer-contract review: the actual workflow emits capture, summary and confirmation blocks only; its broad command allow-list does not represent a list-producing path',
+  INVENTORY_ITEM_CREATE: 'producer-contract review: the actual workflow emits capture, summary and confirmation blocks only; its broad command allow-list does not represent a list-producing path',
 };
 
 const LIST_BLOCKS = ['GROUPED_LIST', 'TABLE', 'TIMELINE', 'PRIORITY_LIST'];

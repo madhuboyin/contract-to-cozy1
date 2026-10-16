@@ -34,10 +34,20 @@ async function pendingDocumentPromotionCandidates(propertyId: string): Promise<D
   ].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
 }
 
+async function pendingDocumentPromotionSourceTotal(propertyId: string): Promise<number> {
+  const totals = await Promise.all([
+    prisma.materialExtractionReview.count({ where: { propertyId, status: 'NEEDS_REVIEW' } }),
+    prisma.inspectionReport.count({ where: { propertyId, status: 'REVIEW_PENDING' } }),
+    prisma.insurancePolicyFact.count({ where: { confirmationStatus: 'PENDING', policyTerm: { propertyId } } }),
+  ]);
+  return totals.reduce((sum, total) => sum + total, 0);
+}
+
 async function documentPromotionReviewResult(propertyId: string): Promise<AskOperationResult> {
-  const candidates = await pendingDocumentPromotionCandidates(propertyId);
+  const [candidates, sourceTotal] = await Promise.all([pendingDocumentPromotionCandidates(propertyId), pendingDocumentPromotionSourceTotal(propertyId)]);
   if (candidates.length === 0) return { status: 'ANSWERED', reasonCode: 'NO_DOCUMENT_PROMOTIONS_PENDING', blocks: [{ type: 'EMPTY_STATE', id: 'document-promotion-empty', title: 'No document-derived records await review', body: 'Ask found no pending material extraction or inspection-report promotion gate.', actions: [] }], suggestions: [] };
-  return { status: 'ANSWERED', reasonCode: 'DOCUMENT_PROMOTIONS_PENDING', blocks: [{ type: 'GROUPED_LIST', filters: [], id: 'document-promotions', title: 'Document-derived records awaiting review', description: 'Nothing listed here becomes trusted canonical data until you confirm the exact candidate.', sections: [{ id: 'pending', title: 'Needs homeowner review', count: candidates.length, items: candidates.map((candidate) => ({ id: candidate.id, title: candidate.title, description: candidate.description, meta: [`Source kind: ${candidate.kind.toLowerCase().replace(/_/g, ' ')}`], status: 'NEEDS_REVIEW', href: null })) }], actions: [] }, { type: 'EVIDENCE', id: 'document-promotion-provenance', title: 'Promotion boundary', items: [{ label: 'Review gate', source: 'Canonical domain-specific review records', observedAt: new Date().toISOString() }] }], suggestions: [] };
+  const sections = [{ id: 'pending', title: 'Needs homeowner review', count: candidates.length, items: candidates.map((candidate) => ({ id: candidate.id, title: candidate.title, description: candidate.description, meta: [`Source kind: ${candidate.kind.toLowerCase().replace(/_/g, ' ')}`], status: 'NEEDS_REVIEW', href: null })) }];
+  return { status: 'ANSWERED', reasonCode: 'DOCUMENT_PROMOTIONS_PENDING', blocks: [{ type: 'GROUPED_LIST', filters: [], id: 'document-promotions', title: 'Document-derived records awaiting review', description: 'Nothing listed here becomes trusted canonical data until you confirm the exact candidate.', sections, collection: collectionDescriptor({ sourceTotal, fetchedCount: candidates.length, sections, nextPageAvailable: false }), actions: [] }, { type: 'EVIDENCE', id: 'document-promotion-provenance', title: 'Promotion boundary', items: [{ label: 'Review gate', source: 'Canonical domain-specific review records', observedAt: new Date().toISOString() }] }], suggestions: [] };
 }
 
 async function documentPromotionConfirmResult(propertyId: string, message: string, launchContext?: CreateAskExecutionRequest['launchContext']): Promise<AskOperationResult> {

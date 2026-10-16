@@ -36,6 +36,7 @@ import { resolveAskEnvelopeQueryScope } from '../askEnvelopeQueryScope';
 import { listWorkItems } from '../../../modules/homeOperations/application/listWorkItems.usecase';
 import { assertUserWorkItemTransition } from '../../../modules/homeOperations/domain/userGovernance';
 import { operationalWorkSnoozeDays } from '../operationalWorkSnooze';
+import { collectionDescriptor } from '../support/collectionDescriptor';
 
 const replaceRepairService = new ReplaceRepairService();
 
@@ -327,7 +328,10 @@ async function operationalWorkUpdateResult(propertyId: string, message: string, 
   const items = await listWorkItems({ propertyId });
   const selected = exactEntityMatch(items, message, launchContext);
   const action = operationalWorkAction(message);
-  if (!selected || !action) return { status: 'NEEDS_ENTITY', reasonCode: 'OPERATIONAL_WORK_TARGET_REQUIRED', blocks: [{ type: 'GROUPED_LIST', filters: [], id: 'operational-work-targets', title: 'Choose tracked work and an action', description: 'Use the exact title or work-item id and say accept, defer, snooze, complete, verify, or reopen.', sections: [{ id: 'work', title: 'Tracked Operational Work', count: items.length, items: items.slice(0, 50).map((item) => ({ id: item.id, title: item.title, description: `${String(item.state).toLowerCase().replace(/_/g, ' ')} · ${String(item.safetyTier).toLowerCase().replace(/_/g, ' ')}`, meta: [], status: String(item.state), href: null })) }], actions: [] }], suggestions: [] };
+  if (!selected || !action) {
+    const sections = [{ id: 'work', title: 'Tracked Operational Work', count: items.length, items: items.slice(0, 50).map((item) => ({ id: item.id, title: item.title, description: `${String(item.state).toLowerCase().replace(/_/g, ' ')} · ${String(item.safetyTier).toLowerCase().replace(/_/g, ' ')}`, meta: [], status: String(item.state), href: null })) }];
+    return { status: 'NEEDS_ENTITY', reasonCode: 'OPERATIONAL_WORK_TARGET_REQUIRED', blocks: [{ type: 'GROUPED_LIST', filters: [], id: 'operational-work-targets', title: 'Choose tracked work and an action', description: 'Use the exact title or work-item id and say accept, defer, snooze, complete, verify, or reopen.', sections, collection: collectionDescriptor({ sourceTotal: items.length, fetchedCount: items.length, sections, nextPageAvailable: false }), actions: [] }], suggestions: [] };
+  }
   const execution = selected.executions.find((candidate) => candidate.role === 'PRIMARY');
   if (action === 'COMPLETE' && (selected.state !== 'ACCEPTED' || execution?.executionType !== 'MAINTENANCE_TASK')) return { status: 'BLOCKED', reasonCode: 'OPERATIONAL_WORK_COMPLETION_REQUIRES_DOMAIN_WORKFLOW', blocks: [{ type: 'BOUNDARY', id: 'operational-work-completion-boundary', title: 'Complete this in its linked workflow', severity: 'INFO', body: 'Quick completion is available only for accepted maintenance-backed work. Project, guidance, booking, safety, and regulated work must record evidence and completion in the linked workflow.', suggestions: [] }, { type: 'SUMMARY', id: 'operational-work-manage', title: selected.title, body: `Current state: ${String(selected.state).toLowerCase().replace(/_/g, ' ')}. No change was made.`, tone: 'CAUTION', actions: [] }], suggestions: [] };
   if (['VERIFY', 'REOPEN'].includes(action) && selected.state !== 'REPORTED_COMPLETE') return { status: 'BLOCKED', reasonCode: 'OPERATIONAL_WORK_REPORTED_COMPLETION_REQUIRED', blocks: [{ type: 'BOUNDARY', id: 'operational-work-reported-completion-boundary', title: 'There is no reported completion to review', severity: 'INFO', body: `This work is currently ${String(selected.state).toLowerCase().replace(/_/g, ' ')}. Refresh the action and choose an available next step.`, suggestions: [] }], suggestions: [] };
@@ -682,24 +686,26 @@ async function intelligenceEnvelopeQueryResult(userId: string, propertyId: strin
     actions: [],
   }];
   if (items.length) {
+    const sections = [...grouped.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([domain, sectionItems]) => ({
+      id: `envelope-${domain.toLowerCase()}`,
+      title: domain.replace(/_/g, ' ').toLowerCase(),
+      count: sectionItems.length,
+      items: sectionItems.map((item) => ({
+        id: item.envelopeKey,
+        title: `${item.type.replace(/_/g, ' ').toLowerCase()} · ${item.source.producer}`,
+        description: item.qualifiedClaim?.verdict ?? `${item.source.sourceModel} · ${item.freshness.currentness.toLowerCase()}`,
+        meta: [item.severity ?? 'UNSPECIFIED', item.createdAt.slice(0, 10)],
+        status: item.freshness.currentness,
+        href: null,
+      })),
+    }));
     blocks.push({
       type: 'GROUPED_LIST', filters: [],
       id: 'intelligence-envelope-items',
       title: 'Derived intelligence by domain',
       description: 'This is a normalized read of registered Envelope producers, not every Home Action or ordinary domain record.',
-      sections: [...grouped.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([domain, sectionItems]) => ({
-        id: `envelope-${domain.toLowerCase()}`,
-        title: domain.replace(/_/g, ' ').toLowerCase(),
-        count: sectionItems.length,
-        items: sectionItems.map((item) => ({
-          id: item.envelopeKey,
-          title: `${item.type.replace(/_/g, ' ').toLowerCase()} · ${item.source.producer}`,
-          description: item.qualifiedClaim?.verdict ?? `${item.source.sourceModel} · ${item.freshness.currentness.toLowerCase()}`,
-          meta: [item.severity ?? 'UNSPECIFIED', item.createdAt.slice(0, 10)],
-          status: item.freshness.currentness,
-          href: null,
-        })),
-      })),
+      sections,
+      collection: collectionDescriptor({ sourceTotal: null, fetchedCount: page.items.length, sections, nextPageAvailable: Boolean(page.nextCursor) }),
       actions: [],
     });
     const evidence = items.flatMap((item) => item.evidence).slice(0, 20);
