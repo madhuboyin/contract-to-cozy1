@@ -141,3 +141,21 @@ test('projects, DIY, plants, habits, seasonal, renovation, and permit operations
     assert.ok(candidates.every((candidate) => candidate.sourceOperationId === operationId), operationId);
   }
 });
+
+test('general financial reads and receipts all have tailored continuations', () => {
+  const migratedOperations = [
+    'COVERAGE_GAPS', 'COVERAGE_COMPARISON_STATUS', 'COVERAGE_REVIEW_STATUS', 'COVERAGE_COMMAND',
+    'SAVINGS_OPPORTUNITIES', 'SAVINGS_BENEFIT_COMMAND', 'OWNERSHIP_COSTS', 'OWNERSHIP_COST_COMMAND',
+    'FINANCING_OVERVIEW', 'FINANCING_PROFILE_COMMAND', 'REFINANCE_ANALYSIS', 'REFINANCE_RATE_MONITOR',
+    'CAPITAL_RESERVE_PLAN', 'CAPITAL_TIMELINE_COMMAND',
+    'PROPERTY_TAX_APPEAL_READINESS', 'PROPERTY_TAX_APPEAL_COMMAND', 'PROPERTY_TAX_COMPARABLE_COMMAND',
+    'SERVICE_PRICE_CHECKS', 'SERVICE_PRICE_CHECK_RUN',
+    'QUOTE_COMPARISON_CREATE', 'QUOTE_COMPARISON_REVIEW', 'QUOTE_COMPARISON_COMMAND',
+    'PRICE_FINALIZATIONS_LIST', 'PRICE_FINALIZATION_COMMAND',
+  ];
+  for (const operationId of migratedOperations) {
+    const candidates = operationSpecificContinuationCandidates(operationId, PROPERTY_ID);
+    assert.ok(candidates.length >= 1, `${operationId}: missing tailored continuation`);
+    assert.ok(candidates.every((candidate) => candidate.sourceOperationId === operationId), operationId);
+  }
+});

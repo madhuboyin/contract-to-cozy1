@@ -33,8 +33,9 @@ test('every registered operation has exactly one continuation-coverage classific
 
 test('generic starters and recovery-only retries do not count as operation-specific coverage', () => {
   assert.ok(CURATED_STARTER_OUTCOME_KEYS.length > 0, 'the test must exercise a real generic starter inventory');
-  assert.deepEqual(governedOperationSpecificOutcomes('REFINANCE_RATE_MONITOR'), []);
-  assert.deepEqual(governedOperationSpecificOutcomes('QUOTE_COMPARISON_CREATE'), []);
+  for (const operationId of ['MAINTENANCE_TASK_CREATE', 'REFINANCE_RATE_MONITOR', 'QUOTE_COMPARISON_CREATE']) {
+    assert.ok(!governedOperationSpecificOutcomes(operationId).includes(`${operationId}:RESTART_AFTER_EXPIRY`), operationId);
+  }
 });
 
 test('reviewed contextual surfaces and state exemptions are explicit and registered', () => {

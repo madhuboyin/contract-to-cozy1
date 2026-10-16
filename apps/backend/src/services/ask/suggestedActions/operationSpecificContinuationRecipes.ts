@@ -234,6 +234,102 @@ export const OPERATION_SPECIFIC_CONTINUATION_RECIPES: Readonly<Partial<Record<As
     recipe('Review renovation readiness', 'Show my renovation permit readiness', 'RENOVATION_PERMIT_READINESS', 'REVIEW_RENOVATION_READINESS', 'PERMIT_STATUS_REVIEW_READINESS'),
     recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'PERMIT_STATUS_REVIEW_HOME_ACTIONS'),
   ],
+  COVERAGE_GAPS: [
+    recipe('Review coverage status', 'Show my coverage review status', 'COVERAGE_REVIEW_STATUS', 'REVIEW_COVERAGE_STATUS', 'COVERAGE_GAPS_REVIEW_STATUS'),
+    recipe('Review recorded warranties', 'Show my recorded warranties', 'WARRANTY_LOOKUP', 'REVIEW_WARRANTIES', 'COVERAGE_GAPS_REVIEW_WARRANTIES'),
+  ],
+  COVERAGE_COMPARISON_STATUS: [
+    recipe('Review coverage gaps', 'Show coverage gaps for my recorded items', 'COVERAGE_GAPS', 'REVIEW_COVERAGE_GAPS', 'COVERAGE_COMPARISON_REVIEW_GAPS'),
+    recipe('Review coverage status', 'Show my coverage review status', 'COVERAGE_REVIEW_STATUS', 'REVIEW_COVERAGE_STATUS', 'COVERAGE_COMPARISON_REVIEW_STATUS'),
+  ],
+  COVERAGE_REVIEW_STATUS: [
+    recipe('Review coverage gaps', 'Show coverage gaps for my recorded items', 'COVERAGE_GAPS', 'REVIEW_COVERAGE_GAPS', 'COVERAGE_STATUS_REVIEW_GAPS'),
+    recipe('Review recorded warranties', 'Show my recorded warranties', 'WARRANTY_LOOKUP', 'REVIEW_WARRANTIES', 'COVERAGE_STATUS_REVIEW_WARRANTIES'),
+  ],
+  COVERAGE_COMMAND: [
+    recipe('Review coverage status', 'Show my coverage review status', 'COVERAGE_REVIEW_STATUS', 'REVIEW_COVERAGE_STATUS', 'COVERAGE_UPDATED_REVIEW_STATUS'),
+    recipe('Review coverage gaps', 'Show coverage gaps for my recorded items', 'COVERAGE_GAPS', 'REVIEW_COVERAGE_GAPS', 'COVERAGE_UPDATED_REVIEW_GAPS'),
+  ],
+  SAVINGS_OPPORTUNITIES: [
+    recipe('Review ownership costs', 'Show my home ownership costs', 'OWNERSHIP_COSTS', 'REVIEW_OWNERSHIP_COSTS', 'SAVINGS_REVIEW_OWNERSHIP_COSTS'),
+    recipe('Review capital outlook', 'Show my capital reserve outlook', 'CAPITAL_RESERVE_PLAN', 'REVIEW_CAPITAL_OUTLOOK', 'SAVINGS_REVIEW_CAPITAL'),
+  ],
+  SAVINGS_BENEFIT_COMMAND: [
+    recipe('Review savings opportunities', 'Show savings opportunities for my home', 'SAVINGS_OPPORTUNITIES', 'REVIEW_SAVINGS', 'SAVINGS_UPDATED_REVIEW_OPPORTUNITIES'),
+    recipe('Review ownership costs', 'Show my home ownership costs', 'OWNERSHIP_COSTS', 'REVIEW_OWNERSHIP_COSTS', 'SAVINGS_UPDATED_REVIEW_COSTS'),
+  ],
+  OWNERSHIP_COSTS: [
+    recipe('Review savings opportunities', 'Show savings opportunities for my home', 'SAVINGS_OPPORTUNITIES', 'REVIEW_SAVINGS', 'OWNERSHIP_COSTS_REVIEW_SAVINGS'),
+    recipe('Review capital outlook', 'Show my capital reserve outlook', 'CAPITAL_RESERVE_PLAN', 'REVIEW_CAPITAL_OUTLOOK', 'OWNERSHIP_COSTS_REVIEW_CAPITAL'),
+  ],
+  OWNERSHIP_COST_COMMAND: [
+    recipe('Review ownership costs', 'Show my home ownership costs', 'OWNERSHIP_COSTS', 'REVIEW_OWNERSHIP_COSTS', 'OWNERSHIP_COST_UPDATED_REVIEW_COSTS'),
+    recipe('Review savings opportunities', 'Show savings opportunities for my home', 'SAVINGS_OPPORTUNITIES', 'REVIEW_SAVINGS', 'OWNERSHIP_COST_UPDATED_REVIEW_SAVINGS'),
+  ],
+  FINANCING_OVERVIEW: [
+    recipe('Review refinance options', 'Show my refinance analysis', 'REFINANCE_ANALYSIS', 'REVIEW_REFINANCE', 'FINANCING_REVIEW_REFINANCE'),
+    recipe('Review ownership costs', 'Show my home ownership costs', 'OWNERSHIP_COSTS', 'REVIEW_OWNERSHIP_COSTS', 'FINANCING_REVIEW_OWNERSHIP_COSTS'),
+  ],
+  FINANCING_PROFILE_COMMAND: [
+    recipe('Review financing overview', 'Show my home financing overview', 'FINANCING_OVERVIEW', 'REVIEW_FINANCING', 'FINANCING_PROFILE_REVIEW_OVERVIEW'),
+    recipe('Review refinance options', 'Show my refinance analysis', 'REFINANCE_ANALYSIS', 'REVIEW_REFINANCE', 'FINANCING_PROFILE_REVIEW_REFINANCE'),
+  ],
+  REFINANCE_ANALYSIS: [
+    recipe('Review financing overview', 'Show my home financing overview', 'FINANCING_OVERVIEW', 'REVIEW_FINANCING', 'REFINANCE_REVIEW_FINANCING'),
+    recipe('Review ownership costs', 'Show my home ownership costs', 'OWNERSHIP_COSTS', 'REVIEW_OWNERSHIP_COSTS', 'REFINANCE_REVIEW_OWNERSHIP_COSTS'),
+  ],
+  REFINANCE_RATE_MONITOR: [
+    recipe('Review refinance options', 'Show my refinance analysis', 'REFINANCE_ANALYSIS', 'REVIEW_REFINANCE', 'REFINANCE_MONITOR_REVIEW_ANALYSIS'),
+    recipe('Review financing overview', 'Show my home financing overview', 'FINANCING_OVERVIEW', 'REVIEW_FINANCING', 'REFINANCE_MONITOR_REVIEW_FINANCING'),
+  ],
+  CAPITAL_RESERVE_PLAN: [
+    recipe('Review ownership costs', 'Show my home ownership costs', 'OWNERSHIP_COSTS', 'REVIEW_OWNERSHIP_COSTS', 'CAPITAL_PLAN_REVIEW_OWNERSHIP_COSTS'),
+    recipe('Review maintenance forecast', 'What maintenance might be coming up?', 'MAINTENANCE_FORECAST', 'REVIEW_MAINTENANCE_FORECAST', 'CAPITAL_PLAN_REVIEW_MAINTENANCE'),
+  ],
+  CAPITAL_TIMELINE_COMMAND: [
+    recipe('Review capital outlook', 'Show my capital reserve outlook', 'CAPITAL_RESERVE_PLAN', 'REVIEW_CAPITAL_OUTLOOK', 'CAPITAL_UPDATED_REVIEW_PLAN'),
+    recipe('Review maintenance forecast', 'What maintenance might be coming up?', 'MAINTENANCE_FORECAST', 'REVIEW_MAINTENANCE_FORECAST', 'CAPITAL_UPDATED_REVIEW_MAINTENANCE'),
+  ],
+  PROPERTY_TAX_APPEAL_READINESS: [
+    recipe('Review ownership costs', 'Show my home ownership costs', 'OWNERSHIP_COSTS', 'REVIEW_OWNERSHIP_COSTS', 'TAX_APPEAL_REVIEW_OWNERSHIP_COSTS'),
+    recipe('Review financing overview', 'Show my home financing overview', 'FINANCING_OVERVIEW', 'REVIEW_FINANCING', 'TAX_APPEAL_REVIEW_FINANCING'),
+  ],
+  PROPERTY_TAX_APPEAL_COMMAND: [
+    recipe('Review appeal readiness', 'Show my property tax appeal readiness', 'PROPERTY_TAX_APPEAL_READINESS', 'REVIEW_TAX_APPEAL', 'TAX_APPEAL_UPDATED_REVIEW_READINESS'),
+    recipe('Review ownership costs', 'Show my home ownership costs', 'OWNERSHIP_COSTS', 'REVIEW_OWNERSHIP_COSTS', 'TAX_APPEAL_UPDATED_REVIEW_COSTS'),
+  ],
+  PROPERTY_TAX_COMPARABLE_COMMAND: [
+    recipe('Review appeal readiness', 'Show my property tax appeal readiness', 'PROPERTY_TAX_APPEAL_READINESS', 'REVIEW_TAX_APPEAL', 'TAX_COMPARABLE_REVIEW_READINESS'),
+    recipe('Review ownership costs', 'Show my home ownership costs', 'OWNERSHIP_COSTS', 'REVIEW_OWNERSHIP_COSTS', 'TAX_COMPARABLE_REVIEW_COSTS'),
+  ],
+  SERVICE_PRICE_CHECKS: [
+    recipe('Review quote comparisons', 'Show my quote comparisons', 'QUOTE_COMPARISON_REVIEW', 'REVIEW_QUOTES', 'SERVICE_PRICES_REVIEW_QUOTES'),
+    recipe('Review finalized prices', 'Show my finalized service prices', 'PRICE_FINALIZATIONS_LIST', 'REVIEW_PRICE_FINALIZATIONS', 'SERVICE_PRICES_REVIEW_FINALIZED'),
+  ],
+  SERVICE_PRICE_CHECK_RUN: [
+    recipe('Review service price checks', 'Show my service price checks', 'SERVICE_PRICE_CHECKS', 'REVIEW_SERVICE_PRICES', 'PRICE_CHECK_REVIEW_CHECKS'),
+    recipe('Review quote comparisons', 'Show my quote comparisons', 'QUOTE_COMPARISON_REVIEW', 'REVIEW_QUOTES', 'PRICE_CHECK_REVIEW_QUOTES'),
+  ],
+  QUOTE_COMPARISON_CREATE: [
+    recipe('Review quote comparisons', 'Show my quote comparisons', 'QUOTE_COMPARISON_REVIEW', 'REVIEW_QUOTES', 'QUOTE_CREATED_REVIEW_QUOTES'),
+    recipe('Review service price checks', 'Show my service price checks', 'SERVICE_PRICE_CHECKS', 'REVIEW_SERVICE_PRICES', 'QUOTE_CREATED_REVIEW_PRICES'),
+  ],
+  QUOTE_COMPARISON_REVIEW: [
+    recipe('Review service price checks', 'Show my service price checks', 'SERVICE_PRICE_CHECKS', 'REVIEW_SERVICE_PRICES', 'QUOTES_REVIEW_SERVICE_PRICES'),
+    recipe('Review finalized prices', 'Show my finalized service prices', 'PRICE_FINALIZATIONS_LIST', 'REVIEW_PRICE_FINALIZATIONS', 'QUOTES_REVIEW_FINALIZED_PRICES'),
+  ],
+  QUOTE_COMPARISON_COMMAND: [
+    recipe('Review quote comparisons', 'Show my quote comparisons', 'QUOTE_COMPARISON_REVIEW', 'REVIEW_QUOTES', 'QUOTE_UPDATED_REVIEW_QUOTES'),
+    recipe('Review service price checks', 'Show my service price checks', 'SERVICE_PRICE_CHECKS', 'REVIEW_SERVICE_PRICES', 'QUOTE_UPDATED_REVIEW_PRICES'),
+  ],
+  PRICE_FINALIZATIONS_LIST: [
+    recipe('Review quote comparisons', 'Show my quote comparisons', 'QUOTE_COMPARISON_REVIEW', 'REVIEW_QUOTES', 'FINALIZED_PRICES_REVIEW_QUOTES'),
+    recipe('Review service price checks', 'Show my service price checks', 'SERVICE_PRICE_CHECKS', 'REVIEW_SERVICE_PRICES', 'FINALIZED_PRICES_REVIEW_CHECKS'),
+  ],
+  PRICE_FINALIZATION_COMMAND: [
+    recipe('Review finalized prices', 'Show my finalized service prices', 'PRICE_FINALIZATIONS_LIST', 'REVIEW_PRICE_FINALIZATIONS', 'PRICE_FINALIZED_REVIEW_RECORDS'),
+    recipe('Review quote comparisons', 'Show my quote comparisons', 'QUOTE_COMPARISON_REVIEW', 'REVIEW_QUOTES', 'PRICE_FINALIZED_REVIEW_QUOTES'),
+  ],
 });
 
 export function operationSpecificContinuationOutcomeKeys(sourceOperationId: string): readonly string[] {
