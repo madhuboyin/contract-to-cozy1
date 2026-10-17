@@ -53,6 +53,10 @@ test('Sell/Hold/Rent returns the typed outcome without running an analysis, and 
   assert.deepEqual([none.status, none.code], ['HOME_VALUE_REQUIRED', PLANNING_HOME_VALUE_REQUIRED]);
   assert.equal(ran, false);
   saved = [{ key: 'homeValueNow', value: 410000 }];
+  assert.equal((await service.estimateOutcome('p1', { years: 5 }, 'u1')).status, 'HOME_VALUE_REQUIRED', 'a camel-case row is not a saved override');
+  saved = [{ key: 'HOME_VALUE_NOW', value: 5 }];
+  assert.equal((await service.estimateOutcome('p1', { years: 5 }, 'u1')).status, 'HOME_VALUE_REQUIRED', 'an out-of-range saved value is not a usable value');
+  saved = [{ key: 'HOME_VALUE_NOW', value: 410000 }];
   const withSaved = await service.estimateOutcome('p1', { years: 5 }, 'u1');
   assert.deepEqual([withSaved.status, withSaved.value.marker], ['OK', 'dto']);
   saved = [];

@@ -124,6 +124,7 @@ make deploy-pi        # Deploy to Raspberry Pi k3s cluster
 
 ## Key Patterns
 
+- **Saved tool overrides:** `ToolOverride` rows use one UPPER_SNAKE key convention defined in `backend/src/services/toolOverrideContract.ts` (see `docs/architecture/TOOL_OVERRIDE_CONTRACT.md`). Never read the rows directly or invent a key spelling; translate through the contract. A saved override is a scenario input for one tool and never updates the Home Record.
 - **Validation:** Zod v4 schemas in `backend/src/utils/validators.ts`, applied as Express middleware via `validateBody(schema)`
 - **Error handling:** Centralized `errorHandler` middleware (must be last in Express chain)
 - **Rate limiting:** Separate limiters for auth, general API, OCR, and premium features

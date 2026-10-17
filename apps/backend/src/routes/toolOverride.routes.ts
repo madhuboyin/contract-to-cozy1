@@ -8,10 +8,13 @@ import { z } from 'zod';
 
 const router = Router({ mergeParams: true });
 
+// Shape only. Which keys exist and which values are valid is the tool's contract (services/toolOverrideContract.ts), checked in the controller.
 const schema = z.object({
+  toolKey: z.string().min(1).optional(),
   overrides: z.array(z.object({
     key: z.string().min(1),
-    value: z.number(),
+    // null clears a saved override.
+    value: z.number().nullable(),
   })).default([]),
 });
 

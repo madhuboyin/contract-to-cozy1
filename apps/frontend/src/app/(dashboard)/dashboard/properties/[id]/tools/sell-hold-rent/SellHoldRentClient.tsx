@@ -273,8 +273,40 @@ export default function SellHoldRentClient() {
         </div>
       </div>
 
-      {needsHomeValue && <HomeValueRequiredPrompt propertyId={propertyId} toolName="Sell, hold or rent" busy={loading} onSubmit={setAnalysisHomeValue} />}
+      {needsHomeValue && (
+        <HomeValueRequiredPrompt
+          propertyId={propertyId} toolName="Sell, hold or rent" busy={loading || ovSaving} onSubmit={setAnalysisHomeValue}
+          saveOption={{
+            label: 'Save as my Sell/Hold/Rent value',
+            note: 'Saved for Sell/Hold/Rent scenarios only. It does not update your home record, and you can clear it under Model inputs.',
+            onSave: async (value) => {
+              setOvSaving(true);
+              try {
+                await saveSellHoldRentOverrides(propertyId, { HOME_VALUE_NOW: value });
+                setAnalysisHomeValue(null);
+                await loadOverrides();
+                await loadSimulator(years);
+                track('action_completed', { tool: 'sell-hold-rent', actionType: 'save_overrides', propertyId });
+              } finally {
+                setOvSaving(false);
+              }
+            },
+          }}
+        />
+      )}
       {analysisHomeValue !== null && !needsHomeValue && <AnalysisOnlyValueNote value={analysisHomeValue} onClear={() => setAnalysisHomeValue(null)} />}
+
+      {data?.current?.homeValueDisclosure && !needsHomeValue && (
+        <p className="text-xs text-slate-600 dark:text-slate-300" data-home-value-disclosure="">{data.current.homeValueDisclosure}</p>
+      )}
+      {!!data?.meta?.ignoredSavedOverrides?.length && (
+        <div role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900" data-ignored-saved-overrides="">
+          <div className="font-semibold">Some saved inputs were not used</div>
+          <ul className="mt-1 list-disc pl-4">
+            {data.meta.ignoredSavedOverrides.map((issue) => <li key={issue.key}>{issue.detail}</li>)}
+          </ul>
+        </div>
+      )}
 
       {error && (
         <div className="flex items-start gap-3 rounded-2xl border border-red-200/70 bg-red-50/85 p-3 backdrop-blur">
@@ -476,7 +508,7 @@ export default function SellHoldRentClient() {
           <div>
             <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Model inputs</div>
             <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">
-              Overrides are saved per property and automatically applied to this tool.
+              Saved overrides are scenario inputs for this tool and are applied automatically. They do not change your home record.
             </div>
           </div>
           <div className="text-xs text-slate-500 dark:text-slate-300">
@@ -560,6 +592,8 @@ export default function SellHoldRentClient() {
                   for (const k of keys) {
                     const n = toNum(overrideDraft[k] || '');
                     if (n !== undefined) patch[k] = n;
+                    // A blank field that has a saved value clears it, so "leave blank to use the default estimate" is true.
+                    else if (overrides[k] !== undefined) patch[k] = null;
                   }
 
                   setOvSaving(true);

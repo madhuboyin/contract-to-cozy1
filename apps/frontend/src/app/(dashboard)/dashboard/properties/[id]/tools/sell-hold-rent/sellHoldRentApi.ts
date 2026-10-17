@@ -44,6 +44,9 @@ export type SellHoldRentDTO = {
 
   current: {
     homeValueNow: number;
+    /** Where the home value came from, and a sentence saying so (a saved value is a scenario input, not the home record). */
+    homeValueSource?: 'SCENARIO_OVERRIDE' | 'APPRAISAL' | 'PURCHASE_PRICE_FALLBACK';
+    homeValueDisclosure?: string;
     appreciationRate: number;
     monthlyRentNow: number;
     sellingCostRate: number;
@@ -130,6 +133,8 @@ export type SellHoldRentDTO = {
     dataSources: string[];
     notes: string[];
     confidence: 'HIGH' | 'MEDIUM' | 'LOW';
+    /** Saved overrides that were not used (unsupported key, not a number, out of range), each with a reason. */
+    ignoredSavedOverrides?: Array<{ key: string; reason: string; detail: string }>;
   };
 };
 
@@ -152,14 +157,16 @@ const TOOL_KEY = 'SELL_HOLD_RENT';
 
 // Keep this consistent with backend override keys (Phase-3)
 // (If your backend uses slightly different keys, just map here.)
+// The keys are the canonical UPPER_SNAKE names from the backend contract (services/toolOverrideContract.ts); there is no other spelling. A number saves the
+// scenario override, null clears it. A saved override is a Sell/Hold/Rent scenario input and never updates the Home Record.
 export type SellHoldRentOverridePatch = Partial<{
-  HOME_VALUE_NOW: number;
-  APPRECIATION_RATE: number;
-  SELLING_COST_RATE: number;
-  MONTHLY_RENT_NOW: number;
-  RENT_GROWTH_RATE: number;
-  VACANCY_RATE: number;
-  MANAGEMENT_RATE: number;
+  HOME_VALUE_NOW: number | null;
+  APPRECIATION_RATE: number | null;
+  SELLING_COST_RATE: number | null;
+  MONTHLY_RENT_NOW: number | null;
+  RENT_GROWTH_RATE: number | null;
+  VACANCY_RATE: number | null;
+  MANAGEMENT_RATE: number | null;
 }>;
 
 // ---------------------------
@@ -271,9 +278,9 @@ export async function getSellHoldRentOverrides(propertyId: string) {
 }
 
 export async function saveSellHoldRentOverrides(propertyId: string, patch: SellHoldRentOverridePatch) {
-  const overrides: ToolOverrideRow[] = Object.entries(patch)
-    .filter(([, v]) => typeof v === 'number' && Number.isFinite(v))
-    .map(([key, value]) => ({ key, value: value as number }));
+  const overrides: Array<{ key: string; value: number | null }> = Object.entries(patch)
+    .filter(([, v]) => v === null || (typeof v === 'number' && Number.isFinite(v)))
+    .map(([key, value]) => ({ key, value: value as number | null }));
 
   const res = await api.put<{ ok: true }>(
     `/api/properties/${propertyId}/tool-overrides`,

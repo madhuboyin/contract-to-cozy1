@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
 
 import { listToolOverrides } from './toolOverride.service';
+import { parseSellHoldRentOverrides, type SellHoldRentSavedOverrides, type ToolOverrideIssue } from './toolOverrideContract';
 import { getCanonicalMortgage } from './canonicalFinanceAdapter.service';
 import {
   FinancialAssumptionService,
@@ -144,6 +145,8 @@ export type SellHoldRentDTO = {
     dataSources: string[];
     notes: string[];
     confidence: Confidence;
+    /** Saved overrides that were not used (unsupported key, not a number, out of range), with the reason. Absent when every saved override was usable. */
+    ignoredSavedOverrides?: ToolOverrideIssue[];
   };
 };
 
@@ -177,13 +180,15 @@ function zipPrefix(zip: string) {
 }
 
 /**
- * Phase 3: Use ToolOverride rows as persisted defaults for this tool.
+ * Saved scenario overrides for this tool, translated once into the estimator's typed input shape (toolOverrideContract.ts is the only place persisted
+ * keys are interpreted). Invalid or unsupported rows are left out and reported, never coerced.
  */
-async function loadToolOverrideMap(propertyId: string): Promise<Record<string, number>> {
-  const rows = await listToolOverrides(propertyId, TOOL_KEY);
-  const out: Record<string, number> = {};
-  for (const r of rows) out[r.key] = r.value;
-  return out;
+async function loadSavedOverrides(propertyId: string): Promise<{ values: SellHoldRentSavedOverrides; ignored: ToolOverrideIssue[] }> {
+  const parsed = parseSellHoldRentOverrides(await listToolOverrides(propertyId, TOOL_KEY));
+  if (parsed.ignored.length) {
+    logger.warn({ propertyId, toolKey: TOOL_KEY, ignored: parsed.ignored }, '[sell-hold-rent] saved overrides ignored');
+  }
+  return parsed;
 }
 
 function pickOverride(
@@ -260,7 +265,7 @@ export class SellHoldRentService {
     input: SellHoldRentInput = {},
     userId?: string
   ): Promise<PlanningHomeValueOutcome<SellHoldRentDTO>> {
-    const saved = (await loadToolOverrideMap(propertyId))['homeValueNow'];
+    const saved = (await loadSavedOverrides(propertyId)).values.homeValueNow;
     const override = input.homeValueNow !== undefined && Number.isFinite(input.homeValueNow) ? input.homeValueNow : saved;
     if (!(await hasPlanningHomeValue(propertyId, override))) return homeValueRequired();
     return { status: 'OK', value: await this.estimate(propertyId, input, userId) };
@@ -306,7 +311,8 @@ export class SellHoldRentService {
       .every((key) => key === 'years' || input[key] === undefined);
 
     // --- Phase 3 persisted overrides ---
-    const toolOv = await loadToolOverrideMap(propertyId);
+    const savedOverrides = await loadSavedOverrides(propertyId);
+    const savedOv = savedOverrides.values;
 
     const ownershipCostProjection =
       await ownershipCostConsumerProjectionService.getProjection({
@@ -317,7 +323,7 @@ export class SellHoldRentService {
       });
     const modeledAppreciation = 0.035;
     const planningHomeValue = resolvePlanningHomeValue({
-      overrideDollars: input.homeValueNow !== undefined && Number.isFinite(input.homeValueNow) ? input.homeValueNow : toolOv['homeValueNow'],
+      overrideDollars: input.homeValueNow !== undefined && Number.isFinite(input.homeValueNow) ? input.homeValueNow : savedOv.homeValueNow,
       overrideLabel: input.homeValueNow !== undefined ? 'the home value in your what-if' : 'the home value you saved for Sell/Hold/Rent',
       appraisedCents: property.lastAppraisedValue,
       purchasePriceCents: property.financingProfile?.purchasePriceCents,
@@ -332,14 +338,14 @@ export class SellHoldRentService {
     const heuristicRent =
       sqft ? (ppsfRentByState[state] ?? 1.6) * sqft : 2400;
 
-    const monthlyRentNow = pickOverride(input.monthlyRentNow, toolOv['monthlyRentNow'], heuristicRent);
+    const monthlyRentNow = pickOverride(input.monthlyRentNow, savedOv.monthlyRentNow, heuristicRent);
     const vacancyRate = clamp(
-      pickOverride(input.vacancyRate, toolOv['vacancyRate'], 0.06),
+      pickOverride(input.vacancyRate, savedOv.vacancyRate, 0.06),
       0,
       0.25
     );
     const managementRate = clamp(
-      pickOverride(input.managementRate, toolOv['managementRate'], 0.08),
+      pickOverride(input.managementRate, savedOv.managementRate, 0.08),
       0,
       0.20
     );
@@ -361,24 +367,16 @@ export class SellHoldRentService {
       toolKey: TOOL_KEY,
       assumptionSetId: input.assumptionSetId,
       requestOverrides: sharedFinancialOverrides,
+      // The saved scenario overrides stand in for the engine's modelled defaults. They still rank below an assumption set chosen for this run and below
+      // request values (resolveForTool), and they were previously passed as "fallbacks" that the modelled defaults always pre-empted.
       canonicalDefaults: {
-        appreciationRate: modeledAppreciation,
-        inflationRate: ['CA', 'FL', 'TX'].includes(state) ? 0.045 : 0.035,
-        rentGrowthRate: 0.03,
-        propertyTaxGrowthRate: ['CA', 'TX', 'NJ', 'IL'].includes(state) ? 0.04 : 0.032,
-        insuranceGrowthRate: ['FL', 'LA', 'TX', 'CA'].includes(state) ? 0.06 : 0.045,
-        maintenanceGrowthRate: 0.04,
-        sellingCostPercent: 0.06,
-      },
-      legacyFallbacks: {
-        appreciationRate: toolOv['appreciationRate'],
-        inflationRate: toolOv['inflationRate'],
-        rentGrowthRate: toolOv['rentGrowthRate'],
-        interestRate: toolOv['mortgageAnnualRate'],
-        propertyTaxGrowthRate: toolOv['propertyTaxGrowthRate'],
-        insuranceGrowthRate: toolOv['insuranceGrowthRate'],
-        maintenanceGrowthRate: toolOv['maintenanceGrowthRate'],
-        sellingCostPercent: toolOv['sellingCostRate'],
+        appreciationRate: savedOv.appreciationRate ?? modeledAppreciation,
+        inflationRate: savedOv.inflationRate ?? (['CA', 'FL', 'TX'].includes(state) ? 0.045 : 0.035),
+        rentGrowthRate: savedOv.rentGrowthRate ?? 0.03,
+        propertyTaxGrowthRate: savedOv.propertyTaxGrowthRate ?? (['CA', 'TX', 'NJ', 'IL'].includes(state) ? 0.04 : 0.032),
+        insuranceGrowthRate: savedOv.insuranceGrowthRate ?? (['FL', 'LA', 'TX', 'CA'].includes(state) ? 0.06 : 0.045),
+        maintenanceGrowthRate: savedOv.maintenanceGrowthRate ?? 0.04,
+        sellingCostPercent: savedOv.sellingCostRate ?? 0.06,
       },
       createdByUserId: userId ?? null,
       persistOverrides: !input.ephemeral,
@@ -395,17 +393,17 @@ export class SellHoldRentService {
 
     // allow request/tool overrides to override snapshot
     const mortgageBalanceNow =
-      input.mortgageBalance ?? toolOv['mortgageBalance'] ?? snap?.mortgageBalance ?? null;
+      input.mortgageBalance ?? savedOv.mortgageBalance ?? snap?.mortgageBalance ?? null;
     const mortgageAnnualRate =
       input.mortgageAnnualRate ??
+      savedOv.mortgageAnnualRate ??
       financialContext.assumptions.interestRate ??
       snap?.interestRate ??
-      toolOv['mortgageAnnualRate'] ??
       null;
     const remainingTermMonths =
-      input.remainingTermMonths ?? toolOv['remainingTermMonths'] ?? snap?.remainingTermMonths ?? null;
+      input.remainingTermMonths ?? savedOv.remainingTermMonths ?? snap?.remainingTermMonths ?? null;
     const monthlyPaymentOverride =
-      input.monthlyPayment ?? toolOv['monthlyPayment'] ?? snap?.monthlyPayment ?? null;
+      input.monthlyPayment ?? savedOv.monthlyPayment ?? snap?.monthlyPayment ?? null;
 
     const debtMode: 'ON' | 'OFF' =
       mortgageBalanceNow && mortgageAnnualRate !== null && remainingTermMonths ? 'ON' : 'OFF';
@@ -487,7 +485,7 @@ export class SellHoldRentService {
     // confidence heuristic
     let confidence: Confidence = 'LOW';
     const hasSize = !!(sqft && sqft > 200);
-    const hasOverrides = Object.keys(toolOv).length > 0 || Object.values(input).some((v) => v !== undefined);
+    const hasOverrides = Object.keys(savedOv).length > 0 || Object.values(input).some((v) => v !== undefined);
     if (debtMode === 'ON' && hasOverrides) confidence = 'HIGH';
     else if (hasOverrides || hasSize) confidence = 'MEDIUM';
 
@@ -512,7 +510,7 @@ export class SellHoldRentService {
       'Rent modeled with simple growth + overhead assumptions.',
       `Vacancy ${(vacancyRate * 100).toFixed(1)}% • management ${(managementRate * 100).toFixed(1)}% • rent growth ${(rentGrowthRate * 100).toFixed(1)}%/yr.`,
     ];
-    if (!input.monthlyRentNow && toolOv['monthlyRentNow'] === undefined) {
+    if (!input.monthlyRentNow && savedOv.monthlyRentNow === undefined) {
       rentNotes.push(`Rent estimated using $/sqft heuristic for ${state} (Phase 3 baseline). Override monthly rent for accuracy.`);
     }
     if (debtMode === 'ON') rentNotes.push('Mortgage interest is treated as a cost; principal paydown increases equity.');
@@ -661,9 +659,10 @@ export class SellHoldRentService {
 
       meta: {
         generatedAt: new Date().toISOString(),
+        ...(savedOverrides.ignored.length ? { ignoredSavedOverrides: savedOverrides.ignored } : {}),
         dataSources,
         notes: [
-          `Tool overrides (ToolOverride) are applied automatically for ${TOOL_KEY}.`,
+          `Saved scenario overrides for ${TOOL_KEY} are applied automatically${Object.keys(savedOv).length ? ` (${Object.keys(savedOv).length} in use)` : ''}. They do not change your home record.`,
           hasFinancialOverrideInput && input.ephemeral
             ? 'What-if assumptions were applied to this estimate only; nothing was saved.'
             : hasFinancialOverrideInput

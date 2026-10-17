@@ -7423,7 +7423,9 @@ model ToolOverride {
   id         String   @id @default(uuid())
   propertyId String
   toolKey    String // e.g. "SELL_HOLD_RENT"
-  key        String // e.g. "monthlyRentNow", "appreciationRate"
+  // Canonical UPPER_SNAKE key from services/toolOverrideContract.ts, e.g. "HOME_VALUE_NOW", "APPRECIATION_RATE". Not camel-case: a row stored under any
+  // other spelling is ignored. A saved override is a scenario input for that tool and never updates the canonical Home Record.
+  key        String
   value      Float
   updatedAt  DateTime @updatedAt
   createdAt  DateTime @default(now())

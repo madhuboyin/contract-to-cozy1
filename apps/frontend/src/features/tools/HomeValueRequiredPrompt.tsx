@@ -7,11 +7,13 @@ import { parsePlanningHomeValue } from './homeValueRequired';
 // Shown inline in place of an error when an analysis has no home value to start from. It says plainly that the value is used for this analysis only:
 // nothing is saved and the home record is unchanged. Keeping a value means adding the appraisal or purchase price to the home record, which is a
 // separate, deliberate step on the property page.
-export function HomeValueRequiredPrompt({ propertyId, toolName, busy = false, onSubmit }: {
+export function HomeValueRequiredPrompt({ propertyId, toolName, busy = false, onSubmit, saveOption }: {
   propertyId: string;
   toolName: string;
   busy?: boolean;
   onSubmit: (value: number) => void;
+  /** Where the tool has saved scenario inputs, a second, clearly labelled choice that saves the value for that tool's scenarios. It never updates the home record. */
+  saveOption?: { label: string; note: string; onSave: (value: number) => void | Promise<void> };
 }) {
   const inputId = useId();
   const [text, setText] = useState('');
@@ -23,6 +25,13 @@ export function HomeValueRequiredPrompt({ propertyId, toolName, busy = false, on
     if (value === null) { setInvalid(true); return; }
     setInvalid(false);
     onSubmit(value);
+  }
+
+  function save() {
+    const value = parsePlanningHomeValue(text);
+    if (value === null) { setInvalid(true); return; }
+    setInvalid(false);
+    void saveOption?.onSave(value);
   }
 
   return (
@@ -43,10 +52,17 @@ export function HomeValueRequiredPrompt({ propertyId, toolName, busy = false, on
         <button type="submit" disabled={busy} className="min-h-10 rounded-lg bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50">
           {busy ? 'Running…' : 'Use for this analysis'}
         </button>
+        {saveOption && (
+          <button type="button" onClick={save} disabled={busy} className="min-h-10 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-50">
+            {saveOption.label}
+          </button>
+        )}
       </div>
       {invalid && <p role="alert" className="mt-2 text-sm text-red-700">Enter an amount between $10,000 and $100,000,000.</p>}
       <p id={`${inputId}-scope`} className="mt-3 text-xs text-amber-900">
-        Used for this analysis only. It is not saved, and your home record is unchanged. To keep a value, add the latest appraisal or purchase price in{' '}
+        <strong>Use for this analysis</strong>: used this once. It is not saved, and your home record is unchanged.
+        {saveOption && <> <strong>{saveOption.label}</strong>: {saveOption.note}</>}
+        {' '}To record the home&rsquo;s actual value, add the latest appraisal or purchase price in{' '}
         <Link href={`/dashboard/properties/${propertyId}/edit`} className="font-semibold underline">your home record</Link>.
       </p>
     </form>

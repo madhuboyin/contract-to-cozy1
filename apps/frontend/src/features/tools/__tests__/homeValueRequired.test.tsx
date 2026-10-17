@@ -24,7 +24,8 @@ test('a planning value accepts dollars with a sign or commas and rejects unusabl
 test('the prompt says the value is for this analysis only and links to the home record', () => {
   render(<HomeValueRequiredPrompt propertyId="p1" toolName="Break-even" onSubmit={() => {}} />);
   expect(screen.getByText(/What value should Break-even plan with\?/)).toBeInTheDocument();
-  expect(screen.getByText(/Used for this analysis only\. It is not saved, and your home record is unchanged\./)).toBeInTheDocument();
+  expect(screen.getByText(/used this once\. It is not saved, and your home record is unchanged\./)).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /Save/ })).not.toBeInTheDocument();
   expect(screen.getByRole('link', { name: 'your home record' })).toHaveAttribute('href', '/dashboard/properties/p1/edit');
   expect(screen.getByRole('button', { name: 'Use for this analysis' })).toBeInTheDocument();
 });
@@ -53,4 +54,24 @@ test('a result that ran on an entered value is labelled as analysis-only and the
   expect(screen.getByText(/for this analysis only\. It is not saved and your home record is unchanged\./)).toBeInTheDocument();
   await user.click(screen.getByRole('button', { name: 'Clear' }));
   expect(onClear).toHaveBeenCalledTimes(1);
+});
+
+test('where a tool has saved scenario inputs the prompt offers a clearly labelled save that says it does not update the home record', async () => {
+  const user = userEvent.setup();
+  const onSave = jest.fn();
+  const onSubmit = jest.fn();
+  render(
+    <HomeValueRequiredPrompt
+      propertyId="p1" toolName="Sell, hold or rent" onSubmit={onSubmit}
+      saveOption={{ label: 'Save as my Sell/Hold/Rent value', note: 'Saved for Sell/Hold/Rent scenarios only. It does not update your home record.', onSave }}
+    />,
+  );
+  expect(screen.getByText(/Saved for Sell\/Hold\/Rent scenarios only\. It does not update your home record\./)).toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: 'Save as my Sell/Hold/Rent value' }));
+  expect(onSave).not.toHaveBeenCalled();
+  expect(screen.getByRole('alert')).toBeInTheDocument();
+  await user.type(screen.getByLabelText('Home value (USD)'), '450000');
+  await user.click(screen.getByRole('button', { name: 'Save as my Sell/Hold/Rent value' }));
+  expect(onSave).toHaveBeenCalledWith(450000);
+  expect(onSubmit).not.toHaveBeenCalled();
 });
