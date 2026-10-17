@@ -43,7 +43,7 @@ export const REVIEWED_OPERATIONS: Readonly<Record<string, string>> = {
   INSPECTION_REPORT_COMPARE: 'document-evidence fixture',
   HVAC_DECISION_SCENARIO: 'completed scenario comparison now declares its dated Decision Platform engine basis and an explicit isolated-scenario limitation',
   HVAC_SPECIALIST_ENGAGE: 'ready Specialist recommendation carries its canonical snapshot date, Decision Platform engine version, deterministic rationale and an explicit professional boundary',
-  SELLER_PREP_CHECKLIST: 'checklist declares its progress basis, canonical Property Sale Case freshness and an explicit listing/disclosure boundary',
+  SELLER_PREP_CHECKLIST: 'checklist declares its progress basis, canonical Property Sale Case freshness, explicit listing/disclosure boundary and complete bounded collection semantics',
   CAPITAL_RESERVE_PLAN: 'reserve-plan summary and timeline are covered by capital timeline fixtures and declare dated planning evidence plus a cost/timing boundary',
   HVAC_DECISION_CONTINUE: 'decision-thread fixtures cover deterministic rationale, canonical-fact evidence, preference references, assumptions and limitations',
   PROPERTY_TAX_APPEAL_READINESS: 'appeal-readiness fixtures cover gaps and canonical facts with reviewed-rule/evidence dates and a tax/appraisal/legal boundary',
@@ -119,6 +119,11 @@ export const REVIEWED_OPERATIONS: Readonly<Record<string, string>> = {
   HIRING_GUIDE: 'the fixed authored checklist declares its complete lossless collection and local progressive-disclosure boundary',
   NEIGHBORHOOD_CHANGE_FEED: 'the complete active reviewed-change set declares exact source and fetched totals before per-source bounded delivery, without unsupported continuation',
   PAST_HAZARD_EXPOSURE: 'the complete matched event and long-term hazard sets declare exact source and fetched totals before per-section bounded delivery, without unsupported continuation',
+  HVAC_DECISION_OUTCOME_REPORT: 'the ambiguous-thread branch declares its complete candidate set; confirmation and outcome branches are list-free',
+  HVAC_DECISION_OUTCOME_VIEW: 'the ambiguous-thread branch declares its complete candidate set; the resolved outcome uses the dedicated lossless outcome-summary pattern',
+  HVAC_DECISION_OUTCOME_UNLINK: 'the ambiguous-thread branch declares its complete candidate set; confirmation and empty branches are list-free',
+  SELLER_PREP_ITEM_DECISION: 'the ambiguous-target branch declares the complete decidable-item set before bounded delivery; confirmation is list-free',
+  SELL_HOLD_RENT_GOAL_CAPTURE: 'producer-contract review: the real workflow is internal conversational capture and the defensive direct handler emits only a boundary, not a collection',
 };
 
 const LIST_BLOCKS = ['GROUPED_LIST', 'TABLE', 'TIMELINE', 'PRIORITY_LIST'];

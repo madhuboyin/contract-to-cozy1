@@ -50,7 +50,7 @@ function install() {
       return models[model];
     },
   });
-  PropertySaleCaseService.getCase = async () => ({ propertyId: 'p1', saleCase: { id: 'case-1' }, readinessItems: items, transitions: [] });
+  PropertySaleCaseService.getCase = async () => ({ propertyId: 'p1', saleCase: { id: 'case-1', updatedAt: UPDATED_AT }, readinessItems: items, transitions: [] });
   PropertySaleCaseService.setItemDecision = async (...args) => { calls.decisions.push(args); return {}; };
   propertyAccess.resolvePropertyAccess = async () => ({ role: accessRole, userId: 'u1', propertyId: 'p1' });
 }
@@ -96,6 +96,7 @@ test('the checklist lists open, pursuing and waived items (not resolved ones) wi
   const rows = contributor.sections.flatMap((section) => section.items);
   assert.deepEqual(rows.map((row) => row.id), ['item-open', 'item-pursuing', 'item-waived']);
   assert.deepEqual(contributor.sections.map((section) => section.id), ['seller-prep-presentation', 'seller-prep-pursuing', 'seller-prep-waived']);
+  assert.deepEqual(contributor.collection, { sourceTotal: 3, fetchedCount: 3, deliveredCount: 3, nextPageAvailable: false, deliveryTruncated: false });
   for (const row of rows) {
     assert.equal(row.entityType, 'SALE_READINESS_ITEM');
     assert.equal(row.href, null, 'a checklist row opens its inline item record, not the desktop sale-case page');
@@ -153,7 +154,17 @@ test('the no-sale-case answers and the decision proposal link to no desktop page
   const target = await capabilityInvoke('SELLER_PREP_ITEM_DECISION', { userId: 'u1', propertyId: 'p1', message: 'Decide on an item' });
   assert.equal(target.reasonCode, 'SELLER_PREP_ITEM_TARGET_REQUIRED');
   assert.deepEqual(target.blocks[0].actions, []);
+  assert.deepEqual(target.blocks[0].collection, { sourceTotal: 3, fetchedCount: 3, deliveredCount: 3, nextPageAvailable: false, deliveryTruncated: false });
   const rows = target.blocks[0].sections.flatMap((section) => section.items);
   assert.ok(rows.length > 0 && rows.every((row) => row.href === null && row.entityType === 'SALE_READINESS_ITEM'));
   assert.equal(JSON.stringify(target).includes('/dashboard/'), false);
+});
+
+test('seller collections declare their full source while preserving bounded delivery and no unsupported continuation', async () => {
+  items = Array.from({ length: 55 }, (_, index) => makeItem(`item-${index}`, { title: `Prepare item ${index}` }));
+  const checklist = await list();
+  assert.deepEqual(checklist.collection, { sourceTotal: 55, fetchedCount: 55, deliveredCount: 20, nextPageAvailable: false, deliveryTruncated: true });
+
+  const target = await capabilityInvoke('SELLER_PREP_ITEM_DECISION', { userId: 'u1', propertyId: 'p1', message: 'Decide on an item' });
+  assert.deepEqual(target.blocks[0].collection, { sourceTotal: 55, fetchedCount: 55, deliveredCount: 50, nextPageAvailable: false, deliveryTruncated: true });
 });

@@ -28,7 +28,7 @@ function install(nextItems, nextRole = 'CONTRIBUTOR') {
   items = nextItems;
   role = nextRole;
   prismaModule.prisma = new Proxy({}, { get(_t, model) { if (model === 'then') return undefined; throw new Error(`Unexpected prisma.${String(model)} access`); } });
-  PropertySaleCaseService.getCase = async () => ({ propertyId: 'p1', saleCase: { id: 'case-1' }, readinessItems: items, transitions: [] });
+  PropertySaleCaseService.getCase = async () => ({ propertyId: 'p1', saleCase: { id: 'case-1', updatedAt: new Date('2026-09-20T00:00:00Z') }, readinessItems: items, transitions: [] });
   propertyAccess.resolvePropertyAccess = async () => ({ role, userId: 'u1', propertyId: 'p1' });
 }
 test.afterEach(() => {
@@ -63,8 +63,9 @@ test('the checklist answer leads with the ring: its basis, the must-address coun
   install([item('verify-first', 'VERIFICATION_NEEDED', 'OPEN', { title: 'Verify the roof age' }), ...sixMustAddress()]);
   const result = await invoke();
   assert.deepEqual(result.suggestions, [], 'the checklist must not suggest paraphrases that reopen the same checklist');
-  assert.deepEqual(result.blocks.map((block) => block.id), ['seller-prep-summary', 'seller-prep-progress', 'seller-prep-open-items']);
-  assert.deepEqual(result.blocks[0].actions, [], 'the checklist answer must not link back out to its desktop duplicate');
+  assert.deepEqual(result.blocks.map((block) => block.id), ['seller-prep-summary', 'seller-prep-progress', 'seller-prep-open-items', 'seller-prep-evidence', 'seller-prep-boundary']);
+  assert.deepEqual(result.blocks[0].actions.map((action) => action.operationId), ['SELLER_PREP_CASE_COMMAND', 'SELLER_PREP_CASE_COMMAND', 'SELLER_PREP_CASE_COMMAND']);
+  assert.ok(result.blocks[0].actions.every((action) => !action.href), 'the checklist actions must stay in Ask instead of linking to the desktop duplicate');
   const ring = progress(result);
   assert.equal(ring.percent, 43);
   assert.equal(ring.basis, '3 of 7 must-address items resolved or disclosed');

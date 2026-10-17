@@ -15,6 +15,7 @@ import * as decisionThreadService from '../../decisionPlatform/decisionThreadSer
 import * as decisionPreferenceService from '../../decisionPlatform/decisionPreferenceService';
 import { assumptionsItemsForSnapshot, decisionProgressBlock, evidenceItemsForCanonicalFacts, recommendationChangeBlock, type HvacEvidenceSourceItem, whyNowBlock } from '../decisionThreadPresentationBlocks';
 import * as outcomeObservationService from '../../decisionPlatform/outcomeObservationService';
+import { collectionDescriptor } from '../support/collectionDescriptor';
 
 export async function hvacDecisionStartContextVersion(propertyId: string, inventoryItemId: string): Promise<string> {
   const item = await prisma.inventoryItem.findFirst({ where: { id: inventoryItemId, propertyId }, select: { id: true, updatedAt: true } });
@@ -77,14 +78,16 @@ async function findHvacItemForMessage(propertyId: string, message: string, focus
   return { items, item };
 }
 
-function hvacDecisionThreadAmbiguousResult(operationId: AskOperationId, candidates: { id: string; title: string; lifecycleStatus: string }[]): AskOperationResult {
+export function hvacDecisionThreadAmbiguousResult(operationId: AskOperationId, candidates: { id: string; title: string; lifecycleStatus: string }[]): AskOperationResult {
+  const sections = [{ id: 'threads', title: 'Threads', count: candidates.length, items: candidates.map((candidate) => ({ id: candidate.id, title: candidate.title, description: candidate.lifecycleStatus, meta: [], status: candidate.lifecycleStatus, href: null })) }];
   return {
     status: 'NEEDS_ENTITY', reasonCode: 'HVAC_DECISION_THREAD_AMBIGUOUS',
     ...durableFreeTextClarification(operationId, 'Multiple decision threads are active for this HVAC system. Which one should Ask continue?'),
     blocks: [{
       type: 'GROUPED_LIST', filters: [], id: 'hvac-decision-thread-candidates', title: 'Active decision threads',
       description: 'This should not normally happen; contact support if it persists.',
-      sections: [{ id: 'threads', title: 'Threads', count: candidates.length, items: candidates.map((candidate) => ({ id: candidate.id, title: candidate.title, description: candidate.lifecycleStatus, meta: [], status: candidate.lifecycleStatus, href: null })) }],
+      sections,
+      collection: collectionDescriptor({ sourceTotal: candidates.length, fetchedCount: candidates.length, sections, nextPageAvailable: false }),
       actions: [],
     }],
     suggestions: [],

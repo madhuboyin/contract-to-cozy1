@@ -16,6 +16,7 @@ import { ensurePropertyAccess, exactEntityMatch } from '../askHandlerSupport';
 import { decisionProgressBlock, whyNowBlock } from '../decisionThreadPresentationBlocks';
 import { sellHoldRentDecisionFamilyAdapter } from '../../decisionPlatform/domainSnapshotAdapters';
 import { SELL_HOLD_RENT_WHAT_IF_LABELS, isSellHoldRentMoneyKey, parseSellHoldRentWhatIf, type SellHoldRentWhatIf } from '../support/sellHoldRentWhatIf';
+import { collectionDescriptor } from '../support/collectionDescriptor';
 
 const sellHoldRentService = new SellHoldRentService();
 
@@ -424,6 +425,16 @@ async function sellerPrepChecklistResult(userId: string, propertyId: string): Pr
   // FRD v1.44: items being pursued and items disclosed-and-waived are listed too (the traditional page shows both),
   // so their Stop pursuing / Reopen decisions are reachable inline.
   if (openItems.length || pursuingItems.length || waivedItems.length) {
+    const sections = [
+      ...[...grouped.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([category, items]) => ({
+        id: `seller-prep-${category.toLowerCase()}`,
+        title: SALE_READINESS_CATEGORY_LABELS[category] ?? category,
+        count: items.length,
+        items: items.slice(0, 20).map(row),
+      })),
+      ...(pursuingItems.length ? [{ id: 'seller-prep-pursuing', title: 'Pursuing before listing', count: pursuingItems.length, items: pursuingItems.slice(0, 20).map(row) }] : []),
+      ...(waivedItems.length ? [{ id: 'seller-prep-waived', title: 'Disclosed, not addressed', count: waivedItems.length, items: waivedItems.slice(0, 20).map(row) }] : []),
+    ];
     blocks.push({
       type: 'GROUPED_LIST', filters: [],
       id: 'seller-prep-open-items',
@@ -431,16 +442,8 @@ async function sellerPrepChecklistResult(userId: string, propertyId: string): Pr
       // IW-PRES-014 / IW-PRES-022: the checklist renders as shelves (FRD v1.84); the live item detail keeps its decisions.
       presentation: { pattern: 'SHELVES' },
       description: 'Repairs, records, and presentation work recommended before listing, grouped by category. Open an item to see it and decide on it.',
-      sections: [
-        ...[...grouped.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([category, items]) => ({
-          id: `seller-prep-${category.toLowerCase()}`,
-          title: SALE_READINESS_CATEGORY_LABELS[category] ?? category,
-          count: items.length,
-          items: items.slice(0, 20).map(row),
-        })),
-        ...(pursuingItems.length ? [{ id: 'seller-prep-pursuing', title: 'Pursuing before listing', count: pursuingItems.length, items: pursuingItems.slice(0, 20).map(row) }] : []),
-        ...(waivedItems.length ? [{ id: 'seller-prep-waived', title: 'Disclosed, not addressed', count: waivedItems.length, items: waivedItems.slice(0, 20).map(row) }] : []),
-      ],
+      sections,
+      collection: collectionDescriptor({ sourceTotal: openItems.length + pursuingItems.length + waivedItems.length, fetchedCount: openItems.length + pursuingItems.length + waivedItems.length, sections, nextPageAvailable: false }),
       actions: [],
     });
   }
@@ -538,6 +541,10 @@ async function sellerPrepItemDecisionResult(userId: string, propertyId: string, 
   const action = sellerPrepItemAction(message);
   if (!selected || !action) {
     const rowActions = sellerPrepItemActions((await ensurePropertyAccess(userId, propertyId)).role);
+    const sections = [{
+      id: 'items', title: 'Checklist items', count: decidable.length,
+      items: decidable.slice(0, 50).map((item) => ({ id: item.id, title: item.title, entityType: 'SALE_READINESS_ITEM', actions: rowActions, description: item.detail ?? null, meta: [], status: item.status, href: null })),
+    }];
     return {
       status: 'NEEDS_ENTITY',
       reasonCode: 'SELLER_PREP_ITEM_TARGET_REQUIRED',
@@ -546,12 +553,8 @@ async function sellerPrepItemDecisionResult(userId: string, propertyId: string, 
         id: 'seller-prep-item-targets',
         title: 'Choose an item and a decision',
         description: 'Use the exact item title and say waive, pursue, reopen, or unpursue.',
-        sections: [{
-          id: 'items',
-          title: 'Checklist items',
-          count: decidable.length,
-          items: decidable.slice(0, 50).map((item) => ({ id: item.id, title: item.title, entityType: 'SALE_READINESS_ITEM', actions: rowActions, description: item.detail ?? null, meta: [], status: item.status, href: null })),
-        }],
+        sections,
+        collection: collectionDescriptor({ sourceTotal: decidable.length, fetchedCount: decidable.length, sections, nextPageAvailable: false }),
         actions: [],
       }],
       suggestions: [],

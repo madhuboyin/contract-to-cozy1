@@ -4,6 +4,8 @@ const SELLER_PREP_CHECKLIST_BLOCK_IDS = new Set([
   'seller-prep-summary',
   'seller-prep-progress',
   'seller-prep-open-items',
+  'seller-prep-evidence',
+  'seller-prep-boundary',
   'related-capabilities',
   'ask-next-actions',
 ]);
