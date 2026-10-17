@@ -214,7 +214,7 @@ export function guidanceJourneyContinuation(journey: any, propertyId: string, op
       `${progress.completedCount} of ${progress.totalCount} steps done.`,
       followedBranch ? 'This plan branched from an earlier one, so this is the plan now in progress.' : null,
       current ? `Current step: ${current.label}.` : 'Every step is done or set aside.',
-      current && !currentInAsk && !blockedReason ? `Ask cannot record this step's proof yet${current.toolKey && current.toolKey !== 'frontend' ? ` (${titleCase(current.toolKey)})` : ''}, so completing it is not currently available in Ask.` : null,
+      current && !currentInAsk && !blockedReason ? `Ask cannot record this step's proof yet, so completing it is not currently available in Ask.` : null,
       blockedReason ? `Blocked: ${blockedReason}` : null,
       GUIDANCE_READINESS_LABELS[journey.executionReadiness] ? `Readiness: ${GUIDANCE_READINESS_LABELS[journey.executionReadiness]}.` : null,
     ].filter(Boolean).join(' '),

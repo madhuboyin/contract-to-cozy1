@@ -106,7 +106,6 @@ export function AdaptiveTableBlock({ block, renderAction, rowDetail }: { block: 
   }));
   const shownCount = block.rows.length;
   const totalCount = Math.max(block.totalCount ?? shownCount, shownCount);
-  const renderedViewLabel = decision.mode === 'RESPONSIVE' ? 'automatically adapted to available width' : decision.mode.toLowerCase();
 
   return <section className="rounded-2xl border border-slate-200 bg-white p-4" aria-labelledby={`ask-table-${block.id}`}>
     <div className="flex flex-wrap items-start justify-between gap-3">
@@ -132,7 +131,6 @@ export function AdaptiveTableBlock({ block, renderAction, rowDetail }: { block: 
 
     <p className="mt-3 text-xs text-slate-500" aria-live="polite">
       {totalCount > shownCount ? `Showing ${shownCount} of ${totalCount} records.` : `${shownCount} ${shownCount === 1 ? 'record' : 'records'}.`}
-      {' '}View: {renderedViewLabel}.
     </p>
     {block.actions.length > 0 && <div className="mt-4 flex flex-wrap gap-2">{block.actions.map((action) => <span key={action.id}>{renderAction(action)}</span>)}</div>}
   </section>;

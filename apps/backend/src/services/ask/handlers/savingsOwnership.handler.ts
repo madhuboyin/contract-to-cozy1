@@ -161,7 +161,7 @@ async function savingsOpportunitiesResult(userId: string, propertyId: string, me
     id: `related-${item.domain}`,
     title: item.domain === 'PROPERTY_TAX' ? 'Property tax opportunity' : item.domain === 'COVERAGE' ? 'Coverage and premium review' : 'Mortgage refinance review',
     description: item.summary,
-    meta: ['Owned by its dedicated ContractToCozy analysis'],
+    meta: ['Review this estimate separately before deciding'],
     status: 'RELATED',
     href: null,
   }));
@@ -206,8 +206,8 @@ async function savingsOpportunitiesResult(userId: string, propertyId: string, me
             : 'No current savings opportunity is recorded—not the same as zero savings',
     body: realizedFocus
       ? unified.totals.realizedCount === 0
-        ? 'Realized value is counted only from a recorded RECEIVED outcome; estimates and actions in progress are kept separate.'
-        : 'These are recorded RECEIVED outcomes. Verification labels remain visible so homeowner-reported and independently verified values are not conflated.'
+        ? 'Realized value is counted only after a benefit or saving is recorded as received; estimates and actions in progress are kept separate.'
+        : 'These savings or benefits were recorded as received. Verification labels distinguish homeowner-reported values from independently verified ones.'
       : paybackFocus && recurring[0]
         ? `Its ${recurring[0].meta.find((item) => item.startsWith('Estimated payback'))?.toLowerCase() ?? 'payback estimate is available in Savings and Benefits'}. Payback uses modeled switching friction and is not a provider guarantee.`
       : homeSavings.potentialAnnualSavings > 0
@@ -229,7 +229,7 @@ async function savingsOpportunitiesResult(userId: string, propertyId: string, me
     ].filter((section) => section.count > 0);
     blocks.push({
       type: 'GROUPED_LIST', filters: [], id: 'savings-opportunity-groups', title: 'Savings and benefits',
-      description: 'Available estimates are planning signals. Realized value appears only from recorded RECEIVED outcomes.',
+      description: 'Available estimates are planning signals. Realized value appears only after a saving or benefit is recorded as received.',
       sections,
       collection: collectionDescriptor({
         sourceTotal: recurringAll.length + benefits.matches.length + unified.totals.inProgressCount + unified.totals.realizedCount + unified.relatedOpportunities.length,

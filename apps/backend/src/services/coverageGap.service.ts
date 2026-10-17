@@ -6,6 +6,15 @@ import { buildInventoryCoveragePresentation } from './inventoryCoverageState.ser
 const HIGH_VALUE_THRESHOLD_CENTS = 50000;       // $500
 const APPLIANCE_THRESHOLD_CENTS = 25000;        // $250
 
+const TASK_LIKE_INVENTORY_NAME = /\b(?:check|inspection|maintenance|test|tune[ -]?up)\b/i;
+
+/** Keep workflow/task records out of asset coverage and use one materiality rule in both coverage reads. */
+export function isCoverageAssetCandidate(input: { name: string; category: string | null; recordGroup: string; exposureCents: number | null }): boolean {
+  if (TASK_LIKE_INVENTORY_NAME.test(input.name)) return false;
+  const threshold = input.category === 'APPLIANCE' ? APPLIANCE_THRESHOLD_CENTS : HIGH_VALUE_THRESHOLD_CENTS;
+  return input.recordGroup === 'SYSTEMS_STRUCTURE' || (input.exposureCents ?? 0) >= threshold;
+}
+
 export type CoverageGapResult = {
   inventoryItemId: string;
   propertyId: string;
@@ -83,10 +92,12 @@ export async function getCoverageReviewItems(propertyId: string): Promise<Covera
 
   return items.flatMap((item): CoverageReviewItem[] => {
     const presentation = buildInventoryCoveragePresentation(item, responsibilities, today);
-    const threshold = item.category === 'APPLIANCE' ? APPLIANCE_THRESHOLD_CENTS : HIGH_VALUE_THRESHOLD_CENTS;
-    const isMaterialCandidate = presentation.recordGroup === 'SYSTEMS_STRUCTURE'
-      || item.category === 'APPLIANCE'
-      || (presentation.effectiveReplacementCostCents ?? 0) >= threshold;
+    const isMaterialCandidate = isCoverageAssetCandidate({
+      name: presentation.displayName,
+      category: item.category ? String(item.category) : null,
+      recordGroup: presentation.recordGroup,
+      exposureCents: presentation.effectiveReplacementCostCents,
+    });
     if (!isMaterialCandidate || ['NOT_REQUIRED', 'MANAGED_ELSEWHERE'].includes(presentation.coverageState)) return [];
 
     const warrantyDocuments = item.warranty?.documents.length ?? 0;
@@ -185,6 +196,12 @@ export async function detectCoverageGaps(
     }
 
     const exposureCents = presentation.effectiveReplacementCostCents ?? 0;
+    if (!isCoverageAssetCandidate({
+      name: presentation.displayName,
+      category: item.category ? String(item.category) : null,
+      recordGroup: presentation.recordGroup,
+      exposureCents: presentation.effectiveReplacementCostCents,
+    })) continue;
     const threshold = item.category === 'APPLIANCE' ? APPLIANCE_THRESHOLD_CENTS : HIGH_VALUE_THRESHOLD_CENTS;
     if (presentation.coverageState !== 'MISSING' || !presentation.coverageActionable || exposureCents < threshold) continue;
 

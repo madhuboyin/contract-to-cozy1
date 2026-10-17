@@ -323,7 +323,7 @@ export class BreakEvenService {
 
     const notes: string[] = [];
     const dataSources: string[] = [
-      'Internal property profile (address/state/zip)',
+      'Recorded home address and location',
       'Ownership Cost Intelligence versioned snapshot and forecast',
       'AssumptionSet + PreferenceProfile (shared financial assumptions)',
     ];
@@ -387,7 +387,7 @@ export class BreakEvenService {
     }
     if (debtMode === 'ON') {
       dataSources.push('PropertyFinancingProfile + mortgage amortization context');
-      notes.push('Debt-aware modeling is ON using mortgage snapshot/override inputs.');
+      notes.push('Mortgage interest and principal are included using the financing details available for this projection.');
       if (mortgageRate.disclosure) notes.push(mortgageRate.disclosure);
       confidence = bumpConfidence(confidence, 'MEDIUM');
     } else if (canonicalMortgage) {
@@ -411,7 +411,7 @@ export class BreakEvenService {
         if (Number.isFinite(comp.annualizedRate) && comp.annualizedRate !== 0) {
           appreciationRate = comp.annualizedRate;
 
-          dataSources.push('FHFA HPI (repeat-sale) appreciation comps (Phase 3)');
+          dataSources.push('Federal Housing Finance Agency home-price history');
           notes.push(
             `Appreciation rate derived from ${comp.regionLevel} repeat-sale index: ${comp.regionLabel} (as of ${comp.asOf}).`
           );
@@ -431,7 +431,7 @@ export class BreakEvenService {
           // bump confidence according to FHFA match strength
           confidence = bumpConfidence(confidence, comp.confidence);
         } else {
-          notes.push('FHFA comps returned no usable rate for this horizon; using heuristic appreciation.');
+          notes.push('Local home-price history was not sufficient for this time period, so the projection uses a clearly labeled 3.5% planning assumption.');
           appreciationMeta = {
             source: 'HEURISTIC',
             regionLevel: 'STATE',
@@ -440,11 +440,11 @@ export class BreakEvenService {
             annualizedRatePct: Math.round(appreciationRate * 1000) / 10,
             confidence: 'LOW',
             fallbackChain: ['Explicit national planning fallback'],
-            notes: ['FHFA series alignment insufficient; using a 3.5% planning assumption.'],
+            notes: ['Suitable local home-price history was unavailable; using a 3.5% planning assumption.'],
           };
         }
       } catch {
-        notes.push('Using heuristic appreciation rate (FHFA comps unavailable).');
+        notes.push('Home-price history is temporarily unavailable, so the projection uses a clearly labeled 3.5% planning assumption.');
         appreciationMeta = {
           source: 'HEURISTIC',
           regionLevel: 'STATE',
@@ -453,11 +453,11 @@ export class BreakEvenService {
           annualizedRatePct: Math.round(appreciationRate * 1000) / 10,
           confidence: 'LOW',
           fallbackChain: ['Explicit national planning fallback'],
-          notes: ['FHFA dataset unavailable; using a 3.5% planning assumption.'],
+          notes: ['Home-price history was unavailable; using a 3.5% planning assumption.'],
         };
       }
     } else {
-      notes.push('Used client-provided appreciationRate override for projection.');
+      notes.push('Used the appreciation rate you provided for this projection.');
     }
 
     const firstForecast = canonicalForwardExpenses[0] ?? annualExpensesNow;
@@ -517,13 +517,13 @@ export class BreakEvenService {
         : deriveExpenseGrowthRate(financialContext.assumptions);
 
     if (input.expenseGrowthRate !== undefined) {
-      notes.push('Used client-provided expenseGrowthRate override for projection.');
+      notes.push('Used the expense-growth rate you provided for this projection.');
     }
     if (hasFinancialOverrideInput && input.ephemeral) {
       notes.push('What-if assumptions were applied to this projection only; nothing was saved.');
       confidence = bumpConfidence(confidence, 'MEDIUM');
     } else if (hasFinancialOverrideInput) {
-      notes.push('Financial overrides were persisted into a reusable AssumptionSet.');
+      notes.push('These planning assumptions were saved for future projections.');
       confidence = bumpConfidence(confidence, 'MEDIUM');
     }
     if (input.assumptionSetId) {
@@ -649,7 +649,7 @@ export class BreakEvenService {
       drivers.push({
         factor: 'Local pricing environment',
         impact: 'LOW',
-        explanation: `Localized modeling uses state + ZIP prefix ${zp} heuristics for context (Phase 1–2).`,
+        explanation: `The projection uses broad local context for ZIP area ${zp}; it is not a property-specific valuation.`,
       });
     }
 
@@ -658,10 +658,10 @@ export class BreakEvenService {
       impact: 'HIGH',
       explanation:
         input.appreciationRate !== undefined
-          ? 'Using your provided appreciation rate override.'
+          ? 'Uses the appreciation rate you provided for this projection.'
           : appreciationMeta?.source === 'FHFA'
-            ? `Based on FHFA repeat-sale index (${appreciationMeta.regionLevel}): ${appreciationMeta.regionLabel}.`
-            : 'Modeled using localized historical heuristics (Phase 1–2).',
+            ? `Based on Federal Housing Finance Agency home-price history for ${appreciationMeta.regionLabel}.`
+            : 'Uses a 3.5% planning assumption because suitable local home-price history was unavailable.',
     });
     drivers.push({
       factor: debtMode === 'ON' ? 'Debt-aware ownership math' : 'Debt context missing',

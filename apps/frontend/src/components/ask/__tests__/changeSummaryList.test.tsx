@@ -42,6 +42,7 @@ test('renders canonical titles as conversational action cards with exact work-it
   expect(list).toHaveClass('max-w-6xl');
   expect(list.querySelector('.grid')).toHaveClass('lg:grid-cols-3');
   expect(within(list).getAllByText('Home action')).toHaveLength(2);
+  expect(within(list).getAllByText('Home action updated.')).toHaveLength(2);
 
   const firstCard = within(list).getByText('Chimney cleaning and inspection').closest('article');
   expect(firstCard).not.toBeNull();

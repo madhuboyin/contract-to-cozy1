@@ -596,13 +596,9 @@ export async function listEligiblePropertyBriefDocuments(propertyId: string, rol
     .map((document) => ({ id: document.id, name: document.title, type: document.kind, description: document.description, verifiedAt: document.verifiedAt, updatedAt: document.updatedAt, source: document.source }));
 }
 
-// Slice 7's "stale-item review/reminders": a brief is an immutable snapshot
-// taken at asOf (see assembleSections) — there is no republish/refresh
-// mechanism (a separate, still-open item), so an old ACTIVE share may be
-// showing a recipient facts that have since changed underneath it, with no
-// homeowner-facing signal that's happening. 90 days is a real, documented
-// threshold, not a fabricated urgency score — "the underlying data could
-// plausibly have drifted," nothing more precise is knowable from this data.
+// A brief remains an immutable snapshot until the household explicitly
+// republishes it. This age signal prioritizes review of actively shared
+// snapshots; preview performs a separate content diff against current records.
 const STALE_BRIEF_THRESHOLD_DAYS = 90;
 
 export function computeBriefStaleness(asOf: Date, hasActiveShare: boolean, now: Date = new Date()) {
@@ -797,6 +793,33 @@ export async function republishPropertyBrief(input: {
 
   const republished = await findAccessibleBrief(input.propertyId, input.briefId);
   return { changed: true, changedSectionTypes, brief: republished };
+}
+
+/**
+ * Read-only counterpart to republishPropertyBrief. It rebuilds the selected
+ * sections from current canonical records and reports the real content diff
+ * without changing the frozen snapshot.
+ */
+export async function inspectPropertyBriefUpdates(input: {
+  propertyId: string;
+  briefId: string;
+  role: HouseholdRole;
+}) {
+  const existing = await findAccessibleBrief(input.propertyId, input.briefId);
+  const documentIds = existing.sections
+    .find((section) => section.sectionType === PropertyBriefSectionType.DOCUMENTS)
+    ?.evidenceLinks.map((link) => link.documentId)
+    .filter((id): id is string => Boolean(id)) ?? [];
+  const freshSections = await assembleSections({
+    propertyId: input.propertyId,
+    role: input.role,
+    purpose: existing.purpose as PropertyBriefPurposeInput,
+    selectedSections: existing.selectedSections as PropertyBriefSectionInput[],
+    documentIds,
+    asOf: new Date(),
+  });
+  const changedSectionTypes = diffBriefSections(existing.sections, freshSections);
+  return { hasUpdates: changedSectionTypes.length > 0, changedSectionTypes };
 }
 
 // Property-shared, not creator-scoped — see listPropertyBriefs above. The

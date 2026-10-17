@@ -63,7 +63,8 @@ describe('Home Action shelves', () => {
       <BlockView block={priority} executionId="e" propertyId="home" onItemAction={onItemAction} itemActionsDisabled={false} onFilterClick={() => undefined} onCollectionPage={() => undefined} onAccessLost={() => undefined} />
     </CalmAnswerContext.Provider></CalmChromeContext.Provider>);
     expect(screen.queryByRole('link', { name: 'Open Maintenance' })).toBeNull();
-    expect(screen.getByText('Ranked here because: higher urgency.')).toBeInTheDocument();
+    expect(screen.getByText('Needs attention sooner')).toBeInTheDocument();
+    expect(screen.queryByText(/Ranked here because|stable tie break/i)).not.toBeInTheDocument();
     expect(screen.getByText(/Unavailable · Stale · high confidence/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Review in Ask' }));
     expect(onItemAction).toHaveBeenCalledWith('HOME_ACTION', 'a1', 'What should I do next for “Replace the HVAC filter”?', 'HOME_ACTIONS', 'CONVERSATION_CONTINUE', undefined, 'a1');

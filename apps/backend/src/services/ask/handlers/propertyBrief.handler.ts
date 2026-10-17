@@ -3,11 +3,13 @@
 // re-exports the names below so existing imports keep working.
 import { type AskPresentationBlock } from '../../../productFramework/ask/ask.contract';
 import { type AskOperationResult } from '../askOperationRegistry';
+import { HouseholdRole } from '@prisma/client';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { humanDate, readableCode } from '../askFormatting';
-import { computeBriefStaleness, getPropertyBriefPreview, listPropertyBriefs } from '../../../propertyBrief/propertyBrief.service';
+import { computeBriefStaleness, getPropertyBriefPreview, inspectPropertyBriefUpdates, listPropertyBriefs } from '../../../propertyBrief/propertyBrief.service';
 import { PROPERTY_BRIEF_TEMPLATES } from '../../../propertyBrief/propertyBrief.contracts';
 import { PROPERTY_BRIEF_ACTION_IDS, PROPERTY_BRIEF_COMMAND_MESSAGE } from '../support/propertyBriefConstants';
+import { ensurePropertyAccess } from '../askHandlerSupport';
 
 // Property Brief capability-card slice (FRD v1.63): the fifteenth new operation for a capability with none. Reads
 // listPropertyBriefs -- the call GET /properties/:id/property-briefs makes for the Property Brief page: every
@@ -104,23 +106,71 @@ export function propertyBriefsFromView(briefs: readonly PropertyBriefListView[],
   };
 }
 
-function printable(value: unknown): string {
+const ACRONYMS = new Set(['ac', 'hoa', 'hvac', 'id', 'nj', 'sku', 'url']);
+const PROVENANCE_LABELS: Record<string, string> = {
+  USER_REPORTED: 'Self-reported', HOMEOWNER_RECORDED: 'Homeowner recorded',
+  CANONICAL_PROPERTY_RECORD: 'Home record', VERIFIED: 'Verified',
+  EVIDENCE_VERIFIED: 'Evidence verified', HOMEOWNER_CONFIRMED: 'Homeowner confirmed',
+  UNKNOWN_OR_NOT_RECORDED: 'Unknown or not recorded', KNOWN_NOT_VERIFIED: 'Recorded, not yet verified',
+};
+
+function briefWords(value: unknown): string {
   if (value === null || value === undefined || value === '') return 'Not recorded';
-  if (Array.isArray(value)) return value.map(printable).join(', ');
+  if (Array.isArray(value)) return value.map(briefWords).join(', ');
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
   if (typeof value === 'object') return JSON.stringify(value);
-  return readableCode(String(value));
+  const raw = String(value).trim();
+  if (PROVENANCE_LABELS[raw]) return PROVENANCE_LABELS[raw];
+  if (/^(?:https?:\/\/|mailto:)/i.test(raw) || raw.includes('@')) return raw;
+  const words = raw.replace(/_/g, ' ').split(/\s+/);
+  if (!raw.includes('_') && (raw !== raw.toLowerCase() || words.length > 4)) return raw;
+  return words.map((word) => {
+    const lower = word.toLowerCase();
+    return ACRONYMS.has(lower) ? lower.toUpperCase() : `${lower.charAt(0).toUpperCase()}${lower.slice(1)}`;
+  }).join(' ');
 }
 
-async function previewResult(propertyId: string, userId: string, briefId: string, canManage: boolean): Promise<AskOperationResult> {
+function briefFieldLabel(key: string): string {
+  return key.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/_/g, ' ').toLowerCase().replace(/^./, (letter) => letter.toUpperCase());
+}
+
+export function propertyBriefPreviewRow(item: Record<string, unknown>, fallbackId: string, proof?: { sourceLabel?: string | null; sourceAsOf?: Date | string | null; verification?: string | null }, sectionAsOf?: Date | string) {
+  const label = typeof item.label === 'string' ? item.label : null;
+  const primaryKey = ['title', 'name', 'providerName', 'carrierName', 'permitNumber', 'sectionTitle'].find((key) => item[key] != null);
+  const primaryValue = primaryKey ? briefWords(item[primaryKey]) : null;
+  const value = item.value != null ? briefWords(item.value) : null;
+  const state = item.state != null ? briefWords(item.state) : null;
+  const title = label
+    ? `${briefWords(label)}: ${value ?? state ?? 'Not recorded'}`
+    : primaryValue ?? value ?? state ?? 'Recorded item';
+  const excluded = new Set(['key', 'asOf', 'source', 'verification', 'label', 'value', 'state', primaryKey].filter(Boolean));
+  const details = Object.entries(item)
+    .filter(([key, fieldValue]) => !excluded.has(key) && fieldValue != null && fieldValue !== '')
+    .map(([key, fieldValue]) => `${briefFieldLabel(key)}: ${briefWords(fieldValue)}`);
+  const source = proof?.sourceLabel
+    ? proof.sourceLabel.replace(/^Verified property fact evidence:\s*/i, '').replace(/^Canonical property record gap$/i, 'Home record')
+    : briefWords(item.source);
+  const verification = briefWords(proof?.verification ?? item.verification);
+  const observedAt = proof?.sourceAsOf ?? item.asOf ?? sectionAsOf;
+  const observedDate = observedAt instanceof Date || typeof observedAt === 'string' ? new Date(observedAt) : null;
+  return {
+    id: String(item.key ?? fallbackId), title,
+    description: details.join(' · ') || null,
+    meta: [source && source !== 'Not recorded' ? `Source: ${briefWords(source)}` : null, observedDate && !Number.isNaN(observedDate.getTime()) ? `As of ${humanDate(observedDate)}` : null, verification !== 'Not recorded' ? verification : null].filter((entry): entry is string => Boolean(entry)),
+  };
+}
+
+async function previewResult(propertyId: string, userId: string, briefId: string, role: HouseholdRole): Promise<AskOperationResult> {
   const preview = await getPropertyBriefPreview(propertyId, userId, briefId);
+  const canManage = role !== HouseholdRole.VIEWER;
+  const updateStatus = await inspectPropertyBriefUpdates({ propertyId, briefId, role });
   const sections = preview.sections.map((section) => {
     const payload = section.payload && typeof section.payload === 'object' && !Array.isArray(section.payload) ? section.payload as Record<string, unknown> : {};
     const evidence = new Map(section.evidenceLinks.map((link) => [link.itemKey, link]));
     const rows = (Array.isArray(payload.items) ? payload.items : []).map((raw, index) => {
       const item: Record<string, unknown> = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw as Record<string, unknown> : { value: raw };
       const proof = evidence.get(String(item.key ?? ''));
-      const details = Object.entries(item).filter(([key, value]) => !['key', 'asOf', 'source', 'verification'].includes(key) && value != null).map(([key, value]) => `${readableCode(key)}: ${printable(value)}`);
-      return { id: String(item.key ?? `${section.id}-${index}`), title: details[0] ?? 'Recorded item', description: details.slice(1).join(' · ') || null, meta: [`Source: ${proof?.sourceLabel ?? printable(item.source)}`, `As of ${humanDate(new Date(proof?.sourceAsOf ?? String(item.asOf ?? section.asOf)))}`, printable(proof?.verification ?? item.verification)], status: section.sensitive ? 'SENSITIVE' : 'INCLUDED' };
+      return { ...propertyBriefPreviewRow(item, `${section.id}-${index}`, proof, section.asOf), status: section.sensitive ? 'Sensitive' : 'Included' };
     });
     return { id: section.id, title: section.title, count: rows.length, items: rows.length ? rows : [{ id: `${section.id}-empty`, title: 'No eligible records were included', description: null, meta: [`As of ${humanDate(new Date(section.asOf))}`], status: 'EMPTY' }] };
   });
@@ -128,26 +178,29 @@ async function previewResult(propertyId: string, userId: string, briefId: string
   const forBrief = (action: ReturnType<typeof commandAction>) => ({ ...action, interactionType: 'START_WORKFLOW' as const, entityType: 'PROPERTY_BRIEF', entityId: preview.id });
   const actions = canManage ? [
     forBrief(commandAction(PROPERTY_BRIEF_ACTION_IDS.SHARE, 'Create controlled share link', 'PRIMARY')),
-    ...(liveShares.length ? [forBrief(commandAction(PROPERTY_BRIEF_ACTION_IDS.REPUBLISH, 'Check for updates'))] : []),
+    ...(updateStatus.hasUpdates ? [forBrief(commandAction(PROPERTY_BRIEF_ACTION_IDS.REPUBLISH, 'Refresh with current records'))] : []),
   ] : [];
   const shareRows = preview.shares.map((share) => {
     const isLive = share.status === 'ACTIVE' && new Date(share.expiresAt).getTime() > Date.now();
     return { id: `${preview.id}:${share.id}`, title: `${isLive ? 'Live' : readableCode(share.status)} controlled link`, description: `Expires ${humanDate(new Date(share.expiresAt))}`, meta: [`${share.accessCount} recipient access${share.accessCount === 1 ? '' : 'es'}`, share.lastTestedAt ? `Last tested ${humanDate(new Date(share.lastTestedAt))}` : 'Not tested yet', share.recipientEmail ? (share.invitationStatus === 'ACCEPTED' ? 'Invited recipient opened it' : 'Invited recipient has not opened it') : 'Copyable link'], status: isLive ? 'ACTIVE' : share.status, entityType: 'PROPERTY_BRIEF_SHARE', actions: canManage && isLive ? [commandAction(PROPERTY_BRIEF_ACTION_IDS.TEST_SHARE, 'Test access'), commandAction(PROPERTY_BRIEF_ACTION_IDS.REVOKE_SHARE, 'Revoke', 'QUIET')] : [] };
   });
   return { status: 'ANSWERED', reasonCode: 'PROPERTY_BRIEF_PREVIEW_READY', parameters: { propertyBriefId: preview.id }, blocks: [
-    { type: 'SUMMARY', id: 'property-brief-preview-summary', title: preview.title, body: `${PROPERTY_BRIEF_TEMPLATES[preview.purpose]?.label ?? readableCode(preview.purpose)} · frozen snapshot of ${humanDate(new Date(preview.asOf))}. Explicitly excluded: ${preview.excludedSections.length ? preview.excludedSections.map(readableCode).join(', ') : 'none'}.`, tone: 'DEFAULT', actions },
+    { type: 'SUMMARY', id: 'property-brief-preview-summary', title: preview.title, body: `${PROPERTY_BRIEF_TEMPLATES[preview.purpose]?.label ?? readableCode(preview.purpose)} · frozen snapshot of ${humanDate(new Date(preview.asOf))}. ${updateStatus.hasUpdates ? `Your home records have changed since this snapshot (${updateStatus.changedSectionTypes.map(readableCode).join(', ')}).` : 'The selected records still match this snapshot.'} Explicitly excluded: ${preview.excludedSections.length ? preview.excludedSections.map(readableCode).join(', ') : 'none'}.`, tone: updateStatus.hasUpdates ? 'CAUTION' : 'DEFAULT', actions },
     { type: 'GROUPED_LIST', filters: [], id: 'property-brief-preview-sections', title: 'Exact recipient preview', description: 'Every item preserves its recorded source, verification state and as-of date.', sections, actions: [] },
     ...(shareRows.length ? [{ type: 'GROUPED_LIST' as const, filters: [], id: 'property-brief-preview-shares', title: 'Controlled links', description: 'Recipient names and email addresses are intentionally omitted from the conversation transcript.', sections: [{ id: 'property-brief-share-history', title: 'Share history', count: shareRows.length, items: shareRows }], actions: [] }] : []),
     { type: 'BOUNDARY', id: 'property-briefs-boundary', title: 'A homeowner-assembled snapshot, not a disclosure', body: preview.limitationStatement, severity: 'INFO', suggestions: [] },
   ], suggestions: [] };
 }
 
-async function propertyBriefsResult(userId: string, propertyId: string, launch: { entityType?: string | null; entityId?: string | null } | null | undefined): Promise<AskOperationResult> {
+async function propertyBriefsResult(userId: string, propertyId: string, launch: { entityType?: string | null; entityId?: string | null } | null | undefined, role: HouseholdRole): Promise<AskOperationResult> {
   // The operation registry enforces the viewer floor for this read. Mutation actions
   // enforce CONTRIBUTOR again in PROPERTY_BRIEF_COMMAND before showing a form or confirmation.
-  const canManage = true;
-  if (launch?.entityType === 'PROPERTY_BRIEF' && launch.entityId) return previewResult(propertyId, userId, launch.entityId, canManage);
+  const canManage = role !== HouseholdRole.VIEWER;
+  if (launch?.entityType === 'PROPERTY_BRIEF' && launch.entityId) return previewResult(propertyId, userId, launch.entityId, role);
   return propertyBriefsFromView(await listPropertyBriefs(propertyId), propertyId, new Date(), canManage);
 }
 
-registerCapabilityHandler('property-brief.briefs', async (envelope) => propertyBriefsResult(envelope.userId, envelope.propertyId!, envelope.launchContext));
+registerCapabilityHandler('property-brief.briefs', async (envelope, deps) => {
+  const access = deps.propertyAccess ?? await ensurePropertyAccess(envelope.userId, envelope.propertyId!);
+  return propertyBriefsResult(envelope.userId, envelope.propertyId!, envelope.launchContext, access.role);
+});

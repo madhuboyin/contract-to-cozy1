@@ -50,7 +50,8 @@ test('view choice changes locally, preserves semantics and persists for the resu
   fireEvent.click(screen.getByRole('button', { name: 'Cards' }));
   expect(screen.queryByRole('table')).not.toBeInTheDocument();
   expect(screen.getAllByText('Annual amount').length).toBe(2);
-  expect(screen.getByText('Showing 2 of 4 records. View: cards.')).toBeInTheDocument();
+  expect(screen.getByText('Showing 2 of 4 records.')).toBeInTheDocument();
+  expect(screen.queryByText(/View:/)).not.toBeInTheDocument();
   expect(screen.getByRole('link', { name: 'Open ownership costs' })).toHaveAttribute('href', '/dashboard/ownership-costs');
   expect(readResultView(window.sessionStorage, resultViewKey('adaptive-session', 'home', 'adaptive-result')).presentationModes['cost-table']).toBe('CARDS');
 
@@ -70,7 +71,7 @@ test('a single record uses labeled cards without presenting a meaningless view s
   expect(screen.queryByRole('group', { name: 'View Ownership costs' })).not.toBeInTheDocument();
   expect(screen.queryByRole('table')).not.toBeInTheDocument();
   expect(container.querySelector('[data-table-presentation="cards"]')).toBeInTheDocument();
-  expect(screen.getByText('1 record. View: cards.')).toBeInTheDocument();
+  expect(screen.getByText('1 record.')).toBeInTheDocument();
 });
 
 test('a producer can prefer a table for a single record without enabling a meaningless switch', () => {
@@ -79,5 +80,5 @@ test('a producer can prefer a table for a single record without enabling a meani
   expect(screen.queryByRole('group', { name: 'View Ownership costs' })).not.toBeInTheDocument();
   expect(screen.getByRole('table', { name: 'Ownership costs' })).toBeInTheDocument();
   expect(container.querySelector('[data-table-presentation="cards"]')).not.toBeInTheDocument();
-  expect(screen.getByText('1 record. View: table.')).toBeInTheDocument();
+  expect(screen.getByText('1 record.')).toBeInTheDocument();
 });

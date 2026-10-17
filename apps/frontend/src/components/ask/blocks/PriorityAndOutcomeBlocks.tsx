@@ -9,6 +9,21 @@ import { useCalmAnswer } from './calmContext';
 import type { AskBlockRenderer } from './types';
 import { CompactAskCard } from '../CompactAskCard';
 
+const PRIORITY_REASON_TEXT: Record<string, string> = {
+  SAFETY_FLOOR: 'Safety comes first',
+  HIGHER_CONSEQUENCE: 'More important if left unresolved',
+  HIGHER_URGENCY: 'Needs attention sooner',
+  HIGHER_CONFIDENCE: 'Supported more strongly by your home record',
+  HIGHER_HOUSEHOLD_RELEVANCE: 'More relevant to your household',
+  MORE_ACTIONABLE: 'Ready for you to act on',
+  FEWER_MISSING_CONTEXT_ITEMS: 'Based on more complete home details',
+};
+
+function priorityReason(codes: string[]): string | null {
+  const reasons = codes.map((code) => PRIORITY_REASON_TEXT[code]).filter((reason): reason is string => Boolean(reason));
+  return reasons.length ? reasons.join(' · ') : null;
+}
+
 // Ask Intelligence FRD §22.1/Phase 9B "usefulness feedback" deliverable —
 // per-PRIORITY_LIST-item rating, distinct from ExecutionFeedback's
 // whole-response UP/DOWN thumbs.
@@ -46,7 +61,6 @@ export const PriorityListBlock: AskBlockRenderer<'PRIORITY_LIST'> = ({ block, ex
     <section className={calm ? 'space-y-3' : 'rounded-2xl border border-slate-200 bg-white p-4'} data-calm-home-actions={calm ? '' : undefined}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className={calm ? 'sr-only' : 'font-semibold text-slate-950'}>{block.title}</h3>
-        {!calm && <span className="text-xs text-slate-500">Ranking policy {block.rankingPolicyVersion}</span>}
       </div>
       {block.items.length === 0 ? (
         <p className="mt-2 text-sm text-slate-600">No ranked item is currently available on this channel. This does not mean the home needs no attention — it means the governed feed has nothing eligible to show right now.</p>
@@ -59,7 +73,7 @@ export const PriorityListBlock: AskBlockRenderer<'PRIORITY_LIST'> = ({ block, ex
               item.completed && 'Completed',
               item.suppressed && 'Suppressed',
             ].filter((label): label is string => Boolean(label));
-            const reason = item.comparativeReasonCodes.map((code) => code.replace(/_/g, ' ').toLowerCase()).join(', ');
+            const reason = priorityReason(item.comparativeReasonCodes);
             const compactMeta = [
               ...lifecycle,
               item.confidenceLabel ? `${item.confidenceLabel.toLowerCase()} confidence` : null,
@@ -73,7 +87,7 @@ export const PriorityListBlock: AskBlockRenderer<'PRIORITY_LIST'> = ({ block, ex
                 fallbackIcon={ClipboardCheck}
                 tone={item.consumerPriority === 'DO_NOW' ? 'CRITICAL' : item.consumerPriority === 'PLAN_SOON' ? 'CAUTION' : item.consumerPriority === 'NO_ACTION' ? 'POSITIVE' : 'DEFAULT'}
                 badge={<span className={cn('rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-wide', categoryBadge[item.consumerPriority])}>{categoryLabel[item.consumerPriority]}</span>}
-                summary={reason ? <>Ranked here because: {reason}.</> : item.watchState ?? undefined}
+                summary={reason ?? item.watchState ?? undefined}
                 meta={compactMeta || undefined}
                 action={item.inlineLaunch ? <button type="button" disabled={itemActionsDisabled} onClick={() => onItemAction('HOME_ACTION', item.homeActionId, item.inlineLaunch!.message, item.inlineLaunch!.operationId, item.inlineLaunch!.interactionType, undefined, item.homeActionId)} className="min-h-10 rounded-lg bg-teal-700 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50">Review in Ask</button> : item.cta ? <ActionLink action={item.cta} /> : item.watchState && <p className="text-sm text-slate-700">{item.watchState}</p>}
                 secondary={<HomeActionUsefulnessButtons executionId={executionId} homeActionId={item.homeActionId} />}
@@ -87,9 +101,7 @@ export const PriorityListBlock: AskBlockRenderer<'PRIORITY_LIST'> = ({ block, ex
                 {item.unavailable && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-600">Unavailable</span>}
                 {item.stale && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-600">Stale</span>}
               </div>
-              {item.comparativeReasonCodes.length > 0 && (
-                <p className="mt-2 text-xs text-slate-600">Ranked here because: {item.comparativeReasonCodes.map((code) => code.replace(/_/g, ' ').toLowerCase()).join(', ')}.</p>
-              )}
+              {reason && <p className="mt-2 text-xs text-slate-600">{reason}.</p>}
               <p className="mt-1 text-xs text-slate-500">
                 {item.confidenceLabel.toLowerCase()} confidence
                 {item.deadlineAt && ` · Due ${new Date(item.deadlineAt).toLocaleDateString()}`}
