@@ -6,6 +6,7 @@ import { reconcileAskExecutionSideEffects } from '../execution/executeOperation'
 import { HomeDigitalWillService } from '../../homeDigitalWill.service';
 
 const CREATE_MESSAGE = 'Create my home continuity plan';
+const PUBLISH_MESSAGE = 'Publish my home continuity plan';
 const sha = (value: string) => createHash('sha256').update(value).digest('hex');
 
 export async function homeDigitalWillCreateResult(propertyId: string): Promise<AskOperationResult> {
@@ -33,7 +34,16 @@ export async function homeDigitalWillCreateResult(propertyId: string): Promise<A
   };
 }
 
+async function homeDigitalWillPublishResult(propertyId: string, planId: string | null): Promise<AskOperationResult> {
+  const plan = await new HomeDigitalWillService().getByProperty(propertyId);
+  if (!plan || !planId || plan.id !== planId) return { status: 'NOT_APPLICABLE', reasonCode: 'HOME_DIGITAL_WILL_NOT_FOUND', blocks: [{ type: 'SUMMARY', id: 'home-digital-will-publish-missing', title: 'That plan is no longer available', body: 'Nothing was published.', tone: 'CAUTION', actions: [] }], suggestions: [] };
+  if (plan.status === 'ACTIVE') return { status: 'ANSWERED', reasonCode: 'HOME_DIGITAL_WILL_ALREADY_PUBLISHED', blocks: [{ type: 'SUMMARY', id: 'home-digital-will-publish-existing', title: 'This plan is already marked ready', body: 'Nothing changed.', tone: 'DEFAULT', actions: [] }], suggestions: [] };
+  const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+  return { status: 'NEEDS_CONFIRMATION', reasonCode: 'HOME_DIGITAL_WILL_PUBLISH_CONFIRMATION_REQUIRED', parameters: { homeDigitalWillPublish: { planId }, confirmationVersion: 1, confirmationExpiresAt: expiresAt }, blocks: [{ type: 'SUMMARY', id: 'home-digital-will-publish-review', title: 'Mark this plan ready', body: 'This records the plan as published and reviewed. It does not invite contacts or grant access.', tone: 'DEFAULT', actions: [] }], confirmation: { confirmationId: `home-digital-will-publish-${sha(`${propertyId}:${planId}:${plan.updatedAt.toISOString()}`).slice(0, 12)}-1`, version: 1, title: 'Mark this Home Continuity Plan ready?', description: 'The readiness checks currently pass. Publishing sets the plan to active and records today as its review date.', fields: [{ label: 'Plan', value: plan.title }, { label: 'Entries', value: String(plan.counts.entryCount) }, { label: 'Trusted contacts', value: String(plan.counts.trustedContactCount) }], editableFields: [], confirmLabel: 'Mark plan ready', consentText: 'I authorize publishing this Home Continuity Plan in the shared home record.', expiresAt }, suggestions: [] };
+}
+
 registerCapabilityHandler('home-digital-will.create', async (envelope) => {
+  if (envelope.launchContext?.operationId === 'HOME_DIGITAL_WILL_CREATE' && envelope.launchContext.surface !== 'ASK_REFRESH' && envelope.message === PUBLISH_MESSAGE && envelope.launchContext.entityType === 'HOME_DIGITAL_WILL_PUBLISH') return homeDigitalWillPublishResult(envelope.propertyId!, envelope.launchContext.entityId ?? null);
   const declared = envelope.launchContext?.operationId === 'HOME_DIGITAL_WILL_CREATE'
     && envelope.launchContext.surface !== 'ASK_REFRESH' && envelope.message === CREATE_MESSAGE;
   if (!declared) return { status: 'NOT_APPLICABLE', reasonCode: 'HOME_DIGITAL_WILL_CREATE_NOT_DECLARED', blocks: [{ type: 'SUMMARY', id: 'home-digital-will-create-not-declared', title: 'Start from Create my plan', body: 'Nothing was created or changed.', tone: 'DEFAULT', actions: [] }], suggestions: [] };
@@ -41,6 +51,17 @@ registerCapabilityHandler('home-digital-will.create', async (envelope) => {
 });
 
 async function confirmHomeDigitalWillCreate(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
+  const publish = ctx.parameters.homeDigitalWillPublish as { planId?: unknown } | undefined;
+  if (publish) {
+    if (typeof publish.planId !== 'string') throw Object.assign(new Error('This publication is no longer active.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+    const service = new HomeDigitalWillService();
+    const current = await service.getByProperty(ctx.execution.propertyId);
+    if (!current || current.id !== publish.planId) throw Object.assign(new Error('That plan is no longer available.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+    const plan = current.status === 'ACTIVE' ? current : await service.publishWill(current.id, ctx.userId);
+    const result: AskOperationResult = { status: 'COMPLETED', reasonCode: current.status === 'ACTIVE' ? 'HOME_DIGITAL_WILL_ALREADY_PUBLISHED' : 'HOME_DIGITAL_WILL_PUBLISHED', blocks: [{ type: 'WORKFLOW_PROGRESS', id: `home-digital-will-published-${plan.id}`, title: current.status === 'ACTIVE' ? 'Plan already marked ready' : 'Home Continuity Plan marked ready', status: 'COMPLETED', description: 'The plan is active and its review date is recorded. No invitations were sent.', details: [{ label: 'Status', value: 'Ready' }], actions: [{ id: 'home-digital-will-review', label: 'Review my plan', interactionType: 'START_WORKFLOW', message: 'Show my home continuity plan', operationId: 'HOME_DIGITAL_WILL', style: 'PRIMARY' }] }], suggestions: [] };
+    const refresh = await reconcileAskExecutionSideEffects(ctx.userId, ctx.execution, ctx.parameters);
+    return { result, artifactType: 'HOME_DIGITAL_WILL', artifactId: plan.id, refreshedExecutions: refresh.refreshedExecutions };
+  }
   if (ctx.parameters.homeDigitalWillCreate !== true) throw Object.assign(new Error('This plan creation is no longer active.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
   const service = new HomeDigitalWillService();
   const existing = await service.getByProperty(ctx.execution.propertyId);

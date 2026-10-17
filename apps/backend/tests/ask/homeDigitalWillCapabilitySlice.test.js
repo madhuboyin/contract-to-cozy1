@@ -87,7 +87,7 @@ test('the plan is summarized with readiness, counts, handoff gaps, entry titles 
   assert.deepEqual(list.sections.map((section) => [section.title, section.items.map((row) => row.title)]), [['Emergency Instructions', ['Water shutoff', 'Getting in']]]);
   assert.deepEqual(list.sections[0].items[0].meta, ['location note', 'critical priority', 'Emergency']);
   assert.equal(list.sections[0].items[0].href, null, 'no row links to a desktop page');
-  assert.deepEqual(result.blocks[0].actions, []);
+  assert.deepEqual(result.blocks[0].actions.map((action) => action.label), ['Download emergency packet']);
   assert.equal(JSON.stringify(result).includes('/dashboard/'), false);
   const withContact = digitalWillFromView(will(), 'p1').blocks.find((block) => block.id === 'digital-will-items').sections.at(-1);
   assert.deepEqual(withContact.items.map((row) => [row.title, row.meta]), [['Jordan Lee', ['family member', 'emergency only access', 'Primary']]]);
@@ -109,7 +109,7 @@ test('every block and the boundary survive the answer-trust validator, and nothi
   const result = { ...raw, parameters: { answerTrustEvidence: { schemaVersion: '1.0', sources: [{ sourceId: 'home-digital-will.read', operationId: 'HOME_DIGITAL_WILL', status: 'COMPLETE', scope: 'FULL', freshness: 'CURRENT', observedAt: '2026-09-23T00:00:00.000Z' }] } } };
   const { result: validated } = validateAskAnswerTrust({ question: 'Show my home continuity plan', operationId: 'HOME_DIGITAL_WILL', result, propertyId: 'p1' });
   assert.deepEqual(validated.blocks.map((block) => block.id), result.blocks.map((block) => block.id));
-  assert.deepEqual(result.blocks[0].actions, []);
+  assert.deepEqual(result.blocks[0].actions.map((action) => action.label), ['Mark plan ready', 'Download emergency packet']);
   assert.equal(JSON.stringify(result).includes('/dashboard/'), false);
 });
 

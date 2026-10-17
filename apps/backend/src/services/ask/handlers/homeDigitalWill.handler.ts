@@ -67,6 +67,10 @@ export function digitalWillFromView(will: DigitalWillView, propertyId: string): 
     };
   }
   const handoff = evaluateHomeDigitalWillHandoffReadiness(will);
+  const planActions = [
+    ...(will.status !== 'ACTIVE' && handoff.state === 'READY' ? [{ id: 'home-continuity-publish', label: 'Mark plan ready', interactionType: 'START_WORKFLOW' as const, message: 'Publish my home continuity plan', operationId: 'HOME_DIGITAL_WILL_CREATE' as const, entityType: 'HOME_DIGITAL_WILL_PUBLISH', entityId: will.id, style: 'PRIMARY' as const }] : []),
+    { id: 'home-continuity-packet', label: 'Download emergency packet', href: `/api/properties/${propertyId}/home-digital-will/emergency-packet.pdf`, style: 'SECONDARY' as const },
+  ];
   const enabled = will.sections.filter((section) => section.isEnabled);
   const entryCount = enabled.reduce((sum, section) => sum + section.entries.length, 0);
   const blocks: AskPresentationBlock[] = [{
@@ -77,7 +81,7 @@ export function digitalWillFromView(will: DigitalWillView, propertyId: string): 
       will.lastReviewedAt ? `Last reviewed ${humanDate(new Date(will.lastReviewedAt))}.` : 'Not reviewed yet.',
     ].join(' '),
     tone: handoff.state === 'READY' ? 'DEFAULT' : 'CAUTION',
-    actions: [],
+    actions: planActions,
   }];
   // IW-PRES-020 (FRD v1.94): the handoff requirements as a ring, ahead of the not-ready note and the plan's sections.
   blocks.push(digitalWillHandoffProgress(handoff.missingRequirements, entryCount));
