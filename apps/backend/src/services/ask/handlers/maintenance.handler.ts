@@ -657,16 +657,19 @@ export async function maintenanceTaskUpdateResult(userId: string, propertyId: st
   const match = typedTarget.kind === 'TARGET' ? typedTarget.row
     : (launchTaskId ? tasks.find((task) => task.id === launchTaskId) ?? null : null) ?? maintenanceCompletionMatch(subject, tasks);
   if (!match) {
+    const taskSections = [{ id: 'tasks', title: 'Maintenance tasks', count: tasks.length, items: tasks.slice(0, 20).map((task) => ({
+      id: task.id, title: task.title, description: task.nextDueDate ? `Due ${humanDate(task.nextDueDate)}` : 'No due date',
+      meta: [task.priority, task.status], status: task.status, href: null,
+    })) }];
     return {
       status: 'NEEDS_ENTITY', reasonCode: 'MAINTENANCE_TASK_SELECTION_REQUIRED',
       ...durableFreeTextClarification('MAINTENANCE_TASK_UPDATE', 'Which maintenance task should Ask update? Use its exact title.'),
       blocks: [{
         type: 'GROUPED_LIST', filters: [], id: 'maintenance-update-options', title: 'Choose the task to change',
         description: 'Ask found more than one possible task. Use its exact title in your next message; nothing has changed.',
-        sections: [{ id: 'tasks', title: 'Maintenance tasks', count: tasks.length, items: tasks.slice(0, 20).map((task) => ({
-          id: task.id, title: task.title, description: task.nextDueDate ? `Due ${humanDate(task.nextDueDate)}` : 'No due date',
-          meta: [task.priority, task.status], status: task.status, href: null,
-        })) }], actions: [],
+        sections: taskSections,
+        collection: collectionDescriptor({ sourceTotal: tasks.length, fetchedCount: tasks.length, sections: taskSections, nextPageAvailable: false }),
+        actions: [],
       }], suggestions: [],
     };
   }

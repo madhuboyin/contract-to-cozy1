@@ -111,6 +111,17 @@ test('maintenance: a row button (no registered outcome) keeps the existing resol
   });
 });
 
+test('maintenance: an unresolved update declares the complete task collection and its bounded delivery', async () => {
+  const tasks = Array.from({ length: 24 }, (_, index) => task(`task-${index + 1}`, `Task ${index + 1}`, { status: 'PENDING' }));
+  await withTasks(tasks, async () => {
+    const result = await maintenanceTaskUpdateResult('u1', 'prop-1', 'Change a maintenance task that is not here.');
+    const list = result.blocks.find((block) => block.id === 'maintenance-update-options');
+    assert.equal(result.reasonCode, 'MAINTENANCE_TASK_SELECTION_REQUIRED');
+    assert.equal(list.sections[0].items.length, 20);
+    assert.deepEqual(list.collection, { sourceTotal: 24, fetchedCount: 24, deliveredCount: 20, nextPageAvailable: false, deliveryTruncated: true });
+  });
+});
+
 // ---- add an item to a room -------------------------------------------------------------------------------------------------
 
 const addToRoom = (launchContext) => capabilityInvoke('INVENTORY_ITEM_CREATE', { userId: 'u1', propertyId: 'prop-1', message: INVENTORY_ADD_MESSAGE, launchContext });

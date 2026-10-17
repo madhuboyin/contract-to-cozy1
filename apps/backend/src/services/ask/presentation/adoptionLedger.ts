@@ -107,6 +107,8 @@ export const REVIEWED_OPERATIONS: Readonly<Record<string, string>> = {
   DIY_TEMPLATE_BROWSE: 'reviewed, eligible and applicable templates are evaluated as a complete source set before bounded delivery, with no unsupported continuation',
   GUIDANCE_JOURNEYS_LIST: 'the fully surfaced, protection-reconciled journey set declares exact source, fetched and delivered totals by urgency',
   GUIDANCE_JOURNEY_CONTINUE: 'one journey’s complete live step set declares exact source, fetched and delivered totals by status',
+  APPLIANCE_FAILURE_RISK: 'the lifespan collection declares the complete analysed-plus-missing appliance total and honest bounded delivery without unsupported continuation',
+  MAINTENANCE_TASK_UPDATE: 'the ambiguous-target command declares the complete task total and bounded selection rows without unsupported continuation',
 };
 
 const LIST_BLOCKS = ['GROUPED_LIST', 'TABLE', 'TIMELINE', 'PRIORITY_LIST'];

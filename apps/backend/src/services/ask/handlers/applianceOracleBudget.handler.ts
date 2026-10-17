@@ -70,17 +70,28 @@ export function applianceFailureRiskFromView(report: OracleReportView | 'PRIMARY
   const skippedBlock: AskPresentationBlock | null = skipped && missing.length < skipped
     ? { type: 'LIMITATION', id: 'appliance-oracle-skipped', title: `${skipped} appliance${skipped === 1 ? '' : 's'} left out`, body: `${skipped === 1 ? 'It has' : 'They have'} no purchase date recorded, so no failure risk can be worked out. Add the purchase date in the inventory to include ${skipped === 1 ? 'it' : 'them'}.`, severity: 'INFO' }
     : null;
-  const lifespan = (items: OracleReportView['predictions']): AskPresentationBlock => ({
+  const lifespan = (items: OracleReportView['predictions']): AskPresentationBlock => {
+    const shownPredictions = items.slice(0, 50);
+    const shownMissing = missing.slice(0, 20);
+    const sections = [{ items: shownPredictions }, { items: shownMissing }];
+    return ({
     type: 'LIFESPAN', id: 'appliance-oracle-items', title: 'Appliance lifespans',
     description: 'Each bar shows the appliance\'s age against its typical life. The label is the Appliance Oracle\'s own failure-risk level.',
     basis: 'An estimate from each appliance\'s purchase date and a typical lifespan for its type, not an inspection.',
-    items: items.slice(0, 50).map((prediction, index) => oracleLifespanItem(prediction, index)),
-    missingAge: missing.slice(0, 20).map((item) => ({
+    items: shownPredictions.map((prediction, index) => oracleLifespanItem(prediction, index)),
+    missingAge: shownMissing.map((item) => ({
       id: item.inventoryItemId, label: oracleApplianceLabel(item.applianceName), entityType: 'INVENTORY_ITEM',
       actions: [{ id: 'correct-purchasedOn', label: 'Add purchase date', message: 'Correct the purchase date of this inventory item.', style: 'PRIMARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'INVENTORY_ITEM_CORRECT' }],
     })),
     missingAgeTitle: missing.length ? `No purchase date yet for ${missing.length === 1 ? 'this appliance' : `these ${missing.length} appliances`}` : null,
+    collection: collectionDescriptor({
+      sourceTotal: report.predictions.length + skipped,
+      fetchedCount: report.predictions.length + skipped,
+      sections,
+      nextPageAvailable: false,
+    }),
   });
+  };
   if (!report.predictions.length) {
     return {
       status: 'ANSWERED', reasonCode: 'APPLIANCE_ORACLE_EMPTY',

@@ -138,7 +138,7 @@ export type AskPresentationBlock =
   | { type: 'LIMITATION'; id: string; title: string; body: string; severity: 'INFO' | 'CAUTION' }
   | { type: 'EMPTY_STATE'; id: string; title: string; body: string; actions: AskAction[] }
   | { type: 'ERROR_STATE'; id: string; title: string; body: string; retryable: boolean; actions: AskAction[] }
-  | { type: 'LIFESPAN'; id: string; title: string; description?: string | null; basis: string; items: Array<{ id: string; label: string; ageYears: number; typicalLifeYears: { min: number; max: number }; status: 'WITHIN_RANGE' | 'PLAN_AHEAD' | 'PAST_RANGE'; statusLabel: string; entityType?: string | null; actions?: AskGroupedListItemAction[]; meta?: string[] }>; missingAge: Array<{ id: string; label: string; entityType?: string | null; actions?: AskGroupedListItemAction[] }>; missingAgeTitle?: string | null }
+  | { type: 'LIFESPAN'; id: string; title: string; description?: string | null; basis: string; items: Array<{ id: string; label: string; ageYears: number; typicalLifeYears: { min: number; max: number }; status: 'WITHIN_RANGE' | 'PLAN_AHEAD' | 'PAST_RANGE'; statusLabel: string; entityType?: string | null; actions?: AskGroupedListItemAction[]; meta?: string[] }>; missingAge: Array<{ id: string; label: string; entityType?: string | null; actions?: AskGroupedListItemAction[] }>; missingAgeTitle?: string | null; collection?: AskCollectionDescriptor }
   | { type: 'PROGRESS'; id: string; title: string; description?: string | null; percent: number; basis: string; metrics: Array<{ label: string; value: string; tone: AskDisplayTone }>; nextSteps: AskGroupedListItem[]; actions: AskAction[] };
 
 // ASK_COZY_SUGGESTED_NEXT_ACTIONS_IMPLEMENTATION_PLAN §4: the server-authored compact follow-up. Mirrors the backend

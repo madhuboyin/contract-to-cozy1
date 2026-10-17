@@ -11,8 +11,8 @@ contract-level journey, or explicit producer-contract review; it is not verified
 
 | Class | Operations |
 |---|---:|
-| Reviewed implementation (fixture, journey, or producer-contract review; not runtime-verified) | 83 |
-| Requires collection adoption | 28 |
+| Reviewed implementation (fixture, journey, or producer-contract review; not runtime-verified) | 85 |
+| Requires collection adoption | 26 |
 | Requires trust or rationale adoption | 0 |
 | Compact receipt: no rich migration needed | 83 |
 | Specialized workflow requiring later review | 0 |
@@ -22,6 +22,7 @@ contract-level journey, or explicit producer-contract review; it is not verified
 
 | Operation | Why |
 |---|---|
+| `APPLIANCE_FAILURE_RISK` | Covered in this effort: the lifespan collection declares the complete analysed-plus-missing appliance total and honest bounded delivery without unsupported continuation. |
 | `BREAK_EVEN_ANALYSIS` | Covered in this effort: audited against the COMPARE profile; fixture. |
 | `BUYER_CLOSING_DAY_READINESS` | Covered in this effort: closing-day blockers declare the complete canonical blocker total and honest bounded delivery with no unsupported continuation. |
 | `BUYER_CONTRACT_TIMELINE` | Covered in this effort: draft and confirmed contingency lists each declare their complete revision-scoped totals and bounded delivery. |
@@ -84,6 +85,7 @@ contract-level journey, or explicit producer-contract review; it is not verified
 | `MAINTENANCE_BUDGET_FORECAST` | Covered in this effort: budget breakdown declares complete category and month totals with no truncation or continuation. |
 | `MAINTENANCE_FORECAST` | Covered in this effort: forecast list declares the complete prediction total and honest first-20 delivery truncation with no unsupported continuation. |
 | `MAINTENANCE_STATUS` | Covered in this effort: maintenance shelves declare exact canonical totals, delivered rows and server-window continuation state. |
+| `MAINTENANCE_TASK_UPDATE` | Covered in this effort: the ambiguous-target command declares the complete task total and bounded selection rows without unsupported continuation. |
 | `MAINTENANCE_TEMPLATES_BROWSE` | Covered in this effort: template catalogue declares source, fetched and delivered totals across applicability buckets without offering unsupported continuation. |
 | `MAJOR_EVENT_ENTRY` | Covered in this effort: event-specific answer wraps governed capability discovery with an explicit legal, tax, insurance, safety and professional boundary. |
 | `MATERIAL_SPECS_LIST` | Covered in this effort: record-explorer fixture. |
@@ -110,7 +112,6 @@ contract-level journey, or explicit producer-contract review; it is not verified
 
 | Operation | Why |
 |---|---|
-| `APPLIANCE_FAILURE_RISK` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
 | `DO_NOTHING_SIMULATION` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
 | `HIRING_GUIDE` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
 | `HOA_COMPLIANCE_STATUS` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
@@ -122,7 +123,6 @@ contract-level journey, or explicit producer-contract review; it is not verified
 | `HVAC_DECISION_OUTCOME_REPORT` | A command whose result may carry a list (for example a choice of target): collection semantics apply, and the boundary derives them until the producer declares its own. |
 | `HVAC_DECISION_OUTCOME_UNLINK` | A command whose result may carry a list (for example a choice of target): collection semantics apply, and the boundary derives them until the producer declares its own. |
 | `HVAC_DECISION_OUTCOME_VIEW` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
-| `MAINTENANCE_TASK_UPDATE` | A command whose result may carry a list (for example a choice of target): collection semantics apply, and the boundary derives them until the producer declares its own. |
 | `NEIGHBORHOOD_CHANGE_FEED` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
 | `OWNERSHIP_COSTS` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
 | `PAST_HAZARD_EXPOSURE` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |

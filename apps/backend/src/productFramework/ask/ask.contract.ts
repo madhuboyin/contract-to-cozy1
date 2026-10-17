@@ -498,6 +498,18 @@ const LifespanBlockSchema = z.object({
   })).max(20).default([]),
   // FRD v1.78: the heading over `missingAge`, naming what is missing (for example "No purchase date yet").
   missingAgeTitle: z.string().trim().min(1).max(120).nullable().optional(),
+  // The lifespan pattern is also a record collection: predictions and missing-age rows can each be capped by the producer.
+  collection: AskCollectionDescriptorSchema.optional(),
+}).superRefine((block, ctx) => {
+  const collection = block.collection;
+  if (!collection) return;
+  const issue = (message: string) => ctx.addIssue({ code: 'custom', path: ['collection'], message });
+  const delivered = block.items.length + block.missingAge.length;
+  if (collection.deliveredCount !== delivered) issue(`deliveredCount ${collection.deliveredCount} must equal the ${delivered} lifespan rows carried by the block.`);
+  if (collection.deliveredCount > collection.fetchedCount) issue('deliveredCount cannot exceed fetchedCount.');
+  if (collection.sourceTotal != null && collection.fetchedCount > collection.sourceTotal) issue('fetchedCount cannot exceed sourceTotal.');
+  if (collection.deliveryTruncated !== collection.deliveredCount < collection.fetchedCount) issue('deliveryTruncated must be true exactly when fewer items were delivered than fetched.');
+  if (collection.nextPageAvailable && collection.sourceTotal != null && collection.sourceTotal <= collection.deliveredCount) issue('nextPageAvailable cannot be true when the whole source was delivered.');
 });
 
 // IW-PRES-020 (FRD v1.72): checklist readiness as a ring. `percent` is the domain's own readiness figure and

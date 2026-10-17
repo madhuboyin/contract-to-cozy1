@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils';
 import { lifespanOrder, lifespanScaleMax } from '@/features/ask/displayPatterns';
 import type { AskBlockRenderer } from '../blocks/types';
 import { ItemActionButtons } from './PatternParts';
+import { CollectionStatusNote } from './CollectionStatusNote';
 
 // IW-PRES-018 (FRD v1.72). One bar per item: the typical-life band and an age marker on one shared year scale.
 // The status label is the server's; this renderer never derives it from the numbers. Items with no recorded age
@@ -63,6 +64,7 @@ export const LifespanBlock: AskBlockRenderer<'LIFESPAN'> = ({ block, onItemActio
           </ul>
         </div>
       )}
+      <CollectionStatusNote collection={block.collection} className="mt-3 text-xs text-slate-500" />
     </section>
   );
 };

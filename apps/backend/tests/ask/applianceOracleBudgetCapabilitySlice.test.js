@@ -75,6 +75,7 @@ test('Appliance Oracle: lifespan bars labelled with the Oracle\'s risk level, no
   ]);
   assert.deepEqual(lifespan.items[0].meta, ['Past its expected life', 'Replacement about $800', 'Replace immediately to avoid emergency failure and higher costs']);
   assert.equal(lifespan.missingAgeTitle, 'No purchase date yet for this appliance');
+  assert.deepEqual(lifespan.collection, { sourceTotal: 3, fetchedCount: 3, deliveredCount: 3, nextPageAvailable: false, deliveryTruncated: false });
   assert.deepEqual(lifespan.missingAge.map((item) => [item.id, item.label, item.entityType, item.actions.map((action) => [action.id, action.label, action.operationId, action.interactionType])]), [
     ['item-dryer', 'Dryer', 'INVENTORY_ITEM', [['correct-purchasedOn', 'Add purchase date', 'INVENTORY_ITEM_CORRECT', 'MUTATE_RECORD']]],
   ]);
@@ -95,6 +96,22 @@ test('Appliance Oracle: nothing with an age is not an all-clear and still offers
   install({ owner: false });
   const blocked = await invoke('APPLIANCE_FAILURE_RISK', 'Show my appliance oracle');
   assert.equal(blocked.reasonCode, 'APPLIANCE_ORACLE_PRIMARY_OWNER_ONLY');
+});
+
+test('Appliance Oracle: lifespan collection reports bounded prediction and missing-age delivery without promising a next page', () => {
+  const prediction = (index) => ({ inventoryItemId: `known-${index}`, applianceName: `Known ${index}`, currentAge: 5, expectedLife: 10, typicalLifeYears: { min: 8, max: 12 }, urgency: 'LOW', failureRisk: 5, remainingLife: 5, estimatedFailureDate: new Date('2031-01-01'), replacementCost: 500, maintenanceImpact: 'Maintain normally' });
+  const report = {
+    propertyId: 'p1', propertyAddress: '1 Main St', totalAppliances: 55, criticalCount: 0, highRiskCount: 0, estimatedTotalCost: 0,
+    predictions: Array.from({ length: 55 }, (_, index) => prediction(index)), appliancesWithoutAge: 25,
+    appliancesWithoutAgeItems: Array.from({ length: 25 }, (_, index) => ({ inventoryItemId: `missing-${index}`, applianceName: `Missing ${index}` })),
+    meta: { classification: 'EDUCATIONAL_ESTIMATE', financialPlanningSafe: false, disclaimer: 'Educational estimate.' }, generatedAt: new Date(), propertyContext: {},
+  };
+  const result = applianceFailureRiskFromView(report, 'p1');
+  const lifespan = result.blocks.find((block) => block.id === 'appliance-oracle-items');
+  assert.equal(lifespan.items.length, 50);
+  assert.equal(lifespan.missingAge.length, 20);
+  assert.deepEqual(lifespan.collection, { sourceTotal: 80, fetchedCount: 80, deliveredCount: 70, nextPageAvailable: false, deliveryTruncated: true });
+  AskPresentationBlockSchema.parse(lifespan);
 });
 
 test('Appliance Oracle service: a this-year purchase is analysed at age 0 (it used to be skipped), a future year is skipped, and each prediction carries its item and typical range', async () => {
