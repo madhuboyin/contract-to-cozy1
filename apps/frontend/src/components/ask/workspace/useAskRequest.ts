@@ -179,7 +179,7 @@ export function useAskRequest({ sessionId, loading, executions, selectedProperty
     setLoading(false);
     setInput(pending.message);
     if (sessionId) window.localStorage.setItem(draftStorageKey(selectedPropertyId, sessionId), pending.message);
-    setError('Stopped. If the request had already reached Ask, its answer may still appear in your history.');
+    setError(null);
     window.setTimeout(() => textareaRef.current?.focus(), 0);
   };
   // FRD v1.96: bring an earlier question back into the composer to change and send again. The earlier answer stays.

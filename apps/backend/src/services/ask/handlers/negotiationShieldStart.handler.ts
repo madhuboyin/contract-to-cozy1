@@ -49,11 +49,17 @@ const notRoutable = (): AskOperationResult => ({
 
 // ── Scenario choice ───────────────────────────────────────────────────────────────────────────────────────────
 
+const scenarioStartMessage = (scenario: NegotiationStartScenario) => {
+  const label = NEGOTIATION_START_SCENARIO_SPECS[scenario].label.toLowerCase();
+  const subject = label.endsWith(' review') ? label : `${label} review`;
+  return `Start ${/^[aeiou]/.test(subject) ? 'an' : 'a'} ${subject}.`;
+};
+
 function scenarioChoice(): AskOperationResult {
   const items = NEGOTIATION_START_SCENARIOS.map((scenario) => ({
     id: scenario, title: NEGOTIATION_START_SCENARIO_SPECS[scenario].label, description: NEGOTIATION_START_SCENARIO_SPECS[scenario].summary,
     meta: [], status: null, href: null, entityType: NEGOTIATION_SHIELD_SCENARIO_ENTITY,
-    actions: [{ id: NEGOTIATION_SHIELD_SCENARIO_ACTION_ID, label: 'Start', message: NEGOTIATION_SHIELD_START_MESSAGE, operationId: 'NEGOTIATION_SHIELD_CASE_START' as const, interactionType: 'CONVERSATION_CONTINUE' as const, style: 'PRIMARY' as const }],
+    actions: [{ id: NEGOTIATION_SHIELD_SCENARIO_ACTION_ID, label: 'Start', message: scenarioStartMessage(scenario), operationId: 'NEGOTIATION_SHIELD_CASE_START' as const, interactionType: 'CONVERSATION_CONTINUE' as const, style: 'PRIMARY' as const }],
   }));
   return {
     status: 'NEEDS_CONTEXT', reasonCode: 'NEGOTIATION_SHIELD_SCENARIO_REQUIRED',
@@ -174,10 +180,11 @@ export async function negotiationShieldStartResult(
 registerCapabilityHandler('negotiation-shield.start', async (envelope) => {
   const launch = envelope.launchContext;
   if (launch?.surface === 'ASK_REFRESH') return notRoutable();
-  const declared = launch?.operationId === 'NEGOTIATION_SHIELD_CASE_START' && envelope.message === NEGOTIATION_SHIELD_START_MESSAGE;
+  const chosenScenario = launch?.entityType === NEGOTIATION_SHIELD_SCENARIO_ENTITY && isNegotiationStartScenario(launch.entityId) ? launch.entityId : null;
+  const chosenMessage = chosenScenario ? scenarioStartMessage(chosenScenario) : null;
+  const declared = launch?.operationId === 'NEGOTIATION_SHIELD_CASE_START' && (envelope.message === NEGOTIATION_SHIELD_START_MESSAGE || envelope.message === chosenMessage);
   if (declared) {
-    const chosen = launch?.entityType === NEGOTIATION_SHIELD_SCENARIO_ENTITY && isNegotiationStartScenario(launch.entityId) ? launch.entityId : null;
-    return negotiationShieldStartResult(envelope.userId, envelope.propertyId!, { scenarioType: chosen, sourceExecutionId: launch?.sourceExecutionId ?? null });
+    return negotiationShieldStartResult(envelope.userId, envelope.propertyId!, { scenarioType: chosenScenario, sourceExecutionId: launch?.sourceExecutionId ?? null });
   }
   if (isNegotiationShieldStartRequest(envelope.message)) {
     return negotiationShieldStartResult(envelope.userId, envelope.propertyId!, { scenarioType: inferNegotiationStartScenario(envelope.message), sourceExecutionId: null });

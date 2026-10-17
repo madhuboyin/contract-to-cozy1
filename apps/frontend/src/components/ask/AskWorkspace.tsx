@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { FormEvent, KeyboardEvent, useCallback, useEffect, useRef, useState } from 'react';
-import { AlertTriangle, CheckCircle2, ChevronsLeft, History, Loader2, Maximize2, RefreshCw, Send, Sparkles, Square, Trash2 } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronsLeft, History, Loader2, Maximize2, RefreshCw, Send, Sparkles, Square, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api/client';
 import { prefersReducedMotion } from '@/features/ask/adaptivePresentation';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
@@ -108,6 +108,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   const deniedProperties = useRef(new Set<string>());
   const conversationScrollRef = useRef<HTMLElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const activeSessionRef = useRef('');
   const { refreshIssues, setRefreshIssues, refreshRequests, setRefreshRequests, redactAccessLostResult, refreshResult, updateExecution } = useResultRefresh({ executions, activeSessionRef, requests, deniedProperties, setExecutions, setPendingWork, setJustUpdatedExecutionId });
   const activeSessionPropertyRef = useRef<string | undefined>(undefined);
@@ -174,6 +175,13 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
     return () => window.clearTimeout(timeout);
   }, [justUpdatedExecutionId, loading]);
   useEffect(() => { if (mode === 'panel') window.setTimeout(() => textareaRef.current?.focus(), 80); }, [mode]);
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    textarea.style.height = 'auto';
+    textarea.style.height = `${Math.min(textarea.scrollHeight, 192)}px`;
+    textarea.style.overflowY = textarea.scrollHeight > 192 ? 'auto' : 'hidden';
+  }, [input]);
 
   const scopeLabel = selectedPropertyId ? 'Answers use your selected home record' : 'General home guidance';
 
@@ -301,7 +309,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
     <form onSubmit={submit} className={cn('group mx-auto w-full', placement === 'hero' ? 'max-w-none' : calm ? 'max-w-[1140px]' : 'max-w-3xl')} aria-label="Ask Cozy question">
       {error && <div className="mb-2 flex items-center gap-2 rounded-xl bg-red-50 px-3 py-2 text-xs text-red-700" role="alert"><AlertTriangle className="h-4 w-4 shrink-0" /><span className="min-w-0 flex-1">{error}</span>
         {input.trim() && !loading && sessionId && <button type="button" onClick={() => void ask(input)} className="shrink-0 rounded-lg border border-red-200 bg-white px-2 py-1 font-semibold text-red-800 hover:bg-red-100">Try again</button>}</div>}
-      <div className={cn('flex gap-2 border border-slate-300 bg-white p-2 shadow-sm transition focus-within:border-emerald-700 focus-within:ring-2 focus-within:ring-emerald-100', placement === 'hero' ? cn('rounded-2xl p-3 shadow-[0_12px_28px_-20px_rgba(15,23,42,0.45)]', calm && 'min-h-16 items-center rounded-full border-stone-300 px-4 py-2 shadow-[0_4px_16px_-8px_rgba(15,23,42,0.35)] sm:px-5') : 'items-end rounded-2xl')}>
+      <div className={cn('flex gap-2 border border-slate-300 bg-white p-2 shadow-sm transition focus-within:border-emerald-700 focus-within:ring-2 focus-within:ring-emerald-100', placement === 'hero' ? cn('rounded-2xl p-3 shadow-[0_12px_28px_-20px_rgba(15,23,42,0.45)]', calm && (input.includes('\n') ? 'min-h-16 items-end rounded-3xl border-stone-300 px-4 py-2 shadow-[0_4px_16px_-8px_rgba(15,23,42,0.35)] sm:px-5' : 'min-h-16 items-center rounded-full border-stone-300 px-4 py-2 shadow-[0_4px_16px_-8px_rgba(15,23,42,0.35)] sm:px-5')) : 'items-end rounded-2xl')}>
         <textarea ref={textareaRef} value={input} onChange={(event) => { setInput(event.target.value); if (sessionId) window.localStorage.setItem(draftStorageKey(selectedPropertyId, sessionId), event.target.value); }} onKeyDown={keyDown} onCompositionStart={() => { isComposingRef.current = true; }} onCompositionEnd={() => { isComposingRef.current = false; }} rows={1} maxLength={4000} placeholder={calm && placement === 'hero' && propertyLabel ? `Ask anything about ${propertyLabel}…` : 'Ask anything about your home…'} className={cn('max-h-48 flex-1 resize-none bg-transparent px-1 text-slate-900 outline-none placeholder:text-slate-500', placement === 'hero' ? (calm ? 'min-h-10 py-2 text-base leading-6' : 'min-h-11 py-2.5 text-base leading-6') : 'min-h-10 py-2 text-sm')} />
         {latestExecution && composerAffordances.map((affordance) => <AttachEvidenceControl key={affordance.id} variant="composer" label={affordance.label}
           event={{ entityType: affordance.target.entityType, id: affordance.target.id, title: affordance.target.title }} propertyId={selectedPropertyId} disabled={loading || !sessionId}
@@ -374,9 +382,9 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
           <CollapsedConversationRail accountLabel={accountName || accountEmail} loggingOut={loggingOut} onNew={startNewSession} onExpand={() => { railToggled.current = true; chooseRailPreference('expanded'); }} onExplore={() => explore.openFrom('COLLAPSED_RAIL')(explore.state.topics[0]?.id ?? 'HOME_CARE')} onLogout={() => void handleLogout()} />
           )
         )}
-        <div className="flex min-w-0 flex-1 flex-col">
+        <div className="relative flex min-w-0 flex-1 flex-col">
       {mode === 'page' && !askUnavailable && <ExploreDisclosure state={explore.state} activeTopicId={explore.focus} onOpen={explore.openFrom('DISCLOSURE')} moreIdeas={moreIdeas} onPanelVisible={explore.topicsVisible('DISCLOSURE')} />}
-      <main ref={conversationScrollRef} data-ask-scroll-container="" className={cn('min-h-0 flex-1 overflow-y-auto overscroll-contain', calm && mode === 'page' && 'bg-[#faf9f6]', mode === 'page' ? (calm ? 'px-4 pb-6 pt-5 sm:px-6 lg:px-10 lg:pt-8' : 'px-4 pb-8 pt-8 sm:px-6 lg:px-10 lg:pt-12') : 'px-4 py-5 sm:px-5')}>
+      <main ref={conversationScrollRef} onScroll={(event) => { const node = event.currentTarget; setShowJumpToLatest(node.scrollHeight - node.scrollTop - node.clientHeight > node.clientHeight); }} data-ask-scroll-container="" className={cn('min-h-0 flex-1 overflow-y-auto overscroll-contain', calm && mode === 'page' && 'bg-[#faf9f6]', mode === 'page' ? (calm ? 'px-4 pb-6 pt-5 sm:px-6 lg:px-10 lg:pt-8' : 'px-4 pb-8 pt-8 sm:px-6 lg:px-10 lg:pt-12') : 'px-4 py-5 sm:px-5')}>
         {explore.focus && <ExploreFocusedView topics={explore.state.topics} topicId={explore.focus} busy={loading || !sessionId} onSelectTopic={explore.openFrom('FOCUSED_VIEW')} onStart={explore.start} onClose={explore.close} onStartersVisible={explore.startersVisible} selector={explore.selector} onChooseTarget={explore.chooseTarget} onCancelSelector={explore.cancelSelector} onRetrySelector={explore.retrySelector} />}
         <div className={explore.focus ? 'hidden' : 'contents'}>
         {calm && mode === 'page' && <h1 className="sr-only hidden lg:block">Ask Cozy</h1>}
@@ -396,7 +404,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
             {calm ? <h2 className="mb-7 text-[26px] font-semibold leading-tight tracking-[-0.02em] text-[#17231d] sm:mb-9 sm:text-[32px]" data-calm-headline={landingOpening ? 'state' : 'generic'}>{landingOpening ?? 'How can I help with your home?'}</h2>
               : <p className="mb-4 max-w-2xl text-base leading-7 text-slate-600">Understand your home, compare options, and take the right next step—with answers grounded in your home record.</p>}
             {!calm && renderComposer('hero')}
-            {calm ? <CalmLanding composer={renderComposer('hero')} headlineShownAbove={Boolean(landingOpening)} view={concierge.view} loading={concierge.loading} failed={concierge.failed} starters={featuredPrompts} usingFallbackStarters={usingFallbackPrompts} onAsk={(prompt, source) => runPrompt(prompt, source)} /> : <section className="mt-7" aria-labelledby="ask-suggestions-title">
+            {calm ? <CalmLanding composer={renderComposer('hero')} headlineShownAbove={Boolean(landingOpening)} view={concierge.view} loading={concierge.loading} failed={concierge.failed} hasProperty={Boolean(selectedPropertyId)} starters={featuredPrompts} usingFallbackStarters={usingFallbackPrompts} onAsk={(prompt, source) => runPrompt(prompt, source)} /> : <section className="mt-7" aria-labelledby="ask-suggestions-title">
               <h2 id="ask-suggestions-title" className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Popular ways to use Ask Cozy</h2>
               <div className="mt-3 grid gap-2 sm:grid-cols-2">{featuredPrompts.map((prompt) => <button type="button" key={prompt.id} onClick={() => runPrompt(prompt, usingFallbackPrompts ? 'FALLBACK' : prompt.source)} className="group rounded-2xl border border-slate-200 bg-white p-3.5 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-teal-300 hover:shadow-md"><span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-teal-700"><CapabilityCategoryIcon categoryId={prompt.categoryId} className="h-3.5 w-3.5" />{prompt.categoryLabel}</span><span className="mt-1.5 block text-sm font-medium text-slate-700 group-hover:text-teal-900">{prompt.question}</span></button>)}</div>
               {explorer}
@@ -461,6 +469,8 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
         )}
         </div>
       </main>
+
+      {showJumpToLatest && <button type="button" onClick={() => { const node = conversationScrollRef.current; node?.scrollTo({ top: node.scrollHeight, behavior: prefersReducedMotion() ? 'auto' : 'smooth' }); setShowJumpToLatest(false); }} className="absolute bottom-24 right-5 z-20 inline-flex min-h-10 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-lg hover:bg-slate-50"><ChevronDown className="h-4 w-4" aria-hidden="true" />Jump to latest</button>}
 
       {(executions.length > 0 || pendingMessage) && !askUnavailable && <footer className={cn('shrink-0 border-t border-slate-200 bg-white/95 p-3 backdrop-blur sm:p-4', calm && mode === 'page' && 'bg-[#faf9f6]/95', mode === 'panel' && 'pb-[calc(env(safe-area-inset-bottom)+0.75rem)]')}><FollowUpRow items={followUps} busy={loading} onPick={pickFollowUp} onDismiss={starterDismissal.dismiss} />{renderComposer('footer')}</footer>}
         </div>

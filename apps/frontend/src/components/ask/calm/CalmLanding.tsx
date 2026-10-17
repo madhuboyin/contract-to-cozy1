@@ -15,7 +15,7 @@ const TONE: Record<StripTone, { chip: string; dot: string }> = {
   DEFAULT: { chip: 'bg-slate-100/70 text-slate-700 hover:bg-slate-100', dot: 'bg-slate-400' },
 };
 // The suggestions stay on one row at every width and scroll sideways when they do not fit; they never wrap into a second row.
-const ROW = 'flex flex-nowrap gap-2 overflow-x-auto pb-1 [scrollbar-width:none]';
+const ROW = 'flex flex-nowrap gap-2 overflow-x-auto pb-1 [scrollbar-width:none] sm:flex-wrap sm:overflow-visible';
 
 const MAJOR_MOMENT_STAGE_LABELS: Record<string, string> = {
   DRAFT: 'Draft', PLANNING: 'Planning', IN_PROGRESS: 'In progress', PAUSED: 'Paused', DISPUTED: 'In dispute',
@@ -28,10 +28,11 @@ function majorMomentStageLabel(stage: string): string {
     ?? stage.replace(/_/g, ' ').toLowerCase().replace(/^./, (character) => character.toUpperCase());
 }
 
-export function CalmLanding({ view, loading, failed, starters, usingFallbackStarters, onAsk, headlineShownAbove = false, composer, children }: {
+export function CalmLanding({ view, loading, failed, hasProperty = Boolean(view), starters, usingFallbackStarters, onAsk, headlineShownAbove = false, composer, children }: {
   view: ConciergeHomeView | null;
   loading: boolean;
   failed: boolean;
+  hasProperty?: boolean;
   starters: AskFeaturedPrompt[];
   usingFallbackStarters: boolean;
   onAsk: (prompt: AskCapabilityPrompt, source: 'ATTENTION' | 'DECISION' | 'DISCOVERY' | 'FALLBACK' | 'PERSONALIZED') => void;
@@ -78,7 +79,8 @@ export function CalmLanding({ view, loading, failed, starters, usingFallbackStar
     <div data-calm-landing="">
       <section aria-label="Your home today" data-calm-state-strip="">
         {loading && <p className="flex items-center gap-2 text-sm text-slate-500" role="status"><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />Checking your home…</p>}
-        {!loading && (failed || !strip) && <p className="text-sm text-slate-500">Your home overview is temporarily unavailable. You can still ask anything above.</p>}
+        {!loading && !hasProperty && <p className="text-sm text-slate-500">Add or select a home for record-based answers, or ask a general home question above.</p>}
+        {!loading && hasProperty && (failed || !strip) && <p className="text-sm text-slate-500">Your home overview is temporarily unavailable. You can still ask anything above.</p>}
         {strip && !loading && <>
           {!headlineShownAbove && stripChips.length === 0 && strip.headline && <p className="text-[15px] leading-6 text-slate-600">{strip.headline}</p>}
           {strip.notes.map((note) => <p key={note} className="mt-2 text-xs text-slate-500">{note}</p>)}
@@ -92,7 +94,7 @@ export function CalmLanding({ view, loading, failed, starters, usingFallbackStar
         {shownStarters.map((prompt) => <li key={prompt.id} className="shrink-0"><button type="button" onClick={() => onAsk(prompt, usingFallbackStarters ? 'FALLBACK' : prompt.source)} className="min-h-10 whitespace-nowrap rounded-full border border-stone-300 bg-transparent px-3.5 py-2 text-sm font-medium text-slate-700 transition hover:border-emerald-700 hover:text-emerald-950">{prompt.question}</button></li>)}
         {children && <li className="shrink-0">{children}</li>}
       </ul>}
-      {view && !loading && !failed && (
+      {view && !loading && !failed && (view.homeContinuity.state === 'UNAVAILABLE' || view.homeContinuity.decisions.length > 0 || Boolean(view.homeContinuity.activeMajorMoment)) && (
         <section className="mt-8 grid gap-4 sm:grid-cols-2" aria-label="Decisions and active work">
           <article className="flex min-w-0 flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
             <div className="flex items-start gap-3">

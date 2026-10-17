@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, Ref, useEffect, useRef, useState } from 'react';
+import { FormEvent, Ref, useEffect, useId, useRef, useState } from 'react';
 import { ExternalLink } from 'lucide-react';
 import { api } from '@/lib/api/client';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
@@ -104,9 +104,9 @@ export function ClarificationCard({ executionId, clarification, onCompleted, aut
       <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-indigo-800">One detail needed</p>
       <h3 className="mt-1 font-semibold text-slate-950">{clarification.question}</h3>
       <div className="mt-4 flex flex-wrap gap-2">
-        {clarification.options.map((option) => <button key={option.operationId} type="button" disabled={saving || expired} onClick={() => void submitClarification(option.operationId)} className="min-h-11 rounded-xl border border-indigo-200 bg-white px-4 py-2 text-sm font-semibold capitalize text-slate-800 hover:border-indigo-400 disabled:opacity-50">{option.label}</button>)}
+        {clarification.options.map((option) => <button key={option.operationId} type="button" disabled={saving || expired} onClick={() => void submitClarification(option.operationId)} className="min-h-11 rounded-xl border border-indigo-200 bg-white px-4 py-2 text-sm font-semibold text-slate-800 hover:border-indigo-400 disabled:opacity-50">{option.label}</button>)}
       </div>
-      {clarification.allowFreeText && <form className="mt-4 flex flex-col gap-2 sm:flex-row" onSubmit={(event) => { event.preventDefault(); void submitClarification(); }}><input value={answer} onChange={(event) => setAnswer(event.target.value)} maxLength={500} disabled={saving || expired} placeholder="Or add a specific detail…" aria-label="Clarification detail" className="min-h-11 flex-1 rounded-xl border border-indigo-200 bg-white px-3 text-sm text-slate-900" /><button type="submit" disabled={saving || expired || !answer.trim()} className="min-h-11 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{saving ? 'Continuing…' : 'Continue'}</button></form>}
+      {clarification.allowFreeText && <form className="mt-4 flex flex-col gap-2 sm:flex-row" onSubmit={(event) => { event.preventDefault(); void submitClarification(); }}><input id={`ask-clarification-${executionId}`} name="clarificationDetail" value={answer} onChange={(event) => setAnswer(event.target.value)} maxLength={500} disabled={saving || expired} placeholder="Or add a specific detail…" aria-label="Clarification detail" className="min-h-11 flex-1 rounded-xl border border-indigo-200 bg-white px-3 text-sm text-slate-900" /><button type="submit" disabled={saving || expired || !answer.trim()} className="min-h-11 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{saving ? 'Continuing…' : 'Continue'}</button></form>}
       {expired && <p className="mt-3 text-sm text-amber-700">This clarification expired. Ask the question again to use current records.</p>}
       {error && <p className="mt-3 text-sm text-red-700" role="alert">{error}</p>}
     </section>
@@ -115,29 +115,32 @@ export function ClarificationCard({ executionId, clarification, onCompleted, aut
 
 // Renders the input for one editable confirmation field, by its declared type.
 export function EditableFieldInput({ field, value, onChange }: { field: AskConfirmationEditableField; value: string; onChange: (next: string) => void }) {
+  const generatedId = useId();
+  const inputId = `ask-confirm-${generatedId.replace(/:/g, '')}`;
+  const inputName = `confirmation_${field.label.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'field'}`;
   const base = 'rounded-lg border border-slate-300 px-2 py-1 text-sm';
   if (field.type === 'SELECT') {
     return (
-      <select aria-label={field.label} value={value} onChange={(event) => onChange(event.target.value)} className={`min-h-9 ${base}`}>
+      <select id={inputId} name={inputName} aria-label={field.label} value={value} onChange={(event) => onChange(event.target.value)} className={`min-h-9 ${base}`}>
         {!(field.options ?? []).some((option) => option.value === value) && <option value="" disabled>Choose…</option>}
         {(field.options ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
       </select>
     );
   }
   if (field.type === 'TEXTAREA') {
-    return <textarea aria-label={field.label} rows={4} maxLength={2000} value={value} onChange={(event) => onChange(event.target.value)} className={`w-full ${base}`} />;
+    return <textarea id={inputId} name={inputName} aria-label={field.label} rows={4} maxLength={2000} value={value} onChange={(event) => onChange(event.target.value)} className={`w-full ${base}`} />;
   }
   if (field.type === 'MONEY') {
     return (
       <span className="inline-flex items-center gap-1">
         <span aria-hidden="true" className="text-slate-500">$</span>
-        <input type="text" inputMode="decimal" maxLength={11} aria-label={field.label} value={value} onChange={(event) => onChange(event.target.value)} className={`min-h-9 w-32 ${base}`} />
+        <input id={inputId} name={inputName} type="text" inputMode="decimal" maxLength={11} aria-label={field.label} value={value} onChange={(event) => onChange(event.target.value)} className={`min-h-9 w-32 ${base}`} />
       </span>
     );
   }
   return (
     <input
-      type={field.type === 'TEXT' ? 'text' : 'date'} maxLength={field.type === 'TEXT' ? 160 : undefined} aria-label={field.label}
+      id={inputId} name={inputName} type={field.type === 'TEXT' ? 'text' : 'date'} maxLength={field.type === 'TEXT' ? 160 : undefined} aria-label={field.label}
       value={value} onChange={(event) => onChange(event.target.value)} className={`min-h-9 ${base}`}
     />
   );

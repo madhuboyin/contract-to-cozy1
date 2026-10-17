@@ -29,6 +29,7 @@ const REASON_COPY: Record<string, string> = {
 export function indicatorText(indicator: AskDiscoveryTopic['indicator']): string | null {
   if (!indicator || indicator.freshness !== 'CURRENT') return null;
   if (typeof indicator.value === 'number' && indicator.value === 0) return null;
+  if (indicator.label.trim().toLowerCase() === 'complete' && typeof indicator.value === 'number') return `${indicator.value}%`;
   // The server owns the label ("need attention"); only the verb agrees with a count of one.
   const label = indicator.value === 1 && indicator.label === 'need attention' ? 'needs attention' : indicator.label;
   return `${indicator.value} ${label}`.trim();

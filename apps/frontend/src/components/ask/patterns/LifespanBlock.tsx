@@ -21,7 +21,7 @@ const years = (value: number) => `${Number.isInteger(value) ? value : value.toFi
 export const LifespanBlock: AskBlockRenderer<'LIFESPAN'> = ({ block, onItemAction, itemActionsDisabled }) => {
   const items = lifespanOrder(block.items);
   const scale = lifespanScaleMax(block.items);
-  const pct = (value: number) => `${Math.min(100, (value / scale) * 100)}%`;
+  const pct = (value: number) => Math.min(100, (value / scale) * 100);
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-4" data-display-pattern="lifespan">
       <h3 className="font-semibold text-slate-950">{block.title}</h3>
@@ -37,11 +37,12 @@ export const LifespanBlock: AskBlockRenderer<'LIFESPAN'> = ({ block, onItemActio
               </div>
               <div className="relative order-3 col-span-2 h-5 sm:order-none sm:col-span-1" role="img"
                 aria-label={`${item.label}: ${years(item.ageYears)} old; typical life ${item.typicalLifeYears.min} to ${item.typicalLifeYears.max} years`}>
-                <span className="absolute inset-x-0 top-2 h-1 rounded-full bg-slate-100" />
-                <span className="absolute top-2 h-1 rounded-full bg-slate-300" style={{ width: pct(item.ageYears) }} />
-                <span className="absolute top-1 h-3 rounded-full border border-dashed border-teal-600 bg-teal-50"
-                  style={{ left: pct(item.typicalLifeYears.min), width: `calc(${pct(item.typicalLifeYears.max)} - ${pct(item.typicalLifeYears.min)})` }} />
-                <span className="absolute top-0 h-5 w-1 -translate-x-1/2 rounded-full bg-slate-900" style={{ left: pct(item.ageYears) }} />
+                <svg viewBox="0 0 100 20" preserveAspectRatio="none" className="h-full w-full" aria-hidden="true">
+                  <rect x="0" y="8" width="100" height="4" rx="2" className="fill-slate-100" />
+                  <rect x="0" y="8" width={pct(item.ageYears)} height="4" rx="2" className="fill-slate-300" />
+                  <rect x={pct(item.typicalLifeYears.min)} y="4" width={Math.max(0, pct(item.typicalLifeYears.max) - pct(item.typicalLifeYears.min))} height="12" rx="2" className="fill-teal-50 stroke-teal-600 [stroke-dasharray:2_2]" />
+                  <rect x={Math.max(0, pct(item.ageYears) - 0.5)} y="0" width="1" height="20" rx="0.5" className="fill-slate-900" />
+                </svg>
               </div>
               <span className={cn('justify-self-end whitespace-nowrap rounded-md px-2 py-0.5 text-[11px] font-semibold', STATUS_CHIP[item.status])}>{item.statusLabel}</span>
               {(item.meta?.length ?? 0) > 0 && <p className="order-4 col-span-2 text-xs text-slate-600 sm:col-span-3" data-ask-lifespan-meta>{item.meta!.join(' · ')}</p>}

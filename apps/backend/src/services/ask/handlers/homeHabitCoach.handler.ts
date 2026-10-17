@@ -8,7 +8,7 @@ import { type AskOperationResult } from '../askOperationRegistry';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { HABIT_COACH_PREFERENCES_ACTION_ID, HABIT_COACH_PREFERENCES_MESSAGE, HABIT_COACH_PROPERTY_ENTITY_TYPE } from '../support/habitCoachPreferencesCommand';
 import { registerConfirmCapabilityHandler, type ConfirmCapabilityContext, type ConfirmCapabilityResult } from '../confirmCapabilityHandlerRegistry';
-import { humanDate, readableCode } from '../askFormatting';
+import { humanDate, readableCode, titleCase } from '../askFormatting';
 import { ensurePropertyAccess } from '../askHandlerSupport';
 import { reconcileAskExecutionSideEffects } from '../execution/executeOperation';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsFeature, AnalyticsModule } from '../../analytics';
@@ -122,7 +122,7 @@ export function homeHabitsFromView(view: HomeHabitsView, propertyId: string, now
       tone: urgent ? 'CAUTION' as const : 'DEFAULT' as const,
       meta: [
         ...(habit.reminderSchedule?.cadenceLabel ? [habit.reminderSchedule.cadenceLabel] : []),
-        ...(template.difficulty ? [readableCode(template.difficulty)] : []),
+        ...(template.difficulty ? [titleCase(template.difficulty)] : []),
         ...(template.estimatedMinutes ? [`About ${template.estimatedMinutes} min`] : []),
         ...[snoozeLabel ?? dueLabel].filter((value): value is string => Boolean(value)),
       ],

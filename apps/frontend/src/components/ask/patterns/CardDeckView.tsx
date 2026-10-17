@@ -177,8 +177,7 @@ export function CardDeckView({ items, swipeRightActionId, swipeLeftActionId, onI
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
-        style={{ transform: dragX ? `translateX(${dragX}px) rotate(${dragX / 24}deg)` : undefined, touchAction: swipeEnabled ? 'pan-y' : undefined }}
-        className={cn('relative min-h-[11rem] select-none space-y-2 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-teal-600', swipeEnabled && !decisionLocked && 'cursor-grab')}
+        className={cn('relative min-h-[11rem] select-none space-y-2 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-teal-600', swipeEnabled && !decisionLocked && 'cursor-grab touch-pan-y')}
       >
         {rightLabel && dragX > 20 && <span className="absolute right-3 top-3 rounded-md bg-teal-50 px-2 py-1 text-xs font-bold text-teal-800">{rightLabel}</span>}
         {leftLabel && dragX < -20 && <span className="absolute left-3 top-3 rounded-md bg-slate-100 px-2 py-1 text-xs font-bold text-slate-700">{leftLabel}</span>}

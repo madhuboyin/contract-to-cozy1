@@ -169,14 +169,13 @@ export function ComparisonStripBlock({ block, renderAction }: { block: Compariso
             <h4 className="text-base font-semibold text-slate-950">{option.label}</h4>
             {option.summary && <p className="mt-1 text-sm leading-5 text-slate-600">{option.summary}</p>}
             {priceShares && (
-              <div
-                className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100"
-                role="img"
+              <progress
+                className="mt-3 block h-2 w-full overflow-hidden rounded-full accent-teal-600"
                 aria-label={priceShares[index] === 1 ? 'Highest price of these options' : `${Math.round(priceShares[index] * 100)}% of the highest price of these options`}
                 data-price-share={priceShares[index].toFixed(3)}
-              >
-                <div className="h-full rounded-full bg-teal-600" style={{ width: `${Math.max(2, priceShares[index] * 100)}%` }} />
-              </div>
+                max={100}
+                value={Math.max(2, priceShares[index] * 100)}
+              />
             )}
             <dl className="mt-4 space-y-2">
               {option.attributes.map((attribute) => (

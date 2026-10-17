@@ -363,7 +363,7 @@ At the same time:
 
 ---
 
-## 5. Resolution Log (2026-10-16)
+## 5. Resolution Log (updated 2026-10-17)
 
 Verification rules used: requirements and code-path tracing, plus environment-independent tests only. No local database, no browser run and no production access. "Fixed in code" therefore means the defect was reproduced or proven by code and a regression test now guards it. It does **not** mean verified on production. Every production-only behavior is marked **Not verified live** with the manual check that closes it.
 
@@ -409,9 +409,28 @@ Owner rulings applied: the explicit-consent checkbox on Ask confirmations stays 
 
 **Debt-aware estimates ignored the canonical financing-profile interest rate: fixed in code (2026-10-17).** In Sell/Hold/Rent the shared assumptions always supplied a rate (the modelled 6.5% default) before the canonical profile was consulted, so a profile rate of 3.25% was ignored and 6.5% used (reproduced in a harness that mirrors the resolver's merge order). Break-even already used the profile rate but switched debt off, with no disclosure, when a balance and term existed without a rate. Both now use one resolver, `services/mortgageRate.ts`, with the owner precedence: a valid scenario override (the request's rate, else the saved `MORTGAGE_ANNUAL_RATE`), then the canonical profile rate, then a disclosed 6.5% assumption only when neither exists and a mortgage is otherwise known. Units are normalised at the boundary: the profile's basis points convert once (`rateFromBasisPoints`, 650 gives 0.065), every estimator input and result is a decimal, and a value that cannot be a rate is refused rather than rescaled: `6.5` (`LOOKS_LIKE_A_PERCENT`) and `0.0006` (`TOO_LOW_FOR_A_RATE`, which is what a percent stored as basis points looks like) are rejected. A malformed rate in a request returns a structured `400 MORTGAGE_RATE_INVALID`, where before the shared assumptions silently clamped it (6.5 became 25%). A malformed saved override or profile rate is left out and reported with its reason. Each estimate now reports the rate used and its source (`current.mortgageRateSource`, `mortgageRateDisclosure`, `financialAssumptions.interestRate`, `meta.notes`), and the Sell/Hold/Rent page shows it. The page's financing-profile editor, where a decimal typed as a percent would have been stored as 6 basis points, now refuses what cannot be a percent. A persisted AssumptionSet is deliberately not a source (it stores the old default along with everything else). Validation: `mortgageRate` (10), `sellHoldRentMortgageRate` (11), `breakEvenMortgageRate` (7, including that both estimators agree), the controller 400s, the contract's range, and page tests. **Not changed:** the financing module's own write validator (`interestRateBps` 0–5000) and Ask's financing-profile command, which are other modules' boundaries; Refinance Radar reads the profile rate with no fallback, so it has one source already. **Behavior change to confirm:** Break-even now models a mortgage with a disclosed 6.5% where it used to turn debt off when only the rate was missing. **Not verified** on real data or in a browser.
 
-### 5.3 Not started (later tier, per owner ordering)
+### 5.3 UX implementation pass (2026-10-17)
 
-Layout, CSS, copy and visual-consistency items: §3.1 item 9 (jargon scrub), §3.2 items 10–18 except item 17's routing and the items already listed above, §3.3 items 19–27 (except the indicator nowrap in row 5), and the §2 items not ruled out by owner rulings.
+No browser or production environment was used. “Implemented” below means code-traced, statically checked and covered by focused environment-independent tests where practical.
+
+| Finding | Status | Implemented change / remaining boundary |
+| :--- | :--- | :--- |
+| §2.1.1–3 | Implemented | Empty decision/major-moment boxes are omitted; no-property and failed-home states have different copy; starter pills wrap on desktop. |
+| §2.2.1, §2.2.3 | Implemented | The composer auto-grows to 12rem and changes shell geometry for multiline text; a user Stop restores the draft without a red failure banner. §2.2.2 universal attachment remains open because the existing evidence API requires a deterministic entity target; no ungoverned upload destination was invented. |
+| §2.3.1–3 | Implemented | Turns share one 1140px outer column, answer width varies only inside it, Change and resend is hover/focus-revealed on desktop, and a Jump to latest control appears when more than one viewport from the bottom. |
+| §2.4.1 | Open | Unifying every legacy block renderer under Calm chrome is a larger presentation migration and was not folded into this defect pass. §2.4.2–4 were already implemented before this pass. |
+| §2.5.1 | Implemented | Clarification options preserve sentence case. §2.5.2 remains intentionally unchanged under the consent owner ruling. |
+| §2.6.2 | Implemented | Session overflow controls are hover/focus-revealed on desktop and remain visible for active rows and touch-size viewports. §2.6.1 remains intentionally unchanged under the collapsed-rail owner ruling. |
+| 18 | Implemented | The DIY template projection filters `[TEST]` titles and `Test template:` descriptions before calculating delivered/source totals. This is defense in depth; the production seed row still needs deletion separately. |
+| 19 | Implemented for the observed path | Removed CSS capitalization and gave `GUIDANCE_JOURNEY_CONTINUE` the concise clarification label “View current guided journey steps.” Other operation labels continue to come from server semantic packages. |
+| 20 | Implemented | See §2.3.1 above. |
+| 21 | Implemented | All production Ask renderers are free of JSX `style` attributes. Lifespan uses SVG attributes; budget/comparison use native progress; timeline uses a fixed-class year track; card-deck swipe no longer emits a dynamic transform style. |
+| 22 | Partially implemented | Financing already used the canonical mortgage labels. Habit difficulty is now title-cased and claim metadata suppresses a status duplicated by the status chip. The broader presenter-by-presenter enum cleanup (Project Tracker, seller receipts and every Service Price Radar capture label) remains open. |
+| 23 | Partially implemented | Coverage uses singular agreement; the Do-Nothing paths observed in the sessions use grammatical count labels and currency ranges (`$0`, not `0-0 USD`); the double-verb Home Action title still needs its source record/presenter isolated. |
+| 24 | Implemented | Scenario cards now send scenario-specific user prompts while the handler continues to accept the old generic prompt for compatibility with already-rendered cards. |
+| 25 | Partially implemented | Completeness indicators render as compact percentages (for example `97%`) and do not wrap. Automatic retitling/disambiguation of repeated starter-created sessions remains open. |
+| 26 | Partially implemented | Jump to latest is implemented. Topic switching still stays in the active session; a new-conversation choice needs a product/session-lifecycle design rather than silently splitting history. |
+| 27 | Implemented in the implicated shared controls | Shared editable fields, clarification free text and conversational bounded-choice controls now carry deterministic `id`/`name` attributes. Exact closure of the historical console count still requires a live production replay. |
 
 ### 5.4 Waiting on artifacts
 

@@ -72,3 +72,14 @@ test('the template browse card passes for its own question, empty and populated,
     }
   }
 });
+
+test('the template browse card never exposes production test fixtures', () => {
+  const card = diyTemplateBrowseFromItems({ items: [
+    template({ id: 'test-title', title: '[TEST] Touch up a scuffed wall' }),
+    template({ id: 'test-description', title: 'Touch up a wall', shortDescription: 'Test template: cover a scuff.' }),
+    template({ id: 'real', title: 'Patch a small drywall hole', shortDescription: 'Repair and repaint a small damaged area.' }),
+  ], hasMore: false }, PROPERTY, true);
+  const rows = card.blocks.find((block) => block.id === 'diy-template-browse')?.sections.flatMap((section) => section.items) ?? [];
+  assert.deepEqual(rows.map((row) => row.id), ['real']);
+  assert.equal(card.blocks.find((block) => block.id === 'diy-template-browse')?.collection.sourceTotal, 1);
+});

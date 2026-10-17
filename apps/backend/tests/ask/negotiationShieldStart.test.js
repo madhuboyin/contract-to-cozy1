@@ -125,7 +125,8 @@ test('Start a review with no scenario asks which of the four, as rows that launc
     for (const item of items) {
       assert.equal(item.entityType, 'NEGOTIATION_SHIELD_SCENARIO');
       assert.equal(item.actions[0].operationId, OP);
-      assert.equal(item.actions[0].message, start.NEGOTIATION_SHIELD_START_MESSAGE);
+      assert.match(item.actions[0].message, /^Start an? .+ review\.$/);
+      assert.notEqual(item.actions[0].message, start.NEGOTIATION_SHIELD_START_MESSAGE);
     }
   } finally { restore(); }
 });

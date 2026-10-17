@@ -45,6 +45,9 @@ const minutes = (value: number | null | undefined) => (!value ? null : value < 6
 
 /** Pure: the card. `canStart` is whether the person may change the property (a contributor or owner); only then do rows carry the start action. */
 export function diyTemplateBrowseFromItems(view: { items: StartableTemplate[]; hasMore: boolean; sourceTotal?: number }, propertyId: string, canStart: boolean): AskOperationResult {
+  // Reviewed production catalogues must never expose an accidentally published test fixture.
+  const visibleItems = view.items.filter((item) => !/^\s*\[test\]/i.test(item.title) && !/^\s*test(?:\s+template)?\s*:/i.test(item.shortDescription ?? ''));
+  view = { ...view, items: visibleItems, sourceTotal: Math.min(view.sourceTotal ?? visibleItems.length, visibleItems.length) };
   const scope: AskPresentationBlock = {
     type: 'BOUNDARY', id: BOUNDARY_ID, title: 'Only reviewed, low-risk projects',
     body: 'Only reviewed templates that fit this home are offered here. Electrical panel or wiring work, gas lines, structural work, active leaks or flooding, and hazardous materials are for a licensed professional. Stop if anything feels unsafe.',

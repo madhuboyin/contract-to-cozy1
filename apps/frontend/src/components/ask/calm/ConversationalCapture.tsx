@@ -123,7 +123,7 @@ function StepInput({ step, value, saving, allowNotSure, onAnswer, onSkip }: {
     return (
       <div className="flex flex-wrap items-center gap-2">
         <label className="sr-only" htmlFor={`capture-${step.key}`}>{step.label}</label>
-        <select id={`capture-${step.key}`} disabled={saving} value={typeof draft === 'string' ? draft : ''} onChange={(event) => setDraft(event.target.value)} className="min-h-10 max-w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900">
+        <select id={`capture-${step.key}`} name={step.key} disabled={saving} value={typeof draft === 'string' ? draft : ''} onChange={(event) => setDraft(event.target.value)} className="min-h-10 max-w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900">
           <option value="">Choose one</option>
           {schema.options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
         </select>

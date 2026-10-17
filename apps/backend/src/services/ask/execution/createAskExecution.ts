@@ -46,6 +46,10 @@ function routingClarificationResult(
   const languagePack = (operationId: AskOperationId) => (
     getAskOperationDefinition(operationId).semantic.languagePacks[decision.language]
   );
+  const clarificationLabel = (operationId: AskOperationId) => operationId === 'GUIDANCE_JOURNEY_CONTINUE'
+    ? 'View current guided journey steps'
+    : languagePack(operationId)?.supportedJobs[0]
+      ?? getAskOperationDefinition(operationId).semantic.supportedJobs[0];
   const choices = candidates.map((candidate) => languagePack(candidate.operationId)?.supportedJobs[0]).filter(Boolean);
   const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
   return {
@@ -66,8 +70,7 @@ function routingClarificationResult(
       question: 'Which home request would you like Ask to handle?',
       options: candidates.map((candidate) => ({
         operationId: candidate.operationId,
-        label: languagePack(candidate.operationId)?.supportedJobs[0]
-          ?? getAskOperationDefinition(candidate.operationId).semantic.supportedJobs[0],
+        label: clarificationLabel(candidate.operationId),
       })),
       allowFreeText: true,
       expiresAt,

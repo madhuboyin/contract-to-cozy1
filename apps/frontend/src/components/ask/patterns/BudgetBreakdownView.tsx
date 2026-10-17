@@ -14,9 +14,7 @@ function BudgetRow({ item }: { item: GroupedList['sections'][number]['items'][nu
         </div>
       </div>
       {item.proportionPercent != null && (
-        <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-100" role="progressbar" aria-label={`${item.title}: ${proportion}% of the upkeep budget`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={proportion}>
-          <div className="h-full rounded-full bg-teal-600" style={{ width: `${proportion}%` }} />
-        </div>
+        <progress className="mt-1.5 block h-1.5 w-full overflow-hidden rounded-full accent-teal-600" aria-label={`${item.title}: ${proportion}% of the upkeep budget`} max={100} value={proportion} />
       )}
       {item.meta.length > 0 && <p className="mt-1.5 truncate text-xs text-slate-500" title={item.meta.join(' · ')}>{item.meta.join(' · ')}</p>}
       {!item.amountLabel && item.description && <p className="mt-1 text-xs text-slate-600">{item.description}</p>}

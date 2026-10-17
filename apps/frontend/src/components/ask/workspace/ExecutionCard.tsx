@@ -260,11 +260,11 @@ export function ExecutionCard({
     // in reduced emphasis and without a frame; it is never a second full copy of the previous look.
     return (
       <CalmChromeContext.Provider value={calmChrome}><CalmAnswerContext.Provider value={calm}>
-        <article id={`ask-execution-${execution.executionId}`} data-answer-width={answerWidth.toLowerCase()} className={cn('mx-auto scroll-mt-28 space-y-3 lg:scroll-mt-32', askAnswerWidthClass(answerWidth))}>
+        <article id={`ask-execution-${execution.executionId}`} data-answer-width={answerWidth.toLowerCase()} className="group mx-auto w-full max-w-[1140px] scroll-mt-28 space-y-3 lg:scroll-mt-32">
           <div className="ml-auto w-fit max-w-[88%] rounded-2xl rounded-br-md bg-slate-900 px-4 py-3 text-sm leading-6 text-white">{execution.question}</div>
           <details className={calmChrome ? undefined : 'rounded-2xl border border-slate-200 bg-slate-50/70 p-3'}>
             <summary className={calmChrome ? 'w-fit cursor-pointer list-none rounded-md px-1 text-xs text-slate-500 hover:text-slate-800 [&::-webkit-details-marker]:hidden' : 'cursor-pointer text-xs font-semibold text-slate-500'}>{calmChrome ? 'Earlier version of this answer · show' : 'Superseded by a refinement below · view original response'}</summary>
-            <div className={cn('mt-3 space-y-3 opacity-75', calmChrome && FRAMELESS_LISTS)}>
+            <div className={cn('mr-auto mt-3 w-full space-y-3 opacity-75', askAnswerWidthClass(answerWidth), calmChrome && FRAMELESS_LISTS)}>
               <BlockSequence blocks={execution.blocks} renderBlock={(block) => <BlockView key={block.id} block={block} executionId={execution.executionId} propertyId={execution.property?.id} itemActionsDisabled onItemAction={() => undefined} onFilterClick={() => undefined} onCollectionPage={() => undefined} onAccessLost={() => undefined} />} />
             </div>
           </details>
@@ -274,7 +274,7 @@ export function ExecutionCard({
   }
 
   return (
-    <ResultRevalidationBoundary executionId={execution.executionId} issue={refreshIssue}><ResultViewContext.Provider value={controls}><CalmChromeContext.Provider value={calmChrome}><CalmAnswerContext.Provider value={calm}><article id={`ask-execution-${execution.executionId}`} data-answer-width={answerWidth.toLowerCase()} className={cn('mx-auto scroll-mt-28 space-y-3 lg:scroll-mt-32', askAnswerWidthClass(answerWidth))} onFocusCapture={() => { window.sessionStorage.setItem(`ctc:ask-return-execution:${execution.sessionId}`, execution.executionId); }} onClickCapture={(event) => {
+    <ResultRevalidationBoundary executionId={execution.executionId} issue={refreshIssue}><ResultViewContext.Provider value={controls}><CalmChromeContext.Provider value={calmChrome}><CalmAnswerContext.Provider value={calm}><article id={`ask-execution-${execution.executionId}`} data-answer-width={answerWidth.toLowerCase()} className="group mx-auto w-full max-w-[1140px] scroll-mt-28 space-y-3 lg:scroll-mt-32" onFocusCapture={() => { window.sessionStorage.setItem(`ctc:ask-return-execution:${execution.sessionId}`, execution.executionId); }} onClickCapture={(event) => {
       const link = (event.target as HTMLElement).closest<HTMLAnchorElement>('a[href]');
       if (!link) return;
       const url = new URL(link.href, window.location.origin);
@@ -283,8 +283,8 @@ export function ExecutionCard({
       controls.change((view) => ({ ...view, scrollOffset, selectedTaskId: url.searchParams.get('taskId') ?? view.selectedTaskId }));
     }}>
       <div className="ml-auto w-fit max-w-[88%] rounded-2xl rounded-br-md bg-slate-900 px-4 py-3 text-sm leading-6 text-white">{execution.question}</div>
-      {onEditQuestion && <div className="flex justify-end"><button type="button" disabled={loading} onClick={() => onEditQuestion(execution.question)} aria-label="Change and resend this question" className="rounded-lg px-2 py-1 text-xs font-semibold text-slate-500 hover:bg-slate-100">Change and resend</button></div>}
-      <div className={calmChrome ? 'space-y-3' : 'space-y-3 rounded-3xl border border-slate-200 bg-white/60 p-3 shadow-sm sm:p-4'}>
+      {onEditQuestion && <div className="flex justify-end"><button type="button" disabled={loading} onClick={() => onEditQuestion(execution.question)} aria-label="Change and resend this question" className="rounded-lg px-2 py-1 text-xs font-semibold text-slate-500 opacity-0 transition hover:bg-slate-100 hover:opacity-100 focus:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 max-lg:opacity-100">Change and resend</button></div>}
+      <div className={cn('mr-auto w-full', askAnswerWidthClass(answerWidth), calmChrome ? 'space-y-3' : 'space-y-3 rounded-3xl border border-slate-200 bg-white/60 p-3 shadow-sm sm:p-4')}>
         {calmChrome ? <div className="flex items-center justify-between gap-2">
           <h2 ref={headingRef} tabIndex={-1} className="flex items-center gap-2 text-xs font-semibold text-teal-800 focus:outline-none"><span aria-hidden="true" className="grid h-6 w-6 place-items-center rounded-full bg-teal-700 text-[11px] font-bold text-white">C</span><span>Cozy<span className="sr-only"> response</span></span></h2>
           <DropdownMenu>

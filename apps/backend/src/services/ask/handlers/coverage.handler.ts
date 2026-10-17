@@ -110,7 +110,7 @@ async function coverageResult(userId: string, propertyId: string, message: strin
   const confirmedGapCount = allItems.filter((item) => item.group === 'NO_COVERAGE' || item.group === 'EXPIRED').length;
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY', id: 'coverage-summary',
-    title: focused.length ? `${focused.length} item${focused.length === 1 ? '' : 's'} match this coverage review` : 'No matching coverage issue was found',
+    title: focused.length ? `${focused.length} item${focused.length === 1 ? ' matches' : 's match'} this coverage review` : 'No matching coverage issue was found',
     body: allItems.length
       ? `${confirmedGapCount} confirmed missing or expired, ${unclearCount} unclear, and ${allItems.filter((item) => item.group === 'EVIDENCE_MISSING').length} missing supporting evidence. Unknown records remain separate from confirmed gaps.`
       : 'No material item-level issue is surfaced from the recorded inventory, policies, warranties, responsibilities, and evidence. This is a record review—not a guarantee that every loss is covered.',

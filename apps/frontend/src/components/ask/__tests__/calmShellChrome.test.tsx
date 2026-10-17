@@ -55,20 +55,20 @@ describe('CalmLanding', () => {
     expect(screen.getByRole('list', { name: 'Home priorities' }).querySelectorAll('[data-strip-chip]')).toHaveLength(2);
   });
 
-  it('keeps both quiet dashboard sections when there are no priority items', () => {
+  it('hides empty decision and active-work sections when there is nothing to show', () => {
     const quiet = view({ priorityList: { ...view().priorityList, items: [] }, landingSpotlight: null });
     render(<CalmLanding view={quiet} loading={false} failed={false} starters={[]} usingFallbackStarters onAsk={jest.fn()} />);
     expect(screen.getByText('Nothing needs attention right now.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /What needs attention/ })).toHaveTextContent('0');
     expect(screen.getByRole('button', { name: /Plan ahead/ })).toHaveTextContent('0');
-    expect(screen.getByRole('heading', { name: 'Decisions to make' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Active major moment' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Decisions to make' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Active major moment' })).not.toBeInTheDocument();
   });
 
   it('is honest while loading and when the overview is unavailable, and never claims the home is fine', () => {
     const { rerender } = render(<CalmLanding view={null} loading failed={false} starters={[]} usingFallbackStarters onAsk={jest.fn()} />);
     expect(screen.getByRole('status')).toHaveTextContent('Checking your home…');
-    rerender(<CalmLanding view={null} loading={false} failed starters={[]} usingFallbackStarters onAsk={jest.fn()} />);
+    rerender(<CalmLanding view={null} loading={false} failed hasProperty starters={[]} usingFallbackStarters onAsk={jest.fn()} />);
     expect(screen.getByText(/temporarily unavailable/)).toBeInTheDocument();
     expect(screen.queryByText(/Nothing needs your attention/)).toBeNull();
     rerender(<CalmLanding view={view({ priorityList: { ...view().priorityList, state: 'UNAVAILABLE' } })} loading={false} failed={false} starters={[]} usingFallbackStarters onAsk={jest.fn()} />);

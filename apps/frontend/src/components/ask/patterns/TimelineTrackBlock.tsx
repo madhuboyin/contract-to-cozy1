@@ -18,8 +18,6 @@ import { exportHomeTimelineEvents } from '@/lib/api/homeTimelineApi';
 // date cannot be read, or there is a single record, the existing vertical list is used instead.
 
 const CATEGORY_COLOURS = ['bg-teal-600', 'bg-sky-600', 'bg-amber-500', 'bg-violet-600', 'bg-rose-600', 'bg-slate-600'];
-const PX_PER_YEAR = 110;
-
 // FRD v1.90: the capital windows keep their live canonical detail (CapitalWindowDetail, re-read from the capital timeline)
 // under the track and in the list, whichever the homeowner picks; any other timeline has no domain detail.
 const CAPITAL_WINDOWS_BLOCK_ID = 'capital-timeline-table';
@@ -150,7 +148,6 @@ export const TimelineTrackBlock: AskBlockRenderer<'TIMELINE'> = (props) => {
   const firstYear = Math.floor(ordered[0].point.year);
   const nowYear = new Date().getFullYear() + new Date().getMonth() / 12;
   const lastYear = Math.max(Math.ceil(ordered[ordered.length - 1].point.year), firstYear + 1);
-  const x = (year: number) => (year - firstYear) * PX_PER_YEAR;
   const colourFor = (categoryId: string | undefined) => categories.find((category) => category.id === categoryId)?.colour ?? 'bg-teal-600';
   const step = (direction: -1 | 1) => {
     if (!selected || visible.length === 0) return;
@@ -176,28 +173,26 @@ export const TimelineTrackBlock: AskBlockRenderer<'TIMELINE'> = (props) => {
         </div>
       )}
       <div className="mt-3 overflow-x-auto rounded-xl border border-slate-100 bg-slate-50" tabIndex={0} aria-label={`${block.title}, ${visible.length} of ${ordered.length} shown`}>
-        <div className="relative mx-6 h-36" style={{ width: `${(lastYear - firstYear) * PX_PER_YEAR}px` }}>
-          <div className="absolute inset-x-0 top-24 h-0.5 bg-slate-200" aria-hidden="true" />
-          {Array.from({ length: lastYear - firstYear + 1 }, (_, offset) => firstYear + offset).map((year) => (
-            <span key={year} className="absolute top-[6.5rem] -translate-x-1/2 text-[11px] tabular-nums text-slate-500" style={{ left: `${x(year)}px` }} aria-hidden="true">{year}</span>
-          ))}
-          {nowYear >= firstYear && nowYear <= lastYear && (
-            <span className="absolute bottom-10 top-4 border-l-2 border-dashed border-teal-500" style={{ left: `${x(nowYear)}px` }} aria-hidden="true">
-              <span className="absolute -top-1 left-1 whitespace-nowrap text-[11px] font-semibold text-teal-800">Today</span>
-            </span>
-          )}
-          <ol>
-            {visible.map(({ item, point }, index) => (
-              <li key={item.id}>
-                <button type="button" aria-pressed={selected?.item.id === item.id} onClick={() => setSelectedId(item.id)}
-                  aria-label={`${point.label}: ${item.label}${item.category ? ` (${item.category.label})` : ''}`}
-                  data-ask-timeline-point={item.id}
-                  className={cn('absolute h-4 w-4 -translate-x-1/2 rounded-full border-[3px] border-slate-50', colourFor(item.category?.id), selected?.item.id === item.id && 'ring-2 ring-slate-900 ring-offset-1')}
-                  style={{ left: `${x(point.year)}px`, top: index % 2 ? '4.25rem' : '2.75rem' }} />
+        <ol className="flex min-w-max px-6 py-4">
+          {Array.from({ length: lastYear - firstYear + 1 }, (_, offset) => firstYear + offset).map((year) => {
+            const inYear = visible.filter(({ point }) => Math.floor(point.year) === year);
+            const isCurrentYear = Math.floor(nowYear) === year;
+            return (
+              <li key={year} className={cn('relative flex h-28 w-[110px] shrink-0 flex-col items-center border-b-2 border-slate-200', isCurrentYear && 'border-b-teal-500')}>
+                {isCurrentYear && <span className="mb-1 text-[11px] font-semibold text-teal-800">Today</span>}
+                <div className="flex flex-1 flex-wrap content-center justify-center gap-2 px-2">
+                  {inYear.map(({ item, point }) => (
+                    <button key={item.id} type="button" aria-pressed={selected?.item.id === item.id} onClick={() => setSelectedId(item.id)}
+                      aria-label={`${point.label}: ${item.label}${item.category ? ` (${item.category.label})` : ''}`}
+                      data-ask-timeline-point={item.id}
+                      className={cn('h-4 w-4 rounded-full border-[3px] border-slate-50', colourFor(item.category?.id), selected?.item.id === item.id && 'ring-2 ring-slate-900 ring-offset-1')} />
+                  ))}
+                </div>
+                <span className="mt-2 text-[11px] tabular-nums text-slate-500" aria-hidden="true">{year}</span>
               </li>
-            ))}
-          </ol>
-        </div>
+            );
+          })}
+        </ol>
       </div>
       {selected ? (
         <div className="mt-3 flex items-start gap-3 rounded-xl border border-slate-200 p-3" aria-live="polite" data-ask-timeline-selected={selected.item.id}>

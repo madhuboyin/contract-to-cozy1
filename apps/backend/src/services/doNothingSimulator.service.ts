@@ -27,6 +27,10 @@ type DeductibleStrategy = 'KEEP_HIGH' | 'RAISE' | 'LOWER' | 'UNCHANGED';
 type Severity = 'LOW' | 'MEDIUM' | 'HIGH';
 type Impact = 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL';
 
+const countLabel = (count: number, singular: string, plural = `${singular}s`) => `${count} ${count === 1 ? singular : plural}`;
+const dollars = (cents: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(cents / 100);
+const dollarRange = (minCents: number, maxCents: number) => minCents === maxCents ? dollars(minCents) : `${dollars(minCents)}–${dollars(maxCents)}`;
+
 type Peril = 'WATER' | 'FIRE' | 'WIND_HAIL' | 'THEFT' | 'LIABILITY' | 'ELECTRICAL' | 'OTHER';
 
 export type DoNothingInputOverrides = {
@@ -996,7 +1000,7 @@ export class DoNothingSimulatorService {
       topRiskDriversRaw.push({
         code: 'MAINTENANCE_DEFERRAL',
         title: 'Skipping maintenance increases failure probability',
-        detail: `${overdueTasks.length} overdue task(s), including ${criticalOverdue.length} high-priority items, were carried forward.`,
+        detail: `${countLabel(overdueTasks.length, 'overdue task')}, including ${countLabel(criticalOverdue.length, 'high-priority item')}, were carried forward.`,
         severity: criticalOverdue.length > 0 ? 'HIGH' : 'MEDIUM',
         relatedPerils: ['OTHER'],
       });
@@ -1006,7 +1010,7 @@ export class DoNothingSimulatorService {
       topRiskDriversRaw.push({
         code: 'AGING_SYSTEMS',
         title: 'Aging systems approach end-of-life',
-        detail: `${nearEolItems.length} item(s) are beyond 70% of expected lifespan, with ${criticalEolItems.length} in critical range.`,
+        detail: `${countLabel(nearEolItems.length, 'item')} ${nearEolItems.length === 1 ? 'is' : 'are'} beyond 70% of expected lifespan, with ${criticalEolItems.length} in critical range.`,
         severity: criticalEolItems.length > 0 ? 'HIGH' : 'MEDIUM',
         relatedPerils: ['OTHER'],
       });
@@ -1018,7 +1022,7 @@ export class DoNothingSimulatorService {
         title: 'Water-related exposure remains elevated',
         detail:
           claimsByPeril.WATER > 0
-            ? `${claimsByPeril.WATER} recent water/plumbing claim signal(s) increase repeat-risk probability.`
+            ? `${countLabel(claimsByPeril.WATER, 'recent water/plumbing claim signal')} ${claimsByPeril.WATER === 1 ? 'increases' : 'increase'} repeat-risk probability.`
             : 'Property and system profile indicate elevated leak/water exposure if no mitigation is applied.',
         severity: claimsByPeril.WATER > 0 || property.hasDrainageIssues ? 'HIGH' : 'MEDIUM',
         relatedPerils: ['WATER'],
@@ -1031,7 +1035,7 @@ export class DoNothingSimulatorService {
         title: 'Wind/hail vulnerability accumulates over time',
         detail:
           claimsByPeril.WIND_HAIL > 0
-            ? `${claimsByPeril.WIND_HAIL} recent wind/hail claim signal(s) found in the property history.`
+            ? `${countLabel(claimsByPeril.WIND_HAIL, 'recent wind/hail claim signal')} ${claimsByPeril.WIND_HAIL === 1 ? 'was' : 'were'} found in the property history.`
             : 'Roof age profile increases weather-loss likelihood over a longer inaction horizon.',
         severity: claimsByPeril.WIND_HAIL > 1 || roofAging ? 'HIGH' : 'MEDIUM',
         relatedPerils: ['WIND_HAIL'],
@@ -1042,7 +1046,7 @@ export class DoNothingSimulatorService {
       topRiskDriversRaw.push({
         code: 'CLAIM_RECURRENCE',
         title: 'Recent claims indicate recurrence sensitivity',
-        detail: `${claims.length} claim(s) in the last 36 months increase baseline incident likelihood sensitivity.`,
+        detail: `${countLabel(claims.length, 'claim')} in the last 36 months ${claims.length === 1 ? 'increases' : 'increase'} baseline incident likelihood sensitivity.`,
         severity: claims.length >= 3 ? 'HIGH' : 'MEDIUM',
         relatedPerils: ['OTHER'],
       });
@@ -1052,7 +1056,7 @@ export class DoNothingSimulatorService {
       topRiskDriversRaw.push({
         code: 'COVERAGE_GAP_SIGNAL',
         title: 'Coverage gap signal increases downside if no action is taken',
-        detail: `${Math.round(coverageGapCount)} active coverage gap signal(s) were reused from Coverage Intelligence.`,
+        detail: `${countLabel(Math.round(coverageGapCount), 'active coverage gap signal')} ${Math.round(coverageGapCount) === 1 ? 'was' : 'were'} reused from Coverage Intelligence.`,
         severity: coverageGapCount >= 3 ? 'HIGH' : 'MEDIUM',
         relatedPerils: ['OTHER'],
       });
@@ -1109,9 +1113,7 @@ export class DoNothingSimulatorService {
       {
         code: 'DEFERRED_MAINTENANCE_COST',
         title: 'Deferred maintenance debt',
-        detail: `Projected maintenance debt adds ${Math.round(maintenanceDebtMin / 100)}-${Math.round(
-          maintenanceDebtMax / 100
-        )} USD over ${horizonMonths} months.`,
+        detail: `Projected maintenance debt adds ${dollarRange(maintenanceDebtMin, maintenanceDebtMax)} over ${horizonMonths} months.`,
         severity: maintenanceDebtMax > 180000 ? 'HIGH' : maintenanceDebtMax > 70000 ? 'MEDIUM' : 'LOW',
         relatedPerils: ['OTHER'],
       },
@@ -1215,7 +1217,7 @@ export class DoNothingSimulatorService {
       },
       {
         title: 'Aging-system failure timing risk',
-        detail: `${criticalEolItems.length} critical end-of-life item(s) can trigger expensive failure windows.`,
+        detail: `${countLabel(criticalEolItems.length, 'critical end-of-life item')} can trigger expensive failure windows.`,
         estCostCentsMin: agingImpactMin,
         estCostCentsMax: agingImpactMax,
       },
@@ -1296,26 +1298,26 @@ export class DoNothingSimulatorService {
       },
       {
         label: 'Maintenance posture evaluated',
-        detail: `${overdueTasks.length} overdue task(s), ${criticalOverdue.length} critical overdue, completion rate ${Math.round(
+        detail: `${countLabel(overdueTasks.length, 'overdue task')}, ${criticalOverdue.length} critical overdue, completion rate ${Math.round(
           completionRate * 100
         )}%.`,
         impact: mergedOverrides.skipMaintenance ? 'NEGATIVE' : overdueTasks.length > 0 ? 'NEGATIVE' : 'NEUTRAL',
       },
       {
         label: 'Inventory lifecycle pressure detected',
-        detail: `${nearEolItems.length} near end-of-life item(s), ${criticalEolItems.length} in critical range.`,
+        detail: `${countLabel(nearEolItems.length, 'near end-of-life item')}, ${criticalEolItems.length} in critical range.`,
         impact: nearEolItems.length > 0 ? 'NEGATIVE' : 'NEUTRAL',
       },
       {
         label: 'Claims recurrence sensitivity applied',
-        detail: `${claims.length} claim(s) in 36-month lookback; water=${claimsByPeril.WATER}, wind/hail=${claimsByPeril.WIND_HAIL}.`,
+        detail: `${countLabel(claims.length, 'claim')} in 36-month lookback; water=${claimsByPeril.WATER}, wind/hail=${claimsByPeril.WIND_HAIL}.`,
         impact: claims.length > 0 ? 'NEGATIVE' : 'NEUTRAL',
       },
       {
         label: 'Shared coverage gap signal applied',
         detail:
           coverageGapCount !== null
-            ? `${Math.round(coverageGapCount)} coverage gap signal(s) reused from Coverage Intelligence.`
+            ? `${countLabel(Math.round(coverageGapCount), 'coverage gap signal')} reused from Coverage Intelligence.`
             : 'No fresh coverage gap signal available; used local baseline only.',
         impact:
           coverageGapCount !== null

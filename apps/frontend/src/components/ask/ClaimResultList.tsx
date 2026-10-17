@@ -234,7 +234,7 @@ export function ClaimResultList({ block, propertyId, disabled, onAction, onFilte
             {item.status && <span className="text-xs text-slate-600">{item.status.replace(/_/g, ' ').toLowerCase()}</span>}
           </div>
           {item.description && <p className="mt-1 text-sm text-slate-600">{item.description}</p>}
-          {item.meta.length > 0 && <p className="mt-1 text-xs text-slate-600">{item.meta.join(' · ')}</p>}
+          {item.meta.filter((value) => label(value) !== label(item.status)).length > 0 && <p className="mt-1 text-xs text-slate-600">{item.meta.filter((value) => label(value) !== label(item.status)).map(label).join(' · ')}</p>}
         </li>)}
       </ul>
       {section.count > section.items.length && <p className="mt-3 text-sm text-slate-500">+{section.count - section.items.length} more are available on the full page.</p>}

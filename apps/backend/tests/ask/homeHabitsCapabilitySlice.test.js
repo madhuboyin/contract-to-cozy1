@@ -92,7 +92,7 @@ test('habits keep the coach\'s ranked order, split into up next, in your routine
   const [due] = list.sections[0].items;
   assert.equal(due.title, 'Habit due');
   assert.equal(due.description, 'Why due');
-  assert.deepEqual(due.meta, ['Monthly', 'easy', 'About 10 min', 'Suggested for Sep 20, 2026']);
+  assert.deepEqual(due.meta, ['Monthly', 'Easy', 'About 10 min', 'Suggested for Sep 20, 2026']);
   assert.doesNotMatch(due.detail, /Why it was suggested/, 'the reason is already on the card');
   assert.match(due.detail, /How often: Monthly/);
   // The review opens inside Ask (see homeHabitReviewWrites.test.js); a row never links to the desktop page.

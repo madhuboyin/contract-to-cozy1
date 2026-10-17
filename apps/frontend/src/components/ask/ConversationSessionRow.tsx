@@ -114,7 +114,7 @@ export function ConversationSessionRow({ session, active, status, disabled, busy
               type="button"
               aria-label={`Conversation actions for ${session.title}`}
               disabled={busy}
-              className="mt-1.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg text-slate-500 hover:bg-white hover:text-slate-900 focus-visible:ring-2 focus-visible:ring-teal-300 disabled:opacity-50"
+              className={cn('mt-1.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg text-slate-500 transition hover:bg-white hover:text-slate-900 focus:opacity-100 focus-visible:ring-2 focus-visible:ring-teal-300 disabled:opacity-50', active ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 max-lg:opacity-100')}
             >
               <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
             </button>
