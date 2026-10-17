@@ -62,6 +62,7 @@ const DEFINITIONS = [
   adapter('status-board.read', 'Status Board (homeStatusBoard.service)', 'HOME_STATUS_BOARD'),
   adapter('home-habits.read', 'Home Habit Coach (HomeHabitCoachService)', 'HOME_HABITS'),
   adapter('home-digital-will.read', 'Home Continuity Plan (HomeDigitalWillService)', 'HOME_DIGITAL_WILL'),
+  adapter('home-digital-will.create', 'Home Continuity Plan (HomeDigitalWillService.getOrCreateByProperty)', 'HOME_DIGITAL_WILL_CREATE', 'MUTATION_PREPARATION'),
   adapter('plant-advisor.care-outlook', 'Plant Advisor care outlook (PlantCarePlannerService)', 'PLANT_CARE_OUTLOOK'),
   adapter('negotiation-shield.cases', 'Negotiation Shield cases (NegotiationShieldService)', 'NEGOTIATION_SHIELD_CASES'),
   adapter('home-digital-twin.scenarios', 'Home Upgrade Planner scenarios (HomeDigitalTwinScenarioService)', 'HOME_UPGRADE_SCENARIOS'),

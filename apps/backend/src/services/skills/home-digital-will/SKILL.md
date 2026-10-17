@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Review this home's continuity plan: how ready it is to hand off, what each section holds and who the trusted contacts are. Entry titles only and contacts without email or phone; entry details stay on the plan.
+Create and manage this home's continuity plan inside Ask Cozy: how ready it is to hand off, what each section holds and who the trusted contacts are. Durable answers remain privacy-minimized; sensitive details appear only in their governed input and review workspace.
 
 ## Select this Skill when
 
@@ -19,10 +19,11 @@ Review this home's continuity plan: how ready it is to hand off, what each secti
 ## Operations
 
 - `HOME_DIGITAL_WILL`
+- `HOME_DIGITAL_WILL_CREATE`
 
 ## Consumers
 
-- ASK: HOME_DIGITAL_WILL
+- ASK: HOME_DIGITAL_WILL, HOME_DIGITAL_WILL_CREATE
 
 ## Canonical ownership and boundaries
 

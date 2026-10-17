@@ -227,6 +227,7 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   PAST_HAZARD_EXPOSURE: 'This house has seen two storms and one flood over the years, according to the reviewed hazard records matched to it.',
   HOME_STATUS_BOARD: 'One of your appliances needs attention soon; two others are worth monitoring and the rest are in good shape.',
   HOME_DIGITAL_WILL: 'Your home plan is not ready yet for someone to take over while you are away; it still needs a primary trusted contact.',
+  HOME_DIGITAL_WILL_CREATE: 'A private Home Continuity Plan draft with the standard sections is ready to be created after confirmation.',
   PLANT_CARE_OUTLOOK: "Yes, with heat in this week's forecast, check the soil of your house plants more often; the fern needs it soon.",
   NEGOTIATION_SHIELD_CASES: 'Two of your negotiation reviews are open: the roof quote review was analyzed last week and the premium increase review is still a draft.',
   HOME_UPGRADE_SCENARIOS: 'Of your saved upgrade options, repairing the water heater costs about $400–$700 upfront, while replacing it with a heat pump model costs $2,800–$4,200 and pays back in about 6 years.',

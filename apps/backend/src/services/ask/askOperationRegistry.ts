@@ -113,6 +113,7 @@ export type AskOperationId =
   // Habit review actions: add to routine, mark done, snooze, skip, stop suggesting. Declared-action only (see ASK_INTERNAL_OPERATION_IDS).
   | 'HOME_HABIT_UPDATE'
   | 'HOME_DIGITAL_WILL'
+  | 'HOME_DIGITAL_WILL_CREATE'
   | 'PLANT_CARE_OUTLOOK'
   | 'NEGOTIATION_SHIELD_CASES'
   // Start a Negotiation Shield review (slice 2a): a confirmation-gated command reached by the declared "Start a review" action, a scenario choice row or a
@@ -441,6 +442,8 @@ export const ASK_INTERNAL_OPERATION_IDS: ReadonlySet<AskOperationId> = new Set<A
   'PROPERTY_PURCHASE_DATE_SET',
   'HOME_JOURNEY_SET',
   'MATERIAL_SPEC_ADD',
+  // Reached only from the empty Home Continuity Plan answer; never by fuzzy retrieval.
+  'HOME_DIGITAL_WILL_CREATE',
   // Reached by the declared Start a review action, a scenario choice row, or the deterministic typed-start pattern; never by fuzzy retrieval.
   'NEGOTIATION_SHIELD_CASE_START',
   // Reached only by the declared Run the analysis action on a review or a started review's receipt; no message pattern.
@@ -753,6 +756,7 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   ROOM_PLANT_RECOMMENDATIONS: definition('ROOM_PLANT_RECOMMENDATIONS', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'plant-advisor.room-recommendations', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
   OWNERSHIP_COST_COMMAND: definition('OWNERSHIP_COST_COMMAND', 'COMMAND', false, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'ownership-costs.command', ['SUMMARY', 'WORKFLOW_PROGRESS']),
   HOME_DIGITAL_WILL: definition('HOME_DIGITAL_WILL', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'home-digital-will.read', ['SUMMARY', 'GROUPED_LIST', 'PROGRESS', 'LIMITATION', 'BOUNDARY']),
+  HOME_DIGITAL_WILL_CREATE: definition('HOME_DIGITAL_WILL_CREATE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'home-digital-will.create', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   HOME_HABITS: definition('HOME_HABITS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'home-habits.read', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY', 'TASK_GUIDE']),
   HOME_HABIT_UPDATE: definition('HOME_HABIT_UPDATE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'home-habits.update', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
   HOME_STATUS_BOARD: definition('HOME_STATUS_BOARD', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'status-board.read', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),

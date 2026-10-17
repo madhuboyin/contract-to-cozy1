@@ -168,11 +168,14 @@ test('PROGRESS is allowed for the operation in the registry and the home digital
   assert.ok(getSkillForOperation('HOME_DIGITAL_WILL').allowedResultBlocks.includes('PROGRESS'));
 });
 
-test('the not-started answer and the handoff next steps link nowhere and say Ask cannot start or edit a plan', () => {
+test('the not-started answer starts governed Ask-native creation without a desktop handoff', () => {
   const none = digitalWillFromView(null, 'p1');
-  assert.deepEqual(none.blocks[0].actions, []);
-  assert.match(none.blocks[0].body, /Ask cannot start or edit one yet/);
+  assert.deepEqual(none.blocks[0].actions.map((action) => [action.label, action.operationId]), [['Create my plan', 'HOME_DIGITAL_WILL_CREATE']]);
+  assert.doesNotMatch(none.blocks[0].body, /Ask cannot start or edit one yet/);
   assert.equal(JSON.stringify(none).includes('/dashboard/'), false);
+});
+
+test('remaining handoff requirements stay privacy-minimized while their Ask-native command slices are implemented', () => {
   const gaps = digitalWillFromView(will({ trustedContacts: [] }), 'p1');
   const ring = gaps.blocks.find((block) => block.id === 'digital-will-progress');
   assert.ok(ring.nextSteps.length > 0 && ring.nextSteps.every((step) => step.href === null));

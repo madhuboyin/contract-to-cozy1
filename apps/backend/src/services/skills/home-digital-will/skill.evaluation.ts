@@ -16,6 +16,7 @@ export const HOME_DIGITAL_WILL_SKILL_EVALUATION = deepFreezeSkillPackage({
   ],
   operationCases: [
     { operationId: 'HOME_DIGITAL_WILL', expectedAdapter: { id: 'home-digital-will.read', version: '1.0' } },
+    { operationId: 'HOME_DIGITAL_WILL_CREATE', expectedAdapter: { id: 'home-digital-will.create', version: '1.0' } },
   ],
   ambiguityCases: [
     {
@@ -26,6 +27,7 @@ export const HOME_DIGITAL_WILL_SKILL_EVALUATION = deepFreezeSkillPackage({
   ],
   policyCases: [
     { consumer: 'ASK', operationId: 'HOME_DIGITAL_WILL', allowed: true },
+    { consumer: 'ASK', operationId: 'HOME_DIGITAL_WILL_CREATE', allowed: true },
   ],
   contextCases: [
     { state: 'KNOWN', expectedBehavior: 'READY' },
@@ -53,13 +55,13 @@ export const HOME_DIGITAL_WILL_SKILL_EVALUATION = deepFreezeSkillPackage({
       expectedBehavior: 'DEGRADED_OR_UNAVAILABLE',
     },
   ],
-  expectedAdapters: [{ id: 'home-digital-will.read', version: '1.0' }],
+  expectedAdapters: [{ id: 'home-digital-will.read', version: '1.0' }, { id: 'home-digital-will.create', version: '1.0' }],
   prohibitedAdapters: ['inventory.lookup', 'intelligence-envelope.query'],
   expectedContextProviders: [PROPERTY_IDENTITY_CONTEXT_PROVIDER, PROPERTY_JOURNEY_CONTEXT_PROVIDER],
   prohibitedContextProviders: ['undeclared.financial-account'],
   expectedStatuses: ['ANSWERED', 'READY_WITH_LIMITATIONS'],
-  expectedBlockTypes: ['SUMMARY', 'GROUPED_LIST', 'PROGRESS', 'LIMITATION', 'BOUNDARY'],
-  expectedCanonicalCalls: [{ id: 'home-digital-will.read', version: '1.0' }],
+  expectedBlockTypes: ['SUMMARY', 'GROUPED_LIST', 'PROGRESS', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY'],
+  expectedCanonicalCalls: [{ id: 'home-digital-will.read', version: '1.0' }, { id: 'home-digital-will.create', version: '1.0' }],
   prohibitedCanonicalCalls: ['inventory.lookup', 'intelligence-envelope.query'],
   modelDisabledCase: {
     message: 'Show my home continuity plan',

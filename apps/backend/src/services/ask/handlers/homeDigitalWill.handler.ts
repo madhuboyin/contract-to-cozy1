@@ -59,9 +59,9 @@ export function digitalWillFromView(will: DigitalWillView, propertyId: string): 
       status: 'ANSWERED', reasonCode: 'DIGITAL_WILL_NOT_STARTED',
       blocks: [{
         type: 'SUMMARY', id: 'digital-will-summary', title: 'No Home Continuity Plan yet',
-        body: 'A Home Continuity Plan records emergency instructions, key contacts, utilities and how the home runs, for whoever needs to take over. None has been started for this home, and Ask cannot start or edit one yet.',
+        body: 'A Home Continuity Plan records emergency instructions, key contacts, utilities and how the home runs, for whoever needs to take over. None has been started for this home.',
         tone: 'DEFAULT',
-        actions: [],
+        actions: [{ id: 'home-continuity-create', label: 'Create my plan', interactionType: 'START_WORKFLOW', message: 'Create my home continuity plan', operationId: 'HOME_DIGITAL_WILL_CREATE', style: 'PRIMARY' }],
       }, boundary],
       suggestions: [],
     };

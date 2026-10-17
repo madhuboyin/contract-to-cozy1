@@ -90,6 +90,7 @@ import './handlers/aroundYourHome.handler';
 import './handlers/homeRiskReplay.handler';
 import './handlers/homeHabitCoach.handler';
 import './handlers/homeDigitalWill.handler';
+import './handlers/homeDigitalWillCreate.handler';
 import './handlers/plantAdvisor.handler';
 import './handlers/plantRecommendations.handler';
 import './handlers/ownershipCostCommands.handler';
