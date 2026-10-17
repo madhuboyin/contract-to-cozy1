@@ -44,6 +44,7 @@ import { homePlantAddResult, homePlantContextVersion, materialSpecAddResult, mat
 import { negotiationShieldStartContextVersion, negotiationShieldStartResult } from '../handlers/negotiationShieldStart.handler';
 import { isNegotiationStartScenario, NEGOTIATION_SHIELD_START_CAPTURE_KEY, NEGOTIATION_START_SCENARIO_SPECS, parseNegotiationStartAnswer } from '../support/negotiationShieldStart';
 import { negotiationShieldEditContextVersion, negotiationShieldEditResult } from '../handlers/negotiationShieldEdit.handler';
+import { HOME_DIGITAL_WILL_METADATA_CAPTURE_KEY, HomeDigitalWillMetadataInputSchema, homeDigitalWillMetadataResult } from '../handlers/homeDigitalWillCreate.handler';
 import { NEGOTIATION_SHIELD_EDIT_CAPTURE_KEY, parseNegotiationEditAnswer } from '../support/negotiationShieldEdit';
 import { getNegotiationShieldEditableInputForProperty } from '../../negotiationShieldCaseList';
 import { negotiationShieldAttachOffer, negotiationShieldAttachResult } from '../handlers/negotiationShieldAttach.handler';
@@ -819,6 +820,20 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     captureId = input.idempotencyKey;
     capturedContextVersion = currentVersion;
     canonicalOwner = material ? 'MaterialSpec' : 'HomePlant';
+  } else if (execution.operationId === 'HOME_DIGITAL_WILL_CREATE') {
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson)
+      ? execution.parametersJson as Record<string, unknown> : {};
+    const launch = storedParameters.homeDigitalWillMetadataLaunch && typeof storedParameters.homeDigitalWillMetadataLaunch === 'object' && !Array.isArray(storedParameters.homeDigitalWillMetadataLaunch)
+      ? storedParameters.homeDigitalWillMetadataLaunch as { planId?: unknown } : null;
+    if (input.captureKey !== HOME_DIGITAL_WILL_METADATA_CAPTURE_KEY || !launch || typeof launch.planId !== 'string') throw Object.assign(new Error('This plan-details form is no longer active. Open Edit details again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    const service = new (await import('../../homeDigitalWill.service')).HomeDigitalWillService();
+    const plan = await service.getByProperty(execution.propertyId);
+    const currentVersion = plan ? createHash('sha256').update(`home-digital-will-metadata:${plan.id}:${plan.updatedAt.toISOString()}`).digest('hex') : null;
+    if (!currentVersion || currentVersion !== input.expectedContextVersion) throw Object.assign(new Error('The plan changed while the form was open. Open Edit details again.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
+    const parsed = HomeDigitalWillMetadataInputSchema.safeParse(input.answer);
+    if (!parsed.success || (parsed.data.lastReviewedAt && !/^\d{4}-\d{2}-\d{2}$/.test(parsed.data.lastReviewedAt))) throw Object.assign(new Error('Check the title, status, readiness and review date.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+    result = await homeDigitalWillMetadataResult(userId, execution.propertyId, launch.planId, parsed.data);
+    captureId = input.idempotencyKey; capturedContextVersion = currentVersion; canonicalOwner = 'HomeDigitalWill';
   } else if (execution.operationId === 'NEGOTIATION_SHIELD_CASE_START') {
     const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson)
       ? execution.parametersJson as Record<string, unknown>

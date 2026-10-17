@@ -68,6 +68,7 @@ export function digitalWillFromView(will: DigitalWillView, propertyId: string): 
   }
   const handoff = evaluateHomeDigitalWillHandoffReadiness(will);
   const planActions = [
+    { id: 'home-continuity-metadata', label: 'Edit details', interactionType: 'START_WORKFLOW' as const, message: 'Edit my home continuity plan details', operationId: 'HOME_DIGITAL_WILL_CREATE' as const, entityType: 'HOME_DIGITAL_WILL_METADATA', entityId: will.id, style: 'SECONDARY' as const },
     ...(will.status !== 'ACTIVE' && handoff.state === 'READY' ? [{ id: 'home-continuity-publish', label: 'Mark plan ready', interactionType: 'START_WORKFLOW' as const, message: 'Publish my home continuity plan', operationId: 'HOME_DIGITAL_WILL_CREATE' as const, entityType: 'HOME_DIGITAL_WILL_PUBLISH', entityId: will.id, style: 'PRIMARY' as const }] : []),
     { id: 'home-continuity-packet', label: 'Download emergency packet', href: `/api/properties/${propertyId}/home-digital-will/emergency-packet.pdf`, style: 'SECONDARY' as const },
   ];
