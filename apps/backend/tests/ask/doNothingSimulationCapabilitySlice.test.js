@@ -16,6 +16,7 @@ const { capabilityCardLaunch } = require('../../src/services/ask/askCapabilityCa
 const { resolveAskRoutingCascade } = require('../../src/services/ask/askRoutingCascade.ts');
 const { getSkillForOperation } = require('../../src/services/skills/skillRegistry.ts');
 const { ASK_OPERATION_CAPABILITY } = require('../../src/services/intelligence/capabilitySkillGuidanceBridge.registry.ts');
+const { AskPresentationBlockSchema } = require('../../src/productFramework/ask/ask.contract.ts');
 
 const PAGE = '/dashboard/properties/p1/tools/do-nothing';
 const original = prismaModule.prisma;
@@ -124,6 +125,28 @@ test('every block and the boundary survive the answer-trust validator, and the i
   assert.equal(run.id, 'run-do-nothing');
   assert.equal(isAskActionApplicable({ action: run, operationId: 'DO_NOTHING_SIMULATION', propertyId: 'p1', householdRole: 'OWNER', authoritativeSourceAvailable: true }), true);
   assert.equal(isAskActionApplicable({ action: run, operationId: 'DO_NOTHING_SIMULATION', propertyId: 'p1', householdRole: 'VIEWER', authoritativeSourceAvailable: true }), false);
+});
+
+test('the complete and oversized legacy-shaped presentations satisfy the saved block contract', () => {
+  const ordinary = doNothingSimulationFromView({ run: dto(), scenarios: [scenario('s1')] }, 'p1', true);
+  for (const block of ordinary.blocks) assert.equal(AskPresentationBlockSchema.safeParse(block).success, true, block.id);
+
+  const malformedDriver = { code: 'OLD', title: null, detail: null, severity: null };
+  const oversized = doNothingSimulationFromView({
+    run: {
+      ...dto(),
+      outputs: {
+        topRiskDrivers: Array.from({ length: 120 }, (_, index) => index === 0 ? malformedDriver : { code: `R${index}`, title: `Risk ${index}`, detail: `Detail ${index}`, severity: 'LOW' }),
+        topCostDrivers: [],
+        biggestAvoidableLosses: [],
+      },
+      nextSteps: [],
+    },
+    scenarios: Array.from({ length: 120 }, (_, index) => scenario(`s${index}`)),
+  }, 'p1', true);
+  for (const block of oversized.blocks) assert.equal(AskPresentationBlockSchema.safeParse(block).success, true, block.id);
+  const list = oversized.blocks.find((block) => block.id === 'do-nothing-items');
+  assert.ok(list.sections.every((section) => section.items.length <= 100));
 });
 
 test('cost-of-waiting questions route here; running or editing a simulation and one item\'s decision are not claimed', () => {

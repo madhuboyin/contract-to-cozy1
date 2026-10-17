@@ -1,5 +1,5 @@
 // Ask handler support: executionState. Moved out of askHandlerSupport.ts unchanged (FRD v1.110); that file re-exports these modules.
-import { ASK_RESPONSE_SCHEMA_VERSION, AskExecutionResponseSchema, type AskExecutionResponse, type AskPresentationBlock } from '../../../productFramework/ask/ask.contract';
+import { ASK_RESPONSE_SCHEMA_VERSION, AskExecutionResponseSchema, AskPresentationBlockSchema, type AskExecutionResponse, type AskPresentationBlock } from '../../../productFramework/ask/ask.contract';
 import { AskExecution, AskExecutionStatus, Prisma } from '@prisma/client';
 import { ASK_OPERATION_DEFINITIONS, getAskOperationDefinition, type AskOperationId, type AskOperationResult } from '../askOperationRegistry';
 import { prisma } from '../../../lib/prisma';
@@ -91,15 +91,22 @@ export function preservedExecutionHistory(existingResultJson: unknown, freshBloc
     ? existingResultJson as { originalResponse?: unknown; blocks?: unknown; continuesExecutionId?: unknown }
     : null;
   const continuesExecutionId = typeof existing?.continuesExecutionId === 'string' ? existing.continuesExecutionId : null;
-  const validExisting = existing?.originalResponse && typeof existing.originalResponse === 'object' && !Array.isArray(existing.originalResponse)
-    && Array.isArray((existing.originalResponse as { blocks?: unknown }).blocks)
-    && typeof (existing.originalResponse as { observedAt?: unknown }).observedAt === 'string'
-    ? existing.originalResponse as { blocks: AskPresentationBlock[]; observedAt: string }
+  const original = existing?.originalResponse && typeof existing.originalResponse === 'object' && !Array.isArray(existing.originalResponse)
+    ? existing.originalResponse as { blocks?: unknown; observedAt?: unknown }
+    : null;
+  const validExisting = original && Array.isArray(original.blocks)
+    && original.blocks.every((block) => AskPresentationBlockSchema.safeParse(block).success)
+    && typeof original.observedAt === 'string' && !Number.isNaN(Date.parse(original.observedAt))
+    ? original as { blocks: AskPresentationBlock[]; observedAt: string }
     : null;
   if (validExisting) return { originalResponse: validExisting, continuesExecutionId };
-  if (Array.isArray(existing?.blocks) && existing.blocks.length > 0) {
+  if (Array.isArray(existing?.blocks) && existing.blocks.length > 0 && existing.blocks.every((block) => AskPresentationBlockSchema.safeParse(block).success)) {
     return { originalResponse: { blocks: existing.blocks as AskPresentationBlock[], observedAt: new Date().toISOString() }, continuesExecutionId };
   }
+  // A stored original/current presentation from an older or malformed
+  // contract must not poison every later refresh. The compatible recomputed
+  // answer becomes the new baseline; incompatible historical details remain
+  // hidden rather than forcing the whole execution into the schema fallback.
   return { originalResponse: { blocks: freshBlocks, observedAt: new Date().toISOString() }, continuesExecutionId };
 }
 

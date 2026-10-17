@@ -32,6 +32,13 @@ test('preservedExecutionHistory keeps an already-stamped original forever, never
   assert.equal(history.continuesExecutionId, 'exec-A');
 });
 
+test('preservedExecutionHistory repairs an incompatible historical presentation with the compatible refresh', () => {
+  const freshBlocks = [{ type: 'SUMMARY', id: 'fresh', title: 'Current answer', body: 'Compatible.', tone: 'DEFAULT', actions: [] }];
+  const existing = { originalResponse: { blocks: [{ type: 'REMOVED_BLOCK_VERSION', id: 'old' }], observedAt: '2026-10-01T00:00:00.000Z' }, blocks: [{ type: 'REMOVED_BLOCK_VERSION', id: 'old' }] };
+  const history = preservedExecutionHistory(existing, freshBlocks);
+  assert.deepEqual(history.originalResponse.blocks, freshBlocks);
+});
+
 test('preservedExecutionHistory never mislabels a fresh error/expiry payload as original when a real previous answer already existed', () => {
   // A row from before this policy existed (or a write site it hasn't
   // reached): no originalResponse snapshot, but a real previous answer sat

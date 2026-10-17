@@ -3,7 +3,7 @@
 // re-exports the names below so existing imports keep working.
 import { AskExecution, AskExecutionStatus, HouseholdRole } from '@prisma/client';
 import { prisma } from '../../../lib/prisma';
-import { ASK_RESPONSE_SCHEMA_VERSION, type AskExecutionResponse, type CreateAskExecutionRequest } from '../../../productFramework/ask/ask.contract';
+import { ASK_RESPONSE_SCHEMA_VERSION, AskPresentationBlockSchema, type AskExecutionResponse, type CreateAskExecutionRequest } from '../../../productFramework/ask/ask.contract';
 import { readAskOperationalControls } from '../../../config/askOperationalControls';
 import { askInlineCapturesTotal, askRemoteGenerationTotal, askSkillAdapterExecutionDurationSeconds, askSkillAdapterExecutionsTotal, askSkillAdapterResolutionDurationSeconds, askSkillCanonicalOperationDurationSeconds, askSkillExecutionDurationSeconds, askSkillExecutionsTotal, askSkillHandoffsTotal } from '../../../lib/metrics';
 import { type PropertyAccess } from '../../propertyAccess.service';
@@ -519,6 +519,14 @@ export function refreshWouldDowngradeAnswer(priorStatus: string, refreshed: { st
     && Boolean(refreshed.reasonCode?.startsWith('ASK_ANSWER_RELEVANCE_'));
 }
 
+export function refreshPresentationIsCompatible(
+  result: Pick<AskOperationResult, 'blocks'>,
+  history: ReturnType<typeof preservedExecutionHistory>,
+): boolean {
+  return result.blocks.every((block) => AskPresentationBlockSchema.safeParse(block).success)
+    && history.originalResponse.blocks.every((block) => AskPresentationBlockSchema.safeParse(block).success);
+}
+
 export async function refreshAskExecutionAfterConflict(userId: string, executionId: string): Promise<AskExecutionResponse> {
   const execution = await prisma.askExecution.findFirst({ where: { id: executionId, userId } });
   if (!execution || !execution.propertyId) {
@@ -551,6 +559,13 @@ export async function refreshAskExecutionAfterConflict(userId: string, execution
   // preserved from whatever this row already had via the one shared
   // history policy.
   const history = preservedExecutionHistory(execution.resultJson, result.blocks);
+  // Validate before persistence. Previously an invalid recomputed block was
+  // written first and only discovered by mapPersistedExecution afterward,
+  // replacing a valid answered card with "unsupported presentation version".
+  if (!refreshPresentationIsCompatible(result, history)) {
+    await prisma.askExecutionEvent.create({ data: { executionId, eventType: 'REFRESH_PRESENTATION_REJECTED', metadataJson: asInputJson({ operationId: execution.operationId }) } });
+    return mapPersistedExecution(execution, await propertySummary(execution.propertyId));
+  }
   const priorParameters = execution.parametersJson as { viewState?: { revision?: number } } | null;
   const priorRevision = priorParameters?.viewState?.revision;
   const write = await prisma.askExecution.updateMany({

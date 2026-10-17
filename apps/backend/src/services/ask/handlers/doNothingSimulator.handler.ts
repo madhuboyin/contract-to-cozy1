@@ -25,6 +25,8 @@ type DoNothingRunView = Extract<Awaited<ReturnType<DoNothingSimulatorService['ge
 type DoNothingScenarioView = Awaited<ReturnType<DoNothingSimulatorService['listScenarios']>>['scenarios'][number];
 const doNothingMoney = (cents: number | null | undefined) => (cents == null ? null : `$${Math.round(cents / 100).toLocaleString('en-US')}`);
 const DO_NOTHING_SEVERITY_LABELS: Record<string, string> = { LOW: 'Low', MEDIUM: 'Medium', HIGH: 'High' };
+const DO_NOTHING_SECTION_ITEM_LIMIT = 100;
+const displayText = (value: unknown): string | null => typeof value === 'string' && value.trim() ? value.trim() : null;
 
 export function doNothingSimulationFromView(
   view: { run: DoNothingRunView | null; scenarios: readonly DoNothingScenarioView[] } | 'PRIMARY_OWNER_ONLY' | 'COVERAGE_CONFLICT',
@@ -66,7 +68,7 @@ export function doNothingSimulationFromView(
     };
   }
   const { run, scenarios } = view;
-  const scenarioItems = scenarios.map((scenario) => ({
+  const scenarioItems = scenarios.slice(0, DO_NOTHING_SECTION_ITEM_LIMIT).map((scenario) => ({
     id: scenario.id,
     title: scenario.name,
     description: `${scenario.horizonMonths} months`,
@@ -126,18 +128,28 @@ export function doNothingSimulationFromView(
       severity: 'INFO',
     });
   }
-  const driverItems = (drivers: readonly { code: string; title: string; detail: string; severity: string }[], prefix: string) => drivers.map((driver, index) => ({
-    id: `${prefix}-${index}`, title: driver.title, description: driver.detail, meta: [], status: `${DO_NOTHING_SEVERITY_LABELS[driver.severity] ?? driver.severity} severity`,
-  }));
+  const driverItems = (drivers: readonly { code: string; title: string; detail: string; severity: string }[], prefix: string) => drivers
+    .flatMap((driver, index) => {
+      const title = displayText(driver?.title);
+      if (!title) return [];
+      return [{ id: `${prefix}-${index}`, title, description: displayText(driver.detail), meta: [], status: `${DO_NOTHING_SEVERITY_LABELS[driver.severity] ?? displayText(driver.severity) ?? 'Unknown'} severity` }];
+    })
+    .slice(0, DO_NOTHING_SECTION_ITEM_LIMIT);
   const sections = [
-    { id: 'do-nothing-losses', title: 'Biggest avoidable losses', items: run.outputs.biggestAvoidableLosses.map((loss, index) => {
+    { id: 'do-nothing-losses', title: 'Biggest avoidable losses', items: run.outputs.biggestAvoidableLosses.flatMap((loss, index) => {
+      const title = displayText(loss?.title);
+      if (!title) return [];
       const min = doNothingMoney(loss.estCostCentsMin);
       const max = doNothingMoney(loss.estCostCentsMax);
-      return { id: `loss-${index}`, title: loss.title, description: loss.detail, meta: min && max ? [min === max ? min : `${min} to ${max}`] : [], status: 'Avoidable' };
-    }) },
+      return [{ id: `loss-${index}`, title, description: displayText(loss.detail), meta: min && max ? [min === max ? min : `${min} to ${max}`] : [], status: 'Avoidable' }];
+    }).slice(0, DO_NOTHING_SECTION_ITEM_LIMIT) },
     { id: 'do-nothing-risks', title: 'Top risk drivers', items: driverItems(run.outputs.topRiskDrivers, 'risk') },
     { id: 'do-nothing-costs', title: 'Top cost drivers', items: driverItems(run.outputs.topCostDrivers, 'cost') },
-    { id: 'do-nothing-next', title: 'Suggested next steps', items: run.nextSteps.map((step, index) => ({ id: `step-${index}`, title: step.title, description: step.detail ?? null, meta: [], status: `${DO_NOTHING_SEVERITY_LABELS[step.priority] ?? step.priority} priority` })) },
+    { id: 'do-nothing-next', title: 'Suggested next steps', items: run.nextSteps.flatMap((step, index) => {
+      const title = displayText(step?.title);
+      if (!title) return [];
+      return [{ id: `step-${index}`, title, description: displayText(step.detail), meta: [], status: `${DO_NOTHING_SEVERITY_LABELS[step.priority] ?? displayText(step.priority) ?? 'Unknown'} priority` }];
+    }).slice(0, DO_NOTHING_SECTION_ITEM_LIMIT) },
     { id: 'do-nothing-scenarios', title: 'Saved scenarios', items: scenarioItems },
   ].filter((section) => section.items.length > 0).map((section) => ({ ...section, count: section.items.length }));
   if (sections.length) {
