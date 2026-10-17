@@ -10,6 +10,7 @@ import { ensurePropertyAccess } from '../askHandlerSupport';
 import {
   NEIGHBORHOOD_COMMAND_ACTION_IDS, NEIGHBORHOOD_COMMAND_MESSAGES, NEIGHBORHOOD_KIND_LABELS, NEIGHBORHOOD_RECORD_ENTITY_TYPE, neighborhoodKindsFor,
 } from '../support/neighborhoodInteractionCommand';
+import { collectionDescriptor } from '../support/collectionDescriptor';
 
 // Around Your Home capability-card slice (FRD v1.49): the second new operation for a capability with none. Reads
 // getAroundYourHome, the same call the page's route makes, in the server's environment as that route does. Read-only.
@@ -42,36 +43,35 @@ export function neighborhoodChangeFeedFromView(view: AroundYourHomeView, propert
   }
   if (active.length) {
     const families = [...new Set(active.map((item) => item.source.family))];
+    const sections = families.map((family) => {
+      const items = active.filter((item) => item.source.family === family);
+      return {
+        id: `neighborhood-${String(family).toLowerCase()}`, title: NEIGHBORHOOD_FAMILY_LABELS[family] ?? readableCode(family), count: items.length,
+        items: items.slice(0, 25).map((item) => ({
+          id: item.propertyMatchId,
+          title: item.observation.facts.title ?? readableCode(item.observation.observationType),
+          description: (item.observation.facts.summary ?? item.observation.facts.description ?? null)?.slice(0, 300) ?? null,
+          meta: [
+            `Possible relevance: ${readableCode(item.possibleRelevance.relevance)}`,
+            item.geography.distanceMiles != null ? `${Number(item.geography.distanceMiles).toFixed(1)} mi away` : `Matched by ${readableCode(item.geography.precision) || 'area'}`,
+            item.source.provider,
+            ...(humanDate(item.observation.observedAt) ? [`Observed ${humanDate(item.observation.observedAt)}`] : []),
+            ...(item.interaction.hasMaterialUpdate ? ['Updated since you last looked'] : []),
+            ...(item.interaction.disposition === 'FOLLOWING' ? ['Following'] : []),
+          ],
+          status: String(item.observation.lifecycleStatus), href: null, entityType: NEIGHBORHOOD_RECORD_ENTITY_TYPE,
+          actions: (canChange ? neighborhoodKindsFor(String(item.interaction.disposition)) : []).map((kind) => ({
+            id: NEIGHBORHOOD_COMMAND_ACTION_IDS[kind], label: kind === 'FOLLOW' ? 'Follow' : kind === 'DISMISS' ? 'Dismiss' : 'Not relevant', message: NEIGHBORHOOD_COMMAND_MESSAGES[kind],
+            operationId: 'NEIGHBORHOOD_INTERACTION_COMMAND' as const, interactionType: 'MUTATE_RECORD' as const, style: kind === 'FOLLOW' ? 'SECONDARY' as const : 'QUIET' as const,
+          })),
+        })),
+      };
+    });
     blocks.push({
       type: 'GROUPED_LIST', filters: [], id: 'neighborhood-changes', title: 'Local changes',
       description: 'Grouped by source. Each shows its possible relevance and the geography it matched.',
-      sections: families.map((family) => {
-        const items = active.filter((item) => item.source.family === family);
-        return {
-          id: `neighborhood-${String(family).toLowerCase()}`, title: NEIGHBORHOOD_FAMILY_LABELS[family] ?? readableCode(family), count: items.length,
-          items: items.slice(0, 25).map((item) => ({
-            id: item.propertyMatchId,
-            title: item.observation.facts.title ?? readableCode(item.observation.observationType),
-            description: (item.observation.facts.summary ?? item.observation.facts.description ?? null)?.slice(0, 300) ?? null,
-            meta: [
-              `Possible relevance: ${readableCode(item.possibleRelevance.relevance)}`,
-              item.geography.distanceMiles != null ? `${Number(item.geography.distanceMiles).toFixed(1)} mi away` : `Matched by ${readableCode(item.geography.precision) || 'area'}`,
-              item.source.provider,
-              ...(humanDate(item.observation.observedAt) ? [`Observed ${humanDate(item.observation.observedAt)}`] : []),
-              ...(item.interaction.hasMaterialUpdate ? ['Updated since you last looked'] : []),
-              ...(item.interaction.disposition === 'FOLLOWING' ? ['Following'] : []),
-            ],
-            status: String(item.observation.lifecycleStatus),
-            href: null,
-            // FRD v1.326: a person's own reading of the change (stored per user), so any member may set it.
-            entityType: NEIGHBORHOOD_RECORD_ENTITY_TYPE,
-            actions: (canChange ? neighborhoodKindsFor(String(item.interaction.disposition)) : []).map((kind) => ({
-              id: NEIGHBORHOOD_COMMAND_ACTION_IDS[kind], label: kind === 'FOLLOW' ? 'Follow' : kind === 'DISMISS' ? 'Dismiss' : 'Not relevant', message: NEIGHBORHOOD_COMMAND_MESSAGES[kind],
-              operationId: 'NEIGHBORHOOD_INTERACTION_COMMAND' as const, interactionType: 'MUTATE_RECORD' as const, style: kind === 'FOLLOW' ? 'SECONDARY' as const : 'QUIET' as const,
-            })),
-          })),
-        };
-      }),
+      sections,
+      collection: collectionDescriptor({ sourceTotal: active.length, fetchedCount: active.length, sections, nextPageAvailable: false }),
       actions: [],
     });
   }

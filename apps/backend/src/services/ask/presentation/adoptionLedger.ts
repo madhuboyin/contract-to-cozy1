@@ -117,6 +117,8 @@ export const REVIEWED_OPERATIONS: Readonly<Record<string, string>> = {
   HOME_UPGRADE_SCENARIOS: 'upgrade option collections declare complete active and archived totals, including bounded management delivery',
   DO_NOTHING_SIMULATION: 'saved scenarios and the latest run’s complete driver collections declare exact source, fetch and delivery totals',
   HIRING_GUIDE: 'the fixed authored checklist declares its complete lossless collection and local progressive-disclosure boundary',
+  NEIGHBORHOOD_CHANGE_FEED: 'the complete active reviewed-change set declares exact source and fetched totals before per-source bounded delivery, without unsupported continuation',
+  PAST_HAZARD_EXPOSURE: 'the complete matched event and long-term hazard sets declare exact source and fetched totals before per-section bounded delivery, without unsupported continuation',
 };
 
 const LIST_BLOCKS = ['GROUPED_LIST', 'TABLE', 'TIMELINE', 'PRIORITY_LIST'];

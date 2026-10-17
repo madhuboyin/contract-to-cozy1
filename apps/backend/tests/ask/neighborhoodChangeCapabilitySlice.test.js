@@ -81,6 +81,17 @@ test('changes are grouped by source with relevance, distance, provider and inter
   assert.ok(list.sections[1].items[0].meta.includes('Updated since you last looked'));
   assert.ok(list.sections[1].items[0].meta.includes('Following'));
   assert.equal(list.sections[0].items[0].href, null);
+  assert.deepEqual(list.collection, { sourceTotal: 2, fetchedCount: 2, deliveredCount: 2, nextPageAvailable: false, deliveryTruncated: false });
+});
+
+test('the complete active collection declares bounded per-source delivery without offering unsupported continuation', () => {
+  const planning = Array.from({ length: 27 }, (_, index) => item(`planning-${index}`));
+  const dismissed = item('dismissed', { interaction: { disposition: 'DISMISSED', hasMaterialUpdate: false } });
+  const result = neighborhoodChangeFeedFromView(view({ items: [...planning, dismissed] }), 'p1');
+  const list = result.blocks.find((block) => block.id === 'neighborhood-changes');
+  assert.equal(list.sections[0].count, 27);
+  assert.equal(list.sections[0].items.length, 25);
+  assert.deepEqual(list.collection, { sourceTotal: 27, fetchedCount: 27, deliveredCount: 25, nextPageAvailable: false, deliveryTruncated: true });
 });
 
 test('coverage that is not current, or not configured, is disclosed rather than reported as an all-clear', () => {

@@ -92,6 +92,16 @@ test('past events and long-term context are listed with the household-recorded e
   assert.ok(exact.meta.includes('2.3 mi away'));
   assert.ok(exact.meta.includes('Household reported an observed effect'));
   assert.equal(exact.href, null);
+  assert.deepEqual(list.collection, { sourceTotal: 3, fetchedCount: 3, deliveredCount: 3, nextPageAvailable: false, deliveryTruncated: false });
+});
+
+test('the complete hazard collection declares bounded per-section delivery without offering unsupported continuation', () => {
+  const pastEvents = Array.from({ length: 27 }, (_, index) => hazard(`past-${index}`));
+  const longTermContext = Array.from({ length: 26 }, (_, index) => hazard(`context-${index}`, { category: 'LONG_TERM_CONTEXT' }));
+  const result = pastHazardExposureFromView(view({ pastEvents, longTermContext }), 'p1');
+  const list = result.blocks.find((block) => block.id === 'past-hazard-exposure');
+  assert.deepEqual(list.sections.map((section) => [section.count, section.items.length]), [[27, 25], [26, 25]]);
+  assert.deepEqual(list.collection, { sourceTotal: 53, fetchedCount: 53, deliveredCount: 50, nextPageAvailable: false, deliveryTruncated: true });
 });
 
 test('the service\'s bounds are always shown, and nothing matched is never an all-clear', () => {

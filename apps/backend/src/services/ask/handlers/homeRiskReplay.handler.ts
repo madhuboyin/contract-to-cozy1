@@ -9,6 +9,7 @@ import { humanDate, readableCode } from '../askFormatting';
 import { isReviewedIntelligenceCoverageAvailable } from '../../../middleware/intelligenceCoverage.middleware';
 import { ensurePropertyAccess } from '../askHandlerSupport';
 import { PAST_HAZARD_COMMAND_ACTION_ID, PAST_HAZARD_COMMAND_MESSAGE, PAST_HAZARD_RECORD_ENTITY_TYPE } from '../support/pastHazardOutcomeCommand';
+import { collectionDescriptor } from '../support/collectionDescriptor';
 
 // Home Risk Replay capability-card slice (FRD v1.50): the third new operation for a capability with none. Reads
 // getPastHazardExposure, the same call the page's route makes (all dates and hazard types), behind the same
@@ -45,6 +46,10 @@ export function pastHazardExposureFromView(view: PastHazardView, propertyId: str
       operationId: 'PAST_HAZARD_OUTCOME_COMMAND' as const, interactionType: 'MUTATE_RECORD' as const, style: 'SECONDARY' as const,
     }] : [],
   });
+  const hazardSections = [
+    ...(past.length ? [{ id: 'past-events', title: 'Past events', count: past.length, items: past.slice(0, 25).map(row) }] : []),
+    ...(longTerm.length ? [{ id: 'long-term-context', title: 'Long-term context', count: longTerm.length, items: longTerm.slice(0, 25).map(row) }] : []),
+  ];
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY', id: 'past-hazard-summary',
     title: past.length || longTerm.length
@@ -64,10 +69,8 @@ export function pastHazardExposureFromView(view: PastHazardView, propertyId: str
     blocks.push({
       type: 'GROUPED_LIST', filters: [], id: 'past-hazard-exposure', title: 'Hazard records matched to this home',
       description: 'From reviewed sources, with any effect the household recorded.',
-      sections: [
-        ...(past.length ? [{ id: 'past-events', title: 'Past events', count: past.length, items: past.slice(0, 25).map(row) }] : []),
-        ...(longTerm.length ? [{ id: 'long-term-context', title: 'Long-term context', count: longTerm.length, items: longTerm.slice(0, 25).map(row) }] : []),
-      ],
+      sections: hazardSections,
+      collection: collectionDescriptor({ sourceTotal: past.length + longTerm.length, fetchedCount: past.length + longTerm.length, sections: hazardSections, nextPageAvailable: false }),
       actions: [],
     });
   }

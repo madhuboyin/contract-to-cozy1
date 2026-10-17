@@ -11,8 +11,8 @@ contract-level journey, or explicit producer-contract review; it is not verified
 
 | Class | Operations |
 |---|---:|
-| Reviewed implementation (fixture, journey, or producer-contract review; not runtime-verified) | 93 |
-| Requires collection adoption | 18 |
+| Reviewed implementation (fixture, journey, or producer-contract review; not runtime-verified) | 95 |
+| Requires collection adoption | 16 |
 | Requires trust or rationale adoption | 0 |
 | Compact receipt: no rich migration needed | 83 |
 | Specialized workflow requiring later review | 0 |
@@ -95,8 +95,10 @@ contract-level journey, or explicit producer-contract review; it is not verified
 | `NEGOTIATION_SHIELD_CASES` | Covered in this effort: case lists and every review subcollection declare source, fetched and delivered totals without unsupported continuation. |
 | `NEGOTIATION_SHIELD_CASE_ANALYZE` | Covered in this effort: the confirmed analysis reuses the fully declared review collections in its completion receipt. |
 | `NEGOTIATION_SHIELD_CASE_START` | Covered in this effort: the fixed scenario choice grid declares its complete lossless collection. |
+| `NEIGHBORHOOD_CHANGE_FEED` | Covered in this effort: the complete active reviewed-change set declares exact source and fetched totals before per-source bounded delivery, without unsupported continuation. |
 | `OPERATIONAL_WORK_UPDATE` | Covered in this effort: the ambiguous-target command declares the complete tracked-work total and bounded selection rows. |
 | `OWNERSHIP_COSTS` | Covered in this effort: every complete in-memory ownership-cost collection declares exact source, fetch and delivery totals across current, change, forecast and variability views. |
+| `PAST_HAZARD_EXPOSURE` | Covered in this effort: the complete matched event and long-term hazard sets declare exact source and fetched totals before per-section bounded delivery, without unsupported continuation. |
 | `PRICE_FINALIZATIONS_LIST` | Covered in this effort: the bounded recent-record read is paired with an authoritative database total and no unsupported continuation. |
 | `PROJECT_TRACKER_PROJECTS` | Covered in this effort: project lists are complete; project-detail sections declare their authoritative totals and genuine per-section continuation windows. |
 | `PROPERTY_SUMMARY` | Covered in this effort: room and completeness collections declare their authoritative totals and bounded delivery. |
@@ -128,8 +130,6 @@ contract-level journey, or explicit producer-contract review; it is not verified
 | `HVAC_DECISION_OUTCOME_REPORT` | A command whose result may carry a list (for example a choice of target): collection semantics apply, and the boundary derives them until the producer declares its own. |
 | `HVAC_DECISION_OUTCOME_UNLINK` | A command whose result may carry a list (for example a choice of target): collection semantics apply, and the boundary derives them until the producer declares its own. |
 | `HVAC_DECISION_OUTCOME_VIEW` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
-| `NEIGHBORHOOD_CHANGE_FEED` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
-| `PAST_HAZARD_EXPOSURE` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
 | `PERMIT_TRACKER_STATUS` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
 | `PLANT_CARE_OUTLOOK` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
 | `PROPERTY_BRIEFS_LIST` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
