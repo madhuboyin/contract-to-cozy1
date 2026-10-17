@@ -136,7 +136,7 @@ function TopicButtons({ topics, activeTopicId, onOpen, onAfterOpen, moreIdeas }:
         <li key={topic.id}>
           <button type="button" aria-pressed={activeTopicId === topic.id} onClick={(event) => { onOpen(topic.id, event.currentTarget); onAfterOpen?.(); }}
             className={cn('flex min-h-10 w-full items-center justify-between gap-2 rounded-xl px-3 py-1.5 text-left text-sm text-slate-700 transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600', activeTopicId === topic.id && 'bg-white font-semibold text-teal-900 shadow-sm')}>
-            <span>{topic.label}{indicatorText(topic.indicator) && <span className="ml-2 text-xs font-normal text-slate-500" data-explore-indicator="">{indicatorText(topic.indicator)}</span>}</span><ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden="true" />
+            <span>{topic.label}{indicatorText(topic.indicator) && <span className="ml-2 whitespace-nowrap text-xs font-normal text-slate-500" data-explore-indicator="">{indicatorText(topic.indicator)}</span>}</span><ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden="true" />
           </button>
         </li>
       ))}

@@ -502,6 +502,23 @@ export function refreshLaunchContext(execution: { id: string; launchContextJson?
   return { ...focus, surface: 'ASK_REFRESH', sourceExecutionId: execution.id };
 }
 
+// Creation skips the semantic relevance check when the clicked control declared this execution's operation (a declared item
+// action named it explicitly, and its terse prompt, e.g. "Continue this guided journey.", cannot be judged as free text).
+// refreshLaunchContext drops operationId on purpose, so a refresh applies the same rule from the stored context.
+export function launchDeclaredOperation(execution: { operationId: string | null; launchContextJson?: unknown }): boolean {
+  const stored = execution.launchContextJson && typeof execution.launchContextJson === 'object' && !Array.isArray(execution.launchContextJson)
+    ? execution.launchContextJson as Record<string, unknown> : {};
+  return Boolean(execution.operationId) && stored.operationId === execution.operationId;
+}
+
+// A refresh is not a new question: it must never replace an answer the homeowner already has with "which request did you
+// mean?", which they did not ask and cannot meaningfully answer on a card they only watched change.
+export function refreshWouldDowngradeAnswer(priorStatus: string, refreshed: { status: string; reasonCode?: string | null }): boolean {
+  return ['ANSWERED', 'COMPLETED', 'READY_WITH_LIMITATIONS'].includes(priorStatus)
+    && refreshed.status === 'NEEDS_CLARIFICATION'
+    && Boolean(refreshed.reasonCode?.startsWith('ASK_ANSWER_RELEVANCE_'));
+}
+
 export async function refreshAskExecutionAfterConflict(userId: string, executionId: string): Promise<AskExecutionResponse> {
   const execution = await prisma.askExecution.findFirst({ where: { id: executionId, userId } });
   if (!execution || !execution.propertyId) {
@@ -527,7 +544,8 @@ export async function refreshAskExecutionAfterConflict(userId: string, execution
   // fixes this for all three callers of this function: the explicit
   // Refresh button, the automatic post-mutation refresh (MAINT-005), and
   // the Ask-workspace return-trip revalidation after a Maintenance edit.
-  const result = await executeOperation({ userId, sessionId: execution.sessionId, executionId: execution.id, message: execution.message, propertyId: execution.propertyId, operation, launchContext: refreshLaunchContext(execution) });
+  const result = await executeOperation({ userId, sessionId: execution.sessionId, executionId: execution.id, message: execution.message, propertyId: execution.propertyId, operation, launchContext: refreshLaunchContext(execution), deferSemanticValidation: launchDeclaredOperation(execution) });
+  if (refreshWouldDowngradeAnswer(execution.status, result)) return mapPersistedExecution(execution, await propertySummary(execution.propertyId));
   // RES-001/RES-003/MAINT-003: refreshing a result does not change which
   // result it continues, nor what it originally answered -- both are
   // preserved from whatever this row already had via the one shared

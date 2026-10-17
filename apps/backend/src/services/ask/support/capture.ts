@@ -147,6 +147,20 @@ export const AREA_OTHER_SURFACE_LABELS: Record<string, string> = {
   'systems.hasCooling': 'Cooling present (from your cooling type and inventory)', 'systems.installedItemTypes': 'Installed system types (from your inventory)',
 };
 
+// A completeness row may offer "Fill in missing details" only when the homeowner can actually answer something. Facts set from the address,
+// calculated, or read from other records (AREA_OTHER_SURFACE_LABELS) are not answerable in the flow, so an area whose only unmet facts are those
+// gets an explanation instead of a button that opens a dead end (live review finding 7).
+export function answerableUnmetFacts(scope: string, unmetFactKeys: readonly string[]): { answerable: string[]; derived: string[] } {
+  const writable = new Set<string>(PROPERTY_FACT_CATALOG.filter((fact) => fact.scope === scope && fact.writable).map((fact) => fact.key));
+  return { answerable: unmetFactKeys.filter((key) => writable.has(key)), derived: unmetFactKeys.filter((key) => !writable.has(key)) };
+}
+
+/** One sentence naming what is still open but cannot be answered here, or null when there is nothing of that kind. */
+export function derivedFactsNote(derivedFactKeys: readonly string[]): string | null {
+  const labels = derivedFactKeys.map((key) => AREA_OTHER_SURFACE_LABELS[key]).filter((label): label is string => Boolean(label));
+  return labels.length ? `Not something to answer here: ${labels.join('; ')}.` : null;
+}
+
 export const areaLabel = (scope: string): string => PROPERTY_SCOPE_LABELS[scope] ?? readablePropertyValue(scope);
 
 export function areaProgressBlock(_propertyId: string, scope: PropertyAreaCaptureScope, progress: Awaited<ReturnType<typeof areaCaptureProgress>>, terminal: boolean, continueAction: boolean): AskPresentationBlock {

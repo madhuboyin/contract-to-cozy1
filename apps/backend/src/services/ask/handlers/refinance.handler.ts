@@ -1,6 +1,7 @@
 // Moved out of askOrchestrator.service.ts unchanged (decomposition, FRD v1.98;
 // docs/architecture/ASK_ORCHESTRATOR_DECOMPOSITION_REVIEW.md). The handler registers itself, and the orchestrator
 // re-exports the names below so existing imports keep working.
+import { isPlanningHomeValueRequired, planningHomeValueRequestResult } from '../support/planningHomeValueRequest';
 import { HouseholdRole, RefinanceRateMonitorProduct, RefinanceScenarioTerm } from '@prisma/client';
 import { logger } from '../../../lib/logger';
 import { type AskPresentationBlock } from '../../../productFramework/ask/ask.contract';
@@ -351,15 +352,24 @@ export function breakEvenWhatIfFromDtos(standard: BreakEvenDTO, scenario: BreakE
 async function breakEvenAnalysisResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
   const years = breakEvenHorizonYears(message);
   const whatIf = parseBreakEvenWhatIf(message);
-  if (whatIf) {
-    const [standard, scenario] = await Promise.all([
-      breakEvenService.compute(propertyId, { years }, userId),
-      breakEvenService.compute(propertyId, { years, ...whatIf, ephemeral: true }, userId),
-    ]);
-    return breakEvenWhatIfFromDtos(standard, scenario, whatIf, propertyId);
+  try {
+    if (whatIf) {
+      // With no value on record, the value the homeowner just gave also stands in for the comparison's "standard" side, so the rest of the what-if still compares.
+      const [standard, scenario] = await Promise.all([
+        breakEvenService.compute(propertyId, { years }, userId).catch((error) => {
+          if (isPlanningHomeValueRequired(error) && whatIf.homeValueNow !== undefined) return breakEvenService.compute(propertyId, { years, homeValueNow: whatIf.homeValueNow, ephemeral: true }, userId);
+          throw error;
+        }),
+        breakEvenService.compute(propertyId, { years, ...whatIf, ephemeral: true }, userId),
+      ]);
+      return breakEvenWhatIfFromDtos(standard, scenario, whatIf, propertyId);
+    }
+    const dto = await breakEvenService.compute(propertyId, { years }, userId);
+    return breakEvenAnalysisFromDto(dto, propertyId);
+  } catch (error) {
+    if (isPlanningHomeValueRequired(error)) return planningHomeValueRequestResult('Break-even');
+    throw error;
   }
-  const dto = await breakEvenService.compute(propertyId, { years }, userId);
-  return breakEvenAnalysisFromDto(dto, propertyId);
 }
 
 async function refinanceAnalysisWithMonitorsResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {

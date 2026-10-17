@@ -16,6 +16,7 @@ import { readAskOperationalControls } from '../../../config/askOperationalContro
 import { askInlineCapturesTotal } from '../../../lib/metrics';
 import { PropertyMaintenanceTaskService } from '../../PropertyMaintenanceTask.service';
 import { ASK_OPERATION_DEFINITIONS, resolveAskOperation, type AskOperationId, type AskOperationResult } from '../askOperationRegistry';
+import { getAskDomainCommandByOperation } from '../askDomainCommandRegistry';
 import { operationalUnavailableResult, registerCapabilityHandler, skillRuntimeUnavailableReason } from '../capabilityHandlerRegistry';
 import { assertCoverageConflictFree } from '../../coverageConflict.service';
 import { captureFeatureContext } from '../../../modules/propertyContext/application/captureFeatureContext';
@@ -420,7 +421,10 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     if (replayed.captureRequests?.length) askInlineCapturesTotal.inc({ operation: execution.operationId ?? 'UNKNOWN', outcome: 'PROMPTED' }, replayed.captureRequests.length);
     return mapPersistedExecution(resumed, await propertySummary(execution.propertyId));
   }
-  if (execution.operationId !== 'PROJECT_TRACKER_CREATE' && !['REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS', 'HOUSEHOLD_INVITATION', 'MAINTENANCE_TASK_CREATE', 'MAINTENANCE_TASK_COMPLETE', 'ROOM_CREATE', 'PROPERTY_PURCHASE_DATE_SET', 'HOME_JOURNEY_SET', 'MATERIAL_SPEC_ADD', 'HOME_PLANT_ADD', 'ROOM_PLANT_RECOMMENDATIONS', 'DO_NOTHING_SIMULATION_RUN', 'SERVICE_PRICE_CHECK_RUN', 'INVENTORY_ITEM_CREATE', 'HOME_EVENT_RADAR_TASK', 'HOME_EVENT_RADAR_PREFERENCES', 'PROPERTY_CONTEXT_AREA_CAPTURE', 'CLAIM_FILE', 'HOME_DEADLINE_MONITOR', 'CAPITAL_RESERVE_PLAN', 'PROPERTY_TAX_APPEAL_READINESS', 'SAVINGS_OPPORTUNITIES', 'SELL_HOLD_RENT_ANALYSIS', 'OWNERSHIP_COSTS', 'OWNERSHIP_COST_COMMAND', 'RESERVE_FUND_COMMAND', 'NEGOTIATION_SHIELD_CASE_START', 'NEGOTIATION_SHIELD_CASE_UPDATE', 'NEGOTIATION_SHIELD_CASE_ATTACH', 'RENOVATION_CASE_START', 'QUOTE_COMPARISON_COMMAND', 'PROPERTY_BRIEF_COMMAND', 'INVENTORY_LOOKUP', 'PROPERTY_SUMMARY', 'HOME_ACTIONS', 'COVERAGE_GAPS', 'CAPTURE_FACT_CONFIRM', 'CAPTURE_EVENT_CONFIRM', 'CAPTURE_WARRANTY_CONFIRM', 'INVENTORY_ITEM_CORRECT'].includes(execution.operationId ?? '')) {
+  if (execution.operationId !== 'PROJECT_TRACKER_CREATE' && !['REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS', 'HOUSEHOLD_INVITATION', 'MAINTENANCE_TASK_CREATE', 'MAINTENANCE_TASK_COMPLETE', 'ROOM_CREATE', 'PROPERTY_PURCHASE_DATE_SET', 'HOME_JOURNEY_SET', 'MATERIAL_SPEC_ADD', 'HOME_PLANT_ADD', 'ROOM_PLANT_RECOMMENDATIONS', 'DO_NOTHING_SIMULATION_RUN', 'SERVICE_PRICE_CHECK_RUN', 'INVENTORY_ITEM_CREATE', 'HOME_EVENT_RADAR_TASK', 'HOME_EVENT_RADAR_PREFERENCES', 'PROPERTY_CONTEXT_AREA_CAPTURE', 'CLAIM_FILE', 'HOME_DEADLINE_MONITOR', 'CAPITAL_RESERVE_PLAN', 'PROPERTY_TAX_APPEAL_READINESS', 'SAVINGS_OPPORTUNITIES', 'SELL_HOLD_RENT_ANALYSIS', 'OWNERSHIP_COSTS', 'OWNERSHIP_COST_COMMAND', 'RESERVE_FUND_COMMAND', 'NEGOTIATION_SHIELD_CASE_START', 'NEGOTIATION_SHIELD_CASE_UPDATE', 'NEGOTIATION_SHIELD_CASE_ATTACH', 'RENOVATION_CASE_START', 'QUOTE_COMPARISON_COMMAND', 'PROPERTY_BRIEF_COMMAND', 'INVENTORY_LOOKUP', 'PROPERTY_SUMMARY', 'HOME_ACTIONS', 'COVERAGE_GAPS', 'CAPTURE_FACT_CONFIRM', 'CAPTURE_EVENT_CONFIRM', 'CAPTURE_WARRANTY_CONFIRM', 'INVENTORY_ITEM_CORRECT', 'INSPECTION_NEGOTIATION_PACKAGE'].includes(execution.operationId ?? '')
+    // Registered domain commands own their capture forms (Upgrade Planner, Habit Coach settings, ...). The stored-captureRequests
+    // match just below is what proves a given form is still live, so this gate must not need a hand-edited entry per command.
+    && !getAskDomainCommandByOperation(execution.operationId ?? '')) {
     const error = new Error('This execution does not have an active inline capture.');
     (error as Error & { code?: string }).code = 'ASK_CAPTURE_NOT_ACTIVE';
     throw error;

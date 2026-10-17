@@ -24,6 +24,11 @@ const PAGE = '/dashboard/properties/p1/projects';
 const originals = { prisma: prismaModule.prisma, list: projectTrackerModule.listProjects, logs: projectTrackerModule.listLogEntries };
 let calls;
 
+// Project-level commands live on the summary (at most three, state-relevant) or in the separate "Project actions" section.
+const projectActionsSection = (detail) => detail.blocks.find((block) => block.id === 'project-actions')?.sections[0].items ?? [];
+const projectActionLabels = (detail) => projectActionsSection(detail).map((item) => item.title);
+const projectCommandIds = (detail) => [...detail.blocks[0].actions.map((action) => action.id), ...projectActionsSection(detail).flatMap((item) => item.actions.map((action) => action.id))];
+
 const project = (id, overrides = {}) => ({
   id, name: `Project ${id}`, projectType: 'KITCHEN_REMODEL', status: 'IN_PROGRESS', contractorName: 'Apex Builders', fulfillmentMode: 'PROFESSIONAL',
   currentContractAmountCents: 4_000_000, paidToDateCents: 2_800_000, expectedEndDate: new Date('2026-11-15T12:00:00.000Z'), warrantyExpiresAt: null,
@@ -132,18 +137,19 @@ test('review project shows the desktop execution record inline', () => {
     _count: { progressLogs: 1, writeBacks: 0 },
   }, [{ id: 'l1', entryType: 'PROGRESS', notes: 'Framing complete', entryDate: new Date('2026-10-11T12:00:00.000Z'), milestoneId: 'm1', photoKeys: ['photo'] }], true);
   assert.equal(detail.reasonCode, 'PROJECT_TRACKER_DETAIL_READY');
-  assert.deepEqual(detail.blocks.map((block) => block.type), ['SUMMARY', 'TABLE', 'GROUPED_LIST', 'BOUNDARY']);
+  assert.deepEqual(detail.blocks.map((block) => block.id), ['project-detail-summary', 'project-detail-financials', 'project-actions', 'project-detail-records', 'project-tracker-boundary']);
   assert.match(detail.blocks[0].body, /0 of 1 milestones complete; 1 open issue/);
   assert.deepEqual(detail.blocks[1].rows.map((row) => row.values.amount), ['$45,000.00', '$28,000.00', '$17,000.00']);
-  assert.deepEqual(detail.blocks[2].sections.map((section) => section.title), ['Milestones', 'Payments', 'Change orders', 'Issues', 'Progress log']);
-  assert.deepEqual(detail.blocks[2].sections.map((section) => section.offset), [0, 0, 0, 0, 0]);
-  assert.deepEqual(detail.blocks[0].actions.slice(0, 3).map((action) => action.label), ['Edit project', 'Add milestone', 'Add payment']);
-  assert.deepEqual(detail.blocks[2].sections[0].items[0].actions.map((action) => action.label), ['Complete milestone', 'Edit', 'Delete']);
-  assert.deepEqual(detail.blocks[2].sections[0].items[0].meta, ['Scheduled Oct 20, 2026']);
-  assert.equal(detail.blocks[2].sections[0].items[0].description, null);
-  assert.equal(detail.blocks[2].sections[0].items[0].detail, 'Inspect framing and rough-ins\nPhoto evidence required');
-  assert.deepEqual(detail.blocks[2].sections[1].items[0].actions.map((action) => action.label), ['Mark paid', 'Edit', 'Delete']);
-  assert.deepEqual(detail.blocks[2].sections[3].items[0].actions.map((action) => action.label), ['Add note', 'Resolve issue', 'Edit', 'Escalate']);
+  assert.deepEqual(detail.blocks.find((block) => block.id === 'project-detail-records').sections.map((section) => section.title), ['Milestones', 'Payments', 'Change orders', 'Issues', 'Progress log']);
+  assert.deepEqual(detail.blocks.find((block) => block.id === 'project-detail-records').sections.map((section) => section.offset), [0, 0, 0, 0, 0]);
+  assert.deepEqual(detail.blocks[0].actions.map((action) => action.label), ['Pause project', 'Complete project', 'Edit project']);
+  assert.deepEqual(projectActionLabels(detail).slice(0, 3), ['Add milestone', 'Add payment', 'Add change order']);
+  assert.deepEqual(detail.blocks.find((block) => block.id === 'project-detail-records').sections[0].items[0].actions.map((action) => action.label), ['Complete milestone', 'Edit', 'Delete']);
+  assert.deepEqual(detail.blocks.find((block) => block.id === 'project-detail-records').sections[0].items[0].meta, ['Scheduled Oct 20, 2026']);
+  assert.equal(detail.blocks.find((block) => block.id === 'project-detail-records').sections[0].items[0].description, null);
+  assert.equal(detail.blocks.find((block) => block.id === 'project-detail-records').sections[0].items[0].detail, 'Inspect framing and rough-ins\nPhoto evidence required');
+  assert.deepEqual(detail.blocks.find((block) => block.id === 'project-detail-records').sections[1].items[0].actions.map((action) => action.label), ['Mark paid', 'Edit', 'Delete']);
+  assert.deepEqual(detail.blocks.find((block) => block.id === 'project-detail-records').sections[3].items[0].actions.map((action) => action.label), ['Add note', 'Resolve issue', 'Edit', 'Escalate']);
 });
 
 test('project completion is one confirmation workflow presented in four governed groups', () => {
@@ -184,7 +190,7 @@ test('planning projects offer governed milestone-template replacement', () => {
     ...project('roof', { status: 'PLANNING' }), milestones: [], payments: [], changeOrders: [], issues: [],
     _count: { progressLogs: 0, writeBacks: 0 },
   }, [], true);
-  assert.equal(detail.blocks[0].actions.some((action) => action.id === PROJECT_TRACKER_ACTION_IDS.REPLACE_MILESTONE_TEMPLATE), true);
+  assert.equal(projectCommandIds(detail).includes(PROJECT_TRACKER_ACTION_IDS.REPLACE_MILESTONE_TEMPLATE), true);
 });
 
 test('escalated issues expose append-only notes and immutable dispute packaging', () => {
@@ -194,7 +200,7 @@ test('escalated issues expose append-only notes and immutable dispute packaging'
     _count: { progressLogs: 0, writeBacks: 0 },
   };
   const detail = projectDetailFromView(record, [], true);
-  assert.deepEqual(detail.blocks.find((block) => block.type === 'GROUPED_LIST').sections[0].items[0].actions.map((action) => action.label), ['Add note', 'Resolve issue', 'Edit', 'Package for dispute']);
+  assert.deepEqual(detail.blocks.find((block) => block.id === 'project-detail-records').sections[0].items[0].actions.map((action) => action.label), ['Add note', 'Resolve issue', 'Edit', 'Package for dispute']);
   const note = projectCommandCapture(PROJECT_TRACKER_ACTION_IDS.ADD_ISSUE_NOTE, record, 'i1');
   assert.deepEqual(note.inputSchema.fields.map((field) => field.key), ['notes', 'evidenceDocumentIds']);
   assert.match(note.helpText, /append-only/);
@@ -207,8 +213,8 @@ test('project materials expose canonical proposal, lifecycle, maintenance, and s
   const material = { id: 'mat1', label: 'Kitchen backsplash', category: 'TILE', lifecycleStatus: 'PROPOSED', manufacturer: 'Daltile', productLine: null, productName: 'Restore', sku: 'R416', colorCode: null, finish: null, dimensions: '4x16', material: 'Ceramic', supplier: 'Tile Shop', quantityPurchased: '60 sq ft', lotBatch: 'L1', notes: null, careInstructions: null, complianceRelevance: { permitRelevant: false, hoaRelevant: false }, submittalDocumentIds: [] };
   const record = { ...project('kitchen'), milestones: [], payments: [], changeOrders: [], issues: [], materialSpecs: [material], _count: { progressLogs: 0, writeBacks: 0 } };
   const detail = projectDetailFromView(record, [], true);
-  assert.equal(detail.blocks[0].actions.some((action) => action.id === PROJECT_TRACKER_ACTION_IDS.ADD_MATERIAL), true);
-  const materials = detail.blocks.find((block) => block.type === 'GROUPED_LIST').sections.find((section) => section.title === 'Materials');
+  assert.equal(projectCommandIds(detail).includes(PROJECT_TRACKER_ACTION_IDS.ADD_MATERIAL), true);
+  const materials = detail.blocks.find((block) => block.id === 'project-detail-records').sections.find((section) => section.title === 'Materials');
   assert.deepEqual(materials.items[0].actions.map((action) => action.label), ['Edit', 'Approve', 'Substitute']);
   const proposal = projectCommandCapture(PROJECT_TRACKER_ACTION_IDS.ADD_MATERIAL, record);
   assert.equal(proposal.inputSchema.fields.some((field) => field.key === 'submittalDocumentIds'), true);

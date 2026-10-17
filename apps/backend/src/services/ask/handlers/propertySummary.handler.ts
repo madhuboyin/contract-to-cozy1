@@ -17,7 +17,7 @@ import { normalizeAnswers } from '../../../modules/propertyContext/application/c
 import { getPropertyContext } from '../../../modules/propertyContext/application/getPropertyContext';
 import { getPropertyRecordOverview } from '../../propertyRecordOverview.service';
 import { humanDate } from '../askFormatting';
-import { AREA_CAPTURE_MESSAGES, areaCaptureProgress, areaLabel, areaProgressBlock, ensurePropertyAccess, isAreaCaptureScope, PROPERTY_SCOPE_LABELS, readablePropertyValue } from '../askHandlerSupport';
+import { answerableUnmetFacts, AREA_CAPTURE_MESSAGES, areaCaptureProgress, derivedFactsNote, areaLabel, areaProgressBlock, ensurePropertyAccess, isAreaCaptureScope, PROPERTY_SCOPE_LABELS, readablePropertyValue } from '../askHandlerSupport';
 import { ROOM_ADD_MESSAGE, roomRenameItemActions } from '../handlers/homeRecordWrites.handler';
 import { INVENTORY_ADD_MESSAGE } from '../handlers/inventory.handler';
 import { roomMapFacts } from '../support/roomMap';
@@ -29,6 +29,18 @@ import { collectionDescriptor } from '../support/collectionDescriptor';
 // the domain's own counts of missing, conflicted and stale facts, and the next steps are the three least complete areas
 // with the capture actions the list below already declares. Nothing is recomputed here beyond the sums of what the
 // domain reports; with no applicable facts there is no ring.
+type CompletenessScopeRow = { scope: string; knownFacts: number; totalFacts: number; missingFactKeys: readonly string[]; conflictedFactKeys: readonly string[]; staleFactKeys: readonly string[] };
+const unmetFactKeys = (row: CompletenessScopeRow) => [...row.missingFactKeys, ...row.conflictedFactKeys, ...row.staleFactKeys];
+// The count a "Fill in missing details" button is judged by: what the homeowner can answer, not everything still open.
+const answerableUnmetCount = (row: CompletenessScopeRow) => answerableUnmetFacts(row.scope, unmetFactKeys(row)).answerable.length;
+// When nothing in an area can be answered here, say why instead of leaving a button that leads to a dead end.
+function completenessRowDescription(row: CompletenessScopeRow): string {
+  const base = `${row.knownFacts} of ${row.totalFacts} facts known`;
+  const { answerable, derived } = answerableUnmetFacts(row.scope, unmetFactKeys(row));
+  const note = answerable.length === 0 ? derivedFactsNote(derived) : null;
+  return note ? `${base}. ${note}` : base;
+}
+
 export function propertyCompletenessProgress(
   completeness: { completenessPercent: number; scopes: Array<{ scope: string; totalFacts: number; knownFacts: number; completenessPercent: number; missingFactKeys: string[]; conflictedFactKeys: string[]; staleFactKeys: string[] }> },
   incompleteScopes: ReadonlyArray<{ scope: string; totalFacts: number; knownFacts: number; completenessPercent: number; missingFactKeys: string[]; conflictedFactKeys: string[]; staleFactKeys: string[] }>,
@@ -52,10 +64,10 @@ export function propertyCompletenessProgress(
     ],
     nextSteps: incompleteScopes.slice(0, 3).map((scope) => ({
       id: scope.scope, title: PROPERTY_SCOPE_LABELS[scope.scope] ?? readablePropertyValue(scope.scope),
-      description: `${scope.knownFacts} of ${scope.totalFacts} facts known`,
+      description: completenessRowDescription(scope),
       meta: [], status: `${scope.completenessPercent}% COMPLETE`, href: null,
       entityType: 'PROPERTY_CONTEXT_AREA',
-      actions: areaCaptureRowActions(scope.scope, canManage, scope.missingFactKeys.length + scope.conflictedFactKeys.length + scope.staleFactKeys.length),
+      actions: areaCaptureRowActions(scope.scope, canManage, answerableUnmetCount(scope)),
     })),
     actions: [],
   };
@@ -291,11 +303,11 @@ async function propertySummaryResult(userId: string, propertyId: string, message
         id: 'incomplete-scopes', title: 'Property Context completeness', count: incompleteScopes.length,
         items: incompleteScopes.map((scope) => ({
           id: scope.scope, title: PROPERTY_SCOPE_LABELS[scope.scope] ?? readablePropertyValue(scope.scope),
-          description: `${scope.knownFacts} of ${scope.totalFacts} facts known`,
+          description: completenessRowDescription(scope),
           meta: [`${scope.missingFactKeys.length} missing`, `${scope.conflictedFactKeys.length} conflicted`, `${scope.staleFactKeys.length} stale`],
           status: `${scope.completenessPercent}% COMPLETE`, href: null,
           entityType: 'PROPERTY_CONTEXT_AREA',
-          actions: areaCaptureRowActions(scope.scope, canImproveContext, scope.missingFactKeys.length + scope.conflictedFactKeys.length + scope.staleFactKeys.length),
+          actions: areaCaptureRowActions(scope.scope, canImproveContext, answerableUnmetCount(scope)),
         })),
       }],
       collection: collectionDescriptor({ sourceTotal: incompleteScopes.length, fetchedCount: incompleteScopes.length, sections: [{ items: incompleteScopes }], nextPageAvailable: false }),

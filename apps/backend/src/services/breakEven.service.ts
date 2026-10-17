@@ -1,4 +1,5 @@
 // apps/backend/src/services/breakEven.service.ts
+import { resolvePlanningHomeValue } from './planningHomeValue';
 import { prisma } from '../lib/prisma';
 import { AppreciationIndexService } from './appreciationIndex.service';
 import {
@@ -287,6 +288,7 @@ export class BreakEvenService {
         city: true,
         state: true,
         zipCode: true,
+        lastAppraisedValue: true,
         financingProfile: {
           select: { purchasePriceCents: true },
         },
@@ -314,23 +316,23 @@ export class BreakEvenService {
         lens: 'OPERATING_EXPENSE',
         horizonYears: years,
       });
-    const homeValueNow = input.homeValueNow
-      ?? (
-        property.financingProfile?.purchasePriceCents != null
-          ? property.financingProfile.purchasePriceCents / 100
-          : 350_000
-      );
+    const planningHomeValue = resolvePlanningHomeValue({
+      overrideDollars: input.homeValueNow,
+      overrideLabel: 'the home value in your what-if',
+      appraisedCents: property.lastAppraisedValue,
+      purchasePriceCents: property.financingProfile?.purchasePriceCents,
+    });
+    const homeValueNow = planningHomeValue.valueDollars;
     let appreciationRate = input.appreciationRate ?? 0.035;
     const annualExpensesNow = ownershipCosts.currentAnnualDollars;
     const canonicalForwardExpenses = ownershipCosts.forwardAnnualDollars
       .map((period) => period.base);
-    if (property.financingProfile?.purchasePriceCents != null && input.homeValueNow == null) {
-      dataSources.push('PropertyFinancingProfile purchase price');
-    } else if (input.homeValueNow == null) {
-      notes.push(
-        'Current home value is unavailable; the disposition model uses a clearly labeled $350,000 fallback.',
-      );
-    }
+    dataSources.push(
+      planningHomeValue.source === 'APPRAISAL' ? 'Property latest appraisal'
+        : planningHomeValue.source === 'PURCHASE_PRICE_FALLBACK' ? 'PropertyFinancingProfile purchase price (appraisal not on record)'
+          : 'Home value entered for this analysis',
+    );
+    notes.push(planningHomeValue.disclosure);
     dataSources.push(
       `Ownership-cost lens: ${ownershipCosts.lens}`,
       `Ownership-cost snapshot: ${ownershipCosts.snapshot.id}`,

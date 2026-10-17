@@ -125,7 +125,7 @@ describe('Explore with Cozy', () => {
     render(<ConversationHistoryNav items={[]} activeSessionId="" loading={false} loadingMore={false} hasMore={false} issue={null} openingId={null} query="" scope="THIS_HOME" selectedHomeAvailable
       onQueryChange={jest.fn()} onScopeChange={jest.fn()} onOpen={jest.fn()} onNew={jest.fn()} onLoadMore={jest.fn()} discoverySlot={<p>discovery group</p>} />);
     const nav = screen.getByRole('navigation', { name: 'Ask Cozy conversations' });
-    const children = Array.from(nav.children);
+    const children = Array.from((nav.querySelector('[data-history-rail-scroll]') as HTMLElement).children);
     const slot = children.findIndex((child) => child.textContent === 'discovery group');
     expect(slot).toBeGreaterThan(0);
     expect(children[slot - 1]).toContainElement(screen.getByRole('button', { name: 'New Ask Cozy session' }));

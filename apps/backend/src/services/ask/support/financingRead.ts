@@ -9,7 +9,7 @@ export const MORTGAGE_TYPE_LABELS: Record<string, string> = {
   CONVENTIONAL: 'Conventional', FHA: 'FHA', VA: 'VA', USDA: 'USDA', JUMBO: 'Jumbo', ARM: 'Adjustable rate', FIXED: 'Fixed rate', OTHER: 'Other',
 };
 export const EQUITY_SOURCE_LABELS: Record<string, string> = {
-  APPRECIATION_TRACKER: 'your recorded home value', PURCHASE_PRICE: 'your purchase price', USER_ENTERED: 'a value you entered',
+  APPRECIATION_TRACKER: 'your recorded home value', PURCHASE_PRICE: 'your purchase price, because no appraisal is recorded', USER_ENTERED: 'a value you entered',
 };
 export const SCENARIO_STATUS_LABELS: Record<string, string> = { DRAFT: 'Draft', SAVED: 'Saved', ARCHIVED: 'Archived' };
 

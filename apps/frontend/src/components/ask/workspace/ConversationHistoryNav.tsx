@@ -122,6 +122,9 @@ export function ConversationHistoryNav({ items, pinnedItems = [], pendingWork = 
   const grouped = [...(showPinned ? [{ label: 'Pinned', items: visiblePinnedItems }] : []), ...periodGroups];
   return (
     <nav className="flex min-h-0 flex-1 flex-col" aria-label="Ask Cozy conversations">
+      {/* One scroll region for everything above the account footer: the fixed controls plus the list used to share the viewport,
+          and on a short laptop screen the list was crushed to a few pixels (live review, 749px viewport). Now the rail scrolls as a whole. */}
+      <div data-history-rail-scroll="" className="min-h-0 flex-1 overflow-y-auto pr-1">
       {!calm && <div className="mb-4 flex items-center gap-2 px-1">
         <span className="grid h-8 w-8 place-items-center rounded-xl bg-teal-700 text-white"><Sparkles className="h-4 w-4" aria-hidden="true" /></span>
         <div><p className="text-sm font-semibold text-slate-950">Ask Cozy</p><p className="text-[11px] text-slate-500">Your home assistant</p></div>
@@ -147,7 +150,7 @@ export function ConversationHistoryNav({ items, pinnedItems = [], pendingWork = 
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
         <input value={query} onChange={(event) => onQueryChange(event.target.value)} maxLength={120} placeholder="Search conversations" className="min-h-10 w-full rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-teal-500 focus:ring-2 focus:ring-teal-100" />
       </label>}
-      <div className="mt-4 min-h-0 flex-1 overflow-y-auto pr-1">
+      <div className="mt-4">
         {issue && <p className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900" role="status">{issue}</p>}
         {loading && <p className="px-2 py-3 text-xs text-slate-400" role="status">{archivedView ? 'Loading archived conversations…' : query.trim() ? 'Searching conversations…' : 'Loading recent conversations…'}</p>}
         {needsYou.length > 0 && <section className="mb-5" aria-labelledby="ask-history-needs-you">
@@ -186,6 +189,7 @@ export function ConversationHistoryNav({ items, pinnedItems = [], pendingWork = 
         ))}
         {hasMore && <button type="button" onClick={onLoadMore} disabled={loading || loadingMore} className="mt-3 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-teal-800 hover:border-teal-300 disabled:opacity-60">{loadingMore ? 'Loading older conversations…' : 'Load older conversations'}</button>}
         {onViewChange && !archivedView && !searching && <button type="button" onClick={() => onViewChange('ARCHIVED')} className="mt-3 flex min-h-9 w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-white hover:text-slate-800"><Archive className="h-3.5 w-3.5" aria-hidden="true" />Archived conversations</button>}
+      </div>
       </div>
       <div className="border-t border-slate-200 pt-3">
         {backHref && <Link href={backHref} className="flex min-h-10 items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-white hover:text-slate-950"><ArrowLeft className="h-4 w-4" />{backLabel || 'Back to Home'}</Link>}

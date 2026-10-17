@@ -1,4 +1,5 @@
 // apps/backend/src/services/sellHoldRent.service.ts
+import { resolvePlanningHomeValue, type PlanningHomeValueSource } from './planningHomeValue';
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
 
@@ -78,6 +79,8 @@ export type SellHoldRentDTO = {
 
   current: {
     homeValueNow: number;
+    homeValueSource: PlanningHomeValueSource;
+    homeValueDisclosure: string;
     appreciationRate: number;
     monthlyRentNow: number;
     sellingCostRate: number;
@@ -265,6 +268,7 @@ export class SellHoldRentService {
         zipCode: true,
         propertySize: true,
         yearBuilt: true,
+        lastAppraisedValue: true,
         financingProfile: {
           select: { purchasePriceCents: true },
         },
@@ -297,12 +301,13 @@ export class SellHoldRentService {
         horizonYears: years,
       });
     const modeledAppreciation = 0.035;
-    const modeledHomeValue =
-      property.financingProfile?.purchasePriceCents != null
-        ? property.financingProfile.purchasePriceCents / 100
-        : 350_000;
-
-    const homeValueNow = pickOverride(input.homeValueNow, toolOv['homeValueNow'], modeledHomeValue);
+    const planningHomeValue = resolvePlanningHomeValue({
+      overrideDollars: input.homeValueNow !== undefined && Number.isFinite(input.homeValueNow) ? input.homeValueNow : toolOv['homeValueNow'],
+      overrideLabel: input.homeValueNow !== undefined ? 'the home value in your what-if' : 'the home value you saved for Sell/Hold/Rent',
+      appraisedCents: property.lastAppraisedValue,
+      purchasePriceCents: property.financingProfile?.purchasePriceCents,
+    });
+    const homeValueNow = planningHomeValue.valueDollars;
 
     // Rent: request > tool override > heuristic (state + sqft)
     const ppsfRentByState: Record<string, number> = {
@@ -580,6 +585,8 @@ export class SellHoldRentService {
 
       current: {
         homeValueNow: roundMoney(homeValueNow),
+        homeValueSource: planningHomeValue.source,
+        homeValueDisclosure: planningHomeValue.disclosure,
         appreciationRate,
         monthlyRentNow: roundMoney(monthlyRentNow),
         sellingCostRate,
