@@ -40,8 +40,9 @@ test('winter plan: personalization says what it is based on, what it does not us
   const about = plan.blocks.find((block) => block.id === 'seasonal-home-care-boundary');
   assert.equal(about.severity, 'INFO');
   assert.match(about.body, /general guidance for your climate, not an assessment of this home/);
-  assert.match(about.body, /does not use anything recorded about your systems/);
-  assert.match(about.body, /your own seasonal checklist can add tasks specific to those systems/);
+  assert.match(about.body, /intentionally includes only tasks that apply without checking your recorded systems/);
+  assert.match(about.body, /seasonal checklist is the personalized view.*systems already recorded/);
+  assert.doesNotMatch(about.body, /Once your home record lists them/);
   const setup = plan.blocks.at(-1).actions.find((action) => action.id === 'seasonal-add-tasks');
   assert.equal(setup.operationId, 'SEASONAL_CHECKLIST_SETUP', 'adding tasks opens the confirmed setup operation, it is not a write here');
   assert.equal(JSON.stringify(plan).includes('"interactionType":"MUTATE'), false);

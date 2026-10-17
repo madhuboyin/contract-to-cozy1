@@ -53,7 +53,7 @@ describe('Home Action shelves', () => {
       type: 'PRIORITY_LIST', id: 'home-actions-priority-list', title: 'What matters now', propertyId: 'home',
       rankingPolicyVersion: 'priority-list-policy-v1', generatedAt: '2026-09-27T12:00:00.000Z', sourceFreshnessAt: '2026-09-27T12:00:00.000Z', truncated: false,
       items: [{
-        homeActionId: 'a1', title: 'Replace the HVAC filter', consumerPriority: 'DO_NOW', comparativeReasonCodes: ['HIGHER_URGENCY'], confidenceLabel: 'HIGH', deadlineAt: null, dependencyRefs: [],
+        homeActionId: 'a1', title: 'Replace the HVAC filter', consumerPriority: 'DO_NOW', comparativeReasonCodes: ['HIGHER_URGENCY'], confidenceLabel: 'HIGH', deadlineAt: '2026-10-31T00:00:00.000Z', dependencyRefs: [],
         cta: { id: 'a1', label: 'Open Maintenance', href: '/dashboard/maintenance?propertyId=home', style: 'PRIMARY' },
         inlineLaunch: { interactionType: 'CONVERSATION_CONTINUE', operationId: 'HOME_ACTIONS', message: 'What should I do next for “Replace the HVAC filter”?' },
         watchState: null, suppressed: false, completed: false, unavailable: true, stale: true,
@@ -64,9 +64,18 @@ describe('Home Action shelves', () => {
     </CalmAnswerContext.Provider></CalmChromeContext.Provider>);
     expect(screen.queryByRole('link', { name: 'Open Maintenance' })).toBeNull();
     expect(screen.getByText('Needs attention sooner')).toBeInTheDocument();
+    expect(screen.getByText(/Due 10\/31\/2026/)).toBeInTheDocument();
     expect(screen.queryByText(/Ranked here because|stable tie break/i)).not.toBeInTheDocument();
     expect(screen.getByText(/Unavailable · Stale · high confidence/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Review in Ask' }));
+    const review = screen.getByRole('button', { name: 'Review in Ask' });
+    expect(review).toHaveClass('border-slate-200', 'bg-white', 'text-teal-800');
+    expect(review).not.toHaveClass('bg-teal-700', 'text-white');
+    const ratingDisclosure = screen.getByText('Rate this action').closest('details');
+    expect(ratingDisclosure).not.toHaveAttribute('open');
+    fireEvent.click(screen.getByText('Rate this action'));
+    expect(ratingDisclosure).toHaveAttribute('open');
+    expect(screen.getByRole('button', { name: 'Mark useful' })).toBeInTheDocument();
+    fireEvent.click(review);
     expect(onItemAction).toHaveBeenCalledWith('HOME_ACTION', 'a1', 'What should I do next for “Replace the HVAC filter”?', 'HOME_ACTIONS', 'CONVERSATION_CONTINUE', undefined, 'a1');
   });
 });

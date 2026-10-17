@@ -162,7 +162,7 @@ function regionNoteFor(region: SeasonalClimateRegion, source: ClimateRegionSourc
 // tasks for its recorded systems appear (the generator reads `requiredAssetType`).
 const aboutBoundary = (): AskPresentationBlock => ({
   type: 'BOUNDARY', id: 'seasonal-home-care-boundary', title: 'About this recommendation',
-  body: 'This is general guidance for your climate, not an assessment of this home, and it does not use anything recorded about your systems. Once your home record lists them, your own seasonal checklist can add tasks specific to those systems.',
+  body: 'This is general guidance for your climate, not an assessment of this home. This plan intentionally includes only tasks that apply without checking your recorded systems. Your seasonal checklist is the personalized view that adds tasks for systems already recorded in your home record.',
   severity: 'INFO', suggestions: [],
 });
 
@@ -338,7 +338,7 @@ export function buildSeasonalTaskWalkthrough(input: SeasonalHomeCareInput & { ta
       history: [],
       notes: [
         { id: 'why', title: 'Why this is on your list', body: `${capitalize(seasonWord)} is ${input.focus === 'NEXT_SEASON' ? 'the next' : 'the current'} season for your area, and this is one of the ${shown.length} general ${seasonWord} tasks for ${REGION_WORDS[region]}. ${PRIORITY_LABELS[task.priority] ?? 'Optional'} tasks like this one are listed ${task.priority === 'CRITICAL' ? 'first' : 'after the urgent ones'}.` },
-        { id: 'personalized', title: 'How personalized is this?', body: 'This is general guidance for your climate. It does not use anything recorded about your home yet, so it cannot account for your specific systems. It becomes more specific as your home record fills in.', actionId: 'seasonal-update-home-details' },
+        { id: 'personalized', title: 'How personalized is this?', body: 'This walkthrough comes from the climate-based general plan, so it intentionally does not check your recorded systems. Your seasonal checklist is the personalized view for systems already recorded in your home record.', actionId: 'seasonal-update-home-details' },
       ],
       actions,
     }],

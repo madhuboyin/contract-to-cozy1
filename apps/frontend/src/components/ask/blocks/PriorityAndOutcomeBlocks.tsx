@@ -8,6 +8,7 @@ import { ActionLink } from './context';
 import { useCalmAnswer } from './calmContext';
 import type { AskBlockRenderer } from './types';
 import { CompactAskCard } from '../CompactAskCard';
+import { formatAskDateOnly } from '@/features/ask/dateFormatting';
 
 const PRIORITY_REASON_TEXT: Record<string, string> = {
   SAFETY_FLOOR: 'Safety comes first',
@@ -40,13 +41,18 @@ function HomeActionUsefulnessButtons({ executionId, homeActionId }: { executionI
   };
 
   return (
-    <div className="flex items-center gap-1 text-xs text-slate-500">
-      <span>{rating ? 'Thanks—saved.' : 'Useful?'}</span>
-      <button type="button" disabled={saving} aria-label="Mark useful" aria-pressed={rating === 'USEFUL'} onClick={() => void submit('USEFUL')} className={cn('rounded-lg p-1.5 hover:bg-slate-100', rating === 'USEFUL' && 'bg-teal-50 text-teal-700')}><ThumbsUp className="h-3.5 w-3.5" /></button>
-      <button type="button" disabled={saving} aria-label="Mark not useful" aria-pressed={rating === 'NOT_USEFUL'} onClick={() => void submit('NOT_USEFUL')} className={cn('rounded-lg p-1.5 hover:bg-slate-100', rating === 'NOT_USEFUL' && 'bg-amber-50 text-amber-700')}><ThumbsDown className="h-3.5 w-3.5" /></button>
-    </div>
+    <details className="text-xs text-slate-500">
+      <summary className="cursor-pointer list-none rounded-lg px-2 py-1 font-medium hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600">{rating ? 'Feedback saved' : 'Rate this action'}</summary>
+      <div className="mt-1 flex items-center justify-end gap-1 rounded-xl border border-slate-200 bg-white p-1.5">
+        <span className="whitespace-nowrap px-1">Useful?</span>
+        <button type="button" disabled={saving} aria-label="Mark useful" aria-pressed={rating === 'USEFUL'} onClick={() => void submit('USEFUL')} className={cn('rounded-lg p-1.5 hover:bg-slate-100', rating === 'USEFUL' && 'bg-teal-50 text-teal-700')}><ThumbsUp className="h-3.5 w-3.5" /></button>
+        <button type="button" disabled={saving} aria-label="Mark not useful" aria-pressed={rating === 'NOT_USEFUL'} onClick={() => void submit('NOT_USEFUL')} className={cn('rounded-lg p-1.5 hover:bg-slate-100', rating === 'NOT_USEFUL' && 'bg-amber-50 text-amber-700')}><ThumbsDown className="h-3.5 w-3.5" /></button>
+      </div>
+    </details>
   );
 }
+
+const reviewButtonClass = 'min-h-9 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-teal-800 hover:border-teal-300 hover:bg-teal-50 disabled:opacity-50';
 
 export const PriorityListBlock: AskBlockRenderer<'PRIORITY_LIST'> = ({ block, executionId, onItemAction, itemActionsDisabled }) => {
   const calm = useCalmAnswer();
@@ -77,7 +83,7 @@ export const PriorityListBlock: AskBlockRenderer<'PRIORITY_LIST'> = ({ block, ex
             const compactMeta = [
               ...lifecycle,
               item.confidenceLabel ? `${item.confidenceLabel.toLowerCase()} confidence` : null,
-              item.deadlineAt ? `Due ${new Date(item.deadlineAt).toLocaleDateString()}` : null,
+              item.deadlineAt ? `Due ${formatAskDateOnly(item.deadlineAt)}` : null,
             ].filter((label): label is string => Boolean(label)).join(' · ');
             return (
             <li key={item.homeActionId} className={cn(!calm && 'rounded-xl border border-slate-200 p-3')}>
@@ -89,7 +95,7 @@ export const PriorityListBlock: AskBlockRenderer<'PRIORITY_LIST'> = ({ block, ex
                 badge={<span className={cn('rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-wide', categoryBadge[item.consumerPriority])}>{categoryLabel[item.consumerPriority]}</span>}
                 summary={reason ?? item.watchState ?? undefined}
                 meta={compactMeta || undefined}
-                action={item.inlineLaunch ? <button type="button" disabled={itemActionsDisabled} onClick={() => onItemAction('HOME_ACTION', item.homeActionId, item.inlineLaunch!.message, item.inlineLaunch!.operationId, item.inlineLaunch!.interactionType, undefined, item.homeActionId)} className="min-h-10 rounded-lg bg-teal-700 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50">Review in Ask</button> : item.cta ? <ActionLink action={item.cta} /> : item.watchState && <p className="text-sm text-slate-700">{item.watchState}</p>}
+                action={item.inlineLaunch ? <button type="button" disabled={itemActionsDisabled} onClick={() => onItemAction('HOME_ACTION', item.homeActionId, item.inlineLaunch!.message, item.inlineLaunch!.operationId, item.inlineLaunch!.interactionType, undefined, item.homeActionId)} className={reviewButtonClass}>Review in Ask</button> : item.cta ? <ActionLink action={item.cta} /> : item.watchState && <p className="text-sm text-slate-700">{item.watchState}</p>}
                 secondary={<HomeActionUsefulnessButtons executionId={executionId} homeActionId={item.homeActionId} />}
               /> : <>
               <div className="flex flex-wrap items-center gap-2">
@@ -104,10 +110,10 @@ export const PriorityListBlock: AskBlockRenderer<'PRIORITY_LIST'> = ({ block, ex
               {reason && <p className="mt-2 text-xs text-slate-600">{reason}.</p>}
               <p className="mt-1 text-xs text-slate-500">
                 {item.confidenceLabel.toLowerCase()} confidence
-                {item.deadlineAt && ` · Due ${new Date(item.deadlineAt).toLocaleDateString()}`}
+                {item.deadlineAt && ` · Due ${formatAskDateOnly(item.deadlineAt)}`}
               </p>
               <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-                <div>{calm && item.inlineLaunch ? <button type="button" disabled={itemActionsDisabled} onClick={() => onItemAction('HOME_ACTION', item.homeActionId, item.inlineLaunch!.message, item.inlineLaunch!.operationId, item.inlineLaunch!.interactionType, undefined, item.homeActionId)} className="min-h-10 rounded-lg bg-teal-700 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50">Review in Ask</button> : item.cta ? <ActionLink action={item.cta} /> : item.watchState && <p className="text-sm text-slate-700">{item.watchState}</p>}</div>
+                <div>{calm && item.inlineLaunch ? <button type="button" disabled={itemActionsDisabled} onClick={() => onItemAction('HOME_ACTION', item.homeActionId, item.inlineLaunch!.message, item.inlineLaunch!.operationId, item.inlineLaunch!.interactionType, undefined, item.homeActionId)} className={reviewButtonClass}>Review in Ask</button> : item.cta ? <ActionLink action={item.cta} /> : item.watchState && <p className="text-sm text-slate-700">{item.watchState}</p>}</div>
                 <HomeActionUsefulnessButtons executionId={executionId} homeActionId={item.homeActionId} />
               </div>
               </>}
