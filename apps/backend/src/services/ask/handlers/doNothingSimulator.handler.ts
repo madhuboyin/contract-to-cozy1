@@ -11,6 +11,7 @@ import {
 import { DoNothingSimulatorService } from '../../doNothingSimulator.service';
 import { humanDate } from '../askFormatting';
 import { DO_NOTHING_RUN_ACTION_ID, DO_NOTHING_RUN_MESSAGE } from '../support/homeToolRunConstants';
+import { collectionDescriptor } from '../support/collectionDescriptor';
 
 // Do-Nothing Simulator capability-card slice (FRD v1.68): the nineteenth new operation for a capability with none (the
 // v1.47 "needs a product decision" label did not hold: runs and scenarios are stored and no model is called). Reads
@@ -88,7 +89,8 @@ export function doNothingSimulationFromView(
       tone: 'DEFAULT', actions: [runAction('Run a simulation'), ...addScenario],
     }];
     if (scenarioItems.length) {
-      blocks.push({ type: 'GROUPED_LIST', filters: [], id: 'do-nothing-items', title: 'Saved scenarios', description: 'Saved with their assumptions; none has been run yet.', sections: [{ id: 'do-nothing-scenarios', title: 'Saved scenarios', count: scenarioItems.length, items: scenarioItems }], actions: [] });
+      const sections = [{ id: 'do-nothing-scenarios', title: 'Saved scenarios', count: scenarioItems.length, items: scenarioItems }];
+      blocks.push({ type: 'GROUPED_LIST', filters: [], id: 'do-nothing-items', title: 'Saved scenarios', description: 'Saved with their assumptions; none has been run yet.', sections, collection: collectionDescriptor({ sourceTotal: scenarioItems.length, fetchedCount: scenarioItems.length, sections, nextPageAvailable: false }), actions: [] });
     }
     blocks.push(boundary);
     return { status: 'ANSWERED', reasonCode: 'DO_NOTHING_NO_RUN', blocks, suggestions: [] };
@@ -139,7 +141,7 @@ export function doNothingSimulationFromView(
     { id: 'do-nothing-scenarios', title: 'Saved scenarios', items: scenarioItems },
   ].filter((section) => section.items.length > 0).map((section) => ({ ...section, count: section.items.length }));
   if (sections.length) {
-    blocks.push({ type: 'GROUPED_LIST', filters: [], id: 'do-nothing-items', title: 'What drives the estimate', description: 'From the latest run. Run it again to change the horizon or use a saved scenario.', sections, actions: [] });
+    blocks.push({ type: 'GROUPED_LIST', filters: [], id: 'do-nothing-items', title: 'What drives the estimate', description: 'From the latest run. Run it again to change the horizon or use a saved scenario.', sections, collection: collectionDescriptor({ sourceTotal: sections.reduce((sum, section) => sum + section.items.length, 0), fetchedCount: sections.reduce((sum, section) => sum + section.items.length, 0), sections, nextPageAvailable: false }), actions: [] });
   }
   blocks.push(boundary);
   return { status: 'ANSWERED', reasonCode: 'DO_NOTHING_READY', blocks, suggestions: [] };

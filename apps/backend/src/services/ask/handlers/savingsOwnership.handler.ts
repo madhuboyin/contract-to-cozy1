@@ -22,6 +22,7 @@ import {
   SAVINGS_AVAILABLE_ENTITY_TYPE, SAVINGS_COMMAND_ACTION_IDS, SAVINGS_COMMAND_MESSAGES, SAVINGS_IN_PROGRESS_ENTITY_TYPE, type SavingsCommandKind,
 } from '../support/savingsBenefitCommand';
 import { OWNERSHIP_COST_ACTION_IDS, OWNERSHIP_COST_COMMAND_MESSAGE } from '../support/ownershipCostConstants';
+import { collectionDescriptor } from '../support/collectionDescriptor';
 
 const homeSavingsService = new HomeSavingsService();
 
@@ -76,7 +77,7 @@ async function savingsOpportunitiesResult(userId: string, propertyId: string, me
     expectedContextVersion: context.contextVersion,
   }] : [];
 
-  const recurring = homeSavings.categories
+  const recurringAll = homeSavings.categories
     .filter((category) => category.topOpportunity && category.status === 'FOUND_SAVINGS')
     .map(({ category, topOpportunity }) => {
       const opportunity = topOpportunity!;
@@ -102,8 +103,8 @@ async function savingsOpportunitiesResult(userId: string, propertyId: string, me
         paybackMonths: opportunity.estimatedPaybackMonths,
       };
     })
-    .sort((left, right) => (left.paybackMonths ?? Number.POSITIVE_INFINITY) - (right.paybackMonths ?? Number.POSITIVE_INFINITY))
-    .slice(0, 8)
+    .sort((left, right) => (left.paybackMonths ?? Number.POSITIVE_INFINITY) - (right.paybackMonths ?? Number.POSITIVE_INFINITY));
+  const recurring = recurringAll.slice(0, 8)
     .map(({ paybackMonths: _paybackMonths, ...item }) => item);
 
   const reviewedBenefits = benefits.matches.slice(0, 8).map((match) => {
@@ -219,16 +220,23 @@ async function savingsOpportunitiesResult(userId: string, propertyId: string, me
   }];
 
   if (hasAnyResult) {
+    const sections = [
+      { id: 'recurring', title: 'Recurring-cost opportunities', count: recurringAll.length, items: recurring },
+      { id: 'benefits', title: 'Benefits and rebates to review', count: benefits.matches.length, items: reviewedBenefits },
+      { id: 'in-progress', title: 'Already in progress', count: unified.totals.inProgressCount, items: inProgress },
+      { id: 'realized', title: 'Recorded realized savings', count: unified.totals.realizedCount, items: realized },
+      { id: 'related', title: 'Related savings decisions', count: unified.relatedOpportunities.length, items: related },
+    ].filter((section) => section.count > 0);
     blocks.push({
       type: 'GROUPED_LIST', filters: [], id: 'savings-opportunity-groups', title: 'Savings and benefits',
       description: 'Available estimates are planning signals. Realized value appears only from recorded RECEIVED outcomes.',
-      sections: [
-        { id: 'recurring', title: 'Recurring-cost opportunities', count: recurring.length, items: recurring },
-        { id: 'benefits', title: 'Benefits and rebates to review', count: reviewedBenefits.length, items: reviewedBenefits },
-        { id: 'in-progress', title: 'Already in progress', count: unified.totals.inProgressCount, items: inProgress },
-        { id: 'realized', title: 'Recorded realized savings', count: unified.totals.realizedCount, items: realized },
-        { id: 'related', title: 'Related savings decisions', count: related.length, items: related },
-      ].filter((section) => section.count > 0),
+      sections,
+      collection: collectionDescriptor({
+        sourceTotal: recurringAll.length + benefits.matches.length + unified.totals.inProgressCount + unified.totals.realizedCount + unified.relatedOpportunities.length,
+        fetchedCount: recurringAll.length + benefits.matches.length + unified.inProgress.length + unified.realized.length + unified.relatedOpportunities.length,
+        sections,
+        nextPageAvailable: false,
+      }),
       actions: relatedActions,
     });
   }
@@ -308,6 +316,19 @@ function ownershipViewSwitcher(active: keyof typeof ownershipViewMessages): AskP
   };
 }
 
+// Ownership Costs builds every grouped-list section from a complete in-memory result. Declare that producer fact in one place so
+// every view (current, changes, forecast and variability) uses the same exact collection semantics.
+function withOwnershipCollections(result: AskOperationResult): AskOperationResult {
+  return {
+    ...result,
+    blocks: result.blocks.map((block) => {
+      if (block.type !== 'GROUPED_LIST' || block.collection) return block;
+      const sourceTotal = block.sections.reduce((sum, section) => sum + section.count, 0);
+      return { ...block, collection: collectionDescriptor({ sourceTotal, fetchedCount: sourceTotal, sections: block.sections, nextPageAvailable: false }) };
+    }),
+  };
+}
+
 const categoryReview: Record<OwnershipCostCategory, { label: string; operationId: AskOperationId; message: string }> = {
   PROPERTY_TAX: { label: 'Review property tax', operationId: 'PROPERTY_TAX_APPEAL_READINESS', message: 'Review my property tax details and appeal readiness' },
   INSURANCE: { label: 'Review insurance', operationId: 'COVERAGE_GAPS', message: 'Review my insurance coverage and premium' },
@@ -373,7 +394,7 @@ async function ownershipChangesResult(userId: string, propertyId: string, lens: 
   });
   blocks.push(ownershipViewSwitcher('changes'));
   blocks.push({ type: 'BOUNDARY', id: 'ownership-cost-change-boundary', title: 'Observed comparison', body: changes.limitations.join(' ') || 'Changes compare recorded periods with stable category definitions; unexplained changes are not presented as facts.', severity: 'INFO', suggestions: [] });
-  return { status: changes.comparable ? 'ANSWERED' : 'READY_WITH_LIMITATIONS', reasonCode: changes.comparable ? undefined : 'OWNERSHIP_COST_HISTORY_LIMITED', blocks, suggestions: [] };
+  return withOwnershipCollections({ status: changes.comparable ? 'ANSWERED' : 'READY_WITH_LIMITATIONS', reasonCode: changes.comparable ? undefined : 'OWNERSHIP_COST_HISTORY_LIMITED', blocks, suggestions: [] });
 }
 
 async function ownershipForecastResult(userId: string, propertyId: string, lens: OwnershipCostCurrentLens, message: string): Promise<AskOperationResult> {
@@ -392,7 +413,7 @@ async function ownershipForecastResult(userId: string, propertyId: string, lens:
   }, {
     type: 'TABLE', id: 'ownership-cost-forecast-periods', title: 'Annual planning range', description: 'Low, base and high forward scenarios.', preferredPresentation: 'TABLE',
     columns: [{ key: 'year', label: 'Year' }, { key: 'low', label: 'Low' }, { key: 'base', label: 'Base' }, { key: 'high', label: 'High' }],
-    rows: forecast.periods.map((period) => ({ id: String(period.year), values: { year: String(period.year), low: moneyFromCents(period.lowCents), base: moneyFromCents(period.baseCents), high: moneyFromCents(period.highCents) } })), actions: [],
+    rows: forecast.periods.map((period) => ({ id: String(period.year), values: { year: String(period.year), low: moneyFromCents(period.lowCents), base: moneyFromCents(period.baseCents), high: moneyFromCents(period.highCents) } })), totalCount: forecast.periods.length, actions: [],
   }, {
     type: 'GROUPED_LIST', id: 'ownership-cost-forecast-drivers', title: 'What drives the range', description: 'Ranked by sensitivity at the selected horizon.', filters: [],
     sections: [{ id: 'forecast-drivers', title: 'Drivers', count: forecast.drivers.length, items: forecast.drivers.map((driver) => ({ id: driver.category, entityType: 'OWNERSHIP_COST_CATEGORY', title: driver.label, description: `${driver.rateSourceLabel} Annual rate: ${(driver.lowRate * 100).toFixed(1)}% / ${(driver.baseRate * 100).toFixed(1)}% / ${(driver.highRate * 100).toFixed(1)}%. Horizon sensitivity: ${moneyFromCents(driver.sensitivityCents)}.`, status: driver.rateSource.replace(/_/g, ' '), meta: driver.knownEvents.slice(0, 3).map((event) => `${event.year}: ${event.label}`) })) }], actions: [],
@@ -410,7 +431,7 @@ async function ownershipForecastResult(userId: string, propertyId: string, lens:
   });
   blocks.push(ownershipViewSwitcher('forecast'));
   blocks.push({ type: 'BOUNDARY', id: 'ownership-cost-forecast-boundary', title: 'Planning range, not a prediction', body: forecast.disclaimer || forecast.limitations.join(' '), severity: 'INFO', suggestions: [] });
-  return { status: forecast.stale.isStale ? 'READY_WITH_LIMITATIONS' : 'ANSWERED', reasonCode: forecast.stale.isStale ? 'OWNERSHIP_COST_FORECAST_STALE' : undefined, blocks, suggestions: [] };
+  return withOwnershipCollections({ status: forecast.stale.isStale ? 'READY_WITH_LIMITATIONS' : 'ANSWERED', reasonCode: forecast.stale.isStale ? 'OWNERSHIP_COST_FORECAST_STALE' : undefined, blocks, suggestions: [] });
 }
 
 async function ownershipBufferResult(userId: string, propertyId: string, lens: OwnershipCostCurrentLens): Promise<AskOperationResult> {
@@ -424,7 +445,7 @@ async function ownershipBufferResult(userId: string, propertyId: string, lens: O
   if (variability.measured.periods.length) blocks.push({
     type: 'TABLE', id: 'ownership-cost-observed-variability', title: 'Observed annual periods', description: 'Recurring and one-time capital amounts remain separate.', preferredPresentation: 'TABLE',
     columns: [{ key: 'year', label: 'Year' }, { key: 'recurring', label: 'Recurring' }, { key: 'capital', label: 'One-time capital' }],
-    rows: variability.measured.periods.map((period) => ({ id: period.snapshotId, values: { year: String(period.year), recurring: moneyFromCents(period.recurringCents), capital: moneyFromCents(period.oneTimeCents) } })), actions: [],
+    rows: variability.measured.periods.map((period) => ({ id: period.snapshotId, values: { year: String(period.year), recurring: moneyFromCents(period.recurringCents), capital: moneyFromCents(period.oneTimeCents) } })), totalCount: variability.measured.periods.length, actions: [],
   });
   blocks.push({
     type: 'GROUPED_LIST', id: 'ownership-cost-buffer-options', title: 'Planning options', description: 'Continue in Ask with the canonical owner of each planning decision.', filters: [],
@@ -435,7 +456,7 @@ async function ownershipBufferResult(userId: string, propertyId: string, lens: O
   });
   blocks.push(ownershipViewSwitcher('variability'));
   blocks.push({ type: 'BOUNDARY', id: 'ownership-cost-buffer-boundary', title: 'Scenario-based planning support', body: `${variability.planningBuffer.nonDuplicationRule} ${variability.limitations.join(' ')}`, severity: 'INFO', suggestions: [] });
-  return { status: variability.eligibility.eligible ? 'ANSWERED' : 'READY_WITH_LIMITATIONS', reasonCode: variability.eligibility.eligible ? undefined : 'OWNERSHIP_COST_VARIABILITY_LIMITED', blocks, suggestions: [] };
+  return withOwnershipCollections({ status: variability.eligibility.eligible ? 'ANSWERED' : 'READY_WITH_LIMITATIONS', reasonCode: variability.eligibility.eligible ? undefined : 'OWNERSHIP_COST_VARIABILITY_LIMITED', blocks, suggestions: [] });
 }
 
 async function ownershipCostsResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
@@ -533,6 +554,7 @@ async function ownershipCostsResult(userId: string, propertyId: string, message:
         evidence: `${category.amountKind.toLowerCase().replace(/_/g, ' ')}${category.freshnessStatus === 'CURRENT' ? '' : ` · ${category.freshnessStatus.toLowerCase()}`}`,
       },
     })),
+    totalCount: included.length,
     actions: [],
   }];
 
@@ -579,7 +601,7 @@ async function ownershipCostsResult(userId: string, propertyId: string, message:
     severity: 'INFO', suggestions: [],
   });
 
-  return {
+  return withOwnershipCollections({
     status: captureRequests.length || coverageLimited || permissionLimited ? 'READY_WITH_LIMITATIONS' : 'ANSWERED',
     reasonCode: captureRequests.length
       ? 'OWNERSHIP_COST_CONTEXT_OPTIONAL'
@@ -592,7 +614,7 @@ async function ownershipCostsResult(userId: string, propertyId: string, message:
     captureRequests,
     blocks,
     suggestions: [],
-  };
+  });
 }
 
 registerCapabilityHandler('savings.opportunities', async (envelope) => savingsOpportunitiesResult(envelope.userId, envelope.propertyId!, envelope.message));

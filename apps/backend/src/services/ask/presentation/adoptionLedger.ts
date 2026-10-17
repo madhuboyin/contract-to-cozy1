@@ -109,6 +109,14 @@ export const REVIEWED_OPERATIONS: Readonly<Record<string, string>> = {
   GUIDANCE_JOURNEY_CONTINUE: 'one journey’s complete live step set declares exact source, fetched and delivered totals by status',
   APPLIANCE_FAILURE_RISK: 'the lifespan collection declares the complete analysed-plus-missing appliance total and honest bounded delivery without unsupported continuation',
   MAINTENANCE_TASK_UPDATE: 'the ambiguous-target command declares the complete task total and bounded selection rows without unsupported continuation',
+  PROJECT_TRACKER_PROJECTS: 'project lists are complete; project-detail sections declare their authoritative totals and genuine per-section continuation windows',
+  OWNERSHIP_COSTS: 'every complete in-memory ownership-cost collection declares exact source, fetch and delivery totals across current, change, forecast and variability views',
+  PRICE_FINALIZATIONS_LIST: 'the bounded recent-record read is paired with an authoritative database total and no unsupported continuation',
+  SAVINGS_OPPORTUNITIES: 'available, in-progress, realized and related savings sections distinguish authoritative source totals, fetched rows and bounded delivery',
+  SERVICE_PRICE_CHECKS: 'the bounded recent-check read is paired with an authoritative database total and no unsupported continuation',
+  HOME_UPGRADE_SCENARIOS: 'upgrade option collections declare complete active and archived totals, including bounded management delivery',
+  DO_NOTHING_SIMULATION: 'saved scenarios and the latest run’s complete driver collections declare exact source, fetch and delivery totals',
+  HIRING_GUIDE: 'the fixed authored checklist declares its complete lossless collection and local progressive-disclosure boundary',
 };
 
 const LIST_BLOCKS = ['GROUPED_LIST', 'TABLE', 'TIMELINE', 'PRIORITY_LIST'];

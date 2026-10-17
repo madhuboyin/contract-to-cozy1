@@ -148,6 +148,7 @@ export type ServiceRadarCreateResponseDTO = {
 
 export type ServiceRadarListResponseDTO = {
   items: ServiceRadarSummaryDTO[];
+  totalCount: number;
 };
 
 export type ServiceRadarDetailResponseDTO = {

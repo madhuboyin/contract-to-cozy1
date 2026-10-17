@@ -8,6 +8,7 @@ import { APIError } from '../../../middleware/error.middleware';
 import { humanDate, readableCode } from '../askFormatting';
 import { ServicePriceRadarService } from '../../servicePriceRadar.service';
 import { SERVICE_PRICE_CHECK_ACTION_ID, SERVICE_PRICE_CHECK_MESSAGE } from '../support/homeToolRunConstants';
+import { collectionDescriptor } from '../support/collectionDescriptor';
 
 // Service Price Radar capability-card slice (FRD v1.60): the twelfth new operation for a capability with none. Reads
 // ServicePriceRadarService.listChecks with the page's own limit (12), the call GET
@@ -23,7 +24,7 @@ const SERVICE_PRICE_CATEGORY_LABELS: Record<string, string> = { HVAC: 'HVAC', WI
 const servicePriceCategoryLabel = (value: string) => SERVICE_PRICE_CATEGORY_LABELS[value] ?? readableCode(value).replace(/\b\w/g, (c) => c.toUpperCase());
 const servicePriceMoney = (value: number | null | undefined) => (value == null ? null : `$${Math.round(value).toLocaleString('en-US')}`);
 
-export function servicePriceChecksFromView(checks: readonly ServicePriceCheckView[] | 'PRIMARY_OWNER_ONLY', propertyId: string): AskOperationResult {
+export function servicePriceChecksFromView(checks: readonly ServicePriceCheckView[] | 'PRIMARY_OWNER_ONLY', propertyId: string, sourceTotal?: number): AskOperationResult {
   // The answer reaches only the home's primary account holder, who can check a quote from it, inside Ask.
   const checkAction = (label: string) => ({ id: SERVICE_PRICE_CHECK_ACTION_ID, label, interactionType: 'START_WORKFLOW' as const, message: SERVICE_PRICE_CHECK_MESSAGE, operationId: 'SERVICE_PRICE_CHECK_RUN', style: 'PRIMARY' as const });
   const boundary: AskPresentationBlock = {
@@ -64,34 +65,30 @@ export function servicePriceChecksFromView(checks: readonly ServicePriceCheckVie
     tone: above ? 'CAUTION' : 'DEFAULT',
     actions: [checkAction('Check another quote')],
   }];
-  if (checks.length >= SERVICE_PRICE_RADAR_ASK_LIMIT) {
+  if (sourceTotal == null ? checks.length >= SERVICE_PRICE_RADAR_ASK_LIMIT : sourceTotal > checks.length) {
     blocks.push({
       type: 'LIMITATION', id: 'service-price-radar-limit', title: `Showing the ${SERVICE_PRICE_RADAR_ASK_LIMIT} most recent checks`,
       body: 'Older quote checks are not listed here.', severity: 'INFO',
     });
   }
+  const sections = [{
+    id: 'service-price-radar-recent', title: 'Recent checks', count: checks.length,
+    items: checks.map((check) => {
+      const low = servicePriceMoney(check.expectedLow);
+      const high = servicePriceMoney(check.expectedHigh);
+      return {
+        id: check.id,
+        title: `${servicePriceCategoryLabel(check.serviceCategory)}${check.serviceSubcategory ? ` · ${servicePriceCategoryLabel(check.serviceSubcategory)}` : ''}`,
+        description: check.explanationShort,
+        meta: [`Quote ${servicePriceMoney(check.quoteAmount)}`, low && high ? `Expected ${low} to ${high}` : 'Broad range only', ...(check.quoteVendorName ? [check.quoteVendorName] : []), `Checked ${humanDate(new Date(check.createdAt))}`],
+        status: check.verdict ? SERVICE_PRICE_VERDICT_LABELS[check.verdict] ?? 'Need more context' : 'Need more context', href: null,
+      };
+    }),
+  }];
   blocks.push({
     type: 'GROUPED_LIST', filters: [], id: 'service-price-radar-checks', title: 'Recent quote checks', description: 'Newest first.',
-    sections: [{
-      id: 'service-price-radar-recent', title: 'Recent checks', count: checks.length,
-      items: checks.map((check) => {
-        const low = servicePriceMoney(check.expectedLow);
-        const high = servicePriceMoney(check.expectedHigh);
-        return {
-          id: check.id,
-          title: `${servicePriceCategoryLabel(check.serviceCategory)}${check.serviceSubcategory ? ` · ${servicePriceCategoryLabel(check.serviceSubcategory)}` : ''}`,
-          description: check.explanationShort,
-          meta: [
-            `Quote ${servicePriceMoney(check.quoteAmount)}`,
-            low && high ? `Expected ${low} to ${high}` : 'Broad range only',
-            ...(check.quoteVendorName ? [check.quoteVendorName] : []),
-            `Checked ${humanDate(new Date(check.createdAt))}`,
-          ],
-          status: check.verdict ? SERVICE_PRICE_VERDICT_LABELS[check.verdict] ?? 'Need more context' : 'Need more context',
-          href: null,
-        };
-      }),
-    }],
+    sections,
+    collection: collectionDescriptor({ sourceTotal: sourceTotal ?? checks.length, fetchedCount: checks.length, sections, nextPageAvailable: false }),
     actions: [],
   });
   blocks.push(boundary);
@@ -100,8 +97,8 @@ export function servicePriceChecksFromView(checks: readonly ServicePriceCheckVie
 
 async function servicePriceChecksResult(propertyId: string, userId: string): Promise<AskOperationResult> {
   try {
-    const { items } = await new ServicePriceRadarService().listChecks(propertyId, userId, { limit: SERVICE_PRICE_RADAR_ASK_LIMIT });
-    return servicePriceChecksFromView(items, propertyId);
+    const result = await new ServicePriceRadarService().listChecks(propertyId, userId, { limit: SERVICE_PRICE_RADAR_ASK_LIMIT });
+    return servicePriceChecksFromView(result.items, propertyId, result.totalCount ?? result.items.length);
   } catch (error) {
     if (error instanceof APIError && error.code === 'PROPERTY_ACCESS_DENIED') return servicePriceChecksFromView('PRIMARY_OWNER_ONLY', propertyId);
     throw error;

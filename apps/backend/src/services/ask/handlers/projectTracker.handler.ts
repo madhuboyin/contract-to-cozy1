@@ -18,6 +18,7 @@ import { ProjectTrackerChangeOrderInputSchema, ProjectTrackerCompletionInputSche
 import { PROJECT_TRACKER_ACTION_IDS, PROJECT_TRACKER_COMMAND_CAPTURE_KEY, PROJECT_TRACKER_COMMAND_MESSAGE, PROJECT_TRACKER_CREATE_ACTION_ID, PROJECT_TRACKER_CREATE_CAPTURE_KEY, PROJECT_TRACKER_CREATE_MESSAGE } from '../support/projectTrackerConstants';
 import { reconcileAskExecutionSideEffects } from '../execution/executeOperation';
 import type { AskViewState } from '../support/executionState';
+import { collectionDescriptor } from '../support/collectionDescriptor';
 
 // Project Tracker capability-card slice (FRD v1.59): the eleventh new operation for a capability with none. Reads
 // projectTracker.service listProjects, the call GET /properties/:id/projects makes for the Project Tracker page (the
@@ -93,13 +94,15 @@ export function trackedProjectsFromView(projects: readonly TrackedProjectView[],
     entityType: 'PROJECT_RECORD',
     actions: [reviewAction(project.id)],
   });
+  const projectSections = [
+    ...(active.length ? [{ id: 'project-tracker-active', title: 'Active projects', count: active.length, items: active.map(row) }] : []),
+    ...(done.length ? [{ id: 'project-tracker-completed', title: 'Completed', count: done.length, items: done.map(row) }] : []),
+    ...(cancelled.length ? [{ id: 'project-tracker-cancelled', title: 'Cancelled', count: cancelled.length, items: cancelled.map(row) }] : []),
+  ];
   blocks.push({
     type: 'GROUPED_LIST', filters: [], id: 'project-tracker-projects', title: 'Projects', description: 'Newest first within each group, as on the page. Open a project for milestones, payments and change orders.',
-    sections: [
-      ...(active.length ? [{ id: 'project-tracker-active', title: 'Active projects', count: active.length, items: active.map(row) }] : []),
-      ...(done.length ? [{ id: 'project-tracker-completed', title: 'Completed', count: done.length, items: done.map(row) }] : []),
-      ...(cancelled.length ? [{ id: 'project-tracker-cancelled', title: 'Cancelled', count: cancelled.length, items: cancelled.map(row) }] : []),
-    ],
+    sections: projectSections,
+    collection: collectionDescriptor({ sourceTotal: projects.length, fetchedCount: projects.length, sections: projectSections, nextPageAvailable: false }),
     actions: [],
   });
   blocks.push(boundary);
@@ -183,10 +186,10 @@ export function projectDetailFromView(project: ProjectDetailView, logs: Awaited<
       { id: 'contract', values: { metric: 'Current contract', amount: project.currentContractAmountCents == null ? 'Not set' : moneyWithCents(project.currentContractAmountCents) } },
       { id: 'paid', values: { metric: 'Paid to date', amount: moneyWithCents(project.paidToDateCents) } },
       { id: 'remaining', values: { metric: 'Remaining', amount: remaining == null ? 'Unknown until the contract amount is set' : moneyWithCents(remaining) } },
-    ], actions: [] },
-    ...(alignment?.projections?.length ? [{ type: 'TABLE' as const, id: 'project-execution-alignment', title: 'Execution alignment diagnostics', description: 'Per-projection synchronization state for linked execution records.', columns: [{ key: 'projection', label: 'Projection' }, { key: 'source', label: 'Source' }, { key: 'status', label: 'Status' }, { key: 'diagnostic', label: 'Last reconciliation' }], rows: alignment.projections.map((projection) => ({ id: projection.id, values: { projection: projection.name, source: `${readableCode(projection.executionSourceType)} · ${projection.executionSourceId}`, status: readableCode(projection.reconciliationStatus), diagnostic: [projection.lastReconciledAt ? humanDate(projection.lastReconciledAt) : 'Never', `${projection.reconciliationAttempts} attempt${projection.reconciliationAttempts === 1 ? '' : 's'}`, projection.reconciliationError].filter(Boolean).join(' · ') } })), actions: [] }] : []),
-    ...(closeout ? [{ type: 'GROUPED_LIST' as const, id: 'project-closeout-preview', title: 'Closeout package', description: `Generated ${closeout.closeoutPackageGeneratedAt ? humanDate(closeout.closeoutPackageGeneratedAt) : 'date unknown'} · ${closeout.writeBacks.length} home-record write-back${closeout.writeBacks.length === 1 ? '' : 's'}. Share links expose the immutable package snapshot only.`, filters: [], sections: [{ id: 'project-closeout-shares', title: 'Share-link history', count: shareLinks.length, items: shareLinks.map((link) => item(link.id, `Created ${humanDate(link.createdAt)}`, link.lastViewedAt ? `Last viewed ${humanDate(link.lastViewedAt)}` : 'Never viewed', [`${link.viewCount} view${link.viewCount === 1 ? '' : 's'}`, link.expiresAt ? `Expires ${humanDate(link.expiresAt)}` : 'No expiry', link.revokedAt ? `Revoked ${humanDate(link.revokedAt)}` : ''], readableCode(link.status))) }], actions: [] }] : []),
-    ...(sections.length ? [{ type: 'GROUPED_LIST' as const, id: 'project-detail-records', title: 'Execution record', description: 'Milestones, payments, change orders, issues and recent progress from the canonical Project Tracker.', filters: [], sections, actions: [] }] : [{ type: 'EMPTY_STATE' as const, id: 'project-detail-empty', title: 'No execution activity recorded yet', body: canManage ? 'The project exists, but only its initial setup is recorded.' : 'The project exists, but no execution activity is available to review.', actions: [] }]),
+    ], totalCount: 3, actions: [] },
+    ...(alignment?.projections?.length ? [{ type: 'TABLE' as const, id: 'project-execution-alignment', title: 'Execution alignment diagnostics', description: 'Per-projection synchronization state for linked execution records.', columns: [{ key: 'projection', label: 'Projection' }, { key: 'source', label: 'Source' }, { key: 'status', label: 'Status' }, { key: 'diagnostic', label: 'Last reconciliation' }], rows: alignment.projections.map((projection) => ({ id: projection.id, values: { projection: projection.name, source: `${readableCode(projection.executionSourceType)} · ${projection.executionSourceId}`, status: readableCode(projection.reconciliationStatus), diagnostic: [projection.lastReconciledAt ? humanDate(projection.lastReconciledAt) : 'Never', `${projection.reconciliationAttempts} attempt${projection.reconciliationAttempts === 1 ? '' : 's'}`, projection.reconciliationError].filter(Boolean).join(' · ') } })), totalCount: alignment.projections.length, actions: [] }] : []),
+    ...(closeout ? (() => { const closeoutSections = [{ id: 'project-closeout-shares', title: 'Share-link history', count: shareLinks.length, items: shareLinks.map((link) => item(link.id, `Created ${humanDate(link.createdAt)}`, link.lastViewedAt ? `Last viewed ${humanDate(link.lastViewedAt)}` : 'Never viewed', [`${link.viewCount} view${link.viewCount === 1 ? '' : 's'}`, link.expiresAt ? `Expires ${humanDate(link.expiresAt)}` : 'No expiry', link.revokedAt ? `Revoked ${humanDate(link.revokedAt)}` : ''], readableCode(link.status))) }]; return [{ type: 'GROUPED_LIST' as const, id: 'project-closeout-preview', title: 'Closeout package', description: `Generated ${closeout.closeoutPackageGeneratedAt ? humanDate(closeout.closeoutPackageGeneratedAt) : 'date unknown'} · ${closeout.writeBacks.length} home-record write-back${closeout.writeBacks.length === 1 ? '' : 's'}. Share links expose the immutable package snapshot only.`, filters: [], sections: closeoutSections, collection: collectionDescriptor({ sourceTotal: shareLinks.length, fetchedCount: shareLinks.length, sections: closeoutSections, nextPageAvailable: false }), actions: [] }]; })() : []),
+    ...(sections.length ? [{ type: 'GROUPED_LIST' as const, id: 'project-detail-records', title: 'Execution record', description: 'Milestones, payments, change orders, issues and recent progress from the canonical Project Tracker.', filters: [], sections, collection: collectionDescriptor({ sourceTotal: sections.reduce((sum, section) => sum + section.count, 0), fetchedCount: sectionRecords.reduce((sum, section) => sum + section.items.length, 0) + logs.length, sections, nextPageAvailable: sections.some((section) => section.offset + section.items.length < section.count) }), actions: [] }] : [{ type: 'EMPTY_STATE' as const, id: 'project-detail-empty', title: 'No execution activity recorded yet', body: canManage ? 'The project exists, but only its initial setup is recorded.' : 'The project exists, but no execution activity is available to review.', actions: [] }]),
     { type: 'BOUNDARY', id: 'project-tracker-boundary', title: 'Your records, not a contract review', body: 'Amounts, dates, approvals and evidence reflect what the household recorded. Review signed contracts, receipts and authority decisions before relying on them.', severity: 'INFO', suggestions: [] },
   ], suggestions: [] };
 }

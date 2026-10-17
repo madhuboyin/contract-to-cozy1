@@ -9,6 +9,7 @@ import { priceFinalizationService } from '../../priceFinalization.service';
 import { ensurePropertyAccess } from '../askHandlerSupport';
 import { humanDate, titleCase } from '../askFormatting';
 import { PRICE_COMMAND_ACTION_IDS, PRICE_COMMAND_MESSAGES, PRICE_FINALIZATION_ENTITY_TYPE, PRICE_FINALIZATION_PROPERTY_ENTITY_TYPE } from '../support/priceFinalizationCommand';
+import { collectionDescriptor } from '../support/collectionDescriptor';
 
 // Price Finalization capability-card slice (FRD v1.67): the eighteenth new operation for a capability with none (the
 // v1.47 "needs a product decision" label did not hold once the page was traced). Reads
@@ -28,7 +29,7 @@ const finalizationMoney = (value: number | null | undefined) => (value == null
   ? null
   : `$${value.toLocaleString('en-US', { minimumFractionDigits: Number.isInteger(value) ? 0 : 2, maximumFractionDigits: 2 })}`);
 
-export function priceFinalizationsFromView(records: readonly PriceFinalizationView[] | 'PRIMARY_OWNER_ONLY', propertyId: string, canChange = false): AskOperationResult {
+export function priceFinalizationsFromView(records: readonly PriceFinalizationView[] | 'PRIMARY_OWNER_ONLY', propertyId: string, canChange = false, sourceTotal?: number): AskOperationResult {
   // Recording a price is a contributor's action on the primary owner's record; a viewer is offered nothing it would refuse.
   const startAction = canChange ? [{
     id: PRICE_COMMAND_ACTION_IDS.START_MANUAL, label: 'Record an accepted price', interactionType: 'START_WORKFLOW' as const, message: PRICE_COMMAND_MESSAGES.START_MANUAL,
@@ -103,21 +104,23 @@ export function priceFinalizationsFromView(records: readonly PriceFinalizationVi
     body: `${finalized} finalized and ${drafts} still ${drafts === 1 ? 'a draft' : 'drafts'}.`,
     tone: 'DEFAULT', actions: startAction,
   }];
-  if (records.length >= PRICE_FINALIZATION_ASK_LIMIT) {
+  if (sourceTotal == null ? records.length >= PRICE_FINALIZATION_ASK_LIMIT : sourceTotal > records.length) {
     blocks.push({
       type: 'LIMITATION', id: 'price-finalization-limit', title: `Showing the ${PRICE_FINALIZATION_ASK_LIMIT} most recent`,
       body: 'Older records may exist; Ask lists the most recent ones.', severity: 'INFO',
     });
   }
+  const sections = groups
+    .map(([status, title]) => ({ status, title, items: records.filter((record) => record.status === status).map(row) }))
+    .filter((section) => section.items.length > 0)
+    .map((section) => ({ id: `price-finalization-${section.status.toLowerCase()}`, title: section.title, count: section.items.length, items: section.items }));
   blocks.push({
     type: 'GROUPED_LIST', filters: [], id: 'price-finalization-items', title: 'Recorded prices and terms',
     description: canChange
       ? 'Newest first. Change a draft\u2019s terms or finalize it. Booking is not currently available in Ask.'
       : 'Newest first. A contributor or owner can change or finalize a draft. Booking is not currently available in Ask.',
-    sections: groups
-      .map(([status, title]) => ({ status, title, items: records.filter((record) => record.status === status).map(row) }))
-      .filter((section) => section.items.length > 0)
-      .map((section) => ({ id: `price-finalization-${section.status.toLowerCase()}`, title: section.title, count: section.items.length, items: section.items })),
+    sections,
+    collection: collectionDescriptor({ sourceTotal: sourceTotal ?? records.length, fetchedCount: records.length, sections, nextPageAvailable: false }),
     actions: [],
   }, boundary);
   return { status: 'ANSWERED', reasonCode: 'PRICE_FINALIZATIONS_READY', blocks, suggestions: [] };
@@ -125,8 +128,8 @@ export function priceFinalizationsFromView(records: readonly PriceFinalizationVi
 
 async function priceFinalizationsResult(propertyId: string, userId: string, canChange: boolean): Promise<AskOperationResult> {
   try {
-    const { items } = await priceFinalizationService.listForProperty(propertyId, userId, PRICE_FINALIZATION_ASK_LIMIT);
-    return priceFinalizationsFromView(items, propertyId, canChange);
+    const result = await priceFinalizationService.listForProperty(propertyId, userId, PRICE_FINALIZATION_ASK_LIMIT);
+    return priceFinalizationsFromView(result.items, propertyId, canChange, result.totalCount ?? result.items.length);
   } catch (error) {
     if (error instanceof APIError && error.code === 'PROPERTY_ACCESS_DENIED') return priceFinalizationsFromView('PRIMARY_OWNER_ONLY', propertyId);
     throw error;

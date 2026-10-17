@@ -293,11 +293,14 @@ export class PriceFinalizationService {
   ): Promise<PriceFinalizationListResponse> {
     await ensurePropertyAccess(propertyId, userId);
 
-    const rows = await prismaAny.priceFinalization.findMany({
+    const where = {
+      propertyId,
+      ...(filters?.guidanceJourneyId ? { guidanceJourneyId: filters.guidanceJourneyId } : {}),
+      ...(filters?.inventoryItemId ? { inventoryItemId: filters.inventoryItemId } : {}),
+    };
+    const [rows, totalCount] = await Promise.all([prismaAny.priceFinalization.findMany({
       where: {
-        propertyId,
-        ...(filters?.guidanceJourneyId ? { guidanceJourneyId: filters.guidanceJourneyId } : {}),
-        ...(filters?.inventoryItemId ? { inventoryItemId: filters.inventoryItemId } : {}),
+        ...where,
       },
       orderBy: {
         createdAt: 'desc',
@@ -310,10 +313,11 @@ export class PriceFinalizationService {
           },
         },
       },
-    });
+    }), prismaAny.priceFinalization.count({ where })]);
 
     return {
       items: rows.map(mapDetail),
+      totalCount,
     };
   }
 

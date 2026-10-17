@@ -81,7 +81,7 @@ test('the real list query is the page\'s: this property, newest first, the limit
   const queries = [];
   prismaModule.prisma = { property: { findFirst: async () => ({ id: 'p1', homeownerProfileId: 'hp1' }) } };
   // The service reads checks through a module-level alias of the real client (prismaAny), so stub that client's model.
-  Object.defineProperty(originals.prisma, 'serviceRadarCheck', { configurable: true, value: { findMany: async (query) => { queries.push(query); return []; } } });
+  Object.defineProperty(originals.prisma, 'serviceRadarCheck', { configurable: true, value: { findMany: async (query) => { queries.push(query); return []; }, count: async () => 0 } });
   try {
     await new ServicePriceRadarService().listChecks('p1', 'u1', { limit: 12 });
   } finally {

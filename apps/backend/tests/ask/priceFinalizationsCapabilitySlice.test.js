@@ -40,7 +40,7 @@ const rows = () => [
 function install({ owner = true, data = rows() } = {}) {
   queries = [];
   prismaModule.prisma = { property: { findFirst: async (query) => { queries.push(['property', query]); return owner ? { id: 'p1' } : null; } } };
-  Object.defineProperty(originals.prisma, 'priceFinalization', { configurable: true, value: { findMany: async (query) => { queries.push(['list', query]); return data; } } });
+  Object.defineProperty(originals.prisma, 'priceFinalization', { configurable: true, value: { findMany: async (query) => { queries.push(['list', query]); return data; }, count: async (query) => { queries.push(['count', query]); return data.length; } } });
 }
 
 test.beforeEach(() => install());

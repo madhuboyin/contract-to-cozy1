@@ -4,6 +4,7 @@
 // product review; it is conservative and does not state requirements that differ by place (licensing, permits and lien rules vary).
 import { type AskPresentationBlock } from '../../../productFramework/ask/ask.contract';
 import { type AskOperationResult } from '../askOperationRegistry';
+import { collectionDescriptor } from './collectionDescriptor';
 
 /** The stored starter message. */
 export const HIRING_GUIDE_MESSAGE = 'What should I ask before hiring a contractor?';
@@ -27,6 +28,10 @@ export function buildHiringGuideResult(): AskOperationResult {
     body: 'This is general guidance, not legal advice and not an assessment of any contractor. Licensing, permit and payment rules differ by location, so check your local requirements.',
     severity: 'INFO', suggestions: [],
   };
+  const sections = [{
+    id: 'hiring-guide-checklist', title: 'Most important first', count: ITEMS.length, initialVisibleCount: LEAD_COUNT,
+    items: ITEMS.map((item, index) => ({ id: item.id, title: item.title, description: item.description, condition: null, meta: [], status: null, href: null, countLabel: String(index + 1) })),
+  }];
   return {
     status: 'ANSWERED', reasonCode: 'HIRING_GUIDE_READY',
     blocks: [{
@@ -34,10 +39,8 @@ export function buildHiringGuideResult(): AskOperationResult {
       body: 'Three checks matter most before you hire: licensing and insurance, itemized written estimates, and a signed contract. References, permits and warranty questions come next.', tone: 'DEFAULT', actions: [],
     }, {
       type: 'GROUPED_LIST', id: 'hiring-guide-items', title: 'Before you hire', actions: [], filters: [],
-      sections: [{
-        id: 'hiring-guide-checklist', title: 'Most important first', count: ITEMS.length, initialVisibleCount: LEAD_COUNT,
-        items: ITEMS.map((item, index) => ({ id: item.id, title: item.title, description: item.description, condition: null, meta: [], status: null, href: null, countLabel: String(index + 1) })),
-      }],
+      sections,
+      collection: collectionDescriptor({ sourceTotal: ITEMS.length, fetchedCount: ITEMS.length, sections, nextPageAvailable: false }),
     }, boundary],
     suggestions: [],
   };

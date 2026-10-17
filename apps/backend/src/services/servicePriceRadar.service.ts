@@ -1004,8 +1004,7 @@ export class ServicePriceRadarService {
   async listChecks(propertyId: string, userId: string, query: ServiceRadarListQuery): Promise<ServiceRadarListResponseDTO> {
     await assertPropertyForUser(propertyId, userId);
 
-    const rows = await prismaAny.serviceRadarCheck.findMany({
-      where: {
+    const where = {
         propertyId,
         ...(query.linkedEntityType && query.linkedEntityId
           ? {
@@ -1017,7 +1016,9 @@ export class ServicePriceRadarService {
               },
             }
           : {}),
-      },
+    };
+    const [rows, totalCount] = await Promise.all([prismaAny.serviceRadarCheck.findMany({
+      where,
       orderBy: [{ createdAt: 'desc' }],
       take: query.limit,
       select: {
@@ -1039,10 +1040,11 @@ export class ServicePriceRadarService {
         confidenceScore: true,
         explanationShort: true,
       },
-    });
+    }), prismaAny.serviceRadarCheck.count({ where })]);
 
     return {
       items: (rows as any[]).map(mapSummary),
+      totalCount,
     };
   }
 

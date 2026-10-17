@@ -9,6 +9,7 @@ import { readableCode } from '../askFormatting';
 import { HomeDigitalTwinScenarioService } from '../../homeDigitalTwinScenario.service';
 import { ensurePropertyAccess } from '../askHandlerSupport';
 import { UPGRADE_COMMAND_ACTION_IDS, UPGRADE_COMMAND_MESSAGES, UPGRADE_SCENARIO_ENTITY_TYPE } from '../support/homeUpgradeCommand';
+import { collectionDescriptor } from '../support/collectionDescriptor';
 
 // Home Upgrade Planner (home-digital-twin) capability-card slice (FRD v1.57): the ninth new operation for a capability
 // with none. Reads HomeDigitalTwinScenarioService.listScenarios, the call GET
@@ -147,35 +148,23 @@ export function homeUpgradeScenariosFromView(
   const strips = ordered.map((group) => ({ group, strip: homeUpgradeComparison(group.key, group.label, group.rows, activeRun) }));
   for (const { strip } of strips) if (strip) blocks.push(strip);
   const listed = strips.filter(({ strip }) => !strip).map(({ group }) => group);
-  if (listed.length) blocks.push({
-    type: 'GROUPED_LIST', filters: [], id: 'home-upgrade-options', title: 'Upgrade options by system', description: 'Grouped by home system.', listDensity: 'DENSE',
-    sections: listed.map((group) => ({
+  if (listed.length) {
+    const sections = listed.map((group) => ({
       id: `home-upgrade-${group.key}`, title: group.label, count: group.rows.length,
       items: group.rows.map((scenario) => {
         const cost = upgradeImpactDisplay(scenario, 'UPFRONT_COST');
         const savings = upgradeImpactDisplay(scenario, 'ANNUAL_SAVINGS');
         const payback = upgradeImpactDisplay(scenario, 'PAYBACK_PERIOD');
-        return {
-          id: scenario.id,
-          title: scenario.name,
-          description: null,
-          meta: [
-            UPGRADE_SCENARIO_TYPE_LABELS[scenario.scenarioType] ?? readableCode(scenario.scenarioType),
-            ...(UPGRADE_DECISION_LABELS[scenario.decisionStatus] ? [UPGRADE_DECISION_LABELS[scenario.decisionStatus]] : []),
-            ...(scenario.isPinned ? ['Pinned'] : []),
-            ...(cost ? [`Upfront ${cost}`] : []),
-            ...(savings ? [`Savings ${savings} a year`] : []),
-            ...(payback ? [`Payback ${payback}`] : []),
-          ],
-          status: activeRun(scenario)
-            ? (scenario.latestRun?.status === 'RUNNING' ? 'Calculating' : 'Queued')
-            : scenario.status === 'COMPUTED' && scenario.staleAt ? 'Results out of date' : UPGRADE_SCENARIO_STATUS_LABELS[scenario.status] ?? readableCode(scenario.status),
-          href: null,
-        };
+        return { id: scenario.id, title: scenario.name, description: null, meta: [UPGRADE_SCENARIO_TYPE_LABELS[scenario.scenarioType] ?? readableCode(scenario.scenarioType), ...(UPGRADE_DECISION_LABELS[scenario.decisionStatus] ? [UPGRADE_DECISION_LABELS[scenario.decisionStatus]] : []), ...(scenario.isPinned ? ['Pinned'] : []), ...(cost ? [`Upfront ${cost}`] : []), ...(savings ? [`Savings ${savings} a year`] : []), ...(payback ? [`Payback ${payback}`] : [])], status: activeRun(scenario) ? (scenario.latestRun?.status === 'RUNNING' ? 'Calculating' : 'Queued') : scenario.status === 'COMPUTED' && scenario.staleAt ? 'Results out of date' : UPGRADE_SCENARIO_STATUS_LABELS[scenario.status] ?? readableCode(scenario.status), href: null };
       }),
-    })),
+    }));
+    blocks.push({
+    type: 'GROUPED_LIST', filters: [], id: 'home-upgrade-options', title: 'Upgrade options by system', description: 'Grouped by home system.', listDensity: 'DENSE',
+    sections,
+    collection: collectionDescriptor({ sourceTotal: sections.reduce((sum, section) => sum + section.items.length, 0), fetchedCount: sections.reduce((sum, section) => sum + section.items.length, 0), sections, nextPageAvailable: false }),
     actions: [],
   });
+  }
   if (manage.canChange) {
     const act = (id: string, label: string, message: string, style: 'PRIMARY' | 'SECONDARY' | 'QUIET' = 'SECONDARY') =>
       ({ id, label, message, operationId: 'HOME_UPGRADE_COMMAND', interactionType: 'MUTATE_RECORD' as const, style });
@@ -193,14 +182,16 @@ export function homeUpgradeScenariosFromView(
           act(UPGRADE_COMMAND_ACTION_IDS.ARCHIVE, 'Archive', UPGRADE_COMMAND_MESSAGES.ARCHIVE, 'QUIET'),
         ],
     });
+    const sections = [
+      { id: 'home-upgrade-manage-active', title: 'Active options', count: scenarios.length, items: scenarios.slice(0, 20).map((scenario) => row(scenario, false)) },
+      ...(manage.archived.length ? [{ id: 'home-upgrade-manage-archived', title: 'Archived', count: manage.archived.length, items: manage.archived.slice(0, 20).map((scenario) => row(scenario, true)) }] : []),
+    ];
     blocks.push({
       type: 'GROUPED_LIST', filters: [], id: 'home-upgrade-manage', title: 'Manage options',
       listDensity: 'DENSE',
       description: 'Record your decision, recalculate, rename or archive an option. Each change is reviewed before it is saved, and a decision does not start any work.',
-      sections: [
-        { id: 'home-upgrade-manage-active', title: 'Active options', count: scenarios.length, items: scenarios.slice(0, 20).map((scenario) => row(scenario, false)) },
-        ...(manage.archived.length ? [{ id: 'home-upgrade-manage-archived', title: 'Archived', count: manage.archived.length, items: manage.archived.slice(0, 20).map((scenario) => row(scenario, true)) }] : []),
-      ],
+      sections,
+      collection: collectionDescriptor({ sourceTotal: scenarios.length + manage.archived.length, fetchedCount: scenarios.length + manage.archived.length, sections, nextPageAvailable: false }),
       actions: [],
     });
   }

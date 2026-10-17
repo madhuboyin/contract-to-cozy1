@@ -124,4 +124,5 @@ export type PriceFinalizationListFilters = {
 
 export type PriceFinalizationListResponse = {
   items: PriceFinalizationDetailDTO[];
+  totalCount: number;
 };
