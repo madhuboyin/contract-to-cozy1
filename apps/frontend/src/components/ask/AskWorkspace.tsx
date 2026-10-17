@@ -296,7 +296,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
     void ask(prompt.question, attribution, prompt.operationId ? { ...prompt.context, operationId: prompt.operationId, ...(discovery ? { discovery } : {}) } : prompt.context);
   };
   // Explore with Cozy: topic selection is view state only; only a starter sends, once, with its declared operation and this property.
-  const explore = useExploreWithCozy({ view: concierge.view, loading: concierge.loading, failed: concierge.failed, propertyId: selectedPropertyId, sessionId, busy: loading || !sessionId, scrollRef: conversationScrollRef, ask });
+  const explore = useExploreWithCozy({ view: concierge.view, loading: concierge.loading, failed: concierge.failed, propertyId: selectedPropertyId, sessionId, busy: loading || !sessionId, hasConversation: executions.length > 0, startNewConversation: startNewSession, scrollRef: conversationScrollRef, ask });
   const explorerProps = {
     groups: concierge.view?.capabilityGroups ?? [],
     onOpen: () => track('ask_capability_explorer_opened', { propertyId: selectedPropertyId ?? null, groupCount: concierge.view?.capabilityGroups.length ?? 0, capabilityCount: concierge.view?.capabilityGroups.reduce((count, group) => count + group.capabilityIds.length, 0) ?? 0 }),

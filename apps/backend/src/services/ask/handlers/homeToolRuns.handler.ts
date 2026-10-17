@@ -21,7 +21,7 @@ import {
   SERVICE_PRICE_CHECK_CAPTURE_KEY, SERVICE_PRICE_CHECK_MESSAGE, SERVICE_PRICE_MAX_QUOTE,
 } from '../support/homeToolRunConstants';
 import { receiptFollowUpAction } from '../support/receiptFollowUps';
-import { readableCode } from '../askFormatting';
+import { enumLabel, readableCode } from '../askFormatting';
 import { HomeHabitCoachService } from '../../homeHabitCoach/homeHabitCoachService';
 import { DoNothingSimulatorService } from '../../doNothingSimulator.service';
 import { ServicePriceRadarService } from '../../servicePriceRadar.service';
@@ -273,7 +273,13 @@ registerConfirmCapabilityHandler('do-nothing-simulator.run', confirmDoNothingRun
 type PriceCheckInput = ReturnType<typeof ServicePriceCheckInputSchema.parse>;
 type CheckSummary = { id: string; verdict: string | null; expectedLow: number | null; expectedHigh: number | null; explanationShort: string | null };
 const VERDICT_LABELS: Record<string, string> = { FAIR: 'Within the expected range', HIGH: 'Above the expected range', VERY_HIGH: 'Well above the expected range', UNDERPRICED: 'Below the expected range' };
-const categoryLabel = (value: string) => readableCode(value).replace(/\b\w/g, (letter) => letter.toUpperCase());
+const SERVICE_CATEGORY_LABELS: Record<string, string> = {
+  HVAC: 'HVAC',
+  WINDOWS_DOORS: 'Windows & doors',
+  LANDSCAPING_DRAINAGE: 'Landscaping & drainage',
+  SECURITY_SAFETY: 'Security & safety',
+};
+const categoryLabel = (value: string) => SERVICE_CATEGORY_LABELS[value] ?? enumLabel(value);
 export const priceCheckVersion = (propertyId: string) => sha(`service-price-check:${propertyId}`);
 
 function priceCheckCaptureRequest(contextVersion: string, entered?: Partial<PriceCheckInput>): AskCaptureRequest {

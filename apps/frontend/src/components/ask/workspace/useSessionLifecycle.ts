@@ -187,7 +187,7 @@ export function useSessionLifecycle({ mode, sessionId, executions, selectedPrope
   };
 
   const startNewSession = () => {
-    if (loading) return;
+    if (loading) return undefined;
     const nextSession = newId();
     activeSessionRef.current = nextSession;
     activeSessionPropertyRef.current = selectedPropertyId;
@@ -200,6 +200,7 @@ export function useSessionLifecycle({ mode, sessionId, executions, selectedPrope
     setHistoryDrawerOpen(false);
     if (mode === 'page') updateAskLocation({ propertyId: selectedPropertyId }, 'push');
     window.setTimeout(() => textareaRef.current?.focus(), 50);
+    return nextSession;
   };
 
   return { clearHistory, startNewSession };

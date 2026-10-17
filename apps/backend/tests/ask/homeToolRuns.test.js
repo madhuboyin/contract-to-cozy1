@@ -229,8 +229,10 @@ test('price check: the declared action opens a form with the 29 supported servic
   const [request] = result.captureRequests;
   const byKey = Object.fromEntries(request.inputSchema.fields.map((field) => [field.key, field]));
   const services = byKey.serviceCategory.inputSchema.options.map((option) => option.value);
+  const labels = Object.fromEntries(byKey.serviceCategory.inputSchema.options.map((option) => [option.value, option.label]));
   assert.equal(services.length, 29);
   for (const regulated of ['INSURANCE', 'ATTORNEY', 'FINANCE']) assert.ok(!services.includes(regulated), regulated);
+  assert.deepEqual([labels.HVAC, labels.WINDOWS_DOORS, labels.LANDSCAPING_DRAINAGE, labels.SECURITY_SAFETY], ['HVAC', 'Windows & doors', 'Landscaping & drainage', 'Security & safety']);
   assert.deepEqual([byKey.serviceCategory.required, byKey.quoteAmount.required, byKey.quoteVendorName.required], [true, true, false]);
   assert.equal(calls.createCheck.length, 0);
 });

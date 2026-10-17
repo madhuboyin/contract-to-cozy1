@@ -137,6 +137,21 @@ describe('AskWorkspace Explore with Cozy wiring', () => {
     expect(mocked.getConciergeHome).toHaveBeenCalledTimes(1);
   });
 
+  it('starts an Explore launch in a new conversation when a transcript already exists', async () => {
+    mount();
+    await openTopicViaDisclosure('Home care');
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Label care-seasonal' })); });
+    await waitFor(() => expect(mocked.createAskExecution).toHaveBeenCalledTimes(1));
+    const firstSessionId = mocked.createAskExecution.mock.calls[0][0].sessionId;
+
+    await openTopicViaDisclosure('Home care');
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Label care-seasonal' })); });
+    await waitFor(() => expect(mocked.createAskExecution).toHaveBeenCalledTimes(2));
+    const second = mocked.createAskExecution.mock.calls[1][0];
+    expect(second.sessionId).not.toBe(firstSessionId);
+    expect(second.launchContext.surface).toBe('ASK_PAGE');
+  });
+
   const events = () => (track as jest.Mock).mock.calls.map(([name, props]) => [name, props] as [string, Record<string, unknown>]);
   const names = () => events().map(([name]) => name);
 

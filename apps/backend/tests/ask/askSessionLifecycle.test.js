@@ -116,7 +116,10 @@ function fakeHistory(rowsByList) {
       findMany: async (query) => {
         queries.push(query);
         const kind = query.where.archivedAt ? 'ARCHIVED' : query.where.pinnedAt ? 'PINNED' : 'RECENT';
-        return (rowsByList[kind] ?? []).map((id) => row(id, kind === 'PINNED' ? { pinnedAt: NOW } : kind === 'ARCHIVED' ? { archivedAt: NOW } : {}));
+        return (rowsByList[kind] ?? []).map((entry) => {
+          const id = typeof entry === 'string' ? entry : entry.id;
+          return row(id, { ...(kind === 'PINNED' ? { pinnedAt: NOW } : kind === 'ARCHIVED' ? { archivedAt: NOW } : {}), ...(typeof entry === 'string' ? {} : entry) });
+        });
       },
     },
   };
@@ -138,4 +141,21 @@ test('the first recent page carries the pinned group; later pages, search and th
   assert.deepEqual(archived.items.map((item) => [item.sessionId, item.archived]), [['a1', true]]);
   assert.equal('pinned' in archived, false);
   assert.deepEqual(queries[0].where.archivedAt, { not: null });
+});
+
+test('duplicate automatic conversation titles are disambiguated without changing user titles', async () => {
+  fakeHistory({
+    RECENT: [
+      { id: 'r1', title: 'What home care should I do this season?' },
+      { id: 'r2', title: 'What home care should I do this season?' },
+      { id: 'r3', title: 'What home care should I do this season?', titleSetByUserAt: NOW },
+    ],
+    PINNED: [],
+  });
+  const result = await getRecentAskSessions('owner-1', 'home-1');
+  assert.deepEqual(result.items.map((item) => item.title), [
+    'What home care should I do this season? (1)',
+    'What home care should I do this season? (2)',
+    'What home care should I do this season?',
+  ]);
 });

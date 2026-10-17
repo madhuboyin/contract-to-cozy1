@@ -425,11 +425,11 @@ No browser or production environment was used. “Implemented” below means cod
 | 19 | Implemented for the observed path | Removed CSS capitalization and gave `GUIDANCE_JOURNEY_CONTINUE` the concise clarification label “View current guided journey steps.” Other operation labels continue to come from server semantic packages. |
 | 20 | Implemented | See §2.3.1 above. |
 | 21 | Implemented | All production Ask renderers are free of JSX `style` attributes. Lifespan uses SVG attributes; budget/comparison use native progress; timeline uses a fixed-class year track; card-deck swipe no longer emits a dynamic transform style. |
-| 22 | Partially implemented | Financing already used the canonical mortgage labels. Habit difficulty is now title-cased and claim metadata suppresses a status duplicated by the status chip. The broader presenter-by-presenter enum cleanup (Project Tracker, seller receipts and every Service Price Radar capture label) remains open. |
-| 23 | Partially implemented | Coverage uses singular agreement; the Do-Nothing paths observed in the sessions use grammatical count labels and currency ranges (`$0`, not `0-0 USD`); the double-verb Home Action title still needs its source record/presenter isolated. |
+| 22 | Implemented | Financing uses canonical mortgage labels; habit difficulty is title-cased; claims and Project Tracker suppress duplicate status metadata; seller-prep receipts use their action labels; and Service Price Radar uses shared enum formatting plus explicit acronym and conjunction-aware category labels. |
+| 23 | Implemented | Coverage uses singular agreement; the Do-Nothing paths observed in the sessions use grammatical count labels and currency ranges (`$0`, not `0-0 USD`); personalized Home Actions now preserve an already-complete reviewed headline instead of prepending a second verb. |
 | 24 | Implemented | Scenario cards now send scenario-specific user prompts while the handler continues to accept the old generic prompt for compatibility with already-rendered cards. |
-| 25 | Partially implemented | Completeness indicators render as compact percentages (for example `97%`) and do not wrap. Automatic retitling/disambiguation of repeated starter-created sessions remains open. |
-| 26 | Partially implemented | Jump to latest is implemented. Topic switching still stays in the active session; a new-conversation choice needs a product/session-lifecycle design rather than silently splitting history. |
+| 25 | Implemented | Completeness indicators render as compact percentages (for example `97%`) and do not wrap. Duplicate automatic session titles are disambiguated in history while user-renamed titles remain unchanged. |
+| 26 | Implemented | Jump to latest is implemented. Launching an Explore starter from a non-empty transcript starts a fresh conversation; an empty conversation is reused. |
 | 27 | Implemented in the implicated shared controls | Shared editable fields, clarification free text and conversational bounded-choice controls now carry deterministic `id`/`name` attributes. Exact closure of the historical console count still requires a live production replay. |
 
 ### 5.4 Waiting on artifacts

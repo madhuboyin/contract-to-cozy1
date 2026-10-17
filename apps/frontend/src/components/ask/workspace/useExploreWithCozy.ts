@@ -22,7 +22,7 @@ export type ExploreSelectorState =
   | { starter: AskDiscoveryStarter; status: 'failed' }
   | { starter: AskDiscoveryStarter; status: 'ready'; selection: AskTargetSelection };
 
-export function useExploreWithCozy({ view, loading, failed, propertyId, sessionId, busy, scrollRef, ask }: {
+export function useExploreWithCozy({ view, loading, failed, propertyId, sessionId, busy, hasConversation, startNewConversation, scrollRef, ask }: {
   view: ConciergeHomeView | null;
   loading: boolean;
   failed: boolean;
@@ -30,8 +30,10 @@ export function useExploreWithCozy({ view, loading, failed, propertyId, sessionI
   sessionId: string;
   /** A request is in flight, or no session exists yet. */
   busy: boolean;
+  hasConversation: boolean;
+  startNewConversation: () => string | undefined;
   scrollRef: RefObject<HTMLElement | null>;
-  ask: (message: string, attribution: undefined, context: AskCapabilityPrompt['context']) => Promise<{ status: string; executionId?: string } | undefined | void>;
+  ask: (message: string, attribution: undefined, context: AskCapabilityPrompt['context'], options?: { sessionIdOverride?: string; firstMessageOverride?: boolean }) => Promise<{ status: string; executionId?: string } | undefined | void>;
 }) {
   const topics = view?.discoveryTopics ?? [];
   const state: ExploreState = { topics, loading, failed };
@@ -98,6 +100,7 @@ export function useExploreWithCozy({ view, loading, failed, propertyId, sessionI
     if (current && topicId) track('ask_discovery_abandoned', { propertyId: home, topicId, reason: 'SELECTOR_CANCELLED' });
     clearSelector();
   };
+  const launchSession = () => hasConversation ? startNewConversation() : sessionId;
   /** One explicit choice launches the target operation through the ordinary Ask path, which revalidates access, role, and current state itself. */
   const chooseTarget = async (option: AskTargetOption) => {
     const current = selectorNow.current;
@@ -112,10 +115,12 @@ export function useExploreWithCozy({ view, loading, failed, propertyId, sessionI
     clearSelector();
     focus.close({ launched: true });
     track('ask_discovery_started', ids);
+    const targetSessionId = launchSession();
+    if (!targetSessionId) return;
     const result = await ask(option.launch.message, undefined, {
       operationId: option.launch.operationId, entityType: option.launch.entityType, entityId: option.launch.entityId, propertyId,
       discovery: { entryId: starter.entryId, surface: 'TOPIC', topicId },
-    });
+    }, { sessionIdOverride: targetSessionId, firstMessageOverride: true });
     const status = result ? result.status : 'REQUEST_FAILED';
     track('ask_discovery_completed', { ...ids, ...(result?.executionId ? { executionId: result.executionId } : {}), status, succeeded: Boolean(result) && !status.startsWith('FAILED') });
   };
@@ -130,10 +135,12 @@ export function useExploreWithCozy({ view, loading, failed, propertyId, sessionI
     track('ask_discovery_starter_selected', ids);
     focus.close({ launched: true });
     track('ask_discovery_started', ids);
+    const targetSessionId = launchSession();
+    if (!targetSessionId) return;
     const result = await ask(starter.message, undefined, {
       operationId: starter.operationId, propertyId: starter.entityContext?.propertyId ?? propertyId,
       discovery: { entryId: starter.entryId, surface: 'TOPIC', topicId },
-    });
+    }, { sessionIdOverride: targetSessionId, firstMessageOverride: true });
     const status = result ? result.status : 'REQUEST_FAILED';
     track('ask_discovery_completed', { ...ids, ...(result?.executionId ? { executionId: result.executionId } : {}), status, succeeded: Boolean(result) && !status.startsWith('FAILED') });
   };

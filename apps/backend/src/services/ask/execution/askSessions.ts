@@ -97,13 +97,30 @@ export async function getRecentAskSessions(userId: string, propertyId: string | 
       titleSetByUser: Boolean(session.titleSetByUserAt),
     }];
   });
+  const disambiguateAutomaticTitles = (groups: AskRecentSessionSummary[][]): AskRecentSessionSummary[][] => {
+    const counts = new Map<string, number>();
+    for (const session of groups.flat()) {
+      const key = session.title.trim().toLocaleLowerCase('en-US');
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    const occurrences = new Map<string, number>();
+    return groups.map((group) => group.map((session) => {
+      if (session.titleSetByUser) return session;
+      const key = session.title.trim().toLocaleLowerCase('en-US');
+      if ((counts.get(key) ?? 0) < 2) return session;
+      const occurrence = (occurrences.get(key) ?? 0) + 1;
+      occurrences.set(key, occurrence);
+      return { ...session, title: `${session.title} (${occurrence})` };
+    }));
+  };
   const page = sessions.slice(0, ASK_SESSION_HISTORY_PAGE_SIZE);
   const last = page.at(-1);
+  const [items, pinned] = disambiguateAutomaticTitles([summarize(page), summarize(pinnedSessions)]);
   return {
-    items: summarize(page),
+    items,
     nextCursor: sessions.length > ASK_SESSION_HISTORY_PAGE_SIZE && last
       ? encodeAskSessionHistoryCursor({ lastActiveAt: last.lastActiveAt, id: last.id }) : null,
-    ...(includePinned ? { pinned: summarize(pinnedSessions) } : {}),
+    ...(includePinned ? { pinned } : {}),
   };
 }
 

@@ -3348,7 +3348,11 @@ async function loadPersonalizationActions(propertyId: string, db: HomeActionSour
       priority,
       signal: headline,
       whyItMatters: summary,
-      recommendedAction: safety ? `Review ${headline} now` : `Review ${headline}`,
+      // The reviewed headline is already a complete homeowner-facing action
+      // sentence (for example, "Your HVAC filter may be due..."). Prefixing
+      // another verb produced titles such as "Review Your ... check" when a
+      // consumer fell back to recommendedAction.
+      recommendedAction: headline,
       expectedOutcome: reviewed.body,
       timing: {
         dueAt: recommendation.expiresAt?.toISOString() ?? null,

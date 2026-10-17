@@ -29,3 +29,17 @@ export const readableCode = (value: string | null | undefined) => (value ? value
 
 /** An internal code as capitalised words, for example "REPLACE_SOON" as "Replace Soon". */
 export const titleCase = (value: string) => readableCode(value).replace(/\b\w/g, (c) => c.toUpperCase());
+
+const DISPLAY_TOKEN_LABELS: Record<string, string> = {
+  ac: 'AC', co: 'CO', diy: 'DIY', hoa: 'HOA', hvac: 'HVAC', usd: 'USD',
+};
+
+/**
+ * A human-facing fallback for enum values that do not have a domain-specific
+ * label map. Known acronyms stay intact and compound service categories read
+ * naturally instead of exposing database-token formatting.
+ */
+export function enumLabel(value: string | null | undefined): string {
+  const words = readableCode(value).split(' ').filter(Boolean);
+  return words.map((word) => DISPLAY_TOKEN_LABELS[word] ?? `${word.charAt(0).toUpperCase()}${word.slice(1)}`).join(' ');
+}

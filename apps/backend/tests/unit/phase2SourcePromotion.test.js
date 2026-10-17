@@ -521,6 +521,7 @@ test('promotes an active reviewed personalization recommendation with its Proper
   assert.equal(action.source.kind, 'PERSONALIZATION');
   assert.match(action.source.version, /^context-v1:r1:c2$/);
   assert.equal(action.primaryCta.label, 'Review recommendation');
+  assert.equal(action.recommendedAction, 'Your HVAC filter may be due for a replacement check');
   assert.equal(action.evidence[0].source, 'ContractToCozy reviewed personalization rule hvac_filter_replacement_check_proof');
   assert.equal(action.governance.safetyTier, 'LOW_CONSEQUENCE');
 });

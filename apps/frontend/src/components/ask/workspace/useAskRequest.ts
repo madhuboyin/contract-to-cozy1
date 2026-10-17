@@ -31,9 +31,10 @@ export function useAskRequest({ sessionId, loading, executions, selectedProperty
   setJustUpdatedExecutionId: (value: string | null) => void;
   setRecentSessionsEpoch: Dispatch<SetStateAction<number>>;
 }) {
-  const ask = async (question: string, attribution?: AskPromptAttribution, promptContext?: AskCapabilityPrompt['context'], options?: { presentInConversation?: boolean; suggestedAction?: { actionId: string; fromExecutionId: string } }) => {
+  const ask = async (question: string, attribution?: AskPromptAttribution, promptContext?: AskCapabilityPrompt['context'], options?: { presentInConversation?: boolean; suggestedAction?: { actionId: string; fromExecutionId: string }; sessionIdOverride?: string; firstMessageOverride?: boolean }) => {
     const message = question.trim();
-    if (!message || !sessionId || loading) return;
+    const requestedSessionId = options?.sessionIdOverride ?? sessionId;
+    if (!message || !requestedSessionId || loading) return;
     // ASK_COZY_INTERACTION_MODEL_UI_FRD FRESH-003/CTX-002: capture which
     // session this request belongs to. Switching property mid-flight resets
     // `executions` and starts a new session (the effect above), but nothing
@@ -41,7 +42,6 @@ export function useAskRequest({ sessionId, loading, executions, selectedProperty
     // being appended into that new, unrelated transcript. activeSessionRef
     // already tracks "the current live session" for exactly this kind of
     // check elsewhere in this component.
-    const requestedSessionId = sessionId;
     if (!promptContext && /\b(?:this|that|selected) task\b/i.test(message)) {
       const selected = executions.filter((item) => item.viewState && !executions.some((other) => other.continuesExecutionId === item.executionId))
         .map((item) => ({ item, view: readResultView(window.sessionStorage, resultViewKey(item.sessionId, item.property?.id ?? 'general', item.viewState!.resultId)) }))
@@ -49,7 +49,7 @@ export function useAskRequest({ sessionId, loading, executions, selectedProperty
       if (selected.length === 1) promptContext = { sourceExecutionId: selected[0].item.executionId, entityType: 'MAINTENANCE_TASK', entityId: selected[0].view.selectedTaskId! };
     }
     const source = executions.find((item) => item.executionId === promptContext?.sourceExecutionId);
-    const requestKey = source ? resultRequestKey(source) : `${sessionId}:question`;
+    const requestKey = source ? resultRequestKey(source) : `${requestedSessionId}:question`;
     const requestToken = requests.current.begin(requestKey);
     inFlight.current = { key: requestKey, token: requestToken, message };
     setInput('');
@@ -60,14 +60,14 @@ export function useAskRequest({ sessionId, loading, executions, selectedProperty
       // Launch surface/capability describe how Ask was *opened* (e.g. from
       // the warranties page), so they only apply to the conversation's
       // first message — a later follow-up isn't an entry-point event.
-      const isFirstMessage = executions.length === 0;
+      const isFirstMessage = options?.firstMessageOverride ?? (requestedSessionId === sessionId && executions.length === 0);
       // SUGGESTED_NEXT_ACTIONS plan §4.1: a selected app-offered action carries only its id and the execution that offered it. The
       // server resolves operation/entity/message from its stored ledger, so none of that is sent as proof of authorship, and the
       // turn stays in the property the offering execution belongs to.
       const suggestedAction = options?.suggestedAction;
       const suggestedActionSource = suggestedAction ? executions.find((item) => item.executionId === suggestedAction.fromExecutionId) : undefined;
       const response = await api.createAskExecution({
-        clientRequestId: newId(), sessionId, message, propertyId: suggestedAction ? (suggestedActionSource?.property?.id ?? selectedPropertyId ?? null) : (promptContext?.propertyId ?? selectedPropertyId ?? null),
+        clientRequestId: newId(), sessionId: requestedSessionId, message, propertyId: suggestedAction ? (suggestedActionSource?.property?.id ?? selectedPropertyId ?? null) : (promptContext?.propertyId ?? selectedPropertyId ?? null),
         ...(suggestedAction ? { suggestedActionSelection: { suggestedActionId: suggestedAction.actionId, suggestedActionFromExecutionId: suggestedAction.fromExecutionId, message } } : {}),
         launchContext: {
           surface: (isFirstMessage && launchSurface) || (mode === 'page' ? 'ASK_PAGE' : 'GLOBAL_LAUNCHER'),
