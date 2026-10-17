@@ -108,6 +108,11 @@ export function digitalWillFromView(will: DigitalWillView, propertyId: string): 
         ],
         status: String(entry.priority),
         href: null,
+        actions: [
+          { id: 'digital-will-entry-up-' + entry.id, label: 'Move up', interactionType: 'START_WORKFLOW' as const, message: 'Move this home continuity plan entry up', operationId: 'HOME_DIGITAL_WILL_CREATE' as const, entityType: 'HOME_DIGITAL_WILL_ENTRY', entityId: entry.id, actionId: 'ENTRY_MOVE_UP', style: 'SECONDARY' as const },
+          { id: 'digital-will-entry-down-' + entry.id, label: 'Move down', interactionType: 'START_WORKFLOW' as const, message: 'Move this home continuity plan entry down', operationId: 'HOME_DIGITAL_WILL_CREATE' as const, entityType: 'HOME_DIGITAL_WILL_ENTRY', entityId: entry.id, actionId: 'ENTRY_MOVE_DOWN', style: 'SECONDARY' as const },
+          { id: 'digital-will-entry-delete-' + entry.id, label: 'Delete', interactionType: 'START_WORKFLOW' as const, message: 'Delete this home continuity plan entry', operationId: 'HOME_DIGITAL_WILL_CREATE' as const, entityType: 'HOME_DIGITAL_WILL_ENTRY', entityId: entry.id, actionId: 'ENTRY_DELETE', style: 'SECONDARY' as const },
+        ],
       })),
     })),
     ...(will.trustedContacts.length ? [{
