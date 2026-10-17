@@ -1,4 +1,5 @@
 import { api } from '@/lib/api/client';
+import { HomeValueRequiredError, isHomeValueRequiredPayload } from '@/features/tools/homeValueRequired';
 import type { PropertyContextEnvelope } from '@/components/property-context/propertyContextTypes';
 
 export type BreakEvenDTO = {
@@ -126,6 +127,13 @@ export async function getBreakEven(
   const q = params.toString();
   const url = `/api/properties/${propertyId}/tools/break-even${q ? `?${q}` : ''}`;
 
-  const res = await api.get(url);
-  return res.data?.breakEven as BreakEvenDTO;
+  try {
+    const res = await api.get(url);
+    return res.data?.breakEven as BreakEvenDTO;
+  } catch (error) {
+    // The API's structured "no home value on record" answer is handled deliberately by the page (an inline prompt), not shown as a failure.
+    const payload = (error as { payload?: unknown } | null)?.payload;
+    if (isHomeValueRequiredPayload(payload)) throw new HomeValueRequiredError((payload as { error?: { message?: string } }).error?.message);
+    throw error;
+  }
 }

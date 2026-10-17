@@ -1,5 +1,5 @@
 // apps/backend/src/services/sellHoldRent.service.ts
-import { resolvePlanningHomeValue, type PlanningHomeValueSource } from './planningHomeValue';
+import { hasPlanningHomeValue, homeValueRequired, resolvePlanningHomeValue, type PlanningHomeValueOutcome, type PlanningHomeValueSource } from './planningHomeValue';
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
 
@@ -250,6 +250,21 @@ export class SellHoldRentService {
   constructor(
     private financialAssumptionService = new FinancialAssumptionService()
   ) {}
+
+  /**
+   * The entry point for callers: reports "a home value is needed" as a typed outcome instead of throwing, so each caller can ask in its own way.
+   * The saved Sell/Hold/Rent value counts as an override for this analysis only; it never writes the canonical property value.
+   */
+  async estimateOutcome(
+    propertyId: string,
+    input: SellHoldRentInput = {},
+    userId?: string
+  ): Promise<PlanningHomeValueOutcome<SellHoldRentDTO>> {
+    const saved = (await loadToolOverrideMap(propertyId))['homeValueNow'];
+    const override = input.homeValueNow !== undefined && Number.isFinite(input.homeValueNow) ? input.homeValueNow : saved;
+    if (!(await hasPlanningHomeValue(propertyId, override))) return homeValueRequired();
+    return { status: 'OK', value: await this.estimate(propertyId, input, userId) };
+  }
 
   async estimate(
     propertyId: string,

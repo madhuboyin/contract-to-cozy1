@@ -3,6 +3,7 @@ import { Response } from 'express';
 import { CustomRequest } from '../types';
 import { SellHoldRentService, SellHoldRentInput } from '../services/sellHoldRent.service';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
+import { sendPlanningHomeValueRequired } from '../utils/planningHomeValueResponse';
 import { getCurrentFinancialContextEnvelope } from '../services/financialContext/context';
 
 const svc = new SellHoldRentService();
@@ -36,7 +37,9 @@ export async function getSellHoldRent(req: CustomRequest, res: Response) {
     vacancyRate: num(req.query.vacancyRate),
     managementRate: num(req.query.managementRate),
   };
-  const dto = await svc.estimate(propertyId, inputs, userId);
+  const outcome = await svc.estimateOutcome(propertyId, inputs, userId);
+  if (outcome.status === 'HOME_VALUE_REQUIRED') return sendPlanningHomeValueRequired(res);
+  const dto = outcome.value;
   const propertyContext = await getCurrentFinancialContextEnvelope(propertyId, req.user!.userId, 'SELL_HOLD_RENT');
   const overrideFields = Object.entries(inputs)
     .filter(([key, value]) => key !== 'years' && value !== undefined)

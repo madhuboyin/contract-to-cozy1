@@ -19,6 +19,7 @@
 import { AskCaptureAttribution, AskExecutionStatus, HomeEventType, Prisma, WarrantyCategory } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '../../../lib/prisma';
+import { PLANNING_HOME_VALUE_REQUIRED } from '../../planningHomeValue';
 import { logger } from '../../../lib/logger';
 import { readAskOperationalControls } from '../../../config/askOperationalControls';
 import { normalizeCaptureValue } from '../../../modules/propertyContext/application/capturePropertyFact';
@@ -1300,8 +1301,61 @@ async function buildSellerPrepInlineBlock(userId: string, propertyId: string): P
 // snapshot even when the homeowner has never opened the Sell/Hold/Rent tool
 // themselves -- otherwise createOrResumeThread throws "No current
 // recommendation available" for a property with no prior analysis.
-async function ensureCanonicalSellHoldRentAnalysis(propertyId: string, userId: string): Promise<void> {
-  await sellHoldRentService.estimate(propertyId, { years: 5 }, userId);
+//
+// Returns false when the home has no value to analyse (no scenario value, appraisal or purchase price). That is insufficient context, not a
+// failure: the caller records PLANNING_HOME_VALUE_REQUIRED and finishes the job, so a retry could never succeed and must not be attempted.
+async function ensureCanonicalSellHoldRentAnalysis(propertyId: string, userId: string): Promise<boolean> {
+  const outcome = await sellHoldRentService.estimateOutcome(propertyId, { years: 5 }, userId);
+  return outcome.status === 'OK';
+}
+
+// The child row for a goal that could not be attached because no home value exists. Idempotent on the same clientRequestId as the attached case,
+// so a replayed event returns this same row.
+async function recordGoalNeedsHomeValue(
+  candidate: GoalExtractionCandidate,
+  clientRequestId: string,
+  input: ConversationalCaptureInput,
+): Promise<PersistedCaptureExecution> {
+  logger.info({ propertyId: input.propertyId, parentExecutionId: input.parentExecutionId, reasonCode: PLANNING_HOME_VALUE_REQUIRED }, '[ask-conversational-capture] sell/hold/rent goal not attached: no home value on record');
+  try {
+    return await prisma.askExecution.create({
+      data: {
+        session: { connect: { id: input.sessionId } },
+        user: { connect: { id: input.userId } },
+        property: { connect: { id: input.propertyId } },
+        clientRequestId,
+        message: candidate.sourceSentence,
+        parentExecution: { connect: { id: input.parentExecutionId } },
+        operationId: 'SELL_HOLD_RENT_GOAL_CAPTURE',
+        parametersJson: { timeframeLabel: candidate.timeframeLabel },
+        operationVersion: '1.0',
+        intentFamily: 'COMMAND',
+        status: 'NOT_APPLICABLE' as AskExecutionStatus,
+        completedAt: new Date(),
+        reasonCode: PLANNING_HOME_VALUE_REQUIRED,
+        resultJson: {
+          schemaVersion: '1.0',
+          blocks: [{
+            type: 'SUMMARY' as const,
+            id: 'sell-hold-rent-goal-needs-home-value',
+            title: 'I need a home value to compare sell, hold or rent',
+            body: `Cozy noticed you mentioned: "${candidate.sourceSentence}". There is no appraisal or purchase price on record yet, so nothing was set up. Tell me a value to plan with, for example “What if my home is worth $450,000?”, or add one to your home record. Nothing was listed or sold.`,
+            tone: 'CAUTION' as const,
+            actions: [],
+          }],
+          captureRequests: [],
+          confirmation: null,
+          clarification: null,
+          suggestions: [],
+        } as unknown as Prisma.InputJsonValue,
+      },
+    });
+  } catch (error) {
+    // A concurrent attempt for the same event created it first: converge on that row.
+    const existing = await prisma.askExecution.findUnique({ where: { userId_clientRequestId: { userId: input.userId, clientRequestId } } });
+    if (existing) return existing;
+    throw error;
+  }
 }
 
 async function processGoalCandidate(
@@ -1320,7 +1374,7 @@ async function processGoalCandidate(
   });
   if (existing) return existing;
 
-  await ensureCanonicalSellHoldRentAnalysis(input.propertyId, input.userId);
+  if (!(await ensureCanonicalSellHoldRentAnalysis(input.propertyId, input.userId))) return recordGoalNeedsHomeValue(candidate, clientRequestId, input);
   // decisionDefinitionId is a schema-level z.literal('SELL_HOLD_RENT') --
   // this vertical slice's own deliberate scope, see extractionCandidateSchema.ts.
   // primaryEntityId is the propertyId itself, matching

@@ -1,7 +1,7 @@
 // Moved out of askOrchestrator.service.ts unchanged (decomposition, FRD v1.98;
 // docs/architecture/ASK_ORCHESTRATOR_DECOMPOSITION_REVIEW.md). The handler registers itself, and the orchestrator
 // re-exports the names below so existing imports keep working.
-import { isPlanningHomeValueRequired, planningHomeValueRequestResult } from '../support/planningHomeValueRequest';
+import { planningHomeValueRequestResult } from '../support/planningHomeValueRequest';
 import { SALE_CASE_ACTION_IDS, SALE_CASE_MESSAGES, legalNextStatuses, type SaleCaseKind } from '../support/sellerPrepCaseCommand';
 import { HouseholdRole } from '@prisma/client';
 import { createHash } from 'node:crypto';
@@ -110,28 +110,23 @@ export function sellHoldRentWhatIfFromAnalyses(standard: SellHoldRentAnalysis, s
 
 async function sellHoldRentWhatIfResult(userId: string, propertyId: string, message: string, overrides: SellHoldRentWhatIf): Promise<AskOperationResult> {
   const years = /\b(?:10|ten)[- ]?years?\b/i.test(message) ? 10 : 5;
-  try {
-    // With no value on record, the value the homeowner just gave also stands in for the comparison's "standard" side, so the rest of the what-if still compares.
-    const standardBasis = overrides.homeValueNow !== undefined ? { homeValueNow: overrides.homeValueNow, ephemeral: true } : {};
-    const [standard, scenario] = await Promise.all([
-      sellHoldRentService.estimate(propertyId, { years }, userId).catch((error) => {
-        if (isPlanningHomeValueRequired(error) && overrides.homeValueNow !== undefined) return sellHoldRentService.estimate(propertyId, { years, ...standardBasis }, userId);
-        throw error;
-      }),
-      sellHoldRentService.estimate(propertyId, { years, ...overrides, ephemeral: true }, userId),
-    ]);
-    return sellHoldRentWhatIfFromAnalyses(standard, scenario, overrides);
-  } catch (error) {
-    if (isPlanningHomeValueRequired(error)) return planningHomeValueRequestResult('Sell, hold or rent');
-    throw error;
-  }
+  const supplied = overrides.homeValueNow;
+  // With no value on record, the value the homeowner just gave also stands in for the comparison's "standard" side, so the rest of the what-if still compares.
+  let standard = await sellHoldRentService.estimateOutcome(propertyId, { years }, userId);
+  if (standard.status === 'HOME_VALUE_REQUIRED' && supplied !== undefined) standard = await sellHoldRentService.estimateOutcome(propertyId, { years, homeValueNow: supplied, ephemeral: true }, userId);
+  const scenario = await sellHoldRentService.estimateOutcome(propertyId, { years, ...overrides, ephemeral: true }, userId);
+  if (standard.status !== 'OK' || scenario.status !== 'OK') return planningHomeValueRequestResult('Sell, hold or rent');
+  return sellHoldRentWhatIfFromAnalyses(standard.value, scenario.value, overrides);
 }
 
 async function sellHoldRentAnalysisResult(userId: string, propertyId: string): Promise<AskOperationResult> {
-  const [access, context, analysis, threadSelection] = await Promise.all([
+  // Checked first: with no home value there is nothing to analyse, so none of the reads below are needed.
+  const analysisOutcome = await sellHoldRentService.estimateOutcome(propertyId, { years: 5 }, userId);
+  if (analysisOutcome.status !== 'OK') return planningHomeValueRequestResult('Sell, hold or rent');
+  const analysis = analysisOutcome.value;
+  const [access, context, threadSelection] = await Promise.all([
     ensurePropertyAccess(userId, propertyId),
     evaluateFeatureContext(propertyId, userId, { featureKey: 'SELL_HOLD_RENT', operationKey: 'VIEW_ANALYSIS' }),
-    sellHoldRentService.estimate(propertyId, { years: 5 }, userId),
     // FRD Sec22 decision (Option B): read-only lookup, never creates or
     // resumes a thread. AMBIGUOUS (multiple active threads for the same
     // property, which createOrResumeThread's own dedup should prevent in
@@ -616,12 +611,7 @@ async function sellerPrepItemDecisionResult(userId: string, propertyId: string, 
 
 registerCapabilityHandler('sale-case.analysis', async (envelope) => {
   const whatIf = parseSellHoldRentWhatIf(envelope.message);
-  try {
-    return whatIf ? await sellHoldRentWhatIfResult(envelope.userId, envelope.propertyId!, envelope.message, whatIf) : await sellHoldRentAnalysisResult(envelope.userId, envelope.propertyId!);
-  } catch (error) {
-    if (isPlanningHomeValueRequired(error)) return planningHomeValueRequestResult('Sell, hold or rent');
-    throw error;
-  }
+  return whatIf ? sellHoldRentWhatIfResult(envelope.userId, envelope.propertyId!, envelope.message, whatIf) : sellHoldRentAnalysisResult(envelope.userId, envelope.propertyId!);
 });
 
 registerCapabilityHandler('seller-prep.checklist', async (envelope) => sellerPrepChecklistResult(envelope.userId, envelope.propertyId!));

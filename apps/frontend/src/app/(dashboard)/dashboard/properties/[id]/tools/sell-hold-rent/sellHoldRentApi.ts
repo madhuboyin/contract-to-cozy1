@@ -1,5 +1,6 @@
 // apps/frontend/src/app/(dashboard)/dashboard/properties/[id]/tools/sell-hold-rent/sellHoldRentApi.ts
 import { api } from '@/lib/api/client';
+import { HomeValueRequiredError, isHomeValueRequiredPayload } from '@/features/tools/homeValueRequired';
 import type { PropertyContextEnvelope } from '@/components/property-context/propertyContextTypes';
 
 export type SellHoldRentInput = {
@@ -184,6 +185,16 @@ async function authedFetchJson<T>(path: string): Promise<T> {
   const text = await res.text();
 
   // If backend returns HTML (404 / not-found page), surface it as an error (avoid dumping HTML into UI).
+  if (res.status === 422) {
+    // A structured "no home value on record" answer is handled deliberately by the page (an inline prompt), not shown as a failure.
+    try {
+      const body = JSON.parse(text);
+      if (isHomeValueRequiredPayload(body)) throw new HomeValueRequiredError(body.error?.message);
+    } catch (error) {
+      if (error instanceof HomeValueRequiredError) throw error;
+    }
+  }
+
   if (!res.ok) {
     const snippet = text.slice(0, 220);
     throw new Error(`Sell/Hold/Rent request failed (${res.status}): ${snippet}`);

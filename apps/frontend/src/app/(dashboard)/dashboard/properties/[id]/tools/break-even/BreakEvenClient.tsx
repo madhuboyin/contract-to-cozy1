@@ -2,6 +2,8 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
+import { HomeValueRequiredPrompt, AnalysisOnlyValueNote } from '@/features/tools/HomeValueRequiredPrompt';
+import { isHomeValueRequiredError } from '@/features/tools/homeValueRequired';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import { Home, DollarSign, TrendingUp, Calendar } from 'lucide-react';
@@ -53,6 +55,9 @@ export default function BreakEvenClient() {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<BreakEvenDTO | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // No home value on record: the page asks inline. The value entered applies to this analysis only (sent as the per-request homeValueNow).
+  const [needsHomeValue, setNeedsHomeValue] = useState(false);
+  const [analysisHomeValue, setAnalysisHomeValue] = useState<number | null>(null);
 
   const reqRef = React.useRef(0);
   const workflowCompletedTrackedRef = React.useRef(false);
@@ -63,7 +68,7 @@ export default function BreakEvenClient() {
     track('workflow_completed', { tool: 'break-even', propertyId });
   }, [propertyId, data]);
 
-  async function load(nextYears: 5 | 10) {
+  async function load(nextYears: 5 | 10, homeValueNow: number | null = analysisHomeValue) {
     if (!propertyId) return;
     setLoading(true);
     setError(null);
@@ -73,12 +78,19 @@ export default function BreakEvenClient() {
       const r = await getBreakEven(propertyId, {
         years: nextYears,
         assumptionSetId: requestedAssumptionSetId ?? undefined,
+        ...(homeValueNow !== null ? { homeValueNow } : {}),
       });
       if (reqId !== reqRef.current) return;
+      setNeedsHomeValue(false);
       setData(r);
     } catch (e: unknown) {
       if (reqId !== reqRef.current) return;
-      setError(e instanceof Error ? e.message : 'Failed to load break-even estimate');
+      if (isHomeValueRequiredError(e)) {
+        setNeedsHomeValue(true);
+        setData(null);
+      } else {
+        setError(e instanceof Error ? e.message : 'Failed to load break-even estimate');
+      }
     } finally {
       setLoading(false);
     }
@@ -208,6 +220,16 @@ export default function BreakEvenClient() {
       />
 
       <PropertyContextCapturePanel propertyId={propertyId} featureKey="BREAK_EVEN" operationKey="VIEW_ANALYSIS" onCaptured={() => load(years)} />
+
+      {needsHomeValue && (
+        <HomeValueRequiredPrompt
+          propertyId={propertyId} toolName="Break-even" busy={loading}
+          onSubmit={(value) => { setAnalysisHomeValue(value); void load(years, value); }}
+        />
+      )}
+      {analysisHomeValue !== null && !needsHomeValue && (
+        <AnalysisOnlyValueNote value={analysisHomeValue} onClear={() => { setAnalysisHomeValue(null); void load(years, null); }} />
+      )}
 
       {error && (
         <div className="flex items-start gap-3 rounded-xl border border-red-100 bg-red-50 p-3">

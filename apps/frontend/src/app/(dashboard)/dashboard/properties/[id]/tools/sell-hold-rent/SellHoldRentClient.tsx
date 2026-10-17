@@ -2,6 +2,8 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { HomeValueRequiredPrompt, AnalysisOnlyValueNote } from '@/features/tools/HomeValueRequiredPrompt';
+import { isHomeValueRequiredError } from '@/features/tools/homeValueRequired';
 import { useParams, useSearchParams } from 'next/navigation';
 import HomeToolsRail from '../../components/HomeToolsRail';
 import MultiLineChart from '../insurance-trend/MultiLineChart';
@@ -60,6 +62,9 @@ export default function SellHoldRentClient() {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<SellHoldRentDTO | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // No home value on record: the page asks inline. The value entered applies to this analysis only (sent as the per-request homeValueNow).
+  const [needsHomeValue, setNeedsHomeValue] = useState(false);
+  const [analysisHomeValue, setAnalysisHomeValue] = useState<number | null>(null);
 
   // Phase-3: overrides + canonical financing profile state
   const [ovLoading, setOvLoading] = useState(false);
@@ -86,14 +91,21 @@ export default function SellHoldRentClient() {
       const dto = await getSellHoldRent(propertyId, {
         years: y,
         assumptionSetId: requestedAssumptionSetId ?? undefined,
+        ...(analysisHomeValue !== null ? { homeValueNow: analysisHomeValue } : {}),
       });
+      setNeedsHomeValue(false);
       setData(dto);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Failed to load simulator');
+      if (isHomeValueRequiredError(e)) {
+        setNeedsHomeValue(true);
+        setData(null);
+      } else {
+        setError(e instanceof Error ? e.message : 'Failed to load simulator');
+      }
     } finally {
       setLoading(false);
     }
-  }, [propertyId, requestedAssumptionSetId]);
+  }, [propertyId, requestedAssumptionSetId, analysisHomeValue]);
 
   const loadOverrides = useCallback(async () => {
     if (!propertyId) return;
@@ -260,6 +272,9 @@ export default function SellHoldRentClient() {
           </div>
         </div>
       </div>
+
+      {needsHomeValue && <HomeValueRequiredPrompt propertyId={propertyId} toolName="Sell, hold or rent" busy={loading} onSubmit={setAnalysisHomeValue} />}
+      {analysisHomeValue !== null && !needsHomeValue && <AnalysisOnlyValueNote value={analysisHomeValue} onClear={() => setAnalysisHomeValue(null)} />}
 
       {error && (
         <div className="flex items-start gap-3 rounded-2xl border border-red-200/70 bg-red-50/85 p-3 backdrop-blur">

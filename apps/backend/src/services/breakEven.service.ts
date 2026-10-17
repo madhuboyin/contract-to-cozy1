@@ -1,5 +1,5 @@
 // apps/backend/src/services/breakEven.service.ts
-import { resolvePlanningHomeValue } from './planningHomeValue';
+import { hasPlanningHomeValue, homeValueRequired, resolvePlanningHomeValue, type PlanningHomeValueOutcome } from './planningHomeValue';
 import { prisma } from '../lib/prisma';
 import { AppreciationIndexService } from './appreciationIndex.service';
 import {
@@ -271,6 +271,16 @@ function projectDebtByYear(args: {
 export class BreakEvenService {
   private appreciation = new AppreciationIndexService();
   private financialAssumptionService = new FinancialAssumptionService();
+
+  /** The entry point for callers: "a home value is needed" is a typed outcome, not an exception (see SellHoldRentService.estimateOutcome). */
+  async computeOutcome(
+    propertyId: string,
+    input: BreakEvenInput = {},
+    userId?: string
+  ): Promise<PlanningHomeValueOutcome<BreakEvenDTO>> {
+    if (!(await hasPlanningHomeValue(propertyId, input.homeValueNow))) return homeValueRequired();
+    return { status: 'OK', value: await this.compute(propertyId, input, userId) };
+  }
 
   async compute(
     propertyId: string,

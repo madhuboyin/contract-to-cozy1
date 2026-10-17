@@ -44,6 +44,8 @@ function install() {
   prismaModule.prisma = new Proxy({}, {
     get(_target, model) {
       if (model === 'then') return undefined;
+      // The one read the home-value check makes before an analysis runs (compute itself is stubbed): a home with a purchase price on record.
+      if (model === 'property') return { findUnique: async () => ({ lastAppraisedValue: null, financingProfile: { purchasePriceCents: 45_000_000 } }) };
       throw new Error(`Unexpected prisma.${String(model)} access`);
     },
   });
