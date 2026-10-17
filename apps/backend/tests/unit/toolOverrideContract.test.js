@@ -99,3 +99,14 @@ test('writes are validated against the same contract; null clears a key', () => 
   assert.equal(isSupportedOverrideTool('constructor'), false);
   assert.equal(toolOverrideIssue('SELL_HOLD_RENT', 'HOME_VALUE_NOW', 450000), null);
 });
+
+test('MORTGAGE_ANNUAL_RATE follows the shared mortgage-rate rule: 0.1% to 25% as a decimal, a percent typed as a decimal is refused with how to enter it', () => {
+  const issue = (value) => parseSellHoldRentOverrides([{ key: 'MORTGAGE_ANNUAL_RATE', value }]).ignored[0];
+  assert.equal(parseSellHoldRentOverrides([{ key: 'MORTGAGE_ANNUAL_RATE', value: 0.001 }]).values.mortgageAnnualRate, 0.001);
+  assert.equal(parseSellHoldRentOverrides([{ key: 'MORTGAGE_ANNUAL_RATE', value: 0.25 }]).values.mortgageAnnualRate, 0.25);
+  assert.match(issue(6.5).detail, /6\.5 looks like a percent.*0\.065 means 6\.5%/);
+  assert.match(issue(0.0006).detail, /below 0\.1%/);
+  assert.equal(issue(0).reason, 'OUT_OF_RANGE');
+  assert.equal(issue(0.2501).reason, 'OUT_OF_RANGE');
+  assert.deepEqual(validateToolOverrideWrite('SELL_HOLD_RENT', [{ key: 'MORTGAGE_ANNUAL_RATE', value: 6.5 }]).map((entry) => entry.reason), ['OUT_OF_RANGE']);
+});

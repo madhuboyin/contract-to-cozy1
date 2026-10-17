@@ -13,3 +13,9 @@ export function sendPlanningHomeValueRequired(res: Response) {
     },
   });
 }
+
+// A request-supplied mortgage rate that cannot be a rate (6.5 for 6.5%, 0.0006 for 6.5%) is refused with a structured 400; Express 4 does not route a rejected
+// async handler to the error middleware, so the controllers answer it deliberately.
+export function sendMortgageRateInvalid(res: Response, error: { message: string; code: string }) {
+  return res.status(400).json({ success: false, error: { code: error.code, message: error.message } });
+}

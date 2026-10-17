@@ -47,6 +47,9 @@ export type SellHoldRentDTO = {
     /** Where the home value came from, and a sentence saying so (a saved value is a scenario input, not the home record). */
     homeValueSource?: 'SCENARIO_OVERRIDE' | 'APPRAISAL' | 'PURCHASE_PRICE_FALLBACK';
     homeValueDisclosure?: string;
+    /** Where the mortgage interest rate came from (null when no mortgage is modelled), and a sentence saying so. Rates are decimals: 0.065 is 6.5%. */
+    mortgageRateSource?: 'SCENARIO_OVERRIDE' | 'CANONICAL_PROFILE' | 'MODELING_ASSUMPTION' | null;
+    mortgageRateDisclosure?: string | null;
     appreciationRate: number;
     monthlyRentNow: number;
     sellingCostRate: number;
@@ -135,6 +138,8 @@ export type SellHoldRentDTO = {
     confidence: 'HIGH' | 'MEDIUM' | 'LOW';
     /** Saved overrides that were not used (unsupported key, not a number, out of range), each with a reason. */
     ignoredSavedOverrides?: Array<{ key: string; reason: string; detail: string }>;
+    /** Mortgage-rate candidates that were present but unusable (a percent entered as a decimal, an implausible profile rate), each with a reason. */
+    ignoredMortgageRates?: Array<{ source: string; reason: string; detail: string }>;
   };
 };
 
@@ -318,4 +323,19 @@ export async function saveFinancingProfile(propertyId: string, patch: Partial<Fi
     }
   );
   return getFinancingProfile(propertyId) as Promise<FinancingProfileProjection>;
+}
+
+/**
+ * The financing profile editor takes a PERCENT ("6.25" means 6.25%). This is the one place that text becomes a decimal, and it refuses anything that cannot be a
+ * mortgage rate rather than guessing: typing the decimal 0.0625 would otherwise be stored as 6 basis points (0.06%).
+ */
+export function parseInterestRatePercent(text: string): { ok: true; decimal: number } | { ok: false; message: string } {
+  const value = Number(text.trim().replace(/%$/, ''));
+  if (!Number.isFinite(value)) return { ok: false, message: 'Enter the interest rate as a percent, for example 6.25.' };
+  if (value < 0.1 || value > 25) {
+    return { ok: false, message: value > 0 && value < 0.1
+      ? `${value}% is below 0.1%. Enter the rate as a percent: 6.25 means 6.25%.`
+      : 'Enter the interest rate as a percent between 0.1 and 25, for example 6.25.' };
+  }
+  return { ok: true, decimal: value / 100 };
 }

@@ -6,6 +6,7 @@ import { logger } from '../lib/logger';
 import { listToolOverrides } from './toolOverride.service';
 import { parseSellHoldRentOverrides, type SellHoldRentSavedOverrides, type ToolOverrideIssue } from './toolOverrideContract';
 import { getCanonicalMortgage } from './canonicalFinanceAdapter.service';
+import { assertMortgageRateInput, resolveMortgageRate, type MortgageRateIssue, type MortgageRateSource } from './mortgageRate';
 import {
   FinancialAssumptionService,
   FinancialAssumptions,
@@ -88,6 +89,9 @@ export type SellHoldRentDTO = {
     // debt (for transparency)
     mortgageBalanceNow?: number | null;
     mortgageAnnualRate?: number | null;
+    /** Where mortgageAnnualRate came from, and a sentence saying so. Null when no mortgage is modelled. */
+    mortgageRateSource?: MortgageRateSource | null;
+    mortgageRateDisclosure?: string | null;
     remainingTermMonths?: number | null;
     monthlyPayment?: number | null;
   };
@@ -147,6 +151,8 @@ export type SellHoldRentDTO = {
     confidence: Confidence;
     /** Saved overrides that were not used (unsupported key, not a number, out of range), with the reason. Absent when every saved override was usable. */
     ignoredSavedOverrides?: ToolOverrideIssue[];
+    /** Mortgage-rate candidates that were present but unusable (a percent entered as a decimal, an out-of-range profile rate), each with a reason. */
+    ignoredMortgageRates?: MortgageRateIssue[];
   };
 };
 
@@ -265,6 +271,8 @@ export class SellHoldRentService {
     input: SellHoldRentInput = {},
     userId?: string
   ): Promise<PlanningHomeValueOutcome<SellHoldRentDTO>> {
+    assertMortgageRateInput(input.interestRate, 'interestRate');
+    assertMortgageRateInput(input.mortgageAnnualRate, 'mortgageAnnualRate');
     const saved = (await loadSavedOverrides(propertyId)).values.homeValueNow;
     const override = input.homeValueNow !== undefined && Number.isFinite(input.homeValueNow) ? input.homeValueNow : saved;
     if (!(await hasPlanningHomeValue(propertyId, override))) return homeValueRequired();
@@ -277,6 +285,9 @@ export class SellHoldRentService {
     userId?: string
   ): Promise<SellHoldRentDTO> {
     if (!userId) throw new Error('Authentication is required for Sell / Hold / Rent.');
+    // A rate that cannot be a mortgage rate (6.5 for 6.5%, 0.0006 for 6.5%) is refused, never rescaled or clamped.
+    assertMortgageRateInput(input.interestRate, 'interestRate');
+    assertMortgageRateInput(input.mortgageAnnualRate, 'mortgageAnnualRate');
     const property = await prisma.property.findUnique({
       where: { id: propertyId },
       select: {
@@ -394,19 +405,24 @@ export class SellHoldRentService {
     // allow request/tool overrides to override snapshot
     const mortgageBalanceNow =
       input.mortgageBalance ?? savedOv.mortgageBalance ?? snap?.mortgageBalance ?? null;
-    const mortgageAnnualRate =
-      input.mortgageAnnualRate ??
-      savedOv.mortgageAnnualRate ??
-      financialContext.assumptions.interestRate ??
-      snap?.interestRate ??
-      null;
     const remainingTermMonths =
       input.remainingTermMonths ?? savedOv.remainingTermMonths ?? snap?.remainingTermMonths ?? null;
+    // One resolver for the rate, shared with Break-even: a scenario value (the request's, else the one saved for this tool), then the financing profile's rate, then a
+    // disclosed assumption only when a mortgage is otherwise known. The shared assumptions' interestRate is not a source: it is always populated (modelled default).
+    const mortgageRate = resolveMortgageRate({
+      scenarioOverride: input.mortgageAnnualRate ?? input.interestRate ?? savedOv.mortgageAnnualRate,
+      canonicalRate: snap?.interestRate,
+      assumeIfMissing: Boolean(mortgageBalanceNow && remainingTermMonths),
+    });
+    const mortgageAnnualRate = mortgageRate.rate;
     const monthlyPaymentOverride =
       input.monthlyPayment ?? savedOv.monthlyPayment ?? snap?.monthlyPayment ?? null;
 
     const debtMode: 'ON' | 'OFF' =
       mortgageBalanceNow && mortgageAnnualRate !== null && remainingTermMonths ? 'ON' : 'OFF';
+    if (mortgageRate.ignored.length) {
+      logger.warn({ propertyId, toolKey: TOOL_KEY, ignored: mortgageRate.ignored }, '[sell-hold-rent] mortgage rate candidates ignored');
+    }
 
     let debt = {
       endingBalance: 0,
@@ -568,7 +584,8 @@ export class SellHoldRentService {
       assumptionSetId: financialContext.assumptionSetId,
       preferenceProfileId: financialContext.preferenceProfileId,
       sharedSignalsUsed: financialContext.sharedSignalsUsed,
-      financialAssumptions: financialContext.assumptions,
+      // The rate shown is the one the estimate used, with its source in current.mortgageRateSource.
+      financialAssumptions: mortgageAnnualRate !== null ? { ...financialContext.assumptions, interestRate: mortgageAnnualRate } : financialContext.assumptions,
       input: {
         propertyId,
         years,
@@ -605,6 +622,8 @@ export class SellHoldRentService {
         sellingCostRate,
         mortgageBalanceNow,
         mortgageAnnualRate,
+        mortgageRateSource: mortgageRate.source,
+        mortgageRateDisclosure: mortgageRate.disclosure,
         remainingTermMonths,
         monthlyPayment: debtMode === 'ON' ? roundMoney(debt.monthlyPayment || 0) : monthlyPaymentOverride,
       },
@@ -660,9 +679,11 @@ export class SellHoldRentService {
       meta: {
         generatedAt: new Date().toISOString(),
         ...(savedOverrides.ignored.length ? { ignoredSavedOverrides: savedOverrides.ignored } : {}),
+        ...(mortgageRate.ignored.length ? { ignoredMortgageRates: mortgageRate.ignored } : {}),
         dataSources,
         notes: [
           `Saved scenario overrides for ${TOOL_KEY} are applied automatically${Object.keys(savedOv).length ? ` (${Object.keys(savedOv).length} in use)` : ''}. They do not change your home record.`,
+          ...(mortgageRate.disclosure ? [mortgageRate.disclosure] : []),
           hasFinancialOverrideInput && input.ephemeral
             ? 'What-if assumptions were applied to this estimate only; nothing was saved.'
             : hasFinancialOverrideInput

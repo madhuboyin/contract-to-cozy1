@@ -11,6 +11,7 @@ import {
 import { buildAnnualCostSeries, buildAnnualGainSeries } from './tools/financialProjectionMath';
 import { computeMonthlyPayment } from './tools/mortgageMath';
 import { getCanonicalMortgage } from './canonicalFinanceAdapter.service';
+import { assertMortgageRateInput, resolveMortgageRate, type MortgageRateSource } from './mortgageRate';
 import {
   ownershipCostConsumerProjectionService,
   type OwnershipCostConsumerProjection,
@@ -74,6 +75,9 @@ export type BreakEvenDTO = {
     debtMode: 'ON' | 'OFF';
     mortgageBalanceNow?: number | null;
     mortgageAnnualRate?: number | null;
+    /** Where mortgageAnnualRate came from, and a sentence saying so. Null when no mortgage is modelled. */
+    mortgageRateSource?: MortgageRateSource | null;
+    mortgageRateDisclosure?: string | null;
     remainingTermMonths?: number | null;
     monthlyPayment?: number | null;
   };
@@ -278,6 +282,8 @@ export class BreakEvenService {
     input: BreakEvenInput = {},
     userId?: string
   ): Promise<PlanningHomeValueOutcome<BreakEvenDTO>> {
+    assertMortgageRateInput(input.interestRate, 'interestRate');
+    assertMortgageRateInput(input.mortgageAnnualRate, 'mortgageAnnualRate');
     if (!(await hasPlanningHomeValue(propertyId, input.homeValueNow))) return homeValueRequired();
     return { status: 'OK', value: await this.compute(propertyId, input, userId) };
   }
@@ -289,6 +295,9 @@ export class BreakEvenService {
   ): Promise<BreakEvenDTO> {
     const years = clampYears(input.years);
     if (!userId) throw new Error('Authentication is required for Break-Even.');
+    // A rate that cannot be a mortgage rate (6.5 for 6.5%, 0.0006 for 6.5%) is refused, never rescaled or clamped.
+    assertMortgageRateInput(input.interestRate, 'interestRate');
+    assertMortgageRateInput(input.mortgageAnnualRate, 'mortgageAnnualRate');
 
     const property = await prisma.property.findUnique({
       where: { id: propertyId },
@@ -351,10 +360,16 @@ export class BreakEvenService {
 
     const mortgageBalanceNow =
       input.mortgageBalance ?? canonicalMortgage?.mortgageBalance ?? null;
-    const mortgageAnnualRate =
-      input.mortgageAnnualRate ?? canonicalMortgage?.interestRate ?? null;
     const remainingTermMonths =
       input.remainingTermMonths ?? canonicalMortgage?.remainingTermMonths ?? null;
+    // The same resolver as Sell/Hold/Rent: a scenario value, then the financing profile's rate, then a disclosed assumption only when a mortgage is otherwise known.
+    const mortgageRate = resolveMortgageRate({
+      scenarioOverride: input.mortgageAnnualRate ?? input.interestRate,
+      canonicalRate: canonicalMortgage?.interestRate,
+      assumeIfMissing: mortgageBalanceNow !== null && remainingTermMonths !== null && remainingTermMonths > 0,
+    });
+    const mortgageAnnualRate = mortgageRate.rate;
+    for (const issue of mortgageRate.ignored) notes.push(issue.detail);
     const monthlyPaymentInput =
       input.monthlyPayment ?? canonicalMortgage?.monthlyPayment ?? null;
     const debtMode: 'ON' | 'OFF' =
@@ -373,6 +388,7 @@ export class BreakEvenService {
     if (debtMode === 'ON') {
       dataSources.push('PropertyFinancingProfile + mortgage amortization context');
       notes.push('Debt-aware modeling is ON using mortgage snapshot/override inputs.');
+      if (mortgageRate.disclosure) notes.push(mortgageRate.disclosure);
       confidence = bumpConfidence(confidence, 'MEDIUM');
     } else if (canonicalMortgage) {
       notes.push('Canonical financing profile is partial; add missing mortgage fields to enable debt-aware break-even.');
@@ -718,6 +734,8 @@ export class BreakEvenService {
         debtMode,
         mortgageBalanceNow,
         mortgageAnnualRate,
+        mortgageRateSource: mortgageRate.source,
+        mortgageRateDisclosure: mortgageRate.disclosure,
         remainingTermMonths,
         monthlyPayment: debtMode === 'ON' ? debtMonthlyPayment : monthlyPaymentInput,
       },

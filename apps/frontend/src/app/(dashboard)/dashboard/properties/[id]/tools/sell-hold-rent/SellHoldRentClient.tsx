@@ -24,6 +24,7 @@ import {
   SellHoldRentDTO,
   SellHoldRentOverridePatch,
   FinancingProfileProjection,
+  parseInterestRatePercent,
 } from './sellHoldRentApi';
 
 function impactBadge(impact: string) {
@@ -72,6 +73,7 @@ export default function SellHoldRentClient() {
   const [overrides, setOverrides] = useState<Record<string, number>>({});
   const [overrideDraft, setOverrideDraft] = useState<Record<string, string>>({});
 
+  const [rateError, setRateError] = useState<string | null>(null);
   const [snapLoading, setSnapLoading] = useState(false);
   const [snapSaving, setSnapSaving] = useState(false);
   const [financingProfile, setFinancingProfile] = useState<FinancingProfileProjection | null>(null);
@@ -298,6 +300,16 @@ export default function SellHoldRentClient() {
 
       {data?.current?.homeValueDisclosure && !needsHomeValue && (
         <p className="text-xs text-slate-600 dark:text-slate-300" data-home-value-disclosure="">{data.current.homeValueDisclosure}</p>
+      )}
+      {data?.current?.mortgageRateDisclosure && !needsHomeValue && (
+        <p className="text-xs text-slate-600 dark:text-slate-300" data-mortgage-rate-disclosure="">{data.current.mortgageRateDisclosure}</p>
+      )}
+      {!!data?.meta?.ignoredMortgageRates?.length && (
+        <div role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900" data-ignored-mortgage-rates="">
+          <ul className="list-disc pl-4">
+            {data.meta.ignoredMortgageRates.map((issue) => <li key={`${issue.source}-${issue.reason}`}>{issue.detail}</li>)}
+          </ul>
+        </div>
       )}
       {!!data?.meta?.ignoredSavedOverrides?.length && (
         <div role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900" data-ignored-saved-overrides="">
@@ -631,8 +643,9 @@ export default function SellHoldRentClient() {
                 label="Interest rate (%)"
                 placeholder="e.g. 6.25"
                 value={snapDraft.interestRatePct}
-                onChange={(v) => setSnapDraft((p) => ({ ...p, interestRatePct: v }))}
+                onChange={(v) => { setRateError(null); setSnapDraft((p) => ({ ...p, interestRatePct: v })); }}
               />
+              {rateError && <p role="alert" className="-mt-1 text-xs text-red-700">{rateError}</p>}
               <InputField
                 label="Remaining term (months)"
                 placeholder="e.g. 312"
@@ -660,6 +673,12 @@ export default function SellHoldRentClient() {
 
                   const mb = toNum(snapDraft.mortgageBalance);
                   const irPct = toNum(snapDraft.interestRatePct);
+                  // A percent typed as a decimal (0.0625 for 6.25%) would be stored as 6 basis points; refuse it here with how to enter it.
+                  if (irPct !== undefined) {
+                    const rate = parseInterestRatePercent(snapDraft.interestRatePct);
+                    if (!rate.ok) { setRateError(rate.message); return; }
+                  }
+                  setRateError(null);
                   const term = toNum(snapDraft.remainingTermMonths);
                   const pay = toNum(snapDraft.monthlyPayment);
 

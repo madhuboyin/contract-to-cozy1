@@ -1,4 +1,5 @@
 import type { SellHoldRentInput } from './sellHoldRent.service';
+import { MORTGAGE_RATE_MAX, MORTGAGE_RATE_MIN, mortgageRateProblem } from './mortgageRate';
 
 // The contract for saved tool overrides (ToolOverride rows). One key convention, defined once, here:
 //
@@ -62,7 +63,7 @@ export const SELL_HOLD_RENT_OVERRIDE_SPECS: readonly ToolOverrideSpec<SellHoldRe
   spec('VACANCY_RATE', 'vacancyRate', 'DECIMAL_RATE', 0, 0.25, 'Vacancy rate'),
   spec('MANAGEMENT_RATE', 'managementRate', 'DECIMAL_RATE', 0, 0.2, 'Management rate'),
   spec('MORTGAGE_BALANCE', 'mortgageBalance', 'USD', 1, 100_000_000, 'Mortgage balance'),
-  spec('MORTGAGE_ANNUAL_RATE', 'mortgageAnnualRate', 'DECIMAL_RATE', 0, 0.25, 'Mortgage interest rate'),
+  spec('MORTGAGE_ANNUAL_RATE', 'mortgageAnnualRate', 'DECIMAL_RATE', MORTGAGE_RATE_MIN, MORTGAGE_RATE_MAX, 'Mortgage interest rate'),
   spec('REMAINING_TERM_MONTHS', 'remainingTermMonths', 'MONTHS', 1, 600, 'Remaining term (months)', true),
   spec('MONTHLY_PAYMENT', 'monthlyPayment', 'USD_PER_MONTH', 1, 1_000_000, 'Monthly payment'),
 ]);
@@ -81,6 +82,11 @@ export function toolOverrideIssue(toolKey: string, key: string, value: unknown):
   if (!item) return { key, reason: 'UNSUPPORTED_KEY', detail: `"${key}" is not a ${toolKey} override key.` };
   if (typeof value !== 'number' || !Number.isFinite(value)) return { key, reason: 'NOT_A_FINITE_NUMBER', detail: `${item.label} must be a number.` };
   if (item.integer && !Number.isInteger(value)) return { key, reason: 'NOT_AN_INTEGER', detail: `${item.label} must be a whole number.` };
+  if (item.field === 'mortgageAnnualRate') {
+    // The mortgage rate has one shared rule and message (a percent typed as a decimal is refused, not rescaled).
+    const problem = mortgageRateProblem(value);
+    return problem ? { key, reason: 'OUT_OF_RANGE', detail: problem.detail } : null;
+  }
   if (value < item.min || value > item.max) return { key, reason: 'OUT_OF_RANGE', detail: `${item.label} must be between ${rangeText(item)}.` };
   return null;
 }

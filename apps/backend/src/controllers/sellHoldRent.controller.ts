@@ -3,7 +3,8 @@ import { Response } from 'express';
 import { CustomRequest } from '../types';
 import { SellHoldRentService, SellHoldRentInput } from '../services/sellHoldRent.service';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
-import { sendPlanningHomeValueRequired } from '../utils/planningHomeValueResponse';
+import { APIError } from '../middleware/error.middleware';
+import { sendMortgageRateInvalid, sendPlanningHomeValueRequired } from '../utils/planningHomeValueResponse';
 import { getCurrentFinancialContextEnvelope } from '../services/financialContext/context';
 
 const svc = new SellHoldRentService();
@@ -37,7 +38,13 @@ export async function getSellHoldRent(req: CustomRequest, res: Response) {
     vacancyRate: num(req.query.vacancyRate),
     managementRate: num(req.query.managementRate),
   };
-  const outcome = await svc.estimateOutcome(propertyId, inputs, userId);
+  let outcome: Awaited<ReturnType<typeof svc.estimateOutcome>>;
+  try {
+    outcome = await svc.estimateOutcome(propertyId, inputs, userId);
+  } catch (error) {
+    if (error instanceof APIError && error.code === 'MORTGAGE_RATE_INVALID') return sendMortgageRateInvalid(res, error);
+    throw error;
+  }
   if (outcome.status === 'HOME_VALUE_REQUIRED') return sendPlanningHomeValueRequired(res);
   const dto = outcome.value;
   const propertyContext = await getCurrentFinancialContextEnvelope(propertyId, req.user!.userId, 'SELL_HOLD_RENT');

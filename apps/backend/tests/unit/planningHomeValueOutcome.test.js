@@ -94,3 +94,14 @@ test('supplying or checking a planning value never writes the property record', 
   await service.estimateOutcome('p1', { years: 5, homeValueNow: 450000 }, 'u1');
   assert.deepEqual(writes, []);
 });
+
+for (const [name, handler, key] of [['Sell/Hold/Rent', getSellHoldRent, 'interestRate'], ['Break-even', getBreakEven, 'interestRate'], ['Break-even', getBreakEven, 'mortgageAnnualRate']]) {
+  test(`${name} API refuses a ${key} typed as a percent with a structured 400, before any home-value check`, async () => {
+    const res = fakeRes();
+    // No home value is on record in this fixture; the malformed rate is still reported first.
+    await handler({ params: { propertyId: 'p1' }, query: { [key]: '6.5' }, user: { userId: 'u1' } }, res);
+    assert.equal(res.statusCode, 400);
+    assert.equal(res.body.error.code, 'MORTGAGE_RATE_INVALID');
+    assert.match(res.body.error.message, /looks like a percent/);
+  });
+}

@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import SellHoldRentClient from '../SellHoldRentClient';
-import { getSellHoldRent, getSellHoldRentOverrides, getFinancingProfile } from '../sellHoldRentApi';
+import { getSellHoldRent, getSellHoldRentOverrides, getFinancingProfile, parseInterestRatePercent } from '../sellHoldRentApi';
 import { HomeValueRequiredError } from '@/features/tools/homeValueRequired';
 
 // Owner ruling 2026-10-16: the 422 "no home value on record" is not shown as an error. The page asks inline; the value entered is sent as the
@@ -9,6 +9,7 @@ import { HomeValueRequiredError } from '@/features/tools/homeValueRequired';
 
 jest.mock('next/navigation', () => ({ useParams: () => ({ id: 'p1' }), useSearchParams: () => new URLSearchParams() }));
 jest.mock('../sellHoldRentApi', () => ({
+  ...jest.requireActual('../sellHoldRentApi'),
   getSellHoldRent: jest.fn(), getSellHoldRentOverrides: jest.fn(), saveSellHoldRentOverrides: jest.fn(), getFinancingProfile: jest.fn(), saveFinancingProfile: jest.fn(),
 }));
 jest.mock('@/lib/analytics/events', () => ({ track: jest.fn() }));
@@ -117,4 +118,42 @@ test('clearing a field that has a saved value and saving sends null for that key
   await user.click(screen.getByRole('button', { name: 'Save overrides' }));
   await waitFor(() => expect(saveSellHoldRentOverrides).toHaveBeenCalled());
   expect(saveSellHoldRentOverrides).toHaveBeenCalledWith('p1', { HOME_VALUE_NOW: null, VACANCY_RATE: 0.1 });
+});
+
+test('the mortgage rate and where it came from are shown with the result, and unusable candidates are listed', async () => {
+  getMock.mockResolvedValue(dto({
+    current: { ...dto().current, mortgageAnnualRate: 0.0325, mortgageRateSource: 'CANONICAL_PROFILE', mortgageRateDisclosure: 'Using the interest rate on your financing profile: 3.25%.' },
+    meta: { generatedAt: new Date().toISOString(), dataSources: [], notes: [], confidence: 'MEDIUM', ignoredMortgageRates: [{ source: 'SCENARIO_OVERRIDE', reason: 'LOOKS_LIKE_A_PERCENT', detail: '6.5 looks like a percent. Enter the rate as a decimal: 0.065 means 6.5%.' }] },
+  }));
+  render(<SellHoldRentClient />);
+  expect(await screen.findByText('Using the interest rate on your financing profile: 3.25%.')).toBeInTheDocument();
+  expect(screen.getByText(/6\.5 looks like a percent/)).toBeInTheDocument();
+});
+
+test('the percent field converts once and refuses what cannot be a percent: 6.25 is 0.0625, 0.0625 is refused rather than stored as 6 basis points', () => {
+  expect(parseInterestRatePercent('6.25')).toEqual({ ok: true, decimal: 0.0625 });
+  expect(parseInterestRatePercent('6.5%')).toEqual({ ok: true, decimal: 0.065 });
+  expect(parseInterestRatePercent('0.1')).toEqual({ ok: true, decimal: 0.001 });
+  expect(parseInterestRatePercent('25')).toEqual({ ok: true, decimal: 0.25 });
+  const decimalTypedAsPercent = parseInterestRatePercent('0.0625');
+  expect(decimalTypedAsPercent.ok).toBe(false);
+  expect(!decimalTypedAsPercent.ok && decimalTypedAsPercent.message).toMatch(/6\.25 means 6\.25%/);
+  for (const bad of ['', 'abc', '0', '-3', '26', '650']) expect(parseInterestRatePercent(bad).ok).toBe(false);
+});
+
+test('saving a financing rate typed as a decimal is refused in the editor and nothing is sent', async () => {
+  const user = userEvent.setup();
+  const { saveFinancingProfile } = jest.requireMock('../sellHoldRentApi');
+  saveFinancingProfile.mockReset();
+  getMock.mockResolvedValue(dto());
+  render(<SellHoldRentClient />);
+  const rate = await screen.findByPlaceholderText('e.g. 6.25');
+  await user.type(rate, '0.0625');
+  await user.click(screen.getByRole('button', { name: 'Save financing details' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('6.25 means 6.25%');
+  expect(saveFinancingProfile).not.toHaveBeenCalled();
+  await user.clear(rate);
+  await user.type(rate, '6.25');
+  await user.click(screen.getByRole('button', { name: 'Save financing details' }));
+  await waitFor(() => expect(saveFinancingProfile).toHaveBeenCalledWith('p1', expect.objectContaining({ interestRate: 0.0625 })));
 });

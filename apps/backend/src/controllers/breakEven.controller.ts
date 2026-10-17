@@ -3,7 +3,8 @@ import { Response } from 'express';
 import { CustomRequest } from '../types';
 import { BreakEvenService } from '../services/breakEven.service';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
-import { sendPlanningHomeValueRequired } from '../utils/planningHomeValueResponse';
+import { APIError } from '../middleware/error.middleware';
+import { sendMortgageRateInvalid, sendPlanningHomeValueRequired } from '../utils/planningHomeValueResponse';
 import { getCurrentFinancialContextEnvelope } from '../services/financialContext/context';
 
 const svc = new BreakEvenService();
@@ -46,24 +47,30 @@ export async function getBreakEven(req: CustomRequest, res: Response) {
   const assumptionSetId =
     typeof req.query.assumptionSetId === 'string' ? req.query.assumptionSetId : undefined;
 
-  const outcome = await svc.computeOutcome(propertyId, {
-    years: years as any,
-    assumptionSetId,
-    homeValueNow,
-    appreciationRate,
-    expenseGrowthRate,
-    inflationRate,
-    rentGrowthRate,
-    interestRate,
-    propertyTaxGrowthRate,
-    insuranceGrowthRate,
-    maintenanceGrowthRate,
-    sellingCostPercent,
-    mortgageBalance,
-    mortgageAnnualRate,
-    remainingTermMonths,
-    monthlyPayment,
-  }, userId);
+  let outcome: Awaited<ReturnType<typeof svc.computeOutcome>>;
+  try {
+    outcome = await svc.computeOutcome(propertyId, {
+      years: years as any,
+      assumptionSetId,
+      homeValueNow,
+      appreciationRate,
+      expenseGrowthRate,
+      inflationRate,
+      rentGrowthRate,
+      interestRate,
+      propertyTaxGrowthRate,
+      insuranceGrowthRate,
+      maintenanceGrowthRate,
+      sellingCostPercent,
+      mortgageBalance,
+      mortgageAnnualRate,
+      remainingTermMonths,
+      monthlyPayment,
+    }, userId);
+  } catch (error) {
+    if (error instanceof APIError && error.code === 'MORTGAGE_RATE_INVALID') return sendMortgageRateInvalid(res, error);
+    throw error;
+  }
   if (outcome.status === 'HOME_VALUE_REQUIRED') return sendPlanningHomeValueRequired(res);
   const dto = outcome.value;
   const propertyContext = await getCurrentFinancialContextEnvelope(propertyId, req.user!.userId, 'BREAK_EVEN');

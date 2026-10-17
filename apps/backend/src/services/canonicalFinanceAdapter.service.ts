@@ -1,3 +1,4 @@
+import { rateFromBasisPoints } from './mortgageRate';
 import { prisma } from '../lib/prisma';
 
 export type CanonicalMortgageDTO = {
@@ -16,7 +17,8 @@ export async function getCanonicalMortgage(propertyId: string): Promise<Canonica
   return {
     propertyId: row.propertyId,
     mortgageBalance: row.currentMortgageBalanceCents == null ? null : row.currentMortgageBalanceCents / 100,
-    interestRate: row.interestRateBps == null ? null : row.interestRateBps / 10_000,
+    // Basis points to a decimal fraction (650 -> 0.065) through the one shared conversion. Plausibility is checked where the rate is used (mortgageRate.ts).
+    interestRate: row.interestRateBps == null ? null : rateFromBasisPoints(row.interestRateBps),
     remainingTermMonths: row.remainingTermMonths ?? null,
     monthlyPayment: row.monthlyPaymentCents == null ? null : row.monthlyPaymentCents / 100,
     lastVerifiedAt: (row.mortgageBalanceAsOfDate ?? row.updatedAt).toISOString(),
