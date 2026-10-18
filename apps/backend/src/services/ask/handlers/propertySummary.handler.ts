@@ -148,9 +148,16 @@ export function propertyOverviewStatusObservation(pendingDetailCount: number): s
   return 'Nothing in the current record suggests an urgent issue.';
 }
 
+/** The deliberate workspace request. A normal summary stays concise; only explicit language opens the complete record index. */
+export function isCompleteHomeRecordRequest(message: string): boolean {
+  if (/\bhow\s+complete\b/i.test(message)) return false;
+  return /\b(?:complete|full|entire|whole)\b.{0,28}\b(?:home|house|property)\s+record\b|\b(?:see|show|view|browse|review|open)\b.{0,28}\b(?:all|everything)\b.{0,28}\b(?:recorded|home\s+record)\b/i.test(message);
+}
+
 async function propertySummaryResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
   const completenessFocus = isPropertyCompletenessRequest(message);
   const roomFocus = /\b(?:show|list|view|see|review)\b.{0,35}\b(?:my|our|the|this)?\s*(?:home|house|property)?\b.{0,20}\brooms?\b|\b(?:show|list|view|see|review)\b.{0,35}\brooms?\b|\b(?:home|house|property)\b.{0,20}\bby room\b/i.test(message);
+  const completeRecordFocus = isCompleteHomeRecordRequest(message);
   const [access, overview, evaluation, property] = await Promise.all([
     ensurePropertyAccess(userId, propertyId),
     getPropertyRecordOverview(propertyId, userId, 'ASK'),
@@ -196,6 +203,8 @@ async function propertySummaryResult(userId: string, propertyId: string, message
   const inventory = overview.sections.inventory.status === 'AVAILABLE' ? overview.sections.inventory.data : null;
   const documents = overview.sections.documents.status === 'AVAILABLE' ? overview.sections.documents.data : null;
   const household = overview.sections.household.status === 'AVAILABLE' ? overview.sections.household.data : null;
+  const warranties = overview.sections.warranties.status === 'AVAILABLE' ? overview.sections.warranties.data : null;
+  const timeline = overview.tools.homeTimeline.status === 'AVAILABLE' ? overview.tools.homeTimeline.data : null;
   const incompleteScopes = (completeness?.scopes ?? [])
     .filter((scope) => scope.completenessPercent < 100
       || scope.missingFactKeys.length > 0
@@ -218,8 +227,8 @@ async function propertySummaryResult(userId: string, propertyId: string, message
       ? 'No pending governed property details were identified. The available Property Context is complete and current.'
       : `${completenessCounts.missing} missing, ${completenessCounts.conflicted} conflicted, and ${completenessCounts.stale} stale detail${pendingDetailCount === 1 ? '' : 's'} were found across ${incompleteScopes.length} area${incompleteScopes.length === 1 ? '' : 's'}. ${captureRequests.length ? 'The highest-priority detail is ready to answer below.' : 'Open the property record to review the affected areas.'}`
     : 'Property Context details are temporarily unavailable, so Ask cannot reliably determine which details are pending.';
-  const vagueOverview = !roomFocus && !completenessFocus;
-  const factRows = vagueOverview ? propertyOverviewFactRows(property, { includeOccupantCount: access.role === HouseholdRole.OWNER }) : [];
+  const vagueOverview = !roomFocus && !completenessFocus && !completeRecordFocus;
+  const factRows = vagueOverview || completeRecordFocus ? propertyOverviewFactRows(property, { includeOccupantCount: access.role === HouseholdRole.OWNER }) : [];
   const missingLine = vagueOverview ? propertyOverviewMissingLine(property) : null;
   const statusObservation = vagueOverview ? propertyOverviewStatusObservation(pendingDetailCount) : null;
   const blocks: AskPresentationBlock[] = [{
@@ -232,6 +241,8 @@ async function propertySummaryResult(userId: string, propertyId: string, message
       ? percent != null
         ? `${propertyName}’s Property Context is ${percent}% complete`
         : `Here is the current Living Home Record for ${propertyName}`
+      : completeRecordFocus
+      ? `Complete home record for ${propertyName}`
       : `Here's the short version of ${propertyName}`,
     body: roomFocus
       ? rooms
@@ -239,8 +250,10 @@ async function propertySummaryResult(userId: string, propertyId: string, message
         : 'Room details are temporarily unavailable for this home.'
       : completenessFocus
       ? completenessBody
+      : completeRecordFocus
+      ? 'This is the complete record index for this home. Review the profile here, then open any section to see its authoritative records without leaving Ask Cozy.'
       : statusObservation ?? '',
-    tone: roomFocus ? (rooms ? 'DEFAULT' : 'CAUTION') : completenessFocus && (degradedSections.length || pendingDetailCount > 0 || (percent != null && percent < 100)) ? 'CAUTION' : 'DEFAULT',
+    tone: roomFocus ? (rooms ? 'DEFAULT' : 'CAUTION') : (completenessFocus || completeRecordFocus) && degradedSections.length ? 'CAUTION' : 'DEFAULT',
     // Ask links to no desktop property page (owner decision 2026-10-10); missing details are added through the area capture rows below.
     actions: [],
   }];
@@ -254,6 +267,41 @@ async function propertySummaryResult(userId: string, propertyId: string, message
       rows: factRows,
       actions: [],
     });
+  }
+
+  if (completeRecordFocus) {
+    if (factRows.length > 0) {
+      blocks.push({
+        type: 'TABLE', id: 'property-summary-facts', title: 'Home profile',
+        description: ['Recorded facts from this home’s current canonical record.', propertyOverviewMissingLine(property)].filter(Boolean).join(' '),
+        preferredPresentation: 'TABLE',
+        columns: [{ key: 'detail', label: 'Detail' }, { key: 'recordedValue', label: 'Recorded value' }],
+        rows: factRows, actions: [],
+      });
+    }
+    const open = (id: string, label: string, message: string, operationId: string) => [{
+      id, label, message, operationId, interactionType: 'CONVERSATION_CONTINUE' as const, style: 'SECONDARY' as const,
+    }];
+    const count = (value: number | null, singular: string, plural = `${singular}s`) => value == null ? 'Temporarily unavailable' : `${value} ${value === 1 ? singular : plural}`;
+    blocks.push({
+      type: 'GROUPED_LIST', id: 'property-record-index', title: 'Record sections', filters: [],
+      description: 'One index for the home. Each section opens as a focused Ask Cozy view, so the complete record stays readable instead of becoming one long dump.',
+      sections: [{ id: 'record-sections', title: 'Browse the record', count: 7, items: [
+        { id: 'profile', title: 'Property details', description: 'Structure, use, systems, safety and other governed home facts.', entityType: 'PROPERTY_RECORD_SECTION', href: null, status: percent == null ? null : `${percent}% COMPLETE`, meta: [count(context?.knownFactCount ?? null, 'known fact')], actions: open('review-completeness', 'Review details', 'How complete is my home record?', 'PROPERTY_SUMMARY') },
+        { id: 'rooms', title: 'Rooms', description: 'Rooms, floor placement, item counts and open maintenance.', entityType: 'PROPERTY_RECORD_SECTION', href: null, status: null, meta: [count(rooms?.count ?? null, 'room')], actions: open('view-rooms', 'View rooms', 'Show me my home by room.', 'PROPERTY_SUMMARY') },
+        { id: 'inventory', title: 'Systems and inventory', description: 'Appliances, equipment and other recorded home items.', entityType: 'PROPERTY_RECORD_SECTION', href: null, status: null, meta: [count(inventory?.totalCount ?? null, 'item'), ...(inventory ? [`${inventory.verifiedCount} verified`] : [])], actions: open('view-inventory', 'View inventory', 'Show my home inventory', 'INVENTORY_LOOKUP') },
+        { id: 'documents', title: 'Documents', description: 'Reports, receipts, permits and other records visible to you.', entityType: 'PROPERTY_RECORD_SECTION', href: null, status: documents?.needsReviewCount ? `${documents.needsReviewCount} NEED REVIEW` : null, meta: [count(documents?.totalCount ?? null, 'document')], actions: open('view-documents', 'View documents', 'Show my home records', 'DOCUMENT_LOOKUP') },
+        { id: 'warranties', title: 'Warranties', description: 'Recorded product and service coverage.', entityType: 'PROPERTY_RECORD_SECTION', href: null, status: null, meta: [count(warranties?.totalCount ?? null, 'warranty', 'warranties'), ...(warranties ? [`${warranties.activeCount} active`] : [])], actions: open('view-warranties', 'View warranties', 'Show my warranties', 'WARRANTY_LOOKUP') },
+        { id: 'timeline', title: 'Home timeline', description: 'Confirmed changes, repairs and other home history.', entityType: 'PROPERTY_RECORD_SECTION', href: null, status: null, meta: [count(timeline?.confirmedCount ?? null, 'confirmed event')], actions: open('view-timeline', 'View timeline', 'Show my home timeline', 'HOME_TIMELINE_EVENTS') },
+        { id: 'household', title: 'Household access', description: 'People who can access this home and their current roles.', entityType: 'PROPERTY_RECORD_SECTION', href: null, status: null, meta: [count(household?.totalCount ?? null, 'member')], actions: [] },
+      ] }],
+      collection: collectionDescriptor({ sourceTotal: 7, fetchedCount: 7, sections: [{ items: Array.from({ length: 7 }) }], nextPageAvailable: false }),
+      actions: [],
+    });
+    if (completeness && incompleteScopes.length) {
+      const ring = propertyCompletenessProgress(completeness, incompleteScopes, propertyId, canImproveContext);
+      if (ring) blocks.push(ring);
+    }
   }
 
   if (roomFocus && rooms) {

@@ -56,6 +56,7 @@ export const ASK_DISCOVERY_TOPICS: readonly AskDiscoveryTopicDefinition[] = Obje
   {
     id: 'HOME_RECORD', label: 'My Home Record', order: 3,
     starters: [
+      { id: 'home-record-complete', entryId: 'understand-complete-record' },
       { id: 'home-record-summary', entryId: 'understand-summary' },
       { id: 'home-record-completeness', entryId: 'understand-completeness' },
       { id: 'home-record-add-detail', entryId: 'understand-add-detail' },

@@ -14,6 +14,7 @@ export const STARTER_PROPERTY_SUMMARY_PRODUCER_ID = 'starter.property-summary';
 
 /** The home-record summary's two stored starter messages. PROPERTY_SUMMARY is message-routable, so these are also real questions; the second selects the completeness focus. */
 export const PROPERTY_SUMMARY_STARTER_MESSAGE = 'Give me a summary of my home record';
+export const PROPERTY_COMPLETE_RECORD_STARTER_MESSAGE = 'Show my complete home record';
 export const PROPERTY_SUMMARY_COMPLETENESS_STARTER_MESSAGE = 'How complete is my home record?';
 
 /** The seasonal read's two starters: distinct outcomes and messages on ONE operation (so a disabled operation removes both: inventory 4a). */

@@ -713,3 +713,7 @@ Do not optimize raw messages, session length, daily streaks, or notification ope
 - Multi-property authorization and aggregation design.
 - Artifact retention/versioning/search contract.
 - Notification-channel governance and consent model.
+
+# Implementation note — complete Home Record
+
+The first Record-destination slice is now exposed from **My Home Record → View complete home record**. It is intentionally a calm record index rather than a transcript-sized serialization or a wall of collection cards: the answer shows the canonical home profile and completeness, inventories every record domain, and launches the existing Ask-native focused operations for rooms, inventory, documents, warranties, and timeline. Household access is represented honestly in the index while a dedicated household read operation remains future work.

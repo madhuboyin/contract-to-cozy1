@@ -9,7 +9,7 @@
 import type { AskTargetSelectorId } from '../../productFramework/ask/askTargetSelection.contract';
 import { DIY_TEMPLATE_BROWSE_ACTION } from '../diy/projectGuide';
 import type { AskOperationId } from './askOperationRegistry';
-import { PROPERTY_SUMMARY_COMPLETENESS_STARTER_MESSAGE, PROPERTY_SUMMARY_STARTER_MESSAGE } from './suggestedActions/starterCandidates';
+import { PROPERTY_COMPLETE_RECORD_STARTER_MESSAGE, PROPERTY_SUMMARY_COMPLETENESS_STARTER_MESSAGE, PROPERTY_SUMMARY_STARTER_MESSAGE } from './suggestedActions/starterCandidates';
 import { SEASONAL_HOME_CARE_NEXT_SEASON_MESSAGE, SEASONAL_HOME_CARE_THIS_SEASON_MESSAGE } from './support/seasonalHomeCare';
 
 // These are entry reads, not claims that the corresponding tool journey is
@@ -184,6 +184,7 @@ function advertisedCardRead(capabilityId: (typeof ASK_ADVERTISED_CARD_READ_CAPAB
 // Entry ids are stable identifiers (telemetry, topic starters), so they keep their original names even where the derived group differs from the
 // id's prefix (for example `protect-coverage` now sits with its capability's outcome, Compare and decide).
 export const ASK_DISCOVERY_BINDINGS: readonly AskCapabilityBinding[] = Object.freeze([
+  read('understand-complete-record', 'property-brief', 'PROPERTY_SUMMARY', PROPERTY_COMPLETE_RECORD_STARTER_MESSAGE, 'View complete home record'),
   read('understand-summary', 'property-brief', 'PROPERTY_SUMMARY', PROPERTY_SUMMARY_STARTER_MESSAGE, 'Summarize my home record'),
   {
     id: 'understand-add-detail', capabilityId: 'property-brief', operationId: 'PROPERTY_CONTEXT_AREA_CAPTURE', question: 'Help me add a missing detail', label: 'Add a missing detail',

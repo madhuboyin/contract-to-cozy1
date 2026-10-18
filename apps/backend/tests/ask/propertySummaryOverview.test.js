@@ -15,7 +15,7 @@ const propertyAccess = require('../../src/services/propertyAccess.service.ts');
 const getPropertyContextModule = require('../../src/modules/propertyContext/application/getPropertyContext.ts');
 const evaluateModule = require('../../src/modules/propertyContext/application/evaluateFeatureContext.ts');
 const { capabilityInvoke } = require('../../src/services/ask/capabilityHandlerRegistry.ts');
-const { propertyOverviewFactsSentence, propertyOverviewFactRows, propertyOverviewMissingLine, propertyOverviewStatusObservation } = require('../../src/services/ask/handlers/propertySummary.handler.ts');
+const { isCompleteHomeRecordRequest, propertyOverviewFactsSentence, propertyOverviewFactRows, propertyOverviewMissingLine, propertyOverviewStatusObservation } = require('../../src/services/ask/handlers/propertySummary.handler.ts');
 const { PROPERTY_RECORD_CONTEXT_SCOPES } = require('../../src/services/propertyRecordOverview.service.ts');
 const { getContextCompleteness } = require('../../src/modules/propertyContext/application/getContextCompleteness.ts');
 const { AskPresentationBlockSchema } = require('../../src/productFramework/ask/ask.contract.ts');
@@ -54,6 +54,27 @@ test.afterEach(() => {
 
 const invoke = (message = 'Tell me about my home') => capabilityInvoke('PROPERTY_SUMMARY', { userId: 'u1', propertyId: 'p1', message }, { propertyAccess: { role: 'OWNER', userId: 'u1', propertyId: 'p1' } });
 const summaryOf = (result) => result.blocks.find((block) => block.id === 'property-summary');
+
+test('the complete record workspace is explicit and does not turn an ordinary summary into a collection dump', () => {
+  assert.equal(isCompleteHomeRecordRequest('Show my complete home record'), true);
+  assert.equal(isCompleteHomeRecordRequest('Let me browse everything recorded for this home'), true);
+  assert.equal(isCompleteHomeRecordRequest('Give me a summary of my home record'), false);
+  assert.equal(isCompleteHomeRecordRequest('How complete is my home record?'), false);
+});
+
+test('an explicit complete-record request returns one calm record index with Ask-native drill-downs', async () => {
+  install({ 'core.dwellingType': { state: 'KNOWN' } });
+  const result = await invoke('Show my complete home record');
+  assert.equal(summaryOf(result).title, 'Complete home record for 94 Ashford Dr, Town');
+  assert.ok(result.blocks.some((block) => block.id === 'property-summary-facts'));
+  const index = result.blocks.find((block) => block.id === 'property-record-index');
+  assert.equal(index.type, 'GROUPED_LIST');
+  assert.equal(index.sections.length, 1);
+  assert.deepEqual(index.sections[0].items.map((item) => item.id), ['profile', 'rooms', 'inventory', 'documents', 'warranties', 'timeline', 'household']);
+  assert.deepEqual(index.sections[0].items.find((item) => item.id === 'inventory').actions[0].operationId, 'INVENTORY_LOOKUP');
+  assert.ok(!JSON.stringify(result.blocks).includes('/dashboard/'));
+  for (const block of result.blocks) AskPresentationBlockSchema.parse(block);
+});
 
 test('propertyOverviewFactsSentence composes from whichever facts are recorded, and omits an unrecorded field entirely rather than saying "Not recorded"', () => {
   assert.equal(
