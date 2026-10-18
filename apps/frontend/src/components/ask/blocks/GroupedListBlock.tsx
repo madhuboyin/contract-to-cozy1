@@ -493,7 +493,7 @@ export const GroupedListBlock: AskBlockRenderer<'GROUPED_LIST'> = (props) => {
         onChooseList={decision.offersChoice && controls ? () => setPreference('LIST') : undefined} filters={block.filters} onFilterClick={onFilterClick}
         disabled={itemActionsDisabled} actions={block.actions}>
         {decision.pattern === 'CHOICE_GRID' && <ChoiceGridView sections={block.sections} onItemAction={onItemAction} disabled={itemActionsDisabled} />}
-        {decision.pattern === 'BUDGET_BREAKDOWN' && <BudgetBreakdownView sections={block.sections} />}
+        {decision.pattern === 'BUDGET_BREAKDOWN' && <BudgetBreakdownView sections={block.sections} summary={block.presentation?.pattern === 'BUDGET_BREAKDOWN' ? block.presentation.summary : undefined} />}
         {decision.pattern === 'STATUS_ACCORDION' && <StatusAccordionView sections={block.sections} collection={block.collection} onItemAction={onItemAction} disabled={itemActionsDisabled} />}
         {decision.pattern === 'SHELVES' && <ShelvesView sections={block.sections} moreAction={block.actions[0]} onItemAction={onItemAction} disabled={itemActionsDisabled} />}
         {decision.pattern === 'DECK' && <CardDeckView items={groupedListItems(block)} swipeRightActionId={decision.swipeRightActionId} swipeLeftActionId={decision.swipeLeftActionId} onItemAction={onItemAction} disabled={itemActionsDisabled}

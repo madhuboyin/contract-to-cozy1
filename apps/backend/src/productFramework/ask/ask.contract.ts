@@ -183,7 +183,16 @@ const GroupedListPresentationSchema = z.discriminatedUnion('pattern', [
   z.object({ pattern: z.literal('CHOICE_GRID') }),
   // A compact proportional breakdown. The first section is the primary comparison; later sections are progressively
   // disclosed so a long financial forecast does not become a page-sized stack of cards.
-  z.object({ pattern: z.literal('BUDGET_BREAKDOWN') }),
+  z.object({
+    pattern: z.literal('BUDGET_BREAKDOWN'),
+    summary: z.object({
+      annual: z.string().trim().min(1).max(60),
+      monthly: z.string().trim().min(1).max(60),
+      peakMonth: z.string().trim().min(1).max(40),
+      peakAmount: z.string().trim().min(1).max(60),
+      confidence: z.string().trim().min(1).max(40),
+    }).optional(),
+  }),
   // A compact, condition-tabbed list whose records disclose supporting facts and actions in place.
   z.object({ pattern: z.literal('STATUS_ACCORDION') }),
   z.object({ pattern: z.literal('SHELVES') }),

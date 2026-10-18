@@ -157,13 +157,21 @@ export function maintenanceBudgetFromView(forecast: BudgetForecastView | 'PRIMAR
       id: `category-${index}`, title: category.category, amountLabel: `${wholeDollars(category.annualCost)} a year`, proportionPercent: category.percentage, meta: category.items.slice(0, 4), status: `${category.percentage}%`,
     })) },
     { id: 'budget-forecast-months', title: 'By month', count: forecast.monthlyForecasts.length, items: forecast.monthlyForecasts.map((month) => ({
-      id: `month-${month.month.toLowerCase()}`, title: month.month, description: `${wholeDollars(month.total)}: routine ${wholeDollars(month.routine)}, preventive ${wholeDollars(month.preventive)}, unexpected ${wholeDollars(month.unexpected)}`, meta: month.tasks.slice(0, 3), status: wholeDollars(month.total),
+      id: `month-${month.month.toLowerCase()}`, title: month.month, description: `Routine ${wholeDollars(month.routine)} · Preventive ${wholeDollars(month.preventive)} · Unexpected ${wholeDollars(month.unexpected)}`, meta: month.tasks.slice(0, 3), status: wholeDollars(month.total),
+      proportionPercent: busiest?.total ? Math.round((month.total / busiest.total) * 100) : 0,
     })) },
   ].filter((section) => section.count > 0);
   blocks.push({
     type: 'GROUPED_LIST', filters: [], id: 'budget-forecast-items', title: 'Where the upkeep budget goes',
     description: 'Estimated annual upkeep by category.',
-    presentation: { pattern: 'BUDGET_BREAKDOWN' },
+    presentation: {
+      pattern: 'BUDGET_BREAKDOWN',
+      summary: {
+        annual: wholeDollars(forecast.totalAnnualCost), monthly: wholeDollars(forecast.monthlyAverage),
+        peakMonth: busiest?.month ?? '—', peakAmount: busiest ? wholeDollars(busiest.total) : '—',
+        confidence: `${forecast.confidenceLevel}%`,
+      },
+    },
     sections: budgetSections,
     collection: collectionDescriptor({
       sourceTotal: forecast.categoryBreakdowns.length + forecast.monthlyForecasts.length,

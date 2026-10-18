@@ -128,30 +128,33 @@ describe('choice grid', () => {
 
 describe('budget breakdown', () => {
   const budget = list({
-    title: 'Where the upkeep budget goes', description: 'Estimated annual upkeep by category.', presentation: { pattern: 'BUDGET_BREAKDOWN' },
+    title: 'Where the upkeep budget goes', description: 'Estimated annual upkeep by category.', presentation: { pattern: 'BUDGET_BREAKDOWN', summary: { annual: '$2,344', monthly: '$195', peakMonth: 'September', peakAmount: '$218', confidence: '95%' } },
   }, [
     { id: 'categories', title: 'By category', count: 2, items: [
       item('hvac', { title: 'HVAC', amountLabel: '$586 a year', proportionPercent: 25, status: '25%', meta: ['Seasonal maintenance', 'Filter replacements'] }),
       item('plumbing', { title: 'Plumbing', amountLabel: '$352 a year', proportionPercent: 15, status: '15%', meta: ['Drain cleaning', 'Leak repairs'] }),
     ] },
     { id: 'months', title: 'By month', count: 2, items: [
-      item('january', { title: 'January', description: '$180: routine $80, preventive $70, unexpected $30', status: '$180' }),
-      item('february', { title: 'February', description: '$140: routine $60, preventive $50, unexpected $30', status: '$140' }),
+      item('january', { title: 'January', description: 'Routine $80 · Preventive $70 · Unexpected $30', status: '$180', proportionPercent: 100 }),
+      item('february', { title: 'February', description: 'Routine $60 · Preventive $50 · Unexpected $30', status: '$140', proportionPercent: 78 }),
     ] },
   ]);
 
-  test('shows compact proportional categories and progressively discloses monthly details', () => {
+  test('shows a forecast snapshot, proportional categories, and a responsive monthly outlook', () => {
     const { container } = render(<Harness block={budget} />);
     expect(container.querySelector('[data-display-pattern="budget_breakdown"]')).toBeInTheDocument();
-    expect(container.querySelector('[data-budget-breakdown] > ul')?.querySelectorAll('[data-budget-row]')).toHaveLength(2);
-    expect(screen.getByRole('progressbar', { name: 'HVAC: 25% of the upkeep budget' })).toHaveAttribute('aria-valuenow', '25');
+    expect(container.querySelectorAll('[data-budget-row]')).toHaveLength(2);
+    expect(screen.getByRole('progressbar', { name: 'HVAC: 25% of the upkeep budget' })).toHaveAttribute('value', '25');
     expect(screen.getByText('$586 a year')).toBeVisible();
     expect(screen.getByText('Seasonal maintenance · Filter replacements')).toBeVisible();
-    expect(screen.getByText('Show by month details')).toBeVisible();
-    expect(screen.getByText('Show by month details').closest('details')).not.toHaveAttribute('open');
-    fireEvent.click(screen.getByText('Show by month details'));
-    expect(screen.getByText('January')).toBeVisible();
-    expect(container.querySelectorAll('[data-budget-row]')).toHaveLength(4);
+    expect(screen.getByLabelText('Budget forecast snapshot')).toHaveTextContent('Annual upkeep$2,344Monthly set-aside$195Peak monthSeptember$218Confidence95%');
+    expect(screen.getByText('Show monthly outlook')).toBeVisible();
+    expect(screen.getByText('Show monthly outlook').closest('details')).not.toHaveAttribute('open');
+    fireEvent.click(screen.getByText('Show monthly outlook'));
+    expect(screen.getAllByText('January')[0]).toBeVisible();
+    expect(screen.getAllByRole('progressbar', { name: 'January: 100% of the peak monthly upkeep budget' })[0]).toHaveAttribute('value', '100');
+    expect(container.querySelectorAll('[data-budget-row]')).toHaveLength(2);
+    expect(container.querySelectorAll('[data-budget-month]')).toHaveLength(4);
     expect(screen.queryByRole('button', { name: 'Auto' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'List' })).not.toBeInTheDocument();
   });
