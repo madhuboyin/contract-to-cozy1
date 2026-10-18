@@ -836,7 +836,7 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
       const parsed = HomeDigitalWillMetadataInputSchema.safeParse(input.answer);
       if (!parsed.success || (parsed.data.lastReviewedAt && !/^\d{4}-\d{2}-\d{2}$/.test(parsed.data.lastReviewedAt))) throw Object.assign(new Error('Check the title, status, readiness and review date.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
       result = await homeDigitalWillMetadataResult(userId, execution.propertyId, launch.planId, parsed.data); capturedContextVersion = currentVersion;
-    } else if (input.captureKey === HOME_DIGITAL_WILL_EDITOR_CAPTURE_KEY && editor && typeof editor.kind === 'string' && ['ENTRY_CREATE', 'ENTRY_EDIT', 'CONTACT_CREATE', 'CONTACT_EDIT', 'SECTION_CREATE', 'SECTION_EDIT'].includes(editor.kind)) {
+    } else if (input.captureKey === HOME_DIGITAL_WILL_EDITOR_CAPTURE_KEY && editor && typeof editor.kind === 'string' && ['ENTRY_CREATE', 'ENTRY_EDIT', 'CONTACT_CREATE', 'CONTACT_CREATE_REACHABLE', 'CONTACT_EDIT', 'SECTION_CREATE', 'SECTION_EDIT'].includes(editor.kind)) {
       if (!plan || homeDigitalWillPlanVersion(plan) !== input.expectedContextVersion) throw Object.assign(new Error('The plan changed while the form was open. Open the editor again.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
       const schema = editor.kind.startsWith('ENTRY_') ? HomeDigitalWillEntryInputSchema : editor.kind.startsWith('CONTACT_') ? HomeDigitalWillContactInputSchema : HomeDigitalWillSectionInputSchema;
       const parsed = schema.safeParse(input.answer); if (!parsed.success) throw Object.assign(new Error(parsed.error.issues[0]?.message ?? 'Check the required fields and formats.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });

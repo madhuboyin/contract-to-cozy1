@@ -15,6 +15,7 @@ const { resolveAskRoutingCascade } = require('../../src/services/ask/askRoutingC
 const { getSkillForOperation } = require('../../src/services/skills/skillRegistry.ts');
 const { ASK_OPERATION_CAPABILITY } = require('../../src/services/intelligence/capabilitySkillGuidanceBridge.registry.ts');
 const { HomeDigitalWillService } = require('../../src/services/homeDigitalWill.service.ts');
+const { homeDigitalWillEditorResult } = require('../../src/services/ask/handlers/homeDigitalWillCreate.handler.ts');
 
 const SECRET = 'Gate code 4417, spare key under the blue pot';
 const originals = { prisma: prismaModule.prisma, get: HomeDigitalWillService.prototype.getByProperty, create: HomeDigitalWillService.prototype.getOrCreateByProperty };
@@ -205,8 +206,9 @@ test('missing readiness requirements launch entry and contact editors inside Ask
   assert.deepEqual(ring.nextSteps.map((step) => [step.title, step.actions[0]?.id]), [
     ['Add an emergency instruction.', 'ENTRY_CREATE'],
     ['Choose a primary trusted contact.', 'CONTACT_CREATE'],
-    ['Add an email or phone number for the primary contact.', 'CONTACT_CREATE'],
+    ['Add an email or phone number for the primary contact.', 'CONTACT_CREATE_REACHABLE'],
   ]);
+  assert.equal(ring.nextSteps[2].actions[0].message, 'Add a reachable primary contact to my home continuity plan');
 });
 
 test('entry, contact and section editor actions return inline forms', async () => {
@@ -215,6 +217,7 @@ test('entry, contact and section editor actions return inline forms', async () =
     ['HOME_DIGITAL_WILL_EDITOR', 's-emergency', 'ENTRY_CREATE', 'Add an entry to this home continuity plan section'],
     ['HOME_DIGITAL_WILL_EDITOR', 'water', 'ENTRY_EDIT', 'Edit this home continuity plan entry'],
     ['HOME_DIGITAL_WILL_EDITOR', 'w1', 'CONTACT_CREATE', 'Add a trusted contact to my home continuity plan'],
+    ['HOME_DIGITAL_WILL_EDITOR', 'w1', 'CONTACT_CREATE_REACHABLE', 'Add a reachable primary contact to my home continuity plan'],
     ['HOME_DIGITAL_WILL_EDITOR', 'c1', 'CONTACT_EDIT', 'Edit this trusted contact'],
     ['HOME_DIGITAL_WILL_EDITOR', 's-emergency', 'SECTION_EDIT', 'Edit this home continuity plan section'],
   ]) {
@@ -223,6 +226,17 @@ test('entry, contact and section editor actions return inline forms', async () =
     assert.equal(result.captureRequests[0].presentation, 'FORM', actionId);
     assert.ok(result.captureRequests[0].inputSchema.groups?.length > 0, `${actionId} uses progressive form stages`);
   }
+});
+
+test('reachable-primary readiness action opens a matching form and enforces reachability', async () => {
+  const invoke = (supplied) => homeDigitalWillEditorResult('u1', 'p1', 'CONTACT_CREATE_REACHABLE', 'w1', supplied);
+  const result = await invoke();
+  assert.equal(result.captureRequests[0].title, 'Add reachable primary contact');
+  assert.equal(result.captureRequests[0].currentAnswer.isPrimary, 'YES');
+  await assert.rejects(() => invoke({ ...result.captureRequests[0].currentAnswer, name: 'Jordan Lee' }), /email address or phone number/);
+  const review = await invoke({ ...result.captureRequests[0].currentAnswer, name: 'Jordan Lee', phone: '555-0100' });
+  assert.equal(review.status, 'NEEDS_CONFIRMATION');
+  assert.equal(review.parameters.homeDigitalWillEditor.kind, 'CONTACT_CREATE_REACHABLE');
 });
 
 test('Emergency view presents critical details and contact methods inline', async () => {

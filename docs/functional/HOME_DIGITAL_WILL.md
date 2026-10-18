@@ -772,7 +772,7 @@ Home Continuity Plan is fully operable from Ask Cozy without navigating to the d
 - adding, editing, moving between sections, reordering, and deleting entries
 - adding, editing, selecting the primary, and deleting trusted contacts
 - editing, enabling/disabling, reordering, deleting, and restoring the eight supported section types
-- actionable readiness next steps for the emergency instruction and primary-contact requirements
+- actionable readiness next steps for the emergency instruction and primary-contact requirements; the reachable-primary action opens a dedicated contact workflow, defaults the contact as primary, and requires an email or phone number
 - a focused inline Emergency view containing critical instructions and reachable contact methods
 - direct emergency-packet download
 
