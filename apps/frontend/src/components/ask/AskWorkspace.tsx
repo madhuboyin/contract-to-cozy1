@@ -227,6 +227,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   const visiblePendingWork = pendingWork.filter((item) => item.execution.sessionId !== sessionId);
   const visibleRecentSessions = recentSessions.filter((item) => item.sessionId !== sessionId && (effectiveHistoryScope === 'ALL_HOMES' || item.property.id === selectedPropertyId));
   const latestExecution = executions.at(-1);
+  const continuityWorkflowActive = Boolean(latestExecution?.captureRequests.some((request) => request.captureKey === 'HOME_DIGITAL_WILL_EDITOR_INPUTS' || request.captureKey === 'HOME_DIGITAL_WILL_METADATA_INPUTS'));
   // ACUI-004: extra composer inputs, offered only when the conversation has one deterministic evidence target for this home.
   const composerAffordances = latestExecution && latestExecution.property?.id === selectedPropertyId && !deniedProperties.current.has(`${sessionId}:${latestExecution.property?.id}`) ? deriveComposerAffordances(latestExecution) : [];
   const knownActiveSession = [...pinnedSessions, ...recentSessions, ...searchSessions].find((item) => item.sessionId === sessionId);
@@ -470,9 +471,9 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
         </div>
       </main>
 
-      {showJumpToLatest && <button type="button" onClick={() => { const node = conversationScrollRef.current; node?.scrollTo({ top: node.scrollHeight, behavior: prefersReducedMotion() ? 'auto' : 'smooth' }); setShowJumpToLatest(false); }} className="absolute bottom-24 right-5 z-20 inline-flex min-h-10 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-lg hover:bg-slate-50"><ChevronDown className="h-4 w-4" aria-hidden="true" />Jump to latest</button>}
+      {showJumpToLatest && !continuityWorkflowActive && <button type="button" onClick={() => { const node = conversationScrollRef.current; node?.scrollTo({ top: node.scrollHeight, behavior: prefersReducedMotion() ? 'auto' : 'smooth' }); setShowJumpToLatest(false); }} className="absolute bottom-24 right-5 z-20 inline-flex min-h-10 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-lg hover:bg-slate-50"><ChevronDown className="h-4 w-4" aria-hidden="true" />Jump to latest</button>}
 
-      {(executions.length > 0 || pendingMessage) && !askUnavailable && <footer className={cn('shrink-0 border-t border-slate-200 bg-white/95 p-3 backdrop-blur sm:p-4', calm && mode === 'page' && 'bg-[#faf9f6]/95', mode === 'panel' && 'pb-[calc(env(safe-area-inset-bottom)+0.75rem)]')}><FollowUpRow items={followUps} busy={loading} onPick={pickFollowUp} onDismiss={starterDismissal.dismiss} />{renderComposer('footer')}</footer>}
+      {(executions.length > 0 || pendingMessage) && !askUnavailable && !continuityWorkflowActive && <footer className={cn('shrink-0 border-t border-slate-200 bg-white/95 p-3 backdrop-blur sm:p-4', calm && mode === 'page' && 'bg-[#faf9f6]/95', mode === 'panel' && 'pb-[calc(env(safe-area-inset-bottom)+0.75rem)]')}><FollowUpRow items={followUps} busy={loading} onPick={pickFollowUp} onDismiss={starterDismissal.dismiss} />{renderComposer('footer')}</footer>}
         </div>
         {wideContextPanel && contextExecution && contextContentAvailable && <aside className="hidden w-80 shrink-0 border-l border-slate-200 bg-slate-50/80 p-4 xl:block" aria-label="Response context">
           <ResponseContextContent execution={contextExecution} headingRef={contextHeadingRef} onClose={closeResponseContext} renderNavigation={(navigation) => navigation ? <AskContextLink href={navigation.href} className="inline-flex min-h-10 items-center rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-teal-800 hover:border-teal-300 hover:bg-teal-50">{navigation.label}</AskContextLink> : null} />

@@ -44,7 +44,11 @@ The Ask-native Home Continuity Plan uses a compact, domain-specific workspace ra
 - plan sections start collapsed and progressively disclose entries and management controls
 - empty and disabled sections remain manageable without occupying a full card each
 - entry, contact, section, and metadata forms are divided into short reviewable stages
-- workflow actions remain visible above the fixed Ask composer while the user completes a form
+- continuity forms use conventional selects for large choice sets, a segmented priority control, and switches for pinned, Emergency-view, and primary-contact decisions
+- the security-data acknowledgement appears only on the final capture stage
+- Cancel uses the governed Ask execution-cancellation path and saves no draft changes
+- the global Ask composer and Jump-to-latest control are suppressed while a continuity workflow is active, preventing competing bottom controls
+- workflow actions remain in the card's normal flow and never overlay form content
 
 Not included in the current implementation:
 

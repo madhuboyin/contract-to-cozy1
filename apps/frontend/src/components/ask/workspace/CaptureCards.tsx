@@ -11,6 +11,7 @@ import { useCalmAnswers } from '@/features/ask/calmAnswers';
 import { canAskConversationally } from '@/features/ask/conversationalCapture';
 import { ConversationalCapture } from '../calm/ConversationalCapture';
 import { AskContextLink } from '../blocks/context';
+import { HomeContinuityCaptureField } from '../HomeContinuityCaptureField';
 import { ACCESS_LOST_CODES, FOCUSABLE_SELECTOR, askFailureCode, captureDraftStorageKey, capturePolicy, confirmationAttemptStorageKey, newId, useAutoFocusFirstControl } from './support';
 
 export function PropertySelectionCard({ executionId, onCompleted, autoFocus = false }: { executionId: string; onCompleted: (execution: AskExecutionResponse) => void; autoFocus?: boolean }) {
@@ -396,6 +397,7 @@ export function InlineCaptureCard({
     } catch { return canonical; }
   });
   const [saving, setSaving] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const [idempotencyKey] = useState(newId);
   const [dismissed, setDismissed] = useState(false);
   const [sensitiveDataConfirmed, setSensitiveDataConfirmed] = useState(false);
@@ -533,6 +535,7 @@ export function InlineCaptureCard({
     const date = value as { precision?: string; value?: string; rangeEnd?: string };
     return date.precision === 'UNKNOWN' ? !request.allowNotSure : !date.value || (date.precision === 'RANGE' && !date.rangeEnd);
   });
+  const finalGroupActive = !activeGroup || activeGroupIndex === formGroups.length - 1;
 
   // `skipping` answers the question with the reserved skip marker: the server saves nothing and moves to the next question.
   const save = async (event: FormEvent | null, skipping = false, override?: Record<string, unknown>) => {
@@ -572,6 +575,21 @@ export function InlineCaptureCard({
     }
   };
 
+  const cancelContinuityWorkflow = async () => {
+    if (saving || cancelling) return;
+    setCancelling(true);
+    setError(null);
+    try {
+      const response = await api.cancelAskExecution(executionId);
+      if (!response.success || !response.data) throw new Error(response.message || 'Could not cancel this workflow.');
+      window.localStorage.removeItem(captureDraftStorageKey(executionId, request.requirementId));
+      onCompleted(response.data);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Could not cancel this workflow.');
+      setCancelling(false);
+    }
+  };
+
   // FRD §11.12 IW-CONV-004: a plain workflow group is asked one question at a time, then submitted as the same single request.
   if (calm && request.presentation !== 'FORM' && canAskConversationally(request) && schema.type === 'GROUP') {
     return <ConversationalCapture request={request} fields={schema.fields} values={values} saving={saving} error={error} autoFocus={autoFocus}
@@ -579,11 +597,16 @@ export function InlineCaptureCard({
   }
 
   return (
-    <form ref={containerRef as unknown as Ref<HTMLFormElement>} onSubmit={save} className={cn('rounded-2xl border', compactEventAdd || compactProjectCreate || compactContinuityPlan ? 'p-3 sm:p-4' : 'p-4', policy.border)} aria-busy={saving} aria-label={request.title}>
+    <form ref={containerRef as unknown as Ref<HTMLFormElement>} onSubmit={save} className={cn('rounded-2xl border', compactContinuityPlan ? 'mx-auto w-full max-w-[820px] border-slate-200 bg-white p-4 shadow-sm sm:p-5' : compactEventAdd || compactProjectCreate ? 'p-3 sm:p-4' : 'p-4', !compactContinuityPlan && policy.border)} aria-busy={saving || cancelling} aria-label={request.title} data-home-continuity-capture={compactContinuityPlan ? '' : undefined}>
       {compactEventAdd || compactProjectCreate ? (
         <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
           <p className="text-sm font-semibold text-slate-950">{compactEventAdd ? 'Event details' : 'Project setup'}</p>
           <p className="text-xs leading-4 text-slate-600">{compactEventAdd ? 'Required: title, type and date (YYYY-MM-DD). You’ll review before anything is saved.' : 'Add the essentials and one real milestone. You’ll review before anything is created.'}</p>
+        </div>
+      ) : compactContinuityPlan ? (
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-4">
+          <div><p className="text-xs font-bold uppercase tracking-[0.12em] text-teal-700">Home Continuity Plan</p><h3 className="mt-1 text-lg font-semibold tracking-tight text-slate-950">{request.title}</h3><p className="mt-1 text-sm text-slate-500">Nothing is saved until you review and confirm.</p></div>
+          {activeGroup && <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">Step {activeGroupIndex + 1} of {formGroups.length}</span>}
         </div>
       ) : (
         <>
@@ -595,13 +618,13 @@ export function InlineCaptureCard({
           {request.destinationLabel && <p className="mt-2 text-xs font-medium text-sky-900">{request.classification === 'WORKFLOW_INPUT' ? `${request.destinationLabel}.` : `${request.destinationLabel} after you continue.`}</p>}
         </>
       )}
-      <div className={compactEventAdd || compactProjectCreate ? 'mt-3 grid gap-x-3 gap-y-2.5 md:grid-cols-6' : compactInventoryCompletion ? 'mt-4 grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3' : compactWorkflow ? 'mt-4 grid gap-3 md:grid-cols-2' : 'mt-4 space-y-4'} data-compact-capture={compactMaintenanceTask ? 'maintenance-task' : compactInventoryCreate ? 'inventory-item-create' : compactInventoryCompletion ? 'inventory-item-completion' : compactMaterialSpec ? 'material-spec' : compactPlantAdvisor ? 'plant-advisor' : compactOwnershipScenario ? 'ownership-cost-scenario' : compactEventAdd ? 'timeline-event' : compactProjectCreate ? 'project-create' : compactProjectCommand ? 'project-command' : undefined}>
+      <div className={compactEventAdd || compactProjectCreate ? 'mt-3 grid gap-x-3 gap-y-2.5 md:grid-cols-6' : compactInventoryCompletion ? 'mt-4 grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3' : compactWorkflow ? 'mt-4 grid gap-3 md:grid-cols-2' : 'mt-4 space-y-4'} data-compact-capture={compactContinuityPlan ? 'home-continuity-plan' : compactMaintenanceTask ? 'maintenance-task' : compactInventoryCreate ? 'inventory-item-create' : compactInventoryCompletion ? 'inventory-item-completion' : compactMaterialSpec ? 'material-spec' : compactPlantAdvisor ? 'plant-advisor' : compactOwnershipScenario ? 'ownership-cost-scenario' : compactEventAdd ? 'timeline-event' : compactProjectCreate ? 'project-create' : compactProjectCommand ? 'project-command' : undefined}>
         {activeGroup && <div className={compactProjectCreate || compactEventAdd ? 'md:col-span-6' : 'md:col-span-2'}>
-          <div className="mb-3 flex items-center justify-between gap-3">
+          <div className="mb-3 flex items-start justify-between gap-3">
             <div><p className="text-sm font-semibold text-slate-950">{activeGroup.title}</p>{activeGroup.description && <p className="mt-0.5 text-xs text-slate-500">{activeGroup.description}</p>}</div>
-            <span className="shrink-0 text-xs font-semibold text-slate-500">Step {activeGroupIndex + 1} of {formGroups.length}</span>
+            {!compactContinuityPlan && <span className="shrink-0 text-xs font-semibold text-slate-500">Step {activeGroupIndex + 1} of {formGroups.length}</span>}
           </div>
-          <ol className="flex gap-1" aria-label="Completion form progress">{formGroups.map((group, index) => <li key={group.id} aria-current={index === activeGroupIndex ? 'step' : undefined} className={cn('h-1.5 flex-1 rounded-full', index <= activeGroupIndex ? 'bg-teal-700' : 'bg-slate-200')}><span className="sr-only">{group.title}</span></li>)}</ol>
+          <ol className={cn('flex', compactContinuityPlan ? 'gap-3 border-b border-slate-100 pb-3' : 'gap-1')} aria-label="Completion form progress">{formGroups.map((group, index) => <li key={group.id} aria-current={index === activeGroupIndex ? 'step' : undefined} className={cn(compactContinuityPlan ? 'flex min-w-0 flex-1 items-center gap-2 text-xs font-semibold' : 'h-1.5 flex-1 rounded-full', compactContinuityPlan ? index === activeGroupIndex ? 'text-teal-800' : index < activeGroupIndex ? 'text-slate-700' : 'text-slate-400' : index <= activeGroupIndex ? 'bg-teal-700' : 'bg-slate-200')}><span className={compactContinuityPlan ? cn('grid h-5 w-5 shrink-0 place-items-center rounded-full text-[10px]', index <= activeGroupIndex ? 'bg-teal-700 text-white' : 'bg-slate-200 text-slate-500') : 'sr-only'}>{compactContinuityPlan ? index + 1 : group.title}</span>{compactContinuityPlan && <span className="truncate">{group.title}</span>}</li>)}</ol>
         </div>}
         {activeGroupFields.map((field) => {
           const inventoryCreateFullWidth = compactInventoryCreate && (field.key === 'name' || field.key === 'category');
@@ -613,6 +636,7 @@ export function InlineCaptureCard({
               || (compactOwnershipScenario && field.key === 'name')
               || (compactEventAdd && ['title', 'type', 'summary'].includes(field.key))
               || (compactProjectCreate && field.key === 'projectType')
+              || (compactContinuityPlan && (['content', 'summary', 'notes', 'targetSectionId'].includes(field.key) || (request.requirementId.includes('entry') && field.key === 'title')))
               || (compactProjectCommand && (field.inputSchema.type === 'LONG_TEXT' || (field.inputSchema.type === 'SINGLE_SELECT' && field.inputSchema.options.length > 3)));
           const fieldLayout = compactEventAdd
             ? fullWidth ? 'md:col-span-6' : 'md:col-span-2'
@@ -621,17 +645,19 @@ export function InlineCaptureCard({
                 : ['name', 'fulfillmentMode', 'contractorName', 'permitApplicability', 'permitApplicabilityBasis', 'hoaApplicability', 'hoaApplicabilityBasis'].includes(field.key) ? 'md:col-span-3'
                   : field.key === 'initialMilestoneName' ? 'md:col-span-4' : 'md:col-span-2'
             : fullWidth ? 'md:col-span-2' : undefined;
-          return <div key={field.key} className={fieldLayout}><CaptureFieldControl field={field} value={values[field.key]} disabled={saving} allowNotSure={request.allowNotSure} compact={compactWorkflow} propertyId={propertyId} onChange={(value) => setValues((current) => ({ ...current, [field.key]: value }))} /></div>;
+          return <div key={field.key} className={fieldLayout}>{compactContinuityPlan ? <HomeContinuityCaptureField field={field} value={values[field.key]} disabled={saving || cancelling} onChange={(value) => setValues((current) => ({ ...current, [field.key]: value }))} /> : <CaptureFieldControl field={field} value={values[field.key]} disabled={saving} allowNotSure={request.allowNotSure} compact={compactWorkflow} propertyId={propertyId} onChange={(value) => setValues((current) => ({ ...current, [field.key]: value }))} />}</div>;
         })}
       </div>
       {error && <p className="mt-3 text-sm text-red-700" role="alert">{error}</p>}
-      {(request.sensitivity === 'FINANCIAL' || request.sensitivity === 'SECURITY') && (
+      {(request.sensitivity === 'FINANCIAL' || request.sensitivity === 'SECURITY') && (!compactContinuityPlan || finalGroupActive) && (
         <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-sky-200 bg-white p-3 text-sm text-slate-700">
           <input type="checkbox" checked={sensitiveDataConfirmed} onChange={(event) => setSensitiveDataConfirmed(event.target.checked)} className="mt-0.5 h-4 w-4 rounded border-slate-300 text-teal-700" />
           <span>{request.confirmationText ?? 'I confirm this information can be saved to the home record.'}</span>
         </label>
       )}
-      <div className={cn('flex flex-wrap gap-2', compactContinuityPlan && 'sticky bottom-20 z-10 -mx-3 -mb-3 border-t border-sky-100 bg-sky-50/95 px-3 py-3 backdrop-blur sm:-mx-4 sm:-mb-4 sm:px-4', compactEventAdd || compactProjectCreate || compactContinuityPlan ? 'mt-3' : 'mt-4')}>
+      <div className={cn('flex flex-wrap items-center gap-2', compactContinuityPlan && 'mt-4 justify-between border-t border-slate-100 pt-4', !compactContinuityPlan && (compactEventAdd || compactProjectCreate ? 'mt-3' : 'mt-4'))}>
+        {compactContinuityPlan && <button type="button" disabled={saving || cancelling} onClick={() => void cancelContinuityWorkflow()} className="min-h-11 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-50">{cancelling ? 'Cancelling…' : 'Cancel'}</button>}
+        <div className="flex flex-wrap gap-2">
         {activeGroupIndex > 0 && <button type="button" disabled={saving} onClick={() => setActiveGroupIndex((index) => Math.max(0, index - 1))} className="min-h-11 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50">Previous</button>}
         {activeGroup && activeGroupIndex < formGroups.length - 1
           ? <button type="button" disabled={saving || activeGroupMissingRequired} onClick={() => setActiveGroupIndex((index) => Math.min(formGroups.length - 1, index + 1))} className="min-h-11 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Next: {formGroups[activeGroupIndex + 1].title}</button>
@@ -639,6 +665,8 @@ export function InlineCaptureCard({
         {request.skippable && <button type="button" disabled={saving} onClick={(event) => void save(event as unknown as FormEvent, true)} className="min-h-11 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">Skip for now</button>}
         {request.classification === 'ENHANCEMENT_ACCURACY' && <button type="button" disabled={saving} onClick={() => { window.localStorage.removeItem(captureDraftStorageKey(executionId, request.requirementId)); setDismissed(true); void api.recordAskCaptureEvent(executionId, { requirementId: request.requirementId, captureKey: request.captureKey, event: 'DISMISSED' }).catch(() => undefined); }} className="min-h-11 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-white">Use general estimate</button>}
         {request.fallbackHref && <AskContextLink href={request.fallbackHref} onClick={() => void api.recordAskCaptureEvent(executionId, { requirementId: request.requirementId, captureKey: request.captureKey, event: 'FULL_FORM_OPENED' }).catch(() => undefined)} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700">Open full form <ExternalLink className="h-4 w-4" /></AskContextLink>}
+        {compactContinuityPlan && activeGroup && activeGroupIndex < formGroups.length - 1 && activeGroupMissingRequired && <p className="basis-full text-right text-xs font-medium text-amber-700">Complete the required fields to continue.</p>}
+        </div>
       </div>
     </form>
   );
