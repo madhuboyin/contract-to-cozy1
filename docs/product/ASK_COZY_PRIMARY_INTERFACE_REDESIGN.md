@@ -8,6 +8,8 @@
 
 **Decision intent:** Make Ask Cozy the primary operating surface for homeownership without making an LLM the product, calculator, policy engine, authorization layer, or system of record.
 
+**Updated implementation authority (October 18, 2026):** [`ASK_COZY_SOLE_HOMEOWNER_INTERFACE_FRD.md`](ASK_COZY_SOLE_HOMEOWNER_INTERFACE_FRD.md) governs the move to a single homeowner-facing shell. Its initial scope explicitly defers admin pages, cross-property aggregation, and full household administration. The execution sequence is defined in [`ASK_COZY_SOLE_HOMEOWNER_INTERFACE_IMPLEMENTATION_PLAN.md`](../architecture/ASK_COZY_SOLE_HOMEOWNER_INTERFACE_IMPLEMENTATION_PLAN.md).
+
 ## 0. Evidence legend and authority
 
 - **VERIFIED PRODUCT EVIDENCE** — directly supported by current product documents, contracts, schemas, services, or the mechanically checked Ask operation registry.
