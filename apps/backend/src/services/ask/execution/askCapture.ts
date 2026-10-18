@@ -44,7 +44,7 @@ import { homePlantAddResult, homePlantContextVersion, materialSpecAddResult, mat
 import { negotiationShieldStartContextVersion, negotiationShieldStartResult } from '../handlers/negotiationShieldStart.handler';
 import { isNegotiationStartScenario, NEGOTIATION_SHIELD_START_CAPTURE_KEY, NEGOTIATION_START_SCENARIO_SPECS, parseNegotiationStartAnswer } from '../support/negotiationShieldStart';
 import { negotiationShieldEditContextVersion, negotiationShieldEditResult } from '../handlers/negotiationShieldEdit.handler';
-import { HOME_DIGITAL_WILL_METADATA_CAPTURE_KEY, HomeDigitalWillMetadataInputSchema, homeDigitalWillMetadataResult } from '../handlers/homeDigitalWillCreate.handler';
+import { HOME_DIGITAL_WILL_EDITOR_CAPTURE_KEY, HOME_DIGITAL_WILL_METADATA_CAPTURE_KEY, HomeDigitalWillContactInputSchema, HomeDigitalWillEntryInputSchema, HomeDigitalWillMetadataInputSchema, HomeDigitalWillSectionInputSchema, homeDigitalWillEditorResult, homeDigitalWillMetadataResult, homeDigitalWillPlanVersion, type HomeDigitalWillEditorKind } from '../handlers/homeDigitalWillCreate.handler';
 import { NEGOTIATION_SHIELD_EDIT_CAPTURE_KEY, parseNegotiationEditAnswer } from '../support/negotiationShieldEdit';
 import { getNegotiationShieldEditableInputForProperty } from '../../negotiationShieldCaseList';
 import { negotiationShieldAttachOffer, negotiationShieldAttachResult } from '../handlers/negotiationShieldAttach.handler';
@@ -827,15 +827,22 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
       ? execution.parametersJson as Record<string, unknown> : {};
     const launch = storedParameters.homeDigitalWillMetadataLaunch && typeof storedParameters.homeDigitalWillMetadataLaunch === 'object' && !Array.isArray(storedParameters.homeDigitalWillMetadataLaunch)
       ? storedParameters.homeDigitalWillMetadataLaunch as { planId?: unknown } : null;
-    if (input.captureKey !== HOME_DIGITAL_WILL_METADATA_CAPTURE_KEY || !launch || typeof launch.planId !== 'string') throw Object.assign(new Error('This plan-details form is no longer active. Open Edit details again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
     const service = new (await import('../../homeDigitalWill.service')).HomeDigitalWillService();
     const plan = await service.getByProperty(execution.propertyId);
-    const currentVersion = plan ? createHash('sha256').update(`home-digital-will-metadata:${plan.id}:${plan.updatedAt.toISOString()}`).digest('hex') : null;
-    if (!currentVersion || currentVersion !== input.expectedContextVersion) throw Object.assign(new Error('The plan changed while the form was open. Open Edit details again.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
-    const parsed = HomeDigitalWillMetadataInputSchema.safeParse(input.answer);
-    if (!parsed.success || (parsed.data.lastReviewedAt && !/^\d{4}-\d{2}-\d{2}$/.test(parsed.data.lastReviewedAt))) throw Object.assign(new Error('Check the title, status, readiness and review date.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
-    result = await homeDigitalWillMetadataResult(userId, execution.propertyId, launch.planId, parsed.data);
-    captureId = input.idempotencyKey; capturedContextVersion = currentVersion; canonicalOwner = 'HomeDigitalWill';
+    const editor = storedParameters.homeDigitalWillEditorLaunch && typeof storedParameters.homeDigitalWillEditorLaunch === 'object' && !Array.isArray(storedParameters.homeDigitalWillEditorLaunch) ? storedParameters.homeDigitalWillEditorLaunch as { kind?: unknown; entityId?: unknown } : null;
+    if (input.captureKey === HOME_DIGITAL_WILL_METADATA_CAPTURE_KEY && launch && typeof launch.planId === 'string') {
+      const currentVersion = plan ? createHash('sha256').update(`home-digital-will-metadata:${plan.id}:${plan.updatedAt.toISOString()}`).digest('hex') : null;
+      if (!currentVersion || currentVersion !== input.expectedContextVersion) throw Object.assign(new Error('The plan changed while the form was open. Open Edit details again.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
+      const parsed = HomeDigitalWillMetadataInputSchema.safeParse(input.answer);
+      if (!parsed.success || (parsed.data.lastReviewedAt && !/^\d{4}-\d{2}-\d{2}$/.test(parsed.data.lastReviewedAt))) throw Object.assign(new Error('Check the title, status, readiness and review date.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+      result = await homeDigitalWillMetadataResult(userId, execution.propertyId, launch.planId, parsed.data); capturedContextVersion = currentVersion;
+    } else if (input.captureKey === HOME_DIGITAL_WILL_EDITOR_CAPTURE_KEY && editor && typeof editor.kind === 'string' && ['ENTRY_CREATE', 'ENTRY_EDIT', 'CONTACT_CREATE', 'CONTACT_EDIT', 'SECTION_CREATE', 'SECTION_EDIT'].includes(editor.kind)) {
+      if (!plan || homeDigitalWillPlanVersion(plan) !== input.expectedContextVersion) throw Object.assign(new Error('The plan changed while the form was open. Open the editor again.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
+      const schema = editor.kind.startsWith('ENTRY_') ? HomeDigitalWillEntryInputSchema : editor.kind.startsWith('CONTACT_') ? HomeDigitalWillContactInputSchema : HomeDigitalWillSectionInputSchema;
+      const parsed = schema.safeParse(input.answer); if (!parsed.success) throw Object.assign(new Error(parsed.error.issues[0]?.message ?? 'Check the required fields and formats.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+      result = await homeDigitalWillEditorResult(userId, execution.propertyId, editor.kind as HomeDigitalWillEditorKind, typeof editor.entityId === 'string' ? editor.entityId : null, parsed.data); capturedContextVersion = input.expectedContextVersion;
+    } else throw Object.assign(new Error('This Home Continuity Plan form is no longer active.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    captureId = input.idempotencyKey; canonicalOwner = 'HomeDigitalWill';
   } else if (execution.operationId === 'NEGOTIATION_SHIELD_CASE_START') {
     const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson)
       ? execution.parametersJson as Record<string, unknown>

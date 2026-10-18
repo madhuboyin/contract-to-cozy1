@@ -649,6 +649,18 @@ export class HomeDigitalWillService {
     return mapEntry(entry);
   }
 
+  async moveEntry(entryId: string, targetSectionId: string, userId: string): Promise<EntryDTO> {
+    const entry = await this.assertEntryOwnership(entryId, userId, 'CONTRIBUTOR');
+    const target = await this.assertSectionOwnership(targetSectionId, userId, 'CONTRIBUTOR');
+    if (entry.section.digitalWillId !== target.digitalWillId) {
+      throw new APIError('Target section does not belong to this digital will', 400, 'INVALID_ENTRY_MOVE');
+    }
+    if (entry.sectionId === targetSectionId) return mapEntry(entry);
+    const last = await prisma.homeDigitalWillEntry.aggregate({ where: { sectionId: targetSectionId }, _max: { sortOrder: true } });
+    const moved = await prisma.homeDigitalWillEntry.update({ where: { id: entryId }, data: { sectionId: targetSectionId, sortOrder: (last._max.sortOrder ?? -1) + 1 } });
+    return mapEntry(moved);
+  }
+
   async deleteEntry(entryId: string, userId: string): Promise<void> {
     await this.assertEntryOwnership(entryId, userId, 'CONTRIBUTOR');
     await prisma.homeDigitalWillEntry.delete({ where: { id: entryId } });

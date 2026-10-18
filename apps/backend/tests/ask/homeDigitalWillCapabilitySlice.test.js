@@ -84,10 +84,13 @@ test('the plan is summarized with readiness, counts, handoff gaps, entry titles 
   assert.match(result.blocks[0].body, /^Draft, with 2 entries across 2 sections and 0 trusted contacts\. Last reviewed Sep 1, 2026\.$/);
   assert.equal(result.blocks.find((block) => block.id === 'digital-will-handoff').body, 'Choose a primary trusted contact.');
   const list = result.blocks.find((block) => block.id === 'digital-will-items');
-  assert.deepEqual(list.sections.map((section) => [section.title, section.items.map((row) => row.title)]), [['Emergency Instructions', ['Water shutoff', 'Getting in']]]);
-  assert.deepEqual(list.sections[0].items[0].meta, ['location note', 'critical priority', 'Emergency']);
-  assert.equal(list.sections[0].items[0].href, null, 'no row links to a desktop page');
-  assert.deepEqual(result.blocks[0].actions.map((action) => action.label), ['Edit details', 'Download emergency packet']);
+  assert.deepEqual(list.sections.map((section) => [section.title, section.items.map((row) => row.title)]), [['Emergency Instructions', ['Manage section', 'Water shutoff', 'Getting in']], ['Utilities', ['Manage section']], ['House Rules — Disabled', ['Manage section']]]);
+  const water = list.sections[0].items.find((row) => row.title === 'Water shutoff');
+  assert.deepEqual(water.meta, ['location note', 'critical priority', 'Emergency']);
+  assert.equal(water.href, null, 'no row links to a desktop page');
+  assert.deepEqual(water.actions.map((action) => action.id), ['ENTRY_EDIT', 'ENTRY_MOVE_UP', 'ENTRY_MOVE_DOWN', 'ENTRY_DELETE']);
+  assert.deepEqual(result.blocks[0].actions.map((action) => action.label), ['Emergency view', 'Edit details']);
+  assert.deepEqual(list.actions.map((action) => action.label), ['Add trusted contact', 'Restore section', 'Download emergency packet']);
   assert.equal(JSON.stringify(result).includes('/dashboard/'), false);
   const withContact = digitalWillFromView(will(), 'p1').blocks.find((block) => block.id === 'digital-will-items').sections.at(-1);
   assert.deepEqual(withContact.items.map((row) => [row.title, row.meta]), [['Jordan Lee', ['family member', 'emergency only access', 'Primary']]]);
@@ -109,7 +112,7 @@ test('every block and the boundary survive the answer-trust validator, and nothi
   const result = { ...raw, parameters: { answerTrustEvidence: { schemaVersion: '1.0', sources: [{ sourceId: 'home-digital-will.read', operationId: 'HOME_DIGITAL_WILL', status: 'COMPLETE', scope: 'FULL', freshness: 'CURRENT', observedAt: '2026-09-23T00:00:00.000Z' }] } } };
   const { result: validated } = validateAskAnswerTrust({ question: 'Show my home continuity plan', operationId: 'HOME_DIGITAL_WILL', result, propertyId: 'p1' });
   assert.deepEqual(validated.blocks.map((block) => block.id), result.blocks.map((block) => block.id));
-  assert.deepEqual(result.blocks[0].actions.map((action) => action.label), ['Edit details', 'Mark plan ready', 'Download emergency packet']);
+  assert.deepEqual(result.blocks[0].actions.map((action) => action.label), ['Emergency view', 'Edit details', 'Mark plan ready']);
   assert.equal(JSON.stringify(result).includes('/dashboard/'), false);
 });
 
@@ -175,9 +178,55 @@ test('the not-started answer starts governed Ask-native creation without a deskt
   assert.equal(JSON.stringify(none).includes('/dashboard/'), false);
 });
 
-test('remaining handoff requirements stay privacy-minimized while their Ask-native command slices are implemented', () => {
+test('handoff requirements stay privacy-minimized and inside Ask', () => {
   const gaps = digitalWillFromView(will({ trustedContacts: [] }), 'p1');
   const ring = gaps.blocks.find((block) => block.id === 'digital-will-progress');
   assert.ok(ring.nextSteps.length > 0 && ring.nextSteps.every((step) => step.href === null));
   assert.equal(/on the plan itself|on the page|Open Home Continuity Plan/.test(JSON.stringify(gaps)), false);
+});
+
+test('all authoring surfaces expose Ask-native actions, including empty and disabled sections', () => {
+  const result = digitalWillFromView(will(), 'p1');
+  const ring = result.blocks.find((block) => block.id === 'digital-will-progress');
+  assert.deepEqual(ring.nextSteps.flatMap((step) => step.actions.map((action) => action.id)), []);
+  const list = result.blocks.find((block) => block.id === 'digital-will-items');
+  const sectionManagers = list.sections.filter((section) => section.id.startsWith('digital-will-section-')).map((section) => section.items[0]);
+  assert.ok(sectionManagers.every((row) => row.title === 'Manage section'));
+  assert.ok(sectionManagers.every((row) => row.actions.map((action) => action.id).join(',') === 'ENTRY_CREATE,SECTION_EDIT,SECTION_MOVE_UP,SECTION_MOVE_DOWN,SECTION_DELETE'));
+  const contact = list.sections.find((section) => section.id === 'digital-will-contacts').items[0];
+  assert.deepEqual(contact.actions.map((action) => action.id), ['CONTACT_EDIT', 'CONTACT_DELETE']);
+  for (const block of result.blocks) AskPresentationBlockSchema.parse(block);
+});
+
+test('missing readiness requirements launch entry and contact editors inside Ask', () => {
+  const result = digitalWillFromView(will({ sections: will().sections.map((section) => section.type === 'EMERGENCY' ? { ...section, entries: [] } : section), trustedContacts: [] }), 'p1');
+  const ring = result.blocks.find((block) => block.id === 'digital-will-progress');
+  assert.deepEqual(ring.nextSteps.map((step) => [step.title, step.actions[0]?.id]), [
+    ['Add an emergency instruction.', 'ENTRY_CREATE'],
+    ['Choose a primary trusted contact.', 'CONTACT_CREATE'],
+    ['Add an email or phone number for the primary contact.', 'CONTACT_CREATE'],
+  ]);
+});
+
+test('entry, contact and section editor actions return inline forms', async () => {
+  const invoke = (entityType, entityId, actionId, message) => capabilityInvoke('HOME_DIGITAL_WILL_CREATE', { userId: 'u1', propertyId: 'p1', message, launchContext: { operationId: 'HOME_DIGITAL_WILL_CREATE', surface: 'ASK_RESULT', entityType, entityId, actionId } }, { propertyAccess: { role: 'OWNER', userId: 'u1', propertyId: 'p1' } });
+  for (const [entityType, entityId, actionId, message] of [
+    ['HOME_DIGITAL_WILL_EDITOR', 's-emergency', 'ENTRY_CREATE', 'Add an entry to this home continuity plan section'],
+    ['HOME_DIGITAL_WILL_EDITOR', 'water', 'ENTRY_EDIT', 'Edit this home continuity plan entry'],
+    ['HOME_DIGITAL_WILL_EDITOR', 'w1', 'CONTACT_CREATE', 'Add a trusted contact to my home continuity plan'],
+    ['HOME_DIGITAL_WILL_EDITOR', 'c1', 'CONTACT_EDIT', 'Edit this trusted contact'],
+    ['HOME_DIGITAL_WILL_EDITOR', 's-emergency', 'SECTION_EDIT', 'Edit this home continuity plan section'],
+  ]) {
+    const result = await invoke(entityType, entityId, actionId, message);
+    assert.equal(result.status, 'NEEDS_CONTEXT', actionId);
+    assert.equal(result.captureRequests[0].presentation, 'FORM', actionId);
+  }
+});
+
+test('Emergency view presents critical details and contact methods inline', async () => {
+  const result = await capabilityInvoke('HOME_DIGITAL_WILL_CREATE', { userId: 'u1', propertyId: 'p1', message: 'Open my home continuity plan emergency view', launchContext: { operationId: 'HOME_DIGITAL_WILL_CREATE', surface: 'ASK_RESULT', entityType: 'HOME_DIGITAL_WILL_EMERGENCY', entityId: 'w1' } }, { propertyAccess: { role: 'OWNER', userId: 'u1', propertyId: 'p1' } });
+  assert.equal(result.reasonCode, 'HOME_DIGITAL_WILL_EMERGENCY_VIEW');
+  assert.match(JSON.stringify(result), /Gate code 4417/);
+  assert.match(JSON.stringify(result), /555-0100/);
+  for (const block of result.blocks) AskPresentationBlockSchema.parse(block);
 });

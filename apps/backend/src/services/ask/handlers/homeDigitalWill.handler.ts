@@ -13,7 +13,7 @@ import { collectionDescriptor } from '../support/collectionDescriptor';
 // CONTRIBUTOR floor. Entries can hold access notes (gate codes, key locations) and Ask keeps its answers in the
 // conversation, so the answer lists entry titles only -- never entry content or summaries -- and trusted contacts by
 // name and role, without email, phone or notes. Details are not shown, and the answer links to no page: Ask never navigates to a
-// desktop page (owner decision 2026-10-10). Starting and editing a plan are not currently available in Ask. Read-only.
+// desktop page (owner decision 2026-10-10). Authoring and emergency workflows are available inline through declared actions.
 type DigitalWillView = Awaited<ReturnType<HomeDigitalWillService['getByProperty']>>;
 const DIGITAL_WILL_MISSING_LABELS: Record<string, string> = {
   'emergency-instruction': 'Add an emergency instruction.',
@@ -29,6 +29,7 @@ const DIGITAL_WILL_MISSING_LABELS: Record<string, string> = {
 export function digitalWillHandoffProgress(
   missingRequirements: readonly string[],
   entryCount: number,
+  targets?: { emergencySectionId?: string; planId?: string; primaryContactId?: string },
 ): Extract<AskPresentationBlock, { type: 'PROGRESS' }> {
   const requirements = ['emergency-instruction', 'primary-trusted-contact', 'primary-contact-method'];
   const unmet = requirements.filter((code) => missingRequirements.includes(code) || (code === 'primary-contact-method' && missingRequirements.includes('primary-trusted-contact')));
@@ -43,7 +44,7 @@ export function digitalWillHandoffProgress(
       { label: 'Missing', value: String(unmet.length), tone: unmet.length ? 'CAUTION' : 'DEFAULT' },
       { label: 'Entries', value: String(entryCount), tone: 'DEFAULT' },
     ],
-    nextSteps: unmet.map((code) => ({ id: `handoff-${code}`, title: DIGITAL_WILL_MISSING_LABELS[code] ?? readableCode(code), description: 'Handoff requirement not met yet', meta: [], status: 'MISSING', href: null, entityType: null })),
+    nextSteps: unmet.map((code) => ({ id: code === 'emergency-instruction' ? targets?.emergencySectionId ?? `handoff-${code}` : code === 'primary-trusted-contact' ? targets?.planId ?? `handoff-${code}` : targets?.primaryContactId ?? targets?.planId ?? `handoff-${code}`, title: DIGITAL_WILL_MISSING_LABELS[code] ?? readableCode(code), description: 'Handoff requirement not met yet', meta: [], status: 'MISSING', href: null, entityType: code === 'emergency-instruction' ? 'HOME_DIGITAL_WILL_SECTION' : code === 'primary-trusted-contact' || !targets?.primaryContactId ? 'HOME_DIGITAL_WILL' : 'HOME_DIGITAL_WILL_CONTACT', actions: code === 'emergency-instruction' && targets?.emergencySectionId ? [{ id: 'ENTRY_CREATE', label: 'Add emergency instruction', interactionType: 'MUTATE_RECORD' as const, message: 'Add an emergency instruction to my home continuity plan', operationId: 'HOME_DIGITAL_WILL_CREATE', style: 'PRIMARY' as const }] : code === 'primary-trusted-contact' && targets?.planId ? [{ id: 'CONTACT_CREATE', label: 'Add trusted contact', interactionType: 'MUTATE_RECORD' as const, message: 'Add a trusted contact to my home continuity plan', operationId: 'HOME_DIGITAL_WILL_CREATE', style: 'PRIMARY' as const }] : code === 'primary-contact-method' && targets?.primaryContactId ? [{ id: 'CONTACT_EDIT', label: 'Add contact method', interactionType: 'MUTATE_RECORD' as const, message: 'Edit my primary trusted contact', operationId: 'HOME_DIGITAL_WILL_CREATE', style: 'PRIMARY' as const }] : code === 'primary-contact-method' && targets?.planId ? [{ id: 'CONTACT_CREATE', label: 'Add reachable primary contact', interactionType: 'MUTATE_RECORD' as const, message: 'Add a trusted contact to my home continuity plan', operationId: 'HOME_DIGITAL_WILL_CREATE', style: 'PRIMARY' as const }] : [] })),
     actions: [],
   };
 }
@@ -68,9 +69,9 @@ export function digitalWillFromView(will: DigitalWillView, propertyId: string): 
   }
   const handoff = evaluateHomeDigitalWillHandoffReadiness(will);
   const planActions = [
+    { id: 'home-continuity-emergency', label: 'Emergency view', interactionType: 'START_WORKFLOW' as const, message: 'Open my home continuity plan emergency view', operationId: 'HOME_DIGITAL_WILL_CREATE' as const, entityType: 'HOME_DIGITAL_WILL_EMERGENCY', entityId: will.id, style: 'PRIMARY' as const },
     { id: 'home-continuity-metadata', label: 'Edit details', interactionType: 'START_WORKFLOW' as const, message: 'Edit my home continuity plan details', operationId: 'HOME_DIGITAL_WILL_CREATE' as const, entityType: 'HOME_DIGITAL_WILL_METADATA', entityId: will.id, style: 'SECONDARY' as const },
     ...(will.status !== 'ACTIVE' && handoff.state === 'READY' ? [{ id: 'home-continuity-publish', label: 'Mark plan ready', interactionType: 'START_WORKFLOW' as const, message: 'Publish my home continuity plan', operationId: 'HOME_DIGITAL_WILL_CREATE' as const, entityType: 'HOME_DIGITAL_WILL_PUBLISH', entityId: will.id, style: 'PRIMARY' as const }] : []),
-    { id: 'home-continuity-packet', label: 'Download emergency packet', href: `/api/properties/${propertyId}/home-digital-will/emergency-packet.pdf`, style: 'SECONDARY' as const },
   ];
   const enabled = will.sections.filter((section) => section.isEnabled);
   const entryCount = enabled.reduce((sum, section) => sum + section.entries.length, 0);
@@ -85,7 +86,7 @@ export function digitalWillFromView(will: DigitalWillView, propertyId: string): 
     actions: planActions,
   }];
   // IW-PRES-020 (FRD v1.94): the handoff requirements as a ring, ahead of the not-ready note and the plan's sections.
-  blocks.push(digitalWillHandoffProgress(handoff.missingRequirements, entryCount));
+  blocks.push(digitalWillHandoffProgress(handoff.missingRequirements, entryCount, { emergencySectionId: will.sections.find((section) => section.type === 'EMERGENCY')?.id, planId: will.id, primaryContactId: will.trustedContacts.find((contact) => contact.isPrimary)?.id }));
   if (handoff.state !== 'READY') {
     blocks.push({
       type: 'LIMITATION', id: 'digital-will-handoff', title: 'Not ready to hand off yet',
@@ -94,9 +95,15 @@ export function digitalWillFromView(will: DigitalWillView, propertyId: string): 
     });
   }
   const sections = [
-    ...enabled.filter((section) => section.entries.length).map((section) => ({
-      id: `digital-will-section-${section.id}`, title: section.title || readableCode(section.type), count: section.entries.length,
-      items: section.entries.map((entry) => ({
+    ...will.sections.map((section) => ({
+      id: `digital-will-section-${section.id}`, title: `${section.title || readableCode(section.type)}${section.isEnabled ? '' : ' — Disabled'}`, count: (section.isEnabled ? section.entries.length : 0) + 1,
+      items: [{ id: section.id, title: 'Manage section', description: section.description, meta: [section.isEnabled ? 'Enabled' : 'Disabled'], status: section.isEnabled ? 'ENABLED' : 'DISABLED', href: null, entityType: 'HOME_DIGITAL_WILL_SECTION', actions: [
+        { id: 'ENTRY_CREATE', label: 'Add entry', interactionType: 'MUTATE_RECORD' as const, message: 'Add an entry to this home continuity plan section', operationId: 'HOME_DIGITAL_WILL_CREATE', style: 'PRIMARY' as const },
+        { id: 'SECTION_EDIT', label: 'Edit section', interactionType: 'MUTATE_RECORD' as const, message: 'Edit this home continuity plan section', operationId: 'HOME_DIGITAL_WILL_CREATE', style: 'SECONDARY' as const },
+        { id: 'SECTION_MOVE_UP', label: 'Move up', interactionType: 'MUTATE_RECORD' as const, message: 'Move this home continuity plan section up', operationId: 'HOME_DIGITAL_WILL_CREATE', style: 'SECONDARY' as const },
+        { id: 'SECTION_MOVE_DOWN', label: 'Move down', interactionType: 'MUTATE_RECORD' as const, message: 'Move this home continuity plan section down', operationId: 'HOME_DIGITAL_WILL_CREATE', style: 'SECONDARY' as const },
+        { id: 'SECTION_DELETE', label: 'Delete section', interactionType: 'MUTATE_RECORD' as const, message: 'Delete this home continuity plan section', operationId: 'HOME_DIGITAL_WILL_CREATE', style: 'SECONDARY' as const },
+      ] }, ...(section.isEnabled ? section.entries : []).map((entry) => ({
         id: entry.id,
         title: entry.title,
         description: null,
@@ -108,12 +115,14 @@ export function digitalWillFromView(will: DigitalWillView, propertyId: string): 
         ],
         status: String(entry.priority),
         href: null,
+        entityType: 'HOME_DIGITAL_WILL_ENTRY',
         actions: [
-          { id: 'digital-will-entry-up-' + entry.id, label: 'Move up', interactionType: 'START_WORKFLOW' as const, message: 'Move this home continuity plan entry up', operationId: 'HOME_DIGITAL_WILL_CREATE' as const, entityType: 'HOME_DIGITAL_WILL_ENTRY', entityId: entry.id, actionId: 'ENTRY_MOVE_UP', style: 'SECONDARY' as const },
-          { id: 'digital-will-entry-down-' + entry.id, label: 'Move down', interactionType: 'START_WORKFLOW' as const, message: 'Move this home continuity plan entry down', operationId: 'HOME_DIGITAL_WILL_CREATE' as const, entityType: 'HOME_DIGITAL_WILL_ENTRY', entityId: entry.id, actionId: 'ENTRY_MOVE_DOWN', style: 'SECONDARY' as const },
-          { id: 'digital-will-entry-delete-' + entry.id, label: 'Delete', interactionType: 'START_WORKFLOW' as const, message: 'Delete this home continuity plan entry', operationId: 'HOME_DIGITAL_WILL_CREATE' as const, entityType: 'HOME_DIGITAL_WILL_ENTRY', entityId: entry.id, actionId: 'ENTRY_DELETE', style: 'SECONDARY' as const },
+          { id: 'ENTRY_EDIT', label: 'Edit', interactionType: 'MUTATE_RECORD' as const, message: 'Edit this home continuity plan entry', operationId: 'HOME_DIGITAL_WILL_CREATE', style: 'PRIMARY' as const },
+          { id: 'ENTRY_MOVE_UP', label: 'Move up', interactionType: 'MUTATE_RECORD' as const, message: 'Move this home continuity plan entry up', operationId: 'HOME_DIGITAL_WILL_CREATE', style: 'SECONDARY' as const },
+          { id: 'ENTRY_MOVE_DOWN', label: 'Move down', interactionType: 'MUTATE_RECORD' as const, message: 'Move this home continuity plan entry down', operationId: 'HOME_DIGITAL_WILL_CREATE', style: 'SECONDARY' as const },
+          { id: 'ENTRY_DELETE', label: 'Delete', interactionType: 'MUTATE_RECORD' as const, message: 'Delete this home continuity plan entry', operationId: 'HOME_DIGITAL_WILL_CREATE', style: 'SECONDARY' as const },
         ],
-      })),
+      }))],
     })),
     ...(will.trustedContacts.length ? [{
       id: 'digital-will-contacts', title: 'Trusted contacts', count: will.trustedContacts.length,
@@ -128,12 +137,23 @@ export function digitalWillFromView(will: DigitalWillView, propertyId: string): 
         ],
         status: contact.isPrimary ? 'PRIMARY' : 'CONTACT',
         href: null,
+        entityType: 'HOME_DIGITAL_WILL_CONTACT',
+        actions: [
+          { id: 'CONTACT_EDIT', label: 'Edit', interactionType: 'MUTATE_RECORD' as const, message: 'Edit this trusted contact', operationId: 'HOME_DIGITAL_WILL_CREATE', style: 'PRIMARY' as const },
+          ...(!contact.isPrimary ? [{ id: 'CONTACT_PRIMARY', label: 'Make primary', interactionType: 'MUTATE_RECORD' as const, message: 'Make this my primary trusted contact', operationId: 'HOME_DIGITAL_WILL_CREATE', style: 'SECONDARY' as const }] : []),
+          { id: 'CONTACT_DELETE', label: 'Delete', interactionType: 'MUTATE_RECORD' as const, message: 'Delete this trusted contact', operationId: 'HOME_DIGITAL_WILL_CREATE', style: 'SECONDARY' as const },
+        ],
       })),
     }] : []),
   ];
   if (sections.length) {
+    const deliveredCount = sections.reduce((sum, section) => sum + section.items.length, 0);
     blocks.push({ type: 'GROUPED_LIST', filters: [], id: 'digital-will-items', title: 'What the plan holds', description: 'Entry titles by section and who can see the plan. Entry details are not shown here.', sections,
-      collection: collectionDescriptor({ sourceTotal: entryCount + will.trustedContacts.length, fetchedCount: entryCount + will.trustedContacts.length, sections, nextPageAvailable: false }), actions: [] });
+      collection: collectionDescriptor({ sourceTotal: deliveredCount, fetchedCount: deliveredCount, sections, nextPageAvailable: false }), actions: [
+        { id: 'home-continuity-add-contact', label: 'Add trusted contact', interactionType: 'START_WORKFLOW', message: 'Add a trusted contact to my home continuity plan', operationId: 'HOME_DIGITAL_WILL_CREATE', entityType: 'HOME_DIGITAL_WILL_EDITOR', entityId: will.id, actionId: 'CONTACT_CREATE', style: 'PRIMARY' },
+        ...(will.sections.length < 8 ? [{ id: 'home-continuity-restore-section', label: 'Restore section', interactionType: 'START_WORKFLOW' as const, message: 'Restore a section in my home continuity plan', operationId: 'HOME_DIGITAL_WILL_CREATE' as const, entityType: 'HOME_DIGITAL_WILL_EDITOR', entityId: will.id, actionId: 'SECTION_CREATE', style: 'SECONDARY' as const }] : []),
+        { id: 'home-continuity-packet', label: 'Download emergency packet', href: `/api/properties/${propertyId}/home-digital-will/emergency-packet.pdf`, style: 'SECONDARY' },
+      ] });
   }
   blocks.push(boundary);
   return {

@@ -748,6 +748,21 @@ HOME_DIGITAL_WILL: 'BookOpen',
 
 ## Feature Flow
 
+### Ask Cozy parity
+
+Home Continuity Plan is fully operable from Ask Cozy without navigating to the desktop tool page. The Ask-native surface supports:
+
+- creating the private plan and its seeded sections
+- editing plan metadata and publishing a ready plan
+- adding, editing, moving between sections, reordering, and deleting entries
+- adding, editing, selecting the primary, and deleting trusted contacts
+- editing, enabling/disabling, reordering, deleting, and restoring the eight supported section types
+- actionable readiness next steps for the emergency instruction and primary-contact requirements
+- a focused inline Emergency view containing critical instructions and reachable contact methods
+- direct emergency-packet download
+
+Every mutation uses the canonical `HomeDigitalWillService`, rechecks the current plan at confirmation time, and reconciles earlier Ask answers after completion. Contact mutations retain the service's owner-only access rule. Entry and contact details remain absent from the normal overview; they appear only in an explicitly opened editor or Emergency view.
+
 Full end-to-end flow:
 
 1. user opens the property tools rail or navigates to `/dashboard/properties/:id/tools/home-digital-will`
