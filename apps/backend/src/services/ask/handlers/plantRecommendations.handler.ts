@@ -97,9 +97,18 @@ async function actionProposal(userId: string, propertyId: string, recommendation
   return { status: 'NEEDS_CONFIRMATION', reasonCode: 'PLANT_RECOMMENDATION_ACTION_CONFIRMATION_REQUIRED', parameters: { plantRecommendationAction: { recommendationId: row.id, roomId: row.room.id, action: kind }, confirmationVersion: 1, confirmationExpiresAt: expiresAt }, blocks: [{ type: 'SUMMARY', id: 'plant-action-review', title: `Review: ${config.label}`, body: 'Nothing changes until you confirm.', tone: 'DEFAULT', actions: [] }], confirmation: { confirmationId: `plant-action-${sha(`${row.id}:${kind}`).slice(0, 12)}-1`, version: 1, title: `${config.label} ${row.plantCatalog.commonName}?`, description: kind === 'ADD_TO_HOME' ? `This adds the recommended plant to ${row.room.name} and keeps its recommendation lineage.` : `This changes the recommendation’s status for ${row.room.name}.`, fields: [{ label: 'Plant', value: row.plantCatalog.commonName }, { label: 'Room', value: row.room.name }], editableFields: [], confirmLabel: config.label, consentText: `I authorize this change to the shared Plant Advisor record.`, expiresAt }, suggestions: [] };
 }
 
+export function resolveRecommendationActionId(message: string, actionId?: string | null): string | null {
+  const matchedByMessage = Object.values(PLANT_RECOMMENDATION_ACTIONS).find((action) => action.message === message.trim())?.id ?? null;
+  if (actionId && matchedByMessage && actionId !== matchedByMessage) return null;
+  return actionId || matchedByMessage;
+}
+
 registerCapabilityHandler('plant-advisor.room-recommendations', async (envelope) => {
   const launch = envelope.launchContext;
-  if (launch?.entityType === 'PLANT_RECOMMENDATION' && launch.entityId && launch.actionId) return actionProposal(envelope.userId, envelope.propertyId!, launch.entityId, launch.actionId);
+  if (launch?.entityType === 'PLANT_RECOMMENDATION' && launch.entityId && launch.surface !== 'ASK_REFRESH') {
+    const actionId = resolveRecommendationActionId(envelope.message, launch.actionId);
+    return actionProposal(envelope.userId, envelope.propertyId!, launch.entityId, actionId ?? '');
+  }
   return roomPlantRecommendationResult(envelope.userId, envelope.propertyId!, undefined, launch?.sourceExecutionId ?? null);
 });
 
