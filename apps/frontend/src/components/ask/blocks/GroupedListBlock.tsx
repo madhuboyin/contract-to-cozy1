@@ -30,6 +30,7 @@ import { ReserveAllocationResultList } from '../ReserveAllocationResultList';
 import { RoomResultList } from '../RoomResultList';
 import { FACT_SHEET_BLOCK_IDS, FactSheetResultList, PLAN_LAYOUT_BLOCK_IDS, SeasonalPlanResultList } from '../SeasonalPlanResultList';
 import { WarrantyResultList } from '../WarrantyResultList';
+import { HomeContinuityPlanResultList } from '../HomeContinuityPlanResultList';
 import { ActionLink, AskBlockActionContext, AskContextLink } from './context';
 import type { AskBlockRenderer } from './types';
 
@@ -369,7 +370,7 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
   );
 }
 
-// Nine bespoke rendering exceptions in the whole registry: a
+// Bespoke rendering exceptions in the registry include the Home Continuity Plan's compact section workspace and a
 // `GROUPED_LIST` block with id `maintenance-groups`; Inventory's
 // item-detail-eligible ids (`inventory-results`, the primary result;
 // `inventory-entity-selection`, the disambiguation list; and
@@ -428,6 +429,9 @@ export const GroupedListBlock: AskBlockRenderer<'GROUPED_LIST'> = (props) => {
   const setPreference = (mode: GroupedListPresentationPreference) => controls?.change((view) => ({
     ...view, groupedListModes: { ...view.groupedListModes, [props.block.id]: mode },
   }));
+  if (props.block.id === 'digital-will-items') {
+    return <HomeContinuityPlanResultList block={props.block} disabled={props.itemActionsDisabled} onAction={props.onItemAction} />;
+  }
   // Maintenance keeps its own component in both layouts, so its live-record detail, paging and selection are the
   // same whichever the homeowner chooses. The pattern still comes only from the server's declaration.
   if (props.block.id === 'maintenance-groups') {

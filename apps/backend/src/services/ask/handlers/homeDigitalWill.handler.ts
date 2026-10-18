@@ -87,16 +87,9 @@ export function digitalWillFromView(will: DigitalWillView, propertyId: string): 
   }];
   // IW-PRES-020 (FRD v1.94): the handoff requirements as a ring, ahead of the not-ready note and the plan's sections.
   blocks.push(digitalWillHandoffProgress(handoff.missingRequirements, entryCount, { emergencySectionId: will.sections.find((section) => section.type === 'EMERGENCY')?.id, planId: will.id, primaryContactId: will.trustedContacts.find((contact) => contact.isPrimary)?.id }));
-  if (handoff.state !== 'READY') {
-    blocks.push({
-      type: 'LIMITATION', id: 'digital-will-handoff', title: 'Not ready to hand off yet',
-      body: handoff.missingRequirements.map((code) => DIGITAL_WILL_MISSING_LABELS[code] ?? readableCode(code)).join(' '),
-      severity: 'CAUTION',
-    });
-  }
   const sections = [
     ...will.sections.map((section) => ({
-      id: `digital-will-section-${section.id}`, title: `${section.title || readableCode(section.type)}${section.isEnabled ? '' : ' — Disabled'}`, count: (section.isEnabled ? section.entries.length : 0) + 1,
+      id: `digital-will-section-${section.id}`, title: `${section.title || readableCode(section.type)}${section.isEnabled ? '' : ' — Disabled'}`, count: section.isEnabled ? section.entries.length : 0,
       items: [{ id: section.id, title: 'Manage section', description: section.description, meta: [section.isEnabled ? 'Enabled' : 'Disabled'], status: section.isEnabled ? 'ENABLED' : 'DISABLED', href: null, entityType: 'HOME_DIGITAL_WILL_SECTION', actions: [
         { id: 'ENTRY_CREATE', label: 'Add entry', interactionType: 'MUTATE_RECORD' as const, message: 'Add an entry to this home continuity plan section', operationId: 'HOME_DIGITAL_WILL_CREATE', style: 'PRIMARY' as const },
         { id: 'SECTION_EDIT', label: 'Edit section', interactionType: 'MUTATE_RECORD' as const, message: 'Edit this home continuity plan section', operationId: 'HOME_DIGITAL_WILL_CREATE', style: 'SECONDARY' as const },

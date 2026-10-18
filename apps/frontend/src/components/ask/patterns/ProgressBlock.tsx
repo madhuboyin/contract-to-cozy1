@@ -14,6 +14,18 @@ const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 export const ProgressBlock: AskBlockRenderer<'PROGRESS'> = ({ block, onItemAction, itemActionsDisabled }) => {
   const percent = Math.max(0, Math.min(100, block.percent));
   const rounded = Math.round(percent);
+  if (block.id === 'digital-will-progress') {
+    return <section className="rounded-2xl border border-slate-200 bg-white p-4" data-display-pattern="continuity-readiness">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <div className="flex items-center gap-3"><span className="text-2xl font-bold tabular-nums text-slate-950">{rounded}%</span><div><h3 className="font-semibold text-slate-950">{block.title}</h3><p className="text-xs text-slate-500">{block.basis}</p></div></div>
+          <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100" role="progressbar" aria-label={block.title} aria-valuemin={0} aria-valuemax={100} aria-valuenow={rounded}><div className="h-full rounded-full bg-teal-600" style={{ width: `${percent}%` }} /></div>
+        </div>
+        {block.metrics.length > 0 && <dl className="grid shrink-0 grid-cols-3 gap-1.5">{block.metrics.map((metric) => <div key={metric.label} className={cn('min-w-16 rounded-lg px-2.5 py-1.5 text-center', TONE_CHIP[metric.tone])}><dd className="text-sm font-bold tabular-nums">{metric.value}</dd><dt className="text-[10px] opacity-80">{metric.label}</dt></div>)}</dl>}
+      </div>
+      {block.nextSteps.length > 0 && <div className="mt-4 border-t border-slate-100 pt-3"><p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Do next</p><ul className="grid gap-2 md:grid-cols-3">{block.nextSteps.map((step) => <li key={step.id} className="flex min-h-16 flex-col justify-between gap-2 rounded-xl bg-slate-50 px-3 py-2.5"><p className="text-sm font-semibold leading-5 text-slate-900">{step.title}</p><ItemActionButtons item={step} actions={step.actions} onItemAction={onItemAction} disabled={itemActionsDisabled} /></li>)}</ul></div>}
+    </section>;
+  }
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-4" data-display-pattern="progress">
       <h3 className="font-semibold text-slate-950">{block.title}</h3>

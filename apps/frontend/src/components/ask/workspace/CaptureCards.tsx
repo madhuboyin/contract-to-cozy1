@@ -505,6 +505,7 @@ export function InlineCaptureCard({
   const compactEventAdd = schema.type === 'GROUP' && request.captureKey === 'CAPTURE_EVENT_ADD';
   const compactProjectCreate = schema.type === 'GROUP' && request.captureKey === 'PROJECT_TRACKER_CREATE_INPUTS';
   const compactProjectCommand = schema.type === 'GROUP' && request.captureKey === 'PROJECT_TRACKER_COMMAND_INPUTS';
+  const compactContinuityPlan = schema.type === 'GROUP' && (request.captureKey === 'HOME_DIGITAL_WILL_EDITOR_INPUTS' || request.captureKey === 'HOME_DIGITAL_WILL_METADATA_INPUTS');
   const formGroups = schema.type === 'GROUP' ? schema.groups ?? [] : [];
   const activeGroup = formGroups[activeGroupIndex] ?? null;
   // Every structured workflow uses the shared compact field treatment. The
@@ -578,7 +579,7 @@ export function InlineCaptureCard({
   }
 
   return (
-    <form ref={containerRef as unknown as Ref<HTMLFormElement>} onSubmit={save} className={cn('rounded-2xl border', compactEventAdd || compactProjectCreate ? 'p-3 sm:p-4' : 'p-4', policy.border)} aria-busy={saving} aria-label={request.title}>
+    <form ref={containerRef as unknown as Ref<HTMLFormElement>} onSubmit={save} className={cn('rounded-2xl border', compactEventAdd || compactProjectCreate || compactContinuityPlan ? 'p-3 sm:p-4' : 'p-4', policy.border)} aria-busy={saving} aria-label={request.title}>
       {compactEventAdd || compactProjectCreate ? (
         <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
           <p className="text-sm font-semibold text-slate-950">{compactEventAdd ? 'Event details' : 'Project setup'}</p>
@@ -630,7 +631,7 @@ export function InlineCaptureCard({
           <span>{request.confirmationText ?? 'I confirm this information can be saved to the home record.'}</span>
         </label>
       )}
-      <div className={cn('flex flex-wrap gap-2', compactEventAdd || compactProjectCreate ? 'mt-3' : 'mt-4')}>
+      <div className={cn('flex flex-wrap gap-2', compactContinuityPlan && 'sticky bottom-20 z-10 -mx-3 -mb-3 border-t border-sky-100 bg-sky-50/95 px-3 py-3 backdrop-blur sm:-mx-4 sm:-mb-4 sm:px-4', compactEventAdd || compactProjectCreate || compactContinuityPlan ? 'mt-3' : 'mt-4')}>
         {activeGroupIndex > 0 && <button type="button" disabled={saving} onClick={() => setActiveGroupIndex((index) => Math.max(0, index - 1))} className="min-h-11 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50">Previous</button>}
         {activeGroup && activeGroupIndex < formGroups.length - 1
           ? <button type="button" disabled={saving || activeGroupMissingRequired} onClick={() => setActiveGroupIndex((index) => Math.min(formGroups.length - 1, index + 1))} className="min-h-11 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Next: {formGroups[activeGroupIndex + 1].title}</button>

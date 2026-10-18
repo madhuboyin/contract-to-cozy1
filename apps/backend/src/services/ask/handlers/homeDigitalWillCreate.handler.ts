@@ -78,7 +78,10 @@ export async function homeDigitalWillMetadataResult(userId: string, propertyId: 
   if (!plan || plan.id !== planId) return { status: 'NOT_APPLICABLE', reasonCode: 'HOME_DIGITAL_WILL_NOT_FOUND', blocks: [{ type: 'SUMMARY', id: 'home-digital-will-metadata-missing', title: 'That plan is no longer available', body: 'Nothing was changed.', tone: 'CAUTION', actions: [] }], suggestions: [] };
   const contextVersion = sha(`home-digital-will-metadata:${plan.id}:${plan.updatedAt.toISOString()}`);
   const current = { title: plan.title, status: plan.status === 'ARCHIVED' ? 'ARCHIVED' : 'DRAFT', readiness: plan.readiness === 'READY' ? 'IN_PROGRESS' : plan.readiness, lastReviewedAt: plan.lastReviewedAt?.toISOString().slice(0, 10) ?? '' } as HomeDigitalWillMetadataInput;
-  const capture: AskCaptureRequest = { requirementId: 'home-digital-will-metadata-inputs', captureKey: HOME_DIGITAL_WILL_METADATA_CAPTURE_KEY, classification: 'WORKFLOW_INPUT', state: 'KNOWN', presentation: 'FORM', title: 'Edit plan details', question: 'What should the plan details say?', helpText: 'Ready is set only by publishing. Nothing is saved until you review and confirm.', inputSchema: { type: 'GROUP', fields: [
+  const capture: AskCaptureRequest = { requirementId: 'home-digital-will-metadata-inputs', captureKey: HOME_DIGITAL_WILL_METADATA_CAPTURE_KEY, classification: 'WORKFLOW_INPUT', state: 'KNOWN', presentation: 'FORM', title: 'Edit plan details', question: 'What should the plan details say?', helpText: 'Ready is set only by publishing. Nothing is saved until you review and confirm.', inputSchema: { type: 'GROUP', groups: [
+    { id: 'identity', title: 'Plan identity', description: 'Name the plan and choose whether it is active work or archived.', fieldKeys: ['title', 'status'] },
+    { id: 'review', title: 'Readiness and review', description: 'Record its current preparation state and latest review date.', fieldKeys: ['readiness', 'lastReviewedAt'] },
+  ], fields: [
     { key: 'title', label: 'Plan title', required: true, inputSchema: { type: 'SHORT_TEXT', maxLength: 255 } },
     { key: 'status', label: 'Status', required: true, inputSchema: { type: 'SINGLE_SELECT', options: [{ label: 'Draft', value: 'DRAFT' }, { label: 'Archived', value: 'ARCHIVED' }] } },
     { key: 'readiness', label: 'Readiness', required: true, inputSchema: { type: 'SINGLE_SELECT', options: [{ label: 'Not started', value: 'NOT_STARTED' }, { label: 'In progress', value: 'IN_PROGRESS' }, { label: 'Needs review', value: 'NEEDS_REVIEW' }] } },
@@ -109,7 +112,11 @@ export async function homeDigitalWillEditorResult(userId: string, propertyId: st
   if (kind.startsWith('ENTRY_')) {
     title = kind === 'ENTRY_CREATE' ? 'Add plan entry' : 'Edit plan entry';
     currentAnswer = entry ? { title: entry.title, entryType: entry.entryType, content: entry.content ?? '', summary: entry.summary ?? '', priority: entry.priority, isPinned: yn(entry.isPinned), isEmergency: yn(entry.isEmergency), targetSectionId: entrySection!.id, effectiveFrom: entry.effectiveFrom?.toISOString().slice(0, 10) ?? '', effectiveTo: entry.effectiveTo?.toISOString().slice(0, 10) ?? '' } : { title: '', entryType: section?.type === 'EMERGENCY' ? 'INSTRUCTION' : 'GENERAL_NOTE', content: '', summary: '', priority: section?.type === 'EMERGENCY' ? 'CRITICAL' : 'MEDIUM', isPinned: 'NO', isEmergency: section?.type === 'EMERGENCY' ? 'YES' : 'NO', targetSectionId: section!.id, effectiveFrom: '', effectiveTo: '' };
-    schema = { type: 'GROUP', fields: [
+    schema = { type: 'GROUP', groups: [
+      { id: 'essentials', title: 'Entry essentials', description: 'Name the entry and choose how it is organized.', fieldKeys: ['title', 'entryType', 'priority', 'targetSectionId'] },
+      { id: 'details', title: 'Instructions', description: 'Add the useful detail someone needs when taking over.', fieldKeys: ['content', 'summary'] },
+      { id: 'visibility', title: 'Visibility and timing', description: 'Choose where the entry appears and when it applies.', fieldKeys: ['isPinned', 'isEmergency', 'effectiveFrom', 'effectiveTo'] },
+    ], fields: [
       { key: 'title', label: 'Title', required: true, inputSchema: { type: 'SHORT_TEXT', maxLength: 500 } }, { key: 'entryType', label: 'Type', required: true, inputSchema: { type: 'SINGLE_SELECT', options: select(entryTypes) } },
       { key: 'content', label: 'Full instructions or details', required: false, inputSchema: { type: 'LONG_TEXT', maxLength: 10000 } }, { key: 'summary', label: 'Short summary', required: false, inputSchema: { type: 'LONG_TEXT', maxLength: 1000 } },
       { key: 'priority', label: 'Priority', required: true, inputSchema: { type: 'SINGLE_SELECT', options: select(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']) } }, { key: 'targetSectionId', label: 'Section', required: true, inputSchema: { type: 'SINGLE_SELECT', options: sectionOptions } },
@@ -119,7 +126,11 @@ export async function homeDigitalWillEditorResult(userId: string, propertyId: st
   } else if (kind.startsWith('CONTACT_')) {
     title = kind === 'CONTACT_CREATE' ? 'Add trusted contact' : 'Edit trusted contact';
     currentAnswer = contact ? { name: contact.name, email: contact.email ?? '', phone: contact.phone ?? '', relationship: contact.relationship ?? '', role: contact.role, accessLevel: contact.accessLevel, isPrimary: yn(contact.isPrimary), notes: contact.notes ?? '' } : { name: '', email: '', phone: '', relationship: '', role: 'EMERGENCY_CONTACT', accessLevel: 'EMERGENCY_ONLY', isPrimary: plan.trustedContacts.length ? 'NO' : 'YES', notes: '' };
-    schema = { type: 'GROUP', fields: [
+    schema = { type: 'GROUP', groups: [
+      { id: 'person', title: 'Contact', description: 'Identify the person and their relationship to the home.', fieldKeys: ['name', 'relationship', 'role'] },
+      { id: 'access', title: 'Access and reachability', description: 'Set access and provide at least one way to reach them.', fieldKeys: ['accessLevel', 'email', 'phone', 'isPrimary'] },
+      { id: 'notes', title: 'Private notes', description: 'Add optional context for household members.', fieldKeys: ['notes'] },
+    ], fields: [
       { key: 'name', label: 'Name', required: true, inputSchema: { type: 'SHORT_TEXT', maxLength: 255 } }, { key: 'relationship', label: 'Relationship', required: false, inputSchema: { type: 'SHORT_TEXT', maxLength: 255 } },
       { key: 'role', label: 'Role', required: true, inputSchema: { type: 'SINGLE_SELECT', options: select(roleValues) } }, { key: 'accessLevel', label: 'Access level', required: true, inputSchema: { type: 'SINGLE_SELECT', options: select(['VIEW', 'EDIT', 'EMERGENCY_ONLY']) } },
       { key: 'email', label: 'Email', required: false, inputSchema: { type: 'SHORT_TEXT', maxLength: 255 } }, { key: 'phone', label: 'Phone', required: false, inputSchema: { type: 'SHORT_TEXT', maxLength: 50 } },
@@ -129,7 +140,9 @@ export async function homeDigitalWillEditorResult(userId: string, propertyId: st
     title = kind === 'SECTION_CREATE' ? 'Restore plan section' : 'Edit plan section';
     if (kind === 'SECTION_CREATE' && missingTypes.length === 0) return { status: 'ANSWERED', reasonCode: 'HOME_DIGITAL_WILL_ALL_SECTIONS_EXIST', blocks: [{ type: 'SUMMARY', id: 'home-digital-will-sections-complete', title: 'All supported sections already exist', body: 'You can edit, disable, reorder, or delete an existing section. A deleted section can be restored later.', tone: 'DEFAULT', actions: [] }], suggestions: [] };
     currentAnswer = section ? { type: section.type, title: section.title, description: section.description ?? '', isEnabled: yn(section.isEnabled) } : { type: missingTypes[0], title: select([missingTypes[0]])[0].label, description: '', isEnabled: 'YES' };
-    schema = { type: 'GROUP', fields: [
+    schema = { type: 'GROUP', groups: [
+      { id: 'section', title: 'Section details', description: 'Choose the topic, label, and whether it appears in the plan.', fieldKeys: ['type', 'title', 'description', 'isEnabled'] },
+    ], fields: [
       { key: 'type', label: 'Section type', required: true, inputSchema: { type: 'SINGLE_SELECT', options: select(kind === 'SECTION_CREATE' ? missingTypes : [section!.type]) } }, { key: 'title', label: 'Title', required: true, inputSchema: { type: 'SHORT_TEXT', maxLength: 255 } },
       { key: 'description', label: 'Description', required: false, inputSchema: { type: 'LONG_TEXT', maxLength: 1000 } }, { key: 'isEnabled', label: 'Enabled', required: true, inputSchema: { type: 'SINGLE_SELECT', options: [{ label: 'Yes', value: 'YES' }, { label: 'No', value: 'NO' }] } },
     ] } as AskCaptureRequest['inputSchema'];

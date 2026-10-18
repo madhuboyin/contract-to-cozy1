@@ -35,6 +35,17 @@ Current behavior:
 - full CRUD for sections, entries, and trusted contacts
 - section and entry reordering via dedicated endpoints
 
+### Ask Cozy presentation
+
+The Ask-native Home Continuity Plan uses a compact, domain-specific workspace rather than the generic grouped-list treatment:
+
+- readiness is presented once as a compact status module with direct next actions
+- section counts represent plan entries only; section-management controls never count as content
+- plan sections start collapsed and progressively disclose entries and management controls
+- empty and disabled sections remain manageable without occupying a full card each
+- entry, contact, section, and metadata forms are divided into short reviewable stages
+- workflow actions remain visible above the fixed Ask composer while the user completes a form
+
 Not included in the current implementation:
 
 - external sharing or unauthenticated access

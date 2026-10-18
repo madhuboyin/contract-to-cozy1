@@ -82,8 +82,9 @@ test('the plan is summarized with readiness, counts, handoff gaps, entry titles 
   const result = digitalWillFromView(will({ trustedContacts: [] }), 'p1');
   assert.equal(result.blocks[0].title, 'Maple Street plan: in progress, 40% complete');
   assert.match(result.blocks[0].body, /^Draft, with 2 entries across 2 sections and 0 trusted contacts\. Last reviewed Sep 1, 2026\.$/);
-  assert.equal(result.blocks.find((block) => block.id === 'digital-will-handoff').body, 'Choose a primary trusted contact.');
+  assert.equal(result.blocks.some((block) => block.id === 'digital-will-handoff'), false, 'readiness gaps are shown once inside the progress module');
   const list = result.blocks.find((block) => block.id === 'digital-will-items');
+  assert.deepEqual(list.sections.map((section) => section.count), [2, 0, 0], 'management controls never inflate content counts');
   assert.deepEqual(list.sections.map((section) => [section.title, section.items.map((row) => row.title)]), [['Emergency Instructions', ['Manage section', 'Water shutoff', 'Getting in']], ['Utilities', ['Manage section']], ['House Rules — Disabled', ['Manage section']]]);
   const water = list.sections[0].items.find((row) => row.title === 'Water shutoff');
   assert.deepEqual(water.meta, ['location note', 'critical priority', 'Emergency']);
@@ -157,7 +158,7 @@ test('the ring is the handoff check\'s three requirements, not the plan\'s self-
 test('the real handler puts the ring after the summary, ignores the self-reported percent, and repeats no entry or contact detail', async () => {
   HomeDigitalWillService.prototype.getByProperty = async () => will({ completionPercent: 100, trustedContacts: [{ id: 'c1', name: 'Jordan Lee', email: null, phone: null, notes: SECRET, relationship: 'Sibling', role: 'FAMILY_MEMBER', accessLevel: 'EMERGENCY_ONLY', isPrimary: true }] });
   const result = await capabilityInvoke('HOME_DIGITAL_WILL', { userId: 'u1', propertyId: 'p1', message: 'Show my home continuity plan' }, { propertyAccess: { role: 'OWNER', userId: 'u1', propertyId: 'p1' } });
-  assert.deepEqual(result.blocks.map((block) => block.id).slice(0, 3), ['digital-will-summary', 'digital-will-progress', 'digital-will-handoff']);
+  assert.deepEqual(result.blocks.map((block) => block.id).slice(0, 3), ['digital-will-summary', 'digital-will-progress', 'digital-will-items']);
   const ring = result.blocks[1];
   assert.equal(ring.percent, 67);
   assert.equal(ring.basis, '2 of 3 handoff requirements met');
@@ -220,6 +221,7 @@ test('entry, contact and section editor actions return inline forms', async () =
     const result = await invoke(entityType, entityId, actionId, message);
     assert.equal(result.status, 'NEEDS_CONTEXT', actionId);
     assert.equal(result.captureRequests[0].presentation, 'FORM', actionId);
+    assert.ok(result.captureRequests[0].inputSchema.groups?.length > 0, `${actionId} uses progressive form stages`);
   }
 });
 
