@@ -140,6 +140,8 @@ import { propertyBriefCommandResult, PropertyBriefPrepareInputSchema, PropertyBr
 import { PROPERTY_BRIEF_ACTION_IDS, PROPERTY_BRIEF_PREPARE_CAPTURE_KEY, PROPERTY_BRIEF_SHARE_CAPTURE_KEY } from '../support/propertyBriefConstants';
 import { projectTrackerCreateContextVersion, projectTrackerCreateResult } from '../handlers/projectTracker.handler';
 import { PROJECT_TRACKER_CREATE_CAPTURE_KEY } from '../support/projectTrackerConstants';
+import { ENVIRONMENT_HVAC_FILTER_CAPTURE_KEY, ENVIRONMENT_HVAC_FILTER_INVALID_MESSAGES, parseEnvironmentHvacFilterAnswer } from '../support/environmentReportCommand';
+import { environmentReportCommandResult } from '../handlers/environmentReportCommands.handler';
 
 const RefinanceProfileCaptureSchema = z.object({
   currentMortgageBalanceUsd: z.number().min(1_000).max(100_000_000),
@@ -1391,6 +1393,26 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     captureId = input.idempotencyKey;
     capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
     canonicalOwner = 'PropertyHazardOutcome';
+  } else if (execution.operationId === 'ENVIRONMENT_REPORT_COMMAND') {
+    if (input.captureKey !== ENVIRONMENT_HVAC_FILTER_CAPTURE_KEY) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    const access = await ensurePropertyAccess(userId, execution.propertyId);
+    if (access.role === HouseholdRole.VIEWER) throw Object.assign(new Error('A contributor or owner is required to record HVAC filter maintenance.'), { code: 'ASK_PERMISSION_REQUIRED' });
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson) ? execution.parametersJson as Record<string, unknown> : {};
+    const envLaunch = storedParameters.environmentReportLaunch && typeof storedParameters.environmentReportLaunch === 'object' && !Array.isArray(storedParameters.environmentReportLaunch)
+      ? storedParameters.environmentReportLaunch as { kind?: unknown; entityId?: unknown; sourceExecutionId?: unknown } : null;
+    if (!envLaunch || envLaunch.kind !== 'RECORD_HVAC_FILTER' || typeof envLaunch.entityId !== 'string') {
+      throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    }
+    const hvacAnswer = parseEnvironmentHvacFilterAnswer(input.answer);
+    if (!hvacAnswer.success) throw Object.assign(new Error(ENVIRONMENT_HVAC_FILTER_INVALID_MESSAGES[hvacAnswer.reason]), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+    result = await environmentReportCommandResult(userId, execution.propertyId, {
+      kind: 'RECORD_HVAC_FILTER',
+      entityId: envLaunch.entityId,
+      sourceExecutionId: typeof envLaunch.sourceExecutionId === 'string' ? envLaunch.sourceExecutionId : null,
+    }, hvacAnswer.data);
+    captureId = input.idempotencyKey;
+    capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
+    canonicalOwner = 'PropertyMaintenanceTask';
   } else if (execution.operationId === 'HOME_BRIEFING_COMMAND') {
     if (input.captureKey !== BRIEFING_PREFERENCES_CAPTURE_KEY) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
     // CALLER_SCOPED (FRD v1.329): the briefing is the caller's own; membership is enforced by ensurePropertyAccess.

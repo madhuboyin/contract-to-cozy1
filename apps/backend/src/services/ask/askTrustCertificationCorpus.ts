@@ -331,6 +331,8 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   NEGOTIATION_SHIELD_BUYER_COMMAND: 'Your negotiation step is shown, with what it will change, and saved only after you confirm; nothing is sent to the seller.',
   PRICE_FINALIZATION_COMMAND: 'Your price record change is shown and saved only after you confirm; nothing is booked, paid or sent to a vendor.',
   QUOTE_COMPARISON_COMMAND: 'Your proposal change is shown and saved only after you confirm; nothing is accepted, booked or sent to a provider.',
+  ENVIRONMENT_REPORT: 'Your environment report shows current weather, 10-day forecast, air quality, drought status, flood zone, county radon zone, nearby EPA facilities, and climate normals for this home.',
+  ENVIRONMENT_REPORT_COMMAND: 'Your weather preparation checklist or HVAC filter maintenance update is shown for review and saved only after you confirm.',
   HOME_PLANT_ADD: 'The plant is reviewed and then added to this home after your confirmation.',
   ROOM_PLANT_RECOMMENDATIONS: 'Room preferences are reviewed and ranked plant recommendations are generated after your confirmation.',
   OWNERSHIP_COST_COMMAND: 'An ownership-cost planning choice is reviewed and recorded only after confirmation.',

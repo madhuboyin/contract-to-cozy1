@@ -72,6 +72,7 @@ const OPERATIONS_BY_CAPABILITY: Record<string, readonly AskOperationId[]> = {
   'service-price-radar': ['SERVICE_PRICE_CHECKS'],
   'home-timeline': ['HOME_TIMELINE_EVENTS'],
   'material-specs': ['MATERIAL_SPECS_LIST', 'DOCUMENT_PROMOTION_REVIEW', 'DOCUMENT_PROMOTION_CONFIRM'],
+  'environment-report': ['ENVIRONMENT_REPORT', 'ENVIRONMENT_REPORT_COMMAND'],
 };
 
 /**

@@ -416,6 +416,8 @@ export const RESULT_OWNERSHIP_RELATIONSHIPS: Readonly<Record<string, readonly st
   OPERATIONAL_WORK_UPDATE: operationSpecificContinuationOutcomeKeys('OPERATIONAL_WORK_UPDATE'),
   PAST_HAZARD_EXPOSURE: operationSpecificContinuationOutcomeKeys('PAST_HAZARD_EXPOSURE'),
   PAST_HAZARD_OUTCOME_COMMAND: operationSpecificContinuationOutcomeKeys('PAST_HAZARD_OUTCOME_COMMAND'),
+  ENVIRONMENT_REPORT: operationSpecificContinuationOutcomeKeys('ENVIRONMENT_REPORT'),
+  ENVIRONMENT_REPORT_COMMAND: operationSpecificContinuationOutcomeKeys('ENVIRONMENT_REPORT_COMMAND'),
   PROPERTY_BRIEFS_LIST: operationSpecificContinuationOutcomeKeys('PROPERTY_BRIEFS_LIST'),
   PROPERTY_BRIEF_COMMAND: operationSpecificContinuationOutcomeKeys('PROPERTY_BRIEF_COMMAND'),
   PROPERTY_CONTEXT_AREA_CAPTURE: operationSpecificContinuationOutcomeKeys('PROPERTY_CONTEXT_AREA_CAPTURE'),

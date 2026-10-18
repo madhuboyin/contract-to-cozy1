@@ -723,6 +723,14 @@ export const OPERATION_SPECIFIC_CONTINUATION_RECIPES: Readonly<Partial<Record<As
     recipe('Review past hazard exposure', 'Show my home risk replay', 'PAST_HAZARD_EXPOSURE', 'REVIEW_PAST_HAZARDS', 'PAST_HAZARD_OUTCOME_REVIEW_EXPOSURE'),
     recipe('Review the home timeline', 'Open my home timeline', 'HOME_TIMELINE_EVENTS', 'REVIEW_HOME_TIMELINE', 'PAST_HAZARD_OUTCOME_REVIEW_TIMELINE'),
   ],
+  ENVIRONMENT_REPORT: [
+    recipe('Review monitored events', 'Show my home event radar feed', 'HOME_EVENT_RADAR_FEED', 'REVIEW_RADAR_FEED', 'ENVIRONMENT_REPORT_REVIEW_RADAR'),
+    recipe('Review past hazard exposure', 'Show my home risk replay', 'PAST_HAZARD_EXPOSURE', 'REVIEW_PAST_HAZARDS', 'ENVIRONMENT_REPORT_REVIEW_HAZARDS'),
+  ],
+  ENVIRONMENT_REPORT_COMMAND: [
+    recipe('Review environment report', 'Show my environment report', 'ENVIRONMENT_REPORT', 'REVIEW_ENVIRONMENT_REPORT', 'ENVIRONMENT_REPORT_COMMAND_REVIEW_REPORT'),
+    recipe('Review maintenance tasks', 'What maintenance is pending?', 'MAINTENANCE_STATUS', 'REVIEW_MAINTENANCE_STATUS', 'ENVIRONMENT_REPORT_COMMAND_REVIEW_MAINTENANCE'),
+  ],
   PROPERTY_BRIEFS_LIST: [
     recipe('Review home summary', 'Show my home summary', 'PROPERTY_SUMMARY', 'REVIEW_HOME_SUMMARY', 'PROPERTY_BRIEFS_REVIEW_SUMMARY'),
     recipe('Review the home timeline', 'Open my home timeline', 'HOME_TIMELINE_EVENTS', 'REVIEW_HOME_TIMELINE', 'PROPERTY_BRIEFS_REVIEW_TIMELINE'),

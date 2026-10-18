@@ -19,6 +19,8 @@ const OPERATION_BOUNDARIES: Partial<Record<AskOperationId, ReadonlySet<string>>>
   BREAK_EVEN_ANALYSIS: new Set(['break-even-boundary']),
   NEIGHBORHOOD_CHANGE_FEED: new Set(['neighborhood-change-boundary']),
   PAST_HAZARD_EXPOSURE: new Set(['past-hazard-boundary']),
+  ENVIRONMENT_REPORT: new Set(['environment-report-boundary']),
+  ENVIRONMENT_REPORT_COMMAND: new Set(['environment-report-boundary']),
   HOME_STATUS_BOARD: new Set(['status-board-boundary']),
   HOME_HABITS: new Set(['home-habits-boundary', 'home-habit-review-boundary']),
   HOME_HABIT_UPDATE: new Set(['home-habit-write-boundary']),
@@ -259,6 +261,16 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   // Record what the household observed after a matched hazard event (register P1 Home Risk Replay). Confirmation-gated, declared-action only; behind the route's reviewed-source-coverage gate.
   PAST_HAZARD_EXPOSURE: new Set(['past-hazard-record-outcome']),
   PAST_HAZARD_OUTCOME_COMMAND: new Set(['past-hazard-back']),
+  ENVIRONMENT_REPORT: new Set([
+    'environment-report-start-preparation',
+    'environment-report-step-complete',
+    'environment-report-step-skip',
+    'environment-report-step-reopen',
+    'environment-report-record-hvac-filter',
+    'environment-report-open-plant-care',
+    'environment-report-open-past-hazards',
+  ]),
+  ENVIRONMENT_REPORT_COMMAND: new Set(['environment-report-back']),
   // Refresh a renovation case's readiness, acknowledge or withdraw the risk of an open item, and reopen an item that was marked satisfied (register P1 Renovation Risk Advisor). Confirmation-gated, declared-action only; acknowledging a risk is owner-only.
   RENOVATION_READINESS_COMMAND: new Set(['renovation-readiness-back']),
   // Save, dismiss, stop pursuing and record the outcome of a savings or benefit opportunity (register P1 Savings & Benefits). Confirmation-gated, declared-action only; primary owner only. Sensitive facts and partner handoffs are not here.

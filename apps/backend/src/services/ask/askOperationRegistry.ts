@@ -224,6 +224,10 @@ export type AskOperationId =
   | 'PRICE_FINALIZATION_COMMAND'
   // Manage the proposals of a quote comparison (register P0 Quote Comparison): add, select, reject or return, remove. Confirmation-gated, reached only by declared actions on the review; never by fuzzy retrieval.
   | 'QUOTE_COMPARISON_COMMAND'
+  // Read the home's Environment Report: current weather, 10-day forecast, air quality, drought monitor status, FEMA flood zone and elevation, county radon potential, nearby EPA-tracked facilities, USDA hardiness zone and NOAA climate normals, active weather insights, and weather preparation checklists.
+  | 'ENVIRONMENT_REPORT'
+  // Start or update a weather preparation checklist step, or record the last HVAC filter change from the Environment Report. Confirmation-gated, declared-action only; never by fuzzy retrieval.
+  | 'ENVIRONMENT_REPORT_COMMAND'
   | 'HOME_UPGRADE_SCENARIOS'
   | 'DIY_PROJECTS'
   // DIY project guide (docs/architecture/ASK_COZY_DIY_PROJECT_GUIDE_PLAN.md): a read-only, launch-only walk through ONE DIY project, reached from the row action on DIY_PROJECTS.
@@ -490,6 +494,7 @@ export const ASK_INTERNAL_OPERATION_IDS: ReadonlySet<AskOperationId> = new Set<A
   'NEGOTIATION_SHIELD_BUYER_COMMAND',
   'PRICE_FINALIZATION_COMMAND',
   'QUOTE_COMPARISON_COMMAND',
+  'ENVIRONMENT_REPORT_COMMAND',
   'PROJECT_TRACKER_CREATE',
   'PROJECT_TRACKER_COMMAND',
   'HOME_PLANT_ADD',
@@ -841,6 +846,8 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   NEGOTIATION_SHIELD_BUYER_COMMAND: definition('NEGOTIATION_SHIELD_BUYER_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'negotiation-shield.buyer', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   PRICE_FINALIZATION_COMMAND: definition('PRICE_FINALIZATION_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'price-finalization.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   QUOTE_COMPARISON_COMMAND: definition('QUOTE_COMPARISON_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'quote-comparison.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
+  ENVIRONMENT_REPORT: definition('ENVIRONMENT_REPORT', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'environment-report.read', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'LIMITATION', 'BOUNDARY']),
+  ENVIRONMENT_REPORT_COMMAND: definition('ENVIRONMENT_REPORT_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'environment-report.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   NEGOTIATION_SHIELD_CASE_ATTACH: definition('NEGOTIATION_SHIELD_CASE_ATTACH', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'negotiation-shield.attach', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   NEGOTIATION_SHIELD_CASE_UPDATE: definition('NEGOTIATION_SHIELD_CASE_UPDATE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'negotiation-shield.update', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   NEGOTIATION_SHIELD_CASE_ANALYZE: definition('NEGOTIATION_SHIELD_CASE_ANALYZE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'negotiation-shield.analyze', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
@@ -1366,6 +1373,8 @@ const homeBriefingPattern = /\b(?:(?:my|the) home briefing|home briefing (?:sett
 const homeStatusBoardPattern = /\bstatus board\b|\b(?:condition|health|state) of (?:my|our|the) (?:appliances|systems|home systems|equipment|home items)\b|\bwhich (?:of (?:my|our) )?(?:appliances|systems|home systems|equipment)\b.{0,30}\b(?:need (?:attention|action)|should i (?:monitor|watch)|are in (?:good|bad|poor) (?:shape|condition))\b|\bhow are (?:my|our) (?:appliances|systems|home systems) (?:doing|holding up)\b/i;
 const pastHazardExposurePattern = /\b(?:home )?risk replay\b|\bpast (?:hazards?|storms?|floods?|flooding|wildfires?|disasters?|hazard exposure)\b|\b(?:has|have|did)\s+(?:my|this|our|the)\s+(?:home|house|property)\s+(?:ever\s+)?(?:been|gone)\s+(?:hit|affected|flooded|exposed|through)\b|\b(?:hazards?|disasters?|storms?|floods?|wildfires?|hurricanes?)\b.{0,30}\b(?:has|have)\b.{0,20}\b(?:home|house|property)\b.{0,15}\b(?:been|seen|faced)\b|\bin (?:a|the) flood zone\b/i;
 const pastHazardOtherIntentPattern = /\b(?:claim|file|filing|insurance|insurer|policy|coverage|report(?:ing)? (?:the )?damage)\b/i;
+const environmentReportPattern = /\benvironment(?:al)? report\b|\bweather preparation(?: checklist)?\b|\b(?:air quality|us aqi|drought (?:status|monitor|conditions?)|radon (?:zone|potential|level)|hardiness zone|climate normals?|epa (?:regulated )?facilities|10[- ]day (?:weather )?forecast)\b|\b(?:weather|air quality).{0,30}\bdrought\b/i;
+const environmentReportOtherIntentPattern = /\b(?:claim|file|filing|insurance|insurer|policy|coverage|home event radar|risk replay|plant advisor|plant care)\b/i;
 const breakEvenAnalysisPattern = /\b(?:break[- ]?even|breaks even|broken even)\b|\b(?:owning|ownership of)\b.{0,40}\bpays? off\b|\b(?:owning|ownership|home|house)\b.{0,40}\b(?:pay|pays|paid) for itself\b/i;
 const breakEvenOtherSensePattern = /\b(?:refinanc\w*|mortgage rate|loan estimate|solar|panels?|heat pump|insulation|upgrade|renovat\w*|remodel\w*|project|appliance|replace\w*|quote)\b/i;
 const sellHoldRentAnalysisPattern = /\b(?:should|could|would|will|is|when|benefit|better|compare|decide|planning|plan)\b.{0,55}\b(?:sell|selling|hold|holding|rent(?:ing)?(?: out)?|landlord)\b|\b(?:sell|selling)\b.{0,55}\b(?:hold|holding|rent(?:ing)?(?: out)?|landlord|good time|worth|benefit|better)\b|\b(?:hold|holding|rent(?:ing)?(?: out)?)\b.{0,55}\b(?:sell|selling|better|benefit)\b|\bwhat if\b.{0,40}\b(?:i|we)\b.{0,12}\b(?:rent(?:ed)?|sell|sold|hold|held)\b.{0,20}\b(?:it|the (?:home|house|property)|my (?:home|house|property))\b/i;
@@ -1678,6 +1687,9 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   }
   if (pastHazardExposurePattern.test(message) && !pastHazardOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('PAST_HAZARD_EXPOSURE', 0.96);
+  }
+  if (environmentReportPattern.test(message) && !environmentReportOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
+    return resolved('ENVIRONMENT_REPORT', 0.96);
   }
   if (neighborhoodChangePattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('NEIGHBORHOOD_CHANGE_FEED', 0.96);

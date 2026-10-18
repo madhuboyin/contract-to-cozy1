@@ -145,6 +145,8 @@ export const KNOWN_UNGOVERNED_OPERATIONS: readonly AskOperationId[] = [
   'NEGOTIATION_SHIELD_BUYER_COMMAND',
   'PRICE_FINALIZATION_COMMAND',
   'QUOTE_COMPARISON_COMMAND',
+  'ENVIRONMENT_REPORT',
+  'ENVIRONMENT_REPORT_COMMAND',
   'ROOM_PLANT_RECOMMENDATIONS',
   'OWNERSHIP_COST_COMMAND',
   // Tool starts written inside Ask (declared-action, confirmation-gated, skill-less): suggest habits, run the simulation, check a quote.

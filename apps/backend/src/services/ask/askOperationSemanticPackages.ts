@@ -216,6 +216,8 @@ const jobs: Record<AskOperationId, string> = {
   CAPTURE_WARRANTY_CONFIRM: 'record a warranty for something at the home directly from conversation',
   CAPTURE_EVIDENCE_CONFIRM: 'attach an already-uploaded document as evidence for something reported directly from conversation',
   SELL_HOLD_RENT_GOAL_CAPTURE: 'attach a durable sell/hold/rent decision thread from a stated intention to sell, directly from conversation',
+  ENVIRONMENT_REPORT: "review this home's Environment Report: current weather, 10-day forecast, air quality, drought monitor status, FEMA flood zone and elevation, county radon potential, nearby EPA-tracked facilities, USDA hardiness zone and NOAA climate normals, active weather insights, and weather preparation checklists",
+  ENVIRONMENT_REPORT_COMMAND: 'start or update a weather preparation checklist step or record the last HVAC filter change from the Environment Report, after confirmation',
 };
 
 const positives: Record<AskOperationId, readonly string[]> = {
@@ -421,6 +423,18 @@ const positives: Record<AskOperationId, readonly string[]> = {
   CAPTURE_WARRANTY_CONFIRM: ['We installed a new furnace last month, it has a 10 year warranty from Carrier', 'The water heater we replaced in June came with a 6 year manufacturer warranty'],
   CAPTURE_EVIDENCE_CONFIRM: ['I uploaded the invoice for that roof replacement', 'Here is the receipt for the water heater install I just mentioned'],
   SELL_HOLD_RENT_GOAL_CAPTURE: ["I'm thinking about selling next year", 'We might rent this place out once we move', 'Starting to consider putting the house on the market'],
+  ENVIRONMENT_REPORT: [
+    'Show my environment report',
+    'What are the weather, air quality, and drought conditions for my home?',
+    'What radon zone and hardiness zone is my home in?',
+    'Are there EPA regulated facilities near my home?',
+    'Shwo my environment report',
+  ],
+  ENVIRONMENT_REPORT_COMMAND: [
+    'Start the weather preparation checklist for this environment insight.',
+    'Mark this weather preparation step done.',
+    'Record the last HVAC filter change for this home.',
+  ],
 };
 
 const negatives: Record<AskOperationId, readonly string[]> = {
@@ -622,6 +636,8 @@ const negatives: Record<AskOperationId, readonly string[]> = {
   CAPTURE_WARRANTY_CONFIRM: ['What is my roof type?', 'Show my home timeline'],
   CAPTURE_EVIDENCE_CONFIRM: ['Show my home timeline', 'What is my roof type?'],
   SELL_HOLD_RENT_GOAL_CAPTURE: ['What is my roof type?', 'Should I sell, hold, or rent this home?'],
+  ENVIRONMENT_REPORT: ['Show my home event radar feed', 'Show my home risk replay', 'Show my plant care outlook'],
+  ENVIRONMENT_REPORT_COMMAND: ['Show my environment report', 'What maintenance is pending?', 'Show my seasonal maintenance tasks'],
 };
 
 const answerPositives: Record<AskOperationId, readonly string[]> = {
@@ -823,6 +839,8 @@ const answerPositives: Record<AskOperationId, readonly string[]> = {
   CAPTURE_WARRANTY_CONFIRM: ['The described warranty is ready to be saved to the canonical Living Home Record after confirmation.'],
   CAPTURE_EVIDENCE_CONFIRM: ['The referenced document is ready to be attached as evidence to the canonical home timeline entry after confirmation.'],
   SELL_HOLD_RENT_GOAL_CAPTURE: ['A sell, hold, or rent decision thread for this home is attached and will resume automatically next time.'],
+  ENVIRONMENT_REPORT: ['Current weather, 10-day forecast, US AQI air quality, drought status, flood zone, county radon zone, nearby EPA facilities, climate normals, and active weather preparation checklists are shown for this home.'],
+  ENVIRONMENT_REPORT_COMMAND: ['The weather preparation checklist or HVAC filter maintenance change is shown for review and saved only after you confirm.'],
 };
 
 const answerNegatives: Partial<Record<AskOperationId, readonly string[]>> = {
@@ -1024,6 +1042,13 @@ const answerNegatives: Partial<Record<AskOperationId, readonly string[]>> = {
   CAPTURE_WARRANTY_CONFIRM: ['The described event is added to the canonical home timeline', 'The stated property fact is saved to the canonical Living Home Record'],
   CAPTURE_EVIDENCE_CONFIRM: ['The described event is added to the canonical home timeline', 'The described warranty is ready to be saved to the canonical Living Home Record after confirmation.'],
   SELL_HOLD_RENT_GOAL_CAPTURE: ['The described warranty is ready to be saved to the canonical Living Home Record after confirmation.'],
+  ENVIRONMENT_REPORT: [
+    'Past hazard records matched to this home are listed without current weather or air quality',
+    'Care changes for tracked houseplants are listed without the full environment report',
+  ],
+  ENVIRONMENT_REPORT_COMMAND: [
+    'The environment report is shown without starting or updating a checklist or maintenance record',
+  ],
 };
 
 export const ASK_OPERATION_SEMANTIC_PACKAGES: Readonly<Record<AskOperationId, AskOperationSemanticPackage>> = Object.freeze(

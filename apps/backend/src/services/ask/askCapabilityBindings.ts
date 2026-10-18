@@ -90,6 +90,7 @@ export const CARD_ENTRY_BINDINGS = {
   // recommendations stay on each page behind a labelled link.
   oracle: { operationId: 'APPLIANCE_FAILURE_RISK', message: 'Show my appliance oracle' },
   budget: { operationId: 'MAINTENANCE_BUDGET_FORECAST', message: 'Show my budget planner' },
+  'environment-report': { operationId: 'ENVIRONMENT_REPORT', message: 'Show my environment report' },
 } as const satisfies Record<string, { operationId: AskOperationId; message: string }>;
 
 export interface AskCapabilityBinding {
@@ -158,6 +159,7 @@ export const ASK_ADVERTISED_CARD_READ_CAPABILITY_IDS = Object.freeze([
   'do-nothing-simulator',
   'oracle',
   'budget',
+  'environment-report',
 ] as const satisfies readonly (keyof typeof CARD_ENTRY_BINDINGS)[]);
 
 // The Claims card is allowed to carry a declared operation, but reviewed discovery requires a message-routable question. Keep the one exception
