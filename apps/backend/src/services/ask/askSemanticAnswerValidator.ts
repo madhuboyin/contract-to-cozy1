@@ -181,6 +181,14 @@ export function validateAskSemanticAnswerRelevance(input: {
       reasonCodes: ['CANONICAL_TYPED_ANSWER_CONTRACT_MATCH'],
     });
   }
+  if (input.operationId === 'ENVIRONMENT_REPORT'
+    && input.result.blocks.some((block) => block.type === 'ENVIRONMENT_REPORT')) {
+    return finish({
+      outcome: 'PASS', selectedOperationId: input.operationId, competingOperationId: null,
+      selectedOperationScore: 1, competingOperationScore: 0, questionAnswerScore: 1,
+      reasonCodes: ['CANONICAL_TYPED_ANSWER_CONTRACT_MATCH'],
+    });
+  }
   const definition = getAskOperationDefinition(input.operationId);
   const semantic = definition.semantic.languagePacks[language];
   if (!semantic) {

@@ -289,10 +289,8 @@ export function environmentReportFromView(
 
   let summaryTitle: string;
   let summaryLead: string;
-  let summaryTone: 'DEFAULT' | 'POSITIVE' | 'CAUTION' = 'DEFAULT';
 
   if (report.insights.length > 0) {
-    summaryTone = actionInsights.length > 0 ? 'CAUTION' : 'DEFAULT';
     const countsParts: string[] = [];
     if (actionInsights.length > 0) countsParts.push(plural(actionInsights.length, 'action-level alert'));
     if (watchInsights.length > 0) countsParts.push(plural(watchInsights.length, 'watch item'));
@@ -300,13 +298,11 @@ export function environmentReportFromView(
     summaryTitle = `${plural(report.insights.length, 'active environmental insight')} for ${locationLabel}`;
     summaryLead = `Your Environment Report has ${countsParts.join(', ')}: ${report.insights.map((i) => i.title).join('; ')}.`;
   } else if (conditionSourcesComplete) {
-    summaryTone = 'POSITIVE';
-    summaryTitle = `No immediate weather or air-quality alerts for ${locationLabel}`;
-    summaryLead = 'No heavy rain, freeze, heat, snow, high-wind, air-quality, or drought thresholds are triggered in the current forecast window.';
+    summaryTitle = `Environmental conditions for ${locationLabel}`;
+    summaryLead = 'Active weather, air quality, and drought feeds are within normal local ranges in the current forecast window.';
   } else {
-    summaryTone = 'DEFAULT';
     summaryTitle = `Environment Report for ${locationLabel} (partial source coverage)`;
-    summaryLead = 'No thresholds were triggered in the available feeds, though one or more condition sources could not be checked.';
+    summaryLead = 'Available environmental feeds are within normal ranges, though one or more condition sources could not be checked.';
   }
 
   const summaryActions: AskSummaryAction[] = [];
@@ -347,53 +343,40 @@ export function environmentReportFromView(
     });
   }
 
-  const sections: GroupedSection[] = [];
+  const structuredInsights = report.insights.map((insight) => {
+    const prep = insight.relatedIncident;
+    const rowActions: GroupedItemAction[] = [];
+    if (canContribute && !prep && insight.recommendedActions.length > 0) {
+      rowActions.push({
+        id: ENVIRONMENT_REPORT_ACTION_IDS.START_PREPARATION,
+        label: 'Start preparation checklist',
+        interactionType: 'MUTATE_RECORD',
+        message: ENVIRONMENT_REPORT_COMMAND_MESSAGES.START_PREPARATION,
+        operationId: 'ENVIRONMENT_REPORT_COMMAND',
+        style: 'PRIMARY',
+      });
+    }
+    return {
+      id: insight.id,
+      category: insight.category,
+      severity: insight.severity,
+      title: insight.title,
+      summary: insight.summary,
+      homeImplication: insight.homeImplication,
+      timeframe: insight.timeframe,
+      effectiveFrom: insight.effectiveFrom,
+      effectiveTo: insight.effectiveTo,
+      affectedSystems: insight.affectedSystems.slice(0, 12),
+      recommendedActions: insight.recommendedActions.slice(0, 12),
+      source: insight.source,
+      relatedIncidentId: prep?.id ?? null,
+      isOfficialAlert: prep?.isOfficialAlert ?? false,
+      entityType: ENVIRONMENT_INSIGHT_ENTITY_TYPE,
+      entityId: insight.id,
+      actions: rowActions,
+    };
+  });
 
-  // 1. Active insights
-  if (report.insights.length > 0) {
-    const insightItems: GroupedItem[] = report.insights.map((insight) => {
-      const prep = insight.relatedIncident;
-      const detailedPrep = prep ? activePreparations[prep.id] : undefined;
-      const prepText = prep
-        ? detailedPrep
-          ? `Checklist: ${detailedPrep.progress.completed}/${detailedPrep.progress.total} steps completed (${prep.status === 'MITIGATED' ? 'Completed' : 'In progress'}).`
-          : `Checklist: ${prep.status === 'MITIGATED' ? 'Completed' : 'In progress'}.`
-        : insight.recommendedActions.length > 0
-          ? `Recommended steps: ${insight.recommendedActions.slice(0, 3).join('; ')}.`
-          : '';
-      const systemsText = insight.affectedSystems.length > 0 ? `Affected systems: ${insight.affectedSystems.join(', ')}.` : '';
-      const rowActions: GroupedItemAction[] = [];
-      if (canContribute && !prep && insight.recommendedActions.length > 0) {
-        rowActions.push({
-          id: ENVIRONMENT_REPORT_ACTION_IDS.START_PREPARATION,
-          label: 'Start preparation checklist',
-          interactionType: 'MUTATE_RECORD',
-          message: ENVIRONMENT_REPORT_COMMAND_MESSAGES.START_PREPARATION,
-          operationId: 'ENVIRONMENT_REPORT_COMMAND',
-          style: 'PRIMARY',
-        });
-      }
-      return {
-        id: insight.id,
-        title: insight.title,
-        description: [insight.summary, insight.homeImplication, systemsText, prepText].filter(Boolean).join(' '),
-        meta: [INSIGHT_SEVERITY_LABELS[insight.severity], insight.timeframe, insight.source].filter(Boolean),
-        badgeLabel: INSIGHT_SEVERITY_LABELS[insight.severity],
-        status: insight.severity.toUpperCase(),
-        href: null,
-        entityType: ENVIRONMENT_INSIGHT_ENTITY_TYPE,
-        actions: rowActions,
-      };
-    });
-    sections.push({
-      id: 'active-insights',
-      title: `Active Weather & Environment Insights (${insightItems.length})`,
-      count: insightItems.length,
-      items: insightItems,
-    });
-  }
-
-  // 2. Active Weather Preparation Checklists (inline step controls)
   const preparationEntries = report.insights
     .map((insight) => {
       const incidentId = insight.relatedIncident?.id;
@@ -402,9 +385,15 @@ export function environmentReportFromView(
     })
     .filter((entry): entry is { insight: EnvironmentInsight; preparation: WeatherPreparationPlan } => entry !== null);
 
-  for (const { insight, preparation } of preparationEntries) {
-    const prepItems: GroupedItem[] = preparation.items.map((item) => {
-      const statusBadge = item.status === 'COMPLETED' ? 'Done' : item.status === 'CANCELED' ? 'Not needed' : 'To do';
+  const structuredPreparations = preparationEntries.map(({ insight, preparation }) => ({
+    id: preparation.id,
+    insightId: insight.id,
+    title: preparation.title || insight.title,
+    summary: preparation.summary || insight.summary,
+    timeframe: preparation.timeframe || insight.timeframe,
+    status: preparation.status,
+    progress: preparation.progress,
+    items: preparation.items.slice(0, 30).map((item) => {
       const stepEntityId = buildWeatherPreparationStepEntityId(preparation.id, item.id);
       const itemActions: GroupedItemAction[] = [];
       if (canContribute) {
@@ -439,350 +428,305 @@ export function environmentReportFromView(
         }
       }
       return {
-        id: stepEntityId,
-        title: item.label,
-        description: `${preparation.status === 'MITIGATED' ? 'Checklist completed' : 'Active checklist'} · ${statusBadge}`,
-        meta: [statusBadge, insight.title],
-        badgeLabel: statusBadge,
-        status: item.status,
-        href: null,
+        id: item.id,
+        entityId: stepEntityId,
         entityType: WEATHER_PREPARATION_ITEM_ENTITY_TYPE,
+        label: item.label,
+        status: item.status,
+        sortOrder: item.sortOrder,
         actions: itemActions,
       };
-    });
-    sections.push({
-      id: `weather-preparation-${preparation.id}`,
-      title: `Preparation Checklist: ${insight.title} (${preparation.progress.completed}/${preparation.progress.total} done)`,
-      count: prepItems.length,
-      items: prepItems,
-    });
-  }
+    }),
+  }));
 
-  // 3. Current Conditions & Short-Range Outlook (Weather, Air Quality, Drought)
-  const conditionItems: GroupedItem[] = [];
-  if (report.sections.weather.status === 'ok' && report.sections.weather.data) {
-    const w = report.sections.weather.data;
-    const tenDayHighs = w.tenDayForecast.map((d) => d.tempMaxF);
-    const tenDayLows = w.tenDayForecast.map((d) => d.tempMinF);
-    const totalTenDayRain = w.tenDayForecast.reduce((sum, d) => sum + (d.precipitationSumIn || 0), 0);
-    const forecastSummary = w.tenDayForecast.length > 0
-      ? `10-day range: ${Math.round(Math.min(...tenDayLows))}°F to ${Math.round(Math.max(...tenDayHighs))}°F, ${totalTenDayRain.toFixed(2)} in. total forecast precipitation.`
-      : '';
-    conditionItems.push({
-      id: 'section-weather',
-      title: 'Weather & 10-Day Forecast',
-      description: [
-        `Feels like ${Math.round(w.current.apparentTemperatureF)}°F, humidity ${Math.round(w.current.humidityPercent)}%, wind ${Math.round(w.current.windSpeedMph)} mph, current precipitation ${w.current.precipitationIn.toFixed(2)} in.`,
-        forecastSummary,
-      ].filter(Boolean).join(' '),
-      meta: [
-        `${Math.round(w.current.temperatureF)}°F`,
-        weatherConditionLabel(w.current.weatherCode),
-        `Wind ${Math.round(w.current.windSpeedMph)} mph`,
-      ],
-      badgeLabel: `${Math.round(w.current.temperatureF)}°F`,
-      href: null,
-    });
-  } else {
-    const reason = sectionReason(report.sections.weather);
-    conditionItems.push({
-      id: 'section-weather',
-      title: 'Weather & 10-Day Forecast',
-      description: `Weather forecast and 30-day history could not be loaded (${unavailableReasonText(reason)}).`,
-      meta: ['Unavailable', unavailableReasonText(reason)],
-      badgeLabel: 'Unavailable',
-      href: null,
-    });
-  }
-
-  if (report.sections.airQuality.status === 'ok' && report.sections.airQuality.data) {
-    const aq = report.sections.airQuality.data;
-    const cur = aq.current;
-    const maxHistoryAqi = aq.history.reduce((max, day) => (day.avgAqi != null && day.avgAqi > max ? day.avgAqi : max), 0);
-    const catLabel = cur ? aqiCategoryLabel(cur.aqi) : 'No current reading';
-    conditionItems.push({
-      id: 'section-air-quality',
-      title: 'Air Quality (US AQI)',
-      description: cur
-        ? `PM2.5: ${cur.pm2_5 !== null ? `${cur.pm2_5.toFixed(1)} µg/m³` : '—'}, PM10: ${cur.pm10 !== null ? `${cur.pm10.toFixed(1)} µg/m³` : '—'}.${maxHistoryAqi > 0 ? ` Highest daily average AQI in history window: ${Math.round(maxHistoryAqi)}.` : ''}`
-        : 'Current air quality readings were not reported for this coordinate.',
-      meta: cur ? [catLabel, `AQI ${cur.aqi ?? '—'}`] : ['No current reading'],
-      badgeLabel: cur?.aqi !== null && cur?.aqi !== undefined ? `AQI ${cur.aqi}` : 'Available',
-      href: null,
-    });
-  } else {
-    const reason = sectionReason(report.sections.airQuality);
-    conditionItems.push({
-      id: 'section-air-quality',
-      title: 'Air Quality (US AQI)',
-      description: `Air quality readings could not be loaded (${unavailableReasonText(reason)}).`,
-      meta: ['Unavailable', unavailableReasonText(reason)],
-      badgeLabel: 'Unavailable',
-      href: null,
-    });
-  }
-
-  if (report.sections.drought.status === 'ok' && report.sections.drought.data) {
-    const d = report.sections.drought.data;
-    const dominantCat = d.current?.dominantCategory ?? 'None';
-    const label = DROUGHT_CATEGORY_LABELS[dominantCat] ?? dominantCat;
-    conditionItems.push({
-      id: 'section-drought',
-      title: 'U.S. Drought Monitor',
-      description: `County status (${report.location?.countyFips ? `FIPS ${report.location.countyFips}` : 'local county'}): ${label} across ${d.history.length} recent weekly snapshots.`,
-      meta: [label, `${d.history.length} weekly snapshots`],
-      badgeLabel: dominantCat,
-      href: null,
-    });
-  } else {
-    const reason = sectionReason(report.sections.drought);
-    conditionItems.push({
-      id: 'section-drought',
-      title: 'U.S. Drought Monitor',
-      description: `County drought status could not be loaded (${unavailableReasonText(reason)}).`,
-      meta: ['Unavailable', unavailableReasonText(reason)],
-      badgeLabel: 'Unavailable',
-      href: null,
-    });
-  }
-
-  sections.push({
-    id: 'current-conditions',
-    title: 'Current Conditions & Short-Range Outlook',
-    count: conditionItems.length,
-    items: conditionItems,
+  const structuredQuestions = report.questions.slice(0, 15).map((question) => {
+    const isHvacFilter =
+      question.field === 'hvacFilterLastCompletedDate'
+      && report.applicability?.hvacFilterMaintenance?.status !== 'NOT_APPLICABLE';
+    const actions: GroupedItemAction[] = isHvacFilter && canContribute
+      ? [
+          {
+            id: ENVIRONMENT_REPORT_ACTION_IDS.RECORD_HVAC_FILTER,
+            label: 'Record HVAC filter change',
+            interactionType: 'MUTATE_RECORD',
+            message: ENVIRONMENT_REPORT_COMMAND_MESSAGES.RECORD_HVAC_FILTER,
+            operationId: 'ENVIRONMENT_REPORT_COMMAND',
+            style: 'SECONDARY',
+          },
+        ]
+      : [];
+    return {
+      id: question.id,
+      insightId: question.insightId,
+      field: question.field,
+      prompt: question.prompt,
+      reason: question.reason,
+      entityType: isHvacFilter ? ENVIRONMENT_HVAC_FILTER_ENTITY_TYPE : null,
+      entityId: isHvacFilter ? propertyId : `question-${question.id}`,
+      actions,
+    };
   });
 
-  // 4. Environmental Hazards & Climate Normals (Flood, Radon, EPA ECHO, Climate, Long-Term Hazard Context, Plant Care)
-  const hazardClimateItems: GroupedItem[] = [];
+  const structuredPlantAdvisorModules = report.plantAdvisorModules.slice(0, 10).map((mod) => ({
+    id: mod.id,
+    trigger: mod.trigger,
+    relatedInsightId: mod.relatedInsightId,
+    title: mod.title,
+    summary: mod.summary,
+    contextLevel: mod.contextLevel,
+    plantNames: mod.plantNames.slice(0, 20),
+    roomNames: mod.roomNames.slice(0, 20),
+    actions: [
+      {
+        id: ENVIRONMENT_REPORT_ACTION_IDS.OPEN_PLANT_CARE,
+        label: 'Review plant care for this weather',
+        interactionType: 'CONVERSATION_CONTINUE' as const,
+        message: 'Show my plant care outlook',
+        operationId: 'PLANT_CARE_OUTLOOK',
+        style: 'SECONDARY' as const,
+      },
+    ],
+  }));
 
-  if (report.sections.floodElevation.status === 'ok' && report.sections.floodElevation.data) {
-    const fl = report.sections.floodElevation.data;
-    const zoneLabel = fl.femaFloodZone ? `Zone ${fl.femaFloodZone}` : 'Unmapped / Zone not returned';
-    const elevLabel = fl.elevationFeet !== null ? `${Math.round(fl.elevationFeet)} ft elevation` : 'Elevation unavailable';
-    hazardClimateItems.push({
-      id: 'section-flood-elevation',
-      title: 'Flood Zone & Elevation (FEMA NFHL / USGS 3DEP)',
-      description: [
-        fl.femaFloodZone
-          ? `FEMA flood zone ${fl.femaFloodZone}${fl.femaZoneSubtype ? ` (${fl.femaZoneSubtype})` : ''}.`
-          : 'FEMA NFHL did not return a mapped flood zone polygon for these coordinates.',
-        fl.elevationFeet !== null ? `Ground elevation is approximately ${Math.round(fl.elevationFeet)} feet above sea level.` : '',
-      ].filter(Boolean).join(' '),
-      meta: [zoneLabel, elevLabel],
-      badgeLabel: zoneLabel,
-      href: null,
-    });
-  } else {
-    const reason = sectionReason(report.sections.floodElevation);
-    hazardClimateItems.push({
-      id: 'section-flood-elevation',
-      title: 'Flood Zone & Elevation (FEMA NFHL / USGS 3DEP)',
-      description: `Flood zone and elevation could not be loaded (${unavailableReasonText(reason)}).`,
-      meta: ['Unavailable', unavailableReasonText(reason)],
-      badgeLabel: 'Unavailable',
-      href: null,
-    });
-  }
+  const rawLongTerm = report.longTermHazardContext;
+  const checkedThroughIso = rawLongTerm?.coverage?.checkedThrough
+    ? rawLongTerm.coverage.checkedThrough instanceof Date
+      ? rawLongTerm.coverage.checkedThrough.toISOString()
+      : String(rawLongTerm.coverage.checkedThrough)
+    : null;
 
-  if (report.sections.radon.status === 'ok' && report.sections.radon.data) {
-    const r = report.sections.radon.data;
-    const zoneBadge = r.zone !== null ? `Zone ${r.zone}` : 'Unclassified';
-    hazardClimateItems.push({
-      id: 'section-radon',
-      title: 'County Radon Potential (EPA)',
-      description: r.zoneDescription,
-      meta: [zoneBadge, ...(r.countyName ? [`${r.countyName}${r.stateName ? `, ${r.stateName}` : ''}`] : [])],
-      badgeLabel: zoneBadge,
-      href: null,
-    });
-  } else {
-    const reason = sectionReason(report.sections.radon);
-    hazardClimateItems.push({
-      id: 'section-radon',
-      title: 'County Radon Potential (EPA)',
-      description: `County radon zone could not be loaded (${unavailableReasonText(reason)}).`,
-      meta: ['Unavailable', unavailableReasonText(reason)],
-      badgeLabel: 'Unavailable',
-      href: null,
-    });
-  }
+  const structuredLongTermHazardContext = rawLongTerm
+    ? {
+        state: rawLongTerm.coverage?.state ?? 'UNKNOWN',
+        checkedThrough: checkedThroughIso,
+        emptyState: rawLongTerm.emptyState ?? null,
+        hazards: (rawLongTerm.hazards ?? []).slice(0, 20).map((h) => ({
+          propertyMatchId: h.propertyMatchId,
+          hazardType: h.hazardType,
+          hazardLabel: h.hazardLabel,
+          title: h.title,
+          factualSummary: h.factualSummary ?? null,
+          lifecycleStatus: h.lifecycleStatus,
+          precision: h.geography?.precision ?? null,
+          distanceMiles: h.geography?.distanceMiles ?? null,
+          provider: h.source?.provider ?? null,
+        })),
+        actions: (rawLongTerm.hazards?.length ?? 0) > 0
+          ? [
+              {
+                id: ENVIRONMENT_REPORT_ACTION_IDS.OPEN_PAST_HAZARDS,
+                label: 'Review past hazard exposure',
+                interactionType: 'CONVERSATION_CONTINUE' as const,
+                message: 'Show my past hazard exposure',
+                operationId: 'PAST_HAZARD_EXPOSURE',
+                style: 'SECONDARY' as const,
+              },
+            ]
+          : [],
+      }
+    : null;
 
-  if (report.sections.hazards.status === 'ok' && report.sections.hazards.data) {
-    const hz = report.sections.hazards.data;
-    const topNames = hz.facilities
-      .slice(0, 3)
-      .map((f) => (f.distanceMiles !== null ? `${f.name} (${f.distanceMiles.toFixed(1)} mi)` : f.name))
-      .join(', ');
-    hazardClimateItems.push({
-      id: 'section-hazards',
-      title: `Nearby Regulated Facilities (EPA ECHO, ${hz.searchRadiusMiles}-mi radius)`,
-      description: hz.totalFacilitiesInRadius > 0
-        ? `${plural(hz.totalFacilitiesInRadius, 'EPA-tracked facility', 'EPA-tracked facilities')} within ${hz.searchRadiusMiles} miles.${topNames ? ` Closest: ${topNames}.` : ''}`
-        : `No EPA ECHO regulated facilities were returned within ${hz.searchRadiusMiles} miles of this home.`,
-      meta: [`${plural(hz.totalFacilitiesInRadius, 'facility', 'facilities')}`, `${hz.searchRadiusMiles}-mi radius`],
-      badgeLabel: `${hz.totalFacilitiesInRadius}`,
-      href: null,
-    });
-  } else {
-    const reason = sectionReason(report.sections.hazards);
-    hazardClimateItems.push({
-      id: 'section-hazards',
-      title: 'Nearby Regulated Facilities (EPA ECHO)',
-      description: `Nearby facility records could not be loaded (${unavailableReasonText(reason)}).`,
-      meta: ['Unavailable', unavailableReasonText(reason)],
-      badgeLabel: 'Unavailable',
-      href: null,
-    });
-  }
+  const weatherSection = report.sections.weather;
+  const airQualitySection = report.sections.airQuality;
+  const droughtSection = report.sections.drought;
+  const floodElevationSection = report.sections.floodElevation;
+  const radonSection = report.sections.radon;
+  const hazardsSection = report.sections.hazards;
+  const climateSection = report.sections.climate;
 
-  if (report.sections.climate.status === 'ok' && report.sections.climate.data) {
-    const cl = report.sections.climate.data;
-    const hzData = cl.hardinessZone.status === 'ok' ? cl.hardinessZone.data : null;
-    const normalsData = cl.normals.status === 'ok' ? cl.normals.data : null;
-    const hzLabel = hzData?.zone ? `Zone ${hzData.zone.toUpperCase()}` : 'Hardiness zone unavailable';
-    const normalsText = normalsData
-      ? `NOAA 1991–2020 normals (${normalsData.stationName}): ${normalsData.annualHeatingDegreeDays ?? '—'} heating degree days, ${normalsData.annualCoolingDegreeDays ?? '—'} cooling degree days.`
-      : 'NOAA 30-year station normals were not returned for this ZIP code.';
-    hazardClimateItems.push({
-      id: 'section-climate',
-      title: 'USDA Hardiness Zone & Climate Normals',
-      description: normalsText,
-      meta: [
-        hzLabel,
-        ...(hzData?.temperatureRangeF ? [`${hzData.temperatureRangeF}°F extreme minimum`] : []),
-      ],
-      badgeLabel: hzLabel,
-      href: null,
-    });
-  } else {
-    const reason = sectionReason(report.sections.climate);
-    hazardClimateItems.push({
-      id: 'section-climate',
-      title: 'USDA Hardiness Zone & Climate Normals',
-      description: `Hardiness zone and climate normals could not be loaded (${unavailableReasonText(reason)}).`,
-      meta: ['Unavailable', unavailableReasonText(reason)],
-      badgeLabel: 'Unavailable',
-      href: null,
-    });
-  }
-
-  if (report.longTermHazardContext?.hazards?.length > 0) {
-    const topHazards = report.longTermHazardContext.hazards
-      .slice(0, 3)
-      .map((h) => `${h.title} (${h.hazardLabel})`)
-      .join('; ');
-    hazardClimateItems.push({
-      id: 'section-long-term-hazards',
-      title: 'Long-Term Hazard Context (Home Risk Replay)',
-      description: `Matched county/ZIP hazard history: ${topHazards}.`,
-      meta: [plural(report.longTermHazardContext.hazards.length, 'recorded hazard match', 'recorded hazard matches')],
-      badgeLabel: `${report.longTermHazardContext.hazards.length}`,
-      href: null,
-      actions: [
-        {
-          id: ENVIRONMENT_REPORT_ACTION_IDS.OPEN_PAST_HAZARDS,
-          label: 'Review past hazard exposure',
-          interactionType: 'CONVERSATION_CONTINUE',
-          message: 'Show my past hazard exposure',
-          operationId: 'PAST_HAZARD_EXPOSURE',
-          style: 'SECONDARY',
-        },
-      ],
-    });
-  }
-
-  if (report.plantAdvisorModules.length > 0) {
-    const mod = report.plantAdvisorModules[0]!;
-    hazardClimateItems.push({
-      id: 'section-plant-weather',
-      title: mod.title,
-      description: mod.summary,
-      meta: ['Plant care weather guidance', ...(mod.plantNames.length > 0 ? [mod.plantNames.slice(0, 3).join(', ')] : [])],
-      badgeLabel: 'Plant care',
-      href: null,
-      actions: [
-        {
-          id: ENVIRONMENT_REPORT_ACTION_IDS.OPEN_PLANT_CARE,
-          label: 'Review plant care for this weather',
-          interactionType: 'CONVERSATION_CONTINUE',
-          message: 'Show my plant care outlook',
-          operationId: 'PLANT_CARE_OUTLOOK',
-          style: 'SECONDARY',
-        },
-      ],
-    });
-  }
-
-  sections.push({
-    id: 'hazards-and-climate',
-    title: 'Environmental Hazards & Climate Normals',
-    count: hazardClimateItems.length,
-    items: hazardClimateItems,
-  });
-
-  // 5. Missing resilience / maintenance details that sharpen active insights
-  if (report.questions.length > 0) {
-    const questionItems: GroupedItem[] = report.questions.map((question) => {
-      const isHvacFilter =
-        question.field === 'hvacFilterLastCompletedDate'
-        && report.applicability?.hvacFilterMaintenance?.status !== 'NOT_APPLICABLE';
-      const actions: GroupedItemAction[] = isHvacFilter && canContribute
-        ? [
-            {
-              id: ENVIRONMENT_REPORT_ACTION_IDS.RECORD_HVAC_FILTER,
-              label: 'Record HVAC filter change',
-              interactionType: 'MUTATE_RECORD',
-              message: ENVIRONMENT_REPORT_COMMAND_MESSAGES.RECORD_HVAC_FILTER,
-              operationId: 'ENVIRONMENT_REPORT_COMMAND',
-              style: 'SECONDARY',
+  const environmentReportBlock: Extract<AskPresentationBlock, { type: 'ENVIRONMENT_REPORT' }> = {
+    type: 'ENVIRONMENT_REPORT',
+    id: 'environment-report-dashboard',
+    title: summaryTitle,
+    summary: [summaryLead, ...conditionHighlights].filter(Boolean).join(' '),
+    generatedAt: report.generatedAt,
+    property: {
+      name: report.property.name ?? null,
+      address: report.property.address,
+      city: report.property.city,
+      state: report.property.state,
+      zipCode: report.property.zipCode,
+    },
+    location: {
+      latitude: report.location.latitude,
+      longitude: report.location.longitude,
+      countyFips: report.location.countyFips,
+      zipCode: report.location.zipCode,
+    },
+    conditionSourcesComplete,
+    insights: structuredInsights,
+    preparations: structuredPreparations,
+    questions: structuredQuestions,
+    plantAdvisorModules: structuredPlantAdvisorModules,
+    longTermHazardContext: structuredLongTermHazardContext,
+    sections: {
+      weather: weatherSection.status === 'ok'
+        ? {
+            status: 'ok',
+            fetchedAt: weatherSection.fetchedAt,
+            data: {
+              current: {
+                temperatureF: weatherSection.data.current.temperatureF,
+                apparentTemperatureF: weatherSection.data.current.apparentTemperatureF,
+                humidityPercent: weatherSection.data.current.humidityPercent,
+                windSpeedMph: weatherSection.data.current.windSpeedMph,
+                precipitationIn: weatherSection.data.current.precipitationIn,
+                weatherCode: weatherSection.data.current.weatherCode,
+                isDay: weatherSection.data.current.isDay ?? true,
+                observedAt: weatherSection.data.current.observedAt,
+              },
+              hourly: (weatherSection.data.hourly ?? []).slice(0, 48).map((p) => ({
+                time: p.time,
+                temperatureF: p.temperatureF,
+                precipitationProbabilityPercent: p.precipitationProbabilityPercent ?? 0,
+                weatherCode: p.weatherCode,
+              })),
+              tenDayForecast: (weatherSection.data.tenDayForecast ?? []).slice(0, 14).map((d) => ({
+                date: d.date,
+                tempMaxF: d.tempMaxF,
+                tempMinF: d.tempMinF,
+                precipitationSumIn: d.precipitationSumIn ?? 0,
+                weatherCode: d.weatherCode,
+              })),
+              thirtyDayHistory: (weatherSection.data.thirtyDayHistory ?? []).slice(0, 35).map((h) => ({
+                date: h.date,
+                tempMaxF: h.tempMaxF,
+                tempMinF: h.tempMinF,
+                precipitationSumIn: h.precipitationSumIn ?? 0,
+              })),
             },
-          ]
-        : [];
-      return {
-        id: isHvacFilter ? propertyId : `question-${question.id}`,
-        title: question.prompt,
-        description: question.reason,
-        meta: ['Missing home resilience detail', readableCode(question.field)],
-        badgeLabel: 'Refines alert',
-        href: null,
-        entityType: isHvacFilter ? ENVIRONMENT_HVAC_FILTER_ENTITY_TYPE : null,
-        actions,
-      };
-    });
-    sections.push({
-      id: 'environment-questions',
-      title: `Home Details That Refine These Alerts (${questionItems.length})`,
-      count: questionItems.length,
-      items: questionItems,
-    });
-  }
+          }
+        : { status: 'unavailable', reason: weatherSection.reason },
+      airQuality: airQualitySection.status === 'ok'
+        ? {
+            status: 'ok',
+            fetchedAt: airQualitySection.fetchedAt,
+            data: {
+              current: {
+                aqi: airQualitySection.data.current.aqi,
+                pm2_5: airQualitySection.data.current.pm2_5,
+                pm10: airQualitySection.data.current.pm10,
+                observedAt: airQualitySection.data.current.observedAt,
+              },
+              history: (airQualitySection.data.history ?? []).slice(0, 35).map((h) => ({
+                date: h.date,
+                avgAqi: h.avgAqi,
+                avgPm2_5: h.avgPm2_5,
+              })),
+            },
+          }
+        : { status: 'unavailable', reason: airQualitySection.reason },
+      drought: droughtSection.status === 'ok'
+        ? {
+            status: 'ok',
+            fetchedAt: droughtSection.fetchedAt,
+            data: {
+              current: droughtSection.data.current
+                ? {
+                    date: droughtSection.data.current.date,
+                    dominantCategory: droughtSection.data.current.dominantCategory,
+                    percentArea: droughtSection.data.current.percentArea,
+                  }
+                : null,
+              history: (droughtSection.data.history ?? []).slice(0, 16).map((w) => ({
+                date: w.date,
+                dominantCategory: w.dominantCategory,
+                percentArea: w.percentArea,
+              })),
+            },
+          }
+        : { status: 'unavailable', reason: droughtSection.reason },
+      floodElevation: floodElevationSection.status === 'ok'
+        ? {
+            status: 'ok',
+            fetchedAt: floodElevationSection.fetchedAt,
+            data: {
+              femaFloodZone: floodElevationSection.data.femaFloodZone,
+              femaZoneSubtype: floodElevationSection.data.femaZoneSubtype,
+              elevationFeet: floodElevationSection.data.elevationFeet,
+            },
+          }
+        : { status: 'unavailable', reason: floodElevationSection.reason },
+      radon: radonSection.status === 'ok'
+        ? {
+            status: 'ok',
+            fetchedAt: radonSection.fetchedAt,
+            data: {
+              zone: radonSection.data.zone,
+              zoneDescription: radonSection.data.zoneDescription,
+              countyName: radonSection.data.countyName,
+              stateName: radonSection.data.stateName,
+            },
+          }
+        : { status: 'unavailable', reason: radonSection.reason },
+      hazards: hazardsSection.status === 'ok'
+        ? {
+            status: 'ok',
+            fetchedAt: hazardsSection.fetchedAt,
+            data: {
+              facilities: (hazardsSection.data.facilities ?? []).slice(0, 25).map((f) => ({
+                registryId: f.registryId,
+                name: f.name,
+                address: f.address,
+                programs: (f.programs ?? []).slice(0, 12),
+                complianceStatus: f.complianceStatus,
+                significantNoncompliance: f.significantNoncompliance,
+                inspectionCount: f.inspectionCount,
+                lastInspectionDate: f.lastInspectionDate,
+                penaltyCount: f.penaltyCount,
+                latitude: f.latitude,
+                longitude: f.longitude,
+                distanceMiles: f.distanceMiles,
+              })),
+              totalFacilitiesInRadius: hazardsSection.data.totalFacilitiesInRadius,
+              totalPenaltiesInRadius: hazardsSection.data.totalPenaltiesInRadius,
+              searchRadiusMiles: hazardsSection.data.searchRadiusMiles,
+            },
+          }
+        : { status: 'unavailable', reason: hazardsSection.reason },
+      climate: climateSection.status === 'ok'
+        ? {
+            status: 'ok',
+            fetchedAt: climateSection.fetchedAt,
+            data: {
+              normals: climateSection.data.normals.status === 'ok'
+                ? {
+                    status: 'ok',
+                    fetchedAt: climateSection.data.normals.fetchedAt,
+                    data: {
+                      stationId: climateSection.data.normals.data.stationId,
+                      stationName: climateSection.data.normals.data.stationName,
+                      monthly: (climateSection.data.normals.data.monthly ?? []).slice(0, 12).map((m) => ({
+                        month: m.month,
+                        avgTempF: m.avgTempF,
+                        avgHighF: m.avgHighF,
+                        avgLowF: m.avgLowF,
+                      })),
+                      annualHeatingDegreeDays: climateSection.data.normals.data.annualHeatingDegreeDays,
+                      annualCoolingDegreeDays: climateSection.data.normals.data.annualCoolingDegreeDays,
+                    },
+                  }
+                : { status: 'unavailable', reason: climateSection.data.normals.reason },
+              hardinessZone: climateSection.data.hardinessZone.status === 'ok'
+                ? {
+                    status: 'ok',
+                    fetchedAt: climateSection.data.hardinessZone.fetchedAt,
+                    data: {
+                      zone: climateSection.data.hardinessZone.data.zone,
+                      temperatureRangeF: climateSection.data.hardinessZone.data.temperatureRangeF,
+                    },
+                  }
+                : { status: 'unavailable', reason: climateSection.data.hardinessZone.reason },
+            },
+          }
+        : { status: 'unavailable', reason: climateSection.reason },
+    },
+    actions: summaryActions,
+  };
 
-  const totalSectionItems = sections.reduce((sum, s) => sum + s.count, 0);
   const hasLimitations = unavailableSections.length > 0 || featureApplicability?.status === 'UNKNOWN';
   const blocks: AskPresentationBlock[] = [
-    {
-      type: 'SUMMARY',
-      id: 'environment-report-summary',
-      title: summaryTitle,
-      body: [summaryLead, ...conditionHighlights].filter(Boolean).join(' '),
-      tone: summaryTone,
-      actions: summaryActions,
-    },
-    {
-      type: 'GROUPED_LIST',
-      id: 'environment-report-details',
-      title: 'Environment Report Details',
-      filters: [],
-      sections,
-      collection: collectionDescriptor({
-        sourceTotal: totalSectionItems,
-        fetchedCount: totalSectionItems,
-        sections,
-        nextPageAvailable: false,
-      }),
-      actions: [],
-    },
+    environmentReportBlock,
     {
       type: 'EVIDENCE',
       id: 'environment-report-evidence',

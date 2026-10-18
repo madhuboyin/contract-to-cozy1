@@ -29,7 +29,7 @@ export function collectionDescriptor(input: {
 }
 
 type SectionLike = { count: number; offset?: number; items: readonly unknown[] };
-type BlockLike = { type: string; collection?: unknown; sections?: readonly SectionLike[] };
+type BlockLike = { type: string; collection?: unknown; sections?: readonly SectionLike[] | unknown };
 
 /**
  * Presentation Quality 5: a producer that did not declare its own collection still withholds rows in two ways, and both are visible in
@@ -45,8 +45,8 @@ type BlockLike = { type: string; collection?: unknown; sections?: readonly Secti
  * total should declare it (see collectionDescriptor above).
  */
 export function withDerivedCollectionDescriptor<T extends BlockLike>(block: T): T {
-  if (block.type !== 'GROUPED_LIST' || block.collection || !block.sections || block.sections.length === 0) return block;
-  const sections = block.sections;
+  if (block.type !== 'GROUPED_LIST' || block.collection || !Array.isArray(block.sections) || block.sections.length === 0) return block;
+  const sections = block.sections as readonly SectionLike[];
   const delivered = sections.reduce((sum, section) => sum + section.items.length, 0);
   const counted = sections.reduce((sum, section) => sum + Math.max(section.count, section.items.length), 0);
   if (counted <= delivered) return block;

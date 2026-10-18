@@ -37,6 +37,7 @@ function filterBlockActions(block: AskPresentationBlock, householdRole: Househol
     case 'ERROR_STATE':
     case 'PROGRESS':
     case 'TASK_GUIDE':
+    case 'ENVIRONMENT_REPORT':
       return { ...block, actions: filterActions(block.actions, householdRole) } as AskPresentationBlock;
     case 'BOUNDARY':
       return { ...block, actions: filterActions(block.actions ?? [], householdRole) } as AskPresentationBlock;

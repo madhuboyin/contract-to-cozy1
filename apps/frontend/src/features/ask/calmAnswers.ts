@@ -59,7 +59,7 @@ export function isCalmAdopter(execution: Pick<AskExecutionResponse, 'blocks'>): 
     block.id === 'maintenance-groups' || block.id === 'inventory-results' || block.id === 'warranty-results' || block.id === 'incident-claim-list' || block.id === 'home-event-radar-feed' || block.id === 'document-lookup-groups'
     || (block.id === 'property-rooms' && block.presentation?.pattern === 'ROOM_MAP' && block.presentation.focused === true)
     || (block.id === 'property-completeness' && !isPropertySummaryDump)
-  )) || (block.type === 'PRIORITY_LIST' && block.id === 'home-actions-priority-list'));
+  )) || (block.type === 'PRIORITY_LIST' && block.id === 'home-actions-priority-list') || block.type === 'ENVIRONMENT_REPORT');
 }
 
 /** IW-CONV-047: a calm Home Actions answer keeps the governed ranked view as its one artifact. */

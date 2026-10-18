@@ -139,7 +139,223 @@ export type AskPresentationBlock =
   | { type: 'EMPTY_STATE'; id: string; title: string; body: string; actions: AskAction[] }
   | { type: 'ERROR_STATE'; id: string; title: string; body: string; retryable: boolean; actions: AskAction[] }
   | { type: 'LIFESPAN'; id: string; title: string; description?: string | null; basis: string; items: Array<{ id: string; label: string; ageYears: number; typicalLifeYears: { min: number; max: number }; status: 'WITHIN_RANGE' | 'PLAN_AHEAD' | 'PAST_RANGE'; statusLabel: string; entityType?: string | null; actions?: AskGroupedListItemAction[]; meta?: string[] }>; missingAge: Array<{ id: string; label: string; entityType?: string | null; actions?: AskGroupedListItemAction[] }>; missingAgeTitle?: string | null; collection?: AskCollectionDescriptor }
-  | { type: 'PROGRESS'; id: string; title: string; description?: string | null; percent: number; basis: string; metrics: Array<{ label: string; value: string; tone: AskDisplayTone }>; nextSteps: AskGroupedListItem[]; actions: AskAction[] };
+  | { type: 'PROGRESS'; id: string; title: string; description?: string | null; percent: number; basis: string; metrics: Array<{ label: string; value: string; tone: AskDisplayTone }>; nextSteps: AskGroupedListItem[]; actions: AskAction[] }
+  | {
+    type: 'ENVIRONMENT_REPORT';
+    id: string;
+    title: string;
+    summary: string;
+    generatedAt: string;
+    property: { name?: string | null; address: string; city: string; state: string; zipCode: string };
+    location: { latitude: number | null; longitude: number | null; countyFips: string | null; zipCode: string | null };
+    conditionSourcesComplete: boolean;
+    insights: Array<{
+      id: string;
+      category: 'rain' | 'snow' | 'freeze' | 'heat' | 'storm' | 'air_quality' | 'drought';
+      severity: 'info' | 'watch' | 'action';
+      title: string;
+      summary: string;
+      homeImplication: string;
+      timeframe: string;
+      effectiveFrom: string;
+      effectiveTo: string;
+      affectedSystems: string[];
+      recommendedActions: string[];
+      source: string;
+      relatedIncidentId?: string | null;
+      isOfficialAlert?: boolean;
+      entityType?: string | null;
+      entityId?: string | null;
+      actions: AskGroupedListItemAction[];
+    }>;
+    preparations: Array<{
+      id: string;
+      insightId: string;
+      title: string;
+      summary: string;
+      timeframe: string;
+      status: string;
+      progress: { completed: number; skipped: number; resolved: number; total: number };
+      items: Array<{
+        id: string;
+        entityId: string;
+        entityType: string;
+        label: string;
+        status: 'CREATED' | 'COMPLETED' | 'CANCELED';
+        sortOrder: number;
+        actions: AskGroupedListItemAction[];
+      }>;
+    }>;
+    questions: Array<{
+      id: string;
+      insightId: string;
+      field: string;
+      prompt: string;
+      reason: string;
+      entityType?: string | null;
+      entityId?: string | null;
+      actions: AskGroupedListItemAction[];
+    }>;
+    plantAdvisorModules: Array<{
+      id: string;
+      trigger: 'heat' | 'freeze' | 'low_humidity' | 'storm' | 'air_quality';
+      relatedInsightId: string | null;
+      title: string;
+      summary: string;
+      contextLevel: 'added_plants' | 'saved_recommendations' | 'room_profiles' | 'setup';
+      plantNames: string[];
+      roomNames: string[];
+      actions: AskGroupedListItemAction[];
+    }>;
+    longTermHazardContext?: {
+      state: string;
+      checkedThrough: string | null;
+      emptyState: string | null;
+      hazards: Array<{
+        propertyMatchId: string;
+        hazardType: string;
+        hazardLabel: string;
+        title: string;
+        factualSummary: string | null;
+        lifecycleStatus: string;
+        precision?: string | null;
+        distanceMiles?: number | null;
+        provider?: string | null;
+      }>;
+      actions: AskGroupedListItemAction[];
+    } | null;
+    sections: {
+      weather: {
+        status: 'ok' | 'unavailable';
+        reason?: string;
+        fetchedAt?: string;
+        data?: {
+          current: {
+            temperatureF: number;
+            apparentTemperatureF: number;
+            humidityPercent: number;
+            windSpeedMph: number;
+            precipitationIn: number;
+            weatherCode: number;
+            isDay?: boolean;
+            observedAt: string;
+          };
+          hourly: Array<{
+            time: string;
+            temperatureF: number;
+            precipitationProbabilityPercent: number;
+            weatherCode: number;
+          }>;
+          tenDayForecast: Array<{
+            date: string;
+            tempMaxF: number;
+            tempMinF: number;
+            precipitationSumIn: number;
+            weatherCode: number;
+          }>;
+          thirtyDayHistory: Array<{
+            date: string;
+            tempMaxF: number;
+            tempMinF: number;
+            precipitationSumIn: number;
+          }>;
+        };
+      };
+      airQuality: {
+        status: 'ok' | 'unavailable';
+        reason?: string;
+        fetchedAt?: string;
+        data?: {
+          current: { aqi: number; pm2_5: number; pm10: number; observedAt: string };
+          history: Array<{ date: string; avgAqi: number; avgPm2_5: number }>;
+        };
+      };
+      drought: {
+        status: 'ok' | 'unavailable';
+        reason?: string;
+        fetchedAt?: string;
+        data?: {
+          current: {
+            date: string;
+            dominantCategory: 'None' | 'D0' | 'D1' | 'D2' | 'D3' | 'D4';
+            percentArea: Record<string, number>;
+          } | null;
+          history: Array<{
+            date: string;
+            dominantCategory: 'None' | 'D0' | 'D1' | 'D2' | 'D3' | 'D4';
+            percentArea: Record<string, number>;
+          }>;
+        };
+      };
+      floodElevation: {
+        status: 'ok' | 'unavailable';
+        reason?: string;
+        fetchedAt?: string;
+        data?: { femaFloodZone: string | null; femaZoneSubtype: string | null; elevationFeet: number | null };
+      };
+      radon: {
+        status: 'ok' | 'unavailable';
+        reason?: string;
+        fetchedAt?: string;
+        data?: { zone: 1 | 2 | 3; zoneDescription: string; countyName: string | null; stateName: string | null };
+      };
+      hazards: {
+        status: 'ok' | 'unavailable';
+        reason?: string;
+        fetchedAt?: string;
+        data?: {
+          facilities: Array<{
+            registryId: string;
+            name: string;
+            address: string;
+            programs: string[];
+            complianceStatus: string | null;
+            significantNoncompliance: boolean;
+            inspectionCount: number;
+            lastInspectionDate: string | null;
+            penaltyCount: number;
+            latitude: number | null;
+            longitude: number | null;
+            distanceMiles: number | null;
+          }>;
+          totalFacilitiesInRadius: number;
+          totalPenaltiesInRadius: string | null;
+          searchRadiusMiles: number;
+        };
+      };
+      climate: {
+        status: 'ok' | 'unavailable';
+        reason?: string;
+        fetchedAt?: string;
+        data?: {
+          normals: {
+            status: 'ok' | 'unavailable';
+            reason?: string;
+            fetchedAt?: string;
+            data?: {
+              stationId: string;
+              stationName: string;
+              monthly: Array<{
+                month: number;
+                avgTempF: number | null;
+                avgHighF: number | null;
+                avgLowF: number | null;
+              }>;
+              annualHeatingDegreeDays: number | null;
+              annualCoolingDegreeDays: number | null;
+            };
+          };
+          hardinessZone: {
+            status: 'ok' | 'unavailable';
+            reason?: string;
+            fetchedAt?: string;
+            data?: { zone: string; temperatureRangeF: string };
+          };
+        };
+      };
+    };
+    actions: AskAction[];
+  };
 
 // ASK_COZY_SUGGESTED_NEXT_ACTIONS_IMPLEMENTATION_PLAN §4: the server-authored compact follow-up. Mirrors the backend
 // SuggestedNextActionSchema; the client renders `label`, submits only the id + source execution on selection, and never

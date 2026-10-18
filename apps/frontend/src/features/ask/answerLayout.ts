@@ -7,6 +7,7 @@ const WIDE_BLOCK_TYPES = new Set<AskPresentationBlock['type']>([
   'TIMELINE',
   'COMPARISON',
   'SCENARIO_COMPARISON',
+  'ENVIRONMENT_REPORT',
 ]);
 
 /**

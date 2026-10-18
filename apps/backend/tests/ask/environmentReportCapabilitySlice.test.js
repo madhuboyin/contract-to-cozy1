@@ -321,7 +321,7 @@ test('ENVIRONMENT_REPORT routing and capability card binding', () => {
   assert.equal(resolveAskOperation('Show my home event radar feed').operationId, 'HOME_EVENT_RADAR_FEED');
 });
 
-test('environmentReportFromView renders full report, active preparation steps, and contributor actions with no desktop links', () => {
+test('environmentReportFromView renders structured ENVIRONMENT_REPORT dashboard block, active preparation steps, and contributor actions with no desktop links', () => {
   const result = environmentReportFromView(sampleEnvironmentReport(), {
     propertyId: 'prop-1',
     canContribute: true,
@@ -332,20 +332,28 @@ test('environmentReportFromView renders full report, active preparation steps, a
   const serialized = JSON.stringify(result);
   assert.equal(serialized.includes('/dashboard/'), false, 'must never emit desktop /dashboard/ links');
 
-  const groupedList = result.blocks.find((block) => block.type === 'GROUPED_LIST');
-  assert.ok(groupedList);
+  assert.equal(result.blocks[0].type, 'ENVIRONMENT_REPORT');
+  const envBlock = result.blocks.find((block) => block.type === 'ENVIRONMENT_REPORT');
+  assert.ok(envBlock);
+  assert.equal(envBlock.property.address, '123 Maple St');
+  assert.equal(envBlock.sections.weather.data.current.temperatureF, 78);
+  assert.equal(envBlock.sections.airQuality.data.current.aqi, 32);
+  assert.equal(envBlock.sections.floodElevation.data.femaFloodZone, 'X');
+  assert.equal(envBlock.sections.radon.data.zone, 3);
+  assert.equal(envBlock.sections.hazards.data.totalFacilitiesInRadius, 1);
 
-  const prepSection = groupedList.sections.find((sec) => sec.id === 'weather-preparation-inc-1');
-  assert.ok(prepSection);
-  assert.equal(prepSection.items.length, 2);
+  assert.equal(envBlock.preparations.length, 1);
+  const prep = envBlock.preparations[0];
+  assert.equal(prep.id, 'inc-1');
+  assert.equal(prep.items.length, 2);
 
-  const completedStep = prepSection.items.find((item) => item.id === 'inc-1:step-1');
+  const completedStep = prep.items.find((item) => item.entityId === 'inc-1:step-1');
   assert.ok(completedStep);
   assert.equal(completedStep.entityType, WEATHER_PREPARATION_ITEM_ENTITY_TYPE);
   assert.equal(completedStep.actions.length, 1);
   assert.equal(completedStep.actions[0].id, ENVIRONMENT_REPORT_ACTION_IDS.REOPEN_STEP);
 
-  const openStep = prepSection.items.find((item) => item.id === 'inc-1:step-2');
+  const openStep = prep.items.find((item) => item.entityId === 'inc-1:step-2');
   assert.ok(openStep);
   assert.equal(openStep.entityType, WEATHER_PREPARATION_ITEM_ENTITY_TYPE);
   assert.deepEqual(
@@ -353,18 +361,14 @@ test('environmentReportFromView renders full report, active preparation steps, a
     [ENVIRONMENT_REPORT_ACTION_IDS.COMPLETE_STEP, ENVIRONMENT_REPORT_ACTION_IDS.SKIP_STEP],
   );
 
-  const insightsSection = groupedList.sections.find((sec) => sec.id === 'active-insights');
-  assert.ok(insightsSection);
-  const notStartedInsight = insightsSection.items.find((item) => item.id === 'insight-2');
+  const notStartedInsight = envBlock.insights.find((item) => item.id === 'insight-2');
   assert.ok(notStartedInsight);
   assert.equal(notStartedInsight.entityType, ENVIRONMENT_INSIGHT_ENTITY_TYPE);
   assert.equal(notStartedInsight.actions.length, 1);
   assert.equal(notStartedInsight.actions[0].id, ENVIRONMENT_REPORT_ACTION_IDS.START_PREPARATION);
   assert.equal(notStartedInsight.actions[0].message, ENVIRONMENT_REPORT_COMMAND_MESSAGES.START_PREPARATION);
 
-  const questionsSection = groupedList.sections.find((sec) => sec.id === 'environment-questions');
-  assert.ok(questionsSection);
-  const hvacQuestion = questionsSection.items[0];
+  const hvacQuestion = envBlock.questions[0];
   assert.ok(hvacQuestion);
   assert.equal(hvacQuestion.entityType, ENVIRONMENT_HVAC_FILTER_ENTITY_TYPE);
   assert.equal(hvacQuestion.actions.length, 1);

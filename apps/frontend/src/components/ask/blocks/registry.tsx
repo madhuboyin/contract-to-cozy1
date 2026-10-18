@@ -43,6 +43,7 @@ import { LifespanBlock } from '../patterns/LifespanBlock';
 import { ProgressBlock } from '../patterns/ProgressBlock';
 import { TaskGuideBlock } from '../TaskGuideBlock';
 import { TimelineTrackBlock } from '../patterns/TimelineTrackBlock';
+import { EnvironmentReportBlock } from './EnvironmentReportBlock';
 import type { AskBlockRenderer, AskBlockRendererProps, AskBlockType } from './types';
 
 type AskBlockRendererRegistry = { [T in AskBlockType]: AskBlockRenderer<T> };
@@ -78,6 +79,7 @@ export const ASK_BLOCK_RENDERERS: AskBlockRendererRegistry = {
   ERROR_STATE: ErrorStateBlock,
   LIFESPAN: LifespanBlock,
   PROGRESS: ProgressBlock,
+  ENVIRONMENT_REPORT: EnvironmentReportBlock,
 };
 
 export function BlockView(props: AskBlockRendererProps) {

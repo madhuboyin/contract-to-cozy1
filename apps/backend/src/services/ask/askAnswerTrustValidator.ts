@@ -92,6 +92,9 @@ function authoredPresentationText(block: AskPresentationBlock): string {
     return [block.title, block.description, ...block.columns.map((column) => column.label)]
       .filter(Boolean).join(' ');
   }
+  if (block.type === 'ENVIRONMENT_REPORT') {
+    return [block.title, block.summary].filter(Boolean).join(' ');
+  }
   return visibleText(block);
 }
 
@@ -102,7 +105,7 @@ function operationSpecificFirstBlock(operationId: AskOperationId, blocks: AskPre
   if (operationId === 'HVAC_DECISION_CONTINUE') return ['DECISION_PROGRESS', 'EMPTY_STATE'].includes(first.type);
   if (operationId === 'HVAC_DECISION_OUTCOME_VIEW') return ['OUTCOME_SUMMARY', 'EMPTY_STATE'].includes(first.type);
   if (operationId.endsWith('_BOUNDARY')) return first.type === 'BOUNDARY';
-  if (['WORKFLOW_PROGRESS', 'MONITOR', 'OUTCOME_SUMMARY', 'DECISION_PROGRESS', 'SCENARIO_COMPARISON', 'PREFERENCE_REFERENCE', 'TASK_GUIDE'].includes(first.type)) {
+  if (['WORKFLOW_PROGRESS', 'MONITOR', 'OUTCOME_SUMMARY', 'DECISION_PROGRESS', 'SCENARIO_COMPARISON', 'PREFERENCE_REFERENCE', 'TASK_GUIDE', 'ENVIRONMENT_REPORT'].includes(first.type)) {
     return getAskOperationDefinition(operationId).allowedBlockTypes.includes(first.type);
   }
   return ['SUMMARY', 'EMPTY_STATE', 'ERROR_STATE', 'BOUNDARY'].includes(first.type);
