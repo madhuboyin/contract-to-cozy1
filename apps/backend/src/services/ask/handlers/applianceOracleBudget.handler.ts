@@ -139,6 +139,12 @@ export function maintenanceBudgetFromView(forecast: BudgetForecastView | 'PRIMAR
     };
   }
   const busiest = [...forecast.monthlyForecasts].sort((a, b) => b.total - a.total)[0];
+  const annualMix = [
+    ['Routine', forecast.monthlyForecasts.reduce((sum, month) => sum + month.routine, 0)],
+    ['Preventive', forecast.monthlyForecasts.reduce((sum, month) => sum + month.preventive, 0)],
+    ['Unexpected', forecast.monthlyForecasts.reduce((sum, month) => sum + month.unexpected, 0)],
+  ] as const;
+  const categoriesByCost = [...forecast.categoryBreakdowns].sort((a, b) => b.annualCost - a.annualCost);
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY', id: 'budget-forecast-summary',
     title: `About ${wholeDollars(forecast.totalAnnualCost)} a year for upkeep`,
@@ -153,7 +159,7 @@ export function maintenanceBudgetFromView(forecast: BudgetForecastView | 'PRIMAR
     });
   }
   const budgetSections = [
-    { id: 'budget-forecast-categories', title: 'By category', count: forecast.categoryBreakdowns.length, items: forecast.categoryBreakdowns.map((category, index) => ({
+    { id: 'budget-forecast-categories', title: 'By category', count: categoriesByCost.length, items: categoriesByCost.map((category, index) => ({
       id: `category-${index}`, title: category.category, amountLabel: `${wholeDollars(category.annualCost)} a year`, proportionPercent: category.percentage, meta: category.items.slice(0, 4), status: `${category.percentage}%`,
     })) },
     { id: 'budget-forecast-months', title: 'By month', count: forecast.monthlyForecasts.length, items: forecast.monthlyForecasts.map((month) => ({
@@ -170,6 +176,30 @@ export function maintenanceBudgetFromView(forecast: BudgetForecastView | 'PRIMAR
         annual: wholeDollars(forecast.totalAnnualCost), monthly: wholeDollars(forecast.monthlyAverage),
         peakMonth: busiest?.month ?? '—', peakAmount: busiest ? wholeDollars(busiest.total) : '—',
         confidence: `${forecast.confidenceLevel}%`,
+      },
+      plan: {
+        headline: `Plan on setting aside about ${wholeDollars(forecast.monthlyAverage)} each month`,
+        guidance: busiest
+          ? `Keep at least ${wholeDollars(busiest.total)} available for ${busiest.month}, the highest forecast month. The monthly set-aside smooths the full year's estimated cost rather than predicting an actual bill each month.`
+          : 'Use the monthly set-aside as a steady buffer for the full year, not as a prediction of an actual monthly bill.',
+        peakDelta: busiest ? `${wholeDollars(Math.max(0, busiest.total - forecast.monthlyAverage))} above average` : '—',
+        topDrivers: categoriesByCost.slice(0, 3).map((category) => `${category.category} ${category.percentage}%`),
+      },
+      costMix: annualMix.map(([label, annual]) => ({
+        label, annual: wholeDollars(annual), monthly: `${wholeDollars(annual / 12)}/mo`,
+        proportionPercent: forecast.totalAnnualCost ? Math.round((annual / forecast.totalAnnualCost) * 100) : 0,
+      })),
+      calculation: {
+        basis: 'A deterministic 12-month estimate of typical upkeep, not a review of your actual bills or a promise that work will occur in a particular month.',
+        factors: [
+          `A base monthly cost for this home's dwelling type`,
+          `A home-age adjustment using ${forecast.propertyAge} years`,
+          'Seasonal multipliers and typical tasks for each month',
+          `${forecast.confidenceLevel}% confidence based partly on the inventory recorded for this home`,
+        ],
+        improvements: forecast.yearBuiltAssumed
+          ? ['Add the year built so the age adjustment uses the home’s recorded age.', 'Keep the home inventory current so confidence reflects the systems and appliances on record.']
+          : ['Keep the year built and home inventory current so the estimate continues to use the best available property facts.'],
       },
     },
     sections: budgetSections,

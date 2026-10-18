@@ -128,7 +128,13 @@ describe('choice grid', () => {
 
 describe('budget breakdown', () => {
   const budget = list({
-    title: 'Where the upkeep budget goes', description: 'Estimated annual upkeep by category.', presentation: { pattern: 'BUDGET_BREAKDOWN', summary: { annual: '$2,344', monthly: '$195', peakMonth: 'September', peakAmount: '$218', confidence: '95%' } },
+    title: 'Where the upkeep budget goes', description: 'Estimated annual upkeep by category.', presentation: {
+      pattern: 'BUDGET_BREAKDOWN',
+      summary: { annual: '$2,344', monthly: '$195', peakMonth: 'September', peakAmount: '$218', confidence: '95%' },
+      plan: { headline: 'Plan on setting aside about $195 each month', guidance: 'Keep at least $218 available for September.', peakDelta: '$23 above average', topDrivers: ['HVAC 25%', 'Exterior 20%'] },
+      costMix: [{ label: 'Routine', annual: '$1,172', monthly: '$98/mo', proportionPercent: 50 }, { label: 'Preventive', annual: '$703', monthly: '$59/mo', proportionPercent: 30 }, { label: 'Unexpected', annual: '$469', monthly: '$39/mo', proportionPercent: 20 }],
+      calculation: { basis: 'A deterministic 12-month estimate of typical upkeep.', factors: ['Dwelling type', 'Home age', 'Season'], improvements: ['Keep the home record current.'] },
+    },
   }, [
     { id: 'categories', title: 'By category', count: 2, items: [
       item('hvac', { title: 'HVAC', amountLabel: '$586 a year', proportionPercent: 25, status: '25%', meta: ['Seasonal maintenance', 'Filter replacements'] }),
@@ -148,6 +154,14 @@ describe('budget breakdown', () => {
     expect(screen.getByText('$586 a year')).toBeVisible();
     expect(screen.getByText('Seasonal maintenance · Filter replacements')).toBeVisible();
     expect(screen.getByLabelText('Budget forecast snapshot')).toHaveTextContent('Annual upkeep$2,344Monthly set-aside$195Peak monthSeptember$218Confidence95%');
+    expect(screen.getByText('Plan on setting aside about $195 each month')).toBeVisible();
+    expect(screen.getByLabelText('Largest budget drivers')).toHaveTextContent('HVAC 25%');
+    expect(screen.getByText('What the monthly buffer covers')).toBeVisible();
+    expect(screen.getByRole('progressbar', { name: 'Routine: 50% of the forecast' })).toHaveAttribute('value', '50');
+    expect(screen.getByText('How this estimate works').closest('details')).not.toHaveAttribute('open');
+    fireEvent.click(screen.getByText('How this estimate works'));
+    expect(screen.getByText('A deterministic 12-month estimate of typical upkeep.')).toBeVisible();
+    expect(screen.getByText('Keep the home record current.')).toBeVisible();
     expect(screen.getByText('Show monthly outlook')).toBeVisible();
     expect(screen.getByText('Show monthly outlook').closest('details')).not.toHaveAttribute('open');
     fireEvent.click(screen.getByText('Show monthly outlook'));

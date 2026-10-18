@@ -82,7 +82,7 @@ export interface AskGroupedListItem {
 }
 export type AskGroupedListPresentation =
   | { pattern: 'CHOICE_GRID' }
-  | { pattern: 'BUDGET_BREAKDOWN'; summary?: { annual: string; monthly: string; peakMonth: string; peakAmount: string; confidence: string } }
+  | { pattern: 'BUDGET_BREAKDOWN'; summary?: { annual: string; monthly: string; peakMonth: string; peakAmount: string; confidence: string }; plan?: { headline: string; guidance: string; peakDelta: string; topDrivers: string[] }; costMix?: Array<{ label: string; annual: string; monthly: string; proportionPercent: number }>; calculation?: { basis: string; factors: string[]; improvements: string[] } }
   | { pattern: 'STATUS_ACCORDION' }
   | { pattern: 'SHELVES' }
   | { pattern: 'DECK'; swipeRightActionId?: string | null; swipeLeftActionId?: string | null; batch?: AskDeckBatch | null }

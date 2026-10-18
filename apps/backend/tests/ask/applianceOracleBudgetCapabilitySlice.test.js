@@ -182,7 +182,14 @@ test('Budget Planner: the calculated yearly and monthly forecast by category and
   assert.deepEqual(summary.actions, [], 'Ask links to no Budget Planner page');
   assert.equal(result.blocks.some((block) => block.id === 'budget-forecast-assumed-age'), false);
   assert.deepEqual(list.sections.map((section) => section.title), ['By category', 'By month']);
-  assert.deepEqual(list.presentation, { pattern: 'BUDGET_BREAKDOWN' });
+  assert.equal(list.presentation.pattern, 'BUDGET_BREAKDOWN');
+  assert.match(list.presentation.summary.annual, /^\$[\d,]+$/);
+  assert.match(list.presentation.plan.headline, /setting aside about/);
+  assert.equal(list.presentation.plan.topDrivers.length, 3);
+  assert.deepEqual(list.presentation.costMix.map((item) => item.label), ['Routine', 'Preventive', 'Unexpected']);
+  assert.ok(Math.abs(list.presentation.costMix.reduce((sum, item) => sum + item.proportionPercent, 0) - 100) <= 1);
+  assert.match(list.presentation.calculation.basis, /deterministic 12-month estimate/);
+  assert.match(list.presentation.calculation.factors.join(' '), /home-age adjustment/i);
   assert.equal(list.sections[0].items[0].amountLabel.endsWith(' a year'), true);
   assert.equal(typeof list.sections[0].items[0].proportionPercent, 'number');
   assert.equal(list.sections[1].count, 12);
@@ -193,6 +200,7 @@ test('Budget Planner: an assumed home age is disclosed; a non-owner is told who 
   install({ yearBuilt: null });
   const assumed = await invoke('MAINTENANCE_BUDGET_FORECAST', 'Show my budget planner');
   assert.equal(assumed.blocks.find((block) => block.id === 'budget-forecast-assumed-age').title, 'Home age assumed');
+  assert.match(assumed.blocks.find((block) => block.id === 'budget-forecast-items').presentation.calculation.improvements.join(' '), /Add the year built/);
   install({ owner: false });
   const blocked = await invoke('MAINTENANCE_BUDGET_FORECAST', 'Show my budget planner');
   assert.equal(blocked.reasonCode, 'BUDGET_PLANNER_PRIMARY_OWNER_ONLY');

@@ -192,6 +192,23 @@ const GroupedListPresentationSchema = z.discriminatedUnion('pattern', [
       peakAmount: z.string().trim().min(1).max(60),
       confidence: z.string().trim().min(1).max(40),
     }).optional(),
+    plan: z.object({
+      headline: z.string().trim().min(1).max(120),
+      guidance: z.string().trim().min(1).max(300),
+      peakDelta: z.string().trim().min(1).max(60),
+      topDrivers: z.array(z.string().trim().min(1).max(80)).min(1).max(3),
+    }).optional(),
+    costMix: z.array(z.object({
+      label: z.string().trim().min(1).max(40),
+      annual: z.string().trim().min(1).max(60),
+      monthly: z.string().trim().min(1).max(60),
+      proportionPercent: z.number().min(0).max(100),
+    })).max(3).optional(),
+    calculation: z.object({
+      basis: z.string().trim().min(1).max(400),
+      factors: z.array(z.string().trim().min(1).max(200)).min(1).max(6),
+      improvements: z.array(z.string().trim().min(1).max(200)).max(4),
+    }).optional(),
   }),
   // A compact, condition-tabbed list whose records disclose supporting facts and actions in place.
   z.object({ pattern: z.literal('STATUS_ACCORDION') }),
