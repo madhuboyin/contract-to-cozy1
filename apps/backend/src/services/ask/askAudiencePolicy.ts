@@ -213,6 +213,7 @@ const POLICIES: readonly AskAudiencePolicy[] = [
   definePolicy('HOME_STATUS_BOARD', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('HOME_HABITS', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('HOME_DIGITAL_WILL', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
+  definePolicy('HOME_DIGITAL_WILL_CREATE', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('PLANT_CARE_OUTLOOK', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('NEGOTIATION_SHIELD_CASES', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('HOME_UPGRADE_SCENARIOS', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),

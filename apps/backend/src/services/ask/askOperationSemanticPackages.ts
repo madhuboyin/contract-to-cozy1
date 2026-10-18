@@ -354,7 +354,11 @@ const positives: Record<AskOperationId, readonly string[]> = {
   NEGOTIATION_SHIELD_CASES: ['Show my negotiation shield cases', 'List the negotiation reviews I have prepared', 'Which of my negotiations have been analyzed?', 'Open negotiation shield', 'Shwo my negotiation shield'],
   PLANT_CARE_OUTLOOK: ['Show my plant care outlook', 'Do my plants need anything with this weather?', 'How should I care for my garden zones this week?', 'Open my plant advisor', 'Shwo my plant care'],
   HOME_DIGITAL_WILL: ['Show my home continuity plan', 'Is our house handoff plan ready if someone has to take over?', 'Who are the trusted contacts on my home plan?', 'Open my digital will', 'Shwo my continuity plan'],
-  HOME_DIGITAL_WILL_CREATE: ['Create my home continuity plan'],
+  HOME_DIGITAL_WILL_CREATE: [
+    'Create my home continuity plan',
+    'Start a private home handoff plan for this house',
+    'Set up a continuity plan for whoever needs to take over my home',
+  ],
   HOME_HABITS: ['Show my home habits', 'Which habits is the coach suggesting for our house?', 'Which home care habits should I pick up?', 'Open my habit coach', 'Shwo my home habbits'],
   HOME_STATUS_BOARD: ['Show my status board', 'Which of my appliances need attention?', 'How are my home systems holding up?', 'What is the condition of my appliances?', 'Shwo my status bord'],
   MAJOR_EVENT_ENTRY: ['Help me prepare for selling my home', 'Give me a checklist for my home sale', 'What should I do before moving out?', 'Help me prepare for my home sale and seling', 'Help me get everything in order before we list'],
