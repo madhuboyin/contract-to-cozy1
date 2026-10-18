@@ -169,6 +169,9 @@ describe('budget breakdown', () => {
     expect(screen.getAllByRole('progressbar', { name: 'January: 100% of the peak monthly upkeep budget' })[0]).toHaveAttribute('value', '100');
     expect(container.querySelectorAll('[data-budget-row]')).toHaveLength(2);
     expect(container.querySelectorAll('[data-budget-month]')).toHaveLength(4);
+    expect(container.querySelector('[data-budget-month]')).not.toHaveClass('rounded-xl', 'border');
+    expect(screen.getByLabelText('Forecast cost mix')).toHaveTextContent('');
+    expect(screen.getByText(/\$98\/mo/).closest('div')).not.toHaveClass('rounded-xl', 'border');
     expect(screen.queryByRole('button', { name: 'Auto' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'List' })).not.toBeInTheDocument();
   });

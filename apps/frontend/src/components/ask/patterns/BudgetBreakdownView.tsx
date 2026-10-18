@@ -26,11 +26,10 @@ function CategoryRow({ item }: { item: Item }) {
 function MonthRow({ item }: { item: Item }) {
   const proportion = item.proportionPercent ?? 0;
   return (
-    <li className="rounded-xl border border-slate-200 bg-white p-3" data-budget-month="">
-      <div className="flex items-center justify-between gap-3"><span className="text-sm font-semibold text-slate-900">{item.title}</span><span className="text-sm font-semibold text-slate-700">{item.status}</span></div>
-      <progress className="mt-2 block h-1.5 w-full overflow-hidden rounded-full accent-teal-600" aria-label={`${item.title}: ${proportion}% of the peak monthly upkeep budget`} max={100} value={proportion} />
-      {item.description && <p className="mt-2 text-xs leading-5 text-slate-600">{item.description}</p>}
-      {item.meta.length > 0 && <p className="mt-1 text-xs leading-5 text-slate-500">{item.meta.join(' · ')}</p>}
+    <li className="grid gap-x-3 gap-y-1 px-3 py-2.5 sm:grid-cols-[5rem_minmax(7rem,0.75fr)_minmax(0,1.7fr)] sm:items-center" data-budget-month="">
+      <div className="flex items-baseline justify-between gap-3 sm:block"><span className="text-sm font-semibold text-slate-900">{item.title}</span><span className="text-sm font-semibold text-slate-700 sm:hidden">{item.status}</span></div>
+      <div><div className="hidden items-baseline justify-between gap-2 sm:flex"><span className="text-xs text-slate-500">Forecast</span><span className="text-sm font-semibold text-slate-700">{item.status}</span></div><progress className="mt-1 block h-1.5 w-full overflow-hidden rounded-full accent-teal-600" aria-label={`${item.title}: ${proportion}% of the peak monthly upkeep budget`} max={100} value={proportion} /></div>
+      <div className="min-w-0">{item.description && <p className="text-xs leading-5 text-slate-600">{item.description}</p>}{item.meta.length > 0 && <p className="text-xs leading-5 text-slate-500">{item.meta.join(' · ')}</p>}</div>
     </li>
   );
 }
@@ -53,26 +52,28 @@ function BudgetPlan({ plan }: { plan: NonNullable<BudgetPresentation['plan']> })
           <h3 id="budget-plan-title" className="mt-1 text-base font-semibold text-slate-950">{plan.headline}</h3>
           <p className="mt-1 text-sm leading-6 text-slate-700">{plan.guidance}</p>
         </div>
-        <div className="shrink-0 rounded-xl border border-teal-200 bg-white px-3 py-2 sm:text-right">
+        <div className="shrink-0 border-l-2 border-teal-300 pl-3 sm:text-right">
           <p className="text-xs font-medium text-slate-500">Peak-month cushion</p>
           <p className="mt-0.5 text-sm font-semibold text-teal-800">{plan.peakDelta}</p>
         </div>
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-2" aria-label="Largest budget drivers">
         <span className="text-xs font-medium text-slate-500">Largest drivers</span>
-        {plan.topDrivers.map((driver) => <span key={driver} className="rounded-full border border-teal-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700">{driver}</span>)}
+        <span className="text-xs font-semibold text-slate-700">{plan.topDrivers.join(' · ')}</span>
       </div>
     </section>
   );
 }
 
 function CostMix({ items }: { items: NonNullable<BudgetPresentation['costMix']> }) {
+  const colors = ['bg-teal-700', 'bg-teal-400', 'bg-slate-400'];
   return (
     <section className="border-t border-slate-200 px-4 py-4 sm:px-5" aria-labelledby="cost-mix-title">
       <div className="flex items-baseline justify-between gap-3"><h3 id="cost-mix-title" className="text-sm font-semibold text-slate-950">What the monthly buffer covers</h3><span className="text-xs text-slate-500">Typical cost mix</span></div>
-      <div className="mt-3 grid gap-2 sm:grid-cols-3">
-        {items.map((item) => <div key={item.label} className="rounded-xl border border-slate-200 bg-slate-50 p-3"><div className="flex items-baseline justify-between gap-2"><p className="text-sm font-semibold text-slate-900">{item.label}</p><span className="text-xs font-semibold text-slate-500">{item.proportionPercent}%</span></div><p className="mt-1 text-base font-semibold text-slate-950">{item.monthly}</p><p className="text-xs text-slate-500">{item.annual} a year</p><progress className="mt-2 block h-1.5 w-full overflow-hidden rounded-full accent-teal-600" aria-label={`${item.label}: ${item.proportionPercent}% of the forecast`} max={100} value={item.proportionPercent} /></div>)}
-      </div>
+      <div className="mt-3 flex h-2.5 w-full overflow-hidden rounded-full bg-slate-100" aria-label="Forecast cost mix">{items.map((item, index) => <span key={item.label} className={colors[index] ?? 'bg-slate-300'} style={{ width: `${item.proportionPercent}%` }} aria-hidden="true" />)}</div>
+      <dl className="mt-3 grid gap-x-6 gap-y-2 sm:grid-cols-3">
+        {items.map((item, index) => <div key={item.label} className="grid grid-cols-[auto_1fr_auto] items-baseline gap-2 border-b border-slate-100 pb-2 sm:grid-cols-[auto_1fr] sm:border-0 sm:pb-0"><span className={`h-2 w-2 rounded-full ${colors[index] ?? 'bg-slate-300'}`} aria-hidden="true" /><dt className="text-sm font-semibold text-slate-900">{item.label} <span className="font-normal text-slate-500">{item.proportionPercent}%</span></dt><dd className="text-right text-sm font-semibold text-slate-800 sm:col-start-2 sm:text-left">{item.monthly} <span className="font-normal text-slate-500">· {item.annual}/yr</span></dd><progress className="sr-only" aria-label={`${item.label}: ${item.proportionPercent}% of the forecast`} max={100} value={item.proportionPercent} /></div>)}
+      </dl>
     </section>
   );
 }
@@ -90,7 +91,7 @@ function CalculationDetails({ calculation }: { calculation: NonNullable<BudgetPr
 }
 
 function MonthGrid({ section }: { section: Section }) {
-  return <ul className="grid gap-2 sm:grid-cols-2">{section.items.map((item) => <MonthRow key={item.id} item={item} />)}</ul>;
+  return <ul className="divide-y divide-slate-200">{section.items.map((item) => <MonthRow key={item.id} item={item} />)}</ul>;
 }
 
 export function BudgetBreakdownView({ sections, presentation }: { sections: GroupedList['sections']; presentation?: BudgetPresentation }) {
@@ -105,9 +106,9 @@ export function BudgetBreakdownView({ sections, presentation }: { sections: Grou
           <div className="flex items-center justify-between px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 sm:px-5"><h3 id={`${categories.id}-title`}>{categories.title}</h3><span>{categories.count} categories</span></div>
           <ul className="divide-y divide-slate-100 border-t border-slate-100">{categories.items.map((item) => <CategoryRow key={item.id} item={item} />)}</ul>
         </section>
-        {months && <section className="hidden bg-slate-50/70 p-4 lg:block" aria-labelledby={`${months.id}-title`}><div className="mb-3 flex items-center justify-between"><h3 id={`${months.id}-title`} className="text-xs font-semibold uppercase tracking-wide text-slate-500">Monthly outlook</h3><span className="text-xs text-slate-500">{months.count} months</span></div><MonthGrid section={months} /></section>}
+        {months && <section className="hidden bg-slate-50/50 lg:block" aria-labelledby={`${months.id}-title`}><div className="flex items-center justify-between border-b border-slate-100 px-3 py-3"><h3 id={`${months.id}-title`} className="text-xs font-semibold uppercase tracking-wide text-slate-500">Monthly outlook</h3><span className="text-xs text-slate-500">{months.count} months</span></div><MonthGrid section={months} /></section>}
       </div>
-      {months && <details className="border-t border-slate-200 lg:hidden"><summary className="flex min-h-11 cursor-pointer list-none items-center justify-between px-4 py-3 text-sm font-semibold text-teal-800 hover:bg-slate-50"><span>Show monthly outlook</span><span className="text-xs font-medium text-slate-500">{months.count} months</span></summary><div className="border-t border-slate-100 bg-slate-50/70 p-3"><MonthGrid section={months} /></div></details>}
+      {months && <details className="border-t border-slate-200 lg:hidden"><summary className="flex min-h-11 cursor-pointer list-none items-center justify-between px-4 py-3 text-sm font-semibold text-teal-800 hover:bg-slate-50"><span>Show monthly outlook</span><span className="text-xs font-medium text-slate-500">{months.count} months</span></summary><div className="border-t border-slate-100 bg-slate-50/50"><MonthGrid section={months} /></div></details>}
       {presentation?.costMix && <CostMix items={presentation.costMix} />}
       {presentation?.calculation && <CalculationDetails calculation={presentation.calculation} />}
       {details.map((section) => <details key={section.id} className="border-t border-slate-100"><summary className="flex min-h-11 cursor-pointer list-none items-center justify-between px-4 py-2.5 text-sm font-semibold text-teal-800 hover:bg-slate-50"><span>Show {section.title.toLowerCase()} details</span><span className="text-xs font-medium text-slate-500">{section.count}</span></summary><ul className="divide-y divide-slate-100 border-t border-slate-100 bg-slate-50/40">{section.items.map((item) => <CategoryRow key={item.id} item={item} />)}</ul></details>)}
