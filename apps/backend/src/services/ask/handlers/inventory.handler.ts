@@ -47,7 +47,14 @@ function inventoryItemSearchText(item: Awaited<ReturnType<InventoryService['list
   ].filter(Boolean).join(' ').toLowerCase();
 }
 
-function inventoryMissingFacts(item: Awaited<ReturnType<InventoryService['listItems']>>[number]): string[] {
+/** The fields the "missing details" judgement reads; the paged Record inventory reader selects exactly these. */
+export type InventoryMissingFactsInput = {
+  brand: string | null; manufacturer: string | null; model: string | null; modelNumber: string | null;
+  serialNo: string | null; serialNumber: string | null; purchasedOn: Date | null;
+  documents: readonly unknown[]; warrantyId: string | null; insurancePolicyId: string | null; coverageEvidenceStatus: string;
+};
+
+export function inventoryMissingFacts(item: InventoryMissingFactsInput): string[] {
   return [
     item.brand || item.manufacturer ? null : 'Brand or manufacturer',
     item.model || item.modelNumber ? null : 'Model',
@@ -63,7 +70,7 @@ export const INVENTORY_MISSING_DETAILS_SUGGESTION = 'Add or update missing detai
 const inventoryCount = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
 
 /** The end-of-life horizon used everywhere Ask talks about "nearing end of life": three years out. */
-function inventoryLifecycleHorizon(now = new Date()): Date {
+export function inventoryLifecycleHorizon(now = new Date()): Date {
   const horizon = new Date(now);
   horizon.setUTCFullYear(horizon.getUTCFullYear() + 3);
   return horizon;

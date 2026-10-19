@@ -7,6 +7,7 @@ import { resolvePropertyAccess, type PropertyAccess } from './propertyAccess.ser
 import { getToolDiscoveryAvailability } from './toolDiscoveryAvailability.service';
 import type { SkillConsumer } from './skills/skill.contract';
 import { invokeReadSkillOperationForConsumer } from './skills/skillConsumerRuntime';
+import { visibleInventoryItemWhere } from './riskAssetApplicability';
 import { listPropertyDocuments } from './propertyDocuments/propertyDocumentInventory.service';
 
 export const PROPERTY_RECORD_CONTEXT_SCOPES: PropertyContextScope[] = [
@@ -54,8 +55,9 @@ async function loadPropertyRecordOverview(propertyId: string, userId: string, ac
         _count: { select: { items: true, maintenanceTasks: { where: { status: { in: ['PENDING', 'IN_PROGRESS'] } } } } },
       },
     })),
+    // Visible items only, as every other canonical inventory read counts them (inferred-not-present risk assets are not inventory).
     settled(prisma.inventoryItem.findMany({
-      where: { propertyId },
+      where: { propertyId, ...visibleInventoryItemWhere() },
       select: {
         id: true, name: true, category: true, condition: true, isVerified: true, updatedAt: true,
         documents: { where: { deletedAt: null }, select: { id: true } },

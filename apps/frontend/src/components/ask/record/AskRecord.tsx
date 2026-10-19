@@ -7,11 +7,12 @@ import { useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api/client';
 import { buildAskWorkspaceHref } from '@/lib/navigation/askNavigation';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
-import type { AskRecordIndex, AskRecordIndexSection, AskRecordRoomRow } from '@/features/ask/types';
+import type { AskRecordIndex, AskRecordIndexSection, AskRecordInventoryRow, AskRecordRoomRow } from '@/features/ask/types';
 import { AskCollection, AskCollectionState, AskCompactRow, AskWorkspaceMeasure } from '../presentation/AskLayoutPrimitives';
 import { askServiceIsPaused } from '../workspace/support';
 import { RecordCollection } from './RecordCollection';
 import { RecordRoomRow } from './RecordRoomRow';
+import { RecordInventoryRow } from './RecordInventoryRow';
 
 const NOT_AVAILABLE_COPY: Record<NonNullable<AskRecordIndexSection['reasonCode']>, string> = {
   READER_NOT_CONNECTED: 'Count not shown here yet. Ask opens this section.',
@@ -62,7 +63,15 @@ function SectionRow({ section, propertyId }: { section: AskRecordIndexSection; p
 }
 
 // Sections the destination can page in place. The index marks them with `pagedCollection`; this is how each one is presented.
-const PAGED_SECTION_LABELS: Record<string, string> = { rooms: 'Rooms' };
+const PAGED_SECTIONS: Record<string, { label: string; searchLabel: string; emptyText: string }> = {
+  rooms: { label: 'Rooms', searchLabel: 'Search rooms', emptyText: 'No rooms are recorded yet.' },
+  inventory: { label: 'Systems and inventory', searchLabel: 'Search inventory', emptyText: 'No inventory items are recorded yet.' },
+};
+
+function renderPagedRow(sectionId: string, row: { id: string }, propertyId: string) {
+  if (sectionId === 'rooms') return <RecordRoomRow key={row.id} room={row as AskRecordRoomRow} propertyId={propertyId} />;
+  return <RecordInventoryRow key={row.id} item={row as AskRecordInventoryRow} propertyId={propertyId} />;
+}
 
 export function AskRecord() {
   const searchParams = useSearchParams();
@@ -71,7 +80,7 @@ export function AskRecord() {
   const propertyMismatch = Boolean(requestedPropertyId) && requestedPropertyId !== selectedPropertyId;
   const scopedPropertyId = requestedPropertyId || selectedPropertyId;
   const requestedSection = searchParams.get('section')?.trim() ?? '';
-  const collectionSection = Object.prototype.hasOwnProperty.call(PAGED_SECTION_LABELS, requestedSection) ? requestedSection : null;
+  const collectionSection = Object.prototype.hasOwnProperty.call(PAGED_SECTIONS, requestedSection) ? requestedSection : null;
   const indexHref = `/dashboard/ask/record${scopedPropertyId ? `?propertyId=${encodeURIComponent(scopedPropertyId)}` : ''}`;
   const [index, setIndex] = useState<AskRecordIndex | null>(null);
   const [status, setStatus] = useState<'LOADING' | 'READY' | 'ERROR' | 'PAUSED'>('LOADING');
@@ -130,14 +139,15 @@ export function AskRecord() {
 
         <section className="mt-5" aria-label="Home record sections">
           {collectionSection && scopedPropertyId && !propertyMismatch ? (
-            <RecordCollection<AskRecordRoomRow>
+            <RecordCollection<{ id: string }>
               key={`${scopedPropertyId}:${collectionSection}`}
               sectionId={collectionSection}
-              label={PAGED_SECTION_LABELS[collectionSection]}
+              label={PAGED_SECTIONS[collectionSection].label}
               propertyId={scopedPropertyId}
               backHref={indexHref}
-              searchLabel="Search rooms"
-              renderRow={(room) => <RecordRoomRow key={room.id} room={room} propertyId={scopedPropertyId} />}
+              searchLabel={PAGED_SECTIONS[collectionSection].searchLabel}
+              emptyText={PAGED_SECTIONS[collectionSection].emptyText}
+              renderRow={(row) => renderPagedRow(collectionSection, row, scopedPropertyId)}
             />
           ) : !scopedPropertyId ? (
             <AskCollectionState kind="NOT_APPLICABLE" description="Select a home to browse its record." />

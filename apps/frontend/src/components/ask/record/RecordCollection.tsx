@@ -15,13 +15,14 @@ const SEARCH_DEBOUNCE_MS = 300;
  * The generic pageable collection shell for a Record section (FR-REC-003): search, the section's declared filters, the authoritative
  * total, and a continuation until every row has been delivered. Row presentation is the section's own.
  */
-export function RecordCollection<Row extends { id: string }>({ sectionId, label, propertyId, backHref, renderRow, searchLabel }: {
+export function RecordCollection<Row extends { id: string }>({ sectionId, label, propertyId, backHref, renderRow, searchLabel, emptyText }: {
   sectionId: string;
   label: string;
   propertyId: string;
   backHref: string;
   renderRow: (row: Row) => ReactNode;
   searchLabel: string;
+  emptyText: string;
 }) {
   const [rows, setRows] = useState<Row[]>([]);
   const [page, setPage] = useState<AskRecordCollectionPage<Row> | null>(null);
@@ -105,7 +106,7 @@ export function RecordCollection<Row extends { id: string }>({ sectionId, label,
             <label key={filter.key} className="flex flex-col text-xs font-semibold text-slate-600">
               <span className="sr-only">{filter.label}</span>
               <select aria-label={filter.label} value={filters[filter.key] ?? ''} onChange={(event) => setFilters((current) => ({ ...current, [filter.key]: event.target.value }))} className="min-h-11 rounded-xl border border-slate-300 bg-white px-3 text-sm font-normal text-slate-900">
-                <option value="">{`All ${filter.label.toLowerCase()}s`}</option>
+                <option value="">{`Any ${filter.label.toLowerCase()}`}</option>
                 {filter.options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
               </select>
             </label>
@@ -121,7 +122,7 @@ export function RecordCollection<Row extends { id: string }>({ sectionId, label,
         ) : status === 'LOADING' && !page ? (
           <div className="flex items-center gap-2 rounded-2xl border border-stone-200 bg-white px-5 py-6 text-sm text-slate-600" role="status"><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />Loading {label.toLowerCase()}…</div>
         ) : page && rows.length === 0 && status === 'READY' ? (
-          <AskCollectionState kind="EMPTY" description={filterActive ? 'No records match your search or filter.' : `No ${label.toLowerCase()} are recorded yet.`} />
+          <AskCollectionState kind="EMPTY" description={filterActive ? 'No records match your search or filter.' : emptyText} />
         ) : (
           <>
             <AskCollection className={`rounded-2xl border border-slate-200 bg-white ${status === 'LOADING' ? 'opacity-60' : ''}`} aria-label={label} aria-busy={status === 'LOADING'}>

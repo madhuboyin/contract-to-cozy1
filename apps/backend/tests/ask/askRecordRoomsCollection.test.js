@@ -134,8 +134,7 @@ test('limits are clamped and malformed queries are rejected', async () => {
   }
 });
 
-test('the registry paged flag agrees with the connected readers, and unpaged or unknown sections are refused', async () => {
+test('the registry paged flag agrees with the connected readers', async () => {
   const paged = ASK_RECORD_SECTION_REGISTRY.filter((entry) => entry.pagedCollection).map((entry) => entry.id).sort();
   assert.deepEqual(paged, Object.keys(ASK_RECORD_COLLECTION_READERS).sort());
-  assert.deepEqual(paged, ['rooms']);
 });

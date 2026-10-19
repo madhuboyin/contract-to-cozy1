@@ -3,6 +3,8 @@ import { prisma } from '../../lib/prisma';
 import type { AskAccountRole } from './askAccountEligibility';
 import { ensureAskServiceAccountEligibility, ensurePropertyAccess } from './askHandlerSupport';
 import { loadOperatingMode } from './askRecordIndex.service';
+import { inventoryLifecycleHorizon, inventoryMissingFacts } from './handlers/inventory.handler';
+import { visibleInventoryItemWhere } from '../riskAssetApplicability';
 import { ASK_RECORD_SECTION_REGISTRY, evaluateRecordSectionApplicability, type AskRecordSectionId } from './governance/askRecordSectionRegistry';
 
 export const ASK_RECORD_COLLECTION_CONTRACT_VERSION = 'ask-record-collection-v1' as const;
@@ -159,11 +161,142 @@ export async function readRoomsPage(propertyId: string, query: AskRecordCollecti
   };
 }
 
+export interface AskRecordInventoryRow {
+  id: string;
+  name: string;
+  category: string;
+  /** Null when the condition is recorded as unknown. */
+  condition: string | null;
+  roomName: string | null;
+  brandModel: string | null;
+  verified: boolean;
+  /** The facts Ask's inventory answer checks that are not recorded yet (brand, model, serial, purchase date, documents, coverage). */
+  missingDetails: string[];
+  /** Set when the expected end of life falls inside Ask's three-year horizon. */
+  endOfLifeBy: string | null;
+  updatedAt: string;
+  /** The declared Ask action for one item; the inventory handler resolves the quoted name exactly. */
+  askQuestion: string;
+}
+
+const INVENTORY_CATEGORIES = ['APPLIANCE', 'HVAC', 'PLUMBING', 'ELECTRICAL', 'ROOF_EXTERIOR', 'SAFETY', 'SMART_HOME', 'FURNITURE', 'ELECTRONICS', 'OTHER', 'INTERIOR', 'STRUCTURAL', 'EXTERIOR', 'SITE'] as const;
+const INVENTORY_STATUSES = [
+  { value: 'incomplete', label: 'Missing details' },
+  { value: 'lifecycle', label: 'Nearing end of life' },
+  { value: 'unverified', label: 'Not verified' },
+] as const;
+const InventoryCursorSchema = z.object({ u: z.string().datetime(), i: z.string() });
+
+// "Not recorded" means null or blank, the same truthiness Ask's inventory answer applies.
+const blank = (field: string) => ({ OR: [{ [field]: null }, { [field]: '' }] });
+
+/** The where clause for each status focus. Mirrors `inventoryMissingFacts` field for field; a test holds the two together. */
+export function inventoryStatusWhere(status: string, now = new Date()): Record<string, unknown> {
+  if (status === 'incomplete') {
+    return {
+      OR: [
+        { AND: [blank('brand'), blank('manufacturer')] },
+        { AND: [blank('model'), blank('modelNumber')] },
+        { AND: [blank('serialNo'), blank('serialNumber')] },
+        { purchasedOn: null },
+        { documents: { none: {} } },
+        { AND: [{ warrantyId: null }, { insurancePolicyId: null }, { coverageEvidenceStatus: 'UNKNOWN' }] },
+      ],
+    };
+  }
+  if (status === 'lifecycle') return { expectedExpiryDate: { not: null, lte: inventoryLifecycleHorizon(now) } };
+  if (status === 'unverified') return { isVerified: false };
+  throw new InvalidCollectionQueryError('status filter is not valid.');
+}
+
+/** Reads one page of inventory: the visible items Ask's inventory answer lists, most recently updated first. */
+export async function readInventoryPage(propertyId: string, query: AskRecordCollectionQuery): Promise<AskRecordCollectionPage<AskRecordInventoryRow>> {
+  const limit = clampLimit(query.limit);
+  const search = cleanSearch(query.search);
+  const category = query.filters?.category?.trim() || null;
+  const room = query.filters?.room?.trim() || null;
+  const status = query.filters?.status?.trim() || null;
+  if (category && !(INVENTORY_CATEGORIES as readonly string[]).includes(category)) throw new InvalidCollectionQueryError('category filter is not valid.');
+  if (room && !/^[A-Za-z0-9-]{1,64}$/.test(room)) throw new InvalidCollectionQueryError('room filter is not valid.');
+  const after = decodeCursor(query.cursor, InventoryCursorSchema);
+
+  const clauses: Array<Record<string, unknown>> = [{ propertyId }, visibleInventoryItemWhere() as Record<string, unknown>];
+  if (category) clauses.push({ category });
+  if (room) clauses.push({ roomId: room });
+  if (status) clauses.push(inventoryStatusWhere(status));
+  if (search) {
+    clauses.push({
+      OR: ['name', 'brand', 'model', 'serialNo', 'manufacturer', 'modelNumber', 'serialNumber', 'upc', 'sku'].map((field) => ({ [field]: { contains: search, mode: 'insensitive' } })),
+    });
+  }
+  const baseWhere = { AND: clauses };
+  const pageWhere = after
+    ? { AND: [...clauses, { OR: [{ updatedAt: { lt: new Date(after.u) } }, { updatedAt: new Date(after.u), id: { lt: after.i } }] }] }
+    : baseWhere;
+  const visibleWhere = { AND: [{ propertyId }, visibleInventoryItemWhere()] };
+
+  const [rows, total, categories, rooms] = await Promise.all([
+    prisma.inventoryItem.findMany({
+      where: pageWhere as never,
+      orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+      take: limit + 1,
+      select: {
+        id: true, name: true, category: true, condition: true, isVerified: true, updatedAt: true, expectedExpiryDate: true,
+        brand: true, manufacturer: true, model: true, modelNumber: true, serialNo: true, serialNumber: true, purchasedOn: true,
+        warrantyId: true, insurancePolicyId: true, coverageEvidenceStatus: true,
+        room: { select: { name: true } },
+        documents: { select: { id: true }, take: 1 },
+      },
+    }),
+    prisma.inventoryItem.count({ where: baseWhere as never }),
+    prisma.inventoryItem.groupBy({ by: ['category'], where: visibleWhere as never, orderBy: { category: 'asc' } }),
+    prisma.inventoryRoom.findMany({ where: { propertyId, items: { some: visibleInventoryItemWhere() } }, orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }, { id: 'asc' }], take: 100, select: { id: true, name: true } }),
+  ]);
+
+  const page = rows.slice(0, limit);
+  const last = page[page.length - 1];
+  const nextCursor = rows.length > limit && last ? encodeCursor({ u: last.updatedAt.toISOString(), i: last.id }) : null;
+  const horizon = inventoryLifecycleHorizon();
+  const filterOptions: AskRecordCollectionPage<unknown>['filterOptions'] = [
+    { key: 'status', label: 'Status', options: INVENTORY_STATUSES.map((entry) => ({ value: entry.value, label: entry.label })) },
+    ...(categories.length > 1 ? [{ key: 'category', label: 'Category', options: categories.map((entry) => ({ value: entry.category, label: readableEnum(entry.category) ?? entry.category })) }] : []),
+    ...(rooms.length > 1 ? [{ key: 'room', label: 'Room', options: rooms.map((entry) => ({ value: entry.id, label: entry.name })) }] : []),
+  ];
+
+  return {
+    contractVersion: ASK_RECORD_COLLECTION_CONTRACT_VERSION,
+    propertyId,
+    sectionId: 'inventory',
+    generatedAt: new Date().toISOString(),
+    total,
+    delivered: page.length,
+    nextCursor,
+    truncated: nextCursor !== null,
+    sort: { key: 'updatedAt', label: 'Recently updated' },
+    query: { search, filters: Object.fromEntries(Object.entries({ category, room, status }).filter(([, value]) => value)) as Record<string, string> },
+    filterOptions,
+    rows: page.map((item) => ({
+      id: item.id,
+      name: item.name,
+      category: readableEnum(item.category) ?? item.category,
+      condition: item.condition === 'UNKNOWN' ? null : readableEnum(item.condition),
+      roomName: item.room?.name ?? null,
+      brandModel: [item.brand ?? item.manufacturer, item.model ?? item.modelNumber].filter(Boolean).join(' ') || null,
+      verified: item.isVerified,
+      missingDetails: inventoryMissingFacts(item),
+      endOfLifeBy: item.expectedExpiryDate && item.expectedExpiryDate <= horizon ? item.expectedExpiryDate.toISOString() : null,
+      updatedAt: item.updatedAt.toISOString(),
+      askQuestion: `Show inventory item "${item.name}"`,
+    })),
+  };
+}
+
 type SectionReader = (propertyId: string, query: AskRecordCollectionQuery) => Promise<AskRecordCollectionPage<unknown>>;
 
 /** The sections with a connected paged reader. The registry's `pagedCollection` flag must agree with this map (tested). */
 export const ASK_RECORD_COLLECTION_READERS: Readonly<Partial<Record<AskRecordSectionId, SectionReader>>> = Object.freeze({
   rooms: readRoomsPage,
+  inventory: readInventoryPage,
 });
 
 export class AskRecordSectionUnavailableError extends Error {

@@ -62,7 +62,7 @@ export const ASK_RECORD_SECTION_REGISTRY: readonly AskRecordSectionDefinition[] 
   section({
     id: 'inventory', label: 'Systems and inventory', scope: 'Appliances, systems and belongings with condition and verification.', owner: 'inventory',
     readOperationIds: ['INVENTORY_LOOKUP'], commandOperationIds: ['INVENTORY_ITEM_CREATE', 'INVENTORY_ITEM_CORRECT'],
-    collectionReader: OVERVIEW, pagedCollection: false, lifecycleOperationId: 'INVENTORY_LOOKUP', freshnessSource: 'Most recently updated item', exportEligibility: 'NOT_EVALUATED',
+    collectionReader: OVERVIEW, pagedCollection: true, lifecycleOperationId: 'INVENTORY_LOOKUP', freshnessSource: 'Most recently updated item', exportEligibility: 'NOT_EVALUATED',
     primaryAction: { label: 'View inventory', question: 'What is in my home inventory?' },
   }),
   section({

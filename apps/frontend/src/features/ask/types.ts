@@ -850,3 +850,17 @@ export interface AskRecordRoomRow {
   updatedAt: string;
   askQuestion: string;
 }
+
+export interface AskRecordInventoryRow {
+  id: string;
+  name: string;
+  category: string;
+  condition: string | null;
+  roomName: string | null;
+  brandModel: string | null;
+  verified: boolean;
+  missingDetails: string[];
+  endOfLifeBy: string | null;
+  updatedAt: string;
+  askQuestion: string;
+}
