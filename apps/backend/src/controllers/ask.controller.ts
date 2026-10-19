@@ -5,6 +5,7 @@ import type { AuthRequest } from '../types/auth.types';
 import { AskSessionSearchRequestSchema, AskSessionUpdateRequestSchema, ContinueAskExecutionSchema, CreateAskExecutionRequestSchema, EditAskConfirmationSchema, RecordAskCaptureEventSchema, RequestAskCorrectionSchema, ResolveAskExecutionPropertySchema, RetryAskExecutionSchema, SubmitAskCaptureRequestSchema, SubmitAskClarificationSchema, SubmitAskConfirmationSchema, SubmitAskFeedbackSchema, SubmitHomeActionUsefulnessFeedbackSchema, DismissSuggestedActionSchema, SUGGESTED_NEXT_ACTION_ID_PATTERN } from '../productFramework/ask/ask.contract';
 import { getAskRecordIndex } from '../services/ask/askRecordIndex.service';
 import { getAskRecordExportReview } from '../services/ask/askRecordExportReview.service';
+import { getAskSavedPage, resolveAskSavedArtifactForUser, setAskSavedArchive, AskSavedInvalidRequestError } from '../services/ask/askSaved.service';
 import { getAskWorkPage, resolveAskWorkForUser, AskWorkInvalidRequestError } from '../services/ask/askWork.service';
 import { getAskRecordCollectionPage, AskRecordSectionUnavailableError } from '../services/ask/askRecordCollections.service';
 import { getAskRecordDetail } from '../services/ask/askRecordDetail.service';
@@ -557,6 +558,57 @@ export async function getAskWorkResolveHandler(req: AuthRequest, res: Response, 
     if (error instanceof AskWorkInvalidRequestError || code === 'ASK_INVALID_REQUEST') return res.status(400).json({ success: false, error: { code: 'ASK_INVALID_REQUEST', message: 'Invalid Work request.' } });
     return next(error);
   }
+}
+
+// Saved (FR-SAVED-001..003): the artifact projection, reopen, and this person's own archive choice. Reads are side-effect free.
+const AskSavedQuerySchema = z.object({
+  propertyId: z.string().trim().min(1).max(160),
+  cursor: z.string().trim().min(1).max(400).optional(),
+  limit: z.coerce.number().int().min(1).max(200).optional(),
+  search: z.string().max(200).optional(),
+  artifactType: z.string().trim().max(60).optional(),
+  freshness: z.string().trim().max(20).optional(),
+  archived: z.enum(['true', 'false']).optional(),
+});
+const AskSavedResolveSchema = z.object({ propertyId: z.string().trim().min(1).max(160), artifactKey: z.string().trim().min(1).max(320) });
+const AskSavedArchiveSchema = z.object({ propertyId: z.string().trim().min(1).max(160), artifactKey: z.string().trim().min(1).max(320), archived: z.boolean() });
+
+function savedError(error: unknown, res: Response, next: NextFunction) {
+  const code = error instanceof Error ? (error as Error & { code?: string }).code : undefined;
+  if (error instanceof AskSavedInvalidRequestError || code === 'ASK_INVALID_REQUEST') return res.status(400).json({ success: false, error: { code: 'ASK_INVALID_REQUEST', message: 'Invalid Saved request.' } });
+  if (code === 'ASK_PROPERTY_NOT_FOUND') return res.status(404).json({ success: false, error: { code, message: 'Property not found or access was removed.' } });
+  return next(error);
+}
+
+export async function getAskSavedPageHandler(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const user = req.user;
+    if (!user) return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED', message: 'Authentication required.' } });
+    const query = AskSavedQuerySchema.safeParse(req.query);
+    if (!query.success) return res.status(400).json({ success: false, error: { code: 'ASK_INVALID_REQUEST', message: 'Invalid Saved request.' } });
+    const { propertyId, archived, ...rest } = query.data;
+    return res.status(200).json({ success: true, data: await getAskSavedPage(user.userId, propertyId, { ...rest, archived: archived === 'true' }, user.role) });
+  } catch (error) { return savedError(error, res, next); }
+}
+
+export async function getAskSavedResolveHandler(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const user = req.user;
+    if (!user) return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED', message: 'Authentication required.' } });
+    const query = AskSavedResolveSchema.safeParse(req.query);
+    if (!query.success) return res.status(400).json({ success: false, error: { code: 'ASK_INVALID_REQUEST', message: 'Invalid Saved request.' } });
+    return res.status(200).json({ success: true, data: await resolveAskSavedArtifactForUser(user.userId, query.data.propertyId, query.data.artifactKey, user.role) });
+  } catch (error) { return savedError(error, res, next); }
+}
+
+export async function patchAskSavedArchiveHandler(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const user = req.user;
+    if (!user) return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED', message: 'Authentication required.' } });
+    const body = AskSavedArchiveSchema.safeParse(req.body);
+    if (!body.success) return res.status(400).json({ success: false, error: { code: 'ASK_INVALID_REQUEST', message: 'Invalid Saved request.' } });
+    return res.status(200).json({ success: true, data: await setAskSavedArchive(user.userId, body.data.propertyId, body.data.artifactKey, body.data.archived, user.role) });
+  } catch (error) { return savedError(error, res, next); }
 }
 
 // One record's canonical detail, provenance and correction routes (FR-REC-004/005). Reauthorizes when the detail opens.

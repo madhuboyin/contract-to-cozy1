@@ -2517,6 +2517,7 @@ model User {
   recommendationGovernanceReviews RecommendationGovernanceReview[]
   capabilityGovernanceReviews     CapabilityGovernanceReview[]
   askSessions                     AskSession[]
+  askSavedArtifactPreferences     AskSavedArtifactPreference[]
   askExecutions                   AskExecution[]
   askSuggestedActionLifecycles    AskSuggestedActionLifecycle[]
   refinanceRateMonitors           RefinanceRateMonitor[]
@@ -8051,6 +8052,23 @@ enum AskExecutionStatus {
   FAILED_TERMINAL
   CANCELLED
   EXPIRED
+}
+
+// Sole Homeowner Interface Phase 4: a person's own "archive this saved result from my Saved list" choice. It is a presentation
+// preference only: it holds no artifact payload, never changes or deletes the canonical record, and is never shared with other members.
+// `artifactKey` is `<type>:<canonical id>` as the Saved projection names it.
+model AskSavedArtifactPreference {
+  id          String   @id @default(uuid())
+  userId      String
+  propertyId  String
+  artifactKey String
+  archivedAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, propertyId, artifactKey])
+  @@index([userId, propertyId])
+  @@map("ask_saved_artifact_preferences")
 }
 
 model AskSession {
