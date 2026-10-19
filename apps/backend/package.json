@@ -32,6 +32,7 @@
     "smoke:health-score-ui": "node scripts/healthScoreUiSmokeCheck.js",
     "acceptance:phase8": "node scripts/phase8-runtime-acceptance.js",
     "smoke:capability-discovery": "ts-node scripts/capability-discovery-smoke.ts",
+    "smoke:ask-homeowner-interface": "ts-node scripts/ask-homeowner-interface-smoke.ts",
     "drill:capability-kill-switches": "ts-node scripts/capability-kill-switch-drill.ts",
     "drill:capability-catalog-only": "ts-node scripts/capability-catalog-only-drill.ts",
     "review:capability-copy": "ts-node scripts/capability-copy-review.ts",

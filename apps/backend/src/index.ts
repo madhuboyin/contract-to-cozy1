@@ -28,6 +28,7 @@ import basicAuth from 'express-basic-auth';
 import { prisma } from './lib/prisma';
 import { redis } from './lib/redis';
 import { runDeepHealthChecks } from './lib/deepHealth';
+import { resolveServiceBuildIdentity } from './config/buildIdentity';
 import './productFramework/capabilities/canonicalCapabilityRegistry';
 
 // Import swagger config
@@ -441,12 +442,16 @@ app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(null, {
  *                   format: date-time
  *                 environment:
  *                   type: string
+ *                 build:
+ *                   type: object
+ *                   description: Bounded deployment identity and Ask homeowner-interface contract version.
  */
 app.get('/api/health', (req: Request, res: Response) => {
   res.status(200).json({
     status: 'healthy',
     service: 'backend',
     timestamp: new Date().toISOString(),
+    build: resolveServiceBuildIdentity(),
   });
 });
 
@@ -471,12 +476,16 @@ app.get('/api/health', (req: Request, res: Response) => {
  *                 timestamp:
  *                   type: string
  *                   format: date-time
+ *                 build:
+ *                   type: object
+ *                   description: Bounded deployment identity and Ask homeowner-interface contract version.
  */
 app.get('/api/ready', (req: Request, res: Response) => {
   res.status(200).json({
     status: 'ready',
     service: 'backend',
     timestamp: new Date().toISOString(),
+    build: resolveServiceBuildIdentity(),
   });
 });
 
