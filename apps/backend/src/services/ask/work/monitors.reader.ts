@@ -60,7 +60,7 @@ export function monitorRow(monitor: MonitorRecord): AskWorkRow | null {
 export const readMonitorWork: AskWorkProviderReader = async (context, query) => {
   const base: Prisma.RefinanceRateMonitorWhereInput = { userId: context.userId, propertyId: context.propertyId };
   const statusFilter: Prisma.RefinanceRateMonitorWhereInput = query.status ? { status: query.status as RefinanceRateMonitorStatus } : {};
-  const inView: Prisma.RefinanceRateMonitorWhereInput = { AND: [base, viewWhere(query.view), statusFilter] };
+  const inView: Prisma.RefinanceRateMonitorWhereInput  = query.entityId ? { AND: [base, { id: query.entityId }] } : { AND: [base, viewWhere(query.view), statusFilter] };
   const [monitors, total, viewCounts] = await Promise.all([
     prisma.refinanceRateMonitor.findMany({
       where: afterBoundaryWhere(inView, query.after, KEY_PREFIX),

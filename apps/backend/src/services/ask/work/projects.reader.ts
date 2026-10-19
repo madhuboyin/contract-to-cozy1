@@ -85,7 +85,7 @@ export const readProjectWork: AskWorkProviderReader = async (context, query) => 
   const now = new Date();
   const base: Prisma.ProjectRecordWhereInput = { propertyId: context.propertyId };
   const statusFilter: Prisma.ProjectRecordWhereInput = query.status ? { status: query.status as ProjectRecordStatus } : {};
-  const inView: Prisma.ProjectRecordWhereInput = { AND: [base, viewWhere(query.view, now), statusFilter] };
+  const inView: Prisma.ProjectRecordWhereInput  = query.entityId ? { AND: [base, { id: query.entityId }] } : { AND: [base, viewWhere(query.view, now), statusFilter] };
   const [projects, total, viewCounts] = await Promise.all([
     prisma.projectRecord.findMany({
       where: afterBoundaryWhere(inView, query.after, KEY_PREFIX),

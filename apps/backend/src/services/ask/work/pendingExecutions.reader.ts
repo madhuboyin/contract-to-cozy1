@@ -59,6 +59,7 @@ export const readPendingExecutionWork: AskWorkProviderReader = async (context, q
     where: {
       userId: context.userId,
       propertyId: context.propertyId,
+      ...(query.entityId ? { id: query.entityId } : {}),
       AND: [
         { OR: [
           { status: { in: INTERACTIVE_ASK_STATUSES } },
@@ -78,8 +79,8 @@ export const readPendingExecutionWork: AskWorkProviderReader = async (context, q
   const viewCounts = { NEEDS_YOU: 0, WAITING: 0 };
   for (const row of live) viewCounts[pendingExecutionView(row.status) as 'NEEDS_YOU' | 'WAITING'] += 1;
   const inView = live
-    .filter((row) => pendingExecutionView(row.status) === query.view)
-    .filter((row) => !query.status || row.status === query.status)
+    .filter((row) => query.entityId || pendingExecutionView(row.status) === query.view)
+    .filter((row) => query.entityId || !query.status || row.status === query.status)
     .map((row) => pendingExecutionRow(row, context.propertyId))
     .sort(compareAskWorkRows);
   const rows = inView.filter((row) => !query.after || compareAskWorkRows(row, query.after) > 0);

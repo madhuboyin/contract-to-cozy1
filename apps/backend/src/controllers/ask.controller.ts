@@ -5,7 +5,7 @@ import type { AuthRequest } from '../types/auth.types';
 import { AskSessionSearchRequestSchema, AskSessionUpdateRequestSchema, ContinueAskExecutionSchema, CreateAskExecutionRequestSchema, EditAskConfirmationSchema, RecordAskCaptureEventSchema, RequestAskCorrectionSchema, ResolveAskExecutionPropertySchema, RetryAskExecutionSchema, SubmitAskCaptureRequestSchema, SubmitAskClarificationSchema, SubmitAskConfirmationSchema, SubmitAskFeedbackSchema, SubmitHomeActionUsefulnessFeedbackSchema, DismissSuggestedActionSchema, SUGGESTED_NEXT_ACTION_ID_PATTERN } from '../productFramework/ask/ask.contract';
 import { getAskRecordIndex } from '../services/ask/askRecordIndex.service';
 import { getAskRecordExportReview } from '../services/ask/askRecordExportReview.service';
-import { getAskWorkPage, AskWorkInvalidRequestError } from '../services/ask/askWork.service';
+import { getAskWorkPage, resolveAskWorkForUser, AskWorkInvalidRequestError } from '../services/ask/askWork.service';
 import { getAskRecordCollectionPage, AskRecordSectionUnavailableError } from '../services/ask/askRecordCollections.service';
 import { getAskRecordDetail } from '../services/ask/askRecordDetail.service';
 import { cancelAskExecution, confirmAskExecution, continueAskExecution, createAskExecution, editAskConfirmation, getAskExecution, getAskPendingWork, getAskSession, getConciergeHome, getRecentAskSessions, updateAskSessionForUser, recordAskCaptureEvent, recordAskCaptureFailure, refreshAskExecutionAfterConflict, requestAskCorrection, resolveAskExecutionProperty, retryAskExecution, submitAskCapture, submitAskClarification, submitAskExecutionFeedback, submitHomeActionUsefulnessFeedback } from '../services/ask/askOrchestrator.service';
@@ -534,6 +534,27 @@ export async function getAskWorkPageHandler(req: AuthRequest, res: Response, nex
     const code = error instanceof Error ? (error as Error & { code?: string }).code : undefined;
     if (error instanceof AskWorkInvalidRequestError || code === 'ASK_INVALID_REQUEST') return res.status(400).json({ success: false, error: { code: 'ASK_INVALID_REQUEST', message: 'Invalid Work request.' } });
     if (code === 'ASK_PROPERTY_NOT_FOUND') return res.status(404).json({ success: false, error: { code, message: 'Property not found or access was removed.' } });
+    return next(error);
+  }
+}
+
+// Opens one piece of work: rereads current state and reports a single recovery outcome (FR-WORK-004). Side-effect free.
+const AskWorkResolveQuerySchema = z.object({
+  propertyId: z.string().trim().min(1).max(160),
+  workKey: z.string().trim().min(1).max(320),
+  version: z.string().trim().max(200).optional(),
+});
+
+export async function getAskWorkResolveHandler(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const user = req.user;
+    if (!user) return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED', message: 'Authentication required.' } });
+    const query = AskWorkResolveQuerySchema.safeParse(req.query);
+    if (!query.success) return res.status(400).json({ success: false, error: { code: 'ASK_INVALID_REQUEST', message: 'Invalid Work request.' } });
+    return res.status(200).json({ success: true, data: await resolveAskWorkForUser(user.userId, query.data.propertyId, query.data.workKey, query.data.version, user.role) });
+  } catch (error) {
+    const code = error instanceof Error ? (error as Error & { code?: string }).code : undefined;
+    if (error instanceof AskWorkInvalidRequestError || code === 'ASK_INVALID_REQUEST') return res.status(400).json({ success: false, error: { code: 'ASK_INVALID_REQUEST', message: 'Invalid Work request.' } });
     return next(error);
   }
 }

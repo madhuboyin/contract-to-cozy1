@@ -86,7 +86,7 @@ export function renovationCaseRow(record: RenovationRecord, role: Parameters<typ
 export const readRenovationCaseWork: AskWorkProviderReader = async (context, query) => {
   const base: Prisma.RenovationCaseWhereInput = { propertyId: context.propertyId, executionProject: { is: null } };
   const statusFilter: Prisma.RenovationCaseWhereInput = query.status ? { lifecycle: query.status as RenovationCaseLifecycle } : {};
-  const inView: Prisma.RenovationCaseWhereInput = { AND: [base, viewWhere(query.view), statusFilter] };
+  const inView: Prisma.RenovationCaseWhereInput  = query.entityId ? { AND: [base, { id: query.entityId }] } : { AND: [base, viewWhere(query.view), statusFilter] };
   const [cases, total, viewCounts] = await Promise.all([
     prisma.renovationCase.findMany({
       where: afterBoundaryWhere(inView, query.after, KEY_PREFIX),

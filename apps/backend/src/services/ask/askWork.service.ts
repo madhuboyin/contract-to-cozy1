@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { HouseholdRole } from '@prisma/client';
 import { logger } from '../../lib/logger';
 import type { AskAccountRole } from './askAccountEligibility';
+import { resolveAskWork } from './work/askWorkResolve';
 import { readPendingExecutionWork } from './work/pendingExecutions.reader';
 import { readDecisionThreadWork } from './work/decisionThreads.reader';
 import { readIncidentWork } from './work/incidents.reader';
@@ -24,7 +25,7 @@ import {
 } from './governance/askWorkProviderRegistry';
 import {
   ASK_WORK_CONTRACT_VERSION, ASK_WORK_DEFAULT_LIMIT, ASK_WORK_MAX_LIMIT, compareAskWorkRows,
-  type AskWorkBoundary, type AskWorkPage, type AskWorkProviderReader, type AskWorkProviderState, type AskWorkProviderStatus, type AskWorkRow,
+  type AskWorkBoundary, type AskWorkPage, type AskWorkResolution, type AskWorkProviderReader, type AskWorkProviderState, type AskWorkProviderStatus, type AskWorkRow,
 } from './askWork.contract';
 
 /**
@@ -262,4 +263,30 @@ export async function composeAskWorkPage(
     providers: statuses,
     rows,
   };
+}
+
+/**
+ * Opens one piece of work for the caller (FR-WORK-004). Access to the home is rechecked first: losing it is a normal ACCESS_LOST outcome,
+ * not an error, so the homeowner is told plainly instead of seeing a failure. Everything else is the resolver's single recovery outcome.
+ */
+export async function resolveAskWorkForUser(
+  userId: string,
+  propertyId: string,
+  workKey: string,
+  expectedVersion: string | null | undefined,
+  accountRole?: AskAccountRole,
+): Promise<AskWorkResolution> {
+  if (!workKey || workKey.length > 320) throw new AskWorkInvalidRequestError('workKey is not valid.');
+  let role: HouseholdRole;
+  try {
+    role = (await authorizeAskWork(userId, propertyId, accountRole)).role;
+  } catch (error) {
+    const code = error instanceof Error ? (error as Error & { code?: string }).code : undefined;
+    if (code === 'ASK_PROPERTY_NOT_FOUND' || code === 'ASK_PERMISSION_REQUIRED') {
+      return { contractVersion: ASK_WORK_CONTRACT_VERSION, propertyId, workKey, outcome: 'ACCESS_LOST', row: null, currentVersion: null, supersededBy: null, message: 'You no longer have access to this home.' };
+    }
+    throw error;
+  }
+  const operatingMode = await loadOperatingMode(userId, propertyId);
+  return resolveAskWork({ userId, propertyId, role, operatingMode, workKey, expectedVersion }, ASK_WORK_PROVIDER_READERS);
 }

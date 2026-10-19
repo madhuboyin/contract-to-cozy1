@@ -62,10 +62,10 @@ export function projectFollowUpRow(project: ProjectFollowUp): AskWorkRow {
  * here: they need their own applicability gate. Read-only.
  */
 export const readScheduledFollowUpWork: AskWorkProviderReader = async (context, query) => {
-  if (query.view !== 'SCHEDULED') return { rows: [], total: 0, viewCounts: null };
+  if (query.view !== 'SCHEDULED' && !query.entityId) return { rows: [], total: 0, viewCounts: null };
   const now = new Date();
-  const claimInView: Prisma.ClaimWhereInput = { propertyId: context.propertyId, status: { in: OPEN_CLAIM_STATUSES }, nextFollowUpAt: { gt: now } };
-  const projectInView: Prisma.ProjectRecordWhereInput = { propertyId: context.propertyId, status: { notIn: ['CANCELLED'] }, followUpDueAt: { gt: now }, followUpCompletedAt: null };
+  const claimInView: Prisma.ClaimWhereInput = { propertyId: context.propertyId, status: { in: OPEN_CLAIM_STATUSES }, nextFollowUpAt: { gt: now }, ...(query.entityId ? { id: query.entityId } : {}) };
+  const projectInView: Prisma.ProjectRecordWhereInput = { propertyId: context.propertyId, status: { notIn: ['CANCELLED'] }, followUpDueAt: { gt: now }, followUpCompletedAt: null, ...(query.entityId ? { id: query.entityId } : {}) };
   const [claims, projects, claimTotal, projectTotal] = await Promise.all([
     prisma.claim.findMany({
       where: afterBoundaryWhere(claimInView, query.after, CLAIM_PREFIX),

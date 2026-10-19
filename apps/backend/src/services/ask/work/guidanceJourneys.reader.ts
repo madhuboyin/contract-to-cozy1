@@ -74,7 +74,7 @@ export function guidanceJourneyRow(journey: JourneyRecord, workItemIds: readonly
 export const readGuidanceJourneyWork: AskWorkProviderReader = async (context, query) => {
   const base: Prisma.GuidanceJourneyWhereInput = { propertyId: context.propertyId, projectRecord: { is: null } };
   const statusFilter: Prisma.GuidanceJourneyWhereInput = query.status ? { status: query.status as GuidanceJourneyStatus } : {};
-  const inView: Prisma.GuidanceJourneyWhereInput = { AND: [base, viewWhere(query.view), statusFilter] };
+  const inView: Prisma.GuidanceJourneyWhereInput  = query.entityId ? { AND: [base, { id: query.entityId }] } : { AND: [base, viewWhere(query.view), statusFilter] };
   const [journeys, total, viewCounts] = await Promise.all([
     prisma.guidanceJourney.findMany({
       where: afterBoundaryWhere(inView, query.after, KEY_PREFIX),

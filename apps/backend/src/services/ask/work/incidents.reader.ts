@@ -89,7 +89,7 @@ export const readIncidentWork: AskWorkProviderReader = async (context, query) =>
   const now = new Date();
   const base: Prisma.IncidentWhereInput = { propertyId: context.propertyId, isSuppressed: false, status: { not: 'SUPPRESSED' } };
   const statusFilter: Prisma.IncidentWhereInput = query.status ? { status: query.status as IncidentStatus } : {};
-  const inView: Prisma.IncidentWhereInput = { AND: [base, viewWhere(query.view, context.userId, now), statusFilter] };
+  const inView: Prisma.IncidentWhereInput  = query.entityId ? { AND: [base, { id: query.entityId }] } : { AND: [base, viewWhere(query.view, context.userId, now), statusFilter] };
   const instant = boundaryInstant(query.after);
   const sameInstant: Prisma.IncidentWhereInput | null = !query.after ? null
     : query.after.workKey.startsWith(KEY_PREFIX) ? { id: { gt: query.after.workKey.slice(KEY_PREFIX.length) } }

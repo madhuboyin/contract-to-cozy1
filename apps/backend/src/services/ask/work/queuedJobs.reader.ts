@@ -109,8 +109,8 @@ export const readQueuedJobWork: AskWorkProviderReader = async (context, query) =
   const scoreBase: Prisma.HomeScoreExportJobWhereInput = { requestedByUserId: context.userId, report: { propertyId: context.propertyId } };
   const reportStatus: Prisma.HomeReportExportWhereInput = query.status ? { status: query.status as HomeReportExportStatus } : {};
   const scoreStatus: Prisma.HomeScoreExportJobWhereInput = query.status ? { jobStatus: query.status as HomeScoreExportJobStatus } : {};
-  const reportInView: Prisma.HomeReportExportWhereInput = { AND: [reportBase, reportWhere(query.view, now), reportStatus] };
-  const scoreInView: Prisma.HomeScoreExportJobWhereInput = { AND: [scoreBase, scoreWhere(query.view), scoreStatus] };
+  const reportInView: Prisma.HomeReportExportWhereInput = query.entityId ? { AND: [reportBase, { id: query.entityId }] } : { AND: [reportBase, reportWhere(query.view, now), reportStatus] };
+  const scoreInView: Prisma.HomeScoreExportJobWhereInput = query.entityId ? { AND: [scoreBase, { id: query.entityId }] } : { AND: [scoreBase, scoreWhere(query.view), scoreStatus] };
   const [reports, scores, reportTotal, scoreTotal, reportCounts, scoreCounts] = await Promise.all([
     prisma.homeReportExport.findMany({
       where: afterBoundaryWhere(reportInView, query.after, REPORT_PREFIX, 'requestedAt'),

@@ -85,7 +85,7 @@ export function decisionThreadRow(thread: ThreadRecord): AskWorkRow {
 export const readDecisionThreadWork: AskWorkProviderReader = async (context, query) => {
   const base: Prisma.DecisionThreadWhereInput = { propertyId: context.propertyId, decisionDefinitionId: { in: [...ASK_RESUMABLE_DECISION_DEFINITION_IDS] } };
   const statusFilter: Prisma.DecisionThreadWhereInput = query.status ? { lifecycleStatus: query.status as DecisionThreadLifecycleStatus } : {};
-  const inView: Prisma.DecisionThreadWhereInput = { AND: [base, viewWhere(query.view), statusFilter] };
+  const inView: Prisma.DecisionThreadWhereInput  = query.entityId ? { AND: [base, { id: query.entityId }] } : { AND: [base, viewWhere(query.view), statusFilter] };
   const instant = boundaryInstant(query.after);
   const sameInstant: Prisma.DecisionThreadWhereInput | null = !query.after ? null
     : query.after.workKey.startsWith(KEY_PREFIX) ? { id: { gt: query.after.workKey.slice(KEY_PREFIX.length) } }

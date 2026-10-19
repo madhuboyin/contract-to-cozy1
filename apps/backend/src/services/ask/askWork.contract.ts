@@ -11,6 +11,23 @@ export const ASK_WORK_MAX_LIMIT = 50;
  */
 export type AskWorkResumeOutcome = 'AVAILABLE' | 'DELETED' | 'COMPLETED' | 'STALE' | 'ACCESS_LOST' | 'SUPERSEDED';
 
+/**
+ * The result of opening one piece of work (FR-WORK-004). The server reauthorizes and rereads current canonical state; `row` is the
+ * current row for AVAILABLE, COMPLETED and STALE, and null when the work is gone, superseded, or no longer visible to the caller.
+ */
+export interface AskWorkResolution {
+  contractVersion: typeof ASK_WORK_CONTRACT_VERSION;
+  propertyId: string;
+  workKey: string;
+  outcome: AskWorkResumeOutcome;
+  row: AskWorkRow | null;
+  /** The version the client should hold now (the row's freshness version), or null when there is no row. */
+  currentVersion: string | null;
+  /** For SUPERSEDED: the workKey of the work that took its place, when one exists. */
+  supersededBy: string | null;
+  message: string;
+}
+
 /** The launch context an exact resume carries (see Ask launchContext). The server rereads and reauthorizes before honoring any of it. */
 export interface AskWorkLaunch {
   operationId: string | null;
@@ -125,6 +142,8 @@ export interface AskWorkReadQuery {
   /** The page size plus one, so the service can tell whether more work follows the page. */
   limit: number;
   status: string | null;
+  /** Resolve one work row by its source id instead of listing: every view, no boundary. Used only by the resume resolver. */
+  entityId?: string | null;
 }
 
 export interface AskWorkReadResult {
