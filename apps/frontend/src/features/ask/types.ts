@@ -1255,3 +1255,67 @@ export interface AskWorkResolution {
   supersededBy: string | null;
   message: string;
 }
+
+// Saved destination (FR-SAVED-001..003). Mirrors the backend `AskSavedPage`, `AskSavedArtifact` and `AskSavedResolution`.
+export type AskArtifactFreshness = 'CURRENT' | 'STALE' | 'EXPIRED' | 'SUPERSEDED';
+export type AskArtifactCategory = 'REPORT' | 'COMPARISON' | 'DECISION_OUTPUT' | 'BRIEFING' | 'CHECKLIST' | 'ANALYSIS';
+
+export interface AskSavedArtifact {
+  artifactKey: string;
+  artifactType: string;
+  category: AskArtifactCategory;
+  owner: string;
+  entity: { type: string; id: string };
+  propertyId: string;
+  sourceExecutionId: string | null;
+  title: string;
+  summary: string | null;
+  createdAt: string;
+  updatedAt: string;
+  sourceAsOf: string;
+  version: { behavior: 'NEW_VERSION_RETAINED' | 'UPDATES_IN_PLACE_WITH_HISTORY' | 'UPDATES_IN_PLACE'; superseded: boolean; supersededBy: string | null; supersedes: string | null; label: string };
+  freshness: { state: AskArtifactFreshness; reason: string | null };
+  visibility: { scope: 'HOUSEHOLD' | 'REQUESTER_ONLY'; sensitivity: 'STANDARD' | 'SENSITIVE' };
+  archived: { byOwner: boolean; byYou: boolean };
+  reopen: { operationId: string; entityType: string; entityId: string; decisionThreadId: string | null; contextVersion: string | null } | null;
+  reopenUnavailableReason: string | null;
+  capabilities: { export: boolean; share: boolean };
+  sortAt: string;
+}
+
+export interface AskSavedTypeStatus {
+  artifactType: string;
+  label: string;
+  state: 'AVAILABLE' | 'UNAVAILABLE' | 'FAILED' | 'RESTRICTED' | 'NOT_APPLICABLE' | 'CONTEXT_REQUIRED';
+  reason: string | null;
+  total: number | null;
+  delivered: number;
+}
+
+export interface AskSavedPage {
+  contractVersion: 'ask-saved-v1';
+  propertyId: string;
+  generatedAt: string;
+  archived: boolean;
+  total: number | null;
+  totalScope: 'COMPLETE' | 'PARTIAL';
+  partial: boolean;
+  delivered: number;
+  nextCursor: string | null;
+  truncated: boolean;
+  counts: { active: number | null; archived: number | null };
+  sort: { key: 'sortAt'; label: string };
+  query: { search: string | null; artifactType: string | null; freshness: AskArtifactFreshness | null };
+  filterOptions: { types: Array<{ value: string; label: string }>; freshness: Array<{ value: string; label: string }> };
+  types: AskSavedTypeStatus[];
+  rows: AskSavedArtifact[];
+}
+
+export interface AskSavedResolution {
+  contractVersion: 'ask-saved-v1';
+  propertyId: string;
+  artifactKey: string;
+  outcome: 'AVAILABLE' | 'DELETED' | 'ACCESS_LOST' | 'UNAVAILABLE';
+  artifact: AskSavedArtifact | null;
+  message: string;
+}

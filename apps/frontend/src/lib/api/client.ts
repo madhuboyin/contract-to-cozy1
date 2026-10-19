@@ -1116,6 +1116,29 @@ class APIClient {
     if (version) params.set('version', version);
     return this.request(`/api/ask/work/resolve?${params.toString()}`, options);
   }
+  // Saved (FR-SAVED-002): the artifact projection. Browse, search, type and freshness filters, and the active or archived list. Side-effect free.
+  async getAskSavedPage(
+    propertyId: string,
+    query: { cursor?: string | null; limit?: number; search?: string; artifactType?: string; freshness?: string; archived?: boolean } = {},
+    options: { signal?: AbortSignal } = {},
+  ): Promise<APIResponse<import('@/features/ask/types').AskSavedPage>> {
+    const params = new URLSearchParams({ propertyId });
+    if (query.cursor) params.set('cursor', query.cursor);
+    if (query.limit) params.set('limit', String(query.limit));
+    if (query.search?.trim()) params.set('search', query.search.trim());
+    if (query.artifactType) params.set('artifactType', query.artifactType);
+    if (query.freshness) params.set('freshness', query.freshness);
+    if (query.archived) params.set('archived', 'true');
+    return this.request(`/api/ask/saved?${params.toString()}`, options);
+  }
+  // Reopens one saved artifact: rereads the canonical record and reports DELETED, ACCESS_LOST or UNAVAILABLE honestly.
+  async resolveAskSavedArtifact(propertyId: string, artifactKey: string, options: { signal?: AbortSignal } = {}): Promise<APIResponse<import('@/features/ask/types').AskSavedResolution>> {
+    return this.request(`/api/ask/saved/resolve?${new URLSearchParams({ propertyId, artifactKey }).toString()}`, options);
+  }
+  // Archives or restores a saved artifact in this person's own Saved list; the canonical record and other members are untouched.
+  async setAskSavedArchive(propertyId: string, artifactKey: string, archived: boolean): Promise<APIResponse<import('@/features/ask/types').AskSavedResolution>> {
+    return this.request('/api/ask/saved/archive', { method: 'PATCH', body: { propertyId, artifactKey, archived } });
+  }
   async getAskRecordIndex(propertyId: string, options: { signal?: AbortSignal } = {}): Promise<APIResponse<import('@/features/ask/types').AskRecordIndex>> {
     return this.request(`/api/ask/record-index?propertyId=${encodeURIComponent(propertyId)}`, options);
   }
