@@ -68,7 +68,7 @@ export const ASK_RECORD_SECTION_REGISTRY: readonly AskRecordSectionDefinition[] 
   section({
     id: 'documents', label: 'Documents', scope: 'Home records and vault documents, plus extracted candidates awaiting review.', owner: 'home-records',
     readOperationIds: ['DOCUMENT_LOOKUP', 'DOCUMENT_PROMOTION_REVIEW'], commandOperationIds: ['DOCUMENT_PROMOTION_CONFIRM'],
-    collectionReader: OVERVIEW, pagedCollection: false, lifecycleOperationId: 'DOCUMENT_LOOKUP', freshnessSource: 'Most recently added document', exportEligibility: 'NOT_EVALUATED',
+    collectionReader: OVERVIEW, pagedCollection: true, lifecycleOperationId: 'DOCUMENT_LOOKUP', freshnessSource: 'Most recently added document', exportEligibility: 'NOT_EVALUATED',
     primaryAction: { label: 'View documents', question: 'Show me my home documents.' },
   }),
   section({

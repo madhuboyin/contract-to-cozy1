@@ -864,3 +864,17 @@ export interface AskRecordInventoryRow {
   updatedAt: string;
   askQuestion: string;
 }
+
+export interface AskRecordDocumentRow {
+  id: string;
+  title: string;
+  kind: string;
+  kindLabel: string;
+  verification: 'UNVERIFIED' | 'PENDING' | 'VERIFIED' | 'REJECTED' | null;
+  needsReview: boolean | null;
+  expiry: 'CURRENT' | 'EXPIRING_SOON' | 'EXPIRED' | null;
+  transitional: boolean;
+  addedAt: string;
+  updatedAt: string;
+  askQuestion: string;
+}

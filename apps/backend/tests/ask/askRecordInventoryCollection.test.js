@@ -128,5 +128,4 @@ test('invalid filters are rejected and the paged flag matches the connected read
   }
   const paged = ASK_RECORD_SECTION_REGISTRY.filter((entry) => entry.pagedCollection).map((entry) => entry.id).sort();
   assert.deepEqual(paged, Object.keys(ASK_RECORD_COLLECTION_READERS).sort());
-  assert.deepEqual(paged, ['inventory', 'rooms']);
 });

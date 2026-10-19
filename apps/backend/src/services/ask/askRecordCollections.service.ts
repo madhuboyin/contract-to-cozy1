@@ -5,6 +5,8 @@ import { ensureAskServiceAccountEligibility, ensurePropertyAccess } from './askH
 import { loadOperatingMode } from './askRecordIndex.service';
 import { inventoryLifecycleHorizon, inventoryMissingFacts } from './handlers/inventory.handler';
 import { visibleInventoryItemWhere } from '../riskAssetApplicability';
+import type { HouseholdRole } from '@prisma/client';
+import { listPropertyDocuments, type PropertyDocument } from '../propertyDocuments/propertyDocumentInventory.service';
 import { ASK_RECORD_SECTION_REGISTRY, evaluateRecordSectionApplicability, type AskRecordSectionId } from './governance/askRecordSectionRegistry';
 
 export const ASK_RECORD_COLLECTION_CONTRACT_VERSION = 'ask-record-collection-v1' as const;
@@ -291,12 +293,110 @@ export async function readInventoryPage(propertyId: string, query: AskRecordColl
   };
 }
 
-type SectionReader = (propertyId: string, query: AskRecordCollectionQuery) => Promise<AskRecordCollectionPage<unknown>>;
+export interface AskRecordDocumentRow {
+  id: string;
+  title: string;
+  kind: string;
+  kindLabel: string;
+  /** The recorded verification status, or null when the store records none. */
+  verification: 'UNVERIFIED' | 'PENDING' | 'VERIFIED' | 'REJECTED' | null;
+  /** Home Records only: extracted facts await review. */
+  needsReview: boolean | null;
+  expiry: 'CURRENT' | 'EXPIRING_SOON' | 'EXPIRED' | null;
+  /** True for a row still held in the legacy vault, which is projected only until its domain is converted. */
+  transitional: boolean;
+  addedAt: string;
+  updatedAt: string;
+  /** Opens the documents answer for this kind of document: Ask has no per-document read yet, so detail and correction stay with that answer. */
+  askQuestion: string;
+}
+
+const DOCUMENT_STATUS_LABELS: Record<string, string> = { VERIFIED: 'Verified', UNVERIFIED: 'Unverified', PENDING: 'Pending verification', REJECTED: 'Rejected', NEEDS_REVIEW: 'Needs review' };
+const DocumentCursorSchema = z.object({ a: z.string().datetime(), i: z.string() });
+
+function documentMatchesStatus(document: PropertyDocument, status: string): boolean {
+  return status === 'NEEDS_REVIEW' ? document.needsReview === true : document.verification === status;
+}
+
+/**
+ * Reads one page of the documents on file: the canonical inventory (Home Records plus the transitional legacy vault, with the caller's
+ * record-level visibility already applied) with the same scope the index counts. That inventory is not database-paged because it spans two
+ * stores, so filtering, search and the cursor are applied to its metadata rows (never file contents), newest first.
+ */
+export async function readDocumentsPage(
+  context: { propertyId: string; role: HouseholdRole },
+  query: AskRecordCollectionQuery,
+  list: typeof listPropertyDocuments = listPropertyDocuments,
+): Promise<AskRecordCollectionPage<AskRecordDocumentRow>> {
+  const limit = clampLimit(query.limit);
+  const search = cleanSearch(query.search);
+  const status = query.filters?.status?.trim() || null;
+  const kind = query.filters?.kind?.trim() || null;
+  if (status && !(status in DOCUMENT_STATUS_LABELS)) throw new InvalidCollectionQueryError('status filter is not valid.');
+  if (kind && !/^[A-Z_]{1,40}$/.test(kind)) throw new InvalidCollectionQueryError('kind filter is not valid.');
+  const after = decodeCursor(query.cursor, DocumentCursorSchema);
+
+  const inventory = await list({ propertyId: context.propertyId, role: context.role, includeLegacy: true, includeInventoryLinkedLegacy: true });
+  const newestFirst = [...inventory.items].sort((left, right) => right.addedAt.getTime() - left.addedAt.getTime() || (left.id < right.id ? 1 : left.id > right.id ? -1 : 0));
+  const needle = search?.toLowerCase() ?? null;
+  const matching = newestFirst.filter((document) => (
+    (!status || documentMatchesStatus(document, status))
+    && (!kind || document.kind === kind)
+    && (!needle || `${document.title} ${document.description ?? ''}`.toLowerCase().includes(needle))
+  ));
+  const afterTime = after ? new Date(after.a).getTime() : null;
+  const remaining = after
+    ? matching.filter((document) => document.addedAt.getTime() < afterTime! || (document.addedAt.getTime() === afterTime && document.id < after.i))
+    : matching;
+  const page = remaining.slice(0, limit);
+  const last = page[page.length - 1];
+  const nextCursor = remaining.length > limit && last ? encodeCursor({ a: last.addedAt.toISOString(), i: last.id }) : null;
+
+  const statusOptions = Object.keys(DOCUMENT_STATUS_LABELS)
+    .filter((value) => inventory.items.some((document) => documentMatchesStatus(document, value)) || value === status)
+    .map((value) => ({ value, label: DOCUMENT_STATUS_LABELS[value] }));
+  const kindOptions = [...new Map(inventory.items.map((document) => [document.kind, document.kindLabel])).entries()]
+    .sort((left, right) => left[1].localeCompare(right[1]))
+    .map(([value, label]) => ({ value, label }));
+
+  return {
+    contractVersion: ASK_RECORD_COLLECTION_CONTRACT_VERSION,
+    propertyId: context.propertyId,
+    sectionId: 'documents',
+    generatedAt: new Date().toISOString(),
+    total: matching.length,
+    delivered: page.length,
+    nextCursor,
+    truncated: nextCursor !== null,
+    sort: { key: 'addedAt', label: 'Recently added' },
+    query: { search, filters: Object.fromEntries(Object.entries({ status, kind }).filter(([, value]) => value)) as Record<string, string> },
+    filterOptions: [
+      ...(statusOptions.length > 1 ? [{ key: 'status', label: 'Status', options: statusOptions }] : []),
+      ...(kindOptions.length > 1 ? [{ key: 'kind', label: 'Type', options: kindOptions }] : []),
+    ],
+    rows: page.map((document) => ({
+      id: document.id,
+      title: document.title,
+      kind: document.kind,
+      kindLabel: document.kindLabel,
+      verification: document.verification,
+      needsReview: document.needsReview,
+      expiry: document.expiry,
+      transitional: document.transitional,
+      addedAt: document.addedAt.toISOString(),
+      updatedAt: document.updatedAt.toISOString(),
+      askQuestion: `Show me my ${document.kindLabel.toLowerCase()}.`,
+    })),
+  };
+}
+
+type SectionReader = (context: { propertyId: string; role: HouseholdRole }, query: AskRecordCollectionQuery) => Promise<AskRecordCollectionPage<unknown>>;
 
 /** The sections with a connected paged reader. The registry's `pagedCollection` flag must agree with this map (tested). */
 export const ASK_RECORD_COLLECTION_READERS: Readonly<Partial<Record<AskRecordSectionId, SectionReader>>> = Object.freeze({
-  rooms: readRoomsPage,
-  inventory: readInventoryPage,
+  rooms: (context, query) => readRoomsPage(context.propertyId, query),
+  inventory: (context, query) => readInventoryPage(context.propertyId, query),
+  documents: readDocumentsPage,
 });
 
 export class AskRecordSectionUnavailableError extends Error {
@@ -328,5 +428,5 @@ export async function getAskRecordCollectionPage(
   if (applicability === 'RESTRICTED') throw new AskRecordSectionRestrictedError('Your household role cannot read this section.');
   if (applicability === 'NOT_APPLICABLE') throw new AskRecordSectionUnavailableError('NOT_APPLICABLE');
   if (applicability === 'CONTEXT_REQUIRED') throw new AskRecordSectionUnavailableError('CONTEXT_REQUIRED');
-  return reader(propertyId, query);
+  return reader({ propertyId, role: access.role }, query);
 }
