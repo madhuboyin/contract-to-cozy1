@@ -3,6 +3,7 @@ import type { NextFunction, Response } from 'express';
 import { z } from 'zod';
 import type { AuthRequest } from '../types/auth.types';
 import { AskSessionSearchRequestSchema, AskSessionUpdateRequestSchema, ContinueAskExecutionSchema, CreateAskExecutionRequestSchema, EditAskConfirmationSchema, RecordAskCaptureEventSchema, RequestAskCorrectionSchema, ResolveAskExecutionPropertySchema, RetryAskExecutionSchema, SubmitAskCaptureRequestSchema, SubmitAskClarificationSchema, SubmitAskConfirmationSchema, SubmitAskFeedbackSchema, SubmitHomeActionUsefulnessFeedbackSchema, DismissSuggestedActionSchema, SUGGESTED_NEXT_ACTION_ID_PATTERN } from '../productFramework/ask/ask.contract';
+import { getAskRecordIndex } from '../services/ask/askRecordIndex.service';
 import { cancelAskExecution, confirmAskExecution, continueAskExecution, createAskExecution, editAskConfirmation, getAskExecution, getAskPendingWork, getAskSession, getConciergeHome, getRecentAskSessions, updateAskSessionForUser, recordAskCaptureEvent, recordAskCaptureFailure, refreshAskExecutionAfterConflict, requestAskCorrection, resolveAskExecutionProperty, retryAskExecution, submitAskCapture, submitAskClarification, submitAskExecutionFeedback, submitHomeActionUsefulnessFeedback } from '../services/ask/askOrchestrator.service';
 import { deleteAskSessionForUser } from '../services/ask/askRetention.service';
 import { dismissSuggestedAction, DismissSuggestedActionError } from '../services/ask/suggestedActions/dismissSuggestedAction';
@@ -447,6 +448,21 @@ export async function deleteAskSession(req: AuthRequest, res: Response, next: Ne
     await deleteAskSessionForUser(userId, sessionId.data);
     return res.status(204).send();
   } catch (error) {
+    return next(error);
+  }
+}
+
+// Record destination index (Sole Homeowner Interface Phase 2): every registered record section with its honest state and count.
+export async function getAskRecordIndexHandler(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const user = req.user;
+    if (!user) return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED', message: 'Authentication required.' } });
+    const propertyId = z.string().trim().min(1).max(160).safeParse(req.query.propertyId);
+    if (!propertyId.success) return res.status(400).json({ success: false, error: { code: 'ASK_INVALID_REQUEST', message: 'A propertyId is required.' } });
+    return res.status(200).json({ success: true, data: await getAskRecordIndex(user.userId, propertyId.data, user.role) });
+  } catch (error) {
+    const code = error instanceof Error ? (error as Error & { code?: string }).code : undefined;
+    if (code === 'ASK_PROPERTY_NOT_FOUND') return res.status(404).json({ success: false, error: { code, message: 'Property not found or access was removed.' } });
     return next(error);
   }
 }

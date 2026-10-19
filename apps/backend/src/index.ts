@@ -197,6 +197,7 @@ import { validateAskDiscoveryTopics } from './services/ask/askDiscoveryTopics';
 import { validateAskCompletionOutcomes } from './services/ask/askCapabilityLifecycle';
 import { validateAskCapabilityBindings, validateAskExplorerRegistry } from './services/ask/askExplorerRegistry';
 import { validateAskDomainCommandRegistry } from './services/ask/askDomainCommandRegistry';
+import { validateAskRecordSectionRegistry } from './services/ask/governance/askRecordSectionRegistry';
 import { validateAskRouteRetirementRegistry } from './services/ask/governance/askRouteRetirementRegistry';
 import { validateAskLlmPurposeContracts } from './services/ask/askRemoteFallbackTypedClaims';
 import { validateCapabilityHandlerRegistry } from './services/ask/capabilityHandlerRegistry';
@@ -240,6 +241,7 @@ const askRegistryIssues = [
   ...validateAskDiscoveryTopics(),
   ...validateAskDomainCommandRegistry(),
   ...validateAskRouteRetirementRegistry(),
+  ...validateAskRecordSectionRegistry(),
   ...validateAskLlmPurposeContracts(),
   ...validateCapabilityHandlerRegistry(),
   ...validateConfirmCapabilityHandlerRegistry(),

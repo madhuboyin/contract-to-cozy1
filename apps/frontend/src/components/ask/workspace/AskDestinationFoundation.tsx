@@ -2,16 +2,11 @@ import Link from 'next/link';
 import type { AskDestinationId } from '@/features/ask/destinations';
 import { AskFocusedPanel } from '../presentation/AskLayoutPrimitives';
 
-const COPY: Record<Exclude<AskDestinationId, 'home' | 'history'>, { title: string; description: string; scope: string }> = {
+const COPY: Record<Exclude<AskDestinationId, 'home' | 'history' | 'record'>, { title: string; description: string; scope: string }> = {
   work: {
     title: 'Work',
     description: 'A durable place for active and completed home workflows.',
     scope: 'Pending confirmations and captures remain available from Home while the complete Work index is being connected.',
-  },
-  record: {
-    title: 'Record',
-    description: 'A structured workspace for the selected home’s canonical record.',
-    scope: 'Browse home record remains available from Home while section navigation, paging, provenance, and export are being connected.',
   },
   saved: {
     title: 'Saved',

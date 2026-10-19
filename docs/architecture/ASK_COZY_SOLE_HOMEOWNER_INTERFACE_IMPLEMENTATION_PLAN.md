@@ -8,6 +8,16 @@
 
 **Phase 1 complete:** Stable Home, Work, Record, Saved, and History routes plus keyboard-operable desktop/mobile destination navigation are implemented. The shell exposes the selected-property switcher, global command search, notification inbox/count, profile/privacy/settings, notification settings, and sign out on every destination. Destination links retain authorized conversation and launch context; existing draft, selected-entity, layout, and scroll restoration retain workspace state across destination changes and browser navigation. “Needs you” lives on Work and links there from Home without changing canonical continuation or cancellation behavior. Shared semantic layout primitives, compact collection states, measured composer scroll spacing, and validated versioned contracts for all five destinations and every registered specialized grouped-list presentation are implemented. The complete canonical Work projection remains Phase 3; Record and Saved remain explicit foundation states until Phases 2 and 4.
 
+**Phase 2 slice 1 (Record index) implemented, uncommitted:** `governance/askRecordSectionRegistry.ts` declares all sixteen FR-REC-002 sections (buyer and seller records are separate lifecycle sections). Each names its existing Ask read and command operations; its role floor is derived as the strictest read floor, and its lifecycle applicability comes from the read operation's audience policy. `askRecordIndex.service.ts` composes `AskRecordIndex` from the canonical property-record overview and serves `GET /api/ask/record-index`. Every section is always listed with a state: `AVAILABLE`, `UNAVAILABLE` (reader not connected, provider failed, or lifecycle context required), `NOT_APPLICABLE`, or `RESTRICTED`. Seven sections have counts today (property facts, rooms, inventory, documents, warranties, timeline, household access); the other nine report `READER_NOT_CONNECTED` until their collection readers exist. The Record destination renders a compact, scannable two-column index on wide screens. No Prisma change; no export; no collection paging; no route retired. "Browse home record" naming is unchanged until Phase 2 exits.
+
+**Phase 2 slice 1 — acceptance items NOT executed (no browser, real data, or manual accessibility run):**
+- Real-database counts and freshness for the seven connected sections, and viewer/contributor/owner role behavior against a live household.
+- Browser layout at 1280 × 720, 1440 × 900, 1920 × 1080, 390 × 844, and 360 × 800 (only class-level assertions exist in Jest).
+- Screen-reader, keyboard focus order, zoom, and reduced-motion audit of the Record index.
+- That the `question` launch from a row opens the intended Ask answer.
+
+**Open floor note:** no Ask operation is dedicated to reading household access, so `household-access` uses `PROPERTY_SUMMARY` (VIEWER), which already carries the household count in the same overview. The index returns only the member count, never names or emails. Confirm this is the intended boundary before the household detail slice.
+
 ## 1. Delivery principles
 
 1. Reuse canonical services and existing Ask execution safeguards.

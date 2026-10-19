@@ -793,3 +793,32 @@ export interface AskCapabilityGroup {
 }
 
 import type { CaptureInputSchema } from '@/components/property-context/featureContextTypes';
+
+// Record destination index (Sole Homeowner Interface Phase 2). Mirrors the backend `AskRecordIndex` contract.
+export type AskRecordSectionState = 'AVAILABLE' | 'UNAVAILABLE' | 'NOT_APPLICABLE' | 'CONTEXT_REQUIRED' | 'RESTRICTED';
+export type AskRecordSectionReason = 'READER_NOT_CONNECTED' | 'PROVIDER_FAILED' | 'LIFECYCLE_INAPPLICABLE' | 'LIFECYCLE_CONTEXT_REQUIRED' | 'ROLE_FLOOR';
+
+export interface AskRecordIndexSection {
+  id: string;
+  label: string;
+  scope: string;
+  state: AskRecordSectionState;
+  reasonCode: AskRecordSectionReason | null;
+  count: number | null;
+  countLabel: string | null;
+  freshAsOf: string | null;
+  freshnessSource: string;
+  primaryAction: { label: string; question: string } | null;
+}
+
+export interface AskRecordIndex {
+  contractVersion: 'ask-record-index-v1';
+  propertyId: string;
+  generatedAt: string;
+  accessRole: 'VIEWER' | 'CONTRIBUTOR' | 'OWNER';
+  operatingMode: 'BUYING' | 'OWNING' | 'SELLING' | 'UNKNOWN';
+  property: { name: string | null; address: string; city: string; state: string } | null;
+  completeness: { state: 'AVAILABLE' | 'UNAVAILABLE'; percent: number | null; pendingDetails: number | null };
+  partial: boolean;
+  sections: AskRecordIndexSection[];
+}

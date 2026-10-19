@@ -1096,6 +1096,9 @@ class APIClient {
     const query = propertyId ? `?propertyId=${encodeURIComponent(propertyId)}` : '';
     return this.request(`/api/ask/pending${query}`, options);
   }
+  async getAskRecordIndex(propertyId: string, options: { signal?: AbortSignal } = {}): Promise<APIResponse<import('@/features/ask/types').AskRecordIndex>> {
+    return this.request(`/api/ask/record-index?propertyId=${encodeURIComponent(propertyId)}`, options);
+  }
   async continueAskExecution(executionId: string, surface: 'ASK_PAGE' | 'GLOBAL_LAUNCHER'): Promise<APIResponse<AskExecutionResponse>> {
     return this.request<AskExecutionResponse>(`/api/ask/executions/${encodeURIComponent(executionId)}/continue`, { method: 'POST', body: { surface } });
   }
