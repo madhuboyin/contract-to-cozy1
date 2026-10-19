@@ -37,6 +37,8 @@ export interface AskWorkNextAction {
   operationId: string | null;
   /** Reauthorized per command floor at read time for the caller's current role; the command re-checks at execution. */
   allowed: boolean;
+  /** Set when the next action is retrying this failed Ask execution (POST /ask/executions/:id/retry, idempotent per clientRequestId). */
+  retryExecutionId?: string;
 }
 
 /**
@@ -58,6 +60,8 @@ export interface AskWorkRow {
   nextAction: AskWorkNextAction | null;
   /** The ordering timestamp (ISO). Rows are ordered by sortAt descending, then workKey ascending. */
   sortAt: string;
+  /** When the work is due or next scheduled to act, when the owner has such a date (ISO). */
+  dueAt?: string | null;
   freshness: { version: string; asOf: string };
   sourceOwner: string;
   resume: AskWorkResume;

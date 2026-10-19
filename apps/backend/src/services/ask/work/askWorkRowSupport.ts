@@ -27,12 +27,12 @@ export function truncateTitle(value: string, max = 120): string {
  * prefix: at the boundary's exact instant a row resumes by workKey order across every provider, so this reader's rows follow a boundary
  * key that sorts before its prefix, follow the same prefix by id, and never follow a boundary key that sorts after it.
  */
-export function afterBoundaryWhere<W extends object>(inView: W, after: AskWorkBoundary | null, prefix: string): W | { AND: object[] } {
+export function afterBoundaryWhere<W extends object>(inView: W, after: AskWorkBoundary | null, prefix: string, field = 'updatedAt'): W | { AND: object[] } {
   const instant = boundaryInstant(after);
   if (!after || !instant) return inView;
   const sameInstant = after.workKey.startsWith(prefix) ? { id: { gt: after.workKey.slice(prefix.length) } }
     : prefix > after.workKey ? {} : { id: { in: [] as string[] } };
-  return { AND: [inView, { OR: [{ updatedAt: { lt: instant } }, { AND: [{ updatedAt: instant }, sameInstant] }] }] };
+  return { AND: [inView, { OR: [{ [field]: { lt: instant } }, { AND: [{ [field]: instant }, sameInstant] }] }] };
 }
 
 /** The home work items that back the given source entities, from one batched lookup (never one call per row). */

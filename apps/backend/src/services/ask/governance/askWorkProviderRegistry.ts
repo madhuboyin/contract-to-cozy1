@@ -31,9 +31,10 @@ export type AskWorkProviderReader = { state: 'CONNECTED' } | { state: 'UNAVAILAB
 /**
  * OPERATION_FLOOR: the read floor is the strictest floor among `readOperationIds`.
  * OWN_EXECUTION: the rows are the caller's own Ask executions; property membership is the floor and there is no read operation.
+ * OWN_REQUESTS: the rows are jobs the caller requested (report exports); property membership is the floor and there is no read operation.
  * NONE: the source has no canonical reader or read operation yet, so the provider is UNAVAILABLE and has no floor to derive.
  */
-export type AskWorkReadAuthority = 'OPERATION_FLOOR' | 'OWN_EXECUTION' | 'NONE';
+export type AskWorkReadAuthority = 'OPERATION_FLOOR' | 'OWN_EXECUTION' | 'OWN_REQUESTS' | 'NONE';
 
 export interface AskWorkProviderDefinition {
   id: AskWorkProviderId;
@@ -148,19 +149,19 @@ export const ASK_WORK_PROVIDER_REGISTRY: readonly AskWorkProviderDefinition[] = 
     id: 'MONITORS', label: 'Monitors', workType: 'MONITOR', owner: 'monitors',
     readOperationIds: ['REFINANCE_RATE_MONITOR', 'HOME_DEADLINE_MONITOR'], commandOperationIds: [],
     readAuthority: 'OPERATION_FLOOR', lifecycleOperationId: 'REFINANCE_RATE_MONITOR',
-    reader: unavailable('The monitor work reader is not connected yet.'), precedence: 20, fallbackProjection: false, sourceAliasKinds: ['monitor'],
-    views: ALL_VIEWS, requiredForExit: true, freshnessSource: 'Monitor last check',
+    reader: CONNECTED, precedence: 20, fallbackProjection: false, sourceAliasKinds: ['monitor'],
+    views: ['ACTIVE', 'WAITING'], requiredForExit: true, freshnessSource: 'Monitor last check',
   }),
   provider({
     id: 'QUEUED_JOBS', label: 'Queued jobs', workType: 'QUEUED_JOB', owner: 'workers',
-    readOperationIds: [], commandOperationIds: [], readAuthority: 'NONE', lifecycleOperationId: null,
-    reader: unavailable('Report and score export jobs have no status reader that a homeowner surface can call.'),
-    precedence: 20, fallbackProjection: false, sourceAliasKinds: ['job'], views: ALL_VIEWS, requiredForExit: true, freshnessSource: 'Job last update',
+    readOperationIds: [], commandOperationIds: [], readAuthority: 'OWN_REQUESTS', lifecycleOperationId: null,
+    reader: CONNECTED,
+    precedence: 20, fallbackProjection: false, sourceAliasKinds: ['job'], views: ['NEEDS_YOU', 'ACTIVE', 'WAITING', 'COMPLETED', 'ARCHIVED'], requiredForExit: true, freshnessSource: 'Job last update',
   }),
   provider({
     id: 'RETRYABLE_EXECUTIONS', label: 'Retryable requests', workType: 'RETRYABLE_EXECUTION', owner: 'ask-executions',
     readOperationIds: [], commandOperationIds: [], readAuthority: 'OWN_EXECUTION', lifecycleOperationId: null,
-    reader: unavailable('The retryable-execution reader is not connected yet.'), precedence: 10, fallbackProjection: false, sourceAliasKinds: ['execution'],
+    reader: CONNECTED, precedence: 10, fallbackProjection: false, sourceAliasKinds: ['execution'],
     views: ['NEEDS_YOU'], requiredForExit: true, freshnessSource: 'Execution last update',
   }),
   provider({
@@ -171,9 +172,10 @@ export const ASK_WORK_PROVIDER_REGISTRY: readonly AskWorkProviderDefinition[] = 
   }),
   provider({
     id: 'SCHEDULED_FOLLOW_UPS', label: 'Scheduled follow-ups', workType: 'SCHEDULED_FOLLOW_UP', owner: 'follow-ups',
-    readOperationIds: [], commandOperationIds: [], readAuthority: 'NONE', lifecycleOperationId: null,
-    reader: unavailable('No canonical scheduled follow-up reader is connected yet.'),
-    precedence: 20, fallbackProjection: false, sourceAliasKinds: ['followUp'], views: ['SCHEDULED', 'COMPLETED', 'ARCHIVED'], requiredForExit: true, freshnessSource: 'Follow-up schedule',
+    readOperationIds: ['INCIDENT_CLAIM_STATUS', 'PROJECT_TRACKER_PROJECTS'], commandOperationIds: ['CLAIM_ACTIVITY_COMMAND', 'PROJECT_TRACKER_COMMAND'],
+    readAuthority: 'OPERATION_FLOOR', lifecycleOperationId: 'INCIDENT_CLAIM_STATUS',
+    reader: CONNECTED,
+    precedence: 20, fallbackProjection: false, sourceAliasKinds: ['followUp', 'claim', 'project'], views: ['SCHEDULED'], requiredForExit: true, freshnessSource: 'Follow-up schedule',
   }),
 ]);
 

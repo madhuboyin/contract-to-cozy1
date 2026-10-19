@@ -10,6 +10,10 @@ import { readProjectWork } from './work/projects.reader';
 import { readGuidanceJourneyWork } from './work/guidanceJourneys.reader';
 import { readDiyProjectWork } from './work/diyProjects.reader';
 import { readRenovationCaseWork } from './work/renovationCases.reader';
+import { readMonitorWork } from './work/monitors.reader';
+import { readQueuedJobWork } from './work/queuedJobs.reader';
+import { readRetryableExecutionWork } from './work/retryableExecutions.reader';
+import { readScheduledFollowUpWork } from './work/scheduledFollowUps.reader';
 import { createOperationalWorkItemReader } from './work/operationalWorkItems.reader';
 import { ensureAskServiceAccountEligibility, ensurePropertyAccess } from './askHandlerSupport';
 import { loadOperatingMode } from './askRecordContext';
@@ -37,6 +41,10 @@ export const ASK_WORK_PROVIDER_READERS: Partial<Record<AskWorkProviderId, AskWor
   GUIDANCE_JOURNEYS: readGuidanceJourneyWork,
   DIY_PROJECTS: readDiyProjectWork,
   RENOVATION_CASES: readRenovationCaseWork,
+  MONITORS: readMonitorWork,
+  QUEUED_JOBS: readQueuedJobWork,
+  RETRYABLE_EXECUTIONS: readRetryableExecutionWork,
+  SCHEDULED_FOLLOW_UPS: readScheduledFollowUpWork,
 };
 
 export class AskWorkInvalidRequestError extends Error {
