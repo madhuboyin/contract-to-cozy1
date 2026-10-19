@@ -830,10 +830,13 @@ export interface AskRecordCollectionPage<Row> {
   propertyId: string;
   sectionId: string;
   generatedAt: string;
+  freshAsOf?: string | null;
   total: number;
   delivered: number;
   nextCursor: string | null;
   truncated: boolean;
+  /** A source limit the cursor cannot work around; shown to the homeowner when present. */
+  notice?: string | null;
   sort: { key: string; label: string };
   query: { search: string | null; filters: Record<string, string> };
   filterOptions: Array<{ key: string; label: string; options: Array<{ value: string; label: string }> }>;
@@ -894,4 +897,48 @@ export interface AskRecordWarrantyRow {
   hasDocuments: boolean;
   updatedAt: string;
   askQuestion: string;
+}
+
+export interface AskRecordTimelineRow {
+  id: string;
+  title: string;
+  summary: string | null;
+  type: string;
+  typeLabel: string;
+  occurredAt: string;
+  datePrecision: 'EXACT_DATE' | 'MONTH' | 'YEAR' | 'RANGE' | 'UNKNOWN';
+  dateRangeStart: string | null;
+  dateRangeEnd: string | null;
+  verification: string;
+  verificationLabel: string;
+  providerName: string | null;
+  isPrivate: boolean;
+  askQuestion: null;
+}
+
+export interface AskRecordMaintenanceRow {
+  id: string;
+  title: string;
+  scope: string;
+  completedOn: string | null;
+  actualCost: string | null;
+  source: string;
+  repeats: string | null;
+  priority: string;
+  askQuestion: null;
+}
+
+export interface AskRecordInspectionRow {
+  id: string;
+  reportType: string;
+  reportTypeLabel: string;
+  inspectionDate: string;
+  inspector: string | null;
+  status: string;
+  statusLabel: string;
+  totalFindings: number;
+  openFindings: number;
+  safetyFindings: number;
+  majorFindings: number;
+  askQuestion: null;
 }

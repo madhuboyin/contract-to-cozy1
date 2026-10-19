@@ -14,7 +14,7 @@ export type AskRecordSectionId =
   | 'buyer-records' | 'seller-records' | 'household-access';
 
 /** Where the index gets the section's count today. Null means no collection reader exists yet, so the section reports UNAVAILABLE. */
-export type AskRecordCollectionReader = 'PROPERTY_RECORD_OVERVIEW' | null;
+export type AskRecordCollectionReader = 'PROPERTY_RECORD_OVERVIEW' | 'PAGED_COLLECTION' | null;
 
 export interface AskRecordSectionDefinition {
   id: AskRecordSectionId;
@@ -45,6 +45,7 @@ const section = (value: AskRecordSectionDefinition): AskRecordSectionDefinition 
 });
 
 const OVERVIEW = 'PROPERTY_RECORD_OVERVIEW' as const;
+const PAGED = 'PAGED_COLLECTION' as const;
 
 export const ASK_RECORD_SECTION_REGISTRY: readonly AskRecordSectionDefinition[] = Object.freeze([
   section({
@@ -78,21 +79,21 @@ export const ASK_RECORD_SECTION_REGISTRY: readonly AskRecordSectionDefinition[] 
     primaryAction: { label: 'View warranties', question: 'Show me my warranties.' },
   }),
   section({
-    id: 'timeline', label: 'Home timeline', scope: 'Confirmed events in the home’s history.', owner: 'home-timeline',
+    id: 'timeline', label: 'Home timeline', scope: 'Events in the home’s history, with how well each is verified.', owner: 'home-timeline',
     readOperationIds: ['HOME_TIMELINE_EVENTS'], commandOperationIds: ['HOME_EVENT_CORRECT', 'HOME_EVENT_VISIBILITY'],
-    collectionReader: OVERVIEW, pagedCollection: false, lifecycleOperationId: 'HOME_TIMELINE_EVENTS', freshnessSource: 'Most recently updated confirmed event', exportEligibility: 'NOT_EVALUATED',
+    collectionReader: PAGED, pagedCollection: true, lifecycleOperationId: 'HOME_TIMELINE_EVENTS', freshnessSource: 'Most recent event date', exportEligibility: 'NOT_EVALUATED',
     primaryAction: { label: 'View timeline', question: 'Show me my home timeline.' },
   }),
   section({
     id: 'maintenance-history', label: 'Maintenance history', scope: 'Completed and open maintenance work.', owner: 'maintenance',
     readOperationIds: ['MAINTENANCE_STATUS'], commandOperationIds: ['MAINTENANCE_TASK_CREATE', 'MAINTENANCE_TASK_UPDATE', 'MAINTENANCE_TASK_COMPLETE'],
-    collectionReader: null, pagedCollection: false, lifecycleOperationId: 'MAINTENANCE_STATUS', freshnessSource: 'Maintenance task updates', exportEligibility: 'NOT_EVALUATED',
+    collectionReader: PAGED, pagedCollection: true, lifecycleOperationId: 'MAINTENANCE_STATUS', freshnessSource: 'Most recent completion', exportEligibility: 'NOT_EVALUATED',
     primaryAction: { label: 'View maintenance', question: 'What is the status of my home maintenance?' },
   }),
   section({
     id: 'inspections', label: 'Inspections', scope: 'Inspection reports and their findings.', owner: 'inspections',
     readOperationIds: ['INSPECTION_REPORTS', 'INSPECTION_FINDINGS'], commandOperationIds: ['INSPECTION_FINDING_UPDATE', 'INSPECTION_REPORT_COMMAND'],
-    collectionReader: null, pagedCollection: false, lifecycleOperationId: 'INSPECTION_REPORTS', freshnessSource: 'Inspection report dates', exportEligibility: 'NOT_EVALUATED',
+    collectionReader: PAGED, pagedCollection: true, lifecycleOperationId: 'INSPECTION_REPORTS', freshnessSource: 'Most recent inspection date', exportEligibility: 'NOT_EVALUATED',
     primaryAction: { label: 'View inspections', question: 'Show me my inspection reports.' },
   }),
   section({
@@ -201,6 +202,7 @@ export function validateAskRecordSectionRegistry(
       if (ASK_OPERATION_DEFINITIONS[operationId] && ASK_OPERATION_DEFINITIONS[operationId].family !== 'COMMAND') issues.push(`${entry.id} lists non-command operation ${operationId} as a command`);
     }
     if (!entry.readOperationIds.includes(entry.lifecycleOperationId)) issues.push(`${entry.id} lifecycle operation ${entry.lifecycleOperationId} is not one of its reads`);
+    if (entry.collectionReader === 'PAGED_COLLECTION' && !entry.pagedCollection) issues.push(`${entry.id} counts from a paged collection but is not flagged paged`);
     if (entry.exportEligibility !== 'NOT_EVALUATED') issues.push(`${entry.id} claims export eligibility before the export slice evaluates it`);
   }
   return issues;

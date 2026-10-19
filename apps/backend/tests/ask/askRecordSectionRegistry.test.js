@@ -107,7 +107,7 @@ test('the index lists every registered section in every lifecycle and role', () 
 test('the index reports canonical counts, freshness, completeness, and the lifecycle states', () => {
   const index = composeAskRecordIndex({ propertyId: 'p1', accessRole: 'OWNER', operatingMode: 'OWNING', overview: overviewFixture(), property });
   const get = (id) => index.sections.find((entry) => entry.id === id);
-  assert.deepEqual([get('rooms').count, get('inventory').count, get('documents').count, get('warranties').count, get('timeline').count, get('household-access').count, get('property-facts').count], [2, 1, 3, 0, 4, 2, 1]);
+  assert.deepEqual([get('rooms').count, get('inventory').count, get('documents').count, get('warranties').count, get('household-access').count, get('property-facts').count], [2, 1, 3, 0, 2, 1]);
   assert.equal(get('rooms').freshAsOf, '2026-10-05T00:00:00.000Z');
   assert.equal(get('documents').freshAsOf, '2026-10-10T00:00:00.000Z');
   assert.equal(get('warranties').freshAsOf, null);
@@ -117,6 +117,17 @@ test('the index reports canonical counts, freshness, completeness, and the lifec
   assert.equal(get('seller-records').state, 'UNAVAILABLE');
   assert.equal(get('seller-records').reasonCode, 'READER_NOT_CONNECTED');
   assert.equal(get('seller-records').primaryAction.question.length > 0, true);
+  // Sections counted through their own paged reader: absent totals are "not connected", never a silent zero.
+  assert.equal(get('timeline').reasonCode, 'READER_NOT_CONNECTED');
+  const counted = composeAskRecordIndex({
+    propertyId: 'p1', accessRole: 'OWNER', operatingMode: 'OWNING', overview: overviewFixture(), property,
+    collectionTotals: { timeline: { total: 1, freshAsOf: '2026-10-12T00:00:00.000Z' }, 'maintenance-history': { total: 7, freshAsOf: null }, inspections: 'FAILED' },
+  });
+  const at = (id) => counted.sections.find((entry) => entry.id === id);
+  assert.deepEqual([at('timeline').count, at('timeline').countLabel, at('timeline').freshAsOf, at('timeline').pagedCollection], [1, 'event', '2026-10-12T00:00:00.000Z', true]);
+  assert.deepEqual([at('maintenance-history').count, at('maintenance-history').countLabel], [7, 'completed tasks']);
+  assert.deepEqual([at('inspections').state, at('inspections').reasonCode], ['UNAVAILABLE', 'PROVIDER_FAILED']);
+  assert.equal(counted.partial, true);
   assert.equal(index.partial, false);
 });
 

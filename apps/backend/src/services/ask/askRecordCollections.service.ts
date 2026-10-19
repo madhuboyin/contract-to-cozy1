@@ -2,10 +2,15 @@ import { z } from 'zod';
 import { prisma } from '../../lib/prisma';
 import type { AskAccountRole } from './askAccountEligibility';
 import { ensureAskServiceAccountEligibility, ensurePropertyAccess } from './askHandlerSupport';
-import { loadOperatingMode } from './askRecordIndex.service';
+import { loadOperatingMode } from './askRecordContext';
 import { inventoryLifecycleHorizon, inventoryMissingFacts } from './handlers/inventory.handler';
 import { visibleInventoryItemWhere } from '../riskAssetApplicability';
 import type { HouseholdRole } from '@prisma/client';
+import { HomeEventsService } from '../homeEvents.service';
+import { loadCanonicalMaintenanceTaskSet } from '../skills/context/maintenanceTaskContext.provider';
+import { formatAskMaintenanceScope, formatAskMaintenanceTitle } from './askMaintenancePresentation';
+import { maintenanceMoney } from './handlers/maintenance.handler';
+import { INSPECTION_REPORT_STATUS_LABELS, INSPECTION_REPORT_TYPE_LABELS } from './support/inspectionReportCommand';
 import { warrantyStatus, WARRANTY_EXPIRING_DAYS, type WarrantyStatusKey } from './handlers/warranties.handler';
 import { listPropertyDocuments, type PropertyDocument } from '../propertyDocuments/propertyDocumentInventory.service';
 import { ASK_RECORD_SECTION_REGISTRY, evaluateRecordSectionApplicability, type AskRecordSectionId } from './governance/askRecordSectionRegistry';
@@ -24,10 +29,14 @@ export interface AskRecordCollectionPage<Row> {
   propertyId: string;
   sectionId: AskRecordSectionId;
   generatedAt: string;
+  /** The newest source date among the delivered scope, when the reader knows it. */
+  freshAsOf: string | null;
   total: number;
   delivered: number;
   nextCursor: string | null;
   truncated: boolean;
+  /** A plain-language limit of the source that the cursor cannot work around, or null. */
+  notice: string | null;
   sort: { key: string; label: string };
   query: { search: string | null; filters: Record<string, string> };
   filterOptions: Array<{ key: string; label: string; options: Array<{ value: string; label: string }> }>;
@@ -144,10 +153,12 @@ export async function readRoomsPage(propertyId: string, query: AskRecordCollecti
     propertyId,
     sectionId: 'rooms',
     generatedAt: new Date().toISOString(),
+    freshAsOf: null,
     total,
     delivered: page.length,
     nextCursor,
     truncated: nextCursor !== null,
+    notice: null,
     sort: { key: 'sortOrder', label: 'Home order, then name' },
     query: { search, filters: floorFilter ? { floor: floorFilter } : {} },
     filterOptions: floorOptions.length > 1 ? [{ key: 'floor', label: 'Floor', options: floorOptions }] : [],
@@ -271,10 +282,12 @@ export async function readInventoryPage(propertyId: string, query: AskRecordColl
     propertyId,
     sectionId: 'inventory',
     generatedAt: new Date().toISOString(),
+    freshAsOf: null,
     total,
     delivered: page.length,
     nextCursor,
     truncated: nextCursor !== null,
+    notice: null,
     sort: { key: 'updatedAt', label: 'Recently updated' },
     query: { search, filters: Object.fromEntries(Object.entries({ category, room, status }).filter(([, value]) => value)) as Record<string, string> },
     filterOptions,
@@ -365,10 +378,12 @@ export async function readDocumentsPage(
     propertyId: context.propertyId,
     sectionId: 'documents',
     generatedAt: new Date().toISOString(),
+    freshAsOf: null,
     total: matching.length,
     delivered: page.length,
     nextCursor,
     truncated: nextCursor !== null,
+    notice: null,
     sort: { key: 'addedAt', label: 'Recently added' },
     query: { search, filters: Object.fromEntries(Object.entries({ status, kind }).filter(([, value]) => value)) as Record<string, string> },
     filterOptions: [
@@ -492,10 +507,12 @@ export async function readWarrantiesPage(propertyId: string, query: AskRecordCol
     propertyId,
     sectionId: 'warranties',
     generatedAt: now.toISOString(),
+    freshAsOf: null,
     total: matching.length,
     delivered: page.length,
     nextCursor,
     truncated: nextCursor !== null,
+    notice: null,
     sort: { key: 'status', label: 'Expiring first, then by expiry date' },
     query: { search, filters: Object.fromEntries(Object.entries({ status, category }).filter(([, value]) => value)) as Record<string, string> },
     filterOptions: [
@@ -506,13 +523,301 @@ export async function readWarrantiesPage(propertyId: string, query: AskRecordCol
   };
 }
 
-type SectionReader = (context: { propertyId: string; role: HouseholdRole }, query: AskRecordCollectionQuery) => Promise<AskRecordCollectionPage<unknown>>;
+export interface AskRecordTimelineRow {
+  id: string;
+  title: string;
+  summary: string | null;
+  type: string;
+  typeLabel: string;
+  occurredAt: string;
+  /** How precise the recorded date is; the display must not invent a day for a month, year, range, or unknown date. */
+  datePrecision: 'EXACT_DATE' | 'MONTH' | 'YEAR' | 'RANGE' | 'UNKNOWN';
+  dateRangeStart: string | null;
+  dateRangeEnd: string | null;
+  verification: string;
+  verificationLabel: string;
+  providerName: string | null;
+  /** True for a private event, which only its recorder is ever sent. */
+  isPrivate: boolean;
+  /** Ask has no per-event read; detail, evidence and correction stay with the Ask timeline answer. */
+  askQuestion: null;
+}
+
+const TIMELINE_SOURCE_LIMIT = 200;
+const TIMELINE_VERIFICATION = ['UNVERIFIED', 'PENDING_CONFIRMATION', 'HOMEOWNER_CONFIRMED', 'EVIDENCE_VERIFIED', 'DISPUTED'] as const;
+const TimelineCursorSchema = z.object({ o: z.number(), i: z.string() });
+const isoOrNullDate = (value: unknown): string | null => {
+  if (!value) return null;
+  const date = new Date(value as string);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+};
+
+/**
+ * Reads one page of the home timeline from the same canonical read Ask and the Timeline page use (`HomeEventsService.listHomeEvents`),
+ * with the privacy rule Ask's other home-event reads apply: a private event goes only to the person who recorded it. That read returns
+ * at most the 200 most recent events and has no continuation, so when it returns exactly that many the page says so in `notice` instead
+ * of claiming a complete history; the continuation is open work in the plan.
+ */
+export async function readTimelinePage(
+  context: { propertyId: string; userId: string },
+  query: AskRecordCollectionQuery,
+  list: (propertyId: string, options: { limit: number }) => Promise<{ events: any[] }> = (propertyId, options) => new HomeEventsService().listHomeEvents(propertyId, options),
+): Promise<AskRecordCollectionPage<AskRecordTimelineRow>> {
+  const limit = clampLimit(query.limit);
+  const search = cleanSearch(query.search);
+  const type = query.filters?.type?.trim() || null;
+  const verification = query.filters?.verification?.trim() || null;
+  if (type && !/^[A-Z_]{1,40}$/.test(type)) throw new InvalidCollectionQueryError('type filter is not valid.');
+  if (verification && !(TIMELINE_VERIFICATION as readonly string[]).includes(verification)) throw new InvalidCollectionQueryError('verification filter is not valid.');
+  const after = decodeCursor(query.cursor, TimelineCursorSchema);
+
+  const { events } = await list(context.propertyId, { limit: TIMELINE_SOURCE_LIMIT });
+  const visible = events.filter((event) => event.visibility !== 'PRIVATE' || event.createdById === context.userId);
+  const time = (event: { occurredAt?: unknown }) => { const value = new Date(event.occurredAt as string).getTime(); return Number.isNaN(value) ? 0 : value; };
+  const ordered = [...visible].sort((left, right) => time(right) - time(left) || (String(left.id) < String(right.id) ? 1 : String(left.id) > String(right.id) ? -1 : 0));
+  const needle = search?.toLowerCase() ?? null;
+  const matching = ordered.filter((event) => (
+    (!type || event.type === type)
+    && (!verification || event.verificationStatus === verification)
+    && (!needle || `${event.title ?? ''} ${event.summary ?? ''} ${event.providerName ?? ''}`.toLowerCase().includes(needle))
+  ));
+  const remaining = after ? matching.filter((event) => time(event) < after.o || (time(event) === after.o && String(event.id) < after.i)) : matching;
+  const page = remaining.slice(0, limit);
+  const last = page[page.length - 1];
+  const nextCursor = remaining.length > limit && last ? encodeCursor({ o: time(last), i: String(last.id) }) : null;
+
+  const typeOptions = [...new Set(visible.map((event) => String(event.type)))].sort().map((value) => ({ value, label: readableEnum(value) ?? value }));
+  const verificationOptions = TIMELINE_VERIFICATION.filter((value) => visible.some((event) => event.verificationStatus === value) || value === verification).map((value) => ({ value, label: readableEnum(value) ?? value }));
+  const newestEvent = ordered.find((event) => time(event) > 0);
+
+  return {
+    contractVersion: ASK_RECORD_COLLECTION_CONTRACT_VERSION,
+    propertyId: context.propertyId,
+    sectionId: 'timeline',
+    generatedAt: new Date().toISOString(),
+    freshAsOf: newestEvent ? new Date(time(newestEvent)).toISOString() : null,
+    total: matching.length,
+    delivered: page.length,
+    nextCursor,
+    truncated: nextCursor !== null,
+    notice: events.length >= TIMELINE_SOURCE_LIMIT
+      ? `This shows the ${TIMELINE_SOURCE_LIMIT} most recent events. Older events are recorded but cannot be listed here yet.`
+      : null,
+    sort: { key: 'occurredAt', label: 'Most recent first' },
+    query: { search, filters: Object.fromEntries(Object.entries({ type, verification }).filter(([, value]) => value)) as Record<string, string> },
+    filterOptions: [
+      ...(verificationOptions.length > 1 ? [{ key: 'verification', label: 'Verification', options: verificationOptions }] : []),
+      ...(typeOptions.length > 1 ? [{ key: 'type', label: 'Type', options: typeOptions }] : []),
+    ],
+    rows: page.map((event) => {
+      const summary = typeof event.summary === 'string' ? event.summary.trim() : '';
+      return {
+        id: String(event.id),
+        title: String(event.title ?? 'Untitled event'),
+        summary: summary ? (summary.length > 140 ? `${summary.slice(0, 139).trimEnd()}…` : summary) : null,
+        type: String(event.type),
+        typeLabel: readableEnum(String(event.type)) ?? String(event.type),
+        occurredAt: isoOrNullDate(event.occurredAt) ?? new Date(0).toISOString(),
+        datePrecision: event.datePrecision ?? 'EXACT_DATE',
+        dateRangeStart: isoOrNullDate(event.dateRangeStart),
+        dateRangeEnd: isoOrNullDate(event.dateRangeEnd),
+        verification: String(event.verificationStatus ?? 'UNVERIFIED'),
+        verificationLabel: readableEnum(String(event.verificationStatus ?? 'UNVERIFIED')) ?? 'Unverified',
+        providerName: event.providerName ?? null,
+        isPrivate: event.visibility === 'PRIVATE',
+        askQuestion: null,
+      };
+    }),
+  };
+}
+
+export interface AskRecordMaintenanceRow {
+  id: string;
+  title: string;
+  /** The item, room, or category the work was for, in Ask's wording. */
+  scope: string;
+  /** Null when the completion date was not recorded. */
+  completedOn: string | null;
+  actualCost: string | null;
+  source: string;
+  repeats: string | null;
+  priority: string;
+  askQuestion: null;
+}
+
+const MaintenanceCursorSchema = z.object({ d: z.number(), i: z.string() });
+const UNDATED = 'undated';
+
+/**
+ * Reads one page of maintenance history: the completed tasks from the same canonical task set Ask's maintenance answer reads, most
+ * recently completed first. A task completed without a recorded date lists last and says so. Open and cancelled work stay with the
+ * Work destination and the maintenance answer.
+ */
+export async function readMaintenanceHistoryPage(
+  context: { propertyId: string; userId: string },
+  query: AskRecordCollectionQuery,
+  load: typeof loadCanonicalMaintenanceTaskSet = loadCanonicalMaintenanceTaskSet,
+): Promise<AskRecordCollectionPage<AskRecordMaintenanceRow>> {
+  const limit = clampLimit(query.limit);
+  const search = cleanSearch(query.search);
+  const year = query.filters?.year?.trim() || null;
+  if (year && year !== UNDATED && !/^\d{4}$/.test(year)) throw new InvalidCollectionQueryError('year filter is not valid.');
+  const after = decodeCursor(query.cursor, MaintenanceCursorSchema);
+
+  const { historical } = await load(context.userId, context.propertyId);
+  // Undated completions sort after every dated one: their key is below any real timestamp.
+  const key = (task: { lastCompletedDate: Date | null }) => (task.lastCompletedDate ? task.lastCompletedDate.getTime() : Number.NEGATIVE_INFINITY);
+  const completed = historical.filter((task) => task.status === 'COMPLETED')
+    .sort((left, right) => (key(right) === key(left) ? 0 : key(right) > key(left) ? 1 : -1) || (left.id < right.id ? 1 : left.id > right.id ? -1 : 0));
+  const yearOf = (task: { lastCompletedDate: Date | null }) => (task.lastCompletedDate ? String(task.lastCompletedDate.getUTCFullYear()) : UNDATED);
+  const needle = search?.toLowerCase() ?? null;
+  const matching = completed.filter((task) => (
+    (!year || yearOf(task) === year)
+    && (!needle || [task.title, task.description, task.inventoryItem?.name, task.room?.name, task.category, task.assetType].filter(Boolean).join(' ').toLowerCase().includes(needle))
+  ));
+  // The cursor stores the date as a number; an undated task is stored as -1, which no real completion date can equal.
+  const cursorKey = (task: { lastCompletedDate: Date | null }) => (task.lastCompletedDate ? task.lastCompletedDate.getTime() : -1);
+  const remaining = after
+    ? matching.filter((task) => cursorKey(task) < after.d || (cursorKey(task) === after.d && task.id < after.i))
+    : matching;
+  const page = remaining.slice(0, limit);
+  const last = page[page.length - 1];
+  const nextCursor = remaining.length > limit && last ? encodeCursor({ d: cursorKey(last), i: last.id }) : null;
+
+  const years = [...new Set(completed.map(yearOf))].sort((left, right) => (left === UNDATED ? 1 : right === UNDATED ? -1 : right.localeCompare(left)));
+  const newestCompleted = completed.find((task) => task.lastCompletedDate);
+
+  return {
+    contractVersion: ASK_RECORD_COLLECTION_CONTRACT_VERSION,
+    propertyId: context.propertyId,
+    sectionId: 'maintenance-history',
+    generatedAt: new Date().toISOString(),
+    freshAsOf: newestCompleted?.lastCompletedDate?.toISOString() ?? null,
+    total: matching.length,
+    delivered: page.length,
+    nextCursor,
+    truncated: nextCursor !== null,
+    notice: null,
+    sort: { key: 'lastCompletedDate', label: 'Most recently completed' },
+    query: { search, filters: year ? { year } : {} },
+    filterOptions: years.length > 1 ? [{ key: 'year', label: 'Year', options: years.map((value) => ({ value, label: value === UNDATED ? 'Date not recorded' : value })) }] : [],
+    rows: page.map((task) => ({
+      id: task.id,
+      title: formatAskMaintenanceTitle(task.title),
+      scope: formatAskMaintenanceScope({ inventoryItemName: task.inventoryItem?.name, roomName: task.room?.name, category: task.category, assetType: task.assetType }),
+      completedOn: task.lastCompletedDate ? task.lastCompletedDate.toISOString() : null,
+      actualCost: maintenanceMoney(task.actualCost),
+      source: String(task.source).toLowerCase().replace(/_/g, ' '),
+      repeats: task.isRecurring && task.frequency ? String(task.frequency).toLowerCase().replace(/_/g, ' ') : null,
+      priority: String(task.priority).toLowerCase(),
+      askQuestion: null,
+    })),
+  };
+}
+
+export interface AskRecordInspectionRow {
+  id: string;
+  reportType: string;
+  reportTypeLabel: string;
+  inspectionDate: string;
+  inspector: string | null;
+  status: string;
+  statusLabel: string;
+  totalFindings: number;
+  openFindings: number;
+  safetyFindings: number;
+  majorFindings: number;
+  askQuestion: null;
+}
+
+const InspectionCursorSchema = z.object({ d: z.string().datetime(), i: z.string() });
+const INSPECTION_TYPES = Object.keys(INSPECTION_REPORT_TYPE_LABELS);
+const INSPECTION_STATUSES = ['PROCESSING', 'REVIEW_PENDING', 'CONFIRMED'] as const;
+
+/** Reads one page of inspection reports (archived ones are not listed), newest inspection first, with a keyset cursor. */
+export async function readInspectionsPage(propertyId: string, query: AskRecordCollectionQuery): Promise<AskRecordCollectionPage<AskRecordInspectionRow>> {
+  const limit = clampLimit(query.limit);
+  const search = cleanSearch(query.search);
+  const reportType = query.filters?.type?.trim() || null;
+  const status = query.filters?.status?.trim() || null;
+  if (reportType && !INSPECTION_TYPES.includes(reportType)) throw new InvalidCollectionQueryError('type filter is not valid.');
+  if (status && !(INSPECTION_STATUSES as readonly string[]).includes(status)) throw new InvalidCollectionQueryError('status filter is not valid.');
+  const after = decodeCursor(query.cursor, InspectionCursorSchema);
+
+  const clauses: Array<Record<string, unknown>> = [{ propertyId, status: { not: 'ARCHIVED' } }];
+  if (reportType) clauses.push({ reportType });
+  if (status) clauses.push({ status });
+  if (search) clauses.push({ OR: ['inspectorName', 'inspectorCompany'].map((field) => ({ [field]: { contains: search, mode: 'insensitive' } })) });
+  const baseWhere = { AND: clauses };
+  const pageWhere = after
+    ? { AND: [...clauses, { OR: [{ inspectionDate: { lt: new Date(after.d) } }, { inspectionDate: new Date(after.d), id: { lt: after.i } }] }] }
+    : baseWhere;
+  const scopeWhere = { propertyId, status: { not: 'ARCHIVED' } };
+
+  const [rows, total, types, statuses] = await Promise.all([
+    prisma.inspectionReport.findMany({
+      where: pageWhere as never,
+      orderBy: [{ inspectionDate: 'desc' }, { id: 'desc' }],
+      take: limit + 1,
+      select: { id: true, reportType: true, inspectionDate: true, inspectorName: true, inspectorCompany: true, status: true, totalFindings: true, openFindings: true, safetyFindings: true, majorFindings: true },
+    }),
+    prisma.inspectionReport.count({ where: baseWhere as never }),
+    prisma.inspectionReport.groupBy({ by: ['reportType'], where: scopeWhere as never, orderBy: { reportType: 'asc' } }),
+    prisma.inspectionReport.groupBy({ by: ['status'], where: scopeWhere as never, orderBy: { status: 'asc' } }),
+  ]);
+
+  const page = rows.slice(0, limit);
+  const last = page[page.length - 1];
+  const nextCursor = rows.length > limit && last ? encodeCursor({ d: last.inspectionDate.toISOString(), i: last.id }) : null;
+  const newest = await prisma.inspectionReport.findFirst({ where: scopeWhere as never, orderBy: [{ inspectionDate: 'desc' }, { id: 'desc' }], select: { inspectionDate: true } });
+  const typeOptions = types.map((entry) => ({ value: entry.reportType as string, label: INSPECTION_REPORT_TYPE_LABELS[entry.reportType] ?? readableEnum(entry.reportType) ?? entry.reportType }));
+  const statusOptions = statuses.map((entry) => ({ value: entry.status as string, label: INSPECTION_REPORT_STATUS_LABELS[entry.status] ?? entry.status }));
+
+  return {
+    contractVersion: ASK_RECORD_COLLECTION_CONTRACT_VERSION,
+    propertyId,
+    sectionId: 'inspections',
+    generatedAt: new Date().toISOString(),
+    freshAsOf: newest?.inspectionDate.toISOString() ?? null,
+    total,
+    delivered: page.length,
+    nextCursor,
+    truncated: nextCursor !== null,
+    notice: null,
+    sort: { key: 'inspectionDate', label: 'Newest inspection first' },
+    query: { search, filters: Object.fromEntries(Object.entries({ type: reportType, status }).filter(([, value]) => value)) as Record<string, string> },
+    filterOptions: [
+      ...(statusOptions.length > 1 ? [{ key: 'status', label: 'Status', options: statusOptions }] : []),
+      ...(typeOptions.length > 1 ? [{ key: 'type', label: 'Type', options: typeOptions }] : []),
+    ],
+    rows: page.map((report) => ({
+      id: report.id,
+      reportType: report.reportType,
+      reportTypeLabel: INSPECTION_REPORT_TYPE_LABELS[report.reportType] ?? 'Inspection',
+      inspectionDate: report.inspectionDate.toISOString(),
+      inspector: [report.inspectorName, report.inspectorCompany].filter(Boolean).join(', ') || null,
+      status: report.status,
+      statusLabel: INSPECTION_REPORT_STATUS_LABELS[report.status] ?? report.status,
+      totalFindings: report.totalFindings,
+      openFindings: report.openFindings,
+      safetyFindings: report.safetyFindings,
+      majorFindings: report.majorFindings,
+      askQuestion: null,
+    })),
+  };
+}
+
+export type AskRecordReaderContext = { propertyId: string; userId: string; role: HouseholdRole };
+type SectionReader = (context: AskRecordReaderContext, query: AskRecordCollectionQuery) => Promise<AskRecordCollectionPage<unknown>>;
 
 /** The sections with a connected paged reader. The registry's `pagedCollection` flag must agree with this map (tested). */
 export const ASK_RECORD_COLLECTION_READERS: Readonly<Partial<Record<AskRecordSectionId, SectionReader>>> = Object.freeze({
   rooms: (context, query) => readRoomsPage(context.propertyId, query),
   inventory: (context, query) => readInventoryPage(context.propertyId, query),
   documents: readDocumentsPage,
+  timeline: (context, query) => readTimelinePage(context, query),
+  'maintenance-history': (context, query) => readMaintenanceHistoryPage(context, query),
+  inspections: (context, query) => readInspectionsPage(context.propertyId, query),
   warranties: (context, query) => readWarrantiesPage(context.propertyId, query),
 });
 
@@ -545,5 +850,5 @@ export async function getAskRecordCollectionPage(
   if (applicability === 'RESTRICTED') throw new AskRecordSectionRestrictedError('Your household role cannot read this section.');
   if (applicability === 'NOT_APPLICABLE') throw new AskRecordSectionUnavailableError('NOT_APPLICABLE');
   if (applicability === 'CONTEXT_REQUIRED') throw new AskRecordSectionUnavailableError('CONTEXT_REQUIRED');
-  return reader({ propertyId, role: access.role }, query);
+  return reader({ propertyId, userId, role: access.role }, query);
 }

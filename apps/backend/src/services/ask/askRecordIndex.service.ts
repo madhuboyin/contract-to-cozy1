@@ -1,14 +1,12 @@
 import type { HouseholdRole } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { logger } from '../../lib/logger';
-import { readAskOperationalControls } from '../../config/askOperationalControls';
-import { composeSkillContext } from '../skills/context/skillContextComposer';
-import { skillContextProviderKey } from '../skills/context/skillContextProviderRegistry';
-import { PROPERTY_JOURNEY_CONTEXT_PROVIDER, type AskOperatingMode } from '../skills/context/propertyJourneyContext.contract';
-import { getSkillDefinition } from '../skills/skillRegistry';
+import type { AskOperatingMode } from '../skills/context/propertyJourneyContext.contract';
 import { getPropertyRecordOverview } from '../propertyRecordOverview.service';
 import type { AskAccountRole } from './askAccountEligibility';
-import { ensureAskServiceAccountEligibility, ensurePropertyAccess, journeyContextFrom } from './askHandlerSupport';
+import { ensureAskServiceAccountEligibility, ensurePropertyAccess } from './askHandlerSupport';
+import { loadOperatingMode } from './askRecordContext';
+import { ASK_RECORD_COLLECTION_READERS } from './askRecordCollections.service';
 import {
   ASK_RECORD_SECTION_REGISTRY,
   evaluateRecordSectionApplicability,
@@ -59,6 +57,15 @@ export interface AskRecordIndex {
 }
 
 type Overview = Awaited<ReturnType<typeof getPropertyRecordOverview>>;
+/** Section totals read through the section's own paged collection reader; 'FAILED' means the reader threw. */
+export type AskRecordCollectionTotals = Partial<Record<AskRecordSectionId, { total: number; freshAsOf: string | null } | 'FAILED'>>;
+
+const COLLECTION_COUNT_NOUNS: Partial<Record<AskRecordSectionId, [string, string]>> = {
+  timeline: ['event', 'events'],
+  'maintenance-history': ['completed task', 'completed tasks'],
+  inspections: ['report', 'reports'],
+};
+
 type SectionRead = { count: number | null; countLabel: string | null; freshAsOf: Date | string | null | undefined; failed: boolean };
 
 const plural = (count: number, singular: string, pluralForm = `${singular}s`) => (count === 1 ? singular : pluralForm);
@@ -76,7 +83,7 @@ const newest = (values: Array<Date | string | null | undefined>): Date | null =>
 function readOverviewSection(id: AskRecordSectionId, overview: Overview | null): SectionRead {
   const failed: SectionRead = { count: null, countLabel: null, freshAsOf: null, failed: true };
   if (!overview) return failed;
-  const { sections, tools, context } = overview;
+  const { sections, context } = overview;
   switch (id) {
     case 'property-facts':
       return context.status === 'AVAILABLE'
@@ -98,10 +105,6 @@ function readOverviewSection(id: AskRecordSectionId, overview: Overview | null):
       return sections.warranties.status === 'AVAILABLE'
         ? { count: sections.warranties.data.totalCount, countLabel: plural(sections.warranties.data.totalCount, 'warranty', 'warranties'), freshAsOf: null, failed: false }
         : failed;
-    case 'timeline':
-      return tools.homeTimeline.status === 'AVAILABLE'
-        ? { count: tools.homeTimeline.data.confirmedCount, countLabel: plural(tools.homeTimeline.data.confirmedCount, 'confirmed event'), freshAsOf: newest(tools.homeTimeline.data.recent.map((event) => event.updatedAt)), failed: false }
-        : failed;
     case 'household-access':
       return sections.household.status === 'AVAILABLE'
         ? { count: sections.household.data.totalCount, countLabel: plural(sections.household.data.totalCount, 'member'), freshAsOf: null, failed: false }
@@ -113,7 +116,7 @@ function readOverviewSection(id: AskRecordSectionId, overview: Overview | null):
 
 function buildSection(
   definition: AskRecordSectionDefinition,
-  input: { accessRole: HouseholdRole; operatingMode: AskOperatingMode; overview: Overview | null },
+  input: { accessRole: HouseholdRole; operatingMode: AskOperatingMode; overview: Overview | null; collectionTotals?: AskRecordCollectionTotals },
 ): AskRecordIndexSection {
   const base = { id: definition.id, label: definition.label, scope: definition.scope, freshnessSource: definition.freshnessSource, pagedCollection: false };
   const withheld = { count: null, countLabel: null, freshAsOf: null, primaryAction: null };
@@ -127,6 +130,13 @@ function buildSection(
   const primaryAction = { ...definition.primaryAction };
   if (definition.collectionReader === null) {
     return { ...base, count: null, countLabel: null, freshAsOf: null, primaryAction, state: 'UNAVAILABLE', reasonCode: 'READER_NOT_CONNECTED' };
+  }
+  if (definition.collectionReader === 'PAGED_COLLECTION') {
+    const totals = input.collectionTotals?.[definition.id];
+    if (totals === undefined) return { ...base, count: null, countLabel: null, freshAsOf: null, primaryAction, state: 'UNAVAILABLE', reasonCode: 'READER_NOT_CONNECTED' };
+    if (totals === 'FAILED') return { ...base, count: null, countLabel: null, freshAsOf: null, primaryAction, state: 'UNAVAILABLE', reasonCode: 'PROVIDER_FAILED' };
+    const noun = COLLECTION_COUNT_NOUNS[definition.id] ?? ['record', 'records'];
+    return { ...base, pagedCollection: definition.pagedCollection, count: totals.total, countLabel: totals.total === 1 ? noun[0] : noun[1], freshAsOf: totals.freshAsOf, primaryAction, state: 'AVAILABLE', reasonCode: null };
   }
   const read = readOverviewSection(definition.id, input.overview);
   if (read.failed) return { ...base, count: null, countLabel: null, freshAsOf: null, primaryAction, state: 'UNAVAILABLE', reasonCode: 'PROVIDER_FAILED' };
@@ -143,6 +153,7 @@ export function composeAskRecordIndex(input: {
   operatingMode: AskOperatingMode;
   overview: Overview | null;
   property: AskRecordIndex['property'];
+  collectionTotals?: AskRecordCollectionTotals;
   generatedAt?: string;
   registry?: readonly AskRecordSectionDefinition[];
 }): AskRecordIndex {
@@ -168,22 +179,6 @@ export function composeAskRecordIndex(input: {
   };
 }
 
-export async function loadOperatingMode(userId: string, propertyId: string): Promise<AskOperatingMode> {
-  try {
-    const skill = getSkillDefinition('property-record');
-    if (!skill) return 'UNKNOWN';
-    const composed = await composeSkillContext(
-      { skill, operationId: 'PROPERTY_SUMMARY', userId, propertyId },
-      { providerEnabled: readAskOperationalControls().contextProviderEnabled },
-    );
-    const entry = composed.entries.find((candidate) => candidate.key === skillContextProviderKey(PROPERTY_JOURNEY_CONTEXT_PROVIDER));
-    return entry?.status === 'AVAILABLE' ? (journeyContextFrom(composed)?.operatingMode ?? 'UNKNOWN') : 'UNKNOWN';
-  } catch (error) {
-    logger.warn({ err: error, propertyId, userId }, 'Record index lifecycle context failed closed');
-    return 'UNKNOWN';
-  }
-}
-
 export async function getAskRecordIndex(userId: string, propertyId: string, accountRole?: AskAccountRole): Promise<AskRecordIndex> {
   await ensureAskServiceAccountEligibility(userId, accountRole);
   const access = await ensurePropertyAccess(userId, propertyId);
@@ -195,5 +190,20 @@ export async function getAskRecordIndex(userId: string, propertyId: string, acco
     loadOperatingMode(userId, propertyId),
     prisma.property.findUnique({ where: { id: propertyId }, select: { name: true, address: true, city: true, state: true } }).catch(() => null),
   ]);
-  return composeAskRecordIndex({ propertyId, accessRole: access.role, operatingMode, overview, property });
+  // Sections whose count comes from their own paged reader: only the applicable ones are read, each failing on its own.
+  const collectionTotals: AskRecordCollectionTotals = {};
+  await Promise.all(ASK_RECORD_SECTION_REGISTRY
+    .filter((definition) => definition.collectionReader === 'PAGED_COLLECTION'
+      && evaluateRecordSectionApplicability(definition, { householdRole: access.role, operatingMode }) === 'APPLICABLE')
+    .map(async (definition) => {
+      const reader = ASK_RECORD_COLLECTION_READERS[definition.id];
+      try {
+        const page = reader ? await reader({ propertyId, userId, role: access.role }, { limit: 1 }) : null;
+        collectionTotals[definition.id] = page ? { total: page.total, freshAsOf: page.freshAsOf } : 'FAILED';
+      } catch (error) {
+        logger.warn({ err: error, propertyId, userId, sectionId: definition.id }, 'Record index section count failed closed');
+        collectionTotals[definition.id] = 'FAILED';
+      }
+    }));
+  return composeAskRecordIndex({ propertyId, accessRole: access.role, operatingMode, overview, property, collectionTotals });
 }
