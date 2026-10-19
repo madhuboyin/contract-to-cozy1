@@ -14,6 +14,7 @@ const KEY_PREFIXES: ReadonlyArray<{ prefix: string; provider: AskWorkProviderId;
   { prefix: 'job:scoreExport:', provider: 'QUEUED_JOBS', kind: 'scoreExport' },
   { prefix: 'followUp:claim:', provider: 'SCHEDULED_FOLLOW_UPS', kind: 'followUpClaim' },
   { prefix: 'followUp:project:', provider: 'SCHEDULED_FOLLOW_UPS', kind: 'followUpProject' },
+  { prefix: 'followUp:savings:', provider: 'SCHEDULED_FOLLOW_UPS', kind: 'followUpSavings' },
   { prefix: 'decisionThread:', provider: 'DECISION_THREADS', kind: 'decisionThread' },
   { prefix: 'execution:', provider: 'PENDING_EXECUTIONS', kind: 'execution' },
   { prefix: 'workItem:', provider: 'OPERATIONAL_WORK_ITEMS', kind: 'workItem' },
@@ -128,6 +129,10 @@ async function probe(kind: string, entityId: string, userId: string, propertyId:
       const project = await prisma.projectRecord.findFirst({ where: { id: entityId, propertyId }, select: { id: true } });
       return project ? { state: 'READ' } : { state: 'MISSING' };
     }
+    case 'followUpSavings': {
+      const action = await prisma.savingsBenefitAction.findFirst({ where: { id: entityId, propertyId }, select: { id: true } });
+      return action ? { state: 'READ' } : { state: 'MISSING' };
+    }
     case 'monitor': {
       const monitor = await prisma.refinanceRateMonitor.findFirst({ where: { id: entityId, userId, propertyId }, select: { status: true } });
       if (!monitor) return { state: 'MISSING' };
@@ -204,7 +209,7 @@ export async function resolveAskWork(
   if (applicability === 'RESTRICTED') return { ...base, outcome: 'ACCESS_LOST', message: 'Your household role can no longer open this work.' };
   if (applicability !== 'APPLICABLE') return { ...base, outcome: 'STALE', message: 'This work does not apply to this home right now.' };
 
-  const page = await reader({ userId, propertyId, role }, { view: 'NEEDS_YOU', after: null, limit: 5, status: null, entityId: parsed.entityId });
+  const page = await reader({ userId, propertyId, role, operatingMode }, { view: 'NEEDS_YOU', after: null, limit: 5, status: null, entityId: parsed.entityId });
   const row: AskWorkRow | undefined = page.rows.find((candidate) => candidate.workKey === workKey);
   if (!row) {
     // The record exists but the owner no longer lists it as work for this caller (a follow-up whose date passed hands over to its claim or project).

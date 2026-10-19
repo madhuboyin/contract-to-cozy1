@@ -103,6 +103,8 @@ test('scheduled follow-ups: future claim and project dates, each its own work wi
   const calls = { claim: [], project: [] };
   prisma.claim = { findMany: async (args) => { calls.claim.push(args); return [claim]; }, count: async () => 1 };
   prisma.projectRecord = { findMany: async (args) => { calls.project.push(args); return [project]; }, count: async () => 1 };
+  prisma.property = { findFirst: async () => null };
+  prisma.savingsBenefitAction = { findMany: async () => [], count: async () => 0 };
   const page = await readScheduledFollowUpWork(ctx, { view: 'SCHEDULED', after: null, limit: 5, status: null });
   assert.deepEqual(page.rows.map((row) => row.workKey), ['followUp:claim:c1', 'followUp:project:pr1']);
   assert.deepEqual(page.rows.map((row) => row.sourceAliases), [[], []], 'a follow-up is its own work, not an alias of its claim or project');

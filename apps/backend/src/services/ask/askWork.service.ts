@@ -196,7 +196,7 @@ export async function composeAskWorkPage(
       if (!reader) return none('UNAVAILABLE', 'No canonical reader is registered for this kind of work.');
       if (!definition.views.includes(view)) return { definition, status: { ...emptyStatus(definition, 'AVAILABLE', null), total: 0 }, rows: [], viewCounts: null };
       try {
-        const result = await reader({ userId, propertyId, role }, { view, after, limit: limit + 1, status });
+        const result = await reader({ userId, propertyId, role, operatingMode }, { view, after, limit: limit + 1, status });
         const rows = result.rows.filter((row) => row.providerId === definition.id && row.propertyId === propertyId);
         return { definition, status: { ...emptyStatus(definition, 'AVAILABLE', null), total: result.total, delivered: rows.length }, rows, viewCounts: result.viewCounts };
       } catch (error) {

@@ -1,4 +1,5 @@
 import type { HouseholdRole } from '@prisma/client';
+import type { AskOperatingMode } from '../skills/context/propertyJourneyContext.contract';
 import type { AskWorkLifecycleView, AskWorkProviderId, AskWorkType } from './governance/askWorkProviderRegistry';
 
 export const ASK_WORK_CONTRACT_VERSION = 'ask-work-v1' as const;
@@ -148,6 +149,8 @@ export interface AskWorkReadContext {
   userId: string;
   propertyId: string;
   role: HouseholdRole;
+  /** The home's operating mode, when the caller knows it; sources with their own applicability gate use it. */
+  operatingMode?: AskOperatingMode;
 }
 
 export interface AskWorkReadQuery {

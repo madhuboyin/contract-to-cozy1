@@ -12,10 +12,14 @@ const SERVED: readonly AskWorkLifecycleView[] = ['NEEDS_YOU', 'ACTIVE', 'WAITING
  * The authoritative, code-owned classification of which service bookings are repairs: bookings in a home-repair trade that were not made
  * for a buyer task. Inspections, moving, cleaning, landscaping, professional services and installs are bookings but not repairs and are
  * deliberately excluded. Changing this list is a product decision; it is the only place that decides.
+ *
+ * Known limitation: `Booking.category` names the trade, not the purpose, so a flooring or solar booking may be an installation or upgrade
+ * rather than a repair. The list is an approximation; an explicit booking purpose would be the authoritative fix and is not needed for Phase 3.
  */
 export const ASK_REPAIR_BOOKING_CATEGORIES: readonly ServiceCategory[] = Object.freeze([
   'HANDYMAN', 'GENERAL_HANDYMAN', 'PLUMBING', 'ELECTRICAL', 'HVAC', 'ROOFING', 'WATER_HEATER', 'FOUNDATION', 'WINDOWS_DOORS', 'GUTTERS',
   'MOLD_REMEDIATION', 'APPLIANCE_REPAIR', 'PEST_CONTROL', 'LOCKSMITH',
+  'INSULATION', 'LANDSCAPING_DRAINAGE', 'FLOORING', 'PAINTING', 'SIDING', 'SECURITY_SAFETY', 'SOLAR',
 ] as ServiceCategory[]);
 
 /** The bookings that count as repairs for a homeowner: their own, in a repair trade, and not tied to a buyer checklist task. */

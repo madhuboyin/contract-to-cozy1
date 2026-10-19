@@ -177,7 +177,7 @@ export const ASK_WORK_PROVIDER_REGISTRY: readonly AskWorkProviderDefinition[] = 
   }),
   provider({
     id: 'SCHEDULED_FOLLOW_UPS', label: 'Scheduled follow-ups', workType: 'SCHEDULED_FOLLOW_UP', owner: 'follow-ups',
-    readOperationIds: ['INCIDENT_CLAIM_STATUS', 'PROJECT_TRACKER_PROJECTS'], commandOperationIds: ['CLAIM_ACTIVITY_COMMAND', 'PROJECT_TRACKER_COMMAND'],
+    readOperationIds: ['INCIDENT_CLAIM_STATUS', 'PROJECT_TRACKER_PROJECTS', 'SAVINGS_OPPORTUNITIES'], commandOperationIds: ['CLAIM_ACTIVITY_COMMAND', 'PROJECT_TRACKER_COMMAND', 'SAVINGS_BENEFIT_COMMAND'],
     readAuthority: 'OPERATION_FLOOR', lifecycleOperationId: 'INCIDENT_CLAIM_STATUS',
     reader: CONNECTED,
     precedence: 20, fallbackProjection: false, sourceAliasKinds: ['followUp'], views: ['SCHEDULED'], statusOptions: [], requiredForExit: true, freshnessSource: 'Follow-up schedule',
