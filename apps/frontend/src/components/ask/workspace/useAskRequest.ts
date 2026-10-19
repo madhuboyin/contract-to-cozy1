@@ -17,7 +17,7 @@ export function useAskRequest({ sessionId, loading, executions, selectedProperty
   launchSurface: string;
   launchCapabilityId: string;
   /** A Record destination launch: used only for the first message, and only while the question is still the one the Record supplied. */
-  launchRecord?: { message: string; operationId: string; entityType: string; entityId: string; actionId?: string };
+  launchRecord?: { message: string; operationId: string; entityType: string; entityId: string; actionId?: string; decisionThreadId?: string; workItemId?: string; journeyId?: string; contextVersion?: string };
   safeBackTo: string;
   requests: MutableRefObject<ReturnType<typeof createResultRequestTracker>>;
   inFlight: MutableRefObject<{ key: string; token: number; message: string } | null>;
@@ -64,7 +64,7 @@ export function useAskRequest({ sessionId, loading, executions, selectedProperty
       // first message — a later follow-up isn't an entry-point event.
       const isFirstMessage = options?.firstMessageOverride ?? (requestedSessionId === sessionId && executions.length === 0);
       if (!promptContext && isFirstMessage && launchRecord && message === launchRecord.message.trim()) {
-        promptContext = { operationId: launchRecord.operationId, entityType: launchRecord.entityType, entityId: launchRecord.entityId, actionId: launchRecord.actionId };
+        promptContext = { operationId: launchRecord.operationId, entityType: launchRecord.entityType, entityId: launchRecord.entityId, actionId: launchRecord.actionId, decisionThreadId: launchRecord.decisionThreadId, workItemId: launchRecord.workItemId, journeyId: launchRecord.journeyId, contextVersion: launchRecord.contextVersion };
       }
       // SUGGESTED_NEXT_ACTIONS plan §4.1: a selected app-offered action carries only its id and the execution that offered it. The
       // server resolves operation/entity/message from its stored ledger, so none of that is sent as proof of authorship, and the

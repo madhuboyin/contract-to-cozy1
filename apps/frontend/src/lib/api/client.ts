@@ -1096,6 +1096,26 @@ class APIClient {
     const query = propertyId ? `?propertyId=${encodeURIComponent(propertyId)}` : '';
     return this.request(`/api/ask/pending${query}`, options);
   }
+  // The canonical Work index (FR-WORK-001/005): one lifecycle view, keyset-paged, side-effect free.
+  async getAskWorkPage(
+    propertyId: string,
+    query: { view?: string; cursor?: string | null; limit?: number; workType?: string; status?: string } = {},
+    options: { signal?: AbortSignal } = {},
+  ): Promise<APIResponse<import('@/features/ask/types').AskWorkPage>> {
+    const params = new URLSearchParams({ propertyId });
+    if (query.view) params.set('view', query.view);
+    if (query.cursor) params.set('cursor', query.cursor);
+    if (query.limit) params.set('limit', String(query.limit));
+    if (query.workType) params.set('workType', query.workType);
+    if (query.status) params.set('status', query.status);
+    return this.request(`/api/ask/work?${params.toString()}`, options);
+  }
+  // Opens one piece of work: rereads current state and reports one recovery outcome (FR-WORK-004). Side-effect free.
+  async resolveAskWork(propertyId: string, workKey: string, version?: string, options: { signal?: AbortSignal } = {}): Promise<APIResponse<import('@/features/ask/types').AskWorkResolution>> {
+    const params = new URLSearchParams({ propertyId, workKey });
+    if (version) params.set('version', version);
+    return this.request(`/api/ask/work/resolve?${params.toString()}`, options);
+  }
   async getAskRecordIndex(propertyId: string, options: { signal?: AbortSignal } = {}): Promise<APIResponse<import('@/features/ask/types').AskRecordIndex>> {
     return this.request(`/api/ask/record-index?propertyId=${encodeURIComponent(propertyId)}`, options);
   }

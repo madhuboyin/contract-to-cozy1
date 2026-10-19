@@ -15,6 +15,10 @@ export type AskSearchParams = {
   launchEntityType?: string | string[];
   launchEntityId?: string | string[];
   launchActionId?: string | string[];
+  launchDecisionThreadId?: string | string[];
+  launchWorkItemId?: string | string[];
+  launchJourneyId?: string | string[];
+  launchContextVersion?: string | string[];
 };
 
 const value = (candidate?: string | string[]) => typeof candidate === 'string' ? candidate : '';
@@ -36,7 +40,7 @@ export async function AskRoutePage({
   const operationId = value(params.launchOperationId);
   const entityType = value(params.launchEntityType);
   const entityId = value(params.launchEntityId);
-  const launchRecord = operationId && entityType && entityId ? { operationId, entityType, entityId, actionId: value(params.launchActionId) || undefined } : undefined;
+  const launchRecord = operationId && entityType && entityId ? { operationId, entityType, entityId, actionId: value(params.launchActionId) || undefined, decisionThreadId: value(params.launchDecisionThreadId) || undefined, workItemId: value(params.launchWorkItemId) || undefined, journeyId: value(params.launchJourneyId) || undefined, contextVersion: value(params.launchContextVersion) || undefined } : undefined;
   return (
     <div className="h-full min-h-0">
       <AskWorkspace

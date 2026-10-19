@@ -14,6 +14,11 @@ type AskWorkspaceHrefInput = {
   launchEntityType?: string | null;
   launchEntityId?: string | null;
   launchActionId?: string | null;
+  /** Work destination resumes: the exact domain identity the operation continues (decision thread, home work item, guided journey) and its version. */
+  launchDecisionThreadId?: string | null;
+  launchWorkItemId?: string | null;
+  launchJourneyId?: string | null;
+  launchContextVersion?: string | null;
 };
 
 function setWhenPresent(params: URLSearchParams, key: string, value?: string | null) {
@@ -35,6 +40,10 @@ export function buildAskWorkspaceHref(input: AskWorkspaceHrefInput = {}): string
   setWhenPresent(params, 'launchEntityType', input.launchEntityType);
   setWhenPresent(params, 'launchEntityId', input.launchEntityId);
   setWhenPresent(params, 'launchActionId', input.launchActionId);
+  setWhenPresent(params, 'launchDecisionThreadId', input.launchDecisionThreadId);
+  setWhenPresent(params, 'launchWorkItemId', input.launchWorkItemId);
+  setWhenPresent(params, 'launchJourneyId', input.launchJourneyId);
+  setWhenPresent(params, 'launchContextVersion', input.launchContextVersion);
 
   const safeBackTo = resolveDashboardBackHref(input.backTo, '');
   if (safeBackTo) params.set('backTo', safeBackTo);

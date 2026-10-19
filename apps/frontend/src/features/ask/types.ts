@@ -1172,3 +1172,82 @@ export interface HomeReportExportSummary {
   errorMessage?: string | null;
   expiresAt?: string | null;
 }
+
+// Work destination (FR-WORK-001..005). Mirrors the backend `AskWorkPage`, `AskWorkRow` and `AskWorkResolution`.
+export type AskWorkLifecycleView = 'NEEDS_YOU' | 'ACTIVE' | 'WAITING' | 'SCHEDULED' | 'COMPLETED' | 'ARCHIVED';
+/** What opening work finds. Separate from the lifecycle views: a row is in one view; an open attempt has one outcome. */
+export type AskWorkResumeOutcome = 'AVAILABLE' | 'DELETED' | 'COMPLETED' | 'STALE' | 'ACCESS_LOST' | 'SUPERSEDED';
+export type AskWorkType =
+  | 'PENDING_EXECUTION' | 'HOME_WORK_ITEM' | 'DECISION_THREAD' | 'INCIDENT' | 'CLAIM' | 'PROJECT' | 'GUIDANCE_JOURNEY' | 'DIY_PROJECT'
+  | 'RENOVATION_CASE' | 'REPAIR' | 'MONITOR' | 'QUEUED_JOB' | 'RETRYABLE_EXECUTION' | 'UNKNOWN_OUTCOME_EXECUTION' | 'SCHEDULED_FOLLOW_UP';
+export type AskWorkProviderState = 'AVAILABLE' | 'UNAVAILABLE' | 'FAILED' | 'RESTRICTED' | 'NOT_APPLICABLE' | 'CONTEXT_REQUIRED';
+
+export interface AskWorkLaunch {
+  operationId: string | null;
+  entityType: string | null;
+  entityId: string | null;
+  actionId: string | null;
+  decisionThreadId: string | null;
+  workItemId: string | null;
+  journeyId: string | null;
+  contextVersion: string | null;
+}
+
+export interface AskWorkRow {
+  workKey: string;
+  sourceAliases: string[];
+  providerId: string;
+  workType: AskWorkType;
+  propertyId: string;
+  entity: { type: string; id: string };
+  title: string;
+  summary: string | null;
+  status: { canonical: string; label: string };
+  lifecycleView: AskWorkLifecycleView;
+  nextAction: { label: string; operationId: string | null; allowed: boolean; retryExecutionId?: string } | null;
+  sortAt: string;
+  dueAt?: string | null;
+  freshness: { version: string; asOf: string };
+  sourceOwner: string;
+  resume: { kind: 'CONVERSATION' | 'CONFIRMATION' | 'WORKSPACE'; executionId: string | null; sessionId: string | null; launch: AskWorkLaunch };
+}
+
+export interface AskWorkProviderStatus {
+  providerId: string;
+  label: string;
+  workType: AskWorkType;
+  state: AskWorkProviderState;
+  reason: string | null;
+  total: number | null;
+  delivered: number;
+  required: boolean;
+}
+
+export interface AskWorkPage {
+  contractVersion: 'ask-work-v1';
+  propertyId: string;
+  generatedAt: string;
+  view: AskWorkLifecycleView;
+  total: number | null;
+  totalScope: 'COMPLETE' | 'PARTIAL';
+  partial: boolean;
+  delivered: number;
+  nextCursor: string | null;
+  truncated: boolean;
+  viewCounts: Record<AskWorkLifecycleView, number | null>;
+  sort: { key: 'sortAt'; label: string };
+  query: { workType: AskWorkType | null; status: string | null };
+  providers: AskWorkProviderStatus[];
+  rows: AskWorkRow[];
+}
+
+export interface AskWorkResolution {
+  contractVersion: 'ask-work-v1';
+  propertyId: string;
+  workKey: string;
+  outcome: AskWorkResumeOutcome;
+  row: AskWorkRow | null;
+  currentVersion: string | null;
+  supersededBy: string | null;
+  message: string;
+}
