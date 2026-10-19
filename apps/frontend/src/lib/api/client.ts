@@ -1099,6 +1099,19 @@ class APIClient {
   async getAskRecordIndex(propertyId: string, options: { signal?: AbortSignal } = {}): Promise<APIResponse<import('@/features/ask/types').AskRecordIndex>> {
     return this.request(`/api/ask/record-index?propertyId=${encodeURIComponent(propertyId)}`, options);
   }
+  async getAskRecordSectionPage<Row>(
+    sectionId: string,
+    propertyId: string,
+    query: { cursor?: string | null; limit?: number; search?: string; filters?: Record<string, string> } = {},
+    options: { signal?: AbortSignal } = {},
+  ): Promise<APIResponse<import('@/features/ask/types').AskRecordCollectionPage<Row>>> {
+    const params = new URLSearchParams({ propertyId });
+    if (query.cursor) params.set('cursor', query.cursor);
+    if (query.limit) params.set('limit', String(query.limit));
+    if (query.search?.trim()) params.set('search', query.search.trim());
+    for (const [key, value] of Object.entries(query.filters ?? {})) if (value) params.set(key, value);
+    return this.request(`/api/ask/record-sections/${encodeURIComponent(sectionId)}?${params.toString()}`, options);
+  }
   async continueAskExecution(executionId: string, surface: 'ASK_PAGE' | 'GLOBAL_LAUNCHER'): Promise<APIResponse<AskExecutionResponse>> {
     return this.request<AskExecutionResponse>(`/api/ask/executions/${encodeURIComponent(executionId)}/continue`, { method: 'POST', body: { surface } });
   }

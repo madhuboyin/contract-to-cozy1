@@ -7,9 +7,11 @@ import { useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api/client';
 import { buildAskWorkspaceHref } from '@/lib/navigation/askNavigation';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
-import type { AskRecordIndex, AskRecordIndexSection } from '@/features/ask/types';
+import type { AskRecordIndex, AskRecordIndexSection, AskRecordRoomRow } from '@/features/ask/types';
 import { AskCollection, AskCollectionState, AskCompactRow, AskWorkspaceMeasure } from '../presentation/AskLayoutPrimitives';
 import { askServiceIsPaused } from '../workspace/support';
+import { RecordCollection } from './RecordCollection';
+import { RecordRoomRow } from './RecordRoomRow';
 
 const NOT_AVAILABLE_COPY: Record<NonNullable<AskRecordIndexSection['reasonCode']>, string> = {
   READER_NOT_CONNECTED: 'Count not shown here yet. Ask opens this section.',
@@ -43,14 +45,24 @@ function SectionRow({ section, propertyId }: { section: AskRecordIndexSection; p
         <p className="mt-0.5 truncate text-xs text-slate-500" title={section.scope}>{section.scope}</p>
         <p className={`mt-1 text-sm ${summary.tone === 'caution' ? 'text-amber-800' : summary.tone === 'muted' ? 'text-slate-500' : 'text-slate-800'}`}>{summary.text}</p>
       </div>
+      <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
+      {section.pagedCollection && (
+        <Link href={`/dashboard/ask/record?propertyId=${encodeURIComponent(propertyId)}&section=${encodeURIComponent(section.id)}`} className="inline-flex min-h-11 items-center justify-center rounded-xl bg-emerald-950 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700" aria-label={`Browse all ${section.label}`}>
+          Browse all
+        </Link>
+      )}
       {href && section.primaryAction && (
-        <Link href={href} className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-xl border border-emerald-900/20 px-3 py-2 text-sm font-semibold text-emerald-950 hover:bg-emerald-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700" aria-label={`${section.primaryAction.label}: ${section.label}`}>
+        <Link href={href} className="inline-flex min-h-11 items-center justify-center rounded-xl border border-emerald-900/20 px-3 py-2 text-sm font-semibold text-emerald-950 hover:bg-emerald-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700" aria-label={`${section.primaryAction.label}: ${section.label}`}>
           {section.primaryAction.label}
         </Link>
       )}
+      </div>
     </AskCompactRow>
   );
 }
+
+// Sections the destination can page in place. The index marks them with `pagedCollection`; this is how each one is presented.
+const PAGED_SECTION_LABELS: Record<string, string> = { rooms: 'Rooms' };
 
 export function AskRecord() {
   const searchParams = useSearchParams();
@@ -58,6 +70,9 @@ export function AskRecord() {
   const { selectedPropertyId, setSelectedPropertyId } = usePropertyContext();
   const propertyMismatch = Boolean(requestedPropertyId) && requestedPropertyId !== selectedPropertyId;
   const scopedPropertyId = requestedPropertyId || selectedPropertyId;
+  const requestedSection = searchParams.get('section')?.trim() ?? '';
+  const collectionSection = Object.prototype.hasOwnProperty.call(PAGED_SECTION_LABELS, requestedSection) ? requestedSection : null;
+  const indexHref = `/dashboard/ask/record${scopedPropertyId ? `?propertyId=${encodeURIComponent(scopedPropertyId)}` : ''}`;
   const [index, setIndex] = useState<AskRecordIndex | null>(null);
   const [status, setStatus] = useState<'LOADING' | 'READY' | 'ERROR' | 'PAUSED'>('LOADING');
   const [attempt, setAttempt] = useState(0);
@@ -68,7 +83,7 @@ export function AskRecord() {
   }, [propertyMismatch, requestedPropertyId, setSelectedPropertyId]);
 
   useEffect(() => {
-    if (!scopedPropertyId || propertyMismatch) return;
+    if (!scopedPropertyId || propertyMismatch || collectionSection) return;
     const controller = new AbortController();
     setStatus('LOADING');
     api.getAskRecordIndex(scopedPropertyId, { signal: controller.signal })
@@ -84,7 +99,7 @@ export function AskRecord() {
         setStatus(askServiceIsPaused(caught) ? 'PAUSED' : 'ERROR');
       });
     return () => controller.abort();
-  }, [scopedPropertyId, propertyMismatch, attempt]);
+  }, [scopedPropertyId, propertyMismatch, collectionSection, attempt]);
 
   const propertyLabel = index?.property ? (index.property.name?.trim() || `${index.property.address}, ${index.property.city}`) : null;
   const completeness = index?.completeness;
@@ -98,7 +113,7 @@ export function AskRecord() {
             <h1 id="ask-record-title" className="mt-1 text-3xl font-semibold tracking-[-0.025em] text-slate-950">Record</h1>
             {propertyLabel && <p className="mt-1 truncate text-sm text-slate-600">{propertyLabel}{index?.property ? ` · ${index.property.city}, ${index.property.state}` : ''}</p>}
           </div>
-          {completeness?.state === 'AVAILABLE' && completeness.percent !== null && (
+          {!collectionSection && completeness?.state === 'AVAILABLE' && completeness.percent !== null && (
             <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3" data-record-completeness>
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-slate-950">{completeness.percent}% of home details known</p>
@@ -114,7 +129,17 @@ export function AskRecord() {
         </header>
 
         <section className="mt-5" aria-label="Home record sections">
-          {!scopedPropertyId ? (
+          {collectionSection && scopedPropertyId && !propertyMismatch ? (
+            <RecordCollection<AskRecordRoomRow>
+              key={`${scopedPropertyId}:${collectionSection}`}
+              sectionId={collectionSection}
+              label={PAGED_SECTION_LABELS[collectionSection]}
+              propertyId={scopedPropertyId}
+              backHref={indexHref}
+              searchLabel="Search rooms"
+              renderRow={(room) => <RecordRoomRow key={room.id} room={room} propertyId={scopedPropertyId} />}
+            />
+          ) : !scopedPropertyId ? (
             <AskCollectionState kind="NOT_APPLICABLE" description="Select a home to browse its record." />
           ) : status === 'PAUSED' ? (
             <AskCollectionState kind="UNAVAILABLE" description="Ask Cozy is temporarily paused. Your saved data is unchanged." className="border-amber-200 bg-amber-50 text-amber-950" />

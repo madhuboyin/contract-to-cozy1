@@ -16,6 +16,8 @@
 - Screen-reader, keyboard focus order, zoom, and reduced-motion audit of the Record index.
 - That the `question` launch from a row opens the intended Ask answer.
 
+**Phase 2 slice 2 (rooms paging) implemented:** the generic collection contract `AskRecordCollectionPage` (FR-REC-003: authoritative total, delivered count, keyset `nextCursor`, `truncated` only when a cursor exists, sort, applied search/filters, filter options) is served by `GET /api/ask/record-sections/:sectionId`, which reauthorizes on every call (account eligibility, current household role, registry role floor, lifecycle applicability). Rooms is the first connected reader (`askRecordCollections.service.ts`; search by name, floor filter including "not recorded", limit 25 default / 50 max). The registry's `pagedCollection` flag is tested against the connected readers. The Record destination opens a section in place at `?section=rooms` with search, filter, total, and "Show more (N remaining)". The Ask rooms answer's 50-room cap is unchanged; its complete continuation is now this Record collection. Not executed: real-database paging and ordering (Postgres collation vs. the keyset comparison), the route's HTTP error mapping, the row's `Show me the items in my <room>` launch question, and browser layout.
+
 **Open floor note:** no Ask operation is dedicated to reading household access, so `household-access` uses `PROPERTY_SUMMARY` (VIEWER), which already carries the household count in the same overview. The index returns only the member count, never names or emails. Confirm this is the intended boundary before the household detail slice.
 
 ## 1. Delivery principles

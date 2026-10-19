@@ -39,6 +39,8 @@ export interface AskRecordIndexSection {
   /** The newest source time the canonical reader supplied; null when it supplies none. */
   freshAsOf: string | null;
   freshnessSource: string;
+  /** True when the Record destination can page this section's complete collection. */
+  pagedCollection: boolean;
   /** The Ask question that opens the section. Withheld for restricted and inapplicable sections. */
   primaryAction: { label: string; question: string } | null;
 }
@@ -113,7 +115,7 @@ function buildSection(
   definition: AskRecordSectionDefinition,
   input: { accessRole: HouseholdRole; operatingMode: AskOperatingMode; overview: Overview | null },
 ): AskRecordIndexSection {
-  const base = { id: definition.id, label: definition.label, scope: definition.scope, freshnessSource: definition.freshnessSource };
+  const base = { id: definition.id, label: definition.label, scope: definition.scope, freshnessSource: definition.freshnessSource, pagedCollection: false };
   const withheld = { count: null, countLabel: null, freshAsOf: null, primaryAction: null };
   const applicability = evaluateRecordSectionApplicability(definition, { householdRole: input.accessRole, operatingMode: input.operatingMode });
   if (applicability === 'RESTRICTED') return { ...base, ...withheld, state: 'RESTRICTED', reasonCode: 'ROLE_FLOOR' };
@@ -128,7 +130,7 @@ function buildSection(
   }
   const read = readOverviewSection(definition.id, input.overview);
   if (read.failed) return { ...base, count: null, countLabel: null, freshAsOf: null, primaryAction, state: 'UNAVAILABLE', reasonCode: 'PROVIDER_FAILED' };
-  return { ...base, count: read.count, countLabel: read.countLabel, freshAsOf: isoOrNull(read.freshAsOf), primaryAction, state: 'AVAILABLE', reasonCode: null };
+  return { ...base, pagedCollection: definition.pagedCollection, count: read.count, countLabel: read.countLabel, freshAsOf: isoOrNull(read.freshAsOf), primaryAction, state: 'AVAILABLE', reasonCode: null };
 }
 
 /**
@@ -166,7 +168,7 @@ export function composeAskRecordIndex(input: {
   };
 }
 
-async function loadOperatingMode(userId: string, propertyId: string): Promise<AskOperatingMode> {
+export async function loadOperatingMode(userId: string, propertyId: string): Promise<AskOperatingMode> {
   try {
     const skill = getSkillDefinition('property-record');
     if (!skill) return 'UNKNOWN';

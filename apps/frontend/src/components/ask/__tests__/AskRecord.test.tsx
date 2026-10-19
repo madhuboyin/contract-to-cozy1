@@ -13,7 +13,7 @@ jest.mock('@/lib/api/client', () => ({ api: { getAskRecordIndex: jest.fn() } }))
 const getIndex = api.getAskRecordIndex as jest.Mock;
 
 const section = (overrides: Partial<AskRecordIndexSection> & Pick<AskRecordIndexSection, 'id' | 'label'>): AskRecordIndexSection => ({
-  scope: `${overrides.label} scope`, state: 'AVAILABLE', reasonCode: null, count: 2, countLabel: 'items', freshAsOf: null, freshnessSource: 'source',
+  scope: `${overrides.label} scope`, state: 'AVAILABLE', reasonCode: null, count: 2, countLabel: 'items', freshAsOf: null, freshnessSource: 'source', pagedCollection: false,
   primaryAction: { label: `Open ${overrides.label}`, question: `Show ${overrides.label}` },
   ...overrides,
 });
@@ -58,6 +58,17 @@ describe('AskRecord', () => {
     expect(within(rows[4] as HTMLElement).getByText(/Tell Cozy whether you own/)).toBeInTheDocument();
     expect(screen.getByText('40% of home details known')).toBeInTheDocument();
     expect(screen.getByText('3 details still to review')).toBeInTheDocument();
+  });
+
+  it('offers Browse all only for sections that serve a paged collection', async () => {
+    getIndex.mockResolvedValue({ success: true, data: index([
+      section({ id: 'rooms', label: 'Rooms', pagedCollection: true }),
+      section({ id: 'inventory', label: 'Systems and inventory' }),
+    ]) });
+    render(<AskRecord />);
+    const browse = await screen.findByRole('link', { name: 'Browse all Rooms' });
+    expect(browse.getAttribute('href')).toBe('/dashboard/ask/record?propertyId=home-1&section=rooms');
+    expect(screen.queryByRole('link', { name: /Browse all Systems/ })).toBeNull();
   });
 
   it('marks a partial read, keeps the other sections, and retries', async () => {

@@ -808,6 +808,7 @@ export interface AskRecordIndexSection {
   countLabel: string | null;
   freshAsOf: string | null;
   freshnessSource: string;
+  pagedCollection: boolean;
   primaryAction: { label: string; question: string } | null;
 }
 
@@ -821,4 +822,31 @@ export interface AskRecordIndex {
   completeness: { state: 'AVAILABLE' | 'UNAVAILABLE'; percent: number | null; pendingDetails: number | null };
   partial: boolean;
   sections: AskRecordIndexSection[];
+}
+
+// Record section collection page (FR-REC-003). Mirrors the backend `AskRecordCollectionPage`.
+export interface AskRecordCollectionPage<Row> {
+  contractVersion: 'ask-record-collection-v1';
+  propertyId: string;
+  sectionId: string;
+  generatedAt: string;
+  total: number;
+  delivered: number;
+  nextCursor: string | null;
+  truncated: boolean;
+  sort: { key: string; label: string };
+  query: { search: string | null; filters: Record<string, string> };
+  filterOptions: Array<{ key: string; label: string; options: Array<{ value: string; label: string }> }>;
+  rows: Row[];
+}
+
+export interface AskRecordRoomRow {
+  id: string;
+  name: string;
+  type: string | null;
+  floorLevel: number | null;
+  itemCount: number;
+  openTaskCount: number;
+  updatedAt: string;
+  askQuestion: string;
 }

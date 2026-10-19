@@ -27,6 +27,8 @@ export interface AskRecordSectionDefinition {
   /** Existing Ask commands that change the section's records. They never lower the read floor. */
   commandOperationIds: readonly AskOperationId[];
   collectionReader: AskRecordCollectionReader;
+  /** True once a pageable, filterable collection reader serves this section (askRecordCollections.service). */
+  pagedCollection: boolean;
   /** Its audience policy decides lifecycle applicability. It must be one of `readOperationIds`. */
   lifecycleOperationId: AskOperationId;
   freshnessSource: string;
@@ -48,91 +50,91 @@ export const ASK_RECORD_SECTION_REGISTRY: readonly AskRecordSectionDefinition[] 
   section({
     id: 'property-facts', label: 'Property details', scope: 'Structure, use, systems, safety and other governed home facts.', owner: 'property-context',
     readOperationIds: ['PROPERTY_SUMMARY'], commandOperationIds: ['PROPERTY_CONTEXT_AREA_CAPTURE', 'PROPERTY_PURCHASE_DATE_SET'],
-    collectionReader: OVERVIEW, lifecycleOperationId: 'PROPERTY_SUMMARY', freshnessSource: 'Property Context completeness', exportEligibility: 'NOT_EVALUATED',
+    collectionReader: OVERVIEW, pagedCollection: false, lifecycleOperationId: 'PROPERTY_SUMMARY', freshnessSource: 'Property Context completeness', exportEligibility: 'NOT_EVALUATED',
     primaryAction: { label: 'Review details', question: 'How complete is my home record?' },
   }),
   section({
     id: 'rooms', label: 'Rooms', scope: 'Rooms, floor placement, item counts and open maintenance.', owner: 'home-record',
     readOperationIds: ['PROPERTY_SUMMARY'], commandOperationIds: ['ROOM_CREATE', 'ROOM_RENAME'],
-    collectionReader: OVERVIEW, lifecycleOperationId: 'PROPERTY_SUMMARY', freshnessSource: 'Most recently updated room', exportEligibility: 'NOT_EVALUATED',
+    collectionReader: OVERVIEW, pagedCollection: true, lifecycleOperationId: 'PROPERTY_SUMMARY', freshnessSource: 'Most recently updated room', exportEligibility: 'NOT_EVALUATED',
     primaryAction: { label: 'View rooms', question: 'Show me my home by room.' },
   }),
   section({
     id: 'inventory', label: 'Systems and inventory', scope: 'Appliances, systems and belongings with condition and verification.', owner: 'inventory',
     readOperationIds: ['INVENTORY_LOOKUP'], commandOperationIds: ['INVENTORY_ITEM_CREATE', 'INVENTORY_ITEM_CORRECT'],
-    collectionReader: OVERVIEW, lifecycleOperationId: 'INVENTORY_LOOKUP', freshnessSource: 'Most recently updated item', exportEligibility: 'NOT_EVALUATED',
+    collectionReader: OVERVIEW, pagedCollection: false, lifecycleOperationId: 'INVENTORY_LOOKUP', freshnessSource: 'Most recently updated item', exportEligibility: 'NOT_EVALUATED',
     primaryAction: { label: 'View inventory', question: 'What is in my home inventory?' },
   }),
   section({
     id: 'documents', label: 'Documents', scope: 'Home records and vault documents, plus extracted candidates awaiting review.', owner: 'home-records',
     readOperationIds: ['DOCUMENT_LOOKUP', 'DOCUMENT_PROMOTION_REVIEW'], commandOperationIds: ['DOCUMENT_PROMOTION_CONFIRM'],
-    collectionReader: OVERVIEW, lifecycleOperationId: 'DOCUMENT_LOOKUP', freshnessSource: 'Most recently added document', exportEligibility: 'NOT_EVALUATED',
+    collectionReader: OVERVIEW, pagedCollection: false, lifecycleOperationId: 'DOCUMENT_LOOKUP', freshnessSource: 'Most recently added document', exportEligibility: 'NOT_EVALUATED',
     primaryAction: { label: 'View documents', question: 'Show me my home documents.' },
   }),
   section({
     id: 'warranties', label: 'Warranties', scope: 'Active and expired warranties with providers and dates.', owner: 'warranties',
     readOperationIds: ['WARRANTY_LOOKUP'], commandOperationIds: ['WARRANTY_CORRECT'],
-    collectionReader: OVERVIEW, lifecycleOperationId: 'WARRANTY_LOOKUP', freshnessSource: 'Warranty expiry dates', exportEligibility: 'NOT_EVALUATED',
+    collectionReader: OVERVIEW, pagedCollection: false, lifecycleOperationId: 'WARRANTY_LOOKUP', freshnessSource: 'Warranty expiry dates', exportEligibility: 'NOT_EVALUATED',
     primaryAction: { label: 'View warranties', question: 'Show me my warranties.' },
   }),
   section({
     id: 'timeline', label: 'Home timeline', scope: 'Confirmed events in the home’s history.', owner: 'home-timeline',
     readOperationIds: ['HOME_TIMELINE_EVENTS'], commandOperationIds: ['HOME_EVENT_CORRECT', 'HOME_EVENT_VISIBILITY'],
-    collectionReader: OVERVIEW, lifecycleOperationId: 'HOME_TIMELINE_EVENTS', freshnessSource: 'Most recently updated confirmed event', exportEligibility: 'NOT_EVALUATED',
+    collectionReader: OVERVIEW, pagedCollection: false, lifecycleOperationId: 'HOME_TIMELINE_EVENTS', freshnessSource: 'Most recently updated confirmed event', exportEligibility: 'NOT_EVALUATED',
     primaryAction: { label: 'View timeline', question: 'Show me my home timeline.' },
   }),
   section({
     id: 'maintenance-history', label: 'Maintenance history', scope: 'Completed and open maintenance work.', owner: 'maintenance',
     readOperationIds: ['MAINTENANCE_STATUS'], commandOperationIds: ['MAINTENANCE_TASK_CREATE', 'MAINTENANCE_TASK_UPDATE', 'MAINTENANCE_TASK_COMPLETE'],
-    collectionReader: null, lifecycleOperationId: 'MAINTENANCE_STATUS', freshnessSource: 'Maintenance task updates', exportEligibility: 'NOT_EVALUATED',
+    collectionReader: null, pagedCollection: false, lifecycleOperationId: 'MAINTENANCE_STATUS', freshnessSource: 'Maintenance task updates', exportEligibility: 'NOT_EVALUATED',
     primaryAction: { label: 'View maintenance', question: 'What is the status of my home maintenance?' },
   }),
   section({
     id: 'inspections', label: 'Inspections', scope: 'Inspection reports and their findings.', owner: 'inspections',
     readOperationIds: ['INSPECTION_REPORTS', 'INSPECTION_FINDINGS'], commandOperationIds: ['INSPECTION_FINDING_UPDATE', 'INSPECTION_REPORT_COMMAND'],
-    collectionReader: null, lifecycleOperationId: 'INSPECTION_REPORTS', freshnessSource: 'Inspection report dates', exportEligibility: 'NOT_EVALUATED',
+    collectionReader: null, pagedCollection: false, lifecycleOperationId: 'INSPECTION_REPORTS', freshnessSource: 'Inspection report dates', exportEligibility: 'NOT_EVALUATED',
     primaryAction: { label: 'View inspections', question: 'Show me my inspection reports.' },
   }),
   section({
     id: 'permits', label: 'Permits', scope: 'Permits and their approval status.', owner: 'permits',
     readOperationIds: ['PERMIT_TRACKER_STATUS'], commandOperationIds: ['PERMIT_TRACKER_COMMAND'],
-    collectionReader: null, lifecycleOperationId: 'PERMIT_TRACKER_STATUS', freshnessSource: 'Permit status updates', exportEligibility: 'NOT_EVALUATED',
+    collectionReader: null, pagedCollection: false, lifecycleOperationId: 'PERMIT_TRACKER_STATUS', freshnessSource: 'Permit status updates', exportEligibility: 'NOT_EVALUATED',
     primaryAction: { label: 'View permits', question: 'What is the status of my permits?' },
   }),
   section({
     id: 'projects-renovations', label: 'Projects and renovations', scope: 'Home projects and renovation cases.', owner: 'projects',
     readOperationIds: ['PROJECT_TRACKER_PROJECTS'], commandOperationIds: ['PROJECT_TRACKER_CREATE', 'PROJECT_TRACKER_COMMAND', 'RENOVATION_CASE_START'],
-    collectionReader: null, lifecycleOperationId: 'PROJECT_TRACKER_PROJECTS', freshnessSource: 'Project updates', exportEligibility: 'NOT_EVALUATED',
+    collectionReader: null, pagedCollection: false, lifecycleOperationId: 'PROJECT_TRACKER_PROJECTS', freshnessSource: 'Project updates', exportEligibility: 'NOT_EVALUATED',
     primaryAction: { label: 'View projects', question: 'Show me my home projects.' },
   }),
   section({
     id: 'incidents-claims', label: 'Incidents and claims', scope: 'Home incidents and insurance claims.', owner: 'incidents-claims',
     readOperationIds: ['INCIDENT_CLAIM_STATUS'], commandOperationIds: ['CLAIM_FILE', 'CLAIM_TRANSITION', 'CLAIM_ACTIVITY_COMMAND'],
-    collectionReader: null, lifecycleOperationId: 'INCIDENT_CLAIM_STATUS', freshnessSource: 'Claim and incident updates', exportEligibility: 'NOT_EVALUATED',
+    collectionReader: null, pagedCollection: false, lifecycleOperationId: 'INCIDENT_CLAIM_STATUS', freshnessSource: 'Claim and incident updates', exportEligibility: 'NOT_EVALUATED',
     primaryAction: { label: 'View claims', question: 'What is the status of my incidents and claims?' },
   }),
   section({
     id: 'coverage', label: 'Coverage and policies', scope: 'Insurance and protection coverage and its gaps.', owner: 'coverage',
     readOperationIds: ['COVERAGE_REVIEW_STATUS', 'COVERAGE_GAPS'], commandOperationIds: ['COVERAGE_COMMAND'],
-    collectionReader: null, lifecycleOperationId: 'COVERAGE_REVIEW_STATUS', freshnessSource: 'Coverage review', exportEligibility: 'NOT_EVALUATED',
+    collectionReader: null, pagedCollection: false, lifecycleOperationId: 'COVERAGE_REVIEW_STATUS', freshnessSource: 'Coverage review', exportEligibility: 'NOT_EVALUATED',
     primaryAction: { label: 'Review coverage', question: 'Review my coverage.' },
   }),
   section({
     id: 'financing-ownership', label: 'Financing and ownership', scope: 'Financing facts and recorded ownership costs.', owner: 'financing',
     readOperationIds: ['FINANCING_OVERVIEW', 'OWNERSHIP_COSTS'], commandOperationIds: ['FINANCING_PROFILE_COMMAND', 'OWNERSHIP_COST_COMMAND'],
-    collectionReader: null, lifecycleOperationId: 'FINANCING_OVERVIEW', freshnessSource: 'Financing profile', exportEligibility: 'NOT_EVALUATED',
+    collectionReader: null, pagedCollection: false, lifecycleOperationId: 'FINANCING_OVERVIEW', freshnessSource: 'Financing profile', exportEligibility: 'NOT_EVALUATED',
     primaryAction: { label: 'View financing', question: 'Show me my financing and ownership costs.' },
   }),
   section({
     id: 'buyer-records', label: 'Buyer records', scope: 'Purchase plan, deadlines and closing records while buying.', owner: 'buyer-plan',
     readOperationIds: ['BUYER_PLAN_STATUS'], commandOperationIds: ['BUYER_PLAN_SETUP_COMMAND', 'BUYER_TASK_CREATE', 'BUYER_TASK_UPDATE', 'BUYER_TASK_COMPLETE'],
-    collectionReader: null, lifecycleOperationId: 'BUYER_PLAN_STATUS', freshnessSource: 'Buyer plan updates', exportEligibility: 'NOT_EVALUATED',
+    collectionReader: null, pagedCollection: false, lifecycleOperationId: 'BUYER_PLAN_STATUS', freshnessSource: 'Buyer plan updates', exportEligibility: 'NOT_EVALUATED',
     primaryAction: { label: 'View buyer plan', question: 'What is the status of my buyer plan?' },
   }),
   section({
     id: 'seller-records', label: 'Seller records', scope: 'Sale preparation items and decisions while preparing to sell.', owner: 'seller-prep',
     readOperationIds: ['SELLER_PREP_CHECKLIST'], commandOperationIds: ['SELLER_PREP_ITEM_DECISION', 'SELLER_PREP_CASE_COMMAND'],
-    collectionReader: null, lifecycleOperationId: 'SELLER_PREP_CHECKLIST', freshnessSource: 'Seller prep updates', exportEligibility: 'NOT_EVALUATED',
+    collectionReader: null, pagedCollection: false, lifecycleOperationId: 'SELLER_PREP_CHECKLIST', freshnessSource: 'Seller prep updates', exportEligibility: 'NOT_EVALUATED',
     primaryAction: { label: 'View sale prep', question: 'Show me my sale preparation checklist.' },
   }),
   // No Ask operation is dedicated to reading household access, so this read-only summary rides the Property Summary operation that
@@ -140,7 +142,7 @@ export const ASK_RECORD_SECTION_REGISTRY: readonly AskRecordSectionDefinition[] 
   section({
     id: 'household-access', label: 'Household access', scope: 'Who has access to this home and in what role.', owner: 'household',
     readOperationIds: ['PROPERTY_SUMMARY'], commandOperationIds: [],
-    collectionReader: OVERVIEW, lifecycleOperationId: 'PROPERTY_SUMMARY', freshnessSource: 'Household membership', exportEligibility: 'NOT_EVALUATED',
+    collectionReader: OVERVIEW, pagedCollection: false, lifecycleOperationId: 'PROPERTY_SUMMARY', freshnessSource: 'Household membership', exportEligibility: 'NOT_EVALUATED',
     primaryAction: { label: 'View household', question: 'Who has access to my home?' },
   }),
 ]);

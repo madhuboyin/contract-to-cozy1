@@ -4,6 +4,7 @@ import { z } from 'zod';
 import type { AuthRequest } from '../types/auth.types';
 import { AskSessionSearchRequestSchema, AskSessionUpdateRequestSchema, ContinueAskExecutionSchema, CreateAskExecutionRequestSchema, EditAskConfirmationSchema, RecordAskCaptureEventSchema, RequestAskCorrectionSchema, ResolveAskExecutionPropertySchema, RetryAskExecutionSchema, SubmitAskCaptureRequestSchema, SubmitAskClarificationSchema, SubmitAskConfirmationSchema, SubmitAskFeedbackSchema, SubmitHomeActionUsefulnessFeedbackSchema, DismissSuggestedActionSchema, SUGGESTED_NEXT_ACTION_ID_PATTERN } from '../productFramework/ask/ask.contract';
 import { getAskRecordIndex } from '../services/ask/askRecordIndex.service';
+import { getAskRecordCollectionPage, AskRecordSectionUnavailableError } from '../services/ask/askRecordCollections.service';
 import { cancelAskExecution, confirmAskExecution, continueAskExecution, createAskExecution, editAskConfirmation, getAskExecution, getAskPendingWork, getAskSession, getConciergeHome, getRecentAskSessions, updateAskSessionForUser, recordAskCaptureEvent, recordAskCaptureFailure, refreshAskExecutionAfterConflict, requestAskCorrection, resolveAskExecutionProperty, retryAskExecution, submitAskCapture, submitAskClarification, submitAskExecutionFeedback, submitHomeActionUsefulnessFeedback } from '../services/ask/askOrchestrator.service';
 import { deleteAskSessionForUser } from '../services/ask/askRetention.service';
 import { dismissSuggestedAction, DismissSuggestedActionError } from '../services/ask/suggestedActions/dismissSuggestedAction';
@@ -463,6 +464,36 @@ export async function getAskRecordIndexHandler(req: AuthRequest, res: Response, 
   } catch (error) {
     const code = error instanceof Error ? (error as Error & { code?: string }).code : undefined;
     if (code === 'ASK_PROPERTY_NOT_FOUND') return res.status(404).json({ success: false, error: { code, message: 'Property not found or access was removed.' } });
+    return next(error);
+  }
+}
+
+const AskRecordCollectionQuerySchema = z.object({
+  propertyId: z.string().trim().min(1).max(160),
+  cursor: z.string().trim().min(1).max(400).optional(),
+  limit: z.coerce.number().int().min(1).max(200).optional(),
+  search: z.string().max(200).optional(),
+  floor: z.string().trim().max(8).optional(),
+});
+
+// One page of a Record section's complete collection, with the total, continuation cursor, sort and applied filters.
+export async function getAskRecordSectionPage(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const user = req.user;
+    if (!user) return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED', message: 'Authentication required.' } });
+    const query = AskRecordCollectionQuerySchema.safeParse(req.query);
+    if (!query.success) return res.status(400).json({ success: false, error: { code: 'ASK_INVALID_REQUEST', message: 'Invalid record collection request.' } });
+    const { propertyId, cursor, limit, search, floor } = query.data;
+    return res.status(200).json({ success: true, data: await getAskRecordCollectionPage(user.userId, propertyId, req.params.sectionId, { cursor, limit, search, filters: { floor } }, user.role) });
+  } catch (error) {
+    const code = error instanceof Error ? (error as Error & { code?: string }).code : undefined;
+    if (code === 'ASK_INVALID_REQUEST') return res.status(400).json({ success: false, error: { code, message: 'Invalid record collection request.' } });
+    if (code === 'ASK_PERMISSION_REQUIRED') return res.status(403).json({ success: false, error: { code, message: 'Your household role cannot read this section.' } });
+    if (code === 'ASK_PROPERTY_NOT_FOUND') return res.status(404).json({ success: false, error: { code, message: 'Property not found or access was removed.' } });
+    if (error instanceof AskRecordSectionUnavailableError) {
+      const status = error.reason === 'NOT_APPLICABLE' || error.reason === 'CONTEXT_REQUIRED' ? 409 : 404;
+      return res.status(status).json({ success: false, error: { code: error.code, reason: error.reason, message: 'This record section is not available.' } });
+    }
     return next(error);
   }
 }
