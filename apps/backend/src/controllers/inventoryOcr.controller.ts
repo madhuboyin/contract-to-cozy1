@@ -3,8 +3,7 @@ import { NextFunction, Response } from 'express';
 import { CustomRequest } from '../types';
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
-import { extractLabelFieldsFromImage } from '../services/inventoryOcr.service';
-import { inventoryOcrToExtractionEnvelope } from '../services/inventoryOcrExtractionEnvelope.adapter';
+import { scanLabelToDraft } from '../services/inventoryLabelScan.service';
 import { InventoryDraftService } from '../services/inventoryDraft.service';
 import { logger } from '../lib/logger';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
@@ -88,86 +87,13 @@ export async function ocrLabelToDraft(req: CustomRequest, res: Response) {
   if (!file?.buffer?.length) throw new APIError('image file is required', 400, 'OCR_IMAGE_REQUIRED');
 
   const debug = canReturnOcrDebug(req);
-  const ocr = await extractLabelFieldsFromImage(file.buffer, { debug: debug as boolean });
-
-  // HI-DOC-001 (Home Intelligence FRD §8.7, Phase 5 remediation item d) —
-  // additive observability only: does not change which fields become the
-  // draft or how confirmation later proceeds, but surfaces the one signal
-  // OcrExtractResult can't on its own — a genuinely unreadable label
-  // (FALLBACK_UNSTRUCTURED) vs. a clean extraction.
-  const envelope = inventoryOcrToExtractionEnvelope(ocr);
-  if (envelope.warnings.length > 0) {
-    logger.warn({ propertyId, warnings: envelope.warnings }, '[inventoryOcr] Extraction envelope reported warnings');
-  }
-
-  // 1) Create OCR session (no image stored)
-  const session = await prisma.inventoryOcrSession.create({
-    data: {
-      propertyId,
-      userId,
-      status: 'COMPLETE',
-      provider: ocr.provider,
-      rawText: ocr.rawText,
-      expiresAt: new Date(Date.now() + 7 * 24 * 3600 * 1000), // 7 days retention
-    },
-    select: { id: true },
-  });
-
-  // 2) Store fields (Prisma schema expects value: string (non-null))
-  const fields: OcrField[] = dedupeFields((ocr.fields || []) as OcrField[]);
-
-  const persistable = fields
-    .filter((f) => typeof f.value === 'string' && f.value.trim().length > 0)
-    .map((f) => ({
-      sessionId: session.id,
-      key: f.key,
-      value: f.value!.trim(), // guaranteed string
-      confidence: f.confidence,
-    }));
-
-  if (persistable.length) {
-    await prisma.inventoryOcrField.createMany({
-      data: persistable,
-    });
-  }
+  const { session, draft, ocr, envelope, fields, extracted } = await scanLabelToDraft({ propertyId, userId, buffer: file.buffer, debug: debug as boolean });
 
   logger.info({
     mimetype: file.mimetype,
     size: file.size,
     hasBuffer: !!file.buffer?.length,
   }, '[inventoryOcr] upload');
-  // 3) Extract canonical values
-  const envelopeValues = new Map(envelope.fields.map((field) => [field.fieldKey, field.value]));
-  const envelopeString = (key: string) => {
-    const value = envelopeValues.get(key);
-    return typeof value === 'string' && value.trim() ? value : null;
-  };
-  const manufacturer = envelopeString('manufacturer');
-  const modelNumber = envelopeString('modelNumber');
-  const serialNumber = envelopeString('serialNumber');
-  const upc = envelopeString('upc');
-  const sku = envelopeString('sku');
-  logger.info({ manufacturer }, 'manufacturer');
-  logger.info({ modelNumber }, 'modelNumber');
-  logger.info({ serialNumber }, 'serialNumber');
-  logger.info({ upc }, 'upc');
-  logger.info({ sku }, 'sku');
-
-  
-  // 4) Create draft tied to session
-  const draft = await draftSvc.createDraftFromOcr({
-    propertyId,
-    userId,
-    ocrSessionId: session.id,
-    manufacturer,
-    modelNumber,
-    serialNumber,
-    upc,
-    sku,
-    confidenceJson: Object.fromEntries(envelope.fields.map((field) => [field.fieldKey, field.confidence])),
-  });
-  
-  logger.info({ draft }, 'draft');
 
   analyticsEmitter.track({
     eventType: AnalyticsEvent.ACTION_COMPLETED,
@@ -181,7 +107,7 @@ export async function ocrLabelToDraft(req: CustomRequest, res: Response) {
   return res.json({
     sessionId: session.id,
     draftId: draft.id,
-    extracted: { manufacturer, modelNumber, serialNumber, upc, sku },
+    extracted,
     confidence: ocr.confidenceByField,
     rawText: ocr.rawText,
     envelope,

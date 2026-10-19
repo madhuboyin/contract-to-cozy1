@@ -1,6 +1,5 @@
 // apps/backend/src/services/inventoryOcr.service.ts
 import { APIError } from '../middleware/error.middleware';
-import sharp from 'sharp';
 
 type ExtractedField = {
   key: string;
@@ -224,6 +223,8 @@ function isValidUpcA(upc12: string) {
 }
 
 async function buildPreprocessVariants(buffer: Buffer) {
+  // Loaded when a label is actually read (like tesseract.js), so importing this module never needs the native image library.
+  const { default: sharp } = await import('sharp');
   const base = sharp(buffer, { failOn: 'none' }).rotate();
   const meta = await base.metadata();
 

@@ -149,6 +149,8 @@ export interface IngestArgs {
   inspectorName?: string;
   inspectorLicense?: string;
   inspectorCompany?: string;
+  /** The original already sits in object storage under this key (the Ask intake stored it as a Home Record), so it is not uploaded a second time. */
+  existingSourceFileKey?: string;
   sourceActionId?: string;
   sourceEntityType?: string;
   sourceEntityId?: string;
@@ -161,19 +163,21 @@ export async function ingestInspectionReport(
   const { propertyId, userId, pdfBuffer, fileName, reportType, inspectionDate } = args;
 
   // Upload PDF to S3 (best-effort — fall back to a local key on error)
-  let sourceFileKey = `inspection/${propertyId}/${Date.now()}-${fileName.replace(/\s+/g, '-')}`;
-  try {
-    const sha = crypto.createHash('sha256').update(pdfBuffer).digest('hex');
-    const uploaded = await uploadPdfBuffer({
-      buffer: pdfBuffer,
-      fileName,
-      checksumSha256: sha,
-      propertyId,
-      userId,
-    });
-    sourceFileKey = uploaded.key;
-  } catch (err) {
-    logger.warn({ err }, '[INSPECTION] S3 upload failed — storing key as local path reference');
+  let sourceFileKey = args.existingSourceFileKey ?? `inspection/${propertyId}/${Date.now()}-${fileName.replace(/\s+/g, '-')}`;
+  if (!args.existingSourceFileKey) {
+    try {
+      const sha = crypto.createHash('sha256').update(pdfBuffer).digest('hex');
+      const uploaded = await uploadPdfBuffer({
+        buffer: pdfBuffer,
+        fileName,
+        checksumSha256: sha,
+        propertyId,
+        userId,
+      });
+      sourceFileKey = uploaded.key;
+    } catch (err) {
+      logger.warn({ err }, '[INSPECTION] S3 upload failed — storing key as local path reference');
+    }
   }
 
   // Create report record in PROCESSING state

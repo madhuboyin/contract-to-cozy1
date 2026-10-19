@@ -51,6 +51,11 @@ export const ASK_ROUTE_RETIREMENT_REGISTRY: readonly AskRouteRetirementEntry[] =
     deepLinkRule: 'KEEP_STRUCTURED_SURFACE', evidenceTests: ['apps/frontend/src/features/ask/__tests__/destinations.test.ts'],
   }),
   entry({
+    id: 'ask-notifications', routePattern: '^/dashboard/ask/notifications$', owner: 'ask-platform', state: 'STRUCTURED_SURFACE_RETAINED',
+    askOperationIds: [], missingReads: [], missingWrites: [], successorDestination: 'HOME',
+    deepLinkRule: 'KEEP_STRUCTURED_SURFACE', evidenceTests: ['apps/frontend/src/components/ask/__tests__/AskNotificationsDestination.test.tsx'],
+  }),
+  entry({
     id: 'ask-history', routePattern: '^/dashboard/ask/history$', owner: 'ask-platform', state: 'STRUCTURED_SURFACE_RETAINED',
     askOperationIds: [], missingReads: [], missingWrites: [], successorDestination: 'HISTORY',
     deepLinkRule: 'KEEP_STRUCTURED_SURFACE', evidenceTests: ['apps/frontend/src/features/ask/__tests__/destinations.test.ts'],

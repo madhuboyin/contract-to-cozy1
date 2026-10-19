@@ -13,7 +13,7 @@ import { prisma } from '../lib/prisma';
 import { auditLog, logger } from '../lib/logger';
 import { APIError } from '../middleware/error.middleware';
 import { downloadObjectBuffer } from './storage/reportStorage';
-import { documentIntelligenceService } from './documentIntelligence.service';
+import { documentIntelligenceService, type DocumentInsights } from './documentIntelligence.service';
 import { documentInsightsToExtractionEnvelope } from './documentIntelligenceExtractionEnvelope.adapter';
 import type { ExtractionEnvelope } from './intelligence/extractionEnvelope.contract';
 import { homeRecordsService } from './homeRecords.service';
@@ -50,9 +50,9 @@ async function syncRecordWorkItem(propertyId: string, recordId: string): Promise
 // distinct from field-level candidates so a future extractor can report
 // per-field confidence without a schema change. Never eligible for review
 // actions or promotion.
-const DOCUMENT_TYPE_FIELD_KEY = '_documentType';
+export const DOCUMENT_TYPE_FIELD_KEY = '_documentType';
 
-const WARRANTY_REQUIRED_FIELD_KEYS = ['providerName', 'startDate', 'expiryDate'] as const;
+export const WARRANTY_REQUIRED_FIELD_KEYS = ['providerName', 'startDate', 'expiryDate'] as const;
 const WARRANTY_OPTIONAL_FIELD_KEYS = ['category', 'coverageDetails', 'cost'] as const;
 type WarrantyFieldKey =
   | (typeof WARRANTY_REQUIRED_FIELD_KEYS)[number]
@@ -62,7 +62,7 @@ const WARRANTY_CATEGORY_VALUES = new Set<WarrantyCategory>([
   'APPLIANCE', 'HVAC', 'ROOFING', 'PLUMBING', 'ELECTRICAL', 'STRUCTURAL', 'HOME_WARRANTY_PLAN', 'OTHER',
 ]);
 
-const EXPENSE_REQUIRED_FIELD_KEYS = ['description', 'amount', 'transactionDate'] as const;
+export const EXPENSE_REQUIRED_FIELD_KEYS = ['description', 'amount', 'transactionDate'] as const;
 const EXPENSE_OPTIONAL_FIELD_KEYS = ['category'] as const;
 type ExpenseFieldKey =
   | (typeof EXPENSE_REQUIRED_FIELD_KEYS)[number]
@@ -76,7 +76,7 @@ const EXPENSE_CATEGORY_VALUES = new Set<ExpenseCategory>([
 // (insurancePolicyRecord.service.ts) — promotion calls straight into that
 // existing staging function rather than re-implementing insurance-record
 // creation, so the two must agree on what's mandatory.
-const INSURANCE_POLICY_REQUIRED_FIELD_KEYS = ['carrierName', 'policyNumber'] as const;
+export const INSURANCE_POLICY_REQUIRED_FIELD_KEYS = ['carrierName', 'policyNumber'] as const;
 const INSURANCE_POLICY_OPTIONAL_FIELD_KEYS = [
   'coverageType', 'premiumAmount', 'deductibleAmount', 'dwellingLimit',
   'personalPropertyLimit', 'liabilityLimit', 'valuationBasis', 'termStart', 'termEnd',
@@ -236,6 +236,8 @@ export class HomeRecordsExtractionService {
     recordId: string;
     versionId: string;
     role: HouseholdRole;
+    /** A reading of this same file already made (the Ask intake classifies with it), so the model is not called a second time for one file. */
+    insights?: DocumentInsights;
   }): Promise<ExtractedFactCandidate[]> {
     const version = await prisma.propertyRecordVersion.findFirst({
       where: { id: input.versionId, recordId: input.recordId, record: { propertyId: input.propertyId, ...visibleRecordWhere(input.role) } },
@@ -297,7 +299,7 @@ export class HomeRecordsExtractionService {
     if (targetDomain === 'SERVICE_QUOTE') {
       return this.runQuoteExtraction({ propertyId: input.propertyId, recordId: input.recordId, version, buffer, recordType });
     }
-    const insights = await documentIntelligenceService.analyzeDocument(buffer, version.mimeType);
+    const insights = input.insights ?? await documentIntelligenceService.analyzeDocument(buffer, version.mimeType);
     // Home Intelligence Functional Completeness FRD §8.7 (HI-DOC-001),
     // Phase 5 work item 3 — the common ExtractionEnvelope this extraction
     // call now also returns. parseStatus FAILED (the AI's response wasn't
