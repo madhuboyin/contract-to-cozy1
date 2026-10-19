@@ -445,6 +445,10 @@ export interface AskExecutionResponse {
   // Bounded to 3, one level deep (a child's own childExecutions is always
   // []): matches the backend's AskExecutionResponseSchema exactly.
   childExecutions: AskExecutionResponse[];
+  /** Phase 8: set while a write has changed what this shows and it has not been refreshed. */
+  staleSince?: string | null;
+  /** Phase 8: on a confirmation's response, the answers in this conversation that could not be refreshed after the write. The write itself succeeded. */
+  reconciliation?: { staleExecutionIds: string[]; markedElsewhere: number };
 }
 
 export interface AskPendingWorkItem {

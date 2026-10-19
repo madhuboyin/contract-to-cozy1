@@ -362,7 +362,7 @@ test('registry facts, and the handler source: a CONTRIBUTOR, confirmation-gated,
   assert.deepEqual([command.roleFloor, command.adapterKey, command.correctionModes, command.material], ['CONTRIBUTOR', 'diy.completion-recover', [], true]);
   assert.equal(ASK_OPERATION_DEFINITIONS.DIY_COMPLETION_RECOVER.family, 'COMMAND');
   assert.equal(isAskMessageRoutableOperation('DIY_COMPLETION_RECOVER'), false);
-  assert.match(fs.readFileSync(path.join(__dirname, '../../src/services/ask/execution/executeOperation.ts'), 'utf8'), /DIY_COMPLETION_RECOVER: \['DIY_PROJECT_GUIDE', 'DIY_PROJECTS'\]/);
+  assert.deepEqual([...require('../../src/services/ask/governance/askMutationImpactRegistry.ts').impactedReadOperationIds('DIY_COMPLETION_RECOVER')].sort(), ['DIY_PROJECTS', 'DIY_PROJECT_GUIDE']);
   const source = fs.readFileSync(path.join(__dirname, '../../src/services/ask/handlers/diyCompletionRecover.handler.ts'), 'utf8');
   assert.match(source, /launchContext\.surface === 'ASK_REFRESH'/);
   assert.match(source, /retryCompletionEffects\(/);

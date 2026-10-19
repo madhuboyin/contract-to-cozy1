@@ -1,6 +1,8 @@
 // Moved out of askOrchestrator.service.ts unchanged (decomposition, FRD v1.98;
 // docs/architecture/ASK_ORCHESTRATOR_DECOMPOSITION_REVIEW.md). The handler registers itself, and the orchestrator
 // re-exports the names below so existing imports keep working.
+import { ASK_MUTATION_IMPACT_REGISTRY, impactedReadOperationIds } from '../governance/askMutationImpactRegistry';
+import { markExecutionsStale, recordReconciliationOutcome, staleMarkerFor, withoutStaleMarker } from '../support/askReconciliation';
 import { AskExecution, AskExecutionStatus, HouseholdRole } from '@prisma/client';
 import { prisma } from '../../../lib/prisma';
 import { ASK_RESPONSE_SCHEMA_VERSION, AskPresentationBlockSchema, type AskExecutionResponse, type CreateAskExecutionRequest } from '../../../productFramework/ask/ask.contract';
@@ -527,7 +529,15 @@ export function refreshPresentationIsCompatible(
     && history.originalResponse.blocks.every((block) => AskPresentationBlockSchema.safeParse(block).success);
 }
 
+// Phase 8: callers that must tell a refresh that happened from one that returned the old answer unchanged (an expired binding, a downgrade, a rejected
+// presentation, a lost write race) use this; `refreshed` is true only when the new answer was written.
+export interface AskDetailedRefresh { response: AskExecutionResponse; refreshed: boolean }
+
 export async function refreshAskExecutionAfterConflict(userId: string, executionId: string): Promise<AskExecutionResponse> {
+  return (await refreshAskExecutionDetailed(userId, executionId)).response;
+}
+
+export async function refreshAskExecutionDetailed(userId: string, executionId: string): Promise<AskDetailedRefresh> {
   const execution = await prisma.askExecution.findFirst({ where: { id: executionId, userId } });
   if (!execution || !execution.propertyId) {
     const error = new Error('Ask execution not found.');
@@ -536,7 +546,7 @@ export async function refreshAskExecutionAfterConflict(userId: string, execution
   }
   await ensurePropertyAccess(userId, execution.propertyId);
   const bindingExpiry = await expireIfSkillBindingChanged(execution);
-  if (bindingExpiry) return bindingExpiry;
+  if (bindingExpiry) return { response: bindingExpiry, refreshed: false };
   if (!execution.operationId || !(execution.operationId in ASK_OPERATION_DEFINITIONS)) {
     const error = new Error('The bound operation version is no longer available.');
     (error as Error & { code?: string }).code = 'ASK_SKILL_VERSION_UNAVAILABLE';
@@ -553,7 +563,7 @@ export async function refreshAskExecutionAfterConflict(userId: string, execution
   // Refresh button, the automatic post-mutation refresh (MAINT-005), and
   // the Ask-workspace return-trip revalidation after a Maintenance edit.
   const result = await executeOperation({ userId, sessionId: execution.sessionId, executionId: execution.id, message: execution.message, propertyId: execution.propertyId, operation, launchContext: refreshLaunchContext(execution), deferSemanticValidation: launchDeclaredOperation(execution) });
-  if (refreshWouldDowngradeAnswer(execution.status, result)) return mapPersistedExecution(execution, await propertySummary(execution.propertyId));
+  if (refreshWouldDowngradeAnswer(execution.status, result)) return { response: mapPersistedExecution(execution, await propertySummary(execution.propertyId)), refreshed: false };
   // RES-001/RES-003/MAINT-003: refreshing a result does not change which
   // result it continues, nor what it originally answered -- both are
   // preserved from whatever this row already had via the one shared
@@ -564,7 +574,7 @@ export async function refreshAskExecutionAfterConflict(userId: string, execution
   // replacing a valid answered card with "unsupported presentation version".
   if (!refreshPresentationIsCompatible(result, history)) {
     await prisma.askExecutionEvent.create({ data: { executionId, eventType: 'REFRESH_PRESENTATION_REJECTED', metadataJson: asInputJson({ operationId: execution.operationId }) } });
-    return mapPersistedExecution(execution, await propertySummary(execution.propertyId));
+    return { response: mapPersistedExecution(execution, await propertySummary(execution.propertyId)), refreshed: false };
   }
   const priorParameters = execution.parametersJson as { viewState?: { revision?: number } } | null;
   const priorRevision = priorParameters?.viewState?.revision;
@@ -577,16 +587,17 @@ export async function refreshAskExecutionAfterConflict(userId: string, execution
       status: result.status,
       reasonCode: result.reasonCode,
       contextVersion: result.contextVersion,
-      parametersJson: result.parameters ? asInputJson(result.parameters) : execution.parametersJson ?? undefined,
+      // A fresh answer is current: the stale marker (Phase 8) goes with the answer it described.
+      parametersJson: withoutStaleMarker(result.parameters ? asInputJson(result.parameters) : execution.parametersJson ?? undefined),
       resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: result.captureRequests ?? [], confirmation: result.confirmation ?? null, clarification: result.clarification ?? null, suggestions: result.suggestions, suggestedNextActionsGoverned: result.suggestedNextActionsGoverned === true, suggestedNextActions: result.suggestedNextActions ?? [], skillHandoff: result.skillHandoff ?? null, continuesExecutionId: history.continuesExecutionId, originalResponse: history.originalResponse }),
       completedAt: terminalStatus(result.status) ? new Date() : null,
     },
   });
   const saved = await prisma.askExecution.findFirstOrThrow({ where: { id: execution.id, userId } });
-  if (write.count !== 1) return mapPersistedExecution(saved, await propertySummary(execution.propertyId));
+  if (write.count !== 1) return { response: mapPersistedExecution(saved, await propertySummary(execution.propertyId)), refreshed: false };
   await prisma.askExecutionEvent.create({ data: { executionId, eventType: 'CONTEXT_CONFLICT_REFRESHED', metadataJson: asInputJson({ contextVersion: result.contextVersion }) } });
   if (result.captureRequests?.length) askInlineCapturesTotal.inc({ operation: operation.operationId, outcome: 'PROMPTED' }, result.captureRequests.length);
-  return mapPersistedExecution(saved, await propertySummary(execution.propertyId));
+  return { response: mapPersistedExecution(saved, await propertySummary(execution.propertyId)), refreshed: true };
 }
 
 // ASK_COZY_INTERACTION_MODEL_UI_FRD MAINT-005/A12: after a confirmation-
@@ -605,6 +616,9 @@ export async function refreshAskExecutionAfterConflict(userId: string, execution
 // so confirmBuyerTaskUpdate can reuse it directly instead of duplicating it.
 interface AskSourceRefreshOutcome {
   refreshedExecutions: AskExecutionResponse[];
+  // Phase 8: this conversation's answers that could not be refreshed and are now marked stale, and answers in other conversations marked stale.
+  staleExecutionIds: string[];
+  markedElsewhere: number;
   // External review finding: a failed refresh used to be indistinguishable
   // from "nothing to refresh" -- the caller got an empty array either way,
   // so CONF-005's "Saved; list could not refresh" recovery text could never
@@ -613,16 +627,26 @@ interface AskSourceRefreshOutcome {
   attemptedAndFailed: boolean;
 }
 
-export async function refreshAskSourceExecution(userId: string, currentExecutionId: string, parameters: Record<string, unknown>): Promise<AskSourceRefreshOutcome> {
+export async function refreshAskSourceExecution(userId: string, currentExecutionId: string, parameters: Record<string, unknown>, becauseOperationId: string | null = null, refresh: typeof refreshAskExecutionDetailed = refreshAskExecutionDetailed): Promise<AskSourceRefreshOutcome> {
   const sourceExecutionId = parameters.sourceExecutionId;
   if (typeof sourceExecutionId !== 'string' || !sourceExecutionId || sourceExecutionId === currentExecutionId) {
-    return { refreshedExecutions: [], attemptedAndFailed: false };
+    return { refreshedExecutions: [], staleExecutionIds: [], markedElsewhere: 0, attemptedAndFailed: false };
   }
   try {
-    return { refreshedExecutions: [await refreshAskExecutionAfterConflict(userId, sourceExecutionId)], attemptedAndFailed: false };
+    const { response, refreshed } = await refresh(userId, sourceExecutionId);
+    if (refreshed) return { refreshedExecutions: [response], staleExecutionIds: [], markedElsewhere: 0, attemptedAndFailed: false };
   } catch {
-    return { refreshedExecutions: [], attemptedAndFailed: true };
+    // fall through: the answer could not be refreshed, so it is marked stale below
   }
+  // Marking is best effort like the refresh itself: it must never fail the write that already succeeded.
+  let marked: string[] = [];
+  try {
+    const row = await prisma.askExecution.findFirst({ where: { id: sourceExecutionId, userId }, select: { id: true, updatedAt: true, parametersJson: true } });
+    marked = row ? await markExecutionsStale([row], becauseOperationId) : [];
+  } catch {
+    marked = [];
+  }
+  return { refreshedExecutions: [], staleExecutionIds: marked, markedElsewhere: 0, attemptedAndFailed: true };
 }
 
 // B04 design (docs/architecture/ASK_COZY_PHASE6_BUYER_ACCEPTANCE_VERIFICATION.md,
@@ -638,218 +662,11 @@ export async function refreshAskSourceExecution(userId: string, currentExecution
 // has the authoritative userId/sessionId/propertyId, and a client-supplied
 // list would be untrusted and would still need the server to know which
 // operations are even eligible siblings.
-export const ASK_MUTATION_IMPACT_MAP: Partial<Record<AskOperationId, readonly AskOperationId[]>> = {
-  OWNERSHIP_COST_COMMAND: ['OWNERSHIP_COSTS'],
-  RESERVE_FUND_COMMAND: ['CAPITAL_RESERVE_PLAN'],
-  PROPERTY_BRIEF_COMMAND: ['PROPERTY_BRIEFS_LIST'],
-  PROJECT_TRACKER_CREATE: ['PROJECT_TRACKER_PROJECTS'],
-  PROJECT_TRACKER_COMMAND: ['PROJECT_TRACKER_PROJECTS'],
-  BUYER_TASK_UPDATE: ['BUYER_PLAN_STATUS', 'BUYER_DEADLINES'],
-  // Guided journey continuation Phase 3: the continuation view and the journey list both show what these change.
-  GUIDANCE_STEP_SKIP: ['GUIDANCE_JOURNEY_CONTINUE', 'GUIDANCE_JOURNEYS_LIST'],
-  GUIDANCE_JOURNEY_DISMISS: ['GUIDANCE_JOURNEY_CONTINUE', 'GUIDANCE_JOURNEYS_LIST'],
-  DIY_STEP_UPDATE: ['DIY_PROJECT_GUIDE', 'DIY_PROJECTS'],
-  DIY_PROJECT_COMPLETE: ['DIY_PROJECT_GUIDE', 'DIY_PROJECTS'],
-  DIY_PROJECT_ABANDON: ['DIY_PROJECT_GUIDE', 'DIY_PROJECTS'],
-  DIY_COMPLETION_RECOVER: ['DIY_PROJECT_GUIDE', 'DIY_PROJECTS'],
-  DIY_PROJECT_START: ['DIY_PROJECTS', 'DIY_TEMPLATE_BROWSE'],
-  // A task added from a recommended template moves that template to "already on your list".
-  MAINTENANCE_TASK_CREATE: ['MAINTENANCE_TEMPLATES_BROWSE'],
-  // B03 fix: BUYER_TASK_COMPLETE previously called no reconciliation
-  // mechanism at all (not even the single-target one BUYER_TASK_UPDATE had
-  // before B04) -- completing a task changes the same BUYER_PLAN_STATUS/
-  // BUYER_DEADLINES membership/counts a reschedule does, so it shares the
-  // exact same sibling set.
-  BUYER_TASK_COMPLETE: ['BUYER_PLAN_STATUS', 'BUYER_DEADLINES'],
-  // P05 fix (docs/architecture/ASK_COZY_PHASE8_PROTECTION_ACCEPTANCE_VERIFICATION.md):
-  // neither Claims confirm handler called any reconciliation mechanism at
-  // all -- a homeowner viewing INCIDENT_CONTINUATION's combined
-  // incidents/claims list (the one read that shows claim state) had no way
-  // for that list to refresh after filing or transitioning a claim except
-  // asking again from scratch. INCIDENT_CONTINUATION is the sole sibling:
-  // it is the only read in this track whose membership/status can change
-  // from either mutation.
-  CLAIM_FILE: ['INCIDENT_CONTINUATION'],
-  CLAIM_TRANSITION: ['INCIDENT_CONTINUATION'],
-  // IW-FRESH-003 fix (docs/product/ASK_COZY_INLINE_WORKSPACE_FRD.md §15):
-  // confirmDocumentPromotionConfirm, confirmCaptureFact/confirmCaptureEvent,
-  // confirmBuyerLifecycleUpdate, and confirmRefinanceRateMonitor previously
-  // called no reconciliation mechanism at all -- not even the single-target
-  // refreshAskSourceExecution the Maintenance reference implementation has
-  // had since Phase 2. Same mechanism as the Buyer/Claims fixes above, not a
-  // new one; sibling sets below are deliberately conservative (XREC-001:
-  // "may have changed", not "definitely changed for this exact record" --
-  // refreshing an unaffected sibling just re-renders identically).
-  //
-  // Confirming or rejecting one candidate changes DOCUMENT_PROMOTION_REVIEW's
-  // own still-visible pending-candidates membership; a CONFIRMED material
-  // spec / insurance policy fact / inspection report write-back can also
-  // change what DOCUMENT_LOOKUP (the document vault) and PROPERTY_SUMMARY
-  // (canonical property facts) show.
-  DOCUMENT_PROMOTION_CONFIRM: ['DOCUMENT_PROMOTION_REVIEW', 'DOCUMENT_LOOKUP', 'PROPERTY_SUMMARY'],
-  // Both are generic property-record writers (capturePropertyFact /
-  // HomeEventsService.createHomeEvent) that can capture a fact or event
-  // about any part of the home, including an inventory item -- the exact
-  // "still-visible inventory result can go stale after a related capture
-  // confirms" gap the coverage audit named. PROPERTY_SUMMARY is the more
-  // general sibling; INVENTORY_LOOKUP the specific one the audit called out.
-  CAPTURE_FACT_CONFIRM: ['PROPERTY_SUMMARY', 'INVENTORY_LOOKUP'],
-  CAPTURE_EVENT_CONFIRM: ['PROPERTY_SUMMARY', 'INVENTORY_LOOKUP'],
-  // Pause/resume/cancel/reschedule all change the same BUYER_PLAN_STATUS/
-  // BUYER_DEADLINES membership and counts a task update or completion does
-  // (reschedule explicitly recalculates every unedited task's due date) --
-  // shares BUYER_TASK_UPDATE/BUYER_TASK_COMPLETE's exact sibling set.
-  BUYER_LIFECYCLE_UPDATE: ['BUYER_PLAN_STATUS', 'BUYER_DEADLINES'],
-  // Creating or updating the rate monitor changes what REFINANCE_ANALYSIS
-  // (the refinance decision read a "set up a monitor" action is typically
-  // launched from) shows about current monitoring state.
-  REFINANCE_RATE_MONITOR: ['REFINANCE_ANALYSIS'],
-  // Finishing the remaining XREC-001 backlog surfaced by the coverage audit
-  // (docs/architecture/ASK_COZY_PHASE0_COVERAGE_AUDIT.md), same
-  // reconcileAskExecutionSideEffects mechanism, same conservative-sibling
-  // design as every entry above.
-  //
-  // The finding's own status/work-disposition is exactly what INSPECTION_FINDINGS's
-  // list shows per row.
-  INSPECTION_FINDING_UPDATE: ['INSPECTION_FINDINGS'],
-  // Group B recall-mutation follow-up (gap audit §17; FRD v1.163): the match's own disposition is
-  // exactly what RECALL_REVIEW's list shows per row -- same reasoning as INSPECTION_FINDING_UPDATE
-  // one entry above.
-  RECALL_MATCH_UPDATE: ['RECALL_REVIEW'],
-  // The item's status is exactly what SELLER_PREP_CHECKLIST's list shows per row.
-  SELLER_PREP_ITEM_DECISION: ['SELLER_PREP_CHECKLIST'],
-  // Corrected inventory facts are shown on the inventory lists and Property Summary, and can change
-  // the confidence/eligibility of Home Actions derived from that exact item. Refresh HOME_ACTIONS too
-  // so a focused missing-detail continuation recomputes the originating recommendation after save.
-  // The Status Board reads each item's recorded install date and warranty when it is read, so an earlier board answer goes stale too.
-  INVENTORY_ITEM_CORRECT: ['INVENTORY_LOOKUP', 'PROPERTY_SUMMARY', 'HOME_ACTIONS', 'HOME_STATUS_BOARD'],
-  // The corrected revision replaces the event row shown in the item-history and Property Summary timeline lists.
-  HOME_EVENT_CORRECT: ['INVENTORY_LOOKUP', 'PROPERTY_SUMMARY'],
-  // Warranty rows are carried by PROPERTY_SUMMARY's property-warranties collection.
-  WARRANTY_CORRECT: ['PROPERTY_SUMMARY', 'HOME_STATUS_BOARD'],
-  // Room names appear in the Property Summary rooms collection and on inventory item rows.
-  ROOM_RENAME: ['PROPERTY_SUMMARY', 'INVENTORY_LOOKUP'],
-  // A new room appears in the Property Summary rooms collection and can be chosen for inventory items.
-  ROOM_CREATE: ['PROPERTY_SUMMARY', 'INVENTORY_LOOKUP'],
-  // A recorded purchase date changes a "since I bought the home" maintenance answer, which was unbounded without it.
-  PROPERTY_PURCHASE_DATE_SET: ['MAINTENANCE_STATUS'],
-  // The home journey frames every audience-aware answer; the property summary is the one that states it.
-  HOME_JOURNEY_SET: ['PROPERTY_SUMMARY'],
-  // A recorded material appears in the material specs list.
-  MATERIAL_SPEC_ADD: ['MATERIAL_SPECS_LIST'],
-  // A started review joins the list it was started from.
-  NEGOTIATION_SHIELD_CASE_START: ['NEGOTIATION_SHIELD_CASES'],
-  // An analysis changes a case's status and last-analyzed date on the list.
-  NEGOTIATION_SHIELD_CASE_ANALYZE: ['NEGOTIATION_SHIELD_CASES'],
-  NEGOTIATION_SHIELD_CASE_UPDATE: ['NEGOTIATION_SHIELD_CASES'],
-  NEGOTIATION_SHIELD_CASE_ATTACH: ['NEGOTIATION_SHIELD_CASES'],
-  // A started case ends the readiness answer's "no active renovation case" state.
-  RENOVATION_CASE_START: ['RENOVATION_PERMIT_READINESS'],
-  HOME_RECORD_STATE_COMMAND: ['DOCUMENT_LOOKUP'],
-  BUYER_CONTRACT_COMMAND: ['BUYER_CONTRACT_TIMELINE', 'BUYER_DEADLINES', 'BUYER_PLAN_STATUS'],
-  BUYER_CLOSING_DISCLOSURE_COMMAND: ['BUYER_DISCLOSURE_FUNDS_READINESS', 'BUYER_DEADLINES', 'BUYER_PLAN_STATUS'],
-  BUYER_LOAN_ESTIMATE_COMMAND: ['BUYER_LOAN_ESTIMATES', 'BUYER_FINANCING_READINESS', 'BUYER_DISCLOSURE_FUNDS_READINESS', 'BUYER_PLAN_STATUS'],
-  BUYER_PLAN_SETUP_COMMAND: ['BUYER_LOAN_ESTIMATES', 'BUYER_FINANCING_READINESS', 'BUYER_INSPECTION_REVIEW', 'BUYER_TITLE_ESCROW_READINESS', 'BUYER_DEADLINES', 'BUYER_PLAN_STATUS'],
-  BUYER_INSURANCE_COMMAND: ['BUYER_INSURANCE_READINESS', 'BUYER_PLAN_STATUS'],
-  BUYER_CLOSING_ITEM_COMMAND: ['BUYER_FINANCING_READINESS', 'BUYER_TITLE_ESCROW_READINESS', 'BUYER_PLAN_STATUS'],
-  BUYER_WALKTHROUGH_COMMAND: ['BUYER_WALKTHROUGH_READINESS', 'BUYER_PLAN_STATUS'],
-  DIY_PROJECT_NOTE_COMMAND: ['DIY_PROJECTS'],
-  SEASONAL_ITEM_COMMAND: ['MAINTENANCE_STATUS'],
-  HOME_WORK_ITEM_COMMAND: ['HOME_WORK_ITEMS', 'HOME_ACTIONS'],
-  INSPECTION_FINDING_DECISION_COMMAND: ['INSPECTION_FINDINGS', 'INSPECTION_REPORTS', 'INSPECTION_REPORT_FINDINGS'],
-  INSPECTION_REPORT_COMMAND: ['INSPECTION_FINDINGS', 'INSPECTION_REPORTS'],
-  SELLER_PREP_CASE_COMMAND: ['SELLER_PREP_CHECKLIST'],
-  CLAIM_ACTIVITY_COMMAND: ['INCIDENT_CLAIM_STATUS'],
-  DO_NOTHING_SCENARIO_COMMAND: ['DO_NOTHING_SIMULATION'],
-  HOME_HABIT_PREFERENCES_COMMAND: ['HOME_HABITS'],
-  FINANCING_PROFILE_COMMAND: ['FINANCING_OVERVIEW'],
-  HOME_BRIEFING_SHARE_COMMAND: ['HOME_BRIEFING_VIEW'],
-  HOA_COMPLIANCE_COMMAND: ['HOA_COMPLIANCE_STATUS'],
-  HOME_BRIEFING_COMMAND: ['HOME_BRIEFING_VIEW'],
-  NEIGHBORHOOD_INTERACTION_COMMAND: ['NEIGHBORHOOD_CHANGE_FEED'],
-  PAST_HAZARD_OUTCOME_COMMAND: ['PAST_HAZARD_EXPOSURE'],
-  ENVIRONMENT_REPORT_COMMAND: ['ENVIRONMENT_REPORT', 'MAINTENANCE_STATUS'],
-  RENOVATION_READINESS_COMMAND: ['RENOVATION_PERMIT_READINESS'],
-  SAVINGS_BENEFIT_COMMAND: ['SAVINGS_OPPORTUNITIES'],
-  PROPERTY_TAX_APPEAL_COMMAND: ['PROPERTY_TAX_APPEAL_READINESS'],
-  PROPERTY_TAX_COMPARABLE_COMMAND: ['PROPERTY_TAX_APPEAL_READINESS'],
-  STATUS_BOARD_COMMAND: ['HOME_STATUS_BOARD'],
-  CAPITAL_TIMELINE_COMMAND: ['CAPITAL_RESERVE_PLAN'],
-  COVERAGE_COMMAND: ['COVERAGE_COMPARISON_STATUS', 'COVERAGE_REVIEW_STATUS'],
-  HOME_UPGRADE_COMMAND: ['HOME_UPGRADE_SCENARIOS'],
-  PERMIT_TRACKER_COMMAND: ['PERMIT_TRACKER_STATUS', 'RENOVATION_PERMIT_READINESS'],
-  NEGOTIATION_SHIELD_BUYER_COMMAND: ['BUYER_NEGOTIATION_READINESS', 'BUYER_INSPECTION_REVIEW'],
-  PRICE_FINALIZATION_COMMAND: ['PRICE_FINALIZATIONS_LIST', 'QUOTE_COMPARISON_REVIEW'],
-  QUOTE_COMPARISON_COMMAND: ['QUOTE_COMPARISON_REVIEW'],
-  // A new plant changes the care outlook, which was empty or shorter before it.
-  HOME_PLANT_ADD: ['PLANT_CARE_OUTLOOK'],
-  ROOM_PLANT_RECOMMENDATIONS: ['PLANT_CARE_OUTLOOK'],
-  // Suggested habits fill the home habits answer that was empty when they were suggested.
-  HOME_HABITS_GENERATE: ['HOME_HABITS'],
-  // A run becomes the latest simulation that the do-nothing answer shows.
-  DO_NOTHING_SIMULATION_RUN: ['DO_NOTHING_SIMULATION'],
-  // A check joins the list of recent quote checks.
-  SERVICE_PRICE_CHECK_RUN: ['SERVICE_PRICE_CHECKS'],
-  // A new item appears in the Property Summary inventory collection and the inventory lookup lists.
-  INVENTORY_ITEM_CREATE: ['PROPERTY_SUMMARY', 'INVENTORY_LOOKUP'],
-  // Answering an area question changes the completeness rows and percentage the Property Summary shows.
-  PROPERTY_CONTEXT_AREA_CAPTURE: ['PROPERTY_SUMMARY'],
-  // Accepting/deferring/snoozing/completing an Operational Work item changes
-  // its state in the HOME_ACTIONS feed that surfaces it -- confirmed by this
-  // handler's own suggested follow-up ("What needs my attention next?").
-  OPERATIONAL_WORK_UPDATE: ['HOME_ACTIONS'],
-  // A habit's status (and, on adoption, the maintenance task it links) is what the habits list and maintenance status show.
-  HOME_HABIT_UPDATE: ['HOME_HABITS', 'MAINTENANCE_STATUS'],
-  // Setting up a season's checklist changes what the seasonal answer offers (it becomes "already set up") and what maintenance shows.
-  SEASONAL_CHECKLIST_SETUP: ['SEASONAL_HOME_CARE', 'MAINTENANCE_STATUS'],
-  // Creating a task changes the same BUYER_PLAN_STATUS/BUYER_DEADLINES
-  // membership/counts BUYER_TASK_UPDATE/BUYER_TASK_COMPLETE already declare.
-  BUYER_TASK_CREATE: ['BUYER_PLAN_STATUS', 'BUYER_DEADLINES'],
-  // BUYER_INSPECTION_REVIEW's own open-finding count is exactly what changes
-  // when a finding's disposition is classified (confirmed by the coverage
-  // audit's own read of that operation).
-  BUYER_FINDING_DISPOSITION: ['BUYER_INSPECTION_REVIEW'],
-  // Creating (or reusing) a workspace changes what QUOTE_COMPARISON_REVIEW
-  // shows for this property.
-  QUOTE_COMPARISON_CREATE: ['QUOTE_COMPARISON_REVIEW'],
-  // All 7 HVAC decision-platform operations affect what HVAC_DECISION_CONTINUE
-  // (the thread's own status/recommendation read) shows for that thread;
-  // OUTCOME_REPORT/OUTCOME_UNLINK additionally affect HVAC_DECISION_OUTCOME_VIEW's
-  // own outcome list directly. No entity-specific filtering beyond the shared
-  // same-session/same-property scoping `refreshImpactedSiblingExecutions`
-  // already does -- a homeowner with multiple open HVAC threads may see an
-  // unrelated thread's still-visible card re-fetch using ITS OWN stored
-  // parameters (harmless, same conservative design as every sibling above).
-  HVAC_DECISION_START: ['HVAC_DECISION_CONTINUE'],
-  HVAC_DECISION_SCENARIO: ['HVAC_DECISION_CONTINUE'],
-  HVAC_DECISION_ABANDON: ['HVAC_DECISION_CONTINUE'],
-  HVAC_DECISION_OUTCOME_REPORT: ['HVAC_DECISION_OUTCOME_VIEW', 'HVAC_DECISION_CONTINUE'],
-  HVAC_DECISION_OUTCOME_UNLINK: ['HVAC_DECISION_OUTCOME_VIEW', 'HVAC_DECISION_CONTINUE'],
-  // Saving/forgetting a preference already calls
-  // decisionThreadService.markThreadsStaleByIds on every canonically
-  // affected DecisionThread (a stronger, entity-precise mechanism than this
-  // map provides) -- but that only marks the CANONICAL record stale; it does
-  // not itself re-fetch an already-rendered Ask conversation card in the
-  // same session, which is what this sibling declaration is for.
-  HVAC_PREFERENCE_SAVE: ['HVAC_DECISION_CONTINUE'],
-  HVAC_PREFERENCE_FORGET: ['HVAC_DECISION_CONTINUE'],
-  // The MATERIAL_DEADLINE/insurance branch of confirmHomeDeadlineMonitor
-  // creates or updates a real PropertyMaintenanceTask (confirmed by direct
-  // read) -- MAINTENANCE_STATUS's own list is exactly what would show it.
-  HOME_DEADLINE_MONITOR: ['MAINTENANCE_STATUS'],
-  // Both are generic property-record writers, same reasoning as
-  // CAPTURE_FACT_CONFIRM/CAPTURE_EVENT_CONFIRM above.
-  CAPTURE_WARRANTY_CONFIRM: ['PROPERTY_SUMMARY', 'INVENTORY_LOOKUP'],
-  // Attaches a document to a canonical HomeEvent -- DOCUMENT_LOOKUP (the
-  // document vault) is the direct sibling; PROPERTY_SUMMARY as the general
-  // one, matching the other three CAPTURE_*_CONFIRM operations.
-  CAPTURE_EVIDENCE_CONFIRM: ['DOCUMENT_LOOKUP', 'PROPERTY_SUMMARY'],
-  // A started guided plan joins the journeys list, which was empty ("No guided journeys in progress") when the plan was started from it.
-  GUIDANCE_JOURNEY_CREATE: ['GUIDANCE_JOURNEYS_LIST'],
-  // HOUSEHOLD_INVITATION has no still-visible Ask read operation whose membership it plausibly affects (no "list household members" read
-  // exists) -- deliberately left out of this map. Its confirm handler still calls reconcileAskExecutionSideEffects for the explicit
-  // sourceExecutionId refresh (the one result a launched-from row-action would refresh), just with zero declared siblings.
-};
+// Phase 8: the sibling-read lists are no longer written here. They come from the validated askMutationImpactRegistry (governance/), which also declares the
+// Record sections, Work providers, Saved types, notifications and suggestions a mutation touches. This read-only view keeps the old name for callers.
+export const ASK_MUTATION_IMPACT_MAP: Readonly<Partial<Record<AskOperationId, readonly AskOperationId[]>>> = Object.freeze(
+  Object.fromEntries(Object.entries(ASK_MUTATION_IMPACT_REGISTRY).map(([operationId, entry]) => [operationId, entry.reads])),
+) as Readonly<Partial<Record<AskOperationId, readonly AskOperationId[]>>>;
 
 // Pure decision core, extracted for direct unit testing (same convention as
 // mergeEvidence/isCapitalTimelineAnalysisStale/formatUnavailableHomeActionProducers):
@@ -868,7 +685,7 @@ export function siblingOperationIdsForBuyerTaskMutation(baseSiblings: readonly A
 // mutation using the same field automatically gets the same conditional
 // sibling without needing its own case here.
 async function impactedSiblingOperationIds(execution: AskExecution, parameters: Record<string, unknown>): Promise<readonly AskOperationId[]> {
-  const declared = execution.operationId ? ASK_MUTATION_IMPACT_MAP[execution.operationId as AskOperationId] ?? [] : [];
+  const declared = execution.operationId ? impactedReadOperationIds(execution.operationId) : [];
   const taskId = parameters.buyerTaskId;
   if (typeof taskId !== 'string' || !execution.propertyId) return declared;
   const task = await prisma.homeBuyerTask.findFirst({ where: { id: taskId, checklist: { propertyId: execution.propertyId } }, select: { taskType: true } });
@@ -900,33 +717,56 @@ export function selectSiblingRefreshTargets<T extends { operationId: string | nu
   });
 }
 
+const ASK_STALE_LOOKBACK_MS = 30 * 24 * 60 * 60 * 1000;
+const ASK_STALE_CANDIDATE_LIMIT = 200;
+
 async function refreshImpactedSiblingExecutions(
   userId: string,
   execution: AskExecution,
   parameters: Record<string, unknown>,
   excludeExecutionIds: ReadonlySet<string>,
+  refresh: typeof refreshAskExecutionDetailed = refreshAskExecutionDetailed,
 ): Promise<AskSourceRefreshOutcome> {
-  if (!execution.propertyId) return { refreshedExecutions: [], attemptedAndFailed: false };
+  const none = { refreshedExecutions: [], staleExecutionIds: [], markedElsewhere: 0, attemptedAndFailed: false };
+  if (!execution.propertyId) return none;
   const siblingOperationIds = await impactedSiblingOperationIds(execution, parameters);
-  if (!siblingOperationIds.length) return { refreshedExecutions: [], attemptedAndFailed: false };
+  if (!siblingOperationIds.length) return none;
   const candidates = await prisma.askExecution.findMany({
     where: {
-      userId, sessionId: execution.sessionId, propertyId: execution.propertyId,
+      userId, propertyId: execution.propertyId,
       operationId: { in: [...siblingOperationIds] },
       status: { in: [...ASK_SIBLING_REFRESH_ELIGIBLE_STATUSES] },
       id: { notIn: [execution.id, ...excludeExecutionIds] },
+      createdAt: { gte: new Date(Date.now() - ASK_STALE_LOOKBACK_MS) },
     },
     orderBy: { updatedAt: 'desc' },
+    take: ASK_STALE_CANDIDATE_LIMIT,
   });
-  const targets = selectSiblingRefreshTargets(candidates, (operationId) => Boolean(getAskDomainCommandByOperation(operationId)));
-  if (!targets.length) return { refreshedExecutions: [], attemptedAndFailed: false };
-  // Promise.allSettled per explicit design decision: one sibling's refresh
-  // failing must never prevent the others from refreshing.
-  const outcomes = await Promise.allSettled(targets.map((target) => refreshAskExecutionAfterConflict(userId, target.id)));
-  return {
-    refreshedExecutions: outcomes.filter((outcome): outcome is PromiseFulfilledResult<AskExecutionResponse> => outcome.status === 'fulfilled').map((outcome) => outcome.value),
-    attemptedAndFailed: outcomes.some((outcome) => outcome.status === 'rejected'),
-  };
+  const isCommand = (operationId: string) => Boolean(getAskDomainCommandByOperation(operationId));
+  // The answers on screen are this conversation's; the newest per operation is the one a person would revisit.
+  const targets = selectSiblingRefreshTargets(candidates.filter((candidate) => candidate.sessionId === execution.sessionId), isCommand);
+  // The same answers in OTHER conversations are history, but reopening one must not show it as current: mark the newest per conversation and operation.
+  const elsewhere: typeof candidates = [];
+  const seen = new Set<string>();
+  for (const candidate of candidates) {
+    if (candidate.sessionId === execution.sessionId || !candidate.operationId || isCommand(candidate.operationId)) continue;
+    const key = `${candidate.sessionId}:${candidate.operationId}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    elsewhere.push(candidate);
+  }
+  const markedElsewhere = elsewhere.length ? (await markExecutionsStale(elsewhere, execution.operationId)).length : 0;
+  if (!targets.length) return { ...none, markedElsewhere };
+  // Promise.allSettled per explicit design decision: one sibling's refresh failing must never prevent the others from refreshing.
+  const outcomes = await Promise.allSettled(targets.map((target) => refresh(userId, target.id)));
+  const refreshedExecutions: AskExecutionResponse[] = [];
+  const unrefreshed: typeof targets = [];
+  outcomes.forEach((outcome, index) => {
+    if (outcome.status === 'fulfilled' && outcome.value.refreshed) refreshedExecutions.push(outcome.value.response);
+    else unrefreshed.push(targets[index]);
+  });
+  const staleExecutionIds = unrefreshed.length ? await markExecutionsStale(unrefreshed, execution.operationId) : [];
+  return { refreshedExecutions, staleExecutionIds, markedElsewhere, attemptedAndFailed: unrefreshed.length > 0 };
 }
 
 // Combines the explicit, frontend-supplied single-target refresh with the
@@ -950,14 +790,23 @@ export function capReconciledChildExecutions<T>(sourceExecutions: readonly T[], 
   return [...sourceExecutions, ...siblingExecutions.slice(0, remainingBudget)];
 }
 
-export async function reconcileAskExecutionSideEffects(userId: string, execution: AskExecution, parameters: Record<string, unknown>): Promise<AskSourceRefreshOutcome> {
+export async function reconcileAskExecutionSideEffects(userId: string, execution: AskExecution, parameters: Record<string, unknown>, refresh: typeof refreshAskExecutionDetailed = refreshAskExecutionDetailed): Promise<AskSourceRefreshOutcome> {
   const sourceExecutionId = typeof parameters.sourceExecutionId === 'string' ? parameters.sourceExecutionId : null;
   const [sourceOutcome, siblingOutcome] = await Promise.all([
-    refreshAskSourceExecution(userId, execution.id, parameters),
-    refreshImpactedSiblingExecutions(userId, execution, parameters, new Set(sourceExecutionId ? [sourceExecutionId] : [])),
+    refreshAskSourceExecution(userId, execution.id, parameters, execution.operationId, refresh),
+    refreshImpactedSiblingExecutions(userId, execution, parameters, new Set(sourceExecutionId ? [sourceExecutionId] : []), refresh),
   ]);
-  return {
-    refreshedExecutions: capReconciledChildExecutions(sourceOutcome.refreshedExecutions, siblingOutcome.refreshedExecutions),
+  const delivered = capReconciledChildExecutions(sourceOutcome.refreshedExecutions, siblingOutcome.refreshedExecutions);
+  const deliveredIds = new Set(delivered.map((response) => response.executionId));
+  // A refreshed answer that does not fit in the response is current in the database but the person's screen still shows the old copy. It is reported
+  // like a stale one (nothing is marked in the database) so the screen offers a refresh instead of silently showing the old answer.
+  const notDelivered = [...sourceOutcome.refreshedExecutions, ...siblingOutcome.refreshedExecutions].map((response) => response.executionId).filter((id) => !deliveredIds.has(id));
+  const outcome: AskSourceRefreshOutcome = {
+    refreshedExecutions: delivered,
+    staleExecutionIds: [...sourceOutcome.staleExecutionIds, ...siblingOutcome.staleExecutionIds, ...notDelivered],
+    markedElsewhere: sourceOutcome.markedElsewhere + siblingOutcome.markedElsewhere,
     attemptedAndFailed: sourceOutcome.attemptedAndFailed || siblingOutcome.attemptedAndFailed,
   };
+  recordReconciliationOutcome({ refreshedExecutionIds: [...deliveredIds], staleExecutionIds: outcome.staleExecutionIds, markedElsewhere: outcome.markedElsewhere });
+  return outcome;
 }

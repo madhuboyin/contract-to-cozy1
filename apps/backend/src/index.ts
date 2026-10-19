@@ -202,6 +202,7 @@ import { validateAskWorkProviders } from './services/ask/askWork.service';
 import { validateAskSavedTypes } from './services/ask/askSaved.service';
 import { validateAskSearchProviders } from './services/ask/askSearch.service';
 import { validateAskNotificationContinuationRegistry } from './services/ask/governance/askNotificationContinuationRegistry';
+import { validateAskMutationImpactRegistry } from './services/ask/governance/askMutationImpactRegistry';
 import { validateAskRouteRetirementRegistry } from './services/ask/governance/askRouteRetirementRegistry';
 import { validateAskLlmPurposeContracts } from './services/ask/askRemoteFallbackTypedClaims';
 import { validateCapabilityHandlerRegistry } from './services/ask/capabilityHandlerRegistry';
@@ -250,6 +251,7 @@ const askRegistryIssues = [
   ...validateAskSavedTypes(),
   ...validateAskSearchProviders(),
   ...validateAskNotificationContinuationRegistry(),
+  ...validateAskMutationImpactRegistry(),
   ...validateAskLlmPurposeContracts(),
   ...validateCapabilityHandlerRegistry(),
   ...validateConfirmCapabilityHandlerRegistry(),

@@ -1452,6 +1452,11 @@ const AskExecutionResponseBaseSchema = z.object({
   suggestedNextActions: z.array(SuggestedNextActionSchema).max(SUGGESTED_NEXT_ACTIONS_MAX).default([]),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
+  // Phase 8 (FR-PLAT-002): set while a write has changed what this answer shows and it has not been refreshed. Cleared by a successful refresh.
+  staleSince: z.string().datetime().nullable().optional(),
+  // Phase 8: present on a confirmation's response. The answers in this conversation that could not be refreshed after the write, and how many answers in
+  // other conversations were marked stale. The write itself succeeded either way.
+  reconciliation: z.object({ staleExecutionIds: z.array(z.string()).max(50), markedElsewhere: z.number().int().min(0) }).optional(),
 });
 
 function validateEvidenceClaimMappings(

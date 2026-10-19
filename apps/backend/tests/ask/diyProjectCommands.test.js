@@ -473,7 +473,7 @@ test('registry facts: two CONTRIBUTOR, confirmation-gated, non-routable commands
     assert.deepEqual([command.roleFloor, command.correctionModes, command.material], ['CONTRIBUTOR', [], true]);
     assert.equal(ASK_OPERATION_DEFINITIONS[id].family, 'COMMAND');
     assert.equal(isAskMessageRoutableOperation(id), false);
-    assert.match(fs.readFileSync(path.join(__dirname, '../../src/services/ask/execution/executeOperation.ts'), 'utf8'), new RegExp(`${id}: \\['DIY_PROJECT_GUIDE', 'DIY_PROJECTS'\\]`));
+    assert.deepEqual([...require('../../src/services/ask/governance/askMutationImpactRegistry.ts').impactedReadOperationIds(id)].sort(), ['DIY_PROJECTS', 'DIY_PROJECT_GUIDE'], `${id} refreshes the guide and the list`);
   }
   assert.equal(getAskDomainCommandByOperation('DIY_PROJECT_COMPLETE').adapterKey, 'diy.project-complete');
   assert.equal(getAskDomainCommandByOperation('DIY_PROJECT_ABANDON').adapterKey, 'diy.project-abandon');

@@ -274,7 +274,7 @@ export function ExecutionCard({
   }
 
   return (
-    <ResultRevalidationBoundary executionId={execution.executionId} issue={refreshIssue}><ResultViewContext.Provider value={controls}><CalmChromeContext.Provider value={calmChrome}><CalmAnswerContext.Provider value={calm}><article id={`ask-execution-${execution.executionId}`} data-answer-width={answerWidth.toLowerCase()} className="group mx-auto w-full max-w-[1140px] scroll-mt-28 space-y-3 lg:scroll-mt-32" onFocusCapture={() => { window.sessionStorage.setItem(`ctc:ask-return-execution:${execution.sessionId}`, execution.executionId); }} onClickCapture={(event) => {
+    <ResultRevalidationBoundary executionId={execution.executionId} issue={refreshIssue} stale={execution.staleSince ? { since: execution.staleSince } : null} onRefresh={() => void refresh()} refreshing={refreshing || refreshPending}><ResultViewContext.Provider value={controls}><CalmChromeContext.Provider value={calmChrome}><CalmAnswerContext.Provider value={calm}><article id={`ask-execution-${execution.executionId}`} data-answer-width={answerWidth.toLowerCase()} className="group mx-auto w-full max-w-[1140px] scroll-mt-28 space-y-3 lg:scroll-mt-32" onFocusCapture={() => { window.sessionStorage.setItem(`ctc:ask-return-execution:${execution.sessionId}`, execution.executionId); }} onClickCapture={(event) => {
       const link = (event.target as HTMLElement).closest<HTMLAnchorElement>('a[href]');
       if (!link) return;
       const url = new URL(link.href, window.location.origin);

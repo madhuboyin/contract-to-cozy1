@@ -367,8 +367,7 @@ test('registry facts: a CONTRIBUTOR, confirmation-gated, non-routable command wi
   const def = ASK_OPERATION_DEFINITIONS.DIY_STEP_UPDATE;
   assert.deepEqual([def.family, def.propertyRoleFloor, def.allowedBlockTypes], ['COMMAND', 'CONTRIBUTOR', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']]);
   assert.equal(isAskMessageRoutableOperation('DIY_STEP_UPDATE'), false);
-  const executeSource = fs.readFileSync(path.join(__dirname, '../../src/services/ask/execution/executeOperation.ts'), 'utf8');
-  assert.match(executeSource, /DIY_STEP_UPDATE: \['DIY_PROJECT_GUIDE', 'DIY_PROJECTS'\]/);
+  assert.deepEqual([...require('../../src/services/ask/governance/askMutationImpactRegistry.ts').impactedReadOperationIds('DIY_STEP_UPDATE')].sort(), ['DIY_PROJECTS', 'DIY_PROJECT_GUIDE']);
   const { DIY_SKILL } = require('../../src/services/skills/diy/skill.manifest.ts');
   assert.deepEqual([DIY_SKILL.autonomyLevel, DIY_SKILL.riskPolicy.effects, DIY_SKILL.riskPolicy.materiality, DIY_SKILL.riskPolicy.reversibility], [2, ['READ', 'WRITE'], 'MATERIAL', 'IRREVERSIBLE']);
   assert.ok(DIY_SKILL.allowedResultBlocks.includes('WORKFLOW_PROGRESS'));

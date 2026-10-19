@@ -7,6 +7,7 @@ import { loadCompletedSuggestedActionKeyHashes } from '../suggestedActions/sugge
 import { AskExecution, Prisma } from '@prisma/client';
 import { createHash } from 'node:crypto';
 import { prisma } from '../../../lib/prisma';
+import { logger } from '../../../lib/logger';
 import { ASK_RESPONSE_SCHEMA_VERSION, type AskExecutionResponse, type AskPresentationBlock, type EditAskConfirmation, type SubmitAskConfirmation } from '../../../productFramework/ask/ask.contract';
 import { readAskOperationalControls } from '../../../config/askOperationalControls';
 import { composeSkillContext } from '../../skills/context/skillContextComposer';
@@ -16,7 +17,8 @@ import { operationalUnavailableResult, skillRuntimeUnavailableReason } from '../
 import { confirmCapabilityInvoke } from '../confirmCapabilityHandlerRegistry';
 import { recordAskCapabilityLifecycle } from '../askCapabilityLifecycle';
 import { asInputJson, assertSkillResultBlocksAllowed, audienceApplicabilityResult, ensurePropertyAccess, enterAskPropertyTimezoneContext, expireIfSkillBindingChanged, journeyContextFrom, mapPersistedExecution, preservedExecutionHistory, propertySummary, recordAskAnswerTrustMetrics, terminalStatus } from '../askHandlerSupport';
-import { reconcileAskExecutionSideEffects, resolveAskSkillHandoff } from '../execution/executeOperation';
+import { capReconciledChildExecutions, reconcileAskExecutionSideEffects, resolveAskSkillHandoff } from '../execution/executeOperation';
+import { reconciliationWasRun, runInReconciliationScope, type ReconciliationScope } from '../support/askReconciliation';
 import { getAskDomainCommandByOperation } from '../askDomainCommandRegistry';
 import { getSkillForOperation } from '../../skills/skillRegistry';
 import { validateSkillExecutionBinding } from '../../skills/skillExecutionBinding';
@@ -101,8 +103,8 @@ export async function confirmAskExecution(userId: string, executionId: string, i
       const replayParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson)
         ? execution.parametersJson as Record<string, unknown>
         : {};
-      const { refreshedExecutions } = await reconcileAskExecutionSideEffects(userId, execution, replayParameters);
-      return mapPersistedExecution(execution, await propertySummary(execution.propertyId), refreshedExecutions);
+      const { refreshedExecutions, staleExecutionIds, markedElsewhere } = await reconcileAskExecutionSideEffects(userId, execution, replayParameters);
+      return { ...mapPersistedExecution(execution, await propertySummary(execution.propertyId), refreshedExecutions), reconciliation: { staleExecutionIds, markedElsewhere } };
     }
   }
   const access = await ensurePropertyAccess(userId, execution.propertyId);
@@ -294,12 +296,28 @@ export async function confirmAskExecution(userId: string, executionId: string, i
   // confirm handler explicitly refreshed another still-visible execution
   // this mutation affected (see ConfirmCapabilityResult.refreshedExecutions).
   let refreshedExecutions: AskExecutionResponse[] = [];
+  let reconciliationScope: ReconciliationScope | null = null;
   try {
   {
-    const confirmed = await confirmCapabilityInvoke(execution.operationId as AskOperationId, {
-      execution: execution as typeof execution & { propertyId: string },
-      userId, parameters, access, command,
+    // Phase 8: whichever handler runs, the write reconciles what it may have changed. A handler that already did so is left alone; one that did not
+    // (or could not) is reconciled here, so no confirmed write leaves an affected answer silently current. Reconciliation never fails the write.
+    const reconciled = await runInReconciliationScope(async () => {
+      const invoked = await confirmCapabilityInvoke(execution.operationId as AskOperationId, {
+        execution: execution as typeof execution & { propertyId: string },
+        userId, parameters, access, command,
+      });
+      if (!reconciliationWasRun()) {
+        try {
+          const fallback = await reconcileAskExecutionSideEffects(userId, execution, parameters);
+          invoked.refreshedExecutions = capReconciledChildExecutions(invoked.refreshedExecutions ?? [], fallback.refreshedExecutions);
+        } catch (error) {
+          logger.warn({ err: error, executionId, operationId: execution.operationId }, '[ASK] Reconciliation after a confirmed write failed; the write stands');
+        }
+      }
+      return invoked;
     });
+    const confirmed = reconciled.value;
+    reconciliationScope = reconciled.scope;
     result = confirmed.result; artifactType = confirmed.artifactType; artifactId = confirmed.artifactId;
     refreshedExecutions = confirmed.refreshedExecutions ?? [];
   }
@@ -449,7 +467,8 @@ export async function confirmAskExecution(userId: string, executionId: string, i
     saved = completed;
   }
   void recordAskCapabilityLifecycle(executionId, 'CONFIRMED');
-  return mapPersistedExecution(saved, await propertySummary(execution.propertyId), refreshedExecutions);
+  const response = mapPersistedExecution(saved, await propertySummary(execution.propertyId), refreshedExecutions);
+  return reconciliationScope ? { ...response, reconciliation: { staleExecutionIds: [...reconciliationScope.staleExecutionIds].slice(0, 50), markedElsewhere: reconciliationScope.markedElsewhere } } : response;
 }
 
 export async function editAskConfirmation(userId: string, executionId: string, input: EditAskConfirmation): Promise<AskExecutionResponse> {

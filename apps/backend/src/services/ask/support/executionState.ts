@@ -1,4 +1,5 @@
 // Ask handler support: executionState. Moved out of askHandlerSupport.ts unchanged (FRD v1.110); that file re-exports these modules.
+import { staleMarkerFor } from './askReconciliation';
 import { ASK_RESPONSE_SCHEMA_VERSION, AskExecutionResponseSchema, AskPresentationBlockSchema, type AskExecutionResponse, type AskPresentationBlock } from '../../../productFramework/ask/ask.contract';
 import { AskExecution, AskExecutionStatus, Prisma } from '@prisma/client';
 import { ASK_OPERATION_DEFINITIONS, getAskOperationDefinition, type AskOperationId, type AskOperationResult } from '../askOperationRegistry';
@@ -194,6 +195,7 @@ export function mapPersistedExecution(execution: {
     suggestedNextActions: readStoredSuggestedNextActions(execution.resultJson),
     createdAt: execution.createdAt.toISOString(),
     updatedAt: execution.updatedAt.toISOString(),
+    staleSince: staleMarkerFor(execution.parametersJson)?.staleSince ?? null,
     // Ask Cozy Stage 3, Phase 3 (implementation plan §19; FRD §16/§28).
     // Only ever populated by the turn's own synchronous conversational-
     // capture attempt (conversationalCapture.ts) -- a persisted execution

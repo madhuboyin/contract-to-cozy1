@@ -75,6 +75,12 @@ export function useResultRefresh({ executions, activeSessionRef, requests, denie
   const updateExecution = (updated: AskExecutionResponse) => {
     if (activeSessionRef.current !== updated.sessionId || deniedProperties.current.has(`${updated.sessionId}:${updated.property?.id}`)) return;
     setExecutions((current) => mergeResultExecutions(current, [updated, ...(updated.childExecutions ?? [])].filter((item) => !deniedProperties.current.has(`${item.sessionId}:${item.property?.id}`))));
+    // Phase 8: answers the write changed but that could not be refreshed are shown as possibly out of date, with a way to refresh them.
+    const staleIds = updated.reconciliation?.staleExecutionIds ?? [];
+    if (staleIds.length > 0) {
+      const since = new Date().toISOString();
+      setExecutions((current) => current.map((item) => staleIds.includes(item.executionId) && !item.staleSince ? { ...item, staleSince: since } : item));
+    }
     setJustUpdatedExecutionId(updated.executionId);
     if (!['NEEDS_ENTITY', 'NEEDS_CLARIFICATION', 'NEEDS_CONTEXT', 'NEEDS_CONFIRMATION'].includes(updated.status)) {
       setPendingWork((current) => current.filter((item) => item.execution.executionId !== updated.executionId));
