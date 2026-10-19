@@ -148,10 +148,10 @@ export function propertyOverviewStatusObservation(pendingDetailCount: number): s
   return 'Nothing in the current record suggests an urgent issue.';
 }
 
-/** The deliberate workspace request. A normal summary stays concise; only explicit language opens the complete record index. */
+/** The deliberate workspace request. A normal summary stays concise; explicit browse language opens the current record index. */
 export function isCompleteHomeRecordRequest(message: string): boolean {
   if (/\bhow\s+complete\b/i.test(message)) return false;
-  return /\b(?:complete|full|entire|whole)\b.{0,28}\b(?:home|house|property)\s+record\b|\b(?:see|show|view|browse|review|open)\b.{0,28}\b(?:all|everything)\b.{0,28}\b(?:recorded|home\s+record)\b/i.test(message);
+  return /\bbrowse\b.{0,28}\b(?:home|house|property)\s+record\b|\b(?:complete|full|entire|whole)\b.{0,28}\b(?:home|house|property)\s+record\b|\b(?:see|show|view|browse|review|open)\b.{0,28}\b(?:all|everything)\b.{0,28}\b(?:recorded|home\s+record)\b/i.test(message);
 }
 
 async function propertySummaryResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
@@ -242,7 +242,7 @@ async function propertySummaryResult(userId: string, propertyId: string, message
         ? `${propertyName}’s Property Context is ${percent}% complete`
         : `Here is the current Living Home Record for ${propertyName}`
       : completeRecordFocus
-      ? `Complete home record for ${propertyName}`
+      ? `Browse home record for ${propertyName}`
       : `Here's the short version of ${propertyName}`,
     body: roomFocus
       ? rooms
@@ -251,7 +251,7 @@ async function propertySummaryResult(userId: string, propertyId: string, message
       : completenessFocus
       ? completenessBody
       : completeRecordFocus
-      ? 'This is the complete record index for this home. Review the profile here, then open any section to see its authoritative records without leaving Ask Cozy.'
+      ? 'This is the current record index for this home. Review the profile here, then open any section to see its authoritative records without leaving Ask Cozy.'
       : statusObservation ?? '',
     tone: roomFocus ? (rooms ? 'DEFAULT' : 'CAUTION') : (completenessFocus || completeRecordFocus) && degradedSections.length ? 'CAUTION' : 'DEFAULT',
     // Ask links to no desktop property page (owner decision 2026-10-10); missing details are added through the area capture rows below.

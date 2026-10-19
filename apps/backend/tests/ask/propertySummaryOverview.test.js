@@ -56,16 +56,17 @@ const invoke = (message = 'Tell me about my home') => capabilityInvoke('PROPERTY
 const summaryOf = (result) => result.blocks.find((block) => block.id === 'property-summary');
 
 test('the complete record workspace is explicit and does not turn an ordinary summary into a collection dump', () => {
+  assert.equal(isCompleteHomeRecordRequest('Browse my home record'), true);
   assert.equal(isCompleteHomeRecordRequest('Show my complete home record'), true);
   assert.equal(isCompleteHomeRecordRequest('Let me browse everything recorded for this home'), true);
   assert.equal(isCompleteHomeRecordRequest('Give me a summary of my home record'), false);
   assert.equal(isCompleteHomeRecordRequest('How complete is my home record?'), false);
 });
 
-test('an explicit complete-record request returns one calm record index with Ask-native drill-downs', async () => {
+test('an explicit browse-record request returns one calm record index with Ask-native drill-downs', async () => {
   install({ 'core.dwellingType': { state: 'KNOWN' } });
-  const result = await invoke('Show my complete home record');
-  assert.equal(summaryOf(result).title, 'Complete home record for 94 Ashford Dr, Town');
+  const result = await invoke('Browse my home record');
+  assert.equal(summaryOf(result).title, 'Browse home record for 94 Ashford Dr, Town');
   assert.ok(result.blocks.some((block) => block.id === 'property-summary-facts'));
   const index = result.blocks.find((block) => block.id === 'property-record-index');
   assert.equal(index.type, 'GROUPED_LIST');

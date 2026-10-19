@@ -221,7 +221,7 @@ const jobs: Record<AskOperationId, string> = {
 };
 
 const positives: Record<AskOperationId, readonly string[]> = {
-  PROPERTY_SUMMARY: ['Are there any pending home details to be filled in?', 'What information is left to add to this property?', 'Did I miss anything while setting up this house?', 'Is my home profile complete?', 'What else do you need to know about this property?', 'What information does this house still need?', 'What home record items need attention and coverage?', 'Is the residence file complete and in good shape?', 'How complete are the records for this address?'],
+  PROPERTY_SUMMARY: ['Browse my home record', 'Are there any pending home details to be filled in?', 'What information is left to add to this property?', 'Did I miss anything while setting up this house?', 'Is my home profile complete?', 'What else do you need to know about this property?', 'What information does this house still need?', 'What home record items need attention and coverage?', 'Is the residence file complete and in good shape?', 'How complete are the records for this address?'],
   INTELLIGENCE_ENVELOPE_QUERY: ['Query the intelligence envelope for my home', 'Show the registered derived intelligence for this property', 'What intelligence signals does my home have?', 'Show my inteligence envelope'],
   HOME_EVENT_RADAR_FEED: ['Show my home event radar feed', 'What monitored events are happening near my home?', 'Anything going on around my house I should know about?', 'Show my radar matches'],
   MAINTENANCE_STATUS: ['What maintenance is pending?', 'List pending maintenance tasks', 'What maintenance tasks are due this month?', 'Show overdue upkeep and completed work', 'Give me a rundown of household work remaining and finished'],

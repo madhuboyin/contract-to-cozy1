@@ -32,7 +32,7 @@ const ALL = Object.values(PRODUCERS).flat();
 const keyOf = (c) => `${c.operationId}:${c.outcomeKey}`;
 
 const EXPECTED = [
-  ['PROPERTY_SUMMARY', 'REVIEW_HOME_SUMMARY', 'Give me a summary of my home record'],
+  ['PROPERTY_SUMMARY', 'REVIEW_HOME_SUMMARY', 'Browse my home record'],
   ['PROPERTY_SUMMARY', 'REVIEW_COMPLETENESS', 'How complete is my home record?'],
   ['SEASONAL_HOME_CARE', 'REVIEW_THIS_SEASON', 'What home care should I do this season?'],
   ['SEASONAL_HOME_CARE', 'PREPARE_NEXT_SEASON', 'What should I do to get ready for next season?'],

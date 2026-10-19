@@ -56,7 +56,7 @@ const outcomeFor = (operationId) => `OPEN_${operationId}`.slice(0, 79);
 const messageFor = (operationId) => `Show me ${operationId.toLowerCase().replace(/_/g, ' ')}`;
 /** One starter. `variant` makes a second, distinct starter (outcome and message) on the SAME operation, e.g. PROPERTY_SUMMARY's completeness focus. */
 const REAL_PROPERTY_SUMMARY = {
-  null: { outcomeKey: 'REVIEW_HOME_SUMMARY', message: 'Give me a summary of my home record' },
+  null: { outcomeKey: 'REVIEW_HOME_SUMMARY', message: 'Browse my home record' },
   REVIEW_COMPLETENESS: { outcomeKey: 'REVIEW_COMPLETENESS', message: 'How complete is my home record?' },
 };
 // PROPERTY_SUMMARY now has REAL registered starter outcomes (D-O4); the harness uses them rather than provisional ones.
@@ -69,7 +69,7 @@ const specKey = (starter) => `${starter.operationId}:${starter.outcomeKey}`;
 
 /** `size` distinct-operation starters, from the real pool. */
 const singletonPool = (size) => POOL_OPERATIONS.slice(0, size).map((op) => spec(op));
-/** `size` starters where PROPERTY_SUMMARY supplies TWO (summary and completeness focus) and the rest are distinct operations. */
+/** `size` starters where PROPERTY_SUMMARY supplies TWO (record browse and completeness focus) and the rest are distinct operations. */
 const groupedPool = (size) => [spec('PROPERTY_SUMMARY'), spec('PROPERTY_SUMMARY', 'REVIEW_COMPLETENESS'), ...POOL_OPERATIONS.filter((op) => op !== 'PROPERTY_SUMMARY').slice(0, size - 2).map((op) => spec(op))];
 
 function registerProvisional(starters, { repeatable = false, promptHistoryExempt = false } = {}) {

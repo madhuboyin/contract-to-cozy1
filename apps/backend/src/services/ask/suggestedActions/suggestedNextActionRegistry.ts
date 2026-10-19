@@ -206,7 +206,7 @@ export const SUGGESTED_ACTION_OUTCOMES: Readonly<Record<string, readonly string[
   HOME_BASICS_GUIDE: ['REVIEW_SAFETY_BASICS', 'REVIEW_MONTHLY_ROUTINE'],
   // The authored hiring guide's one outcome (inventory D-O4).
   HIRING_GUIDE: ['REVIEW_HIRING_CHECKLIST'],
-  // The home-record summary's two starters (inventory D-O4): a plain summary and the completeness focus, both message-routable reads.
+  // The home-record operation exposes the browse/summary, completeness and handoff identities.
   PROPERTY_SUMMARY: ['REVIEW_HOME_SUMMARY', 'REVIEW_COMPLETENESS', 'HANDOFF_REVIEW_PROPERTY'],
   MAINTENANCE_STATUS: ['HANDOFF_REVIEW_MAINTENANCE', 'REVIEW_MAINTENANCE_STATUS'],
   COVERAGE_GAPS: ['HANDOFF_REVIEW_COVERAGE', 'REVIEW_COVERAGE_GAPS'],

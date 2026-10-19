@@ -14,7 +14,7 @@ export const STARTER_PROPERTY_SUMMARY_PRODUCER_ID = 'starter.property-summary';
 
 /** The home-record summary's two stored starter messages. PROPERTY_SUMMARY is message-routable, so these are also real questions; the second selects the completeness focus. */
 export const PROPERTY_SUMMARY_STARTER_MESSAGE = 'Give me a summary of my home record';
-export const PROPERTY_COMPLETE_RECORD_STARTER_MESSAGE = 'Show my complete home record';
+export const PROPERTY_BROWSE_RECORD_STARTER_MESSAGE = 'Browse my home record';
 export const PROPERTY_SUMMARY_COMPLETENESS_STARTER_MESSAGE = 'How complete is my home record?';
 
 /** The seasonal read's two starters: distinct outcomes and messages on ONE operation (so a disabled operation removes both: inventory 4a). */
@@ -79,7 +79,7 @@ export function hiringGuideStarters(propertyId: string): SuggestedNextActionCand
   })];
 }
 
-/** The home-record summary's two starters: distinct outcomes and messages on ONE operation, no entity. Executed on an empty home (inventory 4c). */
+/** The home-record operation's two starters: browse the current record index or review its completeness. */
 export function propertySummaryStarters(propertyId: string): SuggestedNextActionCandidate[] {
   const base = {
     source: 'CAPABILITY_RECOMMENDATION' as const,
@@ -95,7 +95,7 @@ export function propertySummaryStarters(propertyId: string): SuggestedNextAction
     traits: { ...DEFAULT_CANDIDATE_TRAITS },
   };
   return [
-    SuggestedNextActionCandidateSchema.parse({ ...base, label: 'Summarize my home record', message: PROPERTY_SUMMARY_STARTER_MESSAGE, outcomeKey: 'REVIEW_HOME_SUMMARY' }),
+    SuggestedNextActionCandidateSchema.parse({ ...base, label: 'Browse home record', message: PROPERTY_BROWSE_RECORD_STARTER_MESSAGE, outcomeKey: 'REVIEW_HOME_SUMMARY' }),
     SuggestedNextActionCandidateSchema.parse({ ...base, label: 'How complete is my home record?', message: PROPERTY_SUMMARY_COMPLETENESS_STARTER_MESSAGE, outcomeKey: 'REVIEW_COMPLETENESS' }),
   ];
 }
