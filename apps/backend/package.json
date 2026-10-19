@@ -47,6 +47,7 @@
     "lint:notification-boundary": "node scripts/check-notification-boundary.js",
     "report:weekly": "ts-node scripts/weekly-retention-report.ts",
     "report:home-intelligence-phase0": "ts-node scripts/generate-home-intelligence-phase0-report.ts",
+    "report:ask-interface-inventory": "ts-node scripts/generate-ask-interface-inventory.ts",
     "retention:ask": "node dist/scripts/askRetentionCleanup.js",
     "retention:ask:dev": "ts-node src/scripts/askRetentionCleanup.ts",
     "reconcile:ask-pending": "node dist/scripts/askPendingExpiryReconcile.js",

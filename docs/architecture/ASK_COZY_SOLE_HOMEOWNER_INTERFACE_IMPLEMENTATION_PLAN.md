@@ -1,8 +1,10 @@
 # Ask Cozy Sole Homeowner Interface — Implementation Plan
 
-**Status:** Proposed execution plan  
+**Status:** In progress
 **Date:** October 18, 2026  
 **Governing requirements:** `docs/product/ASK_COZY_SOLE_HOMEOWNER_INTERFACE_FRD.md`
+
+**Implemented Phase 0 foundation:** The code-owned route-retirement registry, startup validation, generated Ask-operation inventory, and generated homeowner-route inventory are implemented. The inventory currently marks no route retired; certification evidence and exact successor mappings remain future work.
 
 ## 1. Delivery principles
 
