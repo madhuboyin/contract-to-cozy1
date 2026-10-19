@@ -5,7 +5,8 @@ import { api } from '@/lib/api/client';
 import type { AskRecordCollectionPage, AskRecordDetail, AskRecordWarrantyRow } from '@/features/ask/types';
 
 let section = 'warranties';
-jest.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams(`propertyId=home-1&section=${section}`) }));
+let focusedRecord = '';
+jest.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams(`propertyId=home-1&section=${section}${focusedRecord ? `&recordId=${focusedRecord}` : ''}`) }));
 jest.mock('@/lib/property/PropertyContext', () => ({
   usePropertyContext: () => ({ selectedPropertyId: 'home-1', setSelectedPropertyId: jest.fn() }),
 }));
@@ -39,7 +40,7 @@ const detail = (overrides: Partial<AskRecordDetail> = {}): AskRecordDetail => ({
 });
 
 describe('AskRecord per-record detail (FR-REC-004/005)', () => {
-  beforeEach(() => { section = 'warranties'; getPage.mockReset(); getDetail.mockReset(); });
+  beforeEach(() => { section = 'warranties'; focusedRecord = ''; getPage.mockReset(); getDetail.mockReset(); });
 
   it('reads nothing extra until Details is opened, then shows facts, provenance with reasons, history unavailable and the correction route', async () => {
     getPage.mockResolvedValue({ success: true, data: page({ state: 'CONNECTED' }) });
@@ -77,6 +78,16 @@ describe('AskRecord per-record detail (FR-REC-004/005)', () => {
     expect(route).toHaveAttribute('data-correction-state', 'role_required');
     expect(route).toHaveTextContent('Not available — Your household role cannot change this; it needs contributor access.');
     expect(within(route).queryByRole('link')).toBeNull();
+  });
+
+  it('opens the exact record a search result points at, with its canonical detail already open above the section list', async () => {
+    focusedRecord = 'war-1';
+    getPage.mockResolvedValue({ success: true, data: page({ state: 'CONNECTED' }) });
+    getDetail.mockResolvedValue({ success: true, data: detail() });
+    render(<AskRecord />);
+    const focused = await waitFor(() => { const el = document.querySelector('[data-record-focused="war-1"]') as HTMLElement; expect(el).toBeTruthy(); return el; });
+    await waitFor(() => expect(focused.querySelector('[data-record-detail-panel="war-1"]')).toBeTruthy());
+    expect(getDetail).toHaveBeenCalledWith('warranties', 'home-1', 'war-1', expect.anything());
   });
 
   it('says a record is no longer available instead of showing stale detail', async () => {

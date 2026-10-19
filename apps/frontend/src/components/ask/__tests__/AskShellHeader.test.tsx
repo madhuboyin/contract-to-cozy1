@@ -30,6 +30,8 @@ jest.mock('../workspace/useAskAccount', () => ({
   useAskAccount: () => ({ accountName: 'Ada Homeowner', accountEmail: 'ada@example.com', loggingOut: false, handleLogout: logout }),
 }));
 
+jest.mock('../search/AskSearchDialog', () => ({ AskSearchDialog: ({ open }: { open: boolean }) => (open ? <div role="dialog" aria-label="Search your home" /> : null) }));
+
 jest.mock('@/components/layout/CtcPropertySelector', () => ({
   CtcPropertySelector: ({ onPropertySelect }: { onPropertySelect: (propertyId: string) => void }) => (
     <button type="button" onClick={() => onPropertySelect('home-2')}>Choose Lake House</button>
@@ -54,6 +56,13 @@ describe('AskShellHeader', () => {
     expect(screen.getByRole('menuitem', { name: 'Notification settings' })).toHaveAttribute('href', '/dashboard/notifications');
     await user.click(screen.getByRole('menuitem', { name: 'Sign out' }));
     expect(logout).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens the federated home search from its own button, separate from the pages-and-tools palette', () => {
+    render(<AskShellHeader />);
+    expect(screen.queryByRole('dialog', { name: 'Search your home' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Search your home' }));
+    expect(screen.getByRole('dialog', { name: 'Search your home' })).toBeInTheDocument();
   });
 
   it('keeps the current destination but clears the old property conversation when switching homes', () => {

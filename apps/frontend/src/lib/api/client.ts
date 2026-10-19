@@ -1139,6 +1139,10 @@ class APIClient {
   async setAskSavedArchive(propertyId: string, artifactKey: string, archived: boolean): Promise<APIResponse<import('@/features/ask/types').AskSavedResolution>> {
     return this.request('/api/ask/saved/archive', { method: 'PATCH', body: { propertyId, artifactKey, archived } });
   }
+  // Federated search (FR-SEARCH-001..004). A POST so the text is in the body and never in a URL; the response is never cached.
+  async searchAsk(propertyId: string, query: string, options: { signal?: AbortSignal } = {}): Promise<APIResponse<import('@/features/ask/types').AskSearchResponse>> {
+    return this.request('/api/ask/search', { method: 'POST', body: { propertyId, query }, ...options });
+  }
   async getAskRecordIndex(propertyId: string, options: { signal?: AbortSignal } = {}): Promise<APIResponse<import('@/features/ask/types').AskRecordIndex>> {
     return this.request(`/api/ask/record-index?propertyId=${encodeURIComponent(propertyId)}`, options);
   }

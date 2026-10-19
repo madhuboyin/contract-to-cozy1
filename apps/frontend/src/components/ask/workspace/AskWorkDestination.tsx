@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api/client';
@@ -139,6 +139,16 @@ export function AskWorkDestination() {
       setBusyKey(null);
     }
   };
+
+  // A search result opens its exact work item: resolve it (reauthorize and reread) and enter it, or say what happened to it.
+  const openParam = searchParams.get('open')?.trim() ?? '';
+  const openedRef = useRef('');
+  useEffect(() => {
+    if (!openParam || !ready || openedRef.current === openParam) return;
+    openedRef.current = openParam;
+    void openReplacement(openParam);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openParam, ready]);
 
   const activeView = WORK_VIEWS.find((entry) => entry.id === view) ?? WORK_VIEWS[0];
   const filtered = Boolean(workType || status);

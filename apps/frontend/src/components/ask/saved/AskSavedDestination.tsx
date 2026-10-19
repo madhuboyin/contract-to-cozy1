@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api/client';
@@ -79,6 +79,16 @@ export function AskSavedDestination() {
     if (href) router.push(href);
     else setNotice(`${artifact.title}: ${artifact.reopenUnavailableReason ?? 'Ask cannot reopen this; its state is shown here.'}${artifact.summary ? ` ${artifact.summary}.` : ''}`);
   });
+
+  // A search result opens its exact saved artifact through the same reopen step, so a removed source says so.
+  const openParam = searchParams.get('open')?.trim() ?? '';
+  const openedRef = useRef('');
+  useEffect(() => {
+    if (!openParam || !ready || openedRef.current === openParam) return;
+    openedRef.current = openParam;
+    void openKey(openParam);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openParam, ready]);
 
   const toggleArchive = (artifact: AskSavedArtifact) => guard(artifact.artifactKey, async () => {
     const response = await api.setAskSavedArchive(scopedPropertyId as string, artifact.artifactKey, !artifact.archived.byYou);

@@ -1319,3 +1319,46 @@ export interface AskSavedResolution {
   artifact: AskSavedArtifact | null;
   message: string;
 }
+
+// Federated search (FR-SEARCH-001..004). Mirrors the backend `AskSearchResponse`.
+export type AskSearchGroupId = 'RECORD' | 'WORK' | 'SAVED' | 'HISTORY' | 'CAPABILITY';
+export type AskSearchDestination =
+  | { kind: 'RECORD'; sectionId: string; recordId: string }
+  | { kind: 'WORK'; workKey: string }
+  | { kind: 'SAVED'; artifactKey: string }
+  | { kind: 'HISTORY'; sessionId: string; executionId: string }
+  | { kind: 'CAPABILITY'; question: string; entryId: string };
+
+export interface AskSearchResult {
+  resultKey: string;
+  group: AskSearchGroupId;
+  providerId: string;
+  typeLabel: string;
+  title: string;
+  snippet: string | null;
+  propertyId: string;
+  status: string | null;
+  asOf: string | null;
+  freshness: string | null;
+  destination: AskSearchDestination;
+}
+
+export interface AskSearchProviderStatus {
+  providerId: string;
+  group: AskSearchGroupId;
+  label: string;
+  state: 'AVAILABLE' | 'UNAVAILABLE' | 'FAILED' | 'TIMED_OUT' | 'RESTRICTED' | 'NOT_APPLICABLE' | 'CONTEXT_REQUIRED';
+  reason: string | null;
+  returned: number;
+  more: boolean;
+}
+
+export interface AskSearchResponse {
+  contractVersion: 'ask-search-v1';
+  propertyId: string;
+  generatedAt: string;
+  partial: boolean;
+  totalResults: number;
+  groups: Array<{ group: AskSearchGroupId; label: string; results: AskSearchResult[]; more: boolean }>;
+  providers: AskSearchProviderStatus[];
+}

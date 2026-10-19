@@ -145,6 +145,8 @@ export function AskRecord() {
   const scopedPropertyId = requestedPropertyId || selectedPropertyId;
   const requestedSection = searchParams.get('section')?.trim() ?? '';
   const exportReview = searchParams.get('export') === 'review';
+  // A search result opens the exact record: its detail is shown first, open, above its section's list.
+  const focusedRecordId = searchParams.get('recordId')?.trim() ?? '';
   const collectionSection = !exportReview && Object.prototype.hasOwnProperty.call(PAGED_SECTIONS, requestedSection) ? requestedSection : null;
   const indexHref = `/dashboard/ask/record${scopedPropertyId ? `?propertyId=${encodeURIComponent(scopedPropertyId)}` : ''}`;
   const [index, setIndex] = useState<AskRecordIndex | null>(null);
@@ -211,6 +213,12 @@ export function AskRecord() {
           {exportReview && scopedPropertyId && !propertyMismatch ? (
             <RecordExportReview key={scopedPropertyId} propertyId={scopedPropertyId} backHref={indexHref} />
           ) : collectionSection && scopedPropertyId && !propertyMismatch ? (
+            <>
+            {focusedRecordId && DETAIL_ROW_LABEL[collectionSection] && (
+              <ul className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50/40" aria-label="Selected record" data-record-focused={focusedRecordId}>
+                <RecordRowDetail key={`${collectionSection}:${focusedRecordId}`} sectionId={collectionSection} recordId={focusedRecordId} propertyId={scopedPropertyId} label="the selected record" backTo={`/dashboard/ask/record?section=${collectionSection}`} defaultOpen />
+              </ul>
+            )}
             <RecordCollection<{ id: string }>
               key={`${scopedPropertyId}:${collectionSection}`}
               sectionId={collectionSection}
@@ -221,6 +229,7 @@ export function AskRecord() {
               emptyText={PAGED_SECTIONS[collectionSection].emptyText}
               renderRow={(row, recordDetail) => renderPagedRow(collectionSection, row, scopedPropertyId, recordDetail)}
             />
+            </>
           ) : !scopedPropertyId ? (
             <AskCollectionState kind="NOT_APPLICABLE" description="Select a home to browse its record." />
           ) : status === 'PAUSED' ? (

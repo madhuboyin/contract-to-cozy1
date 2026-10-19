@@ -5,10 +5,11 @@ import { workResumeHref } from '../work/workPresentation';
 import { api } from '@/lib/api/client';
 import type { AskWorkPage, AskWorkResolution, AskWorkRow } from '@/features/ask/types';
 
+let mockSearch = 'propertyId=home-1';
 const push = jest.fn();
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push }),
-  useSearchParams: () => new URLSearchParams('propertyId=home-1'),
+  useSearchParams: () => new URLSearchParams(mockSearch),
 }));
 jest.mock('@/lib/property/PropertyContext', () => ({
   usePropertyContext: () => ({ selectedPropertyId: 'home-1', setSelectedPropertyId: jest.fn() }),
@@ -53,6 +54,7 @@ const resolution = (overrides: Partial<AskWorkResolution> = {}): AskWorkResoluti
 
 describe('AskWorkDestination', () => {
   beforeEach(() => {
+    mockSearch = 'propertyId=home-1';
     for (const mock of [push, getWork, resolveWork, continueExecution, retryExecution, cancelExecution]) mock.mockReset();
   });
 
@@ -127,6 +129,22 @@ describe('AskWorkDestination', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Check what happened' }));
     await waitFor(() => expect(continueExecution).toHaveBeenCalledWith('e5', 'ASK_PAGE'));
     expect(push).toHaveBeenCalledWith('/dashboard/ask?propertyId=home-1&sessionId=s5&executionId=e5');
+  });
+
+  it('opens the exact work item a search result points at, through a fresh resolve, and says what happened if it is gone', async () => {
+    mockSearch = 'propertyId=home-1&open=project%3Apr1';
+    getWork.mockResolvedValue({ success: true, data: page([]) });
+    resolveWork.mockResolvedValue({ success: true, data: resolution() });
+    render(<AskWorkDestination />);
+    await waitFor(() => expect(resolveWork).toHaveBeenCalledWith('home-1', 'project:pr1'));
+    await waitFor(() => expect(push).toHaveBeenCalled());
+    expect(push.mock.calls[0][0]).toContain('launchEntityId=pr1');
+    push.mockReset(); resolveWork.mockReset();
+    resolveWork.mockResolvedValue({ success: true, data: resolution({ outcome: 'DELETED', row: null, message: 'This was removed.' }) });
+    mockSearch = 'propertyId=home-1&open=project%3Agone';
+    render(<AskWorkDestination />);
+    expect(await screen.findAllByText(/This was removed/)).not.toHaveLength(0);
+    expect(push).not.toHaveBeenCalled();
   });
 
   it('explains why work Ask cannot continue is shown without an action', async () => {

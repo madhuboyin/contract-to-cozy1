@@ -76,8 +76,8 @@ export function RecordDetailPanel({ detail, propertyId, backTo }: { detail: AskR
 }
 
 /** The "Details" disclosure under a Record row. Detail is read only when it is opened, so a collection page costs nothing extra. */
-export function RecordRowDetail({ sectionId, recordId, propertyId, label, backTo }: { sectionId: string; recordId: string; propertyId: string; label: string; backTo: string }) {
-  const [open, setOpen] = useState(false);
+export function RecordRowDetail({ sectionId, recordId, propertyId, label, backTo, defaultOpen = false }: { sectionId: string; recordId: string; propertyId: string; label: string; backTo: string; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen);
   const [state, setState] = useState<{ status: 'IDLE' | 'LOADING' | 'READY' | 'MISSING' | 'ERROR' | 'PAUSED'; detail: AskRecordDetail | null }>({ status: 'IDLE', detail: null });
   const [attempt, setAttempt] = useState(0);
   const panelId = useId();

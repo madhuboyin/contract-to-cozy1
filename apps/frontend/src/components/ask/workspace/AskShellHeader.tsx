@@ -2,7 +2,8 @@
 
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { Bell, Loader2, LogOut, Search, Settings, Sparkles, UserRound } from 'lucide-react';
+import { useState } from 'react';
+import { Bell, Command, Loader2, LogOut, Search, Settings, Sparkles, UserRound } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { CtcPropertySelector } from '@/components/layout/CtcPropertySelector';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -10,6 +11,7 @@ import { api } from '@/lib/api/client';
 import { useNotifications } from '@/lib/notifications/NotificationContext';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { useAskAccount } from './useAskAccount';
+import { AskSearchDialog } from '../search/AskSearchDialog';
 
 export function AskShellHeader() {
   const pathname = usePathname();
@@ -30,6 +32,7 @@ export function AskShellHeader() {
   const selected = properties.find((property) => property.id === selectedPropertyId);
   const address = selected?.address?.trim() || selected?.name?.trim() || 'Select a home';
   const accountLabel = accountName || accountEmail || 'Account';
+  const [searchOpen, setSearchOpen] = useState(false);
 
   const switchProperty = (propertyId: string) => {
     setSelectedPropertyId(propertyId);
@@ -60,8 +63,11 @@ export function AskShellHeader() {
       />
 
       <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-2">
-        <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('ctc-command-palette-open'))} aria-label="Search pages, actions, and tools" className="grid h-11 w-11 place-items-center rounded-xl text-slate-600 hover:bg-stone-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700 focus-visible:ring-offset-2">
+        <button type="button" onClick={() => setSearchOpen(true)} aria-label="Search your home" aria-haspopup="dialog" className="grid h-11 w-11 place-items-center rounded-xl text-slate-600 hover:bg-stone-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700 focus-visible:ring-offset-2">
           <Search className="h-5 w-5" aria-hidden="true" />
+        </button>
+        <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('ctc-command-palette-open'))} aria-label="Search pages, actions, and tools" className="grid h-11 w-11 place-items-center rounded-xl text-slate-600 hover:bg-stone-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700 focus-visible:ring-offset-2">
+          <Command className="h-5 w-5" aria-hidden="true" />
         </button>
         <Link href="/dashboard/notifications" aria-label={unreadCount > 0 ? `Notifications (${unreadCount} unread)` : 'Notifications'} className="relative grid h-11 w-11 place-items-center rounded-xl text-slate-600 hover:bg-stone-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700 focus-visible:ring-offset-2">
           <Bell className="h-5 w-5" aria-hidden="true" />
@@ -90,6 +96,7 @@ export function AskShellHeader() {
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+      <AskSearchDialog open={searchOpen} onOpenChange={setSearchOpen} propertyId={selectedPropertyId ?? undefined} />
     </header>
   );
 }

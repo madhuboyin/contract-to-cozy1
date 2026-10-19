@@ -6,8 +6,9 @@ import { PinnedResultsStrip } from '../PinnedResultsStrip';
 import { api } from '@/lib/api/client';
 import type { AskSavedArtifact, AskSavedPage, AskSavedResolution } from '@/features/ask/types';
 
+let mockSearch = 'propertyId=home-1';
 const push = jest.fn();
-jest.mock('next/navigation', () => ({ useRouter: () => ({ push }), useSearchParams: () => new URLSearchParams('propertyId=home-1') }));
+jest.mock('next/navigation', () => ({ useRouter: () => ({ push }), useSearchParams: () => new URLSearchParams(mockSearch) }));
 jest.mock('@/lib/property/PropertyContext', () => ({ usePropertyContext: () => ({ selectedPropertyId: 'home-1', setSelectedPropertyId: jest.fn() }) }));
 jest.mock('@/lib/api/client', () => ({ api: { getAskSavedPage: jest.fn(), resolveAskSavedArtifact: jest.fn(), setAskSavedArchive: jest.fn() } }));
 
@@ -32,7 +33,7 @@ const page = (rows: AskSavedArtifact[], overrides: Partial<AskSavedPage> = {}): 
 const resolution = (overrides: Partial<AskSavedResolution> = {}): AskSavedResolution => ({ contractVersion: 'ask-saved-v1', propertyId: 'home-1', artifactKey: 'comparison:q1', outcome: 'AVAILABLE', artifact: artifact(), message: 'Ready to open.', ...overrides });
 
 describe('AskSavedDestination', () => {
-  beforeEach(() => { for (const mock of [push, getSaved, resolveSaved, setArchive]) mock.mockReset(); });
+  beforeEach(() => { mockSearch = 'propertyId=home-1'; for (const mock of [push, getSaved, resolveSaved, setArchive]) mock.mockReset(); });
 
   it('lists saved results with kind, freshness, version and counts for the saved and archived lists', async () => {
     getSaved.mockResolvedValue({ success: true, data: page([artifact()]) });
@@ -89,6 +90,16 @@ describe('AskSavedDestination', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Open' }));
     expect(await screen.findByText(message)).toBeInTheDocument();
     expect(push).not.toHaveBeenCalled();
+  });
+
+  it('opens the exact saved artifact a search result points at, through the same reopen step', async () => {
+    mockSearch = 'propertyId=home-1&open=comparison%3Aq1';
+    getSaved.mockResolvedValue({ success: true, data: page([]) });
+    resolveSaved.mockResolvedValue({ success: true, data: resolution() });
+    render(<AskSavedDestination />);
+    await waitFor(() => expect(resolveSaved).toHaveBeenCalledWith('home-1', 'comparison:q1'));
+    await waitFor(() => expect(push).toHaveBeenCalled());
+    expect(push.mock.calls[0][0]).toContain('launchEntityId=q1');
   });
 
   it('keeps a replaced version visible, marked, with a way to see the newer one', async () => {
