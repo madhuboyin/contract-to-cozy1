@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Loader2, PlusCircle } from 'lucide-react';
 import { api } from '@/lib/api/client';
+import { FINANCING_OWNER_ONLY_MESSAGE, isFinancingOwnerOnlyError, readOwnerOnly } from '@/lib/financing/ownerOnly';
 import {
   MobilePageContainer,
   MobilePageIntro,
@@ -29,19 +30,21 @@ export default function FinancingHubPage() {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [showCalculator, setShowCalculator] = useState(false);
+  const [ownerOnly, setOwnerOnly] = useState(false);
 
   useEffect(() => {
     if (!propertyId) return;
     setLoading(true);
     Promise.all([
-      api.getFinancingProfile(propertyId).catch(() => null),
-      api.getEquityPosition(propertyId).catch(() => null),
+      readOwnerOnly(() => api.getFinancingProfile(propertyId)),
+      readOwnerOnly(() => api.getEquityPosition(propertyId)),
       api.listFinancingScenarios(propertyId).catch(() => []),
     ])
       .then(([p, e, s]) => {
-        setProfile(p);
-        setEquity(e);
+        setProfile(p.value);
+        setEquity(e.value);
         setScenarios(s);
+        setOwnerOnly(p.ownerOnly || e.ownerOnly);
       })
       .finally(() => setLoading(false));
   }, [propertyId]);
@@ -52,6 +55,10 @@ export default function FinancingHubPage() {
     try {
       const e = await api.refreshEquityPosition(propertyId);
       setEquity(e);
+    } catch (error) {
+      if (!isFinancingOwnerOnlyError(error)) throw error;
+      setEquity(null);
+      setOwnerOnly(true);
     } finally {
       setRefreshing(false);
     }
@@ -88,13 +95,19 @@ export default function FinancingHubPage() {
         </div>
       ) : (
         <>
-          <EquityCard
-            equity={equity}
-            profile={profile}
-            propertyId={propertyId}
-            onRefresh={handleRefreshEquity}
-            refreshing={refreshing}
-          />
+          {ownerOnly ? (
+            <p className="rounded-xl border border-slate-200 bg-white/80 px-5 py-4 text-sm text-slate-600" role="note" data-financing-owner-only>
+              {FINANCING_OWNER_ONLY_MESSAGE}
+            </p>
+          ) : (
+            <EquityCard
+              equity={equity}
+              profile={profile}
+              propertyId={propertyId}
+              onRefresh={handleRefreshEquity}
+              refreshing={refreshing}
+            />
+          )}
 
           {/* Calculator */}
           <div className="overflow-hidden rounded-2xl border border-white/70 bg-white/80 shadow-sm backdrop-blur dark:border-slate-700/60 dark:bg-slate-900/50">
@@ -149,14 +162,16 @@ export default function FinancingHubPage() {
             )}
           </div>
 
-          <div className="space-y-1 text-xs text-slate-500">
-            <Link
-              href={`/dashboard/properties/${propertyId}/tools/financing/profile`}
-              className="block underline"
-            >
-              Update mortgage details
-            </Link>
-          </div>
+          {!ownerOnly && (
+            <div className="space-y-1 text-xs text-slate-500">
+              <Link
+                href={`/dashboard/properties/${propertyId}/tools/financing/profile`}
+                className="block underline"
+              >
+                Update mortgage details
+              </Link>
+            </div>
+          )}
         </>
       )}
     </MobilePageContainer>

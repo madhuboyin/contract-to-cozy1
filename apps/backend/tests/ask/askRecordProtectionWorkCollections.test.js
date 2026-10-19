@@ -68,6 +68,7 @@ test('permit filters compose, a source cap is disclosed, and bad filters are rej
 });
 
 // ── projects ─────────────────────────────────────────────────────────────────────────────────────────────────────
+let cases = [];
 const project = (n, overrides = {}) => ({
   id: `prj-${String(n).padStart(3, '0')}`, name: `Project ${n}`, projectType: 'KITCHEN_REMODEL', status: 'IN_PROGRESS', contractorName: 'BuildCo', fulfillmentMode: 'CONTRACTOR',
   currentContractAmountCents: 1_000_000, paidToDateCents: 250_000, expectedEndDate: new Date('2027-01-01T00:00:00Z'), warrantyExpiresAt: null,
@@ -76,14 +77,14 @@ const project = (n, overrides = {}) => ({
 
 test('projects list active, then completed, then cancelled, newest first inside each, and page completely', async () => {
   const rows = [...Array.from({ length: 30 }, (_, index) => project(index + 1)), project(50, { status: 'COMPLETED' }), project(51, { status: 'CANCELLED' }), project(52, { status: 'DISPUTED' })];
-  const read = (query) => readProjectsPage('p1', query, async () => rows);
+  const read = (query) => readProjectsPage('p1', query, async () => rows, async () => cases);
   const first = await read({ limit: 25 });
   assert.equal(first.total, 33);
   const ids = await drain(read, { limit: 25 });
   assert.equal(ids.length, 33);
   assert.equal(new Set(ids).size, 33);
-  assert.deepEqual(ids.slice(-2), ['prj-050', 'prj-051']);
-  assert.equal(ids.includes('prj-052') && ids.indexOf('prj-052') < ids.indexOf('prj-050'), true, 'disputed is still active');
+  assert.deepEqual(ids.slice(-2), ['project:prj-050', 'project:prj-051']);
+  assert.equal(ids.includes('project:prj-052') && ids.indexOf('project:prj-052') < ids.indexOf('project:prj-050'), true, 'disputed is still active');
 });
 
 test('project rows show recorded amounts; an unknown contract has no remaining balance; DIY is named; filters compose', async () => {
@@ -93,21 +94,53 @@ test('project rows show recorded amounts; an unknown contract has no remaining b
     project(3, { status: 'COMPLETED', warrantyExpiresAt: new Date('2028-05-01T00:00:00Z'), paidToDateCents: 1_000_000, currentContractAmountCents: 1_000_000 }),
     project(4, { contractorName: null, fulfillmentMode: 'CONTRACTOR' }),
   ];
-  const read = (query) => readProjectsPage('p1', query, async () => rows);
+  const read = (query) => readProjectsPage('p1', query, async () => rows, async () => cases);
   const page = await read({});
   const byId = Object.fromEntries(page.rows.map((row) => [row.id, row]));
-  assert.deepEqual([byId['prj-001'].contractLabel, byId['prj-001'].paidLabel, byId['prj-001'].remainingLabel], ['$10,000', '$2,500', '$7,500']);
-  assert.deepEqual([byId['prj-002'].contractLabel, byId['prj-002'].remainingLabel, byId['prj-002'].providerLabel, byId['prj-002'].typeLabel], [null, null, 'DIY / household', 'Flooring']);
-  assert.equal(byId['prj-003'].remainingLabel, null);
-  assert.equal(byId['prj-003'].warrantyExpiresAt, '2028-05-01T00:00:00.000Z');
-  assert.equal(byId['prj-004'].providerLabel, null);
-  assert.deepEqual((await read({ filters: { type: 'FLOORING' } })).rows.map((row) => row.id), ['prj-002']);
-  assert.deepEqual((await read({ filters: { status: 'COMPLETED' } })).rows.map((row) => row.id), ['prj-003']);
+  assert.deepEqual([byId['project:prj-001'].contractLabel, byId['project:prj-001'].paidLabel, byId['project:prj-001'].remainingLabel], ['$10,000', '$2,500', '$7,500']);
+  assert.deepEqual([byId['project:prj-002'].contractLabel, byId['project:prj-002'].remainingLabel, byId['project:prj-002'].providerLabel, byId['project:prj-002'].typeLabel], [null, null, 'DIY / household', 'Flooring']);
+  assert.equal(byId['project:prj-003'].remainingLabel, null);
+  assert.equal(byId['project:prj-003'].warrantyExpiresAt, '2028-05-01T00:00:00.000Z');
+  assert.equal(byId['project:prj-004'].providerLabel, null);
+  assert.deepEqual((await read({ filters: { type: 'FLOORING' } })).rows.map((row) => row.id), ['project:prj-002']);
+  assert.deepEqual((await read({ filters: { status: 'COMPLETED' } })).rows.map((row) => row.id), ['project:prj-003']);
   assert.deepEqual((await read({ search: 'diy' })).rows.map((row) => row.id), []);
-  assert.deepEqual((await read({ search: 'project 4' })).rows.map((row) => row.id), ['prj-004']);
+  assert.deepEqual((await read({ search: 'project 4' })).rows.map((row) => row.id), ['project:prj-004']);
   for (const bad of [{ filters: { status: 'NOPE' } }, { filters: { type: 'NOPE' } }, { cursor: 'x' }]) {
     await assert.rejects(() => read(bad), (error) => error.code === 'ASK_INVALID_REQUEST', JSON.stringify(bad));
   }
+});
+
+const renovation = (n, overrides = {}) => ({
+  id: `rc-${n}`, name: `Case ${n}`, objective: 'Open up the kitchen', caseType: 'REMODEL', lifecycle: 'SCOPE_DEFINITION', targetBudgetCents: 4_000_000, targetEndDate: new Date('2027-06-01T00:00:00Z'),
+  updatedAt: new Date(Date.UTC(2026, 6, 1) - n * 86_400_000), ...overrides,
+});
+
+test('renovation cases list beside tracked projects with their own kind, stage, and target budget; the kind filter separates them', async () => {
+  cases = [renovation(1), renovation(2, { lifecycle: 'VERIFIED_COMPLETE' }), renovation(3, { lifecycle: 'CANCELLED' }), renovation(4, { caseType: 'ENERGY_UPGRADE', targetBudgetCents: null, targetEndDate: null })];
+  const rows = [project(1), project(2, { status: 'COMPLETED' })];
+  const read = (query) => readProjectsPage('p1', query, async () => rows, async () => cases);
+  try {
+    const page = await read({});
+    assert.equal(page.total, 6);
+    assert.deepEqual(page.rows.map((row) => [row.id, row.kind]).filter(([, kind]) => kind === 'RENOVATION_CASE').map(([id]) => id).sort(), ['renovation:rc-1', 'renovation:rc-2', 'renovation:rc-3', 'renovation:rc-4']);
+    const byId = Object.fromEntries(page.rows.map((row) => [row.id, row]));
+    assert.deepEqual([byId['renovation:rc-1'].typeLabel, byId['renovation:rc-1'].statusLabel, byId['renovation:rc-1'].contractLabel, byId['renovation:rc-1'].paidLabel], ['Remodel', 'Scope Definition', '$40,000', null]);
+    assert.deepEqual([byId['renovation:rc-1'].milestoneCount, byId['renovation:rc-1'].issueCount], [null, null]);
+    assert.deepEqual([byId['renovation:rc-4'].contractLabel, byId['renovation:rc-4'].typeLabel], [null, 'Energy upgrade']);
+    const order = page.rows.map((row) => row.id);
+    assert.ok(order.indexOf('renovation:rc-3') > order.indexOf('renovation:rc-2') && order.indexOf('renovation:rc-2') > order.indexOf('renovation:rc-4'), 'active, then completed, then cancelled');
+    assert.deepEqual((await read({ filters: { kind: 'RENOVATION_CASE' } })).rows.length, 4);
+    assert.deepEqual((await read({ filters: { kind: 'PROJECT' } })).rows.map((row) => row.kind), ['PROJECT', 'PROJECT']);
+    assert.deepEqual((await read({ filters: { status: 'VERIFIED_COMPLETE' } })).rows.map((row) => row.id), ['renovation:rc-2']);
+    assert.deepEqual((await read({ filters: { type: 'ENERGY_UPGRADE' } })).rows.map((row) => row.id), ['renovation:rc-4']);
+    assert.deepEqual((await read({ search: 'open up' })).rows.length, 4);
+    assert.deepEqual(page.filterOptions.map((filter) => filter.key), ['kind', 'status', 'type']);
+    await assert.rejects(() => read({ filters: { kind: 'NOPE' } }), (error) => error.code === 'ASK_INVALID_REQUEST');
+    // Both kinds page together without a collision on the cursor.
+    const ids = await drain(read, { limit: 2 });
+    assert.equal(new Set(ids).size, 6);
+  } finally { cases = []; }
 });
 
 // ── incidents and claims ─────────────────────────────────────────────────────────────────────────────────────────

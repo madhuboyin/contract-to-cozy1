@@ -13,6 +13,8 @@ import { MORTGAGE_STATUS_LABELS, MORTGAGE_TYPE_LABELS, SCENARIO_STATUS_LABELS } 
 import { evaluateCoverageRecord } from '../coverage/contextPolicy';
 import { permitTrackerService } from '../permitTracker.service';
 import { listProjects as listTrackedProjects } from '../projectTracker.service';
+import { listRenovationCases } from '../renovationCase.service';
+import { RENOVATION_CASE_TYPE_LABELS } from './support/renovationCaseStart';
 import { PERMIT_CATEGORY_LABELS, PERMIT_OFFICIAL_STATUS_LABELS, PERMIT_REPORTED_STATUS_LABELS, PERMIT_WORK_TYPE_LABELS } from './support/permitTrackerRead';
 import { PROJECT_STATUS_LABELS, PROJECT_TYPE_LABELS } from './handlers/projectTracker.handler';
 import { OPEN_CLAIM_STATUSES, OPEN_INCIDENT_STATUSES } from './handlers/claims.handler';
@@ -157,7 +159,7 @@ export async function readRoomsPage(propertyId: string, query: AskRecordCollecti
       take: limit + 1,
       select: {
         id: true, name: true, type: true, updatedAt: true, floorLevel: true, sortOrder: true,
-        _count: { select: { items: true, maintenanceTasks: { where: { status: { in: ['PENDING', 'IN_PROGRESS'] } } } } },
+        _count: { select: { items: { where: visibleInventoryItemWhere() }, maintenanceTasks: { where: { status: { in: ['PENDING', 'IN_PROGRESS'] } } } } },
       },
     }),
     prisma.inventoryRoom.count({ where: baseWhere }),
@@ -928,24 +930,32 @@ export async function readPermitsPage(
 }
 
 export interface AskRecordProjectRow {
+  /** Tracked projects and renovation cases are separate tables, so the key carries the kind (`project:<id>`, `renovation:<id>`). */
   id: string;
+  kind: 'PROJECT' | 'RENOVATION_CASE';
   name: string;
   typeLabel: string;
   status: string;
   statusLabel: string;
   /** The contractor, or "DIY / household", or null when no provider is recorded. */
   providerLabel: string | null;
+  /** A project's contract amount, or a renovation case's target budget. */
   contractLabel: string | null;
-  paidLabel: string;
+  paidLabel: string | null;
   remainingLabel: string | null;
   expectedEndDate: string | null;
   warrantyExpiresAt: string | null;
-  milestoneCount: number;
-  issueCount: number;
+  /** Null for a renovation case, which keeps no milestones or issues of its own. */
+  milestoneCount: number | null;
+  issueCount: number | null;
   askQuestion: null;
 }
 
 const PROJECT_STATUSES = Object.keys(PROJECT_STATUS_LABELS);
+/** Renovation case lifecycles that end the case; every other lifecycle is active work. */
+const RENOVATION_COMPLETED_LIFECYCLES = new Set(['VERIFIED_COMPLETE', 'COMPLETED_WITH_OPEN_ITEMS', 'HISTORICAL_RESEARCH']);
+const RENOVATION_LIFECYCLES = ['IDEA', 'FEASIBILITY', 'SCOPE_DEFINITION', 'REQUIREMENTS_RESEARCH', 'APPROVALS_IN_PROGRESS', 'PREPARING_TO_START', 'READY_TO_START', 'IN_EXECUTION', 'INSPECTION_AND_CLOSEOUT', 'VERIFIED_COMPLETE', 'ON_HOLD', 'CANCELLED', 'COMPLETED_WITH_OPEN_ITEMS', 'HISTORICAL_RESEARCH'];
+const PROJECT_KINDS = ['PROJECT', 'RENOVATION_CASE'] as const;
 const ProjectCursorSchema = z.object({ g: z.number().int(), c: z.number(), i: z.string() });
 const projectMoney = (cents: number | null | undefined) => (cents == null ? null : `$${Math.round(cents / 100).toLocaleString('en-US')}`);
 
@@ -958,21 +968,25 @@ export async function readProjectsPage(
   propertyId: string,
   query: AskRecordCollectionQuery,
   list: typeof listTrackedProjects = listTrackedProjects,
+  listCases: typeof listRenovationCases = listRenovationCases,
 ): Promise<AskRecordCollectionPage<AskRecordProjectRow>> {
   const limit = clampLimit(query.limit);
   const search = cleanSearch(query.search);
   const status = query.filters?.status?.trim() || null;
   const type = query.filters?.type?.trim() || null;
-  if (status && !PROJECT_STATUSES.includes(status)) throw new InvalidCollectionQueryError('status filter is not valid.');
-  if (type && !(type in PROJECT_TYPE_LABELS)) throw new InvalidCollectionQueryError('type filter is not valid.');
+  const kind = query.filters?.kind?.trim() || null;
+  if (status && !PROJECT_STATUSES.includes(status) && !RENOVATION_LIFECYCLES.includes(status)) throw new InvalidCollectionQueryError('status filter is not valid.');
+  if (type && !(type in PROJECT_TYPE_LABELS) && !(type in RENOVATION_CASE_TYPE_LABELS)) throw new InvalidCollectionQueryError('type filter is not valid.');
+  if (kind && !(PROJECT_KINDS as readonly string[]).includes(kind)) throw new InvalidCollectionQueryError('kind filter is not valid.');
   const after = decodeCursor(query.cursor, ProjectCursorSchema);
 
-  const projects = await list(propertyId);
-  const entries = projects.map((project) => {
+  const [projects, cases] = await Promise.all([list(propertyId), listCases(propertyId)]);
+  const projectEntries = projects.map((project) => {
     const group = project.status === 'COMPLETED' ? 1 : project.status === 'CANCELLED' ? 2 : 0;
     const contract = project.currentContractAmountCents;
     const row: AskRecordProjectRow = {
-      id: project.id,
+      id: `project:${project.id}`,
+      kind: 'PROJECT',
       name: project.name,
       typeLabel: PROJECT_TYPE_LABELS[project.projectType] ?? readableEnum(project.projectType) ?? project.projectType,
       status: project.status,
@@ -988,10 +1002,33 @@ export async function readProjectsPage(
       askQuestion: null,
     };
     return { row, group, type: String(project.projectType), key: new Date(project.createdAt).getTime(), haystack: `${project.name} ${project.contractorName ?? ''}`.toLowerCase() };
-  }).sort((left, right) => left.group - right.group || right.key - left.key || (left.row.id < right.row.id ? -1 : left.row.id > right.row.id ? 1 : 0));
+  });
+  // Renovation cases (archived ones are not listed, as on the Renovation page): active until a completed lifecycle or cancellation.
+  const caseEntries = cases.map((renovation) => {
+    const group = renovation.lifecycle === 'CANCELLED' ? 2 : RENOVATION_COMPLETED_LIFECYCLES.has(renovation.lifecycle) ? 1 : 0;
+    const row: AskRecordProjectRow = {
+      id: `renovation:${renovation.id}`,
+      kind: 'RENOVATION_CASE',
+      name: renovation.name,
+      typeLabel: RENOVATION_CASE_TYPE_LABELS[renovation.caseType] ?? readableEnum(renovation.caseType) ?? renovation.caseType,
+      status: renovation.lifecycle,
+      statusLabel: readableEnum(renovation.lifecycle) ?? renovation.lifecycle,
+      providerLabel: null,
+      contractLabel: projectMoney(renovation.targetBudgetCents),
+      paidLabel: null,
+      remainingLabel: null,
+      expectedEndDate: renovation.targetEndDate ? new Date(renovation.targetEndDate).toISOString() : null,
+      warrantyExpiresAt: null,
+      milestoneCount: null,
+      issueCount: null,
+      askQuestion: null,
+    };
+    return { row, group, type: String(renovation.caseType), key: new Date(renovation.updatedAt).getTime(), haystack: `${renovation.name} ${renovation.objective ?? ''}`.toLowerCase() };
+  });
+  const entries = [...projectEntries, ...caseEntries].sort((left, right) => left.group - right.group || right.key - left.key || (left.row.id < right.row.id ? -1 : left.row.id > right.row.id ? 1 : 0));
 
   const needle = search?.toLowerCase() ?? null;
-  const matching = entries.filter((entry) => (!status || entry.row.status === status) && (!type || entry.type === type) && (!needle || entry.haystack.includes(needle)));
+  const matching = entries.filter((entry) => (!status || entry.row.status === status) && (!type || entry.type === type) && (!kind || entry.row.kind === kind) && (!needle || entry.haystack.includes(needle)));
   const remaining = after
     ? matching.filter((entry) => entry.group > after.g || (entry.group === after.g && (entry.key < after.c || (entry.key === after.c && entry.row.id > after.i))))
     : matching;
@@ -999,8 +1036,11 @@ export async function readProjectsPage(
   const last = page[page.length - 1];
   const nextCursor = remaining.length > limit && last ? encodeCursor({ g: last.group, c: last.key, i: last.row.id }) : null;
 
-  const statusOptions = PROJECT_STATUSES.filter((value) => entries.some((entry) => entry.row.status === value) || value === status).map((value) => ({ value, label: PROJECT_STATUS_LABELS[value] }));
-  const typeOptions = Object.keys(PROJECT_TYPE_LABELS).filter((value) => entries.some((entry) => entry.type === value) || value === type).map((value) => ({ value, label: PROJECT_TYPE_LABELS[value] }));
+  const statusLabelOf = (value: string) => PROJECT_STATUS_LABELS[value] ?? readableEnum(value) ?? value;
+  const typeLabelOf = (value: string) => PROJECT_TYPE_LABELS[value] ?? RENOVATION_CASE_TYPE_LABELS[value] ?? readableEnum(value) ?? value;
+  const statusOptions = [...new Set([...PROJECT_STATUSES, ...RENOVATION_LIFECYCLES])].filter((value) => entries.some((entry) => entry.row.status === value) || value === status).map((value) => ({ value, label: statusLabelOf(value) }));
+  const typeOptions = [...new Set([...Object.keys(PROJECT_TYPE_LABELS), ...Object.keys(RENOVATION_CASE_TYPE_LABELS)])].filter((value) => entries.some((entry) => entry.type === value) || value === type).map((value) => ({ value, label: typeLabelOf(value) }));
+  const kindOptions = [{ value: 'PROJECT', label: 'Tracked projects' }, { value: 'RENOVATION_CASE', label: 'Renovation cases' }].filter((option) => entries.some((entry) => entry.row.kind === option.value) || option.value === kind);
   const newest = entries.map((entry) => entry.key).sort((a, b) => b - a)[0];
 
   return {
@@ -1015,8 +1055,9 @@ export async function readProjectsPage(
     truncated: nextCursor !== null,
     notice: null,
     sort: { key: 'status', label: 'Active first, then newest' },
-    query: { search, filters: Object.fromEntries(Object.entries({ status, type }).filter(([, value]) => value)) as Record<string, string> },
+    query: { search, filters: Object.fromEntries(Object.entries({ status, type, kind }).filter(([, value]) => value)) as Record<string, string> },
     filterOptions: [
+      ...(kindOptions.length > 1 ? [{ key: 'kind', label: 'Kind', options: kindOptions }] : []),
       ...(statusOptions.length > 1 ? [{ key: 'status', label: 'Status', options: statusOptions }] : []),
       ...(typeOptions.length > 1 ? [{ key: 'type', label: 'Type', options: typeOptions }] : []),
     ],

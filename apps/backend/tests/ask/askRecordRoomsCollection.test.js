@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 require('ts-node/register');
 
 const { prisma } = require('../../src/lib/prisma.ts');
+const { visibleInventoryItemWhere } = require('../../src/services/riskAssetApplicability.ts');
 const {
   ASK_RECORD_COLLECTION_READERS,
   ASK_RECORD_COLLECTION_MAX_LIMIT,
@@ -123,6 +124,7 @@ test('rows carry counts, floor, an Ask question, and the property scope is alway
   assert.equal(page.total, 1);
   assert.deepEqual(page.rows[0], { id: 'room-001', name: 'Kitchen', type: 'Kitchen', floorLevel: 1, itemCount: 7, openTaskCount: 2, updatedAt: '2026-10-01T12:00:00.000Z', askQuestion: 'Show me the items in my Kitchen.' });
   assert.equal(state.findManyArgs[0].where.propertyId, 'p1');
+  assert.deepEqual(state.findManyArgs[0].select._count.select.items, { where: visibleInventoryItemWhere() }, 'a room counts only the inventory the Record shows');
 });
 
 test('limits are clamped and malformed queries are rejected', async () => {

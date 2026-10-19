@@ -54,6 +54,8 @@ import {
   type SavedRefinanceLoanEstimateComparison,
 } from './mortgageRefinanceRadarApi';
 import type { PropertyFinancingProfile } from '@/types';
+import { FINANCING_OWNER_ONLY_MESSAGE, isFinancingOwnerOnlyError, readOwnerOnly } from '@/lib/financing/ownerOnly';
+
 import { Button } from '@/components/ui/button';
 import RouteStateCard from '@/components/system/RouteStateCard';
 import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
@@ -1910,7 +1912,7 @@ function MortgageSetupForm({
       });
       await onSaved();
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Failed to save mortgage details.');
+      setError(isFinancingOwnerOnlyError(e) ? FINANCING_OWNER_ONLY_MESSAGE : e instanceof Error ? e.message : 'Failed to save mortgage details.');
       setSaving(false);
     }
   }
@@ -2450,6 +2452,7 @@ export default function MortgageRefinanceRadarClient() {
   const [data, setData] = useState<RadarStatusDTO | null>(null);
   const [rateData, setRateData] = useState<RateHistoryDTO | null>(null);
   const [mortgageProfile, setMortgageProfile] = useState<PropertyFinancingProfile | null>(null);
+  const [mortgageOwnerOnly, setMortgageOwnerOnly] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const reqRef = useRef(0);
@@ -2462,12 +2465,13 @@ export default function MortgageRefinanceRadarClient() {
     setRateData(null);
     try {
       const reqId = ++reqRef.current;
-      const [initialStatus, rates, profile] = await Promise.all([
+      const [initialStatus, rates, profileRead] = await Promise.all([
         getRadarStatus(propertyId),
         getRateHistory(propertyId, 52).catch(() => null),
-        getFinancingMortgageProfile(propertyId).catch(() => null),
+        readOwnerOnly(() => getFinancingMortgageProfile(propertyId)),
       ]);
       if (reqId !== reqRef.current) return;
+      const profile = profileRead.value;
 
       const hasCompleteCanonicalMortgage = Boolean(
         profile &&
@@ -2487,6 +2491,7 @@ export default function MortgageRefinanceRadarClient() {
       setData(status);
       setRateData(rates);
       setMortgageProfile(profile);
+      setMortgageOwnerOnly(profileRead.ownerOnly);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to load radar data');
     } finally {
@@ -2625,11 +2630,19 @@ export default function MortgageRefinanceRadarClient() {
         (data as RadarStatusUnavailable).reason === 'MISSING_MORTGAGE_DATA'
           ? (
             <div className="space-y-4">
-              <MortgageSetupForm
-                propertyId={propertyId}
-                initial={mortgageProfile}
-                onSaved={handleEvaluate}
-              />
+              {mortgageOwnerOnly ? (
+                <GlassCard>
+                  <p className="p-5 text-sm text-slate-600 dark:text-slate-300 sm:p-6" role="note" data-financing-owner-only>
+                    {FINANCING_OWNER_ONLY_MESSAGE}
+                  </p>
+                </GlassCard>
+              ) : (
+                <MortgageSetupForm
+                  propertyId={propertyId}
+                  initial={mortgageProfile}
+                  onSaved={handleEvaluate}
+                />
+              )}
               {rateData && rateData.snapshots.length > 0 && (
                 <MortgageRateHistoryChart
                   rateData={rateData}
@@ -2700,7 +2713,7 @@ export default function MortgageRefinanceRadarClient() {
               propertyId={propertyId}
               onFinancingUpdated={async () => {
                 await handleEvaluate();
-                setMortgageProfile(await getFinancingMortgageProfile(propertyId).catch(() => null));
+                setMortgageProfile((await readOwnerOnly(() => getFinancingMortgageProfile(propertyId))).value);
               }}
             />
             <RefinanceFeedbackCard

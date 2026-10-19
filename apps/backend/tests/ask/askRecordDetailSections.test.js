@@ -152,10 +152,25 @@ test('a completed or cancelled project cannot be updated through Ask, and a proj
   const project = { name: 'New roof', projectType: 'ROOFING', status: 'COMPLETED', sourceType: 'MANUAL', fulfillmentMode: 'DIY', contractorName: null, description: null, startDate: day(-200), expectedEndDate: null, actualEndDate: day(-100), currentContractAmountCents: null, paidToDateCents: 5000, warrantyExpiresAt: null, verifiedAt: null, createdAt: day(-210), updatedAt: day(-100), inventoryItem: null, warranty: null, _count: { milestones: 1, issues: 0, payments: 2, changeOrders: 0 } };
   const restore = stub(prisma, 'projectRecord', { findFirst: async () => project });
   try {
-    const detail = await read('projects-renovations', 'OWNER', 'pj1');
+    const detail = await read('projects-renovations', 'OWNER', 'project:pj1');
     assert.equal(detail.facts.find((f) => f.label === 'Remaining').value, 'Not recorded');
     assert.equal(detail.facts.find((f) => f.label === 'Who does the work').value, 'DIY / household');
     assert.equal(detail.corrections[0].state, 'UNAVAILABLE');
+  } finally { restore(); }
+});
+
+test('a renovation case opens with its lifecycle history, names no Ask command that changes it, and is not found once archived or under another id', async () => {
+  let args;
+  const restore = stub(prisma, 'renovationCase', { findFirst: async (a) => { args = a; return a.where.id === 'rc1' ? { name: 'Kitchen remodel', objective: 'Open it up', caseType: 'REMODEL', lifecycle: 'SCOPE_DEFINITION', outcomeStatus: 'NOT_STARTED', governanceTier: 'STANDARD', responsibilityContext: 'HOMEOWNER', targetBudgetCents: 4_000_000, targetStartDate: null, targetEndDate: day(200), entryPoint: 'ASK', sourceType: null, createdAt: day(-40), updatedAt: day(-2), cancelReason: null, executionProject: null, _count: { links: 2, participants: 1 }, events: [{ eventType: 'LIFECYCLE_CHANGED', fromLifecycle: 'IDEA', toLifecycle: 'SCOPE_DEFINITION', occurredAt: day(-2) }] } : null; } });
+  try {
+    const detail = await read('projects-renovations', 'CONTRIBUTOR', 'renovation:rc1');
+    assert.equal(args.where.archivedAt, null);
+    assert.equal(detail.facts.find((f) => f.label === 'Target budget').value, '$40,000');
+    assert.deepEqual(detail.provenance.history.entries.map((e) => e.label), ['Lifecycle Changed: Idea to Scope Definition']);
+    assert.deepEqual(detail.provenance.related.records.map((r) => r.kindLabel), ['Case links', 'People on the case']);
+    assert.deepEqual([detail.corrections[0].operationId, detail.corrections[0].state], [null, 'UNAVAILABLE']);
+    await assert.rejects(() => read('projects-renovations', 'OWNER', 'renovation:other'), AskRecordNotFoundError);
+    await assert.rejects(() => read('projects-renovations', 'OWNER', 'rc1'), AskRecordNotFoundError, 'an unprefixed id is neither kind');
   } finally { restore(); }
 });
 

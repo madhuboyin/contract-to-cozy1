@@ -1,8 +1,8 @@
 // Coverage Intelligence inside Ask (register P0 "Coverage Intelligence"; FRD v1.317): the policy review read, starting a comparison, and recording the
 // keep / change / shop / defer decision. Pure: messages, action ids, the decision form and its validation.
 //
-// Owner-only, as coverage comparison and review are: both services authorize the home's primary owner, so Ask discloses that instead of offering a form
-// it would refuse. A decision to CHANGE needs the option chosen, and, unless that option is equivalent, the reason the tradeoff is accepted, exactly as the
+// Household-role gated, as the coverage services are (services/coverageAccess.ts): review, comparison, and quotes are CONTRIBUTOR; the final decision is
+// OWNER, and the answer-trust policy holds that action to OWNER too (askAudiencePresentation). A decision to CHANGE needs the option chosen, and, unless that option is equivalent, the reason the tradeoff is accepted, exactly as the
 // canonical service requires. A quote is added from a document on file (support/coverageQuoteCommand.ts); adding another verified policy term is not offered.
 import { z } from 'zod';
 

@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { Loader2, PlusCircle } from 'lucide-react';
 import { api } from '@/lib/api/client';
+import { FINANCING_OWNER_ONLY_MESSAGE, isFinancingOwnerOnlyError, readOwnerOnly } from '@/lib/financing/ownerOnly';
 import { Button } from '@/components/ui/button';
 import HomeToolHeader from '@/components/tools/HomeToolHeader';
 import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
@@ -29,20 +30,22 @@ export default function FinancingToolClient() {
   const [refreshing, setRefreshing] = useState(false);
   const [showCalculator, setShowCalculator] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [ownerOnly, setOwnerOnly] = useState(false);
 
   useEffect(() => {
     if (!propertyId) return;
     track('workflow_started', { tool: 'financing', propertyId, entryPoint: 'direct' });
     setLoading(true);
     Promise.all([
-      api.getFinancingProfile(propertyId).catch(() => null),
-      api.getEquityPosition(propertyId).catch(() => null),
+      readOwnerOnly(() => api.getFinancingProfile(propertyId)),
+      readOwnerOnly(() => api.getEquityPosition(propertyId)),
       api.listFinancingScenarios(propertyId).catch(() => []),
     ])
       .then(([p, e, s]) => {
-        setProfile(p);
-        setEquity(e);
+        setProfile(p.value);
+        setEquity(e.value);
         setScenarios(s);
+        setOwnerOnly(p.ownerOnly || e.ownerOnly);
       })
       .catch(() => setError('Failed to load financing data'))
       .finally(() => setLoading(false));
@@ -54,6 +57,10 @@ export default function FinancingToolClient() {
     try {
       const e = await api.refreshEquityPosition(propertyId);
       setEquity(e);
+    } catch (refreshError) {
+      if (!isFinancingOwnerOnlyError(refreshError)) throw refreshError;
+      setEquity(null);
+      setOwnerOnly(true);
     } finally {
       setRefreshing(false);
     }
@@ -97,13 +104,19 @@ export default function FinancingToolClient() {
       ) : (
         <div className="space-y-6">
           {/* Equity card */}
-          <EquityCard
-            equity={equity}
-            profile={profile}
-            propertyId={propertyId}
-            onRefresh={handleRefreshEquity}
-            refreshing={refreshing}
-          />
+          {ownerOnly ? (
+            <p className="rounded-xl border border-slate-200 bg-white/80 px-5 py-4 text-sm text-slate-600" role="note" data-financing-owner-only>
+              {FINANCING_OWNER_ONLY_MESSAGE}
+            </p>
+          ) : (
+            <EquityCard
+              equity={equity}
+              profile={profile}
+              propertyId={propertyId}
+              onRefresh={handleRefreshEquity}
+              refreshing={refreshing}
+            />
+          )}
 
           {/* Calculator */}
           <div className="overflow-hidden rounded-2xl border border-white/70 bg-white/80 shadow-sm backdrop-blur dark:border-slate-700/60 dark:bg-slate-900/50">
@@ -169,14 +182,16 @@ export default function FinancingToolClient() {
           </div>
 
           {/* Quick links */}
-          <div className="space-y-1 text-xs text-slate-500">
-            <a
-              href={`/dashboard/properties/${propertyId}/tools/financing/profile`}
-              className="block underline"
-            >
-              Update mortgage details
-            </a>
-          </div>
+          {!ownerOnly && (
+            <div className="space-y-1 text-xs text-slate-500">
+              <a
+                href={`/dashboard/properties/${propertyId}/tools/financing/profile`}
+                className="block underline"
+              >
+                Update mortgage details
+              </a>
+            </div>
+          )}
         </div>
       )}
     </ToolWorkspaceTemplate>

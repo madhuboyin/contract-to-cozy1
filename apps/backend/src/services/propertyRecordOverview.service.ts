@@ -52,7 +52,7 @@ async function loadPropertyRecordOverview(propertyId: string, userId: string, ac
       // still open (pending or in progress, as Maintenance counts them). Additive for the property page.
       select: {
         id: true, name: true, type: true, updatedAt: true, floorLevel: true,
-        _count: { select: { items: true, maintenanceTasks: { where: { status: { in: ['PENDING', 'IN_PROGRESS'] } } } } },
+        _count: { select: { items: { where: visibleInventoryItemWhere() }, maintenanceTasks: { where: { status: { in: ['PENDING', 'IN_PROGRESS'] } } } } },
       },
     })),
     // Visible items only, as every other canonical inventory read counts them (inferred-not-present risk assets are not inventory).

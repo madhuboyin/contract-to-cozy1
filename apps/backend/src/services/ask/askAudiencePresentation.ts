@@ -3,6 +3,7 @@ import type { AskPresentationBlock } from '../../productFramework/ask/ask.contra
 import type { PropertyJourneyContext } from '../skills/context/propertyJourneyContext.contract';
 import type { AskOperationResult } from './askOperationRegistry';
 import { HOME_JOURNEY_SET_MESSAGE } from './support/homeSettingsConstants';
+import { COVERAGE_COMMAND_ACTION_IDS, COVERAGE_COMMAND_KIND_ROLE_FLOORS, type CoverageCommandKind } from './support/coverageCommand';
 
 type AskAction = Extract<AskPresentationBlock, { type: 'SUMMARY' }>['actions'][number];
 
@@ -12,7 +13,20 @@ const MUTATION_ACTION_PATTERN = /^(?:abandon|add|archive|cancel|change|check (?:
 const MUTATION_SUGGESTION_PATTERN = /^(?:(?:can|could|would) you |please |help me |i want to )?(?:add|archive|cancel|change|complete|confirm|create|delete|disable|edit|enable|forget|invite|mark|monitor|notify|recalculate|record|remove|report|reschedule|run|save|schedule|send|set|start|submit|unlink|update|upload)\b/i;
 const OWNER_ONLY_ACTION_PATTERN = /^(?:invite|manage household|add member|remove member|change owner|update shared profile)\b/i;
 
+const ROLE_RANK: Record<HouseholdRole, number> = { VIEWER: 0, CONTRIBUTOR: 1, OWNER: 2 };
+
+/**
+ * Action-level role floors, for an action whose floor is higher than its operation's. Derived from the command's own declared floors, never
+ * restated: recording the final coverage decision is OWNER although the comparison operation that offers it is CONTRIBUTOR. The label-pattern
+ * checks below cannot express that, and the handler and command enforce it independently; this keeps the policy layer in agreement.
+ */
+const ACTION_ROLE_FLOORS: Readonly<Record<string, HouseholdRole>> = Object.freeze(Object.fromEntries(
+  (Object.keys(COVERAGE_COMMAND_KIND_ROLE_FLOORS) as CoverageCommandKind[]).map((kind) => [COVERAGE_COMMAND_ACTION_IDS[kind], COVERAGE_COMMAND_KIND_ROLE_FLOORS[kind]]),
+));
+
 export function isAskActionAllowedForHouseholdRole(action: AskAction, householdRole: HouseholdRole): boolean {
+  const floor = ACTION_ROLE_FLOORS[action.id];
+  if (floor && ROLE_RANK[householdRole] < ROLE_RANK[floor]) return false;
   const actionId = action.id.replace(/[-_]/g, ' ');
   if (householdRole === 'VIEWER' && (MUTATION_ACTION_PATTERN.test(actionId) || MUTATION_ACTION_PATTERN.test(action.label))) return false;
   if (householdRole === 'CONTRIBUTOR' && (OWNER_ONLY_ACTION_PATTERN.test(actionId) || OWNER_ONLY_ACTION_PATTERN.test(action.label))) return false;

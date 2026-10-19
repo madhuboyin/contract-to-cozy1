@@ -28,23 +28,33 @@ export function RecordPermitRow({ permit }: { permit: AskRecordPermitRow }) {
 }
 
 export function RecordProjectRow({ project }: { project: AskRecordProjectRow }) {
-  const facts = [
-    project.typeLabel,
-    project.providerLabel ?? 'Provider not recorded',
-    project.contractLabel ? `Contract ${project.contractLabel}` : 'Contract amount not set',
-    `Paid ${project.paidLabel}`,
-    project.remainingLabel ? `Remaining ${project.remainingLabel}` : null,
-    project.status !== 'COMPLETED' && when(project.expectedEndDate) ? `Due ${when(project.expectedEndDate)}` : null,
-    project.status === 'COMPLETED' && when(project.warrantyExpiresAt) ? `Warranty expires ${when(project.warrantyExpiresAt)}` : null,
-  ].filter(Boolean);
-  const caution = project.status === 'DISPUTED' || project.issueCount > 0;
+  const isCase = project.kind === 'RENOVATION_CASE';
+  const finished = project.status === 'COMPLETED' || project.status === 'VERIFIED_COMPLETE';
+  const facts = isCase
+    ? [
+      'Renovation case',
+      project.typeLabel,
+      project.contractLabel ? `Target budget ${project.contractLabel}` : 'Target budget not set',
+      !finished && when(project.expectedEndDate) ? `Target finish ${when(project.expectedEndDate)}` : null,
+    ].filter(Boolean)
+    : [
+      project.typeLabel,
+      project.providerLabel ?? 'Provider not recorded',
+      project.contractLabel ? `Contract ${project.contractLabel}` : 'Contract amount not set',
+      `Paid ${project.paidLabel ?? '$0'}`,
+      project.remainingLabel ? `Remaining ${project.remainingLabel}` : null,
+      project.status !== 'COMPLETED' && when(project.expectedEndDate) ? `Due ${when(project.expectedEndDate)}` : null,
+      project.status === 'COMPLETED' && when(project.warrantyExpiresAt) ? `Warranty expires ${when(project.warrantyExpiresAt)}` : null,
+    ].filter(Boolean);
+  const issues = project.issueCount ?? 0;
+  const caution = project.status === 'DISPUTED' || issues > 0;
   return (
     <AskCompactRow className="border-b border-slate-200 last:border-b-0" data-record-row={project.id}>
       <div className="min-w-0">
         <p className="text-sm font-semibold text-slate-950">{project.name}</p>
         <p className="mt-0.5 text-xs text-slate-500">{facts.join(' · ')}</p>
         <p className={`mt-1 text-xs font-semibold ${caution ? 'text-amber-800' : 'text-slate-700'}`}>
-          {[project.statusLabel, `${project.milestoneCount} ${project.milestoneCount === 1 ? 'milestone' : 'milestones'}`, project.issueCount ? `${project.issueCount} ${project.issueCount === 1 ? 'issue' : 'issues'}` : null].filter(Boolean).join(' · ')}
+          {[project.statusLabel, project.milestoneCount == null ? null : `${project.milestoneCount} ${project.milestoneCount === 1 ? 'milestone' : 'milestones'}`, issues ? `${issues} ${issues === 1 ? 'issue' : 'issues'}` : null].filter(Boolean).join(' · ')}
         </p>
       </div>
     </AskCompactRow>

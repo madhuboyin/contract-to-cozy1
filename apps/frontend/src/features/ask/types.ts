@@ -1018,19 +1018,21 @@ export interface AskRecordPermitRow {
 }
 
 export interface AskRecordProjectRow {
+  /** `project:<id>` or `renovation:<id>`: tracked projects and renovation cases are separate tables. */
   id: string;
+  kind: 'PROJECT' | 'RENOVATION_CASE';
   name: string;
   typeLabel: string;
   status: string;
   statusLabel: string;
   providerLabel: string | null;
   contractLabel: string | null;
-  paidLabel: string;
+  paidLabel: string | null;
   remainingLabel: string | null;
   expectedEndDate: string | null;
   warrantyExpiresAt: string | null;
-  milestoneCount: number;
-  issueCount: number;
+  milestoneCount: number | null;
+  issueCount: number | null;
   askQuestion: null;
 }
 

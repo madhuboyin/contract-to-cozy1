@@ -64,15 +64,17 @@ export async function buildAuthoritativeReportSnapshot(args: {
   const { context } = planning;
 
   // Only the selected sections are read, so an unselected section's data never enters the snapshot, the PDF, or the shared copy. Inventory
-  // is read through the same visibility rule the Record and Ask apply (inferred-not-present and risk-only rows are not inventory).
+  // is read through the same visibility rule the Record and Ask apply (inferred-not-present and risk-only rows are not inventory), documents
+  // attached to an exported item, policy, or warranty exclude soft-deleted files, and maintenance is completed history only.
   const property = await prisma.property.findUnique({
     where: { id: propertyId },
     include: {
       ...(has('rooms') ? { inventoryRooms: true } : {}),
-      ...(has('inventory') ? { inventoryItems: { where: visibleInventoryItemWhere(), include: { room: true, documents: true } } } : {}),
-      ...(has('coverage') ? { insurancePolicies: { include: { documents: true } } } : {}),
-      ...(has('warranties') ? { warranties: { include: { documents: true } } } : {}),
-      ...(has('maintenance-history') ? { maintenanceTasks: true } : {}),
+      ...(has('inventory') ? { inventoryItems: { where: visibleInventoryItemWhere(), include: { room: true, documents: { where: { deletedAt: null } } } } } : {}),
+      ...(has('coverage') ? { insurancePolicies: { include: { documents: { where: { deletedAt: null } } } } } : {}),
+      ...(has('warranties') ? { warranties: { include: { documents: { where: { deletedAt: null } } } } } : {}),
+      // History means completed work, the same rows the Record's maintenance history lists.
+      ...(has('maintenance-history') ? { maintenanceTasks: { where: { status: 'COMPLETED' as const } } } : {}),
     },
   }) as any;
 

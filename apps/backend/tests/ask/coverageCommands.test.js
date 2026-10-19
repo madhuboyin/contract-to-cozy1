@@ -225,11 +225,17 @@ test('the comparison answer offers Start (empty state) and Record my decision (o
   assert.match(source, /COVERAGE_COMMAND_ACTION_IDS\.START/);
   assert.match(source, /COVERAGE_COMMAND_ACTION_IDS\.DECIDE/);
   assert.match(source, /canChange && !latestDecision && comparison\.status === 'DRAFT'/);
-  const applicable = (id, operationId) => isAskActionApplicable({
+  const applicable = (id, operationId, householdRole = 'CONTRIBUTOR') => isAskActionApplicable({
     action: { id, label: 'x', interactionType: 'START_WORKFLOW', message: 'm', operationId, style: 'PRIMARY' },
-    operationId, propertyId: 'prop-1', householdRole: 'CONTRIBUTOR', authoritativeSourceAvailable: true,
+    operationId, propertyId: 'prop-1', householdRole, authoritativeSourceAvailable: true,
   });
-  for (const id of ['coverage-start-comparison', 'coverage-record-decision']) assert.equal(applicable(id, 'COVERAGE_COMPARISON_STATUS'), true, id);
+  // The policy layer agrees with the command: the final decision is OWNER, the rest of the comparison is CONTRIBUTOR.
+  assert.equal(applicable('coverage-start-comparison', 'COVERAGE_COMPARISON_STATUS'), true);
+  assert.equal(applicable('coverage-add-quote', 'COVERAGE_COMPARISON_STATUS'), true);
+  assert.equal(applicable('coverage-record-decision', 'COVERAGE_COMPARISON_STATUS'), false, 'a contributor is never shown the owner-only decision');
+  assert.equal(applicable('coverage-record-decision', 'COVERAGE_COMPARISON_STATUS', 'OWNER'), true);
+  assert.equal(applicable('coverage-record-decision', 'COVERAGE_COMPARISON_STATUS', 'VIEWER'), false);
+  assert.equal(applicable('coverage-start-comparison', 'COVERAGE_COMPARISON_STATUS', 'VIEWER'), false);
   assert.equal(applicable('coverage-generate-review', 'COVERAGE_REVIEW_STATUS'), true);
   for (const id of ['coverage-back', 'coverage-back-review']) assert.equal(applicable(id, OP), true, id);
 });

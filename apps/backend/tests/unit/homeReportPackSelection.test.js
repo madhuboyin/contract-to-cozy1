@@ -24,7 +24,7 @@ const PROPERTY = {
   inventoryRooms: [ROOM], inventoryItems: ITEMS,
   insurancePolicies: [{ id: 'pol1', carrierName: 'Acme Mutual', policyNumber: 'POL-SECRET', startDate: new Date('2026-01-01'), expiryDate: new Date('2027-01-01'), premiumAmount: 1800, personalPropertyLimitCents: 5_000_000, documents: [] }],
   warranties: [{ id: 'w1', providerName: 'FixCo', policyNumber: 'WAR-SECRET', startDate: new Date('2026-01-01'), expiryDate: new Date('2028-01-01'), coverageDetails: 'Parts', documents: [] }],
-  maintenanceTasks: [{ id: 't1', title: 'Replace filter', status: 'COMPLETED', priority: 'HIGH', riskLevel: 'HIGH', frequency: null, nextDueDate: null, lastCompletedDate: null, estimatedCost: null, actualCost: null, assetType: null, source: 'USER_CREATED' }],
+  maintenanceTasks: [{ id: 't2', title: 'Open task', status: 'PENDING', priority: 'LOW', riskLevel: null, frequency: null, nextDueDate: null, lastCompletedDate: null, estimatedCost: null, actualCost: null, assetType: null, source: 'USER_CREATED' }, { id: 't1', title: 'Replace filter', status: 'COMPLETED', priority: 'HIGH', riskLevel: 'HIGH', frequency: null, nextDueDate: null, lastCompletedDate: null, estimatedCost: null, actualCost: null, assetType: null, source: 'USER_CREATED' }],
 };
 
 function install() {
@@ -50,6 +50,27 @@ function install() {
 }
 const build = (extra = {}) => buildAuthoritativeReportSnapshot({ userId: 'u1', propertyId: 'p1', ...extra });
 const selection = (included) => ({ version: 1, requested: included, included, unavailable: [] });
+
+test('the maintenance section exports completed history only, as the Record lists it', async () => {
+  const { calls, restore } = install();
+  try {
+    const snapshot = await build({ sections: selection(['maintenance-history']) });
+    assert.deepEqual(calls.findUnique[0].include.maintenanceTasks, { where: { status: 'COMPLETED' } });
+    assert.deepEqual(snapshot.maintenance.tasks.map((task) => task.id), ['t1']);
+  } finally { restore(); }
+});
+
+test('files attached to an exported item, policy, or warranty never include a deleted document', async () => {
+  const { calls, restore } = install();
+  try {
+    await build();
+    const include = calls.findUnique[0].include;
+    const where = { deletedAt: null };
+    assert.deepEqual(include.inventoryItems.include.documents, { where });
+    assert.deepEqual(include.insurancePolicies.include.documents, { where });
+    assert.deepEqual(include.warranties.include.documents, { where });
+  } finally { restore(); }
+});
 
 test('inventory the Record and Ask hide never reaches the pack, whichever way the export was requested', async () => {
   const { calls, restore } = install();

@@ -9,6 +9,7 @@ import { maintenanceMoney } from './handlers/maintenance.handler';
 import { PROJECT_STATUS_LABELS, PROJECT_TYPE_LABELS } from './handlers/projectTracker.handler';
 import { OPEN_CLAIM_STATUSES, OPEN_INCIDENT_STATUSES } from './handlers/claims.handler';
 import { PERMIT_CATEGORY_LABELS, PERMIT_OFFICIAL_STATUS_LABELS, PERMIT_REPORTED_STATUS_LABELS } from './support/permitTrackerRead';
+import { RENOVATION_CASE_TYPE_LABELS } from './support/renovationCaseStart';
 import { INSPECTION_REPORT_STATUS_LABELS, INSPECTION_REPORT_TYPE_LABELS, inspectionReportCanArchive, inspectionReportCanConfirm } from './support/inspectionReportCommand';
 import { SCENARIO_STATUS_LABELS } from './support/financingRead';
 import type { AskRecordSectionId } from './governance/askRecordSectionRegistry';
@@ -214,6 +215,56 @@ async function readPermitDetail(context: DetailContext, permitId: string): Promi
       route({ id: 'permit-edit', label: 'Change details', operationId: 'PERMIT_TRACKER_COMMAND', role: context.role, openQuestion: 'What is the status of my permits?' }),
       route({ id: 'permit-remove', label: 'Remove', operationId: 'PERMIT_TRACKER_COMMAND', role: context.role, openQuestion: 'What is the status of my permits?' }),
     ],
+  };
+}
+
+const PROJECT_PREFIX = 'project:';
+const RENOVATION_PREFIX = 'renovation:';
+
+async function readProjectsRenovationsDetail(context: DetailContext, compositeId: string): Promise<DetailBody> {
+  if (compositeId.startsWith(PROJECT_PREFIX)) return readProjectDetail(context, compositeId.slice(PROJECT_PREFIX.length));
+  if (compositeId.startsWith(RENOVATION_PREFIX)) return readRenovationCaseDetail(context, compositeId.slice(RENOVATION_PREFIX.length));
+  return notFound();
+}
+
+async function readRenovationCaseDetail(context: DetailContext, caseId: string): Promise<DetailBody> {
+  const renovation = await prisma.renovationCase.findFirst({
+    where: { id: caseId, propertyId: context.propertyId, archivedAt: null },
+    select: {
+      name: true, objective: true, caseType: true, lifecycle: true, outcomeStatus: true, governanceTier: true, responsibilityContext: true, targetBudgetCents: true, targetStartDate: true,
+      targetEndDate: true, entryPoint: true, sourceType: true, createdAt: true, updatedAt: true, cancelReason: true,
+      executionProject: { select: { name: true } },
+      _count: { select: { links: true, participants: true } },
+      events: { orderBy: { occurredAt: 'desc' }, take: 25, select: { eventType: true, fromLifecycle: true, toLifecycle: true, occurredAt: true } },
+    },
+  });
+  if (!renovation) return notFound();
+  const related: AskRecordRelated[] = [
+    ...(renovation.executionProject ? [{ label: renovation.executionProject.name, kindLabel: 'Execution project', broken: null }] : []),
+    ...(renovation._count.links > 0 ? [{ label: `${renovation._count.links} linked ${renovation._count.links === 1 ? 'record' : 'records'}`, kindLabel: 'Case links', broken: null }] : []),
+    ...(renovation._count.participants > 0 ? [{ label: `${renovation._count.participants} ${renovation._count.participants === 1 ? 'participant' : 'participants'}`, kindLabel: 'People on the case', broken: null }] : []),
+  ];
+  const history: AskRecordHistoryEntry[] = renovation.events.map((event) => ({
+    at: event.occurredAt.toISOString(),
+    label: event.fromLifecycle && event.toLifecycle ? `${readable(String(event.eventType))}: ${readable(String(event.fromLifecycle))} to ${readable(String(event.toLifecycle))}` : String(readable(String(event.eventType))),
+  }));
+  return {
+    title: renovation.name,
+    facts: [
+      fact('Kind', 'Renovation case'), fact('Type', RENOVATION_CASE_TYPE_LABELS[renovation.caseType] ?? readable(renovation.caseType)), fact('Stage', readable(renovation.lifecycle)),
+      fact('Outcome', readable(String(renovation.outcomeStatus))), fact('Goal', renovation.objective), fact('Target budget', money(renovation.targetBudgetCents)),
+      fact('Target start', day(renovation.targetStartDate)), fact('Target finish', day(renovation.targetEndDate)),
+      fact('Who is responsible', readable(String(renovation.responsibilityContext))), fact('Oversight level', readable(String(renovation.governanceTier))),
+    ],
+    provenance: {
+      source: available(renovation.entryPoint ? `Started from ${readable(renovation.entryPoint)?.toLowerCase()}` : `${readable(renovation.sourceType ?? 'MANUAL')} case`, renovation.createdAt.toISOString()),
+      observed: observedAt('Last updated', renovation.updatedAt),
+      verification: unavailable('A renovation case has no verification state; its readiness items track what is confirmed.'),
+      visibility: everyMember('renovation cases'),
+      related: { state: related.length ? 'AVAILABLE' : 'NOT_RECORDED', records: related, reason: related.length ? null : 'No project, record, or person is linked.' },
+      history: history.length ? { state: 'AVAILABLE', entries: history, reason: null } : { state: 'NOT_RECORDED', entries: [], reason: 'No case event is on record.' },
+    },
+    corrections: [noCommand('renovation-case-change', 'Change this case', 'Ask can start a renovation case and update its readiness items, but no Ask command changes the case itself.')],
   };
 }
 
@@ -467,7 +518,7 @@ export const MORE_RECORD_DETAIL_READERS: Readonly<Partial<Record<AskRecordSectio
   'maintenance-history': readMaintenanceHistoryDetail,
   inspections: readInspectionDetail,
   permits: readPermitDetail,
-  'projects-renovations': readProjectDetail,
+  'projects-renovations': readProjectsRenovationsDetail,
   'incidents-claims': readIncidentClaimDetail,
   coverage: readCoverageDetail,
   'financing-ownership': readFinancingScenarioDetail,

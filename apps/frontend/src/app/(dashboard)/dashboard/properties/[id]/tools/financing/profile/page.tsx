@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { api } from '@/lib/api/client';
+import { FINANCING_OWNER_ONLY_MESSAGE, isFinancingOwnerOnlyError, readOwnerOnly } from '@/lib/financing/ownerOnly';
 import { usePropertyWriteAccess } from '@/lib/property/usePropertyWriteAccess';
 import { MobilePageContainer } from '@/components/mobile/dashboard/MobilePrimitives';
 import MortgageProfileForm from '@/components/features/financing/MortgageProfileForm';
@@ -22,13 +23,15 @@ export default function FinancingProfilePage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [ownerOnly, setOwnerOnly] = useState(false);
 
   useEffect(() => {
     if (!propertyId) return;
-    api
-      .getFinancingProfile(propertyId)
-      .then(setProfile)
-      .catch(() => null)
+    readOwnerOnly(() => api.getFinancingProfile(propertyId))
+      .then((read) => {
+        setProfile(read.value);
+        setOwnerOnly(read.ownerOnly);
+      })
       .finally(() => setLoading(false));
   }, [propertyId]);
 
@@ -53,7 +56,8 @@ export default function FinancingProfilePage() {
         router.push(`/dashboard/properties/${propertyId}/tools/financing`);
       }, 800);
     } catch (err: any) {
-      setError(err?.message ?? 'Failed to save');
+      if (isFinancingOwnerOnlyError(err)) setOwnerOnly(true);
+      else setError(err?.message ?? 'Failed to save');
     } finally {
       setSaving(false);
     }
@@ -99,7 +103,11 @@ export default function FinancingProfilePage() {
               {error}
             </div>
           )}
-          {canManage ? (
+          {ownerOnly ? (
+            <div className="rounded-xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300" role="note" data-financing-owner-only>
+              {FINANCING_OWNER_ONLY_MESSAGE}
+            </div>
+          ) : canManage ? (
             <MortgageProfileForm initial={profile} onSave={handleSave} saving={saving} />
           ) : (
             <div className="rounded-xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
