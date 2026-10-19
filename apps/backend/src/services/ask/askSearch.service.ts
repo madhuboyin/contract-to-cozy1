@@ -66,7 +66,8 @@ export async function composeAskSearch(
     if (!provider.search) return { provider, results: [], status: status('UNAVAILABLE', 'No search is registered for this source.') };
     try {
       const output = await withTimeout(provider.search(context, query, ASK_SEARCH_PER_PROVIDER), timeoutMs);
-      const results = output.results.filter((result) => result.propertyId === context.propertyId || result.group === 'HISTORY');
+      // Every group is held to the selected home, conversations included: "all homes" history search is deferred, so no result may come from another one.
+      const results = output.results.filter((result) => result.propertyId === context.propertyId);
       return { provider, results, status: status('AVAILABLE', null, results.length, output.more) };
     } catch (error) {
       const timedOut = error instanceof ProviderTimeoutError;

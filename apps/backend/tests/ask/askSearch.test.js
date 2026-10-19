@@ -79,6 +79,19 @@ test('a provider the role cannot use is reported and never called; another home\
   assert.equal(response.partial, true);
 });
 
+test('the selected-home boundary holds for every group, conversations included', async () => {
+  const providers = [
+    fake('H', 'HISTORY', async () => ({ more: false, results: [result('H', 'HISTORY', 'Mine', { destination: { kind: 'HISTORY', sessionId: 's1', executionId: 'e1' } }), result('H', 'HISTORY', 'Other home chat', { propertyId: 'p2', destination: { kind: 'HISTORY', sessionId: 's2', executionId: 'e2' } })] })),
+    fake('R', 'RECORD', async () => ({ more: false, results: [result('R', 'RECORD', 'Other record', { propertyId: 'p2' })] })),
+    fake('C', 'CAPABILITY', async () => ({ more: false, results: [result('C', 'CAPABILITY', 'Other capability', { propertyId: 'p3' })] })),
+  ];
+  const response = await composeAskSearch(ctx(), 'chat', providers);
+  assert.deepEqual(response.groups.find((g) => g.group === 'HISTORY').results.map((r) => r.title), ['Mine']);
+  assert.equal(response.groups.find((g) => g.group === 'RECORD').results.length, 0);
+  assert.equal(response.groups.find((g) => g.group === 'CAPABILITY').results.length, 0);
+  assert.ok(response.groups.flatMap((g) => g.results).every((r) => r.propertyId === 'p1'));
+});
+
 test('telemetry carries counts, timings and the query length only: never the text, titles or ids', async () => {
   const lines = [];
   const original = logger.info;
