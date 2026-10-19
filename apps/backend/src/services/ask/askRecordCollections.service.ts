@@ -6,6 +6,7 @@ import { loadOperatingMode } from './askRecordContext';
 import { inventoryLifecycleHorizon, inventoryMissingFacts } from './handlers/inventory.handler';
 import { visibleInventoryItemWhere } from '../riskAssetApplicability';
 import type { HouseholdRole } from '@prisma/client';
+import { evaluateCoverageRecord } from '../coverage/contextPolicy';
 import { permitTrackerService } from '../permitTracker.service';
 import { listProjects as listTrackedProjects } from '../projectTracker.service';
 import { PERMIT_CATEGORY_LABELS, PERMIT_OFFICIAL_STATUS_LABELS, PERMIT_REPORTED_STATUS_LABELS, PERMIT_WORK_TYPE_LABELS } from './support/permitTrackerRead';
@@ -1093,6 +1094,102 @@ export async function readIncidentsClaimsPage(propertyId: string, query: AskReco
   };
 }
 
+export interface AskRecordPolicyRow {
+  id: string;
+  carrierName: string;
+  coverageType: string | null;
+  status: 'ACTIVE' | 'NEEDS_REVIEW' | 'STARTS_LATER' | 'EXPIRED';
+  statusLabel: string;
+  startDate: string | null;
+  expiryDate: string | null;
+  verified: boolean;
+  lastVerifiedAt: string | null;
+  askQuestion: null;
+}
+
+const POLICY_STATUS_ORDER = ['ACTIVE', 'NEEDS_REVIEW', 'STARTS_LATER', 'EXPIRED'] as const;
+const POLICY_STATUS_LABELS: Record<(typeof POLICY_STATUS_ORDER)[number], string> = { ACTIVE: 'Active', NEEDS_REVIEW: 'Dates need review', STARTS_LATER: 'Starts later', EXPIRED: 'Expired' };
+const PolicyCursorSchema = z.object({ r: z.number().int(), k: z.number(), i: z.string() });
+
+/**
+ * Reads one page of the home's insurance policy records, the same property-scoped rows `GET /properties/:id/insurance` returns to any
+ * household member. Status is the governed `evaluateCoverageRecord`. The policy number, premium, deductible and coverage limits are
+ * never selected: the Record names the policy, its carrier and type, its dates, and whether it has been verified.
+ */
+export async function readCoveragePoliciesPage(propertyId: string, query: AskRecordCollectionQuery, now = new Date()): Promise<AskRecordCollectionPage<AskRecordPolicyRow>> {
+  const limit = clampLimit(query.limit);
+  const search = cleanSearch(query.search);
+  const status = query.filters?.status?.trim() || null;
+  const coverageType = query.filters?.coverageType?.trim() || null;
+  if (status && !(POLICY_STATUS_ORDER as readonly string[]).includes(status)) throw new InvalidCollectionQueryError('status filter is not valid.');
+  if (coverageType && coverageType.length > 60) throw new InvalidCollectionQueryError('coverage type filter is not valid.');
+  const after = decodeCursor(query.cursor, PolicyCursorSchema);
+
+  const policies = await prisma.insurancePolicy.findMany({
+    where: { propertyId },
+    orderBy: [{ expiryDate: 'asc' }, { id: 'asc' }],
+    select: { id: true, propertyId: true, carrierName: true, coverageType: true, isVerified: true, lastVerifiedAt: true, startDate: true, expiryDate: true },
+  });
+  const entries = policies.map((policy) => {
+    const applicability = evaluateCoverageRecord(policy, propertyId, now);
+    const key = applicability.lifecycle === 'FUTURE' ? 'STARTS_LATER' : applicability.lifecycle === 'EXPIRED' ? 'EXPIRED' : applicability.lifecycle === 'ACTIVE' ? 'ACTIVE' : 'NEEDS_REVIEW';
+    return {
+      rank: POLICY_STATUS_ORDER.indexOf(key),
+      // Expired policies list the most recently expired first; every other status lists the soonest expiry first.
+      sortKey: policy.expiryDate ? (key === 'EXPIRED' ? -policy.expiryDate.getTime() : policy.expiryDate.getTime()) : Number.POSITIVE_INFINITY,
+      haystack: `${policy.carrierName} ${policy.coverageType ?? ''}`.toLowerCase(),
+      row: {
+        id: policy.id,
+        carrierName: policy.carrierName,
+        coverageType: policy.coverageType ?? null,
+        status: key,
+        statusLabel: POLICY_STATUS_LABELS[key],
+        startDate: policy.startDate?.toISOString() ?? null,
+        expiryDate: policy.expiryDate?.toISOString() ?? null,
+        verified: policy.isVerified,
+        lastVerifiedAt: policy.lastVerifiedAt?.toISOString() ?? null,
+        askQuestion: null,
+      } satisfies AskRecordPolicyRow,
+    };
+  }).sort((left, right) => left.rank - right.rank || (left.sortKey === right.sortKey ? 0 : left.sortKey < right.sortKey ? -1 : 1) || (left.row.id < right.row.id ? -1 : left.row.id > right.row.id ? 1 : 0));
+
+  const needle = search?.toLowerCase() ?? null;
+  const matching = entries.filter((entry) => (!status || entry.row.status === status) && (!coverageType || entry.row.coverageType === coverageType) && (!needle || entry.haystack.includes(needle)));
+  // An undated policy has an infinite sort key, which JSON cannot carry; the cursor stores a sentinel above every real timestamp instead,
+  // and the comparison uses the same stored form so undated policies are neither repeated nor skipped.
+  const cursorKey = (value: number) => (Number.isFinite(value) ? value : Number.MAX_SAFE_INTEGER);
+  const remaining = after
+    ? matching.filter((entry) => entry.rank > after.r || (entry.rank === after.r && (cursorKey(entry.sortKey) > after.k || (cursorKey(entry.sortKey) === after.k && entry.row.id > after.i))))
+    : matching;
+  const page = remaining.slice(0, limit);
+  const last = page[page.length - 1];
+  const nextCursor = remaining.length > limit && last ? encodeCursor({ r: last.rank, k: cursorKey(last.sortKey), i: last.row.id }) : null;
+
+  const statusOptions = POLICY_STATUS_ORDER.filter((value) => entries.some((entry) => entry.row.status === value) || value === status).map((value) => ({ value, label: POLICY_STATUS_LABELS[value] }));
+  const typeOptions = [...new Set(entries.map((entry) => entry.row.coverageType).filter((value): value is string => Boolean(value)))].sort().map((value) => ({ value, label: value }));
+  const newest = policies.map((policy) => policy.expiryDate?.getTime() ?? 0).sort((a, b) => b - a)[0];
+
+  return {
+    contractVersion: ASK_RECORD_COLLECTION_CONTRACT_VERSION,
+    propertyId,
+    sectionId: 'coverage',
+    generatedAt: now.toISOString(),
+    freshAsOf: newest ? new Date(newest).toISOString() : null,
+    total: matching.length,
+    delivered: page.length,
+    nextCursor,
+    truncated: nextCursor !== null,
+    notice: null,
+    sort: { key: 'status', label: 'Active first, then by expiry date' },
+    query: { search, filters: Object.fromEntries(Object.entries({ status, coverageType }).filter(([, value]) => value)) as Record<string, string> },
+    filterOptions: [
+      ...(statusOptions.length > 1 ? [{ key: 'status', label: 'Status', options: statusOptions }] : []),
+      ...(typeOptions.length > 1 ? [{ key: 'coverageType', label: 'Coverage type', options: typeOptions }] : []),
+    ],
+    rows: page.map((entry) => entry.row),
+  };
+}
+
 export type AskRecordReaderContext = { propertyId: string; userId: string; role: HouseholdRole };
 type SectionReader = (context: AskRecordReaderContext, query: AskRecordCollectionQuery) => Promise<AskRecordCollectionPage<unknown>>;
 
@@ -1105,6 +1202,7 @@ export const ASK_RECORD_COLLECTION_READERS: Readonly<Partial<Record<AskRecordSec
   'maintenance-history': (context, query) => readMaintenanceHistoryPage(context, query),
   inspections: (context, query) => readInspectionsPage(context.propertyId, query),
   permits: (context, query) => readPermitsPage(context.propertyId, query),
+  coverage: (context, query) => readCoveragePoliciesPage(context.propertyId, query),
   'projects-renovations': (context, query) => readProjectsPage(context.propertyId, query),
   'incidents-claims': (context, query) => readIncidentsClaimsPage(context.propertyId, query),
   warranties: (context, query) => readWarrantiesPage(context.propertyId, query),

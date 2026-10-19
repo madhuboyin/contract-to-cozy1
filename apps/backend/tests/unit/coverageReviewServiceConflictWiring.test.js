@@ -36,6 +36,10 @@ function activeTerm(overrides = {}) {
 }
 
 const prismaMock = {
+  // The service authorizes through household access (a CONTRIBUTOR floor to generate), so the caller needs a membership row.
+  householdMember: {
+    findUnique: async () => ({ role: 'OWNER' }),
+  },
   property: {
     findFirst: async () => ({ id: 'property-1', updatedAt: new Date('2026-08-01T00:00:00.000Z') }),
   },

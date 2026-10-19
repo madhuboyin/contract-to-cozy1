@@ -143,8 +143,9 @@ function flattenQuote(quote: CoverageQuoteInput): Record<string, unknown> {
 export async function coverageCommandResult(userId: string, propertyId: string, launch: CoverageCommandLaunch, supplied?: CoverageDecisionInput, suppliedQuote?: CoverageQuoteInput): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
   if (access.role === HouseholdRole.VIEWER) return permissionBlocked();
-  if (!(await isPrimaryOwner(userId, propertyId))) return ownerOnly();
   const kind = launch.kind;
+  // Generating a review needs the CONTRIBUTOR floor the review service enforces itself. A comparison and a decision are still the primary owner's.
+  if (kind !== 'REVIEW' && !(await isPrimaryOwner(userId, propertyId))) return ownerOnly();
   const expiresAt = new Date(Date.now() + CONFIRMATION_MINUTES * 60 * 1000);
   const base = { sourceExecutionId: launch.sourceExecutionId, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() };
   const confirm = (contextVersion: string, title: string, description: string, confirmLabel: string, fields: Array<{ label: string; value: string }>, parameters: Record<string, unknown>,
@@ -247,7 +248,7 @@ async function confirmCoverageCommand(ctx: ConfirmCapabilityContext): Promise<Co
   const kind = command?.kind as CoverageCommandKind | undefined;
   if (!kind || !(kind in COVERAGE_COMMAND_MESSAGES) || typeof command?.entityId !== 'string') throw stale('The step to take is invalid.');
   const propertyId = execution.propertyId;
-  if (!(await isPrimaryOwner(userId, propertyId))) throw stale('Only the home\'s primary owner can do this.', 'ASK_PERMISSION_REQUIRED');
+  if (kind !== 'REVIEW' && !(await isPrimaryOwner(userId, propertyId))) throw stale('Only the home\'s primary owner can do this.', 'ASK_PERMISSION_REQUIRED');
   try {
     let title: string; let description: string; let artifactType = 'COVERAGE_COMPARISON'; let artifactId = command.entityId;
     const actions: Array<Record<string, unknown>> = [];

@@ -115,9 +115,9 @@ export const ASK_RECORD_SECTION_REGISTRY: readonly AskRecordSectionDefinition[] 
     primaryAction: { label: 'View claims', question: 'What is the status of my incidents and claims?' },
   }),
   section({
-    id: 'coverage', label: 'Coverage and policies', scope: 'Insurance and protection coverage and its gaps.', owner: 'coverage',
+    id: 'coverage', label: 'Coverage and policies', scope: 'Insurance policy records and their dates.', owner: 'coverage',
     readOperationIds: ['COVERAGE_REVIEW_STATUS', 'COVERAGE_GAPS'], commandOperationIds: ['COVERAGE_COMMAND'],
-    collectionReader: null, pagedCollection: false, lifecycleOperationId: 'COVERAGE_REVIEW_STATUS', freshnessSource: 'Coverage review', exportEligibility: 'NOT_EVALUATED',
+    collectionReader: PAGED, pagedCollection: true, lifecycleOperationId: 'COVERAGE_REVIEW_STATUS', freshnessSource: 'Policy expiry dates', exportEligibility: 'NOT_EVALUATED',
     primaryAction: { label: 'Review coverage', question: 'Review my coverage.' },
   }),
   section({

@@ -7,7 +7,7 @@ import { useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api/client';
 import { buildAskWorkspaceHref } from '@/lib/navigation/askNavigation';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
-import type { AskRecordIndex, AskRecordDocumentRow, AskRecordIndexSection, AskRecordIncidentClaimRow, AskRecordInspectionRow, AskRecordInventoryRow, AskRecordMaintenanceRow, AskRecordPermitRow, AskRecordProjectRow, AskRecordRoomRow, AskRecordTimelineRow, AskRecordWarrantyRow } from '@/features/ask/types';
+import type { AskRecordIndex, AskRecordDocumentRow, AskRecordIndexSection, AskRecordIncidentClaimRow, AskRecordInspectionRow, AskRecordInventoryRow, AskRecordMaintenanceRow, AskRecordPermitRow, AskRecordPolicyRow, AskRecordProjectRow, AskRecordRoomRow, AskRecordTimelineRow, AskRecordWarrantyRow } from '@/features/ask/types';
 import { AskCollection, AskCollectionState, AskCompactRow, AskWorkspaceMeasure } from '../presentation/AskLayoutPrimitives';
 import { askServiceIsPaused } from '../workspace/support';
 import { RecordCollection } from './RecordCollection';
@@ -15,7 +15,7 @@ import { RecordRoomRow } from './RecordRoomRow';
 import { RecordInventoryRow } from './RecordInventoryRow';
 import { RecordDocumentRow } from './RecordDocumentRow';
 import { RecordWarrantyRow } from './RecordWarrantyRow';
-import { RecordIncidentClaimRow, RecordPermitRow, RecordProjectRow } from './RecordWorkProtectionRows';
+import { RecordIncidentClaimRow, RecordPermitRow, RecordPolicyRow, RecordProjectRow } from './RecordWorkProtectionRows';
 import { RecordInspectionRow, RecordMaintenanceRow, RecordTimelineRow } from './RecordHistoryRows';
 
 const NOT_AVAILABLE_COPY: Record<NonNullable<AskRecordIndexSection['reasonCode']>, string> = {
@@ -77,6 +77,7 @@ const PAGED_SECTIONS: Record<string, { label: string; searchLabel: string; empty
   permits: { label: 'Permits', searchLabel: 'Search permits', emptyText: 'No permits are recorded for this home.' },
   'projects-renovations': { label: 'Projects and renovations', searchLabel: 'Search projects', emptyText: 'No projects are tracked yet.' },
   'incidents-claims': { label: 'Incidents and claims', searchLabel: 'Search incidents and claims', emptyText: 'No incidents or claims are recorded.' },
+  coverage: { label: 'Coverage and policies', searchLabel: 'Search policies', emptyText: 'No insurance policies are recorded for this home.' },
   inventory: { label: 'Systems and inventory', searchLabel: 'Search inventory', emptyText: 'No inventory items are recorded yet.' },
 };
 
@@ -90,6 +91,7 @@ function renderPagedRow(sectionId: string, row: { id: string }, propertyId: stri
   if (sectionId === 'permits') return <RecordPermitRow key={row.id} permit={row as AskRecordPermitRow} />;
   if (sectionId === 'projects-renovations') return <RecordProjectRow key={row.id} project={row as AskRecordProjectRow} />;
   if (sectionId === 'incidents-claims') return <RecordIncidentClaimRow key={row.id} record={row as AskRecordIncidentClaimRow} />;
+  if (sectionId === 'coverage') return <RecordPolicyRow key={row.id} policy={row as AskRecordPolicyRow} />;
   return <RecordInventoryRow key={row.id} item={row as AskRecordInventoryRow} propertyId={propertyId} />;
 }
 

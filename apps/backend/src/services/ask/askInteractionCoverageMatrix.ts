@@ -1783,7 +1783,7 @@ export const ASK_INTERACTION_COVERAGE_MATRIX: Readonly<Record<AskOperationId, As
     messageRoutable: true,
     confirmationCapable: false,
     correctionModes: [],
-    note: 'Register P0 Coverage Intelligence (FRD v1.317). Reads findCurrentCoverageReview -- what GET /coverage-review reads, strictly read-only since FRD v1.308 -- and renders the questions, their evidence and what is missing, without a conclusion about what a claim would pay. A review is generated only by the explicit, confirmed COVERAGE_COMMAND action. Owner-only, as the service is.',
+    note: 'Register P0 Coverage Intelligence (FRD v1.317). Reads findCurrentCoverageReview -- what GET /coverage-review reads, strictly read-only since FRD v1.308 -- and renders the questions, their evidence and what is missing, without a conclusion about what a claim would pay. A review is generated only by the explicit, confirmed COVERAGE_COMMAND action. Readable by every household member; generating one needs CONTRIBUTOR, both enforced by the service.',
     uiSurface: { status: 'TRACED', notes: 'Shared generic renderer: SUMMARY (state, scope, policy, freshness), GROUPED_LIST (questions), LIMITATION (healthy scope), BOUNDARY.' },
     freshnessSource: { status: 'TRACED', notes: 'No contextVersion; read live on each request. An out-of-date review is flagged, not refreshed.' },
     idempotency: { status: 'TRACED', notes: 'Pure read.' },

@@ -2,11 +2,10 @@
 //
 // Reads what GET /coverage-review reads (findCurrentCoverageReview, strictly read-only since FRD v1.308): the questions worth asking about the confirmed
 // facts on the household's policy, with the evidence each rests on and what is missing. It never generates a review (that is the explicit, confirmed
-// action) and never reaches a conclusion about what a claim would pay. Owner-only, as the service is. Ask links to no page.
+// action) and never reaches a conclusion about what a claim would pay. Open to every household member, as the service and the route are. Ask links to no page.
 import { type AskPresentationBlock } from '../../../productFramework/ask/ask.contract';
 import { type AskOperationResult } from '../askOperationRegistry';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
-import { APIError } from '../../../middleware/error.middleware';
 import { humanDate } from '../askFormatting';
 import { ensurePropertyAccess } from '../askHandlerSupport';
 import { findCurrentCoverageReview } from '../../coverageReview.service';
@@ -90,16 +89,5 @@ export function coverageReviewFromView(read: ReviewResult, canGenerate: boolean,
 registerCapabilityHandler('coverage.review-status', async (envelope, deps) => {
   const propertyId = envelope.propertyId!;
   const access = deps.propertyAccess ?? await ensurePropertyAccess(envelope.userId, propertyId);
-  try {
-    return coverageReviewFromView(await findCurrentCoverageReview(propertyId, envelope.userId), access.role !== 'VIEWER', propertyId);
-  } catch (error) {
-    if (error instanceof APIError && error.code === 'PROPERTY_NOT_FOUND') {
-      return {
-        status: 'BLOCKED', reasonCode: 'COVERAGE_REVIEW_OWNER_ONLY',
-        blocks: [{ type: 'BOUNDARY', id: 'coverage-review-owner-only', title: 'Coverage review is for the primary owner', body: 'The coverage review currently works only for the property’s primary homeowner account, not shared household access.', severity: 'CAUTION', suggestions: [] }],
-        suggestions: [],
-      };
-    }
-    throw error;
-  }
+  return coverageReviewFromView(await findCurrentCoverageReview(propertyId, envelope.userId), access.role !== 'VIEWER', propertyId);
 });

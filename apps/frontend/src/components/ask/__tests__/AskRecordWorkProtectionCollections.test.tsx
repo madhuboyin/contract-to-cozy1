@@ -70,4 +70,18 @@ describe('AskRecord permits, projects, and incidents/claims', () => {
     expect(screen.getByText('Claim · In progress · property damage · Acme Mutual · Opened Apr 1, 2026')).toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: 'Kind' })).toBeInTheDocument();
   });
+
+  it('coverage lists policies with status, dates, and verification, and never a policy number or amount', async () => {
+    mockSection = 'coverage';
+    getPage.mockResolvedValueOnce({ success: true, data: page('coverage', [
+      { id: 'pol1', carrierName: 'Acme Mutual', coverageType: 'Homeowner', status: 'ACTIVE' as const, statusLabel: 'Active', startDate: '2026-01-01T12:00:00.000Z', expiryDate: '2027-01-01T12:00:00.000Z', verified: true, lastVerifiedAt: '2026-02-01T12:00:00.000Z', askQuestion: null as null },
+      { id: 'pol2', carrierName: 'Old Co', coverageType: null, status: 'NEEDS_REVIEW' as const, statusLabel: 'Dates need review', startDate: null, expiryDate: null, verified: false, lastVerifiedAt: null, askQuestion: null as null },
+    ]) });
+    render(<AskRecord />);
+
+    expect(await screen.findByRole('heading', { name: 'Coverage and policies' })).toBeInTheDocument();
+    expect(screen.getByText('Homeowner · Active until Jan 1, 2027 · Verified Feb 1, 2026')).toBeInTheDocument();
+    expect(screen.getByText('Dates need review · Not verified')).toBeInTheDocument();
+    expect(document.querySelectorAll('[data-record-row] a')).toHaveLength(0);
+  });
 });

@@ -86,20 +86,40 @@ test('the review read lists the questions with evidence gaps and the boundary; a
   assert.equal(none.blocks[0].actions[0].label, 'Review my coverage');
 });
 
-test('the review capability reads the canonical lookup, never the generator, and discloses owner-only', async () => {
+test('the review capability reads the canonical lookup, never the generator, for every household role', async () => {
   const saved = { find: reviewService.findCurrentCoverageReview, gen: reviewService.getOrCreateCoverageReview };
   let generated = 0;
   reviewService.getOrCreateCoverageReview = async () => { generated += 1; return {}; };
   reviewService.findCurrentCoverageReview = async () => ({ review: null, isCurrent: false });
   try {
-    const result = await capabilityInvoke('COVERAGE_REVIEW_STATUS', { userId: 'user-1', propertyId: 'prop-1', message: 'Show my coverage review', launchContext: null }, { propertyAccess: { role: 'CONTRIBUTOR' } });
-    assert.equal(result.reasonCode, 'COVERAGE_REVIEW_NOT_GENERATED');
+    for (const role of ['VIEWER', 'CONTRIBUTOR', 'OWNER']) {
+      const result = await capabilityInvoke('COVERAGE_REVIEW_STATUS', { userId: 'user-1', propertyId: 'prop-1', message: 'Show my coverage review', launchContext: null }, { propertyAccess: { role } });
+      assert.equal(result.reasonCode, 'COVERAGE_REVIEW_NOT_GENERATED', role);
+      assert.notEqual(result.status, 'BLOCKED', role);
+    }
     assert.equal(generated, 0);
-    const { APIError } = require('../../src/middleware/error.middleware.ts');
-    reviewService.findCurrentCoverageReview = async () => { throw new APIError('Property not found', 404, 'PROPERTY_NOT_FOUND'); };
-    const blocked = await capabilityInvoke('COVERAGE_REVIEW_STATUS', { userId: 'user-1', propertyId: 'prop-1', message: 'Show my coverage review', launchContext: null }, { propertyAccess: { role: 'CONTRIBUTOR' } });
-    assert.equal(blocked.reasonCode, 'COVERAGE_REVIEW_OWNER_ONLY');
+    // A viewer is shown the read but is not offered the generate action.
+    const viewer = await capabilityInvoke('COVERAGE_REVIEW_STATUS', { userId: 'user-1', propertyId: 'prop-1', message: 'Show my coverage review', launchContext: null }, { propertyAccess: { role: 'VIEWER' } });
+    assert.equal(viewer.blocks.some((block) => (block.actions ?? []).some((action) => action.id === 'coverage-generate-review')), false);
   } finally { Object.assign(reviewService, { findCurrentCoverageReview: saved.find, getOrCreateCoverageReview: saved.gen }); }
+});
+
+test('a service access failure is never turned into an owner-only answer', async () => {
+  const saved = reviewService.findCurrentCoverageReview;
+  const { APIError } = require('../../src/middleware/error.middleware.ts');
+  reviewService.findCurrentCoverageReview = async () => { throw new APIError('Property not found', 404, 'PROPERTY_NOT_FOUND'); };
+  try {
+    await assert.rejects(() => capabilityInvoke('COVERAGE_REVIEW_STATUS', { userId: 'user-1', propertyId: 'prop-1', message: 'Show my coverage review', launchContext: null }, { propertyAccess: { role: 'CONTRIBUTOR' } }), (error) => error.code === 'PROPERTY_NOT_FOUND');
+  } finally { reviewService.findCurrentCoverageReview = saved; }
+});
+
+test('generating a review needs CONTRIBUTOR, not the primary account; a comparison and a decision still do', async () => {
+  const restoreRole = withRole('CONTRIBUTOR'); let restore = withData({ primary: false });
+  try {
+    assert.equal((await invoke(M.REVIEW, launchFor('REVIEW', 'prop-1'))).status, 'NEEDS_CONFIRMATION');
+    assert.equal((await invoke(M.REVIEW, launchFor('REVIEW', 'prop-1'), 'VIEWER')).reasonCode, 'ASK_PERMISSION_REQUIRED');
+    assert.equal((await invoke(M.START, launchFor('START', 'prop-1'))).reasonCode, 'COVERAGE_COMMAND_OWNER_ONLY');
+  } finally { restore(); restoreRole(); }
 });
 
 test('the command is declared-action only, a registered contributor command, owner-only, and refuses a viewer, a refresh and a wrong entity', async () => {

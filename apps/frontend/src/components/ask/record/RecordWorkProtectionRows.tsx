@@ -1,4 +1,4 @@
-import type { AskRecordIncidentClaimRow, AskRecordPermitRow, AskRecordProjectRow } from '@/features/ask/types';
+import type { AskRecordIncidentClaimRow, AskRecordPermitRow, AskRecordPolicyRow, AskRecordProjectRow } from '@/features/ask/types';
 import { AskCompactRow } from '../presentation/AskLayoutPrimitives';
 
 const dateFormat = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
@@ -66,6 +66,26 @@ export function RecordIncidentClaimRow({ record }: { record: AskRecordIncidentCl
         <p className="text-sm font-semibold text-slate-950">{record.title}</p>
         <p className="mt-0.5 text-xs text-slate-500">{facts.join(' · ')}</p>
         {record.summary && <p className="mt-1 text-xs text-slate-600">{record.summary}</p>}
+      </div>
+    </AskCompactRow>
+  );
+}
+
+export function RecordPolicyRow({ policy }: { policy: AskRecordPolicyRow }) {
+  const facts = [
+    policy.coverageType,
+    policy.status === 'NEEDS_REVIEW' ? 'Dates need review' : policy.status === 'STARTS_LATER' ? `Starts ${when(policy.startDate) ?? 'later'}` : null,
+    policy.status === 'ACTIVE' && when(policy.expiryDate) ? `Active until ${when(policy.expiryDate)}` : null,
+    policy.status === 'EXPIRED' && when(policy.expiryDate) ? `Expired ${when(policy.expiryDate)}` : null,
+    policy.status === 'STARTS_LATER' && when(policy.expiryDate) ? `Expires ${when(policy.expiryDate)}` : null,
+    policy.verified ? `Verified${when(policy.lastVerifiedAt) ? ` ${when(policy.lastVerifiedAt)}` : ''}` : 'Not verified',
+  ].filter(Boolean);
+  return (
+    <AskCompactRow className="border-b border-slate-200 last:border-b-0" data-record-row={policy.id}>
+      <div className="min-w-0">
+        <p className="text-sm font-semibold text-slate-950">{policy.carrierName}</p>
+        <p className="mt-0.5 text-xs text-slate-500">{facts.join(' · ')}</p>
+        <p className={`mt-1 text-xs font-semibold ${policy.status === 'NEEDS_REVIEW' ? 'text-amber-800' : 'text-slate-700'}`}>{policy.statusLabel}</p>
       </div>
     </AskCompactRow>
   );

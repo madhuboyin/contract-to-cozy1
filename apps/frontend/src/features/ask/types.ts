@@ -991,3 +991,16 @@ export interface AskRecordIncidentClaimRow {
   closedAt: string | null;
   askQuestion: null;
 }
+
+export interface AskRecordPolicyRow {
+  id: string;
+  carrierName: string;
+  coverageType: string | null;
+  status: 'ACTIVE' | 'NEEDS_REVIEW' | 'STARTS_LATER' | 'EXPIRED';
+  statusLabel: string;
+  startDate: string | null;
+  expiryDate: string | null;
+  verified: boolean;
+  lastVerifiedAt: string | null;
+  askQuestion: null;
+}
