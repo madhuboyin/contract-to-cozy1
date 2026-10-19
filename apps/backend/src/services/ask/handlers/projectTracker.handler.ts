@@ -28,10 +28,10 @@ import { collectionDescriptor } from '../support/collectionDescriptor';
 // creating projects and recording milestones, payments, change orders and issues stay on the page.
 type TrackedProjectView = Awaited<ReturnType<typeof listTrackedProjects>>[number];
 // The page's own labels (projects/page.tsx and ProjectTrackerHelpers).
-const PROJECT_STATUS_LABELS: Record<string, string> = {
+export const PROJECT_STATUS_LABELS: Record<string, string> = {
   DRAFT: 'Draft', PLANNING: 'Planning', IN_PROGRESS: 'In Progress', PAUSED: 'Paused', COMPLETED: 'Completed', CANCELLED: 'Cancelled', DISPUTED: 'Disputed',
 };
-const PROJECT_TYPE_LABELS: Record<string, string> = {
+export const PROJECT_TYPE_LABELS: Record<string, string> = {
   ROOF_REPLACEMENT: 'Roof Replacement', HVAC_REPLACEMENT: 'HVAC Replacement', HVAC_REPAIR: 'HVAC Repair', KITCHEN_REMODEL: 'Kitchen Remodel',
   BATHROOM_REMODEL: 'Bathroom Remodel', ELECTRICAL_PANEL: 'Electrical Panel', PLUMBING_REPIPING: 'Plumbing Repiping', WATER_HEATER: 'Water Heater',
   FOUNDATION_WORK: 'Foundation Work', WINDOW_REPLACEMENT: 'Window Replacement', FLOORING: 'Flooring', PAINTING_INTERIOR: 'Interior Painting',

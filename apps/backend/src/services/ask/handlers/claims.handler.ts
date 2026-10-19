@@ -269,8 +269,8 @@ export type ClaimsScope = 'BOTH' | 'CLAIMS' | 'INCIDENTS';
 export type ClaimsState = 'ALL' | 'OPEN' | 'CLOSED';
 const CLAIMS_SCOPES: ReadonlySet<string> = new Set(['BOTH', 'CLAIMS', 'INCIDENTS']);
 const CLAIMS_STATES: ReadonlySet<string> = new Set(['ALL', 'OPEN', 'CLOSED']);
-const OPEN_INCIDENT_STATUSES: string[] = ['DETECTED', 'EVALUATED', 'ACTIVE', 'ACTIONED'];
-const OPEN_CLAIM_STATUSES: string[] = ['DRAFT', 'IN_PROGRESS', 'SUBMITTED', 'UNDER_REVIEW'];
+export const OPEN_INCIDENT_STATUSES: string[] = ['DETECTED', 'EVALUATED', 'ACTIVE', 'ACTIONED'];
+export const OPEN_CLAIM_STATUSES: string[] = ['DRAFT', 'IN_PROGRESS', 'SUBMITTED', 'UNDER_REVIEW'];
 // Each declared chip begins with a phrase askFollowUpContext's FILTER_CONTINUATION_PATTERN accepts (asserted in tests).
 const CLAIMS_CLEAR_MESSAGE = 'Now show all records with no filters';
 // A typed follow-up arrives joined to the prior question ("Show my claims. Only show open records"), so each phrase may follow a sentence break.

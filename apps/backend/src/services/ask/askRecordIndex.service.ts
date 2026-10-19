@@ -64,6 +64,9 @@ const COLLECTION_COUNT_NOUNS: Partial<Record<AskRecordSectionId, [string, string
   timeline: ['event', 'events'],
   'maintenance-history': ['completed task', 'completed tasks'],
   inspections: ['report', 'reports'],
+  permits: ['permit', 'permits'],
+  'projects-renovations': ['project', 'projects'],
+  'incidents-claims': ['incident or claim', 'incidents and claims'],
 };
 
 type SectionRead = { count: number | null; countLabel: string | null; freshAsOf: Date | string | null | undefined; failed: boolean };

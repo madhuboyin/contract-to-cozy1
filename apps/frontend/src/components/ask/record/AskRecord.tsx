@@ -7,7 +7,7 @@ import { useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api/client';
 import { buildAskWorkspaceHref } from '@/lib/navigation/askNavigation';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
-import type { AskRecordIndex, AskRecordDocumentRow, AskRecordIndexSection, AskRecordInspectionRow, AskRecordInventoryRow, AskRecordMaintenanceRow, AskRecordRoomRow, AskRecordTimelineRow, AskRecordWarrantyRow } from '@/features/ask/types';
+import type { AskRecordIndex, AskRecordDocumentRow, AskRecordIndexSection, AskRecordIncidentClaimRow, AskRecordInspectionRow, AskRecordInventoryRow, AskRecordMaintenanceRow, AskRecordPermitRow, AskRecordProjectRow, AskRecordRoomRow, AskRecordTimelineRow, AskRecordWarrantyRow } from '@/features/ask/types';
 import { AskCollection, AskCollectionState, AskCompactRow, AskWorkspaceMeasure } from '../presentation/AskLayoutPrimitives';
 import { askServiceIsPaused } from '../workspace/support';
 import { RecordCollection } from './RecordCollection';
@@ -15,6 +15,7 @@ import { RecordRoomRow } from './RecordRoomRow';
 import { RecordInventoryRow } from './RecordInventoryRow';
 import { RecordDocumentRow } from './RecordDocumentRow';
 import { RecordWarrantyRow } from './RecordWarrantyRow';
+import { RecordIncidentClaimRow, RecordPermitRow, RecordProjectRow } from './RecordWorkProtectionRows';
 import { RecordInspectionRow, RecordMaintenanceRow, RecordTimelineRow } from './RecordHistoryRows';
 
 const NOT_AVAILABLE_COPY: Record<NonNullable<AskRecordIndexSection['reasonCode']>, string> = {
@@ -73,6 +74,9 @@ const PAGED_SECTIONS: Record<string, { label: string; searchLabel: string; empty
   timeline: { label: 'Home timeline', searchLabel: 'Search timeline', emptyText: 'No events are on the timeline yet.' },
   'maintenance-history': { label: 'Maintenance history', searchLabel: 'Search maintenance history', emptyText: 'No completed maintenance is recorded yet.' },
   inspections: { label: 'Inspections', searchLabel: 'Search inspections', emptyText: 'No inspection reports are recorded yet.' },
+  permits: { label: 'Permits', searchLabel: 'Search permits', emptyText: 'No permits are recorded for this home.' },
+  'projects-renovations': { label: 'Projects and renovations', searchLabel: 'Search projects', emptyText: 'No projects are tracked yet.' },
+  'incidents-claims': { label: 'Incidents and claims', searchLabel: 'Search incidents and claims', emptyText: 'No incidents or claims are recorded.' },
   inventory: { label: 'Systems and inventory', searchLabel: 'Search inventory', emptyText: 'No inventory items are recorded yet.' },
 };
 
@@ -83,6 +87,9 @@ function renderPagedRow(sectionId: string, row: { id: string }, propertyId: stri
   if (sectionId === 'timeline') return <RecordTimelineRow key={row.id} event={row as AskRecordTimelineRow} />;
   if (sectionId === 'maintenance-history') return <RecordMaintenanceRow key={row.id} task={row as AskRecordMaintenanceRow} />;
   if (sectionId === 'inspections') return <RecordInspectionRow key={row.id} report={row as AskRecordInspectionRow} />;
+  if (sectionId === 'permits') return <RecordPermitRow key={row.id} permit={row as AskRecordPermitRow} />;
+  if (sectionId === 'projects-renovations') return <RecordProjectRow key={row.id} project={row as AskRecordProjectRow} />;
+  if (sectionId === 'incidents-claims') return <RecordIncidentClaimRow key={row.id} record={row as AskRecordIncidentClaimRow} />;
   return <RecordInventoryRow key={row.id} item={row as AskRecordInventoryRow} propertyId={propertyId} />;
 }
 

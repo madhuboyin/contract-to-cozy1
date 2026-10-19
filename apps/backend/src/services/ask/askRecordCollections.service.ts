@@ -6,6 +6,11 @@ import { loadOperatingMode } from './askRecordContext';
 import { inventoryLifecycleHorizon, inventoryMissingFacts } from './handlers/inventory.handler';
 import { visibleInventoryItemWhere } from '../riskAssetApplicability';
 import type { HouseholdRole } from '@prisma/client';
+import { permitTrackerService } from '../permitTracker.service';
+import { listProjects as listTrackedProjects } from '../projectTracker.service';
+import { PERMIT_CATEGORY_LABELS, PERMIT_OFFICIAL_STATUS_LABELS, PERMIT_REPORTED_STATUS_LABELS, PERMIT_WORK_TYPE_LABELS } from './support/permitTrackerRead';
+import { PROJECT_STATUS_LABELS, PROJECT_TYPE_LABELS } from './handlers/projectTracker.handler';
+import { OPEN_CLAIM_STATUSES, OPEN_INCIDENT_STATUSES } from './handlers/claims.handler';
 import { HomeEventsService } from '../homeEvents.service';
 import { loadCanonicalMaintenanceTaskSet } from '../skills/context/maintenanceTaskContext.provider';
 import { formatAskMaintenanceScope, formatAskMaintenanceTitle } from './askMaintenancePresentation';
@@ -803,6 +808,291 @@ export async function readInspectionsPage(propertyId: string, query: AskRecordCo
   };
 }
 
+export interface AskRecordPermitRow {
+  id: string;
+  title: string;
+  description: string | null;
+  /** The issuing authority's status. The household cannot change it. */
+  officialStatus: string;
+  officialStatusLabel: string;
+  /** What the household or contractor reported, shown only while the official status is not confirmed. */
+  reportedStatusLabel: string | null;
+  closed: boolean;
+  hasOpenInspections: boolean;
+  issueDate: string | null;
+  finaledDate: string | null;
+  expirationDate: string | null;
+  contractorName: string | null;
+  verified: boolean;
+  askQuestion: null;
+}
+
+const PERMIT_SOURCE_LIMIT = 500;
+const PERMIT_CLOSED = new Set(['FINALED', 'EXPIRED', 'VOIDED']);
+const PermitCursorSchema = z.object({ g: z.number().int(), d: z.number(), i: z.string() });
+const dateKey = (iso: string | null | undefined): number => (iso ? new Date(iso).getTime() : -1);
+
+/**
+ * Reads one page of the home's permit records through `permitTrackerService.listPermits`, the read the Permit Tracker page and Ask use
+ * (active records first, then closed out or no longer valid; newest issue date first). Official and reported status stay apart. That
+ * service reads up to 500 records in one call; a home with more says so in `notice`.
+ */
+export async function readPermitsPage(
+  propertyId: string,
+  query: AskRecordCollectionQuery,
+  list: typeof permitTrackerService.listPermits = (id, params) => permitTrackerService.listPermits(id, params),
+): Promise<AskRecordCollectionPage<AskRecordPermitRow>> {
+  const limit = clampLimit(query.limit);
+  const search = cleanSearch(query.search);
+  const status = query.filters?.status?.trim() || null;
+  const category = query.filters?.category?.trim() || null;
+  if (status && !(status in PERMIT_OFFICIAL_STATUS_LABELS)) throw new InvalidCollectionQueryError('status filter is not valid.');
+  if (category && !(category in PERMIT_CATEGORY_LABELS)) throw new InvalidCollectionQueryError('category filter is not valid.');
+  const after = decodeCursor(query.cursor, PermitCursorSchema);
+
+  const source = await list(propertyId, { limit: PERMIT_SOURCE_LIMIT });
+  const rows = (source.items as Array<Record<string, any>>).map((permit) => {
+    const closed = PERMIT_CLOSED.has(permit.status);
+    const reported = permit.reportedStatus ? PERMIT_REPORTED_STATUS_LABELS[permit.reportedStatus] ?? null : null;
+    const row: AskRecordPermitRow = {
+      id: permit.id,
+      title: `${PERMIT_CATEGORY_LABELS[permit.category] ?? permit.category} permit${permit.permitNumber ? ` ${permit.permitNumber}` : ''}`,
+      description: permit.description ?? (permit.workTypes?.length ? permit.workTypes.map(PERMIT_WORK_TYPE_LABELS).join(', ') : null),
+      officialStatus: permit.status,
+      officialStatusLabel: PERMIT_OFFICIAL_STATUS_LABELS[permit.status] ?? permit.status,
+      reportedStatusLabel: permit.status === 'UNKNOWN' ? reported : null,
+      closed,
+      hasOpenInspections: Boolean(permit.hasOpenInspections),
+      issueDate: permit.issueDate ?? null,
+      finaledDate: permit.finaledDate ?? null,
+      expirationDate: permit.expirationDate ?? null,
+      contractorName: permit.contractorName ?? null,
+      verified: Boolean(permit.isVerified),
+      askQuestion: null,
+    };
+    return { row, category: String(permit.category), group: closed ? 1 : 0, key: dateKey(permit.issueDate), haystack: `${row.title} ${row.description ?? ''} ${row.contractorName ?? ''} ${permit.permitNumber ?? ''}`.toLowerCase() };
+  }).sort((left, right) => left.group - right.group || right.key - left.key || (left.row.id < right.row.id ? -1 : left.row.id > right.row.id ? 1 : 0));
+
+  const needle = search?.toLowerCase() ?? null;
+  const matching = rows.filter((entry) => (!status || entry.row.officialStatus === status) && (!category || entry.category === category) && (!needle || entry.haystack.includes(needle)));
+  const remaining = after
+    ? matching.filter((entry) => entry.group > after.g || (entry.group === after.g && (entry.key < after.d || (entry.key === after.d && entry.row.id > after.i))))
+    : matching;
+  const page = remaining.slice(0, limit);
+  const last = page[page.length - 1];
+  const nextCursor = remaining.length > limit && last ? encodeCursor({ g: last.group, d: last.key, i: last.row.id }) : null;
+
+  const statusOptions = Object.keys(PERMIT_OFFICIAL_STATUS_LABELS).filter((value) => rows.some((entry) => entry.row.officialStatus === value) || value === status).map((value) => ({ value, label: PERMIT_OFFICIAL_STATUS_LABELS[value] }));
+  const categoryOptions = Object.keys(PERMIT_CATEGORY_LABELS).filter((value) => rows.some((entry) => entry.category === value) || value === category).map((value) => ({ value, label: PERMIT_CATEGORY_LABELS[value] }));
+  const newest = rows.map((entry) => entry.key).filter((key) => key > 0).sort((a, b) => b - a)[0];
+
+  return {
+    contractVersion: ASK_RECORD_COLLECTION_CONTRACT_VERSION,
+    propertyId,
+    sectionId: 'permits',
+    generatedAt: new Date().toISOString(),
+    freshAsOf: newest ? new Date(newest).toISOString() : null,
+    total: matching.length,
+    delivered: page.length,
+    nextCursor,
+    truncated: nextCursor !== null,
+    notice: source.nextCursor ? `This lists the first ${PERMIT_SOURCE_LIMIT} permit records. More are recorded but cannot be listed here yet.` : null,
+    sort: { key: 'status', label: 'Active first, then by issue date' },
+    query: { search, filters: Object.fromEntries(Object.entries({ status, category }).filter(([, value]) => value)) as Record<string, string> },
+    filterOptions: [
+      ...(statusOptions.length > 1 ? [{ key: 'status', label: 'Status', options: statusOptions }] : []),
+      ...(categoryOptions.length > 1 ? [{ key: 'category', label: 'Category', options: categoryOptions }] : []),
+    ],
+    rows: page.map((entry) => entry.row),
+  };
+}
+
+export interface AskRecordProjectRow {
+  id: string;
+  name: string;
+  typeLabel: string;
+  status: string;
+  statusLabel: string;
+  /** The contractor, or "DIY / household", or null when no provider is recorded. */
+  providerLabel: string | null;
+  contractLabel: string | null;
+  paidLabel: string;
+  remainingLabel: string | null;
+  expectedEndDate: string | null;
+  warrantyExpiresAt: string | null;
+  milestoneCount: number;
+  issueCount: number;
+  askQuestion: null;
+}
+
+const PROJECT_STATUSES = Object.keys(PROJECT_STATUS_LABELS);
+const ProjectCursorSchema = z.object({ g: z.number().int(), c: z.number(), i: z.string() });
+const projectMoney = (cents: number | null | undefined) => (cents == null ? null : `$${Math.round(cents / 100).toLocaleString('en-US')}`);
+
+/**
+ * Reads one page of tracked projects through `listProjects`, the read the Project Tracker page and Ask use: active projects first, then
+ * completed, then cancelled, newest created first inside each group. Amounts are the recorded figures; an unknown contract amount has no
+ * remaining balance.
+ */
+export async function readProjectsPage(
+  propertyId: string,
+  query: AskRecordCollectionQuery,
+  list: typeof listTrackedProjects = listTrackedProjects,
+): Promise<AskRecordCollectionPage<AskRecordProjectRow>> {
+  const limit = clampLimit(query.limit);
+  const search = cleanSearch(query.search);
+  const status = query.filters?.status?.trim() || null;
+  const type = query.filters?.type?.trim() || null;
+  if (status && !PROJECT_STATUSES.includes(status)) throw new InvalidCollectionQueryError('status filter is not valid.');
+  if (type && !(type in PROJECT_TYPE_LABELS)) throw new InvalidCollectionQueryError('type filter is not valid.');
+  const after = decodeCursor(query.cursor, ProjectCursorSchema);
+
+  const projects = await list(propertyId);
+  const entries = projects.map((project) => {
+    const group = project.status === 'COMPLETED' ? 1 : project.status === 'CANCELLED' ? 2 : 0;
+    const contract = project.currentContractAmountCents;
+    const row: AskRecordProjectRow = {
+      id: project.id,
+      name: project.name,
+      typeLabel: PROJECT_TYPE_LABELS[project.projectType] ?? readableEnum(project.projectType) ?? project.projectType,
+      status: project.status,
+      statusLabel: PROJECT_STATUS_LABELS[project.status] ?? readableEnum(project.status) ?? project.status,
+      providerLabel: project.contractorName ?? (project.fulfillmentMode === 'DIY' ? 'DIY / household' : null),
+      contractLabel: projectMoney(contract),
+      paidLabel: projectMoney(project.paidToDateCents) ?? '$0',
+      remainingLabel: project.status !== 'COMPLETED' && contract != null ? projectMoney(contract - (project.paidToDateCents ?? 0)) : null,
+      expectedEndDate: project.expectedEndDate ? new Date(project.expectedEndDate).toISOString() : null,
+      warrantyExpiresAt: project.warrantyExpiresAt ? new Date(project.warrantyExpiresAt).toISOString() : null,
+      milestoneCount: project._count?.milestones ?? 0,
+      issueCount: project._count?.issues ?? 0,
+      askQuestion: null,
+    };
+    return { row, group, type: String(project.projectType), key: new Date(project.createdAt).getTime(), haystack: `${project.name} ${project.contractorName ?? ''}`.toLowerCase() };
+  }).sort((left, right) => left.group - right.group || right.key - left.key || (left.row.id < right.row.id ? -1 : left.row.id > right.row.id ? 1 : 0));
+
+  const needle = search?.toLowerCase() ?? null;
+  const matching = entries.filter((entry) => (!status || entry.row.status === status) && (!type || entry.type === type) && (!needle || entry.haystack.includes(needle)));
+  const remaining = after
+    ? matching.filter((entry) => entry.group > after.g || (entry.group === after.g && (entry.key < after.c || (entry.key === after.c && entry.row.id > after.i))))
+    : matching;
+  const page = remaining.slice(0, limit);
+  const last = page[page.length - 1];
+  const nextCursor = remaining.length > limit && last ? encodeCursor({ g: last.group, c: last.key, i: last.row.id }) : null;
+
+  const statusOptions = PROJECT_STATUSES.filter((value) => entries.some((entry) => entry.row.status === value) || value === status).map((value) => ({ value, label: PROJECT_STATUS_LABELS[value] }));
+  const typeOptions = Object.keys(PROJECT_TYPE_LABELS).filter((value) => entries.some((entry) => entry.type === value) || value === type).map((value) => ({ value, label: PROJECT_TYPE_LABELS[value] }));
+  const newest = entries.map((entry) => entry.key).sort((a, b) => b - a)[0];
+
+  return {
+    contractVersion: ASK_RECORD_COLLECTION_CONTRACT_VERSION,
+    propertyId,
+    sectionId: 'projects-renovations',
+    generatedAt: new Date().toISOString(),
+    freshAsOf: newest ? new Date(newest).toISOString() : null,
+    total: matching.length,
+    delivered: page.length,
+    nextCursor,
+    truncated: nextCursor !== null,
+    notice: null,
+    sort: { key: 'status', label: 'Active first, then newest' },
+    query: { search, filters: Object.fromEntries(Object.entries({ status, type }).filter(([, value]) => value)) as Record<string, string> },
+    filterOptions: [
+      ...(statusOptions.length > 1 ? [{ key: 'status', label: 'Status', options: statusOptions }] : []),
+      ...(typeOptions.length > 1 ? [{ key: 'type', label: 'Type', options: typeOptions }] : []),
+    ],
+    rows: page.map((entry) => entry.row),
+  };
+}
+
+export interface AskRecordIncidentClaimRow {
+  /** Incident and claim ids come from different tables, so the key carries the kind. */
+  id: string;
+  recordId: string;
+  kind: 'INCIDENT' | 'CLAIM';
+  title: string;
+  summary: string | null;
+  statusLabel: string;
+  open: boolean;
+  /** Incident severity or claim type, as recorded. */
+  detailLabel: string | null;
+  providerName: string | null;
+  openedAt: string | null;
+  closedAt: string | null;
+  askQuestion: null;
+}
+
+const ICCursorSchema = z.object({ o: z.number(), i: z.string() });
+const humanizeCode = (value: string | null | undefined) => (value ? value.toLowerCase().replace(/_/g, ' ') : null);
+
+/**
+ * Reads one page of incidents (not suppressed) and claims together, newest first, with their own open/closed states. Ask's answer reads
+ * each bucket with a small fixed limit and no continuation; the Record lists every one. Incidents and claims are separate tables, so
+ * the rows are merged in memory (a home has a handful of each).
+ */
+export async function readIncidentsClaimsPage(propertyId: string, query: AskRecordCollectionQuery): Promise<AskRecordCollectionPage<AskRecordIncidentClaimRow>> {
+  const limit = clampLimit(query.limit);
+  const search = cleanSearch(query.search);
+  const kind = query.filters?.kind?.trim() || null;
+  const state = query.filters?.state?.trim() || null;
+  if (kind && kind !== 'INCIDENT' && kind !== 'CLAIM') throw new InvalidCollectionQueryError('kind filter is not valid.');
+  if (state && state !== 'open' && state !== 'closed') throw new InvalidCollectionQueryError('state filter is not valid.');
+  const after = decodeCursor(query.cursor, ICCursorSchema);
+
+  const [incidents, claims] = await Promise.all([
+    prisma.incident.findMany({ where: { propertyId, isSuppressed: false }, select: { id: true, title: true, summary: true, status: true, severity: true, openedAt: true, resolvedAt: true, typeKey: true } }),
+    prisma.claim.findMany({ where: { propertyId }, select: { id: true, title: true, status: true, type: true, providerName: true, incidentAt: true, openedAt: true, closedAt: true, updatedAt: true } }),
+  ]);
+  const entries = [
+    ...incidents.map((incident) => {
+      const open = OPEN_INCIDENT_STATUSES.includes(incident.status);
+      const when = incident.openedAt;
+      return {
+        key: when.getTime(), kind: 'INCIDENT' as const, open,
+        row: { id: `incident:${incident.id}`, recordId: incident.id, kind: 'INCIDENT' as const, title: incident.title, summary: incident.summary ?? humanizeCode(incident.typeKey), statusLabel: humanizeCode(incident.status) ?? incident.status, open, detailLabel: incident.severity ? `${humanizeCode(incident.severity)} severity` : null, providerName: null, openedAt: when.toISOString(), closedAt: incident.resolvedAt?.toISOString() ?? null, askQuestion: null },
+      };
+    }),
+    ...claims.map((claim) => {
+      const open = OPEN_CLAIM_STATUSES.includes(claim.status);
+      const when = claim.openedAt ?? claim.incidentAt ?? claim.updatedAt;
+      return {
+        key: when.getTime(), kind: 'CLAIM' as const, open,
+        row: { id: `claim:${claim.id}`, recordId: claim.id, kind: 'CLAIM' as const, title: claim.title, summary: null, statusLabel: humanizeCode(claim.status) ?? claim.status, open, detailLabel: humanizeCode(claim.type), providerName: claim.providerName ?? null, openedAt: when.toISOString(), closedAt: claim.closedAt?.toISOString() ?? null, askQuestion: null },
+      };
+    }),
+  ].sort((left, right) => right.key - left.key || (left.row.id < right.row.id ? -1 : left.row.id > right.row.id ? 1 : 0));
+
+  const needle = search?.toLowerCase() ?? null;
+  const matching = entries.filter((entry) => (
+    (!kind || entry.kind === kind)
+    && (!state || (state === 'open') === entry.open)
+    && (!needle || `${entry.row.title} ${entry.row.summary ?? ''} ${entry.row.providerName ?? ''}`.toLowerCase().includes(needle))
+  ));
+  const remaining = after ? matching.filter((entry) => entry.key < after.o || (entry.key === after.o && entry.row.id > after.i)) : matching;
+  const page = remaining.slice(0, limit);
+  const last = page[page.length - 1];
+  const nextCursor = remaining.length > limit && last ? encodeCursor({ o: last.key, i: last.row.id }) : null;
+
+  return {
+    contractVersion: ASK_RECORD_COLLECTION_CONTRACT_VERSION,
+    propertyId,
+    sectionId: 'incidents-claims',
+    generatedAt: new Date().toISOString(),
+    freshAsOf: entries[0] ? new Date(entries[0].key).toISOString() : null,
+    total: matching.length,
+    delivered: page.length,
+    nextCursor,
+    truncated: nextCursor !== null,
+    notice: null,
+    sort: { key: 'openedAt', label: 'Most recent first' },
+    query: { search, filters: Object.fromEntries(Object.entries({ kind, state }).filter(([, value]) => value)) as Record<string, string> },
+    filterOptions: [
+      { key: 'kind', label: 'Kind', options: [{ value: 'INCIDENT', label: 'Incidents' }, { value: 'CLAIM', label: 'Claims' }] },
+      { key: 'state', label: 'State', options: [{ value: 'open', label: 'Open' }, { value: 'closed', label: 'Closed' }] },
+    ],
+    rows: page.map((entry) => entry.row),
+  };
+}
+
 export type AskRecordReaderContext = { propertyId: string; userId: string; role: HouseholdRole };
 type SectionReader = (context: AskRecordReaderContext, query: AskRecordCollectionQuery) => Promise<AskRecordCollectionPage<unknown>>;
 
@@ -814,6 +1104,9 @@ export const ASK_RECORD_COLLECTION_READERS: Readonly<Partial<Record<AskRecordSec
   timeline: (context, query) => readTimelinePage(context, query),
   'maintenance-history': (context, query) => readMaintenanceHistoryPage(context, query),
   inspections: (context, query) => readInspectionsPage(context.propertyId, query),
+  permits: (context, query) => readPermitsPage(context.propertyId, query),
+  'projects-renovations': (context, query) => readProjectsPage(context.propertyId, query),
+  'incidents-claims': (context, query) => readIncidentsClaimsPage(context.propertyId, query),
   warranties: (context, query) => readWarrantiesPage(context.propertyId, query),
 });
 

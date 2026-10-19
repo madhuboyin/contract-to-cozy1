@@ -942,3 +942,52 @@ export interface AskRecordInspectionRow {
   majorFindings: number;
   askQuestion: null;
 }
+
+export interface AskRecordPermitRow {
+  id: string;
+  title: string;
+  description: string | null;
+  officialStatus: string;
+  officialStatusLabel: string;
+  reportedStatusLabel: string | null;
+  closed: boolean;
+  hasOpenInspections: boolean;
+  issueDate: string | null;
+  finaledDate: string | null;
+  expirationDate: string | null;
+  contractorName: string | null;
+  verified: boolean;
+  askQuestion: null;
+}
+
+export interface AskRecordProjectRow {
+  id: string;
+  name: string;
+  typeLabel: string;
+  status: string;
+  statusLabel: string;
+  providerLabel: string | null;
+  contractLabel: string | null;
+  paidLabel: string;
+  remainingLabel: string | null;
+  expectedEndDate: string | null;
+  warrantyExpiresAt: string | null;
+  milestoneCount: number;
+  issueCount: number;
+  askQuestion: null;
+}
+
+export interface AskRecordIncidentClaimRow {
+  id: string;
+  recordId: string;
+  kind: 'INCIDENT' | 'CLAIM';
+  title: string;
+  summary: string | null;
+  statusLabel: string;
+  open: boolean;
+  detailLabel: string | null;
+  providerName: string | null;
+  openedAt: string | null;
+  closedAt: string | null;
+  askQuestion: null;
+}

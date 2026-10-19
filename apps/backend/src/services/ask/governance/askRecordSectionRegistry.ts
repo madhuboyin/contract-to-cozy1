@@ -99,19 +99,19 @@ export const ASK_RECORD_SECTION_REGISTRY: readonly AskRecordSectionDefinition[] 
   section({
     id: 'permits', label: 'Permits', scope: 'Permits and their approval status.', owner: 'permits',
     readOperationIds: ['PERMIT_TRACKER_STATUS'], commandOperationIds: ['PERMIT_TRACKER_COMMAND'],
-    collectionReader: null, pagedCollection: false, lifecycleOperationId: 'PERMIT_TRACKER_STATUS', freshnessSource: 'Permit status updates', exportEligibility: 'NOT_EVALUATED',
+    collectionReader: PAGED, pagedCollection: true, lifecycleOperationId: 'PERMIT_TRACKER_STATUS', freshnessSource: 'Most recent permit issue date', exportEligibility: 'NOT_EVALUATED',
     primaryAction: { label: 'View permits', question: 'What is the status of my permits?' },
   }),
   section({
     id: 'projects-renovations', label: 'Projects and renovations', scope: 'Home projects and renovation cases.', owner: 'projects',
     readOperationIds: ['PROJECT_TRACKER_PROJECTS'], commandOperationIds: ['PROJECT_TRACKER_CREATE', 'PROJECT_TRACKER_COMMAND', 'RENOVATION_CASE_START'],
-    collectionReader: null, pagedCollection: false, lifecycleOperationId: 'PROJECT_TRACKER_PROJECTS', freshnessSource: 'Project updates', exportEligibility: 'NOT_EVALUATED',
+    collectionReader: PAGED, pagedCollection: true, lifecycleOperationId: 'PROJECT_TRACKER_PROJECTS', freshnessSource: 'Most recently created project', exportEligibility: 'NOT_EVALUATED',
     primaryAction: { label: 'View projects', question: 'Show me my home projects.' },
   }),
   section({
     id: 'incidents-claims', label: 'Incidents and claims', scope: 'Home incidents and insurance claims.', owner: 'incidents-claims',
     readOperationIds: ['INCIDENT_CLAIM_STATUS'], commandOperationIds: ['CLAIM_FILE', 'CLAIM_TRANSITION', 'CLAIM_ACTIVITY_COMMAND'],
-    collectionReader: null, pagedCollection: false, lifecycleOperationId: 'INCIDENT_CLAIM_STATUS', freshnessSource: 'Claim and incident updates', exportEligibility: 'NOT_EVALUATED',
+    collectionReader: PAGED, pagedCollection: true, lifecycleOperationId: 'INCIDENT_CLAIM_STATUS', freshnessSource: 'Most recent incident or claim', exportEligibility: 'NOT_EVALUATED',
     primaryAction: { label: 'View claims', question: 'What is the status of my incidents and claims?' },
   }),
   section({
