@@ -878,3 +878,20 @@ export interface AskRecordDocumentRow {
   updatedAt: string;
   askQuestion: string;
 }
+
+export interface AskRecordWarrantyRow {
+  id: string;
+  providerName: string;
+  category: string;
+  categoryLabel: string;
+  itemName: string | null;
+  coverageSummary: string | null;
+  status: 'ACTIVE' | 'EXPIRING' | 'EXPIRED' | 'STARTS_LATER' | 'NEEDS_REVIEW';
+  statusLabel: string;
+  daysRemaining: number | null;
+  startDate: string;
+  expiryDate: string;
+  hasDocuments: boolean;
+  updatedAt: string;
+  askQuestion: string;
+}

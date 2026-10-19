@@ -6,6 +6,7 @@ import { loadOperatingMode } from './askRecordIndex.service';
 import { inventoryLifecycleHorizon, inventoryMissingFacts } from './handlers/inventory.handler';
 import { visibleInventoryItemWhere } from '../riskAssetApplicability';
 import type { HouseholdRole } from '@prisma/client';
+import { warrantyStatus, WARRANTY_EXPIRING_DAYS, type WarrantyStatusKey } from './handlers/warranties.handler';
 import { listPropertyDocuments, type PropertyDocument } from '../propertyDocuments/propertyDocumentInventory.service';
 import { ASK_RECORD_SECTION_REGISTRY, evaluateRecordSectionApplicability, type AskRecordSectionId } from './governance/askRecordSectionRegistry';
 
@@ -390,6 +391,121 @@ export async function readDocumentsPage(
   };
 }
 
+export interface AskRecordWarrantyRow {
+  id: string;
+  providerName: string;
+  category: string;
+  categoryLabel: string;
+  /** The linked inventory item's name, when the warranty is attached to one. */
+  itemName: string | null;
+  /** Coverage text exactly as recorded, shortened for a row. Policy number and cost are never read. */
+  coverageSummary: string | null;
+  status: WarrantyStatusKey;
+  statusLabel: string;
+  daysRemaining: number | null;
+  startDate: string;
+  expiryDate: string;
+  hasDocuments: boolean;
+  updatedAt: string;
+  /** Opens the warranties answer for this category, the narrowest declared read Ask has. */
+  askQuestion: string;
+}
+
+const WARRANTY_STATUS_ORDER: readonly WarrantyStatusKey[] = ['EXPIRING', 'NEEDS_REVIEW', 'ACTIVE', 'STARTS_LATER', 'EXPIRED'];
+const WARRANTY_STATUS_LABELS: Record<WarrantyStatusKey, string> = {
+  EXPIRING: `Expires within ${WARRANTY_EXPIRING_DAYS} days`, NEEDS_REVIEW: 'Dates need review', ACTIVE: 'Active', STARTS_LATER: 'Starts later', EXPIRED: 'Expired',
+};
+const WARRANTY_CATEGORIES = ['APPLIANCE', 'HVAC', 'ROOFING', 'PLUMBING', 'ELECTRICAL', 'STRUCTURAL', 'HOME_WARRANTY_PLAN', 'OTHER'] as const;
+// The words Ask's warranty focus recognizes for each category, so a row's question lands on that category's answer (tested against `warrantyFocus`).
+const WARRANTY_CATEGORY_QUESTION_WORDS: Record<string, string> = {
+  APPLIANCE: 'appliance', HVAC: 'HVAC', ROOFING: 'roofing', PLUMBING: 'plumbing', ELECTRICAL: 'electrical', STRUCTURAL: 'structural', HOME_WARRANTY_PLAN: 'home warranty plan', OTHER: 'other',
+};
+const WarrantyCursorSchema = z.object({ r: z.number().int(), k: z.number(), i: z.string() });
+const COVERAGE_SUMMARY_MAX = 140;
+
+type WarrantyEntry = { row: AskRecordWarrantyRow; haystack: string; rank: number; key: number };
+
+/**
+ * Reads one page of the property's warranties, in Ask's own order: expiring first, then dates that need review, active, starting later,
+ * and expired (most recently expired first). Status is the governed `warrantyStatus`, which depends on dates and a coverage evaluation, so
+ * it is computed per row and the filters, search and cursor run over the property's warranty rows (a handful per home) in memory.
+ */
+export async function readWarrantiesPage(propertyId: string, query: AskRecordCollectionQuery, now = new Date()): Promise<AskRecordCollectionPage<AskRecordWarrantyRow>> {
+  const limit = clampLimit(query.limit);
+  const search = cleanSearch(query.search);
+  const status = query.filters?.status?.trim() || null;
+  const category = query.filters?.category?.trim() || null;
+  if (status && !(WARRANTY_STATUS_ORDER as readonly string[]).includes(status)) throw new InvalidCollectionQueryError('status filter is not valid.');
+  if (category && !(WARRANTY_CATEGORIES as readonly string[]).includes(category)) throw new InvalidCollectionQueryError('category filter is not valid.');
+  const after = decodeCursor(query.cursor, WarrantyCursorSchema);
+
+  const records = await prisma.warranty.findMany({
+    where: { propertyId },
+    orderBy: [{ expiryDate: 'asc' }, { id: 'asc' }],
+    select: {
+      id: true, propertyId: true, providerName: true, category: true, coverageDetails: true, startDate: true, expiryDate: true, updatedAt: true,
+      inventoryItem: { select: { name: true } }, documents: { select: { id: true }, take: 1 },
+    },
+  });
+  const entries: WarrantyEntry[] = records.map((record) => {
+    const evaluated = warrantyStatus(record, propertyId, now);
+    const coverage = record.coverageDetails?.trim() || null;
+    const questionWord = WARRANTY_CATEGORY_QUESTION_WORDS[record.category] ?? 'recorded';
+    return {
+      haystack: [record.inventoryItem?.name, record.providerName, record.coverageDetails].filter(Boolean).join(' ').toLowerCase(),
+      rank: WARRANTY_STATUS_ORDER.indexOf(evaluated.key),
+      // Expired warranties list the most recently expired first; every other status lists the soonest expiry first.
+      key: evaluated.key === 'EXPIRED' ? -record.expiryDate.getTime() : record.expiryDate.getTime(),
+      row: {
+        id: record.id,
+        providerName: record.providerName,
+        category: record.category,
+        categoryLabel: readableEnum(record.category) ?? record.category,
+        itemName: record.inventoryItem?.name ?? null,
+        coverageSummary: coverage && coverage.length > COVERAGE_SUMMARY_MAX ? `${coverage.slice(0, COVERAGE_SUMMARY_MAX - 1).trimEnd()}…` : coverage,
+        status: evaluated.key,
+        statusLabel: WARRANTY_STATUS_LABELS[evaluated.key],
+        daysRemaining: evaluated.daysRemaining,
+        startDate: record.startDate.toISOString(),
+        expiryDate: record.expiryDate.toISOString(),
+        hasDocuments: record.documents.length > 0,
+        updatedAt: record.updatedAt.toISOString(),
+        askQuestion: `Show me my ${questionWord} warranties.`,
+      },
+    };
+  }).sort((left, right) => left.rank - right.rank || left.key - right.key || (left.row.id < right.row.id ? -1 : left.row.id > right.row.id ? 1 : 0));
+
+  const needle = search?.toLowerCase() ?? null;
+  const matching = entries.filter((entry) => (!status || entry.row.status === status) && (!category || entry.row.category === category) && (!needle || entry.haystack.includes(needle)));
+  const remaining = after
+    ? matching.filter((entry) => entry.rank > after.r || (entry.rank === after.r && (entry.key > after.k || (entry.key === after.k && entry.row.id > after.i))))
+    : matching;
+  const page = remaining.slice(0, limit);
+  const last = page[page.length - 1];
+  const nextCursor = remaining.length > limit && last ? encodeCursor({ r: last.rank, k: last.key, i: last.row.id }) : null;
+
+  const statusOptions = WARRANTY_STATUS_ORDER.filter((value) => entries.some((entry) => entry.row.status === value) || value === status).map((value) => ({ value, label: WARRANTY_STATUS_LABELS[value] }));
+  const categoryOptions = WARRANTY_CATEGORIES.filter((value) => entries.some((entry) => entry.row.category === value) || value === category).map((value) => ({ value, label: readableEnum(value) ?? value }));
+
+  return {
+    contractVersion: ASK_RECORD_COLLECTION_CONTRACT_VERSION,
+    propertyId,
+    sectionId: 'warranties',
+    generatedAt: now.toISOString(),
+    total: matching.length,
+    delivered: page.length,
+    nextCursor,
+    truncated: nextCursor !== null,
+    sort: { key: 'status', label: 'Expiring first, then by expiry date' },
+    query: { search, filters: Object.fromEntries(Object.entries({ status, category }).filter(([, value]) => value)) as Record<string, string> },
+    filterOptions: [
+      ...(statusOptions.length > 1 ? [{ key: 'status', label: 'Status', options: statusOptions }] : []),
+      ...(categoryOptions.length > 1 ? [{ key: 'category', label: 'Category', options: categoryOptions }] : []),
+    ],
+    rows: page.map((entry) => entry.row),
+  };
+}
+
 type SectionReader = (context: { propertyId: string; role: HouseholdRole }, query: AskRecordCollectionQuery) => Promise<AskRecordCollectionPage<unknown>>;
 
 /** The sections with a connected paged reader. The registry's `pagedCollection` flag must agree with this map (tested). */
@@ -397,6 +513,7 @@ export const ASK_RECORD_COLLECTION_READERS: Readonly<Partial<Record<AskRecordSec
   rooms: (context, query) => readRoomsPage(context.propertyId, query),
   inventory: (context, query) => readInventoryPage(context.propertyId, query),
   documents: readDocumentsPage,
+  warranties: (context, query) => readWarrantiesPage(context.propertyId, query),
 });
 
 export class AskRecordSectionUnavailableError extends Error {

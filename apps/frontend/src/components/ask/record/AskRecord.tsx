@@ -7,13 +7,14 @@ import { useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api/client';
 import { buildAskWorkspaceHref } from '@/lib/navigation/askNavigation';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
-import type { AskRecordIndex, AskRecordDocumentRow, AskRecordIndexSection, AskRecordInventoryRow, AskRecordRoomRow } from '@/features/ask/types';
+import type { AskRecordIndex, AskRecordDocumentRow, AskRecordIndexSection, AskRecordInventoryRow, AskRecordRoomRow, AskRecordWarrantyRow } from '@/features/ask/types';
 import { AskCollection, AskCollectionState, AskCompactRow, AskWorkspaceMeasure } from '../presentation/AskLayoutPrimitives';
 import { askServiceIsPaused } from '../workspace/support';
 import { RecordCollection } from './RecordCollection';
 import { RecordRoomRow } from './RecordRoomRow';
 import { RecordInventoryRow } from './RecordInventoryRow';
 import { RecordDocumentRow } from './RecordDocumentRow';
+import { RecordWarrantyRow } from './RecordWarrantyRow';
 
 const NOT_AVAILABLE_COPY: Record<NonNullable<AskRecordIndexSection['reasonCode']>, string> = {
   READER_NOT_CONNECTED: 'Count not shown here yet. Ask opens this section.',
@@ -67,12 +68,14 @@ function SectionRow({ section, propertyId }: { section: AskRecordIndexSection; p
 const PAGED_SECTIONS: Record<string, { label: string; searchLabel: string; emptyText: string }> = {
   rooms: { label: 'Rooms', searchLabel: 'Search rooms', emptyText: 'No rooms are recorded yet.' },
   documents: { label: 'Documents', searchLabel: 'Search documents', emptyText: 'No documents are on file yet.' },
+  warranties: { label: 'Warranties', searchLabel: 'Search warranties', emptyText: 'No warranties are recorded yet.' },
   inventory: { label: 'Systems and inventory', searchLabel: 'Search inventory', emptyText: 'No inventory items are recorded yet.' },
 };
 
 function renderPagedRow(sectionId: string, row: { id: string }, propertyId: string) {
   if (sectionId === 'rooms') return <RecordRoomRow key={row.id} room={row as AskRecordRoomRow} propertyId={propertyId} />;
   if (sectionId === 'documents') return <RecordDocumentRow key={row.id} document={row as AskRecordDocumentRow} propertyId={propertyId} />;
+  if (sectionId === 'warranties') return <RecordWarrantyRow key={row.id} warranty={row as AskRecordWarrantyRow} propertyId={propertyId} />;
   return <RecordInventoryRow key={row.id} item={row as AskRecordInventoryRow} propertyId={propertyId} />;
 }
 
