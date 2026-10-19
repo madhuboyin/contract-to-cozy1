@@ -1056,3 +1056,42 @@ export interface AskRecordHouseholdMemberRow {
   joinedAt: string;
   askQuestion: null;
 }
+
+// Export review (FR-REC-006). Mirrors the backend `AskRecordExportReview`.
+export interface AskRecordExportReviewSection {
+  id: string;
+  label: string;
+  state: 'INCLUDED' | 'EXCLUDED';
+  applicability: 'APPLICABLE' | 'NOT_APPLICABLE' | 'CONTEXT_REQUIRED' | 'RESTRICTED';
+  packPath: string | null;
+  reason: string | null;
+  note: string | null;
+  ownerFields: string[];
+  sharedFields: string[];
+  withheldFromShared: string[];
+}
+
+export interface AskRecordExportReview {
+  contractVersion: 'ask-record-export-review-v1';
+  propertyId: string;
+  generatedAt: string;
+  property: { name: string | null; address: string; city: string; state: string } | null;
+  accessRole: 'VIEWER' | 'CONTRIBUTOR' | 'OWNER';
+  operatingMode: 'BUYING' | 'OWNING' | 'SELLING' | 'UNKNOWN';
+  create: { allowed: boolean; requiredRole: 'CONTRIBUTOR'; reason: string | null };
+  pack: { format: 'PDF'; sectionsSelectable: false; downloadableBy: 'CREATOR'; recordExpiresInDays: number };
+  sharing: { requiredRole: 'CONTRIBUTOR'; defaultExpiryDays: number; copy: 'REDACTED' };
+  sections: AskRecordExportReviewSection[];
+  included: string[];
+  excluded: string[];
+}
+
+export type HomeReportExportStatus = 'PENDING' | 'GENERATING' | 'READY' | 'FAILED' | 'EXPIRED' | 'DELETED';
+export interface HomeReportExportSummary {
+  id: string;
+  status: HomeReportExportStatus;
+  requestedAt: string;
+  completedAt?: string | null;
+  errorMessage?: string | null;
+  expiresAt?: string | null;
+}

@@ -11,6 +11,7 @@ import type { AskRecordBuyerTaskRow, AskRecordFinancingScenarioRow, AskRecordHou
 import { AskCollection, AskCollectionState, AskCompactRow, AskWorkspaceMeasure } from '../presentation/AskLayoutPrimitives';
 import { askServiceIsPaused } from '../workspace/support';
 import { RecordCollection } from './RecordCollection';
+import { RecordExportReview } from './RecordExportReview';
 import { RecordRoomRow } from './RecordRoomRow';
 import { RecordInventoryRow } from './RecordInventoryRow';
 import { RecordDocumentRow } from './RecordDocumentRow';
@@ -111,7 +112,8 @@ export function AskRecord() {
   const propertyMismatch = Boolean(requestedPropertyId) && requestedPropertyId !== selectedPropertyId;
   const scopedPropertyId = requestedPropertyId || selectedPropertyId;
   const requestedSection = searchParams.get('section')?.trim() ?? '';
-  const collectionSection = Object.prototype.hasOwnProperty.call(PAGED_SECTIONS, requestedSection) ? requestedSection : null;
+  const exportReview = searchParams.get('export') === 'review';
+  const collectionSection = !exportReview && Object.prototype.hasOwnProperty.call(PAGED_SECTIONS, requestedSection) ? requestedSection : null;
   const indexHref = `/dashboard/ask/record${scopedPropertyId ? `?propertyId=${encodeURIComponent(scopedPropertyId)}` : ''}`;
   const [index, setIndex] = useState<AskRecordIndex | null>(null);
   const [status, setStatus] = useState<'LOADING' | 'READY' | 'ERROR' | 'PAUSED'>('LOADING');
@@ -123,7 +125,7 @@ export function AskRecord() {
   }, [propertyMismatch, requestedPropertyId, setSelectedPropertyId]);
 
   useEffect(() => {
-    if (!scopedPropertyId || propertyMismatch || collectionSection) return;
+    if (!scopedPropertyId || propertyMismatch || collectionSection || exportReview) return;
     const controller = new AbortController();
     setStatus('LOADING');
     api.getAskRecordIndex(scopedPropertyId, { signal: controller.signal })
@@ -139,7 +141,7 @@ export function AskRecord() {
         setStatus(askServiceIsPaused(caught) ? 'PAUSED' : 'ERROR');
       });
     return () => controller.abort();
-  }, [scopedPropertyId, propertyMismatch, collectionSection, attempt]);
+  }, [scopedPropertyId, propertyMismatch, collectionSection, exportReview, attempt]);
 
   const propertyLabel = index?.property ? (index.property.name?.trim() || `${index.property.address}, ${index.property.city}`) : null;
   const completeness = index?.completeness;
@@ -153,7 +155,7 @@ export function AskRecord() {
             <h1 id="ask-record-title" className="mt-1 text-3xl font-semibold tracking-[-0.025em] text-slate-950">Record</h1>
             {propertyLabel && <p className="mt-1 truncate text-sm text-slate-600">{propertyLabel}{index?.property ? ` · ${index.property.city}, ${index.property.state}` : ''}</p>}
           </div>
-          {!collectionSection && completeness?.state === 'AVAILABLE' && completeness.percent !== null && (
+          {!collectionSection && !exportReview && completeness?.state === 'AVAILABLE' && completeness.percent !== null && (
             <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3" data-record-completeness>
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-slate-950">{completeness.percent}% of home details known</p>
@@ -166,10 +168,17 @@ export function AskRecord() {
               )}
             </div>
           )}
+          {!collectionSection && !exportReview && scopedPropertyId && (
+            <Link href={`/dashboard/ask/record?propertyId=${encodeURIComponent(scopedPropertyId)}&export=review`} className="inline-flex min-h-11 items-center justify-center rounded-xl border border-emerald-900/20 bg-white px-4 py-2 text-sm font-semibold text-emerald-950 hover:bg-emerald-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700">
+              Export home record
+            </Link>
+          )}
         </header>
 
         <section className="mt-5" aria-label="Home record sections">
-          {collectionSection && scopedPropertyId && !propertyMismatch ? (
+          {exportReview && scopedPropertyId && !propertyMismatch ? (
+            <RecordExportReview key={scopedPropertyId} propertyId={scopedPropertyId} backHref={indexHref} />
+          ) : collectionSection && scopedPropertyId && !propertyMismatch ? (
             <RecordCollection<{ id: string }>
               key={`${scopedPropertyId}:${collectionSection}`}
               sectionId={collectionSection}

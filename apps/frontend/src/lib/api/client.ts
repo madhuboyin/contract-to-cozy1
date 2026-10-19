@@ -1112,6 +1112,19 @@ class APIClient {
     for (const [key, value] of Object.entries(query.filters ?? {})) if (value) params.set(key, value);
     return this.request(`/api/ask/record-sections/${encodeURIComponent(sectionId)}?${params.toString()}`, options);
   }
+  async getAskRecordExportReview(propertyId: string, options: { signal?: AbortSignal } = {}): Promise<APIResponse<import('@/features/ask/types').AskRecordExportReview>> {
+    return this.request(`/api/ask/record-export-review?propertyId=${encodeURIComponent(propertyId)}`, options);
+  }
+  // The existing home-report export endpoints (the Reports page uses the same ones); the Record export creates the same pack.
+  async createHomeReportExport(propertyId: string): Promise<APIResponse<{ exportId: string; status: import('@/features/ask/types').HomeReportExportStatus }>> {
+    return this.request(`/api/properties/${encodeURIComponent(propertyId)}/reports/exports`, { method: 'POST', body: { type: 'HOME_REPORT_PACK' } });
+  }
+  async listHomeReportExports(propertyId: string): Promise<APIResponse<{ exports: import('@/features/ask/types').HomeReportExportSummary[] }>> {
+    return this.request(`/api/properties/${encodeURIComponent(propertyId)}/reports/exports`);
+  }
+  async getHomeReportExportDownloadUrl(exportId: string): Promise<APIResponse<{ url: string }>> {
+    return this.request(`/api/reports/exports/${encodeURIComponent(exportId)}/download`);
+  }
   async continueAskExecution(executionId: string, surface: 'ASK_PAGE' | 'GLOBAL_LAUNCHER'): Promise<APIResponse<AskExecutionResponse>> {
     return this.request<AskExecutionResponse>(`/api/ask/executions/${encodeURIComponent(executionId)}/continue`, { method: 'POST', body: { surface } });
   }

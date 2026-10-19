@@ -42,12 +42,12 @@ test('record section registry is structurally valid and declares every FR-REC-00
   assert.deepEqual(ASK_RECORD_SECTION_REGISTRY.map((entry) => entry.id).sort(), [...REQUIRED_SECTIONS].sort());
 });
 
-test('registry validation rejects duplicates, unregistered operations, a foreign lifecycle operation, and export claims', () => {
+test('registry validation rejects duplicates, unregistered operations, a foreign lifecycle operation, and an unexplained export exclusion', () => {
   const base = byId('rooms');
   const issues = validateAskRecordSectionRegistry([
     base,
     { ...base },
-    { ...byId('inventory'), id: 'documents', readOperationIds: ['NOT_AN_OPERATION'], lifecycleOperationId: 'WARRANTY_LOOKUP', owner: ' ', exportEligibility: 'ELIGIBLE' },
+    { ...byId('inventory'), id: 'documents', readOperationIds: ['NOT_AN_OPERATION'], lifecycleOperationId: 'WARRANTY_LOOKUP', owner: ' ', exportEligibility: { state: 'NOT_IN_PACK', reason: ' ' } },
     { ...byId('warranties'), id: 'timeline', commandOperationIds: ['INVENTORY_LOOKUP'] },
   ]);
   const text = issues.join('\n');
@@ -55,7 +55,7 @@ test('registry validation rejects duplicates, unregistered operations, a foreign
   assert.match(text, /unregistered operation NOT_AN_OPERATION/);
   assert.match(text, /lifecycle operation WARRANTY_LOOKUP is not one of its reads/);
   assert.match(text, /documents has no owner/);
-  assert.match(text, /claims export eligibility/);
+  assert.match(text, /is not in the pack but gives no reason/);
   assert.match(text, /lists non-command operation INVENTORY_LOOKUP/);
 });
 

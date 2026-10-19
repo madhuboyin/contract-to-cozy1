@@ -4,6 +4,7 @@ import { z } from 'zod';
 import type { AuthRequest } from '../types/auth.types';
 import { AskSessionSearchRequestSchema, AskSessionUpdateRequestSchema, ContinueAskExecutionSchema, CreateAskExecutionRequestSchema, EditAskConfirmationSchema, RecordAskCaptureEventSchema, RequestAskCorrectionSchema, ResolveAskExecutionPropertySchema, RetryAskExecutionSchema, SubmitAskCaptureRequestSchema, SubmitAskClarificationSchema, SubmitAskConfirmationSchema, SubmitAskFeedbackSchema, SubmitHomeActionUsefulnessFeedbackSchema, DismissSuggestedActionSchema, SUGGESTED_NEXT_ACTION_ID_PATTERN } from '../productFramework/ask/ask.contract';
 import { getAskRecordIndex } from '../services/ask/askRecordIndex.service';
+import { getAskRecordExportReview } from '../services/ask/askRecordExportReview.service';
 import { getAskRecordCollectionPage, AskRecordSectionUnavailableError } from '../services/ask/askRecordCollections.service';
 import { cancelAskExecution, confirmAskExecution, continueAskExecution, createAskExecution, editAskConfirmation, getAskExecution, getAskPendingWork, getAskSession, getConciergeHome, getRecentAskSessions, updateAskSessionForUser, recordAskCaptureEvent, recordAskCaptureFailure, refreshAskExecutionAfterConflict, requestAskCorrection, resolveAskExecutionProperty, retryAskExecution, submitAskCapture, submitAskClarification, submitAskExecutionFeedback, submitHomeActionUsefulnessFeedback } from '../services/ask/askOrchestrator.service';
 import { deleteAskSessionForUser } from '../services/ask/askRetention.service';
@@ -505,6 +506,22 @@ export async function getAskRecordSectionPage(req: AuthRequest, res: Response, n
       const status = error.reason === 'NOT_APPLICABLE' || error.reason === 'CONTEXT_REQUIRED' ? 409 : 404;
       return res.status(status).json({ success: false, error: { code: error.code, reason: error.reason, message: 'This record section is not available.' } });
     }
+    return next(error);
+  }
+}
+
+// Export review (FR-REC-006): what the home-report pack includes and excludes, how sensitive fields are handled, and the limits that apply.
+// Read-only; creating the export stays the existing explicit action.
+export async function getAskRecordExportReviewHandler(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const user = req.user;
+    if (!user) return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED', message: 'Authentication required.' } });
+    const propertyId = z.string().trim().min(1).max(160).safeParse(req.query.propertyId);
+    if (!propertyId.success) return res.status(400).json({ success: false, error: { code: 'ASK_INVALID_REQUEST', message: 'A propertyId is required.' } });
+    return res.status(200).json({ success: true, data: await getAskRecordExportReview(user.userId, propertyId.data, user.role) });
+  } catch (error) {
+    const code = error instanceof Error ? (error as Error & { code?: string }).code : undefined;
+    if (code === 'ASK_PROPERTY_NOT_FOUND') return res.status(404).json({ success: false, error: { code, message: 'Property not found or access was removed.' } });
     return next(error);
   }
 }
