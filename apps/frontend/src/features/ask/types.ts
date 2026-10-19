@@ -1362,3 +1362,74 @@ export interface AskSearchResponse {
   groups: Array<{ group: AskSearchGroupId; label: string; results: AskSearchResult[]; more: boolean }>;
   providers: AskSearchProviderStatus[];
 }
+
+// Notifications (FR-NOTIF-001..004). Mirrors the backend inbox, open result and settings contracts.
+export type AskNotificationDestination =
+  | { kind: 'WORK'; workKey: string }
+  | { kind: 'SAVED'; artifactKey: string }
+  | { kind: 'CONVERSATION'; sessionId: string; executionId: string }
+  | { kind: 'QUESTION'; question: string }
+  | { kind: 'LEGACY_LINK'; path: string };
+
+export interface AskNotificationItem {
+  id: string;
+  type: string;
+  category: string;
+  categoryLabel: string;
+  urgency: 'ROUTINE' | 'MATERIAL' | 'URGENT' | 'CRITICAL';
+  title: string;
+  message: string;
+  whyItAppeared: string;
+  propertyId: string | null;
+  propertyLabel: string | null;
+  propertyAccess: 'ACCESSIBLE' | 'LOST' | 'NONE';
+  createdAt: string;
+  expiresAt: string | null;
+  expired: boolean;
+  isRead: boolean;
+  dismissed: boolean;
+  continuationKind: AskNotificationDestination['kind'] | 'NONE';
+  deliveryPaused: 'MUTED' | 'SNOOZED' | null;
+}
+
+export interface AskNotificationPage {
+  contractVersion: 'ask-notification-v1';
+  generatedAt: string;
+  view: 'INBOX' | 'DISMISSED';
+  total: number;
+  unreadCount: number;
+  dismissedCount: number;
+  nextCursor: string | null;
+  truncated: boolean;
+  query: { unreadOnly: boolean; category: string | null; propertyId: string | null };
+  filterOptions: { categories: Array<{ value: string; label: string }>; properties: Array<{ value: string; label: string }> };
+  items: AskNotificationItem[];
+}
+
+export interface AskNotificationOpenResult {
+  contractVersion: 'ask-notification-v1';
+  notificationId: string;
+  outcome: 'AVAILABLE' | 'DELETED' | 'ACCESS_LOST' | 'UNAVAILABLE';
+  destination: AskNotificationDestination | null;
+  propertyId: string | null;
+  legacy: boolean;
+  message: string;
+}
+
+export interface AskNotificationCategorySetting {
+  category: string;
+  label: string;
+  description: string;
+  canPause: boolean;
+  email: { mode: 'ON' | 'MUTED' | 'SNOOZED'; snoozedUntil: string | null; cadence: string | null; defaultCadence: string };
+  consent: { required: boolean; granted: boolean; version: string | null; disclosure: string | null };
+}
+
+export interface AskNotificationSettings {
+  generatedAt: string;
+  channels: Array<{ channel: 'IN_APP' | 'EMAIL'; configurable: boolean; disclosure: string }>;
+  unavailableChannels: Array<{ channel: 'PUSH' | 'SMS' | 'WHATSAPP'; reason: string }>;
+  quietHours: { start: string | null; end: string | null; timezone: string };
+  categories: AskNotificationCategorySetting[];
+  capabilitySettings: Array<{ id: string; label: string; description: string; question: string }>;
+}

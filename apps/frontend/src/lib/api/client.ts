@@ -1143,6 +1143,38 @@ class APIClient {
   async searchAsk(propertyId: string, query: string, options: { signal?: AbortSignal } = {}): Promise<APIResponse<import('@/features/ask/types').AskSearchResponse>> {
     return this.request('/api/ask/search', { method: 'POST', body: { propertyId, query }, ...options });
   }
+  // Notifications (FR-NOTIF-001..004): the unified inbox, opening an item against live records, dismiss and read, and the central settings.
+  async getAskNotifications(query: { view?: 'INBOX' | 'DISMISSED'; cursor?: string | null; limit?: number; unreadOnly?: boolean; category?: string; propertyId?: string } = {}, options: { signal?: AbortSignal } = {}): Promise<APIResponse<import('@/features/ask/types').AskNotificationPage>> {
+    const params = new URLSearchParams();
+    if (query.view) params.set('view', query.view);
+    if (query.cursor) params.set('cursor', query.cursor);
+    if (query.limit) params.set('limit', String(query.limit));
+    if (query.unreadOnly) params.set('unreadOnly', 'true');
+    if (query.category) params.set('category', query.category);
+    if (query.propertyId) params.set('propertyId', query.propertyId);
+    return this.request(`/api/ask/notifications?${params.toString()}`, options);
+  }
+  async openAskNotification(id: string): Promise<APIResponse<import('@/features/ask/types').AskNotificationOpenResult>> {
+    return this.request(`/api/ask/notifications/${encodeURIComponent(id)}/open`, { method: 'POST' });
+  }
+  async setAskNotificationDismissed(id: string, dismissed: boolean): Promise<APIResponse<{ id: string; dismissed: boolean }>> {
+    return this.request(`/api/ask/notifications/${encodeURIComponent(id)}/dismiss`, { method: 'PATCH', body: { dismissed } });
+  }
+  async setAskNotificationRead(id: string, read: boolean): Promise<APIResponse<{ id: string; isRead: boolean }>> {
+    return this.request(`/api/ask/notifications/${encodeURIComponent(id)}/read`, { method: 'PATCH', body: { read } });
+  }
+  async getAskNotificationSettings(options: { signal?: AbortSignal } = {}): Promise<APIResponse<import('@/features/ask/types').AskNotificationSettings>> {
+    return this.request('/api/ask/notification-settings', options);
+  }
+  async updateAskNotificationCategory(category: string, update: { mode: 'ON' | 'MUTED' | 'SNOOZED'; snoozedUntil?: string | null }): Promise<APIResponse<import('@/features/ask/types').AskNotificationCategorySetting>> {
+    return this.request(`/api/ask/notification-settings/categories/${encodeURIComponent(category)}`, { method: 'PUT', body: update });
+  }
+  async updateAskNotificationQuietHours(input: { start: string | null; end: string | null; timezone: string }): Promise<APIResponse<{ start: string | null; end: string | null; timezone: string }>> {
+    return this.request('/api/ask/notification-settings/quiet-hours', { method: 'PUT', body: input });
+  }
+  async setAskNotificationConsent(category: string, granted: boolean): Promise<APIResponse<{ category: string; granted: boolean; version: string | null }>> {
+    return this.request(`/api/ask/notification-settings/consents/${encodeURIComponent(category)}`, { method: 'PUT', body: { granted } });
+  }
   async getAskRecordIndex(propertyId: string, options: { signal?: AbortSignal } = {}): Promise<APIResponse<import('@/features/ask/types').AskRecordIndex>> {
     return this.request(`/api/ask/record-index?propertyId=${encodeURIComponent(propertyId)}`, options);
   }

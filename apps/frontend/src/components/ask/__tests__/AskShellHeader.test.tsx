@@ -48,12 +48,12 @@ describe('AskShellHeader', () => {
     render(<AskShellHeader />);
 
     expect(screen.getByRole('link', { name: 'Ask Cozy Home' })).toHaveAttribute('href', '/dashboard/ask');
-    expect(screen.getByRole('link', { name: 'Notifications (12 unread)' })).toHaveAttribute('href', '/dashboard/notifications');
+    expect(screen.getByRole('link', { name: 'Notifications (12 unread)' })).toHaveAttribute('href', '/dashboard/ask/notifications');
     fireEvent.click(screen.getByRole('button', { name: 'Search pages, actions, and tools' }));
     expect(opened).toHaveBeenCalledTimes(1);
     await user.click(screen.getByRole('button', { name: 'Open settings for Ada Homeowner' }));
     expect(await screen.findByRole('menuitem', { name: 'Profile, privacy & settings' })).toHaveAttribute('href', '/dashboard/profile');
-    expect(screen.getByRole('menuitem', { name: 'Notification settings' })).toHaveAttribute('href', '/dashboard/notifications');
+    expect(screen.getByRole('menuitem', { name: 'Notification settings' })).toHaveAttribute('href', '/dashboard/ask/notifications?tab=settings');
     await user.click(screen.getByRole('menuitem', { name: 'Sign out' }));
     expect(logout).toHaveBeenCalledTimes(1);
   });
