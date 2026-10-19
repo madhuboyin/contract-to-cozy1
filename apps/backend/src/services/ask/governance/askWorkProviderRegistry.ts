@@ -72,6 +72,8 @@ const provider = (value: AskWorkProviderDefinition): AskWorkProviderDefinition =
 const CONNECTED = { state: 'CONNECTED' } as const;
 const unavailable = (reason: string): AskWorkProviderReader => ({ state: 'UNAVAILABLE', reason });
 const ALL_VIEWS = ASK_WORK_LIFECYCLE_VIEWS;
+/** Domains with no scheduled state never populate the Scheduled view. */
+const NO_SCHEDULE: readonly AskWorkLifecycleView[] = ['NEEDS_YOU', 'ACTIVE', 'WAITING', 'COMPLETED', 'ARCHIVED'];
 
 export const ASK_WORK_PROVIDER_REGISTRY: readonly AskWorkProviderDefinition[] = Object.freeze([
   provider({
@@ -84,15 +86,15 @@ export const ASK_WORK_PROVIDER_REGISTRY: readonly AskWorkProviderDefinition[] = 
     id: 'DECISION_THREADS', label: 'Decisions', workType: 'DECISION_THREAD', owner: 'decision-platform',
     readOperationIds: ['HVAC_DECISION_CONTINUE'], commandOperationIds: ['HVAC_DECISION_ABANDON'],
     readAuthority: 'OPERATION_FLOOR', lifecycleOperationId: 'HVAC_DECISION_CONTINUE',
-    reader: unavailable('The decision-thread work reader is not connected yet.'), precedence: 20, fallbackProjection: false, sourceAliasKinds: ['decisionThread'],
-    views: ALL_VIEWS, requiredForExit: true, freshnessSource: 'Decision thread last update',
+    reader: CONNECTED, precedence: 20, fallbackProjection: false, sourceAliasKinds: ['decisionThread'],
+    views: NO_SCHEDULE, requiredForExit: true, freshnessSource: 'Decision thread last update',
   }),
   provider({
     id: 'INCIDENTS', label: 'Incidents', workType: 'INCIDENT', owner: 'incidents',
     readOperationIds: ['INCIDENT_CLAIM_STATUS', 'INCIDENT_CONTINUATION'], commandOperationIds: [],
     readAuthority: 'OPERATION_FLOOR', lifecycleOperationId: 'INCIDENT_CLAIM_STATUS',
-    reader: unavailable('The incident work reader is not connected yet.'), precedence: 20, fallbackProjection: false, sourceAliasKinds: ['incident', 'workItem'],
-    views: ALL_VIEWS, requiredForExit: true, freshnessSource: 'Incident last update',
+    reader: CONNECTED, precedence: 20, fallbackProjection: false, sourceAliasKinds: ['incident', 'workItem'],
+    views: NO_SCHEDULE, requiredForExit: true, freshnessSource: 'Incident last update',
   }),
   provider({
     id: 'CLAIMS', label: 'Claims', workType: 'CLAIM', owner: 'incidents-claims',

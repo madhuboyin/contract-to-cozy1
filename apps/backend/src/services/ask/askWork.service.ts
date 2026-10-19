@@ -3,6 +3,8 @@ import type { HouseholdRole } from '@prisma/client';
 import { logger } from '../../lib/logger';
 import type { AskAccountRole } from './askAccountEligibility';
 import { readPendingExecutionWork } from './work/pendingExecutions.reader';
+import { readDecisionThreadWork } from './work/decisionThreads.reader';
+import { readIncidentWork } from './work/incidents.reader';
 import { createOperationalWorkItemReader } from './work/operationalWorkItems.reader';
 import { ensureAskServiceAccountEligibility, ensurePropertyAccess } from './askHandlerSupport';
 import { loadOperatingMode } from './askRecordContext';
@@ -23,6 +25,8 @@ import {
 export const ASK_WORK_PROVIDER_READERS: Partial<Record<AskWorkProviderId, AskWorkProviderReader>> = {
   PENDING_EXECUTIONS: readPendingExecutionWork,
   OPERATIONAL_WORK_ITEMS: createOperationalWorkItemReader(),
+  DECISION_THREADS: readDecisionThreadWork,
+  INCIDENTS: readIncidentWork,
 };
 
 export class AskWorkInvalidRequestError extends Error {
