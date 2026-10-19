@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 import type { AskPendingWorkItem, AskRecentSessionSummary, AskSessionChange } from '@/features/ask/types';
 import { ConversationSessionRow } from '../ConversationSessionRow';
 
-export function PendingWorkInbox({ items, loadingId, dismissingId, onResume, onDismiss, calm = false }: {
+export function PendingWorkInbox({ items, loadingId, dismissingId, onResume, onDismiss, calm = false, workHref }: {
   /** IW-CONV-017 (FRD v1.113): unfinished work is one quiet line per item, not a titled card. */
   calm?: boolean;
   items: AskPendingWorkItem[];
@@ -17,16 +17,17 @@ export function PendingWorkInbox({ items, loadingId, dismissingId, onResume, onD
   dismissingId: string | null;
   onResume: (item: AskPendingWorkItem) => void;
   onDismiss: (item: AskPendingWorkItem) => void;
+  workHref?: string;
 }) {
   if (!items.length) return null;
   if (calm) return (
-    <ul className="mx-auto max-w-[1140px] space-y-1.5" aria-label="Unfinished work" data-calm-pending="">{items.slice(0, 2).map((item) => {
+    <div className="mx-auto max-w-[1140px]" data-calm-pending=""><ul className="space-y-1.5" aria-label="Unfinished work">{items.slice(0, 2).map((item) => {
       const busy = loadingId === item.execution.executionId || dismissingId === item.execution.executionId;
       const canDismiss = item.pendingKind !== 'COMMAND_RECOVERY';
       return <li key={item.execution.executionId} className="flex items-center gap-2 rounded-2xl bg-slate-100/70 px-3.5 py-2 text-sm"><span className="min-w-0 flex-1 truncate text-slate-700"><span className="text-slate-500">Unfinished · </span>{item.execution.question}</span>
         {canDismiss && <button type="button" disabled={busy} onClick={() => onDismiss(item)} className="min-h-8 rounded-lg px-2 text-xs font-semibold text-slate-500 hover:bg-slate-200 disabled:opacity-50">{item.pendingKind === 'CONFIRMATION' ? 'Cancel' : 'Dismiss'}</button>}
         <button type="button" disabled={busy} onClick={() => onResume(item)} className="min-h-8 rounded-lg px-2 text-xs font-semibold text-teal-800 hover:bg-teal-50 disabled:opacity-50">{loadingId === item.execution.executionId ? 'Opening…' : 'Continue'}</button></li>;
-    })}</ul>
+    })}</ul>{workHref && <Link href={workHref} className="mt-2 inline-flex min-h-9 items-center rounded-lg px-2 text-xs font-semibold text-teal-800 hover:bg-teal-50">View Work</Link>}</div>
   );
   return (
     <section className="mx-auto mb-5 max-w-3xl rounded-2xl border border-indigo-200 bg-indigo-50/60 p-3" aria-labelledby="ask-pending-title">
@@ -36,6 +37,7 @@ export function PendingWorkInbox({ items, loadingId, dismissingId, onResume, onD
         const canDismiss = item.pendingKind !== 'COMMAND_RECOVERY';
         return <li key={item.execution.executionId} className="flex flex-col gap-2 px-3 py-2.5 sm:flex-row sm:items-center"><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-slate-900">{item.execution.question}</p><p className="mt-0.5 text-[11px] text-slate-500">{item.pendingKind.toLowerCase().replace(/_/g, ' ')} · {new Date(item.execution.updatedAt).toLocaleString()}</p></div><div className="flex shrink-0 items-center gap-1.5">{canDismiss && <button type="button" disabled={Boolean(loadingId || dismissingId)} onClick={() => onDismiss(item)} className="min-h-9 rounded-lg px-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-50">{dismissingId === item.execution.executionId ? 'Dismissing…' : item.pendingKind === 'CONFIRMATION' ? 'Cancel' : 'Dismiss'}</button>}<button type="button" disabled={Boolean(loadingId || dismissingId)} onClick={() => onResume(item)} className="min-h-9 rounded-lg bg-indigo-700 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">{loadingId === item.execution.executionId ? 'Opening…' : actionBusy ? 'Please wait…' : item.actionLabel}</button></div></li>;
       })}</ul>
+      {workHref && <Link href={workHref} className="mt-2 inline-flex min-h-9 items-center rounded-lg px-2 text-xs font-semibold text-indigo-800 hover:bg-indigo-100">View all in Work</Link>}
     </section>
   );
 }
@@ -54,12 +56,10 @@ export function recentSessionStatus(status: AskRecentSessionSummary['latestStatu
   return 'Not available';
 }
 
-export function ConversationHistoryNav({ items, pinnedItems = [], pendingWork = [], continuingId = null, view = 'RECENT', onViewChange, onSessionChange, onSessionDelete, busySessionId = null, activeSessionId, loading, loadingMore, hasMore, issue, openingId, query, scope, selectedHomeAvailable, onQueryChange, onScopeChange, onOpen, onResumePending, onNew, onLoadMore, backHref, backLabel, statusSlot, discoverySlot, accountName, accountEmail, loggingOut = false, onLogout }: {
+export function ConversationHistoryNav({ items, pinnedItems = [], view = 'RECENT', onViewChange, onSessionChange, onSessionDelete, busySessionId = null, activeSessionId, loading, loadingMore, hasMore, issue, openingId, query, scope, selectedHomeAvailable, onQueryChange, onScopeChange, onOpen, onNew, onLoadMore, backHref, backLabel, statusSlot, discoverySlot, accountName, accountEmail, loggingOut = false, onLogout }: {
   items: AskRecentSessionSummary[];
   // IW-HIST-003/011 (FRD v1.71): the pinned group (recent view only) and the explicit archived view.
   pinnedItems?: AskRecentSessionSummary[];
-  pendingWork?: AskPendingWorkItem[];
-  continuingId?: string | null;
   view?: 'RECENT' | 'ARCHIVED';
   onViewChange?: (view: 'RECENT' | 'ARCHIVED') => void;
   // IW-HIST-009..012, IW-HIST-014: the per-conversation session menu. Resolve false to keep the row's editor open.
@@ -78,7 +78,6 @@ export function ConversationHistoryNav({ items, pinnedItems = [], pendingWork = 
   onQueryChange: (query: string) => void;
   onScopeChange: (scope: 'THIS_HOME' | 'ALL_HOMES') => void;
   onOpen: (session: AskRecentSessionSummary) => void;
-  onResumePending?: (item: AskPendingWorkItem) => void;
   onNew: () => void;
   onLoadMore: () => void;
   backHref?: string;
@@ -107,12 +106,10 @@ export function ConversationHistoryNav({ items, pinnedItems = [], pendingWork = 
   }, []);
   const archivedView = view === 'ARCHIVED';
   const searching = Boolean(query.trim());
-  const needsYou = !archivedView && !searching && onResumePending ? pendingWork.slice(0, 2) : [];
-  const needsYouSessionIds = new Set(needsYou.map((item) => item.execution.sessionId));
-  const visiblePinnedItems = pinnedItems.filter((session) => !needsYouSessionIds.has(session.sessionId));
+  const visiblePinnedItems = pinnedItems;
   const showPinned = !archivedView && !searching && visiblePinnedItems.length > 0;
   const pinnedIds = new Set(showPinned ? visiblePinnedItems.map((session) => session.sessionId) : []);
-  const periodGroups = items.filter((session) => !pinnedIds.has(session.sessionId) && !needsYouSessionIds.has(session.sessionId)).reduce<Array<{ label: string; items: AskRecentSessionSummary[] }>>((groups, session) => {
+  const periodGroups = items.filter((session) => !pinnedIds.has(session.sessionId)).reduce<Array<{ label: string; items: AskRecentSessionSummary[] }>>((groups, session) => {
     const label = askHistoryGroupLabel(session.lastActiveAt, calendar);
     const group = groups.find((candidate) => candidate.label === label);
     if (group) group.items.push(session);
@@ -153,15 +150,6 @@ export function ConversationHistoryNav({ items, pinnedItems = [], pendingWork = 
       <div className="mt-4">
         {issue && <p className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900" role="status">{issue}</p>}
         {loading && <p className="px-2 py-3 text-xs text-slate-400" role="status">{archivedView ? 'Loading archived conversations…' : query.trim() ? 'Searching conversations…' : 'Loading recent conversations…'}</p>}
-        {needsYou.length > 0 && <section className="mb-5" aria-labelledby="ask-history-needs-you">
-          <h3 id="ask-history-needs-you" className="px-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-amber-700">Needs you</h3>
-          <ul className="mt-1 space-y-1">{needsYou.map((item) => <li key={item.execution.executionId}>
-            <button type="button" disabled={Boolean(continuingId)} onClick={() => onResumePending?.(item)} className="w-full rounded-xl px-3 py-2 text-left transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 disabled:opacity-60">
-              <span className="block truncate text-sm font-medium text-slate-900">{item.execution.question}</span>
-              <span className="mt-0.5 block text-xs font-semibold text-teal-700">{continuingId === item.execution.executionId ? 'Opening…' : item.actionLabel}</span>
-            </button>
-          </li>)}</ul>
-        </section>}
         {grouped.length === 0 && !loading ? (
           // IW-CALM-008: with no history, no search and no error there is nothing to say, so the calm rail shows nothing.
           calm && !archivedView && !query.trim() && !issue ? null : <p className="rounded-xl bg-slate-50 px-3 py-4 text-sm text-slate-500">{archivedView ? issue ? 'Archived conversations are unavailable right now.' : 'No archived conversations.' : query.trim() ? issue ? 'Search results are unavailable right now.' : 'No conversations match this search.' : issue ? 'No conversations are available to show right now.' : 'Your recent conversations will appear here.'}</p>

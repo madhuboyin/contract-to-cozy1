@@ -6,7 +6,7 @@
 
 **Implemented Phase 0 foundation:** The code-owned route-retirement registry, startup validation, generated Ask-operation inventory, generated homeowner-route inventory, deployed frontend/API build-contract diagnostics, and production Ask discovery smoke are implemented. The inventory currently marks no route retired; certification evidence and exact successor mappings remain future work.
 
-**Implemented Phase 1 shell foundation:** Stable Home, Work, Record, Saved, and History routes plus responsive destination navigation are implemented. Home and History embed the current Ask behavior; Work, Record, and Saved remain explicit foundation states until their canonical projections are implemented in later phases.
+**Implemented Phase 1 shell foundation:** Stable Home, Work, Record, Saved, and History routes plus responsive destination navigation are implemented. Home and History embed the current Ask behavior. The existing pending-Ask “Needs you” preview now lives on Work and links there from Home without changing canonical continuation or cancellation behavior; the complete canonical Work projection remains future work. Record and Saved remain explicit foundation states until their canonical projections are implemented in later phases.
 
 ## 1. Delivery principles
 

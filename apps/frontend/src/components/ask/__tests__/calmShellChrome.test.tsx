@@ -3,7 +3,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { CalmLanding } from '../calm/CalmLanding';
 import { FollowUpRow } from '../calm/FollowUpRow';
 import type { FollowUpItem } from '@/features/ask/followUps';
-import { ConversationHistoryNav } from '../workspace/ConversationHistoryNav';
+import { ConversationHistoryNav, PendingWorkInbox } from '../workspace/ConversationHistoryNav';
 import { IntelligenceRefreshStatus } from '../../intelligence/IntelligenceRefreshStatus';
 import { CALM_ANSWERS_STORAGE_KEY } from '@/features/ask/calmAnswers';
 import type { ConciergeHomeView } from '@/features/ask/types';
@@ -206,19 +206,23 @@ describe('ConversationHistoryNav in the calm shell', () => {
     expect(screen.getByText('Your home assistant')).toBeInTheDocument();
     expect(screen.getByText(/navigation remains available above/)).toBeInTheDocument();
   });
-  it('shows at most two actionable conversations under Needs you and removes their duplicate history rows', () => {
+  it('keeps pending work out of conversation History', () => {
     window.localStorage.setItem(CALM_ANSWERS_STORAGE_KEY, '1');
-    const onResumePending = jest.fn();
     const recent = (sessionId: string, title: string) => ({ sessionId, title, property: { id: 'home', label: 'Home' }, latestStatus: 'NEEDS_CONFIRMATION', latestExecutionId: `e-${sessionId}`, executionCount: 1, lastActiveAt: new Date().toISOString(), pinned: false, archived: false, titleSetByUser: false });
-    const pending = (sessionId: string, question: string) => ({ pendingKind: 'CONFIRMATION', actionLabel: 'Review and confirm', execution: { executionId: `e-${sessionId}`, sessionId, question } });
-    nav({ items: [recent('s1', 'Finish task setup'), recent('s4', 'Ordinary recent chat')], pendingWork: [pending('s1', 'Finish task setup'), pending('s2', 'Add the purchase date'), pending('s3', 'Third pending item')], onResumePending });
-    expect(screen.getByRole('heading', { name: 'Needs you' })).toBeInTheDocument();
-    expect(screen.getAllByText('Finish task setup')).toHaveLength(1);
+    nav({ items: [recent('s1', 'Finish task setup'), recent('s4', 'Ordinary recent chat')] });
+    expect(screen.queryByRole('heading', { name: 'Needs you' })).toBeNull();
+    expect(screen.getByText('Finish task setup')).toBeInTheDocument();
+    expect(screen.getByText('Ordinary recent chat')).toBeInTheDocument();
+  });
+
+  it('caps the Home preview at two rows and provides the complete Work path', () => {
+    window.localStorage.setItem(CALM_ANSWERS_STORAGE_KEY, '1');
+    const pending = (sessionId: string, question: string) => ({ pendingKind: 'CONFIRMATION' as const, actionLabel: 'Review and confirm', execution: { executionId: `e-${sessionId}`, sessionId, question } });
+    render(<PendingWorkInbox items={[pending('s1', 'Finish task setup'), pending('s2', 'Add the purchase date'), pending('s3', 'Third pending item')] as never} loadingId={null} dismissingId={null} onResume={jest.fn()} onDismiss={jest.fn()} calm workHref="/dashboard/ask/work?propertyId=home" />);
+    expect(screen.getByText('Finish task setup')).toBeInTheDocument();
     expect(screen.getByText('Add the purchase date')).toBeInTheDocument();
     expect(screen.queryByText('Third pending item')).toBeNull();
-    expect(screen.getByText('Ordinary recent chat')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Finish task setup/ }));
-    expect(onResumePending).toHaveBeenCalledWith(expect.objectContaining({ execution: expect.objectContaining({ sessionId: 's1' }) }));
+    expect(screen.getByRole('link', { name: 'View Work' })).toHaveAttribute('href', '/dashboard/ask/work?propertyId=home');
   });
 });
 
