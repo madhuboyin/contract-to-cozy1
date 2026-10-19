@@ -203,50 +203,204 @@ export const readSavedSeasonalChecklists: AskSavedTypeReader = createSavedReader
   },
 });
 
-// ── Sell, hold or rent analyses: each computation is retained; the newest is current ────────────────────────────────────
-interface AnalysisRow { id: string; years: number; winner: string; confidence: string; computedAt: Date; createdAt: Date; updatedAt: Date }
-interface AnalysisScope { latestId: string | null; previousOf: Map<string, string | null> }
+// ── Computed analyses that keep every run: one version chain per logical identity ──────────────────────────────────────
+interface ChainScope { latestIds: string[]; newerOf: Map<string, string>; previousOf: Map<string, string> }
 
-export const readSavedSellHoldRentAnalyses: AskSavedTypeReader = createSavedReader<AnalysisRow, AnalysisScope>({
+/**
+ * Builds supersession chains from rows ordered newest first. Runs only supersede others with the same logical identity (`groupOf`): a
+ * 5-year sell/hold/rent result never supersedes a 10-year one, and one item's replace/repair analysis never supersedes another's.
+ */
+function chainScope(ordered: Array<{ id: string }>, groupOf: (row: { id: string }) => string): ChainScope {
+  const latestIds: string[] = [];
+  const newerOf = new Map<string, string>();
+  const previousOf = new Map<string, string>();
+  const lastSeen = new Map<string, string>();
+  for (const row of ordered) {
+    const group = groupOf(row);
+    const above = lastSeen.get(group);
+    if (!above) latestIds.push(row.id);
+    else { previousOf.set(above, row.id); newerOf.set(row.id, above); }
+    lastSeen.set(group, row.id);
+  }
+  return { latestIds, newerOf, previousOf };
+}
+
+interface AnalysisRow { id: string; years: number; winner: string; confidence: string; computedAt: Date; createdAt: Date; updatedAt: Date }
+
+export const readSavedSellHoldRentAnalyses: AskSavedTypeReader = createSavedReader<AnalysisRow, ChainScope>({
   artifactType: 'SELL_HOLD_RENT_ANALYSIS', keyPrefix: 'analysis', sortField: 'computedAt',
   scope: async (context) => {
-    const ordered = await prisma.sellHoldRentAnalysis.findMany({ where: { propertyId: context.propertyId }, select: { id: true }, orderBy: [{ computedAt: 'desc' }, { id: 'asc' }] });
-    const previousOf = new Map<string, string | null>();
-    ordered.forEach((entry, index) => previousOf.set(entry.id, ordered[index + 1]?.id ?? null));
-    return { latestId: ordered[0]?.id ?? null, previousOf };
+    const ordered = await prisma.sellHoldRentAnalysis.findMany({ where: { propertyId: context.propertyId }, select: { id: true, years: true }, orderBy: [{ computedAt: 'desc' }, { id: 'asc' }] });
+    const years = new Map(ordered.map((entry) => [entry.id, String(entry.years)]));
+    return chainScope(ordered, (row) => years.get(row.id) ?? '');
   },
   baseWhere: (context) => ({ propertyId: context.propertyId }),
   ownerArchivedWhere: () => NONE,
   freshnessWhere: (freshness, _context, scope) => {
-    if (freshness === 'CURRENT') return scope.latestId ? { id: scope.latestId } : NONE;
-    if (freshness === 'SUPERSEDED') return scope.latestId ? { id: { not: scope.latestId } } : NONE;
+    if (freshness === 'CURRENT') return { id: { in: scope.latestIds } };
+    if (freshness === 'SUPERSEDED') return { id: { notIn: scope.latestIds } };
     return NONE;
   },
   searchWhere: (search) => ({ OR: [...['SELL', 'HOLD', 'RENT'].filter((winner) => winner.toLowerCase().includes(search.toLowerCase())).map((winner) => ({ winner })), NONE] }),
   findMany: ({ where, take }) => prisma.sellHoldRentAnalysis.findMany({ where, take, select: { id: true, years: true, winner: true, confidence: true, computedAt: true, createdAt: true, updatedAt: true }, orderBy: [{ computedAt: 'desc' }, { id: 'asc' }] }) as Promise<AnalysisRow[]>,
   count: (where) => prisma.sellHoldRentAnalysis.count({ where }),
   toArtifact: (row, context, scope) => {
-    const superseded = scope.latestId !== null && row.id !== scope.latestId;
-    const newerIds = [...scope.previousOf.entries()].find(([, previous]) => previous === row.id)?.[0] ?? null;
+    const superseded = !scope.latestIds.includes(row.id);
+    const newer = scope.newerOf.get(row.id);
+    const previous = scope.previousOf.get(row.id);
     return envelope('SELL_HOLD_RENT_ANALYSIS', context, {
       artifactId: row.id, entity: { type: 'SELL_HOLD_RENT_ANALYSIS', id: row.id }, title: `Sell, hold or rent (${row.years}-year view)`, summary: `Best option: ${humanize(row.winner)} · ${humanize(row.confidence)} confidence`,
       createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(), sourceAsOf: row.computedAt.toISOString(), sortAt: row.computedAt.toISOString(),
-      freshness: { state: superseded ? 'SUPERSEDED' : 'CURRENT', reason: superseded ? 'A newer analysis replaced this one; this version is kept.' : null },
+      freshness: { state: superseded ? 'SUPERSEDED' : 'CURRENT', reason: superseded ? `A newer ${row.years}-year analysis replaced this one; this version is kept.` : null },
       visibility: { scope: 'HOUSEHOLD', sensitivity: 'SENSITIVE' },
       // Asking for this analysis again computes a new one, so reopening it would not show this saved result; it is shown as saved instead.
       reopen: null, reopenUnavailableReason: 'Ask recomputes this analysis rather than reopening it. This saved copy shows the result as it was computed.',
       capabilities: { export: false, share: false },
-      version: { label: `Computed ${row.computedAt.toISOString().slice(0, 10)}`, superseded, supersededBy: newerIds ? `analysis:${newerIds}` : null, supersedes: scope.previousOf.get(row.id) ? `analysis:${scope.previousOf.get(row.id)}` : null },
+      version: { label: `${row.years}-year view computed ${row.computedAt.toISOString().slice(0, 10)}`, superseded, supersededBy: newer ? `analysis:${newer}` : null, supersedes: previous ? `analysis:${previous}` : null },
       archivedByOwner: false,
     });
   },
 });
 
-export const ASK_SAVED_TYPE_READERS: Record<AskArtifactTypeDefinition['id'], AskSavedTypeReader> = {
+// ── Capital timelines: one chain per planning horizon ──────────────────────────────────────────────────────────────────
+interface CapitalRow { id: string; horizonYears: number; status: string; confidence: string; summary: string | null; computedAt: Date; createdAt: Date; updatedAt: Date }
+
+export const readSavedCapitalTimelines: AskSavedTypeReader = createSavedReader<CapitalRow, ChainScope>({
+  artifactType: 'CAPITAL_TIMELINE_ANALYSIS', keyPrefix: 'capital', sortField: 'computedAt',
+  scope: async (context) => {
+    const ordered = await prisma.homeCapitalTimelineAnalysis.findMany({ where: { propertyId: context.propertyId, status: { not: 'ERROR' } }, select: { id: true, horizonYears: true }, orderBy: [{ computedAt: 'desc' }, { id: 'asc' }] });
+    const horizon = new Map(ordered.map((entry) => [entry.id, String(entry.horizonYears)]));
+    return chainScope(ordered, (row) => horizon.get(row.id) ?? '');
+  },
+  baseWhere: (context) => ({ propertyId: context.propertyId, status: { not: 'ERROR' } }),
+  ownerArchivedWhere: () => NONE,
+  freshnessWhere: (freshness, _context, scope) => {
+    if (freshness === 'SUPERSEDED') return { id: { notIn: scope.latestIds } };
+    if (freshness === 'CURRENT') return { id: { in: scope.latestIds }, status: 'READY' };
+    if (freshness === 'STALE') return { id: { in: scope.latestIds }, status: 'STALE' };
+    return NONE;
+  },
+  searchWhere: (search) => ({ OR: [contains('summary', search), NONE] }),
+  findMany: ({ where, take }) => prisma.homeCapitalTimelineAnalysis.findMany({ where, take, select: { id: true, horizonYears: true, status: true, confidence: true, summary: true, computedAt: true, createdAt: true, updatedAt: true }, orderBy: [{ computedAt: 'desc' }, { id: 'asc' }] }) as Promise<CapitalRow[]>,
+  count: (where) => prisma.homeCapitalTimelineAnalysis.count({ where }),
+  toArtifact: (row, context, scope) => {
+    const superseded = !scope.latestIds.includes(row.id);
+    const stale = !superseded && row.status === 'STALE';
+    const newer = scope.newerOf.get(row.id);
+    const previous = scope.previousOf.get(row.id);
+    return envelope('CAPITAL_TIMELINE_ANALYSIS', context, {
+      artifactId: row.id, entity: { type: 'CAPITAL_TIMELINE_ANALYSIS', id: row.id }, title: `Capital timeline (${row.horizonYears}-year view)`, summary: row.summary?.trim() || `${humanize(row.confidence)} confidence`,
+      createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(), sourceAsOf: row.computedAt.toISOString(), sortAt: row.computedAt.toISOString(),
+      freshness: { state: superseded ? 'SUPERSEDED' : stale ? 'STALE' : 'CURRENT', reason: superseded ? `A newer ${row.horizonYears}-year timeline replaced this one; this version is kept.` : stale ? 'Records it relied on have changed since it was computed.' : null },
+      visibility: { scope: 'HOUSEHOLD', sensitivity: 'SENSITIVE' },
+      reopen: null, reopenUnavailableReason: 'Ask recomputes the capital plan rather than reopening a stored timeline. This saved copy shows the result as it was computed.',
+      capabilities: { export: false, share: false },
+      version: { label: `${row.horizonYears}-year view computed ${row.computedAt.toISOString().slice(0, 10)}`, superseded, supersededBy: newer ? `capital:${newer}` : null, supersedes: previous ? `capital:${previous}` : null },
+      archivedByOwner: false,
+    });
+  },
+});
+
+// ── Replace or repair analyses: the owner's own "current" marker decides supersession ───────────────────────────────────
+interface ReplaceRepairRow { id: string; inventoryItemId: string; currentMarker: string | null; status: string; verdict: string; confidence: string; summary: string | null; computedAt: Date; createdAt: Date; updatedAt: Date; inventoryItem: { name: string | null } | null }
+interface ReplaceRepairPrepared { currentByItem: Map<string, string> }
+
+export const readSavedReplaceRepairAnalyses: AskSavedTypeReader = createSavedReader<ReplaceRepairRow>({
+  artifactType: 'REPLACE_REPAIR_ANALYSIS', keyPrefix: 'replacerepair', sortField: 'computedAt',
+  baseWhere: (context) => ({ propertyId: context.propertyId, status: { not: 'ERROR' } }),
+  ownerArchivedWhere: () => NONE,
+  freshnessWhere: (freshness) => {
+    if (freshness === 'SUPERSEDED') return { currentMarker: null };
+    if (freshness === 'CURRENT') return { currentMarker: { not: null }, status: 'READY' };
+    if (freshness === 'STALE') return { currentMarker: { not: null }, status: 'STALE' };
+    return NONE;
+  },
+  searchWhere: (search) => ({ OR: [{ inventoryItem: contains('name', search) }, contains('summary', search)] }),
+  findMany: ({ where, take }) => prisma.replaceRepairAnalysis.findMany({ where, take, select: { id: true, inventoryItemId: true, currentMarker: true, status: true, verdict: true, confidence: true, summary: true, computedAt: true, createdAt: true, updatedAt: true, inventoryItem: { select: { name: true } } }, orderBy: [{ computedAt: 'desc' }, { id: 'asc' }] }) as Promise<ReplaceRepairRow[]>,
+  count: (where) => prisma.replaceRepairAnalysis.count({ where }),
+  // The analysis that replaced a superseded one is the item's current one: one batched lookup for the page.
+  prepare: async (rows, context): Promise<ReplaceRepairPrepared> => {
+    const items = [...new Set(rows.filter((row) => row.currentMarker === null).map((row) => row.inventoryItemId))];
+    const current = items.length ? await prisma.replaceRepairAnalysis.findMany({ where: { propertyId: context.propertyId, inventoryItemId: { in: items }, currentMarker: { not: null } }, select: { id: true, inventoryItemId: true } }) : [];
+    return { currentByItem: new Map(current.map((entry) => [entry.inventoryItemId, entry.id])) };
+  },
+  toArtifact: (row, context, _scope, prepared) => {
+    const superseded = row.currentMarker === null;
+    const stale = !superseded && row.status === 'STALE';
+    const replacement = superseded ? (prepared as ReplaceRepairPrepared).currentByItem.get(row.inventoryItemId) : undefined;
+    const name = row.inventoryItem?.name?.trim() || 'Item';
+    return envelope('REPLACE_REPAIR_ANALYSIS', context, {
+      artifactId: row.id, entity: { type: 'REPLACE_REPAIR_ANALYSIS', id: row.id }, title: `${name}: replace or repair`, summary: row.summary?.trim() || `Verdict: ${humanize(row.verdict)} · ${humanize(row.confidence)} confidence`,
+      createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(), sourceAsOf: row.computedAt.toISOString(), sortAt: row.computedAt.toISOString(),
+      freshness: { state: superseded ? 'SUPERSEDED' : stale ? 'STALE' : 'CURRENT', reason: superseded ? 'A newer analysis for this item replaced this one; this version is kept.' : stale ? 'Records it relied on have changed since it was computed.' : null },
+      visibility: { scope: 'HOUSEHOLD', sensitivity: 'SENSITIVE' },
+      reopen: null, reopenUnavailableReason: 'Ask recomputes replacement guidance rather than reopening a stored analysis. This saved copy shows the result as it was computed.',
+      capabilities: { export: false, share: false },
+      version: { label: `Computed ${row.computedAt.toISOString().slice(0, 10)}`, superseded, supersededBy: replacement ? `replacerepair:${replacement}` : null, supersedes: null },
+      archivedByOwner: false,
+    });
+  },
+});
+
+// ── Coverage comparisons ────────────────────────────────────────────────────────────────────────────────────────────────
+interface CoverageRow { id: string; status: string; equivalenceStatus: string; createdAt: Date; updatedAt: Date }
+
+export const readSavedCoverageComparisons: AskSavedTypeReader = createSavedReader<CoverageRow>({
+  artifactType: 'COVERAGE_COMPARISON', keyPrefix: 'coverage', sortField: 'updatedAt',
+  baseWhere: (context) => ({ propertyId: context.propertyId }),
+  ownerArchivedWhere: () => NONE,
+  freshnessWhere: (freshness) => (freshness === 'CURRENT' ? {} : NONE),
+  searchWhere: (search) => ({ OR: [contains('status', search), contains('equivalenceStatus', search)] }),
+  findMany: ({ where, take }) => prisma.coverageComparison.findMany({ where, take, select: { id: true, status: true, equivalenceStatus: true, createdAt: true, updatedAt: true }, orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }] }) as Promise<CoverageRow[]>,
+  count: (where) => prisma.coverageComparison.count({ where }),
+  toArtifact: (row, context) => envelope('COVERAGE_COMPARISON', context, {
+    artifactId: row.id, entity: { type: 'COVERAGE_COMPARISON', id: row.id }, title: 'Coverage comparison', summary: `${humanize(row.status)} · ${humanize(row.equivalenceStatus)}`,
+    createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(), sourceAsOf: row.updatedAt.toISOString(), sortAt: row.updatedAt.toISOString(),
+    freshness: { state: 'CURRENT', reason: null }, visibility: { scope: 'HOUSEHOLD', sensitivity: 'SENSITIVE' },
+    reopen: { operationId: 'COVERAGE_COMPARISON_STATUS', entityType: 'COVERAGE_COMPARISON', entityId: row.id, decisionThreadId: null, contextVersion: row.updatedAt.toISOString() }, reopenUnavailableReason: null,
+    capabilities: { export: false, share: false },
+    version: { label: `${humanize(row.status)}, updated ${row.updatedAt.toISOString().slice(0, 10)}` }, archivedByOwner: false,
+  }),
+});
+
+// ── Financing scenarios ─────────────────────────────────────────────────────────────────────────────────────────────────
+const RATE_STALE_DAYS = 90;
+interface FinancingRow { id: string; title: string; status: string; projectCostCents: number; createdAt: Date; updatedAt: Date }
+
+export const readSavedFinancingScenarios: AskSavedTypeReader = createSavedReader<FinancingRow>({
+  artifactType: 'FINANCING_SCENARIO', keyPrefix: 'financing', sortField: 'updatedAt',
+  baseWhere: (context) => ({ propertyId: context.propertyId }),
+  ownerArchivedWhere: () => ({ status: 'ARCHIVED' }),
+  freshnessWhere: (freshness, context) => {
+    const cutoff = new Date(context.now.getTime() - RATE_STALE_DAYS * DAY_MS);
+    return freshness === 'CURRENT' ? { createdAt: { gt: cutoff } } : freshness === 'STALE' ? { createdAt: { lte: cutoff } } : NONE;
+  },
+  searchWhere: (search) => ({ OR: [contains('title', search), contains('projectDescription', search)] }),
+  findMany: ({ where, take }) => prisma.financingScenario.findMany({ where, take, select: { id: true, title: true, status: true, projectCostCents: true, createdAt: true, updatedAt: true }, orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }] }) as Promise<FinancingRow[]>,
+  count: (where) => prisma.financingScenario.count({ where }),
+  toArtifact: (row, context) => {
+    const stale = context.now.getTime() - row.createdAt.getTime() >= RATE_STALE_DAYS * DAY_MS;
+    return envelope('FINANCING_SCENARIO', context, {
+      artifactId: row.id, entity: { type: 'FINANCING_SCENARIO', id: row.id }, title: row.title, summary: `${humanize(row.status)} · project cost $${Math.round(row.projectCostCents / 100).toLocaleString('en-US')}`,
+      createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(), sourceAsOf: row.createdAt.toISOString(), sortAt: row.updatedAt.toISOString(),
+      freshness: { state: stale ? 'STALE' : 'CURRENT', reason: stale ? 'Its rates were captured more than 90 days ago and may have changed.' : null },
+      visibility: { scope: 'HOUSEHOLD', sensitivity: 'SENSITIVE' },
+      reopen: { operationId: 'FINANCING_OVERVIEW', entityType: 'FINANCING_SCENARIO', entityId: row.id, decisionThreadId: null, contextVersion: row.updatedAt.toISOString() }, reopenUnavailableReason: null,
+      capabilities: { export: false, share: false },
+      version: { label: `Calculated ${row.createdAt.toISOString().slice(0, 10)}` }, archivedByOwner: row.status === 'ARCHIVED',
+    });
+  },
+});
+
+export const ASK_SAVED_TYPE_READERS: Partial<Record<AskArtifactTypeDefinition['id'], AskSavedTypeReader>> = {
   HOME_REPORT_EXPORT: readSavedReportExports,
   QUOTE_COMPARISON: readSavedQuoteComparisons,
   DECISION_RECOMMENDATION: readSavedDecisionRecommendations,
   PROPERTY_BRIEF: readSavedPropertyBriefs,
   SEASONAL_CHECKLIST: readSavedSeasonalChecklists,
   SELL_HOLD_RENT_ANALYSIS: readSavedSellHoldRentAnalyses,
+  COVERAGE_COMPARISON: readSavedCoverageComparisons,
+  FINANCING_SCENARIO: readSavedFinancingScenarios,
+  REPLACE_REPAIR_ANALYSIS: readSavedReplaceRepairAnalyses,
+  CAPITAL_TIMELINE_ANALYSIS: readSavedCapitalTimelines,
 };

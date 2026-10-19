@@ -155,29 +155,31 @@ test('the page merges types in (sortAt desc, key asc) order, pages with a cursor
   const reader = (rows, other) => async (_c, q) => ({ rows: rows.filter((r) => !q.after || r.sortAt < q.after.sortAt || (r.sortAt === q.after.sortAt && r.artifactKey > q.after.artifactKey)).slice(0, q.limit), total: rows.length, otherTotal: other });
   const all = { QUOTE_COMPARISON: reader([row('comparison:a', at(5).toISOString()), row('comparison:b', at(2).toISOString())], 1), SEASONAL_CHECKLIST: reader([row('seasonal:a', at(5).toISOString())], 2) };
   const empty = async () => ({ rows: [], total: 0, otherTotal: 0 });
-  const readersMap = Object.fromEntries(ASK_ARTIFACT_TYPE_REGISTRY.map((entry) => [entry.id, all[entry.id] ?? empty]));
-  const first = await composeAskSavedPage(input(), parsed({ limit: 2 }), readersMap);
+  const connected = ASK_ARTIFACT_TYPE_REGISTRY.filter((entry) => entry.reader.state === 'CONNECTED');
+  const readersMap = Object.fromEntries(connected.map((entry) => [entry.id, all[entry.id] ?? empty]));
+  const first = await composeAskSavedPage(input(), parsed({ limit: 2 }), readersMap, connected);
   assert.deepEqual(first.rows.map((r) => r.artifactKey), ['comparison:a', 'seasonal:a']);
   assert.equal(first.truncated, true);
   assert.equal(first.partial, false);
   assert.equal(first.total, 3);
   assert.deepEqual(first.counts, { active: 3, archived: 3 });
   const boundary = JSON.parse(Buffer.from(first.nextCursor, 'base64url').toString('utf8'));
-  const second = await composeAskSavedPage(input(), parsed({ limit: 2, after: { sortAt: boundary.t, artifactKey: boundary.k } }), readersMap);
+  const second = await composeAskSavedPage(input(), parsed({ limit: 2, after: { sortAt: boundary.t, artifactKey: boundary.k } }), readersMap, connected);
   assert.deepEqual(second.rows.map((r) => r.artifactKey), ['comparison:b']);
   assert.equal(second.nextCursor, null);
-  assert.deepEqual(first.filterOptions.types.map((o) => o.value).sort(), ASK_ARTIFACT_TYPE_REGISTRY.map((e) => e.id).sort());
+  assert.deepEqual(first.filterOptions.types.map((o) => o.value).sort(), connected.map((e) => e.id).sort());
 });
 
 test('a failing type is reported, never dropped or counted as zero, and makes the page partial with no total', async () => {
   const empty = async () => ({ rows: [], total: 0, otherTotal: 0 });
-  const readersMap = Object.fromEntries(ASK_ARTIFACT_TYPE_REGISTRY.map((entry) => [entry.id, entry.id === 'PROPERTY_BRIEF' ? async () => { throw new Error('boom'); } : empty]));
-  const page = await composeAskSavedPage(input(), parsed(), readersMap);
+  const connected = ASK_ARTIFACT_TYPE_REGISTRY.filter((entry) => entry.reader.state === 'CONNECTED');
+  const readersMap = Object.fromEntries(connected.map((entry) => [entry.id, entry.id === 'PROPERTY_BRIEF' ? async () => { throw new Error('boom'); } : empty]));
+  const page = await composeAskSavedPage(input(), parsed(), readersMap, connected);
   assert.equal(page.partial, true);
   assert.equal(page.total, null);
   assert.equal(page.totalScope, 'PARTIAL');
   assert.equal(page.types.find((t) => t.artifactType === 'PROPERTY_BRIEF').state, 'FAILED');
-  assert.equal(page.types.length, ASK_ARTIFACT_TYPE_REGISTRY.length);
+  assert.equal(page.types.length, connected.length);
 });
 
 test('resolve: a live artifact opens; a removed one is DELETED; a role that lost access is ACCESS_LOST; a bad key is DELETED', async () => {
@@ -194,4 +196,96 @@ test('resolve: a live artifact opens; a removed one is DELETED; a role that lost
 test('the preference table holds only a key, and Saved reads write nothing', async () => {
   const fields = Object.keys(require('@prisma/client').Prisma.AskSavedArtifactPreferenceScalarFieldEnum).sort();
   assert.deepEqual(fields, ['archivedAt', 'artifactKey', 'id', 'propertyId', 'userId']);
+});
+
+test('property briefs are classified accurately: republishing replaces them in place, so no earlier version is claimed', () => {
+  const brief = ASK_ARTIFACT_TYPE_REGISTRY.find((entry) => entry.id === 'PROPERTY_BRIEF');
+  assert.equal(brief.versionBehavior, 'UPDATES_IN_PLACE');
+  assert.equal(brief.materialDecisionOutput, false);
+  assert.match(brief.retention, /keeps no earlier version/);
+});
+
+test('sell/hold/rent versions chain per horizon: a new 5-year result never supersedes a 10-year one', async () => {
+  noReceipts();
+  const rows = [
+    { id: 'a5new', years: 5, winner: 'HOLD', confidence: 'HIGH', computedAt: at(19), createdAt: at(19), updatedAt: at(19) },
+    { id: 'a10', years: 10, winner: 'SELL', confidence: 'MEDIUM', computedAt: at(12), createdAt: at(12), updatedAt: at(12) },
+    { id: 'a5old', years: 5, winner: 'SELL', confidence: 'LOW', computedAt: at(2), createdAt: at(2), updatedAt: at(2) },
+  ];
+  prisma.sellHoldRentAnalysis = { findMany: async (args) => (args.select.winner ? rows : rows.map(({ id, years }) => ({ id, years }))), count: async () => 3 };
+  const byId = Object.fromEntries((await readers.readSavedSellHoldRentAnalyses(ctx, query())).rows.map((row) => [row.entity.id, row]));
+  assert.equal(byId.a5new.freshness.state, 'CURRENT');
+  assert.equal(byId.a10.freshness.state, 'CURRENT', 'the 10-year result is its own chain and stays current');
+  assert.equal(byId.a5old.freshness.state, 'SUPERSEDED');
+  assert.equal(byId.a5old.version.supersededBy, 'analysis:a5new');
+  assert.equal(byId.a5new.version.supersedes, 'analysis:a5old');
+  assert.equal(byId.a10.version.supersedes, null);
+  const calls = [];
+  prisma.sellHoldRentAnalysis.findMany = async (args) => { calls.push(args); return args.select.winner ? [] : rows.map(({ id, years }) => ({ id, years })); };
+  await readers.readSavedSellHoldRentAnalyses(ctx, query({ freshness: 'CURRENT' }));
+  assert.match(JSON.stringify(calls.find((c) => c.select.winner).where), /"id":\{"in":\["a5new","a10"\]\}/);
+});
+
+test('capital timelines chain per horizon and surface stale ones; replace/repair uses the owner\'s current marker', async () => {
+  noReceipts();
+  const cap = [
+    { id: 'c10new', horizonYears: 10, status: 'STALE', confidence: 'MEDIUM', summary: null, computedAt: at(18), createdAt: at(18), updatedAt: at(18) },
+    { id: 'c5', horizonYears: 5, status: 'READY', confidence: 'HIGH', summary: 'Five years', computedAt: at(10), createdAt: at(10), updatedAt: at(10) },
+    { id: 'c10old', horizonYears: 10, status: 'READY', confidence: 'LOW', summary: null, computedAt: at(1), createdAt: at(1), updatedAt: at(1) },
+  ];
+  prisma.homeCapitalTimelineAnalysis = { findMany: async (args) => (args.select.summary !== undefined ? cap : cap.map(({ id, horizonYears }) => ({ id, horizonYears }))), count: async () => 3 };
+  const byId = Object.fromEntries((await readers.readSavedCapitalTimelines(ctx, query())).rows.map((row) => [row.entity.id, row]));
+  assert.equal(byId.c10new.freshness.state, 'STALE');
+  assert.equal(byId.c5.freshness.state, 'CURRENT');
+  assert.equal(byId.c10old.freshness.state, 'SUPERSEDED');
+  assert.equal(byId.c10old.version.supersededBy, 'capital:c10new');
+  prisma.replaceRepairAnalysis = {
+    findMany: async (args) => (args.select.verdict
+      ? [
+        { id: 'r2', inventoryItemId: 'i1', currentMarker: 'CURRENT', status: 'READY', verdict: 'REPLACE_SOON', confidence: 'HIGH', summary: null, computedAt: at(18), createdAt: at(18), updatedAt: at(18), inventoryItem: { name: 'Furnace' } },
+        { id: 'r1', inventoryItemId: 'i1', currentMarker: null, status: 'READY', verdict: 'REPAIR_ONLY', confidence: 'LOW', summary: null, computedAt: at(2), createdAt: at(2), updatedAt: at(2), inventoryItem: { name: 'Furnace' } },
+      ]
+      : [{ id: 'r2', inventoryItemId: 'i1' }]),
+    count: async () => 2,
+  };
+  const [current, prior] = (await readers.readSavedReplaceRepairAnalyses(ctx, query())).rows;
+  assert.equal(current.freshness.state, 'CURRENT');
+  assert.equal(prior.freshness.state, 'SUPERSEDED');
+  assert.equal(prior.version.supersededBy, 'replacerepair:r2');
+  assert.equal(current.title, 'Furnace: replace or repair');
+});
+
+test('coverage comparisons and financing scenarios: reopen targets, owner archive, and stale rates', async () => {
+  noReceipts();
+  prisma.coverageComparison = { findMany: async () => [{ id: 'cc1', status: 'DECIDED', equivalenceStatus: 'EQUIVALENT', createdAt: at(1), updatedAt: at(9) }], count: async () => 1 };
+  const [coverage] = (await readers.readSavedCoverageComparisons(ctx, query())).rows;
+  assert.equal(coverage.reopen.operationId, 'COVERAGE_COMPARISON_STATUS');
+  assert.equal(coverage.summary, 'Decided · Equivalent');
+  const old = new Date(NOW.getTime() - 120 * 86_400_000);
+  prisma.financingScenario = { findMany: async () => [{ id: 'f1', title: 'New roof loan', status: 'ARCHIVED', projectCostCents: 1250000, createdAt: old, updatedAt: at(2) }], count: async () => 1 };
+  const [financing] = (await readers.readSavedFinancingScenarios(ctx, query({ archived: 'ARCHIVED' }))).rows;
+  assert.equal(financing.freshness.state, 'STALE');
+  assert.equal(financing.archived.byOwner, true);
+  assert.equal(financing.summary, 'Archived · project cost $12,500');
+  assert.equal(financing.reopen.operationId, 'FINANCING_OVERVIEW');
+});
+
+test('every FR-SAVED-001 family is in the registry: connected, or explicitly UNAVAILABLE with a reason, and the page says it is partial', async () => {
+  const unavailable = ASK_ARTIFACT_TYPE_REGISTRY.filter((entry) => entry.reader.state === 'UNAVAILABLE');
+  assert.deepEqual(unavailable.map((entry) => entry.id).sort(), ['ANNOTATED_IMAGE', 'BUYER_WORKSPACE', 'HOME_DIGITAL_WILL', 'HOME_SCORE_REPORT', 'MOVING_PLAN', 'NEGOTIATION_SHIELD_ANALYSIS', 'REFINANCE_SCENARIO', 'RENOVATION_COMPLIANCE_CHECKLIST', 'ROOM_AND_PLANT_CHECKLIST', 'SELLER_PREP_PLAN']);
+  for (const entry of unavailable) assert.ok(entry.reader.reason.length > 20, entry.id);
+  const categories = new Set(ASK_ARTIFACT_TYPE_REGISTRY.map((entry) => entry.category));
+  for (const required of ['REPORT', 'COMPARISON', 'PLAN', 'CHECKLIST', 'IMAGE', 'DECISION_OUTPUT', 'BRIEFING']) assert.ok(categories.has(required), required);
+  const empty = async () => ({ rows: [], total: 0, otherTotal: 0 });
+  const connected = ASK_ARTIFACT_TYPE_REGISTRY.filter((entry) => entry.reader.state === 'CONNECTED');
+  const readersMap = Object.fromEntries(connected.map((entry) => [entry.id, empty]));
+  const page = await composeAskSavedPage(input(), parsed(), readersMap);
+  assert.equal(page.partial, true);
+  assert.equal(page.total, null);
+  assert.equal(page.types.length, ASK_ARTIFACT_TYPE_REGISTRY.length, 'no type is omitted');
+  assert.deepEqual(page.types.filter((t) => t.state === 'UNAVAILABLE').map((t) => t.artifactType).sort(), unavailable.map((e) => e.id).sort());
+  assert.deepEqual(validateAskSavedTypes(), []);
+  const open = await resolveAskSavedArtifact({ ...input(), artifactKey: 'will:w1' }, readersMap);
+  assert.equal(open.outcome, 'UNAVAILABLE');
+  assert.match(open.message, /estate/);
 });

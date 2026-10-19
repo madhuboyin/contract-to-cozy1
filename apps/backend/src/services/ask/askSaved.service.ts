@@ -71,7 +71,10 @@ export function validateAskSavedTypes(
   readers: Partial<Record<AskArtifactTypeId, AskSavedTypeReader>> = ASK_SAVED_TYPE_READERS,
 ): string[] {
   const issues = validateAskArtifactTypeRegistry(entries);
-  for (const entry of entries) if (!readers[entry.id]) issues.push(`${entry.id} has no registered Saved reader`);
+  for (const entry of entries) {
+    if (entry.reader.state === 'CONNECTED' && !readers[entry.id]) issues.push(`${entry.id} is declared connected but has no registered Saved reader`);
+    if (entry.reader.state === 'UNAVAILABLE' && readers[entry.id]) issues.push(`${entry.id} has a registered reader but is declared unavailable`);
+  }
   return issues;
 }
 
@@ -117,6 +120,7 @@ export async function composeAskSavedPage(
   const outcomes = await Promise.all(registry.filter((definition) => !parsed.artifactType || definition.id === parsed.artifactType).map(async (definition) => {
     const status = (state: AskSavedTypeState, reason: string | null, total: number | null = null, delivered = 0): AskSavedTypeStatus => ({ artifactType: definition.id, label: definition.label, state, reason, total, delivered });
     const none = (state: AskSavedTypeState, reason: string | null) => ({ definition, status: status(state, reason), rows: [] as AskSavedArtifact[], total: null as number | null, other: null as number | null });
+    if (definition.reader.state === 'UNAVAILABLE') return none('UNAVAILABLE', definition.reader.reason);
     const applicability = evaluateArtifactTypeApplicability(definition, { householdRole: role, operatingMode });
     if (applicability !== 'APPLICABLE') return none(applicability, NOT_APPLICABLE_REASONS[applicability]);
     const reader = readers[definition.id];
@@ -189,6 +193,7 @@ export async function resolveAskSavedArtifact(
   const base = { contractVersion: ASK_SAVED_CONTRACT_VERSION, propertyId: input.propertyId, artifactKey: input.artifactKey, artifact: null } as const;
   const parsed = parseArtifactKey(input.artifactKey, registry);
   if (!parsed) return { ...base, outcome: 'DELETED', message: 'This saved result could not be found.' };
+  if (parsed.definition.reader.state === 'UNAVAILABLE') return { ...base, outcome: 'UNAVAILABLE', message: parsed.definition.reader.reason };
   const applicability = evaluateArtifactTypeApplicability(parsed.definition, { householdRole: input.role, operatingMode: input.operatingMode });
   if (applicability === 'RESTRICTED') return { ...base, outcome: 'ACCESS_LOST', message: 'Your household role can no longer open this.' };
   if (applicability !== 'APPLICABLE') return { ...base, outcome: 'UNAVAILABLE', message: 'This kind of saved result does not apply to this home right now.' };

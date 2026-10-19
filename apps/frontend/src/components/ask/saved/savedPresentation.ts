@@ -2,7 +2,7 @@ import { buildAskWorkspaceHref } from '@/lib/navigation/askNavigation';
 import type { AskArtifactCategory, AskArtifactFreshness, AskSavedArtifact } from '@/features/ask/types';
 
 export const FRESHNESS_LABELS: Record<AskArtifactFreshness, string> = { CURRENT: 'Current', STALE: 'Out of date', EXPIRED: 'Expired', SUPERSEDED: 'Replaced by a newer version' };
-export const CATEGORY_LABELS: Record<AskArtifactCategory, string> = { REPORT: 'Report', COMPARISON: 'Comparison', DECISION_OUTPUT: 'Decision', BRIEFING: 'Briefing', CHECKLIST: 'Checklist', ANALYSIS: 'Analysis' };
+export const CATEGORY_LABELS: Record<AskArtifactCategory, string> = { REPORT: 'Report', COMPARISON: 'Comparison', DECISION_OUTPUT: 'Decision', BRIEFING: 'Briefing', CHECKLIST: 'Checklist', ANALYSIS: 'Analysis', PLAN: 'Plan', IMAGE: 'Image', OTHER: 'Saved result' };
 
 export const SAVED_EMPTY = { active: 'Nothing is saved for this home yet.', archived: 'Nothing is archived.' } as const;
 

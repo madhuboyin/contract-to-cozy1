@@ -1258,7 +1258,7 @@ export interface AskWorkResolution {
 
 // Saved destination (FR-SAVED-001..003). Mirrors the backend `AskSavedPage`, `AskSavedArtifact` and `AskSavedResolution`.
 export type AskArtifactFreshness = 'CURRENT' | 'STALE' | 'EXPIRED' | 'SUPERSEDED';
-export type AskArtifactCategory = 'REPORT' | 'COMPARISON' | 'DECISION_OUTPUT' | 'BRIEFING' | 'CHECKLIST' | 'ANALYSIS';
+export type AskArtifactCategory = 'REPORT' | 'COMPARISON' | 'DECISION_OUTPUT' | 'BRIEFING' | 'CHECKLIST' | 'ANALYSIS' | 'PLAN' | 'IMAGE' | 'OTHER';
 
 export interface AskSavedArtifact {
   artifactKey: string;
