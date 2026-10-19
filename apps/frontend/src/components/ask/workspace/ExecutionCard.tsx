@@ -351,7 +351,7 @@ export function ExecutionCard({
             isn't known yet -- render the outcome-unknown state instead of
             ConfirmationCard's "Confirmation required," which would invite
             a resubmit of something that may already be running or done. */}
-        {execution.confirmation && execution.status === 'RUNNING' && <PendingOutcomeCard executionId={execution.executionId} confirmationVersion={execution.confirmation.version} onCompleted={updateExecution} onAccessLost={() => onAccessLost(execution)} />}
+        {execution.confirmation && (execution.status === 'RUNNING' || execution.status === 'OUTCOME_UNKNOWN') && <PendingOutcomeCard executionId={execution.executionId} confirmationVersion={execution.confirmation.version} onCompleted={updateExecution} onAccessLost={() => onAccessLost(execution)} />}
         {execution.skillHandoff && (() => {
           const prompt = handoffPrompt(execution.skillHandoff);
           const label = handoffLabel(execution.skillHandoff);

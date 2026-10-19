@@ -59,8 +59,8 @@ test('repairs: an explicit classification, the caller\'s own bookings only, neve
   assert.equal(repairRow({ id: 'b2', propertyId: 'p1', status: 'DISPUTED', description: '', scheduledDate: null, updatedAt: at(1), service: { name: 'x' } }).nextAction.label, 'Resolve the dispute');
 });
 
-test('repairs is connected, and only unknown-outcome is left unavailable', () => {
-  assert.deepEqual(ASK_WORK_PROVIDER_REGISTRY.filter((entry) => entry.reader.state === 'UNAVAILABLE').map((entry) => entry.id), ['UNKNOWN_OUTCOME_EXECUTIONS']);
+test('repairs is connected with a registered reader', () => {
+  assert.equal(ASK_WORK_PROVIDER_REGISTRY.find((entry) => entry.id === 'REPAIRS').reader.state, 'CONNECTED');
   assert.deepEqual(validateAskWorkProviders(), []);
   assert.ok(ASK_WORK_PROVIDER_READERS.REPAIRS);
 });

@@ -171,8 +171,8 @@ export const ASK_WORK_PROVIDER_REGISTRY: readonly AskWorkProviderDefinition[] = 
   }),
   provider({
     id: 'UNKNOWN_OUTCOME_EXECUTIONS', label: 'Requests with an unknown outcome', workType: 'UNKNOWN_OUTCOME_EXECUTION', owner: 'ask-executions',
-    readOperationIds: [], commandOperationIds: [], readAuthority: 'NONE', lifecycleOperationId: null,
-    reader: unavailable('No canonical unknown-outcome state exists; an ordinary failure is not an unknown outcome, so nothing is derived.'),
+    readOperationIds: [], commandOperationIds: [], readAuthority: 'OWN_EXECUTION', lifecycleOperationId: null,
+    reader: CONNECTED,
     precedence: 10, fallbackProjection: false, sourceAliasKinds: ['execution'], views: ['NEEDS_YOU'], statusOptions: statuses('OUTCOME_UNKNOWN'), requiredForExit: true, freshnessSource: 'Execution last update',
   }),
   provider({

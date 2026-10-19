@@ -165,10 +165,10 @@ export async function getAskExecution(userId: string, executionId: string): Prom
 
 export const INTERACTIVE_ASK_STATUSES: AskExecutionStatus[] = ['NEEDS_PROPERTY', 'NEEDS_ENTITY', 'NEEDS_CLARIFICATION', 'NEEDS_CONTEXT', 'NEEDS_CONFIRMATION'];
 
-const CONTINUABLE_ASK_STATUSES: AskExecutionStatus[] = [...INTERACTIVE_ASK_STATUSES, 'RUNNING'];
+const CONTINUABLE_ASK_STATUSES: AskExecutionStatus[] = [...INTERACTIVE_ASK_STATUSES, 'RUNNING', 'OUTCOME_UNKNOWN'];
 
 export function pendingKind(status: AskExecutionStatus): AskPendingWorkItem['pendingKind'] {
-  if (status === 'RUNNING') return 'COMMAND_RECOVERY';
+  if (status === 'RUNNING' || status === 'OUTCOME_UNKNOWN') return 'COMMAND_RECOVERY';
   if (status === 'NEEDS_PROPERTY') return 'PROPERTY_SELECTION';
   if (status === 'NEEDS_ENTITY') return 'ENTITY_SELECTION';
   if (status === 'NEEDS_CONTEXT') return 'CONTEXT_CAPTURE';
@@ -177,7 +177,7 @@ export function pendingKind(status: AskExecutionStatus): AskPendingWorkItem['pen
 }
 
 export function pendingActionLabel(status: AskExecutionStatus): string {
-  if (status === 'RUNNING') return 'Check action status';
+  if (status === 'RUNNING' || status === 'OUTCOME_UNKNOWN') return 'Check action status';
   if (status === 'NEEDS_PROPERTY') return 'Select a home';
   if (status === 'NEEDS_ENTITY') return 'Choose a record';
   if (status === 'NEEDS_CONTEXT') return 'Add the missing detail';
@@ -236,6 +236,7 @@ export async function reclaimOrphanedRunningExecution(execution: AskExecution): 
 }
 
 export async function expirePendingInteraction(execution: AskExecution): Promise<AskExecution> {
+  if (execution.status === 'OUTCOME_UNKNOWN') return execution;
   if (execution.status === 'RUNNING') return reclaimOrphanedRunningExecution(execution);
   const interactionExpiresAt = pendingInteractionExpiresAt(execution);
   if (!interactionExpiresAt || interactionExpiresAt > new Date()) return execution;
@@ -280,6 +281,7 @@ export async function getAskPendingWork(userId: string, propertyId: string | nul
         { OR: [
           { status: { in: INTERACTIVE_ASK_STATUSES } },
           { status: 'RUNNING', confirmations: { some: { status: 'CLAIMED' } } },
+          { status: 'OUTCOME_UNKNOWN' },
           { status: 'RUNNING', confirmations: { none: {} }, updatedAt: { lte: orphanRunningCutoff } },
         ] },
         { OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] },

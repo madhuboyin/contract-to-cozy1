@@ -116,6 +116,19 @@ describe('AskWorkDestination', () => {
     expect(push).toHaveBeenCalled();
   });
 
+  it('opens a request whose result was not confirmed through the canonical continuation, with no dismiss', async () => {
+    const unknown = row({ workKey: 'execution:e5', providerId: 'UNKNOWN_OUTCOME_EXECUTIONS', workType: 'UNKNOWN_OUTCOME_EXECUTION', title: 'Replace the filter', summary: 'We could not confirm whether this finished.', status: { canonical: 'OUTCOME_UNKNOWN', label: 'Result not confirmed' }, nextAction: { label: 'Check what happened', operationId: null, allowed: true }, resume: { kind: 'CONFIRMATION', executionId: 'e5', sessionId: 's5', launch } });
+    getWork.mockResolvedValue({ success: true, data: page([unknown]) });
+    resolveWork.mockResolvedValue({ success: true, data: resolution({ workKey: 'execution:e5', row: unknown }) });
+    continueExecution.mockResolvedValue({ success: true, data: { executionId: 'e5', sessionId: 's5', property: { id: 'home-1', label: 'Home' } } });
+    render(<AskWorkDestination />);
+    expect(await screen.findByText('We could not confirm whether this finished.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Dismiss' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Check what happened' }));
+    await waitFor(() => expect(continueExecution).toHaveBeenCalledWith('e5', 'ASK_PAGE'));
+    expect(push).toHaveBeenCalledWith('/dashboard/ask?propertyId=home-1&sessionId=s5&executionId=e5');
+  });
+
   it('explains why work Ask cannot continue is shown without an action', async () => {
     const repair = row({ workKey: 'repair:b1', providerId: 'REPAIRS', workType: 'REPAIR', title: 'Plumbing repair', nextAction: null, resume: { kind: 'WORKSPACE', executionId: null, sessionId: null, launch, unavailableReason: 'Ask cannot manage service bookings yet. Its current state is shown here.' } });
     getWork.mockResolvedValue({ success: true, data: page([repair]) });

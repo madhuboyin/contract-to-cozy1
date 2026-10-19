@@ -160,7 +160,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   const landingOpening = calm && !concierge.loading && !concierge.failed && concierge.view ? buildConciergeStateStrip(concierge.view).opening : null;
   const askUnavailable = serviceUnavailable
     || concierge.failureCode === ASK_ACCOUNT_ROLE_ELIGIBILITY_DISABLED;
-  const hasPendingWork = loading || Boolean(input.trim()) || executions.some((execution) => ['NEEDS_ENTITY', 'NEEDS_CLARIFICATION', 'NEEDS_CONTEXT', 'NEEDS_CONFIRMATION', 'RUNNING'].includes(execution.status));
+  const hasPendingWork = loading || Boolean(input.trim()) || executions.some((execution) => ['NEEDS_ENTITY', 'NEEDS_CLARIFICATION', 'NEEDS_CONTEXT', 'NEEDS_CONFIRMATION', 'RUNNING', 'OUTCOME_UNKNOWN'].includes(execution.status));
   const safeBackTo = resolveDashboardBackHref(initialBackTo, '');
   useEffect(() => { onPendingStateChange?.(hasPendingWork); }, [hasPendingWork, onPendingStateChange]);
   useEffect(() => {

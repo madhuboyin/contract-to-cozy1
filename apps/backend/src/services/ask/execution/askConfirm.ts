@@ -107,7 +107,7 @@ export async function confirmAskExecution(userId: string, executionId: string, i
   }
   const access = await ensurePropertyAccess(userId, execution.propertyId);
   const command = getAskDomainCommandByOperation(execution.operationId ?? '');
-  const recoveringClaim = previous?.status === 'CLAIMED' && execution.status === 'RUNNING';
+  const recoveringClaim = previous?.status === 'CLAIMED' && (execution.status === 'RUNNING' || execution.status === 'OUTCOME_UNKNOWN');
   if (!command || (execution.status !== 'NEEDS_CONFIRMATION' && !recoveringClaim)) {
     const error = new Error('This confirmation is no longer active.');
     (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_NOT_ACTIVE';
@@ -221,8 +221,10 @@ export async function confirmAskExecution(userId: string, executionId: string, i
       (error as Error & { code?: string }).code = 'ASK_CONFIRMATION_IN_PROGRESS';
       throw error;
     }
+    // Reconciling an unknown outcome puts the execution back under an active claim, so a concurrent check sees it running, not unknown.
+    await prisma.askExecution.updateMany({ where: { id: executionId, userId, status: 'OUTCOME_UNKNOWN' }, data: { status: 'RUNNING', reasonCode: 'ASK_CONFIRMATION_CLAIMED' } });
     await prisma.askExecutionEvent.create({
-      data: { executionId, eventType: 'CONFIRMATION_RECOVERY_CLAIMED', metadataJson: asInputJson({ confirmationVersion: input.confirmationVersion }) },
+      data: { executionId, eventType: 'CONFIRMATION_RECOVERY_CLAIMED', metadataJson: asInputJson({ confirmationVersion: input.confirmationVersion, fromOutcomeUnknown: previous?.outcomeUnknownAt != null }) },
     });
   } else {
     try {
@@ -360,7 +362,10 @@ export async function confirmAskExecution(userId: string, executionId: string, i
       if (updated.count !== 1) return;
       await tx.askConfirmationReceipt.updateMany({
         where: { executionId, status: 'CLAIMED' },
-        data: { status: 'FAILED', lastErrorCode: errorCode ?? 'ASK_CONFIRMATION_CONFLICT' },
+        data: {
+          status: 'FAILED', lastErrorCode: errorCode ?? 'ASK_CONFIRMATION_CONFLICT',
+          ...(previous?.outcomeUnknownAt ? { reconciledAt: new Date(), reconciliationOutcome: 'NOT_PERFORMED' } : {}),
+        },
       });
       await tx.askExecutionEvent.create({
         data: { executionId, eventType: 'CONFIRMATION_CONFLICT_RELEASED', metadataJson: asInputJson({ errorCode: errorCode ?? null }) },
@@ -397,6 +402,10 @@ export async function confirmAskExecution(userId: string, executionId: string, i
         where: { id: execution.id },
         data: { status: result.status, reasonCode: result.reasonCode, contextVersion: result.contextVersion, parametersJson: result.parameters ? asInputJson(result.parameters) : undefined, resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: [], confirmation: null, clarification: null, suggestions: result.suggestions, suggestedNextActionsGoverned: result.suggestedNextActionsGoverned === true, suggestedNextActions: result.suggestedNextActions ?? [], skillHandoff: result.skillHandoff ?? null, ...preservedExecutionHistory(execution.resultJson, result.blocks) }), completedAt: new Date() },
       });
+      // Settling an unknown outcome: record that and how it was reconciled, in the same transaction as the completion.
+      if (previous?.outcomeUnknownAt) {
+        await tx.askConfirmationReceipt.update({ where: { executionId }, data: { reconciledAt: new Date(), reconciliationOutcome: 'COMPLETED' } });
+      }
       await tx.askConfirmationReceipt.update({
         where: { executionId },
         data: { status: 'COMPLETED', artifactType, artifactId, completedAt: new Date(), lastErrorCode: null },

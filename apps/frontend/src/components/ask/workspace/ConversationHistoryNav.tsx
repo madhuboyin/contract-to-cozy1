@@ -46,6 +46,7 @@ export function recentSessionStatus(status: AskRecentSessionSummary['latestStatu
   if (['NEEDS_PROPERTY', 'NEEDS_ENTITY', 'NEEDS_CLARIFICATION', 'NEEDS_CONTEXT'].includes(status)) return 'Needs input';
   if (status === 'NEEDS_CONFIRMATION') return 'Awaiting confirmation';
   if (status === 'RUNNING') return 'In progress';
+  if (status === 'OUTCOME_UNKNOWN') return 'Result not confirmed';
   if (['ANSWERED', 'COMPLETED', 'READY_WITH_LIMITATIONS'].includes(status)) return 'Completed';
   // IW-CALM-008/009 (FRD v1.111): a state the homeowner can act on says so; no raw status name is ever shown.
   if (['FAILED_RETRYABLE', 'UNAVAILABLE'].includes(status)) return 'Needs a retry';

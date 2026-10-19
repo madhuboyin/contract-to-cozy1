@@ -116,23 +116,26 @@ test('scheduled follow-ups: future claim and project dates, each its own work wi
   assert.equal(projectFollowUpRow(project).summary, 'Completed');
 });
 
-test('only unknown-outcome remains unavailable, with a stated reason; everything else is connected and valid', async () => {
+test('every FR-WORK-001 provider is connected, valid, and has a registered reader', async () => {
   assert.deepEqual(validateAskWorkProviders(), []);
-  const unavailable = ASK_WORK_PROVIDER_REGISTRY.filter((entry) => entry.reader.state === 'UNAVAILABLE').map((entry) => entry.id).sort();
-  assert.deepEqual(unavailable, ['UNKNOWN_OUTCOME_EXECUTIONS']);
-  for (const id of unavailable) assert.ok(ASK_WORK_PROVIDER_REGISTRY.find((entry) => entry.id === id).reader.reason.length > 20);
-  for (const entry of ASK_WORK_PROVIDER_REGISTRY.filter((candidate) => candidate.reader.state === 'CONNECTED')) assert.ok(ASK_WORK_PROVIDER_READERS[entry.id], entry.id);
+  assert.deepEqual(ASK_WORK_PROVIDER_REGISTRY.filter((entry) => entry.reader.state === 'UNAVAILABLE').map((entry) => entry.id), []);
+  for (const entry of ASK_WORK_PROVIDER_REGISTRY) assert.ok(ASK_WORK_PROVIDER_READERS[entry.id], entry.id);
   assert.equal(workProviderReadFloor(ASK_WORK_PROVIDER_REGISTRY.find((entry) => entry.id === 'SCHEDULED_FOLLOW_UPS')), 'VIEWER');
   assert.equal(workProviderReadFloor(ASK_WORK_PROVIDER_REGISTRY.find((entry) => entry.id === 'QUEUED_JOBS')), null);
 });
 
-test('the page stays partial while a required provider is unavailable, naming each one', async () => {
+test('a page is complete only when every provider answered, and partial the moment one fails', async () => {
   const empty = async () => ({ rows: [], total: 0, viewCounts: null });
-  const readers = Object.fromEntries(ASK_WORK_PROVIDER_REGISTRY.filter((entry) => entry.reader.state === 'CONNECTED').map((entry) => [entry.id, empty]));
-  const page = await composeAskWorkPage({ userId: 'u1', propertyId: 'p1', role: 'OWNER', operatingMode: 'OWNING' }, { view: 'NEEDS_YOU', limit: 5, after: null, workType: null, status: null }, readers);
-  assert.equal(page.partial, true);
-  assert.equal(page.total, null);
-  assert.equal(page.totalScope, 'PARTIAL');
-  assert.deepEqual(page.providers.filter((entry) => entry.state === 'UNAVAILABLE').map((entry) => entry.providerId).sort(), ['UNKNOWN_OUTCOME_EXECUTIONS']);
-  assert.ok(page.providers.every((entry) => entry.required));
+  const readers = Object.fromEntries(ASK_WORK_PROVIDER_REGISTRY.map((entry) => [entry.id, empty]));
+  const owner = { userId: 'u1', propertyId: 'p1', role: 'OWNER', operatingMode: 'OWNING' };
+  const q = { view: 'NEEDS_YOU', limit: 5, after: null, workType: null, status: null };
+  const complete = await composeAskWorkPage(owner, q, readers);
+  assert.equal(complete.partial, false);
+  assert.equal(complete.totalScope, 'COMPLETE');
+  assert.equal(complete.total, 0);
+  const failing = await composeAskWorkPage(owner, q, { ...readers, CLAIMS: async () => { throw new Error('boom'); } });
+  assert.equal(failing.partial, true);
+  assert.equal(failing.total, null);
+  assert.equal(failing.providers.find((entry) => entry.providerId === 'CLAIMS').state, 'FAILED');
+  assert.ok(failing.providers.every((entry) => entry.required));
 });

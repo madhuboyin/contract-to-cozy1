@@ -53,5 +53,5 @@ export function resultHeadline(execution: Pick<AskExecutionResponse, 'blocks' | 
  */
 export function canFoldResult(execution: Pick<AskExecutionResponse, 'status' | 'confirmation' | 'clarification' | 'captureRequests'>): boolean {
   return !execution.confirmation && !execution.clarification && execution.captureRequests.length === 0
-    && !['NEEDS_CONFIRMATION', 'NEEDS_PROPERTY', 'NEEDS_CONTEXT', 'NEEDS_ENTITY', 'NEEDS_CLARIFICATION', 'RUNNING'].includes(execution.status);
+    && !['NEEDS_CONFIRMATION', 'NEEDS_PROPERTY', 'NEEDS_CONTEXT', 'NEEDS_ENTITY', 'NEEDS_CLARIFICATION', 'RUNNING', 'OUTCOME_UNKNOWN'].includes(execution.status);
 }

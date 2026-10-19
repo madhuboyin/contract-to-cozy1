@@ -56,7 +56,7 @@ export function AskWorkDestination() {
 
   const enter = async (row: AskWorkRow) => {
     const propertyId = scopedPropertyId as string;
-    if (row.providerId === 'PENDING_EXECUTIONS' && row.resume.executionId) {
+    if ((row.providerId === 'PENDING_EXECUTIONS' || row.providerId === 'UNKNOWN_OUTCOME_EXECUTIONS') && row.resume.executionId) {
       const response = await api.continueAskExecution(row.resume.executionId, 'ASK_PAGE');
       if (!response.success || !response.data) throw new Error(response.message || 'Could not resume this request.');
       // A request that still asks which home it is about has no home to match; Ask finishes that question in the conversation.

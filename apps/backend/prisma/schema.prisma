@@ -8028,6 +8028,10 @@ model NotificationOutcome {
 }
 
 enum AskExecutionStatus {
+  // A confirmed command claimed its receipt and the claim's lease ran out with no recorded completion, so Ask cannot tell whether the
+  // domain write happened. Distinct from every failure: nothing here says the command failed. Recorded by the unknown-outcome sweep and
+  // cleared only by reconciling through the same idempotent confirm path (see AskConfirmationReceipt.reconciledAt).
+  OUTCOME_UNKNOWN
   RECEIVED
   ROUTING
   NEEDS_PROPERTY
@@ -8269,6 +8273,11 @@ model AskConfirmationReceipt {
   attemptCount        Int      @default(1)
   completedAt         DateTime?
   lastErrorCode       String?
+  // Unknown-outcome reconciliation: when the sweep recorded that the claim's lease expired with no completion, and when and how a later
+  // idempotent confirm settled it (COMPLETED: the command is now recorded as done; NOT_PERFORMED: it failed before any write).
+  outcomeUnknownAt      DateTime?
+  reconciledAt          DateTime?
+  reconciliationOutcome String?
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
@@ -8276,6 +8285,7 @@ model AskConfirmationReceipt {
 
   @@unique([executionId])
   @@unique([executionId, idempotencyKey])
+  @@index([status, leaseExpiresAt])
   @@map("ask_confirmation_receipts")
 }
 

@@ -62,6 +62,7 @@ async function probe(kind: string, entityId: string, userId: string, propertyId:
         return outcome('SUPERSEDED', 'This request was tried again; the new attempt replaced it.', retryId ? `execution:${retryId}` : null);
       }
       if (EXECUTION_COMPLETED.includes(execution.status)) return outcome('COMPLETED', 'This request is finished.');
+      if (execution.status === 'OUTCOME_UNKNOWN') return { state: 'READ', provider: 'UNKNOWN_OUTCOME_EXECUTIONS' };
       if (EXECUTION_OPEN.includes(execution.status)) return { state: 'READ', provider: 'PENDING_EXECUTIONS' };
       return outcome('STALE', 'This request is no longer waiting on you.');
     }

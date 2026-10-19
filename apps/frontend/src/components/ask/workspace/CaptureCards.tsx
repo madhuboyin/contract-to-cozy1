@@ -236,7 +236,7 @@ export function ConfirmationCard({ executionId, confirmation, onCompleted, autoF
         const reconciled = await api.getAskExecution(executionId);
         if (reconciled.success && reconciled.data && reconciled.data.status !== 'NEEDS_CONFIRMATION') {
           onCompleted(reconciled.data);
-          if (reconciled.data.status !== 'RUNNING') window.sessionStorage.removeItem(confirmationAttemptStorageKey(executionId, confirmation.version));
+          if (reconciled.data.status !== 'RUNNING' && reconciled.data.status !== 'OUTCOME_UNKNOWN') window.sessionStorage.removeItem(confirmationAttemptStorageKey(executionId, confirmation.version));
           return;
         }
       } catch (reconcileError) {

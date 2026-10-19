@@ -14,6 +14,7 @@ import { readRenovationCaseWork } from './work/renovationCases.reader';
 import { readMonitorWork } from './work/monitors.reader';
 import { readQueuedJobWork } from './work/queuedJobs.reader';
 import { readRetryableExecutionWork } from './work/retryableExecutions.reader';
+import { readUnknownOutcomeWork } from './work/unknownOutcomes.reader';
 import { readRepairWork } from './work/repairs.reader';
 import { readScheduledFollowUpWork } from './work/scheduledFollowUps.reader';
 import { createOperationalWorkItemReader } from './work/operationalWorkItems.reader';
@@ -48,6 +49,7 @@ export const ASK_WORK_PROVIDER_READERS: Partial<Record<AskWorkProviderId, AskWor
   RETRYABLE_EXECUTIONS: readRetryableExecutionWork,
   SCHEDULED_FOLLOW_UPS: readScheduledFollowUpWork,
   REPAIRS: readRepairWork,
+  UNKNOWN_OUTCOME_EXECUTIONS: readUnknownOutcomeWork,
 };
 
 export class AskWorkInvalidRequestError extends Error {
