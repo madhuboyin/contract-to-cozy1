@@ -217,6 +217,7 @@ const jobs: Record<AskOperationId, string> = {
   CAPTURE_EVIDENCE_CONFIRM: 'attach an already-uploaded document as evidence for something reported directly from conversation',
   SELL_HOLD_RENT_GOAL_CAPTURE: 'attach a durable sell/hold/rent decision thread from a stated intention to sell, directly from conversation',
   ENVIRONMENT_REPORT: "review this home's Environment Report: current weather, 10-day forecast, air quality, drought monitor status, FEMA flood zone and elevation, county radon potential, nearby EPA-tracked facilities, USDA hardiness zone and NOAA climate normals, active weather insights, and weather preparation checklists",
+  HOUSEHOLD_ACCESS_SUMMARY: 'see who has access to this home and in what role: names, roles, the primary owner and join dates, without email addresses or pending invitations',
   ENVIRONMENT_REPORT_COMMAND: 'start or update a weather preparation checklist step or record the last HVAC filter change from the Environment Report, after confirmation',
 };
 
@@ -430,6 +431,12 @@ const positives: Record<AskOperationId, readonly string[]> = {
     'Are there EPA regulated facilities near my home?',
     'Shwo my environment report',
   ],
+  HOUSEHOLD_ACCESS_SUMMARY: [
+    'Who has access to my home?',
+    'Who is in my household?',
+    'Show my household members',
+    'Who can see my home record?',
+  ],
   ENVIRONMENT_REPORT_COMMAND: [
     'Start the weather preparation checklist for this environment insight.',
     'Mark this weather preparation step done.',
@@ -637,6 +644,7 @@ const negatives: Record<AskOperationId, readonly string[]> = {
   CAPTURE_EVIDENCE_CONFIRM: ['Show my home timeline', 'What is my roof type?'],
   SELL_HOLD_RENT_GOAL_CAPTURE: ['What is my roof type?', 'Should I sell, hold, or rent this home?'],
   ENVIRONMENT_REPORT: ['Show my home event radar feed', 'Show my home risk replay', 'Show my plant care outlook'],
+  HOUSEHOLD_ACCESS_SUMMARY: ['Invite my spouse to my household', 'Show my home timeline', 'Remove a member from my household'],
   ENVIRONMENT_REPORT_COMMAND: ['Show my environment report', 'What maintenance is pending?', 'Show my seasonal maintenance tasks'],
 };
 
@@ -840,6 +848,7 @@ const answerPositives: Record<AskOperationId, readonly string[]> = {
   CAPTURE_EVIDENCE_CONFIRM: ['The referenced document is ready to be attached as evidence to the canonical home timeline entry after confirmation.'],
   SELL_HOLD_RENT_GOAL_CAPTURE: ['A sell, hold, or rent decision thread for this home is attached and will resume automatically next time.'],
   ENVIRONMENT_REPORT: ['Current weather, 10-day forecast, US AQI air quality, drought status, flood zone, county radon zone, nearby EPA facilities, climate normals, and active weather preparation checklists are shown for this home.'],
+  HOUSEHOLD_ACCESS_SUMMARY: ['The people with access to this home are listed with their role and when they joined; email addresses and pending invitations are not shown.'],
   ENVIRONMENT_REPORT_COMMAND: ['The weather preparation checklist or HVAC filter maintenance change is shown for review and saved only after you confirm.'],
 };
 
@@ -1046,6 +1055,7 @@ const answerNegatives: Partial<Record<AskOperationId, readonly string[]>> = {
     'Past hazard records matched to this home are listed without current weather or air quality',
     'Care changes for tracked houseplants are listed without the full environment report',
   ],
+  HOUSEHOLD_ACCESS_SUMMARY: ['An invitation to join the household is shown for review and sent only after you confirm'],
   ENVIRONMENT_REPORT_COMMAND: [
     'The environment report is shown without starting or updating a checklist or maintenance record',
   ],

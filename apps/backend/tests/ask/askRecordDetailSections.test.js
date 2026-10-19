@@ -46,9 +46,9 @@ test('the launch questions Record routes use resolve to the read operation of th
   for (const [question, operationId] of Object.entries(expected)) assert.equal(resolveAskOperation(question).operationId, operationId, question);
 });
 
-test('every section primary action resolves to one of that section’s reads, except the household summary, which has no Ask read', () => {
+test('every section primary action resolves to one of that section’s reads', () => {
   const mismatched = ASK_RECORD_SECTION_REGISTRY.filter((entry) => !entry.readOperationIds.includes(resolveAskOperation(entry.primaryAction.question).operationId)).map((entry) => entry.id);
-  assert.deepEqual(mismatched, ['household-access']);
+  assert.deepEqual(mismatched, []);
 });
 
 // ---- timeline ----

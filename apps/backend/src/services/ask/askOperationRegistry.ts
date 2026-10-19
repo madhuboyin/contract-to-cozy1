@@ -226,6 +226,8 @@ export type AskOperationId =
   | 'QUOTE_COMPARISON_COMMAND'
   // Read the home's Environment Report: current weather, 10-day forecast, air quality, drought monitor status, FEMA flood zone and elevation, county radon potential, nearby EPA-tracked facilities, USDA hardiness zone and NOAA climate normals, active weather insights, and weather preparation checklists.
   | 'ENVIRONMENT_REPORT'
+  // Read who has access to the home and in what role: names, roles, primary owner, and join dates, never email addresses or pending invitations. Inviting and changing access stay with HOUSEHOLD_INVITATION (owner-only).
+  | 'HOUSEHOLD_ACCESS_SUMMARY'
   // Start or update a weather preparation checklist step, or record the last HVAC filter change from the Environment Report. Confirmation-gated, declared-action only; never by fuzzy retrieval.
   | 'ENVIRONMENT_REPORT_COMMAND'
   | 'HOME_UPGRADE_SCENARIOS'
@@ -846,6 +848,7 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   NEGOTIATION_SHIELD_BUYER_COMMAND: definition('NEGOTIATION_SHIELD_BUYER_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'negotiation-shield.buyer', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   PRICE_FINALIZATION_COMMAND: definition('PRICE_FINALIZATION_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'price-finalization.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   QUOTE_COMPARISON_COMMAND: definition('QUOTE_COMPARISON_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'quote-comparison.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
+  HOUSEHOLD_ACCESS_SUMMARY: definition('HOUSEHOLD_ACCESS_SUMMARY', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'household.access-summary', ['SUMMARY', 'GROUPED_LIST', 'EMPTY_STATE', 'BOUNDARY']),
   ENVIRONMENT_REPORT: definition('ENVIRONMENT_REPORT', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'environment-report.read', ['SUMMARY', 'ENVIRONMENT_REPORT', 'GROUPED_LIST', 'EVIDENCE', 'LIMITATION', 'BOUNDARY']),
   ENVIRONMENT_REPORT_COMMAND: definition('ENVIRONMENT_REPORT_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'environment-report.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   NEGOTIATION_SHIELD_CASE_ATTACH: definition('NEGOTIATION_SHIELD_CASE_ATTACH', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'negotiation-shield.attach', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
@@ -1378,6 +1381,8 @@ const environmentReportOtherIntentPattern = /\b(?:claim|file|filing|insurance|in
 const breakEvenAnalysisPattern = /\b(?:break[- ]?even|breaks even|broken even)\b|\b(?:owning|ownership of)\b.{0,40}\bpays? off\b|\b(?:owning|ownership|home|house)\b.{0,40}\b(?:pay|pays|paid) for itself\b/i;
 const breakEvenOtherSensePattern = /\b(?:refinanc\w*|mortgage rate|loan estimate|solar|panels?|heat pump|insulation|upgrade|renovat\w*|remodel\w*|project|appliance|replace\w*|quote)\b/i;
 const sellHoldRentAnalysisPattern = /\b(?:should|could|would|will|is|when|benefit|better|compare|decide|planning|plan)\b.{0,55}\b(?:sell|selling|hold|holding|rent(?:ing)?(?: out)?|landlord)\b|\b(?:sell|selling)\b.{0,55}\b(?:hold|holding|rent(?:ing)?(?: out)?|landlord|good time|worth|benefit|better)\b|\b(?:hold|holding|rent(?:ing)?(?: out)?)\b.{0,55}\b(?:sell|selling|better|benefit)\b|\bwhat if\b.{0,40}\b(?:i|we)\b.{0,12}\b(?:rent(?:ed)?|sell|sold|hold|held)\b.{0,20}\b(?:it|the (?:home|house|property)|my (?:home|house|property))\b/i;
+// Read-only "who has access" questions. Any invite/add/remove/change verb is a command and is left to HOUSEHOLD_INVITATION or the model.
+const householdAccessSummaryPattern = /^(?!.*\b(?:invite|add|remove|delete|change|update|revoke|promote|demote|share)\b).*(?:\bwho (?:has|have|can (?:see|access)) (?:access|my home|this home|my home record)\b|\bwho(?:'s| is| are) (?:in|on) (?:my|our|the) household\b|\b(?:show|list|see|view)\b.{0,20}\b(?:my |our |the )?household (?:members?|access)\b|\bhousehold (?:members?|access)\b.{0,20}\b(?:list|summary)\b|\bwho (?:all )?(?:has|have) access\b)/i;
 const householdInvitationPattern = /\b(?:invite|add|share (?:my|the) home with)\b.{0,50}\b(?:wife|husband|spouse|partner|family member|household member|someone|person)\b|\bhousehold\b.{0,40}\b(?:invite|invitation|add (?:a )?member)\b/i;
 const explicitCapabilityPattern = /\b(?:tool|something (?:available|to help)|anything (?:available|to help)|what can help|do you have|feature available)\b/i;
 const capabilityPattern = /\b(tool|something available|what can help|do you have|help me (?:with|plan)|refinanc|sell.*rent|compare.{0,40}(?:quotes?|bids?|proposals?|estimates?)|organize.{0,40}(?:records?|documents?|paperwork)|track.{0,40}(?:permits?|projects?)|plan.{0,40}(?:renovation|remodel|replacement)|savings?|rebates?|monitor)\b/i;
@@ -1738,6 +1743,9 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   }
   if (householdInvitationPattern.test(message)) {
     return resolved('HOUSEHOLD_INVITATION', 0.98);
+  }
+  if (householdAccessSummaryPattern.test(message) && !explicitCapabilityPattern.test(message)) {
+    return resolved('HOUSEHOLD_ACCESS_SUMMARY', 0.96);
   }
   if (explicitCapabilityPattern.test(message) || capabilityPattern.test(message)) {
     return resolved('CAPABILITY_DISCOVERY', 0.88);

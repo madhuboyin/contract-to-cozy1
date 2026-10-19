@@ -158,6 +158,7 @@ const POLICIES: readonly AskAudiencePolicy[] = [
   definePolicy('PRICE_FINALIZATION_COMMAND', KNOWN_MODES),
   definePolicy('QUOTE_COMPARISON_COMMAND', KNOWN_MODES),
   definePolicy('ENVIRONMENT_REPORT', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
+  definePolicy('HOUSEHOLD_ACCESS_SUMMARY', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('ENVIRONMENT_REPORT_COMMAND', KNOWN_MODES),
   definePolicy('HOME_PLANT_ADD', ALL_MODES),
   definePolicy('ROOM_PLANT_RECOMMENDATIONS', ALL_MODES),

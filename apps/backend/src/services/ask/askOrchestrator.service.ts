@@ -149,6 +149,7 @@ import './handlers/negotiationShieldBuyerCommands.handler';
 import './handlers/priceFinalizationCommands.handler';
 import './handlers/quoteComparisonCommands.handler';
 import './handlers/environmentReport.handler';
+import './handlers/householdAccess.handler';
 import './handlers/environmentReportCommands.handler';
 export { executeOperationCore, executeOperation, refreshAskExecutionAfterConflict, refreshAskSourceExecution, ASK_MUTATION_IMPACT_MAP, siblingOperationIdsForBuyerTaskMutation, selectSiblingRefreshTargets, capReconciledChildExecutions, reconcileAskExecutionSideEffects } from './execution/executeOperation';
 export { oracleApplianceLabel, oracleLifespanItem, applianceFailureRiskFromView, maintenanceBudgetFromView } from './handlers/applianceOracleBudget.handler';

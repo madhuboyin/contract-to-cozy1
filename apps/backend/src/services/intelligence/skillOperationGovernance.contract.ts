@@ -147,6 +147,9 @@ export const KNOWN_UNGOVERNED_OPERATIONS: readonly AskOperationId[] = [
   'QUOTE_COMPARISON_COMMAND',
   'ENVIRONMENT_REPORT',
   'ENVIRONMENT_REPORT_COMMAND',
+  // Household access summary (Sole Homeowner Interface FR-REC-002): a read-only, skill-less answer over the household member list. Same
+  // precedent as RECALL_REVIEW above; it must stay in this list or the boot-time governance check fails.
+  'HOUSEHOLD_ACCESS_SUMMARY',
   'ROOM_PLANT_RECOMMENDATIONS',
   'OWNERSHIP_COST_COMMAND',
   // Tool starts written inside Ask (declared-action, confirmation-gated, skill-less): suggest habits, run the simulation, check a quote.
