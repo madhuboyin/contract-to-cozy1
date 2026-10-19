@@ -5,6 +5,11 @@ import type { AskAccountRole } from './askAccountEligibility';
 import { readPendingExecutionWork } from './work/pendingExecutions.reader';
 import { readDecisionThreadWork } from './work/decisionThreads.reader';
 import { readIncidentWork } from './work/incidents.reader';
+import { readClaimWork } from './work/claims.reader';
+import { readProjectWork } from './work/projects.reader';
+import { readGuidanceJourneyWork } from './work/guidanceJourneys.reader';
+import { readDiyProjectWork } from './work/diyProjects.reader';
+import { readRenovationCaseWork } from './work/renovationCases.reader';
 import { createOperationalWorkItemReader } from './work/operationalWorkItems.reader';
 import { ensureAskServiceAccountEligibility, ensurePropertyAccess } from './askHandlerSupport';
 import { loadOperatingMode } from './askRecordContext';
@@ -27,6 +32,11 @@ export const ASK_WORK_PROVIDER_READERS: Partial<Record<AskWorkProviderId, AskWor
   OPERATIONAL_WORK_ITEMS: createOperationalWorkItemReader(),
   DECISION_THREADS: readDecisionThreadWork,
   INCIDENTS: readIncidentWork,
+  CLAIMS: readClaimWork,
+  PROJECTS: readProjectWork,
+  GUIDANCE_JOURNEYS: readGuidanceJourneyWork,
+  DIY_PROJECTS: readDiyProjectWork,
+  RENOVATION_CASES: readRenovationCaseWork,
 };
 
 export class AskWorkInvalidRequestError extends Error {

@@ -59,7 +59,7 @@ test('validation rejects dishonest reader claims and a fallback that outranks ca
   assert.match(validateAskWorkProviderRegistry([{ ...claims, readOperationIds: [] }]).join('\n'), /declares none/);
   assert.match(validateAskWorkProviderRegistry([claims, { ...byId('OPERATIONAL_WORK_ITEMS'), precedence: 5 }]).join('\n'), /fallback projection/);
   assert.match(validateAskWorkProviders([{ ...claims, reader: { state: 'CONNECTED' } }], {}).join('\n'), /no registered reader/);
-  assert.match(validateAskWorkProviders([claims], { CLAIMS: async () => ({ rows: [], total: 0, viewCounts: null }) }).join('\n'), /registered reader but is declared unavailable/);
+  assert.match(validateAskWorkProviders([{ ...claims, reader: { state: 'UNAVAILABLE', reason: 'not yet' } }], { CLAIMS: async () => ({ rows: [], total: 0, viewCounts: null }) }).join('\n'), /registered reader but is declared unavailable/);
 });
 
 test('with no readers supplied, every provider is UNAVAILABLE and the page is partial with no total', async () => {

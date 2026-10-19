@@ -124,7 +124,7 @@ test('work item provider: aliases keep the canonical domain keys of its executio
 });
 
 test('work item provider: ownership exclusion switches on only when the canonical provider is connected', async () => {
-  const connect = (ids) => ASK_WORK_PROVIDER_REGISTRY.map((entry) => (ids.includes(entry.id) ? { ...entry, reader: { state: 'CONNECTED' } } : entry));
+  const connect = (ids) => ASK_WORK_PROVIDER_REGISTRY.map((entry) => ({ ...entry, reader: ids.includes(entry.id) ? { state: 'CONNECTED' } : { state: 'UNAVAILABLE', reason: 'test' } }));
   const none = installWorkItems([]);
   await createOperationalWorkItemReader(connect(['OPERATIONAL_WORK_ITEMS']))(ctx, { view: 'NEEDS_YOU', after: null, limit: 5, status: null });
   assert.doesNotMatch(JSON.stringify(none.findMany[0].where), /"executionType"/);
@@ -156,7 +156,7 @@ test('the connected providers are registered readers, and the page carries both 
   const page = await composeAskWorkPage(
     { userId: 'u1', propertyId: 'p1', role: 'OWNER', operatingMode: 'OWNING' },
     { view: 'NEEDS_YOU', limit: 10, after: null, workType: null, status: null },
-    require('../../src/services/ask/askWork.service.ts').ASK_WORK_PROVIDER_READERS,
+    { PENDING_EXECUTIONS: require('../../src/services/ask/askWork.service.ts').ASK_WORK_PROVIDER_READERS.PENDING_EXECUTIONS, OPERATIONAL_WORK_ITEMS: require('../../src/services/ask/askWork.service.ts').ASK_WORK_PROVIDER_READERS.OPERATIONAL_WORK_ITEMS },
   );
   assert.deepEqual(page.rows.map((row) => row.workKey), ['workItem:w1', 'execution:e1']);
   assert.equal(page.providers.find((entry) => entry.providerId === 'PENDING_EXECUTIONS').state, 'AVAILABLE');

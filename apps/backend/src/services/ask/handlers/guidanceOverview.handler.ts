@@ -176,7 +176,7 @@ export function guidanceGuardTargetForStep(step: { toolKey?: string | null; step
   return null;
 }
 
-function journeyTitleFor(journey: any): string {
+export function journeyTitleFor(journey: any): string {
   const family = String(journey.primarySignal?.signalIntentFamily ?? '').toLowerCase();
   const title = GUIDANCE_FAMILY_TITLES[family]
     ?? (journey.primarySignal?.signalIntentFamily ? titleCase(journey.primarySignal.signalIntentFamily) : `${titleCase(journey.issueDomain)} Action Plan`);

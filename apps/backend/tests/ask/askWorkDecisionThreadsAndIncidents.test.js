@@ -112,6 +112,6 @@ test('decisions and incidents are connected providers, valid at startup, and no 
   prisma.operationalWorkItem = { findMany: async () => [], count: async () => 0, groupBy: async () => [] };
   prisma.decisionThread = { findMany: async () => [], count: async () => 0, groupBy: async () => [] };
   prisma.incident = { findMany: async () => [], count: async () => 0 };
-  const page = await composeAskWorkPage({ userId: 'u1', propertyId: 'p1', role: 'OWNER', operatingMode: 'OWNING' }, { view: 'NEEDS_YOU', limit: 5, after: null, workType: null, status: null }, ASK_WORK_PROVIDER_READERS);
+  const page = await composeAskWorkPage({ userId: 'u1', propertyId: 'p1', role: 'OWNER', operatingMode: 'OWNING' }, { view: 'NEEDS_YOU', limit: 5, after: null, workType: null, status: null }, { PENDING_EXECUTIONS: ASK_WORK_PROVIDER_READERS.PENDING_EXECUTIONS, OPERATIONAL_WORK_ITEMS: ASK_WORK_PROVIDER_READERS.OPERATIONAL_WORK_ITEMS, DECISION_THREADS: ASK_WORK_PROVIDER_READERS.DECISION_THREADS, INCIDENTS: ASK_WORK_PROVIDER_READERS.INCIDENTS });
   for (const id of ['PENDING_EXECUTIONS', 'OPERATIONAL_WORK_ITEMS', 'DECISION_THREADS', 'INCIDENTS']) assert.equal(page.providers.find((entry) => entry.providerId === id).state, 'AVAILABLE', id);
 });
