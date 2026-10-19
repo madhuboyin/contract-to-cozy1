@@ -1154,6 +1154,41 @@ class APIClient {
     if (query.propertyId) params.set('propertyId', query.propertyId);
     return this.request(`/api/ask/notifications?${params.toString()}`, options);
   }
+  // Phase 7 file intake. The file is kept first; reading it is a separate call that needs the person's acknowledgement.
+  async getAskIntakeConfig(): Promise<APIResponse<import('@/features/ask/types').AskIntakeConfig>> {
+    return this.request('/api/ask/intake/config');
+  }
+  async uploadAskIntakeFile(propertyId: string, file: File, sensitivity: string): Promise<APIResponse<import('@/features/ask/types').AskIntakeView>> {
+    this.validateFile(file, { allowedTypes: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'application/pdf'] });
+    const formData = new FormData();
+    formData.append('sensitivity', sensitivity);
+    formData.append('file', file);
+    return this.formDataRequest(`/api/ask/properties/${encodeURIComponent(propertyId)}/intake/files`, formData);
+  }
+  async getAskIntake(propertyId: string, recordId: string): Promise<APIResponse<import('@/features/ask/types').AskIntakeView>> {
+    return this.request(`/api/ask/properties/${encodeURIComponent(propertyId)}/intake/${encodeURIComponent(recordId)}`);
+  }
+  async analyzeAskIntake(propertyId: string, recordId: string, body: { kind: import('@/features/ask/types').AskIntakeKind | 'AUTO'; acknowledgedProcessing?: boolean; inspection?: { reportType: string; inspectionDate: string } }): Promise<APIResponse<import('@/features/ask/types').AskIntakeView>> {
+    return this.request(`/api/ask/properties/${encodeURIComponent(propertyId)}/intake/${encodeURIComponent(recordId)}/analyze`, { method: 'POST', body });
+  }
+  async reviewAskIntakeCandidate(propertyId: string, recordId: string, candidateId: string, body: { action: 'CONFIRM' | 'CORRECT' | 'REJECT'; value?: string }): Promise<APIResponse<import('@/features/ask/types').AskIntakeView>> {
+    return this.request(`/api/ask/properties/${encodeURIComponent(propertyId)}/intake/${encodeURIComponent(recordId)}/candidates/${encodeURIComponent(candidateId)}/review`, { method: 'POST', body });
+  }
+  async promoteAskIntake(propertyId: string, recordId: string): Promise<APIResponse<import('@/features/ask/types').AskIntakeView>> {
+    return this.request(`/api/ask/properties/${encodeURIComponent(propertyId)}/intake/${encodeURIComponent(recordId)}/promote`, { method: 'POST' });
+  }
+  async updateAskIntakeLabel(propertyId: string, recordId: string, patch: Record<string, string | null>): Promise<APIResponse<import('@/features/ask/types').AskIntakeView>> {
+    return this.request(`/api/ask/properties/${encodeURIComponent(propertyId)}/intake/${encodeURIComponent(recordId)}/label`, { method: 'PATCH', body: patch });
+  }
+  async confirmAskIntakeLabel(propertyId: string, recordId: string): Promise<APIResponse<import('@/features/ask/types').AskIntakeView>> {
+    return this.request(`/api/ask/properties/${encodeURIComponent(propertyId)}/intake/${encodeURIComponent(recordId)}/label/confirm`, { method: 'POST' });
+  }
+  async dismissAskIntakeLabel(propertyId: string, recordId: string): Promise<APIResponse<import('@/features/ask/types').AskIntakeView>> {
+    return this.request(`/api/ask/properties/${encodeURIComponent(propertyId)}/intake/${encodeURIComponent(recordId)}/label/dismiss`, { method: 'POST' });
+  }
+  async discardAskIntake(propertyId: string, recordId: string): Promise<APIResponse<import('@/features/ask/types').AskIntakeView>> {
+    return this.request(`/api/ask/properties/${encodeURIComponent(propertyId)}/intake/${encodeURIComponent(recordId)}/discard`, { method: 'POST' });
+  }
   async openAskNotification(id: string): Promise<APIResponse<import('@/features/ask/types').AskNotificationOpenResult>> {
     return this.request(`/api/ask/notifications/${encodeURIComponent(id)}/open`, { method: 'POST' });
   }

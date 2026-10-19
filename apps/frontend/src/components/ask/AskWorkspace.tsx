@@ -7,6 +7,7 @@ import { prefersReducedMotion } from '@/features/ask/adaptivePresentation';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { cn } from '@/lib/utils';
 import { VoiceInputButton } from './VoiceInputButton';
+import { ComposerIntakeButton } from './intake/ComposerIntakeButton';
 import type { AskCapabilityPrompt, AskExecutionResponse, AskPendingWorkItem, AskRecentSessionSummary, AskSessionChange } from '@/features/ask/types';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { track } from '@/lib/analytics/events';
@@ -317,6 +318,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
         {latestExecution && composerAffordances.map((affordance) => <AttachEvidenceControl key={affordance.id} variant="composer" label={affordance.label}
           event={{ entityType: affordance.target.entityType, id: affordance.target.id, title: affordance.target.title }} propertyId={selectedPropertyId} disabled={loading || !sessionId}
           onAttached={(documentId) => void ask(affordance.target.message, undefined, { entityType: affordance.target.entityType, entityId: affordance.target.id, sourceExecutionId: latestExecution.executionId, operationId: 'CAPTURE_EVIDENCE_CONFIRM', documentId })} />)}
+        <ComposerIntakeButton propertyId={selectedPropertyId} disabled={loading} embedded={placement === 'hero' && calm} />
         <VoiceInputButton large={placement === 'hero' && !calm} embedded={placement === 'hero' && calm} disabled={loading || !sessionId} getValue={() => inputRef.current}
           onChange={(value) => { setInput(value); if (sessionId) window.localStorage.setItem(draftStorageKey(selectedPropertyId, sessionId), value); }} />
         {loading && inFlight.current

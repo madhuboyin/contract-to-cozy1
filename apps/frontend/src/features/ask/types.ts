@@ -1433,3 +1433,44 @@ export interface AskNotificationSettings {
   categories: AskNotificationCategorySetting[];
   capabilitySettings: Array<{ id: string; label: string; description: string; question: string }>;
 }
+
+// Sole Homeowner Interface Phase 7 (FR-INPUT-001..005): the file intake. Mirrors services/ask/askIntake.contract.ts.
+export type AskIntakeKind = 'WARRANTY' | 'RECEIPT' | 'INSURANCE_POLICY' | 'APPLIANCE_LABEL' | 'INSPECTION_REPORT';
+export type AskIntakeFacet<T> = { status: 'AVAILABLE'; value: T } | { status: 'NOT_RECORDED'; reason: string };
+
+export interface AskIntakeDisclosures { retention: string; sharing: string; modelProcessing: string; localProcessing: string; confirmation: string }
+
+export interface AskIntakeConfig {
+  contractVersion: string;
+  acceptedTypes: string[];
+  maxBytes: number;
+  sensitivities: string[];
+  kinds: Array<{ kind: AskIntakeKind; label: string; description: string; acceptsImages: boolean; readsWith: 'MODEL' | 'LOCAL_OCR' }>;
+  reportTypes: string[];
+  disclosures: AskIntakeDisclosures;
+}
+
+export interface AskIntakeCandidate {
+  id: string; fieldKey: string; label: string; proposedValue: string | null; reviewedValue: string | null; effectiveValue: string | null; confidence: number; required: boolean;
+  reviewStatus: 'PENDING' | 'CONFIRMED' | 'CORRECTED' | 'REJECTED'; citation: string | null; promoted: boolean;
+}
+
+export interface AskIntakeView {
+  contractVersion: string; generatedAt: string; propertyId: string; recordId: string; versionId: string; title: string;
+  state: 'UPLOADED' | 'REVIEW' | 'COMPLETED' | 'DISCARDED';
+  kind: AskIntakeKind | null;
+  choice: { reason: string; options: Array<{ kind: AskIntakeKind; label: string; description: string }> } | null;
+  needsDetails: { kind: 'INSPECTION_REPORT'; reportTypes: string[] } | null;
+  classification: { kind: AskIntakeKind | null; modelLabel: string | null; confidence: number } | null;
+  candidates: AskIntakeCandidate[];
+  missingRequired: string[];
+  labelDraft: { id: string; status: 'DRAFT' | 'CONFIRMED' | 'DISMISSED'; fields: Array<{ key: string; label: string; value: string | null; confidence: number | null }>; itemId: string | null } | null;
+  inspection: { reportId: string; status: string; findingCount: number } | null;
+  result: { entityType: 'WARRANTY' | 'EXPENSE' | 'INSURANCE_POLICY' | 'INVENTORY_ITEM'; entityId: string } | null;
+  provenance: {
+    original: { recordId: string; versionId: string; fileName: string; mimeType: string; sizeBytes: number; sha256: string; uploadedAt: string; scanStatus: string; contentChecks: string };
+    reader: AskIntakeFacet<{ kind: 'MODEL' | 'LOCAL_OCR'; name: string }>;
+    pageAndRegion: AskIntakeFacet<never>;
+  };
+  disclosures: AskIntakeDisclosures;
+}
