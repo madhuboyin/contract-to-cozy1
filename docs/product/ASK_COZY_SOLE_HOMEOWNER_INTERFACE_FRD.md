@@ -93,6 +93,63 @@ The composer shall be available on Home and in active workspaces. A structured w
 
 A homeowner shall be able to discover and complete supported work without knowing feature names or URLs.
 
+### FR-IA-005 — Information density is a cross-screen contract
+
+Ask Cozy shall use the available viewport in proportion to the information and actions being presented. Intentional breathing room around a heading, explanation, confirmation, or focused decision is allowed; large empty regions inside repeated containers, oversized single-column rows, and avoidable vertical travel are not.
+
+This is a quality invariant, not a requirement that every screen share the same layout, component family, density, or visual rhythm. It applies to every Ask destination, workspace, response block, detail view, capture flow, empty state, loading state, error state, and responsive breakpoint, but it shall be evaluated against that experience's purpose and presentation contract. A screen is not accepted merely because each individual component is readable in isolation.
+
+### FR-IA-006 — Choose the smallest suitable presentation
+
+Each destination or tool shall declare the presentation family best suited to its homeowner job and content shape:
+
+- a title, short description, metadata, and one action shall use a compact row or list item;
+- repeated comparable facts shall use a dense definition grid, table, or compact list;
+- cards shall be reserved for independently actionable, visually distinct, or materially richer objects;
+- multiple homogeneous cards shall use an adaptive grid when the content can be compared without harming scan order;
+- a focused form, consequential review, or long-form explanation may use a narrower reading measure;
+- index, collection, timeline, comparison, and record workspaces shall use the wider workspace measure available to them.
+- data-rich or spatial tools may use a purpose-built report, dashboard, map, forecast, chart, timeline, scenario model, or other specialized composition when it improves comprehension or actionability.
+
+Specialized presentations are first-class Ask experiences, not exceptions to be converted into generic cards or lists. For example, Environment Report may retain its weather hero, signal strip, alerts, preparation checklist, forecast ranges, charts, and environmental sections as one coherent report. It remains subject to responsive behavior, accessibility, truthful states, action proximity, and the absence of accidental dead space, but not to compact-list geometry.
+
+No variable-content component shall rely on a fixed or minimum height that creates an accidental empty body below its final meaningful element. A specialized presentation may reserve geometry for a chart, map, comparison, media region, stable state transition, or other need documented in its presentation contract. Primary compact-row actions shall remain adjacent to the title, status, or metadata they affect on desktop; they shall not be pushed to the bottom of a tall container solely for visual symmetry.
+
+### FR-IA-007 — Density and viewport acceptance
+
+For screens whose declared presentation includes compact repeated rows, at desktop widths of 1280 pixels and above:
+
+- a compact repeated row should normally occupy 72–112 CSS pixels, including its internal padding and divider;
+- when four or more compact rows exist, at least four shall be visible in the result viewport at 1440 × 900 after the persistent Ask header and composer are accounted for;
+- the principal workspace shall expand beyond prose width and may use multiple columns when doing so preserves logical reading order;
+- no repeated container may contain more than 32 CSS pixels of unexplained trailing vertical space after its last visible content or action;
+- sticky navigation, suggestion chips, and the composer shall not obscure the final row or require decorative bottom padding beyond the measured overlay height plus the standard spacing token.
+
+The row-height and above-the-fold targets do not apply to purpose-built reports, visualizations, forms, comparisons, or decision workspaces. Those experiences shall define tool-specific viewport and density acceptance criteria based on their essential content and interaction model.
+
+All acceptance budgets are constraints against accidental waste, not instructions to shrink text, visualizations, or touch targets. WCAG reflow, 200% zoom, localization, user font scaling, validation messages, and content wrapping take precedence. At smaller widths the same information shall reflow without horizontal page scrolling or loss of essential content or actions; a visualization may use an explicitly accessible local pan/scroll interaction when its presentation contract requires it.
+
+### FR-IA-008 — Tool-specific presentation contracts
+
+Every structured destination and registered specialized result family shall document:
+
+- the homeowner job and primary scan or decision path;
+- its presentation family and why a generic list, card deck, or prose answer is insufficient when a specialized renderer is used;
+- essential regions and their priority at desktop and mobile breakpoints;
+- which regions may collapse, paginate, scroll locally, or move behind progressive disclosure;
+- empty, partial, stale, unavailable, loading, error, and unusually long-content behavior;
+- tool-specific viewport, accessibility, and visual-regression acceptance criteria.
+
+Shared Ask primitives may supply typography, tokens, focus behavior, action dispatch, loading/error semantics, and responsive scaffolding. They shall not force unrelated tools into the same information architecture or visual composition.
+
+### FR-IA-009 — Empty and zero-count sections remain useful
+
+A zero-count, unavailable, or not-applicable section shall not consume the same vertical area as a populated rich card. It shall use a compact state that names the condition and, when allowed, places the relevant add, retry, or explanation action beside it. Sections required for truthfulness may not disappear, but truthfulness does not require an oversized empty container.
+
+### FR-IA-010 — User-selectable layouts must provide real value
+
+Auto/List/Cards or equivalent presentation controls shall appear only when at least two modes provide a materially different, usable view and the selection is remembered for the relevant scope. A layout toggle shall not compensate for a poor default. Auto shall select the presentation best suited to the tool, current data, and viewport; that presentation is not required to be the densest one.
+
 ## 7. Home requirements
 
 ### FR-HOME-001 — State before prompt
@@ -195,6 +252,12 @@ An authorized homeowner shall be able to export a scoped home-record package. Ex
 ### FR-REC-007 — Naming integrity
 
 Until FR-REC-001 through FR-REC-006 are met, the existing seven-section response shall be labeled “Browse home record” or “Home record overview,” not “Complete home record.”
+
+### FR-REC-008 — Record index density
+
+The Record index shall present section name, state/count, concise scope, freshness or completeness when relevant, and its primary action as one scannable unit. Sparse sections shall use compact rows; richer previews may use cards or an adaptive grid. The index shall not render every section as a tall full-width card, and zero-count sections shall follow FR-IA-009.
+
+On desktop the profile summary, record navigation, and completeness summary shall form a coherent workspace rather than three vertically isolated reports. The default view shall prioritize section scanning and direct navigation; detailed explanations remain available on demand.
 
 ## 10. Saved requirements
 

@@ -165,6 +165,23 @@ Do not create migration scripts; update Prisma and run generation when a schema 
 - History behavior has no regression.
 - No domain workflow is retired yet.
 
+### Presentation contracts and shared quality system
+
+Build presentation governance into the shell before migrating more workflows:
+
+1. Define shared semantic layout primitives for common content shapes: `AskReadingMeasure`, `AskWorkspaceMeasure`, `AskCompactRow`, `AskDefinitionGrid`, `AskCollection`, `AskAdaptiveGrid`, and `AskFocusedPanel`. These are a reusable baseline, not the complete Ask visual language.
+2. Give each structured destination and specialized result family a versioned presentation contract describing its homeowner job, essential regions, responsive priorities, state variants, and acceptance criteria.
+3. Map generic response patterns to shared primitives. A grouped list must default to compact rows; card decks require rich or independently actionable items. Do not infer “card” merely because an object has a title and action.
+4. Preserve dedicated typed renderers when the domain benefits from a custom composition. Environment Report, planners, timelines, scenario comparisons, maps, and similarly data-rich experiences may combine charts, signals, controls, and narrative in a tool-specific layout rather than inheriting collection-row rules.
+5. Remove fixed/minimum content heights from variable repeated items. Keep minimum sizes only for accessible controls, skeleton stability, media/visualization geometry, or another need documented by the presentation contract.
+6. Place row-level actions beside the row identity/status on wide screens and below the content only when wrapping requires it.
+7. Make workspace width content-aware: prose keeps a readable measure; records, tables, timelines, planners, comparisons, indexes, and reports use the width and composition defined by their presentation contract.
+8. Measure the sticky composer and navigation overlays and derive scroll padding from their actual height. Do not use large static spacer blocks.
+9. Add compact zero, unavailable, and not-applicable variants to collection presentations with explicit add/retry/explanation actions. Specialized tools define state treatment within their own composition.
+10. Remove layout-mode controls from operations that do not have two genuinely useful renderings. Persist valid choices and make Auto select the most suitable accessible default for that presentation family, which is not always the densest one.
+
+Shared quality invariants and a tool-specific presentation contract are part of Phase 1 exit criteria for every migrated screen. Visual uniformity is not an exit criterion.
+
 ## 6. Phase 2 — Complete Record workspace
 
 ### Backend slices
@@ -184,6 +201,8 @@ Do not create migration scripts; update Prisma and run generation when a schema 
 4. Add source/freshness/audit presentation.
 5. Add correction and state actions only when declared by the server.
 6. Add export review and receipt.
+7. Replace the tall one-column section-card stack with the shared compact collection primitive; allow a richer preview only when a section has enough content to justify it.
+8. Compose profile, section navigation, and completeness into one responsive workspace: a wide scannable index on desktop, a single compact list on mobile, and no duplicated explanatory bands.
 
 ### Exit criteria
 
@@ -192,6 +211,7 @@ Do not create migration scripts; update Prisma and run generation when a schema 
 - Every capped collection has a complete continuation.
 - Viewer/contributor/owner access tests pass.
 - Export content and exclusions are tested.
+- The Record index satisfies FR-IA-005 through FR-IA-010 and FR-REC-008 at the certified viewports.
 
 ## 7. Phase 3 — Work workspace
 
@@ -376,6 +396,11 @@ After the sole-property homeowner shell is certified:
 - Back/forward, refresh and deep links.
 - Mobile sheets/composer.
 - Accessibility and focus restoration.
+- Presentation-contract snapshots at 1280 × 720, 1440 × 900, 1920 × 1080, 390 × 844, and 360 × 800 for every destination and registered structured response family.
+- Bounding-box assertions appropriate to the declared presentation family: compact-row height for collections; essential-region visibility and visualization integrity for custom reports; unexplained trailing space, content hidden by sticky overlays, and page-level horizontal overflow for both. Assertions shall permit wrapped/localized/zoomed content to grow.
+- Populated, zero-count, unavailable, loading, error, and unusually long-content fixtures so visual checks cannot pass only on ideal data.
+
+Quality checks shall fail on systemic wasted space, not on intentional whitespace or space required for a visualization, comparison, decision, or narrative hierarchy. Snapshot review must use the tool's presentation contract to verify comprehension, scanability, grouping, action proximity, touch targets, focus order, reflow, and essential content visibility. It shall not compare every tool to a single card/list template.
 
 ### Production smoke
 
