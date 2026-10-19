@@ -543,7 +543,6 @@ export interface AskRecordTimelineRow {
   askQuestion: null;
 }
 
-const TIMELINE_SOURCE_LIMIT = 200;
 const TIMELINE_VERIFICATION = ['UNVERIFIED', 'PENDING_CONFIRMATION', 'HOMEOWNER_CONFIRMED', 'EVIDENCE_VERIFIED', 'DISPUTED'] as const;
 const TimelineCursorSchema = z.object({ o: z.number(), i: z.string() });
 const isoOrNullDate = (value: unknown): string | null => {
@@ -553,15 +552,14 @@ const isoOrNullDate = (value: unknown): string | null => {
 };
 
 /**
- * Reads one page of the home timeline from the same canonical read Ask and the Timeline page use (`HomeEventsService.listHomeEvents`),
- * with the privacy rule Ask's other home-event reads apply: a private event goes only to the person who recorded it. That read returns
- * at most the 200 most recent events and has no continuation, so when it returns exactly that many the page says so in `notice` instead
- * of claiming a complete history; the continuation is open work in the plan.
+ * Reads one page of the home timeline from `HomeEventsService.listAllCurrentEvents`: every current event, with the purchase
+ * de-duplication and appliance-profile projection the Timeline page and Ask apply, and no 200-event limit. The privacy rule is Ask's: a
+ * private event goes only to the person who recorded it. Filtering, search and the cursor run over those lean rows (no evidence graph).
  */
 export async function readTimelinePage(
   context: { propertyId: string; userId: string },
   query: AskRecordCollectionQuery,
-  list: (propertyId: string, options: { limit: number }) => Promise<{ events: any[] }> = (propertyId, options) => new HomeEventsService().listHomeEvents(propertyId, options),
+  list: (propertyId: string) => Promise<any[]> = (propertyId) => new HomeEventsService().listAllCurrentEvents(propertyId),
 ): Promise<AskRecordCollectionPage<AskRecordTimelineRow>> {
   const limit = clampLimit(query.limit);
   const search = cleanSearch(query.search);
@@ -571,7 +569,7 @@ export async function readTimelinePage(
   if (verification && !(TIMELINE_VERIFICATION as readonly string[]).includes(verification)) throw new InvalidCollectionQueryError('verification filter is not valid.');
   const after = decodeCursor(query.cursor, TimelineCursorSchema);
 
-  const { events } = await list(context.propertyId, { limit: TIMELINE_SOURCE_LIMIT });
+  const events = await list(context.propertyId);
   const visible = events.filter((event) => event.visibility !== 'PRIVATE' || event.createdById === context.userId);
   const time = (event: { occurredAt?: unknown }) => { const value = new Date(event.occurredAt as string).getTime(); return Number.isNaN(value) ? 0 : value; };
   const ordered = [...visible].sort((left, right) => time(right) - time(left) || (String(left.id) < String(right.id) ? 1 : String(left.id) > String(right.id) ? -1 : 0));
@@ -600,9 +598,7 @@ export async function readTimelinePage(
     delivered: page.length,
     nextCursor,
     truncated: nextCursor !== null,
-    notice: events.length >= TIMELINE_SOURCE_LIMIT
-      ? `This shows the ${TIMELINE_SOURCE_LIMIT} most recent events. Older events are recorded but cannot be listed here yet.`
-      : null,
+    notice: null,
     sort: { key: 'occurredAt', label: 'Most recent first' },
     query: { search, filters: Object.fromEntries(Object.entries({ type, verification }).filter(([, value]) => value)) as Record<string, string> },
     filterOptions: [

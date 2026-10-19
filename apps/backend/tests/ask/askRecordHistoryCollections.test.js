@@ -28,7 +28,7 @@ const event = (n, overrides = {}) => ({
   id: `evt-${String(n).padStart(3, '0')}`, title: `Event ${n}`, summary: null, type: 'REPAIR', occurredAt: new Date(Date.UTC(2026, 5, 1) - n * 86_400_000), datePrecision: 'EXACT_DATE',
   dateRangeStart: null, dateRangeEnd: null, verificationStatus: 'UNVERIFIED', providerName: null, visibility: 'HOUSEHOLD', createdById: 'someone', ...overrides,
 });
-const timeline = (events, calls = []) => async (propertyId, options) => { calls.push({ propertyId, options }); return { events }; };
+const timeline = (events, calls = []) => async (propertyId) => { calls.push({ propertyId }); return events; };
 const tctx = (userId = 'u1') => ({ propertyId: 'p1', userId });
 
 test('timeline pages newest first with a continuation and the same privacy rule as Ask: private events only for their recorder', async () => {
@@ -72,11 +72,22 @@ test('timeline filters compose, rows shorten long summaries, and a source that r
   assert.equal(page.rows.find((row) => row.id === 'evt-001').summary.length, 140);
   assert.equal(page.rows[0].verificationLabel, 'Evidence Verified');
   assert.equal(page.notice, null);
-  const capped = await readTimelinePage(tctx(), { limit: 5 }, timeline(Array.from({ length: 200 }, (_, index) => event(index + 1))));
-  assert.match(capped.notice, /200 most recent events/);
+});
+
+test('timeline has no 200-event ceiling: 450 events page to the end without repeats or a notice, newest first', async () => {
+  const events = Array.from({ length: 450 }, (_, index) => event(index + 1));
+  const list = timeline(events);
+  const first = await readTimelinePage(tctx(), { limit: 50 }, list);
+  assert.equal(first.total, 450);
+  assert.equal(first.notice, null);
+  assert.equal(first.truncated, true);
+  const ids = await drain((query) => readTimelinePage(tctx(), query, list), { limit: 50 });
+  assert.equal(ids.length, 450);
+  assert.equal(new Set(ids).size, 450);
+  assert.deepEqual(ids, events.map((row) => row.id));
   const calls = [];
   await readTimelinePage(tctx(), {}, timeline([], calls));
-  assert.deepEqual(calls[0], { propertyId: 'p1', options: { limit: 200 } });
+  assert.deepEqual(calls[0], { propertyId: 'p1' });
 });
 
 // ── maintenance history ──────────────────────────────────────────────────────────────────────────────────────────

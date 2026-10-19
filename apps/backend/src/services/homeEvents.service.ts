@@ -285,6 +285,34 @@ export class HomeEventsService {
     };
   }
 
+  /**
+   * Every current event of the property, newest first, with no limit and without the evidence graph `listHomeEvents` includes. It applies
+   * the same purchase de-duplication and appliance-profile projection as `listHomeEvents`, so a list built from it agrees with the Timeline
+   * page and Ask wherever they overlap, but it can be paged to the end. Callers apply their own visibility rule (a private event belongs
+   * to the person who recorded it).
+   */
+  async listAllCurrentEvents(propertyId: string): Promise<any[]> {
+    const events = await prisma.homeEvent.findMany({
+      where: { propertyId, isCurrent: true, deletedAt: null },
+      orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }],
+      select: {
+        id: true, propertyId: true, createdById: true, type: true, subtype: true, importance: true, visibility: true,
+        occurredAt: true, datePrecision: true, dateRangeStart: true, dateRangeEnd: true, title: true, summary: true,
+        providerName: true, verificationStatus: true,
+        documents: { select: { id: true }, take: 1 },
+        inventoryItem: { select: { id: true, name: true, sourceHash: true } },
+      },
+    });
+    const normalized = this.collapseDuplicatePurchaseEvents(events);
+    const projected = await this.injectMissingCanonicalApplianceEvents(propertyId, normalized);
+    return projected
+      .map(({ inventoryItem, ...event }: any) => event)
+      .sort((a: any, b: any) => {
+        const byDate = new Date(b.occurredAt || 0).getTime() - new Date(a.occurredAt || 0).getTime();
+        return byDate !== 0 ? byDate : String(b.id || '').localeCompare(String(a.id || ''));
+      });
+  }
+
   private mapHomeEventToTimelineEntry(event: any): TimelineProjectionEntry {
     const envelope = buildUnifiedEventEnvelope({
       eventType: String(event.type || 'OTHER'),
