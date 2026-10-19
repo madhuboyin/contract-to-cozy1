@@ -44,7 +44,6 @@ import { deriveComposerAffordances } from '@/features/ask/composerAffordances';
 import { resolveHistoryRailExpanded, useHistoryRailPreference } from '@/features/ask/historyRail';
 import { useSelectedPropertyLabel } from './workspace/useSelectedPropertyLabel';
 import { buildConciergeStateStrip } from '@/features/ask/conciergeStateStrip';
-import { AskShellHeader } from './workspace/AskShellHeader';
 import { useAskAccount } from './workspace/useAskAccount';
 import { CollapsedConversationRail } from './workspace/CollapsedConversationRail';
 import { ExploreDisclosure, ExploreFocusedView, ExploreRailGroup } from './workspace/ExploreWithCozy';
@@ -328,7 +327,6 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
 
   return (
     <div data-ask-layout={mode === 'page' ? 'full-window' : 'panel'} className={cn('flex min-h-0 flex-col', mode === 'page' ? 'h-full bg-white' : 'h-full bg-slate-50', calm && 'ask-calm')}>
-      {calm && mode === 'page' && <AskShellHeader onOpenHistory={() => setHistoryDrawerOpen(true)} />}
       {/* Safe-area padding only changes anything on the mobile full-screen
           sheet (mode="panel" below the lg breakpoint, where this header sits
           flush against the device's actual top edge/notch); env() resolves
