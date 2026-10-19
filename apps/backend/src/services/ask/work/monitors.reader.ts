@@ -60,7 +60,12 @@ export function monitorRow(monitor: MonitorRecord): AskWorkRow | null {
 export const readMonitorWork: AskWorkProviderReader = async (context, query) => {
   const base: Prisma.RefinanceRateMonitorWhereInput = { userId: context.userId, propertyId: context.propertyId };
   const statusFilter: Prisma.RefinanceRateMonitorWhereInput = query.status ? { status: query.status as RefinanceRateMonitorStatus } : {};
-  const inView: Prisma.RefinanceRateMonitorWhereInput  = query.entityId ? { AND: [base, { id: query.entityId }] } : { AND: [base, viewWhere(query.view), statusFilter] };
+  // Text search: the product it watches ("30-year", "15-year"), or the words that name any monitor of this kind.
+  const needle = (query.search ?? '').toLowerCase();
+  const generic = needle !== '' && ['refinance', 'rate', 'alert', 'monitor', 'mortgage'].some((word) => word.includes(needle) || needle.includes(word));
+  const products = (Object.entries(PRODUCT_LABELS) as Array<[RefinanceRateMonitorProduct, string]>).filter(([, label]) => label.includes(needle)).map(([product]) => product);
+  const searchClause: Prisma.RefinanceRateMonitorWhereInput[] = needle && !generic ? [{ product: { in: products } }] : [];
+  const inView: Prisma.RefinanceRateMonitorWhereInput = query.entityId ? { AND: [base, { id: query.entityId }] } : { AND: [base, query.allViews ? { status: { in: ['ACTIVE', 'PAUSED'] } } : viewWhere(query.view), statusFilter, ...searchClause] };
   const [monitors, total, viewCounts] = await Promise.all([
     prisma.refinanceRateMonitor.findMany({
       where: afterBoundaryWhere(inView, query.after, KEY_PREFIX),

@@ -31,7 +31,7 @@ export function recordRowTitle(row: Record<string, unknown>, fallback: string): 
 const recordProviders: AskSearchProvider[] = ASK_RECORD_SECTION_REGISTRY.map((definition): AskSearchProvider => {
   const reader = ASK_RECORD_COLLECTION_READERS[definition.id];
   if (!reader || !definition.pagedCollection) {
-    return { id: `RECORD_${definition.id}`, group: 'RECORD', label: definition.label, unavailableReason: 'This section is a summary, not a list of records, so it has nothing to search yet.' };
+    return { id: `RECORD_${definition.id}`, group: 'RECORD', label: definition.label, unavailableReason: 'Property details are governed facts, not a list of records, and there is no per-fact reader with its own visibility rules yet. Ask "How complete is my home record?" to review them.' };
   }
   return {
     id: `RECORD_${definition.id}`,
@@ -56,11 +56,8 @@ const recordProviders: AskSearchProvider[] = ASK_RECORD_SECTION_REGISTRY.map((de
 });
 
 // ── Work: the readers that can match on their own text; the rest are reported, not skipped ─────────────────────────────────
-const UNSEARCHABLE_WORK: Partial<Record<AskWorkProviderId, string>> = {
-  MONITORS: 'Monitors are not searchable by text yet.',
-  QUEUED_JOBS: 'Report and score export jobs are not searchable by text yet.',
-  SCHEDULED_FOLLOW_UPS: 'Scheduled follow-ups are searchable through the claim or project they belong to.',
-};
+/** Work kinds with no text of their own to search. None today: monitors, export jobs and follow-ups match on their kind or the item they belong to. */
+const UNSEARCHABLE_WORK: Partial<Record<AskWorkProviderId, string>> = {};
 
 const workProviders: AskSearchProvider[] = ASK_WORK_PROVIDER_REGISTRY.map((definition): AskSearchProvider => {
   const unavailableReason = UNSEARCHABLE_WORK[definition.id];

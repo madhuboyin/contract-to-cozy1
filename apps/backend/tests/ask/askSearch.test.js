@@ -139,7 +139,7 @@ test('Work search matches on the owner\'s own text across every lifecycle view, 
   const output = await provider.search(ctx(), 'water', 5);
   ASK_WORK_PROVIDER_READERS.CLAIMS = original;
   assert.equal(output.results[0].destination.workKey, 'claim:c1');
-  for (const id of ['MONITORS', 'QUEUED_JOBS', 'SCHEDULED_FOLLOW_UPS']) assert.ok(ASK_SEARCH_PROVIDERS.find((p) => p.id === `WORK_${id}`).unavailableReason);
+  for (const id of ['MONITORS', 'QUEUED_JOBS', 'SCHEDULED_FOLLOW_UPS']) assert.ok(ASK_SEARCH_PROVIDERS.find((p) => p.id === `WORK_${id}`).search, `${id} is now searchable`);
 });
 
 test('Saved search uses the artifact reader, active list only, and opens the exact artifact', async () => {

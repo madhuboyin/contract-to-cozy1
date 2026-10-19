@@ -106,11 +106,14 @@ export async function savingsFollowUpsApplicable(context: { userId: string; prop
  * where `savingsFollowUpsApplicable` allows. Read-only.
  */
 export const readScheduledFollowUpWork: AskWorkProviderReader = async (context, query) => {
-  if (query.view !== 'SCHEDULED' && !query.entityId) return { rows: [], total: 0, viewCounts: null };
+  if (query.view !== 'SCHEDULED' && !query.entityId && !query.allViews) return { rows: [], total: 0, viewCounts: null };
   const now = new Date();
-  const claimInView: Prisma.ClaimWhereInput = { propertyId: context.propertyId, status: { in: OPEN_CLAIM_STATUSES }, nextFollowUpAt: { gt: now }, ...(query.entityId ? { id: query.entityId } : {}) };
-  const projectInView: Prisma.ProjectRecordWhereInput = { propertyId: context.propertyId, status: { notIn: ['CANCELLED'] }, followUpDueAt: { gt: now }, followUpCompletedAt: null, ...(query.entityId ? { id: query.entityId } : {}) };
-  const savingsOn = await savingsFollowUpsApplicable(context);
+  const claimInView: Prisma.ClaimWhereInput = { propertyId: context.propertyId, status: { in: OPEN_CLAIM_STATUSES }, nextFollowUpAt: { gt: now }, ...(query.entityId ? { id: query.entityId } : {}), ...(query.search ? { title: { contains: query.search, mode: 'insensitive' as const } } : {}) };
+  const projectInView: Prisma.ProjectRecordWhereInput = { propertyId: context.propertyId, status: { notIn: ['CANCELLED'] }, followUpDueAt: { gt: now }, followUpCompletedAt: null, ...(query.entityId ? { id: query.entityId } : {}), ...(query.search ? { name: { contains: query.search, mode: 'insensitive' as const } } : {}) };
+  const needle = (query.search ?? '').toLowerCase();
+  // A savings action has no title of its own, so text finds it only by the words that name it.
+  const savingsNamed = !needle || ['savings', 'benefit', 'follow up', 'follow-up'].some((word) => word.includes(needle) || needle.includes(word));
+  const savingsOn = savingsNamed && await savingsFollowUpsApplicable(context);
   const savingsInView: Prisma.SavingsBenefitActionWhereInput = { propertyId: context.propertyId, state: 'STARTED', followUpAt: { gt: now }, ...(query.entityId ? { id: query.entityId } : {}) };
   const [claims, projects, savings, claimTotal, projectTotal, savingsTotal] = await Promise.all([
     prisma.claim.findMany({

@@ -111,8 +111,14 @@ export const readQueuedJobWork: AskWorkProviderReader = async (context, query) =
   const scoreBase: Prisma.HomeScoreExportJobWhereInput = { requestedByUserId: context.userId, report: { propertyId: context.propertyId } };
   const reportStatus: Prisma.HomeReportExportWhereInput = query.status ? { status: query.status as HomeReportExportStatus } : {};
   const scoreStatus: Prisma.HomeScoreExportJobWhereInput = query.status ? { jobStatus: query.status as HomeScoreExportJobStatus } : {};
-  const reportInView: Prisma.HomeReportExportWhereInput = query.entityId ? { AND: [reportBase, { id: query.entityId }] } : { AND: [reportBase, reportWhere(query.view, now), reportStatus] };
-  const scoreInView: Prisma.HomeScoreExportJobWhereInput = query.entityId ? { AND: [scoreBase, { id: query.entityId }] } : { AND: [scoreBase, scoreWhere(query.view, now), scoreStatus] };
+  // Text search matches the kind of report ("inventory", "coverage") or the words that name any export or score report.
+  const needle = (query.search ?? '').toLowerCase();
+  const exportWords = needle !== '' && ['report', 'export', 'download'].some((word) => word.includes(needle) || needle.includes(word));
+  const reportTypes = (Object.entries(REPORT_TYPE_LABELS) as Array<[HomeReportExportType, string]>).filter(([, label]) => label.toLowerCase().includes(needle)).map(([type]) => type);
+  const scoreMatches = needle === '' || exportWords || ['home score', 'score', 'pdf', 'json'].some((word) => word.includes(needle) || needle.includes(word));
+  const reportSearch: Prisma.HomeReportExportWhereInput[] = needle && !exportWords ? [{ type: { in: reportTypes } }] : [];
+  const reportInView: Prisma.HomeReportExportWhereInput = query.entityId ? { AND: [reportBase, { id: query.entityId }] } : { AND: [reportBase, query.allViews ? { status: { in: ['PENDING', 'GENERATING', 'READY', 'FAILED', 'EXPIRED'] }, deletedAt: null } : reportWhere(query.view, now), reportStatus, ...reportSearch] };
+  const scoreInView: Prisma.HomeScoreExportJobWhereInput = query.entityId ? { AND: [scoreBase, { id: query.entityId }] } : { AND: [scoreBase, query.allViews ? {} : scoreWhere(query.view, now), scoreStatus, ...(scoreMatches ? [] : [{ id: { in: [] as string[] } }])] };
   const [reports, scores, reportTotal, scoreTotal, reportCounts, scoreCounts] = await Promise.all([
     prisma.homeReportExport.findMany({
       where: afterBoundaryWhere(reportInView, query.after, REPORT_PREFIX, 'requestedAt'),

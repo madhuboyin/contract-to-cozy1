@@ -272,7 +272,7 @@ test('coverage comparisons and financing scenarios: reopen targets, owner archiv
 
 test('every FR-SAVED-001 family is in the registry: connected, or explicitly UNAVAILABLE with a reason, and the page says it is partial', async () => {
   const unavailable = ASK_ARTIFACT_TYPE_REGISTRY.filter((entry) => entry.reader.state === 'UNAVAILABLE');
-  assert.deepEqual(unavailable.map((entry) => entry.id).sort(), ['ANNOTATED_IMAGE', 'BUYER_WORKSPACE', 'HOME_DIGITAL_WILL', 'HOME_SCORE_REPORT', 'MOVING_PLAN', 'NEGOTIATION_SHIELD_ANALYSIS', 'REFINANCE_SCENARIO', 'RENOVATION_COMPLIANCE_CHECKLIST', 'ROOM_AND_PLANT_CHECKLIST', 'SELLER_PREP_PLAN']);
+  assert.deepEqual(unavailable.map((entry) => entry.id).sort(), ['ANNOTATED_IMAGE', 'BUYER_WORKSPACE', 'HOME_DIGITAL_WILL', 'MOVING_PLAN', 'NEGOTIATION_SHIELD_ANALYSIS', 'RENOVATION_COMPLIANCE_CHECKLIST', 'ROOM_AND_PLANT_CHECKLIST', 'SELLER_PREP_PLAN']);
   for (const entry of unavailable) assert.ok(entry.reader.reason.length > 20, entry.id);
   const categories = new Set(ASK_ARTIFACT_TYPE_REGISTRY.map((entry) => entry.category));
   for (const required of ['REPORT', 'COMPARISON', 'PLAN', 'CHECKLIST', 'IMAGE', 'DECISION_OUTPUT', 'BRIEFING']) assert.ok(categories.has(required), required);

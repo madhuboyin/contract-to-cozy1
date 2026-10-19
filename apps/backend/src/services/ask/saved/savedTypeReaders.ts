@@ -392,6 +392,61 @@ export const readSavedFinancingScenarios: AskSavedTypeReader = createSavedReader
   },
 });
 
+// ── Home score reports (homeowner mode): the owner's own status says which one is current ─────────────────────────────────
+interface ScoreReportRow { id: string; status: string; reportVersion: string; scoreModelVersion: string | null; generatedAt: Date; createdAt: Date; updatedAt: Date }
+
+export const readSavedHomeScoreReports: AskSavedTypeReader = createSavedReader<ScoreReportRow>({
+  artifactType: 'HOME_SCORE_REPORT', keyPrefix: 'scorereport', sortField: 'generatedAt',
+  baseWhere: (context) => ({ propertyId: context.propertyId, reportMode: 'HOMEOWNER', status: { in: ['FINAL', 'SUPERSEDED', 'REVOKED'] } }),
+  ownerArchivedWhere: () => ({ status: 'REVOKED' }),
+  freshnessWhere: (freshness) => (freshness === 'CURRENT' ? { status: 'FINAL' } : freshness === 'SUPERSEDED' ? { status: 'SUPERSEDED' } : NONE),
+  searchWhere: (search) => ({ OR: [...('home score report'.includes(search.toLowerCase()) || search.toLowerCase().includes('score') ? [{}] : []), contains('reportVersion', search), NONE] }),
+  findMany: ({ where, take }) => prisma.homeScoreReport.findMany({ where, take, select: { id: true, status: true, reportVersion: true, scoreModelVersion: true, generatedAt: true, createdAt: true, updatedAt: true }, orderBy: [{ generatedAt: 'desc' }, { id: 'asc' }] }) as Promise<ScoreReportRow[]>,
+  count: (where) => prisma.homeScoreReport.count({ where }),
+  toArtifact: (row, context) => {
+    const superseded = row.status === 'SUPERSEDED';
+    return envelope('HOME_SCORE_REPORT', context, {
+      artifactId: row.id, entity: { type: 'HOME_SCORE_REPORT', id: row.id }, title: 'Home score report', summary: `Report version ${row.reportVersion}${row.scoreModelVersion ? ` · model ${row.scoreModelVersion}` : ''}`,
+      createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(), sourceAsOf: row.generatedAt.toISOString(), sortAt: row.generatedAt.toISOString(),
+      freshness: { state: superseded ? 'SUPERSEDED' : 'CURRENT', reason: superseded ? 'A newer score report replaced this one; this version is kept.' : null },
+      visibility: { scope: 'HOUSEHOLD', sensitivity: 'STANDARD' },
+      reopen: null, reopenUnavailableReason: 'Ask cannot reopen a stored score report. Its state is shown here.',
+      capabilities: { export: false, share: false },
+      version: { label: `Generated ${row.generatedAt.toISOString().slice(0, 10)}`, superseded }, archivedByOwner: row.status === 'REVOKED',
+    });
+  },
+});
+
+// ── Saved refinance scenarios ───────────────────────────────────────────────────────────────────────────────────────────
+interface RefinanceRow { id: string; targetRate: number; targetTerm: string; monthlySavings: unknown; createdAt: Date; updatedAt: Date }
+
+export const readSavedRefinanceScenarios: AskSavedTypeReader = createSavedReader<RefinanceRow>({
+  artifactType: 'REFINANCE_SCENARIO', keyPrefix: 'refinance', sortField: 'updatedAt',
+  baseWhere: (context) => ({ propertyId: context.propertyId, isSaved: true }),
+  ownerArchivedWhere: () => NONE,
+  freshnessWhere: (freshness, context) => {
+    const cutoff = new Date(context.now.getTime() - RATE_STALE_DAYS * DAY_MS);
+    return freshness === 'CURRENT' ? { createdAt: { gt: cutoff } } : freshness === 'STALE' ? { createdAt: { lte: cutoff } } : NONE;
+  },
+  searchWhere: (search) => ({ OR: [...('refinance scenario'.includes(search.toLowerCase()) || search.toLowerCase().includes('refinance') ? [{}] : []), NONE] }),
+  findMany: ({ where, take }) => prisma.refinanceScenarioSnapshot.findMany({ where, take, select: { id: true, targetRate: true, targetTerm: true, monthlySavings: true, createdAt: true, updatedAt: true }, orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }] }) as Promise<RefinanceRow[]>,
+  count: (where) => prisma.refinanceScenarioSnapshot.count({ where }),
+  toArtifact: (row, context) => {
+    const stale = context.now.getTime() - row.createdAt.getTime() >= RATE_STALE_DAYS * DAY_MS;
+    const savings = row.monthlySavings == null ? null : Number(row.monthlySavings);
+    return envelope('REFINANCE_SCENARIO', context, {
+      artifactId: row.id, entity: { type: 'REFINANCE_SCENARIO', id: row.id }, title: `Refinance at ${row.targetRate}% (${humanize(row.targetTerm)})`,
+      summary: savings === null || Number.isNaN(savings) ? 'Saved scenario' : `About $${Math.round(savings).toLocaleString('en-US')} a month`,
+      createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(), sourceAsOf: row.createdAt.toISOString(), sortAt: row.updatedAt.toISOString(),
+      freshness: { state: stale ? 'STALE' : 'CURRENT', reason: stale ? 'Its assumptions were captured more than 90 days ago and rates may have changed.' : null },
+      visibility: { scope: 'HOUSEHOLD', sensitivity: 'SENSITIVE' },
+      reopen: null, reopenUnavailableReason: 'Ask recalculates refinance analyses rather than reopening a saved scenario. This saved copy shows what was calculated.',
+      capabilities: { export: false, share: false },
+      version: { label: `Calculated ${row.createdAt.toISOString().slice(0, 10)}` }, archivedByOwner: false,
+    });
+  },
+});
+
 export const ASK_SAVED_TYPE_READERS: Partial<Record<AskArtifactTypeDefinition['id'], AskSavedTypeReader>> = {
   HOME_REPORT_EXPORT: readSavedReportExports,
   QUOTE_COMPARISON: readSavedQuoteComparisons,
@@ -403,4 +458,6 @@ export const ASK_SAVED_TYPE_READERS: Partial<Record<AskArtifactTypeDefinition['i
   FINANCING_SCENARIO: readSavedFinancingScenarios,
   REPLACE_REPAIR_ANALYSIS: readSavedReplaceRepairAnalyses,
   CAPITAL_TIMELINE_ANALYSIS: readSavedCapitalTimelines,
+  HOME_SCORE_REPORT: readSavedHomeScoreReports,
+  REFINANCE_SCENARIO: readSavedRefinanceScenarios,
 };
