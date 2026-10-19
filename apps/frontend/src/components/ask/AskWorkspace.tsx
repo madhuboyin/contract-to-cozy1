@@ -55,7 +55,7 @@ export { BlockView };
 // The history rail and the draft key moved to ./workspace/; re-exported for existing imports.
 export { ConversationHistoryNav } from './workspace/ConversationHistoryNav';
 export { draftStorageKey } from './workspace/support';
-export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, initialQuestion = '', initialSessionId = '', initialExecutionId = '', initialPropertyId = '', initialBackTo = '', initialBackLabel = 'Back to previous page', launchSurface = '', launchCapabilityId = '' }: { mode?: 'page' | 'panel'; onClose?: () => void; onPendingStateChange?: (pending: boolean) => void; initialQuestion?: string; initialSessionId?: string; initialExecutionId?: string; initialPropertyId?: string; initialBackTo?: string; initialBackLabel?: string; launchSurface?: string; launchCapabilityId?: string }) {
+export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, initialQuestion = '', initialSessionId = '', initialExecutionId = '', initialPropertyId = '', initialBackTo = '', initialBackLabel = 'Back to previous page', initialHistoryOpen = false, launchSurface = '', launchCapabilityId = '' }: { mode?: 'page' | 'panel'; onClose?: () => void; onPendingStateChange?: (pending: boolean) => void; initialQuestion?: string; initialSessionId?: string; initialExecutionId?: string; initialPropertyId?: string; initialBackTo?: string; initialBackLabel?: string; initialHistoryOpen?: boolean; launchSurface?: string; launchCapabilityId?: string }) {
   const { accountName, accountEmail, loggingOut, handleLogout } = useAskAccount();
   const { selectedPropertyId, setSelectedPropertyId } = usePropertyContext();
   // A notification deep link carries the answer's property, but the globally-selected property
@@ -87,7 +87,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   const { pendingWork, setPendingWork, pendingLoading, continuingId, setContinuingId, dismissingPendingId, dismissPendingWork } = usePendingWork({ selectedPropertyId, propertyMismatch, availabilityEpoch, loading, setError, setServiceUnavailable, onDismissed: () => setRecentSessionsEpoch((current) => current + 1) });
   const accessLostRef = useRef<(propertyId: string) => void>(() => {});
   const { recentSessions, setRecentSessions, recentSessionsLoading, setRecentSessionsLoading, recentSessionsLoadingMore, setRecentSessionsLoadingMore, recentSessionsNextCursor, setRecentSessionsNextCursor, recentSessionsIssue, setRecentSessionsIssue, historySearchInput, setHistorySearchInput, historySearchTerm, setHistorySearchTerm, searchSessions, setSearchSessions, searchNextCursor, setSearchNextCursor, searchLoading, setSearchLoading, searchLoadingMore, setSearchLoadingMore, searchIssue, setSearchIssue, historyView, setHistoryView, pinnedSessions, setPinnedSessions, historyPropertyRef, historyRequestEpochRef, searchRequestEpochRef, searchScopeRef, loadMoreRecentSessions, loadMoreSearchSessions } = useConversationHistory({ selectedPropertyId, effectiveHistoryScope, propertyMismatch, availabilityEpoch, recentSessionsEpoch, setServiceUnavailable, onAccessLostRef: accessLostRef });
-  const [historyDrawerOpen, setHistoryDrawerOpen] = useState(false);
+  const [historyDrawerOpen, setHistoryDrawerOpen] = useState(initialHistoryOpen);
   const { contextExecutionId, contextHeadingRef, contextExecution, contextContentAvailable, wideContextPanel, closeResponseContext, openResponseContext } = useResponseContextPanel({ mode, sessionId, selectedPropertyId, executions });
   // Marks the execution whose pending card should receive focus: set right
   // after a turn this session actually produced (a new question answered,
@@ -151,7 +151,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   // ACUI-006: on the calm landing the desktop rail starts collapsed; an explicit choice is remembered, and a search keeps it open.
   const [railPreference, chooseRailPreference] = useHistoryRailPreference();
   const railToggled = useRef(false);
-  const railExpanded = resolveHistoryRailExpanded({ calm, landingVisible, preference: railPreference, searching: historySearchInput.trim().length > 0 });
+  const railExpanded = initialHistoryOpen || resolveHistoryRailExpanded({ calm, landingVisible, preference: railPreference, searching: historySearchInput.trim().length > 0 });
   // The toggle unmounts with the state it changes, so hand focus to its counterpart after an explicit choice.
   useEffect(() => { if (railToggled.current) { railToggled.current = false; document.getElementById('ask-history-toggle')?.focus(); } }, [railExpanded]);
   // ACUI-001: the launch says which home it is about and leads with that home's state; unknown state keeps the generic prompt.

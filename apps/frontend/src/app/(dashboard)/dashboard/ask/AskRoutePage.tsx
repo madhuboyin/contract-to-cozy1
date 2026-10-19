@@ -1,0 +1,48 @@
+import { AskWorkspace } from '@/components/ask/AskWorkspace';
+import { resolveDashboardBackHref } from '@/lib/navigation/backNavigation';
+import { askOriginBackLabel } from '@/lib/navigation/askNavigation';
+
+export type AskSearchParams = {
+  sessionId?: string | string[];
+  executionId?: string | string[];
+  propertyId?: string | string[];
+  question?: string | string[];
+  backTo?: string | string[];
+  from?: string | string[];
+  launchSurface?: string | string[];
+  launchCapabilityId?: string | string[];
+};
+
+const value = (candidate?: string | string[]) => typeof candidate === 'string' ? candidate : '';
+
+export async function AskRoutePage({
+  searchParams,
+  initialHistoryOpen = false,
+}: {
+  searchParams: Promise<AskSearchParams>;
+  initialHistoryOpen?: boolean;
+}) {
+  const params = await searchParams;
+  const source = value(params.from);
+  const requestedBackTo = value(params.backTo);
+  const initialBackTo = resolveDashboardBackHref(
+    requestedBackTo,
+    source === 'notification' ? '/dashboard/notifications' : '',
+  );
+  return (
+    <div className="h-full min-h-0">
+      <AskWorkspace
+        mode="page"
+        initialSessionId={value(params.sessionId)}
+        initialExecutionId={value(params.executionId)}
+        initialPropertyId={value(params.propertyId)}
+        initialQuestion={value(params.question)}
+        initialBackTo={initialBackTo}
+        initialBackLabel={askOriginBackLabel(initialBackTo, source)}
+        initialHistoryOpen={initialHistoryOpen}
+        launchSurface={value(params.launchSurface)}
+        launchCapabilityId={value(params.launchCapabilityId)}
+      />
+    </div>
+  );
+}
