@@ -286,7 +286,6 @@ export async function getAskPendingWork(userId: string, propertyId: string | nul
       ],
     },
     orderBy: { updatedAt: 'desc' },
-    take: 20,
   });
   const property = await propertySummary(propertyId);
   const items: AskPendingWorkItem[] = [];
@@ -298,7 +297,6 @@ export async function getAskPendingWork(userId: string, propertyId: string | nul
       actionLabel: pendingActionLabel(current.status),
       execution: mapPersistedExecution(current, property),
     });
-    if (items.length === 3) break;
   }
   return items;
 }

@@ -20,6 +20,8 @@ const CONTINUITY_QUERY_KEYS = [
   'executionId',
   'backTo',
   'from',
+  'launchSurface',
+  'launchCapabilityId',
 ] as const;
 
 export function askDestinationForPath(pathname: string): AskDestinationId {

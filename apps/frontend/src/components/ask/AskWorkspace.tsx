@@ -49,6 +49,7 @@ import { CollapsedConversationRail } from './workspace/CollapsedConversationRail
 import { ExploreDisclosure, ExploreFocusedView, ExploreRailGroup } from './workspace/ExploreWithCozy';
 import { useExploreWithCozy } from './workspace/useExploreWithCozy';
 import { discoveryClaimFor } from '@/features/ask/exploreTelemetry';
+import { useMeasuredElementHeight } from './workspace/useMeasuredElementHeight';
 // Re-exported for existing test imports; ./blocks/registry.tsx is the implementation.
 export { BlockView };
 // The history rail and the draft key moved to ./workspace/; re-exported for existing imports.
@@ -107,6 +108,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   const deniedProperties = useRef(new Set<string>());
   const conversationScrollRef = useRef<HTMLElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const composerMeasure = useMeasuredElementHeight();
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const activeSessionRef = useRef('');
   const { refreshIssues, setRefreshIssues, refreshRequests, setRefreshRequests, redactAccessLostResult, refreshResult, updateExecution } = useResultRefresh({ executions, activeSessionRef, requests, deniedProperties, setExecutions, setPendingWork, setJustUpdatedExecutionId });
@@ -384,7 +386,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
         )}
         <div className="relative flex min-w-0 flex-1 flex-col">
       {mode === 'page' && !askUnavailable && <ExploreDisclosure state={explore.state} activeTopicId={explore.focus} onOpen={explore.openFrom('DISCLOSURE')} moreIdeas={moreIdeas} onPanelVisible={explore.topicsVisible('DISCLOSURE')} />}
-      <main ref={conversationScrollRef} onScroll={(event) => { const node = event.currentTarget; setShowJumpToLatest(node.scrollHeight - node.scrollTop - node.clientHeight > node.clientHeight); }} data-ask-scroll-container="" className={cn('min-h-0 flex-1 overflow-y-auto overscroll-contain', calm && mode === 'page' && 'bg-[#faf9f6]', mode === 'page' ? (calm ? 'px-4 pb-6 pt-5 sm:px-6 lg:px-10 lg:pt-8' : 'px-4 pb-8 pt-8 sm:px-6 lg:px-10 lg:pt-12') : 'px-4 py-5 sm:px-5')}>
+      <main ref={conversationScrollRef} style={{ scrollPaddingBottom: composerMeasure.height ? composerMeasure.height + 16 : undefined }} onScroll={(event) => { const node = event.currentTarget; setShowJumpToLatest(node.scrollHeight - node.scrollTop - node.clientHeight > node.clientHeight); }} data-ask-scroll-container="" data-composer-measured-height={composerMeasure.height || undefined} className={cn('min-h-0 flex-1 overflow-y-auto overscroll-contain', calm && mode === 'page' && 'bg-[#faf9f6]', mode === 'page' ? (calm ? 'px-4 pb-6 pt-5 sm:px-6 lg:px-10 lg:pt-8' : 'px-4 pb-8 pt-8 sm:px-6 lg:px-10 lg:pt-12') : 'px-4 py-5 sm:px-5')}>
         {explore.focus && <ExploreFocusedView topics={explore.state.topics} topicId={explore.focus} busy={loading || !sessionId} onSelectTopic={explore.openFrom('FOCUSED_VIEW')} onStart={explore.start} onClose={explore.close} onStartersVisible={explore.startersVisible} selector={explore.selector} onChooseTarget={explore.chooseTarget} onCancelSelector={explore.cancelSelector} onRetrySelector={explore.retrySelector} />}
         <div className={explore.focus ? 'hidden' : 'contents'}>
         {calm && mode === 'page' && <h1 className="sr-only hidden lg:block">Ask Cozy</h1>}
@@ -470,9 +472,9 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
         </div>
       </main>
 
-      {showJumpToLatest && !continuityWorkflowActive && <button type="button" onClick={() => { const node = conversationScrollRef.current; node?.scrollTo({ top: node.scrollHeight, behavior: prefersReducedMotion() ? 'auto' : 'smooth' }); setShowJumpToLatest(false); }} className="absolute bottom-24 right-5 z-20 inline-flex min-h-10 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-lg hover:bg-slate-50"><ChevronDown className="h-4 w-4" aria-hidden="true" />Jump to latest</button>}
+      {showJumpToLatest && !continuityWorkflowActive && <button type="button" style={{ bottom: composerMeasure.height + 16 }} onClick={() => { const node = conversationScrollRef.current; node?.scrollTo({ top: node.scrollHeight, behavior: prefersReducedMotion() ? 'auto' : 'smooth' }); setShowJumpToLatest(false); }} className="absolute right-5 z-20 inline-flex min-h-10 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-lg hover:bg-slate-50"><ChevronDown className="h-4 w-4" aria-hidden="true" />Jump to latest</button>}
 
-      {(executions.length > 0 || pendingMessage) && !askUnavailable && !continuityWorkflowActive && <footer className={cn('shrink-0 border-t border-slate-200 bg-white/95 p-3 backdrop-blur sm:p-4', calm && mode === 'page' && 'bg-[#faf9f6]/95', mode === 'panel' && 'pb-[calc(env(safe-area-inset-bottom)+0.75rem)]')}><FollowUpRow items={followUps} busy={loading} onPick={pickFollowUp} onDismiss={starterDismissal.dismiss} />{renderComposer('footer')}</footer>}
+      {(executions.length > 0 || pendingMessage) && !askUnavailable && !continuityWorkflowActive && <footer ref={composerMeasure.ref} data-ask-composer-overlay="" className={cn('shrink-0 border-t border-slate-200 bg-white/95 p-3 backdrop-blur sm:p-4', calm && mode === 'page' && 'bg-[#faf9f6]/95', mode === 'panel' && 'pb-[calc(env(safe-area-inset-bottom)+0.75rem)]')}><FollowUpRow items={followUps} busy={loading} onPick={pickFollowUp} onDismiss={starterDismissal.dismiss} />{renderComposer('footer')}</footer>}
         </div>
         {wideContextPanel && contextExecution && contextContentAvailable && <aside className="hidden w-80 shrink-0 border-l border-slate-200 bg-slate-50/80 p-4 xl:block" aria-label="Response context">
           <ResponseContextContent execution={contextExecution} headingRef={contextHeadingRef} onClose={closeResponseContext} renderNavigation={(navigation) => navigation ? <AskContextLink href={navigation.href} className="inline-flex min-h-10 items-center rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-teal-800 hover:border-teal-300 hover:bg-teal-50">{navigation.label}</AskContextLink> : null} />

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api/client';
 import { buildAskWorkspaceHref } from '@/lib/navigation/askNavigation';
@@ -10,6 +10,7 @@ import type { AskPendingWorkItem } from '@/features/ask/types';
 import { PendingWorkInbox } from './ConversationHistoryNav';
 import { usePendingWork } from './usePendingWork';
 import { askServiceIsPaused } from './support';
+import { AskCollectionState, AskWorkspaceMeasure } from '../presentation/AskLayoutPrimitives';
 
 export function AskWorkDestination() {
   const router = useRouter();
@@ -72,7 +73,7 @@ export function AskWorkDestination() {
 
   return (
     <main className="h-full overflow-y-auto px-4 py-8 sm:px-6 lg:px-10" aria-labelledby="ask-work-title">
-      <div className="mx-auto max-w-5xl">
+      <AskWorkspaceMeasure className="max-w-5xl" data-presentation-contract="ask.destination.work">
         <p className="text-xs font-bold uppercase tracking-[0.14em] text-teal-700">Ask Cozy destination</p>
         <h1 id="ask-work-title" className="mt-2 text-3xl font-semibold tracking-[-0.025em] text-slate-950">Work</h1>
         <p className="mt-3 max-w-2xl text-base leading-7 text-slate-600">Resume requests that are waiting for your input on the selected home.</p>
@@ -86,13 +87,13 @@ export function AskWorkDestination() {
           </div>
 
           {!scopedPropertyId ? (
-            <div className="rounded-2xl border border-stone-200 bg-white px-5 py-6 text-sm text-slate-600">Select a home to see work that needs your input.</div>
+            <AskCollectionState kind="NOT_APPLICABLE" description="Select a home to see work that needs your input." />
           ) : serviceUnavailable ? (
-            <div className="flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-5 text-sm text-amber-950" role="status"><AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" /><span>Pending Ask work is temporarily unavailable. Your saved data is unchanged.</span></div>
+            <AskCollectionState kind="UNAVAILABLE" description="Pending Ask work is temporarily unavailable. Your saved data is unchanged." className="border-amber-200 bg-amber-50 text-amber-950" />
           ) : pendingLoading || propertyMismatch ? (
             <div className="flex items-center gap-2 rounded-2xl border border-stone-200 bg-white px-5 py-6 text-sm text-slate-600" role="status"><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />Checking pending work…</div>
           ) : pendingWork.length === 0 ? (
-            <div className="flex gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-5 text-sm text-emerald-950"><CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" /><span>No Ask requests need your input right now.</span></div>
+            <AskCollectionState kind="EMPTY" description="No Ask requests need your input right now." className="border-emerald-200 bg-emerald-50 text-emerald-950" />
           ) : (
             <PendingWorkInbox items={pendingWork} loadingId={continuingId} dismissingId={dismissingPendingId} onResume={(item) => void resumePendingWork(item)} onDismiss={(item) => void dismissPendingWork(item)} />
           )}
@@ -102,7 +103,7 @@ export function AskWorkDestination() {
         <aside className="mt-8 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4 text-sm leading-6 text-slate-600" aria-label="Work destination scope">
           This first Work slice contains the existing pending Ask preview. Active projects, journeys, decisions, incidents, claims, monitors, queued jobs, lifecycle views, and complete pagination remain connected to their canonical owners until the full Work index is implemented.
         </aside>
-      </div>
+      </AskWorkspaceMeasure>
     </main>
   );
 }

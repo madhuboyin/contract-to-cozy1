@@ -27,10 +27,12 @@ describe('Ask Cozy destination routes', () => {
       propertyId: 'property-1',
       sessionId: 'session-1',
       executionId: 'execution-1',
+      launchSurface: 'HOME_ACTION',
+      launchCapabilityId: 'maintenance',
       question: 'must-not-replay',
     });
     expect(buildAskDestinationHref(ASK_DESTINATIONS[1], current)).toBe(
-      '/dashboard/ask/work?propertyId=property-1&sessionId=session-1&executionId=execution-1',
+      '/dashboard/ask/work?propertyId=property-1&sessionId=session-1&executionId=execution-1&launchSurface=HOME_ACTION&launchCapabilityId=maintenance',
     );
   });
 });

@@ -6,7 +6,7 @@
 
 **Implemented Phase 0 foundation:** The code-owned route-retirement registry, startup validation, generated Ask-operation inventory, generated homeowner-route inventory, deployed frontend/API build-contract diagnostics, and production Ask discovery smoke are implemented. The inventory currently marks no route retired; certification evidence and exact successor mappings remain future work.
 
-**Implemented Phase 1 shell foundation:** Stable Home, Work, Record, Saved, and History routes plus responsive destination navigation are implemented. The shell now exposes the selected-property switcher, global command search, notification inbox/count, profile/privacy/settings, notification settings, and sign out on every destination. Home and History embed the current Ask behavior. The existing pending-Ask “Needs you” preview now lives on Work and links there from Home without changing canonical continuation or cancellation behavior; the complete canonical Work projection remains future work. Record and Saved remain explicit foundation states until their canonical projections are implemented in later phases.
+**Phase 1 complete:** Stable Home, Work, Record, Saved, and History routes plus keyboard-operable desktop/mobile destination navigation are implemented. The shell exposes the selected-property switcher, global command search, notification inbox/count, profile/privacy/settings, notification settings, and sign out on every destination. Destination links retain authorized conversation and launch context; existing draft, selected-entity, layout, and scroll restoration retain workspace state across destination changes and browser navigation. “Needs you” lives on Work and links there from Home without changing canonical continuation or cancellation behavior. Shared semantic layout primitives, compact collection states, measured composer scroll spacing, and validated versioned contracts for all five destinations and every registered specialized grouped-list presentation are implemented. The complete canonical Work projection remains Phase 3; Record and Saved remain explicit foundation states until Phases 2 and 4.
 
 ## 1. Delivery principles
 
@@ -185,6 +185,16 @@ Build presentation governance into the shell before migrating more workflows:
 10. Remove layout-mode controls from operations that do not have two genuinely useful renderings. Persist valid choices and make Auto select the most suitable accessible default for that presentation family, which is not always the densest one.
 
 Shared quality invariants and a tool-specific presentation contract are part of Phase 1 exit criteria for every migrated screen. Visual uniformity is not an exit criterion.
+
+### Phase 1 completion evidence
+
+- `AskLayoutPrimitives.tsx` owns the reading/workspace measures, compact row, definition grid, collection, adaptive grid, focused panel, and compact empty/unavailable/not-applicable states.
+- `presentationContracts.ts` is the versioned registry for the five destinations and all registered specialized grouped-list patterns; module validation rejects duplicate or incomplete contracts.
+- Generic grouped lists use the shared collection primitive and compact empty state. Record, Saved, and Work foundations declare their destination contracts; bespoke renderers retain their specialized composition.
+- The pending-Ask reader no longer applies the former three-item display cap, so the Work destination does not silently hide authorized “Needs you” requests.
+- Destination URLs preserve property, session, execution, return, origin, and launch context. Existing result-view session storage restores focused entity, filters/layout, disclosure, and scroll state after authorized session hydration.
+- ResizeObserver measurement drives composer-relative scroll padding and the “Jump to latest” offset; the fixed composer offset was removed.
+- Focused shell, navigation, History lifecycle, destination continuity, result restoration, primitives, contract registry, and measurement tests cover the Phase 1 code gates. No domain workflow is retired by this phase.
 
 ## 6. Phase 2 — Complete Record workspace
 

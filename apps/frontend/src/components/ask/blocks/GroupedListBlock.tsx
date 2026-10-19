@@ -33,6 +33,7 @@ import { WarrantyResultList } from '../WarrantyResultList';
 import { HomeContinuityPlanResultList } from '../HomeContinuityPlanResultList';
 import { ActionLink, AskBlockActionContext, AskContextLink } from './context';
 import type { AskBlockRenderer } from './types';
+import { AskCollection, AskCollectionState } from '../presentation/AskLayoutPrimitives';
 
 // Blocks whose items carry longer text revealed on demand (`item.detail`). The Negotiation Shield draft is collapsed by default so a long
 // message does not push the analysis down; the producer sets the id, the client only implements the expand/collapse.
@@ -252,8 +253,8 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
               </div>
               <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">{section.count}</span>
             </div>
-            {section.items.length === 0 ? <p className="text-sm text-slate-500">None recorded.</p> : (
-              <ul id={listId} className={cn(
+            {section.items.length === 0 ? <AskCollectionState kind="EMPTY" title={section.title} action={block.sections.length === 1 && block.actions[0] ? <ActionLink action={block.actions[0]} /> : undefined} /> : (
+              <AskCollection id={listId} className={cn(
                 block.id === 'project-detail-records' && 'grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3',
                 block.id !== 'project-detail-records' && (dense ? 'divide-y divide-slate-100' : presentation === 'COMPACT_LIST' ? 'space-y-1' : 'space-y-3'),
               )} data-project-record-grid={block.id === 'project-detail-records' ? '' : undefined}>
@@ -331,7 +332,7 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
                     )}
                   </li>;
                 })}
-              </ul>
+              </AskCollection>
             )}
             {canExpand && (
               <button

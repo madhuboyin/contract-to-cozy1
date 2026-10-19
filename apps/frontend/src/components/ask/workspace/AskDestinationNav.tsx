@@ -5,6 +5,7 @@ import { usePathname, useSearchParams } from 'next/navigation';
 import { Bookmark, BriefcaseBusiness, History, Home, NotebookTabs, type LucideIcon } from 'lucide-react';
 import { ASK_DESTINATIONS, askDestinationForPath, buildAskDestinationHref, type AskDestinationId } from '@/features/ask/destinations';
 import { cn } from '@/lib/utils';
+import { ASK_DESTINATION_PRESENTATION_CONTRACTS } from '@/features/ask/presentationContracts';
 
 const ICONS: Record<AskDestinationId, LucideIcon> = {
   home: Home,
@@ -27,6 +28,7 @@ function DestinationLinks({ mobile = false }: { mobile?: boolean }) {
         key={destination.id}
         href={buildAskDestinationHref(destination, searchParams)}
         aria-current={selected ? 'page' : undefined}
+        data-presentation-contract={ASK_DESTINATION_PRESENTATION_CONTRACTS[destination.id].id}
         className={cn(
           'inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-3 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700 focus-visible:ring-offset-2',
           mobile && 'min-w-0 flex-1 flex-col gap-0.5 rounded-lg px-1 py-1 text-[11px]',

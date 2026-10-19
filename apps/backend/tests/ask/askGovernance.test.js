@@ -146,6 +146,16 @@ test('orphaned RUNNING executions (no confirmation receipt) are reclaimed on a t
   assert.match(createFn.slice(0, 1500), /reclaimOrphanedRunningExecution\(duplicate\)/);
 });
 
+test('pending Ask work returns the complete authorized set for the Work destination', () => {
+  const orchestrator = readAskOrchestratorSources();
+  const start = orchestrator.indexOf('export async function getAskPendingWork(');
+  const end = orchestrator.indexOf('\nexport async function continueAskExecution(', start);
+  const pendingWorkFn = orchestrator.slice(start, end);
+  assert.ok(start >= 0 && end > start);
+  assert.doesNotMatch(pendingWorkFn, /take:\s*\d+/);
+  assert.doesNotMatch(pendingWorkFn, /items\.length\s*===\s*\d+/);
+});
+
 test('home-deadline monitor confirmation rechecks warranty/insurance source freshness, not just maintenance-sourced tasks', () => {
   const orchestrator = readAskOrchestratorSources();
   // Prep time must capture a version signature for the warranty/policy

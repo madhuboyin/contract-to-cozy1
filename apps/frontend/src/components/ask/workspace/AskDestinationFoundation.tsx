@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import type { AskDestinationId } from '@/features/ask/destinations';
+import { AskFocusedPanel } from '../presentation/AskLayoutPrimitives';
 
 const COPY: Record<Exclude<AskDestinationId, 'home' | 'history'>, { title: string; description: string; scope: string }> = {
   work: {
@@ -23,7 +24,7 @@ export function AskDestinationFoundation({ destination }: { destination: keyof t
   const copy = COPY[destination];
   return (
     <main className="h-full overflow-y-auto px-4 py-8 sm:px-6 lg:px-10" aria-labelledby={`ask-${destination}-title`}>
-      <section className="mx-auto max-w-4xl rounded-3xl border border-stone-200 bg-white px-5 py-8 shadow-sm sm:px-8 sm:py-10">
+      <AskFocusedPanel className="max-w-4xl rounded-3xl px-5 py-8 shadow-sm sm:px-8 sm:py-10" data-presentation-contract={`ask.destination.${destination}`}>
         <p className="text-xs font-bold uppercase tracking-[0.14em] text-teal-700">Ask Cozy destination</p>
         <h1 id={`ask-${destination}-title`} className="mt-2 text-3xl font-semibold tracking-[-0.025em] text-slate-950">{copy.title}</h1>
         <p className="mt-3 max-w-2xl text-base leading-7 text-slate-600">{copy.description}</p>
@@ -33,7 +34,7 @@ export function AskDestinationFoundation({ destination }: { destination: keyof t
         <Link href="/dashboard/ask" className="mt-6 inline-flex min-h-11 items-center rounded-xl bg-emerald-950 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-900">
           Return to Ask Cozy Home
         </Link>
-      </section>
+      </AskFocusedPanel>
     </main>
   );
 }
