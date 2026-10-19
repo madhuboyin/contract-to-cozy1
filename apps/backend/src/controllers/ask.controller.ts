@@ -5,6 +5,7 @@ import type { AuthRequest } from '../types/auth.types';
 import { AskSessionSearchRequestSchema, AskSessionUpdateRequestSchema, ContinueAskExecutionSchema, CreateAskExecutionRequestSchema, EditAskConfirmationSchema, RecordAskCaptureEventSchema, RequestAskCorrectionSchema, ResolveAskExecutionPropertySchema, RetryAskExecutionSchema, SubmitAskCaptureRequestSchema, SubmitAskClarificationSchema, SubmitAskConfirmationSchema, SubmitAskFeedbackSchema, SubmitHomeActionUsefulnessFeedbackSchema, DismissSuggestedActionSchema, SUGGESTED_NEXT_ACTION_ID_PATTERN } from '../productFramework/ask/ask.contract';
 import { getAskRecordIndex } from '../services/ask/askRecordIndex.service';
 import { getAskRecordExportReview } from '../services/ask/askRecordExportReview.service';
+import { getAskWorkPage, AskWorkInvalidRequestError } from '../services/ask/askWork.service';
 import { getAskRecordCollectionPage, AskRecordSectionUnavailableError } from '../services/ask/askRecordCollections.service';
 import { getAskRecordDetail } from '../services/ask/askRecordDetail.service';
 import { cancelAskExecution, confirmAskExecution, continueAskExecution, createAskExecution, editAskConfirmation, getAskExecution, getAskPendingWork, getAskSession, getConciergeHome, getRecentAskSessions, updateAskSessionForUser, recordAskCaptureEvent, recordAskCaptureFailure, refreshAskExecutionAfterConflict, requestAskCorrection, resolveAskExecutionProperty, retryAskExecution, submitAskCapture, submitAskClarification, submitAskExecutionFeedback, submitHomeActionUsefulnessFeedback } from '../services/ask/askOrchestrator.service';
@@ -507,6 +508,32 @@ export async function getAskRecordSectionPage(req: AuthRequest, res: Response, n
       const status = error.reason === 'NOT_APPLICABLE' || error.reason === 'CONTEXT_REQUIRED' ? 409 : 404;
       return res.status(status).json({ success: false, error: { code: error.code, reason: error.reason, message: 'This record section is not available.' } });
     }
+    return next(error);
+  }
+}
+
+// The canonical Work index (FR-WORK-001/005): one authorized, keyset-paged lifecycle view. Side-effect free; reauthorizes on every call.
+const AskWorkQuerySchema = z.object({
+  propertyId: z.string().trim().min(1).max(160),
+  view: z.string().trim().max(24).optional(),
+  cursor: z.string().trim().min(1).max(400).optional(),
+  limit: z.coerce.number().int().min(1).max(200).optional(),
+  workType: z.string().trim().max(40).optional(),
+  status: z.string().trim().max(60).optional(),
+});
+
+export async function getAskWorkPageHandler(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const user = req.user;
+    if (!user) return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED', message: 'Authentication required.' } });
+    const query = AskWorkQuerySchema.safeParse(req.query);
+    if (!query.success) return res.status(400).json({ success: false, error: { code: 'ASK_INVALID_REQUEST', message: 'Invalid Work request.' } });
+    const { propertyId, ...rest } = query.data;
+    return res.status(200).json({ success: true, data: await getAskWorkPage(user.userId, propertyId, rest, user.role) });
+  } catch (error) {
+    const code = error instanceof Error ? (error as Error & { code?: string }).code : undefined;
+    if (error instanceof AskWorkInvalidRequestError || code === 'ASK_INVALID_REQUEST') return res.status(400).json({ success: false, error: { code: 'ASK_INVALID_REQUEST', message: 'Invalid Work request.' } });
+    if (code === 'ASK_PROPERTY_NOT_FOUND') return res.status(404).json({ success: false, error: { code, message: 'Property not found or access was removed.' } });
     return next(error);
   }
 }

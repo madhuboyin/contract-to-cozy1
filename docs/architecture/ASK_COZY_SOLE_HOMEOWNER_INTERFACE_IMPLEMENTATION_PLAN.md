@@ -8,6 +8,8 @@
 
 **Phase 1 complete:** Stable Home, Work, Record, Saved, and History routes plus keyboard-operable desktop/mobile destination navigation are implemented. The shell exposes the selected-property switcher, global command search, notification inbox/count, profile/privacy/settings, notification settings, and sign out on every destination. Destination links retain authorized conversation and launch context; existing draft, selected-entity, layout, and scroll restoration retain workspace state across destination changes and browser navigation. “Needs you” lives on Work and links there from Home without changing canonical continuation or cancellation behavior. Shared semantic layout primitives, compact collection states, measured composer scroll spacing, and validated versioned contracts for all five destinations and every registered specialized grouped-list presentation are implemented. The complete canonical Work projection remains Phase 3; Record and Saved remain explicit foundation states until Phases 2 and 4.
 
+**Phase 3 slice 1 (Work provider registry, contracts, gate) implemented:** `governance/askWorkProviderRegistry.ts` declares the fifteen FR-WORK-001 providers (pending executions, home work items, decision threads, incidents, claims, projects, guided journeys, DIY guides, renovation cases, repairs, monitors, queued jobs, retryable executions, unknown-outcome executions, scheduled follow-ups). Each names its existing read and command Ask operations; its READ floor is the strictest read-operation floor, each command keeps its OWN action floor (`workActionAllowed`), and lifecycle applicability comes from the lifecycle read operation's audience policy. The gate supplements the canonical service's authorization and never replaces it. `askWork.contract.ts` defines `AskWorkPage`, `AskWorkRow` (stable `workKey` plus `sourceAliases`, canonical status unchanged, derived lifecycle view, next action, freshness, source owner, exact resume launch) and the provider reader contract. Lifecycle views (`NEEDS_YOU`, `ACTIVE`, `WAITING`, `SCHEDULED`, `COMPLETED`, `ARCHIVED`) and resume outcomes (`AVAILABLE`, `DELETED`, `COMPLETED`, `STALE`, `ACCESS_LOST`, `SUPERSEDED`) are separate types. `askWork.service.ts` serves `GET /api/ask/work` (side-effect free): every applicable, connected provider returns the next rows after one global `(sortAt desc, workKey asc)` keyset boundary (asked for page size + 1 so truncation is provable), the service merges, and a canonical domain provider wins over the `OperationalWorkItem` fallback projection with the loser kept as a source alias. A provider that is unavailable, restricted, not applicable, or failing is listed with its state and reason and makes the page `partial`; the total is reported only when every provider counted (`totalScope: COMPLETE`), never as zero. Startup validation (`validateAskWorkProviders`) rejects duplicate ids, unregistered operations, a floor claim without reads, a fallback that outranks canonical providers, and a reader state that disagrees with the registered readers. Every provider starts UNAVAILABLE with its reason; slices 2 onward connect them. Nothing was run against a real database or browser; the frontend Work views are a later slice.
+
 **Phase 2 slice 1 (Record index) implemented, uncommitted:** `governance/askRecordSectionRegistry.ts` declares all sixteen FR-REC-002 sections (buyer and seller records are separate lifecycle sections). Each names its existing Ask read and command operations; its role floor is derived as the strictest read floor, and its lifecycle applicability comes from the read operation's audience policy. `askRecordIndex.service.ts` composes `AskRecordIndex` from the canonical property-record overview and serves `GET /api/ask/record-index`. Every section is always listed with a state: `AVAILABLE`, `UNAVAILABLE` (reader not connected, provider failed, or lifecycle context required), `NOT_APPLICABLE`, or `RESTRICTED`. Seven sections have counts today (property facts, rooms, inventory, documents, warranties, timeline, household access); the other nine report `READER_NOT_CONNECTED` until their collection readers exist. The Record destination renders a compact, scannable two-column index on wide screens. No Prisma change; no export; no collection paging; no route retired. "Browse home record" naming is unchanged until Phase 2 exits.
 
 **Phase 2 slice 1 — acceptance items NOT executed (no browser, real data, or manual accessibility run):**
@@ -313,13 +315,28 @@ Shared quality invariants and a tool-specific presentation contract are part of 
 
 ## 7. Phase 3 — Work workspace
 
-### Backend slices
+Governing requirements: FR-WORK-001 through FR-WORK-005. Work is the canonical index of everything the homeowner may need to act on, read from each source's own owner. A conversation may reference work but is never its identity.
 
-1. Implement providers for Ask pending executions, projects, guidance journeys, decision threads, incidents, claims, repairs, renovation cases, monitors, and queued jobs.
-2. Normalize lifecycle states without replacing canonical domain states.
-3. Batch load counts and previews; avoid N+1 domain calls.
-4. Resolve exact resume targets and current-version tokens.
-5. Add stale/deleted/access-lost recovery mapping.
+### Decisions in force
+
+1. Provider READ floors are derived from the provider's read operations; ACTION floors are derived independently per command operation. The gate supplements, and never replaces, the canonical service's own authorization.
+2. The Work GET has no side effects: it filters on `expiresAt`, never expires, updates, or reconciles, and writes no events. Resume and confirm reread and reconcile; durable expiry stays with `askPendingExpiryReconciliation`.
+3. Claims get their own new read-only canonical provider (no claim list reader exists in the service layer).
+4. Guidance gets a read-only list; the existing journey list runs a coverage reconcile write and is not used.
+5. The canonical domain provider wins over `OperationalWorkItem`; `OperationalWorkItem` is a fallback projection for work whose resume owner is home-operations, and source aliases are kept on the selected workKey.
+6. Lifecycle views and resume outcomes are separate types.
+7. A source with no canonical reader is reported UNAVAILABLE. It is never synthesized and never omitted, and Phase 3 cannot exit while a required provider is UNAVAILABLE.
+8. Ordinary failures are never mapped to "unknown outcome".
+
+### Backend slices (in order)
+
+1. Provider registry, contracts, gate, and `GET /api/ask/work`. (Done.)
+2. Pending executions (read-only, `expiresAt`-filtered) and the `OperationalWorkItem` fallback projection.
+3. Decision threads and incidents.
+4. Projects, guided journeys (read-only list), DIY guides, renovation cases, and claims (new read-only provider).
+5. Monitors, queued jobs, retryable executions, unknown-outcome executions, and scheduled follow-ups. Sources with no canonical reader stay UNAVAILABLE and are listed in the end-of-phase review.
+6. Batch load counts and previews; avoid N+1 domain calls.
+7. Resolve exact resume targets and current-version tokens, reauthorize and reread on open, and map stale, deleted, access-lost, and superseded work to distinct recovery outcomes.
 
 ### Frontend slices
 
@@ -327,6 +344,7 @@ Shared quality invariants and a tool-specific presentation contract are part of 
 2. Work-type and status filters.
 3. Inline current detail and primary next action.
 4. Exact resume into conversation, confirmation, or structured workspace.
+5. Explicit partial-provider and UNAVAILABLE states; counts and a path to the complete list wherever a preview is capped.
 
 ### Exit criteria
 
@@ -334,6 +352,7 @@ Shared quality invariants and a tool-specific presentation contract are part of 
 - Archiving a conversation does not orphan canonical work.
 - No preview cap hides work without a complete list.
 - Resume reauthorizes and rereads current state.
+- No required provider is UNAVAILABLE.
 
 ## 8. Phase 4 — Saved artifacts
 

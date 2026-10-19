@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth.middleware';
 import { requireAskEligibleAccount } from '../middleware/askAccountEligibility.middleware';
-import { getAskTargetSelectionHandler, deleteAskSession, patchAskSession, getAskConciergeHome, getAskExecutionById, getAskMonitor, getAskPendingExecutions, getAskRecordIndexHandler, getAskRecordExportReviewHandler, getAskRecordSectionPage, getAskRecordDetailHandler, getAskRecentSessions, getAskSessionExecutions, patchAskMonitor, postAskCancellation, postAskCapture, postAskCaptureEvent, postAskClarification, postAskConfirmation, postAskConfirmationEdit, postAskContinuation, postAskCorrection, postAskExecution, postAskExecutionProperty, postAskExecutionRefresh, postAskExecutionRetry, postAskFeedback, postDismissSuggestedAction, postAskSessionSearch, postHomeActionUsefulnessFeedback } from '../controllers/ask.controller';
+import { getAskTargetSelectionHandler, deleteAskSession, patchAskSession, getAskConciergeHome, getAskExecutionById, getAskMonitor, getAskPendingExecutions, getAskWorkPageHandler, getAskRecordIndexHandler, getAskRecordExportReviewHandler, getAskRecordSectionPage, getAskRecordDetailHandler, getAskRecentSessions, getAskSessionExecutions, patchAskMonitor, postAskCancellation, postAskCapture, postAskCaptureEvent, postAskClarification, postAskConfirmation, postAskConfirmationEdit, postAskContinuation, postAskCorrection, postAskExecution, postAskExecutionProperty, postAskExecutionRefresh, postAskExecutionRetry, postAskFeedback, postDismissSuggestedAction, postAskSessionSearch, postHomeActionUsefulnessFeedback } from '../controllers/ask.controller';
 
 const router = Router();
 
@@ -25,6 +25,7 @@ router.post('/ask/executions/:executionId/continue', postAskContinuation);
 router.post('/ask/executions/:executionId/corrections', postAskCorrection);
 router.get('/ask/executions/:executionId', getAskExecutionById);
 router.get('/ask/pending', getAskPendingExecutions);
+router.get('/ask/work', getAskWorkPageHandler);
 router.get('/ask/record-index', getAskRecordIndexHandler);
 router.get('/ask/record-export-review', getAskRecordExportReviewHandler);
 router.get('/ask/record-sections/:sectionId', getAskRecordSectionPage);
