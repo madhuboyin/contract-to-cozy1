@@ -288,7 +288,7 @@ export class NotificationService {
 
   static async listForUser(userId: string, limit = 30) {
     return prisma.notification.findMany({
-      where: { userId },
+      where: { userId, dismissedAt: null },
       orderBy: { createdAt: 'desc' },
       take: limit,
       include: {
@@ -305,6 +305,7 @@ export class NotificationService {
       where: {
         userId,
         isRead: false,
+        dismissedAt: null,
       },
     });
   }

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth.middleware';
 import { requireAskEligibleAccount } from '../middleware/askAccountEligibility.middleware';
-import { getAskTargetSelectionHandler, deleteAskSession, patchAskSession, getAskConciergeHome, getAskExecutionById, getAskMonitor, getAskPendingExecutions, getAskWorkPageHandler, postAskSearchHandler, getAskSavedPageHandler, getAskSavedResolveHandler, patchAskSavedArchiveHandler, getAskWorkResolveHandler, getAskRecordIndexHandler, getAskRecordExportReviewHandler, getAskRecordSectionPage, getAskRecordDetailHandler, getAskRecentSessions, getAskSessionExecutions, patchAskMonitor, postAskCancellation, postAskCapture, postAskCaptureEvent, postAskClarification, postAskConfirmation, postAskConfirmationEdit, postAskContinuation, postAskCorrection, postAskExecution, postAskExecutionProperty, postAskExecutionRefresh, postAskExecutionRetry, postAskFeedback, postDismissSuggestedAction, postAskSessionSearch, postHomeActionUsefulnessFeedback } from '../controllers/ask.controller';
+import { getAskTargetSelectionHandler, deleteAskSession, patchAskSession, getAskConciergeHome, getAskExecutionById, getAskMonitor, getAskPendingExecutions, getAskWorkPageHandler, postAskSearchHandler, getAskNotificationsHandler, postAskNotificationOpenHandler, patchAskNotificationDismissHandler, patchAskNotificationReadHandler, getAskNotificationSettingsHandler, putAskNotificationCategoryHandler, putAskNotificationQuietHoursHandler, putAskNotificationConsentHandler, getAskSavedPageHandler, getAskSavedResolveHandler, patchAskSavedArchiveHandler, getAskWorkResolveHandler, getAskRecordIndexHandler, getAskRecordExportReviewHandler, getAskRecordSectionPage, getAskRecordDetailHandler, getAskRecentSessions, getAskSessionExecutions, patchAskMonitor, postAskCancellation, postAskCapture, postAskCaptureEvent, postAskClarification, postAskConfirmation, postAskConfirmationEdit, postAskContinuation, postAskCorrection, postAskExecution, postAskExecutionProperty, postAskExecutionRefresh, postAskExecutionRetry, postAskFeedback, postDismissSuggestedAction, postAskSessionSearch, postHomeActionUsefulnessFeedback } from '../controllers/ask.controller';
 
 const router = Router();
 
@@ -27,6 +27,14 @@ router.get('/ask/executions/:executionId', getAskExecutionById);
 router.get('/ask/pending', getAskPendingExecutions);
 router.get('/ask/work', getAskWorkPageHandler);
 router.post('/ask/search', postAskSearchHandler);
+router.get('/ask/notifications', getAskNotificationsHandler);
+router.post('/ask/notifications/:id/open', postAskNotificationOpenHandler);
+router.patch('/ask/notifications/:id/dismiss', patchAskNotificationDismissHandler);
+router.patch('/ask/notifications/:id/read', patchAskNotificationReadHandler);
+router.get('/ask/notification-settings', getAskNotificationSettingsHandler);
+router.put('/ask/notification-settings/categories/:category', putAskNotificationCategoryHandler);
+router.put('/ask/notification-settings/quiet-hours', putAskNotificationQuietHoursHandler);
+router.put('/ask/notification-settings/consents/:category', putAskNotificationConsentHandler);
 router.get('/ask/saved', getAskSavedPageHandler);
 router.get('/ask/saved/resolve', getAskSavedResolveHandler);
 router.patch('/ask/saved/archive', patchAskSavedArchiveHandler);

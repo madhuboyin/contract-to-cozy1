@@ -5,6 +5,8 @@ import type { AuthRequest } from '../types/auth.types';
 import { AskSessionSearchRequestSchema, AskSessionUpdateRequestSchema, ContinueAskExecutionSchema, CreateAskExecutionRequestSchema, EditAskConfirmationSchema, RecordAskCaptureEventSchema, RequestAskCorrectionSchema, ResolveAskExecutionPropertySchema, RetryAskExecutionSchema, SubmitAskCaptureRequestSchema, SubmitAskClarificationSchema, SubmitAskConfirmationSchema, SubmitAskFeedbackSchema, SubmitHomeActionUsefulnessFeedbackSchema, DismissSuggestedActionSchema, SUGGESTED_NEXT_ACTION_ID_PATTERN } from '../productFramework/ask/ask.contract';
 import { getAskRecordIndex } from '../services/ask/askRecordIndex.service';
 import { getAskRecordExportReview } from '../services/ask/askRecordExportReview.service';
+import { listAskNotifications, openAskNotification, setAskNotificationDismissed, setAskNotificationRead, AskNotificationInvalidRequestError, AskNotificationNotFoundError } from '../services/ask/askNotificationInbox.service';
+import { getAskNotificationSettings, updateAskNotificationCategory, updateAskNotificationQuietHours, setAskNotificationConsent, AskNotificationSettingsError } from '../services/ask/askNotificationSettings.service';
 import { searchAsk, AskSearchInvalidRequestError } from '../services/ask/askSearch.service';
 import { getAskSavedPage, resolveAskSavedArtifactForUser, setAskSavedArchive, AskSavedInvalidRequestError } from '../services/ask/askSaved.service';
 import { getAskWorkPage, resolveAskWorkForUser, AskWorkInvalidRequestError } from '../services/ask/askWork.service';
@@ -559,6 +561,103 @@ export async function getAskWorkResolveHandler(req: AuthRequest, res: Response, 
     if (error instanceof AskWorkInvalidRequestError || code === 'ASK_INVALID_REQUEST') return res.status(400).json({ success: false, error: { code: 'ASK_INVALID_REQUEST', message: 'Invalid Work request.' } });
     return next(error);
   }
+}
+
+// Notifications (FR-NOTIF-001..004): the unified inbox, opening an item against live records, dismiss and read, and the central settings.
+const AskNotificationListSchema = z.object({
+  view: z.enum(['INBOX', 'DISMISSED']).optional(),
+  cursor: z.string().trim().min(1).max(400).optional(),
+  limit: z.coerce.number().int().min(1).max(200).optional(),
+  unreadOnly: z.enum(['true', 'false']).optional(),
+  category: z.string().trim().max(40).optional(),
+  propertyId: z.string().trim().min(1).max(160).optional(),
+});
+
+function notificationError(error: unknown, res: Response, next: NextFunction) {
+  const code = error instanceof Error ? (error as Error & { code?: string }).code : undefined;
+  if (error instanceof AskNotificationInvalidRequestError || code === 'ASK_INVALID_REQUEST') return res.status(400).json({ success: false, error: { code: 'ASK_INVALID_REQUEST', message: 'Invalid notification request.' } });
+  if (error instanceof AskNotificationNotFoundError) return res.status(404).json({ success: false, error: { code: 'ASK_NOTIFICATION_NOT_FOUND', message: 'Notification not found.' } });
+  if (error instanceof AskNotificationSettingsError) return res.status(error.code === 'ASK_INVALID_REQUEST' ? 400 : 409).json({ success: false, error: { code: error.code, message: error.message } });
+  return next(error);
+}
+
+export async function getAskNotificationsHandler(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const user = req.user;
+    if (!user) return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED', message: 'Authentication required.' } });
+    const query = AskNotificationListSchema.safeParse(req.query);
+    if (!query.success) return res.status(400).json({ success: false, error: { code: 'ASK_INVALID_REQUEST', message: 'Invalid notification request.' } });
+    res.setHeader('Cache-Control', 'no-store');
+    return res.status(200).json({ success: true, data: await listAskNotifications(user.userId, { ...query.data, unreadOnly: query.data.unreadOnly === 'true' }, user.role) });
+  } catch (error) { return notificationError(error, res, next); }
+}
+
+export async function postAskNotificationOpenHandler(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const user = req.user;
+    if (!user) return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED', message: 'Authentication required.' } });
+    res.setHeader('Cache-Control', 'no-store');
+    return res.status(200).json({ success: true, data: await openAskNotification(user.userId, req.params.id, user.role) });
+  } catch (error) { return notificationError(error, res, next); }
+}
+
+export async function patchAskNotificationDismissHandler(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const user = req.user;
+    if (!user) return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED', message: 'Authentication required.' } });
+    const body = z.object({ dismissed: z.boolean() }).safeParse(req.body);
+    if (!body.success) return res.status(400).json({ success: false, error: { code: 'ASK_INVALID_REQUEST', message: 'Invalid notification request.' } });
+    return res.status(200).json({ success: true, data: await setAskNotificationDismissed(user.userId, req.params.id, body.data.dismissed, user.role) });
+  } catch (error) { return notificationError(error, res, next); }
+}
+
+export async function patchAskNotificationReadHandler(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const user = req.user;
+    if (!user) return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED', message: 'Authentication required.' } });
+    const body = z.object({ read: z.boolean() }).safeParse(req.body);
+    if (!body.success) return res.status(400).json({ success: false, error: { code: 'ASK_INVALID_REQUEST', message: 'Invalid notification request.' } });
+    return res.status(200).json({ success: true, data: await setAskNotificationRead(user.userId, req.params.id, body.data.read, user.role) });
+  } catch (error) { return notificationError(error, res, next); }
+}
+
+export async function getAskNotificationSettingsHandler(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const user = req.user;
+    if (!user) return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED', message: 'Authentication required.' } });
+    res.setHeader('Cache-Control', 'no-store');
+    return res.status(200).json({ success: true, data: await getAskNotificationSettings(user.userId, user.role) });
+  } catch (error) { return notificationError(error, res, next); }
+}
+
+export async function putAskNotificationCategoryHandler(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const user = req.user;
+    if (!user) return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED', message: 'Authentication required.' } });
+    const body = z.object({ mode: z.enum(['ON', 'MUTED', 'SNOOZED']), snoozedUntil: z.string().datetime().nullable().optional(), cadence: z.enum(['IMMEDIATE', 'DAILY_DIGEST', 'WEEKLY_BRIEF']).nullable().optional() }).strict().safeParse(req.body);
+    if (!body.success) return res.status(400).json({ success: false, error: { code: 'ASK_INVALID_REQUEST', message: 'Invalid notification setting.' } });
+    return res.status(200).json({ success: true, data: await updateAskNotificationCategory(user.userId, req.params.category, body.data, user.role) });
+  } catch (error) { return notificationError(error, res, next); }
+}
+
+export async function putAskNotificationQuietHoursHandler(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const user = req.user;
+    if (!user) return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED', message: 'Authentication required.' } });
+    const body = z.object({ start: z.string().nullable(), end: z.string().nullable(), timezone: z.string().trim().min(1).max(100) }).strict().safeParse(req.body);
+    if (!body.success) return res.status(400).json({ success: false, error: { code: 'ASK_INVALID_REQUEST', message: 'Invalid notification setting.' } });
+    return res.status(200).json({ success: true, data: await updateAskNotificationQuietHours(user.userId, body.data, user.role) });
+  } catch (error) { return notificationError(error, res, next); }
+}
+
+export async function putAskNotificationConsentHandler(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const user = req.user;
+    if (!user) return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED', message: 'Authentication required.' } });
+    const body = z.object({ granted: z.boolean() }).strict().safeParse(req.body);
+    if (!body.success) return res.status(400).json({ success: false, error: { code: 'ASK_INVALID_REQUEST', message: 'Invalid notification setting.' } });
+    return res.status(200).json({ success: true, data: await setAskNotificationConsent(user.userId, req.params.category, body.data.granted, user.role) });
+  } catch (error) { return notificationError(error, res, next); }
 }
 
 // Federated search (FR-SEARCH-001..004). A POST so the query text travels in the body, not in a URL that access logs would keep. Never cached.

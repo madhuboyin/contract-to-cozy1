@@ -9,7 +9,7 @@ import {
   type NotificationUrgency,
 } from '../productFramework/notificationPolicy.contract';
 
-const IMMEDIATE_CATEGORIES = new Set<NotificationCategory>(['SAFETY', 'ACTIVE_DAMAGE', 'MATERIAL_DEADLINE', 'WORKFLOW']);
+export const IMMEDIATE_CATEGORIES = new Set<NotificationCategory>(['SAFETY', 'ACTIVE_DAMAGE', 'MATERIAL_DEADLINE', 'WORKFLOW']);
 function isDeliveryChannelSupported(
   channel: keyof typeof NotificationChannel,
   category: NotificationCategory,
@@ -103,6 +103,8 @@ export async function upsertNotificationPreference(userId: string, input: {
   channel: keyof typeof NotificationChannel; enabled: boolean; cadence: Cadence;
   quietStart?: string | null; quietEnd?: string | null; timezone: string;
   minimumValue?: number | null; deadlineLeadDays?: number | null;
+  /** Set to pause until that time; null clears a snooze; undefined leaves it as it is. */
+  snoozedUntil?: Date | null;
 }) {
   const scopeKey = notificationScopeKey(input);
   return prisma.notificationPreference.upsert({
@@ -121,8 +123,10 @@ export async function upsertNotificationPreference(userId: string, input: {
       timezone: input.timezone,
       minimumValue: input.category === 'SAVINGS_BENEFITS' ? input.minimumValue : null,
       deadlineLeadDays: input.category === 'SAVINGS_BENEFITS' ? input.deadlineLeadDays : null,
+      snoozedUntil: input.snoozedUntil ?? null,
     },
     update: {
+      ...(input.snoozedUntil !== undefined ? { snoozedUntil: input.snoozedUntil } : {}),
       propertyId: input.propertyId,
       memberUserId: input.memberUserId,
       enabled: input.enabled,
@@ -171,7 +175,9 @@ export async function resolveNotificationPolicy(input: {
     const enabled = supported && (critical && channel === 'IN_APP' ? true : preference?.enabled ?? channelDefaults.includes(channel));
     const cadence = (preference?.cadence ?? defaultCadence) as Cadence;
     const quiet = preference ? isQuietNow(preference, input.now ?? new Date()) : false;
-    return { channel, enabled: enabled && cadence !== 'MUTED', cadence, deliverImmediately: supported && cadence === 'IMMEDIATE' && (!quiet || critical), quietHoursApplied: quiet && !critical };
+    // A snooze pauses delivery until its own end time and then lapses by itself; a critical in-app notification is never snoozed.
+    const snoozed = Boolean(preference?.snoozedUntil && preference.snoozedUntil > (input.now ?? new Date())) && !(critical && channel === 'IN_APP');
+    return { channel, enabled: enabled && cadence !== 'MUTED' && !snoozed, cadence, deliverImmediately: supported && cadence === 'IMMEDIATE' && (!quiet || critical), quietHoursApplied: quiet && !critical };
   });
   return { category, urgency, scopeKey: notificationScopeKey(input), channels };
 }

@@ -7811,6 +7811,10 @@ model Notification {
   isRead Boolean   @default(false)
   readAt DateTime?
 
+  // Sole Homeowner Interface Phase 6: the person hid this from their inbox. A presentation choice only: the notification, its deliveries
+  // and its audit trail are untouched, it stops counting toward the unread badge, and restoring clears it.
+  dismissedAt DateTime?
+
   metadata  Json?
   createdAt DateTime @default(now())
 
@@ -7825,6 +7829,7 @@ model Notification {
   @@index([recallMatchId])
   @@index([userId, createdAt])
   @@index([userId, isRead])
+  @@index([userId, dismissedAt, createdAt])
   @@index([entityType, entityId])
 }
 
@@ -7905,6 +7910,8 @@ model NotificationPreference {
   // default; values are ignored for other notification categories.
   minimumValue    Decimal? @db.Decimal(12, 2)
   deadlineLeadDays Int?
+  // Pause this category's delivery on this channel until this time, then resume on its own. Evaluated by the delivery policy, never by a client.
+  snoozedUntil DateTime?
   createdAt    DateTime            @default(now())
   updatedAt    DateTime            @updatedAt
 
