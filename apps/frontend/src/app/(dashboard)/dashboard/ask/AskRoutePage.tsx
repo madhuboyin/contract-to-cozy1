@@ -11,6 +11,10 @@ export type AskSearchParams = {
   from?: string | string[];
   launchSurface?: string | string[];
   launchCapabilityId?: string | string[];
+  launchOperationId?: string | string[];
+  launchEntityType?: string | string[];
+  launchEntityId?: string | string[];
+  launchActionId?: string | string[];
 };
 
 const value = (candidate?: string | string[]) => typeof candidate === 'string' ? candidate : '';
@@ -29,6 +33,10 @@ export async function AskRoutePage({
     requestedBackTo,
     source === 'notification' ? '/dashboard/notifications' : '',
   );
+  const operationId = value(params.launchOperationId);
+  const entityType = value(params.launchEntityType);
+  const entityId = value(params.launchEntityId);
+  const launchRecord = operationId && entityType && entityId ? { operationId, entityType, entityId, actionId: value(params.launchActionId) || undefined } : undefined;
   return (
     <div className="h-full min-h-0">
       <AskWorkspace
@@ -42,6 +50,7 @@ export async function AskRoutePage({
         initialHistoryOpen={initialHistoryOpen}
         launchSurface={value(params.launchSurface)}
         launchCapabilityId={value(params.launchCapabilityId)}
+        launchRecord={launchRecord}
       />
     </div>
   );

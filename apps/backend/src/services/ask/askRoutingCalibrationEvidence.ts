@@ -26,7 +26,7 @@ const ROWS: readonly ObservationTuple[] = [
   ['004-expected', '004', 'MAINTENANCE_TASK_UPDATE', .1899, true], ['004-competitor', '004', 'BUYER_TASK_UPDATE', .2814, false],
   // FRD v1.70: 005's competitor re-derived to APPLIANCE_FAILURE_RISK (was INVENTORY_LOOKUP .4333); the shared word is intrinsic to both.
   ['005-expected', '005', 'COVERAGE_GAPS', .7519, true], ['005-competitor', '005', 'APPLIANCE_FAILURE_RISK', .4353, false],
-  ['006-expected', '006', 'INCIDENT_CLAIM_STATUS', .1065, true], ['006-competitor', '006', 'HVAC_DECISION_CONTINUE', .1622, false],
+  ['006-expected', '006', 'INCIDENT_CLAIM_STATUS', 0.1065, true], ['006-competitor', '006', 'CLAIM_CHECKLIST_VIEW', 0.167, false],
   ['007-expected', '007', 'SAVINGS_OPPORTUNITIES', .6503, true], ['007-competitor', '007', 'OWNERSHIP_COSTS', .4618, false],
   // FRD v1.70: 008's competitor re-derived to MAINTENANCE_BUDGET_FORECAST (was BREAK_EVEN_ANALYSIS .4805); the shared word is intrinsic to both.
   ['008-expected', '008', 'OWNERSHIP_COSTS', .6832, true], ['008-competitor', '008', 'MAINTENANCE_BUDGET_FORECAST', .5552, false],
@@ -38,7 +38,7 @@ const ROWS: readonly ObservationTuple[] = [
   ['014-expected', '014', 'REFINANCE_ANALYSIS', .6936, true], ['014-competitor', '014', 'PAST_HAZARD_EXPOSURE', .5002, false],
   ['015-expected', '015', 'REFINANCE_RATE_MONITOR', .6678, true], ['015-competitor', '015', 'HOME_DEADLINE_MONITOR', .3509, false],
   ['016-expected', '016', 'SELL_HOLD_RENT_ANALYSIS', .5358, true], ['016-competitor', '016', 'INSPECTION_FINDINGS', .4609, false],
-  ['017-expected', '017', 'HOUSEHOLD_INVITATION', .6546, true], ['017-competitor', '017', 'QUOTE_COMPARISON_CREATE', .0979, false],
+  ['017-expected', '017', 'HOUSEHOLD_INVITATION', 0.6546, true], ['017-competitor', '017', 'HOUSEHOLD_ACCESS_SUMMARY', 0.4261, false],
   // FRD v1.65: 018's competitor re-derived to GUIDANCE_JOURNEYS_LIST (was INCIDENT_CONTINUATION .1424). Starting and
   // reviewing guided journeys share their intrinsic words, so no rewording removes it; the expected score is unchanged.
   ['018-expected', '018', 'GUIDANCE_JOURNEY_CREATE', .8766, true], ['018-competitor', '018', 'GUIDANCE_JOURNEYS_LIST', .627, false],
@@ -47,7 +47,7 @@ const ROWS: readonly ObservationTuple[] = [
   // FRD v1.70: 021's competitor re-derived to APPLIANCE_FAILURE_RISK (was INVENTORY_LOOKUP .4826); the shared word is intrinsic to both.
   ['021-expected', '021', 'HOME_DEADLINE_MONITOR', .5747, true], ['021-competitor', '021', 'APPLIANCE_FAILURE_RISK', .4888, false],
   ['022-expected', '022', 'CAPITAL_RESERVE_PLAN', .7763, true], ['022-competitor', '022', 'OWNERSHIP_COSTS', .6972, false],
-  ['023-expected', '023', 'PROPERTY_TAX_APPEAL_READINESS', .2329, true], ['023-competitor', '023', 'DOCUMENT_LOOKUP', .1412, false],
+  ['023-expected', '023', 'PROPERTY_TAX_APPEAL_READINESS', 0.2329, true], ['023-competitor', '023', 'PERMIT_TRACKER_STATUS', 0.1443, false],
   ['024-expected', '024', 'RENOVATION_PERMIT_READINESS', .4594, true], ['024-competitor', '024', 'SELLER_PREP_CHECKLIST', .1234, false],
   ['025-expected', '025', 'MAJOR_EVENT_ENTRY', .6136, true], ['025-competitor', '025', 'SELLER_PREP_CHECKLIST', .6189, false],
   ['026-expected', '026', 'EMERGENCY_BOUNDARY', .1177, true], ['026-competitor', '026', 'SELL_HOLD_RENT_ANALYSIS', .0871, false],
@@ -60,12 +60,12 @@ const ROWS: readonly ObservationTuple[] = [
   ['033-expected', '033', 'HVAC_DECISION_ABANDON', .6142, true], ['033-competitor', '033', 'HVAC_DECISION_OUTCOME_VIEW', .5012, false],
   ['034-expected', '034', 'HVAC_PREFERENCE_SAVE', .6876, true], ['034-competitor', '034', 'HVAC_PREFERENCE_FORGET', .513, false],
   ['035-expected', '035', 'HVAC_PREFERENCE_FORGET', .5981, true], ['035-competitor', '035', 'HVAC_DECISION_ABANDON', .4527, false],
-  ['036-expected', '036', 'HOME_CHANGE_SUMMARY', .9096, true], ['036-competitor', '036', 'BUYER_DISCLOSURE_FUNDS_READINESS', .5617, false],
+  ['036-expected', '036', 'HOME_CHANGE_SUMMARY', 0.9096, true], ['036-competitor', '036', 'INSPECTION_REPORT_COMPARE', 0.5932, false],
   ['037-expected', '037', 'HVAC_DECISION_OUTCOME_REPORT', .5325, true], ['037-competitor', '037', 'HVAC_DECISION_OUTCOME_VIEW', .6623, false],
   ['038-expected', '038', 'HVAC_DECISION_OUTCOME_VIEW', .6794, true], ['038-competitor', '038', 'HVAC_DECISION_OUTCOME_REPORT', .6486, false],
   ['039-expected', '039', 'HVAC_DECISION_OUTCOME_UNLINK', .9236, true], ['039-competitor', '039', 'HVAC_DECISION_OUTCOME_REPORT', .6652, false],
   ['040-expected', '040', 'BUYER_PLAN_STATUS', .2482, true], ['040-competitor', '040', 'BUYER_COST_READINESS', .2015, false],
-  ['041-expected', '041', 'BUYER_DEADLINES', .338, true], ['041-competitor', '041', 'MAINTENANCE_FORECAST', .3167, false],
+  ['041-expected', '041', 'BUYER_DEADLINES', 0.338, true], ['041-competitor', '041', 'PERMIT_TRACKER_STATUS', 0.3303, false],
   ['042-expected', '042', 'BUYER_DOCUMENT_READINESS', .3609, true], ['042-competitor', '042', 'MAINTENANCE_STATUS', .2779, false],
   ['043-expected', '043', 'BUYER_INSPECTION_REVIEW', .3538, true], ['043-competitor', '043', 'INSPECTION_FINDINGS', .1743, false],
   ['044-expected', '044', 'BUYER_TASK_COMPLETE', .2923, true], ['044-competitor', '044', 'MAINTENANCE_TASK_COMPLETE', .7034, false],
@@ -78,18 +78,18 @@ const ROWS: readonly ObservationTuple[] = [
   // operation's semantic package was added to the candidate pool; the expected score is unchanged.
   ['049-expected', '049', 'BUYER_TITLE_ESCROW_READINESS', .9339, true], ['049-competitor', '049', 'RECALL_REVIEW', .5812, false],
   ['050-expected', '050', 'BUYER_WALKTHROUGH_READINESS', .4485, true], ['050-competitor', '050', 'BUYER_TASK_CREATE', .2122, false],
-  ['051-expected', '051', 'BUYER_DISCLOSURE_FUNDS_READINESS', .9413, true], ['051-competitor', '051', 'HOME_CHANGE_SUMMARY', .6382, false],
+  ['051-expected', '051', 'BUYER_DISCLOSURE_FUNDS_READINESS', 0.9413, true], ['051-competitor', '051', 'INSPECTION_REPORT_COMPARE', 0.6648, false],
   ['052-expected', '052', 'BUYER_CLOSING_DAY_READINESS', .5134, true], ['052-competitor', '052', 'BUYER_DEADLINES', .2162, false],
   ['053-expected', '053', 'BUYER_CONTRACT_TIMELINE', .4127, true], ['053-competitor', '053', 'BUYER_INSPECTION_REVIEW', .2243, false],
-  ['054-expected', '054', 'BUYER_NEGOTIATION_READINESS', .328, true], ['054-competitor', '054', 'NEGOTIATION_SHIELD_CASES', .1948, false],
+  ['054-expected', '054', 'BUYER_NEGOTIATION_READINESS', 0.328, true], ['054-competitor', '054', 'INSPECTION_NEGOTIATION_PACKAGE', 0.299, false],
   ['055-expected', '055', 'BUYER_COST_READINESS', .7572, true], ['055-competitor', '055', 'BUYER_CONTRACT_TIMELINE', .486, false],
   ['056-expected', '056', 'BUYER_FINDING_DISPOSITION', .3368, true], ['056-competitor', '056', 'INSPECTION_FINDING_UPDATE', .2681, false],
   ['057-expected', '057', 'BUYER_LIFECYCLE_UPDATE', .2499, true], ['057-competitor', '057', 'UNSAFE_RESTRICTED_BOUNDARY', .5548, false],
-  ['058-expected', '058', 'CLAIM_FILE', .8322, true], ['058-competitor', '058', 'COVERAGE_COMPARISON_STATUS', .6026, false],
+  ['058-expected', '058', 'CLAIM_FILE', 0.8322, true], ['058-competitor', '058', 'BUYER_INSURANCE_READINESS', 0.6392, false],
   ['059-expected', '059', 'CLAIM_TRANSITION', .6671, true], ['059-competitor', '059', 'BUYER_COST_READINESS', .617, false],
   ['060-expected', '060', 'INCIDENT_CONTINUATION', .2135, true], ['060-competitor', '060', 'INCIDENT_CLAIM_STATUS', .1423, false],
   ['061-expected', '061', 'OPERATIONAL_WORK_UPDATE', .6787, true], ['061-competitor', '061', 'SELLER_PREP_ITEM_DECISION', .5658, false],
-  ['062-expected', '062', 'INSPECTION_FINDINGS', .7431, true], ['062-competitor', '062', 'SELLER_PREP_CHECKLIST', .6995, false],
+  ['062-expected', '062', 'INSPECTION_FINDINGS', 0.7431, true], ['062-competitor', '062', 'INSPECTION_REPORTS', 0.7488, false],
   ['063-expected', '063', 'INSPECTION_FINDING_UPDATE', .2948, true], ['063-competitor', '063', 'DOCUMENT_PROMOTION_CONFIRM', .1982, false],
   ['064-expected', '064', 'DOCUMENT_PROMOTION_REVIEW', .2725, true], ['064-competitor', '064', 'BUYER_CONTRACT_TIMELINE', .2461, false],
   ['065-expected', '065', 'DOCUMENT_PROMOTION_CONFIRM', .6684, true], ['065-competitor', '065', 'HOME_CHANGE_SUMMARY', .6381, false],
@@ -97,7 +97,7 @@ const ROWS: readonly ObservationTuple[] = [
   // Phase 3 / PR 12b — fixture ask-routing-independent-v2-067 (HVAC_SPECIALIST_ENGAGE).
   ['067-expected', '067', 'HVAC_SPECIALIST_ENGAGE', .7802, true], ['067-competitor', '067', 'HVAC_DECISION_OUTCOME_REPORT', .504, false],
   ['068-expected', '068', 'MAINTENANCE_FORECAST', .6388, true], ['068-competitor', '068', 'HVAC_DECISION_OUTCOME_VIEW', .496, false],
-  ['069-expected', '069', 'COVERAGE_COMPARISON_STATUS', .7029, true], ['069-competitor', '069', 'COVERAGE_GAPS', .5983, false],
+  ['069-expected', '069', 'COVERAGE_COMPARISON_STATUS', 0.7029, true], ['069-competitor', '069', 'BUYER_INSURANCE_READINESS', 0.6248, false],
   ['070-expected', '070', 'DOCUMENT_LOOKUP', .1773, true], ['070-competitor', '070', 'INVENTORY_LOOKUP', .6844, false],
   ['071-expected', '071', 'SELLER_PREP_CHECKLIST', .8358, true], ['071-competitor', '071', 'PROPERTY_TAX_APPEAL_READINESS', .7613, false],
   ['072-expected', '072', 'SELLER_PREP_ITEM_DECISION', .1505, true], ['072-competitor', '072', 'SELLER_PREP_CHECKLIST', .221, false],
@@ -109,7 +109,7 @@ const ROWS: readonly ObservationTuple[] = [
   ['075-expected', '075', 'NEIGHBORHOOD_CHANGE_FEED', .2809, true], ['075-competitor', '075', 'PAST_HAZARD_EXPOSURE', .25, false],
   // FRD v1.50: fixture 076 (PAST_HAZARD_EXPOSURE). Adding that operation also made it the strongest competitor on 014, 074
   // and 075, each still below its expected operation; all re-derived from the retriever, not hand-edited.
-  ['076-expected', '076', 'PAST_HAZARD_EXPOSURE', .7281, true], ['076-competitor', '076', 'CAPABILITY_DISCOVERY', .6224, false],
+  ['076-expected', '076', 'PAST_HAZARD_EXPOSURE', 0.7281, true], ['076-competitor', '076', 'HOUSEHOLD_ACCESS_SUMMARY', 0.6282, false],
   // FRD v1.51: fixture 077 (HOME_STATUS_BOARD), re-derived from the retriever; no existing row changed. A first fixture
   // ("How are my home systems holding up these days?") put a 0.637 wrong-operation competitor into the READ curve and
   // pulled an unrelated misspelled fixture under the execution floor, so it was replaced.
@@ -117,7 +117,7 @@ const ROWS: readonly ObservationTuple[] = [
   // FRD v1.53: fixture 078 (HOME_HABITS), re-derived from the retriever; no existing row changed. Two first choices with a
   // weak (< 0.29) wrong-operation competitor pooled with other fixtures' low competitors in the READ curve and pulled
   // "Show my inspecion findings" under the execution floor; this pair leaves that fixture's confidence unchanged.
-  ['078-expected', '078', 'HOME_HABITS', .8183, true], ['078-competitor', '078', 'CAPITAL_RESERVE_PLAN', .6673, false],
+  ['078-expected', '078', 'HOME_HABITS', 0.8183, true], ['078-competitor', '078', 'HOME_BRIEFING_VIEW', 0.6704, false],
   // FRD v1.54: fixture 079 (HOME_DIGITAL_WILL), re-derived from the retriever; no existing row changed. Candidate pairs
   // were tested against every Skill routing case first; this one leaves "Show my inspecion findings" unchanged at 0.4322.
   ['079-expected', '079', 'HOME_DIGITAL_WILL', .8264, true], ['079-competitor', '079', 'SELLER_PREP_CHECKLIST', .6408, false],
@@ -131,7 +131,7 @@ const ROWS: readonly ObservationTuple[] = [
   ['081-expected', '081', 'NEGOTIATION_SHIELD_CASES', .2729, true], ['081-competitor', '081', 'HVAC_DECISION_CONTINUE', .2193, false],
   // FRD v1.57: fixture 082 (HOME_UPGRADE_SCENARIOS), re-derived from the retriever; no existing row changed. Candidate
   // pairs were swept against every Skill routing case; this one keeps them resolved ("Show my inspecion findings" 0.4387).
-  ['082-expected', '082', 'HOME_UPGRADE_SCENARIOS', .664, true], ['082-competitor', '082', 'QUOTE_COMPARISON_CREATE', .5181, false],
+  ['082-expected', '082', 'HOME_UPGRADE_SCENARIOS', 0.664, true], ['082-competitor', '082', 'FINANCING_OVERVIEW', 0.6756, false],
   // FRD v1.58: fixture 083 (DIY_PROJECTS), re-derived from the retriever; no existing row changed (a first-draft positive
   // sharing the "How far along…" frame with fixtures 047 and 082 was reworded). Candidate pairs were swept against every
   // Skill routing case; this one keeps them resolved ("Show my inspecion findings" 0.4448).
@@ -154,11 +154,11 @@ const ROWS: readonly ObservationTuple[] = [
   // against every Skill routing case; this one keeps them resolved ("Show my inspecion findings" 0.4557).
   // FRD v1.70: 087's competitor re-derived to MAINTENANCE_BUDGET_FORECAST (was OWNERSHIP_COSTS .1221): both far below the
   // expected score; the new op's cost wording edges past ownership costs.
-  ['087-expected', '087', 'MATERIAL_SPECS_LIST', .3611, true], ['087-competitor', '087', 'MAINTENANCE_BUDGET_FORECAST', .1368, false],
+  ['087-expected', '087', 'MATERIAL_SPECS_LIST', 0.3611, true], ['087-competitor', '087', 'HOME_BRIEFING_VIEW', 0.1568, false],
   // FRD v1.63: fixture 088 (PROPERTY_BRIEFS_LIST), re-derived from the retriever; no existing row changed (first-draft
   // positives sharing frames with fixtures 026, 078 and 084 were reworded). Candidate pairs were swept against every
   // Skill routing case; this one keeps them resolved ("Show my inspecion findings" 0.4557).
-  ['088-expected', '088', 'PROPERTY_BRIEFS_LIST', .8098, true], ['088-competitor', '088', 'HOUSEHOLD_INVITATION', .6665, false],
+  ['088-expected', '088', 'PROPERTY_BRIEFS_LIST', 0.8098, true], ['088-competitor', '088', 'PROPERTY_BRIEF_COMMAND', 0.7475, false],
   // FRD v1.65: fixture 089 (GUIDANCE_JOURNEYS_LIST), re-derived from the retriever. First-draft positives that became the
   // competitor on fixtures 043 and 060 were reworded; 018's competitor was re-derived (see its row). Candidate pairs
   // were swept against every Skill routing case; this one keeps them resolved ("Show my inspecion findings" 0.4458).
@@ -188,6 +188,26 @@ const ROWS: readonly ObservationTuple[] = [
   // Group B recall-mutation follow-up (gap audit §17; FRD v1.163): fixture 097 (RECALL_MATCH_UPDATE),
   // derived from the live retriever the same way every row above was.
   ['097-expected', '097', 'RECALL_MATCH_UPDATE', .4063, true], ['097-competitor', '097', 'RECALL_REVIEW', .1851, false],
+  // Sole Homeowner Interface Phase 2 review: fixtures 098-114 give every message-routable operation that had no routing evidence one row pair, derived
+  // from the live retriever the same way every row above was. Rows for fixtures 023-088 listed above were re-derived in the same pass because
+  // operations added since (including HOUSEHOLD_ACCESS_SUMMARY) became their strongest competitor; the expected operation is unchanged in each.
+  ['098-expected', '098', 'PROPERTY_BRIEF_COMMAND', 0.6204, true], ['098-competitor', '098', 'MAJOR_EVENT_ENTRY', 0.5863, false],
+  ['099-expected', '099', 'ROOM_PLANT_RECOMMENDATIONS', 0.1569, true], ['099-competitor', '099', 'HOUSEHOLD_ACCESS_SUMMARY', 0.1319, false],
+  ['100-expected', '100', 'RESERVE_FUND_COMMAND', 0.2544, true], ['100-competitor', '100', 'BUYER_FINDING_DISPOSITION', 0.1279, false],
+  ['101-expected', '101', 'BUYER_LOAN_ESTIMATES', 0.3497, true], ['101-competitor', '101', 'BUYER_COST_READINESS', 0.1689, false],
+  ['102-expected', '102', 'BUYER_INSURANCE_READINESS', 0.7623, true], ['102-competitor', '102', 'COVERAGE_COMPARISON_STATUS', 0.6476, false],
+  ['103-expected', '103', 'HOME_WORK_ITEMS', 0.7589, true], ['103-competitor', '103', 'SELLER_PREP_CHECKLIST', 0.7377, false],
+  ['104-expected', '104', 'INSPECTION_NEGOTIATION_PACKAGE', 0.3321, true], ['104-competitor', '104', 'BUYER_NEGOTIATION_READINESS', 0.3075, false],
+  ['105-expected', '105', 'INSPECTION_REPORT_FINDINGS', 0.4857, true], ['105-competitor', '105', 'INSPECTION_FINDINGS', 0.3394, false],
+  ['106-expected', '106', 'INSPECTION_REPORT_COMPARE', 0.4866, true], ['106-competitor', '106', 'INSPECTION_REPORTS', 0.2801, false],
+  ['107-expected', '107', 'INSPECTION_REPORTS', 0.8141, true], ['107-competitor', '107', 'HOME_WORK_ITEMS', 0.7413, false],
+  ['108-expected', '108', 'CLAIM_CHECKLIST_VIEW', 0.3796, true], ['108-competitor', '108', 'BUYER_CLOSING_DAY_READINESS', 0.284, false],
+  ['109-expected', '109', 'HOME_BRIEFING_VIEW', 0.7743, true], ['109-competitor', '109', 'PROPERTY_BRIEFS_LIST', 0.735, false],
+  ['110-expected', '110', 'COVERAGE_REVIEW_STATUS', 0.6917, true], ['110-competitor', '110', 'COVERAGE_COMPARISON_STATUS', 0.6121, false],
+  ['111-expected', '111', 'FINANCING_OVERVIEW', 0.2309, true], ['111-competitor', '111', 'HOME_UPGRADE_SCENARIOS', 0.2725, false],
+  ['112-expected', '112', 'PERMIT_TRACKER_STATUS', 0.2809, true], ['112-competitor', '112', 'DOCUMENT_LOOKUP', 0.2329, false],
+  ['113-expected', '113', 'HOUSEHOLD_ACCESS_SUMMARY', 0.3871, true], ['113-competitor', '113', 'HOUSEHOLD_INVITATION', 0.177, false],
+  ['114-expected', '114', 'ENVIRONMENT_REPORT', 0.3969, true], ['114-competitor', '114', 'HOME_STATUS_BOARD', 0.32, false],
 ];
 
 export const ASK_ROUTING_CALIBRATION_OBSERVATIONS: readonly AskRoutingCalibrationObservation[] = Object.freeze(

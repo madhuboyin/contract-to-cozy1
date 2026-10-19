@@ -35,6 +35,14 @@ export interface AskRecordHistoryEntry {
 
 export type AskRecordCorrectionState = 'AVAILABLE' | 'ROLE_REQUIRED' | 'UNAVAILABLE';
 
+export interface AskRecordLaunch {
+  message: string;
+  operationId: AskOperationId;
+  entityType: string;
+  entityId: string;
+  actionId: string | null;
+}
+
 export interface AskRecordCorrectionRoute {
   id: string;
   label: string;
@@ -45,8 +53,12 @@ export interface AskRecordCorrectionRoute {
   state: AskRecordCorrectionState;
   /** Why the route cannot be used now. Null when AVAILABLE. */
   reason: string | null;
-  /** The Ask question whose answer carries this command's action for this record. Null unless AVAILABLE. */
-  openQuestion: string | null;
+  /**
+   * How to open this change for exactly this record: the declared message, the operation to route to, and the record's own entity (and action id,
+   * where the command needs one). It is the same launch an item action in an Ask answer sends, so every downstream role, target and confirmation
+   * check runs unchanged. Null unless AVAILABLE; a general answer that might omit the record is never a launch.
+   */
+  launch: AskRecordLaunch | null;
   /** A limit of the Ask answer that route opens (for example a list cap), or null. */
   note: string | null;
 }
@@ -103,23 +115,25 @@ export function commandFloor(operationId: AskOperationId): 'VIEWER' | 'CONTRIBUT
 }
 
 export function route(input: {
-  id: string; label: string; operationId: AskOperationId; role: HouseholdRole; openQuestion: string;
+  id: string; label: string; operationId: AskOperationId; role: HouseholdRole;
+  /** The record-specific launch; its operation defaults to the route's command. */
+  launch: { message: string; entityType: string; entityId: string; actionId?: string; operationId?: AskOperationId };
   /** Record-specific reason the command cannot apply now, checked after the role. */
   blockedReason?: string | null;
   note?: string | null;
 }): AskRecordCorrectionRoute {
   const floor = commandFloor(input.operationId);
   if (floor && ROLE_RANK[input.role] < ROLE_RANK[floor]) {
-    return { id: input.id, label: input.label, operationId: input.operationId, requiredRole: floor, state: 'ROLE_REQUIRED', reason: `Your household role cannot change this; it needs ${floor.toLowerCase()} access.`, openQuestion: null, note: null };
+    return { id: input.id, label: input.label, operationId: input.operationId, requiredRole: floor, state: 'ROLE_REQUIRED', reason: `Your household role cannot change this; it needs ${floor.toLowerCase()} access.`, launch: null, note: null };
   }
   if (input.blockedReason) {
-    return { id: input.id, label: input.label, operationId: input.operationId, requiredRole: floor, state: 'UNAVAILABLE', reason: input.blockedReason, openQuestion: null, note: null };
+    return { id: input.id, label: input.label, operationId: input.operationId, requiredRole: floor, state: 'UNAVAILABLE', reason: input.blockedReason, launch: null, note: null };
   }
-  return { id: input.id, label: input.label, operationId: input.operationId, requiredRole: floor, state: 'AVAILABLE', reason: null, openQuestion: input.openQuestion, note: input.note ?? null };
+  return { id: input.id, label: input.label, operationId: input.operationId, requiredRole: floor, state: 'AVAILABLE', reason: null, launch: { message: input.launch.message, operationId: input.launch.operationId ?? input.operationId, entityType: input.launch.entityType, entityId: input.launch.entityId, actionId: input.launch.actionId ?? null }, note: input.note ?? null };
 }
 
 export const unavailableRoute = (id: string, label: string, operationId: AskOperationId | null, reason: string): AskRecordCorrectionRoute => ({
-  id, label, operationId, requiredRole: null, state: 'UNAVAILABLE', reason, openQuestion: null, note: null,
+  id, label, operationId, requiredRole: null, state: 'UNAVAILABLE', reason, launch: null, note: null,
 });
 
 export const NO_HISTORY = (what: string) => ({ state: 'UNAVAILABLE' as const, entries: [] as AskRecordHistoryEntry[], reason: `No canonical change-history reader is connected for ${what}, so no history is shown and none is inferred.` });

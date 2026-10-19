@@ -127,6 +127,25 @@ const CERTIFICATION_ROWS: ReadonlyArray<Omit<AskRoutingCertificationFixture, 'fi
   // fixture ids are positional (a prior insert-mid-array mistake silently renumbered every fixture
   // after it and desynced askRoutingCalibrationEvidence.ts's own position-keyed snapshot).
   { operationId: 'RECALL_MATCH_UPDATE', message: 'Mark the dishwasher recall match resolved', category: 'PARAPHRASE' },
+  // Routing evidence for the message-routable operations that had none (Sole Homeowner Interface Phase 2 review). Each is an independent paraphrase
+  // outside the operation index; its calibration rows are derived from the live retriever like every row above.
+  { operationId: 'PROPERTY_BRIEF_COMMAND', message: 'Prepare a shareable brief of my home for a visiting contractor', category: 'PARAPHRASE' },
+  { operationId: 'ROOM_PLANT_RECOMMENDATIONS', message: 'Which houseplants would do well in my north-facing bedroom?', category: 'PARAPHRASE' },
+  { operationId: 'RESERVE_FUND_COMMAND', message: 'I put $200 into the reserve fund this month', category: 'PARAPHRASE' },
+  { operationId: 'BUYER_LOAN_ESTIMATES', message: 'Line up the loan estimates from the banks for my purchase', category: 'PARAPHRASE' },
+  { operationId: 'BUYER_INSURANCE_READINESS', message: 'Is my insurance ready for the closing date?', category: 'PARAPHRASE' },
+  { operationId: 'HOME_WORK_ITEMS', message: 'What is on my home work list right now?', category: 'PARAPHRASE' },
+  { operationId: 'INSPECTION_NEGOTIATION_PACKAGE', message: 'Turn the inspection issues into a negotiation package for the seller', category: 'PARAPHRASE' },
+  { operationId: 'INSPECTION_REPORT_FINDINGS', message: 'What did the inspector find in this report?', category: 'PARAPHRASE' },
+  { operationId: 'INSPECTION_REPORT_COMPARE', message: 'Compare this inspection with the previous one', category: 'PARAPHRASE' },
+  { operationId: 'INSPECTION_REPORTS', message: 'List the inspections done on my house', category: 'PARAPHRASE' },
+  { operationId: 'CLAIM_CHECKLIST_VIEW', message: 'What do I still need to do for my claim paperwork?', category: 'PARAPHRASE' },
+  { operationId: 'HOME_BRIEFING_VIEW', message: 'What does my weekly home briefing say?', category: 'PARAPHRASE' },
+  { operationId: 'COVERAGE_REVIEW_STATUS', message: 'Has my coverage been reviewed against my policy facts?', category: 'PARAPHRASE' },
+  { operationId: 'FINANCING_OVERVIEW', message: 'What are my financing options for upgrades?', category: 'PARAPHRASE' },
+  { operationId: 'PERMIT_TRACKER_STATUS', message: 'Do I have unfinished building permits?', category: 'PARAPHRASE' },
+  { operationId: 'HOUSEHOLD_ACCESS_SUMMARY', message: 'Who else is on my household with access?', category: 'PARAPHRASE' },
+  { operationId: 'ENVIRONMENT_REPORT', message: 'What are the local environmental conditions for my home?', category: 'PARAPHRASE' },
 ];
 
 export const ASK_ROUTING_CERTIFICATION_FIXTURES: readonly AskRoutingCertificationFixture[] = Object.freeze(

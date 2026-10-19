@@ -9,6 +9,11 @@ type AskWorkspaceHrefInput = {
   from?: string | null;
   launchSurface?: string | null;
   launchCapabilityId?: string | null;
+  /** A record-specific launch (Record destination): the operation and the record the question is about. */
+  launchOperationId?: string | null;
+  launchEntityType?: string | null;
+  launchEntityId?: string | null;
+  launchActionId?: string | null;
 };
 
 function setWhenPresent(params: URLSearchParams, key: string, value?: string | null) {
@@ -26,6 +31,10 @@ export function buildAskWorkspaceHref(input: AskWorkspaceHrefInput = {}): string
   setWhenPresent(params, 'from', input.from);
   setWhenPresent(params, 'launchSurface', input.launchSurface);
   setWhenPresent(params, 'launchCapabilityId', input.launchCapabilityId);
+  setWhenPresent(params, 'launchOperationId', input.launchOperationId);
+  setWhenPresent(params, 'launchEntityType', input.launchEntityType);
+  setWhenPresent(params, 'launchEntityId', input.launchEntityId);
+  setWhenPresent(params, 'launchActionId', input.launchActionId);
 
   const safeBackTo = resolveDashboardBackHref(input.backTo, '');
   if (safeBackTo) params.set('backTo', safeBackTo);

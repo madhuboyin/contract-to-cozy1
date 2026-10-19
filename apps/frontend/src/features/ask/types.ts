@@ -843,6 +843,14 @@ export interface AskRecordFacet {
   reason: string | null;
 }
 
+export interface AskRecordLaunch {
+  message: string;
+  operationId: string;
+  entityType: string;
+  entityId: string;
+  actionId: string | null;
+}
+
 export interface AskRecordCorrectionRoute {
   id: string;
   label: string;
@@ -851,8 +859,8 @@ export interface AskRecordCorrectionRoute {
   requiredRole: 'VIEWER' | 'CONTRIBUTOR' | 'OWNER' | null;
   state: 'AVAILABLE' | 'ROLE_REQUIRED' | 'UNAVAILABLE';
   reason: string | null;
-  /** The Ask question whose answer carries this command's action for this record. Null unless AVAILABLE. */
-  openQuestion: string | null;
+  /** The record-specific launch of this change: the same message, operation, and record target an item action in an Ask answer sends. Null unless AVAILABLE. */
+  launch: AskRecordLaunch | null;
   /** A limit of the Ask answer that route opens (for example a list cap), or null. */
   note: string | null;
 }
@@ -926,7 +934,9 @@ export interface AskRecordInventoryRow {
 }
 
 export interface AskRecordDocumentRow {
+  /** A document's own id, or `candidate:<kind>:<id>` for a document-derived candidate awaiting review. */
   id: string;
+  rowKind: 'DOCUMENT' | 'EXTRACTED_CANDIDATE';
   title: string;
   kind: string;
   kindLabel: string;

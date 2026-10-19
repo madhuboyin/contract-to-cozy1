@@ -55,7 +55,7 @@ export { BlockView };
 // The history rail and the draft key moved to ./workspace/; re-exported for existing imports.
 export { ConversationHistoryNav } from './workspace/ConversationHistoryNav';
 export { draftStorageKey } from './workspace/support';
-export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, initialQuestion = '', initialSessionId = '', initialExecutionId = '', initialPropertyId = '', initialBackTo = '', initialBackLabel = 'Back to previous page', initialHistoryOpen = false, launchSurface = '', launchCapabilityId = '' }: { mode?: 'page' | 'panel'; onClose?: () => void; onPendingStateChange?: (pending: boolean) => void; initialQuestion?: string; initialSessionId?: string; initialExecutionId?: string; initialPropertyId?: string; initialBackTo?: string; initialBackLabel?: string; initialHistoryOpen?: boolean; launchSurface?: string; launchCapabilityId?: string }) {
+export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, initialQuestion = '', initialSessionId = '', initialExecutionId = '', initialPropertyId = '', initialBackTo = '', initialBackLabel = 'Back to previous page', initialHistoryOpen = false, launchSurface = '', launchCapabilityId = '', launchRecord }: { mode?: 'page' | 'panel'; onClose?: () => void; onPendingStateChange?: (pending: boolean) => void; initialQuestion?: string; initialSessionId?: string; initialExecutionId?: string; initialPropertyId?: string; initialBackTo?: string; initialBackLabel?: string; initialHistoryOpen?: boolean; launchSurface?: string; launchCapabilityId?: string; launchRecord?: { operationId: string; entityType: string; entityId: string; actionId?: string } }) {
   const { accountName, accountEmail, loggingOut, handleLogout } = useAskAccount();
   const { selectedPropertyId, setSelectedPropertyId } = usePropertyContext();
   // A notification deep link carries the answer's property, but the globally-selected property
@@ -186,7 +186,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
 
   const scopeLabel = selectedPropertyId ? 'Answers use your selected home record' : 'General home guidance';
 
-  const { ask, retryExecution, stopAsking, editAndResend } = useAskRequest({ sessionId, loading, executions, selectedPropertyId, mode, launchSurface, launchCapabilityId, safeBackTo, requests, inFlight, stoppedRequests, deniedProperties, activeSessionRef, textareaRef, setInput, setError, setLoading, setServiceUnavailable, setExecutions, setJustUpdatedExecutionId, setRecentSessionsEpoch });
+  const { ask, retryExecution, stopAsking, editAndResend } = useAskRequest({ sessionId, loading, executions, selectedPropertyId, mode, launchSurface, launchCapabilityId, launchRecord: launchRecord ? { ...launchRecord, message: initialQuestion } : undefined, safeBackTo, requests, inFlight, stoppedRequests, deniedProperties, activeSessionRef, textareaRef, setInput, setError, setLoading, setServiceUnavailable, setExecutions, setJustUpdatedExecutionId, setRecentSessionsEpoch });
 
   const { submit, keyDown, isComposingRef } = useComposerKeys({
     input,

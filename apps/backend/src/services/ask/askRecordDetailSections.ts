@@ -10,6 +10,13 @@ import { PROJECT_STATUS_LABELS, PROJECT_TYPE_LABELS } from './handlers/projectTr
 import { OPEN_CLAIM_STATUSES, OPEN_INCIDENT_STATUSES } from './handlers/claims.handler';
 import { PERMIT_CATEGORY_LABELS, PERMIT_OFFICIAL_STATUS_LABELS, PERMIT_REPORTED_STATUS_LABELS } from './support/permitTrackerRead';
 import { RENOVATION_CASE_TYPE_LABELS } from './support/renovationCaseStart';
+import { HOME_EVENT_VISIBILITY_MESSAGE } from './support/homeEventCorrection';
+import { INSPECTION_REPORT_ENTITY_TYPE, INSPECTION_REPORT_MESSAGES } from './support/inspectionReportCommand';
+import { INSPECTION_FINDINGS_OF_REPORT_ACTION_ID, INSPECTION_FINDINGS_OF_REPORT_MESSAGE } from './support/inspectionFindingDecisionCommand';
+import { PERMIT_COMMAND_MESSAGES, PERMIT_ENTITY_TYPE } from './support/permitTrackerCommand';
+import { PROJECT_TRACKER_ACTION_IDS, PROJECT_TRACKER_COMMAND_MESSAGE } from './support/projectTrackerConstants';
+import { CLAIM_ENTITY_TYPE } from './support/claimActivityCommand';
+import { SELLER_PREP_ITEM_ACTIONS } from './handlers/sellHoldRent.handler';
 import { INSPECTION_REPORT_STATUS_LABELS, INSPECTION_REPORT_TYPE_LABELS, inspectionReportCanArchive, inspectionReportCanConfirm } from './support/inspectionReportCommand';
 import { SCENARIO_STATUS_LABELS } from './support/financingRead';
 import type { AskRecordSectionId } from './governance/askRecordSectionRegistry';
@@ -40,7 +47,6 @@ function eventWhen(event: { occurredAt: Date; datePrecision: string; dateRangeSt
   }
 }
 
-const TIMELINE_QUESTION = 'Show me my home timeline.';
 
 async function readTimelineDetail(context: DetailContext, eventId: string): Promise<DetailBody> {
   const event = await prisma.homeEvent.findFirst({
@@ -104,13 +110,13 @@ async function readTimelineDetail(context: DetailContext, eventId: string): Prom
       history: history.length ? { state: 'AVAILABLE', entries: history, reason: null } : { state: 'NOT_RECORDED', entries: [], reason: 'No verification change or revision is on record.' },
     },
     corrections: [
+      ...([['title', 'Correct title', 'Correct the title of this timeline event.'], ['date', 'Correct date', 'Correct the date of this timeline event.'], ['summary', 'Correct details', 'Correct the summary of this timeline event.']] as const).map(([field, label, message]) => route({
+        id: `event-correct-${field}`, label, operationId: 'HOME_EVENT_CORRECT', role: context.role, launch: { message, entityType: 'HOME_EVENT', entityId: eventId },
+        blockedReason: field === 'date' && event.datePrecision === 'RANGE' ? 'This event is recorded as a date range and cannot be corrected here.' : null,
+      })),
       route({
-        id: 'event-correct', label: 'Correct title, date, or details', operationId: 'HOME_EVENT_CORRECT', role: context.role, openQuestion: TIMELINE_QUESTION,
-        note: 'Ask lists the 200 most recent events; an older event may not appear there.',
-      }),
-      route({
-        id: 'event-visibility', label: 'Change visibility', operationId: 'HOME_EVENT_VISIBILITY', role: context.role, openQuestion: TIMELINE_QUESTION,
-        note: isCreator ? 'Ask lists the 200 most recent events; an older event may not appear there.' : 'Only the person who added the event can change it to or from private.',
+        id: 'event-visibility', label: 'Change visibility', operationId: 'HOME_EVENT_VISIBILITY', role: context.role, launch: { message: HOME_EVENT_VISIBILITY_MESSAGE, entityType: 'HOME_EVENT', entityId: eventId },
+        note: isCreator ? null : 'Only the person who added the event can change it to or from private.',
       }),
     ],
   };
@@ -139,10 +145,7 @@ async function readMaintenanceHistoryDetail(context: DetailContext, taskId: stri
       related: { state: related.length ? 'AVAILABLE' : 'NOT_RECORDED', records: related, reason: related.length ? null : 'No item or room is linked.' },
       history: NO_HISTORY('maintenance tasks'),
     },
-    corrections: [route({
-      id: 'maintenance-update', label: 'Change this task', operationId: 'MAINTENANCE_TASK_UPDATE', role: context.role, openQuestion: 'What is the status of my home maintenance?',
-      blockedReason: 'Ask changes open maintenance tasks only; a completed task is history.',
-    })],
+    corrections: [unavailableRoute('maintenance-update', 'Change this task', 'MAINTENANCE_TASK_UPDATE', 'Ask changes open maintenance tasks only; a completed task is history.')],
   };
 }
 
@@ -161,8 +164,7 @@ async function readInspectionDetail(context: DetailContext, reportId: string): P
     ...(report.processedAt ? [{ at: report.processedAt.toISOString(), label: 'Findings extracted for review' }] : []),
     ...(report.confirmedAt ? [{ at: report.confirmedAt.toISOString(), label: 'Confirmed by the household' }] : []),
   ].sort((left, right) => right.at.localeCompare(left.at));
-  const question = 'Show me my inspection reports.';
-  const listCap = 'Ask lists the 25 newest reports; an older report may not appear there.';
+  const entity = { entityType: INSPECTION_REPORT_ENTITY_TYPE, entityId: reportId };
   return {
     title: `${type} inspection`,
     facts: [
@@ -179,9 +181,9 @@ async function readInspectionDetail(context: DetailContext, reportId: string): P
       history: { state: 'AVAILABLE', entries: history, reason: null },
     },
     corrections: [
-      route({ id: 'inspection-confirm', label: 'Review and confirm', operationId: 'INSPECTION_REPORT_COMMAND', role: context.role, openQuestion: question, note: listCap, blockedReason: inspectionReportCanConfirm(report.status) ? null : 'This report is not waiting for confirmation.' }),
-      route({ id: 'inspection-archive', label: 'Archive this report', operationId: 'INSPECTION_REPORT_COMMAND', role: context.role, openQuestion: question, note: listCap, blockedReason: inspectionReportCanArchive(report.status) ? null : 'This report cannot be archived in its current status.' }),
-      route({ id: 'inspection-findings', label: 'Decide on its findings', operationId: 'INSPECTION_FINDING_UPDATE', role: context.role, openQuestion: question, note: listCap, blockedReason: report.status === 'CONFIRMED' ? null : 'Findings can be decided once the report is confirmed.' }),
+      route({ id: 'inspection-confirm', label: 'Review and confirm', operationId: 'INSPECTION_REPORT_COMMAND', role: context.role, launch: { message: INSPECTION_REPORT_MESSAGES.CONFIRM, ...entity }, blockedReason: inspectionReportCanConfirm(report.status) ? null : 'This report is not waiting for confirmation.' }),
+      route({ id: 'inspection-archive', label: 'Archive this report', operationId: 'INSPECTION_REPORT_COMMAND', role: context.role, launch: { message: INSPECTION_REPORT_MESSAGES.ARCHIVE, ...entity }, blockedReason: inspectionReportCanArchive(report.status) ? null : 'This report cannot be archived in its current status.' }),
+      route({ id: 'inspection-findings', label: 'Decide on its findings', operationId: 'INSPECTION_FINDING_UPDATE', role: context.role, launch: { message: INSPECTION_FINDINGS_OF_REPORT_MESSAGE, actionId: INSPECTION_FINDINGS_OF_REPORT_ACTION_ID, operationId: 'INSPECTION_REPORT_FINDINGS', ...entity }, blockedReason: report.status === 'CONFIRMED' ? null : 'Findings can be decided once the report is confirmed.' }),
     ],
   };
 }
@@ -212,8 +214,8 @@ async function readPermitDetail(context: DetailContext, permitId: string): Promi
       history: NO_HISTORY('permits'),
     },
     corrections: [
-      route({ id: 'permit-edit', label: 'Change details', operationId: 'PERMIT_TRACKER_COMMAND', role: context.role, openQuestion: 'What is the status of my permits?' }),
-      route({ id: 'permit-remove', label: 'Remove', operationId: 'PERMIT_TRACKER_COMMAND', role: context.role, openQuestion: 'What is the status of my permits?' }),
+      route({ id: 'permit-edit', label: 'Change details', operationId: 'PERMIT_TRACKER_COMMAND', role: context.role, launch: { message: PERMIT_COMMAND_MESSAGES.EDIT, entityType: PERMIT_ENTITY_TYPE, entityId: permitId } }),
+      route({ id: 'permit-remove', label: 'Remove', operationId: 'PERMIT_TRACKER_COMMAND', role: context.role, launch: { message: PERMIT_COMMAND_MESSAGES.REMOVE, entityType: PERMIT_ENTITY_TYPE, entityId: permitId } }),
     ],
   };
 }
@@ -303,7 +305,8 @@ async function readProjectDetail(context: DetailContext, projectId: string): Pro
       history: NO_HISTORY('projects'),
     },
     corrections: [route({
-      id: 'project-update', label: 'Update this project', operationId: 'PROJECT_TRACKER_COMMAND', role: context.role, openQuestion: 'Show me my home projects.',
+      id: 'project-update', label: 'Update this project', operationId: 'PROJECT_TRACKER_COMMAND', role: context.role,
+      launch: { message: PROJECT_TRACKER_COMMAND_MESSAGE, actionId: PROJECT_TRACKER_ACTION_IDS.EDIT_PROJECT, entityType: 'PROJECT_RECORD', entityId: projectId },
       blockedReason: closed ? 'Ask changes projects that are not completed or cancelled.' : null,
     })],
   };
@@ -351,8 +354,7 @@ async function readIncidentClaimDetail(context: DetailContext, compositeId: stri
     ...(claim.warranty ? [{ label: claim.warranty.providerName, kindLabel: 'Warranty', broken: null }] : []),
   ];
   const open = OPEN_CLAIM_STATUSES.includes(claim.status);
-  const question = 'What is the status of my incidents and claims?';
-  const listNote = 'Ask lists the most recent claims; an older one may not appear there.';
+  const claimId = compositeId.slice(CLAIM_PREFIX.length);
   return {
     title: claim.title,
     facts: [
@@ -369,8 +371,11 @@ async function readIncidentClaimDetail(context: DetailContext, compositeId: stri
       history: NO_HISTORY('claims'),
     },
     corrections: [
-      route({ id: 'claim-transition', label: 'Change the claim status', operationId: 'CLAIM_TRANSITION', role: context.role, openQuestion: question, note: listNote, blockedReason: open ? null : 'This claim is closed.' }),
-      route({ id: 'claim-activity', label: 'Log claim activity', operationId: 'CLAIM_ACTIVITY_COMMAND', role: context.role, openQuestion: question, note: listNote, blockedReason: open ? null : 'This claim is closed.' }),
+      route({
+        id: 'claim-close', label: 'Close this claim', operationId: 'CLAIM_TRANSITION', role: context.role, launch: { message: 'Close this claim.', entityType: CLAIM_ENTITY_TYPE, entityId: claimId },
+        blockedReason: open ? null : 'This claim is closed.', note: 'Other status changes are offered by the claim’s own actions in Ask.',
+      }),
+      unavailableRoute('claim-activity', 'Log claim activity', 'CLAIM_ACTIVITY_COMMAND', 'Claim activity is logged from the claim’s checklist in Ask; a single entry cannot be opened from the Record yet.'),
     ],
   };
 }
@@ -447,7 +452,7 @@ async function readBuyerTaskDetail(context: DetailContext, taskId: string): Prom
       history: NO_HISTORY('buyer tasks'),
     },
     corrections: [route({
-      id: 'buyer-complete', label: 'Mark complete', operationId: 'BUYER_TASK_COMPLETE', role: context.role, openQuestion: 'What is due before closing?',
+      id: 'buyer-complete', label: 'Mark complete', operationId: 'BUYER_TASK_COMPLETE', role: context.role, launch: { message: 'Mark this Buyer Plan task complete.', entityType: 'BUYER_TASK', entityId: taskId },
       blockedReason: done ? 'This task is already complete.' : task.blocking ? null : 'Ask offers completion from the closing deadlines list, which shows blocking tasks only.',
     })],
   };
@@ -482,10 +487,10 @@ async function readSellerItemDetail(context: DetailContext, itemId: string): Pro
       related: { state: 'UNAVAILABLE', records: [], reason: 'No canonical reader lists the source records behind a checklist item here.' },
       history: decisions.length ? { state: 'AVAILABLE', entries: decisions, reason: null } : { state: 'NOT_RECORDED', entries: [], reason: 'No decision has been recorded for this item.' },
     },
-    corrections: [route({
-      id: 'seller-decision', label: 'Decide on this item', operationId: 'SELLER_PREP_ITEM_DECISION', role: context.role, openQuestion: 'Show me my sale readiness checklist.',
-      note: 'Ask offers the decisions that are legal for the item’s current state.',
-    })],
+    corrections: SELLER_PREP_ITEM_ACTIONS.map(({ id, label, message }) => route({
+      id, label, operationId: 'SELLER_PREP_ITEM_DECISION', role: context.role, launch: { message, entityType: 'SALE_READINESS_ITEM', entityId: itemId },
+      note: 'Ask checks that this decision is legal for the item’s current state.',
+    })),
   };
 }
 

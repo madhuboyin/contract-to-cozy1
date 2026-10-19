@@ -34,7 +34,7 @@ const detail = (overrides: Partial<AskRecordDetail> = {}): AskRecordDetail => ({
     related: { state: 'AVAILABLE', records: [{ label: 'Furnace', kindLabel: 'Inventory item', broken: false }], reason: null },
     history: { state: 'UNAVAILABLE', entries: [], reason: 'No canonical change-history reader is connected for warranties, so no history is shown and none is inferred.' },
   },
-  corrections: [{ id: 'warranty-correct', label: 'Correct a detail', operationId: 'WARRANTY_CORRECT', requiredRole: 'CONTRIBUTOR', state: 'AVAILABLE', reason: null, openQuestion: 'Show me my HVAC warranties.', note: 'Ask lists the 25 newest.' }],
+  corrections: [{ id: 'warranty-correct', label: 'Correct a detail', operationId: 'WARRANTY_CORRECT', requiredRole: 'CONTRIBUTOR', state: 'AVAILABLE', reason: null, launch: { message: 'Correct a detail of this warranty.', operationId: 'WARRANTY_CORRECT', entityType: 'WARRANTY', entityId: 'war-1', actionId: null }, note: 'Ask will ask which detail to change.' }],
   ...overrides,
 });
 
@@ -62,14 +62,15 @@ describe('AskRecord per-record detail (FR-REC-004/005)', () => {
     expect(panel.querySelector('[data-provenance="history"]')).toHaveTextContent('Not available — No canonical change-history reader');
     const link = within(panel).getByRole('link', { name: 'Correct a detail' });
     const url = new URL(link.getAttribute('href') as string, 'https://x.test');
-    expect(url.searchParams.get('question')).toBe('Show me my HVAC warranties.');
+    expect(url.searchParams.get('question')).toBe('Correct a detail of this warranty.');
+    expect([url.searchParams.get('launchOperationId'), url.searchParams.get('launchEntityType'), url.searchParams.get('launchEntityId')]).toEqual(['WARRANTY_CORRECT', 'WARRANTY', 'war-1']);
     expect(url.searchParams.get('backTo')).toBe('/dashboard/ask/record?section=warranties');
-    expect(within(panel).getByText('Ask lists the 25 newest.')).toBeInTheDocument();
+    expect(within(panel).getByText('Ask will ask which detail to change.')).toBeInTheDocument();
   });
 
   it('states a correction that cannot be used and why, with no link', async () => {
     getPage.mockResolvedValue({ success: true, data: page({ state: 'CONNECTED' }) });
-    getDetail.mockResolvedValue({ success: true, data: detail({ corrections: [{ id: 'warranty-correct', label: 'Correct a detail', operationId: 'WARRANTY_CORRECT', requiredRole: 'CONTRIBUTOR', state: 'ROLE_REQUIRED', reason: 'Your household role cannot change this; it needs contributor access.', openQuestion: null, note: null }] }) });
+    getDetail.mockResolvedValue({ success: true, data: detail({ corrections: [{ id: 'warranty-correct', label: 'Correct a detail', operationId: 'WARRANTY_CORRECT', requiredRole: 'CONTRIBUTOR', state: 'ROLE_REQUIRED', reason: 'Your household role cannot change this; it needs contributor access.', launch: null, note: null }] }) });
     render(<AskRecord />);
     fireEvent.click(await screen.findByRole('button', { name: /Details and history/ }));
     const route = await waitFor(() => { const el = document.querySelector('[data-correction="warranty-correct"]') as HTMLElement; expect(el).toBeTruthy(); return el; });
@@ -99,7 +100,7 @@ describe('AskRecord per-record detail (FR-REC-004/005)', () => {
     section = 'timeline';
     const event = { id: 'ev-1', title: 'Roof replaced', summary: null, type: 'REPAIR', typeLabel: 'Repair', occurredAt: '2025-06-01T00:00:00.000Z', datePrecision: 'MONTH', dateRangeStart: null, dateRangeEnd: null, verification: 'UNVERIFIED', verificationLabel: 'Unverified', providerName: null, isPrivate: false, askQuestion: null };
     getPage.mockResolvedValue({ success: true, data: { ...page({ state: 'CONNECTED' }), sectionId: 'timeline', rows: [event], total: 1, delivered: 1 } });
-    getDetail.mockResolvedValue({ success: true, data: detail({ sectionId: 'timeline', recordId: 'ev-1', corrections: [{ id: 'incident-change', label: 'Change this incident', operationId: null, requiredRole: null, state: 'UNAVAILABLE', reason: 'Incidents are raised and resolved by the system; no Ask command changes an incident.', openQuestion: null, note: null }] }) });
+    getDetail.mockResolvedValue({ success: true, data: detail({ sectionId: 'timeline', recordId: 'ev-1', corrections: [{ id: 'incident-change', label: 'Change this incident', operationId: null, requiredRole: null, state: 'UNAVAILABLE', reason: 'Incidents are raised and resolved by the system; no Ask command changes an incident.', launch: null, note: null }] }) });
     render(<AskRecord />);
     fireEvent.click(await screen.findByRole('button', { name: 'Details and history for Roof replaced' }));
     expect(getDetail).toHaveBeenCalledWith('timeline', 'home-1', 'ev-1', expect.anything());

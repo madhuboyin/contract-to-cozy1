@@ -13,7 +13,7 @@ jest.mock('@/lib/api/client', () => ({ api: { getAskRecordIndex: jest.fn(), getA
 const getPage = api.getAskRecordSectionPage as jest.Mock;
 
 const document_ = (n: number, overrides: Partial<AskRecordDocumentRow> = {}): AskRecordDocumentRow => ({
-  id: `doc-${n}`, title: `Document ${n}`, kind: 'MANUAL', kindLabel: 'Manuals', verification: 'UNVERIFIED', needsReview: false, expiry: null, transitional: false,
+  id: `doc-${n}`, rowKind: 'DOCUMENT', title: `Document ${n}`, kind: 'MANUAL', kindLabel: 'Manuals', verification: 'UNVERIFIED', needsReview: false, expiry: null, transitional: false,
   addedAt: '2026-10-05T12:00:00.000Z', updatedAt: '2026-10-05T12:00:00.000Z', askQuestion: 'Show me my manuals.', ...overrides,
 });
 const FILTERS = [
@@ -58,6 +58,18 @@ describe('AskRecord documents collection', () => {
     await waitFor(() => expect(getPage).toHaveBeenLastCalledWith('documents', 'home-1', { limit: 25, search: '', filters: { status: 'NEEDS_REVIEW' } }, expect.anything()));
     fireEvent.change(screen.getByRole('combobox', { name: 'Type' }), { target: { value: 'CONTRACT' } });
     await waitFor(() => expect(getPage).toHaveBeenLastCalledWith('documents', 'home-1', { limit: 25, search: '', filters: { status: 'NEEDS_REVIEW', kind: 'CONTRACT' } }, expect.anything()));
+  });
+
+  it('lists a candidate awaiting review with its own state and a Review action that opens the promotion review', async () => {
+    getPage.mockResolvedValueOnce({ success: true, data: page([
+      document_(0, { id: 'candidate:INSPECTION_REPORT:r1', rowKind: 'EXTRACTED_CANDIDATE', title: 'general inspection report', kind: 'INSPECTION_REPORT', kindLabel: 'Inspection report extraction', verification: null, needsReview: true, askQuestion: 'Review pending document extractions.' }),
+      document_(1),
+    ]) });
+    render(<AskRecord />);
+    const row = (await screen.findByText('general inspection report')).closest('[data-record-row]') as HTMLElement;
+    expect(within(row).getByText('Awaiting your review · not trusted data until you confirm it')).toBeInTheDocument();
+    const url = new URL(within(row).getByRole('link', { name: 'Review general inspection report' }).getAttribute('href') as string, 'https://x.test');
+    expect(url.searchParams.get('question')).toBe('Review pending document extractions.');
   });
 
   it('says plainly when no documents are on file', async () => {

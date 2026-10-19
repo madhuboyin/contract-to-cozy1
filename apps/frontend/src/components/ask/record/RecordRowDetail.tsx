@@ -56,8 +56,8 @@ export function RecordDetailPanel({ detail, propertyId, backTo }: { detail: AskR
         <ul className="mt-1 space-y-1">
           {detail.corrections.map((route) => (
             <li key={route.id} data-correction={route.id} data-correction-state={route.state.toLowerCase()} className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
-              {route.state === 'AVAILABLE' && route.openQuestion ? (
-                <Link href={buildAskWorkspaceHref({ propertyId, question: route.openQuestion, from: 'record', backTo })} className="inline-flex min-h-11 items-center rounded-xl border border-emerald-900/20 px-3 py-2 font-semibold text-emerald-950 hover:bg-emerald-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700">
+              {route.state === 'AVAILABLE' && route.launch ? (
+                <Link href={buildAskWorkspaceHref({ propertyId, question: route.launch.message, from: 'record', backTo, launchOperationId: route.launch.operationId, launchEntityType: route.launch.entityType, launchEntityId: route.launch.entityId, launchActionId: route.launch.actionId })} className="inline-flex min-h-11 items-center rounded-xl border border-emerald-900/20 px-3 py-2 font-semibold text-emerald-950 hover:bg-emerald-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700">
                   {route.label}
                 </Link>
               ) : (

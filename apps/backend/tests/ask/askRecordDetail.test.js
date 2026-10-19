@@ -117,13 +117,18 @@ test('room correction routes use ROOM_RENAME and its registered floor: a viewer 
     const viewer = await sectionReader('rooms')(ctx('VIEWER'), 'r1');
     for (const entry of viewer.corrections) {
       assert.equal(entry.operationId, 'ROOM_RENAME');
-      assert.deepEqual([entry.state, entry.requiredRole, entry.openQuestion], ['ROLE_REQUIRED', floor, null]);
+      assert.deepEqual([entry.state, entry.requiredRole, entry.launch], ['ROLE_REQUIRED', floor, null]);
       assert.match(entry.reason, /contributor access/);
     }
     for (const role of ['CONTRIBUTOR', 'OWNER']) {
       const detail = await sectionReader('rooms')(ctx(role), 'r1');
       assert.deepEqual(detail.corrections.map((entry) => entry.state), ['AVAILABLE', 'AVAILABLE', 'AVAILABLE']);
-      assert.ok(detail.corrections.every((entry) => entry.openQuestion === 'Show me my home by room.' && entry.reason === null));
+      assert.deepEqual(detail.corrections.map((entry) => entry.launch), [
+        { message: 'Rename this room.', operationId: 'ROOM_RENAME', entityType: 'INVENTORY_ROOM', entityId: 'r1', actionId: null },
+        { message: 'Change the type of this room.', operationId: 'ROOM_RENAME', entityType: 'INVENTORY_ROOM', entityId: 'r1', actionId: null },
+        { message: 'Change the floor level of this room.', operationId: 'ROOM_RENAME', entityType: 'INVENTORY_ROOM', entityId: 'r1', actionId: null },
+      ]);
+      assert.ok(detail.corrections.every((entry) => entry.reason === null));
     }
   } finally { restore(); }
 });
@@ -198,9 +203,9 @@ test('inventory correction routes use INVENTORY_ITEM_CORRECT at its registered f
   const { restore } = stubItem(ITEM);
   try {
     const viewer = (await sectionReader('inventory')(ctx('VIEWER'), 'i1')).corrections[0];
-    assert.deepEqual([viewer.operationId, viewer.state, viewer.requiredRole, viewer.openQuestion], ['INVENTORY_ITEM_CORRECT', 'ROLE_REQUIRED', 'CONTRIBUTOR', null]);
+    assert.deepEqual([viewer.operationId, viewer.state, viewer.requiredRole, viewer.launch], ['INVENTORY_ITEM_CORRECT', 'ROLE_REQUIRED', 'CONTRIBUTOR', null]);
     const contributor = (await sectionReader('inventory')(ctx('CONTRIBUTOR'), 'i1')).corrections[0];
-    assert.deepEqual([contributor.state, contributor.openQuestion], ['AVAILABLE', 'Show inventory item "Water heater"']);
+    assert.deepEqual([contributor.state, contributor.launch], ['AVAILABLE', { message: 'Correct a detail of this inventory item.', operationId: 'INVENTORY_ITEM_CORRECT', entityType: 'INVENTORY_ITEM', entityId: 'i1', actionId: null }]);
   } finally { restore(); }
 });
 
@@ -246,9 +251,9 @@ test('warranty correction needs the registered floor AND being the member who ad
   try {
     assert.equal((await sectionReader('warranties')(ctx('VIEWER'), 'w1')).corrections[0].state, 'ROLE_REQUIRED');
     const own = (await sectionReader('warranties')(ctx('CONTRIBUTOR'), 'w1')).corrections[0];
-    assert.deepEqual([own.state, own.openQuestion], ['AVAILABLE', 'Show me my appliance warranties.']);
+    assert.deepEqual([own.state, own.launch], ['AVAILABLE', { message: 'Correct a detail of this warranty.', operationId: 'WARRANTY_CORRECT', entityType: 'WARRANTY', entityId: 'w1', actionId: null }]);
     const other = (await sectionReader('warranties')(ctx('OWNER', { userId: 'someone-else' }), 'w1')).corrections[0];
-    assert.deepEqual([other.state, other.reason, other.openQuestion], ['UNAVAILABLE', 'Only the member who added this warranty can correct it.', null]);
+    assert.deepEqual([other.state, other.reason, other.launch], ['UNAVAILABLE', 'Only the member who added this warranty can correct it.', null]);
   } finally { restore(); }
   restore = stubWarranty(null);
   try {
@@ -295,7 +300,7 @@ test('a Home Record opens through the canonical Home Records reader with the cal
     assert.deepEqual(detail.corrections.map((c) => [c.id, c.operationId, c.state]), [
       ['document-verification', 'HOME_RECORD_STATE_COMMAND', 'AVAILABLE'], ['document-effective-period', 'HOME_RECORD_STATE_COMMAND', 'AVAILABLE'], ['document-archive', 'HOME_RECORD_STATE_COMMAND', 'AVAILABLE'],
     ]);
-    assert.ok(detail.corrections.every((c) => c.openQuestion === 'Show me my receipts.'));
+    assert.deepEqual(detail.corrections.map((c) => [c.launch.message, c.launch.entityType, c.launch.entityId]), [['Record whether I have verified this home record.', 'PROPERTY_RECORD', 'd1'], ['Set the period this home record is in effect.', 'PROPERTY_RECORD', 'd1'], ['Archive this home record.', 'PROPERTY_RECORD', 'd1']]);
   } finally { restore(); }
 });
 
@@ -332,7 +337,7 @@ test('a legacy vault document is shown from its listed metadata, with history, l
     assert.equal(detail.provenance.verification.state, 'UNAVAILABLE');
     assert.equal(detail.provenance.visibility.state, 'UNAVAILABLE');
     assert.equal(detail.corrections.length, 1);
-    assert.deepEqual([detail.corrections[0].state, detail.corrections[0].openQuestion], ['UNAVAILABLE', null]);
+    assert.deepEqual([detail.corrections[0].state, detail.corrections[0].launch], ['UNAVAILABLE', null]);
     assert.doesNotMatch(JSON.stringify(detail), /\/dashboard/, 'no desktop link');
   } finally { restore(); }
 });
@@ -359,4 +364,20 @@ test('the contract version is stamped on every detail', async () => {
     assert.equal(detail.contractVersion, ASK_RECORD_DETAIL_CONTRACT_VERSION);
     assert.deepEqual([detail.sectionId, detail.recordId, detail.propertyId, detail.generatedAt], ['rooms', 'r1', 'p1', NOW.toISOString()]);
   } finally { restore(); prisma.inventoryRoom = saved; prisma.inventoryItem = savedItems; }
+});
+
+test('a document-derived candidate opens from the uncapped pending set, states it is not trusted data, and routes to the promotion command', async () => {
+  const handler = require('../../src/services/ask/handlers/documents.handler.ts');
+  const saved = handler.pendingDocumentPromotionCandidates;
+  let limitSeen;
+  handler.pendingDocumentPromotionCandidates = async (propertyId, limit) => { limitSeen = limit; return [{ id: 'm1', kind: 'MATERIAL_EXTRACTION_REVIEW', title: 'Material review: Paint', description: '4 extracted fields awaiting review', updatedAt: day(-1), parentId: 'ms1' }]; };
+  try {
+    const detail = await sectionReader('documents')(ctx('CONTRIBUTOR'), 'candidate:MATERIAL_EXTRACTION_REVIEW:m1');
+    assert.equal(limitSeen, null, 'the Record reads every candidate, not the 25 Ask lists');
+    assert.equal(detail.provenance.verification.state, 'NOT_RECORDED');
+    assert.match(detail.facts.find((f) => f.label === 'State').value, /not trusted data/);
+    assert.deepEqual(detail.corrections.map((c) => [c.id, c.operationId, c.state, c.launch.message, c.launch.entityType, c.launch.entityId]), [['candidate-confirm', 'DOCUMENT_PROMOTION_CONFIRM', 'AVAILABLE', 'Confirm this document extraction.', 'MATERIAL_EXTRACTION_REVIEW', 'm1'], ['candidate-reject', 'DOCUMENT_PROMOTION_CONFIRM', 'AVAILABLE', 'Reject this document extraction.', 'MATERIAL_EXTRACTION_REVIEW', 'm1']]);
+    assert.equal((await sectionReader('documents')(ctx('VIEWER'), 'candidate:MATERIAL_EXTRACTION_REVIEW:m1')).corrections[0].state, 'ROLE_REQUIRED');
+    await assert.rejects(() => sectionReader('documents')(ctx('OWNER'), 'candidate:MATERIAL_EXTRACTION_REVIEW:gone'), AskRecordNotFoundError);
+  } finally { handler.pendingDocumentPromotionCandidates = saved; }
 });

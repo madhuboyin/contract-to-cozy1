@@ -25,6 +25,7 @@ import { maintenanceMoney } from './handlers/maintenance.handler';
 import { INSPECTION_REPORT_STATUS_LABELS, INSPECTION_REPORT_TYPE_LABELS } from './support/inspectionReportCommand';
 import { warrantyStatus, WARRANTY_EXPIRING_DAYS, type WarrantyStatusKey } from './handlers/warranties.handler';
 import { listPropertyDocuments, type PropertyDocument } from '../propertyDocuments/propertyDocumentInventory.service';
+import { pendingDocumentPromotionCandidates, type DocumentPromotionCandidate } from './handlers/documents.handler';
 import { ASK_RECORD_SECTION_REGISTRY, evaluateRecordSectionApplicability, type AskRecordSectionDefinition, type AskRecordSectionId, type AskRecordDetailCapability } from './governance/askRecordSectionRegistry';
 
 export const ASK_RECORD_COLLECTION_CONTRACT_VERSION = 'ask-record-collection-v1' as const;
@@ -335,7 +336,10 @@ export async function readInventoryPage(propertyId: string, query: AskRecordColl
 }
 
 export interface AskRecordDocumentRow {
+  /** A document's own id, or `candidate:<kind>:<id>` for a document-derived candidate awaiting review (candidates live in other tables). */
   id: string;
+  /** A candidate is never trusted data until the household confirms it; it is listed with its own state, not as a document. */
+  rowKind: 'DOCUMENT' | 'EXTRACTED_CANDIDATE';
   title: string;
   kind: string;
   kindLabel: string;
@@ -353,7 +357,12 @@ export interface AskRecordDocumentRow {
 }
 
 const DOCUMENT_STATUS_LABELS: Record<string, string> = { VERIFIED: 'Verified', UNVERIFIED: 'Unverified', PENDING: 'Pending verification', REJECTED: 'Rejected', NEEDS_REVIEW: 'Needs review' };
-const DocumentCursorSchema = z.object({ a: z.string().datetime(), i: z.string() });
+const DocumentCursorSchema = z.object({ g: z.number().int(), a: z.string().datetime(), i: z.string() });
+const CANDIDATE_KIND_LABELS: Record<DocumentPromotionCandidate['kind'], string> = {
+  MATERIAL_EXTRACTION_REVIEW: 'Material extraction', INSPECTION_REPORT: 'Inspection report extraction', INSURANCE_POLICY_FACT: 'Insurance policy fact',
+};
+const DOCUMENT_STATES = ['document', 'candidate'] as const;
+export const candidateRowId = (candidate: Pick<DocumentPromotionCandidate, 'kind' | 'id'>) => `candidate:${candidate.kind}:${candidate.id}`;
 
 function documentMatchesStatus(document: PropertyDocument, status: string): boolean {
   return status === 'NEEDS_REVIEW' ? document.needsReview === true : document.verification === status;
@@ -368,37 +377,87 @@ export async function readDocumentsPage(
   context: { propertyId: string; role: HouseholdRole },
   query: AskRecordCollectionQuery,
   list: typeof listPropertyDocuments = listPropertyDocuments,
+  loadCandidates: (propertyId: string) => Promise<DocumentPromotionCandidate[]> = (propertyId) => pendingDocumentPromotionCandidates(propertyId, null),
 ): Promise<AskRecordCollectionPage<AskRecordDocumentRow>> {
   const limit = clampLimit(query.limit);
   const search = cleanSearch(query.search);
   const status = query.filters?.status?.trim() || null;
   const kind = query.filters?.kind?.trim() || null;
+  const state = query.filters?.state?.trim() || null;
+  if (state && !(DOCUMENT_STATES as readonly string[]).includes(state)) throw new InvalidCollectionQueryError('state filter is not valid.');
   if (status && !(status in DOCUMENT_STATUS_LABELS)) throw new InvalidCollectionQueryError('status filter is not valid.');
   if (kind && !/^[A-Z_]{1,40}$/.test(kind)) throw new InvalidCollectionQueryError('kind filter is not valid.');
   const after = decodeCursor(query.cursor, DocumentCursorSchema);
 
-  const inventory = await list({ propertyId: context.propertyId, role: context.role, includeLegacy: true, includeInventoryLinkedLegacy: true });
-  const newestFirst = [...inventory.items].sort((left, right) => right.addedAt.getTime() - left.addedAt.getTime() || (left.id < right.id ? 1 : left.id > right.id ? -1 : 0));
+  const [inventory, candidates] = await Promise.all([
+    list({ propertyId: context.propertyId, role: context.role, includeLegacy: true, includeInventoryLinkedLegacy: true }),
+    loadCandidates(context.propertyId),
+  ]);
+  // Candidates that await the household's review come first (they need a decision), then documents, each newest first.
+  type Entry = { group: number; at: Date; id: string; row: AskRecordDocumentRow; haystack: string; kind: string; needsReview: boolean; verification: PropertyDocument['verification'] };
+  const documentEntries: Entry[] = inventory.items.map((document) => ({
+    group: 1, at: document.addedAt, id: document.id, kind: document.kind, needsReview: document.needsReview === true, verification: document.verification,
+    haystack: `${document.title} ${document.description ?? ''}`.toLowerCase(),
+    row: {
+      id: document.id,
+      rowKind: 'DOCUMENT',
+      title: document.title,
+      kind: document.kind,
+      kindLabel: document.kindLabel,
+      verification: document.verification,
+      needsReview: document.needsReview,
+      expiry: document.expiry,
+      transitional: document.transitional,
+      addedAt: document.addedAt.toISOString(),
+      updatedAt: document.updatedAt.toISOString(),
+      askQuestion: `Show me my ${document.kindLabel.toLowerCase()}.`,
+    },
+  }));
+  const candidateEntries: Entry[] = candidates.map((candidate) => ({
+    group: 0, at: candidate.updatedAt, id: candidateRowId(candidate), kind: candidate.kind, needsReview: true, verification: null,
+    haystack: `${candidate.title} ${candidate.description}`.toLowerCase(),
+    row: {
+      id: candidateRowId(candidate),
+      rowKind: 'EXTRACTED_CANDIDATE',
+      title: candidate.title,
+      kind: candidate.kind,
+      kindLabel: CANDIDATE_KIND_LABELS[candidate.kind],
+      verification: null,
+      needsReview: true,
+      expiry: null,
+      transitional: false,
+      addedAt: candidate.updatedAt.toISOString(),
+      updatedAt: candidate.updatedAt.toISOString(),
+      askQuestion: 'Review pending document extractions.',
+    },
+  }));
+  const all = [...candidateEntries, ...documentEntries]
+    .sort((left, right) => left.group - right.group || right.at.getTime() - left.at.getTime() || (left.id < right.id ? 1 : left.id > right.id ? -1 : 0));
   const needle = search?.toLowerCase() ?? null;
-  const matching = newestFirst.filter((document) => (
-    (!status || documentMatchesStatus(document, status))
-    && (!kind || document.kind === kind)
-    && (!needle || `${document.title} ${document.description ?? ''}`.toLowerCase().includes(needle))
+  const matchesStatus = (entry: Entry, value: string) => (value === 'NEEDS_REVIEW' ? entry.needsReview : entry.verification === value);
+  const matching = all.filter((entry) => (
+    (!status || matchesStatus(entry, status))
+    && (!kind || entry.kind === kind)
+    && (!state || (state === 'candidate' ? entry.group === 0 : entry.group === 1))
+    && (!needle || entry.haystack.includes(needle))
   ));
   const afterTime = after ? new Date(after.a).getTime() : null;
   const remaining = after
-    ? matching.filter((document) => document.addedAt.getTime() < afterTime! || (document.addedAt.getTime() === afterTime && document.id < after.i))
+    ? matching.filter((entry) => entry.group > after.g || (entry.group === after.g && (entry.at.getTime() < afterTime! || (entry.at.getTime() === afterTime && entry.id < after.i))))
     : matching;
   const page = remaining.slice(0, limit);
   const last = page[page.length - 1];
-  const nextCursor = remaining.length > limit && last ? encodeCursor({ a: last.addedAt.toISOString(), i: last.id }) : null;
+  const nextCursor = remaining.length > limit && last ? encodeCursor({ g: last.group, a: last.at.toISOString(), i: last.id }) : null;
 
   const statusOptions = Object.keys(DOCUMENT_STATUS_LABELS)
-    .filter((value) => inventory.items.some((document) => documentMatchesStatus(document, value)) || value === status)
+    .filter((value) => all.some((entry) => matchesStatus(entry, value)) || value === status)
     .map((value) => ({ value, label: DOCUMENT_STATUS_LABELS[value] }));
-  const kindOptions = [...new Map(inventory.items.map((document) => [document.kind, document.kindLabel])).entries()]
+  const kindOptions = [...new Map(all.map((entry) => [entry.kind, entry.row.kindLabel])).entries()]
     .sort((left, right) => left[1].localeCompare(right[1]))
     .map(([value, label]) => ({ value, label }));
+  const stateOptions = candidateEntries.length > 0 || state === 'candidate'
+    ? [{ value: 'document', label: 'Documents' }, { value: 'candidate', label: 'Awaiting your review' }]
+    : [];
 
   return {
     contractVersion: ASK_RECORD_COLLECTION_CONTRACT_VERSION,
@@ -411,25 +470,14 @@ export async function readDocumentsPage(
     nextCursor,
     truncated: nextCursor !== null,
     notice: null,
-    sort: { key: 'addedAt', label: 'Recently added' },
-    query: { search, filters: Object.fromEntries(Object.entries({ status, kind }).filter(([, value]) => value)) as Record<string, string> },
+    sort: { key: 'addedAt', label: 'Awaiting review first, then recently added' },
+    query: { search, filters: Object.fromEntries(Object.entries({ status, kind, state }).filter(([, value]) => value)) as Record<string, string> },
     filterOptions: [
+      ...(stateOptions.length > 1 ? [{ key: 'state', label: 'Kind', options: stateOptions }] : []),
       ...(statusOptions.length > 1 ? [{ key: 'status', label: 'Status', options: statusOptions }] : []),
       ...(kindOptions.length > 1 ? [{ key: 'kind', label: 'Type', options: kindOptions }] : []),
     ],
-    rows: page.map((document) => ({
-      id: document.id,
-      title: document.title,
-      kind: document.kind,
-      kindLabel: document.kindLabel,
-      verification: document.verification,
-      needsReview: document.needsReview,
-      expiry: document.expiry,
-      transitional: document.transitional,
-      addedAt: document.addedAt.toISOString(),
-      updatedAt: document.updatedAt.toISOString(),
-      askQuestion: `Show me my ${document.kindLabel.toLowerCase()}.`,
-    })),
+    rows: page.map((entry) => entry.row),
   };
 }
 

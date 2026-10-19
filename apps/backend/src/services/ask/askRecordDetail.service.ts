@@ -3,6 +3,10 @@ import type { AskAccountRole } from './askAccountEligibility';
 import { visibleInventoryItemWhere } from '../riskAssetApplicability';
 import { homeRecordsService } from '../homeRecords.service';
 import { listPropertyDocuments } from '../propertyDocuments/propertyDocumentInventory.service';
+import { pendingDocumentPromotionCandidates } from './handlers/documents.handler';
+import { ROOM_CORRECTION_FIELDS } from './handlers/homeRecordWrites.handler';
+import { HOME_RECORD_ENTITY_TYPE, HOME_RECORD_MESSAGES } from './support/homeRecordStateCommand';
+import { candidateRowId } from './askRecordCollections.service';
 import { warrantyStatus, WARRANTY_EXPIRING_DAYS } from './handlers/warranties.handler';
 import type { AskRecordSectionDefinition, AskRecordSectionId } from './governance/askRecordSectionRegistry';
 import {
@@ -26,7 +30,7 @@ async function readRoomDetail(context: DetailContext, roomId: string): Promise<D
   const visibleItems = await prisma.inventoryItem.count({ where: { AND: [{ roomId, propertyId: context.propertyId }, visibleInventoryItemWhere()] } });
   const itemLabel = `${visibleItems} ${visibleItems === 1 ? 'item' : 'items'}`;
   const taskLabel = `${room._count.maintenanceTasks} open ${room._count.maintenanceTasks === 1 ? 'task' : 'tasks'}`;
-  const home = 'Show me my home by room.';
+  const launch = (message: string) => ({ message, entityType: 'INVENTORY_ROOM', entityId: roomId });
   return {
     title: room.name,
     facts: [fact('Type', readable(room.type)), fact('Floor level', room.floorLevel === null ? null : String(room.floorLevel)), { label: 'Items', value: itemLabel }, { label: 'Open maintenance', value: taskLabel }],
@@ -39,9 +43,9 @@ async function readRoomDetail(context: DetailContext, roomId: string): Promise<D
       history: NO_HISTORY('rooms'),
     },
     corrections: [
-      route({ id: 'room-name', label: 'Rename room', operationId: 'ROOM_RENAME', role: context.role, openQuestion: home }),
-      route({ id: 'room-type', label: 'Change room type', operationId: 'ROOM_RENAME', role: context.role, openQuestion: home }),
-      route({ id: 'room-floor', label: 'Change floor level', operationId: 'ROOM_RENAME', role: context.role, openQuestion: home }),
+      route({ id: 'room-name', label: 'Rename room', operationId: 'ROOM_RENAME', role: context.role, launch: launch(ROOM_CORRECTION_FIELDS.name.message) }),
+      route({ id: 'room-type', label: 'Change room type', operationId: 'ROOM_RENAME', role: context.role, launch: launch(ROOM_CORRECTION_FIELDS.type.message) }),
+      route({ id: 'room-floor', label: 'Change floor level', operationId: 'ROOM_RENAME', role: context.role, launch: launch(ROOM_CORRECTION_FIELDS.floorLevel.message) }),
     ],
   };
 }
@@ -68,7 +72,6 @@ async function readInventoryDetail(context: DetailContext, itemId: string): Prom
     ...(item._count.documents > 0 ? [{ label: `${item._count.documents} ${item._count.documents === 1 ? 'document' : 'documents'}`, kindLabel: 'Attached documents', broken: null }] : []),
   ];
   const sourceBits = [INVENTORY_SOURCE_LABELS[item.sourceType] ?? readable(item.sourceType), item.sourceFileName, item.sourceOcrSessionId ? 'confirmed from a scan' : null].filter(Boolean);
-  const question = `Show inventory item "${item.name}"`;
   return {
     title: item.name,
     facts: [
@@ -88,12 +91,11 @@ async function readInventoryDetail(context: DetailContext, itemId: string): Prom
       related: { state: related.length ? 'AVAILABLE' : 'NOT_RECORDED', records: related, reason: related.length ? null : 'No room, warranty, policy, or document is linked.' },
       history: NO_HISTORY('inventory items'),
     },
-    corrections: [route({ id: 'inventory-correct', label: 'Correct a detail', operationId: 'INVENTORY_ITEM_CORRECT', role: context.role, openQuestion: question })],
+    corrections: [route({ id: 'inventory-correct', label: 'Correct a detail', operationId: 'INVENTORY_ITEM_CORRECT', role: context.role, launch: { message: 'Correct a detail of this inventory item.', entityType: 'INVENTORY_ITEM', entityId: itemId }, note: 'Ask will ask which detail to change.' })],
   };
 }
 
 const WARRANTY_STATUS_TEXT = { EXPIRING: `Expires within ${WARRANTY_EXPIRING_DAYS} days`, NEEDS_REVIEW: 'Dates need review', ACTIVE: 'Active', STARTS_LATER: 'Starts later', EXPIRED: 'Expired' } as const;
-const WARRANTY_QUESTION_WORDS: Record<string, string> = { APPLIANCE: 'appliance', HVAC: 'HVAC', ROOFING: 'roofing', PLUMBING: 'plumbing', ELECTRICAL: 'electrical', STRUCTURAL: 'structural', HOME_WARRANTY_PLAN: 'home warranty plan', OTHER: 'other' };
 
 async function readWarrantyDetail(context: DetailContext, warrantyId: string): Promise<DetailBody> {
   const warranty = await prisma.warranty.findFirst({
@@ -128,7 +130,8 @@ async function readWarrantyDetail(context: DetailContext, warrantyId: string): P
     // The warranty belongs to the profile of the member who added it, and Ask only lets that member correct it (existing rule, unchanged).
     corrections: [route({
       id: 'warranty-correct', label: 'Correct a detail', operationId: 'WARRANTY_CORRECT', role: context.role,
-      openQuestion: `Show me my ${WARRANTY_QUESTION_WORDS[warranty.category] ?? 'recorded'} warranties.`,
+      launch: { message: 'Correct a detail of this warranty.', entityType: 'WARRANTY', entityId: warrantyId },
+      note: 'Ask will ask which detail to change.',
       blockedReason: owned ? null : 'Only the member who added this warranty can correct it.',
     })],
   };
@@ -137,11 +140,42 @@ async function readWarrantyDetail(context: DetailContext, warrantyId: string): P
 const RECORD_VISIBILITY_TEXT: Record<string, string> = { HOUSEHOLD: 'Every household member can see this record.', OWNER_ONLY: 'Only home owners can see this record.', RECIPIENT_SELECTED: 'Only home owners can see this record.' };
 const LEGACY_REASON = 'This document is still in the older vault. Ask has no change command for it, and it has no versions or history to read.';
 
+const CANDIDATE_SOURCE_TEXT = {
+  MATERIAL_EXTRACTION_REVIEW: 'Facts extracted from an uploaded material document',
+  INSPECTION_REPORT: 'Findings extracted from an uploaded inspection report',
+  INSURANCE_POLICY_FACT: 'A value extracted from an insurance policy document',
+} as const;
+
+/** A document-derived candidate awaiting review: read from the same pending set Ask's review lists, with no cap. */
+async function readCandidateDetail(context: DetailContext, rowId: string): Promise<DetailBody> {
+  const candidate = (await pendingDocumentPromotionCandidates(context.propertyId, null)).find((entry) => candidateRowId(entry) === rowId);
+  if (!candidate) throw new AskRecordNotFoundError('Record not found.');
+  return {
+    title: candidate.title,
+    facts: [fact('What it is', readable(candidate.kind)), fact('Candidate', candidate.description), { label: 'State', value: 'Awaiting your review; not trusted data yet' }],
+    provenance: {
+      source: available(CANDIDATE_SOURCE_TEXT[candidate.kind], candidate.updatedAt.toISOString()),
+      observed: observedAt('Last updated', candidate.updatedAt),
+      verification: notRecorded('Nothing here becomes a trusted record until you confirm it.'),
+      visibility: available('Every household member can see candidates awaiting review.'),
+      related: { state: 'NOT_RECORDED', records: [], reason: 'The review gate keeps no link a candidate can show here.' },
+      history: NO_HISTORY('extracted candidates'),
+    },
+    corrections: [
+      route({ id: 'candidate-confirm', label: 'Confirm this candidate', operationId: 'DOCUMENT_PROMOTION_CONFIRM', role: context.role, launch: { message: 'Confirm this document extraction.', entityType: candidate.kind, entityId: candidate.id } }),
+      route({
+        id: 'candidate-reject', label: 'Reject this candidate', operationId: 'DOCUMENT_PROMOTION_CONFIRM', role: context.role, launch: { message: 'Reject this document extraction.', entityType: candidate.kind, entityId: candidate.id },
+        blockedReason: candidate.kind === 'INSPECTION_REPORT' ? 'An inspection report cannot be rejected here; review its findings and archive it instead.' : null,
+      }),
+    ],
+  };
+}
+
 async function readDocumentDetail(context: DetailContext, documentId: string): Promise<DetailBody> {
+  if (documentId.startsWith('candidate:')) return readCandidateDetail(context, documentId);
   const inventory = await listPropertyDocuments({ propertyId: context.propertyId, role: context.role, includeLegacy: true, includeInventoryLinkedLegacy: true });
   const listed = inventory.items.find((entry) => entry.id === documentId);
   if (!listed) throw new AskRecordNotFoundError('Record not found.');
-  const question = `Show me my ${listed.kindLabel.toLowerCase()}.`;
   const verification = listed.verification
     ? available(`${readable(listed.verification)}`, listed.verifiedAt?.toISOString() ?? null)
     : unavailable('This store records no verification status for the document.');
@@ -173,8 +207,8 @@ async function readDocumentDetail(context: DetailContext, documentId: string): P
     .sort((left, right) => right.versionNumber - left.versionNumber)
     .map((version) => ({ at: version.createdAt.toISOString(), label: `Version ${version.versionNumber} added` }));
   const effective = record.effectiveFrom || record.effectiveTo ? `${day(record.effectiveFrom) ?? 'earlier'} to ${day(record.effectiveTo) ?? 'no end date'}` : null;
-  const stateRoute = (id: string, label: string, allowed: boolean, blocked: string) => route({
-    id, label, operationId: 'HOME_RECORD_STATE_COMMAND', role: context.role, openQuestion: question, blockedReason: allowed ? null : blocked,
+  const stateRoute = (id: string, label: string, message: string, allowed: boolean, blocked: string) => route({
+    id, label, operationId: 'HOME_RECORD_STATE_COMMAND', role: context.role, launch: { message, entityType: HOME_RECORD_ENTITY_TYPE, entityId: documentId }, blockedReason: allowed ? null : blocked,
   });
   return {
     title: record.title,
@@ -193,9 +227,9 @@ async function readDocumentDetail(context: DetailContext, documentId: string): P
         : { state: 'NOT_RECORDED', entries: [], reason: 'No file version is on record.' },
     },
     corrections: [
-      stateRoute('document-verification', 'Record verification', actions.verify, 'This record is in the trash.'),
-      stateRoute('document-effective-period', 'Set when it is in effect', actions.manageEffectivePeriod, 'This record is in the trash.'),
-      stateRoute('document-archive', 'Archive', actions.archive, archived ? 'This record is not active.' : 'This record cannot be archived now.'),
+      stateRoute('document-verification', 'Record verification', HOME_RECORD_MESSAGES.VERIFICATION, actions.verify, 'This record is in the trash.'),
+      stateRoute('document-effective-period', 'Set when it is in effect', HOME_RECORD_MESSAGES.EFFECTIVE_PERIOD, actions.manageEffectivePeriod, 'This record is in the trash.'),
+      stateRoute('document-archive', 'Archive', HOME_RECORD_MESSAGES.ARCHIVE, actions.archive, archived ? 'This record is not active.' : 'This record cannot be archived now.'),
     ],
   };
 }

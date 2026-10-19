@@ -30,20 +30,47 @@ test('each correction route’s command is registered at the floor it reports, a
       const detail = await read('inspections', role, 'r1');
       for (const entry of detail.corrections) {
         if (entry.operationId) assert.equal(entry.requiredRole ?? ASK_OPERATION_DEFINITIONS[entry.operationId].propertyRoleFloor, ASK_OPERATION_DEFINITIONS[entry.operationId].propertyRoleFloor);
-        assert.equal(Boolean(entry.openQuestion), entry.state === 'AVAILABLE');
+        assert.equal(Boolean(entry.launch), entry.state === 'AVAILABLE');
         assert.equal(Boolean(entry.reason), entry.state !== 'AVAILABLE');
       }
     }
   } finally { restore.forEach((fn) => fn()); }
 });
 
-test('the launch questions Record routes use resolve to the read operation of their section, never to the model fallback', () => {
-  const expected = {
-    'Show me my home timeline.': 'HOME_TIMELINE_EVENTS', 'What is the status of my home maintenance?': 'MAINTENANCE_STATUS', 'Show me my inspection reports.': 'INSPECTION_REPORTS',
-    'What is the status of my permits?': 'PERMIT_TRACKER_STATUS', 'Show me my home projects.': 'PROJECT_TRACKER_PROJECTS', 'What is the status of my incidents and claims?': 'INCIDENT_CLAIM_STATUS',
-    'What is due before closing?': 'BUYER_DEADLINES', 'Show me my sale readiness checklist.': 'SELLER_PREP_CHECKLIST',
-  };
-  for (const [question, operationId] of Object.entries(expected)) assert.equal(resolveAskOperation(question).operationId, operationId, question);
+test('every launch a Record route can send reaches its own command with a record target the command accepts, and sends no free text a command could mis-parse', async () => {
+  const { ASK_OPERATION_DEFINITIONS: definitions } = require('../../src/services/ask/askOperationRegistry.ts');
+  const launches = [];
+  const collect = (detail) => detail.corrections.forEach((entry) => { if (entry.launch) launches.push({ route: entry.id, command: entry.operationId, ...entry.launch }); });
+  const restores = [
+    stub(prisma, 'inspectionReport', { findFirst: async () => REPORT }),
+    stub(prisma, 'homeEvent', { findFirst: async () => EVENT }),
+    stub(prisma, 'propertyPermitRecord', { findFirst: async () => ({ permitNumber: null, category: 'ROOFING', description: null, status: 'ISSUED', reportedStatus: 'NONE', reportedAt: null, officialSourceType: null, officialObservedAt: null, applicationDate: null, issueDate: null, expirationDate: null, finaledDate: null, contractorName: null, workLocation: null, source: 'MANUAL_ENTRY', isVerified: false, createdAt: day(-9), updatedAt: day(-1) }) }),
+    stub(prisma, 'projectRecord', { findFirst: async () => ({ name: 'Roof', projectType: 'ROOFING', status: 'IN_PROGRESS', sourceType: 'MANUAL', fulfillmentMode: 'DIY', contractorName: null, description: null, startDate: day(-9), expectedEndDate: null, actualEndDate: null, currentContractAmountCents: null, paidToDateCents: 0, warrantyExpiresAt: null, verifiedAt: null, createdAt: day(-9), updatedAt: day(-1), inventoryItem: null, warranty: null, _count: { milestones: 0, issues: 0, payments: 0, changeOrders: 0 } }) }),
+    stub(prisma, 'claim', { findFirst: async () => ({ title: 'Roof claim', description: null, type: 'INSURANCE', status: 'SUBMITTED', sourceType: 'INSURANCE', providerName: null, incidentAt: null, openedAt: day(-9), submittedAt: null, closedAt: null, lastActivityAt: day(-1), nextFollowUpAt: null, createdAt: day(-9), updatedAt: day(-1), claimNumber: null, deductibleAmount: null, estimatedLossAmount: null, settlementAmount: null, insurancePolicy: null, warranty: null }) }),
+    stub(HomeBuyerTaskService, 'getTask', async () => ({ title: 'Order inspection', description: null, phase: 'UNDER_CONTRACT', status: 'NOT_STARTED', priority: 'NOW', whyMatters: null, completionCriteria: null, dueAt: null, completedAt: null, required: true, blocking: true, sourceType: 'TEMPLATE', templateKey: null, completionVerifiedAt: null, createdAt: day(-5), updatedAt: day(-1) })),
+    stub(prisma, 'propertySaleCase', { findUnique: async () => ({ id: 'sc1' }) }),
+    stub(prisma, 'saleReadinessItem', { findFirst: async () => ({ title: 'Fix railing', detail: null, category: 'SAFETY', requirementClass: 'REQUIRED', status: 'OPEN', sourceEntityType: 'INSPECTION_FINDING', dueAt: null, resolvedAt: null, waivedAt: null, waivedReason: null, pursuedAt: null, estimatedCostMinCents: null, estimatedCostMaxCents: null, createdAt: day(-9), updatedAt: day(-2) }) }),
+  ];
+  try {
+    for (const [section, id] of [['inspections', 'r1'], ['timeline', 'e1'], ['permits', 'pm1'], ['projects-renovations', 'project:pj1'], ['incidents-claims', 'claim:c1'], ['buyer-records', 'b1'], ['seller-records', 'si1']]) {
+      collect(await read(section, 'OWNER', id));
+    }
+    restores.push(stub(prisma, 'inspectionReport', { findFirst: async () => ({ ...REPORT, status: 'CONFIRMED', confirmedAt: day(-2) }) }));
+    collect(await read('inspections', 'OWNER', 'r1'));
+  } finally { restores.forEach((fn) => fn()); }
+  assert.ok(launches.length >= 14, `expected the launches of seven sections, saw ${launches.length}`);
+  for (const launch of launches) {
+    assert.ok(launch.entityType && launch.entityId, launch.route);
+    assert.ok(launch.operationId in definitions, `${launch.route}: ${launch.operationId} is a registered operation`);
+    assert.ok(launch.message.length > 5 && !launch.message.includes('"'), launch.route);
+  }
+  // The routes that change a record launch their own command; the findings route launches the read that lists them.
+  const byRoute = Object.fromEntries(launches.map((launch) => [launch.route, launch]));
+  assert.equal(byRoute['inspection-findings'].operationId, 'INSPECTION_REPORT_FINDINGS');
+  assert.equal(byRoute['inspection-confirm'].operationId, 'INSPECTION_REPORT_COMMAND');
+  assert.equal(byRoute['project-update'].actionId, 'project-tracker-edit-project');
+  assert.equal(byRoute['buyer-complete'].entityType, 'BUYER_TASK');
+  assert.deepEqual(['sale-item-pursue', 'sale-item-unpursue', 'sale-item-waive', 'sale-item-reopen'].every((id) => byRoute[id]?.entityType === 'SALE_READINESS_ITEM'), true);
 });
 
 test('every section primary action resolves to one of that section’s reads', () => {
@@ -69,8 +96,9 @@ test('a timeline event shows recorded precision, verification, revision history,
     assert.equal(detail.provenance.verification.value, 'Homeowner Confirmed');
     assert.deepEqual(detail.provenance.history.entries.map((e) => e.label), ['Marked homeowner confirmed', 'Revision 2: Fixed the month']);
     assert.deepEqual(detail.provenance.related.records.map((r) => r.kindLabel), ['Inventory item', 'Evidence and documents']);
-    assert.deepEqual(detail.corrections.map((c) => [c.operationId, c.state]), [['HOME_EVENT_CORRECT', 'AVAILABLE'], ['HOME_EVENT_VISIBILITY', 'AVAILABLE']]);
-    assert.match(detail.corrections[0].note, /200 most recent/);
+    assert.deepEqual(detail.corrections.map((c) => [c.operationId, c.state]), [['HOME_EVENT_CORRECT', 'AVAILABLE'], ['HOME_EVENT_CORRECT', 'AVAILABLE'], ['HOME_EVENT_CORRECT', 'AVAILABLE'], ['HOME_EVENT_VISIBILITY', 'AVAILABLE']]);
+    assert.deepEqual(detail.corrections.map((c) => c.launch.message), ['Correct the title of this timeline event.', 'Correct the date of this timeline event.', 'Correct the summary of this timeline event.', 'Change the visibility of this timeline event.']);
+    assert.ok(detail.corrections.every((c) => c.launch.entityType === 'HOME_EVENT' && c.launch.entityId === 'e1'));
     assert.equal((await read('timeline', 'VIEWER', 'e1')).corrections[0].state, 'ROLE_REQUIRED');
   } finally { restore(); }
 });
@@ -115,14 +143,14 @@ test('a completed task opens with its canonical set; an open task is not history
 
 const REPORT = { reportType: 'GENERAL_HOME', inspectionDate: day(-30), inspectorName: 'Pat', inspectorCompany: 'Acme', inspectorLicense: null, status: 'REVIEW_PENDING', totalFindings: 4, openFindings: 4, safetyFindings: 1, majorFindings: 0, extractionModel: 'm', sourceEntityType: null, createdAt: day(-29), processedAt: day(-28), confirmedAt: null, updatedAt: day(-1) };
 
-test('an inspection report gates confirm/archive/findings on its status and discloses the 25-report Ask list', async () => {
+test('an inspection report gates confirm/archive/findings on its status and launches each for this report', async () => {
   let row = REPORT;
   const restore = stub(prisma, 'inspectionReport', { findFirst: async (args) => { assert.deepEqual(args.where.status, { not: 'ARCHIVED' }); return row; } });
   try {
     let detail = await read('inspections', 'CONTRIBUTOR', 'r1');
     const byId = () => Object.fromEntries(detail.corrections.map((c) => [c.id, c]));
     assert.equal(byId()['inspection-confirm'].state, 'AVAILABLE');
-    assert.match(byId()['inspection-confirm'].note, /25 newest/);
+    assert.deepEqual(byId()['inspection-confirm'].launch, { message: 'Review this inspection report before it is trusted.', operationId: 'INSPECTION_REPORT_COMMAND', entityType: 'INSPECTION_REPORT', entityId: 'r1', actionId: null });
     assert.equal(byId()['inspection-findings'].state, 'UNAVAILABLE');
     assert.equal(detail.provenance.verification.state, 'NOT_RECORDED');
     assert.deepEqual(detail.provenance.history.entries.map((e) => e.label), ['Findings extracted for review', 'Report added']);
@@ -188,10 +216,11 @@ test('incident and claim ids carry their kind; an incident states that no Ask co
     let detail = await read('incidents-claims', 'CONTRIBUTOR', 'claim:c1');
     const text = JSON.stringify(detail);
     assert.ok(!text.includes('CLM-SECRET') && !text.includes('9000') && !text.includes('1000'));
-    assert.deepEqual(detail.corrections.map((c) => [c.operationId, c.state]), [['CLAIM_TRANSITION', 'AVAILABLE'], ['CLAIM_ACTIVITY_COMMAND', 'AVAILABLE']]);
+    assert.deepEqual(detail.corrections.map((c) => [c.operationId, c.state]), [['CLAIM_TRANSITION', 'AVAILABLE'], ['CLAIM_ACTIVITY_COMMAND', 'UNAVAILABLE']]);
     claimRow = { ...claim, status: 'CLOSED', closedAt: day(-1) };
     detail = await read('incidents-claims', 'CONTRIBUTOR', 'claim:c1');
-    assert.ok(detail.corrections.every((c) => c.state === 'UNAVAILABLE' && c.reason === 'This claim is closed.'));
+    assert.equal(detail.corrections[0].reason, 'This claim is closed.');
+    assert.ok(detail.corrections.every((c) => c.state === 'UNAVAILABLE'));
     await assert.rejects(() => read('incidents-claims', 'OWNER', 'bogus'), AskRecordNotFoundError);
   } finally { restoreIncident(); restoreClaim(); }
 });

@@ -8,7 +8,7 @@ import { askServiceIsPaused, draftStorageKey, newId, updateAskLocation, type Ask
 // Sending a question: the request, its stale-answer guards, restoring the text on failure, stopping a request and
 // bringing an earlier question back to edit. Moved out of AskWorkspace unchanged (P2, FRD v1.107). The refs are shared
 // with result refresh, so the workspace owns them and passes them in.
-export function useAskRequest({ sessionId, loading, executions, selectedPropertyId, mode, launchSurface, launchCapabilityId, safeBackTo, requests, inFlight, stoppedRequests, deniedProperties, activeSessionRef, textareaRef, setInput, setError, setLoading, setServiceUnavailable, setExecutions, setJustUpdatedExecutionId, setRecentSessionsEpoch }: {
+export function useAskRequest({ sessionId, loading, executions, selectedPropertyId, mode, launchSurface, launchCapabilityId, launchRecord, safeBackTo, requests, inFlight, stoppedRequests, deniedProperties, activeSessionRef, textareaRef, setInput, setError, setLoading, setServiceUnavailable, setExecutions, setJustUpdatedExecutionId, setRecentSessionsEpoch }: {
   sessionId: string;
   loading: boolean;
   executions: AskExecutionResponse[];
@@ -16,6 +16,8 @@ export function useAskRequest({ sessionId, loading, executions, selectedProperty
   mode: 'page' | 'panel';
   launchSurface: string;
   launchCapabilityId: string;
+  /** A Record destination launch: used only for the first message, and only while the question is still the one the Record supplied. */
+  launchRecord?: { message: string; operationId: string; entityType: string; entityId: string; actionId?: string };
   safeBackTo: string;
   requests: MutableRefObject<ReturnType<typeof createResultRequestTracker>>;
   inFlight: MutableRefObject<{ key: string; token: number; message: string } | null>;
@@ -61,6 +63,9 @@ export function useAskRequest({ sessionId, loading, executions, selectedProperty
       // the warranties page), so they only apply to the conversation's
       // first message — a later follow-up isn't an entry-point event.
       const isFirstMessage = options?.firstMessageOverride ?? (requestedSessionId === sessionId && executions.length === 0);
+      if (!promptContext && isFirstMessage && launchRecord && message === launchRecord.message.trim()) {
+        promptContext = { operationId: launchRecord.operationId, entityType: launchRecord.entityType, entityId: launchRecord.entityId, actionId: launchRecord.actionId };
+      }
       // SUGGESTED_NEXT_ACTIONS plan §4.1: a selected app-offered action carries only its id and the execution that offered it. The
       // server resolves operation/entity/message from its stored ledger, so none of that is sent as proof of authorship, and the
       // turn stays in the property the offering execution belongs to.
