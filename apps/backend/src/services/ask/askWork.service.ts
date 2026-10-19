@@ -2,6 +2,8 @@ import { z } from 'zod';
 import type { HouseholdRole } from '@prisma/client';
 import { logger } from '../../lib/logger';
 import type { AskAccountRole } from './askAccountEligibility';
+import { readPendingExecutionWork } from './work/pendingExecutions.reader';
+import { createOperationalWorkItemReader } from './work/operationalWorkItems.reader';
 import { ensureAskServiceAccountEligibility, ensurePropertyAccess } from './askHandlerSupport';
 import { loadOperatingMode } from './askRecordContext';
 import type { AskOperatingMode } from '../skills/context/propertyJourneyContext.contract';
@@ -18,7 +20,10 @@ import {
  * The canonical readers, one per CONNECTED provider. A provider with no entry here is reported UNAVAILABLE; its rows are never synthesized.
  * Each reader is side-effect free (FR-WORK: the Work GET never expires, updates, or reconciles anything).
  */
-export const ASK_WORK_PROVIDER_READERS: Partial<Record<AskWorkProviderId, AskWorkProviderReader>> = {};
+export const ASK_WORK_PROVIDER_READERS: Partial<Record<AskWorkProviderId, AskWorkProviderReader>> = {
+  PENDING_EXECUTIONS: readPendingExecutionWork,
+  OPERATIONAL_WORK_ITEMS: createOperationalWorkItemReader(),
+};
 
 export class AskWorkInvalidRequestError extends Error {
   code = 'ASK_INVALID_REQUEST';

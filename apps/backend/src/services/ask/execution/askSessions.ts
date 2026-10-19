@@ -167,7 +167,7 @@ export const INTERACTIVE_ASK_STATUSES: AskExecutionStatus[] = ['NEEDS_PROPERTY',
 
 const CONTINUABLE_ASK_STATUSES: AskExecutionStatus[] = [...INTERACTIVE_ASK_STATUSES, 'RUNNING'];
 
-function pendingKind(status: AskExecutionStatus): AskPendingWorkItem['pendingKind'] {
+export function pendingKind(status: AskExecutionStatus): AskPendingWorkItem['pendingKind'] {
   if (status === 'RUNNING') return 'COMMAND_RECOVERY';
   if (status === 'NEEDS_PROPERTY') return 'PROPERTY_SELECTION';
   if (status === 'NEEDS_ENTITY') return 'ENTITY_SELECTION';
@@ -176,7 +176,7 @@ function pendingKind(status: AskExecutionStatus): AskPendingWorkItem['pendingKin
   return 'CLARIFICATION';
 }
 
-function pendingActionLabel(status: AskExecutionStatus): string {
+export function pendingActionLabel(status: AskExecutionStatus): string {
   if (status === 'RUNNING') return 'Check action status';
   if (status === 'NEEDS_PROPERTY') return 'Select a home';
   if (status === 'NEEDS_ENTITY') return 'Choose a record';
@@ -208,7 +208,7 @@ export function pendingInteractionExpiresAt(execution: { resultJson: Prisma.Json
 // recoveringClaim) — this only reclaims RUNNING rows with no confirmation
 // receipt at all, i.e. a plain read/analysis operation, once enough time
 // has passed that it could not still be legitimately executing.
-const ASK_RUNNING_RECLAIM_GRACE_MS = 30_000;
+export const ASK_RUNNING_RECLAIM_GRACE_MS = 30_000;
 
 export async function reclaimOrphanedRunningExecution(execution: AskExecution): Promise<AskExecution> {
   if (execution.status !== 'RUNNING') return execution;

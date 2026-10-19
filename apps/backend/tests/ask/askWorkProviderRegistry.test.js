@@ -62,8 +62,8 @@ test('validation rejects dishonest reader claims and a fallback that outranks ca
   assert.match(validateAskWorkProviders([claims], { CLAIMS: async () => ({ rows: [], total: 0, viewCounts: null }) }).join('\n'), /registered reader but is declared unavailable/);
 });
 
-test('no reader is registered yet, so every provider is UNAVAILABLE and the page is partial with no total', async () => {
-  assert.deepEqual(Object.keys(ASK_WORK_PROVIDER_READERS), []);
+test('with no readers supplied, every provider is UNAVAILABLE and the page is partial with no total', async () => {
+  assert.deepEqual(Object.keys(ASK_WORK_PROVIDER_READERS).sort(), ASK_WORK_PROVIDER_REGISTRY.filter((entry) => entry.reader.state === 'CONNECTED').map((entry) => entry.id).sort());
   const page = await composeAskWorkPage(input(), query(), {});
   assert.equal(page.providers.length, ASK_WORK_PROVIDER_REGISTRY.length, 'no provider is omitted');
   assert.ok(page.partial);

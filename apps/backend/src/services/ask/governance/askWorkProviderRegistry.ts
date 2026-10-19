@@ -77,8 +77,8 @@ export const ASK_WORK_PROVIDER_REGISTRY: readonly AskWorkProviderDefinition[] = 
   provider({
     id: 'PENDING_EXECUTIONS', label: 'Pending requests', workType: 'PENDING_EXECUTION', owner: 'ask-executions',
     readOperationIds: [], commandOperationIds: [], readAuthority: 'OWN_EXECUTION', lifecycleOperationId: null,
-    reader: unavailable('The pending-execution reader is not connected yet.'), precedence: 10, fallbackProjection: false, sourceAliasKinds: ['execution'],
-    views: ['NEEDS_YOU', 'WAITING', 'COMPLETED', 'ARCHIVED'], requiredForExit: true, freshnessSource: 'Execution last update',
+    reader: CONNECTED, precedence: 10, fallbackProjection: false, sourceAliasKinds: ['execution'],
+    views: ['NEEDS_YOU', 'WAITING'], requiredForExit: true, freshnessSource: 'Execution last update',
   }),
   provider({
     id: 'DECISION_THREADS', label: 'Decisions', workType: 'DECISION_THREAD', owner: 'decision-platform',
@@ -133,7 +133,7 @@ export const ASK_WORK_PROVIDER_REGISTRY: readonly AskWorkProviderDefinition[] = 
     id: 'OPERATIONAL_WORK_ITEMS', label: 'Home work items', workType: 'HOME_WORK_ITEM', owner: 'home-operations',
     readOperationIds: ['HOME_WORK_ITEMS'], commandOperationIds: ['HOME_WORK_ITEM_COMMAND', 'OPERATIONAL_WORK_UPDATE'],
     readAuthority: 'OPERATION_FLOOR', lifecycleOperationId: 'HOME_WORK_ITEMS',
-    reader: unavailable('The home work-item reader is not connected yet.'), precedence: 90, fallbackProjection: true, sourceAliasKinds: ['workItem'],
+    reader: CONNECTED, precedence: 90, fallbackProjection: true, sourceAliasKinds: ['workItem'],
     views: ALL_VIEWS, requiredForExit: true, freshnessSource: 'Work item last update',
   }),
   provider({
@@ -159,13 +159,13 @@ export const ASK_WORK_PROVIDER_REGISTRY: readonly AskWorkProviderDefinition[] = 
     id: 'RETRYABLE_EXECUTIONS', label: 'Retryable requests', workType: 'RETRYABLE_EXECUTION', owner: 'ask-executions',
     readOperationIds: [], commandOperationIds: [], readAuthority: 'OWN_EXECUTION', lifecycleOperationId: null,
     reader: unavailable('The retryable-execution reader is not connected yet.'), precedence: 10, fallbackProjection: false, sourceAliasKinds: ['execution'],
-    views: ['NEEDS_YOU', 'ARCHIVED'], requiredForExit: true, freshnessSource: 'Execution last update',
+    views: ['NEEDS_YOU'], requiredForExit: true, freshnessSource: 'Execution last update',
   }),
   provider({
     id: 'UNKNOWN_OUTCOME_EXECUTIONS', label: 'Requests with an unknown outcome', workType: 'UNKNOWN_OUTCOME_EXECUTION', owner: 'ask-executions',
     readOperationIds: [], commandOperationIds: [], readAuthority: 'NONE', lifecycleOperationId: null,
     reader: unavailable('No canonical unknown-outcome state exists; an ordinary failure is not an unknown outcome, so nothing is derived.'),
-    precedence: 10, fallbackProjection: false, sourceAliasKinds: ['execution'], views: ['NEEDS_YOU', 'ARCHIVED'], requiredForExit: true, freshnessSource: 'Execution last update',
+    precedence: 10, fallbackProjection: false, sourceAliasKinds: ['execution'], views: ['NEEDS_YOU'], requiredForExit: true, freshnessSource: 'Execution last update',
   }),
   provider({
     id: 'SCHEDULED_FOLLOW_UPS', label: 'Scheduled follow-ups', workType: 'SCHEDULED_FOLLOW_UP', owner: 'follow-ups',
