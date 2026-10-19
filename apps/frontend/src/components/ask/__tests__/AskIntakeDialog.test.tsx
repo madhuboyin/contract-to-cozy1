@@ -24,9 +24,10 @@ const config = (): AskIntakeConfig => ({
     { kind: 'RECEIPT', label: 'A receipt or invoice', description: 'What was paid.', acceptsImages: true, readsWith: 'MODEL' },
     { kind: 'INSURANCE_POLICY', label: 'An insurance policy', description: 'Carrier and limits.', acceptsImages: true, readsWith: 'MODEL' },
     { kind: 'APPLIANCE_LABEL', label: 'An appliance or product label', description: 'Brand, model and serial.', acceptsImages: true, readsWith: 'LOCAL_OCR' },
-    { kind: 'INSPECTION_REPORT', label: 'An inspection report', description: 'Findings you review.', acceptsImages: false, readsWith: 'MODEL' },
+    { kind: 'INSPECTION_REPORT', label: 'An inspection report', description: 'Each finding is proposed for you to accept or reject. Only the ones you accept become an inspection report for you to go through.', acceptsImages: false, readsWith: 'MODEL' },
   ],
   reportTypes: ['GENERAL', 'ROOF'], disclosures: DISCLOSURES,
+  safetyChecks: { engine: 'NONE', statement: 'Files are checked for a mismatched type, embedded programs and active content. No antivirus engine is connected, so this is not a full malware scan.' },
 });
 const view = (overrides: Partial<AskIntakeView> = {}): AskIntakeView => ({
   contractVersion: 'ask-intake-v1', generatedAt: `2026-10-20T12:00:0${Math.floor(Math.random() * 9)}.000Z`, propertyId: 'home-1', recordId: 'rec-1', versionId: 'ver-1', title: 'receipt', state: 'UPLOADED', kind: null, choice: null, needsDetails: null,
@@ -34,12 +35,12 @@ const view = (overrides: Partial<AskIntakeView> = {}): AskIntakeView => ({
   provenance: {
     original: { recordId: 'rec-1', versionId: 'ver-1', fileName: 'receipt.pdf', mimeType: 'application/pdf', sizeBytes: 2048, sha256: 'abcdef', uploadedAt: '2026-10-20T12:00:00.000Z', scanStatus: 'CLEAN', contentChecks: 'Checked that the file type matches its contents.' },
     reader: { status: 'NOT_RECORDED', reason: 'This file has not been read yet.' },
-    pageAndRegion: { status: 'NOT_RECORDED', reason: 'The readers report one overall confidence for the file and do not say where on a page a detail was found.' },
+    pageAndRegion: { status: 'NOT_RECORDED', reason: 'The reader did not say where in the file these details were found.' },
   },
   disclosures: DISCLOSURES, ...overrides,
 });
 const candidate = (overrides: Partial<AskIntakeCandidate>): AskIntakeCandidate => ({
-  id: 'c1', fieldKey: 'description', label: 'What it was for', proposedValue: 'Water heater', reviewedValue: null, effectiveValue: 'Water heater', confidence: 0.9, required: true, reviewStatus: 'PENDING', citation: 'AI extraction', promoted: false, ...overrides,
+  id: 'c1', fieldKey: 'description', label: 'What it was for', proposedValue: 'Water heater', reviewedValue: null, effectiveValue: 'Water heater', confidence: 0.9, required: true, reviewStatus: 'PENDING', citation: 'AI extraction', promoted: false, evidence: { status: 'NOT_RECORDED', reason: 'The reader did not say where in the file this was found.' }, ...overrides,
 });
 const ok = (data: AskIntakeView) => ({ success: true, data });
 const pdf = () => new File(['%PDF'], 'receipt.pdf', { type: 'application/pdf' });
@@ -114,13 +115,20 @@ describe('AskIntakeDialog', () => {
     expect(screen.queryByText('Let Cozy decide')).not.toBeInTheDocument();
   });
 
-  it('asks an inspection report for its type and date before reading, and sends them', async () => {
+  const finding = (id: string, key: string, system: string, status: AskIntakeCandidate['reviewStatus'] = 'PENDING', evidence: AskIntakeCandidate['evidence'] = { status: 'NOT_RECORDED', reason: 'The reader did not say where in the file this was found.' }): AskIntakeCandidate => candidate({
+    id, fieldKey: key, label: `${system} · Major`, proposedValue: `${system} problem`, effectiveValue: `${system} problem`, required: false, reviewStatus: status, evidence,
+    finding: { homeSystem: system, severity: 'Major', conditionRating: 'POOR', recommendation: 'REPAIR', interpretation: 'It needs repair.', location: 'North slope', costRangeCents: { low: 50000, high: 120000 } },
+  });
+
+  it('asks an inspection report for its type and date before reading, and proposes findings instead of creating anything', async () => {
+    const proposed = view({ state: 'REVIEW', kind: 'INSPECTION_REPORT', candidates: [finding('f1', 'finding:1', 'Roof'), finding('f2', 'finding:2', 'Plumbing')] });
     mocks.uploadAskIntakeFile.mockResolvedValue(ok(view()));
-    mocks.analyzeAskIntake.mockResolvedValue(ok(view({ state: 'REVIEW', kind: 'INSPECTION_REPORT', inspection: { reportId: 'rep-1', status: 'REVIEW_PENDING', findingCount: 4 } })));
+    mocks.analyzeAskIntake.mockResolvedValue(ok(proposed));
     renderDialog();
     await upload();
     await screen.findByText(/It has not been read yet/);
     fireEvent.click(screen.getByRole('radio', { name: /inspection report/ }));
+    expect(screen.getByText(/Each finding is proposed for you to accept or reject/)).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText(/I understand this file/));
     const read = screen.getByRole('button', { name: 'Read this file' });
     expect(read).toBeDisabled();
@@ -128,8 +136,61 @@ describe('AskIntakeDialog', () => {
     fireEvent.change(screen.getByLabelText('Report type'), { target: { value: 'ROOF' } });
     fireEvent.click(read);
     await waitFor(() => expect(mocks.analyzeAskIntake).toHaveBeenCalledWith('home-1', 'rec-1', { kind: 'INSPECTION_REPORT', acknowledgedProcessing: true, inspection: { reportType: 'ROOF', inspectionDate: '2026-09-01' } }));
-    expect(await screen.findByText(/4 findings were found. None of them has been added to your home/)).toBeInTheDocument();
+    expect(await screen.findByText(/Only those are added, as a new inspection report/)).toBeInTheDocument();
+    expect(mocks.promoteAskIntake).not.toHaveBeenCalled();
+    expect(screen.queryByRole('link', { name: 'Review the findings' })).not.toBeInTheDocument();
+  });
+
+  it('inspection findings can be accepted or rejected but not edited, and the report is created only from accepted ones', async () => {
+    const proposed = view({ state: 'REVIEW', kind: 'INSPECTION_REPORT', candidates: [finding('f1', 'finding:1', 'Roof'), finding('f2', 'finding:2', 'Plumbing'), finding('f3', 'finding:3', 'HVAC')] });
+    mocks.uploadAskIntakeFile.mockResolvedValue(ok(proposed));
+    renderDialog();
+    await upload();
+    expect(await screen.findByText('0 accepted · 3 undecided · 0 rejected')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Edit/ })).not.toBeInTheDocument();
+    const create = screen.getByRole('button', { name: /Create the report from 0 accepted findings/ });
+    expect(create).toBeDisabled();
+    const row = document.querySelector('[data-intake-candidate="finding:1"]') as HTMLElement;
+    expect(within(row).getByText(/North slope · Repair · Estimated \$500 to \$1,200/)).toBeInTheDocument();
+    mocks.reviewAskIntakeCandidate.mockResolvedValue(ok({ ...proposed, candidates: [finding('f1', 'finding:1', 'Roof', 'CONFIRMED'), finding('f2', 'finding:2', 'Plumbing', 'REJECTED'), finding('f3', 'finding:3', 'HVAC')] }));
+    fireEvent.click(within(row).getByRole('button', { name: 'Accept Roof · Major' }));
+    await waitFor(() => expect(mocks.reviewAskIntakeCandidate).toHaveBeenCalledWith('home-1', 'rec-1', 'f1', { action: 'CONFIRM', value: undefined }));
+    expect(await screen.findByText('1 accepted · 1 undecided · 1 rejected')).toBeInTheDocument();
+    const enabled = screen.getByRole('button', { name: 'Create the report from 1 accepted finding' });
+    expect(enabled).toBeEnabled();
+    mocks.promoteAskIntake.mockResolvedValue(ok({ ...proposed, candidates: [], inspection: { reportId: 'rep-1', status: 'REVIEW_PENDING', findingCount: 1 } }));
+    fireEvent.click(enabled);
+    expect(await screen.findByText(/created with the 1 finding you accepted/)).toBeInTheDocument();
+    expect(screen.getByText(/rejected or left undecided were not added/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Review the findings' })).toHaveAttribute('href', '/dashboard/ask/record?propertyId=home-1&section=inspections');
+  });
+
+  it('says where each detail came from, how that was established, or that the reader did not say', async () => {
+    const proposed = view({ state: 'REVIEW', kind: 'RECEIPT', candidates: [
+      candidate({ id: 'c1', fieldKey: 'description', evidence: { status: 'AVAILABLE', value: { page: 2, box: null, excerpt: 'Paid to Acme Plumbing', basis: 'TEXT_MATCH', description: 'Page 2' } } }),
+      candidate({ id: 'c2', fieldKey: 'amount', label: 'Amount', evidence: { status: 'AVAILABLE', value: { page: 1, box: [100, 50, 140, 400], excerpt: null, basis: 'MODEL_REPORTED', description: 'Page 1, upper left' } } }),
+      candidate({ id: 'c3', fieldKey: 'category', label: 'Category', required: false }),
+    ] });
+    mocks.uploadAskIntakeFile.mockResolvedValue(ok(proposed));
+    renderDialog();
+    await upload();
+    const checked = (await screen.findByText('Page 2')).closest('p') as HTMLElement;
+    expect(checked).toHaveTextContent('found in the file’s text');
+    expect(checked).toHaveTextContent('Paid to Acme Plumbing');
+    const reported = screen.getByText('Page 1, upper left').closest('p') as HTMLElement;
+    expect(reported).toHaveTextContent('reported by the reader, not checked');
+    expect(document.querySelector('[data-intake-candidate="category"] [data-intake-evidence="none"]')).toHaveTextContent('did not say where');
+  });
+
+  it('states what the safety checks actually are, and explains a blocked or unscannable file', async () => {
+    mocks.uploadAskIntakeFile.mockRejectedValueOnce(Object.assign(new Error('x'), { payload: { error: { code: 'ASK_INTAKE_MALWARE_DETECTED' } } }));
+    renderDialog();
+    expect(await screen.findByText(/No antivirus engine is connected, so this is not a full malware scan/)).toBeInTheDocument();
+    await upload();
+    expect(await screen.findByText('This file was blocked because it may be harmful. It was not added.')).toBeInTheDocument();
+    mocks.uploadAskIntakeFile.mockRejectedValueOnce(Object.assign(new Error('x'), { payload: { error: { code: 'ASK_INTAKE_SCAN_UNAVAILABLE' } } }));
+    await upload();
+    expect(await screen.findByText(/could not be checked for malware right now, so it was not added/)).toBeInTheDocument();
   });
 
   it('shows each proposed detail with its confidence, lets the person accept, edit or reject it, and blocks adding until the needed ones are decided', async () => {
@@ -227,7 +288,7 @@ describe('AskIntakeDialog', () => {
     expect(panel).toHaveTextContent('receipt.pdf');
     expect(panel).toHaveTextContent('abcdef');
     expect(panel).toHaveTextContent('gemini-2.0-flash');
-    expect(panel).toHaveTextContent('do not say where on a page');
+    expect(panel).toHaveTextContent('did not say where in the file');
   });
 
   it('accepts a dropped or pasted file, refuses several at once, and explains failures in plain words', async () => {
@@ -273,6 +334,9 @@ describe('intake presentation', () => {
     expect(canAddToHome({ ...base, candidates: [candidate({ reviewStatus: 'CONFIRMED' })] })).toBe(true);
     expect(canAddToHome({ ...base, candidates: [candidate({ reviewStatus: 'CONFIRMED' })], missingRequired: ['Amount'] })).toBe(false);
     expect(canAddToHome(view())).toBe(false);
+    const findings = view({ kind: 'INSPECTION_REPORT', candidates: [candidate({ reviewStatus: 'PENDING' }), candidate({ id: 'c2', reviewStatus: 'REJECTED' })] });
+    expect(canAddToHome(findings)).toBe(false);
+    expect(canAddToHome({ ...findings, candidates: [candidate({ reviewStatus: 'CONFIRMED' }), candidate({ id: 'c2', reviewStatus: 'PENDING' })] })).toBe(true);
   });
   it('links each result to where it lives, and nothing when nothing was created', () => {
     expect(intakeResultHref(view({ result: { entityType: 'WARRANTY', entityId: 'w1' } }))).toBe('/dashboard/ask/record?propertyId=home-1&section=warranties');

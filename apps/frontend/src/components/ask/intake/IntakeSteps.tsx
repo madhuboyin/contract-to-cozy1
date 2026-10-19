@@ -4,7 +4,7 @@ import { useRef, useState } from 'react';
 import Link from 'next/link';
 import { Camera, FileUp, Loader2 } from 'lucide-react';
 import type { AskIntakeCandidate, AskIntakeConfig, AskIntakeKind, AskIntakeView } from '@/features/ask/types';
-import { REPORT_TYPE_LABELS, SENSITIVITY_CHOICES, candidateStatusLabel, canAddToHome, confidenceLabel, formatBytes, kindLabel, originalHref } from './intakePresentation';
+import { RECOMMENDATION_LABELS, REPORT_TYPE_LABELS, SENSITIVITY_CHOICES, candidateStatusLabel, canAddToHome, confidenceLabel, formatBytes, formatCostRange, kindLabel, originalHref } from './intakePresentation';
 
 const BUTTON = 'inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700 disabled:opacity-50';
 const PRIMARY = `${BUTTON} bg-emerald-950 text-white hover:bg-emerald-900`;
@@ -39,6 +39,7 @@ export function IntakePicker({ config, busy, onFile, problem }: { config: AskInt
       <div className="space-y-1 text-xs text-slate-600" data-intake-disclosures>
         <p>{config.disclosures.retention}</p>
         <p>{config.disclosures.sharing}</p>
+        <p data-intake-safety>{config.safetyChecks.statement}</p>
         <p className="font-semibold text-slate-800">The file is kept first. Nothing is read until you choose to.</p>
       </div>
     </div>
@@ -107,11 +108,25 @@ export function IntakeReadStep({ view, config, busy, onRead, onKeep, onDiscard }
   );
 }
 
-function CandidateRow({ candidate, busy, onReview }: { candidate: AskIntakeCandidate; busy: boolean; onReview: (action: 'CONFIRM' | 'CORRECT' | 'REJECT', value?: string) => void }) {
+function EvidenceLine({ candidate }: { candidate: AskIntakeCandidate }) {
+  const { evidence } = candidate;
+  if (evidence.status === 'NOT_RECORDED') return <p className="mt-0.5 text-xs text-slate-500" data-intake-evidence="none">{evidence.reason}</p>;
+  const { value } = evidence;
+  return (
+    <p className="mt-0.5 text-xs text-slate-600" data-intake-evidence={value.basis}>
+      <span className="font-semibold text-slate-700">{value.description || 'Location recorded'}</span>
+      {value.basis === 'MODEL_REPORTED' ? ' (reported by the reader, not checked)' : ' (found in the file’s text)'}
+      {value.excerpt ? <q className="mt-0.5 block break-words italic text-slate-500">…{value.excerpt}…</q> : null}
+    </p>
+  );
+}
+
+function CandidateRow({ candidate, busy, editable, onReview }: { candidate: AskIntakeCandidate; busy: boolean; editable: boolean; onReview: (action: 'CONFIRM' | 'CORRECT' | 'REJECT', value?: string) => void }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(candidate.effectiveValue ?? candidate.proposedValue ?? '');
   const confidence = confidenceLabel(candidate.confidence);
   const rejected = candidate.reviewStatus === 'REJECTED';
+  const cost = candidate.finding ? formatCostRange(candidate.finding.costRangeCents) : null;
   return (
     <li className="px-3 py-2" data-intake-candidate={candidate.fieldKey}>
       <div className="flex flex-wrap items-baseline justify-between gap-x-3">
@@ -128,9 +143,16 @@ function CandidateRow({ candidate, busy, onReview }: { candidate: AskIntakeCandi
       ) : (
         <>
           <p className={`mt-0.5 break-words text-sm ${rejected ? 'text-slate-400 line-through' : 'text-slate-950'}`}>{candidate.proposedValue ?? 'Nothing found'}{candidate.reviewStatus === 'CORRECTED' && candidate.effectiveValue ? <span className="ml-2 no-underline text-emerald-900">→ {candidate.effectiveValue}</span> : null}</p>
+          {candidate.finding && (
+            <p className="mt-0.5 text-xs text-slate-700" data-intake-finding>
+              {[candidate.finding.location, RECOMMENDATION_LABELS[candidate.finding.recommendation] ?? candidate.finding.recommendation, cost ? `Estimated ${cost}` : null].filter(Boolean).join(' · ')}
+              {candidate.finding.interpretation ? <span className="mt-0.5 block text-slate-600">{candidate.finding.interpretation}</span> : null}
+            </p>
+          )}
+          <EvidenceLine candidate={candidate} />
           <div className="mt-1 flex flex-wrap gap-2">
             <button type="button" className={SECONDARY} disabled={busy || candidate.reviewStatus === 'CONFIRMED' || !candidate.proposedValue} onClick={() => onReview('CONFIRM')} aria-label={`Accept ${candidate.label}`}>Accept</button>
-            <button type="button" className={SECONDARY} disabled={busy} onClick={() => { setDraft(candidate.effectiveValue ?? candidate.proposedValue ?? ''); setEditing(true); }} aria-label={`Edit ${candidate.label}`}>Edit</button>
+            {editable && <button type="button" className={SECONDARY} disabled={busy} onClick={() => { setDraft(candidate.effectiveValue ?? candidate.proposedValue ?? ''); setEditing(true); }} aria-label={`Edit ${candidate.label}`}>Edit</button>}
             <button type="button" className={SECONDARY} disabled={busy || rejected} onClick={() => onReview('REJECT')} aria-label={`Reject ${candidate.label}`}>Reject</button>
           </div>
         </>
@@ -142,16 +164,21 @@ function CandidateRow({ candidate, busy, onReview }: { candidate: AskIntakeCandi
 /** Step 3 (documents): every proposed detail can be accepted, edited, rejected, or left for later. Nothing is added until "Add to my home". */
 export function IntakeCandidates({ view, busy, onReview, onAdd, onDiscard }: { view: AskIntakeView; busy: boolean; onReview: (id: string, action: 'CONFIRM' | 'CORRECT' | 'REJECT', value?: string) => void; onAdd: () => void; onDiscard: () => void }) {
   const allowed = canAddToHome(view);
+  const inspection = view.kind === 'INSPECTION_REPORT';
+  const accepted = view.candidates.filter((candidate) => candidate.reviewStatus === 'CONFIRMED').length;
+  const undecided = view.candidates.filter((candidate) => candidate.reviewStatus === 'PENDING').length;
   return (
     <div className="space-y-3">
-      <p className="text-sm text-slate-700" role="status">Cozy read this as <span className="font-semibold">{kindLabel(view.kind)}</span>{view.classification ? ` (${confidenceLabel(view.classification.confidence).text})` : ''}. Check each detail. Nothing is added to your home until you choose to.</p>
+      <p className="text-sm text-slate-700" role="status">Cozy read this as <span className="font-semibold">{kindLabel(view.kind)}</span>{view.classification ? ` (${confidenceLabel(view.classification.confidence).text})` : ''}. {inspection ? 'Accept the findings you want. Only those are added, as a new inspection report. Rejected and undecided ones are never added.' : 'Check each detail. Nothing is added to your home until you choose to.'}</p>
+      {view.candidates.length === 0 && <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950" role="note" data-intake-empty>{inspection ? 'No findings could be read from this report, so there is nothing to add.' : 'Nothing could be read from this file.'}</p>}
       <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200">
-        {view.candidates.map((candidate) => <CandidateRow key={`${candidate.id}:${candidate.reviewStatus}:${candidate.effectiveValue}`} candidate={candidate} busy={busy} onReview={(action, value) => onReview(candidate.id, action, value)} />)}
+        {view.candidates.map((candidate) => <CandidateRow key={`${candidate.id}:${candidate.reviewStatus}:${candidate.effectiveValue}`} candidate={candidate} busy={busy} editable={!inspection} onReview={(action, value) => onReview(candidate.id, action, value)} />)}
       </ul>
       {view.missingRequired.length > 0 && <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950" role="note" data-intake-missing>Still needed before this can be added: {view.missingRequired.join(', ')}. Edit a detail to fill it in.</p>}
-      {view.missingRequired.length === 0 && !allowed && <p className="text-sm text-slate-600" role="note">Accept or edit the details marked “needed” to continue. Others can stay undecided.</p>}
+      {!inspection && view.missingRequired.length === 0 && !allowed && <p className="text-sm text-slate-600" role="note">Accept or edit the details marked “needed” to continue. Others can stay undecided.</p>}
+      {inspection && view.candidates.length > 0 && <p className="text-sm text-slate-600" role="status" data-intake-tally>{accepted} accepted · {undecided} undecided · {view.candidates.length - accepted - undecided} rejected</p>}
       <div className="flex flex-wrap gap-2">
-        <button type="button" className={PRIMARY} disabled={busy || !allowed} onClick={onAdd}>{busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}Add to my home</button>
+        <button type="button" className={PRIMARY} disabled={busy || !allowed} onClick={onAdd}>{busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}{inspection ? `Create the report from ${accepted} accepted ${accepted === 1 ? 'finding' : 'findings'}` : 'Add to my home'}</button>
         <button type="button" className={SECONDARY} disabled={busy} onClick={onDiscard}>Remove file</button>
       </div>
     </div>
@@ -201,7 +228,7 @@ export function IntakeProvenance({ view }: { view: AskIntakeView }) {
         <dt className="font-semibold">Checks</dt><dd>{original.contentChecks}</dd>
         <dt className="font-semibold">Fingerprint</dt><dd className="break-all font-mono">{original.sha256}</dd>
         <dt className="font-semibold">Read by</dt><dd>{reader.status === 'AVAILABLE' ? reader.value.name : reader.reason}</dd>
-        <dt className="font-semibold">Page and place</dt><dd>{pageAndRegion.status === 'NOT_RECORDED' ? pageAndRegion.reason : 'Recorded'}</dd>
+        <dt className="font-semibold">Page and place</dt><dd>{pageAndRegion.status === 'NOT_RECORDED' ? pageAndRegion.reason : `Recorded for ${pageAndRegion.value.located} of ${pageAndRegion.value.total} details`}</dd>
       </dl>
       <Link href={originalHref(view)} className="mt-2 inline-block font-semibold text-emerald-900 underline">Open the original in your Home Records</Link>
     </details>

@@ -17,6 +17,10 @@ export interface ExtractionEvidenceLocation {
   page?: number | null;
   excerpt?: string | null;
   excerptHash?: string | null;
+  /** [ymin, xmin, ymax, xmax] on a 0-1000 page scale, when the reader located the field. */
+  box?: readonly number[] | null;
+  /** TEXT_MATCH: found in the PDF's own text layer. MODEL_REPORTED: the AI reader's claim, not checked. */
+  basis?: 'TEXT_MATCH' | 'MODEL_REPORTED';
 }
 
 export interface ExtractionCandidateField {

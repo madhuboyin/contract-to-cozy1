@@ -6,6 +6,7 @@ import { uploadPdfBuffer } from './storage/reportStorage';
 import { APIError } from '../middleware/error.middleware';
 import { inspectionExtractionToEnvelope } from './inspectionExtractionEnvelope.adapter';
 import { executeGovernedAIRequest, resolveGovernedAIModel } from './ai/aiRequestGovernance.service';
+import { locateValueInPages, pdfPageTexts, type FieldLocation } from './documentLocationEvidence';
 
 type HomeSystem =
   | 'ROOF' | 'EXTERIOR' | 'FOUNDATION' | 'BASEMENT_CRAWLSPACE' | 'STRUCTURAL'
@@ -17,7 +18,7 @@ type Severity = 'SAFETY' | 'MAJOR' | 'MINOR' | 'MONITOR' | 'INFORMATIONAL';
 type InspectorRec = 'MONITOR' | 'REPAIR' | 'REPLACE' | 'FURTHER_EVALUATION' | 'SAFETY_IMMEDIATE';
 type Confidence = 'HIGH' | 'MEDIUM' | 'LOW';
 
-interface ExtractedFinding {
+export interface ExtractedFinding {
   homeSystem: HomeSystem;
   subsystem?: string;
   location?: string;
@@ -268,4 +269,58 @@ export async function ingestInspectionReport(
   }
 
   return { reportId: report.id, findingCount };
+}
+
+
+export type LocatedInspectionFinding = ExtractedFinding & { evidence: FieldLocation | null };
+
+/**
+ * Reads an inspection PDF into PROPOSED findings and writes nothing. Each finding carries where it was found: the report's own text is searched
+ * page by page for the verbatim description, so a page is only ever reported when the text is really on it. A scanned PDF has no text layer
+ * and is refused as unreadable, as in the direct path.
+ */
+export async function extractInspectionFindings(pdfBuffer: Buffer): Promise<{ findings: LocatedInspectionFinding[]; rawFindingCount: number; pageCount: number }> {
+  const pages = await pdfPageTexts(pdfBuffer).catch(() => [] as string[]);
+  const pdfText = pages.length > 0 && pages.join('').trim().length >= 50 ? pages.join('\n\n') : await extractPdfText(pdfBuffer);
+  const { findings, rawFindingCount } = await callGemini(pdfText);
+  return {
+    findings: findings.map((finding) => ({ ...finding, evidence: pages.length > 0 ? locateValueInPages(pages, finding.inspectorDescription.slice(0, 120)) : null })),
+    rawFindingCount,
+    pageCount: pages.length,
+  };
+}
+
+/**
+ * Creates the inspection report and ONLY the findings the person accepted, in one transaction. The report starts in REVIEW_PENDING like the direct
+ * path, so everything downstream that waits for a reviewed report keeps waiting.
+ */
+export async function createInspectionReportFromFindings(
+  args: { propertyId: string; reportType: string; inspectionDate: string; existingSourceFileKey: string; sourceEntityType: string; sourceEntityId: string },
+  findings: readonly ExtractedFinding[],
+): Promise<{ reportId: string; findingIds: string[] }> {
+  if (findings.length === 0) throw new APIError('Accept at least one finding first.', 422, 'INSPECTION_NO_ACCEPTED_FINDINGS');
+  return prisma.$transaction(async (tx) => {
+    const report = await tx.inspectionReport.create({
+      data: {
+        propertyId: args.propertyId, reportType: args.reportType as any, inspectionDate: new Date(args.inspectionDate), sourceFileKey: args.existingSourceFileKey,
+        status: 'REVIEW_PENDING', extractionModel: 'gemini-1.5-flash', processedAt: new Date(),
+        totalFindings: findings.length, openFindings: findings.length,
+        safetyFindings: findings.filter((f) => f.severity === 'SAFETY').length, majorFindings: findings.filter((f) => f.severity === 'MAJOR').length,
+        sourceEntityType: args.sourceEntityType, sourceEntityId: args.sourceEntityId,
+      },
+    });
+    const findingIds: string[] = [];
+    for (const f of findings) {
+      const created = await tx.inspectionFinding.create({
+        data: {
+          reportId: report.id, propertyId: args.propertyId, homeSystem: f.homeSystem, subsystem: f.subsystem, location: f.location, conditionRating: f.conditionRating, severity: f.severity,
+          inspectorDescription: f.inspectorDescription, inspectorRecommendation: f.inspectorRecommendation, aiInterpretation: f.aiInterpretation,
+          estimatedCostCentsLow: f.estimatedCostCentsLow, estimatedCostCentsHigh: f.estimatedCostCentsHigh, extractionConfidence: f.extractionConfidence, status: 'OPEN',
+        },
+        select: { id: true },
+      });
+      findingIds.push(created.id);
+    }
+    return { reportId: report.id, findingIds };
+  });
 }

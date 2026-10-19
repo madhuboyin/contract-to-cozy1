@@ -1448,11 +1448,28 @@ export interface AskIntakeConfig {
   kinds: Array<{ kind: AskIntakeKind; label: string; description: string; acceptsImages: boolean; readsWith: 'MODEL' | 'LOCAL_OCR' }>;
   reportTypes: string[];
   disclosures: AskIntakeDisclosures;
+  /** What the safety checks actually are on this server, so the dialog never claims more than ran. */
+  safetyChecks: { engine: 'CLAMD' | 'NONE'; statement: string };
+}
+
+export interface AskIntakeEvidence {
+  page: number | null;
+  box: number[] | null;
+  excerpt: string | null;
+  basis: 'TEXT_MATCH' | 'MODEL_REPORTED';
+  description: string;
+}
+
+export interface AskIntakeFindingDetail {
+  homeSystem: string; severity: string; conditionRating: string; recommendation: string; interpretation: string; location: string | null;
+  costRangeCents: { low: number | null; high: number | null };
 }
 
 export interface AskIntakeCandidate {
   id: string; fieldKey: string; label: string; proposedValue: string | null; reviewedValue: string | null; effectiveValue: string | null; confidence: number; required: boolean;
   reviewStatus: 'PENDING' | 'CONFIRMED' | 'CORRECTED' | 'REJECTED'; citation: string | null; promoted: boolean;
+  evidence: AskIntakeFacet<AskIntakeEvidence>;
+  finding?: AskIntakeFindingDetail;
 }
 
 export interface AskIntakeView {
@@ -1470,7 +1487,7 @@ export interface AskIntakeView {
   provenance: {
     original: { recordId: string; versionId: string; fileName: string; mimeType: string; sizeBytes: number; sha256: string; uploadedAt: string; scanStatus: string; contentChecks: string };
     reader: AskIntakeFacet<{ kind: 'MODEL' | 'LOCAL_OCR'; name: string }>;
-    pageAndRegion: AskIntakeFacet<never>;
+    pageAndRegion: AskIntakeFacet<{ located: number; total: number }>;
   };
   disclosures: AskIntakeDisclosures;
 }

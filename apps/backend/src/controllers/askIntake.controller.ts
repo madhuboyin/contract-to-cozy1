@@ -1,6 +1,7 @@
 import type { NextFunction, Response } from 'express';
 import { z } from 'zod';
 import type { CustomRequest } from '../types';
+import { contentScanEngine, contentScanStatement } from '../services/contentScan.service';
 import {
   ASK_INTAKE_ACCEPTED_TYPES, ASK_INTAKE_CONTRACT_VERSION, ASK_INTAKE_DISCLOSURES, ASK_INTAKE_INSPECTION_REPORT_TYPES, ASK_INTAKE_KIND_OPTIONS, ASK_INTAKE_MAX_BYTES, ASK_INTAKE_SENSITIVITIES,
 } from '../services/ask/askIntake.contract';
@@ -36,7 +37,7 @@ export function getAskIntakeConfigHandler(_req: CustomRequest, res: Response) {
     data: {
       contractVersion: ASK_INTAKE_CONTRACT_VERSION, acceptedTypes: ASK_INTAKE_ACCEPTED_TYPES, maxBytes: ASK_INTAKE_MAX_BYTES, sensitivities: ASK_INTAKE_SENSITIVITIES,
       kinds: ASK_INTAKE_KIND_OPTIONS.map(({ kind, label, description, acceptsImages, readsWith }) => ({ kind, label, description, acceptsImages, readsWith })),
-      reportTypes: ASK_INTAKE_INSPECTION_REPORT_TYPES, disclosures: ASK_INTAKE_DISCLOSURES,
+      reportTypes: ASK_INTAKE_INSPECTION_REPORT_TYPES, disclosures: ASK_INTAKE_DISCLOSURES, safetyChecks: { engine: contentScanEngine(), statement: contentScanStatement() },
     },
   });
 }

@@ -52,6 +52,8 @@ export function documentInsightsToExtractionEnvelope(
         // per-field — every field shares it rather than inventing a
         // per-field number the model never actually produced.
         confidence: insights.confidence,
+        // Where the reader said it found this value. Unverified here (basis MODEL_REPORTED); a PDF's text layer can upgrade it later.
+        ...(insights.fieldLocations?.[fieldKey] ? { evidence: { page: insights.fieldLocations[fieldKey].page, box: insights.fieldLocations[fieldKey].box, basis: 'MODEL_REPORTED' as const } } : {}),
       }));
 
   const warnings: string[] = parseStatus === 'FAILED'

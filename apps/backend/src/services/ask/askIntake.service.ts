@@ -8,14 +8,15 @@ import {
 } from '../homeRecordsExtraction.service';
 import { documentIntelligenceService, type DocumentInsights } from '../documentIntelligence.service';
 import { documentInsightsToExtractionEnvelope, DOCUMENT_INTELLIGENCE_MODEL_ID } from '../documentIntelligenceExtractionEnvelope.adapter';
-import { ingestInspectionReport } from '../inspectionExtraction.service';
+import { createInspectionReportFromFindings, extractInspectionFindings, type ExtractedFinding } from '../inspectionExtraction.service';
+import { describeLocation, excerptHash } from '../documentLocationEvidence';
 import { scanLabelToDraft } from '../inventoryLabelScan.service';
 import { InventoryDraftService } from '../inventoryDraft.service';
 import { downloadObjectBuffer } from '../storage/reportStorage';
 import {
   ASK_INTAKE_ACCEPTED_TYPES, ASK_INTAKE_CLASSIFICATION_FLOOR, ASK_INTAKE_CONTRACT_VERSION, ASK_INTAKE_DISCLOSURES, ASK_INTAKE_INSPECTION_REPORT_TYPES, ASK_INTAKE_KIND_OPTIONS,
   ASK_INTAKE_MAX_BYTES, ASK_INTAKE_SENSITIVITIES,
-  type AskIntakeCandidate, type AskIntakeFacet, type AskIntakeInspectionReportType, type AskIntakeKind, type AskIntakeSensitivity, type AskIntakeState, type AskIntakeView,
+  type AskIntakeCandidate, type AskIntakeEvidence, type AskIntakeFacet, type AskIntakeFindingDetail, type AskIntakeInspectionReportType, type AskIntakeKind, type AskIntakeSensitivity, type AskIntakeState, type AskIntakeView,
 } from './askIntake.contract';
 
 export interface AskIntakeContext { propertyId: string; userId: string; role: HouseholdRole }
@@ -89,11 +90,42 @@ async function findInspectionReport(ctx: AskIntakeContext, recordId: string) {
   });
 }
 
-function candidateView(row: ExtractedFactCandidate, required: readonly string[]): AskIntakeCandidate {
+const INSPECTION_DETAILS_KEY = '_inspectionDetails';
+const INFORMATIONAL_KEYS = new Set<string>([DOCUMENT_TYPE_FIELD_KEY, INSPECTION_DETAILS_KEY]);
+const SYSTEM_LABELS: Record<string, string> = {
+  ROOF: 'Roof', EXTERIOR: 'Exterior', FOUNDATION: 'Foundation', BASEMENT_CRAWLSPACE: 'Basement or crawlspace', STRUCTURAL: 'Structure', ELECTRICAL: 'Electrical', PLUMBING: 'Plumbing', HVAC: 'Heating and cooling',
+  INTERIOR: 'Interior', ATTIC_INSULATION: 'Attic and insulation', APPLIANCES: 'Appliances', GARAGE: 'Garage', SITE_GRADING: 'Site and grading',
+};
+const SEVERITY_LABELS: Record<string, string> = { SAFETY: 'Safety', MAJOR: 'Major', MINOR: 'Minor', MONITOR: 'Monitor', INFORMATIONAL: 'For information' };
+const CONFIDENCE_BY_TIER: Record<string, number> = { HIGH: 0.9, MEDIUM: 0.6, LOW: 0.35 };
+
+function parseFinding(raw: string | null): (ExtractedFinding & { evidence?: unknown }) | null {
+  if (!raw) return null;
+  try { const value = JSON.parse(raw); return value && typeof value.homeSystem === 'string' && typeof value.inspectorDescription === 'string' ? value : null; } catch { return null; }
+}
+
+function findingDetail(finding: ExtractedFinding): AskIntakeFindingDetail {
   return {
-    id: row.id, fieldKey: row.fieldKey, label: FIELD_LABELS[row.fieldKey] ?? row.fieldKey, proposedValue: row.proposedValue, reviewedValue: row.reviewedValue,
-    effectiveValue: row.reviewStatus === 'REJECTED' ? null : row.reviewedValue ?? row.proposedValue, confidence: row.confidence, required: required.includes(row.fieldKey),
-    reviewStatus: row.reviewStatus, citation: row.sourceCitation, promoted: Boolean(row.promotedEntityId),
+    homeSystem: SYSTEM_LABELS[finding.homeSystem] ?? finding.homeSystem, severity: SEVERITY_LABELS[finding.severity] ?? finding.severity, conditionRating: finding.conditionRating,
+    recommendation: finding.inspectorRecommendation, interpretation: finding.aiInterpretation, location: [finding.subsystem, finding.location].filter(Boolean).join(', ') || null,
+    costRangeCents: { low: finding.estimatedCostCentsLow ?? null, high: finding.estimatedCostCentsHigh ?? null },
+  };
+}
+
+function evidenceFacet(row: ExtractedFactCandidate): AskIntakeFacet<AskIntakeEvidence> {
+  const region = (row.sourceRegionJson ?? null) as { box?: number[] | null; excerpt?: string | null; basis?: 'TEXT_MATCH' | 'MODEL_REPORTED' } | null;
+  if (row.sourcePage == null && !region?.box && !region?.excerpt) return { status: 'NOT_RECORDED', reason: 'The reader did not say where in the file this was found.' };
+  const box = region?.box ?? null;
+  return { status: 'AVAILABLE', value: { page: row.sourcePage, box, excerpt: region?.excerpt ?? null, basis: region?.basis ?? 'MODEL_REPORTED', description: describeLocation({ page: row.sourcePage, box }) } };
+}
+
+function candidateView(row: ExtractedFactCandidate, required: readonly string[]): AskIntakeCandidate {
+  const finding = row.targetDomain === 'INSPECTION_FINDING' ? parseFinding(row.proposedValue) : null;
+  return {
+    id: row.id, fieldKey: row.fieldKey, label: finding ? `${SYSTEM_LABELS[finding.homeSystem] ?? finding.homeSystem} · ${SEVERITY_LABELS[finding.severity] ?? finding.severity}` : FIELD_LABELS[row.fieldKey] ?? row.fieldKey,
+    proposedValue: finding ? finding.inspectorDescription : row.proposedValue, reviewedValue: row.reviewedValue,
+    effectiveValue: row.reviewStatus === 'REJECTED' ? null : finding ? finding.inspectorDescription : row.reviewedValue ?? row.proposedValue, confidence: row.confidence, required: required.includes(row.fieldKey),
+    reviewStatus: row.reviewStatus, citation: row.sourceCitation, promoted: Boolean(row.promotedEntityId), evidence: evidenceFacet(row), ...(finding ? { finding: findingDetail(finding) } : {}),
   };
 }
 
@@ -105,7 +137,8 @@ export async function getAskIntake(ctx: AskIntakeContext, recordId: string): Pro
   const required = documentKind ? REQUIRED_FOR_KIND[documentKind] : [];
   const facts = version.extractedFacts;
   const classificationRow = facts.find((row) => row.fieldKey === DOCUMENT_TYPE_FIELD_KEY);
-  const candidates = facts.filter((row) => row.fieldKey !== DOCUMENT_TYPE_FIELD_KEY).map((row) => candidateView(row, required));
+  const candidates = facts.filter((row) => !INFORMATIONAL_KEYS.has(row.fieldKey)).map((row) => candidateView(row, required));
+  const inspectionRead = facts.some((row) => row.fieldKey === INSPECTION_DETAILS_KEY);
   const missingRequired = documentKind && candidates.length > 0
     ? required.filter((key) => !candidates.some((candidate) => candidate.fieldKey === key && candidate.effectiveValue)).map((key) => FIELD_LABELS[key] ?? key)
     : [];
@@ -114,8 +147,9 @@ export async function getAskIntake(ctx: AskIntakeContext, recordId: string): Pro
 
   let state: AskIntakeState = 'UPLOADED';
   if (record.lifecycleStatus === 'TRASHED') state = 'DISCARDED';
-  else if (promoted || draft?.status === 'CONFIRMED' || draft?.status === 'DISMISSED' || report?.status === 'CONFIRMED') state = 'COMPLETED';
-  else if (candidates.length > 0 || draft || report) state = 'REVIEW';
+  else if (kind === 'INSPECTION_REPORT') state = report?.status === 'CONFIRMED' ? 'COMPLETED' : report || inspectionRead || candidates.length > 0 ? 'REVIEW' : 'UPLOADED';
+  else if (promoted || draft?.status === 'CONFIRMED' || draft?.status === 'DISMISSED') state = 'COMPLETED';
+  else if (candidates.length > 0 || draft) state = 'REVIEW';
 
   const labelItem = draft?.status === 'CONFIRMED'
     ? await prisma.inventoryItem.findFirst({ where: { propertyId: ctx.propertyId, sourceOcrSessionId: draft.sessionId ?? '__none__' }, select: { id: true } })
@@ -128,7 +162,7 @@ export async function getAskIntake(ctx: AskIntakeContext, recordId: string): Pro
 
   const modelReader: AskIntakeFacet<{ kind: 'MODEL' | 'LOCAL_OCR'; name: string }> = kind === 'APPLIANCE_LABEL'
     ? { status: 'AVAILABLE', value: { kind: 'LOCAL_OCR', name: 'Text recognition on our server' } }
-    : candidates.length > 0 || report ? { status: 'AVAILABLE', value: { kind: 'MODEL', name: DOCUMENT_INTELLIGENCE_MODEL_ID } } : { status: 'NOT_RECORDED', reason: 'This file has not been read yet.' };
+    : candidates.length > 0 || report || inspectionRead ? { status: 'AVAILABLE', value: { kind: 'MODEL', name: DOCUMENT_INTELLIGENCE_MODEL_ID } } : { status: 'NOT_RECORDED', reason: 'This file has not been read yet.' };
 
   return {
     contractVersion: ASK_INTAKE_CONTRACT_VERSION, generatedAt: new Date().toISOString(), propertyId: ctx.propertyId, recordId: record.id, versionId: version.id, title: record.title,
@@ -145,7 +179,9 @@ export async function getAskIntake(ctx: AskIntakeContext, recordId: string): Pro
         uploadedAt: version.createdAt.toISOString(), scanStatus: version.scanStatus, contentChecks: CONTENT_CHECKS,
       },
       reader: modelReader,
-      pageAndRegion: { status: 'NOT_RECORDED', reason: 'The readers report one overall confidence for the file and do not say where on a page a detail was found.' },
+      pageAndRegion: candidates.some((candidate) => candidate.evidence.status === 'AVAILABLE')
+        ? { status: 'AVAILABLE', value: { located: candidates.filter((candidate) => candidate.evidence.status === 'AVAILABLE').length, total: candidates.length } }
+        : { status: 'NOT_RECORDED', reason: candidates.length === 0 ? 'Nothing has been read from this file yet.' : 'The reader did not say where in the file these details were found.' },
     },
     disclosures: ASK_INTAKE_DISCLOSURES,
   };
@@ -224,11 +260,24 @@ export async function analyzeAskIntake(ctx: AskIntakeContext, recordId: string, 
     if (!ASK_INTAKE_INSPECTION_REPORT_TYPES.includes(details.reportType) || Number.isNaN(Date.parse(details.inspectionDate)) || Date.parse(details.inspectionDate) > Date.now() + 86_400_000) {
       throw invalid('Choose the report type and the date the inspection happened.', 'ASK_INTAKE_INSPECTION_DETAILS_INVALID');
     }
-    await setRecordType(record.id, RECORD_TYPE_FOR_KIND[kind]);
+    // Read first, write second: the findings are only PROPOSED here (as candidates on the file's version). Nothing becomes an inspection finding
+    // until the person accepts it and asks for the report to be created.
     const buffer = await readOriginal(version.storageKey);
-    await ingestInspectionReport({
-      propertyId: ctx.propertyId, userId: ctx.userId, pdfBuffer: buffer, fileName: version.originalFileName, reportType: details.reportType, inspectionDate: details.inspectionDate,
-      existingSourceFileKey: version.storageKey, sourceEntityType: 'PROPERTY_RECORD', sourceEntityId: record.id,
+    const { findings, rawFindingCount } = await extractInspectionFindings(buffer);
+    await setRecordType(record.id, RECORD_TYPE_FOR_KIND[kind]);
+    const citation = `AI extraction from "${version.originalFileName}"`;
+    await prisma.extractedFactCandidate.createMany({
+      data: [
+        { propertyRecordVersionId: version.id, targetDomain: 'INSPECTION_FINDING', fieldKey: INSPECTION_DETAILS_KEY, proposedValue: JSON.stringify({ reportType: details.reportType, inspectionDate: details.inspectionDate, rawFindingCount }), sourceCitation: citation, confidence: 1 },
+        ...findings.map((finding, index) => {
+          const { evidence, ...proposed } = finding;
+          return {
+            propertyRecordVersionId: version.id, targetDomain: 'INSPECTION_FINDING' as const, fieldKey: `finding:${index + 1}`, proposedValue: JSON.stringify(proposed), sourceCitation: citation,
+            confidence: CONFIDENCE_BY_TIER[finding.extractionConfidence] ?? 0.5, sourcePage: evidence?.page ?? null,
+            sourceRegionJson: evidence ? { box: evidence.box, excerpt: evidence.excerpt, basis: evidence.basis } : undefined, sourceExcerptHash: evidence?.excerpt ? excerptHash(evidence.excerpt) : null,
+          };
+        }),
+      ],
     });
     return getAskIntake(ctx, record.id);
   }
@@ -248,10 +297,34 @@ export async function analyzeAskIntake(ctx: AskIntakeContext, recordId: string, 
 
 /** Accept, edit or reject one proposed detail. "Decide later" is leaving it pending: it needs no call and writes nothing. */
 export async function reviewAskIntakeCandidate(ctx: AskIntakeContext, recordId: string, candidateId: string, input: { action: 'CONFIRM' | 'CORRECT' | 'REJECT'; value?: string }): Promise<AskIntakeView> {
+  const { record } = await loadRecord(ctx, recordId);
+  if (record.recordType === 'INSPECTION_REPORT' && input.action === 'CORRECT') throw invalid('A finding can be accepted or rejected, not edited. Edit it after it is added.', 'ASK_INTAKE_FINDING_NOT_EDITABLE');
   await homeRecordsExtractionService.reviewCandidate({
     propertyId: ctx.propertyId, recordId, candidateId, userId: ctx.userId, role: ctx.role, action: input.action, reviewedValue: input.value ?? null,
   });
   return getAskIntake(ctx, recordId);
+}
+
+/**
+ * Creates the inspection report from the findings the person ACCEPTED. Rejected and undecided findings are never written. A second request is
+ * refused rather than creating a second report.
+ */
+async function promoteAcceptedFindings(ctx: AskIntakeContext, recordId: string, versionId: string): Promise<void> {
+  if (await findInspectionReport(ctx, recordId)) throw new APIError('An inspection report was already created from this file.', 409, 'ASK_INTAKE_ALREADY_USED');
+  const rows = await prisma.extractedFactCandidate.findMany({ where: { propertyRecordVersionId: versionId, targetDomain: 'INSPECTION_FINDING' }, orderBy: { createdAt: 'asc' } });
+  const details = rows.find((row) => row.fieldKey === INSPECTION_DETAILS_KEY);
+  const parsedDetails = details?.proposedValue ? (JSON.parse(details.proposedValue) as { reportType: string; inspectionDate: string }) : null;
+  if (!parsedDetails) throw new APIError('Read the file as an inspection report first.', 409, 'ASK_INTAKE_NOT_READ');
+  const accepted = rows.filter((row) => row.fieldKey !== INSPECTION_DETAILS_KEY && (row.reviewStatus === 'CONFIRMED' || row.reviewStatus === 'CORRECTED') && !row.promotedEntityId);
+  const pairs = accepted.flatMap((row) => { const finding = parseFinding(row.proposedValue); return finding ? [{ row, finding: finding as ExtractedFinding }] : []; });
+  const findings = pairs.map((pair) => pair.finding);
+  if (findings.length === 0) throw new APIError('Accept at least one finding first.', 422, 'INSPECTION_NO_ACCEPTED_FINDINGS');
+  const { version } = await loadRecord(ctx, recordId);
+  const { findingIds } = await createInspectionReportFromFindings(
+    { propertyId: ctx.propertyId, reportType: parsedDetails.reportType, inspectionDate: parsedDetails.inspectionDate, existingSourceFileKey: version.storageKey, sourceEntityType: 'PROPERTY_RECORD', sourceEntityId: recordId },
+    findings,
+  );
+  await Promise.all(pairs.map((pair, index) => prisma.extractedFactCandidate.update({ where: { id: pair.row.id }, data: { promotedEntityType: 'INSPECTION_FINDING', promotedEntityId: findingIds[index] ?? null } })));
 }
 
 /** Create the warranty, expense or policy from the confirmed details. The existing promotion refuses when a required detail is missing or rejected. */
@@ -261,6 +334,7 @@ export async function promoteAskIntake(ctx: AskIntakeContext, recordId: string):
   if (record.recordType === 'WARRANTY') await homeRecordsExtractionService.promoteWarranty(base);
   else if (record.recordType === 'RECEIPT') await homeRecordsExtractionService.promoteExpense(base);
   else if (record.recordType === 'INSURANCE_POLICY') await homeRecordsExtractionService.promoteInsurancePolicy(base);
+  else if (record.recordType === 'INSPECTION_REPORT') await promoteAcceptedFindings(ctx, recordId, version.id);
   else throw invalid('Nothing from this file can be added this way.', 'ASK_INTAKE_NOT_PROMOTABLE');
   return getAskIntake(ctx, recordId);
 }

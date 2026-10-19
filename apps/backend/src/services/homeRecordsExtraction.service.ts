@@ -15,6 +15,7 @@ import { APIError } from '../middleware/error.middleware';
 import { downloadObjectBuffer } from './storage/reportStorage';
 import { documentIntelligenceService, type DocumentInsights } from './documentIntelligence.service';
 import { documentInsightsToExtractionEnvelope } from './documentIntelligenceExtractionEnvelope.adapter';
+import { excerptHash, pdfPageTexts, resolveLocation, type FieldLocation, type PageBox } from './documentLocationEvidence';
 import type { ExtractionEnvelope } from './intelligence/extractionEnvelope.contract';
 import { homeRecordsService } from './homeRecords.service';
 import { assertRecordVisible, visibleRecordWhere } from './homeRecordsAccess';
@@ -230,6 +231,27 @@ function insurancePolicyCandidatesFromEnvelope(
   return candidates;
 }
 
+// Which reader fields each proposed detail was built from, so a detail can be traced back to where the reader found it (Phase 7, FR-INPUT-003).
+const CANDIDATE_SOURCE_KEYS: Record<'WARRANTY' | 'EXPENSE' | 'INSURANCE_POLICY', Record<string, readonly string[]>> = {
+  WARRANTY: { providerName: ['manufacturer', 'vendor'], startDate: ['purchaseDate'], expiryDate: ['warrantyExpiration'], category: ['category'], coverageDetails: ['productName', 'modelNumber', 'serialNumber'], cost: ['amount'] },
+  EXPENSE: { description: ['vendor', 'productName'], amount: ['amount'], transactionDate: ['purchaseDate'], category: ['category'] },
+  INSURANCE_POLICY: {
+    carrierName: ['carrierName'], policyNumber: ['policyNumber'], coverageType: ['coverageType'], premiumAmount: ['premiumAmount'], deductibleAmount: ['deductible'], dwellingLimit: ['dwellingLimit'],
+    personalPropertyLimit: ['personalPropertyLimit'], liabilityLimit: ['liabilityLimit'], valuationBasis: ['valuationBasis'], termStart: ['startDate'], termEnd: ['expiryDate'],
+  },
+};
+
+function candidateLocation(envelope: ExtractionEnvelope, pages: readonly string[], domain: keyof typeof CANDIDATE_SOURCE_KEYS, candidateFieldKey: string): FieldLocation | null {
+  for (const sourceKey of CANDIDATE_SOURCE_KEYS[domain][candidateFieldKey] ?? []) {
+    const field = envelope.fields.find((entry) => entry.fieldKey === sourceKey);
+    if (!field || Array.isArray(field.value) || field.value === null || typeof field.value === 'boolean') continue;
+    const reported = field.evidence ? { page: field.evidence.page ?? null, box: (field.evidence.box as PageBox | null | undefined) ?? null } : null;
+    const location = resolveLocation(pages, field.value as string | number, reported);
+    if (location) return location;
+  }
+  return null;
+}
+
 export class HomeRecordsExtractionService {
   async runExtraction(input: {
     propertyId: string;
@@ -325,6 +347,8 @@ export class HomeRecordsExtractionService {
       : targetDomain === 'EXPENSE'
         ? receiptCandidatesFromEnvelope(envelope)
         : insurancePolicyCandidatesFromEnvelope(envelope);
+    // A PDF's own text layer lets us check where a value really is; a scan or photo has none, so only the reader's (unverified) claim can be kept.
+    const pages = version.mimeType === 'application/pdf' ? await pdfPageTexts(buffer).catch(() => [] as string[]) : [];
     const rows = [
       {
         propertyRecordVersionId: version.id,
@@ -334,14 +358,20 @@ export class HomeRecordsExtractionService {
         sourceCitation: citation,
         confidence,
       },
-      ...fieldCandidates.map((candidate) => ({
-        propertyRecordVersionId: version.id,
-        targetDomain,
-        fieldKey: candidate.fieldKey,
-        proposedValue: candidate.proposedValue,
-        sourceCitation: citation,
-        confidence,
-      })),
+      ...fieldCandidates.map((candidate) => {
+        const location = candidateLocation(envelope, pages, targetDomain, candidate.fieldKey);
+        return {
+          propertyRecordVersionId: version.id,
+          targetDomain,
+          fieldKey: candidate.fieldKey,
+          proposedValue: candidate.proposedValue,
+          sourceCitation: citation,
+          confidence,
+          sourcePage: location?.page ?? null,
+          sourceRegionJson: location ? { box: location.box, excerpt: location.excerpt, basis: location.basis } : undefined,
+          sourceExcerptHash: location?.excerpt ? excerptHash(location.excerpt) : null,
+        };
+      }),
     ];
 
     await prisma.extractedFactCandidate.createMany({ data: rows });

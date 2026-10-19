@@ -2306,6 +2306,8 @@ enum ExtractedFactTargetDomain {
   INSURANCE_POLICY
   // Quote facts: provider, total, dates, scope, line items and terms (Quote Comparison import design, D-Q1).
   SERVICE_QUOTE
+  // One finding proposed from an inspection report (Ask intake, Phase 7). It becomes an InspectionFinding only when the person accepts it.
+  INSPECTION_FINDING
   OTHER
 }
 
@@ -5293,6 +5295,12 @@ model ExtractedFactCandidate {
   fieldKey                String
   proposedValue           String?
   sourceCitation          String?
+  // Where in the original this was found (Phase 7, FR-INPUT-003). All null when the reader did not say; the page is 1-based.
+  sourcePage              Int?
+  // { box?: [ymin, xmin, ymax, xmax] on a 0-1000 page scale, excerpt?: string, basis: 'TEXT_MATCH' | 'MODEL_REPORTED' }
+  sourceRegionJson        Json?
+  // SHA-256 of the normalized excerpt, so the evidence can be re-checked against the original without storing more text.
+  sourceExcerptHash       String?
   confidence              Float
   reviewStatus            ExtractedFactReviewStatus @default(PENDING)
   reviewedValue           String?

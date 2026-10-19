@@ -58,7 +58,7 @@ export function AskIntakeDialog({ open, onOpenChange, propertyId }: { open: bool
   );
   else if (view.state === 'REVIEW' && view.inspection) body = (
     <div className="space-y-3" data-intake-inspection>
-      <p className="text-sm text-slate-800" role="status">Your inspection report was read and {view.inspection.findingCount} {view.inspection.findingCount === 1 ? 'finding was' : 'findings were'} found. None of them has been added to your home. Go through them to decide what to do about each one.</p>
+      <p className="text-sm text-slate-800" role="status">An inspection report was created with the {view.inspection.findingCount} {view.inspection.findingCount === 1 ? 'finding' : 'findings'} you accepted. Go through them to decide what to do about each one. Findings you rejected or left undecided were not added.</p>
       <div className="flex flex-wrap gap-2">{resultHref && <Link href={resultHref} className={PRIMARY_LINK}>Review the findings</Link>}<button type="button" className={LINK} onClick={startOver}>Add another file</button></div>
     </div>
   );

@@ -6,6 +6,7 @@ import { getAskTargetSelectionHandler, deleteAskSession, patchAskSession, getAsk
 import { propertyAuthMiddleware, requireHouseholdRole } from '../middleware/propertyAuth.middleware';
 import { uploadRateLimiter } from '../middleware/rateLimiter.middleware';
 import { validateDocumentUpload } from '../utils/documentValidator.util';
+import { scanIntakeUpload } from '../services/contentScan.service';
 import { ASK_INTAKE_ACCEPTED_TYPES, ASK_INTAKE_MAX_BYTES } from '../services/ask/askIntake.contract';
 import { getAskIntakeConfigHandler, getAskIntakeHandler, patchAskIntakeLabel, postAskIntakeAnalyze, postAskIntakeCandidateReview, postAskIntakeDiscard, postAskIntakeFile, postAskIntakeLabelConfirm, postAskIntakeLabelDismiss, postAskIntakePromote } from '../controllers/askIntake.controller';
 
@@ -40,7 +41,7 @@ router.post('/ask/executions/:executionId/corrections', postAskCorrection);
 router.get('/ask/executions/:executionId', getAskExecutionById);
 router.get('/ask/pending', getAskPendingExecutions);
 router.get('/ask/intake/config', getAskIntakeConfigHandler);
-router.post('/ask/properties/:propertyId/intake/files', ...intakeContributor, uploadRateLimiter, intakeUpload.single('file'), validateDocumentUpload, postAskIntakeFile);
+router.post('/ask/properties/:propertyId/intake/files', ...intakeContributor, uploadRateLimiter, intakeUpload.single('file'), validateDocumentUpload, scanIntakeUpload, postAskIntakeFile);
 router.get('/ask/properties/:propertyId/intake/:recordId', ...intakeContributor, getAskIntakeHandler);
 router.post('/ask/properties/:propertyId/intake/:recordId/analyze', ...intakeContributor, postAskIntakeAnalyze);
 router.post('/ask/properties/:propertyId/intake/:recordId/candidates/:candidateId/review', ...intakeContributor, postAskIntakeCandidateReview);

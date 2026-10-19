@@ -6,6 +6,7 @@ import { logger } from '../lib/logger';
 import { APIError } from '../middleware/error.middleware';
 import { AICircuitBreaker, AICircuitOpenError, AITimeoutError, withTimeout } from '../lib/aiResilience';
 import { executeGovernedAIRequest, resolveGovernedAIModel } from './ai/aiRequestGovernance.service';
+import { sanitizeBox, sanitizePage, type PageBox } from './documentLocationEvidence';
 import { parseServiceQuoteResponse, SERVICE_QUOTE_ANALYSIS_PROMPT, type ServiceQuoteParse } from './serviceQuoteExtraction';
 
 export interface DocumentInsights {
@@ -38,6 +39,8 @@ export interface DocumentInsights {
   };
   suggestedActions: string[];
   rawText?: string;
+  /** Where each extracted field appears in the file, as the reader reported it (unverified). Keys are extractedData keys. */
+  fieldLocations?: Record<string, { page: number | null; box: PageBox | null }>;
 }
 
 const DOCUMENT_ANALYSIS_PROMPT = `Analyze this home-related document and extract key information.
@@ -99,8 +102,13 @@ Return ONLY valid JSON with this EXACT structure (no markdown, no code blocks):
     "expiryDate": "YYYY-MM-DD or null",
     "coverageType": "string or null"
   },
-  "suggestedActions": ["action1", "action2"]
-}`;
+  "suggestedActions": ["action1", "action2"],
+  "fieldLocations": {
+    "<an extractedData key you filled in>": { "page": 1-based page number or null, "box": [ymin, xmin, ymax, xmax] or null }
+  }
+}
+
+For fieldLocations, give only the fields you actually extracted. "box" is where that value is printed, as four numbers from 0 to 1000 relative to the page (top-left is 0,0). Use null for page or box when you cannot tell. Never guess a location.`;
 
 // Material Specs' AI-review pipeline (Slice 5 of the continuity plan):
 // extracts only what's visibly printed on a product photo (paint can,
@@ -175,7 +183,7 @@ export class DocumentIntelligenceService {
                 ]
               }],
               config: {
-                maxOutputTokens: 1000,
+                maxOutputTokens: 2000, // room for fieldLocations; a truncated reply would be unparseable
                 temperature: 0.1, // Low temperature for accuracy
                 responseMimeType: 'application/json',
               }
@@ -204,6 +212,16 @@ export class DocumentIntelligenceService {
         .trim();
 
       const insights: DocumentInsights = JSON.parse(cleanedText);
+      // Locations are optional and unverified: keep only well-formed ones, for fields that were actually extracted.
+      const rawLocations = (insights.fieldLocations ?? {}) as Record<string, { page?: unknown; box?: unknown }>;
+      const locations: NonNullable<DocumentInsights['fieldLocations']> = {};
+      for (const [key, value] of Object.entries(rawLocations)) {
+        if (!value || typeof value !== 'object' || (insights.extractedData as Record<string, unknown> | undefined)?.[key] == null) continue;
+        const page = sanitizePage(value.page);
+        const box = sanitizeBox(value.box);
+        if (page !== null || box !== null) locations[key] = { page, box };
+      }
+      insights.fieldLocations = Object.keys(locations).length > 0 ? locations : undefined;
 
       // Convert date strings to Date objects
       if (insights.extractedData.purchaseDate) {
