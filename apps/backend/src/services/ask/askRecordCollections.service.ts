@@ -6,6 +6,9 @@ import { loadOperatingMode } from './askRecordContext';
 import { inventoryLifecycleHorizon, inventoryMissingFacts } from './handlers/inventory.handler';
 import { visibleInventoryItemWhere } from '../riskAssetApplicability';
 import type { HouseholdRole } from '@prisma/client';
+import { listScenarios } from '../financing.service';
+import { HomeBuyerTaskService } from '../HomeBuyerTask.service';
+import { SCENARIO_STATUS_LABELS } from './support/financingRead';
 import { evaluateCoverageRecord } from '../coverage/contextPolicy';
 import { permitTrackerService } from '../permitTracker.service';
 import { listProjects as listTrackedProjects } from '../projectTracker.service';
@@ -1190,6 +1193,288 @@ export async function readCoveragePoliciesPage(propertyId: string, query: AskRec
   };
 }
 
+// A cursor over a multi-part sort key: the numeric parts compare in order, then the id. Used by the sections whose order has several parts.
+const KeyCursorSchema = z.object({ k: z.array(z.number()).max(6), i: z.string() });
+const afterKey = (entry: { key: number[]; id: string }, cursor: { k: number[]; i: string }): boolean => {
+  for (let index = 0; index < cursor.k.length; index += 1) {
+    if (entry.key[index] !== cursor.k[index]) return entry.key[index] > cursor.k[index];
+  }
+  return entry.id > cursor.i;
+};
+const byKey = (left: { key: number[]; id: string }, right: { key: number[]; id: string }): number => {
+  for (let index = 0; index < left.key.length; index += 1) {
+    if (left.key[index] !== right.key[index]) return left.key[index] < right.key[index] ? -1 : 1;
+  }
+  return left.id < right.id ? -1 : left.id > right.id ? 1 : 0;
+};
+const usd = (cents: number | null | undefined) => (cents == null ? null : `$${Math.round(cents / 100).toLocaleString('en-US')}`);
+const FAR = 8_640_000_000_000_000; // a time later than any recorded date, for "no date" sorting last
+
+export interface AskRecordFinancingScenarioRow {
+  id: string;
+  title: string;
+  projectCostLabel: string;
+  status: string;
+  statusLabel: string;
+  /** The way to pay the household selected, if any. */
+  selectedOptionLabel: string | null;
+  entryPointLabel: string | null;
+  createdAt: string;
+  askQuestion: null;
+}
+
+const FINANCING_STATUSES = ['DRAFT', 'SAVED'] as const;
+
+/**
+ * Reads one page of the home's saved financing scenarios (draft and saved), newest first, through `listScenarios`, the read the Financing
+ * page and Ask use (any household member). This section lists scenarios only. The financing profile (mortgage balance, rate, payment) and
+ * the ownership-cost snapshot are not collections and are not included: the profile's own history is OWNER-only and its route comment calls
+ * the profile owner-only as a whole while its current-profile GET admits members, so exposing profile facts here needs that floor settled.
+ */
+export async function readFinancingScenariosPage(
+  propertyId: string,
+  query: AskRecordCollectionQuery,
+  list: typeof listScenarios = listScenarios,
+): Promise<AskRecordCollectionPage<AskRecordFinancingScenarioRow>> {
+  const limit = clampLimit(query.limit);
+  const search = cleanSearch(query.search);
+  const status = query.filters?.status?.trim() || null;
+  if (status && !(FINANCING_STATUSES as readonly string[]).includes(status)) throw new InvalidCollectionQueryError('status filter is not valid.');
+  const after = decodeCursor(query.cursor, KeyCursorSchema);
+
+  const scenarios = await list(propertyId);
+  const entries = scenarios.map((scenario) => ({
+    id: scenario.id,
+    key: [-new Date(scenario.createdAt).getTime()],
+    haystack: String(scenario.title).toLowerCase(),
+    row: {
+      id: scenario.id,
+      title: scenario.title,
+      projectCostLabel: usd(scenario.projectCostCents) ?? '$0',
+      status: String(scenario.status),
+      statusLabel: SCENARIO_STATUS_LABELS[String(scenario.status)] ?? String(scenario.status),
+      selectedOptionLabel: scenario.selectedOption ? readableEnum(String(scenario.selectedOption)) : null,
+      entryPointLabel: scenario.entryPoint ? readableEnum(String(scenario.entryPoint)) : null,
+      createdAt: new Date(scenario.createdAt).toISOString(),
+      askQuestion: null,
+    } satisfies AskRecordFinancingScenarioRow,
+  })).sort(byKey);
+
+  const needle = search?.toLowerCase() ?? null;
+  const matching = entries.filter((entry) => (!status || entry.row.status === status) && (!needle || entry.haystack.includes(needle)));
+  const remaining = after ? matching.filter((entry) => afterKey(entry, after)) : matching;
+  const page = remaining.slice(0, limit);
+  const last = page[page.length - 1];
+  const nextCursor = remaining.length > limit && last ? encodeCursor({ k: last.key, i: last.id }) : null;
+  const statusOptions = FINANCING_STATUSES.filter((value) => entries.some((entry) => entry.row.status === value) || value === status).map((value) => ({ value, label: SCENARIO_STATUS_LABELS[value] }));
+
+  return {
+    contractVersion: ASK_RECORD_COLLECTION_CONTRACT_VERSION,
+    propertyId,
+    sectionId: 'financing-ownership',
+    generatedAt: new Date().toISOString(),
+    freshAsOf: entries[0]?.row.createdAt ?? null,
+    total: matching.length,
+    delivered: page.length,
+    nextCursor,
+    truncated: nextCursor !== null,
+    notice: null,
+    sort: { key: 'createdAt', label: 'Newest first' },
+    query: { search, filters: status ? { status } : {} },
+    filterOptions: statusOptions.length > 1 ? [{ key: 'status', label: 'Status', options: statusOptions }] : [],
+    rows: page.map((entry) => entry.row),
+  };
+}
+
+export interface AskRecordBuyerTaskRow {
+  id: string;
+  title: string;
+  description: string | null;
+  status: string;
+  statusLabel: string;
+  phase: string;
+  phaseLabel: string;
+  required: boolean;
+  blocking: boolean;
+  dueAt: string | null;
+  completedAt: string | null;
+  askQuestion: null;
+}
+
+const BUYER_STATUSES = ['PENDING', 'IN_PROGRESS', 'BLOCKED', 'COMPLETED', 'NOT_NEEDED', 'CANCELLED'];
+const BUYER_PHASES = ['EXPLORING', 'OFFER_CONTRACT', 'DUE_DILIGENCE', 'CLOSING_PREP', 'MOVE_IN', 'FIRST_30_DAYS', 'DAYS_31_TO_90', 'RECURRING_HOME'];
+
+/**
+ * Reads one page of the Buyer Plan's tasks through `HomeBuyerTaskService.getTasks` (read-only; any household member), in the plan's own
+ * order: by phase, then the plan's sort order. A home with no plan, or that is not a purchase, reads as an empty collection with a
+ * plain-language notice; every other failure is rethrown so it is reported as unavailable rather than as "nothing recorded".
+ */
+export async function readBuyerRecordsPage(
+  context: { propertyId: string; userId: string },
+  query: AskRecordCollectionQuery,
+  load: (userId: string, propertyId: string) => Promise<any[]> = (userId, propertyId) => HomeBuyerTaskService.getTasks(userId, propertyId),
+): Promise<AskRecordCollectionPage<AskRecordBuyerTaskRow>> {
+  const limit = clampLimit(query.limit);
+  const search = cleanSearch(query.search);
+  const status = query.filters?.status?.trim() || null;
+  const phase = query.filters?.phase?.trim() || null;
+  if (status && !BUYER_STATUSES.includes(status)) throw new InvalidCollectionQueryError('status filter is not valid.');
+  if (phase && !BUYER_PHASES.includes(phase)) throw new InvalidCollectionQueryError('phase filter is not valid.');
+  const after = decodeCursor(query.cursor, KeyCursorSchema);
+
+  let tasks: any[] = [];
+  let notice: string | null = null;
+  try {
+    tasks = await load(context.userId, context.propertyId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '';
+    if (message === 'Buyer plan not found.') notice = 'No Buyer Plan has been started for this home.';
+    else if (message.startsWith('The buyer acquisition plan is only available')) notice = 'A Buyer Plan applies to a purchase or a recently purchased home.';
+    else throw error;
+  }
+
+  const entries = tasks.map((task) => ({
+    id: String(task.id),
+    key: [BUYER_PHASES.indexOf(String(task.phase)), Number(task.sortOrder ?? 0)],
+    haystack: `${task.title ?? ''} ${task.description ?? ''}`.toLowerCase(),
+    phase: String(task.phase),
+    row: {
+      id: String(task.id),
+      title: String(task.title),
+      description: task.description ?? null,
+      status: String(task.status),
+      statusLabel: readableEnum(String(task.status)) ?? String(task.status),
+      phase: String(task.phase),
+      phaseLabel: readableEnum(String(task.phase)) ?? String(task.phase),
+      required: Boolean(task.required),
+      blocking: Boolean(task.blocking),
+      dueAt: task.dueAt ? new Date(task.dueAt).toISOString() : null,
+      completedAt: task.completedAt ? new Date(task.completedAt).toISOString() : null,
+      askQuestion: null,
+    } satisfies AskRecordBuyerTaskRow,
+  })).sort(byKey);
+
+  const needle = search?.toLowerCase() ?? null;
+  const matching = entries.filter((entry) => (!status || entry.row.status === status) && (!phase || entry.phase === phase) && (!needle || entry.haystack.includes(needle)));
+  const remaining = after ? matching.filter((entry) => afterKey(entry, after)) : matching;
+  const page = remaining.slice(0, limit);
+  const last = page[page.length - 1];
+  const nextCursor = remaining.length > limit && last ? encodeCursor({ k: last.key, i: last.id }) : null;
+  const statusOptions = BUYER_STATUSES.filter((value) => entries.some((entry) => entry.row.status === value) || value === status).map((value) => ({ value, label: readableEnum(value) ?? value }));
+  const phaseOptions = BUYER_PHASES.filter((value) => entries.some((entry) => entry.phase === value) || value === phase).map((value) => ({ value, label: readableEnum(value) ?? value }));
+  const completions = entries.map((entry) => entry.row.completedAt).filter((value): value is string => Boolean(value)).sort().reverse();
+
+  return {
+    contractVersion: ASK_RECORD_COLLECTION_CONTRACT_VERSION,
+    propertyId: context.propertyId,
+    sectionId: 'buyer-records',
+    generatedAt: new Date().toISOString(),
+    freshAsOf: completions[0] ?? null,
+    total: matching.length,
+    delivered: page.length,
+    nextCursor,
+    truncated: nextCursor !== null,
+    notice,
+    sort: { key: 'phase', label: 'By plan phase' },
+    query: { search, filters: Object.fromEntries(Object.entries({ status, phase }).filter(([, value]) => value)) as Record<string, string> },
+    filterOptions: [
+      ...(statusOptions.length > 1 ? [{ key: 'status', label: 'Status', options: statusOptions }] : []),
+      ...(phaseOptions.length > 1 ? [{ key: 'phase', label: 'Phase', options: phaseOptions }] : []),
+    ],
+    rows: page.map((entry) => entry.row),
+  };
+}
+
+export interface AskRecordSellerItemRow {
+  id: string;
+  title: string;
+  detail: string | null;
+  category: string;
+  categoryLabel: string;
+  requirementLabel: string;
+  status: string;
+  statusLabel: string;
+  dueAt: string | null;
+  costRangeLabel: string | null;
+  askQuestion: null;
+}
+
+const SELLER_STATUS_ORDER = ['OPEN', 'PURSUING', 'WAIVED', 'RESOLVED'];
+const SELLER_CATEGORIES = ['SAFETY_STRUCTURAL', 'SYSTEMS_MAINTENANCE', 'PERMITS_DISCLOSURE', 'DOCUMENTATION_RECORDS', 'FINANCIAL_DECISION', 'PRESENTATION'];
+
+/**
+ * Reads one page of the sale case's readiness items as stored, without refreshing them. Ask's checklist refreshes the items from the
+ * home's records on every read (a write); the Record index and collection must not write, so this lists the persisted items and says
+ * so in `notice`. Open items first, then pursued, waived, and resolved; earliest due first, then oldest first.
+ */
+export async function readSellerRecordsPage(propertyId: string, query: AskRecordCollectionQuery): Promise<AskRecordCollectionPage<AskRecordSellerItemRow>> {
+  const limit = clampLimit(query.limit);
+  const search = cleanSearch(query.search);
+  const status = query.filters?.status?.trim() || null;
+  const category = query.filters?.category?.trim() || null;
+  if (status && !SELLER_STATUS_ORDER.includes(status)) throw new InvalidCollectionQueryError('status filter is not valid.');
+  if (category && !SELLER_CATEGORIES.includes(category)) throw new InvalidCollectionQueryError('category filter is not valid.');
+  const after = decodeCursor(query.cursor, KeyCursorSchema);
+
+  const saleCase = await prisma.propertySaleCase.findUnique({ where: { propertyId }, select: { id: true } });
+  const items = saleCase
+    ? await prisma.saleReadinessItem.findMany({
+      where: { saleCaseId: saleCase.id },
+      select: { id: true, category: true, requirementClass: true, status: true, title: true, detail: true, dueAt: true, createdAt: true, estimatedCostMinCents: true, estimatedCostMaxCents: true },
+    })
+    : [];
+
+  const entries = items.map((item) => ({
+    id: item.id,
+    key: [SELLER_STATUS_ORDER.indexOf(String(item.status)), item.dueAt ? item.dueAt.getTime() : FAR, item.createdAt.getTime()],
+    haystack: `${item.title} ${item.detail ?? ''}`.toLowerCase(),
+    row: {
+      id: item.id,
+      title: item.title,
+      detail: item.detail ?? null,
+      category: String(item.category),
+      categoryLabel: readableEnum(String(item.category)) ?? String(item.category),
+      requirementLabel: readableEnum(String(item.requirementClass)) ?? String(item.requirementClass),
+      status: String(item.status),
+      statusLabel: readableEnum(String(item.status)) ?? String(item.status),
+      dueAt: item.dueAt?.toISOString() ?? null,
+      costRangeLabel: item.estimatedCostMinCents != null && item.estimatedCostMaxCents != null ? `${usd(item.estimatedCostMinCents)} to ${usd(item.estimatedCostMaxCents)}` : null,
+      askQuestion: null,
+    } satisfies AskRecordSellerItemRow,
+  })).sort(byKey);
+
+  const needle = search?.toLowerCase() ?? null;
+  const matching = entries.filter((entry) => (!status || entry.row.status === status) && (!category || entry.row.category === category) && (!needle || entry.haystack.includes(needle)));
+  const remaining = after ? matching.filter((entry) => afterKey(entry, after)) : matching;
+  const page = remaining.slice(0, limit);
+  const last = page[page.length - 1];
+  const nextCursor = remaining.length > limit && last ? encodeCursor({ k: last.key, i: last.id }) : null;
+  const statusOptions = SELLER_STATUS_ORDER.filter((value) => entries.some((entry) => entry.row.status === value) || value === status).map((value) => ({ value, label: readableEnum(value) ?? value }));
+  const categoryOptions = SELLER_CATEGORIES.filter((value) => entries.some((entry) => entry.row.category === value) || value === category).map((value) => ({ value, label: readableEnum(value) ?? value }));
+
+  return {
+    contractVersion: ASK_RECORD_COLLECTION_CONTRACT_VERSION,
+    propertyId,
+    sectionId: 'seller-records',
+    generatedAt: new Date().toISOString(),
+    freshAsOf: null,
+    total: matching.length,
+    delivered: page.length,
+    nextCursor,
+    truncated: nextCursor !== null,
+    notice: saleCase
+      ? 'These are the sale checklist items as last refreshed. Open the seller checklist in Ask to refresh them from your latest records.'
+      : 'No sale case has been started for this home.',
+    sort: { key: 'status', label: 'Open first, then by due date' },
+    query: { search, filters: Object.fromEntries(Object.entries({ status, category }).filter(([, value]) => value)) as Record<string, string> },
+    filterOptions: [
+      ...(statusOptions.length > 1 ? [{ key: 'status', label: 'Status', options: statusOptions }] : []),
+      ...(categoryOptions.length > 1 ? [{ key: 'category', label: 'Category', options: categoryOptions }] : []),
+    ],
+    rows: page.map((entry) => entry.row),
+  };
+}
+
 export type AskRecordReaderContext = { propertyId: string; userId: string; role: HouseholdRole };
 type SectionReader = (context: AskRecordReaderContext, query: AskRecordCollectionQuery) => Promise<AskRecordCollectionPage<unknown>>;
 
@@ -1203,6 +1488,9 @@ export const ASK_RECORD_COLLECTION_READERS: Readonly<Partial<Record<AskRecordSec
   inspections: (context, query) => readInspectionsPage(context.propertyId, query),
   permits: (context, query) => readPermitsPage(context.propertyId, query),
   coverage: (context, query) => readCoveragePoliciesPage(context.propertyId, query),
+  'financing-ownership': (context, query) => readFinancingScenariosPage(context.propertyId, query),
+  'buyer-records': (context, query) => readBuyerRecordsPage(context, query),
+  'seller-records': (context, query) => readSellerRecordsPage(context.propertyId, query),
   'projects-renovations': (context, query) => readProjectsPage(context.propertyId, query),
   'incidents-claims': (context, query) => readIncidentsClaimsPage(context.propertyId, query),
   warranties: (context, query) => readWarrantiesPage(context.propertyId, query),

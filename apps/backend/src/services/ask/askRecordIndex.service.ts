@@ -66,6 +66,9 @@ const COLLECTION_COUNT_NOUNS: Partial<Record<AskRecordSectionId, [string, string
   inspections: ['report', 'reports'],
   permits: ['permit', 'permits'],
   coverage: ['policy', 'policies'],
+  'financing-ownership': ['saved scenario', 'saved scenarios'],
+  'buyer-records': ['task', 'tasks'],
+  'seller-records': ['checklist item', 'checklist items'],
   'projects-renovations': ['project', 'projects'],
   'incidents-claims': ['incident or claim', 'incidents and claims'],
 };

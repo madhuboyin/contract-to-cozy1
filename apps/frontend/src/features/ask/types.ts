@@ -1004,3 +1004,44 @@ export interface AskRecordPolicyRow {
   lastVerifiedAt: string | null;
   askQuestion: null;
 }
+
+export interface AskRecordFinancingScenarioRow {
+  id: string;
+  title: string;
+  projectCostLabel: string;
+  status: string;
+  statusLabel: string;
+  selectedOptionLabel: string | null;
+  entryPointLabel: string | null;
+  createdAt: string;
+  askQuestion: null;
+}
+
+export interface AskRecordBuyerTaskRow {
+  id: string;
+  title: string;
+  description: string | null;
+  status: string;
+  statusLabel: string;
+  phase: string;
+  phaseLabel: string;
+  required: boolean;
+  blocking: boolean;
+  dueAt: string | null;
+  completedAt: string | null;
+  askQuestion: null;
+}
+
+export interface AskRecordSellerItemRow {
+  id: string;
+  title: string;
+  detail: string | null;
+  category: string;
+  categoryLabel: string;
+  requirementLabel: string;
+  status: string;
+  statusLabel: string;
+  dueAt: string | null;
+  costRangeLabel: string | null;
+  askQuestion: null;
+}

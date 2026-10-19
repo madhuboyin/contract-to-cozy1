@@ -121,21 +121,21 @@ export const ASK_RECORD_SECTION_REGISTRY: readonly AskRecordSectionDefinition[] 
     primaryAction: { label: 'Review coverage', question: 'Review my coverage.' },
   }),
   section({
-    id: 'financing-ownership', label: 'Financing and ownership', scope: 'Financing facts and recorded ownership costs.', owner: 'financing',
+    id: 'financing-ownership', label: 'Financing and ownership', scope: 'Saved financing scenarios for home projects.', owner: 'financing',
     readOperationIds: ['FINANCING_OVERVIEW', 'OWNERSHIP_COSTS'], commandOperationIds: ['FINANCING_PROFILE_COMMAND', 'OWNERSHIP_COST_COMMAND'],
-    collectionReader: null, pagedCollection: false, lifecycleOperationId: 'FINANCING_OVERVIEW', freshnessSource: 'Financing profile', exportEligibility: 'NOT_EVALUATED',
+    collectionReader: PAGED, pagedCollection: true, lifecycleOperationId: 'FINANCING_OVERVIEW', freshnessSource: 'Newest saved scenario', exportEligibility: 'NOT_EVALUATED',
     primaryAction: { label: 'View financing', question: 'Show me my financing and ownership costs.' },
   }),
   section({
-    id: 'buyer-records', label: 'Buyer records', scope: 'Purchase plan, deadlines and closing records while buying.', owner: 'buyer-plan',
+    id: 'buyer-records', label: 'Buyer records', scope: 'Buyer Plan tasks across the purchase.', owner: 'buyer-plan',
     readOperationIds: ['BUYER_PLAN_STATUS'], commandOperationIds: ['BUYER_PLAN_SETUP_COMMAND', 'BUYER_TASK_CREATE', 'BUYER_TASK_UPDATE', 'BUYER_TASK_COMPLETE'],
-    collectionReader: null, pagedCollection: false, lifecycleOperationId: 'BUYER_PLAN_STATUS', freshnessSource: 'Buyer plan updates', exportEligibility: 'NOT_EVALUATED',
+    collectionReader: PAGED, pagedCollection: true, lifecycleOperationId: 'BUYER_PLAN_STATUS', freshnessSource: 'Most recent task completion', exportEligibility: 'NOT_EVALUATED',
     primaryAction: { label: 'View buyer plan', question: 'What is the status of my buyer plan?' },
   }),
   section({
-    id: 'seller-records', label: 'Seller records', scope: 'Sale preparation items and decisions while preparing to sell.', owner: 'seller-prep',
+    id: 'seller-records', label: 'Seller records', scope: 'Sale readiness checklist items.', owner: 'seller-prep',
     readOperationIds: ['SELLER_PREP_CHECKLIST'], commandOperationIds: ['SELLER_PREP_ITEM_DECISION', 'SELLER_PREP_CASE_COMMAND'],
-    collectionReader: null, pagedCollection: false, lifecycleOperationId: 'SELLER_PREP_CHECKLIST', freshnessSource: 'Seller prep updates', exportEligibility: 'NOT_EVALUATED',
+    collectionReader: PAGED, pagedCollection: true, lifecycleOperationId: 'SELLER_PREP_CHECKLIST', freshnessSource: 'Last checklist refresh', exportEligibility: 'NOT_EVALUATED',
     primaryAction: { label: 'View sale prep', question: 'Show me my sale preparation checklist.' },
   }),
   // No Ask operation is dedicated to reading household access, so this read-only summary rides the Property Summary operation that

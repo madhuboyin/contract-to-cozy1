@@ -84,4 +84,34 @@ describe('AskRecord permits, projects, and incidents/claims', () => {
     expect(screen.getByText('Dates need review · Not verified')).toBeInTheDocument();
     expect(document.querySelectorAll('[data-record-row] a')).toHaveLength(0);
   });
+
+  it('financing scenarios, buyer tasks, and sale checklist items state their facts, and the no-plan and persisted-items notices show', async () => {
+    mockSection = 'financing-ownership';
+    getPage.mockResolvedValueOnce({ success: true, data: page('financing-ownership', [
+      { id: 'f1', title: 'Roof loan', projectCostLabel: '$40,000', status: 'DRAFT', statusLabel: 'Draft', selectedOptionLabel: 'Home Equity Loan', entryPointLabel: 'Direct', createdAt: '2026-05-01T12:00:00.000Z', askQuestion: null as null },
+      { id: 'f2', title: 'Kitchen', projectCostLabel: '$9,000', status: 'SAVED', statusLabel: 'Saved', selectedOptionLabel: null, entryPointLabel: null, createdAt: '2026-04-01T12:00:00.000Z', askQuestion: null as null },
+    ]) });
+    const first = render(<AskRecord />);
+    expect(await screen.findByRole('heading', { name: 'Financing and ownership' })).toBeInTheDocument();
+    expect(screen.getByText('$40,000 · Draft · Chosen: Home Equity Loan · Direct · Created May 1, 2026')).toBeInTheDocument();
+    expect(screen.getByText('$9,000 · Saved · No option chosen · Created Apr 1, 2026')).toBeInTheDocument();
+    first.unmount();
+
+    mockSection = 'buyer-records';
+    getPage.mockResolvedValueOnce({ success: true, data: page('buyer-records', [
+      { id: 'b1', title: 'Order appraisal', description: 'Lender step', status: 'BLOCKED', statusLabel: 'Blocked', phase: 'DUE_DILIGENCE', phaseLabel: 'Due Diligence', required: true, blocking: true, dueAt: '2026-12-01T12:00:00.000Z', completedAt: null, askQuestion: null as null },
+    ]) });
+    const second = render(<AskRecord />);
+    expect(await screen.findByText('Due Diligence · Blocked · Required · Due Dec 1, 2026')).toBeInTheDocument();
+    expect(screen.getByText('Blocking the plan')).toBeInTheDocument();
+    second.unmount();
+
+    mockSection = 'seller-records';
+    getPage.mockResolvedValueOnce({ success: true, data: page('seller-records', [
+      { id: 's1', title: 'Fix railing', detail: 'Rail is loose', category: 'SAFETY_STRUCTURAL', categoryLabel: 'Safety Structural', requirementLabel: 'Material Blocker', status: 'OPEN', statusLabel: 'Open', dueAt: null, costRangeLabel: '$500 to $1,200', askQuestion: null as null },
+    ], { notice: 'These are the sale checklist items as last refreshed. Open the seller checklist in Ask to refresh them from your latest records.' }) });
+    render(<AskRecord />);
+    expect(await screen.findByText('Safety Structural · Material Blocker · Open · Estimated $500 to $1,200')).toBeInTheDocument();
+    expect(screen.getByRole('note')).toHaveTextContent('as last refreshed');
+  });
 });
