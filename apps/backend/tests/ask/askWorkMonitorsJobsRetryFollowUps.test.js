@@ -97,7 +97,7 @@ test('queued job reader merges report and score exports for the caller and this 
   assert.equal(scoreExportRow({ id: 's2', jobStatus: 'DONE', format: 'JSON', createdAt: at(2) }, 'p1').title, 'Home score report (JSON)');
 });
 
-test('scheduled follow-ups: future claim and project dates, owner keys kept as aliases, only the Scheduled view', async () => {
+test('scheduled follow-ups: future claim and project dates, each its own work with its own due date, only the Scheduled view', async () => {
   const claim = { id: 'c1', propertyId: 'p1', title: 'Water claim', status: 'SUBMITTED', nextFollowUpAt: at(20), updatedAt: at(6) };
   const project = { id: 'pr1', propertyId: 'p1', name: 'Roof', status: 'COMPLETED', followUpDueAt: at(25), updatedAt: at(5) };
   const calls = { claim: [], project: [] };
@@ -105,7 +105,7 @@ test('scheduled follow-ups: future claim and project dates, owner keys kept as a
   prisma.projectRecord = { findMany: async (args) => { calls.project.push(args); return [project]; }, count: async () => 1 };
   const page = await readScheduledFollowUpWork(ctx, { view: 'SCHEDULED', after: null, limit: 5, status: null });
   assert.deepEqual(page.rows.map((row) => row.workKey), ['followUp:claim:c1', 'followUp:project:pr1']);
-  assert.deepEqual(page.rows.map((row) => row.sourceAliases), [['claim:c1'], ['project:pr1']]);
+  assert.deepEqual(page.rows.map((row) => row.sourceAliases), [[], []], 'a follow-up is its own work, not an alias of its claim or project');
   assert.equal(page.rows[0].dueAt, at(20).toISOString());
   assert.equal(page.total, 2);
   assert.match(JSON.stringify(calls.claim[0].where), /"nextFollowUpAt":\{"gt"/);
@@ -116,10 +116,10 @@ test('scheduled follow-ups: future claim and project dates, owner keys kept as a
   assert.equal(projectFollowUpRow(project).summary, 'Completed');
 });
 
-test('only unknown-outcome and repairs remain unavailable, each with a stated reason; everything else is connected and valid', async () => {
+test('only unknown-outcome remains unavailable, with a stated reason; everything else is connected and valid', async () => {
   assert.deepEqual(validateAskWorkProviders(), []);
   const unavailable = ASK_WORK_PROVIDER_REGISTRY.filter((entry) => entry.reader.state === 'UNAVAILABLE').map((entry) => entry.id).sort();
-  assert.deepEqual(unavailable, ['REPAIRS', 'UNKNOWN_OUTCOME_EXECUTIONS']);
+  assert.deepEqual(unavailable, ['UNKNOWN_OUTCOME_EXECUTIONS']);
   for (const id of unavailable) assert.ok(ASK_WORK_PROVIDER_REGISTRY.find((entry) => entry.id === id).reader.reason.length > 20);
   for (const entry of ASK_WORK_PROVIDER_REGISTRY.filter((candidate) => candidate.reader.state === 'CONNECTED')) assert.ok(ASK_WORK_PROVIDER_READERS[entry.id], entry.id);
   assert.equal(workProviderReadFloor(ASK_WORK_PROVIDER_REGISTRY.find((entry) => entry.id === 'SCHEDULED_FOLLOW_UPS')), 'VIEWER');
@@ -133,6 +133,6 @@ test('the page stays partial while a required provider is unavailable, naming ea
   assert.equal(page.partial, true);
   assert.equal(page.total, null);
   assert.equal(page.totalScope, 'PARTIAL');
-  assert.deepEqual(page.providers.filter((entry) => entry.state === 'UNAVAILABLE').map((entry) => entry.providerId).sort(), ['REPAIRS', 'UNKNOWN_OUTCOME_EXECUTIONS']);
+  assert.deepEqual(page.providers.filter((entry) => entry.state === 'UNAVAILABLE').map((entry) => entry.providerId).sort(), ['UNKNOWN_OUTCOME_EXECUTIONS']);
   assert.ok(page.providers.every((entry) => entry.required));
 });

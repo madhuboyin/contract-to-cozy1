@@ -67,7 +67,7 @@ export function WorkRow({ row, busy, canOpen, onOpen, onRetry, onDismiss }: {
           {updated && <div><dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Last updated</dt><dd className="text-slate-900">{updated}</dd></div>}
           {due && <div><dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Due</dt><dd className="text-slate-900">{due}</dd></div>}
           <div><dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Kept by</dt><dd className="text-slate-900">{row.sourceOwner.replace(/-/g, ' ')}</dd></div>
-          {!canOpen && <div className="sm:col-span-2"><dd className="text-slate-600">There is nothing to continue in Ask for this; it shows its current state here.</dd></div>}
+          {!canOpen && <div className="sm:col-span-2"><dd className="text-slate-600">{row.resume.unavailableReason ?? 'There is nothing to continue in Ask for this; it shows its current state here.'}</dd></div>}
         </dl>
       )}
     </li>

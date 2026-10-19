@@ -1198,7 +1198,8 @@ export interface AskWorkRow {
   sourceAliases: string[];
   providerId: string;
   workType: AskWorkType;
-  propertyId: string;
+  /** Null only for a pending request that has no home yet. */
+  propertyId: string | null;
   entity: { type: string; id: string };
   title: string;
   summary: string | null;
@@ -1209,7 +1210,7 @@ export interface AskWorkRow {
   dueAt?: string | null;
   freshness: { version: string; asOf: string };
   sourceOwner: string;
-  resume: { kind: 'CONVERSATION' | 'CONFIRMATION' | 'WORKSPACE'; executionId: string | null; sessionId: string | null; launch: AskWorkLaunch };
+  resume: { kind: 'CONVERSATION' | 'CONFIRMATION' | 'WORKSPACE'; executionId: string | null; sessionId: string | null; launch: AskWorkLaunch; unavailableReason?: string | null };
 }
 
 export interface AskWorkProviderStatus {
@@ -1238,6 +1239,9 @@ export interface AskWorkPage {
   sort: { key: 'sortAt'; label: string };
   query: { workType: AskWorkType | null; status: string | null };
   providers: AskWorkProviderStatus[];
+  filterOptions: { workTypes: Array<{ value: string; label: string }>; statusesByWorkType: Record<string, Array<{ value: string; label: string }>> };
+  /** The caller's pending requests that belong to no home yet; never attached to a property. */
+  unscopedPending: AskWorkRow[];
   rows: AskWorkRow[];
 }
 

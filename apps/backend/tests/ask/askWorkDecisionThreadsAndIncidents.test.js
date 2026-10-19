@@ -24,7 +24,16 @@ test('decision thread views: gathering and comparing need you, stale-in-motion n
   assert.equal(decisionThreadLifecycleView('ARCHIVED', 'STALE'), 'ARCHIVED');
 });
 
-const thread = (id, lifecycleStatus, day, extra = {}) => ({ id, propertyId: 'p1', title: `Decision ${id}`, lifecycleStatus, contextStatus: 'CURRENT', primaryEntityType: 'InventoryItem', primaryEntityId: 'inv1', version: 3, updatedAt: at(day), currentRecommendationSnapshot: null, ...extra });
+const thread = (id, lifecycleStatus, day, extra = {}) => ({ decisionDefinitionId: 'HVAC_REPAIR_REPLACE', id, propertyId: 'p1', title: `Decision ${id}`, lifecycleStatus, contextStatus: 'CURRENT', primaryEntityType: 'InventoryItem', primaryEntityId: 'inv1', version: 3, updatedAt: at(day), currentRecommendationSnapshot: null, ...extra });
+
+test('a decision family Ask cannot continue is still listed, with its resume marked unavailable and a reason', () => {
+  const row = decisionThreadRow(thread('t9', 'RECOMMENDATION_AVAILABLE', 4, { decisionDefinitionId: 'ROOF_REPAIR_REPLACE' }));
+  assert.equal(row.workKey, 'decisionThread:t9');
+  assert.equal(row.nextAction, null);
+  assert.equal(row.resume.launch.operationId, null);
+  assert.match(row.resume.unavailableReason, /Ask cannot continue/);
+  assert.equal(row.lifecycleView, 'NEEDS_YOU');
+});
 
 test('decision thread row carries the thread identity, version and the continue launch (HVAC_DECISION_CONTINUE)', () => {
   const row = decisionThreadRow(thread('t1', 'RECOMMENDATION_AVAILABLE', 4));
@@ -38,7 +47,7 @@ test('decision thread row carries the thread identity, version and the continue 
   assert.equal(decisionThreadRow(thread('t2', 'ACTION_IN_PROGRESS', 4, { contextStatus: 'STALE' })).nextAction.label, 'Review what changed');
 });
 
-test('decision thread reader is property scoped, family limited, read-only, and counts every view', async () => {
+test('decision thread reader is property scoped, lists every family, read-only, and counts every view', async () => {
   const calls = [];
   prisma.decisionThread = {
     findMany: async (args) => { calls.push(args); return [thread('t1', 'OPEN', 5)]; },
@@ -49,7 +58,7 @@ test('decision thread reader is property scoped, family limited, read-only, and 
   const page = await readDecisionThreadWork(ctx, { view: 'NEEDS_YOU', after: null, limit: 5, status: null });
   const where = JSON.stringify(calls[0].where);
   assert.match(where, /"propertyId":"p1"/);
-  assert.match(where, /"decisionDefinitionId":\{"in":\["HVAC_REPAIR_REPLACE"\]\}/);
+  assert.doesNotMatch(where, /decisionDefinitionId/, 'no decision family is suppressed');
   assert.equal(page.rows[0].workKey, 'decisionThread:t1');
   assert.deepEqual(page.viewCounts, { NEEDS_YOU: 3, ACTIVE: 0, WAITING: 0, SCHEDULED: 0, COMPLETED: 3, ARCHIVED: 0 });
   await readDecisionThreadWork(ctx, { view: 'NEEDS_YOU', after: { sortAt: at(5).toISOString(), workKey: 'zzz:1' }, limit: 5, status: 'OPEN' });
@@ -110,6 +119,8 @@ test('decisions and incidents are connected providers, valid at startup, and no 
   for (const id of ['DECISION_THREADS', 'INCIDENTS']) assert.equal(ASK_WORK_PROVIDER_REGISTRY.find((entry) => entry.id === id).reader.state, 'CONNECTED');
   prisma.askExecution = { findMany: async () => [] };
   prisma.operationalWorkItem = { findMany: async () => [], count: async () => 0, groupBy: async () => [] };
+  prisma.operationalWorkSource = { findMany: async () => [] };
+  prisma.operationalWorkExecution = { findMany: async () => [] };
   prisma.decisionThread = { findMany: async () => [], count: async () => 0, groupBy: async () => [] };
   prisma.incident = { findMany: async () => [], count: async () => 0 };
   const page = await composeAskWorkPage({ userId: 'u1', propertyId: 'p1', role: 'OWNER', operatingMode: 'OWNING' }, { view: 'NEEDS_YOU', limit: 5, after: null, workType: null, status: null }, { PENDING_EXECUTIONS: ASK_WORK_PROVIDER_READERS.PENDING_EXECUTIONS, OPERATIONAL_WORK_ITEMS: ASK_WORK_PROVIDER_READERS.OPERATIONAL_WORK_ITEMS, DECISION_THREADS: ASK_WORK_PROVIDER_READERS.DECISION_THREADS, INCIDENTS: ASK_WORK_PROVIDER_READERS.INCIDENTS });

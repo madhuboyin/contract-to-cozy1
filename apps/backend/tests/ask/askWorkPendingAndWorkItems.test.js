@@ -87,6 +87,8 @@ test('work item lifecycle view is derived from the canonical state and dispositi
 const item = (id, state, day, extra = {}) => ({ id, propertyId: 'p1', state, disposition: null, title: `Item ${id}`, homeownerReason: 'Because', updatedAt: at(day), executions: [], ...extra });
 
 function installWorkItems(rows) {
+  prisma.operationalWorkSource = { findMany: async () => [] };
+  prisma.operationalWorkExecution = { findMany: async () => [] };
   const calls = { findMany: [], count: [], groupBy: [] };
   prisma.operationalWorkItem = {
     findMany: async (args) => { calls.findMany.push(args); return rows.slice(0, args.take); },
@@ -133,8 +135,7 @@ test('work item provider: ownership exclusion switches on only when the canonica
   const where = JSON.stringify(some.findMany[0].where);
   assert.match(where, /"executionType":"PROJECT"/);
   assert.match(where, /"executionType":"CLAIM"/);
-  assert.match(where, /"sourceType":"INCIDENT"/);
-  assert.doesNotMatch(where, /"executionType":"GUIDANCE"/);
+  assert.doesNotMatch(where, /"executionType":"GUIDANCE"/, 'guidance and incident ownership is decided by the owner\'s visible row, not by the link');
 });
 
 test('work item provider: resumes after a boundary from another provider at the same instant by key order', async () => {

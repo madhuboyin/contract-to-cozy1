@@ -99,7 +99,10 @@ test('a home work item merged into another, or owned by a connected canonical pr
   prisma.operationalWorkItem = found(item({ executions: [{ executionType: 'CLAIM', executionEntityId: 'c1' }] }));
   assert.equal((await resolveAskWork({ ...base, workKey: 'workItem:w1' }, {})).supersededBy, 'claim:c1');
   prisma.operationalWorkItem = found(item({ sources: [{ sourceEntityId: 'i1' }] }));
+  prisma.incident = found({ id: 'i1' });
   assert.equal((await resolveAskWork({ ...base, workKey: 'workItem:w1' }, {})).supersededBy, 'incident:i1');
+  prisma.incident = found(null);
+  assert.equal((await resolveAskWork({ ...base, workKey: 'workItem:w1' }, { OPERATIONAL_WORK_ITEMS: readerOf([row('OPERATIONAL_WORK_ITEMS', 'workItem:w1')]) })).outcome, 'AVAILABLE', 'a work item whose incident is hidden stays a home work item');
   prisma.operationalWorkItem = found(item({ state: 'CANDIDATE' }));
   assert.equal((await resolveAskWork({ ...base, workKey: 'workItem:w1' }, {})).outcome, 'STALE');
   const unowned = ASK_WORK_PROVIDER_REGISTRY.map((entry) => ({ ...entry, reader: entry.id === 'OPERATIONAL_WORK_ITEMS' ? { state: 'CONNECTED' } : { state: 'UNAVAILABLE', reason: 'test' } }));

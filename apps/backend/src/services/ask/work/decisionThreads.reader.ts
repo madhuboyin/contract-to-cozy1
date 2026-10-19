@@ -5,7 +5,7 @@ import type { AskWorkProviderReader, AskWorkRow } from '../askWork.contract';
 import { boundaryInstant, truncateTitle, workLaunch } from './askWorkRowSupport';
 
 const KEY_PREFIX = 'decisionThread:';
-/** The one decision family Ask can continue today (HVAC_DECISION_CONTINUE); other families have no Ask resume, so they are not offered. */
+/** The decision families Ask can continue today (HVAC_DECISION_CONTINUE). Every other family is still listed, with its resume marked unavailable. */
 export const ASK_RESUMABLE_DECISION_DEFINITION_IDS: readonly string[] = ['HVAC_REPAIR_REPLACE'];
 
 const LIFECYCLE_LABELS: Record<DecisionThreadLifecycleStatus, string> = {
@@ -48,6 +48,7 @@ interface ThreadRecord {
   title: string;
   lifecycleStatus: DecisionThreadLifecycleStatus;
   contextStatus: DecisionThreadContextStatus;
+  decisionDefinitionId: string;
   primaryEntityType: string | null;
   primaryEntityId: string | null;
   version: number;
@@ -57,7 +58,8 @@ interface ThreadRecord {
 
 export function decisionThreadRow(thread: ThreadRecord): AskWorkRow {
   const sortAt = thread.updatedAt.toISOString();
-  const nextStep = NEXT_STEP[thread.lifecycleStatus];
+  const resumable = ASK_RESUMABLE_DECISION_DEFINITION_IDS.includes(thread.decisionDefinitionId);
+  const nextStep = resumable ? NEXT_STEP[thread.lifecycleStatus] : undefined;
   const stale = thread.contextStatus !== 'CURRENT' && IN_MOTION.includes(thread.lifecycleStatus);
   return {
     workKey: `${KEY_PREFIX}${thread.id}`,
@@ -70,20 +72,23 @@ export function decisionThreadRow(thread: ThreadRecord): AskWorkRow {
     summary: stale ? 'Some of what this decision relied on has changed.' : null,
     status: { canonical: thread.lifecycleStatus, label: LIFECYCLE_LABELS[thread.lifecycleStatus] },
     lifecycleView: decisionThreadLifecycleView(thread.lifecycleStatus, thread.contextStatus),
-    nextAction: stale ? { label: 'Review what changed', operationId: null, allowed: true } : nextStep ? { label: nextStep, operationId: null, allowed: true } : null,
+    nextAction: !resumable ? null : stale ? { label: 'Review what changed', operationId: null, allowed: true } : nextStep ? { label: nextStep, operationId: null, allowed: true } : null,
     sortAt,
     freshness: { version: String(thread.version), asOf: sortAt },
     sourceOwner: 'decision-platform',
     resume: {
       kind: 'WORKSPACE', executionId: null, sessionId: null,
-      launch: workLaunch({ operationId: 'HVAC_DECISION_CONTINUE', entityType: thread.primaryEntityType, entityId: thread.primaryEntityId, decisionThreadId: thread.id, contextVersion: String(thread.version) }),
+      launch: resumable
+        ? workLaunch({ operationId: 'HVAC_DECISION_CONTINUE', entityType: thread.primaryEntityType, entityId: thread.primaryEntityId, decisionThreadId: thread.id, contextVersion: String(thread.version) })
+        : workLaunch({ entityType: 'DecisionThread', entityId: thread.id, decisionThreadId: thread.id, contextVersion: String(thread.version) }),
+      unavailableReason: resumable ? null : 'Ask cannot continue this kind of decision yet. Its current state is shown here.',
     },
   };
 }
 
-/** Decision threads for the home (FR-WORK-001). Property-scoped like Concierge Home; read-only. `role` is unused: the read floor is the gate's. */
+/** Every decision thread for the home (FR-WORK-001), whatever its family. Property-scoped like Concierge Home; read-only. `role` is unused: the read floor is the gate's. */
 export const readDecisionThreadWork: AskWorkProviderReader = async (context, query) => {
-  const base: Prisma.DecisionThreadWhereInput = { propertyId: context.propertyId, decisionDefinitionId: { in: [...ASK_RESUMABLE_DECISION_DEFINITION_IDS] } };
+  const base: Prisma.DecisionThreadWhereInput = { propertyId: context.propertyId };
   const statusFilter: Prisma.DecisionThreadWhereInput = query.status ? { lifecycleStatus: query.status as DecisionThreadLifecycleStatus } : {};
   const inView: Prisma.DecisionThreadWhereInput  = query.entityId ? { AND: [base, { id: query.entityId }] } : { AND: [base, viewWhere(query.view), statusFilter] };
   const instant = boundaryInstant(query.after);
@@ -97,7 +102,7 @@ export const readDecisionThreadWork: AskWorkProviderReader = async (context, que
     prisma.decisionThread.findMany({
       where: paged,
       select: {
-        id: true, propertyId: true, title: true, lifecycleStatus: true, contextStatus: true, primaryEntityType: true, primaryEntityId: true, version: true, updatedAt: true,
+        id: true, propertyId: true, title: true, lifecycleStatus: true, contextStatus: true, decisionDefinitionId: true, primaryEntityType: true, primaryEntityId: true, version: true, updatedAt: true,
         currentRecommendationSnapshot: { select: { verdictCode: true } },
       },
       orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],

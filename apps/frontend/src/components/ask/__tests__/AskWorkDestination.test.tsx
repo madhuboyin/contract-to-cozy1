@@ -43,7 +43,9 @@ const page = (rows: AskWorkRow[], overrides: Partial<AskWorkPage> = {}): AskWork
   contractVersion: 'ask-work-v1', propertyId: 'home-1', generatedAt: '2026-10-19T12:00:00.000Z', view: 'NEEDS_YOU', total: rows.length, totalScope: 'COMPLETE', partial: false, delivered: rows.length,
   nextCursor: null, truncated: false, viewCounts: { NEEDS_YOU: rows.length, ACTIVE: 2, WAITING: 0, SCHEDULED: null, COMPLETED: 5, ARCHIVED: 1 }, sort: { key: 'sortAt', label: 'Most recently updated first' },
   query: { workType: null, status: null },
-  providers: [{ providerId: 'PROJECTS', label: 'Projects', workType: 'PROJECT', state: 'AVAILABLE', reason: null, total: rows.length, delivered: rows.length, required: true }], rows, ...overrides,
+  providers: [{ providerId: 'PROJECTS', label: 'Projects', workType: 'PROJECT', state: 'AVAILABLE', reason: null, total: rows.length, delivered: rows.length, required: true }],
+  filterOptions: { workTypes: [{ value: 'PROJECT', label: 'Projects' }], statusesByWorkType: { PROJECT: [{ value: 'IN_PROGRESS', label: 'In progress' }, { value: 'DISPUTED', label: 'Disputed' }] } },
+  unscopedPending: [], rows, ...overrides,
 });
 const resolution = (overrides: Partial<AskWorkResolution> = {}): AskWorkResolution => ({
   contractVersion: 'ask-work-v1', propertyId: 'home-1', workKey: 'project:pr1', outcome: 'AVAILABLE', row: row(), currentVersion: 'v1', supersededBy: null, message: 'Ready to open.', ...overrides,
@@ -95,7 +97,32 @@ describe('AskWorkDestination', () => {
     await waitFor(() => expect(getWork).toHaveBeenLastCalledWith('home-1', expect.objectContaining({ view: 'ACTIVE' }), expect.anything()));
     fireEvent.change(screen.getByLabelText('Kind of work'), { target: { value: 'PROJECT' } });
     await waitFor(() => expect(getWork).toHaveBeenLastCalledWith('home-1', expect.objectContaining({ view: 'ACTIVE', workType: 'PROJECT' }), expect.anything()));
-    expect(screen.getByLabelText('Status')).toBeInTheDocument();
+    const statusSelect = screen.getByLabelText('Status');
+    // The server's complete list, including a status no loaded row has yet.
+    expect(within(statusSelect).getByRole('option', { name: 'Disputed' })).toBeInTheDocument();
+  });
+
+  it('shows pending requests that have no home in their own section, never inside a home\'s list', async () => {
+    const homeless = { ...pendingRow(), workKey: 'execution:e7', propertyId: null, title: 'Add my new water heater', resume: { kind: 'CONVERSATION' as const, executionId: 'e7', sessionId: 's7', launch: { ...launch, entityType: 'AskExecution', entityId: 'e7' } } };
+    getWork.mockResolvedValue({ success: true, data: page([row()], { unscopedPending: [homeless] }) });
+    resolveWork.mockResolvedValue({ success: true, data: resolution({ workKey: 'execution:e7', row: homeless }) });
+    continueExecution.mockResolvedValue({ success: true, data: { executionId: 'e7', sessionId: 's7', property: null } });
+    render(<AskWorkDestination />);
+    const section = await screen.findByLabelText('Requests with no home yet');
+    expect(within(section).getByText('Add my new water heater')).toBeInTheDocument();
+    expect(screen.getByText('No home selected yet')).toBeInTheDocument();
+    fireEvent.click(within(section).getByRole('button', { name: 'Review and confirm' }));
+    await waitFor(() => expect(continueExecution).toHaveBeenCalledWith('e7', 'ASK_PAGE'));
+    expect(push).toHaveBeenCalled();
+  });
+
+  it('explains why work Ask cannot continue is shown without an action', async () => {
+    const repair = row({ workKey: 'repair:b1', providerId: 'REPAIRS', workType: 'REPAIR', title: 'Plumbing repair', nextAction: null, resume: { kind: 'WORKSPACE', executionId: null, sessionId: null, launch, unavailableReason: 'Ask cannot manage service bookings yet. Its current state is shown here.' } });
+    getWork.mockResolvedValue({ success: true, data: page([repair]) });
+    render(<AskWorkDestination />);
+    await screen.findByText('Plumbing repair');
+    fireEvent.click(screen.getByRole('button', { name: 'Details' }));
+    expect(document.querySelector('[data-work-detail]')).toHaveTextContent('Ask cannot manage service bookings yet');
   });
 
   it('pages every row: Show more continues from the cursor and never repeats a row', async () => {

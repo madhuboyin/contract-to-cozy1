@@ -148,10 +148,13 @@ test('all five providers are connected, valid, and make the OperationalWorkItem 
   }
   const calls = [];
   prisma.operationalWorkItem = { findMany: async (args) => { calls.push(args); return []; }, count: async () => 0, groupBy: async () => [] };
+  prisma.operationalWorkSource = { findMany: async () => [] };
+  prisma.operationalWorkExecution = { findMany: async () => [] };
+
   await createOperationalWorkItemReader()(ctx, { view: 'NEEDS_YOU', after: null, limit: 5, status: null });
   const where = JSON.stringify(calls[0].where);
   assert.match(where, /"executionType":"PROJECT"/);
-  assert.match(where, /"executionType":"GUIDANCE"/);
+  assert.doesNotMatch(where, /"executionType":"GUIDANCE"/);
   assert.match(where, /"executionType":"CLAIM"/);
 });
 

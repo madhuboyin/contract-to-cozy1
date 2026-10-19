@@ -46,6 +46,8 @@ export interface AskWorkResume {
   executionId: string | null;
   sessionId: string | null;
   launch: AskWorkLaunch;
+  /** Set when the work is real and visible but Ask has no operation to continue it; the plain reason is shown instead of a dead action. */
+  unavailableReason?: string | null;
 }
 
 export interface AskWorkNextAction {
@@ -67,7 +69,8 @@ export interface AskWorkRow {
   sourceAliases: string[];
   providerId: AskWorkProviderId;
   workType: AskWorkType;
-  propertyId: string;
+  /** Null only for a pending request that has no home yet (the account-scoped bucket). */
+  propertyId: string | null;
   entity: { type: string; id: string };
   title: string;
   summary: string | null;
@@ -121,7 +124,19 @@ export interface AskWorkPage {
   sort: { key: 'sortAt'; label: string };
   query: { workType: AskWorkType | null; status: string | null };
   providers: AskWorkProviderStatus[];
+  /** Server-authoritative filter choices: the kinds of work that answered and, for each, every status it can have. */
+  filterOptions: { workTypes: AskWorkFilterOption[]; statusesByWorkType: Record<string, AskWorkFilterOption[]> };
+  /**
+   * The caller's own pending requests that belong to no home yet (a request still asking which home). Account-scoped, so they are never
+   * attached to a property; present only when the caller can act on them in this view.
+   */
+  unscopedPending: AskWorkRow[];
   rows: AskWorkRow[];
+}
+
+export interface AskWorkFilterOption {
+  value: string;
+  label: string;
 }
 
 export interface AskWorkBoundary {

@@ -36,7 +36,7 @@ export function afterBoundaryWhere<W extends object>(inView: W, after: AskWorkBo
 }
 
 /** The home work items that back the given source entities, from one batched lookup (never one call per row). */
-export async function workItemIdsByExecution(executionType: 'PROJECT' | 'GUIDANCE' | 'CLAIM', entityIds: readonly string[]): Promise<Map<string, string[]>> {
+export async function workItemIdsByExecution(executionType: 'PROJECT' | 'GUIDANCE' | 'CLAIM' | 'BOOKING', entityIds: readonly string[]): Promise<Map<string, string[]>> {
   const byEntity = new Map<string, string[]>();
   if (entityIds.length === 0) return byEntity;
   const executions = await prisma.operationalWorkExecution.findMany({

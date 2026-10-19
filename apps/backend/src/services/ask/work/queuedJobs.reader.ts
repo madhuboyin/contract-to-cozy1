@@ -2,6 +2,7 @@ import type { HomeReportExportStatus, HomeReportExportType, HomeScoreExportForma
 import { prisma } from '../../../lib/prisma';
 import { ASK_WORK_LIFECYCLE_VIEWS, type AskWorkLifecycleView } from '../governance/askWorkProviderRegistry';
 import { compareAskWorkRows, type AskWorkProviderReader, type AskWorkRow } from '../askWork.contract';
+import { ASK_WORK_LISTING_RETENTION_DAYS, listingCutoff } from './askWorkRetention';
 import { afterBoundaryWhere, countViews, workLaunch } from './askWorkRowSupport';
 
 const REPORT_PREFIX = 'job:reportExport:';
@@ -40,15 +41,16 @@ function reportWhere(view: AskWorkLifecycleView, now: Date): Prisma.HomeReportEx
     case 'WAITING': return { ...live, status: 'PENDING' };
     case 'ACTIVE': return { ...live, status: 'GENERATING' };
     case 'COMPLETED': return { AND: [live, { status: 'READY' }, unexpired] };
-    case 'ARCHIVED': return { AND: [live, { OR: [{ status: 'EXPIRED' }, { status: 'READY', expiresAt: { lte: now } }] }] };
+    case 'ARCHIVED': return { AND: [live, { expiresAt: { gt: listingCutoff(ASK_WORK_LISTING_RETENTION_DAYS.reportExportsExpiredHistory, now) } }, { OR: [{ status: 'EXPIRED' }, { status: 'READY', expiresAt: { lte: now } }] }] };
     default: return { id: { in: [] } };
   }
 }
 
 const SCORE_STATUSES: Partial<Record<AskWorkLifecycleView, HomeScoreExportJobStatus[]>> = { NEEDS_YOU: ['FAILED'], WAITING: ['QUEUED'], ACTIVE: ['RUNNING'], COMPLETED: ['DONE'] };
-function scoreWhere(view: AskWorkLifecycleView): Prisma.HomeScoreExportJobWhereInput {
+function scoreWhere(view: AskWorkLifecycleView, now: Date): Prisma.HomeScoreExportJobWhereInput {
   const statuses = SCORE_STATUSES[view];
-  return statuses ? { jobStatus: { in: statuses } } : { id: { in: [] } };
+  if (!statuses) return { id: { in: [] } };
+  return view === 'COMPLETED' ? { jobStatus: { in: statuses }, createdAt: { gte: listingCutoff(ASK_WORK_LISTING_RETENTION_DAYS.scoreExportsCompleted, now) } } : { jobStatus: { in: statuses } };
 }
 
 interface ReportRecord { id: string; propertyId: string; type: HomeReportExportType; status: HomeReportExportStatus; requestedAt: Date; expiresAt: Date | null; deletedAt: Date | null }
@@ -110,7 +112,7 @@ export const readQueuedJobWork: AskWorkProviderReader = async (context, query) =
   const reportStatus: Prisma.HomeReportExportWhereInput = query.status ? { status: query.status as HomeReportExportStatus } : {};
   const scoreStatus: Prisma.HomeScoreExportJobWhereInput = query.status ? { jobStatus: query.status as HomeScoreExportJobStatus } : {};
   const reportInView: Prisma.HomeReportExportWhereInput = query.entityId ? { AND: [reportBase, { id: query.entityId }] } : { AND: [reportBase, reportWhere(query.view, now), reportStatus] };
-  const scoreInView: Prisma.HomeScoreExportJobWhereInput = query.entityId ? { AND: [scoreBase, { id: query.entityId }] } : { AND: [scoreBase, scoreWhere(query.view), scoreStatus] };
+  const scoreInView: Prisma.HomeScoreExportJobWhereInput = query.entityId ? { AND: [scoreBase, { id: query.entityId }] } : { AND: [scoreBase, scoreWhere(query.view, now), scoreStatus] };
   const [reports, scores, reportTotal, scoreTotal, reportCounts, scoreCounts] = await Promise.all([
     prisma.homeReportExport.findMany({
       where: afterBoundaryWhere(reportInView, query.after, REPORT_PREFIX, 'requestedAt'),
@@ -127,7 +129,7 @@ export const readQueuedJobWork: AskWorkProviderReader = async (context, query) =
     prisma.homeReportExport.count({ where: reportInView }),
     prisma.homeScoreExportJob.count({ where: scoreInView }),
     countViews(ASK_WORK_LIFECYCLE_VIEWS, SERVED, (view) => prisma.homeReportExport.count({ where: { AND: [reportBase, reportWhere(view, now)] } })),
-    countViews(ASK_WORK_LIFECYCLE_VIEWS, SERVED, (view) => prisma.homeScoreExportJob.count({ where: { AND: [scoreBase, scoreWhere(view)] } })),
+    countViews(ASK_WORK_LIFECYCLE_VIEWS, SERVED, (view) => prisma.homeScoreExportJob.count({ where: { AND: [scoreBase, scoreWhere(view, now)] } })),
   ]);
   const rows = [
     ...reports.flatMap((report) => { const row = reportExportRow(report, now); return row ? [row] : []; }),

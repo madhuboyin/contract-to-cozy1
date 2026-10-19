@@ -3,7 +3,7 @@ import type { HouseholdRole } from '@prisma/client';
 import { logger } from '../../lib/logger';
 import type { AskAccountRole } from './askAccountEligibility';
 import { resolveAskWork } from './work/askWorkResolve';
-import { readPendingExecutionWork } from './work/pendingExecutions.reader';
+import { readPendingExecutionWork, readPropertylessPendingWork } from './work/pendingExecutions.reader';
 import { readDecisionThreadWork } from './work/decisionThreads.reader';
 import { readIncidentWork } from './work/incidents.reader';
 import { readClaimWork } from './work/claims.reader';
@@ -14,6 +14,7 @@ import { readRenovationCaseWork } from './work/renovationCases.reader';
 import { readMonitorWork } from './work/monitors.reader';
 import { readQueuedJobWork } from './work/queuedJobs.reader';
 import { readRetryableExecutionWork } from './work/retryableExecutions.reader';
+import { readRepairWork } from './work/repairs.reader';
 import { readScheduledFollowUpWork } from './work/scheduledFollowUps.reader';
 import { createOperationalWorkItemReader } from './work/operationalWorkItems.reader';
 import { ensureAskServiceAccountEligibility, ensurePropertyAccess } from './askHandlerSupport';
@@ -46,6 +47,7 @@ export const ASK_WORK_PROVIDER_READERS: Partial<Record<AskWorkProviderId, AskWor
   QUEUED_JOBS: readQueuedJobWork,
   RETRYABLE_EXECUTIONS: readRetryableExecutionWork,
   SCHEDULED_FOLLOW_UPS: readScheduledFollowUpWork,
+  REPAIRS: readRepairWork,
 };
 
 export class AskWorkInvalidRequestError extends Error {
@@ -141,7 +143,10 @@ export async function getAskWorkPage(
   const parsed = parseWorkQuery(query);
   const { role } = await authorizeAskWork(userId, propertyId, accountRole);
   const operatingMode = await loadOperatingMode(userId, propertyId);
-  return composeAskWorkPage({ userId, propertyId, role, operatingMode }, parsed, ASK_WORK_PROVIDER_READERS);
+  // The caller's homeless pending requests belong to no home; they come with the first page, never attached to this property.
+  const wantsUnscoped = !parsed.after && (!parsed.workType || parsed.workType === 'PENDING_EXECUTION');
+  const unscopedPending = wantsUnscoped ? await readPropertylessPendingWork(userId, parsed.view, parsed.status) : [];
+  return composeAskWorkPage({ userId, propertyId, role, operatingMode }, parsed, ASK_WORK_PROVIDER_READERS, ASK_WORK_PROVIDER_REGISTRY, unscopedPending);
 }
 
 function parseWorkQuery(query: AskWorkQuery): ParsedWorkQuery {
@@ -173,6 +178,7 @@ export async function composeAskWorkPage(
   parsed: ParsedWorkQuery,
   readers: Partial<Record<AskWorkProviderId, AskWorkProviderReader>>,
   registry: readonly AskWorkProviderDefinition[] = ASK_WORK_PROVIDER_REGISTRY,
+  unscopedPending: AskWorkRow[] = [],
 ): Promise<AskWorkPage> {
   const { userId, propertyId, role, operatingMode } = input;
   const { view, limit, after, workType, status } = parsed;
@@ -261,6 +267,8 @@ export async function composeAskWorkPage(
     sort: { key: 'sortAt', label: 'Most recently updated first' },
     query: { workType: workType as AskWorkType | null, status },
     providers: statuses,
+    filterOptions: workFilterOptions(registry, statuses),
+    unscopedPending,
     rows,
   };
 }
@@ -289,4 +297,19 @@ export async function resolveAskWorkForUser(
   }
   const operatingMode = await loadOperatingMode(userId, propertyId);
   return resolveAskWork({ userId, propertyId, role, operatingMode, workKey, expectedVersion }, ASK_WORK_PROVIDER_READERS);
+}
+
+/** Server-authoritative filter choices: the kinds of work that answered, and every status each can have (not just those on the loaded page). */
+export function workFilterOptions(registry: readonly AskWorkProviderDefinition[], providerStatuses: readonly AskWorkProviderStatus[]): AskWorkPage['filterOptions'] {
+  const answered = new Set(providerStatuses.filter((entry) => entry.state === 'AVAILABLE').map((entry) => entry.providerId));
+  const workTypes: AskWorkPage['filterOptions']['workTypes'] = [];
+  const statusesByWorkType: AskWorkPage['filterOptions']['statusesByWorkType'] = {};
+  for (const definition of registry) {
+    if (!answered.has(definition.id)) continue;
+    if (!workTypes.some((option) => option.value === definition.workType)) workTypes.push({ value: definition.workType, label: definition.label });
+    const merged = statusesByWorkType[definition.workType] ?? [];
+    for (const option of definition.statusOptions) if (!merged.some((existing) => existing.value === option.value)) merged.push({ ...option });
+    statusesByWorkType[definition.workType] = merged;
+  }
+  return { workTypes, statusesByWorkType };
 }

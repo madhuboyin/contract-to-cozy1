@@ -2,6 +2,7 @@ import type { OperationalWorkItemDisposition, OperationalWorkItemState, Prisma }
 import { prisma } from '../../../lib/prisma';
 import { ASK_WORK_PROVIDER_REGISTRY, workActionAllowed, ASK_WORK_LIFECYCLE_VIEWS, type AskWorkLifecycleView, type AskWorkProviderDefinition } from '../governance/askWorkProviderRegistry';
 import type { AskWorkProviderReader, AskWorkRow } from '../askWork.contract';
+import { repairBookingWhere } from './repairs.reader';
 import { boundaryInstant, truncateTitle, workLaunch } from './askWorkRowSupport';
 
 const WORK_ITEM_KEY_PREFIX = 'workItem:';
@@ -45,17 +46,51 @@ function viewWhere(view: AskWorkLifecycleView): Prisma.OperationalWorkItemWhereI
 
 const EXECUTION_ALIAS_KINDS: Record<string, string> = { MAINTENANCE_TASK: 'maintenanceTask', GUIDANCE: 'journey', PROJECT: 'project', BOOKING: 'booking', CLAIM: 'claim' };
 
+/** Journey statuses the guided-journey provider lists; a journey in any other status has no row of its own. */
+const LISTED_JOURNEY_STATUSES = ['NOT_STARTED', 'ACTIVE', 'COMPLETED', 'DISMISSED'] as const;
+
 /**
- * Work whose resume owner is another canonical Work provider is that provider's row, not this projection's. Exclusion applies only once
- * the owning provider is CONNECTED, so work never disappears while its canonical reader does not exist yet.
+ * Home work items another connected provider actually shows, so the projection can leave them out. Ownership is decided by the owner's
+ * visible row, not by the mere existence of a link: a work item whose incident is suppressed, or whose journey was aborted, stays here
+ * because no canonical row represents it. Project and claim rows exist for every project and claim, so those are excluded by relation.
+ * Each set is bounded by the home's own links and read in one query per source (never per row).
  */
-function ownedByConnectedProvider(registry: readonly AskWorkProviderDefinition[]): Prisma.OperationalWorkItemWhereInput[] {
+async function ownedWorkItemIds(userId: string, propertyId: string, registry: readonly AskWorkProviderDefinition[]): Promise<string[]> {
+  const connected = (id: string) => registry.find((entry) => entry.id === id)?.reader.state === 'CONNECTED';
+  const owned: string[] = [];
+  if (connected('INCIDENTS')) {
+    const sources = await prisma.operationalWorkSource.findMany({ where: { sourceType: 'INCIDENT', active: true, workItem: { propertyId } }, select: { workItemId: true, sourceEntityId: true } });
+    if (sources.length) {
+      const visible = new Set((await prisma.incident.findMany({ where: { propertyId, isSuppressed: false, status: { not: 'SUPPRESSED' }, id: { in: sources.map((source) => source.sourceEntityId) } }, select: { id: true } })).map((incident) => incident.id));
+      owned.push(...sources.filter((source) => visible.has(source.sourceEntityId)).map((source) => source.workItemId));
+    }
+  }
+  if (connected('GUIDANCE_JOURNEYS')) {
+    const executions = await prisma.operationalWorkExecution.findMany({ where: { executionType: 'GUIDANCE', role: 'PRIMARY', workItem: { propertyId } }, select: { workItemId: true, executionEntityId: true } });
+    if (executions.length) {
+      const represented = new Set((await prisma.guidanceJourney.findMany({
+        where: { propertyId, id: { in: executions.map((execution) => execution.executionEntityId) }, OR: [{ status: { in: [...LISTED_JOURNEY_STATUSES] } }, { projectRecord: { isNot: null } }] },
+        select: { id: true },
+      })).map((journey) => journey.id));
+      owned.push(...executions.filter((execution) => represented.has(execution.executionEntityId)).map((execution) => execution.workItemId));
+    }
+  }
+  if (connected('REPAIRS')) {
+    // A repair row shows only for the household member who requested the booking, so only that member's repairs own their work items.
+    const executions = await prisma.operationalWorkExecution.findMany({ where: { executionType: 'BOOKING', role: 'PRIMARY', workItem: { propertyId } }, select: { workItemId: true, executionEntityId: true } });
+    if (executions.length) {
+      const represented = new Set((await prisma.booking.findMany({ where: { AND: [repairBookingWhere(userId, propertyId), { id: { in: executions.map((execution) => execution.executionEntityId) } }] }, select: { id: true } })).map((booking) => booking.id));
+      owned.push(...executions.filter((execution) => represented.has(execution.executionEntityId)).map((execution) => execution.workItemId));
+    }
+  }
+  return [...new Set(owned)];
+}
+
+function ownedByRelation(registry: readonly AskWorkProviderDefinition[]): Prisma.OperationalWorkItemWhereInput[] {
   const connected = (id: string) => registry.find((entry) => entry.id === id)?.reader.state === 'CONNECTED';
   const exclusions: Prisma.OperationalWorkItemWhereInput[] = [];
   if (connected('PROJECTS')) exclusions.push({ executions: { some: { executionType: 'PROJECT', role: 'PRIMARY' } } });
-  if (connected('GUIDANCE_JOURNEYS')) exclusions.push({ executions: { some: { executionType: 'GUIDANCE', role: 'PRIMARY' } } });
   if (connected('CLAIMS')) exclusions.push({ executions: { some: { executionType: 'CLAIM', role: 'PRIMARY' } } });
-  if (connected('INCIDENTS')) exclusions.push({ sources: { some: { sourceType: 'INCIDENT', active: true } } });
   return exclusions;
 }
 
@@ -98,10 +133,11 @@ export function operationalWorkItemRow(item: WorkItemRecord, role: Parameters<ty
 export function createOperationalWorkItemReader(registry: readonly AskWorkProviderDefinition[] = ASK_WORK_PROVIDER_REGISTRY): AskWorkProviderReader {
   const definition = registry.find((entry) => entry.id === 'OPERATIONAL_WORK_ITEMS')!;
   return async (context, query) => {
+    const ownedIds = await ownedWorkItemIds(context.userId, context.propertyId, registry);
     const base: Prisma.OperationalWorkItemWhereInput = {
       propertyId: context.propertyId,
       supersededByWorkItemId: null,
-      NOT: ownedByConnectedProvider(registry),
+      NOT: [...ownedByRelation(registry), ...(ownedIds.length ? [{ id: { in: ownedIds } }] : [])],
     };
     const statusFilter = query.status ? { state: query.status as OperationalWorkItemState } : {};
     const inView: Prisma.OperationalWorkItemWhereInput  = query.entityId ? { AND: [base, { id: query.entityId }] } : { AND: [base, viewWhere(query.view), statusFilter] };

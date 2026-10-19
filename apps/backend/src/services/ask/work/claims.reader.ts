@@ -2,6 +2,7 @@ import type { ClaimStatus, Prisma } from '@prisma/client';
 import { prisma } from '../../../lib/prisma';
 import { ASK_WORK_LIFECYCLE_VIEWS, ASK_WORK_PROVIDER_REGISTRY, workActionAllowed, type AskWorkLifecycleView } from '../governance/askWorkProviderRegistry';
 import type { AskWorkProviderReader, AskWorkRow } from '../askWork.contract';
+import { ASK_WORK_LISTING_RETENTION_DAYS, listingCutoff } from './askWorkRetention';
 import { afterBoundaryWhere, countViews, truncateTitle, workItemIdsByExecution, workLaunch } from './askWorkRowSupport';
 
 const KEY_PREFIX = 'claim:';
@@ -31,7 +32,7 @@ function viewWhere(view: AskWorkLifecycleView, now: Date): Prisma.ClaimWhereInpu
     case 'NEEDS_YOU': return { OR: [{ status: { in: ['DRAFT', 'APPROVED', 'DENIED'] } }, { status: { in: ['IN_PROGRESS', 'SUBMITTED', 'UNDER_REVIEW'] }, ...overdue }] };
     case 'ACTIVE': return { status: 'IN_PROGRESS', ...notOverdue };
     case 'WAITING': return { status: { in: ['SUBMITTED', 'UNDER_REVIEW'] }, ...notOverdue };
-    case 'COMPLETED': return { status: 'CLOSED' };
+    case 'COMPLETED': return { status: 'CLOSED', updatedAt: { gte: listingCutoff(ASK_WORK_LISTING_RETENTION_DAYS.claimsCompleted, now) } };
     default: return { id: { in: [] } };
   }
 }

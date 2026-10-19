@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api/client';
@@ -49,17 +49,9 @@ export function AskWorkDestination() {
   const chooseView = (next: AskWorkLifecycleView) => { setView(next); setStatus(''); setNotice(null); setError(null); };
   const chooseType = (next: string) => { setWorkType(next); setStatus(''); };
 
-  const typeOptions = useMemo(() => {
-    const seen = new Map<AskWorkType, string>();
-    for (const provider of page?.providers ?? []) if (provider.state === 'AVAILABLE') seen.set(provider.workType, WORK_TYPE_LABELS[provider.workType] ?? provider.label);
-    return [...seen.entries()];
-  }, [page]);
-  const statusOptions = useMemo(() => {
-    const seen = new Map<string, string>();
-    for (const row of rows) seen.set(row.status.canonical, row.status.label);
-    if (status && !seen.has(status)) seen.set(status, status);
-    return [...seen.entries()];
-  }, [rows, status]);
+  // Filter choices come from the server, so a status that is only on a later page can still be chosen.
+  const typeOptions: Array<[string, string]> = (page?.filterOptions.workTypes ?? []).map((option) => [option.value, WORK_TYPE_LABELS[option.value as AskWorkType] ?? option.label]);
+  const statusOptions: Array<[string, string]> = (workType ? page?.filterOptions.statusesByWorkType[workType] ?? [] : []).map((option) => [option.value, option.label]);
   const gaps = (page?.providers ?? []).filter((provider) => provider.state !== 'AVAILABLE' && provider.state !== 'NOT_APPLICABLE');
 
   const enter = async (row: AskWorkRow) => {
@@ -67,7 +59,8 @@ export function AskWorkDestination() {
     if (row.providerId === 'PENDING_EXECUTIONS' && row.resume.executionId) {
       const response = await api.continueAskExecution(row.resume.executionId, 'ASK_PAGE');
       if (!response.success || !response.data) throw new Error(response.message || 'Could not resume this request.');
-      if ((response.data.property?.id ?? undefined) !== propertyId) throw new Error('Select the matching home before resuming this request.');
+      // A request that still asks which home it is about has no home to match; Ask finishes that question in the conversation.
+      if (row.propertyId !== null && (response.data.property?.id ?? undefined) !== propertyId) throw new Error('Select the matching home before resuming this request.');
       router.push(buildAskWorkspaceHref({ propertyId: response.data.property?.id ?? propertyId, sessionId: response.data.sessionId, executionId: response.data.executionId }));
       return;
     }
@@ -231,6 +224,18 @@ export function AskWorkDestination() {
             </div>
           )}
           {error && <p className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">{error}</p>}
+
+          {(page?.unscopedPending.length ?? 0) > 0 && (
+            <section className="mt-4" aria-labelledby="ask-work-no-home-title" data-work-no-home>
+              <h3 id="ask-work-no-home-title" className="text-sm font-semibold text-slate-950">No home selected yet</h3>
+              <p className="mt-1 text-sm text-slate-600">These requests are still asking which home they are about, so they are not part of any one home.</p>
+              <ul className="mt-2 rounded-2xl border border-slate-200 bg-white" aria-label="Requests with no home yet">
+                {page?.unscopedPending.map((row) => (
+                  <WorkRow key={row.workKey} row={row} busy={busyKey === row.workKey} canOpen onOpen={open} onDismiss={row.status.canonical !== 'RUNNING' ? (target) => void dismiss(target) : undefined} />
+                ))}
+              </ul>
+            </section>
+          )}
 
           <div className="mt-4">
             {!scopedPropertyId ? (

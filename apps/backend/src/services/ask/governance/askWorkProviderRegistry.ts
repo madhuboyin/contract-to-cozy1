@@ -56,6 +56,8 @@ export interface AskWorkProviderDefinition {
   /** Source identifiers other providers or older links may use for this provider's work; kept as aliases on the selected workKey. */
   sourceAliasKinds: readonly string[];
   views: readonly AskWorkLifecycleView[];
+  /** Every canonical status the provider's rows can have, for the server-authoritative Status filter. */
+  statusOptions: readonly { value: string; label: string }[];
   /** Phase 3 cannot exit while a required provider is UNAVAILABLE. */
   requiredForExit: boolean;
   freshnessSource: string;
@@ -67,10 +69,13 @@ const provider = (value: AskWorkProviderDefinition): AskWorkProviderDefinition =
   commandOperationIds: Object.freeze([...value.commandOperationIds]),
   sourceAliasKinds: Object.freeze([...value.sourceAliasKinds]),
   views: Object.freeze([...value.views]),
+  statusOptions: Object.freeze(value.statusOptions.map((option) => Object.freeze({ ...option }))),
   reader: Object.freeze({ ...value.reader }),
 });
 
 const CONNECTED = { state: 'CONNECTED' } as const;
+const humanize = (value: string) => { const text = value.toLowerCase().replace(/_/g, ' '); return text.charAt(0).toUpperCase() + text.slice(1); };
+const statuses = (...values: string[]) => values.map((value) => ({ value, label: humanize(value) }));
 const unavailable = (reason: string): AskWorkProviderReader => ({ state: 'UNAVAILABLE', reason });
 const ALL_VIEWS = ASK_WORK_LIFECYCLE_VIEWS;
 /** Domains with no scheduled state never populate the Scheduled view. */
@@ -81,101 +86,101 @@ export const ASK_WORK_PROVIDER_REGISTRY: readonly AskWorkProviderDefinition[] = 
     id: 'PENDING_EXECUTIONS', label: 'Pending requests', workType: 'PENDING_EXECUTION', owner: 'ask-executions',
     readOperationIds: [], commandOperationIds: [], readAuthority: 'OWN_EXECUTION', lifecycleOperationId: null,
     reader: CONNECTED, precedence: 10, fallbackProjection: false, sourceAliasKinds: ['execution'],
-    views: ['NEEDS_YOU', 'WAITING'], requiredForExit: true, freshnessSource: 'Execution last update',
+    views: ['NEEDS_YOU', 'WAITING'], statusOptions: statuses('NEEDS_PROPERTY', 'NEEDS_ENTITY', 'NEEDS_CLARIFICATION', 'NEEDS_CONTEXT', 'NEEDS_CONFIRMATION', 'RUNNING'), requiredForExit: true, freshnessSource: 'Execution last update',
   }),
   provider({
     id: 'DECISION_THREADS', label: 'Decisions', workType: 'DECISION_THREAD', owner: 'decision-platform',
     readOperationIds: ['HVAC_DECISION_CONTINUE'], commandOperationIds: ['HVAC_DECISION_ABANDON'],
     readAuthority: 'OPERATION_FLOOR', lifecycleOperationId: 'HVAC_DECISION_CONTINUE',
     reader: CONNECTED, precedence: 20, fallbackProjection: false, sourceAliasKinds: ['decisionThread'],
-    views: NO_SCHEDULE, requiredForExit: true, freshnessSource: 'Decision thread last update',
+    views: NO_SCHEDULE, statusOptions: statuses('OPEN', 'GATHERING_CONTEXT', 'READY_TO_COMPARE', 'RECOMMENDATION_AVAILABLE', 'ACTION_IN_PROGRESS', 'DECIDED', 'COMPLETED', 'ABANDONED', 'ARCHIVED'), requiredForExit: true, freshnessSource: 'Decision thread last update',
   }),
   provider({
     id: 'INCIDENTS', label: 'Incidents', workType: 'INCIDENT', owner: 'incidents',
     readOperationIds: ['INCIDENT_CLAIM_STATUS', 'INCIDENT_CONTINUATION'], commandOperationIds: [],
     readAuthority: 'OPERATION_FLOOR', lifecycleOperationId: 'INCIDENT_CLAIM_STATUS',
     reader: CONNECTED, precedence: 20, fallbackProjection: false, sourceAliasKinds: ['incident', 'workItem'],
-    views: NO_SCHEDULE, requiredForExit: true, freshnessSource: 'Incident last update',
+    views: NO_SCHEDULE, statusOptions: statuses('DETECTED', 'EVALUATED', 'ACTIVE', 'ACTIONED', 'MITIGATED', 'RESOLVED', 'EXPIRED'), requiredForExit: true, freshnessSource: 'Incident last update',
   }),
   provider({
     id: 'CLAIMS', label: 'Claims', workType: 'CLAIM', owner: 'incidents-claims',
     readOperationIds: ['INCIDENT_CLAIM_STATUS', 'CLAIM_CHECKLIST_VIEW'], commandOperationIds: ['CLAIM_FILE', 'CLAIM_TRANSITION', 'CLAIM_ACTIVITY_COMMAND'],
     readAuthority: 'OPERATION_FLOOR', lifecycleOperationId: 'INCIDENT_CLAIM_STATUS',
     reader: CONNECTED, precedence: 20, fallbackProjection: false, sourceAliasKinds: ['claim', 'workItem'],
-    views: ['NEEDS_YOU', 'ACTIVE', 'WAITING', 'COMPLETED'], requiredForExit: true, freshnessSource: 'Claim last update',
+    views: ['NEEDS_YOU', 'ACTIVE', 'WAITING', 'COMPLETED'], statusOptions: statuses('DRAFT', 'IN_PROGRESS', 'SUBMITTED', 'UNDER_REVIEW', 'APPROVED', 'DENIED', 'CLOSED'), requiredForExit: true, freshnessSource: 'Claim last update',
   }),
   provider({
     id: 'PROJECTS', label: 'Projects', workType: 'PROJECT', owner: 'projects',
     readOperationIds: ['PROJECT_TRACKER_PROJECTS'], commandOperationIds: ['PROJECT_TRACKER_CREATE', 'PROJECT_TRACKER_COMMAND'],
     readAuthority: 'OPERATION_FLOOR', lifecycleOperationId: 'PROJECT_TRACKER_PROJECTS',
     reader: CONNECTED, precedence: 20, fallbackProjection: false, sourceAliasKinds: ['project', 'workItem', 'journey', 'renovation'],
-    views: ALL_VIEWS, requiredForExit: true, freshnessSource: 'Project last update',
+    views: ALL_VIEWS, statusOptions: statuses('DRAFT', 'PLANNING', 'IN_PROGRESS', 'PAUSED', 'COMPLETED', 'CANCELLED', 'DISPUTED'), requiredForExit: true, freshnessSource: 'Project last update',
   }),
   provider({
     id: 'GUIDANCE_JOURNEYS', label: 'Guided journeys', workType: 'GUIDANCE_JOURNEY', owner: 'guidance',
     readOperationIds: ['GUIDANCE_JOURNEYS_LIST', 'GUIDANCE_JOURNEY_CONTINUE'], commandOperationIds: ['GUIDANCE_JOURNEY_DISMISS', 'GUIDANCE_STEP_SKIP'],
     readAuthority: 'OPERATION_FLOOR', lifecycleOperationId: 'GUIDANCE_JOURNEYS_LIST',
     reader: CONNECTED, precedence: 20, fallbackProjection: false, sourceAliasKinds: ['journey', 'workItem'],
-    views: ['NEEDS_YOU', 'ACTIVE', 'COMPLETED', 'ARCHIVED'], requiredForExit: true, freshnessSource: 'Journey last update',
+    views: ['NEEDS_YOU', 'ACTIVE', 'COMPLETED', 'ARCHIVED'], statusOptions: statuses('NOT_STARTED', 'ACTIVE', 'COMPLETED', 'DISMISSED'), requiredForExit: true, freshnessSource: 'Journey last update',
   }),
   provider({
     id: 'DIY_PROJECTS', label: 'DIY guides', workType: 'DIY_PROJECT', owner: 'diy',
     readOperationIds: ['DIY_PROJECTS', 'DIY_PROJECT_GUIDE'], commandOperationIds: ['DIY_STEP_UPDATE', 'DIY_PROJECT_COMPLETE', 'DIY_PROJECT_ABANDON', 'DIY_COMPLETION_RECOVER'],
     readAuthority: 'OPERATION_FLOOR', lifecycleOperationId: 'DIY_PROJECTS',
     reader: CONNECTED, precedence: 20, fallbackProjection: false, sourceAliasKinds: ['diyProject'],
-    views: ['NEEDS_YOU', 'ACTIVE', 'COMPLETED', 'ARCHIVED'], requiredForExit: true, freshnessSource: 'DIY project last update',
+    views: ['NEEDS_YOU', 'ACTIVE', 'COMPLETED', 'ARCHIVED'], statusOptions: statuses('PLANNING', 'IN_PROGRESS', 'COMPLETED', 'ABANDONED', 'HIRED_OUT'), requiredForExit: true, freshnessSource: 'DIY project last update',
   }),
   provider({
     id: 'RENOVATION_CASES', label: 'Renovation cases', workType: 'RENOVATION_CASE', owner: 'renovation',
     readOperationIds: ['PROJECT_TRACKER_PROJECTS'], commandOperationIds: ['RENOVATION_CASE_START', 'RENOVATION_READINESS_COMMAND'],
     readAuthority: 'OPERATION_FLOOR', lifecycleOperationId: 'PROJECT_TRACKER_PROJECTS',
     reader: CONNECTED, precedence: 20, fallbackProjection: false, sourceAliasKinds: ['renovation'],
-    views: ['NEEDS_YOU', 'ACTIVE', 'WAITING', 'COMPLETED', 'ARCHIVED'], requiredForExit: true, freshnessSource: 'Renovation case last update',
+    views: ['NEEDS_YOU', 'ACTIVE', 'WAITING', 'COMPLETED', 'ARCHIVED'], statusOptions: statuses('IDEA', 'FEASIBILITY', 'SCOPE_DEFINITION', 'REQUIREMENTS_RESEARCH', 'APPROVALS_IN_PROGRESS', 'PREPARING_TO_START', 'READY_TO_START', 'IN_EXECUTION', 'INSPECTION_AND_CLOSEOUT', 'VERIFIED_COMPLETE', 'ON_HOLD', 'CANCELLED', 'COMPLETED_WITH_OPEN_ITEMS', 'HISTORICAL_RESEARCH'), requiredForExit: true, freshnessSource: 'Renovation case last update',
   }),
   provider({
     id: 'OPERATIONAL_WORK_ITEMS', label: 'Home work items', workType: 'HOME_WORK_ITEM', owner: 'home-operations',
     readOperationIds: ['HOME_WORK_ITEMS'], commandOperationIds: ['HOME_WORK_ITEM_COMMAND', 'OPERATIONAL_WORK_UPDATE'],
     readAuthority: 'OPERATION_FLOOR', lifecycleOperationId: 'HOME_WORK_ITEMS',
     reader: CONNECTED, precedence: 90, fallbackProjection: true, sourceAliasKinds: ['workItem'],
-    views: ALL_VIEWS, requiredForExit: true, freshnessSource: 'Work item last update',
+    views: ALL_VIEWS, statusOptions: statuses('ACCEPTED', 'SCHEDULED', 'IN_PROGRESS', 'IN_GUIDANCE', 'IN_PROJECT', 'BLOCKED', 'DEFERRED', 'REPORTED_COMPLETE', 'REOPENED', 'VERIFIED', 'FOLLOW_UP_DUE', 'CLOSED'), requiredForExit: true, freshnessSource: 'Work item last update',
   }),
   provider({
     id: 'REPAIRS', label: 'Repairs', workType: 'REPAIR', owner: 'bookings',
-    readOperationIds: [], commandOperationIds: [], readAuthority: 'NONE', lifecycleOperationId: null,
-    reader: unavailable('Repairs have no canonical homeowner reader: the only repair-shaped record is a service Booking, which has no homeowner list reader.'),
-    precedence: 20, fallbackProjection: false, sourceAliasKinds: ['booking'], views: ALL_VIEWS, requiredForExit: true, freshnessSource: 'Booking last update',
+    readOperationIds: [], commandOperationIds: [], readAuthority: 'OWN_REQUESTS', lifecycleOperationId: null,
+    reader: CONNECTED,
+    precedence: 20, fallbackProjection: false, sourceAliasKinds: ['repair', 'workItem'], views: ALL_VIEWS, statusOptions: statuses('DRAFT', 'PENDING', 'CONFIRMED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED', 'DISPUTED'), requiredForExit: true, freshnessSource: 'Booking last update',
   }),
   provider({
     id: 'MONITORS', label: 'Monitors', workType: 'MONITOR', owner: 'monitors',
     readOperationIds: ['REFINANCE_RATE_MONITOR', 'HOME_DEADLINE_MONITOR'], commandOperationIds: [],
     readAuthority: 'OPERATION_FLOOR', lifecycleOperationId: 'REFINANCE_RATE_MONITOR',
     reader: CONNECTED, precedence: 20, fallbackProjection: false, sourceAliasKinds: ['monitor'],
-    views: ['ACTIVE', 'WAITING'], requiredForExit: true, freshnessSource: 'Monitor last check',
+    views: ['ACTIVE', 'WAITING'], statusOptions: statuses('ACTIVE', 'PAUSED'), requiredForExit: true, freshnessSource: 'Monitor last check',
   }),
   provider({
     id: 'QUEUED_JOBS', label: 'Queued jobs', workType: 'QUEUED_JOB', owner: 'workers',
     readOperationIds: [], commandOperationIds: [], readAuthority: 'OWN_REQUESTS', lifecycleOperationId: null,
     reader: CONNECTED,
-    precedence: 20, fallbackProjection: false, sourceAliasKinds: ['job'], views: ['NEEDS_YOU', 'ACTIVE', 'WAITING', 'COMPLETED', 'ARCHIVED'], requiredForExit: true, freshnessSource: 'Job last update',
+    precedence: 20, fallbackProjection: false, sourceAliasKinds: ['job'], views: ['NEEDS_YOU', 'ACTIVE', 'WAITING', 'COMPLETED', 'ARCHIVED'], statusOptions: statuses('PENDING', 'GENERATING', 'READY', 'FAILED', 'EXPIRED', 'QUEUED', 'RUNNING', 'DONE'), requiredForExit: true, freshnessSource: 'Job last update',
   }),
   provider({
     id: 'RETRYABLE_EXECUTIONS', label: 'Retryable requests', workType: 'RETRYABLE_EXECUTION', owner: 'ask-executions',
     readOperationIds: [], commandOperationIds: [], readAuthority: 'OWN_EXECUTION', lifecycleOperationId: null,
     reader: CONNECTED, precedence: 10, fallbackProjection: false, sourceAliasKinds: ['execution'],
-    views: ['NEEDS_YOU'], requiredForExit: true, freshnessSource: 'Execution last update',
+    views: ['NEEDS_YOU'], statusOptions: statuses('FAILED_RETRYABLE'), requiredForExit: true, freshnessSource: 'Execution last update',
   }),
   provider({
     id: 'UNKNOWN_OUTCOME_EXECUTIONS', label: 'Requests with an unknown outcome', workType: 'UNKNOWN_OUTCOME_EXECUTION', owner: 'ask-executions',
     readOperationIds: [], commandOperationIds: [], readAuthority: 'NONE', lifecycleOperationId: null,
     reader: unavailable('No canonical unknown-outcome state exists; an ordinary failure is not an unknown outcome, so nothing is derived.'),
-    precedence: 10, fallbackProjection: false, sourceAliasKinds: ['execution'], views: ['NEEDS_YOU'], requiredForExit: true, freshnessSource: 'Execution last update',
+    precedence: 10, fallbackProjection: false, sourceAliasKinds: ['execution'], views: ['NEEDS_YOU'], statusOptions: statuses('OUTCOME_UNKNOWN'), requiredForExit: true, freshnessSource: 'Execution last update',
   }),
   provider({
     id: 'SCHEDULED_FOLLOW_UPS', label: 'Scheduled follow-ups', workType: 'SCHEDULED_FOLLOW_UP', owner: 'follow-ups',
     readOperationIds: ['INCIDENT_CLAIM_STATUS', 'PROJECT_TRACKER_PROJECTS'], commandOperationIds: ['CLAIM_ACTIVITY_COMMAND', 'PROJECT_TRACKER_COMMAND'],
     readAuthority: 'OPERATION_FLOOR', lifecycleOperationId: 'INCIDENT_CLAIM_STATUS',
     reader: CONNECTED,
-    precedence: 20, fallbackProjection: false, sourceAliasKinds: ['followUp', 'claim', 'project'], views: ['SCHEDULED'], requiredForExit: true, freshnessSource: 'Follow-up schedule',
+    precedence: 20, fallbackProjection: false, sourceAliasKinds: ['followUp'], views: ['SCHEDULED'], statusOptions: [], requiredForExit: true, freshnessSource: 'Follow-up schedule',
   }),
 ]);
 

@@ -1,4 +1,5 @@
 import { prisma } from '../../../lib/prisma';
+import { repairBookingWhere } from './repairs.reader';
 import { loadOperatingMode } from '../askRecordContext';
 import type { AskAccountRole } from '../askAccountEligibility';
 import { ASK_WORK_PROVIDER_REGISTRY, evaluateWorkProviderApplicability, type AskWorkProviderDefinition, type AskWorkProviderId } from '../governance/askWorkProviderRegistry';
@@ -22,6 +23,7 @@ const KEY_PREFIXES: ReadonlyArray<{ prefix: string; provider: AskWorkProviderId;
   { prefix: 'journey:', provider: 'GUIDANCE_JOURNEYS', kind: 'journey' },
   { prefix: 'diyProject:', provider: 'DIY_PROJECTS', kind: 'diyProject' },
   { prefix: 'renovation:', provider: 'RENOVATION_CASES', kind: 'renovation' },
+  { prefix: 'repair:', provider: 'REPAIRS', kind: 'repair' },
 ];
 
 export function parseAskWorkKey(workKey: string): { provider: AskWorkProviderId; kind: string; entityId: string } | null {
@@ -49,7 +51,7 @@ async function probe(kind: string, entityId: string, userId: string, propertyId:
   switch (kind) {
     case 'execution': {
       const execution = await prisma.askExecution.findFirst({
-        where: { id: entityId, userId, propertyId },
+        where: { id: entityId, userId, OR: [{ propertyId }, { propertyId: null }] },
         select: { status: true, events: { where: { eventType: 'RETRY_STARTED' }, select: { metadataJson: true }, take: 1 } },
       });
       if (!execution) return { state: 'MISSING' };
@@ -74,9 +76,25 @@ async function probe(kind: string, entityId: string, userId: string, propertyId:
       });
       if (!item) return { state: 'MISSING' };
       if (item.supersededByWorkItemId) return outcome('SUPERSEDED', 'This was merged into other work.', `workItem:${item.supersededByWorkItemId}`);
-      const owner = item.executions.find((execution) => (execution.executionType === 'PROJECT' && connected('PROJECTS')) || (execution.executionType === 'GUIDANCE' && connected('GUIDANCE_JOURNEYS')) || (execution.executionType === 'CLAIM' && connected('CLAIMS')));
-      if (owner) return outcome('SUPERSEDED', 'This work is now tracked in its own place.', `${owner.executionType === 'PROJECT' ? 'project' : owner.executionType === 'GUIDANCE' ? 'journey' : 'claim'}:${owner.executionEntityId}`);
-      if (item.sources.length && connected('INCIDENTS')) return outcome('SUPERSEDED', 'This work is now tracked as an incident.', `incident:${item.sources[0].sourceEntityId}`);
+      const relationOwner = item.executions.find((execution) => (execution.executionType === 'PROJECT' && connected('PROJECTS')) || (execution.executionType === 'CLAIM' && connected('CLAIMS')));
+      if (relationOwner) return outcome('SUPERSEDED', 'This work is now tracked in its own place.', `${relationOwner.executionType === 'PROJECT' ? 'project' : 'claim'}:${relationOwner.executionEntityId}`);
+      // Incident and journey ownership counts only when the owner's row is visible, exactly as the list decides it.
+      const guidance = connected('GUIDANCE_JOURNEYS') ? item.executions.find((execution) => execution.executionType === 'GUIDANCE') : undefined;
+      if (guidance) {
+        const journey = await prisma.guidanceJourney.findFirst({
+          where: { id: guidance.executionEntityId, propertyId, OR: [{ status: { in: ['NOT_STARTED', 'ACTIVE', 'COMPLETED', 'DISMISSED'] } }, { projectRecord: { isNot: null } }] },
+          select: { id: true, projectRecord: { select: { id: true } } },
+        });
+        if (journey) return outcome('SUPERSEDED', 'This work is now tracked as a guided plan.', journey.projectRecord ? `project:${journey.projectRecord.id}` : `journey:${journey.id}`);
+      }
+      if (item.sources.length && connected('INCIDENTS')) {
+        const incident = await prisma.incident.findFirst({ where: { propertyId, isSuppressed: false, status: { not: 'SUPPRESSED' }, id: { in: item.sources.map((source) => source.sourceEntityId) } }, select: { id: true } });
+        if (incident) return outcome('SUPERSEDED', 'This work is now tracked as an incident.', `incident:${incident.id}`);
+      }
+      const booking = connected('REPAIRS') ? item.executions.find((execution) => execution.executionType === 'BOOKING') : undefined;
+      if (booking && await prisma.booking.findFirst({ where: { AND: [repairBookingWhere(userId, propertyId), { id: booking.executionEntityId }] }, select: { id: true } })) {
+        return outcome('SUPERSEDED', 'This work is now tracked as a repair.', `repair:${booking.executionEntityId}`);
+      }
       if (item.state === 'CANDIDATE') return outcome('STALE', 'This is a suggestion, not work you accepted.');
       return { state: 'READ' };
     }
@@ -134,6 +152,10 @@ async function probe(kind: string, entityId: string, userId: string, propertyId:
     case 'project': {
       const project = await prisma.projectRecord.findFirst({ where: { id: entityId, propertyId }, select: { id: true } });
       return project ? { state: 'READ' } : { state: 'MISSING' };
+    }
+    case 'repair': {
+      const booking = await prisma.booking.findFirst({ where: { AND: [repairBookingWhere(userId, propertyId), { id: entityId }] }, select: { id: true } });
+      return booking ? { state: 'READ' } : { state: 'MISSING' };
     }
     case 'diyProject': {
       const diy = await prisma.diyProject.findFirst({ where: { id: entityId, propertyId }, select: { id: true } });

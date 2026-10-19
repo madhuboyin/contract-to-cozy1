@@ -16,7 +16,7 @@ export function claimFollowUpRow(claim: ClaimFollowUp): AskWorkRow {
   const sortAt = claim.updatedAt.toISOString();
   return {
     workKey: `${CLAIM_PREFIX}${claim.id}`,
-    sourceAliases: [`claim:${claim.id}`],
+    sourceAliases: [],
     providerId: 'SCHEDULED_FOLLOW_UPS',
     workType: 'SCHEDULED_FOLLOW_UP',
     propertyId: claim.propertyId,
@@ -38,7 +38,7 @@ export function projectFollowUpRow(project: ProjectFollowUp): AskWorkRow {
   const sortAt = project.updatedAt.toISOString();
   return {
     workKey: `${PROJECT_PREFIX}${project.id}`,
-    sourceAliases: [`project:${project.id}`],
+    sourceAliases: [],
     providerId: 'SCHEDULED_FOLLOW_UPS',
     workType: 'SCHEDULED_FOLLOW_UP',
     propertyId: project.propertyId,
@@ -58,7 +58,8 @@ export function projectFollowUpRow(project: ProjectFollowUp): AskWorkRow {
 
 /**
  * Follow-ups with a future date on a claim or a project (FR-WORK-001 scheduled follow-ups), read from each owner's own date field. The row
- * keeps the owner's key as an alias, so the claim or project itself remains the work to open. Savings-benefit follow-ups are not read
+ * is its own work (`followUp:*`), not a duplicate of its claim or project: it keeps its own due date and identity, and its resume target is the
+ * owner, so opening it lands on the claim or project without hiding either row. Savings-benefit follow-ups are not read
  * here: they need their own applicability gate. Read-only.
  */
 export const readScheduledFollowUpWork: AskWorkProviderReader = async (context, query) => {

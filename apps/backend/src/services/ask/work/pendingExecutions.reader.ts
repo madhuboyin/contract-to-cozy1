@@ -21,7 +21,7 @@ export function pendingExecutionView(status: AskExecutionStatus): AskWorkLifecyc
   return status === 'RUNNING' ? 'WAITING' : 'NEEDS_YOU';
 }
 
-export function pendingExecutionRow(row: PendingRow, propertyId: string): AskWorkRow {
+export function pendingExecutionRow(row: PendingRow, propertyId: string | null): AskWorkRow {
   const sortAt = row.updatedAt.toISOString();
   const confirmation = row.status === 'NEEDS_CONFIRMATION';
   return {
@@ -52,14 +52,16 @@ export function pendingExecutionRow(row: PendingRow, propertyId: string): AskWor
  * updated, expired, or recorded here. The candidate set is the caller's open requests for one home, so it is read whole and paged by the
  * shared (sortAt desc, workKey asc) boundary without a hidden cap.
  */
-export const readPendingExecutionWork: AskWorkProviderReader = async (context, query) => {
-  const now = new Date();
+const PENDING_SELECT = { id: true, sessionId: true, propertyId: true, status: true, message: true, operationId: true, contextVersion: true, resultJson: true, updatedAt: true, expiresAt: true } as const;
+
+/** The caller's live pending requests for one home (or, with `propertyId: null`, the requests that belong to no home yet). Read-only. */
+async function loadLivePending(userId: string, propertyId: string | null, entityId: string | null | undefined, now: Date): Promise<PendingRow[]> {
   const orphanRunningCutoff = new Date(now.getTime() - (readAskOperationalControls().executionTimeoutMs + ASK_RUNNING_RECLAIM_GRACE_MS));
   const candidates = await prisma.askExecution.findMany({
     where: {
-      userId: context.userId,
-      propertyId: context.propertyId,
-      ...(query.entityId ? { id: query.entityId } : {}),
+      userId,
+      // A resolve by id also finds the request while it is still homeless, so a request that gains a home while open stays openable.
+      ...(entityId ? { id: entityId, OR: [{ propertyId }, { propertyId: null }] } : { propertyId }),
       AND: [
         { OR: [
           { status: { in: INTERACTIVE_ASK_STATUSES } },
@@ -69,20 +71,37 @@ export const readPendingExecutionWork: AskWorkProviderReader = async (context, q
         { OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
       ],
     },
-    select: { id: true, sessionId: true, propertyId: true, status: true, message: true, operationId: true, contextVersion: true, resultJson: true, updatedAt: true, expiresAt: true },
+    select: PENDING_SELECT,
     orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
   });
-  const live = candidates.filter((row) => {
+  return candidates.filter((row) => {
     const interactionExpiry = pendingInteractionExpiresAt(row);
     return !interactionExpiry || interactionExpiry > now;
   });
+}
+
+export const readPendingExecutionWork: AskWorkProviderReader = async (context, query) => {
+  const now = new Date();
+  const live = await loadLivePending(context.userId, context.propertyId, query.entityId, now);
   const viewCounts = { NEEDS_YOU: 0, WAITING: 0 };
   for (const row of live) viewCounts[pendingExecutionView(row.status) as 'NEEDS_YOU' | 'WAITING'] += 1;
   const inView = live
     .filter((row) => query.entityId || pendingExecutionView(row.status) === query.view)
     .filter((row) => query.entityId || !query.status || row.status === query.status)
-    .map((row) => pendingExecutionRow(row, context.propertyId))
+    .map((row) => pendingExecutionRow(row, row.propertyId ? context.propertyId : null))
     .sort(compareAskWorkRows);
   const rows = inView.filter((row) => !query.after || compareAskWorkRows(row, query.after) > 0);
   return { rows: rows.slice(0, query.limit), total: inView.length, viewCounts };
 };
+
+/**
+ * FR-WORK / exit criterion: every pending request stays discoverable outside its conversation, including one that still asks which home
+ * it is about. Those belong to no home, so they are returned as an account-scoped bucket and never attached to a property.
+ */
+export async function readPropertylessPendingWork(userId: string, view: AskWorkLifecycleView, status: string | null): Promise<AskWorkRow[]> {
+  const live = await loadLivePending(userId, null, null, new Date());
+  return live
+    .filter((row) => pendingExecutionView(row.status) === view && (!status || row.status === status))
+    .map((row) => pendingExecutionRow(row, null))
+    .sort(compareAskWorkRows);
+}
