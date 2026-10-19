@@ -137,6 +137,6 @@ test('seller filters compose and bad filters are rejected; the registry flags an
     const entry = ASK_RECORD_SECTION_REGISTRY.find((section) => section.id === id);
     assert.deepEqual([entry.pagedCollection, entry.collectionReader, typeof ASK_RECORD_COLLECTION_READERS[id]], [true, 'PAGED_COLLECTION', 'function'], id);
   }
-  // Only the governed facts section and the household summary are not paged collections yet.
-  assert.deepEqual(ASK_RECORD_SECTION_REGISTRY.filter((entry) => !entry.pagedCollection).map((entry) => entry.id), ['property-facts', 'household-access']);
+  // Only the governed facts section is not a paged collection: it stays the completeness view.
+  assert.deepEqual(ASK_RECORD_SECTION_REGISTRY.filter((entry) => !entry.pagedCollection).map((entry) => entry.id), ['property-facts']);
 });

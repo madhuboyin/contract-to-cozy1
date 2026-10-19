@@ -7,7 +7,7 @@ import { useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api/client';
 import { buildAskWorkspaceHref } from '@/lib/navigation/askNavigation';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
-import type { AskRecordBuyerTaskRow, AskRecordFinancingScenarioRow, AskRecordIndex, AskRecordDocumentRow, AskRecordIndexSection, AskRecordIncidentClaimRow, AskRecordInspectionRow, AskRecordInventoryRow, AskRecordMaintenanceRow, AskRecordPermitRow, AskRecordPolicyRow, AskRecordProjectRow, AskRecordRoomRow, AskRecordSellerItemRow, AskRecordTimelineRow, AskRecordWarrantyRow } from '@/features/ask/types';
+import type { AskRecordBuyerTaskRow, AskRecordFinancingScenarioRow, AskRecordHouseholdMemberRow, AskRecordIndex, AskRecordDocumentRow, AskRecordIndexSection, AskRecordIncidentClaimRow, AskRecordInspectionRow, AskRecordInventoryRow, AskRecordMaintenanceRow, AskRecordPermitRow, AskRecordPolicyRow, AskRecordProjectRow, AskRecordRoomRow, AskRecordSellerItemRow, AskRecordTimelineRow, AskRecordWarrantyRow } from '@/features/ask/types';
 import { AskCollection, AskCollectionState, AskCompactRow, AskWorkspaceMeasure } from '../presentation/AskLayoutPrimitives';
 import { askServiceIsPaused } from '../workspace/support';
 import { RecordCollection } from './RecordCollection';
@@ -15,7 +15,7 @@ import { RecordRoomRow } from './RecordRoomRow';
 import { RecordInventoryRow } from './RecordInventoryRow';
 import { RecordDocumentRow } from './RecordDocumentRow';
 import { RecordWarrantyRow } from './RecordWarrantyRow';
-import { RecordBuyerTaskRow, RecordFinancingScenarioRow, RecordSellerItemRow } from './RecordTransactionRows';
+import { RecordBuyerTaskRow, RecordFinancingScenarioRow, RecordHouseholdMemberRow, RecordSellerItemRow } from './RecordTransactionRows';
 import { RecordIncidentClaimRow, RecordPermitRow, RecordPolicyRow, RecordProjectRow } from './RecordWorkProtectionRows';
 import { RecordInspectionRow, RecordMaintenanceRow, RecordTimelineRow } from './RecordHistoryRows';
 
@@ -82,6 +82,7 @@ const PAGED_SECTIONS: Record<string, { label: string; searchLabel: string; empty
   'financing-ownership': { label: 'Financing and ownership', searchLabel: 'Search scenarios', emptyText: 'No financing scenarios are saved yet.' },
   'buyer-records': { label: 'Buyer records', searchLabel: 'Search buyer tasks', emptyText: 'No buyer tasks are recorded.' },
   'seller-records': { label: 'Seller records', searchLabel: 'Search sale checklist', emptyText: 'No sale checklist items are recorded.' },
+  'household-access': { label: 'Household access', searchLabel: 'Search members', emptyText: 'No household members are recorded.' },
   inventory: { label: 'Systems and inventory', searchLabel: 'Search inventory', emptyText: 'No inventory items are recorded yet.' },
 };
 
@@ -99,6 +100,7 @@ function renderPagedRow(sectionId: string, row: { id: string }, propertyId: stri
   if (sectionId === 'financing-ownership') return <RecordFinancingScenarioRow key={row.id} scenario={row as AskRecordFinancingScenarioRow} />;
   if (sectionId === 'buyer-records') return <RecordBuyerTaskRow key={row.id} task={row as AskRecordBuyerTaskRow} />;
   if (sectionId === 'seller-records') return <RecordSellerItemRow key={row.id} item={row as AskRecordSellerItemRow} />;
+  if (sectionId === 'household-access') return <RecordHouseholdMemberRow key={row.id} member={row as AskRecordHouseholdMemberRow} />;
   return <RecordInventoryRow key={row.id} item={row as AskRecordInventoryRow} propertyId={propertyId} />;
 }
 

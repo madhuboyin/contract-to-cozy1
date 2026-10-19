@@ -114,4 +114,20 @@ describe('AskRecord permits, projects, and incidents/claims', () => {
     expect(await screen.findByText('Safety Structural · Material Blocker · Open · Estimated $500 to $1,200')).toBeInTheDocument();
     expect(screen.getByRole('note')).toHaveTextContent('as last refreshed');
   });
+
+  it('household access shows names, roles, the primary owner, and who is reading, with nothing administrative', async () => {
+    mockSection = 'household-access';
+    getPage.mockResolvedValueOnce({ success: true, data: page('household-access', [
+      { id: 'm1', name: 'Sarah Chen', role: 'OWNER' as const, roleLabel: 'Owner', isPrimaryOwner: true, isYou: true, joinedAt: '2025-01-10T12:00:00.000Z', askQuestion: null as null },
+      { id: 'm2', name: 'Nana', role: 'VIEWER' as const, roleLabel: 'Viewer', isPrimaryOwner: false, isYou: false, joinedAt: '2026-03-02T12:00:00.000Z', askQuestion: null as null },
+    ]) });
+    render(<AskRecord />);
+
+    expect(await screen.findByRole('heading', { name: 'Household access' })).toBeInTheDocument();
+    expect(screen.getByText('Owner · Primary owner · Joined Jan 10, 2025')).toBeInTheDocument();
+    expect(screen.getByText('You')).toBeInTheDocument();
+    expect(screen.getByText('Viewer · Joined Mar 2, 2026')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /remove|invite|change role/i })).toBeNull();
+    expect(document.querySelectorAll('[data-record-row] a')).toHaveLength(0);
+  });
 });

@@ -484,6 +484,7 @@ const AskRecordCollectionQuerySchema = z.object({
   state: z.string().trim().max(8).optional(),
   coverageType: z.string().trim().max(60).optional(),
   phase: z.string().trim().max(24).optional(),
+  role: z.string().trim().max(16).optional(),
 });
 
 // One page of a Record section's complete collection, with the total, continuation cursor, sort and applied filters.
@@ -493,8 +494,8 @@ export async function getAskRecordSectionPage(req: AuthRequest, res: Response, n
     if (!user) return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED', message: 'Authentication required.' } });
     const query = AskRecordCollectionQuerySchema.safeParse(req.query);
     if (!query.success) return res.status(400).json({ success: false, error: { code: 'ASK_INVALID_REQUEST', message: 'Invalid record collection request.' } });
-    const { propertyId, cursor, limit, search, floor, category, room, status, kind, type, verification, year, state, coverageType, phase } = query.data;
-    return res.status(200).json({ success: true, data: await getAskRecordCollectionPage(user.userId, propertyId, req.params.sectionId, { cursor, limit, search, filters: { floor, category, room, status, kind, type, verification, year, state, coverageType, phase } }, user.role) });
+    const { propertyId, cursor, limit, search, floor, category, room, status, kind, type, verification, year, state, coverageType, phase, role } = query.data;
+    return res.status(200).json({ success: true, data: await getAskRecordCollectionPage(user.userId, propertyId, req.params.sectionId, { cursor, limit, search, filters: { floor, category, room, status, kind, type, verification, year, state, coverageType, phase, role } }, user.role) });
   } catch (error) {
     const code = error instanceof Error ? (error as Error & { code?: string }).code : undefined;
     if (code === 'ASK_INVALID_REQUEST') return res.status(400).json({ success: false, error: { code, message: 'Invalid record collection request.' } });

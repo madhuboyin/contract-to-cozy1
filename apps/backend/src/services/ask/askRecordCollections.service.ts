@@ -6,6 +6,7 @@ import { loadOperatingMode } from './askRecordContext';
 import { inventoryLifecycleHorizon, inventoryMissingFacts } from './handlers/inventory.handler';
 import { visibleInventoryItemWhere } from '../riskAssetApplicability';
 import type { HouseholdRole } from '@prisma/client';
+import { HouseholdService } from '../household.service';
 import { listScenarios } from '../financing.service';
 import { HomeBuyerTaskService } from '../HomeBuyerTask.service';
 import { SCENARIO_STATUS_LABELS } from './support/financingRead';
@@ -1475,6 +1476,87 @@ export async function readSellerRecordsPage(propertyId: string, query: AskRecord
   };
 }
 
+export interface AskRecordHouseholdMemberRow {
+  id: string;
+  /** The household display name, else the account name. Never an email address. */
+  name: string;
+  role: 'OWNER' | 'CONTRIBUTOR' | 'VIEWER';
+  roleLabel: string;
+  isPrimaryOwner: boolean;
+  /** True for the person reading the list. */
+  isYou: boolean;
+  joinedAt: string;
+  askQuestion: null;
+}
+
+const HOUSEHOLD_ROLES = ['OWNER', 'CONTRIBUTOR', 'VIEWER'] as const;
+const HOUSEHOLD_ROLE_LABELS: Record<(typeof HOUSEHOLD_ROLES)[number], string> = { OWNER: 'Owner', CONTRIBUTOR: 'Contributor', VIEWER: 'Viewer' };
+
+/**
+ * Reads one page of who has access to the home, through `HouseholdService.listMembers`: the read `GET /household/members` serves to any
+ * household member. This is a summary and nothing administrative: names, role, whether someone is the primary owner, and when they
+ * joined. Email addresses, last-login times, and pending invitations (an OWNER-only read) are never returned, and role changes,
+ * invitations, and removal stay with their owner-only commands.
+ */
+export async function readHouseholdAccessPage(
+  context: { propertyId: string; userId: string },
+  query: AskRecordCollectionQuery,
+  list: (propertyId: string) => Promise<any[]> = (propertyId) => new HouseholdService().listMembers(propertyId),
+): Promise<AskRecordCollectionPage<AskRecordHouseholdMemberRow>> {
+  const limit = clampLimit(query.limit);
+  const search = cleanSearch(query.search);
+  const role = query.filters?.role?.trim() || null;
+  if (role && !(HOUSEHOLD_ROLES as readonly string[]).includes(role)) throw new InvalidCollectionQueryError('role filter is not valid.');
+  const after = decodeCursor(query.cursor, KeyCursorSchema);
+
+  const members = await list(context.propertyId);
+  const entries = members.map((member) => {
+    const accountName = [member.user?.firstName, member.user?.lastName].filter(Boolean).join(' ').trim();
+    const name = String(member.displayName ?? '').trim() || accountName || 'Household member';
+    const joined = new Date(member.joinedAt).getTime();
+    return {
+      id: String(member.id),
+      key: [member.isPrimaryOwner ? 0 : 1, Number.isNaN(joined) ? 0 : joined],
+      haystack: name.toLowerCase(),
+      row: {
+        id: String(member.id),
+        name,
+        role: member.role as AskRecordHouseholdMemberRow['role'],
+        roleLabel: HOUSEHOLD_ROLE_LABELS[member.role as keyof typeof HOUSEHOLD_ROLE_LABELS] ?? String(member.role),
+        isPrimaryOwner: Boolean(member.isPrimaryOwner),
+        isYou: member.userId === context.userId,
+        joinedAt: new Date(member.joinedAt).toISOString(),
+        askQuestion: null,
+      } satisfies AskRecordHouseholdMemberRow,
+    };
+  }).sort(byKey);
+
+  const needle = search?.toLowerCase() ?? null;
+  const matching = entries.filter((entry) => (!role || entry.row.role === role) && (!needle || entry.haystack.includes(needle)));
+  const remaining = after ? matching.filter((entry) => afterKey(entry, after)) : matching;
+  const page = remaining.slice(0, limit);
+  const last = page[page.length - 1];
+  const nextCursor = remaining.length > limit && last ? encodeCursor({ k: last.key, i: last.id }) : null;
+  const roleOptions = HOUSEHOLD_ROLES.filter((value) => entries.some((entry) => entry.row.role === value) || value === role).map((value) => ({ value, label: HOUSEHOLD_ROLE_LABELS[value] }));
+
+  return {
+    contractVersion: ASK_RECORD_COLLECTION_CONTRACT_VERSION,
+    propertyId: context.propertyId,
+    sectionId: 'household-access',
+    generatedAt: new Date().toISOString(),
+    freshAsOf: null,
+    total: matching.length,
+    delivered: page.length,
+    nextCursor,
+    truncated: nextCursor !== null,
+    notice: null,
+    sort: { key: 'joinedAt', label: 'Primary owner first, then by join date' },
+    query: { search, filters: role ? { role } : {} },
+    filterOptions: roleOptions.length > 1 ? [{ key: 'role', label: 'Role', options: roleOptions }] : [],
+    rows: page.map((entry) => entry.row),
+  };
+}
+
 export type AskRecordReaderContext = { propertyId: string; userId: string; role: HouseholdRole };
 type SectionReader = (context: AskRecordReaderContext, query: AskRecordCollectionQuery) => Promise<AskRecordCollectionPage<unknown>>;
 
@@ -1491,6 +1573,7 @@ export const ASK_RECORD_COLLECTION_READERS: Readonly<Partial<Record<AskRecordSec
   'financing-ownership': (context, query) => readFinancingScenariosPage(context.propertyId, query),
   'buyer-records': (context, query) => readBuyerRecordsPage(context, query),
   'seller-records': (context, query) => readSellerRecordsPage(context.propertyId, query),
+  'household-access': (context, query) => readHouseholdAccessPage(context, query),
   'projects-renovations': (context, query) => readProjectsPage(context.propertyId, query),
   'incidents-claims': (context, query) => readIncidentsClaimsPage(context.propertyId, query),
   warranties: (context, query) => readWarrantiesPage(context.propertyId, query),

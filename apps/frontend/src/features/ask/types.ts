@@ -1045,3 +1045,14 @@ export interface AskRecordSellerItemRow {
   costRangeLabel: string | null;
   askQuestion: null;
 }
+
+export interface AskRecordHouseholdMemberRow {
+  id: string;
+  name: string;
+  role: 'OWNER' | 'CONTRIBUTOR' | 'VIEWER';
+  roleLabel: string;
+  isPrimaryOwner: boolean;
+  isYou: boolean;
+  joinedAt: string;
+  askQuestion: null;
+}

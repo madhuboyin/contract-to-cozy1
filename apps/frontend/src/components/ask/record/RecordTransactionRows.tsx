@@ -1,4 +1,4 @@
-import type { AskRecordBuyerTaskRow, AskRecordFinancingScenarioRow, AskRecordSellerItemRow } from '@/features/ask/types';
+import type { AskRecordBuyerTaskRow, AskRecordFinancingScenarioRow, AskRecordHouseholdMemberRow, AskRecordSellerItemRow } from '@/features/ask/types';
 import { AskCompactRow } from '../presentation/AskLayoutPrimitives';
 
 const dateFormat = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
@@ -39,6 +39,19 @@ export function RecordSellerItemRow({ item }: { item: AskRecordSellerItemRow }) 
         <p className="text-sm font-semibold text-slate-950">{item.title}</p>
         <p className="mt-0.5 text-xs text-slate-500">{facts.join(' · ')}</p>
         {item.detail && <p className="mt-1 text-xs text-slate-600">{item.detail}</p>}
+      </div>
+    </AskCompactRow>
+  );
+}
+
+// Read-only: roles, invitations, and removal stay with their owner-only commands.
+export function RecordHouseholdMemberRow({ member }: { member: AskRecordHouseholdMemberRow }) {
+  const facts = [member.roleLabel, member.isPrimaryOwner ? 'Primary owner' : null, `Joined ${when(member.joinedAt)}`].filter(Boolean);
+  return (
+    <AskCompactRow className="border-b border-slate-200 last:border-b-0" data-record-row={member.id}>
+      <div className="min-w-0">
+        <p className="text-sm font-semibold text-slate-950">{member.name}{member.isYou ? <span className="ml-2 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-900">You</span> : null}</p>
+        <p className="mt-0.5 text-xs text-slate-500">{facts.join(' · ')}</p>
       </div>
     </AskCompactRow>
   );

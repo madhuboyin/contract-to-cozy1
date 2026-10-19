@@ -138,12 +138,13 @@ export const ASK_RECORD_SECTION_REGISTRY: readonly AskRecordSectionDefinition[] 
     collectionReader: PAGED, pagedCollection: true, lifecycleOperationId: 'SELLER_PREP_CHECKLIST', freshnessSource: 'Last checklist refresh', exportEligibility: 'NOT_EVALUATED',
     primaryAction: { label: 'View sale prep', question: 'Show me my sale preparation checklist.' },
   }),
-  // No Ask operation is dedicated to reading household access, so this read-only summary rides the Property Summary operation that
-  // already carries the household count in the same canonical overview. Role changes stay deferred (HOUSEHOLD_INVITATION is OWNER-only).
+  // No Ask operation is dedicated to reading household access, so this read-only summary rides the Property Summary operation. The
+  // member list is member-level on its route (`GET /household/members`). Role changes, invitations, and the pending-invite list stay
+  // owner-only and deferred (HOUSEHOLD_INVITATION is OWNER-only).
   section({
     id: 'household-access', label: 'Household access', scope: 'Who has access to this home and in what role.', owner: 'household',
     readOperationIds: ['PROPERTY_SUMMARY'], commandOperationIds: [],
-    collectionReader: OVERVIEW, pagedCollection: false, lifecycleOperationId: 'PROPERTY_SUMMARY', freshnessSource: 'Household membership', exportEligibility: 'NOT_EVALUATED',
+    collectionReader: PAGED, pagedCollection: true, lifecycleOperationId: 'PROPERTY_SUMMARY', freshnessSource: 'Household membership', exportEligibility: 'NOT_EVALUATED',
     primaryAction: { label: 'View household', question: 'Who has access to my home?' },
   }),
 ]);

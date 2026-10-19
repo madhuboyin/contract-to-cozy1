@@ -64,6 +64,7 @@ const COLLECTION_COUNT_NOUNS: Partial<Record<AskRecordSectionId, [string, string
   timeline: ['event', 'events'],
   'maintenance-history': ['completed task', 'completed tasks'],
   inspections: ['report', 'reports'],
+  'household-access': ['member', 'members'],
   permits: ['permit', 'permits'],
   coverage: ['policy', 'policies'],
   'financing-ownership': ['saved scenario', 'saved scenarios'],
@@ -111,10 +112,6 @@ function readOverviewSection(id: AskRecordSectionId, overview: Overview | null):
     case 'warranties':
       return sections.warranties.status === 'AVAILABLE'
         ? { count: sections.warranties.data.totalCount, countLabel: plural(sections.warranties.data.totalCount, 'warranty', 'warranties'), freshAsOf: null, failed: false }
-        : failed;
-    case 'household-access':
-      return sections.household.status === 'AVAILABLE'
-        ? { count: sections.household.data.totalCount, countLabel: plural(sections.household.data.totalCount, 'member'), freshAsOf: null, failed: false }
         : failed;
     default:
       return failed;
