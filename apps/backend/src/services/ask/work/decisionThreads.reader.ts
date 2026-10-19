@@ -90,7 +90,8 @@ export function decisionThreadRow(thread: ThreadRecord): AskWorkRow {
 export const readDecisionThreadWork: AskWorkProviderReader = async (context, query) => {
   const base: Prisma.DecisionThreadWhereInput = { propertyId: context.propertyId };
   const statusFilter: Prisma.DecisionThreadWhereInput = query.status ? { lifecycleStatus: query.status as DecisionThreadLifecycleStatus } : {};
-  const inView: Prisma.DecisionThreadWhereInput  = query.entityId ? { AND: [base, { id: query.entityId }] } : { AND: [base, viewWhere(query.view), statusFilter] };
+  const searchTerm = query.search;
+  const inView: Prisma.DecisionThreadWhereInput = query.entityId ? { AND: [base, { id: query.entityId }] } : { AND: [base, query.allViews ? {} : viewWhere(query.view), statusFilter, ...(searchTerm ? [{ OR: ((s: string) => [{ title: { contains: s, mode: 'insensitive' } }])(searchTerm) as never }] : [])] };
   const instant = boundaryInstant(query.after);
   const sameInstant: Prisma.DecisionThreadWhereInput | null = !query.after ? null
     : query.after.workKey.startsWith(KEY_PREFIX) ? { id: { gt: query.after.workKey.slice(KEY_PREFIX.length) } }

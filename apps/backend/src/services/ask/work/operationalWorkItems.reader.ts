@@ -140,7 +140,8 @@ export function createOperationalWorkItemReader(registry: readonly AskWorkProvid
       NOT: [...ownedByRelation(registry), ...(ownedIds.length ? [{ id: { in: ownedIds } }] : [])],
     };
     const statusFilter = query.status ? { state: query.status as OperationalWorkItemState } : {};
-    const inView: Prisma.OperationalWorkItemWhereInput  = query.entityId ? { AND: [base, { id: query.entityId }] } : { AND: [base, viewWhere(query.view), statusFilter] };
+    const searchTerm = query.search;
+  const inView: Prisma.OperationalWorkItemWhereInput = query.entityId ? { AND: [base, { id: query.entityId }] } : { AND: [base, query.allViews ? {} : viewWhere(query.view), statusFilter, ...(searchTerm ? [{ OR: ((s: string) => [{ title: { contains: s, mode: 'insensitive' } }, { homeownerReason: { contains: s, mode: 'insensitive' } }])(searchTerm) as never }] : [])] };
     const instant = boundaryInstant(query.after);
     // Same-instant rows resume by workKey order across every provider: this provider's keys all start with the work-item prefix.
     const sameInstant: Prisma.OperationalWorkItemWhereInput | null = !query.after ? null

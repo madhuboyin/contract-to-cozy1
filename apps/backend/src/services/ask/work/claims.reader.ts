@@ -77,7 +77,8 @@ export const readClaimWork: AskWorkProviderReader = async (context, query) => {
   const now = new Date();
   const base: Prisma.ClaimWhereInput = { propertyId: context.propertyId };
   const statusFilter: Prisma.ClaimWhereInput = query.status ? { status: query.status as ClaimStatus } : {};
-  const inView: Prisma.ClaimWhereInput  = query.entityId ? { AND: [base, { id: query.entityId }] } : { AND: [base, viewWhere(query.view, now), statusFilter] };
+  const searchTerm = query.search;
+  const inView: Prisma.ClaimWhereInput = query.entityId ? { AND: [base, { id: query.entityId }] } : { AND: [base, query.allViews ? {} : viewWhere(query.view, now), statusFilter, ...(searchTerm ? [{ OR: ((s: string) => [{ title: { contains: s, mode: 'insensitive' } }, { providerName: { contains: s, mode: 'insensitive' } }])(searchTerm) as never }] : [])] };
   const [claims, total, viewCounts] = await Promise.all([
     prisma.claim.findMany({
       where: afterBoundaryWhere(inView, query.after, KEY_PREFIX),

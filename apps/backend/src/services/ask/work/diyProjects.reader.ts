@@ -65,7 +65,8 @@ export function diyProjectRow(project: DiyRecord, role: Parameters<typeof workAc
 export const readDiyProjectWork: AskWorkProviderReader = async (context, query) => {
   const base: Prisma.DiyProjectWhereInput = { propertyId: context.propertyId };
   const statusFilter: Prisma.DiyProjectWhereInput = query.status ? { status: query.status as DiyProjectStatus } : {};
-  const inView: Prisma.DiyProjectWhereInput  = query.entityId ? { AND: [base, { id: query.entityId }] } : { AND: [base, viewWhere(query.view), statusFilter] };
+  const searchTerm = query.search;
+  const inView: Prisma.DiyProjectWhereInput = query.entityId ? { AND: [base, { id: query.entityId }] } : { AND: [base, query.allViews ? {} : viewWhere(query.view), statusFilter, ...(searchTerm ? [{ OR: ((s: string) => [{ title: { contains: s, mode: 'insensitive' } }])(searchTerm) as never }] : [])] };
   const [projects, total, viewCounts] = await Promise.all([
     prisma.diyProject.findMany({
       where: afterBoundaryWhere(inView, query.after, KEY_PREFIX),

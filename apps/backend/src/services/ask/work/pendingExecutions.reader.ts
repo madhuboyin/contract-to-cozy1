@@ -86,7 +86,8 @@ export const readPendingExecutionWork: AskWorkProviderReader = async (context, q
   const viewCounts = { NEEDS_YOU: 0, WAITING: 0 };
   for (const row of live) viewCounts[pendingExecutionView(row.status) as 'NEEDS_YOU' | 'WAITING'] += 1;
   const inView = live
-    .filter((row) => query.entityId || pendingExecutionView(row.status) === query.view)
+    .filter((row) => query.entityId || query.allViews || pendingExecutionView(row.status) === query.view)
+    .filter((row) => !query.search || row.message.toLowerCase().includes(query.search.toLowerCase()))
     .filter((row) => query.entityId || !query.status || row.status === query.status)
     .map((row) => pendingExecutionRow(row, row.propertyId ? context.propertyId : null))
     .sort(compareAskWorkRows);

@@ -91,7 +91,8 @@ export const readRepairWork: AskWorkProviderReader = async (context, query) => {
   const now = new Date();
   const base = repairBookingWhere(context.userId, context.propertyId);
   const statusFilter: Prisma.BookingWhereInput = query.status ? { status: query.status as BookingStatus } : {};
-  const inView: Prisma.BookingWhereInput = query.entityId ? { AND: [base, { id: query.entityId }] } : { AND: [base, viewWhere(query.view, now), statusFilter] };
+  const searchTerm = query.search;
+  const inView: Prisma.BookingWhereInput = query.entityId ? { AND: [base, { id: query.entityId }] } : { AND: [base, query.allViews ? {} : viewWhere(query.view, now), statusFilter, ...(searchTerm ? [{ OR: ((s: string) => [{ description: { contains: s, mode: 'insensitive' } }, { service: { name: { contains: s, mode: 'insensitive' } } }])(searchTerm) as never }] : [])] };
   const [bookings, total, viewCounts] = await Promise.all([
     prisma.booking.findMany({
       where: afterBoundaryWhere(inView, query.after, KEY_PREFIX),

@@ -200,6 +200,7 @@ import { validateAskDomainCommandRegistry } from './services/ask/askDomainComman
 import { validateAskRecordSectionRegistry } from './services/ask/governance/askRecordSectionRegistry';
 import { validateAskWorkProviders } from './services/ask/askWork.service';
 import { validateAskSavedTypes } from './services/ask/askSaved.service';
+import { validateAskSearchProviders } from './services/ask/askSearch.service';
 import { validateAskRouteRetirementRegistry } from './services/ask/governance/askRouteRetirementRegistry';
 import { validateAskLlmPurposeContracts } from './services/ask/askRemoteFallbackTypedClaims';
 import { validateCapabilityHandlerRegistry } from './services/ask/capabilityHandlerRegistry';
@@ -246,6 +247,7 @@ const askRegistryIssues = [
   ...validateAskRecordSectionRegistry(),
   ...validateAskWorkProviders(),
   ...validateAskSavedTypes(),
+  ...validateAskSearchProviders(),
   ...validateAskLlmPurposeContracts(),
   ...validateCapabilityHandlerRegistry(),
   ...validateConfirmCapabilityHandlerRegistry(),

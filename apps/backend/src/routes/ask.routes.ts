@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth.middleware';
 import { requireAskEligibleAccount } from '../middleware/askAccountEligibility.middleware';
-import { getAskTargetSelectionHandler, deleteAskSession, patchAskSession, getAskConciergeHome, getAskExecutionById, getAskMonitor, getAskPendingExecutions, getAskWorkPageHandler, getAskSavedPageHandler, getAskSavedResolveHandler, patchAskSavedArchiveHandler, getAskWorkResolveHandler, getAskRecordIndexHandler, getAskRecordExportReviewHandler, getAskRecordSectionPage, getAskRecordDetailHandler, getAskRecentSessions, getAskSessionExecutions, patchAskMonitor, postAskCancellation, postAskCapture, postAskCaptureEvent, postAskClarification, postAskConfirmation, postAskConfirmationEdit, postAskContinuation, postAskCorrection, postAskExecution, postAskExecutionProperty, postAskExecutionRefresh, postAskExecutionRetry, postAskFeedback, postDismissSuggestedAction, postAskSessionSearch, postHomeActionUsefulnessFeedback } from '../controllers/ask.controller';
+import { getAskTargetSelectionHandler, deleteAskSession, patchAskSession, getAskConciergeHome, getAskExecutionById, getAskMonitor, getAskPendingExecutions, getAskWorkPageHandler, postAskSearchHandler, getAskSavedPageHandler, getAskSavedResolveHandler, patchAskSavedArchiveHandler, getAskWorkResolveHandler, getAskRecordIndexHandler, getAskRecordExportReviewHandler, getAskRecordSectionPage, getAskRecordDetailHandler, getAskRecentSessions, getAskSessionExecutions, patchAskMonitor, postAskCancellation, postAskCapture, postAskCaptureEvent, postAskClarification, postAskConfirmation, postAskConfirmationEdit, postAskContinuation, postAskCorrection, postAskExecution, postAskExecutionProperty, postAskExecutionRefresh, postAskExecutionRetry, postAskFeedback, postDismissSuggestedAction, postAskSessionSearch, postHomeActionUsefulnessFeedback } from '../controllers/ask.controller';
 
 const router = Router();
 
@@ -26,6 +26,7 @@ router.post('/ask/executions/:executionId/corrections', postAskCorrection);
 router.get('/ask/executions/:executionId', getAskExecutionById);
 router.get('/ask/pending', getAskPendingExecutions);
 router.get('/ask/work', getAskWorkPageHandler);
+router.post('/ask/search', postAskSearchHandler);
 router.get('/ask/saved', getAskSavedPageHandler);
 router.get('/ask/saved/resolve', getAskSavedResolveHandler);
 router.patch('/ask/saved/archive', patchAskSavedArchiveHandler);

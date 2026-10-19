@@ -5,6 +5,7 @@ import type { AuthRequest } from '../types/auth.types';
 import { AskSessionSearchRequestSchema, AskSessionUpdateRequestSchema, ContinueAskExecutionSchema, CreateAskExecutionRequestSchema, EditAskConfirmationSchema, RecordAskCaptureEventSchema, RequestAskCorrectionSchema, ResolveAskExecutionPropertySchema, RetryAskExecutionSchema, SubmitAskCaptureRequestSchema, SubmitAskClarificationSchema, SubmitAskConfirmationSchema, SubmitAskFeedbackSchema, SubmitHomeActionUsefulnessFeedbackSchema, DismissSuggestedActionSchema, SUGGESTED_NEXT_ACTION_ID_PATTERN } from '../productFramework/ask/ask.contract';
 import { getAskRecordIndex } from '../services/ask/askRecordIndex.service';
 import { getAskRecordExportReview } from '../services/ask/askRecordExportReview.service';
+import { searchAsk, AskSearchInvalidRequestError } from '../services/ask/askSearch.service';
 import { getAskSavedPage, resolveAskSavedArtifactForUser, setAskSavedArchive, AskSavedInvalidRequestError } from '../services/ask/askSaved.service';
 import { getAskWorkPage, resolveAskWorkForUser, AskWorkInvalidRequestError } from '../services/ask/askWork.service';
 import { getAskRecordCollectionPage, AskRecordSectionUnavailableError } from '../services/ask/askRecordCollections.service';
@@ -556,6 +557,29 @@ export async function getAskWorkResolveHandler(req: AuthRequest, res: Response, 
   } catch (error) {
     const code = error instanceof Error ? (error as Error & { code?: string }).code : undefined;
     if (error instanceof AskWorkInvalidRequestError || code === 'ASK_INVALID_REQUEST') return res.status(400).json({ success: false, error: { code: 'ASK_INVALID_REQUEST', message: 'Invalid Work request.' } });
+    return next(error);
+  }
+}
+
+// Federated search (FR-SEARCH-001..004). A POST so the query text travels in the body, not in a URL that access logs would keep. Never cached.
+const AskSearchBodySchema = z.object({
+  propertyId: z.string().trim().min(1).max(160),
+  query: z.string().max(400),
+  group: z.enum(['RECORD', 'WORK', 'SAVED', 'HISTORY', 'CAPABILITY']).optional(),
+});
+
+export async function postAskSearchHandler(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const user = req.user;
+    if (!user) return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED', message: 'Authentication required.' } });
+    const body = AskSearchBodySchema.safeParse(req.body);
+    if (!body.success) return res.status(400).json({ success: false, error: { code: 'ASK_INVALID_REQUEST', message: 'Invalid search request.' } });
+    res.setHeader('Cache-Control', 'no-store');
+    return res.status(200).json({ success: true, data: await searchAsk(user.userId, body.data.propertyId, body.data.query, user.role, body.data.group ?? null) });
+  } catch (error) {
+    const code = error instanceof Error ? (error as Error & { code?: string }).code : undefined;
+    if (error instanceof AskSearchInvalidRequestError || code === 'ASK_INVALID_REQUEST') return res.status(400).json({ success: false, error: { code: 'ASK_INVALID_REQUEST', message: 'Invalid search request.' } });
+    if (code === 'ASK_PROPERTY_NOT_FOUND') return res.status(404).json({ success: false, error: { code, message: 'Property not found or access was removed.' } });
     return next(error);
   }
 }

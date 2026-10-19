@@ -48,6 +48,7 @@ export const readUnknownOutcomeWork: AskWorkProviderReader = async (context, que
     propertyId: context.propertyId,
     status: 'OUTCOME_UNKNOWN',
     ...(query.entityId ? { id: query.entityId } : {}),
+    ...(query.search ? { message: { contains: query.search, mode: 'insensitive' as const } } : {}),
     ...(!query.entityId && query.status && query.status !== 'OUTCOME_UNKNOWN' ? { id: { in: [] } } : {}),
   };
   const asNeeds = query.view === 'NEEDS_YOU' || Boolean(query.entityId);

@@ -49,6 +49,7 @@ export const readRetryableExecutionWork: AskWorkProviderReader = async (context,
     propertyId: context.propertyId,
     status: 'FAILED_RETRYABLE',
     ...(query.entityId ? { id: query.entityId } : {}),
+    ...(query.search ? { message: { contains: query.search, mode: 'insensitive' as const } } : {}),
     events: { none: { eventType: 'RETRY_STARTED' } },
     ...(query.status && query.status !== 'FAILED_RETRYABLE' ? { id: { in: [] } } : {}),
   };

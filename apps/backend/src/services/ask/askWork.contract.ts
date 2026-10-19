@@ -162,6 +162,9 @@ export interface AskWorkReadQuery {
   status: string | null;
   /** Resolve one work row by its source id instead of listing: every view, no boundary. Used only by the resume resolver. */
   entityId?: string | null;
+  /** Global search: only rows whose own text matches, across every lifecycle view. */
+  search?: string | null;
+  allViews?: boolean;
 }
 
 export interface AskWorkReadResult {
