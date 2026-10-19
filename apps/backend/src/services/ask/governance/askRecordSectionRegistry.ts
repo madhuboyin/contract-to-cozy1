@@ -48,12 +48,17 @@ export type AskRecordDetailCapability =
   | { state: 'UNAVAILABLE'; reason: string };
 
 /** The sections whose rows open per-record detail today. Every other section is UNAVAILABLE until its canonical owner has a detail reader. */
-export const ASK_RECORD_DETAIL_CONNECTED_SECTIONS: readonly AskRecordSectionId[] = Object.freeze(['rooms', 'inventory', 'documents', 'warranties']);
+export const ASK_RECORD_DETAIL_CONNECTED_SECTIONS: readonly AskRecordSectionId[] = Object.freeze([
+  'rooms', 'inventory', 'documents', 'warranties', 'timeline', 'maintenance-history', 'inspections', 'permits', 'projects-renovations', 'incidents-claims', 'coverage',
+  'financing-ownership', 'buyer-records', 'seller-records', 'household-access',
+]);
 
 const recordDetailCapability = (id: AskRecordSectionId, label: string): AskRecordDetailCapability => (
   ASK_RECORD_DETAIL_CONNECTED_SECTIONS.includes(id)
     ? { state: 'CONNECTED' }
-    : { state: 'UNAVAILABLE', reason: `No canonical per-record detail reader is connected for ${label.toLowerCase()} yet, so a row shows its listed facts only.` }
+    : id === 'property-facts'
+      ? { state: 'UNAVAILABLE', reason: 'Property details is the governed completeness view, not a list of records, so it has no per-record detail; its facts are read through Property Context.' }
+      : { state: 'UNAVAILABLE', reason: `No canonical per-record detail reader is connected for ${label.toLowerCase()} yet, so a row shows its listed facts only.` }
 );
 
 export interface AskRecordSectionDefinition {
@@ -139,7 +144,7 @@ export const ASK_RECORD_SECTION_REGISTRY: readonly AskRecordSectionDefinition[] 
     id: 'inventory', label: 'Systems and inventory', scope: 'Appliances, systems and belongings with condition and verification.', owner: 'inventory',
     readOperationIds: ['INVENTORY_LOOKUP'], commandOperationIds: ['INVENTORY_ITEM_CREATE', 'INVENTORY_ITEM_CORRECT'],
     collectionReader: OVERVIEW, pagedCollection: true, lifecycleOperationId: 'INVENTORY_LOOKUP', freshnessSource: 'Most recently updated item', exportEligibility: EXPORT['inventory'],
-    primaryAction: { label: 'View inventory', question: 'What is in my home inventory?' },
+    primaryAction: { label: 'View inventory', question: 'Show me my inventory.' },
   }),
   section({
     id: 'documents', label: 'Documents', scope: 'Home records and vault documents, plus extracted candidates awaiting review.', owner: 'home-records',
@@ -205,13 +210,13 @@ export const ASK_RECORD_SECTION_REGISTRY: readonly AskRecordSectionDefinition[] 
     id: 'buyer-records', label: 'Buyer records', scope: 'Buyer Plan tasks across the purchase.', owner: 'buyer-plan',
     readOperationIds: ['BUYER_PLAN_STATUS'], commandOperationIds: ['BUYER_PLAN_SETUP_COMMAND', 'BUYER_TASK_CREATE', 'BUYER_TASK_UPDATE', 'BUYER_TASK_COMPLETE'],
     collectionReader: PAGED, pagedCollection: true, lifecycleOperationId: 'BUYER_PLAN_STATUS', freshnessSource: 'Most recent task completion', exportEligibility: EXPORT['buyer-records'],
-    primaryAction: { label: 'View buyer plan', question: 'What is the status of my buyer plan?' },
+    primaryAction: { label: 'View buyer plan', question: 'Show me my buyer checklist.' },
   }),
   section({
     id: 'seller-records', label: 'Seller records', scope: 'Sale readiness checklist items.', owner: 'seller-prep',
     readOperationIds: ['SELLER_PREP_CHECKLIST'], commandOperationIds: ['SELLER_PREP_ITEM_DECISION', 'SELLER_PREP_CASE_COMMAND'],
     collectionReader: PAGED, pagedCollection: true, lifecycleOperationId: 'SELLER_PREP_CHECKLIST', freshnessSource: 'Last checklist refresh', exportEligibility: EXPORT['seller-records'],
-    primaryAction: { label: 'View sale prep', question: 'Show me my sale preparation checklist.' },
+    primaryAction: { label: 'View sale prep', question: 'Show me my sale readiness checklist.' },
   }),
   // No Ask operation is dedicated to reading household access, so this read-only summary rides the Property Summary operation. The
   // member list is member-level on its route (`GET /household/members`). Role changes, invitations, and the pending-invite list stay

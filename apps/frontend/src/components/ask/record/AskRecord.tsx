@@ -106,12 +106,23 @@ function renderPagedRowBase(sectionId: string, row: { id: string }, propertyId: 
   return <RecordInventoryRow key={row.id} item={row as AskRecordInventoryRow} propertyId={propertyId} />;
 }
 
-// Row labels for the Details disclosure's screen-reader text; only sections with a connected detail reader appear here.
+// Row labels for the Details disclosure's screen-reader text, one per section with a connected detail reader.
 const DETAIL_ROW_LABEL: Record<string, (row: never) => string> = {
   rooms: (row: AskRecordRoomRow) => row.name,
   inventory: (row: AskRecordInventoryRow) => row.name,
   documents: (row: AskRecordDocumentRow) => row.title,
   warranties: (row: AskRecordWarrantyRow) => `${row.providerName} warranty`,
+  timeline: (row: AskRecordTimelineRow) => row.title,
+  'maintenance-history': (row: AskRecordMaintenanceRow) => row.title,
+  inspections: (row: AskRecordInspectionRow) => `${row.reportTypeLabel} inspection`,
+  permits: (row: AskRecordPermitRow) => row.title,
+  'projects-renovations': (row: AskRecordProjectRow) => row.name,
+  'incidents-claims': (row: AskRecordIncidentClaimRow) => row.title,
+  coverage: (row: AskRecordPolicyRow) => `${row.carrierName} policy`,
+  'financing-ownership': (row: AskRecordFinancingScenarioRow) => row.title,
+  'buyer-records': (row: AskRecordBuyerTaskRow) => row.title,
+  'seller-records': (row: AskRecordSellerItemRow) => row.title,
+  'household-access': (row: AskRecordHouseholdMemberRow) => row.name,
 };
 
 function renderPagedRow(sectionId: string, row: { id: string }, propertyId: string, recordDetail: AskRecordDetailCapability | undefined) {

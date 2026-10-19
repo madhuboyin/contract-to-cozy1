@@ -846,12 +846,15 @@ export interface AskRecordFacet {
 export interface AskRecordCorrectionRoute {
   id: string;
   label: string;
-  operationId: string;
+  /** The existing Ask command that makes the change; null when no Ask command changes this kind of record. */
+  operationId: string | null;
   requiredRole: 'VIEWER' | 'CONTRIBUTOR' | 'OWNER' | null;
   state: 'AVAILABLE' | 'ROLE_REQUIRED' | 'UNAVAILABLE';
   reason: string | null;
   /** The Ask question whose answer carries this command's action for this record. Null unless AVAILABLE. */
   openQuestion: string | null;
+  /** A limit of the Ask answer that route opens (for example a list cap), or null. */
+  note: string | null;
 }
 
 // One record's detail, provenance and correction routes (FR-REC-004/005). Mirrors the backend `AskRecordDetail`.

@@ -34,7 +34,7 @@ const detail = (overrides: Partial<AskRecordDetail> = {}): AskRecordDetail => ({
     related: { state: 'AVAILABLE', records: [{ label: 'Furnace', kindLabel: 'Inventory item', broken: false }], reason: null },
     history: { state: 'UNAVAILABLE', entries: [], reason: 'No canonical change-history reader is connected for warranties, so no history is shown and none is inferred.' },
   },
-  corrections: [{ id: 'warranty-correct', label: 'Correct a detail', operationId: 'WARRANTY_CORRECT', requiredRole: 'CONTRIBUTOR', state: 'AVAILABLE', reason: null, openQuestion: 'Show me my HVAC warranties.' }],
+  corrections: [{ id: 'warranty-correct', label: 'Correct a detail', operationId: 'WARRANTY_CORRECT', requiredRole: 'CONTRIBUTOR', state: 'AVAILABLE', reason: null, openQuestion: 'Show me my HVAC warranties.', note: 'Ask lists the 25 newest.' }],
   ...overrides,
 });
 
@@ -64,11 +64,12 @@ describe('AskRecord per-record detail (FR-REC-004/005)', () => {
     const url = new URL(link.getAttribute('href') as string, 'https://x.test');
     expect(url.searchParams.get('question')).toBe('Show me my HVAC warranties.');
     expect(url.searchParams.get('backTo')).toBe('/dashboard/ask/record?section=warranties');
+    expect(within(panel).getByText('Ask lists the 25 newest.')).toBeInTheDocument();
   });
 
   it('states a correction that cannot be used and why, with no link', async () => {
     getPage.mockResolvedValue({ success: true, data: page({ state: 'CONNECTED' }) });
-    getDetail.mockResolvedValue({ success: true, data: detail({ corrections: [{ id: 'warranty-correct', label: 'Correct a detail', operationId: 'WARRANTY_CORRECT', requiredRole: 'CONTRIBUTOR', state: 'ROLE_REQUIRED', reason: 'Your household role cannot change this; it needs contributor access.', openQuestion: null }] }) });
+    getDetail.mockResolvedValue({ success: true, data: detail({ corrections: [{ id: 'warranty-correct', label: 'Correct a detail', operationId: 'WARRANTY_CORRECT', requiredRole: 'CONTRIBUTOR', state: 'ROLE_REQUIRED', reason: 'Your household role cannot change this; it needs contributor access.', openQuestion: null, note: null }] }) });
     render(<AskRecord />);
     fireEvent.click(await screen.findByRole('button', { name: /Details and history/ }));
     const route = await waitFor(() => { const el = document.querySelector('[data-correction="warranty-correct"]') as HTMLElement; expect(el).toBeTruthy(); return el; });
@@ -92,6 +93,18 @@ describe('AskRecord per-record detail (FR-REC-004/005)', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Details and history/ }));
     fireEvent.click(await screen.findByRole('button', { name: 'Try again' }));
     await waitFor(() => expect(document.querySelector('[data-record-detail-panel="war-1"]')).toBeTruthy());
+  });
+
+  it('opens detail for a timeline row and for a command-less record whose route names no Ask command', async () => {
+    section = 'timeline';
+    const event = { id: 'ev-1', title: 'Roof replaced', summary: null, type: 'REPAIR', typeLabel: 'Repair', occurredAt: '2025-06-01T00:00:00.000Z', datePrecision: 'MONTH', dateRangeStart: null, dateRangeEnd: null, verification: 'UNVERIFIED', verificationLabel: 'Unverified', providerName: null, isPrivate: false, askQuestion: null };
+    getPage.mockResolvedValue({ success: true, data: { ...page({ state: 'CONNECTED' }), sectionId: 'timeline', rows: [event], total: 1, delivered: 1 } });
+    getDetail.mockResolvedValue({ success: true, data: detail({ sectionId: 'timeline', recordId: 'ev-1', corrections: [{ id: 'incident-change', label: 'Change this incident', operationId: null, requiredRole: null, state: 'UNAVAILABLE', reason: 'Incidents are raised and resolved by the system; no Ask command changes an incident.', openQuestion: null, note: null }] }) });
+    render(<AskRecord />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Details and history for Roof replaced' }));
+    expect(getDetail).toHaveBeenCalledWith('timeline', 'home-1', 'ev-1', expect.anything());
+    const route = await waitFor(() => { const el = document.querySelector('[data-correction="incident-change"]') as HTMLElement; expect(el).toBeTruthy(); return el; });
+    expect(route).toHaveTextContent('Not available — Incidents are raised and resolved by the system');
   });
 
   it('a section with no detail reader says so once and shows no Details control', async () => {

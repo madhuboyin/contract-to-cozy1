@@ -27,9 +27,11 @@ test('detail is CONNECTED exactly where a reader exists, and every other section
   for (const entry of ASK_RECORD_SECTION_REGISTRY) {
     const hasReader = Boolean(ASK_RECORD_DETAIL_READERS[entry.id]);
     assert.equal(entry.recordDetail.state, hasReader ? 'CONNECTED' : 'UNAVAILABLE', entry.id);
-    if (!hasReader) assert.match(entry.recordDetail.reason, /No canonical per-record detail reader is connected/, entry.id);
+    if (!hasReader) assert.ok(entry.recordDetail.reason.length > 20, entry.id);
   }
-  assert.deepEqual(Object.keys(ASK_RECORD_DETAIL_READERS).sort(), ['documents', 'inventory', 'rooms', 'warranties']);
+  assert.deepEqual(ASK_RECORD_SECTION_REGISTRY.filter((entry) => entry.recordDetail.state === 'UNAVAILABLE').map((entry) => entry.id), ['property-facts']);
+  assert.match(ASK_RECORD_SECTION_REGISTRY.find((entry) => entry.id === 'property-facts').recordDetail.reason, /completeness view/);
+  assert.equal(Object.keys(ASK_RECORD_DETAIL_READERS).length, 15);
 });
 
 // ---- authorization -------------------------------------------------------------------------------------------------------------
@@ -44,7 +46,7 @@ function stubAccess(role, mode = 'OWNING') {
 test('opening detail for a section with no detail reader reports it unavailable, before anything is read', async () => {
   const restore = stubAccess('OWNER');
   try {
-    await assert.rejects(() => getAskRecordDetail('u1', 'p1', 'permits', 'x', 'HOMEOWNER'), (error) => error instanceof AskRecordSectionUnavailableError && error.reason === 'NO_DETAIL');
+    await assert.rejects(() => getAskRecordDetail('u1', 'p1', 'property-facts', 'x', 'HOMEOWNER'), (error) => error instanceof AskRecordSectionUnavailableError && error.reason === 'NO_DETAIL');
     await assert.rejects(() => getAskRecordDetail('u1', 'p1', 'nope', 'x', 'HOMEOWNER'), (error) => error instanceof AskRecordSectionUnavailableError && error.reason === 'UNKNOWN_SECTION');
   } finally { restore(); }
 });

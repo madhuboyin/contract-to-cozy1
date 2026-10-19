@@ -66,6 +66,7 @@ export function RecordDetailPanel({ detail, propertyId, backTo }: { detail: AskR
                   <span className="text-slate-600" role="note">Not available — {route.reason}</span>
                 </>
               )}
+              {route.state === 'AVAILABLE' && route.note && <span className="text-xs text-slate-600" role="note">{route.note}</span>}
             </li>
           ))}
         </ul>

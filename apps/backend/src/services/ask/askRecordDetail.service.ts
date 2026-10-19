@@ -1,136 +1,20 @@
-import type { HouseholdRole } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import type { AskAccountRole } from './askAccountEligibility';
 import { visibleInventoryItemWhere } from '../riskAssetApplicability';
 import { homeRecordsService } from '../homeRecords.service';
 import { listPropertyDocuments } from '../propertyDocuments/propertyDocumentInventory.service';
 import { warrantyStatus, WARRANTY_EXPIRING_DAYS } from './handlers/warranties.handler';
-import { ASK_OPERATION_DEFINITIONS, type AskOperationId } from './askOperationRegistry';
 import type { AskRecordSectionDefinition, AskRecordSectionId } from './governance/askRecordSectionRegistry';
+import {
+  ASK_RECORD_DETAIL_CONTRACT_VERSION, AskRecordNotFoundError, NO_HISTORY, available, day, fact, notRecorded, observedAt, preciseDate, presence, readable, route, unavailable, unavailableRoute,
+  type AskRecordDetail, type AskRecordRelated, type AskRecordHistoryEntry, type DetailBody, type DetailContext, type DetailReader,
+} from './askRecordDetailSupport';
+import { MORE_RECORD_DETAIL_READERS } from './askRecordDetailSections';
+
+export * from './askRecordDetailSupport';
 import { authorizeAskRecordSection, AskRecordSectionUnavailableError } from './askRecordCollections.service';
 
-export const ASK_RECORD_DETAIL_CONTRACT_VERSION = 'ask-record-detail-v1' as const;
-
-/**
- * FR-REC-004 / FR-REC-005. One record's canonical detail, with its provenance and its correction routes. Every provenance facet states
- * whether it is AVAILABLE, NOT_RECORDED (the canonical owner keeps it and has none for this record), or UNAVAILABLE (the canonical owner
- * has no reader or no such concept). A facet is never omitted and never inferred.
- */
-export type AskRecordFacetState = 'AVAILABLE' | 'NOT_RECORDED' | 'UNAVAILABLE';
-
-export interface AskRecordFacet {
-  state: AskRecordFacetState;
-  /** A plain statement of the fact. Null unless AVAILABLE. */
-  value: string | null;
-  /** An ISO timestamp, for facets that are a moment in time. */
-  at: string | null;
-  /** Why the facet is not AVAILABLE. Null when it is. */
-  reason: string | null;
-}
-
-export interface AskRecordRelated {
-  label: string;
-  kindLabel: string;
-  /** True when the canonical owner reports the link cannot be resolved. Null when its health cannot be determined. */
-  broken: boolean | null;
-}
-
-export interface AskRecordHistoryEntry {
-  at: string;
-  label: string;
-}
-
-export type AskRecordCorrectionState = 'AVAILABLE' | 'ROLE_REQUIRED' | 'UNAVAILABLE';
-
-export interface AskRecordCorrectionRoute {
-  id: string;
-  label: string;
-  /** The existing Ask command that makes the change. */
-  operationId: AskOperationId;
-  /** Derived from the operation's registered floor; null for an unavailable route. */
-  requiredRole: 'VIEWER' | 'CONTRIBUTOR' | 'OWNER' | null;
-  state: AskRecordCorrectionState;
-  /** Why the route cannot be used now. Null when AVAILABLE. */
-  reason: string | null;
-  /** The Ask question whose answer carries this command's action for this record. Null unless AVAILABLE. */
-  openQuestion: string | null;
-}
-
-export interface AskRecordDetail {
-  contractVersion: typeof ASK_RECORD_DETAIL_CONTRACT_VERSION;
-  propertyId: string;
-  sectionId: AskRecordSectionId;
-  recordId: string;
-  generatedAt: string;
-  title: string;
-  facts: Array<{ label: string; value: string }>;
-  provenance: {
-    source: AskRecordFacet;
-    observed: AskRecordFacet;
-    verification: AskRecordFacet;
-    visibility: AskRecordFacet;
-    related: { state: AskRecordFacetState; records: AskRecordRelated[]; reason: string | null };
-    history: { state: AskRecordFacetState; entries: AskRecordHistoryEntry[]; reason: string | null };
-  };
-  corrections: AskRecordCorrectionRoute[];
-}
-
-export class AskRecordNotFoundError extends Error {
-  code = 'ASK_RECORD_NOT_FOUND';
-}
-
-const NOT_RECORDED = 'Not recorded';
-const available = (value: string, at: string | null = null): AskRecordFacet => ({ state: 'AVAILABLE', value, at, reason: null });
-const notRecorded = (reason: string): AskRecordFacet => ({ state: 'NOT_RECORDED', value: null, at: null, reason });
-const unavailable = (reason: string): AskRecordFacet => ({ state: 'UNAVAILABLE', value: null, at: null, reason });
-const observedAt = (label: string, at: Date): AskRecordFacet => available(label, at.toISOString());
-
-const readable = (value: string | null | undefined): string | null => (value ? value.toLowerCase().split('_').map((word) => word[0].toUpperCase() + word.slice(1)).join(' ') : null);
-const day = (value: Date | null | undefined): string | null => (value ? value.toISOString().slice(0, 10) : null);
-const fact = (label: string, value: string | null | undefined) => ({ label, value: value && value.trim() ? value : NOT_RECORDED });
-/** A recorded-or-not marker for fields the Record never prints (serial number, costs, policy number). */
-const presence = (label: string, value: unknown) => ({ label, value: value === null || value === undefined || value === '' ? NOT_RECORDED : 'Recorded (shown in the Ask answer)' });
-
-/** A date that carries its own precision is never shown as a more exact day than was recorded. */
-function preciseDate(value: Date | null, precision: string | null): string | null {
-  if (!value) return null;
-  if (!precision || precision === 'EXACT_DATE') return day(value);
-  if (precision === 'MONTH') return value.toISOString().slice(0, 7);
-  if (precision === 'YEAR') return value.toISOString().slice(0, 4);
-  return 'Approximate date';
-}
-
-const ROLE_RANK: Record<HouseholdRole, number> = { VIEWER: 0, CONTRIBUTOR: 1, OWNER: 2 };
-
-/** The route's role floor is the command's registered floor; nothing here classifies a role on its own. */
-function commandFloor(operationId: AskOperationId): 'VIEWER' | 'CONTRIBUTOR' | 'OWNER' | null {
-  return ASK_OPERATION_DEFINITIONS[operationId]?.propertyRoleFloor ?? null;
-}
-
-function route(input: {
-  id: string; label: string; operationId: AskOperationId; role: HouseholdRole; openQuestion: string;
-  /** Record-specific reason the command cannot apply now, checked after the role. */
-  blockedReason?: string | null;
-}): AskRecordCorrectionRoute {
-  const floor = commandFloor(input.operationId);
-  if (floor && ROLE_RANK[input.role] < ROLE_RANK[floor]) {
-    return { id: input.id, label: input.label, operationId: input.operationId, requiredRole: floor, state: 'ROLE_REQUIRED', reason: `Your household role cannot change this; it needs ${floor.toLowerCase()} access.`, openQuestion: null };
-  }
-  if (input.blockedReason) {
-    return { id: input.id, label: input.label, operationId: input.operationId, requiredRole: floor, state: 'UNAVAILABLE', reason: input.blockedReason, openQuestion: null };
-  }
-  return { id: input.id, label: input.label, operationId: input.operationId, requiredRole: floor, state: 'AVAILABLE', reason: null, openQuestion: input.openQuestion };
-}
-
-const unavailableRoute = (id: string, label: string, operationId: AskOperationId, reason: string): AskRecordCorrectionRoute => ({
-  id, label, operationId, requiredRole: null, state: 'UNAVAILABLE', reason, openQuestion: null,
-});
-
-const NO_HISTORY = (what: string) => ({ state: 'UNAVAILABLE' as const, entries: [] as AskRecordHistoryEntry[], reason: `No canonical change-history reader is connected for ${what}, so no history is shown and none is inferred.` });
-
-interface DetailContext { propertyId: string; userId: string; role: HouseholdRole; now: Date }
-
-async function readRoomDetail(context: DetailContext, roomId: string): Promise<Omit<AskRecordDetail, 'contractVersion' | 'propertyId' | 'sectionId' | 'recordId' | 'generatedAt'>> {
+async function readRoomDetail(context: DetailContext, roomId: string): Promise<DetailBody> {
   const room = await prisma.inventoryRoom.findFirst({
     where: { id: roomId, propertyId: context.propertyId },
     select: {
@@ -164,7 +48,7 @@ async function readRoomDetail(context: DetailContext, roomId: string): Promise<O
 
 const INVENTORY_SOURCE_LABELS: Record<string, string> = { MANUAL: 'Entered by hand', BULK_UPLOAD: 'Bulk upload', MOBILE_SCAN: 'Scanned in the app', INTEGRATION: 'Imported from an integration' };
 
-async function readInventoryDetail(context: DetailContext, itemId: string): Promise<Omit<AskRecordDetail, 'contractVersion' | 'propertyId' | 'sectionId' | 'recordId' | 'generatedAt'>> {
+async function readInventoryDetail(context: DetailContext, itemId: string): Promise<DetailBody> {
   const item = await prisma.inventoryItem.findFirst({
     where: { AND: [{ id: itemId, propertyId: context.propertyId }, visibleInventoryItemWhere()] },
     select: {
@@ -211,7 +95,7 @@ async function readInventoryDetail(context: DetailContext, itemId: string): Prom
 const WARRANTY_STATUS_TEXT = { EXPIRING: `Expires within ${WARRANTY_EXPIRING_DAYS} days`, NEEDS_REVIEW: 'Dates need review', ACTIVE: 'Active', STARTS_LATER: 'Starts later', EXPIRED: 'Expired' } as const;
 const WARRANTY_QUESTION_WORDS: Record<string, string> = { APPLIANCE: 'appliance', HVAC: 'HVAC', ROOFING: 'roofing', PLUMBING: 'plumbing', ELECTRICAL: 'electrical', STRUCTURAL: 'structural', HOME_WARRANTY_PLAN: 'home warranty plan', OTHER: 'other' };
 
-async function readWarrantyDetail(context: DetailContext, warrantyId: string): Promise<Omit<AskRecordDetail, 'contractVersion' | 'propertyId' | 'sectionId' | 'recordId' | 'generatedAt'>> {
+async function readWarrantyDetail(context: DetailContext, warrantyId: string): Promise<DetailBody> {
   const warranty = await prisma.warranty.findFirst({
     where: { id: warrantyId, propertyId: context.propertyId },
     select: {
@@ -253,7 +137,7 @@ async function readWarrantyDetail(context: DetailContext, warrantyId: string): P
 const RECORD_VISIBILITY_TEXT: Record<string, string> = { HOUSEHOLD: 'Every household member can see this record.', OWNER_ONLY: 'Only home owners can see this record.', RECIPIENT_SELECTED: 'Only home owners can see this record.' };
 const LEGACY_REASON = 'This document is still in the older vault. Ask has no change command for it, and it has no versions or history to read.';
 
-async function readDocumentDetail(context: DetailContext, documentId: string): Promise<Omit<AskRecordDetail, 'contractVersion' | 'propertyId' | 'sectionId' | 'recordId' | 'generatedAt'>> {
+async function readDocumentDetail(context: DetailContext, documentId: string): Promise<DetailBody> {
   const inventory = await listPropertyDocuments({ propertyId: context.propertyId, role: context.role, includeLegacy: true, includeInventoryLinkedLegacy: true });
   const listed = inventory.items.find((entry) => entry.id === documentId);
   if (!listed) throw new AskRecordNotFoundError('Record not found.');
@@ -316,12 +200,10 @@ async function readDocumentDetail(context: DetailContext, documentId: string): P
   };
 }
 
-type DetailBody = Omit<AskRecordDetail, 'contractVersion' | 'propertyId' | 'sectionId' | 'recordId' | 'generatedAt'>;
-type DetailReader = (context: DetailContext, recordId: string) => Promise<DetailBody>;
 
 /** The sections with a connected detail reader. The registry's `recordDetail` capability must agree with this map (tested). */
 export const ASK_RECORD_DETAIL_READERS: Readonly<Partial<Record<AskRecordSectionId, DetailReader>>> = Object.freeze({
-  rooms: readRoomDetail, inventory: readInventoryDetail, documents: readDocumentDetail, warranties: readWarrantyDetail,
+  rooms: readRoomDetail, inventory: readInventoryDetail, documents: readDocumentDetail, warranties: readWarrantyDetail, ...MORE_RECORD_DETAIL_READERS,
 });
 
 /** Reauthorizes when the detail opens (account, current household role, section floor, lifecycle) and reads from the canonical owner. */
