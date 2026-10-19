@@ -184,7 +184,7 @@ function advertisedCardRead(capabilityId: (typeof ASK_ADVERTISED_CARD_READ_CAPAB
 // Entry ids are stable identifiers (telemetry, topic starters), so they keep their original names even where the derived group differs from the
 // id's prefix (for example `protect-coverage` now sits with its capability's outcome, Compare and decide).
 export const ASK_DISCOVERY_BINDINGS: readonly AskCapabilityBinding[] = Object.freeze([
-  read('understand-complete-record', 'property-brief', 'PROPERTY_SUMMARY', PROPERTY_BROWSE_RECORD_STARTER_MESSAGE, 'Browse home record'),
+  read('understand-complete-record', 'property-brief', 'PROPERTY_SUMMARY', PROPERTY_BROWSE_RECORD_STARTER_MESSAGE, 'Complete home record'),
   read('understand-summary', 'property-brief', 'PROPERTY_SUMMARY', PROPERTY_SUMMARY_STARTER_MESSAGE, 'Summarize my home record'),
   {
     id: 'understand-add-detail', capabilityId: 'property-brief', operationId: 'PROPERTY_CONTEXT_AREA_CAPTURE', question: 'Help me add a missing detail', label: 'Add a missing detail',

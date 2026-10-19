@@ -66,7 +66,7 @@ test('the complete record workspace is explicit and does not turn an ordinary su
 test('an explicit browse-record request returns one calm record index with Ask-native drill-downs', async () => {
   install({ 'core.dwellingType': { state: 'KNOWN' } });
   const result = await invoke('Browse my home record');
-  assert.equal(summaryOf(result).title, 'Browse home record for 94 Ashford Dr, Town');
+  assert.equal(summaryOf(result).title, 'Complete home record for 94 Ashford Dr, Town');
   assert.ok(result.blocks.some((block) => block.id === 'property-summary-facts'));
   const index = result.blocks.find((block) => block.id === 'property-record-index');
   assert.equal(index.type, 'GROUPED_LIST');

@@ -242,7 +242,7 @@ async function propertySummaryResult(userId: string, propertyId: string, message
         ? `${propertyName}’s Property Context is ${percent}% complete`
         : `Here is the current Living Home Record for ${propertyName}`
       : completeRecordFocus
-      ? `Browse home record for ${propertyName}`
+      ? `Complete home record for ${propertyName}`
       : `Here's the short version of ${propertyName}`,
     body: roomFocus
       ? rooms
