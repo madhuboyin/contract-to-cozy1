@@ -832,6 +832,48 @@ export interface AskRecordRestrictedDetail {
   facts: Array<{ label: string; value: string }>;
 }
 
+export type AskRecordDetailCapability = { state: 'CONNECTED' } | { state: 'UNAVAILABLE'; reason: string };
+
+export type AskRecordFacetState = 'AVAILABLE' | 'NOT_RECORDED' | 'UNAVAILABLE';
+
+export interface AskRecordFacet {
+  state: AskRecordFacetState;
+  value: string | null;
+  at: string | null;
+  reason: string | null;
+}
+
+export interface AskRecordCorrectionRoute {
+  id: string;
+  label: string;
+  operationId: string;
+  requiredRole: 'VIEWER' | 'CONTRIBUTOR' | 'OWNER' | null;
+  state: 'AVAILABLE' | 'ROLE_REQUIRED' | 'UNAVAILABLE';
+  reason: string | null;
+  /** The Ask question whose answer carries this command's action for this record. Null unless AVAILABLE. */
+  openQuestion: string | null;
+}
+
+// One record's detail, provenance and correction routes (FR-REC-004/005). Mirrors the backend `AskRecordDetail`.
+export interface AskRecordDetail {
+  contractVersion: 'ask-record-detail-v1';
+  propertyId: string;
+  sectionId: string;
+  recordId: string;
+  generatedAt: string;
+  title: string;
+  facts: Array<{ label: string; value: string }>;
+  provenance: {
+    source: AskRecordFacet;
+    observed: AskRecordFacet;
+    verification: AskRecordFacet;
+    visibility: AskRecordFacet;
+    related: { state: AskRecordFacetState; records: Array<{ label: string; kindLabel: string; broken: boolean | null }>; reason: string | null };
+    history: { state: AskRecordFacetState; entries: Array<{ at: string; label: string }>; reason: string | null };
+  };
+  corrections: AskRecordCorrectionRoute[];
+}
+
 // Record section collection page (FR-REC-003). Mirrors the backend `AskRecordCollectionPage`.
 export interface AskRecordCollectionPage<Row> {
   contractVersion: 'ask-record-collection-v1';
@@ -847,6 +889,8 @@ export interface AskRecordCollectionPage<Row> {
   notice?: string | null;
   /** Facts that need a higher role than the collection; present only for sections that have some. */
   detail?: AskRecordRestrictedDetail | null;
+  /** FR-REC-004: whether a row opens canonical per-record detail, or why it cannot. */
+  recordDetail?: AskRecordDetailCapability;
   sort: { key: string; label: string };
   query: { search: string | null; filters: Record<string, string> };
   filterOptions: Array<{ key: string; label: string; options: Array<{ value: string; label: string }> }>;

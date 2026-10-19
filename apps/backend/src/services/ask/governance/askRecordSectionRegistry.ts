@@ -39,7 +39,26 @@ export type AskRecordSectionExport =
   }
   | { state: 'NOT_IN_PACK'; reason: string };
 
+/**
+ * FR-REC-004: whether a row opens canonical per-record detail (askRecordDetail.service). Where no canonical detail reader is connected the
+ * capability is reported UNAVAILABLE with a reason; it is never synthesized from the collection row and never left out.
+ */
+export type AskRecordDetailCapability =
+  | { state: 'CONNECTED' }
+  | { state: 'UNAVAILABLE'; reason: string };
+
+/** The sections whose rows open per-record detail today. Every other section is UNAVAILABLE until its canonical owner has a detail reader. */
+export const ASK_RECORD_DETAIL_CONNECTED_SECTIONS: readonly AskRecordSectionId[] = Object.freeze(['rooms', 'inventory', 'documents', 'warranties']);
+
+const recordDetailCapability = (id: AskRecordSectionId, label: string): AskRecordDetailCapability => (
+  ASK_RECORD_DETAIL_CONNECTED_SECTIONS.includes(id)
+    ? { state: 'CONNECTED' }
+    : { state: 'UNAVAILABLE', reason: `No canonical per-record detail reader is connected for ${label.toLowerCase()} yet, so a row shows its listed facts only.` }
+);
+
 export interface AskRecordSectionDefinition {
+  /** Derived from `ASK_RECORD_DETAIL_CONNECTED_SECTIONS`; present on every registered section. */
+  recordDetail: AskRecordDetailCapability;
   id: AskRecordSectionId;
   label: string;
   /** One concise line of what the section holds. */
@@ -60,8 +79,9 @@ export interface AskRecordSectionDefinition {
   primaryAction: { label: string; question: string };
 }
 
-const section = (value: AskRecordSectionDefinition): AskRecordSectionDefinition => Object.freeze({
+const section = (value: Omit<AskRecordSectionDefinition, 'recordDetail'>): AskRecordSectionDefinition => Object.freeze({
   ...value,
+  recordDetail: Object.freeze(recordDetailCapability(value.id, value.label)),
   exportEligibility: Object.freeze(value.exportEligibility.state === 'IN_PACK'
     ? { ...value.exportEligibility, ownerFields: Object.freeze([...value.exportEligibility.ownerFields]), sharedFields: Object.freeze([...value.exportEligibility.sharedFields]), withheldFromShared: Object.freeze([...value.exportEligibility.withheldFromShared]) }
     : { ...value.exportEligibility }),

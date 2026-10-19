@@ -6,6 +6,7 @@ import { AskSessionSearchRequestSchema, AskSessionUpdateRequestSchema, ContinueA
 import { getAskRecordIndex } from '../services/ask/askRecordIndex.service';
 import { getAskRecordExportReview } from '../services/ask/askRecordExportReview.service';
 import { getAskRecordCollectionPage, AskRecordSectionUnavailableError } from '../services/ask/askRecordCollections.service';
+import { getAskRecordDetail } from '../services/ask/askRecordDetail.service';
 import { cancelAskExecution, confirmAskExecution, continueAskExecution, createAskExecution, editAskConfirmation, getAskExecution, getAskPendingWork, getAskSession, getConciergeHome, getRecentAskSessions, updateAskSessionForUser, recordAskCaptureEvent, recordAskCaptureFailure, refreshAskExecutionAfterConflict, requestAskCorrection, resolveAskExecutionProperty, retryAskExecution, submitAskCapture, submitAskClarification, submitAskExecutionFeedback, submitHomeActionUsefulnessFeedback } from '../services/ask/askOrchestrator.service';
 import { deleteAskSessionForUser } from '../services/ask/askRetention.service';
 import { dismissSuggestedAction, DismissSuggestedActionError } from '../services/ask/suggestedActions/dismissSuggestedAction';
@@ -505,6 +506,28 @@ export async function getAskRecordSectionPage(req: AuthRequest, res: Response, n
     if (error instanceof AskRecordSectionUnavailableError) {
       const status = error.reason === 'NOT_APPLICABLE' || error.reason === 'CONTEXT_REQUIRED' ? 409 : 404;
       return res.status(status).json({ success: false, error: { code: error.code, reason: error.reason, message: 'This record section is not available.' } });
+    }
+    return next(error);
+  }
+}
+
+// One record's canonical detail, provenance and correction routes (FR-REC-004/005). Reauthorizes when the detail opens.
+export async function getAskRecordDetailHandler(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const user = req.user;
+    if (!user) return res.status(401).json({ success: false, error: { code: 'AUTH_REQUIRED', message: 'Authentication required.' } });
+    const propertyId = z.string().trim().min(1).max(160).safeParse(req.query.propertyId);
+    const recordId = z.string().trim().min(1).max(160).safeParse(req.params.recordId);
+    if (!propertyId.success || !recordId.success) return res.status(400).json({ success: false, error: { code: 'ASK_INVALID_REQUEST', message: 'A propertyId and record id are required.' } });
+    return res.status(200).json({ success: true, data: await getAskRecordDetail(user.userId, propertyId.data, req.params.sectionId, recordId.data, user.role) });
+  } catch (error) {
+    const code = error instanceof Error ? (error as Error & { code?: string }).code : undefined;
+    if (code === 'ASK_PERMISSION_REQUIRED') return res.status(403).json({ success: false, error: { code, message: 'Your household role cannot read this section.' } });
+    if (code === 'ASK_PROPERTY_NOT_FOUND') return res.status(404).json({ success: false, error: { code, message: 'Property not found or access was removed.' } });
+    if (code === 'ASK_RECORD_NOT_FOUND') return res.status(404).json({ success: false, error: { code, message: 'Record not found.' } });
+    if (error instanceof AskRecordSectionUnavailableError) {
+      const status = error.reason === 'NOT_APPLICABLE' || error.reason === 'CONTEXT_REQUIRED' ? 409 : 404;
+      return res.status(status).json({ success: false, error: { code: error.code, reason: error.reason, message: 'This record detail is not available.' } });
     }
     return next(error);
   }

@@ -23,7 +23,7 @@ import { maintenanceMoney } from './handlers/maintenance.handler';
 import { INSPECTION_REPORT_STATUS_LABELS, INSPECTION_REPORT_TYPE_LABELS } from './support/inspectionReportCommand';
 import { warrantyStatus, WARRANTY_EXPIRING_DAYS, type WarrantyStatusKey } from './handlers/warranties.handler';
 import { listPropertyDocuments, type PropertyDocument } from '../propertyDocuments/propertyDocumentInventory.service';
-import { ASK_RECORD_SECTION_REGISTRY, evaluateRecordSectionApplicability, type AskRecordSectionId } from './governance/askRecordSectionRegistry';
+import { ASK_RECORD_SECTION_REGISTRY, evaluateRecordSectionApplicability, type AskRecordSectionDefinition, type AskRecordSectionId, type AskRecordDetailCapability } from './governance/askRecordSectionRegistry';
 
 export const ASK_RECORD_COLLECTION_CONTRACT_VERSION = 'ask-record-collection-v1' as const;
 export const ASK_RECORD_COLLECTION_DEFAULT_LIMIT = 25;
@@ -49,6 +49,8 @@ export interface AskRecordCollectionPage<Row> {
   notice: string | null;
   /** Facts about the whole section that need a higher role than the collection itself. Present only where a section has some. */
   detail?: AskRecordRestrictedDetail | null;
+  /** FR-REC-004: whether a row of this section opens canonical per-record detail, or why it cannot. Set by the authorizing wrapper. */
+  recordDetail?: AskRecordDetailCapability;
   sort: { key: string; label: string };
   query: { search: string | null; filters: Record<string, string> };
   filterOptions: Array<{ key: string; label: string; options: Array<{ value: string; label: string }> }>;
@@ -1637,7 +1639,7 @@ export const ASK_RECORD_COLLECTION_READERS: Readonly<Partial<Record<AskRecordSec
 
 export class AskRecordSectionUnavailableError extends Error {
   code = 'ASK_RECORD_SECTION_UNAVAILABLE';
-  constructor(public readonly reason: 'UNKNOWN_SECTION' | 'NOT_PAGED' | 'NOT_APPLICABLE' | 'CONTEXT_REQUIRED') {
+  constructor(public readonly reason: 'UNKNOWN_SECTION' | 'NOT_PAGED' | 'NO_DETAIL' | 'NOT_APPLICABLE' | 'CONTEXT_REQUIRED') {
     super(`Record section is unavailable: ${reason}.`);
   }
 }
@@ -1646,7 +1648,29 @@ export class AskRecordSectionRestrictedError extends Error {
   code = 'ASK_PERMISSION_REQUIRED';
 }
 
-/** Reauthorizes on every call: account eligibility, current household role, role floor, and lifecycle applicability. */
+/**
+ * Reauthorizes on every call: account eligibility, current household role, role floor, and lifecycle applicability. `precheck` runs on the
+ * resolved section before the role and lifecycle checks, so a section that cannot serve the request reports that first.
+ */
+export async function authorizeAskRecordSection(
+  userId: string,
+  propertyId: string,
+  sectionId: string,
+  accountRole: AskAccountRole | undefined,
+  precheck: (definition: AskRecordSectionDefinition) => void,
+): Promise<{ definition: AskRecordSectionDefinition; role: HouseholdRole }> {
+  await ensureAskServiceAccountEligibility(userId, accountRole);
+  const access = await ensurePropertyAccess(userId, propertyId);
+  const definition = ASK_RECORD_SECTION_REGISTRY.find((entry) => entry.id === sectionId);
+  if (!definition) throw new AskRecordSectionUnavailableError('UNKNOWN_SECTION');
+  precheck(definition);
+  const applicability = evaluateRecordSectionApplicability(definition, { householdRole: access.role, operatingMode: await loadOperatingMode(userId, propertyId) });
+  if (applicability === 'RESTRICTED') throw new AskRecordSectionRestrictedError('Your household role cannot read this section.');
+  if (applicability === 'NOT_APPLICABLE') throw new AskRecordSectionUnavailableError('NOT_APPLICABLE');
+  if (applicability === 'CONTEXT_REQUIRED') throw new AskRecordSectionUnavailableError('CONTEXT_REQUIRED');
+  return { definition, role: access.role };
+}
+
 export async function getAskRecordCollectionPage(
   userId: string,
   propertyId: string,
@@ -1654,15 +1678,9 @@ export async function getAskRecordCollectionPage(
   query: AskRecordCollectionQuery,
   accountRole?: AskAccountRole,
 ): Promise<AskRecordCollectionPage<unknown>> {
-  await ensureAskServiceAccountEligibility(userId, accountRole);
-  const access = await ensurePropertyAccess(userId, propertyId);
-  const definition = ASK_RECORD_SECTION_REGISTRY.find((entry) => entry.id === sectionId);
-  if (!definition) throw new AskRecordSectionUnavailableError('UNKNOWN_SECTION');
-  const reader = ASK_RECORD_COLLECTION_READERS[definition.id];
-  if (!definition.pagedCollection || !reader) throw new AskRecordSectionUnavailableError('NOT_PAGED');
-  const applicability = evaluateRecordSectionApplicability(definition, { householdRole: access.role, operatingMode: await loadOperatingMode(userId, propertyId) });
-  if (applicability === 'RESTRICTED') throw new AskRecordSectionRestrictedError('Your household role cannot read this section.');
-  if (applicability === 'NOT_APPLICABLE') throw new AskRecordSectionUnavailableError('NOT_APPLICABLE');
-  if (applicability === 'CONTEXT_REQUIRED') throw new AskRecordSectionUnavailableError('CONTEXT_REQUIRED');
-  return reader({ propertyId, userId, role: access.role }, query);
+  const { definition, role } = await authorizeAskRecordSection(userId, propertyId, sectionId, accountRole, (entry) => {
+    if (!entry.pagedCollection || !ASK_RECORD_COLLECTION_READERS[entry.id]) throw new AskRecordSectionUnavailableError('NOT_PAGED');
+  });
+  const page = await ASK_RECORD_COLLECTION_READERS[definition.id]!({ propertyId, userId, role }, query);
+  return { ...page, recordDetail: definition.recordDetail };
 }

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link';
 import { Loader2 } from 'lucide-react';
 import { api } from '@/lib/api/client';
-import type { AskRecordCollectionPage } from '@/features/ask/types';
+import type { AskRecordCollectionPage, AskRecordDetailCapability } from '@/features/ask/types';
 import { AskCollection, AskCollectionState } from '../presentation/AskLayoutPrimitives';
 import { askServiceIsPaused } from '../workspace/support';
 
@@ -20,7 +20,7 @@ export function RecordCollection<Row extends { id: string }>({ sectionId, label,
   label: string;
   propertyId: string;
   backHref: string;
-  renderRow: (row: Row) => ReactNode;
+  renderRow: (row: Row, recordDetail: AskRecordDetailCapability | undefined) => ReactNode;
   searchLabel: string;
   emptyText: string;
 }) {
@@ -129,6 +129,8 @@ export function RecordCollection<Row extends { id: string }>({ sectionId, label,
         </div>
       )}
 
+      {page?.recordDetail?.state === 'UNAVAILABLE' && rows.length > 0 && <p className="mt-3 text-sm text-slate-600" role="note" data-record-detail-unavailable>Per-record details are not available for this section. {page.recordDetail.reason}</p>}
+
       {page?.notice && <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950" role="note" data-record-collection-notice>{page.notice}</p>}
 
       <div className="mt-4">
@@ -143,7 +145,7 @@ export function RecordCollection<Row extends { id: string }>({ sectionId, label,
         ) : (
           <>
             <AskCollection className={`rounded-2xl border border-slate-200 bg-white ${status === 'LOADING' ? 'opacity-60' : ''}`} aria-label={label} aria-busy={status === 'LOADING'}>
-              {rows.map((row) => renderRow(row))}
+              {rows.map((row) => renderRow(row, page?.recordDetail))}
             </AskCollection>
             {page?.nextCursor && (
               <div className="mt-3 flex flex-col items-start gap-2 sm:flex-row sm:items-center">

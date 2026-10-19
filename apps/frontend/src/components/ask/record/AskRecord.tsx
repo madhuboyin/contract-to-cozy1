@@ -1,16 +1,17 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { Fragment, useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Loader2 } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api/client';
 import { buildAskWorkspaceHref } from '@/lib/navigation/askNavigation';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
-import type { AskRecordBuyerTaskRow, AskRecordFinancingScenarioRow, AskRecordHouseholdMemberRow, AskRecordIndex, AskRecordDocumentRow, AskRecordIndexSection, AskRecordIncidentClaimRow, AskRecordInspectionRow, AskRecordInventoryRow, AskRecordMaintenanceRow, AskRecordPermitRow, AskRecordPolicyRow, AskRecordProjectRow, AskRecordRoomRow, AskRecordSellerItemRow, AskRecordTimelineRow, AskRecordWarrantyRow } from '@/features/ask/types';
+import type { AskRecordDetailCapability, AskRecordBuyerTaskRow, AskRecordFinancingScenarioRow, AskRecordHouseholdMemberRow, AskRecordIndex, AskRecordDocumentRow, AskRecordIndexSection, AskRecordIncidentClaimRow, AskRecordInspectionRow, AskRecordInventoryRow, AskRecordMaintenanceRow, AskRecordPermitRow, AskRecordPolicyRow, AskRecordProjectRow, AskRecordRoomRow, AskRecordSellerItemRow, AskRecordTimelineRow, AskRecordWarrantyRow } from '@/features/ask/types';
 import { AskCollection, AskCollectionState, AskCompactRow, AskWorkspaceMeasure } from '../presentation/AskLayoutPrimitives';
 import { askServiceIsPaused } from '../workspace/support';
 import { RecordCollection } from './RecordCollection';
+import { RecordRowDetail } from './RecordRowDetail';
 import { RecordExportReview } from './RecordExportReview';
 import { RecordRoomRow } from './RecordRoomRow';
 import { RecordInventoryRow } from './RecordInventoryRow';
@@ -87,7 +88,7 @@ const PAGED_SECTIONS: Record<string, { label: string; searchLabel: string; empty
   inventory: { label: 'Systems and inventory', searchLabel: 'Search inventory', emptyText: 'No inventory items are recorded yet.' },
 };
 
-function renderPagedRow(sectionId: string, row: { id: string }, propertyId: string) {
+function renderPagedRowBase(sectionId: string, row: { id: string }, propertyId: string) {
   if (sectionId === 'rooms') return <RecordRoomRow key={row.id} room={row as AskRecordRoomRow} propertyId={propertyId} />;
   if (sectionId === 'documents') return <RecordDocumentRow key={row.id} document={row as AskRecordDocumentRow} propertyId={propertyId} />;
   if (sectionId === 'warranties') return <RecordWarrantyRow key={row.id} warranty={row as AskRecordWarrantyRow} propertyId={propertyId} />;
@@ -103,6 +104,26 @@ function renderPagedRow(sectionId: string, row: { id: string }, propertyId: stri
   if (sectionId === 'seller-records') return <RecordSellerItemRow key={row.id} item={row as AskRecordSellerItemRow} />;
   if (sectionId === 'household-access') return <RecordHouseholdMemberRow key={row.id} member={row as AskRecordHouseholdMemberRow} />;
   return <RecordInventoryRow key={row.id} item={row as AskRecordInventoryRow} propertyId={propertyId} />;
+}
+
+// Row labels for the Details disclosure's screen-reader text; only sections with a connected detail reader appear here.
+const DETAIL_ROW_LABEL: Record<string, (row: never) => string> = {
+  rooms: (row: AskRecordRoomRow) => row.name,
+  inventory: (row: AskRecordInventoryRow) => row.name,
+  documents: (row: AskRecordDocumentRow) => row.title,
+  warranties: (row: AskRecordWarrantyRow) => `${row.providerName} warranty`,
+};
+
+function renderPagedRow(sectionId: string, row: { id: string }, propertyId: string, recordDetail: AskRecordDetailCapability | undefined) {
+  const base = renderPagedRowBase(sectionId, row, propertyId);
+  const label = DETAIL_ROW_LABEL[sectionId];
+  if (recordDetail?.state !== 'CONNECTED' || !label) return base;
+  return (
+    <Fragment key={row.id}>
+      {base}
+      <RecordRowDetail sectionId={sectionId} recordId={row.id} propertyId={propertyId} label={label(row as never)} backTo={`/dashboard/ask/record?section=${sectionId}`} />
+    </Fragment>
+  );
 }
 
 export function AskRecord() {
@@ -187,7 +208,7 @@ export function AskRecord() {
               backHref={indexHref}
               searchLabel={PAGED_SECTIONS[collectionSection].searchLabel}
               emptyText={PAGED_SECTIONS[collectionSection].emptyText}
-              renderRow={(row) => renderPagedRow(collectionSection, row, scopedPropertyId)}
+              renderRow={(row, recordDetail) => renderPagedRow(collectionSection, row, scopedPropertyId, recordDetail)}
             />
           ) : !scopedPropertyId ? (
             <AskCollectionState kind="NOT_APPLICABLE" description="Select a home to browse its record." />

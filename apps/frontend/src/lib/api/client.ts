@@ -1112,6 +1112,9 @@ class APIClient {
     for (const [key, value] of Object.entries(query.filters ?? {})) if (value) params.set(key, value);
     return this.request(`/api/ask/record-sections/${encodeURIComponent(sectionId)}?${params.toString()}`, options);
   }
+  async getAskRecordDetail(sectionId: string, propertyId: string, recordId: string, options: { signal?: AbortSignal } = {}): Promise<APIResponse<import('@/features/ask/types').AskRecordDetail>> {
+    return this.request(`/api/ask/record-sections/${encodeURIComponent(sectionId)}/records/${encodeURIComponent(recordId)}?propertyId=${encodeURIComponent(propertyId)}`, options);
+  }
   async getAskRecordExportReview(propertyId: string, options: { signal?: AbortSignal } = {}): Promise<APIResponse<import('@/features/ask/types').AskRecordExportReview>> {
     return this.request(`/api/ask/record-export-review?propertyId=${encodeURIComponent(propertyId)}`, options);
   }
