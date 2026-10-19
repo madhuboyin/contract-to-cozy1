@@ -4,6 +4,7 @@ import type { AskOperatingMode } from '../skills/context/propertyJourneyContext.
 import type { AskAccountRole } from './askAccountEligibility';
 import { ensureAskServiceAccountEligibility, ensurePropertyAccess } from './askHandlerSupport';
 import { loadOperatingMode } from './askRecordContext';
+import { REPORT_PACK_ALWAYS_INCLUDED_IDENTITY } from '../planningContext/reportPackSections';
 import {
   ASK_RECORD_SECTION_REGISTRY,
   evaluateRecordSectionApplicability,
@@ -52,8 +53,8 @@ export interface AskRecordExportReview {
   create: { allowed: boolean; requiredRole: typeof ASK_RECORD_EXPORT_CREATE_FLOOR; reason: string | null };
   pack: {
     format: 'PDF';
-    /** The pack is a fixed set of blocks: the section choice the export route accepts is stored but never applied. */
-    sectionsSelectable: false;
+    /** Sections can be chosen; the export honors the choice and discloses any requested section it cannot carry. */
+    sectionsSelectable: true;
     /** Only the person who creates an export can download it. */
     downloadableBy: 'CREATOR';
     recordExpiresInDays: number;
@@ -64,6 +65,8 @@ export interface AskRecordExportReview {
     /** A shared link serves the redacted copy only; the full PDF is never behind a link. */
     copy: 'REDACTED';
   };
+  /** The home's address is on every pack's cover, whatever sections are chosen. */
+  alwaysIncluded: { label: string; ownerFields: readonly string[]; sharedFields: readonly string[]; withheldFromShared: readonly string[] };
   sections: AskRecordExportReviewSection[];
   included: AskRecordSectionId[];
   excluded: AskRecordSectionId[];
@@ -98,8 +101,9 @@ export function composeAskRecordExportReview(input: {
       requiredRole: ASK_RECORD_EXPORT_CREATE_FLOOR,
       reason: allowed ? null : `Creating an export needs the ${ASK_RECORD_EXPORT_CREATE_FLOOR} role for this home.`,
     },
-    pack: { format: 'PDF', sectionsSelectable: false, downloadableBy: 'CREATOR', recordExpiresInDays: ASK_RECORD_EXPORT_RECORD_EXPIRY_DAYS },
+    pack: { format: 'PDF', sectionsSelectable: true, downloadableBy: 'CREATOR', recordExpiresInDays: ASK_RECORD_EXPORT_RECORD_EXPIRY_DAYS },
     sharing: { requiredRole: ASK_RECORD_EXPORT_CREATE_FLOOR, defaultExpiryDays: ASK_RECORD_EXPORT_SHARE_DEFAULT_DAYS, copy: 'REDACTED' },
+    alwaysIncluded: { label: 'Home address', ...REPORT_PACK_ALWAYS_INCLUDED_IDENTITY },
     sections,
     included: sections.filter((section) => section.state === 'INCLUDED').map((section) => section.id),
     excluded: sections.filter((section) => section.state === 'EXCLUDED').map((section) => section.id),

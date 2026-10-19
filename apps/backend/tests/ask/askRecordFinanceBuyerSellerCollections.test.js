@@ -140,3 +140,45 @@ test('seller filters compose and bad filters are rejected; the registry flags an
   // Only the governed facts section is not a paged collection: it stays the completeness view.
   assert.deepEqual(ASK_RECORD_SECTION_REGISTRY.filter((entry) => !entry.pagedCollection).map((entry) => entry.id), ['property-facts']);
 });
+
+// ── the owner-only financing profile ─────────────────────────────────────────────────────────────────────────────
+const { financingProfileFacts, FINANCING_PROFILE_READ_FLOOR } = require('../../src/services/ask/askRecordCollections.service.ts');
+
+const PROFILE = {
+  mortgageStatus: 'MORTGAGED', mortgageType: 'FIXED', purchasePriceCents: 45_000_000, purchaseDate: new Date('2020-06-15T12:00:00Z'), originalMortgageBalanceCents: 36_000_000,
+  currentMortgageBalanceCents: 31_250_000, mortgageBalanceAsOfDate: new Date('2026-09-01T12:00:00Z'), interestRateBps: 375, remainingTermMonths: 276, monthlyPaymentCents: 185_000,
+  hasSecondMortgage: false, secondMortgageBalanceCents: null, hasPMI: false,
+};
+const noScenarios = async () => [];
+
+test('the financing profile is a read-guarded detail: its floor is OWNER, and a viewer or contributor never causes it to be read', async () => {
+  assert.equal(FINANCING_PROFILE_READ_FLOOR, 'OWNER');
+  for (const role of ['VIEWER', 'CONTRIBUTOR']) {
+    let loads = 0;
+    const page = await readFinancingScenariosPage('p1', {}, noScenarios, { role, loadProfile: async () => { loads += 1; return PROFILE; } });
+    assert.equal(loads, 0, role);
+    assert.deepEqual(page.detail, { id: 'financing-profile', title: 'Mortgage and purchase details', state: 'OWNER_ONLY', requiredRole: 'OWNER', facts: [] }, role);
+    assert.equal(/31,250|375|3\.75|185,000|Fixed/i.test(JSON.stringify(page)), false, role);
+  }
+});
+
+test('an owner gets the persisted profile facts, labelled, with a not-recorded state when there is no profile', async () => {
+  const owner = await readFinancingScenariosPage('p1', {}, noScenarios, { role: 'OWNER', loadProfile: async () => PROFILE });
+  assert.equal(owner.detail.state, 'AVAILABLE');
+  assert.deepEqual(Object.fromEntries(owner.detail.facts.map((fact) => [fact.label, fact.value])), {
+    Mortgage: 'Has a mortgage', Type: 'Fixed rate', 'Purchase price': '$450,000', 'Purchase date': 'Jun 15, 2020', 'Original balance': '$360,000',
+    'Current balance': '$312,500 as of Sep 1, 2026', 'Interest rate': '3.75%', 'Remaining term': '23 years', 'Monthly payment': '$1,850/month', 'Private mortgage insurance': 'No',
+  });
+  const none = await readFinancingScenariosPage('p1', {}, noScenarios, { role: 'OWNER', loadProfile: async () => null });
+  assert.deepEqual([none.detail.state, none.detail.facts], ['NOT_RECORDED', []]);
+  const unknown = await readFinancingScenariosPage('p1', {}, noScenarios, { role: 'OWNER', loadProfile: async () => ({ ...PROFILE, mortgageStatus: 'UNKNOWN' }) });
+  assert.equal(unknown.detail.state, 'NOT_RECORDED');
+  assert.deepEqual(financingProfileFacts({ mortgageStatus: 'MORTGAGED', hasSecondMortgage: true, secondMortgageBalanceCents: 1_000_000 }).find((fact) => fact.label === 'Second mortgage'), { label: 'Second mortgage', value: '$10,000' });
+});
+
+test('the index count never reads the profile, and a profile failure for an owner is not turned into "not recorded"', async () => {
+  let loads = 0;
+  const counted = await readFinancingScenariosPage('p1', { omitDetail: true }, noScenarios, { role: 'OWNER', loadProfile: async () => { loads += 1; return PROFILE; } });
+  assert.deepEqual([loads, counted.detail], [0, null]);
+  await assert.rejects(() => readFinancingScenariosPage('p1', {}, noScenarios, { role: 'OWNER', loadProfile: async () => { throw new Error('database down'); } }), /database down/);
+});

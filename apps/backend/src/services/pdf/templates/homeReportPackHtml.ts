@@ -1,4 +1,6 @@
 // apps/backend/src/services/pdf/templates/homeReportPackHtml.ts
+import { REPORT_PACK_SECTION_IDS, type ReportPackSectionId } from '../../planningContext/reportPackSections';
+
 function moneyFromCents(cents?: number | null) {
   if (cents == null) return '—';
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(cents / 100);
@@ -27,7 +29,13 @@ export function buildHomeReportPackHtml(snapshot: any) {
     .filter(Boolean)
     .join(', ');
 
+  // The sections this pack carries. A snapshot stored before selections existed carries them all.
+  const includedIds: string[] = Array.isArray(meta.pack?.included) ? meta.pack.included : [...REPORT_PACK_SECTION_IDS];
+  const has = (id: ReportPackSectionId) => includedIds.includes(id);
+  const hasCoverage = has('coverage') || has('warranties');
+
   const inventoryItems = snapshot.inventory?.items ?? [];
+  const rooms = snapshot.inventory?.rooms ?? [];
   const tasks = snapshot.maintenance?.tasks ?? [];
   const policies = snapshot.coverage?.insurancePolicies ?? [];
   const warranties = snapshot.coverage?.warranties ?? [];
@@ -39,13 +47,13 @@ export function buildHomeReportPackHtml(snapshot: any) {
   const generatedAt = meta.generatedAt ? new Date(meta.generatedAt) : new Date();
 
   const toc = [
-    { id: 'toc', label: 'Table of Contents' },
-    { id: 'summary', label: 'Home Summary' },
-    { id: 'inventory', label: 'Inventory' },
-    { id: 'maintenance', label: 'Maintenance Outlook' },
-    { id: 'coverage', label: 'Coverage Snapshot' },
-    { id: 'disclaimer', label: 'Disclaimers' },
-  ];
+    { id: 'toc', label: 'Table of Contents', show: true },
+    { id: 'summary', label: 'Home Summary', show: true },
+    { id: 'inventory', label: 'Inventory', show: has('inventory') || has('rooms') },
+    { id: 'maintenance', label: 'Maintenance Outlook', show: has('maintenance-history') },
+    { id: 'coverage', label: 'Coverage Snapshot', show: hasCoverage },
+    { id: 'disclaimer', label: 'Disclaimers', show: true },
+  ].filter((entry) => entry.show);
 
   return `<!doctype html>
 <html>
@@ -176,25 +184,23 @@ export function buildHomeReportPackHtml(snapshot: any) {
 
       <div class="hr"></div>
 
-      <div class="grid3">
-        <div class="kpi">
+      ${(has('inventory') || has('maintenance-history') || hasCoverage) ? `<div class="grid3">
+        ${has('inventory') ? `<div class="kpi">
           <div class="label">Inventory Items</div>
           <div class="value">${inventoryItems.length}</div>
           <div class="muted" style="font-size:11px; margin-top:4px;">Replacement total: ${moneyFromCents(totalReplacementCents)}</div>
-        </div>
-
-        <div class="kpi">
+        </div>` : ''}
+        ${has('maintenance-history') ? `<div class="kpi">
           <div class="label">Open Maintenance</div>
           <div class="value">${openTasks.length}</div>
           <div class="muted" style="font-size:11px; margin-top:4px;">High-risk tasks: ${highRiskTasks.length}</div>
-        </div>
-
-        <div class="kpi">
+        </div>` : ''}
+        ${hasCoverage ? `<div class="kpi">
           <div class="label">Coverage On File</div>
-          <div class="value">${policies.length + warranties.length}</div>
-          <div class="muted" style="font-size:11px; margin-top:4px;">Insurance: ${policies.length} • Warranties: ${warranties.length}</div>
-        </div>
-      </div>
+          <div class="value">${(has('coverage') ? policies.length : 0) + (has('warranties') ? warranties.length : 0)}</div>
+          <div class="muted" style="font-size:11px; margin-top:4px;">${[has('coverage') ? `Insurance: ${policies.length}` : '', has('warranties') ? `Warranties: ${warranties.length}` : ''].filter(Boolean).join(' • ')}</div>
+        </div>` : ''}
+      </div>` : ''}
 
       <div class="muted" style="margin-top:12px; font-size:11px;">
         Use this report for insurance applications, claims, resale packets, estate planning, and HOA/lender requests.
@@ -228,42 +234,46 @@ export function buildHomeReportPackHtml(snapshot: any) {
   <div class="page break-before" id="summary">
     <div class="sectionTitle">
       <div class="h2">Home Summary</div>
-      <div class="chip">${safe(p.dwellingType ?? 'Property')}</div>
+      <div class="chip">${safe(has('property-facts') ? (p.dwellingType ?? 'Property') : 'Property')}</div>
     </div>
 
     <div class="grid2">
       <div class="card">
         <div class="h3">Property</div>
         <div class="muted" style="font-size:11px;">
-          ${safe(address) || '—'}<br/>
+          ${safe(address) || '—'}${has('property-facts') ? `<br/>
           Year built: ${safe(p.yearBuilt?.toString() ?? '—')}<br/>
-          Living area: ${safe(p.livingAreaSqft?.toString() ?? '—')} sqft
+          Living area: ${safe(p.livingAreaSqft?.toString() ?? '—')} sqft` : ''}
         </div>
       </div>
 
       <div class="card">
         <div class="h3">Highlights</div>
         <div style="font-size:11px;">
-          <div>• Inventory replacement total: <b>${moneyFromCents(totalReplacementCents)}</b></div>
-          <div>• Open maintenance tasks: <b>${openTasks.length}</b></div>
-          <div>• Coverage records on file: <b>${policies.length + warranties.length}</b></div>
+          ${has('inventory') ? `<div>• Inventory replacement total: <b>${moneyFromCents(totalReplacementCents)}</b></div>` : ''}
+          ${has('maintenance-history') ? `<div>• Open maintenance tasks: <b>${openTasks.length}</b></div>` : ''}
+          ${hasCoverage ? `<div>• Coverage records on file: <b>${(has('coverage') ? policies.length : 0) + (has('warranties') ? warranties.length : 0)}</b></div>` : ''}
+          ${!has('inventory') && !has('maintenance-history') && !hasCoverage ? `<div class="muted">This report carries the sections listed in the table of contents.</div>` : ''}
         </div>
-        <div class="muted" style="margin-top:8px; font-size:10px;">
+        ${has('inventory') ? `<div class="muted" style="margin-top:8px; font-size:10px;">
           Tip: Keep inventory replacement values updated for smoother claims.
-        </div>
+        </div>` : ''}
       </div>
     </div>
   </div>
 
   <!-- INVENTORY -->
-  <div class="page break-before" id="inventory">
-    <div class="sectionTitle">
+  ${(has('inventory') || has('rooms')) ? `<div class="page break-before" id="inventory">
+    ${has('rooms') ? `<div class="card avoid-break" style="margin-bottom:10px;">
+      <div class="h3">Rooms (${rooms.length})</div>
+      <div class="muted" style="font-size:11px;">${rooms.length === 0 ? 'No rooms on file.' : rooms.map((room: any) => safe(room.name)).join(' • ')}</div>
+    </div>` : ''}
+    ${has('inventory') ? `<div class="sectionTitle">
       <div class="h2">Inventory</div>
       <div class="muted" style="font-size:11px;">
         ${inventoryItems.length} items • Replacement total: ${moneyFromCents(totalReplacementCents)}
       </div>
     </div>
-
     <div class="card">
       <table>
         <thead>
@@ -299,10 +309,11 @@ export function buildHomeReportPackHtml(snapshot: any) {
 
       ${inventoryItems.length > 250 ? `<div class="muted" style="margin-top:8px; font-size:10px;">Showing first 250 items.</div>` : ``}
     </div>
-  </div>
+` : ''}
+  </div>` : ''}
 
   <!-- MAINTENANCE -->
-  <div class="page break-before" id="maintenance">
+  ${has('maintenance-history') ? `  <div class="page break-before" id="maintenance">
     <div class="sectionTitle">
       <div class="h2">Maintenance Outlook</div>
       <div class="muted" style="font-size:11px;">
@@ -343,19 +354,19 @@ export function buildHomeReportPackHtml(snapshot: any) {
         </tbody>
       </table>
     </div>
-  </div>
+  </div>` : ''}
 
   <!-- COVERAGE -->
-  <div class="page break-before" id="coverage">
+  ${hasCoverage ? `  <div class="page break-before" id="coverage">
     <div class="sectionTitle">
       <div class="h2">Coverage Snapshot</div>
       <div class="muted" style="font-size:11px;">
-        Insurance: ${policies.length} • Warranties: ${warranties.length}
+        ${[has('coverage') ? `Insurance: ${policies.length}` : '', has('warranties') ? `Warranties: ${warranties.length}` : ''].filter(Boolean).join(' • ')}
       </div>
     </div>
 
     <div class="grid2">
-      <div class="card avoid-break">
+      ${has('coverage') ? `<div class="card avoid-break">
         <div class="h3">Insurance Policies</div>
         <table>
           <thead>
@@ -375,9 +386,9 @@ export function buildHomeReportPackHtml(snapshot: any) {
             }
           </tbody>
         </table>
-      </div>
+      </div>` : ''}
 
-      <div class="card avoid-break">
+      ${has('warranties') ? `<div class="card avoid-break">
         <div class="h3">Warranties</div>
         <table>
           <thead>
@@ -397,13 +408,13 @@ export function buildHomeReportPackHtml(snapshot: any) {
             }
           </tbody>
         </table>
-      </div>
+      </div>` : ''}
     </div>
 
     <div class="muted" style="margin-top:10px; font-size:10px;">
       Tip: Upload policy declarations and warranty contracts under Documents for quicker underwriting and claims.
     </div>
-  </div>
+  </div>` : ''}
 
   <!-- DISCLAIMERS -->
   <div class="page break-before" id="disclaimer">

@@ -28,9 +28,9 @@ const excluded = (id: string, label: string, reason: string, overrides: Partial<
 const review = (overrides: Partial<AskRecordExportReview> = {}): AskRecordExportReview => ({
   contractVersion: 'ask-record-export-review-v1', propertyId: 'home-1', generatedAt: '2026-10-19T12:00:00.000Z', property: { name: 'Maple House', address: '1 Main St', city: 'Austin', state: 'TX' },
   accessRole: 'OWNER', operatingMode: 'OWNING', create: { allowed: true, requiredRole: 'CONTRIBUTOR', reason: null },
-  pack: { format: 'PDF', sectionsSelectable: false, downloadableBy: 'CREATOR', recordExpiresInDays: 30 }, sharing: { requiredRole: 'CONTRIBUTOR', defaultExpiryDays: 14, copy: 'REDACTED' },
-  sections: [included('coverage', 'Coverage and policies', { note: 'Insurance policies only.' }), excluded('timeline', 'Home timeline', 'The pack has no timeline section.'), excluded('buyer-records', 'Buyer records', 'The pack has no buyer records section.', { applicability: 'NOT_APPLICABLE' })],
-  included: ['coverage'], excluded: ['timeline', 'buyer-records'], ...overrides,
+  pack: { format: 'PDF', sectionsSelectable: true, downloadableBy: 'CREATOR', recordExpiresInDays: 30 }, alwaysIncluded: { label: 'Home address', ownerFields: ['addressLine1', 'city', 'state', 'zipCode'], sharedFields: ['city', 'state'], withheldFromShared: ['addressLine1', 'zipCode'] }, sharing: { requiredRole: 'CONTRIBUTOR', defaultExpiryDays: 14, copy: 'REDACTED' },
+  sections: [included('coverage', 'Coverage and policies', { note: 'Insurance policies only.' }), included('inventory', 'Systems and inventory', { packPath: 'inventory.items', ownerFields: ['name'], sharedFields: ['name'], withheldFromShared: [] }), excluded('timeline', 'Home timeline', 'The pack has no timeline section.'), excluded('buyer-records', 'Buyer records', 'The pack has no buyer records section.', { applicability: 'NOT_APPLICABLE' })],
+  included: ['coverage', 'inventory'], excluded: ['timeline', 'buyer-records'], ...overrides,
 });
 
 describe('Record export review', () => {
@@ -44,7 +44,8 @@ describe('Record export review', () => {
     expect(getReview).toHaveBeenCalledWith('home-1', expect.objectContaining({ signal: expect.any(AbortSignal) }));
     const facts = document.querySelector('[data-export-facts]') as HTMLElement;
     expect(within(facts).getByText('Maple House')).toBeInTheDocument();
-    expect(within(facts).getByText(/you cannot choose a subset/)).toBeInTheDocument();
+    expect(within(facts).getByText(/PDF, with the sections you choose below/)).toBeInTheDocument();
+    expect(screen.getByText(/always on the cover; a shared link keeps city, state only/)).toBeInTheDocument();
     expect(within(facts).getByText(/Only you, the person who creates it. It is kept for 30 days./)).toBeInTheDocument();
     expect(within(facts).getByText(/redacted copy only, never this full export, and lasts 14 days by default/)).toBeInTheDocument();
     const coverage = document.querySelector('[data-export-section="coverage"]') as HTMLElement;
@@ -53,42 +54,45 @@ describe('Record export review', () => {
     expect(within(coverage).getByText('Insurance policies only.')).toBeInTheDocument();
     expect(within(document.querySelector('[data-export-section="timeline"]') as HTMLElement).getByText('The pack has no timeline section.')).toBeInTheDocument();
     expect(within(document.querySelector('[data-export-section="buyer-records"]') as HTMLElement).getByText(/Not applicable at your home’s stage/)).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Included (1)' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Included (2)' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Not included (2)' })).toBeInTheDocument();
     expect(createExport).not.toHaveBeenCalled();
   });
 
   it('creates nothing until the sensitive-fields acknowledgement is checked, then shows a receipt with what was and was not included', async () => {
     getReview.mockResolvedValue({ success: true, data: review() });
-    createExport.mockResolvedValue({ success: true, data: { exportId: 'exp-1', status: 'PENDING' } });
+    createExport.mockResolvedValue({ success: true, data: { exportId: 'exp-1', status: 'PENDING', selection: { version: 1, requested: ['coverage', 'timeline'], included: ['coverage'], unavailable: [{ id: 'timeline', reason: 'NOT_IN_PACK' }] } } });
     render(<AskRecord />);
 
     const button = await screen.findByRole('button', { name: 'Create export' });
     expect(button).toBeDisabled();
     fireEvent.click(button);
     expect(createExport).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(screen.getByRole('checkbox', { name: /I understand/ }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Include Systems and inventory' }));
     fireEvent.click(button);
 
-    await waitFor(() => expect(createExport).toHaveBeenCalledWith('home-1'));
+    await waitFor(() => expect(createExport).toHaveBeenCalledWith('home-1', ['coverage']));
     const receipt = await screen.findByText('Export requested');
     const box = receipt.closest('[data-export-receipt]') as HTMLElement;
     expect(within(box).getByText(/Waiting to be generated/)).toBeInTheDocument();
     expect(within(box).getByText('Included: Coverage and policies.')).toBeInTheDocument();
-    expect(within(box).getByText('Not included: Home timeline, Buyer records.')).toBeInTheDocument();
+    expect(within(box).getByText('Not chosen: Systems and inventory.')).toBeInTheDocument();
+    expect(within(box).getByText(/Requested but not exportable: Home timeline \(not part of the export\)/)).toBeInTheDocument();
+    expect(within(box).getByText('Not part of the export: Home timeline, Buyer records.')).toBeInTheDocument();
     expect(within(box).getByText(/Kept for 30 days. No share link has been created./)).toBeInTheDocument();
     expect(within(box).queryByRole('button', { name: 'Download' })).toBeNull();
   });
 
   it('checks status, offers the download only when ready, and reports a failure', async () => {
     getReview.mockResolvedValue({ success: true, data: review() });
-    createExport.mockResolvedValue({ success: true, data: { exportId: 'exp-1', status: 'PENDING' } });
+    createExport.mockResolvedValue({ success: true, data: { exportId: 'exp-1', status: 'PENDING', selection: { version: 1, requested: ['coverage', 'inventory'], included: ['coverage', 'inventory'], unavailable: [] } } });
     listExports.mockResolvedValueOnce({ success: true, data: { exports: [{ id: 'exp-1', status: 'READY', requestedAt: '2026-10-19T12:01:00.000Z' }] } });
     downloadUrl.mockResolvedValue({ success: true, data: { url: 'https://files.example/pack.pdf' } });
     const assign = jest.fn();
     Object.defineProperty(window, 'location', { configurable: true, value: { ...window.location, assign } });
     render(<AskRecord />);
-    fireEvent.click(await screen.findByRole('checkbox'));
+    fireEvent.click(await screen.findByRole('checkbox', { name: /I understand/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Create export' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Check status' }));
     const download = await screen.findByRole('button', { name: 'Download' });
@@ -106,13 +110,13 @@ describe('Record export review', () => {
     const first = render(<AskRecord />);
     expect(await screen.findByText('Creating an export needs the CONTRIBUTOR role for this home.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Create export' })).toBeNull();
-    expect(screen.getByRole('heading', { name: 'Included (1)' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Included (2)' })).toBeInTheDocument();
     first.unmount();
 
     getReview.mockResolvedValueOnce({ success: true, data: review() });
     createExport.mockRejectedValueOnce(new Error('A report export is already in progress for this property.'));
     render(<AskRecord />);
-    fireEvent.click(await screen.findByRole('checkbox'));
+    fireEvent.click(await screen.findByRole('checkbox', { name: /I understand/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Create export' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('already in progress');
     expect(screen.queryByText('Export requested')).toBeNull();
@@ -124,6 +128,15 @@ describe('Record export review', () => {
     expect(await screen.findByText('The export review could not be loaded.')).toBeInTheDocument();
     getReview.mockResolvedValueOnce({ success: true, data: review() });
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
-    expect(await screen.findByRole('heading', { name: 'Included (1)' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Included (2)' })).toBeInTheDocument();
+  });
+
+  it('cannot create with every section unchecked', async () => {
+    getReview.mockResolvedValue({ success: true, data: review() });
+    render(<AskRecord />);
+    fireEvent.click(await screen.findByRole('checkbox', { name: /I understand/ }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Include Coverage and policies' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Include Systems and inventory' }));
+    expect(screen.getByRole('button', { name: 'Create export' })).toBeDisabled();
   });
 });

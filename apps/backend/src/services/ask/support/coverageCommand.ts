@@ -15,6 +15,15 @@ export const COVERAGE_COMMAND_MESSAGES = {
   ADD_QUOTE: 'Add a quote to my coverage comparison.',
 } as const;
 export type CoverageCommandKind = keyof typeof COVERAGE_COMMAND_MESSAGES;
+/**
+ * The household role each coverage step needs, the same floors the coverage routes and services enforce (see services/coverageAccess.ts):
+ * generating a review, starting a comparison, and adding a quote are CONTRIBUTOR; recording the final decision is OWNER. The operation's
+ * registered floor is the lowest of these; a test holds the two together.
+ */
+export const COVERAGE_COMMAND_KIND_ROLE_FLOORS: Record<CoverageCommandKind, 'CONTRIBUTOR' | 'OWNER'> = {
+  START: 'CONTRIBUTOR', REVIEW: 'CONTRIBUTOR', ADD_QUOTE: 'CONTRIBUTOR', DECIDE: 'OWNER',
+};
+
 export const COVERAGE_COMMAND_ACTION_IDS = { START: 'coverage-start-comparison', REVIEW: 'coverage-generate-review', DECIDE: 'coverage-record-decision', ADD_QUOTE: 'coverage-add-quote' } as const;
 export const coverageCommandKindFromMessage = (message: string): CoverageCommandKind | null =>
   ((Object.entries(COVERAGE_COMMAND_MESSAGES) as Array<[CoverageCommandKind, string]>).find(([, value]) => value === message)?.[0]) ?? null;

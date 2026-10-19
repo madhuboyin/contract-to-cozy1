@@ -81,6 +81,24 @@ export async function resolvePropertyAccess(
  * (including a transaction) and NEVER writes: a pre-household owner with no membership row is accepted by the ownership check without one being created.
  * Used where an authorization must be decided inside the transaction that depends on it (DIY project completion).
  */
+/**
+ * The caller's household role for a property, read-only and transaction-capable, or null for no access. A member's role is their row's; a
+ * pre-household primary homeowner with no membership row is an OWNER. Never writes (unlike `resolvePropertyAccess`).
+ */
+export async function getPropertyRoleReadOnly(
+  db: Pick<typeof prisma, 'householdMember' | 'property'>,
+  userId: string,
+  propertyId: string,
+): Promise<HouseholdRole | null> {
+  const member = await db.householdMember.findUnique({
+    where: { propertyId_userId: { propertyId, userId } },
+    select: { role: true },
+  });
+  if (member) return member.role;
+  const owned = await db.property.findFirst({ where: { id: propertyId, homeownerProfile: { userId } }, select: { id: true } });
+  return owned ? 'OWNER' : null;
+}
+
 export async function hasPropertyRoleWithin(
   db: Pick<typeof prisma, 'householdMember' | 'property'>,
   userId: string,

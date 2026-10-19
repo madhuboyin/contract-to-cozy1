@@ -1,6 +1,7 @@
 import type { HouseholdRole } from '@prisma/client';
 import type { AskOperatingMode } from '../../skills/context/propertyJourneyContext.contract';
 import { evaluateAskAudienceApplicability, getAskAudiencePolicy } from '../askAudiencePolicy';
+import { REPORT_PACK_SECTION_PATHS, type ReportPackPath, type ReportPackSectionId } from '../../planningContext/reportPackSections';
 import { ASK_OPERATION_DEFINITIONS, type AskOperationId, type AskPropertyRoleFloor } from '../askOperationRegistry';
 
 /**
@@ -21,8 +22,7 @@ export type AskRecordCollectionReader = 'PROPERTY_RECORD_OVERVIEW' | 'PAGED_COLL
  * pack is the one authoritative export: this registry only describes it, so a test holds `sharedFields` to the redaction allowlist
  * (`buildRedactedReportSnapshot`) and `ownerFields` to the fields the builder emits.
  */
-export type AskRecordPackPath =
-  | 'property' | 'inventory.rooms' | 'inventory.items' | 'maintenance.tasks' | 'coverage.insurancePolicies' | 'coverage.warranties';
+export type AskRecordPackPath = ReportPackPath;
 
 export type AskRecordSectionExport =
   | {
@@ -72,26 +72,26 @@ const section = (value: AskRecordSectionDefinition): AskRecordSectionDefinition 
 
 
 const notInPack = (reason: string): AskRecordSectionExport => ({ state: 'NOT_IN_PACK', reason });
-const inPack = (packPath: AskRecordPackPath, ownerFields: readonly string[], sharedFields: readonly string[], withheldFromShared: readonly string[], note: string | null = null): AskRecordSectionExport => ({
-  state: 'IN_PACK', packPath, ownerFields, sharedFields, withheldFromShared, note,
+const inPack = (id: ReportPackSectionId, ownerFields: readonly string[], sharedFields: readonly string[], withheldFromShared: readonly string[], note: string | null = null): AskRecordSectionExport => ({
+  state: 'IN_PACK', packPath: REPORT_PACK_SECTION_PATHS[id], ownerFields, sharedFields, withheldFromShared, note,
 });
 
 const EXPORT: Record<AskRecordSectionId, AskRecordSectionExport> = {
-  'property-facts': inPack('property', ['nickname', 'addressLine1', 'city', 'state', 'zipCode', 'dwellingType', 'propertyUse', 'yearBuilt', 'livingAreaSqft'], ['city', 'state', 'dwellingType', 'yearBuilt', 'livingAreaSqft'], ['nickname', 'addressLine1', 'zipCode', 'propertyUse'],
-    'Only the home’s identity and headline facts. Property Context completeness, known facts by area, and their sources are not in the pack.'),
-  rooms: inPack('inventory.rooms', ['id', 'name'], ['name'], ['id'], 'Room names only: floors, item counts, and open maintenance are not in the pack.'),
-  inventory: inPack('inventory.items', ['name', 'category', 'condition', 'brand', 'modelNumber', 'serialNumber', 'purchasedOn', 'purchaseCostCents', 'replacementCostCents', 'room', 'documents'], ['name', 'category', 'condition', 'brand', 'roomName'], ['modelNumber', 'serialNumber', 'purchasedOn', 'purchaseCostCents', 'replacementCostCents', 'documents'],
-    'Every inventory row the pack builder reads, without the visibility rule the Record and Ask apply, so rows they hide can appear here.'),
+  'property-facts': inPack('property-facts', ['nickname', 'dwellingType', 'propertyUse', 'yearBuilt', 'livingAreaSqft'], ['dwellingType', 'yearBuilt', 'livingAreaSqft'], ['nickname', 'propertyUse'],
+    'Only the headline facts. Property Context completeness, known facts by area, and their sources are not in the pack. The home’s address is on every pack’s cover whatever is selected.'),
+  rooms: inPack('rooms', ['id', 'name'], ['name'], ['id'], 'Room names only: floors, item counts, and open maintenance are not in the pack.'),
+  inventory: inPack('inventory', ['name', 'category', 'condition', 'brand', 'modelNumber', 'serialNumber', 'purchasedOn', 'purchaseCostCents', 'replacementCostCents', 'room', 'documents'], ['name', 'category', 'condition', 'brand', 'roomName'], ['modelNumber', 'serialNumber', 'purchasedOn', 'purchaseCostCents', 'replacementCostCents', 'documents'],
+    'The same inventory rows the Record and Ask list (items they hide are not exported).'),
   documents: notInPack('The pack has no documents section. Documents appear only as links attached to inventory items, insurance policies, and warranties.'),
-  warranties: inPack('coverage.warranties', ['providerName', 'policyNumber', 'startDate', 'expiryDate', 'coverageDetails', 'documents'], ['providerName', 'startDate', 'expiryDate'], ['policyNumber', 'coverageDetails', 'documents']),
+  warranties: inPack('warranties', ['providerName', 'policyNumber', 'startDate', 'expiryDate', 'coverageDetails', 'documents'], ['providerName', 'startDate', 'expiryDate'], ['policyNumber', 'coverageDetails', 'documents']),
   timeline: notInPack('The pack has no timeline section.'),
-  'maintenance-history': inPack('maintenance.tasks', ['title', 'status', 'priority', 'riskLevel', 'frequency', 'nextDueDate', 'lastCompletedDate', 'estimatedCost', 'actualCost', 'assetType', 'source'], ['title', 'status', 'priority', 'frequency', 'lastCompletedDate'], ['riskLevel', 'nextDueDate', 'estimatedCost', 'actualCost', 'assetType', 'source'],
+  'maintenance-history': inPack('maintenance-history', ['title', 'status', 'priority', 'riskLevel', 'frequency', 'nextDueDate', 'lastCompletedDate', 'estimatedCost', 'actualCost', 'assetType', 'source'], ['title', 'status', 'priority', 'frequency', 'lastCompletedDate'], ['riskLevel', 'nextDueDate', 'estimatedCost', 'actualCost', 'assetType', 'source'],
     'Every maintenance task, open, completed, and cancelled, not only completed history.'),
   inspections: notInPack('The pack has no inspections section.'),
   permits: notInPack('The pack has no permits section.'),
   'projects-renovations': notInPack('The pack has no projects or renovations section.'),
   'incidents-claims': notInPack('The pack has no incidents or claims section.'),
-  coverage: inPack('coverage.insurancePolicies', ['providerName', 'policyNumber', 'startDate', 'expiryDate', 'premium', 'coverageAmount', 'documents'], ['providerName', 'startDate', 'expiryDate'], ['policyNumber', 'premium', 'coverageAmount', 'documents'],
+  coverage: inPack('coverage', ['providerName', 'policyNumber', 'startDate', 'expiryDate', 'premium', 'coverageAmount', 'documents'], ['providerName', 'startDate', 'expiryDate'], ['policyNumber', 'premium', 'coverageAmount', 'documents'],
     'Insurance policies only, with the policy number, premium, and coverage amount in the owner’s copy.'),
   'financing-ownership': notInPack('The pack has no financing or ownership-cost section.'),
   'buyer-records': notInPack('The pack has no buyer records section.'),

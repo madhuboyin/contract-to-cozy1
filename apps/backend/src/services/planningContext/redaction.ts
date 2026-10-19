@@ -14,6 +14,8 @@ export interface RedactedReportSnapshot {
     templateVersion: number;
     contextVersion: string | null;
     redacted: true;
+    /** The sections the full pack carries, so the shared copy renders only those. */
+    pack: { included: string[] } | null;
   };
   property: {
     city: string | null;
@@ -70,6 +72,7 @@ export function buildRedactedReportSnapshot(snapshot: FullSnapshot): RedactedRep
       templateVersion: Number(snapshot?.meta?.templateVersion ?? 1),
       contextVersion: snapshot?.meta?.contextVersion ?? null,
       redacted: true,
+      pack: Array.isArray(snapshot?.meta?.pack?.included) ? { included: snapshot.meta.pack.included.map(String) } : null,
     },
     property: {
       city: snapshot?.property?.city ?? null,

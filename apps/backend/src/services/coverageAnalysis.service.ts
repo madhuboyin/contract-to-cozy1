@@ -17,6 +17,8 @@ import {
 import { PreferencePostureDefaults, PreferenceProfileService } from './preferenceProfile.service';
 import { isCoverageActive } from './coverage/contextPolicy';
 import { assertCoverageConflictFree } from './coverageConflict.service';
+import { COVERAGE_ROLE_FLOORS, requireCoverageRole } from './coverageAccess';
+import { APIError } from '../middleware/error.middleware';
 
 type Impact = 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL';
 type Priority = 'LOW' | 'MEDIUM' | 'HIGH';
@@ -494,11 +496,12 @@ function computeItemFailureProbability(
   return clamp(base * (conditionMultiplier[condition] ?? 1), 0.04, 0.92);
 }
 
-async function assertPropertyForUser(propertyId: string, userId: string) {
+// Household access at a declared floor (see coverageAccess.ts), never the primary homeowner account. The property is then loaded by id.
+async function assertPropertyForUser(propertyId: string, userId: string, minimum: 'VIEWER' | 'CONTRIBUTOR' = COVERAGE_ROLE_FLOORS.START_OR_CHANGE) {
+  await requireCoverageRole(propertyId, userId, minimum);
   const property = await prisma.property.findFirst({
     where: {
       id: propertyId,
-      homeownerProfile: { userId },
     },
     select: {
       id: true,
@@ -536,7 +539,7 @@ async function assertPropertyForUser(propertyId: string, userId: string) {
   });
 
   if (!property) {
-    throw new Error('Property not found or access denied.');
+    throw new APIError('Property not found', 404, 'PROPERTY_NOT_FOUND');
   }
 
   return property;
@@ -1600,7 +1603,7 @@ export class CoverageIntelligenceService {
     propertyId: string,
     userId: string
   ): Promise<{ exists: false } | { exists: true; analysis: CoverageAnalysisDTO }> {
-    await assertPropertyForUser(propertyId, userId);
+    await assertPropertyForUser(propertyId, userId, COVERAGE_ROLE_FLOORS.READ);
     await assertCoverageConflictFree(propertyId, prisma, {
       requireAllInsurancePolicies: true,
       requireAllWarranties: true,
@@ -1627,7 +1630,7 @@ export class CoverageIntelligenceService {
     itemId: string,
     userId: string
   ): Promise<{ exists: false } | { exists: true; analysis: ItemCoverageAnalysisDTO }> {
-    await assertPropertyForUser(propertyId, userId);
+    await assertPropertyForUser(propertyId, userId, COVERAGE_ROLE_FLOORS.READ);
     const item = await this.assertItemForProperty(propertyId, itemId);
     await assertCoverageConflictFree(propertyId, prisma, {
       warrantyId: item.warranty?.id ?? null,
@@ -1662,6 +1665,8 @@ export class CoverageIntelligenceService {
     overrides?: CoverageAnalysisOverrides,
     options?: CoverageRunOptions
   ): Promise<CoverageAnalysisDTO> {
+    // Authorize before anything is resolved or created: running an analysis persists one, so it needs CONTRIBUTOR.
+    await requireCoverageRole(propertyId, userId, COVERAGE_ROLE_FLOORS.START_OR_CHANGE);
     const resolved = await this.resolveRunInputs(propertyId, userId, overrides, options);
     const { snapshot: computedSnapshot, homeownerProfileId } = await this.computeSnapshot(
       propertyId,
@@ -1710,6 +1715,8 @@ export class CoverageIntelligenceService {
     userId: string,
     input: CoverageSimulationInput
   ): Promise<CoverageAnalysisDTO> {
+    // A simulation can create an assumption set (and a saved scenario), so it needs CONTRIBUTOR before anything is resolved.
+    await requireCoverageRole(propertyId, userId, COVERAGE_ROLE_FLOORS.START_OR_CHANGE);
     const resolved = await this.resolveRunInputs(propertyId, userId, input.overrides, {
       assumptionSetId: input.assumptionSetId,
     });

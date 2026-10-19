@@ -10,6 +10,7 @@ import { logger } from '../lib/logger';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 import { resolvePropertyAccess, ROLE_RANK } from '../services/propertyAccess.service';
 import { getAggregationContextEnvelope } from '../services/aggregationContext/context';
+import { InvalidExportSelectionError, normalizeAskRecordExportRequest } from '../services/ask/askRecordExportSelection';
 
 async function canMutateReport(propertyId: string, userId: string): Promise<boolean> {
   const access = await resolvePropertyAccess(userId, propertyId);
@@ -22,6 +23,19 @@ export async function createHomeReportExport(req: Request, res: Response) {
     const userId = (req as any).user?.userId as string;
 
     const { type = 'HOME_REPORT_PACK', sections } = req.body ?? {};
+
+    // The section choice is validated against the Record section registry and stored normalized, with any requested section the pack
+    // cannot carry recorded as unavailable. The snapshot builder and the worker both read this stored selection.
+    let selection;
+    try {
+      const access = await resolvePropertyAccess(userId, propertyId);
+      selection = normalizeAskRecordExportRequest({ sections, type, role: access?.role ?? 'VIEWER' });
+    } catch (error) {
+      if (error instanceof InvalidExportSelectionError) {
+        return res.status(400).json({ success: false, message: error.message, code: error.code, data: { unavailable: error.unavailable } });
+      }
+      throw error;
+    }
     const propertyContext = await getAggregationContextEnvelope(propertyId, userId, 'REPORT_SUMMARIES');
     if (propertyContext.decision.status !== 'APPLICABLE') {
       return res.status(409).json({
@@ -55,7 +69,7 @@ export async function createHomeReportExport(req: Request, res: Response) {
         propertyId,
         type,
         status: 'PENDING',
-        sections: sections ?? null,
+        sections: selection as unknown as object,
         templateVersion: 1,
         dataVersion: 1,
         timezone: 'America/New_York',
@@ -84,6 +98,8 @@ export async function createHomeReportExport(req: Request, res: Response) {
         exportId: exp.id,
         status: exp.status,
         propertyContext,
+        // What the export carries and what was asked for but could not be carried.
+        selection,
       }
     });
   } catch (error: any) {

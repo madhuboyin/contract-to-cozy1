@@ -8,7 +8,7 @@ import {
   type ReviewTerm,
 } from './coverageReviewRules';
 import { getConflictedInsurancePolicyTerms } from './coverageConflict.service';
-import { hasPropertyRoleWithin } from './propertyAccess.service';
+import { COVERAGE_ROLE_FLOORS, requireCoverageRole } from './coverageAccess';
 
 const REVIEW_TTL_DAYS = 30;
 
@@ -51,21 +51,8 @@ const reviewInclude = {
 };
 
 /** Everything the review is computed from, and its fingerprint. Read-only: shared by the read path and the explicit (re)generation. */
-/**
- * The service enforces its own access rule, whatever route or caller reaches it: reading a review is open to every household member
- * (VIEWER and up), and generating one needs CONTRIBUTOR, the same floors the GET and POST routes declare. Household access is the
- * canonical `hasPropertyRoleWithin`, which also admits a pre-household primary homeowner and never writes. A caller with no access to the
- * property gets the same not-found a missing property would, so another home's existence is not revealed.
- */
-async function authorizeReviewAccess(propertyId: string, userId: string, minimumRole: 'VIEWER' | 'CONTRIBUTOR') {
-  if (!(await hasPropertyRoleWithin(prisma, userId, propertyId, 'VIEWER'))) throw new APIError('Property not found', 404, 'PROPERTY_NOT_FOUND');
-  if (minimumRole !== 'VIEWER' && !(await hasPropertyRoleWithin(prisma, userId, propertyId, minimumRole))) {
-    throw new APIError(`This action requires the ${minimumRole} role for the property.`, 403, 'PROPERTY_ROLE_REQUIRED');
-  }
-}
-
 async function loadReviewInputs(propertyId: string, userId: string, minimumRole: 'VIEWER' | 'CONTRIBUTOR') {
-  await authorizeReviewAccess(propertyId, userId, minimumRole);
+  await requireCoverageRole(propertyId, userId, minimumRole);
   const property = await prisma.property.findFirst({
     where: { id: propertyId },
     select: { id: true, updatedAt: true },
@@ -137,7 +124,7 @@ export async function findCurrentCoverageReview(
   userId: string,
   options: { evaluatedAt?: Date } = {}
 ) {
-  const { inputFingerprint } = await loadReviewInputs(propertyId, userId, 'VIEWER');
+  const { inputFingerprint } = await loadReviewInputs(propertyId, userId, COVERAGE_ROLE_FLOORS.READ);
   const evaluatedAt = options.evaluatedAt ?? new Date();
   const current = await prisma.coverageReview.findFirst({
     where: {
@@ -171,7 +158,7 @@ export async function getOrCreateCoverageReview(
     evaluatedAt?: Date;
   } = {}
 ) {
-  const { policyTerm, hasUnresolvedConflict, inputFingerprint } = await loadReviewInputs(propertyId, userId, 'CONTRIBUTOR');
+  const { policyTerm, hasUnresolvedConflict, inputFingerprint } = await loadReviewInputs(propertyId, userId, COVERAGE_ROLE_FLOORS.START_OR_CHANGE);
   const evaluatedAt = options.evaluatedAt ?? new Date();
 
   const existing = await prisma.coverageReview.findFirst({

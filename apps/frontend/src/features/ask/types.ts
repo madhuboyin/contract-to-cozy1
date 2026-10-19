@@ -824,6 +824,14 @@ export interface AskRecordIndex {
   sections: AskRecordIndexSection[];
 }
 
+export interface AskRecordRestrictedDetail {
+  id: string;
+  title: string;
+  state: 'AVAILABLE' | 'NOT_RECORDED' | 'OWNER_ONLY';
+  requiredRole: 'OWNER';
+  facts: Array<{ label: string; value: string }>;
+}
+
 // Record section collection page (FR-REC-003). Mirrors the backend `AskRecordCollectionPage`.
 export interface AskRecordCollectionPage<Row> {
   contractVersion: 'ask-record-collection-v1';
@@ -837,6 +845,8 @@ export interface AskRecordCollectionPage<Row> {
   truncated: boolean;
   /** A source limit the cursor cannot work around; shown to the homeowner when present. */
   notice?: string | null;
+  /** Facts that need a higher role than the collection; present only for sections that have some. */
+  detail?: AskRecordRestrictedDetail | null;
   sort: { key: string; label: string };
   query: { search: string | null; filters: Record<string, string> };
   filterOptions: Array<{ key: string; label: string; options: Array<{ value: string; label: string }> }>;
@@ -1079,11 +1089,19 @@ export interface AskRecordExportReview {
   accessRole: 'VIEWER' | 'CONTRIBUTOR' | 'OWNER';
   operatingMode: 'BUYING' | 'OWNING' | 'SELLING' | 'UNKNOWN';
   create: { allowed: boolean; requiredRole: 'CONTRIBUTOR'; reason: string | null };
-  pack: { format: 'PDF'; sectionsSelectable: false; downloadableBy: 'CREATOR'; recordExpiresInDays: number };
+  pack: { format: 'PDF'; sectionsSelectable: true; downloadableBy: 'CREATOR'; recordExpiresInDays: number };
+  alwaysIncluded: { label: string; ownerFields: string[]; sharedFields: string[]; withheldFromShared: string[] };
   sharing: { requiredRole: 'CONTRIBUTOR'; defaultExpiryDays: number; copy: 'REDACTED' };
   sections: AskRecordExportReviewSection[];
   included: string[];
   excluded: string[];
+}
+
+export interface HomeReportExportSelection {
+  version: 1;
+  requested: string[];
+  included: string[];
+  unavailable: Array<{ id: string; reason: 'NOT_IN_PACK' | 'RESTRICTED' }>;
 }
 
 export type HomeReportExportStatus = 'PENDING' | 'GENERATING' | 'READY' | 'FAILED' | 'EXPIRED' | 'DELETED';

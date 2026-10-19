@@ -113,16 +113,39 @@ test('a service access failure is never turned into an owner-only answer', async
   } finally { reviewService.findCurrentCoverageReview = saved; }
 });
 
-test('generating a review needs CONTRIBUTOR, not the primary account; a comparison and a decision still do', async () => {
-  const restoreRole = withRole('CONTRIBUTOR'); let restore = withData({ primary: false });
+test('every coverage step follows the household floors, never the primary account: contributor steps work for a non-primary member, the final decision is an owner’s', async () => {
+  for (const primary of [false, true]) {
+    const restoreRole = withRole('CONTRIBUTOR'); const restore = withData({ primary });
+    try {
+      for (const kind of ['REVIEW', 'START']) {
+        assert.equal((await invoke(M[kind], launchFor(kind, 'prop-1'))).status, 'NEEDS_CONFIRMATION', `${kind} primary=${primary}`);
+        assert.equal((await invoke(M[kind], launchFor(kind, 'prop-1'), 'VIEWER')).reasonCode, 'ASK_PERMISSION_REQUIRED', `${kind} viewer`);
+      }
+      const decide = await invoke(M.DECIDE, launchFor('DECIDE', 'cmp-1'));
+      assert.equal(decide.reasonCode, 'COVERAGE_COMMAND_OWNER_ONLY', `contributor primary=${primary}`);
+      assert.match(decide.blocks[0].title, /Only an owner can record a final coverage decision/);
+      assert.equal(JSON.stringify(decide).includes('primary'), false, 'no primary-account wording');
+    } finally { restore(); restoreRole(); }
+  }
+  const restoreRole = withRole('OWNER'); const restore = withData({ primary: false });
   try {
-    assert.equal((await invoke(M.REVIEW, launchFor('REVIEW', 'prop-1'))).status, 'NEEDS_CONFIRMATION');
-    assert.equal((await invoke(M.REVIEW, launchFor('REVIEW', 'prop-1'), 'VIEWER')).reasonCode, 'ASK_PERMISSION_REQUIRED');
-    assert.equal((await invoke(M.START, launchFor('START', 'prop-1'))).reasonCode, 'COVERAGE_COMMAND_OWNER_ONLY');
+    assert.equal((await invoke(M.DECIDE, launchFor('DECIDE', 'cmp-1'), 'OWNER')).status, 'NEEDS_CONTEXT', 'an owner who is not the primary account reaches the decision form');
   } finally { restore(); restoreRole(); }
 });
 
-test('the command is declared-action only, a registered contributor command, owner-only, and refuses a viewer, a refresh and a wrong entity', async () => {
+test('the per-step floors are declared once and agree with the registered operation floor and the decision route', () => {
+  assert.deepEqual(command.COVERAGE_COMMAND_KIND_ROLE_FLOORS, { START: 'CONTRIBUTOR', REVIEW: 'CONTRIBUTOR', ADD_QUOTE: 'CONTRIBUTOR', DECIDE: 'OWNER' });
+  const lowest = Object.values(command.COVERAGE_COMMAND_KIND_ROLE_FLOORS).includes('CONTRIBUTOR') ? 'CONTRIBUTOR' : 'OWNER';
+  assert.equal(getAskDomainCommandByOperation(OP).roleFloor, lowest);
+  const routes = require('node:fs').readFileSync(require.resolve('../../src/routes/coverageAnalysis.routes.ts'), 'utf8');
+  const block = (path) => { const at = routes.indexOf(`'${path}'`); return routes.slice(at, routes.indexOf('\n);', at)); };
+  assert.match(block('/properties/:propertyId/coverage-comparisons/:comparisonId/decision'), /requireHouseholdRole\('OWNER'\)/);
+  for (const path of ['/properties/:propertyId/coverage-comparisons/:comparisonId/options', '/properties/:propertyId/coverage-comparison', '/properties/:propertyId/coverage-review', '/properties/:propertyId/coverage-analysis/run', '/properties/:propertyId/coverage-analysis/simulate']) {
+    assert.ok(routes.indexOf(`'${path}'`) > 0, path);
+  }
+});
+
+test('the command is declared-action only, a registered contributor command, and refuses a viewer, a refresh and a wrong entity', async () => {
   for (const message of Object.values(M)) assert.notEqual(route(message), OP, message);
   assert.equal(getAskDomainCommandByOperation(OP).roleFloor, 'CONTRIBUTOR');
   const restoreRole = withRole('CONTRIBUTOR'); let restore = withData();
@@ -132,16 +155,13 @@ test('the command is declared-action only, a registered contributor command, own
     assert.equal((await invoke(M.START, launchFor('START', 'prop-1', { surface: 'ASK_REFRESH' }))).reasonCode, 'ASK_COVERAGE_COMMAND_NOT_DIRECTLY_ROUTABLE');
     assert.equal((await invoke(M.DECIDE, launchFor('DECIDE', 'cmp-1', { entityType: command.COVERAGE_PROPERTY_ENTITY_TYPE }))).reasonCode, 'ASK_COVERAGE_COMMAND_NOT_DIRECTLY_ROUTABLE');
     assert.equal((await invoke(M.START, launchFor('START', 'prop-1'), 'VIEWER')).reasonCode, 'ASK_PERMISSION_REQUIRED');
-    restore();
-    restore = withData({ primary: false });
-    assert.equal((await invoke(M.START, launchFor('START', 'prop-1'))).reasonCode, 'COVERAGE_COMMAND_OWNER_ONLY');
   } finally { restore(); restoreRole(); }
 });
 
 test('the decision form lists the compared options; a switch to a non-equivalent option needs the reason; a recorded or missing comparison is refused', async () => {
-  const restoreRole = withRole('CONTRIBUTOR'); let restore = withData();
+  const restoreRole = withRole('OWNER'); let restore = withData();
   try {
-    const form = await invoke(M.DECIDE, launchFor('DECIDE', 'cmp-1'));
+    const form = await invoke(M.DECIDE, launchFor('DECIDE', 'cmp-1'), 'OWNER');
     assert.equal(form.status, 'NEEDS_CONTEXT');
     const fields = form.captureRequests[0].inputSchema.fields;
     assert.deepEqual(fields.map((f) => f.key), ['decision', 'selectedOptionId', 'rationale']);
@@ -156,14 +176,14 @@ test('the decision form lists the compared options; a switch to a non-equivalent
     assert.equal((await handler.coverageCommandResult('user-1', 'prop-1', { kind: 'DECIDE', entityId: 'cmp-1', sourceExecutionId: null }, { decision: 'CHANGE', selectedOptionId: '33333333-3333-4333-8333-333333333333', rationale: 'x' })).reasonCode, 'COVERAGE_OPTION_NOT_FOUND');
     restore();
     restore = withData({ comparison: { ...COMPARISON, status: 'DECIDED' } });
-    assert.equal((await invoke(M.DECIDE, launchFor('DECIDE', 'cmp-1'))).reasonCode, 'COVERAGE_DECISION_ALREADY_RECORDED');
+    assert.equal((await invoke(M.DECIDE, launchFor('DECIDE', 'cmp-1'), 'OWNER')).reasonCode, 'COVERAGE_DECISION_ALREADY_RECORDED');
     restore();
     restore = withData({ comparison: null });
-    assert.equal((await invoke(M.DECIDE, launchFor('DECIDE', 'cmp-1'))).reasonCode, 'COVERAGE_COMPARISON_NOT_FOUND');
+    assert.equal((await invoke(M.DECIDE, launchFor('DECIDE', 'cmp-1'), 'OWNER')).reasonCode, 'COVERAGE_COMPARISON_NOT_FOUND');
   } finally { restore(); restoreRole(); }
 });
 
-const ctx = (parameters) => ({ userId: 'user-1', execution: { id: 'exec-1', propertyId: 'prop-1', createdAt: new Date() }, access: { role: 'CONTRIBUTOR' }, parameters, command: getAskDomainCommandByOperation(OP) });
+const ctx = (parameters, role) => ({ userId: 'user-1', execution: { id: 'exec-1', propertyId: 'prop-1', createdAt: new Date() }, access: { role: role ?? (parameters?.coverageCommand?.kind === 'DECIDE' ? 'OWNER' : 'CONTRIBUTOR') }, parameters, command: getAskDomainCommandByOperation(OP) });
 function installWrites() {
   const saved = { cmp: comparisonService.getOrCreateCoverageComparison, rev: reviewService.getOrCreateCoverageReview, dec: decisionOperations.recordCoverageDecisionWithEffects, r: executeOperation.reconcileAskExecutionSideEffects };
   const calls = [];
@@ -193,6 +213,10 @@ test('confirming each command calls the canonical function; the decision carries
     await assert.rejects(() => confirmCapabilityInvoke(OP, ctx({ coverageCommand: { kind: 'DECIDE', entityId: 'cmp-1' }, coverageContextVersion: version, coverageDecision: { decision: 'CHANGE' } })), (e) => e.code === 'ASK_CONFIRMATION_NOT_ACTIVE');
     await assert.rejects(() => confirmCapabilityInvoke(OP, ctx({ coverageCommand: { kind: 'ERASE', entityId: 'cmp-1' } })), (e) => e.code === 'ASK_CONFIRMATION_NOT_ACTIVE');
     assert.equal(w.calls.length, before);
+    // Confirm time re-checks the role: a contributor cannot confirm a final decision, and a viewer cannot confirm any step.
+    await assert.rejects(() => confirmCapabilityInvoke(OP, ctx({ coverageCommand: { kind: 'DECIDE', entityId: 'cmp-1' }, coverageContextVersion: version, coverageDecision: { decision: 'KEEP' } }, 'CONTRIBUTOR')), (e) => e.code === 'ASK_PERMISSION_REQUIRED');
+    await assert.rejects(() => confirmCapabilityInvoke(OP, ctx({ coverageCommand: { kind: 'START', entityId: 'prop-1' } }, 'VIEWER')), (e) => e.code === 'ASK_PERMISSION_REQUIRED');
+    assert.equal(w.calls.length, before, 'a refused confirm writes nothing');
   } finally { w.restore(); restore(); }
 });
 

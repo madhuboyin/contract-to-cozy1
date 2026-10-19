@@ -10,6 +10,7 @@ const {
 } = require('../../src/services/ask/askRecordExportReview.service.ts');
 const { ASK_RECORD_SECTION_REGISTRY, validateAskRecordSectionRegistry } = require('../../src/services/ask/governance/askRecordSectionRegistry.ts');
 const { buildRedactedReportSnapshot, REDACTED_FORBIDDEN_FIELD_NAMES } = require('../../src/services/planningContext/redaction.ts');
+const { REPORT_PACK_SECTION_IDS, REPORT_PACK_SECTION_PATHS, REPORT_PACK_ALWAYS_INCLUDED_IDENTITY } = require('../../src/services/planningContext/reportPackSections.ts');
 
 const src = (path) => readFileSync(join(__dirname, '../../src', path), 'utf8');
 const property = { name: 'Maple House', address: '1 Main St', city: 'Austin', state: 'TX' };
@@ -33,7 +34,7 @@ test('only a CONTRIBUTOR or OWNER can create an export, as the existing route re
   assert.deepEqual([review('VIEWER').create.allowed, review('VIEWER').create.reason], [false, 'Creating an export needs the CONTRIBUTOR role for this home.']);
   for (const role of ['CONTRIBUTOR', 'OWNER']) assert.deepEqual([review(role).create.allowed, review(role).create.reason], [true, null], role);
   assert.deepEqual(review('VIEWER').included, review('OWNER').included);
-  assert.deepEqual([review('OWNER').pack.sectionsSelectable, review('OWNER').pack.downloadableBy, review('OWNER').sharing.copy], [false, 'CREATOR', 'REDACTED']);
+  assert.deepEqual([review('OWNER').pack.sectionsSelectable, review('OWNER').pack.downloadableBy, review('OWNER').sharing.copy], [true, 'CREATOR', 'REDACTED']);
 });
 
 test('lifecycle-inapplicable sections report it and are not silently dropped', () => {
@@ -56,11 +57,14 @@ test('the review states the pack rules from their sources: route floor, record e
   assert.deepEqual([result.pack.recordExpiresInDays, result.sharing.defaultExpiryDays, result.sharing.requiredRole], [30, 14, 'CONTRIBUTOR']);
 });
 
-test('the pack ignores a section choice: the builder never reads `sections`, so the review says sections are not selectable', () => {
+test('the pack honors a section choice: the builder reads the stored selection, and the registry and pack agree on which sections exist', () => {
   const builder = src('services/planningContext/reportSnapshot.ts');
   const body = builder.slice(builder.indexOf('export async function buildAuthoritativeReportSnapshot'));
-  assert.equal(/\bsections\b/.test(body.replace(/sections\?: unknown;/, '')), false, 'the builder body does not use sections');
-  assert.equal(review('OWNER').pack.sectionsSelectable, false);
+  assert.match(body, /resolveStoredPackSections\(args\.sections, args\.type\)/);
+  assert.equal(review('OWNER').pack.sectionsSelectable, true);
+  assert.deepEqual(IN_PACK.map((entry) => entry.id).sort(), [...REPORT_PACK_SECTION_IDS].sort());
+  for (const entry of IN_PACK) assert.equal(entry.exportEligibility.packPath, REPORT_PACK_SECTION_PATHS[entry.id], entry.id);
+  assert.deepEqual(review('OWNER').alwaysIncluded, { label: 'Home address', ...REPORT_PACK_ALWAYS_INCLUDED_IDENTITY });
 });
 
 // A probe snapshot carrying every owner field for a pack path, so the real redaction can be asked what survives.
@@ -69,7 +73,8 @@ function probe(entry) {
   const row = Object.fromEntries(exported.ownerFields.map((field) => [field, field === 'room' ? { id: 'r', name: 'Kitchen' } : field === 'documents' ? [{ id: 'd', fileUrl: 'https://x' }] : `value-${field}`]));
   const snapshot = { meta: {}, property: {}, inventory: { rooms: [], items: [] }, maintenance: { tasks: [] }, coverage: { insurancePolicies: [], warranties: [] } };
   const [block, leaf] = exported.packPath.split('.');
-  if (leaf) snapshot[block][leaf] = [row]; else snapshot[block] = row;
+  if (leaf) snapshot[block][leaf] = [row];
+  else snapshot[block] = { ...row, ...Object.fromEntries(REPORT_PACK_ALWAYS_INCLUDED_IDENTITY.ownerFields.map((field) => [field, `value-${field}`])) };
   return snapshot;
 }
 const redactedAt = (redacted, packPath) => { const [block, leaf] = packPath.split('.'); const value = leaf ? redacted[block][leaf][0] : redacted[block]; return value; };
@@ -79,9 +84,12 @@ test('each section’s shared-copy fields are exactly what the real redaction ke
     const exported = entry.exportEligibility;
     const redacted = buildRedactedReportSnapshot(probe(entry));
     const kept = Object.keys(redactedAt(redacted, exported.packPath)).sort();
-    assert.deepEqual(kept, [...exported.sharedFields].sort(), `${entry.id} shared fields`);
+    // The property block also carries the always-included address identity, of which a shared link keeps city and state.
+    const expected = exported.packPath === 'property' ? [...exported.sharedFields, ...REPORT_PACK_ALWAYS_INCLUDED_IDENTITY.sharedFields] : [...exported.sharedFields];
+    assert.deepEqual(kept, expected.sort(), `${entry.id} shared fields`);
     const json = JSON.stringify(redacted);
     for (const field of exported.withheldFromShared) assert.equal(json.includes(`value-${field}`), false, `${entry.id} leaks ${field}`);
+    if (exported.packPath === 'property') for (const field of REPORT_PACK_ALWAYS_INCLUDED_IDENTITY.withheldFromShared) assert.equal(json.includes(`value-${field}`), false, `identity leaks ${field}`);
     for (const field of exported.sharedFields) assert.equal(exported.withheldFromShared.includes(field), false, `${entry.id} ${field}`);
     assert.equal(exported.sharedFields.some((field) => REDACTED_FORBIDDEN_FIELD_NAMES.includes(field)), false, `${entry.id} shares a forbidden field`);
   }

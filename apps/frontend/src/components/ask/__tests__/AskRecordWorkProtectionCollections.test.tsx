@@ -130,4 +130,19 @@ describe('AskRecord permits, projects, and incidents/claims', () => {
     expect(screen.queryByRole('button', { name: /remove|invite|change role/i })).toBeNull();
     expect(document.querySelectorAll('[data-record-row] a')).toHaveLength(0);
   });
+
+  it('financing shows the owner-only mortgage details to an owner and says they are owner-only otherwise', async () => {
+    mockSection = 'financing-ownership';
+    getPage.mockResolvedValueOnce({ success: true, data: page('financing-ownership', [], { total: 0, detail: { id: 'financing-profile', title: 'Mortgage and purchase details', state: 'AVAILABLE', requiredRole: 'OWNER', facts: [{ label: 'Current balance', value: '$312,500 as of Sep 1, 2026' }, { label: 'Interest rate', value: '3.75%' }] } }) });
+    const owner = render(<AskRecord />);
+    const box = (await screen.findByText('Mortgage and purchase details')).closest('[data-record-detail]') as HTMLElement;
+    expect(within(box).getByText('$312,500 as of Sep 1, 2026')).toBeInTheDocument();
+    expect(within(box).getByText('3.75%')).toBeInTheDocument();
+    owner.unmount();
+
+    getPage.mockResolvedValueOnce({ success: true, data: page('financing-ownership', [], { total: 0, detail: { id: 'financing-profile', title: 'Mortgage and purchase details', state: 'OWNER_ONLY', requiredRole: 'OWNER', facts: [] } }) });
+    render(<AskRecord />);
+    expect(await screen.findByText('These details are visible to a home owner only.')).toBeInTheDocument();
+    expect(screen.queryByText(/\$312,500/)).toBeNull();
+  });
 });

@@ -99,6 +99,7 @@ router.post(
 router.post(
   '/properties/:propertyId/coverage-comparisons/:comparisonId/options',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(comparisonOptionSchema),
   addCoverageOption
 );
@@ -106,6 +107,8 @@ router.post(
 router.post(
   '/properties/:propertyId/coverage-comparisons/:comparisonId/decision',
   propertyAuthMiddleware,
+  // The final coverage decision is the household owner's.
+  requireHouseholdRole('OWNER'),
   validateBody(comparisonDecisionSchema),
   recordCoverageComparisonDecision
 );
@@ -133,6 +136,7 @@ router.get(
 router.post(
   '/properties/:propertyId/coverage-analysis/run',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(runBodySchema),
   runCoverageAnalysis
 );
@@ -140,6 +144,7 @@ router.post(
 router.post(
   '/properties/:propertyId/coverage-analysis/simulate',
   propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
   validateBody(simulateBodySchema),
   simulateCoverageAnalysis
 );

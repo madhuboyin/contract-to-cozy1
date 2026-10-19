@@ -57,7 +57,7 @@ export async function createExportAndGeneratePdf(args: CreateExportArgs) {
 
   try {
     // 3) build snapshot DTO (this is what renders + what we store)
-    const snapshot = await buildAuthoritativeReportSnapshot({ userId, propertyId, sections });
+    const snapshot = await buildAuthoritativeReportSnapshot({ userId, propertyId, sections, type });
 
     // 4) render PDF buffer
     const pdfBuffer = await renderHomeReportPackPdf(snapshot);

@@ -250,30 +250,11 @@ export function coverageComparisonStrip(
   };
 }
 
-async function coverageComparisonStatusResult(userId: string, propertyId: string, canChange = false): Promise<AskOperationResult> {
+async function coverageComparisonStatusResult(userId: string, propertyId: string, canChange = false, isOwner = false): Promise<AskOperationResult> {
   await ensurePropertyAccess(userId, propertyId);
 
-  let result: Awaited<ReturnType<typeof findCoverageComparison>>;
-  try {
-    result = await findCoverageComparison(propertyId, userId);
-  } catch (error) {
-    if (error instanceof APIError && error.code === 'PROPERTY_NOT_FOUND') {
-      return {
-        status: 'BLOCKED',
-        reasonCode: 'COVERAGE_COMPARISON_OWNER_ONLY',
-        blocks: [{
-          type: 'BOUNDARY',
-          id: 'coverage-comparison-owner-only',
-          title: 'Coverage comparison is owner-only for now',
-          body: 'Coverage comparison currently only works for the property’s primary homeowner account, not shared household access. Ask a household owner to check this for you.',
-          severity: 'CAUTION',
-          suggestions: [],
-        }],
-        suggestions: [],
-      };
-    }
-    throw error;
-  }
+  // Household access is enforced by the comparison service itself; a failure is reported as the error it is, never as an "owner-only" answer.
+  const result = await findCoverageComparison(propertyId, userId);
 
   if (result.state === 'BASELINE_REQUIRED') {
     return {
@@ -330,16 +311,16 @@ async function coverageComparisonStatusResult(userId: string, propertyId: string
       : alternativeOptions.length
         ? `Overall status: ${COVERAGE_COMPARISON_EQUIVALENCE_LABELS[comparison.equivalenceStatus] ?? comparison.equivalenceStatus}.`
         : canChange
-          ? 'Add a quote from a document on your home records to line it up against your current coverage, or record a keep, shop or decide-later decision. Adding another verified policy term is not currently available in Ask.'
-          : 'Adding a quote or another policy term to compare against your current coverage is not currently available in Ask; a contributor or owner can record a keep, shop or decide-later decision.',
+          ? `Add a quote from a document on your home records to line it up against your current coverage${isOwner ? ', or record a keep, shop or decide-later decision' : '; an owner can record the final keep, shop or decide-later decision'}. Adding another verified policy term is not currently available in Ask.`
+          : 'Adding a quote or another policy term to compare against your current coverage is not currently available in Ask; an owner can record a keep, shop or decide-later decision.',
     tone: latestDecision ? 'POSITIVE' : alternativeOptions.length ? 'DEFAULT' : 'DEFAULT',
     actions: canChange && !latestDecision && comparison.status === 'DRAFT' ? [{
       id: COVERAGE_COMMAND_ACTION_IDS.ADD_QUOTE, label: 'Add a quote', interactionType: 'START_WORKFLOW' as const, message: COVERAGE_COMMAND_MESSAGES.ADD_QUOTE,
       operationId: 'COVERAGE_COMMAND' as const, entityType: COVERAGE_COMPARISON_ENTITY_TYPE, entityId: comparison.id, style: alternativeOptions.length ? 'SECONDARY' as const : 'PRIMARY' as const,
-    }, {
+    }, ...(isOwner ? [{
       id: COVERAGE_COMMAND_ACTION_IDS.DECIDE, label: 'Record my decision', interactionType: 'START_WORKFLOW' as const, message: COVERAGE_COMMAND_MESSAGES.DECIDE,
       operationId: 'COVERAGE_COMMAND' as const, entityType: COVERAGE_COMPARISON_ENTITY_TYPE, entityId: comparison.id, style: alternativeOptions.length ? 'PRIMARY' as const : 'SECONDARY' as const,
-    }] : [],
+    }] : [])] : [],
   }];
 
   const allOptions = currentOption ? [currentOption, ...alternativeOptions] : alternativeOptions;
@@ -395,5 +376,5 @@ registerCapabilityHandler('coverage.review', async (envelope) => coverageResult(
 
 registerCapabilityHandler('coverage.comparison-status', async (envelope, deps) => {
   const access = deps.propertyAccess ?? await ensurePropertyAccess(envelope.userId, envelope.propertyId!);
-  return coverageComparisonStatusResult(envelope.userId, envelope.propertyId!, access.role !== 'VIEWER');
+  return coverageComparisonStatusResult(envelope.userId, envelope.propertyId!, access.role !== 'VIEWER', access.role === 'OWNER');
 });

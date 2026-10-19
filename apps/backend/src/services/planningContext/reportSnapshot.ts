@@ -2,6 +2,8 @@ import { prisma } from '../../lib/prisma';
 import { knownContextValue } from '../propertyContextDecision';
 import { getPlanningContextDecisions } from './context';
 import { getAggregationContextEnvelope } from '../aggregationContext/context';
+import { visibleInventoryItemWhere } from '../riskAssetApplicability';
+import { resolveStoredPackSections, type ReportPackSectionId } from './reportPackSections';
 
 export interface ReportWorkerContextResult {
   allowed: boolean;
@@ -49,24 +51,30 @@ export async function checkReportWorkerContext(propertyId: string): Promise<Repo
 export async function buildAuthoritativeReportSnapshot(args: {
   userId: string;
   propertyId: string;
+  /** The stored selection (`ReportPackSelection`). Anything else, or nothing, carries the sections the export `type` names. */
   sections?: unknown;
+  type?: string | null;
 }) {
   const { userId, propertyId } = args;
+  const included = resolveStoredPackSections(args.sections, args.type);
+  const has = (id: ReportPackSectionId) => included.includes(id);
 
   const planning = await getPlanningContextDecisions(propertyId, userId, 'REPORTS');
   const aggregationContext = await getAggregationContextEnvelope(propertyId, userId, 'REPORT_SUMMARIES');
   const { context } = planning;
 
+  // Only the selected sections are read, so an unselected section's data never enters the snapshot, the PDF, or the shared copy. Inventory
+  // is read through the same visibility rule the Record and Ask apply (inferred-not-present and risk-only rows are not inventory).
   const property = await prisma.property.findUnique({
     where: { id: propertyId },
     include: {
-      inventoryRooms: true,
-      inventoryItems: { include: { room: true, documents: true } },
-      insurancePolicies: { include: { documents: true } },
-      warranties: { include: { documents: true } },
-      maintenanceTasks: true,
+      ...(has('rooms') ? { inventoryRooms: true } : {}),
+      ...(has('inventory') ? { inventoryItems: { where: visibleInventoryItemWhere(), include: { room: true, documents: true } } } : {}),
+      ...(has('coverage') ? { insurancePolicies: { include: { documents: true } } } : {}),
+      ...(has('warranties') ? { warranties: { include: { documents: true } } } : {}),
+      ...(has('maintenance-history') ? { maintenanceTasks: true } : {}),
     },
-  });
+  }) as any;
 
   if (!property) throw new Error('Property not found');
 
@@ -83,23 +91,28 @@ export async function buildAuthoritativeReportSnapshot(args: {
         missingFactKeys: planning.decisions.reportGeneration.missingFactKeys,
       },
       aggregationContext,
+      // The sections this pack carries; the template and the shared copy render only these.
+      pack: { included },
     },
     property: {
       id: property.id,
-      nickname: (property as { nickname?: string | null }).nickname ?? null,
+      // Identity is on every pack's cover (see REPORT_PACK_ALWAYS_INCLUDED_IDENTITY).
       addressLine1: property.address ?? null,
       city: knownContextValue<string>(context, 'location.city') ?? property.city ?? null,
       state: knownContextValue<string>(context, 'location.state') ?? property.state ?? null,
       zipCode: knownContextValue<string>(context, 'location.zipCode') ?? property.zipCode ?? null,
-      dwellingType: knownContextValue<string>(context, 'core.dwellingType') ?? null,
-      propertyUse: knownContextValue<string>(context, 'core.propertyUse') ?? null,
-      yearBuilt: knownContextValue<number>(context, 'core.yearBuilt') ?? property.yearBuilt ?? null,
-      livingAreaSqft:
-        knownContextValue<number>(context, 'core.propertySizeSqFt') ?? property.propertySize ?? null,
+      // The headline facts belong to the property-facts section and are absent unless it is selected.
+      nickname: has('property-facts') ? ((property as { nickname?: string | null }).nickname ?? null) : null,
+      dwellingType: has('property-facts') ? knownContextValue<string>(context, 'core.dwellingType') ?? null : null,
+      propertyUse: has('property-facts') ? knownContextValue<string>(context, 'core.propertyUse') ?? null : null,
+      yearBuilt: has('property-facts') ? knownContextValue<number>(context, 'core.yearBuilt') ?? property.yearBuilt ?? null : null,
+      livingAreaSqft: has('property-facts')
+        ? knownContextValue<number>(context, 'core.propertySizeSqFt') ?? property.propertySize ?? null
+        : null,
     },
     inventory: {
-      rooms: property.inventoryRooms.map((room) => ({ id: room.id, name: room.name })),
-      items: property.inventoryItems.map((item) => ({
+      rooms: (property.inventoryRooms ?? []).map((room: any) => ({ id: room.id, name: room.name })),
+      items: (property.inventoryItems ?? []).map((item: any) => ({
         id: item.id,
         name: item.name,
         category: item.category,
@@ -111,7 +124,7 @@ export async function buildAuthoritativeReportSnapshot(args: {
         purchaseCostCents: item.purchaseCostCents ?? null,
         replacementCostCents: item.replacementCostCents ?? null,
         room: item.room ? { id: item.room.id, name: item.room.name } : null,
-        documents: item.documents.map((doc) => ({
+        documents: item.documents.map((doc: any) => ({
           id: doc.id,
           name: doc.name,
           type: doc.type,
@@ -120,7 +133,7 @@ export async function buildAuthoritativeReportSnapshot(args: {
       })),
     },
     maintenance: {
-      tasks: property.maintenanceTasks.map((task) => ({
+      tasks: (property.maintenanceTasks ?? []).map((task: any) => ({
         id: task.id,
         title: task.title,
         status: task.status,
@@ -136,7 +149,7 @@ export async function buildAuthoritativeReportSnapshot(args: {
       })),
     },
     coverage: {
-      insurancePolicies: property.insurancePolicies.map((policy) => ({
+      insurancePolicies: (property.insurancePolicies ?? []).map((policy: any) => ({
         id: policy.id,
         providerName: policy.carrierName,
         policyNumber: policy.policyNumber,
@@ -145,21 +158,21 @@ export async function buildAuthoritativeReportSnapshot(args: {
         premium: policy.premiumAmount != null ? Number(policy.premiumAmount) : null,
         coverageAmount:
           policy.personalPropertyLimitCents != null ? policy.personalPropertyLimitCents / 100 : null,
-        documents: policy.documents.map((doc) => ({
+        documents: policy.documents.map((doc: any) => ({
           id: doc.id,
           name: doc.name,
           type: doc.type,
           fileUrl: doc.fileUrl,
         })),
       })),
-      warranties: property.warranties.map((warranty) => ({
+      warranties: (property.warranties ?? []).map((warranty: any) => ({
         id: warranty.id,
         providerName: warranty.providerName,
         policyNumber: warranty.policyNumber,
         startDate: warranty.startDate,
         expiryDate: warranty.expiryDate,
         coverageDetails: warranty.coverageDetails ?? null,
-        documents: warranty.documents.map((doc) => ({
+        documents: warranty.documents.map((doc: any) => ({
           id: doc.id,
           name: doc.name,
           type: doc.type,

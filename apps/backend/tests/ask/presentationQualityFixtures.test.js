@@ -304,12 +304,12 @@ const FIN_CALC = new FinancingCalculatorService().computeAll(4_000_000, { helocR
 test('5 audit: the financing overview answers first and a named project compares the ways to pay with a structured, dated rate basis', () => {
   runFixture({
     id: 'audit-financing-overview', pattern: 'DIRECT_ANSWER', profile: 'DIRECT_ANSWER', message: 'How is my financing?', operationId: 'FINANCING_OVERVIEW',
-    build: () => financingFromView({ profile: FIN_PROFILE, equity: FIN_EQUITY, scenarios: [], calc: null, amountDollars: null }),
+    build: () => financingFromView({ profile: FIN_PROFILE, equity: FIN_EQUITY, scenarios: [], calc: null, amountDollars: null, isOwner: true }),
     expect: { directAnswer: /About 58% equity/, requiredBlockTypes: ['GROUPED_LIST', 'BOUNDARY'] },
   });
   runFixture({
     id: 'audit-financing-project', pattern: 'COMPARISON', profile: 'COMPARE', message: 'What would a $40,000 project cost to finance?', operationId: 'FINANCING_OVERVIEW',
-    build: () => financingFromView({ profile: FIN_PROFILE, equity: FIN_EQUITY, scenarios: [], calc: FIN_CALC, amountDollars: 40000 }),
+    build: () => financingFromView({ profile: FIN_PROFILE, equity: FIN_EQUITY, scenarios: [], calc: FIN_CALC, amountDollars: 40000, isOwner: true }),
     expect: {
       directAnswer: /Financing a \$40,000 project/, requiredBlockTypes: ['GROUPED_LIST', 'EVIDENCE', 'BOUNDARY'], comparisonBlockIds: ['financing-options'],
       check: (result) => {

@@ -41,7 +41,9 @@ router.use(apiRateLimiter);
 router.use(authenticate);
 
 // ─── Financing Profile ────────────────────────────────────────────────────────
-router.get('/properties/:propertyId/financing/profile', propertyAuthMiddleware, getFinancingProfile);
+// The persisted financing profile is owner-only as a whole (owner ruling 2026-10-13): reading the current profile needs OWNER, as writing it
+// and reading its history do. The equity position and its history persist the mortgage balance, so they are owner-only too.
+router.get('/properties/:propertyId/financing/profile', propertyAuthMiddleware, requireHouseholdRole('OWNER'), getFinancingProfile);
 router.put(
   '/properties/:propertyId/financing/profile',
   propertyAuthMiddleware,
@@ -58,16 +60,18 @@ router.get(
 );
 
 // ─── Equity Position ──────────────────────────────────────────────────────────
-router.get('/properties/:propertyId/financing/equity', propertyAuthMiddleware, getEquityPosition);
+router.get('/properties/:propertyId/financing/equity', propertyAuthMiddleware, requireHouseholdRole('OWNER'), getEquityPosition);
 router.post(
   '/properties/:propertyId/financing/equity/refresh',
   propertyAuthMiddleware,
-  requireHouseholdRole('CONTRIBUTOR'),
+  // The refresh returns the persisted equity position, which carries the mortgage balance.
+  requireHouseholdRole('OWNER'),
   refreshEquityPosition,
 );
 router.get(
   '/properties/:propertyId/financing/equity/history',
   propertyAuthMiddleware,
+  requireHouseholdRole('OWNER'),
   getEquityHistory,
 );
 

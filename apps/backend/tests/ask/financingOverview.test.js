@@ -45,7 +45,7 @@ const EQUITY = { id: 'e-1', estimatedValueCents: 50000000, estimatedValueSource:
 const CALC = new FinancingCalculatorService().computeAll(4_000_000, { helocRateBps: 900, helRateBps: 875, personalLoanMinRateBps: 1100, personalLoanMaxRateBps: 2000, contractorPromoMonths: 12, contractorOngoingAprBps: 2699, opportunityCostRateBps: 600 }, { helocEligible: true, helocCapacityCents: 21500000 }, '2026-10-01T00:00:00.000Z');
 
 test('the overview shows the mortgage and equity numbers and a hint to name a project; it never claims what it was not given', () => {
-  const result = financingFromView({ profile: PROFILE, equity: EQUITY, scenarios: [], calc: null, amountDollars: null });
+  const result = financingFromView({ profile: PROFILE, equity: EQUITY, scenarios: [], calc: null, amountDollars: null, isOwner: true });
   assert.equal(result.status, 'ANSWERED');
   assert.match(result.blocks[0].title, /About 58% equity/);
   const facts = Object.fromEntries(result.blocks.find((b) => b.id === 'financing-numbers').sections[0].items.map((i) => [i.title, i.description]));
@@ -55,7 +55,7 @@ test('the overview shows the mortgage and equity numbers and a hint to name a pr
 });
 
 test('with nothing recorded the overview says so, partial facts are not dressed up, and nothing links to a page', () => {
-  const result = financingFromView({ profile: null, equity: { ...EQUITY, estimatedValueCents: 0, equityCents: 0, equityPercent: '0', ltvPercent: '0', helocEligible: false, helocCapacityCents: 0 }, scenarios: [], calc: null, amountDollars: null });
+  const result = financingFromView({ profile: null, equity: { ...EQUITY, estimatedValueCents: 0, equityCents: 0, equityPercent: '0', ltvPercent: '0', helocEligible: false, helocCapacityCents: 0 }, scenarios: [], calc: null, amountDollars: null, isOwner: true });
   assert.equal(result.reasonCode, 'FINANCING_PROFILE_MISSING');
   assert.match(result.blocks[0].title, /No financing details recorded yet/);
   assert.equal(result.blocks.find((b) => b.id === 'financing-numbers')?.sections[0].items.length ?? 1, 1);
@@ -63,7 +63,7 @@ test('with nothing recorded the overview says so, partial facts are not dressed 
 });
 
 test('a named project cost compares the five ways to pay with the calculator numbers and the rates disclaimer', () => {
-  const result = financingFromView({ profile: PROFILE, equity: EQUITY, scenarios: [], calc: CALC, amountDollars: 40000 });
+  const result = financingFromView({ profile: PROFILE, equity: EQUITY, scenarios: [], calc: CALC, amountDollars: 40000, isOwner: true });
   assert.match(result.blocks[0].title, /Financing a \$40,000 project/);
   const options = result.blocks.find((b) => b.id === 'financing-options');
   assert.deepEqual(options.sections[0].items.map((i) => i.id), ['financing-heloc', 'financing-home-equity-loan', 'financing-personal-0', 'financing-personal-1', 'financing-personal-2', 'financing-personal-3', 'financing-contractor', 'financing-cash']);
@@ -75,7 +75,7 @@ test('a named project cost compares the five ways to pay with the calculator num
 
 test('saved scenarios are listed read-only and a not-eligible HELOC is labelled for comparison only', () => {
   const result = financingFromView({
-    profile: PROFILE, equity: { ...EQUITY, helocEligible: false }, calc: { ...CALC, helocEligible: false, helocCapacityCents: 0 }, amountDollars: 40000,
+    profile: PROFILE, equity: { ...EQUITY, helocEligible: false }, calc: { ...CALC, helocEligible: false, helocCapacityCents: 0 }, amountDollars: 40000, isOwner: true,
     scenarios: [{ id: 's-1', title: 'Kitchen', projectCostCents: 4000000, status: 'SAVED', selectedOption: 'HOME_EQUITY_LOAN', createdAt: new Date('2026-09-01') }],
   });
   assert.match(result.blocks[0].body, /does not look sufficient for a HELOC/);
@@ -92,10 +92,10 @@ test('the capability reads the canonical calls and survives the answer-trust val
   financing.listScenarios = async (id) => { calls.push(['scenarios', id]); return []; };
   financing.calculate = async (id, cents) => { calls.push(['calculate', id, cents]); return CALC; };
   try {
-    const raw = await capabilityInvoke(OP, { userId: 'user-1', propertyId: 'prop-1', message: 'What would a $40,000 project cost to finance?', launchContext: null }, { propertyAccess: { role: 'VIEWER' } });
+    const raw = await capabilityInvoke(OP, { userId: 'user-1', propertyId: 'prop-1', message: 'What would a $40,000 project cost to finance?', launchContext: null }, { propertyAccess: { role: 'OWNER' } });
     assert.deepEqual(calls.map((c) => c[0]).sort(), ['calculate', 'equity', 'profile', 'scenarios']);
     assert.deepEqual(calls.find((c) => c[0] === 'calculate'), ['calculate', 'prop-1', 4_000_000]);
-    const result = { ...raw, parameters: { audiencePresentation: { householdRole: 'VIEWER' }, answerTrustEvidence: { schemaVersion: '1.0', sources: [{
+    const result = { ...raw, parameters: { audiencePresentation: { householdRole: 'OWNER' }, answerTrustEvidence: { schemaVersion: '1.0', sources: [{
       sourceId: 'financing.overview', operationId: OP, status: 'COMPLETE', scope: 'FULL', freshness: 'CURRENT', observedAt: '2026-10-12T00:00:00.000Z' }] } } };
     const { result: validated } = validateAskAnswerTrust({ question: 'What would a $40,000 project cost to finance?', operationId: OP, result, propertyId: 'prop-1' });
     assert.deepEqual(validated.blocks.map((b) => b.id), result.blocks.map((b) => b.id));
@@ -123,4 +123,48 @@ test('reading the equity position (and the calculator that uses it) saves no sna
     await financing.refreshEquity('prop-1');
     assert.deepEqual(writes, [['create', 'prop-1']], 'the explicit refresh saves a snapshot');
   } finally { Object.assign(prisma, { equityPosition: saved.eq, propertyFinancingProfile: saved.pf, property: saved.pr, financingRateConfig: saved.cfg }); }
+});
+
+// ───────────────────────────── the persisted profile is owner-only ─────────────────────────────
+
+const NON_OWNER_LEAKS = /mortgage balance|\$250,000|5\.5%|equity \(|Loan to value|May qualify|may qualify|does not look sufficient|looks sufficient|about \d+% equity/i;
+
+test('below OWNER the answer never shows the mortgage, equity, loan to value, or HELOC eligibility, even when they are supplied', () => {
+  for (const isOwner of [false, undefined]) {
+    const result = financingFromView({ profile: PROFILE, equity: EQUITY, scenarios: [], calc: null, amountDollars: null, propertyId: 'prop-1', isOwner });
+    assert.equal(result.blocks.find((block) => block.id === 'financing-numbers'), undefined);
+    assert.equal(NON_OWNER_LEAKS.test(JSON.stringify(result)), false, JSON.stringify(result).slice(0, 300));
+    assert.equal(result.blocks[0].actions.length, 0);
+    assert.equal(result.reasonCode, undefined, 'the absence of a profile is not revealed either');
+    assert.match(result.blocks[0].body, /visible to a home owner/);
+  }
+});
+
+test('below OWNER a named project still compares the ways to pay and lists saved scenarios, without saying whether the home could qualify', () => {
+  const result = financingFromView({
+    profile: PROFILE, equity: EQUITY, calc: CALC, amountDollars: 40000, isOwner: false, propertyId: 'prop-1',
+    scenarios: [{ id: 's-1', title: 'Kitchen', projectCostCents: 4000000, status: 'SAVED', selectedOption: 'HOME_EQUITY_LOAN', createdAt: new Date('2026-09-01') }],
+  });
+  assert.match(result.blocks[0].title, /Financing a/);
+  assert.match(result.blocks[0].body, /depends on mortgage details that only a home owner can see/);
+  assert.equal(NON_OWNER_LEAKS.test(JSON.stringify(result.blocks[0])), false);
+  const options = result.blocks.find((block) => block.id === 'financing-options');
+  assert.equal(options.sections[0].items.find((item) => item.id === 'financing-heloc').status, null);
+  assert.equal(result.blocks.some((block) => block.id === 'financing-scenarios'), true);
+});
+
+test('only an owner’s request reads the profile or the equity position; the answer for a viewer and a contributor never loads them', async () => {
+  for (const role of ['VIEWER', 'CONTRIBUTOR', 'OWNER']) {
+    const saved = { p: financing.getProfile, e: financing.getLatestEquity, s: financing.listScenarios, c: financing.calculate };
+    const calls = [];
+    financing.getProfile = async () => { calls.push('profile'); return PROFILE; };
+    financing.getLatestEquity = async () => { calls.push('equity'); return EQUITY; };
+    financing.listScenarios = async () => { calls.push('scenarios'); return []; };
+    financing.calculate = async () => { calls.push('calculate'); return CALC; };
+    try {
+      const raw = await capabilityInvoke(OP, { userId: 'user-1', propertyId: 'prop-1', message: 'Show my financing', launchContext: null }, { propertyAccess: { role } });
+      assert.deepEqual(calls.sort(), role === 'OWNER' ? ['equity', 'profile', 'scenarios'] : ['scenarios'], role);
+      assert.equal(NON_OWNER_LEAKS.test(JSON.stringify(raw)), role === 'OWNER', role);
+    } finally { Object.assign(financing, { getProfile: saved.p, getLatestEquity: saved.e, listScenarios: saved.s, calculate: saved.c }); }
+  }
 });

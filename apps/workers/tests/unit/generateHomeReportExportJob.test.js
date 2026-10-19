@@ -27,6 +27,9 @@ function fakeDeps({
   claimCount = 1,
   readyUpdateThrows = false,
   contextAllowed = true,
+  storedSections = null,
+  storedType = 'HOME_REPORT_PACK',
+  builderArgs = [],
 }) {
   const calls = { updates: [], deletes: [], uploads: 0 };
 
@@ -38,7 +41,8 @@ function fakeDeps({
           status: initialStatus,
           propertyId: 'property-1',
           userId: 'user-1',
-          sections: null,
+          type: storedType,
+          sections: storedSections,
         }),
         updateMany: async (args) => {
           calls.updates.push({ kind: 'updateMany', args });
@@ -66,10 +70,10 @@ function fakeDeps({
       userId: 'user-1',
       reasonCodes: contextAllowed ? [] : ['NOT_APPLICABLE'],
     }),
-    buildAuthoritativeReportSnapshot: async () => ({
+    buildAuthoritativeReportSnapshot: async (args) => { builderArgs.push(args); return {
       property: { addressLine1: '1 Main St', city: 'Plainsboro', state: 'NJ' },
       meta: { generatedAt: new Date().toISOString(), contextVersion: 'v1' },
-    }),
+    }; },
     deleteObject: async (bucket, key) => {
       calls.deletes.push({ bucket, key });
     },
@@ -126,4 +130,15 @@ test('skips entirely when property context is not applicable', async () => {
   const failedUpdate = calls.updates.find((u) => u.kind === 'update' && u.args.data.status === 'FAILED');
   assert.ok(failedUpdate);
   assert.match(failedUpdate.args.data.errorMessage, /PROPERTY_CONTEXT_RECHECK_BLOCKED/);
+});
+
+test('the worker generates the pack from the stored section selection and the export type, so a worker-built pack matches what was reviewed', async () => {
+  const selection = { version: 1, requested: ['inventory', 'timeline'], included: ['inventory'], unavailable: [{ id: 'timeline', reason: 'NOT_IN_PACK' }] };
+  const builderArgs = [];
+  const { deps } = fakeDeps({ claimCount: 1, storedSections: selection, storedType: 'INVENTORY', builderArgs });
+
+  await generateHomeReportExportJob('export-1', deps);
+
+  assert.equal(builderArgs.length, 1);
+  assert.deepEqual(builderArgs[0], { userId: 'user-1', propertyId: 'property-1', sections: selection, type: 'INVENTORY' });
 });

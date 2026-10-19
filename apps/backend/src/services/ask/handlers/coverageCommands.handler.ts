@@ -21,7 +21,7 @@ import { getOrCreateCoverageReview } from '../../coverageReview.service';
 import { recordCoverageDecisionWithEffects } from '../../coverageDecisionOperations';
 import {
   COVERAGE_COMMAND_ACTION_IDS, COVERAGE_COMMAND_MESSAGES, COVERAGE_COMPARISON_ENTITY_TYPE, COVERAGE_DECISIONS, COVERAGE_DECISION_CAPTURE_KEY,
-  COVERAGE_DECISION_OPTION_LABELS, COVERAGE_PROPERTY_ENTITY_TYPE, coverageCommandKindFromMessage, coverageCommandTargetsProperty, parseCoverageDecisionAnswer,
+  COVERAGE_COMMAND_KIND_ROLE_FLOORS, COVERAGE_DECISION_OPTION_LABELS, COVERAGE_PROPERTY_ENTITY_TYPE, coverageCommandKindFromMessage, coverageCommandTargetsProperty, parseCoverageDecisionAnswer,
   type CoverageCommandKind, type CoverageDecisionInput,
 } from '../support/coverageCommand';
 import {
@@ -44,7 +44,7 @@ const permissionBlocked = (): AskOperationResult => ({
 });
 const ownerOnly = (): AskOperationResult => ({
   status: 'BLOCKED', reasonCode: 'COVERAGE_COMMAND_OWNER_ONLY',
-  blocks: [{ type: 'SUMMARY', id: 'coverage-command-owner-only', title: 'Only the home\'s primary owner can do this', body: 'Coverage review and comparison are kept for the home\'s primary account holder. Nothing has changed.', tone: 'CAUTION', actions: [] }],
+  blocks: [{ type: 'SUMMARY', id: 'coverage-command-owner-only', title: 'Only an owner can record a final coverage decision', body: 'Recording a final coverage decision is a household owner\'s step. A contributor can start a comparison and add quotes. Nothing has changed.', tone: 'CAUTION', actions: [] }],
   suggestions: [],
 });
 const notRoutable = (): AskOperationResult => ({
@@ -56,9 +56,6 @@ const unavailable = (reasonCode: string, title: string, body: string): AskOperat
   status: 'NOT_APPLICABLE', reasonCode, blocks: [{ type: 'SUMMARY', id: 'coverage-command-unavailable', title, body, tone: 'DEFAULT', actions: [backToComparison] }], suggestions: [],
 });
 
-async function isPrimaryOwner(userId: string, propertyId: string): Promise<boolean> {
-  return Boolean(await database.property.findFirst({ where: { id: propertyId, homeownerProfile: { userId } }, select: { id: true } }));
-}
 type ComparisonRow = {
   id: string; status: string; updatedAt: Date; equivalenceStatus: string;
   options: Array<{ id: string; label: string; optionType: string; equivalenceStatus: string; carrierName: string | null }>;
@@ -145,7 +142,7 @@ export async function coverageCommandResult(userId: string, propertyId: string, 
   if (access.role === HouseholdRole.VIEWER) return permissionBlocked();
   const kind = launch.kind;
   // Generating a review needs the CONTRIBUTOR floor the review service enforces itself. A comparison and a decision are still the primary owner's.
-  if (kind !== 'REVIEW' && !(await isPrimaryOwner(userId, propertyId))) return ownerOnly();
+  if (COVERAGE_COMMAND_KIND_ROLE_FLOORS[kind] === 'OWNER' && access.role !== HouseholdRole.OWNER) return ownerOnly();
   const expiresAt = new Date(Date.now() + CONFIRMATION_MINUTES * 60 * 1000);
   const base = { sourceExecutionId: launch.sourceExecutionId, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() };
   const confirm = (contextVersion: string, title: string, description: string, confirmLabel: string, fields: Array<{ label: string; value: string }>, parameters: Record<string, unknown>,
@@ -248,7 +245,10 @@ async function confirmCoverageCommand(ctx: ConfirmCapabilityContext): Promise<Co
   const kind = command?.kind as CoverageCommandKind | undefined;
   if (!kind || !(kind in COVERAGE_COMMAND_MESSAGES) || typeof command?.entityId !== 'string') throw stale('The step to take is invalid.');
   const propertyId = execution.propertyId;
-  if (kind !== 'REVIEW' && !(await isPrimaryOwner(userId, propertyId))) throw stale('Only the home\'s primary owner can do this.', 'ASK_PERMISSION_REQUIRED');
+  // The role is read again at confirm time: the confirmation may have waited, and a role can change.
+  if (ctx.access.role === HouseholdRole.VIEWER || (COVERAGE_COMMAND_KIND_ROLE_FLOORS[kind] === 'OWNER' && ctx.access.role !== HouseholdRole.OWNER)) {
+    throw stale(COVERAGE_COMMAND_KIND_ROLE_FLOORS[kind] === 'OWNER' ? 'Only an owner can record a final coverage decision.' : 'A contributor or owner can change coverage records.', 'ASK_PERMISSION_REQUIRED');
+  }
   try {
     let title: string; let description: string; let artifactType = 'COVERAGE_COMPARISON'; let artifactId = command.entityId;
     const actions: Array<Record<string, unknown>> = [];

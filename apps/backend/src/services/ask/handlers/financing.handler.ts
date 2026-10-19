@@ -33,7 +33,14 @@ const BOUNDARY: AskPresentationBlock = {
 
 /** Pure: the answer from the reads, exported for tests. `calc` is present when the message named a project cost. */
 export function financingFromView(input: { profile: Profile; equity: Equity | null; scenarios: readonly Scenario[]; calc: FinancingResultSet | null; amountDollars: number | null; propertyId?: string; isOwner?: boolean }): AskOperationResult {
-  const { profile, equity, scenarios, calc, amountDollars } = input;
+  const { scenarios, amountDollars } = input;
+  // The persisted financing profile is owner-only as a whole (owner ruling 2026-10-13, FRD v1.333), and equity, loan to value, and HELOC
+  // eligibility are derived from its mortgage balance. Below OWNER none of that is read or shown; scenarios and the calculator's way-to-pay
+  // comparison stay available to every household member.
+  const isOwner = input.isOwner === true;
+  const profile = isOwner ? input.profile : null;
+  const equity = isOwner ? input.equity : null;
+  const calc = input.calc;
   const blocks: AskPresentationBlock[] = [];
   const hasProfile = Boolean(profile && profile.mortgageStatus !== 'UNKNOWN');
   const equityLine = equity && equity.estimatedValueCents > 0
@@ -41,10 +48,11 @@ export function financingFromView(input: { profile: Profile; equity: Equity | nu
     : null;
   blocks.push({
     type: 'SUMMARY', id: 'financing-summary',
-    title: calc ? `Financing a ${money(calc.projectCostCents / 100)} project` : equityLine ? `About ${Number(equity!.equityPercent)}% equity in your home` : 'No financing details recorded yet',
+    title: calc ? `Financing a ${money(calc.projectCostCents / 100)} project` : !isOwner ? 'Financing' : equityLine ? `About ${Number(equity!.equityPercent)}% equity in your home` : 'No financing details recorded yet',
     body: calc
-      ? `Five ways to pay for it, side by side. ${calc.helocEligible ? `Your equity looks sufficient for a HELOC up to ${money(calc.helocCapacityCents / 100)}.` : 'Your recorded equity does not look sufficient for a HELOC, so that option is shown for comparison only.'}`
-      : equityLine ?? 'Add your home value and mortgage details to see your equity and what you could borrow.',
+      ? `Five ways to pay for it, side by side. ${!isOwner ? 'Whether you could qualify depends on mortgage details that only a home owner can see.' : calc.helocEligible ? `Your equity looks sufficient for a HELOC up to ${money(calc.helocCapacityCents / 100)}.` : 'Your recorded equity does not look sufficient for a HELOC, so that option is shown for comparison only.'}`
+      : !isOwner ? 'Mortgage, equity, and borrowing details are visible to a home owner. Saved financing scenarios and project cost comparisons are available here.'
+        : equityLine ?? 'Add your home value and mortgage details to see your equity and what you could borrow.',
     tone: 'DEFAULT',
     // The financing profile is owner-only on every surface (owner ruling 2026-10-13, FRD v1.333).
     actions: input.isOwner && input.propertyId ? [{
@@ -67,7 +75,7 @@ export function financingFromView(input: { profile: Profile; equity: Equity | nu
       { label: 'HELOC', value: equity.helocEligible ? `May qualify, up to ${dollars(equity.helocCapacityCents)}` : 'Not likely at this equity level' },
     ] : []),
   ].filter((fact) => fact.value);
-  if (facts.length) {
+  if (isOwner && facts.length) {
     blocks.push({
       type: 'GROUPED_LIST', filters: [], id: 'financing-numbers', title: 'Your numbers',
       description: hasProfile ? 'From the financing details recorded for this home.' : 'Little is recorded, so these are partial.',
@@ -82,7 +90,7 @@ export function financingFromView(input: { profile: Profile; equity: Equity | nu
       {
         id: 'financing-heloc', title: 'Home equity line of credit (HELOC)',
         description: `${monthly(calc.heloc.drawMonthlyPaymentCents)} while drawing (interest only), then ${monthly(calc.heloc.repaymentMonthlyPaymentCents)} to repay over ten years.`,
-        meta: [`${rate(calc.heloc.rateBps)} variable`, `${money(calc.heloc.totalInterestCents / 100)} total interest`], status: calc.helocEligible ? 'You may qualify' : 'May not qualify',
+        meta: [`${rate(calc.heloc.rateBps)} variable`, `${money(calc.heloc.totalInterestCents / 100)} total interest`], status: !isOwner ? null : calc.helocEligible ? 'You may qualify' : 'May not qualify',
       },
       {
         id: 'financing-home-equity-loan', title: 'Home equity loan',
@@ -135,18 +143,20 @@ export function financingFromView(input: { profile: Profile; equity: Equity | nu
     });
   }
   blocks.push(BOUNDARY);
-  return { status: 'ANSWERED', reasonCode: hasProfile || calc ? undefined : 'FINANCING_PROFILE_MISSING', blocks, suggestions: [] };
+  return { status: 'ANSWERED', reasonCode: !isOwner || hasProfile || calc ? undefined : 'FINANCING_PROFILE_MISSING', blocks, suggestions: [] };
 }
 
 registerCapabilityHandler('financing.overview', async (envelope, deps) => {
   const propertyId = envelope.propertyId!;
   const access = await (deps.propertyAccess ?? ensurePropertyAccess(envelope.userId, propertyId));
   const amountDollars = parseFinancingAmountDollars(envelope.message);
+  const isOwner = access.role === 'OWNER';
+  // Only an owner's request reads the profile or the equity position at all.
   const [profile, equity, scenarios, calc] = await Promise.all([
-    getProfile(propertyId),
-    getLatestEquity(propertyId).catch(() => null),
+    isOwner ? getProfile(propertyId) : Promise.resolve(null),
+    isOwner ? getLatestEquity(propertyId).catch(() => null) : Promise.resolve(null),
     listScenarios(propertyId),
     amountDollars === null ? Promise.resolve(null) : calculate(propertyId, amountDollars * 100),
   ]);
-  return financingFromView({ profile, equity, scenarios, calc, amountDollars, propertyId, isOwner: access.role === 'OWNER' });
+  return financingFromView({ profile, equity, scenarios, calc, amountDollars, propertyId, isOwner });
 });

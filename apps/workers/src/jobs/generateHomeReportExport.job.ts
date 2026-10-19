@@ -108,6 +108,7 @@ export async function generateHomeReportExportJob(
       userId: contextCheck.userId,
       propertyId: exp.propertyId,
       sections: exp.sections ?? undefined,
+      type: exp.type,
     });
 
     const propertyLabel = [snapshot.property.addressLine1, snapshot.property.city, snapshot.property.state]

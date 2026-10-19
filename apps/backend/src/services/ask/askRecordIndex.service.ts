@@ -202,7 +202,7 @@ export async function getAskRecordIndex(userId: string, propertyId: string, acco
     .map(async (definition) => {
       const reader = ASK_RECORD_COLLECTION_READERS[definition.id];
       try {
-        const page = reader ? await reader({ propertyId, userId, role: access.role }, { limit: 1 }) : null;
+        const page = reader ? await reader({ propertyId, userId, role: access.role }, { limit: 1, omitDetail: true }) : null;
         collectionTotals[definition.id] = page ? { total: page.total, freshAsOf: page.freshAsOf } : 'FAILED';
       } catch (error) {
         logger.warn({ err: error, propertyId, userId, sectionId: definition.id }, 'Record index section count failed closed');

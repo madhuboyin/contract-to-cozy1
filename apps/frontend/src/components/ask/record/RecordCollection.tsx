@@ -114,6 +114,21 @@ export function RecordCollection<Row extends { id: string }>({ sectionId, label,
         </div>
       </div>
 
+      {page?.detail && (
+        <div className="mt-3 rounded-2xl border border-slate-200 bg-white p-4" data-record-detail={page.detail.id}>
+          <h3 className="text-sm font-semibold text-slate-950">{page.detail.title}</h3>
+          {page.detail.state === 'OWNER_ONLY' ? (
+            <p className="mt-1 text-sm text-slate-600" role="note">These details are visible to a home owner only.</p>
+          ) : page.detail.state === 'NOT_RECORDED' ? (
+            <p className="mt-1 text-sm text-slate-600">Nothing is recorded yet.</p>
+          ) : (
+            <dl className="mt-2 grid grid-cols-1 gap-x-6 gap-y-1 text-sm sm:grid-cols-2 lg:grid-cols-3">
+              {page.detail.facts.map((fact) => <div key={fact.label}><dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">{fact.label}</dt><dd className="text-slate-900">{fact.value}</dd></div>)}
+            </dl>
+          )}
+        </div>
+      )}
+
       {page?.notice && <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950" role="note" data-record-collection-notice>{page.notice}</p>}
 
       <div className="mt-4">

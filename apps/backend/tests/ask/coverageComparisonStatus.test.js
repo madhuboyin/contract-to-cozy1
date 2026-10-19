@@ -101,11 +101,11 @@ test('coverageComparisonStatusResult calls ensurePropertyAccess itself -- unlike
   assert.match(body, /await ensurePropertyAccess\(userId, propertyId\);/);
 });
 
-test('a non-owner household member rejected by the narrower authorizeProperty gets a disclosed BLOCKED result, not a raw 404', () => {
+test('the comparison read has no owner-only fallback: household access is enforced by the service and its failure is reported as the error it is', () => {
   const body = handlerBody();
-  assert.match(body, /error instanceof APIError && error\.code === 'PROPERTY_NOT_FOUND'/);
-  assert.match(body, /status: 'BLOCKED'/);
-  assert.match(body, /reasonCode: 'COVERAGE_COMPARISON_OWNER_ONLY'/);
+  assert.doesNotMatch(body, /COVERAGE_COMPARISON_OWNER_ONLY/);
+  assert.doesNotMatch(body, /primary homeowner/);
+  assert.match(body, /await findCoverageComparison\(propertyId, userId\)/);
 });
 
 test('coverageComparisonStatusResult returns NOT_APPLICABLE when no verified policy exists yet', () => {
@@ -125,7 +125,7 @@ test('coverageComparisonStatusResult renders a GROUPED_LIST of options and surfa
 test('the capability handler and captureFallbackHref registrations both exist for COVERAGE_COMPARISON_STATUS', () => {
   assert.match(
     orchestratorSource,
-    /registerCapabilityHandler\('coverage\.comparison-status', async \(envelope, deps\) => \{[\s\S]*coverageComparisonStatusResult\(envelope\.userId, envelope\.propertyId!, access\.role !== 'VIEWER'\);/,
+    /registerCapabilityHandler\('coverage\.comparison-status', async \(envelope, deps\) => \{[\s\S]*coverageComparisonStatusResult\(envelope\.userId, envelope\.propertyId!, access\.role !== 'VIEWER', access\.role === 'OWNER'\);/,
   );
   assert.match(orchestratorSource, /case 'COVERAGE_COMPARISON_STATUS': return `\$\{base\}\/tools\/coverage-options`;/);
 });

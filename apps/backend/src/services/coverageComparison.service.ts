@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import { Prisma } from '@prisma/client';
+import { Prisma, type HouseholdRole } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
 import { recordCoverageDecisionOutcome } from './decisionPlatform/outcomeObservationService';
+import { COVERAGE_ROLE_FLOORS, requireCoverageRole } from './coverageAccess';
 import { assertPropertyDocumentsExist } from './propertyDocuments/propertyDocumentInventory.service';
 
 export const COVERAGE_EQUIVALENCE_VERSION = 1;
@@ -182,12 +183,9 @@ function annualPremiumFromFacts(facts: NormalizedCoverageFact[]) {
   return premium?.valueType === 'AMOUNT' ? premium.amountValue ?? null : null;
 }
 
-async function authorizeProperty(propertyId: string, userId: string) {
-  const property = await prisma.property.findFirst({
-    where: { id: propertyId, homeownerProfile: { userId } },
-    select: { id: true },
-  });
-  if (!property) throw new APIError('Property not found', 404, 'PROPERTY_NOT_FOUND');
+// Household access at a declared floor (see coverageAccess.ts), never the primary homeowner account.
+function authorizeProperty(propertyId: string, userId: string, minimum: HouseholdRole) {
+  return requireCoverageRole(propertyId, userId, minimum);
 }
 
 const comparisonInclude = {
@@ -233,7 +231,7 @@ export async function findCoverageComparison(
   userId: string,
   context: { sourceActionId?: string | null } = {}
 ) {
-  await authorizeProperty(propertyId, userId);
+  await authorizeProperty(propertyId, userId, COVERAGE_ROLE_FLOORS.READ);
   const baseline = await prisma.insurancePolicyTerm.findFirst({
     where: { propertyId, verificationStatus: 'VERIFIED' },
     orderBy: [{ termStart: 'desc' }, { createdAt: 'desc' }],
@@ -266,7 +264,7 @@ export async function getOrCreateCoverageComparison(
     sourceActionId?: string | null;
   } = {}
 ) {
-  await authorizeProperty(propertyId, userId);
+  await authorizeProperty(propertyId, userId, COVERAGE_ROLE_FLOORS.START_OR_CHANGE);
   const baseline = await prisma.insurancePolicyTerm.findFirst({
     where: { propertyId, verificationStatus: 'VERIFIED' },
     orderBy: [{ termStart: 'desc' }, { createdAt: 'desc' }],
@@ -362,7 +360,7 @@ export async function getCoverageComparison(
   comparisonId: string,
   userId: string
 ) {
-  await authorizeProperty(propertyId, userId);
+  await authorizeProperty(propertyId, userId, COVERAGE_ROLE_FLOORS.READ);
   const comparison = await prisma.coverageComparison.findFirst({
     where: { id: comparisonId, propertyId },
     include: comparisonInclude,
@@ -379,7 +377,7 @@ export async function addCoverageComparisonOption(
   userId: string,
   input: CoverageOptionInput
 ) {
-  await authorizeProperty(propertyId, userId);
+  const callerRole = await authorizeProperty(propertyId, userId, COVERAGE_ROLE_FLOORS.START_OR_CHANGE);
   const comparison = await prisma.coverageComparison.findFirst({
     where: { id: comparisonId, propertyId, status: 'DRAFT' },
     include: {
@@ -416,11 +414,10 @@ export async function addCoverageComparisonOption(
     if (!sourceDocumentId) {
       throw new APIError('A quote source document is required', 400, 'QUOTE_DOCUMENT_REQUIRED');
     }
-    // The quote reference is a Home Record id (Documents slice S5d). This domain has no household-role
-    // sharing (authorizeProperty above already confirmed this userId is the property's own homeownerProfile
-    // owner), so OWNER is the correct, not just convenient, role for the canonical inventory check.
+    // The quote reference is a Home Record id (Documents slice S5d). The canonical inventory check runs as the caller's own household role,
+    // so a record the caller's role may not see (an owner-only record, for a contributor) cannot be cited as a quote source.
     await assertPropertyDocumentsExist(
-      { propertyId, role: 'OWNER', ids: [sourceDocumentId] },
+      { propertyId, role: callerRole, ids: [sourceDocumentId] },
       () => new APIError('Quote source document not found', 404, 'DOCUMENT_NOT_FOUND'),
     );
     facts = facts.map((fact) => ({
@@ -472,7 +469,7 @@ export async function recordCoverageDecision(
     sourceActionId?: string | null;
   }
 ) {
-  await authorizeProperty(propertyId, userId);
+  await authorizeProperty(propertyId, userId, COVERAGE_ROLE_FLOORS.FINAL_DECISION);
   const comparison = await prisma.coverageComparison.findFirst({
     where: { id: comparisonId, propertyId },
     include: { options: true },

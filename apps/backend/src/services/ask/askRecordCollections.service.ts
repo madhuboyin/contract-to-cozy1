@@ -7,9 +7,9 @@ import { inventoryLifecycleHorizon, inventoryMissingFacts } from './handlers/inv
 import { visibleInventoryItemWhere } from '../riskAssetApplicability';
 import type { HouseholdRole } from '@prisma/client';
 import { HouseholdService } from '../household.service';
-import { listScenarios } from '../financing.service';
+import { getProfile, listScenarios } from '../financing.service';
 import { HomeBuyerTaskService } from '../HomeBuyerTask.service';
-import { SCENARIO_STATUS_LABELS } from './support/financingRead';
+import { MORTGAGE_STATUS_LABELS, MORTGAGE_TYPE_LABELS, SCENARIO_STATUS_LABELS } from './support/financingRead';
 import { evaluateCoverageRecord } from '../coverage/contextPolicy';
 import { permitTrackerService } from '../permitTracker.service';
 import { listProjects as listTrackedProjects } from '../projectTracker.service';
@@ -47,13 +47,26 @@ export interface AskRecordCollectionPage<Row> {
   truncated: boolean;
   /** A plain-language limit of the source that the cursor cannot work around, or null. */
   notice: string | null;
+  /** Facts about the whole section that need a higher role than the collection itself. Present only where a section has some. */
+  detail?: AskRecordRestrictedDetail | null;
   sort: { key: string; label: string };
   query: { search: string | null; filters: Record<string, string> };
   filterOptions: Array<{ key: string; label: string; options: Array<{ value: string; label: string }> }>;
   rows: Row[];
 }
 
+export interface AskRecordRestrictedDetail {
+  id: string;
+  title: string;
+  /** OWNER_ONLY: the caller is below the required role, so the facts were never read. */
+  state: 'AVAILABLE' | 'NOT_RECORDED' | 'OWNER_ONLY';
+  requiredRole: 'OWNER';
+  facts: Array<{ label: string; value: string }>;
+}
+
 export interface AskRecordCollectionQuery {
+  /** Internal: a caller that needs only the total (the index) skips any restricted detail so it is never read for nothing. */
+  omitDetail?: boolean;
   cursor?: string | null;
   limit?: number | null;
   search?: string | null;
@@ -1228,14 +1241,45 @@ const FINANCING_STATUSES = ['DRAFT', 'SAVED'] as const;
 
 /**
  * Reads one page of the home's saved financing scenarios (draft and saved), newest first, through `listScenarios`, the read the Financing
- * page and Ask use (any household member). This section lists scenarios only. The financing profile (mortgage balance, rate, payment) and
- * the ownership-cost snapshot are not collections and are not included: the profile's own history is OWNER-only and its route comment calls
- * the profile owner-only as a whole while its current-profile GET admits members, so exposing profile facts here needs that floor settled.
+ * page and Ask use (any household member). The persisted financing profile (mortgage balance, rate, payment, and the rest) is owner-only
+ * as a whole, so it appears only as `detail` and is read only for an OWNER; below that the detail says it is owner-only and the profile
+ * is never loaded. The ownership-cost snapshot is not a read-only collection and is not included.
  */
+/** The persisted financing profile is owner-only as a whole (owner ruling 2026-10-13); `financing.routes` requires it on the profile GET, and a test pins that. */
+export const FINANCING_PROFILE_READ_FLOOR = 'OWNER' as const;
+
+const usdExact = (cents: number | null | undefined) => (cents == null ? null : `$${(cents / 100).toLocaleString('en-US', { maximumFractionDigits: 0 })}`);
+const dayLabel = (value: unknown) => {
+  if (!value) return null;
+  const date = new Date(value as string);
+  return Number.isNaN(date.getTime()) ? null : new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }).format(date);
+};
+
+/** The persisted profile's facts as labelled lines. Read only after the caller is known to be an OWNER. */
+export function financingProfileFacts(profile: Record<string, any>): Array<{ label: string; value: string }> {
+  const rate = profile.interestRateBps == null ? null : `${Number((profile.interestRateBps / 100).toFixed(2))}%`;
+  const years = profile.remainingTermMonths ? `${Math.round((profile.remainingTermMonths / 12) * 10) / 10} years` : null;
+  const balanceAsOf = dayLabel(profile.mortgageBalanceAsOfDate);
+  return ([
+    ['Mortgage', MORTGAGE_STATUS_LABELS[String(profile.mortgageStatus)] ?? null],
+    ['Type', profile.mortgageType ? MORTGAGE_TYPE_LABELS[String(profile.mortgageType)] ?? String(profile.mortgageType) : null],
+    ['Purchase price', usdExact(profile.purchasePriceCents)],
+    ['Purchase date', dayLabel(profile.purchaseDate)],
+    ['Original balance', usdExact(profile.originalMortgageBalanceCents)],
+    ['Current balance', usdExact(profile.currentMortgageBalanceCents) ? `${usdExact(profile.currentMortgageBalanceCents)}${balanceAsOf ? ` as of ${balanceAsOf}` : ''}` : null],
+    ['Interest rate', rate],
+    ['Remaining term', years],
+    ['Monthly payment', usdExact(profile.monthlyPaymentCents) ? `${usdExact(profile.monthlyPaymentCents)}/month` : null],
+    ['Second mortgage', profile.hasSecondMortgage ? (usdExact(profile.secondMortgageBalanceCents) ?? 'Yes') : null],
+    ['Private mortgage insurance', profile.hasPMI == null ? null : profile.hasPMI ? 'Yes' : 'No'],
+  ] as Array<[string, string | null]>).filter((entry): entry is [string, string] => Boolean(entry[1])).map(([label, value]) => ({ label, value }));
+}
+
 export async function readFinancingScenariosPage(
   propertyId: string,
   query: AskRecordCollectionQuery,
   list: typeof listScenarios = listScenarios,
+  access?: { role: HouseholdRole; loadProfile?: typeof getProfile },
 ): Promise<AskRecordCollectionPage<AskRecordFinancingScenarioRow>> {
   const limit = clampLimit(query.limit);
   const search = cleanSearch(query.search);
@@ -1269,6 +1313,17 @@ export async function readFinancingScenariosPage(
   const nextCursor = remaining.length > limit && last ? encodeCursor({ k: last.key, i: last.id }) : null;
   const statusOptions = FINANCING_STATUSES.filter((value) => entries.some((entry) => entry.row.status === value) || value === status).map((value) => ({ value, label: SCENARIO_STATUS_LABELS[value] }));
 
+  let detail: AskRecordRestrictedDetail | null = null;
+  if (access && !query.omitDetail) {
+    if (access.role !== FINANCING_PROFILE_READ_FLOOR) {
+      detail = { id: 'financing-profile', title: 'Mortgage and purchase details', state: 'OWNER_ONLY', requiredRole: 'OWNER', facts: [] };
+    } else {
+      const profile = await (access.loadProfile ?? getProfile)(propertyId);
+      const facts = profile && profile.mortgageStatus !== 'UNKNOWN' ? financingProfileFacts(profile as unknown as Record<string, any>) : [];
+      detail = { id: 'financing-profile', title: 'Mortgage and purchase details', state: facts.length ? 'AVAILABLE' : 'NOT_RECORDED', requiredRole: 'OWNER', facts };
+    }
+  }
+
   return {
     contractVersion: ASK_RECORD_COLLECTION_CONTRACT_VERSION,
     propertyId,
@@ -1280,6 +1335,7 @@ export async function readFinancingScenariosPage(
     nextCursor,
     truncated: nextCursor !== null,
     notice: null,
+    detail,
     sort: { key: 'createdAt', label: 'Newest first' },
     query: { search, filters: status ? { status } : {} },
     filterOptions: statusOptions.length > 1 ? [{ key: 'status', label: 'Status', options: statusOptions }] : [],
@@ -1570,7 +1626,7 @@ export const ASK_RECORD_COLLECTION_READERS: Readonly<Partial<Record<AskRecordSec
   inspections: (context, query) => readInspectionsPage(context.propertyId, query),
   permits: (context, query) => readPermitsPage(context.propertyId, query),
   coverage: (context, query) => readCoveragePoliciesPage(context.propertyId, query),
-  'financing-ownership': (context, query) => readFinancingScenariosPage(context.propertyId, query),
+  'financing-ownership': (context, query) => readFinancingScenariosPage(context.propertyId, query, listScenarios, { role: context.role }),
   'buyer-records': (context, query) => readBuyerRecordsPage(context, query),
   'seller-records': (context, query) => readSellerRecordsPage(context.propertyId, query),
   'household-access': (context, query) => readHouseholdAccessPage(context, query),

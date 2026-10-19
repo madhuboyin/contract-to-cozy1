@@ -4,24 +4,32 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Loader2 } from 'lucide-react';
 import { api } from '@/lib/api/client';
-import type { AskRecordExportReview, AskRecordExportReviewSection, HomeReportExportStatus, HomeReportExportSummary } from '@/features/ask/types';
+import type { AskRecordExportReview, AskRecordExportReviewSection, HomeReportExportSelection, HomeReportExportStatus, HomeReportExportSummary } from '@/features/ask/types';
 import { AskCollection, AskCollectionState, AskCompactRow } from '../presentation/AskLayoutPrimitives';
 import { askServiceIsPaused } from '../workspace/support';
 
 const dateTime = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
 const words = (field: string) => field.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/Cents$/, '').toLowerCase();
 const list = (fields: readonly string[]) => fields.map(words).join(', ');
+const labelOf = (review: AskRecordExportReview, id: string) => review.sections.find((section) => section.id === id)?.label ?? id;
 
 const STATUS_COPY: Record<HomeReportExportStatus, string> = {
   PENDING: 'Waiting to be generated', GENERATING: 'Being generated', READY: 'Ready to download', FAILED: 'Could not be generated', EXPIRED: 'Expired', DELETED: 'Deleted',
 };
 
-function SectionRow({ section }: { section: AskRecordExportReviewSection }) {
+function SectionRow({ section, checked, onToggle }: { section: AskRecordExportReviewSection; checked?: boolean; onToggle?: (checked: boolean) => void }) {
   const notApplicable = section.applicability === 'NOT_APPLICABLE';
   return (
     <AskCompactRow className="border-b border-slate-200 last:border-b-0" data-export-section={section.id} data-export-state={section.state.toLowerCase()}>
       <div className="min-w-0">
-        <p className="text-sm font-semibold text-slate-950">{section.label}{notApplicable ? <span className="ml-2 text-xs font-normal text-slate-500">Not applicable at your home’s stage</span> : null}</p>
+        {onToggle ? (
+          <label className="flex min-h-11 items-center gap-2 text-sm font-semibold text-slate-950">
+            <input type="checkbox" checked={Boolean(checked)} onChange={(event) => onToggle(event.target.checked)} className="h-5 w-5" aria-label={`Include ${section.label}`} />
+            {section.label}
+          </label>
+        ) : (
+          <p className="text-sm font-semibold text-slate-950">{section.label}{notApplicable ? <span className="ml-2 text-xs font-normal text-slate-500">Not applicable at your home’s stage</span> : null}</p>
+        )}
         {section.state === 'INCLUDED' ? (
           <>
             <p className="mt-0.5 text-xs text-slate-600">Your copy has: {list(section.ownerFields)}.</p>
@@ -41,9 +49,10 @@ export function RecordExportReview({ propertyId, backHref }: { propertyId: strin
   const [status, setStatus] = useState<'LOADING' | 'READY' | 'ERROR' | 'PAUSED'>('LOADING');
   const [attempt, setAttempt] = useState(0);
   const [acknowledged, setAcknowledged] = useState(false);
+  const [chosen, setChosen] = useState<string[] | null>(null);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
-  const [receipt, setReceipt] = useState<{ exportId: string; createdAt: string; review: AskRecordExportReview; summary: HomeReportExportSummary | null; initialStatus: HomeReportExportStatus } | null>(null);
+  const [receipt, setReceipt] = useState<{ exportId: string; createdAt: string; review: AskRecordExportReview; selection: HomeReportExportSelection; summary: HomeReportExportSummary | null; initialStatus: HomeReportExportStatus } | null>(null);
   const [checking, setChecking] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
 
@@ -55,6 +64,7 @@ export function RecordExportReview({ propertyId, backHref }: { propertyId: strin
         if (controller.signal.aborted) return;
         if (!response.success || !response.data) throw new Error(response.message || 'Could not load the export review.');
         setReview(response.data);
+        setChosen((current) => current ?? response.data!.included);
         setStatus('READY');
       })
       .catch((caught) => {
@@ -69,15 +79,15 @@ export function RecordExportReview({ propertyId, backHref }: { propertyId: strin
     setCreating(true);
     setCreateError(null);
     try {
-      const response = await api.createHomeReportExport(propertyId);
+      const response = await api.createHomeReportExport(propertyId, chosen ?? review.included);
       if (!response.success || !response.data) throw new Error(response.message || 'Could not create the export.');
-      setReceipt({ exportId: response.data.exportId, createdAt: new Date().toISOString(), review, summary: null, initialStatus: response.data.status });
+      setReceipt({ exportId: response.data.exportId, createdAt: new Date().toISOString(), review, selection: response.data.selection, summary: null, initialStatus: response.data.status });
     } catch (caught) {
       setCreateError(caught instanceof Error ? caught.message : 'Could not create the export.');
     } finally {
       setCreating(false);
     }
-  }, [review, creating, propertyId]);
+  }, [review, creating, propertyId, chosen]);
 
   const checkStatus = useCallback(async () => {
     if (!receipt || checking) return;
@@ -125,14 +135,15 @@ export function RecordExportReview({ propertyId, backHref }: { propertyId: strin
           <dl className="grid gap-x-6 gap-y-2 rounded-2xl border border-slate-200 bg-white p-4 text-sm sm:grid-cols-2" data-export-facts>
             <div><dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Home</dt><dd className="text-slate-900">{propertyLabel ?? 'This home'}</dd></div>
             <div><dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Reviewed</dt><dd className="text-slate-900">{dateTime.format(new Date(review.generatedAt))}</dd></div>
-            <div><dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Format</dt><dd className="text-slate-900">PDF. The sections above are fixed; you cannot choose a subset.</dd></div>
+            <div><dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Format</dt><dd className="text-slate-900">PDF, with the sections you choose below.</dd></div>
             <div><dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Who can download</dt><dd className="text-slate-900">Only you, the person who creates it. It is kept for {review.pack.recordExpiresInDays} days.</dd></div>
             <div className="sm:col-span-2"><dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Sharing</dt><dd className="text-slate-900">A shared link carries a redacted copy only, never this full export, and lasts {review.sharing.defaultExpiryDays} days by default. Creating a link needs the {review.sharing.requiredRole.toLowerCase()} role.</dd></div>
           </dl>
 
           <div>
             <h3 className="text-base font-semibold text-slate-950">Included ({included.length})</h3>
-            <AskCollection className="mt-2 rounded-2xl border border-slate-200 bg-white" aria-label="Included sections">{included.map((section) => <SectionRow key={section.id} section={section} />)}</AskCollection>
+            <p className="mt-1 text-xs text-slate-500">Choose the sections to export. The home’s address ({list(review.alwaysIncluded.ownerFields)}) is always on the cover; a shared link keeps {list(review.alwaysIncluded.sharedFields)} only.</p>
+            <AskCollection className="mt-2 rounded-2xl border border-slate-200 bg-white" aria-label="Included sections">{included.map((section) => <SectionRow key={section.id} section={section} checked={(chosen ?? review.included).includes(section.id)} onToggle={receipt ? undefined : (checked) => setChosen((current) => { const base = current ?? review.included; return checked ? [...base.filter((id) => id !== section.id), section.id] : base.filter((id) => id !== section.id); })} />)}</AskCollection>
           </div>
           <div>
             <h3 className="text-base font-semibold text-slate-950">Not included ({excluded.length})</h3>
@@ -143,8 +154,10 @@ export function RecordExportReview({ propertyId, backHref }: { propertyId: strin
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950" role="status" data-export-receipt>
               <p className="font-semibold">Export requested</p>
               <p className="mt-1">Requested {dateTime.format(new Date(receipt.createdAt))} for {propertyLabel ?? 'this home'}. {STATUS_COPY[currentStatus ?? 'PENDING']}.</p>
-              <p className="mt-1">Included: {receipt.review.sections.filter((section) => section.state === 'INCLUDED').map((section) => section.label).join(', ')}.</p>
-              <p className="mt-1">Not included: {receipt.review.sections.filter((section) => section.state === 'EXCLUDED').map((section) => section.label).join(', ')}.</p>
+              <p className="mt-1">Included: {receipt.selection.included.map((id) => labelOf(receipt.review, id)).join(', ')}.</p>
+              <p className="mt-1">Not chosen: {receipt.review.sections.filter((section) => section.state === 'INCLUDED' && !receipt.selection.included.includes(section.id)).map((section) => section.label).join(', ') || 'none'}.</p>
+              {receipt.selection.unavailable.length > 0 && <p className="mt-1 font-semibold text-amber-900">Requested but not exportable: {receipt.selection.unavailable.map((entry) => `${labelOf(receipt.review, entry.id)} (${entry.reason === 'RESTRICTED' ? 'your role cannot read it' : 'not part of the export'})`).join(', ')}.</p>}
+              <p className="mt-1">Not part of the export: {receipt.review.sections.filter((section) => section.state === 'EXCLUDED').map((section) => section.label).join(', ')}.</p>
               <p className="mt-1">Reviewed {dateTime.format(new Date(receipt.review.generatedAt))}. Kept for {receipt.review.pack.recordExpiresInDays} days. No share link has been created.</p>
               <div className="mt-3 flex flex-wrap gap-2">
                 <button type="button" onClick={() => void checkStatus()} disabled={checking} className="min-h-11 rounded-xl border border-emerald-900/30 bg-white px-3 py-2 font-semibold text-emerald-950 hover:bg-emerald-100 disabled:opacity-60">{checking ? 'Checking…' : 'Check status'}</button>
@@ -163,7 +176,7 @@ export function RecordExportReview({ propertyId, backHref }: { propertyId: strin
                     <input type="checkbox" checked={acknowledged} onChange={(event) => setAcknowledged(event.target.checked)} className="mt-1 h-5 w-5" />
                     <span>I understand my copy includes the sensitive fields listed above, such as serial numbers, policy numbers, premiums, and costs, and only I can download it.</span>
                   </label>
-                  <button type="button" onClick={() => void create()} disabled={!acknowledged || creating} className="mt-3 min-h-11 rounded-xl bg-emerald-950 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-900 disabled:opacity-50">{creating ? 'Creating…' : 'Create export'}</button>
+                  <button type="button" onClick={() => void create()} disabled={!acknowledged || creating || (chosen ?? review.included).length === 0} className="mt-3 min-h-11 rounded-xl bg-emerald-950 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-900 disabled:opacity-50">{creating ? 'Creating…' : 'Create export'}</button>
                 </>
               )}
               {createError && <p className="mt-2 text-sm font-semibold text-red-800" role="alert">{createError}</p>}

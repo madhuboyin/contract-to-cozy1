@@ -69,6 +69,22 @@ export async function upsertFinancingProfile(req: CustomRequest, res: Response, 
 
 // ─── Equity Position ──────────────────────────────────────────────────────────
 
+/**
+ * Financing scenarios and the calculator stay readable by every household member, but whether a home qualifies for a HELOC, and how much it
+ * could borrow, is derived from the owner-only mortgage balance. For a caller below OWNER those derived equity figures are removed.
+ */
+const EQUITY_DERIVED_RESULT_FIELDS = ['helocEligible', 'helocCapacityCents'] as const;
+export function withoutEquityDerivedFields<T>(value: T, role: string | undefined): T {
+  if (role === 'OWNER' || !value || typeof value !== 'object') return value;
+  const clone: Record<string, unknown> = { ...(value as Record<string, unknown>) };
+  for (const field of EQUITY_DERIVED_RESULT_FIELDS) delete clone[field];
+  for (const field of ['equitySnapshotCents', 'helocCapacitySnapshotCents']) if (field in clone) clone[field] = null;
+  for (const field of ['resultsJson', 'results']) {
+    if (clone[field] && typeof clone[field] === 'object') clone[field] = withoutEquityDerivedFields(clone[field], role);
+  }
+  return clone as T;
+}
+
 function serializeEquity(e: Awaited<ReturnType<typeof svc.getLatestEquity>>) {
   return {
     ...e,
@@ -142,7 +158,7 @@ export async function getEquityHistory(req: CustomRequest, res: Response, next: 
 export async function calculateFinancing(req: CustomRequest, res: Response, next: NextFunction) {
   try {
     const userId = requireUserId(req);
-    const results = await svc.calculate(req.params.propertyId, req.body.projectCostCents);
+    const results = withoutEquityDerivedFields(await svc.calculate(req.params.propertyId, req.body.projectCostCents), req.householdRole);
     const propertyContext = await getCurrentFinancialContextEnvelope(req.params.propertyId, userId, 'FINANCING_CENTER');
     res.json({
       success: true,
@@ -203,7 +219,7 @@ export async function createFinancingScenario(req: CustomRequest, res: Response,
       metadataJson: { actionType: 'create_scenario', entryPoint: (scenario as any)?.entryPoint },
     });
 
-    res.status(201).json({ success: true, data: { scenario, propertyContext } });
+    res.status(201).json({ success: true, data: { scenario: withoutEquityDerivedFields(scenario, req.householdRole), propertyContext } });
   } catch (err) {
     next(err);
   }
@@ -220,7 +236,7 @@ export async function getFinancingScenario(req: CustomRequest, res: Response, ne
       'FINANCING_CENTER',
       scenario.propertyContextVersion,
     );
-    res.json({ success: true, data: { scenario, propertyContext } });
+    res.json({ success: true, data: { scenario: withoutEquityDerivedFields(scenario, req.householdRole), propertyContext } });
   } catch (err) {
     next(err);
   }
@@ -237,7 +253,7 @@ export async function updateFinancingScenario(req: CustomRequest, res: Response,
       'FINANCING_CENTER',
       scenario?.propertyContextVersion,
     );
-    res.json({ success: true, data: { scenario, propertyContext } });
+    res.json({ success: true, data: { scenario: withoutEquityDerivedFields(scenario, req.householdRole), propertyContext } });
   } catch (err) {
     next(err);
   }
