@@ -42,7 +42,7 @@ export function editorFieldProblem(field: AskRecordEditorField, value: string): 
   return field.maxLength !== undefined && value.length > field.maxLength ? `Use at most ${field.maxLength} characters.` : null;
 }
 
-export function RecordEditor({ editor, initialValues, title, mode = 'edit', saving, cancelling, error, saveLabel, autoFocus, crossFieldErrors, onSubmit, onCancel }: {
+export function RecordEditor({ editor, initialValues, title, mode = 'edit', saving, cancelling, error, saveLabel, autoFocus, crossFieldErrors, sensitiveConsent, onSubmit, onCancel }: {
   editor: AskRecordEditor;
   /** What the form starts from: the canonical values, or what the homeowner entered when the server sent the form back. */
   initialValues: Record<string, string>;
@@ -57,6 +57,7 @@ export function RecordEditor({ editor, initialValues, title, mode = 'edit', savi
   autoFocus?: boolean;
   /** Rules that span fields (e.g. end after start), evaluated on the normalized values; shown as soon as they apply. */
   crossFieldErrors?: (values: Record<string, string>) => Record<string, string>;
+  sensitiveConsent?: { checked: boolean; label: string; onChange: (checked: boolean) => void };
   onSubmit: (values: Record<string, string>) => void;
   onCancel: () => void;
 }) {
@@ -93,7 +94,8 @@ export function RecordEditor({ editor, initialValues, title, mode = 'edit', savi
   const disabledReason = busy ? null
     : adding && missing.length > 0 ? `Add the ${missing.length > 1 ? `${missing.slice(0, -1).join(', ')} and ${missing[missing.length - 1]}` : missing[0]} to continue.`
       : !adding && !dirty ? 'Change a detail to enable review.'
-        : blockers > 0 ? `Fix ${blockers === 1 ? '1 field' : `${blockers} fields`} to continue.` : null;
+        : blockers > 0 ? `Fix ${blockers === 1 ? '1 field' : `${blockers} fields`} to continue.`
+          : sensitiveConsent && !sensitiveConsent.checked ? 'Confirm that you are ready to review these financial details.' : null;
 
   useEffect(() => {
     if (!autoFocus) return;
@@ -108,7 +110,7 @@ export function RecordEditor({ editor, initialValues, title, mode = 'edit', savi
     window.addEventListener('beforeunload', warn);
     return () => window.removeEventListener('beforeunload', warn);
   }, [dirty]);
-  const requestCancel = () => { if (dirty && !adding) setConfirmingDiscard(true); else onCancel(); };
+  const requestCancel = () => { if (dirty) setConfirmingDiscard(true); else onCancel(); };
 
   // On a phone the editor is a full-height sheet; keep the page behind it from scrolling.
   useEffect(() => {
@@ -133,7 +135,7 @@ export function RecordEditor({ editor, initialValues, title, mode = 'edit', savi
     event.preventDefault();
     if (busy) return;
     setAttempted(true);
-    if (!dirty || blockers > 0 || (adding && missing.length > 0)) {
+    if (!dirty || blockers > 0 || (adding && missing.length > 0) || (sensitiveConsent && !sensitiveConsent.checked)) {
       const first = editor.fields.find((field) => problems[field.key] || cross[field.key]);
       if (first) rootRef.current?.querySelector<HTMLElement>(`[data-editor-field="${first.key}"]`)?.focus();
       return;
@@ -171,7 +173,7 @@ export function RecordEditor({ editor, initialValues, title, mode = 'edit', savi
             <input {...common} type="text" inputMode="decimal" autoComplete="off" value={value} placeholder={field.placeholder ?? '0.00'} className={cn(common.className, 'pl-7')} onChange={(event) => change(field.key, event.target.value)} />
           </div>
         ) : (
-          <input {...common} type="text" maxLength={field.maxLength} value={value} placeholder={field.placeholder} onChange={(event) => change(field.key, event.target.value)} />
+          <input {...common} type={field.inputType ?? 'text'} inputMode={field.inputType === 'email' ? 'email' : field.inputType === 'tel' ? 'tel' : undefined} autoComplete={field.inputType === 'email' ? 'email' : field.inputType === 'tel' ? 'tel' : undefined} maxLength={field.maxLength} value={value} placeholder={field.placeholder} onChange={(event) => change(field.key, event.target.value)} />
         )}
         {field.disabledReason && <p id={`${id}-disabled`} className="mt-1 text-xs text-slate-600">{field.disabledReason}</p>}
         {field.helpText && !message && !field.disabledReason && <p id={`${id}-help`} className="mt-1 text-xs text-slate-500">{field.helpText}</p>}
@@ -206,6 +208,7 @@ export function RecordEditor({ editor, initialValues, title, mode = 'edit', savi
             );
           })}
         </div>
+        {sensitiveConsent && <label className="mx-4 mb-3 flex min-h-11 items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700 sm:mx-5"><input type="checkbox" checked={sensitiveConsent.checked} disabled={busy} onChange={(event) => sensitiveConsent.onChange(event.target.checked)} className="h-4 w-4 rounded border-slate-300 text-teal-700 focus:ring-teal-600" />{sensitiveConsent.label}</label>}
         {error && <p className="px-4 pb-2 text-sm text-red-700 sm:px-5" role="alert">{error}</p>}
         <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 bg-white px-4 py-3 sm:px-5">
           {confirmingDiscard ? (
@@ -219,7 +222,7 @@ export function RecordEditor({ editor, initialValues, title, mode = 'edit', savi
           )}
           <div className="flex flex-1 flex-wrap items-center justify-end gap-3">
             {disabledReason && <p className="text-xs font-medium text-slate-600" id={`${baseId}-reason`}>{disabledReason}</p>}
-            <button type="submit" disabled={busy || !dirty || (adding && (missing.length > 0 || blockers > 0))} aria-describedby={disabledReason ? `${baseId}-reason` : undefined} className="min-h-11 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50">{saving ? (adding ? 'Saving…' : 'Checking…') : label}</button>
+            <button type="submit" disabled={busy || !dirty || (adding && (missing.length > 0 || blockers > 0)) || Boolean(sensitiveConsent && !sensitiveConsent.checked)} aria-describedby={disabledReason ? `${baseId}-reason` : undefined} className="min-h-11 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50">{saving ? (adding ? 'Saving…' : 'Checking…') : label}</button>
           </div>
         </footer>
       </form>

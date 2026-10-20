@@ -20,6 +20,13 @@ const warrantyDateOrder = (values: Record<string, string>): Record<string, strin
   values.startDate && values.expiryDate && values.expiryDate <= values.startDate ? { expiryDate: 'The expiration date must be after the start date.' } : {}
 );
 
+const hoaDuesPair = (values: Record<string, string>): Record<string, string> => {
+  if (Boolean(values.duesAmount) === Boolean(values.duesFrequency)) return {};
+  return values.duesAmount
+    ? { duesFrequency: 'Choose how often these dues are paid.' }
+    : { duesAmount: 'Enter the dues amount, or clear the payment frequency.' };
+};
+
 export function PropertySelectionCard({ executionId, onCompleted, autoFocus = false }: { executionId: string; onCompleted: (execution: AskExecutionResponse) => void; autoFocus?: boolean }) {
   const { setSelectedPropertyId } = usePropertyContext();
   const containerRef = useRef<HTMLElement>(null);
@@ -607,7 +614,9 @@ export function InlineCaptureCard({
     const entered = request.currentAnswer && typeof request.currentAnswer === 'object' && !Array.isArray(request.currentAnswer)
       ? Object.fromEntries(Object.entries(request.currentAnswer as Record<string, unknown>).map(([key, value]) => [key, typeof value === 'string' ? value : ''])) as Record<string, string>
       : request.editor.original;
-    return <RecordEditor editor={request.editor} initialValues={entered} crossFieldErrors={request.captureKey === 'WARRANTY_UPDATE_INPUTS' ? warrantyDateOrder : undefined} title={request.title} saving={saving} cancelling={cancelling} error={error} autoFocus={autoFocus}
+    const hoa = request.captureKey === 'HOA_ASSOCIATION';
+    return <RecordEditor mode={hoa && !request.editor.original.name ? 'add' : 'edit'} editor={request.editor} initialValues={entered} crossFieldErrors={request.captureKey === 'WARRANTY_UPDATE_INPUTS' ? warrantyDateOrder : hoa ? hoaDuesPair : undefined} title={request.title} saving={saving} cancelling={cancelling} error={error} autoFocus={autoFocus}
+      sensitiveConsent={request.sensitivity === 'FINANCIAL' || request.sensitivity === 'SECURITY' ? { checked: sensitiveDataConfirmed, label: 'I’m ready to review these financial details.', onChange: setSensitiveDataConfirmed } : undefined}
       onSubmit={(editorValues) => void save(null, false, editorValues)} onCancel={() => void cancelContinuityWorkflow()} />;
   }
 

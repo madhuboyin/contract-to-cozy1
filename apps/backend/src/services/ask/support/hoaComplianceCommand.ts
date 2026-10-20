@@ -2,8 +2,8 @@
 // bodies the canonical HOA service takes.
 //
 // What the household can say is the REPORTED status of an approval request (its own word). An association's decision is recorded with a truth layer, a source
-// and evidence, and that stays on the page; so do conditions and a denial reason, which the service refuses without a decision. A blank in a change form leaves
-// the recorded value alone, as the service does for an undefined field.
+// and evidence, and that stays on the page; so do conditions and a denial reason, which the service refuses without a decision. Association editing uses the
+// shared RecordEditor, where an explicit blank clears an optional field; the older approval-edit form still omits blank fields.
 import { z } from 'zod';
 
 export const HOA_PROPERTY_ENTITY_TYPE = 'HOA_PROPERTY';
@@ -87,8 +87,10 @@ export function hoaServiceBody(kind: HoaFormKind, v: HoaFormValues): Record<stri
   const day = (key: string, as: string = key) => { if (typeof v[key] === 'string') body[as] = noon(v[key] as string); };
   if (kind === 'ASSOCIATION') {
     copy('name', 'managementCompany', 'contactName', 'contactEmail', 'contactPhone', 'duesFrequency', 'notes');
-    if (typeof v.duesAmount === 'number') body.duesAmountCents = Math.round(v.duesAmount * 100);
-    day('nextDueDate');
+    if (v.duesAmount === null) body.duesAmountCents = null;
+    else if (typeof v.duesAmount === 'number') body.duesAmountCents = Math.round(v.duesAmount * 100);
+    if (v.nextDueDate === null) body.nextDueDate = null;
+    else day('nextDueDate');
   } else if (kind === 'APPROVAL_ADD') {
     copy('workType', 'description', 'notes'); body.reportedStatus = v.reportedStatus ?? 'NOT_SUBMITTED'; day('submittedDate'); day('expirationDate'); body.documentIds = [];
   } else if (kind === 'APPROVAL_EDIT') {

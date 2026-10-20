@@ -151,6 +151,49 @@ test('Add warranty: Continue enables once required fields are valid and submits 
   });
 });
 
+const hoaFields = [
+  { key: 'name', label: 'Association name', kind: 'TEXT', section: 'association', required: true },
+  { key: 'managementCompany', label: 'Management company', kind: 'TEXT', section: 'association', required: false },
+  { key: 'contactName', label: 'Contact name', kind: 'TEXT', section: 'contact', required: false },
+  { key: 'contactEmail', label: 'Contact email', kind: 'TEXT', inputType: 'email', section: 'contact', required: false },
+  { key: 'contactPhone', label: 'Contact phone', kind: 'TEXT', inputType: 'tel', section: 'contact', required: false },
+  { key: 'duesAmount', label: 'Dues amount', kind: 'MONEY', section: 'dues', required: false },
+  { key: 'duesFrequency', label: 'Payment frequency', kind: 'SELECT', section: 'dues', required: false, options: [{ label: 'Monthly', value: 'MONTHLY' }], emptyLabel: 'Not recorded' },
+  { key: 'nextDueDate', label: 'Next due date', kind: 'DATE', section: 'dues', required: false },
+  { key: 'notes', label: 'Notes', kind: 'TEXTAREA', section: 'additional', required: false },
+];
+const emptyHoa = Object.fromEntries(hoaFields.map((field) => [field.key, '']));
+const hoaRequest = {
+  requirementId: 'hoa-association-inputs', captureKey: 'HOA_ASSOCIATION', classification: 'WORKFLOW_INPUT', state: 'UNKNOWN', presentation: 'FORM',
+  title: 'Set up HOA details', question: 'Add the details you know.', helpText: null, allowNotSure: false, sensitivity: 'FINANCIAL', destinationLabel: null, confirmationText: null,
+  expectedContextVersion: 'hoa-v1', inputSchema: { type: 'GROUP', fields: [] }, currentAnswer: emptyHoa,
+  editor: { recordLabel: 'HOA details', sections: [{ id: 'association', title: 'Association' }, { id: 'contact', title: 'Contact' }, { id: 'dues', title: 'Dues' }, { id: 'additional', title: 'Additional information' }], fields: hoaFields, original: emptyHoa },
+} as unknown as AskCaptureRequest;
+
+test('HOA setup is a compact sectioned editor with native contact controls, paired dues validation, financial acknowledgement and guarded Cancel', async () => {
+  jest.spyOn(api, 'submitAskCapture').mockResolvedValue({ success: true, data: { executionId: 'hoa1' } } as never);
+  jest.spyOn(api, 'cancelAskExecution').mockResolvedValue({ success: true, data: { executionId: 'hoa1', status: 'CANCELLED' } } as never);
+  render(<InlineCaptureCard executionId="hoa1" request={hoaRequest} onCompleted={jest.fn()} />);
+  expect(screen.getAllByRole('group').map((group) => group.querySelector('legend')?.textContent)).toEqual(['Association', 'Contact', 'Dues', 'Additional information']);
+  expect(screen.getByLabelText(/^Contact email/)).toHaveAttribute('type', 'email');
+  expect(screen.getByLabelText(/^Contact phone/)).toHaveAttribute('type', 'tel');
+  fireEvent.change(screen.getByLabelText(/^Association name/), { target: { value: 'Maple HOA' } });
+  fireEvent.change(screen.getByLabelText(/^Dues amount/), { target: { value: '250' } });
+  expect(screen.getByText('Choose how often these dues are paid.')).toBeVisible();
+  fireEvent.change(screen.getByLabelText(/^Payment frequency/), { target: { value: 'MONTHLY' } });
+  const consent = screen.getByRole('checkbox', { name: 'I’m ready to review these financial details.' });
+  expect(screen.getByRole('button', { name: 'Continue to review' })).toBeDisabled();
+  fireEvent.click(consent);
+  expect(screen.getByRole('button', { name: 'Continue to review' })).toBeEnabled();
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+  expect(screen.getByRole('alertdialog', { name: 'Discard your changes?' })).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Keep editing' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Continue to review' }));
+  await waitFor(() => expect(api.submitAskCapture).toHaveBeenCalledWith('hoa1', expect.objectContaining({
+    sensitiveDataConfirmed: true, answer: expect.objectContaining({ name: 'Maple HOA', duesAmount: '250.00', duesFrequency: 'MONTHLY' }),
+  })));
+});
+
 // Timeline event editor needs (FRD v1.386): disabled-with-reason fields, explicit empty choices, changed markers, an unsaved-changes guard and full rows.
 const eventOriginal = { title: 'Roof replacement', type: 'VERIFIED_RESOLUTION', occurredAt: '2026-09-01', importance: 'NORMAL', summary: '', amount: '', visibility: 'HOUSEHOLD', roomId: '', inventoryItemId: '' };
 const eventRequest = {

@@ -567,6 +567,7 @@ export interface AskRecordEditorField {
   options?: Array<{ label: string; value: string }>;
   helpText?: string;
   placeholder?: string;
+  inputType?: 'email' | 'tel';
   /** DATE only: a soft, non-blocking note shown when the chosen date is before today. */
   pastDateNote?: string;
   /** SELECT only: an explicit empty option (value '') such as "No room". */

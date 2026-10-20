@@ -113,6 +113,7 @@ import { financingProfileCommandResult } from '../handlers/financingProfileComma
 import { BRIEFING_SHARE_CAPTURE_KEY, parseBriefingShareAnswer } from '../support/homeBriefingCommand';
 import { briefingShareResult } from '../handlers/homeBriefingShareCommands.handler';
 import { hoaFormKindFromCaptureKey, parseHoaFormAnswer } from '../support/hoaComplianceCommand';
+import { hoaAssociationEditorFormValues, validateHoaAssociationEditorAnswer } from '../support/hoaAssociationEditor';
 import { hoaCommandResult } from '../handlers/hoaComplianceCommands.handler';
 import { COVERAGE_DECISION_CAPTURE_KEY, parseCoverageDecisionAnswer, type CoverageCommandKind } from '../support/coverageCommand';
 import { COVERAGE_QUOTE_CAPTURE_KEY, parseCoverageQuoteAnswer } from '../support/coverageQuoteCommand';
@@ -1504,7 +1505,12 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     if (!hoaLaunch || hoaLaunch.kind !== hoaKind || typeof hoaLaunch.entityId !== 'string') {
       throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
     }
-    const hoaAnswer = parseHoaFormAnswer(hoaKind, input.answer);
+    const associationEditor = hoaKind === 'ASSOCIATION' ? validateHoaAssociationEditorAnswer(input.answer) : null;
+    const hoaAnswer = associationEditor
+      ? Object.keys(associationEditor.errors).length
+        ? { success: false as const, reason: 'INVALID' as const }
+        : { success: true as const, data: hoaAssociationEditorFormValues(associationEditor.values) }
+      : parseHoaFormAnswer(hoaKind, input.answer);
     if (!hoaAnswer.success) {
       throw Object.assign(new Error(hoaAnswer.reason === 'NOTHING' ? 'Change at least one thing.' : 'Check the form and try again.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
     }

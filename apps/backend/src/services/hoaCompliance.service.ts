@@ -28,7 +28,7 @@ class HoaComplianceService {
       contactPhone: payload.contactPhone,
       duesAmountCents: payload.duesAmountCents,
       duesFrequency: payload.duesFrequency,
-      nextDueDate: payload.nextDueDate ? new Date(payload.nextDueDate) : undefined,
+      nextDueDate: payload.nextDueDate === null ? null : payload.nextDueDate ? new Date(payload.nextDueDate) : undefined,
       documentIds: payload.documentIds,
       notes: payload.notes,
     };

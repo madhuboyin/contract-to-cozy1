@@ -1223,7 +1223,7 @@ export const AskCaptureRequestSchema = z.object({
     sections: z.array(z.object({ id: z.string(), title: z.string() })),
     fields: z.array(z.object({
       key: z.string(), label: z.string(), kind: z.enum(['TEXT', 'TEXTAREA', 'SELECT', 'DATE', 'MONEY']), section: z.string(), required: z.boolean(),
-      maxLength: z.number().optional(), options: z.array(z.object({ label: z.string(), value: z.string() })).optional(), helpText: z.string().optional(), placeholder: z.string().optional(), pastDateNote: z.string().optional(), emptyLabel: z.string().optional(), disabledReason: z.string().optional(),
+      maxLength: z.number().optional(), options: z.array(z.object({ label: z.string(), value: z.string() })).optional(), helpText: z.string().optional(), placeholder: z.string().optional(), inputType: z.enum(['email', 'tel']).optional(), pastDateNote: z.string().optional(), emptyLabel: z.string().optional(), disabledReason: z.string().optional(),
     })),
     original: z.record(z.string(), z.string()),
     // Per-field problems from the last submit (field-level and cross-field), shown on the field and as a summary.

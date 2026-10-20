@@ -28,6 +28,8 @@ export interface RecordEditorField {
   readonly options?: readonly CorrectionOption[];
   readonly helpText?: string;
   readonly placeholder?: string;
+  /** TEXT only: render the native control best suited to contact data without changing the stored string shape. */
+  readonly inputType?: 'email' | 'tel';
   /** DATE only: a soft, non-blocking note shown (and repeated in the review) when the date is before today. */
   readonly pastDateNote?: string;
   /** SELECT only: label of an explicit empty option (value ''), e.g. "No room". */

@@ -23,6 +23,7 @@ require('../../src/services/ask/askOrchestrator.service.ts');
 const { hoaComplianceService } = require('../../src/services/hoaCompliance.service.ts');
 const operations = require('../../src/services/hoaComplianceOperations.ts');
 const command = require('../../src/services/ask/support/hoaComplianceCommand.ts');
+const associationEditor = require('../../src/services/ask/support/hoaAssociationEditor.ts');
 const handler = require('../../src/services/ask/handlers/hoaComplianceCommands.handler.ts');
 const { hoaComplianceFromView } = require('../../src/services/ask/handlers/hoaCompliance.handler.ts');
 
@@ -44,6 +45,8 @@ test('forms mirror the routes; a blank is not a value; a decision is not a form 
   assert.equal(p('VIOLATION', { summary: '' }).success, false);
   assert.deepEqual(command.hoaServiceBody('ASSOCIATION', { name: 'Maple HOA', duesAmount: 250.5, duesFrequency: 'MONTHLY', nextDueDate: '2026-12-01' }),
     { name: 'Maple HOA', duesFrequency: 'MONTHLY', duesAmountCents: 25050, nextDueDate: '2026-12-01T12:00:00.000Z' });
+  assert.deepEqual(command.hoaServiceBody('ASSOCIATION', { contactEmail: null, duesAmount: null, duesFrequency: null, nextDueDate: null }),
+    { contactEmail: null, duesFrequency: null, duesAmountCents: null, nextDueDate: null });
   assert.deepEqual(command.hoaServiceBody('APPROVAL_ADD', { workType: 'FENCE' }), { workType: 'FENCE', reportedStatus: 'NOT_SUBMITTED', documentIds: [] });
   assert.deepEqual(command.hoaServiceBody('VIOLATION', { summary: 'Lawn', fine: 75, cureDeadline: '2026-11-01' }), { summary: 'Lawn', cureDeadline: '2026-11-01T12:00:00.000Z', fineAmountCents: 7500 });
 });
@@ -76,6 +79,42 @@ test('declared-action only, a contributor command; an approval needs an associat
     restore(); restore = withData({ association: null });
     assert.equal((await as('CONTRIBUTOR', M.APPROVAL_ADD, launch('APPROVAL_ADD', 'prop-1'))).reasonCode, 'HOA_ASSOCIATION_REQUIRED');
   } finally { restore(); }
+});
+
+test('association setup and update use one compact editor with contact controls and paired dues validation', async () => {
+  let restore = withData({ association: null });
+  try {
+    const add = await as('CONTRIBUTOR', M.ASSOCIATION, launch('ASSOCIATION', 'prop-1'));
+    const capture = add.captureRequests[0];
+    assert.deepEqual(capture.editor.sections.map((section) => section.title), ['Association', 'Contact', 'Dues', 'Additional information']);
+    assert.equal(capture.editor.fields.find((field) => field.key === 'contactEmail').inputType, 'email');
+    assert.equal(capture.editor.fields.find((field) => field.key === 'contactPhone').inputType, 'tel');
+    assert.equal(capture.editor.fields.find((field) => field.key === 'duesAmount').kind, 'MONEY');
+    assert.equal(capture.destinationLabel, null);
+    assert.deepEqual(associationEditor.validateHoaAssociationEditorAnswer({
+      name: 'Maple HOA', managementCompany: '', contactName: '', contactEmail: '', contactPhone: '', duesAmount: '250', duesFrequency: '', nextDueDate: '', notes: '',
+    }).errors, { duesFrequency: 'Choose how often these dues are paid.' });
+  } finally { restore(); }
+
+  restore = withData({ association: {
+    id: 'assoc-1', name: 'Maple HOA', managementCompany: 'Old manager', contactName: null, contactEmail: 'hello@maple.test', contactPhone: null,
+    duesAmountCents: 25000, duesFrequency: 'MONTHLY', nextDueDate: new Date('2026-12-01T12:00:00Z'), notes: 'Old note', updatedAt: UPDATED,
+  } });
+  const restoreRole = withRole('CONTRIBUTOR');
+  try {
+    const values = {
+      name: 'Maple HOA', managementCompany: '', contactName: '', contactEmail: 'hello@maple.test', contactPhone: '',
+      duesAmount: '250.00', duesFrequency: 'MONTHLY', nextDueDate: '2026-12-01', notes: 'Updated note',
+    };
+    const result = await handler.hoaCommandResult('user-1', 'prop-1', { kind: 'ASSOCIATION', entityId: 'prop-1', sourceExecutionId: null }, values);
+    assert.equal(result.status, 'NEEDS_CONFIRMATION');
+    assert.deepEqual(result.confirmation.fields, [
+      { label: 'Management company', value: 'Old manager → Not recorded' },
+      { label: 'Notes', value: 'Old note → Updated note' },
+    ]);
+    assert.deepEqual(result.parameters.hoaChangedKeys, ['managementCompany', 'notes']);
+    assert.equal(result.parameters.hoaForm.managementCompany, null);
+  } finally { restoreRole(); restore(); }
 });
 
 test('a change shows before and after, an unchanged form is refused, a removal confirms, and nothing is written at review', async () => {
@@ -113,8 +152,10 @@ test('confirming goes through the shared effects module and the service; stale o
   executeOperation.reconcileAskExecutionSideEffects = async () => ({ attemptedAndFailed: false, refreshedExecutions: [] });
   try {
     const assocVersion = sha(`hoa:ASSOCIATION:prop-1:${UPDATED.toISOString()}`);
-    await confirmCapabilityInvoke(OP, ctx({ hoaCommand: { kind: 'ASSOCIATION', entityId: 'prop-1' }, hoaContextVersion: assocVersion, hoaForm: { name: 'Maple HOA', duesAmount: 250 } }));
-    assert.deepEqual(calls[0], ['upsert', { propertyId: 'prop-1', userId: 'user-1', body: { name: 'Maple HOA', duesAmountCents: 25000 } }]);
+    await confirmCapabilityInvoke(OP, ctx({ hoaCommand: { kind: 'ASSOCIATION', entityId: 'prop-1' }, hoaContextVersion: assocVersion, hoaChangedKeys: ['name', 'duesAmount', 'duesFrequency'], hoaForm: {
+      name: 'Maple HOA', managementCompany: null, contactName: null, contactEmail: null, contactPhone: null, duesAmount: 250, duesFrequency: 'MONTHLY', nextDueDate: null, notes: null,
+    } }));
+    assert.deepEqual(calls[0], ['upsert', { propertyId: 'prop-1', userId: 'user-1', body: { name: 'Maple HOA', duesFrequency: 'MONTHLY', duesAmountCents: 25000 } }]);
     await confirmCapabilityInvoke(OP, ctx({ hoaCommand: { kind: 'APPROVAL_ADD', entityId: 'prop-1' }, hoaContextVersion: sha('hoa:APPROVAL_ADD:prop-1:assoc-1'), hoaForm: { workType: 'FENCE' } }));
     assert.deepEqual(calls[1], ['create', { propertyId: 'prop-1', userId: 'user-1', role: 'CONTRIBUTOR', body: { workType: 'FENCE', reportedStatus: 'NOT_SUBMITTED', documentIds: [] } }]);
     await confirmCapabilityInvoke(OP, ctx({ hoaCommand: { kind: 'VIOLATION', entityId: 'prop-1' }, hoaContextVersion: sha('hoa:VIOLATION:prop-1'), hoaForm: { summary: 'Lawn too long' } }));

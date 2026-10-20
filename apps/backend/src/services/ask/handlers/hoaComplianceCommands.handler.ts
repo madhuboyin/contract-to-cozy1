@@ -20,6 +20,11 @@ import {
   HOA_WORK_TYPES, HOA_WORK_TYPE_LABELS, hoaCommandEntityType, hoaCommandKindFromMessage, hoaServiceBody, parseHoaFormAnswer,
   type HoaCommandKind, type HoaFormKind, type HoaFormValues,
 } from '../support/hoaComplianceCommand';
+import { editorToGroupSchema } from '../recordEditor/recordEditor.contract';
+import {
+  hoaAssociationEditorChanges, hoaAssociationEditorDescriptor, hoaAssociationEditorFormValues, hoaAssociationEditorPatch,
+  validateHoaAssociationEditorAnswer, type HoaAssociationEditorRow,
+} from '../support/hoaAssociationEditor';
 
 const CONFIRMATION_MINUTES = 30;
 const sha = (text: string) => createHash('sha256').update(text).digest('hex');
@@ -46,7 +51,22 @@ const approvalVersion = (kind: HoaCommandKind, r: ApprovalRow) => sha(`hoa:${kin
 const approvalLabel = (r: ApprovalRow) => `${HOA_WORK_TYPE_LABELS[r.workType] ?? r.workType} request`;
 const day = (value: unknown) => (typeof value === 'string' ? humanDate(new Date(`${value}T12:00:00.000Z`)) ?? value : null);
 
-function formCapture(kind: HoaFormKind, contextVersion: string, entered: HoaFormValues, label?: string): AskCaptureRequest {
+function formCapture(kind: HoaFormKind, contextVersion: string, entered: HoaFormValues, label?: string, canonicalAssociation?: HoaAssociationEditorRow | null, errors?: Record<string, string>): AskCaptureRequest {
+  if (kind === 'ASSOCIATION') {
+    const descriptor = hoaAssociationEditorDescriptor(canonicalAssociation ?? null, contextVersion);
+    const initial = Object.keys(entered).length ? validateHoaAssociationEditorAnswer(entered).values : descriptor.original;
+    return {
+      requirementId: 'hoa-association-inputs', captureKey: HOA_FORM_CAPTURE_KEYS.ASSOCIATION, classification: 'WORKFLOW_INPUT', state: canonicalAssociation ? 'KNOWN' : 'UNKNOWN',
+      title: canonicalAssociation ? 'Update HOA details' : 'Set up HOA details', question: canonicalAssociation ? 'Change any HOA details in one place.' : 'Add the association, contact, and dues details you know.',
+      helpText: 'You will review only what changed before anything is saved.', inputSchema: editorToGroupSchema(descriptor), currentAnswer: initial,
+      allowNotSure: false, sensitivity: 'FINANCIAL', destinationLabel: null, confirmationText: null, expectedContextVersion: contextVersion, presentation: 'FORM',
+      editor: {
+        recordLabel: descriptor.recordLabel, sections: descriptor.sections.map((section) => ({ ...section })),
+        fields: descriptor.fields.map((field) => ({ ...field, options: field.options?.map((option) => ({ ...option })) })),
+        original: { ...descriptor.original }, ...(errors && Object.keys(errors).length ? { errors } : {}),
+      },
+    };
+  }
   const clean = Object.fromEntries(Object.entries(entered).filter(([, v]) => v !== null && v !== undefined && v !== ''));
   const select = (key: string, name: string, values: readonly string[], labels: Record<string, string>, required: boolean) =>
     ({ key, label: name, required, inputSchema: { type: 'SINGLE_SELECT' as const, options: values.map((value) => ({ label: labels[value] ?? value, value })) } });
@@ -99,35 +119,34 @@ export async function hoaCommandResult(userId: string, propertyId: string, launc
     confirmationId: `hoa-${id}-1`, version: 1, title: spec.title, description: spec.description, fields: spec.fields, editableFields: [] as never[],
     confirmLabel: spec.confirmLabel, consentText: 'I authorize this change to the shared home record.', expiresAt: expiresAt.toISOString(),
   });
-  const ask = (formKind: HoaFormKind, contextVersion: string, title: string, body: string, current: HoaFormValues, label?: string): AskOperationResult => ({
+  const ask = (formKind: HoaFormKind, contextVersion: string, title: string, body: string, current: HoaFormValues, label?: string, canonicalAssociation?: HoaAssociationEditorRow | null, errors?: Record<string, string>): AskOperationResult => ({
     status: 'NEEDS_CONTEXT', reasonCode: `HOA_${kind}_INPUT_REQUIRED`, contextVersion, parameters: launchParameters,
-    blocks: [{ type: 'SUMMARY', id: 'hoa-input', title, body, tone: 'DEFAULT', actions: [] }], captureRequests: [formCapture(formKind, contextVersion, current, label)], suggestions: [],
+    blocks: [{ type: 'SUMMARY', id: 'hoa-input', title, body, tone: 'DEFAULT', actions: [] }], captureRequests: [formCapture(formKind, contextVersion, current, label, canonicalAssociation, errors)], suggestions: [],
   });
-  const review = (id: string, contextVersion: string, params: Record<string, unknown>, spec: Parameters<typeof confirmation>[1], formKind: HoaFormKind, label?: string): AskOperationResult => ({
+  const review = (id: string, contextVersion: string, params: Record<string, unknown>, spec: Parameters<typeof confirmation>[1], formKind: HoaFormKind, label?: string, canonicalAssociation?: HoaAssociationEditorRow | null): AskOperationResult => ({
     status: 'NEEDS_CONFIRMATION', reasonCode: `HOA_${kind}_CONFIRMATION_REQUIRED`, contextVersion,
     parameters: { hoaForm: supplied, hoaCommand: { kind, entityId: launch.entityId }, hoaContextVersion: contextVersion, ...params, ...base },
     blocks: [{ type: 'SUMMARY', id: 'hoa-review', title: spec.title, body: 'Nothing is saved until you confirm.', tone: 'DEFAULT', actions: [] }],
-    confirmation: confirmation(id, spec), captureRequests: supplied ? [formCapture(formKind, contextVersion, supplied, label)] : undefined, suggestions: [],
+    confirmation: confirmation(id, spec), captureRequests: supplied ? [formCapture(formKind, contextVersion, supplied, label, canonicalAssociation)] : undefined, suggestions: [],
   });
 
   if (kind === 'ASSOCIATION') {
-    const association: any = await hoaComplianceService.getAssociation(propertyId);
+    const association = await hoaComplianceService.getAssociation(propertyId) as HoaAssociationEditorRow & { id: string; updatedAt: Date } | null;
     const contextVersion = sha(`hoa:ASSOCIATION:${propertyId}:${association ? association.updatedAt?.toISOString?.() ?? association.id : 'none'}`);
     if (!supplied) {
-      return ask('ASSOCIATION', contextVersion, association ? 'Update your HOA details' : 'Set up your HOA', 'Nothing has been saved yet.', association ? {
-        name: association.name, managementCompany: association.managementCompany, contactName: association.contactName, contactEmail: association.contactEmail,
-        contactPhone: association.contactPhone, duesAmount: association.duesAmountCents != null ? association.duesAmountCents / 100 : null, duesFrequency: association.duesFrequency,
-        nextDueDate: iso(association.nextDueDate ?? null), notes: association.notes,
-      } : {});
+      return ask('ASSOCIATION', contextVersion, association ? 'Update your HOA details' : 'Set up your HOA', 'Review and update the details kept with this home.', {}, undefined, association);
     }
-    return review(`association-${sha(JSON.stringify(supplied)).slice(0, 12)}`, contextVersion, {}, {
+    const checked = validateHoaAssociationEditorAnswer(supplied);
+    if (Object.keys(checked.errors).length) return ask('ASSOCIATION', contextVersion, association ? 'Update your HOA details' : 'Set up your HOA', 'Fix the highlighted details, then continue.', checked.values, undefined, association, checked.errors);
+    const descriptor = hoaAssociationEditorDescriptor(association, contextVersion);
+    const changes = hoaAssociationEditorChanges(descriptor.original, checked.values);
+    if (!changes.length) return unavailable('HOA_ASSOCIATION_NO_CHANGE', 'Nothing to change', 'These details match what is already recorded. Nothing has changed.');
+    const formValues = hoaAssociationEditorFormValues(checked.values);
+    return review(`association-${sha(JSON.stringify(formValues)).slice(0, 12)}`, contextVersion, { hoaForm: formValues, hoaChangedKeys: changes.map((change) => change.key) }, {
       title: association ? 'Save these HOA details?' : 'Set up this HOA?', confirmLabel: 'Save HOA details',
       description: 'This records your association and what you pay. Nothing is sent to the association.',
-      fields: [{ label: 'Association', value: String(supplied.name) }, ...row('Management company', supplied.managementCompany as string),
-        ...row('Contact', [supplied.contactName, supplied.contactEmail, supplied.contactPhone].filter(Boolean).join(' · ')),
-        ...(typeof supplied.duesAmount === 'number' ? [{ label: 'Dues', value: `${money(supplied.duesAmount)}${supplied.duesFrequency ? ` ${HOA_DUES_LABELS[String(supplied.duesFrequency)].toLowerCase()}` : ''}` }] : []),
-        ...row('Next due', day(supplied.nextDueDate)), ...row('Notes', supplied.notes as string)],
-    }, 'ASSOCIATION');
+      fields: changes.map((change) => ({ label: change.label, value: association ? `${change.before} → ${change.after}` : change.after })),
+    }, 'ASSOCIATION', undefined, association);
   }
 
   if (kind === 'APPROVAL_ADD') {
@@ -231,7 +250,11 @@ async function confirmHoaCommand(ctx: ConfirmCapabilityContext): Promise<Confirm
         const association: any = await hoaComplianceService.getAssociation(propertyId);
         const version = sha(`hoa:ASSOCIATION:${propertyId}:${association ? association.updatedAt?.toISOString?.() ?? association.id : 'none'}`);
         if (parameters.hoaContextVersion !== version) throw stale('Your HOA details changed while the confirmation was open. Review them again and try again.', 'ASK_CONTEXT_VERSION_CONFLICT');
-        const saved: any = await upsertHoaAssociationWithEffects({ propertyId, userId, body });
+        const editor = validateHoaAssociationEditorAnswer(parameters.hoaForm);
+        if (Object.keys(editor.errors).length) throw stale('The details to save are invalid.');
+        const changedKeys = Array.isArray(parameters.hoaChangedKeys) ? parameters.hoaChangedKeys.filter((key): key is string => typeof key === 'string') : Object.keys(editor.values);
+        const narrowed = hoaAssociationEditorPatch(changedKeys, editor.values);
+        const saved: any = await upsertHoaAssociationWithEffects({ propertyId, userId, body: hoaServiceBody('ASSOCIATION', narrowed) });
         artifactId = saved.association?.id ?? propertyId;
         title = 'HOA details saved'; description = 'Your association is recorded.';
       } else if (kind === 'APPROVAL_ADD') {
