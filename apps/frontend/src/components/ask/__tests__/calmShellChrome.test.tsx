@@ -58,9 +58,11 @@ describe('CalmLanding', () => {
   it('hides empty decision and active-work sections when there is nothing to show', () => {
     const quiet = view({ priorityList: { ...view().priorityList, items: [] }, landingSpotlight: null });
     render(<CalmLanding view={quiet} loading={false} failed={false} starters={[]} usingFallbackStarters onAsk={jest.fn()} />);
-    expect(screen.getByText('Nothing needs attention right now.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /What needs attention/ })).toHaveTextContent('0');
-    expect(screen.getByRole('button', { name: /Plan ahead/ })).toHaveTextContent('0');
+    // One calm line replaces the two empty cards, and the questions behind them stay one click away.
+    expect(screen.getByText(/You.re all caught up/)).toBeInTheDocument();
+    expect(screen.queryByText('Nothing needs attention right now.')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Review anyway' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Look ahead' })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Decisions to make' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Active major moment' })).not.toBeInTheDocument();
   });

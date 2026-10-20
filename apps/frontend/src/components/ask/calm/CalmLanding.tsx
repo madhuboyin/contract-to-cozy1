@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, ArrowRight, ChevronRight, Loader2, Milestone, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, ArrowRight, CheckCircle2, ChevronRight, Loader2, Milestone, ShieldCheck } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { buildConciergeStateStrip, type StripChip, type StripTone } from '@/features/ask/conciergeStateStrip';
 import type { AskCapabilityPrompt, AskFeaturedPrompt, ConciergeHomeView } from '@/features/ask/types';
@@ -74,6 +74,8 @@ export function CalmLanding({ view, loading, failed, hasProperty = Boolean(view)
     );
   };
   const stripChips = (strip?.chips ?? []).filter((entry) => entry.id === 'strip-needs-attention' || entry.id === 'strip-plan-ahead');
+  // Quiet: both priority partitions are available and empty.
+  const quiet = stripChips.length === 2 && stripChips.every((entry) => entry.count === 0);
   const secondaryStripChips = (strip?.chips ?? []).filter((entry) => entry.id !== 'strip-needs-attention' && entry.id !== 'strip-plan-ahead');
   return (
     <div data-calm-landing="">
@@ -87,7 +89,15 @@ export function CalmLanding({ view, loading, failed, hasProperty = Boolean(view)
         </>}
       </section>
       {/* FRD v1.151: recent changes and decision continuations remain useful, but are secondary suggestion pills rather than replacing either priority card. */}
-      {stripChips.length > 0 && !loading && <ul className="grid gap-4 sm:grid-cols-2" aria-label="Home priorities">{stripChips.map(contextLine)}</ul>}
+      {/* When nothing needs attention and nothing is coming up, two empty cards would only say "nothing" twice: one calm line replaces them. */}
+      {quiet && !loading && (
+        <section data-calm-quiet="" aria-label="Home priorities" className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl border border-emerald-100 bg-emerald-50/60 px-4 py-3.5 sm:px-5">
+          <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-emerald-700" aria-hidden="true"><CheckCircle2 className="h-5 w-5" /></span>
+          <p className="min-w-0 flex-1 basis-48 text-[15px] font-semibold leading-5 text-emerald-950">You&rsquo;re all caught up<span className="block text-sm font-normal text-emerald-900/80">Nothing needs attention and nothing is coming up to plan for.</span></p>
+          {stripChips.map((entry) => <button key={entry.id} type="button" data-strip-chip={entry.id} onClick={() => onAsk(entry.prompt, entry.source)} className="min-h-10 rounded-full px-3 text-sm font-semibold text-emerald-900 underline-offset-4 hover:underline">{entry.id === 'strip-plan-ahead' ? 'Look ahead' : 'Review anyway'}</button>)}
+        </section>
+      )}
+      {!quiet && stripChips.length > 0 && !loading && <ul className="grid gap-4 sm:grid-cols-2" aria-label="Home priorities">{stripChips.map(contextLine)}</ul>}
       {composer && <div className="mt-6">{composer}</div>}
       {(secondaryStripChips.length > 0 || shownStarters.length > 0 || children) && !loading && <ul className={cn(ROW, 'mt-4')} aria-label="Suggestions">
         {secondaryStripChips.map((entry) => <li key={entry.id} className="shrink-0"><button type="button" onClick={() => onAsk(entry.prompt, entry.source)} className="min-h-10 whitespace-nowrap rounded-full border border-stone-300 bg-transparent px-3.5 py-2 text-sm font-medium text-slate-700 transition hover:border-emerald-700 hover:text-emerald-950">{entry.label}</button></li>)}
