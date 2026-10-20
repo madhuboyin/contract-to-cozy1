@@ -21,7 +21,7 @@ export const WARRANTY_EDITOR_SECTIONS = [
 export const WARRANTY_EDITOR_FIELDS: readonly RecordEditorField[] = [
   { key: 'providerName', label: 'Provider', kind: 'TEXT', section: 'warranty', required: true, maxLength: 120 },
   { key: 'category', label: 'Coverage type', kind: 'SELECT', section: 'warranty', required: true, options: WARRANTY_CATEGORY_OPTIONS },
-  { key: 'policyNumber', label: 'Policy number', kind: 'TEXT', section: 'coverage', required: false, maxLength: 160 },
+  { key: 'policyNumber', label: 'Policy number', kind: 'TEXT', section: 'warranty', required: false, maxLength: 160 },
   { key: 'coverageDetails', label: 'Coverage details', kind: 'TEXTAREA', section: 'coverage', required: false, maxLength: 2000, helpText: 'What is and is not covered, claim limits, deductibles.' },
   { key: 'startDate', label: 'Start date', kind: 'DATE', section: 'dates-cost', required: true },
   { key: 'expiryDate', label: 'Expiration date', kind: 'DATE', section: 'dates-cost', required: true, pastDateNote: 'This date has already passed, so the warranty will show as expired.' },

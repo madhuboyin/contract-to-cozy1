@@ -118,7 +118,7 @@ export function RecordEditor({ editor, initialValues, title, saving, cancelling,
       onBlur: () => setTouched((current) => ({ ...current, [field.key]: true })),
     } as const;
     return (
-      <div key={field.key} className={field.kind === 'TEXTAREA' ? 'md:col-span-2' : undefined}>
+      <div key={field.key} className={field.kind === 'TEXTAREA' ? 'md:col-span-3' : undefined}>
         <label htmlFor={id} className="mb-1 block text-xs font-semibold text-slate-800">{field.label}{field.required ? <span aria-hidden="true"> *</span> : <span className="font-normal text-slate-500"> (optional)</span>}</label>
         {field.kind === 'SELECT' ? (
           <select {...common} value={value} onChange={(event) => change(field.key, event.target.value)}>
@@ -126,7 +126,7 @@ export function RecordEditor({ editor, initialValues, title, saving, cancelling,
             {(field.options ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
           </select>
         ) : field.kind === 'TEXTAREA' ? (
-          <textarea {...common} rows={4} maxLength={field.maxLength} value={value} placeholder={field.placeholder} onChange={(event) => change(field.key, event.target.value)} />
+          <textarea {...common} rows={3} maxLength={field.maxLength} value={value} placeholder={field.placeholder} onChange={(event) => change(field.key, event.target.value)} />
         ) : field.kind === 'DATE' ? (
           <input {...common} type="date" value={value} onChange={(event) => change(field.key, event.target.value)} />
         ) : field.kind === 'MONEY' ? (
@@ -157,14 +157,14 @@ export function RecordEditor({ editor, initialValues, title, saving, cancelling,
           <h3 className="mt-1 text-lg font-semibold tracking-tight text-slate-950">{editor.recordLabel}</h3>
           <p className="mt-1 text-sm text-slate-500">Nothing is saved until you review and confirm. Only what you change is listed.</p>
         </header>
-        <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-4 py-4 sm:px-5">
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 py-4 sm:px-5">
           {editor.sections.map((section) => {
             const fields = editor.fields.filter((field) => field.section === section.id);
             if (fields.length === 0) return null;
             return (
               <fieldset key={section.id} className="min-w-0 border-0 p-0">
                 <legend className="mb-3 text-sm font-semibold text-slate-950">{section.title}</legend>
-                <div className="grid gap-x-4 gap-y-3 md:grid-cols-2">{fields.map(renderField)}</div>
+                <div className="grid gap-x-4 gap-y-3 md:grid-cols-3">{fields.map(renderField)}</div>
               </fieldset>
             );
           })}

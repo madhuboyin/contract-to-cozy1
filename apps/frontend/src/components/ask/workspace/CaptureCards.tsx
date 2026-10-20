@@ -609,9 +609,9 @@ export function InlineCaptureCard({
   // Add a warranty (FRD v1.385): compact inline workflow instead of one padded card per field.
   if (schema.type === 'GROUP' && request.captureKey === 'CAPTURE_WARRANTY_EDIT') {
     const warrantyFieldOf = (key: string) => schema.fields.find((field) => field.key === key);
-    const sections: Array<{ title: string; keys: string[]; wide?: string[] }> = [
-      { title: 'Basics', keys: ['providerName', 'category'], wide: ['category'] },
-      { title: 'Coverage', keys: ['policyNumber', 'coverageDetails'], wide: ['coverageDetails'] },
+    const sections: Array<{ title: string; keys: string[]; wide?: string[]; span2?: string[] }> = [
+      { title: 'Basics', keys: ['providerName', 'policyNumber', 'category'], wide: ['category'], span2: ['providerName'] },
+      { title: 'Coverage', keys: ['coverageDetails'], wide: ['coverageDetails'] },
       { title: 'Term and cost', keys: ['startDate', 'expiryDate', 'cost'] },
     ];
     const dayOf = (key: string) => { const value = values[key] as { value?: string } | undefined; return value && typeof value === 'object' ? value.value ?? '' : ''; };
@@ -633,11 +633,11 @@ export function InlineCaptureCard({
           {sections.map((section) => (
             <fieldset key={section.title} className="min-w-0 border-0 p-0">
               <legend className="mb-2 text-sm font-semibold text-slate-950">{section.title}</legend>
-              <div className="grid gap-x-3 gap-y-2.5 md:grid-cols-2">
+              <div className="grid gap-x-3 gap-y-2.5 md:grid-cols-3">
                 {section.keys.map((key) => {
                   const field = warrantyFieldOf(key);
                   if (!field) return null;
-                  return <div key={key} className={section.wide?.includes(key) ? 'md:col-span-2' : undefined}>
+                  return <div key={key} className={section.wide?.includes(key) ? 'md:col-span-3' : section.span2?.includes(key) ? 'md:col-span-2' : undefined}>
                     <CaptureFieldControl field={{ ...field, label: field.required ? field.label : `${field.label} (optional)` }} value={values[key]} disabled={saving || cancelling} allowNotSure={false} compact propertyId={propertyId}
                       onChange={(value) => setValues((current) => ({ ...current, [key]: value }))} />
                     {key === 'expiryDate' && expiryPassed && <p className="mt-1 text-xs font-medium text-amber-800" role="note">This date has already passed, so the warranty will show as expired.</p>}
