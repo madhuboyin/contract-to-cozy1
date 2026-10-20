@@ -2,7 +2,7 @@
 
 import { Fragment, useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Loader2 } from 'lucide-react';
+import { AlertCircle, BookOpen, Boxes, FileText, Home, Landmark, Loader2, Search, ShieldCheck, Users, type LucideIcon } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api/client';
 import { buildAskWorkspaceHref } from '@/lib/navigation/askNavigation';
@@ -41,27 +41,57 @@ function sectionSummary(section: AskRecordIndexSection): { text: string; tone: '
   return { text: copy, tone: section.reasonCode === 'PROVIDER_FAILED' ? 'caution' : 'muted' };
 }
 
+const SECTION_ICONS: Record<string, LucideIcon> = {
+  'property-facts': Home,
+  rooms: Home,
+  inventory: Boxes,
+  documents: FileText,
+  warranties: ShieldCheck,
+  timeline: BookOpen,
+  'maintenance-history': BookOpen,
+  inspections: FileText,
+  permits: FileText,
+  'projects-renovations': Boxes,
+  'incidents-claims': AlertCircle,
+  coverage: ShieldCheck,
+  'financing-ownership': Landmark,
+  'buyer-records': Landmark,
+  'seller-records': Landmark,
+  'household-access': Users,
+};
+
+const RECORD_GROUPS = [
+  { id: 'home', label: 'About the home', description: 'The home itself and what is recorded in it.', sections: ['property-facts', 'rooms', 'inventory'] },
+  { id: 'history', label: 'Documents and history', description: 'Evidence, coverage, events and completed work.', sections: ['documents', 'warranties', 'timeline', 'maintenance-history', 'inspections', 'permits'] },
+  { id: 'work', label: 'Work and protection', description: 'Active projects, risks, incidents and policies.', sections: ['projects-renovations', 'incidents-claims', 'coverage'] },
+  { id: 'ownership', label: 'Ownership and household', description: 'Financial, transaction and access records.', sections: ['financing-ownership', 'buyer-records', 'seller-records', 'household-access'] },
+] as const;
+
 function SectionRow({ section, propertyId }: { section: AskRecordIndexSection; propertyId: string }) {
   const summary = sectionSummary(section);
+  const Icon = SECTION_ICONS[section.id] ?? FileText;
   const href = section.primaryAction
     ? buildAskWorkspaceHref({ propertyId, question: section.primaryAction.question, from: 'record', backTo: '/dashboard/ask/record' })
     : null;
   return (
-    <AskCompactRow className="border-b border-slate-200 lg:min-h-[4rem]" data-record-section={section.id} data-record-section-state={section.state.toLowerCase()}>
-      <div className="min-w-0">
-        <p className="text-sm font-semibold text-slate-950">{section.label}</p>
-        <p className="mt-0.5 truncate text-xs text-slate-500" title={section.scope}>{section.scope}</p>
-        <p className={`mt-1 text-sm ${summary.tone === 'caution' ? 'text-amber-800' : summary.tone === 'muted' ? 'text-slate-500' : 'text-slate-800'}`}>{summary.text}</p>
+    <AskCompactRow className="border-b border-slate-100 lg:min-h-[4.5rem]" data-record-section={section.id} data-record-section-state={section.state.toLowerCase()}>
+      <div className="flex min-w-0 items-start gap-3">
+        <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-emerald-50 text-emerald-900" aria-hidden="true"><Icon className="h-4 w-4" /></span>
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-slate-950">{section.label}</p>
+          <p className="mt-0.5 truncate text-xs text-slate-500" title={section.scope}>{section.scope}</p>
+          <p className={`mt-1 text-sm ${summary.tone === 'caution' ? 'font-medium text-amber-800' : summary.tone === 'muted' ? 'text-slate-500' : 'text-slate-800'}`}>{summary.text}</p>
+        </div>
       </div>
-      <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
+      <div className="flex shrink-0 items-center gap-2">
       {section.pagedCollection && (
-        <Link href={`/dashboard/ask/record?propertyId=${encodeURIComponent(propertyId)}&section=${encodeURIComponent(section.id)}`} className="inline-flex min-h-11 items-center justify-center rounded-xl bg-emerald-950 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700" aria-label={`Browse all ${section.label}`}>
-          Browse all
+        <Link href={`/dashboard/ask/record?propertyId=${encodeURIComponent(propertyId)}&section=${encodeURIComponent(section.id)}`} className="inline-flex min-h-10 items-center justify-center rounded-xl bg-emerald-950 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700" aria-label={`Browse all ${section.label}`}>
+          Browse
         </Link>
       )}
       {href && section.primaryAction && (
-        <Link href={href} className="inline-flex min-h-11 items-center justify-center rounded-xl border border-emerald-900/20 px-3 py-2 text-sm font-semibold text-emerald-950 hover:bg-emerald-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700" aria-label={`${section.primaryAction.label}: ${section.label}`}>
-          {section.primaryAction.label}
+        <Link href={href} className="inline-flex min-h-10 items-center justify-center rounded-xl px-2.5 py-2 text-sm font-semibold text-emerald-950 hover:bg-emerald-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700" aria-label={`${section.primaryAction.label}: ${section.label}`}>
+          Ask Cozy
         </Link>
       )}
       </div>
@@ -152,6 +182,7 @@ export function AskRecord() {
   const [index, setIndex] = useState<AskRecordIndex | null>(null);
   const [status, setStatus] = useState<'LOADING' | 'READY' | 'ERROR' | 'PAUSED'>('LOADING');
   const [attempt, setAttempt] = useState(0);
+  const [sectionQuery, setSectionQuery] = useState('');
   const retry = useCallback(() => setAttempt((value) => value + 1), []);
 
   useEffect(() => {
@@ -179,33 +210,47 @@ export function AskRecord() {
 
   const propertyLabel = index?.property ? (index.property.name?.trim() || `${index.property.address}, ${index.property.city}`) : null;
   const completeness = index?.completeness;
+  const normalizedSectionQuery = sectionQuery.trim().toLowerCase();
+  const visibleGroups = RECORD_GROUPS.map((group) => ({
+    ...group,
+    sections: (index?.sections ?? []).filter((section) => group.sections.includes(section.id as never)
+      && (!normalizedSectionQuery || `${section.label} ${section.scope}`.toLowerCase().includes(normalizedSectionQuery))),
+  })).filter((group) => group.sections.length > 0);
+  const availableSections = index?.sections.filter((section) => section.state === 'AVAILABLE') ?? [];
+  const populatedSectionCount = availableSections.filter((section) => (section.count ?? 0) > 0).length;
+  const unavailableCount = index?.sections.filter((section) => section.state === 'UNAVAILABLE').length ?? 0;
+  const applicableCount = index?.sections.filter((section) => section.state !== 'NOT_APPLICABLE').length ?? 0;
+  const orientation = completeness?.state === 'AVAILABLE' && completeness.pendingDetails
+    ? `${completeness.pendingDetails} home detail${completeness.pendingDetails === 1 ? '' : 's'} need review. Everything else is organized below by how you use it.`
+    : 'Your home record is organized below by how you use it. Browse a section or ask Cozy about any record.';
 
   return (
     <section className="h-full overflow-y-auto px-4 py-6 sm:px-6 lg:px-10" aria-labelledby="ask-record-title">
       <AskWorkspaceMeasure data-presentation-contract="ask.destination.record">
-        <header className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-          <div className="min-w-0">
-            <p className="text-xs font-bold uppercase tracking-[0.14em] text-teal-700">Ask Cozy destination</p>
-            <h1 id="ask-record-title" className="mt-1 text-3xl font-semibold tracking-[-0.025em] text-slate-950">Record</h1>
-            {propertyLabel && <p className="mt-1 truncate text-sm text-slate-600">{propertyLabel}{index?.property ? ` · ${index.property.city}, ${index.property.state}` : ''}</p>}
-          </div>
-          {!collectionSection && !exportReview && completeness?.state === 'AVAILABLE' && completeness.percent !== null && (
-            <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3" data-record-completeness>
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-slate-950">{completeness.percent}% of home details known</p>
-                <p className="text-xs text-slate-500">{completeness.pendingDetails ? `${completeness.pendingDetails} detail${completeness.pendingDetails === 1 ? '' : 's'} still to review` : 'Nothing pending review'}</p>
-              </div>
-              {scopedPropertyId && (
-                <Link href={buildAskWorkspaceHref({ propertyId: scopedPropertyId, question: 'How complete is my home record?', from: 'record', backTo: '/dashboard/ask/record' })} className="inline-flex min-h-11 items-center rounded-xl border border-emerald-900/20 px-3 py-2 text-sm font-semibold text-emerald-950 hover:bg-emerald-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700">
-                  Review
-                </Link>
-              )}
+        <header className="overflow-hidden rounded-3xl border border-emerald-100 bg-gradient-to-br from-emerald-950 via-emerald-900 to-teal-800 text-white shadow-sm">
+          <div className="flex flex-col gap-5 px-5 py-5 sm:px-7 sm:py-6 lg:flex-row lg:items-end lg:justify-between">
+            <div className="min-w-0 max-w-3xl">
+              <p className="text-xs font-bold uppercase tracking-[0.14em] text-emerald-200">Your home record</p>
+              <h1 id="ask-record-title" className="mt-1 text-3xl font-semibold tracking-[-0.025em] sm:text-4xl">{propertyLabel ?? 'Record'}</h1>
+              {index?.property && <p className="mt-1 truncate text-sm text-emerald-100">{index.property.address} · {index.property.city}, {index.property.state}</p>}
+              {!collectionSection && !exportReview && index && <p className="mt-4 max-w-2xl text-sm leading-6 text-emerald-50">{orientation}</p>}
             </div>
-          )}
-          {!collectionSection && !exportReview && scopedPropertyId && (
-            <Link href={`/dashboard/ask/record?propertyId=${encodeURIComponent(scopedPropertyId)}&export=review`} className="inline-flex min-h-11 items-center justify-center rounded-xl border border-emerald-900/20 bg-white px-4 py-2 text-sm font-semibold text-emerald-950 hover:bg-emerald-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700">
-              Export home record
-            </Link>
+            {!collectionSection && !exportReview && scopedPropertyId && (
+              <div className="flex flex-wrap gap-2">
+                {completeness?.state === 'AVAILABLE' && completeness.percent !== null && (
+                  <Link href={buildAskWorkspaceHref({ propertyId: scopedPropertyId, question: 'How complete is my home record?', from: 'record', backTo: '/dashboard/ask/record' })} className="inline-flex min-h-11 items-center rounded-xl bg-white px-4 py-2 text-sm font-semibold text-emerald-950 hover:bg-emerald-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-white">Review details</Link>
+                )}
+                <Link href={`/dashboard/ask/record?propertyId=${encodeURIComponent(scopedPropertyId)}&export=review`} className="inline-flex min-h-11 items-center justify-center rounded-xl border border-white/30 px-4 py-2 text-sm font-semibold text-white hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-white">Export</Link>
+              </div>
+            )}
+          </div>
+          {!collectionSection && !exportReview && index && (
+            <dl className="grid grid-cols-2 border-t border-white/15 bg-black/10 sm:grid-cols-4" data-record-signals>
+              <div className="px-5 py-3"><dt className="text-[11px] font-semibold uppercase tracking-wide text-emerald-200">Home details</dt><dd className="mt-0.5 text-lg font-semibold">{completeness?.state === 'AVAILABLE' && completeness.percent !== null ? `${completeness.percent}% known` : 'Checking'}</dd></div>
+              <div className="border-l border-white/15 px-5 py-3"><dt className="text-[11px] font-semibold uppercase tracking-wide text-emerald-200">Needs review</dt><dd className="mt-0.5 text-lg font-semibold">{completeness?.state === 'AVAILABLE' ? completeness.pendingDetails : '—'}</dd></div>
+              <div className="border-t border-white/15 px-5 py-3 sm:border-l sm:border-t-0"><dt className="text-[11px] font-semibold uppercase tracking-wide text-emerald-200">With records</dt><dd className="mt-0.5 text-lg font-semibold">{populatedSectionCount} sections</dd></div>
+              <div className="border-l border-t border-white/15 px-5 py-3 sm:border-t-0"><dt className="text-[11px] font-semibold uppercase tracking-wide text-emerald-200">Sections available</dt><dd className="mt-0.5 text-lg font-semibold">{applicableCount - unavailableCount} of {applicableCount}</dd></div>
+            </dl>
           )}
         </header>
 
@@ -243,9 +288,28 @@ export function AskRecord() {
               {index.partial && (
                 <AskCollectionState kind="UNAVAILABLE" description="Some sections could not be read right now. They are marked below." className="mb-3 border-amber-200 bg-amber-50 text-amber-950" action={<button type="button" onClick={retry} className="min-h-11 rounded-xl border border-amber-300 bg-white px-3 py-2 text-sm font-semibold text-amber-950 hover:bg-amber-100">Try again</button>} />
               )}
-              <AskCollection className="rounded-2xl border border-slate-200 bg-white lg:grid lg:grid-cols-2 lg:divide-y-0 lg:[&>li:nth-child(odd)]:border-r lg:[&>li:nth-child(odd)]:border-slate-200" aria-label="Record sections">
-                {index.sections.map((section) => <SectionRow key={section.id} section={section} propertyId={index.propertyId} />)}
-              </AskCollection>
+              <label className="relative mb-5 block max-w-xl">
+                <span className="sr-only">Search home record sections</span>
+                <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
+                <input value={sectionQuery} onChange={(event) => setSectionQuery(event.target.value)} placeholder="Find a section, such as warranties or permits" className="min-h-12 w-full rounded-2xl border border-slate-200 bg-white py-3 pl-10 pr-4 text-sm text-slate-950 shadow-sm outline-none placeholder:text-slate-400 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100" />
+              </label>
+              {visibleGroups.length === 0 ? (
+                <AskCollectionState kind="EMPTY" title="No matching record section" description={`No section matches “${sectionQuery.trim()}”. Try a broader term.`} />
+              ) : (
+                <div className="space-y-6">
+                  {visibleGroups.map((group) => (
+                    <section key={group.id} aria-labelledby={`record-group-${group.id}`}>
+                      <div className="mb-2 px-1">
+                        <h2 id={`record-group-${group.id}`} className="text-base font-semibold text-slate-950">{group.label}</h2>
+                        <p className="mt-0.5 text-xs text-slate-500">{group.description}</p>
+                      </div>
+                      <AskCollection className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:grid lg:grid-cols-2 lg:divide-y-0 lg:[&>li:nth-child(odd)]:border-r lg:[&>li:nth-child(odd)]:border-slate-100" aria-label={group.label}>
+                        {group.sections.map((section) => <SectionRow key={section.id} section={section} propertyId={index.propertyId} />)}
+                      </AskCollection>
+                    </section>
+                  ))}
+                </div>
+              )}
             </>
           )}
         </section>

@@ -19,6 +19,7 @@ const { isCompleteHomeRecordRequest, propertyOverviewFactsSentence, propertyOver
 const { PROPERTY_RECORD_CONTEXT_SCOPES } = require('../../src/services/propertyRecordOverview.service.ts');
 const { getContextCompleteness } = require('../../src/modules/propertyContext/application/getContextCompleteness.ts');
 const { AskPresentationBlockSchema } = require('../../src/productFramework/ask/ask.contract.ts');
+const { isAskInConversationHref } = require('../../src/services/ask/askAnswerTrustPolicy.ts');
 
 // The full fact catalog has ~70 applicable facts; a snapshot naming only a few as KNOWN leaves the rest "missing" by the domain's own
 // rule, so tests compute the expected pending count the same way the handler does rather than assuming a hand-picked number.
@@ -63,17 +64,23 @@ test('the complete record workspace is explicit and does not turn an ordinary su
   assert.equal(isCompleteHomeRecordRequest('How complete is my home record?'), false);
 });
 
-test('an explicit browse-record request returns one calm record index with Ask-native drill-downs', async () => {
+test('the trust boundary admits durable Ask destinations but still rejects traditional dashboard pages', () => {
+  assert.equal(isAskInConversationHref('/dashboard/ask/record?propertyId=p1'), true);
+  assert.equal(isAskInConversationHref('/dashboard/ask/work?propertyId=p1'), true);
+  assert.equal(isAskInConversationHref('/dashboard/properties/p1/tools/home-records'), false);
+});
+
+test('an explicit browse-record request gives a concise handoff to the canonical Record workspace', async () => {
   install({ 'core.dwellingType': { state: 'KNOWN' } });
   const result = await invoke('Browse my home record');
-  assert.equal(summaryOf(result).title, 'Complete home record for 94 Ashford Dr, Town');
-  assert.ok(result.blocks.some((block) => block.id === 'property-summary-facts'));
-  const index = result.blocks.find((block) => block.id === 'property-record-index');
-  assert.equal(index.type, 'GROUPED_LIST');
-  assert.equal(index.sections.length, 1);
-  assert.deepEqual(index.sections[0].items.map((item) => item.id), ['profile', 'rooms', 'inventory', 'documents', 'warranties', 'timeline', 'household']);
-  assert.deepEqual(index.sections[0].items.find((item) => item.id === 'inventory').actions[0].operationId, 'INVENTORY_LOOKUP');
-  assert.ok(!JSON.stringify(result.blocks).includes('/dashboard/'));
+  const summary = summaryOf(result);
+  assert.equal(summary.title, 'Your home record is ready to browse');
+  assert.match(summary.body, /Open the Record workspace/);
+  assert.deepEqual(summary.actions, [{
+    id: 'browse-home-record', label: 'Browse home record', href: '/dashboard/ask/record?propertyId=p1', style: 'PRIMARY',
+  }]);
+  assert.equal(result.blocks.some((block) => block.id === 'property-summary-facts'), false);
+  assert.equal(result.blocks.some((block) => block.id === 'property-record-index'), false);
   for (const block of result.blocks) AskPresentationBlockSchema.parse(block);
 });
 

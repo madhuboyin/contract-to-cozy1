@@ -438,13 +438,21 @@ export function householdRoleFromResult(result: AskOperationResult): HouseholdRo
 }
 
 /**
- * Ask is the product surface (owner decision, 2026-10-10): an answer may link only to a place inside the conversation. A link to a desktop page
- * (any other /dashboard route) is removed here, in one place, for every block type, so no handler can send a homeowner out of Ask.
+ * Ask is the product surface (owner decision, 2026-10-10): an answer may link only to the conversation or one of Ask's durable destinations.
+ * A link to a traditional desktop page (any other /dashboard route) is removed here, in one place, for every block type, so no handler can
+ * send a homeowner out of Ask.
  */
 export function isAskInConversationHref(href: string): boolean {
   if (!href.startsWith('/')) return false;
   const path = new URL(href, 'https://ask.local').pathname;
-  return path === '/dashboard/ask' || path === '/dashboard/ask/';
+  return [
+    '/dashboard/ask',
+    '/dashboard/ask/',
+    '/dashboard/ask/work',
+    '/dashboard/ask/record',
+    '/dashboard/ask/saved',
+    '/dashboard/ask/history',
+  ].includes(path);
 }
 
 export function isAskHrefSafeForProperty(href: string, propertyId?: string | null): boolean {

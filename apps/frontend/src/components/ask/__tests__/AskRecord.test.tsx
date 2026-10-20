@@ -37,10 +37,11 @@ describe('AskRecord', () => {
     ]) });
     render(<AskRecord />);
 
-    expect(await screen.findByText('Maple House · Austin, TX')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Maple House' })).toBeInTheDocument();
+    expect(screen.getByText('1 Main St · Austin, TX')).toBeInTheDocument();
     expect(getIndex).toHaveBeenCalledWith('home-1', expect.objectContaining({ signal: expect.any(AbortSignal) }));
     const rows = Array.from(document.querySelectorAll('[data-record-section]'));
-    expect(rows.map((row) => row.getAttribute('data-record-section'))).toEqual(['rooms', 'warranties', 'permits', 'buyer-records', 'inspections']);
+    expect(rows.map((row) => row.getAttribute('data-record-section'))).toEqual(['rooms', 'warranties', 'permits', 'inspections', 'buyer-records']);
 
     const rooms = rows[0] as HTMLElement;
     expect(within(rooms).getByText(/3 rooms · updated Oct 5, 2026/)).toBeInTheDocument();
@@ -53,11 +54,14 @@ describe('AskRecord', () => {
 
     expect(within(rows[1] as HTMLElement).getByText('None recorded')).toBeInTheDocument();
     expect(within(rows[2] as HTMLElement).getByText(/Count not shown here yet/)).toBeInTheDocument();
-    expect(within(rows[3] as HTMLElement).getByText(/Does not apply at your home/)).toBeInTheDocument();
-    expect(within(rows[3] as HTMLElement).queryByRole('link')).toBeNull();
-    expect(within(rows[4] as HTMLElement).getByText(/Tell Cozy whether you own/)).toBeInTheDocument();
-    expect(screen.getByText('40% of home details known')).toBeInTheDocument();
-    expect(screen.getByText('3 details still to review')).toBeInTheDocument();
+    const buyer = document.querySelector('[data-record-section="buyer-records"]') as HTMLElement;
+    const inspections = document.querySelector('[data-record-section="inspections"]') as HTMLElement;
+    expect(within(buyer).getByText(/Does not apply at your home/)).toBeInTheDocument();
+    expect(within(buyer).queryByRole('link')).toBeNull();
+    expect(within(inspections).getByText(/Tell Cozy whether you own/)).toBeInTheDocument();
+    expect(screen.getByText('40% known')).toBeInTheDocument();
+    expect(within(screen.getByText('Needs review').closest('div') as HTMLElement).getByText('3')).toBeInTheDocument();
+    expect(screen.getByText(/3 home details need review/)).toBeInTheDocument();
   });
 
   it('offers Browse all only for sections that serve a paged collection', async () => {
@@ -107,9 +111,9 @@ describe('AskRecord', () => {
     getIndex.mockResolvedValue({ success: true, data: index([section({ id: 'rooms', label: 'Rooms' }), section({ id: 'inventory', label: 'Inventory' })]) });
     render(<AskRecord />);
     await screen.findByText('Inventory');
-    const list = screen.getByRole('list', { name: 'Record sections' });
-    expect(list.className).toContain('lg:grid-cols-2');
-    for (const row of Array.from(list.querySelectorAll('li'))) {
+    const lists = screen.getAllByRole('list');
+    expect(lists.every((list) => list.className.includes('lg:grid-cols-2'))).toBe(true);
+    for (const row of Array.from(document.querySelectorAll('[data-record-section]'))) {
       expect(row.className).not.toMatch(/(^|\s)h-/);
       expect(row.className).toContain('sm:flex-row');
       expect(row.querySelectorAll('a')).toHaveLength(1);
