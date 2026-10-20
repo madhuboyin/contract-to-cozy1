@@ -111,7 +111,7 @@ test('an exact-warranty question: one record, no filters, recorded text, and a p
   expect(api.correctionConfirmBodies).toEqual([]);
 });
 
-test('inline detail opens without navigating; an owner corrects a warranty through edit, consent reset, confirmation and a receipt', async ({ page }) => {
+test('inline detail opens without navigating; an owner edits a warranty through ONE editor, a changes-only review, consent and a receipt', async ({ page }) => {
   const api = await installAskApi(page);
   await startWarranties(page);
   await expect(page.getByRole('button', { name: /Add the warranty document/ })).toHaveCount(0);
@@ -119,23 +119,31 @@ test('inline detail opens without navigating; an owner corrects a warranty throu
   await response.getByRole('button', { name: 'Acme Home Warranty' }).click();
   await expect(response.getByText('Current canonical warranty record.')).toBeVisible();
   await expect(page).toHaveURL(/\/acceptance\/ask\?/);
-  // Owner-authorised controls are present for the requester's own warranty.
-  await expect(response.getByText('Correct a detail')).toBeVisible();
+  // Owner-authorised controls are present for the requester's own warranty: one Edit action, not a list of "Correct ..." buttons.
+  await expect(response.getByRole('button', { name: /^Edit warranty/ })).toHaveCount(1);
+  await expect(response.getByText('Correct a detail')).toHaveCount(0);
   await expect(response.locator('button', { hasText: 'Attach a document' })).toBeVisible();
-  await response.getByText('Correct a detail').click();
-  await response.getByRole('button', { name: /^Correct expiry date/ }).click();
-  await expect.poll(() => api.executionBodies.some((body) => body.message === 'Correct the expiry date of this warranty.'
+  await response.getByRole('button', { name: /^Edit warranty/ }).click();
+  await expect.poll(() => api.executionBodies.some((body) => body.message === 'Edit this warranty.'
     && (body.launchContext as { entityId?: string } | undefined)?.entityId === 'warranty-property-summary')).toBe(true);
+
+  const editor = page.locator('[data-record-editor]');
+  await expect(editor.getByLabel(/^Provider/)).toHaveValue('Acme Home Warranty');
+  await expect(editor.getByLabel(/^Expiration date/)).toHaveValue('2027-12-01');
+  await expect(editor.getByRole('button', { name: 'Review changes' })).toBeDisabled();
+  await expect(editor.getByText('Change a detail to enable review.')).toBeVisible();
+  await editor.getByLabel(/^Expiration date/).fill('2028-06-30');
+  await editor.getByLabel(/^Cost/).fill('525.5');
+  await editor.getByRole('button', { name: 'Review changes' }).click();
+  await expect.poll(() => api.warrantyEditCaptureBodies).toEqual([expect.objectContaining({
+    captureKey: 'WARRANTY_UPDATE_INPUTS', answer: expect.objectContaining({ expiryDate: '2028-06-30', cost: '525.50', providerName: 'Acme Home Warranty' }),
+  })]);
   await expect(page.locator('[data-conversational-stage="review"]')).toContainText('Review · nothing is saved until you confirm');
-  await expect(page.getByText('Correct the expiry date of the Acme Home Warranty warranty?')).toBeVisible();
-  await page.getByRole('button', { name: 'Edit' }).click();
-  await page.getByLabel('Corrected expiry date').fill('2028-06-30');
-  await page.getByRole('button', { name: 'Save', exact: true }).click();
-  await expect.poll(() => api.correctionEditBodies).toEqual([{ confirmationVersion: 1, edits: { value: '2028-06-30' } }]);
-  await expect(page.getByRole('button', { name: 'Save expiry date' })).toBeDisabled();
-  await page.getByLabel(/I authorize this correction to the warranty record/).check();
-  await page.getByRole('button', { name: 'Save expiry date' }).click();
-  await expect.poll(() => api.correctionConfirmBodies).toEqual([expect.objectContaining({ confirmationVersion: 2, consentConfirmed: true })]);
+  await expect(page.getByText('Save 2 changes to the Acme Home Warranty warranty?')).toBeVisible();
+  await expect(page.getByText('2027-12-01 \u2192 2028-06-30')).toBeVisible();
+  await page.getByLabel(/I authorize these changes to the warranty record/).check();
+  await page.getByRole('button', { name: 'Save changes' }).click();
+  await expect.poll(() => api.correctionConfirmBodies).toEqual([expect.objectContaining({ confirmationVersion: 1, consentConfirmed: true })]);
   const receipt = page.locator('[data-calm-receipt="completed"]');
   await expect(receipt).toContainText('Receipt');
   await expect(receipt).toContainText('Warranty updated');

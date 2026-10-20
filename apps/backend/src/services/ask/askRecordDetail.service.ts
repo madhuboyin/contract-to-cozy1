@@ -129,10 +129,10 @@ async function readWarrantyDetail(context: DetailContext, warrantyId: string): P
     },
     // The warranty belongs to the profile of the member who added it, and Ask only lets that member correct it (existing rule, unchanged).
     corrections: [route({
-      id: 'warranty-correct', label: 'Correct a detail', operationId: 'WARRANTY_CORRECT', role: context.role,
-      launch: { message: 'Correct a detail of this warranty.', entityType: 'WARRANTY', entityId: warrantyId },
-      note: 'Ask will ask which detail to change.',
-      blockedReason: owned ? null : 'Only the member who added this warranty can correct it.',
+      id: 'warranty-edit', label: 'Edit warranty', operationId: 'WARRANTY_UPDATE', role: context.role,
+      launch: { message: 'Edit this warranty.', entityType: 'WARRANTY', entityId: warrantyId },
+      note: 'Ask opens every detail of the warranty in one editor and reviews only what you change.',
+      blockedReason: owned ? null : 'Only the member who added this warranty can edit it.',
     })],
   };
 }

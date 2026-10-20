@@ -317,10 +317,10 @@ export type AskOperationId =
   | 'HOME_EVENT_CORRECT'
   // Phase 3 write slice 7: change who can see a timeline event (PRIVATE / HOUSEHOLD / RESALE_PACK), written in place.
   | 'HOME_EVENT_VISIBILITY'
-  // Phase 3 write slice 3: provider/expiry-date correction on a Warranty,
+  // Phase 3 write slice 3 (multi-field RecordEditor edit since FRD v1.385): edit a Warranty,
   // owner-only (a Warranty belongs to one member's homeownerProfile, and the
   // canonical updateWarranty is scoped to it).
-  | 'WARRANTY_CORRECT'
+  | 'WARRANTY_UPDATE'
   | 'WARRANTY_LOOKUP'
   // Phase 3 write slice 4: rename an InventoryRoom via the canonical
   // inventoryService.updateRoom (plus the controller's stale-analysis markers).
@@ -455,7 +455,7 @@ export const ASK_INTERNAL_OPERATION_IDS: ReadonlySet<AskOperationId> = new Set<A
   'INVENTORY_ITEM_CORRECT',
   'HOME_EVENT_CORRECT',
   'HOME_EVENT_VISIBILITY',
-  'WARRANTY_CORRECT',
+  'WARRANTY_UPDATE',
   'ROOM_RENAME',
   // Reached only by the declared "Add a room" action: there is no message pattern for it and no fuzzy retrieval.
   'ROOM_CREATE',
@@ -620,7 +620,7 @@ export interface AskOperationResult {
 const CAPABILITY_CONTINUITY_OPERATIONS = new Set<AskOperationId>([
   'MAINTENANCE_STATUS', 'MAINTENANCE_TASK_CREATE', 'MAINTENANCE_TASK_COMPLETE',
   'MAINTENANCE_TASK_UPDATE', 'MAINTENANCE_FORECAST', 'GUIDANCE_JOURNEY_CREATE', 'QUOTE_COMPARISON_CREATE', 'QUOTE_COMPARISON_REVIEW', 'HOME_DEADLINE_MONITOR',
-  'CAPITAL_RESERVE_PLAN', 'RESERVE_FUND_COMMAND', 'PROPERTY_BRIEF_COMMAND', 'PROPERTY_TAX_APPEAL_READINESS', 'RENOVATION_PERMIT_READINESS', 'MAJOR_EVENT_ENTRY', 'SELLER_PREP_CHECKLIST', 'SELLER_PREP_ITEM_DECISION', 'INVENTORY_ITEM_CORRECT', 'HOME_EVENT_CORRECT', 'HOME_EVENT_VISIBILITY', 'WARRANTY_CORRECT', 'ROOM_RENAME', 'ROOM_CREATE', 'PROPERTY_PURCHASE_DATE_SET', 'HOME_JOURNEY_SET', 'MATERIAL_SPEC_ADD', 'HOME_PLANT_ADD', 'ROOM_PLANT_RECOMMENDATIONS', 'OWNERSHIP_COST_COMMAND', 'HOME_HABITS_GENERATE', 'DO_NOTHING_SIMULATION_RUN', 'SERVICE_PRICE_CHECK_RUN',
+  'CAPITAL_RESERVE_PLAN', 'RESERVE_FUND_COMMAND', 'PROPERTY_BRIEF_COMMAND', 'PROPERTY_TAX_APPEAL_READINESS', 'RENOVATION_PERMIT_READINESS', 'MAJOR_EVENT_ENTRY', 'SELLER_PREP_CHECKLIST', 'SELLER_PREP_ITEM_DECISION', 'INVENTORY_ITEM_CORRECT', 'HOME_EVENT_CORRECT', 'HOME_EVENT_VISIBILITY', 'WARRANTY_UPDATE', 'ROOM_RENAME', 'ROOM_CREATE', 'PROPERTY_PURCHASE_DATE_SET', 'HOME_JOURNEY_SET', 'MATERIAL_SPEC_ADD', 'HOME_PLANT_ADD', 'ROOM_PLANT_RECOMMENDATIONS', 'OWNERSHIP_COST_COMMAND', 'HOME_HABITS_GENERATE', 'DO_NOTHING_SIMULATION_RUN', 'SERVICE_PRICE_CHECK_RUN',
   'COVERAGE_GAPS', 'COVERAGE_COMPARISON_STATUS', 'SAVINGS_OPPORTUNITIES', 'OWNERSHIP_COSTS', 'INVENTORY_LOOKUP', 'DOCUMENT_LOOKUP',
   'PROPERTY_SUMMARY', 'HOME_ACTIONS', 'REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS',
   'REFINANCE_RATE_MONITOR', 'SELL_HOLD_RENT_ANALYSIS',
@@ -817,7 +817,7 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   INVENTORY_ITEM_CORRECT: definition('INVENTORY_ITEM_CORRECT', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'inventory.item-correct', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   HOME_EVENT_CORRECT: definition('HOME_EVENT_CORRECT', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'home-event.correct', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   HOME_EVENT_VISIBILITY: definition('HOME_EVENT_VISIBILITY', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'home-event.visibility', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS', 'LIMITATION']),
-  WARRANTY_CORRECT: definition('WARRANTY_CORRECT', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'warranty.correct', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS', 'LIMITATION']),
+  WARRANTY_UPDATE: definition('WARRANTY_UPDATE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'warranty.update', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   ROOM_RENAME: definition('ROOM_RENAME', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'room.rename', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   ROOM_CREATE: definition('ROOM_CREATE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'room.create', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   PROPERTY_PURCHASE_DATE_SET: definition('PROPERTY_PURCHASE_DATE_SET', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'OWNER', 'property-purchase-date.set', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
@@ -1126,8 +1126,8 @@ const inventoryCreatePattern = /^\s*(?:please\s+)?(?:add|record|create)\s+(?!(?:
 const homeEventCorrectPattern = /\b(?:correct|fix|change|update|edit)\b.{0,40}\b(?:title|date|name|summary|description|amount|cost|price|type|importance|room|inventory\s+item)\b.{0,40}\b(?:timeline|home)\s+event\b|\b(?:timeline|home)\s+event\b.{0,60}\b(?:correct|fix|change|update|edit)\b.{0,30}\b(?:title|date|name|summary|description|amount|cost|price|type|importance|room|inventory\s+item)\b/i;
 // Timeline event visibility (Phase 3 write slice 7): change/make/share/set + private/household/resale/visibility + event.
 const homeEventVisibilityPattern = /\b(?:change|make|set|share)\b.{0,40}\b(?:visibility|private|household|resale)\b.{0,40}\b(?:timeline|home)\s+event\b|\b(?:timeline|home)\s+event\b.{0,60}\b(?:change|make|set|share)\b.{0,30}\b(?:visibility|private|household|resale)\b|\b(?:change|make|set|share)\b.{0,40}\b(?:timeline|home)\s+event\b.{0,40}\b(?:visibility|private|household|resale)\b|\bwho\s+can\s+see\b.{0,60}\b(?:timeline|home)\s+event\b/i;
-// Warranty provider / expiry-date correction (Phase 3 write slice 3).
-const warrantyCorrectPattern = /\b(?:correct|fix|change|update|edit)\b.{0,40}\b(?:provider|expir(?:y|ation|es)|start(?:\s+date)?|coverage\s+(?:type|details)|category|policy(?:\s+number)?|cost|price|premium|details)\b.{0,40}\bwarrant(?:y|ies)\b|\bwarrant(?:y|ies)\b.{0,60}\b(?:correct|fix|change|update|edit)\b.{0,30}\b(?:provider|expir(?:y|ation)|start(?:\s+date)?|coverage\s+(?:type|details)|category|policy(?:\s+number)?|cost|price|premium|details)\b/i;
+// Warranty edit (Phase 3 write slice 3, one multi-field editor since FRD v1.385): a named field, or the bare "Edit this warranty" the declared action sends.
+const warrantyCorrectPattern = /^\s*(?:edit|update|change|correct)\s+(?:this|the|my|a)\s+warrant(?:y|ies)\b|\b(?:correct|fix|change|update|edit)\b.{0,40}\b(?:provider|expir(?:y|ation|es)|start(?:\s+date)?|coverage\s+(?:type|details)|category|policy(?:\s+number)?|cost|price|premium|details)\b.{0,40}\bwarrant(?:y|ies)\b|\bwarrant(?:y|ies)\b.{0,60}\b(?:correct|fix|change|update|edit)\b.{0,30}\b(?:provider|expir(?:y|ation)|start(?:\s+date)?|coverage\s+(?:type|details)|category|policy(?:\s+number)?|cost|price|premium|details)\b/i;
 // Room correction (Phase 3 write slice 4, extended to type and floor level): an explicit rename/correct verb
 // for the name, type or floor level, tied to the word "room".
 const roomRenamePattern = /\brename\b.{0,40}\broom\b|\b(?:correct|fix|change|update|edit)\b.{0,40}\bname\b.{0,40}\broom\b|\broom\b.{0,60}\b(?:correct|fix|change|update|edit)\b.{0,30}\bname\b|\b(?:correct|fix|change|update|edit)\b.{0,40}\b(?:type|floor(?:\s+level)?)\b.{0,40}\broom\b|\b(?:correct|fix|change|update|edit)\b.{0,40}\broom\s+(?:type|floor(?:\s+level)?)\b|\broom\b.{0,60}\b(?:correct|fix|change|update|edit)\b.{0,30}\b(?:type|floor(?:\s+level)?)\b/i;
@@ -1555,7 +1555,7 @@ export function resolveAskOperation(message: string): AskOperationResolution {
     return resolved('ROOM_RENAME', 0.97);
   }
   if (warrantyCorrectPattern.test(message) && !explicitCapabilityPattern.test(message)) {
-    return resolved('WARRANTY_CORRECT', 0.97);
+    return resolved('WARRANTY_UPDATE', 0.97);
   }
   if (homeEventCorrectPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('HOME_EVENT_CORRECT', 0.97);

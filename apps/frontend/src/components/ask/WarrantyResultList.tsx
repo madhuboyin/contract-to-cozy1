@@ -149,7 +149,7 @@ function WarrantyDetail({ warrantyId, expectedPropertyId, fallbackItem, disabled
           <Pencil className="h-4 w-4 text-teal-700" aria-hidden="true" />
           <h5 id={`warranty-edit-${warrantyId}`} className="text-sm font-semibold text-slate-950">Edit warranty</h5>
         </div>
-        <p className="mt-1 text-sm text-slate-600">Choose the detail you want to correct. Cozy will review the change with you before saving it.</p>
+        <p className="mt-1 text-sm text-slate-600">Change any details in one place. Cozy shows only what changed for your review before saving.</p>
         <CorrectionActions actions={correctionActions} subject={warranty.providerName} entityType={fallbackItem.entityType} entityId={fallbackItem.id} disabled={disabled} onAction={onAction} />
       </section>}
       {correctionActions.length === 0 && <div className="mt-5 flex gap-3 border-t border-slate-200 pt-4 text-sm text-slate-600" data-warranty-edit-unavailable="">

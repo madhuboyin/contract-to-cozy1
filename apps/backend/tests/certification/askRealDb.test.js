@@ -131,7 +131,7 @@ test('RECONCILE: a write marks the other conversations\' answers stale in the da
   const session = (label) => prisma.askSession.create({ data: { userId: owner.id } });
   const [mine, other] = [await session('a'), await session('b')];
   const execution = (sessionId, operationId, minutes, extra = {}) => prisma.askExecution.create({ data: { sessionId, userId: owner.id, propertyId: p1.id, clientRequestId: unique('req'), message: 'q', operationId, status: 'ANSWERED', createdAt: new Date(Date.now() - minutes * 60_000), ...extra } });
-  const writer = await execution(mine.id, 'WARRANTY_CORRECT', 5, { status: 'COMPLETED' });
+  const writer = await execution(mine.id, 'WARRANTY_UPDATE', 5, { status: 'COMPLETED' });
   const here = await execution(mine.id, 'WARRANTY_LOOKUP', 4);
   const there = await execution(other.id, 'WARRANTY_LOOKUP', 3);
   const unrelated = await execution(other.id, 'ROOM_CREATE', 2, { status: 'COMPLETED' });
@@ -162,7 +162,7 @@ test('RECONCILE: marking is safe against a concurrent change (a row updated sinc
   const row = await prisma.askExecution.create({ data: { sessionId: session.id, userId: owner.id, propertyId: p1.id, clientRequestId: unique('req'), message: 'q', operationId: 'WARRANTY_LOOKUP', status: 'ANSWERED' } });
   const stale = await prisma.askExecution.findUnique({ where: { id: row.id } });
   await prisma.askExecution.update({ where: { id: row.id }, data: { message: 'changed meanwhile' } });
-  const marked = await svc.reconciliation.markExecutionsStale([stale], 'WARRANTY_CORRECT');
+  const marked = await svc.reconciliation.markExecutionsStale([stale], 'WARRANTY_UPDATE');
   assert.deepEqual(marked, [], 'the changed row was not overwritten');
   assert.equal((await prisma.askExecution.findUnique({ where: { id: row.id } })).message, 'changed meanwhile');
 });

@@ -112,7 +112,7 @@ test('a viewer sees no write control, a non-owner sees no correction, and only t
   assert.ok(!list(viewer).actions.some((action) => action.id === 'open-warranties-list'), 'Ask links to no desktop Warranties page');
   const member = build('Show my warranties', records, { canWrite: true, ownedIds: new Set(['mine']) });
   const byId = Object.fromEntries(items(member).map((item) => [item.id, item]));
-  assert.ok(byId.mine.actions.length > 0 && byId.mine.actions.every((action) => action.operationId === 'WARRANTY_CORRECT'));
+  assert.ok(byId.mine.actions.length > 0 && byId.mine.actions.every((action) => action.operationId === 'WARRANTY_UPDATE'));
   assert.equal(byId.theirs.actions, undefined);
   assert.ok(list(member).actions.some((action) => action.id === 'add-warranty' && action.operationId === 'CAPTURE_WARRANTY_CONFIRM'));
 });
@@ -200,7 +200,7 @@ test('the questions this operation owns route here; coverage gaps, claims, corre
   assert.equal(route('What coverage gaps does my home have?'), 'COVERAGE_GAPS');
   assert.equal(route('File a claim for my broken furnace'), 'CLAIM_FILE');
   assert.equal(route('Start a warranty claim for my dishwasher'), 'CLAIM_FILE');
-  assert.equal(route('Correct the expiry date on my warranty'), 'WARRANTY_CORRECT');
+  assert.equal(route('Correct the expiry date on my warranty'), 'WARRANTY_UPDATE');
   assert.equal(route('Remind me when my warranty expires'), 'HOME_DEADLINE_MONITOR');
   assert.notEqual(route('Add a warranty to my home record'), 'WARRANTY_LOOKUP');
 });

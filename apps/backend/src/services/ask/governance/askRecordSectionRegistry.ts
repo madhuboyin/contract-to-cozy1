@@ -154,7 +154,7 @@ export const ASK_RECORD_SECTION_REGISTRY: readonly AskRecordSectionDefinition[] 
   }),
   section({
     id: 'warranties', label: 'Warranties', scope: 'Active and expired warranties with providers and dates.', owner: 'warranties',
-    readOperationIds: ['WARRANTY_LOOKUP'], commandOperationIds: ['WARRANTY_CORRECT'],
+    readOperationIds: ['WARRANTY_LOOKUP'], commandOperationIds: ['WARRANTY_UPDATE'],
     collectionReader: OVERVIEW, pagedCollection: true, lifecycleOperationId: 'WARRANTY_LOOKUP', freshnessSource: 'Warranty expiry dates', exportEligibility: EXPORT['warranties'],
     primaryAction: { label: 'View warranties', question: 'Show me my warranties.' },
   }),

@@ -334,24 +334,39 @@ export async function listWarranties(homeownerProfileId: string): Promise<Warran
 
   return rawWarranties.map(mapRawWarrantyToWarranty);
 }
+export const WARRANTY_VERSION_CONFLICT = 'WARRANTY_VERSION_CONFLICT';
+
 export async function updateWarranty(
   warrantyId: string, 
   homeownerProfileId: string, 
-  data: UpdateWarrantyDTO
+  data: UpdateWarrantyDTO,
+  // Compare-and-swap for multi-field callers (Ask's WARRANTY_UPDATE): the write lands only if the row still has this
+  // updatedAt, in the same statement, so a concurrent edit cannot be silently overwritten. Scalar fields only.
+  options?: { expectedUpdatedAt?: Date }
 ): Promise<Warranty> {
-  const rawUpdatedWarranty = await prisma.warranty.update({
-    where: { id: warrantyId, homeownerProfileId },
-    data: {
-      ...data,
-      ...(data.startDate && { startDate: new Date(data.startDate) }),
-      ...(data.expiryDate && { expiryDate: new Date(data.expiryDate) }),
-      // Handle inventoryItemId update (supports both old and new field names)
-      ...(data.inventoryItemId && {
-        inventoryItem: { connect: { id: data.inventoryItemId } }
-      }),
-    } as Prisma.WarrantyUpdateInput,
-    include: { documents: true }
-  });
+  let rawUpdatedWarranty;
+  if (options?.expectedUpdatedAt) {
+    const claimed = await prisma.warranty.updateMany({
+      where: { id: warrantyId, homeownerProfileId, updatedAt: options.expectedUpdatedAt },
+      data: data as Prisma.WarrantyUpdateManyMutationInput,
+    });
+    if (claimed.count !== 1) throw Object.assign(new Error('This warranty changed while the edit was open.'), { code: WARRANTY_VERSION_CONFLICT });
+    rawUpdatedWarranty = await prisma.warranty.findUniqueOrThrow({ where: { id: warrantyId }, include: { documents: true } });
+  } else {
+    rawUpdatedWarranty = await prisma.warranty.update({
+      where: { id: warrantyId, homeownerProfileId },
+      data: {
+        ...data,
+        ...(data.startDate && { startDate: new Date(data.startDate) }),
+        ...(data.expiryDate && { expiryDate: new Date(data.expiryDate) }),
+        // Handle inventoryItemId update (supports both old and new field names)
+        ...(data.inventoryItemId && {
+          inventoryItem: { connect: { id: data.inventoryItemId } }
+        }),
+      } as Prisma.WarrantyUpdateInput,
+      include: { documents: true }
+    });
+  }
 
   // 🔑 ADD THIS SECTION - Trigger risk report regeneration
   if (rawUpdatedWarranty.propertyId) {

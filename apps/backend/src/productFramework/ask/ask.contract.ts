@@ -1216,6 +1216,19 @@ export const AskCaptureRequestSchema = z.object({
   presentation: z.enum(['CONVERSATIONAL', 'FORM']).optional(),
   // The homeowner may skip this question for now (Property Summary per-area capture). Skipping writes nothing.
   skippable: z.boolean().optional(),
+  // Present when the form edits one existing record (shared RecordEditor, FRD v1.385): the client renders sections, dirty
+  // state and a changes-only save from this instead of the generic GROUP form. `inputSchema` stays an honest fallback.
+  editor: z.object({
+    recordLabel: z.string(),
+    sections: z.array(z.object({ id: z.string(), title: z.string() })),
+    fields: z.array(z.object({
+      key: z.string(), label: z.string(), kind: z.enum(['TEXT', 'TEXTAREA', 'SELECT', 'DATE', 'MONEY']), section: z.string(), required: z.boolean(),
+      maxLength: z.number().optional(), options: z.array(z.object({ label: z.string(), value: z.string() })).optional(), helpText: z.string().optional(), placeholder: z.string().optional(), pastDateNote: z.string().optional(),
+    })),
+    original: z.record(z.string(), z.string()),
+    // Per-field problems from the last submit (field-level and cross-field), shown on the field and as a summary.
+    errors: z.record(z.string(), z.string()).optional(),
+  }).optional(),
 });
 
 export const SubmitAskCaptureRequestSchema = z.object({

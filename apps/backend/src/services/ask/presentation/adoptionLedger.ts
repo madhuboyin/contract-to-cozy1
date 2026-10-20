@@ -98,7 +98,7 @@ export const REVIEWED_OPERATIONS: Readonly<Record<string, string>> = {
   INVENTORY_ITEM_CORRECT: 'the ambiguous-target command declares the complete inventory total and bounded selection rows',
   HOME_EVENT_CORRECT: 'the ambiguous-target command pairs its bounded event read with an authoritative visible-event count',
   HOME_EVENT_VISIBILITY: 'the ambiguous-target command pairs its bounded event read with an authoritative visible-event count',
-  WARRANTY_CORRECT: 'the ambiguous-target command declares the requester-owned warranty total and bounded fetched selection rows',
+  WARRANTY_UPDATE: 'the ambiguous-target command declares the requester-owned warranty total and bounded fetched selection rows',
   ROOM_RENAME: 'the ambiguous-target command pairs its bounded room read with an authoritative room count',
   INTELLIGENCE_ENVELOPE_QUERY: 'the paged Envelope read declares fetched and delivered rows, an unknown global total, and the real continuation state',
   ROOM_CREATE: 'producer-contract review: the actual workflow emits capture, summary and confirmation blocks only; its broad command allow-list does not represent a list-producing path',

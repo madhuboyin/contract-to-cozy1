@@ -726,14 +726,16 @@ test('buildChildExecutionData: a WARRANTY candidate\'s captureRequest exposes pr
   // Code review finding (2026-09-13, [P1]): dates are now editable (see
   // resolveWarrantyDates's own header on why a manufactured guess must be
   // correctable, not just labeled).
-  assert.deepEqual(request.inputSchema.fields.map((field) => field.key), ['providerName', 'category', 'policyNumber', 'coverageDetails', 'cost', 'startDate', 'expiryDate']);
+  assert.deepEqual(request.inputSchema.fields.map((field) => field.key), ['providerName', 'category', 'policyNumber', 'coverageDetails', 'startDate', 'expiryDate', 'cost']);
   assert.equal(request.currentAnswer.providerName, 'Carrier');
   assert.equal(request.currentAnswer.category, 'HVAC');
   assert.equal(request.currentAnswer.policyNumber, 'POL-123');
   assert.equal(request.currentAnswer.coverageDetails, 'Parts and labor');
   assert.equal(request.currentAnswer.cost, 450);
-  assert.match(request.currentAnswer.startDate, /^\d{4}-\d{2}-\d{2}$/);
-  assert.match(request.currentAnswer.expiryDate, /^\d{4}-\d{2}-\d{2}$/);
+  // The native date control answers with the shared exact-day value.
+  assert.equal(request.currentAnswer.startDate.precision, 'EXACT_DATE');
+  assert.match(request.currentAnswer.startDate.value, /^\d{4}-\d{2}-\d{2}$/);
+  assert.match(request.currentAnswer.expiryDate.value, /^\d{4}-\d{2}-\d{2}$/);
 });
 
 test('buildChildExecutionData: a WARRANTY candidate whose start date was only derivable via fallback (not stated) labels it estimated and flags startDateApproximate in the stored parameters', () => {

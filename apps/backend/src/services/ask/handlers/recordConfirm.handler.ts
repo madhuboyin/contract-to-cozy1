@@ -14,15 +14,16 @@ import { captureFeatureContext, PropertyContextCaptureValidationError, PropertyC
 import { PropertyContextAccessDeniedError } from '../../../modules/propertyContext/application/getPropertyContext';
 import { APIError } from '../../../middleware/error.middleware';
 import { markDoNothingRunsStale } from '../../doNothingSimulator.service';
-import { updateWarranty } from '../../home-management.service';
+import { updateWarranty, WARRANTY_VERSION_CONFLICT } from '../../home-management.service';
+import { validateWarrantyEditorAnswer, warrantyEditorChanges, warrantyEditorPatch, warrantyEditorValues } from '../support/warrantyEditor';
 import { correctionDisplay, correctionNormalized } from '../askCorrectionFields';
 import { markCoverageAnalysisStale, markItemCoverageAnalysesStale } from '../../coverageAnalysis.service';
 import { markReplaceRepairStale } from '../../replaceRepairAnalysis.service';
 import { markRiskPremiumOptimizerStale } from '../../riskPremiumOptimizer.service';
 import { humanDate } from '../askFormatting';
 import { AreaCaptureAnswerSchema, areaCaptureError, areaCaptureStateFrom, areaEffectiveSkip } from '../handlers/propertySummary.handler';
-import { areaCaptureProgress, areaLabel, areaProgressBlock, asInputJson, captureEventResult, ensurePropertyAccess, HOME_EVENT_CORRECTION_FIELDS, HOME_EVENT_LINK_FIELDS, HOME_EVENT_VISIBILITY_LABELS, HomeEventCorrectionInputSchema, HomeEventVisibilityInputSchema, HouseholdInvitationInputSchema, InventoryCreateInputSchema, InventoryItemCorrectionInputSchema, InvitableHouseholdRole, invitationRoleCopy, mapPersistedExecution, preservedExecutionHistory, propertySummary, RoomCreateInputSchema, RoomRenameInputSchema, WarrantyCorrectionInputSchema } from '../askHandlerSupport';
-import { homeEventContextVersion, homeEventCorrectionBlocker, homeEventCorrectionConfirmation, homeEventCorrectionValueError, homeEventFieldCurrent, homeEventFieldPatch, homeEventLinkOptions, homeEventsServiceForCapture, homeEventVisibilityBlocker, homeEventVisibilityConfirmation, householdService, householdWorkflowVersion, ROOM_CORRECTION_FIELDS, roomContextVersion, roomCorrectionNormalized, roomCorrectionValueError, roomFieldCurrent, roomFieldDisplay, roomRenameConfirmation, roomTypeLabel, WARRANTY_CORRECTION_FIELDS, warrantyContextVersion, warrantyCorrectionConfirmation, warrantyCorrectionValueError, warrantyFieldCurrent, warrantyFieldPatch } from '../handlers/homeRecordWrites.handler';
+import { areaCaptureProgress, areaLabel, areaProgressBlock, asInputJson, captureEventResult, ensurePropertyAccess, HOME_EVENT_CORRECTION_FIELDS, HOME_EVENT_LINK_FIELDS, HOME_EVENT_VISIBILITY_LABELS, HomeEventCorrectionInputSchema, HomeEventVisibilityInputSchema, HouseholdInvitationInputSchema, InventoryCreateInputSchema, InventoryItemCorrectionInputSchema, InvitableHouseholdRole, invitationRoleCopy, mapPersistedExecution, preservedExecutionHistory, propertySummary, RoomCreateInputSchema, RoomRenameInputSchema, WarrantyUpdateInputSchema } from '../askHandlerSupport';
+import { homeEventContextVersion, homeEventCorrectionBlocker, homeEventCorrectionConfirmation, homeEventCorrectionValueError, homeEventFieldCurrent, homeEventFieldPatch, homeEventLinkOptions, homeEventsServiceForCapture, homeEventVisibilityBlocker, homeEventVisibilityConfirmation, householdService, householdWorkflowVersion, ROOM_CORRECTION_FIELDS, roomContextVersion, roomCorrectionNormalized, roomCorrectionValueError, roomFieldCurrent, roomFieldDisplay, roomRenameConfirmation, roomTypeLabel, warrantyContextVersion } from '../handlers/homeRecordWrites.handler';
 import { warrantyExpiryReminderCandidates } from '../handlers/warranties.handler';
 import { homeEventFollowUpCandidates } from '../handlers/homeRecordWrites.handler';
 import { inventoryViewItemAction } from './inventoryAskActions';
@@ -423,59 +424,73 @@ async function confirmHomeEventVisibility(ctx: ConfirmCapabilityContext): Promis
 
 registerConfirmCapabilityHandler('home-event.visibility', confirmHomeEventVisibility);
 
-async function confirmWarrantyCorrect(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
+async function confirmWarrantyUpdate(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
   const { execution, userId, parameters } = ctx;
-  const candidate = WarrantyCorrectionInputSchema.safeParse(parameters.warrantyCorrection);
-  if (!candidate.success) throw Object.assign(new Error('The warranty correction is invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
-  const { warrantyId, field, value } = candidate.data;
+  const candidate = WarrantyUpdateInputSchema.safeParse(parameters.warrantyUpdate);
+  if (!candidate.success) throw Object.assign(new Error('The warranty update is invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+  const { warrantyId, changes } = candidate.data;
   const warranty = await prisma.warranty.findFirst({
     where: { id: warrantyId, propertyId: execution.propertyId },
     include: { homeownerProfile: { select: { id: true, userId: true } } },
   });
   if (!warranty) throw Object.assign(new Error('This warranty is no longer available. It may have been deleted.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
-  // Ownership is re-verified at execution time: updateWarranty is scoped to
-  // the owning homeownerProfile, and Ask must not widen that.
+  // Ownership is re-verified at execution time: updateWarranty is scoped to the owning homeownerProfile, and Ask must not widen that.
   if (warranty.homeownerProfile.userId !== userId) {
     throw Object.assign(new Error('Only the household member who added this warranty can change it.'), { code: 'ASK_PERMISSION_REQUIRED' });
   }
-  const invalid = warrantyCorrectionValueError(field, value, warranty);
-  if (invalid || typeof value !== 'string') throw Object.assign(new Error(invalid ?? 'Enter a corrected value before confirming.'), { code: 'ASK_INVALID_CONFIRMATION_EDIT' });
-  const next = correctionNormalized(WARRANTY_CORRECTION_FIELDS[field], value);
-  const previous = warrantyFieldCurrent(warranty, field);
-  // A recovery retry of this same execution sees the already-corrected value.
-  const alreadyApplied = previous === next;
-  if (!alreadyApplied && parameters.warrantyCorrectionContextVersion !== warrantyContextVersion(warranty)) {
+  const original = warrantyEditorValues(warranty);
+  // A recovery retry of this same execution sees the already-saved values.
+  const alreadyApplied = Object.entries(changes).every(([key, value]) => original[key] === value);
+  if (!alreadyApplied && parameters.warrantyUpdateContextVersion !== warrantyContextVersion(warranty)) {
     throw Object.assign(new Error('This warranty changed while confirmation was open. Review it and try again.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
   }
-  // Narrowed patch: never the request body, only the one confirmed field.
-  if (!alreadyApplied) await updateWarranty(warranty.id, warranty.homeownerProfile.id, warrantyFieldPatch(field, next));
+  const merged = { ...original, ...changes };
+  const { values, errors } = validateWarrantyEditorAnswer(merged);
+  const firstError = Object.values(errors)[0];
+  if (firstError) throw Object.assign(new Error(firstError), { code: 'ASK_INVALID_CONFIRMATION_EDIT' });
+  const changed = warrantyEditorChanges(original, values);
+  if (!alreadyApplied) {
+    // Narrowed scalar patch of only the confirmed keys, written as one compare-and-swap on the version the review was built from.
+    try {
+      await updateWarranty(warranty.id, warranty.homeownerProfile.id, warrantyEditorPatch(Object.keys(changes), values) as never, { expectedUpdatedAt: warranty.updatedAt });
+    } catch (caught) {
+      if ((caught as { code?: string }).code === WARRANTY_VERSION_CONFLICT) {
+        throw Object.assign(new Error('This warranty changed while confirmation was open. Review it and try again.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
+      }
+      throw caught;
+    }
+  }
   const updated = await prisma.warranty.findUniqueOrThrow({ where: { id: warranty.id } });
-  const meta = WARRANTY_CORRECTION_FIELDS[field];
   const result: AskOperationResult = {
-    status: 'COMPLETED', reasonCode: 'WARRANTY_CORRECTED', contextVersion: warrantyContextVersion(updated),
+    status: 'COMPLETED', reasonCode: 'WARRANTY_UPDATED', contextVersion: warrantyContextVersion(updated),
     blocks: [{
-      type: 'WORKFLOW_PROGRESS', id: `warranty-corrected-${warranty.id}`, title: 'Warranty updated', status: 'COMPLETED',
+      type: 'WORKFLOW_PROGRESS', id: `warranty-updated-${warranty.id}`, title: 'Warranty updated', status: 'COMPLETED',
       description: 'The warranty record was updated and dependent coverage analysis was marked for refresh.',
-      details: [{ label: 'Warranty', value: updated.providerName }, { label: 'Field', value: meta.label }, { label: 'Previous value', value: alreadyApplied ? 'Already corrected' : correctionDisplay(meta, previous) }, { label: 'New value', value: correctionDisplay(meta, next) }],
+      details: [
+        { label: 'Warranty', value: updated.providerName },
+        ...(alreadyApplied
+          ? [{ label: 'Changes', value: 'Already saved' }]
+          : changed.map((change) => ({ label: change.label, value: `${change.before} \u2192 ${change.after}` }))),
+      ],
       actions: [receiptFollowUpAction('WARRANTIES')],
     }],
     suggestions: [],
-    // The reminder deadline follows the expiry date, so only an expiry-date correction can make a reminder worth offering.
-    suggestedNextActionCandidates: field === 'expiryDate'
-      ? await warrantyExpiryReminderCandidates(updated, { propertyId: execution.propertyId!, sourceOperationId: 'WARRANTY_CORRECT', checkExistingReminder: true })
+    // The reminder deadline follows the expiry date, so only an expiry-date change can make a reminder worth offering.
+    suggestedNextActionCandidates: 'expiryDate' in changes
+      ? await warrantyExpiryReminderCandidates(updated, { propertyId: execution.propertyId!, sourceOperationId: 'WARRANTY_UPDATE', checkExistingReminder: true })
       : [],
   };
   const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
   if (refresh.attemptedAndFailed) {
     result.blocks.push({
       type: 'LIMITATION', id: `warranty-refresh-failed-${warranty.id}`, severity: 'CAUTION', title: 'Saved; view could not refresh',
-      body: 'This correction was saved to the warranty record. The result you were viewing could not refresh automatically -- ask "Show my warranties" to see its current state.',
+      body: 'These changes were saved to the warranty record. The result you were viewing could not refresh automatically -- ask "Show my warranties" to see its current state.',
     });
   }
   return { result, artifactType: 'WARRANTY', artifactId: warranty.id, refreshedExecutions: refresh.refreshedExecutions };
 }
 
-registerConfirmCapabilityHandler('warranty.correct', confirmWarrantyCorrect);
+registerConfirmCapabilityHandler('warranty.update', confirmWarrantyUpdate);
 
 async function confirmRoomRename(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
   const { execution, userId, parameters } = ctx;
@@ -818,47 +833,6 @@ export async function editHomeEventVisibilityConfirmation(
     where: { id: execution.id, status: 'NEEDS_CONFIRMATION', parametersJson: { path: ['confirmationVersion'], equals: input.confirmationVersion } },
     data: {
       parametersJson: asInputJson({ ...parameters, homeEventVisibility: updatedInput, confirmationVersion: nextVersion, confirmationExpiresAt: expiresAt.toISOString() }),
-      resultJson: asInputJson({
-        schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: [reviewBlock], captureRequests: [], confirmation: newConfirmation, clarification: null, suggestions: [],
-        ...preservedExecutionHistory(execution.resultJson, [reviewBlock]),
-      }),
-    },
-  });
-  if (editWrite.count !== 1) throw Object.assign(new Error('This confirmation changed before your edit was applied. Review the current proposal and try again.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
-  await prisma.askExecutionEvent.create({
-    data: { executionId: execution.id, eventType: 'CONFIRMATION_EDITED', metadataJson: asInputJson({ previousVersion: input.confirmationVersion, newVersion: nextVersion, editedFields: Object.keys(input.edits) }) },
-  });
-  const saved = await prisma.askExecution.findUniqueOrThrow({ where: { id: execution.id } });
-  return mapPersistedExecution(saved, await propertySummary(execution.propertyId));
-}
-
-export async function editWarrantyCorrectConfirmation(
-  execution: AskExecution,
-  parameters: Record<string, unknown>,
-  input: EditAskConfirmation,
-  userId: string,
-): Promise<AskExecutionResponse> {
-  const existing = WarrantyCorrectionInputSchema.safeParse(parameters.warrantyCorrection);
-  if (!existing.success) throw Object.assign(new Error('Editing is not available for this proposal.'), { code: 'ASK_EDIT_NOT_SUPPORTED' });
-  const warranty = await prisma.warranty.findFirst({
-    where: { id: existing.data.warrantyId, propertyId: execution.propertyId! },
-    select: { id: true, providerName: true, startDate: true, expiryDate: true, category: true, policyNumber: true, cost: true, coverageDetails: true, homeownerProfile: { select: { userId: true } } },
-  });
-  if (!warranty) throw Object.assign(new Error('The selected warranty is no longer available.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
-  if (warranty.homeownerProfile.userId !== userId) throw Object.assign(new Error('Only the household member who added this warranty can change it.'), { code: 'ASK_PERMISSION_REQUIRED' });
-  const invalid = warrantyCorrectionValueError(existing.data.field, input.edits.value, warranty);
-  if (invalid) throw Object.assign(new Error(invalid), { code: 'ASK_INVALID_CONFIRMATION_EDIT' });
-  const cleaned = correctionNormalized(WARRANTY_CORRECTION_FIELDS[existing.data.field], input.edits.value);
-  const updatedInput = WarrantyCorrectionInputSchema.parse({ ...existing.data, value: cleaned });
-  const nextVersion = input.confirmationVersion + 1;
-  const expiresAt = new Date(Date.now() + 30 * 60_000);
-  const current = warrantyFieldCurrent(warranty, existing.data.field);
-  const newConfirmation = warrantyCorrectionConfirmation(warranty, existing.data.field, current, cleaned, nextVersion, expiresAt);
-  const reviewBlock = { type: 'SUMMARY' as const, id: 'warranty-correct-review', title: `Review this ${WARRANTY_CORRECTION_FIELDS[existing.data.field].label} correction`, body: 'No warranty record has changed yet. Edit the corrected value, then confirm.', tone: 'DEFAULT' as const, actions: [] };
-  const editWrite = await prisma.askExecution.updateMany({
-    where: { id: execution.id, status: 'NEEDS_CONFIRMATION', parametersJson: { path: ['confirmationVersion'], equals: input.confirmationVersion } },
-    data: {
-      parametersJson: asInputJson({ ...parameters, warrantyCorrection: updatedInput, confirmationVersion: nextVersion, confirmationExpiresAt: expiresAt.toISOString() }),
       resultJson: asInputJson({
         schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: [reviewBlock], captureRequests: [], confirmation: newConfirmation, clarification: null, suggestions: [],
         ...preservedExecutionHistory(execution.resultJson, [reviewBlock]),

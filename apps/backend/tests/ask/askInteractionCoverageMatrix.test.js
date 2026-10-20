@@ -88,7 +88,7 @@ test('a property-scoped operation never has a null role floor (ROLL-002 authoriz
 const STAGE_2_TRACED_OPERATIONS = new Set([
   'INVENTORY_ITEM_CORRECT',
   'HOME_EVENT_CORRECT',
-  'WARRANTY_CORRECT',
+  'WARRANTY_UPDATE',
   'ROOM_RENAME',
   'ROOM_CREATE',
   'PROPERTY_PURCHASE_DATE_SET',

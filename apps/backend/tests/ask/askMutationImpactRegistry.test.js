@@ -53,7 +53,7 @@ test('the registry agrees with what Record sections and Work providers say about
 
 test('gaps the old sibling list had are closed: writes that left a visible list silently current now refresh it', () => {
   const reads = (id) => registry.impactedReadOperationIds(id);
-  assert.ok(reads('WARRANTY_CORRECT').includes('WARRANTY_LOOKUP'));
+  assert.ok(reads('WARRANTY_UPDATE').includes('WARRANTY_LOOKUP'));
   assert.ok(reads('MAINTENANCE_TASK_COMPLETE').includes('MAINTENANCE_STATUS'));
   assert.ok(reads('MAINTENANCE_TASK_CREATE').includes('MAINTENANCE_STATUS'));
   assert.ok(reads('HOME_EVENT_VISIBILITY').includes('HOME_TIMELINE_EVENTS'));
@@ -66,7 +66,7 @@ test('gaps the old sibling list had are closed: writes that left a visible list 
 
 test('the validator rejects each way a declaration can be wrong', () => {
   const broken = (mutate) => { const registryCopy = clone(); mutate(registryCopy); return registry.validateAskMutationImpactRegistry(registryCopy); };
-  assert.match(broken((r) => { delete r.WARRANTY_CORRECT; }).join('\n'), /WARRANTY_CORRECT: a mutation with no impact declaration/);
+  assert.match(broken((r) => { delete r.WARRANTY_UPDATE; }).join('\n'), /WARRANTY_UPDATE: a mutation with no impact declaration/);
   assert.match(broken((r) => { r.NOT_A_MUTATION = { ...r.ROOM_RENAME, operationId: 'NOT_A_MUTATION' }; }).join('\n'), /NOT_A_MUTATION: declared but not a registered mutation/);
   assert.match(broken((r) => { r.ROOM_RENAME = { ...r.ROOM_RENAME, reads: ['ROOM_CREATE'] }; }).join('\n'), /ROOM_CREATE, which is a mutation, not a read/);
   assert.match(broken((r) => { r.ROOM_RENAME = { ...r.ROOM_RENAME, reads: ['NO_SUCH_OPERATION'] }; }).join('\n'), /reads unknown operation/);
@@ -100,7 +100,7 @@ test('startup validation includes the impact registry', () => {
 
 const t = (minutes) => new Date(Date.UTC(2026, 9, 20, 12, minutes));
 const row = (id, overrides = {}) => ({ id, userId: 'u1', sessionId: 's1', propertyId: 'p1', operationId: 'WARRANTY_LOOKUP', status: 'ANSWERED', parametersJson: null, createdAt: t(0), updatedAt: t(1), ...overrides });
-const writer = { id: 'w1', userId: 'u1', sessionId: 's1', propertyId: 'p1', operationId: 'WARRANTY_CORRECT', status: 'COMPLETED', parametersJson: {}, createdAt: t(0), updatedAt: t(5) };
+const writer = { id: 'w1', userId: 'u1', sessionId: 's1', propertyId: 'p1', operationId: 'WARRANTY_UPDATE', status: 'COMPLETED', parametersJson: {}, createdAt: t(0), updatedAt: t(5) };
 
 function install(rows) {
   const updates = [];
@@ -138,7 +138,7 @@ test('an answer whose refresh fails or returns the old answer is marked stale, k
     assert.equal(updates.length, 1);
     assert.equal(updates[0].data.updatedAt.getTime(), t(1).getTime(), 'the answer keeps its updated time');
     assert.equal(updates[0].guard.getTime(), t(1).getTime(), 'a row that changed meanwhile is left alone');
-    assert.deepEqual(reconciliation.staleMarkerFor(updates[0].data.parametersJson), { staleSince: updates[0].data.parametersJson.reconciliation.staleSince, becauseOperationId: 'WARRANTY_CORRECT' });
+    assert.deepEqual(reconciliation.staleMarkerFor(updates[0].data.parametersJson), { staleSince: updates[0].data.parametersJson.reconciliation.staleSince, becauseOperationId: 'WARRANTY_UPDATE' });
     assert.deepEqual([...scope.staleExecutionIds], ['a']);
   }
 });
@@ -147,7 +147,7 @@ test('answers in other conversations are marked stale, not refreshed, newest per
   const updates = install([
     row('same', { updatedAt: t(2) }),
     row('other-new', { sessionId: 's2', updatedAt: t(4) }), row('other-old', { sessionId: 's2', updatedAt: t(3) }), row('third', { sessionId: 's3' }),
-    row('command', { operationId: 'WARRANTY_CORRECT' }),
+    row('command', { operationId: 'WARRANTY_UPDATE' }),
   ]);
   const refreshed = [];
   const { value, scope } = await reconciliation.runInReconciliationScope(() => executeOperation.reconcileAskExecutionSideEffects('u1', writer, {}, async (userId, id) => { refreshed.push(id); return { response: { executionId: id }, refreshed: true }; }));
@@ -183,7 +183,7 @@ test('the explicit source answer is refreshed too, and marked stale when that fa
 });
 
 test('the stale mark reads back as staleSince on the answer, and a fresh answer carries none', () => {
-  const marker = { staleSince: '2026-10-20T12:05:00.000Z', becauseOperationId: 'WARRANTY_CORRECT' };
+  const marker = { staleSince: '2026-10-20T12:05:00.000Z', becauseOperationId: 'WARRANTY_UPDATE' };
   const marked = reconciliation.withStaleMarker({ viewState: { resultId: 'r1', revision: 3 } }, marker);
   assert.equal(marked.viewState.revision, 3, 'the answer\'s own state is kept');
   assert.deepEqual(reconciliation.staleMarkerFor(marked), marker);

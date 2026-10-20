@@ -8,7 +8,7 @@ import { humanDate } from '../askFormatting';
 import { ensurePropertyAccess, HOME_DEADLINE_DEFAULT_LEAD_DAYS, readablePropertyValue } from '../askHandlerSupport';
 import { warrantyContextVersion } from '../suggestedActions/domainVersions';
 import { DEFAULT_CANDIDATE_SIGNALS, DEFAULT_CANDIDATE_TRAITS, type SuggestedNextActionCandidate } from '../suggestedActions/suggestedNextActionCandidate';
-import { WARRANTY_ADD_MESSAGE, warrantyCorrectionItemActions } from '../handlers/homeRecordWrites.handler';
+import { WARRANTY_ADD_MESSAGE, warrantyEditItemActions } from '../handlers/homeRecordWrites.handler';
 import { MAX_RESULT_ITEMS, type AskViewState } from '../support/executionState';
 import { randomUUID } from 'node:crypto';
 import { collectionDescriptor } from '../support/collectionDescriptor';
@@ -338,7 +338,7 @@ export function warrantiesFromRecords(input: {
           ...(entry.record.inventoryItem?.name ? [`Linked to ${entry.record.inventoryItem.name}`] : []),
           `${entry.record.documents?.length ?? 0} document${(entry.record.documents?.length ?? 0) === 1 ? '' : 's'}`,
         ],
-        actions: warrantyCorrectionItemActions(canWrite, ownedIds.has(entry.record.id)),
+        actions: warrantyEditItemActions(canWrite, ownedIds.has(entry.record.id)),
       })),
     }],
     // Presentation Quality 3: the matched warranties are the whole collection for this request; the first MAX_RESULT_ITEMS are shown

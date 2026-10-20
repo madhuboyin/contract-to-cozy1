@@ -60,7 +60,7 @@ test('Property Summary warranty titles dispatch through the registry and open ca
 
 test('warranty rows present status, completeness, documents, editability, and an explicit detail affordance', () => {
   const editable: typeof block = { ...block, sections: [{ ...block.sections[0], items: [
-    { ...block.sections[0].items[0], meta: ['Home warranty plan', 'Expires Dec 1, 2027', '0 documents'], description: 'No coverage details recorded.', actions: [{ id: 'correct-expiryDate', label: 'Correct expiry date', message: 'Correct the expiry date of this warranty.', style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId: 'WARRANTY_CORRECT' }] },
+    { ...block.sections[0].items[0], meta: ['Home warranty plan', 'Expires Dec 1, 2027', '0 documents'], description: 'No coverage details recorded.', actions: [{ id: 'edit-warranty', label: 'Edit warranty', message: 'Edit this warranty.', style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId: 'WARRANTY_UPDATE' }] },
   ] }] };
   render(<WarrantyResultList block={editable} propertyId="home" onAction={() => {}} onAccessLost={() => {}} link={(_, label) => label} />);
   const row = screen.getByRole('button', { name: /Acme Home Warranty/ });
@@ -109,7 +109,7 @@ test('warranty detail shows declared correction actions with exact identity, and
   window.history.replaceState({}, '', '/dashboard/ask?propertyId=home&sessionId=session');
   mockedGetPropertyWarranties.mockResolvedValue([canonicalWarranty()]);
   const owned: typeof block = { ...block, sections: [{ ...block.sections[0], items: [
-    { ...block.sections[0].items[0], actions: [{ id: 'correct-expiryDate', label: 'Correct expiry date', message: 'Correct the expiry date of this warranty.', style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId: 'WARRANTY_CORRECT' }] },
+    { ...block.sections[0].items[0], actions: [{ id: 'edit-warranty', label: 'Edit warranty', message: 'Edit this warranty.', style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId: 'WARRANTY_UPDATE' }] },
   ] }] };
   const onAction = jest.fn();
   const response = { ...execution(), blocks: [owned] } as AskExecutionResponse;
@@ -119,8 +119,8 @@ test('warranty detail shows declared correction actions with exact identity, and
   }
   const first = render(<Harness />);
   fireEvent.click(screen.getByRole('button', { name: 'Acme Home Warranty' }));
-  fireEvent.click(await screen.findByRole('button', { name: /Correct expiry date/ }));
-  expect(onAction).toHaveBeenCalledWith('WARRANTY', 'warranty-0', 'Correct the expiry date of this warranty.', 'WARRANTY_CORRECT', 'MUTATE_RECORD');
+  fireEvent.click(await screen.findByRole('button', { name: /Edit warranty for/ }));
+  expect(onAction).toHaveBeenCalledWith('WARRANTY', 'warranty-0', 'Edit this warranty.', 'WARRANTY_UPDATE', 'MUTATE_RECORD');
   first.unmount();
   window.sessionStorage.clear();
 

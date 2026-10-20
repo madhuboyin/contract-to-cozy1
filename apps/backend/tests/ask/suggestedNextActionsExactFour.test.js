@@ -520,7 +520,7 @@ test('result-producer ownership holds only when the TRUSTED current operation ow
   assert.equal(owned.evaluated[0].currentResultOwnership, true);
   const owned2 = real([brand()], 'INVENTORY_ITEM_CREATE');
   assert.equal(owned2.evaluated[0].currentResultOwnership, true, 'creating an item also owns its missing-detail follow-ups');
-  for (const [label, op] of [['unrelated operation', 'WARRANTY_CORRECT'], ['no trusted operation', null], ['undefined', undefined], ['lookalike', 'INVENTORY_ITEM_CORRECT_X']]) {
+  for (const [label, op] of [['unrelated operation', 'WARRANTY_UPDATE'], ['no trusted operation', null], ['undefined', undefined], ['lookalike', 'INVENTORY_ITEM_CORRECT_X']]) {
     const denied = real([brand()], op);
     assert.equal(denied.exactFour.signalClaimsDenied, 1, label);
     assert.equal(denied.evaluated[0].currentResultOwnership, false, label);
@@ -530,10 +530,10 @@ test('result-producer ownership holds only when the TRUSTED current operation ow
   assert.equal(forged.evaluated[0].currentResultOwnership, false);
   // A denied claim loses every benefit: it counts against the one-unrelated cap and cannot take the reserved slot.
   const opp = (id) => named(id, 'HOME_OPPORTUNITY', { source: 'OPERATION_RESULT', ...claim({ currentResultOwnership: true }) });
-  const two = real([opp('o1'), opp('o2')], 'WARRANTY_CORRECT');
+  const two = real([opp('o1'), opp('o2')], 'WARRANTY_UPDATE');
   assert.equal(two.selected.length, 1, 'ungranted ownership is capped as an unrelated opportunity');
   const reserved = selectExactFourSuggestedNextActions({
-    nominations: new Map([['operation-result.candidates', [opp('strong')]], ['x', gaps]]), eligibility: ctx(), actionableCompleteness: 0.5, currentOperationId: 'WARRANTY_CORRECT',
+    nominations: new Map([['operation-result.candidates', [opp('strong')]], ['x', gaps]]), eligibility: ctx(), actionableCompleteness: 0.5, currentOperationId: 'WARRANTY_UPDATE',
     slotGrants: { 'operation-result.candidates': { allowed: new Set(['HOME_OPPORTUNITY']), fallback: 'HOME_OPPORTUNITY', mayClaimCurrentResultOwnership: true, ownershipRequiresRegisteredRelationship: true }, x: { allowed: new Set(ALL), fallback: 'PROFILE_GAP' } },
   });
   assert.equal(reserved.exactFour.opportunityReserved, false, 'a denied ownership claim cannot reserve the opportunity slot');

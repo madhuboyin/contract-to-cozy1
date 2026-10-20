@@ -615,10 +615,7 @@ function correctableSummaryExecution() {
       id: 'warranty-property-summary', title: 'Acme Home Warranty', description: null, entityType: 'WARRANTY', href: null, status: 'ACTIVE',
       meta: ['Home warranty plan', 'Expires Dec 1, 2027'],
       actions: [
-        action('correct-expiryDate', 'Correct expiry date', 'Correct the expiry date of this warranty.', 'WARRANTY_CORRECT'),
-        action('correct-category', 'Correct coverage type', 'Correct the coverage type of this warranty.', 'WARRANTY_CORRECT'),
-        action('correct-cost', 'Correct cost', 'Correct the cost of this warranty.', 'WARRANTY_CORRECT'),
-        action('correct-coverageDetails', 'Correct coverage details', 'Correct the coverage details of this warranty.', 'WARRANTY_CORRECT'),
+        action('edit-warranty', 'Edit warranty', 'Edit this warranty.', 'WARRANTY_UPDATE'),
       ],
     }] }],
     actions: [
@@ -689,14 +686,12 @@ function evidenceAttachExecution(status: 'NEEDS_CONFIRMATION' | 'COMPLETED', ver
 // Phase 3 write-slice acceptance: confirmation -> edit -> confirm for the
 // inventory (DATE), warranty (DATE) and room (TEXT) corrections. Shapes mirror
 // the real server's confirmation cards.
-export type CorrectionKind = 'inventory' | 'warranty' | 'room' | 'roomType' | 'roomFloor' | 'inventoryCondition' | 'inventoryCost' | 'inventoryRoom' | 'eventAmount' | 'eventVisibility' | 'eventRoom' | 'warrantyCategory';
+export type CorrectionKind = 'inventory' | 'room' | 'roomType' | 'roomFloor' | 'inventoryCondition' | 'inventoryCost' | 'inventoryRoom' | 'eventAmount' | 'eventVisibility' | 'eventRoom';
 const CORRECTIONS: Record<CorrectionKind, { message: RegExp; operationId: string; title: string; label: string; type: 'DATE' | 'TEXT' | 'SELECT' | 'MONEY'; initial: string; confirmLabel: string; consentText: string; receiptTitle: string; current: string; options?: Array<{ label: string; value: string }> }> = {
   inventory: { message: /correct the install date of this inventory item/i, operationId: 'INVENTORY_ITEM_CORRECT', title: 'Correct installed date for Water heater?', label: 'Corrected installed date', type: 'DATE', initial: '2022-01-15', current: '2022-01-15', confirmLabel: 'Save installed date', consentText: 'I authorize this correction to the shared home inventory record.', receiptTitle: 'Inventory record updated' },
-  warranty: { message: /correct the expiry date of this warranty/i, operationId: 'WARRANTY_CORRECT', title: 'Correct the expiry date of the Acme Home Warranty warranty?', label: 'Corrected expiry date', type: 'DATE', initial: '2027-12-01', current: '2027-12-01', confirmLabel: 'Save expiry date', consentText: 'I authorize this correction to the warranty record.', receiptTitle: 'Warranty updated' },
   inventoryCondition: { message: /correct the condition of this inventory item/i, operationId: 'INVENTORY_ITEM_CORRECT', title: 'Correct condition for Water heater?', label: 'Corrected condition', type: 'SELECT', initial: 'GOOD', current: 'Good', confirmLabel: 'Save condition', consentText: 'I authorize this correction to the shared home inventory record.', receiptTitle: 'Inventory record updated', options: [{ label: 'New', value: 'NEW' }, { label: 'Good', value: 'GOOD' }, { label: 'Fair', value: 'FAIR' }, { label: 'Poor', value: 'POOR' }, { label: 'Unknown', value: 'UNKNOWN' }] },
   inventoryCost: { message: /correct the purchase cost of this inventory item/i, operationId: 'INVENTORY_ITEM_CORRECT', title: 'Correct purchase cost for Water heater?', label: 'Corrected purchase cost', type: 'MONEY', initial: '850.00', current: '$850.00', confirmLabel: 'Save purchase cost', consentText: 'I authorize this correction to the shared home inventory record.', receiptTitle: 'Inventory record updated' },
   eventAmount: { message: /correct the amount of this timeline event/i, operationId: 'HOME_EVENT_CORRECT', title: 'Correct the amount of "Roof replacement"?', label: 'Corrected amount', type: 'MONEY', initial: '18500.00', current: '$18,500.00', confirmLabel: 'Save amount', consentText: 'I authorize this correction to the shared home timeline.', receiptTitle: 'Home timeline event corrected' },
-  warrantyCategory: { message: /correct the coverage type of this warranty/i, operationId: 'WARRANTY_CORRECT', title: 'Correct the coverage type of the Acme Home Warranty warranty?', label: 'Corrected coverage type', type: 'SELECT', initial: 'HOME_WARRANTY_PLAN', current: 'Home warranty plan', confirmLabel: 'Save coverage type', consentText: 'I authorize this correction to the warranty record.', receiptTitle: 'Warranty updated', options: [{ label: 'Appliance', value: 'APPLIANCE' }, { label: 'HVAC', value: 'HVAC' }, { label: 'Roofing', value: 'ROOFING' }, { label: 'Home warranty plan', value: 'HOME_WARRANTY_PLAN' }, { label: 'Other', value: 'OTHER' }] },
   roomType: { message: /change the type of this room/i, operationId: 'ROOM_RENAME', title: 'Change the type of "Kitchen"?', label: 'New type', type: 'SELECT', initial: 'KITCHEN', current: 'Kitchen', confirmLabel: 'Save type', consentText: 'I authorize this type change to the shared home record.', receiptTitle: 'Room updated', options: [{ label: 'Kitchen', value: 'KITCHEN' }, { label: 'Office', value: 'OFFICE' }, { label: 'Basement', value: 'BASEMENT' }] },
   roomFloor: { message: /change the floor level of this room/i, operationId: 'ROOM_RENAME', title: 'Change the floor level of "Kitchen"?', label: 'New floor level', type: 'TEXT', initial: '1', current: '1', confirmLabel: 'Save floor level', consentText: 'I authorize this floor level change to the shared home record.', receiptTitle: 'Room updated' },
   room: { message: /rename this room/i, operationId: 'ROOM_RENAME', title: 'Rename "Kitchen"?', label: 'New room name', type: 'TEXT', initial: 'Kitchen', current: 'Kitchen', confirmLabel: 'Save room name', consentText: 'I authorize this rename of the shared home record.', receiptTitle: 'Room renamed' },
@@ -726,7 +721,7 @@ function correctionExecution(kind: CorrectionKind, status: 'NEEDS_CONFIRMATION' 
 
 // Phase 3 add-record acceptance: user-initiated "Add a warranty" -> empty form -> confirmation -> receipt.
 // Shapes mirror what warrantyAddResult / editCaptureWarrantyCandidate / confirmCaptureWarranty produce.
-function warrantyAddExecution(stage: 'FORM' | 'CONFIRMATION' | 'DONE', sessionId?: string, answer?: Record<string, string>) {
+function warrantyAddExecution(stage: 'FORM' | 'CONFIRMATION' | 'DONE', sessionId?: string, answer?: Record<string, unknown>) {
   const base = propertySummaryTimelineExecution();
   const common = {
     ...base, sessionId: sessionId ?? base.sessionId, executionId: 'execution-warranty-add', question: 'Add a warranty to my home record.',
@@ -739,15 +734,15 @@ function warrantyAddExecution(stage: 'FORM' | 'CONFIRMATION' | 'DONE', sessionId
       blocks: [{ type: 'SUMMARY', id: 'warranty-add-input', title: 'Add a warranty', body: 'Nothing has been saved yet. Enter the details, then review them before the warranty is added.', tone: 'DEFAULT', actions: [] }],
       captureRequests: [{
         requirementId: 'capture-warranty-edit', captureKey: 'CAPTURE_WARRANTY_EDIT', classification: 'WORKFLOW_INPUT', state: 'UNKNOWN',
-        title: 'Add a warranty', question: 'Which warranty would you like to add to your home record?', helpText: 'Enter dates as YYYY-MM-DD. You will review everything before it is saved.',
+        title: 'Add a warranty', question: 'Which warranty would you like to add to your home record?', helpText: 'Only the provider, coverage type and dates are required. You will review everything before it is saved.',
         inputSchema: { type: 'GROUP', fields: [
           field('providerName', 'Provider', true, { type: 'SHORT_TEXT', maxLength: 160 }),
-          field('category', 'Coverage type', true, { type: 'SINGLE_SELECT', options: [{ label: 'HOME_WARRANTY_PLAN', value: 'HOME_WARRANTY_PLAN' }, { label: 'HVAC', value: 'HVAC' }] }),
+          field('category', 'Coverage type', true, { type: 'SINGLE_SELECT', options: [{ label: 'Home warranty plan', value: 'HOME_WARRANTY_PLAN' }, { label: 'HVAC', value: 'HVAC' }] }),
           field('policyNumber', 'Policy number', false, { type: 'SHORT_TEXT', maxLength: 160 }),
-          field('coverageDetails', 'Coverage details', false, { type: 'SHORT_TEXT', maxLength: 2000 }),
-          field('cost', 'Cost', false, { type: 'DECIMAL', min: 0, max: 10_000_000, unit: 'USD' }),
-          field('startDate', 'Start date', true, { type: 'SHORT_TEXT', maxLength: 10 }),
-          field('expiryDate', 'Expiration date', true, { type: 'SHORT_TEXT', maxLength: 10 }),
+          field('coverageDetails', 'Coverage details', false, { type: 'LONG_TEXT', maxLength: 2000 }),
+          field('startDate', 'Start date', true, { type: 'APPROXIMATE_DATE', allowedPrecisions: ['EXACT_DATE'], allowFuture: true }),
+          field('expiryDate', 'Expiration date', true, { type: 'APPROXIMATE_DATE', allowedPrecisions: ['EXACT_DATE'], allowFuture: true }),
+          field('cost', 'Cost (USD)', false, { type: 'MONEY', currency: 'USD', min: 0, max: 10_000_000 }),
         ] },
         currentAnswer: { providerName: null, category: null, policyNumber: null, coverageDetails: null, cost: null, startDate: null, expiryDate: null },
         allowNotSure: false, sensitivity: 'STANDARD', destinationLabel: 'Used to prepare this warranty; nothing is saved until you confirm', confirmationText: null,
@@ -762,7 +757,7 @@ function warrantyAddExecution(stage: 'FORM' | 'CONFIRMATION' | 'DONE', sessionId
       confirmation: {
         confirmationId: 'capture-warranty-edit-1', version: 1, title: 'Save this warranty to your property record?',
         description: 'You entered these details. No change is saved until you confirm.',
-        fields: [{ label: 'Provider', value: answer?.providerName ?? '' }, { label: 'Coverage', value: answer?.category ?? '' }, { label: 'Expires', value: answer?.expiryDate ?? '' }],
+        fields: [{ label: 'Provider', value: String(answer?.providerName ?? '') }, { label: 'Coverage', value: answer?.category === 'HOME_WARRANTY_PLAN' ? 'Home warranty plan' : String(answer?.category ?? '') }, { label: 'Expires', value: String((answer?.expiryDate as { value?: string } | undefined)?.value ?? '') }],
         editableFields: [], confirmLabel: 'Save warranty',
         consentText: 'I confirm this is accurate and authorize ContractToCozy to save it to my property record.', expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
       },
@@ -771,6 +766,59 @@ function warrantyAddExecution(stage: 'FORM' | 'CONFIRMATION' | 'DONE', sessionId
   return {
     ...common, status: 'COMPLETED', captureRequests: [], confirmation: null,
     blocks: [{ type: 'SUMMARY', id: 'warranty-captured-new', title: 'Recorded to your property record', body: 'Your Acme Home Warranty warranty is now saved to your Living Home Record.', tone: 'POSITIVE', actions: [] }],
+  };
+}
+
+// Warranty edit through the shared RecordEditor (FRD v1.385): one "Edit warranty" action -> editor -> review of changed fields -> receipt.
+const WARRANTY_EDITOR_ORIGINAL = { providerName: 'Acme Home Warranty', category: 'HOME_WARRANTY_PLAN', policyNumber: 'POL-123', coverageDetails: 'Covers HVAC and major appliances.', startDate: '2026-01-01', expiryDate: '2027-12-01', cost: '450.00' };
+function warrantyEditExecution(stage: 'FORM' | 'CONFIRMATION' | 'DONE', sessionId?: string, answer?: Record<string, string>) {
+  const base = propertySummaryTimelineExecution();
+  const common = {
+    ...base, sessionId: sessionId ?? base.sessionId, executionId: 'execution-warranty-edit', question: 'Edit this warranty.',
+    operation: { id: 'WARRANTY_UPDATE', version: '1.0', family: 'COMMAND' }, contextVersion: 'warranty-edit-context-v1', updatedAt: new Date().toISOString(),
+  };
+  if (stage === 'FORM') {
+    return {
+      ...common, status: 'NEEDS_CONTEXT', confirmation: null,
+      blocks: [{ type: 'SUMMARY', id: 'warranty-update-input', title: 'Edit the Acme Home Warranty warranty', body: 'Nothing has been saved yet.', tone: 'DEFAULT', actions: [] }],
+      captureRequests: [{
+        requirementId: 'warranty-update-warranty-property-summary', captureKey: 'WARRANTY_UPDATE_INPUTS', classification: 'WORKFLOW_INPUT', state: 'KNOWN',
+        title: 'Edit warranty', question: 'What should change on the Acme Home Warranty warranty?', helpText: null,
+        inputSchema: { type: 'GROUP', fields: [] }, currentAnswer: WARRANTY_EDITOR_ORIGINAL, allowNotSure: false, sensitivity: 'STANDARD',
+        destinationLabel: null, confirmationText: null, expectedContextVersion: 'warranty-edit-context-v1', presentation: 'FORM',
+        editor: {
+          recordLabel: 'Acme Home Warranty warranty',
+          sections: [{ id: 'warranty', title: 'Warranty' }, { id: 'coverage', title: 'Coverage' }, { id: 'dates-cost', title: 'Dates and cost' }],
+          fields: [
+            { key: 'providerName', label: 'Provider', kind: 'TEXT', section: 'warranty', required: true, maxLength: 120 },
+            { key: 'category', label: 'Coverage type', kind: 'SELECT', section: 'warranty', required: true, options: [{ label: 'Home warranty plan', value: 'HOME_WARRANTY_PLAN' }, { label: 'HVAC', value: 'HVAC' }] },
+            { key: 'policyNumber', label: 'Policy number', kind: 'TEXT', section: 'coverage', required: false, maxLength: 160 },
+            { key: 'coverageDetails', label: 'Coverage details', kind: 'TEXTAREA', section: 'coverage', required: false, maxLength: 2000 },
+            { key: 'startDate', label: 'Start date', kind: 'DATE', section: 'dates-cost', required: true },
+            { key: 'expiryDate', label: 'Expiration date', kind: 'DATE', section: 'dates-cost', required: true, pastDateNote: 'This date has already passed, so the warranty will show as expired.' },
+            { key: 'cost', label: 'Cost (USD)', kind: 'MONEY', section: 'dates-cost', required: false },
+          ],
+          original: WARRANTY_EDITOR_ORIGINAL,
+        },
+      }],
+    };
+  }
+  if (stage === 'CONFIRMATION') {
+    const changed = Object.entries(answer ?? {}).filter(([key, value]) => (WARRANTY_EDITOR_ORIGINAL as Record<string, string>)[key] !== value);
+    return {
+      ...common, status: 'NEEDS_CONFIRMATION', captureRequests: [],
+      blocks: [{ type: 'SUMMARY', id: 'warranty-update-review', title: 'Review this change', body: 'No warranty record has changed yet. Only what you changed is listed.', tone: 'DEFAULT', actions: [] }],
+      confirmation: {
+        confirmationId: 'warranty-update-warranty-property-summary-1', version: 1, title: `Save ${changed.length === 1 ? '1 change' : `${changed.length} changes`} to the Acme Home Warranty warranty?`,
+        description: 'This writes through the canonical warranty service.',
+        fields: [{ label: 'Warranty', value: 'Acme Home Warranty' }, ...changed.map(([key, value]) => ({ label: key === 'expiryDate' ? 'Expiration date' : key, value: `${(WARRANTY_EDITOR_ORIGINAL as Record<string, string>)[key]} \u2192 ${value}` }))],
+        editableFields: [], confirmLabel: 'Save changes', consentText: 'I authorize these changes to the warranty record.', expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
+      },
+    };
+  }
+  return {
+    ...common, status: 'COMPLETED', captureRequests: [], confirmation: null,
+    blocks: [{ type: 'WORKFLOW_PROGRESS', id: 'warranty-updated', title: 'Warranty updated', status: 'COMPLETED', description: 'The warranty record was updated.', details: [{ label: 'Warranty', value: 'Acme Home Warranty' }], actions: [] }],
   };
 }
 
@@ -1008,10 +1056,7 @@ function warrantyJourneyExecution(state: WarrantyJourneyState, options: { viewer
     }, boundary] };
   }
   const itemActions = (id: string) => options.viewer || id === 'warranty-review' ? undefined : [
-    { id: 'correct-expiryDate', label: 'Correct expiry date', message: 'Correct the expiry date of this warranty.', style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId: 'WARRANTY_CORRECT' },
-    { id: 'correct-category', label: 'Correct coverage type', message: 'Correct the coverage type of this warranty.', style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId: 'WARRANTY_CORRECT' },
-    { id: 'correct-cost', label: 'Correct cost', message: 'Correct the cost of this warranty.', style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId: 'WARRANTY_CORRECT' },
-    { id: 'correct-coverageDetails', label: 'Correct coverage details', message: 'Correct the coverage details of this warranty.', style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId: 'WARRANTY_CORRECT' },
+    { id: 'edit-warranty', label: 'Edit warranty', message: 'Edit this warranty.', style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId: 'WARRANTY_UPDATE' },
   ];
   const matched = options.single
     ? WARRANTY_JOURNEY_ITEMS.filter((item) => item.id === 'warranty-property-summary')
@@ -2697,6 +2742,7 @@ export async function installAskContext(context: BrowserContext, options: { calm
 export async function installAskApi(page: Page, options: { selectorState?: 'OPTIONS' | 'NONE_ELIGIBLE' | 'UNAVAILABLE'; slowAnswerMs?: number; conflictOnce?: boolean; permissionDenied?: boolean; maintenanceDetailAccessLost?: boolean; noDecision?: boolean; heatAttention?: boolean; duplicateRefrigerator?: boolean; recentSessions?: boolean; recentSessionsPages?: boolean; searchSessions?: boolean; allHomeSessions?: boolean; pendingWork?: boolean; askFailsOnce?: boolean; refinementFailsOnce?: boolean; warrantyViewer?: boolean; warrantyEmpty?: boolean; warrantyDetailAccessLost?: boolean; documentsEmpty?: boolean; claimsViewer?: boolean; claimsEmpty?: boolean; claimDetailAccessLost?: boolean; claimUnknownOutcomeOnce?: boolean; claimConfirmDenied?: boolean; unknownOutcomeOnce?: boolean; repeatedSuggestion?: boolean; inventoryDetailNotFound?: boolean; inventoryDetailAccessLost?: boolean; claimStaleAfterConfirm?: 'REFRESH_OK' | 'REFRESH_FAILS' } = {}) {
   activeSessionId = null;
   const captureBodies: Array<Record<string, unknown>> = [];
+  const warrantyEditCaptureBodies: Array<Record<string, unknown>> = [];
   const executionQuestions: string[] = [];
   const executionBodies: Array<Record<string, unknown>> = [];
   const selectorReads: string[] = [];
@@ -3277,6 +3323,11 @@ export async function installAskApi(page: Page, options: { selectorState?: 'OPTI
       await fulfill(route, { success: true, data: warrantyAddExecution('FORM', body.sessionId as string | undefined) }, 201);
       return;
     }
+    if (/^edit this warranty/i.test(body.message)) {
+      if (typeof body.sessionId === 'string') correctionSessionId = body.sessionId;
+      await fulfill(route, { success: true, data: warrantyEditExecution('FORM', body.sessionId as string | undefined) }, 201);
+      return;
+    }
     const correctionKind = (Object.keys(CORRECTIONS) as CorrectionKind[]).find((kind) => CORRECTIONS[kind].message.test(body.message));
     if (correctionKind) {
       if (typeof body.sessionId === 'string') correctionSessionId = body.sessionId;
@@ -3609,6 +3660,17 @@ export async function installAskApi(page: Page, options: { selectorState?: 'OPTI
     await fulfill(route, { success: true, data: maintenanceCompletionExecution('DONE') });
   });
   // Registered after the generic captures route above so it takes precedence for this execution only.
+  await page.route(`${apiOrigin}/api/ask/executions/execution-warranty-edit/captures`, async (route) => {
+    assertAuthenticated(route.request());
+    const body = route.request().postDataJSON() as Record<string, unknown>;
+    warrantyEditCaptureBodies.push(body);
+    await fulfill(route, { success: true, data: warrantyEditExecution('CONFIRMATION', correctionSessionId, body.answer as Record<string, string>) });
+  });
+  await page.route(`${apiOrigin}/api/ask/executions/execution-warranty-edit/confirm`, async (route) => {
+    assertAuthenticated(route.request());
+    correctionConfirmBodies.push(route.request().postDataJSON() as Record<string, unknown>);
+    await fulfill(route, { success: true, data: warrantyEditExecution('DONE', correctionSessionId) });
+  });
   await page.route(`${apiOrigin}/api/ask/executions/execution-warranty-add/captures`, async (route) => {
     assertAuthenticated(route.request());
     const body = route.request().postDataJSON() as Record<string, unknown>;
@@ -3655,7 +3717,7 @@ export async function installAskApi(page: Page, options: { selectorState?: 'OPTI
     };
     return fulfill(route, { success: true, data: cancelled });
   });
-  return { selectorReads, captureBodies, executionQuestions, executionBodies, correctionEditBodies, correctionConfirmBodies, warrantyAddCaptureBodies, addCaptureBodies, monitorPatchBodies, staleRefreshCalls: () => staleRefreshCalls, captureAttempts: () => captureAttempts };
+  return { selectorReads, captureBodies, warrantyEditCaptureBodies, executionQuestions, executionBodies, correctionEditBodies, correctionConfirmBodies, warrantyAddCaptureBodies, addCaptureBodies, monitorPatchBodies, staleRefreshCalls: () => staleRefreshCalls, captureAttempts: () => captureAttempts };
 }
 
 function assertAuthenticated(request: Request) {

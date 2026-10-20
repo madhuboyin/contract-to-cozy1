@@ -25,7 +25,7 @@ import { validateSkillExecutionBinding } from '../../skills/skillExecutionBindin
 import { validateAskConfirmedCompletion } from '../askAnswerTrustValidator';
 import { INTERACTIVE_ASK_STATUSES } from '../execution/askSessions';
 import { editInspectionFindingResolveConfirmation, editRecallMatchResolveConfirmation } from '../handlers/workflowConfirm.handler';
-import { editHomeEventCorrectConfirmation, editHomeEventVisibilityConfirmation, editInventoryItemCorrectConfirmation, editRoomRenameConfirmation, editWarrantyCorrectConfirmation } from '../handlers/recordConfirm.handler';
+import { editHomeEventCorrectConfirmation, editHomeEventVisibilityConfirmation, editInventoryItemCorrectConfirmation, editRoomRenameConfirmation } from '../handlers/recordConfirm.handler';
 import { editBuyerTaskUpdateConfirmation } from '../handlers/buyerConfirm.handler';
 import { editMaintenanceTaskUpdateConfirmation } from '../handlers/maintenanceConfirm.handler';
 import { editHomeEventRadarFeedbackConfirmation } from '../handlers/radarConfirm.handler';
@@ -529,7 +529,6 @@ const EDIT_CONFIRMATION_HANDLERS: Partial<Record<AskOperationId, (
   HOME_EVENT_RADAR_FEEDBACK: editHomeEventRadarFeedbackConfirmation,
   INSPECTION_FINDING_UPDATE: editInspectionFindingResolveConfirmation,
   RECALL_MATCH_UPDATE: editRecallMatchResolveConfirmation,
-  WARRANTY_CORRECT: editWarrantyCorrectConfirmation,
   ROOM_RENAME: editRoomRenameConfirmation,
   BUYER_TASK_UPDATE: editBuyerTaskUpdateConfirmation,
 };

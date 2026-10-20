@@ -136,10 +136,10 @@ export const HomeEventVisibilityInputSchema = z.object({
   value: z.enum(['PRIVATE', 'HOUSEHOLD', 'RESALE_PACK']).nullable(),
 }).strict();
 
-export const WarrantyCorrectionInputSchema = z.object({
+// The changed fields only, by editor field key (FRD v1.385). Values are the editor's strings; '' clears an optional field.
+export const WarrantyUpdateInputSchema = z.object({
   warrantyId: z.string().trim().min(1).max(160),
-  field: z.enum(['providerName', 'expiryDate', 'startDate', 'category', 'policyNumber', 'cost', 'coverageDetails']),
-  value: z.string().max(2000).nullable(),
+  changes: z.record(z.string(), z.string().max(2000)).refine((changes) => Object.keys(changes).length > 0 && Object.keys(changes).length <= 7, { message: 'Change at least one field.' }),
 }).strict();
 
 export const RoomRenameInputSchema = z.object({

@@ -113,7 +113,7 @@ export function captureFallbackHref(operationId: string | null, propertyId: stri
     case 'INVENTORY_ITEM_CREATE': return `${base}/inventory?tab=items`;
     case 'PROPERTY_CONTEXT_AREA_CAPTURE': return base;
     case 'HOME_EVENT_CORRECT': return `${base}/timeline`;
-    case 'WARRANTY_CORRECT': return '/dashboard/warranties';
+    case 'WARRANTY_UPDATE': return '/dashboard/warranties';
     case 'ROOM_RENAME':
     case 'ROOM_CREATE': return `${base}/rooms`;
     case 'HOME_HABIT_UPDATE': return `${base}/tools/home-habit-coach`;

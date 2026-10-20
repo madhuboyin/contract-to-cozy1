@@ -551,6 +551,34 @@ export interface AskCaptureRequest {
   presentation?: 'CONVERSATIONAL' | 'FORM';
   /** The homeowner may skip this question for now; skipping saves nothing (Property Summary per-area capture). */
   skippable?: boolean;
+  /** Present when the form edits one existing record: rendered by the shared RecordEditor instead of the generic GROUP form. */
+  editor?: AskRecordEditor;
+}
+
+export type AskRecordEditorFieldKind = 'TEXT' | 'TEXTAREA' | 'SELECT' | 'DATE' | 'MONEY';
+
+export interface AskRecordEditorField {
+  key: string;
+  label: string;
+  kind: AskRecordEditorFieldKind;
+  section: string;
+  required: boolean;
+  maxLength?: number;
+  options?: Array<{ label: string; value: string }>;
+  helpText?: string;
+  placeholder?: string;
+  /** DATE only: a soft, non-blocking note shown when the chosen date is before today. */
+  pastDateNote?: string;
+}
+
+export interface AskRecordEditor {
+  recordLabel: string;
+  sections: Array<{ id: string; title: string }>;
+  fields: AskRecordEditorField[];
+  /** The freshly read canonical values (strings; '' is empty); dirty state is measured against these. */
+  original: Record<string, string>;
+  /** Problems from the last submit, by field key. */
+  errors?: Record<string, string>;
 }
 
 export interface SubmitAskCapturePayload {

@@ -359,7 +359,7 @@ test('HOME_EVENT_VISIBILITY: a read question about who can see an event does not
   assert.equal(noEntity.blocks[0].sections[0].items.length, 1);
 });
 
-// ───────────────────────────── WARRANTY_CORRECT ─────────────────────────────
+// ───────────────────────────── WARRANTY_UPDATE ─────────────────────────────
 const warrantyUpdatedAt = new Date('2026-09-02T00:00:00.000Z');
 const warrantyVersion = sha(`w1:${warrantyUpdatedAt.toISOString()}`);
 function warrantyModel({ ownerUserId = 'u1', providerName = 'Acme Home Warranty', expiryDate = new Date('2027-12-01T00:00:00.000Z') } = {}) {
@@ -369,42 +369,46 @@ function warrantyModel({ ownerUserId = 'u1', providerName = 'Acme Home Warranty'
   };
   models.warranty = { count: async () => 1, findFirst: async () => row, findUniqueOrThrow: async () => row, findMany: async () => [row] };
 }
-const warrantyParams = (field, value, version = warrantyVersion) => ({ warrantyCorrection: { warrantyId: 'w1', field, value }, warrantyCorrectionContextVersion: version, confirmationVersion: 2 });
+const warrantyParams = (changes, version = warrantyVersion) => ({ warrantyUpdate: { warrantyId: 'w1', changes }, warrantyUpdateContextVersion: version, confirmationVersion: 1 });
 
-test('WARRANTY_CORRECT confirm by the owner writes only the confirmed field, scoped to the owning profile', async () => {
+test('WARRANTY_UPDATE confirm writes ONLY the changed fields in one narrowed patch, scoped to the owning profile and the reviewed version', async () => {
   warrantyModel();
-  const { result, artifactType } = await invoke('WARRANTY_CORRECT', warrantyParams('expiryDate', '2028-06-30'));
-  assert.equal(calls.updateWarranty.length, 1);
-  const [warrantyId, profileId, patch] = calls.updateWarranty[0];
-  assert.equal(warrantyId, 'w1');
-  assert.equal(profileId, 'hp1');
-  assert.deepEqual(Object.keys(patch), ['expiryDate']);
+  const { result, artifactType } = await invoke('WARRANTY_UPDATE', warrantyParams({ expiryDate: '2028-06-30', providerName: 'Better Home Warranty', cost: '525.50', policyNumber: '' }));
+  assert.equal(calls.updateWarranty.length, 1, 'one atomic write for the whole edit');
+  const [warrantyId, profileId, patch, options] = calls.updateWarranty[0];
+  assert.deepEqual([warrantyId, profileId], ['w1', 'hp1']);
+  assert.deepEqual(Object.keys(patch).sort(), ['cost', 'expiryDate', 'policyNumber', 'providerName']);
   assert.equal(patch.expiryDate.toISOString(), '2028-06-30T00:00:00.000Z');
-  assert.equal(result.reasonCode, 'WARRANTY_CORRECTED');
+  assert.equal(patch.cost, 525.5);
+  assert.equal(patch.policyNumber, null, 'clearing an optional field writes null');
+  assert.deepEqual(options, { expectedUpdatedAt: warrantyUpdatedAt }, 'compare-and-swap on the version the review was built from');
+  assert.equal(result.reasonCode, 'WARRANTY_UPDATED');
   assert.equal(artifactType, 'WARRANTY');
-
-  install(); warrantyModel();
-  await invoke('WARRANTY_CORRECT', warrantyParams('providerName', '  Better Home Warranty '));
-  assert.deepEqual(calls.updateWarranty[0][2], { providerName: 'Better Home Warranty' });
 });
 
-test('WARRANTY_CORRECT confirm refuses a member who did not add the warranty, even with a valid version and CONTRIBUTOR access', async () => {
+test('WARRANTY_UPDATE confirm refuses a member who did not add the warranty, even with a valid version and CONTRIBUTOR access', async () => {
   warrantyModel({ ownerUserId: 'someone-else' });
-  assert.equal(await codeOf(invoke('WARRANTY_CORRECT', warrantyParams('expiryDate', '2028-06-30'))), 'ASK_PERMISSION_REQUIRED');
+  assert.equal(await codeOf(invoke('WARRANTY_UPDATE', warrantyParams({ expiryDate: '2028-06-30' }))), 'ASK_PERMISSION_REQUIRED');
   assert.equal(calls.updateWarranty.length, 0);
 });
 
-test('WARRANTY_CORRECT confirm rejects an expiry before the start date, a too-short provider, and a stale version', async () => {
+test('WARRANTY_UPDATE confirm rejects an expiry before the start date, a missing provider, and a stale version', async () => {
   warrantyModel();
-  assert.equal(await codeOf(invoke('WARRANTY_CORRECT', warrantyParams('expiryDate', '2025-12-31'))), 'ASK_INVALID_CONFIRMATION_EDIT');
-  assert.equal(await codeOf(invoke('WARRANTY_CORRECT', warrantyParams('providerName', 'A'))), 'ASK_INVALID_CONFIRMATION_EDIT');
-  assert.equal(await codeOf(invoke('WARRANTY_CORRECT', warrantyParams('expiryDate', '2028-06-30', 'stale'))), 'ASK_CONTEXT_VERSION_CONFLICT');
+  assert.equal(await codeOf(invoke('WARRANTY_UPDATE', warrantyParams({ expiryDate: '2025-12-31' }))), 'ASK_INVALID_CONFIRMATION_EDIT');
+  assert.equal(await codeOf(invoke('WARRANTY_UPDATE', warrantyParams({ providerName: '' }))), 'ASK_INVALID_CONFIRMATION_EDIT');
+  assert.equal(await codeOf(invoke('WARRANTY_UPDATE', warrantyParams({ expiryDate: '2028-06-30' }, 'stale'))), 'ASK_CONTEXT_VERSION_CONFLICT');
   assert.equal(calls.updateWarranty.length, 0);
 });
 
-test('WARRANTY_CORRECT confirm treats an already-applied value as done without a second write', async () => {
+test('WARRANTY_UPDATE confirm maps a lost compare-and-swap to a context conflict, not a silent overwrite', async () => {
+  warrantyModel();
+  homeManagement.updateWarranty = async () => { throw Object.assign(new Error('changed'), { code: homeManagement.WARRANTY_VERSION_CONFLICT }); };
+  assert.equal(await codeOf(invoke('WARRANTY_UPDATE', warrantyParams({ expiryDate: '2028-06-30' }))), 'ASK_CONTEXT_VERSION_CONFLICT');
+});
+
+test('WARRANTY_UPDATE confirm treats already-saved values as done without a second write (canonical form: 450 equals 450.00)', async () => {
   warrantyModel({ expiryDate: new Date('2028-06-30T00:00:00.000Z') });
-  const { result } = await invoke('WARRANTY_CORRECT', warrantyParams('expiryDate', '2028-06-30', 'version-from-before'));
+  const { result } = await invoke('WARRANTY_UPDATE', warrantyParams({ expiryDate: '2028-06-30', cost: '450.00' }, 'version-from-before'));
   assert.equal(result.status, 'COMPLETED');
   assert.equal(calls.updateWarranty.length, 0);
 });
@@ -599,8 +603,13 @@ test('Add a warranty: the declared action returns the empty capture form, reusin
   assert.equal(request.requirementId, 'capture-warranty-edit');
   assert.equal(request.classification, 'WORKFLOW_INPUT', 'the submit button must say "Continue to review", not "Save"');
   assert.equal(request.expectedContextVersion, result.contextVersion, 'the submit branch compares the execution context version to the request');
-  assert.deepEqual(request.inputSchema.fields.map((field) => field.key), ['providerName', 'category', 'policyNumber', 'coverageDetails', 'cost', 'startDate', 'expiryDate']);
+  assert.deepEqual(request.inputSchema.fields.map((field) => field.key), ['providerName', 'category', 'policyNumber', 'coverageDetails', 'startDate', 'expiryDate', 'cost']);
   assert.ok(request.currentAnswer && Object.values(request.currentAnswer).every((value) => value === null), 'nothing is pre-filled');
+  const kind = (key) => request.inputSchema.fields.find((field) => field.key === key).inputSchema;
+  assert.equal(kind('coverageDetails').type, 'LONG_TEXT', 'a multiline coverage-details box');
+  assert.deepEqual([kind('startDate').type, kind('startDate').allowedPrecisions, kind('startDate').allowFuture], ['APPROXIMATE_DATE', ['EXACT_DATE'], true], 'a native exact-day date input');
+  assert.deepEqual([kind('cost').type, kind('cost').currency], ['MONEY', 'USD'], 'a $-prefixed USD amount');
+  assert.ok(kind('category').options.every((option) => option.label !== option.value || option.value === 'HVAC'), 'friendly coverage labels, not raw enum values');
   assert.equal(calls.captureWarranty.length, 0, 'proposing writes nothing');
 });
 
@@ -981,71 +990,80 @@ test('event propose: a system-created type and a date range are declined with a 
   assert.equal(date.reasonCode, 'HOME_EVENT_DATE_RANGE_UNSUPPORTED');
 });
 
-// ── Warranty: the richer fields ──
-test('WARRANTY_CORRECT writes each new field kind as a narrowed patch scoped to the owning profile', async () => {
-  const cases = [
-    ['category', 'HVAC', { category: 'HVAC' }],
-    ['policyNumber', '  POL-999 ', { policyNumber: 'POL-999' }],
-    ['cost', '525.5', { cost: 525.5 }],
-    ['coverageDetails', 'Covers compressor and coils.\nExcludes filters.', { coverageDetails: 'Covers compressor and coils.\nExcludes filters.' }],
-  ];
-  for (const [field, value, patch] of cases) {
-    install(); warrantyModel();
-    await invoke('WARRANTY_CORRECT', warrantyParams(field, value));
-    assert.deepEqual([calls.updateWarranty[0][0], calls.updateWarranty[0][1], calls.updateWarranty[0][2]], ['w1', 'hp1', patch], field);
-  }
-  install(); warrantyModel();
-  await invoke('WARRANTY_CORRECT', warrantyParams('startDate', '2026-03-01'));
-  assert.deepEqual(Object.keys(calls.updateWarranty[0][2]), ['startDate']);
-  assert.equal(calls.updateWarranty[0][2].startDate.toISOString(), '2026-03-01T00:00:00.000Z');
-});
+// ── Warranty: the shared RecordEditor flow ──
+const proposeWarranty = async (message = 'Edit this warranty.') => capabilityInvoke('WARRANTY_UPDATE', { userId: 'u1', propertyId: 'p1', message, launchContext: { surface: 'ASK_WORKSPACE', entityType: 'WARRANTY', entityId: 'w1', operationId: 'WARRANTY_UPDATE' } });
+const { warrantyUpdateResult } = require('../../src/services/ask/handlers/homeRecordWrites.handler.ts');
+const submitWarranty = (answer) => warrantyUpdateResult('u1', 'p1', 'Edit this warranty.', undefined, { warrantyId: 'w1', answer });
+const fullAnswer = (overrides = {}) => ({ providerName: 'Acme Home Warranty', category: 'HOME_WARRANTY_PLAN', policyNumber: 'POL-123', coverageDetails: 'HVAC and appliances.', startDate: '2026-01-01', expiryDate: '2027-12-01', cost: '450.00', ...overrides });
 
-test('WARRANTY_CORRECT keeps the dates in order and rejects invalid values for each new field kind', async () => {
-  const invalid = [
-    ['startDate', '2027-12-01'], ['startDate', '2028-01-01'], ['expiryDate', '2025-12-31'],
-    ['category', 'GADGET'], ['cost', 'abc'], ['cost', '-3'], ['policyNumber', ''], ['policyNumber', 'p'.repeat(161)], ['coverageDetails', ''], ['coverageDetails', 'c'.repeat(2001)],
-  ];
-  for (const [field, value] of invalid) {
-    install(); warrantyModel();
-    const code = await codeOf(invoke('WARRANTY_CORRECT', warrantyParams(field, value)));
-    // an over-long coverage text is stopped by the parameter schema before the field check; everything else by the field check
-    assert.ok(['ASK_INVALID_CONFIRMATION_EDIT', 'ASK_CONFIRMATION_NOT_ACTIVE'].includes(code), `${field}=${String(value).slice(0, 12)} -> ${code}`);
-    assert.equal(calls.updateWarranty.length, 0, field);
-  }
-  install(); warrantyModel();
-  assert.equal(await codeOf(invoke('WARRANTY_CORRECT', warrantyParams('startDate', '2027-12-01'))), 'ASK_INVALID_CONFIRMATION_EDIT', 'start on the expiry date is refused');
-});
-
-test('WARRANTY_CORRECT already-applied check compares in canonical form (450 equals 450.00)', async () => {
+test('warranty edit: ONE declared action opens the editor with every field prefilled from the fresh row, grouped in three sections; nothing is written', async () => {
   warrantyModel();
-  const { result } = await invoke('WARRANTY_CORRECT', warrantyParams('cost', '450.00', 'version-from-before'));
-  assert.equal(result.status, 'COMPLETED');
+  const result = await proposeWarranty();
+  assert.equal(result.status, 'NEEDS_CONTEXT');
+  assert.equal(result.reasonCode, 'WARRANTY_UPDATE_INPUT_REQUIRED');
+  const [request] = result.captureRequests;
+  assert.equal(request.captureKey, 'WARRANTY_UPDATE_INPUTS');
+  assert.equal(request.expectedContextVersion, warrantyVersion);
+  assert.deepEqual(request.editor.sections.map((section) => section.title), ['Warranty', 'Coverage', 'Dates and cost']);
+  assert.deepEqual(request.editor.fields.map((field) => [field.key, field.kind]), [['providerName', 'TEXT'], ['category', 'SELECT'], ['policyNumber', 'TEXT'], ['coverageDetails', 'TEXTAREA'], ['startDate', 'DATE'], ['expiryDate', 'DATE'], ['cost', 'MONEY']]);
+  assert.deepEqual(request.editor.original, fullAnswer());
+  assert.ok(request.editor.fields.find((field) => field.key === 'category').options.some((option) => option.label === 'Home warranty plan'), 'friendly enum labels');
+  assert.equal(calls.updateWarranty.length, 0, 'opening the editor writes nothing');
+  install(); warrantyModel({ ownerUserId: 'someone-else' });
+  assert.equal((await proposeWarranty()).reasonCode, 'WARRANTY_NOT_OWNED_BY_REQUESTER');
+});
+
+test('warranty edit: submitting reviews ONLY the changed fields (before -> after) with one confirmation', async () => {
+  warrantyModel();
+  const result = await submitWarranty(fullAnswer({ providerName: ' Better Home Warranty ', cost: '525.5' }));
+  assert.equal(result.status, 'NEEDS_CONFIRMATION');
+  assert.deepEqual(result.confirmation.fields.map((field) => field.label), ['Warranty', 'Provider', 'Cost (USD)']);
+  assert.equal(result.confirmation.fields[1].value, 'Acme Home Warranty \u2192 Better Home Warranty');
+  assert.equal(result.confirmation.fields[2].value, '$450.00 \u2192 $525.50');
+  assert.deepEqual(result.parameters.warrantyUpdate.changes, { providerName: 'Better Home Warranty', cost: '525.50' });
+  assert.equal(result.parameters.warrantyUpdateContextVersion, warrantyVersion);
+  assert.deepEqual(result.confirmation.editableFields, []);
+  assert.equal(calls.updateWarranty.length, 0, 'reviewing writes nothing');
+});
+
+test('warranty edit: cross-field and field problems come back on the editor BEFORE any review; unchanged submits are not reviewed', async () => {
+  warrantyModel();
+  const reversed = await submitWarranty(fullAnswer({ expiryDate: '2025-12-31' }));
+  assert.equal(reversed.status, 'NEEDS_CONTEXT');
+  assert.equal(reversed.reasonCode, 'WARRANTY_UPDATE_INVALID');
+  assert.equal(reversed.captureRequests[0].editor.errors.expiryDate, 'The expiration date must be after the start date.');
+  assert.equal(reversed.captureRequests[0].currentAnswer.expiryDate, '2025-12-31', 'what the homeowner entered is kept');
+  const blank = await submitWarranty(fullAnswer({ providerName: '', cost: 'abc' }));
+  assert.deepEqual(Object.keys(blank.captureRequests[0].editor.errors).sort(), ['cost', 'providerName']);
+  const unchanged = await submitWarranty(fullAnswer());
+  assert.equal(unchanged.reasonCode, 'WARRANTY_UPDATE_NO_CHANGES');
+  const stray = await submitWarranty({ ...fullAnswer(), ownerId: 'x' });
+  assert.equal(stray.reasonCode, 'WARRANTY_UPDATE_INVALID', 'an unknown key is not a request body');
   assert.equal(calls.updateWarranty.length, 0);
 });
 
-const proposeWarranty = async (message) => capabilityInvoke('WARRANTY_CORRECT', { userId: 'u1', propertyId: 'p1', message, launchContext: { surface: 'ASK_WORKSPACE', entityType: 'WARRANTY', entityId: 'w1', operationId: 'WARRANTY_CORRECT' } });
+test('warranty edit: clearing an optional field is a change; a past expiry is allowed with a soft note on the review', async () => {
+  warrantyModel();
+  const cleared = await submitWarranty(fullAnswer({ policyNumber: '', cost: '' }));
+  assert.equal(cleared.status, 'NEEDS_CONFIRMATION');
+  assert.deepEqual(cleared.parameters.warrantyUpdate.changes, { policyNumber: '', cost: '' });
+  assert.equal(cleared.confirmation.fields[1].value, 'POL-123 \u2192 Not recorded');
+  const past = await submitWarranty(fullAnswer({ expiryDate: '2026-02-01' }));
+  assert.equal(past.status, 'NEEDS_CONFIRMATION');
+  assert.match(past.confirmation.description, /already passed/);
+});
 
-test('warranty propose: each field kind builds the matching editable field and current value', async () => {
-  const cases = [
-    ['Correct the provider of this warranty.', 'TEXT', 'Acme Home Warranty', 'Acme Home Warranty'],
-    ['Correct the expiry date of this warranty.', 'DATE', '2027-12-01', '2027-12-01'],
-    ['Correct the start date of this warranty.', 'DATE', '2026-01-01', '2026-01-01'],
-    ['Correct the coverage type of this warranty.', 'SELECT', 'HOME_WARRANTY_PLAN', 'Home warranty plan'],
-    ['Correct the policy number of this warranty.', 'TEXT', 'POL-123', 'POL-123'],
-    ['Correct the cost of this warranty.', 'MONEY', '450.00', '$450.00'],
-    ['Correct the coverage details of this warranty.', 'TEXTAREA', 'HVAC and appliances.', 'HVAC and appliances.'],
-  ];
-  for (const [message, type, value, shown] of cases) {
-    install(); warrantyModel();
-    const result = await proposeWarranty(message);
-    assert.equal(result.status, 'NEEDS_CONFIRMATION', message);
-    const [field] = result.confirmation.editableFields;
-    assert.deepEqual([field.type, field.value], [type, value], message);
-    assert.equal(result.confirmation.fields.find((entry) => entry.label === 'Current value').value, shown, message);
-    assert.equal(calls.updateWarranty.length, 0, 'proposing writes nothing');
-  }
-  install(); warrantyModel({ ownerUserId: 'someone-else' });
-  assert.equal((await proposeWarranty('Correct the cost of this warranty.')).reasonCode, 'WARRANTY_NOT_OWNED_BY_REQUESTER');
+test('Add a warranty: the native date control\'s exact-day values and an omitted/cleared optional field are accepted', () => {
+  const stored = { captureOrigin: 'USER_ADD', confirmationVersion: 1 };
+  const answer = { providerName: 'Acme', category: 'HVAC', startDate: { precision: 'EXACT_DATE', value: '2026-01-01' }, expiryDate: { precision: 'EXACT_DATE', value: '2027-01-01' } };
+  const edited = editCaptureWarrantyCandidate(stored, 'Add a warranty to my home record.', 'ctx-1', answer, new Date('2026-09-21T00:00:00.000Z'));
+  assert.equal(edited.status, 'NEEDS_CONFIRMATION');
+  assert.equal(edited.parameters.cost, null);
+  assert.equal(edited.parameters.policyNumber, null);
+  assert.equal(edited.confirmation.fields.find((field) => field.label === 'Coverage').value, 'HVAC');
+  const friendly = editCaptureWarrantyCandidate(stored, 'x', 'ctx-1', { ...answer, category: 'HOME_WARRANTY_PLAN' }, new Date());
+  assert.equal(friendly.confirmation.fields.find((field) => field.label === 'Coverage').value, 'Home warranty plan');
+  assert.equal(editCaptureWarrantyCandidate(stored, 'x', 'ctx-1', { ...answer, expiryDate: { precision: 'EXACT_DATE', value: '2025-01-01' } }, new Date()), null, 'expiry must follow the start date');
 });
 
 // ── Add a timeline event (user-initiated capture) ──

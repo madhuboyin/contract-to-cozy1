@@ -8,7 +8,7 @@ require('ts-node/register');
 // explicit correction phrasing or a declared item action -- and ordinary read questions must never land on them.
 
 const { resolveAskRoutingCascade } = require('../../src/services/ask/askRoutingCascade.ts');
-const CORRECTION_OPERATIONS = new Set(['INVENTORY_ITEM_CORRECT', 'HOME_EVENT_CORRECT', 'WARRANTY_CORRECT', 'ROOM_RENAME', 'ROOM_CREATE', 'INVENTORY_ITEM_CREATE', 'PROPERTY_CONTEXT_AREA_CAPTURE', 'HOME_EVENT_VISIBILITY']);
+const CORRECTION_OPERATIONS = new Set(['INVENTORY_ITEM_CORRECT', 'HOME_EVENT_CORRECT', 'WARRANTY_UPDATE', 'ROOM_RENAME', 'ROOM_CREATE', 'INVENTORY_ITEM_CREATE', 'PROPERTY_CONTEXT_AREA_CAPTURE', 'HOME_EVENT_VISIBILITY']);
 const routeOf = (message) => resolveAskRoutingCascade(message, { localRoutingEnabled: true }).operation.operationId;
 
 const READS = [
@@ -53,12 +53,12 @@ const WRITES = [
   ['Correct the purchase cost of this inventory item.', 'INVENTORY_ITEM_CORRECT'], ['Correct the replacement cost of this inventory item.', 'INVENTORY_ITEM_CORRECT'],
   ['Correct the notes of this inventory item.', 'INVENTORY_ITEM_CORRECT'], ['Please fix the serial number on my inventory record for the dryer', 'INVENTORY_ITEM_CORRECT'],
   ['Correct the title of this timeline event.', 'HOME_EVENT_CORRECT'], ['Correct the date of this timeline event.', 'HOME_EVENT_CORRECT'],
-  ['Correct the provider of this warranty.', 'WARRANTY_CORRECT'], ['Correct the expiry date of this warranty.', 'WARRANTY_CORRECT'],
+  ['Correct the provider of this warranty.', 'WARRANTY_UPDATE'], ['Correct the expiry date of this warranty.', 'WARRANTY_UPDATE'],
   ['Correct the summary of this timeline event.', 'HOME_EVENT_CORRECT'], ['Correct the amount of this timeline event.', 'HOME_EVENT_CORRECT'],
   ['Correct the type of this timeline event.', 'HOME_EVENT_CORRECT'], ['Correct the importance of this timeline event.', 'HOME_EVENT_CORRECT'],
-  ['Correct the start date of this warranty.', 'WARRANTY_CORRECT'], ['Correct the coverage type of this warranty.', 'WARRANTY_CORRECT'],
-  ['Correct the policy number of this warranty.', 'WARRANTY_CORRECT'], ['Correct the cost of this warranty.', 'WARRANTY_CORRECT'],
-  ['Correct the coverage details of this warranty.', 'WARRANTY_CORRECT'],
+  ['Correct the start date of this warranty.', 'WARRANTY_UPDATE'], ['Correct the coverage type of this warranty.', 'WARRANTY_UPDATE'],
+  ['Correct the policy number of this warranty.', 'WARRANTY_UPDATE'], ['Correct the cost of this warranty.', 'WARRANTY_UPDATE'],
+  ['Correct the coverage details of this warranty.', 'WARRANTY_UPDATE'],
   ['Change the visibility of this timeline event.', 'HOME_EVENT_VISIBILITY'], ['Make this timeline event private', 'HOME_EVENT_VISIBILITY'], ['Share this timeline event in resale summaries', 'HOME_EVENT_VISIBILITY'], ['Who can see this timeline event?', 'HOME_EVENT_VISIBILITY'],
   ['Correct the room of this timeline event.', 'HOME_EVENT_CORRECT'], ['Correct the inventory item of this timeline event.', 'HOME_EVENT_CORRECT'], ['Change the room for this timeline event to the kitchen', 'HOME_EVENT_CORRECT'],
   ['Correct the room of this inventory item.', 'INVENTORY_ITEM_CORRECT'], ['Correct the category of this inventory item.', 'INVENTORY_ITEM_CORRECT'], ['Change the room for this inventory item to the kitchen', 'INVENTORY_ITEM_CORRECT'],

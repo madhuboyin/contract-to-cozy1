@@ -18,8 +18,10 @@ import { homeEventContextVersion, roomContextVersion, warrantyContextVersion } f
 import { staleSuggestedActionResult } from '../suggestedActions/staleSuggestedActionResult';
 import { correctionFieldForOutcome } from '../suggestedActions/suggestedNextActionRegistry';
 import { DEFAULT_CANDIDATE_SIGNALS, DEFAULT_CANDIDATE_TRAITS, type SuggestedNextActionCandidate } from '../suggestedActions/suggestedNextActionCandidate';
-import { durableFreeTextClarification, ensurePropertyAccess, exactEntityMatch, HOME_EVENT_CORRECTION_FIELDS, HOME_EVENT_LINK_FIELDS, HOME_EVENT_VISIBILITY_LABELS, HomeEventCorrectionField, HomeEventCorrectionInputSchema, HomeEventVisibilityInputSchema, HouseholdInvitationInputSchema, invitationRoleCopy, isValidDateEditInput, propertySummary, readablePropertyValue, ROOM_TYPE_VALUES, RoomCreateInputSchema, RoomRenameInputSchema, WarrantyCorrectionInputSchema } from '../askHandlerSupport';
+import { durableFreeTextClarification, ensurePropertyAccess, exactEntityMatch, HOME_EVENT_CORRECTION_FIELDS, HOME_EVENT_LINK_FIELDS, HOME_EVENT_VISIBILITY_LABELS, HomeEventCorrectionField, HomeEventCorrectionInputSchema, HomeEventVisibilityInputSchema, HouseholdInvitationInputSchema, invitationRoleCopy, isValidDateEditInput, propertySummary, readablePropertyValue, ROOM_TYPE_VALUES, RoomCreateInputSchema, RoomRenameInputSchema, WarrantyUpdateInputSchema } from '../askHandlerSupport';
 import { collectionDescriptor } from '../support/collectionDescriptor';
+import { editorToGroupSchema, type RecordEditorChange } from '../recordEditor/recordEditor.contract';
+import { validateWarrantyEditorAnswer, warrantyEditorChanges, warrantyEditorDescriptor, warrantyEditorNotes, warrantyEditorValues, type WarrantyEditorRow } from '../support/warrantyEditor';
 
 export const householdService = new HouseholdService();
 
@@ -377,92 +379,43 @@ async function homeEventVisibilityResult(userId: string, propertyId: string, mes
 
 registerCapabilityHandler('home-event.visibility', async (envelope) => homeEventVisibilityResult(envelope.userId, envelope.propertyId!, envelope.message, envelope.launchContext));
 
-// Phase 3 write slice 3: provider / expiry-date correction on a Warranty.
-// OWNER-ONLY: a Warranty belongs to one member's homeownerProfile and the
-// canonical updateWarranty is scoped to it (the traditional Warranties page
-// has the same rule), so actions are declared only for warranties the
-// requester added and confirm re-verifies ownership.
-const WARRANTY_CATEGORY_OPTIONS: readonly CorrectionOption[] = [
-  { label: 'Appliance', value: 'APPLIANCE' }, { label: 'HVAC', value: 'HVAC' }, { label: 'Roofing', value: 'ROOFING' }, { label: 'Plumbing', value: 'PLUMBING' },
-  { label: 'Electrical', value: 'ELECTRICAL' }, { label: 'Structural', value: 'STRUCTURAL' }, { label: 'Home warranty plan', value: 'HOME_WARRANTY_PLAN' }, { label: 'Other', value: 'OTHER' },
-];
-
-type WarrantyCorrectionMeta = CorrectionFieldSpec & { action: string; message: string };
-
-export const WARRANTY_CORRECTION_FIELDS: Record<'providerName' | 'expiryDate' | 'startDate' | 'category' | 'policyNumber' | 'cost' | 'coverageDetails', WarrantyCorrectionMeta> = {
-  providerName: { label: 'provider', action: 'Correct provider', message: 'Correct the provider of this warranty.', kind: 'TEXT', min: 2, max: 120 },
-  expiryDate: { label: 'expiry date', action: 'Correct expiry date', message: 'Correct the expiry date of this warranty.', kind: 'DATE' },
-  startDate: { label: 'start date', action: 'Correct start date', message: 'Correct the start date of this warranty.', kind: 'DATE' },
-  category: { label: 'coverage type', action: 'Correct coverage type', message: 'Correct the coverage type of this warranty.', kind: 'SELECT', options: WARRANTY_CATEGORY_OPTIONS },
-  policyNumber: { label: 'policy number', action: 'Correct policy number', message: 'Correct the policy number of this warranty.', kind: 'TEXT', max: 160 },
-  cost: { label: 'cost', action: 'Correct cost', message: 'Correct the cost of this warranty.', kind: 'MONEY' },
-  coverageDetails: { label: 'coverage details', action: 'Correct coverage details', message: 'Correct the coverage details of this warranty.', kind: 'TEXTAREA', max: 2000 },
-};
-
-type WarrantyCorrectionField = keyof typeof WARRANTY_CORRECTION_FIELDS;
-
-// Order matters where words overlap: "coverage details" before "coverage type", and the dates before "provider".
-function warrantyCorrectionField(message: string): WarrantyCorrectionField | null {
-  if (/\b(?:coverage details|details)\b/i.test(message)) return 'coverageDetails';
-  if (/\b(?:coverage type|category)\b/i.test(message)) return 'category';
-  if (/\bpolicy\b/i.test(message)) return 'policyNumber';
-  if (/\b(?:cost|price|premium)\b/i.test(message)) return 'cost';
-  if (/\bstart(?:s|ed|ing)?\b/i.test(message)) return 'startDate';
-  if (/\bexpir(?:y|ation|es)\b/i.test(message)) return 'expiryDate';
-  if (/\b(?:provider|name)\b/i.test(message)) return 'providerName';
-  return null;
-}
-
-// Field-level validation plus the one cross-field rule: the start date must stay before the expiry date.
-export function warrantyCorrectionValueError(field: WarrantyCorrectionField, value: unknown, row: { startDate: Date; expiryDate: Date }): string | null {
-  const base = correctionValueError(WARRANTY_CORRECTION_FIELDS[field], value);
-  if (base || typeof value !== 'string') return base;
-  if (field === 'expiryDate' && new Date(`${value.trim()}T00:00:00Z`) < row.startDate) return 'The expiry date cannot be before the warranty start date.';
-  if (field === 'startDate' && new Date(`${value.trim()}T00:00:00Z`) >= row.expiryDate) return 'The start date must be before the warranty expiry date.';
-  return null;
-}
-
-export function warrantyFieldCurrent(warranty: object, field: WarrantyCorrectionField): string | null {
-  const raw = (warranty as Record<string, unknown>)[field];
-  const kind = WARRANTY_CORRECTION_FIELDS[field].kind;
-  if (kind === 'DATE') return correctionDateString(raw);
-  if (kind === 'MONEY') return correctionMoneyFromDollars(raw);
-  return typeof raw === 'string' && raw.trim() ? raw : null;
-}
-
-// Narrowed patch: only the one confirmed field, never a request body.
-export function warrantyFieldPatch(field: WarrantyCorrectionField, normalized: string): Record<string, unknown> {
-  const kind = WARRANTY_CORRECTION_FIELDS[field].kind;
-  if (kind === 'DATE') return { [field]: new Date(`${normalized}T00:00:00Z`) };
-  if (kind === 'MONEY') return { [field]: Number(normalized) };
-  return { [field]: normalized };
-}
+// WARRANTY_UPDATE (FRD v1.385): ONE multi-field edit of a warranty through the shared RecordEditor contract, replacing the
+// seven single-field "Correct ..." actions. The first result is the editor (all fields prefilled from the fresh canonical
+// row); submitting it validates the whole answer, then the homeowner reviews ONLY the changed fields (before -> after)
+// and confirms once. Confirm re-checks ownership and freshness and writes one compare-and-swap update.
+// OWNER-ONLY: a Warranty belongs to one member's homeownerProfile and the canonical updateWarranty is scoped to it (the
+// traditional Warranties page has the same rule), so the action is declared only for warranties the requester added.
+export const WARRANTY_EDIT_MESSAGE = 'Edit this warranty.';
+export const WARRANTY_UPDATE_CAPTURE_KEY = 'WARRANTY_UPDATE_INPUTS';
 
 export { warrantyContextVersion };
 
-// `owned` is decided by the caller from the requester's own homeownerProfile
-// -- never from role alone.
-export function warrantyCorrectionItemActions(canManage: boolean, owned: boolean) {
+// `owned` is decided by the caller from the requester's own homeownerProfile -- never from role alone.
+export function warrantyEditItemActions(canManage: boolean, owned: boolean) {
   if (!canManage || !owned) return undefined;
-  return (Object.keys(WARRANTY_CORRECTION_FIELDS) as WarrantyCorrectionField[]).map((field) => ({
-    id: `correct-${field}`, label: WARRANTY_CORRECTION_FIELDS[field].action, message: WARRANTY_CORRECTION_FIELDS[field].message,
-    style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'WARRANTY_CORRECT',
-  }));
+  return [{
+    id: 'edit-warranty', label: 'Edit warranty', message: WARRANTY_EDIT_MESSAGE,
+    style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'WARRANTY_UPDATE',
+  }];
 }
 
-export function warrantyCorrectionConfirmation(warranty: { id: string; providerName: string }, field: WarrantyCorrectionField, current: string | null, proposed: string | null, version: number, expiresAt: Date) {
-  const meta = WARRANTY_CORRECTION_FIELDS[field];
+export function warrantyUpdateCaptureRequest(row: WarrantyEditorRow, entered?: Record<string, string>, errors?: Record<string, string>): AskCaptureRequest {
+  const descriptor = warrantyEditorDescriptor(row);
   return {
-    confirmationId: `warranty-correct-${warranty.id}-${version}`, version, title: `Correct the ${meta.label} of the ${warranty.providerName} warranty?`,
-    description: 'This writes through the canonical warranty service, the same record the Warranties page edits, and refreshes dependent coverage analysis.',
-    fields: [{ label: 'Warranty', value: warranty.providerName }, { label: 'Field', value: meta.label }, { label: 'Current value', value: correctionDisplay(meta, current) }],
-    editableFields: [{
-      key: 'value', label: `Corrected ${meta.label}`, type: meta.kind, value: proposed ?? '',
-      ...(meta.kind === 'SELECT' ? { options: [...(meta.options ?? [])] } : {}),
-    }],
-    confirmLabel: `Save ${meta.label}`, consentText: 'I authorize this correction to the warranty record.', expiresAt: expiresAt.toISOString(),
+    requirementId: `warranty-update-${row.id}`, captureKey: WARRANTY_UPDATE_CAPTURE_KEY, classification: 'WORKFLOW_INPUT', state: 'KNOWN',
+    title: 'Edit warranty', question: `What should change on the ${row.providerName} warranty?`,
+    helpText: 'Change anything below. You will review only what changed before it is saved.',
+    inputSchema: editorToGroupSchema(descriptor), currentAnswer: entered ?? descriptor.original,
+    allowNotSure: false, sensitivity: 'STANDARD', destinationLabel: 'Used to prepare this change; nothing is saved until you confirm', confirmationText: null,
+    expectedContextVersion: descriptor.version, presentation: 'FORM',
+    editor: {
+      recordLabel: descriptor.recordLabel, sections: descriptor.sections.map((section) => ({ ...section })),
+      fields: descriptor.fields.map((field) => ({ ...field, options: field.options?.map((option) => ({ ...option })) })),
+      original: { ...descriptor.original }, ...(errors && Object.keys(errors).length ? { errors } : {}),
+    },
   };
 }
+
 
 // Phase 3 add slice: start a user-initiated warranty add. Returns the empty form; submitting it resumes through
 // the existing CAPTURE_WARRANTY_EDIT path (validation, ISO date normalisation, confirmation card) and confirming
@@ -600,13 +553,26 @@ export async function evidenceAttachResult(userId: string, propertyId: string, t
   };
 }
 
-async function warrantyCorrectResult(userId: string, propertyId: string, message: string, launchContext?: CreateAskExecutionRequest['launchContext']): Promise<AskOperationResult> {
+const WARRANTY_EDIT_SELECT = {
+  id: true, providerName: true, startDate: true, expiryDate: true, updatedAt: true, category: true, policyNumber: true, cost: true, coverageDetails: true,
+  homeownerProfile: { select: { userId: true } },
+} as const;
+
+/**
+ * `submitted` is the editor's answer on a capture submit (with `warrantyId` from the execution's stored parameters); without it this
+ * returns the editor itself.
+ */
+export async function warrantyUpdateResult(
+  userId: string, propertyId: string, message: string, launchContext?: CreateAskExecutionRequest['launchContext'],
+  submitted?: { warrantyId: string; answer: unknown },
+): Promise<AskOperationResult> {
   await ensurePropertyAccess(userId, propertyId);
   const [warranties, sourceTotal] = await Promise.all([prisma.warranty.findMany({
-    where: { propertyId }, orderBy: { expiryDate: 'asc' }, take: 200,
-    select: { id: true, providerName: true, startDate: true, expiryDate: true, updatedAt: true, category: true, policyNumber: true, cost: true, coverageDetails: true, homeownerProfile: { select: { userId: true } } },
+    where: { propertyId }, orderBy: { expiryDate: 'asc' }, take: 200, select: WARRANTY_EDIT_SELECT,
   }), prisma.warranty.count({ where: { propertyId, homeownerProfile: { userId } } })]);
-  const selected = exactEntityMatch(warranties.map((warranty) => ({ ...warranty, title: warranty.providerName })), message, launchContext);
+  const selected = submitted
+    ? warranties.find((warranty) => warranty.id === submitted.warrantyId) ?? null
+    : exactEntityMatch(warranties.map((warranty) => ({ ...warranty, title: warranty.providerName })), message, launchContext);
   if (!selected) {
     const mine = warranties.filter((warranty) => warranty.homeownerProfile.userId === userId);
     const sections = [{ id: 'warranties', title: 'Your warranties', count: sourceTotal, items: mine.slice(0, 20).map((warranty) => ({
@@ -614,10 +580,10 @@ async function warrantyCorrectResult(userId: string, propertyId: string, message
     })) }];
     return {
       status: 'NEEDS_ENTITY', reasonCode: 'WARRANTY_TARGET_REQUIRED',
-      ...durableFreeTextClarification('WARRANTY_CORRECT', 'Which warranty should Ask correct? Use its exact provider name.'),
+      ...durableFreeTextClarification('WARRANTY_UPDATE', 'Which warranty should Ask edit? Use its exact provider name.'),
       blocks: [{
-        type: 'GROUPED_LIST', filters: [], id: 'warranty-selection', title: 'Choose the warranty to correct',
-        description: 'Only warranties you added can be corrected here. Use the exact provider name in your next message; nothing has changed.',
+        type: 'GROUPED_LIST', filters: [], id: 'warranty-selection', title: 'Choose the warranty to edit',
+        description: 'Only warranties you added can be edited here. Use the exact provider name in your next message; nothing has changed.',
         sections,
         collection: collectionDescriptor({ sourceTotal, fetchedCount: mine.length, sections, nextPageAvailable: false }),
         actions: [],
@@ -628,38 +594,66 @@ async function warrantyCorrectResult(userId: string, propertyId: string, message
   if (selected.homeownerProfile.userId !== userId) {
     return {
       status: 'NOT_APPLICABLE', reasonCode: 'WARRANTY_NOT_OWNED_BY_REQUESTER',
-      blocks: [{ type: 'SUMMARY', id: 'warranty-not-owned', title: 'Only the member who added this warranty can change it', body: 'This warranty belongs to another household member\'s profile, so it cannot be corrected here. Nothing has changed.', tone: 'CAUTION', actions: [] }],
+      blocks: [{ type: 'SUMMARY', id: 'warranty-not-owned', title: 'Only the member who added this warranty can change it', body: 'This warranty belongs to another household member\'s profile, so it cannot be edited here. Nothing has changed.', tone: 'CAUTION', actions: [] }],
       suggestions: [],
     };
   }
-  const field = warrantyCorrectionField(message);
-  if (!field) {
-    return {
-      status: 'NEEDS_CLARIFICATION', reasonCode: 'WARRANTY_CORRECTION_FIELD_REQUIRED',
-      ...durableFreeTextClarification('WARRANTY_CORRECT', `Which detail of the ${selected.providerName} warranty should change? Ask can correct its provider, dates, coverage type, policy number, cost, or coverage details.`),
-      blocks: [{ type: 'SUMMARY', id: 'warranty-correct-field', title: 'Which detail should change?', body: 'Say provider, expiry date, start date, coverage type, policy number, cost, or coverage details. Nothing has changed.', tone: 'CAUTION', actions: [] }],
-      suggestions: [],
-    };
-  }
-  const current = warrantyFieldCurrent(selected, field);
-  const stated = WARRANTY_CORRECTION_FIELDS[field].kind === 'DATE' ? message.match(/\b(\d{4}-\d{2}-\d{2})\b/)?.[1] ?? null : null;
-  const proposed = stated && isValidDateEditInput(stated) ? stated : current;
-  const expiresAt = new Date(Date.now() + 30 * 60_000);
   const contextVersion = warrantyContextVersion(selected);
-  const input = WarrantyCorrectionInputSchema.parse({ warrantyId: selected.id, field, value: proposed });
+  const sourceExecutionId = launchContext?.sourceExecutionId ?? null;
+  const editorBlock = { type: 'SUMMARY' as const, id: 'warranty-update-input', title: `Edit the ${selected.providerName} warranty`, body: 'Nothing has been saved yet. Change what you need, then review only what changed.', tone: 'DEFAULT' as const, actions: [] };
+  if (!submitted) {
+    return {
+      status: 'NEEDS_CONTEXT', reasonCode: 'WARRANTY_UPDATE_INPUT_REQUIRED', contextVersion,
+      parameters: { warrantyId: selected.id, sourceExecutionId },
+      blocks: [editorBlock], captureRequests: [warrantyUpdateCaptureRequest(selected)], suggestions: [],
+    };
+  }
+  const { values, errors } = validateWarrantyEditorAnswer(submitted.answer);
+  if (Object.keys(errors).length) {
+    return {
+      status: 'NEEDS_CONTEXT', reasonCode: 'WARRANTY_UPDATE_INVALID', contextVersion,
+      parameters: { warrantyId: selected.id, sourceExecutionId },
+      blocks: [{ ...editorBlock, id: 'warranty-update-invalid', title: 'Check the highlighted fields', body: 'Nothing has been saved. Fix the highlighted fields, then review again.', tone: 'CAUTION' as const }],
+      captureRequests: [warrantyUpdateCaptureRequest(selected, values, errors)], suggestions: [],
+    };
+  }
+  const original = warrantyEditorValues(selected);
+  const changes = warrantyEditorChanges(original, values);
+  if (changes.length === 0) {
+    return {
+      status: 'NEEDS_CONTEXT', reasonCode: 'WARRANTY_UPDATE_NO_CHANGES', contextVersion,
+      parameters: { warrantyId: selected.id, sourceExecutionId },
+      blocks: [{ ...editorBlock, id: 'warranty-update-no-changes', title: 'Nothing has changed', body: 'These details match the recorded warranty. Change a field to review an update.' }],
+      captureRequests: [warrantyUpdateCaptureRequest(selected, values)], suggestions: [],
+    };
+  }
+  const input = WarrantyUpdateInputSchema.parse({ warrantyId: selected.id, changes: Object.fromEntries(changes.map((change) => [change.key, values[change.key]])) });
+  const notes = warrantyEditorNotes(values, new Date());
+  const expiresAt = new Date(Date.now() + 30 * 60_000);
   return {
-    status: 'NEEDS_CONFIRMATION', reasonCode: 'WARRANTY_CORRECTION_CONFIRMATION_REQUIRED', contextVersion,
+    status: 'NEEDS_CONFIRMATION', reasonCode: 'WARRANTY_UPDATE_CONFIRMATION_REQUIRED', contextVersion,
     parameters: {
-      warrantyCorrection: input, warrantyCorrectionContextVersion: contextVersion, sourceExecutionId: launchContext?.sourceExecutionId ?? null,
+      warrantyId: selected.id, warrantyUpdate: input, warrantyUpdateContextVersion: contextVersion, sourceExecutionId,
       confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString(),
     },
-    blocks: [{ type: 'SUMMARY', id: 'warranty-correct-review', title: `Review this ${WARRANTY_CORRECTION_FIELDS[field].label} correction`, body: 'No warranty record has changed yet. Edit the corrected value, then confirm.', tone: 'DEFAULT', actions: [] }],
-    confirmation: warrantyCorrectionConfirmation(selected, field, current, proposed, 1, expiresAt),
+    blocks: [{ type: 'SUMMARY', id: 'warranty-update-review', title: `Review ${changes.length === 1 ? 'this change' : `these ${changes.length} changes`}`, body: 'No warranty record has changed yet. Only what you changed is listed.', tone: 'DEFAULT', actions: [] }],
+    confirmation: warrantyUpdateConfirmation(selected, changes, notes, 1, expiresAt),
+    // Kept so the entry can be adjusted and resubmitted before confirming.
+    captureRequests: [warrantyUpdateCaptureRequest(selected, values)],
     suggestions: [],
   };
 }
 
-registerCapabilityHandler('warranty.correct', async (envelope) => warrantyCorrectResult(envelope.userId, envelope.propertyId!, envelope.message, envelope.launchContext));
+export function warrantyUpdateConfirmation(warranty: { id: string; providerName: string }, changes: readonly RecordEditorChange[], notes: readonly string[], version: number, expiresAt: Date) {
+  return {
+    confirmationId: `warranty-update-${warranty.id}-${version}`, version, title: `Save ${changes.length === 1 ? '1 change' : `${changes.length} changes`} to the ${warranty.providerName} warranty?`,
+    description: `This writes through the canonical warranty service, the same record the Warranties page edits, and refreshes dependent coverage analysis.${notes.length ? ` ${notes.join(' ')}` : ''}`,
+    fields: [{ label: 'Warranty', value: warranty.providerName }, ...changes.map((change) => ({ label: change.label, value: `${change.before} \u2192 ${change.after}` }))],
+    editableFields: [], confirmLabel: 'Save changes', consentText: 'I authorize these changes to the warranty record.', expiresAt: expiresAt.toISOString(),
+  };
+}
+
+registerCapabilityHandler('warranty.update', async (envelope) => warrantyUpdateResult(envelope.userId, envelope.propertyId!, envelope.message, envelope.launchContext));
 
 
 export const roomTypeLabel = (value: string): string => value.charAt(0) + value.slice(1).toLowerCase().replace(/_/g, ' ');

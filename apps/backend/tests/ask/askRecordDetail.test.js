@@ -246,14 +246,14 @@ test('a warranty added through Ask says so', async () => {
 });
 
 test('warranty correction needs the registered floor AND being the member who added it (the existing Ask rule, not a new one)', async () => {
-  assert.equal(ASK_OPERATION_DEFINITIONS.WARRANTY_CORRECT.propertyRoleFloor, 'CONTRIBUTOR');
+  assert.equal(ASK_OPERATION_DEFINITIONS.WARRANTY_UPDATE.propertyRoleFloor, 'CONTRIBUTOR');
   let restore = stubWarranty(WARRANTY);
   try {
     assert.equal((await sectionReader('warranties')(ctx('VIEWER'), 'w1')).corrections[0].state, 'ROLE_REQUIRED');
     const own = (await sectionReader('warranties')(ctx('CONTRIBUTOR'), 'w1')).corrections[0];
-    assert.deepEqual([own.state, own.launch], ['AVAILABLE', { message: 'Correct a detail of this warranty.', operationId: 'WARRANTY_CORRECT', entityType: 'WARRANTY', entityId: 'w1', actionId: null }]);
+    assert.deepEqual([own.state, own.launch], ['AVAILABLE', { message: 'Edit this warranty.', operationId: 'WARRANTY_UPDATE', entityType: 'WARRANTY', entityId: 'w1', actionId: null }]);
     const other = (await sectionReader('warranties')(ctx('OWNER', { userId: 'someone-else' }), 'w1')).corrections[0];
-    assert.deepEqual([other.state, other.reason, other.launch], ['UNAVAILABLE', 'Only the member who added this warranty can correct it.', null]);
+    assert.deepEqual([other.state, other.reason, other.launch], ['UNAVAILABLE', 'Only the member who added this warranty can edit it.', null]);
   } finally { restore(); }
   restore = stubWarranty(null);
   try {

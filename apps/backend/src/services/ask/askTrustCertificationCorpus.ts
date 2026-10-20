@@ -377,7 +377,7 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   SERVICE_PRICE_CHECK_RUN: 'The quote details are reviewed and the quote is checked against typical local prices after your confirmation.',
   INVENTORY_ITEM_CREATE: 'The new inventory item is reviewed and then added to your home record after your confirmation.',
   PROPERTY_CONTEXT_AREA_CAPTURE: 'Each missing home detail is reviewed and then saved to your home record after your confirmation.',
-  WARRANTY_CORRECT: 'The selected warranty has a corrected provider name or expiry date after your confirmation.',
+  WARRANTY_UPDATE: 'The selected warranty has its edited details saved after you review the changes and confirm.',
   HOME_EVENT_CORRECT: 'The timeline event correction is reviewed before it is recorded as a new revision.',
   HOME_EVENT_VISIBILITY: 'Who can see the timeline event is reviewed and then changed after your confirmation.',
   HOME_EVENT_RADAR_STATE: 'The selected monitored event is saved for you only; nobody else in the household sees the change.',

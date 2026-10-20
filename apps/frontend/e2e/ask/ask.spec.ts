@@ -317,16 +317,6 @@ test('a contributor corrects an inventory item purchase cost inline through the 
   });
 });
 
-test('a contributor corrects their own warranty expiry date inline through the DATE field', async ({ page }) => {
-  const api = await installAskApi(page);
-  await correctionFlow(page, api, {
-    block: 'Warranties', recordButton: 'Acme Home Warranty', detailText: 'Covers HVAC and major appliances.', actionLabel: /^Correct expiry date/,
-    actionMessage: 'Correct the expiry date of this warranty.', entityType: 'WARRANTY', entityId: 'warranty-property-summary', disclosure: true,
-    confirmationTitle: 'Correct the expiry date of the Acme Home Warranty warranty?', fieldLabel: 'Corrected expiry date', newValue: '2028-06-30', confirmLabel: 'Save expiry date',
-    consentText: /I authorize this correction to the warranty record/, receiptTitle: 'Warranty updated',
-  });
-});
-
 test('a contributor corrects a timeline event amount inline through the money field', async ({ page }) => {
   const api = await installAskApi(page);
   await correctionFlow(page, api, {
@@ -334,16 +324,6 @@ test('a contributor corrects a timeline event amount inline through the money fi
     actionMessage: 'Correct the amount of this timeline event.', entityType: 'HOME_EVENT', entityId: 'event-property-summary', disclosure: true,
     confirmationTitle: 'Correct the amount of "Roof replacement"?', fieldLabel: 'Corrected amount', newValue: '19250.50', shownValue: '$19250.50', confirmLabel: 'Save amount',
     consentText: /I authorize this correction to the shared home timeline/, receiptTitle: 'Home timeline event corrected',
-  });
-});
-
-test('a contributor corrects a warranty coverage type inline through a dropdown', async ({ page }) => {
-  const api = await installAskApi(page);
-  await correctionFlow(page, api, {
-    block: 'Warranties', recordButton: 'Acme Home Warranty', detailText: 'Covers HVAC and major appliances.', actionLabel: /^Correct coverage type/,
-    actionMessage: 'Correct the coverage type of this warranty.', entityType: 'WARRANTY', entityId: 'warranty-property-summary', disclosure: true, select: true,
-    confirmationTitle: 'Correct the coverage type of the Acme Home Warranty warranty?', fieldLabel: 'Corrected coverage type', newValue: 'HVAC', shownValue: 'HVAC', confirmLabel: 'Save coverage type',
-    consentText: /I authorize this correction to the warranty record/, receiptTitle: 'Warranty updated',
   });
 });
 
@@ -566,14 +546,14 @@ test('a contributor adds a warranty inline: the Add action opens the form, Conti
   await expect(page.getByText('Nothing has been saved yet', { exact: false })).toBeVisible();
 
   await page.getByLabel('Provider').fill('Acme Home Warranty');
-  await page.getByRole('button', { name: 'HOME_WARRANTY_PLAN' }).click();
+  await page.getByRole('button', { name: 'Home warranty plan' }).click();
   await page.getByLabel('Start date').fill('2026-01-01');
   await page.getByLabel('Expiration date').fill('2027-12-01');
   await page.getByRole('button', { name: 'Continue to review' }).click();
 
   await expect.poll(() => api.warrantyAddCaptureBodies).toEqual([expect.objectContaining({
     requirementId: 'capture-warranty-edit', captureKey: 'CAPTURE_WARRANTY_EDIT', expectedContextVersion: 'warranty-add-context-v1',
-    answer: expect.objectContaining({ providerName: 'Acme Home Warranty', category: 'HOME_WARRANTY_PLAN', startDate: '2026-01-01', expiryDate: '2027-12-01' }),
+    answer: expect.objectContaining({ providerName: 'Acme Home Warranty', category: 'HOME_WARRANTY_PLAN', startDate: { precision: 'EXACT_DATE', value: '2026-01-01' }, expiryDate: { precision: 'EXACT_DATE', value: '2027-12-01' } }),
   })]);
   await expect(page.getByText('Save this warranty to your property record?').first()).toBeVisible();
   await expect(page.getByText('You entered these details', { exact: false }).first()).toBeVisible();

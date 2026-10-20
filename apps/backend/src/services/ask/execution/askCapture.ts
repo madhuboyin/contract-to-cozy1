@@ -9,6 +9,7 @@ import { HouseholdRole, MaintenanceTaskStatus, Prisma } from '@prisma/client';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { prisma } from '../../../lib/prisma';
+import { warrantyContextVersion } from '../suggestedActions/domainVersions';
 import { logger } from '../../../lib/logger';
 import { areaScopeForOutcome, loadAreaCaptureAllowlist } from '../suggestedActions/profileAreaAllowlist';
 import { ASK_RESPONSE_SCHEMA_VERSION, type AskExecutionResponse, type AskPresentationBlock, type RecordAskCaptureEvent, type SubmitAskCaptureRequest } from '../../../productFramework/ask/ask.contract';
@@ -30,7 +31,7 @@ import { radarNotificationPreferenceService } from '../../../modules/homeEventRa
 import { updateInsurancePolicy } from '../../home-management.service';
 import { areaCapturePrompt, areaCaptureStateFrom, areaCaptureSubmitResult } from '../handlers/propertySummary.handler';
 import { AREA_CAPTURE_MESSAGES, asInputJson, ensurePropertyAccess, enterAskPropertyTimezoneContext, expireIfSkillBindingChanged, HouseholdInvitationInputSchema, InventoryCreateInputSchema, MaintenanceCompletionWorkflowInputSchema, MaintenanceTaskWorkflowInputSchema, mapPersistedExecution, preservedExecutionHistory, propertySummary, RadarTaskAnswerSchema, RadarTaskTargetSchema, RoomCreateInputSchema, terminalStatus } from '../askHandlerSupport';
-import { householdInvitationResult, householdWorkflowVersion, ROOM_CREATE_CAPTURE_KEY, roomCreateContextVersion, roomCreateResult } from '../handlers/homeRecordWrites.handler';
+import { householdInvitationResult, householdWorkflowVersion, ROOM_CREATE_CAPTURE_KEY, roomCreateContextVersion, roomCreateResult, WARRANTY_UPDATE_CAPTURE_KEY, warrantyUpdateResult } from '../handlers/homeRecordWrites.handler';
 import { INVENTORY_COMPLETE_DETAILS_CAPTURE_KEY, INVENTORY_CREATE_CAPTURE_KEY, inventoryCompleteDetailsResult, inventoryCreateContextVersion, inventoryItemContextVersion, inventoryItemCreateResult } from '../handlers/inventory.handler';
 import { claimFileResult, ClaimFileWorkflowInputSchema } from '../handlers/claims.handler';
 import { RADAR_PREFERENCES_CAPTURE_KEY, RADAR_TASK_CAPTURE_KEY, radarCaptureError, radarPreferencesBodyFromAnswer, radarPreferencesContextVersion, radarPreferencesFormResult, radarTaskContextVersion, radarTaskFormResult } from '../handlers/homeEventRadar.handler';
@@ -731,6 +732,33 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     captureId = input.idempotencyKey;
     capturedContextVersion = currentVersion;
     canonicalOwner = 'InventoryRoom';
+  } else if (execution.operationId === 'WARRANTY_UPDATE') {
+    // Shared RecordEditor submit (FRD v1.385): the answer is every editor field; the target is the warranty the editor was opened for.
+    if (input.captureKey !== WARRANTY_UPDATE_CAPTURE_KEY) {
+      const error = new Error('This warranty edit is no longer active.');
+      (error as Error & { code?: string }).code = 'ASK_CAPTURE_NOT_ACTIVE';
+      throw error;
+    }
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson)
+      ? execution.parametersJson as Record<string, unknown>
+      : {};
+    const warrantyId = typeof storedParameters.warrantyId === 'string' ? storedParameters.warrantyId : null;
+    const warranty = warrantyId ? await prisma.warranty.findFirst({ where: { id: warrantyId, propertyId: execution.propertyId }, select: { id: true, updatedAt: true } }) : null;
+    if (!warranty) {
+      const error = new Error('This warranty is no longer available. It may have been deleted.');
+      (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
+      throw error;
+    }
+    const currentVersion = warrantyContextVersion(warranty);
+    if (currentVersion !== input.expectedContextVersion) {
+      const error = new Error('This warranty changed while the editor was open. Review the refreshed values and try again.');
+      (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
+      throw error;
+    }
+    result = await warrantyUpdateResult(userId, execution.propertyId, execution.message, undefined, { warrantyId: warranty.id, answer: input.answer });
+    captureId = input.idempotencyKey;
+    capturedContextVersion = currentVersion;
+    canonicalOwner = 'Warranty';
   } else if (execution.operationId === 'PROPERTY_PURCHASE_DATE_SET' || execution.operationId === 'HOME_JOURNEY_SET') {
     const purchaseDate = execution.operationId === 'PROPERTY_PURCHASE_DATE_SET';
     if (input.captureKey !== (purchaseDate ? PURCHASE_DATE_CAPTURE_KEY : HOME_JOURNEY_CAPTURE_KEY)) {

@@ -70,7 +70,7 @@ test('the unavailable-record copy tells the user to show the timeline or invento
 
 test('correcting a warranty, a timeline event or a room with no target shows plain rows and no page action', async () => {
   for (const [operationId, message] of [
-    ['WARRANTY_CORRECT', 'Correct the provider of this warranty.'],
+    ['WARRANTY_UPDATE', 'Correct the provider of this warranty.'],
     ['HOME_EVENT_CORRECT', 'Correct the date of this timeline event.'],
     ['HOME_EVENT_VISIBILITY', 'Change who can see this timeline event.'],
     ['ROOM_RENAME', 'Rename this room.'],

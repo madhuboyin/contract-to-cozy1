@@ -14,7 +14,7 @@ Review the warranties recorded for this home: provider, category and dates, whet
 ## Do not select this Skill when
 
 - Add a warranty to my home record (`CAPTURE_WARRANTY_CONFIRM`)
-- Correct the expiry date on my warranty (`WARRANTY_CORRECT`)
+- Correct the expiry date on my warranty (`WARRANTY_UPDATE`)
 - The request is about missing protection or coverage gaps (`coverage`)
 - The request is to file or advance a claim (`incident-claim`)
 

@@ -26,6 +26,7 @@ import { normalizeCaptureValue } from '../../../modules/propertyContext/applicat
 import { FINANCING_CAPTURE_FACT_KEY } from '../../../modules/propertyContext/application/capturePropertyFinancingFact';
 import type { AskCaptureRequest, AskPresentationBlock } from '../../../productFramework/ask/ask.contract';
 import type { AskOperationResult } from '../askOperationRegistry';
+import { WARRANTY_CATEGORY_OPTIONS } from '../support/warrantyEditor';
 import { evaluateExtractionPreFilter } from './extractionPreFilter';
 import { runStructuredExtraction, type ActiveDecisionThreadContext, type RecentDocumentContext, type RecentHomeEventContext } from './extractionContract';
 import { ExtractionAttributionSchema, filterCandidatesPreservingWarrantyLinks, splitGoalCandidates } from './extractionCandidateSchema';
@@ -317,14 +318,16 @@ function warrantyEditCaptureRequest(parameters: Record<string, unknown>, context
     title: 'Edit before saving',
     question: startDateApproximate ? 'Is this warranty information accurate? The start date is an estimate -- please check it.' : 'Is this warranty information accurate?',
     helpText: 'Change any field below, then confirm to save the corrected version.',
+    // Friendly coverage labels, a multiline details box, native exact-day date inputs (future dates allowed: warranties expire
+    // ahead of today; past dates are allowed too) and a $-prefixed USD cost. Same keys as before, so the edit path is unchanged.
     inputSchema: { type: 'GROUP', fields: [
       { key: 'providerName', label: 'Provider', required: true, inputSchema: { type: 'SHORT_TEXT', maxLength: 160 } },
-      { key: 'category', label: 'Coverage type', required: true, inputSchema: { type: 'SINGLE_SELECT', options: Object.values(WarrantyCategory).map((value) => ({ label: value, value })) } },
+      { key: 'category', label: 'Coverage type', required: true, inputSchema: { type: 'SINGLE_SELECT', options: WARRANTY_CATEGORY_OPTIONS } },
       { key: 'policyNumber', label: 'Policy number', required: false, inputSchema: { type: 'SHORT_TEXT', maxLength: 160 } },
-      { key: 'coverageDetails', label: 'Coverage details', required: false, inputSchema: { type: 'SHORT_TEXT', maxLength: 2000 } },
-      { key: 'cost', label: 'Cost', required: false, inputSchema: { type: 'DECIMAL', min: 0, max: 10_000_000, unit: 'USD' } },
-      { key: 'startDate', label: startDateApproximate ? 'Start date (estimated)' : 'Start date', required: true, inputSchema: { type: 'SHORT_TEXT', maxLength: 10 } },
-      { key: 'expiryDate', label: 'Expiration date', required: true, inputSchema: { type: 'SHORT_TEXT', maxLength: 10 } },
+      { key: 'coverageDetails', label: 'Coverage details', helpText: 'What is and is not covered, claim limits, deductibles.', required: false, inputSchema: { type: 'LONG_TEXT', maxLength: 2000 } },
+      { key: 'startDate', label: startDateApproximate ? 'Start date (estimated)' : 'Start date', required: true, inputSchema: { type: 'APPROXIMATE_DATE', allowedPrecisions: ['EXACT_DATE'], allowFuture: true } },
+      { key: 'expiryDate', label: 'Expiration date', required: true, inputSchema: { type: 'APPROXIMATE_DATE', allowedPrecisions: ['EXACT_DATE'], allowFuture: true } },
+      { key: 'cost', label: 'Cost (USD)', helpText: 'Optional. What you paid for the warranty.', required: false, inputSchema: { type: 'MONEY', currency: 'USD', min: 0, max: 10_000_000 } },
     ] },
     currentAnswer: {
       providerName: parameters.providerName,
@@ -332,8 +335,8 @@ function warrantyEditCaptureRequest(parameters: Record<string, unknown>, context
       policyNumber: parameters.policyNumber ?? null,
       coverageDetails: parameters.coverageDetails ?? null,
       cost: parameters.cost ?? null,
-      startDate: typeof parameters.startDate === 'string' ? parameters.startDate.slice(0, 10) : null,
-      expiryDate: typeof parameters.expiryDate === 'string' ? parameters.expiryDate.slice(0, 10) : null,
+      startDate: typeof parameters.startDate === 'string' ? { precision: 'EXACT_DATE', value: parameters.startDate.slice(0, 10) } : null,
+      expiryDate: typeof parameters.expiryDate === 'string' ? { precision: 'EXACT_DATE', value: parameters.expiryDate.slice(0, 10) } : null,
     },
     allowNotSure: false,
     sensitivity: 'STANDARD',
@@ -359,7 +362,7 @@ export function warrantyAddCaptureRequest(contextVersion: string): AskCaptureReq
     state: 'UNKNOWN',
     title: 'Add a warranty',
     question: 'Which warranty would you like to add to your home record?',
-    helpText: 'Enter dates as YYYY-MM-DD. You will review everything before it is saved.',
+    helpText: 'Only the provider, coverage type and dates are required. You will review everything before it is saved.',
     currentAnswer: { providerName: null, category: null, policyNumber: null, coverageDetails: null, cost: null, startDate: null, expiryDate: null },
     destinationLabel: 'Used to prepare this warranty; nothing is saved until you confirm',
   };
@@ -715,7 +718,7 @@ function warrantyEditConfirmationBlocksAndCard(mergedParameters: Record<string, 
   const startDateApproximate = Boolean(mergedParameters.startDateApproximate);
   const fields: Array<{ label: string; value: string }> = [
     { label: 'Provider', value: typeof mergedParameters.providerName === 'string' ? mergedParameters.providerName : '' },
-    { label: 'Coverage', value: typeof mergedParameters.category === 'string' ? mergedParameters.category : '' },
+    { label: 'Coverage', value: typeof mergedParameters.category === 'string' ? WARRANTY_CATEGORY_OPTIONS.find((option) => option.value === mergedParameters.category)?.label ?? mergedParameters.category : '' },
   ];
   if (typeof mergedParameters.policyNumber === 'string' && mergedParameters.policyNumber) fields.push({ label: 'Policy number', value: mergedParameters.policyNumber });
   if (typeof mergedParameters.cost === 'number') fields.push({ label: 'Cost', value: `$${mergedParameters.cost.toLocaleString()}` });
@@ -1110,14 +1113,18 @@ const WARRANTY_DATE_STRING = z.string().trim().min(1).refine((value) => !Number.
 // Cross-field validated the same way captureWarranty.ts's actual
 // confirm-time writer validates them, so an edit can never propose a card
 // that would fail once confirmed.
+// The date control answers with the shared APPROXIMATE_DATE value limited to an exact day; a bare YYYY-MM-DD still parses.
+const warrantyDay = (value: unknown) => (value && typeof value === 'object' && !Array.isArray(value) && (value as { precision?: unknown }).precision === 'EXACT_DATE' ? (value as { value?: unknown }).value : value);
+
 const WARRANTY_EDIT_ANSWER_SCHEMA = z.object({
   providerName: z.string().trim().min(1).max(160),
   category: z.nativeEnum(WarrantyCategory),
-  policyNumber: z.string().trim().max(160).nullable(),
-  coverageDetails: z.string().trim().max(2000).nullable(),
-  cost: z.number().nonnegative().max(10_000_000).nullable(),
-  startDate: WARRANTY_DATE_STRING,
-  expiryDate: WARRANTY_DATE_STRING,
+  // Optional fields: a cleared or never-touched control is absent or empty, which means "none".
+  policyNumber: z.string().trim().max(160).nullish().transform((value) => value || null),
+  coverageDetails: z.string().trim().max(2000).nullish().transform((value) => value || null),
+  cost: z.number().nonnegative().max(10_000_000).nullish().transform((value) => value ?? null),
+  startDate: z.preprocess(warrantyDay, WARRANTY_DATE_STRING),
+  expiryDate: z.preprocess(warrantyDay, WARRANTY_DATE_STRING),
 }).strict().refine(
   (value) => new Date(value.expiryDate) > new Date(value.startDate),
   { message: 'Expiration date must be after the start date', path: ['expiryDate'] },

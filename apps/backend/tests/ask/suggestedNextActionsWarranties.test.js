@@ -148,7 +148,7 @@ test('a deleted, changed or expired target gives the stale recovery and never fa
 
 const clock = fixedSuggestedNextActionClock(NOW);
 const finalize = (candidates, availability = null) => finalizeSuggestedNextActionsWithReport(
-  { result: { status: 'COMPLETED', blocks: [], suggestions: ['Show my warranties'], suggestedNextActionCandidates: candidates }, executionId: 'exec-1', userId: 'u1', sessionId: 's1', propertyId: 'prop-1', operationId: 'WARRANTY_CORRECT', message: 'Correct the expiry date of this warranty.' },
+  { result: { status: 'COMPLETED', blocks: [], suggestions: ['Show my warranties'], suggestedNextActionCandidates: candidates }, executionId: 'exec-1', userId: 'u1', sessionId: 's1', propertyId: 'prop-1', operationId: 'WARRANTY_UPDATE', message: 'Correct the expiry date of this warranty.' },
   { clock, loadOperationAvailability: async () => new Map([['HOME_DEADLINE_MONITOR', availability]]), loadExecutionExpiresAt: async () => null },
 );
 const withValidatorRows = async (rows, fn) => {
@@ -191,8 +191,8 @@ test('a warranty that was deleted, is in another property, or changed since the 
 
 test('the recorded receipt and an expiry-date correction nominate the reminder; other corrections do not', () => {
   const record = readFileSync(resolve(__dirname, '../../src/services/ask/handlers/recordConfirm.handler.ts'), 'utf8');
-  assert.match(record, /suggestedNextActionCandidates: field === 'expiryDate'\n\s+\? await warrantyExpiryReminderCandidates\(updated, \{[^}]*checkExistingReminder: true/);
-  assert.doesNotMatch(record, /field === 'startDate'\s*\?\s*await warrantyExpiryReminderCandidates/);
+  assert.match(record, /suggestedNextActionCandidates: 'expiryDate' in changes\n\s+\? await warrantyExpiryReminderCandidates\(updated, \{[^}]*checkExistingReminder: true/);
+  assert.doesNotMatch(record, /'startDate' in changes\s*\?\s*await warrantyExpiryReminderCandidates/);
   const capture = readFileSync(resolve(__dirname, '../../src/services/ask/handlers/captureConfirm.handler.ts'), 'utf8');
   assert.match(capture, /warrantyExpiryReminderCandidates\(warranty, \{[^}]*checkExistingReminder: false/);
 });

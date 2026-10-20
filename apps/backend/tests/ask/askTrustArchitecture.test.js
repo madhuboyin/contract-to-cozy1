@@ -61,7 +61,7 @@ test('operations that must never be reached by fuzzy retrieval are absent from r
     // these write commands, so they must not be retrieval candidates.
     'INVENTORY_ITEM_CORRECT',
     'HOME_EVENT_CORRECT',
-    'WARRANTY_CORRECT',
+    'WARRANTY_UPDATE',
     'ROOM_RENAME',
     // Added only from the declared "Add a room" action; no message pattern.
     'ROOM_CREATE',
