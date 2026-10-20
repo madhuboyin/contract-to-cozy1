@@ -177,7 +177,7 @@ export function ComparisonStripBlock({ block, renderAction }: { block: Compariso
                 value={Math.max(2, priceShares[index] * 100)}
               />
             )}
-            <dl className="mt-4 space-y-2">
+            <dl className="mt-4 grid grid-cols-2 gap-2 sm:block sm:space-y-2">
               {option.attributes.map((attribute) => (
                 <div key={attribute.label} className={cn('rounded-lg border px-3 py-2 text-sm', toneStyles[attribute.tone])}>
                   <dt className="text-xs font-medium opacity-75">{attribute.label}</dt>
