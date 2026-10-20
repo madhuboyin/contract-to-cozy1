@@ -146,6 +146,8 @@ const CERTIFICATION_ROWS: ReadonlyArray<Omit<AskRoutingCertificationFixture, 'fi
   { operationId: 'PERMIT_TRACKER_STATUS', message: 'Do I have unfinished building permits?', category: 'PARAPHRASE' },
   { operationId: 'HOUSEHOLD_ACCESS_SUMMARY', message: 'Who else is on my household with access?', category: 'PARAPHRASE' },
   { operationId: 'ENVIRONMENT_REPORT', message: 'What are the local environmental conditions for my home?', category: 'PARAPHRASE' },
+  { operationId: 'WORK_OVERVIEW', message: 'What work is waiting on me right now?', category: 'PARAPHRASE' },
+  { operationId: 'SAVED_RESULTS', message: 'Which of my saved results are out of date?', category: 'PARAPHRASE' },
 ];
 
 export const ASK_ROUTING_CERTIFICATION_FIXTURES: readonly AskRoutingCertificationFixture[] = Object.freeze(
@@ -317,6 +319,8 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   SEASONAL_ITEM_COMMAND: 'The seasonal task change is shown for review and applied only after you confirm.',
   HOME_WORK_ITEM_COMMAND: 'The change is shown for review and applied only after you confirm.',
   HOME_WORK_ITEMS: 'Your open work items are listed with their state, due date and snooze.',
+  WORK_OVERVIEW: 'Your work is summarized by what needs you, is under way, waiting or scheduled, with the items listed and a note of what is being shown.',
+  SAVED_RESULTS: 'Your saved reports, comparisons and decisions are listed newest first with how current each one is.',
   INSPECTION_NEGOTIATION_PACKAGE: 'A negotiation package is built from this inspection report: a choice per open finding, then the credit total and the repair and as-is lists; nothing is saved or sent.',
   INSPECTION_FINDING_DECISION_COMMAND: 'The decision is shown for review and recorded only after you confirm; nothing is sent to anyone.',
   INSPECTION_REPORT_FINDINGS: 'The findings in this report are listed with their state and the decisions each allows.',

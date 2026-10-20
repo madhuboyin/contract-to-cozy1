@@ -59,6 +59,8 @@ const OPERATION_BOUNDARIES: Partial<Record<AskOperationId, ReadonlySet<string>>>
   FINANCING_OVERVIEW: new Set(['financing-boundary']),
   DO_NOTHING_SIMULATION: new Set(['do-nothing-boundary']),
   WARRANTY_LOOKUP: new Set(['warranty-boundary']),
+  WORK_OVERVIEW: new Set(['work-overview-boundary', 'work-overview-partial']),
+  SAVED_RESULTS: new Set(['saved-results-boundary', 'saved-results-partial']),
   INCIDENT_CLAIM_STATUS: new Set(['claim-status-boundary']),
   DOCUMENT_LOOKUP: new Set(['document-lookup-boundary']),
   APPLIANCE_FAILURE_RISK: new Set(['appliance-oracle-boundary']),
@@ -222,6 +224,9 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   // Snooze or reschedule a Home Operations work item, or accept the routine low-risk candidates in bulk (register P2 Maintenance and Home Operations). Confirmation-gated, declared-action only.
   HOME_WORK_ITEM_COMMAND: new Set(['home-work-items-back']),
   // List the home's open Home Operations work items with state, due date and snooze (register P2 Maintenance and Home Operations). Read-only.
+  // Work and Saved as conversations (FRD v1.1 §1.2). Read-only; every control is a row action or a chip, so no block-level action is declared.
+  WORK_OVERVIEW: new Set(),
+  SAVED_RESULTS: new Set(),
   HOME_WORK_ITEMS: new Set(['home-work-items-back', 'work-item-snooze', 'work-item-reschedule', 'work-items-accept-routine']),
   // Build a negotiation package from a confirmed pre-purchase inspection report: choose a decision per open finding and see the credit total (register P2 Inspection Hub). Calculation only; saves nothing.
   INSPECTION_NEGOTIATION_PACKAGE: new Set(['inspection-reports-back']),

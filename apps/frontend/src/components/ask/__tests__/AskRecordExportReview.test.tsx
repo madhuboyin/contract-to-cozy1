@@ -1,10 +1,9 @@
 /** @jest-environment jsdom */
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { AskRecord } from '../record/AskRecord';
+import { RecordExportReview } from '../record/RecordExportReview';
 import { api } from '@/lib/api/client';
 import type { AskRecordExportReview, AskRecordExportReviewSection } from '@/features/ask/types';
 
-jest.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams('propertyId=home-1&export=review') }));
 jest.mock('@/lib/property/PropertyContext', () => ({
   usePropertyContext: () => ({ selectedPropertyId: 'home-1', setSelectedPropertyId: jest.fn() }),
 }));
@@ -38,7 +37,7 @@ describe('Record export review', () => {
 
   it('discloses inclusions, exclusions, sensitive fields, expiry, and who can download before anything is created', async () => {
     getReview.mockResolvedValue({ success: true, data: review() });
-    render(<AskRecord />);
+    render(<RecordExportReview propertyId="home-1" onBack={jest.fn()} />);
 
     expect(await screen.findByRole('heading', { name: 'Export home record' })).toBeInTheDocument();
     expect(getReview).toHaveBeenCalledWith('home-1', expect.objectContaining({ signal: expect.any(AbortSignal) }));
@@ -62,7 +61,7 @@ describe('Record export review', () => {
   it('creates nothing until the sensitive-fields acknowledgement is checked, then shows a receipt with what was and was not included', async () => {
     getReview.mockResolvedValue({ success: true, data: review() });
     createExport.mockResolvedValue({ success: true, data: { exportId: 'exp-1', status: 'PENDING', selection: { version: 1, requested: ['coverage', 'timeline'], included: ['coverage'], unavailable: [{ id: 'timeline', reason: 'NOT_IN_PACK' }] } } });
-    render(<AskRecord />);
+    render(<RecordExportReview propertyId="home-1" onBack={jest.fn()} />);
 
     const button = await screen.findByRole('button', { name: 'Create export' });
     expect(button).toBeDisabled();
@@ -91,7 +90,7 @@ describe('Record export review', () => {
     downloadUrl.mockResolvedValue({ success: true, data: { url: 'https://files.example/pack.pdf' } });
     const assign = jest.fn();
     Object.defineProperty(window, 'location', { configurable: true, value: { ...window.location, assign } });
-    render(<AskRecord />);
+    render(<RecordExportReview propertyId="home-1" onBack={jest.fn()} />);
     fireEvent.click(await screen.findByRole('checkbox', { name: /I understand/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Create export' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Check status' }));
@@ -107,7 +106,7 @@ describe('Record export review', () => {
 
   it('a viewer sees the same contents but cannot create, and a refused create shows the reason', async () => {
     getReview.mockResolvedValueOnce({ success: true, data: review({ accessRole: 'VIEWER', create: { allowed: false, requiredRole: 'CONTRIBUTOR', reason: 'Creating an export needs the CONTRIBUTOR role for this home.' } }) });
-    const first = render(<AskRecord />);
+    const first = render(<RecordExportReview propertyId="home-1" onBack={jest.fn()} />);
     expect(await screen.findByText('Creating an export needs the CONTRIBUTOR role for this home.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Create export' })).toBeNull();
     expect(screen.getByRole('heading', { name: 'Included (2)' })).toBeInTheDocument();
@@ -115,7 +114,7 @@ describe('Record export review', () => {
 
     getReview.mockResolvedValueOnce({ success: true, data: review() });
     createExport.mockRejectedValueOnce(new Error('A report export is already in progress for this property.'));
-    render(<AskRecord />);
+    render(<RecordExportReview propertyId="home-1" onBack={jest.fn()} />);
     fireEvent.click(await screen.findByRole('checkbox', { name: /I understand/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Create export' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('already in progress');
@@ -124,7 +123,7 @@ describe('Record export review', () => {
 
   it('shows a retryable error when the review cannot be loaded', async () => {
     getReview.mockRejectedValueOnce(new Error('network'));
-    render(<AskRecord />);
+    render(<RecordExportReview propertyId="home-1" onBack={jest.fn()} />);
     expect(await screen.findByText('The export review could not be loaded.')).toBeInTheDocument();
     getReview.mockResolvedValueOnce({ success: true, data: review() });
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
@@ -133,7 +132,7 @@ describe('Record export review', () => {
 
   it('cannot create with every section unchecked', async () => {
     getReview.mockResolvedValue({ success: true, data: review() });
-    render(<AskRecord />);
+    render(<RecordExportReview propertyId="home-1" onBack={jest.fn()} />);
     fireEvent.click(await screen.findByRole('checkbox', { name: /I understand/ }));
     fireEvent.click(screen.getByRole('checkbox', { name: 'Include Coverage and policies' }));
     fireEvent.click(screen.getByRole('checkbox', { name: 'Include Systems and inventory' }));

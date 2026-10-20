@@ -2,7 +2,8 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { AskIntakeDialog } from '../intake/AskIntakeDialog';
 import { ComposerIntakeButton } from '../intake/ComposerIntakeButton';
-import { canAddToHome, intakeFailureMessage, intakeResultHref, pickSingleFile } from '../intake/intakePresentation';
+import { canAddToHome, intakeFailureMessage, intakeResultQuestion, pickSingleFile } from '../intake/intakePresentation';
+import { AskInlineContext } from '../inline/AskInlineContext';
 import { api } from '@/lib/api/client';
 import type { AskIntakeCandidate, AskIntakeConfig, AskIntakeView } from '@/features/ask/types';
 
@@ -45,7 +46,9 @@ const candidate = (overrides: Partial<AskIntakeCandidate>): AskIntakeCandidate =
 const ok = (data: AskIntakeView) => ({ success: true, data });
 const pdf = () => new File(['%PDF'], 'receipt.pdf', { type: 'application/pdf' });
 
-function renderDialog() { return render(<AskIntakeDialog open onOpenChange={jest.fn()} propertyId="home-1" />); }
+const launch = jest.fn();
+// What the dialog points at is the next question of the conversation behind it, not a page.
+function renderDialog() { return render(<AskInlineContext.Provider value={{ launch, openExecution: jest.fn(), openView: jest.fn() }}><AskIntakeDialog open onOpenChange={jest.fn()} propertyId="home-1" /></AskInlineContext.Provider>); }
 async function upload(file = pdf()) {
   const input = await screen.findByLabelText('Choose a file to add');
   fireEvent.change(input, { target: { files: [file] } });
@@ -162,7 +165,9 @@ describe('AskIntakeDialog', () => {
     fireEvent.click(enabled);
     expect(await screen.findByText(/created with the 1 finding you accepted/)).toBeInTheDocument();
     expect(screen.getByText(/rejected or left undecided were not added/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Review the findings' })).toHaveAttribute('href', '/dashboard/ask/record?propertyId=home-1&section=inspections');
+    expect(screen.queryByRole('link', { name: 'Review the findings' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Review the findings' }));
+    expect(launch).toHaveBeenCalledWith({ question: 'Show me my inspection reports.' });
   });
 
   it('says where each detail came from, how that was established, or that the reader did not say', async () => {
@@ -226,7 +231,8 @@ describe('AskIntakeDialog', () => {
     await upload();
     fireEvent.click(await screen.findByRole('button', { name: 'Add to my home' }));
     expect(await screen.findByText('Expense added to your home.')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'See it in your home record' })).toHaveAttribute('href', '/dashboard/ask/record?propertyId=home-1&section=documents&recordId=rec-1');
+    fireEvent.click(screen.getByRole('button', { name: 'Show it in my home record' }));
+    expect(launch).toHaveBeenCalledWith({ question: 'Show my home documents' });
   });
 
   it('rejecting a label adds nothing to inventory and says so', async () => {
@@ -264,7 +270,8 @@ describe('AskIntakeDialog', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Keep without reading' }));
     expect(await screen.findByText(/Kept in your Home Records without being read/)).toBeInTheDocument();
     expect(mocks.analyzeAskIntake).not.toHaveBeenCalled();
-    expect(screen.getByRole('link', { name: 'Open it in Home Records' })).toHaveAttribute('href', '/dashboard/ask/record?propertyId=home-1&section=documents&recordId=rec-1');
+    fireEvent.click(screen.getByRole('button', { name: 'Show it in my documents' }));
+    expect(launch).toHaveBeenCalledWith({ question: 'Show my home documents' });
   });
 
   it('removing a file goes to the recoverable trash and says so', async () => {
@@ -350,9 +357,9 @@ describe('intake presentation', () => {
     expect(canAddToHome({ ...findings, candidates: [candidate({ reviewStatus: 'CONFIRMED' }), candidate({ id: 'c2', reviewStatus: 'PENDING' })] })).toBe(true);
   });
   it('links each result to where it lives, and nothing when nothing was created', () => {
-    expect(intakeResultHref(view({ result: { entityType: 'WARRANTY', entityId: 'w1' } }))).toBe('/dashboard/ask/record?propertyId=home-1&section=warranties');
-    expect(intakeResultHref(view({ result: { entityType: 'INVENTORY_ITEM', entityId: 'i1' } }))).toBe('/dashboard/ask/record?propertyId=home-1&section=inventory&recordId=i1');
-    expect(intakeResultHref(view())).toBeNull();
+    expect(intakeResultQuestion(view({ result: { entityType: 'WARRANTY', entityId: 'w1' } }))).toBe('Show my warranties');
+    expect(intakeResultQuestion(view({ result: { entityType: 'INVENTORY_ITEM', entityId: 'i1' } }))).toBe('Show my home inventory');
+    expect(intakeResultQuestion(view())).toBeNull();
   });
   it('turns failure codes into plain sentences and files into one file', () => {
     expect(intakeFailureMessage(Object.assign(new Error('x'), { code: 'ASK_INTAKE_TOO_LARGE' }), 'fallback')).toBe('That file is larger than 10MB.');

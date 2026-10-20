@@ -1,16 +1,38 @@
 # Ask Cozy Sole Homeowner Interface — Functional Requirements Document
 
 **Status:** Proposed implementation baseline  
-**Version:** 1.0  
-**Date:** October 18, 2026  
+**Version:** 1.2  
+**Date:** October 20, 2026 (v1.1 and v1.0: October 20 and 18, 2026)  
 **Owners:** Product, Design, Frontend, Ask Platform, Domain Services  
 **Supersedes for this scope:** the migration priorities in `ASK_COZY_PRIMARY_INTERFACE_REDESIGN.md`; it does not supersede domain FRDs, canonical service ownership, authorization, confirmation, or safety policy.
 
 ## 1. Decision
 
-Ask Cozy will become the single homeowner-facing product shell. It will combine conversational control with structured workspaces; it will not force record browsing, bulk work, comparison, settings, or history into a chat transcript.
+Ask Cozy will become the single homeowner-facing product shell. It will combine conversational control with structured workspaces, and every structured workspace shall be shown **inline, as a block in the conversation** (§1.2). Ask Cozy has no top-level destination navigation and no screen to travel to and come back from.
 
 The transition is workflow-by-workflow. A traditional homeowner route remains available until the Ask version does the job well (§16).
+
+### 1.2 Everything happens inline, and collections are conversations (v1.1–v1.2, owner decisions October 20, 2026)
+
+v1.0 made Home, Work, Record, Saved and History five URL-addressable destinations behind a top navigation bar. In use that reproduced a traditional multi-screen product: opening a record row left the Record screen for a chat screen, and "Back to previous page" returned. v1.1 withdrew that. v1.1 first moved the old pages into the transcript as blocks, which kept a database browser (search box, filter dropdowns, sort and paging controls) inside the conversation. v1.2 replaces those blocks with **conversational collections**.
+
+**The rule:** conversation defines and modifies the result set; structured inline UI presents it. Natural language is the primary control. Chips, expandable records and "Show more" are accelerators that send the same sentences a homeowner could type.
+
+1. **One surface, no top navigation.** Ask is the conversation. There is no Home / Work / Record / Saved / History bar. The left sidebar is the only navigation and exists to hint prompts ("What needs me", "Browse my home record", "Find something saved"): each asks its question as the next turn. History is the conversation list beside the transcript.
+2. **No hop-and-return.** Nothing inside a conversation navigates, and nothing needs a "back". A row's action asks its question (with the registered operation and exact record it declares) as the next turn of the same conversation.
+3. **Interpreted answer first.** A collection answer opens with a count, what it means and what is being shown, in its first lines: "Your home record is 97% complete and holds 46 records across 5 areas. 2 home details need review. Where would you like to start?", "3 things need you.", "2 saved results, 1 no longer current." Attention items come first, then direct matches, then context; the rest only when asked for. A partial read never reads as complete or empty.
+4. **Remembered constraints, stated in plain words.** Each answer says what it is showing ("Showing needs you · claims · most recently updated first.") and keeps its constraints in the result's view state. A refinement changes only the dimension it names ("only show claims", "only show out of date results", "show archived"), and the homeowner can widen or clear it in words ("now show all work with no filters"). There is no filter drawer, sort menu or search box inside a result.
+5. **Contextual refinements as natural-language chips.** After a result, the offered chips are sentences that continue it (lifecycle states with their counts, the kinds present, "Show more", "Clear filters"), generated from the current result. They are not a generic toolbar.
+6. **Ordering is stated, not chosen from a menu.** Each answer states the order it used (most recently updated first, needs attention soonest) so the homeowner never loses orientation.
+7. **Stable "Show more".** Continuation extends the same deterministic result (the server's own ordering with a larger limit), never reruns and reshuffles. There are no page numbers.
+8. **Inline detail, never a page.** Opening a result expands or continues it in the transcript.
+9. **Export is conversational in intent, structured in form.** The export review stays as the one inline structured block because it is a review-then-confirm form (scope, exclusions, expiry, sharing), not a collection. It opens from the sidebar hint and closes back to the conversation. Typing "export my warranties" as a command is a later step (below).
+10. **Old addresses redirect.** `/dashboard/ask/{record,work,saved}` open Ask with that question already asked; `/dashboard/ask/history` shows the conversation list; the export review is `?view=export`. Notifications and search results continue the conversation with the exact operation and record the server declared, after rereading it (a removed, finished or replaced item says so).
+11. **Two continuity exceptions.** Opening a pending item that belongs to a *different* conversation replaces the transcript with that conversation, the same as choosing it from history. The notification inbox remains its own utility screen.
+
+Operations: `WORK_OVERVIEW` and `SAVED_RESULTS` (read, deterministic, viewer floor) answer Work and Saved from their canonical services; `PROPERTY_SUMMARY` answers "browse my home record" with the interpreted overview and directional chips; every record area already has its own conversational read. Not yet built: a typed export command (scope review and confirmation inside the conversation, then a receipt), search-term "conversational reference" inside Saved ("find the roofing comparison"), and a per-area ordering choice ("group by system").
+
+Where §3–§19 say "destination", read "conversational answer"; where they require URL-addressable destination state, the requirement is met by the redirects in item 10.
 
 ### 1.1 Explicitly deferred
 
@@ -30,7 +52,7 @@ Operation registration is not interface parity. Ask-only readiness requires disc
 
 ## 3. Goals
 
-1. Provide one homeowner shell with **Home**, **Work**, **Record**, **Saved**, and **History**.
+1. Provide one homeowner shell, the conversation, in which **Work**, **Record**, **Saved** and **History** are reached inline (§1.2).
 2. Make the selected home's current state useful without requiring a prompt.
 3. Make every active workflow discoverable and resumable independently of its conversation.
 4. Make the authoritative home record browseable, searchable, pageable, correctable, and exportable.
@@ -71,7 +93,7 @@ Homeowner intent or navigation
 
 ### FR-IA-001 — Persistent destinations
 
-Desktop and mobile shall expose Home, Work, Record, Saved, and History as stable destinations. Each destination shall have its own URL-addressable state and shall not be implemented as a synthetic chat message.
+**Superseded by §1.2 (v1.2).** Home is the conversation; Work, Record and Saved are answered in it from the sidebar prompt hints, search, notifications and redirects; History is the conversation list. None is a separate screen and none has top navigation.
 
 ### FR-IA-002 — Persistent utilities
 
@@ -87,7 +109,7 @@ Full household administration and admin operations may remain outside this shell
 
 ### FR-IA-003 — Conversation remains available
 
-The composer shall be available on Home and in active workspaces. A structured workspace shall preserve its filters, selection, scroll position, and entity context while the homeowner asks a follow-up.
+The composer shall be available whenever an answer is shown. A result keeps its constraints in its view state while the homeowner asks a follow-up, because the follow-up is a turn of the same conversation and the answer stays in the transcript. A control in an answer shall ask in place and shall not navigate (§1.2 item 2).
 
 ### FR-IA-004 — No route knowledge
 
@@ -209,7 +231,7 @@ The Work destination shall page all authorized results. Compact Home and rail pr
 
 ### FR-REC-001 — Record is a destination
 
-The complete Home Record shall be a durable Record workspace, not a one-time grouped-list answer.
+The complete Home Record shall be browseable as a conversation (§1.2): an interpreted overview with directions into each area, each area a paged, constraint-aware answer, not a separate screen.
 
 ### FR-REC-002 — Canonical section registry
 
@@ -400,7 +422,7 @@ A homeowner route moves to Ask when the Ask version does the intended homeowner 
 
 ### FR-A11Y-001
 
-All five destinations and critical workflows shall pass keyboard-only, screen-reader, 200%/400% zoom, contrast, reduced-motion, focus-order, modal focus-return, and live-region review on desktop and mobile.
+The conversational answers (Record, Work, Saved), the export block, the conversation list and critical workflows shall pass keyboard-only, screen-reader, 200%/400% zoom, contrast, reduced-motion, focus-order, modal focus-return, and live-region review on desktop and mobile.
 
 ### FR-PERF-001
 

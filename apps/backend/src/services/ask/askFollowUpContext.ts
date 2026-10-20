@@ -19,6 +19,8 @@ const FILTER_CONTINUABLE_OPERATIONS: ReadonlySet<AskOperationId> = new Set([
   'DOCUMENT_LOOKUP',
   'PROPERTY_SUMMARY',
   'HOME_ACTIONS',
+  'WORK_OVERVIEW',
+  'SAVED_RESULTS',
   // B02 fix (docs/architecture/ASK_COZY_PHASE6_BUYER_ACCEPTANCE_VERIFICATION.md):
   // without this, a declared lane-filter chip's own canned message (which
   // does carry sourceExecutionId) would not be recognized as continuing

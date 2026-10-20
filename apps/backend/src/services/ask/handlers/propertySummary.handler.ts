@@ -154,6 +154,40 @@ export function isCompleteHomeRecordRequest(message: string): boolean {
   return /\bbrowse\b.{0,28}\b(?:home|house|property)\s+record\b|\b(?:complete|full|entire|whole)\b.{0,28}\b(?:home|house|property)\s+record\b|\b(?:see|show|view|browse|review|open)\b.{0,28}\b(?:all|everything)\b.{0,28}\b(?:recorded|home\s+record)\b/i.test(message);
 }
 
+/**
+ * The interpreted answer for "browse my home record": how many records it holds across how many areas, how complete it is, and what needs
+ * review, before any list. Counts are recorded values only; an area that could not be read is left out of both numbers rather than counted as zero.
+ */
+export function recordOverviewLines(input: { percent: number | null; counts: ReadonlyArray<number | null | undefined>; pendingDetails: number; documentsNeedingReview: number }): { headline: string; supportLine: string } {
+  const known = input.counts.filter((value): value is number => typeof value === 'number');
+  const records = known.reduce((sum, value) => sum + value, 0);
+  const areas = known.filter((value) => value > 0).length;
+  const holds = `${records} ${records === 1 ? 'record' : 'records'} across ${areas} ${areas === 1 ? 'area' : 'areas'}`;
+  const headline = input.percent == null ? `Your home record holds ${holds}.` : `Your home record is ${input.percent}% complete and holds ${holds}.`;
+  const attention = [
+    input.pendingDetails > 0 ? `${input.pendingDetails} home detail${input.pendingDetails === 1 ? '' : 's'} ${input.pendingDetails === 1 ? 'needs' : 'need'} review` : null,
+    input.documentsNeedingReview > 0 ? `${input.documentsNeedingReview} document${input.documentsNeedingReview === 1 ? '' : 's'} ${input.documentsNeedingReview === 1 ? 'is' : 'are'} waiting for review` : null,
+  ].filter((part): part is string => Boolean(part));
+  return { headline, supportLine: attention.length ? `${attention.join(' and ')}. Where would you like to start?` : 'Nothing needs review right now. Where would you like to start?' };
+}
+
+/** The directions offered after the overview: each is the question that opens that area, so a choice is simply the next question asked. */
+export function recordOverviewDirections(attention: boolean) {
+  const direction = (id: string, label: string, message: string) => ({ id, label, message, active: false });
+  return [
+    ...(attention ? [direction('needs-attention', 'Needs attention', 'How complete is my home record?')] : []),
+    direction('systems', 'Systems & appliances', 'Show my home inventory'),
+    direction('documents', 'Documents', 'Show my home documents'),
+    direction('warranties', 'Warranties', 'Show my warranties'),
+    direction('history', 'Home history', 'Show my home timeline'),
+    direction('rooms', 'Rooms', 'Show me my home by room.'),
+    direction('permits', 'Permits', 'What is the status of my permits?'),
+    direction('inspections', 'Inspections', 'Show me my inspection reports.'),
+    direction('projects', 'Projects', 'Show me my home projects.'),
+    direction('coverage', 'Coverage', 'Review my coverage.'),
+  ];
+}
+
 async function propertySummaryResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
   const completenessFocus = isPropertyCompletenessRequest(message);
   const roomFocus = /\b(?:show|list|view|see|review)\b.{0,35}\b(?:my|our|the|this)?\s*(?:home|house|property)?\b.{0,20}\brooms?\b|\b(?:show|list|view|see|review)\b.{0,35}\brooms?\b|\b(?:home|house|property)\b.{0,20}\bby room\b/i.test(message);
@@ -231,6 +265,8 @@ async function propertySummaryResult(userId: string, propertyId: string, message
   const factRows = vagueOverview || completeRecordFocus ? propertyOverviewFactRows(property, { includeOccupantCount: access.role === HouseholdRole.OWNER }) : [];
   const missingLine = vagueOverview ? propertyOverviewMissingLine(property) : null;
   const statusObservation = vagueOverview ? propertyOverviewStatusObservation(pendingDetailCount) : null;
+  // The recorded areas this overview can count without reading them again (a null is an area that could not be read, never zero).
+  const recordAreaCounts = [rooms?.count, inventory?.totalCount, documents?.totalCount, warranties?.totalCount, timeline?.confirmedCount, household?.totalCount];
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY', id: 'property-summary',
     title: roomFocus
@@ -254,6 +290,8 @@ async function propertySummaryResult(userId: string, propertyId: string, message
       ? 'This is the current record index for this home. Review the profile here, then open any section to see its authoritative records without leaving Ask Cozy.'
       : statusObservation ?? '',
     tone: roomFocus ? (rooms ? 'DEFAULT' : 'CAUTION') : (completenessFocus || completeRecordFocus) && degradedSections.length ? 'CAUTION' : 'DEFAULT',
+    // Browsing the record answers first (FRD v1.1 §1.2): how much is recorded, how complete it is, and what needs the homeowner, in two lines.
+    ...(completeRecordFocus ? recordOverviewLines({ percent, counts: recordAreaCounts, pendingDetails: completenessCounts.missing + completenessCounts.conflicted + completenessCounts.stale, documentsNeedingReview: documents?.needsReviewCount ?? 0 }) : {}),
     // Ask links to no desktop property page (owner decision 2026-10-10); missing details are added through the area capture rows below.
     actions: [],
   }];
@@ -284,7 +322,7 @@ async function propertySummaryResult(userId: string, propertyId: string, message
     }];
     const count = (value: number | null, singular: string, plural = `${singular}s`) => value == null ? 'Temporarily unavailable' : `${value} ${value === 1 ? singular : plural}`;
     blocks.push({
-      type: 'GROUPED_LIST', id: 'property-record-index', title: 'Record sections', filters: [],
+      type: 'GROUPED_LIST', id: 'property-record-index', title: 'Record sections', filters: recordOverviewDirections(completenessCounts.missing + completenessCounts.conflicted + completenessCounts.stale + (documents?.needsReviewCount ?? 0) > 0),
       description: 'One index for the home. Each section opens as a focused Ask Cozy view, so the complete record stays readable instead of becoming one long dump.',
       sections: [{ id: 'record-sections', title: 'Browse the record', count: 7, items: [
         { id: 'profile', title: 'Property details', description: 'Structure, use, systems, safety and other governed home facts.', entityType: 'PROPERTY_RECORD_SECTION', href: null, status: percent == null ? null : `${percent}% COMPLETE`, meta: [count(context?.knownFactCount ?? null, 'known fact')], actions: open('review-completeness', 'Review details', 'How complete is my home record?', 'PROPERTY_SUMMARY') },

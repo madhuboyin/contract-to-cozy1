@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
 import { Loader2 } from 'lucide-react';
 import { api } from '@/lib/api/client';
 import type { AskRecordExportReview, AskRecordExportReviewSection, HomeReportExportSelection, HomeReportExportStatus, HomeReportExportSummary } from '@/features/ask/types';
@@ -44,7 +43,7 @@ function SectionRow({ section, checked, onToggle }: { section: AskRecordExportRe
   );
 }
 
-export function RecordExportReview({ propertyId, backHref }: { propertyId: string; backHref: string }) {
+export function RecordExportReview({ propertyId, onBack }: { propertyId: string; onBack: () => void }) {
   const [review, setReview] = useState<AskRecordExportReview | null>(null);
   const [status, setStatus] = useState<'LOADING' | 'READY' | 'ERROR' | 'PAUSED'>('LOADING');
   const [attempt, setAttempt] = useState(0);
@@ -120,7 +119,7 @@ export function RecordExportReview({ propertyId, backHref }: { propertyId: strin
 
   return (
     <section aria-labelledby="ask-record-export-title" data-record-export>
-      <Link href={backHref} className="no-brand-style text-sm font-semibold text-emerald-900 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700">← All record sections</Link>
+      <button type="button" onClick={onBack} className="no-brand-style text-sm font-semibold text-emerald-900 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700">Close export</button>
       <h2 id="ask-record-export-title" className="mt-1 text-2xl font-semibold tracking-[-0.02em] text-slate-950">Export home record</h2>
       <p className="mt-1 text-sm text-slate-600">Review exactly what the export includes before you create it. Nothing is created until you confirm.</p>
 

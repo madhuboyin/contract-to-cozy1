@@ -38,17 +38,17 @@ export const ASK_ROUTE_RETIREMENT_REGISTRY: readonly AskRouteRetirementEntry[] =
   entry({
     id: 'ask-work', routePattern: '^/dashboard/ask/work$', owner: 'ask-platform', state: 'STRUCTURED_SURFACE_RETAINED',
     askOperationIds: [], missingReads: ['complete canonical work index'], missingWrites: ['exact resume coverage for every work type'], successorDestination: 'WORK',
-    deepLinkRule: 'KEEP_STRUCTURED_SURFACE', evidenceTests: ['apps/frontend/src/features/ask/__tests__/destinations.test.ts'],
+    deepLinkRule: 'MAP_TO_EXACT_ASK_CONTEXT', evidenceTests: ['apps/frontend/src/features/ask/__tests__/destinations.test.ts'],
   }),
   entry({
     id: 'ask-record', routePattern: '^/dashboard/ask/record$', owner: 'ask-platform', state: 'STRUCTURED_SURFACE_RETAINED',
     askOperationIds: ['PROPERTY_SUMMARY'], missingReads: ['pageable canonical record sections'], missingWrites: ['complete inline correction parity'], successorDestination: 'RECORD',
-    deepLinkRule: 'KEEP_STRUCTURED_SURFACE', evidenceTests: ['apps/frontend/src/features/ask/__tests__/destinations.test.ts'],
+    deepLinkRule: 'MAP_TO_EXACT_ASK_CONTEXT', evidenceTests: ['apps/frontend/src/features/ask/__tests__/destinations.test.ts'],
   }),
   entry({
     id: 'ask-saved', routePattern: '^/dashboard/ask/saved$', owner: 'ask-platform', state: 'STRUCTURED_SURFACE_RETAINED',
     askOperationIds: [], missingReads: ['saved artifact index'], missingWrites: [], successorDestination: 'SAVED',
-    deepLinkRule: 'KEEP_STRUCTURED_SURFACE', evidenceTests: ['apps/frontend/src/features/ask/__tests__/destinations.test.ts'],
+    deepLinkRule: 'MAP_TO_EXACT_ASK_CONTEXT', evidenceTests: ['apps/frontend/src/features/ask/__tests__/destinations.test.ts'],
   }),
   entry({
     id: 'ask-notifications', routePattern: '^/dashboard/ask/notifications$', owner: 'ask-platform', state: 'STRUCTURED_SURFACE_RETAINED',
@@ -58,7 +58,7 @@ export const ASK_ROUTE_RETIREMENT_REGISTRY: readonly AskRouteRetirementEntry[] =
   entry({
     id: 'ask-history', routePattern: '^/dashboard/ask/history$', owner: 'ask-platform', state: 'STRUCTURED_SURFACE_RETAINED',
     askOperationIds: [], missingReads: [], missingWrites: [], successorDestination: 'HISTORY',
-    deepLinkRule: 'KEEP_STRUCTURED_SURFACE', evidenceTests: ['apps/frontend/src/features/ask/__tests__/destinations.test.ts'],
+    deepLinkRule: 'MAP_TO_EXACT_ASK_CONTEXT', evidenceTests: ['apps/frontend/src/features/ask/__tests__/destinations.test.ts'],
   }),
   entry({
     id: 'property-records', routePattern: '^/dashboard/properties/(?:\\[id\\])/(?:documents|inventory|rooms|materials|vault|reports|property-brief)(?:/.*)?$',

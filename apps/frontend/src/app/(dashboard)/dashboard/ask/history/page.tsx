@@ -1,5 +1,8 @@
-import { AskRoutePage, type AskSearchParams } from '../AskRoutePage';
+import { redirect } from 'next/navigation';
+import type { AskSearchParams } from '../AskRoutePage';
+import { legacyAskViewRedirect } from '../legacyViewRedirect';
 
-export default function AskHistoryPage({ searchParams }: { searchParams: Promise<AskSearchParams> }) {
-  return <AskRoutePage searchParams={searchParams} initialHistoryOpen />;
+// History is the conversation list beside the conversation now; this old address opens Ask with that list showing.
+export default async function AskHistoryPage({ searchParams }: { searchParams: Promise<AskSearchParams> }) {
+  redirect(legacyAskViewRedirect('history', await searchParams));
 }

@@ -19,6 +19,8 @@ export type AskSearchParams = {
   launchWorkItemId?: string | string[];
   launchJourneyId?: string | string[];
   launchContextVersion?: string | string[];
+  /** What to show on arrival: `export` opens the export review block, `history` shows the conversation list. */
+  view?: string | string[];
 };
 
 const value = (candidate?: string | string[]) => typeof candidate === 'string' ? candidate : '';
@@ -37,6 +39,8 @@ export async function AskRoutePage({
     requestedBackTo,
     source === 'notification' ? '/dashboard/notifications' : '',
   );
+  const viewKind = value(params.view);
+  const initialView = viewKind === 'export' ? { kind: 'export' } as const : undefined;
   const operationId = value(params.launchOperationId);
   const entityType = value(params.launchEntityType);
   const entityId = value(params.launchEntityId);
@@ -51,7 +55,8 @@ export async function AskRoutePage({
         initialQuestion={value(params.question)}
         initialBackTo={initialBackTo}
         initialBackLabel={askOriginBackLabel(initialBackTo, source)}
-        initialHistoryOpen={initialHistoryOpen}
+        initialHistoryOpen={initialHistoryOpen || viewKind === 'history'}
+        initialView={initialView}
         launchSurface={value(params.launchSurface)}
         launchCapabilityId={value(params.launchCapabilityId)}
         launchRecord={launchRecord}

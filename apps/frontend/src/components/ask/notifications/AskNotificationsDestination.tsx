@@ -10,7 +10,7 @@ import { askServiceIsPaused } from '../workspace/support';
 import { AskCollectionState, AskWorkspaceMeasure } from '../presentation/AskLayoutPrimitives';
 import { NotificationRow } from './NotificationRow';
 import { NotificationSettingsPanel } from './NotificationSettingsPanel';
-import { OPEN_OUTCOME_COPY, notificationDestinationHref } from './notificationPresentation';
+import { OPEN_OUTCOME_COPY, WORK_OUTCOME_COPY, notificationDestinationHref, savedContinuationHref, workContinuationHref } from './notificationPresentation';
 import { useAskNotifications } from './useAskNotifications';
 
 type Tab = 'INBOX' | 'DISMISSED' | 'SETTINGS';
@@ -63,8 +63,23 @@ export function AskNotificationsDestination() {
     }
     const home = result.propertyId ?? item.propertyId ?? selectedPropertyId;
     if (!home && result.destination.kind !== 'LEGACY_LINK') { setNotice(`${item.title}: Select a home to open this.`); return; }
+    // Work and Saved reread their record first, so a removed, finished or replaced item says so here instead of opening something stale.
+    let href: string | null = null;
+    if (result.destination.kind === 'WORK' && home) {
+      const resolved = await api.resolveAskWork(home, result.destination.workKey);
+      if (!resolved.success || !resolved.data) throw new Error(resolved.message || 'Could not open this.');
+      const resolution = resolved.data;
+      if (resolution.outcome !== 'AVAILABLE' || !resolution.row) { setNotice(`${item.title}: ${resolution.message || WORK_OUTCOME_COPY[resolution.outcome === 'AVAILABLE' ? 'STALE' : resolution.outcome]}`); return; }
+      href = workContinuationHref(resolution.row, home);
+    } else if (result.destination.kind === 'SAVED' && home) {
+      const resolved = await api.resolveAskSavedArtifact(home, result.destination.artifactKey);
+      if (!resolved.success || !resolved.data) throw new Error(resolved.message || 'Could not open this.');
+      const resolution = resolved.data;
+      if (resolution.outcome !== 'AVAILABLE' || !resolution.artifact) { setNotice(`${item.title}: ${resolution.message}`); return; }
+      href = savedContinuationHref(resolution.artifact, home);
+    }
     patchItem(item.id, { isRead: true });
-    router.push(notificationDestinationHref(result.destination, home ?? ''));
+    router.push(href ?? notificationDestinationHref(result.destination, home ?? ''));
   });
 
   const toggleRead = (item: AskNotificationItem) => guard(item.id, async () => {

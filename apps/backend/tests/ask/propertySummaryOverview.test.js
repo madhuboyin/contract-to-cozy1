@@ -15,7 +15,8 @@ const propertyAccess = require('../../src/services/propertyAccess.service.ts');
 const getPropertyContextModule = require('../../src/modules/propertyContext/application/getPropertyContext.ts');
 const evaluateModule = require('../../src/modules/propertyContext/application/evaluateFeatureContext.ts');
 const { capabilityInvoke } = require('../../src/services/ask/capabilityHandlerRegistry.ts');
-const { isCompleteHomeRecordRequest, propertyOverviewFactsSentence, propertyOverviewFactRows, propertyOverviewMissingLine, propertyOverviewStatusObservation } = require('../../src/services/ask/handlers/propertySummary.handler.ts');
+const { isCompleteHomeRecordRequest, recordOverviewDirections, recordOverviewLines, propertyOverviewFactsSentence, propertyOverviewFactRows, propertyOverviewMissingLine, propertyOverviewStatusObservation } = require('../../src/services/ask/handlers/propertySummary.handler.ts');
+const { resolveAskRoutingCascade } = require('../../src/services/ask/askRoutingCascade.ts');
 const { PROPERTY_RECORD_CONTEXT_SCOPES } = require('../../src/services/propertyRecordOverview.service.ts');
 const { getContextCompleteness } = require('../../src/modules/propertyContext/application/getContextCompleteness.ts');
 const { AskPresentationBlockSchema } = require('../../src/productFramework/ask/ask.contract.ts');
@@ -203,4 +204,35 @@ test('the answer checker keeps the answer when the table description says what i
   });
   assert.equal(checked.semantic.outcome, 'PASS', JSON.stringify(checked.semantic));
   assert.ok(checked.result.blocks.some((block) => block.id === 'property-summary-facts'));
+});
+
+test('browsing the record answers first: how much is recorded and how complete, what needs review, then where to start', async () => {
+  assert.deepEqual(recordOverviewLines({ percent: 97, counts: [3, 18, 14, 6, 5, null], pendingDetails: 2, documentsNeedingReview: 0 }), {
+    headline: 'Your home record is 97% complete and holds 46 records across 5 areas.',
+    supportLine: '2 home details need review. Where would you like to start?',
+  });
+  assert.equal(recordOverviewLines({ percent: null, counts: [1, 0], pendingDetails: 0, documentsNeedingReview: 1 }).headline, 'Your home record holds 1 record across 1 area.');
+  assert.equal(recordOverviewLines({ percent: 100, counts: [0], pendingDetails: 0, documentsNeedingReview: 0 }).supportLine, 'Nothing needs review right now. Where would you like to start?');
+  assert.match(recordOverviewLines({ percent: 80, counts: [2], pendingDetails: 1, documentsNeedingReview: 2 }).supportLine, /^1 home detail needs review and 2 documents are waiting for review\./);
+
+  install({ 'core.dwellingType': { state: 'KNOWN' } });
+  const result = await invoke('Browse my home record');
+  const summary = summaryOf(result);
+  assert.match(summary.headline, /^Your home record (?:is \d+% complete and )?holds \d+ records? across \d+ areas?\.$/);
+  const index = result.blocks.find((block) => block.id === 'property-record-index');
+  assert.equal(index.filters[0].id, 'needs-attention');
+  for (const chip of index.filters) assert.ok(chip.message.trim().length > 0 && chip.active === false);
+  assert.ok(index.filters.length <= 16);
+  assert.deepEqual(recordOverviewDirections(false).map((chip) => chip.id).slice(0, 2), ['systems', 'documents']);
+  assert.ok(!JSON.stringify(result.blocks).includes('/dashboard/'));
+});
+
+test('every direction the record overview offers is a question that opens that area, so a choice is simply the next question', () => {
+  const expected = {
+    systems: 'INVENTORY_LOOKUP', documents: 'DOCUMENT_LOOKUP', warranties: 'WARRANTY_LOOKUP', history: 'HOME_TIMELINE_EVENTS', permits: 'PERMIT_TRACKER_STATUS',
+    inspections: 'INSPECTION_REPORTS', projects: 'PROJECT_TRACKER_PROJECTS', coverage: 'COVERAGE_REVIEW_STATUS', 'needs-attention': 'PROPERTY_SUMMARY', rooms: 'PROPERTY_SUMMARY',
+  };
+  for (const chip of recordOverviewDirections(true)) {
+    assert.equal(resolveAskRoutingCascade(chip.message, { localRoutingEnabled: true }).operation?.operationId, expected[chip.id], chip.label);
+  }
 });

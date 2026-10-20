@@ -1,10 +1,9 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import Link from 'next/link';
 import { Camera, FileUp, Loader2 } from 'lucide-react';
 import type { AskIntakeCandidate, AskIntakeConfig, AskIntakeKind, AskIntakeView } from '@/features/ask/types';
-import { RECOMMENDATION_LABELS, REPORT_TYPE_LABELS, SENSITIVITY_CHOICES, candidateStatusLabel, canAddToHome, confidenceLabel, formatBytes, formatCostRange, kindLabel, originalHref } from './intakePresentation';
+import { RECOMMENDATION_LABELS, REPORT_TYPE_LABELS, SENSITIVITY_CHOICES, candidateStatusLabel, canAddToHome, confidenceLabel, formatBytes, formatCostRange, kindLabel } from './intakePresentation';
 
 const BUTTON = 'inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700 disabled:opacity-50';
 const PRIMARY = `${BUTTON} bg-emerald-950 text-white hover:bg-emerald-900`;
@@ -218,7 +217,7 @@ export function IntakeLabelReview({ view, busy, onSave, onConfirm, onReject }: {
 }
 
 /** What the file's record shows: where it came from, how it was checked and read, and what is not known. */
-export function IntakeProvenance({ view }: { view: AskIntakeView }) {
+export function IntakeProvenance({ view, onOpenOriginal }: { view: AskIntakeView; onOpenOriginal: () => void }) {
   const { original, reader, pageAndRegion } = view.provenance;
   return (
     <details className="rounded-xl border border-slate-200 px-3 py-2 text-xs text-slate-700" data-intake-provenance>
@@ -230,7 +229,7 @@ export function IntakeProvenance({ view }: { view: AskIntakeView }) {
         <dt className="font-semibold">Read by</dt><dd>{reader.status === 'AVAILABLE' ? reader.value.name : reader.reason}</dd>
         <dt className="font-semibold">Page and place</dt><dd>{pageAndRegion.status === 'NOT_RECORDED' ? pageAndRegion.reason : `Recorded for ${pageAndRegion.value.located} of ${pageAndRegion.value.total} details`}</dd>
       </dl>
-      <Link href={originalHref(view)} className="no-brand-style mt-2 inline-block font-semibold text-emerald-900 underline">Open the original in your Home Records</Link>
+      <button type="button" onClick={onOpenOriginal} className="no-brand-style mt-2 inline-block font-semibold text-emerald-900 underline">Show the original in my documents</button>
     </details>
   );
 }

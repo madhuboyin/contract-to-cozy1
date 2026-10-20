@@ -47,7 +47,7 @@ const ROWS: readonly ObservationTuple[] = [
   // FRD v1.70: 021's competitor re-derived to APPLIANCE_FAILURE_RISK (was INVENTORY_LOOKUP .4826); the shared word is intrinsic to both.
   ['021-expected', '021', 'HOME_DEADLINE_MONITOR', .5747, true], ['021-competitor', '021', 'APPLIANCE_FAILURE_RISK', .4888, false],
   ['022-expected', '022', 'CAPITAL_RESERVE_PLAN', .7763, true], ['022-competitor', '022', 'OWNERSHIP_COSTS', .6972, false],
-  ['023-expected', '023', 'PROPERTY_TAX_APPEAL_READINESS', 0.2329, true], ['023-competitor', '023', 'PERMIT_TRACKER_STATUS', 0.1443, false],
+  ['023-expected', '023', 'PROPERTY_TAX_APPEAL_READINESS', 0.2329, true], ['023-competitor', '023', 'SAVED_RESULTS', 0.1496, false],
   ['024-expected', '024', 'RENOVATION_PERMIT_READINESS', .4594, true], ['024-competitor', '024', 'SELLER_PREP_CHECKLIST', .1234, false],
   ['025-expected', '025', 'MAJOR_EVENT_ENTRY', .6136, true], ['025-competitor', '025', 'SELLER_PREP_CHECKLIST', .6189, false],
   ['026-expected', '026', 'EMERGENCY_BOUNDARY', .1177, true], ['026-competitor', '026', 'SELL_HOLD_RENT_ANALYSIS', .0871, false],
@@ -79,7 +79,7 @@ const ROWS: readonly ObservationTuple[] = [
   ['049-expected', '049', 'BUYER_TITLE_ESCROW_READINESS', .9339, true], ['049-competitor', '049', 'RECALL_REVIEW', .5812, false],
   ['050-expected', '050', 'BUYER_WALKTHROUGH_READINESS', .4485, true], ['050-competitor', '050', 'BUYER_TASK_CREATE', .2122, false],
   ['051-expected', '051', 'BUYER_DISCLOSURE_FUNDS_READINESS', 0.9413, true], ['051-competitor', '051', 'INSPECTION_REPORT_COMPARE', 0.6648, false],
-  ['052-expected', '052', 'BUYER_CLOSING_DAY_READINESS', .5134, true], ['052-competitor', '052', 'BUYER_DEADLINES', .2162, false],
+  ['052-expected', '052', 'BUYER_CLOSING_DAY_READINESS', 0.5134, true], ['052-competitor', '052', 'WORK_OVERVIEW', 0.2239, false],
   ['053-expected', '053', 'BUYER_CONTRACT_TIMELINE', .4127, true], ['053-competitor', '053', 'BUYER_INSPECTION_REVIEW', .2243, false],
   ['054-expected', '054', 'BUYER_NEGOTIATION_READINESS', 0.328, true], ['054-competitor', '054', 'INSPECTION_NEGOTIATION_PACKAGE', 0.299, false],
   ['055-expected', '055', 'BUYER_COST_READINESS', .7572, true], ['055-competitor', '055', 'BUYER_CONTRACT_TIMELINE', .486, false],
@@ -208,6 +208,9 @@ const ROWS: readonly ObservationTuple[] = [
   ['112-expected', '112', 'PERMIT_TRACKER_STATUS', 0.2809, true], ['112-competitor', '112', 'DOCUMENT_LOOKUP', 0.2329, false],
   ['113-expected', '113', 'HOUSEHOLD_ACCESS_SUMMARY', 0.3871, true], ['113-competitor', '113', 'HOUSEHOLD_INVITATION', 0.177, false],
   ['114-expected', '114', 'ENVIRONMENT_REPORT', 0.3969, true], ['114-competitor', '114', 'HOME_STATUS_BOARD', 0.32, false],
+  // Work and Saved as conversations (FRD v1.1 §1.2): 115-116 are their fixtures; 023 and 052 re-derived because WORK_OVERVIEW and SAVED_RESULTS became their strongest competitor (expected operation unchanged).
+  ['115-expected', '115', 'WORK_OVERVIEW', 0.4182, true], ['115-competitor', '115', 'EMERGENCY_BOUNDARY', 0.2315, false],
+  ['116-expected', '116', 'SAVED_RESULTS', 0.5999, true], ['116-competitor', '116', 'HOME_UPGRADE_SCENARIOS', 0.223, false],
 ];
 
 export const ASK_ROUTING_CALIBRATION_OBSERVATIONS: readonly AskRoutingCalibrationObservation[] = Object.freeze(

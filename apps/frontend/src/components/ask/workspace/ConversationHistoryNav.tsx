@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 import type { AskPendingWorkItem, AskRecentSessionSummary, AskSessionChange } from '@/features/ask/types';
 import { ConversationSessionRow } from '../ConversationSessionRow';
 
-export function PendingWorkInbox({ items, loadingId, dismissingId, onResume, onDismiss, calm = false, workHref }: {
+export function PendingWorkInbox({ items, loadingId, dismissingId, onResume, onDismiss, calm = false, onViewWork }: {
   /** IW-CONV-017 (FRD v1.113): unfinished work is one quiet line per item, not a titled card. */
   calm?: boolean;
   items: AskPendingWorkItem[];
@@ -17,7 +17,7 @@ export function PendingWorkInbox({ items, loadingId, dismissingId, onResume, onD
   dismissingId: string | null;
   onResume: (item: AskPendingWorkItem) => void;
   onDismiss: (item: AskPendingWorkItem) => void;
-  workHref?: string;
+  onViewWork?: () => void;
 }) {
   if (!items.length) return null;
   if (calm) return (
@@ -27,7 +27,7 @@ export function PendingWorkInbox({ items, loadingId, dismissingId, onResume, onD
       return <li key={item.execution.executionId} className="flex items-center gap-2 rounded-2xl bg-slate-100/70 px-3.5 py-2 text-sm"><span className="min-w-0 flex-1 truncate text-slate-700"><span className="text-slate-500">Unfinished · </span>{item.execution.question}</span>
         {canDismiss && <button type="button" disabled={busy} onClick={() => onDismiss(item)} className="min-h-8 rounded-lg px-2 text-xs font-semibold text-slate-500 hover:bg-slate-200 disabled:opacity-50">{item.pendingKind === 'CONFIRMATION' ? 'Cancel' : 'Dismiss'}</button>}
         <button type="button" disabled={busy} onClick={() => onResume(item)} className="min-h-8 rounded-lg px-2 text-xs font-semibold text-teal-800 hover:bg-teal-50 disabled:opacity-50">{loadingId === item.execution.executionId ? 'Opening…' : 'Continue'}</button></li>;
-    })}</ul>{workHref && <Link href={workHref} className="mt-2 inline-flex min-h-9 items-center rounded-lg px-2 text-xs font-semibold text-teal-800 hover:bg-teal-50">View Work</Link>}</div>
+    })}</ul>{onViewWork && <button type="button" onClick={onViewWork} className="mt-2 inline-flex min-h-9 items-center rounded-lg px-2 text-xs font-semibold text-teal-800 hover:bg-teal-50">View Work</button>}</div>
   );
   return (
     <section className="mx-auto mb-5 max-w-3xl rounded-2xl border border-indigo-200 bg-indigo-50/60 p-3" aria-labelledby="ask-pending-title">
@@ -37,7 +37,7 @@ export function PendingWorkInbox({ items, loadingId, dismissingId, onResume, onD
         const canDismiss = item.pendingKind !== 'COMMAND_RECOVERY';
         return <li key={item.execution.executionId} className="flex flex-col gap-2 px-3 py-2.5 sm:flex-row sm:items-center"><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-slate-900">{item.execution.question}</p><p className="mt-0.5 text-[11px] text-slate-500">{item.pendingKind.toLowerCase().replace(/_/g, ' ')} · {new Date(item.execution.updatedAt).toLocaleString()}</p></div><div className="flex shrink-0 items-center gap-1.5">{canDismiss && <button type="button" disabled={Boolean(loadingId || dismissingId)} onClick={() => onDismiss(item)} className="min-h-9 rounded-lg px-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-50">{dismissingId === item.execution.executionId ? 'Dismissing…' : item.pendingKind === 'CONFIRMATION' ? 'Cancel' : 'Dismiss'}</button>}<button type="button" disabled={Boolean(loadingId || dismissingId)} onClick={() => onResume(item)} className="min-h-9 rounded-lg bg-indigo-700 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">{loadingId === item.execution.executionId ? 'Opening…' : actionBusy ? 'Please wait…' : item.actionLabel}</button></div></li>;
       })}</ul>
-      {workHref && <Link href={workHref} className="mt-2 inline-flex min-h-9 items-center rounded-lg px-2 text-xs font-semibold text-indigo-800 hover:bg-indigo-100">View all in Work</Link>}
+      {onViewWork && <button type="button" onClick={onViewWork} className="mt-2 inline-flex min-h-9 items-center rounded-lg px-2 text-xs font-semibold text-indigo-800 hover:bg-indigo-100">View all in Work</button>}
     </section>
   );
 }

@@ -6,13 +6,14 @@ import { api } from '@/lib/api/client';
 import type { AskSearchResponse, AskSearchResult } from '@/features/ask/types';
 
 const push = jest.fn();
-jest.mock('next/navigation', () => ({ useRouter: () => ({ push }) }));
+let mockPath = '/dashboard/ask';
+jest.mock('next/navigation', () => ({ useRouter: () => ({ push }), usePathname: () => mockPath }));
 jest.mock('@/lib/api/client', () => ({ api: { searchAsk: jest.fn() } }));
 const searchAsk = api.searchAsk as jest.Mock;
 
 const result = (overrides: Partial<AskSearchResult> = {}): AskSearchResult => ({
   resultKey: 'k1', group: 'RECORD', providerId: 'RECORD_rooms', typeLabel: 'Rooms', title: 'Primary bedroom', snippet: null, propertyId: 'home-1', status: null, asOf: '2026-10-02T00:00:00.000Z', freshness: null,
-  destination: { kind: 'RECORD', sectionId: 'rooms', recordId: 'room-9' }, ...overrides,
+  destination: { kind: 'RECORD', sectionId: 'rooms', recordId: 'room-9', open: { question: 'Show me the items in my Primary bedroom.' } }, ...overrides,
 });
 const response = (groups: AskSearchResponse['groups'], overrides: Partial<AskSearchResponse> = {}): AskSearchResponse => ({
   contractVersion: 'ask-search-v1', propertyId: 'home-1', generatedAt: '2026-10-20T12:00:00.000Z', partial: false, totalResults: groups.reduce((n, g) => n + g.results.length, 0), groups, providers: [], ...overrides,
@@ -20,7 +21,7 @@ const response = (groups: AskSearchResponse['groups'], overrides: Partial<AskSea
 const type = (text: string) => fireEvent.change(screen.getByLabelText('Search your home', { selector: 'input' }), { target: { value: text } });
 
 describe('AskSearchDialog', () => {
-  beforeEach(() => { push.mockReset(); searchAsk.mockReset(); });
+  beforeEach(() => { mockPath = '/dashboard/ask'; push.mockReset(); searchAsk.mockReset(); });
 
   it('does not search until there are two characters, and says so', () => {
     render(<AskSearchDialog open onOpenChange={jest.fn()} propertyId="home-1" />);
@@ -39,7 +40,7 @@ describe('AskSearchDialog', () => {
   it('groups results by kind with type, status and date, and opens the exact record', async () => {
     searchAsk.mockResolvedValue({ success: true, data: response([
       { group: 'RECORD', label: 'Home record', more: false, results: [result()] },
-      { group: 'WORK', label: 'Work', more: true, results: [result({ resultKey: 'w1', group: 'WORK', providerId: 'WORK_CLAIMS', typeLabel: 'Claims', title: 'Water claim', status: 'Closed', freshness: 'completed', destination: { kind: 'WORK', workKey: 'claim:c1' } })] },
+      { group: 'WORK', label: 'Work', more: true, results: [result({ resultKey: 'w1', group: 'WORK', providerId: 'WORK_CLAIMS', typeLabel: 'Claims', title: 'Water claim', status: 'Closed', freshness: 'completed', destination: { kind: 'WORK', workKey: 'claim:c1', open: { question: 'Continue: Water claim', operationId: 'CLAIM_CHECKLIST_VIEW', entityType: 'CLAIM', entityId: 'c1', contextVersion: 'v1' } } })] },
     ]) });
     const onOpenChange = jest.fn();
     render(<AskSearchDialog open onOpenChange={onOpenChange} propertyId="home-1" />);
@@ -51,9 +52,23 @@ describe('AskSearchDialog', () => {
     const work = document.querySelector('[data-search-group="WORK"]') as HTMLElement;
     expect(within(work).getByText(/Claims · Closed · completed/)).toBeInTheDocument();
     expect(within(work).getByText(/More matches exist/)).toBeInTheDocument();
+    // Already in an Ask conversation: the record opens as a block in it, and the page goes nowhere.
+    const requested = jest.fn();
+    window.addEventListener('ask:ask-question', requested);
     fireEvent.click(screen.getByRole('button', { name: /Primary bedroom/ }));
-    expect(push).toHaveBeenCalledWith('/dashboard/ask/record?propertyId=home-1&section=rooms&recordId=room-9');
+    window.removeEventListener('ask:ask-question', requested);
+    expect(requested).toHaveBeenCalledTimes(1);
+    expect((requested.mock.calls[0][0] as CustomEvent).detail).toEqual({ propertyId: 'home-1', question: 'Show me the items in my Primary bedroom.', from: 'search' });
+    expect(push).not.toHaveBeenCalled();
     expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+  it('opens a result as a deep link into Ask from a page that is not an Ask conversation', async () => {
+    mockPath = '/dashboard/ask/notifications';
+    searchAsk.mockResolvedValue({ success: true, data: response([{ group: 'RECORD', label: 'Home record', more: false, results: [result()] }]) });
+    render(<AskSearchDialog open onOpenChange={jest.fn()} propertyId="home-1" />);
+    type('bed');
+    fireEvent.click(await screen.findByRole('button', { name: /Primary bedroom/ }));
+    expect(new URL(push.mock.calls[0][0], 'https://x.test').searchParams.get('question')).toBe('Show me the items in my Primary bedroom.');
   });
 
   it('names the places that could not be searched and never calls a partial empty result empty', async () => {
@@ -71,7 +86,7 @@ describe('AskSearchDialog', () => {
   });
 
   it('keeps results from the groups that answered when another failed', async () => {
-    searchAsk.mockResolvedValue({ success: true, data: response([{ group: 'SAVED', label: 'Saved', more: false, results: [result({ resultKey: 's1', group: 'SAVED', title: 'Roofing quotes', destination: { kind: 'SAVED', artifactKey: 'comparison:q1' } })] }], { partial: true, providers: [{ providerId: 'WORK_CLAIMS', group: 'WORK', label: 'Claims', state: 'FAILED', reason: 'This could not be searched right now.', returned: 0, more: false }] }) });
+    searchAsk.mockResolvedValue({ success: true, data: response([{ group: 'SAVED', label: 'Saved', more: false, results: [result({ resultKey: 's1', group: 'SAVED', title: 'Roofing quotes', destination: { kind: 'SAVED', artifactKey: 'comparison:q1', open: { question: 'Show my saved results' } } })] }], { partial: true, providers: [{ providerId: 'WORK_CLAIMS', group: 'WORK', label: 'Claims', state: 'FAILED', reason: 'This could not be searched right now.', returned: 0, more: false }] }) });
     render(<AskSearchDialog open onOpenChange={jest.fn()} propertyId="home-1" />);
     type('roof');
     expect(await screen.findByText('Roofing quotes')).toBeInTheDocument();
@@ -103,8 +118,11 @@ describe('AskSearchDialog', () => {
     await screen.findByText('Primary bedroom');
     expect(setItem).not.toHaveBeenCalled();
     expect(window.location.href).not.toMatch(/mortgage/);
+    const requested = jest.fn();
+    window.addEventListener('ask:ask-question', requested);
     fireEvent.click(screen.getByRole('button', { name: /Primary bedroom/ }));
-    expect(push.mock.calls[0][0]).not.toMatch(/mortgage/);
+    window.removeEventListener('ask:ask-question', requested);
+    expect(JSON.stringify((requested.mock.calls[0][0] as CustomEvent).detail)).not.toMatch(/mortgage/);
     setItem.mockRestore();
   });
 
@@ -123,12 +141,17 @@ describe('AskSearchDialog', () => {
 });
 
 describe('searchResultHref', () => {
-  it('builds each exact destination from the typed destination', () => {
-    expect(searchResultHref(result({ destination: { kind: 'WORK', workKey: 'claim:c1' } }), 'home-1')).toBe('/dashboard/ask/work?propertyId=home-1&open=claim%3Ac1');
-    expect(searchResultHref(result({ destination: { kind: 'SAVED', artifactKey: 'comparison:q1' } }), 'home-1')).toBe('/dashboard/ask/saved?propertyId=home-1&open=comparison%3Aq1');
+  it('turns each typed destination into the question it asks, carrying the exact record the server declared', () => {
+    const work = new URL(searchResultHref(result({ destination: { kind: 'WORK', workKey: 'claim:c1', open: { question: 'Continue: Water claim', operationId: 'CLAIM_CHECKLIST_VIEW', entityType: 'CLAIM', entityId: 'c1', contextVersion: 'v1' } } }), 'home-1'), 'https://x.test');
+    expect(work.pathname).toBe('/dashboard/ask');
+    expect(Object.fromEntries(work.searchParams)).toMatchObject({ propertyId: 'home-1', question: 'Continue: Water claim', launchOperationId: 'CLAIM_CHECKLIST_VIEW', launchEntityType: 'CLAIM', launchEntityId: 'c1', launchContextVersion: 'v1' });
+    const saved = new URL(searchResultHref(result({ destination: { kind: 'SAVED', artifactKey: 'comparison:q1', open: { question: 'Show my saved results' } } }), 'home-1'), 'https://x.test');
+    expect(saved.searchParams.get('question')).toBe('Show my saved results');
+    expect(saved.searchParams.get('launchOperationId')).toBeNull();
     expect(searchResultHref(result({ destination: { kind: 'HISTORY', sessionId: 's1', executionId: 'e1' } }), 'home-1')).toBe('/dashboard/ask?propertyId=home-1&sessionId=s1&executionId=e1');
     const capability = searchResultHref(result({ destination: { kind: 'CAPABILITY', question: 'What maintenance is due?', entryId: 'x' } }), 'home-1');
     expect(new URL(capability, 'https://x.test').searchParams.get('question')).toBe('What maintenance is due?');
     expect(capability).not.toContain('launchOperationId');
+    expect(JSON.stringify([work.href, saved.href])).not.toMatch(/dashboard\/ask\/(record|work|saved)/);
   });
 });

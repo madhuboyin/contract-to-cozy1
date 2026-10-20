@@ -1,6 +1,8 @@
-import { Suspense } from 'react';
-import { AskSavedDestination } from '@/components/ask/saved/AskSavedDestination';
+import { redirect } from 'next/navigation';
+import type { AskSearchParams } from '../AskRoutePage';
+import { legacyAskViewRedirect } from '../legacyViewRedirect';
 
-export default function AskSavedPage() {
-  return <Suspense fallback={<div className="p-6 text-sm text-slate-600" role="status">Loading Saved…</div>}><AskSavedDestination /></Suspense>;
+// Saved is a block in the conversation now; this old address opens Ask with it already shown.
+export default async function AskSavedPage({ searchParams }: { searchParams: Promise<AskSearchParams> }) {
+  redirect(legacyAskViewRedirect('saved', await searchParams));
 }

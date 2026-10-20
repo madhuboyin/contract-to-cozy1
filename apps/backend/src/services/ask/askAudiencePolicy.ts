@@ -124,6 +124,8 @@ const POLICIES: readonly AskAudiencePolicy[] = [
   definePolicy('SEASONAL_ITEM_COMMAND', KNOWN_MODES),
   definePolicy('HOME_WORK_ITEM_COMMAND', KNOWN_MODES),
   definePolicy('HOME_WORK_ITEMS', KNOWN_MODES),
+  definePolicy('WORK_OVERVIEW', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
+  definePolicy('SAVED_RESULTS', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('INSPECTION_NEGOTIATION_PACKAGE', KNOWN_MODES),
   definePolicy('INSPECTION_FINDING_DECISION_COMMAND', KNOWN_MODES),
   definePolicy('INSPECTION_REPORT_FINDINGS', KNOWN_MODES),

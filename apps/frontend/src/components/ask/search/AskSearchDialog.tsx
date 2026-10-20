@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import { Loader2, Search } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
-import { GROUP_ORDER, formatSearchDate, searchResultHref } from './searchPresentation';
+import { GROUP_ORDER, formatSearchDate, searchResultAsk, searchResultHref } from './searchPresentation';
+import { requestAskQuestion } from '../inline/askViewBridge';
+import type { AskSearchResult } from '@/features/ask/types';
 import { useAskSearch } from './useAskSearch';
 
 const GROUP_HEADINGS = { RECORD: 'Home record', WORK: 'Work', SAVED: 'Saved', HISTORY: 'Conversations', CAPABILITY: 'Things Ask can do' } as const;
@@ -16,12 +18,19 @@ const GROUP_HEADINGS = { RECORD: 'Home record', WORK: 'Work', SAVED: 'Saved', HI
  */
 export function AskSearchDialog({ open, onOpenChange, propertyId, returnFocusRef }: { open: boolean; onOpenChange: (open: boolean) => void; propertyId: string | undefined; /** The control that opened the dialog: focus goes back to it when the dialog closes (a controlled dialog has no trigger of its own). */ returnFocusRef?: React.RefObject<HTMLElement | null> }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [query, setQuery] = useState('');
   const { response, status, retry, tooShort } = useAskSearch(propertyId, query, open);
 
   useEffect(() => { if (!open) setQuery(''); }, [open]);
 
-  const go = (href: string) => { onOpenChange(false); router.push(href); };
+  // A record, work item or saved result asks its question in the conversation already on screen, as its next turn; elsewhere it is the same deep link.
+  const open_ = (result: AskSearchResult, home: string) => {
+    onOpenChange(false);
+    const ask = searchResultAsk(result, home);
+    if (ask && pathname === '/dashboard/ask') requestAskQuestion(ask);
+    else router.push(searchResultHref(result, home));
+  };
   const gaps = (response?.providers ?? []).filter((provider) => provider.state !== 'AVAILABLE' && provider.state !== 'NOT_APPLICABLE');
   const groups = GROUP_ORDER.flatMap((id) => response?.groups.filter((group) => group.group === id && group.results.length > 0) ?? []);
 
@@ -74,7 +83,7 @@ export function AskSearchDialog({ open, onOpenChange, propertyId, returnFocusRef
                           const date = formatSearchDate(result.asOf);
                           return (
                             <li key={result.resultKey}>
-                              <button type="button" onClick={() => go(searchResultHref(result, propertyId))} className="block min-h-11 w-full px-3 py-2 text-left hover:bg-slate-50 focus:outline-none focus-visible:bg-slate-50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-700">
+                              <button type="button" onClick={() => open_(result, propertyId)} className="block min-h-11 w-full px-3 py-2 text-left hover:bg-slate-50 focus:outline-none focus-visible:bg-slate-50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-700">
                                 <span className="block break-words text-sm font-semibold text-slate-950">{result.title}</span>
                                 <span className="mt-0.5 block text-xs text-slate-600">
                                   {[result.typeLabel, result.status, result.freshness, date].filter(Boolean).join(' · ')}

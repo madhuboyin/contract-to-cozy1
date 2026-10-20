@@ -1,6 +1,8 @@
-import { Suspense } from 'react';
-import { AskRecord } from '@/components/ask/record/AskRecord';
+import { redirect } from 'next/navigation';
+import type { AskSearchParams } from '../AskRoutePage';
+import { legacyAskViewRedirect } from '../legacyViewRedirect';
 
-export default function AskRecordPage() {
-  return <Suspense fallback={<div className="p-6 text-sm text-slate-600" role="status">Loading Record…</div>}><AskRecord /></Suspense>;
+// Record is a block in the conversation now; this old address opens Ask with it already shown.
+export default async function AskRecordPage({ searchParams }: { searchParams: Promise<AskSearchParams> }) {
+  redirect(legacyAskViewRedirect('record', await searchParams));
 }

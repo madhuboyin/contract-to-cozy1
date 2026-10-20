@@ -13,11 +13,23 @@ export const ASK_SEARCH_PROVIDER_TIMEOUT_MS = 3000;
 export type AskSearchGroup = 'RECORD' | 'WORK' | 'SAVED' | 'HISTORY' | 'CAPABILITY';
 export const ASK_SEARCH_GROUPS: readonly AskSearchGroup[] = Object.freeze(['RECORD', 'WORK', 'SAVED', 'HISTORY', 'CAPABILITY']);
 
+/**
+ * How choosing a result continues the conversation (FRD v1.1 §1.2): the question to ask, and, when the result is one exact record with a
+ * registered operation, that operation and record so Ask opens that one, not a look-alike. Ask never navigates to it.
+ */
+export interface AskSearchOpen {
+  question: string;
+  operationId?: string;
+  entityType?: string;
+  entityId?: string;
+  contextVersion?: string;
+}
+
 /** The exact canonical place a result opens. The client builds the route from this; the server never sends a free-form URL. */
 export type AskSearchDestination =
-  | { kind: 'RECORD'; sectionId: string; recordId: string }
-  | { kind: 'WORK'; workKey: string }
-  | { kind: 'SAVED'; artifactKey: string }
+  | { kind: 'RECORD'; sectionId: string; recordId: string; open: AskSearchOpen }
+  | { kind: 'WORK'; workKey: string; open: AskSearchOpen }
+  | { kind: 'SAVED'; artifactKey: string; open: AskSearchOpen }
   | { kind: 'HISTORY'; sessionId: string; executionId: string }
   | { kind: 'CAPABILITY'; question: string; entryId: string };
 

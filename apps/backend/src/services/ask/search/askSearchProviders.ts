@@ -48,7 +48,7 @@ const recordProviders: AskSearchProvider[] = ASK_RECORD_SECTION_REGISTRY.map((de
           title: recordRowTitle(row, definition.label), snippet: null, propertyId: context.propertyId,
           status: RECORD_STATUS_FIELDS.map((field) => text(row[field])).find(Boolean) ?? null,
           asOf: RECORD_DATE_FIELDS.map((field) => text(row[field])).find(Boolean) ?? null, freshness: null,
-          destination: { kind: 'RECORD', sectionId: definition.id, recordId: row.id },
+          destination: { kind: 'RECORD', sectionId: definition.id, recordId: row.id, open: { question: text(row.askQuestion) ?? definition.primaryAction.question } },
         })),
       };
     },
@@ -76,7 +76,12 @@ const workProviders: AskSearchProvider[] = ASK_WORK_PROVIDER_REGISTRY.map((defin
         results: page.rows.slice(0, limit).map((row): AskSearchResult => ({
           resultKey: row.workKey, group: 'WORK', providerId: `WORK_${definition.id}`, typeLabel: definition.label, title: row.title, snippet: row.summary,
           propertyId: context.propertyId, status: row.status.label, asOf: row.freshness.asOf, freshness: row.lifecycleView.toLowerCase().replace(/_/g, ' '),
-          destination: { kind: 'WORK', workKey: row.workKey },
+          destination: {
+            kind: 'WORK', workKey: row.workKey,
+            open: row.resume.kind === 'WORKSPACE' && row.resume.launch.operationId && row.resume.launch.entityType && row.resume.launch.entityId
+              ? { question: `Continue: ${row.title}`.slice(0, 300), operationId: row.resume.launch.operationId, entityType: row.resume.launch.entityType, entityId: row.resume.launch.entityId, ...(row.resume.launch.contextVersion ? { contextVersion: row.resume.launch.contextVersion } : {}) }
+              : { question: 'What needs me?' },
+          },
         })),
       };
     },
@@ -102,7 +107,12 @@ const savedProviders: AskSearchProvider[] = ASK_ARTIFACT_TYPE_REGISTRY.map((defi
         results: page.rows.slice(0, limit).map((row): AskSearchResult => ({
           resultKey: row.artifactKey, group: 'SAVED', providerId: `SAVED_${definition.id}`, typeLabel: definition.label, title: row.title, snippet: row.summary,
           propertyId: context.propertyId, status: row.version.label, asOf: row.sourceAsOf, freshness: row.freshness.state.toLowerCase(),
-          destination: { kind: 'SAVED', artifactKey: row.artifactKey },
+          destination: {
+            kind: 'SAVED', artifactKey: row.artifactKey,
+            open: row.reopen
+              ? { question: `Open ${row.title}`.slice(0, 300), operationId: row.reopen.operationId, entityType: row.reopen.entityType, entityId: row.reopen.entityId, ...(row.reopen.contextVersion ? { contextVersion: row.reopen.contextVersion } : {}) }
+              : { question: 'Show my saved results' },
+          },
         })),
       };
     },

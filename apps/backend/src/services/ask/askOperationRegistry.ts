@@ -158,6 +158,8 @@ export type AskOperationId =
   | 'HOME_WORK_ITEM_COMMAND'
   // List the home's open Home Operations work items with state, due date and snooze (register P2 Maintenance and Home Operations). Read-only.
   | 'HOME_WORK_ITEMS'
+  | 'WORK_OVERVIEW'
+  | 'SAVED_RESULTS'
   // Build a negotiation package from a confirmed pre-purchase inspection report: choose a decision per open finding and see the credit total (register P2 Inspection Hub). Calculation only; saves nothing.
   | 'INSPECTION_NEGOTIATION_PACKAGE'
   // Keep an eye on an inspection finding, or record the seller's plan to fix or disclose it (register P2 Inspection Hub). Confirmation-gated, declared-action only.
@@ -815,6 +817,8 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   SEASONAL_ITEM_COMMAND: definition('SEASONAL_ITEM_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'seasonal-item.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   HOME_WORK_ITEM_COMMAND: definition('HOME_WORK_ITEM_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'home-work-item.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   HOME_WORK_ITEMS: definition('HOME_WORK_ITEMS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'home-work-items.list', ['SUMMARY', 'GROUPED_LIST', 'EMPTY_STATE', 'BOUNDARY']),
+  WORK_OVERVIEW: definition('WORK_OVERVIEW', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'work.overview', ['SUMMARY', 'GROUPED_LIST', 'EMPTY_STATE', 'BOUNDARY']),
+  SAVED_RESULTS: definition('SAVED_RESULTS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'saved.results', ['SUMMARY', 'GROUPED_LIST', 'EMPTY_STATE', 'BOUNDARY']),
   INSPECTION_NEGOTIATION_PACKAGE: definition('INSPECTION_NEGOTIATION_PACKAGE', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'inspection-negotiation-package.build', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
   INSPECTION_FINDING_DECISION_COMMAND: definition('INSPECTION_FINDING_DECISION_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'inspection-finding-decision.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   INSPECTION_REPORT_FINDINGS: definition('INSPECTION_REPORT_FINDINGS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'inspection-report-findings.view', ['SUMMARY', 'GROUPED_LIST', 'EMPTY_STATE', 'BOUNDARY']),
@@ -1171,6 +1175,9 @@ const claimTransitionPattern = /\b(?:submit|advance|move|transition|approve|deny
 const incidentContinuationPattern = /\b(?:emergency|incident)\b.{0,80}\b(?:over|contained|resolved|document|record|follow up|claim)\b|\b(?:document|record|follow up on)\b.{0,60}\b(?:emergency|incident)\b/i;
 const inspectionFindingUpdatePattern = /\b(?:accept|dismiss|resolve|close|track)\b.{0,80}\binspection (?:finding|issue)\b|\binspection (?:finding|issue)\b.{0,80}\b(?:accept|dismiss|resolve|close|track)\b/i;
 const inspectionReportsPattern = /\b(?:show|list|review|which|what|see|open)\b.{0,50}\binspection reports?\b/i;
+// Work and Saved as conversations (FRD v1.1 §1.2): "what needs me", "show my work", "what's waiting", "show my saved results/reports".
+const workOverviewPattern = /^\s*(?:what|which)(?:\s+(?:work|things?|items?))?\s+(?:needs?\s+me|(?:is|are)\s+waiting\s+on\s+me)\b|\b(?:what|which|show|list|see)\b.{0,30}\b(?:work|things?)\s+(?:that\s+needs?\s+me|i\s+need\s+to\s+(?:do|decide|answer))\b|\b(?:show|list|see|open)\s+(?:me\s+)?my\s+(?:open\s+|active\s+|scheduled\s+|completed\s+)?work\b(?!\s+items?\b|\s+list\b)/i;
+const savedResultsPattern = /\b(?:show|list|see|open|find|what(?:'s| is| are))\b.{0,30}\b(?:my\s+)?saved\s+(?:results?|reports?|comparisons?|items?|decisions?|briefings?|checklists?)\b|\bwhat (?:have i|did i) saved\b/i;
 const homeWorkItemsPattern = /\b(?:show|list|what|which|see|open)\b.{0,50}\b(?:home operations?|operational|home)\s+work(?:\s+items?|\s+list)\b|\bmy work items\b/i;
 const inspectionFindingsPattern = /\b(?:show|review|list|what|open|unresolved)\b.{0,70}\binspection (?:findings?|issues?)\b|\bwhat did (?:the |my )?inspection find\b/i;
 // Checked before recallReviewPattern below (same order as inspection's update-before-review cascade):
@@ -1637,6 +1644,8 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   if (inspectionFindingsPattern.test(message)) return resolved('INSPECTION_FINDINGS', 0.96);
   if (inspectionReportsPattern.test(message)) return resolved('INSPECTION_REPORTS', 0.95);
   if (homeWorkItemsPattern.test(message)) return resolved('HOME_WORK_ITEMS', 0.95);
+  if (workOverviewPattern.test(message)) return resolved('WORK_OVERVIEW', 0.95);
+  if (savedResultsPattern.test(message)) return resolved('SAVED_RESULTS', 0.95);
   if (recallMatchUpdatePattern.test(message)) return resolved('RECALL_MATCH_UPDATE', 0.98);
   if (recallReviewPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('RECALL_REVIEW', 0.96);

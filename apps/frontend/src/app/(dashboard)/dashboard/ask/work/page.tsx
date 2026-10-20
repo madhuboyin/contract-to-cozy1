@@ -1,6 +1,8 @@
-import { Suspense } from 'react';
-import { AskWorkDestination } from '@/components/ask/workspace/AskWorkDestination';
+import { redirect } from 'next/navigation';
+import type { AskSearchParams } from '../AskRoutePage';
+import { legacyAskViewRedirect } from '../legacyViewRedirect';
 
-export default function AskWorkPage() {
-  return <Suspense fallback={<div className="p-6 text-sm text-slate-600" role="status">Loading Work…</div>}><AskWorkDestination /></Suspense>;
+// Work is a block in the conversation now; this old address opens Ask with it already shown.
+export default async function AskWorkPage({ searchParams }: { searchParams: Promise<AskSearchParams> }) {
+  redirect(legacyAskViewRedirect('work', await searchParams));
 }

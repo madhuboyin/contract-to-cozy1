@@ -114,6 +114,8 @@ import './handlers/diyCommands.handler';
 import './handlers/seasonalItemCommands.handler';
 import './handlers/homeWorkItemCommands.handler';
 import './handlers/homeWorkItems.handler';
+import './handlers/workOverview.handler';
+import './handlers/savedResults.handler';
 import './handlers/inspectionNegotiationPackage.handler';
 import './handlers/inspectionFindingDecisionCommands.handler';
 import './handlers/inspectionFindingDecisions.handler';

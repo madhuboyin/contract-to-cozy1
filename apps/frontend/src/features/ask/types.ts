@@ -1326,10 +1326,12 @@ export interface AskSavedResolution {
 
 // Federated search (FR-SEARCH-001..004). Mirrors the backend `AskSearchResponse`.
 export type AskSearchGroupId = 'RECORD' | 'WORK' | 'SAVED' | 'HISTORY' | 'CAPABILITY';
+/** How choosing a result continues the conversation: the question to ask and, for one exact record, its registered operation and identity. */
+export interface AskSearchOpen { question: string; operationId?: string; entityType?: string; entityId?: string; contextVersion?: string }
 export type AskSearchDestination =
-  | { kind: 'RECORD'; sectionId: string; recordId: string }
-  | { kind: 'WORK'; workKey: string }
-  | { kind: 'SAVED'; artifactKey: string }
+  | { kind: 'RECORD'; sectionId: string; recordId: string; open: AskSearchOpen }
+  | { kind: 'WORK'; workKey: string; open: AskSearchOpen }
+  | { kind: 'SAVED'; artifactKey: string; open: AskSearchOpen }
   | { kind: 'HISTORY'; sessionId: string; executionId: string }
   | { kind: 'CAPABILITY'; question: string; entryId: string };
 

@@ -70,19 +70,19 @@ export const RESULT_COPY: Record<NonNullable<AskIntakeView['result']>['entityTyp
   INVENTORY_ITEM: { done: 'Item added to your inventory.', section: 'inventory' },
 };
 
-export function intakeResultHref(view: AskIntakeView): string | null {
-  const home = encodeURIComponent(view.propertyId);
-  if (view.result) {
-    const { section } = RESULT_COPY[view.result.entityType];
-    const recordId = view.result.entityType === 'EXPENSE' ? view.recordId : view.result.entityType === 'INVENTORY_ITEM' ? view.result.entityId : null;
-    return `/dashboard/ask/record?propertyId=${home}&section=${section}${recordId ? `&recordId=${encodeURIComponent(recordId)}` : ''}`;
-  }
-  if (view.inspection) return `/dashboard/ask/record?propertyId=${home}&section=inspections`;
+// What the homeowner asks next about what they just added: the question that opens that part of the record, in this same conversation.
+const SECTION_QUESTIONS: Record<string, string> = {
+  warranties: 'Show my warranties', documents: 'Show my home documents', coverage: 'Review my coverage', inventory: 'Show my home inventory', inspections: 'Show me my inspection reports.',
+};
+
+export function intakeResultQuestion(view: AskIntakeView): string | null {
+  if (view.result) return SECTION_QUESTIONS[RESULT_COPY[view.result.entityType].section] ?? null;
+  if (view.inspection) return SECTION_QUESTIONS.inspections;
   return null;
 }
 
-export function originalHref(view: AskIntakeView): string {
-  return `/dashboard/ask/record?propertyId=${encodeURIComponent(view.propertyId)}&section=documents&recordId=${encodeURIComponent(view.recordId)}`;
+export function originalQuestion(): string {
+  return SECTION_QUESTIONS.documents;
 }
 
 export function kindLabel(kind: AskIntakeKind | null): string {

@@ -116,7 +116,9 @@ test('Record search goes through the section\'s own reader with the search term 
   const output = await provider.search(ctx(), 'bedroom', 5);
   assert.match(JSON.stringify(calls[0].where), /"name":\{"contains":"bedroom","mode":"insensitive"\}/);
   assert.equal(output.results[0].title, 'Primary bedroom');
-  assert.deepEqual(output.results[0].destination, { kind: 'RECORD', sectionId: 'rooms', recordId: 'room-9' });
+  // Choosing it asks, in the same conversation, the question that opens that area; nothing navigates.
+  assert.deepEqual(output.results[0].destination, { kind: 'RECORD', sectionId: 'rooms', recordId: 'room-9', open: { question: output.results[0].destination.open.question } });
+  assert.ok(output.results[0].destination.open.question.length > 0);
   assert.equal(output.results[0].snippet, null);
   assert.equal(recordRowTitle({ providerName: 'Rheem' }, 'Warranties'), 'Rheem');
   assert.equal(recordRowTitle({}, 'Warranties'), 'Warranties');
@@ -139,6 +141,7 @@ test('Work search matches on the owner\'s own text across every lifecycle view, 
   const output = await provider.search(ctx(), 'water', 5);
   ASK_WORK_PROVIDER_READERS.CLAIMS = original;
   assert.equal(output.results[0].destination.workKey, 'claim:c1');
+  assert.ok(output.results[0].destination.open.question.length > 0);
   for (const id of ['MONITORS', 'QUEUED_JOBS', 'SCHEDULED_FOLLOW_UPS']) assert.ok(ASK_SEARCH_PROVIDERS.find((p) => p.id === `WORK_${id}`).search, `${id} is now searchable`);
 });
 
@@ -154,7 +157,8 @@ test('Saved search uses the artifact reader, active list only, and opens the exa
   ASK_SAVED_TYPE_READERS.QUOTE_COMPARISON = original;
   assert.equal(seen[0].archived, 'ACTIVE');
   assert.deepEqual(seen[0].archivedByYouIds, ['q-archived']);
-  assert.deepEqual(output.results[0].destination, { kind: 'SAVED', artifactKey: 'comparison:q1' });
+  // A row with no registered reopen operation falls back to the Saved question; one with it carries the operation and exact record (see the Work test).
+  assert.deepEqual(output.results[0].destination, { kind: 'SAVED', artifactKey: 'comparison:q1', open: { question: 'Show my saved results' } });
   assert.equal(ASK_SEARCH_PROVIDERS.find((p) => p.id === 'SAVED_HOME_DIGITAL_WILL').unavailableReason.length > 20, true);
 });
 

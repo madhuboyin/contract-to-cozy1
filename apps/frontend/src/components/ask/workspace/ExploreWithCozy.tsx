@@ -5,7 +5,7 @@
 // navigates nowhere. A starter is the only thing that launches, through the ordinary Ask path. Topics, order, starters and their
 // availability are rendered exactly as the server returned them; nothing here infers an operation from a label.
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
-import { ArrowRight, ChevronDown, ChevronRight, Compass } from 'lucide-react';
+import { ArrowRight, Bookmark, BriefcaseBusiness, ChevronDown, ChevronRight, Compass, Download, NotebookTabs } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { AskDiscoveryStarter, AskDiscoveryTopic, AskDiscoveryTopicId, AskTargetOption } from '@/features/ask/types';
 import type { ExploreSelectorState } from './useExploreWithCozy';
@@ -146,6 +146,29 @@ function TopicButtons({ topics, activeTopicId, onOpen, onAfterOpen, moreIdeas }:
   );
 }
 
+// Prompt hints for what a homeowner would otherwise type. Each one asks the question in this conversation, so the answer arrives as the next turn.
+const QUESTION_SHORTCUTS: ReadonlyArray<{ question: string; label: string; hint: string; Icon: typeof NotebookTabs }> = [
+  { question: 'What needs me?', label: 'What needs me', hint: 'Work', Icon: BriefcaseBusiness },
+  { question: 'Browse my home record', label: 'Browse my home record', hint: 'Record', Icon: NotebookTabs },
+  { question: 'Show my saved results', label: 'Find something saved', hint: 'Saved', Icon: Bookmark },
+];
+
+function ViewShortcuts({ onAsk, onExport, onAfterOpen }: { onAsk: (question: string) => void; onExport?: () => void; onAfterOpen?: () => void }) {
+  const row = (key: string, label: string, hint: string, Icon: typeof NotebookTabs, run: () => void) => (
+    <li key={key}>
+      <button type="button" onClick={() => { run(); onAfterOpen?.(); }} className="flex min-h-10 w-full items-center gap-2 rounded-xl px-3 py-1.5 text-left text-sm text-slate-700 transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600">
+        <Icon className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden="true" /><span className="min-w-0 flex-1">{label}</span><span className="text-xs text-slate-400">{hint}</span>
+      </button>
+    </li>
+  );
+  return (
+    <ul className="space-y-0.5" aria-label="Ask about your home">
+      {QUESTION_SHORTCUTS.map(({ question, label, hint, Icon }) => row(question, label, hint, Icon, () => onAsk(question)))}
+      {onExport && row('export', 'Export my home record', 'Export', Download, onExport)}
+    </ul>
+  );
+}
+
 function ExploreStatus({ state }: { state: ExploreState }) {
   if (state.loading && !state.topics.length) return <p className="px-3 py-2 text-xs text-slate-400" role="status">Loading ideas…</p>;
   if (!state.topics.length) return <p className="px-3 py-2 text-xs text-slate-500" role="status">{state.failed ? 'Ideas are unavailable right now. You can still ask anything.' : 'No ideas to suggest right now.'}</p>;
@@ -153,10 +176,12 @@ function ExploreStatus({ state }: { state: ExploreState }) {
 }
 
 /** Desktop rail group: near the top of the conversation rail, quieter than the composer and the current response. */
-export function ExploreRailGroup({ state, activeTopicId, onOpen, moreIdeas, onVisible }: {
+export function ExploreRailGroup({ state, activeTopicId, onOpen, onAskShortcut, onOpenExport, moreIdeas, onVisible }: {
   state: ExploreState;
   activeTopicId: AskDiscoveryTopicId | null;
   onOpen: (topicId: AskDiscoveryTopicId, from: HTMLElement) => void;
+  onAskShortcut?: (question: string) => void;
+  onOpenExport?: () => void;
   moreIdeas?: ReactNode;
   /** Fired once, only after the topics are on screen. */
   onVisible?: () => void;
@@ -169,15 +194,18 @@ export function ExploreRailGroup({ state, activeTopicId, onOpen, moreIdeas, onVi
         <ExploreStatus state={state} />
         {state.topics.length > 0 && <TopicButtons topics={state.topics} activeTopicId={activeTopicId} onOpen={onOpen} moreIdeas={moreIdeas} />}
       </div>
+      {onAskShortcut && <div className="mt-1"><ViewShortcuts onAsk={onAskShortcut} onExport={onOpenExport} /></div>}
     </section>
   );
 }
 
 /** Narrow screens: one compact disclosure above the conversation. It is not a drawer and never overlays the page. */
-export function ExploreDisclosure({ state, activeTopicId, onOpen, moreIdeas, onPanelVisible }: {
+export function ExploreDisclosure({ state, activeTopicId, onOpen, onAskShortcut, onOpenExport, moreIdeas, onPanelVisible }: {
   state: ExploreState;
   activeTopicId: AskDiscoveryTopicId | null;
   onOpen: (topicId: AskDiscoveryTopicId, from: HTMLElement) => void;
+  onAskShortcut?: (question: string) => void;
+  onOpenExport?: () => void;
   moreIdeas?: ReactNode;
   /** Fired once, only after the expanded panel's topics are on screen (a collapsed disclosure shows no topics). */
   onPanelVisible?: () => void;
@@ -196,6 +224,7 @@ export function ExploreDisclosure({ state, activeTopicId, onOpen, moreIdeas, onP
         <ExploreStatus state={state} />
         {state.topics.length > 0 && <TopicButtons topics={state.topics} activeTopicId={activeTopicId} moreIdeas={moreIdeas}
           onOpen={(topicId) => onOpen(topicId, toggleRef.current as HTMLElement)} onAfterOpen={() => setExpanded(false)} />}
+        {onAskShortcut && <div className="mt-1"><ViewShortcuts onAsk={onAskShortcut} onExport={onOpenExport} onAfterOpen={() => setExpanded(false)} /></div>}
       </div>}
     </div>
   );

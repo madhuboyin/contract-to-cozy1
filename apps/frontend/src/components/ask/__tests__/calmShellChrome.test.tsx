@@ -219,12 +219,14 @@ describe('ConversationHistoryNav in the calm shell', () => {
 
   it('caps the Home preview at two rows and provides the complete Work path', () => {
     window.localStorage.setItem(CALM_ANSWERS_STORAGE_KEY, '1');
+    const onViewWork = jest.fn();
     const pending = (sessionId: string, question: string) => ({ pendingKind: 'CONFIRMATION' as const, actionLabel: 'Review and confirm', execution: { executionId: `e-${sessionId}`, sessionId, question } });
-    render(<PendingWorkInbox items={[pending('s1', 'Finish task setup'), pending('s2', 'Add the purchase date'), pending('s3', 'Third pending item')] as never} loadingId={null} dismissingId={null} onResume={jest.fn()} onDismiss={jest.fn()} calm workHref="/dashboard/ask/work?propertyId=home" />);
+    render(<PendingWorkInbox items={[pending('s1', 'Finish task setup'), pending('s2', 'Add the purchase date'), pending('s3', 'Third pending item')] as never} loadingId={null} dismissingId={null} onResume={jest.fn()} onDismiss={jest.fn()} calm onViewWork={onViewWork} />);
     expect(screen.getByText('Finish task setup')).toBeInTheDocument();
     expect(screen.getByText('Add the purchase date')).toBeInTheDocument();
     expect(screen.queryByText('Third pending item')).toBeNull();
-    expect(screen.getByRole('link', { name: 'View Work' })).toHaveAttribute('href', '/dashboard/ask/work?propertyId=home');
+    fireEvent.click(screen.getByRole('button', { name: 'View Work' }));
+    expect(onViewWork).toHaveBeenCalledTimes(1);
   });
 });
 

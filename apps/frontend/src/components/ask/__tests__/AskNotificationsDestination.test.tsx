@@ -10,7 +10,7 @@ let mockSearch = '';
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push }), useSearchParams: () => new URLSearchParams(mockSearch) }));
 jest.mock('@/lib/property/PropertyContext', () => ({ usePropertyContext: () => ({ selectedPropertyId: 'home-1', setSelectedPropertyId: jest.fn() }) }));
 jest.mock('@/lib/api/client', () => ({ api: {
-  getAskNotifications: jest.fn(), openAskNotification: jest.fn(), setAskNotificationDismissed: jest.fn(), setAskNotificationRead: jest.fn(),
+  getAskNotifications: jest.fn(), openAskNotification: jest.fn(), resolveAskWork: jest.fn(), resolveAskSavedArtifact: jest.fn(), setAskNotificationDismissed: jest.fn(), setAskNotificationRead: jest.fn(),
   getAskNotificationSettings: jest.fn(), updateAskNotificationCategory: jest.fn(), updateAskNotificationQuietHours: jest.fn(), setAskNotificationConsent: jest.fn(),
 } }));
 const mocks = api as unknown as Record<string, jest.Mock>;
@@ -58,8 +58,14 @@ describe('AskNotificationsDestination', () => {
     mocks.getAskNotifications.mockResolvedValue({ success: true, data: page([item()]) });
     mocks.openAskNotification.mockResolvedValue({ success: true, data: opened() });
     render(<AskNotificationsDestination />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Open in Work' }));
-    await waitFor(() => expect(push).toHaveBeenCalledWith('/dashboard/ask/work?propertyId=home-1&open=claim%3Ac1'));
+    // The work is reread first, then continued in Ask with its own operation and record: no Work page.
+    mocks.resolveAskWork.mockResolvedValue({ success: true, data: { outcome: 'AVAILABLE', message: '', row: { title: 'Water claim', resume: { kind: 'WORKSPACE', executionId: null, sessionId: null, launch: { operationId: 'CLAIM_CHECKLIST_VIEW', entityType: 'CLAIM', entityId: 'c1', actionId: null, decisionThreadId: null, workItemId: null, journeyId: null, contextVersion: 'v1' } } } } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Continue this' }));
+    await waitFor(() => expect(push).toHaveBeenCalled());
+    const url = new URL(push.mock.calls[0][0], 'https://x.test');
+    expect(url.pathname).toBe('/dashboard/ask');
+    expect(Object.fromEntries(url.searchParams)).toMatchObject({ propertyId: 'home-1', question: 'Continue: Water claim', launchOperationId: 'CLAIM_CHECKLIST_VIEW', launchEntityType: 'CLAIM', launchEntityId: 'c1', launchContextVersion: 'v1' });
+    expect(mocks.resolveAskWork).toHaveBeenCalledWith('home-1', 'claim:c1');
     expect(mocks.openAskNotification).toHaveBeenCalledWith('n1');
   });
 
@@ -67,7 +73,7 @@ describe('AskNotificationsDestination', () => {
     mocks.getAskNotifications.mockResolvedValue({ success: true, data: page([item()]) });
     mocks.openAskNotification.mockResolvedValue({ success: true, data: opened({ outcome, destination: null, message }) });
     render(<AskNotificationsDestination />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Open in Work' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Continue this' }));
     expect(await screen.findByText(message, { exact: false })).toBeInTheDocument();
     expect(push).not.toHaveBeenCalled();
   });
@@ -193,7 +199,8 @@ describe('Notification settings', () => {
 
 describe('notificationDestinationHref', () => {
   it('builds each destination, and only a stored link leaves Ask', () => {
-    expect(notificationDestinationHref({ kind: 'SAVED', artifactKey: 'seasonal:s1' }, 'h')).toBe('/dashboard/ask/saved?propertyId=h&open=seasonal%3As1');
+    expect(new URL(notificationDestinationHref({ kind: 'SAVED', artifactKey: 'seasonal:s1' }, 'h'), 'https://x.test').searchParams.get('question')).toBe('Show my saved results');
+    expect(new URL(notificationDestinationHref({ kind: 'WORK', workKey: 'claim:c1' }, 'h'), 'https://x.test').searchParams.get('question')).toBe('What needs me?');
     expect(notificationDestinationHref({ kind: 'CONVERSATION', sessionId: 's', executionId: 'e' }, 'h')).toBe('/dashboard/ask?propertyId=h&sessionId=s&executionId=e&from=notification');
     expect(new URL(notificationDestinationHref({ kind: 'QUESTION', question: 'Show my warranties.' }, 'h'), 'https://x.test').searchParams.get('question')).toBe('Show my warranties.');
     expect(notificationDestinationHref({ kind: 'LEGACY_LINK', path: '/dashboard/profile' }, 'h')).toBe('/dashboard/profile');

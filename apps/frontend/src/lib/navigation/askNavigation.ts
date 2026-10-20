@@ -1,6 +1,6 @@
 import { resolveDashboardBackHref } from './backNavigation';
 
-type AskWorkspaceHrefInput = {
+export type AskWorkspaceHrefInput = {
   propertyId?: string | null;
   sessionId?: string | null;
   executionId?: string | null;

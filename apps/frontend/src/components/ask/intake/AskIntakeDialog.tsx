@@ -1,10 +1,10 @@
 'use client';
 
 import { useEffect, useState, type ClipboardEvent, type DragEvent } from 'react';
-import Link from 'next/link';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { IntakeCandidates, IntakeLabelReview, IntakePicker, IntakeProvenance, IntakeReadStep } from './IntakeSteps';
-import { RESULT_COPY, intakeResultHref, originalHref, pickSingleFile } from './intakePresentation';
+import { RESULT_COPY, intakeResultQuestion, originalQuestion, pickSingleFile } from './intakePresentation';
+import { useAskInline } from '../inline/AskInlineContext';
 import { useAskIntake } from './useAskIntake';
 
 const LINK = 'inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700';
@@ -34,7 +34,10 @@ export function AskIntakeDialog({ open, onOpenChange, propertyId, returnFocusRef
   const onPaste = (event: ClipboardEvent) => { if (event.clipboardData?.files?.length) { event.preventDefault(); accept(event.clipboardData.files); } };
   const startOver = () => { intake.reset(); setKept(false); setProblem(null); };
 
-  const resultHref = view ? intakeResultHref(view) : null;
+  const inline = useAskInline();
+  // Asking about it is the next turn of the conversation behind this dialog, so the dialog closes first.
+  const askAbout = (question: string) => { onOpenChange(false); inline?.launch({ question }); };
+  const resultQuestion = view ? intakeResultQuestion(view) : null;
   let body: React.ReactNode;
   if (!propertyId) body = <p className="text-sm text-slate-600" role="status">Select a home to add a file to it.</p>;
   else if (intake.paused) body = <p className="text-sm text-amber-950" role="status">Adding files is temporarily unavailable. Nothing was lost.</p>;
@@ -47,7 +50,7 @@ export function AskIntakeDialog({ open, onOpenChange, propertyId, returnFocusRef
   );
   else if (kept) body = (
     <div className="space-y-3"><p className="text-sm text-slate-800" role="status">Kept in your Home Records without being read. Nothing was added to your home.</p>
-      <div className="flex flex-wrap gap-2"><Link href={originalHref(view)} className={PRIMARY_LINK}>Open it in Home Records</Link><button type="button" className={LINK} onClick={startOver}>Add another file</button></div></div>
+      <div className="flex flex-wrap gap-2"><button type="button" className={PRIMARY_LINK} onClick={() => askAbout(originalQuestion())}>Show it in my documents</button><button type="button" className={LINK} onClick={startOver}>Add another file</button></div></div>
   );
   else if (view.state === 'UPLOADED') body = (
     <IntakeReadStep key={`${view.recordId}:${view.choice?.reason ?? ''}:${Boolean(view.needsDetails)}`} view={view} config={config} busy={busy === 'READING' || busy === 'SAVING'}
@@ -59,14 +62,14 @@ export function AskIntakeDialog({ open, onOpenChange, propertyId, returnFocusRef
   else if (view.state === 'REVIEW' && view.inspection) body = (
     <div className="space-y-3" data-intake-inspection>
       <p className="text-sm text-slate-800" role="status">An inspection report was created with the {view.inspection.findingCount} {view.inspection.findingCount === 1 ? 'finding' : 'findings'} you accepted. Go through them to decide what to do about each one. Findings you rejected or left undecided were not added.</p>
-      <div className="flex flex-wrap gap-2">{resultHref && <Link href={resultHref} className={PRIMARY_LINK}>Review the findings</Link>}<button type="button" className={LINK} onClick={startOver}>Add another file</button></div>
+      <div className="flex flex-wrap gap-2">{resultQuestion && <button type="button" className={PRIMARY_LINK} onClick={() => askAbout(resultQuestion)}>Review the findings</button>}<button type="button" className={LINK} onClick={startOver}>Add another file</button></div>
     </div>
   );
   else if (view.state === 'REVIEW') body = <IntakeCandidates view={view} busy={busy === 'SAVING'} onReview={(id, action, value) => void intake.reviewCandidate(id, action, value)} onAdd={() => void intake.addToHome()} onDiscard={() => void intake.discard()} />;
   else body = (
     <div className="space-y-3" data-intake-done>
       <p className="text-sm text-slate-800" role="status">{view.result ? RESULT_COPY[view.result.entityType].done : 'Rejected. Nothing was added to your home. The original is still in your Home Records.'}</p>
-      <div className="flex flex-wrap gap-2">{resultHref && view.result && <Link href={resultHref} className={PRIMARY_LINK}>See it in your home record</Link>}<button type="button" className={LINK} onClick={startOver}>Add another file</button></div>
+      <div className="flex flex-wrap gap-2">{resultQuestion && view.result && <button type="button" className={PRIMARY_LINK} onClick={() => askAbout(resultQuestion)}>Show it in my home record</button>}<button type="button" className={LINK} onClick={startOver}>Add another file</button></div>
     </div>
   );
 
@@ -83,7 +86,7 @@ export function AskIntakeDialog({ open, onOpenChange, propertyId, returnFocusRef
         <div className="space-y-4 px-4 py-4" aria-live="polite" aria-busy={busy !== null}>
           {error && <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800" role="alert" data-intake-error>{error}</p>}
           {body}
-          {view && view.state !== 'DISCARDED' && !kept && <IntakeProvenance view={view} />}
+          {view && view.state !== 'DISCARDED' && !kept && <IntakeProvenance view={view} onOpenOriginal={() => askAbout(originalQuestion())} />}
         </div>
       </DialogContent>
     </Dialog>
