@@ -4,6 +4,7 @@ import { useRef, useState } from 'react';
 import { Loader2, Paperclip } from 'lucide-react';
 import { api } from '@/lib/api/client';
 import { uploadRecordForWorkflow } from '@/app/(dashboard)/dashboard/properties/[id]/tools/home-records/homeRecordsApi';
+import { cn } from '@/lib/utils';
 
 // ASK_COZY_INLINE_WORKSPACE_FRD Phase 3 (evidence upload) and v1.99 (inventory items and warranties). A file is picked and
 // uploaded out of band (POST .../evidence-upload) BEFORE anything is dispatched to Ask, because CAPTURE_EVIDENCE_CONFIRM's
@@ -19,7 +20,7 @@ export const EVIDENCE_ATTACH_MESSAGES = {
 export const EVIDENCE_UPLOAD_ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'application/pdf'];
 export const EVIDENCE_UPLOAD_MAX_BYTES = 10 * 1024 * 1024;
 
-export function AttachEvidenceControl({ event, propertyId, disabled, onAttached, label = 'Attach evidence', variant = 'inline', store = 'ASK_EVIDENCE' }: {
+export function AttachEvidenceControl({ event, propertyId, disabled, onAttached, label = 'Attach evidence', variant = 'inline', store = 'ASK_EVIDENCE', className }: {
   event: { entityType: string | null | undefined; id: string; title: string };
   propertyId?: string;
   disabled?: boolean;
@@ -32,6 +33,7 @@ export function AttachEvidenceControl({ event, propertyId, disabled, onAttached,
    * Home Record through the canonical workflow upload and the callback receives the record id (owner ruling D-P5).
    */
   store?: 'ASK_EVIDENCE' | 'HOME_RECORDS';
+  className?: string;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState<'IDLE' | 'UPLOADING' | 'ERROR'>('IDLE');
@@ -63,7 +65,7 @@ export function AttachEvidenceControl({ event, propertyId, disabled, onAttached,
   };
 
   return (
-    <div className={variant === 'composer' ? 'relative' : 'mt-3'}>
+    <div className={cn(variant === 'composer' ? 'relative' : 'mt-3', className)}>
       <input
         ref={inputRef} type="file" accept={EVIDENCE_UPLOAD_ALLOWED_TYPES.join(',')} className="sr-only" tabIndex={-1}
         aria-label={`Attach evidence file for ${event.title}`}

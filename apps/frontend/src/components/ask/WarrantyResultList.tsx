@@ -144,28 +144,32 @@ function WarrantyDetail({ warrantyId, expectedPropertyId, fallbackItem, disabled
           {warranty.coverageDetails || 'No coverage details are recorded. Add them so future repair and coverage decisions have the right context.'}
         </p>
       </section>
-      {onAction && correctionActions.length > 0 && <section className="mt-5 border-t border-slate-200 pt-4" aria-labelledby={`warranty-edit-${warrantyId}`}>
-        <div className="flex items-center gap-2">
-          <Pencil className="h-4 w-4 text-teal-700" aria-hidden="true" />
-          <h5 id={`warranty-edit-${warrantyId}`} className="text-sm font-semibold text-slate-950">Edit warranty</h5>
+      {onAction && correctionActions.length > 0 && <section className="mt-5 border-t border-slate-200 pt-4" aria-labelledby={`warranty-manage-${warrantyId}`}>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <Pencil className="h-4 w-4 text-teal-700" aria-hidden="true" />
+              <h5 id={`warranty-manage-${warrantyId}`} className="text-sm font-semibold text-slate-950">Manage warranty</h5>
+            </div>
+            <p className="mt-1 text-sm text-slate-600">Changes are reviewed before saving.</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2" data-warranty-actions="">
+            <CorrectionActions className="mt-0" actions={correctionActions} subject={warranty.providerName} entityType={fallbackItem.entityType} entityId={fallbackItem.id} disabled={disabled} onAction={onAction} />
+            <AttachEvidenceControl
+              className="mt-0"
+              event={{ entityType: fallbackItem.entityType, id: fallbackItem.id, title: warranty.providerName }}
+              propertyId={expectedPropertyId}
+              disabled={disabled}
+              label="Attach document"
+              onAttached={(documentId) => onAction(fallbackItem.entityType, fallbackItem.id, EVIDENCE_ATTACH_MESSAGES.WARRANTY, 'CAPTURE_EVIDENCE_CONFIRM', 'MUTATE_RECORD', documentId)}
+            />
+          </div>
         </div>
-        <p className="mt-1 text-sm text-slate-600">Change any details in one place. Cozy shows only what changed for your review before saving.</p>
-        <CorrectionActions actions={correctionActions} subject={warranty.providerName} entityType={fallbackItem.entityType} entityId={fallbackItem.id} disabled={disabled} onAction={onAction} />
       </section>}
       {correctionActions.length === 0 && <div className="mt-5 flex gap-3 border-t border-slate-200 pt-4 text-sm text-slate-600" data-warranty-edit-unavailable="">
         <LockKeyhole className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" aria-hidden="true" />
         <p><span className="font-semibold text-slate-800">Editing unavailable.</span> Your current access does not allow changes to this warranty.</p>
       </div>}
-      {onAction && correctionActions.length > 0 && (
-        <AttachEvidenceControl
-          event={{ entityType: fallbackItem.entityType, id: fallbackItem.id, title: warranty.providerName }}
-          propertyId={expectedPropertyId}
-          disabled={disabled}
-          label="Attach a document"
-          onAttached={(documentId) => onAction(fallbackItem.entityType, fallbackItem.id, EVIDENCE_ATTACH_MESSAGES.WARRANTY, 'CAPTURE_EVIDENCE_CONFIRM', 'MUTATE_RECORD', documentId)}
-        />
-      )}
-      <p className="mt-4 text-xs text-slate-500">Current canonical warranty record.</p>
     </>}
   </aside>;
 }

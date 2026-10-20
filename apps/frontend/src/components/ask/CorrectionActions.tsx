@@ -1,6 +1,7 @@
 'use client';
 
 import type { AskItemActionInteractionType } from '@/features/ask/types';
+import { cn } from '@/lib/utils';
 
 type CorrectionAction = { id: string; label: string; message: string; operationId: string; interactionType: AskItemActionInteractionType };
 
@@ -15,13 +16,14 @@ export type CorrectionActionHandler = (
 // The correction buttons a record's inline detail offers. Up to three sit inline; a longer list is folded behind one
 // "Correct a detail" disclosure so the detail stays readable. Each button dispatches its exact declared action with
 // the record's own identity.
-export function CorrectionActions({ actions, subject, entityType, entityId, disabled, onAction }: {
+export function CorrectionActions({ actions, subject, entityType, entityId, disabled, onAction, className }: {
   actions: readonly CorrectionAction[];
   subject: string;
   entityType: string | null | undefined;
   entityId: string;
   disabled?: boolean;
   onAction: CorrectionActionHandler;
+  className?: string;
 }) {
   if (actions.length === 0) return null;
   const buttons = actions.map((action) => (
@@ -34,9 +36,9 @@ export function CorrectionActions({ actions, subject, entityType, entityId, disa
     </button>
   ));
   const group = <div className="flex flex-wrap gap-2" role="group" aria-label={`Corrections for ${subject}`}>{buttons}</div>;
-  if (buttons.length <= 3) return <div className="mt-4">{group}</div>;
+  if (buttons.length <= 3) return <div className={cn('mt-4', className)}>{group}</div>;
   return (
-    <details className="mt-4 rounded-xl border border-slate-200 bg-white p-3">
+    <details className={cn('mt-4 rounded-xl border border-slate-200 bg-white p-3', className)}>
       <summary className="min-h-8 cursor-pointer text-sm font-semibold text-teal-800">Correct a detail</summary>
       <div className="mt-3">{group}</div>
     </details>

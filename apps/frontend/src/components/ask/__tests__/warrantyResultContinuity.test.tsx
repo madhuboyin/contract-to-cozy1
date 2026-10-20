@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { BlockView } from '../blocks/registry';
 import { WarrantyResultList } from '../WarrantyResultList';
 import { AskBlockActionContext } from '../blocks/context';
@@ -119,6 +119,10 @@ test('warranty detail shows declared correction actions with exact identity, and
   }
   const first = render(<Harness />);
   fireEvent.click(screen.getByRole('button', { name: 'Acme Home Warranty' }));
+  const actions = (await screen.findByText('Manage warranty')).closest('section')!;
+  expect(within(actions).getByRole('button', { name: /Edit warranty for/ })).toBeInTheDocument();
+  expect(within(actions).getByRole('button', { name: /Attach document for/ })).toBeInTheDocument();
+  expect(screen.queryByText('Current canonical warranty record.')).not.toBeInTheDocument();
   fireEvent.click(await screen.findByRole('button', { name: /Edit warranty for/ }));
   expect(onAction).toHaveBeenCalledWith('WARRANTY', 'warranty-0', 'Edit this warranty.', 'WARRANTY_UPDATE', 'MUTATE_RECORD');
   first.unmount();
