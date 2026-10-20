@@ -1,0 +1,46 @@
+{
+  "contractVersion": "ask-intake-v1",
+  "generatedAt": "2026-10-20T00:14:05.676Z",
+  "propertyId": "ask-property-fixture",
+  "recordId": "248b3888-fa39-4d5f-a15d-f29856dd1ce7",
+  "versionId": "b2b8a6c1-efea-472d-ad9a-76b03084a1a5",
+  "title": "receipt",
+  "state": "UPLOADED",
+  "kind": null,
+  "choice": null,
+  "needsDetails": null,
+  "classification": null,
+  "candidates": [],
+  "missingRequired": [],
+  "labelDraft": null,
+  "inspection": null,
+  "result": null,
+  "provenance": {
+    "original": {
+      "recordId": "248b3888-fa39-4d5f-a15d-f29856dd1ce7",
+      "versionId": "b2b8a6c1-efea-472d-ad9a-76b03084a1a5",
+      "fileName": "water-heater-receipt.pdf",
+      "mimeType": "application/pdf",
+      "sizeBytes": 90000,
+      "sha256": "h-mvfxkmwr-11000000000000000000000000000000000000000000000000000",
+      "uploadedAt": "2026-10-20T00:14:05.308Z",
+      "scanStatus": "CLEAN",
+      "contentChecks": "Checked that the file type matches its contents and scanned for embedded executables and active content. This is not a full antivirus scan."
+    },
+    "reader": {
+      "status": "NOT_RECORDED",
+      "reason": "This file has not been read yet."
+    },
+    "pageAndRegion": {
+      "status": "NOT_RECORDED",
+      "reason": "Nothing has been read from this file yet."
+    }
+  },
+  "disclosures": {
+    "retention": "The original file is kept in your Home Records until you remove it. Removing it moves it to the trash for 30 days, then it is deleted unless a retention rule or legal hold keeps it.",
+    "sharing": "Household members can see the file according to the sensitivity you choose. It is not shared outside your household.",
+    "modelProcessing": "To read a warranty, receipt, insurance policy or inspection report, the file is sent to Google Gemini, an AI service, to extract the details. Nothing is sent until you choose to read it.",
+    "localProcessing": "An appliance label photo is read on our server with text recognition. It is not sent to an AI service. The photo is kept as the original; the text it contains is kept for 7 days to build the draft.",
+    "confirmation": "Reading a file only proposes details. Nothing is added to your home until you accept it. Anything you reject, or leave undecided, is never added."
+  }
+}

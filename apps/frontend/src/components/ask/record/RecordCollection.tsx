@@ -91,7 +91,7 @@ export function RecordCollection<Row extends { id: string }>({ sectionId, label,
     <section aria-labelledby="ask-record-collection-title" data-record-collection={sectionId}>
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div className="min-w-0">
-          <Link href={backHref} className="text-sm font-semibold text-emerald-900 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700">← All record sections</Link>
+          <Link href={backHref} className="no-brand-style text-sm font-semibold text-emerald-900 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700">← All record sections</Link>
           <h2 id="ask-record-collection-title" className="mt-1 text-2xl font-semibold tracking-[-0.02em] text-slate-950">{label}</h2>
           {page && <p className="mt-1 text-sm text-slate-600" role="status" data-record-collection-count>
             {page.total === 0 ? (filterActive ? 'No matches' : 'None recorded') : `Showing ${rows.length} of ${page.total}${filterActive ? ' matching' : ''}`} · sorted by {page.sort.label.toLowerCase()}

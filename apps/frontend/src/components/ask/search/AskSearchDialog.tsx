@@ -14,7 +14,7 @@ const GROUP_HEADINGS = { RECORD: 'Home record', WORK: 'Work', SAVED: 'Saved', HI
  * are grouped by kind with their home, status and date, and open the exact place they live. A kind that could not be searched is named,
  * never silently left out. The text stays in this dialog and is cleared when it closes.
  */
-export function AskSearchDialog({ open, onOpenChange, propertyId }: { open: boolean; onOpenChange: (open: boolean) => void; propertyId: string | undefined }) {
+export function AskSearchDialog({ open, onOpenChange, propertyId, returnFocusRef }: { open: boolean; onOpenChange: (open: boolean) => void; propertyId: string | undefined; /** The control that opened the dialog: focus goes back to it when the dialog closes (a controlled dialog has no trigger of its own). */ returnFocusRef?: React.RefObject<HTMLElement | null> }) {
   const router = useRouter();
   const [query, setQuery] = useState('');
   const { response, status, retry, tooShort } = useAskSearch(propertyId, query, open);
@@ -27,7 +27,7 @@ export function AskSearchDialog({ open, onOpenChange, propertyId }: { open: bool
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[85vh] w-[calc(100vw-2rem)] max-w-2xl overflow-y-auto p-0 sm:rounded-2xl" aria-describedby="ask-search-description">
+      <DialogContent className="max-h-[85vh] w-[calc(100vw-2rem)] max-w-2xl overflow-y-auto p-0 sm:rounded-2xl" aria-describedby="ask-search-description" onCloseAutoFocus={(event) => { if (returnFocusRef?.current) { event.preventDefault(); returnFocusRef.current.focus(); } }}>
         <div className="border-b border-slate-200 px-4 pb-3 pt-4">
           <DialogTitle className="text-lg font-semibold text-slate-950">Search your home</DialogTitle>
           <DialogDescription id="ask-search-description" className="mt-1 text-sm text-slate-600">Your home record, work, saved results, conversations, and what Ask can do for the selected home.</DialogDescription>

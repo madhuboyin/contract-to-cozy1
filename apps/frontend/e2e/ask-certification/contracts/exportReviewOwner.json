@@ -1,0 +1,362 @@
+{
+  "contractVersion": "ask-record-export-review-v1",
+  "propertyId": "ask-property-fixture",
+  "generatedAt": "2026-10-20T00:14:05.481Z",
+  "property": {
+    "name": null,
+    "address": "1 Main St",
+    "city": "Testville",
+    "state": "CA"
+  },
+  "accessRole": "OWNER",
+  "operatingMode": "OWNING",
+  "create": {
+    "allowed": true,
+    "requiredRole": "CONTRIBUTOR",
+    "reason": null
+  },
+  "pack": {
+    "format": "PDF",
+    "sectionsSelectable": true,
+    "downloadableBy": "CREATOR",
+    "recordExpiresInDays": 30
+  },
+  "sharing": {
+    "requiredRole": "CONTRIBUTOR",
+    "defaultExpiryDays": 14,
+    "copy": "REDACTED"
+  },
+  "alwaysIncluded": {
+    "label": "Home address",
+    "ownerFields": [
+      "addressLine1",
+      "city",
+      "state",
+      "zipCode"
+    ],
+    "sharedFields": [
+      "city",
+      "state"
+    ],
+    "withheldFromShared": [
+      "addressLine1",
+      "zipCode"
+    ]
+  },
+  "sections": [
+    {
+      "id": "property-facts",
+      "label": "Property details",
+      "applicability": "APPLICABLE",
+      "state": "INCLUDED",
+      "packPath": "property",
+      "reason": null,
+      "note": "Only the headline facts. Property Context completeness, known facts by area, and their sources are not in the pack. The home’s address is on every pack’s cover whatever is selected.",
+      "ownerFields": [
+        "nickname",
+        "dwellingType",
+        "propertyUse",
+        "yearBuilt",
+        "livingAreaSqft"
+      ],
+      "sharedFields": [
+        "dwellingType",
+        "yearBuilt",
+        "livingAreaSqft"
+      ],
+      "withheldFromShared": [
+        "nickname",
+        "propertyUse"
+      ]
+    },
+    {
+      "id": "rooms",
+      "label": "Rooms",
+      "applicability": "APPLICABLE",
+      "state": "INCLUDED",
+      "packPath": "inventory.rooms",
+      "reason": null,
+      "note": "Room names only: floors, item counts, and open maintenance are not in the pack.",
+      "ownerFields": [
+        "id",
+        "name"
+      ],
+      "sharedFields": [
+        "name"
+      ],
+      "withheldFromShared": [
+        "id"
+      ]
+    },
+    {
+      "id": "inventory",
+      "label": "Systems and inventory",
+      "applicability": "APPLICABLE",
+      "state": "INCLUDED",
+      "packPath": "inventory.items",
+      "reason": null,
+      "note": "The same inventory rows the Record and Ask list (items they hide are not exported).",
+      "ownerFields": [
+        "name",
+        "category",
+        "condition",
+        "brand",
+        "modelNumber",
+        "serialNumber",
+        "purchasedOn",
+        "purchaseCostCents",
+        "replacementCostCents",
+        "room",
+        "documents"
+      ],
+      "sharedFields": [
+        "name",
+        "category",
+        "condition",
+        "brand",
+        "roomName"
+      ],
+      "withheldFromShared": [
+        "modelNumber",
+        "serialNumber",
+        "purchasedOn",
+        "purchaseCostCents",
+        "replacementCostCents",
+        "documents"
+      ]
+    },
+    {
+      "id": "documents",
+      "label": "Documents",
+      "applicability": "APPLICABLE",
+      "state": "EXCLUDED",
+      "packPath": null,
+      "reason": "The pack has no documents section. Documents appear only as transitional legacy file links attached to exported inventory items, insurance policies, and warranties (deleted files and links on items the Record hides are excluded).",
+      "note": null,
+      "ownerFields": [],
+      "sharedFields": [],
+      "withheldFromShared": []
+    },
+    {
+      "id": "warranties",
+      "label": "Warranties",
+      "applicability": "APPLICABLE",
+      "state": "INCLUDED",
+      "packPath": "coverage.warranties",
+      "reason": null,
+      "note": null,
+      "ownerFields": [
+        "providerName",
+        "policyNumber",
+        "startDate",
+        "expiryDate",
+        "coverageDetails",
+        "documents"
+      ],
+      "sharedFields": [
+        "providerName",
+        "startDate",
+        "expiryDate"
+      ],
+      "withheldFromShared": [
+        "policyNumber",
+        "coverageDetails",
+        "documents"
+      ]
+    },
+    {
+      "id": "timeline",
+      "label": "Home timeline",
+      "applicability": "APPLICABLE",
+      "state": "EXCLUDED",
+      "packPath": null,
+      "reason": "The pack has no timeline section.",
+      "note": null,
+      "ownerFields": [],
+      "sharedFields": [],
+      "withheldFromShared": []
+    },
+    {
+      "id": "maintenance-history",
+      "label": "Maintenance history",
+      "applicability": "APPLICABLE",
+      "state": "INCLUDED",
+      "packPath": "maintenance.tasks",
+      "reason": null,
+      "note": "Completed maintenance only, the same rows the Record’s maintenance history lists; open and cancelled work is not exported.",
+      "ownerFields": [
+        "title",
+        "status",
+        "priority",
+        "riskLevel",
+        "frequency",
+        "nextDueDate",
+        "lastCompletedDate",
+        "estimatedCost",
+        "actualCost",
+        "assetType",
+        "source"
+      ],
+      "sharedFields": [
+        "title",
+        "status",
+        "priority",
+        "frequency",
+        "lastCompletedDate"
+      ],
+      "withheldFromShared": [
+        "riskLevel",
+        "nextDueDate",
+        "estimatedCost",
+        "actualCost",
+        "assetType",
+        "source"
+      ]
+    },
+    {
+      "id": "inspections",
+      "label": "Inspections",
+      "applicability": "APPLICABLE",
+      "state": "EXCLUDED",
+      "packPath": null,
+      "reason": "The pack has no inspections section.",
+      "note": null,
+      "ownerFields": [],
+      "sharedFields": [],
+      "withheldFromShared": []
+    },
+    {
+      "id": "permits",
+      "label": "Permits",
+      "applicability": "APPLICABLE",
+      "state": "EXCLUDED",
+      "packPath": null,
+      "reason": "The pack has no permits section.",
+      "note": null,
+      "ownerFields": [],
+      "sharedFields": [],
+      "withheldFromShared": []
+    },
+    {
+      "id": "projects-renovations",
+      "label": "Projects and renovations",
+      "applicability": "APPLICABLE",
+      "state": "EXCLUDED",
+      "packPath": null,
+      "reason": "The pack has no projects or renovations section.",
+      "note": null,
+      "ownerFields": [],
+      "sharedFields": [],
+      "withheldFromShared": []
+    },
+    {
+      "id": "incidents-claims",
+      "label": "Incidents and claims",
+      "applicability": "APPLICABLE",
+      "state": "EXCLUDED",
+      "packPath": null,
+      "reason": "The pack has no incidents or claims section.",
+      "note": null,
+      "ownerFields": [],
+      "sharedFields": [],
+      "withheldFromShared": []
+    },
+    {
+      "id": "coverage",
+      "label": "Coverage and policies",
+      "applicability": "APPLICABLE",
+      "state": "INCLUDED",
+      "packPath": "coverage.insurancePolicies",
+      "reason": null,
+      "note": "Insurance policies only, with the policy number, premium, and coverage amount in the owner’s copy.",
+      "ownerFields": [
+        "providerName",
+        "policyNumber",
+        "startDate",
+        "expiryDate",
+        "premium",
+        "coverageAmount",
+        "documents"
+      ],
+      "sharedFields": [
+        "providerName",
+        "startDate",
+        "expiryDate"
+      ],
+      "withheldFromShared": [
+        "policyNumber",
+        "premium",
+        "coverageAmount",
+        "documents"
+      ]
+    },
+    {
+      "id": "financing-ownership",
+      "label": "Financing and ownership",
+      "applicability": "APPLICABLE",
+      "state": "EXCLUDED",
+      "packPath": null,
+      "reason": "The pack has no financing or ownership-cost section.",
+      "note": null,
+      "ownerFields": [],
+      "sharedFields": [],
+      "withheldFromShared": []
+    },
+    {
+      "id": "buyer-records",
+      "label": "Buyer records",
+      "applicability": "NOT_APPLICABLE",
+      "state": "EXCLUDED",
+      "packPath": null,
+      "reason": "The pack has no buyer records section.",
+      "note": null,
+      "ownerFields": [],
+      "sharedFields": [],
+      "withheldFromShared": []
+    },
+    {
+      "id": "seller-records",
+      "label": "Seller records",
+      "applicability": "APPLICABLE",
+      "state": "EXCLUDED",
+      "packPath": null,
+      "reason": "The pack has no seller records section.",
+      "note": null,
+      "ownerFields": [],
+      "sharedFields": [],
+      "withheldFromShared": []
+    },
+    {
+      "id": "household-access",
+      "label": "Household access",
+      "applicability": "APPLICABLE",
+      "state": "EXCLUDED",
+      "packPath": null,
+      "reason": "The pack has no household section, and household membership is never exported.",
+      "note": null,
+      "ownerFields": [],
+      "sharedFields": [],
+      "withheldFromShared": []
+    }
+  ],
+  "included": [
+    "property-facts",
+    "rooms",
+    "inventory",
+    "warranties",
+    "maintenance-history",
+    "coverage"
+  ],
+  "excluded": [
+    "documents",
+    "timeline",
+    "inspections",
+    "permits",
+    "projects-renovations",
+    "incidents-claims",
+    "financing-ownership",
+    "buyer-records",
+    "seller-records",
+    "household-access"
+  ]
+}

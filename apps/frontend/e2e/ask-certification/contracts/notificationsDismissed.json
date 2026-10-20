@@ -1,0 +1,99 @@
+{
+  "contractVersion": "ask-notification-v1",
+  "generatedAt": "2026-10-20T00:14:05.644Z",
+  "view": "DISMISSED",
+  "total": 1,
+  "unreadCount": 4,
+  "dismissedCount": 1,
+  "nextCursor": null,
+  "truncated": false,
+  "query": {
+    "unreadOnly": false,
+    "category": null,
+    "propertyId": null
+  },
+  "filterOptions": {
+    "categories": [
+      {
+        "value": "SAFETY",
+        "label": "Safety"
+      },
+      {
+        "value": "ACTIVE_DAMAGE",
+        "label": "Active damage"
+      },
+      {
+        "value": "MATERIAL_DEADLINE",
+        "label": "Deadlines"
+      },
+      {
+        "value": "WORKFLOW",
+        "label": "Your requests and claims"
+      },
+      {
+        "value": "MAINTENANCE",
+        "label": "Maintenance"
+      },
+      {
+        "value": "COVERAGE",
+        "label": "Coverage"
+      },
+      {
+        "value": "PROJECT",
+        "label": "Projects"
+      },
+      {
+        "value": "RECALL",
+        "label": "Recalls"
+      },
+      {
+        "value": "ACCOUNT",
+        "label": "Account"
+      },
+      {
+        "value": "NEIGHBORHOOD",
+        "label": "Neighborhood"
+      },
+      {
+        "value": "GENERAL",
+        "label": "General"
+      },
+      {
+        "value": "REFINANCE",
+        "label": "Refinance alerts"
+      },
+      {
+        "value": "SAVINGS_BENEFITS",
+        "label": "Savings and benefits"
+      }
+    ],
+    "properties": [
+      {
+        "value": "ask-property-fixture",
+        "label": "1 Main St, Testville"
+      }
+    ]
+  },
+  "items": [
+    {
+      "id": "62b9e12e-d0d4-4015-85ee-6c633cbee766",
+      "type": "CLAIM_SUBMITTED",
+      "category": "WORKFLOW",
+      "categoryLabel": "Your requests and claims",
+      "urgency": "MATERIAL",
+      "title": "An old notice",
+      "message": "Something changed.",
+      "whyItAppeared": "Something you started, a request, claim or booking, changed.",
+      "propertyId": "ask-property-fixture",
+      "propertyLabel": "1 Main St, Testville",
+      "propertyAccess": "ACCESSIBLE",
+      "createdAt": "2026-10-20T00:14:05.306Z",
+      "expiresAt": null,
+      "expired": false,
+      "isRead": false,
+      "dismissed": true,
+      "continuationKind": "NONE",
+      "deliveryPaused": null
+    }
+  ]
+}

@@ -1,0 +1,274 @@
+{
+  "contractVersion": "ask-record-index-v1",
+  "propertyId": "ask-property-fixture",
+  "generatedAt": "2026-10-20T00:14:05.397Z",
+  "accessRole": "OWNER",
+  "operatingMode": "OWNING",
+  "property": {
+    "name": null,
+    "address": "1 Main St",
+    "city": "Testville",
+    "state": "CA"
+  },
+  "completeness": {
+    "state": "AVAILABLE",
+    "percent": 13,
+    "pendingDetails": 63
+  },
+  "partial": false,
+  "sections": [
+    {
+      "id": "property-facts",
+      "label": "Property details",
+      "scope": "Structure, use, systems, safety and other governed home facts.",
+      "freshnessSource": "Property Context completeness",
+      "pagedCollection": false,
+      "count": 9,
+      "countLabel": "known facts",
+      "freshAsOf": null,
+      "primaryAction": {
+        "label": "Review details",
+        "question": "How complete is my home record?"
+      },
+      "state": "AVAILABLE",
+      "reasonCode": null
+    },
+    {
+      "id": "rooms",
+      "label": "Rooms",
+      "scope": "Rooms, floor placement, item counts and open maintenance.",
+      "freshnessSource": "Most recently updated room",
+      "pagedCollection": true,
+      "count": 5,
+      "countLabel": "rooms",
+      "freshAsOf": "2026-10-20T00:14:05.278Z",
+      "primaryAction": {
+        "label": "View rooms",
+        "question": "Show me my home by room."
+      },
+      "state": "AVAILABLE",
+      "reasonCode": null
+    },
+    {
+      "id": "inventory",
+      "label": "Systems and inventory",
+      "scope": "Appliances, systems and belongings with condition and verification.",
+      "freshnessSource": "Most recently updated item",
+      "pagedCollection": true,
+      "count": 0,
+      "countLabel": "items",
+      "freshAsOf": null,
+      "primaryAction": {
+        "label": "View inventory",
+        "question": "Show me my inventory."
+      },
+      "state": "AVAILABLE",
+      "reasonCode": null
+    },
+    {
+      "id": "documents",
+      "label": "Documents",
+      "scope": "Home records and vault documents, plus extracted candidates awaiting review.",
+      "freshnessSource": "Most recently added document",
+      "pagedCollection": true,
+      "count": 7,
+      "countLabel": "documents",
+      "freshAsOf": "2026-10-20T00:14:05.321Z",
+      "primaryAction": {
+        "label": "View documents",
+        "question": "Show me my home documents."
+      },
+      "state": "AVAILABLE",
+      "reasonCode": null
+    },
+    {
+      "id": "warranties",
+      "label": "Warranties",
+      "scope": "Active and expired warranties with providers and dates.",
+      "freshnessSource": "Warranty expiry dates",
+      "pagedCollection": true,
+      "count": 0,
+      "countLabel": "warranties",
+      "freshAsOf": null,
+      "primaryAction": {
+        "label": "View warranties",
+        "question": "Show me my warranties."
+      },
+      "state": "AVAILABLE",
+      "reasonCode": null
+    },
+    {
+      "id": "timeline",
+      "label": "Home timeline",
+      "scope": "Events in the home’s history, with how well each is verified.",
+      "freshnessSource": "Most recent event date",
+      "pagedCollection": true,
+      "count": 0,
+      "countLabel": "events",
+      "freshAsOf": null,
+      "primaryAction": {
+        "label": "View timeline",
+        "question": "Show me my home timeline."
+      },
+      "state": "AVAILABLE",
+      "reasonCode": null
+    },
+    {
+      "id": "maintenance-history",
+      "label": "Maintenance history",
+      "scope": "Completed and open maintenance work.",
+      "freshnessSource": "Most recent completion",
+      "pagedCollection": true,
+      "count": 0,
+      "countLabel": "completed tasks",
+      "freshAsOf": null,
+      "primaryAction": {
+        "label": "View maintenance",
+        "question": "What is the status of my home maintenance?"
+      },
+      "state": "AVAILABLE",
+      "reasonCode": null
+    },
+    {
+      "id": "inspections",
+      "label": "Inspections",
+      "scope": "Inspection reports and their findings.",
+      "freshnessSource": "Most recent inspection date",
+      "pagedCollection": true,
+      "count": 0,
+      "countLabel": "reports",
+      "freshAsOf": null,
+      "primaryAction": {
+        "label": "View inspections",
+        "question": "Show me my inspection reports."
+      },
+      "state": "AVAILABLE",
+      "reasonCode": null
+    },
+    {
+      "id": "permits",
+      "label": "Permits",
+      "scope": "Permits and their approval status.",
+      "freshnessSource": "Most recent permit issue date",
+      "pagedCollection": true,
+      "count": 0,
+      "countLabel": "permits",
+      "freshAsOf": null,
+      "primaryAction": {
+        "label": "View permits",
+        "question": "What is the status of my permits?"
+      },
+      "state": "AVAILABLE",
+      "reasonCode": null
+    },
+    {
+      "id": "projects-renovations",
+      "label": "Projects and renovations",
+      "scope": "Home projects and renovation cases.",
+      "freshnessSource": "Most recently created project",
+      "pagedCollection": true,
+      "count": 0,
+      "countLabel": "projects",
+      "freshAsOf": null,
+      "primaryAction": {
+        "label": "View projects",
+        "question": "Show me my home projects."
+      },
+      "state": "AVAILABLE",
+      "reasonCode": null
+    },
+    {
+      "id": "incidents-claims",
+      "label": "Incidents and claims",
+      "scope": "Home incidents and insurance claims.",
+      "freshnessSource": "Most recent incident or claim",
+      "pagedCollection": true,
+      "count": 0,
+      "countLabel": "incidents and claims",
+      "freshAsOf": null,
+      "primaryAction": {
+        "label": "View claims",
+        "question": "What is the status of my incidents and claims?"
+      },
+      "state": "AVAILABLE",
+      "reasonCode": null
+    },
+    {
+      "id": "coverage",
+      "label": "Coverage and policies",
+      "scope": "Insurance policy records and their dates.",
+      "freshnessSource": "Policy expiry dates",
+      "pagedCollection": true,
+      "count": 0,
+      "countLabel": "policies",
+      "freshAsOf": null,
+      "primaryAction": {
+        "label": "Review coverage",
+        "question": "Review my coverage."
+      },
+      "state": "AVAILABLE",
+      "reasonCode": null
+    },
+    {
+      "id": "financing-ownership",
+      "label": "Financing and ownership",
+      "scope": "Saved financing scenarios for home projects.",
+      "freshnessSource": "Newest saved scenario",
+      "pagedCollection": true,
+      "count": 0,
+      "countLabel": "saved scenarios",
+      "freshAsOf": null,
+      "primaryAction": {
+        "label": "View financing",
+        "question": "Show me my financing and ownership costs."
+      },
+      "state": "AVAILABLE",
+      "reasonCode": null
+    },
+    {
+      "id": "buyer-records",
+      "label": "Buyer records",
+      "scope": "Buyer Plan tasks across the purchase.",
+      "freshnessSource": "Most recent task completion",
+      "pagedCollection": false,
+      "count": null,
+      "countLabel": null,
+      "freshAsOf": null,
+      "primaryAction": null,
+      "state": "NOT_APPLICABLE",
+      "reasonCode": "LIFECYCLE_INAPPLICABLE"
+    },
+    {
+      "id": "seller-records",
+      "label": "Seller records",
+      "scope": "Sale readiness checklist items.",
+      "freshnessSource": "Last checklist refresh",
+      "pagedCollection": true,
+      "count": 0,
+      "countLabel": "checklist items",
+      "freshAsOf": null,
+      "primaryAction": {
+        "label": "View sale prep",
+        "question": "Show me my sale readiness checklist."
+      },
+      "state": "AVAILABLE",
+      "reasonCode": null
+    },
+    {
+      "id": "household-access",
+      "label": "Household access",
+      "scope": "Who has access to this home and in what role.",
+      "freshnessSource": "Household membership",
+      "pagedCollection": true,
+      "count": 2,
+      "countLabel": "members",
+      "freshAsOf": null,
+      "primaryAction": {
+        "label": "View household",
+        "question": "Who has access to my home?"
+      },
+      "state": "AVAILABLE",
+      "reasonCode": null
+    }
+  ]
+}

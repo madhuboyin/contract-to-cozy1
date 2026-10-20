@@ -1,0 +1,9 @@
+{
+  "contractVersion": "ask-notification-v1",
+  "notificationId": "e451cfee-b802-40a0-a6ed-e9a4cce9d5e0",
+  "destination": null,
+  "legacy": false,
+  "outcome": "ACCESS_LOST",
+  "propertyId": null,
+  "message": "You no longer have access to the home this is about."
+}

@@ -1,0 +1,152 @@
+{
+  "contractVersion": "ask-intake-v1",
+  "generatedAt": "2026-10-20T00:14:05.683Z",
+  "propertyId": "ask-property-fixture",
+  "recordId": "353c856d-da61-44b9-8ff0-8284ca36f0bd",
+  "versionId": "96a06e83-20f8-43af-bbe3-37c6b2cf2335",
+  "title": "roof-report",
+  "state": "REVIEW",
+  "kind": "INSPECTION_REPORT",
+  "choice": null,
+  "needsDetails": null,
+  "classification": null,
+  "candidates": [
+    {
+      "id": "92a504ab-53ba-4487-8475-eb11e22ad0ad",
+      "fieldKey": "finding:1",
+      "label": "Roof · Major",
+      "proposedValue": "Shingles are lifting along the north slope.",
+      "reviewedValue": null,
+      "effectiveValue": "Shingles are lifting along the north slope.",
+      "confidence": 0.9,
+      "required": false,
+      "reviewStatus": "PENDING",
+      "citation": null,
+      "promoted": false,
+      "evidence": {
+        "status": "AVAILABLE",
+        "value": {
+          "page": 4,
+          "box": null,
+          "excerpt": "Shingles are lifting along the north slope",
+          "basis": "TEXT_MATCH",
+          "description": "Page 4"
+        }
+      },
+      "finding": {
+        "homeSystem": "Roof",
+        "severity": "Major",
+        "conditionRating": "POOR",
+        "recommendation": "REPAIR",
+        "interpretation": "This should be repaired soon.",
+        "location": "North slope",
+        "costRangeCents": {
+          "low": 50000,
+          "high": 120000
+        }
+      }
+    },
+    {
+      "id": "a6dabb89-6d5d-4765-8721-0852ced46373",
+      "fieldKey": "finding:2",
+      "label": "Electrical · Safety",
+      "proposedValue": "The main panel has no cover plate.",
+      "reviewedValue": null,
+      "effectiveValue": "The main panel has no cover plate.",
+      "confidence": 0.6,
+      "required": false,
+      "reviewStatus": "PENDING",
+      "citation": null,
+      "promoted": false,
+      "evidence": {
+        "status": "AVAILABLE",
+        "value": {
+          "page": 7,
+          "box": null,
+          "excerpt": "The main panel has no cover plate",
+          "basis": "TEXT_MATCH",
+          "description": "Page 7"
+        }
+      },
+      "finding": {
+        "homeSystem": "Electrical",
+        "severity": "Safety",
+        "conditionRating": "POOR",
+        "recommendation": "REPAIR",
+        "interpretation": "This should be repaired soon.",
+        "location": "North slope",
+        "costRangeCents": {
+          "low": 50000,
+          "high": 120000
+        }
+      }
+    },
+    {
+      "id": "a44547a0-f704-4057-9aea-2369b6ee30b2",
+      "fieldKey": "finding:3",
+      "label": "Plumbing · Minor",
+      "proposedValue": "A faucet in the garage drips.",
+      "reviewedValue": null,
+      "effectiveValue": "A faucet in the garage drips.",
+      "confidence": 0.35,
+      "required": false,
+      "reviewStatus": "PENDING",
+      "citation": null,
+      "promoted": false,
+      "evidence": {
+        "status": "NOT_RECORDED",
+        "reason": "The reader did not say where in the file this was found."
+      },
+      "finding": {
+        "homeSystem": "Plumbing",
+        "severity": "Minor",
+        "conditionRating": "POOR",
+        "recommendation": "REPAIR",
+        "interpretation": "This should be repaired soon.",
+        "location": "North slope",
+        "costRangeCents": {
+          "low": 50000,
+          "high": 120000
+        }
+      }
+    }
+  ],
+  "missingRequired": [],
+  "labelDraft": null,
+  "inspection": null,
+  "result": null,
+  "provenance": {
+    "original": {
+      "recordId": "353c856d-da61-44b9-8ff0-8284ca36f0bd",
+      "versionId": "96a06e83-20f8-43af-bbe3-37c6b2cf2335",
+      "fileName": "roof-inspection.pdf",
+      "mimeType": "application/pdf",
+      "sizeBytes": 90000,
+      "sha256": "h-mvfxkmx0-15000000000000000000000000000000000000000000000000000",
+      "uploadedAt": "2026-10-20T00:14:05.316Z",
+      "scanStatus": "CLEAN",
+      "contentChecks": "Checked that the file type matches its contents and scanned for embedded executables and active content. This is not a full antivirus scan."
+    },
+    "reader": {
+      "status": "AVAILABLE",
+      "value": {
+        "kind": "MODEL",
+        "name": "gemini-2.0-flash"
+      }
+    },
+    "pageAndRegion": {
+      "status": "AVAILABLE",
+      "value": {
+        "located": 2,
+        "total": 3
+      }
+    }
+  },
+  "disclosures": {
+    "retention": "The original file is kept in your Home Records until you remove it. Removing it moves it to the trash for 30 days, then it is deleted unless a retention rule or legal hold keeps it.",
+    "sharing": "Household members can see the file according to the sensitivity you choose. It is not shared outside your household.",
+    "modelProcessing": "To read a warranty, receipt, insurance policy or inspection report, the file is sent to Google Gemini, an AI service, to extract the details. Nothing is sent until you choose to read it.",
+    "localProcessing": "An appliance label photo is read on our server with text recognition. It is not sent to an AI service. The photo is kept as the original; the text it contains is kept for 7 days to build the draft.",
+    "confirmation": "Reading a file only proposes details. Nothing is added to your home until you accept it. Anything you reject, or leave undecided, is never added."
+  }
+}

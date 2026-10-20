@@ -1,0 +1,76 @@
+{
+  "contractVersion": "ask-record-collection-v1",
+  "propertyId": "ask-property-fixture",
+  "sectionId": "rooms",
+  "generatedAt": "2026-10-20T00:14:05.427Z",
+  "freshAsOf": null,
+  "total": 5,
+  "delivered": 5,
+  "nextCursor": null,
+  "truncated": false,
+  "notice": null,
+  "sort": {
+    "key": "sortOrder",
+    "label": "Home order, then name"
+  },
+  "query": {
+    "search": null,
+    "filters": {}
+  },
+  "filterOptions": [],
+  "rows": [
+    {
+      "id": "ce036ddb-2635-490a-bf68-50e78b7ee33b",
+      "name": "Kitchen",
+      "type": "Other",
+      "floorLevel": null,
+      "itemCount": 0,
+      "openTaskCount": 0,
+      "updatedAt": "2026-10-20T00:14:05.273Z",
+      "askQuestion": "Show me the items in my Kitchen."
+    },
+    {
+      "id": "51ffbe3f-599e-4922-ae5f-9e72b07c81e5",
+      "name": "Primary bedroom",
+      "type": "Other",
+      "floorLevel": null,
+      "itemCount": 0,
+      "openTaskCount": 0,
+      "updatedAt": "2026-10-20T00:14:05.276Z",
+      "askQuestion": "Show me the items in my Primary bedroom."
+    },
+    {
+      "id": "88047d2e-11b1-4bde-9190-a280a7bce6b3",
+      "name": "Garage",
+      "type": "Other",
+      "floorLevel": null,
+      "itemCount": 0,
+      "openTaskCount": 0,
+      "updatedAt": "2026-10-20T00:14:05.277Z",
+      "askQuestion": "Show me the items in my Garage."
+    },
+    {
+      "id": "6c1e6a69-eb64-47a5-bd66-4cb6aaf861d4",
+      "name": "Basement",
+      "type": "Other",
+      "floorLevel": null,
+      "itemCount": 0,
+      "openTaskCount": 0,
+      "updatedAt": "2026-10-20T00:14:05.277Z",
+      "askQuestion": "Show me the items in my Basement."
+    },
+    {
+      "id": "3036ac0c-0e10-4290-98d2-ec4b7aa56033",
+      "name": "Laundry room",
+      "type": "Other",
+      "floorLevel": null,
+      "itemCount": 0,
+      "openTaskCount": 0,
+      "updatedAt": "2026-10-20T00:14:05.278Z",
+      "askQuestion": "Show me the items in my Laundry room."
+    }
+  ],
+  "recordDetail": {
+    "state": "CONNECTED"
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "contractVersion": "ask-saved-v1",
+  "propertyId": "ask-property-fixture",
+  "artifactKey": "brief:a5499710-6f32-4eba-ae06-4b9ef7b59bd3",
+  "artifact": {
+    "entity": {
+      "type": "PROPERTY_BRIEF",
+      "id": "a5499710-6f32-4eba-ae06-4b9ef7b59bd3"
+    },
+    "title": "Home reference brief",
+    "summary": "Homeowner reference",
+    "createdAt": "2026-10-20T00:14:05.298Z",
+    "updatedAt": "2026-10-20T00:14:05.298Z",
+    "sourceAsOf": "2026-10-20T00:14:05.297Z",
+    "sortAt": "2026-10-20T00:14:05.298Z",
+    "freshness": {
+      "state": "CURRENT",
+      "reason": null
+    },
+    "visibility": {
+      "scope": "HOUSEHOLD",
+      "sensitivity": "SENSITIVE"
+    },
+    "reopen": {
+      "operationId": "PROPERTY_BRIEFS_LIST",
+      "entityType": "PROPERTY_BRIEF",
+      "entityId": "a5499710-6f32-4eba-ae06-4b9ef7b59bd3",
+      "decisionThreadId": null,
+      "contextVersion": "2026-10-20T00:14:05.298Z"
+    },
+    "reopenUnavailableReason": null,
+    "capabilities": {
+      "export": false,
+      "share": true
+    },
+    "artifactKey": "brief:a5499710-6f32-4eba-ae06-4b9ef7b59bd3",
+    "artifactType": "PROPERTY_BRIEF",
+    "category": "BRIEFING",
+    "owner": "property-brief",
+    "propertyId": "ask-property-fixture",
+    "sourceExecutionId": null,
+    "version": {
+      "behavior": "UPDATES_IN_PLACE",
+      "superseded": false,
+      "supersededBy": null,
+      "supersedes": null,
+      "label": "As of 2026-10-20"
+    },
+    "archived": {
+      "byOwner": false,
+      "byYou": false
+    }
+  },
+  "outcome": "AVAILABLE",
+  "message": "Ready to open."
+}

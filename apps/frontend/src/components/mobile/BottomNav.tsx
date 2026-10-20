@@ -35,8 +35,8 @@ export function BottomNav() {
               key={item.key}
               href={item.href}
               className={cn(
-                'flex min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[10px] font-semibold transition-colors',
-                active ? 'text-teal-700' : 'text-slate-500 hover:text-slate-800',
+                'no-brand-style flex min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[10px] font-semibold transition-colors',
+                active ? 'text-teal-700' : 'text-slate-600 hover:text-slate-800',
               )}
             >
               <Icon className="h-5 w-5" />

@@ -1,0 +1,142 @@
+{
+  "contractVersion": "ask-intake-v1",
+  "generatedAt": "2026-10-20T00:14:05.679Z",
+  "propertyId": "ask-property-fixture",
+  "recordId": "e6f4da3d-bd98-4f04-9ef0-df4a66105b04",
+  "versionId": "752b49a2-81a0-464e-983c-1edbbd4cadba",
+  "title": "water-heater-receipt",
+  "state": "REVIEW",
+  "kind": "RECEIPT",
+  "choice": null,
+  "needsDetails": null,
+  "classification": {
+    "kind": "RECEIPT",
+    "modelLabel": "RECEIPT",
+    "confidence": 0.92
+  },
+  "candidates": [
+    {
+      "id": "d946cb39-2fe1-473e-8814-6f0572f0eb96",
+      "fieldKey": "description",
+      "label": "What it was for",
+      "proposedValue": "Acme Plumbing",
+      "reviewedValue": null,
+      "effectiveValue": "Acme Plumbing",
+      "confidence": 0.92,
+      "required": true,
+      "reviewStatus": "PENDING",
+      "citation": "AI extraction",
+      "promoted": false,
+      "evidence": {
+        "status": "AVAILABLE",
+        "value": {
+          "page": 1,
+          "box": null,
+          "excerpt": "Paid to Acme Plumbing",
+          "basis": "TEXT_MATCH",
+          "description": "Page 1"
+        }
+      }
+    },
+    {
+      "id": "b10caf8e-ca5f-4a55-9092-9e3cc98e4d25",
+      "fieldKey": "amount",
+      "label": "Amount",
+      "proposedValue": "1200",
+      "reviewedValue": null,
+      "effectiveValue": "1200",
+      "confidence": 0.92,
+      "required": true,
+      "reviewStatus": "PENDING",
+      "citation": null,
+      "promoted": false,
+      "evidence": {
+        "status": "AVAILABLE",
+        "value": {
+          "page": 1,
+          "box": [
+            620,
+            700,
+            660,
+            960
+          ],
+          "excerpt": null,
+          "basis": "MODEL_REPORTED",
+          "description": "Page 1, right"
+        }
+      }
+    },
+    {
+      "id": "1edb3984-d7e6-4bc9-b2c9-71401ccb8f5e",
+      "fieldKey": "transactionDate",
+      "label": "Date",
+      "proposedValue": "2026-09-30",
+      "reviewedValue": null,
+      "effectiveValue": "2026-09-30",
+      "confidence": 0.92,
+      "required": true,
+      "reviewStatus": "PENDING",
+      "citation": null,
+      "promoted": false,
+      "evidence": {
+        "status": "NOT_RECORDED",
+        "reason": "The reader did not say where in the file this was found."
+      }
+    },
+    {
+      "id": "c1ccebd2-a9b2-4e53-b3c4-948a056246aa",
+      "fieldKey": "category",
+      "label": "Category",
+      "proposedValue": "REPAIR_SERVICE",
+      "reviewedValue": null,
+      "effectiveValue": "REPAIR_SERVICE",
+      "confidence": 0.92,
+      "required": false,
+      "reviewStatus": "PENDING",
+      "citation": null,
+      "promoted": false,
+      "evidence": {
+        "status": "NOT_RECORDED",
+        "reason": "The reader did not say where in the file this was found."
+      }
+    }
+  ],
+  "missingRequired": [],
+  "labelDraft": null,
+  "inspection": null,
+  "result": null,
+  "provenance": {
+    "original": {
+      "recordId": "e6f4da3d-bd98-4f04-9ef0-df4a66105b04",
+      "versionId": "752b49a2-81a0-464e-983c-1edbbd4cadba",
+      "fileName": "plumbing-receipt.pdf",
+      "mimeType": "application/pdf",
+      "sizeBytes": 90000,
+      "sha256": "h-mvfxkmwu-13000000000000000000000000000000000000000000000000000",
+      "uploadedAt": "2026-10-20T00:14:05.311Z",
+      "scanStatus": "CLEAN",
+      "contentChecks": "Checked that the file type matches its contents and scanned for embedded executables and active content. This is not a full antivirus scan."
+    },
+    "reader": {
+      "status": "AVAILABLE",
+      "value": {
+        "kind": "MODEL",
+        "name": "gemini-2.0-flash"
+      }
+    },
+    "pageAndRegion": {
+      "status": "AVAILABLE",
+      "value": {
+        "located": 2,
+        "total": 4
+      }
+    }
+  },
+  "disclosures": {
+    "retention": "The original file is kept in your Home Records until you remove it. Removing it moves it to the trash for 30 days, then it is deleted unless a retention rule or legal hold keeps it.",
+    "sharing": "Household members can see the file according to the sensitivity you choose. It is not shared outside your household.",
+    "modelProcessing": "To read a warranty, receipt, insurance policy or inspection report, the file is sent to Google Gemini, an AI service, to extract the details. Nothing is sent until you choose to read it.",
+    "localProcessing": "An appliance label photo is read on our server with text recognition. It is not sent to an AI service. The photo is kept as the original; the text it contains is kept for 7 days to build the draft.",
+    "confirmation": "Reading a file only proposes details. Nothing is added to your home until you accept it. Anything you reject, or leave undecided, is never added."
+  }
+}

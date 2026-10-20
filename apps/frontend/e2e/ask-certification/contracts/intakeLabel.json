@@ -1,0 +1,85 @@
+{
+  "contractVersion": "ask-intake-v1",
+  "generatedAt": "2026-10-20T00:14:05.685Z",
+  "propertyId": "ask-property-fixture",
+  "recordId": "2c93580f-a3e1-4457-870e-d9041ace7242",
+  "versionId": "c1f8d87a-2cdb-47a9-bbb3-3f518844542e",
+  "title": "label",
+  "state": "REVIEW",
+  "kind": "APPLIANCE_LABEL",
+  "choice": null,
+  "needsDetails": null,
+  "classification": null,
+  "candidates": [],
+  "missingRequired": [],
+  "labelDraft": {
+    "id": "95458711-d95c-4651-adfe-73321cf3fc4a",
+    "status": "DRAFT",
+    "fields": [
+      {
+        "key": "manufacturer",
+        "label": "Brand",
+        "value": "Rheem",
+        "confidence": 0.82
+      },
+      {
+        "key": "modelNumber",
+        "label": "Model number",
+        "value": "XE50M09",
+        "confidence": 0.71
+      },
+      {
+        "key": "serialNumber",
+        "label": "Serial number",
+        "value": null,
+        "confidence": null
+      },
+      {
+        "key": "upc",
+        "label": "Barcode (UPC)",
+        "value": null,
+        "confidence": null
+      },
+      {
+        "key": "sku",
+        "label": "SKU",
+        "value": null,
+        "confidence": null
+      }
+    ],
+    "itemId": null
+  },
+  "inspection": null,
+  "result": null,
+  "provenance": {
+    "original": {
+      "recordId": "2c93580f-a3e1-4457-870e-d9041ace7242",
+      "versionId": "c1f8d87a-2cdb-47a9-bbb3-3f518844542e",
+      "fileName": "water-heater-label.png",
+      "mimeType": "image/png",
+      "sizeBytes": 90000,
+      "sha256": "h-mvfxkmx4-17000000000000000000000000000000000000000000000000000",
+      "uploadedAt": "2026-10-20T00:14:05.321Z",
+      "scanStatus": "CLEAN",
+      "contentChecks": "Checked that the file type matches its contents and scanned for embedded executables and active content. This is not a full antivirus scan."
+    },
+    "reader": {
+      "status": "AVAILABLE",
+      "value": {
+        "kind": "LOCAL_OCR",
+        "name": "Text recognition on our server"
+      }
+    },
+    "pageAndRegion": {
+      "status": "NOT_RECORDED",
+      "reason": "Nothing has been read from this file yet."
+    }
+  },
+  "disclosures": {
+    "retention": "The original file is kept in your Home Records until you remove it. Removing it moves it to the trash for 30 days, then it is deleted unless a retention rule or legal hold keeps it.",
+    "sharing": "Household members can see the file according to the sensitivity you choose. It is not shared outside your household.",
+    "modelProcessing": "To read a warranty, receipt, insurance policy or inspection report, the file is sent to Google Gemini, an AI service, to extract the details. Nothing is sent until you choose to read it.",
+    "localProcessing": "An appliance label photo is read on our server with text recognition. It is not sent to an AI service. The photo is kept as the original; the text it contains is kept for 7 days to build the draft.",
+    "confirmation": "Reading a file only proposes details. Nothing is added to your home until you accept it. Anything you reject, or leave undecided, is never added."
+  }
+}

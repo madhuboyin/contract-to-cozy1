@@ -110,13 +110,13 @@ export function IntakeReadStep({ view, config, busy, onRead, onKeep, onDiscard }
 
 function EvidenceLine({ candidate }: { candidate: AskIntakeCandidate }) {
   const { evidence } = candidate;
-  if (evidence.status === 'NOT_RECORDED') return <p className="mt-0.5 text-xs text-slate-500" data-intake-evidence="none">{evidence.reason}</p>;
+  if (evidence.status === 'NOT_RECORDED') return <p className="mt-0.5 text-xs text-slate-600" data-intake-evidence="none">{evidence.reason}</p>;
   const { value } = evidence;
   return (
     <p className="mt-0.5 text-xs text-slate-600" data-intake-evidence={value.basis}>
       <span className="font-semibold text-slate-700">{value.description || 'Location recorded'}</span>
       {value.basis === 'MODEL_REPORTED' ? ' (reported by the reader, not checked)' : ' (found in the file’s text)'}
-      {value.excerpt ? <q className="mt-0.5 block break-words italic text-slate-500">…{value.excerpt}…</q> : null}
+      {value.excerpt ? <q className="mt-0.5 block break-words italic text-slate-600">…{value.excerpt}…</q> : null}
     </p>
   );
 }
@@ -130,7 +130,7 @@ function CandidateRow({ candidate, busy, editable, onReview }: { candidate: AskI
   return (
     <li className="px-3 py-2" data-intake-candidate={candidate.fieldKey}>
       <div className="flex flex-wrap items-baseline justify-between gap-x-3">
-        <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">{candidate.label}{candidate.required ? ' (needed)' : ''}</span>
+        <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">{candidate.label}{candidate.required ? ' (needed)' : ''}</span>
         <span className="text-xs text-slate-600">{candidateStatusLabel(candidate)} · <span className={confidence.low ? 'font-semibold text-amber-800' : undefined}>{confidence.text}</span></span>
       </div>
       {editing ? (
@@ -230,7 +230,7 @@ export function IntakeProvenance({ view }: { view: AskIntakeView }) {
         <dt className="font-semibold">Read by</dt><dd>{reader.status === 'AVAILABLE' ? reader.value.name : reader.reason}</dd>
         <dt className="font-semibold">Page and place</dt><dd>{pageAndRegion.status === 'NOT_RECORDED' ? pageAndRegion.reason : `Recorded for ${pageAndRegion.value.located} of ${pageAndRegion.value.total} details`}</dd>
       </dl>
-      <Link href={originalHref(view)} className="mt-2 inline-block font-semibold text-emerald-900 underline">Open the original in your Home Records</Link>
+      <Link href={originalHref(view)} className="no-brand-style mt-2 inline-block font-semibold text-emerald-900 underline">Open the original in your Home Records</Link>
     </details>
   );
 }

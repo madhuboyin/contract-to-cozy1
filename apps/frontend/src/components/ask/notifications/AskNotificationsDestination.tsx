@@ -81,7 +81,7 @@ export function AskNotificationsDestination() {
   });
 
   return (
-    <main className="h-full overflow-y-auto px-4 py-8 sm:px-6 lg:px-10" aria-labelledby="ask-notifications-title">
+    <section className="h-full overflow-y-auto px-4 py-8 sm:px-6 lg:px-10" aria-labelledby="ask-notifications-title">
       <AskWorkspaceMeasure>
         <p className="text-xs font-bold uppercase tracking-[0.14em] text-teal-700">Ask Cozy</p>
         <h1 id="ask-notifications-title" className="mt-2 text-3xl font-semibold tracking-[-0.025em] text-slate-950">Notifications</h1>
@@ -157,6 +157,6 @@ export function AskNotificationsDestination() {
           )}
         </section>
       </AskWorkspaceMeasure>
-    </main>
+    </section>
   );
 }

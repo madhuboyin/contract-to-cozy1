@@ -1,0 +1,12 @@
+{
+  "contractVersion": "ask-notification-v1",
+  "notificationId": "475d16e2-d026-4e66-8ab9-6f61e210ecde",
+  "destination": {
+    "kind": "SAVED",
+    "artifactKey": "seasonal:cmvfxkmwl0007mmvv5ym43bqj"
+  },
+  "legacy": false,
+  "outcome": "AVAILABLE",
+  "propertyId": "ask-property-fixture",
+  "message": "Ready to open."
+}

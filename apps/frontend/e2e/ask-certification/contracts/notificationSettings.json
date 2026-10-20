@@ -1,0 +1,314 @@
+{
+  "generatedAt": "2026-10-20T00:14:05.649Z",
+  "channels": [
+    {
+      "channel": "IN_APP",
+      "configurable": false,
+      "disclosure": "Notifications are always kept in your inbox so nothing important is lost. Muting a category pauses email only."
+    },
+    {
+      "channel": "EMAIL",
+      "configurable": true,
+      "disclosure": "Email is optional. Safety and active-damage notices are always sent. Quiet hours delay everything else."
+    }
+  ],
+  "unavailableChannels": [
+    {
+      "channel": "PUSH",
+      "reason": "Push notifications are not available yet."
+    },
+    {
+      "channel": "SMS",
+      "reason": "Text messages are not available yet."
+    },
+    {
+      "channel": "WHATSAPP",
+      "reason": "WhatsApp messages are not available yet."
+    }
+  ],
+  "quietHours": {
+    "start": null,
+    "end": null,
+    "timezone": "UTC"
+  },
+  "categories": [
+    {
+      "category": "SAFETY",
+      "label": "Safety",
+      "description": "Something that may affect safety was detected for your home.",
+      "canPause": false,
+      "email": {
+        "mode": "ON",
+        "snoozedUntil": null,
+        "cadence": null,
+        "defaultCadence": "IMMEDIATE"
+      },
+      "consent": {
+        "required": false,
+        "granted": false,
+        "version": null,
+        "disclosure": null
+      }
+    },
+    {
+      "category": "ACTIVE_DAMAGE",
+      "label": "Active damage",
+      "description": "Possible active damage was detected, so it is shown right away.",
+      "canPause": false,
+      "email": {
+        "mode": "ON",
+        "snoozedUntil": null,
+        "cadence": null,
+        "defaultCadence": "IMMEDIATE"
+      },
+      "consent": {
+        "required": false,
+        "granted": false,
+        "version": null,
+        "disclosure": null
+      }
+    },
+    {
+      "category": "MATERIAL_DEADLINE",
+      "label": "Deadlines",
+      "description": "A date you are tracking is coming up or has passed.",
+      "canPause": true,
+      "email": {
+        "mode": "ON",
+        "snoozedUntil": null,
+        "cadence": null,
+        "defaultCadence": "IMMEDIATE"
+      },
+      "consent": {
+        "required": false,
+        "granted": false,
+        "version": null,
+        "disclosure": null
+      }
+    },
+    {
+      "category": "WORKFLOW",
+      "label": "Your requests and claims",
+      "description": "Something you started, a request, claim or booking, changed.",
+      "canPause": true,
+      "email": {
+        "mode": "ON",
+        "snoozedUntil": null,
+        "cadence": null,
+        "defaultCadence": "IMMEDIATE"
+      },
+      "consent": {
+        "required": false,
+        "granted": false,
+        "version": null,
+        "disclosure": null
+      }
+    },
+    {
+      "category": "MAINTENANCE",
+      "label": "Maintenance",
+      "description": "A maintenance reminder for your home.",
+      "canPause": true,
+      "email": {
+        "mode": "ON",
+        "snoozedUntil": null,
+        "cadence": null,
+        "defaultCadence": "WEEKLY_BRIEF"
+      },
+      "consent": {
+        "required": false,
+        "granted": false,
+        "version": null,
+        "disclosure": null
+      }
+    },
+    {
+      "category": "COVERAGE",
+      "label": "Coverage",
+      "description": "Something changed on a policy or warranty you have recorded.",
+      "canPause": true,
+      "email": {
+        "mode": "ON",
+        "snoozedUntil": null,
+        "cadence": null,
+        "defaultCadence": "WEEKLY_BRIEF"
+      },
+      "consent": {
+        "required": false,
+        "granted": false,
+        "version": null,
+        "disclosure": null
+      }
+    },
+    {
+      "category": "PROJECT",
+      "label": "Projects",
+      "description": "A project or quote you are following has an update.",
+      "canPause": true,
+      "email": {
+        "mode": "ON",
+        "snoozedUntil": null,
+        "cadence": null,
+        "defaultCadence": "WEEKLY_BRIEF"
+      },
+      "consent": {
+        "required": false,
+        "granted": false,
+        "version": null,
+        "disclosure": null
+      }
+    },
+    {
+      "category": "RECALL",
+      "label": "Recalls",
+      "description": "A recall may apply to something in your home.",
+      "canPause": true,
+      "email": {
+        "mode": "ON",
+        "snoozedUntil": null,
+        "cadence": null,
+        "defaultCadence": "WEEKLY_BRIEF"
+      },
+      "consent": {
+        "required": false,
+        "granted": false,
+        "version": null,
+        "disclosure": null
+      }
+    },
+    {
+      "category": "ACCOUNT",
+      "label": "Account",
+      "description": "A notice about your account.",
+      "canPause": true,
+      "email": {
+        "mode": "ON",
+        "snoozedUntil": null,
+        "cadence": null,
+        "defaultCadence": "WEEKLY_BRIEF"
+      },
+      "consent": {
+        "required": false,
+        "granted": false,
+        "version": null,
+        "disclosure": null
+      }
+    },
+    {
+      "category": "NEIGHBORHOOD",
+      "label": "Neighborhood",
+      "description": "A change was noticed near your home.",
+      "canPause": true,
+      "email": {
+        "mode": "ON",
+        "snoozedUntil": null,
+        "cadence": null,
+        "defaultCadence": "WEEKLY_BRIEF"
+      },
+      "consent": {
+        "required": false,
+        "granted": false,
+        "version": null,
+        "disclosure": null
+      }
+    },
+    {
+      "category": "GENERAL",
+      "label": "General",
+      "description": "An update about your home.",
+      "canPause": true,
+      "email": {
+        "mode": "ON",
+        "snoozedUntil": null,
+        "cadence": null,
+        "defaultCadence": "WEEKLY_BRIEF"
+      },
+      "consent": {
+        "required": false,
+        "granted": false,
+        "version": null,
+        "disclosure": null
+      }
+    },
+    {
+      "category": "ALL",
+      "label": "Everything else",
+      "description": "An update about your home.",
+      "canPause": true,
+      "email": {
+        "mode": "ON",
+        "snoozedUntil": null,
+        "cadence": null,
+        "defaultCadence": "WEEKLY_BRIEF"
+      },
+      "consent": {
+        "required": false,
+        "granted": false,
+        "version": null,
+        "disclosure": null
+      }
+    },
+    {
+      "category": "REFINANCE",
+      "label": "Refinance alerts",
+      "description": "You asked to be told about refinance rate changes.",
+      "canPause": true,
+      "email": {
+        "mode": "ON",
+        "snoozedUntil": null,
+        "cadence": null,
+        "defaultCadence": "WEEKLY_BRIEF"
+      },
+      "consent": {
+        "required": true,
+        "granted": false,
+        "version": null,
+        "disclosure": "If you allow it, we email you when refinance rates cross a threshold you set. Rates are not advice. You can turn this off any time, and in-app alerts stay either way."
+      }
+    },
+    {
+      "category": "SAVINGS_BENEFITS",
+      "label": "Savings and benefits",
+      "description": "You asked to be told about savings and benefits.",
+      "canPause": true,
+      "email": {
+        "mode": "ON",
+        "snoozedUntil": null,
+        "cadence": null,
+        "defaultCadence": "WEEKLY_BRIEF"
+      },
+      "consent": {
+        "required": true,
+        "granted": false,
+        "version": null,
+        "disclosure": "If you allow it, we email you about savings and benefits deadlines and follow-ups you chose to track. You can turn this off any time, and in-app notices stay either way."
+      }
+    }
+  ],
+  "capabilitySettings": [
+    {
+      "id": "refinance-monitors",
+      "label": "Refinance rate monitors",
+      "description": "Each monitor has its own rate threshold, cadence and quiet hours, and can be paused or stopped.",
+      "question": "Show my refinance rate monitors."
+    },
+    {
+      "id": "savings-reminders",
+      "label": "Savings and benefits reminders",
+      "description": "Choose the minimum value and how many days ahead of a deadline you are reminded.",
+      "question": "Show me my savings opportunities."
+    },
+    {
+      "id": "home-briefing",
+      "label": "Home briefing",
+      "description": "Set when your home briefing is delivered and what it includes.",
+      "question": "Show my home briefing."
+    },
+    {
+      "id": "maintenance-reminders",
+      "label": "Maintenance reminders",
+      "description": "Reminders follow each task’s own schedule; change them on the task.",
+      "question": "What is the status of my home maintenance?"
+    }
+  ]
+}

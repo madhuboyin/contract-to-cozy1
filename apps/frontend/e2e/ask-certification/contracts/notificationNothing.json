@@ -1,0 +1,9 @@
+{
+  "contractVersion": "ask-notification-v1",
+  "notificationId": "4e3b6017-c5ad-42d9-bec7-1936e03476bc",
+  "destination": null,
+  "legacy": false,
+  "outcome": "UNAVAILABLE",
+  "propertyId": "ask-property-fixture",
+  "message": "This notification has nothing to open."
+}

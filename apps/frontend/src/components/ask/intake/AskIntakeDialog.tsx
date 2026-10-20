@@ -15,7 +15,7 @@ const PRIMARY_LINK = 'inline-flex min-h-11 items-center justify-center rounded-x
  * involves, then each proposed detail is accepted, edited, rejected or left for later. Nothing reaches the home without "Add to my home" or
  * "Add to inventory". Every step has a keyboard and form path: the camera, drop and paste are shortcuts to the same file chooser.
  */
-export function AskIntakeDialog({ open, onOpenChange, propertyId }: { open: boolean; onOpenChange: (open: boolean) => void; propertyId: string | undefined }) {
+export function AskIntakeDialog({ open, onOpenChange, propertyId, returnFocusRef }: { open: boolean; onOpenChange: (open: boolean) => void; propertyId: string | undefined; returnFocusRef?: React.RefObject<HTMLElement | null> }) {
   const intake = useAskIntake(propertyId, open);
   const { view, config, busy, error } = intake;
   const [kept, setKept] = useState(false);
@@ -73,7 +73,7 @@ export function AskIntakeDialog({ open, onOpenChange, propertyId }: { open: bool
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className={`max-h-[85vh] w-[calc(100vw-2rem)] max-w-xl overflow-y-auto p-0 sm:rounded-2xl ${dragging ? 'ring-2 ring-emerald-700' : ''}`} aria-describedby="ask-intake-description"
+        className={`max-h-[85vh] w-[calc(100vw-2rem)] max-w-xl overflow-y-auto p-0 sm:rounded-2xl ${dragging ? 'ring-2 ring-emerald-700' : ''}`} aria-describedby="ask-intake-description" onCloseAutoFocus={(event) => { if (returnFocusRef?.current) { event.preventDefault(); returnFocusRef.current.focus(); } }}
         onDragOver={(event) => { if (!view) { event.preventDefault(); setDragging(true); } }} onDragLeave={() => setDragging(false)} onDrop={onDrop} onPaste={onPaste}
       >
         <div className="border-b border-slate-200 px-4 pb-3 pt-4">

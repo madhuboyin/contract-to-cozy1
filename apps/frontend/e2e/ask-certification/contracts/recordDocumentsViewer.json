@@ -1,0 +1,151 @@
+{
+  "contractVersion": "ask-record-collection-v1",
+  "propertyId": "ask-property-fixture",
+  "sectionId": "documents",
+  "generatedAt": "2026-10-20T00:14:05.459Z",
+  "freshAsOf": null,
+  "total": 6,
+  "delivered": 6,
+  "nextCursor": null,
+  "truncated": false,
+  "notice": null,
+  "sort": {
+    "key": "addedAt",
+    "label": "Awaiting review first, then recently added"
+  },
+  "query": {
+    "search": null,
+    "filters": {}
+  },
+  "filterOptions": [
+    {
+      "key": "status",
+      "label": "Status",
+      "options": [
+        {
+          "value": "UNVERIFIED",
+          "label": "Unverified"
+        },
+        {
+          "value": "NEEDS_REVIEW",
+          "label": "Needs review"
+        }
+      ]
+    },
+    {
+      "key": "kind",
+      "label": "Type",
+      "options": [
+        {
+          "value": "INSPECTION_REPORT",
+          "label": "Inspection reports"
+        },
+        {
+          "value": "MANUAL",
+          "label": "Manuals"
+        },
+        {
+          "value": "OTHER",
+          "label": "Other"
+        },
+        {
+          "value": "PHOTO",
+          "label": "Photos"
+        },
+        {
+          "value": "RECEIPT",
+          "label": "Receipts"
+        }
+      ]
+    }
+  ],
+  "rows": [
+    {
+      "id": "2c93580f-a3e1-4457-870e-d9041ace7242",
+      "rowKind": "DOCUMENT",
+      "title": "label",
+      "kind": "PHOTO",
+      "kindLabel": "Photos",
+      "verification": "UNVERIFIED",
+      "needsReview": false,
+      "expiry": null,
+      "transitional": false,
+      "addedAt": "2026-10-20T00:14:05.321Z",
+      "updatedAt": "2026-10-20T00:14:05.322Z",
+      "askQuestion": "Show me my photos."
+    },
+    {
+      "id": "353c856d-da61-44b9-8ff0-8284ca36f0bd",
+      "rowKind": "DOCUMENT",
+      "title": "roof-report",
+      "kind": "INSPECTION_REPORT",
+      "kindLabel": "Inspection reports",
+      "verification": "UNVERIFIED",
+      "needsReview": true,
+      "expiry": null,
+      "transitional": false,
+      "addedAt": "2026-10-20T00:14:05.316Z",
+      "updatedAt": "2026-10-20T00:14:05.318Z",
+      "askQuestion": "Show me my inspection reports."
+    },
+    {
+      "id": "e6f4da3d-bd98-4f04-9ef0-df4a66105b04",
+      "rowKind": "DOCUMENT",
+      "title": "water-heater-receipt",
+      "kind": "RECEIPT",
+      "kindLabel": "Receipts",
+      "verification": "UNVERIFIED",
+      "needsReview": true,
+      "expiry": null,
+      "transitional": false,
+      "addedAt": "2026-10-20T00:14:05.311Z",
+      "updatedAt": "2026-10-20T00:14:05.312Z",
+      "askQuestion": "Show me my receipts."
+    },
+    {
+      "id": "248b3888-fa39-4d5f-a15d-f29856dd1ce7",
+      "rowKind": "DOCUMENT",
+      "title": "receipt",
+      "kind": "OTHER",
+      "kindLabel": "Other",
+      "verification": "UNVERIFIED",
+      "needsReview": false,
+      "expiry": null,
+      "transitional": false,
+      "addedAt": "2026-10-20T00:14:05.308Z",
+      "updatedAt": "2026-10-20T00:14:05.310Z",
+      "askQuestion": "Show me my other."
+    },
+    {
+      "id": "e669774a-6684-470c-83f8-ce42f02b0793",
+      "rowKind": "DOCUMENT",
+      "title": "Roof inspection report",
+      "kind": "INSPECTION_REPORT",
+      "kindLabel": "Inspection reports",
+      "verification": "UNVERIFIED",
+      "needsReview": false,
+      "expiry": null,
+      "transitional": false,
+      "addedAt": "2026-10-20T00:14:05.284Z",
+      "updatedAt": "2026-10-20T00:14:05.292Z",
+      "askQuestion": "Show me my inspection reports."
+    },
+    {
+      "id": "ff77d7b3-f9b1-4838-bc91-0fb154944290",
+      "rowKind": "DOCUMENT",
+      "title": "Furnace manual",
+      "kind": "MANUAL",
+      "kindLabel": "Manuals",
+      "verification": "UNVERIFIED",
+      "needsReview": false,
+      "expiry": null,
+      "transitional": false,
+      "addedAt": "2026-10-20T00:14:05.279Z",
+      "updatedAt": "2026-10-20T00:14:05.289Z",
+      "askQuestion": "Show me my manuals."
+    }
+  ],
+  "recordDetail": {
+    "state": "CONNECTED"
+  }
+}

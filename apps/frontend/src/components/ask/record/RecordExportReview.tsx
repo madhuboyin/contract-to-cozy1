@@ -120,7 +120,7 @@ export function RecordExportReview({ propertyId, backHref }: { propertyId: strin
 
   return (
     <section aria-labelledby="ask-record-export-title" data-record-export>
-      <Link href={backHref} className="text-sm font-semibold text-emerald-900 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700">← All record sections</Link>
+      <Link href={backHref} className="no-brand-style text-sm font-semibold text-emerald-900 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700">← All record sections</Link>
       <h2 id="ask-record-export-title" className="mt-1 text-2xl font-semibold tracking-[-0.02em] text-slate-950">Export home record</h2>
       <p className="mt-1 text-sm text-slate-600">Review exactly what the export includes before you create it. Nothing is created until you confirm.</p>
 

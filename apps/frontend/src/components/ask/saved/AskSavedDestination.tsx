@@ -99,7 +99,7 @@ export function AskSavedDestination() {
   });
 
   return (
-    <main className="h-full overflow-y-auto px-4 py-8 sm:px-6 lg:px-10" aria-labelledby="ask-saved-title">
+    <section className="h-full overflow-y-auto px-4 py-8 sm:px-6 lg:px-10" aria-labelledby="ask-saved-title">
       <AskWorkspaceMeasure className="max-w-5xl" data-presentation-contract="ask.destination.saved">
         <p className="text-xs font-bold uppercase tracking-[0.14em] text-teal-700">Ask Cozy destination</p>
         <h1 id="ask-saved-title" className="mt-2 text-3xl font-semibold tracking-[-0.025em] text-slate-950">Saved</h1>
@@ -193,6 +193,6 @@ export function AskSavedDestination() {
           </div>
         </section>
       </AskWorkspaceMeasure>
-    </main>
+    </section>
   );
 }

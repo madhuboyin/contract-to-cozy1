@@ -1,0 +1,553 @@
+{
+  "contractVersion": "ask-search-v1",
+  "propertyId": "ask-property-fixture",
+  "generatedAt": "2026-10-20T00:14:05.597Z",
+  "partial": true,
+  "totalResults": 2,
+  "groups": [
+    {
+      "group": "RECORD",
+      "label": "Home record",
+      "results": [
+        {
+          "resultKey": "record:documents:ff77d7b3-f9b1-4838-bc91-0fb154944290",
+          "group": "RECORD",
+          "providerId": "RECORD_documents",
+          "typeLabel": "Documents",
+          "title": "Furnace manual",
+          "snippet": null,
+          "propertyId": "ask-property-fixture",
+          "status": "Manuals",
+          "asOf": "2026-10-20T00:14:05.289Z",
+          "freshness": null,
+          "destination": {
+            "kind": "RECORD",
+            "sectionId": "documents",
+            "recordId": "ff77d7b3-f9b1-4838-bc91-0fb154944290"
+          }
+        }
+      ],
+      "more": false
+    },
+    {
+      "group": "WORK",
+      "label": "Work",
+      "results": [
+        {
+          "resultKey": "workItem:e66aecad-6a86-414d-a832-05f365152339",
+          "group": "WORK",
+          "providerId": "WORK_OPERATIONAL_WORK_ITEMS",
+          "typeLabel": "Home work items",
+          "title": "Replace furnace filter",
+          "snippet": "Keeps the home safe and efficient.",
+          "propertyId": "ask-property-fixture",
+          "status": "Accepted",
+          "asOf": "2026-10-20T00:14:05.293Z",
+          "freshness": "needs you",
+          "destination": {
+            "kind": "WORK",
+            "workKey": "workItem:e66aecad-6a86-414d-a832-05f365152339"
+          }
+        }
+      ],
+      "more": false
+    },
+    {
+      "group": "SAVED",
+      "label": "Saved",
+      "results": [],
+      "more": false
+    },
+    {
+      "group": "HISTORY",
+      "label": "Conversations",
+      "results": [],
+      "more": false
+    },
+    {
+      "group": "CAPABILITY",
+      "label": "Things Ask can do",
+      "results": [],
+      "more": false
+    }
+  ],
+  "providers": [
+    {
+      "providerId": "RECORD_property-facts",
+      "group": "RECORD",
+      "label": "Property details",
+      "state": "UNAVAILABLE",
+      "reason": "Property details are governed facts, not a list of records, and there is no per-fact reader with its own visibility rules yet. Ask \"How complete is my home record?\" to review them.",
+      "returned": 0,
+      "more": false
+    },
+    {
+      "providerId": "RECORD_rooms",
+      "group": "RECORD",
+      "label": "Rooms",
+      "state": "AVAILABLE",
+      "reason": null,
+      "returned": 0,
+      "more": false
+    },
+    {
+      "providerId": "RECORD_inventory",
+      "group": "RECORD",
+      "label": "Systems and inventory",
+      "state": "AVAILABLE",
+      "reason": null,
+      "returned": 0,
+      "more": false
+    },
+    {
+      "providerId": "RECORD_documents",
+      "group": "RECORD",
+      "label": "Documents",
+      "state": "AVAILABLE",
+      "reason": null,
+      "returned": 1,
+      "more": false
+    },
+    {
+      "providerId": "RECORD_warranties",
+      "group": "RECORD",
+      "label": "Warranties",
+      "state": "AVAILABLE",
+      "reason": null,
+      "returned": 0,
+      "more": false
+    },
+    {
+      "providerId": "RECORD_timeline",
+      "group": "RECORD",
+      "label": "Home timeline",
+      "state": "AVAILABLE",
+      "reason": null,
+      "returned": 0,
+      "more": false
+    },
+    {
+      "providerId": "RECORD_maintenance-history",
+      "group": "RECORD",
+      "label": "Maintenance history",
+      "state": "AVAILABLE",
+      "reason": null,
+      "returned": 0,
+      "more": false
+    },
+    {
+      "providerId": "RECORD_inspections",
+      "group": "RECORD",
+      "label": "Inspections",
+      "state": "AVAILABLE",
+      "reason": null,
+      "returned": 0,
+      "more": false
+    },
+    {
+      "providerId": "RECORD_permits",
+      "group": "RECORD",
+      "label": "Permits",
+      "state": "AVAILABLE",
+      "reason": null,
+      "returned": 0,
+      "more": false
+    },
+    {
+      "providerId": "RECORD_projects-renovations",
+      "group": "RECORD",
+      "label": "Projects and renovations",
+      "state": "AVAILABLE",
+      "reason": null,
+      "returned": 0,
+      "more": false
+    },
+    {
+      "providerId": "RECORD_incidents-claims",
+      "group": "RECORD",
+      "label": "Incidents and claims",
+      "state": "AVAILABLE",
+      "reason": null,
+      "returned": 0,
+      "more": false
+    },
+    {
+      "providerId": "RECORD_coverage",
+      "group": "RECORD",
+      "label": "Coverage and policies",
+      "state": "AVAILABLE",
+      "reason": null,
+      "returned": 0,
+      "more": false
+    },
+    {
+      "providerId": "RECORD_financing-ownership",
+      "group": "RECORD",
+      "label": "Financing and ownership",
+      "state": "AVAILABLE",
+      "reason": null,
+      "returned": 0,
+      "more": false
+    },
+    {
+      "providerId": "RECORD_buyer-records",
+      "group": "RECORD",
+      "label": "Buyer records",
+      "state": "NOT_APPLICABLE",
+      "reason": "This does not apply to this home right now.",
+      "returned": 0,
+      "more": false
+    },
+    {
+      "providerId": "RECORD_seller-records",
+      "group": "RECORD",
+      "label": "Seller records",
+      "state": "AVAILABLE",
+      "reason": null,
+      "returned": 0,
+      "more": false
+    },
+    {
+      "providerId": "RECORD_household-access",
+      "group": "RECORD",
+      "label": "Household access",
+      "state": "AVAILABLE",
+      "reason": null,
+      "returned": 0,
+      "more": false
+    },
+    {
+      "providerId": "WORK_PENDING_EXECUTIONS",
+      "group": "WORK",
+      "label": "Pending requests",
+      "state": "AVAILABLE",
+      "reason": null,
+      "returned": 0,
+      "more": false
+    },
+    {
+      "providerId": "WORK_DECISION_THREADS",
+      "group": "WORK",
+      "label": "Decisions",
+      "state": "AVAILABLE",
+      "reason": null,
+      "returned": 0,
+      "more": false
+    },
+    {
+      "providerId": "WORK_INCIDENTS",
+      "group": "WORK",
+      "label": "Incidents",
+      "state": "AVAILABLE",
+      "reason": null,
+      "returned": 0,
+      "more": false
+    },
+    {
+      "providerId": "WORK_CLAIMS",
+      "group": "WORK",
+      "label": "Claims",
+      "state": "AVAILABLE",
+      "reason": null,
+      "returned": 0,
+      "more": false
+    },
+    {
+      "providerId": "WORK_PROJECTS",
+      "group": "WORK",
+      "label": "Projects",
+      "state": "AVAILABLE",
+      "reason": null,
+      "returned": 0,
+      "more": false
+    },
+    {
+      "providerId": "WORK_GUIDANCE_JOURNEYS",
+      "group": "WORK",
+      "label": "Guided journeys",
+      "state": "AVAILABLE",
+      "reason": null,
+      "returned": 0,
+      "more": false
+    },
+    {
+      "providerId": "WORK_DIY_PROJECTS",
+      "group": "WORK",
+      "label": "DIY guides",
+      "state": "AVAILABLE",
+      "reason": null,
+      "returned": 0,
+      "more": false
+    },
+    {
+      "providerId": "WORK_RENOVATION_CASES",
+      "group": "WORK",
+      "label": "Renovation cases",
+      "state": "AVAILABLE",
+      "reason": null,
+      "returned": 0,
+      "more": false
+    },
+    {
+      "providerId": "WORK_OPERATIONAL_WORK_ITEMS",
+      "group": "WORK",
+      "label": "Home work items",
+      "state": "AVAILABLE",
+      "reason": null,
+      "returned": 1,
+      "more": false
+    },
+    {
+      "providerId": "WORK_REPAIRS",
+      "group": "WORK",
+      "label": "Repairs",
+      "state": "AVAILABLE",
+      "reason": null,
+      "returned": 0,
+      "more": false
+    },
+    {
+      "providerId": "WORK_MONITORS",
+      "group": "WORK",
+      "label": "Monitors",
+      "state": "AVAILABLE",
+      "reason": null,
+      "returned": 0,
+      "more": false
+    },
+    {
+      "providerId": "WORK_QUEUED_JOBS",
+      "group": "WORK",
+      "label": "Queued jobs",
+      "state": "AVAILABLE",
+      "reason": null,
+      "returned": 0,
+      "more": false
+    },
+    {
+      "providerId": "WORK_RETRYABLE_EXECUTIONS",
+      "group": "WORK",
+      "label": "Retryable requests",
+      "state": "AVAILABLE",
+      "reason": null,
+      "returned": 0,
+      "more": false
+    },
+    {
+      "providerId": "WORK_UNKNOWN_OUTCOME_EXECUTIONS",
+      "group": "WORK",
+      "label": "Requests with an unknown outcome",
+      "state": "AVAILABLE",
+      "reason": null,
+      "returned": 0,
+      "more": false
+    },
+    {
+      "providerId": "WORK_SCHEDULED_FOLLOW_UPS",
+      "group": "WORK",
+      "label": "Scheduled follow-ups",
+      "state": "AVAILABLE",
+      "reason": null,
+      "returned": 0,
+      "more": false
+    },
+    {
+      "providerId": "SAVED_HOME_REPORT_EXPORT",
+      "group": "SAVED",
+      "label": "Home reports",
+      "state": "AVAILABLE",
+      "reason": null,
+      "returned": 0,
+      "more": false
+    },
+    {
+      "providerId": "SAVED_QUOTE_COMPARISON",
+      "group": "SAVED",
+      "label": "Quote comparisons",
+      "state": "AVAILABLE",
+      "reason": null,
+      "returned": 0,
+      "more": false
+    },
+    {
+      "providerId": "SAVED_DECISION_RECOMMENDATION",
+      "group": "SAVED",
+      "label": "Decision recommendations",
+      "state": "AVAILABLE",
+      "reason": null,
+      "returned": 0,
+      "more": false
+    },
+    {
+      "providerId": "SAVED_PROPERTY_BRIEF",
+      "group": "SAVED",
+      "label": "Property briefs",
+      "state": "AVAILABLE",
+      "reason": null,
+      "returned": 0,
+      "more": false
+    },
+    {
+      "providerId": "SAVED_SEASONAL_CHECKLIST",
+      "group": "SAVED",
+      "label": "Seasonal checklists",
+      "state": "AVAILABLE",
+      "reason": null,
+      "returned": 0,
+      "more": false
+    },
+    {
+      "providerId": "SAVED_SELL_HOLD_RENT_ANALYSIS",
+      "group": "SAVED",
+      "label": "Sell, hold or rent analyses",
+      "state": "AVAILABLE",
+      "reason": null,
+      "returned": 0,
+      "more": false
+    },
+    {
+      "providerId": "SAVED_COVERAGE_COMPARISON",
+      "group": "SAVED",
+      "label": "Coverage comparisons",
+      "state": "AVAILABLE",
+      "reason": null,
+      "returned": 0,
+      "more": false
+    },
+    {
+      "providerId": "SAVED_FINANCING_SCENARIO",
+      "group": "SAVED",
+      "label": "Financing scenarios",
+      "state": "AVAILABLE",
+      "reason": null,
+      "returned": 0,
+      "more": false
+    },
+    {
+      "providerId": "SAVED_REPLACE_REPAIR_ANALYSIS",
+      "group": "SAVED",
+      "label": "Replace or repair analyses",
+      "state": "AVAILABLE",
+      "reason": null,
+      "returned": 0,
+      "more": false
+    },
+    {
+      "providerId": "SAVED_CAPITAL_TIMELINE_ANALYSIS",
+      "group": "SAVED",
+      "label": "Capital timelines",
+      "state": "AVAILABLE",
+      "reason": null,
+      "returned": 0,
+      "more": false
+    },
+    {
+      "providerId": "SAVED_HOME_SCORE_REPORT",
+      "group": "SAVED",
+      "label": "Home score reports",
+      "state": "AVAILABLE",
+      "reason": null,
+      "returned": 0,
+      "more": false
+    },
+    {
+      "providerId": "SAVED_REFINANCE_SCENARIO",
+      "group": "SAVED",
+      "label": "Saved refinance scenarios",
+      "state": "AVAILABLE",
+      "reason": null,
+      "returned": 0,
+      "more": false
+    },
+    {
+      "providerId": "SAVED_NEGOTIATION_SHIELD_ANALYSIS",
+      "group": "SAVED",
+      "label": "Negotiation analyses",
+      "state": "UNAVAILABLE",
+      "reason": "Negotiation analyses belong to a buyer case; the case's visibility rule has not been connected to Saved.",
+      "returned": 0,
+      "more": false
+    },
+    {
+      "providerId": "SAVED_BUYER_WORKSPACE",
+      "group": "SAVED",
+      "label": "Buyer workspaces",
+      "state": "UNAVAILABLE",
+      "reason": "Buyer workspaces apply only to a purchase in progress; their lifecycle gate has not been connected to Saved.",
+      "returned": 0,
+      "more": false
+    },
+    {
+      "providerId": "SAVED_SELLER_PREP_PLAN",
+      "group": "SAVED",
+      "label": "Seller prep plans",
+      "state": "UNAVAILABLE",
+      "reason": "The seller prep plan is a per-person preference record without versions; it needs its own Saved identity before it is projected.",
+      "returned": 0,
+      "more": false
+    },
+    {
+      "providerId": "SAVED_MOVING_PLAN",
+      "group": "SAVED",
+      "label": "Moving plans",
+      "state": "UNAVAILABLE",
+      "reason": "Moving plans have no Ask read operation to govern visibility.",
+      "returned": 0,
+      "more": false
+    },
+    {
+      "providerId": "SAVED_HOME_DIGITAL_WILL",
+      "group": "SAVED",
+      "label": "Home digital will",
+      "state": "UNAVAILABLE",
+      "reason": "The digital will holds sensitive estate content and needs its own visibility and sharing rules before it is projected.",
+      "returned": 0,
+      "more": false
+    },
+    {
+      "providerId": "SAVED_ROOM_AND_PLANT_CHECKLIST",
+      "group": "SAVED",
+      "label": "Room and plant checklists",
+      "state": "UNAVAILABLE",
+      "reason": "Room and plant checklists have no read operation of their own to govern visibility.",
+      "returned": 0,
+      "more": false
+    },
+    {
+      "providerId": "SAVED_RENOVATION_COMPLIANCE_CHECKLIST",
+      "group": "SAVED",
+      "label": "Renovation compliance checklists",
+      "state": "UNAVAILABLE",
+      "reason": "Compliance checklists are part of a renovation case and need that case's visibility rule before they are projected.",
+      "returned": 0,
+      "more": false
+    },
+    {
+      "providerId": "SAVED_ANNOTATED_IMAGE",
+      "group": "SAVED",
+      "label": "Annotated images",
+      "state": "UNAVAILABLE",
+      "reason": "No annotated-image record exists yet, so there is nothing to project.",
+      "returned": 0,
+      "more": false
+    },
+    {
+      "providerId": "HISTORY_CONVERSATIONS",
+      "group": "HISTORY",
+      "label": "Conversations",
+      "state": "AVAILABLE",
+      "reason": null,
+      "returned": 0,
+      "more": false
+    },
+    {
+      "providerId": "CAPABILITIES",
+      "group": "CAPABILITY",
+      "label": "Things Ask can do",
+      "state": "AVAILABLE",
+      "reason": null,
+      "returned": 0,
+      "more": false
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "contractVersion": "ask-notification-v1",
+  "notificationId": "6c23e3f3-4aff-4d62-9db3-6422433ebae0",
+  "destination": null,
+  "legacy": false,
+  "outcome": "DELETED",
+  "propertyId": "ask-property-fixture",
+  "message": "What this was about has been removed, so there is nothing to open."
+}

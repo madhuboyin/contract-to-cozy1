@@ -1,0 +1,682 @@
+{
+  "contractVersion": "ask-work-v1",
+  "propertyId": "ask-property-fixture",
+  "generatedAt": "2026-10-20T00:14:05.557Z",
+  "view": "ACTIVE",
+  "total": 1,
+  "totalScope": "COMPLETE",
+  "partial": false,
+  "delivered": 1,
+  "nextCursor": null,
+  "truncated": false,
+  "viewCounts": {
+    "NEEDS_YOU": null,
+    "ACTIVE": 1,
+    "WAITING": null,
+    "SCHEDULED": null,
+    "COMPLETED": 0,
+    "ARCHIVED": 0
+  },
+  "sort": {
+    "key": "sortAt",
+    "label": "Most recently updated first"
+  },
+  "query": {
+    "workType": null,
+    "status": null
+  },
+  "providers": [
+    {
+      "providerId": "PENDING_EXECUTIONS",
+      "label": "Pending requests",
+      "workType": "PENDING_EXECUTION",
+      "state": "AVAILABLE",
+      "reason": null,
+      "total": 0,
+      "delivered": 0,
+      "required": true
+    },
+    {
+      "providerId": "DECISION_THREADS",
+      "label": "Decisions",
+      "workType": "DECISION_THREAD",
+      "state": "AVAILABLE",
+      "reason": null,
+      "total": 0,
+      "delivered": 0,
+      "required": true
+    },
+    {
+      "providerId": "INCIDENTS",
+      "label": "Incidents",
+      "workType": "INCIDENT",
+      "state": "AVAILABLE",
+      "reason": null,
+      "total": 0,
+      "delivered": 0,
+      "required": true
+    },
+    {
+      "providerId": "CLAIMS",
+      "label": "Claims",
+      "workType": "CLAIM",
+      "state": "AVAILABLE",
+      "reason": null,
+      "total": 0,
+      "delivered": 0,
+      "required": true
+    },
+    {
+      "providerId": "PROJECTS",
+      "label": "Projects",
+      "workType": "PROJECT",
+      "state": "AVAILABLE",
+      "reason": null,
+      "total": 0,
+      "delivered": 0,
+      "required": true
+    },
+    {
+      "providerId": "GUIDANCE_JOURNEYS",
+      "label": "Guided journeys",
+      "workType": "GUIDANCE_JOURNEY",
+      "state": "AVAILABLE",
+      "reason": null,
+      "total": 0,
+      "delivered": 0,
+      "required": true
+    },
+    {
+      "providerId": "DIY_PROJECTS",
+      "label": "DIY guides",
+      "workType": "DIY_PROJECT",
+      "state": "AVAILABLE",
+      "reason": null,
+      "total": 0,
+      "delivered": 0,
+      "required": true
+    },
+    {
+      "providerId": "RENOVATION_CASES",
+      "label": "Renovation cases",
+      "workType": "RENOVATION_CASE",
+      "state": "AVAILABLE",
+      "reason": null,
+      "total": 0,
+      "delivered": 0,
+      "required": true
+    },
+    {
+      "providerId": "OPERATIONAL_WORK_ITEMS",
+      "label": "Home work items",
+      "workType": "HOME_WORK_ITEM",
+      "state": "AVAILABLE",
+      "reason": null,
+      "total": 1,
+      "delivered": 1,
+      "required": true
+    },
+    {
+      "providerId": "REPAIRS",
+      "label": "Repairs",
+      "workType": "REPAIR",
+      "state": "AVAILABLE",
+      "reason": null,
+      "total": 0,
+      "delivered": 0,
+      "required": true
+    },
+    {
+      "providerId": "MONITORS",
+      "label": "Monitors",
+      "workType": "MONITOR",
+      "state": "AVAILABLE",
+      "reason": null,
+      "total": 0,
+      "delivered": 0,
+      "required": true
+    },
+    {
+      "providerId": "QUEUED_JOBS",
+      "label": "Queued jobs",
+      "workType": "QUEUED_JOB",
+      "state": "AVAILABLE",
+      "reason": null,
+      "total": 0,
+      "delivered": 0,
+      "required": true
+    },
+    {
+      "providerId": "RETRYABLE_EXECUTIONS",
+      "label": "Retryable requests",
+      "workType": "RETRYABLE_EXECUTION",
+      "state": "AVAILABLE",
+      "reason": null,
+      "total": 0,
+      "delivered": 0,
+      "required": true
+    },
+    {
+      "providerId": "UNKNOWN_OUTCOME_EXECUTIONS",
+      "label": "Requests with an unknown outcome",
+      "workType": "UNKNOWN_OUTCOME_EXECUTION",
+      "state": "AVAILABLE",
+      "reason": null,
+      "total": 0,
+      "delivered": 0,
+      "required": true
+    },
+    {
+      "providerId": "SCHEDULED_FOLLOW_UPS",
+      "label": "Scheduled follow-ups",
+      "workType": "SCHEDULED_FOLLOW_UP",
+      "state": "AVAILABLE",
+      "reason": null,
+      "total": 0,
+      "delivered": 0,
+      "required": true
+    }
+  ],
+  "filterOptions": {
+    "workTypes": [
+      {
+        "value": "PENDING_EXECUTION",
+        "label": "Pending requests"
+      },
+      {
+        "value": "DECISION_THREAD",
+        "label": "Decisions"
+      },
+      {
+        "value": "INCIDENT",
+        "label": "Incidents"
+      },
+      {
+        "value": "CLAIM",
+        "label": "Claims"
+      },
+      {
+        "value": "PROJECT",
+        "label": "Projects"
+      },
+      {
+        "value": "GUIDANCE_JOURNEY",
+        "label": "Guided journeys"
+      },
+      {
+        "value": "DIY_PROJECT",
+        "label": "DIY guides"
+      },
+      {
+        "value": "RENOVATION_CASE",
+        "label": "Renovation cases"
+      },
+      {
+        "value": "HOME_WORK_ITEM",
+        "label": "Home work items"
+      },
+      {
+        "value": "REPAIR",
+        "label": "Repairs"
+      },
+      {
+        "value": "MONITOR",
+        "label": "Monitors"
+      },
+      {
+        "value": "QUEUED_JOB",
+        "label": "Queued jobs"
+      },
+      {
+        "value": "RETRYABLE_EXECUTION",
+        "label": "Retryable requests"
+      },
+      {
+        "value": "UNKNOWN_OUTCOME_EXECUTION",
+        "label": "Requests with an unknown outcome"
+      },
+      {
+        "value": "SCHEDULED_FOLLOW_UP",
+        "label": "Scheduled follow-ups"
+      }
+    ],
+    "statusesByWorkType": {
+      "PENDING_EXECUTION": [
+        {
+          "value": "NEEDS_PROPERTY",
+          "label": "Needs property"
+        },
+        {
+          "value": "NEEDS_ENTITY",
+          "label": "Needs entity"
+        },
+        {
+          "value": "NEEDS_CLARIFICATION",
+          "label": "Needs clarification"
+        },
+        {
+          "value": "NEEDS_CONTEXT",
+          "label": "Needs context"
+        },
+        {
+          "value": "NEEDS_CONFIRMATION",
+          "label": "Needs confirmation"
+        },
+        {
+          "value": "RUNNING",
+          "label": "Running"
+        }
+      ],
+      "DECISION_THREAD": [
+        {
+          "value": "OPEN",
+          "label": "Open"
+        },
+        {
+          "value": "GATHERING_CONTEXT",
+          "label": "Gathering context"
+        },
+        {
+          "value": "READY_TO_COMPARE",
+          "label": "Ready to compare"
+        },
+        {
+          "value": "RECOMMENDATION_AVAILABLE",
+          "label": "Recommendation available"
+        },
+        {
+          "value": "ACTION_IN_PROGRESS",
+          "label": "Action in progress"
+        },
+        {
+          "value": "DECIDED",
+          "label": "Decided"
+        },
+        {
+          "value": "COMPLETED",
+          "label": "Completed"
+        },
+        {
+          "value": "ABANDONED",
+          "label": "Abandoned"
+        },
+        {
+          "value": "ARCHIVED",
+          "label": "Archived"
+        }
+      ],
+      "INCIDENT": [
+        {
+          "value": "DETECTED",
+          "label": "Detected"
+        },
+        {
+          "value": "EVALUATED",
+          "label": "Evaluated"
+        },
+        {
+          "value": "ACTIVE",
+          "label": "Active"
+        },
+        {
+          "value": "ACTIONED",
+          "label": "Actioned"
+        },
+        {
+          "value": "MITIGATED",
+          "label": "Mitigated"
+        },
+        {
+          "value": "RESOLVED",
+          "label": "Resolved"
+        },
+        {
+          "value": "EXPIRED",
+          "label": "Expired"
+        }
+      ],
+      "CLAIM": [
+        {
+          "value": "DRAFT",
+          "label": "Draft"
+        },
+        {
+          "value": "IN_PROGRESS",
+          "label": "In progress"
+        },
+        {
+          "value": "SUBMITTED",
+          "label": "Submitted"
+        },
+        {
+          "value": "UNDER_REVIEW",
+          "label": "Under review"
+        },
+        {
+          "value": "APPROVED",
+          "label": "Approved"
+        },
+        {
+          "value": "DENIED",
+          "label": "Denied"
+        },
+        {
+          "value": "CLOSED",
+          "label": "Closed"
+        }
+      ],
+      "PROJECT": [
+        {
+          "value": "DRAFT",
+          "label": "Draft"
+        },
+        {
+          "value": "PLANNING",
+          "label": "Planning"
+        },
+        {
+          "value": "IN_PROGRESS",
+          "label": "In progress"
+        },
+        {
+          "value": "PAUSED",
+          "label": "Paused"
+        },
+        {
+          "value": "COMPLETED",
+          "label": "Completed"
+        },
+        {
+          "value": "CANCELLED",
+          "label": "Cancelled"
+        },
+        {
+          "value": "DISPUTED",
+          "label": "Disputed"
+        }
+      ],
+      "GUIDANCE_JOURNEY": [
+        {
+          "value": "NOT_STARTED",
+          "label": "Not started"
+        },
+        {
+          "value": "ACTIVE",
+          "label": "Active"
+        },
+        {
+          "value": "COMPLETED",
+          "label": "Completed"
+        },
+        {
+          "value": "DISMISSED",
+          "label": "Dismissed"
+        }
+      ],
+      "DIY_PROJECT": [
+        {
+          "value": "PLANNING",
+          "label": "Planning"
+        },
+        {
+          "value": "IN_PROGRESS",
+          "label": "In progress"
+        },
+        {
+          "value": "COMPLETED",
+          "label": "Completed"
+        },
+        {
+          "value": "ABANDONED",
+          "label": "Abandoned"
+        },
+        {
+          "value": "HIRED_OUT",
+          "label": "Hired out"
+        }
+      ],
+      "RENOVATION_CASE": [
+        {
+          "value": "IDEA",
+          "label": "Idea"
+        },
+        {
+          "value": "FEASIBILITY",
+          "label": "Feasibility"
+        },
+        {
+          "value": "SCOPE_DEFINITION",
+          "label": "Scope definition"
+        },
+        {
+          "value": "REQUIREMENTS_RESEARCH",
+          "label": "Requirements research"
+        },
+        {
+          "value": "APPROVALS_IN_PROGRESS",
+          "label": "Approvals in progress"
+        },
+        {
+          "value": "PREPARING_TO_START",
+          "label": "Preparing to start"
+        },
+        {
+          "value": "READY_TO_START",
+          "label": "Ready to start"
+        },
+        {
+          "value": "IN_EXECUTION",
+          "label": "In execution"
+        },
+        {
+          "value": "INSPECTION_AND_CLOSEOUT",
+          "label": "Inspection and closeout"
+        },
+        {
+          "value": "VERIFIED_COMPLETE",
+          "label": "Verified complete"
+        },
+        {
+          "value": "ON_HOLD",
+          "label": "On hold"
+        },
+        {
+          "value": "CANCELLED",
+          "label": "Cancelled"
+        },
+        {
+          "value": "COMPLETED_WITH_OPEN_ITEMS",
+          "label": "Completed with open items"
+        },
+        {
+          "value": "HISTORICAL_RESEARCH",
+          "label": "Historical research"
+        }
+      ],
+      "HOME_WORK_ITEM": [
+        {
+          "value": "ACCEPTED",
+          "label": "Accepted"
+        },
+        {
+          "value": "SCHEDULED",
+          "label": "Scheduled"
+        },
+        {
+          "value": "IN_PROGRESS",
+          "label": "In progress"
+        },
+        {
+          "value": "IN_GUIDANCE",
+          "label": "In guidance"
+        },
+        {
+          "value": "IN_PROJECT",
+          "label": "In project"
+        },
+        {
+          "value": "BLOCKED",
+          "label": "Blocked"
+        },
+        {
+          "value": "DEFERRED",
+          "label": "Deferred"
+        },
+        {
+          "value": "REPORTED_COMPLETE",
+          "label": "Reported complete"
+        },
+        {
+          "value": "REOPENED",
+          "label": "Reopened"
+        },
+        {
+          "value": "VERIFIED",
+          "label": "Verified"
+        },
+        {
+          "value": "FOLLOW_UP_DUE",
+          "label": "Follow up due"
+        },
+        {
+          "value": "CLOSED",
+          "label": "Closed"
+        }
+      ],
+      "REPAIR": [
+        {
+          "value": "DRAFT",
+          "label": "Draft"
+        },
+        {
+          "value": "PENDING",
+          "label": "Pending"
+        },
+        {
+          "value": "CONFIRMED",
+          "label": "Confirmed"
+        },
+        {
+          "value": "IN_PROGRESS",
+          "label": "In progress"
+        },
+        {
+          "value": "COMPLETED",
+          "label": "Completed"
+        },
+        {
+          "value": "CANCELLED",
+          "label": "Cancelled"
+        },
+        {
+          "value": "DISPUTED",
+          "label": "Disputed"
+        }
+      ],
+      "MONITOR": [
+        {
+          "value": "ACTIVE",
+          "label": "Active"
+        },
+        {
+          "value": "PAUSED",
+          "label": "Paused"
+        }
+      ],
+      "QUEUED_JOB": [
+        {
+          "value": "PENDING",
+          "label": "Pending"
+        },
+        {
+          "value": "GENERATING",
+          "label": "Generating"
+        },
+        {
+          "value": "READY",
+          "label": "Ready"
+        },
+        {
+          "value": "FAILED",
+          "label": "Failed"
+        },
+        {
+          "value": "EXPIRED",
+          "label": "Expired"
+        },
+        {
+          "value": "QUEUED",
+          "label": "Queued"
+        },
+        {
+          "value": "RUNNING",
+          "label": "Running"
+        },
+        {
+          "value": "DONE",
+          "label": "Done"
+        }
+      ],
+      "RETRYABLE_EXECUTION": [
+        {
+          "value": "FAILED_RETRYABLE",
+          "label": "Failed retryable"
+        }
+      ],
+      "UNKNOWN_OUTCOME_EXECUTION": [
+        {
+          "value": "OUTCOME_UNKNOWN",
+          "label": "Outcome unknown"
+        }
+      ],
+      "SCHEDULED_FOLLOW_UP": []
+    }
+  },
+  "unscopedPending": [],
+  "rows": [
+    {
+      "workKey": "workItem:61db630c-a376-4754-b4f5-194c1df09ed2",
+      "sourceAliases": [],
+      "providerId": "OPERATIONAL_WORK_ITEMS",
+      "workType": "HOME_WORK_ITEM",
+      "propertyId": "ask-property-fixture",
+      "entity": {
+        "type": "OperationalWorkItem",
+        "id": "61db630c-a376-4754-b4f5-194c1df09ed2"
+      },
+      "title": "Test smoke detectors",
+      "summary": "Keeps the home safe and efficient.",
+      "status": {
+        "canonical": "IN_PROGRESS",
+        "label": "In progress"
+      },
+      "lifecycleView": "ACTIVE",
+      "nextAction": {
+        "label": "Mark it done when finished",
+        "operationId": "HOME_WORK_ITEM_COMMAND",
+        "allowed": true
+      },
+      "sortAt": "2026-10-20T00:14:05.297Z",
+      "freshness": {
+        "version": "2026-10-20T00:14:05.297Z",
+        "asOf": "2026-10-20T00:14:05.297Z"
+      },
+      "sourceOwner": "home-operations",
+      "resume": {
+        "kind": "WORKSPACE",
+        "executionId": null,
+        "sessionId": null,
+        "launch": {
+          "operationId": "HOME_WORK_ITEMS",
+          "entityType": "OperationalWorkItem",
+          "entityId": "61db630c-a376-4754-b4f5-194c1df09ed2",
+          "actionId": null,
+          "decisionThreadId": null,
+          "workItemId": "61db630c-a376-4754-b4f5-194c1df09ed2",
+          "journeyId": null,
+          "contextVersion": null
+        }
+      }
+    }
+  ]
+}

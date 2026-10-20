@@ -325,6 +325,17 @@ describe('ComposerIntakeButton', () => {
     expect(await screen.findByText('Add a file to your home', { selector: 'h2' })).toBeInTheDocument();
     expect(mocks.getAskIntakeConfig).toHaveBeenCalled();
   });
+
+  it('returns focus to the button that opened it when the dialog closes (a modal must not drop focus on the page body)', async () => {
+    render(<ComposerIntakeButton propertyId="home-1" />);
+    const opener = screen.getByRole('button', { name: 'Add a file to your home' });
+    opener.focus();
+    fireEvent.click(opener);
+    await screen.findByText('Add a file to your home', { selector: 'h2' });
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByText('Add a file to your home', { selector: 'h2' })).not.toBeInTheDocument());
+    await waitFor(() => expect(opener).toHaveFocus());
+  });
 });
 
 describe('intake presentation', () => {

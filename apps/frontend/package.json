@@ -23,6 +23,7 @@
     "qa:gates": "npm run qa:product-framework:routes && npm run qa:product-framework:capabilities && npm run qa:home-buyer-routes && npm run qa:priority-routes && npm run qa:pwa && npm run qa:shared-primitives && npm run qa:visual-drift && npm run test:visual-contract",
     "test": "jest",
     "test:property-context:e2e": "PROPERTY_CONTEXT_ACCEPTANCE_FIXTURE=1 npm run build && playwright test --config=playwright.property-context.config.ts",
+    "test:ask-certification:e2e": "ASK_ACCEPTANCE_FIXTURE=1 NEXT_PUBLIC_API_URL=http://localhost:3123 npm run build && playwright test --config=playwright.ask-certification.config.ts",
     "test:ask:e2e": "ASK_ACCEPTANCE_FIXTURE=1 npm run build && playwright test --config=playwright.ask.config.ts",
     "test:home-event-radar:e2e": "HOME_EVENT_RADAR_ACCEPTANCE_FIXTURE=1 NEXT_PUBLIC_API_URL=http://localhost:3111 npm run build && playwright test --config=playwright.home-event-radar.config.ts",
     "test:tool-discovery:e2e": "TOOL_DISCOVERY_ACCEPTANCE_FIXTURE=1 npm run build && playwright test --config=playwright.tool-discovery.config.ts",
@@ -87,6 +88,7 @@
     "zod": "^4.1.13"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.10.2",
     "@playwright/test": "^1.51.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",

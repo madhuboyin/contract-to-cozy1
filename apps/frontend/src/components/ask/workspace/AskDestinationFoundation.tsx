@@ -18,7 +18,7 @@ const COPY: Record<Exclude<AskDestinationId, 'home' | 'history' | 'record'>, { t
 export function AskDestinationFoundation({ destination }: { destination: keyof typeof COPY }) {
   const copy = COPY[destination];
   return (
-    <main className="h-full overflow-y-auto px-4 py-8 sm:px-6 lg:px-10" aria-labelledby={`ask-${destination}-title`}>
+    <section className="h-full overflow-y-auto px-4 py-8 sm:px-6 lg:px-10" aria-labelledby={`ask-${destination}-title`}>
       <AskFocusedPanel className="max-w-4xl rounded-3xl px-5 py-8 shadow-sm sm:px-8 sm:py-10" data-presentation-contract={`ask.destination.${destination}`}>
         <p className="text-xs font-bold uppercase tracking-[0.14em] text-teal-700">Ask Cozy destination</p>
         <h1 id={`ask-${destination}-title`} className="mt-2 text-3xl font-semibold tracking-[-0.025em] text-slate-950">{copy.title}</h1>
@@ -30,6 +30,6 @@ export function AskDestinationFoundation({ destination }: { destination: keyof t
           Return to Ask Cozy Home
         </Link>
       </AskFocusedPanel>
-    </main>
+    </section>
   );
 }

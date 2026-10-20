@@ -181,7 +181,7 @@ export function AskRecord() {
   const completeness = index?.completeness;
 
   return (
-    <main className="h-full overflow-y-auto px-4 py-6 sm:px-6 lg:px-10" aria-labelledby="ask-record-title">
+    <section className="h-full overflow-y-auto px-4 py-6 sm:px-6 lg:px-10" aria-labelledby="ask-record-title">
       <AskWorkspaceMeasure data-presentation-contract="ask.destination.record">
         <header className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div className="min-w-0">
@@ -250,6 +250,6 @@ export function AskRecord() {
           )}
         </section>
       </AskWorkspaceMeasure>
-    </main>
+    </section>
   );
 }

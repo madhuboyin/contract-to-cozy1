@@ -1,0 +1,77 @@
+{
+  "contractVersion": "ask-intake-v1",
+  "acceptedTypes": [
+    "application/pdf",
+    "image/jpeg",
+    "image/png",
+    "image/webp"
+  ],
+  "maxBytes": 10485760,
+  "sensitivities": [
+    "STANDARD",
+    "PERSONAL",
+    "FINANCIAL",
+    "INSURANCE",
+    "LEGAL"
+  ],
+  "kinds": [
+    {
+      "kind": "WARRANTY",
+      "label": "A warranty",
+      "description": "Provider, start and end dates, and what is covered.",
+      "acceptsImages": true,
+      "readsWith": "MODEL"
+    },
+    {
+      "kind": "RECEIPT",
+      "label": "A receipt or invoice",
+      "description": "What was paid for, how much, and when. Saved as an expense once you confirm.",
+      "acceptsImages": true,
+      "readsWith": "MODEL"
+    },
+    {
+      "kind": "INSURANCE_POLICY",
+      "label": "An insurance policy",
+      "description": "Carrier, policy number, limits and dates from a declarations page.",
+      "acceptsImages": true,
+      "readsWith": "MODEL"
+    },
+    {
+      "kind": "APPLIANCE_LABEL",
+      "label": "An appliance or product label",
+      "description": "Brand, model and serial number, read on this server. Becomes an inventory item once you confirm.",
+      "acceptsImages": true,
+      "readsWith": "LOCAL_OCR"
+    },
+    {
+      "kind": "INSPECTION_REPORT",
+      "label": "An inspection report",
+      "description": "Each finding is proposed for you to accept or reject. Only the ones you accept become an inspection report for you to go through.",
+      "acceptsImages": false,
+      "readsWith": "MODEL"
+    }
+  ],
+  "reportTypes": [
+    "GENERAL",
+    "ROOF",
+    "HVAC",
+    "SEWER",
+    "ELECTRICAL",
+    "FOUNDATION",
+    "PRE_PURCHASE",
+    "PRE_LISTING",
+    "ANNUAL",
+    "OTHER"
+  ],
+  "disclosures": {
+    "retention": "The original file is kept in your Home Records until you remove it. Removing it moves it to the trash for 30 days, then it is deleted unless a retention rule or legal hold keeps it.",
+    "sharing": "Household members can see the file according to the sensitivity you choose. It is not shared outside your household.",
+    "modelProcessing": "To read a warranty, receipt, insurance policy or inspection report, the file is sent to Google Gemini, an AI service, to extract the details. Nothing is sent until you choose to read it.",
+    "localProcessing": "An appliance label photo is read on our server with text recognition. It is not sent to an AI service. The photo is kept as the original; the text it contains is kept for 7 days to build the draft.",
+    "confirmation": "Reading a file only proposes details. Nothing is added to your home until you accept it. Anything you reject, or leave undecided, is never added."
+  },
+  "safetyChecks": {
+    "engine": "NONE",
+    "statement": "Files are checked for a mismatched type, embedded programs and active content. No antivirus engine is connected, so this is not a full malware scan."
+  }
+}

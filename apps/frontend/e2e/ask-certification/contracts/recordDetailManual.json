@@ -1,0 +1,125 @@
+{
+  "contractVersion": "ask-record-detail-v1",
+  "propertyId": "ask-property-fixture",
+  "sectionId": "documents",
+  "recordId": "ff77d7b3-f9b1-4838-bc91-0fb154944290",
+  "generatedAt": "2026-10-20T00:14:05.459Z",
+  "title": "Furnace manual",
+  "facts": [
+    {
+      "label": "Type",
+      "value": "Manuals"
+    },
+    {
+      "label": "Description",
+      "value": "Not recorded"
+    },
+    {
+      "label": "Status",
+      "value": "Active"
+    },
+    {
+      "label": "In effect",
+      "value": "Not recorded"
+    },
+    {
+      "label": "Sensitivity",
+      "value": "Standard"
+    },
+    {
+      "label": "Extracted details",
+      "value": "Nothing waiting"
+    }
+  ],
+  "provenance": {
+    "source": {
+      "state": "AVAILABLE",
+      "value": "Added by you",
+      "at": "2026-10-20T00:14:05.279Z",
+      "reason": null
+    },
+    "observed": {
+      "state": "AVAILABLE",
+      "value": "Last updated",
+      "at": "2026-10-20T00:14:05.289Z",
+      "reason": null
+    },
+    "verification": {
+      "state": "AVAILABLE",
+      "value": "Unverified",
+      "at": null,
+      "reason": null
+    },
+    "visibility": {
+      "state": "AVAILABLE",
+      "value": "Every household member can see this record.",
+      "at": null,
+      "reason": null
+    },
+    "related": {
+      "state": "NOT_RECORDED",
+      "records": [],
+      "reason": "No other record is linked."
+    },
+    "history": {
+      "state": "AVAILABLE",
+      "entries": [
+        {
+          "at": "2026-10-20T00:14:05.279Z",
+          "label": "Version 1 added"
+        }
+      ],
+      "reason": null
+    }
+  },
+  "corrections": [
+    {
+      "id": "document-verification",
+      "label": "Record verification",
+      "operationId": "HOME_RECORD_STATE_COMMAND",
+      "requiredRole": "CONTRIBUTOR",
+      "state": "AVAILABLE",
+      "reason": null,
+      "launch": {
+        "message": "Record whether I have verified this home record.",
+        "operationId": "HOME_RECORD_STATE_COMMAND",
+        "entityType": "PROPERTY_RECORD",
+        "entityId": "ff77d7b3-f9b1-4838-bc91-0fb154944290",
+        "actionId": null
+      },
+      "note": null
+    },
+    {
+      "id": "document-effective-period",
+      "label": "Set when it is in effect",
+      "operationId": "HOME_RECORD_STATE_COMMAND",
+      "requiredRole": "CONTRIBUTOR",
+      "state": "AVAILABLE",
+      "reason": null,
+      "launch": {
+        "message": "Set the period this home record is in effect.",
+        "operationId": "HOME_RECORD_STATE_COMMAND",
+        "entityType": "PROPERTY_RECORD",
+        "entityId": "ff77d7b3-f9b1-4838-bc91-0fb154944290",
+        "actionId": null
+      },
+      "note": null
+    },
+    {
+      "id": "document-archive",
+      "label": "Archive",
+      "operationId": "HOME_RECORD_STATE_COMMAND",
+      "requiredRole": "CONTRIBUTOR",
+      "state": "AVAILABLE",
+      "reason": null,
+      "launch": {
+        "message": "Archive this home record.",
+        "operationId": "HOME_RECORD_STATE_COMMAND",
+        "entityType": "PROPERTY_RECORD",
+        "entityId": "ff77d7b3-f9b1-4838-bc91-0fb154944290",
+        "actionId": null
+      },
+      "note": null
+    }
+  ]
+}

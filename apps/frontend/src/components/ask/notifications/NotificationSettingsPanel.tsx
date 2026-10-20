@@ -102,8 +102,8 @@ export function NotificationSettingsPanel({ propertyId }: { propertyId: string |
         <h3 id="notif-quiet-title" className="text-sm font-semibold text-slate-950">Quiet hours for email</h3>
         <p className="mt-1 text-sm text-slate-600">Email that is not urgent waits until quiet hours end. Leave both blank for none.</p>
         <div className="mt-2 flex flex-wrap items-end gap-2">
-          <label className="text-xs font-semibold text-slate-600">Start<input type="time" value={quiet.start} onChange={(event) => setQuiet((current) => ({ ...current, start: event.target.value }))} className="mt-1 block min-h-11 rounded-xl border border-slate-300 px-3 text-sm font-normal text-slate-900" /></label>
-          <label className="text-xs font-semibold text-slate-600">End<input type="time" value={quiet.end} onChange={(event) => setQuiet((current) => ({ ...current, end: event.target.value }))} className="mt-1 block min-h-11 rounded-xl border border-slate-300 px-3 text-sm font-normal text-slate-900" /></label>
+          <label className="text-xs font-semibold text-slate-600">Start<input type="time" value={quiet.start} onChange={(event) => setQuiet((current) => ({ ...current, start: event.target.value }))} className="mt-1 block min-h-11 rounded-xl border border-slate-300 px-3 text-sm font-normal text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700" /></label>
+          <label className="text-xs font-semibold text-slate-600">End<input type="time" value={quiet.end} onChange={(event) => setQuiet((current) => ({ ...current, end: event.target.value }))} className="mt-1 block min-h-11 rounded-xl border border-slate-300 px-3 text-sm font-normal text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700" /></label>
           <button type="button" disabled={busy === 'quiet'} onClick={() => void saveQuiet()} className="min-h-11 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50 disabled:opacity-60">Save quiet hours</button>
         </div>
       </section>

@@ -154,7 +154,7 @@ export function AskWorkDestination() {
   const filtered = Boolean(workType || status);
 
   return (
-    <main className="h-full overflow-y-auto px-4 py-8 sm:px-6 lg:px-10" aria-labelledby="ask-work-title">
+    <section className="h-full overflow-y-auto px-4 py-8 sm:px-6 lg:px-10" aria-labelledby="ask-work-title">
       <AskWorkspaceMeasure className="max-w-5xl" data-presentation-contract="ask.destination.work">
         <p className="text-xs font-bold uppercase tracking-[0.14em] text-teal-700">Ask Cozy destination</p>
         <h1 id="ask-work-title" className="mt-2 text-3xl font-semibold tracking-[-0.025em] text-slate-950">Work</h1>
@@ -288,6 +288,6 @@ export function AskWorkDestination() {
           </div>
         </section>
       </AskWorkspaceMeasure>
-    </main>
+    </section>
   );
 }

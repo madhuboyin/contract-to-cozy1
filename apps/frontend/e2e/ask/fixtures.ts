@@ -2,7 +2,8 @@ import { expect, type BrowserContext, type Page, type Request, type Route } from
 
 export const propertyId = 'ask-property-fixture';
 export const otherPropertyId = 'ask-other-property-fixture';
-const apiOrigin = 'http://localhost:8080';
+// The certification build serves the API from the page's own origin (WebKit cannot intercept a cross-origin preflight); the default is unchanged.
+const apiOrigin = process.env.ASK_E2E_API_ORIGIN ?? 'http://localhost:8080';
 
 function capabilityExecution(unavailable = false) {
   const capability = {
