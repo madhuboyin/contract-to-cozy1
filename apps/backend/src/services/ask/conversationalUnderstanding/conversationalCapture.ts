@@ -369,17 +369,36 @@ export function warrantyAddCaptureRequest(contextVersion: string): AskCaptureReq
 // An event the homeowner chose to add (rather than one Ask extracted from something they said) needs the one thing
 // the extraction edit path deliberately excludes: a date. So it has its own form (CAPTURE_EVENT_ADD), and its
 // submission builds the same confirmation parameters extraction produces, so the existing confirmCaptureEvent
-// writer handles it unchanged. A user-added event is always an exact date: a timeline records what happened, so
-// a date in the future is refused.
+// writer handles it unchanged. The homeowner can preserve the precision they actually know instead of inventing a day.
 export const EVENT_ADD_CAPTURE_KEY = 'CAPTURE_EVENT_ADD';
 const EVENT_ADD_TYPES = Object.values(HomeEventType).filter((value) => value !== 'VERIFIED_RESOLUTION');
 const eventTypeLabel = (value: string): string => value.charAt(0) + value.slice(1).toLowerCase().replace(/_/g, ' ');
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+const isValidIsoDate = (value: string): boolean => /^\d{4}-\d{2}-\d{2}$/.test(value)
+  && !Number.isNaN(new Date(`${value}T00:00:00Z`).getTime())
+  && new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) === value;
+
+const EVENT_ADD_DATE_SCHEMA = z.object({
+  precision: z.enum(['EXACT_DATE', 'MONTH', 'YEAR', 'RANGE']),
+  value: z.string().min(4).max(10),
+  rangeEnd: z.string().max(10).optional(),
+}).superRefine((date, ctx) => {
+  const validValue = date.precision === 'YEAR'
+    ? /^\d{4}$/.test(date.value)
+    : date.precision === 'MONTH'
+      ? /^\d{4}-(0[1-9]|1[0-2])$/.test(date.value)
+      : isValidIsoDate(date.value);
+  if (!validValue) ctx.addIssue({ code: 'custom', path: ['value'], message: 'Enter a valid recorded date.' });
+  if (date.precision === 'RANGE' && (!date.rangeEnd || !isValidIsoDate(date.rangeEnd) || date.rangeEnd < date.value)) ctx.addIssue({ code: 'custom', path: ['rangeEnd'], message: 'Enter an end date on or after the start date.' });
+});
 
 const EVENT_ADD_ANSWER_SCHEMA = z.object({
   title: z.string().trim().min(3).max(140),
   type: z.nativeEnum(HomeEventType).refine((value) => value !== 'VERIFIED_RESOLUTION', { message: 'Choose one of the listed types.' }),
-  occurredAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine((value) => !Number.isNaN(new Date(`${value}T00:00:00Z`).getTime()), { message: 'Enter a valid date.' }),
+  occurredAt: z.union([
+    z.string().refine(isValidIsoDate, { message: 'Enter a valid recorded date.' }).transform((value) => ({ precision: 'EXACT_DATE' as const, value })),
+    EVENT_ADD_DATE_SCHEMA,
+  ]),
   summary: z.string().trim().max(500).nullish().transform((value) => value || null),
   amount: z.number().nonnegative().max(10_000_000).nullish().transform((value) => value ?? null),
   providerName: z.string().trim().max(160).nullish().transform((value) => value || null),
@@ -394,13 +413,13 @@ export function eventAddCaptureRequest(contextVersion: string, entered: Record<s
     state: 'UNKNOWN',
     title: 'Add a timeline event',
     question: 'What would you like to add to your home timeline?',
-    helpText: 'Enter the date as YYYY-MM-DD. You will review everything before it is saved.',
+    helpText: 'Use the precision you actually know. You will review everything before it is saved.',
     inputSchema: { type: 'GROUP', fields: [
       { key: 'title', label: 'Title', required: true, inputSchema: { type: 'SHORT_TEXT', maxLength: 140 } },
       { key: 'type', label: 'Type', required: true, inputSchema: { type: 'SINGLE_SELECT', options: EVENT_ADD_TYPES.map((value) => ({ label: eventTypeLabel(value), value })) } },
-      { key: 'occurredAt', label: 'Date', required: true, inputSchema: { type: 'SHORT_TEXT', maxLength: 10 } },
-      { key: 'summary', label: 'Details', required: false, inputSchema: { type: 'SHORT_TEXT', maxLength: 500 } },
-      { key: 'amount', label: 'Amount', required: false, inputSchema: { type: 'DECIMAL', min: 0, max: 10_000_000, unit: 'USD' } },
+      { key: 'occurredAt', label: 'When did it happen?', required: true, inputSchema: { type: 'APPROXIMATE_DATE', allowedPrecisions: ['EXACT_DATE', 'MONTH', 'YEAR', 'RANGE'], allowFuture: false } },
+      { key: 'summary', label: 'Details', required: false, inputSchema: { type: 'LONG_TEXT', maxLength: 500 } },
+      { key: 'amount', label: 'Amount', helpText: 'Optional, in USD.', required: false, inputSchema: { type: 'DECIMAL', min: 0, max: 10_000_000, unit: 'USD' } },
       { key: 'providerName', label: 'Provider', required: false, inputSchema: { type: 'SHORT_TEXT', maxLength: 160 } },
     ] },
     currentAnswer: {
@@ -425,21 +444,26 @@ export function buildUserAddedEventConfirmation(
 ): { result: AskOperationResult } | { error: string } {
   const parameters = asParameterRecord(storedParameters);
   const parsed = EVENT_ADD_ANSWER_SCHEMA.safeParse(answer);
-  if (!parsed.success) return { error: parsed.error.issues[0]?.message && !/expected|invalid/i.test(parsed.error.issues[0].message) ? parsed.error.issues[0].message : 'Enter a title, a type, and a date as YYYY-MM-DD.' };
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message && !/expected|invalid/i.test(parsed.error.issues[0].message) ? parsed.error.issues[0].message : 'Enter a title, a type, and when the event happened.' };
   const entered = parsed.data;
-  if (new Date(`${entered.occurredAt}T00:00:00Z`).getTime() > now.getTime() + ONE_DAY_MS) return { error: 'A timeline records what has happened, so the date cannot be in the future.' };
+  const dateValue = entered.occurredAt.value;
+  const canonicalDate = entered.occurredAt.precision === 'YEAR' ? `${dateValue}-01-01` : entered.occurredAt.precision === 'MONTH' ? `${dateValue}-01` : dateValue;
+  if (new Date(`${canonicalDate}T00:00:00Z`).getTime() > now.getTime() + ONE_DAY_MS) return { error: 'A timeline records what has happened, so the date cannot be in the future.' };
   const confirmationVersion = nextConfirmationVersion(parameters);
   const expiresAt = confirmationExpiry(now);
   const merged: Record<string, unknown> = {
     ...parameters,
     captureOrigin: USER_ADD_ORIGIN,
     type: entered.type, title: entered.title, summary: entered.summary,
-    occurredAt: `${entered.occurredAt}T00:00:00.000Z`, datePrecision: 'EXACT_DATE', dateRangeStart: null, dateRangeEnd: null,
+    occurredAt: `${canonicalDate}T00:00:00.000Z`, datePrecision: entered.occurredAt.precision,
+    dateRangeStart: entered.occurredAt.precision === 'RANGE' ? `${dateValue}T00:00:00.000Z` : null,
+    dateRangeEnd: entered.occurredAt.precision === 'RANGE' && entered.occurredAt.rangeEnd ? `${entered.occurredAt.rangeEnd}T00:00:00.000Z` : null,
     amount: entered.amount, currency: entered.amount != null ? 'USD' : null, providerName: entered.providerName,
     attribution: 'FIRSTHAND', captureChannel: CAPTURE_CHANNEL,
   };
   const fields: Array<{ label: string; value: string }> = [
-    { label: 'Event', value: entered.title }, { label: 'Type', value: eventTypeLabel(entered.type) }, { label: 'Date', value: entered.occurredAt },
+    { label: 'Event', value: entered.title }, { label: 'Type', value: eventTypeLabel(entered.type) },
+    { label: 'Date', value: entered.occurredAt.precision === 'RANGE' ? `${dateValue} to ${entered.occurredAt.rangeEnd}` : dateValue },
   ];
   if (entered.amount != null) fields.push({ label: 'Amount', value: `$${entered.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` });
   if (entered.providerName) fields.push({ label: 'Provider', value: entered.providerName });

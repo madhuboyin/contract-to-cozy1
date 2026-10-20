@@ -467,6 +467,7 @@ const MetricRowBlockSchema = z.object({
 
 const TimelineBlockSchema = z.object({
   type: z.literal('TIMELINE'), id: z.string(), title: z.string(), description: z.string().nullable().optional(),
+  actions: z.array(AskActionSchema).max(3).default([]),
   controls: z.object({
     search: z.boolean().default(false),
     typeFilter: z.boolean().default(false),

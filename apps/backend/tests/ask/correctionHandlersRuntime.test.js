@@ -1109,6 +1109,19 @@ test('Add event: blank optional fields become null, and resubmitting raises the 
   assert.equal(second.parameters.confirmationVersion, 2, 'a stale confirmation can never match the edited one');
 });
 
+test('Add event: month, year and range precision are preserved instead of inventing an exact day', () => {
+  const base = { title: 'Roof replaced', type: 'IMPROVEMENT' };
+  const month = buildUserAddedEventConfirmation({}, 'ctx-1', { ...base, occurredAt: { precision: 'MONTH', value: '2026-08' } }, NOW).result;
+  assert.deepEqual([month.parameters.occurredAt, month.parameters.datePrecision], ['2026-08-01T00:00:00.000Z', 'MONTH']);
+  const year = buildUserAddedEventConfirmation({}, 'ctx-1', { ...base, occurredAt: { precision: 'YEAR', value: '2025' } }, NOW).result;
+  assert.deepEqual([year.parameters.occurredAt, year.parameters.datePrecision], ['2025-01-01T00:00:00.000Z', 'YEAR']);
+  const range = buildUserAddedEventConfirmation({}, 'ctx-1', { ...base, occurredAt: { precision: 'RANGE', value: '2026-08-01', rangeEnd: '2026-08-15' } }, NOW).result;
+  assert.deepEqual(
+    [range.parameters.occurredAt, range.parameters.datePrecision, range.parameters.dateRangeStart, range.parameters.dateRangeEnd],
+    ['2026-08-01T00:00:00.000Z', 'RANGE', '2026-08-01T00:00:00.000Z', '2026-08-15T00:00:00.000Z'],
+  );
+});
+
 test('Add event: an unusable answer is refused with a reason (short title, unlisted or system type, bad or future date, negative amount)', () => {
   const base = { title: 'Roof replaced', type: 'IMPROVEMENT', occurredAt: '2026-08-15' };
   const cases = [

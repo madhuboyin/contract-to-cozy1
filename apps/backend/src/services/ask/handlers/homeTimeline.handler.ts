@@ -111,11 +111,20 @@ const eventActions = (canManage: boolean) => canManage ? [
   { id: 'correct-visibility', label: 'Change visibility', message: HOME_EVENT_VISIBILITY_MESSAGE, style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'HOME_EVENT_VISIBILITY' },
 ] : undefined;
 
+const logEventAction = {
+  id: 'home-timeline-log-event', label: 'Log an event', interactionType: 'START_WORKFLOW' as const,
+  message: EVENT_ADD_MESSAGE, operationId: 'CAPTURE_EVENT_CONFIRM', style: 'SECONDARY' as const,
+};
+const logEventItemAction = {
+  id: 'home-timeline-log-event', label: 'Log an event', interactionType: 'MUTATE_RECORD' as const,
+  message: EVENT_ADD_MESSAGE, operationId: 'CAPTURE_EVENT_CONFIRM', style: 'PRIMARY' as const,
+};
+
 const logEventBlock = (propertyId: string): AskPresentationBlock => ({
   type: 'GROUPED_LIST', id: 'home-timeline-actions', title: 'Add to this history', description: 'Record something that happened at this home without leaving the conversation.', filters: [],
   sections: [{ id: 'home-timeline-add-actions', title: 'Timeline actions', count: 1, items: [{
     id: propertyId, entityType: 'PROPERTY', title: 'Log an event', description: 'Add a repair, maintenance visit, improvement, inspection, purchase, claim, milestone or note.', meta: [],
-    actions: [{ id: 'home-timeline-log-event', label: 'Log an event', interactionType: 'MUTATE_RECORD', message: EVENT_ADD_MESSAGE, operationId: 'CAPTURE_EVENT_CONFIRM', style: 'PRIMARY' }],
+    actions: [logEventItemAction],
   }] }], actions: [],
 });
 
@@ -150,7 +159,6 @@ export function homeTimelineFromView(allEvents: readonly TimelineEventView[], pr
     tone: disputed ? 'CAUTION' : 'DEFAULT',
     actions: [],
   }];
-  if (canManage) blocks.push(logEventBlock(propertyId));
   if (allEvents.length >= HOME_TIMELINE_ASK_LIMIT) {
     blocks.push({
       type: 'LIMITATION', id: 'home-timeline-limit', title: `Showing the ${HOME_TIMELINE_ASK_LIMIT} most recent events`,
@@ -171,6 +179,7 @@ export function homeTimelineFromView(allEvents: readonly TimelineEventView[], pr
     blocks.push({
       type: 'TIMELINE', id: 'home-timeline-events', title: 'Home timeline',
       description: 'Each event sits at its recorded date; a month or a year is shown as recorded, and a range at its start. Open an event on the timeline for its details and evidence.',
+      actions: canManage ? [logEventAction] : [],
       controls: { search: true, typeFilter: true, dateFilter: true, limitFilter: true, selectionExport: true, annualRecap: true, storyPlayback: true },
       items: onTrack.map(({ event, placement }) => {
         const category = homeTimelineCategory(event.type);

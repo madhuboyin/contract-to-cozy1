@@ -493,10 +493,17 @@ export function InlineCaptureCard({
     ? schema.fields
     : [{ key: 'value', label: 'Answer', required: true, inputSchema: schema, helpText: undefined, when: undefined }];
 
+  const compactEventAdd = schema.type === 'GROUP' && request.captureKey === 'CAPTURE_EVENT_ADD';
+  const eventType = typeof values.type === 'string' ? values.type : null;
   const activeFields = fields.filter((field) => {
     if (!field.when) return true;
     const actual = values[field.when.fieldKey];
     return field.when.operator === 'EQUALS' ? actual === field.when.value : actual !== field.when.value;
+  }).filter((field) => {
+    if (!compactEventAdd || !eventType) return true;
+    if (field.key === 'amount') return ['PURCHASE', 'REPAIR', 'MAINTENANCE', 'CLAIM', 'IMPROVEMENT', 'VALUE_UPDATE'].includes(eventType);
+    if (field.key === 'providerName') return ['PURCHASE', 'REPAIR', 'MAINTENANCE', 'CLAIM', 'IMPROVEMENT', 'INSPECTION'].includes(eventType);
+    return true;
   });
   const compactMaintenanceTask = schema.type === 'GROUP' && request.captureKey === 'MAINTENANCE_TASK_INPUTS';
   const compactInventoryCreate = schema.type === 'GROUP' && request.captureKey === 'INVENTORY_ITEM_CREATE_INPUTS';
@@ -504,7 +511,6 @@ export function InlineCaptureCard({
   const compactMaterialSpec = schema.type === 'GROUP' && request.captureKey === 'MATERIAL_SPEC_INPUTS';
   const compactPlantAdvisor = schema.type === 'GROUP' && request.captureKey === 'ROOM_PLANT_RECOMMENDATION_INPUTS';
   const compactOwnershipScenario = schema.type === 'GROUP' && request.captureKey === 'OWNERSHIP_COST_SCENARIO_INPUTS';
-  const compactEventAdd = schema.type === 'GROUP' && request.captureKey === 'CAPTURE_EVENT_ADD';
   const compactProjectCreate = schema.type === 'GROUP' && request.captureKey === 'PROJECT_TRACKER_CREATE_INPUTS';
   const compactProjectCommand = schema.type === 'GROUP' && request.captureKey === 'PROJECT_TRACKER_COMMAND_INPUTS';
   const compactContinuityPlan = schema.type === 'GROUP' && (request.captureKey === 'HOME_DIGITAL_WILL_EDITOR_INPUTS' || request.captureKey === 'HOME_DIGITAL_WILL_METADATA_INPUTS');
@@ -597,11 +603,11 @@ export function InlineCaptureCard({
   }
 
   return (
-    <form ref={containerRef as unknown as Ref<HTMLFormElement>} onSubmit={save} className={cn('rounded-2xl border', compactContinuityPlan ? 'mx-auto w-full max-w-[820px] border-slate-200 bg-white p-4 shadow-sm sm:p-5' : compactEventAdd || compactProjectCreate ? 'p-3 sm:p-4' : 'p-4', !compactContinuityPlan && policy.border)} aria-busy={saving || cancelling} aria-label={request.title} data-home-continuity-capture={compactContinuityPlan ? '' : undefined}>
+    <form ref={containerRef as unknown as Ref<HTMLFormElement>} onSubmit={save} className={cn('rounded-2xl border', compactContinuityPlan ? 'mx-auto w-full max-w-[820px] border-slate-200 bg-white p-4 shadow-sm sm:p-5' : compactEventAdd ? 'border-slate-200 bg-white p-4 shadow-sm sm:p-5' : compactProjectCreate ? 'p-3 sm:p-4' : 'p-4', !compactContinuityPlan && !compactEventAdd && policy.border)} aria-busy={saving || cancelling} aria-label={request.title} data-home-continuity-capture={compactContinuityPlan ? '' : undefined}>
       {compactEventAdd || compactProjectCreate ? (
         <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-          <p className="text-sm font-semibold text-slate-950">{compactEventAdd ? 'Event details' : 'Project setup'}</p>
-          <p className="text-xs leading-4 text-slate-600">{compactEventAdd ? 'Required: title, type and date (YYYY-MM-DD). You’ll review before anything is saved.' : 'Add the essentials and one real milestone. You’ll review before anything is created.'}</p>
+          <p className={compactEventAdd ? 'text-lg font-semibold tracking-tight text-slate-950' : 'text-sm font-semibold text-slate-950'}>{compactEventAdd ? 'Add a timeline event' : 'Project setup'}</p>
+          <p className="text-xs leading-4 text-slate-600">{compactEventAdd ? 'Nothing is saved until you review and confirm.' : 'Add the essentials and one real milestone. You’ll review before anything is created.'}</p>
         </div>
       ) : compactContinuityPlan ? (
         <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-4">
@@ -655,8 +661,8 @@ export function InlineCaptureCard({
           <span>{request.confirmationText ?? 'I confirm this information can be saved to the home record.'}</span>
         </label>
       )}
-      <div className={cn('flex flex-wrap items-center gap-2', compactContinuityPlan && 'mt-4 justify-between border-t border-slate-100 pt-4', !compactContinuityPlan && (compactEventAdd || compactProjectCreate ? 'mt-3' : 'mt-4'))}>
-        {compactContinuityPlan && <button type="button" disabled={saving || cancelling} onClick={() => void cancelContinuityWorkflow()} className="min-h-11 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-50">{cancelling ? 'Cancelling…' : 'Cancel'}</button>}
+      <div className={cn('flex flex-wrap items-center gap-2', (compactContinuityPlan || compactEventAdd) && 'mt-4 justify-between border-t border-slate-100 pt-4', !compactContinuityPlan && !compactEventAdd && (compactProjectCreate ? 'mt-3' : 'mt-4'))}>
+        {(compactContinuityPlan || compactEventAdd) && <button type="button" disabled={saving || cancelling} onClick={() => void cancelContinuityWorkflow()} className="min-h-11 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-50">{cancelling ? 'Cancelling…' : 'Cancel'}</button>}
         <div className="flex flex-wrap gap-2">
         {activeGroupIndex > 0 && <button type="button" disabled={saving} onClick={() => setActiveGroupIndex((index) => Math.max(0, index - 1))} className="min-h-11 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50">Previous</button>}
         {activeGroup && activeGroupIndex < formGroups.length - 1
@@ -666,6 +672,7 @@ export function InlineCaptureCard({
         {request.classification === 'ENHANCEMENT_ACCURACY' && <button type="button" disabled={saving} onClick={() => { window.localStorage.removeItem(captureDraftStorageKey(executionId, request.requirementId)); setDismissed(true); void api.recordAskCaptureEvent(executionId, { requirementId: request.requirementId, captureKey: request.captureKey, event: 'DISMISSED' }).catch(() => undefined); }} className="min-h-11 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-white">Use general estimate</button>}
         {request.fallbackHref && <AskContextLink href={request.fallbackHref} onClick={() => void api.recordAskCaptureEvent(executionId, { requirementId: request.requirementId, captureKey: request.captureKey, event: 'FULL_FORM_OPENED' }).catch(() => undefined)} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700">Open full form <ExternalLink className="h-4 w-4" /></AskContextLink>}
         {compactContinuityPlan && activeGroup && activeGroupIndex < formGroups.length - 1 && activeGroupMissingRequired && <p className="basis-full text-right text-xs font-medium text-amber-700">Complete the required fields to continue.</p>}
+        {compactEventAdd && missingRequired && <p className="basis-full text-right text-xs font-medium text-amber-700">Add a title, choose a type, and enter when it happened.</p>}
         </div>
       </div>
     </form>

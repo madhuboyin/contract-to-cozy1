@@ -60,7 +60,7 @@ export function capitalTimelineBlock(
     return `${parts.year}-${parts.month}`;
   };
   return {
-    type: 'TIMELINE', id: 'capital-timeline-table', title: 'Upcoming capital windows',
+    type: 'TIMELINE', id: 'capital-timeline-table', title: 'Upcoming capital windows', actions: [],
     description: `Windows and ranges come from the canonical Home Capital Timeline; they are not failure dates or vendor quotes. Each sits at the start of its window.${totalCount > upcoming.length ? ` Showing the ${upcoming.length} soonest of ${totalCount} windows.` : ''}`,
     items: upcoming.map((item) => ({
       id: item.id,

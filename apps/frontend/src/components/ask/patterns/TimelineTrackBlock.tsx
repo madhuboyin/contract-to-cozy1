@@ -1,10 +1,10 @@
 'use client';
 
 import { useContext, useEffect, useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight, Download, Pause, Play, Search } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, Download, Pause, Play, Search, SlidersHorizontal } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { resolveTimelineTrack } from '@/features/ask/displayPatterns';
-import { AskContextLink } from '../blocks/context';
+import { ActionLink, AskContextLink } from '../blocks/context';
 import { TimelineList } from '../blocks/CoreBlocks';
 import { TimelineEventDetail } from './TimelineEventDetail';
 import { ResultViewContext } from '@/features/ask/useResultView';
@@ -25,6 +25,7 @@ const CAPITAL_WINDOWS_BLOCK_ID = 'capital-timeline-table';
 export const TimelineTrackBlock: AskBlockRenderer<'TIMELINE'> = (props) => {
   const { block, onItemAction, itemActionsDisabled, propertyId, onAccessLost } = props;
   const isCapitalWindows = block.id === CAPITAL_WINDOWS_BLOCK_ID;
+  const isHomeTimeline = block.id === 'home-timeline-events';
   // A record that carries its own detail (home events) opens in place; the capital windows keep their live re-read. Neither navigates away.
   const hasWindowDetail = isCapitalWindows || block.items.some((item) => item.detail);
   const points = useMemo(() => resolveTimelineTrack(block), [block]);
@@ -34,7 +35,7 @@ export const TimelineTrackBlock: AskBlockRenderer<'TIMELINE'> = (props) => {
     return Array.from(seen, ([id, label], index) => ({ id, label, colour: CATEGORY_COLOURS[index % CATEGORY_COLOURS.length] }));
   }, [block]);
   const [hidden, setHidden] = useState<string[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(() => block.items[0]?.id ?? null);
   const [query, setQuery] = useState('');
   const [eventType, setEventType] = useState('');
   const [fromDate, setFromDate] = useState('');
@@ -46,7 +47,7 @@ export const TimelineTrackBlock: AskBlockRenderer<'TIMELINE'> = (props) => {
   const [actionError, setActionError] = useState<string | null>(null);
   const controls = useContext(ResultViewContext);
   const [localDetailId, setLocalDetailId] = useState<string | null>(null);
-  const layout = controls?.view.timelineLayouts?.[block.id] ?? 'TRACK';
+  const layout = controls?.view.timelineLayouts?.[block.id] ?? (isHomeTimeline ? 'LIST' : 'TRACK');
   const detailId = hasWindowDetail ? (controls ? controls.detailIdFor(block.id) : localDetailId) : null;
   const detailItem = detailId ? block.items.find((item) => item.id === detailId) : undefined;
   const toggleSelected = (itemId: string) => setSelectedForExport((current) => {
@@ -90,6 +91,15 @@ export const TimelineTrackBlock: AskBlockRenderer<'TIMELINE'> = (props) => {
     const timer = window.setTimeout(() => setPlaybackIndex((current) => current + 1 >= filteredItems.length ? 0 : current + 1), 900);
     return () => window.clearTimeout(timer);
   }, [playbackOn, playbackIndex, filteredItems]);
+  useEffect(() => {
+    if (layout !== 'TRACK' || !selectedId) return;
+    requestAnimationFrame(() => {
+      const selectedPoint = document.querySelector<HTMLElement>(`[data-ask-timeline-point="${CSS.escape(selectedId)}"]`);
+      if (typeof selectedPoint?.scrollIntoView === 'function') {
+        selectedPoint.scrollIntoView({ block: 'nearest', inline: 'center' });
+      }
+    });
+  }, [layout, selectedId]);
   const downloadJson = (filename: string, value: unknown) => {
     const url = URL.createObjectURL(new Blob([JSON.stringify(value, null, 2)], { type: 'application/json' }));
     const anchor = document.createElement('a'); anchor.href = url; anchor.download = filename; anchor.click(); URL.revokeObjectURL(url);
@@ -100,27 +110,28 @@ export const TimelineTrackBlock: AskBlockRenderer<'TIMELINE'> = (props) => {
         <button key={choice} type="button" aria-pressed={layout === choice}
           onClick={() => controls.change((view) => ({ ...view, timelineLayouts: { ...(view.timelineLayouts ?? {}), [block.id]: choice } }))}
           className={cn('min-h-9 rounded-lg px-2.5 text-xs font-semibold', layout === choice ? 'bg-white text-teal-800 shadow-sm' : 'text-slate-600 hover:bg-white')}>
-          {choice === 'TRACK' ? 'Timeline' : 'List'}
+          {choice === 'TRACK' ? (isHomeTimeline ? 'Timeline map' : 'Timeline') : (isHomeTimeline ? 'Event list' : 'List')}
         </button>
       ))}
     </div>
   );
   const heading = (
     <div className="flex flex-wrap items-start justify-between gap-3">
-      <div>
-        <h3 className="font-semibold text-slate-950">{block.title}</h3>
+      <div className="min-w-0">
+        <div className="flex items-center gap-2"><span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-teal-700"><CalendarDays className="h-4 w-4" aria-hidden="true" /></span><h3 className="text-base font-semibold text-slate-950">{block.title}</h3></div>
         {block.description && <p className="mt-1 text-sm text-slate-600">{block.description}</p>}
+        {(block.actions?.length ?? 0) > 0 && <div className="mt-3 flex flex-wrap gap-2">{block.actions?.map((action) => <ActionLink key={action.id} action={action} />)}</div>}
       </div>
       {layoutSwitch}
     </div>
   );
-  const parityControls = block.controls && (
-    <div className="mt-3 space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+  const parityControlsContent = block.controls && (
+    <div className={cn('space-y-3', isHomeTimeline ? '' : 'mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3')}>
       <div className="flex flex-wrap gap-2">
         {block.controls.search && <label className="relative min-w-56 flex-1"><Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-slate-400" aria-hidden="true" /><span className="sr-only">Search timeline events</span><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search events…" className="min-h-10 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-sm" /></label>}
         {block.controls.typeFilter && <label><span className="sr-only">Event type</span><select value={eventType} onChange={(event) => setEventType(event.target.value)} className="min-h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm"><option value="">All event types</option>{eventTypes.map((type) => <option key={type} value={type}>{type}</option>)}</select></label>}
         {block.controls.dateFilter && <><label className="text-xs text-slate-500">From<input type="date" value={fromDate} max={toDate || undefined} onChange={(event) => setFromDate(event.target.value)} className="ml-2 min-h-10 rounded-xl border border-slate-200 bg-white px-2 text-sm text-slate-800" /></label><label className="text-xs text-slate-500">To<input type="date" value={toDate} min={fromDate || undefined} onChange={(event) => setToDate(event.target.value)} className="ml-2 min-h-10 rounded-xl border border-slate-200 bg-white px-2 text-sm text-slate-800" /></label></>}
-        {block.controls.limitFilter && <label><span className="sr-only">Event limit</span><select value={displayLimit} onChange={(event) => setDisplayLimit(Number(event.target.value))} className="min-h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm"><option value={25}>Last 25 events</option><option value={50}>Last 50 events</option><option value={80}>Last 80 events</option><option value={150}>Last 150 events</option><option value={200}>All events (up to 200)</option></select></label>}
+        {block.controls.limitFilter && <label><span className="sr-only">Events shown</span><select value={displayLimit} onChange={(event) => setDisplayLimit(Number(event.target.value))} className="min-h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm"><option value={25}>Show 25 events</option><option value={50}>Show 50 events</option><option value={80}>Show all {block.items.length} returned events</option></select></label>}
       </div>
       <div className="flex flex-wrap items-center gap-2">
         {block.controls.selectionExport && <button type="button" disabled={!propertyId || selectedForExport.size === 0} onClick={async () => { try { setActionError(null); const response = await exportHomeTimelineEvents(propertyId!, [...selectedForExport]); downloadJson(`home-timeline-${new Date().toISOString().slice(0, 10)}.json`, response.data); } catch { setActionError('The selected events could not be exported.'); } }} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold disabled:opacity-50"><Download className="h-4 w-4" aria-hidden="true" />Export selected ({selectedForExport.size})</button>}
@@ -132,8 +143,14 @@ export const TimelineTrackBlock: AskBlockRenderer<'TIMELINE'> = (props) => {
       {actionError && <p className="text-xs text-rose-700" role="alert">{actionError}</p>}
     </div>
   );
+  const parityControls = isHomeTimeline && parityControlsContent ? (
+    <details className="mt-3 rounded-xl border border-slate-200 bg-white">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-3 py-2 text-sm font-semibold text-slate-700"><SlidersHorizontal className="h-4 w-4 text-teal-700" aria-hidden="true" />Refine or use timeline tools</summary>
+      <div className="border-t border-slate-100 p-3">{parityControlsContent}</div>
+    </details>
+  ) : parityControlsContent;
   if (layout === 'LIST' || !points) {
-    return <section id={block.id} className="scroll-mt-4 rounded-2xl border border-slate-200 bg-white p-4" data-display-pattern="timeline-list">{heading}{parityControls}
+    return <section id={block.id} className="scroll-mt-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5" data-display-pattern="timeline-list">{heading}{parityControls}
       <TimelineList block={filteredBlock} onOpenDetail={hasWindowDetail ? openDetail : undefined} openDetailId={detailId} onItemAction={onItemAction} itemActionsDisabled={itemActionsDisabled} selectedIds={block.controls?.selectionExport ? selectedForExport : undefined} onToggleSelected={block.controls?.selectionExport ? toggleSelected : undefined} />
       {windowDetail}
     </section>;
@@ -155,7 +172,7 @@ export const TimelineTrackBlock: AskBlockRenderer<'TIMELINE'> = (props) => {
     setSelectedId(visible[(position + direction + visible.length) % visible.length].item.id);
   };
   return (
-    <section id={block.id} className="scroll-mt-4 rounded-2xl border border-slate-200 bg-white p-4" data-display-pattern="timeline">
+    <section id={block.id} className="scroll-mt-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5" data-display-pattern="timeline">
       {heading}
       {parityControls}
       {categories.length > 1 && (

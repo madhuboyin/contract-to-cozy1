@@ -70,9 +70,10 @@ test('the operation reads the page\'s full supported event list (limit 200) behi
 
 test('contributors can log, review and correct real events inline while modeled events stay read-only', async () => {
   const result = await capabilityInvoke('HOME_TIMELINE_EVENTS', { userId: 'u1', propertyId: 'p1', message: 'Show my home timeline' }, { propertyAccess: { role: 'CONTRIBUTOR', userId: 'u1', propertyId: 'p1' } });
-  const add = result.blocks.find((block) => block.id === 'home-timeline-actions').sections[0].items[0].actions[0];
-  assert.deepEqual({ label: add.label, operationId: add.operationId, message: add.message }, { label: 'Log an event', operationId: 'CAPTURE_EVENT_CONFIRM', message: 'Add an event to my home timeline.' });
+  assert.equal(result.blocks.some((block) => block.id === 'home-timeline-actions'), false, 'the add action does not consume a separate generic result card');
   const track = result.blocks.find((block) => block.id === 'home-timeline-events');
+  const add = track.actions[0];
+  assert.deepEqual({ label: add.label, operationId: add.operationId, message: add.message }, { label: 'Log an event', operationId: 'CAPTURE_EVENT_CONFIRM', message: 'Add an event to my home timeline.' });
   assert.deepEqual(track.controls, { search: true, typeFilter: true, dateFilter: true, limitFilter: true, selectionExport: true, annualRecap: true, storyPlayback: true });
   const kitchen = track.items.find((item) => item.id === 'kitchen');
   assert.equal(kitchen.detail.canReviewVerification, true);
