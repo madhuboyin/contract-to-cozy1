@@ -168,6 +168,8 @@ export const ASK_ADVERTISED_CARD_READ_CAPABILITY_IDS = Object.freeze([
   'oracle',
   'budget',
   'environment-report',
+  'property-tax',
+  'sell-hold-rent',
 ] as const satisfies readonly (keyof typeof CARD_ENTRY_BINDINGS)[]);
 
 // The Claims card is allowed to carry a declared operation, but reviewed discovery requires a message-routable question. Keep the one exception

@@ -84,7 +84,7 @@ test('More ideas explicitly advertises the Home Continuity Plan and Material Spe
 });
 
 test('More ideas advertises the broad reviewed tool shelf from canonical card reads without importing ownership disagreements', () => {
-  assert.equal(ASK_ADVERTISED_CARD_READ_CAPABILITY_IDS.length, 28);
+  assert.equal(ASK_ADVERTISED_CARD_READ_CAPABILITY_IDS.length, 30);
   for (const capabilityId of ASK_ADVERTISED_CARD_READ_CAPABILITY_IDS) {
     const card = CARD_ENTRY_BINDINGS[capabilityId];
     const entry = explorerEntryById(`tool-${capabilityId}`);
