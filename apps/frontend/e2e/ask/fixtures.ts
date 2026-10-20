@@ -2694,7 +2694,7 @@ export async function installAskContext(context: BrowserContext, options: { calm
   await context.addCookies([{ name: 'ctc.at', value: 'ask-acceptance-token', domain: 'localhost', path: '/', httpOnly: true, sameSite: 'Strict' }]);
 }
 
-export async function installAskApi(page: Page, options: { selectorState?: 'OPTIONS' | 'NONE_ELIGIBLE' | 'UNAVAILABLE'; slowAnswerMs?: number; conflictOnce?: boolean; permissionDenied?: boolean; maintenanceDetailAccessLost?: boolean; noDecision?: boolean; heatAttention?: boolean; duplicateRefrigerator?: boolean; recentSessions?: boolean; recentSessionsPages?: boolean; searchSessions?: boolean; allHomeSessions?: boolean; pendingWork?: boolean; askFailsOnce?: boolean; refinementFailsOnce?: boolean; warrantyViewer?: boolean; warrantyEmpty?: boolean; warrantyDetailAccessLost?: boolean; documentsEmpty?: boolean; claimsViewer?: boolean; claimsEmpty?: boolean; claimDetailAccessLost?: boolean; claimUnknownOutcomeOnce?: boolean; claimConfirmDenied?: boolean; unknownOutcomeOnce?: boolean; repeatedSuggestion?: boolean; inventoryDetailNotFound?: boolean; inventoryDetailAccessLost?: boolean } = {}) {
+export async function installAskApi(page: Page, options: { selectorState?: 'OPTIONS' | 'NONE_ELIGIBLE' | 'UNAVAILABLE'; slowAnswerMs?: number; conflictOnce?: boolean; permissionDenied?: boolean; maintenanceDetailAccessLost?: boolean; noDecision?: boolean; heatAttention?: boolean; duplicateRefrigerator?: boolean; recentSessions?: boolean; recentSessionsPages?: boolean; searchSessions?: boolean; allHomeSessions?: boolean; pendingWork?: boolean; askFailsOnce?: boolean; refinementFailsOnce?: boolean; warrantyViewer?: boolean; warrantyEmpty?: boolean; warrantyDetailAccessLost?: boolean; documentsEmpty?: boolean; claimsViewer?: boolean; claimsEmpty?: boolean; claimDetailAccessLost?: boolean; claimUnknownOutcomeOnce?: boolean; claimConfirmDenied?: boolean; unknownOutcomeOnce?: boolean; repeatedSuggestion?: boolean; inventoryDetailNotFound?: boolean; inventoryDetailAccessLost?: boolean; claimStaleAfterConfirm?: 'REFRESH_OK' | 'REFRESH_FAILS' } = {}) {
   activeSessionId = null;
   const captureBodies: Array<Record<string, unknown>> = [];
   const executionQuestions: string[] = [];
@@ -2836,7 +2836,16 @@ export async function installAskApi(page: Page, options: { selectorState?: 'OPTI
     if (options.claimConfirmDenied) { await fulfill(route, { success: false, error: { code: 'ASK_PERMISSION_REQUIRED', message: 'A contributor or owner must change a claim status.' } }, 403); return; }
     // The first confirm's outcome is not known (a claim was made, the write may or may not have finished); a status check settles it.
     if (options.claimUnknownOutcomeOnce && claimConfirmCalls === 1) { await fulfill(route, { success: true, data: claimsExecution('RUNNING') }); return; }
-    await fulfill(route, { success: true, data: claimsExecution('DONE') });
+    // Phase 8 (FR-PLAT-002): the write succeeded but the claims list shown earlier could not be refreshed, so the response marks it stale.
+    await fulfill(route, { success: true, data: options.claimStaleAfterConfirm ? { ...claimsExecution('DONE'), reconciliation: { staleExecutionIds: ['execution-claims-journey-1'], markedElsewhere: 0 } } : claimsExecution('DONE') });
+  });
+  let staleRefreshCalls = 0;
+  await page.route(`${apiOrigin}/api/ask/executions/execution-claims-journey-1/refresh`, async (route) => {
+    staleRefreshCalls += 1;
+    if (options.claimStaleAfterConfirm === 'REFRESH_FAILS' && staleRefreshCalls === 1) { await fulfill(route, { success: false, error: { code: 'INTERNAL_ERROR', message: 'The claims could not be read just now.' } }, 500); return; }
+    const refreshed = claimsJourneyExecution({ scope: 'BOTH', state: 'ALL', revision: 1, sessionId: activeSessionId ?? undefined }) as { blocks: Array<Record<string, unknown>> };
+    refreshed.blocks[0] = { ...refreshed.blocks[0], supportLine: 'Refreshed after the claim status change.' };
+    await fulfill(route, { success: true, data: refreshed });
   });
   await page.route(`${apiOrigin}/api/properties/${propertyId}/claims/claim-kitchen-leak`, (route) => options.claimDetailAccessLost
     ? fulfill(route, { message: 'Property not found or access denied.' }, 404)
@@ -3646,7 +3655,7 @@ export async function installAskApi(page: Page, options: { selectorState?: 'OPTI
     };
     return fulfill(route, { success: true, data: cancelled });
   });
-  return { selectorReads, captureBodies, executionQuestions, executionBodies, correctionEditBodies, correctionConfirmBodies, warrantyAddCaptureBodies, addCaptureBodies, monitorPatchBodies, captureAttempts: () => captureAttempts };
+  return { selectorReads, captureBodies, executionQuestions, executionBodies, correctionEditBodies, correctionConfirmBodies, warrantyAddCaptureBodies, addCaptureBodies, monitorPatchBodies, staleRefreshCalls: () => staleRefreshCalls, captureAttempts: () => captureAttempts };
 }
 
 function assertAuthenticated(request: Request) {
