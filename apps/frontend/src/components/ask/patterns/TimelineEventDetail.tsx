@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { FileCheck2, Loader2, LockKeyhole, Pencil, X } from 'lucide-react';
+import { FileCheck2, Loader2, LockKeyhole, X } from 'lucide-react';
 import type { AskPresentationBlock } from '@/features/ask/types';
 import type { AskItemActionInteractionType } from '@/features/ask/types';
 import { ItemActionButtons } from './PatternParts';
@@ -23,9 +23,11 @@ export function TimelineEventDetail({ item, propertyId, onClose, onItemAction, d
   useEffect(() => { headingRef.current?.focus(); }, [item.id]);
   const detail = item.detail;
   const canEdit = Boolean(onItemAction && (item.actions?.length ?? 0) > 0);
+  const canAttach = Boolean(detail?.canAttachEvidence && onItemAction);
+  const hasEvidence = Boolean(detail && detail.evidence.length > 0);
   const headingId = `timeline-event-detail-${item.id}`;
   return (
-    <aside className="mt-4 border-t border-slate-200 bg-slate-50/70 px-4 py-5 sm:px-5" aria-labelledby={headingId} data-ask-timeline-detail={item.id}>
+    <aside className="mt-3 border-t border-slate-200 bg-slate-50/70 px-4 py-4 sm:px-5" aria-labelledby={headingId} data-ask-timeline-detail={item.id}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-teal-700">Timeline event</p>
@@ -34,17 +36,19 @@ export function TimelineEventDetail({ item, propertyId, onClose, onItemAction, d
         </div>
         <button type="button" onClick={onClose} className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-xl text-slate-600 hover:bg-white" aria-label={`Close details for ${item.label}`}><X className="h-4 w-4" aria-hidden="true" /></button>
       </div>
-      {item.description && <p className="mt-3 text-sm leading-6 text-slate-700">{item.description}</p>}
+      {item.description && <p className="mt-2 text-sm leading-5 text-slate-700">{item.description}</p>}
       {detail && detail.facts.length > 0 && (
-        <dl className="mt-4 grid gap-x-6 gap-y-4 border-y border-slate-200 py-4 text-sm sm:grid-cols-2">
+        <dl className="mt-3 grid gap-x-6 gap-y-3 border-y border-slate-200 py-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
           {detail.facts.map((fact) => <div key={fact.label}><dt className="text-xs text-slate-500">{fact.label}</dt><dd className="mt-0.5 font-medium text-slate-900">{fact.value}</dd></div>)}
         </dl>
       )}
-      {detail?.canReviewVerification && propertyId && (
-        <div className="mt-5 border-t border-slate-200 pt-4">
-          <h5 className="text-sm font-semibold text-slate-900">Verify this event</h5>
+      {(detail?.canReviewVerification && propertyId || canEdit || canAttach) && <section className="mt-4 border-t border-slate-200 pt-3" aria-label={`Event actions for ${item.label}`}>
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
+        {detail?.canReviewVerification && propertyId && (
+        <div className="min-w-0">
+          <h5 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Verify</h5>
           {!reviewChoice ? (
-            <div className="mt-2 flex flex-wrap gap-2">
+            <div className="mt-1.5 flex flex-wrap gap-2">
               <button type="button" disabled={disabled || reviewing} onClick={() => setReviewChoice('HOMEOWNER_CONFIRMED')} className="min-h-10 rounded-xl border border-teal-200 px-3 text-sm font-semibold text-teal-800 disabled:opacity-50">Confirm as accurate</button>
               <button type="button" disabled={disabled || reviewing} onClick={() => setReviewChoice('DISPUTED')} className="min-h-10 rounded-xl border border-rose-200 px-3 text-sm font-semibold text-rose-700 disabled:opacity-50">Mark as disputed</button>
             </div>
@@ -71,18 +75,23 @@ export function TimelineEventDetail({ item, propertyId, onClose, onItemAction, d
           )}
           {reviewError && <p className="mt-2 text-xs text-rose-700" role="alert">{reviewError}</p>}
         </div>
-      )}
-      {canEdit && onItemAction && <section className="mt-5 border-t border-slate-200 pt-4" aria-label={`Edit ${item.label}`}>
-        <div className="flex items-center gap-2"><Pencil className="h-4 w-4 text-teal-700" aria-hidden="true" /><h5 className="text-sm font-semibold text-slate-950">Edit event</h5></div>
-        <p className="mt-1 text-sm text-slate-600">Change any details in one place. Cozy shows only what changed for your review before saving.</p>
-        <ItemActionButtons className="mt-3" item={item} actions={item.actions} onItemAction={onItemAction} disabled={disabled ?? false} />
+        )}
+        {(canEdit || canAttach) && onItemAction && <div className="min-w-0 sm:text-right" data-timeline-manage-actions="">
+          <h5 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Manage</h5>
+          <div className="mt-1.5 flex flex-wrap gap-2 sm:justify-end">
+            {canEdit && <ItemActionButtons item={item} actions={item.actions} onItemAction={onItemAction} disabled={disabled ?? false} />}
+            {canAttach && <AttachEvidenceControl className="!mt-0" event={{ entityType: item.entityType, id: item.id, title: item.label }} propertyId={propertyId} disabled={disabled}
+              onAttached={(documentId) => onItemAction(item.entityType, item.id, EVIDENCE_ATTACH_MESSAGE, 'CAPTURE_EVIDENCE_CONFIRM', 'MUTATE_RECORD', documentId)} />}
+          </div>
+          <p className="mt-1 text-xs text-slate-500">Changes are reviewed before saving.</p>
+        </div>}
+        </div>
       </section>}
-      {!canEdit && <div className="mt-5 flex gap-3 border-t border-slate-200 pt-4 text-sm text-slate-600" data-timeline-edit-unavailable="">
+      {!canEdit && !canAttach && <div className="mt-4 flex gap-3 border-t border-slate-200 pt-3 text-sm text-slate-600" data-timeline-edit-unavailable="">
         <LockKeyhole className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" /><p><span className="font-semibold text-slate-800">Editing unavailable.</span> Your current access does not allow changes to this event.</p>
       </div>}
-      <div className="mt-5">
+      {detail && hasEvidence ? <div className="mt-4 border-t border-slate-200 pt-3">
         <div className="flex items-center gap-2"><FileCheck2 className="h-4 w-4 text-teal-700" aria-hidden="true" /><h5 className="text-sm font-semibold text-slate-950">Evidence</h5></div>
-        {detail && detail.evidence.length > 0 ? (
           <ul className="mt-1.5 space-y-1.5 text-sm">
             {detail.evidence.map((row, index) => (
               <li key={`${row.label}-${index}`} className="border-l-2 border-teal-200 py-1 pl-3">
@@ -90,16 +99,7 @@ export function TimelineEventDetail({ item, propertyId, onClose, onItemAction, d
               </li>
             ))}
           </ul>
-        ) : <p className="mt-1 text-sm text-slate-600">No evidence is attached to this record yet.</p>}
-      </div>
-      {detail?.canAttachEvidence && onItemAction && (
-        <AttachEvidenceControl
-          event={{ entityType: item.entityType, id: item.id, title: item.label }}
-          propertyId={propertyId}
-          disabled={disabled}
-          onAttached={(documentId) => onItemAction(item.entityType, item.id, EVIDENCE_ATTACH_MESSAGE, 'CAPTURE_EVIDENCE_CONFIRM', 'MUTATE_RECORD', documentId)}
-        />
-      )}
+      </div> : <p className="mt-3 text-xs text-slate-500">No evidence attached yet.</p>}
     </aside>
   );
 }

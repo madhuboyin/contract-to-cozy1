@@ -136,15 +136,11 @@ function HomeEventDetail({ eventId, expectedPropertyId, fallbackItem, disabled, 
           <div><dt className="text-xs text-slate-500">Recorded as</dt><dd className="mt-0.5 font-medium text-slate-900">{fieldLabel(event.observationKind)}</dd></div>
           <div><dt className="text-xs text-slate-500">Amount</dt><dd className="mt-0.5 font-medium text-slate-900">{formatAmount(event.amount, event.currency)}</dd></div>
         </dl>
-        {onAction && <CorrectionActions actions={fallbackItem.actions ?? []} subject={event.title} entityType={fallbackItem.entityType} entityId={fallbackItem.id} disabled={disabled} onAction={onAction} />}
-        {onAction && (fallbackItem.actions?.length ?? 0) > 0 && (
-          <AttachEvidenceControl
-            event={{ entityType: fallbackItem.entityType, id: fallbackItem.id, title: event.title }}
-            propertyId={expectedPropertyId}
-            disabled={disabled}
-            onAttached={(documentId) => onAction(fallbackItem.entityType, fallbackItem.id, EVIDENCE_ATTACH_MESSAGE, 'CAPTURE_EVIDENCE_CONFIRM', 'MUTATE_RECORD', documentId)}
-          />
-        )}
+        {onAction && (fallbackItem.actions?.length ?? 0) > 0 && <div className="mt-4 flex flex-wrap items-center gap-2" data-home-event-manage-actions="">
+          <CorrectionActions className="!mt-0" actions={fallbackItem.actions ?? []} subject={event.title} entityType={fallbackItem.entityType} entityId={fallbackItem.id} disabled={disabled} onAction={onAction} />
+          <AttachEvidenceControl className="!mt-0" event={{ entityType: fallbackItem.entityType, id: fallbackItem.id, title: event.title }} propertyId={expectedPropertyId} disabled={disabled}
+            onAttached={(documentId) => onAction(fallbackItem.entityType, fallbackItem.id, EVIDENCE_ATTACH_MESSAGE, 'CAPTURE_EVIDENCE_CONFIRM', 'MUTATE_RECORD', documentId)} />
+        </div>}
         <p className="mt-3 text-xs text-slate-500">{event.documents?.length ?? 0} document{(event.documents?.length ?? 0) === 1 ? '' : 's'} · Current canonical record · updated {formatDate(event.updatedAt)}</p>
       </>}
     </aside>

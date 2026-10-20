@@ -195,9 +195,11 @@ export function TimelineList({ block, onOpenDetail, openDetailId, onItemAction, 
             </div>
             {facts.length > 0 && <p className="mt-0.5 text-xs text-slate-500">{facts.join(' · ')}</p>}
             {item.description && <p className="mt-1 text-sm text-slate-600">{item.description}</p>}
-            {onOpenDetail && <button type="button" data-ask-detail-trigger={item.id} data-ask-detail-block={block.id} aria-expanded={openDetailId === item.id} onClick={() => onOpenDetail(item.id)}
-              className="mt-1 min-h-8 rounded-lg border border-slate-200 px-2.5 text-xs font-semibold text-teal-800 hover:bg-slate-50">Review event<span className="sr-only"> {item.label}</span></button>}
-            {onItemAction && <ItemActionButtons className="mt-2" item={item} actions={item.actions} onItemAction={onItemAction} disabled={itemActionsDisabled ?? false} />}
+            {(onOpenDetail || (onItemAction && (item.actions?.length ?? 0) > 0)) && <div className="mt-2 flex flex-wrap items-center gap-2" data-timeline-row-actions={item.id}>
+              {onOpenDetail && <button type="button" data-ask-detail-trigger={item.id} data-ask-detail-block={block.id} aria-expanded={openDetailId === item.id} onClick={() => onOpenDetail(item.id)}
+                className="min-h-9 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-teal-800 hover:bg-slate-50">View details<span className="sr-only"> {item.label}</span></button>}
+              {onItemAction && <ItemActionButtons item={item} actions={item.actions} onItemAction={onItemAction} disabled={itemActionsDisabled ?? false} />}
+            </div>}
           </li>
         );
       })}

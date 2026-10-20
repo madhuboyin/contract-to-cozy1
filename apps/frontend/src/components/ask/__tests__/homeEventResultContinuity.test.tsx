@@ -127,6 +127,8 @@ test('inline event detail exposes declared correction actions with exact event i
   }
   const first = render(<Harness />);
   fireEvent.click(screen.getByRole('button', { name: 'Water heater replaced' }));
+  const manage = await screen.findByRole('group', { name: /Corrections for Water heater replaced/ });
+  expect(manage.closest('[data-home-event-manage-actions]')).toContainElement(screen.getByRole('button', { name: /Attach evidence/ }));
   fireEvent.click(await screen.findByRole('button', { name: /Edit event/ }));
   expect(onAction).toHaveBeenCalledWith('HOME_EVENT', 'event-0', 'Edit this timeline event.', 'HOME_EVENT_UPDATE', 'MUTATE_RECORD');
   first.unmount();

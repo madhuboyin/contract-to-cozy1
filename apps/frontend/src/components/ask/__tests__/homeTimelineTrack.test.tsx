@@ -12,7 +12,7 @@ type TimelineBlock = Extract<AskPresentationBlock, { type: 'TIMELINE' }>;
 const block: TimelineBlock = {
   type: 'TIMELINE', id: 'home-timeline-events', title: 'Home timeline', description: 'Each event sits at its recorded date.',
   items: [
-    { id: 'kitchen', label: 'Kitchen remodel', date: '2024-06-15', datePrecision: 'DAY', status: 'Evidence Verified', detail: { facts: [{ label: 'Provider', value: 'Oak & Co' }, { label: 'Amount', value: '$18,500' }], evidence: [{ label: 'Invoice', meta: 'Jun 16, 2024 · Final invoice' }] }, category: { id: 'work', label: 'Work done' }, entityType: 'HOME_EVENT', meta: ['Improvement', 'Highlight'], description: 'New cabinets and counters.' },
+    { id: 'kitchen', label: 'Kitchen remodel', date: '2024-06-15', datePrecision: 'DAY', status: 'Evidence Verified', detail: { facts: [{ label: 'Provider', value: 'Oak & Co' }, { label: 'Amount', value: '$18,500' }], evidence: [{ label: 'Invoice', meta: 'Jun 16, 2024 · Final invoice' }], canReviewVerification: true, canAttachEvidence: true }, category: { id: 'work', label: 'Work done' }, entityType: 'HOME_EVENT', meta: ['Improvement', 'Highlight'], description: 'New cabinets and counters.', actions: [{ id: 'edit-kitchen', label: 'Edit event', message: 'Edit this timeline event.', operationId: 'HOME_EVENT_UPDATE', interactionType: 'MUTATE_RECORD', style: 'SECONDARY' }] },
     { id: 'note', label: 'Paint colours', date: '2024-02', datePrecision: 'MONTH', status: 'Unverified', detail: { facts: [{ label: 'Visible to', value: 'Only the person who recorded it' }], evidence: [] }, category: { id: 'records', label: 'Records and notes' }, entityType: 'HOME_EVENT', meta: ['Note', 'Private'] },
     { id: 'inspection', label: 'Home inspection', date: '2023', datePrecision: 'YEAR', status: 'Homeowner Confirmed', detail: { facts: [{ label: 'Verification', value: 'Homeowner Confirmed' }], evidence: [] }, category: { id: 'inspections', label: 'Inspections' }, entityType: 'HOME_EVENT', meta: ['Inspection'] },
     { id: 'gutters', label: 'Gutter repair', date: '2020-04-01', datePrecision: 'DAY', status: 'Unverified', detail: { facts: [{ label: 'Verification', value: 'Unverified' }], evidence: [] }, category: { id: 'work', label: 'Work done' }, entityType: 'HOME_EVENT', meta: ['Apr 1, 2020 – Jun 30, 2020', 'Repair'] },
@@ -73,6 +73,8 @@ test('the Event list is the calm default, shows every event newest first, and th
   expect(within(rows[1]).getByText('Feb 2024')).toBeInTheDocument();
   expect(within(rows[2]).getByText('2023')).toBeInTheDocument();
   expect(within(rows[1]).getByText('Records and notes · Note · Private')).toBeInTheDocument();
+  const firstActions = rows[0].querySelector('[data-timeline-row-actions="kitchen"]') as HTMLElement;
+  expect(within(firstActions).getAllByRole('button').map((button) => button.textContent)).toEqual(['View details Kitchen remodel', 'Edit event']);
   fireEvent.click(screen.getByRole('button', { name: 'Timeline map' }));
   expect(readResultView(window.sessionStorage, resultViewKey('timeline-session', 'home', 'timeline-result')).timelineLayouts?.['home-timeline-events']).toBe('TRACK');
   first.unmount();
@@ -91,6 +93,10 @@ test('"View details" opens the record in place from the track and from the list,
   expect(within(detail).getByText('Oak & Co')).toBeInTheDocument();
   expect(within(detail).getByText('$18,500')).toBeInTheDocument();
   expect(within(detail).getByText(/Invoice/)).toBeInTheDocument();
+  const manage = detail.querySelector('[data-timeline-manage-actions]') as HTMLElement;
+  expect(within(manage).getAllByRole('button').map((button) => button.textContent)).toEqual(['Edit event', 'Attach evidence for Kitchen remodel']);
+  expect(within(detail).queryByRole('heading', { name: 'Edit event' })).not.toBeInTheDocument();
+  expect(within(detail).getByText('Changes are reviewed before saving.')).toBeInTheDocument();
   expect(detail.querySelector('a[href]')).toBeNull();
   fireEvent.click(within(detail).getByRole('button', { name: 'Close details for Kitchen remodel' }));
   expect(container.querySelector('[data-ask-timeline-detail]')).toBeNull();
@@ -98,5 +104,5 @@ test('"View details" opens the record in place from the track and from the list,
   fireEvent.click(within(rows[1]).getByRole('button', { name: /View details/ }));
   const note = container.querySelector('[data-ask-timeline-detail="note"]') as HTMLElement;
   expect(within(note).getByText('Only the person who recorded it')).toBeInTheDocument();
-  expect(within(note).getByText('No evidence is attached to this record yet.')).toBeInTheDocument();
+  expect(within(note).getByText('No evidence attached yet.')).toBeInTheDocument();
 });
