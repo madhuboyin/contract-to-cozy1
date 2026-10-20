@@ -58,6 +58,14 @@ export const CARD_ENTRY_BINDINGS = {
   'home-digital-will': { operationId: 'HOME_DIGITAL_WILL', message: 'Show my home continuity plan' },
   // FRD v1.55: backed by a new operation reading the same getOutlook Plant Advisor's Care tab reads.
   'plant-advisor': { operationId: 'PLANT_CARE_OUTLOOK', message: 'Show my plant care outlook' },
+  // These tools said "not available inside Ask yet" although Ask operations already read the same canonical sources. Each card now opens
+  // that read inline; the page stays one tap away for anything the read does not cover.
+  permits: { operationId: 'PERMIT_TRACKER_STATUS', message: 'Show my permits' },
+  financing: { operationId: 'FINANCING_OVERVIEW', message: 'Show my financing overview' },
+  'property-tax': { operationId: 'PROPERTY_TAX_APPEAL_READINESS', message: 'Is a property tax appeal worth it for my home?' },
+  'sell-hold-rent': { operationId: 'SELL_HOLD_RENT_ANALYSIS', message: 'Should I sell, hold or rent my home?' },
+  'quote-comparison': { operationId: 'QUOTE_COMPARISON_REVIEW', message: 'Review my contractor quote comparison' },
+  'replace-repair': { operationId: 'REPLACEMENT_GUIDANCE', message: 'Should I repair or replace my appliance?' },
   // FRD v1.56: backed by a new operation reading the same listCasesForProperty the Negotiation Shield case list reads.
   'negotiation-shield': { operationId: 'NEGOTIATION_SHIELD_CASES', message: 'Show my negotiation shield cases' },
   // FRD v1.57: backed by a new operation reading the Home Upgrade Planner's saved scenarios (listScenarios).
@@ -235,4 +243,7 @@ export const KNOWN_CARD_BRIDGE_DISAGREEMENTS: Readonly<Record<string, AskOperati
   documents: 'DOCUMENT_LOOKUP',
   'home-records': 'PROPERTY_SUMMARY',
   'reserve-fund': 'CAPITAL_RESERVE_PLAN',
+  // Like `documents`: these operations have no skill, so the guidance bridge assigns them to no capability; the card entry read is still correct.
+  permits: 'PERMIT_TRACKER_STATUS',
+  financing: 'FINANCING_OVERVIEW',
 });

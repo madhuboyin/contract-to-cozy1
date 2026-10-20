@@ -84,7 +84,7 @@ test('More ideas explicitly advertises the Home Continuity Plan and Material Spe
 });
 
 test('More ideas advertises the broad reviewed tool shelf from canonical card reads without importing ownership disagreements', () => {
-  assert.equal(ASK_ADVERTISED_CARD_READ_CAPABILITY_IDS.length, 27);
+  assert.equal(ASK_ADVERTISED_CARD_READ_CAPABILITY_IDS.length, 28);
   for (const capabilityId of ASK_ADVERTISED_CARD_READ_CAPABILITY_IDS) {
     const card = CARD_ENTRY_BINDINGS[capabilityId];
     const entry = explorerEntryById(`tool-${capabilityId}`);
@@ -199,8 +199,8 @@ test('derivation skips a binding whose capability does not exist, and the valida
 });
 
 test('the capability-card bindings are the same source, unchanged, and validated against the bridge', () => {
-  assert.equal(Object.keys(CARD_ENTRY_BINDINGS).length, 33);
-  assert.deepEqual(KNOWN_CARD_BRIDGE_DISAGREEMENTS, { documents: 'DOCUMENT_LOOKUP', 'home-records': 'PROPERTY_SUMMARY', 'reserve-fund': 'CAPITAL_RESERVE_PLAN' });
+  assert.equal(Object.keys(CARD_ENTRY_BINDINGS).length, 40);
+  assert.deepEqual(KNOWN_CARD_BRIDGE_DISAGREEMENTS, { documents: 'DOCUMENT_LOOKUP', 'home-records': 'PROPERTY_SUMMARY', 'reserve-fund': 'CAPITAL_RESERVE_PLAN', permits: 'PERMIT_TRACKER_STATUS', financing: 'FINANCING_OVERVIEW' });
   assert.deepEqual(validateAskCapabilityBindings(), []);
   // An unlisted disagreement, a stale pin, an unknown capability and an unknown operation are each rejected.
   assert.match(validateAskCapabilityBindings({ ...CARD_ENTRY_BINDINGS, maintenance: { operationId: 'OWNERSHIP_COSTS', message: 'x' } }).join('\n'), /card-binding\/maintenance: the guidance bridge assigns OWNERSHIP_COSTS to ownership-costs/);
