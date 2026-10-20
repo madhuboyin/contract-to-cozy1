@@ -587,6 +587,8 @@ Verification not executed (no real database, browser, or assistive technology in
 
 ## 14. Phase 10 — Workflow retirement
 
+**Phase 10 status (2026-10-20): started with maintenance, evidence packet only; nothing retired or redirected.** Packet: `docs/architecture/ASK_MAINTENANCE_RETIREMENT_EVIDENCE_PACKET.md`. Verdict: not ready. The registry has no maintenance entry (it is bundled with projects, buyer plan and others), the legacy page has capabilities Ask lacks (task notes, post-completion outcome edit, undo, completed-history and filter parity), no successor map exists, and maintenance writes are not in the real-database harness. Phase 9 exit was not recorded when this started.
+
 ### Process
 
 1. Select one route family, starting with maintenance.
