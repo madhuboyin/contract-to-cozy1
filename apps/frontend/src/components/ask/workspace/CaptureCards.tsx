@@ -15,6 +15,11 @@ import { HomeContinuityCaptureField } from '../HomeContinuityCaptureField';
 import { RecordEditor } from '../recordEditor/RecordEditor';
 import { ACCESS_LOST_CODES, FOCUSABLE_SELECTOR, askFailureCode, captureDraftStorageKey, capturePolicy, confirmationAttemptStorageKey, newId, useAutoFocusFirstControl } from './support';
 
+/** The one rule the warranty forms share: the expiration date must be after the start date (the server enforces it too). */
+const warrantyDateOrder = (values: Record<string, string>): Record<string, string> => (
+  values.startDate && values.expiryDate && values.expiryDate <= values.startDate ? { expiryDate: 'The expiration date must be after the start date.' } : {}
+);
+
 export function PropertySelectionCard({ executionId, onCompleted, autoFocus = false }: { executionId: string; onCompleted: (execution: AskExecutionResponse) => void; autoFocus?: boolean }) {
   const { setSelectedPropertyId } = usePropertyContext();
   const containerRef = useRef<HTMLElement>(null);
@@ -602,61 +607,43 @@ export function InlineCaptureCard({
     const entered = request.currentAnswer && typeof request.currentAnswer === 'object' && !Array.isArray(request.currentAnswer)
       ? Object.fromEntries(Object.entries(request.currentAnswer as Record<string, unknown>).map(([key, value]) => [key, typeof value === 'string' ? value : ''])) as Record<string, string>
       : request.editor.original;
-    return <RecordEditor editor={request.editor} initialValues={entered} title={request.title} saving={saving} cancelling={cancelling} error={error} autoFocus={autoFocus}
+    return <RecordEditor editor={request.editor} initialValues={entered} crossFieldErrors={request.captureKey === 'WARRANTY_UPDATE_INPUTS' ? warrantyDateOrder : undefined} title={request.title} saving={saving} cancelling={cancelling} error={error} autoFocus={autoFocus}
       onSubmit={(editorValues) => void save(null, false, editorValues)} onCancel={() => void cancelContinuityWorkflow()} />;
   }
 
-  // Add a warranty (FRD v1.385): compact inline workflow instead of one padded card per field.
+  // Add a warranty (FRD v1.385): the same RecordEditor as Edit warranty, started empty, so the two forms cannot drift apart.
   if (schema.type === 'GROUP' && request.captureKey === 'CAPTURE_WARRANTY_EDIT') {
-    const warrantyFieldOf = (key: string) => schema.fields.find((field) => field.key === key);
-    const sections: Array<{ title: string; keys: string[]; wide?: string[]; span2?: string[] }> = [
-      { title: 'Basics', keys: ['providerName', 'policyNumber', 'category'], wide: ['category'], span2: ['providerName'] },
-      { title: 'Coverage', keys: ['coverageDetails'], wide: ['coverageDetails'] },
-      { title: 'Term and cost', keys: ['startDate', 'expiryDate', 'cost'] },
-    ];
-    const dayOf = (key: string) => { const value = values[key] as { value?: string } | undefined; return value && typeof value === 'object' ? value.value ?? '' : ''; };
-    const missingLabels = schema.fields.filter((field) => field.required).filter((field) => {
-      const value = values[field.key];
-      return field.inputSchema.type === 'APPROXIMATE_DATE' ? !dayOf(field.key) : value === undefined || value === null || value === '';
-    }).map((field) => field.label.replace(/ \(estimated\)$/, '').toLowerCase());
-    const orderProblem = dayOf('startDate') && dayOf('expiryDate') && dayOf('expiryDate') <= dayOf('startDate') ? 'The expiration date must be after the start date.' : null;
-    const expiryPassed = Boolean(dayOf('expiryDate')) && dayOf('expiryDate') < new Date().toISOString().slice(0, 10);
-    const continueReason = missingLabels.length > 0 ? `Add the ${missingLabels.length > 1 ? `${missingLabels.slice(0, -1).join(', ')} and ${missingLabels[missingLabels.length - 1]}` : missingLabels[0]} to continue.` : orderProblem;
-    return (
-      <form ref={containerRef as unknown as Ref<HTMLFormElement>} onSubmit={(event) => { if (!continueReason) void save(event); else event.preventDefault(); }} aria-busy={saving || cancelling}
-        className="mx-auto w-full max-w-[840px] rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5" data-compact-capture="warranty-add">
-        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-          <h3 className="text-lg font-semibold tracking-tight text-slate-950">{request.title}</h3>
-          <p className="text-xs leading-4 text-slate-600">Nothing is saved until you review and confirm.</p>
-        </div>
-        <div className="mt-4 space-y-5">
-          {sections.map((section) => (
-            <fieldset key={section.title} className="min-w-0 border-0 p-0">
-              <legend className="mb-2 text-sm font-semibold text-slate-950">{section.title}</legend>
-              <div className="grid gap-x-3 gap-y-2.5 md:grid-cols-3">
-                {section.keys.map((key) => {
-                  const field = warrantyFieldOf(key);
-                  if (!field) return null;
-                  return <div key={key} className={section.wide?.includes(key) ? 'md:col-span-3' : section.span2?.includes(key) ? 'md:col-span-2' : undefined}>
-                    <CaptureFieldControl field={{ ...field, label: field.required ? field.label : `${field.label} (optional)` }} value={values[key]} disabled={saving || cancelling} allowNotSure={false} compact propertyId={propertyId}
-                      onChange={(value) => setValues((current) => ({ ...current, [key]: value }))} />
-                    {key === 'expiryDate' && expiryPassed && <p className="mt-1 text-xs font-medium text-amber-800" role="note">This date has already passed, so the warranty will show as expired.</p>}
-                  </div>;
-                })}
-              </div>
-            </fieldset>
-          ))}
-        </div>
-        {(error || orderProblem) && <p className="mt-3 text-sm text-red-700" role="alert">{error ?? orderProblem}</p>}
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
-          <button type="button" disabled={saving || cancelling} onClick={() => void cancelContinuityWorkflow()} className="min-h-11 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-50">{cancelling ? 'Cancelling…' : 'Cancel'}</button>
-          <div className="flex flex-1 flex-wrap items-center justify-end gap-3">
-            {continueReason && !orderProblem && <p id="warranty-add-reason" className="text-xs font-medium text-slate-600">{continueReason}</p>}
-            <button type="submit" disabled={saving || cancelling || Boolean(continueReason)} aria-describedby={continueReason && !orderProblem ? 'warranty-add-reason' : undefined} className="min-h-11 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50">{saving ? 'Saving…' : 'Continue to review'}</button>
-          </div>
-        </div>
-      </form>
-    );
+    const keyed = (key: string) => schema.fields.find((field) => field.key === key);
+    const sectionOf: Record<string, string> = { providerName: 'warranty', category: 'warranty', policyNumber: 'warranty', coverageDetails: 'coverage', startDate: 'dates-cost', expiryDate: 'dates-cost', cost: 'dates-cost' };
+    const kindOf = (field: { inputSchema: { type: string } }) => field.inputSchema.type === 'SINGLE_SELECT' ? 'SELECT' : field.inputSchema.type === 'LONG_TEXT' ? 'TEXTAREA' : field.inputSchema.type === 'APPROXIMATE_DATE' ? 'DATE' : field.inputSchema.type === 'MONEY' ? 'MONEY' : 'TEXT';
+    const fields = ['providerName', 'category', 'policyNumber', 'coverageDetails', 'startDate', 'expiryDate', 'cost'].flatMap((key) => {
+      const field = keyed(key);
+      if (!field) return [];
+      const inputSchema = field.inputSchema as { options?: Array<{ label: string; value: string }>; maxLength?: number };
+      return [{
+        key, label: field.label.replace(/ \(estimated\)$/, ''), kind: kindOf(field) as 'TEXT', section: sectionOf[key], required: field.required,
+        ...(inputSchema.options ? { options: inputSchema.options } : {}), ...(inputSchema.maxLength ? { maxLength: inputSchema.maxLength } : {}),
+        ...(field.helpText ? { helpText: field.helpText } : {}),
+        ...(key === 'expiryDate' ? { pastDateNote: 'This date has already passed, so the warranty will show as expired.' } : {}),
+      }];
+    });
+    const addEditor = {
+      recordLabel: request.title, fields, original: Object.fromEntries(fields.map((field) => [field.key, ''])),
+      sections: [{ id: 'warranty', title: 'Warranty' }, { id: 'coverage', title: 'Coverage' }, { id: 'dates-cost', title: 'Dates and cost' }],
+    };
+    const current = (request.currentAnswer ?? {}) as Record<string, unknown>;
+    const initial = Object.fromEntries(fields.map((field) => {
+      const raw = current[field.key];
+      const text = raw && typeof raw === 'object' ? String((raw as { value?: unknown }).value ?? '') : raw === null || raw === undefined ? '' : String(raw);
+      return [field.key, text];
+    })) as Record<string, string>;
+    const toAnswer = (entered: Record<string, string>) => ({
+      ...entered,
+      startDate: { precision: 'EXACT_DATE', value: entered.startDate }, expiryDate: { precision: 'EXACT_DATE', value: entered.expiryDate },
+      cost: entered.cost ? Number(entered.cost) : null,
+    });
+    return <RecordEditor mode="add" editor={addEditor} initialValues={initial} title={request.title} saving={saving} cancelling={cancelling} error={error} autoFocus={autoFocus}
+      crossFieldErrors={warrantyDateOrder} onSubmit={(entered) => void save(null, false, toAnswer(entered))} onCancel={() => void cancelContinuityWorkflow()} />;
   }
 
   // FRD §11.12 IW-CONV-004: a plain workflow group is asked one question at a time, then submitted as the same single request.

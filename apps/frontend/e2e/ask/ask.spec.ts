@@ -546,7 +546,7 @@ test('a contributor adds a warranty inline: the Add action opens the form, Conti
   await expect(page.getByText('Nothing has been saved yet', { exact: false })).toBeVisible();
 
   await page.getByLabel('Provider').fill('Acme Home Warranty');
-  await page.getByRole('button', { name: 'Home warranty plan' }).click();
+  await page.getByLabel(/^Coverage type/).selectOption('HOME_WARRANTY_PLAN');
   await page.getByLabel('Start date').fill('2026-01-01');
   await page.getByLabel('Expiration date').fill('2027-12-01');
   await page.getByRole('button', { name: 'Continue to review' }).click();

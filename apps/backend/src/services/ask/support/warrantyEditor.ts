@@ -25,7 +25,7 @@ export const WARRANTY_EDITOR_FIELDS: readonly RecordEditorField[] = [
   { key: 'coverageDetails', label: 'Coverage details', kind: 'TEXTAREA', section: 'coverage', required: false, maxLength: 2000, helpText: 'What is and is not covered, claim limits, deductibles.' },
   { key: 'startDate', label: 'Start date', kind: 'DATE', section: 'dates-cost', required: true },
   { key: 'expiryDate', label: 'Expiration date', kind: 'DATE', section: 'dates-cost', required: true, pastDateNote: 'This date has already passed, so the warranty will show as expired.' },
-  { key: 'cost', label: 'Cost (USD)', kind: 'MONEY', section: 'dates-cost', required: false, helpText: 'Optional. What you paid for the warranty.' },
+  { key: 'cost', label: 'Cost (USD)', kind: 'MONEY', section: 'dates-cost', required: false },
 ];
 
 export interface WarrantyEditorRow {

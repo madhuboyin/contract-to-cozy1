@@ -28,17 +28,21 @@ export function editorFieldProblem(field: AskRecordEditorField, value: string): 
   return field.maxLength !== undefined && value.length > field.maxLength ? `Use at most ${field.maxLength} characters.` : null;
 }
 
-export function RecordEditor({ editor, initialValues, title, saving, cancelling, error, saveLabel = 'Review changes', autoFocus, onSubmit, onCancel }: {
+export function RecordEditor({ editor, initialValues, title, mode = 'edit', saving, cancelling, error, saveLabel, autoFocus, crossFieldErrors, onSubmit, onCancel }: {
   editor: AskRecordEditor;
   /** What the form starts from: the canonical values, or what the homeowner entered when the server sent the form back. */
   initialValues: Record<string, string>;
   title: string;
+  /** 'add' starts from an empty record: Continue stays disabled (with the reason) until the required fields are valid. */
+  mode?: 'edit' | 'add';
   saving: boolean;
   cancelling: boolean;
   /** A request-level failure (network, stale record); field problems come from `editor.errors`. */
   error: string | null;
   saveLabel?: string;
   autoFocus?: boolean;
+  /** Rules that span fields (e.g. end after start), evaluated on the normalized values; shown as soon as they apply. */
+  crossFieldErrors?: (values: Record<string, string>) => Record<string, string>;
   onSubmit: (values: Record<string, string>) => void;
   onCancel: () => void;
 }) {
@@ -49,6 +53,8 @@ export function RecordEditor({ editor, initialValues, title, saving, cancelling,
   const [attempted, setAttempted] = useState(false);
   // A server problem on a field stays until that field is edited again.
   const [staleServerErrors, setStaleServerErrors] = useState<Record<string, boolean>>({});
+  const adding = mode === 'add';
+  const label = saveLabel ?? (adding ? 'Continue to review' : 'Review changes');
   const busy = saving || cancelling;
   const today = todayIso();
 
@@ -63,10 +69,15 @@ export function RecordEditor({ editor, initialValues, title, saving, cancelling,
     }
     return found;
   }, [editor.fields, normalized]);
+  const cross = useMemo(() => crossFieldErrors?.(normalized) ?? {}, [crossFieldErrors, normalized]);
   const serverErrors = Object.fromEntries(Object.entries(editor.errors ?? {}).filter(([key]) => !staleServerErrors[key]));
-  const visibleError = (key: string): string | null => serverErrors[key] ?? ((touched[key] || attempted) ? problems[key] ?? null : null);
-  const blockers = Object.keys(problems).length;
-  const disabledReason = busy ? null : !dirty ? 'Change a detail to enable review.' : blockers > 0 ? `Fix ${blockers === 1 ? '1 field' : `${blockers} fields`} to continue.` : null;
+  const visibleError = (key: string): string | null => serverErrors[key] ?? cross[key] ?? ((touched[key] || attempted) ? problems[key] ?? null : null);
+  const missing = editor.fields.filter((field) => field.required && !normalized[field.key]).map((field) => field.label.toLowerCase());
+  const blockers = new Set([...Object.keys(problems), ...Object.keys(cross)]).size;
+  const disabledReason = busy ? null
+    : adding && missing.length > 0 ? `Add the ${missing.length > 1 ? `${missing.slice(0, -1).join(', ')} and ${missing[missing.length - 1]}` : missing[0]} to continue.`
+      : !adding && !dirty ? 'Change a detail to enable review.'
+        : blockers > 0 ? `Fix ${blockers === 1 ? '1 field' : `${blockers} fields`} to continue.` : null;
 
   useEffect(() => {
     if (!autoFocus) return;
@@ -97,8 +108,8 @@ export function RecordEditor({ editor, initialValues, title, saving, cancelling,
     event.preventDefault();
     if (busy) return;
     setAttempted(true);
-    if (!dirty || blockers > 0) {
-      const first = editor.fields.find((field) => problems[field.key]);
+    if (!dirty || blockers > 0 || (adding && missing.length > 0)) {
+      const first = editor.fields.find((field) => problems[field.key] || cross[field.key]);
       if (first) rootRef.current?.querySelector<HTMLElement>(`[data-editor-field="${first.key}"]`)?.focus();
       return;
     }
@@ -153,9 +164,9 @@ export function RecordEditor({ editor, initialValues, title, saving, cancelling,
     >
       <form onSubmit={submit} noValidate aria-busy={busy} className="flex min-h-0 flex-1 flex-col">
         <header className="border-b border-slate-100 px-4 py-4 sm:px-5">
-          <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-teal-700">Edit</p>
-          <h3 className="mt-1 text-lg font-semibold tracking-tight text-slate-950">{editor.recordLabel}</h3>
-          <p className="mt-1 text-sm text-slate-500">Nothing is saved until you review and confirm. Only what you change is listed.</p>
+          <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-teal-700">{adding ? 'Add' : 'Edit'}</p>
+          <h3 className="mt-1 text-lg font-semibold tracking-tight text-slate-950">{adding ? title : editor.recordLabel}</h3>
+          <p className="mt-1 text-sm text-slate-500">{adding ? 'Nothing is saved until you review and confirm.' : 'Nothing is saved until you review and confirm. Only what you change is listed.'}</p>
         </header>
         <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 py-4 sm:px-5">
           {editor.sections.map((section) => {
@@ -174,7 +185,7 @@ export function RecordEditor({ editor, initialValues, title, saving, cancelling,
           <button type="button" disabled={busy} onClick={onCancel} className="min-h-11 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-50">{cancelling ? 'Cancelling…' : 'Cancel'}</button>
           <div className="flex flex-1 flex-wrap items-center justify-end gap-3">
             {disabledReason && <p className="text-xs font-medium text-slate-600" id={`${baseId}-reason`}>{disabledReason}</p>}
-            <button type="submit" disabled={busy || !dirty} aria-describedby={disabledReason ? `${baseId}-reason` : undefined} className="min-h-11 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50">{saving ? 'Checking…' : saveLabel}</button>
+            <button type="submit" disabled={busy || !dirty || (adding && (missing.length > 0 || blockers > 0))} aria-describedby={disabledReason ? `${baseId}-reason` : undefined} className="min-h-11 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50">{saving ? (adding ? 'Saving…' : 'Checking…') : label}</button>
           </div>
         </footer>
       </form>

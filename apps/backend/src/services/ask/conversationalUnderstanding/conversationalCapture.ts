@@ -327,7 +327,7 @@ function warrantyEditCaptureRequest(parameters: Record<string, unknown>, context
       { key: 'coverageDetails', label: 'Coverage details', helpText: 'What is and is not covered, claim limits, deductibles.', required: false, inputSchema: { type: 'LONG_TEXT', maxLength: 2000 } },
       { key: 'startDate', label: startDateApproximate ? 'Start date (estimated)' : 'Start date', required: true, inputSchema: { type: 'APPROXIMATE_DATE', allowedPrecisions: ['EXACT_DATE'], allowFuture: true } },
       { key: 'expiryDate', label: 'Expiration date', required: true, inputSchema: { type: 'APPROXIMATE_DATE', allowedPrecisions: ['EXACT_DATE'], allowFuture: true } },
-      { key: 'cost', label: 'Cost (USD)', helpText: 'Optional. What you paid for the warranty.', required: false, inputSchema: { type: 'MONEY', currency: 'USD', min: 0, max: 10_000_000 } },
+      { key: 'cost', label: 'Cost (USD)', required: false, inputSchema: { type: 'MONEY', currency: 'USD', min: 0, max: 10_000_000 } },
     ] },
     currentAnswer: {
       providerName: parameters.providerName,

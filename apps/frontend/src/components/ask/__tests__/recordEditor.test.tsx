@@ -115,36 +115,38 @@ const addRequest = {
   ] },
 } as unknown as AskCaptureRequest;
 
-test('Add warranty is a compact form: sections, optional fields marked, native dates, multiline details, $ cost, Cancel, and a reason Continue is disabled', () => {
+test('Add warranty uses the same editor as Edit: same sections, select, native dates, multiline details, $ cost, Cancel, and a reason Continue is disabled', () => {
   const view = render(<InlineCaptureCard executionId="a1" request={addRequest} onCompleted={jest.fn()} />);
-  expect(view.container.querySelector('[data-compact-capture="warranty-add"]')).toHaveClass('max-w-[840px]');
-  expect(screen.getAllByRole('group').map((group) => group.querySelector('legend')?.textContent).filter((text) => ['Basics', 'Coverage', 'Term and cost'].includes(text ?? ''))).toEqual(['Basics', 'Coverage', 'Term and cost']);
-  expect(screen.getByRole('button', { name: 'Home warranty plan' })).toBeVisible();
-  expect(screen.getByLabelText('Start date value')).toHaveAttribute('type', 'date');
+  expect(view.container.querySelector('[data-record-editor]')).toBeInTheDocument();
+  expect(screen.getAllByRole('group').map((group) => group.querySelector('legend')?.textContent)).toEqual(['Warranty', 'Coverage', 'Dates and cost']);
+  expect(screen.getByLabelText(/^Coverage type/).tagName).toBe('SELECT');
+  expect(screen.getByLabelText(/^Start date/)).toHaveAttribute('type', 'date');
   expect(screen.getByLabelText(/^Coverage details/).tagName).toBe('TEXTAREA');
   expect(screen.getByText('$')).toBeVisible();
-  expect(screen.getByText(/Policy number \(optional\)/)).toBeVisible();
+  expect(screen.getAllByText('(optional)')).toHaveLength(3);
+  expect(screen.queryByText(/Optional\. What you paid/)).not.toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Cancel' })).toBeVisible();
   expect(screen.getByRole('button', { name: 'Continue to review' })).toBeDisabled();
   expect(screen.getByText('Add the provider, coverage type, start date and expiration date to continue.')).toBeVisible();
 });
 
-test('Add warranty: once the required fields are filled Continue enables and submits the exact-day dates; an expiry before the start explains why it is blocked', async () => {
+test('Add warranty: Continue enables once required fields are valid and submits exact-day dates and a numeric cost; a reversed date range blocks it with the reason', async () => {
   jest.spyOn(api, 'submitAskCapture').mockResolvedValue({ success: true, data: { executionId: 'a1' } } as never);
   render(<InlineCaptureCard executionId="a1" request={addRequest} onCompleted={jest.fn()} />);
-  fireEvent.change(screen.getByLabelText('Provider'), { target: { value: 'Acme' } });
-  fireEvent.click(screen.getByRole('button', { name: 'HVAC' }));
-  fireEvent.change(screen.getByLabelText('Start date value'), { target: { value: '2026-06-01' } });
-  fireEvent.change(screen.getByLabelText('Expiration date value'), { target: { value: '2026-01-01' } });
+  fireEvent.change(screen.getByLabelText(/^Provider/), { target: { value: 'Acme' } });
+  fireEvent.change(screen.getByLabelText(/^Coverage type/), { target: { value: 'HVAC' } });
+  fireEvent.change(screen.getByLabelText(/^Start date/), { target: { value: '2026-06-01' } });
+  fireEvent.change(screen.getByLabelText(/^Expiration date/), { target: { value: '2026-01-01' } });
   expect(screen.getByRole('button', { name: 'Continue to review' })).toBeDisabled();
   expect(screen.getByRole('alert')).toHaveTextContent('The expiration date must be after the start date.');
-  fireEvent.change(screen.getByLabelText('Expiration date value'), { target: { value: '2020-01-01' } });
-  fireEvent.change(screen.getByLabelText('Start date value'), { target: { value: '2019-01-01' } });
+  fireEvent.change(screen.getByLabelText(/^Start date/), { target: { value: '2019-01-01' } });
+  fireEvent.change(screen.getByLabelText(/^Expiration date/), { target: { value: '2020-01-01' } });
+  fireEvent.change(screen.getByLabelText(/^Cost/), { target: { value: '99.5' } });
   expect(screen.getByRole('note')).toHaveTextContent('already passed');
   expect(screen.getByRole('button', { name: 'Continue to review' })).toBeEnabled();
   fireEvent.click(screen.getByRole('button', { name: 'Continue to review' }));
   await waitFor(() => expect(api.submitAskCapture).toHaveBeenCalledTimes(1));
   expect((api.submitAskCapture as jest.Mock).mock.calls[0][1].answer).toMatchObject({
-    providerName: 'Acme', category: 'HVAC', startDate: { precision: 'EXACT_DATE', value: '2019-01-01' }, expiryDate: { precision: 'EXACT_DATE', value: '2020-01-01' },
+    providerName: 'Acme', category: 'HVAC', startDate: { precision: 'EXACT_DATE', value: '2019-01-01' }, expiryDate: { precision: 'EXACT_DATE', value: '2020-01-01' }, cost: 99.5,
   });
 });
