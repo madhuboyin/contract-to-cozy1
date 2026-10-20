@@ -116,7 +116,7 @@ test('inline event detail exposes declared correction actions with exact event i
   window.history.replaceState({}, '', '/dashboard/ask?propertyId=home&sessionId=session');
   mockedGetHomeEvent.mockResolvedValue(canonicalEvent());
   const withActions: typeof block = { ...block, sections: [{ ...block.sections[0], items: [
-    { ...block.sections[0].items[0], actions: [{ id: 'correct-title', label: 'Correct title', message: 'Correct the title of this timeline event.', style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId: 'HOME_EVENT_CORRECT' }] },
+    { ...block.sections[0].items[0], actions: [{ id: 'edit-event', label: 'Edit event', message: 'Edit this timeline event.', style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId: 'HOME_EVENT_UPDATE' }] },
     ...block.sections[0].items.slice(1),
   ] }] };
   const onAction = jest.fn();
@@ -127,8 +127,8 @@ test('inline event detail exposes declared correction actions with exact event i
   }
   const first = render(<Harness />);
   fireEvent.click(screen.getByRole('button', { name: 'Water heater replaced' }));
-  fireEvent.click(await screen.findByRole('button', { name: /Correct title/ }));
-  expect(onAction).toHaveBeenCalledWith('HOME_EVENT', 'event-0', 'Correct the title of this timeline event.', 'HOME_EVENT_CORRECT', 'MUTATE_RECORD');
+  fireEvent.click(await screen.findByRole('button', { name: /Edit event/ }));
+  expect(onAction).toHaveBeenCalledWith('HOME_EVENT', 'event-0', 'Edit this timeline event.', 'HOME_EVENT_UPDATE', 'MUTATE_RECORD');
   first.unmount();
   window.sessionStorage.clear();
 
@@ -145,7 +145,7 @@ test('Attach evidence control: uploads the picked file out of band, then dispatc
   mockedGetHomeEvent.mockResolvedValue(canonicalEvent());
   mockedUploadAskEvidence.mockResolvedValueOnce({ success: true, data: { document: { id: 'doc-1', name: 'invoice.pdf', mimeType: 'application/pdf', fileSize: 1024 } } } as Awaited<ReturnType<typeof api.uploadAskEvidence>>);
   const withActions: typeof block = { ...block, sections: [{ ...block.sections[0], items: [
-    { ...block.sections[0].items[0], actions: [{ id: 'correct-title', label: 'Correct title', message: 'Correct the title of this timeline event.', style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId: 'HOME_EVENT_CORRECT' }] },
+    { ...block.sections[0].items[0], actions: [{ id: 'edit-event', label: 'Edit event', message: 'Edit this timeline event.', style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId: 'HOME_EVENT_UPDATE' }] },
     ...block.sections[0].items.slice(1),
   ] }] };
   const onAction = jest.fn();
@@ -170,7 +170,7 @@ test('Attach evidence control: an unsupported file type or a failed upload is re
   mockedGetHomeEvent.mockResolvedValue(canonicalEvent());
   mockedUploadAskEvidence.mockRejectedValueOnce(new Error('The server refused the file.'));
   const withActions: typeof block = { ...block, sections: [{ ...block.sections[0], items: [
-    { ...block.sections[0].items[0], actions: [{ id: 'correct-title', label: 'Correct title', message: 'Correct the title of this timeline event.', style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId: 'HOME_EVENT_CORRECT' }] },
+    { ...block.sections[0].items[0], actions: [{ id: 'edit-event', label: 'Edit event', message: 'Edit this timeline event.', style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId: 'HOME_EVENT_UPDATE' }] },
     ...block.sections[0].items.slice(1),
   ] }] };
   const onAction = jest.fn();

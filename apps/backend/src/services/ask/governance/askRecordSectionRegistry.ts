@@ -160,7 +160,7 @@ export const ASK_RECORD_SECTION_REGISTRY: readonly AskRecordSectionDefinition[] 
   }),
   section({
     id: 'timeline', label: 'Home timeline', scope: 'Events in the home’s history, with how well each is verified.', owner: 'home-timeline',
-    readOperationIds: ['HOME_TIMELINE_EVENTS'], commandOperationIds: ['HOME_EVENT_CORRECT', 'HOME_EVENT_VISIBILITY'],
+    readOperationIds: ['HOME_TIMELINE_EVENTS'], commandOperationIds: ['HOME_EVENT_CORRECT', 'HOME_EVENT_UPDATE', 'HOME_EVENT_VISIBILITY'],
     collectionReader: PAGED, pagedCollection: true, lifecycleOperationId: 'HOME_TIMELINE_EVENTS', freshnessSource: 'Most recent event date', exportEligibility: EXPORT['timeline'],
     primaryAction: { label: 'View timeline', question: 'Show me my home timeline.' },
   }),

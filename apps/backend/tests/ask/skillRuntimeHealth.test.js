@@ -54,6 +54,7 @@ test('adapter failure degrades or removes only operations that depend on that ad
     // with them enabled the skill is correctly only DEGRADED.
     ASK_ADAPTER_INVENTORY_ITEM_CORRECT_KILL_SWITCH: 'true',
     ASK_ADAPTER_HOME_EVENT_CORRECT_KILL_SWITCH: 'true',
+    ASK_ADAPTER_HOME_EVENT_UPDATE_KILL_SWITCH: 'true',
     ASK_ADAPTER_WARRANTY_UPDATE_KILL_SWITCH: 'true',
     ASK_ADAPTER_ROOM_RENAME_KILL_SWITCH: 'true',
     ASK_ADAPTER_ROOM_CREATE_KILL_SWITCH: 'true',

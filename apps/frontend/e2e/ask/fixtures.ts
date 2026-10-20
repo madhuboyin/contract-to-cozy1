@@ -551,16 +551,8 @@ function correctableSummaryExecution() {
   const list = response.blocks.find((block) => block.type === 'GROUPED_LIST' && block.id === 'property-recent-events') as
     { sections: Array<{ items: Array<Record<string, unknown>> }> } | undefined;
   if (list) {
-    const eventAction = (id: string, label: string, message: string) => ({ id, label, message, style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId: 'HOME_EVENT_CORRECT' });
-    // More than three corrections, so the detail folds them behind one "Correct a detail" disclosure.
-    list.sections[0].items[0].actions = [
-      eventAction('correct-title', 'Correct title', 'Correct the title of this timeline event.'),
-      eventAction('correct-occurredAt', 'Correct date', 'Correct the date of this timeline event.'),
-      eventAction('correct-amount', 'Correct amount', 'Correct the amount of this timeline event.'),
-      eventAction('correct-type', 'Correct type', 'Correct the type of this timeline event.'),
-      { id: 'correct-visibility', label: 'Change visibility', message: 'Change the visibility of this timeline event.', style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId: 'HOME_EVENT_VISIBILITY' },
-      { id: 'correct-roomId', label: 'Correct room', message: 'Correct the room of this timeline event.', style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId: 'HOME_EVENT_CORRECT' },
-    ];
+    const eventAction = (id: string, label: string, message: string, operationId = 'HOME_EVENT_UPDATE') => ({ id, label, message, style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId });
+    list.sections[0].items[0].actions = [eventAction('edit-event', 'Edit event', 'Edit this timeline event.', 'HOME_EVENT_UPDATE')];
   }
   const action = (id: string, label: string, message: string, operationId: string) => ({ id, label, message, style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId });
   const rooms = response.blocks.find((block) => block.type === 'GROUPED_LIST' && block.id === 'property-rooms') as
@@ -819,6 +811,61 @@ function warrantyEditExecution(stage: 'FORM' | 'CONFIRMATION' | 'DONE', sessionI
   return {
     ...common, status: 'COMPLETED', captureRequests: [], confirmation: null,
     blocks: [{ type: 'WORKFLOW_PROGRESS', id: 'warranty-updated', title: 'Warranty updated', status: 'COMPLETED', description: 'The warranty record was updated.', details: [{ label: 'Warranty', value: 'Acme Home Warranty' }], actions: [] }],
+  };
+}
+
+// Timeline event edit through the shared RecordEditor (FRD v1.386): one "Edit event" action -> editor -> changes-only review -> receipt.
+const EVENT_EDITOR_ORIGINAL = { title: 'Roof replacement', type: 'IMPROVEMENT', occurredAt: '2026-09-01', importance: 'NORMAL', summary: 'Full tear-off.', amount: '18500.00', visibility: 'HOUSEHOLD', roomId: '', inventoryItemId: '' };
+function eventEditExecution(stage: 'FORM' | 'CONFIRMATION' | 'DONE', sessionId?: string, answer?: Record<string, string>) {
+  const base = propertySummaryTimelineExecution();
+  const common = {
+    ...base, sessionId: sessionId ?? base.sessionId, executionId: 'execution-event-edit', question: 'Edit this timeline event.',
+    operation: { id: 'HOME_EVENT_UPDATE', version: '1.0', family: 'COMMAND' }, contextVersion: 'event-edit-context-v1', updatedAt: new Date().toISOString(),
+  };
+  if (stage === 'FORM') {
+    const select = (key: string, label: string, section: string, required: boolean, options: Array<{ label: string; value: string }>, extra: Record<string, unknown> = {}) => ({ key, label, kind: 'SELECT', section, required, options, ...extra });
+    return {
+      ...common, status: 'NEEDS_CONTEXT', confirmation: null,
+      blocks: [{ type: 'SUMMARY', id: 'home-event-update-input', title: 'Edit "Roof replacement"', body: 'Nothing has been saved yet.', tone: 'DEFAULT', actions: [] }],
+      captureRequests: [{
+        requirementId: 'home-event-update-event-property-summary', captureKey: 'HOME_EVENT_UPDATE_INPUTS', classification: 'WORKFLOW_INPUT', state: 'KNOWN',
+        title: 'Edit event', question: 'What should change?', helpText: null, inputSchema: { type: 'GROUP', fields: [] }, currentAnswer: EVENT_EDITOR_ORIGINAL,
+        allowNotSure: false, sensitivity: 'STANDARD', destinationLabel: null, confirmationText: null, expectedContextVersion: 'event-edit-context-v1', presentation: 'FORM',
+        editor: {
+          recordLabel: 'Roof replacement',
+          sections: [{ id: 'event', title: 'Event' }, { id: 'details', title: 'Details' }, { id: 'links', title: 'Links' }],
+          fields: [
+            { key: 'title', label: 'Title', kind: 'TEXT', section: 'event', required: true, maxLength: 140 },
+            select('type', 'Type', 'event', true, [{ label: 'Improvement', value: 'IMPROVEMENT' }, { label: 'Repair', value: 'REPAIR' }]),
+            { key: 'occurredAt', label: 'Date', kind: 'DATE', section: 'event', required: true },
+            select('importance', 'Importance', 'event', true, [{ label: 'Normal', value: 'NORMAL' }, { label: 'High', value: 'HIGH' }]),
+            { key: 'summary', label: 'Summary', kind: 'TEXTAREA', section: 'details', required: false, maxLength: 500 },
+            { key: 'amount', label: 'Amount (USD)', kind: 'MONEY', section: 'details', required: false },
+            select('visibility', 'Visibility', 'details', true, [{ label: 'Household', value: 'HOUSEHOLD' }, { label: 'Resale pack', value: 'RESALE_PACK' }]),
+            select('roomId', 'Room', 'links', false, [{ label: 'Kitchen', value: 'room-1' }], { emptyLabel: 'No room' }),
+            select('inventoryItemId', 'Inventory item', 'links', false, [], { emptyLabel: 'No item' }),
+          ],
+          original: EVENT_EDITOR_ORIGINAL,
+        },
+      }],
+    };
+  }
+  if (stage === 'CONFIRMATION') {
+    const changed = Object.entries(answer ?? {}).filter(([key, value]) => (EVENT_EDITOR_ORIGINAL as Record<string, string>)[key] !== value);
+    return {
+      ...common, status: 'NEEDS_CONFIRMATION', captureRequests: [],
+      blocks: [{ type: 'SUMMARY', id: 'home-event-update-review', title: 'Review this change', body: 'No timeline record has changed yet. Only what you changed is listed.', tone: 'DEFAULT', actions: [] }],
+      confirmation: {
+        confirmationId: 'home-event-update-event-property-summary-1', version: 1, title: `Save ${changed.length === 1 ? '1 change' : `${changed.length} changes`} to "Roof replacement"?`,
+        description: 'This records ONE new revision on the canonical home timeline.',
+        fields: [{ label: 'Event', value: 'Roof replacement' }, ...changed.map(([key, value]) => ({ label: key === 'title' ? 'Title' : key, value: `${(EVENT_EDITOR_ORIGINAL as Record<string, string>)[key]} \u2192 ${value}` }))],
+        editableFields: [], confirmLabel: 'Save changes', consentText: 'I authorize these changes to the shared home timeline.', expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
+      },
+    };
+  }
+  return {
+    ...common, status: 'COMPLETED', captureRequests: [], confirmation: null,
+    blocks: [{ type: 'WORKFLOW_PROGRESS', id: 'home-event-updated', title: 'Home timeline event updated', status: 'COMPLETED', description: 'The event was saved as one new revision.', details: [{ label: 'Event', value: 'Roof replacement' }], actions: [] }],
   };
 }
 
@@ -2743,6 +2790,7 @@ export async function installAskApi(page: Page, options: { selectorState?: 'OPTI
   activeSessionId = null;
   const captureBodies: Array<Record<string, unknown>> = [];
   const warrantyEditCaptureBodies: Array<Record<string, unknown>> = [];
+  const eventEditCaptureBodies: Array<Record<string, unknown>> = [];
   const executionQuestions: string[] = [];
   const executionBodies: Array<Record<string, unknown>> = [];
   const selectorReads: string[] = [];
@@ -3323,6 +3371,11 @@ export async function installAskApi(page: Page, options: { selectorState?: 'OPTI
       await fulfill(route, { success: true, data: warrantyAddExecution('FORM', body.sessionId as string | undefined) }, 201);
       return;
     }
+    if (/^edit this timeline event/i.test(body.message)) {
+      if (typeof body.sessionId === 'string') correctionSessionId = body.sessionId;
+      await fulfill(route, { success: true, data: eventEditExecution('FORM', body.sessionId as string | undefined) }, 201);
+      return;
+    }
     if (/^edit this warranty/i.test(body.message)) {
       if (typeof body.sessionId === 'string') correctionSessionId = body.sessionId;
       await fulfill(route, { success: true, data: warrantyEditExecution('FORM', body.sessionId as string | undefined) }, 201);
@@ -3660,6 +3713,17 @@ export async function installAskApi(page: Page, options: { selectorState?: 'OPTI
     await fulfill(route, { success: true, data: maintenanceCompletionExecution('DONE') });
   });
   // Registered after the generic captures route above so it takes precedence for this execution only.
+  await page.route(`${apiOrigin}/api/ask/executions/execution-event-edit/captures`, async (route) => {
+    assertAuthenticated(route.request());
+    const body = route.request().postDataJSON() as Record<string, unknown>;
+    eventEditCaptureBodies.push(body);
+    await fulfill(route, { success: true, data: eventEditExecution('CONFIRMATION', correctionSessionId, body.answer as Record<string, string>) });
+  });
+  await page.route(`${apiOrigin}/api/ask/executions/execution-event-edit/confirm`, async (route) => {
+    assertAuthenticated(route.request());
+    correctionConfirmBodies.push(route.request().postDataJSON() as Record<string, unknown>);
+    await fulfill(route, { success: true, data: eventEditExecution('DONE', correctionSessionId) });
+  });
   await page.route(`${apiOrigin}/api/ask/executions/execution-warranty-edit/captures`, async (route) => {
     assertAuthenticated(route.request());
     const body = route.request().postDataJSON() as Record<string, unknown>;
@@ -3717,7 +3781,7 @@ export async function installAskApi(page: Page, options: { selectorState?: 'OPTI
     };
     return fulfill(route, { success: true, data: cancelled });
   });
-  return { selectorReads, captureBodies, warrantyEditCaptureBodies, executionQuestions, executionBodies, correctionEditBodies, correctionConfirmBodies, warrantyAddCaptureBodies, addCaptureBodies, monitorPatchBodies, staleRefreshCalls: () => staleRefreshCalls, captureAttempts: () => captureAttempts };
+  return { selectorReads, captureBodies, warrantyEditCaptureBodies, eventEditCaptureBodies, executionQuestions, executionBodies, correctionEditBodies, correctionConfirmBodies, warrantyAddCaptureBodies, addCaptureBodies, monitorPatchBodies, staleRefreshCalls: () => staleRefreshCalls, captureAttempts: () => captureAttempts };
 }
 
 function assertAuthenticated(request: Request) {

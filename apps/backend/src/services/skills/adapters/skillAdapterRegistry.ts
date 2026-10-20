@@ -99,6 +99,7 @@ const DEFINITIONS = [
   adapter('room.rename', 'InventoryService', 'ROOM_RENAME', 'MUTATION_PREPARATION'),
   adapter('warranty.update', 'HomeManagementService', 'WARRANTY_UPDATE', 'MUTATION_PREPARATION'),
   adapter('home-event.correct', 'HomeEventsService', 'HOME_EVENT_CORRECT', 'MUTATION_PREPARATION'),
+  adapter('home-event.update', 'HomeEventsService', 'HOME_EVENT_UPDATE', 'MUTATION_PREPARATION'),
   adapter('home-event.visibility', 'HomeEventsService', 'HOME_EVENT_VISIBILITY', 'MUTATION_PREPARATION'),
   adapter('inventory.item-correct', 'InventoryService', 'INVENTORY_ITEM_CORRECT', 'MUTATION_PREPARATION'),
   adapter('seller-prep.item-decision', 'PropertySaleCaseService', 'SELLER_PREP_ITEM_DECISION', 'MUTATION_PREPARATION'),

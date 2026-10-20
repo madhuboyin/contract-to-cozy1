@@ -1,19 +1,14 @@
+/** What the declared "Edit event" action sends (FRD v1.386). */
+export const HOME_EVENT_EDIT_MESSAGE = 'Edit this timeline event.';
+
 // Ask handler support: homeEventCorrection. Moved out of askHandlerSupport.ts unchanged (FRD v1.110); that file re-exports these modules.
 import { type CorrectionFieldSpec, type CorrectionOption } from '../askCorrectionFields';
 
-export function homeEventCorrectionItemActions(canManage: boolean) {
+export function homeEventEditItemActions(canManage: boolean) {
   if (!canManage) return undefined;
-  const fields = (Object.keys(HOME_EVENT_CORRECTION_FIELDS) as HomeEventCorrectionField[]).map((field) => ({
-    id: `correct-${field}`, label: HOME_EVENT_CORRECTION_FIELDS[field].action, message: HOME_EVENT_CORRECTION_FIELDS[field].message,
-    style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'HOME_EVENT_CORRECT',
-  }));
-  // Whether this contributor may go on to choose PRIVATE, or move a PRIVATE event to something else, is re-checked
-  // against live data (createdById) in homeEventVisibilityResult/confirmHomeEventVisibility -- the action itself is
-  // offered to any contributor exactly like the other event corrections, since a PRIVATE event a non-creator cannot
-  // even see never reaches this list in the first place.
-  return [...fields, {
-    id: 'correct-visibility', label: 'Change visibility', message: HOME_EVENT_VISIBILITY_MESSAGE,
-    style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'HOME_EVENT_VISIBILITY',
+  return [{
+    id: 'edit-event', label: 'Edit event', message: HOME_EVENT_EDIT_MESSAGE,
+    style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'HOME_EVENT_UPDATE',
   }];
 }
 

@@ -96,8 +96,8 @@ test('a timeline event shows recorded precision, verification, revision history,
     assert.equal(detail.provenance.verification.value, 'Homeowner Confirmed');
     assert.deepEqual(detail.provenance.history.entries.map((e) => e.label), ['Marked homeowner confirmed', 'Revision 2: Fixed the month']);
     assert.deepEqual(detail.provenance.related.records.map((r) => r.kindLabel), ['Inventory item', 'Evidence and documents']);
-    assert.deepEqual(detail.corrections.map((c) => [c.operationId, c.state]), [['HOME_EVENT_CORRECT', 'AVAILABLE'], ['HOME_EVENT_CORRECT', 'AVAILABLE'], ['HOME_EVENT_CORRECT', 'AVAILABLE'], ['HOME_EVENT_VISIBILITY', 'AVAILABLE']]);
-    assert.deepEqual(detail.corrections.map((c) => c.launch.message), ['Correct the title of this timeline event.', 'Correct the date of this timeline event.', 'Correct the summary of this timeline event.', 'Change the visibility of this timeline event.']);
+    assert.deepEqual(detail.corrections.map((c) => [c.operationId, c.state]), [['HOME_EVENT_UPDATE', 'AVAILABLE']]);
+    assert.deepEqual(detail.corrections.map((c) => c.launch.message), ['Edit this timeline event.']);
     assert.ok(detail.corrections.every((c) => c.launch.entityType === 'HOME_EVENT' && c.launch.entityId === 'e1'));
     assert.equal((await read('timeline', 'VIEWER', 'e1')).corrections[0].state, 'ROLE_REQUIRED');
   } finally { restore(); }

@@ -10,6 +10,20 @@ import type { AskRecordEditor, AskRecordEditorField } from '@/features/ask/types
 
 const INPUT = 'w-full rounded-xl border bg-white px-3 py-2 text-base outline-none transition-colors focus:border-teal-600 focus:ring-2 focus:ring-teal-600/15 disabled:opacity-60 sm:text-sm';
 
+const SPAN: Record<number, string> = { 4: 'md:col-span-4', 6: 'md:col-span-6', 12: 'md:col-span-12' };
+
+/** Column spans on a 12-column grid so every row fills: multiline fields take a full row, the rest share rows of up to three (2x2 for four). */
+export function fieldSpans(fields: AskRecordEditorField[]): Record<string, string> {
+  const spans: Record<string, string> = {};
+  const rest = fields.filter((field) => field.kind !== 'TEXTAREA');
+  for (const field of fields) if (field.kind === 'TEXTAREA') spans[field.key] = SPAN[12];
+  const rows: AskRecordEditorField[][] = [];
+  if (rest.length === 4) rows.push(rest.slice(0, 2), rest.slice(2));
+  else for (let index = 0; index < rest.length; index += 3) rows.push(rest.slice(index, index + 3));
+  for (const row of rows) for (const field of row) spans[field.key] = SPAN[12 / row.length];
+  return spans;
+}
+
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
 /** The value as the server will see it, so "850" and "850.00" are not a change. */
@@ -51,6 +65,7 @@ export function RecordEditor({ editor, initialValues, title, mode = 'edit', savi
   const [values, setValues] = useState<Record<string, string>>(() => ({ ...editor.original, ...initialValues }));
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [attempted, setAttempted] = useState(false);
+  const [confirmingDiscard, setConfirmingDiscard] = useState(false);
   // A server problem on a field stays until that field is edited again.
   const [staleServerErrors, setStaleServerErrors] = useState<Record<string, boolean>>({});
   const adding = mode === 'add';
@@ -61,6 +76,7 @@ export function RecordEditor({ editor, initialValues, title, mode = 'edit', savi
   const normalized = useMemo(() => Object.fromEntries(editor.fields.map((field) => [field.key, normalizeEditorFieldValue(field, values[field.key] ?? '')])), [editor.fields, values]);
   const changedKeys = editor.fields.filter((field) => normalized[field.key] !== (editor.original[field.key] ?? '')).map((field) => field.key);
   const dirty = changedKeys.length > 0;
+  const changedSet = new Set(changedKeys);
   const problems = useMemo(() => {
     const found: Record<string, string> = {};
     for (const field of editor.fields) {
@@ -84,6 +100,15 @@ export function RecordEditor({ editor, initialValues, title, mode = 'edit', savi
     rootRef.current?.querySelector<HTMLElement>('input, select, textarea')?.focus({ preventScroll: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Leaving the page with unsaved edits warns, and Cancel asks before throwing edits away.
+  useEffect(() => {
+    if (!dirty || typeof window === 'undefined') return undefined;
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ''; };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [dirty]);
+  const requestCancel = () => { if (dirty && !adding) setConfirmingDiscard(true); else onCancel(); };
 
   // On a phone the editor is a full-height sheet; keep the page behind it from scrolling.
   useEffect(() => {
@@ -116,24 +141,24 @@ export function RecordEditor({ editor, initialValues, title, mode = 'edit', savi
     onSubmit(normalized);
   };
 
-  const renderField = (field: AskRecordEditorField) => {
+  const renderField = (field: AskRecordEditorField, span: string) => {
     const id = `${baseId}-${field.key}`;
     const message = visibleError(field.key);
     const value = values[field.key] ?? '';
     const pastNote = field.kind === 'DATE' && field.pastDateNote && /^\d{4}-\d{2}-\d{2}$/.test(value) && value < today ? field.pastDateNote : null;
-    const describedBy = [message ? `${id}-error` : null, pastNote ? `${id}-note` : null, field.helpText ? `${id}-help` : null].filter(Boolean).join(' ') || undefined;
+    const describedBy = [message ? `${id}-error` : null, pastNote ? `${id}-note` : null, field.disabledReason ? `${id}-disabled` : null, field.helpText ? `${id}-help` : null].filter(Boolean).join(' ') || undefined;
     const common = {
-      id, 'data-editor-field': field.key, disabled: busy, 'aria-invalid': message ? true : undefined, 'aria-describedby': describedBy,
+      id, 'data-editor-field': field.key, disabled: busy || Boolean(field.disabledReason), 'aria-invalid': message ? true : undefined, 'aria-describedby': describedBy,
       'aria-required': field.required || undefined,
-      className: cn(INPUT, message ? 'border-red-400' : 'border-slate-200'),
+      className: cn(INPUT, message ? 'border-red-400' : changedSet.has(field.key) ? 'border-teal-500 bg-teal-50/40' : 'border-slate-200', field.disabledReason && 'cursor-not-allowed bg-slate-50 text-slate-600'),
       onBlur: () => setTouched((current) => ({ ...current, [field.key]: true })),
     } as const;
     return (
-      <div key={field.key} className={field.kind === 'TEXTAREA' ? 'md:col-span-3' : undefined}>
-        <label htmlFor={id} className="mb-1 block text-xs font-semibold text-slate-800">{field.label}{field.required ? <span aria-hidden="true"> *</span> : <span className="font-normal text-slate-500"> (optional)</span>}</label>
+      <div key={field.key} className={span}>
+        <label htmlFor={id} className="mb-1 block text-xs font-semibold text-slate-800">{field.label}{field.required ? <span aria-hidden="true"> *</span> : <span className="font-normal text-slate-500"> (optional)</span>}{changedSet.has(field.key) && <span className="ml-1.5 rounded bg-teal-100 px-1 py-px text-[10px] font-semibold uppercase tracking-wide text-teal-800">Changed</span>}</label>
         {field.kind === 'SELECT' ? (
           <select {...common} value={value} onChange={(event) => change(field.key, event.target.value)}>
-            {!value && <option value="">Choose…</option>}
+            {field.emptyLabel ? <option value="">{field.emptyLabel}</option> : !value && <option value="">Choose…</option>}
             {(field.options ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
           </select>
         ) : field.kind === 'TEXTAREA' ? (
@@ -148,7 +173,8 @@ export function RecordEditor({ editor, initialValues, title, mode = 'edit', savi
         ) : (
           <input {...common} type="text" maxLength={field.maxLength} value={value} placeholder={field.placeholder} onChange={(event) => change(field.key, event.target.value)} />
         )}
-        {field.helpText && !message && <p id={`${id}-help`} className="mt-1 text-xs text-slate-500">{field.helpText}</p>}
+        {field.disabledReason && <p id={`${id}-disabled`} className="mt-1 text-xs text-slate-600">{field.disabledReason}</p>}
+        {field.helpText && !message && !field.disabledReason && <p id={`${id}-help`} className="mt-1 text-xs text-slate-500">{field.helpText}</p>}
         {pastNote && <p id={`${id}-note`} className="mt-1 text-xs font-medium text-amber-800" role="note">{pastNote}</p>}
         {message && <p id={`${id}-error`} className="mt-1 text-xs font-medium text-red-700" role="alert">{message}</p>}
       </div>
@@ -175,14 +201,22 @@ export function RecordEditor({ editor, initialValues, title, mode = 'edit', savi
             return (
               <fieldset key={section.id} className="min-w-0 border-0 p-0">
                 <legend className="mb-3 text-sm font-semibold text-slate-950">{section.title}</legend>
-                <div className="grid gap-x-4 gap-y-3 md:grid-cols-3">{fields.map(renderField)}</div>
+                <div className="grid gap-x-4 gap-y-3 md:grid-cols-12">{fields.map((field) => renderField(field, fieldSpans(fields)[field.key]))}</div>
               </fieldset>
             );
           })}
         </div>
         {error && <p className="px-4 pb-2 text-sm text-red-700 sm:px-5" role="alert">{error}</p>}
         <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 bg-white px-4 py-3 sm:px-5">
-          <button type="button" disabled={busy} onClick={onCancel} className="min-h-11 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-50">{cancelling ? 'Cancelling…' : 'Cancel'}</button>
+          {confirmingDiscard ? (
+            <div className="flex flex-wrap items-center gap-2" role="alertdialog" aria-label="Discard your changes?">
+              <span className="text-sm font-medium text-slate-800">Discard your changes?</span>
+              <button type="button" disabled={busy} onClick={() => setConfirmingDiscard(false)} className="min-h-11 rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Keep editing</button>
+              <button type="button" disabled={busy} onClick={onCancel} className="min-h-11 rounded-xl px-3 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-50">Discard</button>
+            </div>
+          ) : (
+            <button type="button" disabled={busy} onClick={requestCancel} className="min-h-11 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-50">{cancelling ? 'Cancelling…' : 'Cancel'}</button>
+          )}
           <div className="flex flex-1 flex-wrap items-center justify-end gap-3">
             {disabledReason && <p className="text-xs font-medium text-slate-600" id={`${baseId}-reason`}>{disabledReason}</p>}
             <button type="submit" disabled={busy || !dirty || (adding && (missing.length > 0 || blockers > 0))} aria-describedby={disabledReason ? `${baseId}-reason` : undefined} className="min-h-11 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50">{saving ? (adding ? 'Saving…' : 'Checking…') : label}</button>

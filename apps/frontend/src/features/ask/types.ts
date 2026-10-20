@@ -569,6 +569,10 @@ export interface AskRecordEditorField {
   placeholder?: string;
   /** DATE only: a soft, non-blocking note shown when the chosen date is before today. */
   pastDateNote?: string;
+  /** SELECT only: an explicit empty option (value '') such as "No room". */
+  emptyLabel?: string;
+  /** The field is shown disabled, with this reason beneath it. */
+  disabledReason?: string;
 }
 
 export interface AskRecordEditor {

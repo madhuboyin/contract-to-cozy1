@@ -10,7 +10,7 @@ import { PROJECT_STATUS_LABELS, PROJECT_TYPE_LABELS } from './handlers/projectTr
 import { OPEN_CLAIM_STATUSES, OPEN_INCIDENT_STATUSES } from './handlers/claims.handler';
 import { PERMIT_CATEGORY_LABELS, PERMIT_OFFICIAL_STATUS_LABELS, PERMIT_REPORTED_STATUS_LABELS } from './support/permitTrackerRead';
 import { RENOVATION_CASE_TYPE_LABELS } from './support/renovationCaseStart';
-import { HOME_EVENT_VISIBILITY_MESSAGE } from './support/homeEventCorrection';
+import { HOME_EVENT_EDIT_MESSAGE } from './support/homeEventCorrection';
 import { INSPECTION_REPORT_ENTITY_TYPE, INSPECTION_REPORT_MESSAGES } from './support/inspectionReportCommand';
 import { INSPECTION_FINDINGS_OF_REPORT_ACTION_ID, INSPECTION_FINDINGS_OF_REPORT_MESSAGE } from './support/inspectionFindingDecisionCommand';
 import { PERMIT_COMMAND_MESSAGES, PERMIT_ENTITY_TYPE } from './support/permitTrackerCommand';
@@ -93,7 +93,6 @@ async function readTimelineDetail(context: DetailContext, eventId: string): Prom
     ...event.verificationRecords.map((entry) => ({ at: entry.createdAt.toISOString(), label: `Marked ${readable(entry.status)?.toLowerCase()}${entry.reason ? `: ${entry.reason}` : ''}` })),
     ...(event.revision > 1 ? [{ at: event.createdAt.toISOString(), label: `Revision ${event.revision}${event.correctionReason ? `: ${event.correctionReason}` : ''}` }] : []),
   ].sort((left, right) => right.at.localeCompare(left.at));
-  const isCreator = event.createdById === context.userId;
   const sourceBits = [readable(event.sourceType), readable(event.sourceBadge), event.captureChannel ? readable(event.captureChannel) : null].filter(Boolean);
   return {
     title: event.title,
@@ -110,13 +109,9 @@ async function readTimelineDetail(context: DetailContext, eventId: string): Prom
       history: history.length ? { state: 'AVAILABLE', entries: history, reason: null } : { state: 'NOT_RECORDED', entries: [], reason: 'No verification change or revision is on record.' },
     },
     corrections: [
-      ...([['title', 'Correct title', 'Correct the title of this timeline event.'], ['date', 'Correct date', 'Correct the date of this timeline event.'], ['summary', 'Correct details', 'Correct the summary of this timeline event.']] as const).map(([field, label, message]) => route({
-        id: `event-correct-${field}`, label, operationId: 'HOME_EVENT_CORRECT', role: context.role, launch: { message, entityType: 'HOME_EVENT', entityId: eventId },
-        blockedReason: field === 'date' && event.datePrecision === 'RANGE' ? 'This event is recorded as a date range and cannot be corrected here.' : null,
-      })),
       route({
-        id: 'event-visibility', label: 'Change visibility', operationId: 'HOME_EVENT_VISIBILITY', role: context.role, launch: { message: HOME_EVENT_VISIBILITY_MESSAGE, entityType: 'HOME_EVENT', entityId: eventId },
-        note: isCreator ? null : 'Only the person who added the event can change it to or from private.',
+        id: 'event-edit', label: 'Edit event', operationId: 'HOME_EVENT_UPDATE', role: context.role, launch: { message: HOME_EVENT_EDIT_MESSAGE, entityType: 'HOME_EVENT', entityId: eventId },
+        note: 'Ask opens every detail of the event in one editor and reviews only what you change.',
       }),
     ],
   };

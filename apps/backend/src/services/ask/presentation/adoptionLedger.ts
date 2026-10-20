@@ -97,6 +97,7 @@ export const REVIEWED_OPERATIONS: Readonly<Record<string, string>> = {
   PROPERTY_SUMMARY: 'room and completeness collections declare their authoritative totals and bounded delivery',
   INVENTORY_ITEM_CORRECT: 'the ambiguous-target command declares the complete inventory total and bounded selection rows',
   HOME_EVENT_CORRECT: 'the ambiguous-target command pairs its bounded event read with an authoritative visible-event count',
+  HOME_EVENT_UPDATE: 'the ambiguous-target command pairs its bounded event read with an authoritative visible-event count',
   HOME_EVENT_VISIBILITY: 'the ambiguous-target command pairs its bounded event read with an authoritative visible-event count',
   WARRANTY_UPDATE: 'the ambiguous-target command declares the requester-owned warranty total and bounded fetched selection rows',
   ROOM_RENAME: 'the ambiguous-target command pairs its bounded room read with an authoritative room count',

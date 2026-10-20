@@ -15,6 +15,7 @@ import { PropertyContextAccessDeniedError } from '../../../modules/propertyConte
 import { APIError } from '../../../middleware/error.middleware';
 import { markDoNothingRunsStale } from '../../doNothingSimulator.service';
 import { updateWarranty, WARRANTY_VERSION_CONFLICT } from '../../home-management.service';
+import { HOME_EVENT_EDITOR_SELECT, homeEventEditorChanges, homeEventEditorFields, homeEventEditorPatch, homeEventEditorValues, validateHomeEventEditorAnswer, type HomeEventEditorRow } from '../support/homeEventEditor';
 import { validateWarrantyEditorAnswer, warrantyEditorChanges, warrantyEditorPatch, warrantyEditorValues } from '../support/warrantyEditor';
 import { correctionDisplay, correctionNormalized } from '../askCorrectionFields';
 import { markCoverageAnalysisStale, markItemCoverageAnalysesStale } from '../../coverageAnalysis.service';
@@ -22,7 +23,7 @@ import { markReplaceRepairStale } from '../../replaceRepairAnalysis.service';
 import { markRiskPremiumOptimizerStale } from '../../riskPremiumOptimizer.service';
 import { humanDate } from '../askFormatting';
 import { AreaCaptureAnswerSchema, areaCaptureError, areaCaptureStateFrom, areaEffectiveSkip } from '../handlers/propertySummary.handler';
-import { areaCaptureProgress, areaLabel, areaProgressBlock, asInputJson, captureEventResult, ensurePropertyAccess, HOME_EVENT_CORRECTION_FIELDS, HOME_EVENT_LINK_FIELDS, HOME_EVENT_VISIBILITY_LABELS, HomeEventCorrectionInputSchema, HomeEventVisibilityInputSchema, HouseholdInvitationInputSchema, InventoryCreateInputSchema, InventoryItemCorrectionInputSchema, InvitableHouseholdRole, invitationRoleCopy, mapPersistedExecution, preservedExecutionHistory, propertySummary, RoomCreateInputSchema, RoomRenameInputSchema, WarrantyUpdateInputSchema } from '../askHandlerSupport';
+import { areaCaptureProgress, areaLabel, areaProgressBlock, asInputJson, captureEventResult, ensurePropertyAccess, HOME_EVENT_CORRECTION_FIELDS, HOME_EVENT_LINK_FIELDS, HOME_EVENT_VISIBILITY_LABELS, HomeEventCorrectionInputSchema, HomeEventVisibilityInputSchema, HouseholdInvitationInputSchema, InventoryCreateInputSchema, InventoryItemCorrectionInputSchema, InvitableHouseholdRole, invitationRoleCopy, mapPersistedExecution, preservedExecutionHistory, propertySummary, RoomCreateInputSchema, RoomRenameInputSchema, WarrantyUpdateInputSchema, HomeEventUpdateInputSchema } from '../askHandlerSupport';
 import { homeEventContextVersion, homeEventCorrectionBlocker, homeEventCorrectionConfirmation, homeEventCorrectionValueError, homeEventFieldCurrent, homeEventFieldPatch, homeEventLinkOptions, homeEventsServiceForCapture, homeEventVisibilityBlocker, homeEventVisibilityConfirmation, householdService, householdWorkflowVersion, ROOM_CORRECTION_FIELDS, roomContextVersion, roomCorrectionNormalized, roomCorrectionValueError, roomFieldCurrent, roomFieldDisplay, roomRenameConfirmation, roomTypeLabel, warrantyContextVersion } from '../handlers/homeRecordWrites.handler';
 import { warrantyExpiryReminderCandidates } from '../handlers/warranties.handler';
 import { homeEventFollowUpCandidates } from '../handlers/homeRecordWrites.handler';
@@ -423,6 +424,89 @@ async function confirmHomeEventVisibility(ctx: ConfirmCapabilityContext): Promis
 }
 
 registerConfirmCapabilityHandler('home-event.visibility', confirmHomeEventVisibility);
+
+async function confirmHomeEventUpdate(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
+  const { execution, userId, parameters } = ctx;
+  const candidate = HomeEventUpdateInputSchema.safeParse(parameters.homeEventUpdate);
+  if (!candidate.success) throw Object.assign(new Error('The timeline update is invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+  const { eventId, changes } = candidate.data;
+  const propertyId = execution.propertyId!;
+  // ONE idempotency key for the whole multi-field edit: a lease-reclaim retry must find this execution's own replacement first.
+  const correctionKey = `ask-correction:${execution.id}`;
+  const refreshAfter = async (result: AskOperationResult, savedId: string, artifactId: string): Promise<ConfirmCapabilityResult> => {
+    const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
+    if (refresh.attemptedAndFailed) {
+      result.blocks.push({
+        type: 'LIMITATION', id: `home-event-refresh-failed-${savedId}`, severity: 'CAUTION', title: 'Saved; view could not refresh',
+        body: 'These changes were saved to your home timeline. The result you were viewing could not refresh automatically -- ask "Show my home timeline" to see its current state.',
+      });
+    }
+    return { result, artifactType: 'HOME_EVENT', artifactId, refreshedExecutions: refresh.refreshedExecutions };
+  };
+  const finishReplacement = async (replacement: { id: string; title: string; type?: string | null; revision?: number | null; amount?: unknown; inventoryItemId?: string | null }) => {
+    const result = captureEventResult(propertyId, replacement, true);
+    // Re-evaluated from the complete replacement record: a changed type, amount or item changes what is still missing.
+    result.suggestedNextActionCandidates = await homeEventFollowUpCandidates(replacement, { propertyId, sourceOperationId: 'HOME_EVENT_UPDATE' });
+    return refreshAfter(result, replacement.id, replacement.id);
+  };
+  const findWinner = () => prisma.homeEvent.findFirst({ where: { propertyId, idempotencyKey: correctionKey } });
+  const already = await findWinner();
+  if (already) return finishReplacement(already);
+  const current = await prisma.homeEvent.findFirst({
+    where: { id: eventId, propertyId, isCurrent: true, deletedAt: null }, select: HOME_EVENT_EDITOR_SELECT,
+  });
+  if (!current || (current.visibility === 'PRIVATE' && current.createdById !== userId)) {
+    throw Object.assign(new Error('This timeline event is no longer available. It may have been edited or removed.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
+  }
+  const row = current as HomeEventEditorRow;
+  const original = homeEventEditorValues(row);
+  const visibilityOnly = Object.keys(changes).length === 1 && 'visibility' in changes;
+  // A visibility-only change is an in-place overwrite, so a retry that already landed is simply done.
+  const alreadyApplied = visibilityOnly && original.visibility === changes.visibility;
+  if (!alreadyApplied && parameters.homeEventUpdateContextVersion !== homeEventContextVersion(row)) {
+    throw Object.assign(new Error('This timeline event changed while confirmation was open. Review it and try again.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
+  }
+  // Every rule is re-run against live data at confirm: disabled fields, link options, the title floor and the creator-only Private rule.
+  const fields = await homeEventEditorFields(propertyId, row, userId);
+  const { values, errors } = validateHomeEventEditorAnswer(fields, original, { ...original, ...changes }, { userId, createdById: row.createdById });
+  const firstError = Object.values(errors)[0];
+  if (firstError) {
+    throw Object.assign(new Error(firstError), { code: errors.visibility ? 'ASK_PERMISSION_REQUIRED' : 'ASK_INVALID_CONFIRMATION_EDIT' });
+  }
+  const changed = homeEventEditorChanges(fields, original, values);
+  if (visibilityOnly) {
+    if (!alreadyApplied) await homeEventsServiceForCapture.setVisibility({ propertyId, eventId: row.id, visibility: values.visibility as 'PRIVATE' | 'HOUSEHOLD' | 'RESALE_PACK' });
+    const result: AskOperationResult = {
+      status: 'COMPLETED', reasonCode: 'HOME_EVENT_UPDATED',
+      blocks: [{
+        type: 'WORKFLOW_PROGRESS', id: `home-event-updated-${row.id}`, title: alreadyApplied ? 'Visibility already set' : 'Event updated', status: 'COMPLETED',
+        description: 'The canonical timeline event was updated in place; no new revision was created.',
+        details: [{ label: 'Event', value: row.title }, ...(alreadyApplied ? [{ label: 'Changes', value: 'Already saved' }] : changed.map((change) => ({ label: change.label, value: `${change.before} \u2192 ${change.after}` })))],
+        actions: [receiptFollowUpAction('TIMELINE')],
+      }],
+      suggestions: [],
+    };
+    return refreshAfter(result, row.id, row.id);
+  }
+  try {
+    const replacement = await homeEventsServiceForCapture.updateHomeEvent(
+      propertyId, row.id,
+      { ...homeEventEditorPatch(Object.keys(changes), values), correctionReason: 'Edited through Ask after homeowner confirmation.' },
+      userId, { idempotencyKey: correctionKey },
+    );
+    return finishReplacement(replacement);
+  } catch (error) {
+    // Same two race recoveries as confirmHomeEventCorrect: the winner's whole supersede+create transaction commits atomically.
+    if ((error instanceof APIError && error.code === 'HOME_EVENT_NOT_FOUND') || (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002')) {
+      const winner = await findWinner();
+      if (winner) return finishReplacement(winner);
+      if (error instanceof APIError) throw Object.assign(new Error('The event to edit is no longer available.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
+    }
+    throw error;
+  }
+}
+
+registerConfirmCapabilityHandler('home-event.update', confirmHomeEventUpdate);
 
 async function confirmWarrantyUpdate(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
   const { execution, userId, parameters } = ctx;

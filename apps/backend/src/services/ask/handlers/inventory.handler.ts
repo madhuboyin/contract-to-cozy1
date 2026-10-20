@@ -15,7 +15,7 @@ import { InventoryService, ROOM_REQUIRED_CATEGORIES } from '../../inventory.serv
 import { type CorrectionOption } from '../askCorrectionFields';
 import { humanDate } from '../askFormatting';
 import { collectionDescriptor } from '../support/collectionDescriptor';
-import { durableFreeTextClarification, ensurePropertyAccess, exactEntityMatch, homeEventCorrectionItemActions, INVENTORY_CATEGORY_VALUES, InventoryCreateInputSchema, InventoryItemCorrectionInputSchema, isValidDateEditInput, MAX_RESULT_ITEMS } from '../askHandlerSupport';
+import { durableFreeTextClarification, ensurePropertyAccess, exactEntityMatch, homeEventEditItemActions, INVENTORY_CATEGORY_VALUES, InventoryCreateInputSchema, InventoryItemCorrectionInputSchema, isValidDateEditInput, MAX_RESULT_ITEMS } from '../askHandlerSupport';
 import { INVENTORY_ADD_MESSAGE, inventoryAddItemAction, inventoryShowAllAction } from './inventoryAskActions';
 import { isIncompleteInventoryRequest, isLifecycleInventoryRequest } from '../askInventoryIntent';
 import { type AskViewState } from '../support/executionState';
@@ -505,7 +505,7 @@ async function inventoryLookupResult(
       sections: [{
         id: 'events', title: 'Timeline', count: events.length,
         items: events.map((event) => ({
-          id: event.id, title: event.title, entityType: 'HOME_EVENT', actions: homeEventCorrectionItemActions(access.role !== HouseholdRole.VIEWER), description: event.summary,
+          id: event.id, title: event.title, entityType: 'HOME_EVENT', actions: homeEventEditItemActions(access.role !== HouseholdRole.VIEWER), description: event.summary,
           meta: [humanDate(event.occurredAt) ?? 'Date unavailable', event.type.toLowerCase().replace(/_/g, ' '), event.verificationStatus.toLowerCase().replace(/_/g, ' '), event.sourceBadge.toLowerCase().replace(/_/g, ' ')],
           status: event.datePrecision, href: null,
         })),

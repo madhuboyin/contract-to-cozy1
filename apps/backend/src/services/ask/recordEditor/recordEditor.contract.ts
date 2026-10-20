@@ -30,6 +30,10 @@ export interface RecordEditorField {
   readonly placeholder?: string;
   /** DATE only: a soft, non-blocking note shown (and repeated in the review) when the date is before today. */
   readonly pastDateNote?: string;
+  /** SELECT only: label of an explicit empty option (value ''), e.g. "No room". */
+  readonly emptyLabel?: string;
+  /** The field is shown but cannot be changed; the reason is printed under it and a submitted change is refused. */
+  readonly disabledReason?: string;
 }
 
 /** What the shared UI renders from. `original` and `version` come from the freshly read canonical record. */
@@ -77,7 +81,7 @@ export function editorFieldError(field: RecordEditorField, value: string): strin
  * Normalises a submitted answer against the field list. Unknown keys are rejected (the editor is not a request body),
  * and every defined field must be present so a half-submitted form cannot silently blank the rest of the record.
  */
-export function readEditorAnswer(fields: readonly RecordEditorField[], answer: unknown): { values: Record<string, string>; errors: RecordEditorErrors } {
+export function readEditorAnswer(fields: readonly RecordEditorField[], answer: unknown, original?: Readonly<Record<string, string>>): { values: Record<string, string>; errors: RecordEditorErrors } {
   const source = answer && typeof answer === 'object' && !Array.isArray(answer) ? answer as Record<string, unknown> : {};
   const known = new Set(fields.map((field) => field.key));
   const errors: RecordEditorErrors = {};
@@ -86,6 +90,7 @@ export function readEditorAnswer(fields: readonly RecordEditorField[], answer: u
   for (const field of fields) {
     if (!(field.key in source)) { errors[field.key] = 'This field is missing from the form.'; continue; }
     values[field.key] = normalizeEditorValue(field, source[field.key]);
+    if (field.disabledReason && original && values[field.key] !== (original[field.key] ?? '')) { errors[field.key] = field.disabledReason; continue; }
     const problem = editorFieldError(field, values[field.key]);
     if (problem) errors[field.key] = problem;
   }

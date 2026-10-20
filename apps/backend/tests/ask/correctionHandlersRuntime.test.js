@@ -1627,3 +1627,110 @@ test('evidence to a record, confirm: source shape -- the warranty is re-read for
   assert.match(fn, /prisma\.warranty\.findFirst\(\{ where: \{ id: targetId, propertyId: execution\.propertyId, homeownerProfile: \{ userId \} \}/);
   assert.match(fn, /prisma\.document\.updateMany\(\{\s*where: \{ id: documentId, propertyId: execution\.propertyId, OR:/);
 });
+
+// ── HOME_EVENT_UPDATE: the shared RecordEditor flow for a timeline event (FRD v1.386) ──
+const { homeEventUpdateResult } = require('../../src/services/ask/handlers/homeRecordWrites.handler.ts');
+const eventRow = (overrides = {}) => ({ id: 'event-1', title: 'Roof replacement', revision: 3, visibility: 'HOUSEHOLD', createdById: 'u9', datePrecision: 'EXACT_DATE', occurredAt: new Date('2026-09-01T00:00:00.000Z'), summary: 'Full tear-off.', amount: '18500', type: 'IMPROVEMENT', importance: 'NORMAL', verificationStatus: 'EVIDENCE_VERIFIED', roomId: null, inventoryItemId: null, ...overrides });
+const eventUpdateParams = (changes, version = eventVersion) => ({ homeEventUpdate: { eventId: 'event-1', changes }, homeEventUpdateContextVersion: version, confirmationVersion: 1 });
+const proposeEventEdit = () => capabilityInvoke('HOME_EVENT_UPDATE', { userId: 'u1', propertyId: 'p1', message: 'Edit this timeline event.', launchContext: { surface: 'ASK_WORKSPACE', entityType: 'HOME_EVENT', entityId: 'event-1', operationId: 'HOME_EVENT_UPDATE' } });
+const submitEventEdit = (answer) => homeEventUpdateResult('u1', 'p1', 'Edit this timeline event.', undefined, { eventId: 'event-1', answer });
+const originalEvent = { title: 'Roof replacement', type: 'IMPROVEMENT', occurredAt: '2026-09-01', importance: 'NORMAL', summary: 'Full tear-off.', amount: '18500.00', visibility: 'HOUSEHOLD', roomId: '', inventoryItemId: '' };
+const setupEventEdit = (overrides, winner) => { install(); linkModels(); eventModel({ current: eventRow(overrides), winner }); };
+
+test('event edit: ONE declared action opens the editor with all nine fields prefilled in three sections, live link options with explicit empty choices; nothing is written', async () => {
+  setupEventEdit();
+  const result = await proposeEventEdit();
+  assert.equal(result.status, 'NEEDS_CONTEXT');
+  const [request] = result.captureRequests;
+  assert.equal(request.captureKey, 'HOME_EVENT_UPDATE_INPUTS');
+  assert.equal(request.expectedContextVersion, eventVersion);
+  assert.deepEqual(request.editor.sections.map((section) => section.title), ['Event', 'Details', 'Links']);
+  assert.deepEqual(request.editor.fields.map((field) => field.key), ['title', 'type', 'occurredAt', 'importance', 'summary', 'amount', 'visibility', 'roomId', 'inventoryItemId']);
+  assert.deepEqual(request.editor.original, originalEvent);
+  const room = request.editor.fields.find((field) => field.key === 'roomId');
+  assert.deepEqual([room.emptyLabel, room.options], ['No room', [{ label: 'Kitchen', value: 'room-1' }]]);
+  assert.ok(!request.editor.fields.find((field) => field.key === 'visibility').options.some((option) => option.value === 'PRIVATE'), 'a non-creator is not offered Private');
+  assert.equal(calls.updateHomeEvent.length + calls.setVisibility.length, 0);
+});
+
+test('event edit: a range date and a guided-plan type are disabled with a reason; month precision is editable and says it becomes exact', async () => {
+  setupEventEdit({ datePrecision: 'RANGE', type: 'VERIFIED_RESOLUTION' });
+  const fields = (await proposeEventEdit()).captureRequests[0].editor.fields;
+  assert.match(fields.find((field) => field.key === 'occurredAt').disabledReason, /date range/);
+  assert.equal(fields.find((field) => field.key === 'type').disabledReason, 'Type is fixed because this event records completion of a guided plan.');
+  const blocked = await submitEventEdit({ ...originalEvent, type: 'NOTE', occurredAt: '2026-09-02' });
+  assert.equal(blocked.reasonCode, 'HOME_EVENT_UPDATE_INVALID');
+  assert.deepEqual(Object.keys(blocked.captureRequests[0].editor.errors).sort(), ['occurredAt', 'type']);
+  setupEventEdit({ datePrecision: 'MONTH' });
+  const month = (await proposeEventEdit()).captureRequests[0].editor.fields.find((field) => field.key === 'occurredAt');
+  assert.equal(month.disabledReason, undefined);
+  assert.match(month.helpText, /Choosing a day makes the date exact/);
+});
+
+test('event edit: the review lists ONLY changed fields; substantive edits disclose the verification transition, visibility-only does not create a revision', async () => {
+  setupEventEdit();
+  const result = await submitEventEdit({ ...originalEvent, title: ' Roof replaced ', amount: '', summary: 'Full tear-off.' });
+  assert.equal(result.status, 'NEEDS_CONFIRMATION');
+  assert.deepEqual(result.confirmation.fields.map((field) => field.label), ['Event', 'Title', 'Amount (USD)']);
+  assert.equal(result.confirmation.fields[2].value, '$18,500.00 → Not recorded');
+  assert.deepEqual(result.parameters.homeEventUpdate.changes, { title: 'Roof replaced', amount: '' });
+  assert.match(result.confirmation.description, /ONE new revision/);
+  assert.match(result.confirmation.description, /evidence-verified, so after this edit it returns to pending confirmation/);
+  const visibility = await submitEventEdit({ ...originalEvent, visibility: 'RESALE_PACK' });
+  assert.match(visibility.confirmation.description, /does not create a new revision, and verification is unchanged/);
+  assert.equal((await submitEventEdit(originalEvent)).reasonCode, 'HOME_EVENT_UPDATE_NO_CHANGES');
+  assert.equal(calls.updateHomeEvent.length, 0);
+});
+
+test('event edit: field, title-floor and creator-only Private problems come back on the editor before any review', async () => {
+  setupEventEdit();
+  assert.deepEqual(Object.keys((await submitEventEdit({ ...originalEvent, title: 'ab', amount: 'x' })).captureRequests[0].editor.errors).sort(), ['amount', 'title']);
+  const priv = await submitEventEdit({ ...originalEvent, visibility: 'PRIVATE' });
+  assert.equal(priv.reasonCode, 'HOME_EVENT_UPDATE_INVALID');
+  assert.ok(priv.captureRequests[0].editor.errors.visibility);
+  assert.equal((await submitEventEdit({ ...originalEvent, roomId: 'room-9' })).reasonCode, 'HOME_EVENT_UPDATE_INVALID', 'a room outside this property is refused');
+});
+
+test('event edit confirm: a multi-field edit is ONE replacement revision with one idempotency key, an exact date, and null for cleared optional fields', async () => {
+  setupEventEdit({ datePrecision: 'YEAR', roomId: 'room-1' });
+  const { result, artifactId } = await invoke('HOME_EVENT_UPDATE', eventUpdateParams({ title: 'Roof replaced', occurredAt: '2026-08-15', summary: '', roomId: '', visibility: 'RESALE_PACK', importance: 'HIGH' }));
+  assert.equal(calls.updateHomeEvent.length, 1, 'one write for the whole edit, not one per field');
+  assert.equal(calls.setVisibility.length, 0, 'a changed visibility rides in the same replacement');
+  const [propertyId, eventId, patch, , options] = calls.updateHomeEvent[0];
+  assert.deepEqual([propertyId, eventId], ['p1', 'event-1']);
+  assert.deepEqual(Object.keys(patch).sort(), ['correctionReason', 'datePrecision', 'importance', 'occurredAt', 'roomId', 'summary', 'title', 'visibility']);
+  assert.deepEqual([patch.datePrecision, patch.occurredAt, patch.summary, patch.roomId], ['EXACT_DATE', '2026-08-15T00:00:00.000Z', null, null]);
+  assert.match(options.idempotencyKey, /^ask-correction:/);
+  assert.equal(artifactId, 'event-2', 'the receipt carries the replacement id');
+  assert.equal(result.status, 'COMPLETED');
+});
+
+test('event edit confirm: a visibility-only change updates in place with no new revision; an already-set value is done', async () => {
+  setupEventEdit();
+  await invoke('HOME_EVENT_UPDATE', eventUpdateParams({ visibility: 'RESALE_PACK' }));
+  assert.equal(calls.updateHomeEvent.length, 0);
+  assert.deepEqual(calls.setVisibility[0][0], { propertyId: 'p1', eventId: 'event-1', visibility: 'RESALE_PACK' });
+  setupEventEdit({ visibility: 'RESALE_PACK' });
+  const { result } = await invoke('HOME_EVENT_UPDATE', eventUpdateParams({ visibility: 'RESALE_PACK' }, 'version-from-before'));
+  assert.equal(result.status, 'COMPLETED');
+  assert.equal(calls.setVisibility.length, 0);
+});
+
+test('event edit confirm: a stale revision, a retried execution, a private event of someone else and a non-creator Private move are all handled', async () => {
+  setupEventEdit();
+  assert.equal(await codeOf(invoke('HOME_EVENT_UPDATE', eventUpdateParams({ title: 'New title' }, sha('event-1:2')))), 'ASK_CONTEXT_VERSION_CONFLICT');
+  assert.equal(await codeOf(invoke('HOME_EVENT_UPDATE', eventUpdateParams({ visibility: 'PRIVATE' }))), 'ASK_PERMISSION_REQUIRED');
+  assert.equal(await codeOf(invoke('HOME_EVENT_UPDATE', eventUpdateParams({ title: 'ab' }))), 'ASK_INVALID_CONFIRMATION_EDIT');
+  setupEventEdit({ visibility: 'PRIVATE', createdById: 'u9' });
+  assert.equal(await codeOf(invoke('HOME_EVENT_UPDATE', eventUpdateParams({ title: 'New title' }))), 'ASK_CONTEXT_VERSION_CONFLICT');
+  setupEventEdit({ datePrecision: 'RANGE' });
+  assert.equal(await codeOf(invoke('HOME_EVENT_UPDATE', eventUpdateParams({ occurredAt: '2026-08-15' }))), 'ASK_INVALID_CONFIRMATION_EDIT');
+  assert.equal(calls.updateHomeEvent.length + calls.setVisibility.length, 0);
+  setupEventEdit({}, { id: 'event-2', title: 'Roof replaced' });
+  const { artifactId } = await invoke('HOME_EVENT_UPDATE', eventUpdateParams({ title: 'Roof replaced' }));
+  assert.equal(artifactId, 'event-2');
+  assert.equal(calls.updateHomeEvent.length, 0, 'a retry finds this execution\'s own replacement instead of superseding again');
+  setupEventEdit({ createdById: 'u1', visibility: 'PRIVATE' });
+  await invoke('HOME_EVENT_UPDATE', eventUpdateParams({ visibility: 'HOUSEHOLD' }));
+  assert.equal(calls.setVisibility.length, 1, 'the creator can move their own event out of private');
+});

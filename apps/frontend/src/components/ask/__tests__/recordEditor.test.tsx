@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { AskCaptureRequest } from '@/features/ask/types';
 import { api } from '@/lib/api/client';
 import { InlineCaptureCard } from '../workspace/CaptureCards';
-import { editorFieldProblem, normalizeEditorFieldValue } from '../recordEditor/RecordEditor';
+import { editorFieldProblem, fieldSpans, normalizeEditorFieldValue } from '../recordEditor/RecordEditor';
 
 // Shared RecordEditor (FRD v1.385) as the warranty reference implementation, and the compact Add warranty form.
 
@@ -149,4 +149,75 @@ test('Add warranty: Continue enables once required fields are valid and submits 
   expect((api.submitAskCapture as jest.Mock).mock.calls[0][1].answer).toMatchObject({
     providerName: 'Acme', category: 'HVAC', startDate: { precision: 'EXACT_DATE', value: '2019-01-01' }, expiryDate: { precision: 'EXACT_DATE', value: '2020-01-01' }, cost: 99.5,
   });
+});
+
+// Timeline event editor needs (FRD v1.386): disabled-with-reason fields, explicit empty choices, changed markers, an unsaved-changes guard and full rows.
+const eventOriginal = { title: 'Roof replacement', type: 'VERIFIED_RESOLUTION', occurredAt: '2026-09-01', importance: 'NORMAL', summary: '', amount: '', visibility: 'HOUSEHOLD', roomId: '', inventoryItemId: '' };
+const eventRequest = {
+  requirementId: 'home-event-update-e1', captureKey: 'HOME_EVENT_UPDATE_INPUTS', classification: 'WORKFLOW_INPUT', state: 'KNOWN', presentation: 'FORM',
+  title: 'Edit event', question: 'q', helpText: null, allowNotSure: false, sensitivity: 'STANDARD', destinationLabel: null, confirmationText: null, expectedContextVersion: 'v1',
+  inputSchema: { type: 'GROUP', fields: [] }, currentAnswer: eventOriginal,
+  editor: {
+    recordLabel: 'Roof replacement',
+    sections: [{ id: 'event', title: 'Event' }, { id: 'details', title: 'Details' }, { id: 'links', title: 'Links' }],
+    fields: [
+      { key: 'title', label: 'Title', kind: 'TEXT', section: 'event', required: true },
+      { key: 'type', label: 'Type', kind: 'SELECT', section: 'event', required: true, options: [{ label: 'Guided plan completion', value: 'VERIFIED_RESOLUTION' }, { label: 'Note', value: 'NOTE' }], disabledReason: 'Type is fixed because this event records completion of a guided plan.' },
+      { key: 'occurredAt', label: 'Date', kind: 'DATE', section: 'event', required: true, helpText: 'This date is recorded by month. Choosing a day makes the date exact.' },
+      { key: 'importance', label: 'Importance', kind: 'SELECT', section: 'event', required: true, options: [{ label: 'Normal', value: 'NORMAL' }] },
+      { key: 'summary', label: 'Summary', kind: 'TEXTAREA', section: 'details', required: false },
+      { key: 'amount', label: 'Amount (USD)', kind: 'MONEY', section: 'details', required: false },
+      { key: 'visibility', label: 'Visibility', kind: 'SELECT', section: 'details', required: true, options: [{ label: 'Household', value: 'HOUSEHOLD' }, { label: 'Resale pack', value: 'RESALE_PACK' }] },
+      { key: 'roomId', label: 'Room', kind: 'SELECT', section: 'links', required: false, options: [{ label: 'Kitchen', value: 'room-1' }], emptyLabel: 'No room' },
+      { key: 'inventoryItemId', label: 'Inventory item', kind: 'SELECT', section: 'links', required: false, options: [], emptyLabel: 'No item' },
+    ],
+    original: eventOriginal,
+  },
+} as unknown as AskCaptureRequest;
+
+test('a disabled field is shown disabled with its reason directly beneath it; a field note explains month precision', () => {
+  render(<InlineCaptureCard executionId="ev1" request={eventRequest} onCompleted={jest.fn()} />);
+  const type = screen.getByLabelText(/^Type/);
+  expect(type).toBeDisabled();
+  expect(type).toHaveAccessibleDescription(/Type is fixed because this event records completion of a guided plan/);
+  expect(screen.getByText('Type is fixed because this event records completion of a guided plan.')).toBeVisible();
+  expect(screen.getByLabelText(/^Date/)).toBeEnabled();
+  expect(screen.getByText(/Choosing a day makes the date exact/)).toBeVisible();
+});
+
+test('link fields offer an explicit empty choice, and clearing back to it counts as a change that is sent as an empty value', async () => {
+  jest.spyOn(api, 'submitAskCapture').mockResolvedValue({ success: true, data: { executionId: 'ev1' } } as never);
+  render(<InlineCaptureCard executionId="ev1" request={eventRequest} onCompleted={jest.fn()} />);
+  const room = screen.getByLabelText(/^Room/);
+  expect(room).toHaveDisplayValue('No room');
+  fireEvent.change(room, { target: { value: 'room-1' } });
+  expect(screen.getAllByText('Changed')).toHaveLength(1);
+  fireEvent.change(room, { target: { value: '' } });
+  expect(screen.queryByText('Changed')).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Review changes' })).toBeDisabled();
+  fireEvent.change(screen.getByLabelText(/^Summary/), { target: { value: 'Full tear-off.' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Review changes' }));
+  await waitFor(() => expect(api.submitAskCapture).toHaveBeenCalled());
+  expect((api.submitAskCapture as jest.Mock).mock.calls[0][1].answer).toEqual({ ...eventOriginal, summary: 'Full tear-off.' });
+});
+
+test('Cancel with unsaved edits asks before discarding; Keep editing returns, Discard cancels the execution', async () => {
+  jest.spyOn(api, 'cancelAskExecution').mockResolvedValue({ success: true, data: { executionId: 'ev1', status: 'CANCELLED' } } as never);
+  render(<InlineCaptureCard executionId="ev1" request={eventRequest} onCompleted={jest.fn()} />);
+  fireEvent.change(screen.getByLabelText(/^Title/), { target: { value: 'Roof replaced' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+  expect(screen.getByRole('alertdialog', { name: 'Discard your changes?' })).toBeVisible();
+  expect(api.cancelAskExecution).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Keep editing' }));
+  expect(screen.getByLabelText(/^Title/)).toHaveValue('Roof replaced');
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
+  await waitFor(() => expect(api.cancelAskExecution).toHaveBeenCalledWith('ev1'));
+});
+
+test('field spans fill every row: four fields as 2x2, three as thirds, two as halves, multiline full width', () => {
+  const f = (key: string, kind = 'TEXT') => ({ key, label: key, kind, section: 's', required: false }) as never;
+  expect(Object.values(fieldSpans([f('a'), f('b'), f('c'), f('d')]))).toEqual(Array(4).fill('md:col-span-6'));
+  expect(Object.values(fieldSpans([f('a'), f('b'), f('c')]))).toEqual(Array(3).fill('md:col-span-4'));
+  expect(fieldSpans([f('a'), f('t', 'TEXTAREA'), f('b')])).toEqual({ t: 'md:col-span-12', a: 'md:col-span-6', b: 'md:col-span-6' });
 });

@@ -9,7 +9,7 @@ import { HouseholdRole, MaintenanceTaskStatus, Prisma } from '@prisma/client';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { prisma } from '../../../lib/prisma';
-import { warrantyContextVersion } from '../suggestedActions/domainVersions';
+import { homeEventContextVersion, warrantyContextVersion } from '../suggestedActions/domainVersions';
 import { logger } from '../../../lib/logger';
 import { areaScopeForOutcome, loadAreaCaptureAllowlist } from '../suggestedActions/profileAreaAllowlist';
 import { ASK_RESPONSE_SCHEMA_VERSION, type AskExecutionResponse, type AskPresentationBlock, type RecordAskCaptureEvent, type SubmitAskCaptureRequest } from '../../../productFramework/ask/ask.contract';
@@ -31,7 +31,7 @@ import { radarNotificationPreferenceService } from '../../../modules/homeEventRa
 import { updateInsurancePolicy } from '../../home-management.service';
 import { areaCapturePrompt, areaCaptureStateFrom, areaCaptureSubmitResult } from '../handlers/propertySummary.handler';
 import { AREA_CAPTURE_MESSAGES, asInputJson, ensurePropertyAccess, enterAskPropertyTimezoneContext, expireIfSkillBindingChanged, HouseholdInvitationInputSchema, InventoryCreateInputSchema, MaintenanceCompletionWorkflowInputSchema, MaintenanceTaskWorkflowInputSchema, mapPersistedExecution, preservedExecutionHistory, propertySummary, RadarTaskAnswerSchema, RadarTaskTargetSchema, RoomCreateInputSchema, terminalStatus } from '../askHandlerSupport';
-import { householdInvitationResult, householdWorkflowVersion, ROOM_CREATE_CAPTURE_KEY, roomCreateContextVersion, roomCreateResult, WARRANTY_UPDATE_CAPTURE_KEY, warrantyUpdateResult } from '../handlers/homeRecordWrites.handler';
+import { householdInvitationResult, householdWorkflowVersion, ROOM_CREATE_CAPTURE_KEY, roomCreateContextVersion, roomCreateResult, WARRANTY_UPDATE_CAPTURE_KEY, warrantyUpdateResult, HOME_EVENT_UPDATE_CAPTURE_KEY, homeEventUpdateResult } from '../handlers/homeRecordWrites.handler';
 import { INVENTORY_COMPLETE_DETAILS_CAPTURE_KEY, INVENTORY_CREATE_CAPTURE_KEY, inventoryCompleteDetailsResult, inventoryCreateContextVersion, inventoryItemContextVersion, inventoryItemCreateResult } from '../handlers/inventory.handler';
 import { claimFileResult, ClaimFileWorkflowInputSchema } from '../handlers/claims.handler';
 import { RADAR_PREFERENCES_CAPTURE_KEY, RADAR_TASK_CAPTURE_KEY, radarCaptureError, radarPreferencesBodyFromAnswer, radarPreferencesContextVersion, radarPreferencesFormResult, radarTaskContextVersion, radarTaskFormResult } from '../handlers/homeEventRadar.handler';
@@ -732,6 +732,33 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     captureId = input.idempotencyKey;
     capturedContextVersion = currentVersion;
     canonicalOwner = 'InventoryRoom';
+  } else if (execution.operationId === 'HOME_EVENT_UPDATE') {
+    // Shared RecordEditor submit (FRD v1.386): the answer is every editor field; the target is the event the editor was opened for.
+    if (input.captureKey !== HOME_EVENT_UPDATE_CAPTURE_KEY) {
+      const error = new Error('This event edit is no longer active.');
+      (error as Error & { code?: string }).code = 'ASK_CAPTURE_NOT_ACTIVE';
+      throw error;
+    }
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson)
+      ? execution.parametersJson as Record<string, unknown>
+      : {};
+    const eventId = typeof storedParameters.eventId === 'string' ? storedParameters.eventId : null;
+    const event = eventId ? await prisma.homeEvent.findFirst({ where: { id: eventId, propertyId: execution.propertyId, isCurrent: true, deletedAt: null }, select: { id: true, revision: true } }) : null;
+    if (!event) {
+      const error = new Error('This timeline event changed or was removed while the editor was open. Open it again to edit the latest version.');
+      (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
+      throw error;
+    }
+    const currentVersion = homeEventContextVersion(event);
+    if (currentVersion !== input.expectedContextVersion) {
+      const error = new Error('This timeline event changed while the editor was open. Review the refreshed values and try again.');
+      (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
+      throw error;
+    }
+    result = await homeEventUpdateResult(userId, execution.propertyId, execution.message, undefined, { eventId: event.id, answer: input.answer });
+    captureId = input.idempotencyKey;
+    capturedContextVersion = currentVersion;
+    canonicalOwner = 'HomeEvent';
   } else if (execution.operationId === 'WARRANTY_UPDATE') {
     // Shared RecordEditor submit (FRD v1.385): the answer is every editor field; the target is the warranty the editor was opened for.
     if (input.captureKey !== WARRANTY_UPDATE_CAPTURE_KEY) {

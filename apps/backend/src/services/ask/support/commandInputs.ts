@@ -131,6 +131,12 @@ export const HomeEventCorrectionInputSchema = z.object({
   value: z.string().max(2000).nullable(),
 }).strict();
 
+// The changed fields only, by editor field key (FRD v1.386); '' clears an optional field.
+export const HomeEventUpdateInputSchema = z.object({
+  eventId: z.string().trim().min(1).max(160),
+  changes: z.record(z.string(), z.string().max(2000)).refine((changes) => Object.keys(changes).length > 0 && Object.keys(changes).length <= 9, { message: 'Change at least one field.' }),
+}).strict();
+
 export const HomeEventVisibilityInputSchema = z.object({
   eventId: z.string().trim().min(1).max(160),
   value: z.enum(['PRIVATE', 'HOUSEHOLD', 'RESALE_PACK']).nullable(),

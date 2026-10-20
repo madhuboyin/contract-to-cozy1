@@ -20,7 +20,10 @@ import { correctionFieldForOutcome } from '../suggestedActions/suggestedNextActi
 import { DEFAULT_CANDIDATE_SIGNALS, DEFAULT_CANDIDATE_TRAITS, type SuggestedNextActionCandidate } from '../suggestedActions/suggestedNextActionCandidate';
 import { durableFreeTextClarification, ensurePropertyAccess, exactEntityMatch, HOME_EVENT_CORRECTION_FIELDS, HOME_EVENT_LINK_FIELDS, HOME_EVENT_VISIBILITY_LABELS, HomeEventCorrectionField, HomeEventCorrectionInputSchema, HomeEventVisibilityInputSchema, HouseholdInvitationInputSchema, invitationRoleCopy, isValidDateEditInput, propertySummary, readablePropertyValue, ROOM_TYPE_VALUES, RoomCreateInputSchema, RoomRenameInputSchema, WarrantyUpdateInputSchema } from '../askHandlerSupport';
 import { collectionDescriptor } from '../support/collectionDescriptor';
+import { HOME_EVENT_EDIT_MESSAGE, homeEventEditItemActions } from '../support/homeEventCorrection';
 import { editorToGroupSchema, type RecordEditorChange } from '../recordEditor/recordEditor.contract';
+import { HomeEventUpdateInputSchema } from '../support/commandInputs';
+import { HOME_EVENT_EDITOR_SELECT, homeEventEditorChanges, homeEventEditorDescriptor, homeEventEditorValues, homeEventUpdateDescription, validateHomeEventEditorAnswer, type HomeEventEditorRow } from '../support/homeEventEditor';
 import { validateWarrantyEditorAnswer, warrantyEditorChanges, warrantyEditorDescriptor, warrantyEditorNotes, warrantyEditorValues, type WarrantyEditorRow } from '../support/warrantyEditor';
 
 export const householdService = new HouseholdService();
@@ -306,6 +309,119 @@ async function homeEventCorrectResult(userId: string, propertyId: string, messag
 }
 
 registerCapabilityHandler('home-event.correct', async (envelope) => homeEventCorrectResult(envelope.userId, envelope.propertyId!, envelope.message, envelope.launchContext));
+
+// HOME_EVENT_UPDATE (FRD v1.386): ONE multi-field edit of a timeline event through the shared RecordEditor. The first result is the
+// editor (all nine fields prefilled from the current revision); submitting validates the whole answer, then the homeowner reviews
+// ONLY the changed fields and confirms once. Persistence keeps the audit model: visibility-only is an in-place update, anything else
+// is ONE replacement revision (see confirmHomeEventUpdate).
+export { HOME_EVENT_EDIT_MESSAGE };
+export const HOME_EVENT_UPDATE_CAPTURE_KEY = 'HOME_EVENT_UPDATE_INPUTS';
+
+export { homeEventEditItemActions };
+
+export function homeEventUpdateCaptureRequest(
+  descriptor: Awaited<ReturnType<typeof homeEventEditorDescriptor>>, eventId: string, entered?: Record<string, string>, errors?: Record<string, string>,
+): AskCaptureRequest {
+  return {
+    requirementId: `home-event-update-${eventId}`, captureKey: HOME_EVENT_UPDATE_CAPTURE_KEY, classification: 'WORKFLOW_INPUT', state: 'KNOWN',
+    title: 'Edit event', question: `What should change on "${descriptor.recordLabel}"?`,
+    helpText: 'Change anything below. You will review only what changed before it is saved.',
+    inputSchema: editorToGroupSchema(descriptor), currentAnswer: entered ?? descriptor.original,
+    allowNotSure: false, sensitivity: 'STANDARD', destinationLabel: 'Used to prepare this change; nothing is saved until you confirm', confirmationText: null,
+    expectedContextVersion: descriptor.version, presentation: 'FORM',
+    editor: {
+      recordLabel: descriptor.recordLabel, sections: descriptor.sections.map((section) => ({ ...section })),
+      fields: descriptor.fields.map((field) => ({ ...field, options: field.options?.map((option) => ({ ...option })) })),
+      original: { ...descriptor.original }, ...(errors && Object.keys(errors).length ? { errors } : {}),
+    },
+  };
+}
+
+export async function homeEventUpdateResult(
+  userId: string, propertyId: string, message: string, launchContext?: CreateAskExecutionRequest['launchContext'],
+  submitted?: { eventId: string; answer: unknown },
+): Promise<AskOperationResult> {
+  await ensurePropertyAccess(userId, propertyId);
+  const where = { propertyId, isCurrent: true, deletedAt: null, OR: [{ visibility: { not: 'PRIVATE' as const } }, { createdById: userId }] };
+  const [events, sourceTotal] = await Promise.all([prisma.homeEvent.findMany({
+    where, orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }], take: 200, select: HOME_EVENT_EDITOR_SELECT,
+  }), prisma.homeEvent.count({ where })]);
+  const selected = submitted
+    ? events.find((event) => event.id === submitted.eventId) ?? null
+    : exactEntityMatch(events, message, launchContext);
+  if (!selected) {
+    const sections = [{ id: 'events', title: 'Timeline events', count: sourceTotal, items: events.slice(0, 20).map((event) => ({
+      id: event.id, title: event.title, description: null, meta: [humanDate(event.occurredAt) ?? 'Date unavailable'], status: null, href: null,
+    })) }];
+    return {
+      status: 'NEEDS_ENTITY', reasonCode: 'HOME_EVENT_TARGET_REQUIRED',
+      ...durableFreeTextClarification('HOME_EVENT_UPDATE', 'Which timeline event should Ask edit? Use its exact title.'),
+      blocks: [{
+        type: 'GROUPED_LIST', filters: [], id: 'home-event-selection', title: 'Choose the event to edit',
+        description: 'Use the exact event title in your next message; nothing has changed.',
+        sections,
+        collection: collectionDescriptor({ sourceTotal, fetchedCount: events.length, sections, nextPageAvailable: false }),
+        actions: [],
+      }],
+      suggestions: [],
+    };
+  }
+  const row = selected as HomeEventEditorRow;
+  const contextVersion = homeEventContextVersion(row);
+  const sourceExecutionId = launchContext?.sourceExecutionId ?? null;
+  const descriptor = await homeEventEditorDescriptor(propertyId, row, userId, contextVersion);
+  const editorBlock = { type: 'SUMMARY' as const, id: 'home-event-update-input', title: `Edit "${row.title}"`, body: 'Nothing has been saved yet. Change what you need, then review only what changed.', tone: 'DEFAULT' as const, actions: [] };
+  if (!submitted) {
+    return {
+      status: 'NEEDS_CONTEXT', reasonCode: 'HOME_EVENT_UPDATE_INPUT_REQUIRED', contextVersion,
+      parameters: { eventId: row.id, sourceExecutionId },
+      blocks: [editorBlock], captureRequests: [homeEventUpdateCaptureRequest(descriptor, row.id)], suggestions: [],
+    };
+  }
+  const { values, errors } = validateHomeEventEditorAnswer(descriptor.fields, descriptor.original, submitted.answer, { userId, createdById: row.createdById });
+  if (Object.keys(errors).length) {
+    return {
+      status: 'NEEDS_CONTEXT', reasonCode: 'HOME_EVENT_UPDATE_INVALID', contextVersion,
+      parameters: { eventId: row.id, sourceExecutionId },
+      blocks: [{ ...editorBlock, id: 'home-event-update-invalid', title: 'Check the highlighted fields', body: 'Nothing has been saved. Fix the highlighted fields, then review again.', tone: 'CAUTION' as const }],
+      captureRequests: [homeEventUpdateCaptureRequest(descriptor, row.id, values, errors)], suggestions: [],
+    };
+  }
+  const changes = homeEventEditorChanges(descriptor.fields, descriptor.original, values);
+  if (changes.length === 0) {
+    return {
+      status: 'NEEDS_CONTEXT', reasonCode: 'HOME_EVENT_UPDATE_NO_CHANGES', contextVersion,
+      parameters: { eventId: row.id, sourceExecutionId },
+      blocks: [{ ...editorBlock, id: 'home-event-update-no-changes', title: 'Nothing has changed', body: 'These details match the recorded event. Change a field to review an update.' }],
+      captureRequests: [homeEventUpdateCaptureRequest(descriptor, row.id, values)], suggestions: [],
+    };
+  }
+  const input = HomeEventUpdateInputSchema.parse({ eventId: row.id, changes: Object.fromEntries(changes.map((change) => [change.key, values[change.key]])) });
+  const expiresAt = new Date(Date.now() + 30 * 60_000);
+  return {
+    status: 'NEEDS_CONFIRMATION', reasonCode: 'HOME_EVENT_UPDATE_CONFIRMATION_REQUIRED', contextVersion,
+    parameters: {
+      eventId: row.id, homeEventUpdate: input, homeEventUpdateContextVersion: contextVersion, sourceExecutionId,
+      confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString(),
+    },
+    blocks: [{ type: 'SUMMARY', id: 'home-event-update-review', title: `Review ${changes.length === 1 ? 'this change' : `these ${changes.length} changes`}`, body: 'No timeline record has changed yet. Only what you changed is listed.', tone: 'DEFAULT', actions: [] }],
+    confirmation: homeEventUpdateConfirmation(row, changes, Object.keys(input.changes), 1, expiresAt),
+    // Kept so the entry can be adjusted and resubmitted before confirming.
+    captureRequests: [homeEventUpdateCaptureRequest(descriptor, row.id, values)],
+    suggestions: [],
+  };
+}
+
+export function homeEventUpdateConfirmation(event: { id: string; title: string; verificationStatus?: string | null }, changes: readonly RecordEditorChange[], changedKeys: readonly string[], version: number, expiresAt: Date) {
+  return {
+    confirmationId: `home-event-update-${event.id}-${version}`, version, title: `Save ${changes.length === 1 ? '1 change' : `${changes.length} changes`} to "${event.title}"?`,
+    description: homeEventUpdateDescription(changedKeys, event.verificationStatus),
+    fields: [{ label: 'Event', value: event.title }, ...changes.map((change) => ({ label: change.label, value: `${change.before} \u2192 ${change.after}` }))],
+    editableFields: [], confirmLabel: 'Save changes', consentText: 'I authorize these changes to the shared home timeline.', expiresAt: expiresAt.toISOString(),
+  };
+}
+
+registerCapabilityHandler('home-event.update', async (envelope) => homeEventUpdateResult(envelope.userId, envelope.propertyId!, envelope.message, envelope.launchContext));
 
 const HOME_EVENT_VISIBILITY_OPTIONS: readonly CorrectionOption[] = [
   { label: 'Private (only you)', value: 'PRIVATE' },

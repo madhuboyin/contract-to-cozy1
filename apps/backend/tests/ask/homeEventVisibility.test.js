@@ -66,7 +66,13 @@ test('the creator-only privacy rule is a pure function of userId, createdById an
   assert.match(blocker, /createdById !== userId/);
 });
 
-test('the item action is offered to any contributor (creator-only enforcement happens at propose/confirm, not the listing)', () => {
-  assert.match(body('function homeEventCorrectionItemActions(', 'function homeEventCorrectionConfirmation('), /correct-visibility/);
+test('visibility is edited inside the one Edit event editor; the creator-only Private rule is enforced at submit and confirm, and the single-field command stays registered', () => {
+  const { homeEventEditItemActions } = require('../../src/services/ask/support/homeEventCorrection.ts');
+  assert.ok(!homeEventEditItemActions(true).some((action) => action.id === 'correct-visibility'));
+  const { homeEventPrivacyBlocker } = require('../../src/services/ask/support/homeEventEditor.ts');
+  assert.ok(homeEventPrivacyBlocker('u1', 'u9', 'HOUSEHOLD', 'PRIVATE'));
+  assert.ok(homeEventPrivacyBlocker('u1', 'u9', 'PRIVATE', 'HOUSEHOLD'));
+  assert.equal(homeEventPrivacyBlocker('u9', 'u9', 'HOUSEHOLD', 'PRIVATE'), null);
+  assert.equal(homeEventPrivacyBlocker('u1', 'u9', 'HOUSEHOLD', 'RESALE_PACK'), null);
   assert.match(source, /HOME_EVENT_VISIBILITY: editHomeEventVisibilityConfirmation/);
 });

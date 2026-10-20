@@ -9,7 +9,7 @@ import { humanDate, readableCode } from '../askFormatting';
 import { getAskPropertyTimezone } from '../askExecutionContext';
 import { ensurePropertyAccess } from '../askHandlerSupport';
 import { HouseholdRole } from '@prisma/client';
-import { HOME_EVENT_VISIBILITY_MESSAGE } from '../support/homeEventCorrection';
+import { HOME_EVENT_EDIT_MESSAGE } from '../support/homeEventCorrection';
 import { EVENT_ADD_MESSAGE } from './homeRecordWrites.handler';
 
 // Home Timeline capability-card slice (FRD v1.61): the thirteenth new operation for a capability with none. Reads
@@ -105,10 +105,7 @@ export function homeTimelinePlacement(event: { occurredAt: Date | string; datePr
 }
 
 const eventActions = (canManage: boolean) => canManage ? [
-  { id: 'correct-title', label: 'Correct title', message: 'Correct the title of this timeline event.', style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'HOME_EVENT_CORRECT' },
-  { id: 'correct-occurredAt', label: 'Correct date', message: 'Correct the date of this timeline event.', style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'HOME_EVENT_CORRECT' },
-  { id: 'correct-summary', label: 'Correct details', message: 'Correct the summary of this timeline event.', style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'HOME_EVENT_CORRECT' },
-  { id: 'correct-visibility', label: 'Change visibility', message: HOME_EVENT_VISIBILITY_MESSAGE, style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'HOME_EVENT_VISIBILITY' },
+  { id: 'edit-event', label: 'Edit event', message: HOME_EVENT_EDIT_MESSAGE, style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'HOME_EVENT_UPDATE' },
 ] : undefined;
 
 const logEventAction = {

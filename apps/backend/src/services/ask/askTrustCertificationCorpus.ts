@@ -379,6 +379,7 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   PROPERTY_CONTEXT_AREA_CAPTURE: 'Each missing home detail is reviewed and then saved to your home record after your confirmation.',
   WARRANTY_UPDATE: 'The selected warranty has its edited details saved after you review the changes and confirm.',
   HOME_EVENT_CORRECT: 'The timeline event correction is reviewed before it is recorded as a new revision.',
+  HOME_EVENT_UPDATE: 'The timeline event edit is reviewed, as one change set, before it is saved.',
   HOME_EVENT_VISIBILITY: 'Who can see the timeline event is reviewed and then changed after your confirmation.',
   HOME_EVENT_RADAR_STATE: 'The selected monitored event is saved for you only; nobody else in the household sees the change.',
   HOME_EVENT_RADAR_MARK_DONE: 'The selected monitored event is marked done after confirmation, and the property radar risk is rechecked.',

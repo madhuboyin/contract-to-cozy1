@@ -79,7 +79,7 @@ test('contributors can log, review and correct real events inline while modeled 
   assert.equal(kitchen.detail.canReviewVerification, true);
   assert.equal(kitchen.detail.canAttachEvidence, true);
   assert.deepEqual(kitchen.actions.map((action) => [action.label, action.operationId]), [
-    ['Correct title', 'HOME_EVENT_CORRECT'], ['Correct date', 'HOME_EVENT_CORRECT'], ['Correct details', 'HOME_EVENT_CORRECT'], ['Change visibility', 'HOME_EVENT_VISIBILITY'],
+    ['Edit event', 'HOME_EVENT_UPDATE'],
   ]);
   assert.equal(track.items.find((item) => item.id === 'synthetic-appliance-dishwasher').actions, undefined);
   for (const block of result.blocks) AskPresentationBlockSchema.parse(block);
