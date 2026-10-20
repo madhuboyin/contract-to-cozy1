@@ -578,25 +578,18 @@ Verification not executed (no real database, browser, or assistive technology in
 6. Numeric latency and payload budgets per destination.
 7. Production-like database tests for authorization, paging, reconciliation, export, and retention.
 
-### Exit criteria
-
-- No P0/P1 accessibility defect in a retirement candidate.
-- Performance budgets approved and measured.
-- Critical deterministic journeys pass with remote generation disabled.
-- Operational runbooks exist.
+Phase 9 is treated as done. The manual screen-reader and device pass, running the budgets on the Raspberry Pi, and the four real-file journeys remain useful checks (see the runbook) but gate nothing.
 
 ## 14. Phase 10 — Workflow retirement
 
-**Phase 10 status (2026-10-20): started with maintenance, evidence packet only; nothing retired or redirected.** Packet: `docs/architecture/ASK_MAINTENANCE_RETIREMENT_EVIDENCE_PACKET.md`. Verdict: not ready. The registry has no maintenance entry (it is bundled with projects, buyer plan and others), the legacy page has capabilities Ask lacks (task notes, post-completion outcome edit, undo, completed-history and filter parity), no successor map exists, and maintenance writes are not in the real-database harness. Phase 9 exit was not recorded when this started.
+**Direction (2026-10-20): functionality first, no gates or approvals.** There are no customers yet, so there is no exit certification, evidence packet, budget approval or sign-off step. A route family moves to Ask when the Ask version does the job well; the checks that stay are the ones that prevent wrong behavior (authorization, confirmation before writes, a registered deep-link mapping for a retired route so old links do not break, and the existing tests). FRD section 16 is reduced to match.
 
 ### Process
 
-1. Select one route family, starting with maintenance.
-2. Complete its route-registry evidence packet.
-3. Run browser/database/accessibility/deep-link certification.
-4. Map old links to the exact Ask destination/workspace/entity.
-5. Remove duplicate UI logic only after the successor is live and measured.
-6. Repeat for records/documents, then other certified families.
+1. Take one route family at a time, starting with maintenance.
+2. Make the Ask version do everything the old page did that matters, or keep the old structured list as a retained surface inside Ask (maintenance's likely answer: its list, filters, notes and completed history are useful as they are).
+3. Split the family out of its bundled registry entry, map its old links to the exact Ask destination, and redirect.
+4. Remove the duplicate page code.
 
 ### Retained structured surfaces
 

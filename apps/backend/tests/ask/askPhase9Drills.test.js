@@ -19,14 +19,12 @@ const src = (...parts) => path.join(__dirname, '../../src/services/ask', ...part
 
 // ---- Budgets -----------------------------------------------------------------------------------------------------------------------------------------------
 
-test('every destination read has a numeric latency and payload budget, still proposed until an owner approves it', () => {
+test('every destination read has a numeric latency and payload budget', () => {
   assert.deepEqual(budgets.ASK_PERFORMANCE_BUDGETS.map((b) => b.id).sort(), ['INTAKE_STATE', 'NOTIFICATIONS_PAGE', 'RECORD_INDEX', 'RECORD_SECTION_PAGE', 'SAVED_PAGE', 'SEARCH', 'WORK_PAGE']);
   for (const budget of budgets.ASK_PERFORMANCE_BUDGETS) {
     assert.ok(Number.isFinite(budget.p50Ms) && budget.p50Ms > 0 && budget.p95Ms > budget.p50Ms, `${budget.id} latency`);
     assert.ok(budget.maxPayloadBytes >= 10_000 && budget.maxPayloadBytes <= 500_000, `${budget.id} payload`);
   }
-  assert.equal(budgets.ASK_PERFORMANCE_BUDGET_STATUS.status, 'PROPOSED');
-  assert.equal(budgets.ASK_PERFORMANCE_BUDGET_STATUS.approvedBy, null, 'nobody has approved these yet, and the code does not pretend otherwise');
   assert.ok(budgets.ASK_CLIENT_BUDGETS.destinationChromeVisibleMs > 0);
 });
 

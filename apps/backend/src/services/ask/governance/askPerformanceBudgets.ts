@@ -3,8 +3,8 @@ import { ASK_PROVIDER_TIMEOUT_MS } from '../support/providerTimeout';
 
 // Sole Homeowner Interface Phase 9 (FR-PERF-001): numeric latency and payload budgets for every destination read.
 // SERVER time for one read of a realistic home (see tests/certification/askPerformance.test.js for the data size), excluding the network.
-// Status is PROPOSED until an owner approves it (`approvedBy`); the certification test measures against these numbers and fails when they are exceeded.
-// Production runs on a Raspberry Pi, so the numbers must be re-measured there (ASK_CERT_BUDGET_FACTOR scales them for slower hardware).
+// The certification test measures against these numbers and fails when they are exceeded, so a slow read shows up as a regression.
+// Production runs on a Raspberry Pi; ASK_CERT_BUDGET_FACTOR scales them when measuring slower hardware.
 export type AskBudgetId = 'RECORD_INDEX' | 'RECORD_SECTION_PAGE' | 'WORK_PAGE' | 'SAVED_PAGE' | 'SEARCH' | 'NOTIFICATIONS_PAGE' | 'INTAKE_STATE';
 
 export interface AskPerformanceBudget {
@@ -17,8 +17,6 @@ export interface AskPerformanceBudget {
   /** The longest any single provider behind it may hold the read before it is reported as unavailable. */
   providerTimeoutMs: number | null;
 }
-
-export const ASK_PERFORMANCE_BUDGET_STATUS = Object.freeze({ status: 'PROPOSED' as 'PROPOSED' | 'APPROVED', approvedBy: null as string | null, approvedAt: null as string | null });
 
 export const ASK_PERFORMANCE_BUDGETS: readonly AskPerformanceBudget[] = Object.freeze([
   { id: 'RECORD_INDEX', label: 'Record index (all sections with counts)', p50Ms: 400, p95Ms: 1200, maxPayloadBytes: 60_000, providerTimeoutMs: ASK_PROVIDER_TIMEOUT_MS },

@@ -52,11 +52,9 @@ test('operation inventory is generated directly from ASK_OPERATION_DEFINITIONS',
   assert.deepEqual(inventory.map((entry) => entry.operationId), Object.keys(ASK_OPERATION_DEFINITIONS).sort((left, right) => left.localeCompare(right)));
 });
 
-test('certified or retired claims without evidence fail closed', () => {
+test('a retired route must map its old links to an exact Ask context', () => {
   const baseline = ASK_ROUTE_RETIREMENT_REGISTRY[0];
-  const uncertified = { ...baseline, id: 'bad-certified', state: 'ASK_CERTIFIED', evidenceTests: [] };
-  const retired = { ...baseline, id: 'bad-retired', state: 'RETIRED', evidenceTests: ['test'], deepLinkRule: 'PRESERVE_UNTIL_CERTIFIED' };
-  assert.match(validateAskRouteRetirementRegistry([uncertified]).join('\n'), /requires evidence tests/);
+  const retired = { ...baseline, id: 'bad-retired', state: 'RETIRED', deepLinkRule: 'PRESERVE_UNTIL_CERTIFIED' };
   assert.match(validateAskRouteRetirementRegistry([retired]).join('\n'), /exact Ask deep-link mapping/);
 });
 

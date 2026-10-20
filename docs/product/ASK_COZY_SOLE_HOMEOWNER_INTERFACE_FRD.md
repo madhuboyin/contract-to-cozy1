@@ -10,7 +10,7 @@
 
 Ask Cozy will become the single homeowner-facing product shell. It will combine conversational control with structured workspaces; it will not force record browsing, bulk work, comparison, settings, or history into a chat transcript.
 
-The transition is workflow-by-workflow. A traditional homeowner route remains available until its successor passes the retirement gate in §16.
+The transition is workflow-by-workflow. A traditional homeowner route remains available until the Ask version does the job well (§16).
 
 ### 1.1 Explicitly deferred
 
@@ -383,28 +383,9 @@ Client and API diagnostics shall expose compatible build/version identifiers. Sm
 
 Registered reads, commands, confirmations, search, record browsing, work continuity, and saved artifacts shall remain available without an LLM. Ambiguous language and extraction may degrade transparently.
 
-## 16. Workflow retirement gate
+## 16. Workflow retirement
 
-A homeowner route may be retired only when evidence proves:
-
-1. discovery through direct language, navigation, suggestion, search, or notification;
-2. full read and write parity for the intended homeowner job;
-3. canonical source and writer reuse;
-4. stable identity and reopen behavior;
-5. correction and record-management parity;
-6. paging/filter/search parity for collections;
-7. retry, cancel, conflict, access-loss, and unknown-outcome recovery;
-8. role reauthorization and confirmation safeguards;
-9. source, freshness, assumptions, and limitations;
-10. dependent-result reconciliation;
-11. desktop and mobile keyboard/screen-reader/zoom certification;
-12. production-like database and browser acceptance;
-13. analytics through verified domain outcome;
-14. support/audit runbook;
-15. deep-link and bookmark successor mapping;
-16. no required legacy-only field, action, export, audit, or history view.
-
-Registry presence, unit tests, a capability card, or a conversational answer alone do not satisfy this gate.
+A homeowner route moves to Ask when the Ask version does the intended homeowner job at least as well: discovery through language, navigation, search or notification; the same reads and writes on the same canonical sources; stable reopen; correction and record management; collection paging and filtering; recovery from retry, conflict, access loss and unknown outcomes; role reauthorization and confirmation before consequential writes; and old links mapped to the exact Ask destination. A useful structured surface may stay as a retained surface inside Ask. There are no sign-off, evidence-packet or approval steps.
 
 ## 17. Security and safety
 
@@ -443,7 +424,7 @@ The release shall certify at least:
 ## 20. Success measures
 
 - Ask-only verified outcomes per active property.
-- Percentage of homeowner workflows passing the retirement gate.
+- Percentage of homeowner workflows moved to Ask.
 - Legacy-route dependence per workflow.
 - Time from Home to canonical outcome.
 - Work resume success.

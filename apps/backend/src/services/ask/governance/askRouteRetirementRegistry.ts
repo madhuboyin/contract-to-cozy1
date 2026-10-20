@@ -226,9 +226,6 @@ export function validateAskRouteRetirementRegistry(entries: readonly AskRouteRet
     for (const operationId of route.askOperationIds) {
       if (!(operationId in ASK_OPERATION_DEFINITIONS)) issues.push(`route-retirement/${route.id}: unknown operation ${operationId}`);
     }
-    if ((route.state === 'ASK_CERTIFIED' || route.state === 'RETIRED') && route.evidenceTests.length === 0) {
-      issues.push(`route-retirement/${route.id}: ${route.state} requires evidence tests`);
-    }
     if (route.state === 'RETIRED' && route.deepLinkRule !== 'MAP_TO_EXACT_ASK_CONTEXT') {
       issues.push(`route-retirement/${route.id}: retired routes require an exact Ask deep-link mapping`);
     }

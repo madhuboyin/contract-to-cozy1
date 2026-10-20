@@ -18,18 +18,17 @@ A changed JSON file is a changed contract; review it like code.
 
 ## 2. Performance budgets
 
-Budgets live in `apps/backend/src/services/ask/governance/askPerformanceBudgets.ts` and are PROPOSED until an owner approves them (`approvedBy`). Measure them on the hardware that matters:
+Budgets live in `apps/backend/src/services/ask/governance/askPerformanceBudgets.ts` and are regression limits: a read that gets much slower fails the check. To see how the Raspberry Pi compares:
 
 1. On the Raspberry Pi, restore a copy of the production database into a scratch database named with `cert`.
 2. `ASK_CERT_DATABASE_URL=... ASK_CERT_RUNS=50 npm run certify:ask-db` prints p50, p95 and payload per destination.
 3. If the Pi misses a budget, either raise the budget deliberately (and say why) or fix the read. `ASK_CERT_BUDGET_FACTOR=2` scales latency budgets for a slower machine; use it only to find out by how much a budget is missed, never to certify.
-4. Record the approved numbers and the run in the plan document, then set `approvedBy` and `approvedAt`.
 
 Browser budget: destination chrome (header and navigation) must not wait for slow data; `journeys.spec.ts` serves a 3-second data delay and asserts the chrome appears within the budget and a loading state is announced.
 
-## 3. Manual pass (required before a retirement decision)
+## 3. Manual pass (optional, whenever convenient)
 
-Automation finds a class of defects. It cannot tell whether a screen reader reads a page sensibly, whether a phone is usable one-handed, or whether copy makes sense. Before any workflow is retired, a person completes this on real devices and records the result.
+Automation finds a class of defects. It cannot tell whether a screen reader reads a page sensibly, whether a phone is usable one-handed, or whether copy makes sense. When you want to check this, complete it on real devices and note the result.
 
 Devices: iPhone with VoiceOver and Safari; Android phone with TalkBack and Chrome; a desktop with a screen reader (VoiceOver with Safari, NVDA with Firefox or Chrome) and keyboard only; the browser at 200% and 400% zoom; "Reduce motion" on.
 
@@ -42,9 +41,9 @@ For each of the ten journeys in FRD section 19, complete it start to finish and 
 - On a phone, upload, review, confirm, receipt and reopen all complete one-handed with the keyboard open.
 - Contrast holds in sunlight (brightness at maximum) and in dark mode if enabled.
 
-Record who ran it, the date, the device and version, and every defect. A P0 or P1 defect in a retirement candidate blocks that retirement.
+Record who ran it, the date, the device and version, and every defect.
 
-## 4. Four journeys that must be run with real files (Phase 7)
+## 4. Four journeys worth running with real files (Phase 7)
 
 Fake-backed tests prove wiring, not that the readers work. With real storage, the AI reader and the OCR engine, add: an inspection PDF, an insurance policy, a receipt or invoice, and a photo of an appliance label. For each, confirm the proposed details are right, that rejecting writes nothing, that accepted details create exactly what was accepted, and that the original opens from the record. Do it once with the antivirus engine connected and once without.
 
