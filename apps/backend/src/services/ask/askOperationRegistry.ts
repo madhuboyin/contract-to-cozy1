@@ -1,4 +1,4 @@
-import { isHomeRecordExportRequest, isHomeRecordExportStatusRequest } from './support/homeRecordExport';
+import { isHomeRecordExportRequest, isHomeRecordExportShareRequest, isHomeRecordExportStatusRequest } from './support/homeRecordExport';
 import type { AskCaptureRequest, AskClarification, AskConfirmation, AskExecutionStatus, AskPresentationBlock, SuggestedNextAction } from '../../productFramework/ask/ask.contract';
 import type { AskFollowUpNomination, SkillHandoffSuggestion } from '../skills/skillHandoff';
 import type { SuggestedNextActionCandidate } from './suggestedActions/suggestedNextActionCandidate';
@@ -164,6 +164,7 @@ export type AskOperationId =
   | 'WORK_OVERVIEW'
   | 'HOME_RECORD_EXPORT'
   | 'HOME_RECORD_EXPORT_STATUS'
+  | 'HOME_RECORD_EXPORT_SHARE'
   | 'SAVED_RESULTS'
   // Build a negotiation package from a confirmed pre-purchase inspection report: choose a decision per open finding and see the credit total (register P2 Inspection Hub). Calculation only; saves nothing.
   | 'INSPECTION_NEGOTIATION_PACKAGE'
@@ -480,6 +481,8 @@ export const ASK_INTERNAL_OPERATION_IDS: ReadonlySet<AskOperationId> = new Set<A
   // Reached only by the declared Try again / Dismiss row actions on the Work answer and the Archive / Restore row actions on the Saved answer.
   'WORK_REQUEST_COMMAND',
   'SAVED_ARCHIVE_COMMAND',
+  // Reached by the declared Share / Stop sharing row actions on the export status answer, or the deterministic typed share pattern; never by fuzzy retrieval.
+  'HOME_RECORD_EXPORT_SHARE',
   'SEASONAL_ITEM_COMMAND',
   'HOME_WORK_ITEM_COMMAND',
   'INSPECTION_FINDING_DECISION_COMMAND',
@@ -828,6 +831,7 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   HOME_WORK_ITEM_COMMAND: definition('HOME_WORK_ITEM_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'home-work-item.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   HOME_WORK_ITEMS: definition('HOME_WORK_ITEMS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'home-work-items.list', ['SUMMARY', 'GROUPED_LIST', 'EMPTY_STATE', 'BOUNDARY']),
   HOME_RECORD_EXPORT: definition('HOME_RECORD_EXPORT', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'home-record-export.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
+  HOME_RECORD_EXPORT_SHARE: definition('HOME_RECORD_EXPORT_SHARE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'home-record-export-share.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   HOME_RECORD_EXPORT_STATUS: definition('HOME_RECORD_EXPORT_STATUS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'home-record-export.status', ['SUMMARY', 'GROUPED_LIST', 'BOUNDARY']),
   WORK_OVERVIEW: definition('WORK_OVERVIEW', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'work.overview', ['SUMMARY', 'GROUPED_LIST', 'EMPTY_STATE', 'BOUNDARY']),
   SAVED_RESULTS: definition('SAVED_RESULTS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'saved.results', ['SUMMARY', 'GROUPED_LIST', 'EMPTY_STATE', 'BOUNDARY']),
@@ -1429,6 +1433,7 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   // be captured by their broader keyword sets.
   // An explicit add/create of a closing task comes first: "add a closing task to get the survey done" contains "done" but completes nothing.
   // Exporting the home record (FRD v1.2 §1.2): an explicit export verb, checked ahead of the generic record and warranty patterns it would otherwise match.
+  if (isHomeRecordExportShareRequest(message)) return resolved('HOME_RECORD_EXPORT_SHARE', 0.96);
   if (isHomeRecordExportStatusRequest(message)) return resolved('HOME_RECORD_EXPORT_STATUS', 0.96);
   if (isHomeRecordExportRequest(message)) return resolved('HOME_RECORD_EXPORT', 0.96);
   if (buyerTaskCreatePattern.test(message)) {

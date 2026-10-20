@@ -68,6 +68,7 @@ const DECLARED: Readonly<Record<string, Declared>> = {
   HOME_HABIT_UPDATE: impact(['HOME_HABITS', 'MAINTENANCE_STATUS'], { notifications: ['home-habit'] }),
   HOME_DEADLINE_MONITOR: impact(['MAINTENANCE_STATUS'], { workProviders: ['MONITORS'], notifications: ['coverage', 'warranty'] }),
   // Work items, home actions, status board
+  HOME_RECORD_EXPORT_SHARE: impact(['HOME_RECORD_EXPORT_STATUS', 'SAVED_RESULTS'], { artifactTypes: ['HOME_REPORT_EXPORT'] }),
   HOME_RECORD_EXPORT: impact(['HOME_RECORD_EXPORT_STATUS', 'WORK_OVERVIEW', 'SAVED_RESULTS'], { workProviders: ['QUEUED_JOBS'], artifactTypes: ['HOME_REPORT_EXPORT'] }),
   HOME_WORK_ITEM_COMMAND: impact(['HOME_WORK_ITEMS', 'HOME_ACTIONS'], { notifications: ['home-action'] }),
   OPERATIONAL_WORK_UPDATE: impact(['HOME_ACTIONS', 'HOME_WORK_ITEMS'], { notifications: ['home-action'] }),

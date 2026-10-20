@@ -116,6 +116,7 @@ import './handlers/homeWorkItemCommands.handler';
 import './handlers/homeWorkItems.handler';
 import './handlers/workOverview.handler';
 import './handlers/homeRecordExport.handler';
+import './handlers/homeRecordExportShare.handler';
 import './handlers/workRequestCommand.handler';
 import './handlers/savedArchiveCommand.handler';
 import './handlers/savedResults.handler';

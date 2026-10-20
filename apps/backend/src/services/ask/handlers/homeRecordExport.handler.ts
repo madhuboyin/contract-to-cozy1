@@ -16,11 +16,12 @@ import { collectionDescriptor } from '../support/collectionDescriptor';
 import { getAskRecordExportReview, ASK_RECORD_EXPORT_RECORD_EXPIRY_DAYS, ASK_RECORD_EXPORT_SHARE_DEFAULT_DAYS } from '../askRecordExportReview.service';
 import { InvalidExportSelectionError, normalizeAskRecordExportRequest } from '../askRecordExportSelection';
 import { getAggregationContextEnvelope } from '../../aggregationContext/context';
+import { shareIsActive } from '../../homeReportExportShare.service';
 import { createHomeReportExportRecord } from '../../homeReportExportCreate.service';
 import type { ReportPackSelection } from '../../planningContext/reportPackSections';
 import {
   HOME_RECORD_EXPORT_ACTION_IDS, HOME_RECORD_EXPORT_ENTITY_TYPE, HOME_RECORD_EXPORT_START_MESSAGE, HOME_RECORD_EXPORT_STATUS_MESSAGE,
-  isHomeRecordExportRequest, parseExportSections,
+  HOME_RECORD_EXPORT_SHARE_ACTION_IDS, isHomeRecordExportRequest, parseExportSections, shareMessage,
 } from '../support/homeRecordExport';
 
 const sha = (text: string) => createHash('sha256').update(text).digest('hex');
@@ -194,7 +195,7 @@ const STATUS_COPY: Record<string, { label: string; line: string }> = {
   EXPIRED: { label: 'Expired', line: 'has expired.' },
 };
 
-interface ExportRow { id: string; status: string; requestedAt: Date; expiresAt: Date | null; sections: unknown; errorMessage: string | null }
+interface ExportRow { id: string; status: string; requestedAt: Date; expiresAt: Date | null; sections: unknown; errorMessage: string | null; shareToken?: string | null; shareRevokedAt?: Date | null; shareExpiresAt?: Date | null }
 
 function includedCount(sections: unknown): number | null {
   const included = (sections as { included?: unknown } | null)?.included;
@@ -202,7 +203,7 @@ function includedCount(sections: unknown): number | null {
 }
 
 /** The caller's own recent exports for this home, newest first, with where each stands. Pure: the handler reads the rows. */
-export function homeRecordExportStatusFromRows(input: readonly ExportRow[], now: Date = new Date()): AskOperationResult {
+export function homeRecordExportStatusFromRows(input: readonly ExportRow[], now: Date = new Date(), canShare = false): AskOperationResult {
   // A file whose keep-until date has passed is expired, whatever its stored status still says.
   const rows = input.map((row) => (row.status === 'READY' && row.expiresAt && row.expiresAt.getTime() <= now.getTime() ? { ...row, status: 'EXPIRED' } : row));
   if (rows.length === 0) {
@@ -223,11 +224,16 @@ export function homeRecordExportStatusFromRows(input: readonly ExportRow[], now:
   const items = rows.map((row) => {
     const status = STATUS_COPY[row.status] ?? { label: row.status.toLowerCase(), line: '' };
     const count = includedCount(row.sections);
+    const shared = shareIsActive({ shareToken: row.shareToken ?? null, shareRevokedAt: row.shareRevokedAt ?? null, shareExpiresAt: row.shareExpiresAt ?? null }, now);
     return {
       id: row.id, title: `Home record export · ${humanDate(row.requestedAt) ?? 'recent'}`, description: row.status === 'FAILED' ? (row.errorMessage ?? 'The export could not be generated.') : null,
       status: status.label, entityType: HOME_RECORD_EXPORT_ENTITY_TYPE, href: null,
-      meta: [count != null ? `${count} ${count === 1 ? 'section' : 'sections'}` : null, row.status === 'READY' && row.expiresAt ? `Download until ${humanDate(row.expiresAt)}` : null].filter((value): value is string => Boolean(value)),
-      actions: [] as never[],
+      meta: [count != null ? `${count} ${count === 1 ? 'section' : 'sections'}` : null, row.status === 'READY' && row.expiresAt ? `Download until ${humanDate(row.expiresAt)}` : null, shared ? `Shared until ${humanDate(row.shareExpiresAt)}` : null].filter((value): value is string => Boolean(value)),
+      // Share and Stop sharing act on this export and confirm first; only someone who can share is offered them, and only for a file that is ready.
+      actions: canShare && row.status === 'READY' ? [
+        { id: HOME_RECORD_EXPORT_SHARE_ACTION_IDS.SHARE, label: shared ? 'Replace the link' : 'Share a link', message: shareMessage('SHARE', `Home record export · ${humanDate(row.requestedAt) ?? 'recent'}`), interactionType: 'MUTATE_RECORD' as const, operationId: 'HOME_RECORD_EXPORT_SHARE', style: 'SECONDARY' as const },
+        ...(shared ? [{ id: HOME_RECORD_EXPORT_SHARE_ACTION_IDS.REVOKE, label: 'Stop sharing', message: shareMessage('REVOKE', `Home record export · ${humanDate(row.requestedAt) ?? 'recent'}`), interactionType: 'MUTATE_RECORD' as const, operationId: 'HOME_RECORD_EXPORT_SHARE', style: 'QUIET' as const }] : []),
+      ] : [],
     };
   });
   return {
@@ -251,10 +257,10 @@ export function homeRecordExportStatusFromRows(input: readonly ExportRow[], now:
 }
 
 registerCapabilityHandler('home-record-export.status', async (envelope) => {
-  await ensurePropertyAccess(envelope.userId, envelope.propertyId!);
+  const access = await ensurePropertyAccess(envelope.userId, envelope.propertyId!);
   const rows = await prisma.homeReportExport.findMany({
     where: { propertyId: envelope.propertyId!, userId: envelope.userId, status: { not: 'DELETED' } }, orderBy: { requestedAt: 'desc' }, take: 5,
-    select: { id: true, status: true, requestedAt: true, expiresAt: true, sections: true, errorMessage: true },
+    select: { id: true, status: true, requestedAt: true, expiresAt: true, sections: true, errorMessage: true, shareToken: true, shareRevokedAt: true, shareExpiresAt: true },
   });
-  return homeRecordExportStatusFromRows(rows);
+  return homeRecordExportStatusFromRows(rows, new Date(), access.role !== HouseholdRole.VIEWER);
 });

@@ -1229,6 +1229,10 @@ class APIClient {
   async getAskRecordDetail(sectionId: string, propertyId: string, recordId: string, options: { signal?: AbortSignal } = {}): Promise<APIResponse<import('@/features/ask/types').AskRecordDetail>> {
     return this.request(`/api/ask/record-sections/${encodeURIComponent(sectionId)}/records/${encodeURIComponent(recordId)}?propertyId=${encodeURIComponent(propertyId)}`, options);
   }
+  /** The caller's own exports for a home. The share token is read from here only when the person asks to copy the link; it is never in an Ask answer. */
+  async listHomeReportExports(propertyId: string): Promise<APIResponse<{ exports: Array<{ id: string; shareToken?: string | null; shareRevokedAt?: string | null; shareExpiresAt?: string | null }> }>> {
+    return this.request(`/api/properties/${encodeURIComponent(propertyId)}/reports/exports`);
+  }
   async getHomeReportExportDownloadUrl(exportId: string): Promise<APIResponse<{ url: string }>> {
     return this.request(`/api/reports/exports/${encodeURIComponent(exportId)}/download`);
   }

@@ -12,6 +12,7 @@ import { resolvePropertyAccess, ROLE_RANK } from '../services/propertyAccess.ser
 import { getAggregationContextEnvelope } from '../services/aggregationContext/context';
 import { InvalidExportSelectionError } from '../services/ask/askRecordExportSelection';
 import { createHomeReportExportRecord } from '../services/homeReportExportCreate.service';
+import { createShareLinkRecord, revokeShareLinkRecord } from '../services/homeReportExportShare.service';
 
 async function canMutateReport(propertyId: string, userId: string): Promise<boolean> {
   const access = await resolvePropertyAccess(userId, propertyId);
@@ -169,82 +170,24 @@ export async function downloadHomeReportExport(req: Request, res: Response) {
   }
 } 
 
+const SHARE_FAILURE: Record<string, { status: number; message: string }> = {
+  NOT_FOUND: { status: 404, message: 'Report export not found' },
+  FORBIDDEN: { status: 403, message: 'Forbidden' },
+  NOT_CONTRIBUTOR: { status: 403, message: 'Report changes require CONTRIBUTOR access.' },
+  DELETED: { status: 410, message: 'Report was deleted' },
+};
+
 export async function createShareLinkForReport(req: Request, res: Response) {
   try {
-    const exportId = req.params.exportId;
     const userId = (req as any).user?.userId as string;
-
-    const exp = await prisma.homeReportExport.findUnique({
-      where: { id: exportId },
-    });
-
-    if (!exp) {
-      return res.status(404).json({ 
-        success: false,
-        message: 'Report export not found' 
-      });
-    }
-    
-    if (exp.userId !== userId) {
-      return res.status(403).json({ 
-        success: false,
-        message: 'Forbidden' 
-      });
-    }
-
-    if (!(await canMutateReport(exp.propertyId, userId))) {
-      return res.status(403).json({ success: false, message: 'Report changes require CONTRIBUTOR access.' });
-    }
-
-    if (exp.status === 'DELETED') {
-      return res.status(410).json({
-        success: false,
-        message: 'Report was deleted',
-      });
-    }
-      
-
     const { expiresInDays = 14 } = req.body ?? {};
-    const token = buildShareToken();
-
-    // Build the redacted share projection before any token exists. Share
-    // consumers never receive the full snapshot or full PDF.
-    await prepareShareArtifacts(exportId);
-
-    const updated = await prisma.homeReportExport.update({
-      where: { id: exportId },
-      data: {
-        shareToken: token,
-        shareExpiresAt: new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000),
-        shareRevokedAt: null,
-      },
-    });
-
-    await prisma.homeReportExportEvent.create({
-      data: {
-        reportId: exportId,
-        type: 'SHARED',
-        meta: { expiresInDays },
-      },
-    });
-
-    analyticsEmitter.track({
-      eventType: AnalyticsEvent.ACTION_COMPLETED,
-      userId,
-      propertyId: exp.propertyId,
-      moduleKey: AnalyticsModule.DASHBOARD,
-      featureKey: AnalyticsFeature.HOME_REPORT_EXPORT,
-      metadataJson: { actionType: 'share', expiresInDays },
-    });
-
-    // ✅ FIX: Return standard format
-    return res.json({
-      success: true,
-      data: {
-        shareToken: updated.shareToken,
-        shareExpiresAt: updated.shareExpiresAt,
-      }
-    });
+    // The rules (ownership, contributor role, not deleted, redacted copy first) live in the shared service, which the Ask command uses too.
+    const outcome = await createShareLinkRecord({ exportId: req.params.exportId, userId, expiresInDays });
+    if (outcome.kind !== 'CREATED') {
+      const failure = SHARE_FAILURE[outcome.kind];
+      return res.status(failure.status).json({ success: false, message: failure.message });
+    }
+    return res.json({ success: true, data: { shareToken: outcome.shareToken, shareExpiresAt: outcome.shareExpiresAt } });
   } catch (error: any) {
     logger.error({ err: error }, '[createShareLinkForReport] Error');
     return res.status(500).json({ 
@@ -256,52 +199,13 @@ export async function createShareLinkForReport(req: Request, res: Response) {
 
 export async function revokeShareLinkForReport(req: Request, res: Response) {
   try {
-    const exportId = req.params.exportId;
     const userId = (req as any).user?.userId as string;
-
-    const exp = await prisma.homeReportExport.findUnique({
-      where: { id: exportId },
-    });
-
-    if (!exp) {
-      return res.status(404).json({ 
-        success: false,
-        message: 'Report export not found' 
-      });
+    const outcome = await revokeShareLinkRecord({ exportId: req.params.exportId, userId });
+    if (outcome.kind !== 'REVOKED') {
+      const failure = SHARE_FAILURE[outcome.kind];
+      return res.status(failure.status).json({ success: false, message: failure.message });
     }
-    
-    if (exp.userId !== userId) {
-      return res.status(403).json({ 
-        success: false,
-        message: 'Forbidden' 
-      });
-    }
-
-    if (!(await canMutateReport(exp.propertyId, userId))) {
-      return res.status(403).json({ success: false, message: 'Report changes require CONTRIBUTOR access.' });
-    }
-
-    if (exp.status === 'DELETED') {
-      return res.status(410).json({
-        success: false,
-        message: 'Report was deleted',
-      });
-    }    
-    
-    await prisma.homeReportExport.update({
-      where: { id: exportId },
-      data: { shareRevokedAt: new Date() },
-    });
-
-    await prisma.homeReportExportEvent.create({
-      data: { reportId: exportId, type: 'SHARE_REVOKED' },
-    });
-
-    // ✅ FIX: Return standard format
-    return res.json({ 
-      success: true,
-      data: { ok: true } 
-    });
+    return res.json({ success: true, data: { ok: true } });
   } catch (error: any) {
     logger.error({ err: error }, '[revokeShareLinkForReport] Error');
     return res.status(500).json({ 

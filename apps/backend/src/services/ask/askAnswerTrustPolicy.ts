@@ -232,6 +232,8 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   // Work and Saved as conversations (FRD v1.1 §1.2). Read-only; every control is a row action or a chip, so no block-level action is declared.
   // Create an export of the home record (FRD v1.2 §1.2). Confirmation-gated; the receipt offers the status check, and the empty status answer offers the start.
   HOME_RECORD_EXPORT: new Set(['home-record-export-status']),
+  // Share an export by link, or stop sharing it (FRD v1.6). Confirmation-gated; the receipt and the unavailable answers offer the status check.
+  HOME_RECORD_EXPORT_SHARE: new Set(['home-record-export-status']),
   HOME_RECORD_EXPORT_STATUS: new Set(['home-record-export-status', 'home-record-export-start']),
   WORK_OVERVIEW: new Set(),
   SAVED_RESULTS: new Set(),

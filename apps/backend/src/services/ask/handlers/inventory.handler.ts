@@ -21,6 +21,7 @@ import { isIncompleteInventoryRequest, isLifecycleInventoryRequest } from '../as
 import { type AskViewState } from '../support/executionState';
 import { loadAskViewState } from './maintenance.handler';
 import { containsFilterContinuation } from '../askFollowUpContext';
+import { isOrderingId, orderingChips, orderingFromWords, withOrdering, type OrderingOption } from '../support/collectionOrdering';
 import { inventoryItemContextVersion, roomContextVersion } from '../suggestedActions/domainVersions';
 import { correctionFieldForOutcome } from '../suggestedActions/suggestedNextActionRegistry';
 import { staleSuggestedActionResult } from '../suggestedActions/staleSuggestedActionResult';
@@ -138,31 +139,68 @@ function inventoryMatchesCategory(item: Awaited<ReturnType<InventoryService['lis
     : item.category === category;
 }
 
+// Ordering in words (FRD v1.6). "As recorded" is the order the record has always been shown in; the others are the ways a homeowner asks to see it.
+export const INVENTORY_DEFAULT_ORDERING = 'RECORDED';
+export const INVENTORY_ORDERINGS: readonly OrderingOption[] = [
+  { id: 'RECORDED', label: 'As recorded', message: 'Now show them in the order recorded', statement: 'as recorded', test: /\bas recorded\b|\border recorded\b|\busual order\b/i },
+  { id: 'NAME', label: 'A to Z', message: 'Now show them by name', statement: 'by name, A to Z', test: /\bby name\b|\balphabetical|\ba[- ]to[- ]z\b/i },
+  { id: 'OLDEST', label: 'Oldest first', message: 'Now show them oldest first', statement: 'by oldest purchase first', test: /\boldest first\b|\bearliest purchase|\bpurchased longest ago\b/i },
+  { id: 'NEWEST', label: 'Newest first', message: 'Now show them newest first', statement: 'by newest purchase first', test: /\bnewest\b|\bmost recently (?:purchased|installed|bought)\b/i },
+  { id: 'UNVERIFIED', label: 'Unverified first', message: 'Now show them with the unverified first', statement: 'with unverified records first', test: /\bunverified\b.{0,20}\bfirst\b|\bnot verified first\b/i },
+  // The wording avoids "end of life" and "expiry", which are the lifecycle filter's own words and would turn an order into a filter.
+  { id: 'END_OF_LIFE', label: 'Soonest end of life', message: 'Now show them by lifecycle date, soonest first', statement: 'by soonest lifecycle date', test: /\blifecycle date\b|\bsoonest lifecycle\b/i },
+  { id: 'SYSTEM', label: 'By system', message: 'Now show them grouped by system', statement: 'grouped by system', test: /\bgrouped? by (?:system|category|type)\b|\bby (?:system|category)\b/i },
+];
+const priorInventoryOrdering = (prior: AskViewState): string => (isOrderingId(INVENTORY_ORDERINGS, prior.roomScopePhrase) ? prior.roomScopePhrase : INVENTORY_DEFAULT_ORDERING);
+
+type InventoryRow = Awaited<ReturnType<InventoryService['listItems']>>[number];
+const FAR = Number.POSITIVE_INFINITY;
+/** Sorts a copy by the chosen order; an item with no value for it goes last, and a tie keeps the order it came in. */
+export function orderInventory(items: readonly InventoryRow[], ordering: string): InventoryRow[] {
+  const by: Record<string, (item: InventoryRow) => number | string> = {
+    NAME: (item) => item.name.toLowerCase(),
+    OLDEST: (item) => item.purchasedOn?.getTime() ?? FAR,
+    NEWEST: (item) => (item.purchasedOn ? -item.purchasedOn.getTime() : FAR),
+    UNVERIFIED: (item) => (item.isVerified ? 1 : 0),
+    END_OF_LIFE: (item) => item.expectedExpiryDate?.getTime() ?? FAR,
+    SYSTEM: (item) => `${item.category}|${item.name.toLowerCase()}`,
+  };
+  const key = by[ordering];
+  if (!key) return [...items];
+  return items.map((item, index) => ({ item, index })).sort((left, right) => {
+    const a = key(left.item); const b = key(right.item);
+    return (typeof a === 'string' && typeof b === 'string' ? a.localeCompare(b) : (a as number) - (b as number)) || left.index - right.index;
+  }).map((entry) => entry.item);
+}
+
 /**
  * Merges this turn's declared filter into the prior view. Only the dimension the message names changes; "no filters" clears both.
  * Returns null when there is no prior view or the message names no filter, so an ordinary question is answered as a fresh query.
  */
-export function resolveInventoryRefinement(message: string, prior: AskViewState | null | undefined): { status: InventoryStatusFilter; category: InventoryCategoryFilter | null } | null {
+export function resolveInventoryRefinement(message: string, prior: AskViewState | null | undefined): { status: InventoryStatusFilter; category: InventoryCategoryFilter | null; ordering: string } | null {
   if (!prior || !INVENTORY_STATUS_FILTERS.has(prior.statusFilter)) return null;
   // Only a declared chip or a typed filter phrase refines a result; an ordinary question is answered on its own.
   if (!containsFilterContinuation(message)) return null;
   const priorCategory = prior.domainScopePhrase && INVENTORY_CATEGORY_FILTERS.has(prior.domainScopePhrase) ? prior.domainScopePhrase as InventoryCategoryFilter : null;
-  if (INVENTORY_CLEAR_PATTERN.test(message)) return { status: 'ALL', category: null };
+  if (INVENTORY_CLEAR_PATTERN.test(message)) return { status: 'ALL', category: null, ordering: INVENTORY_DEFAULT_ORDERING };
   const status: InventoryStatusFilter | null = isIncompleteInventoryRequest(message) ? 'INCOMPLETE'
     : isLifecycleInventoryRequest(message) ? 'LIFECYCLE'
       : INVENTORY_ALL_STATUS_PATTERN.test(message) ? 'ALL' : null;
   const allCategories = INVENTORY_ALL_CATEGORIES_PATTERN.test(message);
   const category = allCategories ? null : detectInventoryCategory(message);
-  if (!status && !category && !allCategories) return null;
-  return { status: status ?? prior.statusFilter as InventoryStatusFilter, category: allCategories ? null : category ?? priorCategory };
+  const ordering = orderingFromWords(INVENTORY_ORDERINGS, message);
+  if (!status && !category && !allCategories && !ordering) return null;
+  return { status: status ?? prior.statusFilter as InventoryStatusFilter, category: allCategories ? null : category ?? priorCategory, ordering: ordering ?? priorInventoryOrdering(prior) };
 }
 
-export function buildInventoryViewState(prior: AskViewState | null | undefined, status: InventoryStatusFilter, category: InventoryCategoryFilter | null): AskViewState {
+export function buildInventoryViewState(prior: AskViewState | null | undefined, status: InventoryStatusFilter, category: InventoryCategoryFilter | null, ordering: string = INVENTORY_DEFAULT_ORDERING): AskViewState {
   return {
     resultId: prior?.resultId ?? randomUUID(),
     // Inventory reuses the generic fields: the category key rides in domainScopePhrase, the status focus in statusFilter.
     domainScopePhrase: category,
     dateScopePhrase: null,
+    // The chosen order rides in roomScopePhrase, the generic spare scope slot of the view state (null is the order as recorded).
+    roomScopePhrase: ordering === INVENTORY_DEFAULT_ORDERING ? null : ordering,
     statusFilter: status,
     selectedTaskId: prior?.selectedTaskId ?? null,
     revision: (prior?.revision ?? 0) + 1,
@@ -177,7 +215,7 @@ async function loadInventoryViewState(sourceExecutionId: string | null | undefin
 }
 
 /** The declared chips for a collection result; every message round-trips through resolveInventoryRefinement. */
-export function inventoryFilterChips(status: InventoryStatusFilter, category: InventoryCategoryFilter | null) {
+export function inventoryFilterChips(status: InventoryStatusFilter, category: InventoryCategoryFilter | null, ordering: string = INVENTORY_DEFAULT_ORDERING) {
   return [
     { id: 'status-all', label: 'All items', message: 'Now show all inventory items', active: status === 'ALL' },
     { id: 'status-incomplete', label: 'Missing details', message: 'Only show items with missing details', active: status === 'INCOMPLETE' },
@@ -186,7 +224,8 @@ export function inventoryFilterChips(status: InventoryStatusFilter, category: In
     { id: 'category-hvac', label: 'HVAC', message: 'Only show HVAC items', active: category === 'HVAC' },
     { id: 'category-appliance', label: 'Appliances', message: 'Only show appliances', active: category === 'APPLIANCE' },
     { id: 'category-roof', label: 'Roof and exterior', message: 'Only show roof items', active: category === 'ROOF_EXTERIOR' },
-    ...(status !== 'ALL' || category ? [{ id: 'clear-all', label: 'Clear filters', message: INVENTORY_CLEAR_FILTERS_MESSAGE, active: false }] : []),
+    ...orderingChips(INVENTORY_ORDERINGS, ordering),
+    ...(status !== 'ALL' || category || ordering !== INVENTORY_DEFAULT_ORDERING ? [{ id: 'clear-all', label: 'Clear filters', message: INVENTORY_CLEAR_FILTERS_MESSAGE, active: false }] : []),
   ];
 }
 
@@ -219,6 +258,8 @@ async function inventoryLookupResult(
   const incompleteFocus = refinement ? refinement.status === 'INCOMPLETE' : isIncompleteInventoryRequest(message);
   const lifecycleFocus = refinement ? refinement.status === 'LIFECYCLE' : /\b(?:end of life|nearing (?:replacement|expiry)|expir(?:e|y|ing)|oldest systems?)\b/i.test(message);
   const categoryFilter = refinement ? refinement.category : detectInventoryCategory(message);
+  // The order: a refinement keeps or changes it; a fresh question may name one ("show my appliances oldest first"); otherwise as recorded.
+  const ordering = refinement ? refinement.ordering : (orderingFromWords(INVENTORY_ORDERINGS, message) ?? INVENTORY_DEFAULT_ORDERING);
   const specificAliases: Array<{ test: RegExp; terms: string[] }> = [
     { test: /\b(?:refrigerator|fridge)\b/i, terms: ['refrigerator', 'fridge'] },
     { test: /\bwater heater\b/i, terms: ['water heater'] },
@@ -264,11 +305,14 @@ async function inventoryLookupResult(
       .sort((left, right) => (left.expectedExpiryDate?.getTime() ?? Number.POSITIVE_INFINITY) - (right.expectedExpiryDate?.getTime() ?? Number.POSITIVE_INFINITY));
   }
 
+  // The chosen order applies to what is left, after the focus has filtered it (an explicit order wins over a focus's own).
+  if (ordering !== INVENTORY_DEFAULT_ORDERING && !targetItemId) matches = orderInventory(matches, ordering);
+
   if (!matches.length && refinement) {
     // A filter that matches nothing still continues the result and keeps every chip, so the homeowner can widen or clear it.
     return {
       status: 'ANSWERED', reasonCode: 'INVENTORY_FILTER_NO_MATCH', contextVersion: recordVersion,
-      parameters: { viewState: buildInventoryViewState(priorViewState, refinement.status, refinement.category) },
+      parameters: { viewState: buildInventoryViewState(priorViewState, refinement.status, refinement.category, ordering) },
       blocks: [{
         type: 'SUMMARY', id: 'inventory-summary', title: 'No inventory records match these filters', headline: 'No items match these filters.',
         supportLine: `This home has ${allItems.length} visible inventory item${allItems.length === 1 ? '' : 's'}. Widen or clear a filter to see them.`,
@@ -277,7 +321,7 @@ async function inventoryLookupResult(
       }, {
         type: 'GROUPED_LIST', id: 'inventory-results',
         title: isIncompleteInventoryRequest(message) ? 'Incomplete inventory records' : isLifecycleInventoryRequest(message) ? 'Recorded lifecycle dates approaching' : 'Inventory details',
-        filters: inventoryFilterChips(refinement.status, refinement.category),
+        filters: inventoryFilterChips(refinement.status, refinement.category, ordering),
         sections: [{ id: 'items', title: 'Living Home Record', count: 0, items: [] }],
         actions: [
           ...(access.role !== HouseholdRole.VIEWER ? [inventoryAddItemAction()] : []),
@@ -365,7 +409,7 @@ async function inventoryLookupResult(
   const freshCollection = !specific && !historyFocus && (genericList || Boolean(categoryFilter) || incompleteFocus || lifecycleFocus);
   const collectionView = !selectedItem && (Boolean(refinement) || freshCollection);
   const activeStatus: InventoryStatusFilter = incompleteFocus ? 'INCOMPLETE' : lifecycleFocus ? 'LIFECYCLE' : 'ALL';
-  const viewState = collectionView ? buildInventoryViewState(priorViewState, activeStatus, categoryFilter) : null;
+  const viewState = collectionView ? buildInventoryViewState(priorViewState, activeStatus, categoryFilter, ordering) : null;
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY', id: 'inventory-summary',
     title: selectedItem ? `Here is what the Home Record contains for ${selectedItem.name}` : `${matches.length} inventory records match this request`,
@@ -395,7 +439,7 @@ async function inventoryLookupResult(
     // href (it lists HomeEvent timeline entries, a different entity type
     // with no inline detail component yet) -- a genuine remaining "broader
     // entry points" gap, matching Maintenance's own flagship-first shape.
-    type: 'GROUPED_LIST', filters: viewState ? inventoryFilterChips(activeStatus, categoryFilter) : [], id: 'inventory-results', title: listTitle,
+    type: 'GROUPED_LIST', filters: viewState ? inventoryFilterChips(activeStatus, categoryFilter, ordering) : [], id: 'inventory-results', title: listTitle,
     description: lifecycleFocus
       ? 'Only items with a recorded expected-expiry date within the next three years are included.'
       : incompleteFocus
@@ -431,6 +475,12 @@ async function inventoryLookupResult(
   }];
   // Presentation Quality 2A: the whole filtered set was read; at most MAX_RESULT_ITEMS are delivered and this handler has no
   // continuation, so a larger set is truncated with no next page (the list shows "Showing X of Y", not a Next control).
+  // The answer says how it is ordered, so the homeowner never loses orientation.
+  const summaryBlock = blocks[0];
+  if (summaryBlock.type === 'SUMMARY' && viewState) {
+    const line = withOrdering(summaryBlock.supportLine, INVENTORY_ORDERINGS, ordering, INVENTORY_DEFAULT_ORDERING);
+    if (line) summaryBlock.supportLine = line;
+  }
   const resultsBlock = blocks[0];
   if (resultsBlock.type === 'GROUPED_LIST') resultsBlock.collection = collectionDescriptor({ sourceTotal: matches.length, fetchedCount: matches.length, sections: resultsBlock.sections, nextPageAvailable: false });
 

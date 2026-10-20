@@ -126,6 +126,7 @@ const POLICIES: readonly AskAudiencePolicy[] = [
   definePolicy('SEASONAL_ITEM_COMMAND', KNOWN_MODES),
   definePolicy('HOME_WORK_ITEM_COMMAND', KNOWN_MODES),
   definePolicy('HOME_WORK_ITEMS', KNOWN_MODES),
+  definePolicy('HOME_RECORD_EXPORT_SHARE', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('HOME_RECORD_EXPORT', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('HOME_RECORD_EXPORT_STATUS', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('WORK_OVERVIEW', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),

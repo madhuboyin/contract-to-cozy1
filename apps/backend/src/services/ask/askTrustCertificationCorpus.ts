@@ -323,6 +323,7 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   SEASONAL_ITEM_COMMAND: 'The seasonal task change is shown for review and applied only after you confirm.',
   HOME_WORK_ITEM_COMMAND: 'The change is shown for review and applied only after you confirm.',
   HOME_WORK_ITEMS: 'Your open work items are listed with their state, due date and snooze.',
+  HOME_RECORD_EXPORT_SHARE: 'The share link is shown for review with what it reveals and how long it works, and is created or stopped only after you confirm.',
   HOME_RECORD_EXPORT: 'The export is shown for review with exactly what it includes and leaves out, and is created only after you confirm.',
   HOME_RECORD_EXPORT_STATUS: 'Your home record exports are listed with where each one stands and whether it is ready to download.',
   WORK_OVERVIEW: 'Your work is summarized by what needs you, is under way, waiting or scheduled, with the items listed and a note of what is being shown.',

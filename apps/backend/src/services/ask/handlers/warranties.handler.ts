@@ -14,6 +14,7 @@ import { randomUUID } from 'node:crypto';
 import { collectionDescriptor } from '../support/collectionDescriptor';
 import { loadAskViewState } from './maintenance.handler';
 import { containsFilterContinuation } from '../askFollowUpContext';
+import { isOrderingId, orderingChips, orderingFromWords, withOrdering, type OrderingOption } from '../support/collectionOrdering';
 
 // Warranties capability slice, W-1 (FRD v1.124; ACUI Warranties certification). A deterministic record read: what the Home Record
 // says about this home's warranties. It reads the same property-scoped rows the Warranties route does
@@ -128,12 +129,23 @@ const CLEAR_PATTERN = /^\s*now show all warranties with no filters\b/i;
 const ALL_STATUS_PATTERN = /^\s*now show all warranties\b/i;
 const ALL_CATEGORIES_PATTERN = /^\s*now show all warranty categories\b/i;
 
-export function resolveWarrantyRefinement(message: string, prior: AskViewState | null | undefined): { status: WarrantyStatusFilter; category: string | null } | null {
+// Ordering in words (FRD v1.6). The usual order puts what needs attention first, then by the date that matters soonest; the others are global.
+export const WARRANTY_DEFAULT_ORDERING = 'ATTENTION';
+export const WARRANTY_ORDERINGS: readonly OrderingOption[] = [
+  { id: 'ATTENTION', label: 'Needs attention first', message: 'Now show them with what needs attention first', statement: 'by what needs attention first', test: /\bneeds? attention first\b|\bmost urgent first\b|\busual order\b/i },
+  { id: 'LATEST_EXPIRY', label: 'Latest expiry first', message: 'Now show them with the latest expiry first', statement: 'by latest expiry first', test: /\blatest expir|\blongest (?:coverage|remaining)\b|\bexpir\w* last\b/i },
+  { id: 'NEWEST', label: 'Newest first', message: 'Now show them newest first', statement: 'by newest coverage first', test: /\bnewest\b|\bmost recent(?:ly)? (?:started|added)\b/i },
+  { id: 'OLDEST', label: 'Oldest first', message: 'Now show them oldest first', statement: 'by oldest coverage first', test: /\boldest\b|\bearliest\b/i },
+  { id: 'PROVIDER', label: 'By provider', message: 'Now show them by provider', statement: 'by provider, A to Z', test: /\bby (?:provider|company)\b|\balphabetical|\ba[- ]to[- ]z\b/i },
+];
+const priorWarrantyOrdering = (prior: AskViewState): string => (isOrderingId(WARRANTY_ORDERINGS, prior.roomScopePhrase) ? prior.roomScopePhrase : WARRANTY_DEFAULT_ORDERING);
+
+export function resolveWarrantyRefinement(message: string, prior: AskViewState | null | undefined): { status: WarrantyStatusFilter; category: string | null; ordering: string } | null {
   if (!prior || !STATUS_FILTERS.has(prior.statusFilter)) return null;
   // Only a declared chip or a typed filter phrase refines a result; an ordinary question is answered on its own.
   if (!containsFilterContinuation(message)) return null;
   const priorCategory = prior.domainScopePhrase && CATEGORY_KEYS.has(prior.domainScopePhrase) ? prior.domainScopePhrase : null;
-  if (CLEAR_PATTERN.test(message)) return { status: 'ALL', category: null };
+  if (CLEAR_PATTERN.test(message)) return { status: 'ALL', category: null, ordering: WARRANTY_DEFAULT_ORDERING };
   const status: WarrantyStatusFilter | null = /\bdates that need review\b/i.test(message) ? 'NEEDS_REVIEW'
     : /\bexpired\b/i.test(message) ? 'EXPIRED'
       : /\bexpir(?:e|es|ing)\b/i.test(message) ? 'EXPIRING'
@@ -141,15 +153,17 @@ export function resolveWarrantyRefinement(message: string, prior: AskViewState |
           : ALL_STATUS_PATTERN.test(message) ? 'ALL' : null;
   const allCategories = ALL_CATEGORIES_PATTERN.test(message);
   const category = allCategories ? null : (CATEGORY_TERMS.find((entry) => entry.test.test(message))?.category ?? null);
-  if (!status && !category && !allCategories) return null;
-  return { status: status ?? prior.statusFilter as WarrantyStatusFilter, category: allCategories ? null : category ?? priorCategory };
+  const ordering = orderingFromWords(WARRANTY_ORDERINGS, message);
+  if (!status && !category && !allCategories && !ordering) return null;
+  return { status: status ?? prior.statusFilter as WarrantyStatusFilter, category: allCategories ? null : category ?? priorCategory, ordering: ordering ?? priorWarrantyOrdering(prior) };
 }
 
-export function buildWarrantyViewState(prior: AskViewState | null | undefined, status: WarrantyStatusFilter, category: string | null): AskViewState {
+export function buildWarrantyViewState(prior: AskViewState | null | undefined, status: WarrantyStatusFilter, category: string | null, ordering: string = WARRANTY_DEFAULT_ORDERING): AskViewState {
   return {
     resultId: prior?.resultId ?? randomUUID(),
     // Warranties reuse the generic fields: the category key rides in domainScopePhrase, the status filter in statusFilter.
-    domainScopePhrase: category, dateScopePhrase: null, statusFilter: status, selectedTaskId: null, revision: (prior?.revision ?? 0) + 1,
+    // The chosen order rides in roomScopePhrase, the generic spare scope slot of the view state (null is the usual order).
+    domainScopePhrase: category, dateScopePhrase: null, roomScopePhrase: ordering === WARRANTY_DEFAULT_ORDERING ? null : ordering, statusFilter: status, selectedTaskId: null, revision: (prior?.revision ?? 0) + 1,
   };
 }
 
@@ -157,19 +171,26 @@ const CATEGORY_WORDS: Record<string, string> = Object.fromEntries(CATEGORY_TERMS
 const capitalise = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
 /** The declared chips: only categories this home actually has, "Dates need review" only when some warranty does, and a way back. */
-export function warrantyFilterChips(status: WarrantyStatusFilter, category: string | null, present: { categories: readonly string[]; needsReview: boolean }) {
+export function warrantyFilterChips(status: WarrantyStatusFilter, category: string | null, present: { categories: readonly string[]; needsReview: boolean }, ordering: string = WARRANTY_DEFAULT_ORDERING) {
   const categories = [...new Set([...present.categories, ...(category ? [category] : [])])];
-  return [
+  const statusChips = [
     { id: 'status-all', label: 'All', message: 'Now show all warranties', active: status === 'ALL' },
     { id: 'status-active', label: 'Active', message: 'Only show active warranties', active: status === 'ACTIVE' },
     { id: 'status-expiring', label: `Expires within ${WARRANTY_EXPIRING_DAYS} days`, message: `Only show warranties expiring within ${WARRANTY_EXPIRING_DAYS} days`, active: status === 'EXPIRING' },
     { id: 'status-expired', label: 'Expired', message: 'Only show expired warranties', active: status === 'EXPIRED' },
     ...(present.needsReview || status === 'NEEDS_REVIEW' ? [{ id: 'status-review', label: 'Dates need review', message: 'Only show warranties with dates that need review', active: status === 'NEEDS_REVIEW' }] : []),
-    ...(categories.length > 1 || category ? [
-      { id: 'category-all', label: 'All categories', message: 'Now show all warranty categories', active: category === null },
-      ...categories.map((key) => ({ id: `category-${key.toLowerCase()}`, label: key === 'HVAC' ? 'HVAC' : capitalise(CATEGORY_WORDS[key] ?? key.toLowerCase()), message: `Only show ${CATEGORY_WORDS[key] ?? key.toLowerCase()} warranties`, active: category === key })),
-    ] : []),
-    ...(status !== 'ALL' || category ? [{ id: 'clear-all', label: 'Clear filters', message: CLEAR_MESSAGE, active: false }] : []),
+  ];
+  const orderChips = orderingChips(WARRANTY_ORDERINGS, ordering);
+  const clear = status !== 'ALL' || category || ordering !== WARRANTY_DEFAULT_ORDERING ? [{ id: 'clear-all', label: 'Clear filters', message: CLEAR_MESSAGE, active: false }] : [];
+  // A result carries at most sixteen chips: the order and the status always show, and the kinds of coverage give way (the chosen one never does).
+  const categoryRoom = Math.max(0, 16 - statusChips.length - orderChips.length - clear.length - 1);
+  const categoryChips = categories.map((key) => ({ id: `category-${key.toLowerCase()}`, label: key === 'HVAC' ? 'HVAC' : capitalise(CATEGORY_WORDS[key] ?? key.toLowerCase()), message: `Only show ${CATEGORY_WORDS[key] ?? key.toLowerCase()} warranties`, active: category === key }));
+  const shownCategories = [...categoryChips.filter((chip) => chip.active), ...categoryChips.filter((chip) => !chip.active)].slice(0, categoryRoom);
+  return [
+    ...statusChips,
+    ...(categories.length > 1 || category ? [{ id: 'category-all', label: 'All categories', message: 'Now show all warranty categories', active: category === null }, ...categoryChips.filter((chip) => shownCategories.includes(chip))] : []),
+    ...orderChips,
+    ...clear,
   ];
 }
 
@@ -234,8 +255,10 @@ export function warrantiesFromRecords(input: {
   // The chips reflect every recorded warranty (never the filtered subset), so a filter can always be widened or cleared.
   const present = { categories: [...new Set(records.map((record) => record.category))], needsReview: enriched.some((entry) => entry.status.key === 'NEEDS_REVIEW') };
   const isCollection = !focus.item;
-  const viewState = isCollection ? buildWarrantyViewState(priorViewState, statusFilter, focus.category) : null;
-  const chips = viewState ? warrantyFilterChips(statusFilter, focus.category, present) : [];
+  // The order: a refinement keeps or changes it; a fresh question may name one ("show my warranties newest first"); otherwise the usual order.
+  const ordering = refinement ? refinement.ordering : (orderingFromWords(WARRANTY_ORDERINGS, message) ?? WARRANTY_DEFAULT_ORDERING);
+  const viewState = isCollection ? buildWarrantyViewState(priorViewState, statusFilter, focus.category, ordering) : null;
+  const chips = viewState ? warrantyFilterChips(statusFilter, focus.category, present, ordering) : [];
 
   if (matched.length === 0 && refinement) {
     // A filter that matches nothing still continues the result and keeps every chip, so it can be widened or cleared.
@@ -267,12 +290,20 @@ export function warrantiesFromRecords(input: {
     };
   }
 
-  matched = [...matched].sort((left, right) => {
+  const byStatusThenDate = (left: (typeof matched)[number], right: (typeof matched)[number]) => {
     const order = STATUS_ORDER.indexOf(left.status.key) - STATUS_ORDER.indexOf(right.status.key);
     if (order !== 0) return order;
     // Expired rows read most recent first; everything else by the date that matters soonest.
     return left.status.key === 'EXPIRED' ? right.record.expiryDate.getTime() - left.record.expiryDate.getTime() : left.record.expiryDate.getTime() - right.record.expiryDate.getTime();
-  });
+  };
+  const byOrdering: Record<string, (left: (typeof matched)[number], right: (typeof matched)[number]) => number> = {
+    LATEST_EXPIRY: (left, right) => right.record.expiryDate.getTime() - left.record.expiryDate.getTime(),
+    NEWEST: (left, right) => right.record.startDate.getTime() - left.record.startDate.getTime(),
+    OLDEST: (left, right) => left.record.startDate.getTime() - right.record.startDate.getTime(),
+    PROVIDER: (left, right) => left.record.providerName.localeCompare(right.record.providerName),
+  };
+  // A stable tie-break (the usual order) keeps the same order for the same question.
+  matched = [...matched].sort((left, right) => (byOrdering[ordering]?.(left, right) || byStatusThenDate(left, right)));
   const count = (key: WarrantyStatusKey) => matched.filter((entry) => entry.status.key === key).length;
   const shown = matched.slice(0, MAX_RESULT_ITEMS);
   const copy = warrantyCalmCopy({
@@ -292,7 +323,7 @@ export function warrantiesFromRecords(input: {
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY', id: 'warranty-summary', title: `${matched.length} recorded ${matched.length === 1 ? 'warranty matches' : 'warranties match'} this request`,
     body: `${copy.headline} ${WARRANTY_EXPIRING_DAYS} days is the window used for expiring soon.`, tone: count('EXPIRING') || count('NEEDS_REVIEW') ? 'CAUTION' : 'DEFAULT',
-    ...copy, actions: [],
+    ...copy, ...(withOrdering(copy.supportLine, WARRANTY_ORDERINGS, ordering, WARRANTY_DEFAULT_ORDERING) ? { supportLine: withOrdering(copy.supportLine, WARRANTY_ORDERINGS, ordering, WARRANTY_DEFAULT_ORDERING) } : {}), actions: [],
   }, {
     type: 'GROUPED_LIST', filters: chips, id: 'warranty-results', title: 'Recorded warranties',
     sections: [{

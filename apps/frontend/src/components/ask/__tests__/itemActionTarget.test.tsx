@@ -18,7 +18,7 @@ const block: GroupedList = {
 
 test('an item action targets the row unless it names its own target', () => {
   const onItemAction = jest.fn();
-  render(<GenericGroupedListBlock block={block} executionId="execution" propertyId="home" onItemAction={onItemAction} itemActionsDisabled={false} onFilterClick={() => undefined} onCollectionPage={() => undefined} />);
+  render(<GenericGroupedListBlock block={block} executionId="execution" propertyId="home" onItemAction={onItemAction} itemActionsDisabled={false} onFilterClick={() => undefined} onCollectionPage={() => undefined} onAccessLost={() => undefined} />);
   fireEvent.click(screen.getByRole('button', { name: 'Open' }));
   expect(onItemAction).toHaveBeenLastCalledWith('QUOTE_COMPARISON_WORKSPACE', 'q1', 'Open Roofing quotes', 'QUOTE_COMPARISON_REVIEW', 'CONVERSATION_CONTINUE');
   fireEvent.click(screen.getByRole('button', { name: 'Archive' }));

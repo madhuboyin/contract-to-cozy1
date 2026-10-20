@@ -56,8 +56,9 @@ test('a fresh collection question carries a new view state and declared chips th
   assert.match(result.parameters.viewState.resultId, /^[0-9a-f-]{36}$/);
   assert.deepEqual(list(result).filters.map((filter) => filter.id), [
     'status-all', 'status-active', 'status-expiring', 'status-expired', 'status-review', 'category-all', 'category-hvac', 'category-roofing', 'category-appliance',
+    'order-attention', 'order-latest-expiry', 'order-newest', 'order-oldest', 'order-provider',
   ]);
-  assert.deepEqual(active(result), ['category-all', 'status-all']);
+  assert.deepEqual(active(result), ['category-all', 'order-attention', 'status-all']);
   assert.ok(!list(result).filters.some((filter) => filter.id === 'clear-all'), 'nothing to clear yet');
   assert.equal(list(result).filters.find((filter) => filter.id === 'status-expiring').label, 'Expires within 60 days');
 });
@@ -65,7 +66,7 @@ test('a fresh collection question carries a new view state and declared chips th
 test('a home with one category and no unreadable dates gets neither a category row nor a "Dates need review" chip', async () => {
   install([warranty('a', { category: 'HVAC' }), warranty('b', { category: 'HVAC', expiryDate: day(10) })]);
   const result = await run('Show my warranties');
-  assert.deepEqual(list(result).filters.map((filter) => filter.id), ['status-all', 'status-active', 'status-expiring', 'status-expired']);
+  assert.deepEqual(list(result).filters.map((filter) => filter.id), ['status-all', 'status-active', 'status-expiring', 'status-expired', 'order-attention', 'order-latest-expiry', 'order-newest', 'order-oldest', 'order-provider']);
 });
 
 test('a status chip keeps the result identity, bumps the revision, re-queries every warranty and offers a way back', async () => {
@@ -76,7 +77,7 @@ test('a status chip keeps the result identity, bumps the revision, re-queries ev
   assert.equal(result.parameters.viewState.statusFilter, 'EXPIRING');
   assert.deepEqual(ids(result), ['hvac-expiring']);
   assert.equal(summary(result).headline, '1 warranty: 1 expiring within 60 days.');
-  assert.deepEqual(active(result), ['category-all', 'status-expiring']);
+  assert.deepEqual(active(result), ['category-all', 'order-attention', 'status-expiring']);
   assert.ok(list(result).filters.some((filter) => filter.id === 'clear-all'));
 });
 
@@ -88,7 +89,7 @@ test('a category chip replaces only the category and keeps the status that was a
   assert.equal(result.parameters.viewState.revision, 3);
   assert.deepEqual(ids(result), ['hvac-active']);
   assert.equal(summary(result).headline, '1 HVAC warranty: 1 active.');
-  assert.deepEqual(active(result), ['category-hvac', 'status-active']);
+  assert.deepEqual(active(result), ['category-hvac', 'order-attention', 'status-active']);
   assert.ok(list(result).filters.length > 0, 'one row is still a list with its chips');
 });
 
@@ -165,6 +166,7 @@ test('every declared chip is recognised as a filter continuation, round-trips to
     'category-all': { category: null }, 'category-hvac': { category: 'HVAC' }, 'category-roofing': { category: 'ROOFING' }, 'category-appliance': { category: 'APPLIANCE' },
     'category-plumbing': { category: 'PLUMBING' }, 'category-electrical': { category: 'ELECTRICAL' }, 'category-structural': { category: 'STRUCTURAL' },
     'category-home_warranty_plan': { category: 'HOME_WARRANTY_PLAN' }, 'category-other': { category: 'OTHER' },
+    'order-attention': { ordering: 'ATTENTION' }, 'order-latest-expiry': { ordering: 'LATEST_EXPIRY' }, 'order-newest': { ordering: 'NEWEST' }, 'order-oldest': { ordering: 'OLDEST' }, 'order-provider': { ordering: 'PROVIDER' },
   };
   prismaModule.prisma = new Proxy({}, { get(_t, model) {
     if (model === 'then') return undefined;
@@ -175,11 +177,12 @@ test('every declared chip is recognised as a filter continuation, round-trips to
     assert.ok(isFilterContinuationMessage(chip.message), `${chip.label}: "${chip.message}" must start with a filter-continuation phrase`);
     const resolved = resolveWarrantyRefinement(chip.message, prior);
     assert.ok(resolved, `${chip.label} must resolve to a refinement`);
-    if (chip.id === 'clear-all') assert.deepEqual(resolved, { status: 'ALL', category: null });
+    if (chip.id === 'clear-all') assert.deepEqual(resolved, { status: 'ALL', category: null, ordering: 'ATTENTION' });
     else {
       assert.ok(expectations[chip.id], `unexpected chip ${chip.id}`);
       if (expectations[chip.id].status) assert.equal(resolved.status, expectations[chip.id].status, chip.label);
       if (expectations[chip.id].category !== undefined) assert.equal(resolved.category, expectations[chip.id].category, chip.label);
+      if (expectations[chip.id].ordering) assert.equal(resolved.ordering, expectations[chip.id].ordering, chip.label);
     }
     const resolution = await resolveAskFollowUpMessage({ sessionId: 's1', propertyId: 'p1', message: chip.message, declaredSourceExecutionId: 'exec-1' });
     assert.equal(resolution.forcedOperationId, 'WARRANTY_LOOKUP', chip.label);
@@ -188,4 +191,42 @@ test('every declared chip is recognised as a filter continuation, round-trips to
   }
   assert.equal(resolveWarrantyRefinement('Tell me about my roof warranty', prior), null, 'an ordinary question is not a refinement');
   assert.equal(resolveWarrantyRefinement('Only show HVAC warranties', null), null);
+});
+
+test('ordering in words: a chip or a sentence changes only the order, a filter chip afterwards keeps it, and the answer states it', async () => {
+  install([
+    warranty('a', { providerName: 'Zed Roofing', category: 'ROOFING', expiryDate: day(300), startDate: day(-100) }),
+    warranty('b', { providerName: 'Acme HVAC', category: 'HVAC', expiryDate: day(20), startDate: day(-900) }),
+    warranty('c', { providerName: 'Mid Plumbing', category: 'PLUMBING', expiryDate: day(700), startDate: day(-400) }),
+  ]);
+  const order = (result) => list(result).sections[0].items.map((entry) => entry.id);
+  const first = await run('Show my warranties');
+  assert.deepEqual(order(first), ['b', 'a', 'c']);
+  assert.equal(first.parameters.viewState.roomScopePhrase, null);
+  const prior = { ...first.parameters.viewState };
+  const newest = resolveWarrantyRefinement('Now show them newest first', prior);
+  assert.deepEqual([newest.status, newest.category, newest.ordering], ['ALL', null, 'NEWEST']);
+  for (const [message, ordering] of [['Now show them with the latest expiry first', 'LATEST_EXPIRY'], ['Now show them oldest first', 'OLDEST'], ['Now show them by provider', 'PROVIDER'], ['Now show them with what needs attention first', 'ATTENTION']]) {
+    assert.equal(resolveWarrantyRefinement(message, prior).ordering, ordering, message);
+  }
+  // An ordinary question is never an ordering.
+  assert.equal(resolveWarrantyRefinement('Which warranty is newest', prior), null);
+
+  const sorted = (message, viewState) => { priorViewState = viewState; return run(message, 'exec-1'); };
+  const byProvider = await sorted('Now show them by provider', prior);
+  assert.deepEqual(order(byProvider), ['b', 'c', 'a']);
+  assert.match(summary(byProvider).supportLine, /Ordered by provider, A to Z\./);
+  assert.equal(byProvider.parameters.viewState.roomScopePhrase, 'PROVIDER');
+  assert.equal(byProvider.parameters.viewState.resultId, prior.resultId);
+  assert.ok(list(byProvider).filters.find((chip) => chip.id === 'order-provider').active);
+  assert.ok(list(byProvider).filters.length <= 16);
+  // A filter chip keeps the order; Clear returns to the usual one.
+  assert.equal(resolveWarrantyRefinement('Only show expired warranties', byProvider.parameters.viewState).ordering, 'PROVIDER');
+  assert.equal(resolveWarrantyRefinement('Now show all warranties with no filters', byProvider.parameters.viewState).ordering, 'ATTENTION');
+  assert.deepEqual(order(await sorted('Now show them newest first', prior)), ['a', 'c', 'b']);
+  assert.deepEqual(order(await sorted('Now show them oldest first', prior)), ['b', 'c', 'a']);
+  assert.deepEqual(order(await sorted('Now show them with the latest expiry first', prior)), ['c', 'a', 'b']);
+  // A fresh question may name the order itself.
+  priorViewState = null;
+  assert.deepEqual(order(await run('Show my warranties oldest first')), ['b', 'c', 'a']);
 });

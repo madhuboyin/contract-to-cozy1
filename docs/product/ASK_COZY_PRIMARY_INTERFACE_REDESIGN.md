@@ -2,13 +2,13 @@
 
 **Status:** Proposed product direction grounded in repository evidence
 
-**Date:** September 26, 2026
+**Date:** September 26, 2026; visual-quality requirements updated October 20, 2026
 
 **Scope:** Product design, conversational UX, orchestration, migration, and retirement criteria
 
 **Decision intent:** Make Ask Cozy the primary operating surface for homeownership without making an LLM the product, calculator, policy engine, authorization layer, or system of record.
 
-**Updated implementation authority (October 18, 2026):** [`ASK_COZY_SOLE_HOMEOWNER_INTERFACE_FRD.md`](ASK_COZY_SOLE_HOMEOWNER_INTERFACE_FRD.md) governs the move to a single homeowner-facing shell. Its initial scope explicitly defers admin pages, cross-property aggregation, and full household administration. The execution sequence is defined in [`ASK_COZY_SOLE_HOMEOWNER_INTERFACE_IMPLEMENTATION_PLAN.md`](../architecture/ASK_COZY_SOLE_HOMEOWNER_INTERFACE_IMPLEMENTATION_PLAN.md).
+**Updated implementation authority (October 20, 2026):** [`ASK_COZY_SOLE_HOMEOWNER_INTERFACE_FRD.md`](ASK_COZY_SOLE_HOMEOWNER_INTERFACE_FRD.md) governs the move to a single homeowner-facing conversational surface. Its §1.2 inline rule supersedes this document wherever older text implies destination tabs, route changes, screen-to-screen workspaces, search/filter/sort toolbars, or numbered pagination. Its initial scope explicitly defers admin pages, cross-property aggregation, and full household administration. The execution sequence is defined in [`ASK_COZY_SOLE_HOMEOWNER_INTERFACE_IMPLEMENTATION_PLAN.md`](../architecture/ASK_COZY_SOLE_HOMEOWNER_INTERFACE_IMPLEMENTATION_PLAN.md).
 
 ## 0. Evidence legend and authority
 
@@ -43,53 +43,71 @@ The product promise is:
 
 > See what matters, understand why, and move the work forward—using your home’s actual record.
 
-Five design commitments follow:
+Six design commitments follow:
 
-1. **State before greeting.** The first screen communicates attention, change, and continuity before it invites an open-ended question.
+1. **State before greeting.** The initial conversational view communicates attention, change, and continuity before it invites an open-ended question.
 2. **Outcome before module.** Homeowners ask about problems and goals; Ask selects capabilities without exposing internal product structure.
 3. **Structured authority, conversational control.** Facts, calculations, rules, authorization, and writes remain deterministic. Conversation is the control layer.
 4. **Every result is an object.** Important answers become addressable, refreshable, correctable, and reusable artifacts—not disposable transcript prose.
-5. **No dead-end handoffs.** A workflow is not retired from the traditional UI until Ask supports discovery, completion, persistence, revisit, correction, recovery, authorization, confirmation, and accessibility.
+5. **No handoffs inside Ask.** Results, detail, refinement, review, confirmation, receipts, and recovery remain inline in the originating conversation. A workflow is not retired from the traditional UI until this inline journey supports discovery, completion, persistence, revisit, correction, recovery, authorization, confirmation, and accessibility.
+6. **Visual quality is functional quality.** Hierarchy, composition, density, responsive behavior, state design and continuity must make the answer easier to understand and act on. Presence of the correct components is not acceptance.
 
 **VERIFIED PRODUCT EVIDENCE:** Current target architecture already defines Ask as an orchestrator over canonical owners, with deterministic routing and calculations, typed blocks, durable executions, evidence/freshness, confirmation receipts, role checks, and model-optional operation.
 
 ## 2. Ask Cozy information architecture
 
-### 2.1 Minimum persistent navigation
+### 2.1 One conversational surface
 
-**RECOMMENDED DESIGN DECISION:** Use five persistent destinations, not a feature menu.
+**RECOMMENDED DESIGN DECISION:** Ask is one persistent conversation, not five destinations. There is no Home / Work / Record / Saved / History navigation bar and no route hop followed by a return. Home is the initial conversational state. Work, Record and Saved are questions answered inline. History is the conversation list in the left sidebar.
 
-| Destination | Purpose | Default content |
+The left sidebar is prompt discovery, not application navigation:
+
+| Sidebar hint | Sentence it asks | Inline result |
 | --- | --- | --- |
-| **Home** | Launch and triage | Briefing, attention, changes, active work, suggestions, composer |
-| **Work** | Continue and monitor | Active resolutions, projects, monitors, pending confirmations, paused tasks |
-| **Record** | Browse authoritative property history | Property summary, systems, inventory, documents, timeline, coverage |
-| **Saved** | Revisit durable outputs | Reports, comparisons, plans, checklists, annotated images, decision threads |
-| **History** | Find prior interactions | Searchable conversations and execution history, scoped by property |
+| **What needs me** | “What needs my attention?” | Interpreted priorities with contextual refinements |
+| **Browse my home record** | “Browse my home record.” | Record overview, followed by area-specific conversational collections |
+| **Continue my work** | “What work can I continue?” | Current work ordered by what needs the homeowner |
+| **Find something saved** | “Show my saved results.” | Saved-result summary and natural-language refinements |
+| **More ideas** | “What else can Cozy help with?” | Eligible prompt suggestions grouped by homeowner outcome |
 
 Persistent utilities:
 
 - property switcher;
-- global search / command palette;
+- one conversational composer for questions, commands, and finding records or artifacts;
 - notification inbox;
 - profile, household access, privacy, and settings.
 
-Mobile uses a bottom bar for **Home**, **Work**, **Saved**, and **Record**, with History inside search. Desktop uses a compact rail. The composer remains available on Home and within an active workspace; it does not float over every screen.
+Desktop keeps the prompt-discovery and conversation-history sidebar beside the transcript. Mobile collapses that sidebar into an accessible conversation/topic drawer; it does not add a destination bottom bar. The composer remains available whenever an answer is shown.
 
-### 2.2 Discovery model
+### 2.2 Conversational collections
+
+Large collections do not reproduce a database browser inside the transcript. Conversation defines and modifies the result set; structured inline UI presents it.
+
+- Start with an interpreted answer: authoritative count when knowable, what it means, what is shown first, and any partial or unavailable sources.
+- Ask one clarification before retrieval only when ambiguity would materially change the answer; otherwise answer first and suggest refinements afterward.
+- Express search as a question or reference in the composer: “Find the water-heater receipt.”
+- Express filters as remembered natural-language constraints: “Only warranties expiring this year.”
+- State the active constraints and ordering in plain language on every continuation.
+- Infer goal-oriented ordering from the request; offer sentence chips such as “Show oldest first,” never a generic sort menu.
+- Replace page numbers with stable “Show more” continuation over the same deterministic result and cursor.
+- Expand record detail inline or continue it as the next turn; never open a destination page.
+- Treat chips and row controls as accessible accelerators for sentences the homeowner could type, not as a parallel toolbar.
+- Keep exhaustive server-side totals, cursors, constraints and ordering contracts even though the homeowner sees a conversational interaction.
+
+### 2.3 Discovery model
 
 Capabilities are discovered in this order:
 
 1. direct natural-language or voice intent;
 2. state-ranked suggestions;
 3. contextual actions on results;
-4. search across records, work, artifacts, and capabilities;
+4. conversational finding across records, work, artifacts, and capabilities;
 5. a lightweight capability directory for browsing;
-6. notifications and deep links carrying property, entity, and execution context.
+6. notifications and old deep links that continue Ask with property, entity, operation, and execution context.
 
 The capability directory is grouped by homeowner outcomes—**Maintain**, **Protect**, **Save**, **Improve**, **Buy**, **Sell or move**, and **Understand my home**—not implementation modules.
 
-## 3. Launch-page specification
+## 3. Initial conversation specification
 
 ### 3.1 Shared anatomy
 
@@ -121,25 +139,22 @@ Below the fold contains recent changes, active work, recent artifacts, and lower
 
 ```text
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│ Ask Cozy       18 Maple Ave ▾                       Search      Alerts   Me   │
+│ Ask Cozy       18 Maple Ave ▾                                   Alerts   Me   │
 ├───────────────┬──────────────────────────────────────────────────────────────┤
-│ Home          │ Good morning                                             │
-│ Work     2    │ Two things need attention; one changed since Tuesday.       │
-│ Record        │                                                              │
-│ Saved         │ ┌ Urgent ─ Water-leak follow-up ──────────────── Continue ┐ │
-│ History       │ │ Plumber estimate added · coverage not yet checked        │ │
-│               │ └───────────────────────────────────────────────────────────┘ │
-│               │ ┌ Due soon ─ HVAC maintenance ─────────────── Mark / Move ┐ │
-│               │ └───────────────────────────────────────────────────────────┘ │
+│ + New chat    │ Good morning                                               │
+│               │ Two things need attention; one changed since Tuesday.       │
+│ EXPLORE       │                                                              │
+│ What needs me │ ┌ Urgent ─ Water-leak follow-up ──────────────── Continue ┐ │
+│ Home record   │ │ Plumber estimate added · coverage not yet checked        │ │
+│ Continue work │ └───────────────────────────────────────────────────────────┘ │
+│ Find saved    │ ┌ Due soon ─ HVAC maintenance ─────────────── Mark / Move ┐ │
+│ More ideas    │ └───────────────────────────────────────────────────────────┘ │
 │               │                                                              │
-│               │ ┌ Ask about your home…                                 🎙︎ │ │
-│               │ │ Attach document  ·  Add photo  ·  Use camera          📎 │ │
-│               │ └───────────────────────────────────────────────────────────┘ │
+│ HISTORY       │ ┌ Ask about your home…                                 🎙︎ │ │
+│ Roof repair   │ │ Attach document  ·  Add photo  ·  Use camera          📎 │ │
+│ Spring plan   │ └───────────────────────────────────────────────────────────┘ │
 │               │ [Check water-damage coverage] [Compare the two estimates]   │
 │               │ [Show what changed]                                         │
-│               │                                                              │
-│               │ Active work                    Recent artifacts               │
-│               │ Roof repair · waiting          Spring home briefing           │
 └───────────────┴──────────────────────────────────────────────────────────────┘
 ```
 
@@ -164,12 +179,161 @@ Below the fold contains recent changes, active work, recent artifacts, and lower
 │                              │
 │ Check water-damage coverage  │
 │ Compare the two estimates    │
-├──────────────────────────────┤
-│ Home   Work   Saved   Record │
 └──────────────────────────────┘
 ```
 
-On mobile, the composer expands to a full-screen capture sheet. Camera is first-class. Cards show one primary action; secondary actions move into an accessible action sheet.
+On mobile, a drawer exposes prompt hints and conversation history without replacing the transcript. The composer may expand to a capture sheet for camera, document, or structured input, then returns the result to the same turn. Cards show one primary action; secondary actions move into an accessible action sheet.
+
+### 3.5 Best-in-class conversational visual system
+
+Visual quality is a product requirement, not implementation polish. A flow does not pass because its content is present, readable in isolation, or uses the shared component library. The complete first viewport, visual hierarchy, density, continuity, responsive transformation, interaction feedback, and state presentation must work as one composition.
+
+This section is normative for homeowner-facing Ask Cozy UI. [`ASK_COZY_CONVERSATIONAL_PRESENTATION_QUALITY_STANDARDIZATION_FRD.md`](ASK_COZY_CONVERSATIONAL_PRESENTATION_QUALITY_STANDARDIZATION_FRD.md) remains the detailed shared-presentation contract; where its older collection language implies a filter toolbar, local sorting UI, or traditional pagination, the conversational-collection rules in §2.2 of this document and §1.2 of the Sole Homeowner Interface FRD govern.
+
+#### 3.5.1 Visual thesis and reference quality
+
+Ask Cozy shall feel calm, editorial, warm, trustworthy, and materially useful—not like a dashboard, database browser, generic chatbot, or wall of cards.
+
+The **Environment Report** is the reference quality bar, not a universal template. Its strengths to carry across Ask are:
+
+- a clear answer-led opening rather than a generic component title;
+- a strong but restrained visual anchor;
+- compact signals that communicate state at a glance;
+- sections composed around the homeowner's question;
+- purposeful use of color, hierarchy, charts, checklists, and whitespace;
+- progressive depth without separating the result from its conversation;
+- honest source limitations integrated into the composition.
+
+Other tools may use different visual forms, but they must show equivalent intentional hierarchy, information density, continuity, and finish. Copying the Environment Report hero or card shapes without its information logic does not satisfy this requirement.
+
+#### 3.5.2 Shell geometry and responsive measure
+
+**VIS-LAYOUT-001 — One canvas.** The transcript, inline result and composer form one continuous canvas. No top or bottom destination bar may compete with the conversation. The left sidebar is visually subordinate to the active turn and may not force the response into a narrow prose column when a rich result needs width.
+
+**VIS-LAYOUT-002 — Desktop measures.** At desktop widths of 1280 CSS pixels and above:
+
+- the expanded left sidebar should normally occupy 280–320 pixels;
+- conversational prose should normally use a readable 680–800 pixel measure;
+- tables, comparisons, reports, timelines and conversational collections may expand to the available result measure, normally up to 1040–1160 pixels;
+- the user prompt, Cozy orientation, structured result, sources, feedback and composer must share an obvious alignment system;
+- user messages shall not be stranded at the far edge of an otherwise empty canvas.
+
+**VIS-LAYOUT-003 — First meaningful viewport.** At 1440 × 900, after persistent shell chrome and composer are accounted for, the homeowner should normally see the direct answer, the most important state or result, and at least one useful next step. A collection with four or more compact rows should normally expose at least four rows. Purpose-built reports shall declare their own essential first-viewport regions.
+
+**VIS-LAYOUT-004 — Mobile continuity.** Below the desktop breakpoint, the sidebar becomes a drawer and the transcript remains the primary surface. Rich results reflow to one column; comparison alternatives may stack; wide evidence or visualization regions may use an explicitly labeled local scroll only when reflow would destroy meaning. No transformation may require horizontal page scrolling or hide the composer, result identity, essential status, or primary action.
+
+#### 3.5.3 Turn anatomy and hierarchy
+
+Every substantial Cozy turn shall compose applicable regions in this order:
+
+1. Cozy identity and conversational orientation;
+2. direct answer, judgment, or honest limitation;
+3. primary structured artifact;
+4. contextual continuations phrased as actions or sentences;
+5. source, freshness, evidence and limitation disclosure;
+6. feedback controls;
+7. composer continuity.
+
+**VIS-HIER-001:** The structured artifact must appear in or immediately adjacent to the answer that introduced it. Metadata, citations and feedback may not visually outrank the answer or result.
+
+**VIS-HIER-002:** A result uses one dominant composition. Supporting sections may use tonal grouping, dividers or progressive disclosure; they shall not become a stack of equally weighted bordered cards.
+
+**VIS-HIER-003:** Actions remain adjacent to the information they affect. A primary row action may not be pushed to the bottom of a tall container for symmetry.
+
+**VIS-HIER-004:** The title shall answer or orient. Avoid meta-status headings such as “Your result is ready” when the actual answer can be stated.
+
+#### 3.5.4 Typography, spacing and density
+
+**VIS-TYPE-001:** Typography shall establish no more than four clearly differentiated levels within a result: answer/title, section heading, body/record label, and metadata. Body text should normally render at 16 CSS pixels with comfortable line height; persistent metadata shall not fall below 12 CSS pixels. Numeric signals use tabular numerals where comparison benefits.
+
+**VIS-TYPE-002:** Display or editorial typography may give reports and important judgments character, but controls, record labels and consequential text remain highly legible. Font changes shall communicate hierarchy, not decoration.
+
+**VIS-SPACE-001:** Layout uses the shared spacing scale consistently. Typical internal gaps should fall between 8 and 24 pixels; turn-to-turn separation should normally fall between 28 and 40 pixels. Exceptions require content-driven geometry such as a chart, image, map or focused review—not an arbitrary fixed height.
+
+**VIS-DENSITY-001:** Compact repeated rows should normally occupy 72–112 pixels including padding and divider. No repeated container may contain more than 32 pixels of unexplained trailing space after its final meaningful element.
+
+**VIS-DENSITY-002:** Whitespace must establish grouping and emphasis. It may not substitute for missing content, center a small answer in a large empty canvas, or create avoidable scrolling.
+
+#### 3.5.5 Color, surfaces and visual trust
+
+**VIS-SURFACE-001:** Use the transcript background as the base surface. Introduce a bordered, elevated or tinted container only when it groups a meaningful artifact, separates a focused decision, or conveys semantic state. Nested card-on-card-on-card compositions are prohibited.
+
+**VIS-SURFACE-002:** Color communicates a governed semantic meaning—attention, caution, success, unavailable, selected, evidence, or freshness—or establishes the restrained Cozy brand anchor. Decorative color may not imply urgency, certainty, completion, safety or recommendation.
+
+**VIS-SURFACE-003:** User and Cozy turns must be distinguishable without relying on color alone. Selected, focused, expanded, stale and unavailable states require shape, text, iconography, or position in addition to color.
+
+**VIS-SURFACE-004:** Sources and limitations remain visually quiet but discoverable. Safety boundaries and consequential effects become prominent when they change what the homeowner should do.
+
+All text, icons, focus indicators, charts and status tokens must meet the applicable WCAG contrast requirement in every supported theme and state.
+
+#### 3.5.6 Component composition
+
+- Use prose for explanation, compact rows for homogeneous records, definition grids for repeated facts, tables for genuine comparison, timelines for temporal relationships, and custom reports for spatial or multi-signal understanding.
+- Reserve cards for independently actionable, visually distinct, or materially richer objects.
+- Do not repeat the same title, count, status or action in the narrative, card header and footer.
+- Do not expose generic Auto/List/Cards toggles to compensate for a weak default.
+- Do not add a toolbar merely because the server supports querying, constraints, ordering or cursors; §2.2 defines their conversational presentation.
+- Empty, unavailable and not-applicable sections use compact truthful states rather than full-size empty cards.
+- At most one action is visually dominant in a result region. Secondary actions remain available without competing equally.
+
+#### 3.5.7 Motion and continuity
+
+Motion shall explain state and preserve spatial continuity; it shall not entertain, delay access, or simulate intelligence.
+
+- Prompt hints visibly become submitted questions in the active conversation.
+- “Show more” appends to the existing result without jumping the viewport or replacing earlier rows.
+- A refinement visibly updates the result and its plain-language constraint summary.
+- Inline detail expands from or immediately after its source item and returns focus to that item when closed.
+- Review becomes receipt in place after a confirmed action.
+- Common transitions should normally complete in 160–240 milliseconds and avoid unnecessary motion beyond 300 milliseconds.
+- `prefers-reduced-motion` removes nonessential animation while preserving state feedback and focus movement.
+
+#### 3.5.8 Complete state design
+
+Every shared result and specialized presentation must define and visually verify:
+
+- initial loading or skeleton;
+- incremental/streaming arrival where supported;
+- partial data with named omissions;
+- empty with a useful truthful next step;
+- success;
+- stale or superseded;
+- source unavailable;
+- retryable failure;
+- terminal failure;
+- access lost or not authorized;
+- unusually long, wrapped or localized content;
+- confirmation pending, submitting, succeeded, failed and unknown outcome where applicable.
+
+Skeleton geometry should resemble the arriving content closely enough to avoid disruptive layout shift. Loading states may not imply that unavailable data exists, and empty states may not imply completion.
+
+#### 3.5.9 Visual acceptance and regression requirements
+
+Every new or materially changed presentation family shall have a declared visual contract containing:
+
+- homeowner job and primary scan path;
+- essential desktop and mobile regions;
+- default, long-content, empty, partial, stale, unavailable and error compositions;
+- first-viewport and density expectations;
+- keyboard focus order, screen-reader structure and live announcements;
+- reduced-motion behavior;
+- screenshot baselines at 1440 × 900 desktop, a representative tablet width, 390 × 844 mobile, and 200% zoom/reflow;
+- unusually long homeowner text and localized wrapping;
+- no-obscured-content checks for sticky composer, chips, drawers, sheets and virtual keyboards.
+
+Review shall evaluate the complete composition, not isolated Storybook components. A presentation fails visual acceptance when any of the following is true:
+
+- a large unexplained empty region dominates the first viewport;
+- destination navigation or a route handoff interrupts a supported conversational journey;
+- citations, chrome or feedback outrank the answer;
+- generic cards make unrelated content appear equally important;
+- the same fact or action is repeated without adding meaning;
+- traditional search/filter/sort/pagination controls replace conversational refinement;
+- content or actions are obscured, clipped, horizontally overflow the page, or lose focus continuity;
+- the default looks acceptable only with ideal fixture data;
+- the visual result is materially less coherent than the Environment Report reference without a content-driven reason.
+
+The minimum golden scenarios are: initial established-home conversation, Browse my home record, What needs my attention, Environment Report, an active project continuation, a comparison, a consequential confirmation and receipt, an empty collection, a partial-provider result, and a mobile multimodal capture return.
 
 ## 4. Default-content visibility matrix
 
@@ -191,7 +355,7 @@ On mobile, the composer expands to a full-screen capture sheet. Camera is first-
 | Savings opportunities | CONDITIONALLY VISIBLE | Deterministically eligible, meaningful value, fresh inputs | P1 |
 | Recent reports | USER-CONFIGURABLE | Revisit convenience; not inherently urgent | P2 |
 | Unfinished conversations | CONDITIONALLY VISIBLE | Only if they contain durable pending work or explicit save | P1 |
-| Recent activity | HIDDEN UNTIL REQUESTED | Low signal on launch; available in History/Record | P2 |
+| Recent activity | HIDDEN UNTIL REQUESTED | Low signal initially; available by asking or from conversation history | P2 |
 | Persistent artifacts | CONDITIONALLY VISIBLE | Recent, pinned, or related to active work | P1 |
 | Suggested actions | ALWAYS VISIBLE | State-ranked, limited to 2–4, never generic | P0 |
 | Upload hints | CONDITIONALLY VISIBLE | Missing document context, new user, or document-capable intent | P1 |
@@ -260,7 +424,7 @@ The mechanically maintained 77-operation registry remains the exhaustive enginee
 | Feature / intent | User goal | Internal context / source of truth | Best input | Inference and follow-up | Deterministic logic / LLM role | Workflow and output | Confirmation / correction / persistence | Launch exposure | Current problem → redesign | Priority |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Attention / triage | Know what matters now | Canonical Home Actions, incidents, deadlines, radar-promoted items | Text/voice/tap | Resolve property; ask only if ambiguous | Ranked aggregation; LLM: EXPLANATION optional | Prioritized issue list | No confirm; actions persist in owners; correct source item | Always/conditional items | Fragmented feeds → one canonical briefing | P0 |
-| Attention / filter | See urgent, costly, or near-term items | Current result set | Follow-up | Infer filter only | Deterministic filtering; LLM: INTENT INTERPRETATION | Updated list preserving identity | No confirm; view state persists | Result action | Filters must not reroute into writes | P0 |
+| Attention / refinement | See urgent, costly, or near-term items | Current result set | Follow-up sentence or chip | Resolve only the named constraint | Deterministic constraint application; LLM: INTENT INTERPRETATION | Updated inline answer that states what it now shows | No confirm; conversational view state persists | Result action | No filter drawer; refinements must not reroute into writes | P0 |
 | Property summary | Understand the home | LHR + PC snapshot | Text/voice | No inference beyond scope | Canonical projection; LLM: SUMMARIZATION optional | Property summary | Correct facts inline; saved snapshot/report optional | Default compact | Avoid dashboard dump; answer current question | P0 |
 | Change review | Know what changed | PropertyChange/timeline/events | Text/tap | Resolve comparison period | Deterministic diff; LLM: EXPLANATION | Change cards/timeline | Source corrections through canonical owner | Conditional | Make deltas addressable | P1 |
 | Maintenance status | See due/completed work | Maintenance tasks | Text/voice | Resolve time/category if needed | Deterministic query; LLM: NONE | Grouped checklist | No confirm; persistent source task | Conditional | Existing reference implementation, elevate to Home | P0 |
@@ -294,8 +458,8 @@ The mechanically maintained 77-operation registry remains the exhaustive enginee
 | Buyer plan | Track purchase readiness | Buyer plan, deadlines, documents, tasks | Text/voice/docs | Resolve lifecycle phase | Deterministic plan rules; LLM: SUMMARIZATION | Status board/checklist | Confirm updates/dispositions; persistent plan | Buyer state | One conversational workspace across 18 registered ops | P0 |
 | Sell/hold/rent | Compare a major decision | Domain scenarios + verified property/financial facts | Text/voice | Capture scenario assumptions separately | Deterministic analysis; LLM: EXPLANATION | Comparison/report | Save versioned decision thread; no transaction | Goal/contextual | Attach related work to durable decision thread | P0 |
 | Seller preparation | Turn intent into a plan | Decision thread + seller prep service | Text/voice/docs | Infer goal candidate; confirm intent | Rules; LLM: INTENT INTERPRETATION | Checklist/timeline | Confirm plan creation/actions; persistent thread | When selling goal active | Discover without knowing feature exists | P1 |
-| Household access | Add/manage collaborator | Household authorization service | Text/voice | Extract person/role proposal | Authorization and role rules; LLM: EXTRACTION | Confirmation panel | Owner confirmation; revoke/change in Record/settings | Hidden until asked | Never expose protected household details | P0 |
-| Capability discovery | Learn what Cozy can do | Registered capability catalog/readiness | Text/search | Interpret outcome, not module | Deterministic registry filtering; LLM: INTENT INTERPRETATION | Capability cards | No confirm until action; recent discovery in history | Suggestions/search | Never recommend unavailable/unregistered capability | P0 |
+| Household access | Add/manage collaborator | Household authorization service | Text/voice | Extract person/role proposal | Authorization and role rules; LLM: EXTRACTION | Confirmation panel | Owner confirmation; revoke/change inline or in required account settings | Hidden until asked | Never expose protected household details | P0 |
+| Capability discovery | Learn what Cozy can do | Registered capability catalog/readiness | Text/sidebar hint | Interpret outcome, not module | Deterministic registry matching; LLM: INTENT INTERPRETATION | Inline capability suggestions | No confirm until action; recent discovery in history | Suggestions/conversation | Never recommend unavailable/unregistered capability | P0 |
 | General guidance | Get bounded home advice | Governed knowledge + property context | Text/voice | Clarify only material ambiguity | Retrieval first; LLM: RECOMMENDATION SUPPORT/EXPLANATION | Concise answer + sources | No write unless converted to proposal | Hidden until asked | Preserve boundary and source distinction | P1 |
 
 ## 7. Response and artifact system
@@ -307,19 +471,19 @@ Every primitive has five shared states: skeleton/working, partial with known omi
 | Insight card | One material observation: conclusion → why → source/date | Explain, compare, save, dismiss, correct | Usually ephemeral unless saved/linked; expands evidence; full-width mobile |
 | Alert card | Urgent risk: severity → immediate action → why now | Show steps, snooze, dismiss, start plan | Persists through resolution/expiry; prominent but non-blocking unless safety-critical |
 | Property summary | Identity → key facts → missing/conflicted → recent change | Explain, correct, show history | Refreshable snapshot; stacked sections on mobile |
-| Prioritized issue list | Rank → impact/urgency → owner/status | Filter, sort, group, turn into plan | Saved view optional; preserves result identity and filters |
-| Comparison table | Comparable dimensions → differences → exclusions → sources | Sort, hide rows, compare selected, explain delta | Versioned artifact; cards-by-option on narrow mobile |
+| Prioritized issue list | Rank → impact/urgency → owner/status | “Only urgent,” “Show costly items,” “Group by system,” turn into plan | Preserves result identity and remembered constraints; “Show more” extends the same result |
+| Comparison table | Comparable dimensions → differences → exclusions → sources | “Put lowest total first,” “Compare the first two,” “Explain this difference” | Versioned inline artifact; cards-by-option on narrow mobile |
 | Recommendation card | Recommendation → evidence → alternatives → limitations | Why, what-if, reject, save, act | Versioned decision artifact for material cases |
 | Provider card | Verified facts → fit → availability → commercial disclosure | Compare, choose, contact, report issue | Selection stored only on confirmation; stacked mobile |
 | Checklist | Ordered actions → status → due date → evidence | Complete, reschedule, assign, add evidence | Canonical tasks/project; thumb-friendly mobile |
-| Timeline | Dated events → upcoming → uncertainty | Change range, show only deadlines, add event | Versioned query or persistent plan; horizontal scroll avoided on mobile |
-| Report | Executive summary → findings → evidence → actions | Ask about section, filter, export, share | Immutable version plus refresh action; table of contents mobile |
+| Timeline | Dated events → upcoming → uncertainty | “Show this year,” “Only deadlines,” add event | Versioned answer or persistent plan; horizontal scroll avoided on mobile |
+| Report | Executive summary → findings → evidence → actions | Ask about section, narrow in words, export, share | Immutable inline artifact plus refresh action; section outline on mobile |
 | Status board | Goal → phase → blockers → next owner → progress | Continue, update, pause, resolve | Durable workspace; single-column mobile |
 | Document preview | Page → highlighted source → extracted candidate | Jump to citation, accept/edit/reject, ask about page | Sensitive retention policy; bottom-sheet candidate review mobile |
 | Annotated image | Original → numbered regions → interpretation/confidence | Focus region, correct label, create task | Original and annotations preserved with consent; pinch/zoom mobile |
-| Confirmation panel | Proposed change → effects → source → role → confirm/cancel | Edit, confirm, cancel, explain impact | Durable pending execution; full-screen mobile for consequential action |
+| Confirmation panel | Proposed change → effects → source → role → confirm/cancel | Edit, confirm, cancel, explain impact | Durable pending execution inline; an accessible modal or sheet may focus consequential review without route navigation |
 | Progress indicator | Current stage → completed stages → next dependency | Cancel, notify me, continue later | Durable for long work; compact live region, no noisy announcements |
-| Persistent workspace | Goal → active result → supporting artifacts → activity | Resume, branch, compare, close, archive | Durable, searchable, property scoped, responsive shell |
+| Inline workspace | Goal → active result → supporting artifacts → activity | Resume, branch, compare, close, archive | Durable, findable in words, property scoped, and rendered in the originating conversation |
 
 ## 8. Multimodal input behavior
 
@@ -391,7 +555,7 @@ Natural/multimodal input
 - **Follow-up:** One high-value question or inspection-report upload, never a long form.
 - **Output/actions:** Known-home summary, first 30-day checklist, upload/camera choices.
 - **Confirmation/completion:** Each extracted fact is reviewed; canonical writes confirmed.
-- **Persistence/revisit:** LHR, checklist, and onboarding progress appear in Home/Work.
+- **Persistence/revisit:** LHR, checklist, and onboarding progress can be resumed by asking or selecting a left-rail prompt/history entry.
 
 ### 10.2 “What needs my attention?”
 
@@ -399,9 +563,9 @@ Natural/multimodal input
 - **Retrieved:** Home Actions, incidents, deadlines, maintenance, active work, source health.
 - **Processing:** Canonical aggregation, deduplication, urgency/impact ranking.
 - **LLM:** Optional explanation only.
-- **Output:** Top three issues plus “show all”; filters for urgent, cost, deadline.
+- **Output:** Top three issues plus stable “Show more”; natural-language refinements for urgency, cost, or deadline.
 - **Actions:** Explain, snooze, start plan, complete, correct.
-- **Persistence/revisit:** Source records persist; view available in Home and Work.
+- **Persistence/revisit:** Source records persist; the answer can be revisited from conversation history or asked for again from current canonical state.
 
 ### 10.3 Uploading an inspection report
 
@@ -458,7 +622,7 @@ Natural/multimodal input
 - **Retrieved:** Active project, provider records, prior estimates.
 - **Processing:** Extract candidate scope/price/exclusions; user validation; normalize comparable items.
 - **Output:** Comparison table with unmatched lines and source citations.
-- **Actions:** Sort by cost, compare first two, show exclusions, choose provider.
+- **Actions:** “Put lowest total first,” “Compare the first two,” “Show exclusions,” choose provider.
 - **Confirmation:** Validate extraction and confirm outreach/selection.
 - **Persistence/revisit:** Versioned comparison artifact linked to project.
 
@@ -479,7 +643,7 @@ Natural/multimodal input
 - **Follow-up:** Only low-confidence material fields.
 - **Output:** Candidate gallery grouped by room with batch review.
 - **Confirmation:** Accept/edit/reject; provenance retained.
-- **Persistence/revisit:** Canonical inventory; progress in Work.
+- **Persistence/revisit:** Canonical inventory; progress appears when the homeowner asks what work can be continued.
 
 ### 10.11 Preparing for severe weather
 
@@ -499,13 +663,13 @@ Natural/multimodal input
 - **Output:** Status board, timeline, next owner, outstanding decision.
 - **Actions:** Update date/status, upload evidence, compare estimates, pause/complete.
 - **Confirmation:** Every mutation.
-- **Persistence/revisit:** Durable project workspace in Work.
+- **Persistence/revisit:** Durable project identity resumed inline through “Continue the roof project,” a notification, or conversation history.
 
 ### 10.13 Revisiting a previous report
 
-- **Input:** Search, History, Saved, or “show my spring report.”
+- **Input:** “Show my spring report,” a left-rail saved-result hint, conversation history, or a contextual suggestion.
 - **Retrieved:** Property-scoped artifact index and access.
-- **Processing:** Exact/semantic retrieval with property and type filters.
+- **Processing:** Exact/semantic retrieval with property and type constraints inferred from the request and stated back plainly.
 - **Output:** Original version with freshness banner and “refresh” action.
 - **Actions:** Ask about section, compare with current, duplicate as plan.
 - **Persistence/revisit:** Immutable original; refresh creates a new linked version.
@@ -516,7 +680,7 @@ Natural/multimodal input
 - **Retrieved:** Authorized property list and approved portfolio projections.
 - **Processing:** Cross-property ranking without mixing facts.
 - **Output:** Property-by-property attention table; explicit property on every row.
-- **Actions:** Filter, switch, compare, open work.
+- **Actions:** Narrow in words, switch property, compare, or continue the named work inline.
 - **Confirmation:** Actions recheck access in selected property.
 - **Persistence/revisit:** Portfolio view preferences; domain records remain property scoped.
 - **Validation need:** Cross-property aggregation is not yet an approved current capability.
@@ -568,12 +732,12 @@ Proactive delivery exists to prevent harm or missed value, not to create engagem
 
 ### Phase 0 — 0–3 months: launch foundation
 
-- Establish Home launch anatomy, property scoping, briefing projection, suggestion policy, and design tokens.
+- Establish the initial conversation anatomy, property scoping, briefing projection, suggestion policy, left-rail prompt discovery, and design tokens.
 - Certify shared artifact primitives, evidence/freshness, responsive behavior, and accessibility.
-- Consolidate existing Ask entry points into the Home/Work/Saved/Record shell.
-- Keep traditional navigation available.
+- Consolidate homeowner entry points into one Ask transcript; remove the Home / Work / Record / Saved / History bar.
+- Map old Ask destination addresses to questions asked in the conversation; keep unrelated traditional routes only until their inline Ask journey reaches parity.
 
-Exit: Home is useful without a prompt; deterministic Ask and pending work survive model outage and refresh.
+Exit: the initial conversation is useful without a typed prompt; deterministic Ask and pending work survive model outage and refresh; no supported Ask journey requires a hop-and-return.
 
 ### Phase 1 — 3–6 months: P0 read and maintenance workflows
 
@@ -610,21 +774,24 @@ Exit: major-moment workflows can be discovered without feature knowledge and rem
 ### Phase 5 — 18–24 months: traditional UI retirement
 
 - Measure per-workflow parity using the checklist below.
-- Retire navigation entries one workflow at a time; preserve Record/audit/bulk structured surfaces where they remain the superior interaction.
+- Retire traditional routes one workflow at a time after their inline conversational journey reaches parity; preserve admin and genuinely non-homeowner operational surfaces only where separately required.
 - Remove duplicate business logic and legacy-only adapters after data and link migration.
-- Keep deep links resolving to the equivalent Ask workspace/artifact.
+- Keep old deep links resolving to Ask with the exact question, operation and entity context needed to produce the equivalent inline answer.
 
-Exit: the traditional dashboard is no longer the product home; remaining structured surfaces are intentional parts of Ask’s Record/Work system, not a parallel product.
+Exit: the traditional dashboard is no longer the homeowner product; homeowner outcomes happen inline in Ask, while retained non-homeowner surfaces remain outside this scope.
 
 ## 14. Traditional UI retirement checklist
 
 A workflow can retire only when all answers are yes:
 
-- Discoverable by natural language, state suggestion, search, or capability directory.
+- Discoverable by natural language, a contextual suggestion, a left-rail prompt hint, notification, or old-link continuation.
 - Completes the full job without route knowledge.
 - Uses the canonical service and source of truth.
 - Persists result/work with stable identity.
-- Reopens from Home, Work, Saved, History, search, notification, and deep link as applicable.
+- Resumes inline from a typed request, prompt hint, conversation history, notification, or old deep link as applicable.
+- States the interpreted result count, active constraints, ordering and partial/truncated state in plain language.
+- Supports stable “Show more” continuation without page numbers or reshuffling prior results.
+- Supports finding, narrowing and reordering in words without requiring a search box, filter drawer, or sort menu.
 - Supports correction of source facts and extracted candidates.
 - Supports safe retry, cancel, failure explanation, and domain-appropriate recovery.
 - Rechecks property access and role for every action.
@@ -635,7 +802,7 @@ A workflow can retire only when all answers are yes:
 - Has analytics from discovery through verified outcome.
 - Has support/audit visibility and an operational runbook.
 - Has no legacy-only data field, action, or history view required for completion.
-- Deep links, bookmarks, and notification links have a mapped successor.
+- Deep links, bookmarks, and notification links continue the conversation with an authorized, current target rather than opening another homeowner screen.
 
 ## 15. Product success metrics
 
@@ -658,6 +825,7 @@ A workflow can retire only when all answers are yes:
 | Efficiency | Deterministic containment, LLM calls/outcome, token cost/outcome, p95 latency, failure/retry rate |
 | Migration | Workflow parity coverage, legacy route dependence, Ask-only successful completion, legacy page retirement readiness |
 | Proactivity | Actionable notification rate, dismiss/mute rate, harm-prevention completion, frequency complaints |
+| Visual quality | First-viewport comprehension, unexplained-space violations, visual-regression defects, obscured-content failures, responsive-state failures, task success across desktop/mobile/zoom |
 
 Do not optimize raw messages, session length, daily streaks, or notification opens.
 
@@ -675,10 +843,10 @@ Do not optimize raw messages, session length, daily streaks, or notification ope
 
 ### 16.2 Assumptions requiring validation
 
-- Homeowners will understand the five-destination IA better than current feature navigation.
+- Homeowners will understand left-rail prompt hints as questions they can ask, not destinations they must navigate.
 - A maximum of three attention cards and four suggestions balances relevance and calm.
 - Users will trust camera/document extraction when original evidence and correction are adjacent.
-- “Saved” and “History” are meaningfully distinct in research; they may need consolidation.
+- Homeowners will understand the difference between finding a saved artifact in the conversation and choosing a prior conversation from history.
 - Portfolio users want cross-home triage on launch rather than a single remembered property.
 - Voice is most valuable for capture and urgent work, not long report review.
 
@@ -691,23 +859,25 @@ Do not optimize raw messages, session length, daily streaks, or notification ope
 5. Which provider actions may transmit homeowner data, and what disclosure/consent is required?
 6. What retention classes apply to voice, photos, inspection reports, policies, and claim evidence?
 7. When is a refreshed artifact a new version versus an update to the same artifact?
-8. Which traditional structured surfaces remain permanently as Record/audit/bulk-management views?
+8. Which admin, audit, or bulk-management jobs are genuinely outside the homeowner conversational surface?
 9. What domain sign-off is required before each material recommendation or workflow can retire its legacy path?
 10. Should the customer-facing name remain “Ask Cozy,” and how is “Cozy” introduced without implying autonomous AI authority?
 
 ## 17. Recommended immediate decisions
 
-1. Approve the five-destination information architecture for usability testing.
-2. Approve Home’s above-the-fold hierarchy: property, state headline, up to three attention/continuity cards, composer, and state-ranked suggestions.
+1. Approve one conversational surface, the removal of top/bottom destination navigation, and the left sidebar as prompt discovery plus conversation history.
+2. Approve the initial conversation hierarchy: property, state headline, up to three attention/continuity items, composer, and state-ranked suggestions.
 3. Make maintenance the retirement-grade reference workflow and inspection upload the multimodal reference workflow.
 4. Adopt the shared artifact identity and versioning contract before adding more presentation variants.
 5. Approve the deterministic suggestion policy and prohibit model-created eligibility.
-6. Resolve history scope, auto-save rules, multi-property scope, and sensitive-media retention before detailed implementation.
+6. Adopt §3.5 as a release requirement and Environment Report as the reference-quality benchmark without forcing its layout onto unrelated tools.
+7. Resolve history scope, auto-save rules, multi-property scope, and sensitive-media retention before detailed implementation.
 
 ## 18. Evidence needed before implementation approval
 
 - Usability tests for first-time, established, urgent, returning-active-work, and multi-property launch states.
 - Production-like validation of the 77-operation catalog’s browser, database, accessibility, and reconciliation behavior.
+- Complete-composition screenshot review for the §3.5 golden scenarios at desktop, tablet, mobile and zoom/reflow sizes.
 - A canonical source map for launch briefing inputs and priority conflicts.
 - Domain-owner sign-off on urgency, materiality, expiry, and suppression rules.
 - Security/privacy review for multimodal storage and model payload minimization.
@@ -716,6 +886,6 @@ Do not optimize raw messages, session length, daily streaks, or notification ope
 - Artifact retention/versioning/search contract.
 - Notification-channel governance and consent model.
 
-# Implementation note — complete Home Record
+# Implementation note — inline Home Record
 
-The first Record-destination slice is now exposed from **My Home Record → View complete home record**. It is intentionally a calm record index rather than a transcript-sized serialization or a wall of collection cards: the answer shows the canonical home profile and completeness, inventories every record domain, and launches the existing Ask-native focused operations for rooms, inventory, documents, warranties, and timeline. Household access is represented honestly in the index while a dedicated household read operation remains future work.
+**Browse my home record** is an inline conversational collection, not a Record destination. It begins with the interpreted state of the record—completeness, attention items, authoritative counts when knowable, and a small number of relevant directions. Choosing an area asks the corresponding registered question in the same conversation. Large areas use stable **Show more** continuation; finding, narrowing and ordering happen in words; record detail, correction, export review, confirmation and receipt remain inline. The complete server-side registry, authorization, cursors, ordering and export contracts remain deterministic even though destination tabs, search fields, filter drawers, sort menus and numbered pagination are absent from the homeowner interaction.

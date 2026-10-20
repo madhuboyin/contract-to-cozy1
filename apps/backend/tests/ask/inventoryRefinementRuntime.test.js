@@ -70,7 +70,7 @@ test('a fresh collection question carries a new view state, declared filters and
     assert.equal(result.parameters.viewState.domainScopePhrase, null);
     assert.match(result.parameters.viewState.resultId, /^[0-9a-f-]{36}$/);
     assert.equal(summary(result).headline, '5 items recorded, 2 with missing details.');
-    assert.deepEqual(active(result), ['category-all', 'status-all']);
+    assert.deepEqual(active(result), ['category-all', 'order-recorded', 'status-all']);
     assert.ok(!list(result).filters.some((filter) => filter.id === 'clear-all'), 'nothing to clear yet');
   } finally { restore(); }
 });
@@ -113,7 +113,7 @@ test('a status chip keeps the result identity, bumps the revision, re-queries th
     assert.equal(result.parameters.viewState.statusFilter, 'INCOMPLETE');
     assert.deepEqual(ids(result), ['fridge', 'heatpump']);
     assert.equal(summary(result).headline, '2 records are missing details.');
-    assert.deepEqual(active(result), ['category-all', 'status-incomplete']);
+    assert.deepEqual(active(result), ['category-all', 'order-recorded', 'status-incomplete']);
     assert.ok(list(result).filters.some((filter) => filter.id === 'clear-all'));
     assert.equal(list(result).title, 'Incomplete inventory records');
   } finally { restore(); }
@@ -128,7 +128,7 @@ test('a category chip replaces only the category and keeps the status focus that
     assert.equal(result.parameters.viewState.revision, 3);
     assert.deepEqual(ids(result), ['heatpump']);
     assert.equal(summary(result).headline, '1 HVAC record is missing details.');
-    assert.deepEqual(active(result), ['category-hvac', 'status-incomplete']);
+    assert.deepEqual(active(result), ['category-hvac', 'order-recorded', 'status-incomplete']);
     // One row is still a list (the way back never disappears), not a single-item detail with capture prompts.
     assert.equal(list(result).filters.length > 0, true);
     assert.deepEqual(result.captureRequests ?? [], []);
@@ -202,14 +202,17 @@ test('every declared chip is recognised as a filter continuation, round-trips to
     const expectations = {
       'status-all': { status: 'ALL' }, 'status-incomplete': { status: 'INCOMPLETE' }, 'status-lifecycle': { status: 'LIFECYCLE' },
       'category-all': { category: null }, 'category-hvac': { category: 'HVAC' }, 'category-appliance': { category: 'APPLIANCE' }, 'category-roof': { category: 'ROOF_EXTERIOR' },
+      'order-recorded': { ordering: 'RECORDED' }, 'order-name': { ordering: 'NAME' }, 'order-oldest': { ordering: 'OLDEST' }, 'order-newest': { ordering: 'NEWEST' },
+      'order-unverified': { ordering: 'UNVERIFIED' }, 'order-end-of-life': { ordering: 'END_OF_LIFE' }, 'order-system': { ordering: 'SYSTEM' },
     };
     for (const chip of inventoryFilterChips('INCOMPLETE', 'HVAC')) {
       assert.ok(isFilterContinuationMessage(chip.message), `${chip.label}: "${chip.message}" must start with a filter-continuation phrase`);
       const resolved = resolveInventoryRefinement(chip.message, prior);
       assert.ok(resolved, `${chip.label} must resolve to a refinement`);
-      if (chip.id === 'clear-all') assert.deepEqual(resolved, { status: 'ALL', category: null });
+      if (chip.id === 'clear-all') assert.deepEqual(resolved, { status: 'ALL', category: null, ordering: 'RECORDED' });
       else assert.equal(resolved.status, expectations[chip.id].status ?? 'ALL');
       if (expectations[chip.id]?.category !== undefined) assert.equal(resolved.category, expectations[chip.id].category);
+      if (expectations[chip.id]?.ordering) assert.equal(resolved.ordering, expectations[chip.id].ordering, chip.label);
       priorViewState = prior;
       const result = await run(chip.message, 'exec-1');
       assert.ok(matchesInventoryAnswerContract(chip.message, result), `${chip.label}: the answer contract must accept the result`);
@@ -305,5 +308,45 @@ test('adding or correcting an item links to no desktop page, and a viewer is tol
     assert.equal(target.reasonCode, 'INVENTORY_ITEM_TARGET_REQUIRED');
     assert.deepEqual(target.blocks[0].actions, []);
     noPageLinks(target, 'correct target');
+  } finally { restore(); }
+});
+
+test('ordering in words: each order sorts what is shown, names itself in the answer, rides the view state, and survives a filter chip', async () => {
+  const { orderInventory, INVENTORY_ORDERINGS } = require('../../src/services/ask/handlers/inventory.handler.ts');
+  const { orderingFromWords } = require('../../src/services/ask/support/collectionOrdering.ts');
+  const rows = [
+    item('b', 'Boiler', 'HVAC', { purchasedOn: new Date('2018-01-01'), isVerified: true, expectedExpiryDate: new Date('2031-01-01') }),
+    item('a', 'Air handler', 'HVAC', { purchasedOn: new Date('2022-06-01'), isVerified: false, expectedExpiryDate: null }),
+    item('d', 'Dishwasher', 'APPLIANCE', { purchasedOn: null, isVerified: false, expectedExpiryDate: new Date('2027-01-01') }),
+    item('c', 'Chimney', 'ROOF_EXTERIOR', { purchasedOn: new Date('2015-01-01'), isVerified: true, expectedExpiryDate: null }),
+  ];
+  const ids = (ordering) => orderInventory(rows, ordering).map((row) => row.id);
+  assert.deepEqual(ids('NAME'), ['a', 'b', 'c', 'd']);
+  assert.deepEqual(ids('OLDEST'), ['c', 'b', 'a', 'd']);
+  assert.deepEqual(ids('NEWEST'), ['a', 'b', 'c', 'd']);
+  assert.deepEqual(ids('UNVERIFIED'), ['a', 'd', 'b', 'c']);
+  assert.deepEqual(ids('END_OF_LIFE'), ['d', 'b', 'a', 'c']);
+  assert.deepEqual(ids('SYSTEM'), ['d', 'a', 'b', 'c']);
+  assert.deepEqual(ids('RECORDED'), ['b', 'a', 'd', 'c']);
+  assert.deepEqual(orderingFromWords(INVENTORY_ORDERINGS, 'Show my appliances oldest first'), 'OLDEST');
+  assert.equal(orderingFromWords(INVENTORY_ORDERINGS, 'Show my inventory'), null);
+
+  install(rows);
+  try {
+    const first = await run('Show my inventory');
+    assert.equal(first.parameters.viewState.roomScopePhrase, null);
+    const prior = { ...first.parameters.viewState };
+    const named = resolveInventoryRefinement('Now show them by name', prior);
+    assert.deepEqual([named.status, named.category, named.ordering], ['ALL', null, 'NAME']);
+    priorViewState = prior;
+    const result = await run('Now show them by name', 'exec-1');
+    assert.deepEqual(list(result).sections[0].items.map((entry) => entry.id), ['a', 'b', 'c', 'd']);
+    assert.match(result.blocks.find((block) => block.id === 'inventory-summary').supportLine, /Ordered by name, A to Z\./);
+    assert.equal(result.parameters.viewState.roomScopePhrase, 'NAME');
+    assert.equal(result.parameters.viewState.resultId, prior.resultId);
+    assert.ok(list(result).filters.find((chip) => chip.id === 'order-name').active);
+    assert.ok(list(result).filters.length <= 16);
+    assert.equal(resolveInventoryRefinement('Only show HVAC items', result.parameters.viewState).ordering, 'NAME');
+    assert.equal(resolveInventoryRefinement('Now show all inventory items with no filters', result.parameters.viewState)?.ordering ?? 'RECORDED', 'RECORDED');
   } finally { restore(); }
 });
