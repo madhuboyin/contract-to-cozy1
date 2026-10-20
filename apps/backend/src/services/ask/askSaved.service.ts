@@ -1,3 +1,4 @@
+import { ProviderTimeoutError, withProviderTimeout } from './support/providerTimeout';
 import { z } from 'zod';
 import type { HouseholdRole } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
@@ -126,15 +127,15 @@ export async function composeAskSavedPage(
     const reader = readers[definition.id];
     if (!reader) return none('UNAVAILABLE', 'No canonical reader is registered for this kind of saved result.');
     try {
-      const result = await reader(context, {
+      const result = await withProviderTimeout(reader(context, {
         after: parsed.after, limit: parsed.limit + 1, search: parsed.search, freshness: parsed.freshness,
         archived: parsed.archived ? 'ARCHIVED' : 'ACTIVE', archivedByYouIds: archivedIds.get(definition.id) ?? [],
-      });
+      }));
       const rows = result.rows.filter((row) => row.propertyId === propertyId);
       return { definition, status: status('AVAILABLE', null, result.total, rows.length), rows, total: result.total, other: result.otherTotal };
     } catch (error) {
-      logger.warn({ err: error, propertyId, artifactType: definition.id }, 'Ask Saved type failed');
-      return none('FAILED', 'This kind of saved result could not be read right now.');
+      logger.warn({ err: error, propertyId, artifactType: definition.id, timedOut: error instanceof ProviderTimeoutError }, 'Ask Saved type failed');
+      return none('FAILED', error instanceof ProviderTimeoutError ? 'This kind of saved result took too long to read, so this page may be incomplete.' : 'This kind of saved result could not be read right now.');
     }
   }));
 

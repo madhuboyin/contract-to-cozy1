@@ -27,6 +27,7 @@
     "test:ask": "node --test $(find tests/ask -type f -name '*.test.js')",
     "test:ask:chunked": "node scripts/run-tests-chunked.js tests/ask",
     "test:chunked": "node scripts/run-tests-chunked.js tests",
+    "certify:ask-db": "node --test --test-concurrency=1 tests/certification/askRealDb.test.js tests/certification/askPerformance.test.js",
     "typecheck": "tsc --noEmit -p .",
     "test:watch": "node --test --watch $(find tests -type f -name '*.test.js')",
     "smoke:health-score-ui": "node scripts/healthScoreUiSmokeCheck.js",

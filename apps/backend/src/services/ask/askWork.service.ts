@@ -1,3 +1,4 @@
+import { ProviderTimeoutError, withProviderTimeout } from './support/providerTimeout';
 import { z } from 'zod';
 import type { HouseholdRole } from '@prisma/client';
 import { logger } from '../../lib/logger';
@@ -196,12 +197,12 @@ export async function composeAskWorkPage(
       if (!reader) return none('UNAVAILABLE', 'No canonical reader is registered for this kind of work.');
       if (!definition.views.includes(view)) return { definition, status: { ...emptyStatus(definition, 'AVAILABLE', null), total: 0 }, rows: [], viewCounts: null };
       try {
-        const result = await reader({ userId, propertyId, role, operatingMode }, { view, after, limit: limit + 1, status });
+        const result = await withProviderTimeout(reader({ userId, propertyId, role, operatingMode }, { view, after, limit: limit + 1, status }));
         const rows = result.rows.filter((row) => row.providerId === definition.id && row.propertyId === propertyId);
         return { definition, status: { ...emptyStatus(definition, 'AVAILABLE', null), total: result.total, delivered: rows.length }, rows, viewCounts: result.viewCounts };
       } catch (error) {
-        logger.warn({ err: error, propertyId, providerId: definition.id }, 'Ask Work provider failed');
-        return none('FAILED', 'This kind of work could not be read right now.');
+        logger.warn({ err: error, propertyId, providerId: definition.id, timedOut: error instanceof ProviderTimeoutError }, 'Ask Work provider failed');
+        return none('FAILED', error instanceof ProviderTimeoutError ? 'This kind of work took too long to read, so this page may be incomplete.' : 'This kind of work could not be read right now.');
       }
     }));
 

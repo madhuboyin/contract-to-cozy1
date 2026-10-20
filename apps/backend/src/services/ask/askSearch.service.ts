@@ -1,3 +1,4 @@
+import { ProviderTimeoutError, withProviderTimeout } from './support/providerTimeout';
 import type { HouseholdRole } from '@prisma/client';
 import { logger } from '../../lib/logger';
 import type { AskAccountRole } from './askAccountEligibility';
@@ -19,15 +20,6 @@ const NOT_APPLICABLE_REASONS = {
   NOT_APPLICABLE: 'This does not apply to this home right now.',
   CONTEXT_REQUIRED: 'More about this home is needed before this can be searched.',
 } as const;
-
-class ProviderTimeoutError extends Error {}
-
-function withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new ProviderTimeoutError('timed out')), ms);
-    work.then((value) => { clearTimeout(timer); resolve(value); }, (error) => { clearTimeout(timer); reject(error); });
-  });
-}
 
 export function normalizeSearchQuery(query: string | null | undefined): string {
   const trimmed = (query ?? '').replace(/\s+/g, ' ').trim();
@@ -65,7 +57,7 @@ export async function composeAskSearch(
     if (applicability !== 'APPLICABLE') return { provider, results: [], status: status(applicability, NOT_APPLICABLE_REASONS[applicability]) };
     if (!provider.search) return { provider, results: [], status: status('UNAVAILABLE', 'No search is registered for this source.') };
     try {
-      const output = await withTimeout(provider.search(context, query, ASK_SEARCH_PER_PROVIDER), timeoutMs);
+      const output = await withProviderTimeout(provider.search(context, query, ASK_SEARCH_PER_PROVIDER), timeoutMs);
       // Every group is held to the selected home, conversations included: "all homes" history search is deferred, so no result may come from another one.
       const results = output.results.filter((result) => result.propertyId === context.propertyId);
       return { provider, results, status: status('AVAILABLE', null, results.length, output.more) };
