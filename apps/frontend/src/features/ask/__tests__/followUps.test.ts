@@ -46,9 +46,9 @@ describe('followUpItems', () => {
     expect(items.map((item) => [item.kind, item.label])).toEqual([['ACTION', 'Add the brand'], ['ACTION', 'Set the purchase date']]);
   });
 
-  it('hides an expired action, drops duplicate ids, never filters typed actions by asked text, and caps at four', () => {
+  it('hides expired and already-asked actions, drops duplicate ids, and caps at four', () => {
     const many = ['a', 'b', 'c', 'd', 'e'].map((c) => typed(`v1.${c.repeat(16)}`, `Label ${c}`));
-    expect(followUpItems(withTyped([typed('v1.xxxxxxxxxxxxxxxx', 'Old', '2026-10-04T11:59:59.000Z'), ...many, many[0]]), new Set(['label a']), key, NOW).map((item) => item.label)).toEqual(['Label a', 'Label b', 'Label c', 'Label d']);
+    expect(followUpItems(withTyped([typed('v1.xxxxxxxxxxxxxxxx', 'Old', '2026-10-04T11:59:59.000Z'), ...many, many[0]]), new Set(['label a please']), key, NOW).map((item) => item.label)).toEqual(['Label b', 'Label c', 'Label d', 'Label e']);
   });
 
   it('shows nothing when every typed action has expired, rather than reviving the strings', () => {

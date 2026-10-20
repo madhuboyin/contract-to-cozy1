@@ -15,7 +15,7 @@ describe('Ask presentation contracts', () => {
 
   it('covers every dedicated data-rich result family', () => {
     expect(Object.keys(ASK_SPECIALIZED_RESULT_CONTRACTS).sort()).toEqual([
-      'COMPARISON', 'ENVIRONMENT_REPORT', 'PRIORITY_LIST', 'SCENARIO_COMPARISON', 'TASK_GUIDE', 'TIMELINE',
+      'COMPARISON', 'ENVIRONMENT_REPORT', 'HOME_RECORD_OVERVIEW', 'PRIORITY_LIST', 'SCENARIO_COMPARISON', 'TASK_GUIDE', 'TIMELINE',
     ]);
   });
 

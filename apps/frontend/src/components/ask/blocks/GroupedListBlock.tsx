@@ -31,6 +31,7 @@ import { RoomResultList } from '../RoomResultList';
 import { FACT_SHEET_BLOCK_IDS, FactSheetResultList, PLAN_LAYOUT_BLOCK_IDS, SeasonalPlanResultList } from '../SeasonalPlanResultList';
 import { WarrantyResultList } from '../WarrantyResultList';
 import { HomeContinuityPlanResultList } from '../HomeContinuityPlanResultList';
+import { HomeRecordOverviewBlock } from '../HomeRecordOverviewBlock';
 import { ActionLink, AskBlockActionContext, AskContextLink } from './context';
 import type { AskBlockRenderer } from './types';
 import { AskCollection, AskCollectionState } from '../presentation/AskLayoutPrimitives';
@@ -430,6 +431,7 @@ export const GroupedListBlock: AskBlockRenderer<'GROUPED_LIST'> = (props) => {
   const setPreference = (mode: GroupedListPresentationPreference) => controls?.change((view) => ({
     ...view, groupedListModes: { ...view.groupedListModes, [props.block.id]: mode },
   }));
+  if (props.block.id === 'property-record-index') return <HomeRecordOverviewBlock {...props} />;
   if (props.block.id === 'digital-will-items') {
     return <HomeContinuityPlanResultList block={props.block} disabled={props.itemActionsDisabled} onAction={props.onItemAction} />;
   }
