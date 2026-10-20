@@ -332,6 +332,29 @@ Use deterministic version-prefixed action ids based on source execution, operati
 - Contract, producer, ranking, deduplication, authorization, freshness, frontend, and integrated-journey tests pass without relying on a live environment.
 - Clarification retry/recovery, retryable failure, terminal failure, confirmation expiry/conflict, refresh, and cancellation tests verify persisted recovery actions.
 
+### ACUI-010 — Browse-my-home-record visual completion
+
+**Priority:** P0
+**Owners:** `propertySummary.handler.ts`, Ask presentation contracts, `GroupedListBlock.tsx`, dedicated Home Record overview renderer, `ExecutionCard.tsx`, Suggested Next Actions
+
+**Outcome:** “Browse my home record” renders as an answer-led, attention-first conversational index rather than a generic configurable card list.
+
+**Current status (October 20, 2026):** **Backend/content-model groundwork only; not visually certified.** Commit `834636df` improved naming, interpreted overview copy, duplication and attention ordering, but `property-record-index` still falls through to `GenericGroupedListBlock`. The resulting Auto/List/Cards controls, tall repeated cards, narrow desktop measure, weak hierarchy, zero-count card treatment and repeated active prompt fail the governing presentation requirements.
+
+**Acceptance criteria:**
+
+- `property-record-index` declares a reviewed presentation contract and resolves to a dedicated compact renderer or explicitly governed compact-index pattern; generic fallback is not accidental.
+- No Auto/List/Cards control appears for this result.
+- The direct answer, completeness/count state, review-needed state and at least four complete area rows are visible at 1440 × 900 after persistent shell and composer space.
+- Review-needed areas appear first; section name, count/state, concise scope and primary continuation form one scannable unit.
+- Repeated rows normally remain within the governed compact-row density; cards are reserved for materially richer, independently actionable content.
+- Zero, unavailable and not-applicable areas use compact truthful treatment and never silently disappear.
+- The result uses the wide workspace measure on desktop, a single-column compact list on mobile, no page-level horizontal scrolling, and no content hidden by sticky chrome.
+- Actions remain adjacent to the information they affect and the active “Browse my home record” prompt is suppressed from Suggested Next Actions.
+- Frontend tests render the actual registered block path and assert renderer selection, absence of layout controls, attention ordering, compact states, action placement and suggestion suppression.
+- Screenshot/bounding-box acceptance covers populated, zero, partial, loading, error and long-content fixtures at 1280 × 720, 1440 × 900, 1920 × 1080, 390 × 844, 360 × 800 and 200% zoom/reflow, with keyboard, focus, screen-reader naming and reduced-motion checks recorded.
+- Completion status distinguishes structural, frontend-rendered, statically validated, browser-certified and production-verified evidence; missing browser evidence is reported as “not visually certified.”
+
 ## 7a. Status at HEAD (September 26, 2026)
 
 | Ticket | Status |
@@ -345,6 +368,7 @@ Use deterministic version-prefixed action ids based on source execution, operati
 | ACUI-004 | **Complete for the three supported record types (FRD v1.119):** home events, inventory items and warranties, with one deterministic target. Maintenance tasks are excluded by decision (backend proposal needed). Browser-covered by ACUI-008 (fixture-backed). |
 | ACUI-008 | **Implemented (FRD v1.120):** `e2e/ask/maintenanceJourney.spec.ts`, 9 scenarios at desktop and 390px. Fixture-backed; not a live-backend run. |
 | ACUI-009 | **Phase 5 containment implemented October 4, 2026 (plan C.14, FRD v1.23; per-file ratchet on raw string-suggestion producers, existing chips unchanged, not full Phase 5); Phase 4 platform recovery implemented October 4, 2026 (plan C.13, FRD v1.22; restart-after-expiry for three reviewed operations, inventory-only review after conflict/stale, no chip for retry/cancel/unavailable; not live-verified); delivery simplified and inventory, rooms, maintenance, warranties and home events converted, claims and inspection closed as terminal by decision October 4, 2026 (plan Appendix C); Phases 1-2 implemented October 4, 2026 (contract, verified selection, ledger persistence, starter signer, compatibility boundary, typed-first frontend rendering, shared finalizer, eligibility, ranking, deduplication; no producers migrated, not live-verified); Phase 3 awaits entry-gate approval (plan Appendix B); Phases 4-5 not started.** Contract, verified selection, candidate pipeline, capture mapping, eligibility, deterministic ranking, cross-surface deduplication, telemetry correlation, and migration are specified in `ASK_COZY_SUGGESTED_NEXT_ACTIONS_IMPLEMENTATION_PLAN.md`. |
+| ACUI-010 | **Open P0 (October 20, 2026).** Backend/content-model groundwork shipped in `834636df`; the result still uses the generic grouped-list renderer and is not visually certified. Dedicated compact rendering, active-prompt suppression, frontend tests and named viewport evidence remain required. |
 
 ACUI-009 adds no feature flag, cohort, canary, pilot, or runtime kill switch because there are no real customers or production customer data. Its additive compatibility boundary supports migration; rollback is a code revert plus rebuild and redeploy.
 
