@@ -1189,7 +1189,7 @@ const inspectionFindingUpdatePattern = /\b(?:accept|dismiss|resolve|close|track)
 const inspectionReportsPattern = /\b(?:show|list|review|which|what|see|open)\b.{0,50}\binspection reports?\b/i;
 // Work and Saved as conversations (FRD v1.1 §1.2): "what needs me", "show my work", "what's waiting", "show my saved results/reports".
 const workOverviewPattern = /^\s*(?:what|which)(?:\s+(?:work|things?|items?))?\s+(?:needs?\s+me|(?:is|are)\s+waiting\s+on\s+me)\b|\b(?:what|which|show|list|see)\b.{0,30}\b(?:work|things?)\s+(?:that\s+needs?\s+me|i\s+need\s+to\s+(?:do|decide|answer))\b|\b(?:show|list|see|open)\s+(?:me\s+)?my\s+(?:open\s+|active\s+|scheduled\s+|completed\s+)?work\b(?!\s+items?\b|\s+list\b)/i;
-const savedResultsPattern = /\b(?:show|list|see|open|find|what(?:'s| is| are))\b.{0,30}\b(?:my\s+)?saved\s+(?:results?|reports?|comparisons?|items?|decisions?|briefings?|checklists?)\b|\bwhat (?:have i|did i) saved\b/i;
+const savedResultsPattern = /\b(?:show|list|see|open|find|what(?:'s| is| are))\b.{0,30}\b(?:my\s+)?saved\s+(?:results?|reports?|comparisons?|items?|decisions?|briefings?|checklists?)\b|\bwhat (?:have i|did i) saved\b|\b(?:find|search(?: for)?|look(?:ing)? for|locate)\b.{0,30}\bsaved\b|\bwhere did i save\b/i;
 const homeWorkItemsPattern = /\b(?:show|list|what|which|see|open)\b.{0,50}\b(?:home operations?|operational|home)\s+work(?:\s+items?|\s+list)\b|\bmy work items\b/i;
 const inspectionFindingsPattern = /\b(?:show|review|list|what|open|unresolved)\b.{0,70}\binspection (?:findings?|issues?)\b|\bwhat did (?:the |my )?inspection find\b/i;
 // Checked before recallReviewPattern below (same order as inspection's update-before-review cascade):

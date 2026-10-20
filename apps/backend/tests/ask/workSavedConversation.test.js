@@ -128,7 +128,7 @@ const savedPage = (rows, overrides = {}) => ({
   filterOptions: { types: [{ value: 'QUOTE_COMPARISON', label: 'Quote comparisons' }, { value: 'PROPERTY_BRIEF', label: 'Property briefs' }], freshness: [{ value: 'CURRENT', label: 'Current' }, { value: 'STALE', label: 'Out of date' }] },
   types: [{ artifactType: 'QUOTE_COMPARISON', label: 'Quote comparisons', state: 'AVAILABLE', reason: null, total: rows.length, delivered: rows.length }], rows, ...overrides,
 });
-const savedState = (overrides = {}) => ({ archived: false, type: null, freshness: null, limit: SAVED_RESULTS_PAGE_SIZE, ...overrides });
+const savedState = (overrides = {}) => ({ archived: false, type: null, freshness: null, limit: SAVED_RESULTS_PAGE_SIZE, search: null, ...overrides });
 const savedAnswer = (page, s = savedState()) => savedResultsFromPage({ page, state: s, viewState: buildSavedViewState(null, s) });
 
 test('Saved states how many results there are and how many are no longer current', () => {
@@ -158,7 +158,7 @@ test('Saved constraints are remembered across turns and every chip parses back t
   const fresh = resolveSavedState('Only show out of date saved results', prior);
   assert.deepEqual([fresh.state.type, fresh.state.freshness, fresh.state.archived], ['QUOTE_COMPARISON', 'STALE', false]);
   prior = buildSavedViewState(prior, fresh.state);
-  assert.deepEqual(savedStateFromViewState(prior), { archived: false, type: 'QUOTE_COMPARISON', freshness: 'STALE', limit: SAVED_RESULTS_PAGE_SIZE });
+  assert.deepEqual(savedStateFromViewState(prior), { archived: false, type: 'QUOTE_COMPARISON', freshness: 'STALE', limit: SAVED_RESULTS_PAGE_SIZE, search: null });
   assert.equal(resolveSavedState('Only show archived saved results', prior).state.archived, true);
   assert.equal(resolveSavedState('Only show saved results that are not archived', buildSavedViewState(null, savedState({ archived: true }))).state.archived, false);
   assert.equal(resolveSavedState('Now show more saved results', prior).state.limit, SAVED_RESULTS_PAGE_SIZE * 2);
@@ -190,4 +190,47 @@ test('the questions these operations own route here, and the ones other operatio
     const definition = ASK_OPERATION_DEFINITIONS[id];
     assert.deepEqual([definition.family, definition.executionMode, definition.propertyRoleFloor, definition.requiresProperty], ['RECORD_QUERY', 'DETERMINISTIC', 'VIEWER', true]);
   }
+});
+
+test('saved search: a word in the question is held as a constraint, stated in the answer, and cleared in words', () => {
+  const { savedSearchFromWords } = require('../../src/services/ask/handlers/savedResults.handler.ts');
+  assert.equal(savedSearchFromWords('Find my saved roofing quotes'), 'roofing');
+  assert.equal(savedSearchFromWords('Where did I save the furnace decision?'), 'furnace');
+  assert.equal(savedSearchFromWords('Search saved results for water heater'), 'heater');
+  assert.equal(savedSearchFromWords('Show my saved results'), null);
+  assert.equal(savedSearchFromWords('What have I saved?'), null);
+  // Chips and kind words never become a search.
+  for (const message of ['Only show out of date saved results', 'Only show seasonal checklists', 'Only show home reports', 'Now show more saved results', 'Only show archived saved results']) assert.equal(savedSearchFromWords(message), null, message);
+
+  const first = resolveSavedState('Find my saved roofing quotes', null);
+  assert.deepEqual([first.refinement, first.state.search, first.state.archived], [false, 'roofing', false]);
+  let prior = buildSavedViewState(null, first.state);
+  assert.equal(prior.roomScopePhrase, 'roofing');
+  // A chip keeps the search; a new word replaces it; Clear search drops only the search.
+  const stale = resolveSavedState('Only show out of date saved results', prior);
+  assert.deepEqual([stale.state.search, stale.state.freshness], ['roofing', 'STALE']);
+  prior = buildSavedViewState(prior, stale.state);
+  assert.equal(resolveSavedState('Only show saved results about furnace', prior).state.search, 'furnace');
+  const cleared = resolveSavedState('Now show saved results with no search', prior);
+  assert.deepEqual([cleared.refinement, cleared.state.search, cleared.state.freshness], [true, null, 'STALE']);
+  assert.equal(resolveSavedState('Now show all saved results with no filters', prior).state.search, null);
+  assert.equal(savedStateFromViewState(prior).search, 'roofing');
+
+  const searching = savedState({ search: 'roofing' });
+  const chips = savedResultsChips(savedPage([artifact()]), searching);
+  assert.ok(chips.some((chip) => chip.id === 'clear-search' && /roofing/.test(chip.label)));
+  for (const chip of chips) { assert.ok(containsFilterContinuation(chip.message), chip.message); assert.equal(resolveSavedState(chip.message, prior).refinement, true, chip.message); }
+
+  const hit = savedAnswer(savedPage([artifact()]), searching);
+  assert.match(hit.blocks[0].supportLine, /matching “roofing”/);
+  const miss = savedAnswer(savedPage([]), searching);
+  assert.equal(miss.blocks[0].headline, 'No saved results match “roofing”.');
+  for (const block of miss.blocks) AskPresentationBlockSchema.parse(block);
+  assert.equal(route('Find my saved roofing quotes'), 'SAVED_RESULTS');
+  assert.equal(route('Where did I save the furnace decision?'), 'SAVED_RESULTS');
+  assert.equal(route('Search my saved results for water heater'), 'SAVED_RESULTS');
+  // "saved for the house" is another operation's question, not a search of Saved.
+  assert.notEqual(route('What upgrade options have I saved for the house?'), 'SAVED_RESULTS');
+  assert.notEqual(route('Find my inspection report'), 'SAVED_RESULTS');
+  assert.equal(route('Show my warranties'), 'WARRANTY_LOOKUP');
 });

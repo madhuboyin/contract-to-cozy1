@@ -38,7 +38,33 @@ const ACTIVE_MESSAGE = 'Only show saved results that are not archived';
 const ARCHIVED_PATTERN = /\barchived\b/i;
 const NOT_ARCHIVED_PATTERN = /\b(?:not archived|unarchived|that are not archived|saved results that are not archived)\b/i;
 
-export interface SavedResultsState { archived: boolean; type: AskArtifactTypeId | null; freshness: AskArtifactFreshness | null; limit: number }
+export interface SavedResultsState { archived: boolean; type: AskArtifactTypeId | null; freshness: AskArtifactFreshness | null; limit: number; /** One word the saved results are matched on, from "find my saved roofing quotes". */ search: string | null }
+
+// Words that are the question, not what is being looked for. What is left after them (and after the kind and freshness words) is the search.
+const SEARCH_STOP = new Set((
+  'a an the my our your me i we it them this that these those of for about on in to at by with from and or is are was were did do does have has had what which where who how '
+  + 'show list see open find search look looking locate get give tell saved save results result items item stuff things thing everything all any some matching match called named regarding containing '
+  + 'home house property archived archive unarchived current expired replaced stale outdated out date up older newer version versions only just now more next rest remaining clear filters filter no not '
+  + 'report reports comparison comparisons decision decisions briefing briefings checklist checklists analysis analyses plan plans scenario scenarios brief briefs quote quotes'
+).split(/\s+/));
+const MAX_SEARCH_LENGTH = 40;
+const CLEAR_SEARCH_MESSAGE = 'Now show saved results with no search';
+const CLEAR_SEARCH_PATTERN = /^\s*now show saved results with no search\b/i;
+
+/**
+ * The one word a message asks to find. The readers match a single string against each kind's own fields, so a phrase would miss a title that
+ * words it differently; the longest remaining word is the most distinctive, and the answer says which word it matched on.
+ */
+export function savedSearchFromWords(message: string): string | null {
+  // Every word of a kind's own label names the kind ("seasonal checklists", "home reports"), never what is being looked for.
+  const kindWords = new Set(ASK_ARTIFACT_TYPE_REGISTRY.flatMap((entry) => entry.label.toLowerCase().match(/[a-z0-9]+/g) ?? []).flatMap((word) => [word, word.replace(/s$/, '')]));
+  const words = (message.toLowerCase().match(/[a-z0-9][a-z0-9'-]*/g) ?? [])
+    .map((word) => word.replace(/['-]+$/, '').replace(/'s$/, ''))
+    .filter((word) => (word.length >= 3 && !SEARCH_STOP.has(word) && !kindWords.has(word) && !/^\d+$/.test(word)) || /^\d{4}$/.test(word));
+  if (words.length === 0) return null;
+  const best = words.reduce((longest, word) => (word.length > longest.length ? word : longest), words[0]);
+  return best.slice(0, MAX_SEARCH_LENGTH);
+}
 
 const isFreshness = (value: string | null | undefined): value is AskArtifactFreshness => Boolean(value) && (FRESHNESS_ORDER as readonly string[]).includes(value as string);
 const connectedTypes = () => ASK_ARTIFACT_TYPE_REGISTRY.filter((entry) => entry.reader.state === 'CONNECTED');
@@ -60,9 +86,10 @@ function freshnessFromWords(message: string): AskArtifactFreshness | null {
 export function savedStateFromViewState(prior: AskViewState | null | undefined): SavedResultsState | null {
   if (!prior || !/^(ACTIVE|ARCHIVED)(:(CURRENT|STALE|EXPIRED|SUPERSEDED))?$/.test(prior.statusFilter)) return null;
   const [archive, freshness] = prior.statusFilter.split(':');
+  const search = typeof prior.roomScopePhrase === 'string' && prior.roomScopePhrase.trim() ? prior.roomScopePhrase.trim().slice(0, MAX_SEARCH_LENGTH) : null;
   const limit = Number(prior.dateScopePhrase);
   return {
-    archived: archive === 'ARCHIVED', freshness: isFreshness(freshness) ? freshness : null, type: isType(prior.domainScopePhrase) ? prior.domainScopePhrase : null,
+    archived: archive === 'ARCHIVED', freshness: isFreshness(freshness) ? freshness : null, type: isType(prior.domainScopePhrase) ? prior.domainScopePhrase : null, search,
     limit: Number.isInteger(limit) && limit >= SAVED_RESULTS_PAGE_SIZE ? Math.min(limit, ASK_SAVED_MAX_LIMIT) : SAVED_RESULTS_PAGE_SIZE,
   };
 }
@@ -73,15 +100,17 @@ export function savedStateFromViewState(prior: AskViewState | null | undefined):
  */
 export function resolveSavedState(message: string, prior: AskViewState | null | undefined): { state: SavedResultsState; refinement: boolean } {
   const base = savedStateFromViewState(prior);
-  const fresh: SavedResultsState = { archived: ARCHIVED_PATTERN.test(message) && !NOT_ARCHIVED_PATTERN.test(message), type: typeFromWords(message), freshness: freshnessFromWords(message), limit: SAVED_RESULTS_PAGE_SIZE };
+  const fresh: SavedResultsState = { archived: ARCHIVED_PATTERN.test(message) && !NOT_ARCHIVED_PATTERN.test(message), type: typeFromWords(message), freshness: freshnessFromWords(message), limit: SAVED_RESULTS_PAGE_SIZE, search: savedSearchFromWords(message) };
   if (base && containsFilterContinuation(message)) {
-    if (CLEAR_PATTERN.test(message)) return { state: { archived: false, type: null, freshness: null, limit: SAVED_RESULTS_PAGE_SIZE }, refinement: true };
+    if (CLEAR_PATTERN.test(message)) return { state: { archived: false, type: null, freshness: null, limit: SAVED_RESULTS_PAGE_SIZE, search: null }, refinement: true };
+    if (CLEAR_SEARCH_PATTERN.test(message)) return { state: { ...base, search: null, limit: SAVED_RESULTS_PAGE_SIZE }, refinement: true };
     if (MORE_PATTERN.test(message)) return { state: { ...base, limit: Math.min(base.limit + SAVED_RESULTS_PAGE_SIZE, ASK_SAVED_MAX_LIMIT) }, refinement: true };
     const type = typeFromWords(message);
     const freshness = freshnessFromWords(message);
     const archiveWords = NOT_ARCHIVED_PATTERN.test(message) ? false : ARCHIVED_PATTERN.test(message) ? true : null;
-    if (type || freshness || archiveWords !== null) {
-      return { state: { archived: archiveWords ?? base.archived, type: type ?? base.type, freshness: freshness ?? base.freshness, limit: SAVED_RESULTS_PAGE_SIZE }, refinement: true };
+    const search = savedSearchFromWords(message);
+    if (type || freshness || archiveWords !== null || search) {
+      return { state: { archived: archiveWords ?? base.archived, type: type ?? base.type, freshness: freshness ?? base.freshness, limit: SAVED_RESULTS_PAGE_SIZE, search: search ?? base.search }, refinement: true };
     }
   }
   return { state: fresh, refinement: false };
@@ -89,7 +118,8 @@ export function resolveSavedState(message: string, prior: AskViewState | null | 
 
 export function buildSavedViewState(prior: AskViewState | null | undefined, state: SavedResultsState): AskViewState {
   return {
-    resultId: prior?.resultId ?? randomUUID(), domainScopePhrase: state.type, dateScopePhrase: String(state.limit),
+    // The search word rides in roomScopePhrase, the generic spare scope slot of the view state.
+    resultId: prior?.resultId ?? randomUUID(), domainScopePhrase: state.type, dateScopePhrase: String(state.limit), roomScopePhrase: state.search,
     statusFilter: `${state.archived ? 'ARCHIVED' : 'ACTIVE'}${state.freshness ? `:${state.freshness}` : ''}`, selectedTaskId: null, revision: (prior?.revision ?? 0) + 1,
   };
 }
@@ -105,7 +135,8 @@ export function savedResultsChips(page: AskSavedPage, state: SavedResultsState) 
     ...types,
     { id: state.archived ? 'show-active' : 'show-archived', label: state.archived ? 'Not archived' : `Archived${page.counts.archived ? ` · ${page.counts.archived}` : ''}`, message: state.archived ? ACTIVE_MESSAGE : ARCHIVED_MESSAGE, active: false },
     ...(page.nextCursor && state.limit < ASK_SAVED_MAX_LIMIT ? [{ id: 'show-more', label: 'Show more', message: MORE_MESSAGE, active: false }] : []),
-    ...(state.type || state.freshness ? [{ id: 'clear-all', label: 'Clear filters', message: CLEAR_MESSAGE, active: false }] : []),
+    ...(state.search ? [{ id: 'clear-search', label: `Clear search “${state.search}”`.slice(0, 80), message: CLEAR_SEARCH_MESSAGE, active: true }] : []),
+    ...(state.type || state.freshness || state.search ? [{ id: 'clear-all', label: 'Clear filters', message: CLEAR_MESSAGE, active: false }] : []),
   ].slice(0, 16);
 }
 
@@ -160,13 +191,13 @@ export function savedResultsFromPage(input: { page: AskSavedPage; state: SavedRe
   const partial = page.partial && gaps.length > 0;
   const total = page.totalScope === 'COMPLETE' ? page.total : null;
   const typeLabel = state.type ? ASK_ARTIFACT_TYPE_REGISTRY.find((entry) => entry.id === state.type)?.label : null;
-  const scope = [state.archived ? 'archived' : 'saved', typeLabel?.toLowerCase(), state.freshness ? FRESHNESS_PHRASES[state.freshness].label.toLowerCase() : null].filter(Boolean).join(' · ');
+  const scope = [state.archived ? 'archived' : 'saved', typeLabel?.toLowerCase(), state.freshness ? FRESHNESS_PHRASES[state.freshness].label.toLowerCase() : null, state.search ? `matching “${state.search}”` : null].filter(Boolean).join(' · ');
   const shownLine = `Showing ${scope} · newest first.`;
   const stale = rows.filter((row) => row.freshness.state !== 'CURRENT').length;
 
   const noun = (count: number) => (count === 1 ? 'result' : 'results');
   const headline = total != null
-    ? total === 0 ? (state.archived ? 'Nothing is archived.' : state.type || state.freshness ? 'No saved results match.' : 'Nothing is saved for this home yet.') : `${total} ${state.archived ? 'archived' : 'saved'} ${noun(total)}${stale ? `, ${stale} no longer current` : ''}.`
+    ? total === 0 ? (state.search ? `No saved results match “${state.search}”.` : state.archived ? 'Nothing is archived.' : state.type || state.freshness ? 'No saved results match.' : 'Nothing is saved for this home yet.') : `${total} ${state.archived ? 'archived' : 'saved'} ${noun(total)}${stale ? `, ${stale} no longer current` : ''}.`
     : rows.length > 0 ? `${rows.length} shown so far; some kinds could not be read, so this may not be everything.` : 'Some kinds could not be read, so this is not a confirmed empty list.';
   const summary: AskPresentationBlock = {
     type: 'SUMMARY', id: 'saved-results-summary', title: headline.replace(/\.$/, ''), body: [headline, shownLine].join(' '), headline, supportLine: shownLine,
@@ -202,7 +233,7 @@ registerCapabilityHandler('saved.results', async (envelope) => {
   const prior = await loadSavedViewState(envelope.launchContext?.sourceExecutionId, envelope.userId);
   const { state } = resolveSavedState(envelope.message, prior);
   try {
-    const page = await getAskSavedPage(envelope.userId, envelope.propertyId!, { archived: state.archived, artifactType: state.type, freshness: state.freshness, limit: state.limit });
+    const page = await getAskSavedPage(envelope.userId, envelope.propertyId!, { archived: state.archived, artifactType: state.type, freshness: state.freshness, limit: state.limit, search: state.search });
     return savedResultsFromPage({ page, state, viewState: buildSavedViewState(prior, state) });
   } catch (caught) {
     if (!(caught instanceof AskWorkRestrictedError)) throw caught;
