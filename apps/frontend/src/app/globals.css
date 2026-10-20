@@ -915,3 +915,11 @@ html {
     margin-bottom: 0;
   }
 }
+
+/* Ask Cozy: the text links and buttons in an answer's action footer are real tap targets (WCAG 2.2 target size), not inline words. */
+[data-ask-action-footer] a,
+[data-ask-action-footer] button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.5rem;
+}

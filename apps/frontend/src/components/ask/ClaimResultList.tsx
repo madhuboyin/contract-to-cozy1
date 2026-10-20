@@ -230,7 +230,7 @@ export function ClaimResultList({ block, propertyId, disabled, onAction, onFilte
           <div className="flex flex-wrap items-center justify-between gap-2">
             {item.entityType === 'CLAIM'
               ? <button type="button" data-claim-detail-trigger={item.id} data-ask-detail-trigger={item.id} data-ask-detail-block={block.id} aria-expanded={detailId === item.id} aria-controls={`claim-detail-${item.id}`} onClick={() => openDetail(item)} className="min-h-10 text-left font-medium text-slate-950 underline-offset-4 hover:text-teal-800 hover:underline">{item.title}</button>
-              : item.href ? <span className="font-medium text-slate-950">{link(item.href, item.title)}</span> : <span className="font-medium text-slate-950">{item.title}</span>}
+              : item.href ? <span className="inline-flex min-h-10 items-center font-medium text-slate-950">{link(item.href, item.title)}</span> : <span className="font-medium text-slate-950">{item.title}</span>}
             {item.status && <span className="text-xs text-slate-600">{item.status.replace(/_/g, ' ').toLowerCase()}</span>}
           </div>
           {item.description && <p className="mt-1 text-sm text-slate-600">{item.description}</p>}

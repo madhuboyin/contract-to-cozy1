@@ -272,7 +272,9 @@ export function RadarEventResultList({ block, propertyId, disabled, onFilter, on
           const existing = groups.find(([groupName]) => groupName === name);
           if (existing) existing[1] = [...existing[1], ...found]; else groups.push([name, found]);
           return groups;
-        }, []).map(([name, group]) => <div key={name} className="flex flex-wrap gap-0.5" role="group" aria-label={name}>
+        }, []).map(([name, group]) => <div key={name} className="flex flex-wrap items-center gap-0.5" role="group" aria-label={name}>
+          {/* A visible name for each row, so "Any time / Weather / Hide dismissed" read as three separate choices. */}
+          {name !== 'Clear filters' && <span aria-hidden="true" className="mr-1 w-16 shrink-0 text-xs font-medium text-slate-500">{name === 'Filter by timing' ? 'When' : name === 'Filter by source' ? 'Source' : 'Dismissed'}</span>}
           {group.map((filter) => <button key={filter.id} type="button" disabled={disabled || filter.active} aria-pressed={filter.active} onClick={() => onFilter(filter.message)}
             className={cn('min-h-8 rounded-md px-2.5 py-1 text-sm disabled:opacity-100', filter.active ? 'bg-slate-100 font-semibold text-slate-900' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900', name === 'Clear filters' && 'underline underline-offset-2')}>{filter.label}</button>)}
         </div>)}
