@@ -64,13 +64,16 @@ test('the complete record workspace is explicit and does not turn an ordinary su
   assert.equal(isCompleteHomeRecordRequest('How complete is my home record?'), false);
 });
 
-test('an explicit browse-record request returns one calm record index with Ask-native drill-downs', async () => {
+test('an explicit browse-record request answers first and returns one calm, non-duplicative index with Ask-native drill-downs', async () => {
   install({ 'core.dwellingType': { state: 'KNOWN' } });
   const result = await invoke('Browse my home record');
-  assert.equal(summaryOf(result).title, 'Complete home record for 94 Ashford Dr, Town');
-  assert.ok(result.blocks.some((block) => block.id === 'property-summary-facts'));
+  assert.equal(summaryOf(result).title, 'Browse 94 Ashford Dr, Town’s home record');
+  assert.ok(summaryOf(result).headline.startsWith('Your home record is '));
+  assert.ok(!result.blocks.some((block) => block.id === 'property-summary-facts'));
+  assert.ok(!result.blocks.some((block) => block.id === 'property-completeness-progress'));
   const index = result.blocks.find((block) => block.id === 'property-record-index');
   assert.equal(index.type, 'GROUPED_LIST');
+  assert.deepEqual(index.filters, []);
   assert.equal(index.sections.length, 1);
   assert.deepEqual(index.sections[0].items.map((item) => item.id), ['profile', 'rooms', 'inventory', 'documents', 'warranties', 'timeline', 'household']);
   assert.deepEqual(index.sections[0].items.find((item) => item.id === 'inventory').actions[0].operationId, 'INVENTORY_LOOKUP');
@@ -220,9 +223,9 @@ test('browsing the record answers first: how much is recorded and how complete, 
   const summary = summaryOf(result);
   assert.match(summary.headline, /^Your home record (?:is \d+% complete and )?holds \d+ records? across \d+ areas?\.$/);
   const index = result.blocks.find((block) => block.id === 'property-record-index');
-  assert.equal(index.filters[0].id, 'needs-attention');
-  for (const chip of index.filters) assert.ok(chip.message.trim().length > 0 && chip.active === false);
-  assert.ok(index.filters.length <= 16);
+  assert.deepEqual(index.filters, [], 'area rows are the directions; a second chip toolbar would duplicate them');
+  assert.equal(index.sections[0].items[0].id, 'profile', 'the area needing review is shown first');
+  assert.match(index.sections[0].items[0].status, /NEED REVIEW$/);
   assert.deepEqual(recordOverviewDirections(false).map((chip) => chip.id).slice(0, 2), ['systems', 'documents']);
   assert.ok(!JSON.stringify(result.blocks).includes('/dashboard/'));
 });

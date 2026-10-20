@@ -95,7 +95,7 @@ export function propertySummaryStarters(propertyId: string): SuggestedNextAction
     traits: { ...DEFAULT_CANDIDATE_TRAITS },
   };
   return [
-    SuggestedNextActionCandidateSchema.parse({ ...base, label: 'Complete home record', message: PROPERTY_BROWSE_RECORD_STARTER_MESSAGE, outcomeKey: 'REVIEW_HOME_SUMMARY' }),
+    SuggestedNextActionCandidateSchema.parse({ ...base, label: 'Browse my home record', message: PROPERTY_BROWSE_RECORD_STARTER_MESSAGE, outcomeKey: 'REVIEW_HOME_SUMMARY' }),
     SuggestedNextActionCandidateSchema.parse({ ...base, label: 'How complete is my home record?', message: PROPERTY_SUMMARY_COMPLETENESS_STARTER_MESSAGE, outcomeKey: 'REVIEW_COMPLETENESS' }),
   ];
 }
