@@ -7,8 +7,8 @@ describe('legacy Ask destination addresses', () => {
     expect(legacyAskViewRedirect('saved', {})).toBe('/dashboard/ask?question=Show+my+saved+results');
   });
 
-  it('keep a view of their own only for the export review and the conversation list', () => {
-    expect(legacyAskViewRedirect('record', { propertyId: 'home-1', export: 'review' })).toBe('/dashboard/ask?propertyId=home-1&view=export');
+  it('ask to export for the old export-review address, and keep a view of their own only for the conversation list', () => {
+    expect(legacyAskViewRedirect('record', { propertyId: 'home-1', export: 'review' })).toBe('/dashboard/ask?propertyId=home-1&question=Export+my+home+record');
     expect(legacyAskViewRedirect('history', { propertyId: 'home-1' })).toBe('/dashboard/ask?propertyId=home-1&view=history');
   });
 });

@@ -1229,16 +1229,6 @@ class APIClient {
   async getAskRecordDetail(sectionId: string, propertyId: string, recordId: string, options: { signal?: AbortSignal } = {}): Promise<APIResponse<import('@/features/ask/types').AskRecordDetail>> {
     return this.request(`/api/ask/record-sections/${encodeURIComponent(sectionId)}/records/${encodeURIComponent(recordId)}?propertyId=${encodeURIComponent(propertyId)}`, options);
   }
-  async getAskRecordExportReview(propertyId: string, options: { signal?: AbortSignal } = {}): Promise<APIResponse<import('@/features/ask/types').AskRecordExportReview>> {
-    return this.request(`/api/ask/record-export-review?propertyId=${encodeURIComponent(propertyId)}`, options);
-  }
-  // The existing home-report export endpoints (the Reports page uses the same ones); the Record export creates the same pack.
-  async createHomeReportExport(propertyId: string, sections?: string[]): Promise<APIResponse<{ exportId: string; status: import('@/features/ask/types').HomeReportExportStatus; selection: import('@/features/ask/types').HomeReportExportSelection }>> {
-    return this.request(`/api/properties/${encodeURIComponent(propertyId)}/reports/exports`, { method: 'POST', body: { type: 'HOME_REPORT_PACK', ...(sections ? { sections } : {}) } });
-  }
-  async listHomeReportExports(propertyId: string): Promise<APIResponse<{ exports: import('@/features/ask/types').HomeReportExportSummary[] }>> {
-    return this.request(`/api/properties/${encodeURIComponent(propertyId)}/reports/exports`);
-  }
   async getHomeReportExportDownloadUrl(exportId: string): Promise<APIResponse<{ url: string }>> {
     return this.request(`/api/reports/exports/${encodeURIComponent(exportId)}/download`);
   }

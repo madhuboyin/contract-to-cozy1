@@ -49,7 +49,8 @@ test('the review states the pack rules from their sources: route floor, record e
   const create = routes.slice(routes.indexOf("'/properties/:propertyId/reports/exports',\n  authenticate"), routes.indexOf(');', routes.indexOf("'/properties/:propertyId/reports/exports',\n  authenticate")));
   assert.match(create, /requireHouseholdRole\('CONTRIBUTOR'\)/);
   const controller = src('controllers/homeReportExport.controller.ts');
-  assert.match(controller, new RegExp(`expiresAt: new Date\\(Date\\.now\\(\\) \\+ ${ASK_RECORD_EXPORT_RECORD_EXPIRY_DAYS} \\* 24 \\* 60 \\* 60 \\* 1000\\)`));
+  // The create rules (and so the record's expiry) live in the service the route and the Ask command share.
+  assert.match(src('services/homeReportExportCreate.service.ts'), new RegExp(`expiresAt: new Date\\(Date\\.now\\(\\) \\+ ${ASK_RECORD_EXPORT_RECORD_EXPIRY_DAYS} \\* 24 \\* 60 \\* 60 \\* 1000\\)`));
   assert.match(controller, new RegExp(`expiresInDays = ${ASK_RECORD_EXPORT_SHARE_DEFAULT_DAYS}\\b`));
   const download = controller.slice(controller.indexOf('export async function downloadHomeReportExport'), controller.indexOf('export async function', controller.indexOf('export async function downloadHomeReportExport') + 10));
   assert.match(download, /exp\.userId !== userId/);

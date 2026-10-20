@@ -16,6 +16,7 @@ import { getAskWorkPage, AskWorkRestrictedError } from '../askWork.service';
 import { ASK_WORK_LIFECYCLE_VIEWS, type AskWorkLifecycleView, type AskWorkType } from '../governance/askWorkProviderRegistry';
 import { ASK_WORK_MAX_LIMIT, type AskWorkPage, type AskWorkRow } from '../askWork.contract';
 import { humanDate } from '../askFormatting';
+import { WORK_REQUEST_ACTION_IDS, WORK_REQUEST_ENTITY_TYPE, workRequestMessage } from '../support/workSavedCommands';
 
 export const WORK_OVERVIEW_PAGE_SIZE = 10;
 
@@ -118,6 +119,17 @@ export function workOverviewChips(page: AskWorkPage, state: WorkOverviewState) {
 
 const truncate = (text: string, max: number) => (text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text);
 
+/** Try again for a request that did not finish, Dismiss for one that is waiting. Both act on the request, not on the row, and confirm first. */
+function requestActions(row: AskWorkRow) {
+  const executionId = row.resume.executionId;
+  if (!executionId) return [];
+  const target = { entityType: WORK_REQUEST_ENTITY_TYPE, entityId: executionId, operationId: 'WORK_REQUEST_COMMAND', interactionType: 'MUTATE_RECORD' as const };
+  return [
+    ...(row.nextAction?.retryExecutionId ? [{ ...target, entityId: row.nextAction.retryExecutionId, id: WORK_REQUEST_ACTION_IDS.RETRY, label: 'Try again', message: workRequestMessage('RETRY', row.title), style: 'PRIMARY' as const }] : []),
+    ...(row.providerId === 'PENDING_EXECUTIONS' && row.status.canonical !== 'RUNNING' ? [{ ...target, id: WORK_REQUEST_ACTION_IDS.DISMISS, label: 'Dismiss', message: workRequestMessage('DISMISS', row.title), style: 'QUIET' as const }] : []),
+  ];
+}
+
 function workRow(row: AskWorkRow) {
   const launch = row.resume.launch;
   const due = row.dueAt ? humanDate(new Date(row.dueAt)) : null;
@@ -134,10 +146,13 @@ function workRow(row: AskWorkRow) {
     entityType: canContinue ? launch.entityType as string : null,
     href: null,
     meta: [KIND_LABELS[row.workType] ?? row.workType, due ? `Due ${due}` : null, row.nextAction ? `Next: ${row.nextAction.label}` : null, note].filter((value): value is string => Boolean(value)).slice(0, 6),
-    actions: canContinue ? [{
-      id: 'work-continue', label: row.nextAction?.label ?? 'Open', message: `Continue: ${row.title}`.slice(0, 300),
-      interactionType: 'CONVERSATION_CONTINUE' as const, operationId: launch.operationId as string, style: 'PRIMARY' as const,
-    }] : [],
+    actions: [
+      ...(canContinue ? [{
+        id: 'work-continue', label: row.nextAction?.label ?? 'Open', message: `Continue: ${row.title}`.slice(0, 300),
+        interactionType: 'CONVERSATION_CONTINUE' as const, operationId: launch.operationId as string, style: 'PRIMARY' as const,
+      }] : []),
+      ...requestActions(row),
+    ],
   };
 }
 

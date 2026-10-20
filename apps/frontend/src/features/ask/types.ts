@@ -46,6 +46,9 @@ export interface AskGroupedListItemAction {
   style: 'PRIMARY' | 'SECONDARY' | 'QUIET';
   interactionType: AskItemActionInteractionType;
   operationId: string;
+  /** When the action acts on something other than its row (a work row's request, a saved row's own list entry). */
+  entityType?: string;
+  entityId?: string;
 }
 
 // ACT-001 FILTER_RESULT: a declared, clickable filter chip.
@@ -1128,53 +1131,6 @@ export interface AskRecordHouseholdMemberRow {
   isYou: boolean;
   joinedAt: string;
   askQuestion: null;
-}
-
-// Export review (FR-REC-006). Mirrors the backend `AskRecordExportReview`.
-export interface AskRecordExportReviewSection {
-  id: string;
-  label: string;
-  state: 'INCLUDED' | 'EXCLUDED';
-  applicability: 'APPLICABLE' | 'NOT_APPLICABLE' | 'CONTEXT_REQUIRED' | 'RESTRICTED';
-  packPath: string | null;
-  reason: string | null;
-  note: string | null;
-  ownerFields: string[];
-  sharedFields: string[];
-  withheldFromShared: string[];
-}
-
-export interface AskRecordExportReview {
-  contractVersion: 'ask-record-export-review-v1';
-  propertyId: string;
-  generatedAt: string;
-  property: { name: string | null; address: string; city: string; state: string } | null;
-  accessRole: 'VIEWER' | 'CONTRIBUTOR' | 'OWNER';
-  operatingMode: 'BUYING' | 'OWNING' | 'SELLING' | 'UNKNOWN';
-  create: { allowed: boolean; requiredRole: 'CONTRIBUTOR'; reason: string | null };
-  pack: { format: 'PDF'; sectionsSelectable: true; downloadableBy: 'CREATOR'; recordExpiresInDays: number };
-  alwaysIncluded: { label: string; ownerFields: string[]; sharedFields: string[]; withheldFromShared: string[] };
-  sharing: { requiredRole: 'CONTRIBUTOR'; defaultExpiryDays: number; copy: 'REDACTED' };
-  sections: AskRecordExportReviewSection[];
-  included: string[];
-  excluded: string[];
-}
-
-export interface HomeReportExportSelection {
-  version: 1;
-  requested: string[];
-  included: string[];
-  unavailable: Array<{ id: string; reason: 'NOT_IN_PACK' | 'RESTRICTED' }>;
-}
-
-export type HomeReportExportStatus = 'PENDING' | 'GENERATING' | 'READY' | 'FAILED' | 'EXPIRED' | 'DELETED';
-export interface HomeReportExportSummary {
-  id: string;
-  status: HomeReportExportStatus;
-  requestedAt: string;
-  completedAt?: string | null;
-  errorMessage?: string | null;
-  expiresAt?: string | null;
 }
 
 // Work destination (FR-WORK-001..005). Mirrors the backend `AskWorkPage`, `AskWorkRow` and `AskWorkResolution`.

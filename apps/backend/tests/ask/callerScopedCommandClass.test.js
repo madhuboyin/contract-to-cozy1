@@ -27,5 +27,7 @@ test('the operation definition floor agrees with the command floor for every dom
 test('only the declared caller-scoped commands exist; adding one is a deliberate act', () => {
   const callerScoped = Object.entries(ASK_DOMAIN_COMMAND_REGISTRY).filter(([, c]) => c.authorization === 'CALLER_SCOPED').map(([id]) => id).sort();
   // DIY_SKILL_PROFILE_COMMAND added deliberately (FRD v1.344): one DIY skill profile per user, written only under the session user id.
-  assert.deepEqual(callerScoped, ['DIY_SKILL_PROFILE_COMMAND', 'HOME_BRIEFING_COMMAND', 'NEIGHBORHOOD_INTERACTION_COMMAND']);
+  // SAVED_ARCHIVE_COMMAND and WORK_REQUEST_COMMAND added deliberately (FRD v1.4): the first writes only the caller's own Saved list entry, the second
+  // only retries or dismisses the caller's own Ask request (both read under the session user id, never another member's).
+  assert.deepEqual(callerScoped, ['DIY_SKILL_PROFILE_COMMAND', 'HOME_BRIEFING_COMMAND', 'NEIGHBORHOOD_INTERACTION_COMMAND', 'SAVED_ARCHIVE_COMMAND', 'WORK_REQUEST_COMMAND']);
 });

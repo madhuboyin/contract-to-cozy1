@@ -148,6 +148,8 @@ const CERTIFICATION_ROWS: ReadonlyArray<Omit<AskRoutingCertificationFixture, 'fi
   { operationId: 'ENVIRONMENT_REPORT', message: 'What are the local environmental conditions for my home?', category: 'PARAPHRASE' },
   { operationId: 'WORK_OVERVIEW', message: 'What work is waiting on me right now?', category: 'PARAPHRASE' },
   { operationId: 'SAVED_RESULTS', message: 'Which of my saved results are out of date?', category: 'PARAPHRASE' },
+  { operationId: 'HOME_RECORD_EXPORT', message: 'Export my warranties', category: 'PARAPHRASE' },
+  { operationId: 'HOME_RECORD_EXPORT_STATUS', message: 'Check on the status of my export', category: 'PARAPHRASE' },
 ];
 
 export const ASK_ROUTING_CERTIFICATION_FIXTURES: readonly AskRoutingCertificationFixture[] = Object.freeze(
@@ -315,10 +317,14 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   BUYER_CLOSING_ITEM_COMMAND: 'The condition or issue change is shown for review and recorded only after you confirm.',
   BUYER_WALKTHROUGH_COMMAND: 'The walkthrough change is shown for review and recorded only after you confirm.',
   DIY_PROJECT_NOTE_COMMAND: 'The note is shown for review and added only after you confirm.',
+  WORK_REQUEST_COMMAND: 'The request is shown for review and retried or dismissed only after you confirm.',
+  SAVED_ARCHIVE_COMMAND: 'The saved result is shown for review and archived or restored in your own list only after you confirm.',
   DIY_SKILL_PROFILE_COMMAND: 'Your skill levels are shown for review and saved only after you confirm.',
   SEASONAL_ITEM_COMMAND: 'The seasonal task change is shown for review and applied only after you confirm.',
   HOME_WORK_ITEM_COMMAND: 'The change is shown for review and applied only after you confirm.',
   HOME_WORK_ITEMS: 'Your open work items are listed with their state, due date and snooze.',
+  HOME_RECORD_EXPORT: 'The export is shown for review with exactly what it includes and leaves out, and is created only after you confirm.',
+  HOME_RECORD_EXPORT_STATUS: 'Your home record exports are listed with where each one stands and whether it is ready to download.',
   WORK_OVERVIEW: 'Your work is summarized by what needs you, is under way, waiting or scheduled, with the items listed and a note of what is being shown.',
   SAVED_RESULTS: 'Your saved reports, comparisons and decisions are listed newest first with how current each one is.',
   INSPECTION_NEGOTIATION_PACKAGE: 'A negotiation package is built from this inspection report: a choice per open finding, then the credit total and the repair and as-is lists; nothing is saved or sent.',

@@ -60,7 +60,7 @@ function ItemActionRow({ item, disabled, onItemAction }: {
   const ordered = [...actions.filter((action) => action.style === 'PRIMARY'), ...actions.filter((action) => action.style !== 'PRIMARY')];
   const inline = ordered.slice(0, MAX_INLINE_ITEM_ACTIONS);
   const overflow = ordered.slice(MAX_INLINE_ITEM_ACTIONS);
-  const run = (action: (typeof actions)[number]) => onItemAction(item.entityType, item.id, action.message, action.operationId, action.interactionType);
+  const run = (action: (typeof actions)[number]) => onItemAction(action.entityType ?? item.entityType, action.entityId ?? item.id, action.message, action.operationId, action.interactionType);
   return (
     <div className="mt-3 flex flex-wrap items-center gap-2">
       {inline.map((action) => <button key={action.id} type="button" disabled={disabled} onClick={() => run(action)} className={itemActionClass(action.style)}>{action.label}</button>)}

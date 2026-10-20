@@ -63,6 +63,8 @@ function loadController({ inFlightRecord = null, contextApplicable = true }) {
   };
 
   const controllerPath = require.resolve('../../src/controllers/homeReportExport.controller.ts');
+  // The create rules moved into a shared service that the controller (and the Ask command) call; reload it with the stubs above.
+  delete require.cache[require.resolve('../../src/services/homeReportExportCreate.service.ts')];
   delete require.cache[controllerPath];
   return { controller: require(controllerPath), getCreateCalls: () => createCalls };
 }

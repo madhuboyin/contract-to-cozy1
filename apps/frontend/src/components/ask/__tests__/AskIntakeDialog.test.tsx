@@ -48,7 +48,7 @@ const pdf = () => new File(['%PDF'], 'receipt.pdf', { type: 'application/pdf' })
 
 const launch = jest.fn();
 // What the dialog points at is the next question of the conversation behind it, not a page.
-function renderDialog() { return render(<AskInlineContext.Provider value={{ launch, openExecution: jest.fn(), openView: jest.fn() }}><AskIntakeDialog open onOpenChange={jest.fn()} propertyId="home-1" /></AskInlineContext.Provider>); }
+function renderDialog() { return render(<AskInlineContext.Provider value={{ launch, openExecution: jest.fn() }}><AskIntakeDialog open onOpenChange={jest.fn()} propertyId="home-1" /></AskInlineContext.Provider>); }
 async function upload(file = pdf()) {
   const input = await screen.findByLabelText('Choose a file to add');
   fireEvent.change(input, { target: { files: [file] } });

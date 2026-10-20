@@ -18,7 +18,7 @@ const mutationIds = registry.askMutationOperationIds();
 const clone = () => ({ ...registry.ASK_MUTATION_IMPACT_REGISTRY });
 
 test('every Ask mutation has exactly one impact declaration, and nothing else does', () => {
-  assert.equal(mutationIds.length, 110);
+  assert.equal(mutationIds.length, 113);
   assert.deepEqual(Object.keys(registry.ASK_MUTATION_IMPACT_REGISTRY).sort(), [...mutationIds].sort());
   assert.deepEqual(registry.validateAskMutationImpactRegistry(), []);
 });

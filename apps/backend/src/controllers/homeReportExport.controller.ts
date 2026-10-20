@@ -10,7 +10,8 @@ import { logger } from '../lib/logger';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 import { resolvePropertyAccess, ROLE_RANK } from '../services/propertyAccess.service';
 import { getAggregationContextEnvelope } from '../services/aggregationContext/context';
-import { InvalidExportSelectionError, normalizeAskRecordExportRequest } from '../services/ask/askRecordExportSelection';
+import { InvalidExportSelectionError } from '../services/ask/askRecordExportSelection';
+import { createHomeReportExportRecord } from '../services/homeReportExportCreate.service';
 
 async function canMutateReport(propertyId: string, userId: string): Promise<boolean> {
   const access = await resolvePropertyAccess(userId, propertyId);
@@ -24,82 +25,32 @@ export async function createHomeReportExport(req: Request, res: Response) {
 
     const { type = 'HOME_REPORT_PACK', sections } = req.body ?? {};
 
-    // The section choice is validated against the Record section registry and stored normalized, with any requested section the pack
-    // cannot carry recorded as unavailable. The snapshot builder and the worker both read this stored selection.
-    let selection;
+    // The rules (section validation, report context, one export at a time, the stored row) live in the shared service, which the Ask
+    // command uses too.
+    let outcome;
     try {
-      const access = await resolvePropertyAccess(userId, propertyId);
-      selection = normalizeAskRecordExportRequest({ sections, type, role: access?.role ?? 'VIEWER' });
+      outcome = await createHomeReportExportRecord({ userId, propertyId, type, sections, locale: req.headers['accept-language']?.toString() });
     } catch (error) {
       if (error instanceof InvalidExportSelectionError) {
         return res.status(400).json({ success: false, message: error.message, code: error.code, data: { unavailable: error.unavailable } });
       }
       throw error;
     }
-    const propertyContext = await getAggregationContextEnvelope(propertyId, userId, 'REPORT_SUMMARIES');
-    if (propertyContext.decision.status !== 'APPLICABLE') {
-      return res.status(409).json({
-        success: false,
-        message: 'Report context is not ready.',
-        data: { propertyContext },
-      });
+    if (outcome.kind === 'CONTEXT_NOT_READY') {
+      return res.status(409).json({ success: false, message: 'Report context is not ready.', data: { propertyContext: outcome.propertyContext } });
+    }
+    if (outcome.kind === 'IN_FLIGHT') {
+      return res.status(409).json({ success: false, message: 'A report export is already in progress for this property.', data: { exportId: outcome.exportId } });
     }
 
-    // W3 (exports — "concurrent duplicate requests"): unlike
-    // materialSpec.service.ts#requestExport, this previously created a new
-    // PENDING row unconditionally — a double-click or two open tabs
-    // triggered two full generations and two S3 uploads for the same
-    // property, wasted compute/storage, and combined with the poller's
-    // claim race, could leave one upload orphaned.
-    const inFlight = await prisma.homeReportExport.findFirst({
-      where: { propertyId, status: { in: ['PENDING', 'GENERATING'] } },
-      select: { id: true },
-    });
-    if (inFlight) {
-      return res.status(409).json({
-        success: false,
-        message: 'A report export is already in progress for this property.',
-        data: { exportId: inFlight.id },
-      });
-    }
-
-    const exp = await prisma.homeReportExport.create({
-      data: {
-        userId,
-        propertyId,
-        type,
-        status: 'PENDING',
-        sections: selection as unknown as object,
-        templateVersion: 1,
-        dataVersion: 1,
-        timezone: 'America/New_York',
-        locale: req.headers['accept-language']?.toString() || 'en-US',
-        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-      },
-    });
-
-    await prisma.homeReportExportEvent.create({
-      data: { reportId: exp.id, type: 'CREATED' },
-    });
-
-    analyticsEmitter.track({
-      eventType: AnalyticsEvent.ACTION_COMPLETED,
-      userId,
-      propertyId,
-      moduleKey: AnalyticsModule.DASHBOARD,
-      featureKey: AnalyticsFeature.HOME_REPORT_EXPORT,
-      metadataJson: { actionType: 'create_export', type: exp.type },
-    });
-
-    // ✅ FIX: Return standard format
     return res.status(202).json({
       success: true,
       data: {
-        exportId: exp.id,
-        status: exp.status,
-        propertyContext,
+        exportId: outcome.export.id,
+        status: outcome.export.status,
+        propertyContext: outcome.propertyContext,
         // What the export carries and what was asked for but could not be carried.
-        selection,
+        selection: outcome.selection,
       }
     });
   } catch (error: any) {

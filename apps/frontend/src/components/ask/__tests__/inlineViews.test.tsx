@@ -13,7 +13,7 @@ jest.mock('@/lib/analytics/events', () => ({ track: jest.fn() }));
 jest.mock('@/lib/api/client', () => ({
   api: {
     getConciergeHome: jest.fn(), createAskExecution: jest.fn(), getRecentAskSessions: jest.fn(), searchAskSessions: jest.fn(), getAskPendingWork: jest.fn(),
-    getAskSession: jest.fn(), getProperties: jest.fn(), getAskTargetSelection: jest.fn(), getAskRecordExportReview: jest.fn(),
+    getAskSession: jest.fn(), getProperties: jest.fn(), getAskTargetSelection: jest.fn(),
   },
 }));
 
@@ -91,14 +91,10 @@ describe('AskWorkspace: everything is a turn of the conversation', () => {
     expect(mocked.createAskExecution.mock.calls[0][0]).toMatchObject({ message: question });
   });
 
-  it('the export review is the one structured block: it opens in the transcript and closes back to the conversation', async () => {
-    mocked.getAskRecordExportReview = jest.fn(() => new Promise(() => undefined));
+  it('exporting is a question too: the confirmation, not a form, is where the export is reviewed', async () => {
     mount();
     await openShortcut('Export my home record');
-    const block = await screen.findByLabelText('Home record export');
-    expect(block).toHaveAttribute('data-ask-inline-view', 'export');
-    expect(mocked.createAskExecution).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: 'Close export' }));
-    expect(screen.queryByLabelText('Home record export')).toBeNull();
+    expect(mocked.createAskExecution.mock.calls[0][0]).toMatchObject({ message: 'Export my home record', propertyId: 'home-1' });
+    expect(document.querySelector('[data-ask-inline-view]')).toBeNull();
   });
 });

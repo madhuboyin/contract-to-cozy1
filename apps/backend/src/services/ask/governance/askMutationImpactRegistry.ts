@@ -68,6 +68,7 @@ const DECLARED: Readonly<Record<string, Declared>> = {
   HOME_HABIT_UPDATE: impact(['HOME_HABITS', 'MAINTENANCE_STATUS'], { notifications: ['home-habit'] }),
   HOME_DEADLINE_MONITOR: impact(['MAINTENANCE_STATUS'], { workProviders: ['MONITORS'], notifications: ['coverage', 'warranty'] }),
   // Work items, home actions, status board
+  HOME_RECORD_EXPORT: impact(['HOME_RECORD_EXPORT_STATUS', 'WORK_OVERVIEW', 'SAVED_RESULTS'], { workProviders: ['QUEUED_JOBS'], artifactTypes: ['HOME_REPORT_EXPORT'] }),
   HOME_WORK_ITEM_COMMAND: impact(['HOME_WORK_ITEMS', 'HOME_ACTIONS'], { notifications: ['home-action'] }),
   OPERATIONAL_WORK_UPDATE: impact(['HOME_ACTIONS', 'HOME_WORK_ITEMS'], { notifications: ['home-action'] }),
   STATUS_BOARD_COMMAND: impact(['HOME_STATUS_BOARD', 'HOME_ACTIONS'], { notifications: ['home-action'] }),
@@ -93,6 +94,8 @@ const DECLARED: Readonly<Record<string, Declared>> = {
   DIY_COMPLETION_RECOVER: impact(['DIY_PROJECT_GUIDE', 'DIY_PROJECTS']),
   DIY_PROJECT_NOTE_COMMAND: impact(['DIY_PROJECTS', 'DIY_PROJECT_GUIDE'], { workProviders: ['DIY_PROJECTS'] }),
   DIY_SKILL_PROFILE_COMMAND: impact(['DIY_TEMPLATE_BROWSE']),
+  WORK_REQUEST_COMMAND: impact(['WORK_OVERVIEW'], { workProviders: ['PENDING_EXECUTIONS', 'RETRYABLE_EXECUTIONS', 'UNKNOWN_OUTCOME_EXECUTIONS'] }),
+  SAVED_ARCHIVE_COMMAND: impact(['SAVED_RESULTS']),
   // Guidance
   GUIDANCE_JOURNEY_CREATE: impact(['GUIDANCE_JOURNEYS_LIST'], { workProviders: ['GUIDANCE_JOURNEYS'] }),
   GUIDANCE_STEP_SKIP: impact(['GUIDANCE_JOURNEY_CONTINUE', 'GUIDANCE_JOURNEYS_LIST']),

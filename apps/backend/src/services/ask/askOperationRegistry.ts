@@ -1,3 +1,4 @@
+import { isHomeRecordExportRequest, isHomeRecordExportStatusRequest } from './support/homeRecordExport';
 import type { AskCaptureRequest, AskClarification, AskConfirmation, AskExecutionStatus, AskPresentationBlock, SuggestedNextAction } from '../../productFramework/ask/ask.contract';
 import type { AskFollowUpNomination, SkillHandoffSuggestion } from '../skills/skillHandoff';
 import type { SuggestedNextActionCandidate } from './suggestedActions/suggestedNextActionCandidate';
@@ -152,6 +153,8 @@ export type AskOperationId =
   | 'DIY_PROJECT_NOTE_COMMAND'
   // Set the caller's own DIY skill levels (register P2 DIY). One profile per user, so a viewer may set it. Confirmation-gated, declared-action only.
   | 'DIY_SKILL_PROFILE_COMMAND'
+  | 'WORK_REQUEST_COMMAND'
+  | 'SAVED_ARCHIVE_COMMAND'
   // Add a seasonal checklist task to maintenance, snooze it, set it aside, or bring it back (register P2 Seasonal Home Care). Confirmation-gated, declared-action only.
   | 'SEASONAL_ITEM_COMMAND'
   // Snooze or reschedule a Home Operations work item, or accept the routine low-risk candidates in bulk (register P2 Maintenance and Home Operations). Confirmation-gated, declared-action only.
@@ -159,6 +162,8 @@ export type AskOperationId =
   // List the home's open Home Operations work items with state, due date and snooze (register P2 Maintenance and Home Operations). Read-only.
   | 'HOME_WORK_ITEMS'
   | 'WORK_OVERVIEW'
+  | 'HOME_RECORD_EXPORT'
+  | 'HOME_RECORD_EXPORT_STATUS'
   | 'SAVED_RESULTS'
   // Build a negotiation package from a confirmed pre-purchase inspection report: choose a decision per open finding and see the credit total (register P2 Inspection Hub). Calculation only; saves nothing.
   | 'INSPECTION_NEGOTIATION_PACKAGE'
@@ -472,6 +477,9 @@ export const ASK_INTERNAL_OPERATION_IDS: ReadonlySet<AskOperationId> = new Set<A
   'BUYER_WALKTHROUGH_COMMAND',
   'DIY_PROJECT_NOTE_COMMAND',
   'DIY_SKILL_PROFILE_COMMAND',
+  // Reached only by the declared Try again / Dismiss row actions on the Work answer and the Archive / Restore row actions on the Saved answer.
+  'WORK_REQUEST_COMMAND',
+  'SAVED_ARCHIVE_COMMAND',
   'SEASONAL_ITEM_COMMAND',
   'HOME_WORK_ITEM_COMMAND',
   'INSPECTION_FINDING_DECISION_COMMAND',
@@ -813,10 +821,14 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   BUYER_CLOSING_ITEM_COMMAND: definition('BUYER_CLOSING_ITEM_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'buyer-closing-item.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   BUYER_WALKTHROUGH_COMMAND: definition('BUYER_WALKTHROUGH_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'buyer-walkthrough.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   DIY_PROJECT_NOTE_COMMAND: definition('DIY_PROJECT_NOTE_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'diy-project-note.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
+  WORK_REQUEST_COMMAND: definition('WORK_REQUEST_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'work-request.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
+  SAVED_ARCHIVE_COMMAND: definition('SAVED_ARCHIVE_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'saved-archive.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   DIY_SKILL_PROFILE_COMMAND: definition('DIY_SKILL_PROFILE_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'diy-skill-profile.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   SEASONAL_ITEM_COMMAND: definition('SEASONAL_ITEM_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'seasonal-item.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   HOME_WORK_ITEM_COMMAND: definition('HOME_WORK_ITEM_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'home-work-item.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   HOME_WORK_ITEMS: definition('HOME_WORK_ITEMS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'home-work-items.list', ['SUMMARY', 'GROUPED_LIST', 'EMPTY_STATE', 'BOUNDARY']),
+  HOME_RECORD_EXPORT: definition('HOME_RECORD_EXPORT', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'home-record-export.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
+  HOME_RECORD_EXPORT_STATUS: definition('HOME_RECORD_EXPORT_STATUS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'home-record-export.status', ['SUMMARY', 'GROUPED_LIST', 'BOUNDARY']),
   WORK_OVERVIEW: definition('WORK_OVERVIEW', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'work.overview', ['SUMMARY', 'GROUPED_LIST', 'EMPTY_STATE', 'BOUNDARY']),
   SAVED_RESULTS: definition('SAVED_RESULTS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'saved.results', ['SUMMARY', 'GROUPED_LIST', 'EMPTY_STATE', 'BOUNDARY']),
   INSPECTION_NEGOTIATION_PACKAGE: definition('INSPECTION_NEGOTIATION_PACKAGE', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'inspection-negotiation-package.build', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
@@ -1416,6 +1428,9 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   // like "closing task ... complete" or "closing plan status" would otherwise
   // be captured by their broader keyword sets.
   // An explicit add/create of a closing task comes first: "add a closing task to get the survey done" contains "done" but completes nothing.
+  // Exporting the home record (FRD v1.2 §1.2): an explicit export verb, checked ahead of the generic record and warranty patterns it would otherwise match.
+  if (isHomeRecordExportStatusRequest(message)) return resolved('HOME_RECORD_EXPORT_STATUS', 0.96);
+  if (isHomeRecordExportRequest(message)) return resolved('HOME_RECORD_EXPORT', 0.96);
   if (buyerTaskCreatePattern.test(message)) {
     return resolved('BUYER_TASK_CREATE', 0.96);
   }

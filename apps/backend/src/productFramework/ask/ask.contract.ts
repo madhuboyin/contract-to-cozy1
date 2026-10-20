@@ -131,6 +131,10 @@ const GroupedListItemActionSchema = z.object({
   style: z.enum(['PRIMARY', 'SECONDARY', 'QUIET']).default('SECONDARY'),
   interactionType: z.enum(ASK_ITEM_ACTION_INTERACTION_TYPES),
   operationId: z.string().trim().min(1).max(120),
+  // A row's action may act on something other than the row itself (a work row's request, a saved row's own list entry). Without these the action
+  // targets the row: its `entityType` and its id.
+  entityType: z.string().trim().min(1).max(120).optional(),
+  entityId: z.string().trim().min(1).max(160).optional(),
   // SUGGESTED_NEXT_ACTIONS plan §7.3: the registered outcome this rich action performs. Optional and additive: an action that
   // declares it publishes its semantic identity to response finalization, which then suppresses an equivalent compact action.
   outcomeKey: z.string().regex(/^[A-Z][A-Z0-9_]{2,79}$/).optional(),

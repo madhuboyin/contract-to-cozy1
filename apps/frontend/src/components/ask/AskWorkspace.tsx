@@ -12,8 +12,7 @@ import type { AskCapabilityPrompt, AskExecutionResponse, AskPendingWorkItem, Ask
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { track } from '@/lib/analytics/events';
 import { buildAskWorkspaceHref, type AskWorkspaceHrefInput } from '@/lib/navigation/askNavigation';
-import { AskInlineContext, type AskInlineApi, type AskInlineViewRequest } from './inline/AskInlineContext';
-import { InlineViewBlock, type AskInlineView } from './inline/InlineViewBlock';
+import { AskInlineContext, type AskInlineApi } from './inline/AskInlineContext';
 import { useAskQuestionRequests } from './inline/askViewBridge';
 import { resolveDashboardBackHref } from '@/lib/navigation/backNavigation';
 import { visibleConciergeFeaturedPrompts } from '@/features/ask/conciergeLandingPolicy';
@@ -59,7 +58,7 @@ export { BlockView };
 // The history rail and the draft key moved to ./workspace/; re-exported for existing imports.
 export { ConversationHistoryNav } from './workspace/ConversationHistoryNav';
 export { draftStorageKey } from './workspace/support';
-export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, initialQuestion = '', initialSessionId = '', initialExecutionId = '', initialPropertyId = '', initialBackTo = '', initialBackLabel = 'Back to previous page', initialHistoryOpen = false, launchSurface = '', launchCapabilityId = '', launchRecord, initialView }: { mode?: 'page' | 'panel'; onClose?: () => void; onPendingStateChange?: (pending: boolean) => void; initialQuestion?: string; initialSessionId?: string; initialExecutionId?: string; initialPropertyId?: string; initialBackTo?: string; initialBackLabel?: string; initialHistoryOpen?: boolean; launchSurface?: string; launchCapabilityId?: string; launchRecord?: { operationId: string; entityType: string; entityId: string; actionId?: string; decisionThreadId?: string; workItemId?: string; journeyId?: string; contextVersion?: string }; initialView?: AskInlineViewRequest }) {
+export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, initialQuestion = '', initialSessionId = '', initialExecutionId = '', initialPropertyId = '', initialBackTo = '', initialBackLabel = 'Back to previous page', initialHistoryOpen = false, launchSurface = '', launchCapabilityId = '', launchRecord }: { mode?: 'page' | 'panel'; onClose?: () => void; onPendingStateChange?: (pending: boolean) => void; initialQuestion?: string; initialSessionId?: string; initialExecutionId?: string; initialPropertyId?: string; initialBackTo?: string; initialBackLabel?: string; initialHistoryOpen?: boolean; launchSurface?: string; launchCapabilityId?: string; launchRecord?: { operationId: string; entityType: string; entityId: string; actionId?: string; decisionThreadId?: string; workItemId?: string; journeyId?: string; contextVersion?: string } }) {
   const { accountName, accountEmail, loggingOut, handleLogout } = useAskAccount();
   const { selectedPropertyId, setSelectedPropertyId } = usePropertyContext();
   // A notification deep link carries the answer's property, but the globally-selected property
@@ -138,11 +137,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
     setPendingWork((current) => current.filter((item) => item.execution.property?.id !== propertyId));
   }, [setRecentSessions, setPinnedSessions, setRecentSessionsNextCursor, setRecentSessionsIssue, setSearchSessions, setSearchNextCursor, setSearchIssue, setPendingWork]);
   accessLostRef.current = redactHistoryAccessLoss;
-  // The export review is the one structured block; everything else (record, work, saved) is answered as a turn of this conversation.
-  const [inlineViews, setInlineViews] = useState<AskInlineView[]>([]);
-  const [focusViewId, setFocusViewId] = useState<string | null>(null);
-  const visibleViews = inlineViews.filter((view) => view.sessionId === sessionId);
-  const landingVisible = executions.length === 0 && visibleViews.length === 0;
+  const landingVisible = executions.length === 0;
   // FRD v1.111 §11.11: the calm shell (one slim header, no helper copy, state strip, docked follow-ups). Off unless chosen.
   const calm = useCalmAnswers();
   // IW-CONV-006 (FRD v1.112): from the moment a question is sent, its turn is on screen: the question, then a status line in the answer's place.
@@ -235,14 +230,6 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
     } finally { setHistoryLoading(false); setContinuingId(null); }
   };
 
-  const openView = (request: AskInlineViewRequest) => {
-    if (!sessionId) return;
-    if (explore.focus) explore.close();
-    const id = newId();
-    // One block per kind: asking for it again brings it back to the end of the conversation with the new target.
-    setInlineViews((current) => [...current.filter((view) => !(view.sessionId === sessionId && view.kind === request.kind)), { ...request, id, sessionId, afterExecutionId: executions.at(-1)?.executionId ?? null }]);
-    setFocusViewId(id);
-  };
   // A follow-up from inside a block is the next turn of this same conversation.
   const launchInline = (input: AskWorkspaceHrefInput) => {
     const question = input.question?.trim();
@@ -281,32 +268,8 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
     }
   };
   useAskQuestionRequests(launchInline);
-  const inlineApi: AskInlineApi = { launch: launchInline, openExecution, openView };
-  // A deep link (?view=record&section=…, a notification, a search result) opens its block once the conversation is ready.
-  const initialViewOpened = useRef(false);
-  useEffect(() => {
-    if (!initialView || initialViewOpened.current || !sessionId || historyLoading || propertyMismatch) return;
-    initialViewOpened.current = true;
-    openView(initialView);
-    const url = new URL(window.location.href);
-    ['view', 'section', 'recordId', 'export', 'open'].forEach((key) => url.searchParams.delete(key));
-    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialView, sessionId, historyLoading, propertyMismatch]);
-  useEffect(() => {
-    if (!focusViewId) return;
-    const timeout = window.setTimeout(() => {
-      const target = document.getElementById(`ask-view-${focusViewId}`);
-      const container = conversationScrollRef.current;
-      if (target && container) container.scrollTo({ top: container.scrollTop + target.getBoundingClientRect().top - container.getBoundingClientRect().top - 16, behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
-      target?.focus({ preventScroll: true });
-      setFocusViewId(null);
-    }, 50);
-    return () => window.clearTimeout(timeout);
-  }, [focusViewId, visibleViews.length]);
-  const renderViewsAfter = (executionId: string | null) => visibleViews.filter((view) => view.afterExecutionId === executionId).map((view) => (
-    <InlineViewBlock key={view.id} view={view} propertyId={selectedPropertyId} onClose={() => setInlineViews((current) => current.filter((item) => item.id !== view.id))} />
-  ));
+  const inlineApi: AskInlineApi = { launch: launchInline, openExecution };
+
 
   const visiblePendingWork = pendingWork.filter((item) => item.execution.sessionId !== sessionId);
   const visibleRecentSessions = recentSessions.filter((item) => item.sessionId !== sessionId && (effectiveHistoryScope === 'ALL_HOMES' || item.property.id === selectedPropertyId));
@@ -462,14 +425,14 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
           railExpanded ? (
           <aside id="ask-history-rail" className="hidden w-[17rem] shrink-0 border-r border-slate-200 bg-[#f7f7f5] px-3 py-4 lg:flex lg:flex-col" aria-label="Conversation history">
             {calm && <button type="button" id="ask-history-toggle" onClick={() => { setHistorySearchInput(''); railToggled.current = true; chooseRailPreference('collapsed'); }} aria-expanded="true" aria-controls="ask-history-rail" className="mb-2 inline-flex min-h-8 items-center gap-1.5 self-end rounded-lg px-2 text-xs font-medium text-slate-500 hover:bg-slate-200/60 hover:text-slate-800"><ChevronsLeft className="h-3.5 w-3.5" aria-hidden="true" />Hide history</button>}
-            <ConversationHistoryNav items={historySessions} pinnedItems={historyPinnedSessions} view={historyView} onViewChange={(nextView) => { setSessionActionIssue(null); setHistorySearchInput(''); setHistoryView(nextView); }} onSessionChange={changeHistorySession} onSessionDelete={deleteHistorySession} busySessionId={sessionActionId} activeSessionId={executions.length > 0 ? sessionId : ''} loading={historyRailLoading} loadingMore={historyRailLoadingMore} hasMore={historyRailHasMore} issue={historyRailIssue} openingId={openingRecentSessionId} query={historySearchInput} scope={effectiveHistoryScope} selectedHomeAvailable={Boolean(selectedPropertyId)} onQueryChange={setHistorySearchInput} onScopeChange={setHistoryScope} onOpen={(recent) => void openRecentSession(recent)} onNew={startNewSession} onLoadMore={() => void loadMoreHistory()} backHref={safeBackTo} backLabel={initialBackLabel} statusSlot={calm && selectedPropertyId ? <IntelligenceRefreshStatus propertyId={selectedPropertyId} compact showLabel={false} /> : undefined} discoverySlot={<ExploreRailGroup state={explore.state} activeTopicId={explore.focus} onOpen={explore.openFrom('RAIL')} onAskShortcut={(question) => { if (explore.focus) explore.close(); void ask(question); }} onOpenExport={() => openView({ kind: 'export' })} moreIdeas={moreIdeas} onVisible={explore.topicsVisible('RAIL')} />} accountName={accountName} accountEmail={accountEmail} loggingOut={loggingOut} onLogout={() => void handleLogout()} />
+            <ConversationHistoryNav items={historySessions} pinnedItems={historyPinnedSessions} view={historyView} onViewChange={(nextView) => { setSessionActionIssue(null); setHistorySearchInput(''); setHistoryView(nextView); }} onSessionChange={changeHistorySession} onSessionDelete={deleteHistorySession} busySessionId={sessionActionId} activeSessionId={executions.length > 0 ? sessionId : ''} loading={historyRailLoading} loadingMore={historyRailLoadingMore} hasMore={historyRailHasMore} issue={historyRailIssue} openingId={openingRecentSessionId} query={historySearchInput} scope={effectiveHistoryScope} selectedHomeAvailable={Boolean(selectedPropertyId)} onQueryChange={setHistorySearchInput} onScopeChange={setHistoryScope} onOpen={(recent) => void openRecentSession(recent)} onNew={startNewSession} onLoadMore={() => void loadMoreHistory()} backHref={safeBackTo} backLabel={initialBackLabel} statusSlot={calm && selectedPropertyId ? <IntelligenceRefreshStatus propertyId={selectedPropertyId} compact showLabel={false} /> : undefined} discoverySlot={<ExploreRailGroup state={explore.state} activeTopicId={explore.focus} onOpen={explore.openFrom('RAIL')} onAskShortcut={(question) => { if (explore.focus) explore.close(); void ask(question); }} moreIdeas={moreIdeas} onVisible={explore.topicsVisible('RAIL')} />} accountName={accountName} accountEmail={accountEmail} loggingOut={loggingOut} onLogout={() => void handleLogout()} />
           </aside>
           ) : (
           <CollapsedConversationRail accountLabel={accountName || accountEmail} loggingOut={loggingOut} onNew={startNewSession} onExpand={() => { railToggled.current = true; chooseRailPreference('expanded'); }} onExplore={() => explore.openFrom('COLLAPSED_RAIL')(explore.state.topics[0]?.id ?? 'HOME_CARE')} onLogout={() => void handleLogout()} />
           )
         )}
         <div className="relative flex min-w-0 flex-1 flex-col">
-      {mode === 'page' && !askUnavailable && <ExploreDisclosure state={explore.state} activeTopicId={explore.focus} onOpen={explore.openFrom('DISCLOSURE')} onAskShortcut={(question) => { if (explore.focus) explore.close(); void ask(question); }} onOpenExport={() => openView({ kind: 'export' })} moreIdeas={moreIdeas} onPanelVisible={explore.topicsVisible('DISCLOSURE')} />}
+      {mode === 'page' && !askUnavailable && <ExploreDisclosure state={explore.state} activeTopicId={explore.focus} onOpen={explore.openFrom('DISCLOSURE')} onAskShortcut={(question) => { if (explore.focus) explore.close(); void ask(question); }} moreIdeas={moreIdeas} onPanelVisible={explore.topicsVisible('DISCLOSURE')} />}
       <main ref={conversationScrollRef} style={{ scrollPaddingBottom: composerMeasure.height ? composerMeasure.height + 16 : undefined }} onScroll={(event) => { const node = event.currentTarget; setShowJumpToLatest(node.scrollHeight - node.scrollTop - node.clientHeight > node.clientHeight); }} data-ask-scroll-container="" data-composer-measured-height={composerMeasure.height || undefined} className={cn('min-h-0 flex-1 overflow-y-auto overscroll-contain', calm && mode === 'page' && 'bg-[#faf9f6]', mode === 'page' ? (calm ? 'px-4 pb-6 pt-5 sm:px-6 lg:px-10 lg:pt-8' : 'px-4 pb-8 pt-8 sm:px-6 lg:px-10 lg:pt-12') : 'px-4 py-5 sm:px-5')}>
         {explore.focus && <ExploreFocusedView topics={explore.state.topics} topicId={explore.focus} busy={loading || !sessionId} onSelectTopic={explore.openFrom('FOCUSED_VIEW')} onStart={explore.start} onClose={explore.close} onStartersVisible={explore.startersVisible} selector={explore.selector} onChooseTarget={explore.chooseTarget} onCancelSelector={explore.cancelSelector} onRetrySelector={explore.retrySelector} />}
         <div className={explore.focus ? 'hidden' : 'contents'}>
@@ -516,7 +479,6 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
                 Its response content is collapsed (no duplicate list); its
                 question stays visible. */}
             <PinnedResultsStrip executions={executions.filter((execution) => conversationView.view.pinned.includes(execution.executionId))} onUnpin={conversationView.togglePin} />
-            {renderViewsAfter(null)}
             {executions.map((execution) => {
               const askReturnHref = buildAskWorkspaceHref({ propertyId: selectedPropertyId, sessionId: execution.sessionId, executionId: execution.executionId, backTo: safeBackTo });
               // Phase 5: raw strings render only for historical executions that predate the governed marker.
@@ -549,7 +511,6 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
                   onTogglePin={() => conversationView.togglePin(execution.executionId)}
                   onEditQuestion={editAndResend}
                 />
-                {renderViewsAfter(execution.executionId)}
               </AskActionReturnContext.Provider>;
             })}
             {pendingMessage ? <PendingTurn message={pendingMessage} /> : loading && <div className="flex items-center gap-3 rounded-2xl border border-teal-100 bg-white p-4 text-sm text-slate-600"><Loader2 className="h-4 w-4 animate-spin text-teal-700" />Checking your home record…</div>}
@@ -560,7 +521,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
 
       {showJumpToLatest && !continuityWorkflowActive && <button type="button" style={{ bottom: composerMeasure.height + 16 }} onClick={() => { const node = conversationScrollRef.current; node?.scrollTo({ top: node.scrollHeight, behavior: prefersReducedMotion() ? 'auto' : 'smooth' }); setShowJumpToLatest(false); }} className="absolute right-5 z-20 inline-flex min-h-10 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-lg hover:bg-slate-50"><ChevronDown className="h-4 w-4" aria-hidden="true" />Jump to latest</button>}
 
-      {(executions.length > 0 || visibleViews.length > 0 || pendingMessage) && !askUnavailable && !continuityWorkflowActive && <footer ref={composerMeasure.ref} data-ask-composer-overlay="" className={cn('shrink-0 border-t border-slate-200 bg-white/95 p-3 backdrop-blur sm:p-4', calm && mode === 'page' && 'bg-[#faf9f6]/95', mode === 'panel' && 'pb-[calc(env(safe-area-inset-bottom)+0.75rem)]')}><FollowUpRow items={followUps} busy={loading} onPick={pickFollowUp} onDismiss={starterDismissal.dismiss} />{renderComposer('footer')}</footer>}
+      {(executions.length > 0 || pendingMessage) && !askUnavailable && !continuityWorkflowActive && <footer ref={composerMeasure.ref} data-ask-composer-overlay="" className={cn('shrink-0 border-t border-slate-200 bg-white/95 p-3 backdrop-blur sm:p-4', calm && mode === 'page' && 'bg-[#faf9f6]/95', mode === 'panel' && 'pb-[calc(env(safe-area-inset-bottom)+0.75rem)]')}><FollowUpRow items={followUps} busy={loading} onPick={pickFollowUp} onDismiss={starterDismissal.dismiss} />{renderComposer('footer')}</footer>}
         </div>
         {wideContextPanel && contextExecution && contextContentAvailable && <aside className="hidden w-80 shrink-0 border-l border-slate-200 bg-slate-50/80 p-4 xl:block" aria-label="Response context">
           <ResponseContextContent execution={contextExecution} headingRef={contextHeadingRef} onClose={closeResponseContext} renderNavigation={(navigation) => navigation ? <AskContextLink href={navigation.href} className="inline-flex min-h-10 items-center rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-teal-800 hover:border-teal-300 hover:bg-teal-50">{navigation.label}</AskContextLink> : null} />

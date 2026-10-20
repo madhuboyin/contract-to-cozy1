@@ -56,7 +56,8 @@ test('a row continues its own operation in this conversation; work with no regis
   const result = answer(workPage([workRow(), pendingRow()]));
   const [project, pending] = result.blocks.find((block) => block.id === 'work-overview-results').sections[0].items;
   assert.deepEqual([project.id, project.entityType, project.actions[0].operationId, project.actions[0].interactionType], ['pr1', 'PROJECT_RECORD', 'PROJECT_TRACKER_PROJECTS', 'CONVERSATION_CONTINUE']);
-  assert.deepEqual(pending.actions, []);
+  // A pending request is dismissed from its row (it confirms first); it has no operation to continue.
+  assert.deepEqual(pending.actions.map((action) => action.id), ['work-request-dismiss']);
   assert.ok(pending.meta.some((line) => /unfinished list/.test(line)));
 });
 
@@ -144,7 +145,8 @@ test('Saved states how many results there are and how many are no longer current
 test('a saved result Ask cannot reopen shows its state and why, with no control', () => {
   const result = savedAnswer(savedPage([artifact({ reopen: null, reopenUnavailableReason: 'The owner keeps this.' })]));
   const [item] = result.blocks.find((block) => block.id === 'saved-results-list').sections[0].items;
-  assert.deepEqual(item.actions, []);
+  // No Open (nothing to reopen); Archive stays, because it only touches this person's own list.
+  assert.deepEqual(item.actions.map((action) => action.id), ['saved-archive']);
   assert.ok(item.meta.includes('The owner keeps this.'));
 });
 

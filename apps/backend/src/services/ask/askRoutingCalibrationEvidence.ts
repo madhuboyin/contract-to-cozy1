@@ -48,7 +48,7 @@ const ROWS: readonly ObservationTuple[] = [
   ['021-expected', '021', 'HOME_DEADLINE_MONITOR', .5747, true], ['021-competitor', '021', 'APPLIANCE_FAILURE_RISK', .4888, false],
   ['022-expected', '022', 'CAPITAL_RESERVE_PLAN', .7763, true], ['022-competitor', '022', 'OWNERSHIP_COSTS', .6972, false],
   ['023-expected', '023', 'PROPERTY_TAX_APPEAL_READINESS', 0.2329, true], ['023-competitor', '023', 'SAVED_RESULTS', 0.1496, false],
-  ['024-expected', '024', 'RENOVATION_PERMIT_READINESS', .4594, true], ['024-competitor', '024', 'SELLER_PREP_CHECKLIST', .1234, false],
+  ['024-expected', '024', 'RENOVATION_PERMIT_READINESS', 0.4594, true], ['024-competitor', '024', 'HOME_RECORD_EXPORT_STATUS', 0.1364, false],
   ['025-expected', '025', 'MAJOR_EVENT_ENTRY', .6136, true], ['025-competitor', '025', 'SELLER_PREP_CHECKLIST', .6189, false],
   ['026-expected', '026', 'EMERGENCY_BOUNDARY', .1177, true], ['026-competitor', '026', 'SELL_HOLD_RENT_ANALYSIS', .0871, false],
   ['027-expected', '027', 'UNSAFE_RESTRICTED_BOUNDARY', .1706, true], ['027-competitor', '027', 'CLAIM_FILE', .1861, false],
@@ -211,6 +211,9 @@ const ROWS: readonly ObservationTuple[] = [
   // Work and Saved as conversations (FRD v1.1 §1.2): 115-116 are their fixtures; 023 and 052 re-derived because WORK_OVERVIEW and SAVED_RESULTS became their strongest competitor (expected operation unchanged).
   ['115-expected', '115', 'WORK_OVERVIEW', 0.4182, true], ['115-competitor', '115', 'EMERGENCY_BOUNDARY', 0.2315, false],
   ['116-expected', '116', 'SAVED_RESULTS', 0.5999, true], ['116-competitor', '116', 'HOME_UPGRADE_SCENARIOS', 0.223, false],
+  ['117-expected', '117', 'HOME_RECORD_EXPORT', 0.5025, true], ['117-competitor', '117', 'WARRANTY_LOOKUP', 0.3834, false],
+  ['118-expected', '118', 'HOME_RECORD_EXPORT_STATUS', 0.5002, true], ['118-competitor', '118', 'BUYER_PLAN_STATUS', 0.2333, false],
+  // Exporting the home record (FRD v1.2 §1.2): 117-118 are their fixtures; 024 re-derived because HOME_RECORD_EXPORT_STATUS became its strongest competitor (expected operation unchanged).
 ];
 
 export const ASK_ROUTING_CALIBRATION_OBSERVATIONS: readonly AskRoutingCalibrationObservation[] = Object.freeze(

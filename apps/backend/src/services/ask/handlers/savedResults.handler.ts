@@ -17,6 +17,7 @@ import { AskWorkRestrictedError } from '../askWork.service';
 import { ASK_ARTIFACT_TYPE_REGISTRY, type AskArtifactFreshness, type AskArtifactTypeId } from '../governance/askArtifactTypeRegistry';
 import { ASK_SAVED_MAX_LIMIT, type AskSavedArtifact, type AskSavedPage } from '../askSaved.contract';
 import { humanDate } from '../askFormatting';
+import { SAVED_ARCHIVE_ACTION_IDS, SAVED_ARTIFACT_ENTITY_TYPE, savedArchiveMessage } from '../support/workSavedCommands';
 
 export const SAVED_RESULTS_PAGE_SIZE = 10;
 
@@ -126,10 +127,18 @@ function savedRow(artifact: AskSavedArtifact) {
     entityType: reopen ? reopen.entityType : null,
     href: null,
     meta,
-    actions: reopen ? [{
-      id: 'saved-open', label: artifact.freshness.state === 'CURRENT' ? 'Open' : 'Open and review', message: `Open ${artifact.title}`.slice(0, 300),
-      interactionType: 'CONVERSATION_CONTINUE' as const, operationId: reopen.operationId, style: 'PRIMARY' as const,
-    }] : [],
+    actions: [
+      ...(reopen ? [{
+        id: 'saved-open', label: artifact.freshness.state === 'CURRENT' ? 'Open' : 'Open and review', message: `Open ${artifact.title}`.slice(0, 300),
+        interactionType: 'CONVERSATION_CONTINUE' as const, operationId: reopen.operationId, style: 'PRIMARY' as const,
+      }] : []),
+      // Archive and Restore change only this person's own list; an item its owner archived cannot be restored from here.
+      ...(artifact.archived.byOwner && !artifact.archived.byYou ? [] : [{
+        id: artifact.archived.byYou ? SAVED_ARCHIVE_ACTION_IDS.RESTORE : SAVED_ARCHIVE_ACTION_IDS.ARCHIVE, label: artifact.archived.byYou ? 'Restore' : 'Archive',
+        message: savedArchiveMessage(artifact.archived.byYou ? 'RESTORE' : 'ARCHIVE', artifact.title), interactionType: 'MUTATE_RECORD' as const, operationId: 'SAVED_ARCHIVE_COMMAND',
+        entityType: SAVED_ARTIFACT_ENTITY_TYPE, entityId: artifact.artifactKey, style: 'QUIET' as const,
+      }]),
+    ],
   };
 }
 

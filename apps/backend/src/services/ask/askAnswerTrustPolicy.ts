@@ -60,6 +60,8 @@ const OPERATION_BOUNDARIES: Partial<Record<AskOperationId, ReadonlySet<string>>>
   DO_NOTHING_SIMULATION: new Set(['do-nothing-boundary']),
   WARRANTY_LOOKUP: new Set(['warranty-boundary']),
   WORK_OVERVIEW: new Set(['work-overview-boundary', 'work-overview-partial']),
+  HOME_RECORD_EXPORT: new Set(['home-record-export-boundary']),
+  HOME_RECORD_EXPORT_STATUS: new Set(['home-record-export-boundary']),
   SAVED_RESULTS: new Set(['saved-results-boundary', 'saved-results-partial']),
   INCIDENT_CLAIM_STATUS: new Set(['claim-status-boundary']),
   DOCUMENT_LOOKUP: new Set(['document-lookup-boundary']),
@@ -219,12 +221,18 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   DIY_PROJECT_NOTE_COMMAND: new Set(['diy-projects-back']),
   // Set the caller's own DIY skill levels (register P2 DIY). One profile per user, so a viewer may set it. Confirmation-gated, declared-action only.
   DIY_SKILL_PROFILE_COMMAND: new Set(['diy-projects-back']),
+  // Retry or dismiss a request from Work; archive or restore a saved result (FRD v1.3). Confirmation-gated, declared-action only.
+  WORK_REQUEST_COMMAND: new Set(['work-request-back']),
+  SAVED_ARCHIVE_COMMAND: new Set(['saved-back']),
   // Add a seasonal checklist task to maintenance, snooze it, set it aside, or bring it back (register P2 Seasonal Home Care). Confirmation-gated, declared-action only.
   SEASONAL_ITEM_COMMAND: new Set(['seasonal-item-back']),
   // Snooze or reschedule a Home Operations work item, or accept the routine low-risk candidates in bulk (register P2 Maintenance and Home Operations). Confirmation-gated, declared-action only.
   HOME_WORK_ITEM_COMMAND: new Set(['home-work-items-back']),
   // List the home's open Home Operations work items with state, due date and snooze (register P2 Maintenance and Home Operations). Read-only.
   // Work and Saved as conversations (FRD v1.1 §1.2). Read-only; every control is a row action or a chip, so no block-level action is declared.
+  // Create an export of the home record (FRD v1.2 §1.2). Confirmation-gated; the receipt offers the status check, and the empty status answer offers the start.
+  HOME_RECORD_EXPORT: new Set(['home-record-export-status']),
+  HOME_RECORD_EXPORT_STATUS: new Set(['home-record-export-status', 'home-record-export-start']),
   WORK_OVERVIEW: new Set(),
   SAVED_RESULTS: new Set(),
   HOME_WORK_ITEMS: new Set(['home-work-items-back', 'work-item-snooze', 'work-item-reschedule', 'work-items-accept-routine']),
