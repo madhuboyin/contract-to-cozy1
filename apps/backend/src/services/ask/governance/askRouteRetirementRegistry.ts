@@ -67,10 +67,20 @@ export const ASK_ROUTE_RETIREMENT_REGISTRY: readonly AskRouteRetirementEntry[] =
     missingReads: ['pageable record collections', 'scoped home-record export'], missingWrites: ['complete inline correction parity'],
     successorDestination: 'RECORD', deepLinkRule: 'PRESERVE_UNTIL_CERTIFIED', evidenceTests: [],
   }),
+  // Maintenance keeps its structured page (list, filters, notes, completed history): Ask answers the same questions and runs the same writes,
+  // and links to the page when the homeowner wants the full list.
   entry({
-    id: 'property-work', routePattern: '^/dashboard/properties/(?:\\[id\\])/(?:maintenance|home-operations|projects|renovations|buyer-plan|guidance|new-home-plan|seller-prep)(?:/.*)?$',
+    id: 'maintenance', routePattern: '^/dashboard/(?:properties/(?:\\[id\\])/)?(?:maintenance|maintenance-setup)(?:/.*)?$',
+    owner: 'home-work', state: 'STRUCTURED_SURFACE_RETAINED',
+    askOperationIds: ['MAINTENANCE_STATUS', 'MAINTENANCE_TASK_CREATE', 'MAINTENANCE_TASK_COMPLETE', 'MAINTENANCE_TASK_UPDATE', 'MAINTENANCE_TEMPLATES_BROWSE'],
+    missingReads: [], missingWrites: ['task notes editing', 'completed-work outcome edit'],
+    successorDestination: 'WORK', deepLinkRule: 'KEEP_STRUCTURED_SURFACE',
+    evidenceTests: ['apps/backend/tests/ask/maintenanceViewStateContinuity.test.js'],
+  }),
+  entry({
+    id: 'property-work', routePattern: '^/dashboard/properties/(?:\\[id\\])/(?:home-operations|projects|renovations|buyer-plan|guidance|new-home-plan|seller-prep)(?:/.*)?$',
     owner: 'home-work', state: 'ASK_PARITY_IN_PROGRESS',
-    askOperationIds: ['MAINTENANCE_STATUS', 'HOME_ACTIONS', 'PROJECT_TRACKER_PROJECTS', 'GUIDANCE_JOURNEY_CONTINUE', 'SELLER_PREP_CHECKLIST'],
+    askOperationIds: ['HOME_ACTIONS', 'PROJECT_TRACKER_PROJECTS', 'GUIDANCE_JOURNEY_CONTINUE', 'SELLER_PREP_CHECKLIST'],
     missingReads: ['complete canonical work index'], missingWrites: ['exact resume coverage for every work type'],
     successorDestination: 'WORK', deepLinkRule: 'PRESERVE_UNTIL_CERTIFIED', evidenceTests: [],
   }),
@@ -128,8 +138,8 @@ export const ASK_ROUTE_RETIREMENT_REGISTRY: readonly AskRouteRetirementEntry[] =
     successorDestination: 'RECORD', deepLinkRule: 'PRESERVE_UNTIL_CERTIFIED', evidenceTests: [],
   }),
   entry({
-    id: 'top-level-work', routePattern: '^/dashboard/(?:maintenance|maintenance-setup|diy|bookings|moving-concierge|resolution-center|modifications)(?:/.*)?$', owner: 'home-work', state: 'LEGACY_ACTIVE',
-    askOperationIds: ['MAINTENANCE_STATUS', 'DIY_PROJECTS'], missingReads: ['complete Work destination parity'], missingWrites: ['exact resume parity'],
+    id: 'top-level-work', routePattern: '^/dashboard/(?:diy|bookings|moving-concierge|resolution-center|modifications)(?:/.*)?$', owner: 'home-work', state: 'LEGACY_ACTIVE',
+    askOperationIds: ['DIY_PROJECTS'], missingReads: ['complete Work destination parity'], missingWrites: ['exact resume parity'],
     successorDestination: 'WORK', deepLinkRule: 'PRESERVE_UNTIL_CERTIFIED', evidenceTests: [],
   }),
   entry({

@@ -159,3 +159,29 @@ test('maintenance collection offsets page and clamp against canonical totals', (
   assert.equal(resolveMaintenanceCollectionOffset(121, 100, 'PREVIOUS'), 50);
   assert.equal(resolveMaintenanceCollectionOffset(1, 50, 'CURRENT'), 0);
 });
+
+// The Completed chip: the service history one click away, with its own status in the view state so paging stays in it.
+test('maintenance pagination restores the completed view for older view state without queryMessage', () => {
+  const result = mergeMaintenanceViewContinuation({ domainScopePhrase: null, dateScopePhrase: null, roomScopePhrase: null, statusFilter: 'COMPLETED' }, 'Show next maintenance results', 'PAGINATION');
+  assert.match(result.effectiveMessage, /completed maintenance tasks/i);
+});
+
+test('the Completed chip shows finished work only, is the one active chip, and All open is not active beside it', () => {
+  const { buildMaintenanceStatusResult } = require('../../src/services/ask/handlers/maintenance.handler.ts');
+  const NOW = new Date('2026-10-01T00:00:00.000Z');
+  const task = (id, status, extra = {}) => ({
+    id, title: `Task ${id}`, description: null, category: 'GENERAL', assetType: null, serviceCategory: null, season: null, status, priority: 'MEDIUM', source: 'USER',
+    nextDueDate: new Date('2026-12-01T00:00:00.000Z'), lastCompletedDate: null, updatedAt: NOW, actualCost: null, estimatedCost: null, isRecurring: false, frequency: null, inventoryItem: null, room: null, ...extra,
+  });
+  const tasks = [task('open', 'PENDING'), task('done', 'COMPLETED', { lastCompletedDate: new Date('2026-09-01T00:00:00.000Z') })];
+  const run = (message) => buildMaintenanceStatusResult({ message, priorViewState: null, viewIntent: 'FILTER', pageRequest: null, tasks, totalTaskCount: 2, timeZone: 'UTC', purchaseDate: null, canManage: true, now: NOW });
+  const chips = (result) => result.blocks.find((block) => block.id === 'maintenance-groups').filters;
+  const completed = run('Only show completed maintenance tasks');
+  const ids = completed.blocks.find((block) => block.id === 'maintenance-groups').sections.flatMap((section) => section.items.map((item) => item.id));
+  assert.deepEqual(ids, ['done']);
+  assert.deepEqual(chips(completed).filter((chip) => chip.active).map((chip) => chip.id), ['completed']);
+  assert.equal(completed.parameters.viewState.statusFilter, 'COMPLETED');
+  const open = run('What maintenance is open?');
+  assert.deepEqual(chips(open).filter((chip) => chip.active).map((chip) => chip.id), ['all']);
+  assert.equal(chips(open).find((chip) => chip.id === 'completed').message, 'Only show completed maintenance tasks');
+});

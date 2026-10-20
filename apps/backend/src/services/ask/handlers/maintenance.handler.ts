@@ -796,7 +796,8 @@ export function mergeMaintenanceViewContinuation(
     const statusPhrase = priorViewState.statusFilter === 'OVERDUE' ? 'overdue maintenance tasks'
       : priorViewState.statusFilter === 'DUE_SOON' ? 'maintenance tasks due soon'
         : priorViewState.statusFilter === 'URGENT' ? 'urgent maintenance tasks'
-          : 'all open maintenance tasks';
+          : priorViewState.statusFilter === 'COMPLETED' ? 'completed maintenance tasks'
+            : 'all open maintenance tasks';
     const restoredQuery = priorViewState.queryMessage
       ?? [priorViewState.domainScopePhrase, priorViewState.dateScopePhrase, priorViewState.roomScopePhrase, statusPhrase].filter(Boolean).join(' ');
     return { effectiveMessage: restoredQuery || message, isClearAllFilters: false };
@@ -1105,10 +1106,12 @@ export function buildMaintenanceStatusResult(input: {
     // offered only when there is a domain/date/room scope actually worth
     // clearing (otherwise it would be redundant with "All open").
     filters: [
-      { id: 'all', label: 'All open', message: 'Now show all open maintenance tasks', active: !overdueOnly && !dueSoonOnly && !highPriorityOnly },
+      { id: 'all', label: 'All open', message: 'Now show all open maintenance tasks', active: !overdueOnly && !dueSoonOnly && !highPriorityOnly && !(showCompleted && !showOpen) },
       { id: 'overdue', label: 'Overdue', message: 'Only show overdue tasks', active: overdueOnly },
       { id: 'due-soon', label: 'Due soon', message: 'Only show tasks due soon', active: dueSoonOnly },
       { id: 'urgent', label: 'Urgent', message: 'Only show urgent tasks', active: highPriorityOnly },
+      // The service history: what has been completed, newest first, reachable without typing.
+      { id: 'completed', label: 'Completed', message: 'Only show completed maintenance tasks', active: showCompleted && !showOpen },
       // External review [P2]: a room-only result (no domain/date scope)
       // used to omit this chip entirely, even though a real filter (room)
       // was active and worth clearing.
@@ -1174,7 +1177,8 @@ export function buildMaintenanceStatusResult(input: {
   // the next), statusFilter derived in the same precedence the chips
   // display, selectedTaskId untouched by a filter change, revision bumped
   // so a stale response can be detected by comparing against it.
-  const statusFilter: string = overdueOnly ? 'OVERDUE' : dueSoonOnly ? 'DUE_SOON' : highPriorityOnly ? 'URGENT' : 'ALL_OPEN';
+  const completedOnly = showCompleted && !showOpen;
+  const statusFilter: string = overdueOnly ? 'OVERDUE' : dueSoonOnly ? 'DUE_SOON' : highPriorityOnly ? 'URGENT' : completedOnly ? 'COMPLETED' : 'ALL_OPEN';
   const viewState: AskViewState = {
     resultId: priorViewState?.resultId ?? randomUUID(),
     domainScopePhrase: scopeTerms[0] ?? null,

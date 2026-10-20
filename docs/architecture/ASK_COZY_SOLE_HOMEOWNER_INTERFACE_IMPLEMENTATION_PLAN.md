@@ -584,6 +584,8 @@ Phase 9 is treated as done. The manual screen-reader and device pass, running th
 
 **Direction (2026-10-20): functionality first, no gates or approvals.** There are no customers yet, so there is no exit certification, evidence packet, budget approval or sign-off step. A route family moves to Ask when the Ask version does the job well; the checks that stay are the ones that prevent wrong behavior (authorization, confirmation before writes, a registered deep-link mapping for a retired route so old links do not break, and the existing tests). FRD section 16 is reduced to match.
 
+**Maintenance (2026-10-20):** done as a retained structured surface. The registry now has its own `maintenance` entry (`STRUCTURED_SURFACE_RETAINED`, old links kept), split out of `property-work` and `top-level-work`. Ask already answers maintenance with All open, Overdue, Due soon and Urgent filters, timing groups, and Complete, Reschedule and Remove actions; this slice added a **Completed** filter chip (service history, paged within the completed view). Still only on the page: task notes editing and changing the outcome of completed work. An earlier packet overstated the filter and history gaps; Ask had them by language and chips.
+
 ### Process
 
 1. Take one route family at a time, starting with maintenance.
