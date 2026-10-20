@@ -58,6 +58,19 @@ test('Property Summary warranty titles dispatch through the registry and open ca
   expect(window.location.pathname).toBe('/dashboard/ask');
 });
 
+test('warranty rows present status, completeness, documents, editability, and an explicit detail affordance', () => {
+  const editable: typeof block = { ...block, sections: [{ ...block.sections[0], items: [
+    { ...block.sections[0].items[0], meta: ['Home warranty plan', 'Expires Dec 1, 2027', '0 documents'], description: 'No coverage details recorded.', actions: [{ id: 'correct-expiryDate', label: 'Correct expiry date', message: 'Correct the expiry date of this warranty.', style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId: 'WARRANTY_CORRECT' }] },
+  ] }] };
+  render(<WarrantyResultList block={editable} propertyId="home" onAction={() => {}} onAccessLost={() => {}} link={(_, label) => label} />);
+  const row = screen.getByRole('button', { name: /Acme Home Warranty/ });
+  expect(row).toHaveTextContent('Active');
+  expect(row).toHaveTextContent('0 documents');
+  expect(row).toHaveTextContent('Coverage details missing');
+  expect(row).toHaveTextContent('Editing available');
+  expect(row).toHaveTextContent('View details');
+});
+
 test('warranty selection persists in result view state', async () => {
   mockedGetPropertyWarranties.mockResolvedValueOnce([canonicalWarranty()]);
   render(<List response={execution()} />);
@@ -115,6 +128,8 @@ test('warranty detail shows declared correction actions with exact identity, and
   fireEvent.click(screen.getByRole('button', { name: 'Acme Home Warranty' }));
   await waitFor(() => expect(screen.getByText('POL-123')).toBeInTheDocument());
   expect(screen.queryByRole('group', { name: /Corrections for/ })).not.toBeInTheDocument();
+  expect(screen.getByText('Editing unavailable.')).toBeInTheDocument();
+  expect(screen.getByText(/current access does not allow changes/i)).toBeInTheDocument();
 });
 
 test('the warranties list renders its declared START_WORKFLOW block action as a button and dispatches that exact action; href actions stay links', () => {
