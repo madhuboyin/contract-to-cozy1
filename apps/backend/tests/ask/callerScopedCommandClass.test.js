@@ -29,5 +29,5 @@ test('only the declared caller-scoped commands exist; adding one is a deliberate
   // DIY_SKILL_PROFILE_COMMAND added deliberately (FRD v1.344): one DIY skill profile per user, written only under the session user id.
   // SAVED_ARCHIVE_COMMAND and WORK_REQUEST_COMMAND added deliberately (FRD v1.4): the first writes only the caller's own Saved list entry, the second
   // only retries or dismisses the caller's own Ask request (both read under the session user id, never another member's).
-  assert.deepEqual(callerScoped, ['DIY_SKILL_PROFILE_COMMAND', 'HOME_BRIEFING_COMMAND', 'NEIGHBORHOOD_INTERACTION_COMMAND', 'SAVED_ARCHIVE_COMMAND', 'WORK_REQUEST_COMMAND']);
+  assert.deepEqual(callerScoped, ['DIY_SKILL_PROFILE_COMMAND', 'HOME_BRIEFING_COMMAND', 'NEIGHBORHOOD_INTERACTION_COMMAND', 'NOTIFICATION_COMMAND', 'NOTIFICATION_SETTINGS_COMMAND', 'SAVED_ARCHIVE_COMMAND', 'WORK_REQUEST_COMMAND']);
 });

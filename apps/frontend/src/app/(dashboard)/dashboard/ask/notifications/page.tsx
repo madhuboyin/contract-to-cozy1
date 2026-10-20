@@ -1,6 +1,8 @@
-import { Suspense } from 'react';
-import { AskNotificationsDestination } from '@/components/ask/notifications/AskNotificationsDestination';
+import { redirect } from 'next/navigation';
+import type { AskSearchParams } from '../AskRoutePage';
+import { legacyAskViewRedirect } from '../legacyViewRedirect';
 
-export default function AskNotificationsPage() {
-  return <Suspense fallback={<div className="p-6 text-sm text-slate-600" role="status">Loading Notifications…</div>}><AskNotificationsDestination /></Suspense>;
+// Notifications and their settings are answers in the conversation now; this old address opens Ask with the question already asked.
+export default async function AskNotificationsPage({ searchParams }: { searchParams: Promise<AskSearchParams & { tab?: string }> }) {
+  redirect(legacyAskViewRedirect('notifications', await searchParams));
 }

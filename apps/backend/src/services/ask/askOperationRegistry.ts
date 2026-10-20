@@ -1,3 +1,4 @@
+import { isNotificationSettingsCommandRequest, isNotificationSettingsOverviewRequest, isNotificationsOverviewRequest } from './support/notificationConversation';
 import { isHomeRecordExportRequest, isHomeRecordExportShareRequest, isHomeRecordExportStatusRequest } from './support/homeRecordExport';
 import type { AskCaptureRequest, AskClarification, AskConfirmation, AskExecutionStatus, AskPresentationBlock, SuggestedNextAction } from '../../productFramework/ask/ask.contract';
 import type { AskFollowUpNomination, SkillHandoffSuggestion } from '../skills/skillHandoff';
@@ -155,6 +156,11 @@ export type AskOperationId =
   | 'DIY_SKILL_PROFILE_COMMAND'
   | 'WORK_REQUEST_COMMAND'
   | 'SAVED_ARCHIVE_COMMAND'
+  // Notifications as a conversation (FRD v1.7): the inbox, its row commands, the settings and their commands. Internal; deterministic typed routes and declared actions only.
+  | 'NOTIFICATIONS_OVERVIEW'
+  | 'NOTIFICATION_COMMAND'
+  | 'NOTIFICATION_SETTINGS_OVERVIEW'
+  | 'NOTIFICATION_SETTINGS_COMMAND'
   // Add a seasonal checklist task to maintenance, snooze it, set it aside, or bring it back (register P2 Seasonal Home Care). Confirmation-gated, declared-action only.
   | 'SEASONAL_ITEM_COMMAND'
   // Snooze or reschedule a Home Operations work item, or accept the routine low-risk candidates in bulk (register P2 Maintenance and Home Operations). Confirmation-gated, declared-action only.
@@ -481,6 +487,11 @@ export const ASK_INTERNAL_OPERATION_IDS: ReadonlySet<AskOperationId> = new Set<A
   // Reached only by the declared Try again / Dismiss row actions on the Work answer and the Archive / Restore row actions on the Saved answer.
   'WORK_REQUEST_COMMAND',
   'SAVED_ARCHIVE_COMMAND',
+  // Notifications (FRD v1.7): reached by the deterministic typed routes and the declared chips and row actions; never by fuzzy retrieval.
+  'NOTIFICATIONS_OVERVIEW',
+  'NOTIFICATION_COMMAND',
+  'NOTIFICATION_SETTINGS_OVERVIEW',
+  'NOTIFICATION_SETTINGS_COMMAND',
   // Reached by the declared Share / Stop sharing row actions on the export status answer, or the deterministic typed share pattern; never by fuzzy retrieval.
   'HOME_RECORD_EXPORT_SHARE',
   'SEASONAL_ITEM_COMMAND',
@@ -834,6 +845,10 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   HOME_RECORD_EXPORT_SHARE: definition('HOME_RECORD_EXPORT_SHARE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'home-record-export-share.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   HOME_RECORD_EXPORT_STATUS: definition('HOME_RECORD_EXPORT_STATUS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'home-record-export.status', ['SUMMARY', 'GROUPED_LIST', 'BOUNDARY']),
   WORK_OVERVIEW: definition('WORK_OVERVIEW', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'work.overview', ['SUMMARY', 'GROUPED_LIST', 'EMPTY_STATE', 'BOUNDARY']),
+  NOTIFICATIONS_OVERVIEW: definition('NOTIFICATIONS_OVERVIEW', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'notifications.overview', ['SUMMARY', 'GROUPED_LIST', 'EMPTY_STATE', 'BOUNDARY']),
+  NOTIFICATION_COMMAND: definition('NOTIFICATION_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'notification.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
+  NOTIFICATION_SETTINGS_OVERVIEW: definition('NOTIFICATION_SETTINGS_OVERVIEW', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'notification.settings.overview', ['SUMMARY', 'GROUPED_LIST', 'EMPTY_STATE', 'BOUNDARY']),
+  NOTIFICATION_SETTINGS_COMMAND: definition('NOTIFICATION_SETTINGS_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'notification.settings.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   SAVED_RESULTS: definition('SAVED_RESULTS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'saved.results', ['SUMMARY', 'GROUPED_LIST', 'EMPTY_STATE', 'BOUNDARY']),
   INSPECTION_NEGOTIATION_PACKAGE: definition('INSPECTION_NEGOTIATION_PACKAGE', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'inspection-negotiation-package.build', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
   INSPECTION_FINDING_DECISION_COMMAND: definition('INSPECTION_FINDING_DECISION_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'inspection-finding-decision.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
@@ -1664,6 +1679,9 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   if (inspectionFindingsPattern.test(message)) return resolved('INSPECTION_FINDINGS', 0.96);
   if (inspectionReportsPattern.test(message)) return resolved('INSPECTION_REPORTS', 0.95);
   if (homeWorkItemsPattern.test(message)) return resolved('HOME_WORK_ITEMS', 0.95);
+  if (isNotificationSettingsCommandRequest(message)) return resolved('NOTIFICATION_SETTINGS_COMMAND', 0.96);
+  if (isNotificationSettingsOverviewRequest(message)) return resolved('NOTIFICATION_SETTINGS_OVERVIEW', 0.96);
+  if (isNotificationsOverviewRequest(message)) return resolved('NOTIFICATIONS_OVERVIEW', 0.95);
   if (workOverviewPattern.test(message)) return resolved('WORK_OVERVIEW', 0.95);
   if (savedResultsPattern.test(message)) return resolved('SAVED_RESULTS', 0.95);
   if (recallMatchUpdatePattern.test(message)) return resolved('RECALL_MATCH_UPDATE', 0.98);

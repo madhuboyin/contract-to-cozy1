@@ -63,6 +63,8 @@ const OPERATION_BOUNDARIES: Partial<Record<AskOperationId, ReadonlySet<string>>>
   HOME_RECORD_EXPORT: new Set(['home-record-export-boundary']),
   HOME_RECORD_EXPORT_STATUS: new Set(['home-record-export-boundary']),
   SAVED_RESULTS: new Set(['saved-results-boundary', 'saved-results-partial']),
+  NOTIFICATIONS_OVERVIEW: new Set(['notifications-boundary']),
+  NOTIFICATION_SETTINGS_OVERVIEW: new Set(['notification-settings-boundary']),
   INCIDENT_CLAIM_STATUS: new Set(['claim-status-boundary']),
   DOCUMENT_LOOKUP: new Set(['document-lookup-boundary']),
   APPLIANCE_FAILURE_RISK: new Set(['appliance-oracle-boundary']),
@@ -224,6 +226,9 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   // Retry or dismiss a request from Work; archive or restore a saved result (FRD v1.3). Confirmation-gated, declared-action only.
   WORK_REQUEST_COMMAND: new Set(['work-request-back']),
   SAVED_ARCHIVE_COMMAND: new Set(['saved-back']),
+  // Notifications (FRD v1.7). Confirmation-gated, declared-action only.
+  NOTIFICATION_COMMAND: new Set(['notification-back']),
+  NOTIFICATION_SETTINGS_COMMAND: new Set(['notification-settings-back']),
   // Add a seasonal checklist task to maintenance, snooze it, set it aside, or bring it back (register P2 Seasonal Home Care). Confirmation-gated, declared-action only.
   SEASONAL_ITEM_COMMAND: new Set(['seasonal-item-back']),
   // Snooze or reschedule a Home Operations work item, or accept the routine low-risk candidates in bulk (register P2 Maintenance and Home Operations). Confirmation-gated, declared-action only.
@@ -237,6 +242,8 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   HOME_RECORD_EXPORT_STATUS: new Set(['home-record-export-status', 'home-record-export-start']),
   WORK_OVERVIEW: new Set(),
   SAVED_RESULTS: new Set(),
+  NOTIFICATIONS_OVERVIEW: new Set(),
+  NOTIFICATION_SETTINGS_OVERVIEW: new Set(),
   HOME_WORK_ITEMS: new Set(['home-work-items-back', 'work-item-snooze', 'work-item-reschedule', 'work-items-accept-routine']),
   // Build a negotiation package from a confirmed pre-purchase inspection report: choose a decision per open finding and see the credit total (register P2 Inspection Hub). Calculation only; saves nothing.
   INSPECTION_NEGOTIATION_PACKAGE: new Set(['inspection-reports-back']),

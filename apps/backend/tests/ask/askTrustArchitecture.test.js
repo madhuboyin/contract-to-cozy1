@@ -108,6 +108,9 @@ test('operations that must never be reached by fuzzy retrieval are absent from r
     'HOME_HABIT_UPDATE',
     // Seasonal checklist setup: reached only from the declared Add these to my tasks action on the seasonal answer.
     'SEASONAL_CHECKLIST_SETUP',
+    // Notifications as a conversation (FRD v1.7): reached by deterministic typed routes and declared chips, never fuzzy retrieval.
+    'NOTIFICATIONS_OVERVIEW',
+    'NOTIFICATION_SETTINGS_OVERVIEW',
   ]);
   // The list also names some COMMAND-family operations (kept for their reasons above); they only need to still be non-routable.
   for (const id of expectedNonCommandInternal) assert.ok(internalOperations.includes(id), `${id} is listed as internal but is message-routable or missing`);

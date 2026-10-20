@@ -63,7 +63,7 @@ describe('AskSearchDialog', () => {
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
   it('opens a result as a deep link into Ask from a page that is not an Ask conversation', async () => {
-    mockPath = '/dashboard/ask/notifications';
+    mockPath = '/dashboard/properties';
     searchAsk.mockResolvedValue({ success: true, data: response([{ group: 'RECORD', label: 'Home record', more: false, results: [result()] }]) });
     render(<AskSearchDialog open onOpenChange={jest.fn()} propertyId="home-1" />);
     type('bed');

@@ -12,6 +12,10 @@ import { useNotifications } from '@/lib/notifications/NotificationContext';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { useAskAccount } from './useAskAccount';
 import { AskSearchDialog } from '../search/AskSearchDialog';
+import { askQuestionHref, requestAskQuestion } from '../inline/askViewBridge';
+
+const WHATS_NEW = "What's new?";
+const NOTIFICATION_SETTINGS = 'Show my notification settings';
 
 export function AskShellHeader() {
   const pathname = usePathname();
@@ -34,6 +38,13 @@ export function AskShellHeader() {
   const accountLabel = accountName || accountEmail || 'Account';
   const [searchOpen, setSearchOpen] = useState(false);
   const searchOpenerRef = useRef<HTMLButtonElement>(null);
+
+  // Notifications are answers in the conversation: on the Ask page the question becomes the next turn; from anywhere else it opens Ask with the question asked.
+  const askCozy = (question: string) => {
+    const input = { propertyId: selectedPropertyId ?? undefined, question };
+    if (pathname === '/dashboard/ask') requestAskQuestion(input);
+    else router.push(askQuestionHref(input));
+  };
 
   const switchProperty = (propertyId: string) => {
     setSelectedPropertyId(propertyId);
@@ -70,10 +81,10 @@ export function AskShellHeader() {
         <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('ctc-command-palette-open'))} aria-label="Search pages, actions, and tools" className="grid h-11 w-11 place-items-center rounded-xl text-slate-600 hover:bg-stone-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700 focus-visible:ring-offset-2">
           <Command className="h-5 w-5" aria-hidden="true" />
         </button>
-        <Link href="/dashboard/ask/notifications" aria-label={unreadCount > 0 ? `Notifications (${unreadCount} unread)` : 'Notifications'} className="relative grid h-11 w-11 place-items-center rounded-xl text-slate-600 hover:bg-stone-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700 focus-visible:ring-offset-2">
+        <button type="button" onClick={() => askCozy(WHATS_NEW)} aria-label={unreadCount > 0 ? `Notifications (${unreadCount} unread)` : 'Notifications'} className="relative grid h-11 w-11 place-items-center rounded-xl text-slate-600 hover:bg-stone-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700 focus-visible:ring-offset-2">
           <Bell className="h-5 w-5" aria-hidden="true" />
           {unreadCount > 0 && <span className="absolute right-0.5 top-0.5 grid min-h-5 min-w-5 place-items-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white" aria-hidden="true">{unreadCount > 9 ? '9+' : unreadCount}</span>}
-        </Link>
+        </button>
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -88,7 +99,7 @@ export function AskShellHeader() {
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild><Link href="/dashboard/profile"><Settings className="mr-2 h-4 w-4" aria-hidden="true" />Profile, privacy &amp; settings</Link></DropdownMenuItem>
-            <DropdownMenuItem asChild><Link href="/dashboard/ask/notifications?tab=settings"><Bell className="mr-2 h-4 w-4" aria-hidden="true" />Notification settings</Link></DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => askCozy(NOTIFICATION_SETTINGS)}><Bell className="mr-2 h-4 w-4" aria-hidden="true" />Notification settings</DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem disabled={loggingOut} onSelect={() => void handleLogout()} className="text-red-700 focus:text-red-800">
               {loggingOut ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> : <LogOut className="mr-2 h-4 w-4" aria-hidden="true" />}
