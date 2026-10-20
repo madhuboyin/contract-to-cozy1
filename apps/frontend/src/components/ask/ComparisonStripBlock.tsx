@@ -107,6 +107,11 @@ export function ComparisonStripBlock({ block, renderAction }: { block: Compariso
     setActiveIndex(closest.index);
   };
 
+  // The at-a-glance verdict: only what the server marked as leading, so the card never ranks options on its own.
+  const leaders = block.options.length < 2 ? [] : [...new Set(block.options.flatMap((option) => option.attributes.map((attribute) => attribute.label)))]
+    .map((label) => ({ label, options: block.options.filter((option) => option.attributes.some((attribute) => attribute.label === label && attribute.leading)).map((option) => option.label) }))
+    .filter((leader) => leader.options.length > 0);
+
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-4" aria-labelledby={`ask-comparison-${block.id}`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -134,6 +139,12 @@ export function ComparisonStripBlock({ block, renderAction }: { block: Compariso
           </div>
         )}
       </div>
+
+      {leaders.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label="Where each option leads" data-comparison-leaders="">
+          {leaders.map((leader) => <span key={leader.label} className="rounded-full bg-emerald-50 px-3 py-1 text-xs text-emerald-950"><span className="text-emerald-800">{leader.label}:</span> <span className="font-semibold">{leader.options.join(', ')}</span></span>)}
+        </div>
+      )}
 
       {layout === 'TABLE' ? <ComparisonTable block={block} renderAction={renderAction} /> : <div
         ref={stripRef}
