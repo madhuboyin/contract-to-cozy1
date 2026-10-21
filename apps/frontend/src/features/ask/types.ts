@@ -555,11 +555,13 @@ export interface AskCaptureRequest {
   editor?: AskRecordEditor;
 }
 
-export type AskRecordEditorFieldKind = 'TEXT' | 'TEXTAREA' | 'SELECT' | 'DATE' | 'MONEY';
+export type AskRecordEditorFieldKind = 'TEXT' | 'TEXTAREA' | 'SELECT' | 'DATE' | 'MONEY' | 'APPROX_DATE';
 
 export interface AskRecordEditorField {
   key: string;
   label: string;
+  /** A short noun for sentences such as "Add the title and date to continue". */
+  shortLabel?: string;
   kind: AskRecordEditorFieldKind;
   section: string;
   required: boolean;
@@ -572,6 +574,8 @@ export interface AskRecordEditorField {
   pastDateNote?: string;
   /** SELECT only: an explicit empty option (value '') such as "No room". */
   emptyLabel?: string;
+  /** The field appears only while another field holds one of these values (server-owned); while hidden it is submitted empty. */
+  visibleWhen?: { field: string; in: string[] };
   /** The field is shown disabled, with this reason beneath it. */
   disabledReason?: string;
 }
@@ -581,7 +585,7 @@ export interface AskRecordEditor {
   /** 'add' starts from an empty record; the default is edit. */
   mode?: 'add' | 'edit';
   saveLabel?: string;
-  sections: Array<{ id: string; title: string }>;
+  sections: Array<{ id: string; title: string; collapsed?: boolean }>;
   fields: AskRecordEditorField[];
   /** The freshly read canonical values (strings; '' is empty); dirty state is measured against these. */
   original: Record<string, string>;

@@ -65,3 +65,50 @@ test('warranty: coverage options carry friendly labels and the USD-only cost fie
   assert.ok(category.options.every((o) => /^[A-Z][a-zA-Z ]+$/.test(o.label)));
   assert.equal(WARRANTY_EDITOR_FIELDS.find((f) => f.key === 'cost').label, 'Cost (USD)');
 });
+
+// Date with precision and conditional fields (FRD v1.394).
+const APPROX = { key: 'when', label: 'When', kind: 'APPROX_DATE', section: 's', required: true };
+const TYPE = { key: 'type', label: 'Type', kind: 'SELECT', section: 's', required: true, options: [{ label: 'Repair', value: 'REPAIR' }, { label: 'Note', value: 'NOTE' }] };
+const AMOUNT = { key: 'amount', label: 'Amount', kind: 'MONEY', section: 's', required: false, visibleWhen: { field: 'type', in: ['REPAIR'] } };
+
+test('a date with precision validates each precision, keeps an unanswered one empty, and displays a range plainly', () => {
+  const ok = (value) => contract.editorFieldError(APPROX, value);
+  assert.equal(ok('EXACT_DATE|2026-08-15'), null);
+  assert.equal(ok('MONTH|2026-08'), null);
+  assert.equal(ok('YEAR|2026'), null);
+  assert.equal(ok('RANGE|2026-08-01|2026-08-15'), null);
+  assert.ok(ok('EXACT_DATE|2026-02-31'));
+  assert.ok(ok('MONTH|2026-13'));
+  assert.ok(ok('YEAR|26'));
+  assert.ok(ok('RANGE|2026-08-15|2026-08-01'));
+  assert.ok(ok('RANGE|2026-08-15|'));
+  assert.ok(ok('WEEK|2026'));
+  assert.equal(contract.normalizeEditorValue(APPROX, 'EXACT_DATE|'), '', 'only a precision chosen is not an answer');
+  assert.equal(contract.normalizeEditorValue(APPROX, ' MONTH|2026-08 '), 'MONTH|2026-08');
+  assert.equal(contract.editorValueDisplay(APPROX, 'RANGE|2026-08-01|2026-08-15'), '2026-08-01 to 2026-08-15');
+  assert.equal(contract.editorValueDisplay(APPROX, 'YEAR|2025'), '2025');
+  assert.match(contract.readEditorAnswer([APPROX], { when: '' }).errors.when, /required/);
+});
+
+test('a dependent field is read as empty while its trigger value does not apply, and is validated when it does', () => {
+  const fields = [TYPE, AMOUNT];
+  assert.deepEqual(contract.readEditorAnswer(fields, { type: 'NOTE', amount: '99' }).values, { type: 'NOTE', amount: '' });
+  assert.deepEqual(contract.readEditorAnswer(fields, { type: 'NOTE', amount: 'junk' }).errors, {}, 'a hidden field is never validated');
+  assert.deepEqual(contract.readEditorAnswer(fields, { type: 'REPAIR', amount: '99' }).values, { type: 'REPAIR', amount: '99.00' });
+  assert.ok(contract.readEditorAnswer(fields, { type: 'REPAIR', amount: 'junk' }).errors.amount);
+});
+
+test('event add: the server owns which details matter for which event type, and the date round-trips', () => {
+  const add = require('../../src/services/ask/support/homeEventAddEditor.ts');
+  const fields = add.eventAddEditorFields();
+  const byKey = Object.fromEntries(fields.map((field) => [field.key, field]));
+  assert.ok(byKey.amount.visibleWhen.in.includes('PURCHASE') && !byKey.amount.visibleWhen.in.includes('INSPECTION'));
+  assert.ok(byKey.providerName.visibleWhen.in.includes('INSPECTION') && !byKey.providerName.visibleWhen.in.includes('VALUE_UPDATE'));
+  assert.deepEqual(add.EVENT_ADD_EDITOR_SECTIONS.map((section) => [section.id, Boolean(section.collapsed)]), [['event', false], ['details', false], ['more', true]]);
+  assert.equal(add.encodeApproxDate({ precision: 'RANGE', value: '2026-08-01', rangeEnd: '2026-08-15' }), 'RANGE|2026-08-01|2026-08-15');
+  assert.equal(add.encodeApproxDate('2026-08-15'), 'EXACT_DATE|2026-08-15');
+  assert.deepEqual(add.decodeApproxDate('MONTH|2026-08'), { precision: 'MONTH', value: '2026-08' });
+  assert.equal(add.decodeApproxDate('EXACT_DATE|'), null);
+  const typed = add.eventAddAnswerFromEditor({ title: 'x', type: 'REPAIR', occurredAt: 'EXACT_DATE|2026-08-15', summary: '', amount: '12.50', providerName: '', importance: 'HIGH', visibility: 'PRIVATE', roomId: '', inventoryItemId: '' });
+  assert.deepEqual([typed.amount, typed.summary, typed.roomId, typed.importance, typed.visibility, typed.occurredAt], [12.5, null, null, 'HIGH', 'PRIVATE', { precision: 'EXACT_DATE', value: '2026-08-15' }]);
+});

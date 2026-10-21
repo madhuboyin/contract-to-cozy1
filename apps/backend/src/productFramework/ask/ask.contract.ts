@@ -1226,10 +1226,10 @@ export const AskCaptureRequestSchema = z.object({
     recordLabel: z.string(),
     // 'add' starts from an empty record (Continue stays disabled with a reason until the required fields are valid); the default is edit.
     mode: z.enum(['add', 'edit']).optional(), saveLabel: z.string().optional(),
-    sections: z.array(z.object({ id: z.string(), title: z.string() })),
+    sections: z.array(z.object({ id: z.string(), title: z.string(), collapsed: z.boolean().optional() })),
     fields: z.array(z.object({
-      key: z.string(), label: z.string(), kind: z.enum(['TEXT', 'TEXTAREA', 'SELECT', 'DATE', 'MONEY']), section: z.string(), required: z.boolean(),
-      maxLength: z.number().optional(), options: z.array(z.object({ label: z.string(), value: z.string() })).optional(), helpText: z.string().optional(), placeholder: z.string().optional(), inputType: z.enum(['email', 'tel']).optional(), pastDateNote: z.string().optional(), emptyLabel: z.string().optional(), disabledReason: z.string().optional(),
+      key: z.string(), label: z.string(), shortLabel: z.string().optional(), kind: z.enum(['TEXT', 'TEXTAREA', 'SELECT', 'DATE', 'MONEY', 'APPROX_DATE']), section: z.string(), required: z.boolean(),
+      maxLength: z.number().optional(), options: z.array(z.object({ label: z.string(), value: z.string() })).optional(), helpText: z.string().optional(), placeholder: z.string().optional(), inputType: z.enum(['email', 'tel']).optional(), pastDateNote: z.string().optional(), emptyLabel: z.string().optional(), disabledReason: z.string().optional(), visibleWhen: z.object({ field: z.string(), in: z.array(z.string()) }).optional(),
     })),
     original: z.record(z.string(), z.string()),
     // Per-field problems from the last submit (field-level and cross-field), shown on the field and as a summary.

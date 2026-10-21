@@ -870,6 +870,29 @@ function eventEditExecution(stage: 'FORM' | 'CONFIRMATION' | 'DONE', sessionId?:
   };
 }
 
+// Add a timeline event on the shared editor (FRD v1.394): the descriptor exactly as the producer builds it, for an empty form.
+const EVENT_ADD_EMPTY = { title: '', type: '', occurredAt: '', summary: '', amount: '', providerName: '', importance: 'NORMAL', visibility: 'HOUSEHOLD', roomId: '', inventoryItemId: '' };
+function eventAddEditor(_current: Record<string, string>) {
+  const types = ['Purchase', 'Document', 'Repair', 'Maintenance', 'Claim', 'Improvement', 'Value update', 'Inspection', 'Note', 'Milestone', 'Other'].map((label) => ({ label, value: label.toUpperCase().replace(/ /g, '_') }));
+  return {
+    recordLabel: 'Add a timeline event', mode: 'add', saveLabel: 'Continue to review',
+    sections: [{ id: 'event', title: 'Event' }, { id: 'details', title: 'Details' }, { id: 'more', title: 'More details', collapsed: true }],
+    fields: [
+      { key: 'title', label: 'Title', kind: 'TEXT', section: 'event', required: true, maxLength: 140 },
+      { key: 'type', label: 'Type', kind: 'SELECT', section: 'event', required: true, options: types },
+      { key: 'occurredAt', label: 'When did it happen?', shortLabel: 'date', kind: 'APPROX_DATE', section: 'event', required: true, helpText: 'Use the precision you actually know.' },
+      { key: 'summary', label: 'What happened?', kind: 'TEXTAREA', section: 'details', required: false, maxLength: 500 },
+      { key: 'amount', label: 'Amount (USD)', kind: 'MONEY', section: 'details', required: false, visibleWhen: { field: 'type', in: ['PURCHASE', 'REPAIR', 'MAINTENANCE', 'CLAIM', 'IMPROVEMENT', 'VALUE_UPDATE'] } },
+      { key: 'providerName', label: 'Provider or contractor', kind: 'TEXT', section: 'details', required: false, maxLength: 160, visibleWhen: { field: 'type', in: ['PURCHASE', 'REPAIR', 'MAINTENANCE', 'CLAIM', 'IMPROVEMENT', 'INSPECTION'] } },
+      { key: 'importance', label: 'Importance', kind: 'SELECT', section: 'more', required: true, options: [{ label: 'Low', value: 'LOW' }, { label: 'Normal', value: 'NORMAL' }, { label: 'High', value: 'HIGH' }, { label: 'Highlight', value: 'HIGHLIGHT' }] },
+      { key: 'visibility', label: 'Who can see it', kind: 'SELECT', section: 'more', required: true, options: [{ label: 'Household', value: 'HOUSEHOLD' }, { label: 'Private (only you)', value: 'PRIVATE' }, { label: 'Resale pack', value: 'RESALE_PACK' }] },
+      { key: 'roomId', label: 'Room', kind: 'SELECT', section: 'more', required: false, emptyLabel: 'No room', options: [{ label: 'Kitchen', value: 'room-kitchen' }] },
+      { key: 'inventoryItemId', label: 'Inventory item', kind: 'SELECT', section: 'more', required: false, emptyLabel: 'No item', options: [] },
+    ],
+    original: EVENT_ADD_EMPTY,
+  };
+}
+
 // Phase 3 add-record acceptance: "Add a timeline event" and "Add a room" -> form -> review -> receipt.
 // Shapes mirror buildUserAddedEventConfirmation / roomCreateResult / the existing confirm receipts.
 type AddKind = 'event' | 'room' | 'item' | 'area';
@@ -916,8 +939,9 @@ function addExecution(kind: AddKind, stage: 'FORM' | 'CONFIRMATION' | 'DONE', se
     helpText: 'You will review everything before it is saved.', inputSchema: { type: 'GROUP', fields }, currentAnswer: current,
     allowNotSure: false, sensitivity: 'STANDARD', destinationLabel: 'Nothing is saved until you confirm', confirmationText: null, expectedContextVersion: spec.context,
     ...(kind === 'area' ? { skippable: true } : {}),
+    ...(kind === 'event' ? { presentation: 'FORM', editor: eventAddEditor(typeof current.title === 'string' ? current as Record<string, string> : EVENT_ADD_EMPTY) } : {}),
   });
-  const empty = kind === 'event' ? { title: null, type: null, occurredAt: null, summary: null, amount: null, providerName: null }
+  const empty = kind === 'event' ? EVENT_ADD_EMPTY
     : kind === 'area' ? { roofType: null, roofReplacementYear: null }
     : kind === 'item' ? { name: null, category: null, roomId: null, brand: null, model: null }
     : { type: null, name: null, floorLevel: null };

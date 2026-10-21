@@ -9,6 +9,7 @@ import { HouseholdRole, MaintenanceTaskStatus, Prisma } from '@prisma/client';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { prisma } from '../../../lib/prisma';
+import { loadEventAddOptions } from '../support/homeEventAddEditor';
 import { homeEventContextVersion, warrantyContextVersion } from '../suggestedActions/domainVersions';
 import { logger } from '../../../lib/logger';
 import { areaScopeForOutcome, loadAreaCaptureAllowlist } from '../suggestedActions/profileAreaAllowlist';
@@ -2113,7 +2114,7 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
       throw error;
     }
     if (isEventAdd) {
-      const built = buildUserAddedEventConfirmation(execution.parametersJson, storedContextVersion, input.answer, new Date());
+      const built = buildUserAddedEventConfirmation(execution.parametersJson, storedContextVersion, input.answer, new Date(), await loadEventAddOptions(execution.propertyId));
       if ('error' in built) {
         const error = new Error(built.error);
         (error as Error & { code?: string }).code = 'ASK_CAPTURE_VALIDATION_ERROR';

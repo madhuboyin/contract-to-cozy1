@@ -1072,7 +1072,8 @@ const declaredEventAdd = { surface: 'ASK_WORKSPACE', operationId: 'CAPTURE_EVENT
 const NOW = new Date('2026-09-21T12:00:00.000Z');
 const eventAnswer = { title: '  Water heater replaced ', type: 'REPAIR', occurredAt: '2026-08-15', summary: 'Old tank failed.', amount: 1450.5, providerName: 'Acme Plumbing' };
 
-test('Add event: the declared action returns the empty form under its own capture key and carries the source list; nothing is written', async () => {
+test('Add event: the declared action returns the shared editor under its own capture key, sectioned, with the type-driven fields hidden until a type is chosen; nothing is written', async () => {
+  linkModels();
   const result = await capabilityInvoke('CAPTURE_EVENT_CONFIRM', eventAddEnvelope(declaredEventAdd));
   assert.equal(result.status, 'NEEDS_CONTEXT');
   assert.equal(result.reasonCode, 'EVENT_ADD_INPUT_REQUIRED');
@@ -1083,10 +1084,52 @@ test('Add event: the declared action returns the empty form under its own captur
   assert.equal(request.requirementId, 'capture-event-add');
   assert.equal(request.classification, 'WORKFLOW_INPUT');
   assert.equal(request.expectedContextVersion, result.contextVersion);
-  assert.deepEqual(request.inputSchema.fields.map((field) => field.key), ['title', 'type', 'occurredAt', 'summary', 'amount', 'providerName']);
-  const typeField = request.inputSchema.fields.find((field) => field.key === 'type');
-  assert.ok(!typeField.inputSchema.options.some((option) => option.value === 'VERIFIED_RESOLUTION'), 'the system-created type is not offered');
-  assert.ok(Object.values(request.currentAnswer).every((value) => value === null), 'nothing is pre-filled');
+  const { editor } = request;
+  assert.deepEqual([editor.mode, editor.saveLabel], ['add', 'Continue to review']);
+  assert.deepEqual(editor.sections.map((section) => [section.title, Boolean(section.collapsed)]), [['Event', false], ['Details', false], ['More details', true]]);
+  assert.deepEqual(editor.fields.map((field) => field.key), ['title', 'type', 'occurredAt', 'summary', 'amount', 'providerName', 'importance', 'visibility', 'roomId', 'inventoryItemId']);
+  const byKey = Object.fromEntries(editor.fields.map((field) => [field.key, field]));
+  assert.deepEqual([byKey.occurredAt.kind, byKey.occurredAt.required, byKey.summary.label, byKey.amount.label, byKey.providerName.label], ['APPROX_DATE', true, 'What happened?', 'Amount (USD)', 'Provider or contractor']);
+  assert.ok(byKey.amount.visibleWhen.in.includes('REPAIR') && !byKey.amount.visibleWhen.in.includes('NOTE'), 'an amount is asked only for events that can have one');
+  assert.ok(byKey.providerName.visibleWhen.in.includes('INSPECTION') && !byKey.providerName.visibleWhen.in.includes('VALUE_UPDATE'));
+  assert.ok(!byKey.type.options.some((option) => option.value === 'VERIFIED_RESOLUTION'), 'the system-created type is not offered');
+  assert.deepEqual(byKey.roomId.options, [{ label: 'Kitchen', value: 'room-1' }]);
+  assert.deepEqual([request.currentAnswer.importance, request.currentAnswer.visibility, request.currentAnswer.title], ['NORMAL', 'HOUSEHOLD', '']);
+  assert.equal(calls.createHomeEvent.length, 0);
+});
+
+const editorAnswer = (overrides = {}) => ({ title: 'Water heater replaced', type: 'REPAIR', occurredAt: 'EXACT_DATE|2026-08-15', summary: '', amount: '', providerName: '', importance: 'NORMAL', visibility: 'HOUSEHOLD', roomId: '', inventoryItemId: '', ...overrides });
+
+test('Add event: the editor\'s answer becomes the review card with only entered details, including the parity fields; hidden fields are read as empty', () => {
+  const options = { rooms: [{ id: 'room-1', name: 'Kitchen' }], items: [{ id: 'item-1', name: 'Water heater' }] };
+  const built = buildUserAddedEventConfirmation({ captureOrigin: 'USER_ADD' }, 'ctx-1', editorAnswer({ amount: '1450.5', providerName: 'Acme Plumbing', summary: 'Old tank failed.', importance: 'HIGH', visibility: 'PRIVATE', roomId: 'room-1', inventoryItemId: 'item-1' }), NOW, options);
+  assert.equal(built.result.status, 'NEEDS_CONFIRMATION');
+  assert.deepEqual(built.result.confirmation.fields.map((field) => [field.label, field.value]), [
+    ['Event', 'Water heater replaced'], ['Type', 'Repair'], ['Date', '2026-08-15'], ['Amount', '$1,450.50'], ['Provider or contractor', 'Acme Plumbing'], ['What happened', 'Old tank failed.'],
+    ['Importance', 'High'], ['Who can see it', 'Only you'], ['Room', 'Kitchen'], ['Inventory item', 'Water heater'],
+  ]);
+  const p = built.result.parameters;
+  assert.deepEqual([p.importance, p.visibility, p.roomId, p.inventoryItemId, p.amount, p.providerName, p.datePrecision], ['HIGH', 'PRIVATE', 'room-1', 'item-1', 1450.5, 'Acme Plumbing', 'EXACT_DATE']);
+  const plain = buildUserAddedEventConfirmation({}, 'ctx-1', editorAnswer(), NOW, options).result;
+  assert.deepEqual(plain.confirmation.fields.map((field) => field.label), ['Event', 'Type', 'Date'], 'defaults and empty fields are not listed');
+  const note = buildUserAddedEventConfirmation({}, 'ctx-1', editorAnswer({ type: 'NOTE', amount: '99', providerName: 'Someone' }), NOW, options).result;
+  assert.deepEqual([note.parameters.amount, note.parameters.providerName], [null, null], 'a note has no amount or provider, so a stale value is dropped');
+  const range = buildUserAddedEventConfirmation({}, 'ctx-1', editorAnswer({ occurredAt: 'RANGE|2026-08-01|2026-08-15' }), NOW, options).result;
+  assert.deepEqual([range.parameters.datePrecision, range.parameters.dateRangeStart, range.parameters.dateRangeEnd], ['RANGE', '2026-08-01T00:00:00.000Z', '2026-08-15T00:00:00.000Z']);
+});
+
+test('Add event: problems come back on the editor, field by field, and nothing is confirmed', () => {
+  const options = { rooms: [{ id: 'room-1', name: 'Kitchen' }], items: [] };
+  const bad = buildUserAddedEventConfirmation({}, 'ctx-1', editorAnswer({ title: 'ab', occurredAt: 'RANGE|2026-08-15|2026-08-01', roomId: 'room-9', amount: 'x' }), NOW, options).result;
+  assert.equal(bad.status, 'NEEDS_CONTEXT');
+  assert.equal(bad.reasonCode, 'EVENT_ADD_INVALID');
+  assert.deepEqual(Object.keys(bad.captureRequests[0].editor.errors).sort(), ['amount', 'occurredAt', 'roomId', 'title']);
+  assert.equal(bad.captureRequests[0].currentAnswer.title, 'ab', 'what was typed is kept');
+  const future = buildUserAddedEventConfirmation({}, 'ctx-1', editorAnswer({ occurredAt: 'EXACT_DATE|2027-01-01' }), NOW, options).result;
+  assert.match(future.captureRequests[0].editor.errors.occurredAt, /cannot be in the future/);
+  const missing = buildUserAddedEventConfirmation({}, 'ctx-1', editorAnswer({ type: '', occurredAt: 'EXACT_DATE|' }), NOW, options).result;
+  assert.ok(missing.captureRequests[0].editor.errors.type);
+  assert.ok(missing.captureRequests[0].editor.errors.occurredAt);
   assert.equal(calls.createHomeEvent.length, 0);
 });
 

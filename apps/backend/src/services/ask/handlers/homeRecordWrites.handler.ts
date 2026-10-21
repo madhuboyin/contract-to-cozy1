@@ -23,6 +23,7 @@ import { collectionDescriptor } from '../support/collectionDescriptor';
 import { HOME_EVENT_EDIT_MESSAGE, homeEventEditItemActions } from '../support/homeEventCorrection';
 import { editorToGroupSchema, type RecordEditorChange } from '../recordEditor/recordEditor.contract';
 import { HomeEventUpdateInputSchema } from '../support/commandInputs';
+import { loadEventAddOptions } from '../support/homeEventAddEditor';
 import { HOME_EVENT_EDITOR_SELECT, homeEventEditorChanges, homeEventEditorDescriptor, homeEventEditorValues, homeEventUpdateDescription, validateHomeEventEditorAnswer, type HomeEventEditorRow } from '../support/homeEventEditor';
 import { validateWarrantyEditorAnswer, warrantyEditorChanges, warrantyEditorDescriptor, warrantyEditorNotes, warrantyEditorValues, type WarrantyEditorRow } from '../support/warrantyEditor';
 
@@ -572,7 +573,7 @@ export async function eventAddResult(userId: string, propertyId: string, sourceE
     status: 'NEEDS_CONTEXT', reasonCode: 'EVENT_ADD_INPUT_REQUIRED', contextVersion,
     parameters: { captureOrigin: USER_ADD_ORIGIN, sourceExecutionId },
     blocks: [{ type: 'SUMMARY', id: 'event-add-input', title: 'Add a timeline event', body: 'Nothing has been saved yet. Enter the details, then review them before the event is added.', tone: 'DEFAULT', actions: [] }],
-    captureRequests: [eventAddCaptureRequest(contextVersion)],
+    captureRequests: [eventAddCaptureRequest(contextVersion, {}, await loadEventAddOptions(propertyId))],
     suggestions: [],
   };
 }

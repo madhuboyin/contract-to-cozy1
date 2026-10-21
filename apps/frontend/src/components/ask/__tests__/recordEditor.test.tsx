@@ -264,3 +264,103 @@ test('field spans fill every row: four fields as 2x2, three as thirds, two as ha
   expect(Object.values(fieldSpans([f('a'), f('b'), f('c')]))).toEqual(Array(3).fill('md:col-span-4'));
   expect(fieldSpans([f('a'), f('t', 'TEXTAREA'), f('b')])).toEqual({ t: 'md:col-span-12', a: 'md:col-span-6', b: 'md:col-span-6' });
 });
+
+// Add event on the shared editor (FRD v1.394): a date with precision, details that appear only for the right type, folded optional details.
+const typeOptions = [{ label: 'Purchase', value: 'PURCHASE' }, { label: 'Repair', value: 'REPAIR' }, { label: 'Note', value: 'NOTE' }];
+const eventAddRequest = (errors?: Record<string, string>) => ({
+  requirementId: 'capture-event-add', captureKey: 'CAPTURE_EVENT_ADD', classification: 'WORKFLOW_INPUT', state: 'UNKNOWN', presentation: 'FORM', title: 'Add a timeline event', question: 'q', helpText: null,
+  allowNotSure: false, sensitivity: 'STANDARD', destinationLabel: null, confirmationText: null, expectedContextVersion: 'ev-v1', inputSchema: { type: 'GROUP', fields: [] },
+  currentAnswer: { title: '', type: '', occurredAt: '', summary: '', amount: '', providerName: '', importance: 'NORMAL', visibility: 'HOUSEHOLD', roomId: '', inventoryItemId: '' },
+  editor: {
+    recordLabel: 'Add a timeline event', mode: 'add', saveLabel: 'Continue to review',
+    sections: [{ id: 'event', title: 'Event' }, { id: 'details', title: 'Details' }, { id: 'more', title: 'More details', collapsed: true }],
+    fields: [
+      { key: 'title', label: 'Title', kind: 'TEXT', section: 'event', required: true, maxLength: 140 },
+      { key: 'type', label: 'Type', kind: 'SELECT', section: 'event', required: true, options: typeOptions },
+      { key: 'occurredAt', label: 'When did it happen?', shortLabel: 'date', kind: 'APPROX_DATE', section: 'event', required: true },
+      { key: 'summary', label: 'What happened?', kind: 'TEXTAREA', section: 'details', required: false },
+      { key: 'amount', label: 'Amount (USD)', kind: 'MONEY', section: 'details', required: false, visibleWhen: { field: 'type', in: ['PURCHASE', 'REPAIR'] } },
+      { key: 'providerName', label: 'Provider or contractor', kind: 'TEXT', section: 'details', required: false, visibleWhen: { field: 'type', in: ['PURCHASE', 'REPAIR'] } },
+      { key: 'importance', label: 'Importance', kind: 'SELECT', section: 'more', required: true, options: [{ label: 'Normal', value: 'NORMAL' }, { label: 'High', value: 'HIGH' }] },
+      { key: 'visibility', label: 'Who can see it', kind: 'SELECT', section: 'more', required: true, options: [{ label: 'Household', value: 'HOUSEHOLD' }, { label: 'Private (only you)', value: 'PRIVATE' }] },
+      { key: 'roomId', label: 'Room', kind: 'SELECT', section: 'more', required: false, emptyLabel: 'No room', options: [{ label: 'Kitchen', value: 'room-1' }] },
+      { key: 'inventoryItemId', label: 'Inventory item', kind: 'SELECT', section: 'more', required: false, emptyLabel: 'No item', options: [] },
+    ],
+    original: { title: '', type: '', occurredAt: '', summary: '', amount: '', providerName: '', importance: 'NORMAL', visibility: 'HOUSEHOLD', roomId: '', inventoryItemId: '' }, ...(errors ? { errors } : {}),
+  },
+}) as unknown as AskCaptureRequest;
+
+test('Add event: amount and provider stay hidden until a type that can have them is chosen, and More details starts folded', () => {
+  const view = render(<InlineCaptureCard executionId="ev1" request={eventAddRequest()} onCompleted={jest.fn()} />);
+  expect(screen.queryByLabelText(/^Amount/)).not.toBeInTheDocument();
+  expect(screen.queryByLabelText(/^Provider or contractor/)).not.toBeInTheDocument();
+  expect(view.container.querySelector('[data-record-editor-more]')).not.toHaveAttribute('open');
+  expect(screen.getByText('Optional')).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText(/^Type/), { target: { value: 'NOTE' } });
+  expect(screen.queryByLabelText(/^Amount/)).not.toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText(/^Type/), { target: { value: 'REPAIR' } });
+  expect(screen.getByLabelText(/^Amount/)).toBeVisible();
+  expect(screen.getByLabelText(/^Provider or contractor/)).toBeVisible();
+  expect(screen.getByText('$')).toBeVisible();
+});
+
+test('Add event: the date keeps its precision on one control; switching starts the date over; Continue explains what is missing', () => {
+  render(<InlineCaptureCard executionId="ev1" request={eventAddRequest()} onCompleted={jest.fn()} />);
+  const group = screen.getByRole('group', { name: 'When did it happen? precision' });
+  expect(Array.from(group.querySelectorAll('button')).map((button) => button.textContent)).toEqual(['Exact date', 'Month', 'Year', 'Date range']);
+  expect(screen.getByRole('button', { name: 'Exact date' })).toHaveAttribute('aria-pressed', 'true');
+  expect(screen.getByRole('button', { name: 'Continue to review' })).toBeDisabled();
+  expect(screen.getByText('Add the title, type and date to continue.')).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Date range' }));
+  expect(screen.getByLabelText('When did it happen? from')).toHaveAttribute('type', 'date');
+  expect(screen.getByLabelText('When did it happen? to')).toHaveAttribute('type', 'date');
+  fireEvent.click(screen.getByRole('button', { name: 'Month' }));
+  expect(screen.getByLabelText('When did it happen? value')).toHaveAttribute('type', 'month');
+  fireEvent.click(screen.getByRole('button', { name: 'Year' }));
+  expect(screen.getByLabelText('When did it happen? value')).toHaveAttribute('type', 'number');
+});
+
+test('Add event: a complete entry submits strings (date as PRECISION|value, hidden fields empty) and a reversed range blocks Continue', async () => {
+  jest.spyOn(api, 'submitAskCapture').mockResolvedValue({ success: true, data: { executionId: 'ev1' } } as never);
+  render(<InlineCaptureCard executionId="ev1" request={eventAddRequest()} onCompleted={jest.fn()} />);
+  fireEvent.change(screen.getByLabelText(/^Title/), { target: { value: 'Water heater replaced' } });
+  fireEvent.change(screen.getByLabelText(/^Type/), { target: { value: 'REPAIR' } });
+  fireEvent.change(screen.getByLabelText('When did it happen? value'), { target: { value: '2026-08-15' } });
+  fireEvent.change(screen.getByLabelText(/^Amount/), { target: { value: '99' } });
+  fireEvent.change(screen.getByLabelText(/^Type/), { target: { value: 'NOTE' } });
+  expect(screen.getByRole('button', { name: 'Continue to review' })).toBeEnabled();
+  fireEvent.click(screen.getByRole('button', { name: 'Continue to review' }));
+  await waitFor(() => expect(api.submitAskCapture).toHaveBeenCalledTimes(1));
+  expect((api.submitAskCapture as jest.Mock).mock.calls[0][1].answer).toEqual({
+    title: 'Water heater replaced', type: 'NOTE', occurredAt: 'EXACT_DATE|2026-08-15', summary: '', amount: '', providerName: '', importance: 'NORMAL', visibility: 'HOUSEHOLD', roomId: '', inventoryItemId: '',
+  });
+});
+
+test('Add event: a problem inside More details opens it, and the date field takes its own server problem', () => {
+  const view = render(<InlineCaptureCard executionId="ev1" request={eventAddRequest({ roomId: 'That room is not in this home.', occurredAt: 'A timeline records what has happened, so the date cannot be in the future.' })} onCompleted={jest.fn()} />);
+  expect(view.container.querySelector('[data-record-editor-more]')).toHaveAttribute('open');
+  expect(screen.getByText('That room is not in this home.')).toBeVisible();
+  expect(screen.getByText(/cannot be in the future/)).toBeVisible();
+});
+
+test('field spans: a date takes its own row so its control is never squeezed', () => {
+  const f = (key: string, kind = 'TEXT') => ({ key, label: key, kind, section: 's', required: false }) as never;
+  expect(fieldSpans([f('title'), f('type', 'SELECT'), f('when', 'APPROX_DATE')])).toEqual({ when: 'md:col-span-12', title: 'md:col-span-6', type: 'md:col-span-6' });
+  expect(fieldSpans([f('amount', 'MONEY'), f('provider')])).toEqual({ amount: 'md:col-span-6', provider: 'md:col-span-6' });
+  expect(fieldSpans([f('provider')])).toEqual({ provider: 'md:col-span-12' });
+});
+
+test('an empty required field is not flagged when it loses focus, only after a submit attempt, so nothing shifts under the pointer', () => {
+  render(<InlineCaptureCard executionId="ev1" request={eventAddRequest()} onCompleted={jest.fn()} />);
+  fireEvent.blur(screen.getByLabelText(/^Title/));
+  expect(screen.queryByText('Title is required.')).not.toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText(/^Title/), { target: { value: 'x'.repeat(141) } });
+  fireEvent.blur(screen.getByLabelText(/^Title/));
+  expect(screen.getByText(/at most 140/)).toBeVisible();
+});
+
+test('Changed markers belong to Edit: Add never shows them', () => {
+  render(<InlineCaptureCard executionId="ev1" request={eventAddRequest()} onCompleted={jest.fn()} />);
+  fireEvent.change(screen.getByLabelText(/^Title/), { target: { value: 'Roof' } });
+  expect(screen.queryByText('Changed')).not.toBeInTheDocument();
+});

@@ -15,8 +15,8 @@ const SPAN: Record<number, string> = { 4: 'md:col-span-4', 6: 'md:col-span-6', 1
 /** Column spans on a 12-column grid so every row fills: multiline fields take a full row, the rest share rows of up to three (2x2 for four). */
 export function fieldSpans(fields: AskRecordEditorField[]): Record<string, string> {
   const spans: Record<string, string> = {};
-  const rest = fields.filter((field) => field.kind !== 'TEXTAREA');
-  for (const field of fields) if (field.kind === 'TEXTAREA') spans[field.key] = SPAN[12];
+  const rest = fields.filter((field) => field.kind !== 'TEXTAREA' && field.kind !== 'APPROX_DATE');
+  for (const field of fields) if (field.kind === 'TEXTAREA' || field.kind === 'APPROX_DATE') spans[field.key] = SPAN[12];
   const rows: AskRecordEditorField[][] = [];
   if (rest.length === 4) rows.push(rest.slice(0, 2), rest.slice(2));
   else for (let index = 0; index < rest.length; index += 3) rows.push(rest.slice(index, index + 3));
@@ -29,6 +29,7 @@ const todayIso = () => new Date().toISOString().slice(0, 10);
 /** The value as the server will see it, so "850" and "850.00" are not a change. */
 export function normalizeEditorFieldValue(field: Pick<AskRecordEditorField, 'kind'>, raw: string): string {
   const text = raw.trim();
+  if (field.kind === 'APPROX_DATE') return approxParts(text).filter(Boolean).length >= 2 ? text : '';
   if (field.kind === 'MONEY' && /^\d{1,8}(?:\.\d{1,2})?$/.test(text)) return Number(text).toFixed(2);
   return text;
 }
@@ -36,10 +37,55 @@ export function normalizeEditorFieldValue(field: Pick<AskRecordEditorField, 'kin
 /** A client-side reason a value is unusable (required, shape). Domain and cross-field rules come back from the server. */
 export function editorFieldProblem(field: AskRecordEditorField, value: string): string | null {
   if (!value) return field.required ? `${field.label} is required.` : null;
+  if (field.kind === 'APPROX_DATE') return approxDateProblem(value);
   if (field.kind === 'DATE') return /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(new Date(`${value}T00:00:00Z`).getTime()) ? null : 'Enter a valid date.';
   if (field.kind === 'MONEY') return /^\d{1,8}(?:\.\d{2})$/.test(value) ? null : 'Enter an amount in dollars, such as 850 or 850.50.';
   if (field.kind === 'SELECT') return (field.options ?? []).some((option) => option.value === value) ? null : 'Choose an option.';
   return field.maxLength !== undefined && value.length > field.maxLength ? `Use at most ${field.maxLength} characters.` : null;
+}
+
+/** [precision, value, rangeEnd] of an APPROX_DATE string (`EXACT_DATE|2026-08-15`, `MONTH|2026-08`, `YEAR|2026`, `RANGE|from|to`). */
+export function approxParts(text: string): [string, string, string] {
+  const [precision = '', value = '', end = ''] = text.split('|');
+  return [precision, value.trim(), end.trim()];
+}
+
+const isDay = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(new Date(`${value}T00:00:00Z`).getTime());
+
+export function approxDateProblem(text: string): string | null {
+  const [precision, value, end] = approxParts(text);
+  if (precision === 'EXACT_DATE') return isDay(value) ? null : 'Enter a valid date.';
+  if (precision === 'MONTH') return /^\d{4}-(0[1-9]|1[0-2])$/.test(value) ? null : 'Enter a valid month.';
+  if (precision === 'YEAR') return /^\d{4}$/.test(value) ? null : 'Enter a valid year.';
+  if (precision === 'RANGE') return !isDay(value) || !isDay(end) ? 'Enter both dates of the range.' : end < value ? 'The end date must be on or after the start date.' : null;
+  return 'Choose how exactly you know when it happened.';
+}
+
+const PRECISIONS = [['EXACT_DATE', 'Exact date'], ['MONTH', 'Month'], ['YEAR', 'Year'], ['RANGE', 'Date range']] as const;
+
+// A date with the precision the person actually knows: the four precisions sit on one line as a segmented control, with the input(s) beside
+// it at a comfortable width (two inputs for a range). Switching precision starts the date over rather than guessing a conversion.
+function ApproxDateInput({ id, fieldKey, label, value, disabled, invalid, describedBy, todayMax, onChange, onBlur }: {
+  id: string; fieldKey: string; label: string; value: string; disabled: boolean; invalid: boolean; describedBy?: string; todayMax: string; onChange: (value: string) => void; onBlur: () => void;
+}) {
+  const [precisionRaw, first, second] = approxParts(value);
+  const precision = precisionRaw || 'EXACT_DATE';
+  const field = cn(INPUT, invalid ? 'border-red-400' : 'border-slate-200');
+  const compose = (a: string, b = '') => onChange(precision === 'RANGE' ? `RANGE|${a}|${b}` : `${precision}|${a}`);
+  return <div role="group" aria-label={label} className="flex flex-wrap items-center gap-x-3 gap-y-2" data-approx-date="">
+    <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-0.5" role="group" aria-label={`${label} precision`}>
+      {PRECISIONS.map(([key, text]) => <button key={key} type="button" disabled={disabled} aria-pressed={precision === key} onClick={() => onChange(`${key}|`)}
+        className={cn('min-h-9 whitespace-nowrap rounded-lg px-3 text-sm font-semibold transition-colors', precision === key ? 'bg-teal-700 text-white shadow-sm' : 'text-slate-700 hover:bg-white')}>{text}</button>)}
+    </div>
+    {precision === 'EXACT_DATE' && <input id={id} data-editor-field={fieldKey} aria-label={`${label} value`} type="date" max={todayMax} value={first} disabled={disabled} aria-invalid={invalid || undefined} aria-describedby={describedBy} onBlur={onBlur} onChange={(event) => compose(event.target.value)} className={cn(field, 'w-44')} />}
+    {precision === 'MONTH' && <input id={id} data-editor-field={fieldKey} aria-label={`${label} value`} type="month" max={todayMax.slice(0, 7)} value={first} disabled={disabled} aria-invalid={invalid || undefined} aria-describedby={describedBy} onBlur={onBlur} onChange={(event) => compose(event.target.value)} className={cn(field, 'w-44')} />}
+    {precision === 'YEAR' && <input id={id} data-editor-field={fieldKey} aria-label={`${label} value`} type="number" inputMode="numeric" min={1600} max={Number(todayMax.slice(0, 4))} placeholder="YYYY" value={first} disabled={disabled} aria-invalid={invalid || undefined} aria-describedby={describedBy} onBlur={onBlur} onChange={(event) => compose(event.target.value)} className={cn(field, 'w-28')} />}
+    {precision === 'RANGE' && <div className="flex flex-wrap items-center gap-2">
+      <input id={id} data-editor-field={fieldKey} aria-label={`${label} from`} type="date" max={todayMax} value={first} disabled={disabled} aria-invalid={invalid || undefined} aria-describedby={describedBy} onBlur={onBlur} onChange={(event) => compose(event.target.value, second)} className={cn(field, 'w-44')} />
+      <span className="text-sm text-slate-500" aria-hidden="true">to</span>
+      <input aria-label={`${label} to`} type="date" max={todayMax} value={second} disabled={disabled} aria-invalid={invalid || undefined} aria-describedby={describedBy} onBlur={onBlur} onChange={(event) => compose(first, event.target.value)} className={cn(field, 'w-44')} />
+    </div>}
+  </div>;
 }
 
 export function RecordEditor({ editor, initialValues, title, mode = 'edit', saving, cancelling, error, saveLabel, autoFocus, crossFieldErrors, sensitiveConsent, onSubmit, onCancel }: {
@@ -74,7 +120,12 @@ export function RecordEditor({ editor, initialValues, title, mode = 'edit', savi
   const busy = saving || cancelling;
   const today = todayIso();
 
-  const normalized = useMemo(() => Object.fromEntries(editor.fields.map((field) => [field.key, normalizeEditorFieldValue(field, values[field.key] ?? '')])), [editor.fields, values]);
+  const normalizedRaw = useMemo(() => Object.fromEntries(editor.fields.map((field) => [field.key, normalizeEditorFieldValue(field, values[field.key] ?? '')])), [editor.fields, values]);
+  // A field that depends on another (an amount only for a purchase) is shown only for the right value, and is submitted empty while hidden.
+  const isShown = (field: AskRecordEditorField) => !field.visibleWhen || field.visibleWhen.in.includes(normalizedRaw[field.visibleWhen.field] ?? '');
+  const normalized = useMemo(() => Object.fromEntries(editor.fields.map((field) => [field.key, isShown(field) ? normalizedRaw[field.key] : ''])),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [editor.fields, normalizedRaw]);
   const changedKeys = editor.fields.filter((field) => normalized[field.key] !== (editor.original[field.key] ?? '')).map((field) => field.key);
   const dirty = changedKeys.length > 0;
   const changedSet = new Set(changedKeys);
@@ -88,8 +139,9 @@ export function RecordEditor({ editor, initialValues, title, mode = 'edit', savi
   }, [editor.fields, normalized]);
   const cross = useMemo(() => crossFieldErrors?.(normalized) ?? {}, [crossFieldErrors, normalized]);
   const serverErrors = Object.fromEntries(Object.entries(editor.errors ?? {}).filter(([key]) => !staleServerErrors[key]));
-  const visibleError = (key: string): string | null => serverErrors[key] ?? cross[key] ?? ((touched[key] || attempted) ? problems[key] ?? null : null);
-  const missing = editor.fields.filter((field) => field.required && !normalized[field.key]).map((field) => field.label.toLowerCase());
+  // An empty required field is flagged only after a submit attempt: flagging it on blur shifted the layout under the pointer mid-click.
+  const visibleError = (key: string): string | null => serverErrors[key] ?? cross[key] ?? ((attempted || (touched[key] && normalized[key])) ? problems[key] ?? null : null);
+  const missing = editor.fields.filter((field) => field.required && !normalized[field.key]).map((field) => (field.shortLabel ?? field.label).toLowerCase());
   const blockers = new Set([...Object.keys(problems), ...Object.keys(cross)]).size;
   const disabledReason = busy ? null
     : adding && missing.length > 0 ? `Add the ${missing.length > 1 ? `${missing.slice(0, -1).join(', ')} and ${missing[missing.length - 1]}` : missing[0]} to continue.`
@@ -157,8 +209,10 @@ export function RecordEditor({ editor, initialValues, title, mode = 'edit', savi
     } as const;
     return (
       <div key={field.key} className={span}>
-        <label htmlFor={id} className="mb-1 block text-xs font-semibold text-slate-800">{field.label}{field.required ? <span aria-hidden="true"> *</span> : <span className="font-normal text-slate-500"> (optional)</span>}{changedSet.has(field.key) && <span className="ml-1.5 rounded bg-teal-100 px-1 py-px text-[10px] font-semibold uppercase tracking-wide text-teal-800">Changed</span>}</label>
-        {field.kind === 'SELECT' ? (
+        <label htmlFor={id} className="mb-1 block text-xs font-semibold text-slate-800">{field.label}{field.required ? <span aria-hidden="true"> *</span> : <span className="font-normal text-slate-500"> (optional)</span>}{!adding && changedSet.has(field.key) && <span className="ml-1.5 rounded bg-teal-100 px-1 py-px text-[10px] font-semibold uppercase tracking-wide text-teal-800">Changed</span>}</label>
+        {field.kind === 'APPROX_DATE' ? (
+          <ApproxDateInput id={id} fieldKey={field.key} label={field.label} value={value} disabled={busy || Boolean(field.disabledReason)} invalid={Boolean(message)} describedBy={describedBy} todayMax={today} onChange={(next) => change(field.key, next)} onBlur={() => setTouched((current) => ({ ...current, [field.key]: true }))} />
+        ) : field.kind === 'SELECT' ? (
           <select {...common} value={value} onChange={(event) => change(field.key, event.target.value)}>
             {field.emptyLabel ? <option value="">{field.emptyLabel}</option> : !value && <option value="">Choose…</option>}
             {(field.options ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
@@ -198,12 +252,22 @@ export function RecordEditor({ editor, initialValues, title, mode = 'edit', savi
         </header>
         <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 py-4 sm:px-5">
           {editor.sections.map((section) => {
-            const fields = editor.fields.filter((field) => field.section === section.id);
+            const fields = editor.fields.filter((field) => field.section === section.id && isShown(field));
             if (fields.length === 0) return null;
+            const spans = fieldSpans(fields);
+            const grid = <div className="grid gap-x-4 gap-y-3 md:grid-cols-12">{fields.map((field) => renderField(field, spans[field.key]))}</div>;
+            // Optional details start folded; a problem inside one opens it so it is never hidden.
+            if (section.collapsed) {
+              const hasProblem = fields.some((field) => visibleError(field.key));
+              return <details key={section.id} open={hasProblem || undefined} className="group min-w-0 rounded-xl border border-slate-200 px-3 py-2" data-record-editor-more="">
+                <summary className="flex min-h-9 cursor-pointer list-none items-center justify-between text-sm font-semibold text-slate-950">{section.title}<span className="text-xs font-normal text-slate-500">Optional</span></summary>
+                <div className="pt-3">{grid}</div>
+              </details>;
+            }
             return (
               <fieldset key={section.id} className="min-w-0 border-0 p-0">
                 <legend className="mb-3 text-sm font-semibold text-slate-950">{section.title}</legend>
-                <div className="grid gap-x-4 gap-y-3 md:grid-cols-12">{fields.map((field) => renderField(field, fieldSpans(fields)[field.key]))}</div>
+                {grid}
               </fieldset>
             );
           })}

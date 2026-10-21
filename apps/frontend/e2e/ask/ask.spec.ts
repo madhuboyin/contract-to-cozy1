@@ -370,14 +370,32 @@ test('a contributor adds a timeline event inline: the Add action opens the form,
     && (body.launchContext as { operationId?: string } | undefined)?.operationId === 'CAPTURE_EVENT_CONFIRM')).toBe(true);
   await expect(page.getByText('Nothing has been saved yet', { exact: false })).toBeVisible();
 
-  await page.getByLabel('Title', { exact: true }).fill('Water heater replaced');
-  await page.getByRole('button', { name: 'Repair', exact: true }).click();
-  await page.getByLabel('Date', { exact: true }).fill('2026-08-15');
-  await page.getByRole('button', { name: 'Continue to review' }).click();
+  const editor = page.locator('[data-record-editor]');
+  // Type-driven details stay out of the way until a type is chosen, optional record details are folded, and Continue says what is missing.
+  await expect(editor.getByLabel(/^Amount/)).toHaveCount(0);
+  await expect(editor.getByLabel(/^Provider or contractor/)).toHaveCount(0);
+  await expect(editor.getByText('Add the title, type and date to continue.')).toBeVisible();
+  await expect(editor.getByRole('button', { name: 'Continue to review' })).toBeDisabled();
+  // The first click after leaving the autofocused title must land (leaving an empty required field must not shift the layout).
+  await editor.getByRole('button', { name: 'Date range' }).click();
+  await expect(editor.getByLabel('When did it happen? from')).toBeVisible();
+  await expect(editor.getByLabel('When did it happen? to')).toBeVisible();
+  await editor.getByRole('button', { name: 'Exact date' }).click();
+  await expect(editor.getByText('Title is required.')).toHaveCount(0);
+  await editor.getByLabel(/^Title/).fill('Water heater replaced');
+  await editor.getByLabel(/^Type/).selectOption('REPAIR');
+  await expect(editor.getByLabel(/^Amount/)).toBeVisible();
+  await expect(editor.getByLabel(/^Provider or contractor/)).toBeVisible();
+  await expect(editor.getByRole('group', { name: 'When did it happen? precision' }).getByRole('button')).toHaveText(['Exact date', 'Month', 'Year', 'Date range']);
+  await editor.getByLabel('When did it happen? value').fill('2026-08-15');
+  await editor.getByLabel(/^Amount/).fill('1450.5');
+  await editor.locator('[data-record-editor-more] summary').click();
+  await editor.getByLabel(/^Importance/).selectOption('HIGH');
+  await editor.getByRole('button', { name: 'Continue to review' }).click();
 
   await expect.poll(() => api.addCaptureBodies).toEqual([expect.objectContaining({
     requirementId: 'capture-event-add', captureKey: 'CAPTURE_EVENT_ADD', expectedContextVersion: 'event-add-context-v1',
-    answer: expect.objectContaining({ title: 'Water heater replaced', type: 'REPAIR', occurredAt: '2026-08-15' }),
+    answer: expect.objectContaining({ title: 'Water heater replaced', type: 'REPAIR', occurredAt: 'EXACT_DATE|2026-08-15', amount: '1450.50', importance: 'HIGH', visibility: 'HOUSEHOLD' }),
   })]);
   await expect(page.getByText('Add this to your home timeline?').first()).toBeVisible();
   await expect(page.getByText('You entered these details', { exact: false }).first()).toBeVisible();

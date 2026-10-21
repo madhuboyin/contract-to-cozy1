@@ -27,6 +27,9 @@ import { FINANCING_CAPTURE_FACT_KEY } from '../../../modules/propertyContext/app
 import type { AskCaptureRequest, AskPresentationBlock } from '../../../productFramework/ask/ask.contract';
 import type { AskOperationResult } from '../askOperationRegistry';
 import { WARRANTY_CATEGORY_OPTIONS } from '../support/warrantyEditor';
+import { editorToGroupSchema, readEditorAnswer } from '../recordEditor/recordEditor.contract';
+import { decodeApproxDate, EVENT_ADD_DEFAULTS, EVENT_ADD_EDITOR_SECTIONS, eventAddAnswerFromEditor, eventAddEditorFields, eventAddEditorValues, type EventAddOptions } from '../support/homeEventAddEditor';
+import { HOME_EVENT_IMPORTANCE_OPTIONS } from '../support/homeEventCorrection';
 import { evaluateExtractionPreFilter } from './extractionPreFilter';
 import { runStructuredExtraction, type ActiveDecisionThreadContext, type RecentDocumentContext, type RecentHomeEventContext } from './extractionContract';
 import { ExtractionAttributionSchema, filterCandidatesPreservingWarrantyLinks, splitGoalCandidates } from './extractionCandidateSchema';
@@ -405,9 +408,16 @@ const EVENT_ADD_ANSWER_SCHEMA = z.object({
   summary: z.string().trim().max(500).nullish().transform((value) => value || null),
   amount: z.number().nonnegative().max(10_000_000).nullish().transform((value) => value ?? null),
   providerName: z.string().trim().max(160).nullish().transform((value) => value || null),
+  // Parity with Edit event (FRD v1.394): the record's importance, who can see it, and what it links to.
+  importance: z.enum(['LOW', 'NORMAL', 'HIGH', 'HIGHLIGHT']).nullish().transform((value) => value ?? 'NORMAL'),
+  visibility: z.enum(['PRIVATE', 'HOUSEHOLD', 'RESALE_PACK']).nullish().transform((value) => value ?? 'HOUSEHOLD'),
+  roomId: z.string().trim().max(160).nullish().transform((value) => value || null),
+  inventoryItemId: z.string().trim().max(160).nullish().transform((value) => value || null),
 }).strict();
 
-export function eventAddCaptureRequest(contextVersion: string, entered: Record<string, unknown> = {}): AskCaptureRequest {
+export function eventAddCaptureRequest(contextVersion: string, entered: Record<string, unknown> = {}, options?: EventAddOptions, errors?: Record<string, string>): AskCaptureRequest {
+  const fields = eventAddEditorFields(options);
+  const values = eventAddEditorValues(entered);
   return {
     requirementId: 'capture-event-add',
     captureKey: EVENT_ADD_CAPTURE_KEY,
@@ -417,24 +427,29 @@ export function eventAddCaptureRequest(contextVersion: string, entered: Record<s
     title: 'Add a timeline event',
     question: 'What would you like to add to your home timeline?',
     helpText: 'Use the precision you actually know. You will review everything before it is saved.',
-    inputSchema: { type: 'GROUP', fields: [
-      { key: 'title', label: 'Title', required: true, inputSchema: { type: 'SHORT_TEXT', maxLength: 140 } },
-      { key: 'type', label: 'Type', required: true, inputSchema: { type: 'SINGLE_SELECT', options: EVENT_ADD_TYPES.map((value) => ({ label: eventTypeLabel(value), value })) } },
-      { key: 'occurredAt', label: 'When did it happen?', required: true, inputSchema: { type: 'APPROXIMATE_DATE', allowedPrecisions: ['EXACT_DATE', 'MONTH', 'YEAR', 'RANGE'], allowFuture: false } },
-      { key: 'summary', label: 'Details', required: false, inputSchema: { type: 'LONG_TEXT', maxLength: 500 } },
-      { key: 'amount', label: 'Amount', helpText: 'Optional, in USD.', required: false, inputSchema: { type: 'DECIMAL', min: 0, max: 10_000_000, unit: 'USD' } },
-      { key: 'providerName', label: 'Provider', required: false, inputSchema: { type: 'SHORT_TEXT', maxLength: 160 } },
-    ] },
-    currentAnswer: {
-      title: entered.title ?? null, type: entered.type ?? null, occurredAt: entered.occurredAt ?? null,
-      summary: entered.summary ?? null, amount: entered.amount ?? null, providerName: entered.providerName ?? null,
-    },
+    inputSchema: editorToGroupSchema({ fields, sections: EVENT_ADD_EDITOR_SECTIONS }),
+    currentAnswer: values,
     allowNotSure: false,
     sensitivity: 'STANDARD',
     destinationLabel: 'Used to prepare this timeline entry; nothing is saved until you confirm',
     confirmationText: null,
     expectedContextVersion: contextVersion,
+    presentation: 'FORM',
+    editor: {
+      recordLabel: 'Add a timeline event', mode: 'add', saveLabel: 'Continue to review',
+      sections: EVENT_ADD_EDITOR_SECTIONS.map((section) => ({ ...section })),
+      fields: fields.map((field) => ({ ...field, options: field.options?.map((option) => ({ ...option })), visibleWhen: field.visibleWhen ? { field: field.visibleWhen.field, in: [...field.visibleWhen.in] } : undefined })),
+      original: { ...EVENT_ADD_DEFAULTS }, ...(errors && Object.keys(errors).length ? { errors } : {}),
+    },
   };
+}
+
+/** The one rule a timeline keeps: it records what has happened. A day of tolerance covers time-zone skew. */
+function futureDateError(encoded: string, now: Date): string | null {
+  const date = decodeApproxDate(encoded);
+  if (!date) return null;
+  const start = date.precision === 'YEAR' ? `${date.value}-01-01` : date.precision === 'MONTH' ? `${date.value}-01` : date.value;
+  return new Date(`${start}T00:00:00Z`).getTime() > now.getTime() + ONE_DAY_MS ? 'A timeline records what has happened, so the date cannot be in the future.' : null;
 }
 
 // Builds (or rebuilds, on a resubmission) the review card for a user-added event. Returns a homeowner-facing reason
@@ -444,9 +459,32 @@ export function buildUserAddedEventConfirmation(
   contextVersion: string,
   answer: unknown,
   now: Date,
+  options?: EventAddOptions,
 ): { result: AskOperationResult } | { error: string } {
   const parameters = asParameterRecord(storedParameters);
-  const parsed = EVENT_ADD_ANSWER_SCHEMA.safeParse(answer);
+  // The shared editor answers with strings (a date as `PRECISION|value`); validate them against the server-owned fields, hand problems back
+  // on the form, and continue with the same typed answer the older shape produced.
+  const fromEditor = Boolean(answer && typeof answer === 'object' && !Array.isArray(answer) && typeof (answer as Record<string, unknown>).occurredAt === 'string' && String((answer as Record<string, unknown>).occurredAt).includes('|'));
+  let typedAnswer: unknown = answer;
+  if (fromEditor) {
+    const fields = eventAddEditorFields(options);
+    const { values, errors } = readEditorAnswer(fields, answer);
+    const future = !errors.occurredAt ? futureDateError(values.occurredAt, now) : null;
+    if (future) errors.occurredAt = future;
+    if (!errors.title && values.title.length < 3) errors.title = 'Use at least 3 characters for the title.';
+    if (Object.keys(errors).length) {
+      return {
+        result: {
+          status: 'NEEDS_CONTEXT', reasonCode: 'EVENT_ADD_INVALID',
+          blocks: [{ type: 'SUMMARY', id: 'capture-event-add-invalid', title: 'Check the highlighted fields', body: 'Nothing has been saved. Fix the highlighted fields, then review again.', tone: 'CAUTION', actions: [] }],
+          captureRequests: [eventAddCaptureRequest(contextVersion, { ...values, occurredAt: values.occurredAt }, options, errors)], suggestions: [],
+          parameters,
+        },
+      };
+    }
+    typedAnswer = eventAddAnswerFromEditor(values);
+  }
+  const parsed = EVENT_ADD_ANSWER_SCHEMA.safeParse(typedAnswer);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message && !/expected|invalid/i.test(parsed.error.issues[0].message) ? parsed.error.issues[0].message : 'Enter a title, a type, and when the event happened.' };
   const entered = parsed.data;
   const dateValue = entered.occurredAt.value;
@@ -462,6 +500,7 @@ export function buildUserAddedEventConfirmation(
     dateRangeStart: entered.occurredAt.precision === 'RANGE' ? `${dateValue}T00:00:00.000Z` : null,
     dateRangeEnd: entered.occurredAt.precision === 'RANGE' && entered.occurredAt.rangeEnd ? `${entered.occurredAt.rangeEnd}T00:00:00.000Z` : null,
     amount: entered.amount, currency: entered.amount != null ? 'USD' : null, providerName: entered.providerName,
+    importance: entered.importance, visibility: entered.visibility, roomId: entered.roomId, inventoryItemId: entered.inventoryItemId,
     attribution: 'FIRSTHAND', captureChannel: CAPTURE_CHANNEL,
   };
   const fields: Array<{ label: string; value: string }> = [
@@ -469,8 +508,12 @@ export function buildUserAddedEventConfirmation(
     { label: 'Date', value: entered.occurredAt.precision === 'RANGE' ? `${dateValue} to ${entered.occurredAt.rangeEnd}` : dateValue },
   ];
   if (entered.amount != null) fields.push({ label: 'Amount', value: `$${entered.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` });
-  if (entered.providerName) fields.push({ label: 'Provider', value: entered.providerName });
-  if (entered.summary) fields.push({ label: 'Details', value: entered.summary });
+  if (entered.providerName) fields.push({ label: 'Provider or contractor', value: entered.providerName });
+  if (entered.summary) fields.push({ label: 'What happened', value: entered.summary });
+  if (entered.importance !== 'NORMAL') fields.push({ label: 'Importance', value: HOME_EVENT_IMPORTANCE_OPTIONS.find((option) => option.value === entered.importance)?.label ?? entered.importance });
+  if (entered.visibility !== 'HOUSEHOLD') fields.push({ label: 'Who can see it', value: entered.visibility === 'PRIVATE' ? 'Only you' : 'Household and resale pack' });
+  if (entered.roomId) fields.push({ label: 'Room', value: options?.rooms.find((room) => room.id === entered.roomId)?.name ?? 'A room in this home' });
+  if (entered.inventoryItemId) fields.push({ label: 'Inventory item', value: options?.items.find((item) => item.id === entered.inventoryItemId)?.name ?? 'An item in this home' });
   const title = 'Add this to your home timeline?';
   return {
     result: {
@@ -485,7 +528,7 @@ export function buildUserAddedEventConfirmation(
         expiresAt: expiresAt.toISOString(),
       },
       suggestions: [],
-      captureRequests: [eventAddCaptureRequest(contextVersion, { ...entered })],
+      captureRequests: [eventAddCaptureRequest(contextVersion, { ...entered }, options)],
       parameters: { ...merged, confirmationVersion, confirmationExpiresAt: expiresAt.toISOString() },
     },
   };
