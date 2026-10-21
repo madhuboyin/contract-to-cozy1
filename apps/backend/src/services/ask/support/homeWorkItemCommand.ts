@@ -12,15 +12,17 @@ export const WORK_ITEM_MESSAGES = {
   ATTACH_EXISTING: 'Attach an existing record as evidence for this work item.',
   SUBMIT_COMPLETION_EVIDENCE: 'Submit completion evidence for this work item.',
   REMOVE_EVIDENCE: 'Remove evidence from this work item.',
+  UPDATE_STATUS: 'Update the status of this work item.',
 } as const;
 export type WorkItemCommandKind = keyof typeof WORK_ITEM_MESSAGES;
 export const WORK_ITEM_ACTION_IDS = { SNOOZE: 'work-item-snooze', RESCHEDULE: 'work-item-reschedule', ACCEPT_ROUTINE: 'work-items-accept-routine' } as const;
 export const workItemKindFromMessage = (message: string): WorkItemCommandKind | null =>
   ((Object.entries(WORK_ITEM_MESSAGES) as Array<[WorkItemCommandKind, string]>).find(([, value]) => value === message)?.[0]) ?? null;
-export type WorkItemFormKind = 'SNOOZE' | 'RESCHEDULE' | 'ATTACH_EXISTING' | 'SUBMIT_COMPLETION_EVIDENCE' | 'REMOVE_EVIDENCE';
+export type WorkItemFormKind = 'SNOOZE' | 'RESCHEDULE' | 'ATTACH_EXISTING' | 'SUBMIT_COMPLETION_EVIDENCE' | 'REMOVE_EVIDENCE' | 'UPDATE_STATUS';
 export const WORK_ITEM_FORM_CAPTURE_KEYS: Record<WorkItemFormKind, string> = {
   SNOOZE: 'WORK_ITEM_SNOOZE', RESCHEDULE: 'WORK_ITEM_RESCHEDULE', ATTACH_EXISTING: 'WORK_ITEM_ATTACH_EXISTING',
   SUBMIT_COMPLETION_EVIDENCE: 'WORK_ITEM_SUBMIT_COMPLETION_EVIDENCE', REMOVE_EVIDENCE: 'WORK_ITEM_REMOVE_EVIDENCE',
+  UPDATE_STATUS: 'WORK_ITEM_UPDATE_STATUS',
 };
 /** The two kinds that write evidence from an existing record (the third form, removal, picks from what is already attached). */
 export const WORK_ITEM_ATTACH_KINDS: readonly WorkItemFormKind[] = ['ATTACH_EXISTING', 'SUBMIT_COMPLETION_EVIDENCE'];
@@ -52,13 +54,19 @@ export function parseEvidenceRef(value: string): { type: WorkEvidenceRefType; id
 }
 export const WorkItemAttachExistingSchema = z.object({ record: z.string().trim().min(3).max(200) }).strict();
 export const WorkItemRemoveEvidenceSchema = z.object({ evidence: z.string().trim().min(1).max(100) }).strict();
+export const WorkItemUpdateStatusSchema = z.object({
+  status: z.enum(['CANDIDATE', 'ACCEPTED', 'SCHEDULED', 'IN_PROGRESS', 'IN_GUIDANCE', 'IN_PROJECT', 'BLOCKED', 'DEFERRED', 'REPORTED_COMPLETE', 'REOPENED', 'VERIFIED', 'FOLLOW_UP_DUE', 'CLOSED']),
+  disposition: z.enum(['NOT_RELEVANT', 'DUPLICATE', 'EXPIRED', 'DISMISSED']).optional(),
+}).strict();
 export const WORK_ITEM_FORM_SCHEMAS = {
   SNOOZE: WorkItemSnoozeSchema, RESCHEDULE: WorkItemRescheduleSchema, ATTACH_EXISTING: WorkItemAttachExistingSchema,
   SUBMIT_COMPLETION_EVIDENCE: WorkItemAttachExistingSchema, REMOVE_EVIDENCE: WorkItemRemoveEvidenceSchema,
+  UPDATE_STATUS: WorkItemUpdateStatusSchema,
 } as const;
 export const WORK_ITEM_FORM_ERRORS: Record<WorkItemFormKind, string> = {
   SNOOZE: 'Choose how long to snooze.', RESCHEDULE: 'Choose a due date.', ATTACH_EXISTING: 'Choose a record to attach.',
   SUBMIT_COMPLETION_EVIDENCE: 'Choose a record to submit.', REMOVE_EVIDENCE: 'Choose the evidence to remove.',
+  UPDATE_STATUS: 'Choose an available status and include a reason when required.',
 };
 export function parseWorkItemAnswer(kind: WorkItemFormKind, answer: unknown) {
   return (WORK_ITEM_FORM_SCHEMAS[kind] as z.ZodType<Record<string, string>>).safeParse(answer);

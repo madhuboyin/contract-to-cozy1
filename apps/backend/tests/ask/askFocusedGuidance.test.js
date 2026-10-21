@@ -507,8 +507,8 @@ test('accepted work offers Complete and Snooze in Ask instead of navigating to W
   const { resolveAskOperation } = require('../../src/services/ask/askOperationRegistry.ts');
   const result = buildFocusedHomeActionGuidance(acceptedWorkAction(), 'context-v1', undefined, null, { canContribute: true });
   const actions = result.blocks.find((block) => block.id === 'focused-home-action-guidance').actions;
-  assert.deepEqual(actions.map((candidate) => candidate.label), ['Mark complete', 'Snooze reminders', 'Change due date']);
-  assert.deepEqual(actions.map((candidate) => candidate.style), ['PRIMARY', 'SECONDARY', 'SECONDARY']);
+  assert.deepEqual(actions.map((candidate) => candidate.label), ['Mark complete', 'Snooze reminders', 'Change due date', 'Update status']);
+  assert.deepEqual(actions.map((candidate) => candidate.style), ['PRIMARY', 'SECONDARY', 'SECONDARY', 'SECONDARY']);
   // Change due date is the existing governed work-item form (never a status picker), addressed by the work item id.
   const reschedule = actions[2];
   assert.equal(reschedule.operationId, 'HOME_WORK_ITEM_COMMAND');
@@ -552,6 +552,7 @@ test('degraded accepted work names missing facts and makes record correction the
     ['Add missing details', 'PRIMARY'],
     ['Snooze reminders', 'SECONDARY'],
     ['Change due date', 'SECONDARY'],
+    ['Update status', 'SECONDARY'],
   ]);
   assert.deepEqual(guidance.actions[0], {
     id: `home-action-missing-details-${action.id}`,
@@ -604,6 +605,7 @@ test('degraded accepted work still offers missing-detail correction when the pro
     ['Add missing details', 'PRIMARY'],
     ['Snooze reminders', 'SECONDARY'],
     ['Change due date', 'SECONDARY'],
+    ['Update status', 'SECONDARY'],
   ]);
   assert.equal(guidance.actions[0].message, 'Complete the missing details for this inventory item.');
   assert.equal(guidance.actions[0].operationId, 'INVENTORY_ITEM_CORRECT');
@@ -640,7 +642,7 @@ test('accepted work follows governed controls and resolves reported completion i
   const build = (action, options) => buildFocusedHomeActionGuidance(action, 'context-v1', undefined, null, options).blocks.find((block) => block.id === 'focused-home-action-guidance').actions;
   // Not completion-eligible: Snooze only, promoted to primary.
   const snoozeOnly = build(acceptedWorkAction({ feedbackControls: ['CORRECT_FACT', 'SNOOZE'] }), { canContribute: true });
-  assert.deepEqual(snoozeOnly.map((candidate) => [candidate.label, candidate.style]), [['Snooze reminders', 'PRIMARY'], ['Change due date', 'SECONDARY']]);
+  assert.deepEqual(snoozeOnly.map((candidate) => [candidate.label, candidate.style]), [['Snooze reminders', 'PRIMARY'], ['Change due date', 'SECONDARY'], ['Update status', 'SECONDARY']]);
   // Completion reported: give a contributor the two decisions that actually close the loop.
   const reported = build(acceptedWorkAction({ workItem: { id: 'work-1', state: 'REPORTED_COMPLETE' }, primaryCta: { label: 'Review completion', href: '/dashboard/properties/property-1/home-operations?focusWorkItemId=work-1&openManage=1' } }), { canContribute: true });
   assert.deepEqual(reported.map((candidate) => [candidate.label, candidate.style]), [['Confirm completion', 'PRIMARY'], ['Still needs attention', 'SECONDARY']]);

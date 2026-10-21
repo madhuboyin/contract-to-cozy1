@@ -103,7 +103,8 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
       workflowControls.invoke({ ...snoozeAction, message });
     };
     return (
-      <section className="rounded-2xl border border-slate-200 bg-white p-4">
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+        <div className="p-4">
         <p className="text-xs font-bold uppercase tracking-wide text-teal-700">{block.title}</p>
         <div className="mt-2 space-y-2">
           {next?.items.map((item) => (
@@ -209,12 +210,13 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
             </ul>
           </div>
         )}
-        {(primaryActions.length > 0 || snoozeAction || hasDetails) && <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-3">
+        </div>
+        {(primaryActions.length > 0 || snoozeAction || hasDetails) && <div className="flex flex-wrap gap-2 border-t border-slate-100 bg-slate-50/50 px-4 py-3">
           {primaryActions.map((action) => <ActionLink key={action.id} action={action} />)}
           {snoozeAction && <button type="button" disabled={!workflowControls || workflowControls.disabled} aria-expanded={snoozeOpen} aria-controls={`${block.id}-snooze`} onClick={() => setFocusedDisclosure(snoozeOpen ? null : 'SNOOZE')} className="inline-flex min-h-10 items-center rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 transition-colors hover:bg-slate-50 disabled:opacity-50">{snoozeAction.label}</button>}
           {hasDetails && <button type="button" aria-expanded={detailsOpen} aria-controls={`${block.id}-details`} onClick={() => setFocusedDisclosure(detailsOpen ? null : 'DETAILS')} className="inline-flex min-h-10 items-center rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 transition-colors hover:bg-slate-50">{detailsOpen ? 'Hide details' : 'View details'}</button>}
         </div>}
-        {snoozeOpen && snoozeAction && <div id={`${block.id}-snooze`} className="mt-3 rounded-xl border border-teal-100 bg-teal-50/40 p-3">
+        {snoozeOpen && snoozeAction && <div id={`${block.id}-snooze`} className="border-t border-teal-100 bg-teal-50/40 p-4">
           <p className="text-sm font-semibold text-slate-900">When should Cozy remind you?</p>
           <p className="mt-1 text-xs leading-5 text-slate-600">You will review the date before the reminder is changed.</p>
           <div className="mt-3 flex flex-wrap gap-2">

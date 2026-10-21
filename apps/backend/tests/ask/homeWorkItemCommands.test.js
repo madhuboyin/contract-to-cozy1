@@ -22,6 +22,7 @@ const listUse = require('../../src/modules/homeOperations/application/listWorkIt
 const snoozeUse = require('../../src/modules/homeOperations/application/snoozeWorkItem.usecase.ts');
 const reschedUse = require('../../src/modules/homeOperations/application/rescheduleWorkItem.usecase.ts');
 const batchUse = require('../../src/modules/homeOperations/application/batchTransitionWorkItems.usecase.ts');
+const transitionUse = require('../../src/modules/homeOperations/application/transitionWorkItem.usecase.ts');
 const command = require('../../src/services/ask/support/homeWorkItemCommand.ts');
 const { homeWorkItemsFromRows } = require('../../src/services/ask/handlers/homeWorkItems.handler.ts');
 
@@ -30,12 +31,12 @@ const M = command.WORK_ITEM_MESSAGES;
 const T = new Date('2026-09-01T00:00:00Z');
 const sha = (text) => crypto.createHash('sha256').update(text).digest('hex');
 const iso = (v) => (v ? v.toISOString() : '');
-const item = (over = {}) => ({ id: 'w1', propertyId: 'prop-1', title: 'Flush water heater', state: 'ACCEPTED', safetyTier: 'LOW_CONSEQUENCE', obligationType: 'MAINTENANCE', dueAt: new Date('2026-10-01T12:00:00Z'), dueWindowStart: null, dueWindowEnd: null, snoozedUntil: null, supersededByWorkItemId: null, ownerUserId: null, isRoutine: false, ...over });
+const item = (over = {}) => ({ id: 'w1', propertyId: 'prop-1', title: 'Flush water heater', state: 'ACCEPTED', safetyTier: 'LOW_CONSEQUENCE', obligationType: 'MAINTENANCE', dueAt: new Date('2026-10-01T12:00:00Z'), dueWindowStart: null, dueWindowEnd: null, snoozedUntil: null, supersededByWorkItemId: null, ownerUserId: null, isRoutine: false, legalNextStates: ['SCHEDULED', 'IN_PROGRESS', 'BLOCKED', 'DEFERRED', 'REOPENED'], closureDispositionRule: 'OPTIONAL', ...over });
 const version = (kind, i) => sha(`work-item:${kind}:${i.id}:${i.state}:${iso(i.dueAt)}:${iso(i.dueWindowStart)}:${iso(i.dueWindowEnd)}:${iso(i.snoozedUntil)}:${i.supersededByWorkItemId ?? ''}`);
 const batchVersion = (items) => sha(`work-batch:${items.map((i) => `${i.id}:${i.state}`).sort().join('|')}`);
 
 function install(role, items = [item()]) {
-  const saved = { a: propertyAccess.resolvePropertyAccess, g: getUse.getWorkItem, l: listUse.listWorkItems, s: snoozeUse.snoozeWorkItem, r: reschedUse.rescheduleWorkItem, b: batchUse.batchTransitionWorkItems, e: executeOperation.reconcileAskExecutionSideEffects };
+  const saved = { a: propertyAccess.resolvePropertyAccess, g: getUse.getWorkItem, l: listUse.listWorkItems, s: snoozeUse.snoozeWorkItem, r: reschedUse.rescheduleWorkItem, b: batchUse.batchTransitionWorkItems, t: transitionUse.transitionWorkItem, e: executeOperation.reconcileAskExecutionSideEffects };
   const calls = [];
   propertyAccess.resolvePropertyAccess = async () => ({ role, userId: 'u1', propertyId: 'prop-1' });
   getUse.getWorkItem = async (id) => items.find((i) => i.id === id) ?? null;
@@ -43,8 +44,9 @@ function install(role, items = [item()]) {
   snoozeUse.snoozeWorkItem = async (a) => { calls.push(['snooze', a]); return {}; };
   reschedUse.rescheduleWorkItem = async (a) => { calls.push(['reschedule', a]); return {}; };
   batchUse.batchTransitionWorkItems = async (a) => { calls.push(['batch', a]); return a.workItemIds.map((id) => ({ workItemId: id, success: true })); };
+  transitionUse.transitionWorkItem = async (a) => { calls.push(['transition', a]); return {}; };
   executeOperation.reconcileAskExecutionSideEffects = async () => ({ attemptedAndFailed: false, refreshedExecutions: [] });
-  return { calls, restore() { propertyAccess.resolvePropertyAccess = saved.a; getUse.getWorkItem = saved.g; listUse.listWorkItems = saved.l; snoozeUse.snoozeWorkItem = saved.s; reschedUse.rescheduleWorkItem = saved.r; batchUse.batchTransitionWorkItems = saved.b; executeOperation.reconcileAskExecutionSideEffects = saved.e; } };
+  return { calls, restore() { propertyAccess.resolvePropertyAccess = saved.a; getUse.getWorkItem = saved.g; listUse.listWorkItems = saved.l; snoozeUse.snoozeWorkItem = saved.s; reschedUse.rescheduleWorkItem = saved.r; batchUse.batchTransitionWorkItems = saved.b; transitionUse.transitionWorkItem = saved.t; executeOperation.reconcileAskExecutionSideEffects = saved.e; } };
 }
 const launch = (over = {}) => ({ operationId: OP, surface: 'ASK_PAGE', entityType: command.WORK_ITEM_ENTITY_TYPE, entityId: 'w1', ...over });
 const invoke = (kind, launchContext) => capabilityInvoke(OP, { userId: 'u1', propertyId: 'prop-1', message: M[kind], launchContext });
@@ -112,6 +114,26 @@ test('confirming calls the usecases the routes call; a changed item or finished 
     await assert.rejects(() => confirmCapabilityInvoke(OP, ctx({ workItemCommand: { kind: 'SNOOZE', entityId: 'w1' }, workItemChange: { snoozedUntil: null }, workItemContextVersion: 'old' })), (e) => e.code === 'ASK_CONTEXT_VERSION_CONFLICT');
     await assert.rejects(() => confirmCapabilityInvoke(OP, ctx({ workItemCommand: { kind: 'SNOOZE', entityId: 'w1' }, workItemChange: {}, workItemContextVersion: v })), (e) => e.code === 'ASK_CONFIRMATION_NOT_ACTIVE');
     assert.equal(w.calls.length, 3);
+  } finally { w.restore(); }
+});
+
+test('update status: shows only legal homeowner transitions, reviews the change, and confirms through the canonical transition usecase', async () => {
+  const w = install('CONTRIBUTOR');
+  try {
+    const form = await invoke('UPDATE_STATUS', launch());
+    assert.equal(form.status, 'NEEDS_CONTEXT');
+    const fields = form.captureRequests[0].inputSchema.fields;
+    assert.deepEqual(fields[0].inputSchema.options.map((option) => option.value), ['SCHEDULED', 'IN_PROGRESS', 'BLOCKED', 'DEFERRED', 'REOPENED']);
+    assert.equal(fields.some((field) => field.key === 'disposition'), false);
+    const { workItemCommandResult } = require('../../src/services/ask/handlers/homeWorkItemCommands.handler.ts');
+    const review = await workItemCommandResult('u1', 'prop-1', { kind: 'UPDATE_STATUS', entityId: 'w1', sourceExecutionId: null }, { status: 'IN_PROGRESS' });
+    assert.equal(review.status, 'NEEDS_CONFIRMATION');
+    assert.equal(review.confirmation.fields[1].value, 'On your list → In progress');
+    await confirmCapabilityInvoke(OP, ctx({ workItemCommand: { kind: 'UPDATE_STATUS', entityId: 'w1' }, workItemChange: { status: 'IN_PROGRESS', disposition: null }, workItemContextVersion: version('UPDATE_STATUS', item()) }));
+    assert.equal(w.calls[0][0], 'transition');
+    assert.deepEqual([w.calls[0][1].workItemId, w.calls[0][1].to, w.calls[0][1].actorType], ['w1', 'IN_PROGRESS', 'USER']);
+    const illegal = await workItemCommandResult('u1', 'prop-1', { kind: 'UPDATE_STATUS', entityId: 'w1', sourceExecutionId: null }, { status: 'VERIFIED' });
+    assert.equal(illegal.reasonCode, 'HOME_WORK_ITEM_STATUS_NOT_AVAILABLE');
   } finally { w.restore(); }
 });
 

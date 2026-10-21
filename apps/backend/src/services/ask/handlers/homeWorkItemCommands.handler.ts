@@ -2,7 +2,7 @@
 // declared actions on the work-items answer. The writes are the routes' own usecases (snoozeWorkItem, rescheduleWorkItem, batchTransitionWorkItems),
 // behind a review that names what changes and a confirmation bound to the item (or, for the batch, the exact eligible set).
 import crypto, { createHash } from 'node:crypto';
-import { HouseholdRole } from '@prisma/client';
+import { HouseholdRole, type OperationalWorkItemDisposition, type OperationalWorkItemState, type RecommendationSafetyTier } from '@prisma/client';
 import { prisma } from '../../../lib/prisma';
 import { type AskCaptureRequest } from '../../../productFramework/ask/ask.contract';
 import { type AskOperationResult } from '../askOperationRegistry';
@@ -19,6 +19,8 @@ import { recordEvidence } from '../../../modules/homeOperations/application/reco
 import { EvidenceNotWithdrawableError, HOMEOWNER_WITHDRAWABLE_EVIDENCE, removeEvidence } from '../../../modules/homeOperations/application/removeEvidence.usecase';
 import { listPropertyDocuments, resolvePropertyDocuments } from '../../propertyDocuments/propertyDocumentInventory.service';
 import { batchTransitionWorkItems } from '../../../modules/homeOperations/application/batchTransitionWorkItems.usecase';
+import { transitionWorkItem } from '../../../modules/homeOperations/application/transitionWorkItem.usecase';
+import { assertUserWorkItemTransition } from '../../../modules/homeOperations/domain/userGovernance';
 import {
   SNOOZE_CHOICES, WORK_ITEM_BATCH_MAX, WORK_ITEM_ENTITY_TYPE, WORK_ITEM_FORM_CAPTURE_KEYS, WORK_ITEM_MESSAGES, parseWorkItemAnswer, snoozeUntil, workItemBatchEligible,
   workItemChangeable, workItemKindFromMessage, WORK_ITEM_FORM_ERRORS, formatEvidenceRef, parseEvidenceRef, WORK_ITEM_ATTACH_KINDS, type WorkEvidenceRefType, type WorkItemCommandKind, type WorkItemFormKind,
@@ -32,7 +34,7 @@ const unavailable = (reasonCode: string, title: string, body: string): AskOperat
 const iso = (value: Date | null | undefined) => (value ? value.toISOString() : '');
 const dayOf = (value: string) => humanDate(new Date(`${value}T12:00:00.000Z`)) ?? value;
 
-interface ItemRow { id: string; propertyId: string; title: string; state: string; safetyTier: string; dueAt: Date | null; dueWindowStart: Date | null; dueWindowEnd: Date | null; snoozedUntil: Date | null; supersededByWorkItemId: string | null; ownerUserId: string | null }
+interface ItemRow { id: string; propertyId: string; title: string; state: OperationalWorkItemState; safetyTier: RecommendationSafetyTier; dueAt: Date | null; dueWindowStart: Date | null; dueWindowEnd: Date | null; snoozedUntil: Date | null; supersededByWorkItemId: string | null; ownerUserId: string | null; legalNextStates: OperationalWorkItemState[]; closureDispositionRule: 'REQUIRED' | 'FORBIDDEN' | 'OPTIONAL' | null }
 const itemVersion = (kind: string, item: ItemRow) =>
   sha(`work-item:${kind}:${item.id}:${item.state}:${iso(item.dueAt)}:${iso(item.dueWindowStart)}:${iso(item.dueWindowEnd)}:${iso(item.snoozedUntil)}:${item.supersededByWorkItemId ?? ''}`);
 const batchVersion = (items: Array<{ id: string; state: string }>) => sha(`work-batch:${items.map((i) => `${i.id}:${i.state}`).sort().join('|')}`);
@@ -53,6 +55,15 @@ const humanFactKey = (key: string) => {
   return words ? words.charAt(0).toUpperCase() + words.slice(1) : 'Home fact';
 };
 const EVIDENCE_PICK_LIMIT = 25;
+const STATUS_LABELS: Record<OperationalWorkItemState, string> = {
+  CANDIDATE: 'Suggested', ACCEPTED: 'On your list', SCHEDULED: 'Scheduled', IN_PROGRESS: 'In progress', IN_GUIDANCE: 'Working through it',
+  IN_PROJECT: 'Part of a project', BLOCKED: 'Waiting on something', DEFERRED: 'Put off for now', REPORTED_COMPLETE: 'Done — being confirmed',
+  REOPENED: 'Back on your list', VERIFIED: 'Done', FOLLOW_UP_DUE: 'Time for a follow-up', CLOSED: 'Closed',
+};
+const DISPOSITION_CHOICES = [
+  { label: 'Not relevant', value: 'NOT_RELEVANT' }, { label: 'Duplicate', value: 'DUPLICATE' },
+  { label: 'Expired', value: 'EXPIRED' }, { label: 'Dismissed', value: 'DISMISSED' },
+];
 
 /** What a homeowner may attach right now: this home's own documents, timeline events and current facts, minus what is already on the work. Bounded and re-read. */
 async function attachChoices(propertyId: string, role: HouseholdRole, userId: string, workItemId: string): Promise<Choice[]> {
@@ -110,6 +121,14 @@ function formCapture(kind: WorkItemFormKind, contextVersion: string, item: ItemR
     : kind === 'REMOVE_EVIDENCE'
     ? { title: `Remove evidence from ${item.title}`, question: 'Which evidence should be removed?', help: 'Only evidence you added that has not been verified can be removed. To replace it, remove it and add the new one.',
         fields: [{ key: 'evidence', label: 'Evidence', required: true, inputSchema: { type: 'SINGLE_SELECT' as const, options: choices } }], seed: {} }
+    : kind === 'UPDATE_STATUS'
+    ? { title: `Update the status of ${item.title}`, question: 'What should happen next?', help: 'Only changes currently allowed for this work are shown. A reason is required when removing a suggestion.',
+        fields: [
+          { key: 'status', label: 'New status', required: true, inputSchema: { type: 'SINGLE_SELECT' as const, options: item.legalNextStates.map((state) => ({ label: STATUS_LABELS[state], value: state })) } },
+          ...(item.legalNextStates.includes('CLOSED') && item.closureDispositionRule !== 'FORBIDDEN'
+            ? [{ key: 'disposition', label: item.closureDispositionRule === 'REQUIRED' ? 'Reason' : 'Reason (if closing)', required: item.closureDispositionRule === 'REQUIRED', inputSchema: { type: 'SINGLE_SELECT' as const, options: DISPOSITION_CHOICES } }]
+            : []),
+        ], seed: {} }
     : kind === 'SNOOZE'
     ? { title: `Snooze ${item.title}`, question: 'How long should reminders for this wait?', help: 'Snoozing only hides reminders. It does not change the state or the due date.',
         fields: [{ key: 'snooze', label: 'Snooze for', required: true, inputSchema: { type: 'SINGLE_SELECT' as const, options: SNOOZE_CHOICES.map((c) => ({ label: c.label, value: c.value })) } }], seed: {} }
@@ -162,6 +181,7 @@ export async function workItemCommandResult(
   const item = await loadItem(propertyId, launch.entityId);
   if (!item) return unavailable('HOME_WORK_ITEM_NOT_FOUND', 'That work item is no longer available', 'Ask could not find that work item. Nothing has changed.');
   if (!workItemChangeable(item)) return unavailable('HOME_WORK_ITEM_FINISHED', 'That work is already finished', 'Finished or replaced work is not changed here. Nothing has changed.');
+  if (kind === 'UPDATE_STATUS' && item.legalNextStates.length === 0) return unavailable('HOME_WORK_ITEM_NO_STATUS_CHANGES', 'No status changes are available', 'This work is controlled by its linked workflow or has no homeowner-managed next state. Nothing has changed.');
   const contextVersion = itemVersion(kind, item);
   const formKind = kind as WorkItemFormKind;
   const evidenceKind = WORK_ITEM_ATTACH_KINDS.includes(formKind) || formKind === 'REMOVE_EVIDENCE';
@@ -185,7 +205,20 @@ export async function workItemCommandResult(
   if (!parsed.success) return unavailable('HOME_WORK_ITEM_INPUT_INVALID', 'Check the details', `${WORK_ITEM_FORM_ERRORS[formKind]} Nothing has changed.`);
   const answer = parsed.data as Record<string, string>;
   let spec: { title: string; description: string; confirmLabel: string; field: { label: string; value: string }; stored: Record<string, unknown> };
-  if (formKind === 'SNOOZE') {
+  if (formKind === 'UPDATE_STATUS') {
+    const status = answer.status as OperationalWorkItemState;
+    const disposition = answer.disposition as OperationalWorkItemDisposition | undefined;
+    if (status !== 'CLOSED' && disposition) return unavailable('HOME_WORK_ITEM_STATUS_REASON_NOT_APPLICABLE', 'Remove the closing reason', 'A closing reason is used only when closing a work item. Nothing has changed.');
+    try { assertUserWorkItemTransition(item, status, disposition); } catch (error) {
+      return unavailable('HOME_WORK_ITEM_STATUS_NOT_AVAILABLE', 'That status is not available', `${error instanceof Error ? error.message : 'Choose one of the available statuses.'} Nothing has changed.`);
+    }
+    spec = {
+      title: `Change status to ${STATUS_LABELS[status]}?`, confirmLabel: 'Update status',
+      description: 'Ask will recheck the work item and its allowed transitions before saving.',
+      field: { label: 'Status', value: `${STATUS_LABELS[item.state]} → ${STATUS_LABELS[status]}` },
+      stored: { status, disposition: disposition ?? null },
+    };
+  } else if (formKind === 'SNOOZE') {
     const until = snoozeUntil(answer.snooze, new Date());
     spec = {
       title: until ? 'Snooze this work item?' : 'Stop snoozing this work item?', confirmLabel: until ? 'Snooze it' : 'Stop snoozing',
@@ -267,7 +300,15 @@ async function confirmWorkItemCommand(ctx: ConfirmCapabilityContext): Promise<Co
       if (parameters.workItemContextVersion !== itemVersion(kind, item)) throw stale('This work item changed while the confirmation was open. Review it again and try again.', 'ASK_CONTEXT_VERSION_CONFLICT');
       if (!workItemChangeable(item)) throw stale('That work is already finished.');
       const change = (parameters.workItemChange ?? {}) as Record<string, unknown>;
-      if (kind === 'SNOOZE') {
+      if (kind === 'UPDATE_STATUS') {
+        const status = change.status as OperationalWorkItemState | undefined;
+        const disposition = change.disposition as OperationalWorkItemDisposition | null | undefined;
+        if (!status) throw stale('The status to apply is invalid.');
+        assertUserWorkItemTransition(item, status, disposition ?? undefined);
+        await transitionWorkItem({ workItemId: item.id, to: status, disposition: disposition ?? undefined, actorType: 'USER', actorUserId: userId, idempotencyKey: `ask:${execution.id}:work-status` });
+        title = `Status changed to ${STATUS_LABELS[status]}`;
+        description = 'The governed work record and its history were updated.';
+      } else if (kind === 'SNOOZE') {
         if (!('snoozedUntil' in change) || (change.snoozedUntil !== null && typeof change.snoozedUntil !== 'string')) throw stale('The snooze to apply is invalid.');
         await snoozeWorkItem({ workItemId: item.id, snoozedUntil: change.snoozedUntil ? new Date(change.snoozedUntil as string) : null, actorUserId: userId, idempotencyKey: crypto.randomUUID() });
         title = change.snoozedUntil ? 'Snoozed' : 'Snooze removed';

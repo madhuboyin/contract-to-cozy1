@@ -8,6 +8,7 @@ import type { ConflictedInsurancePolicyTerm } from '../coverageConflict.service'
 import { isAppliancesInsight } from './healthGapCapture';
 import { COMPLETION_EVIDENCE_POLICY } from '../intelligence/completionEvidencePolicy.registry';
 import { WORK_ITEM_ENTITY_TYPE, WORK_ITEM_MESSAGES, workItemChangeable } from './support/homeWorkItemCommand';
+import { legalUserWorkItemTransitions } from '../../modules/homeOperations/domain/userGovernance';
 
 // Must equal INVENTORY_ADD_MESSAGE in handlers/inventory.handler.ts (pinned by test): the handler recognises the
 // declared add action by this exact text, and importing it here would pull that handler's registrations into this pure module.
@@ -297,12 +298,16 @@ function resolveAcceptedWorkActions(action: RankedHomeAction, canContribute: boo
       }
     : null;
   const controls = new Set<string>(action.feedbackControls);
+  const legalStatusChanges = legalUserWorkItemTransitions({ state: workItem.state, safetyTier: action.governance.safetyTier });
   const actions = [
     ...(missingDetailsAction ? [missingDetailsAction] : []),
     ...(controls.has('COMPLETE') ? [{ ...common, id: `home-action-complete-${action.id}`, label: 'Mark complete', message: 'Complete this work item.', style: (missingDetailsAction ? 'SECONDARY' : 'PRIMARY') as 'PRIMARY' | 'SECONDARY' }] : []),
     ...(controls.has('SNOOZE') ? [{ ...common, id: `home-action-snooze-${action.id}`, label: 'Snooze reminders', message: 'Snooze this work item.', style: (controls.has('COMPLETE') || missingDetailsAction ? 'SECONDARY' : 'PRIMARY') as 'PRIMARY' | 'SECONDARY' }] : []),
     ...(workItemChangeable(workItem)
       ? [{ id: `home-action-reschedule-${action.id}`, label: 'Change due date', message: WORK_ITEM_MESSAGES.RESCHEDULE, interactionType: 'START_WORKFLOW' as const, operationId: 'HOME_WORK_ITEM_COMMAND', entityType: WORK_ITEM_ENTITY_TYPE, entityId: workItem.id, style: 'SECONDARY' as const }]
+      : []),
+    ...(legalStatusChanges.length > 0
+      ? [{ id: `home-action-status-${action.id}`, label: 'Update status', message: WORK_ITEM_MESSAGES.UPDATE_STATUS, interactionType: 'START_WORKFLOW' as const, operationId: 'HOME_WORK_ITEM_COMMAND', entityType: WORK_ITEM_ENTITY_TYPE, entityId: workItem.id, style: 'SECONDARY' as const }]
       : []),
   ];
   return actions.length ? actions : null;
