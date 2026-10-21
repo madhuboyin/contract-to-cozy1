@@ -78,4 +78,34 @@ describe('Home Action shelves', () => {
     fireEvent.click(review);
     expect(onItemAction).toHaveBeenCalledWith('HOME_ACTION', 'a1', 'What should I do next for “Replace the HVAC filter”?', 'HOME_ACTIONS', 'CONVERSATION_CONTINUE', undefined, 'a1');
   });
+
+  test('the calm ranked view has timing filters with full-feed counts, one Start here row, and no horizontal overflow classes', () => {
+    const onItemAction = jest.fn();
+    const item = (id: string, rawPriority: 'NOW' | 'CONSIDER') => ({
+      homeActionId: id, title: `Action ${id}`, rawPriority, consumerPriority: 'PLAN_SOON' as const, comparativeReasonCodes: [], confidenceLabel: 'MEDIUM' as const, deadlineAt: null, dependencyRefs: [],
+      cta: null, inlineLaunch: { interactionType: 'CONVERSATION_CONTINUE' as const, operationId: 'HOME_ACTIONS' as const, message: `What should I do next for “Action ${id}”?` },
+      watchState: null, suppressed: false, completed: false, unavailable: false, stale: false,
+    });
+    const priority: AskPresentationBlock = {
+      type: 'PRIORITY_LIST', id: 'home-actions-priority-list', title: 'What matters now', propertyId: 'home',
+      rankingPolicyVersion: 'priority-list-policy-v1', generatedAt: '2026-09-27T12:00:00.000Z', sourceFreshnessAt: null, truncated: false,
+      filters: [
+        { id: 'all', label: 'All', count: 9, message: 'What needs my attention around the home?', active: true },
+        { id: 'now', label: 'Now', count: 1, message: 'What needs my attention right now?', active: false },
+        { id: 'consider', label: 'Consider', count: 6, message: 'What home actions are worth a look to consider?', active: false },
+      ],
+      items: [item('a1', 'NOW'), item('a2', 'CONSIDER')],
+    };
+    const { container } = render(<CalmChromeContext.Provider value><CalmAnswerContext.Provider value>
+      <BlockView block={priority} executionId="e" propertyId="home" onItemAction={onItemAction} itemActionsDisabled={false} onFilterClick={() => undefined} onCollectionPage={() => undefined} onAccessLost={() => undefined} />
+    </CalmAnswerContext.Provider></CalmChromeContext.Provider>);
+    expect(screen.getAllByText('Start here')).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'All · 9' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Consider · 6' })).toHaveAttribute('aria-pressed', 'false');
+    expect(container.querySelectorAll('[data-home-action-row]')).toHaveLength(2);
+    expect(screen.getByText('Consider', { selector: 'span' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Consider · 6' }));
+    expect(onItemAction).toHaveBeenCalledWith('HOME_ACTION_FILTER', '', 'What home actions are worth a look to consider?', 'HOME_ACTIONS', 'CONVERSATION_CONTINUE');
+    expect(container.querySelector('.overflow-x-auto, .min-w-\\[')).toBeNull();
+  });
 });

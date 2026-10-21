@@ -16,6 +16,11 @@ const { AskPresentationBlockSchema } = require('../../src/productFramework/ask/a
 test('landing section prompts preserve the dashboard priority partitions', () => {
   assert.deepEqual(homeActionPriorityFilter('Show me what needs attention now or soon'), ['NOW', 'SOON']);
   assert.deepEqual(homeActionPriorityFilter('Show me what I should plan ahead for'), ['PLAN', 'CONSIDER']);
+  assert.deepEqual(homeActionPriorityFilter('What home actions are worth a look to consider?'), ['CONSIDER']);
+  assert.deepEqual(homeActionPriorityFilter('What needs my attention right now?'), ['NOW']);
+  assert.deepEqual(homeActionPriorityFilter('What home actions are due soon?'), ['SOON']);
+  assert.deepEqual(homeActionPriorityFilter('What should I plan for around the home?'), ['PLAN']);
+  assert.equal(homeActionPriorityFilter('What needs my attention around the home?'), null);
   assert.deepEqual(homeActionPriorityFilter('What is urgent?'), ['NOW']);
   assert.deepEqual(homeActionPriorityFilter('What is due soon?'), ['SOON']);
   assert.deepEqual(homeActionPriorityFilter('What can wait?'), ['PLAN', 'CONSIDER']);

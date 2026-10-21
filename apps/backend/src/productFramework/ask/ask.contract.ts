@@ -747,6 +747,8 @@ const PriorityListItemSchema = z.object({
   homeActionId: z.string(),
   title: z.string(),
   consumerPriority: z.enum(['DO_NOW', 'PLAN_SOON', 'WATCH', 'OPTIONAL', 'NO_ACTION']),
+  // The feed bucket (the same one the filter counts use), so a row's badge and the chips never disagree.
+  rawPriority: z.enum(['NOW', 'SOON', 'PLAN', 'CONSIDER']).optional(),
   comparativeReasonCodes: z.array(z.string()).max(8),
   confidenceLabel: z.enum(['LOW', 'MEDIUM', 'HIGH']),
   deadlineAt: z.string().nullable(),
@@ -772,6 +774,11 @@ const PriorityListBlockSchema = z.object({
   sourceFreshnessAt: z.string().nullable(),
   items: z.array(PriorityListItemSchema).max(20),
   truncated: z.boolean(),
+  // Server-declared timing filters with true full-feed counts (FRD v1.395); each message is a normal Home Actions query.
+  filters: z.array(z.object({
+    id: z.string(), label: z.string().max(40), count: z.number().int().min(0),
+    message: z.string().trim().min(1).max(300), active: z.boolean(),
+  })).max(5).optional(),
 });
 
 // Ask Intelligence FRD §19.1/§21.5, Phase 10A. One entry per recorded

@@ -21,6 +21,7 @@ export function homeActionPriorityFilter(message: string): HomeActionPriority[] 
   if (/\b(?:urgent|right now|immediately|priority now)\b/i.test(message)) return ['NOW'];
   if (/\bsoon\b/i.test(message)) return ['SOON'];
   if (/\b(?:should i plan|planning|plan for|later)\b/i.test(message)) return ['PLAN'];
+  if (/\bto consider\b/i.test(message)) return ['CONSIDER'];
   if (/\b(?:can wait|consider)\b/i.test(message)) return ['PLAN', 'CONSIDER'];
   return null;
 }

@@ -1,13 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { ClipboardCheck, ThumbsDown, ThumbsUp } from 'lucide-react';
+import { MoreHorizontal, ThumbsDown, ThumbsUp } from 'lucide-react';
 import { api } from '@/lib/api/client';
 import { cn } from '@/lib/utils';
 import { ActionLink } from './context';
 import { useCalmAnswer } from './calmContext';
 import type { AskBlockRenderer } from './types';
-import { CompactAskCard } from '../CompactAskCard';
 import { formatAskDateOnly } from '@/features/ask/dateFormatting';
 
 const PRIORITY_REASON_TEXT: Record<string, string> = {
@@ -52,6 +51,16 @@ function HomeActionUsefulnessButtons({ executionId, homeActionId }: { executionI
   );
 }
 
+// Calm rows keep the rating out of the way: one overflow button opens the same two-button rating.
+function HomeActionOverflow({ executionId, homeActionId }: { executionId: string; homeActionId: string }) {
+  return (
+    <details className="relative shrink-0">
+      <summary aria-label="More options" className="flex h-9 w-9 cursor-pointer list-none items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"><MoreHorizontal className="h-4 w-4" aria-hidden="true" /></summary>
+      <div className="absolute right-0 z-10 mt-1 rounded-xl border border-slate-200 bg-white p-1.5 shadow-md"><HomeActionUsefulnessButtons executionId={executionId} homeActionId={homeActionId} /></div>
+    </details>
+  );
+}
+
 const reviewButtonClass = 'min-h-9 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-teal-800 hover:border-teal-300 hover:bg-teal-50 disabled:opacity-50';
 
 export const PriorityListBlock: AskBlockRenderer<'PRIORITY_LIST'> = ({ block, executionId, onItemAction, itemActionsDisabled }) => {
@@ -59,6 +68,7 @@ export const PriorityListBlock: AskBlockRenderer<'PRIORITY_LIST'> = ({ block, ex
   const categoryLabel: Record<typeof block.items[number]['consumerPriority'], string> = {
     DO_NOW: 'Do now', PLAN_SOON: 'Plan soon', WATCH: 'Watch', OPTIONAL: 'Optional', NO_ACTION: 'No action needed',
   };
+  const bucketLabel: Record<'NOW' | 'SOON' | 'PLAN' | 'CONSIDER', string> = { NOW: 'Now', SOON: 'Soon', PLAN: 'Plan', CONSIDER: 'Consider' };
   const categoryBadge: Record<typeof block.items[number]['consumerPriority'], string> = {
     DO_NOW: 'bg-red-100 text-red-800', PLAN_SOON: 'bg-amber-200 text-amber-900',
     WATCH: 'bg-slate-100 text-slate-700', OPTIONAL: 'bg-slate-100 text-slate-500', NO_ACTION: 'bg-emerald-100 text-emerald-800',
@@ -68,10 +78,21 @@ export const PriorityListBlock: AskBlockRenderer<'PRIORITY_LIST'> = ({ block, ex
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className={calm ? 'sr-only' : 'font-semibold text-slate-950'}>{block.title}</h3>
       </div>
+      {calm && block.filters && block.filters.length > 0 && (
+        <div role="group" aria-label="Filter by timing" className="flex flex-wrap gap-1.5" data-home-action-filters="">
+          {block.filters.map((filter) => (
+            <button key={filter.id} type="button" disabled={itemActionsDisabled} aria-pressed={filter.active}
+              onClick={() => onItemAction('HOME_ACTION_FILTER', '', filter.message, 'HOME_ACTIONS', 'CONVERSATION_CONTINUE')}
+              className={cn('min-h-9 rounded-full border px-3 py-1 text-xs font-semibold disabled:opacity-50', filter.active ? 'border-teal-700 bg-teal-700 text-white' : 'border-slate-200 bg-white text-slate-700 hover:border-teal-300 hover:bg-teal-50')}>
+              {filter.label} · {filter.count}
+            </button>
+          ))}
+        </div>
+      )}
       {block.items.length === 0 ? (
         <p className="mt-2 text-sm text-slate-600">No ranked item is currently available on this channel. This does not mean the home needs no attention — it means the governed feed has nothing eligible to show right now.</p>
       ) : (
-        <ol className={calm ? 'grid gap-2 sm:grid-cols-2 xl:grid-cols-3' : 'mt-4 space-y-3'}>
+        <ol className={calm ? 'divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200 bg-white' : 'mt-4 space-y-3'}>
           {block.items.map((item, index) => {
             const lifecycle = [
               item.unavailable && 'Unavailable',
@@ -87,17 +108,23 @@ export const PriorityListBlock: AskBlockRenderer<'PRIORITY_LIST'> = ({ block, ex
             ].filter((label): label is string => Boolean(label)).join(' · ');
             return (
             <li key={item.homeActionId} className={cn(!calm && 'rounded-xl border border-slate-200 p-3')}>
-              {calm ? <CompactAskCard
-                title={item.title}
-                iconCategory="MAINTENANCE"
-                fallbackIcon={ClipboardCheck}
-                tone={item.consumerPriority === 'DO_NOW' ? 'CRITICAL' : item.consumerPriority === 'PLAN_SOON' ? 'CAUTION' : item.consumerPriority === 'NO_ACTION' ? 'POSITIVE' : 'DEFAULT'}
-                badge={<span className={cn('rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-wide', categoryBadge[item.consumerPriority])}>{categoryLabel[item.consumerPriority]}</span>}
-                summary={reason ?? item.watchState ?? undefined}
-                meta={compactMeta || undefined}
-                action={item.inlineLaunch ? <button type="button" disabled={itemActionsDisabled} onClick={() => onItemAction('HOME_ACTION', item.homeActionId, item.inlineLaunch!.message, item.inlineLaunch!.operationId, item.inlineLaunch!.interactionType, undefined, item.homeActionId)} className={reviewButtonClass}>Review in Ask</button> : item.cta ? <ActionLink action={item.cta} /> : item.watchState && <p className="text-sm text-slate-700">{item.watchState}</p>}
-                secondary={<HomeActionUsefulnessButtons executionId={executionId} homeActionId={item.homeActionId} />}
-              /> : <>
+              {calm ? (
+                <div className={cn('flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:justify-between', index === 0 && 'bg-teal-50/50')} data-home-action-row={index === 0 ? 'start' : 'row'}>
+                  <div className="min-w-0 flex-1 space-y-1">
+                    {index === 0 && <p className="text-[11px] font-bold uppercase tracking-wide text-teal-800">Start here</p>}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide', categoryBadge[item.consumerPriority])}>{item.rawPriority ? bucketLabel[item.rawPriority] : categoryLabel[item.consumerPriority]}</span>
+                      <h4 className="min-w-0 break-words text-sm font-semibold text-slate-900">{item.title}</h4>
+                    </div>
+                    {index === 0 && (reason ?? item.watchState) && <p className="text-xs text-slate-600">{reason ?? item.watchState}</p>}
+                    {compactMeta && <p className="text-xs text-slate-500">{compactMeta}</p>}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {item.inlineLaunch ? <button type="button" disabled={itemActionsDisabled} onClick={() => onItemAction('HOME_ACTION', item.homeActionId, item.inlineLaunch!.message, item.inlineLaunch!.operationId, item.inlineLaunch!.interactionType, undefined, item.homeActionId)} className={reviewButtonClass}>Review in Ask</button> : item.cta ? <ActionLink action={item.cta} /> : item.watchState && <p className="text-sm text-slate-700">{item.watchState}</p>}
+                    <HomeActionOverflow executionId={executionId} homeActionId={item.homeActionId} />
+                  </div>
+                </div>
+              ) : <>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-xs font-semibold text-slate-400">#{index + 1}</span>
                 <h4 className="font-semibold text-slate-900">{item.title}</h4>

@@ -265,6 +265,21 @@ export async function loadOptionalBuyerPlanContext(
   }
 }
 
+function homeActionTimingFilters(
+  buckets: Record<'NOW' | 'SOON' | 'PLAN' | 'CONSIDER', unknown[]>,
+  active: string[] | null,
+) {
+  const total = buckets.NOW.length + buckets.SOON.length + buckets.PLAN.length + buckets.CONSIDER.length;
+  const only = (key: 'NOW' | 'SOON' | 'PLAN' | 'CONSIDER') => Boolean(active && active.length === 1 && active[0] === key);
+  return [
+    { id: 'all', label: 'All', count: total, message: 'What needs my attention around the home?', active: !active },
+    { id: 'now', label: 'Now', count: buckets.NOW.length, message: 'What needs my attention right now?', active: only('NOW') },
+    { id: 'soon', label: 'Soon', count: buckets.SOON.length, message: 'What home actions are due soon?', active: only('SOON') },
+    { id: 'plan', label: 'Plan', count: buckets.PLAN.length, message: 'What should I plan for around the home?', active: only('PLAN') },
+    { id: 'consider', label: 'Consider', count: buckets.CONSIDER.length, message: 'What home actions are worth a look to consider?', active: only('CONSIDER') },
+  ];
+}
+
 async function homeActionsResult(userId: string, propertyId: string, message: string, focusedActionId?: string | null): Promise<AskOperationResult> {
   const [access, buyerContextValue] = await Promise.all([
     ensurePropertyAccess(userId, propertyId),
@@ -449,7 +464,9 @@ async function homeActionsResult(userId: string, propertyId: string, message: st
         ? `No ${priorityFilter?.map((value) => value.toLowerCase()).join(' or ')} Home Action is currently surfaced`
         : selectedActions.length === 1
           ? selectedActions[0].presentation?.headline ?? selectedActions[0].recommendedAction
-          : `${selectedActions.length} Home Actions are ready to review.`),
+          : matchingActions.length > selectedActions.length
+            ? `${matchingActions.length} Home Actions to review; the top ${selectedActions.length} are shown.`
+            : `${matchingActions.length} Home Actions are ready to review.`),
     supportLine: empty?.body
       ?? (filteredEmpty
         ? `${feed.actions.length} active action${feed.actions.length === 1 ? '' : 's'} remain in the full governed feed.`
@@ -458,6 +475,7 @@ async function homeActionsResult(userId: string, propertyId: string, message: st
       { label: `${feed.buckets.NOW.length} now`, tone: feed.buckets.NOW.length ? 'CRITICAL' : 'DEFAULT' },
       { label: `${feed.buckets.SOON.length} soon`, tone: feed.buckets.SOON.length ? 'CAUTION' : 'DEFAULT' },
       { label: `${feed.buckets.PLAN.length} to plan`, tone: 'DEFAULT' },
+      { label: `${feed.buckets.CONSIDER.length} to consider`, tone: 'DEFAULT' },
     ] : undefined,
     actions: [],
   }];
@@ -488,7 +506,7 @@ async function homeActionsResult(userId: string, propertyId: string, message: st
   // honest empty-state copy, and an empty PRIORITY_LIST block risks reading
   // as "nothing needs attention" rather than "feed has no eligible items".
   if (feed.actions.length) {
-    const priorityActions = dashboardSection ? selectedActions : feed.actions;
+    const priorityActions = dashboardSection || priorityFilter ? selectedActions : feed.actions;
     const suppressedHomeActionIds = await getSuppressedHomeActionIds({
       userId, propertyId, homeActionIds: priorityActions.map((action) => action.id),
     }).catch(() => new Set<string>());
@@ -497,6 +515,8 @@ async function homeActionsResult(userId: string, propertyId: string, message: st
       id: 'home-actions-priority-list',
       title: 'What matters now',
       ...buildPriorityListView({ ...feed, actions: priorityActions }, 'ASK', { suppressedHomeActionIds }),
+      // Counts come from the whole governed feed (Consider included), never from the 8 cards shown.
+      ...(dashboardSection ? {} : { filters: homeActionTimingFilters(feed.buckets, priorityFilter) }),
     });
   }
 
