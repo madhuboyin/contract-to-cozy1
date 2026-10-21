@@ -138,6 +138,9 @@ test('Home Operations marks overdue rows and reserves More for three or more act
   expect(overdue).toHaveTextContent('Overdue');
   expect(overdue).toContainElement(screen.getByRole('button', { name: 'Snooze' }));
   expect(overdue).toContainElement(screen.getByRole('button', { name: 'Change due date' }));
+  const overdueActions = overdue?.querySelector('[data-home-work-item-actions]');
+  expect(overdueActions).toHaveClass('basis-full', 'border-t');
+  expect(overdueActions?.querySelector('[data-item-status]')).toBeNull();
   expect(screen.getByText('More')).toBeVisible();
   expect(screen.getByRole('button', { name: 'Snooze chimney' })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Change chimney due date' })).toBeInTheDocument();

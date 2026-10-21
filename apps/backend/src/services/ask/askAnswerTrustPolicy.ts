@@ -245,7 +245,14 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   SAVED_RESULTS: new Set(),
   NOTIFICATIONS_OVERVIEW: new Set(),
   NOTIFICATION_SETTINGS_OVERVIEW: new Set(),
-  HOME_WORK_ITEMS: new Set(['home-work-items-back', 'work-item-snooze', 'work-item-reschedule', 'work-items-accept-routine']),
+  HOME_WORK_ITEMS: new Set([
+    'home-work-items-back',
+    'work-item-snooze',
+    'work-item-reschedule',
+    'work-items-accept-routine',
+    'work-item-update-status',
+    'work-item-attach-evidence',
+  ]),
   // Build a negotiation package from a confirmed pre-purchase inspection report: choose a decision per open finding and see the credit total (register P2 Inspection Hub). Calculation only; saves nothing.
   INSPECTION_NEGOTIATION_PACKAGE: new Set(['inspection-reports-back']),
   // Keep an eye on an inspection finding, or record the seller's plan to fix or disclose it (register P2 Inspection Hub). Confirmation-gated, declared-action only.

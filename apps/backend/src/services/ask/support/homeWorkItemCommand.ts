@@ -15,7 +15,10 @@ export const WORK_ITEM_MESSAGES = {
   UPDATE_STATUS: 'Update the status of this work item.',
 } as const;
 export type WorkItemCommandKind = keyof typeof WORK_ITEM_MESSAGES;
-export const WORK_ITEM_ACTION_IDS = { SNOOZE: 'work-item-snooze', RESCHEDULE: 'work-item-reschedule', ACCEPT_ROUTINE: 'work-items-accept-routine' } as const;
+export const WORK_ITEM_ACTION_IDS = {
+  SNOOZE: 'work-item-snooze', RESCHEDULE: 'work-item-reschedule', ACCEPT_ROUTINE: 'work-items-accept-routine',
+  UPDATE_STATUS: 'work-item-update-status', ATTACH_EVIDENCE: 'work-item-attach-evidence',
+} as const;
 export const workItemKindFromMessage = (message: string): WorkItemCommandKind | null =>
   ((Object.entries(WORK_ITEM_MESSAGES) as Array<[WorkItemCommandKind, string]>).find(([, value]) => value === message)?.[0]) ?? null;
 export type WorkItemFormKind = 'SNOOZE' | 'RESCHEDULE' | 'ATTACH_EXISTING' | 'SUBMIT_COMPLETION_EVIDENCE' | 'REMOVE_EVIDENCE' | 'UPDATE_STATUS';

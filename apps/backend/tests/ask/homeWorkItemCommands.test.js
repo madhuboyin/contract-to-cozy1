@@ -66,14 +66,15 @@ test('the list drops finished or replaced work, sorts by due date, and offers co
   ];
   const view = (canChange) => homeWorkItemsFromRows(rows, canChange, new Date('2026-09-15T00:00:00Z'));
   const contributor = view(true);
-  assert.deepEqual(contributor.blocks[1].sections[0].items.map((i) => i.id), ['soon', 'late', 'cand']);
+  assert.deepEqual(contributor.blocks[1].sections.map((section) => section.title), ['Needs action', 'Recommendations']);
+  assert.deepEqual(contributor.blocks[1].sections.flatMap((section) => section.items.map((i) => i.id)), ['soon', 'late', 'cand']);
   assert.equal(contributor.blocks[1].listDensity, 'DENSE');
-  assert.equal(contributor.blocks[1].sections[0].initialVisibleCount, 3);
+  assert.deepEqual(contributor.blocks[1].sections.map((section) => section.initialVisibleCount), [2, 1]);
   assert.equal(contributor.blocks[1].description, null);
-  assert.deepEqual(contributor.blocks[1].sections[0].items[0].actions.map((a) => a.id), ['work-item-snooze', 'work-item-reschedule']);
+  assert.deepEqual(contributor.blocks[1].sections[0].items[0].actions.map((a) => a.id), ['work-item-update-status', 'work-item-snooze', 'work-item-reschedule']);
   assert.deepEqual(contributor.blocks[0].actions.map((a) => a.id), ['work-items-accept-routine']);
   const viewer = view(false);
-  assert.ok(viewer.blocks[1].sections[0].items.every((i) => i.actions.length === 0));
+  assert.ok(viewer.blocks[1].sections.flatMap((section) => section.items).every((i) => i.actions.length === 0));
   assert.deepEqual(viewer.blocks[0].actions, []);
   assert.equal(homeWorkItemsFromRows([item({ state: 'CLOSED' })], true, new Date()).reasonCode, 'NO_OPEN_WORK_ITEMS');
 });
@@ -83,7 +84,7 @@ test('the list keeps distinct canonical rows with the same title and adds contex
     item({ id: 'decision-1', title: 'Consider replacing your Dishwasher.', homeownerReason: 'The appliance is nearing its expected service life.', subjectType: 'INVENTORY_ITEM' }),
     item({ id: 'decision-2', title: 'Consider replacing your Dishwasher.', homeownerReason: 'Repair costs may exceed the remaining value.', subjectType: 'INVENTORY_ITEM' }),
   ], true, new Date('2026-09-15T00:00:00Z'));
-  const rows = result.blocks[1].sections[0].items;
+  const rows = result.blocks[1].sections.flatMap((section) => section.items);
   assert.deepEqual(rows.map((row) => row.id), ['decision-1', 'decision-2']);
   assert.deepEqual(rows.map((row) => row.description), [
     'The appliance is nearing its expected service life.',
@@ -98,12 +99,15 @@ test('the list distinguishes overdue adopted work, paused reminders, reported co
     item({ id: 'reported', state: 'REPORTED_COMPLETE', dueAt: new Date('2026-09-15T12:00:00Z') }),
     item({ id: 'candidate', state: 'CANDIDATE', dueAt: new Date('2026-09-01T12:00:00Z'), obligationType: 'DECISION' }),
   ], true, new Date('2026-10-21T12:00:00Z'));
-  const rows = result.blocks[1].sections[0].items;
+  const rows = result.blocks[1].sections.flatMap((section) => section.items);
   assert.equal(rows.find((row) => row.id === 'overdue').tone, 'CRITICAL');
   assert.match(rows.find((row) => row.id === 'overdue').meta[0], /^Overdue since /);
   assert.equal(rows.find((row) => row.id === 'paused').tone, 'DEFAULT');
   assert.match(rows.find((row) => row.id === 'paused').meta.join(' · '), /Snoozed until/);
   assert.equal(rows.find((row) => row.id === 'reported').tone, 'DEFAULT');
+  assert.equal(rows.find((row) => row.id === 'reported').status, 'Waiting for verification');
+  assert.match(rows.find((row) => row.id === 'reported').meta.join(' · '), /stays here until the outcome is verified/);
+  assert.deepEqual(rows.find((row) => row.id === 'reported').actions.map((action) => action.label), ['Add evidence', 'Update status']);
   assert.equal(rows.find((row) => row.id === 'candidate').status, 'Not added');
   assert.equal(rows.find((row) => row.id === 'candidate').description, 'Recommendation · decision');
   assert.match(rows.find((row) => row.id === 'candidate').meta.join(' · '), /Not yet added to your work/);
