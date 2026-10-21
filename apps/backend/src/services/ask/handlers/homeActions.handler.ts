@@ -20,7 +20,7 @@ import { humanDate } from '../askFormatting';
 import { ensurePropertyAccess, MAX_RESULT_ITEMS, propertyLabel } from '../askHandlerSupport';
 import { buildPriorityListView } from '../../decisionPlatform/priorityListPolicy';
 import { getSuppressedHomeActionIds } from '../../decisionPlatform/homeActionUsefulnessFeedback.service';
-import { buildFocusedHomeActionGuidance, homeActionPriorityFilter, isHealthFactorFocusHref, isPropertyContextCaptureAction } from '../askFocusedGuidance';
+import { buildFocusedHomeActionGuidance, WORK_EVIDENCE_KIND_LABELS, homeActionPriorityFilter, isHealthFactorFocusHref, isPropertyContextCaptureAction } from '../askFocusedGuidance';
 import { askCaptureRequest } from '../support/capture';
 import {
   dashboardSectionRepresentativeActions,
@@ -280,6 +280,26 @@ function homeActionTimingFilters(
   ];
 }
 
+// Evidence already recorded on a work item, with a readable label per kind. Newest first, bounded; a failed read just omits the section.
+async function loadWorkEvidence(propertyId: string, workItemId: string) {
+  const rows = await prisma.operationalWorkEvidence.findMany({
+    where: { workItemId, workItem: { propertyId } }, orderBy: { observedAt: 'desc' }, take: 20,
+    select: { id: true, evidenceType: true, evidenceEntityId: true, verificationStatus: true, observedAt: true },
+  });
+  const ids = (type: string) => rows.filter((row) => row.evidenceType === type).map((row) => row.evidenceEntityId);
+  const [documents, events] = await Promise.all([
+    ids('DOCUMENT').length ? prisma.document.findMany({ where: { id: { in: ids('DOCUMENT') }, propertyId }, select: { id: true, name: true } }) : [],
+    ids('HOME_EVENT').length ? prisma.homeEvent.findMany({ where: { id: { in: ids('HOME_EVENT') }, propertyId }, select: { id: true, title: true } }) : [],
+  ]);
+  const names = new Map<string, string>([...documents.map((d) => [d.id, d.name] as const), ...events.map((e) => [e.id, e.title] as const)]);
+  return rows.map((row) => ({
+    id: row.id, kind: row.evidenceType, status: row.verificationStatus,
+    label: names.get(row.evidenceEntityId) ?? WORK_EVIDENCE_KIND_LABELS[row.evidenceType] ?? 'Evidence',
+    observedAt: formatEvidenceDate(row.observedAt),
+  }));
+}
+const formatEvidenceDate = (date: Date) => date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+
 async function homeActionsResult(userId: string, propertyId: string, message: string, focusedActionId?: string | null): Promise<AskOperationResult> {
   const [access, buyerContextValue] = await Promise.all([
     ensurePropertyAccess(userId, propertyId),
@@ -423,7 +443,10 @@ async function homeActionsResult(userId: string, propertyId: string, message: st
     const policyConflict = conflictTermId
       ? (await getConflictedInsurancePolicyTerms(propertyId, prisma)).find((term) => term.termId === conflictTermId) ?? null
       : null;
-    return buildFocusedHomeActionGuidance(focusedAction, evaluation.contextVersion, propertyFacts ?? undefined, captureRequest, { canContribute: access.role !== HouseholdRole.VIEWER, policyConflict, captureFeature, applianceCount, applianceNeedingDetails });
+    const workEvidence = focusedAction.workItem && focusedAction.presentation?.variant === 'ACCEPTED_WORK'
+      ? await loadWorkEvidence(propertyId, focusedAction.workItem.id).catch(() => undefined)
+      : undefined;
+    return buildFocusedHomeActionGuidance(focusedAction, evaluation.contextVersion, propertyFacts ?? undefined, captureRequest, { canContribute: access.role !== HouseholdRole.VIEWER, policyConflict, captureFeature, applianceCount, applianceNeedingDetails, workEvidence });
   }
 
   const topFocus = /\b(?:what should i do next|next best action|highest priority|top priorit(?:y|ies)|where should i start)\b/i.test(message);

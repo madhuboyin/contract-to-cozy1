@@ -16,22 +16,27 @@ export type ComposerAffordance = {
   maxBytes: number;
   /** The file is attached to this record after review; nothing executes on upload. */
   effect: 'ATTACH_EVIDENCE_AFTER_REVIEW';
-  target: { entityType: 'HOME_EVENT' | 'INVENTORY_ITEM' | 'WARRANTY'; id: string; title: string; message: string };
+  target: { entityType: 'HOME_EVENT' | 'INVENTORY_ITEM' | 'WARRANTY' | 'WORK_ITEM'; id: string; title: string; message: string };
 };
 
 const MESSAGES: Record<ComposerAffordance['target']['entityType'], string> = {
   HOME_EVENT: EVIDENCE_ATTACH_MESSAGES.HOME_EVENT,
   INVENTORY_ITEM: EVIDENCE_ATTACH_MESSAGES.INVENTORY_ITEM,
   WARRANTY: EVIDENCE_ATTACH_MESSAGES.WARRANTY,
+  WORK_ITEM: EVIDENCE_ATTACH_MESSAGES.WORK_ITEM,
 };
 const LABELS: Record<ComposerAffordance['target']['entityType'], string> = {
   HOME_EVENT: 'Add a photo or document',
   INVENTORY_ITEM: 'Add a photo or document',
   WARRANTY: 'Add the warranty document',
+  WORK_ITEM: 'Add a photo or document',
 };
 
-const isTarget = (item: AskGroupedListItem): item is AskGroupedListItem & { entityType: ComposerAffordance['target']['entityType'] } =>
-  (item.entityType === 'HOME_EVENT' || item.entityType === 'INVENTORY_ITEM' || item.entityType === 'WARRANTY') && (item.actions?.length ?? 0) > 0;
+// A work item is a target only on the row the server marks `evidenceTarget` (emitted for contributors and owners alone); the others need declared actions.
+type AffordanceItem = AskGroupedListItem & { entityType: ComposerAffordance['target']['entityType'] };
+const isTarget = (item: AskGroupedListItem): item is AffordanceItem =>
+  ((item.entityType === 'HOME_EVENT' || item.entityType === 'INVENTORY_ITEM' || item.entityType === 'WARRANTY') && (item.actions?.length ?? 0) > 0)
+  || (item.entityType === 'OPERATIONAL_WORK_ITEM' && item.evidenceTarget === true);
 
 export function deriveComposerAffordances(execution: AskExecutionResponse | undefined | null): ComposerAffordance[] {
   // A read result is ANSWERED; only a settled result can name a target.
@@ -42,7 +47,8 @@ export function deriveComposerAffordances(execution: AskExecutionResponse | unde
   // Exactly one distinct record: a list of several has no deterministic target.
   const distinct = new Map(targets.map((item) => [`${item.entityType}:${item.id}`, item]));
   if (distinct.size !== 1) return [];
-  const [item] = Array.from(distinct.values());
+  const [found] = Array.from(distinct.values());
+  const item = found.entityType === ('OPERATIONAL_WORK_ITEM' as string) ? { ...found, entityType: 'WORK_ITEM' as const, title: 'this work' } : found;
   return [{
     id: 'attach-evidence', capability: 'PHOTO_OR_DOCUMENT', label: LABELS[item.entityType],
     purpose: `${LABELS[item.entityType]} for ${item.title}`,

@@ -1,4 +1,5 @@
 import { CONTINUITY_BLOCKS } from './continuityFixtures';
+import { HOME_ACTIONS_FOCUSED, HOME_ACTIONS_LIST } from './homeActionsFixtures';
 import { expect, type BrowserContext, type Page, type Request, type Route } from '@playwright/test';
 
 export const propertyId = 'ask-property-fixture';
@@ -647,11 +648,12 @@ function eventCorrectionExecution(status: 'NEEDS_CONFIRMATION' | 'COMPLETED', ve
 // correction here, editableFields is always [] -- the file was already picked and uploaded client-side before
 // this execution exists, so there is nothing left to edit on the confirmation card, only review and consent.
 // FRD v1.99: the same flow for an inventory item or a warranty; only the record and the wording differ.
-type EvidenceTarget = { kind: 'event' | 'inventory' | 'warranty'; title: string; where: string; noun: string; message: string };
+type EvidenceTarget = { kind: 'event' | 'inventory' | 'warranty' | 'work'; title: string; where: string; noun: string; message: string };
 const EVIDENCE_TARGETS: Record<EvidenceTarget['kind'], EvidenceTarget> = {
   event: { kind: 'event', title: 'Roof replacement', where: 'home timeline entry', noun: 'home record entry', message: 'Attach evidence to this home timeline entry.' },
   inventory: { kind: 'inventory', title: 'Water heater', where: 'inventory item', noun: 'inventory item', message: 'Attach this document to this inventory item.' },
   warranty: { kind: 'warranty', title: 'Acme Home Warranty', where: 'warranty', noun: 'warranty', message: 'Attach this document to this warranty.' },
+  work: { kind: 'work', title: 'Chimney cleaning and inspection', where: 'home action', noun: 'work item', message: 'Attach this document as evidence for this work.' },
 };
 function evidenceAttachConfirmation(version: number, documentName: string, target: EvidenceTarget = EVIDENCE_TARGETS.event) {
   return {
@@ -3217,11 +3219,37 @@ export async function installAskApi(page: Page, options: { selectorState?: 'OPTI
       await fulfill(route, { success: true, data: claimsJourneyExecution({ ...claimsJourney!, sessionId: body.sessionId }, { viewer: options.claimsViewer, empty: options.claimsEmpty }) }, 201);
       return;
     }
+    if (/home actions fixture (all|consider|contributor|viewer|regulated)/i.test(body.message)) {
+      const kind = (/home actions fixture (\w+)/i.exec(body.message)![1].toLowerCase());
+      await fulfill(route, { success: true, data: homeActionsExecution(kind === 'all' ? 'list-all' : kind === 'consider' ? 'list-consider' : kind as 'contributor' | 'viewer' | 'regulated', body.sessionId as string | undefined) }, 201);
+      return;
+    }
+    if (/worth a look to consider/i.test(body.message)) {
+      await fulfill(route, { success: true, data: homeActionsExecution('list-consider', body.sessionId as string | undefined) }, 201);
+      return;
+    }
+    if (/attach this document as evidence for this work/i.test(body.message)) {
+      const response = evidenceAttachExecution('NEEDS_CONFIRMATION', 1, 'receipt.pdf', body.sessionId as string | undefined, EVIDENCE_TARGETS.work);
+      await fulfill(route, { success: true, data: response }, 201);
+      return;
+    }
     if (/continuity journey/i.test(body.message)) {
       await fulfill(route, { success: true, data: continuityExecution(/established/i.test(body.message) ? 'established' : 'starter', body.sessionId as string | undefined) }, 201);
       return;
     }
-    // Warranties W-3: a warranty answer, one exact warranty, and declared-filter refinements (merged the way the handler merges them).
+    // Home Actions (FRD 1.398-1.400): the ranked list (All / Consider filter views) and the focused accepted-work view for a contributor, a viewer and regulated work.
+function homeActionsExecution(kind: 'list-all' | 'list-consider' | 'contributor' | 'viewer' | 'regulated', sessionId?: string) {
+  const blocks = kind === 'list-all' ? HOME_ACTIONS_LIST.all : kind === 'list-consider' ? HOME_ACTIONS_LIST.consider : HOME_ACTIONS_FOCUSED[kind];
+  return {
+    schemaVersion: '1.0', sessionId: sessionId ?? 'ask-acceptance-session', executionId: `execution-home-actions-${kind}`, question: 'What needs my attention around the home?', status: 'ANSWERED',
+    property: { id: propertyId, label: 'Acceptance Home' }, operation: { id: 'HOME_ACTIONS', version: '1.0', family: 'HOME_OPERATIONS' }, contextVersion: 'home-actions-v1',
+    skill: null, skillHandoff: null, captureRequests: [], confirmation: null, clarification: null, childExecutions: [], originalResponse: null, viewState: null,
+    correctionCapabilities: { intent: true, entity: true, homeRecord: false, retryResponse: false }, suggestions: [], blocks,
+    createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+  };
+}
+
+// Warranties W-3: a warranty answer, one exact warranty, and declared-filter refinements (merged the way the handler merges them).
     if (/warranty journey/i.test(body.message) || (warrantyJourney && /^(?:only show|now show all) (?:.*warrant|warrant)/i.test(body.message))) {
       if (/acme warranty journey/i.test(body.message)) {
         await fulfill(route, { success: true, data: warrantyJourneyExecution({ status: 'ALL', category: null, revision: 1, sessionId: body.sessionId }, { single: true, viewer: options.warrantyViewer }) }, 201);

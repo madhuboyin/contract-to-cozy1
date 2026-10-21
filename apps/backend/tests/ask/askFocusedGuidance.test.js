@@ -662,6 +662,30 @@ test('accepted work follows governed controls and resolves reported completion i
   assert.deepEqual(other.map((candidate) => candidate.label), ['Open work']);
 });
 
+test('accepted work lists its evidence and offers one upload row only to contributors, worded by safety tier', () => {
+  const evidence = [
+    { id: 'e1', label: 'Chimney sweep invoice.pdf', kind: 'DOCUMENT', status: 'PENDING', observedAt: 'Oct 20, 2026' },
+    { id: 'e2', label: 'Annual inspection', kind: 'HOME_EVENT', status: 'VERIFIED', observedAt: null },
+  ];
+  const sectionFor = (action, options) => buildFocusedHomeActionGuidance(action, 'context-v1', undefined, null, options)
+    .blocks.find((block) => block.id === 'focused-home-action-guidance').sections.find((section) => section.id === 'work-evidence');
+  const low = sectionFor(acceptedWorkAction(), { canContribute: true, workEvidence: evidence });
+  assert.deepEqual(low.items.slice(0, 2).map((item) => [item.title, item.status]), [['Chimney sweep invoice.pdf', 'Awaiting review'], ['Annual inspection', 'Verified']]);
+  const target = low.items[2];
+  assert.deepEqual([target.id, target.entityType, target.evidenceTarget], ['work-1', 'OPERATIONAL_WORK_ITEM', true]);
+  assert.match(target.description, /reviewed before it is attached/);
+  // Viewers see the evidence read-only: no upload row.
+  assert.equal(sectionFor(acceptedWorkAction(), { canContribute: false, workEvidence: evidence }).items.some((item) => item.evidenceTarget), false);
+  // Regulated work says plainly that a photo does not close it.
+  const regulated = sectionFor(acceptedWorkAction({ governance: { ...weatherAction().governance, safetyTier: 'REGULATED_COVERAGE' } }), { canContribute: true, workEvidence: [] });
+  assert.match(regulated.items[0].description, /does not close it/);
+  // Nothing loaded (read failed) -> no section; the schema keeps the marker.
+  assert.equal(sectionFor(acceptedWorkAction(), { canContribute: true }), undefined);
+  const block = buildFocusedHomeActionGuidance(acceptedWorkAction(), 'context-v1', undefined, null, { canContribute: true, workEvidence: [] }).blocks.find((b) => b.id === 'focused-home-action-guidance');
+  const parsed = AskPresentationBlockSchema.parse(block);
+  assert.equal(parsed.sections.find((section) => section.id === 'work-evidence').items[0].evidenceTarget, true);
+});
+
 // Sweep of the remaining producers (FRD v1.170): incident-detail and project-detail fallbacks.
 test('incident-detail and project-detail primary CTAs route to their Ask operation, and only those paths', () => {
   const { resolveAskOperation } = require('../../src/services/ask/askOperationRegistry.ts');

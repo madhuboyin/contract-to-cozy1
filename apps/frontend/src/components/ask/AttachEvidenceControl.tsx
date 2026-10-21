@@ -16,6 +16,7 @@ export const EVIDENCE_ATTACH_MESSAGES = {
   HOME_EVENT: EVIDENCE_ATTACH_MESSAGE,
   INVENTORY_ITEM: 'Attach this document to this inventory item.',
   WARRANTY: 'Attach this document to this warranty.',
+  WORK_ITEM: 'Attach this document as evidence for this work.',
 } as const;
 export const EVIDENCE_UPLOAD_ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'application/pdf'];
 export const EVIDENCE_UPLOAD_MAX_BYTES = 10 * 1024 * 1024;

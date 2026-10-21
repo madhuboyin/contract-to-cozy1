@@ -6,6 +6,7 @@ import { resolveHealthFactorChecklist, urgencyLabel, type HealthFactorChecklistP
 import { buildPolicyConflictSection } from './policyConflictPresentation';
 import type { ConflictedInsurancePolicyTerm } from '../coverageConflict.service';
 import { isAppliancesInsight } from './healthGapCapture';
+import { COMPLETION_EVIDENCE_POLICY } from '../intelligence/completionEvidencePolicy.registry';
 import { WORK_ITEM_ENTITY_TYPE, WORK_ITEM_MESSAGES, workItemChangeable } from './support/homeWorkItemCommand';
 
 // Must equal INVENTORY_ADD_MESSAGE in handlers/inventory.handler.ts (pinned by test): the handler recognises the
@@ -383,6 +384,34 @@ function resolveMatchedItemHealthRouting(action: RankedHomeAction): FocusedAskRo
   };
 }
 
+const WORK_EVIDENCE_STATUS: Record<string, string> = { PENDING: 'Awaiting review', VERIFIED: 'Verified', REJECTED: 'Not accepted' };
+export const WORK_EVIDENCE_KIND_LABELS: Record<string, string> = {
+  DOCUMENT: 'Document', HOME_EVENT: 'Timeline event', PROPERTY_FACT: 'Home fact', USER_ATTESTATION: 'Your confirmation',
+  DOMAIN_COMPLETION_RECORD: 'Completion record', SYSTEM_DERIVATION: 'Derived by Cozy',
+};
+export const workEvidenceStatusLabel = (status: string): string => WORK_EVIDENCE_STATUS[status] ?? status;
+
+// Evidence already on the work item, plus (contributors and owners only) the one row where a photo or document can be added.
+// What counts depends on the work's safety tier, stated in the row so nobody uploads a photo expecting it to close regulated work.
+function buildWorkEvidenceSection(action: RankedHomeAction, evidence: NonNullable<NonNullable<Parameters<typeof buildFocusedHomeActionGuidance>[4]>['workEvidence']>, canContribute: boolean) {
+  const policy = COMPLETION_EVIDENCE_POLICY.find((entry) => entry.safetyTier === action.governance.safetyTier);
+  const guidance = policy?.attestation === 'INSUFFICIENT'
+    ? `${policy.minimumCompletionBehavior} Evidence you add here is reviewed by the record that governs this work; it does not close it.`
+    : 'Add a photo or document that shows what was done. It is reviewed before it is attached.';
+  const items = [
+    ...evidence.map((entry) => ({
+      id: `${action.id}-evidence-${entry.id}`, title: entry.label, description: null,
+      meta: [WORK_EVIDENCE_KIND_LABELS[entry.kind] ?? entry.kind, ...(entry.observedAt ? [entry.observedAt] : [])],
+      status: workEvidenceStatusLabel(entry.status), href: null,
+    })),
+    ...(canContribute && action.workItem ? [{
+      id: action.workItem.id, title: 'Add a photo or document', description: guidance, meta: [], status: null, href: null,
+      entityType: 'OPERATIONAL_WORK_ITEM', evidenceTarget: true,
+    }] : []),
+  ];
+  return items.length ? { id: 'work-evidence', title: 'Evidence', count: evidence.length, items } : null;
+}
+
 function focusedTitle(action: RankedHomeAction): string {
   return (action.presentation?.headline ?? action.recommendedAction)
     .trim()
@@ -429,6 +458,8 @@ export function buildFocusedHomeActionGuidance(
     // First recorded appliance still missing a purchase date (same filter as the producer); lets "Complete appliance
     // details" continue in Ask through the single-item inventory correction instead of the bulk edit page.
     applianceNeedingDetails?: { id: string; name: string } | null;
+    // Evidence already recorded on this action's work item (loaded by the handler); undefined when none was loaded.
+    workEvidence?: Array<{ id: string; label: string; kind: string; status: string; observedAt: string | null }>;
   } = {},
 ): AskOperationResult {
   const title = focusedTitle(action);
@@ -524,6 +555,9 @@ export function buildFocusedHomeActionGuidance(
       groupLabel: group.label,
     })))
     : [];
+  const evidenceSection = action.workItem && action.presentation?.variant === 'ACCEPTED_WORK' && options.workEvidence
+    ? buildWorkEvidenceSection(action, options.workEvidence, options.canContribute === true)
+    : null;
   const detailFacts: Array<{ label: string; value: string; groupLabel: string }> = groupedDetailFacts.length > 0
     ? groupedDetailFacts
     : keyFacts.map((fact) => ({ label: fact.label, value: fact.value, groupLabel: 'Home details' }));
@@ -608,7 +642,7 @@ export function buildFocusedHomeActionGuidance(
         status: null,
         href: null,
       })),
-    }] : []), ...(checklist ? [{
+    }] : []), ...(evidenceSection ? [evidenceSection] : []), ...(checklist ? [{
       id: 'checklist',
       title: checklist.title,
       count: checklist.items.length,

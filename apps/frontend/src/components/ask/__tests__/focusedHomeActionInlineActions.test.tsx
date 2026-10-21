@@ -54,3 +54,26 @@ test('focused Home Action keeps details and snooze choices inline', () => {
     entityId: 'work-1',
   }));
 });
+
+test('focused Home Action shows its evidence without opening details, with the upload hint only when the server marks a target', () => {
+  const withEvidence = (target: boolean): GroupedList => ({
+    ...block,
+    sections: [...block.sections, { id: 'work-evidence', title: 'Evidence', count: 1, items: [
+      { id: 'e1', title: 'Invoice.pdf', meta: ['Document', 'Oct 20, 2026'], status: 'Awaiting review' },
+      ...(target ? [{ id: 'work-1', title: 'Add a photo or document', description: 'Add a photo or document that shows what was done.', meta: [], entityType: 'OPERATIONAL_WORK_ITEM', evidenceTarget: true }] : []),
+    ] }],
+  });
+  const view = (b: GroupedList) => render(
+    <AskBlockActionContext.Provider value={{ disabled: false, invoke: jest.fn() }}>
+      <GenericGroupedListBlock block={b} executionId="execution" propertyId="home" onItemAction={() => undefined} itemActionsDisabled={false} onFilterClick={() => undefined} onCollectionPage={() => undefined} onAccessLost={() => undefined} />
+    </AskBlockActionContext.Provider>,
+  );
+  const first = view(withEvidence(true));
+  expect(screen.getByText('Invoice.pdf')).toBeInTheDocument();
+  expect(screen.getByText('Awaiting review')).toBeInTheDocument();
+  expect(screen.getByText(/shows what was done/)).toBeInTheDocument();
+  first.unmount();
+  view(withEvidence(false));
+  expect(screen.getByText('Invoice.pdf')).toBeInTheDocument();
+  expect(screen.queryByText(/shows what was done/)).toBeNull();
+});

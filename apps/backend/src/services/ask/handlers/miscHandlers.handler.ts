@@ -871,10 +871,11 @@ registerCapabilityHandler('capture.warranty.confirm', async (envelope) => {
 export const EVIDENCE_ATTACH_MESSAGE = 'Attach evidence to this home timeline entry.';
 // The canned message for each target the homeowner can attach a file to (FRD v1.99); it shows as their message in the
 // conversation, so it names the record type. The propose guard requires the message that matches the launch context's type.
-export const EVIDENCE_ATTACH_MESSAGES: Record<'HOME_EVENT' | 'INVENTORY_ITEM' | 'WARRANTY', string> = {
+export const EVIDENCE_ATTACH_MESSAGES: Record<'HOME_EVENT' | 'INVENTORY_ITEM' | 'WARRANTY' | 'WORK_ITEM', string> = {
   HOME_EVENT: EVIDENCE_ATTACH_MESSAGE,
   INVENTORY_ITEM: 'Attach this document to this inventory item.',
   WARRANTY: 'Attach this document to this warranty.',
+  WORK_ITEM: 'Attach this document as evidence for this work.',
 };
 
 // A document is attached as evidence to an EXISTING event only from the declared "Attach evidence" control (see

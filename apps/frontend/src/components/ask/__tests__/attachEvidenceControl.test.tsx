@@ -15,6 +15,7 @@ test('each record type has its own canned message, matching the server\'s', () =
     HOME_EVENT: 'Attach evidence to this home timeline entry.',
     INVENTORY_ITEM: 'Attach this document to this inventory item.',
     WARRANTY: 'Attach this document to this warranty.',
+    WORK_ITEM: 'Attach this document as evidence for this work.',
   });
 });
 

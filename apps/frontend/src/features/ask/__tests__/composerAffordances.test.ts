@@ -38,4 +38,12 @@ describe('deriveComposerAffordances', () => {
     expect(deriveComposerAffordances(execution(blocks, { captureRequests: [{}] }))).toEqual([]);
     expect(deriveComposerAffordances(null)).toEqual([]);
   });
+  it('offers a work-item upload only on the row the server marks as the evidence target', () => {
+    const marked = { ...item('work-1', 'OPERATIONAL_WORK_ITEM', 0), evidenceTarget: true };
+    const [affordance] = deriveComposerAffordances(execution([list(item('a', null, 0), marked)]));
+    expect(affordance.target).toMatchObject({ entityType: 'WORK_ITEM', id: 'work-1', message: 'Attach this document as evidence for this work.' });
+    expect(affordance.label).toBe('Add a photo or document');
+    // Unmarked work rows (a viewer's read-only list) offer nothing.
+    expect(deriveComposerAffordances(execution([list(item('work-1', 'OPERATIONAL_WORK_ITEM', 0))]))).toEqual([]);
+  });
 });

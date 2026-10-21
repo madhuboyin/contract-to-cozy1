@@ -27,7 +27,7 @@ function priorityReason(codes: string[]): string | null {
 // Ask Intelligence FRD §22.1/Phase 9B "usefulness feedback" deliverable —
 // per-PRIORITY_LIST-item rating, distinct from ExecutionFeedback's
 // whole-response UP/DOWN thumbs.
-function HomeActionUsefulnessButtons({ executionId, homeActionId }: { executionId: string; homeActionId: string }) {
+function HomeActionUsefulnessButtons({ executionId, homeActionId, bare = false }: { executionId: string; homeActionId: string; bare?: boolean }) {
   const [rating, setRating] = useState<'USEFUL' | 'NOT_USEFUL' | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -39,14 +39,18 @@ function HomeActionUsefulnessButtons({ executionId, homeActionId }: { executionI
     } finally { setSaving(false); }
   };
 
-  return (
-    <details className="text-xs text-slate-500">
-      <summary className="cursor-pointer list-none rounded-lg px-2 py-1 font-medium hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600">{rating ? 'Feedback saved' : 'Rate this action'}</summary>
+  const buttons = (
       <div className="mt-1 flex items-center justify-end gap-1 rounded-xl border border-slate-200 bg-white p-1.5">
         <span className="whitespace-nowrap px-1">Useful?</span>
         <button type="button" disabled={saving} aria-label="Mark useful" aria-pressed={rating === 'USEFUL'} onClick={() => void submit('USEFUL')} className={cn('rounded-lg p-1.5 hover:bg-slate-100', rating === 'USEFUL' && 'bg-teal-50 text-teal-700')}><ThumbsUp className="h-3.5 w-3.5" /></button>
         <button type="button" disabled={saving} aria-label="Mark not useful" aria-pressed={rating === 'NOT_USEFUL'} onClick={() => void submit('NOT_USEFUL')} className={cn('rounded-lg p-1.5 hover:bg-slate-100', rating === 'NOT_USEFUL' && 'bg-amber-50 text-amber-700')}><ThumbsDown className="h-3.5 w-3.5" /></button>
       </div>
+  );
+  if (bare) return <div className="text-xs text-slate-500"><p className="px-1 font-medium">{rating ? 'Feedback saved' : 'Rate this action'}</p>{buttons}</div>;
+  return (
+    <details className="text-xs text-slate-500">
+      <summary className="cursor-pointer list-none rounded-lg px-2 py-1 font-medium hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600">{rating ? 'Feedback saved' : 'Rate this action'}</summary>
+      {buttons}
     </details>
   );
 }
@@ -55,8 +59,8 @@ function HomeActionUsefulnessButtons({ executionId, homeActionId }: { executionI
 function HomeActionOverflow({ executionId, homeActionId }: { executionId: string; homeActionId: string }) {
   return (
     <details className="relative shrink-0">
-      <summary aria-label="More options" className="flex h-9 w-9 cursor-pointer list-none items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"><MoreHorizontal className="h-4 w-4" aria-hidden="true" /></summary>
-      <div className="absolute right-0 z-10 mt-1 rounded-xl border border-slate-200 bg-white p-1.5 shadow-md"><HomeActionUsefulnessButtons executionId={executionId} homeActionId={homeActionId} /></div>
+      <summary role="button" aria-label="More options" className="flex h-9 w-9 cursor-pointer list-none items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"><MoreHorizontal className="h-4 w-4" aria-hidden="true" /></summary>
+      <div className="absolute right-0 z-10 mt-1 rounded-xl border border-slate-200 bg-white p-1.5 shadow-md"><HomeActionUsefulnessButtons executionId={executionId} homeActionId={homeActionId} bare /></div>
     </details>
   );
 }

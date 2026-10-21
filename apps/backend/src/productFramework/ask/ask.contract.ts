@@ -152,6 +152,8 @@ const GroupedListItemSchema = z.object({
   status: z.string().nullable().optional(),
   href: z.string().nullable().optional(),
   entityType: z.string().trim().min(1).max(60).nullable().optional(),
+  // This row is the one place a photo or document can be attached to `entityType`/`id` (FRD 1.400); the composer offers the upload for it.
+  evidenceTarget: z.boolean().optional(),
   // The entity's parent record, when the inline detail must re-read it through its parent (an inspection finding is
   // read through its report). Additive; FRD v1.43.
   parentId: z.string().trim().min(1).max(160).nullable().optional(),

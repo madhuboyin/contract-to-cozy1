@@ -89,6 +89,9 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
     const facts = block.sections.find((section) => section.id === 'known-details')?.items ?? [];
     const checklist = block.sections.find((section) => section.id === 'checklist');
     const policyConflicts = block.sections.find((section) => section.id === 'policy-conflicts');
+    const evidence = block.sections.find((section) => section.id === 'work-evidence');
+    const evidenceRows = evidence?.items.filter((item) => !item.evidenceTarget) ?? [];
+    const evidenceTarget = evidence?.items.find((item) => item.evidenceTarget);
     const snoozeAction = block.actions.find((action) => action.interactionType === 'START_WORKFLOW' && /^Snooze reminders?$/i.test(action.label));
     const primaryActions = block.actions.filter((action) => action !== snoozeAction);
     const hasDetails = Boolean(why?.description || facts.length > 0);
@@ -111,6 +114,25 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
             </div>
           ))}
         </div>
+        {evidence && (evidenceRows.length > 0 || evidenceTarget) && (
+          <div className="mt-4 border-t border-slate-100 pt-3" data-work-evidence="">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{evidence.title}</p>
+            {evidenceRows.length > 0 ? (
+              <ul className="mt-2 divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white">
+                {evidenceRows.map((item) => (
+                  <li key={item.id} className="flex items-start justify-between gap-3 px-3 py-2">
+                    <div className="min-w-0">
+                      <p className="break-words text-sm font-medium text-slate-900">{item.title}</p>
+                      {item.meta.length > 0 && <p className="text-xs text-slate-500">{item.meta.join(' · ')}</p>}
+                    </div>
+                    {item.status && <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700">{item.status}</span>}
+                  </li>
+                ))}
+              </ul>
+            ) : <p className="mt-1 text-sm text-slate-600">No evidence is attached yet.</p>}
+            {evidenceTarget?.description && <p className="mt-2 text-xs leading-5 text-slate-600">{evidenceTarget.description}</p>}
+          </div>
+        )}
         {detailsOpen && hasDetails && (
           <div id={`${block.id}-details`} className="mt-4 border-t border-slate-100 pt-4">
             <div>

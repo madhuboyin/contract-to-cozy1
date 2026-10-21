@@ -580,11 +580,12 @@ export async function eventAddResult(userId: string, propertyId: string, sourceE
 
 // Evidence can be attached to a home timeline event (the original), and (FRD v1.99) to an inventory item or a warranty. All
 // three reuse CAPTURE_EVIDENCE_CONFIRM: the target type travels in the execution's own stored parameters.
-export type EvidenceAttachTargetType = 'HOME_EVENT' | 'INVENTORY_ITEM' | 'WARRANTY';
-export const EVIDENCE_ATTACH_TARGET_TYPES: readonly EvidenceAttachTargetType[] = ['HOME_EVENT', 'INVENTORY_ITEM', 'WARRANTY'];
+export type EvidenceAttachTargetType = 'HOME_EVENT' | 'INVENTORY_ITEM' | 'WARRANTY' | 'WORK_ITEM';
+export const EVIDENCE_ATTACH_TARGET_TYPES: readonly EvidenceAttachTargetType[] = ['HOME_EVENT', 'INVENTORY_ITEM', 'WARRANTY', 'WORK_ITEM'];
 const EVIDENCE_TARGET_COPY: Record<EvidenceAttachTargetType, { noun: string; where: string; missingTitle: string; missingBody: string }> = {
   HOME_EVENT: { noun: 'timeline entry', where: 'home timeline entry', missingTitle: 'This timeline event is no longer available', missingBody: 'It may have been corrected, removed, or you no longer have access to it. Show your home timeline to find it.' },
   INVENTORY_ITEM: { noun: 'inventory item', where: 'inventory item', missingTitle: 'This inventory item is no longer available', missingBody: 'It may have been removed, or you no longer have access to it. Show your home inventory to find it.' },
+  WORK_ITEM: { noun: 'work item', where: 'home action', missingTitle: 'This work is no longer available', missingBody: 'It may have been replaced or removed, or you no longer have access to it. Ask what needs your attention to find it.' },
   WARRANTY: { noun: 'warranty', where: 'warranty', missingTitle: 'This warranty is no longer available', missingBody: 'It may have been removed, or only the person who added it can attach documents to it. Open Warranties to check.' },
 };
 
@@ -595,7 +596,7 @@ function evidenceAttachConfirmation(document: { id: string; name: string }, targ
     description: `You are attaching a document you just uploaded to this ${copy.where}. No change is saved until you confirm.`,
     fields: [{ label: 'Document', value: document.name }, { label: 'Attach to', value: target.title }],
     editableFields: [], confirmLabel: 'Attach document',
-    consentText: target.type === 'HOME_EVENT' ? 'I confirm this document is evidence for this home record entry.' : `I confirm this document belongs with this ${copy.noun}.`,
+    consentText: target.type === 'HOME_EVENT' ? 'I confirm this document is evidence for this home record entry.' : target.type === 'WORK_ITEM' ? 'I confirm this document is evidence for this work. It stays pending until its governing record verifies it.' : `I confirm this document belongs with this ${copy.noun}.`,
     expiresAt: expiresAt.toISOString(),
   };
 }
@@ -614,6 +615,10 @@ async function evidenceTarget(userId: string, propertyId: string, type: Evidence
   if (type === 'INVENTORY_ITEM') {
     const item = await prisma.inventoryItem.findFirst({ where: { id, propertyId }, select: { id: true, name: true } });
     return item ? { id: item.id, title: item.name, type } : null;
+  }
+  if (type === 'WORK_ITEM') {
+    const work = await prisma.operationalWorkItem.findFirst({ where: { id, propertyId, supersededByWorkItemId: null }, select: { id: true, title: true } });
+    return work ? { id: work.id, title: work.title, type } : null;
   }
   const warranty = await prisma.warranty.findFirst({ where: { id, propertyId, homeownerProfile: { userId } }, select: { id: true, providerName: true } });
   return warranty ? { id: warranty.id, title: warranty.providerName, type } : null;

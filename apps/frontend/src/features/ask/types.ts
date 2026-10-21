@@ -71,6 +71,8 @@ export interface AskGroupedListItem {
   status?: string | null;
   href?: string | null;
   entityType?: string | null;
+  /** The one row where a photo or document can be attached to `entityType`/`id` (the composer offers the upload). */
+  evidenceTarget?: boolean;
   parentId?: string | null;
   actions?: AskGroupedListItemAction[];
   tone?: AskDisplayTone;

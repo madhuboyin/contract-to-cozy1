@@ -8,6 +8,7 @@ import { registerConfirmCapabilityHandler, type ConfirmCapabilityContext, type C
 import { capturePropertyFact } from '../../../modules/propertyContext/application/capturePropertyFact';
 import { capturePropertyFinancingFact, FINANCING_CAPTURE_FACT_KEY, PropertyMortgageRateRefusedError } from '../../../modules/propertyContext/application/capturePropertyFinancingFact';
 import { captureWarranty } from '../../../modules/propertyContext/application/captureWarranty';
+import { recordEvidence } from '../../../modules/homeOperations/application/recordEvidence.usecase';
 import { warrantyExpiryReminderCandidates } from '../handlers/warranties.handler';
 import { PropertyContextAccessDeniedError } from '../../../modules/propertyContext/application/getPropertyContext';
 import { USER_ADD_ORIGIN } from '../conversationalUnderstanding/conversationalCapture';
@@ -339,6 +340,9 @@ async function confirmCaptureEvidence(ctx: ConfirmCapabilityContext): Promise<Co
   if (parameters.captureOrigin === USER_ADD_ORIGIN && (parameters.evidenceTargetType === 'INVENTORY_ITEM' || parameters.evidenceTargetType === 'WARRANTY')) {
     return confirmEvidenceRecordLink(ctx, parameters.evidenceTargetType, documentId);
   }
+  if (parameters.captureOrigin === USER_ADD_ORIGIN && parameters.evidenceTargetType === 'WORK_ITEM') {
+    return confirmWorkItemEvidence(ctx, documentId);
+  }
   let eventId: string;
   if (parameters.captureOrigin === USER_ADD_ORIGIN) {
     if (typeof parameters.eventId !== 'string' || !parameters.eventId.trim()) {
@@ -400,6 +404,37 @@ async function confirmCaptureEvidence(ctx: ConfirmCapabilityContext): Promise<Co
     });
   }
   return { result, artifactType: command.artifactType, artifactId: link.id, refreshedExecutions: refresh.refreshedExecutions };
+}
+
+// Records an uploaded document as PENDING evidence on a Home Operations work item (FRD 1.400). Same writer and same property checks as the
+// desktop evidence route; a homeowner cannot verify it here, so material, regulated and safety work stays with its governing record.
+async function confirmWorkItemEvidence(ctx: ConfirmCapabilityContext, documentId: string): Promise<ConfirmCapabilityResult> {
+  const { execution, userId, parameters, command } = ctx;
+  const workItemId = parameters.evidenceTargetId;
+  if (typeof workItemId !== 'string' || !workItemId.trim()) {
+    throw Object.assign(new Error('The work to attach evidence to is invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+  }
+  const work = await prisma.operationalWorkItem.findFirst({ where: { id: workItemId, propertyId: execution.propertyId, supersededByWorkItemId: null }, select: { id: true, title: true } });
+  const document = await prisma.document.findFirst({ where: { id: documentId, propertyId: execution.propertyId }, select: { id: true, name: true } });
+  if (!work || !document) throw Object.assign(new Error('That work or document is no longer available.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+  const already = await prisma.operationalWorkEvidence.findFirst({ where: { workItemId: work.id, evidenceType: 'DOCUMENT', evidenceEntityId: document.id }, select: { id: true } });
+  if (!already) {
+    await recordEvidence({
+      workItemId: work.id, evidenceType: 'DOCUMENT', evidenceEntityId: document.id, verificationStatus: 'PENDING', observedAt: new Date(),
+      actorUserId: userId, idempotencyKey: `ask:${execution.id}:work-evidence`,
+    });
+  }
+  const result: AskOperationResult = {
+    status: 'COMPLETED', reasonCode: already ? 'WORK_EVIDENCE_ALREADY_ATTACHED' : 'WORK_EVIDENCE_ATTACHED',
+    blocks: [{
+      type: 'SUMMARY', id: `work-evidence-attached-${work.id}`, title: already ? 'Already attached' : 'Evidence attached', tone: 'POSITIVE',
+      body: `${document.name} is ${already ? 'already' : 'now'} on "${work.title}" as pending evidence. It is reviewed by the record that governs this work.`,
+      actions: [],
+    }],
+    confirmation: null, suggestions: [],
+  };
+  const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
+  return { result, artifactType: command.artifactType, artifactId: work.id, refreshedExecutions: refresh.refreshedExecutions };
 }
 
 // Links an uploaded document to an existing inventory item or warranty (FRD v1.99). The target is re-verified with the

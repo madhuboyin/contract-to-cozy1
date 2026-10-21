@@ -70,10 +70,10 @@ describe('Home Action shelves', () => {
     const review = screen.getByRole('button', { name: 'Review in Ask' });
     expect(review).toHaveClass('border-slate-200', 'bg-white', 'text-teal-800');
     expect(review).not.toHaveClass('bg-teal-700', 'text-white');
-    const ratingDisclosure = screen.getByText('Rate this action').closest('details');
-    expect(ratingDisclosure).not.toHaveAttribute('open');
-    fireEvent.click(screen.getByText('Rate this action'));
-    expect(ratingDisclosure).toHaveAttribute('open');
+    const overflow = screen.getByRole('button', { name: 'More options' }).closest('details');
+    expect(overflow).not.toHaveAttribute('open');
+    fireEvent.click(screen.getByRole('button', { name: 'More options' }));
+    expect(overflow).toHaveAttribute('open');
     expect(screen.getByRole('button', { name: 'Mark useful' })).toBeInTheDocument();
     fireEvent.click(review);
     expect(onItemAction).toHaveBeenCalledWith('HOME_ACTION', 'a1', 'What should I do next for “Replace the HVAC filter”?', 'HOME_ACTIONS', 'CONVERSATION_CONTINUE', undefined, 'a1');

@@ -1660,7 +1660,18 @@ test('evidence to a record: the canned message must match the record type, so on
   recordModels();
   const mismatched = await capabilityInvoke('CAPTURE_EVIDENCE_CONFIRM', { userId: 'u1', propertyId: 'p1', message: EVIDENCE_ATTACH_MESSAGES.HOME_EVENT, launchContext: { surface: 'ASK_WORKSPACE', entityType: 'INVENTORY_ITEM', entityId: 'item-1', documentId: 'doc-1', operationId: 'CAPTURE_EVIDENCE_CONFIRM' } });
   assert.equal(mismatched.status, 'OUT_OF_SCOPE');
-  assert.deepEqual(EVIDENCE_ATTACH_MESSAGES, { HOME_EVENT: 'Attach evidence to this home timeline entry.', INVENTORY_ITEM: 'Attach this document to this inventory item.', WARRANTY: 'Attach this document to this warranty.' });
+  assert.deepEqual(EVIDENCE_ATTACH_MESSAGES, { HOME_EVENT: 'Attach evidence to this home timeline entry.', INVENTORY_ITEM: 'Attach this document to this inventory item.', WORK_ITEM: 'Attach this document as evidence for this work.', WARRANTY: 'Attach this document to this warranty.' });
+});
+
+// Work-item evidence (FRD 1.400): the confirm re-reads both rows by property, records PENDING evidence through the canonical writer,
+// and is idempotent -- a repeat attach of the same document adds nothing.
+test('evidence to a work item, confirm: source shape -- property-scoped reads, pending DOCUMENT evidence via recordEvidence, no duplicate', () => {
+  const fn = orchestratorSource.slice(orchestratorSource.indexOf('async function confirmWorkItemEvidence'), orchestratorSource.indexOf('async function confirmEvidenceRecordLink'));
+  assert.match(fn, /prisma\.operationalWorkItem\.findFirst\(\{ where: \{ id: workItemId, propertyId: execution\.propertyId, supersededByWorkItemId: null \}/);
+  assert.match(fn, /prisma\.document\.findFirst\(\{ where: \{ id: documentId, propertyId: execution\.propertyId \}/);
+  assert.match(fn, /evidenceType: 'DOCUMENT'[\s\S]*verificationStatus: 'PENDING'/);
+  assert.match(fn, /operationalWorkEvidence\.findFirst/);
+  assert.doesNotMatch(fn, /VERIFIED/);
 });
 
 // The fakes above ignore `where`, so the confirm-time scoping is pinned against the real function body (as this file does elsewhere).
