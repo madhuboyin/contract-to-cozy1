@@ -168,6 +168,13 @@ test('accepted operational work shows its task identity instead of a legacy comp
   });
 });
 
+test('legacy accepted-work copy never promises a completion route Ask does not offer', () => {
+  const base = { title: 'Inspect the chimney', homeownerReason: 'Annual.', expectedOutcome: 'The task is completed and recorded.', state: 'ACCEPTED' };
+  assert.match(acceptedOperationalWorkHomeCopy({ ...base, completionBlocker: 'EVIDENCE_REQUIRED' }).expectedOutcome, /documented evidence/);
+  assert.match(acceptedOperationalWorkHomeCopy({ ...base, completionBlocker: 'LINKED_WORKFLOW' }).expectedOutcome, /linked guidance or project/);
+  assert.equal(acceptedOperationalWorkHomeCopy({ ...base, completionBlocker: null }).expectedOutcome, 'Complete the task and record the outcome.');
+});
+
 test('reported-complete operational work asks for verification instead of presenting completion as active work', () => {
   const copy = acceptedOperationalWorkHomeCopy({
     title: 'Service the furnace',

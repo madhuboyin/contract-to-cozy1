@@ -986,6 +986,8 @@ type AcceptedOperationalWorkCopyInput = {
   title: string;
   expectedOutcome: string;
   state: OperationalWorkItemState;
+  /** Why Ask offers no "Mark complete" for this item, so the copy never promises a completion route that does not exist. */
+  completionBlocker?: 'EVIDENCE_REQUIRED' | 'LINKED_WORKFLOW' | null;
 };
 
 /**
@@ -1007,9 +1009,13 @@ export function acceptedOperationalWorkHomeCopy(item: AcceptedOperationalWorkCop
     'the task is completed and recorded.';
   return {
     recommendedAction: item.title,
-    expectedOutcome: legacyCompletedOutcome
-      ? 'Complete the task and record the outcome.'
-      : item.expectedOutcome,
+    expectedOutcome: !legacyCompletedOutcome
+      ? item.expectedOutcome
+      : item.completionBlocker === 'EVIDENCE_REQUIRED'
+        ? 'Completion needs documented evidence; a simple confirmation is not enough for this work.'
+        : item.completionBlocker === 'LINKED_WORKFLOW'
+          ? 'Progress on this work is recorded in its linked guidance or project.'
+          : 'Complete the task and record the outcome.',
     primaryCtaLabel: 'Open work',
   };
 }
@@ -1142,6 +1148,9 @@ export async function appendAcceptedOperationalWork(
       title: displayTitle,
       expectedOutcome: item.expectedOutcome,
       state: item.state,
+      completionBlocker: completionEligible
+        ? null
+        : completionEvidencePolicy?.attestation === 'INSUFFICIENT' ? 'EVIDENCE_REQUIRED' : 'LINKED_WORKFLOW',
     });
     const now = new Date().toISOString();
     const homeAction = adaptHomeActionSource(sourceKind, {
