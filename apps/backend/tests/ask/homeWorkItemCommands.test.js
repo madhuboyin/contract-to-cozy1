@@ -142,3 +142,84 @@ test('the action ids are allowlisted on the list and the back action on the comm
   for (const id of Object.values(command.WORK_ITEM_ACTION_IDS)) assert.equal(applicable(id, 'HOME_WORK_ITEMS'), true, id);
   assert.equal(applicable('home-work-items-back', OP), true);
 });
+
+// FRD 1.401: attach an existing record, submit completion evidence, remove evidence. Prisma delegates and the document inventory are faked; nothing else is.
+const { prisma } = require('../../src/lib/prisma.ts');
+const docs = require('../../src/services/propertyDocuments/propertyDocumentInventory.service.ts');
+const recordUse = require('../../src/modules/homeOperations/application/recordEvidence.usecase.ts');
+const removeUse = require('../../src/modules/homeOperations/application/removeEvidence.usecase.ts');
+
+function installEvidence({ attached = [], removable = [] } = {}) {
+  const saved = { list: docs.listPropertyDocuments, resolve: docs.resolvePropertyDocuments, rec: recordUse.recordEvidence, rem: removeUse.removeEvidence,
+    ev: prisma.operationalWorkEvidence, he: prisma.homeEvent, pf: prisma.propertyFactEvidence, doc: prisma.document };
+  const calls = [];
+  docs.listPropertyDocuments = async () => ({ items: [{ id: 'doc-1', title: 'Chimney invoice.pdf' }, { id: 'doc-2', title: 'Already there.pdf' }] });
+  docs.resolvePropertyDocuments = async ({ ids }) => ids.filter((id) => id === 'doc-1').map((id) => ({ id, title: 'Chimney invoice.pdf' }));
+  recordUse.recordEvidence = async (a) => { calls.push(['record', a]); return {}; };
+  removeUse.removeEvidence = async (a) => { calls.push(['remove', a]); return { removed: true }; };
+  prisma.operationalWorkEvidence = { findMany: async (q) => (q.where.evidenceType ? removable : attached), findFirst: async () => null };
+  prisma.homeEvent = { findMany: async () => [{ id: 'ev-1', title: 'Annual inspection', occurredAt: new Date('2026-09-02T00:00:00Z') }], findFirst: async ({ where }) => (where.id === 'ev-1' ? { title: 'Annual inspection' } : null) };
+  prisma.propertyFactEvidence = { findMany: async () => [{ id: 'pf-1', factKey: 'chimney.lastSweepYear', observedAt: new Date() }, { id: 'pf-2', factKey: 'chimney.lastSweepYear', observedAt: new Date() }], findFirst: async ({ where }) => (where.id === 'pf-1' ? { factKey: 'chimney.lastSweepYear' } : null) };
+  prisma.document = { findMany: async () => [{ id: 'doc-9', name: 'Old photo.jpg' }] };
+  return { calls, restore() { Object.assign(docs, { listPropertyDocuments: saved.list, resolvePropertyDocuments: saved.resolve }); recordUse.recordEvidence = saved.rec; removeUse.removeEvidence = saved.rem;
+    prisma.operationalWorkEvidence = saved.ev; prisma.homeEvent = saved.he; prisma.propertyFactEvidence = saved.pf; prisma.document = saved.doc; } };
+}
+
+test('attach existing: the picker offers this home\'s documents, events and one current fact, minus what is already attached; the pick is re-read before review', async () => {
+  const w = install('CONTRIBUTOR'); const e = installEvidence({ attached: [{ evidenceType: 'DOCUMENT', evidenceEntityId: 'doc-2' }] });
+  try {
+    const form = await invoke('ATTACH_EXISTING', launch());
+    assert.equal(form.status, 'NEEDS_CONTEXT');
+    const options = form.captureRequests[0].inputSchema.fields[0].inputSchema.options;
+    assert.deepEqual(options.map((o) => o.value), ['DOCUMENT:doc-1', 'HOME_EVENT:ev-1', 'PROPERTY_FACT:pf-1']);
+    assert.match(options[2].label, /Home fact · Chimney last sweep year/);
+    const { workItemCommandResult } = require('../../src/services/ask/handlers/homeWorkItemCommands.handler.ts');
+    const review = await workItemCommandResult('u1', 'prop-1', { kind: 'ATTACH_EXISTING', entityId: 'w1', sourceExecutionId: null }, { record: 'HOME_EVENT:ev-1' });
+    assert.equal(review.status, 'NEEDS_CONFIRMATION');
+    assert.deepEqual(review.parameters.workItemChange, { evidenceType: 'HOME_EVENT', evidenceEntityId: 'ev-1' });
+    assert.match(review.confirmation.description, /does not mark the work complete/);
+    const submit = await workItemCommandResult('u1', 'prop-1', { kind: 'SUBMIT_COMPLETION_EVIDENCE', entityId: 'w1', sourceExecutionId: null }, { record: 'DOCUMENT:doc-1' });
+    assert.equal(submit.confirmation.title, 'Submit this as completion evidence?');
+    // A forged or already-attached pick resolves to nothing and writes nothing.
+    for (const record of ['DOCUMENT:doc-2', 'DOCUMENT:other-home', 'NOPE:1', 'PROPERTY_FACT:pf-2']) {
+      const refused = await workItemCommandResult('u1', 'prop-1', { kind: 'ATTACH_EXISTING', entityId: 'w1', sourceExecutionId: null }, { record });
+      assert.notEqual(refused.status, 'NEEDS_CONFIRMATION', record);
+    }
+    assert.equal(e.calls.length, 0);
+  } finally { e.restore(); w.restore(); }
+});
+
+test('attach existing, confirm: writes ONE pending evidence row through the canonical writer, idempotent, and refuses a record that went away', async () => {
+  const w = install('CONTRIBUTOR'); const e = installEvidence();
+  try {
+    const params = { workItemCommand: { kind: 'ATTACH_EXISTING', entityId: 'w1' }, workItemChange: { evidenceType: 'DOCUMENT', evidenceEntityId: 'doc-1' }, workItemContextVersion: version('ATTACH_EXISTING', item()) };
+    await confirmCapabilityInvoke(OP, ctx(params));
+    assert.equal(e.calls.length, 1);
+    assert.deepEqual([e.calls[0][1].evidenceType, e.calls[0][1].evidenceEntityId, e.calls[0][1].verificationStatus, e.calls[0][1].idempotencyKey], ['DOCUMENT', 'doc-1', 'PENDING', 'ask:exec-1:work-evidence-ref']);
+    await assert.rejects(() => confirmCapabilityInvoke(OP, ctx({ ...params, workItemChange: { evidenceType: 'DOCUMENT', evidenceEntityId: 'gone' } })), (err) => err.code === 'ASK_CONFIRMATION_NOT_ACTIVE');
+    await assert.rejects(() => confirmCapabilityInvoke(OP, ctx({ ...params, workItemContextVersion: 'old' })), (err) => err.code === 'ASK_CONTEXT_VERSION_CONFLICT');
+    assert.equal(e.calls.length, 1);
+  } finally { e.restore(); w.restore(); }
+});
+
+test('remove evidence: only withdrawable evidence is offered, the review names it, and confirm calls the withdrawal usecase; viewers and an empty list are refused', async () => {
+  let w = install('CONTRIBUTOR'); let e = installEvidence({ removable: [{ id: 'row-1', evidenceType: 'DOCUMENT', evidenceEntityId: 'doc-9', observedAt: new Date() }] });
+  try {
+    const form = await invoke('REMOVE_EVIDENCE', launch());
+    assert.deepEqual(form.captureRequests[0].inputSchema.fields[0].inputSchema.options, [{ label: 'Document · Old photo.jpg', value: 'row-1' }]);
+    const { workItemCommandResult } = require('../../src/services/ask/handlers/homeWorkItemCommands.handler.ts');
+    const review = await workItemCommandResult('u1', 'prop-1', { kind: 'REMOVE_EVIDENCE', entityId: 'w1', sourceExecutionId: null }, { evidence: 'row-1' });
+    assert.deepEqual(review.parameters.workItemChange, { evidenceId: 'row-1' });
+    const forged = await workItemCommandResult('u1', 'prop-1', { kind: 'REMOVE_EVIDENCE', entityId: 'w1', sourceExecutionId: null }, { evidence: 'someone-elses' });
+    assert.equal(forged.reasonCode, 'HOME_WORK_ITEM_EVIDENCE_NOT_AVAILABLE');
+    await confirmCapabilityInvoke(OP, ctx({ workItemCommand: { kind: 'REMOVE_EVIDENCE', entityId: 'w1' }, workItemChange: { evidenceId: 'row-1' }, workItemContextVersion: version('REMOVE_EVIDENCE', item()) }));
+    assert.deepEqual([e.calls[0][0], e.calls[0][1].workItemId, e.calls[0][1].evidenceId], ['remove', 'w1', 'row-1']);
+    // A withdrawal the usecase refuses (verified or governing-record evidence) surfaces as a stale confirmation, never a silent success.
+    removeUse.removeEvidence = async () => { throw new removeUse.EvidenceNotWithdrawableError('Verified evidence cannot be removed because a completion or approval may rely on it.'); };
+    await assert.rejects(() => confirmCapabilityInvoke(OP, ctx({ workItemCommand: { kind: 'REMOVE_EVIDENCE', entityId: 'w1' }, workItemChange: { evidenceId: 'row-1' }, workItemContextVersion: version('REMOVE_EVIDENCE', item()) })), (err) => err.code === 'ASK_CONFIRMATION_NOT_ACTIVE');
+  } finally { e.restore(); w.restore(); }
+  w = install('CONTRIBUTOR'); e = installEvidence({ removable: [] });
+  try { assert.equal((await invoke('REMOVE_EVIDENCE', launch())).reasonCode, 'HOME_WORK_ITEM_NO_REMOVABLE_EVIDENCE'); } finally { e.restore(); w.restore(); }
+  w = install('VIEWER'); e = installEvidence();
+  try { assert.equal((await invoke('ATTACH_EXISTING', launch())).reasonCode, 'ASK_PERMISSION_REQUIRED'); } finally { e.restore(); w.restore(); }
+});

@@ -686,6 +686,24 @@ test('accepted work lists its evidence and offers one upload row only to contrib
   assert.equal(parsed.sections.find((section) => section.id === 'work-evidence').items[0].evidenceTarget, true);
 });
 
+test('evidence actions: attach an existing record, remove only withdrawable evidence, and regulated work submits completion evidence', () => {
+  const evidenceActions = (action, evidence, canContribute = true) => buildFocusedHomeActionGuidance(action, 'context-v1', undefined, null, { canContribute, workEvidence: evidence })
+    .blocks.find((block) => block.id === 'focused-home-action-guidance').sections.find((section) => section.id === 'work-evidence').items.find((item) => item.evidenceTarget)?.actions;
+  const pending = [{ id: 'e1', label: 'Invoice.pdf', kind: 'DOCUMENT', status: 'PENDING', observedAt: null }];
+  const verifiedOnly = [{ id: 'e2', label: 'Inspection', kind: 'HOME_EVENT', status: 'VERIFIED', observedAt: null }, { id: 'e3', label: 'Done', kind: 'DOMAIN_COMPLETION_RECORD', status: 'PENDING', observedAt: null }];
+  const low = evidenceActions(acceptedWorkAction(), pending);
+  assert.deepEqual(low.map((a) => [a.label, a.style]), [['Attach an existing record', 'SECONDARY'], ['Remove evidence', 'QUIET']]);
+  assert.ok(low.every((a) => a.operationId === 'HOME_WORK_ITEM_COMMAND' && a.entityType === 'OPERATIONAL_WORK_ITEM' && a.entityId === 'work-1' && a.interactionType === 'MUTATE_RECORD'));
+  // Verified evidence and evidence written by the governing record are not offered for removal.
+  assert.deepEqual(evidenceActions(acceptedWorkAction(), verifiedOnly).map((a) => a.label), ['Attach an existing record']);
+  // Regulated work: the attach is worded and styled as the completion-evidence submission.
+  const regulated = evidenceActions(acceptedWorkAction({ governance: { ...weatherAction().governance, safetyTier: 'REGULATED_COVERAGE' } }), []);
+  assert.deepEqual(regulated.map((a) => [a.label, a.style]), [['Submit completion evidence', 'PRIMARY']]);
+  assert.equal(regulated[0].message, 'Submit completion evidence for this work item.');
+  // Viewers get no evidence target at all.
+  assert.equal(evidenceActions(acceptedWorkAction(), pending, false), undefined);
+});
+
 // Sweep of the remaining producers (FRD v1.170): incident-detail and project-detail fallbacks.
 test('incident-detail and project-detail primary CTAs route to their Ask operation, and only those paths', () => {
   const { resolveAskOperation } = require('../../src/services/ask/askOperationRegistry.ts');

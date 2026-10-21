@@ -391,6 +391,19 @@ export const WORK_EVIDENCE_KIND_LABELS: Record<string, string> = {
 };
 export const workEvidenceStatusLabel = (status: string): string => WORK_EVIDENCE_STATUS[status] ?? status;
 
+const WITHDRAWABLE_KINDS = new Set(['DOCUMENT', 'HOME_EVENT', 'PROPERTY_FACT']);
+// Evidence actions all run the existing confirmation-gated work-item form flow: pick an existing record (or evidence to withdraw), review, consent.
+// Regulated and safety work calls the same attach "Submit completion evidence"; it records pending evidence and never marks the work complete.
+function workEvidenceActions(action: RankedHomeAction, completionNeedsEvidence: boolean, hasRemovable: boolean) {
+  const base = { interactionType: 'MUTATE_RECORD' as const, operationId: 'HOME_WORK_ITEM_COMMAND', entityType: WORK_ITEM_ENTITY_TYPE, entityId: action.workItem!.id };
+  return [
+    completionNeedsEvidence
+      ? { ...base, id: `home-action-submit-evidence-${action.id}`, label: 'Submit completion evidence', message: WORK_ITEM_MESSAGES.SUBMIT_COMPLETION_EVIDENCE, style: 'PRIMARY' as const }
+      : { ...base, id: `home-action-attach-existing-${action.id}`, label: 'Attach an existing record', message: WORK_ITEM_MESSAGES.ATTACH_EXISTING, style: 'SECONDARY' as const },
+    ...(hasRemovable ? [{ ...base, id: `home-action-remove-evidence-${action.id}`, label: 'Remove evidence', message: WORK_ITEM_MESSAGES.REMOVE_EVIDENCE, style: 'QUIET' as const }] : []),
+  ];
+}
+
 // Evidence already on the work item, plus (contributors and owners only) the one row where a photo or document can be added.
 // What counts depends on the work's safety tier, stated in the row so nobody uploads a photo expecting it to close regulated work.
 function buildWorkEvidenceSection(action: RankedHomeAction, evidence: NonNullable<NonNullable<Parameters<typeof buildFocusedHomeActionGuidance>[4]>['workEvidence']>, canContribute: boolean) {
@@ -407,6 +420,7 @@ function buildWorkEvidenceSection(action: RankedHomeAction, evidence: NonNullabl
     ...(canContribute && action.workItem ? [{
       id: action.workItem.id, title: 'Add a photo or document', description: guidance, meta: [], status: null, href: null,
       entityType: 'OPERATIONAL_WORK_ITEM', evidenceTarget: true,
+      actions: workEvidenceActions(action, policy?.attestation === 'INSUFFICIENT', evidence.some((entry) => WITHDRAWABLE_KINDS.has(entry.kind) && entry.status !== 'VERIFIED')),
     }] : []),
   ];
   return items.length ? { id: 'work-evidence', title: 'Evidence', count: evidence.length, items } : null;

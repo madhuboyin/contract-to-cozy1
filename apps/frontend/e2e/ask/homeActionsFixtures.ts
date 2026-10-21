@@ -84,7 +84,29 @@ export const HOME_ACTIONS_FOCUSED = {
        "status": null,
        "href": null,
        "entityType": "OPERATIONAL_WORK_ITEM",
-       "evidenceTarget": true
+       "evidenceTarget": true,
+       "actions": [
+        {
+         "id": "home-action-attach-existing-operational-work:work-1",
+         "label": "Attach an existing record",
+         "message": "Attach an existing record as evidence for this work item.",
+         "style": "SECONDARY",
+         "interactionType": "MUTATE_RECORD",
+         "operationId": "HOME_WORK_ITEM_COMMAND",
+         "entityType": "OPERATIONAL_WORK_ITEM",
+         "entityId": "work-1"
+        },
+        {
+         "id": "home-action-remove-evidence-operational-work:work-1",
+         "label": "Remove evidence",
+         "message": "Remove evidence from this work item.",
+         "style": "QUIET",
+         "interactionType": "MUTATE_RECORD",
+         "operationId": "HOME_WORK_ITEM_COMMAND",
+         "entityType": "OPERATIONAL_WORK_ITEM",
+         "entityId": "work-1"
+        }
+       ]
       }
      ]
     }
@@ -314,7 +336,19 @@ export const HOME_ACTIONS_FOCUSED = {
        "status": null,
        "href": null,
        "entityType": "OPERATIONAL_WORK_ITEM",
-       "evidenceTarget": true
+       "evidenceTarget": true,
+       "actions": [
+        {
+         "id": "home-action-submit-evidence-operational-work:work-1",
+         "label": "Submit completion evidence",
+         "message": "Submit completion evidence for this work item.",
+         "style": "PRIMARY",
+         "interactionType": "MUTATE_RECORD",
+         "operationId": "HOME_WORK_ITEM_COMMAND",
+         "entityType": "OPERATIONAL_WORK_ITEM",
+         "entityId": "work-1"
+        }
+       ]
       }
      ]
     }

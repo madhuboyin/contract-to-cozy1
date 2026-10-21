@@ -49,6 +49,20 @@ test('a contributor sees Mark complete, Snooze and Change due date, the evidence
     && (body.launchContext as { operationId?: string } | undefined)?.operationId === 'HOME_WORK_ITEM_COMMAND')).toBe(true);
 });
 
+test('contributor evidence actions: attach an existing record, and remove only the evidence that can still be withdrawn', async ({ page }) => {
+  const api = await installAskApi(page);
+  await ask(page, 'home actions fixture contributor');
+  const answer = page.locator('[id^="ask-execution-execution-home-actions-contributor"]');
+  const region = answer.locator('[data-work-evidence]');
+  await expect(region.getByRole('button', { name: 'Attach an existing record' })).toBeVisible();
+  await expect(region.getByRole('button', { name: 'Remove evidence' })).toBeVisible();
+  await region.getByRole('button', { name: 'Attach an existing record' }).click();
+  await expect.poll(() => api.executionBodies.some((body) => body.message === 'Attach an existing record as evidence for this work item.'
+    && (body.launchContext as { operationId?: string; entityType?: string; entityId?: string } | undefined)?.operationId === 'HOME_WORK_ITEM_COMMAND'
+    && (body.launchContext as { entityType?: string } | undefined)?.entityType === 'OPERATIONAL_WORK_ITEM'
+    && (body.launchContext as { entityId?: string } | undefined)?.entityId === 'work-1')).toBe(true);
+});
+
 test('evidence upload: the file goes up first, then a review-and-confirm card names the work; nothing is attached before consent', async ({ page }) => {
   const api = await installAskApi(page);
   await ask(page, 'home actions fixture contributor');
@@ -69,6 +83,7 @@ test('a viewer sees the evidence read-only: no upload, no changing actions', asy
   const answer = page.locator('[id^="ask-execution-execution-home-actions-viewer"]');
   await expect(answer.getByText('Chimney sweep invoice.pdf')).toBeVisible();
   await expect(page.getByRole('button', { name: /Add a photo or document/ })).toHaveCount(0);
+  for (const name of ['Attach an existing record', 'Remove evidence', 'Submit completion evidence']) await expect(answer.getByRole('button', { name })).toHaveCount(0);
   for (const name of ['Mark complete', 'Snooze reminders', 'Change due date']) await expect(answer.getByRole('button', { name })).toHaveCount(0);
 });
 
@@ -80,4 +95,9 @@ test('regulated work: no Mark complete, plain wording that a photo does not clos
   await expect(answer.getByRole('button', { name: 'Change due date' })).toBeVisible();
   await expect(answer.getByText(/does not close it/)).toBeVisible();
   await expect(page.getByRole('button', { name: /Add a photo or document/ })).toBeVisible();
+  // The attach is worded as submitting completion evidence, and there is nothing yet to remove.
+  const region = answer.locator('[data-work-evidence]');
+  await expect(region.getByRole('button', { name: 'Submit completion evidence' })).toBeVisible();
+  await expect(region.getByRole('button', { name: 'Attach an existing record' })).toHaveCount(0);
+  await expect(region.getByRole('button', { name: 'Remove evidence' })).toHaveCount(0);
 });

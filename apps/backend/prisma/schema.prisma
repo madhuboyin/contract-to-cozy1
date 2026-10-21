@@ -24051,6 +24051,8 @@ enum OperationalWorkEventType {
   WORK_DEFERRED
   WORK_REPORTED_COMPLETE
   OUTCOME_EVIDENCE_ADDED
+  // Evidence a homeowner attached by mistake and withdrew while it was still pending or rejected; the event keeps the history of it.
+  OUTCOME_EVIDENCE_REMOVED
   OUTCOME_VERIFIED
   WORK_REOPENED
   // HI-ATT-010: a governed rollback of an execution-state work item back to

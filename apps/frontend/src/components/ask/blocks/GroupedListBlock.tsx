@@ -131,6 +131,7 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
               </ul>
             ) : <p className="mt-1 text-sm text-slate-600">No evidence is attached yet.</p>}
             {evidenceTarget?.description && <p className="mt-2 text-xs leading-5 text-slate-600">{evidenceTarget.description}</p>}
+            {evidenceTarget && (evidenceTarget.actions?.length ?? 0) > 0 && <ItemActionRow item={evidenceTarget} disabled={itemActionsDisabled} onItemAction={onItemAction} />}
           </div>
         )}
         {detailsOpen && hasDetails && (

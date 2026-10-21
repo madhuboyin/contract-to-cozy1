@@ -507,6 +507,11 @@ export function recordWorkEvidence(input: {
   });
 }
 
+/** Withdraws one evidence row from a work item; the caller records the event and decides what may be withdrawn. */
+export function deleteWorkEvidence(workItemId: string, evidenceId: string) {
+  return prisma.operationalWorkEvidence.deleteMany({ where: { id: evidenceId, workItemId } });
+}
+
 /** Durable, reversible — see recordDuplicateDecision.usecase.ts. */
 export function setSupersededBy(workItemId: string, supersededByWorkItemId: string | null) {
   return prisma.operationalWorkItem.update({

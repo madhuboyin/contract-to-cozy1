@@ -105,7 +105,7 @@ import { parseWalkthroughAnswer, walkthroughFormKindFromCaptureKey } from '../su
 import { diyProjectNoteResult, diySkillProfileResult } from '../handlers/diyCommands.handler';
 import { DIY_NOTE_CAPTURE_KEY, DIY_PROFILE_CAPTURE_KEY, parseDiyNoteAnswer, parseDiySkillProfileAnswer } from '../support/diyCommand';
 import { SEASONAL_SNOOZE_CAPTURE_KEY, parseSeasonalSnoozeAnswer } from '../support/seasonalItemCommand';
-import { parseWorkItemAnswer, workItemFormKindFromCaptureKey } from '../support/homeWorkItemCommand';
+import { parseWorkItemAnswer, WORK_ITEM_FORM_ERRORS, workItemFormKindFromCaptureKey } from '../support/homeWorkItemCommand';
 import { NEGOTIATION_PACKAGE_CAPTURE_KEY } from '../support/inspectionReportCommand';
 import { HABIT_COACH_PREFERENCES_CAPTURE_KEY, parseHabitCoachPreferencesAnswer } from '../support/habitCoachPreferencesCommand';
 import { habitCoachPreferencesResult } from '../handlers/habitCoachPreferencesCommands.handler';
@@ -1672,7 +1672,7 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
       throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
     }
     if (!parseWorkItemAnswer(wiKind, input.answer).success) {
-      throw Object.assign(new Error(wiKind === 'SNOOZE' ? 'Choose how long to snooze.' : 'Choose a due date.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+      throw Object.assign(new Error(WORK_ITEM_FORM_ERRORS[wiKind]), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
     }
     result = await workItemCommandResult(userId, execution.propertyId, {
       kind: wiKind, entityId: wiLaunch.entityId, sourceExecutionId: typeof wiLaunch.sourceExecutionId === 'string' ? wiLaunch.sourceExecutionId : null,

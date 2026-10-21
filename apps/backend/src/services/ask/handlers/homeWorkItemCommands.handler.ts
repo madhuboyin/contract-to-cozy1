@@ -3,6 +3,7 @@
 // behind a review that names what changes and a confirmation bound to the item (or, for the batch, the exact eligible set).
 import crypto, { createHash } from 'node:crypto';
 import { HouseholdRole } from '@prisma/client';
+import { prisma } from '../../../lib/prisma';
 import { type AskCaptureRequest } from '../../../productFramework/ask/ask.contract';
 import { type AskOperationResult } from '../askOperationRegistry';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
@@ -14,10 +15,13 @@ import { getWorkItem as loadWorkItem } from '../../../modules/homeOperations/app
 import { listWorkItems } from '../../../modules/homeOperations/application/listWorkItems.usecase';
 import { snoozeWorkItem } from '../../../modules/homeOperations/application/snoozeWorkItem.usecase';
 import { rescheduleWorkItem } from '../../../modules/homeOperations/application/rescheduleWorkItem.usecase';
+import { recordEvidence } from '../../../modules/homeOperations/application/recordEvidence.usecase';
+import { EvidenceNotWithdrawableError, HOMEOWNER_WITHDRAWABLE_EVIDENCE, removeEvidence } from '../../../modules/homeOperations/application/removeEvidence.usecase';
+import { listPropertyDocuments, resolvePropertyDocuments } from '../../propertyDocuments/propertyDocumentInventory.service';
 import { batchTransitionWorkItems } from '../../../modules/homeOperations/application/batchTransitionWorkItems.usecase';
 import {
   SNOOZE_CHOICES, WORK_ITEM_BATCH_MAX, WORK_ITEM_ENTITY_TYPE, WORK_ITEM_FORM_CAPTURE_KEYS, WORK_ITEM_MESSAGES, parseWorkItemAnswer, snoozeUntil, workItemBatchEligible,
-  workItemChangeable, workItemKindFromMessage, type WorkItemCommandKind, type WorkItemFormKind,
+  workItemChangeable, workItemKindFromMessage, WORK_ITEM_FORM_ERRORS, formatEvidenceRef, parseEvidenceRef, WORK_ITEM_ATTACH_KINDS, type WorkEvidenceRefType, type WorkItemCommandKind, type WorkItemFormKind,
 } from '../support/homeWorkItemCommand';
 
 const sha = (text: string) => createHash('sha256').update(text).digest('hex');
@@ -42,8 +46,71 @@ async function eligibleBatch(propertyId: string) {
   return all.filter(workItemBatchEligible).slice(0, WORK_ITEM_BATCH_MAX);
 }
 
-function formCapture(kind: WorkItemFormKind, contextVersion: string, item: ItemRow): AskCaptureRequest {
-  const spec = kind === 'SNOOZE'
+type Choice = { label: string; value: string };
+const EVIDENCE_TYPE_LABEL: Record<string, string> = { DOCUMENT: 'Document', HOME_EVENT: 'Timeline event', PROPERTY_FACT: 'Home fact' };
+const humanFactKey = (key: string) => {
+  const words = key.replace(/[._-]+/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2').trim().toLowerCase();
+  return words ? words.charAt(0).toUpperCase() + words.slice(1) : 'Home fact';
+};
+const EVIDENCE_PICK_LIMIT = 25;
+
+/** What a homeowner may attach right now: this home's own documents, timeline events and current facts, minus what is already on the work. Bounded and re-read. */
+async function attachChoices(propertyId: string, role: HouseholdRole, userId: string, workItemId: string): Promise<Choice[]> {
+  const attached = await prisma.operationalWorkEvidence.findMany({ where: { workItemId }, select: { evidenceType: true, evidenceEntityId: true } });
+  const has = new Set(attached.map((row) => `${row.evidenceType}:${row.evidenceEntityId}`));
+  const [documents, events, facts] = await Promise.all([
+    listPropertyDocuments({ propertyId, role, includeLegacy: true }),
+    prisma.homeEvent.findMany({
+      where: { propertyId, isCurrent: true, deletedAt: null, OR: [{ visibility: { not: 'PRIVATE' } }, { createdById: userId }] },
+      orderBy: { occurredAt: 'desc' }, take: EVIDENCE_PICK_LIMIT, select: { id: true, title: true, occurredAt: true },
+    }),
+    prisma.propertyFactEvidence.findMany({
+      where: { propertyId, supersededAt: null }, orderBy: { observedAt: 'desc' }, take: EVIDENCE_PICK_LIMIT * 2, select: { id: true, factKey: true, observedAt: true },
+    }),
+  ]);
+  const seenFacts = new Set<string>();
+  const factChoices = facts.filter((fact) => (seenFacts.has(fact.factKey) ? false : (seenFacts.add(fact.factKey), true))).slice(0, EVIDENCE_PICK_LIMIT);
+  return [
+    ...documents.items.slice(0, EVIDENCE_PICK_LIMIT).map((doc) => ({ label: `${EVIDENCE_TYPE_LABEL.DOCUMENT} · ${doc.title}`, value: formatEvidenceRef('DOCUMENT', doc.id) })),
+    ...events.map((event) => ({ label: `${EVIDENCE_TYPE_LABEL.HOME_EVENT} · ${event.title} (${humanDate(event.occurredAt) ?? 'undated'})`, value: formatEvidenceRef('HOME_EVENT', event.id) })),
+    ...factChoices.map((fact) => ({ label: `${EVIDENCE_TYPE_LABEL.PROPERTY_FACT} · ${humanFactKey(fact.factKey)}`, value: formatEvidenceRef('PROPERTY_FACT', fact.id) })),
+  ].filter((choice) => !has.has(choice.value));
+}
+
+/** Evidence the homeowner may withdraw: their own kinds, not yet verified. */
+async function removeChoices(workItemId: string): Promise<Choice[]> {
+  const rows = await prisma.operationalWorkEvidence.findMany({
+    where: { workItemId, evidenceType: { in: [...HOMEOWNER_WITHDRAWABLE_EVIDENCE] }, verificationStatus: { not: 'VERIFIED' } }, orderBy: { observedAt: 'desc' }, take: 20,
+  });
+  const documentIds = rows.filter((row) => row.evidenceType === 'DOCUMENT').map((row) => row.evidenceEntityId);
+  const eventIds = rows.filter((row) => row.evidenceType === 'HOME_EVENT').map((row) => row.evidenceEntityId);
+  const [events] = await Promise.all([eventIds.length ? prisma.homeEvent.findMany({ where: { id: { in: eventIds } }, select: { id: true, title: true } }) : []]);
+  const documents = documentIds.length ? await prisma.document.findMany({ where: { id: { in: documentIds } }, select: { id: true, name: true } }) : [];
+  const names = new Map<string, string>([...events.map((e) => [e.id, e.title] as const), ...documents.map((d) => [d.id, d.name] as const)]);
+  return rows.map((row) => ({ label: `${EVIDENCE_TYPE_LABEL[row.evidenceType] ?? 'Evidence'} · ${names.get(row.evidenceEntityId) ?? 'Record'}`, value: row.id }));
+}
+
+/** Resolves a picked record to its display name, scoped to this home; null when it is not (or no longer) there. */
+async function resolveEvidenceRef(propertyId: string, role: HouseholdRole, userId: string, ref: { type: WorkEvidenceRefType; id: string }): Promise<string | null> {
+  if (ref.type === 'DOCUMENT') return (await resolvePropertyDocuments({ propertyId, role, ids: [ref.id], includeLegacy: true }))[0]?.title ?? null;
+  if (ref.type === 'HOME_EVENT') {
+    const event = await prisma.homeEvent.findFirst({ where: { id: ref.id, propertyId, isCurrent: true, deletedAt: null, OR: [{ visibility: { not: 'PRIVATE' } }, { createdById: userId }] }, select: { title: true } });
+    return event?.title ?? null;
+  }
+  const fact = await prisma.propertyFactEvidence.findFirst({ where: { id: ref.id, propertyId, supersededAt: null }, select: { factKey: true } });
+  return fact ? humanFactKey(fact.factKey) : null;
+}
+
+function formCapture(kind: WorkItemFormKind, contextVersion: string, item: ItemRow, choices: Choice[] = []): AskCaptureRequest {
+  const spec = kind === 'ATTACH_EXISTING' || kind === 'SUBMIT_COMPLETION_EVIDENCE'
+    ? { title: kind === 'SUBMIT_COMPLETION_EVIDENCE' ? `Submit completion evidence for ${item.title}` : `Attach a record to ${item.title}`,
+        question: kind === 'SUBMIT_COMPLETION_EVIDENCE' ? 'Which record shows this work was done?' : 'Which record should count as evidence for this work?',
+        help: 'It is added as pending evidence and reviewed by the record that governs this work. Nothing is saved until you confirm.',
+        fields: [{ key: 'record', label: 'Record', required: true, inputSchema: { type: 'SINGLE_SELECT' as const, options: choices } }], seed: {} }
+    : kind === 'REMOVE_EVIDENCE'
+    ? { title: `Remove evidence from ${item.title}`, question: 'Which evidence should be removed?', help: 'Only evidence you added that has not been verified can be removed. To replace it, remove it and add the new one.',
+        fields: [{ key: 'evidence', label: 'Evidence', required: true, inputSchema: { type: 'SINGLE_SELECT' as const, options: choices } }], seed: {} }
+    : kind === 'SNOOZE'
     ? { title: `Snooze ${item.title}`, question: 'How long should reminders for this wait?', help: 'Snoozing only hides reminders. It does not change the state or the due date.',
         fields: [{ key: 'snooze', label: 'Snooze for', required: true, inputSchema: { type: 'SINGLE_SELECT' as const, options: SNOOZE_CHOICES.map((c) => ({ label: c.label, value: c.value })) } }], seed: {} }
     : { title: `Change the due date of ${item.title}`, question: 'When is it now due?', help: 'This replaces the date it is due. Nothing is saved until you confirm.',
@@ -97,16 +164,25 @@ export async function workItemCommandResult(
   if (!workItemChangeable(item)) return unavailable('HOME_WORK_ITEM_FINISHED', 'That work is already finished', 'Finished or replaced work is not changed here. Nothing has changed.');
   const contextVersion = itemVersion(kind, item);
   const formKind = kind as WorkItemFormKind;
+  const evidenceKind = WORK_ITEM_ATTACH_KINDS.includes(formKind) || formKind === 'REMOVE_EVIDENCE';
+  const choices = evidenceKind
+    ? (formKind === 'REMOVE_EVIDENCE' ? await removeChoices(item.id) : await attachChoices(propertyId, access.role, userId, item.id))
+    : [];
+  if (evidenceKind && choices.length === 0) {
+    return unavailable(formKind === 'REMOVE_EVIDENCE' ? 'HOME_WORK_ITEM_NO_REMOVABLE_EVIDENCE' : 'HOME_WORK_ITEM_NO_RECORDS_TO_ATTACH',
+      formKind === 'REMOVE_EVIDENCE' ? 'No evidence can be removed' : 'No other records to attach',
+      formKind === 'REMOVE_EVIDENCE' ? 'Only evidence you added that has not been verified can be removed. Nothing has changed.' : 'This home has no other documents, timeline events or facts that are not already on this work. You can upload a file instead. Nothing has changed.');
+  }
   if (!supplied) {
     return {
       status: 'NEEDS_CONTEXT', reasonCode: `HOME_WORK_ITEM_${kind}_INPUT_REQUIRED`, contextVersion,
       parameters: { workItemLaunch: { kind, entityId: item.id, sourceExecutionId: launch.sourceExecutionId } },
       blocks: [{ type: 'SUMMARY', id: 'home-work-item-input', title: item.title, body: 'Nothing has been saved yet; you will review the change first.', tone: 'DEFAULT', actions: [] }],
-      captureRequests: [formCapture(formKind, contextVersion, item)], suggestions: [],
+      captureRequests: [formCapture(formKind, contextVersion, item, choices)], suggestions: [],
     };
   }
   const parsed = parseWorkItemAnswer(formKind, supplied);
-  if (!parsed.success) return unavailable('HOME_WORK_ITEM_INPUT_INVALID', 'Check the details', kind === 'SNOOZE' ? 'Choose how long to snooze. Nothing has changed.' : 'Choose a due date. Nothing has changed.');
+  if (!parsed.success) return unavailable('HOME_WORK_ITEM_INPUT_INVALID', 'Check the details', `${WORK_ITEM_FORM_ERRORS[formKind]} Nothing has changed.`);
   const answer = parsed.data as Record<string, string>;
   let spec: { title: string; description: string; confirmLabel: string; field: { label: string; value: string }; stored: Record<string, unknown> };
   if (formKind === 'SNOOZE') {
@@ -116,6 +192,23 @@ export async function workItemCommandResult(
       description: 'Snoozing only hides reminders. It does not change the work item’s state or due date.',
       field: { label: 'Reminders', value: `${item.snoozedUntil ? `Snoozed until ${humanDate(item.snoozedUntil)}` : 'Not snoozed'} → ${until ? `Snoozed until ${humanDate(until)}` : 'Not snoozed'}` },
       stored: { snoozedUntil: until ? until.toISOString() : null },
+    };
+  } else if (WORK_ITEM_ATTACH_KINDS.includes(formKind)) {
+    const ref = parseEvidenceRef(answer.record);
+    const name = ref && choices.some((choice) => choice.value === answer.record) ? await resolveEvidenceRef(propertyId, access.role, userId, ref) : null;
+    if (!ref || !name) return unavailable('HOME_WORK_ITEM_RECORD_NOT_AVAILABLE', 'That record is not available', 'It may have been removed or is already on this work. Nothing has changed.');
+    const submit = formKind === 'SUBMIT_COMPLETION_EVIDENCE';
+    spec = {
+      title: submit ? 'Submit this as completion evidence?' : 'Attach this record as evidence?', confirmLabel: submit ? 'Submit evidence' : 'Attach record',
+      description: 'It is added as pending evidence and reviewed by the record that governs this work. It does not mark the work complete.',
+      field: { label: EVIDENCE_TYPE_LABEL[ref.type], value: name }, stored: { evidenceType: ref.type, evidenceEntityId: ref.id },
+    };
+  } else if (formKind === 'REMOVE_EVIDENCE') {
+    const picked = choices.find((choice) => choice.value === answer.evidence);
+    if (!picked) return unavailable('HOME_WORK_ITEM_EVIDENCE_NOT_AVAILABLE', 'That evidence cannot be removed', 'It may already be gone or verified. Nothing has changed.');
+    spec = {
+      title: 'Remove this evidence?', confirmLabel: 'Remove evidence', description: 'The record itself is not deleted; it just stops counting as evidence for this work. The removal stays in the work’s history.',
+      field: { label: 'Evidence', value: picked.label }, stored: { evidenceId: picked.value },
     };
   } else {
     const date = answer.dueAt;
@@ -132,7 +225,7 @@ export async function workItemCommandResult(
       confirmationId: `home-work-${kind.toLowerCase()}-${sha(`${item.id}:${JSON.stringify(spec.stored)}`).slice(0, 12)}-1`, version: 1, title: spec.title, description: spec.description,
       fields: [{ label: 'Work item', value: item.title }, spec.field], editableFields: [], confirmLabel: spec.confirmLabel, consentText: consent, expiresAt: expiresAt.toISOString(),
     },
-    captureRequests: [formCapture(formKind, contextVersion, item)], suggestions: [],
+    captureRequests: [formCapture(formKind, contextVersion, item, choices)], suggestions: [],
   };
 }
 
@@ -179,6 +272,29 @@ async function confirmWorkItemCommand(ctx: ConfirmCapabilityContext): Promise<Co
         await snoozeWorkItem({ workItemId: item.id, snoozedUntil: change.snoozedUntil ? new Date(change.snoozedUntil as string) : null, actorUserId: userId, idempotencyKey: crypto.randomUUID() });
         title = change.snoozedUntil ? 'Snoozed' : 'Snooze removed';
         description = 'Reminders for it were updated. Its state and due date are unchanged.';
+      } else if (kind === 'ATTACH_EXISTING' || kind === 'SUBMIT_COMPLETION_EVIDENCE') {
+        const type = change.evidenceType;
+        const entityId = change.evidenceEntityId;
+        const ref = typeof type === 'string' && typeof entityId === 'string' ? parseEvidenceRef(`${type}:${entityId}`) : null;
+        if (!ref) throw stale('The record to attach is invalid.');
+        const access = await ensurePropertyAccess(userId, propertyId);
+        if (!(await resolveEvidenceRef(propertyId, access.role, userId, ref))) throw stale('That record is no longer available to attach.');
+        const already = await prisma.operationalWorkEvidence.findFirst({ where: { workItemId: item.id, evidenceType: ref.type, evidenceEntityId: ref.id }, select: { id: true } });
+        if (!already) {
+          await recordEvidence({ workItemId: item.id, evidenceType: ref.type, evidenceEntityId: ref.id, verificationStatus: 'PENDING', observedAt: new Date(), actorUserId: userId, idempotencyKey: `ask:${execution.id}:work-evidence-ref` });
+        }
+        title = already ? 'Already on this work' : kind === 'SUBMIT_COMPLETION_EVIDENCE' ? 'Completion evidence submitted' : 'Evidence attached';
+        description = 'It is pending review by the record that governs this work. The work itself is unchanged.';
+      } else if (kind === 'REMOVE_EVIDENCE') {
+        if (typeof change.evidenceId !== 'string') throw stale('The evidence to remove is invalid.');
+        try {
+          const removed = await removeEvidence({ workItemId: item.id, evidenceId: change.evidenceId, actorUserId: userId, idempotencyKey: `ask:${execution.id}:work-evidence-remove` });
+          title = removed.removed ? 'Evidence removed' : 'Already removed';
+        } catch (error) {
+          if (error instanceof EvidenceNotWithdrawableError) throw stale(error.message);
+          throw error;
+        }
+        description = 'It no longer counts as evidence for this work. The removal stays in the work’s history.';
       } else {
         if (typeof change.dueAt !== 'string') throw stale('The due date to apply is invalid.');
         await rescheduleWorkItem({ workItemId: item.id, dueAt: new Date(change.dueAt), actorUserId: userId, idempotencyKey: crypto.randomUUID() });
