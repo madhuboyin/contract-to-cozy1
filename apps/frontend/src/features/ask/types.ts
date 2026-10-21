@@ -80,6 +80,9 @@ export interface AskGroupedListItem {
   floorLevel?: number | null;
   countLabel?: string | null;
   badgeLabel?: string | null;
+  attributes?: Array<{ label: string; value: string; tone?: AskDisplayTone }>;
+  highlights?: string[];
+  warnings?: string[];
   needsInfo?: boolean;
   detail?: string | null;
 }

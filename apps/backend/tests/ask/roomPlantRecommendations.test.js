@@ -17,7 +17,8 @@ const recommendation = (overrides = {}) => ({
   rank: 1, score: 9.2, confidence: 0.92, confidenceBand: 'HIGH', status: 'RECOMMENDED',
   reasonSummary: 'Fits the room light and selected care effort.', reason: { summary: 'Strong fit', fitSignals: ['Bright indirect light', 'Pet safe'], warningFlags: [] }, warningFlags: [],
   plantName: 'Parlor Palm', scientificName: 'Chamaedorea elegans', shortDescription: 'A compact indoor palm.',
-  careSummary: 'Let the top soil dry slightly.', placementTip: 'Keep a few feet from the window.', ...overrides,
+  careSummary: 'Let the top soil dry slightly.', placementTip: 'Keep a few feet from the window.',
+  lightLevel: 'BRIGHT_INDIRECT', maintenanceLevel: 'LOW', toxicityLevel: 'PET_SAFE', isPetSafe: true, ...overrides,
 });
 
 test('the operation is a governed contributor command owned by Plant Advisor', () => {
@@ -28,6 +29,8 @@ test('the operation is a governed contributor command owned by Plant Advisor', (
 
 test('the input requires room and light while retaining the desktop ranking preferences', () => {
   assert.equal(RoomPlantRecommendationInputSchema.safeParse({ roomId: 'room-1', hasPets: false, goals: [] }).success, false);
+  assert.equal(RoomPlantRecommendationInputSchema.safeParse({ roomId: 'room-1', lightLevel: 'MEDIUM', goals: [] }).success, false);
+  assert.equal(RoomPlantRecommendationInputSchema.parse({ roomId: 'room-1', lightLevel: 'MEDIUM', hasPets: null, goals: [] }).hasPets, null);
   const parsed = RoomPlantRecommendationInputSchema.parse({ roomId: 'room-1', lightLevel: 'BRIGHT_INDIRECT', maintenancePreference: 'LOW', hasPets: true, goals: ['PET_SAFE', 'LOW_MAINTENANCE'], notes: 'Away from the vent' });
   assert.deepEqual(parsed.goals, ['PET_SAFE', 'LOW_MAINTENANCE']);
 });
@@ -36,15 +39,18 @@ test('recommendation rows preserve fit, care, placement, warnings and governed a
   const result = recommendationResult({ roomId: 'room-1', name: 'Dining' }, [recommendation({ warningFlags: ['Keep away from cold drafts'] })], true);
   const row = result.blocks.find((block) => block.id === 'room-plant-recommendations').sections[0].items[0];
   assert.equal(row.title, '1. Parlor Palm');
-  assert.deepEqual(row.meta, ['92% fit', 'High confidence', 'Bright indirect light', 'Pet safe']);
-  assert.match(row.description, /Why it fits: Fits the room light/);
-  assert.match(row.description, /Care: Let the top soil dry slightly/);
-  assert.match(row.description, /Placement: Keep a few feet from the window/);
-  assert.match(row.description, /Warnings: Keep away from cold drafts/);
+  assert.deepEqual(row.meta, ['92% fit', 'High confidence']);
+  assert.equal(row.badgeLabel, 'Best match');
+  assert.deepEqual(row.attributes, [
+    { label: 'Light', value: 'Bright indirect' },
+    { label: 'Care', value: 'Low' },
+    { label: 'Pet safety', value: 'Pet-safe', tone: 'POSITIVE' },
+  ]);
+  assert.deepEqual(row.highlights, ['Bright indirect light', 'Pet safe']);
+  assert.deepEqual(row.warnings, ['Keep away from cold drafts']);
   assert.match(row.detail, /Care: Let the top soil dry slightly/);
   assert.match(row.detail, /Placement: Keep a few feet from the window/);
-  assert.match(row.detail, /Warnings: Keep away from cold drafts/);
-  assert.deepEqual(row.actions.map((action) => action.id), ['plant-recommendation-add-home', 'plant-recommendation-save', 'plant-recommendation-dismiss']);
+  assert.deepEqual(row.actions.map((action) => action.label), ['Track this plant', 'Save for later', 'Not interested']);
   assert.equal(row.actions.every((action) => action.operationId === 'ROOM_PLANT_RECOMMENDATIONS'), true);
   const viewer = recommendationResult({ roomId: 'room-1', name: 'Dining' }, [recommendation()], false);
   assert.equal(viewer.blocks.find((block) => block.id === 'room-plant-recommendations').sections[0].items[0].actions, undefined);

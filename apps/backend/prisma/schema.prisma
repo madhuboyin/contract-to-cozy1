@@ -13069,7 +13069,9 @@ model RoomPlantProfile {
   detectedRoomType      RoomType?
   lightLevel            PlantLightLevel?
   maintenancePreference PlantMaintenanceLevel?
-  hasPets               Boolean                @default(false)
+  // Null means the household has not confirmed whether pets can access this
+  // room. Plant Advisor treats that as a safety uncertainty, never as "No".
+  hasPets               Boolean?
   goals                 PlantGoalType[]        @default([])
   notes                 String?
 

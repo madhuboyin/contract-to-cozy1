@@ -17,7 +17,7 @@ export interface RoomPlantProfileDTO {
   detectedRoomType: RoomType | null;
   lightLevel: PlantLightLevel | null;
   maintenancePreference: PlantMaintenanceLevel | null;
-  hasPets: boolean;
+  hasPets: boolean | null;
   goals: PlantGoalType[];
   notes: string | null;
   createdAt: string;
@@ -69,6 +69,10 @@ export interface RoomPlantRecommendationDTO {
   shortDescription: string;
   careSummary: string | null;
   placementTip: string | null;
+  lightLevel: PlantLightLevel;
+  maintenanceLevel: PlantMaintenanceLevel;
+  toxicityLevel: PlantToxicityLevel;
+  isPetSafe: boolean;
 }
 
 export interface PlantAdvisorRoomSummaryDTO {

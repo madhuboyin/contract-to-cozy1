@@ -7,7 +7,7 @@ export type FeatureContextReadiness =
   | 'PERMISSION_REQUIRED';
 
 export type ScalarCaptureInputSchema =
-  | { type: 'BOOLEAN'; trueLabel: string; falseLabel: string }
+  | { type: 'BOOLEAN'; trueLabel: string; falseLabel: string; unknownLabel?: string }
   | { type: 'SINGLE_SELECT'; options: Array<{ label: string; value: string }> }
   | { type: 'MULTI_SELECT'; options: Array<{ label: string; value: string }>; maxItems?: number }
   | { type: 'DOCUMENT_MULTI_SELECT'; options: Array<{ label: string; value: string }>; maxItems?: number; allowUpload?: boolean; uploadTarget?: 'HOME_RECORDS' }

@@ -41,7 +41,7 @@ export const upsertRoomPlantProfileBodySchema = z.object({
   detectedRoomType: z.nativeEnum(RoomType).optional().nullable(),
   lightLevel: z.nativeEnum(PlantLightLevel).optional().nullable(),
   maintenancePreference: z.nativeEnum(PlantMaintenanceLevel).optional().nullable(),
-  hasPets: z.boolean().optional(),
+  hasPets: z.boolean().nullable().optional(),
   goals: z.array(z.nativeEnum(PlantGoalType)).max(10).optional(),
   notes: z.string().max(1000).optional().nullable(),
 });

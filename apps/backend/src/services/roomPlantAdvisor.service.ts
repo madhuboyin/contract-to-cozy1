@@ -34,7 +34,7 @@ type RoomProfilePatch = {
   detectedRoomType?: RoomType | null;
   lightLevel?: PlantLightLevel | null;
   maintenancePreference?: PlantMaintenanceLevel | null;
-  hasPets?: boolean;
+  hasPets?: boolean | null;
   goals?: PlantGoalType[];
   notes?: string | null;
 };
@@ -357,7 +357,7 @@ function didScoringInputsChange(existing: any, patchData: Record<string, unknown
   ) {
     return true;
   }
-  if ('hasPets' in patchData && Boolean(existing.hasPets) !== Boolean(patchData.hasPets)) {
+  if ('hasPets' in patchData && (existing.hasPets ?? null) !== (patchData.hasPets ?? null)) {
     return true;
   }
   if ('goals' in patchData) {
@@ -378,7 +378,7 @@ function scorePlantCandidate(args: {
     detectedRoomType: RoomType | null;
     lightLevel: PlantLightLevel | null;
     maintenancePreference: PlantMaintenanceLevel | null;
-    hasPets: boolean;
+    hasPets: boolean | null;
     goals: PlantGoalType[];
   };
   roomType: RoomType | null;
@@ -536,7 +536,7 @@ function scorePlantCandidate(args: {
     }
   }
 
-  if (profile.hasPets) {
+  if (profile.hasPets !== false) {
     if (plant.isPetSafe || plant.toxicityLevel === 'PET_SAFE') {
       score += 18;
       pushUnique(fitSignals, 'Pet-safety profile is favorable.');
@@ -629,9 +629,9 @@ function scorePlantCandidate(args: {
 
   score = round(clamp(score, 0, 100), 1);
 
-  if (profile.hasPets && petSafetySeverity === 'HIGH') {
+  if (profile.hasPets !== false && petSafetySeverity === 'HIGH') {
     score = Math.min(score, 62);
-  } else if (profile.hasPets && petSafetySeverity === 'MILD') {
+  } else if (profile.hasPets !== false && petSafetySeverity === 'MILD') {
     score = Math.min(score, 72);
   }
 
@@ -650,9 +650,9 @@ function scorePlantCandidate(args: {
   confidence -= majorWarningCount * 0.12;
   confidence -= softBlockerCount * 0.05;
   if (score < 55) confidence -= 0.06;
-  if (profile.hasPets && petSafetySeverity === 'HIGH') {
+  if (profile.hasPets !== false && petSafetySeverity === 'HIGH') {
     confidence = Math.min(confidence, 0.56);
-  } else if (profile.hasPets && petSafetySeverity === 'MILD') {
+  } else if (profile.hasPets !== false && petSafetySeverity === 'MILD') {
     confidence = Math.min(confidence, 0.64);
   }
   confidence = round(clamp(confidence, 0.05, 0.98), 2);
@@ -665,10 +665,10 @@ function scorePlantCandidate(args: {
         ? 'NEAR_FIT'
         : 'WEAK';
 
-  if (profile.hasPets && petSafetySeverity === 'MILD' && fitCategory === 'STRONG') {
+  if (profile.hasPets !== false && petSafetySeverity === 'MILD' && fitCategory === 'STRONG') {
     fitCategory = 'NEAR_FIT';
   }
-  if (profile.hasPets && petSafetySeverity === 'HIGH') {
+  if (profile.hasPets !== false && petSafetySeverity === 'HIGH') {
     fitCategory = 'WEAK';
   }
 
@@ -727,7 +727,7 @@ export class RoomPlantAdvisorService {
       detectedRoomType: row.detectedRoomType ?? null,
       lightLevel: row.lightLevel ?? null,
       maintenancePreference: row.maintenancePreference ?? null,
-      hasPets: Boolean(row.hasPets),
+      hasPets: typeof row.hasPets === 'boolean' ? row.hasPets : null,
       goals: Array.isArray(row.goals) ? row.goals : [],
       notes: row.notes ?? null,
       createdAt: row.createdAt.toISOString(),
@@ -788,6 +788,10 @@ export class RoomPlantAdvisorService {
       shortDescription: buildShortDescription(row.plantCatalog),
       careSummary: row.plantCatalog.careSummary ?? null,
       placementTip: row.plantCatalog.placementTips ?? null,
+      lightLevel: row.plantCatalog.lightLevel,
+      maintenanceLevel: row.plantCatalog.maintenanceLevel,
+      toxicityLevel: row.plantCatalog.toxicityLevel,
+      isPetSafe: Boolean(row.plantCatalog.isPetSafe || row.plantCatalog.toxicityLevel === 'PET_SAFE'),
     };
   }
 
@@ -833,7 +837,7 @@ export class RoomPlantAdvisorService {
     if (patch && 'detectedRoomType' in patch) data.detectedRoomType = patch.detectedRoomType ?? null;
     if (patch && 'lightLevel' in patch) data.lightLevel = patch.lightLevel ?? null;
     if (patch && 'maintenancePreference' in patch) data.maintenancePreference = patch.maintenancePreference ?? null;
-    if (patch && 'hasPets' in patch) data.hasPets = Boolean(patch.hasPets);
+    if (patch && 'hasPets' in patch) data.hasPets = patch.hasPets ?? null;
     if (patch && 'goals' in patch) data.goals = Array.isArray(patch.goals) ? patch.goals : [];
     if (patch && 'notes' in patch) data.notes = patch.notes ?? null;
 
@@ -869,7 +873,7 @@ export class RoomPlantAdvisorService {
         detectedRoomType: room.type ?? null,
         lightLevel: null,
         maintenancePreference: null,
-        hasPets: false,
+        hasPets: null,
         goals: [],
         notes: null,
         ...data,

@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { HouseholdRole, PlantGoalType, PlantLightLevel, PlantMaintenanceLevel } from '@prisma/client';
 import { prisma } from '../../../lib/prisma';
-import type { AskCaptureRequest } from '../../../productFramework/ask/ask.contract';
+import type { AskCaptureRequest, AskPresentationBlock } from '../../../productFramework/ask/ask.contract';
 import type { AskOperationResult } from '../askOperationRegistry';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { registerConfirmCapabilityHandler, type ConfirmCapabilityContext, type ConfirmCapabilityResult } from '../confirmCapabilityHandlerRegistry';
@@ -35,13 +35,13 @@ function captureRequest(contextVersion: string, rooms: Array<{ id: string; name:
     inputSchema: { type: 'GROUP', fields: [
       { key: 'roomId', label: 'Room', required: true, inputSchema: { type: 'SINGLE_SELECT', options: rooms.map((room) => ({ label: room.name, value: room.id })) } },
       { key: 'lightLevel', label: 'Light level', required: true, inputSchema: { type: 'SINGLE_SELECT', options: Object.values(PlantLightLevel).map((value) => ({ label: labels(value), value })) } },
-      { key: 'maintenancePreference', label: 'Care effort', required: false, inputSchema: { type: 'SINGLE_SELECT', options: Object.values(PlantMaintenanceLevel).map((value) => ({ label: labels(value), value })) } },
-      { key: 'hasPets', label: 'Pets in this room?', required: true, inputSchema: { type: 'BOOLEAN', trueLabel: 'Yes', falseLabel: 'No' } },
-      { key: 'goals', label: 'Goals', required: false, inputSchema: { type: 'MULTI_SELECT', options: Object.values(PlantGoalType).map((value) => ({ label: labels(value), value })), maxItems: 5 } },
-      { key: 'notes', label: 'Notes', helpText: 'Optional placement constraints, such as an AC vent or limited floor space.', required: false, inputSchema: { type: 'SHORT_TEXT', maxLength: 1000 } },
+      { key: 'maintenancePreference', label: 'Care effort (optional)', required: false, inputSchema: { type: 'SINGLE_SELECT', options: Object.values(PlantMaintenanceLevel).map((value) => ({ label: labels(value), value })) } },
+      { key: 'hasPets', label: 'Can pets access this room?', helpText: 'Choose Unsure if you cannot confidently rule out pet access.', required: true, inputSchema: { type: 'BOOLEAN', trueLabel: 'Yes', falseLabel: 'No', unknownLabel: 'Unsure' } },
+      { key: 'goals', label: 'Goals (optional)', helpText: 'Choose any that matter to you.', required: false, inputSchema: { type: 'MULTI_SELECT', options: Object.values(PlantGoalType).map((value) => ({ label: labels(value), value })), maxItems: 5 } },
+      { key: 'notes', label: 'Placement notes (optional)', helpText: 'For example, an AC vent, a narrow shelf or limited floor space.', required: false, inputSchema: { type: 'LONG_TEXT', maxLength: 1000 } },
     ] },
-    currentAnswer: entered ?? { hasPets: false, goals: [] }, allowNotSure: false, sensitivity: 'STANDARD',
-    destinationLabel: 'Used to generate and store a new recommendation set for this room; nothing changes until you confirm', confirmationText: null,
+    currentAnswer: entered ?? { goals: [] }, allowNotSure: false, sensitivity: 'STANDARD',
+    destinationLabel: 'You’ll review these preferences before Cozy updates this room’s recommendations', confirmationText: null,
     expectedContextVersion: contextVersion,
   };
 }
@@ -54,19 +54,61 @@ function recommendationActions(status: string) {
   return [make('ADD_TO_HOME', 'PRIMARY'), ...(status === 'SAVED' ? [] : [make('SAVE')]), ...(status === 'DISMISSED' ? [] : [make('DISMISS')])];
 }
 
-export function recommendationResult(room: { roomId: string; name: string }, recommendations: Awaited<ReturnType<RoomPlantAdvisorService['getRoomAdvisorState']>>['recommendations'], canChange: boolean): AskOperationResult {
+type PlantRecommendation = Awaited<ReturnType<RoomPlantAdvisorService['getRoomAdvisorState']>>['recommendations'][number];
+type PlantProfile = Awaited<ReturnType<RoomPlantAdvisorService['getRoomAdvisorState']>>['profile'];
+
+function fitPresentation(confidence: number) {
+  if (confidence >= 0.8) return { label: 'Best match', tone: 'POSITIVE' as const, primary: true };
+  if (confidence >= 0.6) return { label: 'Good match', tone: 'POSITIVE' as const, primary: true };
+  if (confidence >= 0.4) return { label: 'Possible with tradeoffs', tone: 'CAUTION' as const, primary: false };
+  return { label: 'Weak match', tone: 'CAUTION' as const, primary: false };
+}
+
+function petSafety(rec: PlantRecommendation) {
+  if (rec.isPetSafe || rec.toxicityLevel === 'PET_SAFE') return { value: 'Pet-safe', tone: 'POSITIVE' as const };
+  if (rec.toxicityLevel === 'MILDLY_TOXIC') return { value: 'Mild toxicity risk', tone: 'CAUTION' as const };
+  if (rec.toxicityLevel === 'TOXIC') return { value: 'Not pet-safe', tone: 'CRITICAL' as const };
+  return { value: 'Pet safety unverified', tone: 'CAUTION' as const };
+}
+
+function recommendationItem(rec: PlantRecommendation, canChange: boolean) {
+  const fit = fitPresentation(rec.confidence);
+  const safety = petSafety(rec);
+  return {
+    id: rec.id, entityType: 'PLANT_RECOMMENDATION', title: `${rec.rank}. ${rec.plantName}`,
+    description: rec.shortDescription,
+    condition: rec.scientificName,
+    status: rec.status,
+    badgeLabel: fit.label,
+    tone: fit.tone,
+    meta: [`${Math.round(rec.confidence * 100)}% fit`, `${labels(rec.confidenceBand)} confidence`],
+    attributes: [
+      { label: 'Light', value: labels(rec.lightLevel) },
+      { label: 'Care', value: labels(rec.maintenanceLevel) },
+      { label: 'Pet safety', value: safety.value, tone: safety.tone },
+    ],
+    highlights: rec.reason.fitSignals.slice(0, 3),
+    warnings: rec.warningFlags.slice(0, 4),
+    detail: [rec.reasonSummary, rec.careSummary ? `Care: ${rec.careSummary}` : null, rec.placementTip ? `Placement: ${rec.placementTip}` : null].filter(Boolean).join('\n'),
+    actions: canChange ? recommendationActions(rec.status) : undefined,
+  };
+}
+
+export function recommendationResult(room: { roomId: string; name: string }, recommendations: Awaited<ReturnType<RoomPlantAdvisorService['getRoomAdvisorState']>>['recommendations'], canChange: boolean, profile: PlantProfile = null): AskOperationResult {
+  const primary = recommendations.filter((rec) => fitPresentation(rec.confidence).primary);
+  const alternatives = recommendations.filter((rec) => !fitPresentation(rec.confidence).primary);
+  const profileSummary = profile
+    ? [room.name, profile.lightLevel ? `${labels(profile.lightLevel)} light` : null, profile.maintenancePreference ? `${labels(profile.maintenancePreference)} care` : 'Any care effort', profile.hasPets === true ? 'Pets have access' : profile.hasPets === false ? 'No pet access' : 'Pet access unsure', ...(profile.goals.length ? [profile.goals.map(labels).join(', ')] : [])].filter(Boolean).join(' · ')
+    : null;
+  const sections: Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>['sections'] = [
+    ...(primary.length ? [{ id: 'best-matches', title: 'Best matches', count: primary.length, initialVisibleCount: Math.min(3, primary.length), items: primary.map((rec) => recommendationItem(rec, canChange)) }] : []),
+    ...(alternatives.length ? [{ id: 'other-possibilities', title: 'Other possibilities', caption: 'These options have meaningful tradeoffs. Review the warnings before choosing one.', count: alternatives.length, items: alternatives.map((rec) => recommendationItem(rec, canChange)) }] : []),
+  ];
   return {
     status: 'ANSWERED', reasonCode: recommendations.length ? 'ROOM_PLANT_RECOMMENDATIONS_READY' : 'ROOM_PLANT_RECOMMENDATIONS_EMPTY',
     blocks: [
       { type: 'SUMMARY', id: 'plant-recommendation-summary', title: recommendations.length ? `${recommendations.length} plants recommended for ${room.name}` : `No plant matches for ${room.name}`, body: recommendations.length ? 'Recommendations use this room’s recorded light, care preference, pet setting and goals.' : 'The current room preferences did not produce a safe fit. Change the preferences and try again.', tone: recommendations.length ? 'POSITIVE' : 'CAUTION', actions: [] },
-      ...(recommendations.length ? [{ type: 'GROUPED_LIST' as const, filters: [], id: 'room-plant-recommendations', title: `Recommendations for ${room.name}`, description: 'Ranked deterministically from the room profile. Review fit, care and warnings before adding a plant.', sections: [{ id: 'recommended-plants', title: 'Best fits', count: recommendations.length, items: recommendations.map((rec) => ({
-        id: rec.id, entityType: 'PLANT_RECOMMENDATION', title: `${rec.rank}. ${rec.plantName}`,
-        description: [rec.shortDescription, `Why it fits: ${rec.reasonSummary}`, rec.careSummary ? `Care: ${rec.careSummary}` : null, rec.placementTip ? `Placement: ${rec.placementTip}` : null, rec.warningFlags.length ? `Warnings: ${rec.warningFlags.join('; ')}` : null].filter(Boolean).join(' '),
-        status: rec.status,
-        meta: [`${Math.round(rec.confidence * 100)}% fit`, `${labels(rec.confidenceBand)} confidence`, ...rec.reason.fitSignals.slice(0, 4)].slice(0, 6),
-        detail: [rec.reasonSummary, rec.careSummary ? `Care: ${rec.careSummary}` : null, rec.placementTip ? `Placement: ${rec.placementTip}` : null, rec.warningFlags.length ? `Warnings: ${rec.warningFlags.join('; ')}` : null].filter(Boolean).join('\n'),
-        actions: canChange ? recommendationActions(rec.status) : undefined,
-      })) }], actions: [] }] : []),
+      ...(recommendations.length ? [{ type: 'GROUPED_LIST' as const, filters: [], id: 'room-plant-recommendations', title: `Recommendations for ${room.name}`, description: profileSummary ?? 'Ranked from the room preferences you reviewed.', sections, actions: [{ id: 'find-plants-again', label: 'Change preferences', interactionType: 'START_WORKFLOW' as const, message: PLANT_RECOMMENDATIONS_MESSAGE, operationId: 'ROOM_PLANT_RECOMMENDATIONS', style: 'SECONDARY' as const }] }] : []),
       { type: 'BOUNDARY', id: 'plant-recommendation-boundary', title: 'Room-fit guidance, not a guarantee', body: 'Confirm the plant’s current toxicity and care information before buying, and keep plants away from children and pets when appropriate.', severity: 'INFO', suggestions: [] },
     ], suggestions: [],
   };
@@ -82,7 +124,7 @@ export async function roomPlantRecommendationResult(userId: string, propertyId: 
   const room = rooms.find((candidate) => candidate.id === supplied.roomId);
   if (!room) return { status: 'NEEDS_CONTEXT', reasonCode: 'PLANT_RECOMMENDATION_ROOM_CHANGED', contextVersion, parameters: { sourceExecutionId }, blocks: [{ type: 'SUMMARY', id: 'plant-recommendation-room-missing', title: 'That room is no longer available', body: 'Choose another recorded room. Nothing has changed.', tone: 'CAUTION', actions: [] }], captureRequests: [captureRequest(contextVersion, rooms)], suggestions: [] };
   const expiresAt = new Date(Date.now() + CONFIRMATION_MINUTES * 60 * 1000).toISOString();
-  return { status: 'NEEDS_CONFIRMATION', reasonCode: 'ROOM_PLANT_RECOMMENDATION_CONFIRMATION_REQUIRED', contextVersion, parameters: { roomPlantRecommendation: supplied, plantRecommendationContextVersion: contextVersion, sourceExecutionId, confirmationVersion: 1, confirmationExpiresAt: expiresAt }, blocks: [{ type: 'SUMMARY', id: 'plant-recommendation-review', title: `Review ${room.name} preferences`, body: 'Generating will replace the current generated recommendation set for this room profile.', tone: 'CAUTION', actions: [] }], confirmation: { confirmationId: `plant-recommendation-${sha(`${propertyId}:${room.id}:${contextVersion}`).slice(0, 12)}-1`, version: 1, title: `Generate new plant recommendations for ${room.name}?`, description: 'Plant Advisor will save these room preferences and replace the current generated set with newly ranked recommendations.', fields: [{ label: 'Room', value: room.name }, { label: 'Light', value: labels(supplied.lightLevel) }, { label: 'Care effort', value: supplied.maintenancePreference ? labels(supplied.maintenancePreference) : 'No preference' }, { label: 'Pets', value: supplied.hasPets ? 'Yes' : 'No' }, { label: 'Goals', value: supplied.goals.length ? supplied.goals.map(labels).join(', ') : 'No preference' }], editableFields: [], confirmLabel: 'Generate recommendations', consentText: 'I authorize saving these room preferences and replacing the generated recommendation set.', expiresAt }, captureRequests: [captureRequest(contextVersion, rooms, supplied)], suggestions: [] };
+  return { status: 'NEEDS_CONFIRMATION', reasonCode: 'ROOM_PLANT_RECOMMENDATION_CONFIRMATION_REQUIRED', contextVersion, parameters: { roomPlantRecommendation: supplied, plantRecommendationContextVersion: contextVersion, sourceExecutionId, confirmationVersion: 1, confirmationExpiresAt: expiresAt }, blocks: [{ type: 'SUMMARY', id: 'plant-recommendation-review', title: `Review ${room.name} preferences`, body: 'Generating will replace the current generated recommendation set for this room profile.', tone: 'CAUTION', actions: [] }], confirmation: { confirmationId: `plant-recommendation-${sha(`${propertyId}:${room.id}:${contextVersion}`).slice(0, 12)}-1`, version: 1, title: `Generate new plant recommendations for ${room.name}?`, description: 'Plant Advisor will save these room preferences and replace the current generated set with newly ranked recommendations.', fields: [{ label: 'Room', value: room.name }, { label: 'Light', value: labels(supplied.lightLevel) }, { label: 'Care effort', value: supplied.maintenancePreference ? labels(supplied.maintenancePreference) : 'No preference' }, { label: 'Pet access', value: supplied.hasPets === true ? 'Yes' : supplied.hasPets === false ? 'No' : 'Unsure' }, { label: 'Goals', value: supplied.goals.length ? supplied.goals.map(labels).join(', ') : 'No preference' }], editableFields: [], confirmLabel: 'Generate recommendations', consentText: 'I authorize saving these room preferences and replacing the generated recommendation set.', expiresAt }, captureRequests: [captureRequest(contextVersion, rooms, supplied)], suggestions: [] };
 }
 
 async function actionProposal(userId: string, propertyId: string, recommendationId: string, actionId: string): Promise<AskOperationResult> {
@@ -122,13 +164,13 @@ async function confirmPlantRecommendation(ctx: ConfirmCapabilityContext): Promis
     else if (action.action === 'ADD_TO_HOME') { const added = await advisor.addRecommendationToHome(execution.propertyId, action.roomId, action.recommendationId, userId, {}); artifactId = added.homePlantId; }
     else throw Object.assign(new Error('That recommendation action is invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
     const state = await advisor.getRoomAdvisorState(execution.propertyId, action.roomId);
-    return { result: { ...recommendationResult({ roomId: state.room.roomId, name: state.room.name }, state.recommendations, true), status: 'COMPLETED', reasonCode: 'PLANT_RECOMMENDATION_ACTION_COMPLETED' }, artifactType: action.action === 'ADD_TO_HOME' ? 'HOME_PLANT' : 'ROOM_PLANT_RECOMMENDATION', artifactId };
+    return { result: { ...recommendationResult({ roomId: state.room.roomId, name: state.room.name }, state.recommendations, true, state.profile), status: 'COMPLETED', reasonCode: 'PLANT_RECOMMENDATION_ACTION_COMPLETED' }, artifactType: action.action === 'ADD_TO_HOME' ? 'HOME_PLANT' : 'ROOM_PLANT_RECOMMENDATION', artifactId };
   }
   const parsed = RoomPlantRecommendationInputSchema.safeParse(parameters.roomPlantRecommendation);
   if (!parsed.success) throw Object.assign(new Error('The room recommendation request is invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
   const room = await prisma.inventoryRoom.findFirst({ where: { id: parsed.data.roomId, propertyId: execution.propertyId }, select: { id: true, name: true } });
   if (!room) throw Object.assign(new Error('That room is no longer in this home.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
   const generated = await advisor.generateRecommendations(execution.propertyId, room.id, { limit: 8, profile: { detectedRoomType: undefined, lightLevel: parsed.data.lightLevel, maintenancePreference: parsed.data.maintenancePreference, hasPets: parsed.data.hasPets, goals: parsed.data.goals, notes: parsed.data.notes } });
-  return { result: { ...recommendationResult({ roomId: room.id, name: room.name }, generated.recommendations, true), status: 'COMPLETED' }, artifactType: 'ROOM_PLANT_RECOMMENDATION_SET', artifactId: room.id };
+  return { result: { ...recommendationResult({ roomId: room.id, name: room.name }, generated.recommendations, true, generated.profile), status: 'COMPLETED' }, artifactType: 'ROOM_PLANT_RECOMMENDATION_SET', artifactId: room.id };
 }
 registerConfirmCapabilityHandler('plant-advisor.room-recommendations', confirmPlantRecommendation);

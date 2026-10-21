@@ -32,6 +32,7 @@ import { FACT_SHEET_BLOCK_IDS, FactSheetResultList, PLAN_LAYOUT_BLOCK_IDS, Seaso
 import { WarrantyResultList } from '../WarrantyResultList';
 import { MaterialSpecResultList } from '../MaterialSpecResultList';
 import { HomeContinuityPlanResultList } from '../HomeContinuityPlanResultList';
+import { PlantRecommendationResultList } from '../PlantRecommendationResultList';
 import { HomeRecordOverviewBlock } from '../HomeRecordOverviewBlock';
 import { ActionLink, AskBlockActionContext, AskContextLink } from './context';
 import type { AskBlockRenderer } from './types';
@@ -436,6 +437,9 @@ export const GroupedListBlock: AskBlockRenderer<'GROUPED_LIST'> = (props) => {
   if (props.block.id === 'property-record-index') return <HomeRecordOverviewBlock {...props} />;
   if (props.block.id === 'digital-will-items') {
     return <HomeContinuityPlanResultList block={props.block} propertyId={props.propertyId} disabled={props.itemActionsDisabled} onAction={props.onItemAction} />;
+  }
+  if (props.block.id === 'room-plant-recommendations') {
+    return <PlantRecommendationResultList block={props.block} disabled={props.itemActionsDisabled} onAction={props.onItemAction} />;
   }
   // Maintenance keeps its own component in both layouts, so its live-record detail, paging and selection are the
   // same whichever the homeowner chooses. The pattern still comes only from the server's declaration.

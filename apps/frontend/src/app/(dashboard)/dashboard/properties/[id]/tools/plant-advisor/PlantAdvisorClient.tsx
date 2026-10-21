@@ -88,7 +88,7 @@ type PlantAdvisorDraft = {
   detectedRoomType: RoomType | null;
   lightLevel: PlantLightLevel | null;
   maintenancePreference: PlantMaintenanceLevel | null;
-  hasPets: boolean;
+  hasPets: boolean | null;
   goals: PlantGoalType[];
   notes: string;
 };
@@ -206,7 +206,7 @@ function createDraft(
     detectedRoomType: profile?.detectedRoomType ?? roomSummary?.roomType ?? null,
     lightLevel: profile?.lightLevel ?? null,
     maintenancePreference: profile?.maintenancePreference ?? null,
-    hasPets: profile?.hasPets ?? false,
+    hasPets: profile?.hasPets ?? null,
     goals: profile?.goals ?? [],
     notes: profile?.notes ?? '',
   };
@@ -433,7 +433,7 @@ export default function PlantAdvisorClient() {
     detectedRoomType: null,
     lightLevel: null,
     maintenancePreference: null,
-    hasPets: false,
+    hasPets: null,
     goals: [],
     notes: '',
   });
@@ -1062,7 +1062,7 @@ export default function PlantAdvisorClient() {
 
                   <div className="space-y-2">
                     <p className="mb-0 text-sm font-medium text-[hsl(var(--mobile-text-primary))]">
-                      Pets in this room?
+                      Can pets access this room?
                     </p>
                     <div className="flex gap-2">
                       <Button
@@ -1080,7 +1080,7 @@ export default function PlantAdvisorClient() {
                       <Button
                         type="button"
                         size="sm"
-                        variant={!draft.hasPets ? 'default' : 'outline'}
+                        variant={draft.hasPets === false ? 'default' : 'outline'}
                         className="min-h-[40px] flex-1"
                         onClick={() => {
                           setDraft((current) => ({ ...current, hasPets: false }));
@@ -1088,6 +1088,18 @@ export default function PlantAdvisorClient() {
                         }}
                       >
                         No
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={draft.hasPets === null ? 'default' : 'outline'}
+                        className="min-h-[40px] flex-1"
+                        onClick={() => {
+                          setDraft((current) => ({ ...current, hasPets: null }));
+                          handleProfileEdited('hasPets', null);
+                        }}
+                      >
+                        Unsure
                       </Button>
                     </div>
                   </div>

@@ -289,7 +289,7 @@ export const RoomPlantRecommendationInputSchema = z.object({
   roomId: z.string().trim().min(1).max(160),
   lightLevel: z.nativeEnum(PlantLightLevel),
   maintenancePreference: z.nativeEnum(PlantMaintenanceLevel).nullable().optional().default(null),
-  hasPets: z.boolean().default(false),
+  hasPets: z.boolean().nullable(),
   goals: z.array(z.nativeEnum(PlantGoalType)).max(5).default([]),
   notes: optionalText(1000),
 }).strict();

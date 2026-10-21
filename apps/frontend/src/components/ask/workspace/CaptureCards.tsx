@@ -537,7 +537,8 @@ export function InlineCaptureCard({
   const missingRequired = activeFields.some((field) => {
     if (!field.required) return false;
     const value = values[field.key];
-    if (value === undefined || value === '' || (value === null && !request.allowNotSure)) return true;
+    if (value === undefined || value === '') return true;
+    if (value === null && !(field.inputSchema.type === 'BOOLEAN' && field.inputSchema.unknownLabel) && !request.allowNotSure) return true;
     if (field.inputSchema.type !== 'APPROXIMATE_DATE' || value === null) return false;
     if (typeof value !== 'object' || Array.isArray(value)) return true;
     const date = value as { precision?: string; value?: string; rangeEnd?: string };
@@ -548,7 +549,8 @@ export function InlineCaptureCard({
   const activeGroupMissingRequired = activeGroupFields.some((field) => {
     if (!field.required) return false;
     const value = values[field.key];
-    if (value === undefined || value === '' || (value === null && !request.allowNotSure)) return true;
+    if (value === undefined || value === '') return true;
+    if (value === null && !(field.inputSchema.type === 'BOOLEAN' && field.inputSchema.unknownLabel) && !request.allowNotSure) return true;
     if (field.inputSchema.type !== 'APPROXIMATE_DATE' || value === null) return false;
     if (typeof value !== 'object' || Array.isArray(value)) return true;
     const date = value as { precision?: string; value?: string; rangeEnd?: string };
@@ -662,11 +664,16 @@ export function InlineCaptureCard({
   }
 
   return (
-    <form ref={containerRef as unknown as Ref<HTMLFormElement>} onSubmit={save} className={cn('rounded-2xl border', compactContinuityPlan ? 'mx-auto w-full max-w-[820px] border-slate-200 bg-white p-4 shadow-sm sm:p-5' : compactEventAdd ? 'border-slate-200 bg-white p-4 shadow-sm sm:p-5' : compactProjectCreate ? 'p-3 sm:p-4' : 'p-4', !compactContinuityPlan && !compactEventAdd && policy.border)} aria-busy={saving || cancelling} aria-label={request.title} data-home-continuity-capture={compactContinuityPlan ? '' : undefined}>
+    <form ref={containerRef as unknown as Ref<HTMLFormElement>} onSubmit={save} className={cn('rounded-2xl border', compactContinuityPlan ? 'mx-auto w-full max-w-[820px] border-slate-200 bg-white p-4 shadow-sm sm:p-5' : compactPlantAdvisor ? 'mx-auto w-full max-w-[900px] border-slate-200 bg-white p-4 shadow-sm sm:p-5' : compactEventAdd ? 'border-slate-200 bg-white p-4 shadow-sm sm:p-5' : compactProjectCreate ? 'p-3 sm:p-4' : 'p-4', !compactContinuityPlan && !compactPlantAdvisor && !compactEventAdd && policy.border)} aria-busy={saving || cancelling} aria-label={request.title} data-home-continuity-capture={compactContinuityPlan ? '' : undefined}>
       {compactEventAdd || compactProjectCreate ? (
         <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
           <p className={compactEventAdd ? 'text-lg font-semibold tracking-tight text-slate-950' : 'text-sm font-semibold text-slate-950'}>{compactEventAdd ? 'Add a timeline event' : 'Project setup'}</p>
           <p className="text-xs leading-4 text-slate-600">{compactEventAdd ? 'Nothing is saved until you review and confirm.' : 'Add the essentials and one real milestone. You’ll review before anything is created.'}</p>
+        </div>
+      ) : compactPlantAdvisor ? (
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-4">
+          <div><p className="text-xs font-bold uppercase tracking-[0.12em] text-teal-700">Plant preferences</p><h3 className="mt-1 text-lg font-semibold tracking-tight text-slate-950">{request.title}</h3><p className="mt-1 text-sm text-slate-600">Choose the room conditions Cozy should use. You’ll review everything before recommendations are updated.</p></div>
+          <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800">Room-specific</span>
         </div>
       ) : compactContinuityPlan ? (
         <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-4">
@@ -720,8 +727,8 @@ export function InlineCaptureCard({
           <span>{request.confirmationText ?? 'I confirm this information can be saved to the home record.'}</span>
         </label>
       )}
-      <div className={cn('flex flex-wrap items-center gap-2', (compactContinuityPlan || compactEventAdd) && 'mt-4 justify-between border-t border-slate-100 pt-4', !compactContinuityPlan && !compactEventAdd && (compactProjectCreate ? 'mt-3' : 'mt-4'))}>
-        {(compactContinuityPlan || compactEventAdd) && <button type="button" disabled={saving || cancelling} onClick={() => void cancelContinuityWorkflow()} className="min-h-11 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-50">{cancelling ? 'Cancelling…' : 'Cancel'}</button>}
+      <div className={cn('flex flex-wrap items-center gap-2', (compactContinuityPlan || compactPlantAdvisor || compactEventAdd) && 'mt-4 justify-between border-t border-slate-100 pt-4', !compactContinuityPlan && !compactPlantAdvisor && !compactEventAdd && (compactProjectCreate ? 'mt-3' : 'mt-4'))}>
+        {(compactContinuityPlan || compactPlantAdvisor || compactEventAdd) && <button type="button" disabled={saving || cancelling} onClick={() => void cancelContinuityWorkflow()} className="min-h-11 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-50">{cancelling ? 'Cancelling…' : 'Cancel'}</button>}
         <div className="flex flex-wrap gap-2">
         {activeGroupIndex > 0 && <button type="button" disabled={saving} onClick={() => setActiveGroupIndex((index) => Math.max(0, index - 1))} className="min-h-11 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50">Previous</button>}
         {activeGroup && activeGroupIndex < formGroups.length - 1

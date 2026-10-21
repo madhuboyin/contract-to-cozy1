@@ -173,6 +173,15 @@ const GroupedListItemSchema = z.object({
   floorLevel: z.number().int().min(-5).max(200).nullable().optional(),
   countLabel: z.string().trim().min(1).max(60).nullable().optional(),
   badgeLabel: z.string().trim().min(1).max(60).nullable().optional(),
+  // Compact, producer-declared comparison facts for domain result lists. These
+  // avoid encoding labels and values into positional `meta` strings.
+  attributes: z.array(z.object({
+    label: z.string().trim().min(1).max(60),
+    value: z.string().trim().min(1).max(160),
+    tone: AskDisplayToneSchema.optional(),
+  })).max(8).optional(),
+  highlights: z.array(z.string().trim().min(1).max(240)).max(8).optional(),
+  warnings: z.array(z.string().trim().min(1).max(300)).max(8).optional(),
   // Orthogonal to the item's condition: Status Board uses this to expose records whose condition
   // cannot be fully assessed without an install or purchase date.
   needsInfo: z.boolean().optional(),
