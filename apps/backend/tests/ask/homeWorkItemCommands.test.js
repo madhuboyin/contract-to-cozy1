@@ -223,3 +223,16 @@ test('remove evidence: only withdrawable evidence is offered, the review names i
   w = install('VIEWER'); e = installEvidence();
   try { assert.equal((await invoke('ATTACH_EXISTING', launch())).reasonCode, 'ASK_PERMISSION_REQUIRED'); } finally { e.restore(); w.restore(); }
 });
+
+test('attach existing, confirm twice: a record already on the work writes nothing more, and the focused action list is refreshed after a change', async () => {
+  const w = install('CONTRIBUTOR'); const e = installEvidence();
+  try {
+    prisma.operationalWorkEvidence.findFirst = async () => ({ id: 'already' });
+    const params = { workItemCommand: { kind: 'ATTACH_EXISTING', entityId: 'w1' }, workItemChange: { evidenceType: 'DOCUMENT', evidenceEntityId: 'doc-1' }, workItemContextVersion: version('ATTACH_EXISTING', item()) };
+    const out = await confirmCapabilityInvoke(OP, ctx(params));
+    assert.equal(out.result.blocks[0].title, 'Already on this work');
+    assert.equal(e.calls.length, 0);
+    // The work-items list and the Home Actions feed (where the focused card shows the evidence) are both re-read after a change.
+    assert.deepEqual([...executeOperation.ASK_MUTATION_IMPACT_MAP.HOME_WORK_ITEM_COMMAND].sort(), ['HOME_ACTIONS', 'HOME_WORK_ITEMS']);
+  } finally { e.restore(); w.restore(); }
+});

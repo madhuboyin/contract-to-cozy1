@@ -13,7 +13,7 @@ import { AskContextLink } from '../blocks/context';
 // a time; a bounded choice is answered with one tap and moves on; an optional question can be skipped; any earlier answer can be
 // changed. When every question is answered or skipped the same single request is submitted, and the review that follows is the
 // existing confirmation. Nothing is written by this component.
-export function ConversationalCapture({ request, fields, values, saving, error, autoFocus = false, onChange, onSubmit }: {
+export function ConversationalCapture({ request, fields, values, saving, error, autoFocus = false, onChange, onSubmit, onCancel, cancelling = false }: {
   request: AskCaptureRequest;
   fields: StructuredCaptureField[];
   values: Record<string, unknown>;
@@ -23,6 +23,9 @@ export function ConversationalCapture({ request, fields, values, saving, error, 
   onChange: (key: string, value: unknown) => void;
   /** Submits the whole group with the final values (passed in because state has not settled yet). */
   onSubmit: (values: Record<string, unknown>) => void;
+  /** Offered by flows that can be abandoned before their review (work-item forms); nothing has been saved at this point. */
+  onCancel?: () => void;
+  cancelling?: boolean;
 }) {
   const active = fields.filter((field) => isFieldActive(field, values));
   const [skipped, setSkipped] = useState<Set<string>>(() => new Set());
@@ -93,6 +96,7 @@ export function ConversationalCapture({ request, fields, values, saving, error, 
       {!step && !saving && (!interacted || Boolean(error)) && <button type="button" onClick={() => { setInteracted(true); submittedRef.current = true; onSubmit(values); }} className="min-h-10 rounded-full bg-teal-700 px-4 text-sm font-medium text-white hover:bg-teal-800">Continue</button>}
       {error && <p className="text-sm text-red-700" role="alert">{error}</p>}
       {request.destinationLabel && <p className="text-xs text-slate-500">{request.destinationLabel}.</p>}
+      {onCancel && step && <button type="button" disabled={saving || cancelling} onClick={onCancel} className="min-h-9 rounded-lg px-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-50">{cancelling ? 'Cancelling…' : 'Cancel'}</button>}
       {request.fallbackHref && <AskContextLink href={request.fallbackHref} className="inline-flex text-sm font-medium text-teal-800 hover:underline">Open the full form instead</AskContextLink>}
     </section>
   );

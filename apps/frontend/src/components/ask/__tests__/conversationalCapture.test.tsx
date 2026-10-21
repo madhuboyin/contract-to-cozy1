@@ -18,6 +18,20 @@ function Harness({ fields = [task, cost], initial = {}, onSubmit = jest.fn(), er
 }
 
 describe('ConversationalCapture', () => {
+  it('offers Cancel only to flows that can be abandoned, only while a question is being asked, and never submits by cancelling', () => {
+    const onCancel = jest.fn();
+    const onSubmit = jest.fn();
+    const { rerender } = render(<ConversationalCapture request={request} fields={[task]} values={{}} saving={false} error={null} onChange={() => undefined} onSubmit={onSubmit} />);
+    expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull();
+    rerender(<ConversationalCapture request={request} fields={[task]} values={{}} saving={false} error={null} onChange={() => undefined} onSubmit={onSubmit} onCancel={onCancel} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(onCancel).toHaveBeenCalledTimes(1);
+    expect(onSubmit).not.toHaveBeenCalled();
+    // Once every question is answered the review owns Cancel, so this one goes away.
+    rerender(<ConversationalCapture request={request} fields={[task]} values={{ taskId: 't2' }} saving={false} error={null} onChange={() => undefined} onSubmit={onSubmit} onCancel={onCancel} />);
+    expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull();
+  });
+
   it('asks one question at a time, advances on a tapped choice, and submits once with both answers', () => {
     const onSubmit = jest.fn();
     render(<Harness onSubmit={onSubmit} />);

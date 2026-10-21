@@ -1,5 +1,6 @@
 import { CONTINUITY_BLOCKS } from './continuityFixtures';
 import { HOME_ACTIONS_FOCUSED, HOME_ACTIONS_LIST } from './homeActionsFixtures';
+import { WORK_EVIDENCE } from './workEvidenceFixtures';
 import { expect, type BrowserContext, type Page, type Request, type Route } from '@playwright/test';
 
 export const propertyId = 'ask-property-fixture';
@@ -1107,6 +1108,39 @@ function continuityExecution(variant: 'starter' | 'established', sessionId?: str
     property: { id: propertyId, label: 'Acceptance Home' }, operation: { id: 'HOME_DIGITAL_WILL', version: '1.0', family: 'RECORDS' }, contextVersion: 'continuity-v1',
     skill: null, skillHandoff: null, captureRequests: [], confirmation: null, clarification: null, childExecutions: [], originalResponse: null, viewState: null,
     correctionCapabilities: { intent: true, entity: true, homeRecord: false, retryResponse: false }, suggestions: [], blocks: CONTINUITY_BLOCKS[variant],
+    createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+  };
+}
+
+// Home Actions (FRD 1.398-1.400): the ranked list (All / Consider filter views) and the focused accepted-work view for a contributor, a viewer and regulated work.
+function homeActionsExecution(kind: 'list-all' | 'list-consider' | 'contributor' | 'viewer' | 'regulated', sessionId?: string) {
+  const blocks = kind === 'list-all' ? HOME_ACTIONS_LIST.all : kind === 'list-consider' ? HOME_ACTIONS_LIST.consider : HOME_ACTIONS_FOCUSED[kind];
+  return {
+    schemaVersion: '1.0', sessionId: sessionId ?? 'ask-acceptance-session', executionId: `execution-home-actions-${kind}`, question: 'What needs my attention around the home?', status: 'ANSWERED',
+    property: { id: propertyId, label: 'Acceptance Home' }, operation: { id: 'HOME_ACTIONS', version: '1.0', family: 'HOME_OPERATIONS' }, contextVersion: 'home-actions-v1',
+    skill: null, skillHandoff: null, captureRequests: [], confirmation: null, clarification: null, childExecutions: [], originalResponse: null, viewState: null,
+    correctionCapabilities: { intent: true, entity: true, homeRecord: false, retryResponse: false }, suggestions: [], blocks,
+    createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+  };
+}
+
+// Work-item evidence flows (FRD 1.402): each stage is the real handler's output (generated), wrapped as an execution. The declared operation and its canned
+// message select the flow, never the prompt wording; the fixture answers the form, the capture submit and the confirmation separately.
+type WorkEvidenceFlow = 'attach' | 'attachMany' | 'submit' | 'remove' | 'emptyAttach' | 'emptyRemove' | 'viewer';
+function workEvidenceFlowFor(message: string, scenario: 'default' | 'attachMany' | 'emptyAttach' | 'emptyRemove' | 'viewer'): WorkEvidenceFlow | null {
+  const kind = (Object.entries(WORK_EVIDENCE.messages) as Array<[string, string]>).find(([, value]) => value === message)?.[0];
+  if (!kind || !['ATTACH_EXISTING', 'SUBMIT_COMPLETION_EVIDENCE', 'REMOVE_EVIDENCE'].includes(kind)) return null;
+  if (scenario === 'attachMany') return kind === 'ATTACH_EXISTING' ? 'attachMany' : null;
+  if (scenario !== 'default') return scenario;
+  return kind === 'ATTACH_EXISTING' ? 'attach' : kind === 'SUBMIT_COMPLETION_EVIDENCE' ? 'submit' : 'remove';
+}
+function workEvidenceExecution(flow: WorkEvidenceFlow, stage: 'form' | 'review' | 'done', sessionId?: string) {
+  const data = (WORK_EVIDENCE[flow] as unknown as Record<string, { status: string; reasonCode: string; contextVersion: string | null; blocks: unknown[]; captureRequests: unknown[]; confirmation: unknown; suggestions: unknown[] }>)[stage];
+  return {
+    schemaVersion: '1.0', sessionId: sessionId ?? 'ask-acceptance-session', executionId: `execution-work-evidence-${flow}`, question: 'Work item evidence', status: data.status,
+    property: { id: propertyId, label: 'Acceptance Home' }, operation: { id: 'HOME_WORK_ITEM_COMMAND', version: '1.0', family: 'COMMAND' }, contextVersion: data.contextVersion ?? 'work-evidence-v1',
+    skill: null, skillHandoff: null, captureRequests: data.captureRequests, confirmation: data.confirmation, clarification: null, childExecutions: [], originalResponse: null, viewState: null,
+    correctionCapabilities: { intent: true, entity: true, homeRecord: false, retryResponse: false }, suggestions: data.suggestions, blocks: data.blocks,
     createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
   };
 }
@@ -2824,12 +2858,13 @@ export async function installAskContext(context: BrowserContext, options: { calm
   await context.addCookies([{ name: 'ctc.at', value: 'ask-acceptance-token', domain: 'localhost', path: '/', httpOnly: true, sameSite: 'Strict' }]);
 }
 
-export async function installAskApi(page: Page, options: { selectorState?: 'OPTIONS' | 'NONE_ELIGIBLE' | 'UNAVAILABLE'; slowAnswerMs?: number; conflictOnce?: boolean; permissionDenied?: boolean; maintenanceDetailAccessLost?: boolean; noDecision?: boolean; heatAttention?: boolean; duplicateRefrigerator?: boolean; recentSessions?: boolean; recentSessionsPages?: boolean; searchSessions?: boolean; allHomeSessions?: boolean; pendingWork?: boolean; askFailsOnce?: boolean; refinementFailsOnce?: boolean; warrantyViewer?: boolean; warrantyEmpty?: boolean; warrantyDetailAccessLost?: boolean; documentsEmpty?: boolean; claimsViewer?: boolean; claimsEmpty?: boolean; claimDetailAccessLost?: boolean; claimUnknownOutcomeOnce?: boolean; claimConfirmDenied?: boolean; unknownOutcomeOnce?: boolean; repeatedSuggestion?: boolean; inventoryDetailNotFound?: boolean; inventoryDetailAccessLost?: boolean; claimStaleAfterConfirm?: 'REFRESH_OK' | 'REFRESH_FAILS' } = {}) {
+export async function installAskApi(page: Page, options: { selectorState?: 'OPTIONS' | 'NONE_ELIGIBLE' | 'UNAVAILABLE'; slowAnswerMs?: number; conflictOnce?: boolean; permissionDenied?: boolean; maintenanceDetailAccessLost?: boolean; noDecision?: boolean; heatAttention?: boolean; duplicateRefrigerator?: boolean; recentSessions?: boolean; recentSessionsPages?: boolean; searchSessions?: boolean; allHomeSessions?: boolean; pendingWork?: boolean; askFailsOnce?: boolean; refinementFailsOnce?: boolean; warrantyViewer?: boolean; warrantyEmpty?: boolean; warrantyDetailAccessLost?: boolean; documentsEmpty?: boolean; claimsViewer?: boolean; claimsEmpty?: boolean; claimDetailAccessLost?: boolean; claimUnknownOutcomeOnce?: boolean; claimConfirmDenied?: boolean; unknownOutcomeOnce?: boolean; repeatedSuggestion?: boolean; inventoryDetailNotFound?: boolean; inventoryDetailAccessLost?: boolean; claimStaleAfterConfirm?: 'REFRESH_OK' | 'REFRESH_FAILS' ; workEvidenceScenario?: 'default' | 'attachMany' | 'emptyAttach' | 'emptyRemove' | 'viewer'; confirmDelayMs?: number} = {}) {
   activeSessionId = null;
   const captureBodies: Array<Record<string, unknown>> = [];
   const warrantyEditCaptureBodies: Array<Record<string, unknown>> = [];
   const eventEditCaptureBodies: Array<Record<string, unknown>> = [];
   const packetDownloads: string[] = [];
+  const cancelBodies: string[] = [];
   const executionQuestions: string[] = [];
   const executionBodies: Array<Record<string, unknown>> = [];
   const selectorReads: string[] = [];
@@ -3219,6 +3254,12 @@ export async function installAskApi(page: Page, options: { selectorState?: 'OPTI
       await fulfill(route, { success: true, data: claimsJourneyExecution({ ...claimsJourney!, sessionId: body.sessionId }, { viewer: options.claimsViewer, empty: options.claimsEmpty }) }, 201);
       return;
     }
+    const workEvidenceFlow = (body.launchContext as { operationId?: string } | undefined)?.operationId === 'HOME_WORK_ITEM_COMMAND'
+      ? workEvidenceFlowFor(String(body.message), options.workEvidenceScenario ?? 'default') : null;
+    if (workEvidenceFlow) {
+      await fulfill(route, { success: true, data: workEvidenceExecution(workEvidenceFlow, 'form', body.sessionId as string | undefined) }, 201);
+      return;
+    }
     if (/home actions fixture (all|consider|contributor|viewer|regulated)/i.test(body.message)) {
       const kind = (/home actions fixture (\w+)/i.exec(body.message)![1].toLowerCase());
       await fulfill(route, { success: true, data: homeActionsExecution(kind === 'all' ? 'list-all' : kind === 'consider' ? 'list-consider' : kind as 'contributor' | 'viewer' | 'regulated', body.sessionId as string | undefined) }, 201);
@@ -3237,19 +3278,7 @@ export async function installAskApi(page: Page, options: { selectorState?: 'OPTI
       await fulfill(route, { success: true, data: continuityExecution(/established/i.test(body.message) ? 'established' : 'starter', body.sessionId as string | undefined) }, 201);
       return;
     }
-    // Home Actions (FRD 1.398-1.400): the ranked list (All / Consider filter views) and the focused accepted-work view for a contributor, a viewer and regulated work.
-function homeActionsExecution(kind: 'list-all' | 'list-consider' | 'contributor' | 'viewer' | 'regulated', sessionId?: string) {
-  const blocks = kind === 'list-all' ? HOME_ACTIONS_LIST.all : kind === 'list-consider' ? HOME_ACTIONS_LIST.consider : HOME_ACTIONS_FOCUSED[kind];
-  return {
-    schemaVersion: '1.0', sessionId: sessionId ?? 'ask-acceptance-session', executionId: `execution-home-actions-${kind}`, question: 'What needs my attention around the home?', status: 'ANSWERED',
-    property: { id: propertyId, label: 'Acceptance Home' }, operation: { id: 'HOME_ACTIONS', version: '1.0', family: 'HOME_OPERATIONS' }, contextVersion: 'home-actions-v1',
-    skill: null, skillHandoff: null, captureRequests: [], confirmation: null, clarification: null, childExecutions: [], originalResponse: null, viewState: null,
-    correctionCapabilities: { intent: true, entity: true, homeRecord: false, retryResponse: false }, suggestions: [], blocks,
-    createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
-  };
-}
-
-// Warranties W-3: a warranty answer, one exact warranty, and declared-filter refinements (merged the way the handler merges them).
+    // Warranties W-3: a warranty answer, one exact warranty, and declared-filter refinements (merged the way the handler merges them).
     if (/warranty journey/i.test(body.message) || (warrantyJourney && /^(?:only show|now show all) (?:.*warrant|warrant)/i.test(body.message))) {
       if (/acme warranty journey/i.test(body.message)) {
         await fulfill(route, { success: true, data: warrantyJourneyExecution({ status: 'ALL', category: null, revision: 1, sessionId: body.sessionId }, { single: true, viewer: options.warrantyViewer }) }, 201);
@@ -3845,6 +3874,25 @@ function homeActionsExecution(kind: 'list-all' | 'list-consider' | 'contributor'
       await fulfill(route, { success: true, data: addExecution(addKind, 'DONE', correctionSessionId) });
     });
   }
+  for (const flow of ['attach', 'attachMany', 'submit', 'remove'] as const) {
+    await page.route(`${apiOrigin}/api/ask/executions/execution-work-evidence-${flow}/captures`, async (route) => {
+      assertAuthenticated(route.request());
+      captureBodies.push(route.request().postDataJSON() as Record<string, unknown>);
+      await fulfill(route, { success: true, data: workEvidenceExecution(flow, 'review') });
+    });
+    await page.route(`${apiOrigin}/api/ask/executions/execution-work-evidence-${flow}/confirm`, async (route) => {
+      assertAuthenticated(route.request());
+      correctionConfirmBodies.push(route.request().postDataJSON() as Record<string, unknown>);
+      if (options.confirmDelayMs) await new Promise((resolve) => setTimeout(resolve, options.confirmDelayMs));
+      await fulfill(route, { success: true, data: workEvidenceExecution(flow, 'done') });
+    });
+    await page.route(`${apiOrigin}/api/ask/executions/execution-work-evidence-${flow}/cancel`, async (route) => {
+      assertAuthenticated(route.request());
+      cancelBodies.push(`execution-work-evidence-${flow}`);
+      await fulfill(route, { success: true, data: { ...workEvidenceExecution(flow, 'form'), status: 'CANCELLED', captureRequests: [], confirmation: null,
+        blocks: [{ type: 'SUMMARY', id: 'work-evidence-cancelled', title: 'Cancelled', body: 'No action was performed.', tone: 'DEFAULT', actions: [] }] } });
+    });
+  }
   await page.route(`${apiOrigin}/api/ask/executions/execution-pending-maintenance/cancel`, (route) => {
     pendingDismissed = true;
     const cancelled = {
@@ -3855,7 +3903,7 @@ function homeActionsExecution(kind: 'list-all' | 'list-consider' | 'contributor'
     };
     return fulfill(route, { success: true, data: cancelled });
   });
-  return { selectorReads, captureBodies, warrantyEditCaptureBodies, eventEditCaptureBodies, packetDownloads, executionQuestions, executionBodies, correctionEditBodies, correctionConfirmBodies, warrantyAddCaptureBodies, addCaptureBodies, monitorPatchBodies, staleRefreshCalls: () => staleRefreshCalls, captureAttempts: () => captureAttempts };
+  return { cancelBodies, selectorReads, captureBodies, warrantyEditCaptureBodies, eventEditCaptureBodies, packetDownloads, executionQuestions, executionBodies, correctionEditBodies, correctionConfirmBodies, warrantyAddCaptureBodies, addCaptureBodies, monitorPatchBodies, staleRefreshCalls: () => staleRefreshCalls, captureAttempts: () => captureAttempts };
 }
 
 function assertAuthenticated(request: Request) {

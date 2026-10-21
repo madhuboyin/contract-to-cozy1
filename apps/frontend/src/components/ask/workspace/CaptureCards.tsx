@@ -507,6 +507,8 @@ export function InlineCaptureCard({
     : [{ key: 'value', label: 'Answer', required: true, inputSchema: schema, helpText: undefined, when: undefined }];
 
   const compactEventAdd = schema.type === 'GROUP' && request.captureKey === 'CAPTURE_EVENT_ADD';
+  // Work-item forms (snooze, due date, attach or remove evidence) can be abandoned before the review; nothing has been saved at this stage.
+  const workItemForm = request.captureKey.startsWith('WORK_ITEM_');
   const eventType = typeof values.type === 'string' ? values.type : null;
   const activeFields = fields.filter((field) => {
     if (!field.when) return true;
@@ -660,7 +662,8 @@ export function InlineCaptureCard({
   // FRD §11.12 IW-CONV-004: a plain workflow group is asked one question at a time, then submitted as the same single request.
   if (calm && request.presentation !== 'FORM' && canAskConversationally(request) && schema.type === 'GROUP') {
     return <ConversationalCapture request={request} fields={schema.fields} values={values} saving={saving} error={error} autoFocus={autoFocus}
-      onChange={(key, value) => setValues((current) => ({ ...current, [key]: value }))} onSubmit={(final) => void save(null, false, final)} />;
+      onChange={(key, value) => setValues((current) => ({ ...current, [key]: value }))} onSubmit={(final) => void save(null, false, final)}
+      onCancel={workItemForm ? () => void cancelContinuityWorkflow() : undefined} cancelling={cancelling} />;
   }
 
   return (
@@ -727,8 +730,8 @@ export function InlineCaptureCard({
           <span>{request.confirmationText ?? 'I confirm this information can be saved to the home record.'}</span>
         </label>
       )}
-      <div className={cn('flex flex-wrap items-center gap-2', (compactContinuityPlan || compactPlantAdvisor || compactEventAdd) && 'mt-4 justify-between border-t border-slate-100 pt-4', !compactContinuityPlan && !compactPlantAdvisor && !compactEventAdd && (compactProjectCreate ? 'mt-3' : 'mt-4'))}>
-        {(compactContinuityPlan || compactPlantAdvisor || compactEventAdd) && <button type="button" disabled={saving || cancelling} onClick={() => void cancelContinuityWorkflow()} className="min-h-11 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-50">{cancelling ? 'Cancelling…' : 'Cancel'}</button>}
+      <div className={cn('flex flex-wrap items-center gap-2', (compactContinuityPlan || compactPlantAdvisor || compactEventAdd || workItemForm) && 'mt-4 justify-between border-t border-slate-100 pt-4', !compactContinuityPlan && !compactPlantAdvisor && !compactEventAdd && !workItemForm && (compactProjectCreate ? 'mt-3' : 'mt-4'))}>
+        {(compactContinuityPlan || compactPlantAdvisor || compactEventAdd || workItemForm) && <button type="button" disabled={saving || cancelling} onClick={() => void cancelContinuityWorkflow()} className="min-h-11 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-50">{cancelling ? 'Cancelling…' : 'Cancel'}</button>}
         <div className="flex flex-wrap gap-2">
         {activeGroupIndex > 0 && <button type="button" disabled={saving} onClick={() => setActiveGroupIndex((index) => Math.max(0, index - 1))} className="min-h-11 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50">Previous</button>}
         {activeGroup && activeGroupIndex < formGroups.length - 1
