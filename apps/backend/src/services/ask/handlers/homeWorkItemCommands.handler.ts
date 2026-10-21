@@ -132,13 +132,13 @@ function formCapture(kind: WorkItemFormKind, contextVersion: string, item: ItemR
     : kind === 'SNOOZE'
     ? { title: `Snooze ${item.title}`, question: 'How long should reminders for this wait?', help: 'Snoozing only hides reminders. It does not change the state or the due date.',
         fields: [{ key: 'snooze', label: 'Snooze for', required: true, inputSchema: { type: 'SINGLE_SELECT' as const, options: SNOOZE_CHOICES.map((c) => ({ label: c.label, value: c.value })) } }], seed: {} }
-    : { title: `Change the due date of ${item.title}`, question: 'When is it now due?', help: 'This replaces the date it is due. Nothing is saved until you confirm.',
+    : { title: 'Change due date', question: item.title, help: item.dueAt ? `Current due date: ${humanDate(item.dueAt)}` : 'No due date is currently recorded.',
         fields: [{ key: 'dueAt', label: 'New due date', required: true, inputSchema: { type: 'APPROXIMATE_DATE' as const, allowedPrecisions: ['EXACT_DATE'], allowFuture: true } }],
         seed: item.dueAt ? { dueAt: item.dueAt.toISOString().slice(0, 10) } : {} };
   return {
     requirementId: `home-work-item-${kind.toLowerCase()}-inputs`, captureKey: WORK_ITEM_FORM_CAPTURE_KEYS[kind], classification: 'WORKFLOW_INPUT', state: 'UNKNOWN', title: spec.title, question: spec.question, helpText: spec.help,
     inputSchema: { type: 'GROUP', fields: spec.fields } as unknown as AskCaptureRequest['inputSchema'], currentAnswer: spec.seed, allowNotSure: false, sensitivity: 'STANDARD',
-    destinationLabel: 'Used to prepare this change; nothing is saved until you confirm', confirmationText: null, expectedContextVersion: contextVersion,
+    destinationLabel: kind === 'RESCHEDULE' ? 'You’ll review this change before saving' : 'Used to prepare this change; nothing is saved until you confirm', confirmationText: null, expectedContextVersion: contextVersion,
   };
 }
 

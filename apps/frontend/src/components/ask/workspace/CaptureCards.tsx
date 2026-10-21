@@ -509,6 +509,7 @@ export function InlineCaptureCard({
   const compactEventAdd = schema.type === 'GROUP' && request.captureKey === 'CAPTURE_EVENT_ADD';
   // Work-item forms (snooze, due date, attach or remove evidence) can be abandoned before the review; nothing has been saved at this stage.
   const workItemForm = request.captureKey.startsWith('WORK_ITEM_');
+  const compactWorkItemReschedule = schema.type === 'GROUP' && request.captureKey === 'WORK_ITEM_RESCHEDULE';
   const eventType = typeof values.type === 'string' ? values.type : null;
   const activeFields = fields.filter((field) => {
     if (!field.when) return true;
@@ -667,8 +668,15 @@ export function InlineCaptureCard({
   }
 
   return (
-    <form ref={containerRef as unknown as Ref<HTMLFormElement>} onSubmit={save} className={cn('rounded-2xl border', compactContinuityPlan ? 'mx-auto w-full max-w-[820px] border-slate-200 bg-white p-4 shadow-sm sm:p-5' : compactPlantAdvisor ? 'mx-auto w-full max-w-[900px] border-slate-200 bg-white p-4 shadow-sm sm:p-5' : compactEventAdd ? 'border-slate-200 bg-white p-4 shadow-sm sm:p-5' : compactProjectCreate ? 'p-3 sm:p-4' : 'p-4', !compactContinuityPlan && !compactPlantAdvisor && !compactEventAdd && policy.border)} aria-busy={saving || cancelling} aria-label={request.title} data-home-continuity-capture={compactContinuityPlan ? '' : undefined}>
-      {compactEventAdd || compactProjectCreate ? (
+    <form ref={containerRef as unknown as Ref<HTMLFormElement>} onSubmit={save} className={cn('rounded-2xl border', compactContinuityPlan ? 'mx-auto w-full max-w-[820px] border-slate-200 bg-white p-4 shadow-sm sm:p-5' : compactPlantAdvisor ? 'mx-auto w-full max-w-[900px] border-slate-200 bg-white p-4 shadow-sm sm:p-5' : compactWorkItemReschedule ? 'mx-auto w-full max-w-[680px] border-sky-200 bg-sky-50/80 p-4 sm:p-5' : compactEventAdd ? 'border-slate-200 bg-white p-4 shadow-sm sm:p-5' : compactProjectCreate ? 'p-3 sm:p-4' : 'p-4', !compactContinuityPlan && !compactPlantAdvisor && !compactWorkItemReschedule && !compactEventAdd && policy.border)} aria-busy={saving || cancelling} aria-label={request.title} data-home-continuity-capture={compactContinuityPlan ? '' : undefined} data-work-item-reschedule={compactWorkItemReschedule ? '' : undefined}>
+      {compactWorkItemReschedule ? (
+        <div>
+          <h3 className="text-lg font-semibold tracking-tight text-slate-950">{request.title}</h3>
+          <p className="mt-1 text-sm font-medium text-slate-700">{request.question}</p>
+          {request.helpText && <p className="mt-1 text-xs text-slate-500">{request.helpText}</p>}
+          {request.destinationLabel && <p className="mt-2 text-xs font-medium text-sky-900">{request.destinationLabel}.</p>}
+        </div>
+      ) : compactEventAdd || compactProjectCreate ? (
         <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
           <p className={compactEventAdd ? 'text-lg font-semibold tracking-tight text-slate-950' : 'text-sm font-semibold text-slate-950'}>{compactEventAdd ? 'Add a timeline event' : 'Project setup'}</p>
           <p className="text-xs leading-4 text-slate-600">{compactEventAdd ? 'Nothing is saved until you review and confirm.' : 'Add the essentials and one real milestone. You’ll review before anything is created.'}</p>
@@ -693,7 +701,7 @@ export function InlineCaptureCard({
           {request.destinationLabel && <p className="mt-2 text-xs font-medium text-sky-900">{request.classification === 'WORKFLOW_INPUT' ? `${request.destinationLabel}.` : `${request.destinationLabel} after you continue.`}</p>}
         </>
       )}
-      <div className={compactEventAdd || compactProjectCreate ? 'mt-3 grid gap-x-3 gap-y-2.5 md:grid-cols-6' : compactInventoryCompletion ? 'mt-4 grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3' : compactWorkflow ? 'mt-4 grid gap-3 md:grid-cols-2' : 'mt-4 space-y-4'} data-compact-capture={compactContinuityPlan ? 'home-continuity-plan' : compactMaintenanceTask ? 'maintenance-task' : compactInventoryCreate ? 'inventory-item-create' : compactInventoryCompletion ? 'inventory-item-completion' : compactMaterialSpec ? 'material-spec' : compactPlantAdvisor ? 'plant-advisor' : compactOwnershipScenario ? 'ownership-cost-scenario' : compactEventAdd ? 'timeline-event' : compactProjectCreate ? 'project-create' : compactProjectCommand ? 'project-command' : undefined}>
+      <div className={compactEventAdd || compactProjectCreate ? 'mt-3 grid gap-x-3 gap-y-2.5 md:grid-cols-6' : compactInventoryCompletion ? 'mt-4 grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3' : compactWorkItemReschedule ? 'mt-4 max-w-md' : compactWorkflow ? 'mt-4 grid gap-3 md:grid-cols-2' : 'mt-4 space-y-4'} data-compact-capture={compactContinuityPlan ? 'home-continuity-plan' : compactMaintenanceTask ? 'maintenance-task' : compactInventoryCreate ? 'inventory-item-create' : compactInventoryCompletion ? 'inventory-item-completion' : compactMaterialSpec ? 'material-spec' : compactPlantAdvisor ? 'plant-advisor' : compactOwnershipScenario ? 'ownership-cost-scenario' : compactEventAdd ? 'timeline-event' : compactProjectCreate ? 'project-create' : compactProjectCommand ? 'project-command' : compactWorkItemReschedule ? 'work-item-reschedule' : undefined}>
         {activeGroup && <div className={compactProjectCreate || compactEventAdd ? 'md:col-span-6' : 'md:col-span-2'}>
           <div className="mb-3 flex items-start justify-between gap-3">
             <div><p className="text-sm font-semibold text-slate-950">{activeGroup.title}</p>{activeGroup.description && <p className="mt-0.5 text-xs text-slate-500">{activeGroup.description}</p>}</div>
@@ -736,7 +744,7 @@ export function InlineCaptureCard({
         {activeGroupIndex > 0 && <button type="button" disabled={saving} onClick={() => setActiveGroupIndex((index) => Math.max(0, index - 1))} className="min-h-11 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50">Previous</button>}
         {activeGroup && activeGroupIndex < formGroups.length - 1
           ? <button type="button" disabled={saving || activeGroupMissingRequired} onClick={() => setActiveGroupIndex((index) => Math.min(formGroups.length - 1, index + 1))} className="min-h-11 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Next: {formGroups[activeGroupIndex + 1].title}</button>
-          : <button type="submit" disabled={saving || missingRequired || ((request.sensitivity === 'FINANCIAL' || request.sensitivity === 'SECURITY') && !sensitiveDataConfirmed)} className="min-h-11 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50">{saving ? 'Saving…' : request.classification === 'WORKFLOW_INPUT' ? 'Continue to review' : 'Save and update answer'}</button>}
+          : <button type="submit" disabled={saving || missingRequired || ((request.sensitivity === 'FINANCIAL' || request.sensitivity === 'SECURITY') && !sensitiveDataConfirmed)} className="min-h-11 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50">{saving ? 'Saving…' : compactWorkItemReschedule ? 'Review change' : request.classification === 'WORKFLOW_INPUT' ? 'Continue to review' : 'Save and update answer'}</button>}
         {request.skippable && <button type="button" disabled={saving} onClick={(event) => void save(event as unknown as FormEvent, true)} className="min-h-11 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">Skip for now</button>}
         {request.classification === 'ENHANCEMENT_ACCURACY' && <button type="button" disabled={saving} onClick={() => { window.localStorage.removeItem(captureDraftStorageKey(executionId, request.requirementId)); setDismissed(true); void api.recordAskCaptureEvent(executionId, { requirementId: request.requirementId, captureKey: request.captureKey, event: 'DISMISSED' }).catch(() => undefined); }} className="min-h-11 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-white">Use general estimate</button>}
         {request.fallbackHref && <AskContextLink href={request.fallbackHref} onClick={() => void api.recordAskCaptureEvent(executionId, { requirementId: request.requirementId, captureKey: request.captureKey, event: 'FULL_FORM_OPENED' }).catch(() => undefined)} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700">Open full form <ExternalLink className="h-4 w-4" /></AskContextLink>}

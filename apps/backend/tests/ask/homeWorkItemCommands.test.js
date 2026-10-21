@@ -118,6 +118,12 @@ test('snooze and reschedule: form, then a review with before and after; nothing 
     const form = await invoke('SNOOZE', launch());
     assert.equal(form.status, 'NEEDS_CONTEXT');
     assert.equal(form.contextVersion, version('SNOOZE', item()));
+    const rescheduleForm = await invoke('RESCHEDULE', launch());
+    assert.equal(rescheduleForm.status, 'NEEDS_CONTEXT');
+    assert.equal(rescheduleForm.captureRequests[0].title, 'Change due date');
+    assert.equal(rescheduleForm.captureRequests[0].question, 'Flush water heater');
+    assert.equal(rescheduleForm.captureRequests[0].helpText, 'Current due date: Oct 1, 2026');
+    assert.equal(rescheduleForm.captureRequests[0].destinationLabel, 'You’ll review this change before saving');
     const { workItemCommandResult } = require('../../src/services/ask/handlers/homeWorkItemCommands.handler.ts');
     const snooze = await workItemCommandResult('u1', 'prop-1', { kind: 'SNOOZE', entityId: 'w1', sourceExecutionId: null }, { snooze: 'ONE_WEEK' });
     assert.equal(snooze.status, 'NEEDS_CONFIRMATION');

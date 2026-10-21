@@ -201,4 +201,25 @@ describe('grouped workflow capture', () => {
     expect(screen.getByLabelText('Cash to close ($)')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Continue to review' })).toBeInTheDocument();
   });
+
+  it('renders the work-item due-date change as one compact, non-repeating review form', () => {
+    const dueDateRequest = {
+      requirementId: 'home-work-item-reschedule-inputs', captureKey: 'WORK_ITEM_RESCHEDULE', classification: 'WORKFLOW_INPUT', state: 'UNKNOWN', presentation: 'FORM',
+      title: 'Change due date', question: 'Consider replacing your Washer Dryer.', helpText: 'Current due date: Oct 31, 2026',
+      destinationLabel: 'You’ll review this change before saving', allowNotSure: false, sensitivity: 'STANDARD', expectedContextVersion: 'v1', confirmationText: null,
+      inputSchema: { type: 'GROUP', fields: [{ key: 'dueAt', label: 'New due date', required: true, inputSchema: { type: 'APPROXIMATE_DATE', allowedPrecisions: ['EXACT_DATE'], allowFuture: true } }] },
+      currentAnswer: { dueAt: '2026-10-31' },
+    } as unknown as AskCaptureRequest;
+    const view = render(<InlineCaptureCard executionId="reschedule-execution" request={dueDateRequest} onCompleted={jest.fn()} />);
+
+    const form = view.container.querySelector('[data-work-item-reschedule]');
+    expect(form).toHaveClass('max-w-[680px]', 'p-4');
+    expect(screen.getAllByText('Change due date')).toHaveLength(1);
+    expect(screen.getByText('Consider replacing your Washer Dryer.')).toBeInTheDocument();
+    expect(screen.getByText('Current due date: Oct 31, 2026')).toBeInTheDocument();
+    expect(screen.getByText('You’ll review this change before saving.')).toBeInTheDocument();
+    expect(screen.queryByText('Complete this workflow')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Used to prepare this change/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Review change' })).toBeInTheDocument();
+  });
 });
