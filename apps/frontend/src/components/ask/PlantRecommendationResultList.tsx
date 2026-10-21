@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { AlertTriangle, ChevronDown, ChevronUp, Leaf, PawPrint, Sparkles } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronUp, Droplets, Leaf, MapPin, PawPrint, Sparkles } from 'lucide-react';
 import type { AskItemActionInteractionType, AskPresentationBlock } from '@/features/ask/types';
 import { cn } from '@/lib/utils';
 import { ActionLink } from './blocks/context';
@@ -26,6 +26,7 @@ function RecommendationCard({ item, disabled, onAction }: { item: Item; disabled
   const run = (action: NonNullable<Item['actions']>[number]) => onAction?.(action.entityType ?? item.entityType, action.entityId ?? item.id, action.message, action.operationId, action.interactionType);
   const status = item.status === 'SAVED' ? 'Saved for later' : item.status === 'DISMISSED' ? 'Not interested' : null;
   const detailsId = `plant-recommendation-${item.id}-details`;
+  const hasDetails = Boolean(item.detail || item.guidance?.length || (item.warnings?.length ?? 0) > 1);
 
   return <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5" data-plant-recommendation={item.id}>
     <div className="flex items-start gap-3">
@@ -56,11 +57,25 @@ function RecommendationCard({ item, disabled, onAction }: { item: Item; disabled
       {expanded && item.warnings!.slice(1).map((warning) => <p key={warning} className="ml-6 mt-1 leading-5">{warning}</p>)}
     </div>}
 
-    {expanded && item.detail && <div id={detailsId} className="mt-4 whitespace-pre-line border-t border-slate-100 pt-4 text-sm leading-6 text-slate-700">{item.detail}</div>}
+    {expanded && <div id={detailsId} className="mt-4 border-t border-slate-100 pt-4">
+      {(item.guidance?.length ?? 0) > 0 && <section aria-label="Care and placement">
+        <h6 className="text-sm font-semibold text-slate-900">Care &amp; placement</h6>
+        <div className="mt-2 grid gap-2 sm:grid-cols-2">
+          {item.guidance!.map((guidance) => {
+            const Icon = guidance.kind === 'PLACEMENT' ? MapPin : guidance.kind === 'CARE' ? Droplets : Leaf;
+            return <div key={`${guidance.label}-${guidance.value}`} className="flex gap-2.5 rounded-xl border border-emerald-100 bg-emerald-50/50 p-3">
+              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-white text-teal-700 shadow-sm" aria-hidden="true"><Icon className="h-4 w-4" /></span>
+              <div className="min-w-0"><p className="text-xs font-bold uppercase tracking-wide text-teal-800">{guidance.label}</p><p className="mt-1 text-sm leading-5 text-slate-700">{guidance.value}</p></div>
+            </div>;
+          })}
+        </div>
+      </section>}
+      {item.detail && <div className={cn('whitespace-pre-line text-sm leading-6 text-slate-700', item.guidance?.length ? 'mt-3' : '')}>{item.detail}</div>}
+    </div>}
     <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-4">
       {track && <button type="button" disabled={disabled || !onAction} onClick={() => run(track)} className="min-h-10 rounded-xl bg-teal-700 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50">{track.label}</button>}
       {save && <button type="button" disabled={disabled || !onAction} onClick={() => run(save)} className="min-h-10 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-50">{save.label}</button>}
-      {(item.detail || (item.warnings?.length ?? 0) > 1) && <button type="button" aria-expanded={expanded} aria-controls={detailsId} onClick={() => setExpanded((value) => !value)} className="inline-flex min-h-10 items-center gap-1 rounded-xl px-3 py-2 text-sm font-semibold text-teal-800 hover:bg-teal-50">{expanded ? 'Hide details' : 'View details'}{expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}</button>}
+      {hasDetails && <button type="button" aria-expanded={expanded} aria-controls={detailsId} onClick={() => setExpanded((value) => !value)} className="inline-flex min-h-10 items-center gap-1 rounded-xl px-3 py-2 text-sm font-semibold text-teal-800 hover:bg-teal-50">{expanded ? 'Hide details' : 'View details'}{expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}</button>}
       {dismiss && <details className="relative ml-auto"><summary className="flex min-h-10 cursor-pointer list-none items-center rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50">More<span className="sr-only"> actions for {item.title}</span></summary><div className="absolute right-0 z-10 mt-1 min-w-40 rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg"><button type="button" disabled={disabled || !onAction} onClick={() => run(dismiss)} className="block min-h-9 w-full rounded-lg px-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">{dismiss.label}</button></div></details>}
     </div>
   </article>;

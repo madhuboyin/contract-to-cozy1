@@ -35,8 +35,8 @@ test('the input requires room and light while retaining the desktop ranking pref
   assert.deepEqual(parsed.goals, ['PET_SAFE', 'LOW_MAINTENANCE']);
 });
 
-test('recommendation rows preserve fit, care, placement, warnings and governed actions', () => {
-  const result = recommendationResult({ roomId: 'room-1', name: 'Dining' }, [recommendation({ warningFlags: ['Keep away from cold drafts'] })], true);
+test('recommendation rows preserve fit, structured care and placement, warnings and governed actions', () => {
+  const result = recommendationResult({ roomId: 'room-1', name: 'Dining' }, [recommendation({ warningFlags: ['Keep away from cold drafts', 'Works, but not ideal under current room inputs.'] })], true);
   const row = result.blocks.find((block) => block.id === 'room-plant-recommendations').sections[0].items[0];
   assert.equal(row.title, '1. Parlor Palm');
   assert.deepEqual(row.meta, ['92% fit', 'High confidence']);
@@ -48,12 +48,25 @@ test('recommendation rows preserve fit, care, placement, warnings and governed a
   ]);
   assert.deepEqual(row.highlights, ['Bright indirect light', 'Pet safe']);
   assert.deepEqual(row.warnings, ['Keep away from cold drafts']);
-  assert.match(row.detail, /Care: Let the top soil dry slightly/);
-  assert.match(row.detail, /Placement: Keep a few feet from the window/);
+  assert.deepEqual(row.guidance, [
+    { label: 'Care', value: 'Let the top soil dry slightly.', kind: 'CARE' },
+    { label: 'Best placement', value: 'Keep a few feet from the window.', kind: 'PLACEMENT' },
+  ]);
+  assert.equal(row.detail, undefined);
   assert.deepEqual(row.actions.map((action) => action.label), ['Track this plant', 'Save for later', 'Not interested']);
   assert.equal(row.actions.every((action) => action.operationId === 'ROOM_PLANT_RECOMMENDATIONS'), true);
   const viewer = recommendationResult({ roomId: 'room-1', name: 'Dining' }, [recommendation()], false);
   assert.equal(viewer.blocks.find((block) => block.id === 'room-plant-recommendations').sections[0].items[0].actions, undefined);
+});
+
+test('keeps the generic near-fit warning only when no specific warning is available', () => {
+  const result = recommendationResult(
+    { roomId: 'room-1', name: 'Dining' },
+    [recommendation({ warningFlags: ['Works, but not ideal under current room inputs.'] })],
+    true,
+  );
+  const row = result.blocks.find((block) => block.id === 'room-plant-recommendations').sections[0].items[0];
+  assert.deepEqual(row.warnings, ['Works, but not ideal under current room inputs.']);
 });
 
 test('resolveRecommendationActionId resolves declared item action messages when launchContext.actionId is omitted', () => {

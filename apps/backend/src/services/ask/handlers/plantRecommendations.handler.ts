@@ -74,6 +74,10 @@ function petSafety(rec: PlantRecommendation) {
 function recommendationItem(rec: PlantRecommendation, canChange: boolean) {
   const fit = fitPresentation(rec.confidence);
   const safety = petSafety(rec);
+  const genericNearFitWarning = 'Works, but not ideal under current room inputs.';
+  const warnings = rec.warningFlags
+    .filter((warning) => warning !== genericNearFitWarning || rec.warningFlags.length === 1)
+    .slice(0, 4);
   return {
     id: rec.id, entityType: 'PLANT_RECOMMENDATION', title: `${rec.rank}. ${rec.plantName}`,
     description: rec.shortDescription,
@@ -88,8 +92,11 @@ function recommendationItem(rec: PlantRecommendation, canChange: boolean) {
       { label: 'Pet safety', value: safety.value, tone: safety.tone },
     ],
     highlights: rec.reason.fitSignals.slice(0, 3),
-    warnings: rec.warningFlags.slice(0, 4),
-    detail: [rec.reasonSummary, rec.careSummary ? `Care: ${rec.careSummary}` : null, rec.placementTip ? `Placement: ${rec.placementTip}` : null].filter(Boolean).join('\n'),
+    warnings,
+    guidance: [
+      ...(rec.careSummary ? [{ label: 'Care', value: rec.careSummary, kind: 'CARE' as const }] : []),
+      ...(rec.placementTip ? [{ label: 'Best placement', value: rec.placementTip, kind: 'PLACEMENT' as const }] : []),
+    ],
     actions: canChange ? recommendationActions(rec.status) : undefined,
   };
 }

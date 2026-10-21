@@ -182,6 +182,14 @@ const GroupedListItemSchema = z.object({
   })).max(8).optional(),
   highlights: z.array(z.string().trim().min(1).max(240)).max(8).optional(),
   warnings: z.array(z.string().trim().min(1).max(300)).max(8).optional(),
+  // Structured, progressively disclosed guidance. Domain renderers can give
+  // care, placement or similar advice a scannable label without parsing a
+  // newline-delimited detail string.
+  guidance: z.array(z.object({
+    label: z.string().trim().min(1).max(60),
+    value: z.string().trim().min(1).max(500),
+    kind: z.enum(['CARE', 'PLACEMENT', 'DEFAULT']).optional(),
+  })).max(6).optional(),
   // Orthogonal to the item's condition: Status Board uses this to expose records whose condition
   // cannot be fully assessed without an install or purchase date.
   needsInfo: z.boolean().optional(),

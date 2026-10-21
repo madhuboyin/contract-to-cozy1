@@ -14,7 +14,8 @@ const item = (id: string, title: string, badgeLabel: string, tone: 'POSITIVE' | 
   id, title, entityType: 'PLANT_RECOMMENDATION', description: 'A compact indoor plant.', condition: 'Planta example', status: 'RECOMMENDED', badgeLabel, tone,
   meta: [id === 'best' ? '88% fit' : '22% fit', id === 'best' ? 'High confidence' : 'Low confidence'],
   attributes: [{ label: 'Light', value: 'Medium' }, { label: 'Care', value: 'Low' }, { label: 'Pet safety', value: id === 'best' ? 'Pet-safe' : 'Not pet-safe', tone: id === 'best' ? 'POSITIVE' : 'CRITICAL' }],
-  highlights: ['Light requirement aligns with this room.'], warnings: id === 'best' ? [] : ['Not a strong fit for this room.'], detail: 'Care: Water when dry.', actions,
+  highlights: ['Light requirement aligns with this room.'], warnings: id === 'best' ? [] : ['Not a strong fit for this room.'],
+  guidance: [{ label: 'Care', value: 'Water when dry.', kind: 'CARE' }, { label: 'Best placement', value: 'Near a bright window.', kind: 'PLACEMENT' }], actions,
 });
 const block: Block = {
   type: 'GROUPED_LIST', id: 'room-plant-recommendations', title: 'Recommendations for Kitchen', description: 'Kitchen · Medium light · Low care · Pets have access', filters: [],
@@ -46,8 +47,10 @@ test('uses distinct action wording and dispatches the declared command', () => {
   expect(screen.getByRole('button', { name: 'Change preferences' })).toBeVisible();
 });
 
-test('reveals care detail without expanding every recommendation', () => {
+test('reveals scannable care and placement guidance without expanding every recommendation', () => {
   render(<PlantRecommendationResultList block={block} onAction={jest.fn()} />);
   fireEvent.click(screen.getByRole('button', { name: /View details/ }));
-  expect(screen.getByText('Care: Water when dry.')).toBeVisible();
+  expect(screen.getByRole('heading', { name: 'Care & placement' })).toBeVisible();
+  expect(screen.getByText('Water when dry.')).toBeVisible();
+  expect(screen.getByText('Near a bright window.')).toBeVisible();
 });

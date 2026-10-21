@@ -83,6 +83,7 @@ export interface AskGroupedListItem {
   attributes?: Array<{ label: string; value: string; tone?: AskDisplayTone }>;
   highlights?: string[];
   warnings?: string[];
+  guidance?: Array<{ label: string; value: string; kind?: 'CARE' | 'PLACEMENT' | 'DEFAULT' }>;
   needsInfo?: boolean;
   detail?: string | null;
 }
