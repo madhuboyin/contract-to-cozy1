@@ -1,9 +1,10 @@
 'use client';
 
 import { type ReactNode, useState } from 'react';
-import { AlertTriangle, ChevronDown, ClipboardList, Info, MoreHorizontal, ShieldCheck, StickyNote, Users, Wrench, Zap } from 'lucide-react';
+import { AlertTriangle, Download, ChevronDown, ClipboardList, Info, MoreHorizontal, ShieldCheck, StickyNote, Users, Wrench, Zap } from 'lucide-react';
 import type { AskPresentationBlock } from '@/features/ask/types';
 import { cn } from '@/lib/utils';
+import { api } from '@/lib/api/client';
 import { ActionLink } from './blocks/context';
 import type { AskBlockRenderer } from './blocks/types';
 
@@ -48,7 +49,32 @@ function ActionMenu({ item, disabled, onAction, includePrimary = true }: {
   </div>;
 }
 
-export function HomeContinuityPlanResultList({ block, disabled, onAction }: { block: Block; disabled: boolean; onAction: OnAction }) {
+// The emergency packet is a file, and a conversation cannot carry a file: like the home-record exports it is fetched with the person's own
+// session when they choose it, and nothing about it is stored in the answer.
+function PacketDownload({ propertyId, disabled }: { propertyId?: string; disabled: boolean }) {
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  if (!propertyId) return null;
+  const download = async () => {
+    setBusy(true); setProblem(null);
+    try {
+      const blob = await api.downloadEmergencyPacketPdf(propertyId);
+      const url = window.URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url; anchor.download = 'emergency-packet.pdf';
+      document.body.appendChild(anchor); anchor.click(); anchor.remove();
+      window.URL.revokeObjectURL(url);
+    } catch { setProblem('The emergency packet could not be downloaded. Try again in a moment.'); } finally { setBusy(false); }
+  };
+  return <>
+    <button type="button" disabled={disabled || busy} onClick={() => void download()} data-packet-download="" className="inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-50">
+      <Download className="h-4 w-4" aria-hidden="true" />{busy ? 'Preparing…' : 'Download emergency packet'}
+    </button>
+    {problem && <p className="w-full text-xs text-rose-700" role="alert">{problem}</p>}
+  </>;
+}
+
+export function HomeContinuityPlanResultList({ block, propertyId, disabled, onAction }: { block: Block; propertyId?: string; disabled: boolean; onAction: OnAction }) {
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
 
   const managerOf = (section: Section) => section.items.find((item) => item.entityType === 'HOME_DIGITAL_WILL_SECTION');
@@ -102,7 +128,7 @@ export function HomeContinuityPlanResultList({ block, disabled, onAction }: { bl
     </div>;
   };
 
-  const toolbar: ReactNode = <div className="flex flex-wrap gap-2" data-continuity-toolbar="">{block.actions.map((action) => <ActionLink key={action.id} action={action} />)}</div>;
+  const toolbar: ReactNode = <div className="flex flex-wrap gap-2" data-continuity-toolbar="">{block.actions.map((action) => <ActionLink key={action.id} action={action} />)}<PacketDownload propertyId={propertyId} disabled={disabled} /></div>;
   const header = (title: string, hint: string) => <div className="flex flex-col gap-3 border-b border-slate-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
     <div><h3 className="font-semibold text-slate-950">{title}</h3><p className="mt-0.5 text-xs leading-5 text-slate-500">{hint}</p></div>
     {toolbar}

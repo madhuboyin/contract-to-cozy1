@@ -431,7 +431,7 @@ export class HomeDigitalWillService {
     const created = await prisma.homeDigitalWill.create({
       data: {
         propertyId,
-        title: body.title ?? 'Home Digital Will',
+        title: body.title ?? 'Home Continuity Plan',
       },
     });
 

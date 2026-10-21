@@ -705,7 +705,7 @@ test('a contributor attaches evidence to a timeline event inline: the file uploa
   await expect(page.getByRole('definition').filter({ hasText: 'invoice.pdf' })).toBeVisible();
   await expect(page.getByRole('definition').filter({ hasText: 'Roof replacement' })).toBeVisible();
   // No editable fields at all -- nothing left to edit once the file is already uploaded, only review and consent.
-  await expect(page.getByRole('button', { name: 'Edit' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Edit', exact: true })).toHaveCount(0);
 
   await page.getByLabel(/I confirm this document is evidence for this home record entry/).check();
   await page.getByRole('button', { name: 'Attach document' }).click();
@@ -1917,13 +1917,12 @@ test('the home continuity plan answers with a handoff ring over three requiremen
   await page.getByPlaceholder(/^Ask anything about /).fill('Show my home continuity plan');
   await page.getByRole('button', { name: 'Send question' }).click();
 
-  const ring = page.locator('#ask-execution-execution-digital-will-ring [data-display-pattern="progress"]');
-  await expect(ring.getByRole('img', { name: '67% ready. 2 of 3 handoff requirements met' })).toBeVisible();
-  await expect(ring.locator('dl > div')).toHaveText(['Met2', 'Missing1', 'Entries4']);
-  await expect(ring.locator('[data-ask-progress-step]')).toHaveCount(1);
-  await expect(ring.locator('[data-ask-progress-step]').first()).toContainText('Add an email or phone number for the primary contact.');
-  await expect(ring.locator('[data-ask-progress-step]').first().getByRole('link', { name: /^Open / })).toHaveAttribute('href', /home-digital-will/);
-  await expect(ring.getByRole('button')).toHaveCount(0);
+  const ring = page.locator('#ask-execution-execution-digital-will-ring [data-display-pattern="continuity-readiness"]');
+  await expect(ring.getByRole('progressbar', { name: 'Ready to hand off' })).toHaveAttribute('aria-valuenow', '67');
+  await expect(ring).toContainText('2 of 3 handoff requirements met');
+  await expect(ring.locator('dl > div')).toHaveText(['2Met', '1Missing', '4Entries']);
+  await expect(ring.locator('[data-continuity-checklist] li')).toHaveCount(1);
+  await expect(ring.locator('[data-continuity-checklist] li').first()).toContainText('Add an email or phone number for the primary contact.');
   await expect.poll(() => api.executionBodies.length).toBe(1);
 });
 
@@ -1934,9 +1933,9 @@ test('on a phone, the continuity plan ring, tiles and steps fit the screen (FRD 
   await page.getByPlaceholder(/^Ask anything about /).fill('Show my home continuity plan');
   await page.getByRole('button', { name: 'Send question' }).click();
 
-  const ring = page.locator('#ask-execution-execution-digital-will-ring [data-display-pattern="progress"]');
-  await expect(ring.getByRole('img', { name: /^67% ready/ })).toBeVisible();
-  for (const element of [...await ring.locator('dl > div').all(), ...await ring.locator('[data-ask-progress-step]').all()]) {
+  const ring = page.locator('#ask-execution-execution-digital-will-ring [data-display-pattern="continuity-readiness"]');
+  await expect(ring.getByRole('progressbar', { name: 'Ready to hand off' })).toHaveAttribute('aria-valuenow', '67');
+  for (const element of [...await ring.locator('dl > div').all(), ...await ring.locator('[data-continuity-checklist] li').all()]) {
     const box = await element.boundingBox();
     expect(box && box.x >= 0 && box.x + box.width <= 390).toBe(true);
   }

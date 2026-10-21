@@ -150,3 +150,27 @@ test('a readiness step that depends on another shows a waiting note and no actio
   expect(screen.queryByText('Handoff requirement not met yet')).not.toBeInTheDocument();
   expect(screen.getAllByRole('button')).toHaveLength(1);
 });
+
+test('the plan toolbar downloads the emergency packet with the person\'s own session, and says so when it fails', async () => {
+  const blob = new Blob(['pdf']);
+  jest.spyOn(api, 'downloadEmergencyPacketPdf').mockResolvedValueOnce(blob);
+  const createUrl = jest.fn(() => 'blob:packet');
+  const revoke = jest.fn();
+  Object.assign(window.URL, { createObjectURL: createUrl, revokeObjectURL: revoke });
+  const click = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+  render(<HomeContinuityPlanResultList block={planBlock({ emergency: 1 })} propertyId="home" disabled={false} onAction={jest.fn()} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Download emergency packet' }));
+  await waitFor(() => expect(click).toHaveBeenCalled());
+  expect(api.downloadEmergencyPacketPdf).toHaveBeenCalledWith('home');
+  expect(createUrl).toHaveBeenCalledWith(blob);
+  expect(revoke).toHaveBeenCalledWith('blob:packet');
+  jest.spyOn(api, 'downloadEmergencyPacketPdf').mockRejectedValueOnce(new Error('nope'));
+  fireEvent.click(screen.getByRole('button', { name: 'Download emergency packet' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('The emergency packet could not be downloaded');
+  click.mockRestore();
+});
+
+test('without a property the packet button is not offered', () => {
+  render(<HomeContinuityPlanResultList block={planBlock({ emergency: 1 })} disabled={false} onAction={jest.fn()} />);
+  expect(screen.queryByRole('button', { name: 'Download emergency packet' })).not.toBeInTheDocument();
+});

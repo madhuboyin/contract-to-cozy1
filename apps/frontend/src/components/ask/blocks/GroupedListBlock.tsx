@@ -435,7 +435,7 @@ export const GroupedListBlock: AskBlockRenderer<'GROUPED_LIST'> = (props) => {
   }));
   if (props.block.id === 'property-record-index') return <HomeRecordOverviewBlock {...props} />;
   if (props.block.id === 'digital-will-items') {
-    return <HomeContinuityPlanResultList block={props.block} disabled={props.itemActionsDisabled} onAction={props.onItemAction} />;
+    return <HomeContinuityPlanResultList block={props.block} propertyId={props.propertyId} disabled={props.itemActionsDisabled} onAction={props.onItemAction} />;
   }
   // Maintenance keeps its own component in both layouts, so its live-record detail, paging and selection are the
   // same whichever the homeowner chooses. The pattern still comes only from the server's declaration.

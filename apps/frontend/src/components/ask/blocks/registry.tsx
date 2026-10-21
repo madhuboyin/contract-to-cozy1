@@ -22,6 +22,7 @@ import {
   UnsupportedBlock,
   WorkflowProgressBlock,
 } from './CoreBlocks';
+import { BoundaryWithDetail } from './BoundaryWithDetail';
 import { EvidenceBlock, OutputArtifactsBlock, RelatedRecordsBlock } from './ContextualBlocks';
 import type { ReactNode } from 'react';
 import type { AskPresentationBlock } from '@/features/ask/types';
@@ -56,7 +57,7 @@ export const ASK_BLOCK_RENDERERS: AskBlockRendererRegistry = {
   TABLE: TableBlock,
   CAPABILITY_LIST: CapabilityListBlock,
   EVIDENCE: EvidenceBlock,
-  BOUNDARY: BoundaryBlock,
+  BOUNDARY: BoundaryWithDetail,
   MONITOR: MonitorBlock,
   WORKFLOW_PROGRESS: WorkflowProgressBlock,
   OUTPUT_ARTIFACTS: OutputArtifactsBlock,

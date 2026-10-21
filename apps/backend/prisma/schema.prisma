@@ -14455,7 +14455,7 @@ model HomeDigitalWill {
   id         String @id @default(uuid())
   propertyId String @unique
 
-  title     String                   @default("Home Digital Will")
+  title     String                   @default("Home Continuity Plan")
   status    HomeDigitalWillStatus    @default(DRAFT)
   readiness HomeDigitalWillReadiness @default(NOT_STARTED)
 

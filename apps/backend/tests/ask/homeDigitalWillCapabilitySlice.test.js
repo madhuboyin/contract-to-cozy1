@@ -93,7 +93,7 @@ test('the plan is summarized with readiness, counts, handoff gaps, entry titles 
   assert.equal(water.href, null, 'no row links to a desktop page');
   assert.deepEqual(water.actions.map((action) => action.id), ['ENTRY_EDIT', 'ENTRY_MOVE_UP', 'ENTRY_MOVE_DOWN', 'ENTRY_DELETE']);
   assert.deepEqual(result.blocks[0].actions, [], 'a calm answer drops summary actions, so plan operations live on the plan toolbar');
-  assert.deepEqual(list.actions.map((action) => action.label), ['Emergency view', 'Edit details', 'Restore section', 'Download emergency packet'], 'no Add trusted contact here while the readiness checklist owns it');
+  assert.deepEqual(list.actions.map((action) => action.label), ['Emergency view', 'Edit details', 'Restore section'], 'no Add trusted contact here while the readiness checklist owns it');
   assert.equal(JSON.stringify(result).includes('/dashboard/'), false);
   const withContact = digitalWillFromView(will(), 'p1').blocks.find((block) => block.id === 'digital-will-items').sections.at(-1);
   assert.deepEqual(withContact.items.map((row) => [row.title, row.meta]), [['Jordan Lee', ['family member', 'emergency only access', 'Primary']]]);
@@ -117,8 +117,8 @@ test('every block and the boundary survive the answer-trust validator, and nothi
   const { result: validated } = validateAskAnswerTrust({ question: 'Show my home continuity plan', operationId: 'HOME_DIGITAL_WILL', result, propertyId: 'p1' });
   assert.deepEqual(validated.blocks.map((block) => block.id), result.blocks.map((block) => block.id));
   const toolbar = result.blocks.find((block) => block.id === 'digital-will-items').actions.map((action) => action.label);
-  assert.deepEqual(toolbar, ['Emergency view', 'Edit details', 'Mark plan ready', 'Add trusted contact', 'Restore section', 'Download emergency packet'], 'the plan toolbar keeps every plan-level action; Add trusted contact returns once a primary contact exists');
-  const styles = result.blocks.find((block) => block.id === 'digital-will-items').actions.filter((action) => action.id !== 'home-continuity-packet').map((action) => [action.label, action.style]);
+  assert.deepEqual(toolbar, ['Emergency view', 'Edit details', 'Mark plan ready', 'Add trusted contact', 'Restore section'], 'the plan toolbar keeps every plan-level action; Add trusted contact returns once a primary contact exists');
+  const styles = result.blocks.find((block) => block.id === 'digital-will-items').actions.map((action) => [action.label, action.style]);
   assert.deepEqual(styles.filter(([, style]) => style === 'PRIMARY'), [['Mark plan ready', 'PRIMARY']], 'one primary action on the toolbar');
   assert.equal(JSON.stringify(result).includes('/dashboard/'), false);
 });
@@ -263,4 +263,36 @@ test('each section manager carries its section type for the client\'s icons and 
   assert.match(boundary.body, /Not a legal will or estate document/);
   assert.match(boundary.body, /Sensitive entry and contact details are not repeated in the conversation/);
   assert.ok(boundary.body.length < 140);
+});
+
+test('the plan header: product name as the headline, status, last reviewed and handoff readiness as separate chips, the saved title as a label', () => {
+  const result = digitalWillFromView(will({ title: 'Home Digital Will', lastReviewedAt: null, trustedContacts: [] }), 'p1');
+  const summary = result.blocks[0];
+  assert.equal(summary.headline, 'Home Continuity Plan');
+  assert.equal(summary.supportLine, 'Home Digital Will · 2 entries across 2 sections and 0 trusted contacts.');
+  assert.deepEqual(summary.chips.map((chip) => [chip.label, chip.tone]), [['Draft', 'DEFAULT'], ['Not reviewed yet', 'CAUTION'], ['1 of 3 handoff requirements met', 'CAUTION']]);
+  const saved = digitalWillFromView(will({ title: 'Home Continuity Plan' }), 'p1').blocks[0];
+  assert.doesNotMatch(saved.supportLine, /·/, 'the product name is not repeated as a label');
+  const ready = digitalWillFromView(will({ status: 'ACTIVE' }), 'p1').blocks[0];
+  assert.deepEqual(ready.chips.map((chip) => chip.label), ['Published', 'Last reviewed Sep 1, 2026', '3 of 3 handoff requirements met']);
+  assert.equal(ready.chips[0].tone, 'POSITIVE');
+  const draftReady = digitalWillFromView(will(), 'p1').blocks[0];
+  assert.equal(draftReady.chips[0].label, 'Draft · ready to publish');
+  AskPresentationBlockSchema.parse(summary);
+});
+
+test('the privacy boundary is short, carries the longer explanation as a disclosure, and no answer carries a desktop-looking packet link', () => {
+  const result = digitalWillFromView(will(), 'p1');
+  const boundary = result.blocks.at(-1);
+  assert.ok(boundary.detail.length > boundary.body.length);
+  assert.match(boundary.detail, /gate codes and key locations/);
+  AskPresentationBlockSchema.parse(boundary);
+  assert.equal(JSON.stringify(result).includes('emergency-packet.pdf'), false, 'the packet is downloaded by the client with the person\'s own session');
+  assert.equal(JSON.stringify(result).includes('"href":"/'), false);
+});
+
+test('new plans are titled Home Continuity Plan', () => {
+  const source = require('node:fs').readFileSync(require('node:path').resolve(__dirname, '../../src/services/homeDigitalWill.service.ts'), 'utf8');
+  assert.match(source, /title: body\.title \?\? 'Home Continuity Plan'/);
+  assert.doesNotMatch(source, /body\.title \?\? 'Home Digital Will'/);
 });

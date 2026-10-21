@@ -2749,7 +2749,7 @@ export const ASK_INTERACTION_COVERAGE_MATRIX: Readonly<Record<AskOperationId, As
     freshnessSource: { status: 'TRACED', notes: 'No contextVersion; read live on each request, as on the page.' },
     idempotency: { status: 'TRACED', notes: 'Pure read (getByProperty never creates a plan; the page\'s create is a separate POST).' },
     reconciliation: { status: 'TRACED', notes: 'N/A as mutation source.' },
-    handoff: { status: 'TRACED', notes: 'No desktop handoff: readiness steps and every authoring control remain inside Ask; the only href is the canonical emergency-packet download.' },
+    handoff: { status: 'TRACED', notes: 'No desktop handoff: readiness steps and every authoring control remain inside Ask; the answer carries no href at all: the emergency packet is a file, so the client downloads it with the person\'s own session from a button on the plan toolbar (FRD v1.393), and nothing about it is stored in the answer.' },
   },
   HOME_DIGITAL_WILL_CREATE: {
     track: 'Records and capture',

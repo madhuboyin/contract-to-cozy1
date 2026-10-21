@@ -117,12 +117,12 @@ test('inline detail opens without navigating; an owner edits a warranty through 
   await expect(page.getByRole('button', { name: /Add the warranty document/ })).toHaveCount(0);
   const response = live(page, 1);
   await response.getByRole('button', { name: 'Acme Home Warranty' }).click();
-  await expect(response.getByText('Current canonical warranty record.')).toBeVisible();
+  await expect(response.getByText('Warranty detail')).toBeVisible();
   await expect(page).toHaveURL(/\/acceptance\/ask\?/);
   // Owner-authorised controls are present for the requester's own warranty: one Edit action, not a list of "Correct ..." buttons.
   await expect(response.getByRole('button', { name: /^Edit warranty/ })).toHaveCount(1);
   await expect(response.getByText('Correct a detail')).toHaveCount(0);
-  await expect(response.locator('button', { hasText: 'Attach a document' })).toBeVisible();
+  await expect(response.locator('button', { hasText: 'Attach document' })).toBeVisible();
   await response.getByRole('button', { name: /^Edit warranty/ }).click();
   await expect.poll(() => api.executionBodies.some((body) => body.message === 'Edit this warranty.'
     && (body.launchContext as { entityId?: string } | undefined)?.entityId === 'warranty-property-summary')).toBe(true);
@@ -157,9 +157,9 @@ test('a viewer sees the same recorded answer with no write or correction control
   await expect(page.getByRole('link', { name: /Open Warranties/ })).toHaveCount(1);
   const response = live(page, 1);
   await response.getByRole('button', { name: 'Acme Home Warranty' }).click();
-  await expect(response.getByText('Current canonical warranty record.')).toBeVisible();
+  await expect(response.getByText('Warranty detail')).toBeVisible();
   await expect(response.getByText('Correct a detail')).toHaveCount(0);
-  await expect(response.locator('button', { hasText: 'Attach a document' })).toHaveCount(0);
+  await expect(response.locator('button', { hasText: 'Attach document' })).toHaveCount(0);
   // No target for the composer either: a viewer cannot attach.
   await expect(page.getByRole('button', { name: /Add (?:a photo or document|the warranty document)/ })).toHaveCount(0);
 });

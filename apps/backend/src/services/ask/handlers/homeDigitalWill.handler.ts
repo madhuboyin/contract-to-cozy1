@@ -53,6 +53,7 @@ export function digitalWillFromView(will: DigitalWillView, propertyId: string): 
   const boundary: AskPresentationBlock = {
     type: 'BOUNDARY', id: 'digital-will-boundary', title: 'A home knowledge plan, not a legal will',
     body: 'Not a legal will or estate document. Sensitive entry and contact details are not repeated in the conversation.',
+    detail: 'The Home Continuity Plan records how this home runs so someone else can take over. It is not a legal will or estate document. Entry details and contact information, including access notes such as gate codes and key locations, are kept out of the conversation and are not repeated in conversation history; open an entry or the emergency view to see them.',
     severity: 'INFO', suggestions: [],
   };
   if (!will) {
@@ -86,6 +87,14 @@ export function digitalWillFromView(will: DigitalWillView, propertyId: string): 
       will.lastReviewedAt ? `Last reviewed ${humanDate(new Date(will.lastReviewedAt))}.` : 'Not reviewed yet.',
     ].join(' '),
     tone: handoff.state === 'READY' ? 'DEFAULT' : 'CAUTION',
+    // The plan header (FRD v1.393): product name, the saved title as a label, and status, last-reviewed and handoff readiness as separate chips.
+    headline: 'Home Continuity Plan',
+    supportLine: `${savedTitle ? `${savedTitle} · ` : ''}${entryCount} entr${entryCount === 1 ? 'y' : 'ies'} across ${enabled.length} section${enabled.length === 1 ? '' : 's'} and ${will.trustedContacts.length} trusted contact${will.trustedContacts.length === 1 ? '' : 's'}.`,
+    chips: [
+      { label: will.status === 'ACTIVE' ? 'Published' : handoff.state === 'READY' ? 'Draft · ready to publish' : 'Draft', tone: will.status === 'ACTIVE' ? 'POSITIVE' as const : 'DEFAULT' as const },
+      { label: will.lastReviewedAt ? `Last reviewed ${humanDate(new Date(will.lastReviewedAt))}` : 'Not reviewed yet', tone: will.lastReviewedAt ? 'DEFAULT' as const : 'CAUTION' as const },
+      { label: digitalWillHandoffProgress(handoff.missingRequirements, entryCount).basis, tone: handoff.state === 'READY' ? 'POSITIVE' as const : 'CAUTION' as const },
+    ],
     // A calm answer drops summary actions, so the plan's own operations live on the plan toolbar (the list header) whenever the list exists.
     actions: will.sections.length || will.trustedContacts.length ? [] : planActions,
   }];
@@ -153,7 +162,6 @@ export function digitalWillFromView(will: DigitalWillView, propertyId: string): 
           { id: 'home-continuity-add-contact', label: 'Add trusted contact', interactionType: 'START_WORKFLOW', message: 'Add a trusted contact to my home continuity plan', operationId: 'HOME_DIGITAL_WILL_CREATE', entityType: 'HOME_DIGITAL_WILL_EDITOR', entityId: will.id, actionId: 'CONTACT_CREATE', style: 'PRIMARY' },
         ]),
         ...(will.sections.length < 8 ? [{ id: 'home-continuity-restore-section', label: 'Restore section', interactionType: 'START_WORKFLOW' as const, message: 'Restore a section in my home continuity plan', operationId: 'HOME_DIGITAL_WILL_CREATE' as const, entityType: 'HOME_DIGITAL_WILL_EDITOR', entityId: will.id, actionId: 'SECTION_CREATE', style: 'SECONDARY' as const }] : []),
-        { id: 'home-continuity-packet', label: 'Download emergency packet', href: `/api/properties/${propertyId}/home-digital-will/emergency-packet.pdf`, style: 'SECONDARY' },
       ] as Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>['actions']).map((action) => (action.id === 'home-continuity-publish' ? action : { ...action, style: 'SECONDARY' as const })) });  // one primary on the toolbar: Mark plan ready, when eligible
   }
   blocks.push(boundary);

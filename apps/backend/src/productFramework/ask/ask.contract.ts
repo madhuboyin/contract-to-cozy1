@@ -370,6 +370,8 @@ const BoundaryBlockSchema = z.object({
   id: z.string(),
   title: z.string(),
   body: z.string(),
+  // The longer explanation behind a short body, shown as a disclosure (FRD v1.393); optional so every other boundary is unchanged.
+  detail: z.string().max(1200).optional(),
   severity: z.enum(['INFO', 'CAUTION', 'EMERGENCY']),
   suggestions: z.array(z.string()).max(5).default([]),
   actions: z.array(AskActionSchema).max(2).optional(),

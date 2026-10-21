@@ -1,3 +1,4 @@
+import { CONTINUITY_BLOCKS } from './continuityFixtures';
 import { expect, type BrowserContext, type Page, type Request, type Route } from '@playwright/test';
 
 export const propertyId = 'ask-property-fixture';
@@ -1069,6 +1070,17 @@ function inventoryJourneyExecution(state: InventoryJourneyState) {
     ],
     skill: null, skillHandoff: null, captureRequests: [], confirmation: null, clarification: null, childExecutions: [], originalResponse: null,
     correctionCapabilities: { intent: true, entity: true, homeRecord: false, retryResponse: false }, suggestions: [],
+    createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+  };
+}
+
+// Home Continuity Plan (FRD v1.393): the HOME_DIGITAL_WILL answer exactly as the producer builds it, for an empty plan and an established one.
+function continuityExecution(variant: 'starter' | 'established', sessionId?: string) {
+  return {
+    schemaVersion: '1.0', sessionId: sessionId ?? 'ask-acceptance-session', executionId: `execution-continuity-${variant}`, question: 'Show my continuity journey', status: 'ANSWERED',
+    property: { id: propertyId, label: 'Acceptance Home' }, operation: { id: 'HOME_DIGITAL_WILL', version: '1.0', family: 'RECORDS' }, contextVersion: 'continuity-v1',
+    skill: null, skillHandoff: null, captureRequests: [], confirmation: null, clarification: null, childExecutions: [], originalResponse: null, viewState: null,
+    correctionCapabilities: { intent: true, entity: true, homeRecord: false, retryResponse: false }, suggestions: [], blocks: CONTINUITY_BLOCKS[variant],
     createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
   };
 }
@@ -2791,6 +2803,7 @@ export async function installAskApi(page: Page, options: { selectorState?: 'OPTI
   const captureBodies: Array<Record<string, unknown>> = [];
   const warrantyEditCaptureBodies: Array<Record<string, unknown>> = [];
   const eventEditCaptureBodies: Array<Record<string, unknown>> = [];
+  const packetDownloads: string[] = [];
   const executionQuestions: string[] = [];
   const executionBodies: Array<Record<string, unknown>> = [];
   const selectorReads: string[] = [];
@@ -3178,6 +3191,10 @@ export async function installAskApi(page: Page, options: { selectorState?: 'OPTI
       else if (/only show closed records/i.test(body.message)) claimsJourney = { ...previous!, state: 'CLOSED', revision: previous!.revision + 1 };
       else claimsJourney = { ...previous!, state: 'ALL', revision: previous!.revision + 1 };
       await fulfill(route, { success: true, data: claimsJourneyExecution({ ...claimsJourney!, sessionId: body.sessionId }, { viewer: options.claimsViewer, empty: options.claimsEmpty }) }, 201);
+      return;
+    }
+    if (/continuity journey/i.test(body.message)) {
+      await fulfill(route, { success: true, data: continuityExecution(/established/i.test(body.message) ? 'established' : 'starter', body.sessionId as string | undefined) }, 201);
       return;
     }
     // Warranties W-3: a warranty answer, one exact warranty, and declared-filter refinements (merged the way the handler merges them).
@@ -3713,6 +3730,11 @@ export async function installAskApi(page: Page, options: { selectorState?: 'OPTI
     await fulfill(route, { success: true, data: maintenanceCompletionExecution('DONE') });
   });
   // Registered after the generic captures route above so it takes precedence for this execution only.
+  await page.route(`${apiOrigin}/api/properties/*/home-digital-will/emergency-packet.pdf`, async (route) => {
+    assertAuthenticated(route.request());
+    packetDownloads.push(route.request().url());
+    await route.fulfill({ status: 200, contentType: 'application/pdf', body: Buffer.from('%PDF-1.4 fixture packet') });
+  });
   await page.route(`${apiOrigin}/api/ask/executions/execution-event-edit/captures`, async (route) => {
     assertAuthenticated(route.request());
     const body = route.request().postDataJSON() as Record<string, unknown>;
@@ -3781,7 +3803,7 @@ export async function installAskApi(page: Page, options: { selectorState?: 'OPTI
     };
     return fulfill(route, { success: true, data: cancelled });
   });
-  return { selectorReads, captureBodies, warrantyEditCaptureBodies, eventEditCaptureBodies, executionQuestions, executionBodies, correctionEditBodies, correctionConfirmBodies, warrantyAddCaptureBodies, addCaptureBodies, monitorPatchBodies, staleRefreshCalls: () => staleRefreshCalls, captureAttempts: () => captureAttempts };
+  return { selectorReads, captureBodies, warrantyEditCaptureBodies, eventEditCaptureBodies, packetDownloads, executionQuestions, executionBodies, correctionEditBodies, correctionConfirmBodies, warrantyAddCaptureBodies, addCaptureBodies, monitorPatchBodies, staleRefreshCalls: () => staleRefreshCalls, captureAttempts: () => captureAttempts };
 }
 
 function assertAuthenticated(request: Request) {
