@@ -97,7 +97,7 @@ test('producer-declared dense rows use two-line records and remove repeated sect
   expect(screen.queryByRole('button', { name: 'Auto' })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Cards' })).not.toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Correct this item' })).toBeVisible();
-  expect(screen.getByText('More')).toBeVisible();
+  expect(screen.queryByText('More')).not.toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Archive' })).toBeInTheDocument();
   const row = view.container.querySelector('[data-ask-task-id="dishwasher"]');
   expect(row).toHaveClass('py-2');
@@ -105,6 +105,42 @@ test('producer-declared dense rows use two-line records and remove repeated sect
   expect(row?.querySelector('.truncate')).toHaveTextContent('replace soon · 11.8 yr old · Warranty active');
   expect(row?.querySelector('[data-item-status]')).not.toBeInTheDocument();
   expect(row?.querySelector('[data-dense-row-content]')).toContainElement(screen.getByRole('button', { name: 'Correct this item' }));
+});
+
+test('Home Operations marks overdue rows and reserves More for three or more actions', () => {
+  const dense: GroupedList = {
+    ...block,
+    id: 'home-work-items',
+    listDensity: 'DENSE',
+    sections: [{ id: 'open', title: 'Open', count: 2, items: [
+      {
+        id: 'overdue', entityType: 'HOME_WORK_ITEM', title: 'Seal driveway cracks', description: 'maintenance task',
+        meta: ['Overdue since Sep 23, 2026'], status: 'Accepted', tone: 'CRITICAL',
+        actions: [
+          { id: 'snooze', label: 'Snooze', message: 'Snooze it', operationId: 'HOME_WORK_ITEM_COMMAND', interactionType: 'MUTATE_RECORD', style: 'QUIET' },
+          { id: 'due', label: 'Change due date', message: 'Change it', operationId: 'HOME_WORK_ITEM_COMMAND', interactionType: 'MUTATE_RECORD', style: 'SECONDARY' },
+        ],
+      },
+      {
+        id: 'many', entityType: 'HOME_WORK_ITEM', title: 'Inspect chimney', meta: [], status: 'In progress',
+        actions: [
+          { id: 'primary', label: 'Update status', message: 'Update it', operationId: 'HOME_WORK_ITEM_COMMAND', interactionType: 'MUTATE_RECORD', style: 'PRIMARY' },
+          { id: 'snooze', label: 'Snooze chimney', message: 'Snooze it', operationId: 'HOME_WORK_ITEM_COMMAND', interactionType: 'MUTATE_RECORD', style: 'QUIET' },
+          { id: 'due', label: 'Change chimney due date', message: 'Change it', operationId: 'HOME_WORK_ITEM_COMMAND', interactionType: 'MUTATE_RECORD', style: 'SECONDARY' },
+        ],
+      },
+    ] }],
+  };
+  const view = render(<GenericGroupedListBlock block={dense} executionId="execution" propertyId="home" onItemAction={() => undefined} itemActionsDisabled={false} onFilterClick={() => undefined} onCollectionPage={() => undefined} onAccessLost={() => undefined} />);
+
+  const overdue = view.container.querySelector('[data-ask-task-id="overdue"]');
+  expect(overdue).toHaveClass('bg-rose-50/70', 'border-l-rose-400');
+  expect(overdue).toHaveTextContent('Overdue');
+  expect(overdue).toContainElement(screen.getByRole('button', { name: 'Snooze' }));
+  expect(overdue).toContainElement(screen.getByRole('button', { name: 'Change due date' }));
+  expect(screen.getByText('More')).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Snooze chimney' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Change chimney due date' })).toBeInTheDocument();
 });
 
 test('Project Tracker sections expose independent server-page controls', () => {

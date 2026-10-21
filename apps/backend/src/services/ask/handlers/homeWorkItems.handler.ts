@@ -12,7 +12,7 @@ import {
 } from '../support/homeWorkItemCommand';
 
 const STATE_LABELS: Record<string, string> = {
-  CANDIDATE: 'Suggested', ACCEPTED: 'Accepted', SCHEDULED: 'Scheduled', IN_PROGRESS: 'In progress', IN_GUIDANCE: 'In guidance', IN_PROJECT: 'In a project',
+  CANDIDATE: 'Not added', ACCEPTED: 'Accepted', SCHEDULED: 'Scheduled', IN_PROGRESS: 'In progress', IN_GUIDANCE: 'In guidance', IN_PROJECT: 'In a project',
   BLOCKED: 'Blocked', DEFERRED: 'Deferred', REPORTED_COMPLETE: 'Reported complete', REOPENED: 'Reopened', FOLLOW_UP_DUE: 'Follow-up due',
 };
 
@@ -43,17 +43,27 @@ export function homeWorkItemsFromRows(items: WorkItemView[], canChange: boolean,
   const row = (item: WorkItemView) => {
     const due = item.dueAt ?? item.dueWindowEnd;
     const snoozed = item.snoozedUntil && item.snoozedUntil.getTime() > now.getTime();
+    const overdue = Boolean(
+      due
+      && due.getTime() < now.getTime()
+      && item.state !== 'CANDIDATE'
+      && item.state !== 'REPORTED_COMPLETE'
+      && !snoozed,
+    );
     const meta = [
-      due ? `Due ${humanDate(due)}` : 'No due date',
+      overdue ? `Overdue since ${humanDate(due!)}` : due ? `Due ${humanDate(due)}` : 'No due date',
       snoozed ? `Snoozed until ${humanDate(item.snoozedUntil!)}` : null,
+      item.state === 'CANDIDATE' ? 'Not yet added to your work' : null,
       item.isRoutine ? 'Routine' : null,
     ].filter((value): value is string => Boolean(value));
     const repeatedTitle = (titleCounts.get(item.title.trim().toLocaleLowerCase()) ?? 0) > 1;
-    const context = repeatedTitle
+    const recordContext = repeatedTitle
       ? item.homeownerReason?.trim() || (item.subjectType ? `${readableCode(item.subjectType)} · ${readableCode(item.obligationType)}` : readableCode(item.obligationType))
       : readableCode(item.obligationType);
+    const context = item.state === 'CANDIDATE' ? `Recommendation · ${recordContext}` : recordContext;
     return {
       id: item.id, title: item.title, description: context, meta, status: STATE_LABELS[item.state] ?? item.state, href: null,
+      tone: overdue ? 'CRITICAL' as const : 'DEFAULT' as const,
       entityType: WORK_ITEM_ENTITY_TYPE,
       actions: canChange ? [
         { id: WORK_ITEM_ACTION_IDS.SNOOZE, label: 'Snooze', message: WORK_ITEM_MESSAGES.SNOOZE, interactionType: 'MUTATE_RECORD' as const, operationId: 'HOME_WORK_ITEM_COMMAND' as const, style: 'QUIET' as const },

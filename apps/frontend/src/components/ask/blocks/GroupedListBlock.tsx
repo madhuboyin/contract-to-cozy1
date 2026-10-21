@@ -301,10 +301,12 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
                   const overflowProjectActions = projectActions.filter((action) => action !== dominantProjectAction);
                   const denseActions = dense ? (item.actions ?? []) : [];
                   const dominantDenseAction = denseActions.find((action) => action.style === 'PRIMARY') ?? denseActions[0];
-                  const overflowDenseActions = denseActions.filter((action) => action !== dominantDenseAction);
+                  const inlineDenseActions = denseActions.length <= 2 ? denseActions : dominantDenseAction ? [dominantDenseAction] : [];
+                  const overflowDenseActions = denseActions.length <= 2 ? [] : denseActions.filter((action) => action !== dominantDenseAction);
                   const statusLabel = item.status?.replace(/_/g, ' ');
                   const visibleStatus = statusLabel?.trim().toLowerCase() === section.title.trim().toLowerCase() ? null : statusLabel;
-                  return <li key={item.id} data-ask-task-id={item.id} tabIndex={-1} className={cn('border outline-offset-2', dense ? 'border-x-0 border-b-0 border-t-0 px-2 py-2' : 'rounded-xl', !dense && (presentation === 'COMPACT_LIST' ? 'px-3 py-2' : 'p-3'), selected ? 'border-teal-600 bg-teal-50' : presentation === 'COMPACT_LIST' ? 'border-transparent bg-white' : 'border-transparent bg-slate-50')}>
+                  const overdueWorkItem = block.id === 'home-work-items' && item.tone === 'CRITICAL';
+                  return <li key={item.id} data-ask-task-id={item.id} tabIndex={-1} className={cn('border outline-offset-2', dense ? 'border-b-0 border-r-0 border-t-0 px-2 py-2' : 'rounded-xl', dense && (overdueWorkItem ? 'border-l-4 border-l-rose-400 bg-rose-50/70' : 'border-l-0'), !dense && (presentation === 'COMPACT_LIST' ? 'px-3 py-2' : 'p-3'), selected ? 'border-teal-600 bg-teal-50' : !dense && (presentation === 'COMPACT_LIST' ? 'border-transparent bg-white' : 'border-transparent bg-slate-50'))}>
                     {dense ? <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3" data-dense-row-content="">
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-baseline gap-x-2" data-dense-primary-line="">
@@ -313,10 +315,11 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
                         </div>
                         {item.meta.length > 0 && <p className="mt-0.5 truncate text-xs text-slate-500" title={item.meta.join(' · ')}>{item.meta.join(' · ')}</p>}
                       </div>
-                      {(visibleStatus || dominantDenseAction) && <div className="flex shrink-0 items-center gap-1.5">
+                      {(visibleStatus || overdueWorkItem || inlineDenseActions.length > 0) && <div className="flex shrink-0 items-center gap-1.5">
+                        {overdueWorkItem && <span className="rounded-full bg-rose-100 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-rose-700">Overdue</span>}
                         {visibleStatus && <span data-item-status={visibleStatus.toLowerCase()} className="rounded-full bg-white px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">{visibleStatus}</span>}
-                        {dominantDenseAction && <div className="flex items-center gap-1.5">
-                          <button type="button" disabled={itemActionsDisabled} onClick={() => onItemAction(item.entityType, item.id, dominantDenseAction.message, dominantDenseAction.operationId, dominantDenseAction.interactionType)} className={cn('min-h-8 rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors disabled:opacity-50', dominantDenseAction.style === 'PRIMARY' ? 'bg-teal-700 text-white hover:bg-teal-800' : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50')}>{dominantDenseAction.label}</button>
+                        {inlineDenseActions.length > 0 && <div className="flex items-center gap-1.5">
+                          {inlineDenseActions.map((itemAction) => <button key={itemAction.id} type="button" disabled={itemActionsDisabled} onClick={() => onItemAction(item.entityType, item.id, itemAction.message, itemAction.operationId, itemAction.interactionType)} className={cn('min-h-8 rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors disabled:opacity-50', itemAction.style === 'PRIMARY' ? 'bg-teal-700 text-white hover:bg-teal-800' : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50')}>{itemAction.label}</button>)}
                           {overflowDenseActions.length > 0 && <details className="relative">
                             <summary className="flex min-h-8 cursor-pointer list-none items-center rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50">More</summary>
                             <div className="absolute right-0 z-10 mt-1 min-w-36 space-y-1 rounded-lg border border-slate-200 bg-white p-1.5 shadow-lg">

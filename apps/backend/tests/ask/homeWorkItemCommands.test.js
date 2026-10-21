@@ -91,6 +91,24 @@ test('the list keeps distinct canonical rows with the same title and adds contex
   ]);
 });
 
+test('the list distinguishes overdue adopted work, paused reminders, reported completion, and recommendations', () => {
+  const result = homeWorkItemsFromRows([
+    item({ id: 'overdue', dueAt: new Date('2026-09-23T12:00:00Z') }),
+    item({ id: 'paused', dueAt: new Date('2026-08-24T12:00:00Z'), snoozedUntil: new Date('2026-11-01T12:00:00Z') }),
+    item({ id: 'reported', state: 'REPORTED_COMPLETE', dueAt: new Date('2026-09-15T12:00:00Z') }),
+    item({ id: 'candidate', state: 'CANDIDATE', dueAt: new Date('2026-09-01T12:00:00Z'), obligationType: 'DECISION' }),
+  ], true, new Date('2026-10-21T12:00:00Z'));
+  const rows = result.blocks[1].sections[0].items;
+  assert.equal(rows.find((row) => row.id === 'overdue').tone, 'CRITICAL');
+  assert.match(rows.find((row) => row.id === 'overdue').meta[0], /^Overdue since /);
+  assert.equal(rows.find((row) => row.id === 'paused').tone, 'DEFAULT');
+  assert.match(rows.find((row) => row.id === 'paused').meta.join(' · '), /Snoozed until/);
+  assert.equal(rows.find((row) => row.id === 'reported').tone, 'DEFAULT');
+  assert.equal(rows.find((row) => row.id === 'candidate').status, 'Not added');
+  assert.equal(rows.find((row) => row.id === 'candidate').description, 'Recommendation · decision');
+  assert.match(rows.find((row) => row.id === 'candidate').meta.join(' · '), /Not yet added to your work/);
+});
+
 test('snooze and reschedule: form, then a review with before and after; nothing is written; viewers, refresh, finished work refused', async () => {
   let w = install('VIEWER');
   try { assert.equal((await invoke('SNOOZE', launch())).reasonCode, 'ASK_PERMISSION_REQUIRED'); } finally { w.restore(); }
