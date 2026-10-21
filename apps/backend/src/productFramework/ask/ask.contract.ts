@@ -284,7 +284,9 @@ const GroupedListBlockSchema = z.object({
     initialVisibleCount: z.number().int().positive().optional(),
     items: z.array(GroupedListItemSchema).max(100),
   })).max(12),
-  actions: z.array(AskActionSchema).max(3).default([]),
+  // Six, not three (FRD v1.391): the Home Continuity Plan toolbar carries Emergency view, Edit details, Mark plan ready, Add trusted contact,
+  // Restore section and the packet download, which a calm answer can no longer keep on its summary.
+  actions: z.array(AskActionSchema).max(6).default([]),
   // FRD v1.92: 12, not 6. The Home Event Radar feed declares four time chips, an all-sources chip, one chip per source present and
   // two dismissed chips (eight with one source, up to twelve with six), which the earlier limit of six rejected.
   // Sixteen: the Home Event Radar feed offers timing (4), source (all + 6), dismissed events (2) and a way back (1) = 14 when every source has events.

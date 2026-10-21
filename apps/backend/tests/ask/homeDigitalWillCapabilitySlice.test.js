@@ -81,8 +81,9 @@ test('entry content, summaries and contact details never appear in the answer', 
 
 test('the plan is summarized with readiness, counts, handoff gaps, entry titles by enabled section and contacts by role', () => {
   const result = digitalWillFromView(will({ trustedContacts: [] }), 'p1');
-  assert.equal(result.blocks[0].title, 'Maple Street plan: in progress, 40% complete');
-  assert.match(result.blocks[0].body, /^Draft, with 2 entries across 2 sections and 0 trusted contacts\. Last reviewed Sep 1, 2026\.$/);
+  assert.equal(result.blocks[0].title, 'Home Continuity Plan', 'the product name leads; the saved title is a label, and the self-reported percentage is not shown');
+  assert.doesNotMatch(JSON.stringify(result.blocks[0]), /40|% complete/);
+  assert.match(result.blocks[0].body, /^Maple Street plan · Draft, with 2 entries across 2 sections and 0 trusted contacts\. Last reviewed Sep 1, 2026\.$/);
   assert.equal(result.blocks.some((block) => block.id === 'digital-will-handoff'), false, 'readiness gaps are shown once inside the progress module');
   const list = result.blocks.find((block) => block.id === 'digital-will-items');
   assert.deepEqual(list.sections.map((section) => section.count), [2, 0, 0], 'management controls never inflate content counts');
@@ -91,8 +92,8 @@ test('the plan is summarized with readiness, counts, handoff gaps, entry titles 
   assert.deepEqual(water.meta, ['location note', 'critical priority', 'Emergency']);
   assert.equal(water.href, null, 'no row links to a desktop page');
   assert.deepEqual(water.actions.map((action) => action.id), ['ENTRY_EDIT', 'ENTRY_MOVE_UP', 'ENTRY_MOVE_DOWN', 'ENTRY_DELETE']);
-  assert.deepEqual(result.blocks[0].actions.map((action) => action.label), ['Emergency view', 'Edit details']);
-  assert.deepEqual(list.actions.map((action) => action.label), ['Add trusted contact', 'Restore section', 'Download emergency packet']);
+  assert.deepEqual(result.blocks[0].actions, [], 'a calm answer drops summary actions, so plan operations live on the plan toolbar');
+  assert.deepEqual(list.actions.map((action) => action.label), ['Emergency view', 'Edit details', 'Restore section', 'Download emergency packet'], 'no Add trusted contact here while the readiness checklist owns it');
   assert.equal(JSON.stringify(result).includes('/dashboard/'), false);
   const withContact = digitalWillFromView(will(), 'p1').blocks.find((block) => block.id === 'digital-will-items').sections.at(-1);
   assert.deepEqual(withContact.items.map((row) => [row.title, row.meta]), [['Jordan Lee', ['family member', 'emergency only access', 'Primary']]]);
@@ -102,7 +103,8 @@ test('a plan ready to hand off has no gap block; no plan yet is not created and 
   const ready = digitalWillFromView(will({ status: 'ACTIVE', readiness: 'READY' }), 'p1');
   assert.equal(ready.reasonCode, 'DIGITAL_WILL_READY');
   assert.equal(ready.blocks.some((block) => block.id === 'digital-will-handoff'), false);
-  assert.match(ready.blocks[0].body, /^Published,/);
+  assert.match(ready.blocks[0].body, /^Maple Street plan · Published,/);
+  assert.equal(ready.blocks[0].title, 'Home Continuity Plan');
   const none = digitalWillFromView(null, 'p1');
   assert.equal(none.reasonCode, 'DIGITAL_WILL_NOT_STARTED');
   assert.equal(none.blocks[0].title, 'No Home Continuity Plan yet');
@@ -114,7 +116,10 @@ test('every block and the boundary survive the answer-trust validator, and nothi
   const result = { ...raw, parameters: { answerTrustEvidence: { schemaVersion: '1.0', sources: [{ sourceId: 'home-digital-will.read', operationId: 'HOME_DIGITAL_WILL', status: 'COMPLETE', scope: 'FULL', freshness: 'CURRENT', observedAt: '2026-09-23T00:00:00.000Z' }] } } };
   const { result: validated } = validateAskAnswerTrust({ question: 'Show my home continuity plan', operationId: 'HOME_DIGITAL_WILL', result, propertyId: 'p1' });
   assert.deepEqual(validated.blocks.map((block) => block.id), result.blocks.map((block) => block.id));
-  assert.deepEqual(result.blocks[0].actions.map((action) => action.label), ['Emergency view', 'Edit details', 'Mark plan ready']);
+  const toolbar = result.blocks.find((block) => block.id === 'digital-will-items').actions.map((action) => action.label);
+  assert.deepEqual(toolbar, ['Emergency view', 'Edit details', 'Mark plan ready', 'Add trusted contact', 'Restore section', 'Download emergency packet'], 'the plan toolbar keeps every plan-level action; Add trusted contact returns once a primary contact exists');
+  const styles = result.blocks.find((block) => block.id === 'digital-will-items').actions.filter((action) => action.id !== 'home-continuity-packet').map((action) => [action.label, action.style]);
+  assert.deepEqual(styles.filter(([, style]) => style === 'PRIMARY'), [['Mark plan ready', 'PRIMARY']], 'one primary action on the toolbar');
   assert.equal(JSON.stringify(result).includes('/dashboard/'), false);
 });
 
@@ -206,9 +211,11 @@ test('missing readiness requirements launch entry and contact editors inside Ask
   assert.deepEqual(ring.nextSteps.map((step) => [step.title, step.actions[0]?.id]), [
     ['Add an emergency instruction.', 'ENTRY_CREATE'],
     ['Choose a primary trusted contact.', 'CONTACT_CREATE'],
-    ['Add an email or phone number for the primary contact.', 'CONTACT_CREATE_REACHABLE'],
+    ['Add an email or phone number for the primary contact.', undefined],
   ]);
-  assert.equal(ring.nextSteps[2].actions[0].message, 'Add a reachable primary contact to my home continuity plan');
+  // The contact method depends on the primary contact: no second creation CTA, just a waiting state.
+  assert.deepEqual([ring.nextSteps[2].status, ring.nextSteps[2].description], ['WAITING', 'Waiting for a primary trusted contact']);
+  assert.deepEqual(result.blocks.find((block) => block.id === 'digital-will-items').actions.map((action) => action.id).filter((id) => id === 'home-continuity-add-contact'), []);
 });
 
 test('entry, contact and section editor actions return inline forms', async () => {
@@ -245,4 +252,15 @@ test('Emergency view presents critical details and contact methods inline', asyn
   assert.match(JSON.stringify(result), /Gate code 4417/);
   assert.match(JSON.stringify(result), /555-0100/);
   for (const block of result.blocks) AskPresentationBlockSchema.parse(block);
+});
+
+test('each section manager carries its section type for the client\'s icons and starter order, and the privacy boundary stays short but keeps both rules', () => {
+  const list = digitalWillFromView(will(), 'p1').blocks.find((block) => block.id === 'digital-will-items');
+  const managers = list.sections.filter((section) => section.id.startsWith('digital-will-section-')).map((section) => section.items[0].meta);
+  assert.deepEqual(managers.map((meta) => meta.at(-1)), ['type:EMERGENCY', 'type:UTILITIES', 'type:HOUSE_RULES']);
+  assert.ok(managers.every((meta) => /^(Enabled|Disabled)$/.test(meta[0])));
+  const boundary = digitalWillFromView(will(), 'p1').blocks.at(-1);
+  assert.match(boundary.body, /Not a legal will or estate document/);
+  assert.match(boundary.body, /Sensitive entry and contact details are not repeated in the conversation/);
+  assert.ok(boundary.body.length < 140);
 });

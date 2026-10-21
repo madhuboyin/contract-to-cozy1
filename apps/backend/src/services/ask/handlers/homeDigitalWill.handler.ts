@@ -44,7 +44,7 @@ export function digitalWillHandoffProgress(
       { label: 'Missing', value: String(unmet.length), tone: unmet.length ? 'CAUTION' : 'DEFAULT' },
       { label: 'Entries', value: String(entryCount), tone: 'DEFAULT' },
     ],
-    nextSteps: unmet.map((code) => ({ id: code === 'emergency-instruction' ? targets?.emergencySectionId ?? `handoff-${code}` : code === 'primary-trusted-contact' ? targets?.planId ?? `handoff-${code}` : targets?.primaryContactId ?? targets?.planId ?? `handoff-${code}`, title: DIGITAL_WILL_MISSING_LABELS[code] ?? readableCode(code), description: 'Handoff requirement not met yet', meta: [], status: 'MISSING', href: null, entityType: code === 'emergency-instruction' ? 'HOME_DIGITAL_WILL_SECTION' : code === 'primary-trusted-contact' || !targets?.primaryContactId ? 'HOME_DIGITAL_WILL' : 'HOME_DIGITAL_WILL_CONTACT', actions: code === 'emergency-instruction' && targets?.emergencySectionId ? [{ id: 'ENTRY_CREATE', label: 'Add emergency instruction', interactionType: 'MUTATE_RECORD' as const, message: 'Add an emergency instruction to my home continuity plan', operationId: 'HOME_DIGITAL_WILL_CREATE', style: 'PRIMARY' as const }] : code === 'primary-trusted-contact' && targets?.planId ? [{ id: 'CONTACT_CREATE', label: 'Add trusted contact', interactionType: 'MUTATE_RECORD' as const, message: 'Add a trusted contact to my home continuity plan', operationId: 'HOME_DIGITAL_WILL_CREATE', style: 'PRIMARY' as const }] : code === 'primary-contact-method' && targets?.primaryContactId ? [{ id: 'CONTACT_EDIT', label: 'Add contact method', interactionType: 'MUTATE_RECORD' as const, message: 'Edit my primary trusted contact', operationId: 'HOME_DIGITAL_WILL_CREATE', style: 'PRIMARY' as const }] : code === 'primary-contact-method' && targets?.planId ? [{ id: 'CONTACT_CREATE_REACHABLE', label: 'Add reachable primary contact', interactionType: 'MUTATE_RECORD' as const, message: 'Add a reachable primary contact to my home continuity plan', operationId: 'HOME_DIGITAL_WILL_CREATE', style: 'PRIMARY' as const }] : [] })),
+    nextSteps: unmet.map((code) => ({ id: code === 'emergency-instruction' ? targets?.emergencySectionId ?? `handoff-${code}` : code === 'primary-trusted-contact' ? targets?.planId ?? `handoff-${code}` : targets?.primaryContactId ?? targets?.planId ?? `handoff-${code}`, title: DIGITAL_WILL_MISSING_LABELS[code] ?? readableCode(code), description: code === 'primary-contact-method' && !targets?.primaryContactId ? 'Waiting for a primary trusted contact' : 'Handoff requirement not met yet', meta: [], status: code === 'primary-contact-method' && !targets?.primaryContactId ? 'WAITING' : 'MISSING', href: null, entityType: code === 'emergency-instruction' ? 'HOME_DIGITAL_WILL_SECTION' : code === 'primary-trusted-contact' || !targets?.primaryContactId ? 'HOME_DIGITAL_WILL' : 'HOME_DIGITAL_WILL_CONTACT', actions: code === 'emergency-instruction' && targets?.emergencySectionId ? [{ id: 'ENTRY_CREATE', label: 'Add emergency instruction', interactionType: 'MUTATE_RECORD' as const, message: 'Add an emergency instruction to my home continuity plan', operationId: 'HOME_DIGITAL_WILL_CREATE', style: 'PRIMARY' as const }] : code === 'primary-trusted-contact' && targets?.planId ? [{ id: 'CONTACT_CREATE', label: 'Add trusted contact', interactionType: 'MUTATE_RECORD' as const, message: 'Add a trusted contact to my home continuity plan', operationId: 'HOME_DIGITAL_WILL_CREATE', style: 'PRIMARY' as const }] : code === 'primary-contact-method' && targets?.primaryContactId ? [{ id: 'CONTACT_EDIT', label: 'Add contact method', interactionType: 'MUTATE_RECORD' as const, message: 'Edit my primary trusted contact', operationId: 'HOME_DIGITAL_WILL_CREATE', style: 'PRIMARY' as const }] : [] })),
     actions: [],
   };
 }
@@ -52,7 +52,7 @@ export function digitalWillHandoffProgress(
 export function digitalWillFromView(will: DigitalWillView, propertyId: string): AskOperationResult {
   const boundary: AskPresentationBlock = {
     type: 'BOUNDARY', id: 'digital-will-boundary', title: 'A home knowledge plan, not a legal will',
-    body: 'The Home Continuity Plan records how this home runs so someone else can take over. It is not a legal will or estate document. Entry details and contact information are kept out of the conversation and are not repeated here.',
+    body: 'Not a legal will or estate document. Sensitive entry and contact details are not repeated in the conversation.',
     severity: 'INFO', suggestions: [],
   };
   if (!will) {
@@ -74,23 +74,27 @@ export function digitalWillFromView(will: DigitalWillView, propertyId: string): 
     ...(will.status !== 'ACTIVE' && handoff.state === 'READY' ? [{ id: 'home-continuity-publish', label: 'Mark plan ready', interactionType: 'START_WORKFLOW' as const, message: 'Publish my home continuity plan', operationId: 'HOME_DIGITAL_WILL_CREATE' as const, entityType: 'HOME_DIGITAL_WILL_PUBLISH', entityId: will.id, style: 'PRIMARY' as const }] : []),
   ];
   const enabled = will.sections.filter((section) => section.isEnabled);
+  const savedTitle = will.title && will.title.trim() && will.title.trim() !== 'Home Continuity Plan' ? will.title.trim() : null;
   const entryCount = enabled.reduce((sum, section) => sum + section.entries.length, 0);
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY', id: 'digital-will-summary',
-    title: `${will.title || 'Home Continuity Plan'}: ${readableCode(will.readiness)}, ${will.completionPercent ?? 0}% complete`,
+    // The product name is the headline. The stored plan title (often the legacy "Home Digital Will") is a label on the status line, and the
+    // plan's own completionPercent is self-reported, so it is not shown: the governed handoff readiness below is the one figure.
+    title: 'Home Continuity Plan',
     body: [
-      `${will.status === 'ACTIVE' ? 'Published' : readableCode(will.status).replace(/^./, (c) => c.toUpperCase())}, with ${entryCount} entr${entryCount === 1 ? 'y' : 'ies'} across ${enabled.length} section${enabled.length === 1 ? '' : 's'} and ${will.trustedContacts.length} trusted contact${will.trustedContacts.length === 1 ? '' : 's'}.`,
+      `${savedTitle ? `${savedTitle} · ` : ''}${will.status === 'ACTIVE' ? 'Published' : readableCode(will.status).replace(/^./, (c) => c.toUpperCase())}, with ${entryCount} entr${entryCount === 1 ? 'y' : 'ies'} across ${enabled.length} section${enabled.length === 1 ? '' : 's'} and ${will.trustedContacts.length} trusted contact${will.trustedContacts.length === 1 ? '' : 's'}.`,
       will.lastReviewedAt ? `Last reviewed ${humanDate(new Date(will.lastReviewedAt))}.` : 'Not reviewed yet.',
     ].join(' '),
     tone: handoff.state === 'READY' ? 'DEFAULT' : 'CAUTION',
-    actions: planActions,
+    // A calm answer drops summary actions, so the plan's own operations live on the plan toolbar (the list header) whenever the list exists.
+    actions: will.sections.length || will.trustedContacts.length ? [] : planActions,
   }];
   // IW-PRES-020 (FRD v1.94): the handoff requirements as a ring, ahead of the not-ready note and the plan's sections.
   blocks.push(digitalWillHandoffProgress(handoff.missingRequirements, entryCount, { emergencySectionId: will.sections.find((section) => section.type === 'EMERGENCY')?.id, planId: will.id, primaryContactId: will.trustedContacts.find((contact) => contact.isPrimary)?.id }));
   const sections = [
     ...will.sections.map((section) => ({
       id: `digital-will-section-${section.id}`, title: `${section.title || readableCode(section.type)}${section.isEnabled ? '' : ' — Disabled'}`, count: section.isEnabled ? section.entries.length : 0,
-      items: [{ id: section.id, title: 'Manage section', description: section.description, meta: [section.isEnabled ? 'Enabled' : 'Disabled'], status: section.isEnabled ? 'ENABLED' : 'DISABLED', href: null, entityType: 'HOME_DIGITAL_WILL_SECTION', actions: [
+      items: [{ id: section.id, title: 'Manage section', description: section.description, meta: [section.isEnabled ? 'Enabled' : 'Disabled', `type:${section.type}`], status: section.isEnabled ? 'ENABLED' : 'DISABLED', href: null, entityType: 'HOME_DIGITAL_WILL_SECTION', actions: [
         { id: 'ENTRY_CREATE', label: 'Add entry', interactionType: 'MUTATE_RECORD' as const, message: 'Add an entry to this home continuity plan section', operationId: 'HOME_DIGITAL_WILL_CREATE', style: 'PRIMARY' as const },
         { id: 'SECTION_EDIT', label: 'Edit section', interactionType: 'MUTATE_RECORD' as const, message: 'Edit this home continuity plan section', operationId: 'HOME_DIGITAL_WILL_CREATE', style: 'SECONDARY' as const },
         { id: 'SECTION_MOVE_UP', label: 'Move up', interactionType: 'MUTATE_RECORD' as const, message: 'Move this home continuity plan section up', operationId: 'HOME_DIGITAL_WILL_CREATE', style: 'SECONDARY' as const },
@@ -142,11 +146,15 @@ export function digitalWillFromView(will: DigitalWillView, propertyId: string): 
   if (sections.length) {
     const deliveredCount = sections.reduce((sum, section) => sum + section.items.length, 0);
     blocks.push({ type: 'GROUPED_LIST', filters: [], id: 'digital-will-items', title: 'What the plan holds', description: 'Entry titles by section and who can see the plan. Entry details are not shown here.', sections,
-      collection: collectionDescriptor({ sourceTotal: deliveredCount, fetchedCount: deliveredCount, sections, nextPageAvailable: false }), actions: [
-        { id: 'home-continuity-add-contact', label: 'Add trusted contact', interactionType: 'START_WORKFLOW', message: 'Add a trusted contact to my home continuity plan', operationId: 'HOME_DIGITAL_WILL_CREATE', entityType: 'HOME_DIGITAL_WILL_EDITOR', entityId: will.id, actionId: 'CONTACT_CREATE', style: 'PRIMARY' },
+      collection: collectionDescriptor({ sourceTotal: deliveredCount, fetchedCount: deliveredCount, sections, nextPageAvailable: false }), actions: ([
+        ...planActions,
+        // The readiness checklist owns "Add trusted contact" until a primary contact exists; after that it is a general management action.
+        ...(handoff.missingRequirements.includes('primary-trusted-contact') ? [] : [
+          { id: 'home-continuity-add-contact', label: 'Add trusted contact', interactionType: 'START_WORKFLOW', message: 'Add a trusted contact to my home continuity plan', operationId: 'HOME_DIGITAL_WILL_CREATE', entityType: 'HOME_DIGITAL_WILL_EDITOR', entityId: will.id, actionId: 'CONTACT_CREATE', style: 'PRIMARY' },
+        ]),
         ...(will.sections.length < 8 ? [{ id: 'home-continuity-restore-section', label: 'Restore section', interactionType: 'START_WORKFLOW' as const, message: 'Restore a section in my home continuity plan', operationId: 'HOME_DIGITAL_WILL_CREATE' as const, entityType: 'HOME_DIGITAL_WILL_EDITOR', entityId: will.id, actionId: 'SECTION_CREATE', style: 'SECONDARY' as const }] : []),
         { id: 'home-continuity-packet', label: 'Download emergency packet', href: `/api/properties/${propertyId}/home-digital-will/emergency-packet.pdf`, style: 'SECONDARY' },
-      ] });
+      ] as Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>['actions']).map((action) => (action.id === 'home-continuity-publish' ? action : { ...action, style: 'SECONDARY' as const })) });  // one primary on the toolbar: Mark plan ready, when eligible
   }
   blocks.push(boundary);
   return {

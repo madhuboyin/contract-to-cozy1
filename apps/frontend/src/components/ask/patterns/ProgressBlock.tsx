@@ -23,7 +23,14 @@ export const ProgressBlock: AskBlockRenderer<'PROGRESS'> = ({ block, onItemActio
         </div>
         {block.metrics.length > 0 && <dl className="grid shrink-0 grid-cols-3 gap-1.5">{block.metrics.map((metric) => <div key={metric.label} className={cn('min-w-16 rounded-lg px-2.5 py-1.5 text-center', TONE_CHIP[metric.tone])}><dd className="text-sm font-bold tabular-nums">{metric.value}</dd><dt className="text-[10px] opacity-80">{metric.label}</dt></div>)}</dl>}
       </div>
-      {block.nextSteps.length > 0 && <div className="mt-4 border-t border-slate-100 pt-3"><p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Do next</p><ul className="grid gap-2 md:grid-cols-3">{block.nextSteps.map((step) => <li key={step.id} className="flex min-h-16 flex-col justify-between gap-2 rounded-xl bg-slate-50 px-3 py-2.5"><p className="text-sm font-semibold leading-5 text-slate-900">{step.title}</p><ItemActionButtons item={step} actions={step.actions} onItemAction={onItemAction} disabled={itemActionsDisabled} /></li>)}</ul></div>}
+      {block.nextSteps.length > 0 && <div className="mt-4 border-t border-slate-100 pt-3" data-continuity-checklist=""><p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">To be ready</p>
+        <ul className="divide-y divide-slate-100">{block.nextSteps.map((step) => <li key={step.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 py-2">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <span className={cn('h-2 w-2 shrink-0 rounded-full', step.status === 'WAITING' ? 'bg-slate-300' : 'bg-amber-500')} aria-hidden="true" />
+            <div className="min-w-0"><p className="text-sm font-medium leading-5 text-slate-900">{step.title}</p>{step.status === 'WAITING' && <p className="text-xs text-slate-500" data-step-waiting="">{step.description}</p>}</div>
+          </div>
+          <ItemActionButtons item={step} actions={step.actions} onItemAction={onItemAction} disabled={itemActionsDisabled} />
+        </li>)}</ul></div>}
     </section>;
   }
   return (
