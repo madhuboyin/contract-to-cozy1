@@ -67,12 +67,28 @@ test('the list drops finished or replaced work, sorts by due date, and offers co
   const view = (canChange) => homeWorkItemsFromRows(rows, canChange, new Date('2026-09-15T00:00:00Z'));
   const contributor = view(true);
   assert.deepEqual(contributor.blocks[1].sections[0].items.map((i) => i.id), ['soon', 'late', 'cand']);
+  assert.equal(contributor.blocks[1].listDensity, 'DENSE');
+  assert.equal(contributor.blocks[1].sections[0].initialVisibleCount, 3);
+  assert.equal(contributor.blocks[1].description, null);
   assert.deepEqual(contributor.blocks[1].sections[0].items[0].actions.map((a) => a.id), ['work-item-snooze', 'work-item-reschedule']);
   assert.deepEqual(contributor.blocks[0].actions.map((a) => a.id), ['work-items-accept-routine']);
   const viewer = view(false);
   assert.ok(viewer.blocks[1].sections[0].items.every((i) => i.actions.length === 0));
   assert.deepEqual(viewer.blocks[0].actions, []);
   assert.equal(homeWorkItemsFromRows([item({ state: 'CLOSED' })], true, new Date()).reasonCode, 'NO_OPEN_WORK_ITEMS');
+});
+
+test('the list keeps distinct canonical rows with the same title and adds context instead of deduplicating by copy', () => {
+  const result = homeWorkItemsFromRows([
+    item({ id: 'decision-1', title: 'Consider replacing your Dishwasher.', homeownerReason: 'The appliance is nearing its expected service life.', subjectType: 'INVENTORY_ITEM' }),
+    item({ id: 'decision-2', title: 'Consider replacing your Dishwasher.', homeownerReason: 'Repair costs may exceed the remaining value.', subjectType: 'INVENTORY_ITEM' }),
+  ], true, new Date('2026-09-15T00:00:00Z'));
+  const rows = result.blocks[1].sections[0].items;
+  assert.deepEqual(rows.map((row) => row.id), ['decision-1', 'decision-2']);
+  assert.deepEqual(rows.map((row) => row.description), [
+    'The appliance is nearing its expected service life.',
+    'Repair costs may exceed the remaining value.',
+  ]);
 });
 
 test('snooze and reschedule: form, then a review with before and after; nothing is written; viewers, refresh, finished work refused', async () => {

@@ -103,15 +103,15 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
       workflowControls.invoke({ ...snoozeAction, message });
     };
     return (
-      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-        <div className="p-4">
+      <section className="w-full max-w-[900px] overflow-hidden rounded-2xl border border-slate-200 bg-white">
+        <div className="p-3.5 sm:p-4">
         <p className="text-xs font-bold uppercase tracking-wide text-teal-700">{block.title}</p>
-        <div className="mt-2 space-y-2">
+        <div className="mt-2">
           {next?.items.map((item) => (
-            <div key={item.id}>
-              <p className="font-semibold text-slate-950">{item.title}</p>
-              {item.description && <p className="mt-1 text-sm leading-5 text-slate-600">{item.description}</p>}
-              {item.meta.length > 0 && <p className="mt-1 text-xs text-slate-500">{item.meta.join(' · ')}</p>}
+            <div key={item.id} className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:gap-3">
+              <p className="shrink-0 font-semibold text-slate-950">{item.title}</p>
+              {item.description && <p className="text-sm leading-5 text-slate-700">{item.description}</p>}
+              {item.meta.length > 0 && <p className="shrink-0 text-xs text-slate-500">{item.meta.join(' · ')}</p>}
             </div>
           ))}
         </div>
@@ -130,9 +130,13 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
                   </li>
                 ))}
               </ul>
-            ) : <p className="mt-1 text-sm text-slate-600">No evidence is attached yet.</p>}
-            {evidenceTarget?.description && <p className="mt-2 text-xs leading-5 text-slate-600">{evidenceTarget.description}</p>}
-            {evidenceTarget && (evidenceTarget.actions?.length ?? 0) > 0 && <ItemActionRow item={evidenceTarget} disabled={itemActionsDisabled} onItemAction={onItemAction} />}
+            ) : null}
+            {evidenceTarget && (
+              <div className={cn('flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between [&>div]:mt-0', evidenceRows.length > 0 ? 'mt-2' : 'mt-1')}>
+                <p className="text-xs leading-5 text-slate-600">{evidenceRows.length > 0 ? evidenceTarget.description : 'No evidence is attached yet.'}</p>
+                {(evidenceTarget.actions?.length ?? 0) > 0 && <ItemActionRow item={evidenceTarget} disabled={itemActionsDisabled} onItemAction={onItemAction} />}
+              </div>
+            )}
           </div>
         )}
         {detailsOpen && hasDetails && (
@@ -211,7 +215,7 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
           </div>
         )}
         </div>
-        {(primaryActions.length > 0 || snoozeAction || hasDetails) && <div className="flex flex-wrap gap-2 border-t border-slate-100 bg-slate-50/50 px-4 py-3">
+        {(primaryActions.length > 0 || snoozeAction || hasDetails) && <div className="flex flex-wrap gap-2 border-t border-slate-100 bg-slate-50/50 px-3.5 py-2.5 sm:px-4">
           {primaryActions.map((action) => <ActionLink key={action.id} action={action} />)}
           {snoozeAction && <button type="button" disabled={!workflowControls || workflowControls.disabled} aria-expanded={snoozeOpen} aria-controls={`${block.id}-snooze`} onClick={() => setFocusedDisclosure(snoozeOpen ? null : 'SNOOZE')} className="inline-flex min-h-10 items-center rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 transition-colors hover:bg-slate-50 disabled:opacity-50">{snoozeAction.label}</button>}
           {hasDetails && <button type="button" aria-expanded={detailsOpen} aria-controls={`${block.id}-details`} onClick={() => setFocusedDisclosure(detailsOpen ? null : 'DETAILS')} className="inline-flex min-h-10 items-center rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 transition-colors hover:bg-slate-50">{detailsOpen ? 'Hide details' : 'View details'}</button>}
@@ -237,7 +241,7 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
     ...view, groupedListModes: { ...view.groupedListModes, [block.id]: mode },
   }));
   return (
-    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white" data-grouped-list-presentation={presentation.toLowerCase()} data-list-density={dense ? 'dense' : undefined}>
+    <section className={cn('overflow-hidden rounded-2xl border border-slate-200 bg-white', block.id === 'home-work-items' && 'w-full max-w-[960px]')} data-grouped-list-presentation={presentation.toLowerCase()} data-list-density={dense ? 'dense' : undefined}>
       <div className={cn('border-b border-slate-100', dense ? 'px-3 py-2.5' : 'px-4 py-3')}>
         <h3 className="font-semibold text-slate-950">{block.title}</h3>
         {block.description && <p className="mt-1 text-xs text-slate-500">{block.description}</p>}

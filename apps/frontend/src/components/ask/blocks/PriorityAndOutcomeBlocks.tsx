@@ -78,7 +78,7 @@ export const PriorityListBlock: AskBlockRenderer<'PRIORITY_LIST'> = ({ block, ex
     WATCH: 'bg-slate-100 text-slate-700', OPTIONAL: 'bg-slate-100 text-slate-500', NO_ACTION: 'bg-emerald-100 text-emerald-800',
   };
   return (
-    <section className={calm ? 'space-y-3' : 'rounded-2xl border border-slate-200 bg-white p-4'} data-calm-home-actions={calm ? '' : undefined}>
+    <section className={calm ? 'w-full max-w-[960px] space-y-3' : 'rounded-2xl border border-slate-200 bg-white p-4'} data-calm-home-actions={calm ? '' : undefined}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className={calm ? 'sr-only' : 'font-semibold text-slate-950'}>{block.title}</h3>
       </div>

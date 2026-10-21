@@ -27,11 +27,13 @@ const block: GroupedList = {
 
 test('focused Home Action keeps details and snooze choices inline', () => {
   const invoke = jest.fn();
-  render(
+  const { container } = render(
     <AskBlockActionContext.Provider value={{ disabled: false, invoke }}>
       <GenericGroupedListBlock block={block} executionId="execution" propertyId="home" onItemAction={() => undefined} itemActionsDisabled={false} onFilterClick={() => undefined} onCollectionPage={() => undefined} onAccessLost={() => undefined} />
     </AskBlockActionContext.Provider>,
   );
+
+  expect(container.querySelector('section')).toHaveClass('max-w-[900px]');
 
   expect(screen.queryByText(/blocked flue/)).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'View details' }));

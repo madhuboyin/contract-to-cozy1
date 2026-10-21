@@ -18,7 +18,7 @@ const STATE_LABELS: Record<string, string> = {
 
 export interface WorkItemView {
   id: string; title: string; state: string; obligationType: string; safetyTier: string; dueAt: Date | null; dueWindowEnd: Date | null; snoozedUntil: Date | null;
-  isRoutine: boolean; supersededByWorkItemId: string | null;
+  isRoutine: boolean; supersededByWorkItemId: string | null; subjectType?: string; homeownerReason?: string | null;
 }
 
 export function homeWorkItemsFromRows(items: WorkItemView[], canChange: boolean, now: Date): AskOperationResult {
@@ -35,6 +35,11 @@ export function homeWorkItemsFromRows(items: WorkItemView[], canChange: boolean,
     return left - right;
   }).slice(0, 40);
   const eligible = open.filter(workItemBatchEligible).length;
+  const titleCounts = open.reduce((counts, item) => {
+    const key = item.title.trim().toLocaleLowerCase();
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+    return counts;
+  }, new Map<string, number>());
   const row = (item: WorkItemView) => {
     const due = item.dueAt ?? item.dueWindowEnd;
     const snoozed = item.snoozedUntil && item.snoozedUntil.getTime() > now.getTime();
@@ -43,8 +48,12 @@ export function homeWorkItemsFromRows(items: WorkItemView[], canChange: boolean,
       snoozed ? `Snoozed until ${humanDate(item.snoozedUntil!)}` : null,
       item.isRoutine ? 'Routine' : null,
     ].filter((value): value is string => Boolean(value));
+    const repeatedTitle = (titleCounts.get(item.title.trim().toLocaleLowerCase()) ?? 0) > 1;
+    const context = repeatedTitle
+      ? item.homeownerReason?.trim() || (item.subjectType ? `${readableCode(item.subjectType)} · ${readableCode(item.obligationType)}` : readableCode(item.obligationType))
+      : readableCode(item.obligationType);
     return {
-      id: item.id, title: item.title, description: readableCode(item.obligationType), meta, status: STATE_LABELS[item.state] ?? item.state, href: null,
+      id: item.id, title: item.title, description: context, meta, status: STATE_LABELS[item.state] ?? item.state, href: null,
       entityType: WORK_ITEM_ENTITY_TYPE,
       actions: canChange ? [
         { id: WORK_ITEM_ACTION_IDS.SNOOZE, label: 'Snooze', message: WORK_ITEM_MESSAGES.SNOOZE, interactionType: 'MUTATE_RECORD' as const, operationId: 'HOME_WORK_ITEM_COMMAND' as const, style: 'QUIET' as const },
@@ -55,14 +64,14 @@ export function homeWorkItemsFromRows(items: WorkItemView[], canChange: boolean,
   const blocks: AskPresentationBlock[] = [
     {
       type: 'SUMMARY', id: 'home-work-items-summary', title: `${open.length} open work item${open.length === 1 ? '' : 's'}`,
-      body: `${eligible ? `${eligible} routine low-risk suggestion${eligible === 1 ? '' : 's'} can be accepted together. ` : ''}Snoozing only hides reminders; changing the due date replaces the date it is due.${open.length > sorted.length ? ` Showing the first ${sorted.length}, soonest due first.` : ''}`,
+      body: `${eligible ? `${eligible} routine suggestion${eligible === 1 ? '' : 's'} can be accepted together. ` : ''}${open.length > sorted.length ? `Showing ${sorted.length} soonest.` : 'Soonest due first.'}`,
       tone: 'DEFAULT',
       actions: canChange && eligible ? [{
         id: WORK_ITEM_ACTION_IDS.ACCEPT_ROUTINE, label: `Accept ${eligible} routine suggestion${eligible === 1 ? '' : 's'}`, message: WORK_ITEM_MESSAGES.ACCEPT_ROUTINE,
         interactionType: 'START_WORKFLOW' as const, operationId: 'HOME_WORK_ITEM_COMMAND' as const, style: 'SECONDARY' as const,
       }] : [],
     },
-    { type: 'GROUPED_LIST', filters: [], id: 'home-work-items', title: 'Work items', description: 'Soonest due first.', sections: [{ id: 'home-work-items-open', title: 'Open', count: sorted.length, items: sorted.map(row) }], actions: [] },
+    { type: 'GROUPED_LIST', filters: [], id: 'home-work-items', title: 'Work items', description: null, listDensity: 'DENSE', sections: [{ id: 'home-work-items-open', title: 'Open', count: sorted.length, initialVisibleCount: Math.min(12, sorted.length), items: sorted.map(row) }], actions: [] },
   ];
   return { status: 'ANSWERED', reasonCode: 'HOME_WORK_ITEMS_FOUND', blocks, suggestions: [] };
 }

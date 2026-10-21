@@ -103,6 +103,7 @@ describe('Home Action shelves', () => {
     expect(screen.getByRole('button', { name: 'All · 9' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('button', { name: 'Consider · 6' })).toHaveAttribute('aria-pressed', 'false');
     expect(container.querySelectorAll('[data-home-action-row]')).toHaveLength(2);
+    expect(container.querySelector('[data-calm-home-actions]')).toHaveClass('max-w-[960px]');
     expect(screen.getByText('Consider', { selector: 'span' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Consider · 6' }));
     expect(onItemAction).toHaveBeenCalledWith('HOME_ACTION_FILTER', '', 'What home actions are worth a look to consider?', 'HOME_ACTIONS', 'CONVERSATION_CONTINUE');
