@@ -578,6 +578,9 @@ export interface AskRecordEditorField {
 
 export interface AskRecordEditor {
   recordLabel: string;
+  /** 'add' starts from an empty record; the default is edit. */
+  mode?: 'add' | 'edit';
+  saveLabel?: string;
   sections: Array<{ id: string; title: string }>;
   fields: AskRecordEditorField[];
   /** The freshly read canonical values (strings; '' is empty); dirty state is measured against these. */

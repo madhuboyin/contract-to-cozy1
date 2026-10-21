@@ -78,18 +78,26 @@ const confirm = (operationId, parameters) => confirmCapabilityInvoke(operationId
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 
 // ───────────────────────────── material spec ─────────────────────────────
-test('material: the declared action opens a form with the type, a required name and the home\'s rooms, and writes nothing', async () => {
+test('material: the declared action opens step one (the type only) as an add-mode editor and writes nothing; picking a type opens that category\'s own fields', async () => {
   const result = await capabilityInvoke('MATERIAL_SPEC_ADD', envelope(MATERIAL_SPEC_ADD_MESSAGE, declared('MATERIAL_SPEC_ADD')));
   assert.equal(result.status, 'NEEDS_CONTEXT');
   assert.equal(result.parameters.sourceExecutionId, 'source-1');
   const [request] = result.captureRequests;
   assert.equal(request.captureKey, 'MATERIAL_SPEC_INPUTS');
   assert.equal(request.expectedContextVersion, result.contextVersion);
-  const byKey = Object.fromEntries(request.inputSchema.fields.map((field) => [field.key, field]));
-  assert.deepEqual(Object.keys(byKey), ['category', 'label', 'roomId', 'manufacturer', 'productName', 'colorCode', 'finish', 'supplier', 'notes']);
-  assert.deepEqual([byKey.category.required, byKey.label.required, byKey.roomId.required, byKey.finish.required], [true, true, false, false]);
-  assert.deepEqual(byKey.roomId.inputSchema.options.map((option) => option.label), ['Whole home', 'Kitchen', 'Den']);
-  assert.equal(byKey.category.inputSchema.options.length, 15);
+  assert.deepEqual([request.editor.mode, request.editor.saveLabel], ['add', 'Continue']);
+  assert.deepEqual(request.editor.fields.map((field) => field.key), ['category']);
+  assert.equal(request.editor.fields[0].options.length, 15);
+  const keys = async (category) => (await materialSpecAddResult('u1', 'p1', { category }, 'source-1')).captureRequests[0].editor.fields.map((field) => field.key);
+  assert.deepEqual(await keys('PAINT'), ['category', 'label', 'roomId', 'manufacturer', 'productName', 'sku', 'colorCode', 'finish', 'surface', 'lotBatch', 'supplier', 'purchaseDate', 'quantityPurchased', 'notes']);
+  assert.deepEqual(await keys('HARDWARE'), ['category', 'label', 'roomId', 'manufacturer', 'productName', 'sku', 'colorCode', 'finish', 'material', 'supplier', 'purchaseDate', 'quantityPurchased', 'notes']);
+  assert.ok(!(await keys('INSULATION')).includes('colorCode'), 'colour is not asked for insulation');
+  const step2 = (await materialSpecAddResult('u1', 'p1', { category: 'TILE' }, null)).captureRequests[0].editor;
+  assert.deepEqual([step2.mode, step2.saveLabel], ['add', 'Continue to review']);
+  assert.match(step2.fields.find((field) => field.key === 'category').disabledReason, /Chosen in the previous step/);
+  assert.deepEqual(step2.fields.find((field) => field.key === 'roomId').options.map((option) => option.label), ['Kitchen', 'Den']);
+  assert.equal(step2.fields.find((field) => field.key === 'roomId').emptyLabel, 'Whole home');
+  assert.deepEqual(step2.sections.map((section) => section.title), ['Material', 'Product', 'Match details', 'Purchase and notes']);
   assert.equal(calls.createSpec.length, 0);
 });
 
@@ -104,24 +112,31 @@ test('material: a refresh, a bare message, a wrong message or a viewer never sta
 });
 
 test('material: empty optional text and the whole-home choice are stored as nothing; a type and a name are required', () => {
-  const parsed = MaterialSpecAddInputSchema.parse({ category: 'PAINT', label: ' Kitchen wall ', roomId: '__WHOLE_HOME__', manufacturer: '', colorCode: 'SW 7036', finish: undefined });
-  assert.deepEqual(parsed, { category: 'PAINT', label: 'Kitchen wall', roomId: null, manufacturer: null, productName: null, colorCode: 'SW 7036', finish: null, supplier: null, notes: null });
+  const parsed = MaterialSpecAddInputSchema.parse({ category: 'PAINT', label: ' Kitchen wall ', roomId: '__WHOLE_HOME__', manufacturer: '', colorCode: 'SW 7036', finish: undefined, surface: '', purchaseDate: '' });
+  assert.deepEqual(parsed, { category: 'PAINT', label: 'Kitchen wall', roomId: null, manufacturer: null, productName: null, colorCode: 'SW 7036', finish: null, supplier: null, notes: null, sku: null, surface: null, dimensions: null, material: null, lotBatch: null, quantityPurchased: null, purchaseDate: null });
   assert.equal(MaterialSpecAddInputSchema.safeParse({ category: 'NOT_A_TYPE', label: 'x' }).success, false);
   assert.equal(MaterialSpecAddInputSchema.safeParse({ category: 'PAINT', label: '   ' }).success, false);
   assert.equal(MaterialSpecAddInputSchema.safeParse({ category: 'PAINT', label: 'x', surprise: 1 }).success, false);
   assert.deepEqual(MaterialSpecAddInputSchema.parse(parsed), parsed, 'the stored input parses to itself');
 });
 
-test('material: a valid entry becomes a review card showing what was entered, and a missing room asks again without confirming', async () => {
-  const input = MaterialSpecAddInputSchema.parse({ category: 'PAINT', label: 'Kitchen wall paint', roomId: 'room-kitchen', manufacturer: 'Sherwin-Williams', colorCode: 'SW 7036' });
-  const card = await materialSpecAddResult('u1', 'p1', input, 'source-1');
+test('material: a valid category-specific entry becomes a review card of what was entered; invalid fields and a missing room come back on the editor, never confirmed', async () => {
+  const blank = Object.fromEntries(['label', 'roomId', 'manufacturer', 'productName', 'sku', 'colorCode', 'finish', 'surface', 'lotBatch', 'supplier', 'purchaseDate', 'quantityPurchased', 'notes'].map((key) => [key, '']));
+  const answer = { ...blank, category: 'PAINT', label: 'Kitchen wall paint', roomId: 'room-kitchen', manufacturer: 'Sherwin-Williams', colorCode: 'SW 7036', purchaseDate: '2026-05-01' };
+  const card = await materialSpecAddResult('u1', 'p1', answer, 'source-1');
   assert.equal(card.status, 'NEEDS_CONFIRMATION');
-  assert.deepEqual(card.confirmation.fields.map((field) => [field.label, field.value]), [['Name', 'Kitchen wall paint'], ['Type', 'Paint'], ['Where', 'Kitchen'], ['Brand', 'Sherwin-Williams'], ['Colour code', 'SW 7036']]);
+  assert.deepEqual(card.confirmation.fields.map((field) => [field.label, field.value]), [['Name', 'Kitchen wall paint'], ['Type', 'Paint'], ['Where', 'Kitchen'], ['Brand', 'Sherwin-Williams'], ['Colour code', 'SW 7036'], ['Purchase date', '2026-05-01']]);
+  assert.equal(card.parameters.materialSpecAdd.purchaseDate, '2026-05-01');
   assert.equal(card.captureRequests[0].currentAnswer.roomId, 'room-kitchen');
-  const gone = await materialSpecAddResult('u1', 'p1', { ...input, roomId: 'room-removed' }, null);
+  const gone = await materialSpecAddResult('u1', 'p1', { ...answer, roomId: 'room-removed' }, null);
   assert.equal(gone.status, 'NEEDS_CONTEXT');
-  assert.equal(gone.reasonCode, 'MATERIAL_SPEC_ROOM_UNAVAILABLE');
+  assert.equal(gone.reasonCode, 'MATERIAL_SPEC_INVALID');
+  assert.ok(gone.captureRequests[0].editor.errors.roomId);
   assert.equal(gone.confirmation, undefined);
+  const noName = await materialSpecAddResult('u1', 'p1', { ...answer, label: '' }, null);
+  assert.ok(noName.captureRequests[0].editor.errors.label);
+  const stray = await materialSpecAddResult('u1', 'p1', { ...answer, colorCode: undefined, dimensions: 'x' }, null);
+  assert.equal(stray.status, 'NEEDS_CONTEXT', 'a field this category does not ask for, or a missing one, is refused');
   roomList = [{ id: 'room-den', name: 'Den' }];
   assert.notEqual(await materialSpecContextVersion('p1'), card.contextVersion, 'a changed room list makes an old form out of date');
 });
@@ -203,10 +218,10 @@ const view = (specs) => ({ specs, hasMore: false });
 test('the Material Specs answer offers Add a material to a contributor or owner, in the empty state and with materials, and never a link', () => {
   for (const specs of [[], [{ id: 's1', label: 'Wall paint', category: 'PAINT', scopeLevel: 'PROPERTY', isActive: true, lifecycleStatus: 'ACTIVE', supplierDiscontinued: false }]]) {
     const result = materialSpecsFromView(view(specs), 'p1', true);
-    const action = result.blocks[0].actions[0];
+    const action = (specs.length ? result.blocks.find((block) => block.id === 'material-specs-items') : result.blocks[0]).actions[0];
     assert.deepEqual({ id: action.id, interactionType: action.interactionType, message: action.message, operationId: action.operationId, href: action.href },
       { id: 'add-material-spec', interactionType: 'START_WORKFLOW', message: MATERIAL_SPEC_ADD_MESSAGE, operationId: 'MATERIAL_SPEC_ADD', href: undefined });
-    assert.deepEqual(materialSpecsFromView(view(specs), 'p1', false).blocks[0].actions, [], 'a viewer reads only');
+    assert.deepEqual(materialSpecsFromView(view(specs), 'p1', false).blocks.flatMap((block) => block.actions ?? []), [], 'a viewer reads only');
     for (const block of result.blocks) AskPresentationBlockSchema.parse(block);
     assert.doesNotMatch(JSON.stringify(result.blocks), /\/dashboard\/|"href"/);
   }

@@ -1220,6 +1220,8 @@ export const AskCaptureRequestSchema = z.object({
   // state and a changes-only save from this instead of the generic GROUP form. `inputSchema` stays an honest fallback.
   editor: z.object({
     recordLabel: z.string(),
+    // 'add' starts from an empty record (Continue stays disabled with a reason until the required fields are valid); the default is edit.
+    mode: z.enum(['add', 'edit']).optional(), saveLabel: z.string().optional(),
     sections: z.array(z.object({ id: z.string(), title: z.string() })),
     fields: z.array(z.object({
       key: z.string(), label: z.string(), kind: z.enum(['TEXT', 'TEXTAREA', 'SELECT', 'DATE', 'MONEY']), section: z.string(), required: z.boolean(),

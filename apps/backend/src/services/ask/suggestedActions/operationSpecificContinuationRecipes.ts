@@ -699,6 +699,9 @@ export const OPERATION_SPECIFIC_CONTINUATION_RECIPES: Readonly<Partial<Record<As
     recipe('Review home inventory', 'Show my home inventory', 'INVENTORY_LOOKUP', 'REVIEW_HOME_INVENTORY', 'MATERIAL_SPECS_REVIEW_INVENTORY'),
     recipe('Review home documents', 'Show my home documents', 'DOCUMENT_LOOKUP', 'REVIEW_DOCUMENTS', 'MATERIAL_SPECS_REVIEW_DOCUMENTS'),
   ],
+  MATERIAL_SPEC_UPDATE: [
+    recipe('Review material specs', 'Show my material specs', 'MATERIAL_SPECS_LIST', 'REVIEW_MATERIAL_SPECS', 'MATERIAL_UPDATED_REVIEW_SPECS'),
+  ],
   MATERIAL_SPEC_ADD: [
     recipe('Review material specs', 'Show my material specs', 'MATERIAL_SPECS_LIST', 'REVIEW_MATERIAL_SPECS', 'MATERIAL_ADDED_REVIEW_SPECS'),
     recipe('Review home summary', 'Show my home summary', 'PROPERTY_SUMMARY', 'REVIEW_HOME_SUMMARY', 'MATERIAL_ADDED_REVIEW_SUMMARY'),

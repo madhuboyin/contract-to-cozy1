@@ -301,6 +301,7 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   PROPERTY_PURCHASE_DATE_SET: 'The purchase date is reviewed and then recorded for this home after your confirmation.',
   HOME_JOURNEY_SET: 'How you are using this home is reviewed and then recorded after your confirmation.',
   MATERIAL_SPEC_ADD: 'The material is reviewed and then recorded for this home after your confirmation.',
+  MATERIAL_SPEC_UPDATE: 'The material edit is reviewed, as one change set, before it is saved.',
   NEGOTIATION_SHIELD_CASE_START: 'Your negotiation review is saved as a draft only after you review and confirm it; it is not analyzed or sent.',
   NEGOTIATION_SHIELD_CASE_ANALYZE: 'The analysis runs and its findings and draft are saved only after you confirm; nothing is sent to anyone.',
   NEGOTIATION_SHIELD_CASE_UPDATE: 'The changes to your review\'s saved details are listed and saved only after you confirm; the analysis is not re-run.',

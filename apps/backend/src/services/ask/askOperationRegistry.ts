@@ -333,6 +333,8 @@ export type AskOperationId =
   | 'PROPERTY_PURCHASE_DATE_SET'
   | 'HOME_JOURNEY_SET'
   | 'MATERIAL_SPEC_ADD'
+  // One multi-field editor for a recorded material (FRD v1.390).
+  | 'MATERIAL_SPEC_UPDATE'
   | 'HOME_PLANT_ADD'
   | 'ROOM_PLANT_RECOMMENDATIONS'
   | 'OWNERSHIP_COST_COMMAND'
@@ -465,6 +467,7 @@ export const ASK_INTERNAL_OPERATION_IDS: ReadonlySet<AskOperationId> = new Set<A
   'PROPERTY_PURCHASE_DATE_SET',
   'HOME_JOURNEY_SET',
   'MATERIAL_SPEC_ADD',
+  'MATERIAL_SPEC_UPDATE',
   // Reached only from the empty Home Continuity Plan answer; never by fuzzy retrieval.
   'HOME_DIGITAL_WILL_CREATE',
   // Reached by the declared Start a review action, a scenario choice row, or the deterministic typed-start pattern; never by fuzzy retrieval.
@@ -623,7 +626,7 @@ export interface AskOperationResult {
 const CAPABILITY_CONTINUITY_OPERATIONS = new Set<AskOperationId>([
   'MAINTENANCE_STATUS', 'MAINTENANCE_TASK_CREATE', 'MAINTENANCE_TASK_COMPLETE',
   'MAINTENANCE_TASK_UPDATE', 'MAINTENANCE_FORECAST', 'GUIDANCE_JOURNEY_CREATE', 'QUOTE_COMPARISON_CREATE', 'QUOTE_COMPARISON_REVIEW', 'HOME_DEADLINE_MONITOR',
-  'CAPITAL_RESERVE_PLAN', 'RESERVE_FUND_COMMAND', 'PROPERTY_BRIEF_COMMAND', 'PROPERTY_TAX_APPEAL_READINESS', 'RENOVATION_PERMIT_READINESS', 'MAJOR_EVENT_ENTRY', 'SELLER_PREP_CHECKLIST', 'SELLER_PREP_ITEM_DECISION', 'INVENTORY_ITEM_CORRECT', 'HOME_EVENT_CORRECT', 'HOME_EVENT_UPDATE', 'HOME_EVENT_VISIBILITY', 'WARRANTY_UPDATE', 'ROOM_RENAME', 'ROOM_CREATE', 'PROPERTY_PURCHASE_DATE_SET', 'HOME_JOURNEY_SET', 'MATERIAL_SPEC_ADD', 'HOME_PLANT_ADD', 'ROOM_PLANT_RECOMMENDATIONS', 'OWNERSHIP_COST_COMMAND', 'HOME_HABITS_GENERATE', 'DO_NOTHING_SIMULATION_RUN', 'SERVICE_PRICE_CHECK_RUN',
+  'CAPITAL_RESERVE_PLAN', 'RESERVE_FUND_COMMAND', 'PROPERTY_BRIEF_COMMAND', 'PROPERTY_TAX_APPEAL_READINESS', 'RENOVATION_PERMIT_READINESS', 'MAJOR_EVENT_ENTRY', 'SELLER_PREP_CHECKLIST', 'SELLER_PREP_ITEM_DECISION', 'INVENTORY_ITEM_CORRECT', 'HOME_EVENT_CORRECT', 'HOME_EVENT_UPDATE', 'HOME_EVENT_VISIBILITY', 'WARRANTY_UPDATE', 'ROOM_RENAME', 'ROOM_CREATE', 'PROPERTY_PURCHASE_DATE_SET', 'HOME_JOURNEY_SET', 'MATERIAL_SPEC_ADD', 'MATERIAL_SPEC_UPDATE', 'HOME_PLANT_ADD', 'ROOM_PLANT_RECOMMENDATIONS', 'OWNERSHIP_COST_COMMAND', 'HOME_HABITS_GENERATE', 'DO_NOTHING_SIMULATION_RUN', 'SERVICE_PRICE_CHECK_RUN',
   'COVERAGE_GAPS', 'COVERAGE_COMPARISON_STATUS', 'SAVINGS_OPPORTUNITIES', 'OWNERSHIP_COSTS', 'INVENTORY_LOOKUP', 'DOCUMENT_LOOKUP',
   'PROPERTY_SUMMARY', 'HOME_ACTIONS', 'REPLACEMENT_GUIDANCE', 'REFINANCE_ANALYSIS',
   'REFINANCE_RATE_MONITOR', 'SELL_HOLD_RENT_ANALYSIS',
@@ -826,6 +829,7 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   ROOM_CREATE: definition('ROOM_CREATE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'room.create', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   PROPERTY_PURCHASE_DATE_SET: definition('PROPERTY_PURCHASE_DATE_SET', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'OWNER', 'property-purchase-date.set', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   MATERIAL_SPEC_ADD: definition('MATERIAL_SPEC_ADD', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'material-spec.add', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
+  MATERIAL_SPEC_UPDATE: definition('MATERIAL_SPEC_UPDATE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'material-spec.update', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   NEGOTIATION_SHIELD_CASE_START: definition('NEGOTIATION_SHIELD_CASE_START', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'negotiation-shield.start', ['SUMMARY', 'GROUPED_LIST', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   RENOVATION_CASE_START: definition('RENOVATION_CASE_START', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'renovation-case.start', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   HOME_RECORD_STATE_COMMAND: definition('HOME_RECORD_STATE_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'home-record-state.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
@@ -1128,6 +1132,8 @@ const inventoryCreatePattern = /^\s*(?:please\s+)?(?:add|record|create)\s+(?!(?:
 // explicit correction verb, title/date/name, and the words "timeline event"
 // or "home event" -- checked before the maintenance/inventory patterns.
 // The bare "Edit this timeline event" the declared Edit event action sends (FRD v1.386); a named field still routes to the single-field command.
+// The bare "Edit this material" the declared Edit material action sends (FRD v1.390).
+const materialSpecUpdatePattern = /^\s*(?:edit|update|change)\s+(?:this|the|my|a)\s+material\b/i;
 const homeEventUpdatePattern = /^\s*(?:edit|update|change|correct)\s+(?:this|the|my|a)\s+(?:timeline|home)\s+event\b/i;
 const homeEventCorrectPattern = /\b(?:correct|fix|change|update|edit)\b.{0,40}\b(?:title|date|name|summary|description|amount|cost|price|type|importance|room|inventory\s+item)\b.{0,40}\b(?:timeline|home)\s+event\b|\b(?:timeline|home)\s+event\b.{0,60}\b(?:correct|fix|change|update|edit)\b.{0,30}\b(?:title|date|name|summary|description|amount|cost|price|type|importance|room|inventory\s+item)\b/i;
 // Timeline event visibility (Phase 3 write slice 7): change/make/share/set + private/household/resale/visibility + event.
@@ -1562,6 +1568,9 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   }
   if (warrantyCorrectPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('WARRANTY_UPDATE', 0.97);
+  }
+  if (materialSpecUpdatePattern.test(message) && !explicitCapabilityPattern.test(message)) {
+    return resolved('MATERIAL_SPEC_UPDATE', 0.97);
   }
   if (homeEventUpdatePattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('HOME_EVENT_UPDATE', 0.97);

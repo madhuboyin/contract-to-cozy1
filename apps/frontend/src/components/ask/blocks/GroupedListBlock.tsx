@@ -30,6 +30,7 @@ import { ReserveAllocationResultList } from '../ReserveAllocationResultList';
 import { RoomResultList } from '../RoomResultList';
 import { FACT_SHEET_BLOCK_IDS, FactSheetResultList, PLAN_LAYOUT_BLOCK_IDS, SeasonalPlanResultList } from '../SeasonalPlanResultList';
 import { WarrantyResultList } from '../WarrantyResultList';
+import { MaterialSpecResultList } from '../MaterialSpecResultList';
 import { HomeContinuityPlanResultList } from '../HomeContinuityPlanResultList';
 import { HomeRecordOverviewBlock } from '../HomeRecordOverviewBlock';
 import { ActionLink, AskBlockActionContext, AskContextLink } from './context';
@@ -407,6 +408,7 @@ const NotedHomeEventResultList = withCollectionNote(HomeEventResultList);
 const NotedDocumentResultList = withCollectionNote(DocumentResultList);
 const NotedHouseholdResultList = withCollectionNote(HouseholdResultList);
 const NotedWarrantyResultList = withCollectionNote(WarrantyResultList);
+const NotedMaterialSpecResultList = withCollectionNote(MaterialSpecResultList);
 const NotedReserveAllocationResultList = withCollectionNote(ReserveAllocationResultList);
 const NotedBuyerTaskResultList = withCollectionNote(BuyerTaskResultList);
 const NotedClaimResultList = withCollectionNote(ClaimResultList);
@@ -541,6 +543,10 @@ const DeclaredListBlock: AskBlockRenderer<'GROUPED_LIST'> = (props) => {
   if (block.id === 'property-household') {
     return <NotedHouseholdResultList block={block} propertyId={propertyId} onAccessLost={onAccessLost}
       link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
+  }
+  // 'material-specs-items' is the MATERIAL_SPECS_LIST answer (FRD v1.390): compact rows, inline canonical detail, Edit material in its Manage region.
+  if (block.id === 'material-specs-items') {
+    return <NotedMaterialSpecResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onAction={onItemAction} onAccessLost={onAccessLost} />;
   }
   // 'warranty-results' is the WARRANTY_LOOKUP answer (Warranties W-1); 'property-warranties' is the Property Summary section. Same rows, same detail.
   if (block.id === 'property-warranties' || block.id === 'warranty-results') {

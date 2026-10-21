@@ -41,7 +41,7 @@ import { HOME_JOURNEY_CAPTURE_KEY, PURCHASE_DATE_CAPTURE_KEY } from '../support/
 import { HOME_PLANT_CAPTURE_KEY, MATERIAL_SPEC_CAPTURE_KEY } from '../support/homeRecordAddConstants';
 import { HomePlantAddInputSchema, MaterialSpecAddInputSchema, OwnershipCostDecisionInputSchema, OwnershipCostScenarioInputSchema, OwnershipCostScenarioRenameInputSchema, ProjectTrackerCreateInputSchema, ReserveFundContributionInputSchema } from '../support/commandInputs';
 import { RoomPlantRecommendationInputSchema } from '../support/commandInputs';
-import { homePlantAddResult, homePlantContextVersion, materialSpecAddResult, materialSpecContextVersion } from '../handlers/homeRecordAdds.handler';
+import { homePlantAddResult, homePlantContextVersion, MATERIAL_SPEC_UPDATE_CAPTURE_KEY, materialSpecAddResult, materialSpecContextVersion, materialSpecUpdateResult } from '../handlers/homeRecordAdds.handler';
 import { negotiationShieldStartContextVersion, negotiationShieldStartResult } from '../handlers/negotiationShieldStart.handler';
 import { isNegotiationStartScenario, NEGOTIATION_SHIELD_START_CAPTURE_KEY, NEGOTIATION_START_SCENARIO_SPECS, parseNegotiationStartAnswer } from '../support/negotiationShieldStart';
 import { negotiationShieldEditContextVersion, negotiationShieldEditResult } from '../handlers/negotiationShieldEdit.handler';
@@ -733,6 +733,39 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     captureId = input.idempotencyKey;
     capturedContextVersion = currentVersion;
     canonicalOwner = 'InventoryRoom';
+  } else if (execution.operationId === 'MATERIAL_SPEC_UPDATE') {
+    // Shared RecordEditor submit (FRD v1.390): the answer is every editor field; the target is the material the editor was opened for.
+    if (input.captureKey !== MATERIAL_SPEC_UPDATE_CAPTURE_KEY) {
+      const error = new Error('This material edit is no longer active.');
+      (error as Error & { code?: string }).code = 'ASK_CAPTURE_NOT_ACTIVE';
+      throw error;
+    }
+    const access = await ensurePropertyAccess(userId, execution.propertyId);
+    if (access.role === HouseholdRole.VIEWER) {
+      const error = new Error('A contributor or owner is required to edit a material.');
+      (error as Error & { code?: string }).code = 'ASK_PERMISSION_REQUIRED';
+      throw error;
+    }
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson)
+      ? execution.parametersJson as Record<string, unknown>
+      : {};
+    const specId = typeof storedParameters.specId === 'string' ? storedParameters.specId : null;
+    const spec = specId ? await prisma.materialSpec.findFirst({ where: { id: specId, propertyId: execution.propertyId }, select: { id: true, updatedAt: true } }) : null;
+    if (!spec) {
+      const error = new Error('This material is no longer available. It may have been removed.');
+      (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
+      throw error;
+    }
+    const currentVersion = createHash('sha256').update(`${spec.id}:${spec.updatedAt.toISOString()}`).digest('hex');
+    if (currentVersion !== input.expectedContextVersion) {
+      const error = new Error('This material changed while the editor was open. Review the refreshed values and try again.');
+      (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
+      throw error;
+    }
+    result = await materialSpecUpdateResult(userId, execution.propertyId, execution.message, undefined, { specId: spec.id, answer: input.answer });
+    captureId = input.idempotencyKey;
+    capturedContextVersion = currentVersion;
+    canonicalOwner = 'MaterialSpec';
   } else if (execution.operationId === 'HOME_EVENT_UPDATE') {
     // Shared RecordEditor submit (FRD v1.386): the answer is every editor field; the target is the event the editor was opened for.
     if (input.captureKey !== HOME_EVENT_UPDATE_CAPTURE_KEY) {
@@ -862,9 +895,10 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
       (error as Error & { code?: string }).code = 'ASK_CONTEXT_VERSION_CONFLICT';
       throw error;
     }
-    const answer = material ? MaterialSpecAddInputSchema.safeParse(input.answer) : HomePlantAddInputSchema.safeParse(input.answer);
+    // A material's answer is validated against its category's server-owned editor fields inside materialSpecAddResult (type first, then the rest).
+    const answer = material ? { success: true as const, data: input.answer } : HomePlantAddInputSchema.safeParse(input.answer);
     if (!answer.success) {
-      const error = new Error(material ? 'Choose a type and enter a name of up to 120 characters.' : 'Enter the plant and choose its room.');
+      const error = new Error('Enter the plant and choose its room.');
       (error as Error & { code?: string }).code = 'ASK_CAPTURE_VALIDATION_ERROR';
       throw error;
     }
@@ -873,7 +907,7 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
       : {};
     const sourceExecutionId = typeof storedParameters.sourceExecutionId === 'string' ? storedParameters.sourceExecutionId : null;
     result = material
-      ? await materialSpecAddResult(userId, execution.propertyId, answer.data as ReturnType<typeof MaterialSpecAddInputSchema.parse>, sourceExecutionId)
+      ? await materialSpecAddResult(userId, execution.propertyId, answer.data, sourceExecutionId)
       : await homePlantAddResult(userId, execution.propertyId, answer.data as ReturnType<typeof HomePlantAddInputSchema.parse>, sourceExecutionId);
     captureId = input.idempotencyKey;
     capturedContextVersion = currentVersion;

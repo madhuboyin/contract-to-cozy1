@@ -615,7 +615,7 @@ export function InlineCaptureCard({
       ? Object.fromEntries(Object.entries(request.currentAnswer as Record<string, unknown>).map(([key, value]) => [key, typeof value === 'string' ? value : ''])) as Record<string, string>
       : request.editor.original;
     const hoa = request.captureKey === 'HOA_ASSOCIATION';
-    return <RecordEditor mode={hoa && !request.editor.original.name ? 'add' : 'edit'} editor={request.editor} initialValues={entered} crossFieldErrors={request.captureKey === 'WARRANTY_UPDATE_INPUTS' ? warrantyDateOrder : hoa ? hoaDuesPair : undefined} title={request.title} saving={saving} cancelling={cancelling} error={error} autoFocus={autoFocus}
+    return <RecordEditor mode={request.editor.mode ?? (hoa && !request.editor.original.name ? 'add' : 'edit')} saveLabel={request.editor.saveLabel} editor={request.editor} initialValues={entered} crossFieldErrors={request.captureKey === 'WARRANTY_UPDATE_INPUTS' ? warrantyDateOrder : hoa ? hoaDuesPair : undefined} title={request.title} saving={saving} cancelling={cancelling} error={error} autoFocus={autoFocus}
       sensitiveConsent={request.sensitivity === 'FINANCIAL' || request.sensitivity === 'SECURITY' ? { checked: sensitiveDataConfirmed, label: 'I’m ready to review these financial details.', onChange: setSensitiveDataConfirmed } : undefined}
       onSubmit={(editorValues) => void save(null, false, editorValues)} onCancel={() => void cancelContinuityWorkflow()} />;
   }

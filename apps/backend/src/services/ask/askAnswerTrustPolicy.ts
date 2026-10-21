@@ -130,6 +130,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   PROPERTY_PURCHASE_DATE_SET: new Set(),
   HOME_JOURNEY_SET: new Set(),
   MATERIAL_SPEC_ADD: new Set(),
+  MATERIAL_SPEC_UPDATE: new Set(),
   HOME_PLANT_ADD: new Set(['add-room-for-plant']),
   ROOM_PLANT_RECOMMENDATIONS: new Set(['plant-recommendation-save', 'plant-recommendation-dismiss', 'plant-recommendation-add-home', 'find-plants-again']),
   HOME_HABITS_GENERATE: new Set(),

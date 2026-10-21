@@ -100,7 +100,7 @@ export function readEditorAnswer(fields: readonly RecordEditorField[], answer: u
 }
 
 export function editorValueDisplay(field: RecordEditorField, value: string): string {
-  if (!value) return NOT_RECORDED;
+  if (!value) return field.kind === 'SELECT' && field.emptyLabel ? field.emptyLabel : NOT_RECORDED;
   if (field.kind === 'MONEY' || field.kind === 'SELECT') return correctionDisplay({ label: field.label, kind: field.kind, options: field.options }, value);
   return value;
 }

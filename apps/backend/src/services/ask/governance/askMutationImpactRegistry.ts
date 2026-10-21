@@ -55,6 +55,7 @@ const DECLARED: Readonly<Record<string, Declared>> = {
   PROPERTY_CONTEXT_AREA_CAPTURE: impact(['PROPERTY_SUMMARY']),
   HOME_JOURNEY_SET: impact(['PROPERTY_SUMMARY'], { recordSections: ['property-facts'] }),
   MATERIAL_SPEC_ADD: impact(['MATERIAL_SPECS_LIST'], { recordSections: ['documents'] }),
+  MATERIAL_SPEC_UPDATE: impact(['MATERIAL_SPECS_LIST']),
   HOME_PLANT_ADD: impact(['PLANT_CARE_OUTLOOK']),
   ROOM_PLANT_RECOMMENDATIONS: impact(['PLANT_CARE_OUTLOOK']),
   HOUSEHOLD_INVITATION: impact(['HOUSEHOLD_ACCESS_SUMMARY'], { recordSections: ['household-access'] }),

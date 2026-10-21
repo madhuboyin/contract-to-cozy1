@@ -412,6 +412,7 @@ export const RESULT_OWNERSHIP_RELATIONSHIPS: Readonly<Record<string, readonly st
   INTELLIGENCE_ENVELOPE_QUERY: operationSpecificContinuationOutcomeKeys('INTELLIGENCE_ENVELOPE_QUERY'),
   MATERIAL_SPECS_LIST: operationSpecificContinuationOutcomeKeys('MATERIAL_SPECS_LIST'),
   MATERIAL_SPEC_ADD: operationSpecificContinuationOutcomeKeys('MATERIAL_SPEC_ADD'),
+  MATERIAL_SPEC_UPDATE: operationSpecificContinuationOutcomeKeys('MATERIAL_SPEC_UPDATE'),
   NEIGHBORHOOD_CHANGE_FEED: operationSpecificContinuationOutcomeKeys('NEIGHBORHOOD_CHANGE_FEED'),
   NEIGHBORHOOD_INTERACTION_COMMAND: operationSpecificContinuationOutcomeKeys('NEIGHBORHOOD_INTERACTION_COMMAND'),
   OPERATIONAL_WORK_UPDATE: operationSpecificContinuationOutcomeKeys('OPERATIONAL_WORK_UPDATE'),

@@ -75,8 +75,8 @@ test('the real list query is the page\'s: this property, category then label, a 
 
 test('materials are grouped by category with product, room, colour, finish, supplier and lifecycle; notes stay on the spec', () => {
   const result = materialSpecsFromView(view(), 'p1');
-  assert.equal(result.blocks[0].title, '3 materials recorded');
-  assert.equal(result.blocks[0].body, 'Across 2 categories: Paint, Tile. 1 is marked discontinued by the supplier.');
+  assert.equal(result.blocks[0].title, '3 saved materials');
+  assert.equal(result.blocks[0].body, '2 types used in this home: Paint, Tile. 1 is marked discontinued by the supplier.');
   assert.equal(result.blocks[0].tone, 'CAUTION');
   const list = result.blocks.find((block) => block.id === 'material-specs-items');
   assert.deepEqual(list.sections.map((section) => [section.title, section.items.map((row) => row.title)]), [
@@ -86,7 +86,8 @@ test('materials are grouped by category with product, room, colour, finish, supp
   const [dining, trim] = list.sections[0].items;
   assert.equal(dining.description, 'Sherwin-Williams · Alabaster');
   assert.deepEqual(dining.meta, ['Dining room', 'Colour SW 7008', 'Finish Eggshell', 'Supplier Local paint store']);
-  assert.equal(dining.status, 'AS BUILT');
+  assert.equal(dining.status, 'AS_BUILT', 'the canonical lifecycle key; the client shows the friendly label');
+  assert.equal(dining.entityType, 'MATERIAL_SPEC');
   assert.equal(dining.href, undefined);
   assert.deepEqual(trim.meta, ['Whole home', 'Discontinued']);
   assert.deepEqual(list.sections[1].items[0].meta, ['Primary bath', 'No longer in use']);
@@ -96,7 +97,7 @@ test('materials are grouped by category with product, room, colour, finish, supp
 
 test('a second page is disclosed; nothing recorded is not an all-clear', () => {
   const more = materialSpecsFromView(view({ hasMore: true, nextCursor: 'shower' }), 'p1');
-  assert.equal(more.blocks[0].title, '3+ materials recorded');
+  assert.equal(more.blocks[0].title, '3+ saved materials');
   assert.equal(more.blocks.find((block) => block.id === 'material-specs-limit').title, 'Showing the first 3 materials');
   const none = materialSpecsFromView({ specs: [], nextCursor: null, hasMore: false }, 'p1');
   assert.equal(none.reasonCode, 'MATERIAL_SPECS_EMPTY');

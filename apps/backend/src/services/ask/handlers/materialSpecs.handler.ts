@@ -9,6 +9,7 @@ import { MaterialSpecService } from '../../materialSpec.service';
 import { HouseholdRole } from '@prisma/client';
 import { ensurePropertyAccess } from '../askHandlerSupport';
 import { MATERIAL_SPEC_ADD_ACTION_ID, MATERIAL_SPEC_ADD_MESSAGE } from '../support/homeRecordAddConstants';
+import { MATERIAL_CATEGORY_LABELS } from '../support/materialSpecEditor';
 
 const materialSpecService = new MaterialSpecService();
 
@@ -20,15 +21,14 @@ const materialSpecService = new MaterialSpecService();
 // supplier and a discontinued flag, which are the facts people ask a materials record for. Notes, lot numbers,
 // quantities and compliance checks stay on the spec page. Read-only.
 type MaterialSpecListView = Awaited<ReturnType<MaterialSpecService['listSpecs']>>;
-// The page's own labels (MaterialSpecsClient CATEGORY_LABELS; lifecycle shown as its enum words).
-export const MATERIAL_CATEGORY_LABELS: Record<string, string> = {
-  PAINT: 'Paint', TILE: 'Tile', FLOORING: 'Flooring', GROUT: 'Grout', COUNTERTOP: 'Countertop', CABINET: 'Cabinet', HARDWARE: 'Hardware',
-  TRIM_MOLDING: 'Trim & Molding', WALLPAPER: 'Wallpaper', ROOFING: 'Roofing', SIDING: 'Siding', WINDOW: 'Window', DOOR: 'Door',
-  INSULATION: 'Insulation', OTHER: 'Other',
-};
+export { MATERIAL_CATEGORY_LABELS };
+
+export const MATERIAL_SPEC_EDIT_MESSAGE = 'Edit this material.';
 
 export function materialSpecsFromView(view: MaterialSpecListView, propertyId: string, canAdd = false): AskOperationResult {
   // A contributor or owner can record a material from here, inside Ask; a viewer reads the list only.
+  // Edit is declared per row for contributors and owners only (FRD v1.390); a viewer reads the list and the canonical detail.
+  const editActions = canAdd ? [{ id: 'edit-material', label: 'Edit material', message: MATERIAL_SPEC_EDIT_MESSAGE, interactionType: 'MUTATE_RECORD' as const, operationId: 'MATERIAL_SPEC_UPDATE', style: 'SECONDARY' as const }] : undefined;
   const addActions = canAdd ? [{ id: MATERIAL_SPEC_ADD_ACTION_ID, label: 'Add a material', interactionType: 'START_WORKFLOW' as const, message: MATERIAL_SPEC_ADD_MESSAGE, operationId: 'MATERIAL_SPEC_ADD', style: 'PRIMARY' as const }] : [];
   const boundary: AskPresentationBlock = {
     type: 'BOUNDARY', id: 'material-specs-boundary', title: 'As recorded, not checked against the product',
@@ -50,15 +50,16 @@ export function materialSpecsFromView(view: MaterialSpecListView, propertyId: st
   const discontinued = specs.filter((spec) => spec.supplierDiscontinued).length;
   const categories = new Map<string, typeof specs>();
   for (const spec of specs) categories.set(spec.category, [...(categories.get(spec.category) ?? []), spec]);
+  const categoryNames = [...categories.keys()].map((category) => MATERIAL_CATEGORY_LABELS[category] ?? readableCode(category));
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY', id: 'material-specs-summary',
-    title: `${specs.length}${view.hasMore ? '+' : ''} material${specs.length === 1 && !view.hasMore ? '' : 's'} recorded`,
+    title: `${specs.length}${view.hasMore ? '+' : ''} saved material${specs.length === 1 && !view.hasMore ? '' : 's'}`,
     body: [
-      `Across ${categories.size} categor${categories.size === 1 ? 'y' : 'ies'}: ${[...categories.keys()].map((category) => MATERIAL_CATEGORY_LABELS[category] ?? readableCode(category)).join(', ')}.`,
+      categories.size === 1 ? `${categoryNames[0]} used in this home.` : `${categories.size} types used in this home: ${categoryNames.join(', ')}.`,
       discontinued ? `${discontinued} ${discontinued === 1 ? 'is' : 'are'} marked discontinued by the supplier.` : null,
     ].filter(Boolean).join(' '),
     tone: discontinued ? 'CAUTION' : 'DEFAULT',
-    actions: addActions,
+    actions: [],
   }];
   if (view.hasMore) {
     blocks.push({
@@ -67,12 +68,13 @@ export function materialSpecsFromView(view: MaterialSpecListView, propertyId: st
     });
   }
   blocks.push({
-    type: 'GROUPED_LIST', filters: [], id: 'material-specs-items', title: 'Recorded materials', description: 'By category. Select a material to see its details.',
+    type: 'GROUPED_LIST', filters: [], id: 'material-specs-items', title: 'Saved materials', description: 'By type. Select View details to see everything recorded.',
     sections: [...categories.entries()].map(([category, rows]) => ({
       id: `material-specs-${category.toLowerCase()}`, title: MATERIAL_CATEGORY_LABELS[category] ?? readableCode(category), count: rows.length,
       items: rows.map((spec) => ({
         id: spec.id,
         title: spec.label,
+        entityType: 'MATERIAL_SPEC',
         description: [spec.manufacturer, spec.productName].filter(Boolean).join(' · ') || null,
         meta: [
           spec.room?.name ?? (spec.scopeLevel === 'PROPERTY' ? 'Whole home' : null),
@@ -82,10 +84,13 @@ export function materialSpecsFromView(view: MaterialSpecListView, propertyId: st
           spec.supplierDiscontinued ? 'Discontinued' : null,
           spec.isActive ? null : 'No longer in use',
         ].filter((value): value is string => Boolean(value)),
-        status: spec.lifecycleStatus.replace(/_/g, ' '),
+        // The canonical lifecycle key; the client shows the friendly label (Planned, Installed ...) and explains it in the detail.
+        status: spec.lifecycleStatus,
+        actions: editActions,
       })),
     })),
-    actions: [],
+    // The collection's one primary step sits in its header, beside the summary, instead of on a row of its own.
+    actions: addActions,
   });
   blocks.push(boundary);
   return { status: 'ANSWERED', reasonCode: 'MATERIAL_SPECS_READY', blocks, suggestions: [] };

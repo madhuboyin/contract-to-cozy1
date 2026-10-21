@@ -1,5 +1,5 @@
 // Ask handler support: commandInputs. Moved out of askHandlerSupport.ts unchanged (FRD v1.110); that file re-exports these modules.
-import { HouseholdRole, InventoryItemCategory, MaintenanceTaskPriority, MaterialCategory, PlantGoalType, PlantLightLevel, PlantMaintenanceLevel, RecurrenceFrequency, ServiceCategory } from '@prisma/client';
+import { HouseholdRole, InventoryItemCategory, MaintenanceTaskPriority, MaterialCategory, MaterialSurface, PlantGoalType, PlantLightLevel, PlantMaintenanceLevel, RecurrenceFrequency, ServiceCategory } from '@prisma/client';
 import { z } from 'zod';
 import { optionalText } from './inputPrimitives';
 export * from './projectTrackerInputs';
@@ -261,6 +261,20 @@ export const MaterialSpecAddInputSchema = z.object({
   finish: optionalText(60),
   supplier: optionalText(120),
   notes: optionalText(1000),
+  // The category-aware editor's other fields (FRD v1.387).
+  sku: optionalText(120),
+  surface: z.nativeEnum(MaterialSurface).nullish().or(z.literal('').transform(() => null)).transform((value) => value ?? null),
+  dimensions: optionalText(120),
+  material: optionalText(120),
+  lotBatch: optionalText(120),
+  quantityPurchased: optionalText(60),
+  purchaseDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullish().or(z.literal('').transform(() => null)).transform((value) => value ?? null),
+}).strict();
+
+// The changed fields only, by editor field key (FRD v1.387); '' clears an optional field.
+export const MaterialSpecUpdateInputSchema = z.object({
+  specId: z.string().trim().min(1).max(160),
+  changes: z.record(z.string(), z.string().max(1000)).refine((changes) => Object.keys(changes).length > 0 && Object.keys(changes).length <= 16, { message: 'Change at least one field.' }),
 }).strict();
 
 export const HomePlantAddInputSchema = z.object({
