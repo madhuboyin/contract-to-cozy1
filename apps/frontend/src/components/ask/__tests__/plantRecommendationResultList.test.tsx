@@ -54,3 +54,17 @@ test('reveals scannable care and placement guidance without expanding every reco
   expect(screen.getByText('Water when dry.')).toBeVisible();
   expect(screen.getByText('Near a bright window.')).toBeVisible();
 });
+
+test('upgrades legacy stored detail strings without repeating rationale or fallback warnings', () => {
+  const legacyBlock = JSON.parse(JSON.stringify(block)) as Block;
+  const legacyItem = legacyBlock.sections[0].items[0];
+  legacyItem.guidance = undefined;
+  legacyItem.detail = 'Fits kitchen conditions. Tradeoff: light is close to ideal.\nCare: Prune to keep shape.\nPlacement: Use a high shelf.';
+  legacyItem.warnings = ['Use filtered light.', 'Works, but not ideal under current room inputs.'];
+  render(<PlantRecommendationResultList block={legacyBlock} onAction={jest.fn()} />);
+  fireEvent.click(screen.getByRole('button', { name: /View details/ }));
+  expect(screen.getByText('Prune to keep shape.')).toBeVisible();
+  expect(screen.getByText('Use a high shelf.')).toBeVisible();
+  expect(screen.queryByText(/Fits kitchen conditions. Tradeoff/)).not.toBeInTheDocument();
+  expect(screen.queryByText('Works, but not ideal under current room inputs.')).not.toBeInTheDocument();
+});

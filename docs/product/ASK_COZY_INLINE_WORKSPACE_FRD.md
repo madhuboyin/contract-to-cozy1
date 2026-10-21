@@ -1,9 +1,11 @@
 # Ask Cozy — Inline Workspace Product Requirements Document
 
-**Version:** 1.396
+**Version:** 1.397
 **Date:** October 21, 2026
 **Status:** Approved product direction; implementation is partial and tracked by requirement
 **Scope:** Ask Cozy interaction across homeowner-facing domains on desktop and mobile, including lightweight capability discovery and Ask-native completion
+
+**Revision 1.397 — Plant Advisor stored-result compatibility (2026-10-21):** Ask executions retain the presentation payload originally delivered, so recommendation cards created before revision 1.396 still carry the former newline-delimited `detail` string. The dedicated Plant Advisor renderer now normalizes those stored results at display time: `Care:` and `Placement:` lines become the same typed-looking **Care & placement** cards as new answers, the legacy rationale line is omitted when visible highlights or warnings already explain the fit, and the generic near-fit fallback is hidden when a specific warning exists. New producer output remains structured; no stored execution is mutated and current ranking, actions and confirmation behavior are unchanged.
 
 **Revision 1.396 — Plant Advisor guidance hierarchy (2026-10-21):** Expanded recommendation details no longer render the recommendation rationale, care and placement as one paragraph-like string. The grouped-list item contract gains optional typed guidance rows; Plant Advisor uses them for a compact **Care & placement** region with separate icon-led **Care** and **Best placement** cards, two columns on wide cards and stacked on narrow screens. Fit rationale stays in the visible highlights and tradeoffs stay in **Consider before choosing**, so expanded details do not repeat them. The generic fallback warning “Works, but not ideal under current room inputs” is suppressed at the Ask presentation boundary whenever a more specific warning is available; it remains when it is the only warning. Ranking, canonical recommendation data, actions, authorization and confirmation behavior are unchanged.
 

@@ -17,6 +17,27 @@ const toneClass = {
   CRITICAL: 'border-rose-200 bg-rose-50 text-rose-800',
 };
 
+const GENERIC_NEAR_FIT_WARNING = 'Works, but not ideal under current room inputs.';
+
+function normalizedRecommendationDetail(item: Item) {
+  const warnings = (item.warnings ?? []).filter((warning) => warning !== GENERIC_NEAR_FIT_WARNING || item.warnings?.length === 1);
+  if (item.guidance?.length) return { guidance: item.guidance, detail: item.detail, warnings };
+
+  // Stored Ask executions retain the presentation payload that was originally
+  // delivered. Upgrade the former newline-delimited Plant Advisor detail at
+  // render time so existing conversations receive the current hierarchy too.
+  const guidance: NonNullable<Item['guidance']> = [];
+  const remaining: string[] = [];
+  for (const line of item.detail?.split('\n').map((value) => value.trim()).filter(Boolean) ?? []) {
+    if (line.startsWith('Care:')) guidance.push({ label: 'Care', value: line.slice('Care:'.length).trim(), kind: 'CARE' });
+    else if (line.startsWith('Placement:')) guidance.push({ label: 'Best placement', value: line.slice('Placement:'.length).trim(), kind: 'PLACEMENT' });
+    // The legacy first line is recommendation rationale already represented by
+    // visible highlights and warnings. Do not repeat it inside expanded detail.
+    else if (!item.highlights?.length && !warnings.length) remaining.push(line);
+  }
+  return { guidance, detail: remaining.join('\n') || null, warnings };
+}
+
 function RecommendationCard({ item, disabled, onAction }: { item: Item; disabled?: boolean; onAction?: ItemActionHandler }) {
   const [expanded, setExpanded] = useState(false);
   const actions = item.actions ?? [];
@@ -26,7 +47,8 @@ function RecommendationCard({ item, disabled, onAction }: { item: Item; disabled
   const run = (action: NonNullable<Item['actions']>[number]) => onAction?.(action.entityType ?? item.entityType, action.entityId ?? item.id, action.message, action.operationId, action.interactionType);
   const status = item.status === 'SAVED' ? 'Saved for later' : item.status === 'DISMISSED' ? 'Not interested' : null;
   const detailsId = `plant-recommendation-${item.id}-details`;
-  const hasDetails = Boolean(item.detail || item.guidance?.length || (item.warnings?.length ?? 0) > 1);
+  const normalized = normalizedRecommendationDetail(item);
+  const hasDetails = Boolean(normalized.detail || normalized.guidance.length || normalized.warnings.length > 1);
 
   return <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5" data-plant-recommendation={item.id}>
     <div className="flex items-start gap-3">
@@ -52,16 +74,16 @@ function RecommendationCard({ item, disabled, onAction }: { item: Item; disabled
     {(item.highlights?.length ?? 0) > 0 && <ul className="mt-4 grid gap-2 text-sm text-slate-700 sm:grid-cols-2" aria-label="Why this plant fits">
       {item.highlights!.map((highlight) => <li key={highlight} className="flex gap-2"><Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-teal-700" aria-hidden="true" /><span>{highlight}</span></li>)}
     </ul>}
-    {(item.warnings?.length ?? 0) > 0 && <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50/70 px-3 py-2.5 text-sm text-amber-950">
-      <div className="flex gap-2"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" /><div><p className="font-semibold">Consider before choosing</p><p className="mt-0.5 leading-5">{item.warnings![0]}</p></div></div>
-      {expanded && item.warnings!.slice(1).map((warning) => <p key={warning} className="ml-6 mt-1 leading-5">{warning}</p>)}
+    {normalized.warnings.length > 0 && <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50/70 px-3 py-2.5 text-sm text-amber-950">
+      <div className="flex gap-2"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" /><div><p className="font-semibold">Consider before choosing</p><p className="mt-0.5 leading-5">{normalized.warnings[0]}</p></div></div>
+      {expanded && normalized.warnings.slice(1).map((warning) => <p key={warning} className="ml-6 mt-1 leading-5">{warning}</p>)}
     </div>}
 
     {expanded && <div id={detailsId} className="mt-4 border-t border-slate-100 pt-4">
-      {(item.guidance?.length ?? 0) > 0 && <section aria-label="Care and placement">
+      {normalized.guidance.length > 0 && <section aria-label="Care and placement">
         <h6 className="text-sm font-semibold text-slate-900">Care &amp; placement</h6>
         <div className="mt-2 grid gap-2 sm:grid-cols-2">
-          {item.guidance!.map((guidance) => {
+          {normalized.guidance.map((guidance) => {
             const Icon = guidance.kind === 'PLACEMENT' ? MapPin : guidance.kind === 'CARE' ? Droplets : Leaf;
             return <div key={`${guidance.label}-${guidance.value}`} className="flex gap-2.5 rounded-xl border border-emerald-100 bg-emerald-50/50 p-3">
               <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-white text-teal-700 shadow-sm" aria-hidden="true"><Icon className="h-4 w-4" /></span>
@@ -70,7 +92,7 @@ function RecommendationCard({ item, disabled, onAction }: { item: Item; disabled
           })}
         </div>
       </section>}
-      {item.detail && <div className={cn('whitespace-pre-line text-sm leading-6 text-slate-700', item.guidance?.length ? 'mt-3' : '')}>{item.detail}</div>}
+      {normalized.detail && <div className={cn('whitespace-pre-line text-sm leading-6 text-slate-700', normalized.guidance.length ? 'mt-3' : '')}>{normalized.detail}</div>}
     </div>}
     <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-4">
       {track && <button type="button" disabled={disabled || !onAction} onClick={() => run(track)} className="min-h-10 rounded-xl bg-teal-700 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50">{track.label}</button>}
