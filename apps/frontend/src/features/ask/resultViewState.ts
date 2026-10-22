@@ -9,11 +9,12 @@ export type ResultView = {
   visibleCounts: Record<string, number>;
   presentationModes: Record<string, 'AUTO' | 'TABLE' | 'CARDS'>;
   comparisonLayouts: Record<string, 'AUTO' | 'STRIP' | 'GRID' | 'TABLE'>;
+  selectedComparisonOptions: Record<string, string>;
   groupedListModes: Record<string, 'AUTO' | 'LIST' | 'CARDS'>;
   timelineLayouts?: Record<string, 'TRACK' | 'LIST'>;
   scrollOffset: number | null;
 };
-export const EMPTY_RESULT_VIEW: ResultView = { selectedTaskId: null, detailTaskId: null, detailTarget: null, detailPageIntent: null, expandedRows: [], visibleCounts: {}, presentationModes: {}, comparisonLayouts: {}, groupedListModes: {}, scrollOffset: null };
+export const EMPTY_RESULT_VIEW: ResultView = { selectedTaskId: null, detailTaskId: null, detailTarget: null, detailPageIntent: null, expandedRows: [], visibleCounts: {}, presentationModes: {}, comparisonLayouts: {}, selectedComparisonOptions: {}, groupedListModes: {}, scrollOffset: null };
 const PREFIX = 'ctc:ask-result-view:v1:';
 export const resultViewKey = (sessionId: string, propertyId: string, resultId: string) => `${PREFIX}${sessionId}:${propertyId}:${resultId}`;
 
@@ -41,6 +42,9 @@ export function readResultView(storage: Storage, key: string): ResultView {
       comparisonLayouts: Object.fromEntries(Object.entries(value.comparisonLayouts ?? {})
         .filter(([key, mode]) => key.length <= 120 && ['AUTO', 'STRIP', 'GRID', 'TABLE'].includes(String(mode)))
         .slice(0, 50)) as ResultView['comparisonLayouts'],
+      selectedComparisonOptions: Object.fromEntries(Object.entries(value.selectedComparisonOptions ?? {})
+        .filter(([key, optionId]) => key.length <= 120 && typeof optionId === 'string' && optionId.length <= 120)
+        .slice(0, 50)) as ResultView['selectedComparisonOptions'],
       groupedListModes: Object.fromEntries(Object.entries(value.groupedListModes ?? {})
         .filter(([key, mode]) => key.length <= 120 && ['AUTO', 'LIST', 'CARDS'].includes(String(mode)))
         .slice(0, 50)) as ResultView['groupedListModes'],
@@ -82,6 +86,7 @@ export function reconcileResultView(view: ResultView, execution: AskExecutionRes
     ? view.detailTarget : null;
   const tableIds = new Set(execution.blocks.filter((block) => block.type === 'TABLE').map((block) => block.id));
   const comparisonIds = new Set(execution.blocks.filter((block) => block.type === 'COMPARISON').map((block) => block.id));
+  const comparisonOptions = new Map(execution.blocks.filter((block) => block.type === 'COMPARISON').map((block) => [block.id, new Set(block.options.map((option) => option.id))]));
   const groupedListIds = new Set(execution.blocks.filter((block) => block.type === 'GROUPED_LIST').map((block) => block.id));
   const timelineIds = new Set(execution.blocks.filter((block) => block.type === 'TIMELINE').map((block) => block.id));
   return {
@@ -94,6 +99,7 @@ export function reconcileResultView(view: ResultView, execution: AskExecutionRes
     visibleCounts: Object.fromEntries(sections.map((section) => [section.id, Math.max(5, Math.min(view.visibleCounts[section.id] ?? 5, section.items.length))])),
     presentationModes: Object.fromEntries(Object.entries(view.presentationModes ?? {}).filter(([blockId]) => tableIds.has(blockId))),
     comparisonLayouts: Object.fromEntries(Object.entries(view.comparisonLayouts ?? {}).filter(([blockId]) => comparisonIds.has(blockId))),
+    selectedComparisonOptions: Object.fromEntries(Object.entries(view.selectedComparisonOptions ?? {}).filter(([blockId, optionId]) => comparisonOptions.get(blockId)?.has(optionId))),
     groupedListModes: Object.fromEntries(Object.entries(view.groupedListModes ?? {}).filter(([blockId]) => groupedListIds.has(blockId))),
     timelineLayouts: Object.fromEntries(Object.entries(view.timelineLayouts ?? {}).filter(([blockId]) => timelineIds.has(blockId))),
   };

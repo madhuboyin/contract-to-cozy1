@@ -1,6 +1,6 @@
 'use client';
 
-import { useContext, useRef, useState, type ReactNode } from 'react';
+import { useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { AskAction, AskPresentationBlock } from '@/features/ask/types';
@@ -80,18 +80,31 @@ export function ComparisonStripBlock({ block, renderAction }: { block: Compariso
   const decision = resolveAdaptiveComparisonPresentation(block, preference);
   const layout = decision.layout;
   const priceShares = comparisonPriceShares(block);
-  const [activeIndex, setActiveIndex] = useState(0);
+  const restoredOptionId = controls?.view.selectedComparisonOptions?.[block.id];
+  const restoredIndex = Math.max(0, block.options.findIndex((option) => option.id === restoredOptionId));
+  const [activeIndex, setActiveIndex] = useState(restoredIndex);
   const stripRef = useRef<HTMLDivElement>(null);
   const optionRefs = useRef<Array<HTMLElement | null>>([]);
+
+  useEffect(() => {
+    const next = block.options.findIndex((option) => option.id === restoredOptionId);
+    if (next >= 0) setActiveIndex(next);
+  }, [block.options, restoredOptionId]);
 
   const setLayout = (next: ComparisonPresentationPreference) => controls?.change((view) => ({
     ...view,
     comparisonLayouts: { ...(view.comparisonLayouts ?? {}), [block.id]: next },
   }));
 
+  const rememberOption = (index: number) => controls?.change((view) => ({
+    ...view,
+    selectedComparisonOptions: { ...(view.selectedComparisonOptions ?? {}), [block.id]: block.options[index]?.id },
+  }));
+
   const moveTo = (next: number) => {
     const bounded = Math.max(0, Math.min(next, block.options.length - 1));
     setActiveIndex(bounded);
+    rememberOption(bounded);
     const option = optionRefs.current[bounded];
     option?.scrollIntoView?.({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'nearest', inline: 'start' });
     option?.focus({ preventScroll: true });
@@ -105,6 +118,7 @@ export function ComparisonStripBlock({ block, renderAction }: { block: Compariso
       return Math.abs(option.offsetLeft - left) < best.distance ? { index, distance: Math.abs(option.offsetLeft - left) } : best;
     }, { index: 0, distance: Number.POSITIVE_INFINITY });
     setActiveIndex(closest.index);
+    rememberOption(closest.index);
   };
 
   // The at-a-glance verdict: only what the server marked as leading, so the card never ranks options on its own.

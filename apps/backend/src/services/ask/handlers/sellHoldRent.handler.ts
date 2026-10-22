@@ -5,6 +5,7 @@ import { planningHomeValueRequestResult } from '../support/planningHomeValueRequ
 import { SALE_CASE_ACTION_IDS, SALE_CASE_MESSAGES, legalNextStatuses, type SaleCaseKind } from '../support/sellerPrepCaseCommand';
 import { HouseholdRole } from '@prisma/client';
 import { createHash } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { prisma } from '../../../lib/prisma';
 import { type AskCaptureRequest, type AskPresentationBlock, type CreateAskExecutionRequest } from '../../../productFramework/ask/ask.contract';
 import { type AskOperationResult } from '../askOperationRegistry';
@@ -12,13 +13,15 @@ import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { evaluateFeatureContext } from '../../../modules/propertyContext/application/evaluateFeatureContext';
 import { SellHoldRentService } from '../../sellHoldRent.service';
 import { PropertySaleCaseService, SALE_READINESS_MUST_ADDRESS_CLASSES, saleReadinessFigure } from '../../propertySaleCase.service';
-import { money } from '../askFormatting';
+import { humanDate, money } from '../askFormatting';
 import { ensurePropertyAccess, exactEntityMatch } from '../askHandlerSupport';
 import { sellHoldRentDecisionFamilyAdapter } from '../../decisionPlatform/domainSnapshotAdapters';
 import { SELL_HOLD_RENT_WHAT_IF_LABELS, isSellHoldRentMoneyKey, parseSellHoldRentWhatIf, type SellHoldRentWhatIf } from '../support/sellHoldRentWhatIf';
 import { collectionDescriptor } from '../support/collectionDescriptor';
 import { FINANCING_PROFILE_ACTION_ID, FINANCING_PROFILE_COMMAND_MESSAGE, FINANCING_PROFILE_ENTITY_TYPE } from '../support/financingProfileCommand';
 import { SELL_HOLD_RENT_COMMAND_ACTION_IDS, SELL_HOLD_RENT_COMMAND_ENTITY_TYPE, SELL_HOLD_RENT_COMMAND_LABELS, SELL_HOLD_RENT_COMMAND_MESSAGES } from '../support/sellHoldRentCommand';
+import { type AskViewState } from '../support/executionState';
+import { loadAskViewState } from './maintenance.handler';
 
 const sellHoldRentService = new SellHoldRentService();
 
@@ -134,7 +137,7 @@ async function sellHoldRentWhatIfResult(userId: string, propertyId: string, mess
   return sellHoldRentWhatIfFromAnalyses(standard.value, scenario.value, overrides);
 }
 
-async function sellHoldRentAnalysisResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
+async function sellHoldRentAnalysisResult(userId: string, propertyId: string, message: string, priorViewState?: AskViewState | null): Promise<AskOperationResult> {
   const requestedYears: 5 | 10 = /\b(?:10|ten)[- ]?years?\b/i.test(message) ? 10 : 5;
   // Checked first: with no home value there is nothing to analyse, so none of the reads below are needed.
   const analysisOutcome = await sellHoldRentService.estimateOutcome(propertyId, { years: requestedYears }, userId);
@@ -181,6 +184,14 @@ async function sellHoldRentAnalysisResult(userId: string, propertyId: string, me
   }] : [];
 
   const years = analysis.input.years;
+  const viewState: AskViewState = {
+    resultId: priorViewState?.resultId ?? randomUUID(),
+    domainScopePhrase: null,
+    dateScopePhrase: null,
+    statusFilter: `HORIZON_${years}`,
+    selectedTaskId: priorViewState?.selectedTaskId ?? null,
+    revision: (priorViewState?.revision ?? 0) + 1,
+  };
   const winnerLabel = analysis.recommendation.winner === 'SELL'
     ? 'selling'
     : analysis.recommendation.winner === 'HOLD'
@@ -199,23 +210,23 @@ async function sellHoldRentAnalysisResult(userId: string, propertyId: string, me
       ? analysis.scenarios.hold.net
       : analysis.scenarios.rent.net;
   const rationale = analysis.recommendation.rationale.filter(Boolean).slice(0, 3);
-  const trackedPlan = activeThread
-    ? ` Your tracked plan is ${String(activeThread.lifecycleStatus).toLowerCase().replace(/_/g, ' ')} and its context is ${String(activeThread.contextStatus).toLowerCase()}.`
-    : '';
   const otherYears = years === 5 ? 10 : 5;
   const assumptionRows = [
     { id: 'home-value', values: { input: 'Home value', value: money(analysis.current.homeValueNow), source: analysis.current.homeValueDisclosure } },
     { id: 'rent', values: { input: 'Monthly rent', value: money(analysis.current.monthlyRentNow), source: analysis.input.overrides.monthlyRentNow === undefined ? 'Saved or modeled planning estimate' : 'Used from this request' } },
     { id: 'appreciation', values: { input: 'Appreciation', value: `${(analysis.current.appreciationRate * 100).toFixed(1)}% / year`, source: analysis.input.overrides.appreciationRate === undefined ? 'Saved or modeled planning estimate' : 'Used from this request' } },
     { id: 'selling-costs', values: { input: 'Selling costs', value: `${(analysis.current.sellingCostRate * 100).toFixed(1)}%`, source: analysis.input.overrides.sellingCostRate === undefined ? 'Saved or modeled planning estimate' : 'Used from this request' } },
+    { id: 'rent-growth', values: { input: 'Rent growth', value: `${(analysis.current.rentGrowthRate * 100).toFixed(1)}% / year`, source: analysis.input.overrides.rentGrowthRate === undefined ? 'Saved or modeled planning estimate' : 'Used from this request' } },
+    { id: 'vacancy', values: { input: 'Vacancy', value: `${(analysis.current.vacancyRate * 100).toFixed(1)}%`, source: analysis.input.overrides.vacancyRate === undefined ? 'Saved or modeled planning estimate' : 'Used from this request' } },
+    { id: 'management', values: { input: 'Management', value: `${(analysis.current.managementRate * 100).toFixed(1)}%`, source: analysis.input.overrides.managementRate === undefined ? 'Saved or modeled planning estimate' : 'Used from this request' } },
     { id: 'mortgage', values: { input: 'Mortgage', value: debtKnown ? `${money(analysis.current.mortgageBalanceNow ?? 0)} balance` : 'Not fully modeled', source: analysis.current.mortgageRateDisclosure ?? 'No complete financing profile was available' } },
   ];
-  const projectionIndexes = Array.from(new Set([0, Math.floor((analysis.projection.length - 1) / 2), analysis.projection.length - 1])).filter((index) => index >= 0);
+  const projectionIndexes = analysis.projection.map((_, index) => index);
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY',
     id: 'sell-hold-rent-summary',
     title: `${winnerLabel[0].toUpperCase()}${winnerLabel.slice(1)} currently leads in the ${years}-year sell, hold, or rent comparison`,
-    body: `${rationale.join(' ')}${trackedPlan} Sell is projected liquidity; hold and rent are modeled changes, so compare the direction and assumptions rather than treating the totals as identical returns.`,
+    body: `${rationale.join(' ')} Sell is projected liquidity; hold and rent are modeled changes, so compare the direction and assumptions rather than treating the totals as identical returns.`,
     tone: lowConfidence || contextLimited ? 'CAUTION' : 'DEFAULT',
     chips: [
       { label: `${money(winningOutcome)} modeled outcome`, tone: 'POSITIVE' },
@@ -226,17 +237,39 @@ async function sellHoldRentAnalysisResult(userId: string, propertyId: string, me
       id: `sell-hold-rent-horizon-${otherYears}`, label: `Compare ${otherYears} years`,
       interactionType: 'START_WORKFLOW', message: `Compare selling, holding, and renting this home over ${otherYears} years.`,
       operationId: 'SELL_HOLD_RENT_ANALYSIS', style: 'SECONDARY',
-    }, ...(canImproveContext ? [{
-      id: activeThread ? SELL_HOLD_RENT_COMMAND_ACTION_IDS.STOP_PLAN : SELL_HOLD_RENT_COMMAND_ACTION_IDS.START_PLAN,
-      label: activeThread ? SELL_HOLD_RENT_COMMAND_LABELS.STOP_PLAN : SELL_HOLD_RENT_COMMAND_LABELS.START_PLAN,
+    }, ...(canImproveContext && !activeThread ? [{
+      id: SELL_HOLD_RENT_COMMAND_ACTION_IDS.START_PLAN,
+      label: SELL_HOLD_RENT_COMMAND_LABELS.START_PLAN,
       interactionType: 'START_WORKFLOW' as const,
-      message: activeThread ? SELL_HOLD_RENT_COMMAND_MESSAGES.STOP_PLAN : SELL_HOLD_RENT_COMMAND_MESSAGES.START_PLAN,
+      message: SELL_HOLD_RENT_COMMAND_MESSAGES.START_PLAN,
       operationId: 'SELL_HOLD_RENT_COMMAND' as const,
       entityType: SELL_HOLD_RENT_COMMAND_ENTITY_TYPE,
-      entityId: activeThread?.id ?? propertyId,
+      entityId: propertyId,
       style: 'SECONDARY' as const,
     }] : [])],
-  }, sellHoldRentComparison(analysis, years), {
+  }, sellHoldRentComparison(analysis, years), ...(activeThread ? [{
+    type: 'TABLE' as const,
+    id: 'sell-hold-rent-tracked-decision',
+    title: 'Tracked decision',
+    description: 'The active planning thread for this home. It is refreshed against the latest recorded context whenever this comparison runs.',
+    columns: [{ key: 'detail', label: 'Detail' }, { key: 'value', label: 'Current state' }],
+    rows: [
+      { id: 'lifecycle', values: { detail: 'Plan status', value: String(activeThread.lifecycleStatus).toLowerCase().replace(/_/g, ' ') } },
+      { id: 'freshness', values: { detail: 'Context', value: String(activeThread.contextStatus).toLowerCase().replace(/_/g, ' ') } },
+      { id: 'updated', values: { detail: 'Last updated', value: humanDate(activeThread.updatedAt) ?? 'Not recorded' } },
+      { id: 'next', values: { detail: 'Next action', value: activeThread.contextStatus === 'STALE' ? 'Review the refreshed comparison and assumptions' : 'Review assumptions or stop tracking when this decision is no longer active' } },
+    ],
+    actions: canImproveContext ? [{
+      id: SELL_HOLD_RENT_COMMAND_ACTION_IDS.STOP_PLAN,
+      label: SELL_HOLD_RENT_COMMAND_LABELS.STOP_PLAN,
+      interactionType: 'START_WORKFLOW' as const,
+      message: SELL_HOLD_RENT_COMMAND_MESSAGES.STOP_PLAN,
+      operationId: 'SELL_HOLD_RENT_COMMAND' as const,
+      entityType: SELL_HOLD_RENT_COMMAND_ENTITY_TYPE,
+      entityId: activeThread.id,
+      style: 'SECONDARY' as const,
+    }] : [],
+  }] : []), {
     type: 'GROUPED_LIST', filters: [],
     id: 'sell-hold-rent-drivers', title: 'What is driving this result',
     description: 'The model ranks these inputs by how strongly they can change the comparison.', listDensity: 'DENSE',
@@ -297,6 +330,7 @@ async function sellHoldRentAnalysisResult(userId: string, propertyId: string, me
           ? 'SELL_HOLD_RENT_ESTIMATED_INPUTS'
           : undefined,
     contextVersion: context.contextVersion,
+    parameters: { viewState },
     captureRequests,
     blocks,
     suggestions: [
@@ -662,7 +696,10 @@ async function sellerPrepItemDecisionResult(userId: string, propertyId: string, 
 
 registerCapabilityHandler('sale-case.analysis', async (envelope) => {
   const whatIf = parseSellHoldRentWhatIf(envelope.message);
-  return whatIf ? sellHoldRentWhatIfResult(envelope.userId, envelope.propertyId!, envelope.message, whatIf) : sellHoldRentAnalysisResult(envelope.userId, envelope.propertyId!, envelope.message);
+  const priorViewState = !whatIf && envelope.launchContext?.sourceExecutionId
+    ? await loadAskViewState(envelope.launchContext.sourceExecutionId, envelope.userId)
+    : null;
+  return whatIf ? sellHoldRentWhatIfResult(envelope.userId, envelope.propertyId!, envelope.message, whatIf) : sellHoldRentAnalysisResult(envelope.userId, envelope.propertyId!, envelope.message, priorViewState);
 });
 
 registerCapabilityHandler('seller-prep.checklist', async (envelope) => sellerPrepChecklistResult(envelope.userId, envelope.propertyId!));

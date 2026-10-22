@@ -77,6 +77,59 @@ function DataTable({ block, className, rowDetail }: { block: TableBlock; classNa
 // A short list of label/value facts (the home record summary) reads better as a grid of tiles than as a two-column table with a view switch:
 // three across on a wide screen, two on a tablet, one on a phone. The rows keep the table's data shape (`detail`, `recordedValue`).
 export const FACT_GRID_TABLE_IDS: ReadonlySet<string> = new Set(['property-summary-facts']);
+const SELL_HOLD_RENT_PROJECTION_ID = 'sell-hold-rent-projection';
+
+const numericMoney = (value: string | undefined) => {
+  if (!value) return null;
+  const parsed = Number(value.replace(/[^0-9.-]/g, ''));
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+function SellHoldRentProjection({ block }: { block: TableBlock }) {
+  const points = block.rows.map((row) => ({
+    year: row.values.year,
+    hold: numericMoney(row.values.hold),
+    rent: numericMoney(row.values.rent),
+  })).filter((point): point is { year: string; hold: number; rent: number } => point.hold !== null && point.rent !== null);
+  const width = 720;
+  const height = 220;
+  const inset = { left: 48, right: 18, top: 18, bottom: 34 };
+  const values = points.flatMap((point) => [point.hold, point.rent, 0]);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = Math.max(1, max - min);
+  const x = (index: number) => inset.left + (points.length <= 1 ? 0 : index * ((width - inset.left - inset.right) / (points.length - 1)));
+  const y = (value: number) => inset.top + ((max - value) / span) * (height - inset.top - inset.bottom);
+  const path = (key: 'hold' | 'rent') => points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${x(index)} ${y(point[key])}`).join(' ');
+  const moneyLabel = (value: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: 'compact', maximumFractionDigits: 0 }).format(value);
+
+  return <section className="rounded-2xl border border-slate-200 bg-white p-4" aria-labelledby={`ask-table-${block.id}`} data-sell-hold-rent-projection="">
+    <h3 id={`ask-table-${block.id}`} className="font-semibold text-slate-950">{block.title}</h3>
+    {block.description && <p className="mt-1 text-xs leading-5 text-slate-500">{block.description}</p>}
+    {points.length > 1 ? <>
+      <div className="mt-3 flex flex-wrap gap-4 text-xs font-medium text-slate-600" aria-hidden="true">
+        <span className="inline-flex items-center gap-1.5"><span className="h-0.5 w-5 bg-slate-700" />Hold change</span>
+        <span className="inline-flex items-center gap-1.5"><span className="h-0.5 w-5 bg-teal-600" />Rent change</span>
+      </div>
+      <svg className="mt-2 h-auto w-full" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`Annual modeled changes. Hold moves from ${moneyLabel(points[0].hold)} to ${moneyLabel(points.at(-1)!.hold)}; rent moves from ${moneyLabel(points[0].rent)} to ${moneyLabel(points.at(-1)!.rent)}.`}>
+        <line x1={inset.left} x2={width - inset.right} y1={y(0)} y2={y(0)} stroke="#cbd5e1" strokeDasharray="5 5" />
+        <path d={path('hold')} fill="none" stroke="#334155" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+        <path d={path('rent')} fill="none" stroke="#0d9488" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+        {points.map((point, index) => <g key={point.year}>
+          <circle cx={x(index)} cy={y(point.hold)} r="3.5" fill="#334155" />
+          <circle cx={x(index)} cy={y(point.rent)} r="3.5" fill="#0d9488" />
+          <text x={x(index)} y={height - 10} textAnchor="middle" className="fill-slate-500 text-[11px]">{point.year}</text>
+        </g>)}
+        <text x={inset.left} y={12} className="fill-slate-500 text-[11px]">{moneyLabel(max)}</text>
+        <text x={inset.left} y={height - inset.bottom + 14} className="fill-slate-500 text-[11px]">{moneyLabel(min)}</text>
+      </svg>
+      <details className="mt-2 text-sm">
+        <summary className="cursor-pointer font-semibold text-teal-800">View annual values</summary>
+        <DataTable block={block} className="mt-3" />
+      </details>
+    </> : <p className="mt-3 rounded-xl bg-slate-50 p-3 text-sm text-slate-600">Not enough annual data is available to draw the projection.</p>}
+  </section>;
+}
 
 function FactGridTable({ block, renderAction }: { block: TableBlock; renderAction: (action: AskAction) => ReactNode }) {
   const [labelKey, valueKey] = [block.columns[0]?.key, block.columns[1]?.key];
@@ -97,6 +150,7 @@ function FactGridTable({ block, renderAction }: { block: TableBlock; renderActio
 
 export function AdaptiveTableBlock({ block, renderAction, rowDetail }: { block: TableBlock; renderAction: (action: AskAction) => ReactNode; rowDetail?: TableRowDetailControls }) {
   const controls = useContext(ResultViewContext);
+  if (block.id === SELL_HOLD_RENT_PROJECTION_ID && !rowDetail) return <SellHoldRentProjection block={block} />;
   if (FACT_GRID_TABLE_IDS.has(block.id) && block.columns.length === 2 && block.rows.length > 0 && !rowDetail) return <FactGridTable block={block} renderAction={renderAction} />;
   const preference = controls?.view.presentationModes?.[block.id] ?? 'AUTO';
   const decision = resolveAdaptiveTablePresentation(block, preference);

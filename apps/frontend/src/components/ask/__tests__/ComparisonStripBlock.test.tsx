@@ -83,4 +83,14 @@ test('exposes visible keyboard-operable strip controls and position context', as
   fireEvent.click(next);
   expect(screen.getByText(/Option 2 of 3/)).toBeVisible();
   expect(screen.getByRole('button', { name: 'Previous option in Compare your options' })).not.toBeDisabled();
+  expect(readResultView(window.sessionStorage, resultViewKey('comparison-session', 'home', 'comparison-result')).selectedComparisonOptions['repair-options']).toBe('replace');
+});
+
+test('restores the selected scenario after the comparison is remounted', async () => {
+  const first = render(<Harness />);
+  await waitFor(() => expect(screen.getByText(/Option 1 of 3/)).toBeVisible());
+  fireEvent.click(screen.getByRole('button', { name: 'Next option in Compare your options' }));
+  first.unmount();
+  render(<Harness />);
+  await waitFor(() => expect(screen.getByText(/Option 2 of 3/)).toBeVisible());
 });

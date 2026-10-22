@@ -1413,7 +1413,7 @@ test('on a phone, quote cards stack within the screen and the table scrolls insi
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
-test('sell, hold and rent show as a comparison strip with no winner badge or price bars, and the Table view lists both facts per path (FRD v1.85)', async ({ page }) => {
+test('sell, hold and rent expose the modeled lead, full inputs, annual projection and governed actions inside Ask', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
@@ -1425,15 +1425,24 @@ test('sell, hold and rent show as a comparison strip with no winner badge or pri
   await expect(strip.getByRole('listitem')).toHaveCount(3);
   await expect(strip.getByRole('listitem', { name: /Sell at the end/ })).toContainText('$412,000 modeled net proceeds');
   await expect(strip.getByRole('listitem', { name: /Rent the home out/ })).toContainText('-$6,500 modeled net change');
-  await expect(strip.locator('[data-badge-policy]')).toHaveCount(0);
+  await expect(strip.getByText('Model lead')).toHaveAttribute('data-badge-policy', 'SELL_HOLD_RENT_MODELED_OUTCOME');
   await expect(strip.getByRole('img')).toHaveCount(0);
+
+  await expect(response.getByRole('img', { name: /Annual modeled changes/ })).toBeVisible();
+  await expect(response.getByRole('heading', { name: 'Inputs used' })).toBeVisible();
+  await expect(response.getByText('Rent growth')).toBeVisible();
+  await expect(response.getByText('Vacancy')).toBeVisible();
+  await expect(response.getByText('Management', { exact: true })).toBeVisible();
+  await expect(response.getByRole('button', { name: 'Edit assumptions' })).toBeVisible();
+  await expect(response.getByRole('button', { name: 'Update mortgage details' })).toBeVisible();
+  await expect(response.getByRole('button', { name: 'Track this decision' })).toBeVisible();
 
   await response.getByRole('button', { name: 'Table', exact: true }).click();
   const table = response.getByRole('table', { name: '5-year scenario snapshot' });
   await expect(table.getByRole('columnheader')).toHaveText(['Sell at the end of the horizon', 'Continue holding', 'Rent the home out']);
   await expect(table.getByRole('rowheader')).toHaveText(['Modeled outcome', 'Key components']);
   await expect(table.locator('[data-leading="true"]')).toHaveCount(0);
-  await expect(response.getByRole('link', { name: /Explore and adjust scenarios/ })).toBeVisible();
+  await expect(response.getByRole('link')).toHaveCount(0);
   await expect.poll(() => api.executionBodies.length).toBe(1);
 });
 

@@ -2231,18 +2231,20 @@ function buyerPlanShelvesExecution() {
 // badge, no leading value and no price bars.
 function sellHoldRentStripExecution() {
   const base = maintenanceExecution();
-  const workspaceHref = `/dashboard/properties/${propertyId}/tools/sell-hold-rent`;
   const option = (id: string, label: string, outcome: string, components: string) => ({
     id, label, summary: null, actions: [],
+    ...(id === 'sell' ? { badge: { label: 'Model lead', basis: 'Highest modeled outcome under the current 5-year assumptions.', policyCode: 'SELL_HOLD_RENT_MODELED_OUTCOME' } } : {}),
     attributes: [{ label: 'Modeled outcome', value: outcome, tone: 'DEFAULT' }, { label: 'Key components', value: components, tone: 'DEFAULT' }],
   });
   return {
-    ...base, executionId: 'execution-sell-hold-rent-strip', question: 'Should I sell, hold, or rent this home?', viewState: null,
+    ...base, executionId: 'execution-sell-hold-rent-strip', question: 'Should I sell, hold, or rent this home?',
+    viewState: { resultId: 'sell-hold-rent-result', revision: 1, domainScopePhrase: null, dateScopePhrase: null, statusFilter: 'HORIZON_5', selectedTaskId: null },
     operation: { id: 'SELL_HOLD_RENT_ANALYSIS', version: '1.0', family: 'DECISION_ANALYSIS' },
     blocks: [
-      { type: 'SUMMARY', id: 'sell-hold-rent-summary', title: 'Here is the current 5-year sell, hold, and rent comparison', tone: 'DEFAULT',
+      { type: 'SUMMARY', id: 'sell-hold-rent-summary', title: 'Selling currently leads in the 5-year sell, hold, or rent comparison', tone: 'DEFAULT',
         body: 'The model’s directional indicator currently points to selling, but this is not a conclusion that now is the right time to sell.',
-        actions: [{ id: 'open-sell-hold-rent', label: 'Explore and adjust scenarios', href: workspaceHref, style: 'PRIMARY' }] },
+        actions: [{ id: 'sell-hold-rent-horizon-10', label: 'Compare 10 years', message: 'Compare selling, holding, and renting this home over 10 years.', operationId: 'SELL_HOLD_RENT_ANALYSIS', interactionType: 'START_WORKFLOW', style: 'SECONDARY' },
+          { id: 'sell-hold-rent-start-plan', label: 'Track this decision', message: 'Track this sell, hold, or rent decision.', operationId: 'SELL_HOLD_RENT_COMMAND', interactionType: 'START_WORKFLOW', entityType: 'SELL_HOLD_RENT_PLAN', entityId: propertyId, style: 'SECONDARY' }] },
       { type: 'COMPARISON', id: 'sell-hold-rent-comparison', title: '5-year scenario snapshot',
         description: 'All amounts are planning estimates. Different scenario rows describe different economic outcomes and should be reviewed with the assumptions below.',
         options: [
@@ -2250,6 +2252,14 @@ function sellHoldRentStripExecution() {
           option('hold', 'Continue holding', '$18,000 modeled net change', '$90,000 appreciation · $72,000 ownership and modeled interest costs'),
           option('rent', 'Rent the home out', '-$6,500 modeled net change', '$150,000 gross rent · $21,000 vacancy and management overhead'),
         ], actions: [] },
+      { type: 'TABLE', id: 'sell-hold-rent-projection', title: 'How hold and rent change over time', description: 'Annual modeled changes; sell is the one-time projected net proceeds shown above.',
+        columns: [{ key: 'year', label: 'Year' }, { key: 'homeValue', label: 'Home value' }, { key: 'hold', label: 'Hold change' }, { key: 'rent', label: 'Rent change' }],
+        rows: [2027, 2028, 2029, 2030, 2031].map((year, index) => ({ id: String(year), values: { year: String(year), homeValue: `$${725000 + index * 25000}`, hold: `$${12000 + index * 4000}`, rent: `$${18000 + index * 7000}` } })), actions: [] },
+      { type: 'TABLE', id: 'sell-hold-rent-assumptions', title: 'Inputs used', description: 'Every editable scenario assumption and its source.',
+        columns: [{ key: 'input', label: 'Input' }, { key: 'value', label: 'Used' }, { key: 'source', label: 'Source' }],
+        rows: ['Home value', 'Monthly rent', 'Appreciation', 'Selling costs', 'Rent growth', 'Vacancy', 'Management', 'Mortgage'].map((input, index) => ({ id: `input-${index}`, values: { input, value: index === 0 ? '$725,000' : index === 1 ? '$4,253' : index === 7 ? '$320,000 balance' : '6.0%', source: 'Recorded or modeled planning estimate' } })),
+        actions: [{ id: 'sell-hold-rent-edit-assumptions', label: 'Edit assumptions', message: 'Edit the assumptions for this sell, hold, or rent comparison.', operationId: 'SELL_HOLD_RENT_COMMAND', interactionType: 'START_WORKFLOW', entityType: 'SELL_HOLD_RENT_PLAN', entityId: propertyId, style: 'SECONDARY' },
+          { id: 'financing-profile-command', label: 'Update mortgage details', message: 'Update my financing profile.', operationId: 'FINANCING_PROFILE_COMMAND', interactionType: 'START_WORKFLOW', entityType: 'FINANCING_PROFILE', entityId: propertyId, style: 'SECONDARY' }] },
     ],
   };
 }

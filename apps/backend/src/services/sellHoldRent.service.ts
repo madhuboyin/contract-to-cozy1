@@ -86,6 +86,9 @@ export type SellHoldRentDTO = {
     appreciationRate: number;
     monthlyRentNow: number;
     sellingCostRate: number;
+    rentGrowthRate: number;
+    vacancyRate: number;
+    managementRate: number;
     // debt (for transparency)
     mortgageBalanceNow?: number | null;
     mortgageAnnualRate?: number | null;
@@ -620,6 +623,9 @@ export class SellHoldRentService {
         appreciationRate,
         monthlyRentNow: roundMoney(monthlyRentNow),
         sellingCostRate,
+        rentGrowthRate,
+        vacancyRate,
+        managementRate,
         mortgageBalanceNow,
         mortgageAnnualRate,
         mortgageRateSource: mortgageRate.source,
