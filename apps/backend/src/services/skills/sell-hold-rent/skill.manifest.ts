@@ -4,7 +4,7 @@ import { PROPERTY_JOURNEY_CONTEXT_PROVIDER } from '../context/propertyJourneyCon
 
 export const SELL_HOLD_RENT_SKILL = Object.freeze({
   "id": "sell-hold-rent",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "domain": "HOME_TRANSACTION",
   "displayName": "Sell, Hold, or Rent",
   "description": "Compare governed sell, hold, and rent scenarios from recorded property and financial context.",
@@ -27,6 +27,12 @@ export const SELL_HOLD_RENT_SKILL = Object.freeze({
       "version": "1.0",
       "requiredContextProviders": [PROPERTY_IDENTITY_CONTEXT_PROVIDER],
       "optionalContextProviders": [PROPERTY_JOURNEY_CONTEXT_PROVIDER]
+    },
+    {
+      "operationId": "SELL_HOLD_RENT_COMMAND",
+      "version": "1.0",
+      "requiredContextProviders": [PROPERTY_IDENTITY_CONTEXT_PROVIDER],
+      "optionalContextProviders": [PROPERTY_JOURNEY_CONTEXT_PROVIDER]
     }
   ],
   "requiredContextProviders": [PROPERTY_IDENTITY_CONTEXT_PROVIDER],
@@ -35,6 +41,10 @@ export const SELL_HOLD_RENT_SKILL = Object.freeze({
     {
       "id": "sale-case.analysis",
       "version": "1.0"
+    },
+    {
+      "id": "sell-hold-rent.command",
+      "version": "1.0"
     }
   ],
   "allowedExternalConnectors": [],
@@ -42,14 +52,16 @@ export const SELL_HOLD_RENT_SKILL = Object.freeze({
     {
       "consumer": "ASK",
       "operations": [
-        "SELL_HOLD_RENT_ANALYSIS"
+        "SELL_HOLD_RENT_ANALYSIS",
+        "SELL_HOLD_RENT_COMMAND"
       ]
     }
   ],
-  "autonomyLevel": 1,
+  "autonomyLevel": 2,
   "riskPolicy": {
     "effects": [
-      "READ"
+      "READ",
+      "WRITE"
     ],
     "materiality": "MATERIAL",
     "riskDomains": [
@@ -57,7 +69,7 @@ export const SELL_HOLD_RENT_SKILL = Object.freeze({
       "TAX_LEGAL",
       "PRIVACY"
     ],
-    "reversibility": "REVERSIBLE"
+    "reversibility": "PARTIALLY_REVERSIBLE"
   },
   "authorizationFloor": "VIEWER",
   "allowedResultBlocks": [
@@ -69,7 +81,9 @@ export const SELL_HOLD_RENT_SKILL = Object.freeze({
     "CAPABILITY_LIST",
     "BOUNDARY",
     "DECISION_PROGRESS",
-    "WHY_NOW"
+    "WHY_NOW",
+    "WORKFLOW_PROGRESS",
+    "LIMITATION"
   ],
   "dependencies": [
     { "type": "CONTEXT_PROVIDER", "id": PROPERTY_IDENTITY_CONTEXT_PROVIDER.id, "version": PROPERTY_IDENTITY_CONTEXT_PROVIDER.version, "required": true },
@@ -77,6 +91,12 @@ export const SELL_HOLD_RENT_SKILL = Object.freeze({
     {
       "type": "OPERATION_CONTRACT",
       "id": "SELL_HOLD_RENT_ANALYSIS",
+      "version": "1.0",
+      "required": true
+    },
+    {
+      "type": "OPERATION_CONTRACT",
+      "id": "SELL_HOLD_RENT_COMMAND",
       "version": "1.0",
       "required": true
     }

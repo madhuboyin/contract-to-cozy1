@@ -6,7 +6,7 @@ import { PROPERTY_JOURNEY_CONTEXT_PROVIDER } from '../context/propertyJourneyCon
 export const SELL_HOLD_RENT_SKILL_EVALUATION = deepFreezeSkillPackage({
   "id": "skill-sell-hold-rent-golden",
   "skillId": "sell-hold-rent",
-  "skillVersion": "1.0.0",
+  "skillVersion": "1.1.0",
   "routingCases": [
     {
       "mode": "EXACT",
@@ -36,6 +36,13 @@ export const SELL_HOLD_RENT_SKILL_EVALUATION = deepFreezeSkillPackage({
         "id": "sale-case.analysis",
         "version": "1.0"
       }
+    },
+    {
+      "operationId": "SELL_HOLD_RENT_COMMAND",
+      "expectedAdapter": {
+        "id": "sell-hold-rent.command",
+        "version": "1.0"
+      }
     }
   ],
   "ambiguityCases": [
@@ -52,6 +59,11 @@ export const SELL_HOLD_RENT_SKILL_EVALUATION = deepFreezeSkillPackage({
     {
       "consumer": "ASK",
       "operationId": "SELL_HOLD_RENT_ANALYSIS",
+      "allowed": true
+    },
+    {
+      "consumer": "ASK",
+      "operationId": "SELL_HOLD_RENT_COMMAND",
       "allowed": true
     }
   ],
@@ -124,6 +136,10 @@ export const SELL_HOLD_RENT_SKILL_EVALUATION = deepFreezeSkillPackage({
     {
       "id": "sale-case.analysis",
       "version": "1.0"
+    },
+    {
+      "id": "sell-hold-rent.command",
+      "version": "1.0"
     }
   ],
   "prohibitedAdapters": [
@@ -146,11 +162,17 @@ export const SELL_HOLD_RENT_SKILL_EVALUATION = deepFreezeSkillPackage({
     "CAPABILITY_LIST",
     "BOUNDARY",
     "DECISION_PROGRESS",
-    "WHY_NOW"
+    "WHY_NOW",
+    "WORKFLOW_PROGRESS",
+    "LIMITATION"
   ],
   "expectedCanonicalCalls": [
     {
       "id": "sale-case.analysis",
+      "version": "1.0"
+    },
+    {
+      "id": "sell-hold-rent.command",
       "version": "1.0"
     }
   ],

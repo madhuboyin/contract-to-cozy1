@@ -21,6 +21,10 @@ The analysis now exposes the canonical write workflows without turning the answe
 
 The comparison still does not choose a final disposition or perform any external sale, rental, listing, financing or advisory action. It remains planning support rather than financial, tax, legal or valuation advice.
 
+### Command governance correction (2026-10-22)
+
+`SELL_HOLD_RENT_COMMAND` is owned by the existing `sell-hold-rent` Skill rather than exempted as an ungoverned internal command. The operation is property-scoped with a contributor floor and uses the registered `sell-hold-rent.command` mutation-preparation adapter. The Skill declares both read and write effects, partial reversibility, the command's workflow/limitation result blocks, its operation-contract dependency, and ASK consumer/evaluation coverage. Confirmation receipts, context-version rechecks, and the operation-level contributor requirement remain authoritative. Startup registry validation now verifies this ownership and the command is deliberately absent from `KNOWN_UNGOVERNED_OPERATIONS`.
+
 ### Completion pass (2026-10-22)
 
 - every editable scenario assumption is visible in the read-only Inputs used table;

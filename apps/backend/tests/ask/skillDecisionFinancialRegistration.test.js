@@ -15,6 +15,7 @@ const {
   validateSkillDefinitions,
 } = require('../../src/services/skills/skillRegistry.ts');
 const { resolveHierarchicalSkillRouting } = require('../../src/services/skills/skillRouter.ts');
+const { KNOWN_UNGOVERNED_OPERATIONS, validateSkillOperationGovernanceCoverage } = require('../../src/services/intelligence/skillOperationGovernance.contract.ts');
 
 const repairReplaceOperations = [
   'REPLACEMENT_GUIDANCE',
@@ -40,6 +41,8 @@ test('SP4 registers Repair or Replace and Refinance as valid immutable Skills', 
   for (const operationId of repairReplaceOperations) assert.equal(getSkillForOperation(operationId).id, 'repair-replace');
   assert.equal(getSkillForOperation('REFINANCE_ANALYSIS').id, 'refinance');
   assert.equal(getSkillForOperation('REFINANCE_RATE_MONITOR').id, 'refinance');
+  assert.equal(getSkillForOperation('SELL_HOLD_RENT_ANALYSIS').id, 'sell-hold-rent');
+  assert.equal(getSkillForOperation('SELL_HOLD_RENT_COMMAND').id, 'sell-hold-rent');
 });
 
 test('deterministic routing binds decision and finance operations to their owning Skills', () => {
@@ -65,7 +68,16 @@ test('effective policy retains Viewer reads and Contributor material writes', ()
   assert.equal(resolveEffectiveSkillOperationPolicy('repair-replace', 'HVAC_DECISION_SCENARIO', 'ASK').authorizationFloor, 'CONTRIBUTOR');
   assert.equal(resolveEffectiveSkillOperationPolicy('refinance', 'REFINANCE_ANALYSIS', 'ASK').authorizationFloor, 'VIEWER');
   assert.equal(resolveEffectiveSkillOperationPolicy('refinance', 'REFINANCE_RATE_MONITOR', 'ASK').authorizationFloor, 'CONTRIBUTOR');
+  assert.equal(resolveEffectiveSkillOperationPolicy('sell-hold-rent', 'SELL_HOLD_RENT_ANALYSIS', 'ASK').authorizationFloor, 'VIEWER');
+  assert.equal(resolveEffectiveSkillOperationPolicy('sell-hold-rent', 'SELL_HOLD_RENT_COMMAND', 'ASK').authorizationFloor, 'CONTRIBUTOR');
   assert.equal(resolveEffectiveSkillOperationPolicy('refinance', 'REFINANCE_ANALYSIS', 'PROACTIVE'), null);
+});
+
+test('Sell Hold Rent command is governed by its owning Skill without a startup carve-out', () => {
+  assert.equal(KNOWN_UNGOVERNED_OPERATIONS.includes('SELL_HOLD_RENT_COMMAND'), false);
+  assert.deepEqual(validateSkillOperationGovernanceCoverage({
+    skillCoversOperation: (operationId) => Boolean(getSkillForOperation(operationId)),
+  }).filter((issue) => issue.includes('SELL_HOLD_RENT_COMMAND')), []);
 });
 
 test('each SP4 Skill can be disabled independently without disabling its operations or peers', () => {

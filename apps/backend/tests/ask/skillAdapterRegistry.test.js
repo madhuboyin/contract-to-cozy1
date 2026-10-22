@@ -32,7 +32,7 @@ test('every represented Skill operation resolves to one registered immutable ada
   // + diy.template-browse and diy.project-start (DIY project start from Ask, step 8).
   // + home-event.update (one multi-field timeline event editor, FRD v1.386).
   // Includes Home Continuity Plan's first Ask-native write adapter (FRD v1.381).
-  assert.equal(Object.keys(SKILL_ADAPTER_DEFINITIONS).length, 119);
+  assert.equal(Object.keys(SKILL_ADAPTER_DEFINITIONS).length, 120);
   for (const skill of Object.values(SKILL_DEFINITIONS)) {
     for (const operation of skill.operations) {
       const reference = skill.allowedAdapters.find((candidate) => candidate.id === getSkillAdapterForOperation(operation.operationId).id);
@@ -54,6 +54,11 @@ test('mutation adapters declare confirmation receipt idempotency while reads rem
   assert.equal(create.effect, 'MUTATION_PREPARATION');
   assert.equal(create.retrySafety, 'CLAIM_GUARDED');
   assert.equal(create.idempotencyPolicy, 'CONFIRMATION_RECEIPT');
+
+  const sellHoldRentCommand = getSkillAdapter('sell-hold-rent.command', '1.0');
+  assert.equal(sellHoldRentCommand.effect, 'MUTATION_PREPARATION');
+  assert.equal(sellHoldRentCommand.retrySafety, 'CLAIM_GUARDED');
+  assert.equal(sellHoldRentCommand.idempotencyPolicy, 'CONFIRMATION_RECEIPT');
 
   const summary = getSkillAdapter('property.summary', '1.0');
   assert.equal(summary.effect, 'READ');
