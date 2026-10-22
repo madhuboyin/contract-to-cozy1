@@ -6,6 +6,12 @@
 **Builds on:** the FRD §22 decision work already completed and pushed this engagement (commit `197e5645`, Option B: `SELL_HOLD_RENT_ANALYSIS` reads but never creates/resumes a thread), the Phase 0 audit's §4.6/§4.8 tracing of `SELL_HOLD_RENT_ANALYSIS`/`SELL_HOLD_RENT_GOAL_CAPTURE`, and the Phase 7 Decisions document's D01/D02/D05/D07 findings for the *HVAC* family — this document evaluates the same scenario IDs against a structurally different family (snapshot-based, not composed-from-facts) and does not assume the HVAC verdicts transfer, except where (as with D05) the two families share the exact same absence and the same scoring standard should apply.
 **Verification level: STATIC.** Every claim below is derived from direct reads of `sellHoldRentAnalysisResult`, `processGoalCandidate`, `buildSellerPrepInlineBlock`, `createSnapshotDecisionFamilyAdapter` (`snapshotDecisionFamilyAdapter.ts`), `domainSnapshotAdapters.ts`'s `sellHoldRentDecisionFamilyAdapter`, and `askFollowUpContext.ts`. Nothing here is database- or browser-verified — this is exactly the "live model/browser limitations remain explicit" disclosure the exit criterion itself asks for.
 
+## Modernized analysis presentation (2026-10-21)
+
+The standard Ask analysis now exposes more of the canonical `SellHoldRentDTO` without copying the desktop page into the conversation. The first block names the model lead, modeled outcome, confidence and horizon; the comparison shows the principal economics for all three paths and badges only the server-declared lead. A compact drivers section, three annual projection checkpoints, source-aware inputs, and governed 5/10-year switching follow. Two ephemeral what-if prompts make the existing no-save scenario path discoverable. When a durable decision thread exists, its lifecycle and freshness are summarized in the decision answer instead of repeating separate generic plan and "Why now" cards.
+
+This remains a read-only analysis surface. It does not persist assumption overrides, edit the financing profile, choose a final disposition, or replace professional financial, tax, legal or valuation review. Those are separate canonical write workflows rather than presentation parity work.
+
 | Field | Status |
 | --- | --- |
 | Audit coverage | Complete — all 6 named scenarios (D01/D05/D07, G02/G04/G07) evaluated |

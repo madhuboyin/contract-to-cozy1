@@ -14,27 +14,37 @@ const { attachAskAuthoritativeSourceEvidence, completedAskAuthoritativeSourceEvi
 const { ASK_OPERATION_DEFINITIONS } = require('../../src/services/ask/askOperationRegistry.ts');
 
 const analysis = (overrides = {}) => ({
+  recommendation: { winner: 'SELL', confidence: 'HIGH', rationale: ['Selling produces the highest modeled outcome.'] },
   scenarios: {
     sell: { netProceeds: 412000, projectedSalePrice: 455000, sellingCosts: 27300 },
-    hold: { net: 18000, appreciationGain: 90000, totalOwnershipCosts: 72000 },
-    rent: { net: -6500, totalRentalIncome: 150000, rentalOverheads: { vacancyLoss: 9000, managementFees: 12000 } },
+    hold: { net: 18000, appreciationGain: 90000, totalOwnershipCosts: 72000, principalPaydown: 18000 },
+    rent: { net: -6500, totalRentalIncome: 150000, totalOwnershipCosts: 118000, appreciationGain: 90000, principalPaydown: 18000, rentalOverheads: { vacancyLoss: 9000, managementFees: 12000 } },
     ...overrides,
   },
 });
 
-test('three paths become options with the modeled outcome and its components, and nothing is badged, led or given an amount', () => {
+test('three paths expose their full economics and the canonical model lead without drawing incomparable amount bars', () => {
   const block = sellHoldRentComparison(analysis(), 5);
   assert.equal(block.id, 'sell-hold-rent-comparison');
   assert.equal(block.title, '5-year scenario snapshot');
   assert.deepEqual(block.options.map((entry) => entry.id), ['sell', 'hold', 'rent']);
   assert.deepEqual(block.options[0].attributes.map((attribute) => [attribute.label, attribute.value]), [
-    ['Modeled outcome', '$412,000 modeled net proceeds'],
-    ['Key components', '$455,000 projected price · $27,300 selling costs'],
+    ['Modeled outcome', '$412,000 net proceeds'],
+    ['Projected sale price', '$455,000'],
+    ['Selling costs', '$27,300'],
   ]);
-  assert.match(block.options[2].attributes[0].value, /modeled net change/);
-  assert.match(block.options[2].attributes[1].value, /\$21,000 vacancy and management overhead/);
+  assert.equal(block.options[0].badge.label, 'Model lead');
+  assert.match(block.options[0].badge.basis, /current 5-year assumptions/);
+  assert.equal(block.options[1].badge, undefined);
+  assert.equal(block.options[2].badge, undefined);
+  assert.deepEqual(block.options[2].attributes.map((attribute) => [attribute.label, attribute.value]), [
+    ['Modeled outcome', '-$6,500 net change'],
+    ['Gross rent', '$150,000'],
+    ['Vacancy and management', '$21,000'],
+    ['Ownership costs', '$118,000'],
+    ['Appreciation and paydown', '$108,000'],
+  ]);
   for (const entry of block.options) {
-    assert.equal(entry.badge, undefined);
     assert.equal(entry.badges, undefined);
     assert.equal(entry.amount, undefined);
     assert.ok(entry.attributes.every((attribute) => attribute.leading === undefined));
@@ -54,7 +64,10 @@ test('the answer checker, with answer relevance on, keeps a sell-hold-rent answe
   const answer = {
     status: 'ANSWERED', suggestions: [],
     blocks: [
-      { type: 'SUMMARY', id: 'sell-hold-rent-summary', title: 'Here is the current 5-year sell, hold, and rent comparison', tone: 'DEFAULT', actions: [],
+      { type: 'SUMMARY', id: 'sell-hold-rent-summary', title: 'Sell, hold, or rent: selling currently leads over 5 years', tone: 'DEFAULT', actions: [{
+        id: 'sell-hold-rent-horizon-10', label: 'Compare 10 years', interactionType: 'START_WORKFLOW',
+        message: 'Compare selling, holding, and renting this home over 10 years.', operationId: 'SELL_HOLD_RENT_ANALYSIS', style: 'SECONDARY',
+      }],
         body: 'The model’s directional indicator currently points to selling, but this is not a conclusion that now is the right time to sell.' },
       sellHoldRentComparison(analysis(), 5),
       { type: 'GROUPED_LIST', filters: [], id: 'sell-hold-rent-assumptions', title: 'Assumptions that materially affect the answer',
@@ -69,4 +82,5 @@ test('the answer checker, with answer relevance on, keeps a sell-hold-rent answe
   });
   assert.equal(checked.result.status, 'ANSWERED', JSON.stringify(checked.semantic));
   assert.ok(checked.result.blocks.some((block) => block.type === 'COMPARISON'));
+  assert.equal(checked.result.blocks[0].actions[0].id, 'sell-hold-rent-horizon-10');
 });

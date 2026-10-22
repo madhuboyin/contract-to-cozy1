@@ -149,6 +149,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
     'refinance-record-decision', 'refinance-adjust-scenario', 'financing-profile-update',
   ]),
   BREAK_EVEN_ANALYSIS: new Set(['rerun-break-even-5', 'rerun-break-even-10']),
+  SELL_HOLD_RENT_ANALYSIS: new Set(['sell-hold-rent-horizon-5', 'sell-hold-rent-horizon-10']),
   // The review's declared actions (each opens a confirmation) and its way back to the list.
   HOME_HABITS: new Set(['generate-home-habits', 'habit-adopt', 'habit-complete', 'habit-snooze', 'habit-skip', 'habit-dismiss', 'habits-back-to-list', 'habits-review-first', 'habits-show-maintenance', 'home-habit-coach-settings']),
   HOME_HABIT_UPDATE: new Set(['habits-back-to-list']),

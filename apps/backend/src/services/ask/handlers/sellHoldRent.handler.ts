@@ -14,7 +14,6 @@ import { SellHoldRentService } from '../../sellHoldRent.service';
 import { PropertySaleCaseService, SALE_READINESS_MUST_ADDRESS_CLASSES, saleReadinessFigure } from '../../propertySaleCase.service';
 import { money } from '../askFormatting';
 import { ensurePropertyAccess, exactEntityMatch } from '../askHandlerSupport';
-import { decisionProgressBlock, whyNowBlock } from '../decisionThreadPresentationBlocks';
 import { sellHoldRentDecisionFamilyAdapter } from '../../decisionPlatform/domainSnapshotAdapters';
 import { SELL_HOLD_RENT_WHAT_IF_LABELS, isSellHoldRentMoneyKey, parseSellHoldRentWhatIf, type SellHoldRentWhatIf } from '../support/sellHoldRentWhatIf';
 import { collectionDescriptor } from '../support/collectionDescriptor';
@@ -35,16 +34,21 @@ export const SALE_READINESS_ITEM_STATUS_LABELS: Record<string, string> = {
 };
 
 // IW-PRES-016 (FRD v1.85): the sell, hold and rent scenarios as a comparison strip. The modeled outcomes can be
-// negative and are different kinds of figure (net proceeds against a net change), so no price bars are drawn (no option
-// declares an amount) and no option is badged or marked leading: the summary already says which way the model's
-// indicator points, and the strip does not repeat it as a winner.
+// negative and are different kinds of figure (net proceeds against a net change), so no price bars are drawn. The
+// service, rather than the renderer, declares the directional model lead and explains its basis.
 export function sellHoldRentComparison(analysis: Awaited<ReturnType<typeof sellHoldRentService.estimate>>, years: number): Extract<AskPresentationBlock, { type: 'COMPARISON' }> {
   const { scenarios } = analysis;
-  const option = (id: string, label: string, outcome: string, components: string) => ({
+  const winner = analysis.recommendation?.winner?.toLowerCase();
+  const option = (id: string, label: string, outcome: string, attributes: Array<{ label: string; value: string }>) => ({
     id, label, summary: null,
+    ...(winner === id ? { badge: {
+      label: 'Model lead',
+      basis: `Highest modeled outcome under the current ${years}-year assumptions.`,
+      policyCode: 'SELL_HOLD_RENT_MODELED_OUTCOME',
+    } } : {}),
     attributes: [
       { label: 'Modeled outcome', value: outcome, tone: 'DEFAULT' as const },
-      { label: 'Key components', value: components, tone: 'DEFAULT' as const },
+      ...attributes.map((attribute) => ({ ...attribute, tone: 'DEFAULT' as const })),
     ],
     actions: [],
   });
@@ -52,12 +56,21 @@ export function sellHoldRentComparison(analysis: Awaited<ReturnType<typeof sellH
     type: 'COMPARISON', id: 'sell-hold-rent-comparison', title: `${years}-year scenario snapshot`,
     description: 'All amounts are planning estimates. Different scenario rows describe different economic outcomes and should be reviewed with the assumptions below.',
     options: [
-      option('sell', 'Sell at the end of the horizon', `${money(scenarios.sell.netProceeds)} modeled net proceeds`,
-        `${money(scenarios.sell.projectedSalePrice)} projected price · ${money(scenarios.sell.sellingCosts)} selling costs`),
-      option('hold', 'Continue holding', `${money(scenarios.hold.net)} modeled net change`,
-        `${money(scenarios.hold.appreciationGain)} appreciation · ${money(scenarios.hold.totalOwnershipCosts)} ownership and modeled interest costs`),
-      option('rent', 'Rent the home out', `${money(scenarios.rent.net)} modeled net change`,
-        `${money(scenarios.rent.totalRentalIncome)} gross rent · ${money(scenarios.rent.rentalOverheads.vacancyLoss + scenarios.rent.rentalOverheads.managementFees)} vacancy and management overhead`),
+      option('sell', 'Sell', `${money(scenarios.sell.netProceeds)} net proceeds`, [
+        { label: 'Projected sale price', value: money(scenarios.sell.projectedSalePrice) },
+        { label: 'Selling costs', value: money(scenarios.sell.sellingCosts) },
+      ]),
+      option('hold', 'Hold', `${money(scenarios.hold.net)} net change`, [
+        { label: 'Appreciation', value: money(scenarios.hold.appreciationGain) },
+        { label: 'Ownership costs', value: money(scenarios.hold.totalOwnershipCosts) },
+        { label: 'Principal paid down', value: money(scenarios.hold.principalPaydown ?? 0) },
+      ]),
+      option('rent', 'Rent', `${money(scenarios.rent.net)} net change`, [
+        { label: 'Gross rent', value: money(scenarios.rent.totalRentalIncome) },
+        { label: 'Vacancy and management', value: money(scenarios.rent.rentalOverheads.vacancyLoss + scenarios.rent.rentalOverheads.managementFees) },
+        { label: 'Ownership costs', value: money(scenarios.rent.totalOwnershipCosts ?? 0) },
+        { label: 'Appreciation and paydown', value: money((scenarios.rent.appreciationGain ?? 0) + (scenarios.rent.principalPaydown ?? 0)) },
+      ]),
     ],
     actions: [],
   };
@@ -119,9 +132,10 @@ async function sellHoldRentWhatIfResult(userId: string, propertyId: string, mess
   return sellHoldRentWhatIfFromAnalyses(standard.value, scenario.value, overrides);
 }
 
-async function sellHoldRentAnalysisResult(userId: string, propertyId: string): Promise<AskOperationResult> {
+async function sellHoldRentAnalysisResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
+  const requestedYears: 5 | 10 = /\b(?:10|ten)[- ]?years?\b/i.test(message) ? 10 : 5;
   // Checked first: with no home value there is nothing to analyse, so none of the reads below are needed.
-  const analysisOutcome = await sellHoldRentService.estimateOutcome(propertyId, { years: 5 }, userId);
+  const analysisOutcome = await sellHoldRentService.estimateOutcome(propertyId, { years: requestedYears }, userId);
   if (analysisOutcome.status !== 'OK') return planningHomeValueRequestResult('Sell, hold or rent');
   const analysis = analysisOutcome.value;
   const [access, context, threadSelection] = await Promise.all([
@@ -177,32 +191,62 @@ async function sellHoldRentAnalysisResult(userId: string, propertyId: string): P
   const permissionLimited = Boolean(activeRequirement && !canImproveContext);
   const contextLimited = captureRequests.length > 0 || permissionLimited;
 
-  const limitations = [
-    `Home value ${money(analysis.current.homeValueNow)}`,
-    `Rent ${money(analysis.current.monthlyRentNow)}/month`,
-    `Appreciation ${(analysis.current.appreciationRate * 100).toFixed(1)}%/year`,
-    `Selling costs ${(analysis.current.sellingCostRate * 100).toFixed(1)}%`,
-    debtKnown ? 'Mortgage modeled from the home record' : 'Mortgage effects are not fully modeled',
+  const winningOutcome = analysis.recommendation.winner === 'SELL'
+    ? analysis.scenarios.sell.netProceeds
+    : analysis.recommendation.winner === 'HOLD'
+      ? analysis.scenarios.hold.net
+      : analysis.scenarios.rent.net;
+  const rationale = analysis.recommendation.rationale.filter(Boolean).slice(0, 3);
+  const trackedPlan = activeThread
+    ? ` Your tracked plan is ${String(activeThread.lifecycleStatus).toLowerCase().replace(/_/g, ' ')} and its context is ${String(activeThread.contextStatus).toLowerCase()}.`
+    : '';
+  const otherYears = years === 5 ? 10 : 5;
+  const assumptionRows = [
+    { id: 'home-value', values: { input: 'Home value', value: money(analysis.current.homeValueNow), source: analysis.current.homeValueDisclosure } },
+    { id: 'rent', values: { input: 'Monthly rent', value: money(analysis.current.monthlyRentNow), source: analysis.input.overrides.monthlyRentNow === undefined ? 'Saved or modeled planning estimate' : 'Used from this request' } },
+    { id: 'appreciation', values: { input: 'Appreciation', value: `${(analysis.current.appreciationRate * 100).toFixed(1)}% / year`, source: analysis.input.overrides.appreciationRate === undefined ? 'Saved or modeled planning estimate' : 'Used from this request' } },
+    { id: 'selling-costs', values: { input: 'Selling costs', value: `${(analysis.current.sellingCostRate * 100).toFixed(1)}%`, source: analysis.input.overrides.sellingCostRate === undefined ? 'Saved or modeled planning estimate' : 'Used from this request' } },
+    { id: 'mortgage', values: { input: 'Mortgage', value: debtKnown ? `${money(analysis.current.mortgageBalanceNow ?? 0)} balance` : 'Not fully modeled', source: analysis.current.mortgageRateDisclosure ?? 'No complete financing profile was available' } },
   ];
+  const projectionIndexes = Array.from(new Set([0, Math.floor((analysis.projection.length - 1) / 2), analysis.projection.length - 1])).filter((index) => index >= 0);
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY',
     id: 'sell-hold-rent-summary',
-    title: `Here is the current ${years}-year sell, hold, and rent comparison`,
-    body: `The model’s directional indicator currently points to ${winnerLabel}, but this is not a conclusion that now is the right time to sell. The sell figure is projected liquidity after selling costs and a mortgage payoff when known; hold and rent figures are modeled changes over the horizon, so the totals should not be treated as directly interchangeable investment returns. Confidence is ${analysis.recommendation.confidence.toLowerCase()}.`,
+    title: `${winnerLabel[0].toUpperCase()}${winnerLabel.slice(1)} currently leads in the ${years}-year sell, hold, or rent comparison`,
+    body: `${rationale.join(' ')}${trackedPlan} Sell is projected liquidity; hold and rent are modeled changes, so compare the direction and assumptions rather than treating the totals as identical returns.`,
     tone: lowConfidence || contextLimited ? 'CAUTION' : 'DEFAULT',
-    // Ask links to no Sell / Hold / Rent page (owner decision 2026-10-10), so the summary carries no action; the tracked plan's own
-    // progress block (FRD Sec22, Option B) follows it when a plan exists.
-    actions: [],
+    chips: [
+      { label: `${money(winningOutcome)} modeled outcome`, tone: 'POSITIVE' },
+      { label: `${analysis.recommendation.confidence.toLowerCase()} confidence`, tone: lowConfidence ? 'CAUTION' : 'DEFAULT' },
+      { label: `${years}-year horizon`, tone: 'DEFAULT' },
+    ],
+    actions: [{
+      id: `sell-hold-rent-horizon-${otherYears}`, label: `Compare ${otherYears} years`,
+      interactionType: 'START_WORKFLOW', message: `Compare selling, holding, and renting this home over ${otherYears} years.`,
+      operationId: 'SELL_HOLD_RENT_ANALYSIS', style: 'SECONDARY',
+    }],
   }, sellHoldRentComparison(analysis, years), {
     type: 'GROUPED_LIST', filters: [],
-    id: 'sell-hold-rent-assumptions',
-    title: 'Assumptions that materially affect the answer',
-    description: 'These are modeled defaults and recorded facts. To test others, ask \u201Cwhat if I rent it for $3,200 and appreciation is 4%?\u201D; nothing you try is saved. Weigh them before relying on the comparison for a major decision.',
-    sections: [{
-      id: 'assumptions', title: 'Current planning inputs', count: limitations.length,
-      items: limitations.map((title, index) => ({ id: `assumption-${index + 1}`, title, description: null, meta: [], status: null, href: null })),
-    }],
+    id: 'sell-hold-rent-drivers', title: 'What is driving this result',
+    description: 'The model ranks these inputs by how strongly they can change the comparison.', listDensity: 'DENSE',
+    sections: [{ id: 'drivers', title: 'Key drivers', count: analysis.drivers.length, items: analysis.drivers.map((driver, index) => ({
+      id: `driver-${index + 1}`, title: driver.factor, description: driver.explanation, meta: [], status: `${driver.impact} impact`, href: null,
+      tone: driver.impact === 'HIGH' ? 'CAUTION' as const : 'DEFAULT' as const,
+    })) }],
     actions: [],
+  }, {
+    type: 'TABLE', id: 'sell-hold-rent-projection', title: 'How hold and rent change over time',
+    description: 'Three checkpoints from the annual model; sell remains the one-time projected net proceeds shown above.',
+    columns: [{ key: 'year', label: 'Year' }, { key: 'homeValue', label: 'Home value' }, { key: 'hold', label: 'Hold change' }, { key: 'rent', label: 'Rent change' }],
+    rows: projectionIndexes.map((index) => ({ id: `projection-${analysis.projection[index].year}`, values: {
+      year: String(analysis.projection[index].year), homeValue: money(analysis.projection[index].homeValue),
+      hold: money(analysis.projection[index].holdNetDelta), rent: money(analysis.projection[index].rentNetDelta),
+    } })), actions: [],
+  }, {
+    type: 'TABLE', id: 'sell-hold-rent-assumptions', title: 'Inputs used',
+    description: 'Recorded values and model defaults used for this comparison. The source column shows where each value came from.',
+    columns: [{ key: 'input', label: 'Input' }, { key: 'value', label: 'Used' }, { key: 'source', label: 'Source' }],
+    rows: assumptionRows, actions: [],
   }, {
     type: 'EVIDENCE',
     id: 'sell-hold-rent-evidence',
@@ -221,24 +265,6 @@ async function sellHoldRentAnalysisResult(userId: string, propertyId: string): P
     suggestions: [],
   }];
 
-  // FRD Sec22 (Option B): surface the tracked plan's own progress when one
-  // exists, right after the summary -- read-only, no recompute (selectThread
-  // above already applied read-time freshness projection). Never creates a
-  // thread; a property with no active goal sees the same blocks as before
-  // this decision was implemented.
-  if (activeThread) {
-    blocks.splice(1, 0, decisionProgressBlock(
-      'sell-hold-rent-analysis-progress',
-      'Your sell, hold, or rent plan',
-      activeThread,
-      activeThread.currentRecommendationSnapshot,
-      [],
-    ));
-    if (activeThread.currentRecommendationSnapshot) {
-      blocks.splice(2, 0, whyNowBlock('sell-hold-rent-analysis-why-now', activeThread.currentRecommendationSnapshot, []));
-    }
-  }
-
   return {
     status: contextLimited || lowConfidence || !debtKnown ? 'READY_WITH_LIMITATIONS' : 'ANSWERED',
     reasonCode: captureRequests.length
@@ -251,7 +277,10 @@ async function sellHoldRentAnalysisResult(userId: string, propertyId: string): P
     contextVersion: context.contextVersion,
     captureRequests,
     blocks,
-    suggestions: [],
+    suggestions: [
+      'What if I rent it for $3,200 and vacancy is 8%?',
+      'What if appreciation is 4% and selling costs are 7%?',
+    ],
   };
 }
 
@@ -611,7 +640,7 @@ async function sellerPrepItemDecisionResult(userId: string, propertyId: string, 
 
 registerCapabilityHandler('sale-case.analysis', async (envelope) => {
   const whatIf = parseSellHoldRentWhatIf(envelope.message);
-  return whatIf ? sellHoldRentWhatIfResult(envelope.userId, envelope.propertyId!, envelope.message, whatIf) : sellHoldRentAnalysisResult(envelope.userId, envelope.propertyId!);
+  return whatIf ? sellHoldRentWhatIfResult(envelope.userId, envelope.propertyId!, envelope.message, whatIf) : sellHoldRentAnalysisResult(envelope.userId, envelope.propertyId!, envelope.message);
 });
 
 registerCapabilityHandler('seller-prep.checklist', async (envelope) => sellerPrepChecklistResult(envelope.userId, envelope.propertyId!));
