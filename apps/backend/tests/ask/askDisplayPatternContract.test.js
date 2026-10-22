@@ -144,3 +144,14 @@ test('audience framing keeps a summary\'s answer chips', () => {
   });
   assert.deepEqual(result.blocks[0].chips, [{ label: '2 overdue', tone: 'CRITICAL' }]);
 });
+
+test('TREND_CHART: one value per category for every series, markers inside the categories, at most four series', () => {
+  const block = (extra) => ({ type: 'TREND_CHART', id: 'chart', title: 'Cost vs appreciation', basis: 'Planning projection.', categories: ['2027', '2028'], series: [{ id: 'a', label: 'A', values: [1, 2] }], ...extra });
+  const parsed = AskPresentationBlockSchema.parse(block({}));
+  assert.equal(parsed.series[0].style, 'SOLID');
+  assert.deepEqual(parsed.markers, []);
+  assert.deepEqual(parsed.actions, []);
+  assert.equal(AskPresentationBlockSchema.safeParse(block({ series: [{ id: 'a', label: 'A', values: [1] }] })).success, false);
+  assert.equal(AskPresentationBlockSchema.safeParse(block({ markers: [{ id: 'm', label: 'M', categoryIndex: 2 }] })).success, false);
+  assert.equal(AskPresentationBlockSchema.safeParse(block({ basis: '' })).success, false);
+});

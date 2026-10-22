@@ -243,10 +243,11 @@ export function breakEvenHorizonYears(message: string): 5 | 10 {
   return /\b(?:5|five)[- ]?years?\b/i.test(message) ? 5 : 10;
 }
 
-export function breakEvenAnalysisFromDto(dto: BreakEvenDTO, propertyId: string): AskOperationResult {
+export function breakEvenAnalysisFromDto(dto: BreakEvenDTO, propertyId: string, options: { canEditFinancing?: boolean } = {}): AskOperationResult {
   const years = dto.input.years;
-  const { breakEven, rollup, sensitivity } = dto;
+  const { breakEven, rollup, sensitivity, current } = dto;
   const yearLabel = (index: number | null) => index == null ? `Not within ${years} years` : `Year ${index}`;
+  const reachedScenarios = (['conservative', 'base', 'optimistic'] as const).filter((key) => sensitivity[key].breakEvenYearIndex != null).length;
   const title = breakEven.status === 'ALREADY_BREAKEVEN'
     ? 'This home has already broken even'
     : breakEven.status === 'PROJECTED'
@@ -254,14 +255,43 @@ export function breakEvenAnalysisFromDto(dto: BreakEvenDTO, propertyId: string):
       : `Not projected to break even within ${years} years`;
   const body = breakEven.status === 'NOT_REACHED'
     ? `Over ${years} years, projected ownership costs of ${money(rollup.cumulativeExpensesAtHorizon)} stay ahead of projected appreciation of ${money(rollup.cumulativeAppreciationAtHorizon)}, a net of ${money(rollup.netAtHorizon)}.`
-    : `Over ${years} years, projected appreciation of ${money(rollup.cumulativeAppreciationAtHorizon)} against ownership costs of ${money(rollup.cumulativeExpensesAtHorizon)} leaves a net of ${money(rollup.netAtHorizon)}. Across the conservative-to-optimistic range: ${sensitivity.rangeLabel}.`;
+    : `${breakEven.status === 'ALREADY_BREAKEVEN' ? 'Appreciation has outpaced cumulative ownership costs.' : 'Appreciation catches up with cumulative ownership costs.'} Over ${years} years the net is ${money(rollup.netAtHorizon)}.`;
   // The service's own disclosures, e.g. the labeled $350,000 fallback it uses when no purchase price is recorded.
   const notes = dto.meta.notes.filter((note) => note.trim());
   const limited = notes.length > 0 || dto.meta.confidence === 'LOW';
+  const debtOn = current.debtMode === 'ON';
   const otherYears = years === 10 ? 5 : 10;
   const blocks: AskPresentationBlock[] = [{
-    type: 'SUMMARY', id: 'break-even-summary', title, body: `${body} Confidence: ${dto.meta.confidence.toLowerCase()}. To test other assumptions, ask \u201Cwhat if appreciation is 5%?\u201D; nothing you try is saved.`,
+    type: 'SUMMARY', id: 'break-even-summary', title, body: `${body} To test other assumptions, ask \u201Cwhat if appreciation is 5%?\u201D; nothing you try is saved.`,
     tone: breakEven.status === 'NOT_REACHED' ? 'CAUTION' : 'DEFAULT',
+    chips: [
+      { label: `${dto.meta.confidence.toLowerCase()} confidence`, tone: dto.meta.confidence === 'LOW' ? 'CAUTION' : 'DEFAULT' },
+      { label: debtOn ? 'Mortgage included' : 'Mortgage not modeled', tone: debtOn ? 'DEFAULT' : 'CAUTION' },
+      { label: `${years}-year horizon`, tone: 'DEFAULT' },
+    ],
+    actions: [],
+  }, {
+    type: 'METRIC_ROW', id: 'break-even-metrics', title: 'Key figures',
+    metrics: [
+      { label: 'Break-even', value: breakEven.status === 'ALREADY_BREAKEVEN' ? 'Already' : breakEven.breakEvenYearIndex == null ? 'Not reached' : `Year ${breakEven.breakEvenYearIndex}`, detail: breakEven.breakEvenCalendarYear ? String(breakEven.breakEvenCalendarYear) : null, tone: breakEven.status === 'NOT_REACHED' ? 'CAUTION' : 'POSITIVE' },
+      { label: `Net at year ${years}`, value: money(rollup.netAtHorizon), tone: rollup.netAtHorizon >= 0 ? 'POSITIVE' : 'CAUTION' },
+      { label: 'Home value', value: money(current.homeValueNow), tone: 'DEFAULT' },
+      { label: 'Annual expenses', value: money(current.annualExpensesNow), tone: 'DEFAULT' },
+      { label: `Costs, ${years} years`, value: money(rollup.cumulativeExpensesAtHorizon), tone: 'DEFAULT' },
+      { label: `Appreciation, ${years} years`, value: money(rollup.cumulativeAppreciationAtHorizon), tone: 'DEFAULT' },
+    ],
+  }, {
+    type: 'TREND_CHART', id: 'break-even-chart', title: 'Cost vs appreciation',
+    description: 'Cumulative ownership costs against cumulative projected appreciation.',
+    basis: `Planning projection over ${years} years; ${debtOn ? 'mortgage interest counts as a cost and principal paydown as gain' : 'mortgage costs are not included'}.`,
+    valueFormat: 'CURRENCY',
+    categories: dto.projection.map((row) => String(row.year)),
+    series: [
+      { id: 'costs', label: 'Cumulative costs', style: 'SOLID', tone: 'CAUTION', values: dto.projection.map((row) => row.cumulativeExpenses) },
+      { id: 'appreciation', label: 'Cumulative appreciation', style: 'DASHED', tone: 'POSITIVE', values: dto.projection.map((row) => row.cumulativeAppreciationGain) },
+    ],
+    markers: breakEven.breakEvenYearIndex != null && breakEven.breakEvenYearIndex >= 1 && breakEven.breakEvenYearIndex <= dto.projection.length
+      ? [{ id: 'break-even', label: `Break-even, year ${breakEven.breakEvenYearIndex}`, categoryIndex: breakEven.breakEvenYearIndex - 1 }] : [],
     actions: [
       { id: `rerun-break-even-${otherYears}`, label: `Show ${otherYears}-year horizon`, interactionType: 'START_WORKFLOW' as const, message: `Show my home break-even analysis for a ${otherYears}-year horizon.`, operationId: 'BREAK_EVEN_ANALYSIS', style: 'SECONDARY' as const },
     ],
@@ -271,30 +301,52 @@ export function breakEvenAnalysisFromDto(dto: BreakEvenDTO, propertyId: string):
   }
   blocks.push({
     type: 'TABLE', id: 'break-even-sensitivity', title: 'Break-even range',
-    description: `Conservative, base and optimistic assumptions over ${years} years.`,
+    description: reachedScenarios === 3 ? `All three scenarios reach break-even within ${years} years.` : reachedScenarios === 0 ? `No scenario reaches break-even within ${years} years.` : `${reachedScenarios} of 3 scenarios reach break-even within ${years} years.`,
     columns: [{ key: 'scenario', label: 'Scenario' }, { key: 'breakEven', label: 'Breaks even' }, { key: 'net', label: `Net at year ${years}` }],
     rows: (['conservative', 'base', 'optimistic'] as const).map((key) => ({
       id: `break-even-${key}`,
       values: { scenario: key.charAt(0).toUpperCase() + key.slice(1), breakEven: yearLabel(sensitivity[key].breakEvenYearIndex), net: money(sensitivity[key].netAtHorizon) },
     })),
     actions: [],
-  }, {
-    type: 'TABLE', id: 'break-even-projection', title: 'Year-by-year projection',
-    description: 'Cumulative ownership costs against cumulative projected appreciation.',
-    columns: [{ key: 'year', label: 'Year' }, { key: 'expenses', label: 'Cumulative costs' }, { key: 'appreciation', label: 'Cumulative appreciation' }, { key: 'net', label: 'Net' }],
-    rows: dto.projection.map((row) => ({
-      id: `break-even-year-${row.year}`,
-      values: { year: String(row.year), expenses: money(row.cumulativeExpenses), appreciation: money(row.cumulativeAppreciationGain), net: money(row.netCumulative) },
-    })),
-    actions: [],
   });
   if (dto.drivers.length) {
     blocks.push({
-      type: 'TABLE', id: 'break-even-drivers', title: 'What drives the result',
-      columns: [{ key: 'factor', label: 'Factor' }, { key: 'impact', label: 'Impact' }, { key: 'explanation', label: 'Why' }],
-      rows: dto.drivers.map((driver, index) => ({ id: `break-even-driver-${index + 1}`, values: { factor: driver.factor, impact: driver.impact.toLowerCase(), explanation: driver.explanation } })),
+      type: 'GROUPED_LIST', filters: [], id: 'break-even-drivers', title: 'What matters most',
+      listDensity: 'DENSE',
+      sections: [{ id: 'drivers', title: 'Drivers', count: dto.drivers.length, items: dto.drivers.map((driver, index) => ({
+        id: `break-even-driver-${index + 1}`, title: driver.factor, description: driver.explanation, meta: [], status: `${driver.impact} impact`, href: null,
+        tone: driver.impact === 'HIGH' ? 'CAUTION' as const : 'DEFAULT' as const,
+      })) }],
       actions: [],
     });
+  }
+  const overridden = (key: string) => dto.input.overrides[key] !== undefined;
+  const rate = current.mortgageAnnualRate;
+  blocks.push({
+    type: 'TABLE', id: 'break-even-assumptions', title: 'Assumptions and confidence',
+    columns: [{ key: 'input', label: 'Input' }, { key: 'value', label: 'Used' }, { key: 'source', label: 'Source' }],
+    rows: [
+      { id: 'home-value', values: { input: 'Home value', value: money(current.homeValueNow), source: overridden('homeValueNow') ? 'Used from this request' : 'Recorded value or planning estimate' } },
+      { id: 'appreciation', values: { input: 'Appreciation', value: `${(current.appreciationRate * 100).toFixed(1)}% / year`, source: overridden('appreciationRate') ? 'Used from this request' : dto.meta.appreciation ? `${dto.meta.appreciation.source === 'FHFA' ? 'FHFA price history' : 'Planning assumption'}, ${dto.meta.appreciation.regionLabel}` : 'Planning assumption' } },
+      { id: 'expenses', values: { input: 'Annual ownership costs', value: money(current.annualExpensesNow), source: 'Ownership cost snapshot and forecast' } },
+      { id: 'mortgage', values: { input: 'Mortgage', value: debtOn ? `${money(current.mortgageBalanceNow ?? 0)} balance${rate != null ? ` at ${(rate * 100).toFixed(1)}%` : ''}` : 'Not modeled', source: current.mortgageRateDisclosure ?? (debtOn ? 'Recorded financing profile' : 'No complete financing profile was available') } },
+      { id: 'confidence', values: { input: 'Confidence', value: dto.meta.confidence.toLowerCase(), source: 'Completeness of the recorded inputs' } },
+    ],
+    actions: [],
+  });
+  const next = dto.nextAction;
+  if (next) {
+    const wantsFinancing = next.toolKey === 'sell-hold-rent' && !debtOn;
+    const action = wantsFinancing
+      ? (options.canEditFinancing ? {
+        id: FINANCING_PROFILE_ACTION_ID, label: 'Update my mortgage and purchase details', interactionType: 'START_WORKFLOW' as const,
+        message: FINANCING_PROFILE_COMMAND_MESSAGE, operationId: 'FINANCING_PROFILE_COMMAND' as const,
+        entityType: FINANCING_PROFILE_ENTITY_TYPE, entityId: propertyId, style: 'PRIMARY' as const,
+      } : null)
+      : next.toolKey === 'sell-hold-rent'
+        ? { id: 'break-even-next-sell-hold-rent', label: 'Compare sell, hold, or rent', interactionType: 'START_WORKFLOW' as const, message: `Compare selling, holding, and renting this home over ${years} years.`, operationId: 'SELL_HOLD_RENT_ANALYSIS' as const, style: 'PRIMARY' as const }
+        : { id: 'break-even-next-capital-timeline', label: 'Plan capital events', interactionType: 'START_WORKFLOW' as const, message: 'How is my reserve fund doing?', operationId: 'CAPITAL_RESERVE_PLAN' as const, style: 'PRIMARY' as const };
+    blocks.push({ type: 'SUMMARY', id: 'break-even-next-action', title: wantsFinancing ? 'Add mortgage details for debt-aware modeling' : next.label, body: next.reason, tone: 'DEFAULT', actions: action ? [action] : [] });
   }
   blocks.push({
     type: 'EVIDENCE', id: 'break-even-evidence', title: 'Sources used',
@@ -317,6 +369,8 @@ export function breakEvenAnalysisFromDto(dto: BreakEvenDTO, propertyId: string):
 // (`ephemeral`: the route would save each set as a reusable assumption set, Ask saves nothing) and shown beside the unchanged standard projection.
 export function breakEvenWhatIfFromDtos(standard: BreakEvenDTO, scenario: BreakEvenDTO, overrides: BreakEvenWhatIf, propertyId: string): AskOperationResult {
   const result = breakEvenAnalysisFromDto(scenario, propertyId);
+  // The horizon switch would re-run the standard projection and drop the hypothetical, so the what-if chart carries none.
+  result.blocks = result.blocks.map((block) => block.type === 'TREND_CHART' ? { ...block, actions: [] } : block);
   const years = scenario.input.years;
   const when = (dto: BreakEvenDTO) => (dto.breakEven.status === 'ALREADY_BREAKEVEN' ? 'Already broken even'
     : dto.breakEven.breakEvenYearIndex == null ? `Not within ${years} years` : `Year ${dto.breakEven.breakEvenYearIndex} (${dto.breakEven.breakEvenCalendarYear})`);
@@ -363,7 +417,8 @@ async function breakEvenAnalysisResult(userId: string, propertyId: string, messa
   }
   const outcome = await breakEvenService.computeOutcome(propertyId, { years }, userId);
   if (outcome.status !== 'OK') return planningHomeValueRequestResult('Break-even');
-  return breakEvenAnalysisFromDto(outcome.value, propertyId);
+  const access = await ensurePropertyAccess(userId, propertyId);
+  return breakEvenAnalysisFromDto(outcome.value, propertyId, { canEditFinancing: access.role === HouseholdRole.OWNER });
 }
 
 async function refinanceAnalysisWithMonitorsResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {

@@ -58,7 +58,7 @@ export const BREAK_EVEN_SKILL_EVALUATION = deepFreezeSkillPackage({
   expectedContextProviders: [PROPERTY_IDENTITY_CONTEXT_PROVIDER, PROPERTY_JOURNEY_CONTEXT_PROVIDER],
   prohibitedContextProviders: ['undeclared.financial-account'],
   expectedStatuses: ['ANSWERED', 'READY_WITH_LIMITATIONS'],
-  expectedBlockTypes: ['SUMMARY', 'TABLE', 'EVIDENCE', 'LIMITATION', 'BOUNDARY'],
+  expectedBlockTypes: ['SUMMARY', 'METRIC_ROW', 'TREND_CHART', 'GROUPED_LIST', 'TABLE', 'EVIDENCE', 'LIMITATION', 'BOUNDARY'],
   expectedCanonicalCalls: [{ id: 'break-even.analysis', version: '1.0' }],
   prohibitedCanonicalCalls: ['sale-case.analysis', 'refinance.analysis'],
   modelDisabledCase: {

@@ -432,6 +432,25 @@ describe('lifespan, progress, timeline, chips and badges', () => {
     expect(onItemAction).toHaveBeenCalledWith('INVENTORY_ITEM', 'mw', 'Add install year message', 'INSPECTION_FINDINGS', 'CONVERSATION_CONTINUE');
   });
 
+  test('trend chart draws the declared series and marker, labels them, and keeps the range switch inside Ask', () => {
+    const onItemAction = jest.fn();
+    const { container } = render(<Harness onItemAction={onItemAction} block={{
+      type: 'TREND_CHART', id: 'chart', title: 'Cost vs appreciation', basis: 'Planning projection over 10 years.', valueFormat: 'CURRENCY',
+      categories: ['2027', '2028', '2029'],
+      series: [
+        { id: 'costs', label: 'Cumulative costs', style: 'SOLID', tone: 'CAUTION', values: [5000, 10000, 15000] },
+        { id: 'appreciation', label: 'Cumulative appreciation', style: 'DASHED', tone: 'POSITIVE', values: [20000, 40000, 60000] },
+      ],
+      markers: [{ id: 'break-even', label: 'Break-even, year 1', categoryIndex: 0 }],
+      actions: [{ id: 'rerun-break-even-5', label: 'Show 5-year horizon', style: 'SECONDARY', interactionType: 'START_WORKFLOW', message: 'Show my home break-even analysis for a 5-year horizon.', operationId: 'BREAK_EVEN_ANALYSIS' }],
+    }} />);
+    expect(container.querySelectorAll('polyline')).toHaveLength(2);
+    expect(container.querySelector('polyline[stroke-dasharray]')).not.toBeNull();
+    expect(screen.getByRole('img', { name: /Cumulative costs ends at \$15,000; Cumulative appreciation ends at \$60,000/ })).toBeInTheDocument();
+    expect(screen.getByText('Break-even, year 1')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Show 5-year horizon' })).toBeInTheDocument();
+  });
+
   test('progress shows the declared percent with its basis, not a count of the steps', () => {
     const onItemAction = jest.fn();
     render(<Harness onItemAction={onItemAction} block={{

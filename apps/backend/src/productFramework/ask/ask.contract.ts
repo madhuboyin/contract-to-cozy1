@@ -578,6 +578,30 @@ const ProgressBlockSchema = z.object({
   actions: z.array(AskActionSchema).max(3).default([]),
 });
 
+// FRD v1.386: cumulative lines over a shared x axis (the Break-Even cost-vs-appreciation chart). The producer declares every series, its
+// line style, the markers and the basis; the renderer only draws them. `actions` carry the range switch (for example 5 and 10 years).
+const TrendChartBlockSchema = z.object({
+  type: z.literal('TREND_CHART'), id: z.string(), title: z.string(), description: z.string().nullable().optional(),
+  basis: z.string().trim().min(1).max(300),
+  valueFormat: z.enum(['CURRENCY']).default('CURRENCY'),
+  categories: z.array(z.string().trim().min(1).max(12)).min(1).max(40),
+  series: z.array(z.object({
+    id: z.string(), label: z.string().trim().min(1).max(60),
+    style: z.enum(['SOLID', 'DASHED']).default('SOLID'),
+    tone: AskDisplayToneSchema.default('DEFAULT'),
+    values: z.array(z.number().finite()).min(1).max(40),
+  })).min(1).max(4),
+  markers: z.array(z.object({ id: z.string(), label: z.string().trim().min(1).max(60), categoryIndex: z.number().int().min(0).max(39) })).max(4).default([]),
+  actions: z.array(AskActionSchema).max(3).default([]),
+}).superRefine((block, ctx) => {
+  block.series.forEach((series, index) => {
+    if (series.values.length !== block.categories.length) ctx.addIssue({ code: 'custom', path: ['series', index, 'values'], message: 'Every series needs one value per category.' });
+  });
+  block.markers.forEach((marker, index) => {
+    if (marker.categoryIndex >= block.categories.length) ctx.addIssue({ code: 'custom', path: ['markers', index, 'categoryIndex'], message: 'A marker must point at a category.' });
+  });
+});
+
 // A single task, habit or step presented as one conversational card: where it sits (breadcrumb), what it is, its key facts as chips, an
 // optional tip, what to do, short explanatory rows, and the next actions. Every string is the producer's own recorded content; the renderer
 // invents nothing (no steps, photos or advice of its own). A row may point at one of `actions` by id so its button sits in the row.
@@ -1109,6 +1133,7 @@ export const AskPresentationBlockSchema = z.discriminatedUnion('type', [
   ErrorStateBlockSchema,
   LifespanBlockSchema,
   ProgressBlockSchema,
+  TrendChartBlockSchema,
   EnvironmentReportBlockSchema,
 ]);
 
