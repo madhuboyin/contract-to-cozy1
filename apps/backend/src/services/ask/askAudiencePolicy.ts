@@ -223,6 +223,7 @@ const POLICIES: readonly AskAudiencePolicy[] = [
   definePolicy('REFINANCE_ANALYSIS', ['OWNING']),
   definePolicy('REFINANCE_RATE_MONITOR', ['OWNING']),
   definePolicy('SELL_HOLD_RENT_ANALYSIS', OWNER_LIFECYCLE_MODES),
+  definePolicy('SELL_HOLD_RENT_COMMAND', OWNER_LIFECYCLE_MODES),
   definePolicy('BREAK_EVEN_ANALYSIS', OWNER_LIFECYCLE_MODES),
   definePolicy('NEIGHBORHOOD_CHANGE_FEED', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('PAST_HAZARD_EXPOSURE', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),

@@ -10,7 +10,16 @@
 
 The standard Ask analysis now exposes more of the canonical `SellHoldRentDTO` without copying the desktop page into the conversation. The first block names the model lead, modeled outcome, confidence and horizon; the comparison shows the principal economics for all three paths and badges only the server-declared lead. A compact drivers section, three annual projection checkpoints, source-aware inputs, and governed 5/10-year switching follow. Two ephemeral what-if prompts make the existing no-save scenario path discoverable. When a durable decision thread exists, its lifecycle and freshness are summarized in the decision answer instead of repeating separate generic plan and "Why now" cards.
 
-This remains a read-only analysis surface. It does not persist assumption overrides, edit the financing profile, choose a final disposition, or replace professional financial, tax, legal or valuation review. Those are separate canonical write workflows rather than presentation parity work.
+### Second-pass governed controls (2026-10-22)
+
+The analysis now exposes the canonical write workflows without turning the answer into a copy of the desktop page:
+
+- contributors and owners can edit the seven scenario assumptions exposed by the desktop tool; the form writes the existing `ToolOverride` contract only after an exact before/after confirmation, and can explicitly clear the saved scenario settings back to model defaults;
+- owners can open the existing owner-only financing-profile editor from the inputs table, so mortgage and purchase facts keep their stricter authorization, validation, history and redacted receipt rather than being duplicated in the Sell / Hold / Rent handler;
+- contributors and owners can start or stop the property-scoped `SELL_HOLD_RENT` decision thread after confirmation. Start uses the canonical snapshot adapter's create-or-resume path and stop uses the canonical optimistic-versioned abandon transition;
+- both assumption and plan confirmations re-read a deterministic context fingerprint and refuse a stale proposal. Successful writes reconcile the originating `SELL_HOLD_RENT_ANALYSIS` answer.
+
+The comparison still does not choose a final disposition or perform any external sale, rental, listing, financing or advisory action. It remains planning support rather than financial, tax, legal or valuation advice.
 
 | Field | Status |
 | --- | --- |

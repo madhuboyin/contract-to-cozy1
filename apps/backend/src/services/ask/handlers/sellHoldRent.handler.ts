@@ -17,6 +17,8 @@ import { ensurePropertyAccess, exactEntityMatch } from '../askHandlerSupport';
 import { sellHoldRentDecisionFamilyAdapter } from '../../decisionPlatform/domainSnapshotAdapters';
 import { SELL_HOLD_RENT_WHAT_IF_LABELS, isSellHoldRentMoneyKey, parseSellHoldRentWhatIf, type SellHoldRentWhatIf } from '../support/sellHoldRentWhatIf';
 import { collectionDescriptor } from '../support/collectionDescriptor';
+import { FINANCING_PROFILE_ACTION_ID, FINANCING_PROFILE_COMMAND_MESSAGE, FINANCING_PROFILE_ENTITY_TYPE } from '../support/financingProfileCommand';
+import { SELL_HOLD_RENT_COMMAND_ACTION_IDS, SELL_HOLD_RENT_COMMAND_ENTITY_TYPE, SELL_HOLD_RENT_COMMAND_LABELS, SELL_HOLD_RENT_COMMAND_MESSAGES } from '../support/sellHoldRentCommand';
 
 const sellHoldRentService = new SellHoldRentService();
 
@@ -224,7 +226,16 @@ async function sellHoldRentAnalysisResult(userId: string, propertyId: string, me
       id: `sell-hold-rent-horizon-${otherYears}`, label: `Compare ${otherYears} years`,
       interactionType: 'START_WORKFLOW', message: `Compare selling, holding, and renting this home over ${otherYears} years.`,
       operationId: 'SELL_HOLD_RENT_ANALYSIS', style: 'SECONDARY',
-    }],
+    }, ...(canImproveContext ? [{
+      id: activeThread ? SELL_HOLD_RENT_COMMAND_ACTION_IDS.STOP_PLAN : SELL_HOLD_RENT_COMMAND_ACTION_IDS.START_PLAN,
+      label: activeThread ? SELL_HOLD_RENT_COMMAND_LABELS.STOP_PLAN : SELL_HOLD_RENT_COMMAND_LABELS.START_PLAN,
+      interactionType: 'START_WORKFLOW' as const,
+      message: activeThread ? SELL_HOLD_RENT_COMMAND_MESSAGES.STOP_PLAN : SELL_HOLD_RENT_COMMAND_MESSAGES.START_PLAN,
+      operationId: 'SELL_HOLD_RENT_COMMAND' as const,
+      entityType: SELL_HOLD_RENT_COMMAND_ENTITY_TYPE,
+      entityId: activeThread?.id ?? propertyId,
+      style: 'SECONDARY' as const,
+    }] : [])],
   }, sellHoldRentComparison(analysis, years), {
     type: 'GROUPED_LIST', filters: [],
     id: 'sell-hold-rent-drivers', title: 'What is driving this result',
@@ -246,7 +257,18 @@ async function sellHoldRentAnalysisResult(userId: string, propertyId: string, me
     type: 'TABLE', id: 'sell-hold-rent-assumptions', title: 'Inputs used',
     description: 'Recorded values and model defaults used for this comparison. The source column shows where each value came from.',
     columns: [{ key: 'input', label: 'Input' }, { key: 'value', label: 'Used' }, { key: 'source', label: 'Source' }],
-    rows: assumptionRows, actions: [],
+    rows: assumptionRows, actions: [
+      ...(canImproveContext ? [{
+        id: SELL_HOLD_RENT_COMMAND_ACTION_IDS.EDIT_ASSUMPTIONS, label: SELL_HOLD_RENT_COMMAND_LABELS.EDIT_ASSUMPTIONS,
+        interactionType: 'START_WORKFLOW' as const, message: SELL_HOLD_RENT_COMMAND_MESSAGES.EDIT_ASSUMPTIONS,
+        operationId: 'SELL_HOLD_RENT_COMMAND' as const, entityType: SELL_HOLD_RENT_COMMAND_ENTITY_TYPE, entityId: propertyId, style: 'SECONDARY' as const,
+      }] : []),
+      ...(access.role === HouseholdRole.OWNER ? [{
+        id: FINANCING_PROFILE_ACTION_ID, label: 'Update mortgage details', interactionType: 'START_WORKFLOW' as const,
+        message: FINANCING_PROFILE_COMMAND_MESSAGE, operationId: 'FINANCING_PROFILE_COMMAND' as const,
+        entityType: FINANCING_PROFILE_ENTITY_TYPE, entityId: propertyId, style: 'SECONDARY' as const,
+      }] : []),
+    ],
   }, {
     type: 'EVIDENCE',
     id: 'sell-hold-rent-evidence',

@@ -136,8 +136,9 @@ const DECLARED: Readonly<Record<string, Declared>> = {
   SELLER_PREP_ITEM_DECISION: impact(['SELLER_PREP_CHECKLIST']),
   SELLER_PREP_CASE_COMMAND: impact(['SELLER_PREP_CHECKLIST']),
   SELL_HOLD_RENT_GOAL_CAPTURE: impact(['SELL_HOLD_RENT_ANALYSIS'], { artifactTypes: ['SELL_HOLD_RENT_ANALYSIS'] }),
+  SELL_HOLD_RENT_COMMAND: impact(['SELL_HOLD_RENT_ANALYSIS'], { artifactTypes: ['SELL_HOLD_RENT_ANALYSIS'] }),
   // Money: financing, costs, reserve, savings, refinance, quotes
-  FINANCING_PROFILE_COMMAND: impact(['FINANCING_OVERVIEW'], { artifactTypes: ['FINANCING_SCENARIO'] }),
+  FINANCING_PROFILE_COMMAND: impact(['FINANCING_OVERVIEW', 'SELL_HOLD_RENT_ANALYSIS'], { artifactTypes: ['FINANCING_SCENARIO', 'SELL_HOLD_RENT_ANALYSIS'] }),
   OWNERSHIP_COST_COMMAND: impact(['OWNERSHIP_COSTS']),
   RESERVE_FUND_COMMAND: impact(['CAPITAL_RESERVE_PLAN'], { artifactTypes: ['CAPITAL_TIMELINE_ANALYSIS'], notifications: ['reserve-fund', 'capital-timeline'] }),
   CAPITAL_TIMELINE_COMMAND: impact(['CAPITAL_RESERVE_PLAN'], { artifactTypes: ['CAPITAL_TIMELINE_ANALYSIS'], notifications: ['capital-timeline', 'reserve-fund'] }),

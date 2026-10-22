@@ -332,6 +332,7 @@ export const RESULT_OWNERSHIP_RELATIONSHIPS: Readonly<Record<string, readonly st
   NEGOTIATION_SHIELD_CASE_UPDATE: operationSpecificContinuationOutcomeKeys('NEGOTIATION_SHIELD_CASE_UPDATE'),
   NEGOTIATION_SHIELD_CASE_ANALYZE: operationSpecificContinuationOutcomeKeys('NEGOTIATION_SHIELD_CASE_ANALYZE'),
   SELL_HOLD_RENT_ANALYSIS: operationSpecificContinuationOutcomeKeys('SELL_HOLD_RENT_ANALYSIS'),
+  SELL_HOLD_RENT_COMMAND: operationSpecificContinuationOutcomeKeys('SELL_HOLD_RENT_COMMAND'),
   SELL_HOLD_RENT_GOAL_CAPTURE: operationSpecificContinuationOutcomeKeys('SELL_HOLD_RENT_GOAL_CAPTURE'),
   SELLER_PREP_CHECKLIST: operationSpecificContinuationOutcomeKeys('SELLER_PREP_CHECKLIST'),
   SELLER_PREP_ITEM_DECISION: operationSpecificContinuationOutcomeKeys('SELLER_PREP_ITEM_DECISION'),

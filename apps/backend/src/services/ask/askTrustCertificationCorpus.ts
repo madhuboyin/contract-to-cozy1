@@ -245,6 +245,7 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   REFINANCE_ANALYSIS: 'The refinance analysis shows that refinancing the current mortgage does not yet improve the break-even numbers.',
   REFINANCE_RATE_MONITOR: 'A mortgage-rate alert can watch for the five-percent threshold after confirmation.',
   SELL_HOLD_RENT_ANALYSIS: 'The recorded assumptions currently favor becoming a landlord and renting over putting the house on the market.',
+  SELL_HOLD_RENT_COMMAND: 'The homeowner reviewed and confirmed a change to the sell, hold, or rent assumptions or tracked decision plan.',
   BREAK_EVEN_ANALYSIS: 'This home is projected to break even in year six, when appreciation catches up with cumulative ownership costs.',
   NEIGHBORHOOD_CHANGE_FEED: 'The city approved one new development close to this home; it is listed with its possible relevance and the geography it matched.',
   PAST_HAZARD_EXPOSURE: 'This house has seen two storms and one flood over the years, according to the reviewed hazard records matched to it.',

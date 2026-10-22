@@ -107,6 +107,7 @@ export type AskOperationId =
   | 'REFINANCE_ANALYSIS'
   | 'REFINANCE_RATE_MONITOR'
   | 'SELL_HOLD_RENT_ANALYSIS'
+  | 'SELL_HOLD_RENT_COMMAND'
   | 'BREAK_EVEN_ANALYSIS'
   | 'NEIGHBORHOOD_CHANGE_FEED'
   | 'PAST_HAZARD_EXPOSURE'
@@ -449,6 +450,7 @@ export const ASK_INTERNAL_OPERATION_IDS: ReadonlySet<AskOperationId> = new Set<A
   'CAPTURE_WARRANTY_CONFIRM',
   'CAPTURE_EVIDENCE_CONFIRM',
   'SELL_HOLD_RENT_GOAL_CAPTURE',
+  'SELL_HOLD_RENT_COMMAND',
   // Inline Workspace Phase 3 correction commands. Fuzzy semantic retrieval scores a plain question such as
   // "When was my water heater last serviced?" or "What is the warranty expiration date for the roof?" as a near
   // match for a correction example (the phrases share the same nouns and date words, and a hard negative cannot
@@ -801,6 +803,7 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   NEIGHBORHOOD_CHANGE_FEED: definition('NEIGHBORHOOD_CHANGE_FEED', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'neighborhood-change.feed', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'LIMITATION', 'BOUNDARY']),
   BREAK_EVEN_ANALYSIS: definition('BREAK_EVEN_ANALYSIS', 'DECISION_ANALYSIS', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'break-even.analysis', ['SUMMARY', 'TABLE', 'EVIDENCE', 'LIMITATION', 'BOUNDARY']),
   SELL_HOLD_RENT_ANALYSIS: definition('SELL_HOLD_RENT_ANALYSIS', 'DECISION_ANALYSIS', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'VIEWER', 'sale-case.analysis', ['SUMMARY', 'GROUPED_LIST', 'TABLE', 'COMPARISON', 'EVIDENCE', 'BOUNDARY', 'DECISION_PROGRESS', 'WHY_NOW']),
+  SELL_HOLD_RENT_COMMAND: definition('SELL_HOLD_RENT_COMMAND', 'COMMAND', false, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'sell-hold-rent.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION']),
   // IW-FRESH-003 fix: BOUNDARY added to HOUSEHOLD_INVITATION, GUIDANCE_JOURNEY_CREATE,
   // and QUOTE_COMPARISON_CREATE so each one's new reconciliation-failure
   // block (see ASK_MUTATION_IMPACT_MAP / the confirm handlers below) isn't

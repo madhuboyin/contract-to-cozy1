@@ -134,6 +134,7 @@ import './handlers/claimActivity.handler';
 import './handlers/doNothingScenarioCommands.handler';
 import './handlers/habitCoachPreferencesCommands.handler';
 import './handlers/financingProfileCommands.handler';
+import './handlers/sellHoldRentCommands.handler';
 import './handlers/homeBriefingShareCommands.handler';
 import './handlers/hoaComplianceCommands.handler';
 import './handlers/homeBriefingCommands.handler';

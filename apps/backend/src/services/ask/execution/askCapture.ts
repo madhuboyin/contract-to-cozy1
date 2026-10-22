@@ -111,6 +111,8 @@ import { HABIT_COACH_PREFERENCES_CAPTURE_KEY, parseHabitCoachPreferencesAnswer }
 import { habitCoachPreferencesResult } from '../handlers/habitCoachPreferencesCommands.handler';
 import { FINANCING_PROFILE_CAPTURE_KEY, parseFinancingProfileAnswer } from '../support/financingProfileCommand';
 import { financingProfileCommandResult } from '../handlers/financingProfileCommands.handler';
+import { SELL_HOLD_RENT_ASSUMPTIONS_CAPTURE_KEY } from '../support/sellHoldRentCommand';
+import { sellHoldRentCommandResult } from '../handlers/sellHoldRentCommands.handler';
 import { BRIEFING_SHARE_CAPTURE_KEY, parseBriefingShareAnswer } from '../support/homeBriefingCommand';
 import { briefingShareResult } from '../handlers/homeBriefingShareCommands.handler';
 import { hoaFormKindFromCaptureKey, parseHoaFormAnswer } from '../support/hoaComplianceCommand';
@@ -1593,6 +1595,20 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     captureId = input.idempotencyKey;
     capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
     canonicalOwner = 'PropertyFinancingProfile';
+  } else if (execution.operationId === 'SELL_HOLD_RENT_COMMAND') {
+    if (input.captureKey !== SELL_HOLD_RENT_ASSUMPTIONS_CAPTURE_KEY) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson) ? execution.parametersJson as Record<string, unknown> : {};
+    const launch = storedParameters.sellHoldRentLaunch && typeof storedParameters.sellHoldRentLaunch === 'object' && !Array.isArray(storedParameters.sellHoldRentLaunch)
+      ? storedParameters.sellHoldRentLaunch as { kind?: unknown; entityId?: unknown; sourceExecutionId?: unknown } : null;
+    if (!launch || launch.kind !== 'EDIT_ASSUMPTIONS' || typeof launch.entityId !== 'string') {
+      throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    }
+    result = await sellHoldRentCommandResult(userId, execution.propertyId, {
+      kind: 'EDIT_ASSUMPTIONS', entityId: launch.entityId, sourceExecutionId: typeof launch.sourceExecutionId === 'string' ? launch.sourceExecutionId : null,
+    }, input.answer as Record<string, unknown>);
+    captureId = input.idempotencyKey;
+    capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
+    canonicalOwner = 'ToolOverride';
   } else if (execution.operationId === 'HOME_HABIT_PREFERENCES_COMMAND') {
     if (input.captureKey !== HABIT_COACH_PREFERENCES_CAPTURE_KEY) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
     const access = await ensurePropertyAccess(userId, execution.propertyId);
