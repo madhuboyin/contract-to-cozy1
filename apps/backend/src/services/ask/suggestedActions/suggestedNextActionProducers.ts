@@ -5,7 +5,7 @@
 //
 // A producer failure is isolated by the finalizer (its nominations are dropped and counted); it can never crash startup or
 // invalidate an otherwise safe answer, so producers may throw.
-import type { AskOperationResult } from '../askOperationRegistry';
+import type { AskOperationId, AskOperationResult } from '../askOperationRegistry';
 import type { SuggestedNextAction } from '../../../productFramework/ask/ask.contract';
 import {
   homeBasicsStarters, hiringGuideStarters, propertySummaryStarters, seasonalHomeCareStarters,
@@ -22,6 +22,8 @@ import {
   OPERATION_SPECIFIC_CONTINUATION_PRODUCER_ID,
   operationSpecificContinuationCandidates,
 } from './operationSpecificContinuationCandidates';
+import { loadOperationSpecificContinuationState } from './operationSpecificContinuationState';
+import { OPERATION_SPECIFIC_CONTINUATION_RECIPES } from './operationSpecificContinuationRecipes';
 
 export interface ProducerContext {
   result: AskOperationResult;
@@ -34,6 +36,7 @@ export interface ProducerContext {
   loadUrgentHomeActionState: typeof loadUrgentHomeActionState;
   loadHomeOpportunityState: typeof loadHomeOpportunityState;
   loadActivePlanState: typeof loadActivePlanState;
+  loadOperationSpecificContinuationState: typeof loadOperationSpecificContinuationState;
 }
 
 export interface SuggestedNextActionProducer {
@@ -58,7 +61,17 @@ export const operationSpecificContinuationProducer: SuggestedNextActionProducer 
   id: OPERATION_SPECIFIC_CONTINUATION_PRODUCER_ID,
   source: 'OPERATION_RESULT',
   essential: true,
-  nominate: ({ sourceOperationId, propertyId }) => operationSpecificContinuationCandidates(sourceOperationId, propertyId),
+  nominate: async ({ sourceOperationId, propertyId, loadOperationSpecificContinuationState: loadState }) => {
+    if (!sourceOperationId || !propertyId) return [];
+    // HOME_ACTIONS is a ranked feed of real work. Its related row must not imply that empty
+    // maintenance, inspection, or recall collections contain records. Other operation recipes
+    // retain their established continuation behavior; several are intentional domain-navigation
+    // receipts rather than claims that a collection is non-empty.
+    const recipes = OPERATION_SPECIFIC_CONTINUATION_RECIPES[sourceOperationId as AskOperationId] ?? [];
+    const needsRecordState = sourceOperationId === 'HOME_ACTIONS' && recipes.length > 0;
+    const state = needsRecordState ? await loadState(propertyId) : undefined;
+    return operationSpecificContinuationCandidates(sourceOperationId, propertyId, state);
+  },
 };
 
 /**

@@ -61,6 +61,7 @@ The result is locally correct behavior with global inconsistencies:
 - Current-answer continuations and time-sensitive home work rank first. When the selected home's **actionable profile completeness** is below 90%, the remaining positions prioritize applicable missing profile details. Strongly relevant homeowner opportunities backfill any positions that remain.
 - Discovery must describe a homeowner outcome rather than advertise a tool. It ranks below active continuation, urgent work, missing-profile completion, and exact-entity actions, and no more than one unrelated exploration action may appear in a row.
 - A fourth action may come from a governed fallback inventory, but it may not be fabricated, ineligible, stale, duplicative, promotional, or semantically routed free text merely to satisfy the count.
+- Record-backed continuations are nominated only when the destination has a matching canonical record. In particular, pending-maintenance, open-inspection-finding, and unresolved-recall continuations must not be used as empty-result filler; governed profile, opportunity, capability, or curated-starter candidates fill any remaining positions.
 
 ### 3.4 Safety is unchanged
 

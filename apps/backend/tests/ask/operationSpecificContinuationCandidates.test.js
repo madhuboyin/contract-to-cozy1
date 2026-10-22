@@ -82,6 +82,36 @@ test('representative domain actions remain operation-specific', () => {
   assert.equal(operationSpecificContinuationCandidates('INCIDENT_CLAIM_STATUS', PROPERTY_ID)[0].operationId, 'INCIDENT_CONTINUATION');
 });
 
+test('record-backed continuations are omitted when their destination would be empty', async () => {
+  const empty = {
+    hasPendingMaintenance: false,
+    hasOpenInspectionFindings: false,
+    hasUnresolvedRecallMatches: false,
+  };
+  assert.deepEqual(operationSpecificContinuationCandidates('HOME_ACTIONS', PROPERTY_ID, empty), []);
+  assert.deepEqual(
+    operationSpecificContinuationCandidates('HOME_ACTIONS', PROPERTY_ID, {
+      ...empty,
+      hasPendingMaintenance: true,
+      hasOpenInspectionFindings: true,
+    }).map((candidate) => candidate.operationId),
+    ['MAINTENANCE_STATUS', 'INSPECTION_FINDINGS'],
+  );
+
+  let loaded = 0;
+  const candidates = await operationSpecificContinuationProducer.nominate({
+    sourceOperationId: 'HOME_ACTIONS',
+    propertyId: PROPERTY_ID,
+    loadOperationSpecificContinuationState: async (propertyId) => {
+      loaded += 1;
+      assert.equal(propertyId, PROPERTY_ID);
+      return { ...empty, hasUnresolvedRecallMatches: true };
+    },
+  });
+  assert.equal(loaded, 1);
+  assert.deepEqual(candidates.map((candidate) => candidate.operationId), ['RECALL_REVIEW']);
+});
+
 test('completed command receipts return to their owning domain reads', () => {
   const expectedTargets = {
     MAINTENANCE_TASK_CREATE: ['MAINTENANCE_STATUS', 'MAINTENANCE_FORECAST'],

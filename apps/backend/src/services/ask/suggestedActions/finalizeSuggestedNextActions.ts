@@ -46,6 +46,7 @@ import { loadHomeOpportunityState } from './homeOpportunityCandidates';
 import { loadActivePlanState } from './activePlanCandidates';
 import { removeSelectedCapabilityDuplicates } from './capabilityRecommendationCandidates';
 import { loadSuggestedActionSharedPropertyState } from './suggestedActionSharedPropertyState';
+import { loadOperationSpecificContinuationState } from './operationSpecificContinuationState';
 
 const RECOVERY_STATUSES: ReadonlySet<string> = new Set([
   'UNAVAILABLE', 'EXPIRED', 'CANCELLED', 'BLOCKED', 'FAILED_RETRYABLE', 'FAILED_TERMINAL', 'OUT_OF_SCOPE', 'NEEDS_PROPERTY', 'NOT_APPLICABLE',
@@ -109,6 +110,8 @@ export interface FinalizeSuggestedNextActionsDeps {
   loadSharedPropertyState?: typeof loadSuggestedActionSharedPropertyState;
   /** Canonical cross-session active decision-thread state. */
   loadActivePlanState?: typeof loadActivePlanState;
+  /** Canonical record presence for continuations that would otherwise open an empty result. */
+  loadOperationSpecificContinuationState?: typeof loadOperationSpecificContinuationState;
   entityValidatorFor?: typeof getSuggestedNextActionEntityValidator;
   /** Monotonic ms clock for the pipeline budget. */
   nowMs?: () => number;
@@ -202,6 +205,7 @@ export async function finalizeSuggestedNextActionsWithReport(
         loadUrgentHomeActionState: deps.loadUrgentHomeActionState ?? loadUrgentHomeActionState,
         loadHomeOpportunityState: resolvedHomeOpportunityLoader,
         loadActivePlanState: deps.loadActivePlanState ?? loadActivePlanState,
+        loadOperationSpecificContinuationState: deps.loadOperationSpecificContinuationState ?? loadOperationSpecificContinuationState,
       }));
       if (producer.essential) {
         nominations.set(producer.id, await nomination);
