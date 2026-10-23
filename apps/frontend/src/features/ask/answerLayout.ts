@@ -16,6 +16,8 @@ const WIDE_BLOCK_TYPES = new Set<AskPresentationBlock['type']>([
  * width. This is presentation-only: it never changes block selection or data.
  */
 export function askAnswerWidth(blocks: AskPresentationBlock[]): AskAnswerWidth {
+  // A chart answer (Break-Even) is a few short tables around one chart; it reads at the standard measure, like Home Actions.
+  if (blocks.some((block) => block.type === 'TREND_CHART')) return 'STANDARD';
   return blocks.some((block) => WIDE_BLOCK_TYPES.has(block.type)
     || (block.type === 'PRIORITY_LIST' && block.items.length > 1)
     || (block.type === 'GROUPED_LIST' && Boolean(block.presentation)))

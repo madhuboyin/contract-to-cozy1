@@ -7,9 +7,9 @@ import type { AskBlockRenderer } from '../blocks/types';
 // FRD v1.386. Draws the producer's series on one shared x axis (the Break-Even cost-vs-appreciation chart). Values, line styles,
 // markers and the range-switch actions are declared by the server; this renderer only scales and draws them.
 
-const WIDTH = 320;
-const HEIGHT = 160;
-const PAD = { left: 46, right: 10, top: 14, bottom: 22 };
+const WIDTH = 640;
+const HEIGHT = 240;
+const PAD = { left: 56, right: 14, top: 16, bottom: 26 };
 
 const STROKE = {
   DEFAULT: 'stroke-slate-600',
@@ -58,17 +58,17 @@ export const TrendChartBlock: AskBlockRenderer<'TREND_CHART'> = ({ block }) => {
           {ticks.map((tick) => (
             <g key={tick}>
               <line x1={PAD.left} x2={WIDTH - PAD.right} y1={y(tick)} y2={y(tick)} className="stroke-slate-100" strokeWidth="1" />
-              <text x={PAD.left - 6} y={y(tick) + 3} textAnchor="end" className="fill-slate-500" fontSize="9">{compactMoney(tick)}</text>
+              <text x={PAD.left - 6} y={y(tick) + 3} textAnchor="end" className="fill-slate-500" fontSize="11">{compactMoney(tick)}</text>
             </g>
           ))}
           {min < 0 && <line x1={PAD.left} x2={WIDTH - PAD.right} y1={y(0)} y2={y(0)} className="stroke-slate-300" strokeWidth="1" />}
           {block.categories.map((category, index) => (index % labelEvery === 0 || index === last) && (
-            <text key={category} x={x(index)} y={HEIGHT - 6} textAnchor="middle" className="fill-slate-500" fontSize="9">{category}</text>
+            <text key={category} x={x(index)} y={HEIGHT - 8} textAnchor="middle" className="fill-slate-500" fontSize="11">{category}</text>
           ))}
           {block.markers.map((marker) => (
             <g key={marker.id}>
               <line x1={x(marker.categoryIndex)} x2={x(marker.categoryIndex)} y1={PAD.top} y2={HEIGHT - PAD.bottom} className="stroke-teal-600" strokeWidth="1" strokeDasharray="2 3" />
-              <circle cx={x(marker.categoryIndex)} cy={y(block.series[0].values[marker.categoryIndex])} r="3.5" className="fill-teal-600 stroke-white" strokeWidth="1.5" />
+              <circle cx={x(marker.categoryIndex)} cy={y(block.series[0].values[marker.categoryIndex])} r="4" className="fill-teal-600 stroke-white" strokeWidth="1.5" />
             </g>
           ))}
           {block.series.map((series) => (
