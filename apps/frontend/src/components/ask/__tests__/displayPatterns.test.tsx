@@ -432,6 +432,15 @@ describe('lifespan, progress, timeline, chips and badges', () => {
     expect(onItemAction).toHaveBeenCalledWith('INVENTORY_ITEM', 'mw', 'Add install year message', 'INSPECTION_FINDINGS', 'CONVERSATION_CONTINUE');
   });
 
+  test('a limitation written as separate lines is a bulleted list; one line stays a paragraph', () => {
+    const { container, unmount } = render(<Harness block={{ type: 'LIMITATION', id: 'limits', title: 'What this projection is missing', body: 'First note.\nSecond note.', severity: 'CAUTION' }} />);
+    expect(Array.from(container.querySelectorAll('li')).map((row) => row.textContent)).toEqual(['First note.', 'Second note.']);
+    unmount();
+    const single = render(<Harness block={{ type: 'LIMITATION', id: 'limits', title: 'Missing', body: 'Only note.', severity: 'CAUTION' }} />);
+    expect(single.container.querySelector('li')).toBeNull();
+    expect(screen.getByText('Only note.')).toBeInTheDocument();
+  });
+
   test('trend chart draws the declared series and marker, labels them, and keeps the range switch inside Ask', () => {
     const onItemAction = jest.fn();
     const { container } = render(<Harness onItemAction={onItemAction} block={{

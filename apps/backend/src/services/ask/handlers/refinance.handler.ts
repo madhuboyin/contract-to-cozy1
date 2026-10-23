@@ -297,7 +297,7 @@ export function breakEvenAnalysisFromDto(dto: BreakEvenDTO, propertyId: string, 
     ],
   }];
   if (notes.length) {
-    blocks.push({ type: 'LIMITATION', id: 'break-even-limitations', title: 'What this projection is missing', body: notes.join(' '), severity: 'CAUTION' });
+    blocks.push({ type: 'LIMITATION', id: 'break-even-limitations', title: 'What this projection is missing', body: notes.join('\n'), severity: 'CAUTION' });
   }
   blocks.push({
     type: 'TABLE', id: 'break-even-sensitivity', title: 'Break-even range',

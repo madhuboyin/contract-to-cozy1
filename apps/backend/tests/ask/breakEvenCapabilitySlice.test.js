@@ -214,3 +214,8 @@ test('a break-even inside the plotted years gets a marker; without a mortgage th
   assert.deepEqual([ownerAction.id, ownerAction.operationId], ['financing-profile-update', 'FINANCING_PROFILE_COMMAND']);
   assert.deepEqual(breakEvenAnalysisFromDto(missingDebt, 'p1').blocks.find((block) => block.id === 'break-even-next-action').actions, []);
 });
+
+test('several service disclosures are one note per line, so the limitation can render as a list', () => {
+  const result = breakEvenAnalysisFromDto(dto({ meta: { ...dto().meta, notes: ['First note.', 'Second note.', '  '] } }), 'p1');
+  assert.equal(result.blocks.find((block) => block.type === 'LIMITATION').body, 'First note.\nSecond note.');
+});
