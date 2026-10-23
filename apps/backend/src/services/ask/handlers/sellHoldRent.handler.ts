@@ -226,7 +226,7 @@ async function sellHoldRentAnalysisResult(userId: string, propertyId: string, me
     type: 'SUMMARY',
     id: 'sell-hold-rent-summary',
     title: `${winnerLabel[0].toUpperCase()}${winnerLabel.slice(1)} currently leads in the ${years}-year sell, hold, or rent comparison`,
-    body: `${rationale.join(' ')} Sell is projected liquidity; hold and rent are modeled changes, so compare the direction and assumptions rather than treating the totals as identical returns.`,
+    body: rationale[0] ?? `${winnerLabel[0].toUpperCase()}${winnerLabel.slice(1)} currently has the highest modeled outcome.`,
     tone: lowConfidence || contextLimited ? 'CAUTION' : 'DEFAULT',
     chips: [
       { label: `${money(winningOutcome)} modeled outcome`, tone: 'POSITIVE' },
@@ -247,6 +247,11 @@ async function sellHoldRentAnalysisResult(userId: string, propertyId: string, me
       entityId: propertyId,
       style: 'SECONDARY' as const,
     }] : [])],
+  }, {
+    // The rest of the rationale and the reading caveat, one point per line so they read as a short list instead of one paragraph.
+    type: 'LIMITATION', id: 'sell-hold-rent-keep-in-mind', title: 'Keep in mind',
+    body: [...rationale.slice(1), 'Sell is projected liquidity; hold and rent are modeled changes, so compare the direction and assumptions rather than treating the totals as identical returns.'].join('\n'),
+    severity: 'INFO',
   }, sellHoldRentComparison(analysis, years), ...(activeThread ? [{
     type: 'TABLE' as const,
     id: 'sell-hold-rent-tracked-decision',
