@@ -23,3 +23,11 @@ test.each<AskPresentationBlock>([
   expect(askAnswerWidth([summary, block])).toBe('WIDE');
   expect(askAnswerWidthClass('WIDE')).toContain('max-w-[1140px]');
 });
+
+test('decision answers (a chart, or Sell / Hold / Rent) read at the standard measure even with tables or a comparison', () => {
+  const table: AskPresentationBlock = { type: 'TABLE', id: 'table', title: 'Facts', columns: [], rows: [], actions: [] };
+  const chart: AskPresentationBlock = { type: 'TREND_CHART', id: 'break-even-chart', title: 'Chart', basis: 'Planning.', valueFormat: 'CURRENCY', categories: ['1'], series: [], markers: [], actions: [] };
+  const comparison: AskPresentationBlock = { type: 'COMPARISON', id: 'sell-hold-rent-comparison', title: 'Options', options: [], actions: [] };
+  expect(askAnswerWidth([summary, table, chart])).toBe('STANDARD');
+  expect(askAnswerWidth([summary, comparison])).toBe('STANDARD');
+});
