@@ -21,6 +21,13 @@ The analysis now exposes the canonical write workflows without turning the answe
 
 The comparison still does not choose a final disposition or perform any external sale, rental, listing, financing or advisory action. It remains planning support rather than financial, tax, legal or valuation advice.
 
+### Governed editor modernization (2026-10-23)
+
+The two write surfaces launched from the comparison now use a dedicated, neutral Ask workspace treatment instead of the generic blue capture card. Both show whether the homeowner has changed anything, provide a governed **Back to comparison** cancellation path, preserve space above the fixed composer, and retain the existing exact before/after confirmation and context-version recheck.
+
+- Scenario assumptions remain one compact surface, organized as property/rent, growth, and selling/rental-cost concepts. Each field identifies whether it is a saved override or will fall back to the model default. Resetting all seven overrides is presented as an explicit “Reset all to model defaults” choice rather than an ordinary ambiguous keep/clear question. Its financial acknowledgement now states accurately that these are planning settings and do not change the Home Record.
+- Financing is a three-step editor: purchase and mortgage status, primary mortgage, then additional loans and costs. Mortgage-only inputs are hidden when the home has no mortgage, and second-mortgage balance is shown only when a second mortgage applies. The workflow remains owner-only and continues to use the canonical financing-profile writer and redacted receipt.
+
 ### Command governance correction (2026-10-22)
 
 `SELL_HOLD_RENT_COMMAND` is owned by the existing `sell-hold-rent` Skill rather than exempted as an ungoverned internal command. The operation is property-scoped with a contributor floor and uses the registered `sell-hold-rent.command` mutation-preparation adapter. The Skill declares both read and write effects, partial reversibility, the command's workflow/limitation result blocks, its operation-contract dependency, and ASK consumer/evaluation coverage. Confirmation receipts, context-version rechecks, and the operation-level contributor requirement remain authoritative. Startup registry validation now verifies this ownership and the command is deliberately absent from `KNOWN_UNGOVERNED_OPERATIONS`.

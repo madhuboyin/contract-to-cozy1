@@ -75,6 +75,10 @@ test('owner floor, declared-action only; a contributor is refused and the form i
     assert.equal(seed.ratePct, 6.5);
     assert.equal(seed.remainingYears, 25);
     assert.equal(seed.currentBalance, 280000);
+    assert.deepEqual(form.captureRequests[0].inputSchema.groups.map((group) => group.title), ['Purchase and mortgage', 'Primary mortgage', 'Additional loans and costs']);
+    assert.equal(form.captureRequests[0].inputSchema.fields.find((field) => field.key === 'mortgageType').when.value, 'MORTGAGED');
+    assert.equal(form.captureRequests[0].inputSchema.fields.find((field) => field.key === 'secondBalance').when.fieldKey, 'hasSecondMortgage');
+    assert.match(form.captureRequests[0].confirmationText, /recorded financial details/);
   } finally { restore(); }
 });
 

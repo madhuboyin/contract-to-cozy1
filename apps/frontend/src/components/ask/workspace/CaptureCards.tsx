@@ -527,6 +527,9 @@ export function InlineCaptureCard({
   const compactMaterialSpec = schema.type === 'GROUP' && request.captureKey === 'MATERIAL_SPEC_INPUTS';
   const compactPlantAdvisor = schema.type === 'GROUP' && request.captureKey === 'ROOM_PLANT_RECOMMENDATION_INPUTS';
   const compactOwnershipScenario = schema.type === 'GROUP' && request.captureKey === 'OWNERSHIP_COST_SCENARIO_INPUTS';
+  const sellHoldRentAssumptions = schema.type === 'GROUP' && request.captureKey === 'sell-hold-rent-assumptions';
+  const financingProfile = schema.type === 'GROUP' && request.captureKey === 'FINANCING_PROFILE_UPDATE';
+  const decisionInputWorkflow = sellHoldRentAssumptions || financingProfile;
   const compactProjectCreate = schema.type === 'GROUP' && request.captureKey === 'PROJECT_TRACKER_CREATE_INPUTS';
   const compactProjectCommand = schema.type === 'GROUP' && request.captureKey === 'PROJECT_TRACKER_COMMAND_INPUTS';
   const compactContinuityPlan = schema.type === 'GROUP' && (request.captureKey === 'HOME_DIGITAL_WILL_EDITOR_INPUTS' || request.captureKey === 'HOME_DIGITAL_WILL_METADATA_INPUTS');
@@ -560,6 +563,10 @@ export function InlineCaptureCard({
     return date.precision === 'UNKNOWN' ? !request.allowNotSure : !date.value || (date.precision === 'RANGE' && !date.rangeEnd);
   });
   const finalGroupActive = !activeGroup || activeGroupIndex === formGroups.length - 1;
+  const recordedValues = request.currentAnswer && typeof request.currentAnswer === 'object' && !Array.isArray(request.currentAnswer)
+    ? request.currentAnswer as Record<string, unknown>
+    : {};
+  const changedFieldCount = activeFields.filter((field) => JSON.stringify(values[field.key]) !== JSON.stringify(recordedValues[field.key])).length;
 
   // `skipping` answers the question with the reserved skip marker: the server saves nothing and moves to the next question.
   const save = async (event: FormEvent | null, skipping = false, override?: Record<string, unknown>) => {
@@ -668,7 +675,7 @@ export function InlineCaptureCard({
   }
 
   return (
-    <form ref={containerRef as unknown as Ref<HTMLFormElement>} onSubmit={save} className={cn('rounded-2xl border', compactContinuityPlan ? 'mx-auto w-full max-w-[820px] border-slate-200 bg-white p-4 shadow-sm sm:p-5' : compactPlantAdvisor ? 'mx-auto w-full max-w-[900px] border-slate-200 bg-white p-4 shadow-sm sm:p-5' : compactWorkItemReschedule ? 'mx-auto w-full max-w-[680px] border-sky-200 bg-sky-50/80 p-4 sm:p-5' : compactEventAdd ? 'border-slate-200 bg-white p-4 shadow-sm sm:p-5' : compactProjectCreate ? 'p-3 sm:p-4' : 'p-4', !compactContinuityPlan && !compactPlantAdvisor && !compactWorkItemReschedule && !compactEventAdd && policy.border)} aria-busy={saving || cancelling} aria-label={request.title} data-home-continuity-capture={compactContinuityPlan ? '' : undefined} data-work-item-reschedule={compactWorkItemReschedule ? '' : undefined}>
+    <form ref={containerRef as unknown as Ref<HTMLFormElement>} onSubmit={save} className={cn('rounded-2xl border', decisionInputWorkflow ? 'mx-auto mb-24 w-full max-w-[900px] border-slate-200 bg-white p-4 shadow-sm sm:p-5' : compactContinuityPlan ? 'mx-auto w-full max-w-[820px] border-slate-200 bg-white p-4 shadow-sm sm:p-5' : compactPlantAdvisor ? 'mx-auto w-full max-w-[900px] border-slate-200 bg-white p-4 shadow-sm sm:p-5' : compactWorkItemReschedule ? 'mx-auto w-full max-w-[680px] border-sky-200 bg-sky-50/80 p-4 sm:p-5' : compactEventAdd ? 'border-slate-200 bg-white p-4 shadow-sm sm:p-5' : compactProjectCreate ? 'p-3 sm:p-4' : 'p-4', !decisionInputWorkflow && !compactContinuityPlan && !compactPlantAdvisor && !compactWorkItemReschedule && !compactEventAdd && policy.border)} aria-busy={saving || cancelling} aria-label={request.title} data-home-continuity-capture={compactContinuityPlan ? '' : undefined} data-work-item-reschedule={compactWorkItemReschedule ? '' : undefined} data-decision-input-workflow={decisionInputWorkflow ? request.captureKey : undefined}>
       {compactWorkItemReschedule ? (
         <div>
           <h3 className="text-lg font-semibold tracking-tight text-slate-950">{request.title}</h3>
@@ -691,6 +698,15 @@ export function InlineCaptureCard({
           <div><p className="text-xs font-bold uppercase tracking-[0.12em] text-teal-700">Home Continuity Plan</p><h3 className="mt-1 text-lg font-semibold tracking-tight text-slate-950">{request.title}</h3><p className="mt-1 text-sm text-slate-500">Nothing is saved until you review and confirm.</p></div>
           {activeGroup && <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">Step {activeGroupIndex + 1} of {formGroups.length}</span>}
         </div>
+      ) : decisionInputWorkflow ? (
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-4">
+          <div className="max-w-2xl">
+            <p className="text-xs font-bold uppercase tracking-[0.12em] text-teal-700">{financingProfile ? 'Recorded financing' : 'Planning assumptions'}</p>
+            <h3 className="mt-1 text-lg font-semibold tracking-tight text-slate-950">{request.title}</h3>
+            <p className="mt-1 text-sm leading-5 text-slate-600">{request.helpText}</p>
+          </div>
+          <span className={cn('rounded-full px-2.5 py-1 text-xs font-semibold', changedFieldCount ? 'bg-amber-50 text-amber-800' : 'bg-slate-100 text-slate-600')}>{changedFieldCount ? `${changedFieldCount} changed` : 'No changes yet'}</span>
+        </div>
       ) : (
         <>
           <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-sky-800">{policy.eyebrow}</p>
@@ -709,7 +725,7 @@ export function InlineCaptureCard({
           </div>
           <ol className={cn('flex', compactContinuityPlan ? 'gap-3 border-b border-slate-100 pb-3' : 'gap-1')} aria-label="Completion form progress">{formGroups.map((group, index) => <li key={group.id} aria-current={index === activeGroupIndex ? 'step' : undefined} className={cn(compactContinuityPlan ? 'flex min-w-0 flex-1 items-center gap-2 text-xs font-semibold' : 'h-1.5 flex-1 rounded-full', compactContinuityPlan ? index === activeGroupIndex ? 'text-teal-800' : index < activeGroupIndex ? 'text-slate-700' : 'text-slate-400' : index <= activeGroupIndex ? 'bg-teal-700' : 'bg-slate-200')}><span className={compactContinuityPlan ? cn('grid h-5 w-5 shrink-0 place-items-center rounded-full text-[10px]', index <= activeGroupIndex ? 'bg-teal-700 text-white' : 'bg-slate-200 text-slate-500') : 'sr-only'}>{compactContinuityPlan ? index + 1 : group.title}</span>{compactContinuityPlan && <span className="truncate">{group.title}</span>}</li>)}</ol>
         </div>}
-        {activeGroupFields.map((field) => {
+        {activeGroupFields.map((field, fieldIndex) => {
           const inventoryCreateFullWidth = compactInventoryCreate && (field.key === 'name' || field.key === 'category');
           const fullWidth = compactMaintenanceTask
             ? field.key === 'title' || field.key === 'description'
@@ -717,6 +733,8 @@ export function InlineCaptureCard({
               || (compactMaterialSpec && ['category', 'label', 'roomId', 'supplier', 'notes'].includes(field.key))
               || (compactPlantAdvisor && ['goals', 'notes'].includes(field.key))
               || (compactOwnershipScenario && field.key === 'name')
+              || (sellHoldRentAssumptions && field.key === 'resetAll')
+              || (financingProfile && ['mortgageStatus', 'mortgageType'].includes(field.key))
               || (compactEventAdd && ['title', 'type', 'summary'].includes(field.key))
               || (compactProjectCreate && field.key === 'projectType')
               || (compactContinuityPlan && (['content', 'summary', 'notes', 'targetSectionId'].includes(field.key) || (request.requirementId.includes('entry') && field.key === 'title')))
@@ -728,18 +746,24 @@ export function InlineCaptureCard({
                 : ['name', 'fulfillmentMode', 'contractorName', 'permitApplicability', 'permitApplicabilityBasis', 'hoaApplicability', 'hoaApplicabilityBasis'].includes(field.key) ? 'md:col-span-3'
                   : field.key === 'initialMilestoneName' ? 'md:col-span-4' : 'md:col-span-2'
             : fullWidth ? 'md:col-span-2' : undefined;
-          return <div key={field.key} className={fieldLayout}>{compactContinuityPlan ? <HomeContinuityCaptureField field={field} value={values[field.key]} disabled={saving || cancelling} onChange={(value) => setValues((current) => ({ ...current, [field.key]: value }))} /> : <CaptureFieldControl field={field} value={values[field.key]} disabled={saving} allowNotSure={request.allowNotSure} compact={compactWorkflow} propertyId={propertyId} onChange={(value) => setValues((current) => ({ ...current, [field.key]: value }))} />}</div>;
+          const assumptionsSection = sellHoldRentAssumptions
+            ? field.key === 'homeValueNow' ? 'Property and rent' : field.key === 'appreciationPct' ? 'Growth assumptions' : field.key === 'sellingCostPct' ? 'Selling and rental costs' : field.key === 'resetAll' ? 'Defaults' : null
+            : null;
+          return <div key={field.key} className={fieldLayout}>
+            {assumptionsSection && <div className={cn('mb-2', fieldIndex > 0 && 'mt-2', field.key !== 'resetAll' && 'md:col-span-2')}><p className="text-sm font-semibold text-slate-950">{assumptionsSection}</p>{field.key === 'homeValueNow' && <p className="mt-0.5 text-xs text-slate-500">Use values for the planning case you want to compare.</p>}</div>}
+            {compactContinuityPlan ? <HomeContinuityCaptureField field={field} value={values[field.key]} disabled={saving || cancelling} onChange={(value) => setValues((current) => ({ ...current, [field.key]: value }))} /> : <CaptureFieldControl field={field} value={values[field.key]} disabled={saving} allowNotSure={request.allowNotSure} compact={compactWorkflow} propertyId={propertyId} onChange={(value) => setValues((current) => ({ ...current, [field.key]: value }))} />}
+          </div>;
         })}
       </div>
       {error && <p className="mt-3 text-sm text-red-700" role="alert">{error}</p>}
-      {(request.sensitivity === 'FINANCIAL' || request.sensitivity === 'SECURITY') && (!compactContinuityPlan || finalGroupActive) && (
+      {(request.sensitivity === 'FINANCIAL' || request.sensitivity === 'SECURITY') && (!compactContinuityPlan || finalGroupActive) && (!financingProfile || finalGroupActive) && (
         <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-sky-200 bg-white p-3 text-sm text-slate-700">
           <input type="checkbox" checked={sensitiveDataConfirmed} onChange={(event) => setSensitiveDataConfirmed(event.target.checked)} className="mt-0.5 h-4 w-4 rounded border-slate-300 text-teal-700" />
           <span>{request.confirmationText ?? 'I confirm this information can be saved to the home record.'}</span>
         </label>
       )}
-      <div className={cn('flex flex-wrap items-center gap-2', (compactContinuityPlan || compactPlantAdvisor || compactEventAdd || workItemForm) && 'mt-4 justify-between border-t border-slate-100 pt-4', !compactContinuityPlan && !compactPlantAdvisor && !compactEventAdd && !workItemForm && (compactProjectCreate ? 'mt-3' : 'mt-4'))}>
-        {(compactContinuityPlan || compactPlantAdvisor || compactEventAdd || workItemForm) && <button type="button" disabled={saving || cancelling} onClick={() => void cancelContinuityWorkflow()} className="min-h-11 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-50">{cancelling ? 'Cancelling…' : 'Cancel'}</button>}
+      <div className={cn('flex flex-wrap items-center gap-2', (decisionInputWorkflow || compactContinuityPlan || compactPlantAdvisor || compactEventAdd || workItemForm) && 'mt-4 justify-between border-t border-slate-100 pt-4', !decisionInputWorkflow && !compactContinuityPlan && !compactPlantAdvisor && !compactEventAdd && !workItemForm && (compactProjectCreate ? 'mt-3' : 'mt-4'))}>
+        {(decisionInputWorkflow || compactContinuityPlan || compactPlantAdvisor || compactEventAdd || workItemForm) && <button type="button" disabled={saving || cancelling} onClick={() => void cancelContinuityWorkflow()} className="min-h-11 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-50">{cancelling ? 'Cancelling…' : decisionInputWorkflow ? 'Back to comparison' : 'Cancel'}</button>}
         <div className="flex flex-wrap gap-2">
         {activeGroupIndex > 0 && <button type="button" disabled={saving} onClick={() => setActiveGroupIndex((index) => Math.max(0, index - 1))} className="min-h-11 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50">Previous</button>}
         {activeGroup && activeGroupIndex < formGroups.length - 1

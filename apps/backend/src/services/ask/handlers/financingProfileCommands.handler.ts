@@ -75,15 +75,26 @@ function formCapture(contextVersion: string, current: Record<string, unknown>, e
     title: 'Your mortgage and purchase details', question: 'What should change?',
     helpText: 'These are the home’s recorded mortgage and purchase facts; only an owner can change them. Change only what is wrong; a blank keeps what is recorded. You will see the exact before and after, and nothing is saved until you confirm. Cozy does not contact your lender.',
     inputSchema: { type: 'GROUP', fields: [
-      select('mortgageStatus', 'Mortgage', MORTGAGE_STATUS_CHOICES, MORTGAGE_STATUS_CHOICE_LABELS), select('mortgageType', 'Mortgage type', MORTGAGE_TYPE_CHOICES, MORTGAGE_TYPE_CHOICE_LABELS),
+      select('mortgageStatus', 'Mortgage', MORTGAGE_STATUS_CHOICES, MORTGAGE_STATUS_CHOICE_LABELS),
+      { ...select('mortgageType', 'Mortgage type', MORTGAGE_TYPE_CHOICES, MORTGAGE_TYPE_CHOICE_LABELS), when: { fieldKey: 'mortgageStatus', operator: 'EQUALS' as const, value: 'MORTGAGED' } },
       money$('purchasePrice', 'Purchase price ($)'), date$('purchaseDate', 'Purchase date'),
-      money$('originalBalance', 'Original balance ($)'), money$('currentBalance', 'Current balance ($)'), date$('balanceAsOf', 'Balance as of'),
-      { key: 'ratePct', label: 'Interest rate (%)', required: false, inputSchema: { type: 'NUMBER' as const, min: 0, max: 50 } },
-      { key: 'remainingYears', label: 'Remaining term (years)', required: false, inputSchema: { type: 'NUMBER' as const, min: 0.1, max: 50 } },
-      money$('monthlyPayment', 'Monthly payment ($)'), yesNo('hasSecondMortgage', 'Second mortgage'), money$('secondBalance', 'Second mortgage balance ($)'), yesNo('hasPMI', 'Private mortgage insurance (PMI)'),
+      { ...money$('originalBalance', 'Original balance ($)'), when: { fieldKey: 'mortgageStatus', operator: 'EQUALS' as const, value: 'MORTGAGED' } },
+      { ...money$('currentBalance', 'Current balance ($)'), when: { fieldKey: 'mortgageStatus', operator: 'EQUALS' as const, value: 'MORTGAGED' } },
+      { ...date$('balanceAsOf', 'Balance as of'), when: { fieldKey: 'mortgageStatus', operator: 'EQUALS' as const, value: 'MORTGAGED' } },
+      { key: 'ratePct', label: 'Interest rate (%)', required: false, when: { fieldKey: 'mortgageStatus', operator: 'EQUALS' as const, value: 'MORTGAGED' }, inputSchema: { type: 'NUMBER' as const, min: 0, max: 50 } },
+      { key: 'remainingYears', label: 'Remaining term (years)', required: false, when: { fieldKey: 'mortgageStatus', operator: 'EQUALS' as const, value: 'MORTGAGED' }, inputSchema: { type: 'NUMBER' as const, min: 0.1, max: 50 } },
+      { ...money$('monthlyPayment', 'Monthly payment ($)'), when: { fieldKey: 'mortgageStatus', operator: 'EQUALS' as const, value: 'MORTGAGED' } },
+      { ...yesNo('hasSecondMortgage', 'Second mortgage'), when: { fieldKey: 'mortgageStatus', operator: 'EQUALS' as const, value: 'MORTGAGED' } },
+      { ...money$('secondBalance', 'Second mortgage balance ($)'), when: { fieldKey: 'hasSecondMortgage', operator: 'EQUALS' as const, value: 'YES' } },
+      { ...yesNo('hasPMI', 'Private mortgage insurance (PMI)'), when: { fieldKey: 'mortgageStatus', operator: 'EQUALS' as const, value: 'MORTGAGED' } },
+    ], groups: [
+      { id: 'purchase', title: 'Purchase and mortgage', description: 'Confirm the financing status and purchase facts recorded for this home.', fieldKeys: ['mortgageStatus', 'purchasePrice', 'purchaseDate'] },
+      { id: 'primary-loan', title: 'Primary mortgage', description: 'Review the loan balance, rate, term and payment.', fieldKeys: ['mortgageType', 'originalBalance', 'currentBalance', 'balanceAsOf', 'ratePct', 'remainingYears', 'monthlyPayment'] },
+      { id: 'additional-costs', title: 'Additional loans and costs', description: 'Add a second mortgage or PMI only when they apply.', fieldKeys: ['hasSecondMortgage', 'secondBalance', 'hasPMI'] },
     ] } as unknown as AskCaptureRequest['inputSchema'],
     currentAnswer: Object.fromEntries(Object.entries(seed).filter(([, v]) => v !== null && v !== undefined && v !== '')),
-    allowNotSure: false, sensitivity: 'FINANCIAL', destinationLabel: 'Used to prepare this change; nothing is saved until you confirm', confirmationText: null, expectedContextVersion: contextVersion,
+    allowNotSure: false, sensitivity: 'FINANCIAL', destinationLabel: 'Used to prepare this change; nothing is saved until you confirm',
+    confirmationText: 'I’m ready to review changes to these recorded financial details.', expectedContextVersion: contextVersion,
   };
 }
 

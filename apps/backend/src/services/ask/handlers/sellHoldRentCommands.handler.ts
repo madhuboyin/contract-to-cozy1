@@ -52,6 +52,7 @@ function assumptionsCapture(contextVersion: string, rows: Array<{ key: string; v
   const numberField = (key: EditableKey) => ({
     key: fieldKeys[key], label: `${specs[key].label}${specs[key].unit === 'DECIMAL_RATE' ? ' (%)' : specs[key].unit === 'USD_PER_MONTH' ? ' ($/month)' : ' ($)'}`,
     required: false,
+    helpText: saved.has(key) ? 'Saved override used instead of the model default.' : 'Leave blank to use the model default shown in the comparison.',
     inputSchema: { type: 'NUMBER' as const, min: specs[key].unit === 'DECIMAL_RATE' ? specs[key].min * 100 : specs[key].min, max: specs[key].unit === 'DECIMAL_RATE' ? specs[key].max * 100 : specs[key].max },
   });
   return {
@@ -60,10 +61,11 @@ function assumptionsCapture(contextVersion: string, rows: Array<{ key: string; v
     helpText: 'These values affect future Sell / Hold / Rent comparisons; they do not change your Home Record. Rates are entered as percentages. You will review the changes before anything is saved.',
     inputSchema: { type: 'GROUP', fields: [
       ...EDITABLE_KEYS.map(numberField),
-      { key: 'resetAll', label: 'Use model defaults for these inputs', required: false, inputSchema: { type: 'SINGLE_SELECT' as const, options: [{ label: 'Keep or save the values above', value: 'NO' }, { label: 'Clear the seven assumptions shown above', value: 'YES' }] } },
+      { key: 'resetAll', label: 'Reset saved assumptions', helpText: 'Choose reset only when you want all seven inputs to return to model defaults.', required: false, inputSchema: { type: 'SINGLE_SELECT' as const, options: [{ label: 'Keep these assumptions', value: 'NO' }, { label: 'Reset all to model defaults', value: 'YES' }] } },
     ] } as unknown as AskCaptureRequest['inputSchema'],
     currentAnswer: { ...seed, resetAll: entered?.resetAll ?? 'NO' }, allowNotSure: false, sensitivity: 'FINANCIAL',
-    destinationLabel: 'Saved only as Sell / Hold / Rent scenario assumptions after confirmation', confirmationText: null, expectedContextVersion: contextVersion,
+    destinationLabel: 'Saved only as Sell / Hold / Rent scenario assumptions after confirmation',
+    confirmationText: 'I’m ready to review these planning assumptions. They won’t change my Home Record.', expectedContextVersion: contextVersion,
   };
 }
 

@@ -359,6 +359,53 @@ test('an empty required field is not flagged when it loses focus, only after a s
   expect(screen.getByText(/at most 140/)).toBeVisible();
 });
 
+const financingWorkflowRequest = {
+  requirementId: 'financing-profile-update-inputs', captureKey: 'FINANCING_PROFILE_UPDATE', classification: 'WORKFLOW_INPUT', state: 'UNKNOWN', presentation: 'FORM',
+  title: 'Your mortgage and purchase details', question: 'What should change?', helpText: 'Change only what is wrong. Nothing is saved until you confirm.',
+  allowNotSure: false, sensitivity: 'FINANCIAL', destinationLabel: 'Used to prepare this change', confirmationText: 'I’m ready to review changes to these recorded financial details.', expectedContextVersion: 'finance-v1',
+  currentAnswer: { mortgageStatus: 'MORTGAGED', mortgageType: 'FIXED_30', purchasePrice: 452000, currentBalance: 320000, hasSecondMortgage: 'NO' },
+  inputSchema: { type: 'GROUP', groups: [
+    { id: 'purchase', title: 'Purchase and mortgage', fieldKeys: ['mortgageStatus', 'purchasePrice'] },
+    { id: 'loan', title: 'Primary mortgage', fieldKeys: ['mortgageType', 'currentBalance'] },
+    { id: 'more', title: 'Additional loans and costs', fieldKeys: ['hasSecondMortgage', 'secondBalance'] },
+  ], fields: [
+    { key: 'mortgageStatus', label: 'Mortgage', required: false, inputSchema: { type: 'SINGLE_SELECT', options: [{ label: 'I have a mortgage', value: 'MORTGAGED' }, { label: 'I have no mortgage', value: 'NO_MORTGAGE' }] } },
+    { key: 'purchasePrice', label: 'Purchase price ($)', required: false, inputSchema: { type: 'NUMBER', min: 0, max: 10000000 } },
+    { key: 'mortgageType', label: 'Mortgage type', required: false, when: { fieldKey: 'mortgageStatus', operator: 'EQUALS', value: 'MORTGAGED' }, inputSchema: { type: 'SINGLE_SELECT', options: [{ label: '30-year fixed', value: 'FIXED_30' }] } },
+    { key: 'currentBalance', label: 'Current balance ($)', required: false, when: { fieldKey: 'mortgageStatus', operator: 'EQUALS', value: 'MORTGAGED' }, inputSchema: { type: 'NUMBER', min: 0, max: 10000000 } },
+    { key: 'hasSecondMortgage', label: 'Second mortgage', required: false, when: { fieldKey: 'mortgageStatus', operator: 'EQUALS', value: 'MORTGAGED' }, inputSchema: { type: 'SINGLE_SELECT', options: [{ label: 'Yes', value: 'YES' }, { label: 'No', value: 'NO' }] } },
+    { key: 'secondBalance', label: 'Second mortgage balance ($)', required: false, when: { fieldKey: 'hasSecondMortgage', operator: 'EQUALS', value: 'YES' }, inputSchema: { type: 'NUMBER', min: 0, max: 10000000 } },
+  ] },
+} as unknown as AskCaptureRequest;
+
+test('Sell/Hold/Rent financing uses a progressive editor, hides inapplicable loan fields, and offers a route back', () => {
+  render(<InlineCaptureCard executionId="finance1" request={financingWorkflowRequest} onCompleted={jest.fn()} />);
+  expect(screen.getByText('Step 1 of 3')).toBeVisible();
+  expect(screen.getAllByText('Purchase and mortgage')[0]).toBeVisible();
+  expect(screen.queryByRole('group', { name: 'Mortgage type' })).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Back to comparison' })).toBeVisible();
+  expect(screen.getByText('No changes yet')).toBeVisible();
+  fireEvent.change(screen.getByLabelText('Purchase price ($)'), { target: { value: '460000' } });
+  expect(screen.getByText('1 changed')).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Next: Primary mortgage' }));
+  expect(screen.getByRole('group', { name: 'Mortgage type' })).toBeVisible();
+});
+
+test('Sell/Hold/Rent assumption consent describes planning settings instead of a Home Record write', () => {
+  const request = { ...financingWorkflowRequest, requirementId: 'sell-hold-rent-assumptions-inputs', captureKey: 'sell-hold-rent-assumptions', title: 'Scenario assumptions',
+    confirmationText: 'I’m ready to review these planning assumptions. They won’t change my Home Record.', currentAnswer: { appreciationPct: 4, resetAll: 'NO' },
+    inputSchema: { type: 'GROUP', fields: [
+      { key: 'appreciationPct', label: 'Appreciation rate (%)', required: false, inputSchema: { type: 'NUMBER', min: -20, max: 30 } },
+      { key: 'resetAll', label: 'Reset saved assumptions', required: false, inputSchema: { type: 'SINGLE_SELECT', options: [{ label: 'Keep these assumptions', value: 'NO' }, { label: 'Reset all to model defaults', value: 'YES' }] } },
+    ] },
+  } as unknown as AskCaptureRequest;
+  render(<InlineCaptureCard executionId="scenario1" request={request} onCompleted={jest.fn()} />);
+  expect(screen.getByText('Growth assumptions')).toBeVisible();
+  expect(screen.getByText('Defaults')).toBeVisible();
+  expect(screen.getByText(/They won’t change my Home Record/)).toBeVisible();
+  expect(screen.queryByText('I confirm this information can be saved to the home record.')).not.toBeInTheDocument();
+});
+
 test('Changed markers belong to Edit: Add never shows them', () => {
   render(<InlineCaptureCard executionId="ev1" request={eventAddRequest()} onCompleted={jest.fn()} />);
   fireEvent.change(screen.getByLabelText(/^Title/), { target: { value: 'Roof' } });
