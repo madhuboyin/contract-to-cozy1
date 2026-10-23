@@ -155,3 +155,13 @@ test('TREND_CHART: one value per category for every series, markers inside the c
   assert.equal(AskPresentationBlockSchema.safeParse(block({ markers: [{ id: 'm', label: 'M', categoryIndex: 2 }] })).success, false);
   assert.equal(AskPresentationBlockSchema.safeParse(block({ basis: '' })).success, false);
 });
+
+test('INSIGHT_BOARD: a layout per section, ordered ranges, and at least one item per section', () => {
+  const item = (extra) => ({ id: 'i', title: 'Item', ...extra });
+  const block = (sectionExtra, itemExtra) => ({ type: 'INSIGHT_BOARD', id: 'board', title: 'Board', sections: [{ id: 's', title: 'Section', layout: 'BARS', items: [item(itemExtra)], ...sectionExtra }] });
+  const parsed = AskPresentationBlockSchema.parse(block({}, { badge: { label: 'High' }, range: { min: 1, max: 2 } }));
+  assert.equal(parsed.sections[0].items[0].badge.tone, 'DEFAULT');
+  assert.equal(AskPresentationBlockSchema.safeParse(block({ layout: 'TABLE' }, {})).success, false);
+  assert.equal(AskPresentationBlockSchema.safeParse(block({}, { range: { min: 5, max: 2 } })).success, false);
+  assert.equal(AskPresentationBlockSchema.safeParse(block({ items: [] }, {})).success, false);
+});

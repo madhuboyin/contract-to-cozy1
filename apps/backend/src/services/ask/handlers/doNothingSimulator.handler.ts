@@ -147,42 +147,60 @@ export function doNothingSimulationFromView(
       severity: 'INFO',
     });
   }
-  const driverItems = (drivers: readonly { code: string; title: string; detail: string; severity: string }[], prefix: string) => drivers
-    .flatMap((driver, index) => {
-      const title = displayText(driver?.title);
-      if (!title) return [];
-      return [{ id: `${prefix}-${index}`, title, description: displayText(driver.detail), meta: [], status: `${DO_NOTHING_SEVERITY_LABELS[driver.severity] ?? displayText(driver.severity) ?? 'Unknown'} severity` }];
-    })
-    .slice(0, DO_NOTHING_SECTION_ITEM_LIMIT);
-  const sections = [
-    { id: 'do-nothing-losses', title: 'Biggest avoidable losses', items: run.outputs.biggestAvoidableLosses.flatMap((loss, index) => {
-      const title = displayText(loss?.title);
-      if (!title) return [];
-      const min = doNothingMoney(loss.estCostCentsMin);
-      const max = doNothingMoney(loss.estCostCentsMax);
-      return [{ id: `loss-${index}`, title, description: displayText(loss.detail), meta: min && max ? [min === max ? min : `${min} to ${max}`] : [], status: 'Avoidable' }];
-    }).slice(0, DO_NOTHING_SECTION_ITEM_LIMIT) },
-    { id: 'do-nothing-risks', title: 'Top risk drivers', items: driverItems(run.outputs.topRiskDrivers, 'risk') },
-    { id: 'do-nothing-costs', title: 'Top cost drivers', items: driverItems(run.outputs.topCostDrivers, 'cost') },
-    { id: 'do-nothing-next', title: 'Suggested next steps', items: run.nextSteps.flatMap((step, index) => {
-      const title = displayText(step?.title);
-      if (!title) return [];
-      return [{ id: `step-${index}`, title, description: displayText(step.detail), meta: [], status: `${DO_NOTHING_SEVERITY_LABELS[step.priority] ?? displayText(step.priority) ?? 'Unknown'} priority` }];
-    }).slice(0, DO_NOTHING_SECTION_ITEM_LIMIT) },
-    { id: 'do-nothing-scenarios', title: 'Saved scenarios', items: scenarioItems },
-  ].filter((section) => section.items.length > 0).map((section) => ({ ...section, count: section.items.length }));
-  if (sections.length) {
-    blocks.push({ type: 'GROUPED_LIST', filters: [], id: 'do-nothing-items', title: 'What drives the estimate', description: 'From the latest run. Run it again to change the horizon or use a saved scenario.', listDensity: 'DENSE', sections, collection: collectionDescriptor({ sourceTotal: sections.reduce((sum, section) => sum + section.items.length, 0), fetchedCount: sections.reduce((sum, section) => sum + section.items.length, 0), sections, nextPageAvailable: false }), actions: [] });
-  }
-  // The page's collapsed "Why this changed": each step the model took, with its effect, so the estimate can be checked.
-  const traceItems = run.decisionTrace.flatMap((entry, index) => {
-    const label = displayText(entry?.label);
-    if (!label) return [];
-    return [{ id: `trace-${index}`, title: label, description: displayText(entry.detail), meta: [], status: entry.impact === 'POSITIVE' ? 'Lowers the estimate' : entry.impact === 'NEGATIVE' ? 'Raises the estimate' : 'No change' }];
+  // FRD v1.405: the findings are one visual board (cost bars, tone-accented driver cards, numbered steps, a collapsed trace) instead of four plain lists.
+  type Tone = 'DEFAULT' | 'POSITIVE' | 'CAUTION' | 'CRITICAL';
+  const severityBadge = (value: string | null | undefined, suffix: string): { label: string; tone: Tone } => ({
+    label: `${DO_NOTHING_SEVERITY_LABELS[value ?? ''] ?? displayText(value) ?? 'Unknown'} ${suffix}`,
+    tone: value === 'HIGH' ? 'CRITICAL' : value === 'MEDIUM' ? 'CAUTION' : 'DEFAULT',
+  });
+  const driverCards = (drivers: readonly { code: string; title: string; detail: string; severity: string }[], prefix: string) => drivers.flatMap((driver, index) => {
+    const title = displayText(driver?.title);
+    return title ? [{ id: `${prefix}-${index}`, title, detail: displayText(driver.detail), badge: severityBadge(driver.severity, 'severity') }] : [];
   }).slice(0, DO_NOTHING_SECTION_ITEM_LIMIT);
-  if (traceItems.length) {
-    const traceSections = [{ id: 'do-nothing-trace-steps', title: 'How the model got here', count: traceItems.length, items: traceItems }];
-    blocks.push({ type: 'GROUPED_LIST', filters: [], id: 'do-nothing-trace', title: 'Why this changed', listDensity: 'DENSE', sections: traceSections, collection: collectionDescriptor({ sourceTotal: traceItems.length, fetchedCount: traceItems.length, sections: traceSections, nextPageAvailable: false }), actions: [] });
+  const lossBars = run.outputs.biggestAvoidableLosses.flatMap((loss, index) => {
+    const title = displayText(loss?.title);
+    if (!title) return [];
+    const min = doNothingMoney(loss.estCostCentsMin);
+    const max = doNothingMoney(loss.estCostCentsMax);
+    const lowCents = loss.estCostCentsMin ?? loss.estCostCentsMax;
+    const highCents = loss.estCostCentsMax ?? loss.estCostCentsMin;
+    return [{
+      id: `loss-${index}`, title, detail: displayText(loss.detail),
+      valueLabel: min && max ? (min === max ? min : `${min} to ${max}`) : null,
+      range: lowCents != null && highCents != null ? { min: lowCents / 100, max: highCents / 100 } : null,
+    }];
+  }).slice(0, DO_NOTHING_SECTION_ITEM_LIMIT);
+  const stepItems = run.nextSteps.flatMap((step, index) => {
+    const title = displayText(step?.title);
+    return title ? [{ id: `step-${index}`, title, detail: displayText(step.detail), badge: severityBadge(step.priority, 'priority') }] : [];
+  }).slice(0, DO_NOTHING_SECTION_ITEM_LIMIT);
+  // The trace lists every input the model looked at; only the steps that moved the estimate are shown, and the rest are counted.
+  const traceEntries = run.decisionTrace.flatMap((entry, index) => {
+    const label = displayText(entry?.label);
+    return label ? [{ index, label, detail: displayText(entry.detail), impact: entry.impact }] : [];
+  });
+  const traceMoved = traceEntries.filter((entry) => entry.impact === 'POSITIVE' || entry.impact === 'NEGATIVE').slice(0, DO_NOTHING_SECTION_ITEM_LIMIT);
+  const traceNeutral = traceEntries.length - traceEntries.filter((entry) => entry.impact === 'POSITIVE' || entry.impact === 'NEGATIVE').length;
+  const boardSections = [
+    ...(lossBars.length ? [{ id: 'do-nothing-losses', title: 'Biggest avoidable losses', layout: 'BARS' as const, items: lossBars }] : []),
+    ...(driverCards(run.outputs.topRiskDrivers, 'risk').length ? [{ id: 'do-nothing-risks', title: 'Top risk drivers', layout: 'CARDS' as const, items: driverCards(run.outputs.topRiskDrivers, 'risk') }] : []),
+    ...(driverCards(run.outputs.topCostDrivers, 'cost').length ? [{ id: 'do-nothing-costs', title: 'Top cost drivers', layout: 'CARDS' as const, items: driverCards(run.outputs.topCostDrivers, 'cost') }] : []),
+    ...(stepItems.length ? [{ id: 'do-nothing-next', title: 'Minimum actions to avoid most downside', layout: 'STEPS' as const, items: stepItems }] : []),
+    ...(traceMoved.length ? [{
+      id: 'do-nothing-trace', title: 'Why this changed', layout: 'DISCLOSURE' as const,
+      summary: `${traceMoved.length} ${traceMoved.length === 1 ? 'step moved' : 'steps moved'} the estimate${traceNeutral ? `; ${traceNeutral} more had no effect` : ''}.`,
+      items: traceMoved.map((entry) => ({
+        id: `trace-${entry.index}`, title: entry.label, detail: entry.detail,
+        badge: { label: entry.impact === 'POSITIVE' ? 'Lowers the estimate' : 'Raises the estimate', tone: entry.impact === 'POSITIVE' ? 'POSITIVE' as const : 'CAUTION' as const },
+      })),
+    }] : []),
+  ];
+  if (boardSections.length) {
+    blocks.push({ type: 'INSIGHT_BOARD', id: 'do-nothing-board', title: 'What drives the estimate', description: 'From the latest run. Run it again to change the horizon or use a saved scenario.', sections: boardSections });
+  }
+  if (scenarioItems.length) {
+    const scenarioSections = [{ id: 'do-nothing-scenarios', title: 'Saved scenarios', count: scenarioItems.length, items: scenarioItems }];
+    blocks.push({ type: 'GROUPED_LIST', filters: [], id: 'do-nothing-items', title: 'Saved scenarios', description: 'Change or delete a scenario, or run one again.', listDensity: 'DENSE', sections: scenarioSections, collection: collectionDescriptor({ sourceTotal: scenarioItems.length, fetchedCount: scenarioItems.length, sections: scenarioSections, nextPageAvailable: false }), actions: [] });
   }
   blocks.push(boundary);
   return { status: 'ANSWERED', reasonCode: 'DO_NOTHING_READY', blocks, suggestions: [] };

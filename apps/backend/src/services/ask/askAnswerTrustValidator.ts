@@ -68,6 +68,10 @@ function authoredPresentationText(block: AskPresentationBlock): string {
   if (block.type === 'LIFESPAN') {
     return [block.title, block.description, block.basis, block.missingAgeTitle, ...block.items.map((item) => item.statusLabel)].filter(Boolean).join(' ');
   }
+  // Insight board items are canonical findings (driver, loss and step titles); only the block copy, section titles and badges are checked.
+  if (block.type === 'INSIGHT_BOARD') {
+    return [block.title, block.description, ...block.sections.flatMap((section) => [section.title, section.summary, ...section.items.map((item) => item.badge?.label)])].filter(Boolean).join(' ');
+  }
   if (block.type === 'PROGRESS') {
     return [block.title, block.description, block.basis, ...block.metrics.map((metric) => metric.label)].filter(Boolean).join(' ');
   }

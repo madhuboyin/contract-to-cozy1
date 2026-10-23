@@ -79,27 +79,35 @@ test('a household member who is not the primary owner is told so, not shown an e
 
 test('the latest run is summarized with cost range, risk change, likelihood, confidence and its scenario; drivers and scenarios listed', async () => {
   const result = await invoke();
-  const [summary, metrics, list, trace] = result.blocks;
+  const [summary, metrics, board, list] = result.blocks;
   assert.equal(summary.title, 'If upkeep is put off for 12 months');
   assert.equal(summary.body, 'Deferred upkeep raises risk. Run for \u201CSkip a year\u201D.');
+  assert.equal(summary.tone, 'CAUTION');
   assert.deepEqual(summary.chips.map((chip) => chip.label), ['Medium confidence', 'High incident likelihood', '12-month horizon', 'Run Sep 15, 2026']);
   assert.deepEqual(metrics.metrics.map((metric) => [metric.label, metric.value]), [
     ['Horizon', '12 months'], ['Extra cost if delayed', '$3,200 to $7,800'], ['Risk score change', '+14'], ['Incident likelihood', 'High'], ['Confidence', 'Medium'],
   ]);
-  assert.deepEqual(trace.sections[0].items.map((item) => [item.title, item.status]), [['Baseline', 'No change'], ['Skipped maintenance', 'Raises the estimate']]);
-  assert.equal(summary.tone, 'CAUTION');
-  assert.deepEqual(summary.actions.map((action) => [action.id, action.operationId, action.interactionType, action.href]), [['run-do-nothing', 'DO_NOTHING_SIMULATION_RUN', 'START_WORKFLOW', undefined], ['do-nothing-scenario-create', 'DO_NOTHING_SCENARIO_COMMAND', 'START_WORKFLOW', undefined]], 'run it again, or add a scenario (FRD v1.336), inside Ask');
+  assert.deepEqual(summary.actions.map((action) => [action.id, action.operationId, action.interactionType, action.href]), [['run-do-nothing', 'DO_NOTHING_SIMULATION_RUN', 'START_WORKFLOW', undefined], ['do-nothing-scenario-create', 'DO_NOTHING_SCENARIO_COMMAND', 'START_WORKFLOW', undefined]]);
   assert.equal(result.blocks.some((block) => block.id === 'do-nothing-status'), false);
-  assert.deepEqual(list.sections.map((section) => [section.title, section.items.map((item) => item.title)]), [
-    ['Biggest avoidable losses', ['Leak damage']],
-    ['Top risk drivers', ['Aging roof']],
-    ['Top cost drivers', ['Water heater failure']],
-    ['Suggested next steps', ['Schedule a roof inspection']],
-    ['Saved scenarios', ['Skip a year']],
+  assert.equal(board.type, 'INSIGHT_BOARD');
+  assert.deepEqual(board.sections.map((section) => [section.title, section.layout, section.items.map((item) => item.title)]), [
+    ['Biggest avoidable losses', 'BARS', ['Leak damage']],
+    ['Top risk drivers', 'CARDS', ['Aging roof']],
+    ['Top cost drivers', 'CARDS', ['Water heater failure']],
+    ['Minimum actions to avoid most downside', 'STEPS', ['Schedule a roof inspection']],
+    ['Why this changed', 'DISCLOSURE', ['Skipped maintenance']],
   ]);
-  assert.deepEqual(list.sections[0].items[0].meta, ['$1,500 to $4,000']);
-  assert.equal(list.sections[1].items[0].status, 'High severity');
-  assert.deepEqual(list.sections[4].items[0].meta, ['Skips maintenance', 'Low risk tolerance', 'Deductible: Keep it high', 'Cash buffer $5,000']);
+  const loss = board.sections[0].items[0];
+  assert.equal(loss.valueLabel, '$1,500 to $4,000');
+  assert.deepEqual(loss.range, { min: 1500, max: 4000 });
+  assert.deepEqual(board.sections[1].items[0].badge, { label: 'High severity', tone: 'CRITICAL' });
+  assert.deepEqual(board.sections[2].items[0].badge, { label: 'Medium severity', tone: 'CAUTION' });
+  assert.deepEqual(board.sections[3].items[0].badge, { label: 'High priority', tone: 'CRITICAL' });
+  assert.equal(board.sections[4].summary, '1 step moved the estimate; 1 more had no effect.');
+  assert.deepEqual(board.sections[4].items[0].badge, { label: 'Raises the estimate', tone: 'CAUTION' });
+  assert.equal(list.id, 'do-nothing-items');
+  assert.deepEqual(list.sections.map((section) => [section.title, section.items.map((item) => item.title)]), [['Saved scenarios', ['Skip a year']]]);
+  assert.deepEqual(list.sections[0].items[0].meta, ['Skips maintenance', 'Low risk tolerance', 'Deductible: Keep it high', 'Cash buffer $5,000']);
 });
 
 test('a stale, failed or low-data run is disclosed; no run is not an all-clear', () => {
@@ -152,6 +160,8 @@ test('the complete and oversized legacy-shaped presentations satisfy the saved b
   for (const block of oversized.blocks) assert.equal(AskPresentationBlockSchema.safeParse(block).success, true, block.id);
   const list = oversized.blocks.find((block) => block.id === 'do-nothing-items');
   assert.ok(list.sections.every((section) => section.items.length <= 100));
+  const board = oversized.blocks.find((block) => block.id === 'do-nothing-board');
+  assert.ok(board.sections.every((section) => section.items.length <= 100));
 });
 
 test('cost-of-waiting questions route here; running or editing a simulation and one item\'s decision are not claimed', () => {

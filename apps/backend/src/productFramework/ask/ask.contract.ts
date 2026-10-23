@@ -602,6 +602,24 @@ const TrendChartBlockSchema = z.object({
   });
 });
 
+// FRD v1.405: a visual board of grouped findings (the Do-Nothing Simulator's losses, drivers, steps and trace). Each section picks how it is drawn:
+// BARS (proportional cost ranges), CARDS (tone-accented cards with a badge), STEPS (numbered, with a priority badge) or DISCLOSURE (collapsed rows).
+// The producer declares every label, badge and number; the renderer only scales the bars and applies the tone colours.
+const InsightBoardBlockSchema = z.object({
+  type: z.literal('INSIGHT_BOARD'), id: z.string(), title: z.string(), description: z.string().nullable().optional(),
+  sections: z.array(z.object({
+    id: z.string(), title: z.string().trim().min(1).max(80),
+    layout: z.enum(['BARS', 'CARDS', 'STEPS', 'DISCLOSURE']),
+    summary: z.string().trim().min(1).max(160).nullable().optional(),
+    items: z.array(z.object({
+      id: z.string(), title: z.string().trim().min(1).max(200), detail: z.string().trim().min(1).max(400).nullable().optional(),
+      badge: z.object({ label: z.string().trim().min(1).max(40), tone: AskDisplayToneSchema.default('DEFAULT') }).nullable().optional(),
+      valueLabel: z.string().trim().min(1).max(60).nullable().optional(),
+      range: z.object({ min: z.number().finite().min(0), max: z.number().finite().min(0) }).refine((range) => range.min <= range.max, { message: 'A range minimum must not exceed its maximum.' }).nullable().optional(),
+    })).min(1).max(100),
+  })).min(1).max(6),
+});
+
 // A single task, habit or step presented as one conversational card: where it sits (breadcrumb), what it is, its key facts as chips, an
 // optional tip, what to do, short explanatory rows, and the next actions. Every string is the producer's own recorded content; the renderer
 // invents nothing (no steps, photos or advice of its own). A row may point at one of `actions` by id so its button sits in the row.
@@ -1134,6 +1152,7 @@ export const AskPresentationBlockSchema = z.discriminatedUnion('type', [
   LifespanBlockSchema,
   ProgressBlockSchema,
   TrendChartBlockSchema,
+  InsightBoardBlockSchema,
   EnvironmentReportBlockSchema,
 ]);
 

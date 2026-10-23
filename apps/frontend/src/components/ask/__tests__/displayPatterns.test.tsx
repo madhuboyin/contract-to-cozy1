@@ -441,6 +441,24 @@ describe('lifespan, progress, timeline, chips and badges', () => {
     expect(screen.getByText('Only note.')).toBeInTheDocument();
   });
 
+  test('insight board draws bars, tone cards, numbered steps and a collapsed trace from the declared sections', () => {
+    const { container } = render(<Harness block={{
+      type: 'INSIGHT_BOARD', id: 'board', title: 'What drives the estimate',
+      sections: [
+        { id: 'losses', title: 'Biggest avoidable losses', layout: 'BARS', items: [{ id: 'l1', title: 'Leak damage', detail: 'From a failed tank', valueLabel: '$1,500 to $4,000', range: { min: 1500, max: 4000 } }] },
+        { id: 'risks', title: 'Top risk drivers', layout: 'CARDS', items: [{ id: 'r1', title: 'Aging roof', badge: { label: 'High severity', tone: 'CRITICAL' } }] },
+        { id: 'next', title: 'Minimum actions', layout: 'STEPS', items: [{ id: 's1', title: 'Schedule a roof inspection', badge: { label: 'High priority', tone: 'CRITICAL' } }, { id: 's2', title: 'Add leak detection' }] },
+        { id: 'trace', title: 'Why this changed', layout: 'DISCLOSURE', summary: '1 step moved the estimate.', items: [{ id: 't1', title: 'Skipped maintenance', badge: { label: 'Raises the estimate', tone: 'CAUTION' } }] },
+      ],
+    }} />);
+    expect(screen.getByText('$1,500 to $4,000')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Leak damage: $1,500 to $4,000' })).toBeInTheDocument();
+    expect(screen.getByText('High severity')).toBeInTheDocument();
+    expect(Array.from(container.querySelectorAll('ol > li')).map((row) => row.getAttribute('data-insight-item'))).toEqual(['s1', 's2']);
+    expect(container.querySelector('details')).not.toHaveAttribute('open');
+    expect(screen.getByText('1 step moved the estimate.')).toBeInTheDocument();
+  });
+
   test('trend chart draws the declared series and marker, labels them, and keeps the range switch inside Ask', () => {
     const onItemAction = jest.fn();
     const { container } = render(<Harness onItemAction={onItemAction} block={{

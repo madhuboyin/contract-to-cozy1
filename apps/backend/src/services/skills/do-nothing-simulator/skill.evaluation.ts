@@ -58,7 +58,7 @@ export const DO_NOTHING_SIMULATOR_SKILL_EVALUATION = deepFreezeSkillPackage({
   expectedContextProviders: [PROPERTY_IDENTITY_CONTEXT_PROVIDER, PROPERTY_JOURNEY_CONTEXT_PROVIDER],
   prohibitedContextProviders: ['undeclared.financial-account'],
   expectedStatuses: ['ANSWERED', 'READY_WITH_LIMITATIONS'],
-  expectedBlockTypes: ['SUMMARY', 'METRIC_ROW', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY'],
+  expectedBlockTypes: ['SUMMARY', 'METRIC_ROW', 'INSIGHT_BOARD', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY'],
   expectedCanonicalCalls: [{ id: 'do-nothing-simulator.latest', version: '1.0' }],
   prohibitedCanonicalCalls: ['inventory.lookup', 'intelligence-envelope.query'],
   modelDisabledCase: {

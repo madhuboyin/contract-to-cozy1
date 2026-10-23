@@ -45,6 +45,7 @@ import { ProgressBlock } from '../patterns/ProgressBlock';
 import { TaskGuideBlock } from '../TaskGuideBlock';
 import { TimelineTrackBlock } from '../patterns/TimelineTrackBlock';
 import { TrendChartBlock } from '../patterns/TrendChartBlock';
+import { InsightBoardBlock } from '../patterns/InsightBoardBlock';
 import { EnvironmentReportBlock } from './EnvironmentReportBlock';
 import type { AskBlockRenderer, AskBlockRendererProps, AskBlockType } from './types';
 
@@ -82,6 +83,7 @@ export const ASK_BLOCK_RENDERERS: AskBlockRendererRegistry = {
   LIFESPAN: LifespanBlock,
   PROGRESS: ProgressBlock,
   TREND_CHART: TrendChartBlock,
+  INSIGHT_BOARD: InsightBoardBlock,
   ENVIRONMENT_REPORT: EnvironmentReportBlock,
 };
 

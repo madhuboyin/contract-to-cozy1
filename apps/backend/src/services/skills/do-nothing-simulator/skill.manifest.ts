@@ -33,7 +33,7 @@ export const DO_NOTHING_SIMULATOR_SKILL = Object.freeze({
     reversibility: 'REVERSIBLE',
   },
   authorizationFloor: 'OWNER',
-  allowedResultBlocks: ['SUMMARY', 'METRIC_ROW', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY'],
+  allowedResultBlocks: ['SUMMARY', 'METRIC_ROW', 'INSIGHT_BOARD', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY'],
   dependencies: [
     { type: 'CONTEXT_PROVIDER', id: PROPERTY_IDENTITY_CONTEXT_PROVIDER.id, version: PROPERTY_IDENTITY_CONTEXT_PROVIDER.version, required: true },
     { type: 'CONTEXT_PROVIDER', id: PROPERTY_JOURNEY_CONTEXT_PROVIDER.id, version: PROPERTY_JOURNEY_CONTEXT_PROVIDER.version, required: false },

@@ -750,7 +750,7 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   MAINTENANCE_BUDGET_FORECAST: definition('MAINTENANCE_BUDGET_FORECAST', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'OWNER', 'budget-planner.forecast', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
   // FRD v1.68: reads getLatestRun and listScenarios, the two GETs the Do-Nothing Simulator page makes on load. OWNER floor:
   // the routes admit any household member, but the service only admits the primary homeowner profile.
-  DO_NOTHING_SIMULATION: definition('DO_NOTHING_SIMULATION', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'OWNER', 'do-nothing-simulator.latest', ['SUMMARY', 'METRIC_ROW', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
+  DO_NOTHING_SIMULATION: definition('DO_NOTHING_SIMULATION', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'OWNER', 'do-nothing-simulator.latest', ['SUMMARY', 'METRIC_ROW', 'INSIGHT_BOARD', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
   // FRD v1.67: reads listForProperty, the call GET /properties/:id/price-finalizations makes for the Price Finalization
   // page. OWNER floor: the route admits any household member, but the service only admits the primary homeowner profile.
   PRICE_FINALIZATIONS_LIST: definition('PRICE_FINALIZATIONS_LIST', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'OWNER', 'price-finalization.records', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
