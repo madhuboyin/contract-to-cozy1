@@ -36,13 +36,13 @@ const run = (overrides = {}) => ({
     biggestAvoidableLosses: [{ title: 'Leak damage', detail: 'From a failed tank', estCostCentsMin: 150000, estCostCentsMax: 400000 }],
   },
   nextSteps: [{ title: 'Schedule a roof inspection', detail: 'Before winter', priority: 'HIGH' }],
-  decisionTrace: [], computedAt: new Date('2026-09-15T12:00:00.000Z'), createdAt: new Date('2026-09-15T12:00:00.000Z'), ...overrides,
+  decisionTrace: [{ label: 'Baseline', detail: 'Modeled 12 months of inaction.', impact: 'NEUTRAL' }, { label: 'Skipped maintenance', impact: 'NEGATIVE' }], computedAt: new Date('2026-09-15T12:00:00.000Z'), createdAt: new Date('2026-09-15T12:00:00.000Z'), ...overrides,
 });
 
 // The DTO shape the service returns, for the view-only tests.
 const dto = () => { const { outputsSnapshot, ...rest } = run(); return { ...rest, outputs: outputsSnapshot }; };
 
-function install({ owner = true, conflict = false, latest = run(), scenarios = [scenario('s1', { name: 'Skip a year', inputOverrides: { skipMaintenance: true, riskTolerance: 'LOW' } })] } = {}) {
+function install({ owner = true, conflict = false, latest = run(), scenarios = [scenario('s1', { name: 'Skip a year', inputOverrides: { skipMaintenance: true, riskTolerance: 'LOW', deductibleStrategy: 'KEEP_HIGH', cashBufferCents: 500000 } })] } = {}) {
   queries = [];
   prismaModule.prisma = {
     property: { findFirst: async (query) => { queries.push(['property', query]); return owner ? { id: 'p1', homeownerProfileId: 'hp1' } : null; } },
@@ -79,9 +79,14 @@ test('a household member who is not the primary owner is told so, not shown an e
 
 test('the latest run is summarized with cost range, risk change, likelihood, confidence and its scenario; drivers and scenarios listed', async () => {
   const result = await invoke();
-  const [summary, list] = result.blocks;
+  const [summary, metrics, list, trace] = result.blocks;
   assert.equal(summary.title, 'If upkeep is put off for 12 months');
-  assert.equal(summary.body, 'Estimated extra cost: $3,200 to $7,800. Risk score rises by 14. Incident likelihood: High. Confidence: Medium. Run Sep 15, 2026 for "Skip a year".');
+  assert.equal(summary.body, 'Deferred upkeep raises risk. Run for \u201CSkip a year\u201D.');
+  assert.deepEqual(summary.chips.map((chip) => chip.label), ['Medium confidence', 'High incident likelihood', '12-month horizon', 'Run Sep 15, 2026']);
+  assert.deepEqual(metrics.metrics.map((metric) => [metric.label, metric.value]), [
+    ['Horizon', '12 months'], ['Extra cost if delayed', '$3,200 to $7,800'], ['Risk score change', '+14'], ['Incident likelihood', 'High'], ['Confidence', 'Medium'],
+  ]);
+  assert.deepEqual(trace.sections[0].items.map((item) => [item.title, item.status]), [['Baseline', 'No change'], ['Skipped maintenance', 'Raises the estimate']]);
   assert.equal(summary.tone, 'CAUTION');
   assert.deepEqual(summary.actions.map((action) => [action.id, action.operationId, action.interactionType, action.href]), [['run-do-nothing', 'DO_NOTHING_SIMULATION_RUN', 'START_WORKFLOW', undefined], ['do-nothing-scenario-create', 'DO_NOTHING_SCENARIO_COMMAND', 'START_WORKFLOW', undefined]], 'run it again, or add a scenario (FRD v1.336), inside Ask');
   assert.equal(result.blocks.some((block) => block.id === 'do-nothing-status'), false);
@@ -94,7 +99,7 @@ test('the latest run is summarized with cost range, risk change, likelihood, con
   ]);
   assert.deepEqual(list.sections[0].items[0].meta, ['$1,500 to $4,000']);
   assert.equal(list.sections[1].items[0].status, 'High severity');
-  assert.deepEqual(list.sections[4].items[0].meta, ['Skips maintenance', 'Low risk tolerance']);
+  assert.deepEqual(list.sections[4].items[0].meta, ['Skips maintenance', 'Low risk tolerance', 'Deductible: Keep it high', 'Cash buffer $5,000']);
 });
 
 test('a stale, failed or low-data run is disclosed; no run is not an all-clear', () => {

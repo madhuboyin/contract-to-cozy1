@@ -6,7 +6,7 @@ import { type AskOperationResult } from '../askOperationRegistry';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { ensurePropertyAccess } from '../askHandlerSupport';
 import {
-  DO_NOTHING_PROPERTY_ENTITY_TYPE, DO_NOTHING_SCENARIO_ACTION_IDS, DO_NOTHING_SCENARIO_ENTITY_TYPE, DO_NOTHING_SCENARIO_MESSAGES,
+  DEDUCTIBLE_LABELS, DO_NOTHING_PROPERTY_ENTITY_TYPE, DO_NOTHING_SCENARIO_ACTION_IDS, DO_NOTHING_SCENARIO_ENTITY_TYPE, DO_NOTHING_SCENARIO_MESSAGES,
 } from '../support/doNothingScenarioCommand';
 import { DoNothingSimulatorService } from '../../doNothingSimulator.service';
 import { humanDate } from '../askFormatting';
@@ -76,6 +76,8 @@ export function doNothingSimulationFromView(
       scenario.inputOverrides.skipMaintenance ? 'Skips maintenance' : null,
       scenario.inputOverrides.skipWarranty ? 'Skips warranty' : null,
       scenario.inputOverrides.riskTolerance ? `${DO_NOTHING_SEVERITY_LABELS[scenario.inputOverrides.riskTolerance] ?? scenario.inputOverrides.riskTolerance} risk tolerance` : null,
+      scenario.inputOverrides.deductibleStrategy && scenario.inputOverrides.deductibleStrategy !== 'UNCHANGED' ? `Deductible: ${DEDUCTIBLE_LABELS[scenario.inputOverrides.deductibleStrategy] ?? scenario.inputOverrides.deductibleStrategy}` : null,
+      scenario.inputOverrides.cashBufferCents != null ? `Cash buffer ${doNothingMoney(scenario.inputOverrides.cashBufferCents)}` : null,
     ].filter((value): value is string => Boolean(value)),
     status: 'Saved',
     entityType: DO_NOTHING_SCENARIO_ENTITY_TYPE,
@@ -100,18 +102,35 @@ export function doNothingSimulationFromView(
   const scenarioName = run.scenarioId ? scenarios.find((scenario) => scenario.id === run.scenarioId)?.name ?? null : null;
   const low = doNothingMoney(run.expectedCostDeltaCentsMin);
   const high = doNothingMoney(run.expectedCostDeltaCentsMax);
+  const likelihood = run.incidentLikelihood ? DO_NOTHING_SEVERITY_LABELS[run.incidentLikelihood] ?? run.incidentLikelihood : null;
+  const confidence = DO_NOTHING_SEVERITY_LABELS[run.confidence] ?? run.confidence;
+  const costRange = low && high ? (low === high ? low : `${low} to ${high}`) : null;
+  const ranAt = humanDate(new Date(run.computedAt));
+  // FRD v1.404: the lead is the service's own summary sentence (the page's result card), with the figures as chips and a key-figures row.
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY', id: 'do-nothing-summary',
     title: `If upkeep is put off for ${run.horizonMonths} months`,
     body: [
-      low && high ? `Estimated extra cost: ${low === high ? low : `${low} to ${high}`}.` : null,
-      run.riskScoreDelta != null ? `Risk score rises by ${run.riskScoreDelta}.` : null,
-      run.incidentLikelihood ? `Incident likelihood: ${DO_NOTHING_SEVERITY_LABELS[run.incidentLikelihood] ?? run.incidentLikelihood}.` : null,
-      `Confidence: ${DO_NOTHING_SEVERITY_LABELS[run.confidence] ?? run.confidence}.`,
-      `Run ${humanDate(new Date(run.computedAt))}${scenarioName ? ` for "${scenarioName}"` : ''}.`,
+      displayText(run.summary) ?? (costRange ? `Estimated extra cost: ${costRange}.` : 'The simulation finished.'),
+      scenarioName ? `Run for \u201C${scenarioName}\u201D.` : null,
     ].filter(Boolean).join(' '),
     tone: run.incidentLikelihood === 'HIGH' ? 'CAUTION' : 'DEFAULT',
+    chips: [
+      { label: `${confidence} confidence`, tone: run.confidence === 'LOW' ? 'CAUTION' : 'DEFAULT' },
+      ...(likelihood ? [{ label: `${likelihood} incident likelihood`, tone: run.incidentLikelihood === 'HIGH' ? 'CAUTION' as const : 'DEFAULT' as const }] : []),
+      { label: `${run.horizonMonths}-month horizon`, tone: 'DEFAULT' as const },
+      { label: `Run ${ranAt}`, tone: 'DEFAULT' as const },
+    ],
     actions: [runAction('Run it again'), ...addScenario],
+  }, {
+    type: 'METRIC_ROW', id: 'do-nothing-metrics', title: 'Key figures',
+    metrics: [
+      { label: 'Horizon', value: `${run.horizonMonths} months`, tone: 'DEFAULT' },
+      { label: 'Extra cost if delayed', value: costRange ?? 'Not estimated', tone: costRange ? 'CAUTION' : 'DEFAULT' },
+      { label: 'Risk score change', value: run.riskScoreDelta == null ? 'Not estimated' : `+${run.riskScoreDelta}`, tone: run.riskScoreDelta ? 'CAUTION' : 'DEFAULT' },
+      { label: 'Incident likelihood', value: likelihood ?? 'Not estimated', tone: run.incidentLikelihood === 'HIGH' ? 'CAUTION' : 'DEFAULT' },
+      { label: 'Confidence', value: confidence, tone: run.confidence === 'LOW' ? 'CAUTION' : 'DEFAULT' },
+    ],
   }];
   if (run.status !== 'READY') {
     blocks.push({
@@ -153,7 +172,17 @@ export function doNothingSimulationFromView(
     { id: 'do-nothing-scenarios', title: 'Saved scenarios', items: scenarioItems },
   ].filter((section) => section.items.length > 0).map((section) => ({ ...section, count: section.items.length }));
   if (sections.length) {
-    blocks.push({ type: 'GROUPED_LIST', filters: [], id: 'do-nothing-items', title: 'What drives the estimate', description: 'From the latest run. Run it again to change the horizon or use a saved scenario.', sections, collection: collectionDescriptor({ sourceTotal: sections.reduce((sum, section) => sum + section.items.length, 0), fetchedCount: sections.reduce((sum, section) => sum + section.items.length, 0), sections, nextPageAvailable: false }), actions: [] });
+    blocks.push({ type: 'GROUPED_LIST', filters: [], id: 'do-nothing-items', title: 'What drives the estimate', description: 'From the latest run. Run it again to change the horizon or use a saved scenario.', listDensity: 'DENSE', sections, collection: collectionDescriptor({ sourceTotal: sections.reduce((sum, section) => sum + section.items.length, 0), fetchedCount: sections.reduce((sum, section) => sum + section.items.length, 0), sections, nextPageAvailable: false }), actions: [] });
+  }
+  // The page's collapsed "Why this changed": each step the model took, with its effect, so the estimate can be checked.
+  const traceItems = run.decisionTrace.flatMap((entry, index) => {
+    const label = displayText(entry?.label);
+    if (!label) return [];
+    return [{ id: `trace-${index}`, title: label, description: displayText(entry.detail), meta: [], status: entry.impact === 'POSITIVE' ? 'Lowers the estimate' : entry.impact === 'NEGATIVE' ? 'Raises the estimate' : 'No change' }];
+  }).slice(0, DO_NOTHING_SECTION_ITEM_LIMIT);
+  if (traceItems.length) {
+    const traceSections = [{ id: 'do-nothing-trace-steps', title: 'How the model got here', count: traceItems.length, items: traceItems }];
+    blocks.push({ type: 'GROUPED_LIST', filters: [], id: 'do-nothing-trace', title: 'Why this changed', listDensity: 'DENSE', sections: traceSections, collection: collectionDescriptor({ sourceTotal: traceItems.length, fetchedCount: traceItems.length, sections: traceSections, nextPageAvailable: false }), actions: [] });
   }
   blocks.push(boundary);
   return { status: 'ANSWERED', reasonCode: 'DO_NOTHING_READY', blocks, suggestions: [] };

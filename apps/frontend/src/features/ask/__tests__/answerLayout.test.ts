@@ -30,4 +30,5 @@ test('decision answers (a chart, or Sell / Hold / Rent) read at the standard mea
   const comparison: AskPresentationBlock = { type: 'COMPARISON', id: 'sell-hold-rent-comparison', title: 'Options', options: [], actions: [] };
   expect(askAnswerWidth([summary, table, chart])).toBe('STANDARD');
   expect(askAnswerWidth([summary, comparison])).toBe('STANDARD');
+  expect(askAnswerWidth([summary, { ...table, id: 'do-nothing-items' }])).toBe('STANDARD');
 });
