@@ -388,10 +388,12 @@ test('Sell/Hold/Rent financing uses a progressive editor, hides inapplicable loa
   expect(screen.getByLabelText('Purchase price ($)').parentElement).toHaveClass('w-56');
   expect(screen.getByLabelText('Purchase price ($)').parentElement).toHaveTextContent('$');
   expect(view.container.querySelector('[data-decision-input-workflow="FINANCING_PROFILE_UPDATE"]')).toHaveClass('max-w-[900px]');
+  expect(view.container.querySelector('[data-compact-capture="financing-profile"]')).not.toHaveClass('grid');
   fireEvent.change(screen.getByLabelText('Purchase price ($)'), { target: { value: '460000' } });
   expect(screen.getByText('1 changed')).toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: 'Next: Primary mortgage' }));
   expect(screen.getByRole('group', { name: 'Mortgage type' })).toBeVisible();
+  expect(screen.getByLabelText('Current balance ($)').closest('.flex.items-center')).toHaveTextContent('Current balance ($)');
 });
 
 test('Sell/Hold/Rent assumption consent describes planning settings instead of a Home Record write', () => {
@@ -403,13 +405,15 @@ test('Sell/Hold/Rent assumption consent describes planning settings instead of a
     ] },
   } as unknown as AskCaptureRequest;
   const view = render(<InlineCaptureCard executionId="scenario1" request={request} onCompleted={jest.fn()} />);
-  expect(screen.getByText('Growth assumptions')).toBeVisible();
-  expect(screen.getByText('Defaults')).toBeVisible();
+  expect(screen.getByRole('heading', { name: 'Growth' })).toBeVisible();
+  expect(screen.getByRole('heading', { name: 'Selling and rental costs' })).toBeVisible();
+  expect(screen.getByText('Reset saved assumptions')).toBeVisible();
   expect(screen.getByText(/They won’t change my Home Record/)).toBeVisible();
   expect(screen.queryByText('I confirm this information can be saved to the home record.')).not.toBeInTheDocument();
   expect(screen.getByLabelText('Appreciation rate (%)').parentElement).toHaveClass('w-32');
   expect(screen.getByLabelText('Appreciation rate (%)').parentElement).toHaveTextContent('%');
   expect(view.container.querySelector('[data-decision-input-workflow="sell-hold-rent-assumptions"]')).toHaveClass('max-w-[760px]');
+  expect(view.container.querySelector('[data-compact-capture="sell-hold-rent-assumptions"]')).not.toHaveClass('grid');
 });
 
 test('Changed markers belong to Edit: Add never shows them', () => {

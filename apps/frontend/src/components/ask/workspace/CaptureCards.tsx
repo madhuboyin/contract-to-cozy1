@@ -567,6 +567,32 @@ export function InlineCaptureCard({
     ? request.currentAnswer as Record<string, unknown>
     : {};
   const changedFieldCount = activeFields.filter((field) => JSON.stringify(values[field.key]) !== JSON.stringify(recordedValues[field.key])).length;
+  const assumptionFieldByKey = new Map(activeFields.map((field) => [field.key, field]));
+  const renderAssumptionRow = (key: string) => {
+    const field = assumptionFieldByKey.get(key);
+    if (!field) return null;
+    const savedOverrideNote = field.helpText?.startsWith('Saved override') ? field.helpText : null;
+    return <div key={key} className="flex min-w-0 items-center justify-between gap-4 rounded-xl bg-slate-50 px-3 py-2.5">
+      <div className="min-w-0"><p className="text-sm font-semibold text-slate-800">{field.label}</p>{savedOverrideNote && <p className="mt-0.5 text-xs text-slate-500">{savedOverrideNote}</p>}</div>
+      <div className="shrink-0"><CaptureFieldControl field={field} value={values[field.key]} disabled={saving} allowNotSure={request.allowNotSure} bare dense propertyId={propertyId} onChange={(value) => setValues((current) => ({ ...current, [field.key]: value }))} /></div>
+    </div>;
+  };
+  const renderFinancingRow = (key: string) => {
+    const field = assumptionFieldByKey.get(key);
+    if (!field) return null;
+    return <div key={key} className="flex min-w-0 items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+      <p className="min-w-0 text-sm font-semibold text-slate-800">{field.label}</p>
+      <div className="shrink-0"><CaptureFieldControl field={field} value={values[field.key]} disabled={saving} allowNotSure={request.allowNotSure} bare dense propertyId={propertyId} onChange={(value) => setValues((current) => ({ ...current, [field.key]: value }))} /></div>
+    </div>;
+  };
+  const renderFinancingChoice = (key: string) => {
+    const field = assumptionFieldByKey.get(key);
+    if (!field) return null;
+    return <section key={key} className="rounded-xl border border-slate-200 bg-white p-3">
+      <p className="mb-2 text-sm font-semibold text-slate-800">{field.label}</p>
+      <CaptureFieldControl field={field} value={values[field.key]} disabled={saving} allowNotSure={request.allowNotSure} bare dense propertyId={propertyId} onChange={(value) => setValues((current) => ({ ...current, [field.key]: value }))} />
+    </section>;
+  };
 
   // `skipping` answers the question with the reserved skip marker: the server saves nothing and moves to the next question.
   const save = async (event: FormEvent | null, skipping = false, override?: Record<string, unknown>) => {
@@ -700,7 +726,7 @@ export function InlineCaptureCard({
         </div>
       ) : decisionInputWorkflow ? (
         <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-4">
-          <div className="max-w-2xl">
+          <div className="min-w-0 flex-1">
             <p className="text-xs font-bold uppercase tracking-[0.12em] text-teal-700">{financingProfile ? 'Recorded financing' : 'Planning assumptions'}</p>
             <h3 className="mt-1 text-lg font-semibold tracking-tight text-slate-950">{request.title}</h3>
             <p className="mt-1 text-sm leading-5 text-slate-600">{request.helpText}</p>
@@ -717,7 +743,7 @@ export function InlineCaptureCard({
           {request.destinationLabel && <p className="mt-2 text-xs font-medium text-sky-900">{request.classification === 'WORKFLOW_INPUT' ? `${request.destinationLabel}.` : `${request.destinationLabel} after you continue.`}</p>}
         </>
       )}
-      <div className={compactEventAdd || compactProjectCreate ? 'mt-3 grid gap-x-3 gap-y-2.5 md:grid-cols-6' : compactInventoryCompletion ? 'mt-4 grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3' : compactWorkItemReschedule ? 'mt-4 max-w-md' : compactWorkflow ? 'mt-4 grid gap-3 md:grid-cols-2' : 'mt-4 space-y-4'} data-compact-capture={compactContinuityPlan ? 'home-continuity-plan' : compactMaintenanceTask ? 'maintenance-task' : compactInventoryCreate ? 'inventory-item-create' : compactInventoryCompletion ? 'inventory-item-completion' : compactMaterialSpec ? 'material-spec' : compactPlantAdvisor ? 'plant-advisor' : compactOwnershipScenario ? 'ownership-cost-scenario' : compactEventAdd ? 'timeline-event' : compactProjectCreate ? 'project-create' : compactProjectCommand ? 'project-command' : compactWorkItemReschedule ? 'work-item-reschedule' : undefined}>
+      <div className={sellHoldRentAssumptions || financingProfile ? 'mt-4' : compactEventAdd || compactProjectCreate ? 'mt-3 grid gap-x-3 gap-y-2.5 md:grid-cols-6' : compactInventoryCompletion ? 'mt-4 grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3' : compactWorkItemReschedule ? 'mt-4 max-w-md' : compactWorkflow ? 'mt-4 grid gap-3 md:grid-cols-2' : 'mt-4 space-y-4'} data-compact-capture={sellHoldRentAssumptions ? 'sell-hold-rent-assumptions' : financingProfile ? 'financing-profile' : compactContinuityPlan ? 'home-continuity-plan' : compactMaintenanceTask ? 'maintenance-task' : compactInventoryCreate ? 'inventory-item-create' : compactInventoryCompletion ? 'inventory-item-completion' : compactMaterialSpec ? 'material-spec' : compactPlantAdvisor ? 'plant-advisor' : compactOwnershipScenario ? 'ownership-cost-scenario' : compactEventAdd ? 'timeline-event' : compactProjectCreate ? 'project-create' : compactProjectCommand ? 'project-command' : compactWorkItemReschedule ? 'work-item-reschedule' : undefined}>
         {activeGroup && <div className={compactProjectCreate || compactEventAdd ? 'md:col-span-6' : 'md:col-span-2'}>
           <div className="mb-3 flex items-start justify-between gap-3">
             <div><p className="text-sm font-semibold text-slate-950">{activeGroup.title}</p>{activeGroup.description && <p className="mt-0.5 text-xs text-slate-500">{activeGroup.description}</p>}</div>
@@ -725,7 +751,36 @@ export function InlineCaptureCard({
           </div>
           <ol className={cn('flex', compactContinuityPlan ? 'gap-3 border-b border-slate-100 pb-3' : 'gap-1')} aria-label="Completion form progress">{formGroups.map((group, index) => <li key={group.id} aria-current={index === activeGroupIndex ? 'step' : undefined} className={cn(compactContinuityPlan ? 'flex min-w-0 flex-1 items-center gap-2 text-xs font-semibold' : 'h-1.5 flex-1 rounded-full', compactContinuityPlan ? index === activeGroupIndex ? 'text-teal-800' : index < activeGroupIndex ? 'text-slate-700' : 'text-slate-400' : index <= activeGroupIndex ? 'bg-teal-700' : 'bg-slate-200')}><span className={compactContinuityPlan ? cn('grid h-5 w-5 shrink-0 place-items-center rounded-full text-[10px]', index <= activeGroupIndex ? 'bg-teal-700 text-white' : 'bg-slate-200 text-slate-500') : 'sr-only'}>{compactContinuityPlan ? index + 1 : group.title}</span>{compactContinuityPlan && <span className="truncate">{group.title}</span>}</li>)}</ol>
         </div>}
-        {activeGroupFields.map((field, fieldIndex) => {
+        {sellHoldRentAssumptions ? <div className="space-y-3">
+          <section aria-labelledby={`assumptions-property-${executionId}`} className="rounded-2xl border border-slate-200 p-3">
+            <div className="mb-2"><h4 id={`assumptions-property-${executionId}`} className="text-sm font-semibold text-slate-950">Property and rent</h4><p className="mt-0.5 text-xs text-slate-500">Blank values continue using the model defaults from the comparison.</p></div>
+            <div className="grid gap-2 sm:grid-cols-2">{renderAssumptionRow('homeValueNow')}{renderAssumptionRow('monthlyRentNow')}</div>
+          </section>
+          <div className="grid gap-3 md:grid-cols-2">
+            <section aria-labelledby={`assumptions-growth-${executionId}`} className="rounded-2xl border border-slate-200 p-3">
+              <h4 id={`assumptions-growth-${executionId}`} className="mb-2 text-sm font-semibold text-slate-950">Growth</h4>
+              <div className="space-y-2">{renderAssumptionRow('appreciationPct')}{renderAssumptionRow('rentGrowthPct')}</div>
+            </section>
+            <section aria-labelledby={`assumptions-costs-${executionId}`} className="rounded-2xl border border-slate-200 p-3">
+              <h4 id={`assumptions-costs-${executionId}`} className="mb-2 text-sm font-semibold text-slate-950">Selling and rental costs</h4>
+              <div className="space-y-2">{renderAssumptionRow('sellingCostPct')}{renderAssumptionRow('vacancyPct')}{renderAssumptionRow('managementPct')}</div>
+            </section>
+          </div>
+          {assumptionFieldByKey.has('resetAll') && <section className="rounded-2xl border border-dashed border-slate-200 p-3"><CaptureFieldControl field={assumptionFieldByKey.get('resetAll')!} value={values.resetAll} disabled={saving} compact propertyId={propertyId} onChange={(value) => setValues((current) => ({ ...current, resetAll: value }))} /></section>}
+        </div> : financingProfile ? <div className="space-y-3">
+          {activeGroupIndex === 0 && <>
+            {renderFinancingChoice('mortgageStatus')}
+            <div className="grid gap-2 md:grid-cols-2">{renderFinancingRow('purchasePrice')}{renderFinancingRow('purchaseDate')}</div>
+          </>}
+          {activeGroupIndex === 1 && <>
+            {renderFinancingChoice('mortgageType')}
+            <div className="grid gap-2 md:grid-cols-2">{['originalBalance', 'currentBalance', 'balanceAsOf', 'ratePct', 'remainingYears', 'monthlyPayment'].map(renderFinancingRow)}</div>
+          </>}
+          {activeGroupIndex === 2 && <>
+            <div className="grid gap-2 md:grid-cols-2">{renderFinancingChoice('hasSecondMortgage')}{renderFinancingChoice('hasPMI')}</div>
+            {renderFinancingRow('secondBalance')}
+          </>}
+        </div> : activeGroupFields.map((field, fieldIndex) => {
           const inventoryCreateFullWidth = compactInventoryCreate && (field.key === 'name' || field.key === 'category');
           const fullWidth = compactMaintenanceTask
             ? field.key === 'title' || field.key === 'description'
