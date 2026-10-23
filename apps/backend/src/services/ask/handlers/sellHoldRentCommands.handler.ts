@@ -52,7 +52,7 @@ function assumptionsCapture(contextVersion: string, rows: Array<{ key: string; v
   const numberField = (key: EditableKey) => ({
     key: fieldKeys[key], label: `${specs[key].label}${specs[key].unit === 'DECIMAL_RATE' ? ' (%)' : specs[key].unit === 'USD_PER_MONTH' ? ' ($/month)' : ' ($)'}`,
     required: false,
-    helpText: saved.has(key) ? 'Saved override used instead of the model default.' : 'Leave blank to use the model default shown in the comparison.',
+    ...(saved.has(key) ? { helpText: 'Saved override; clear it to use the model default.' } : {}),
     inputSchema: { type: 'NUMBER' as const, min: specs[key].unit === 'DECIMAL_RATE' ? specs[key].min * 100 : specs[key].min, max: specs[key].unit === 'DECIMAL_RATE' ? specs[key].max * 100 : specs[key].max },
   });
   return {

@@ -379,12 +379,15 @@ const financingWorkflowRequest = {
 } as unknown as AskCaptureRequest;
 
 test('Sell/Hold/Rent financing uses a progressive editor, hides inapplicable loan fields, and offers a route back', () => {
-  render(<InlineCaptureCard executionId="finance1" request={financingWorkflowRequest} onCompleted={jest.fn()} />);
+  const view = render(<InlineCaptureCard executionId="finance1" request={financingWorkflowRequest} onCompleted={jest.fn()} />);
   expect(screen.getByText('Step 1 of 3')).toBeVisible();
   expect(screen.getAllByText('Purchase and mortgage')[0]).toBeVisible();
   expect(screen.queryByRole('group', { name: 'Mortgage type' })).not.toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Back to comparison' })).toBeVisible();
   expect(screen.getByText('No changes yet')).toBeVisible();
+  expect(screen.getByLabelText('Purchase price ($)').parentElement).toHaveClass('w-56');
+  expect(screen.getByLabelText('Purchase price ($)').parentElement).toHaveTextContent('$');
+  expect(view.container.querySelector('[data-decision-input-workflow="FINANCING_PROFILE_UPDATE"]')).toHaveClass('max-w-[900px]');
   fireEvent.change(screen.getByLabelText('Purchase price ($)'), { target: { value: '460000' } });
   expect(screen.getByText('1 changed')).toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: 'Next: Primary mortgage' }));
@@ -399,11 +402,14 @@ test('Sell/Hold/Rent assumption consent describes planning settings instead of a
       { key: 'resetAll', label: 'Reset saved assumptions', required: false, inputSchema: { type: 'SINGLE_SELECT', options: [{ label: 'Keep these assumptions', value: 'NO' }, { label: 'Reset all to model defaults', value: 'YES' }] } },
     ] },
   } as unknown as AskCaptureRequest;
-  render(<InlineCaptureCard executionId="scenario1" request={request} onCompleted={jest.fn()} />);
+  const view = render(<InlineCaptureCard executionId="scenario1" request={request} onCompleted={jest.fn()} />);
   expect(screen.getByText('Growth assumptions')).toBeVisible();
   expect(screen.getByText('Defaults')).toBeVisible();
   expect(screen.getByText(/They won’t change my Home Record/)).toBeVisible();
   expect(screen.queryByText('I confirm this information can be saved to the home record.')).not.toBeInTheDocument();
+  expect(screen.getByLabelText('Appreciation rate (%)').parentElement).toHaveClass('w-32');
+  expect(screen.getByLabelText('Appreciation rate (%)').parentElement).toHaveTextContent('%');
+  expect(view.container.querySelector('[data-decision-input-workflow="sell-hold-rent-assumptions"]')).toHaveClass('max-w-[760px]');
 });
 
 test('Changed markers belong to Edit: Add never shows them', () => {

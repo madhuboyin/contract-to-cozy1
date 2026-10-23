@@ -27,6 +27,7 @@ The two write surfaces launched from the comparison now use a dedicated, neutral
 
 - Scenario assumptions remain one compact surface, organized as property/rent, growth, and selling/rental-cost concepts. Each field identifies whether it is a saved override or will fall back to the model default. Resetting all seven overrides is presented as an explicit “Reset all to model defaults” choice rather than an ordinary ambiguous keep/clear question. Its financial acknowledgement now states accurately that these are planning settings and do not change the Home Record.
 - Financing is a three-step editor: purchase and mortgage status, primary mortgage, then additional loans and costs. Mortgage-only inputs are hidden when the home has no mortgage, and second-mortgage balance is shown only when a second mortgage applies. The workflow remains owner-only and continues to use the canonical financing-profile writer and redacted receipt.
+- Short financial values use proportional controls rather than stretching across their grid column: percentages and terms use compact widths, currency values use a slightly wider control, dates remain calendar-sized, and `$`/`%` adornments make units visible at the point of entry. The assumptions workspace is narrower than the financing editor, and repeated model-default helper copy is omitted unless a saved override needs explanation.
 
 ### Command governance correction (2026-10-22)
 
