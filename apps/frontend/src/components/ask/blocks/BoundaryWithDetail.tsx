@@ -5,6 +5,8 @@ import { BoundaryBlock } from './CoreBlocks';
 // boundary without `detail` renders exactly as before.
 export const BoundaryWithDetail: AskBlockRenderer<'BOUNDARY'> = (props) => {
   const { block } = props;
+  // The Home Actions boundary reads at the same measure as the action list above it, not the full answer width.
+  if (block.id === 'home-actions-boundary') return <div className="w-full max-w-[960px]"><BoundaryBlock {...props} /></div>;
   if (!block.detail) return <BoundaryBlock {...props} />;
   return <div data-boundary-with-detail="">
     <BoundaryBlock {...props} />
