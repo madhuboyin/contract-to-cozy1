@@ -108,10 +108,10 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
         <p className="text-xs font-bold uppercase tracking-wide text-teal-700">{block.title}</p>
         <div className="mt-2">
           {next?.items.map((item) => (
-            <div key={item.id} className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:gap-3">
-              <p className="shrink-0 font-semibold text-slate-950">{item.title}</p>
+            <div key={item.id} className="flex flex-col gap-1">
+              <p className="font-semibold text-slate-950">{item.title}</p>
               {item.description && <p className="text-sm leading-5 text-slate-700">{item.description}</p>}
-              {item.meta.length > 0 && <p className="shrink-0 text-xs text-slate-500">{item.meta.join(' · ')}</p>}
+              {item.meta.length > 0 && <p className="text-xs text-slate-500">{item.meta.join(' · ')}</p>}
             </div>
           ))}
         </div>
