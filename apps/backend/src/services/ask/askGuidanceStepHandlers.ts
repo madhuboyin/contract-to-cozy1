@@ -10,7 +10,7 @@
 // A test requires every tool key used by the template registry to be classified, so a new template step cannot
 // silently default.
 
-import { DO_NOTHING_RUN_MESSAGE } from './support/homeToolRunConstants';
+import { DO_NOTHING_RUN_MESSAGE, SERVICE_PRICE_CHECK_MESSAGE } from './support/homeToolRunConstants';
 
 export type AskGuidanceStepMode = 'IN_ASK' | 'INLINE_CAPTURE' | 'NAVIGATE';
 
@@ -72,6 +72,12 @@ export const ASK_GUIDANCE_IN_ASK_STEPS: Readonly<Record<string, AskGuidanceInAsk
     operationId: 'DO_NOTHING_SIMULATION_RUN', message: DO_NOTHING_RUN_MESSAGE, label: 'Run the simulation', carriesStep: true,
     reason: 'You can run the simulation here; the result is recorded on this journey.',
     outcome: 'A saved simulation run is recorded as this step\'s proof.',
+  },
+  // A saved price check is the proof that a quote was validated. The page sends the journey with the check; Ask now reports it the same way.
+  'service-price-radar:validate_price': {
+    operationId: 'SERVICE_PRICE_CHECK_RUN', message: SERVICE_PRICE_CHECK_MESSAGE, label: 'Check a quote', carriesStep: true,
+    reason: 'You can check a contractor quote here; the saved check is recorded on this journey.',
+    outcome: 'A saved quote check is recorded as this step\'s proof.',
   },
   'do-nothing-simulator:model_cost_of_delay': {
     operationId: 'DO_NOTHING_SIMULATION_RUN', message: DO_NOTHING_RUN_MESSAGE, label: 'Run the simulation', carriesStep: true,

@@ -466,3 +466,17 @@ actions. This slice fixes the structure and proves it with one step.
 - **Still open.** No key is capturable or operation-resolvable yet, so the `CAPTURE_FIELD` and `RUN_OPERATION` paths are tested but unused by
   shipped data. The next connected step is Service Price Radar (`SERVICE_PRICE_CHECK_RUN`), then Home Savings.
 
+## 19. Second connected step: Service Price Radar `validate_price` (2026-10-24)
+
+- **The proof was undefined on Desktop too.** The page sends `guidanceJourneyId`, `guidanceStepKey` and `guidanceSignalIntentFamily` with a
+  new price check and the validator accepts them, but nothing ever recorded a completion, so no surface moved the step (this is why section
+  16 kept it NAVIGATE). Per the owner's direction this slice defines the proof and fixes both surfaces together: a saved price check is the
+  proof for `validate_price` (the step the tool's own outcome matches; the `estimate_*` steps stay NAVIGATE).
+- **One builder.** `buildServicePriceCheckCompletion` / `reportServicePriceCheck` in `guidanceToolReporting.ts` produce the payload
+  `guidanceDerivedData` already reads for this tool (`fairPriceMin/Max`, `currency`, `confidenceScore`) plus `proofType: 'price_check'`. The
+  Desktop controller reports it when the page sent a journey (a check made outside a journey reports nothing, as before). Ask's
+  `SERVICE_PRICE_CHECK_RUN` carries the step id like the Do-Nothing run (launch entity `GUIDANCE_STEP`, execution parameter `guidanceStepId`),
+  re-reads the step in this home at confirmation, and reports through the shared reporter (`reportToJourneyStep`, now common to both tools).
+- **Still the same rules.** The step must be this tool's open step on an open journey; a failed report never fails the saved check and the
+  receipt says so; a step already done is not reported twice (idempotent `dedupeKey`).
+

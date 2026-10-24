@@ -24,7 +24,7 @@ import { receiptFollowUpAction } from '../support/receiptFollowUps';
 import { enumLabel, readableCode } from '../askFormatting';
 import { HomeHabitCoachService } from '../../homeHabitCoach/homeHabitCoachService';
 import { DoNothingSimulatorService } from '../../doNothingSimulator.service';
-import { reportDoNothingRun } from '../../guidanceEngine/guidanceToolReporting';
+import { reportDoNothingRun, reportServicePriceCheck } from '../../guidanceEngine/guidanceToolReporting';
 import { getGuidanceModels } from '../../guidanceEngine/guidanceTypes';
 import { ServicePriceRadarService } from '../../servicePriceRadar.service';
 import { assertProjectComplianceApplicable } from '../../projectCompliance/context';
@@ -216,24 +216,26 @@ registerCapabilityHandler('do-nothing-simulator.run', async (envelope) => {
   return notRoutable('do-nothing-run-not-routable', 'Use the Run simulation button', 'The simulation is run from the Run simulation button on the do-nothing answer. Nothing has changed.', 'ASK_DO_NOTHING_RUN_NOT_DIRECTLY_ROUTABLE');
 });
 
-// Reports a finished run to the journey step it was launched from, exactly as the Desktop page does. The simulation is already saved, so a step that cannot
-// be reported never fails the run: the receipt says which of the two happened. Returns the receipt line, or null when the step is not this tool's open step.
-async function reportRunToJourneyStep(userId: string, propertyId: string, stepId: string, runId: string, run: RunSummary | null): Promise<string | null> {
+// Reports a finished run to the journey step it was launched from, exactly as the Desktop page does. The write is already saved, so a step that cannot
+// be reported never fails it: the receipt says which of the two happened. Returns the receipt line, or null when the step is not this tool's open step.
+async function reportToJourneyStep(
+  userId: string, propertyId: string, stepId: string, toolKey: string,
+  report: (target: { journeyId: string; stepKey: string; signalIntentFamily: string | null }) => Promise<boolean>,
+): Promise<string | null> {
   const step = await getGuidanceModels().guidanceJourneyStep.findFirst({
     where: { id: stepId, journey: { propertyId } },
     select: { stepKey: true, toolKey: true, status: true, journey: { select: { id: true, status: true, primarySignal: { select: { signalIntentFamily: true } } } } },
   });
-  if (!step || step.toolKey !== 'do-nothing-simulator' || !['ACTIVE', 'NOT_STARTED'].includes(String(step.journey.status))) return null;
+  if (!step || step.toolKey !== toolKey || !['ACTIVE', 'NOT_STARTED'].includes(String(step.journey.status))) return null;
   if (step.status === 'COMPLETED') return 'This step was already done';
   if (!['PENDING', 'IN_PROGRESS'].includes(String(step.status))) return null;
-  const recorded = await reportDoNothingRun(
-    propertyId,
-    { id: runId, ...run },
-    { journeyId: step.journey.id, stepKey: step.stepKey, signalIntentFamily: step.journey.primarySignal?.signalIntentFamily ?? null },
-    userId,
-  );
-  return recorded ? 'This step is recorded as done' : 'The simulation is saved, but the journey step could not be updated. Open the journey to check it';
+  const recorded = await report({ journeyId: step.journey.id, stepKey: step.stepKey, signalIntentFamily: step.journey.primarySignal?.signalIntentFamily ?? null });
+  return recorded ? 'This step is recorded as done' : 'This is saved, but the journey step could not be updated. Open the journey to check it';
 }
+const reportRunToJourneyStep = (userId: string, propertyId: string, stepId: string, runId: string, run: RunSummary | null) =>
+  reportToJourneyStep(userId, propertyId, stepId, 'do-nothing-simulator', (target) => reportDoNothingRun(propertyId, { id: runId, ...run }, target, userId));
+const reportCheckToJourneyStep = (userId: string, propertyId: string, stepId: string, checkId: string, check: CheckSummary | null, input: { serviceCategory: string; quoteAmount: number }) =>
+  reportToJourneyStep(userId, propertyId, stepId, 'service-price-radar', (target) => reportServicePriceCheck(propertyId, { id: checkId, serviceCategory: input.serviceCategory, quoteAmount: input.quoteAmount, quoteCurrency: 'USD', verdict: check?.verdict ?? null, expectedLow: check?.expectedLow ?? null, expectedHigh: check?.expectedHigh ?? null }, target, userId));
 
 async function confirmDoNothingRun(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
   const { execution, userId, parameters } = ctx;
@@ -325,14 +327,16 @@ function priceCheckCaptureRequest(contextVersion: string, entered?: Partial<Pric
   };
 }
 
-export async function servicePriceCheckResult(userId: string, propertyId: string, supplied: PriceCheckInput | undefined, sourceExecutionId: string | null): Promise<AskOperationResult> {
+export async function servicePriceCheckResult(userId: string, propertyId: string, supplied: PriceCheckInput | undefined, sourceExecutionId: string | null, guidanceStepId: string | null = null): Promise<AskOperationResult> {
+  // A check started from a guided journey's step carries that step through the form and the review; the confirmation re-checks it before reporting.
+  const launch = { sourceExecutionId, ...(guidanceStepId ? { guidanceStepId } : {}) };
   const access = await ensurePropertyAccess(userId, propertyId);
   if (access.role === HouseholdRole.VIEWER) return blocked('price-check-permission', 'ASK_PERMISSION_REQUIRED', 'A contributor or owner can check a quote', 'Your role can view this home but not change it. Nothing has changed.');
   if (!(await isPrimaryAccountHolder(userId, propertyId))) return primaryHolderOnly('price-check-primary-only', 'SERVICE_PRICE_RADAR_PRIMARY_OWNER_ONLY', 'check a quote');
   const contextVersion = priceCheckVersion(propertyId);
   if (!supplied) {
     return {
-      status: 'NEEDS_CONTEXT', reasonCode: 'SERVICE_PRICE_CHECK_INPUT_REQUIRED', contextVersion, parameters: { sourceExecutionId },
+      status: 'NEEDS_CONTEXT', reasonCode: 'SERVICE_PRICE_CHECK_INPUT_REQUIRED', contextVersion, parameters: launch,
       blocks: [{ type: 'SUMMARY', id: 'price-check-input', title: 'Check a contractor quote', body: 'Nothing has been checked yet. Enter the service and the amount, then review it before it is checked.', tone: 'DEFAULT', actions: [] }],
       captureRequests: [priceCheckCaptureRequest(contextVersion)], suggestions: [],
     };
@@ -340,7 +344,7 @@ export async function servicePriceCheckResult(userId: string, propertyId: string
   const expiresAt = new Date(Date.now() + CONFIRMATION_MINUTES * 60 * 1000);
   return {
     status: 'NEEDS_CONFIRMATION', reasonCode: 'SERVICE_PRICE_CHECK_CONFIRMATION_REQUIRED', contextVersion,
-    parameters: { servicePriceCheck: supplied, servicePriceCheckContextVersion: contextVersion, sourceExecutionId, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() },
+    parameters: { servicePriceCheck: supplied, servicePriceCheckContextVersion: contextVersion, ...launch, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() },
     blocks: [{ type: 'SUMMARY', id: 'price-check-review', title: 'Review this quote check', body: 'You entered these details. Nothing is checked until you confirm.', tone: 'DEFAULT', actions: [] }],
     confirmation: {
       confirmationId: `price-check-${sha(`${propertyId}:${supplied.serviceCategory}:${supplied.quoteAmount}`).slice(0, 12)}-1`, version: 1,
@@ -359,7 +363,7 @@ export async function servicePriceCheckResult(userId: string, propertyId: string
 
 registerCapabilityHandler('service-price-radar.check', async (envelope) => {
   const declared = envelope.launchContext?.operationId === 'SERVICE_PRICE_CHECK_RUN' && envelope.launchContext.surface !== 'ASK_REFRESH' && envelope.message === SERVICE_PRICE_CHECK_MESSAGE;
-  if (declared) return servicePriceCheckResult(envelope.userId, envelope.propertyId!, undefined, envelope.launchContext?.sourceExecutionId ?? null);
+  if (declared) return servicePriceCheckResult(envelope.userId, envelope.propertyId!, undefined, envelope.launchContext?.sourceExecutionId ?? null, envelope.launchContext?.entityType === 'GUIDANCE_STEP' ? envelope.launchContext.entityId ?? null : null);
   return notRoutable('price-check-not-routable', 'Use the Check a quote button', 'A quote is checked from the Check a quote button on the quote checks answer. Nothing has changed.', 'ASK_SERVICE_PRICE_CHECK_NOT_DIRECTLY_ROUTABLE');
 });
 
@@ -393,6 +397,7 @@ async function confirmServicePriceCheck(ctx: ConfirmCapabilityContext): Promise<
     });
   }
   const checkId = earlier?.id ?? check!.id;
+  const journeyOutcome = typeof parameters.guidanceStepId === 'string' ? await reportCheckToJourneyStep(userId, propertyId, parameters.guidanceStepId, checkId, check, input) : null;
   const range = check && check.expectedLow != null && check.expectedHigh != null ? `${usd(check.expectedLow)} to ${usd(check.expectedHigh)}` : null;
   const result: AskOperationResult = {
     status: 'COMPLETED', reasonCode: 'SERVICE_PRICE_CHECK_COMPLETED',
@@ -403,6 +408,7 @@ async function confirmServicePriceCheck(ctx: ConfirmCapabilityContext): Promise<
         { label: 'Service', value: categoryLabel(input.serviceCategory) }, { label: 'Quote', value: usd(input.quoteAmount) },
         { label: 'Expected range', value: range ?? 'No local benchmark qualified for this service' },
         ...(check?.verdict ? [{ label: 'Result', value: VERDICT_LABELS[check.verdict] ?? readableCode(check.verdict) }] : []),
+        ...(journeyOutcome ? [{ label: 'Guided journey', value: journeyOutcome }] : []),
       ],
       actions: [receiptFollowUpAction('PRICE_CHECKS')],
     }],

@@ -1,4 +1,5 @@
 import { NextFunction, Response } from 'express';
+import { reportServicePriceCheck } from '../services/guidanceEngine/guidanceToolReporting';
 import { CustomRequest } from '../types';
 import { APIError } from '../middleware/error.middleware';
 import { ServicePriceRadarService } from '../services/servicePriceRadar.service';
@@ -55,6 +56,16 @@ export async function createServicePriceRadarCheck(
       { serviceCategory: payload.serviceCategory },
       currentContext.contextVersion,
     );
+
+    // The page sends the journey it was opened from; a check made outside a journey reports nothing (as before).
+    if (payload.guidanceJourneyId) {
+      await reportServicePriceCheck(
+        req.params.propertyId,
+        result.check as never,
+        { journeyId: payload.guidanceJourneyId, stepKey: payload.guidanceStepKey ?? null, signalIntentFamily: payload.guidanceSignalIntentFamily ?? null },
+        userId,
+      );
+    }
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.TOOL_USED,

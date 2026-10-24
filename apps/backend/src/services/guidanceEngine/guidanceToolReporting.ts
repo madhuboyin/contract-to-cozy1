@@ -174,3 +174,71 @@ export async function reportDoNothingRun(
     return false;
   }
 }
+
+// ── Service Price Radar ─────────────────────────────────────────────────────────────────────────────────────────
+
+export type ServicePriceCheckReportRow = {
+  id: string;
+  serviceCategory?: string | null;
+  quoteAmount?: number | null;
+  quoteCurrency?: string | null;
+  verdict?: string | null;
+  expectedLow?: number | null;
+  expectedHigh?: number | null;
+  confidenceScore?: number | null;
+};
+
+/**
+ * The completion a saved price check reports for the journey's `validate_price` step. The shape is what guidanceDerivedData reads for this tool
+ * (fairPriceMin/Max, currency, confidenceScore). Desktop passes the journey and step the page sent; Ask passes the step it was launched from.
+ */
+export function buildServicePriceCheckCompletion(
+  propertyId: string,
+  check: ServicePriceCheckReportRow,
+  target: { journeyId?: string | null; stepKey?: string | null; signalIntentFamily?: string | null },
+) {
+  const stepKey = target.stepKey ?? 'validate_price';
+  return {
+    propertyId,
+    journeyId: target.journeyId ?? null,
+    signalIntentFamily: target.signalIntentFamily?.trim().toLowerCase() || 'lifecycle_end_or_past_life',
+    issueDomain: 'ASSET_LIFECYCLE' as const,
+    sourceToolKey: 'service-price-radar',
+    sourceEntityType: 'SERVICE_RADAR_CHECK',
+    sourceEntityId: check.id,
+    stepKey,
+    status: 'COMPLETED' as const,
+    dedupeKey: `service-price-radar:${propertyId}:${check.id}:${stepKey}`,
+    producedData: {
+      proofType: 'price_check',
+      proofId: check.id,
+      checkId: check.id,
+      serviceCategory: check.serviceCategory ?? null,
+      quoteAmount: check.quoteAmount ?? null,
+      currency: check.quoteCurrency ?? 'USD',
+      verdict: check.verdict ?? null,
+      fairPriceMin: check.expectedLow ?? null,
+      fairPriceMax: check.expectedHigh ?? null,
+      confidenceScore: check.confidenceScore ?? null,
+    },
+  };
+}
+
+/** Reports a saved price check to the guidance engine. Never throws; returns whether the report was recorded. */
+export async function reportServicePriceCheck(
+  propertyId: string,
+  check: ServicePriceCheckReportRow,
+  target: { journeyId?: string | null; stepKey?: string | null; signalIntentFamily?: string | null },
+  actorUserId?: string | null,
+): Promise<boolean> {
+  try {
+    await guidanceJourneyService.recordToolCompletion({
+      ...buildServicePriceCheckCompletion(propertyId, check, target),
+      ...(actorUserId ? { actorUserId } : {}),
+    });
+    return true;
+  } catch (guidanceError) {
+    logger.warn({ guidanceError, checkId: check.id }, '[GUIDANCE] price check completion report failed');
+    return false;
+  }
+}

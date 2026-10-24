@@ -250,11 +250,12 @@ test('a Home Action tied to a journey continues it in Ask; a more specific answe
 
 // Phase 2, first slice: the recalls steps a recall write actually reports.
 const { ASK_GUIDANCE_IN_ASK_STEPS } = require('../../src/services/ask/askGuidanceStepHandlers.ts');
-const { buildRecallMatchCompletion, buildDoNothingRunCompletion } = require('../../src/services/guidanceEngine/guidanceToolReporting.ts');
+const { buildRecallMatchCompletion, buildDoNothingRunCompletion, buildServicePriceCheckCompletion } = require('../../src/services/guidanceEngine/guidanceToolReporting.ts');
 
 test('IN_ASK steps are exactly the steps a recall write or a do-nothing run reports, and each operation exists', () => {
   const reported = new Set([
     ...['CONFIRM', 'DISMISS', 'RESOLVE'].map((a) => `recalls:${buildRecallMatchCompletion('p1', a, { id: 'm1' }).stepKey}`),
+    ...[buildServicePriceCheckCompletion('p1', { id: 'c1' }, {})].map((done) => `${done.sourceToolKey}:${done.stepKey}`),
     ...['compare_action_options', 'model_cost_of_delay'].map((stepKey) => { const done = buildDoNothingRunCompletion('p1', { id: 'r1' }, { stepKey }); return `${done.sourceToolKey}:${done.stepKey}`; }),
   ]);
   assert.deepEqual(new Set(Object.keys(ASK_GUIDANCE_IN_ASK_STEPS)), reported);

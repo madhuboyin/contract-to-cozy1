@@ -1121,7 +1121,7 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     const guidanceStepId = typeof storedParameters.guidanceStepId === 'string' ? storedParameters.guidanceStepId : null;
     result = simulation
       ? await doNothingRunResult(userId, execution.propertyId, answer.data as ReturnType<typeof DoNothingRunInputSchema.parse>, sourceExecutionId, guidanceStepId)
-      : await servicePriceCheckResult(userId, execution.propertyId, answer.data as ReturnType<typeof ServicePriceCheckInputSchema.parse>, sourceExecutionId);
+      : await servicePriceCheckResult(userId, execution.propertyId, answer.data as ReturnType<typeof ServicePriceCheckInputSchema.parse>, sourceExecutionId, guidanceStepId);
     captureId = input.idempotencyKey;
     capturedContextVersion = currentVersion;
     canonicalOwner = simulation ? 'DoNothingSimulationRun' : 'ServiceRadarCheck';

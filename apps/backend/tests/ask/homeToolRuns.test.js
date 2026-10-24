@@ -249,7 +249,7 @@ test('do-nothing from a journey step: a failed report never fails the run and th
   stepRow = journeyStep(); recordFails = true;
   const failed = await confirm('DO_NOTHING_SIMULATION_RUN', card.parameters);
   assert.equal(failed.result.status, 'COMPLETED');
-  assert.match(failed.result.blocks[0].details.find((detail) => detail.label === 'Guided journey').value, /simulation is saved, but the journey step could not be updated/);
+  assert.match(failed.result.blocks[0].details.find((detail) => detail.label === 'Guided journey').value, /is saved, but the journey step could not be updated/);
   for (const stale of [null, journeyStep({ toolKey: 'recalls' }), journeyStep({ status: 'SKIPPED' }), journeyStep({ journey: { id: 'j1', status: 'DISMISSED', primarySignal: null } })]) {
     stepRow = stale; recordFails = false; calls.guidance.length = 0;
     const result = await confirm('DO_NOTHING_SIMULATION_RUN', card.parameters);
@@ -337,3 +337,37 @@ test('price check: execution re-checks the primary-holder test and the input, an
   assert.equal(calls.createCheck.length, 0);
   await assert.rejects(confirm('SERVICE_PRICE_CHECK_RUN', { servicePriceCheck: { serviceCategory: 'INSURANCE', quoteAmount: 10 } }), (error) => error.code === 'ASK_CONFIRMATION_NOT_ACTIVE');
 });
+
+// ── Guided journey: a quote check started from a journey's step is reported to that step, as the page's check would be ──
+const priceStep = (overrides = {}) => ({ stepKey: 'validate_price', toolKey: 'service-price-radar', status: 'PENDING', journey: { id: 'j1', status: 'ACTIVE', primarySignal: { signalIntentFamily: 'lifecycle_end_or_past_life' } }, ...overrides });
+const priceLaunch = { surface: 'ASK_WORKSPACE', operationId: 'SERVICE_PRICE_CHECK_RUN', sourceExecutionId: 'source-1', entityType: 'GUIDANCE_STEP', entityId: 'step-p' };
+
+test('price check from a journey step: the step rides through the form and review, and confirming records the saved check as proof', async () => {
+  stepRow = priceStep();
+  const form = await start('SERVICE_PRICE_CHECK_RUN', SERVICE_PRICE_CHECK_MESSAGE, priceLaunch);
+  assert.deepEqual([form.parameters.sourceExecutionId, form.parameters.guidanceStepId], ['source-1', 'step-p']);
+  const card = await servicePriceCheckResult('u1', 'p1', ServicePriceCheckInputSchema.parse({ serviceCategory: 'PLUMBING', quoteAmount: '5000' }), 'source-1', 'step-p');
+  assert.equal(card.parameters.guidanceStepId, 'step-p');
+  assert.equal(calls.guidance.length, 0, 'nothing is reported before the homeowner confirms');
+  const { result } = await confirm('SERVICE_PRICE_CHECK_RUN', card.parameters);
+  const report = calls.guidance.find((entry) => entry[0] === 'record')[1];
+  assert.deepEqual({ j: report.journeyId, s: report.stepKey, tool: report.sourceToolKey, proof: report.producedData.proofType, id: report.producedData.proofId, min: report.producedData.fairPriceMin, max: report.producedData.fairPriceMax, actor: report.actorUserId },
+    { j: 'j1', s: 'validate_price', tool: 'service-price-radar', proof: 'price_check', id: 'check-1', min: 4000, max: 6000, actor: 'u1' });
+  assert.match(report.dedupeKey, /^service-price-radar:p1:check-1:/);
+  assert.deepEqual(result.blocks[0].details.find((detail) => detail.label === 'Guided journey'), { label: 'Guided journey', value: 'This step is recorded as done' });
+});
+
+test('price check from a journey step: a failed report never fails the check; another tool\'s step or a finished journey is never reported', async () => {
+  const card = await servicePriceCheckResult('u1', 'p1', ServicePriceCheckInputSchema.parse({ serviceCategory: 'PLUMBING', quoteAmount: '5000' }), 'source-1', 'step-p');
+  stepRow = priceStep(); recordFails = true;
+  const failed = await confirm('SERVICE_PRICE_CHECK_RUN', card.parameters);
+  assert.equal(failed.result.status, 'COMPLETED');
+  assert.match(failed.result.blocks[0].details.find((detail) => detail.label === 'Guided journey').value, /is saved, but the journey step could not be updated/);
+  for (const stale of [null, priceStep({ toolKey: 'do-nothing-simulator' }), priceStep({ status: 'SKIPPED' }), priceStep({ journey: { id: 'j1', status: 'DISMISSED', primarySignal: null } })]) {
+    stepRow = stale; recordFails = false; calls.guidance.length = 0;
+    const result = await confirm('SERVICE_PRICE_CHECK_RUN', card.parameters);
+    assert.equal(calls.guidance.some((entry) => entry[0] === 'record'), false);
+    assert.equal(result.result.blocks[0].details.some((detail) => detail.label === 'Guided journey'), false);
+  }
+});
+
