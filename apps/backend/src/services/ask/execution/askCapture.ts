@@ -1118,8 +1118,9 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
       ? execution.parametersJson as Record<string, unknown>
       : {};
     const sourceExecutionId = typeof storedParameters.sourceExecutionId === 'string' ? storedParameters.sourceExecutionId : null;
+    const guidanceStepId = typeof storedParameters.guidanceStepId === 'string' ? storedParameters.guidanceStepId : null;
     result = simulation
-      ? await doNothingRunResult(userId, execution.propertyId, answer.data as ReturnType<typeof DoNothingRunInputSchema.parse>, sourceExecutionId)
+      ? await doNothingRunResult(userId, execution.propertyId, answer.data as ReturnType<typeof DoNothingRunInputSchema.parse>, sourceExecutionId, guidanceStepId)
       : await servicePriceCheckResult(userId, execution.propertyId, answer.data as ReturnType<typeof ServicePriceCheckInputSchema.parse>, sourceExecutionId);
     captureId = input.idempotencyKey;
     capturedContextVersion = currentVersion;

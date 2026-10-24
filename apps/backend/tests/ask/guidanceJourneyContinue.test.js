@@ -75,28 +75,28 @@ test.afterEach(() => {
 const launch = (entityId = 'j1') => ({ surface: 'ASK_WORKSPACE', entityType: 'GUIDANCE_JOURNEY', entityId, operationId: 'GUIDANCE_JOURNEY_CONTINUE' });
 const invoke = (launchContext) => capabilityInvoke('GUIDANCE_JOURNEY_CONTINUE', { userId: 'u1', propertyId: 'p1', message: 'Continue this guided journey.', launchContext }, { propertyAccess: { role: 'VIEWER', userId: 'u1', propertyId: 'p1' } });
 // The summary's actions without the Phase 3 dismiss action (offered to contributors on open journeys).
-const primaryIds = (result) => block(result, 'guidance-journey-summary').actions.map((a) => a.id).filter((id) => id !== 'dismiss-guided-journey');
+const primaryIds = (result) => workspace(result).actions.map((a) => a.id).filter((id) => !['dismiss-guided-journey', 'skip-guided-journey-step'].includes(id));
 const block = (result, id) => result.blocks.find((candidate) => candidate.id === id);
+const workspace = (result) => block(result, 'guidance-journey-workspace');
+const fact = (result, label) => workspace(result).main.facts.find((entry) => entry.label === label)?.value;
 
 test('reads the named journey without AI advice, behind the viewer floor, and shows progress, current step and the steps by status', async () => {
   const result = await invoke(launch());
   assert.deepEqual(calls[0], ['journey', 'p1', 'j1', null, { includeAIAdvice: false }]);
   assert.equal(result.status, 'ANSWERED');
   assert.equal(result.reasonCode, 'GUIDANCE_JOURNEY_READY');
-  const summary = block(result, 'guidance-journey-summary');
-  assert.equal(summary.title, 'Water heater: Aging System');
-  assert.match(summary.body, /1 of 3 steps done\. Current step: Step b\./);
-  const sections = block(result, 'guidance-journey-steps').sections;
-  assert.deepEqual(sections.map((s) => [s.title, s.items.map((i) => i.title)]), [['Still to do', ['Step b', 'Step c']], ['Done', ['Step a']]]);
-  const current = sections[0].items[0];
-  assert.equal(current.description, 'Compare what the policy covers.');
-  assert.ok(current.meta.includes('Current step'));
-  assert.ok(current.meta.some((line) => /not currently available in Ask/.test(line)), 'a NAVIGATE step says why it is not completed in Ask');
-  // Ask links to no Guidance Overview page (owner decision, 2026-10-10): no step links, and the summary offers no page action.
-  assert.equal(current.href, null);
-  assert.equal(sections[0].items[1].href, null);
-  assert.match(summary.body, /completing it is not currently available in Ask/);
-  assert.equal(summary.actions.some((a) => a.id === 'open-guidance-overview'), false);
+  const guide = workspace(result);
+  assert.equal(guide.type, 'TASK_GUIDE');
+  assert.equal(guide.title, 'Water heater: Aging System');
+  assert.match(guide.summary, /Next: Step b\./);
+  assert.deepEqual(guide.progress && { current: guide.progress.current, total: guide.progress.total, completed: guide.progress.completed, label: guide.progress.label }, { current: 2, total: 3, completed: 1, label: 'Step 2 of 3 \u00b7 33% done' });
+  // One ordered rail (no still-to-do / done buckets), with exactly one current step.
+  assert.deepEqual(guide.outline.map((entry) => [entry.title, entry.state]), [['Step a', 'DONE'], ['Step b', 'CURRENT'], ['Step c', 'UPCOMING']]);
+  assert.equal(guide.main.body, 'Compare what the policy covers.');
+  assert.match(fact(result, 'In Ask'), /Not yet/, 'a NAVIGATE step says it is not completed in Ask');
+  assert.equal(result.blocks.some((b) => b.type === 'GROUPED_LIST'), false, 'no generic list');
+  // Ask links to no Guidance Overview page (owner decision, 2026-10-10): the workspace offers no page action.
+  assert.equal(guide.actions.some((a) => a.id === 'open-guidance-overview' || a.href), false);
   assert.equal(JSON.stringify(result).includes('/dashboard/'), false);
 });
 
@@ -104,7 +104,7 @@ test('a BRANCHED journey is followed to its live child and says so', async () =>
   stored = journey({ id: 'child' });
   const result = await invoke(launch('parent'));
   assert.equal(result.reasonCode, 'GUIDANCE_JOURNEY_BRANCH_FOLLOWED');
-  assert.match(block(result, 'guidance-journey-summary').body, /branched from an earlier one/);
+  assert.match(workspace(result).summary, /branched from an earlier one/);
   assert.equal(JSON.stringify(result).includes('/dashboard/'), false);
 });
 
@@ -146,7 +146,8 @@ test('step governance, the execution guard and missing details are all shown in 
   for (const text of ['A licensed plumber should do this.', 'Shut off the water.', 'Call emergency services for a gas smell.', 'not available yet: Finish the inspection first.', 'Install Year']) {
     assert.ok(boundary.body.includes(text), text);
   }
-  assert.ok(block(result, 'guidance-journey-steps').sections[0].items[0].meta.some((line) => /external flow/.test(line)));
+  assert.equal(workspace(result).main.facts.find((entry) => entry.label === 'Not available yet').value, 'Finish the inspection first.');
+  assert.match(workspace(result).chips[0].label, /Add 1 detail to continue/);
   // A non-execution current step never calls the guard.
   calls.length = 0;
   stored = journey();
@@ -163,18 +164,17 @@ test('evidence is labelled verified, reported by you, or recorded by the tool, a
     evidence('e4', { status: 'REJECTED' }),
     evidence('e5', { status: 'SUPERSEDED' }),
   ] }), 'p1', { requestedJourneyId: 'j1' });
-  const items = block(result, 'guidance-journey-evidence').items;
-  assert.deepEqual(items.map((i) => i.source), ['Verified · Recalls', 'Reported by you, not verified · Recalls', 'Recorded by the tool · Recalls']);
-  assert.equal(items[0].label, 'Step a: Recall Confirmation');
-  assert.equal(block(guidanceJourneyContinuation(journey(), 'p1', { requestedJourneyId: 'j1' }), 'guidance-journey-evidence'), undefined, 'no evidence block when none is recorded');
+  const rows = workspace(result).history;
+  assert.deepEqual(rows.map((row) => row.value), ['Verified', 'Reported by you', 'Recorded by the tool']);
+  assert.equal(rows[0].label, 'Step a: Recall Confirmation');
+  assert.deepEqual(workspace(guidanceJourneyContinuation(journey(), 'p1', { requestedJourneyId: 'j1' })).history, [], 'no recorded activity when none is recorded');
 });
 
 test('a blocked current step shows its reason and a cautionary tone', () => {
   const result = guidanceJourneyContinuation(journey({ steps: [step('a', 'COMPLETED', 1), step('b', 'BLOCKED', 2, { blockedReason: 'Add your renewal date first' })] }), 'p1', { requestedJourneyId: 'j1' });
-  const summary = block(result, 'guidance-journey-summary');
-  assert.equal(summary.tone, 'CAUTION');
-  assert.match(summary.body, /Blocked: Add your renewal date first/);
-  assert.deepEqual(block(result, 'guidance-journey-steps').collection, { sourceTotal: 2, fetchedCount: 2, deliveredCount: 2, nextPageAvailable: false, deliveryTruncated: false });
+  assert.match(workspace(result).summary, /Blocked: Add your renewal date first/);
+  assert.equal(fact(result, 'Blocked'), 'Add your renewal date first');
+  assert.equal(workspace(result).actions.some((a) => a.id === 'continue-step-in-ask'), false, 'a blocked step offers no way to do it');
 });
 
 test('guard targets follow the execution guard service\'s own step matching', () => {
@@ -191,7 +191,7 @@ test('every block survives the answer-trust validator and the page link the acti
   const result = { ...raw, parameters: { answerTrustEvidence: { schemaVersion: '1.0', sources: [{ sourceId: 'guidance-overview.continue', operationId: 'GUIDANCE_JOURNEY_CONTINUE', status: 'COMPLETE', scope: 'FULL', freshness: 'CURRENT', observedAt: '2026-09-30T00:00:00.000Z' }] } } };
   const { result: validated } = validateAskAnswerTrust({ question: 'Continue this guided journey.', operationId: 'GUIDANCE_JOURNEY_CONTINUE', result, propertyId: 'p1' });
   assert.deepEqual(validated.blocks.map((b) => b.id), result.blocks.map((b) => b.id));
-  assert.deepEqual(block(validated, 'guidance-journey-summary').actions.map((a) => a.id), ['dismiss-guided-journey']);
+  assert.deepEqual(workspace(validated).actions.map((a) => a.id), ['skip-guided-journey-step', 'dismiss-guided-journey']);
 });
 
 test('every tool key the template registry launches is classified, and tool keys stay NAVIGATE (only named steps are IN_ASK)', () => {
@@ -216,7 +216,7 @@ test('each journey in the list offers the in-Ask read and links to no desktop pa
   const view = { journeys: [{ id: 'j1', status: 'ACTIVE', issueDomain: 'ASSET_LIFECYCLE', executionReadiness: 'READY', primarySignalId: 's', primarySignal: { signalIntentFamily: 'coverage_gap' }, inventoryItem: { name: 'Roof' }, steps: [step('a', 'PENDING', 1)] }], next: [] };
   const item = guidanceJourneysFromView(view, new Set(), 'p1').blocks.find((b) => b.type === 'GROUPED_LIST').sections[0].items[0];
   assert.equal(item.entityType, 'GUIDANCE_JOURNEY');
-  assert.deepEqual(item.actions, [{ id: 'continue-guided-journey', label: 'See this journey here', message: 'Continue this guided journey.', style: 'SECONDARY', interactionType: 'CONVERSATION_CONTINUE', operationId: 'GUIDANCE_JOURNEY_CONTINUE' }]);
+  assert.deepEqual(item.actions, [{ id: 'continue-guided-journey', label: 'Open journey', message: 'Continue this guided journey.', style: 'SECONDARY', interactionType: 'CONVERSATION_CONTINUE', operationId: 'GUIDANCE_JOURNEY_CONTINUE' }]);
   assert.equal(item.href, null);
 });
 
@@ -246,10 +246,13 @@ test('a Home Action tied to a journey continues it in Ask; a more specific answe
 
 // Phase 2, first slice: the recalls steps a recall write actually reports.
 const { ASK_GUIDANCE_IN_ASK_STEPS } = require('../../src/services/ask/askGuidanceStepHandlers.ts');
-const { buildRecallMatchCompletion } = require('../../src/services/guidanceEngine/guidanceToolReporting.ts');
+const { buildRecallMatchCompletion, buildDoNothingRunCompletion } = require('../../src/services/guidanceEngine/guidanceToolReporting.ts');
 
-test('IN_ASK steps are exactly the steps the recall write reports, and each operation exists', () => {
-  const reported = new Set(['CONFIRM', 'DISMISS', 'RESOLVE'].map((a) => `recalls:${buildRecallMatchCompletion('p1', a, { id: 'm1' }).stepKey}`));
+test('IN_ASK steps are exactly the steps a recall write or a do-nothing run reports, and each operation exists', () => {
+  const reported = new Set([
+    ...['CONFIRM', 'DISMISS', 'RESOLVE'].map((a) => `recalls:${buildRecallMatchCompletion('p1', a, { id: 'm1' }).stepKey}`),
+    ...['compare_action_options', 'model_cost_of_delay'].map((stepKey) => { const done = buildDoNothingRunCompletion('p1', { id: 'r1' }, { stepKey }); return `${done.sourceToolKey}:${done.stepKey}`; }),
+  ]);
   assert.deepEqual(new Set(Object.keys(ASK_GUIDANCE_IN_ASK_STEPS)), reported);
   for (const [key, entry] of Object.entries(ASK_GUIDANCE_IN_ASK_STEPS)) {
     assert.ok(ASK_OPERATION_DEFINITIONS[entry.operationId], `${key}: unknown operation`);
@@ -267,11 +270,12 @@ test('a current recall step offers the in-Ask review as the primary action; bloc
   const recallStep = (status, overrides = {}) => step('safety_alert', status, 1, { toolKey: 'recalls', ...overrides });
   stored = journey({ currentStepKey: 'safety_alert', steps: [recallStep('IN_PROGRESS')] });
   const result = await invoke(launch());
-  const summaryActions = block(result, 'guidance-journey-summary').actions;
+  const summaryActions = workspace(result).actions;
   const [primary] = summaryActions;
   assert.deepEqual({ id: primary.id, t: primary.interactionType, o: primary.operationId, m: primary.message, s: primary.style }, { id: 'continue-step-in-ask', t: 'START_WORKFLOW', o: 'RECALL_REVIEW', m: 'Show my open recall matches', s: 'PRIMARY' });
   assert.equal(summaryActions.some((action) => action.id === 'open-guidance-overview'), false, 'no Guidance Overview page action');
-  assert.ok(block(result, 'guidance-journey-steps').sections[0].items[0].meta.some((line) => /it is recorded on this journey\./.test(line)));
+  assert.match(fact(result, 'In Ask'), /^Yes/);
+  assert.match(fact(result, 'Records'), /recall match is recorded/);
 
   stored = journey({ currentStepKey: 'safety_alert', steps: [recallStep('BLOCKED', { blockedReason: 'Wait' })] });
   assert.deepEqual(primaryIds(await invoke(launch())), []);
@@ -280,7 +284,7 @@ test('a current recall step offers the in-Ask review as the primary action; bloc
   guardResult = { blocked: true, blockedReason: 'Confirm the match first.' };
   assert.deepEqual(primaryIds(await invoke(launch())), []);
   guardResult = { blocked: false, blockedReason: null };
-  assert.equal(block(await invoke(launch()), 'guidance-journey-summary').actions[0].id, 'continue-step-in-ask');
+  assert.equal(workspace(await invoke(launch())).actions[0].id, 'continue-step-in-ask');
 
   stored = journey();
   assert.deepEqual(primaryIds(await invoke(launch())), []);
@@ -291,7 +295,7 @@ test('the in-Ask action survives the answer-trust validator', async () => {
   const raw = await invoke(launch());
   const result = { ...raw, parameters: { answerTrustEvidence: { schemaVersion: '1.0', sources: [{ sourceId: 'guidance-overview.continue', operationId: 'GUIDANCE_JOURNEY_CONTINUE', status: 'COMPLETE', scope: 'FULL', freshness: 'CURRENT', observedAt: '2026-09-30T00:00:00.000Z' }] } } };
   const { result: validated } = validateAskAnswerTrust({ question: 'Continue this guided journey.', operationId: 'GUIDANCE_JOURNEY_CONTINUE', result, propertyId: 'p1' });
-  assert.deepEqual(block(validated, 'guidance-journey-summary').actions.map((a) => a.id), ['continue-step-in-ask', 'dismiss-guided-journey']);
+  assert.deepEqual(workspace(validated).actions.map((a) => a.id), ['continue-step-in-ask', 'skip-guided-journey-step', 'dismiss-guided-journey']);
 });
 
 // ───────────────────────────── Phase 3: skip a step, dismiss a journey ─────────────────────────────
@@ -406,24 +410,23 @@ test('dismiss: confirm-gated, says it cannot be reopened, idempotent, and stale 
 
 test('the continuation view offers skip on the current step only when policy allows, and dismiss only to contributors on open journeys', async () => {
   const withStep = (stepKey, status = 'IN_PROGRESS') => journey({ journeyTypeKey: 'asset_lifecycle_resolution', currentStepKey: stepKey, steps: [step(stepKey, status, 1, { toolKey: 'coverage-intelligence' })] });
-  const items = (result) => block(result, 'guidance-journey-steps').sections.flatMap((s) => s.items);
+  const skipOf = (result) => workspace(result).actions.find((a) => a.id === 'skip-guided-journey-step');
   stored = withStep('repair_replace_decision');
   let result = await invoke(launch());
-  const current = items(result)[0];
-  assert.equal(current.entityType, 'GUIDANCE_STEP');
-  assert.deepEqual(current.actions.map((a) => [a.id, a.interactionType, a.operationId, a.message]), [['skip-guided-journey-step', 'MUTATE_RECORD', 'GUIDANCE_STEP_SKIP', GUIDANCE_STEP_SKIP_MESSAGE]]);
-  const dismiss = block(result, 'guidance-journey-summary').actions.find((a) => a.id === 'dismiss-guided-journey');
-  assert.deepEqual({ t: dismiss.interactionType, o: dismiss.operationId, et: dismiss.entityType, ei: dismiss.entityId, m: dismiss.message }, { t: 'START_WORKFLOW', o: 'GUIDANCE_JOURNEY_DISMISS', et: 'GUIDANCE_JOURNEY', ei: 'j1', m: GUIDANCE_JOURNEY_DISMISS_MESSAGE });
+  const skip = skipOf(result);
+  assert.deepEqual({ t: skip.interactionType, o: skip.operationId, et: skip.entityType, ei: skip.entityId, m: skip.message, s: skip.style }, { t: 'START_WORKFLOW', o: 'GUIDANCE_STEP_SKIP', et: 'GUIDANCE_STEP', ei: 'id-repair_replace_decision', m: GUIDANCE_STEP_SKIP_MESSAGE, s: 'QUIET' });
+  const dismiss = workspace(result).actions.find((a) => a.id === 'dismiss-guided-journey');
+  assert.deepEqual({ t: dismiss.interactionType, o: dismiss.operationId, et: dismiss.entityType, ei: dismiss.entityId, m: dismiss.message, s: dismiss.style }, { t: 'START_WORKFLOW', o: 'GUIDANCE_JOURNEY_DISMISS', et: 'GUIDANCE_JOURNEY', ei: 'j1', m: GUIDANCE_JOURNEY_DISMISS_MESSAGE, s: 'QUIET' });
 
   stored = withStep('check_coverage');
-  assert.equal(items(await invoke(launch()))[0].actions, undefined, 'a DISALLOWED step is not offered for skipping');
+  assert.equal(skipOf(await invoke(launch())), undefined, 'a DISALLOWED step is not offered for skipping');
   stored = journey({ status: 'COMPLETED' });
   assert.equal(block(await invoke(launch()), 'guidance-journey-summary').actions.some((a) => a.id === 'dismiss-guided-journey'), false);
   stored = withStep('repair_replace_decision');
   accessRole = 'VIEWER';
   result = await invoke(launch());
-  assert.equal(items(result)[0].actions, undefined, 'viewers are not offered the write');
-  assert.equal(block(result, 'guidance-journey-summary').actions.some((a) => a.id === 'dismiss-guided-journey'), false);
+  assert.equal(skipOf(result), undefined, 'viewers are not offered the write');
+  assert.equal(workspace(result).actions.some((a) => a.id === 'dismiss-guided-journey'), false);
 });
 
 test('the registry facts: both writes are non-routable, contributor-floor, confirmation-gated and owned by guidance-overview', () => {

@@ -10,6 +10,8 @@
 // A test requires every tool key used by the template registry to be classified, so a new template step cannot
 // silently default.
 
+import { DO_NOTHING_RUN_MESSAGE } from './support/homeToolRunConstants';
+
 export type AskGuidanceStepMode = 'IN_ASK' | 'INLINE_CAPTURE' | 'NAVIGATE';
 
 const NOT_YET = 'Ask does not complete this step with recorded proof yet, so completing it is not currently available in Ask.';
@@ -50,16 +52,31 @@ export const ASK_GUIDANCE_STEP_TOOL_MODES: Readonly<Record<string, { mode: AskGu
 // has three steps but only two are reported by a recall write (guidanceToolReporting.buildRecallMatchCompletion:
 // `safety_alert` on confirm, `recall_resolution` on dismiss and resolve); `review_remedy_instructions` is reported by
 // nothing in Ask, so it stays NAVIGATE. A test ties this table to the reporting helper so they cannot drift.
-export type AskGuidanceInAskStep = { operationId: string; message: string; label: string; reason: string };
+// `outcome` is what finishing the step records, said before the homeowner starts. `carriesStep` sends the step with the launch, for an operation that
+// reports the step itself (the do-nothing run); the recall review finds its own matches and needs no step.
+export type AskGuidanceInAskStep = { operationId: string; message: string; label: string; reason: string; outcome: string; carriesStep?: boolean };
 
 export const ASK_GUIDANCE_IN_ASK_STEPS: Readonly<Record<string, AskGuidanceInAskStep>> = Object.freeze({
   'recalls:safety_alert': {
     operationId: 'RECALL_REVIEW', message: 'Show my open recall matches', label: 'Review recall matches here',
     reason: 'You can confirm the recall match here; it is recorded on this journey.',
+    outcome: 'Your confirmation of the recall match is recorded as this step\'s proof.',
   },
   'recalls:recall_resolution': {
     operationId: 'RECALL_REVIEW', message: 'Show my open recall matches', label: 'Review recall matches here',
     reason: 'You can dismiss or resolve the recall match here; it is recorded on this journey.',
+    outcome: 'Dismissing or resolving the recall match is recorded as this step\'s proof.',
+  },
+  // The Do-Nothing Simulator's confirmed run is the same write the page makes, and reports the step it was started from (see reportDoNothingRun).
+  'do-nothing-simulator:compare_action_options': {
+    operationId: 'DO_NOTHING_SIMULATION_RUN', message: DO_NOTHING_RUN_MESSAGE, label: 'Run the simulation', carriesStep: true,
+    reason: 'You can run the simulation here; the result is recorded on this journey.',
+    outcome: 'A saved simulation run is recorded as this step\'s proof.',
+  },
+  'do-nothing-simulator:model_cost_of_delay': {
+    operationId: 'DO_NOTHING_SIMULATION_RUN', message: DO_NOTHING_RUN_MESSAGE, label: 'Run the simulation', carriesStep: true,
+    reason: 'You can run the simulation here; the result is recorded on this journey.',
+    outcome: 'A saved simulation run is recorded as this step\'s proof.',
   },
 });
 

@@ -47,7 +47,7 @@ export const GUIDANCE_OVERVIEW_SKILL = Object.freeze({
     reversibility: 'PARTIALLY_REVERSIBLE',
   },
   authorizationFloor: 'VIEWER',
-  allowedResultBlocks: ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'EMPTY_STATE', 'BOUNDARY', 'WORKFLOW_PROGRESS'],
+  allowedResultBlocks: ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'EMPTY_STATE', 'BOUNDARY', 'WORKFLOW_PROGRESS', 'TASK_GUIDE'],
   dependencies: [
     { type: 'CONTEXT_PROVIDER', id: PROPERTY_IDENTITY_CONTEXT_PROVIDER.id, version: PROPERTY_IDENTITY_CONTEXT_PROVIDER.version, required: true },
     { type: 'CONTEXT_PROVIDER', id: PROPERTY_JOURNEY_CONTEXT_PROVIDER.id, version: PROPERTY_JOURNEY_CONTEXT_PROVIDER.version, required: false },

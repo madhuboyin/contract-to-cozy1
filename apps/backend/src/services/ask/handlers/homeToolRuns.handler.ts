@@ -24,6 +24,8 @@ import { receiptFollowUpAction } from '../support/receiptFollowUps';
 import { enumLabel, readableCode } from '../askFormatting';
 import { HomeHabitCoachService } from '../../homeHabitCoach/homeHabitCoachService';
 import { DoNothingSimulatorService } from '../../doNothingSimulator.service';
+import { reportDoNothingRun } from '../../guidanceEngine/guidanceToolReporting';
+import { getGuidanceModels } from '../../guidanceEngine/guidanceTypes';
 import { ServicePriceRadarService } from '../../servicePriceRadar.service';
 import { assertProjectComplianceApplicable } from '../../projectCompliance/context';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsFeature, AnalyticsModule } from '../../analytics';
@@ -160,7 +162,10 @@ export async function doNothingRunContextVersion(userId: string, propertyId: str
   return doNothingVersion(propertyId, await savedScenarios(userId, propertyId));
 }
 
-export async function doNothingRunResult(userId: string, propertyId: string, supplied: DoNothingInput | undefined, sourceExecutionId: string | null): Promise<AskOperationResult> {
+export async function doNothingRunResult(userId: string, propertyId: string, supplied: DoNothingInput | undefined, sourceExecutionId: string | null, guidanceStepId: string | null = null): Promise<AskOperationResult> {
+  // A run started from a guided journey's current step carries that step through the capture and the confirmation; nothing here trusts it
+  // beyond naming the step, and the confirmation re-checks the step belongs to this home and is still open before it reports anything.
+  const launch = { sourceExecutionId, ...(guidanceStepId ? { guidanceStepId } : {}) };
   const access = await ensurePropertyAccess(userId, propertyId);
   if (access.role === HouseholdRole.VIEWER) return blocked('do-nothing-run-permission', 'ASK_PERMISSION_REQUIRED', 'A contributor or owner can run the simulation', 'Your role can view this home but not change it. Nothing has changed.');
   if (!(await isPrimaryAccountHolder(userId, propertyId))) return primaryHolderOnly('do-nothing-run-primary-only', 'DO_NOTHING_PRIMARY_OWNER_ONLY', 'run the simulation');
@@ -176,14 +181,14 @@ export async function doNothingRunResult(userId: string, propertyId: string, sup
   const contextVersion = doNothingVersion(propertyId, scenarios);
   if (!supplied) {
     return {
-      status: 'NEEDS_CONTEXT', reasonCode: 'DO_NOTHING_RUN_INPUT_REQUIRED', contextVersion, parameters: { sourceExecutionId },
+      status: 'NEEDS_CONTEXT', reasonCode: 'DO_NOTHING_RUN_INPUT_REQUIRED', contextVersion, parameters: launch,
       blocks: [{ type: 'SUMMARY', id: 'do-nothing-run-input', title: 'Run the do-nothing simulation', body: 'Nothing has run yet. Choose how far ahead to look, then review it before it runs.', tone: 'DEFAULT', actions: [] }],
       captureRequests: [doNothingCaptureRequest(contextVersion, scenarios)], suggestions: [],
     };
   }
   if (supplied.scenarioId && !scenarios.some((scenario) => scenario.id === supplied.scenarioId)) {
     return {
-      status: 'NEEDS_CONTEXT', reasonCode: 'DO_NOTHING_RUN_SCENARIO_UNAVAILABLE', contextVersion, parameters: { sourceExecutionId },
+      status: 'NEEDS_CONTEXT', reasonCode: 'DO_NOTHING_RUN_SCENARIO_UNAVAILABLE', contextVersion, parameters: launch,
       blocks: [{ type: 'SUMMARY', id: 'do-nothing-run-scenario-missing', title: 'That saved scenario is no longer available', body: 'Choose another scenario or none. Nothing has run.', tone: 'CAUTION', actions: [] }],
       captureRequests: [doNothingCaptureRequest(contextVersion, scenarios, { ...supplied, scenarioId: null })], suggestions: [],
     };
@@ -191,7 +196,7 @@ export async function doNothingRunResult(userId: string, propertyId: string, sup
   const expiresAt = new Date(Date.now() + CONFIRMATION_MINUTES * 60 * 1000);
   return {
     status: 'NEEDS_CONFIRMATION', reasonCode: 'DO_NOTHING_RUN_CONFIRMATION_REQUIRED', contextVersion,
-    parameters: { doNothingRun: supplied, doNothingRunContextVersion: contextVersion, sourceExecutionId, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() },
+    parameters: { doNothingRun: supplied, doNothingRunContextVersion: contextVersion, ...launch, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() },
     blocks: [{ type: 'SUMMARY', id: 'do-nothing-run-review', title: 'Review this simulation', body: 'You chose these settings. Nothing runs until you confirm.', tone: 'DEFAULT', actions: [] }],
     confirmation: {
       confirmationId: `do-nothing-run-${sha(`${propertyId}:${supplied.horizonMonths}:${supplied.scenarioId ?? 'none'}`).slice(0, 12)}-1`, version: 1,
@@ -207,9 +212,28 @@ export async function doNothingRunResult(userId: string, propertyId: string, sup
 
 registerCapabilityHandler('do-nothing-simulator.run', async (envelope) => {
   const declared = envelope.launchContext?.operationId === 'DO_NOTHING_SIMULATION_RUN' && envelope.launchContext.surface !== 'ASK_REFRESH' && envelope.message === DO_NOTHING_RUN_MESSAGE;
-  if (declared) return doNothingRunResult(envelope.userId, envelope.propertyId!, undefined, envelope.launchContext?.sourceExecutionId ?? null);
+  if (declared) return doNothingRunResult(envelope.userId, envelope.propertyId!, undefined, envelope.launchContext?.sourceExecutionId ?? null, envelope.launchContext?.entityType === 'GUIDANCE_STEP' ? envelope.launchContext.entityId ?? null : null);
   return notRoutable('do-nothing-run-not-routable', 'Use the Run simulation button', 'The simulation is run from the Run simulation button on the do-nothing answer. Nothing has changed.', 'ASK_DO_NOTHING_RUN_NOT_DIRECTLY_ROUTABLE');
 });
+
+// Reports a finished run to the journey step it was launched from, exactly as the Desktop page does. The simulation is already saved, so a step that cannot
+// be reported never fails the run: the receipt says which of the two happened. Returns the receipt line, or null when the step is not this tool's open step.
+async function reportRunToJourneyStep(userId: string, propertyId: string, stepId: string, runId: string, run: RunSummary | null): Promise<string | null> {
+  const step = await getGuidanceModels().guidanceJourneyStep.findFirst({
+    where: { id: stepId, journey: { propertyId } },
+    select: { stepKey: true, toolKey: true, status: true, journey: { select: { id: true, status: true, primarySignal: { select: { signalIntentFamily: true } } } } },
+  });
+  if (!step || step.toolKey !== 'do-nothing-simulator' || !['ACTIVE', 'NOT_STARTED'].includes(String(step.journey.status))) return null;
+  if (step.status === 'COMPLETED') return 'This step was already done';
+  if (!['PENDING', 'IN_PROGRESS'].includes(String(step.status))) return null;
+  const recorded = await reportDoNothingRun(
+    propertyId,
+    { id: runId, ...run },
+    { journeyId: step.journey.id, stepKey: step.stepKey, signalIntentFamily: step.journey.primarySignal?.signalIntentFamily ?? null },
+    userId,
+  );
+  return recorded ? 'This step is recorded as done' : 'The simulation is saved, but the journey step could not be updated. Open the journey to check it';
+}
 
 async function confirmDoNothingRun(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
   const { execution, userId, parameters } = ctx;
@@ -246,6 +270,7 @@ async function confirmDoNothingRun(ctx: ConfirmCapabilityContext): Promise<Confi
       metadataJson: { actionType: 'run_simulation', horizonMonths: input.horizonMonths, riskScoreDelta: run?.riskScoreDelta ?? null, via: 'ask' },
     });
   }
+  const journeyOutcome = typeof parameters.guidanceStepId === 'string' ? await reportRunToJourneyStep(userId, propertyId, parameters.guidanceStepId, runId, run) : null;
   const min = usdFromCents(run?.expectedCostDeltaCentsMin);
   const max = usdFromCents(run?.expectedCostDeltaCentsMax);
   const result: AskOperationResult = {
@@ -257,6 +282,7 @@ async function confirmDoNothingRun(ctx: ConfirmCapabilityContext): Promise<Confi
         { label: 'Looked ahead', value: `${run?.horizonMonths ?? input.horizonMonths} months` },
         { label: 'Added cost if nothing is done', value: min && max ? (min === max ? min : `${min} to ${max}`) : 'Not enough recorded history to estimate' },
         ...(run?.confidence ? [{ label: 'Confidence', value: readableCode(run.confidence).replace(/^\w/, (letter) => letter.toUpperCase()) }] : []),
+        ...(journeyOutcome ? [{ label: 'Guided journey', value: journeyOutcome }] : []),
       ],
       actions: [receiptFollowUpAction('DO_NOTHING')],
     }],

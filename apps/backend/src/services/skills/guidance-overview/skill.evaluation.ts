@@ -64,7 +64,7 @@ export const GUIDANCE_OVERVIEW_SKILL_EVALUATION = deepFreezeSkillPackage({
   expectedContextProviders: [PROPERTY_IDENTITY_CONTEXT_PROVIDER, PROPERTY_JOURNEY_CONTEXT_PROVIDER],
   prohibitedContextProviders: ['undeclared.financial-account'],
   expectedStatuses: ['ANSWERED', 'READY_WITH_LIMITATIONS'],
-  expectedBlockTypes: ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'EMPTY_STATE', 'BOUNDARY', 'WORKFLOW_PROGRESS'],
+  expectedBlockTypes: ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'EMPTY_STATE', 'BOUNDARY', 'WORKFLOW_PROGRESS', 'TASK_GUIDE'],
   expectedCanonicalCalls: [{ id: 'guidance-overview.journeys', version: '1.0' }, { id: 'guidance-overview.continue', version: '1.0' }, { id: 'guidance-overview.step-skip', version: '1.0' }, { id: 'guidance-overview.journey-dismiss', version: '1.0' }],
   prohibitedCanonicalCalls: ['inventory.lookup', 'intelligence-envelope.query'],
   modelDisabledCase: {

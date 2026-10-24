@@ -415,3 +415,32 @@ property, item, step and service category was generated and explicitly confirmed
   the §13 selection rule without changing its intended homeowner outcome. Nothing was built; no code changed.
 - **Effect on §14.** No step qualifies for the next IN_ASK slice, now including this one. The slice list is empty until product
   defines a step proof for a tool that actually produces the step's stated outcome.
+
+## 17. Journey workspace and the first connected step (2026-10-24)
+
+A review of the live Ask against the Desktop Guidance Overview found lifecycle parity only: list, create, open, skip and dismiss existed, but
+the journey was a generic grouped list whose current step usually said Ask could not complete it, with skip and dismiss as the only
+actions. This slice fixes the structure and proves it with one step.
+
+- **Presentation.** The active-journey continuation is one `TASK_GUIDE` block, `guidance-journey-workspace` (it replaces the summary,
+  `guidance-journey-steps` list and `guidance-journey-evidence` blocks; ended journeys still answer with a summary). Typed fields only:
+  `progress` (step N of M, percent), `outline` (the ordered rail with done / current / not started / skipped), `main` (the current step's
+  description and facts: whether Ask can do it, what finishing it records, what blocks it, which details are missing), `history` (recorded
+  proof), `chips` (readiness, or "Add N details to continue"). The client renders it as `GuidanceJourneyWorkspace.tsx`: a rail beside the
+  current-step panel on a wide screen and a horizontal strip on a phone, no Auto/List/Cards, and **Skip this step** and **Dismiss this
+  journey** (both QUIET actions with unchanged confirmations) behind a "More" menu. The list's action reads "Open journey".
+- **First connected step.** `do-nothing-simulator:compare_action_options` and `:model_cost_of_delay` are IN_ASK. The primary action runs the
+  existing `DO_NOTHING_SIMULATION_RUN` (same form, same review, same confirmation, primary-account-holder rule) with the step id as the
+  launch entity. The step id rides through the capture and review as an execution parameter; at confirmation the handler re-reads the step
+  inside this home, requires it to be this tool's open step on an open journey, and reports through
+  `guidanceToolReporting.reportDoNothingRun`, the same builder the Desktop controller now uses (one payload, one idempotency key
+  `do-nothing-simulator:{property}:{run}:{step}`). The receipt says "This step is recorded as done", "This step was already done", or, if the
+  report failed, that the simulation is saved but the journey step could not be updated. A failed report never fails the saved run. The source
+  journey refreshes in place through the existing `sourceExecutionId` reconciliation.
+- **Registry.** `GUIDANCE_JOURNEY_CONTINUE` allows `SUMMARY, TASK_GUIDE, BOUNDARY, EMPTY_STATE`; the `guidance-overview` skill declares
+  `TASK_GUIDE` (a missing skill declaration is the boot-crash class, caught by `startupRegistryValidation.test.js`); `skip-guided-journey-step`
+  joins the operation's action allowlist.
+- **Still open.** Every other step stays NAVIGATE and says so plainly. Not built: collecting the missing details inline (still stopped, see
+  section 12), in-place list-to-journey drilling (opening a journey is still a new turn), and the other 27 tool keys. Nothing here was verified
+  against a real database or in a browser.
+

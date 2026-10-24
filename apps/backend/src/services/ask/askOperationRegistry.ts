@@ -766,7 +766,7 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   HOME_BASICS_GUIDE: definition('HOME_BASICS_GUIDE', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'home-basics.guide', ['SUMMARY', 'GROUPED_LIST', 'BOUNDARY']),
   SEASONAL_HOME_CARE: definition('SEASONAL_HOME_CARE', 'STATUS_SUMMARY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'seasonal.home-care', ['SUMMARY', 'GROUPED_LIST', 'BOUNDARY', 'TASK_GUIDE']),
   SEASONAL_CHECKLIST_SETUP: definition('SEASONAL_CHECKLIST_SETUP', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'OWNER', 'seasonal.checklist-setup', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
-  GUIDANCE_JOURNEY_CONTINUE: definition('GUIDANCE_JOURNEY_CONTINUE', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'guidance-overview.continue', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'BOUNDARY', 'EMPTY_STATE']),
+  GUIDANCE_JOURNEY_CONTINUE: definition('GUIDANCE_JOURNEY_CONTINUE', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'guidance-overview.continue', ['SUMMARY', 'TASK_GUIDE', 'BOUNDARY', 'EMPTY_STATE']),
   GUIDANCE_STEP_SKIP: definition('GUIDANCE_STEP_SKIP', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'guidance-overview.step-skip', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
   GUIDANCE_JOURNEY_DISMISS: definition('GUIDANCE_JOURNEY_DISMISS', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'guidance-overview.journey-dismiss', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
   // FRD v1.63: reads listPropertyBriefs, the call GET /properties/:id/property-briefs makes for the Property Brief page.

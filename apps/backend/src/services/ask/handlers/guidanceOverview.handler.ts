@@ -98,7 +98,7 @@ export function guidanceJourneysFromView(payload: Pick<GuidancePayload, 'journey
         // Guided journey continuation Phase 1: the read of this one journey stays in Ask (it completes nothing).
         entityType: 'GUIDANCE_JOURNEY',
         actions: [{
-          id: 'continue-guided-journey', label: 'See this journey here', message: 'Continue this guided journey.', style: 'SECONDARY' as const,
+          id: 'continue-guided-journey', label: 'Open journey', message: 'Continue this guided journey.', style: 'SECONDARY' as const,
           interactionType: 'CONVERSATION_CONTINUE' as const, operationId: 'GUIDANCE_JOURNEY_CONTINUE',
         }],
       },
@@ -156,9 +156,6 @@ export const GUIDANCE_JOURNEY_DISMISS_MESSAGE = 'Dismiss this guided journey.';
 
 type ContinueGuard = { blocked: boolean; blockedReason: string | null; targetAction: string } | null;
 
-const STEP_STATUS_LABELS: Record<string, string> = {
-  COMPLETED: 'Done', IN_PROGRESS: 'In progress', PENDING: 'To do', BLOCKED: 'Blocked', SKIPPED: 'Skipped',
-};
 const ENDED_JOURNEY_TEXT: Record<string, [string, string, string]> = {
   COMPLETED: ['GUIDANCE_JOURNEY_COMPLETED', 'This guided journey is complete', 'Every required step is done. Nothing further is needed here.'],
   DISMISSED: ['GUIDANCE_JOURNEY_DISMISSED', 'This guided journey was dismissed', 'It was set aside, so Ask will not continue it. A new one can be started from your guided journeys list.'],
@@ -207,84 +204,82 @@ export function guidanceJourneyContinuation(journey: any, propertyId: string, op
   // Phase 2: a step Ask can complete with recorded proof offers the in-Ask path as the primary action (never when blocked).
   const currentInAsk = current ? askGuidanceStepMode(current.toolKey, current.stepKey).inAsk ?? null : null;
   const blocks: AskPresentationBlock[] = [];
+  const open = ['ACTIVE', 'NOT_STARTED'].includes(String(journey.status));
+  const canWrite = options.canContribute === true && open;
+  const canSkip = Boolean(current) && canWrite
+    && ['PENDING', 'IN_PROGRESS', 'BLOCKED'].includes(String(current?.status))
+    && getStepSkipPolicy(journey.journeyTypeKey ?? null, String(current?.stepKey)) !== 'DISALLOWED';
+  const unavailable = options.guard?.blocked ? options.guard.blockedReason ?? 'an earlier step is not done.' : null;
+  const completedCount = steps.filter((step) => step.status === 'COMPLETED').length;
+  const skippedCount = steps.filter((step) => step.status === 'SKIPPED').length;
+  const position = current ? steps.findIndex((step) => step.id === current.id) + 1 : steps.length;
+  const percent = steps.length ? Math.round((completedCount / steps.length) * 100) : 0;
+  const readiness = GUIDANCE_READINESS_LABELS[journey.executionReadiness];
+  const currentMode = current ? askGuidanceStepMode(current.toolKey, current.stepKey) : null;
 
-  blocks.push({
-    type: 'SUMMARY', id: 'guidance-journey-summary', title,
-    body: [
-      `${progress.completedCount} of ${progress.totalCount} steps done.`,
-      followedBranch ? 'This plan branched from an earlier one, so this is the plan now in progress.' : null,
-      current ? `Current step: ${current.label}.` : 'Every step is done or set aside.',
-      current && !currentInAsk && !blockedReason ? `Ask cannot record this step's proof yet, so completing it is not currently available in Ask.` : null,
-      blockedReason ? `Blocked: ${blockedReason}` : null,
-      GUIDANCE_READINESS_LABELS[journey.executionReadiness] ? `Readiness: ${GUIDANCE_READINESS_LABELS[journey.executionReadiness]}.` : null,
-    ].filter(Boolean).join(' '),
-    tone: blockedReason ? 'CAUTION' : 'DEFAULT', actions: currentInAsk && !blockedReason && !options.guard?.blocked
-      ? [{
-        id: 'continue-step-in-ask', label: currentInAsk.label, interactionType: 'START_WORKFLOW' as const, message: currentInAsk.message,
-        operationId: currentInAsk.operationId, style: 'PRIMARY' as const,
-      }]
-      : [],
-  });
-  if (options.canContribute === true && ['ACTIVE', 'NOT_STARTED'].includes(String(journey.status))) {
-    const summaryBlock = blocks[blocks.length - 1] as Extract<AskPresentationBlock, { type: 'SUMMARY' }>;
-    summaryBlock.actions = [...summaryBlock.actions, {
-      id: 'dismiss-guided-journey', label: 'Dismiss this journey', interactionType: 'START_WORKFLOW' as const, message: GUIDANCE_JOURNEY_DISMISS_MESSAGE,
-      operationId: 'GUIDANCE_JOURNEY_DISMISS', entityType: 'GUIDANCE_JOURNEY', entityId: journey.id, style: 'QUIET' as const,
-    }];
-  }
-
-  const skippable = (step: { stepKey: string; status: string }) => options.canContribute === true
-    && ['PENDING', 'IN_PROGRESS', 'BLOCKED'].includes(step.status)
-    && getStepSkipPolicy(journey.journeyTypeKey ?? null, step.stepKey) !== 'DISALLOWED';
-  const section = (key: string, label: string, list: typeof steps) => ({
-    id: `guidance-journey-${key}`, title: label, count: list.length,
-    items: list.map((step) => {
-      const mode = askGuidanceStepMode(step.toolKey, step.stepKey);
-      return {
-        id: step.id, title: step.label,
-        description: step.id === current?.id ? (step.description ?? null) : null,
-        meta: [
-          step.id === current?.id ? 'Current step' : null,
-          step.status === 'BLOCKED' && step.blockedReason ? `Blocked: ${step.blockedReason}` : null,
-          step.status === 'SKIPPED' && step.skippedReason ? `Skipped: ${step.skippedReason}` : null,
-          step.id === current?.id && mode.mode !== 'INLINE_CAPTURE' ? mode.reason : null,
-        ].filter((value): value is string => Boolean(value)),
-        status: STEP_STATUS_LABELS[step.status] ?? step.status,
-        href: null,
-        // Phase 3: skipping the current step, never when policy forbids it (the confirmation re-checks everything).
-        ...(step.id === current?.id && skippable(step) ? {
-          entityType: 'GUIDANCE_STEP',
-          actions: [{
-            id: 'skip-guided-journey-step', label: 'Skip this step', message: GUIDANCE_STEP_SKIP_MESSAGE, style: 'QUIET' as const,
-            interactionType: 'MUTATE_RECORD' as const, operationId: 'GUIDANCE_STEP_SKIP',
-          }],
-        } : {}),
-      };
-    }),
-  });
-  const done = steps.filter((step) => step.status === 'COMPLETED');
-  const todo = steps.filter((step) => ['IN_PROGRESS', 'BLOCKED', 'PENDING'].includes(step.status));
-  const skipped = steps.filter((step) => step.status === 'SKIPPED');
-  const stepSections = [section('todo', 'Still to do', todo), section('done', 'Done', done), section('skipped', 'Skipped', skipped)].filter((entry) => entry.items.length > 0);
-  blocks.push({
-    type: 'GROUPED_LIST', filters: [], id: 'guidance-journey-steps', title: 'Steps', description: 'In order. Steps are finished in their own tool, where the proof is recorded.',
-    sections: stepSections,
-    collection: collectionDescriptor({ sourceTotal: steps.length, fetchedCount: steps.length, sections: stepSections, nextPageAvailable: false }),
-    actions: [],
-  });
-
-  const evidence = ((journey.evidences ?? []) as any[]).map((row) => mapGuidanceEvidence(row)).filter((row) => row.status !== 'REJECTED' && row.status !== 'SUPERSEDED' && !row.invalidatedAt);
-  if (evidence.length) {
-    const stepLabel = new Map(steps.map((step) => [step.id, step.label]));
-    blocks.push({
-      type: 'EVIDENCE', id: 'guidance-journey-evidence', title: 'What has been recorded',
-      items: evidence.slice(0, 10).map((row) => ({
-        label: `${stepLabel.get(row.stepId) ?? 'Step'}: ${row.proofType ? titleCase(row.proofType) : titleCase(row.evidenceType)}`,
-        source: `${row.status === 'VERIFIED' ? 'Verified' : row.sourceType === 'USER_INPUT' ? 'Reported by you, not verified' : 'Recorded by the tool'}${row.sourceToolKey ? ` · ${titleCase(row.sourceToolKey)}` : ''}`,
-        observedAt: row.observedAt,
-      })),
+  // One purpose-built workspace instead of a summary plus a generic list: where the journey stands, the step to do now (what it is, what it needs,
+  // what finishing it records), the ordered rail, and what has been recorded. Skip and dismiss are quiet actions the client keeps behind a menu.
+  type WorkspaceBlock = Extract<AskPresentationBlock, { type: 'TASK_GUIDE' }>;
+  const actions: WorkspaceBlock['actions'] = [];
+  if (currentInAsk && !blockedReason && !options.guard?.blocked) {
+    actions.push({
+      id: 'continue-step-in-ask', label: currentInAsk.label, interactionType: 'START_WORKFLOW' as const, message: currentInAsk.message,
+      operationId: currentInAsk.operationId, style: 'PRIMARY' as const,
+      ...(currentInAsk.carriesStep && current ? { entityType: 'GUIDANCE_STEP', entityId: current.id } : {}),
     });
   }
+  if (canSkip && current) {
+    actions.push({
+      id: 'skip-guided-journey-step', label: 'Skip this step', interactionType: 'START_WORKFLOW' as const, message: GUIDANCE_STEP_SKIP_MESSAGE,
+      operationId: 'GUIDANCE_STEP_SKIP', entityType: 'GUIDANCE_STEP', entityId: current.id, style: 'QUIET' as const,
+    });
+  }
+  if (canWrite) {
+    actions.push({
+      id: 'dismiss-guided-journey', label: 'Dismiss this journey', interactionType: 'START_WORKFLOW' as const, message: GUIDANCE_JOURNEY_DISMISS_MESSAGE,
+      operationId: 'GUIDANCE_JOURNEY_DISMISS', entityType: 'GUIDANCE_JOURNEY', entityId: journey.id, style: 'QUIET' as const,
+    });
+  }
+
+  const evidenceRows = ((journey.evidences ?? []) as any[]).map((row) => mapGuidanceEvidence(row))
+    .filter((row) => row.status !== 'REJECTED' && row.status !== 'SUPERSEDED' && !row.invalidatedAt);
+  const stepLabel = new Map(steps.map((step) => [step.id, step.label]));
+  const facts = current ? [
+    { label: 'In Ask', value: currentInAsk ? 'Yes, and it is recorded on this journey' : 'Not yet. Ask cannot record this step\'s proof' },
+    ...(currentInAsk ? [{ label: 'Records', value: currentInAsk.outcome }] : []),
+    ...(blockedReason ? [{ label: 'Blocked', value: blockedReason.slice(0, 200) }] : []),
+    ...(unavailable ? [{ label: 'Not available yet', value: unavailable.slice(0, 200) }] : []),
+    ...(missing.length ? [{ label: 'Missing details', value: missing.map((key) => titleCase(key)).join(', ').slice(0, 200) }] : []),
+  ] : [];
+
+  blocks.push({
+    type: 'TASK_GUIDE', id: 'guidance-journey-workspace', title,
+    summary: [
+      followedBranch ? 'This plan branched from an earlier one, so this is the plan now in progress.' : null,
+      !current ? 'Every step is done or set aside.' : blockedReason ? `Blocked: ${blockedReason}` : `Next: ${current.label}.`,
+    ].filter(Boolean).join(' '),
+    eyebrow: ['Guided journey'], icon: journey.issueDomain === 'SAFETY' ? 'SAFETY' : 'TASK',
+    chips: [{
+      label: missing.length ? `Add ${missing.length} detail${missing.length === 1 ? '' : 's'} to continue` : readiness ?? 'In progress', kind: 'STATUS' as const,
+    }],
+    main: current ? { title: 'Current step', body: (current.description ?? current.label).slice(0, 800), facts } : null,
+    history: evidenceRows.slice(0, 5).map((row) => ({
+      label: `${stepLabel.get(row.stepId) ?? 'Step'}: ${row.proofType ? titleCase(row.proofType) : titleCase(row.evidenceType)}`.slice(0, 60),
+      value: (row.status === 'VERIFIED' ? 'Verified' : row.sourceType === 'USER_INPUT' ? 'Reported by you' : 'Recorded by the tool').slice(0, 60),
+    })),
+    notes: [],
+    actions,
+    ...(steps.length > 0 && steps.length <= 40 ? {
+      progress: {
+        current: Math.min(Math.max(position, 1), steps.length), total: steps.length, completed: completedCount, skipped: skippedCount,
+        label: current ? `Step ${position} of ${steps.length} \u00b7 ${percent}% done` : `All ${steps.length} steps done or set aside`, asOf: new Date().toISOString(),
+      },
+      outline: steps.map((step) => ({
+        stepId: step.id, title: step.label.slice(0, 160), optional: !step.isRequired,
+        state: step.status === 'COMPLETED' ? 'DONE' as const : step.status === 'SKIPPED' ? 'SKIPPED' as const : step.id === current?.id ? 'CURRENT' as const : 'UPCOMING' as const,
+      })),
+    } : {}),
+  } satisfies WorkspaceBlock);
 
   const governance = current?.governance;
   const boundaryParts = [

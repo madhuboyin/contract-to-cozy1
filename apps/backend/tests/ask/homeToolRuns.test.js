@@ -24,16 +24,18 @@ const { ServicePriceRadarService } = require('../../src/services/servicePriceRad
 const propertyAccess = require('../../src/services/propertyAccess.service.ts');
 const compliance = require('../../src/services/projectCompliance/context.ts');
 const analytics = require('../../src/services/analytics/index.ts');
+const { guidanceJourneyService } = require('../../src/services/guidanceEngine/guidanceJourney.service.ts');
 
 const realPrisma = prismaModule.prisma;
 const originals = {
   resolveAccess: propertyAccess.resolvePropertyAccess, generate: HomeHabitCoachService.prototype.generateHabits, listScenarios: DoNothingSimulatorService.prototype.listScenarios,
-  run: DoNothingSimulatorService.prototype.run, createCheck: ServicePriceRadarService.prototype.createCheck, assertCompliance: compliance.assertProjectComplianceApplicable, track: analytics.analyticsEmitter.track,
+  run: DoNothingSimulatorService.prototype.run, recordCompletion: guidanceJourneyService.recordToolCompletion, createCheck: ServicePriceRadarService.prototype.createCheck, assertCompliance: compliance.assertProjectComplianceApplicable, track: analytics.analyticsEmitter.track,
 };
-let calls; let accessRole; let primaryHolder; let coachEnabled; let aliveTemplates; let scenarios; let coverageConflict; let earlierRun; let earlierCheck; let generateResult;
+let stepRow; let recordFails; let calls; let accessRole; let primaryHolder; let coachEnabled; let aliveTemplates; let scenarios; let coverageConflict; let earlierRun; let earlierCheck; let generateResult;
 
 test.beforeEach(() => {
-  calls = { generate: [], run: [], createCheck: [], compliance: [], track: [] };
+  calls = { generate: [], run: [], createCheck: [], compliance: [], track: [], guidance: [] };
+  stepRow = null; recordFails = false;
   accessRole = 'OWNER'; primaryHolder = true; coachEnabled = null; aliveTemplates = ['t1']; coverageConflict = false; earlierRun = null; earlierCheck = null; generateResult = { created: 3, skipped: 1, details: [] };
   scenarios = [{ id: 's1', name: 'Skip a year', horizonMonths: 12 }];
   const models = {
@@ -43,6 +45,8 @@ test.beforeEach(() => {
     doNothingSimulationRun: { findFirst: async () => earlierRun },
     serviceRadarCheck: { findFirst: async () => earlierCheck },
     askExecution: { findMany: async () => [] },
+    guidanceSignal: {}, guidanceJourney: {}, guidanceJourneyEvent: {}, guidanceStepEvidence: {},
+    guidanceJourneyStep: { findFirst: async (args) => { calls.guidance.push(['lookup', args.where]); return stepRow; } },
   };
   prismaModule.prisma = new Proxy({}, {
     get(_target, model) {
@@ -68,6 +72,7 @@ test.beforeEach(() => {
   };
   compliance.assertProjectComplianceApplicable = async (...args) => { calls.compliance.push(args); return { contextVersion: 'ctx-7' }; };
   analytics.analyticsEmitter.track = (event) => { calls.track.push(event); };
+  guidanceJourneyService.recordToolCompletion = async (input) => { calls.guidance.push(['record', input]); if (recordFails) throw new Error('guidance down'); return {}; };
 });
 test.afterEach(() => {
   prismaModule.prisma = realPrisma;
@@ -78,6 +83,7 @@ test.afterEach(() => {
   ServicePriceRadarService.prototype.createCheck = originals.createCheck;
   compliance.assertProjectComplianceApplicable = originals.assertCompliance;
   analytics.analyticsEmitter.track = originals.track;
+  guidanceJourneyService.recordToolCompletion = originals.recordCompletion;
 });
 
 const declared = (operationId) => ({ surface: 'ASK_WORKSPACE', operationId, sourceExecutionId: 'source-1' });
@@ -216,6 +222,51 @@ test('do-nothing: execution re-checks everything: saved scenarios changed, confl
   assert.match(retried.result.blocks[0].details[1].value, /Not enough recorded history/);
   assert.equal(calls.run.length, 1, 'only the permission attempt reached the simulator; the retry ran nothing');
   await assert.rejects(confirm('DO_NOTHING_SIMULATION_RUN', { doNothingRun: { horizonMonths: 7 } }), (error) => error.code === 'ASK_CONFIRMATION_NOT_ACTIVE');
+});
+
+// ── Guided journey: a run started from a journey's step is reported to that step, as the page does ──
+const journeyStep = (overrides = {}) => ({ stepKey: 'compare_action_options', toolKey: 'do-nothing-simulator', status: 'IN_PROGRESS', journey: { id: 'j1', status: 'ACTIVE', primarySignal: { signalIntentFamily: 'cost_of_inaction_risk' } }, ...overrides });
+const journeyLaunch = { surface: 'ASK_WORKSPACE', operationId: 'DO_NOTHING_SIMULATION_RUN', sourceExecutionId: 'source-1', entityType: 'GUIDANCE_STEP', entityId: 'step-1' };
+
+test('do-nothing from a journey step: the step rides through the form and the review, and confirming records it on the journey with proof', async () => {
+  stepRow = journeyStep();
+  const form = await start('DO_NOTHING_SIMULATION_RUN', DO_NOTHING_RUN_MESSAGE, journeyLaunch);
+  assert.deepEqual([form.parameters.sourceExecutionId, form.parameters.guidanceStepId], ['source-1', 'step-1']);
+  const card = await doNothingRunResult('u1', 'p1', DoNothingRunInputSchema.parse({ horizonMonths: '12' }), 'source-1', 'step-1');
+  assert.equal(card.parameters.guidanceStepId, 'step-1');
+  assert.equal(calls.guidance.length, 0, 'nothing is reported before the homeowner confirms');
+  const { result } = await confirm('DO_NOTHING_SIMULATION_RUN', card.parameters);
+  assert.deepEqual(calls.guidance[0], ['lookup', { id: 'step-1', journey: { propertyId: 'p1' } }], 'the step is looked up inside this home only');
+  const report = calls.guidance[1][1];
+  assert.deepEqual({ j: report.journeyId, s: report.stepKey, st: report.status, tool: report.sourceToolKey, proof: report.producedData.proofType, id: report.producedData.proofId, actor: report.actorUserId },
+    { j: 'j1', s: 'compare_action_options', st: 'COMPLETED', tool: 'do-nothing-simulator', proof: 'simulation_run', id: 'run-1', actor: 'u1' });
+  assert.match(report.dedupeKey, /^do-nothing-simulator:p1:run-1:/, 'a replay does not add a second evidence row');
+  assert.deepEqual(result.blocks[0].details.find((detail) => detail.label === 'Guided journey'), { label: 'Guided journey', value: 'This step is recorded as done' });
+});
+
+test('do-nothing from a journey step: a failed report never fails the run and the receipt says so; a step that is not this tool\'s open step is never reported', async () => {
+  const card = await doNothingRunResult('u1', 'p1', DoNothingRunInputSchema.parse({ horizonMonths: '12' }), 'source-1', 'step-1');
+  stepRow = journeyStep(); recordFails = true;
+  const failed = await confirm('DO_NOTHING_SIMULATION_RUN', card.parameters);
+  assert.equal(failed.result.status, 'COMPLETED');
+  assert.match(failed.result.blocks[0].details.find((detail) => detail.label === 'Guided journey').value, /simulation is saved, but the journey step could not be updated/);
+  for (const stale of [null, journeyStep({ toolKey: 'recalls' }), journeyStep({ status: 'SKIPPED' }), journeyStep({ journey: { id: 'j1', status: 'DISMISSED', primarySignal: null } })]) {
+    stepRow = stale; recordFails = false; calls.guidance.length = 0;
+    const result = await confirm('DO_NOTHING_SIMULATION_RUN', card.parameters);
+    assert.equal(calls.guidance.some((entry) => entry[0] === 'record'), false);
+    assert.equal(result.result.blocks[0].details.some((detail) => detail.label === 'Guided journey'), false);
+  }
+  stepRow = journeyStep({ status: 'COMPLETED' }); calls.guidance.length = 0;
+  const done = await confirm('DO_NOTHING_SIMULATION_RUN', card.parameters);
+  assert.equal(calls.guidance.some((entry) => entry[0] === 'record'), false, 'a step already done is not reported twice');
+  assert.equal(done.result.blocks[0].details.find((detail) => detail.label === 'Guided journey').value, 'This step was already done');
+});
+
+test('do-nothing without a journey step reports nothing to the guidance engine', async () => {
+  const card = await doNothingRunResult('u1', 'p1', DoNothingRunInputSchema.parse({ horizonMonths: '12' }), 'source-1');
+  assert.equal('guidanceStepId' in card.parameters, false);
+  await confirm('DO_NOTHING_SIMULATION_RUN', card.parameters);
+  assert.deepEqual(calls.guidance, []);
 });
 
 // ───────────────────────────── Service Price Radar: check a quote ─────────────────────────────

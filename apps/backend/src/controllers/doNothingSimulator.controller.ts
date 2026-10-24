@@ -7,6 +7,7 @@ import {
   UpdateDoNothingScenarioInput,
 } from '../services/doNothingSimulator.service';
 import { guidanceJourneyService } from '../services/guidanceEngine/guidanceJourney.service';
+import { reportDoNothingRun } from '../services/guidanceEngine/guidanceToolReporting';
 import { logger } from '../lib/logger';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 import { getFinancialContextEnvelope } from '../services/financialContext/context';
@@ -191,35 +192,12 @@ export async function runDoNothingSimulation(req: CustomRequest, res: Response) 
       result.run.propertyContextVersion,
     );
 
-    try {
-      await guidanceJourneyService.recordToolCompletion({
-        propertyId,
-        actorUserId: userId,
-        journeyId: guidanceJourneyId ?? null,
-        signalIntentFamily:
-          guidanceSignalIntentFamily?.trim().toLowerCase() || 'cost_of_inaction_risk',
-        issueDomain: 'FINANCIAL',
-        sourceToolKey: 'do-nothing-simulator',
-        sourceEntityType: 'DO_NOTHING_SIMULATION_RUN',
-        sourceEntityId: result.run.id,
-        stepKey: guidanceStepKey ?? 'compare_action_options',
-        status: 'COMPLETED',
-        producedData: {
-          proofType: 'simulation_run',
-          proofId: result.run.id,
-          runId: result.run.id,
-          horizonMonths: result.run.horizonMonths,
-          confidence: result.run.confidence,
-          riskScoreDelta: result.run.riskScoreDelta,
-          incidentLikelihood: result.run.incidentLikelihood,
-          expectedCostDeltaCentsMin: result.run.expectedCostDeltaCentsMin,
-          expectedCostDeltaCentsMax: result.run.expectedCostDeltaCentsMax,
-          summary: result.run.summary,
-        },
-      });
-    } catch (guidanceError) {
-      logger.warn({ guidanceError }, '[GUIDANCE] do-nothing hook failed');
-    }
+    await reportDoNothingRun(
+      propertyId,
+      result.run,
+      { journeyId: guidanceJourneyId ?? null, stepKey: guidanceStepKey ?? null, signalIntentFamily: guidanceSignalIntentFamily ?? null },
+      userId,
+    );
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.ACTION_COMPLETED,

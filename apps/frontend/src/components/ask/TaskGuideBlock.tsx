@@ -7,6 +7,7 @@ import type { AskAction, AskTaskGuideChip, AskTaskGuideOutlineEntry } from '@/fe
 import { ActionLink } from './blocks/context';
 import { ACTION_ICONS } from './SeasonalAnswerCards';
 import type { AskBlockRenderer } from './blocks/types';
+import { GUIDANCE_JOURNEY_WORKSPACE_ID, GuidanceJourneyWorkspace } from './GuidanceJourneyWorkspace';
 
 // One task or habit as a single conversational card (TASK_GUIDE): where it sits, what it is, its key facts as chips, an optional tip, what to
 // do, short explanatory rows and the next actions. It shows exactly what the producer recorded (no steps, photos or advice of its own), and
@@ -41,7 +42,7 @@ function snapshotTime(asOf: string): string | null {
   return Number.isNaN(date.getTime()) ? null : date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
 
-export const TaskGuideBlock: AskBlockRenderer<'TASK_GUIDE'> = ({ block }) => {
+const TaskGuideCard: AskBlockRenderer<'TASK_GUIDE'> = ({ block }) => {
   const Icon = ICONS[block.icon] ?? ClipboardList;
   const inRows = new Set(block.notes.map((note) => note.actionId).filter((id): id is string => Boolean(id)));
   const byId = new Map(block.actions.map((action) => [action.id, action]));
@@ -193,3 +194,8 @@ export const TaskGuideBlock: AskBlockRenderer<'TASK_GUIDE'> = ({ block }) => {
     </article>
   );
 };
+
+// A guided journey is its own workspace (rail, current step, recorded proof), not the task card.
+export const TaskGuideBlock: AskBlockRenderer<'TASK_GUIDE'> = (props) => (
+  props.block.id === GUIDANCE_JOURNEY_WORKSPACE_ID ? <GuidanceJourneyWorkspace block={props.block} /> : <TaskGuideCard {...props} />
+);
