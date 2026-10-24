@@ -76,6 +76,15 @@ const SummaryBlockSchema = z.object({
   // counts as the chips. Optional so existing producers are unchanged; a client falls back to `title` and `body`.
   headline: z.string().max(200).optional(),
   supportLine: z.string().max(240).optional(),
+  // Property Brief preview: typed header facts, so the client never parses `body`. Counts come from the section type,
+  // not the section title. Optional so every other summary is unchanged.
+  propertyBrief: z.object({
+    purposeLabel: z.string().max(80),
+    snapshotAsOf: z.string().max(40),
+    excludedSections: z.array(z.string().max(60)).max(12),
+    changedSections: z.array(z.string().max(60)).max(12),
+    counts: z.object({ facts: z.number().int().min(0), history: z.number().int().min(0), gaps: z.number().int().min(0), otherRecords: z.number().int().min(0) }),
+  }).optional(),
 });
 
 // Ask Cozy Stage 3, Phase 5 (implementation plan §11; FRD §28/§29). The one

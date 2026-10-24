@@ -160,6 +160,11 @@ export function propertyBriefPreviewRow(item: Record<string, unknown>, fallbackI
   };
 }
 
+const sectionRecordCount = (section: { payload: unknown }) => {
+  const payload = section.payload && typeof section.payload === 'object' && !Array.isArray(section.payload) ? section.payload as Record<string, unknown> : {};
+  return Array.isArray(payload.items) ? payload.items.length : 0;
+};
+
 async function previewResult(propertyId: string, userId: string, briefId: string, role: HouseholdRole): Promise<AskOperationResult> {
   const preview = await getPropertyBriefPreview(propertyId, userId, briefId);
   const canManage = role !== HouseholdRole.VIEWER;
@@ -184,11 +189,21 @@ async function previewResult(propertyId: string, userId: string, briefId: string
     const isLive = share.status === 'ACTIVE' && new Date(share.expiresAt).getTime() > Date.now();
     return { id: `${preview.id}:${share.id}`, title: `${isLive ? 'Live' : readableCode(share.status)} controlled link`, description: `Expires ${humanDate(new Date(share.expiresAt))}`, meta: [`${share.accessCount} recipient access${share.accessCount === 1 ? '' : 'es'}`, share.lastTestedAt ? `Last tested ${humanDate(new Date(share.lastTestedAt))}` : 'Not tested yet', share.recipientEmail ? (share.invitationStatus === 'ACCEPTED' ? 'Invited recipient opened it' : 'Invited recipient has not opened it') : 'Copyable link'], status: isLive ? 'ACTIVE' : share.status, entityType: 'PROPERTY_BRIEF_SHARE', actions: canManage && isLive ? [commandAction(PROPERTY_BRIEF_ACTION_IDS.TEST_SHARE, 'Test access'), commandAction(PROPERTY_BRIEF_ACTION_IDS.REVOKE_SHARE, 'Revoke', 'QUIET')] : [] };
   });
+  const countFor = (types: string[]) => preview.sections.filter((section) => types.includes(section.sectionType)).reduce((sum, section) => sum + sectionRecordCount(section), 0);
+  const total = preview.sections.reduce((sum, section) => sum + sectionRecordCount(section), 0);
+  const facts = countFor(['PROPERTY_FACTS']), history = countFor(['VERIFIED_HISTORY']), gaps = countFor(['OPEN_UNKNOWNS']);
+  const propertyBrief = {
+    purposeLabel: PROPERTY_BRIEF_TEMPLATES[preview.purpose]?.label ?? readableCode(preview.purpose),
+    snapshotAsOf: new Date(preview.asOf).toISOString(),
+    excludedSections: preview.excludedSections.map(readableCode),
+    changedSections: updateStatus.hasUpdates ? updateStatus.changedSectionTypes.map(readableCode) : [],
+    counts: { facts, history, gaps, otherRecords: total - facts - history - gaps },
+  };
   return { status: 'ANSWERED', reasonCode: 'PROPERTY_BRIEF_PREVIEW_READY', parameters: { propertyBriefId: preview.id }, blocks: [
-    { type: 'SUMMARY', id: 'property-brief-preview-summary', title: preview.title, body: `${PROPERTY_BRIEF_TEMPLATES[preview.purpose]?.label ?? readableCode(preview.purpose)} · frozen snapshot of ${humanDate(new Date(preview.asOf))}. ${updateStatus.hasUpdates ? `Your home records have changed since this snapshot (${updateStatus.changedSectionTypes.map(readableCode).join(', ')}).` : 'The selected records still match this snapshot.'} Explicitly excluded: ${preview.excludedSections.length ? preview.excludedSections.map(readableCode).join(', ') : 'none'}.`, tone: updateStatus.hasUpdates ? 'CAUTION' : 'DEFAULT', actions },
+    { type: 'SUMMARY', id: 'property-brief-preview-summary', title: preview.title, body: `${PROPERTY_BRIEF_TEMPLATES[preview.purpose]?.label ?? readableCode(preview.purpose)} · frozen snapshot of ${humanDate(new Date(preview.asOf))}. ${updateStatus.hasUpdates ? `Your home records have changed since this snapshot (${updateStatus.changedSectionTypes.map(readableCode).join(', ')}).` : 'The selected records still match this snapshot.'} Explicitly excluded: ${preview.excludedSections.length ? preview.excludedSections.map(readableCode).join(', ') : 'none'}.`, tone: updateStatus.hasUpdates ? 'CAUTION' : 'DEFAULT', actions, propertyBrief },
     { type: 'GROUPED_LIST', filters: [], id: 'property-brief-preview-sections', title: 'Exact recipient preview', description: 'Every item preserves its recorded source, verification state and as-of date.', sections, actions: [] },
     ...(shareRows.length ? [{ type: 'GROUPED_LIST' as const, filters: [], id: 'property-brief-preview-shares', title: 'Controlled links', description: 'Recipient names and email addresses are intentionally omitted from the conversation transcript.', sections: [{ id: 'property-brief-share-history', title: 'Share history', count: shareRows.length, items: shareRows }], actions: [] }] : []),
-    { type: 'BOUNDARY', id: 'property-briefs-boundary', title: 'A homeowner-assembled snapshot, not a disclosure', body: preview.limitationStatement, severity: 'INFO', suggestions: [] },
+    { type: 'BOUNDARY', id: 'property-brief-preview-boundary', title: 'A homeowner-assembled snapshot, not a disclosure', body: preview.limitationStatement, severity: 'INFO', suggestions: [] },
   ], suggestions: [] };
 }
 

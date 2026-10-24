@@ -47,19 +47,20 @@ import { TimelineTrackBlock } from '../patterns/TimelineTrackBlock';
 import { TrendChartBlock } from '../patterns/TrendChartBlock';
 import { InsightBoardBlock } from '../patterns/InsightBoardBlock';
 import { EnvironmentReportBlock } from './EnvironmentReportBlock';
+import { PROPERTY_BRIEF_PREVIEW_IDS, PropertyBriefHeader, PropertyBriefLimitation } from '../PropertyBriefPreview';
 import type { AskBlockRenderer, AskBlockRendererProps, AskBlockType } from './types';
 
 type AskBlockRendererRegistry = { [T in AskBlockType]: AskBlockRenderer<T> };
 
 export const ASK_BLOCK_RENDERERS: AskBlockRendererRegistry = {
   TASK_GUIDE: TaskGuideBlock,
-  SUMMARY: SummaryBlock,
+  SUMMARY: (props) => props.block.id === PROPERTY_BRIEF_PREVIEW_IDS.summary ? <PropertyBriefHeader block={props.block} /> : <SummaryBlock {...props} />,
   PROACTIVE_INSIGHT: ProactiveInsightBlock,
   GROUPED_LIST: GroupedListBlock,
   TABLE: TableBlock,
   CAPABILITY_LIST: CapabilityListBlock,
   EVIDENCE: EvidenceBlock,
-  BOUNDARY: BoundaryWithDetail,
+  BOUNDARY: (props) => props.block.id === PROPERTY_BRIEF_PREVIEW_IDS.boundary ? <PropertyBriefLimitation block={props.block} /> : <BoundaryWithDetail {...props} />,
   MONITOR: MonitorBlock,
   WORKFLOW_PROGRESS: WorkflowProgressBlock,
   OUTPUT_ARTIFACTS: OutputArtifactsBlock,

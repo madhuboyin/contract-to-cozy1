@@ -43,7 +43,7 @@ const OPERATION_BOUNDARIES: Partial<Record<AskOperationId, ReadonlySet<string>>>
   SERVICE_PRICE_CHECKS: new Set(['service-price-radar-boundary']),
   HOME_TIMELINE_EVENTS: new Set(['home-timeline-boundary']),
   MATERIAL_SPECS_LIST: new Set(['material-specs-boundary']),
-  PROPERTY_BRIEFS_LIST: new Set(['property-briefs-boundary']),
+  PROPERTY_BRIEFS_LIST: new Set(['property-briefs-boundary', 'property-brief-preview-boundary']),
   GUIDANCE_JOURNEYS_LIST: new Set(['guidance-journeys-boundary']),
   GUIDANCE_JOURNEY_CONTINUE: new Set(['guidance-journey-boundary']),
   SEASONAL_HOME_CARE: new Set(['seasonal-home-care-boundary']),
