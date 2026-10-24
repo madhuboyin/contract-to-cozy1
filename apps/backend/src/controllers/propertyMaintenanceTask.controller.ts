@@ -599,8 +599,8 @@ const handleGetPropertyStats = async (
 const handleAttachEvidence = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     if (!req.user) return res.status(401).json({ message: 'Authentication required.' });
-    const documentIds = Array.isArray(req.body?.documentIds) ? req.body.documentIds : [];
-    const data = await attachMaintenanceTaskEvidence(req.user.userId, req.params.taskId, documentIds);
+    const recordIds = Array.isArray(req.body?.recordIds) ? req.body.recordIds : [];
+    const data = await attachMaintenanceTaskEvidence(req.user.userId, req.params.taskId, recordIds);
     return res.status(200).json({ success: true, data });
   } catch (error) {
     return next(error);

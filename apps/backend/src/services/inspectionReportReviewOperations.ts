@@ -83,6 +83,11 @@ export async function reviewInspectionReportWithEffects(
   const current = await inspectionReportFingerprint(propertyId, reportId);
   if (!current) throw new APIError('Inspection report not found.', 404, 'INSPECTION_REPORT_NOT_FOUND');
   if (!(REVIEWABLE_REPORT_STATUSES as readonly string[]).includes(current.report.status)) throw new APIError('This report is not ready to review yet.', 409, 'INSPECTION_REPORT_NOT_REVIEWABLE');
+  // Accepting a report does not resolve its safety findings, but each one must first have a durable disposition (tracked work or another decision): a safety finding that is open AND untriaged blocks acceptance.
+  if (outcome === 'ACCEPTED') {
+    const untriaged = await prisma.inspectionFinding.findMany({ where: { reportId, propertyId, severity: 'SAFETY', status: 'OPEN', workDisposition: 'PENDING_REVIEW' }, select: { id: true } });
+    if (untriaged.length > 0) throw new APIError(`${untriaged.length} safety finding${untriaged.length === 1 ? ' needs' : 's need'} a decision before this report can be accepted.`, 409, 'INSPECTION_SAFETY_UNTRIAGED', { findingIds: untriaged.map((f: { id: string }) => f.id) });
+  }
   // A caller that showed a person a version (Ask's confirmation) records the review of THAT version, never a newer one the person did not see.
   if (options.expectedFingerprint && options.expectedFingerprint !== current.fingerprint) throw new APIError('This report changed after it was shown. Review it again.', 409, 'INSPECTION_REPORT_CHANGED');
   // The step is re-read first: a review launched from a journey step records that journey and step on the row (exact lineage), and only when they fit. A repeat of the same review of the same version by

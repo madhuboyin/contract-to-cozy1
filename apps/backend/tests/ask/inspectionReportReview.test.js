@@ -20,11 +20,12 @@ const { INSPECTION_REPORT_REVIEW_MESSAGE } = require('../../src/services/ask/sup
 const { APIError } = require('../../src/middleware/error.middleware.ts');
 
 const OP = 'INSPECTION_REPORT_REVIEW';
-let report; let findings; let reviews; let step; let reports; let reportFails; let role; let findingForSignal; let saved;
+let untriagedSafety = []; let report; let findings; let reviews; let step; let reports; let reportFails; let role; let findingForSignal; let saved;
 const stepRow = (over = {}) => ({ id: 'step-i', stepKey: 'review_inspection_report', toolKey: 'inspection-report', status: 'PENDING', journey: { id: 'j1', status: 'ACTIVE', inventoryItemId: null,
   primarySignal: { signalIntentFamily: 'inspection_followup_needed', sourceToolKey: 'inspection-hub', sourceEntityType: 'INSPECTION_FINDING', sourceEntityId: 'f1' } }, ...over });
 
 test.beforeEach(() => {
+  untriagedSafety = [];
   report = { id: 'r1', propertyId: 'p1', reportType: 'GENERAL', status: 'CONFIRMED', totalFindings: 2, openFindings: 2, safetyFindings: 0, majorFindings: 1, confirmedAt: new Date('2026-10-02T00:00:00Z'), processedAt: new Date('2026-10-01T00:00:00Z'),
     inspectionDate: new Date('2026-09-28T00:00:00Z'), inspectorCompany: 'Acme Inspect', sourceJourneyId: null, createdAt: new Date('2026-10-01T00:00:00Z') };
   findings = [{ id: 'f1', status: 'OPEN', severity: 'MAJOR', updatedAt: new Date() }, { id: 'f2', status: 'OPEN', severity: 'MINOR', updatedAt: new Date() }];
@@ -34,7 +35,7 @@ test.beforeEach(() => {
   prisma.guidanceSignal = {}; prisma.guidanceJourney = {}; prisma.guidanceJourneyEvent = {}; prisma.guidanceStepEvidence = {};
   prisma.guidanceJourneyStep = { findFirst: async () => step };
   prisma.inspectionReport = { findFirst: async (args) => (args.where.id === report.id || args.where.sourceJourneyId ? { ...report, findings } : null) };
-  prisma.inspectionFinding = { findFirst: async (args) => (findingForSignal && args.where.id === findingForSignal.id && (!args.where.reportId || args.where.reportId === findingForSignal.reportId) ? findingForSignal : null) };
+  prisma.inspectionFinding = { findMany: async () => untriagedSafety, findFirst: async (args) => (findingForSignal && args.where.id === findingForSignal.id && (!args.where.reportId || args.where.reportId === findingForSignal.reportId) ? findingForSignal : null) };
   prisma.inspectionReportReview = {
     findFirst: async (args) => reviews.filter((row) => Object.entries(args.where).every(([k, v]) => row[k] === v)).at(-1) ?? null,
     create: async ({ data }) => { const row = { id: `rev-${reviews.length + 1}`, reviewedAt: new Date(), ...data }; reviews.push(row); return row; },
@@ -163,4 +164,14 @@ test('the page\'s review route is the contributor-only shared write, and report 
   assert.match(fs.readFileSync(require.resolve('../../src/controllers/inspectionHub.controller.ts'), 'utf8'), /reviewInspectionReportWithEffects\(/);
   const service = fs.readFileSync(require.resolve('../../src/services/inspectionReportReviewOperations.ts'), 'utf8');
   assert.equal(/inspectionReport\.update\(|confirmedAt:\s*new Date|status:\s*['"]CONFIRMED/.test(service), false, 'review never touches the report\'s processing or confirmation state');
+});
+
+test('accepting is blocked only while a safety finding is open and untriaged; a plain review is not', async () => {
+  untriagedSafety = [{ id: 'f1' }];
+  await assert.rejects(() => ops.reviewInspectionReportWithEffects('p1', 'u1', 'r1', { outcome: 'ACCEPTED' }), (e) => e.code === 'INSPECTION_SAFETY_UNTRIAGED' && e.details.findingIds[0] === 'f1');
+  const reviewed = await ops.reviewInspectionReportWithEffects('p1', 'u1', 'r1', { outcome: 'REVIEWED' });
+  assert.ok(reviewed.review);
+  untriagedSafety = [];
+  const accepted = await ops.reviewInspectionReportWithEffects('p1', 'u1', 'r1', { outcome: 'ACCEPTED' });
+  assert.equal(accepted.review.outcome, 'ACCEPTED');
 });

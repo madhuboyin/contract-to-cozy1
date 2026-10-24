@@ -341,6 +341,9 @@ export default function ReportDetailPage() {
   const allSystems = Object.keys(grouped).sort((a, b) => SYSTEM_LABELS[a]?.localeCompare(SYSTEM_LABELS[b] ?? '') ?? 0);
   const hasSafetyFindings = allSystems.some((s) => grouped[s]?.some((f) => f.severity === 'SAFETY' && f.status === 'OPEN'));
   const isEditable = report?.status === 'REVIEW_PENDING';
+  // Accepting does not resolve safety findings; it needs each to have a decision first. Open safety work that is already tracked is listed as a warning, not a block.
+  const openSafety = allSystems.flatMap((system) => (grouped[system] ?? []).filter((f) => f.severity === 'SAFETY' && f.status === 'OPEN'));
+  const untriagedSafety = openSafety.filter((f) => f.workDisposition === 'PENDING_REVIEW');
 
   return (
     <MobilePageContainer className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:max-w-3xl lg:pb-10">
@@ -402,12 +405,27 @@ export default function ReportDetailPage() {
                   {reviewing ? 'Saving…' : 'Mark as reviewed'}
                 </Button>
               )}
-              {report.latestReview?.outcome !== 'ACCEPTED' && !hasSafetyFindings && (
+              {report.latestReview?.outcome !== 'ACCEPTED' && untriagedSafety.length === 0 && (
                 <Button className="min-h-[44px]" variant="outline" disabled={reviewing} onClick={() => handleReview('ACCEPTED')}>
                   Accept report
                 </Button>
               )}
             </div>
+            {untriagedSafety.length > 0 && (
+              <p className="text-xs text-rose-700">
+                Decide what to do about {untriagedSafety.length} safety finding{untriagedSafety.length === 1 ? '' : 's'} before accepting this report.
+              </p>
+            )}
+            {openSafety.length > 0 && (
+              <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800">
+                <p className="font-semibold">Accepting this report does not resolve its safety findings.</p>
+                <ul className="mt-1 list-disc pl-4">
+                  {openSafety.map((f) => (
+                    <li key={f.id}>{f.inspectorDescription} — {f.workDisposition === 'PENDING_REVIEW' ? 'needs a decision' : 'tracked, still open'}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </MobileCard>
         )}
 

@@ -68,7 +68,7 @@ router.patch('/:taskId', propertyMaintenanceTaskController.handleUpdateTask);
  */
 router.patch('/:taskId/status', propertyMaintenanceTaskController.handleUpdateTaskStatus);
 
-/** Attach evidence documents (already saved to the home) to a task; reruns the journey report when the task is already completed. Body: { documentIds } */
+/** Attach Home Records (already saved to the home) as evidence for a task; reruns the journey report when the task is already completed. Body: { recordIds } */
 router.post('/:taskId/evidence', propertyMaintenanceTaskController.handleAttachEvidence);
 
 /**

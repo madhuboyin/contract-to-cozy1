@@ -5,6 +5,7 @@
 // with nothing attached, proves nothing. Desktop and Ask both complete tasks through `PropertyMaintenanceTaskService`, which calls `reportLinkedTaskCompletion`.
 
 import { prisma } from '../lib/prisma';
+import { assertProjectDocuments, resolveProjectDocuments } from './projectDocuments.service';
 import { PropertyMaintenanceTaskService } from './PropertyMaintenanceTask.service';
 import { APIError } from '../middleware/error.middleware';
 import { logger } from '../lib/logger';
@@ -15,14 +16,29 @@ export const MAINTENANCE_STEP_TOOL_KEY = 'maintenance';
 export const MAINTENANCE_LINKABLE_STEP_KEYS = ['complete_compliance_task'];
 export type MaintenanceLinkSource = 'DESKTOP' | 'ASK';
 
-/** The evidence documents a completed task names that exist on its property; an empty list means the completion is self-reported only. */
-export async function verifiedCompletionEvidence(task: { id: string; propertyId: string; status: string; completionMetadata: unknown }): Promise<string[]> {
+export type MaintenanceEvidenceRef = { source: 'HOME_RECORD' | 'LEGACY_DOCUMENT'; id: string; versionId: string | null };
+
+const metadataOf = (task: { completionMetadata: unknown }): Record<string, unknown> =>
+  task.completionMetadata && typeof task.completionMetadata === 'object' && !Array.isArray(task.completionMetadata) ? task.completionMetadata as Record<string, unknown> : {};
+const storedEvidence = (meta: Record<string, unknown>): Array<{ source: string; id: string; versionId: string | null }> =>
+  (Array.isArray(meta.evidence) ? meta.evidence : []).filter((entry: any) => entry && typeof entry.id === 'string' && entry.source === 'HOME_RECORD');
+const legacyIds = (meta: Record<string, unknown>): string[] =>
+  (Array.isArray(meta.photoDocumentIds) ? meta.photoDocumentIds : []).filter((id): id is string => typeof id === 'string' && id.length > 0);
+
+/**
+ * The evidence a completed task has that still resolves through the shared Home Records resolver (same property, active, household-visible, clean). Home Records attached through
+ * `attachMaintenanceTaskEvidence` are canonical; a legacy document id the completion already named (`photoDocumentIds`) is accepted only as a transitional reference. The returned
+ * references say which store and version supplied each piece of evidence. A self-reported completion with nothing attached has none.
+ */
+export async function verifiedCompletionEvidence(task: { id: string; propertyId: string; status: string; completionMetadata: unknown }): Promise<MaintenanceEvidenceRef[]> {
   if (task.status !== 'COMPLETED') return [];
-  const meta = task.completionMetadata && typeof task.completionMetadata === 'object' && !Array.isArray(task.completionMetadata) ? task.completionMetadata as Record<string, unknown> : {};
-  const ids = Array.isArray(meta.photoDocumentIds) ? meta.photoDocumentIds.filter((id): id is string => typeof id === 'string' && id.length > 0) : [];
-  if (ids.length === 0) return [];
-  const found = await prisma.document.findMany({ where: { id: { in: ids }, propertyId: task.propertyId }, select: { id: true } });
-  return found.map((doc: { id: string }) => doc.id);
+  const meta = metadataOf(task);
+  const records = storedEvidence(meta);
+  const legacy = legacyIds(meta);
+  if (records.length === 0 && legacy.length === 0) return [];
+  const resolved = await resolveProjectDocuments(task.propertyId, [...records.map((entry) => entry.id), ...legacy], { transitionalLegacyIds: legacy });
+  const pinned = new Map(records.map((entry) => [entry.id, entry.versionId]));
+  return resolved.documents.map((doc) => ({ source: doc.source === 'HOME_RECORD' ? 'HOME_RECORD' as const : 'LEGACY_DOCUMENT' as const, id: doc.id, versionId: doc.source === 'HOME_RECORD' ? (pinned.get(doc.id) ?? doc.versionId) : null }));
 }
 
 /** Links a task to one journey step. The step is re-read (open, maintenance tool, compliance step) and the task must belong to the same property. */
@@ -39,12 +55,12 @@ export async function linkMaintenanceTaskToStep(propertyId: string, userId: stri
   return { link, reused: false };
 }
 
-export function buildMaintenanceTaskCompletion(propertyId: string, actorUserId: string, task: { id: string; lastCompletedDate: Date | null }, evidenceDocumentIds: string[], binding: GuidanceStepBinding) {
+export function buildMaintenanceTaskCompletion(propertyId: string, actorUserId: string, task: { id: string; lastCompletedDate: Date | null }, evidence: MaintenanceEvidenceRef[], binding: GuidanceStepBinding) {
   return {
     propertyId, actorUserId, journeyId: binding.journeyId, inventoryItemId: binding.inventoryItemId, signalIntentFamily: binding.signalIntentFamily ?? 'compliance_deadline', issueDomain: 'MAINTENANCE' as const,
     sourceToolKey: MAINTENANCE_STEP_TOOL_KEY, sourceEntityType: 'PROPERTY_MAINTENANCE_TASK', sourceEntityId: task.id, stepKey: binding.stepKey, status: 'COMPLETED' as const,
     dedupeKey: `maintenance-task-verified:${propertyId}:${task.id}:${binding.stepId}`,
-    producedData: { proofType: 'maintenance_task_verified_completion', proofId: task.id, taskId: task.id, evidenceDocumentIds, completedAt: (task.lastCompletedDate ?? new Date()).toISOString() },
+    producedData: { proofType: 'maintenance_task_verified_completion', proofId: task.id, taskId: task.id, evidence, completedAt: (task.lastCompletedDate ?? new Date()).toISOString() },
   };
 }
 
@@ -85,19 +101,21 @@ export async function openLinkedStepIds(taskId: string): Promise<string[]> {
 }
 
 /**
- * Attaches evidence documents (they must already exist on this task's property) to a task. When the task is already completed this reruns the shared reporter, so a
- * completion that was waiting for evidence is reported without reopening or recompleting the task. Desktop and Ask both call this.
+ * Attaches Home Records as evidence for a task. Only Home Records (active, household-visible, clean, this property) are accepted for new evidence, resolved through the shared resolver;
+ * the record and its current version are stored on the task. When the task is already completed this reruns the shared reporter, so a completion that was waiting for evidence is
+ * reported without reopening or recompleting the task. Desktop and Ask both call this.
  */
-export async function attachMaintenanceTaskEvidence(userId: string, taskId: string, documentIds: string[]): Promise<{ documentIds: string[]; reportedStepIds: string[] }> {
+export async function attachMaintenanceTaskEvidence(userId: string, taskId: string, recordIds: string[]): Promise<{ evidence: MaintenanceEvidenceRef[]; reportedStepIds: string[] }> {
   const task = await PropertyMaintenanceTaskService.getTask(userId, taskId, 'CONTRIBUTOR');
-  const requested = [...new Set(documentIds.filter((id) => typeof id === 'string' && id.length > 0))];
-  if (requested.length === 0) throw new APIError('Choose at least one document as evidence.', 400, 'MAINTENANCE_EVIDENCE_REQUIRED');
-  const found = await prisma.document.findMany({ where: { id: { in: requested }, propertyId: task.propertyId }, select: { id: true } });
-  if (found.length !== requested.length) throw new APIError('Evidence must be documents saved to this home.', 400, 'MAINTENANCE_EVIDENCE_NOT_FOUND');
-  const meta = task.completionMetadata && typeof task.completionMetadata === 'object' && !Array.isArray(task.completionMetadata) ? task.completionMetadata as Record<string, unknown> : {};
-  const existing = Array.isArray(meta.photoDocumentIds) ? meta.photoDocumentIds.filter((id): id is string => typeof id === 'string') : [];
-  const merged = [...new Set([...existing, ...requested])];
-  await prisma.propertyMaintenanceTask.update({ where: { id: taskId }, data: { completionMetadata: { ...meta, photoDocumentIds: merged } as any } });
+  const requested = [...new Set(recordIds.filter((id) => typeof id === 'string' && id.length > 0))];
+  if (requested.length === 0) throw new APIError('Choose at least one Home Record as evidence.', 400, 'MAINTENANCE_EVIDENCE_REQUIRED');
+  const documents = await assertProjectDocuments(task.propertyId, requested, { message: 'Evidence must be Home Records saved to this home.', code: 'MAINTENANCE_EVIDENCE_NOT_FOUND' });
+  if (documents.some((doc) => doc.source !== 'HOME_RECORD')) throw new APIError('Evidence must be Home Records saved to this home.', 400, 'MAINTENANCE_EVIDENCE_NOT_FOUND');
+  const meta = metadataOf(task);
+  const existing = storedEvidence(meta);
+  const added = documents.filter((doc) => !existing.some((entry) => entry.id === doc.id && entry.versionId === doc.versionId))
+    .map((doc) => ({ source: 'HOME_RECORD', id: doc.id, versionId: doc.versionId, attachedAt: new Date().toISOString(), attachedByUserId: userId }));
+  await prisma.propertyMaintenanceTask.update({ where: { id: taskId }, data: { completionMetadata: { ...meta, evidence: [...existing, ...added] } as any } });
   const reportedStepIds = task.status === 'COMPLETED' ? await reportLinkedTaskCompletion(userId, taskId) : [];
-  return { documentIds: merged, reportedStepIds };
+  return { evidence: [...existing, ...added].map((entry) => ({ source: 'HOME_RECORD' as const, id: entry.id, versionId: entry.versionId })), reportedStepIds };
 }
