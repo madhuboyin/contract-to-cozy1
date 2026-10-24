@@ -301,3 +301,115 @@ test('every id the answers and the receipt emit is allowlisted for the operation
   assert.equal(applicable('price-finalization-start-quote', 'QUOTE_COMPARISON_REVIEW'), true);
   for (const id of ['price-finalization-finalize', 'price-finalization-edit', 'price-finalization-back']) assert.equal(applicable(id, OP), true, id);
 });
+
+// ── Guided journey: a record started for the finalize step is bound to it; finalizing completes that exact step (continuation FRD section 23) ──
+const { askGuidanceStepMode } = require('../../src/services/ask/askGuidanceStepHandlers.ts');
+const { guidanceJourneyService } = require('../../src/services/guidanceEngine/guidanceJourney.service.ts');
+const projectCompliance = require('../../src/services/projectCompliance/context.ts');
+const priceStep = (over = {}) => ({ id: 'step-f', stepKey: 'finalize_price', toolKey: 'price-finalization', status: 'PENDING', journey: { id: 'j1', status: 'ACTIVE', inventoryItemId: null, primarySignal: { signalIntentFamily: 'lifecycle_end_or_past_life' } }, ...over });
+function withJourney({ step, source }) {
+  const saved = ['guidanceSignal', 'guidanceJourney', 'guidanceJourneyEvent', 'guidanceStepEvidence', 'guidanceJourneyStep', 'askExecution'].map((name) => [name, prisma[name]]);
+  const seen = { steps: [], sources: [] };
+  prisma.guidanceSignal = {}; prisma.guidanceJourney = {}; prisma.guidanceJourneyEvent = {}; prisma.guidanceStepEvidence = {};
+  prisma.guidanceJourneyStep = { findFirst: async (args) => { seen.steps.push(args.where); return step; } };
+  prisma.askExecution = { findFirst: async (args) => { seen.sources.push(args.where); return source ?? null; } };
+  return { seen, restore() { for (const [name, model] of saved) prisma[name] = model; } };
+}
+const startParams = (extra = {}) => ({ priceStart: { vendorName: 'Acme Roofing', quotePrice: null, acceptedPrice: 11500, scopeSummary: null, paymentTerms: null, warrantyTerms: null, timelineTerms: null, notes: null }, priceCommand: { kind: 'START_MANUAL', entityId: 'prop-1' }, ...extra });
+
+test('the journey step offers the price records answer as its in-Ask action, carrying the step as a field', () => {
+  const mode = askGuidanceStepMode('price-finalization', 'finalize_price');
+  assert.equal(mode.mode, 'IN_ASK');
+  assert.deepEqual({ o: mode.inAsk.operationId, carries: mode.inAsk.carriesStep }, { o: 'PRICE_FINALIZATIONS_LIST', carries: 'FIELD' });
+});
+
+test('a command started from the price records the journey opened carries that step; a step of another tool is dropped, not used', async () => {
+  const restoreData = withData(); const restoreRole = withRole('OWNER');
+  try {
+    const launch = { operationId: OP, surface: 'ASK_PAGE', entityType: command.PRICE_FINALIZATION_PROPERTY_ENTITY_TYPE, entityId: 'prop-1', sourceExecutionId: 'src-1' };
+    let j = withJourney({ step: priceStep(), source: { launchContextJson: { operationId: 'PRICE_FINALIZATIONS_LIST', guidanceStepId: 'step-f' } } });
+    try {
+      const result = await invoke(M.START_MANUAL, launch, 'OWNER');
+      assert.deepEqual(j.seen.sources[0], { id: 'src-1', userId: 'user-1', propertyId: 'prop-1' });
+      assert.equal(result.parameters.priceCommandLaunch.guidanceStepId, 'step-f');
+    } finally { j.restore(); }
+    // The source answer was opened for a negotiation step (a review's "Record the accepted price"): not this tool's step, so it is no part of any journey.
+    j = withJourney({ step: priceStep({ toolKey: 'negotiation-shield', stepKey: 'prepare_negotiation' }), source: { launchContextJson: { guidanceStepId: 'step-n' } } });
+    try {
+      const result = await invoke(M.START_MANUAL, launch, 'OWNER');
+      assert.equal('guidanceStepId' in result.parameters.priceCommandLaunch, false);
+    } finally { j.restore(); }
+  } finally { restoreRole(); restoreData(); }
+});
+
+test('confirming a start for a journey step stores its journey and step key on the record; a stale step starts a plain record and says so', async () => {
+  const restoreData = withData(); const w = installWrites(); let j = withJourney({ step: priceStep() });
+  try {
+    const out = await confirmCapabilityInvoke(OP, ctx(startParams({ guidanceStepId: 'step-f' })));
+    assert.deepEqual(j.seen.steps[0], { id: 'step-f', journey: { propertyId: 'prop-1' } });
+    assert.deepEqual({ j: w.calls[0][3].guidanceJourneyId, k: w.calls[0][3].guidanceStepKey, f: w.calls[0][3].guidanceSignalIntentFamily }, { j: 'j1', k: 'finalize_price', f: 'lifecycle_end_or_past_life' });
+    assert.match(out.result.blocks[0].details.find((d) => d.label === 'Guided journey').value, /finalizing it completes the step/);
+    j.restore();
+    for (const stale of [null, priceStep({ toolKey: 'coverage-intelligence' }), priceStep({ status: 'COMPLETED' }), priceStep({ status: 'SKIPPED' }), priceStep({ journey: { id: 'j1', status: 'DISMISSED', inventoryItemId: null, primarySignal: null } })]) {
+      j = withJourney({ step: stale }); w.calls.length = 0;
+      const plain = await confirmCapabilityInvoke(OP, ctx(startParams({ guidanceStepId: 'step-f' })));
+      assert.equal('guidanceJourneyId' in w.calls[0][3] || 'guidanceStepKey' in w.calls[0][3], false);
+      assert.equal(plain.result.status, 'COMPLETED');
+      j.restore();
+    }
+    j = withJourney({ step: priceStep() }); w.calls.length = 0;
+    await confirmCapabilityInvoke(OP, ctx(startParams()));
+    assert.equal('guidanceJourneyId' in w.calls[0][3], false, 'outside a journey nothing is added');
+  } finally { j.restore(); w.restore(); restoreData(); }
+});
+
+test('finalizing a record bound to a step says whether that step was updated; an unbound record says nothing about any journey', async () => {
+  const bound = { ...DRAFT, guidanceJourneyId: 'j1', guidanceStepKey: 'finalize_price' };
+  for (const [reported, expected] of [[true, 'This step is recorded as done'], [false, /could not be updated/], [null, undefined]]) {
+    const restoreData = withData({ record: bound }); const w = installWrites();
+    operations.finalizePriceFinalizationWithEffects = async (...a) => { w.calls.push(['finalize', ...a]); return { detail: { id: 'pf-1', vendorName: 'Acme', acceptedPrice: 11500 }, contextVersion: 'v', guidanceReported: reported }; };
+    try {
+      const out = await confirmCapabilityInvoke(OP, ctx({ priceFinalize: { acceptedPrice: 11500 }, priceCommand: { kind: 'FINALIZE', entityId: 'pf-1' }, priceCommandContextVersion: version(bound) }));
+      const note = out.result.blocks[0].details.find((d) => d.label === 'Guided journey')?.value;
+      if (expected instanceof RegExp) assert.match(note, expected); else assert.equal(note, expected);
+    } finally { w.restore(); restoreData(); }
+  }
+  const restoreData = withData(); const w = installWrites();
+  try {
+    const out = await confirmCapabilityInvoke(OP, ctx({ priceFinalize: { acceptedPrice: 11500 }, priceCommand: { kind: 'FINALIZE', entityId: 'pf-1' }, priceCommandContextVersion: version(DRAFT) }));
+    assert.equal(out.result.blocks[0].details.some((d) => d.label === 'Guided journey'), false);
+  } finally { w.restore(); restoreData(); }
+});
+
+test('the shared finalize reports a bound record on exactly its stored step, and never falls back to the signal family when that step is no longer open', async () => {
+  const saved = { get: finalizationService.getDetail, fin: finalizationService.finalize, gate: projectCompliance.assertProjectComplianceDecisionsApplicable, rec: guidanceJourneyService.recordToolCompletion };
+  const analytics = require('../../src/services/analytics/index.ts'); const savedTrack = analytics.analyticsEmitter.track; analytics.analyticsEmitter.track = () => {};
+  const recorded = [];
+  const detail = (over = {}) => ({ id: 'pf-1', vendorName: 'Acme', acceptedPrice: 11500, currency: 'USD', serviceCategory: 'ROOFING', terms: [], inventoryItemId: null, guidanceJourneyId: 'j1', guidanceStepKey: 'finalize_price', guidanceSignalIntentFamily: 'lifecycle_end_or_past_life', ...over });
+  let current = detail();
+  finalizationService.getDetail = async () => current; finalizationService.finalize = async () => current;
+  projectCompliance.assertProjectComplianceDecisionsApplicable = async () => ({ contextVersion: 'ctx' });
+  guidanceJourneyService.recordToolCompletion = async (input) => { recorded.push(input); if (recorded.failNext) throw new Error('down'); return {}; };
+  try {
+    let j = withJourney({ step: priceStep() });
+    let out = await operations.finalizePriceFinalizationWithEffects('prop-1', 'user-1', 'pf-1', { acceptedPrice: 11500 });
+    assert.deepEqual([out.guidanceReported, recorded[0].journeyId, recorded[0].stepKey], [true, 'j1', 'finalize_price']);
+    assert.deepEqual(j.seen.steps[0], { journeyId: 'j1', stepKey: 'finalize_price', journey: { propertyId: 'prop-1' } });
+    j.restore();
+    recorded.length = 0; recorded.failNext = true; j = withJourney({ step: priceStep() });
+    assert.equal((await operations.finalizePriceFinalizationWithEffects('prop-1', 'user-1', 'pf-1', { acceptedPrice: 11500 })).guidanceReported, false, 'a failed report is saved-but-not-recorded');
+    j.restore(); recorded.failNext = false;
+    for (const stale of [null, priceStep({ toolKey: 'coverage-intelligence' }), priceStep({ status: 'SKIPPED' }), priceStep({ journey: { id: 'j1', status: 'DISMISSED', inventoryItemId: null, primarySignal: null } })]) {
+      recorded.length = 0; j = withJourney({ step: stale });
+      out = await operations.finalizePriceFinalizationWithEffects('prop-1', 'user-1', 'pf-1', { acceptedPrice: 11500 });
+      assert.equal(recorded.length, 0, 'nothing is reported, and not by signal family either');
+      assert.equal(out.guidanceReported, false);
+      j.restore();
+    }
+    // A record with no stored journey keeps the compatibility behaviour: reported by the caller's step key or the signal family.
+    current = detail({ guidanceJourneyId: null, guidanceStepKey: null }); recorded.length = 0; j = withJourney({ step: null });
+    out = await operations.finalizePriceFinalizationWithEffects('prop-1', 'user-1', 'pf-1', { acceptedPrice: 11500 });
+    assert.deepEqual([recorded.length, recorded[0].journeyId, out.guidanceReported], [1, null, null]);
+    j.restore();
+  } finally { analytics.analyticsEmitter.track = savedTrack; finalizationService.getDetail = saved.get; finalizationService.finalize = saved.fin; projectCompliance.assertProjectComplianceDecisionsApplicable = saved.gate; guidanceJourneyService.recordToolCompletion = saved.rec; }
+});

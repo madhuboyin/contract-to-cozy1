@@ -5,26 +5,9 @@
 // The older behaviour (completing by signal family when a command starts outside a journey) stays where a tool has it, as a compatibility path only.
 
 import { prisma } from '../../../lib/prisma';
-import { getGuidanceModels } from '../../guidanceEngine/guidanceTypes';
+import { type GuidanceStepBinding } from '../../guidanceEngine/guidanceStepBinding';
 
-export type GuidanceStepBinding = {
-  stepId: string;
-  stepKey: string;
-  journeyId: string;
-  signalIntentFamily: string | null;
-  inventoryItemId: string | null;
-};
-export type GuidanceStepRefusal = 'NOT_FOUND' | 'WRONG_TOOL' | 'WRONG_STEP' | 'STEP_DONE' | 'STEP_CLOSED' | 'JOURNEY_CLOSED';
-export type GuidanceStepBindingResult = { ok: true; binding: GuidanceStepBinding } | { ok: false; reason: GuidanceStepRefusal };
-
-export const GUIDANCE_STEP_REFUSAL_TEXT: Record<GuidanceStepRefusal, string> = {
-  NOT_FOUND: 'The journey step this was started from is no longer available.',
-  WRONG_TOOL: 'The journey step this was started from belongs to a different tool.',
-  WRONG_STEP: 'The journey step this was started from is not one this can complete.',
-  STEP_DONE: 'The journey step this was started from is already done.',
-  STEP_CLOSED: 'The journey step this was started from is no longer open.',
-  JOURNEY_CLOSED: 'The journey this was started from is no longer open.',
-};
+export * from '../../guidanceEngine/guidanceStepBinding';
 
 /** The step id a launch names: the explicit field, or the step as the launch entity (the Do-Nothing and Service Price Radar starts). */
 export function launchedGuidanceStepId(launch: { guidanceStepId?: string | null; entityType?: string | null; entityId?: string | null } | null | undefined): string | null {
@@ -48,18 +31,3 @@ export async function guidanceStepIdFromSourceExecution(userId: string, property
   } : null);
 }
 
-export async function resolveGuidanceStepBinding(
-  propertyId: string, stepId: string, expected: { toolKey: string; stepKeys?: readonly string[] },
-): Promise<GuidanceStepBindingResult> {
-  const step = await getGuidanceModels().guidanceJourneyStep.findFirst({
-    where: { id: stepId, journey: { propertyId } },
-    select: { stepKey: true, toolKey: true, status: true, journey: { select: { id: true, status: true, inventoryItemId: true, primarySignal: { select: { signalIntentFamily: true } } } } },
-  });
-  if (!step) return { ok: false, reason: 'NOT_FOUND' };
-  if (step.toolKey !== expected.toolKey) return { ok: false, reason: 'WRONG_TOOL' };
-  if (expected.stepKeys && !expected.stepKeys.includes(step.stepKey)) return { ok: false, reason: 'WRONG_STEP' };
-  if (!['ACTIVE', 'NOT_STARTED'].includes(String(step.journey.status))) return { ok: false, reason: 'JOURNEY_CLOSED' };
-  if (step.status === 'COMPLETED') return { ok: false, reason: 'STEP_DONE' };
-  if (!['PENDING', 'IN_PROGRESS'].includes(String(step.status))) return { ok: false, reason: 'STEP_CLOSED' };
-  return { ok: true, binding: { stepId, stepKey: step.stepKey, journeyId: step.journey.id, signalIntentFamily: step.journey.primarySignal?.signalIntentFamily ?? null, inventoryItemId: step.journey.inventoryItemId ?? null } };
-}

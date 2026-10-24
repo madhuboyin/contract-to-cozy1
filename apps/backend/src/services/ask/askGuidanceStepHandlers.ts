@@ -94,6 +94,12 @@ export const ASK_GUIDANCE_IN_ASK_STEPS: Readonly<Record<string, AskGuidanceInAsk
     reason: 'You can compare your coverage and record your decision here; the decision is recorded on this journey.',
     outcome: 'Your recorded coverage decision is recorded as this step\'s proof.',
   },
+  // The step opens the price records answer; a record started or finalized from it belongs to this step. Finalizing is the proof; starting a record is not.
+  'price-finalization:finalize_price': {
+    operationId: 'PRICE_FINALIZATIONS_LIST', message: 'Show my price finalizations', label: 'Open price records', carriesStep: 'FIELD',
+    reason: 'You can record and finalize the accepted price here; finalizing it is recorded on this journey.',
+    outcome: 'Your finalized accepted price and terms are recorded as this step\'s proof.',
+  },
   'do-nothing-simulator:model_cost_of_delay': {
     operationId: 'DO_NOTHING_SIMULATION_RUN', message: DO_NOTHING_RUN_MESSAGE, label: 'Run the simulation', carriesStep: 'ENTITY',
     reason: 'You can run the simulation here; the result is recorded on this journey.',

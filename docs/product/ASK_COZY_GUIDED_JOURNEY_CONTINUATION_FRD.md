@@ -532,3 +532,16 @@ gets "Start a negotiation review" with exact journey binding; Coverage and Price
 - **Scope.** Only a decision proves the comparison step. The other coverage steps (`check_coverage`, `review_current_*`, `check_*_coverage`) stay NAVIGATE: a review or
   a decision does not show that they were done.
 
+## 23. Price Finalization: a record bound to its step (2026-10-24)
+
+- **How the binding already worked.** A price finalization stores `guidanceJourneyId`, `guidanceStepKey` and `guidanceSignalIntentFamily`; finalizing reports from those. Ask's
+  start commands never set them, so a record started in Ask completed by signal family (a default `finalize_price` and a default family) and could advance any compatible step.
+- **Binding at the start.** The `finalize_price` step opens the price records answer (`PRICE_FINALIZATIONS_LIST`) with the step as `guidanceStepId`. A start command from
+  that answer takes the step from its source execution, re-reads it at the proposal and at the confirmation (tool `price-finalization`, step `finalize_price`, open step,
+  open journey) and stores the journey, step key and signal family on the new record. A step inherited from another tool's answer (for example a negotiation review) is dropped
+  at the proposal, so that command is simply not part of any journey. A stale step starts a plain record and the receipt says so.
+- **Exact at the finalize.** `finalizePriceFinalizationWithEffects` (shared by Desktop and Ask) now re-reads a record's stored journey and step key before it reports; if the step is
+  no longer this tool's open step it reports nothing and does **not** fall back to the signal family. A record with no stored journey keeps the compatibility behaviour. The result
+  carries `guidanceReported` (true, false when the report failed or the step was stale, null when the record is not bound) and Ask's receipt says which. Starting or changing a
+  record completes nothing; only finalizing does.
+

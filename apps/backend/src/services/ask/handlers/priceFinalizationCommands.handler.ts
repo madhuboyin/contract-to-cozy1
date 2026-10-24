@@ -27,6 +27,7 @@ import {
   createPriceFinalizationDraftWithEffects, finalizePriceFinalizationWithEffects, updatePriceFinalizationDraftWithEffects,
 } from '../../priceFinalizationOperations';
 import { NEGOTIATION_SHIELD_CASE_ENTITY_TYPE } from '../support/negotiationShieldStart';
+import { GUIDANCE_STEP_REFUSAL_TEXT, guidanceStepIdFromSourceExecution, launchedGuidanceStepId, resolveGuidanceStepBinding } from '../support/guidanceStepBinding';
 import { QUOTE_WORKSPACE_ENTITY_TYPE } from '../support/quoteComparisonCommand';
 import {
   PRICE_COMMAND_ACTION_IDS, PRICE_COMMAND_MESSAGES, PRICE_FINALIZATION_ENTITY_TYPE, PRICE_FORM_CAPTURE_KEYS, parsePriceFormAnswer, priceCommandEntityType,
@@ -38,7 +39,9 @@ const CONFIRMATION_MINUTES = 30;
 const sha = (text: string) => createHash('sha256').update(text).digest('hex');
 const database = prisma as any;
 
-export interface PriceCommandLaunch { kind: PriceCommandKind; entityId: string; sourceExecutionId: string | null }
+/** `guidanceStepId` is the journey step this command belongs to: the one the launch names, else the one the price records answer it started from was opened for. */
+export interface PriceCommandLaunch { kind: PriceCommandKind; entityId: string; sourceExecutionId: string | null; guidanceStepId?: string | null }
+const PRICE_JOURNEY_STEP_KEYS = ['finalize_price'] as const;
 
 const backToRecords = { id: 'price-finalization-back', label: 'Back to price records', interactionType: 'START_WORKFLOW' as const, message: 'Show my price finalizations', operationId: 'PRICE_FINALIZATIONS_LIST' as const, style: 'SECONDARY' as const };
 
@@ -123,8 +126,8 @@ export async function priceCommandResult(userId: string, propertyId: string, lau
   if (!(await isPrimaryOwner(userId, propertyId))) return primaryOwnerOnly();
   const kind = launch.kind;
   const expiresAt = new Date(Date.now() + CONFIRMATION_MINUTES * 60 * 1000);
-  const base = { sourceExecutionId: launch.sourceExecutionId, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() };
-  const launchParameters = { priceCommandLaunch: { kind, entityId: launch.entityId, sourceExecutionId: launch.sourceExecutionId } };
+  const base = { sourceExecutionId: launch.sourceExecutionId, ...(launch.guidanceStepId ? { guidanceStepId: launch.guidanceStepId } : {}), confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() };
+  const launchParameters = { priceCommandLaunch: { kind, entityId: launch.entityId, sourceExecutionId: launch.sourceExecutionId, ...(launch.guidanceStepId ? { guidanceStepId: launch.guidanceStepId } : {}) } };
   const row = (label: string, value: string | null) => (value ? [{ label, value }] : []);
   const dollars = (value: number | null) => (value === null ? null : money(value));
 
@@ -261,7 +264,12 @@ registerCapabilityHandler('price-finalization.command', async (envelope) => {
   const kind = priceCommandKindFromMessage(envelope.message);
   if (!kind || launch?.operationId !== 'PRICE_FINALIZATION_COMMAND' || launch.surface === 'ASK_REFRESH' || !launch.entityId) return notRoutable();
   if (launch.entityType !== priceCommandEntityType(kind, NEGOTIATION_SHIELD_CASE_ENTITY_TYPE, QUOTE_WORKSPACE_ENTITY_TYPE)) return notRoutable();
-  return priceCommandResult(envelope.userId, envelope.propertyId!, { kind, entityId: launch.entityId, sourceExecutionId: launch.sourceExecutionId ?? null });
+  // The journey step this belongs to: named by the launch, else the step the price records answer it came from was opened for. A step that is not this tool's open
+  // finalize step (for example one inherited from a negotiation review) is dropped here, so the command is simply not part of any journey.
+  const sourceExecutionId = launch.sourceExecutionId ?? null;
+  const candidate = launchedGuidanceStepId(launch) ?? await guidanceStepIdFromSourceExecution(envelope.userId, envelope.propertyId!, sourceExecutionId);
+  const bound = candidate ? await resolveGuidanceStepBinding(envelope.propertyId!, candidate, { toolKey: 'price-finalization', stepKeys: PRICE_JOURNEY_STEP_KEYS }) : null;
+  return priceCommandResult(envelope.userId, envelope.propertyId!, { kind, entityId: launch.entityId, sourceExecutionId, guidanceStepId: bound?.ok ? bound.binding.stepId : null });
 });
 
 const stale = (message: string, code = 'ASK_CONFIRMATION_NOT_ACTIVE') => Object.assign(new Error(message), { code });
@@ -277,6 +285,7 @@ async function confirmPriceCommand(ctx: ConfirmCapabilityContext): Promise<Confi
 
   try {
     let title: string; let description: string; let recordId = entityId; let vendor: string | null = null; let acceptedPrice: number | null = null;
+    let journeyNote: string | null = null;
     const actions: Array<Record<string, unknown>> = [];
     const followUps = (id: string, hasPrice: boolean) => {
       actions.push({ id: PRICE_COMMAND_ACTION_IDS.FINALIZE, label: hasPrice ? 'Finalize this price' : 'Finalize with a price', interactionType: 'START_WORKFLOW', message: PRICE_COMMAND_MESSAGES.FINALIZE,
@@ -300,7 +309,13 @@ async function confirmPriceCommand(ctx: ConfirmCapabilityContext): Promise<Confi
       const payload = kind === 'START_QUOTE'
         ? { sourceType: 'QUOTE_COMPARISON', quoteComparisonWorkspaceId: entityId }
         : priceStartInput(kind, (expected as { success: true; data: PriceTermsInput }).data, kind === 'START_NS' ? entityId : undefined);
-      const { detail } = await createPriceFinalizationDraftWithEffects(propertyId, userId, payload as never);
+      // A record started for a journey step stores that journey and step, which is what later binds its finalization exactly. The step is re-read now; a step that is
+      // no longer open starts a plain record and the receipt says so.
+      const stepId = typeof parameters.guidanceStepId === 'string' ? parameters.guidanceStepId : null;
+      const stepBound = stepId ? await resolveGuidanceStepBinding(propertyId, stepId, { toolKey: 'price-finalization', stepKeys: PRICE_JOURNEY_STEP_KEYS }) : null;
+      if (stepBound) journeyNote = stepBound.ok ? 'This record is bound to the journey step; finalizing it completes the step' : stepBound.reason === 'STEP_DONE' ? 'This step was already done' : GUIDANCE_STEP_REFUSAL_TEXT[stepBound.reason];
+      const bindings = stepBound?.ok ? { guidanceJourneyId: stepBound.binding.journeyId, guidanceStepKey: stepBound.binding.stepKey, ...(stepBound.binding.signalIntentFamily ? { guidanceSignalIntentFamily: stepBound.binding.signalIntentFamily } : {}) } : {};
+      const { detail } = await createPriceFinalizationDraftWithEffects(propertyId, userId, { ...payload, ...bindings } as never);
       recordId = detail.id; vendor = detail.vendorName; acceptedPrice = detail.acceptedPrice;
       title = 'Price record started';
       description = 'A draft is saved. Nothing is finalized, booked or sent to the vendor.';
@@ -329,8 +344,10 @@ async function confirmPriceCommand(ctx: ConfirmCapabilityContext): Promise<Confi
         const checked = parsePriceFormAnswer('FINALIZE', parameters.priceFinalize);
         if (!checked.success) throw stale('The accepted price to record is invalid.');
         const price = (checked.data as { acceptedPrice: number }).acceptedPrice;
-        const { detail } = await finalizePriceFinalizationWithEffects(propertyId, userId, record.id, { acceptedPrice: price } as never);
+        const { detail, guidanceReported } = await finalizePriceFinalizationWithEffects(propertyId, userId, record.id, { acceptedPrice: price } as never);
         vendor = detail.vendorName; acceptedPrice = detail.acceptedPrice;
+        // Only a record bound to a journey step says anything about it: reported, failed, or no longer this tool's open step (nothing reported, no other step used).
+        if (record.guidanceJourneyId) journeyNote = guidanceReported === true ? 'This step is recorded as done' : guidanceReported === false ? 'The price is finalized, but the journey step could not be updated. Open the journey to check it' : null;
         title = 'Price finalized'; description = 'The accepted price and terms are recorded as final. Nothing was booked, paid or sent to the vendor.';
       }
     }
@@ -339,7 +356,7 @@ async function confirmPriceCommand(ctx: ConfirmCapabilityContext): Promise<Confi
       status: 'COMPLETED', reasonCode: `PRICE_COMMAND_${kind}_COMPLETED`,
       blocks: [{
         type: 'WORKFLOW_PROGRESS', id: `price-command-${kind.toLowerCase()}-${recordId}`, title, status: 'COMPLETED', description,
-        details: [...(vendor ? [{ label: 'Vendor', value: vendor }] : []), ...(acceptedPrice ? [{ label: 'Accepted price', value: money(acceptedPrice) }] : [])],
+        details: [...(vendor ? [{ label: 'Vendor', value: vendor }] : []), ...(acceptedPrice ? [{ label: 'Accepted price', value: money(acceptedPrice) }] : []), ...(journeyNote ? [{ label: 'Guided journey', value: journeyNote }] : [])],
         actions: (actions.length ? actions : [{ ...backToRecords, label: 'See price records', style: 'PRIMARY' as const }]) as never,
       }],
       suggestions: [],

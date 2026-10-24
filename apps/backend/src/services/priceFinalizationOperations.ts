@@ -8,6 +8,7 @@ import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } f
 import { guidanceJourneyService } from './guidanceEngine/guidanceJourney.service';
 import { assertProjectComplianceDecisionsApplicable } from './projectCompliance/context';
 import { priceFinalizationService } from './priceFinalization.service';
+import { resolveGuidanceStepBindingByKey } from './guidanceEngine/guidanceStepBinding';
 import type {
   PriceFinalizationCreateInput, PriceFinalizationDetailDTO, PriceFinalizationFinalizeInput, PriceFinalizationUpdateInput,
 } from './priceFinalization.types';
@@ -58,7 +59,7 @@ export async function updatePriceFinalizationDraftWithEffects(
 export async function finalizePriceFinalizationWithEffects(
   propertyId: string, userId: string, finalizationId: string,
   payload: PriceFinalizationFinalizeInput & { guidanceStepKey?: string | null; guidanceSignalIntentFamily?: string | null },
-): Promise<{ detail: PriceFinalizationDetailDTO; contextVersion: string }> {
+): Promise<{ detail: PriceFinalizationDetailDTO; contextVersion: string; guidanceReported: boolean | null }> {
   const existing = await priceFinalizationService.getDetail(propertyId, userId, finalizationId);
   const currentContext = await assertProjectComplianceDecisionsApplicable(
     propertyId, userId, 'PRICE_FINALIZATION', { serviceCategory: (payload.serviceCategory ?? existing.serviceCategory ?? 'UNSPECIFIED') as never }, [...GATE_DECISIONS],
@@ -73,6 +74,13 @@ export async function finalizePriceFinalizationWithEffects(
     metadataJson: { actionType: 'finalize', finalizationId: detail.id, acceptedPrice: detail.acceptedPrice, serviceCategory: detail.serviceCategory },
   });
 
+  // A record that stored its journey and step is bound to exactly that step: if it is no longer this tool's open step nothing is reported, and the signal family
+  // is never used instead. A record with no stored journey keeps the older behaviour (the caller's step key, else the family) as a compatibility path.
+  let guidanceReported: boolean | null = null;
+  if (detail.guidanceJourneyId) {
+    const bound = await resolveGuidanceStepBindingByKey(propertyId, detail.guidanceJourneyId, detail.guidanceStepKey || 'finalize_price', { toolKey: 'price-finalization' });
+    if (!bound.ok) return { detail, contextVersion: currentContext.contextVersion, guidanceReported: bound.reason === 'STEP_DONE' ? null : false };
+  }
   const resolvedStepKey = detail.guidanceStepKey || (typeof payload.guidanceStepKey === 'string' ? payload.guidanceStepKey : null) || 'finalize_price';
   const resolvedSignalFamily = detail.guidanceSignalIntentFamily
     || (typeof payload.guidanceSignalIntentFamily === 'string' ? payload.guidanceSignalIntentFamily : null) || 'lifecycle_end_or_past_life';
@@ -86,8 +94,10 @@ export async function finalizePriceFinalizationWithEffects(
         vendorName: detail.vendorName, serviceCategory: detail.serviceCategory, termsAcceptedCount: detail.terms.filter((term) => term.isAccepted).length,
       },
     });
+    guidanceReported = detail.guidanceJourneyId ? true : null;
   } catch (guidanceError) {
+    if (detail.guidanceJourneyId) guidanceReported = false;
     logger.warn({ guidanceError }, '[GUIDANCE] price finalization hook failed');
   }
-  return { detail, contextVersion: currentContext.contextVersion };
+  return { detail, contextVersion: currentContext.contextVersion, guidanceReported };
 }
