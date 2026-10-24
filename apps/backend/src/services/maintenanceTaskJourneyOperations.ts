@@ -16,7 +16,10 @@ export const MAINTENANCE_STEP_TOOL_KEY = 'maintenance';
 export const MAINTENANCE_LINKABLE_STEP_KEYS = ['complete_compliance_task'];
 export type MaintenanceLinkSource = 'DESKTOP' | 'ASK';
 
-export type MaintenanceEvidenceRef = { source: 'HOME_RECORD' | 'LEGACY_DOCUMENT'; id: string; versionId: string | null };
+export type MaintenanceEvidenceRef = { source: 'HOME_RECORD' | 'LEGACY_DOCUMENT' | 'HOME_EVENT'; id: string; versionId: string | null };
+
+/** The Home Event source entity a task's events carry; the explicit task-to-event relationship. */
+export const TASK_EVENT_SOURCE_ENTITY = 'PROPERTY_MAINTENANCE_TASK';
 
 const metadataOf = (task: { completionMetadata: unknown }): Record<string, unknown> =>
   task.completionMetadata && typeof task.completionMetadata === 'object' && !Array.isArray(task.completionMetadata) ? task.completionMetadata as Record<string, unknown> : {};
@@ -35,10 +38,18 @@ export async function verifiedCompletionEvidence(task: { id: string; propertyId:
   const meta = metadataOf(task);
   const records = storedEvidence(meta);
   const legacy = legacyIds(meta);
-  if (records.length === 0 && legacy.length === 0) return [];
+  // A Home Event is evidence only when it is explicitly this task's (its source entity names the task, never a matching category or title), is the current revision, is not deleted, and
+  // is EVIDENCE_VERIFIED. A homeowner-confirmed event (the task's own completion record) is self-attestation and does not count.
+  const events = await prisma.homeEvent.findMany({
+    where: { propertyId: task.propertyId, sourceEntityType: TASK_EVENT_SOURCE_ENTITY, sourceEntityId: task.id, isCurrent: true, deletedAt: null, verificationStatus: 'EVIDENCE_VERIFIED' },
+    select: { id: true, revision: true },
+  });
+  const eventRefs: MaintenanceEvidenceRef[] = events.map((event: { id: string; revision: number }) => ({ source: 'HOME_EVENT' as const, id: event.id, versionId: String(event.revision) }));
+  if (records.length === 0 && legacy.length === 0) return eventRefs;
   const resolved = await resolveProjectDocuments(task.propertyId, [...records.map((entry) => entry.id), ...legacy], { transitionalLegacyIds: legacy });
   const pinned = new Map(records.map((entry) => [entry.id, entry.versionId]));
-  return resolved.documents.map((doc) => ({ source: doc.source === 'HOME_RECORD' ? 'HOME_RECORD' as const : 'LEGACY_DOCUMENT' as const, id: doc.id, versionId: doc.source === 'HOME_RECORD' ? (pinned.get(doc.id) ?? doc.versionId) : null }));
+  const documentRefs: MaintenanceEvidenceRef[] = resolved.documents.map((doc) => ({ source: doc.source === 'HOME_RECORD' ? 'HOME_RECORD' as const : 'LEGACY_DOCUMENT' as const, id: doc.id, versionId: doc.source === 'HOME_RECORD' ? (pinned.get(doc.id) ?? doc.versionId) : null }));
+  return [...documentRefs, ...eventRefs];
 }
 
 /** Links a task to one journey step. The step is re-read (open, maintenance tool, compliance step) and the task must belong to the same property. */

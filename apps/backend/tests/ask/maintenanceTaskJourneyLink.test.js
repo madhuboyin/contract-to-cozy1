@@ -6,12 +6,13 @@ const { prisma } = require('../../src/lib/prisma.ts');
 const ops = require('../../src/services/maintenanceTaskJourneyOperations.ts');
 const { guidanceJourneyService } = require('../../src/services/guidanceEngine/guidanceJourney.service.ts');
 
-function setup({ task, docs = [], links = [] }) {
+function setup({ task, docs = [], links = [], events = [] }) {
   const reported = [];
   const created = [];
   prisma.propertyMaintenanceTask = { findUnique: async () => task, findFirst: async ({ where }) => (task && where.id === task.id && where.propertyId === task.propertyId ? task : null) };
   // Home Records resolve through the shared resolver (propertyRecord); legacy documents only when the completion named them (document).
   prisma.propertyRecord = { findMany: async ({ where }) => docs.filter((d) => d.record && where.id.in.includes(d.id) && d.propertyId === where.propertyId).map((d) => ({ id: d.id, title: 't', recordType: 'OTHER', sensitivity: 'STANDARD', currentVersionId: d.versionId ?? 'v1', currentVersion: { mimeType: 'application/pdf' } })) };
+  prisma.homeEvent = { findMany: async ({ where }) => events.filter((e) => e.propertyId === where.propertyId && e.sourceEntityType === where.sourceEntityType && e.sourceEntityId === where.sourceEntityId && e.isCurrent && !e.deletedAt && e.verificationStatus === where.verificationStatus) };
   prisma.document = { findMany: async ({ where }) => docs.filter((d) => !d.record && where.id.in.includes(d.id) && d.propertyId === where.propertyId).map((d) => ({ id: d.id, name: 'legacy', mimeType: null })) };
   prisma.guidanceStepMaintenanceTaskLink = {
     findMany: async () => links,
@@ -118,4 +119,15 @@ test('evidence attached to a task that is not completed yet is kept but reports 
     assert.equal(h.reported.length, 0);
     assert.equal(h.writes[0].completionMetadata.evidence.length, 1);
   } finally { h.restore(); }
+});
+
+test('a verified Home Event explicitly linked to the task is evidence; a homeowner-confirmed one, another task\'s, or a superseded one is not', async () => {
+  const task = { id: 't1', propertyId: 'p1', status: 'COMPLETED', completionMetadata: {}, lastCompletedDate: new Date() };
+  const ev = (over) => ({ id: 'e1', propertyId: 'p1', sourceEntityType: 'PROPERTY_MAINTENANCE_TASK', sourceEntityId: 't1', isCurrent: true, deletedAt: null, verificationStatus: 'EVIDENCE_VERIFIED', revision: 2, ...over });
+  let h = setup({ task, events: [ev({})] });
+  try { assert.deepEqual(await ops.verifiedCompletionEvidence(task), [{ source: 'HOME_EVENT', id: 'e1', versionId: '2' }]); } finally { h.restore(); }
+  for (const over of [{ verificationStatus: 'HOMEOWNER_CONFIRMED' }, { sourceEntityId: 't2' }, { isCurrent: false }, { deletedAt: new Date() }]) {
+    h = setup({ task, events: [ev(over)] });
+    try { assert.deepEqual(await ops.verifiedCompletionEvidence(task), [], JSON.stringify(over)); } finally { h.restore(); }
+  }
 });
