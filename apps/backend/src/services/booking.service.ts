@@ -1,3 +1,4 @@
+import { syncBookingMaintenanceProofsSafely } from './maintenanceBookingProofSync';
 // apps/backend/src/services/booking.service.ts
 
 import {
@@ -1080,6 +1081,7 @@ export class BookingService {
 
       return completedBooking;
     });
+    await syncBookingMaintenanceProofsSafely(bookingId);
     for (const { workItem, event } of completedPendingEvents) {
       await emitWorkItemLifecycleChange(workItem, event).catch((err) =>
         logger.warn({ err, bookingId }, '[BOOKING] work-item lifecycle-change emission failed post-commit'),
@@ -1246,6 +1248,8 @@ export class BookingService {
       entityType: 'BOOKING',
       entityId: updated.id,
     });
+
+    await syncBookingMaintenanceProofsSafely(bookingId);
 
     const quoteDecisionWorkspaceId = (booking as any).quoteDecisionWorkspaceId as string | null;
     if (quoteDecisionWorkspaceId) {

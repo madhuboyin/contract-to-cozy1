@@ -1,3 +1,4 @@
+import { syncBookingMaintenanceProofsSafely } from './maintenanceBookingProofSync';
 // apps/backend/src/services/adminBookingOps.service.ts
 //
 // Booking Operations workspace backend (ADMIN_MODULE_FRD.md §10.3, Phase 2
@@ -231,6 +232,8 @@ export async function openDisputeCase(
     },
     ctx
   );
+  // A dispute raised on a completed booking ends the provider-confirmed completion as journey proof.
+  await syncBookingMaintenanceProofsSafely(booking.id);
   if (booking.quoteDecisionWorkspaceId) {
     emitServiceQuoteDecisionAnalytics({
       eventName: ServiceQuoteDecisionEvent.DISPUTE_REPORTED,

@@ -16,7 +16,7 @@ export const MAINTENANCE_STEP_TOOL_KEY = 'maintenance';
 export const MAINTENANCE_LINKABLE_STEP_KEYS = ['complete_compliance_task'];
 export type MaintenanceLinkSource = 'DESKTOP' | 'ASK';
 
-export type MaintenanceEvidenceRef = { source: 'HOME_RECORD' | 'LEGACY_DOCUMENT' | 'HOME_EVENT'; id: string; versionId: string | null };
+export type MaintenanceEvidenceRef = { source: 'HOME_RECORD' | 'LEGACY_DOCUMENT' | 'HOME_EVENT' | 'BOOKING'; id: string; versionId: string | null };
 
 /** The Home Event source entity a task's events carry; the explicit task-to-event relationship. */
 export const TASK_EVENT_SOURCE_ENTITY = 'PROPERTY_MAINTENANCE_TASK';
@@ -33,8 +33,23 @@ const legacyIds = (meta: Record<string, unknown>): string[] =>
  * `attachMaintenanceTaskEvidence` are canonical; a legacy document id the completion already named (`photoDocumentIds`) is accepted only as a transitional reference. The returned
  * references say which store and version supplied each piece of evidence. A self-reported completion with nothing attached has none.
  */
-export async function verifiedCompletionEvidence(task: { id: string; propertyId: string; status: string; completionMetadata: unknown }): Promise<MaintenanceEvidenceRef[]> {
-  if (task.status !== 'COMPLETED') return [];
+/**
+ * A provider-confirmed booking completion is the primary authoritative proof. It counts when the task is explicitly linked to the booking (`bookingId`), the booking is COMPLETED (only the booking's
+ * own provider can complete it), and no dispute case was opened on it after that completion. A dispute raised later, a cancellation or a DISPUTED status ends it; a provider's later
+ * re-completion (a newer `completedAt`) is a new version that stands again. The version is the completion time.
+ */
+export async function bookingCompletionEvidence(task: { bookingId?: string | null; propertyId: string }): Promise<MaintenanceEvidenceRef | null> {
+  if (!task.bookingId) return null;
+  const booking = await prisma.booking.findFirst({ where: { id: task.bookingId, propertyId: task.propertyId }, select: { id: true, status: true, providerId: true, completedAt: true } });
+  if (!booking || booking.status !== 'COMPLETED' || !booking.providerId || !booking.completedAt) return null;
+  const disputed = await prisma.adminCase.count({ where: { type: 'DISPUTE', entityType: 'BOOKING', entityId: booking.id, createdAt: { gt: booking.completedAt } } });
+  return disputed > 0 ? null : { source: 'BOOKING', id: booking.id, versionId: booking.completedAt.toISOString() };
+}
+
+export async function verifiedCompletionEvidence(task: { id: string; propertyId: string; status: string; completionMetadata: unknown; bookingId?: string | null }): Promise<MaintenanceEvidenceRef[]> {
+  const booking = await bookingCompletionEvidence(task);
+  if (task.status !== 'COMPLETED') return booking ? [booking] : [];
+  const withBooking = (refs: MaintenanceEvidenceRef[]) => (booking ? [booking, ...refs] : refs);
   const meta = metadataOf(task);
   const records = storedEvidence(meta);
   const legacy = legacyIds(meta);
@@ -45,11 +60,11 @@ export async function verifiedCompletionEvidence(task: { id: string; propertyId:
     select: { id: true, revision: true },
   });
   const eventRefs: MaintenanceEvidenceRef[] = events.map((event: { id: string; revision: number }) => ({ source: 'HOME_EVENT' as const, id: event.id, versionId: String(event.revision) }));
-  if (records.length === 0 && legacy.length === 0) return eventRefs;
+  if (records.length === 0 && legacy.length === 0) return withBooking(eventRefs);
   const resolved = await resolveProjectDocuments(task.propertyId, [...records.map((entry) => entry.id), ...legacy], { transitionalLegacyIds: legacy });
   const pinned = new Map(records.map((entry) => [entry.id, entry.versionId]));
   const documentRefs: MaintenanceEvidenceRef[] = resolved.documents.map((doc) => ({ source: doc.source === 'HOME_RECORD' ? 'HOME_RECORD' as const : 'LEGACY_DOCUMENT' as const, id: doc.id, versionId: doc.source === 'HOME_RECORD' ? (pinned.get(doc.id) ?? doc.versionId) : null }));
-  return [...documentRefs, ...eventRefs];
+  return withBooking([...documentRefs, ...eventRefs]);
 }
 
 /** Links a task to one journey step. The step is re-read (open, maintenance tool, compliance step) and the task must belong to the same property. */
@@ -67,9 +82,18 @@ export async function linkMaintenanceTaskToStep(propertyId: string, userId: stri
 }
 
 export function buildMaintenanceTaskCompletion(propertyId: string, actorUserId: string, task: { id: string; lastCompletedDate: Date | null }, evidence: MaintenanceEvidenceRef[], binding: GuidanceStepBinding) {
+  const booking = evidence.find((ref) => ref.source === 'BOOKING');
+  const base = { propertyId, actorUserId, journeyId: binding.journeyId, inventoryItemId: binding.inventoryItemId, signalIntentFamily: binding.signalIntentFamily ?? 'compliance_deadline', issueDomain: 'MAINTENANCE' as const, sourceToolKey: MAINTENANCE_STEP_TOOL_KEY, stepKey: binding.stepKey, status: 'COMPLETED' as const };
+  // A provider-confirmed booking is its own proof: its evidence row names the booking and its completion version, so a later dispute or cancellation invalidates exactly that row.
+  if (booking) {
+    return {
+      ...base, sourceEntityType: 'BOOKING', sourceEntityId: booking.id,
+      dedupeKey: `maintenance-booking-completed:${propertyId}:${booking.id}:${booking.versionId}:${binding.stepId}`,
+      producedData: { proofType: 'maintenance_booking_completed', proofId: booking.id, taskId: task.id, bookingId: booking.id, evidence, completedAt: booking.versionId },
+    };
+  }
   return {
-    propertyId, actorUserId, journeyId: binding.journeyId, inventoryItemId: binding.inventoryItemId, signalIntentFamily: binding.signalIntentFamily ?? 'compliance_deadline', issueDomain: 'MAINTENANCE' as const,
-    sourceToolKey: MAINTENANCE_STEP_TOOL_KEY, sourceEntityType: 'PROPERTY_MAINTENANCE_TASK', sourceEntityId: task.id, stepKey: binding.stepKey, status: 'COMPLETED' as const,
+    ...base, sourceEntityType: 'PROPERTY_MAINTENANCE_TASK', sourceEntityId: task.id,
     dedupeKey: `maintenance-task-verified:${propertyId}:${task.id}:${binding.stepId}`,
     producedData: { proofType: 'maintenance_task_verified_completion', proofId: task.id, taskId: task.id, evidence, completedAt: (task.lastCompletedDate ?? new Date()).toISOString() },
   };
@@ -79,9 +103,9 @@ export function buildMaintenanceTaskCompletion(propertyId: string, actorUserId: 
  * Reports a just-completed task to every step it is linked to, when (and only when) the completion is verified. A step that no longer fits reports nothing;
  * a failed report never undoes the completion. Returns the step ids reported.
  */
-export async function reportLinkedTaskCompletion(actorUserId: string, taskId: string): Promise<string[]> {
+export async function reportLinkedTaskCompletion(actorUserId: string | null, taskId: string): Promise<string[]> {
   const task = await prisma.propertyMaintenanceTask.findUnique({ where: { id: taskId } });
-  if (!task || task.status !== 'COMPLETED') return [];
+  if (!task) return [];
   const links = await prisma.guidanceStepMaintenanceTaskLink.findMany({ where: { maintenanceTaskId: taskId, propertyId: task.propertyId } });
   if (links.length === 0) return [];
   const evidence = await verifiedCompletionEvidence(task);
@@ -91,7 +115,8 @@ export async function reportLinkedTaskCompletion(actorUserId: string, taskId: st
     try {
       const bound = await resolveGuidanceStepBinding(task.propertyId, link.stepId, { toolKey: MAINTENANCE_STEP_TOOL_KEY, stepKeys: MAINTENANCE_LINKABLE_STEP_KEYS });
       if (!bound.ok || bound.binding.journeyId !== link.journeyId) continue;
-      await guidanceJourneyService.recordToolCompletion(buildMaintenanceTaskCompletion(task.propertyId, actorUserId, task, evidence, bound.binding));
+      if (!actorUserId && !link.linkedByUserId) continue; // never report as a made-up user
+      await guidanceJourneyService.recordToolCompletion(buildMaintenanceTaskCompletion(task.propertyId, (actorUserId ?? link.linkedByUserId)!, task, evidence, bound.binding));
       reported.push(link.stepId);
     } catch (guidanceError) {
       logger.warn({ guidanceError, taskId, stepId: link.stepId }, '[GUIDANCE] linked maintenance completion report failed');
