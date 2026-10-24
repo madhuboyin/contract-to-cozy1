@@ -22,30 +22,37 @@ const { guidanceJourneyService } = require('../../src/services/guidanceEngine/gu
 const reporting = require('../../src/services/guidanceEngine/projectJourneyReporting.ts');
 const { PROJECT_TRACKER_CREATE_MESSAGE } = require('../../src/services/ask/support/projectTrackerConstants.ts');
 const { askGuidanceStepMode } = require('../../src/services/ask/askGuidanceStepHandlers.ts');
+const featureContext = require('../../src/modules/propertyContext/application/evaluateFeatureContext.ts');
+const compliance = require('../../src/services/projectCompliance/context.ts');
+const analytics = require('../../src/services/analytics/index.ts');
 
 const OP = 'PROJECT_TRACKER_CREATE';
 const FORM = { name: 'New roof', projectType: 'ROOF_REPLACEMENT', fulfillmentMode: 'PROVIDER', contractorName: 'Acme Roofing', contractAmountDollars: 18500, startDate: '2026-11-01', expectedEndDate: null,
   permitApplicability: 'UNKNOWN', hoaApplicability: 'UNKNOWN', initialMilestoneName: 'Tear off', initialMilestoneDate: null, contractDocumentIds: [] };
-let step; let existingProject; let created; let completions; let recordFails; let saved;
+let step; let existingProject; let created; let completions; let recordFails; let saved; let gates;
 const stepRow = (over = {}) => ({ stepKey: 'confirm_scope_and_provider', toolKey: 'project-tracker', status: 'PENDING', journey: { id: 'j1', status: 'ACTIVE', inventoryItemId: 'item-1', primarySignal: { signalIntentFamily: 'lifecycle_end_or_past_life' } }, ...over });
 
 test.beforeEach(() => {
   step = stepRow(); existingProject = null; created = []; completions = []; recordFails = false;
   saved = { models: ['guidanceSignal', 'guidanceJourney', 'guidanceJourneyEvent', 'guidanceStepEvidence', 'guidanceJourneyStep', 'projectRecord', 'propertyRecord', 'document', 'property'].map((name) => [name, prisma[name]]),
-    resolve: propertyAccess.resolvePropertyAccess, create: projectService.createProject, rec: guidanceJourneyService.recordToolCompletion, reconcile: executeOperation.reconcileAskExecutionSideEffects };
+    resolve: propertyAccess.resolvePropertyAccess, create: projectService.createProject, evalCtx: featureContext.evaluateFeatureContext, compliance: compliance.assertProjectComplianceApplicable, track: analytics.analyticsEmitter.track, rec: guidanceJourneyService.recordToolCompletion, reconcile: executeOperation.reconcileAskExecutionSideEffects };
   prisma.guidanceSignal = {}; prisma.guidanceJourneyEvent = {}; prisma.guidanceStepEvidence = {};
   prisma.guidanceJourney = { findFirst: async (args) => (args.where.id === 'j-open' ? { id: 'j-open' } : null) };
   prisma.guidanceJourneyStep = { findFirst: async () => step };
   prisma.projectRecord = { findFirst: async (args) => (args.where.guidanceJourneyId ? existingProject : null), findMany: async () => [] };
   prisma.propertyRecord = { findMany: async () => [] };
   propertyAccess.resolvePropertyAccess = async () => ({ role: 'CONTRIBUTOR', userId: 'u1', propertyId: 'p1' });
-  projectService.createProject = async (propertyId, data) => { created.push(data); return { id: 'proj-1' }; };
+  projectService.createProject = async (propertyId, data) => { created.push(data); return { id: 'proj-1', milestones: [] }; };
+  gates = { feature: 0, compliance: 0 };
+  featureContext.evaluateFeatureContext = async () => { gates.feature += 1; return { canExecute: true }; };
+  compliance.assertProjectComplianceApplicable = async () => { gates.compliance += 1; return { contextVersion: 'ctx' }; };
+  analytics.analyticsEmitter.track = () => {};
   guidanceJourneyService.recordToolCompletion = async (input) => { completions.push(input); if (recordFails) throw new Error('down'); return {}; };
   executeOperation.reconcileAskExecutionSideEffects = async () => ({ attemptedAndFailed: false, refreshedExecutions: [] });
 });
 test.afterEach(() => {
   for (const [name, model] of saved.models) prisma[name] = model;
-  propertyAccess.resolvePropertyAccess = saved.resolve; projectService.createProject = saved.create; guidanceJourneyService.recordToolCompletion = saved.rec; executeOperation.reconcileAskExecutionSideEffects = saved.reconcile;
+  propertyAccess.resolvePropertyAccess = saved.resolve; projectService.createProject = saved.create; featureContext.evaluateFeatureContext = saved.evalCtx; compliance.assertProjectComplianceApplicable = saved.compliance; analytics.analyticsEmitter.track = saved.track; guidanceJourneyService.recordToolCompletion = saved.rec; executeOperation.reconcileAskExecutionSideEffects = saved.reconcile;
 });
 
 const start = (entity) => capabilityInvoke(OP, { userId: 'u1', propertyId: 'p1', message: PROJECT_TRACKER_CREATE_MESSAGE, launchContext: { surface: 'ASK_WORKSPACE', operationId: OP, sourceExecutionId: 'src-1', ...(entity ? { entityType: 'GUIDANCE_STEP', entityId: 'step-p' } : {}) } });
@@ -122,7 +129,21 @@ test('Ask\'s completion command reports through the shared closure reporter and 
   const handler = fs.readFileSync(require.resolve('../../src/services/ask/handlers/projectTracker.handler.ts'), 'utf8');
   assert.match(handler, /reportProjectClosure\(ctx\.execution\.propertyId, ctx\.userId/);
   const controller = fs.readFileSync(require.resolve('../../src/controllers/projectTracker.controller.ts'), 'utf8');
-  assert.match(controller, /reportProjectCreated\(/);
+  assert.match(controller, /createProjectWithEffects\(/, 'the page creates through the shared service, which reports the created project');
   assert.match(controller, /reportProjectClosure\(/);
+  assert.match(fs.readFileSync(require.resolve('../../src/services/projectTrackerOperations.ts'), 'utf8'), /reportProjectCreated\(/);
   assert.equal(/producedData: \{\s*proofType: 'project_scope_confirmation'/.test(controller), false, 'the inline create report is gone');
+});
+
+test('Ask now runs the page\'s gates: a refused gate is the homeowner\'s answer in the gate\'s own words, and nothing is created or reported', async () => {
+  const proposal = await require('../../src/services/ask/handlers/projectTracker.handler.ts').projectTrackerCreateResult('u1', 'p1', FORM, null, 'step-p');
+  featureContext.evaluateFeatureContext = async () => ({ canExecute: false });
+  await assert.rejects(() => confirmCapabilityInvoke(OP, ctx(proposal.parameters)), (error) => error.code === 'ASK_CONFIRMATION_NOT_ACTIVE' && /Complete the required property responsibility/.test(error.message));
+  assert.equal(created.length, 0);
+  assert.equal(completions.length, 0);
+  featureContext.evaluateFeatureContext = async () => ({ canExecute: true });
+  assert.equal(gates.compliance >= 0, true);
+  const ok = await confirmCapabilityInvoke(OP, ctx(proposal.parameters));
+  assert.equal(ok.result.status, 'COMPLETED');
+  assert.ok(gates.compliance >= 1, 'the compliance applicability check runs for an Ask create too');
 });

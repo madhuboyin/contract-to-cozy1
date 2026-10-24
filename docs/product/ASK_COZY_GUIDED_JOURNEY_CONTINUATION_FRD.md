@@ -632,3 +632,20 @@ CONNECTABLE now means the proof is decided and nothing needs a product call; wha
 - **Desktop.** The Desktop shell still completes `review_signal` through the generic completion endpoint; it does not yet use the typed acknowledgement. Moving it onto `acknowledgeGuidanceStep` is open.
 - **Matrix.** `guidance-overview:review_signal` is CONNECTED (16 connected).
 
+## 29. Project Create parity (2026-10-24)
+
+Owner decision: Ask and Desktop produce the same canonical project initialization, owned by the shared service so neither caller can drift.
+
+- **The difference that existed.** The page's create ran the property-responsibility gate (`evaluateFeatureContext`, `PROJECTS` / `CREATE_PROJECT`; refusal is a 409 `PROPERTY_CONTEXT_INCOMPLETE`) and the compliance
+  applicability check (`PROJECT_TRACKER`, `ownerProjectExecution`), then created the project, reported the journey step, emitted the `create_project` analytics event and the first-milestone lifecycle
+  event. Ask's confirmation ran **none of the gates** and none of the events: it called the project service directly. That also meant Ask could create a project the page would have refused.
+- **One service.** `services/projectTrackerOperations.ts` `createProjectWithEffects` owns, in this order: the two gates, the idempotency rule, the project service create, the guidance proof
+  (`reportProjectCreated`, when a journey is named), the analytics event and the first-milestone lifecycle event (source action, entity and journey carried). The controller and the Ask confirmation both call
+  it; a test fails if either calls the project service's create or repeats a gate or the create event itself.
+- **Idempotency.** The project service has no key, so the rule is anchored by the caller: `reuseCreatedSince` is when the operation began, and a project of the same name created since is that operation's own
+  earlier write, returned with `reused: true` and no second round of effects. Ask passes the execution's start; the page passes none, as before. Same journey linkage and defaults: the service takes the same body.
+- **Ask-side behaviour.** A gate refusal at the confirmation is the homeowner's answer in the gate's own words (code `ASK_CONFIRMATION_NOT_ACTIVE`), and nothing is created or reported. The receipt and the journey
+  step logic from section 25 are unchanged.
+- **Not changed.** The Desktop request and response shapes (the controller still returns the project and the compliance envelope). Initial milestone content is whatever the caller supplies (Ask supplies the one
+  first milestone its form collects; the page supplies its own plan); the service imposes no extra policy.
+

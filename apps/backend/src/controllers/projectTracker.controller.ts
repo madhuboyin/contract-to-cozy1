@@ -7,18 +7,14 @@ import {
   reconcileProjectExecution,
 } from '../services/renovationExecution.service';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
-import {
-  assertProjectComplianceApplicable,
-  getProjectComplianceEnvelope,
-} from '../services/projectCompliance/context';
-import { evaluateFeatureContext } from '../modules/propertyContext/application/evaluateFeatureContext';
+import { getProjectComplianceEnvelope } from '../services/projectCompliance/context';
 import { APIError } from '../middleware/error.middleware';
 import { guidanceJourneyService } from '../services/guidanceEngine/guidanceJourney.service';
 import { logger } from '../lib/logger';
-import { reportProjectClosure, reportProjectCreated } from '../services/guidanceEngine/projectJourneyReporting';
+import { reportProjectClosure } from '../services/guidanceEngine/projectJourneyReporting';
+import { createProjectWithEffects } from '../services/projectTrackerOperations';
 import { recordToolLifecycleEvents } from '../services/analytics/toolLifecycle';
 import {
-  hasTrackableProjectMilestone,
   projectMilestonePlanCompletionEvent,
   projectProgressCompletionEvent,
 } from '../services/analytics/projectTrackerLifecycle';
@@ -60,71 +56,14 @@ export async function getProviderExecutionReadiness(req: Request, res: Response,
 
 export async function createProject(req: Request, res: Response, next: NextFunction) {
   try {
-    const work = {
-      projectType: req.body.projectType,
-      serviceCategory: req.body.serviceCategory,
-      homeSystemsAffected: req.body.homeSystemsAffected ?? [],
-    };
-    const evaluation = await evaluateFeatureContext(req.params.propertyId, req.user!.userId, {
-      featureKey: 'PROJECTS',
-      operationKey: 'CREATE_PROJECT',
-      operationInput: work,
-    });
-    if (!evaluation.canExecute) {
-      throw new APIError(
-        'Complete the required property responsibility before creating this project.',
-        409,
-        'PROPERTY_CONTEXT_INCOMPLETE',
-        { evaluation },
-      );
-    }
-    await assertProjectComplianceApplicable(
-      req.params.propertyId,
-      req.user!.userId,
-      'PROJECT_TRACKER',
-      work,
-      'ownerProjectExecution',
-    );
-    const data = await svc.createProject(req.params.propertyId, { ...req.body, actingUserId: req.user!.userId });
-    if (req.body.guidanceJourneyId) {
-      await reportProjectCreated(req.params.propertyId, req.user!.userId, {
-        projectId: (data as any).id, journeyId: req.body.guidanceJourneyId, inventoryItemId: req.body.inventoryItemId ?? null,
-        executionPath: req.body.executionPath ?? null, fulfillmentMode: req.body.fulfillmentMode, fundingMode: req.body.fundingMode, complexity: req.body.complexity,
-      });
-    }
+    // The gates, the guidance report, the analytics and the first-milestone lifecycle event live in the shared service, so Ask creates a project exactly the same way.
+    const { project: data, work } = await createProjectWithEffects(req.params.propertyId, req.user!.userId, req.body);
     const propertyContext = await getProjectComplianceEnvelope(
       req.params.propertyId,
       req.user!.userId,
       'PROJECT_TRACKER',
-      work,
+      work as never,
     );
-
-    analyticsEmitter.track({
-      eventType: AnalyticsEvent.ACTION_COMPLETED,
-      userId: req.user?.userId,
-      propertyId: req.params.propertyId,
-      moduleKey: AnalyticsModule.PROJECT_MGMT,
-      featureKey: AnalyticsFeature.PROJECT_TRACKER,
-      metadataJson: { actionType: 'create_project', projectId: (data as any)?.id },
-    });
-    const firstMilestone = (data as any).milestones?.[0];
-    if (hasTrackableProjectMilestone(firstMilestone)) {
-      void recordToolLifecycleEvents({
-        userId: req.user!.userId,
-        propertyId: req.params.propertyId,
-        events: [projectMilestonePlanCompletionEvent({
-          projectId: (data as any).id,
-          milestoneId: firstMilestone.id,
-          operation: 'project_created_with_milestone',
-          sourceActionId: req.body.sourceActionId,
-          sourceEntityType: req.body.sourceEntityType,
-          sourceEntityId: req.body.sourceEntityId,
-          sourceJourneyId:
-            req.body.sourceJourneyId ?? req.body.guidanceJourneyId,
-        })],
-      });
-    }
-
     res.status(201).json({ success: true, data, propertyContext });
   } catch (err) { next(err); }
 }

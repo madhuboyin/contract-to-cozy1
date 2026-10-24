@@ -20,7 +20,9 @@ import { reconcileAskExecutionSideEffects } from '../execution/executeOperation'
 import type { AskViewState } from '../support/executionState';
 import { collectionDescriptor } from '../support/collectionDescriptor';
 import { GUIDANCE_STEP_REFUSAL_TEXT, resolveGuidanceStepBinding, type GuidanceStepBindingResult } from '../support/guidanceStepBinding';
-import { reportProjectClosure, reportProjectCreated } from '../../guidanceEngine/projectJourneyReporting';
+import { reportProjectClosure } from '../../guidanceEngine/projectJourneyReporting';
+import { createProjectWithEffects } from '../../projectTrackerOperations';
+import { APIError } from '../../../middleware/error.middleware';
 
 const PROJECT_JOURNEY_STEP_KEYS = ['confirm_scope_and_provider'] as const;
 const journeyStepUnavailable = (body: string): AskOperationResult => ({
@@ -349,27 +351,34 @@ async function confirmProjectTrackerCreate(ctx: ConfirmCapabilityContext): Promi
   if (!candidate.success) throw Object.assign(new Error('The project details are invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
   const input = candidate.data;
   const contractDocument = (await projectDocuments(ctx.execution.propertyId, input.contractDocumentIds))[0];
-  const earlier = await prisma.projectRecord.findFirst({ where: { propertyId: ctx.execution.propertyId, name: input.name, createdAt: { gte: ctx.execution.createdAt } }, select: { id: true } });
   // A project started for a journey's step stores that journey and reports the step; the step is re-read now, and one that is no longer open starts a plain project.
   const stepId = typeof ctx.parameters.guidanceStepId === 'string' ? ctx.parameters.guidanceStepId : null;
-  const stepBound: GuidanceStepBindingResult | null = stepId && !earlier ? await resolveGuidanceStepBinding(ctx.execution.propertyId, stepId, { toolKey: 'project-tracker', stepKeys: PROJECT_JOURNEY_STEP_KEYS }) : null;
-  const project = earlier ?? await createProject(ctx.execution.propertyId, {
-    ...(stepBound?.ok ? { guidanceJourneyId: stepBound.binding.journeyId, ...(stepBound.binding.inventoryItemId ? { inventoryItemId: stepBound.binding.inventoryItemId } : {}) } : {}),
-    name: input.name, projectType: input.projectType, fulfillmentMode: input.fulfillmentMode, contractorName: input.fulfillmentMode === 'PROVIDER' ? input.contractorName : undefined,
-    contractAmountCents: Math.round(input.contractAmountDollars * 100), startDate: input.startDate, expectedEndDate: input.expectedEndDate ?? undefined,
-    permitApplicability: input.permitApplicability, permitApplicabilityBasis: input.permitApplicabilityBasis ?? undefined,
-    hoaApplicability: input.hoaApplicability, hoaApplicabilityBasis: input.hoaApplicabilityBasis ?? undefined,
-    // The Home Record id is the reference (owner ruling D-P1); no storage key is copied.
-    ...(contractDocument ? { contractDocumentIds: [contractDocument.id] } : {}),
-    actingUserId: ctx.userId,
-    sourceType: 'MANUAL', milestones: [{ name: input.initialMilestoneName, scheduledDate: input.initialMilestoneDate ?? undefined, milestoneType: 'STANDARD', requiresPhotoEvidence: false, position: 0 }],
-  });
-  const projectId = project.id;
+  const stepBound: GuidanceStepBindingResult | null = stepId ? await resolveGuidanceStepBinding(ctx.execution.propertyId, stepId, { toolKey: 'project-tracker', stepKeys: PROJECT_JOURNEY_STEP_KEYS }) : null;
+  // The page's own creation: the same gates (property responsibility, compliance applicability), analytics, first-milestone lifecycle event and journey proof, in one shared
+  // service. A retry of this confirmation finds the project this execution already made.
+  let created: Awaited<ReturnType<typeof createProjectWithEffects>>;
+  try {
+    created = await createProjectWithEffects(ctx.execution.propertyId, ctx.userId, {
+      ...(stepBound?.ok ? { guidanceJourneyId: stepBound.binding.journeyId, ...(stepBound.binding.inventoryItemId ? { inventoryItemId: stepBound.binding.inventoryItemId } : {}) } : {}),
+      name: input.name, projectType: input.projectType, fulfillmentMode: input.fulfillmentMode, contractorName: input.fulfillmentMode === 'PROVIDER' ? input.contractorName : undefined,
+      contractAmountCents: Math.round(input.contractAmountDollars * 100), startDate: input.startDate, expectedEndDate: input.expectedEndDate ?? undefined,
+      permitApplicability: input.permitApplicability, permitApplicabilityBasis: input.permitApplicabilityBasis ?? undefined,
+      hoaApplicability: input.hoaApplicability, hoaApplicabilityBasis: input.hoaApplicabilityBasis ?? undefined,
+      // The Home Record id is the reference (owner ruling D-P1); no storage key is copied.
+      ...(contractDocument ? { contractDocumentIds: [contractDocument.id] } : {}),
+      sourceType: 'MANUAL', milestones: [{ name: input.initialMilestoneName, scheduledDate: input.initialMilestoneDate ?? undefined, milestoneType: 'STANDARD', requiresPhotoEvidence: false, position: 0 }],
+    } as never, { reuseCreatedSince: ctx.execution.createdAt });
+  } catch (error) {
+    // A gate's refusal is the homeowner's answer, with the gate's own words.
+    if (error instanceof APIError && error.statusCode < 500) throw Object.assign(new Error(error.message), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+    throw error;
+  }
+  const earlier = created.reused ? created.project : null;
+  const projectId = created.project.id as string;
   let journeyNote: string | null = null;
-  if (stepBound) {
+  if (stepBound && !created.reused) {
     journeyNote = !stepBound.ok ? (stepBound.reason === 'STEP_DONE' ? 'This step was already done' : GUIDANCE_STEP_REFUSAL_TEXT[stepBound.reason])
-      : (await reportProjectCreated(ctx.execution.propertyId, ctx.userId, { projectId, journeyId: stepBound.binding.journeyId, inventoryItemId: stepBound.binding.inventoryItemId, fulfillmentMode: input.fulfillmentMode }))
-        ? 'This step is recorded as done' : 'The project is started, but the journey step could not be updated. Open the journey to check it';
+      : created.guidanceReported ? 'This step is recorded as done' : 'The project is started, but the journey step could not be updated. Open the journey to check it';
   }
   const result: AskOperationResult = { status: 'COMPLETED', reasonCode: 'PROJECT_TRACKER_CREATE_COMPLETED', blocks: [{ type: 'WORKFLOW_PROGRESS', id: `project-created-${projectId}`, title: earlier ? 'Project already started' : 'Project started', status: 'COMPLETED', description: 'The project and its first milestone are now in Project Tracker.', details: [{ label: 'Project', value: input.name }, { label: 'First milestone', value: input.initialMilestoneName }, { label: 'Amount', value: `$${input.contractAmountDollars.toLocaleString('en-US')}` }, ...(journeyNote ? [{ label: 'Guided journey', value: journeyNote }] : [])], actions: [{ id: 'project-tracker-show-projects', label: 'Show my projects', interactionType: 'START_WORKFLOW', message: 'Show my project tracker', operationId: 'PROJECT_TRACKER_PROJECTS', style: 'SECONDARY' }] }], suggestions: [] };
   const refresh = await reconcileAskExecutionSideEffects(ctx.userId, ctx.execution, ctx.parameters);
