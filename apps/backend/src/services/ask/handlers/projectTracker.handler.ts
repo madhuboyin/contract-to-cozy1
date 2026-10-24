@@ -19,6 +19,15 @@ import { PROJECT_TRACKER_ACTION_IDS, PROJECT_TRACKER_COMMAND_CAPTURE_KEY, PROJEC
 import { reconcileAskExecutionSideEffects } from '../execution/executeOperation';
 import type { AskViewState } from '../support/executionState';
 import { collectionDescriptor } from '../support/collectionDescriptor';
+import { GUIDANCE_STEP_REFUSAL_TEXT, resolveGuidanceStepBinding, type GuidanceStepBindingResult } from '../support/guidanceStepBinding';
+import { reportProjectClosure, reportProjectCreated } from '../../guidanceEngine/projectJourneyReporting';
+
+const PROJECT_JOURNEY_STEP_KEYS = ['confirm_scope_and_provider'] as const;
+const journeyStepUnavailable = (body: string): AskOperationResult => ({
+  status: 'NOT_APPLICABLE', reasonCode: 'PROJECT_TRACKER_JOURNEY_STEP_UNAVAILABLE',
+  blocks: [{ type: 'SUMMARY', id: 'project-create-journey-step-unavailable', title: 'This step cannot start a project', body: `${body} Nothing has changed.`, tone: 'DEFAULT', actions: [] }],
+  suggestions: [],
+});
 
 // Project Tracker capability-card slice (FRD v1.59): the eleventh new operation for a capability with none. Reads
 // projectTracker.service listProjects, the call GET /properties/:id/projects makes for the Project Tracker page (the
@@ -303,15 +312,23 @@ function projectCaptureRequest(contextVersion: string, entered?: Partial<Project
     allowNotSure: false, sensitivity: 'STANDARD', destinationLabel: 'Used to prepare this project; nothing is created until you confirm', confirmationText: null, expectedContextVersion: contextVersion };
 }
 
-export async function projectTrackerCreateResult(userId: string, propertyId: string, supplied: ProjectCreateInput | undefined, sourceExecutionId: string | null): Promise<AskOperationResult> {
+export async function projectTrackerCreateResult(userId: string, propertyId: string, supplied: ProjectCreateInput | undefined, sourceExecutionId: string | null, guidanceStepId: string | null = null): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
   if (access.role === HouseholdRole.VIEWER) return { status: 'BLOCKED', reasonCode: 'ASK_PERMISSION_REQUIRED', blocks: [{ type: 'SUMMARY', id: 'project-create-permission', title: 'A contributor or owner can start a project', body: 'Your role can view projects but not create them. Nothing has changed.', tone: 'CAUTION', actions: [] }], suggestions: [] };
+  // Started from a journey's step: re-read the step (home, journey, tool, status) and refuse a second project for the same journey; a stale step starts nothing.
+  const launch = { sourceExecutionId, ...(guidanceStepId ? { guidanceStepId } : {}) };
+  if (guidanceStepId) {
+    const bound = await resolveGuidanceStepBinding(propertyId, guidanceStepId, { toolKey: 'project-tracker', stepKeys: PROJECT_JOURNEY_STEP_KEYS });
+    if (!bound.ok) return journeyStepUnavailable(GUIDANCE_STEP_REFUSAL_TEXT[bound.reason]);
+    const existing = await prisma.projectRecord.findFirst({ where: { propertyId, guidanceJourneyId: bound.binding.journeyId, status: { not: 'CANCELLED' } }, select: { id: true, name: true } });
+    if (existing) return journeyStepUnavailable(`"${existing.name}" already tracks this journey, so Ask will not start a second project for it.`);
+  }
   const contextVersion = await projectTrackerCreateContextVersion(propertyId);
   const documentOptions = await projectDocumentOptions(propertyId);
-  if (!supplied) return { status: 'NEEDS_CONTEXT', reasonCode: 'PROJECT_TRACKER_CREATE_INPUT_REQUIRED', contextVersion, parameters: { sourceExecutionId }, blocks: [{ type: 'SUMMARY', id: 'project-create-input', title: 'Start a tracked project', body: 'Enter the project, cost, compliance decisions and first milestone, then review everything before it is created.', tone: 'DEFAULT', actions: [] }], captureRequests: [projectCaptureRequest(contextVersion, undefined, documentOptions)], suggestions: [] };
+  if (!supplied) return { status: 'NEEDS_CONTEXT', reasonCode: 'PROJECT_TRACKER_CREATE_INPUT_REQUIRED', contextVersion, parameters: launch, blocks: [{ type: 'SUMMARY', id: 'project-create-input', title: 'Start a tracked project', body: 'Enter the project, cost, compliance decisions and first milestone, then review everything before it is created.', tone: 'DEFAULT', actions: [] }], captureRequests: [projectCaptureRequest(contextVersion, undefined, documentOptions)], suggestions: [] };
   const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
   return { status: 'NEEDS_CONFIRMATION', reasonCode: 'PROJECT_TRACKER_CREATE_CONFIRMATION_REQUIRED', contextVersion,
-    parameters: { projectTrackerCreate: supplied, projectTrackerContextVersion: contextVersion, sourceExecutionId, confirmationVersion: 1, confirmationExpiresAt: expiresAt },
+    parameters: { projectTrackerCreate: supplied, projectTrackerContextVersion: contextVersion, ...launch, confirmationVersion: 1, confirmationExpiresAt: expiresAt },
     blocks: [{ type: 'SUMMARY', id: 'project-create-review', title: 'Review this project', body: 'This will create a shared project and its first milestone. Nothing is created until you confirm.', tone: 'DEFAULT', actions: [] }],
     confirmation: { confirmationId: `project-create-${sha(`${propertyId}:${supplied.name}:${supplied.startDate}`).slice(0, 12)}-1`, version: 1, title: `Start "${supplied.name}"?`, description: 'The project will be available in Project Tracker for milestones, payments, change orders, issues, progress and completion evidence.', fields: [
       { label: 'Type', value: PROJECT_TYPE_LABELS[supplied.projectType] }, { label: 'Delivery', value: supplied.fulfillmentMode === 'DIY' ? 'DIY / household' : supplied.contractorName! },
@@ -323,7 +340,7 @@ export async function projectTrackerCreateResult(userId: string, propertyId: str
 
 registerCapabilityHandler('project-tracker.create', async (envelope) => {
   const declared = envelope.launchContext?.operationId === 'PROJECT_TRACKER_CREATE' && envelope.launchContext.surface !== 'ASK_REFRESH' && envelope.message === PROJECT_TRACKER_CREATE_MESSAGE;
-  if (declared) return projectTrackerCreateResult(envelope.userId, envelope.propertyId!, undefined, envelope.launchContext?.sourceExecutionId ?? null);
+  if (declared) return projectTrackerCreateResult(envelope.userId, envelope.propertyId!, undefined, envelope.launchContext?.sourceExecutionId ?? null, envelope.launchContext?.entityType === 'GUIDANCE_STEP' ? envelope.launchContext.entityId ?? null : null);
   return { status: 'NOT_APPLICABLE', reasonCode: 'ASK_PROJECT_CREATE_NOT_DIRECTLY_ROUTABLE', blocks: [{ type: 'SUMMARY', id: 'project-create-not-routable', title: 'Use the Start a project button', body: 'Start from the Project Tracker answer so the workflow stays tied to this home. Nothing has changed.', tone: 'DEFAULT', actions: [] }], suggestions: [] };
 });
 
@@ -333,7 +350,11 @@ async function confirmProjectTrackerCreate(ctx: ConfirmCapabilityContext): Promi
   const input = candidate.data;
   const contractDocument = (await projectDocuments(ctx.execution.propertyId, input.contractDocumentIds))[0];
   const earlier = await prisma.projectRecord.findFirst({ where: { propertyId: ctx.execution.propertyId, name: input.name, createdAt: { gte: ctx.execution.createdAt } }, select: { id: true } });
+  // A project started for a journey's step stores that journey and reports the step; the step is re-read now, and one that is no longer open starts a plain project.
+  const stepId = typeof ctx.parameters.guidanceStepId === 'string' ? ctx.parameters.guidanceStepId : null;
+  const stepBound: GuidanceStepBindingResult | null = stepId && !earlier ? await resolveGuidanceStepBinding(ctx.execution.propertyId, stepId, { toolKey: 'project-tracker', stepKeys: PROJECT_JOURNEY_STEP_KEYS }) : null;
   const project = earlier ?? await createProject(ctx.execution.propertyId, {
+    ...(stepBound?.ok ? { guidanceJourneyId: stepBound.binding.journeyId, ...(stepBound.binding.inventoryItemId ? { inventoryItemId: stepBound.binding.inventoryItemId } : {}) } : {}),
     name: input.name, projectType: input.projectType, fulfillmentMode: input.fulfillmentMode, contractorName: input.fulfillmentMode === 'PROVIDER' ? input.contractorName : undefined,
     contractAmountCents: Math.round(input.contractAmountDollars * 100), startDate: input.startDate, expectedEndDate: input.expectedEndDate ?? undefined,
     permitApplicability: input.permitApplicability, permitApplicabilityBasis: input.permitApplicabilityBasis ?? undefined,
@@ -344,7 +365,13 @@ async function confirmProjectTrackerCreate(ctx: ConfirmCapabilityContext): Promi
     sourceType: 'MANUAL', milestones: [{ name: input.initialMilestoneName, scheduledDate: input.initialMilestoneDate ?? undefined, milestoneType: 'STANDARD', requiresPhotoEvidence: false, position: 0 }],
   });
   const projectId = project.id;
-  const result: AskOperationResult = { status: 'COMPLETED', reasonCode: 'PROJECT_TRACKER_CREATE_COMPLETED', blocks: [{ type: 'WORKFLOW_PROGRESS', id: `project-created-${projectId}`, title: earlier ? 'Project already started' : 'Project started', status: 'COMPLETED', description: 'The project and its first milestone are now in Project Tracker.', details: [{ label: 'Project', value: input.name }, { label: 'First milestone', value: input.initialMilestoneName }, { label: 'Amount', value: `$${input.contractAmountDollars.toLocaleString('en-US')}` }], actions: [{ id: 'project-tracker-show-projects', label: 'Show my projects', interactionType: 'START_WORKFLOW', message: 'Show my project tracker', operationId: 'PROJECT_TRACKER_PROJECTS', style: 'SECONDARY' }] }], suggestions: [] };
+  let journeyNote: string | null = null;
+  if (stepBound) {
+    journeyNote = !stepBound.ok ? (stepBound.reason === 'STEP_DONE' ? 'This step was already done' : GUIDANCE_STEP_REFUSAL_TEXT[stepBound.reason])
+      : (await reportProjectCreated(ctx.execution.propertyId, ctx.userId, { projectId, journeyId: stepBound.binding.journeyId, inventoryItemId: stepBound.binding.inventoryItemId, fulfillmentMode: input.fulfillmentMode }))
+        ? 'This step is recorded as done' : 'The project is started, but the journey step could not be updated. Open the journey to check it';
+  }
+  const result: AskOperationResult = { status: 'COMPLETED', reasonCode: 'PROJECT_TRACKER_CREATE_COMPLETED', blocks: [{ type: 'WORKFLOW_PROGRESS', id: `project-created-${projectId}`, title: earlier ? 'Project already started' : 'Project started', status: 'COMPLETED', description: 'The project and its first milestone are now in Project Tracker.', details: [{ label: 'Project', value: input.name }, { label: 'First milestone', value: input.initialMilestoneName }, { label: 'Amount', value: `$${input.contractAmountDollars.toLocaleString('en-US')}` }, ...(journeyNote ? [{ label: 'Guided journey', value: journeyNote }] : [])], actions: [{ id: 'project-tracker-show-projects', label: 'Show my projects', interactionType: 'START_WORKFLOW', message: 'Show my project tracker', operationId: 'PROJECT_TRACKER_PROJECTS', style: 'SECONDARY' }] }], suggestions: [] };
   const refresh = await reconcileAskExecutionSideEffects(ctx.userId, ctx.execution, ctx.parameters);
   return { result, artifactType: 'PROJECT_RECORD', artifactId: projectId, refreshedExecutions: refresh.refreshedExecutions };
 }
@@ -594,6 +621,13 @@ async function confirmProjectTrackerCommand(ctx: ConfirmCapabilityContext): Prom
     const proofs = await projectDocuments(ctx.execution.propertyId, input.proofDocumentIds); const warrantyDocument = (await projectDocuments(ctx.execution.propertyId, input.warrantyDocumentIds))[0];
     const record = await confirmCompletion(command.projectId, ctx.execution.propertyId, ctx.userId, { actualEndDate: input.actualEndDate ?? undefined, outcomeStatus: 'VERIFIED_SUCCESS', commissioningResult: input.commissioningResult, functionalVerificationResult: input.functionalVerificationResult, safetyCheckResult: input.safetyCheckResult, inspectionResult: input.inspectionResult, unresolvedExceptions: [], closeoutDeclarations: categories.map(([category, key]) => ({ category, disposition: input[key], evidenceDocumentIds: [], notes: input[`${key}Notes`] ?? '' })), actualCostCents: Math.round(Number(input.actualCostDollars) * 100), providerOutcome: input.providerOutcome, recommendationOverridden: false, recommendationComprehensionConfirmed: true, proofDocuments: [...proofs.map((document) => ({ proofKey: document.id, documentId: document.id, type: 'OTHER', name: document.name, fileSize: 0, mimeType: document.mimeType ?? 'application/octet-stream', kind: 'OTHER' })), ...(warrantyDocument ? [{ proofKey: 'warranty', documentId: warrantyDocument.id, type: 'OTHER', name: warrantyDocument.name, fileSize: 0, mimeType: warrantyDocument.mimeType ?? 'application/octet-stream', kind: 'OTHER' }] : [])], contractorRatingQuality: input.contractorRatingQuality, contractorRatingTimeline: input.contractorRatingTimeline, contractorRatingComms: input.contractorRatingComms, contractorRatingBudget: input.contractorRatingBudget, contractorReviewText: input.contractorReviewText, warrantyPeriodMonths: input.warrantyPeriodMonths });
     artifactId = record.project.id; detail = record.project.name;
+    // The same closure reports the Desktop page makes (one shared reporter), to the journey this project was created for; nothing else is completed in its place.
+    const closure = await reportProjectClosure(ctx.execution.propertyId, ctx.userId, {
+      projectId: command.projectId, journeyId: (record.project as { guidanceJourneyId?: string | null }).guidanceJourneyId, inventoryItemId: (record.project as { inventoryItemId?: string | null }).inventoryItemId ?? null,
+      outcomeStatus: 'VERIFIED_SUCCESS', writeBackAppliedAt: (record.project as { writeBackAppliedAt?: unknown }).writeBackAppliedAt,
+      homeEventId: (record as { homeEventId?: string | null }).homeEventId, documentIds: (record as { documentIds?: string[] | null }).documentIds, futureCareTaskIds: (record as { futureCareTaskIds?: string[] | null }).futureCareTaskIds,
+    });
+    if (closure !== null) extraDetails.push({ label: 'Guided journey', value: closure ? 'The closing steps are recorded as done' : 'The project is completed, but the journey steps could not be updated. Open the journey to check them' });
   }
   else if (command.actionId === PROJECT_TRACKER_ACTION_IDS.SHARE_CLOSEOUT) { const share = await createCloseoutShareLink(command.projectId, ctx.execution.propertyId); artifactType = 'PROJECT_CLOSEOUT_SHARE_LINK'; artifactId = share.shareLink.id; detail = 'Closeout recipient link'; extraDetails.push({ label: 'Recipient link', value: closeoutShareUrl(share.token) }, { label: 'Expires', value: humanDate(share.shareLink.expiresAt) ?? 'In 30 days' }); }
   else if (command.actionId === PROJECT_TRACKER_ACTION_IDS.EDIT_PROJECT) { const contractDocument = (await projectDocuments(ctx.execution.propertyId, input.contractDocumentIds))[0]; const record = await updateProject(command.projectId, ctx.execution.propertyId, { ...input, ...(contractDocument ? { contractDocumentIds: [contractDocument.id] } : {}), actingUserId: ctx.userId }); detail = record.name; }

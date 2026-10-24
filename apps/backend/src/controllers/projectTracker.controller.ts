@@ -15,6 +15,7 @@ import { evaluateFeatureContext } from '../modules/propertyContext/application/e
 import { APIError } from '../middleware/error.middleware';
 import { guidanceJourneyService } from '../services/guidanceEngine/guidanceJourney.service';
 import { logger } from '../lib/logger';
+import { reportProjectClosure, reportProjectCreated } from '../services/guidanceEngine/projectJourneyReporting';
 import { recordToolLifecycleEvents } from '../services/analytics/toolLifecycle';
 import {
   hasTrackableProjectMilestone,
@@ -86,30 +87,10 @@ export async function createProject(req: Request, res: Response, next: NextFunct
     );
     const data = await svc.createProject(req.params.propertyId, { ...req.body, actingUserId: req.user!.userId });
     if (req.body.guidanceJourneyId) {
-      try {
-        await guidanceJourneyService.recordToolCompletion({
-          propertyId: req.params.propertyId,
-          actorUserId: req.user!.userId,
-          journeyId: req.body.guidanceJourneyId,
-          inventoryItemId: req.body.inventoryItemId ?? null,
-          sourceToolKey: 'project-tracker',
-          sourceEntityType: 'PROJECT',
-          sourceEntityId: (data as any).id,
-          stepKey: 'confirm_scope_and_provider',
-          status: 'COMPLETED',
-          producedData: {
-            proofType: 'project_scope_confirmation',
-            proofId: (data as any).id,
-            projectId: (data as any).id,
-            executionPath: req.body.executionPath ?? null,
-            fulfillmentMode: req.body.fulfillmentMode ?? 'PROVIDER',
-            fundingMode: req.body.fundingMode ?? 'UNDECIDED',
-            complexity: req.body.complexity ?? 'MAJOR',
-          },
-        });
-      } catch (guidanceError) {
-        logger.warn({ guidanceError }, '[PHASE3] project handoff guidance hook failed');
-      }
+      await reportProjectCreated(req.params.propertyId, req.user!.userId, {
+        projectId: (data as any).id, journeyId: req.body.guidanceJourneyId, inventoryItemId: req.body.inventoryItemId ?? null,
+        executionPath: req.body.executionPath ?? null, fulfillmentMode: req.body.fulfillmentMode, fundingMode: req.body.fundingMode, complexity: req.body.complexity,
+      });
     }
     const propertyContext = await getProjectComplianceEnvelope(
       req.params.propertyId,
@@ -563,39 +544,11 @@ export async function confirmCompletion(req: Request, res: Response, next: NextF
     );
 
     const completedProject = (data as any).project;
-    if (completedProject?.guidanceJourneyId && req.body.outcomeStatus === 'VERIFIED_SUCCESS') {
-      const closureSteps = [
-        ['track_work', 'project_execution_record', req.params.projectId],
-        ['verify_outcome', 'project_verified_outcome', (data as any).homeEventId],
-        ['capture_proof', 'project_completion_proof', (data as any).documentIds?.[0] ?? (data as any).homeEventId],
-        ['update_home_record', 'living_home_record_writeback', (data as any).homeEventId],
-        ['set_future_care', 'future_care_plan', (data as any).futureCareTaskIds?.[0] ?? (data as any).homeEventId],
-      ] as const;
-      try {
-        for (const [stepKey, proofType, proofId] of closureSteps) {
-          await guidanceJourneyService.recordToolCompletion({
-            propertyId: req.params.propertyId,
-            actorUserId: req.user!.userId,
-            journeyId: completedProject.guidanceJourneyId,
-            inventoryItemId: completedProject.inventoryItemId ?? null,
-            sourceToolKey: 'project-completion',
-            sourceEntityType: 'PROJECT',
-            sourceEntityId: req.params.projectId,
-            stepKey,
-            status: 'COMPLETED',
-            producedData: {
-              proofType,
-              proofId,
-              projectId: req.params.projectId,
-              outcomeStatus: req.body.outcomeStatus,
-              writeBackAppliedAt: completedProject.writeBackAppliedAt,
-            },
-          });
-        }
-      } catch (guidanceError) {
-        logger.warn({ guidanceError }, '[PHASE3] verified closure guidance hook failed');
-      }
-    }
+    await reportProjectClosure(req.params.propertyId, req.user!.userId, {
+      projectId: req.params.projectId, journeyId: completedProject?.guidanceJourneyId, inventoryItemId: completedProject?.inventoryItemId ?? null,
+      outcomeStatus: req.body.outcomeStatus, writeBackAppliedAt: completedProject?.writeBackAppliedAt,
+      homeEventId: (data as any).homeEventId, documentIds: (data as any).documentIds, futureCareTaskIds: (data as any).futureCareTaskIds,
+    });
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.ACTION_COMPLETED,

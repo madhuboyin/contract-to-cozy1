@@ -554,8 +554,8 @@ row has no step, when a row is incomplete, and when `CONNECTED` and the IN_ASK t
 
 | Verdict | Rows | Meaning |
 |---|---|---|
-| CONNECTED | 9 | An Ask write reports the step with proof: recalls (2, family fallback), Do-Nothing (2), Service Price Radar `validate_price` and `get_cleaning_quotes`, Negotiation Shield, Coverage `compare_coverage_options`, Price Finalization `finalize_price` |
-| CONNECTABLE | 5 | Project Tracker `confirm_scope_and_provider` and the four Project Completion steps: an Ask command and a Desktop reporter exist, but the reporter is inline in `projectTracker.controller`; extract it into a shared helper first |
+| CONNECTED | 9 (14 after section 25) | An Ask write reports the step with proof: recalls (2, family fallback), Do-Nothing (2), Service Price Radar `validate_price` and `get_cleaning_quotes`, Negotiation Shield, Coverage `compare_coverage_options`, Price Finalization `finalize_price` |
+| CONNECTABLE | 5 (all connected in section 25) | Project Tracker `confirm_scope_and_provider` and the four Project Completion steps: an Ask command and a Desktop reporter exist, but the reporter is inline in `projectTracker.controller`; extract it into a shared helper first |
 | NEEDS_PRODUCT_DECISION | 45 | The proof is undefined or no surface reports it (coverage review steps, documents, guidance-native acknowledgements, inspection, maintenance, ownership costs, capital timeline, radar, incidents, history, quote comparison, shopping steps, remaining Home Savings steps) |
 | WRONG_TOOL | 5 | The step promises what its tool does not produce: Home Savings `evaluate_savings_funding` (owner decision: a save or dismiss does not complete it; product to choose a capital-funding step, a narrower relabelled proof, or a real comparison command in Ask), the three Service Price Radar estimate steps, and `review_insurance_market` |
 | UNSUPPORTED | 24 | No Ask surface: booking and scheduling (external commitment), the focused-shell `frontend` steps, the replacement flow states, repair-versus-replace analysis |
@@ -564,4 +564,22 @@ row has no step, when a row is incomplete, and when `CONNECTED` and the IN_ASK t
   Do-Nothing and Service Price Radar reporters now only report the step keys their proof matches (`validate_price` and `get_cleaning_quotes`; the two Do-Nothing steps).
 - **Order of work for the rest.** By existing Ask command and proof clarity: the five CONNECTABLE rows first (shared reporter, then Ask), then whatever product decides for the NEEDS_PRODUCT_DECISION
   families. Nothing in the last three verdicts is connected speculatively.
+
+## 25. Project Tracker and Project Completion (2026-10-24)
+
+The five rows the matrix called CONNECTABLE are now CONNECTED (matrix: 14 connected).
+
+- **One reporter for both surfaces.** `guidanceEngine/projectJourneyReporting.ts` holds what `projectTracker.controller` did inline: `reportProjectCreated` (the
+  `confirm_scope_and_provider` step, proof `project_scope_confirmation`) and `reportProjectClosure` (the five closing steps with their own proofs, for a verified-success
+  completion only). The controller now calls them. `reportProjectClosure` sends the steps to exactly the journey the project stores and not to a journey that is no longer open; it
+  never uses a signal family.
+- **A parity bug fixed.** Ask's "Complete project" (`PROJECT_TRACKER_COMMAND`, `COMPLETE_PROJECT`) never reported anything, so a project completed in Ask advanced no journey even though the
+  page's completion did. It now calls `reportProjectClosure`, and the receipt says whether the closing steps were recorded.
+- **Starting a project for a step.** `confirm_scope_and_provider` offers "Start a project" with the step as the launch entity. The proposal re-reads the step (home, journey, tool `project-tracker`,
+  step key, open step, open journey) and refuses to start a second project for a journey that already has a non-cancelled one. The step rides the form and the review; at confirmation it is re-read, the
+  project is created with the journey (and its item) stored on it, the step is reported with the project as proof, and a stale step starts a plain project and says so.
+- **The closing steps.** `track_work` and the four `project-completion` steps open the project (`PROJECT_TRACKER_PROJECTS`); finishing the project with a verified outcome is the proof. These are the
+  Desktop semantics unchanged: one completion reports all five closing steps, each with its own proof record.
+- **Not changed.** Minor-work completion (`completeMinorWork`) stays inline in the controller. Ask's project create still does not emit the analytics and lifecycle events the page does; that is a separate
+  parity item, not part of the journey binding.
 

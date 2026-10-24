@@ -875,7 +875,7 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
       throw Object.assign(new Error(answer.error.issues[0]?.message ?? 'Complete the required project details.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
     }
     const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson) ? execution.parametersJson as Record<string, unknown> : {};
-    result = await projectTrackerCreateResult(userId, execution.propertyId, answer.data, typeof storedParameters.sourceExecutionId === 'string' ? storedParameters.sourceExecutionId : null);
+    result = await projectTrackerCreateResult(userId, execution.propertyId, answer.data, typeof storedParameters.sourceExecutionId === 'string' ? storedParameters.sourceExecutionId : null, typeof storedParameters.guidanceStepId === 'string' ? storedParameters.guidanceStepId : null);
     captureId = input.idempotencyKey;
     capturedContextVersion = currentVersion;
     canonicalOwner = 'ProjectRecord';

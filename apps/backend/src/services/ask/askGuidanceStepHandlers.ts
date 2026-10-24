@@ -12,6 +12,7 @@
 
 import { DO_NOTHING_RUN_MESSAGE, SERVICE_PRICE_CHECK_MESSAGE } from './support/homeToolRunConstants';
 import { NEGOTIATION_SHIELD_START_MESSAGE } from './support/negotiationShieldStart';
+import { PROJECT_TRACKER_CREATE_MESSAGE } from './support/projectTrackerConstants';
 
 export type AskGuidanceStepMode = 'IN_ASK' | 'INLINE_CAPTURE' | 'NAVIGATE';
 
@@ -105,6 +106,38 @@ export const ASK_GUIDANCE_IN_ASK_STEPS: Readonly<Record<string, AskGuidanceInAsk
     operationId: 'PRICE_FINALIZATIONS_LIST', message: 'Show my price finalizations', label: 'Open price records', carriesStep: 'FIELD',
     reason: 'You can record and finalize the accepted price here; finalizing it is recorded on this journey.',
     outcome: 'Your finalized accepted price and terms are recorded as this step\'s proof.',
+  },
+  // A project started for this step stores the journey; creating it is the proof. The closing steps below are reported when the project is completed with a verified
+  // outcome (the same shared reporter the Desktop page uses, to the journey the project was created for), so their action opens the project, not a new flow.
+  'project-tracker:confirm_scope_and_provider': {
+    operationId: 'PROJECT_TRACKER_CREATE', message: PROJECT_TRACKER_CREATE_MESSAGE, label: 'Start a project', carriesStep: 'ENTITY',
+    reason: 'You can start the project here; creating it is recorded on this journey.',
+    outcome: 'The project you start is recorded as this step\'s proof.',
+  },
+  'project-tracker:track_work': {
+    operationId: 'PROJECT_TRACKER_PROJECTS', message: 'Show my project tracker', label: 'Open your project',
+    reason: 'You can complete the project here with a verified outcome; its closing steps are recorded on this journey.',
+    outcome: 'Completing the project with a verified outcome records this step\'s proof.',
+  },
+  'project-completion:capture_proof': {
+    operationId: 'PROJECT_TRACKER_PROJECTS', message: 'Show my project tracker', label: 'Open your project',
+    reason: 'You can complete the project here with a verified outcome; its closing steps are recorded on this journey.',
+    outcome: 'Completing the project with a verified outcome records this step\'s proof.',
+  },
+  'project-completion:set_future_care': {
+    operationId: 'PROJECT_TRACKER_PROJECTS', message: 'Show my project tracker', label: 'Open your project',
+    reason: 'You can complete the project here with a verified outcome; its closing steps are recorded on this journey.',
+    outcome: 'Completing the project with a verified outcome records this step\'s proof.',
+  },
+  'project-completion:update_home_record': {
+    operationId: 'PROJECT_TRACKER_PROJECTS', message: 'Show my project tracker', label: 'Open your project',
+    reason: 'You can complete the project here with a verified outcome; its closing steps are recorded on this journey.',
+    outcome: 'Completing the project with a verified outcome records this step\'s proof.',
+  },
+  'project-completion:verify_outcome': {
+    operationId: 'PROJECT_TRACKER_PROJECTS', message: 'Show my project tracker', label: 'Open your project',
+    reason: 'You can complete the project here with a verified outcome; its closing steps are recorded on this journey.',
+    outcome: 'Completing the project with a verified outcome records this step\'s proof.',
   },
   'do-nothing-simulator:model_cost_of_delay': {
     operationId: 'DO_NOTHING_SIMULATION_RUN', message: DO_NOTHING_RUN_MESSAGE, label: 'Run the simulation', carriesStep: 'ENTITY',
