@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { acknowledgeGuidanceStep, completeGuidanceStep, type GuidanceStepDTO } from '@/lib/api/guidanceApi';
+import { acknowledgeGuidanceStep, checkFindingDecisions, completeGuidanceStep, type GuidanceStepDTO } from '@/lib/api/guidanceApi';
 
 type StepOption = {
   label: string;
@@ -359,6 +359,17 @@ export function GuidanceOverviewInlineStep({
           ...(disposition === 'act_now' || disposition === 'plan_soon' || disposition === 'monitor' ? { disposition } : {}),
           ...(note.trim() ? { note: note.trim().slice(0, 500) } : {}),
         });
+        onComplete?.(nextStepKey ?? null);
+        return;
+      }
+      // "Act on findings" is completed by the findings' own decisions, never by the checklist: the server reads them and refuses while any still needs one.
+      if (step.stepKey === 'act_on_inspection_findings') {
+        try {
+          await checkFindingDecisions(propertyId, { guidanceStepId: step.id });
+        } catch (checkError) {
+          setError(checkError instanceof Error ? checkError.message : 'Some findings still need a decision.');
+          return;
+        }
         onComplete?.(nextStepKey ?? null);
         return;
       }

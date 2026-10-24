@@ -264,6 +264,7 @@ test('IN_ASK steps are exactly the steps a recall write, a do-nothing run, a pri
     ...require('../../src/services/inspectionReportReviewOperations.ts').INSPECTION_REVIEW_STEP_KEYS.map((key) => `inspection-report:${key}`), // a review record of this version of the report
     'coverage-intelligence:review_current_policy_context', 'coverage-intelligence:review_current_warranty_context', // a persisted review of the current terms
     'documents:activate_warranty_coverage', 'documents:bind_policy_and_record_documents', // the saved, active coverage record
+    'guidance-overview:act_on_inspection_findings', // every finding the journey is about has a decision
     'maintenance:complete_compliance_task', // a task linked to the step, completed with Home Record evidence
     'capital-timeline:fund_capital_expense', // an explicit confirmation of the expense's reserve allocation
     'price-finalization:finalize_price', // finalizing a record bound to the step reports it (a start does not)

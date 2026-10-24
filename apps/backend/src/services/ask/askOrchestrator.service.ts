@@ -67,6 +67,7 @@ import './handlers/guidanceOverview.handler';
 import './handlers/guidanceStepAcknowledge.handler';
 import './handlers/coverageAnalysisRun.handler';
 import './handlers/inspectionReportReview.handler';
+import './handlers/inspectionFindingsCheck.handler';
 import './handlers/coverageRecordCheck.handler';
 import './handlers/coverageTermReview.handler';
 import './handlers/maintenanceEvidenceAttach.handler';

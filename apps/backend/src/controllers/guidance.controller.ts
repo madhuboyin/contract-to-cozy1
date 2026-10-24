@@ -1,3 +1,4 @@
+import { FINDINGS_STEP_KEY, FINDINGS_STEP_TOOL_KEY, checkFindingDecisionsWithEffects } from '../services/inspectionFindingsProofOperations';
 import { COVERAGE_RECORD_STEP_KEYS, COVERAGE_RECORD_TOOL_KEY, checkCoverageRecordWithEffects } from '../services/coverageRecordProofOperations';
 import { linkMaintenanceTaskToStep } from '../services/maintenanceTaskJourneyOperations';
 import { NextFunction, Response } from 'express';
@@ -183,6 +184,7 @@ export async function resolveGuidanceSignal(req: CustomRequest, res: Response, n
   }
 }
 
+const FINDINGS_DECISION_REQUIRED = () => new APIError('Decide what to do about each finding, then check: this step is completed by the findings\' decisions, not by marking it done.', 409, 'GUIDANCE_FINDING_DECISIONS_REQUIRED');
 // The coverage record steps have no weaker path either: only a saved, active record completes them.
 const COVERAGE_RECORD_REQUIRED = () => new APIError('Save the plan, then check your records: this step is completed by a saved policy or warranty, not by marking it done.', 409, 'GUIDANCE_COVERAGE_RECORD_REQUIRED');
 const ACKNOWLEDGEMENT_REQUIRED = () => new APIError('This is a review step: mark it as reviewed instead of completing it.', 409, 'GUIDANCE_ACKNOWLEDGEMENT_REQUIRED');
@@ -228,6 +230,22 @@ export async function checkCoverageRecordEndpoint(req: CustomRequest, res: Respo
   } catch (error) { next(error); }
 }
 
+/** Desktop's check that every finding the journey is about has a decision: the findings decide, the page's checklist does not. */
+export async function checkFindingDecisionsEndpoint(req: CustomRequest, res: Response, next: NextFunction) {
+  try {
+    const userId = requireUserId(req);
+    const propertyId = req.params.propertyId;
+    let stepId: string | null = req.body?.guidanceStepId ?? null;
+    if (!stepId && req.body?.guidanceJourneyId) {
+      const step = await getGuidanceModels().guidanceJourneyStep.findFirst({ where: { journeyId: req.body.guidanceJourneyId, stepKey: FINDINGS_STEP_KEY, journey: { propertyId } }, select: { id: true } });
+      stepId = step?.id ?? null;
+    }
+    if (!stepId) throw new APIError('The journey step this was started from is no longer available.', 404, 'GUIDANCE_STEP_NOT_FOUND');
+    const result = await checkFindingDecisionsWithEffects(propertyId, userId, stepId);
+    res.json({ success: true, data: { findingCount: result.state.total, guidanceReported: result.guidanceReported } });
+  } catch (error) { next(error); }
+}
+
 export async function completeGuidanceStep(req: CustomRequest, res: Response, next: NextFunction) {
   try {
     const userId = requireUserId(req);
@@ -235,6 +253,7 @@ export async function completeGuidanceStep(req: CustomRequest, res: Response, ne
     const stepId = req.params.stepId;
     // A review step has no weaker path: self-reported producedData cannot complete it.
     const target = await getGuidanceModels().guidanceJourneyStep.findFirst({ where: { id: stepId, journey: { propertyId } }, select: { stepKey: true, toolKey: true } });
+    if (target && target.stepKey === FINDINGS_STEP_KEY && target.toolKey === FINDINGS_STEP_TOOL_KEY) throw FINDINGS_DECISION_REQUIRED();
     if (target && COVERAGE_RECORD_STEP_KEYS.includes(target.stepKey) && target.toolKey === COVERAGE_RECORD_TOOL_KEY) throw COVERAGE_RECORD_REQUIRED();
     if (target && target.toolKey === ACKNOWLEDGEMENT_TOOL_KEY && (ACKNOWLEDGEABLE_STEP_KEYS as readonly string[]).includes(target.stepKey)) throw ACKNOWLEDGEMENT_REQUIRED();
 
@@ -388,6 +407,7 @@ export async function recordGuidanceToolCompletion(req: CustomRequest, res: Resp
   try {
     const userId = requireUserId(req);
     const propertyId = req.params.propertyId;
+    if (req.body?.status === 'COMPLETED' && req.body?.stepKey === FINDINGS_STEP_KEY) throw FINDINGS_DECISION_REQUIRED();
     if (req.body?.status === 'COMPLETED' && COVERAGE_RECORD_STEP_KEYS.includes(String(req.body?.stepKey ?? ''))) throw COVERAGE_RECORD_REQUIRED();
     if (req.body?.sourceToolKey === ACKNOWLEDGEMENT_TOOL_KEY && (ACKNOWLEDGEABLE_STEP_KEYS as readonly string[]).includes(String(req.body?.stepKey ?? ''))) throw ACKNOWLEDGEMENT_REQUIRED();
 

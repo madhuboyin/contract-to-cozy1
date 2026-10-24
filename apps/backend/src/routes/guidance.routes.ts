@@ -12,6 +12,7 @@ import {
   acknowledgeGuidanceStepEndpoint,
   linkMaintenanceTaskEndpoint,
   checkCoverageRecordEndpoint,
+  checkFindingDecisionsEndpoint,
   dismissGuidanceJourney,
   generateGuidanceModelShortlist,
   generateGuidanceVendorSuggestions,
@@ -263,6 +264,14 @@ router.post(
   requireHouseholdRole('CONTRIBUTOR'),
   validateBody(z.object({ guidanceStepId: z.string().uuid().optional(), guidanceJourneyId: z.string().uuid().optional(), guidanceStepKey: z.string().min(1).max(120).optional() })),
   checkCoverageRecordEndpoint
+);
+
+router.post(
+  '/properties/:propertyId/guidance/inspection-findings-check',
+  propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
+  validateBody(z.object({ guidanceStepId: z.string().uuid().optional(), guidanceJourneyId: z.string().uuid().optional() })),
+  checkFindingDecisionsEndpoint
 );
 
 router.post(

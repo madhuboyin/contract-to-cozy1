@@ -449,6 +449,12 @@ export async function checkCoverageRecord(propertyId: string, payload: { guidanc
   return res.data;
 }
 
+/** Checks that every finding the journey is about has a decision; the findings decide, the page's checklist does not (the same operation Ask uses). Throws when some still need one. */
+export async function checkFindingDecisions(propertyId: string, payload: { guidanceStepId: string }): Promise<{ findingCount: number; guidanceReported: boolean }> {
+  const res = await api.post<{ findingCount: number; guidanceReported: boolean }>(`/api/properties/${propertyId}/guidance/inspection-findings-check`, payload);
+  return res.data;
+}
+
 export async function recordGuidanceToolStatus(
   propertyId: string,
   payload: {
