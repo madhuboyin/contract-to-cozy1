@@ -255,7 +255,7 @@ const { buildRecallMatchCompletion, buildDoNothingRunCompletion, buildServicePri
 test('IN_ASK steps are exactly the steps a recall write, a do-nothing run, a price check, a negotiation analysis, a coverage decision or a price finalization reports, and each operation exists', () => {
   const reported = new Set([
     ...['CONFIRM', 'DISMISS', 'RESOLVE'].map((a) => `recalls:${buildRecallMatchCompletion('p1', a, { id: 'm1' }).stepKey}`),
-    ...[buildServicePriceCheckCompletion('p1', { id: 'c1' }, {})].map((done) => `${done.sourceToolKey}:${done.stepKey}`),
+    ...['validate_price', 'get_cleaning_quotes'].map((stepKey) => { const done = buildServicePriceCheckCompletion('p1', { id: 'c1' }, { stepKey }); return `${done.sourceToolKey}:${done.stepKey}`; }),
     `negotiation-shield:${require('../../src/services/negotiationShieldJourneyCompletion.ts').NEGOTIATION_SHIELD_DEFAULT_STEP_KEY}`,
     'price-finalization:finalize_price', // finalizing a record bound to the step reports it (a start does not)
     'coverage-intelligence:compare_coverage_options', // the coverage decision's proof; Ask binds it to this one step (a review step is not proved by a decision)

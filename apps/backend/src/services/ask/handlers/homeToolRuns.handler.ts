@@ -219,18 +219,18 @@ registerCapabilityHandler('do-nothing-simulator.run', async (envelope) => {
 // Reports a finished run to the journey step it was launched from, exactly as the Desktop page does. The write is already saved, so a step that cannot
 // be reported never fails it: the receipt says which of the two happened. Returns the receipt line, or null when the step is not this tool's open step.
 async function reportToJourneyStep(
-  userId: string, propertyId: string, stepId: string, toolKey: string,
+  userId: string, propertyId: string, stepId: string, toolKey: string, stepKeys: readonly string[],
   report: (target: { journeyId: string; stepKey: string; signalIntentFamily: string | null }) => Promise<boolean>,
 ): Promise<string | null> {
-  const bound = await resolveGuidanceStepBinding(propertyId, stepId, { toolKey });
+  const bound = await resolveGuidanceStepBinding(propertyId, stepId, { toolKey, stepKeys });
   if (!bound.ok) return bound.reason === 'STEP_DONE' ? 'This step was already done' : null;
   const recorded = await report({ journeyId: bound.binding.journeyId, stepKey: bound.binding.stepKey, signalIntentFamily: bound.binding.signalIntentFamily });
   return recorded ? 'This step is recorded as done' : 'This is saved, but the journey step could not be updated. Open the journey to check it';
 }
 const reportRunToJourneyStep = (userId: string, propertyId: string, stepId: string, runId: string, run: RunSummary | null) =>
-  reportToJourneyStep(userId, propertyId, stepId, 'do-nothing-simulator', (target) => reportDoNothingRun(propertyId, { id: runId, ...run }, target, userId));
+  reportToJourneyStep(userId, propertyId, stepId, 'do-nothing-simulator', ['compare_action_options', 'model_cost_of_delay'], (target) => reportDoNothingRun(propertyId, { id: runId, ...run }, target, userId));
 const reportCheckToJourneyStep = (userId: string, propertyId: string, stepId: string, checkId: string, check: CheckSummary | null, input: { serviceCategory: string; quoteAmount: number }) =>
-  reportToJourneyStep(userId, propertyId, stepId, 'service-price-radar', (target) => reportServicePriceCheck(propertyId, { id: checkId, serviceCategory: input.serviceCategory, quoteAmount: input.quoteAmount, quoteCurrency: 'USD', verdict: check?.verdict ?? null, expectedLow: check?.expectedLow ?? null, expectedHigh: check?.expectedHigh ?? null }, target, userId));
+  reportToJourneyStep(userId, propertyId, stepId, 'service-price-radar', ['validate_price', 'get_cleaning_quotes'], (target) => reportServicePriceCheck(propertyId, { id: checkId, serviceCategory: input.serviceCategory, quoteAmount: input.quoteAmount, quoteCurrency: 'USD', verdict: check?.verdict ?? null, expectedLow: check?.expectedLow ?? null, expectedHigh: check?.expectedHigh ?? null }, target, userId));
 
 async function confirmDoNothingRun(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
   const { execution, userId, parameters } = ctx;

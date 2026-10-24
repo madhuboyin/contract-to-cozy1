@@ -81,6 +81,12 @@ export const ASK_GUIDANCE_IN_ASK_STEPS: Readonly<Record<string, AskGuidanceInAsk
     reason: 'You can check a contractor quote here; the saved check is recorded on this journey.',
     outcome: 'A saved quote check is recorded as this step\'s proof.',
   },
+  // The same saved price check proves a cleaning quote was reviewed.
+  'service-price-radar:get_cleaning_quotes': {
+    operationId: 'SERVICE_PRICE_CHECK_RUN', message: SERVICE_PRICE_CHECK_MESSAGE, label: 'Check the cleaning quote', carriesStep: 'ENTITY',
+    reason: 'You can check a cleaning quote here; the saved check is recorded on this journey.',
+    outcome: 'A saved quote check is recorded as this step\'s proof.',
+  },
   // A multi-stage flow: the step opens the start (reusing an existing review of the kind), then the analysis. The step id follows every stage and is
   // re-read at each one; the step completes only when the analysis is saved.
   'negotiation-shield:prepare_negotiation': {

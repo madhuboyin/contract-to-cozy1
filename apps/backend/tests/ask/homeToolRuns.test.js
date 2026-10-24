@@ -371,3 +371,17 @@ test('price check from a journey step: a failed report never fails the check; an
   }
 });
 
+test('price check: the cleaning-quote step is completed the same way, and a step of the same tool that a price check does not prove (an estimate) is never reported', async () => {
+  const card = await servicePriceCheckResult('u1', 'p1', ServicePriceCheckInputSchema.parse({ serviceCategory: 'PLUMBING', quoteAmount: '5000' }), 'source-1', 'step-p');
+  stepRow = priceStep({ stepKey: 'get_cleaning_quotes' });
+  const { result } = await confirm('SERVICE_PRICE_CHECK_RUN', card.parameters);
+  assert.equal(calls.guidance.find((entry) => entry[0] === 'record')[1].stepKey, 'get_cleaning_quotes');
+  assert.equal(result.blocks[0].details.find((detail) => detail.label === 'Guided journey').value, 'This step is recorded as done');
+  for (const other of ['estimate_repair_cost', 'estimate_uninsured_cost']) {
+    stepRow = priceStep({ stepKey: other }); calls.guidance.length = 0;
+    const out = await confirm('SERVICE_PRICE_CHECK_RUN', card.parameters);
+    assert.equal(calls.guidance.some((entry) => entry[0] === 'record'), false, `${other}: a price check does not prove an estimate`);
+    assert.equal(out.result.blocks[0].details.some((detail) => detail.label === 'Guided journey'), false);
+  }
+});
+

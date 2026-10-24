@@ -545,3 +545,23 @@ gets "Start a negotiation review" with exact journey binding; Coverage and Price
   carries `guidanceReported` (true, false when the report failed or the step was stale, null when the record is not bound) and Ask's receipt says which. Starting or changing a
   record completes nothing; only finalizing does.
 
+## 24. The step proof matrix (2026-10-24)
+
+`services/ask/askGuidanceStepProofMatrix.ts` classifies every guided-journey step the template registry can produce (118 journey steps, 88 distinct `toolKey:stepKey`
+rows) before any more are connected: what the step promises, the durable record that would prove it, the existing Ask command and Desktop reporter, what a launch needs,
+how the step is bound (`EXACT_STEP`, `FAMILY_FALLBACK`, `NONE`), a verdict and the risk. `tests/ask/guidanceStepProofMatrix.test.js` fails when a registered step has no row, when a
+row has no step, when a row is incomplete, and when `CONNECTED` and the IN_ASK table disagree in either direction.
+
+| Verdict | Rows | Meaning |
+|---|---|---|
+| CONNECTED | 9 | An Ask write reports the step with proof: recalls (2, family fallback), Do-Nothing (2), Service Price Radar `validate_price` and `get_cleaning_quotes`, Negotiation Shield, Coverage `compare_coverage_options`, Price Finalization `finalize_price` |
+| CONNECTABLE | 5 | Project Tracker `confirm_scope_and_provider` and the four Project Completion steps: an Ask command and a Desktop reporter exist, but the reporter is inline in `projectTracker.controller`; extract it into a shared helper first |
+| NEEDS_PRODUCT_DECISION | 45 | The proof is undefined or no surface reports it (coverage review steps, documents, guidance-native acknowledgements, inspection, maintenance, ownership costs, capital timeline, radar, incidents, history, quote comparison, shopping steps, remaining Home Savings steps) |
+| WRONG_TOOL | 5 | The step promises what its tool does not produce: Home Savings `evaluate_savings_funding` (owner decision: a save or dismiss does not complete it; product to choose a capital-funding step, a narrower relabelled proof, or a real comparison command in Ask), the three Service Price Radar estimate steps, and `review_insurance_market` |
+| UNSUPPORTED | 24 | No Ask surface: booking and scheduling (external commitment), the focused-shell `frontend` steps, the replacement flow states, repair-versus-replace analysis |
+
+- **Also in this slice.** `service-price-radar:get_cleaning_quotes` is connected through the same saved price check (the matrix called it connectable, with the proof already defined). The
+  Do-Nothing and Service Price Radar reporters now only report the step keys their proof matches (`validate_price` and `get_cleaning_quotes`; the two Do-Nothing steps).
+- **Order of work for the rest.** By existing Ask command and proof clarity: the five CONNECTABLE rows first (shared reporter, then Ask), then whatever product decides for the NEEDS_PRODUCT_DECISION
+  families. Nothing in the last three verdicts is connected speculatively.
+
