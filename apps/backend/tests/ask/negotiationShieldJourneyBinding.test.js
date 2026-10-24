@@ -72,7 +72,7 @@ const ctx = (operationId, parameters) => ({ userId: 'u1', execution: { id: 'exec
 test('the journey step offers the start as its in-Ask action, carrying the step', () => {
   const mode = askGuidanceStepMode('negotiation-shield', 'prepare_negotiation');
   assert.equal(mode.mode, 'IN_ASK');
-  assert.deepEqual({ o: mode.inAsk.operationId, m: mode.inAsk.message, carries: mode.inAsk.carriesStep }, { o: START, m: NEGOTIATION_SHIELD_START_MESSAGE, carries: true });
+  assert.deepEqual({ o: mode.inAsk.operationId, m: mode.inAsk.message, carries: mode.inAsk.carriesStep }, { o: START, m: NEGOTIATION_SHIELD_START_MESSAGE, carries: 'ENTITY' });
   assert.equal(askGuidanceStepMode('negotiation-shield', 'other_step').mode, 'NAVIGATE');
 });
 
