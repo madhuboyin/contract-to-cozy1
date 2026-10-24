@@ -42,8 +42,10 @@ describe('Property Brief preview', () => {
     expect(screen.getByText('14 facts · 0 history records · 3 known gaps · 2 other records')).toBeInTheDocument();
     expect(screen.queryByText(/must never be parsed/)).toBeNull();
   });
-  it('renders the limitation statement in full', () => {
+  it('summarises the limitation as bullets and keeps the full statement in a disclosure', () => {
     render(<PropertyBriefLimitation block={{ type: 'BOUNDARY', id: 'property-briefs-boundary', title: 'A homeowner-assembled snapshot, not a disclosure', body: 'Not an inspection.', severity: 'INFO', suggestions: [] }} />);
-    expect(screen.getByText(/Not an inspection\./)).toBeInTheDocument();
+    expect(screen.getAllByRole('listitem')).toHaveLength(4);
+    expect(screen.getByText('Not an inspection.')).toBeInTheDocument();
+    expect(screen.getByText('Read the full statement')).toBeInTheDocument();
   });
 });

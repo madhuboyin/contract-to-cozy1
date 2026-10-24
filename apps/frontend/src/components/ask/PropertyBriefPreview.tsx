@@ -181,11 +181,27 @@ export const PropertyBriefSharePanel: AskBlockRenderer<'GROUPED_LIST'> = ({ bloc
   );
 };
 
-// The limitation statement stays in full, as a subdued trust panel.
+// Four scannable points up front; the full limitation statement stays one disclosure away, word for word.
+const LIMITATION_POINTS = [
+  'Not an inspection, appraisal, certification, title report or professional opinion.',
+  'Includes only the records selected for this brief.',
+  'May contain unknown or incomplete information.',
+  'Does not replace independent professional review.',
+];
+
 export function PropertyBriefLimitation({ block }: { block: Extract<AskPresentationBlock, { type: 'BOUNDARY' }> }) {
   return (
-    <aside data-property-brief-limitation="" className="max-w-[860px] rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-slate-600">
-      <p><strong className="font-semibold text-slate-700">{block.title}.</strong> {block.body}</p>
+    <aside data-property-brief-limitation="" aria-label={block.title} className="max-w-[860px] rounded-xl border border-slate-200 bg-slate-50 p-3 sm:p-4">
+      <h4 className="flex items-center gap-1.5 text-sm font-semibold text-slate-800"><Info className="h-4 w-4 text-slate-500" aria-hidden="true" />{block.title}</h4>
+      <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-700 marker:text-slate-400">
+        {LIMITATION_POINTS.map((point) => <li key={point}>{point}</li>)}
+      </ul>
+      <details className="group mt-2 text-xs text-slate-500">
+        <summary className="inline-flex min-h-8 cursor-pointer list-none items-center gap-1 font-medium text-slate-600 hover:text-slate-900 [&::-webkit-details-marker]:hidden">
+          <ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" aria-hidden="true" />Read the full statement
+        </summary>
+        <p className="mt-1 max-w-prose leading-5">{block.body}</p>
+      </details>
     </aside>
   );
 }
