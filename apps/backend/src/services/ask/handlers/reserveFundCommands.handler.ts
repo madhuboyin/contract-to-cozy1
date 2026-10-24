@@ -9,7 +9,7 @@ import { homeReserveFundService } from '../../homeReserveFund.service';
 import { homeReserveFundReconciliationService } from '../../homeReserveFundReconciliation.service';
 import { getFinancialContextDecisions } from '../../financialContext/context';
 import { ReserveFundContributionInputSchema } from '../support/commandInputs';
-import { RESERVE_FUND_ACTION_IDS, RESERVE_FUND_BALANCE_CAPTURE_KEY, RESERVE_FUND_COMMAND_MESSAGE, RESERVE_FUND_CONTRIBUTION_CAPTURE_KEY } from '../support/reserveFundConstants';
+import { RESERVE_FUND_ACTION_IDS, RESERVE_FUND_ALLOCATION_CAPTURE_KEY, RESERVE_FUND_BALANCE_CAPTURE_KEY, RESERVE_FUND_COMMAND_MESSAGE, RESERVE_FUND_CONTRIBUTION_CAPTURE_KEY } from '../support/reserveFundConstants';
 import { parseReserveFundMessage, type ReserveFundContributionMessage } from '../support/reserveFundMessage';
 import { evaluateFeatureContext } from '../../../modules/propertyContext/application/evaluateFeatureContext';
 import { prisma } from '../../../lib/prisma';
@@ -36,6 +36,18 @@ function balanceCapture(prefillDollars?: number | null): AskCaptureRequest {
       { key: 'note', label: 'Note', required: false, inputSchema: { type: 'LONG_TEXT', maxLength: 500 } },
     ] }, currentAnswer: prefillDollars != null ? { targetDollars: prefillDollars } : {}, allowNotSure: false, sensitivity: 'FINANCIAL',
     destinationLabel: 'Logs a self-reported balance correction after confirmation', confirmationText: null, expectedContextVersion: 'reserve-fund-live',
+  };
+}
+
+function allocationCapture(expense: string, suggestedCents: number, chosenCents?: number): AskCaptureRequest {
+  return {
+    requirementId: 'reserve-fund-allocation-input', captureKey: RESERVE_FUND_ALLOCATION_CAPTURE_KEY, classification: 'WORKFLOW_INPUT', state: 'UNKNOWN', presentation: 'FORM',
+    title: `Monthly amount for ${expense}`, question: `How much a month do you want to set aside? The plan suggests ${usd(suggestedCents)}.`,
+    helpText: 'Your amount becomes the plan for this expense and later recalculations keep it. Nothing is saved until you confirm.',
+    inputSchema: { type: 'GROUP', fields: [
+      { key: 'monthlyDollars', label: 'Monthly amount ($)', required: true, inputSchema: { type: 'NUMBER', min: 0.01, max: 1_000_000 } },
+    ] }, currentAnswer: chosenCents != null && chosenCents > 0 ? { monthlyDollars: chosenCents / 100 } : {}, allowNotSure: false, sensitivity: 'FINANCIAL',
+    destinationLabel: 'Prepares the funding confirmation; nothing is saved until you confirm', confirmationText: null, expectedContextVersion: 'reserve-fund-live',
   };
 }
 
@@ -82,7 +94,7 @@ const postureChoice = (): AskOperationResult => ({ status: 'COMPLETED', reasonCo
 
 const blocked = (): AskOperationResult => ({ status: 'BLOCKED', reasonCode: 'ASK_PERMISSION_REQUIRED', blocks: [{ type: 'SUMMARY', id: 'reserve-fund-command-permission', title: 'A contributor or owner is required', body: 'You can review the reserve plan, but your role cannot change its shared balance or planning settings.', tone: 'CAUTION', actions: [] }], suggestions: [] });
 
-export async function reserveFundCommandResult(userId: string, propertyId: string, launch: Launch, supplied?: Contribution, prefill?: ReserveFundContributionMessage | null, balance?: ReserveFundBalanceTarget | null, balancePrefill?: number | null): Promise<AskOperationResult> {
+export async function reserveFundCommandResult(userId: string, propertyId: string, launch: Launch, supplied?: Contribution, prefill?: ReserveFundContributionMessage | null, balance?: ReserveFundBalanceTarget | null, balancePrefill?: number | null, allocationCents?: number | null): Promise<AskOperationResult> {
   if ((await ensurePropertyAccess(userId, propertyId)).role === HouseholdRole.VIEWER) return blocked();
   const actionId = launch?.actionId ?? '';
   const entityId = launch?.entityId ?? '';
@@ -101,6 +113,7 @@ export async function reserveFundCommandResult(userId: string, propertyId: strin
   let title = 'Update the reserve fund?';
   let description = 'Nothing changes until you confirm.';
   const fields: Array<{ label: string; value: string }> = [];
+  let allocationEdit: AskCaptureRequest | null = null;
   if (actionId === RESERVE_FUND_ACTION_IDS.SET_BALANCE && balance) {
     // Re-read the canonical balance, show the arithmetic, and do nothing when it already matches (FRD v1.329).
     const baselineCents = await currentBalanceCents(propertyId);
@@ -134,15 +147,25 @@ export async function reserveFundCommandResult(userId: string, propertyId: strin
     command.expectedSuggestedCents = line.allocationSuggestedMonthlyCents ?? line.allocatedMonthlyCents;
     if (supplied) { command.guidanceStepId = bound?.ok ? supplied : null; if (!bound?.ok) command.guidanceStepRefused = true; }
     const expense = line.timelineItem?.inventoryItem?.name ?? String(line.timelineItem?.category ?? 'Capital item').toLowerCase().replace(/_/g, ' ');
+    // The amount to confirm: the one the person typed in the edit form, else the current allocation. Zero never funds an expense, so it is asked for instead of confirmed.
+    const suggestedCents = line.allocationSuggestedMonthlyCents ?? line.allocatedMonthlyCents;
+    const chosenCents = allocationCents ?? line.allocatedMonthlyCents;
+    command.monthlyCents = chosenCents;
+    if (chosenCents <= 0) {
+      return { status: 'NEEDS_CONTEXT', reasonCode: 'RESERVE_FUND_ALLOCATION_REQUIRED', parameters: { reserveFundLaunch: launch },
+        blocks: [{ type: 'SUMMARY', id: 'reserve-fund-allocation-input', title: `How much a month for ${expense}?`, body: 'This expense has no monthly amount yet, and nothing funds it until you choose one greater than zero. Nothing is saved until you confirm.', tone: 'DEFAULT', actions: [] }],
+        captureRequests: [allocationCapture(expense, suggestedCents, undefined)], suggestions: [] };
+    }
     title = `Confirm the funding plan for ${expense}?`;
-    description = `This records that you confirm saving ${usd(line.allocatedMonthlyCents)} a month toward ${usd(line.targetCostCents)} for this expense. It does not move money; it is your confirmation of the plan.`;
-    fields.push({ label: 'Expense', value: expense }, { label: 'Suggested monthly amount', value: usd(line.allocationSuggestedMonthlyCents ?? line.allocatedMonthlyCents) }, { label: 'Monthly allocation', value: usd(line.allocatedMonthlyCents) }, { label: 'Target', value: usd(line.targetCostCents) });
+    description = `This records that you confirm saving ${usd(chosenCents)} a month toward ${usd(line.targetCostCents)} for this expense. It does not move money; it is your confirmation of the plan.`;
+    fields.push({ label: 'Expense', value: expense }, { label: 'Suggested monthly amount', value: usd(suggestedCents) }, { label: 'Chosen monthly amount', value: chosenCents === suggestedCents ? `${usd(chosenCents)} (as suggested)` : usd(chosenCents) }, { label: 'Target', value: usd(line.targetCostCents) });
+    allocationEdit = allocationCapture(expense, suggestedCents, chosenCents);
     if (supplied && !bound?.ok) fields.push({ label: 'Guided journey', value: bound ? GUIDANCE_STEP_REFUSAL_TEXT[bound.reason] : 'No journey step' });
   }
   else if (actionId === RESERVE_FUND_ACTION_IDS.ACCEPT_RECONCILIATION) { title = 'Mark this reserve item retired?'; description = 'The matched expense will be recorded as evidence that this planned need was completed.'; }
   else { const posture = actionId.split('reserve-fund-posture-')[1]; title = `Use the ${posture} planning posture?`; description = 'This changes which point in each estimated cost range is used and immediately recalculates the plan.'; command.posture = posture?.toUpperCase(); }
   const expiresAt = expiry();
-  return { status: 'NEEDS_CONFIRMATION', reasonCode: 'RESERVE_FUND_COMMAND_CONFIRMATION_REQUIRED', parameters: { reserveFundCommand: command, sourceExecutionId: launch?.sourceExecutionId ?? null, confirmationVersion: 1, confirmationExpiresAt: expiresAt }, blocks: [{ type: 'SUMMARY', id: 'reserve-fund-command-review', title, body: description, tone: actionId === RESERVE_FUND_ACTION_IDS.REMOVE_CONTRIBUTION ? 'CAUTION' : 'DEFAULT', actions: [] }], confirmation: { confirmationId: `reserve-fund-${sha(`${propertyId}:${actionId}:${entityId}:${JSON.stringify(supplied ?? null)}`).slice(0, 16)}-1`, version: 1, title, description, fields, editableFields: [], confirmLabel: 'Confirm', consentText: 'I authorize this change to the shared Reserve Fund record.', expiresAt }, suggestions: [] };
+  return { status: 'NEEDS_CONFIRMATION', reasonCode: 'RESERVE_FUND_COMMAND_CONFIRMATION_REQUIRED', parameters: { reserveFundCommand: command, ...(allocationEdit ? { reserveFundLaunch: launch } : {}), sourceExecutionId: launch?.sourceExecutionId ?? null, confirmationVersion: 1, confirmationExpiresAt: expiresAt }, blocks: [{ type: 'SUMMARY', id: 'reserve-fund-command-review', title, body: description, tone: actionId === RESERVE_FUND_ACTION_IDS.REMOVE_CONTRIBUTION ? 'CAUTION' : 'DEFAULT', actions: [] }], confirmation: { confirmationId: `reserve-fund-${sha(`${propertyId}:${actionId}:${entityId}:${JSON.stringify(supplied ?? null)}`).slice(0, 16)}-1`, version: 1, title, description, fields, editableFields: [], confirmLabel: 'Confirm', consentText: 'I authorize this change to the shared Reserve Fund record.', expiresAt }, ...(allocationEdit ? { captureRequests: [allocationEdit] } : {}), suggestions: [] };
 }
 
 registerCapabilityHandler('reserve-fund.command', async (envelope) => {
@@ -176,7 +199,7 @@ registerCapabilityHandler('reserve-fund.command', async (envelope) => {
 async function confirmReserveFundCommand(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
   const { execution, parameters, userId } = ctx;
   const propertyId = execution.propertyId;
-  const command = parameters.reserveFundCommand as { actionId: string; entityId?: string; posture?: HomeReserveFundPosture; input?: Contribution; balance?: { targetCents: number; baselineCents: number; note: string | null }; guidanceStepId?: string | null; guidanceStepRefused?: boolean; expectedSuggestedCents?: number };
+  const command = parameters.reserveFundCommand as { actionId: string; entityId?: string; posture?: HomeReserveFundPosture; input?: Contribution; balance?: { targetCents: number; baselineCents: number; note: string | null }; guidanceStepId?: string | null; guidanceStepRefused?: boolean; expectedSuggestedCents?: number; monthlyCents?: number };
   let artifactType = 'HOME_RESERVE_FUND';
   let artifactId = propertyId;
   let title = 'Reserve Fund updated';
@@ -212,7 +235,7 @@ async function confirmReserveFundCommand(ctx: ConfirmCapabilityContext): Promise
   } else if (command.actionId === RESERVE_FUND_ACTION_IDS.CONFIRM_ALLOCATION) {
     // The shared write and journey report (the Desktop route calls the same function). The confirmation is saved even if the step cannot be reported; a refused step reports nothing.
     const stepId = typeof command.guidanceStepId === 'string' ? command.guidanceStepId : null;
-    const confirmed = await confirmReserveAllocationWithEffects(propertyId, userId, command.entityId!, { guidanceStepId: stepId, expectedSuggestedCents: typeof command.expectedSuggestedCents === 'number' ? command.expectedSuggestedCents : null });
+    const confirmed = await confirmReserveAllocationWithEffects(propertyId, userId, command.entityId!, { guidanceStepId: stepId, monthlyCents: typeof command.monthlyCents === 'number' ? command.monthlyCents : null, expectedSuggestedCents: typeof command.expectedSuggestedCents === 'number' ? command.expectedSuggestedCents : null });
     artifactType = 'HOME_RESERVE_FUND_LINE_ITEM'; artifactId = confirmed.lineItem.id; title = 'Funding plan confirmed';
     journeyNote = stepId ? (confirmed.guidanceReported ? 'This step is recorded as done' : confirmed.guidanceRefusal ? GUIDANCE_STEP_REFUSAL_TEXT[confirmed.guidanceRefusal as keyof typeof GUIDANCE_STEP_REFUSAL_TEXT] ?? 'No journey step was updated' : 'The funding is confirmed, but the journey step could not be updated. Open the journey to check it')
       : command.guidanceStepRefused ? 'This expense is not the one the journey step is about, so no journey step was updated' : null;

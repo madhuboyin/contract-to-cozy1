@@ -1,6 +1,7 @@
 export const RESERVE_FUND_COMMAND_MESSAGE = 'Manage this reserve fund.';
 export const RESERVE_FUND_CONTRIBUTION_CAPTURE_KEY = 'reserve-fund-contribution';
 export const RESERVE_FUND_BALANCE_CAPTURE_KEY = 'reserve-fund-balance';
+export const RESERVE_FUND_ALLOCATION_CAPTURE_KEY = 'reserve-fund-allocation';
 
 export const RESERVE_FUND_ACTION_IDS = {
   ADD_CONTRIBUTION: 'reserve-fund-add-contribution',

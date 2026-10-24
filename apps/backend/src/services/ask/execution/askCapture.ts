@@ -142,7 +142,7 @@ import { homeDeadlineMonitorResult } from '../handlers/miscHandlers.handler';
 import { ownershipCostCommandResult } from '../handlers/ownershipCostCommands.handler';
 import { OWNERSHIP_COST_ACTION_IDS, OWNERSHIP_COST_DECISION_CAPTURE_KEY, OWNERSHIP_COST_SCENARIO_CAPTURE_KEY } from '../support/ownershipCostConstants';
 import { reserveFundCommandResult } from '../handlers/reserveFundCommands.handler';
-import { RESERVE_FUND_ACTION_IDS, RESERVE_FUND_BALANCE_CAPTURE_KEY, RESERVE_FUND_CONTRIBUTION_CAPTURE_KEY } from '../support/reserveFundConstants';
+import { RESERVE_FUND_ACTION_IDS, RESERVE_FUND_ALLOCATION_CAPTURE_KEY, RESERVE_FUND_BALANCE_CAPTURE_KEY, RESERVE_FUND_CONTRIBUTION_CAPTURE_KEY } from '../support/reserveFundConstants';
 import { propertyBriefCommandResult, PropertyBriefPrepareInputSchema, PropertyBriefShareInputSchema } from '../handlers/propertyBriefCommands.handler';
 import { PROPERTY_BRIEF_ACTION_IDS, PROPERTY_BRIEF_PREPARE_CAPTURE_KEY, PROPERTY_BRIEF_SHARE_CAPTURE_KEY } from '../support/propertyBriefConstants';
 import { projectTrackerCreateContextVersion, projectTrackerCreateResult } from '../handlers/projectTracker.handler';
@@ -1238,14 +1238,22 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     capturedContextVersion = 'ownership-cost-live';
     canonicalOwner = 'OwnershipCostPlanning';
   } else if (execution.operationId === 'RESERVE_FUND_COMMAND') {
-    if (![RESERVE_FUND_CONTRIBUTION_CAPTURE_KEY, RESERVE_FUND_BALANCE_CAPTURE_KEY].includes(input.captureKey) || input.expectedContextVersion !== 'reserve-fund-live') {
+    if (![RESERVE_FUND_CONTRIBUTION_CAPTURE_KEY, RESERVE_FUND_BALANCE_CAPTURE_KEY, RESERVE_FUND_ALLOCATION_CAPTURE_KEY].includes(input.captureKey) || input.expectedContextVersion !== 'reserve-fund-live') {
       throw Object.assign(new Error('This reserve-fund form is no longer active.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
     }
     const access = await ensurePropertyAccess(userId, execution.propertyId);
     if (access.role === HouseholdRole.VIEWER) throw Object.assign(new Error('A contributor or owner is required to change the Reserve Fund.'), { code: 'ASK_PERMISSION_REQUIRED' });
     const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson) ? execution.parametersJson as Record<string, unknown> : {};
     const launch = storedParameters.reserveFundLaunch && typeof storedParameters.reserveFundLaunch === 'object' && !Array.isArray(storedParameters.reserveFundLaunch) ? storedParameters.reserveFundLaunch as { actionId?: string; entityId?: string; sourceExecutionId?: string } : null;
-    if (input.captureKey === RESERVE_FUND_BALANCE_CAPTURE_KEY) {
+    if (input.captureKey === RESERVE_FUND_ALLOCATION_CAPTURE_KEY) {
+      if (launch?.actionId !== RESERVE_FUND_ACTION_IDS.CONFIRM_ALLOCATION || !launch.entityId) throw Object.assign(new Error('This reserve-fund action is no longer active.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+      const allocationAnswer = z.object({ monthlyDollars: z.coerce.number().min(0.01).max(1_000_000) }).strict().safeParse(input.answer);
+      if (!allocationAnswer.success) throw Object.assign(new Error('Enter a monthly amount greater than zero.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+      result = await reserveFundCommandResult(userId, execution.propertyId, launch, undefined, null, null, null, Math.round(allocationAnswer.data.monthlyDollars * 100));
+      captureId = input.idempotencyKey;
+      capturedContextVersion = 'reserve-fund-live';
+      canonicalOwner = 'HomeReserveFundLineItem';
+    } else if (input.captureKey === RESERVE_FUND_BALANCE_CAPTURE_KEY) {
       if (launch?.actionId !== RESERVE_FUND_ACTION_IDS.SET_BALANCE) throw Object.assign(new Error('This reserve-fund action is no longer active.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
       const balanceAnswer = z.object({ targetDollars: z.coerce.number().min(0).max(100_000_000), note: z.preprocess((v) => (v === '' ? null : v), z.string().trim().max(500).nullable().optional()) }).strict().safeParse(input.answer);
       if (!balanceAnswer.success) throw Object.assign(new Error('Enter the balance as a dollar amount of zero or more.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });

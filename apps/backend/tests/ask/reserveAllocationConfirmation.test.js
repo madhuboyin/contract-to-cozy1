@@ -110,7 +110,7 @@ test('Ask: the proposal shows the expense and the amount being confirmed, and ta
   sourceLaunch = { operationId: 'CAPITAL_RESERVE_PLAN', guidanceStepId: 'step-f' };
   const result = await reserveFundCommandResult('u1', 'p1', launch());
   assert.equal(result.status, 'NEEDS_CONFIRMATION');
-  assert.deepEqual(result.confirmation.fields.map((f) => [f.label, f.value]), [['Expense', 'Furnace'], ['Suggested monthly amount', '$185.00'], ['Monthly allocation', '$185.00'], ['Target', '$9,000.00']]);
+  assert.deepEqual(result.confirmation.fields.map((f) => [f.label, f.value]), [['Expense', 'Furnace'], ['Suggested monthly amount', '$185.00'], ['Chosen monthly amount', '$185.00 (as suggested)'], ['Target', '$9,000.00']]);
   assert.equal(result.parameters.reserveFundCommand.guidanceStepId, 'step-f');
   assert.equal(updates.length, 0, 'proposing writes nothing');
 });
@@ -178,4 +178,25 @@ test('zero or a non-integer amount never funds the expense, and a suggestion tha
 test('recalculation keeps a confirmed allocation instead of replacing it', () => {
   const src = fs.readFileSync(require.resolve('../../src/services/homeReserveFundCalculation.service.ts'), 'utf8');
   assert.match(src, /if \(keptCents != null\) allocatedMonthlyCents = keptCents;/);
+});
+
+test('Ask: the existing confirmation takes a chosen amount through its edit form, shows suggested and chosen apart, and confirms that amount', async () => {
+  line.allocationSuggestedMonthlyCents = 18500;
+  const first = await reserveFundCommandResult('u1', 'p1', launch());
+  assert.equal(first.captureRequests[0].captureKey, 'reserve-fund-allocation');
+  assert.equal(first.parameters.reserveFundLaunch.actionId, RESERVE_FUND_ACTION_IDS.CONFIRM_ALLOCATION);
+  const edited = await reserveFundCommandResult('u1', 'p1', launch(), undefined, null, null, null, 25000);
+  assert.deepEqual(edited.confirmation.fields.map((f) => [f.label, f.value]).filter(([l]) => /monthly/.test(l)), [['Suggested monthly amount', '$185.00'], ['Chosen monthly amount', '$250.00']]);
+  assert.equal(edited.parameters.reserveFundCommand.monthlyCents, 25000);
+  const done = await confirmCapabilityInvoke(OP, { userId: 'u1', execution: { id: 'e1', propertyId: 'p1', createdAt: new Date() }, access: { role: 'CONTRIBUTOR' }, parameters: edited.parameters, command: getAskDomainCommandByOperation(OP) });
+  assert.ok(done.result);
+  assert.equal(line.allocatedMonthlyCents, 25000);
+  assert.equal(line.allocationSuggestedMonthlyCents, 18500);
+});
+
+test('Ask: an expense with no monthly amount asks for one instead of confirming zero', async () => {
+  line.allocatedMonthlyCents = 0; line.allocationSuggestedMonthlyCents = 0;
+  const out = await reserveFundCommandResult('u1', 'p1', launch());
+  assert.equal(out.status, 'NEEDS_CONTEXT');
+  assert.equal(out.reasonCode, 'RESERVE_FUND_ALLOCATION_REQUIRED');
 });
