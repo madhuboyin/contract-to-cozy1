@@ -182,18 +182,48 @@ async function capitalReservePlanResult(userId: string, propertyId: string, mess
   const totalHigh = upcoming.reduce((sum, item) => sum + (item.estimatedCostMaxCents ?? 0), 0);
   const targetTotalCents = lineItems.reduce((sum, line) => sum + (line.targetCostCents ?? 0), 0);
   const progress = targetTotalCents > 0 ? Math.min(100, Math.max(0, ((fund.currentBalanceCents ?? 0) / targetTotalCents) * 100)) : 0;
+  const needsAttention = (fund.currentShortfallCents ?? 0) > 0 || progress < 100;
+  const overviewAction = canManage
+    ? (fund.currentBalanceCents ?? 0) === 0
+      ? commandAction(RESERVE_FUND_ACTION_IDS.SET_BALANCE, 'Add current balance', 'PRIMARY')
+      : commandAction(RESERVE_FUND_ACTION_IDS.ADD_CONTRIBUTION, 'Log a balance change', 'PRIMARY')
+    : null;
+  const overviewSteps = upcoming.slice(0, 3).map((item) => ({
+    id: String(item.id),
+    title: String(item.inventoryItem?.name ?? String(item.category).toLowerCase().replace(/_/g, ' ')),
+    description: `${humanDate(new Date(item.windowStart))}–${humanDate(new Date(item.windowEnd))}`,
+    amountLabel: `${money((item.estimatedCostMinCents ?? 0) / 100)}–${money((item.estimatedCostMaxCents ?? 0) / 100)}`,
+    meta: [String(item.confidence).toLowerCase() + ' confidence'],
+    status: 'UPCOMING', href: null, entityType: 'CAPITAL_TIMELINE_ITEM', actions: [],
+  }));
   const blocks: AskPresentationBlock[] = [{
-    type: 'SUMMARY', id: 'capital-reserve-summary', title: `${money((fund.currentBalanceCents ?? 0) / 100)} saved toward a ${money(targetTotalCents / 100)} reserve target`,
-    body: `${progress.toFixed(0)}% funded. The current ${String(fund.posture).toLowerCase()} plan suggests ${money((fund.recommendedMonthlyContributionCents ?? 0) / 100)} per month and records a ${money((fund.currentShortfallCents ?? 0) / 100)} near-term shortfall. The modeled cost range for the displayed ${analysis.horizonYears ?? 10}-year horizon is ${money(totalLow / 100)}–${money(totalHigh / 100)}.`,
-    tone: (fund.currentShortfallCents ?? 0) > 0 ? 'CAUTION' : 'DEFAULT', actions: [
+    type: 'SUMMARY', id: 'capital-reserve-summary',
+    title: needsAttention ? 'Your reserve fund needs attention' : 'Your reserve fund is on track',
+    body: needsAttention
+      ? `${money((fund.currentBalanceCents ?? 0) / 100)} is recorded against a ${money(targetTotalCents / 100)} target; the current plan recommends ${money((fund.recommendedMonthlyContributionCents ?? 0) / 100)} per month.`
+      : `${money((fund.currentBalanceCents ?? 0) / 100)} is recorded against a ${money(targetTotalCents / 100)} target, with no near-term shortfall.`,
+    tone: needsAttention ? 'CAUTION' : 'DEFAULT', actions: [
+      ...(overviewAction ? [overviewAction] : []),
       // Horizon re-run (FRD Appendix D planning/refinement follow-up): re-invokes this same CAPITAL_RESERVE_PLAN
       // operation with an explicit horizon in the message, mirroring the traditional page's own 5yr/10yr toggle --
       // only offers the horizon NOT currently shown, same as a two-state toggle rather than two redundant buttons.
       ...(analysis.horizonYears !== 5 ? [{ id: 'rerun-horizon-5', label: 'Show 5-year horizon', interactionType: 'START_WORKFLOW' as const, message: 'Show my capital reserve plan for a 5-year horizon.', operationId: 'CAPITAL_RESERVE_PLAN', style: 'SECONDARY' as const }] : analysis.horizonYears !== 10 ? [{ id: 'rerun-horizon-10', label: 'Show 10-year horizon', interactionType: 'START_WORKFLOW' as const, message: 'Show my capital reserve plan for a 10-year horizon.', operationId: 'CAPITAL_RESERVE_PLAN', style: 'SECONDARY' as const }] : []),
     ],
+  }, {
+    type: 'PROGRESS', id: 'reserve-fund-overview', title: 'Funding progress',
+    description: `Based on the ${String(fund.posture).toLowerCase()} plan over ${analysis.horizonYears ?? 10} years.`,
+    percent: progress,
+    basis: `${money((fund.currentBalanceCents ?? 0) / 100)} of ${money(targetTotalCents / 100)} funded`,
+    metrics: [
+      { label: 'Monthly plan', value: `${money((fund.recommendedMonthlyContributionCents ?? 0) / 100)}/mo`, tone: (fund.recommendedMonthlyContributionCents ?? 0) > 0 ? 'CAUTION' : 'DEFAULT' },
+      { label: 'Near-term gap', value: money((fund.currentShortfallCents ?? 0) / 100), tone: (fund.currentShortfallCents ?? 0) > 0 ? 'CRITICAL' : 'POSITIVE' },
+      { label: 'Planning style', value: String(fund.posture).toLowerCase().replace(/^./, (letter) => letter.toUpperCase()), tone: 'DEFAULT' },
+    ],
+    nextSteps: overviewSteps,
+    actions: [],
   },
-  { type: 'GROUPED_LIST', filters: [], id: 'reserve-planning-controls', title: 'Manage the reserve plan', description: `The current posture is ${String(fund.posture).toLowerCase()}. Conservative uses the high estimate, moderate uses the midpoint, and aggressive uses the low estimate. Recommended monthly funding is the sum of each smoothable target divided by its months remaining; needs due within six months are shown as shortfall instead.`, sections: [{ id: 'fund-actions', title: 'Balance and calculation', count: 2, items: [{ id: 'add-contribution', title: 'Log a balance change', description: 'Record a deposit, withdrawal, or balance correction. No money is transferred.', meta: ['Self-reported ledger'], status: 'AVAILABLE', entityType: 'RESERVE_FUND', ...(canManage ? { actions: [commandAction(RESERVE_FUND_ACTION_IDS.ADD_CONTRIBUTION, 'Log contribution', 'PRIMARY')] } : {}) }, { id: 'recalculate', title: 'Recalculate from current records', description: 'Refresh targets and allocations from the canonical Capital Timeline and property context.', meta: [fund.lastRecalculatedAt ? `Last recalculated ${humanDate(new Date(fund.lastRecalculatedAt))}` : 'Not recalculated yet'], status: 'AVAILABLE', entityType: 'RESERVE_FUND', ...(canManage ? { actions: [commandAction(RESERVE_FUND_ACTION_IDS.RECALCULATE, 'Recalculate plan')] } : {}) }] }, { id: 'postures', title: 'Choose how estimates are planned', count: 3, items: (['CONSERVATIVE', 'MODERATE', 'AGGRESSIVE'] as const).map((posture) => ({ id: posture, title: posture[0] + posture.slice(1).toLowerCase(), description: posture === 'CONSERVATIVE' ? 'Plans from the high end of each cost range.' : posture === 'MODERATE' ? 'Plans from the midpoint of each cost range.' : 'Plans from the low end of each cost range.', meta: [fund.posture === posture ? 'Current posture' : 'Available'], status: fund.posture === posture ? 'CURRENT' : 'AVAILABLE', entityType: 'RESERVE_FUND_POSTURE', ...(canManage && fund.posture !== posture ? { actions: [commandAction(RESERVE_FUND_ACTION_IDS[`POSTURE_${posture}`], `Use ${posture.toLowerCase()}`)] } : {}) })) }], actions: [] },
   capitalTimelineBlock(upcoming, items.length),
+  { type: 'GROUPED_LIST', filters: [], id: 'reserve-planning-controls', title: 'Adjust the plan', description: `The current planning style is ${String(fund.posture).toLowerCase()}. Conservative uses the high estimate, moderate uses the midpoint, and aggressive uses the low estimate.`, sections: [{ id: 'fund-actions', title: 'Balance and calculation', count: 2, items: [{ id: 'add-contribution', title: 'Log a balance change', description: 'Record a deposit, withdrawal, or balance correction. No money is transferred.', meta: ['Self-reported ledger'], status: 'AVAILABLE', entityType: 'RESERVE_FUND', ...(canManage ? { actions: [commandAction(RESERVE_FUND_ACTION_IDS.ADD_CONTRIBUTION, 'Log contribution', 'PRIMARY')] } : {}) }, { id: 'recalculate', title: 'Recalculate from current records', description: 'Refresh targets and allocations from your home’s replacement plan and recorded details.', meta: [fund.lastRecalculatedAt ? `Last recalculated ${humanDate(new Date(fund.lastRecalculatedAt))}` : 'Not recalculated yet'], status: 'AVAILABLE', entityType: 'RESERVE_FUND', ...(canManage ? { actions: [commandAction(RESERVE_FUND_ACTION_IDS.RECALCULATE, 'Recalculate plan')] } : {}) }] }, { id: 'postures', title: 'Choose a planning style', count: 3, items: (['CONSERVATIVE', 'MODERATE', 'AGGRESSIVE'] as const).map((posture) => ({ id: posture, title: posture[0] + posture.slice(1).toLowerCase(), description: posture === 'CONSERVATIVE' ? 'Uses the high end of each cost range for more cushion.' : posture === 'MODERATE' ? 'Uses the midpoint of each cost range.' : 'Uses the low end of each cost range for a smaller monthly target.', meta: [fund.posture === posture ? 'Current style' : 'Available'], status: fund.posture === posture ? 'CURRENT' : 'AVAILABLE', entityType: 'RESERVE_FUND_POSTURE', ...(canManage && fund.posture !== posture ? { actions: [commandAction(RESERVE_FUND_ACTION_IDS[`POSTURE_${posture}`], `Use ${posture.toLowerCase()}`)] } : {}) })) }], actions: [] },
   ...capitalAdjustmentBlocks,
   // Home Capital Timeline reference journey (FRD Appendix D), first inline-detail slice: entityType routes these
   // through ReserveAllocationResultList (GroupedListBlock.tsx) instead of the generic href-only renderer, opening

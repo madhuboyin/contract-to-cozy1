@@ -158,6 +158,7 @@ export const CAPITAL_PLANNING_SKILL_EVALUATION = deepFreezeSkillPackage({
   ],
   "expectedBlockTypes": [
     "SUMMARY",
+    "PROGRESS",
     "GROUPED_LIST",
     "TABLE",
     "TIMELINE",

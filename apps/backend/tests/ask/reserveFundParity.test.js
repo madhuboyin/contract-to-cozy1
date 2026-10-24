@@ -33,10 +33,13 @@ test('traditional reserve fund mutations enforce the contributor role floor', ()
   for (const mutation of mutations) assert.match(mutation, /requireHouseholdRole\('CONTRIBUTOR'\)/);
 });
 
-test('Ask reserve result includes desktop balance, controls, ledger, retired items and reconciliation', () => {
+test('Ask reserve result leads with a decision-oriented overview and retains desktop parity details', () => {
   const handler = source('src/services/ask/handlers/capitalPlanning.handler.ts');
-  for (const marker of ['reserve-planning-controls', 'reserve-contribution-ledger', 'reserve-retired-items', 'reserve-reconciliation-suggestions', 'currentBalanceCents', 'targetTotalCents']) {
+  for (const marker of ['Your reserve fund needs attention', 'reserve-fund-overview', 'Funding progress', 'Monthly plan', 'Near-term gap', 'Add current balance', 'overviewSteps', 'reserve-planning-controls', 'reserve-contribution-ledger', 'reserve-retired-items', 'reserve-reconciliation-suggestions', 'currentBalanceCents', 'targetTotalCents']) {
     assert.match(handler, new RegExp(marker));
   }
+  assert.ok(handler.indexOf("id: 'reserve-fund-overview'") < handler.indexOf("id: 'reserve-planning-controls'"));
+  assert.ok(handler.indexOf('capitalTimelineBlock(upcoming') < handler.indexOf("id: 'reserve-planning-controls'"));
+  assert.ok(ASK_OPERATION_DEFINITIONS.CAPITAL_RESERVE_PLAN.allowedBlockTypes.includes('PROGRESS'));
 });
 

@@ -73,6 +73,7 @@ export const CAPITAL_PLANNING_SKILL = Object.freeze({
   "authorizationFloor": "VIEWER",
   "allowedResultBlocks": [
     "SUMMARY",
+    "PROGRESS",
     "GROUPED_LIST",
     "TABLE",
     "TIMELINE",
