@@ -21163,6 +21163,24 @@ model InspectionReportReview {
   @@map("inspection_report_reviews")
 }
 
+// An explicit link from a maintenance task to the guided-journey step it is meant to satisfy. One task may support more than one step.
+// The link is the only thing that lets a task's verified completion count toward a step; titles and categories are never matched.
+model GuidanceStepMaintenanceTaskLink {
+  id                String   @id @default(uuid())
+  propertyId        String
+  journeyId         String
+  stepId            String
+  maintenanceTaskId String
+  source            String
+  linkedByUserId    String?
+  createdAt         DateTime @default(now())
+
+  @@unique([stepId, maintenanceTaskId])
+  @@index([maintenanceTaskId])
+  @@index([propertyId, journeyId])
+  @@map("guidance_step_maintenance_task_links")
+}
+
 // One row per extracted finding. Survives across the life of the property record.
 model InspectionFinding {
   id         String @id @default(uuid())

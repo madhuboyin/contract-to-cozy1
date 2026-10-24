@@ -738,3 +738,13 @@ Owner decision: add persisted review evidence; do not overload `InspectionReport
 - **Matrix.** The four rows are CONNECTED (29 connected). They are the second case in which an acknowledgement-class proof may complete a step: a persisted, versioned review record, not a bare confirmation.
 - **Not built.** The page has no review button yet (the route exists); the Desktop UI to call it is open.
 
+
+## 36. Maintenance task to journey step link (compliance task step)
+
+A maintenance task counts toward `maintenance:complete_compliance_task` only through an explicit `GuidanceStepMaintenanceTaskLink` (journey, step, task, property, source `DESKTOP`/`ASK`, linking user, time). One task may be linked to several steps. Titles and categories are never matched.
+
+**Verified completion** means the task is `COMPLETED` and at least one evidence document it names (`completionMetadata.photoDocumentIds`) exists on the same property. Creating a task, or marking it complete with nothing attached, is self-reported and reports nothing to the journey.
+
+`maintenanceTaskJourneyOperations.reportLinkedTaskCompletion` is the one reporter. `PropertyMaintenanceTaskService.applyTaskCompletionSideEffects` calls it on every transition to completed, so Desktop and Ask completion cannot differ. Each link's step is re-read (open journey, maintenance tool, compliance step, same journey) before reporting; a failed report never undoes the completion. Desktop makes the link with `POST /properties/:propertyId/guidance/steps/:stepId/maintenance-link`.
+
+**Not yet built:** creating the link from Ask when a task is created from the step, and attaching evidence documents in Ask's completion. Until then the proof-matrix row stays CONNECTABLE. Schema change: new table, needs `prisma db push`.

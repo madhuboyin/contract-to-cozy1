@@ -1,4 +1,5 @@
 // apps/backend/src/services/PropertyMaintenanceTask.service.ts
+import { reportLinkedTaskCompletion } from './maintenanceTaskJourneyOperations';
 import {
     PropertyMaintenanceTask,
     MaintenanceTaskStatus,
@@ -797,6 +798,9 @@ import { markReconciliationResolved, recordReconciliationFailure } from '../modu
       }
 
       await this.syncTaskWorkItem(userId, updatedTask, wasCompleted, isNowCompleted);
+
+      // A task linked to a journey step reports its completion to that step only when the completion is verified (never self-reported alone).
+      if (!wasCompleted && isNowCompleted) await reportLinkedTaskCompletion(userId, updatedTask.id);
     }
 
     /**

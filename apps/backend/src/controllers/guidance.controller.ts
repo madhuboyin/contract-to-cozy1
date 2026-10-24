@@ -1,3 +1,4 @@
+import { linkMaintenanceTaskToStep } from '../services/maintenanceTaskJourneyOperations';
 import { NextFunction, Response } from 'express';
 import { CustomRequest } from '../types';
 import { guidanceJourneyService } from '../services/guidanceEngine/guidanceJourney.service';
@@ -195,6 +196,16 @@ export async function acknowledgeGuidanceStepEndpoint(req: CustomRequest, res: R
     analyticsEmitter.track({ eventType: AnalyticsEvent.ACTION_COMPLETED, userId, propertyId: req.params.propertyId, moduleKey: AnalyticsModule.GUIDANCE, featureKey: AnalyticsFeature.GUIDANCE_ADVISOR, metadataJson: { actionType: 'acknowledge_step' } });
     const { journey, step } = outcome.result;
     res.json({ success: true, data: { step: mapGuidanceStep(step, { suppressGenericRepairReplace: journey?.inventoryItem?.category === 'HVAC' }), journey: mapGuidanceJourney(journey) } });
+  } catch (error) { next(error); }
+}
+
+export async function linkMaintenanceTaskEndpoint(req: CustomRequest, res: Response, next: NextFunction) {
+  try {
+    const userId = requireUserId(req);
+    const taskId = req.body?.maintenanceTaskId;
+    if (typeof taskId !== 'string' || !taskId) throw new APIError('A maintenance task is required.', 400, 'MAINTENANCE_TASK_REQUIRED');
+    const { link, reused } = await linkMaintenanceTaskToStep(req.params.propertyId, userId, taskId, req.params.stepId, 'DESKTOP');
+    res.json({ success: true, data: { link, reused } });
   } catch (error) { next(error); }
 }
 

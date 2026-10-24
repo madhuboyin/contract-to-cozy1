@@ -10,6 +10,7 @@ import {
   changeGuidanceJourneyIssue,
   completeGuidanceStep,
   acknowledgeGuidanceStepEndpoint,
+  linkMaintenanceTaskEndpoint,
   dismissGuidanceJourney,
   generateGuidanceModelShortlist,
   generateGuidanceVendorSuggestions,
@@ -98,6 +99,8 @@ const acknowledgeStepBodySchema = z.object({
   disposition: z.enum(['act_now', 'plan_soon', 'monitor']).optional(),
   note: z.string().trim().max(500).optional(),
 });
+
+const maintenanceLinkBodySchema = z.object({ maintenanceTaskId: z.string().trim().min(1) });
 
 const skipStepBodySchema = z.object({
   reasonCode: z.string().trim().min(2).max(80).optional(),
@@ -242,6 +245,15 @@ router.post(
   requireHouseholdRole('CONTRIBUTOR'),
   validateBody(acknowledgeStepBodySchema),
   acknowledgeGuidanceStepEndpoint
+);
+
+router.post(
+  '/properties/:propertyId/guidance/steps/:stepId/maintenance-link',
+  validate(propertyStepParamsSchema),
+  propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
+  validateBody(maintenanceLinkBodySchema),
+  linkMaintenanceTaskEndpoint
 );
 
 router.post(
