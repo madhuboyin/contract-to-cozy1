@@ -46,10 +46,16 @@ function captureRequest(contextVersion: string, rooms: Array<{ id: string; name:
   };
 }
 
-function recommendationActions(status: string) {
+function recommendationActions(status: string, roomName?: string) {
   const make = (key: keyof typeof PLANT_RECOMMENDATION_ACTIONS, style: 'PRIMARY' | 'SECONDARY' = 'SECONDARY') => {
     const action = PLANT_RECOMMENDATION_ACTIONS[key];
-    return { ...action, style, interactionType: 'MUTATE_RECORD' as const, operationId: 'ROOM_PLANT_RECOMMENDATIONS' };
+    return {
+      ...action,
+      ...(key === 'ADD_TO_HOME' && roomName ? { label: `Add to ${roomName}` } : {}),
+      style,
+      interactionType: 'MUTATE_RECORD' as const,
+      operationId: 'ROOM_PLANT_RECOMMENDATIONS',
+    };
   };
   return [make('ADD_TO_HOME', 'PRIMARY'), ...(status === 'SAVED' ? [] : [make('SAVE')]), ...(status === 'DISMISSED' ? [] : [make('DISMISS')])];
 }
@@ -71,7 +77,7 @@ function petSafety(rec: PlantRecommendation) {
   return { value: 'Pet safety unverified', tone: 'CAUTION' as const };
 }
 
-function recommendationItem(rec: PlantRecommendation, canChange: boolean) {
+function recommendationItem(rec: PlantRecommendation, canChange: boolean, roomName?: string) {
   const fit = fitPresentation(rec.confidence);
   const safety = petSafety(rec);
   const genericNearFitWarning = 'Works, but not ideal under current room inputs.';
@@ -97,7 +103,7 @@ function recommendationItem(rec: PlantRecommendation, canChange: boolean) {
       ...(rec.careSummary ? [{ label: 'Care', value: rec.careSummary, kind: 'CARE' as const }] : []),
       ...(rec.placementTip ? [{ label: 'Best placement', value: rec.placementTip, kind: 'PLACEMENT' as const }] : []),
     ],
-    actions: canChange ? recommendationActions(rec.status) : undefined,
+    actions: canChange ? recommendationActions(rec.status, roomName) : undefined,
   };
 }
 
@@ -108,8 +114,8 @@ export function recommendationResult(room: { roomId: string; name: string }, rec
     ? [room.name, profile.lightLevel ? `${labels(profile.lightLevel)} light` : null, profile.maintenancePreference ? `${labels(profile.maintenancePreference)} care` : 'Any care effort', profile.hasPets === true ? 'Pets have access' : profile.hasPets === false ? 'No pet access' : 'Pet access unsure', ...(profile.goals.length ? [profile.goals.map(labels).join(', ')] : [])].filter(Boolean).join(' · ')
     : null;
   const sections: Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>['sections'] = [
-    ...(primary.length ? [{ id: 'best-matches', title: 'Best matches', count: primary.length, initialVisibleCount: Math.min(3, primary.length), items: primary.map((rec) => recommendationItem(rec, canChange)) }] : []),
-    ...(alternatives.length ? [{ id: 'other-possibilities', title: 'Other possibilities', caption: 'These options have meaningful tradeoffs. Review the warnings before choosing one.', count: alternatives.length, items: alternatives.map((rec) => recommendationItem(rec, canChange)) }] : []),
+    ...(primary.length ? [{ id: 'best-matches', title: 'Best matches', count: primary.length, initialVisibleCount: Math.min(3, primary.length), items: primary.map((rec) => recommendationItem(rec, canChange, room.name)) }] : []),
+    ...(alternatives.length ? [{ id: 'other-possibilities', title: 'Other possibilities', caption: 'These options have meaningful tradeoffs. Review the warnings before choosing one.', count: alternatives.length, items: alternatives.map((rec) => recommendationItem(rec, canChange, room.name)) }] : []),
   ];
   return {
     status: 'ANSWERED', reasonCode: recommendations.length ? 'ROOM_PLANT_RECOMMENDATIONS_READY' : 'ROOM_PLANT_RECOMMENDATIONS_EMPTY',
@@ -121,13 +127,47 @@ export function recommendationResult(room: { roomId: string; name: string }, rec
   };
 }
 
+async function previousRecommendationsBlock(rooms: Array<{ id: string; name: string }>, propertyId: string, canChange: boolean): Promise<AskPresentationBlock | null> {
+  const states = await Promise.all(rooms.map(async (room) => ({ room, state: await advisor.getRoomAdvisorState(propertyId, room.id) })));
+  const withRecommendations = states.filter(({ state }) => state.recommendations.length > 0);
+  if (!withRecommendations.length) return null;
+  return {
+    type: 'GROUPED_LIST',
+    filters: [],
+    id: 'previous-room-plant-recommendations',
+    title: 'Your current room recommendations',
+    description: 'These are the latest saved recommendation sets. You can act on them now or use the form below to replace one room’s set.',
+    sections: withRecommendations.map(({ room, state }) => ({
+      id: `previous-room-${room.id}`,
+      title: room.name,
+      caption: state.profile
+        ? [state.profile.lightLevel ? `${labels(state.profile.lightLevel)} light` : null, state.profile.maintenancePreference ? `${labels(state.profile.maintenancePreference)} care` : 'Any care effort'].filter(Boolean).join(' · ')
+        : 'Saved room recommendations',
+      count: state.recommendations.length,
+      initialVisibleCount: Math.min(2, state.recommendations.length),
+      items: state.recommendations.map((rec) => recommendationItem(rec, canChange, room.name)),
+    })),
+    actions: [],
+  };
+}
+
 export async function roomPlantRecommendationResult(userId: string, propertyId: string, supplied?: ReturnType<typeof RoomPlantRecommendationInputSchema.parse>, sourceExecutionId: string | null = null): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
   if (access.role === HouseholdRole.VIEWER) return { status: 'BLOCKED', reasonCode: 'ASK_PERMISSION_REQUIRED', blocks: [{ type: 'SUMMARY', id: 'plant-recommendation-permission', title: 'A contributor or owner can generate plant recommendations', body: 'Your role can view existing home information but cannot replace the room’s generated recommendation set.', tone: 'CAUTION', actions: [] }], suggestions: [] };
   const rooms = await roomChoices(propertyId);
   if (!rooms.length) return { status: 'NOT_APPLICABLE', reasonCode: 'PLANT_RECOMMENDATION_ROOM_REQUIRED', blocks: [{ type: 'SUMMARY', id: 'plant-recommendation-no-room', title: 'Add a room first', body: 'Plant Advisor needs a recorded room before it can make room-specific recommendations.', tone: 'CAUTION', actions: [] }], suggestions: [] };
   const contextVersion = await plantRecommendationContextVersion(propertyId);
-  if (!supplied) return { status: 'NEEDS_CONTEXT', reasonCode: 'ROOM_PLANT_RECOMMENDATION_INPUT_REQUIRED', contextVersion, parameters: { sourceExecutionId }, blocks: [{ type: 'SUMMARY', id: 'plant-recommendation-input', title: 'Find plants that fit a room', body: 'Choose a room and its light conditions. Nothing changes until you review and confirm.', tone: 'DEFAULT', actions: [] }], captureRequests: [captureRequest(contextVersion, rooms)], suggestions: [] };
+  if (!supplied) {
+    const previous = await previousRecommendationsBlock(rooms, propertyId, true);
+    return {
+      status: 'NEEDS_CONTEXT', reasonCode: 'ROOM_PLANT_RECOMMENDATION_INPUT_REQUIRED', contextVersion, parameters: { sourceExecutionId },
+      blocks: [
+        { type: 'SUMMARY', id: 'plant-recommendation-input', title: previous ? 'Review or refresh room recommendations' : 'Find plants that fit a room', body: previous ? 'Your existing recommendations are still available below. Choose new conditions only when you want to refresh a room.' : 'Choose a room and its light conditions. Nothing changes until you review and confirm.', tone: 'DEFAULT', actions: [] },
+        ...(previous ? [previous] : []),
+      ],
+      captureRequests: [captureRequest(contextVersion, rooms)], suggestions: [],
+    };
+  }
   const room = rooms.find((candidate) => candidate.id === supplied.roomId);
   if (!room) return { status: 'NEEDS_CONTEXT', reasonCode: 'PLANT_RECOMMENDATION_ROOM_CHANGED', contextVersion, parameters: { sourceExecutionId }, blocks: [{ type: 'SUMMARY', id: 'plant-recommendation-room-missing', title: 'That room is no longer available', body: 'Choose another recorded room. Nothing has changed.', tone: 'CAUTION', actions: [] }], captureRequests: [captureRequest(contextVersion, rooms)], suggestions: [] };
   const expiresAt = new Date(Date.now() + CONFIRMATION_MINUTES * 60 * 1000).toISOString();

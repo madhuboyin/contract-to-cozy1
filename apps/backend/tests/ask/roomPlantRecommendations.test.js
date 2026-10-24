@@ -53,7 +53,7 @@ test('recommendation rows preserve fit, structured care and placement, warnings 
     { label: 'Best placement', value: 'Keep a few feet from the window.', kind: 'PLACEMENT' },
   ]);
   assert.equal(row.detail, undefined);
-  assert.deepEqual(row.actions.map((action) => action.label), ['Track this plant', 'Save for later', 'Not interested']);
+  assert.deepEqual(row.actions.map((action) => action.label), ['Add to Dining', 'Save for later', 'Not interested']);
   assert.equal(row.actions.every((action) => action.operationId === 'ROOM_PLANT_RECOMMENDATIONS'), true);
   const viewer = recommendationResult({ roomId: 'room-1', name: 'Dining' }, [recommendation()], false);
   assert.equal(viewer.blocks.find((block) => block.id === 'room-plant-recommendations').sections[0].items[0].actions, undefined);
@@ -94,9 +94,13 @@ test('clicking Add to home, Save, or Dismiss on a recommended plant proposes the
     },
     inventoryRoom: {
       findMany: async () => [{ id: 'room-laundry', name: 'Laundry' }],
+      findFirst: async ({ where }) => (where.id === 'room-laundry' && where.propertyId === 'p1'
+        ? { id: 'room-laundry', name: 'Laundry', type: 'LAUNDRY' }
+        : null),
     },
     roomPlantProfile: {
       findMany: async () => [],
+      findFirst: async () => null,
     },
   };
 
