@@ -2,7 +2,7 @@
 // proof). It records, before any step is connected to Ask, what the step promises, what durable record would prove it, which Ask command and Desktop reporter exist,
 // what a launch needs, how the step is bound, and a verdict:
 //   CONNECTED               an Ask write reports this step with proof (it is in ASK_GUIDANCE_IN_ASK_STEPS)
-//   CONNECTABLE             a proof, an Ask command and a reporter exist or can be shared; the prerequisite says what is left
+//   CONNECTABLE             the proof is decided and nothing needs a product call; what is left to build (an Ask command, a shared reporter) is in the prerequisite
 //   NEEDS_PRODUCT_DECISION  the proof is undefined, or a surface does not report it; connecting it now would invent a meaning
 //   WRONG_TOOL              the step promises something its tool does not produce
 //   UNSUPPORTED             Ask has no surface for it (an external flow, or guidance-native state)
@@ -10,6 +10,7 @@
 // a row with no step. Order of work: by existing Ask command and proof clarity, not tool count. See the continuation FRD, section 24.
 
 export type GuidanceStepProofVerdict = 'CONNECTED' | 'CONNECTABLE' | 'NEEDS_PRODUCT_DECISION' | 'WRONG_TOOL' | 'UNSUPPORTED';
+export type GuidanceStepProofPolicy = 'ACKNOWLEDGEMENT' | 'CANONICAL_MUTATION' | 'VERIFIED_EVIDENCE' | 'EXTERNAL_COMPLETION' | 'DECISION';
 export type GuidanceStepBindingKind = 'EXACT_STEP' | 'FAMILY_FALLBACK' | 'NONE';
 export interface GuidanceStepProofRow {
   homeownerJob: string;
@@ -19,6 +20,8 @@ export interface GuidanceStepProofRow {
   launchPrerequisites: string;
   binding: GuidanceStepBindingKind;
   verdict: GuidanceStepProofVerdict;
+  /** What kind of proof completes the step: ACKNOWLEDGEMENT (a true review step only), CANONICAL_MUTATION (a saved canonical record), VERIFIED_EVIDENCE, EXTERNAL_COMPLETION (work done outside Ask) or DECISION (an explicit saved decision). */
+  proofPolicy: GuidanceStepProofPolicy;
   risk: string;
 }
 
@@ -30,6 +33,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: 'booking.controller / booking.service (after a booking is created)',
     launchPrerequisites: 'A chosen provider, scope and time.',
     binding: 'NONE', verdict: 'UNSUPPORTED',
+    proofPolicy: 'EXTERNAL_COMPLETION',
     risk: 'External commitment to a provider (cost, scheduling, contact); Ask does not run the booking flow.',
   },
   'booking:book_energy_service': {
@@ -39,6 +43,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: 'booking.controller / booking.service (after a booking is created)',
     launchPrerequisites: 'A chosen provider, scope and time.',
     binding: 'NONE', verdict: 'UNSUPPORTED',
+    proofPolicy: 'EXTERNAL_COMPLETION',
     risk: 'External commitment to a provider (cost, scheduling, contact); Ask does not run the booking flow.',
   },
   'booking:book_remediation_service': {
@@ -48,6 +53,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: 'booking.controller / booking.service (after a booking is created)',
     launchPrerequisites: 'A chosen provider, scope and time.',
     binding: 'NONE', verdict: 'UNSUPPORTED',
+    proofPolicy: 'EXTERNAL_COMPLETION',
     risk: 'External commitment to a provider (cost, scheduling, contact); Ask does not run the booking flow.',
   },
   'booking:book_service': {
@@ -57,6 +63,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: 'booking.controller / booking.service (after a booking is created)',
     launchPrerequisites: 'A chosen provider, scope and time.',
     binding: 'NONE', verdict: 'UNSUPPORTED',
+    proofPolicy: 'EXTERNAL_COMPLETION',
     risk: 'External commitment to a provider (cost, scheduling, contact); Ask does not run the booking flow.',
   },
   'booking:route_specialist': {
@@ -66,6 +73,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: 'booking.controller / booking.service (after a booking is created)',
     launchPrerequisites: 'A chosen provider, scope and time.',
     binding: 'NONE', verdict: 'UNSUPPORTED',
+    proofPolicy: 'EXTERNAL_COMPLETION',
     risk: 'External commitment to a provider (cost, scheduling, contact); Ask does not run the booking flow.',
   },
   'booking:schedule_compliance_service': {
@@ -75,6 +83,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: 'booking.controller / booking.service (after a booking is created)',
     launchPrerequisites: 'A chosen provider, scope and time.',
     binding: 'NONE', verdict: 'UNSUPPORTED',
+    proofPolicy: 'EXTERNAL_COMPLETION',
     risk: 'External commitment to a provider (cost, scheduling, contact); Ask does not run the booking flow.',
   },
   'booking:schedule_inspection': {
@@ -84,6 +93,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: 'booking.controller / booking.service (after a booking is created)',
     launchPrerequisites: 'A chosen provider, scope and time.',
     binding: 'NONE', verdict: 'UNSUPPORTED',
+    proofPolicy: 'EXTERNAL_COMPLETION',
     risk: 'External commitment to a provider (cost, scheduling, contact); Ask does not run the booking flow.',
   },
   'booking:schedule_maintenance_inspection': {
@@ -93,6 +103,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: 'booking.controller / booking.service (after a booking is created)',
     launchPrerequisites: 'A chosen provider, scope and time.',
     binding: 'NONE', verdict: 'UNSUPPORTED',
+    proofPolicy: 'EXTERNAL_COMPLETION',
     risk: 'External commitment to a provider (cost, scheduling, contact); Ask does not run the booking flow.',
   },
   'booking:schedule_post_repair_inspection': {
@@ -102,6 +113,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: 'booking.controller / booking.service (after a booking is created)',
     launchPrerequisites: 'A chosen provider, scope and time.',
     binding: 'NONE', verdict: 'UNSUPPORTED',
+    proofPolicy: 'EXTERNAL_COMPLETION',
     risk: 'External commitment to a provider (cost, scheduling, contact); Ask does not run the booking flow.',
   },
   'booking:schedule_pre_purchase_inspection': {
@@ -111,6 +123,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: 'booking.controller / booking.service (after a booking is created)',
     launchPrerequisites: 'A chosen provider, scope and time.',
     binding: 'NONE', verdict: 'UNSUPPORTED',
+    proofPolicy: 'EXTERNAL_COMPLETION',
     risk: 'External commitment to a provider (cost, scheduling, contact); Ask does not run the booking flow.',
   },
   'booking:schedule_recall_service': {
@@ -120,6 +133,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: 'booking.controller / booking.service (after a booking is created)',
     launchPrerequisites: 'A chosen provider, scope and time.',
     binding: 'NONE', verdict: 'UNSUPPORTED',
+    proofPolicy: 'EXTERNAL_COMPLETION',
     risk: 'External commitment to a provider (cost, scheduling, contact); Ask does not run the booking flow.',
   },
   'booking:schedule_weather_followup': {
@@ -129,6 +143,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: 'booking.controller / booking.service (after a booking is created)',
     launchPrerequisites: 'A chosen provider, scope and time.',
     binding: 'NONE', verdict: 'UNSUPPORTED',
+    proofPolicy: 'EXTERNAL_COMPLETION',
     risk: 'External commitment to a provider (cost, scheduling, contact); Ask does not run the booking flow.',
   },
   'booking:shop_inspection_providers': {
@@ -138,6 +153,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: 'booking.controller / booking.service report bookings only',
     launchPrerequisites: 'A service category and the homeowner\'s criteria.',
     binding: 'NONE', verdict: 'NEEDS_PRODUCT_DECISION',
+    proofPolicy: 'DECISION',
     risk: 'False completion: browsing or comparing is not a decision.',
   },
   'booking:shop_insurance_providers': {
@@ -147,6 +163,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: 'booking.controller / booking.service report bookings only',
     launchPrerequisites: 'A service category and the homeowner\'s criteria.',
     binding: 'NONE', verdict: 'NEEDS_PRODUCT_DECISION',
+    proofPolicy: 'DECISION',
     risk: 'False completion: browsing or comparing is not a decision.',
   },
   'booking:shop_warranty_providers': {
@@ -156,6 +173,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: 'booking.controller / booking.service report bookings only',
     launchPrerequisites: 'A service category and the homeowner\'s criteria.',
     binding: 'NONE', verdict: 'NEEDS_PRODUCT_DECISION',
+    proofPolicy: 'DECISION',
     risk: 'False completion: browsing or comparing is not a decision.',
   },
   'booking:take_action': {
@@ -165,6 +183,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: 'booking.controller / booking.service (after a booking is created)',
     launchPrerequisites: 'A chosen provider, scope and time.',
     binding: 'NONE', verdict: 'UNSUPPORTED',
+    proofPolicy: 'EXTERNAL_COMPLETION',
     risk: 'External commitment to a provider (cost, scheduling, contact); Ask does not run the booking flow.',
   },
   'capital-timeline:plan_capital_improvements': {
@@ -174,6 +193,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: null,
     launchPrerequisites: 'A capital timeline entry for the home.',
     binding: 'NONE', verdict: 'NEEDS_PRODUCT_DECISION',
+    proofPolicy: 'CANONICAL_MUTATION',
     risk: 'False completion: the timeline command changes a plan, not the step\'s promise.',
   },
   'capital-timeline:route_financial_plan': {
@@ -183,79 +203,88 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: null,
     launchPrerequisites: 'A capital timeline entry for the home.',
     binding: 'NONE', verdict: 'NEEDS_PRODUCT_DECISION',
+    proofPolicy: 'CANONICAL_MUTATION',
     risk: 'False completion: the timeline command changes a plan, not the step\'s promise.',
   },
   'coverage-intelligence:check_compliance_coverage': {
     homeownerJob: 'Check if remediation costs are covered',
-    canonicalProof: 'Undefined: a generated review or a recorded decision does not show this specific coverage question was answered.',
-    askOperation: 'COVERAGE_COMMAND',
+    canonicalProof: 'A fresh canonical coverage evaluation (a saved coverage analysis) scoped to the journey\'s subject (its inventory item, or the property when the journey has none), carrying its coverage status, the source records it used and its evaluation time. A regenerated coverage review counts only if it persists that scoped evaluation.',
+    askOperation: null,
     desktopReporter: 'coverageDecisionOperations (a recorded decision only)',
-    launchPrerequisites: 'A verified policy or warranty record.',
-    binding: 'NONE', verdict: 'NEEDS_PRODUCT_DECISION',
-    risk: 'False completion: a decision on a comparison would mark a coverage check that was never made.',
+    launchPrerequisites: 'Build first: an Ask command that runs the canonical coverage analysis for the journey\'s subject, and one shared reporter used by it and the Desktop coverage-analysis run. The step is carried exactly, and the evaluation must be newer than the step and for the same subject.',
+    binding: 'EXACT_STEP', verdict: 'CONNECTABLE',
+    proofPolicy: 'CANONICAL_MUTATION',
+    risk: 'Opening or reading the review is not proof, and neither is a transient answer; a decision on a comparison does not prove a coverage check.',
   },
   'coverage-intelligence:check_coverage': {
     homeownerJob: 'Check coverage and deductible exposure',
-    canonicalProof: 'Undefined: a generated review or a recorded decision does not show this specific coverage question was answered.',
-    askOperation: 'COVERAGE_COMMAND',
+    canonicalProof: 'A fresh canonical coverage evaluation (a saved coverage analysis) scoped to the journey\'s subject (its inventory item, or the property when the journey has none), carrying its coverage status, the source records it used and its evaluation time. A regenerated coverage review counts only if it persists that scoped evaluation.',
+    askOperation: null,
     desktopReporter: 'coverageDecisionOperations (a recorded decision only)',
-    launchPrerequisites: 'A verified policy or warranty record.',
-    binding: 'NONE', verdict: 'NEEDS_PRODUCT_DECISION',
-    risk: 'False completion: a decision on a comparison would mark a coverage check that was never made.',
+    launchPrerequisites: 'Build first: an Ask command that runs the canonical coverage analysis for the journey\'s subject, and one shared reporter used by it and the Desktop coverage-analysis run. The step is carried exactly, and the evaluation must be newer than the step and for the same subject.',
+    binding: 'EXACT_STEP', verdict: 'CONNECTABLE',
+    proofPolicy: 'CANONICAL_MUTATION',
+    risk: 'Opening or reading the review is not proof, and neither is a transient answer; a decision on a comparison does not prove a coverage check.',
   },
   'coverage-intelligence:check_financial_coverage': {
     homeownerJob: 'Check if costs are covered',
-    canonicalProof: 'Undefined: a generated review or a recorded decision does not show this specific coverage question was answered.',
-    askOperation: 'COVERAGE_COMMAND',
+    canonicalProof: 'A fresh canonical coverage evaluation (a saved coverage analysis) scoped to the journey\'s subject (its inventory item, or the property when the journey has none), carrying its coverage status, the source records it used and its evaluation time. A regenerated coverage review counts only if it persists that scoped evaluation.',
+    askOperation: null,
     desktopReporter: 'coverageDecisionOperations (a recorded decision only)',
-    launchPrerequisites: 'A verified policy or warranty record.',
-    binding: 'NONE', verdict: 'NEEDS_PRODUCT_DECISION',
-    risk: 'False completion: a decision on a comparison would mark a coverage check that was never made.',
+    launchPrerequisites: 'Build first: an Ask command that runs the canonical coverage analysis for the journey\'s subject, and one shared reporter used by it and the Desktop coverage-analysis run. The step is carried exactly, and the evaluation must be newer than the step and for the same subject.',
+    binding: 'EXACT_STEP', verdict: 'CONNECTABLE',
+    proofPolicy: 'CANONICAL_MUTATION',
+    risk: 'Opening or reading the review is not proof, and neither is a transient answer; a decision on a comparison does not prove a coverage check.',
   },
   'coverage-intelligence:check_inaction_coverage': {
     homeownerJob: 'Check if exposure is covered',
-    canonicalProof: 'Undefined: a generated review or a recorded decision does not show this specific coverage question was answered.',
-    askOperation: 'COVERAGE_COMMAND',
+    canonicalProof: 'A fresh canonical coverage evaluation (a saved coverage analysis) scoped to the journey\'s subject (its inventory item, or the property when the journey has none), carrying its coverage status, the source records it used and its evaluation time. A regenerated coverage review counts only if it persists that scoped evaluation.',
+    askOperation: null,
     desktopReporter: 'coverageDecisionOperations (a recorded decision only)',
-    launchPrerequisites: 'A verified policy or warranty record.',
-    binding: 'NONE', verdict: 'NEEDS_PRODUCT_DECISION',
-    risk: 'False completion: a decision on a comparison would mark a coverage check that was never made.',
+    launchPrerequisites: 'Build first: an Ask command that runs the canonical coverage analysis for the journey\'s subject, and one shared reporter used by it and the Desktop coverage-analysis run. The step is carried exactly, and the evaluation must be newer than the step and for the same subject.',
+    binding: 'EXACT_STEP', verdict: 'CONNECTABLE',
+    proofPolicy: 'CANONICAL_MUTATION',
+    risk: 'Opening or reading the review is not proof, and neither is a transient answer; a decision on a comparison does not prove a coverage check.',
   },
   'coverage-intelligence:check_inspection_coverage': {
     homeownerJob: 'Check coverage for flagged repairs',
-    canonicalProof: 'Undefined: a generated review or a recorded decision does not show this specific coverage question was answered.',
-    askOperation: 'COVERAGE_COMMAND',
+    canonicalProof: 'A fresh canonical coverage evaluation (a saved coverage analysis) scoped to the journey\'s subject (its inventory item, or the property when the journey has none), carrying its coverage status, the source records it used and its evaluation time. A regenerated coverage review counts only if it persists that scoped evaluation.',
+    askOperation: null,
     desktopReporter: 'coverageDecisionOperations (a recorded decision only)',
-    launchPrerequisites: 'A verified policy or warranty record.',
-    binding: 'NONE', verdict: 'NEEDS_PRODUCT_DECISION',
-    risk: 'False completion: a decision on a comparison would mark a coverage check that was never made.',
+    launchPrerequisites: 'Build first: an Ask command that runs the canonical coverage analysis for the journey\'s subject, and one shared reporter used by it and the Desktop coverage-analysis run. The step is carried exactly, and the evaluation must be newer than the step and for the same subject.',
+    binding: 'EXACT_STEP', verdict: 'CONNECTABLE',
+    proofPolicy: 'CANONICAL_MUTATION',
+    risk: 'Opening or reading the review is not proof, and neither is a transient answer; a decision on a comparison does not prove a coverage check.',
   },
   'coverage-intelligence:check_recall_coverage': {
     homeownerJob: 'Check if recall service is covered',
-    canonicalProof: 'Undefined: a generated review or a recorded decision does not show this specific coverage question was answered.',
-    askOperation: 'COVERAGE_COMMAND',
+    canonicalProof: 'A fresh canonical coverage evaluation (a saved coverage analysis) scoped to the journey\'s subject (its inventory item, or the property when the journey has none), carrying its coverage status, the source records it used and its evaluation time. A regenerated coverage review counts only if it persists that scoped evaluation.',
+    askOperation: null,
     desktopReporter: 'coverageDecisionOperations (a recorded decision only)',
-    launchPrerequisites: 'A verified policy or warranty record.',
-    binding: 'NONE', verdict: 'NEEDS_PRODUCT_DECISION',
-    risk: 'False completion: a decision on a comparison would mark a coverage check that was never made.',
+    launchPrerequisites: 'Build first: an Ask command that runs the canonical coverage analysis for the journey\'s subject, and one shared reporter used by it and the Desktop coverage-analysis run. The step is carried exactly, and the evaluation must be newer than the step and for the same subject.',
+    binding: 'EXACT_STEP', verdict: 'CONNECTABLE',
+    proofPolicy: 'CANONICAL_MUTATION',
+    risk: 'Opening or reading the review is not proof, and neither is a transient answer; a decision on a comparison does not prove a coverage check.',
   },
   'coverage-intelligence:check_replacement_coverage': {
     homeownerJob: 'Check replacement coverage and rebates',
-    canonicalProof: 'Undefined: a generated review or a recorded decision does not show this specific coverage question was answered.',
-    askOperation: 'COVERAGE_COMMAND',
+    canonicalProof: 'A fresh canonical coverage evaluation (a saved coverage analysis) scoped to the journey\'s subject (its inventory item, or the property when the journey has none), carrying its coverage status, the source records it used and its evaluation time. A regenerated coverage review counts only if it persists that scoped evaluation.',
+    askOperation: null,
     desktopReporter: 'coverageDecisionOperations (a recorded decision only)',
-    launchPrerequisites: 'A verified policy or warranty record.',
-    binding: 'NONE', verdict: 'NEEDS_PRODUCT_DECISION',
-    risk: 'False completion: a decision on a comparison would mark a coverage check that was never made.',
+    launchPrerequisites: 'Build first: an Ask command that runs the canonical coverage analysis for the journey\'s subject, and one shared reporter used by it and the Desktop coverage-analysis run. The step is carried exactly, and the evaluation must be newer than the step and for the same subject.',
+    binding: 'EXACT_STEP', verdict: 'CONNECTABLE',
+    proofPolicy: 'CANONICAL_MUTATION',
+    risk: 'Opening or reading the review is not proof, and neither is a transient answer; a decision on a comparison does not prove a coverage check.',
   },
   'coverage-intelligence:check_weather_coverage': {
     homeownerJob: 'Check weather damage coverage',
-    canonicalProof: 'Undefined: a generated review or a recorded decision does not show this specific coverage question was answered.',
-    askOperation: 'COVERAGE_COMMAND',
+    canonicalProof: 'A fresh canonical coverage evaluation (a saved coverage analysis) scoped to the journey\'s subject (its inventory item, or the property when the journey has none), carrying its coverage status, the source records it used and its evaluation time. A regenerated coverage review counts only if it persists that scoped evaluation.',
+    askOperation: null,
     desktopReporter: 'coverageDecisionOperations (a recorded decision only)',
-    launchPrerequisites: 'A verified policy or warranty record.',
-    binding: 'NONE', verdict: 'NEEDS_PRODUCT_DECISION',
-    risk: 'False completion: a decision on a comparison would mark a coverage check that was never made.',
+    launchPrerequisites: 'Build first: an Ask command that runs the canonical coverage analysis for the journey\'s subject, and one shared reporter used by it and the Desktop coverage-analysis run. The step is carried exactly, and the evaluation must be newer than the step and for the same subject.',
+    binding: 'EXACT_STEP', verdict: 'CONNECTABLE',
+    proofPolicy: 'CANONICAL_MUTATION',
+    risk: 'Opening or reading the review is not proof, and neither is a transient answer; a decision on a comparison does not prove a coverage check.',
   },
   'coverage-intelligence:compare_coverage_options': {
     homeownerJob: 'Compare policy and warranty options',
@@ -264,25 +293,28 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: 'coverageDecisionOperations.recordCoverageDecisionWithEffects',
     launchPrerequisites: 'A coverage comparison with a verified current policy; the step is carried from the comparison answer.',
     binding: 'EXACT_STEP', verdict: 'CONNECTED',
+    proofPolicy: 'DECISION',
     risk: 'Owner-only decision; no policy is changed and no insurer contacted.',
   },
   'coverage-intelligence:review_current_policy_context': {
     homeownerJob: 'Review current policy context',
-    canonicalProof: 'Undefined: a generated review or a recorded decision does not show this specific coverage question was answered.',
+    canonicalProof: 'A coverage review persisted for the current policy term, with its generation time and the source term it was built from.',
     askOperation: 'COVERAGE_COMMAND',
     desktopReporter: 'coverageDecisionOperations (a recorded decision only)',
-    launchPrerequisites: 'A verified policy or warranty record.',
-    binding: 'NONE', verdict: 'NEEDS_PRODUCT_DECISION',
-    risk: 'False completion: a decision on a comparison would mark a coverage check that was never made.',
+    launchPrerequisites: 'Build first: one shared reporter for the persisted review, used by Ask\'s review command and by the Desktop review generation; the step is carried exactly.',
+    binding: 'EXACT_STEP', verdict: 'CONNECTABLE',
+    proofPolicy: 'CANONICAL_MUTATION',
+    risk: 'A review of the policy or warranty term is proof only if it is persisted with its generation time and source term; a transient answer or an opened review is not.',
   },
   'coverage-intelligence:review_current_warranty_context': {
     homeownerJob: 'Review current warranty context',
-    canonicalProof: 'Undefined: a generated review or a recorded decision does not show this specific coverage question was answered.',
+    canonicalProof: 'A coverage review persisted for the current warranty term, with its generation time and the source term it was built from.',
     askOperation: 'COVERAGE_COMMAND',
     desktopReporter: 'coverageDecisionOperations (a recorded decision only)',
-    launchPrerequisites: 'A verified policy or warranty record.',
-    binding: 'NONE', verdict: 'NEEDS_PRODUCT_DECISION',
-    risk: 'False completion: a decision on a comparison would mark a coverage check that was never made.',
+    launchPrerequisites: 'Build first: one shared reporter for the persisted review, used by Ask\'s review command and by the Desktop review generation; the step is carried exactly.',
+    binding: 'EXACT_STEP', verdict: 'CONNECTABLE',
+    proofPolicy: 'CANONICAL_MUTATION',
+    risk: 'A review of the policy or warranty term is proof only if it is persisted with its generation time and source term; a transient answer or an opened review is not.',
   },
   'coverage-intelligence:review_insurance_market': {
     homeownerJob: 'Review local premium trends',
@@ -291,6 +323,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: null,
     launchPrerequisites: 'Local market data.',
     binding: 'NONE', verdict: 'WRONG_TOOL',
+    proofPolicy: 'ACKNOWLEDGEMENT',
     risk: 'The step promises a market review the tool does not produce.',
   },
   'do-nothing-simulator:compare_action_options': {
@@ -300,6 +333,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: 'guidanceToolReporting.reportDoNothingRun',
     launchPrerequisites: 'None beyond the home record; the step is carried as the launch entity.',
     binding: 'EXACT_STEP', verdict: 'CONNECTED',
+    proofPolicy: 'CANONICAL_MUTATION',
     risk: 'Primary-account-holder only; a failed report never fails the saved run.',
   },
   'do-nothing-simulator:model_cost_of_delay': {
@@ -309,25 +343,28 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: 'guidanceToolReporting.reportDoNothingRun',
     launchPrerequisites: 'None beyond the home record; the step is carried as the launch entity.',
     binding: 'EXACT_STEP', verdict: 'CONNECTED',
+    proofPolicy: 'CANONICAL_MUTATION',
     risk: 'Primary-account-holder only; a failed report never fails the saved run.',
   },
   'documents:activate_warranty_coverage': {
     homeownerJob: 'Record the selected warranty plan',
-    canonicalProof: 'A Home Record (policy, warranty or proof) saved or updated.',
+    canonicalProof: 'An actual policy or warranty record (active coverage) saved for the item or home; reading or comparing options is not proof.',
     askOperation: null,
     desktopReporter: null,
-    launchPrerequisites: 'The document or the plan details the homeowner chose.',
-    binding: 'NONE', verdict: 'NEEDS_PRODUCT_DECISION',
-    risk: 'Records are saved by several Ask commands, none of which reports a journey step; the record proves a document exists, not that the plan was activated or bound.',
+    launchPrerequisites: 'Build first: a shared reporter for the saved policy or warranty record, used by Ask\'s record commands and the Desktop save; the step is carried exactly and the record must be for this journey\'s subject.',
+    binding: 'EXACT_STEP', verdict: 'CONNECTABLE',
+    proofPolicy: 'CANONICAL_MUTATION',
+    risk: 'False completion if an uploaded document is taken for active coverage; the record\'s own status decides.',
   },
   'documents:bind_policy_and_record_documents': {
     homeownerJob: 'Bind policy and upload proof',
-    canonicalProof: 'A Home Record (policy, warranty or proof) saved or updated.',
+    canonicalProof: 'An actual policy or warranty record (active coverage) saved for the item or home; reading or comparing options is not proof.',
     askOperation: null,
     desktopReporter: null,
-    launchPrerequisites: 'The document or the plan details the homeowner chose.',
-    binding: 'NONE', verdict: 'NEEDS_PRODUCT_DECISION',
-    risk: 'Records are saved by several Ask commands, none of which reports a journey step; the record proves a document exists, not that the plan was activated or bound.',
+    launchPrerequisites: 'Build first: a shared reporter for the saved policy or warranty record, used by Ask\'s record commands and the Desktop save; the step is carried exactly and the record must be for this journey\'s subject.',
+    binding: 'EXACT_STEP', verdict: 'CONNECTABLE',
+    proofPolicy: 'CANONICAL_MUTATION',
+    risk: 'False completion if an uploaded document is taken for active coverage; the record\'s own status decides.',
   },
   'documents:update_policy_or_documents': {
     homeownerJob: 'Update policy or upload documents',
@@ -336,6 +373,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: null,
     launchPrerequisites: 'The document or the plan details the homeowner chose.',
     binding: 'NONE', verdict: 'NEEDS_PRODUCT_DECISION',
+    proofPolicy: 'CANONICAL_MUTATION',
     risk: 'Records are saved by several Ask commands, none of which reports a journey step; the record proves a document exists, not that the plan was activated or bound.',
   },
   'frontend:confirm_replacement_path': {
@@ -345,6 +383,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: 'guidance.controller generic completion endpoint',
     launchPrerequisites: 'The focused guidance shell\'s own state.',
     binding: 'NONE', verdict: 'UNSUPPORTED',
+    proofPolicy: 'DECISION',
     risk: 'No Ask surface for these guidance-native steps; completing them from Ask would need invented proof.',
   },
   'frontend:confirm_replacement_plan': {
@@ -354,6 +393,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: 'guidance.controller generic completion endpoint',
     launchPrerequisites: 'The focused guidance shell\'s own state.',
     binding: 'NONE', verdict: 'UNSUPPORTED',
+    proofPolicy: 'DECISION',
     risk: 'No Ask surface for these guidance-native steps; completing them from Ask would need invented proof.',
   },
   'frontend:confirm_replacement_shopping_path': {
@@ -363,16 +403,18 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: 'guidance.controller generic completion endpoint',
     launchPrerequisites: 'The focused guidance shell\'s own state.',
     binding: 'NONE', verdict: 'UNSUPPORTED',
+    proofPolicy: 'DECISION',
     risk: 'No Ask surface for these guidance-native steps; completing them from Ask would need invented proof.',
   },
   'guidance-overview:act_on_inspection_findings': {
     homeownerJob: 'Act on findings',
-    canonicalProof: 'Undefined: a guidance-native acknowledgement with no tool of its own.',
-    askOperation: null,
+    canonicalProof: 'A finding decision completes only the exact decision step for that finding; resolving a finding needs its canonical resolution outcome and any required evidence.',
+    askOperation: 'INSPECTION_FINDING_DECISION_COMMAND',
     desktopReporter: 'guidance.controller generic completion endpoint',
-    launchPrerequisites: 'Whatever the step asks the homeowner to confirm.',
-    binding: 'NONE', verdict: 'NEEDS_PRODUCT_DECISION',
-    risk: 'False completion if an acknowledgement is treated as proof.',
+    launchPrerequisites: 'Build first: a shared reporter for the finding decision and resolution, used by Ask\'s finding commands and the Desktop inspection hub; the step is carried exactly with the finding id.',
+    binding: 'EXACT_STEP', verdict: 'CONNECTABLE',
+    proofPolicy: 'DECISION',
+    risk: 'One finding\'s decision must never complete a step about the whole report, and scheduling an inspection is separate proof.',
   },
   'guidance-overview:confirm_cleaning_complete': {
     homeownerJob: 'Confirm service completed',
@@ -381,6 +423,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: 'guidance.controller generic completion endpoint',
     launchPrerequisites: 'Whatever the step asks the homeowner to confirm.',
     binding: 'NONE', verdict: 'NEEDS_PRODUCT_DECISION',
+    proofPolicy: 'EXTERNAL_COMPLETION',
     risk: 'False completion if an acknowledgement is treated as proof.',
   },
   'guidance-overview:prepare_property_access': {
@@ -390,6 +433,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: 'guidance.controller generic completion endpoint',
     launchPrerequisites: 'Whatever the step asks the homeowner to confirm.',
     binding: 'NONE', verdict: 'NEEDS_PRODUCT_DECISION',
+    proofPolicy: 'ACKNOWLEDGEMENT',
     risk: 'False completion if an acknowledgement is treated as proof.',
   },
   'guidance-overview:review_compliance_requirement': {
@@ -399,16 +443,18 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: 'guidance.controller generic completion endpoint',
     launchPrerequisites: 'Whatever the step asks the homeowner to confirm.',
     binding: 'NONE', verdict: 'NEEDS_PRODUCT_DECISION',
+    proofPolicy: 'ACKNOWLEDGEMENT',
     risk: 'False completion if an acknowledgement is treated as proof.',
   },
   'guidance-overview:review_signal': {
     homeownerJob: 'Review guidance signal',
-    canonicalProof: 'Undefined: a guidance-native acknowledgement with no tool of its own.',
+    canonicalProof: 'A typed, durable acknowledgement recording the exact signal and version, the journey step, the actor, the time and the outcome. \'I reviewed this\' is valid because review is the promised job.',
     askOperation: null,
     desktopReporter: 'guidance.controller generic completion endpoint',
-    launchPrerequisites: 'Whatever the step asks the homeowner to confirm.',
-    binding: 'NONE', verdict: 'NEEDS_PRODUCT_DECISION',
-    risk: 'False completion if an acknowledgement is treated as proof.',
+    launchPrerequisites: 'Build: an Ask acknowledgement command and the shared acknowledgement recorder.',
+    binding: 'EXACT_STEP', verdict: 'CONNECTABLE',
+    proofPolicy: 'ACKNOWLEDGEMENT',
+    risk: 'Acknowledgement is allowed only for a true review step; it must not be reused for safety, financial, compliance, execution or repair steps.',
   },
   'guidance-overview:select_cleaning_type': {
     homeownerJob: 'Select cleaning service type',
@@ -417,6 +463,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: 'guidance.controller generic completion endpoint',
     launchPrerequisites: 'Whatever the step asks the homeowner to confirm.',
     binding: 'NONE', verdict: 'NEEDS_PRODUCT_DECISION',
+    proofPolicy: 'DECISION',
     risk: 'False completion if an acknowledgement is treated as proof.',
   },
   'guidance-overview:track_resolution': {
@@ -426,16 +473,18 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: 'guidance.controller generic completion endpoint',
     launchPrerequisites: 'Whatever the step asks the homeowner to confirm.',
     binding: 'NONE', verdict: 'NEEDS_PRODUCT_DECISION',
+    proofPolicy: 'EXTERNAL_COMPLETION',
     risk: 'False completion if an acknowledgement is treated as proof.',
   },
   'guidance-overview:update_budget': {
     homeownerJob: 'Update your budget for the new assessment',
-    canonicalProof: 'Undefined: a guidance-native acknowledgement with no tool of its own.',
+    canonicalProof: 'An actual canonical budget or funding-plan mutation; an \'I did this\' confirmation is not proof.',
     askOperation: null,
     desktopReporter: 'guidance.controller generic completion endpoint',
     launchPrerequisites: 'Whatever the step asks the homeowner to confirm.',
     binding: 'NONE', verdict: 'NEEDS_PRODUCT_DECISION',
-    risk: 'False completion if an acknowledgement is treated as proof.',
+    proofPolicy: 'CANONICAL_MUTATION',
+    risk: 'False completion if a confirmation stands in for the budget change; needs the owning tool\'s canonical write.',
   },
   'history-verify:verify_history': {
     homeownerJob: 'Verify issue & service history',
@@ -444,6 +493,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: null,
     launchPrerequisites: 'Timeline events to verify.',
     binding: 'NONE', verdict: 'NEEDS_PRODUCT_DECISION',
+    proofPolicy: 'VERIFIED_EVIDENCE',
     risk: 'False completion: a timeline read is not verification.',
   },
   'home-event-radar:review_energy_signal': {
@@ -453,6 +503,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: 'homeEventRadar.controller (journey-id gated)',
     launchPrerequisites: 'A radar event and the journey it came from.',
     binding: 'EXACT_STEP', verdict: 'NEEDS_PRODUCT_DECISION',
+    proofPolicy: 'ACKNOWLEDGEMENT',
     risk: 'Completion semantics unresolved (one step, journey-id gated); see the radar audit in the continuation FRD section 12.',
   },
   'home-savings:evaluate_savings_funding': {
@@ -462,6 +513,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: 'homeSavings.controller.runHomeSavingsComparison (only on a comparison run)',
     launchPrerequisites: 'Connected utility accounts for a comparison run.',
     binding: 'NONE', verdict: 'WRONG_TOOL',
+    proofPolicy: 'DECISION',
     risk: 'Owner decision 2026-10-24: save or dismiss does not complete it, and Desktop semantics are not changed to advance a journey. Product chooses: a capital-funding step owned by another tool, a narrower relabelled proof, or a real comparison command in Ask.',
   },
   'home-savings:find_energy_savings': {
@@ -471,6 +523,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: 'homeSavings.controller.runHomeSavingsComparison (only on a comparison run)',
     launchPrerequisites: 'Connected utility accounts for a comparison run.',
     binding: 'NONE', verdict: 'NEEDS_PRODUCT_DECISION',
+    proofPolicy: 'DECISION',
     risk: 'False completion if a save or dismiss is treated as the proof.',
   },
   'home-savings:find_offset_savings': {
@@ -480,6 +533,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: 'homeSavings.controller.runHomeSavingsComparison (only on a comparison run)',
     launchPrerequisites: 'Connected utility accounts for a comparison run.',
     binding: 'NONE', verdict: 'NEEDS_PRODUCT_DECISION',
+    proofPolicy: 'DECISION',
     risk: 'False completion if a save or dismiss is treated as the proof.',
   },
   'incidents:review_assessment': {
@@ -489,6 +543,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: 'incidents/incident.service (system signal)',
     launchPrerequisites: 'An incident or assessment record.',
     binding: 'NONE', verdict: 'NEEDS_PRODUCT_DECISION',
+    proofPolicy: 'ACKNOWLEDGEMENT',
     risk: 'False completion: a read is not a review.',
   },
   'incidents:weather_safety_check': {
@@ -498,6 +553,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: 'incidents/incident.service (system signal)',
     launchPrerequisites: 'An incident or assessment record.',
     binding: 'NONE', verdict: 'NEEDS_PRODUCT_DECISION',
+    proofPolicy: 'ACKNOWLEDGEMENT',
     risk: 'False completion: a read is not a review.',
   },
   'inspection-report:assess_urgency': {
@@ -507,52 +563,58 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: 'inspectionHub.service / buyerAcquisition.service (signal ingest, not a step completion)',
     launchPrerequisites: 'An inspection report with findings.',
     binding: 'NONE', verdict: 'NEEDS_PRODUCT_DECISION',
+    proofPolicy: 'DECISION',
     risk: 'False completion: one finding\'s decision is not the whole report\'s review.',
   },
   'inspection-report:review_inspection_report': {
     homeownerJob: 'Review inspection report',
-    canonicalProof: 'Undefined: reviewing a report or deciding individual findings does not show the whole step was done.',
+    canonicalProof: 'A persisted reviewed or accepted state on the report; displaying or reading it does not count. No such state exists yet.',
     askOperation: 'INSPECTION_FINDING_DECISION_COMMAND',
     desktopReporter: 'inspectionHub.service / buyerAcquisition.service (signal ingest, not a step completion)',
     launchPrerequisites: 'An inspection report with findings.',
     binding: 'NONE', verdict: 'NEEDS_PRODUCT_DECISION',
-    risk: 'False completion: one finding\'s decision is not the whole report\'s review.',
+    proofPolicy: 'ACKNOWLEDGEMENT',
+    risk: 'Needs a persisted reviewed state (a schema change) before any surface can report it; reading a report is never proof.',
   },
   'inspection-report:review_maintenance_report': {
     homeownerJob: 'Review the maintenance inspection report',
-    canonicalProof: 'Undefined: reviewing a report or deciding individual findings does not show the whole step was done.',
+    canonicalProof: 'A persisted reviewed or accepted state on the report; displaying or reading it does not count. No such state exists yet.',
     askOperation: 'INSPECTION_FINDING_DECISION_COMMAND',
     desktopReporter: 'inspectionHub.service / buyerAcquisition.service (signal ingest, not a step completion)',
     launchPrerequisites: 'An inspection report with findings.',
     binding: 'NONE', verdict: 'NEEDS_PRODUCT_DECISION',
-    risk: 'False completion: one finding\'s decision is not the whole report\'s review.',
+    proofPolicy: 'ACKNOWLEDGEMENT',
+    risk: 'Needs a persisted reviewed state (a schema change) before any surface can report it; reading a report is never proof.',
   },
   'inspection-report:review_post_repair_report': {
     homeownerJob: 'Review the post-repair inspection result',
-    canonicalProof: 'Undefined: reviewing a report or deciding individual findings does not show the whole step was done.',
+    canonicalProof: 'A persisted reviewed or accepted state on the report; displaying or reading it does not count. No such state exists yet.',
     askOperation: 'INSPECTION_FINDING_DECISION_COMMAND',
     desktopReporter: 'inspectionHub.service / buyerAcquisition.service (signal ingest, not a step completion)',
     launchPrerequisites: 'An inspection report with findings.',
     binding: 'NONE', verdict: 'NEEDS_PRODUCT_DECISION',
-    risk: 'False completion: one finding\'s decision is not the whole report\'s review.',
+    proofPolicy: 'ACKNOWLEDGEMENT',
+    risk: 'Needs a persisted reviewed state (a schema change) before any surface can report it; reading a report is never proof.',
   },
   'inspection-report:review_pre_purchase_report': {
     homeownerJob: 'Review the due-diligence inspection report',
-    canonicalProof: 'Undefined: reviewing a report or deciding individual findings does not show the whole step was done.',
+    canonicalProof: 'A persisted reviewed or accepted state on the report; displaying or reading it does not count. No such state exists yet.',
     askOperation: 'INSPECTION_FINDING_DECISION_COMMAND',
     desktopReporter: 'inspectionHub.service / buyerAcquisition.service (signal ingest, not a step completion)',
     launchPrerequisites: 'An inspection report with findings.',
     binding: 'NONE', verdict: 'NEEDS_PRODUCT_DECISION',
-    risk: 'False completion: one finding\'s decision is not the whole report\'s review.',
+    proofPolicy: 'ACKNOWLEDGEMENT',
+    risk: 'Needs a persisted reviewed state (a schema change) before any surface can report it; reading a report is never proof.',
   },
   'maintenance:complete_compliance_task': {
     homeownerJob: 'Complete required compliance tasks',
-    canonicalProof: 'Undefined: a completed maintenance task would be the natural proof, but no surface reports it to the journey.',
+    canonicalProof: 'A maintenance task linked to this exact journey step, with verified completion (or the legally final status under its governing workflow). Reported-complete is not enough where verification or evidence is required; completion is never inferred from a matching title or category.',
     askOperation: 'MAINTENANCE_TASK_UPDATE',
     desktopReporter: null,
-    launchPrerequisites: 'A maintenance task linked to the journey.',
-    binding: 'NONE', verdict: 'NEEDS_PRODUCT_DECISION',
-    risk: 'A reporter would have to be added to Desktop too, so both surfaces match.',
+    launchPrerequisites: 'Build first: one shared helper that reports a linked task\'s verified completion, used by Ask\'s task completion and the Desktop completion; needs an explicit task-to-step link.',
+    binding: 'EXACT_STEP', verdict: 'CONNECTABLE',
+    proofPolicy: 'VERIFIED_EVIDENCE',
+    risk: 'False completion if a self-reported task is taken for the obligation being met.',
   },
   'maintenance:protect_exposed_systems': {
     homeownerJob: 'Protect exposed systems',
@@ -561,6 +623,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: null,
     launchPrerequisites: 'A maintenance task linked to the journey.',
     binding: 'NONE', verdict: 'NEEDS_PRODUCT_DECISION',
+    proofPolicy: 'EXTERNAL_COMPLETION',
     risk: 'A reporter would have to be added to Desktop too, so both surfaces match.',
   },
   'negotiation-shield:prepare_negotiation': {
@@ -570,6 +633,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: 'negotiationShieldJourneyCompletion.recordNegotiationShieldAnalysisCompletion',
     launchPrerequisites: 'A review (started or reused) with saved details; the step rides start and analysis.',
     binding: 'EXACT_STEP', verdict: 'CONNECTED',
+    proofPolicy: 'CANONICAL_MUTATION',
     risk: 'Optional step Desktop auto-completes: Ask refuses a step already done so it makes no duplicate review.',
   },
   'ownership-costs:estimate_out_of_pocket_cost': {
@@ -579,6 +643,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: null,
     launchPrerequisites: 'Recorded costs for the home.',
     binding: 'NONE', verdict: 'NEEDS_PRODUCT_DECISION',
+    proofPolicy: 'CANONICAL_MUTATION',
     risk: 'False completion: viewing an estimate is not doing the step.',
   },
   'ownership-costs:estimate_total_cost': {
@@ -588,6 +653,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: null,
     launchPrerequisites: 'Recorded costs for the home.',
     binding: 'NONE', verdict: 'NEEDS_PRODUCT_DECISION',
+    proofPolicy: 'CANONICAL_MUTATION',
     risk: 'False completion: viewing an estimate is not doing the step.',
   },
   'ownership-costs:prepare_appeal': {
@@ -597,6 +663,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: null,
     launchPrerequisites: 'Recorded costs for the home.',
     binding: 'NONE', verdict: 'NEEDS_PRODUCT_DECISION',
+    proofPolicy: 'CANONICAL_MUTATION',
     risk: 'False completion: viewing an estimate is not doing the step.',
   },
   'price-finalization:finalize_price': {
@@ -606,6 +673,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: 'priceFinalizationOperations.finalizePriceFinalizationWithEffects',
     launchPrerequisites: 'A price record started from the journey\'s price records answer.',
     binding: 'EXACT_STEP', verdict: 'CONNECTED',
+    proofPolicy: 'CANONICAL_MUTATION',
     risk: 'Primary-owner only; a record not bound to a journey keeps the family-fallback path.',
   },
   'project-completion:capture_proof': {
@@ -615,6 +683,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: 'projectJourneyReporting.reportProjectClosure (shared by the controller and Ask)',
     launchPrerequisites: 'A project created for this journey, completed with a verified outcome.',
     binding: 'EXACT_STEP', verdict: 'CONNECTED',
+    proofPolicy: 'VERIFIED_EVIDENCE',
     risk: 'Reported together with the other closing steps; only a verified-success completion reports, and only to the journey the project stores.',
   },
   'project-completion:set_future_care': {
@@ -624,6 +693,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: 'projectJourneyReporting.reportProjectClosure (shared by the controller and Ask)',
     launchPrerequisites: 'A project created for this journey, completed with a verified outcome.',
     binding: 'EXACT_STEP', verdict: 'CONNECTED',
+    proofPolicy: 'VERIFIED_EVIDENCE',
     risk: 'Reported together with the other closing steps; only a verified-success completion reports, and only to the journey the project stores.',
   },
   'project-completion:update_home_record': {
@@ -633,6 +703,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: 'projectJourneyReporting.reportProjectClosure (shared by the controller and Ask)',
     launchPrerequisites: 'A project created for this journey, completed with a verified outcome.',
     binding: 'EXACT_STEP', verdict: 'CONNECTED',
+    proofPolicy: 'VERIFIED_EVIDENCE',
     risk: 'Reported together with the other closing steps; only a verified-success completion reports, and only to the journey the project stores.',
   },
   'project-completion:verify_outcome': {
@@ -642,6 +713,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: 'projectJourneyReporting.reportProjectClosure (shared by the controller and Ask)',
     launchPrerequisites: 'A project created for this journey, completed with a verified outcome.',
     binding: 'EXACT_STEP', verdict: 'CONNECTED',
+    proofPolicy: 'VERIFIED_EVIDENCE',
     risk: 'Reported together with the other closing steps; only a verified-success completion reports, and only to the journey the project stores.',
   },
   'project-tracker:confirm_scope_and_provider': {
@@ -651,6 +723,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: 'projectJourneyReporting.reportProjectCreated (shared by the controller and Ask)',
     launchPrerequisites: 'A project to create; the step rides the form and the confirmation, and a second project for the same journey is refused.',
     binding: 'EXACT_STEP', verdict: 'CONNECTED',
+    proofPolicy: 'CANONICAL_MUTATION',
     risk: 'Primary form is long (contract, permit and HOA applicability, first milestone); a stale step starts a plain project and the receipt says so.',
   },
   'project-tracker:track_work': {
@@ -660,6 +733,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: 'projectJourneyReporting.reportProjectClosure (shared by the controller and Ask)',
     launchPrerequisites: 'A project created for this journey, completed with a verified outcome.',
     binding: 'EXACT_STEP', verdict: 'CONNECTED',
+    proofPolicy: 'VERIFIED_EVIDENCE',
     risk: 'Reported together with the other closing steps; only a verified-success completion reports, and only to the journey the project stores.',
   },
   'quote-comparison:compare_quotes': {
@@ -669,6 +743,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: null,
     launchPrerequisites: 'A quote comparison workspace with two or more quotes.',
     binding: 'NONE', verdict: 'NEEDS_PRODUCT_DECISION',
+    proofPolicy: 'DECISION',
     risk: 'Ask cannot add or select quotes for the workspace; completion would be false.',
   },
   'recalls:recall_resolution': {
@@ -678,6 +753,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: 'guidanceToolReporting.reportRecallMatchStep',
     launchPrerequisites: 'An open recall match.',
     binding: 'EXACT_STEP', verdict: 'CONNECTED',
+    proofPolicy: 'DECISION',
     risk: 'Exact step and item: a recall action started from a journey completes only that journey step for that match\'s item; one started outside a journey keeps the signal-family path.',
   },
   'recalls:review_remedy_instructions': {
@@ -687,6 +763,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: null,
     launchPrerequisites: 'An open recall match.',
     binding: 'NONE', verdict: 'NEEDS_PRODUCT_DECISION',
+    proofPolicy: 'ACKNOWLEDGEMENT',
     risk: 'False completion: nothing in Ask reports this step.',
   },
   'recalls:safety_alert': {
@@ -696,6 +773,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: 'guidanceToolReporting.reportRecallMatchStep',
     launchPrerequisites: 'An open recall match.',
     binding: 'EXACT_STEP', verdict: 'CONNECTED',
+    proofPolicy: 'DECISION',
     risk: 'Exact step and item: a recall action started from a journey completes only that journey step for that match\'s item; one started outside a journey keeps the signal-family path.',
   },
   'replace-repair:assess_repair_or_replace': {
@@ -705,6 +783,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: 'replaceRepairAnalysis.controller (inline)',
     launchPrerequisites: 'An inventory item and the analysis inputs.',
     binding: 'NONE', verdict: 'UNSUPPORTED',
+    proofPolicy: 'CANONICAL_MUTATION',
     risk: 'Ask has no command that runs the analysis (the replacement guidance answer is a read).',
   },
   'replace-repair:repair_replace_decision': {
@@ -714,6 +793,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: 'replaceRepairAnalysis.controller (inline)',
     launchPrerequisites: 'An inventory item and the analysis inputs.',
     binding: 'NONE', verdict: 'UNSUPPORTED',
+    proofPolicy: 'DECISION',
     risk: 'Ask has no command that runs the analysis (the replacement guidance answer is a read).',
   },
   'replacement-model-comparison:compare_replacement_models': {
@@ -723,6 +803,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: 'guidance.controller generic completion endpoint (from the page)',
     launchPrerequisites: 'The replacement flow\'s own saved state.',
     binding: 'NONE', verdict: 'UNSUPPORTED',
+    proofPolicy: 'DECISION',
     risk: 'Ask offers a replacement guidance read only; none of these flow states can be written from Ask.',
   },
   'replacement-plan-followup:save_plan_and_follow_up': {
@@ -732,6 +813,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: 'guidance.controller generic completion endpoint (from the page)',
     launchPrerequisites: 'The replacement flow\'s own saved state.',
     binding: 'NONE', verdict: 'UNSUPPORTED',
+    proofPolicy: 'CANONICAL_MUTATION',
     risk: 'Ask offers a replacement guidance read only; none of these flow states can be written from Ask.',
   },
   'replacement-planning:set_budget_and_shortlist': {
@@ -741,6 +823,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: 'guidance.controller generic completion endpoint (from the page)',
     launchPrerequisites: 'The replacement flow\'s own saved state.',
     binding: 'NONE', verdict: 'UNSUPPORTED',
+    proofPolicy: 'CANONICAL_MUTATION',
     risk: 'Ask offers a replacement guidance read only; none of these flow states can be written from Ask.',
   },
   'replacement-priorities-capture:set_replacement_priorities': {
@@ -750,6 +833,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: 'guidance.controller generic completion endpoint (from the page)',
     launchPrerequisites: 'The replacement flow\'s own saved state.',
     binding: 'NONE', verdict: 'UNSUPPORTED',
+    proofPolicy: 'CANONICAL_MUTATION',
     risk: 'Ask offers a replacement guidance read only; none of these flow states can be written from Ask.',
   },
   'replacement-purchase-finalization:finalize_purchase_selection': {
@@ -759,6 +843,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: 'guidance.controller generic completion endpoint (from the page)',
     launchPrerequisites: 'The replacement flow\'s own saved state.',
     binding: 'NONE', verdict: 'UNSUPPORTED',
+    proofPolicy: 'DECISION',
     risk: 'Ask offers a replacement guidance read only; none of these flow states can be written from Ask.',
   },
   'replacement-purchase-options:compare_purchase_options': {
@@ -768,6 +853,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: 'guidance.controller generic completion endpoint (from the page)',
     launchPrerequisites: 'The replacement flow\'s own saved state.',
     binding: 'NONE', verdict: 'UNSUPPORTED',
+    proofPolicy: 'DECISION',
     risk: 'Ask offers a replacement guidance read only; none of these flow states can be written from Ask.',
   },
   'service-price-radar:estimate_improvement_cost': {
@@ -777,6 +863,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: null,
     launchPrerequisites: 'A quote amount and service.',
     binding: 'NONE', verdict: 'WRONG_TOOL',
+    proofPolicy: 'CANONICAL_MUTATION',
     risk: 'The step promises an estimate the tool cannot produce (section 16 of the continuation FRD); completing it would be false.',
   },
   'service-price-radar:estimate_repair_cost': {
@@ -786,6 +873,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: null,
     launchPrerequisites: 'A quote amount and service.',
     binding: 'NONE', verdict: 'WRONG_TOOL',
+    proofPolicy: 'CANONICAL_MUTATION',
     risk: 'The step promises an estimate the tool cannot produce (section 16 of the continuation FRD); completing it would be false.',
   },
   'service-price-radar:estimate_uninsured_cost': {
@@ -795,6 +883,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: null,
     launchPrerequisites: 'A quote amount and service.',
     binding: 'NONE', verdict: 'WRONG_TOOL',
+    proofPolicy: 'CANONICAL_MUTATION',
     risk: 'The step promises an estimate the tool cannot produce (section 16 of the continuation FRD); completing it would be false.',
   },
   'service-price-radar:get_cleaning_quotes': {
@@ -804,6 +893,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: 'guidanceToolReporting.reportServicePriceCheck',
     launchPrerequisites: 'A cleaning quote amount.',
     binding: 'EXACT_STEP', verdict: 'CONNECTED',
+    proofPolicy: 'CANONICAL_MUTATION',
     risk: 'Same primary-account-holder rule and benchmark limits as validate_price.',
   },
   'service-price-radar:validate_price': {
@@ -813,6 +903,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     desktopReporter: 'guidanceToolReporting.reportServicePriceCheck',
     launchPrerequisites: 'A quote amount and service category.',
     binding: 'EXACT_STEP', verdict: 'CONNECTED',
+    proofPolicy: 'CANONICAL_MUTATION',
     risk: 'Primary-account-holder only; the check benchmarks a quote, not the contractor or scope.',
   },
 };

@@ -595,3 +595,26 @@ started outside a journey.
 - **Reporting.** `reportRecallMatchStep` takes an optional exact `{ journeyId }` (the report is still the same builder, dedupe key and proofs as the traditional controller) and now returns whether it was recorded. With no step
   at all (an action that never came from a journey) the report is unchanged: matched by signal family.
 
+## 27. Proof policy and the decided proofs (2026-10-24)
+
+Owner decisions of 2026-10-24 recorded in the matrix. Every row now declares a **proof policy**: `ACKNOWLEDGEMENT`, `CANONICAL_MUTATION`, `VERIFIED_EVIDENCE`, `EXTERNAL_COMPLETION` or
+`DECISION`. A test requires one for every step and fails if an acknowledgement is allowed to complete anything but a true review step (today only `guidance-overview:review_signal`).
+Matrix now: 15 CONNECTED (the section 24 count of 9, then section 25's 6; section 25's "14" was a miscount), 15 CONNECTABLE, 29 NEEDS_PRODUCT_DECISION, 5 WRONG_TOOL, 24 UNSUPPORTED.
+CONNECTABLE now means the proof is decided and nothing needs a product call; what is left to build is the first words of the row's prerequisite.
+
+- **Coverage `check_*` (8 steps).** Proof: a *fresh canonical coverage evaluation* scoped to the journey's subject (its item, or the property when the journey has none), with its coverage
+  status, the source records it used and its evaluation time. The existing durable record is the saved coverage analysis (item-scoped, with `reviewState`, `inputsSnapshot` and `computedAt`);
+  regenerating a coverage review counts only if it persists that scoped evaluation, and a transient answer or opening the review never counts. Today neither surface reports these steps
+  (the Desktop analysis run reports nothing) and Ask has no command that runs the analysis (the coverage commands header says so). To build: an Ask command that runs the canonical analysis for the
+  subject, one shared reporter used by it and the Desktop run, exact step binding, and a check that the evaluation is newer than the step and for the same subject. `compare_coverage_options`
+  stays the explicit saved decision (connected); `review_current_policy_context` and `review_current_warranty_context` need a *persisted* review of the term with its generation time.
+- **Activation and binding (`activate_warranty_coverage`, `bind_policy_and_record_documents`).** Proof: an actual policy or warranty record (active coverage); an uploaded document alone is not.
+- **Inspection.** Reading or displaying a report completes nothing. A review step needs a *persisted reviewed or accepted state* (none exists; a schema change). A finding decision completes only
+  the exact decision step for that finding, resolving it needs its canonical resolution outcome and any required evidence, and scheduling an inspection is separate proof (booking, unsupported).
+- **Maintenance and compliance.** `complete_compliance_task`: a task linked to that exact step with *verified* completion (or the legally final status under its governing workflow); reported-complete is
+  not enough where verification or evidence applies, and nothing is inferred from titles or categories. One shared helper must report it for Desktop and Ask; an explicit task-to-step link is needed first.
+- **Acknowledgement.** `review_signal` may be completed by a typed, durable acknowledgement (exact signal and version, step, actor, time, outcome). `update_budget` needs the real budget or funding-plan
+  mutation. Safety, financial, compliance, execution and repair steps are never completed by generic self-attestation.
+- **Home Savings.** `evaluate_savings_funding` is replaced for new journeys by a Capital Timeline funding step that completes only when a durable funding plan or allocation is saved (section 30).
+  Existing journeys keep the old step as unsupported; no Home Savings outcome completes it.
+

@@ -13,6 +13,9 @@ const { listGuidanceTemplates, DEFAULT_TEMPLATE } = require('../../src/services/
 
 const VERDICTS = ['CONNECTED', 'CONNECTABLE', 'NEEDS_PRODUCT_DECISION', 'WRONG_TOOL', 'UNSUPPORTED'];
 const BINDINGS = ['EXACT_STEP', 'FAMILY_FALLBACK', 'NONE'];
+const POLICIES = ['ACKNOWLEDGEMENT', 'CANONICAL_MUTATION', 'VERIFIED_EVIDENCE', 'EXTERNAL_COMPLETION', 'DECISION'];
+// Acknowledgement completes only a true review step, never a safety, financial, compliance, execution or repair step (owner decision 2026-10-24).
+const ACKNOWLEDGEMENT_MAY_COMPLETE = new Set(['guidance-overview:review_signal']);
 const templates = [...listGuidanceTemplates(), DEFAULT_TEMPLATE];
 const registered = templates.flatMap((template) => (template.steps ?? []).map((step) => ({ journey: template.journeyTypeKey, key: `${step.toolKey}:${step.stepKey}` })));
 
@@ -29,8 +32,11 @@ test('every row is complete and uses only the declared vocabulary', () => {
     for (const field of ['homeownerJob', 'canonicalProof', 'launchPrerequisites', 'risk']) assert.ok(typeof row[field] === 'string' && row[field].trim().length > 10, `${key}.${field}`);
     assert.ok(VERDICTS.includes(row.verdict), `${key}: verdict`);
     assert.ok(BINDINGS.includes(row.binding), `${key}: binding`);
+    assert.ok(POLICIES.includes(row.proofPolicy), `${key}: every step declares its proof policy`);
     if (row.askOperation !== null) assert.ok(ASK_OPERATION_DEFINITIONS[row.askOperation], `${key}: ${row.askOperation} is not a registered operation`);
-    if (row.verdict === 'CONNECTED' || row.verdict === 'CONNECTABLE') assert.ok(row.askOperation && row.desktopReporter, `${key}: a connected or connectable step names its Ask operation and its reporter`);
+    if (row.verdict === 'CONNECTED') assert.ok(row.askOperation && row.desktopReporter, `${key}: a connected step names its Ask operation and its reporter`);
+    // Connectable means the proof is decided: anything still missing (an Ask command, a shared reporter) is said as what to build first.
+    if (row.verdict === 'CONNECTABLE' && !(row.askOperation && row.desktopReporter)) assert.match(row.launchPrerequisites, /^Build/, `${key}: a connectable step with no Ask command or reporter yet says what to build first`);
     if (row.verdict === 'CONNECTED') assert.notEqual(row.binding, 'NONE', `${key}: a connected step is bound`);
   }
 });
@@ -49,5 +55,21 @@ test('the matrix records the owner decisions: Home Savings is not advanced by a 
   assert.equal(GUIDANCE_STEP_PROOF_MATRIX['home-savings:evaluate_savings_funding'].verdict, 'WRONG_TOOL');
   assert.match(GUIDANCE_STEP_PROOF_MATRIX['home-savings:evaluate_savings_funding'].risk, /save or dismiss does not complete it/);
   for (const step of ['estimate_uninsured_cost', 'estimate_repair_cost', 'estimate_improvement_cost']) assert.equal(GUIDANCE_STEP_PROOF_MATRIX[`service-price-radar:${step}`].verdict, 'WRONG_TOOL', step);
-  assert.equal(GUIDANCE_STEP_PROOF_MATRIX['coverage-intelligence:check_coverage'].verdict, 'NEEDS_PRODUCT_DECISION', 'a decision does not prove a coverage check');
+  assert.equal(GUIDANCE_STEP_PROOF_MATRIX['coverage-intelligence:check_coverage'].verdict, 'CONNECTABLE', 'the proof is decided (a fresh scoped evaluation); the command and reporter are still to build');
+});
+
+test('acknowledgement is never the proof for a step that is not a true review step, and the owner\'s proof definitions are recorded', () => {
+  for (const [key, row] of Object.entries(GUIDANCE_STEP_PROOF_MATRIX)) {
+    if (row.proofPolicy === 'ACKNOWLEDGEMENT' && (row.verdict === 'CONNECTED' || row.verdict === 'CONNECTABLE')) assert.ok(ACKNOWLEDGEMENT_MAY_COMPLETE.has(key), `${key}: only a true review step may be completed by an acknowledgement`);
+  }
+  assert.equal(GUIDANCE_STEP_PROOF_MATRIX['guidance-overview:review_signal'].proofPolicy, 'ACKNOWLEDGEMENT');
+  assert.equal(GUIDANCE_STEP_PROOF_MATRIX['guidance-overview:update_budget'].proofPolicy, 'CANONICAL_MUTATION', 'a budget step needs the real mutation');
+  assert.equal(GUIDANCE_STEP_PROOF_MATRIX['maintenance:complete_compliance_task'].proofPolicy, 'VERIFIED_EVIDENCE');
+  for (const step of ['check_coverage', 'check_recall_coverage', 'check_weather_coverage']) {
+    const row = GUIDANCE_STEP_PROOF_MATRIX[`coverage-intelligence:${step}`];
+    assert.match(row.canonicalProof, /fresh canonical coverage evaluation/, step);
+    assert.match(row.risk, /not proof/, step);
+  }
+  assert.equal(GUIDANCE_STEP_PROOF_MATRIX['coverage-intelligence:compare_coverage_options'].proofPolicy, 'DECISION');
+  for (const step of ['book_service', 'schedule_inspection']) assert.equal(GUIDANCE_STEP_PROOF_MATRIX[`booking:${step}`].proofPolicy, 'EXTERNAL_COMPLETION', step);
 });
