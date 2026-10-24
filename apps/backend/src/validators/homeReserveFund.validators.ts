@@ -19,6 +19,11 @@ export const listLineItemsQuerySchema = z.object({
   status: z.nativeEnum(HomeReserveFundLineItemStatus).optional(),
 });
 
+// Confirming a line item's allocation: the explicit homeowner confirmation that an expense is funded. The step is optional and only a hint (the server re-reads it).
+export const confirmAllocationBodySchema = z.object({
+  guidanceStepId: z.string().uuid().optional(),
+});
+
 export const retireLineItemBodySchema = z.object({
   evidenceRef: z.string().max(500).optional().nullable(),
 });

@@ -1,4 +1,5 @@
 // apps/backend/src/controllers/homeReserveFund.controller.ts
+import { confirmReserveAllocationWithEffects } from '../services/reserveAllocationOperations';
 import { Response, NextFunction } from 'express';
 import { CustomRequest } from '../types';
 import { homeReserveFundService } from '../services/homeReserveFund.service';
@@ -134,6 +135,18 @@ export async function listLineItems(req: CustomRequest, res: Response, next: Nex
       status: req.query.status as any,
     });
     res.json({ success: true, data: { lineItems } });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/** The page's explicit confirmation of one line item's allocation. The same shared write and journey report Ask uses. */
+export async function confirmLineItemAllocation(req: CustomRequest, res: Response, next: NextFunction) {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) throw new APIError('Authentication required.', 401, 'AUTH_REQUIRED');
+    const result = await confirmReserveAllocationWithEffects(req.params.propertyId, userId, req.params.lineItemId, { guidanceStepId: req.body?.guidanceStepId ?? null });
+    res.json({ success: true, data: { lineItem: result.lineItem, guidanceReported: result.guidanceReported } });
   } catch (err) {
     next(err);
   }

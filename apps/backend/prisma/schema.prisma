@@ -10685,6 +10685,13 @@ model HomeReserveFundLineItem {
   retiredReason      HomeReserveFundRetiredReason?
   retiredEvidenceRef String?
 
+  // Explicit homeowner confirmation of THIS allocation. The recalculation service creates and updates line items automatically, so a line item's existence or its calculated amount is
+  // never proof that the expense is funded; only a person confirming it is. Confirming records who, when and which monthly amount they confirmed (a later recalculation that changes the
+  // amount does not silently carry the confirmation over: the confirmed amount is kept beside the current one). A generic contribution to the parent fund does not set these.
+  allocationConfirmedAt           DateTime?
+  allocationConfirmedByUserId     String?
+  allocationConfirmedMonthlyCents Int?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

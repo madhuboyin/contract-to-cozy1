@@ -95,6 +95,13 @@ export const ASK_GUIDANCE_IN_ASK_STEPS: Readonly<Record<string, AskGuidanceInAsk
     reason: 'You can mark this review step as reviewed here; your review is recorded with the time.',
     outcome: 'Your review of the signal, recorded with the time and the signal version, is this step\'s proof.',
   },
+  // The expense's allocation, explicitly confirmed by the homeowner (a calculated line item is not proof). The step opens the capital reserve plan; confirming one expense's funding from it
+  // (the plan's own row action, started from this execution) completes the step when the journey is about that very expense.
+  'capital-timeline:fund_capital_expense': {
+    operationId: 'CAPITAL_RESERVE_PLAN', message: 'Show my capital reserve plan', label: 'Open the reserve plan', carriesStep: 'FIELD',
+    reason: 'You can confirm the funding for this expense in the reserve plan; your confirmation is recorded on this journey.',
+    outcome: 'Your confirmation of this expense\'s funding plan is recorded as this step\'s proof.',
+  },
   // A multi-stage flow: the step opens the start (reusing an existing review of the kind), then the analysis. The step id follows every stage and is
   // re-read at each one; the step completes only when the analysis is saved.
   'negotiation-shield:prepare_negotiation': {

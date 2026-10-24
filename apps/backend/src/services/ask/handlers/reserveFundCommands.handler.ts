@@ -12,6 +12,10 @@ import { ReserveFundContributionInputSchema } from '../support/commandInputs';
 import { RESERVE_FUND_ACTION_IDS, RESERVE_FUND_BALANCE_CAPTURE_KEY, RESERVE_FUND_COMMAND_MESSAGE, RESERVE_FUND_CONTRIBUTION_CAPTURE_KEY } from '../support/reserveFundConstants';
 import { parseReserveFundMessage, type ReserveFundContributionMessage } from '../support/reserveFundMessage';
 import { evaluateFeatureContext } from '../../../modules/propertyContext/application/evaluateFeatureContext';
+import { prisma } from '../../../lib/prisma';
+import { confirmReserveAllocationWithEffects, resolveFundingStepBinding } from '../../reserveAllocationOperations';
+import { homeReserveFundCalculationService } from '../../homeReserveFundCalculation.service';
+import { GUIDANCE_STEP_REFUSAL_TEXT, guidanceStepIdFromSourceExecution, launchedGuidanceStepId } from '../support/guidanceStepBinding';
 
 const sha = (value: string) => createHash('sha256').update(value).digest('hex');
 const expiry = () => new Date(Date.now() + 30 * 60 * 1000).toISOString();
@@ -118,6 +122,22 @@ export async function reserveFundCommandResult(userId: string, propertyId: strin
     fields.push({ label: 'Balance change', value: `${signed >= 0 ? '+' : '−'}${new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Math.abs(signed))}` });
   } else if (actionId === RESERVE_FUND_ACTION_IDS.REMOVE_CONTRIBUTION) { title = 'Remove this ledger entry?'; description = 'The entry will be deleted and its balance effect reversed.'; }
   else if (actionId === RESERVE_FUND_ACTION_IDS.RECALCULATE) { title = 'Recalculate the reserve plan?'; description = 'The plan will be rebuilt from the current Capital Timeline and property context.'; }
+  else if (actionId === RESERVE_FUND_ACTION_IDS.CONFIRM_ALLOCATION) {
+    // One expense's allocation, confirmed by the homeowner. The line item is re-read here (this home's fund, still active) and the confirmation shows the amount being confirmed.
+    const fund = await homeReserveFundCalculationService.getOrCreateFund(propertyId);
+    const line = await prisma.homeReserveFundLineItem.findFirst({ where: { id: entityId, fundId: fund.id }, include: { timelineItem: { include: { inventoryItem: { select: { name: true } } } } } });
+    if (!line || line.status !== 'ACTIVE') return { status: 'NOT_APPLICABLE', reasonCode: 'RESERVE_FUND_LINE_ITEM_NOT_AVAILABLE', blocks: [{ type: 'SUMMARY', id: 'reserve-fund-allocation-unavailable', title: 'That reserve item is no longer available', body: 'It was retired or does not belong to this home. Nothing was changed.', tone: 'DEFAULT', actions: [] }], suggestions: [] };
+    // The journey step this belongs to, if any: the one the launch names, else the one the reserve plan it came from was opened for. A step that does not fit this expense is remembered as
+    // refused, so nothing is reported to any journey; the allocation itself can still be confirmed.
+    const supplied = launchedGuidanceStepId(launch) ?? await guidanceStepIdFromSourceExecution(userId, propertyId, launch?.sourceExecutionId ?? null);
+    const bound = supplied ? await resolveFundingStepBinding(propertyId, supplied, line) : null;
+    if (supplied) { command.guidanceStepId = bound?.ok ? supplied : null; if (!bound?.ok) command.guidanceStepRefused = true; }
+    const expense = line.timelineItem?.inventoryItem?.name ?? String(line.timelineItem?.category ?? 'Capital item').toLowerCase().replace(/_/g, ' ');
+    title = `Confirm the funding plan for ${expense}?`;
+    description = `This records that you confirm saving ${usd(line.allocatedMonthlyCents)} a month toward ${usd(line.targetCostCents)} for this expense. It does not move money; it is your confirmation of the plan.`;
+    fields.push({ label: 'Expense', value: expense }, { label: 'Monthly allocation', value: usd(line.allocatedMonthlyCents) }, { label: 'Target', value: usd(line.targetCostCents) });
+    if (supplied && !bound?.ok) fields.push({ label: 'Guided journey', value: bound ? GUIDANCE_STEP_REFUSAL_TEXT[bound.reason] : 'No journey step' });
+  }
   else if (actionId === RESERVE_FUND_ACTION_IDS.ACCEPT_RECONCILIATION) { title = 'Mark this reserve item retired?'; description = 'The matched expense will be recorded as evidence that this planned need was completed.'; }
   else { const posture = actionId.split('reserve-fund-posture-')[1]; title = `Use the ${posture} planning posture?`; description = 'This changes which point in each estimated cost range is used and immediately recalculates the plan.'; command.posture = posture?.toUpperCase(); }
   const expiresAt = expiry();
@@ -155,10 +175,11 @@ registerCapabilityHandler('reserve-fund.command', async (envelope) => {
 async function confirmReserveFundCommand(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
   const { execution, parameters, userId } = ctx;
   const propertyId = execution.propertyId;
-  const command = parameters.reserveFundCommand as { actionId: string; entityId?: string; posture?: HomeReserveFundPosture; input?: Contribution; balance?: { targetCents: number; baselineCents: number; note: string | null } };
+  const command = parameters.reserveFundCommand as { actionId: string; entityId?: string; posture?: HomeReserveFundPosture; input?: Contribution; balance?: { targetCents: number; baselineCents: number; note: string | null }; guidanceStepId?: string | null; guidanceStepRefused?: boolean };
   let artifactType = 'HOME_RESERVE_FUND';
   let artifactId = propertyId;
   let title = 'Reserve Fund updated';
+  let journeyNote: string | null = null;
   if (command.actionId === RESERVE_FUND_ACTION_IDS.RECALCULATE || command.posture) {
     const evaluation = await evaluateFeatureContext(propertyId, userId, { featureKey: 'RESERVE_FUND', operationKey: 'RECALCULATE' });
     if (!evaluation.canExecute) throw Object.assign(new Error('Required property context is incomplete. Review the missing home details, then try again.'), { code: 'PROPERTY_CONTEXT_REQUIRED' });
@@ -187,6 +208,13 @@ async function confirmReserveFundCommand(ctx: ConfirmCapabilityContext): Promise
   } else if (command.actionId === RESERVE_FUND_ACTION_IDS.RECALCULATE) {
     const context = await getFinancialContextDecisions(propertyId, userId, 'RESERVE_FUND');
     const fund = await homeReserveFundService.recalculate(propertyId, context.contextVersion, userId); artifactId = fund.id; title = 'Reserve plan recalculated';
+  } else if (command.actionId === RESERVE_FUND_ACTION_IDS.CONFIRM_ALLOCATION) {
+    // The shared write and journey report (the Desktop route calls the same function). The confirmation is saved even if the step cannot be reported; a refused step reports nothing.
+    const stepId = typeof command.guidanceStepId === 'string' ? command.guidanceStepId : null;
+    const confirmed = await confirmReserveAllocationWithEffects(propertyId, userId, command.entityId!, { guidanceStepId: stepId });
+    artifactType = 'HOME_RESERVE_FUND_LINE_ITEM'; artifactId = confirmed.lineItem.id; title = 'Funding plan confirmed';
+    journeyNote = stepId ? (confirmed.guidanceReported ? 'This step is recorded as done' : confirmed.guidanceRefusal ? GUIDANCE_STEP_REFUSAL_TEXT[confirmed.guidanceRefusal as keyof typeof GUIDANCE_STEP_REFUSAL_TEXT] ?? 'No journey step was updated' : 'The funding is confirmed, but the journey step could not be updated. Open the journey to check it')
+      : command.guidanceStepRefused ? 'This expense is not the one the journey step is about, so no journey step was updated' : null;
   } else if (command.actionId === RESERVE_FUND_ACTION_IDS.ACCEPT_RECONCILIATION) {
     const [lineItemId, expenseId] = (command.entityId ?? '').split(':');
     const line = await homeReserveFundReconciliationService.acceptMatch(propertyId, lineItemId, expenseId); artifactType = 'HOME_RESERVE_FUND_LINE_ITEM'; artifactId = line.id; title = 'Matched reserve item retired';
@@ -194,7 +222,7 @@ async function confirmReserveFundCommand(ctx: ConfirmCapabilityContext): Promise
     const context = await getFinancialContextDecisions(propertyId, userId, 'RESERVE_FUND');
     const fund = await homeReserveFundService.updatePosture(propertyId, command.posture, context.contextVersion, userId); artifactId = fund.id; title = 'Planning posture updated';
   } else throw Object.assign(new Error('That reserve-fund action is no longer available.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
-  return { result: { status: 'COMPLETED', reasonCode: 'RESERVE_FUND_COMMAND_COMPLETED', blocks: [{ type: 'WORKFLOW_PROGRESS', id: `reserve-fund-command-${artifactId}`, title, status: 'COMPLETED', description: 'The canonical Reserve Fund now reflects this change.', details: [], actions: [showFundAction] }], suggestions: [] }, artifactType, artifactId };
+  return { result: { status: 'COMPLETED', reasonCode: 'RESERVE_FUND_COMMAND_COMPLETED', blocks: [{ type: 'WORKFLOW_PROGRESS', id: `reserve-fund-command-${artifactId}`, title, status: 'COMPLETED', description: 'The canonical Reserve Fund now reflects this change.', details: journeyNote ? [{ label: 'Guided journey', value: journeyNote }] : [], actions: [showFundAction] }], suggestions: [] }, artifactType, artifactId };
 }
 
 registerConfirmCapabilityHandler('reserve-fund.command', confirmReserveFundCommand);

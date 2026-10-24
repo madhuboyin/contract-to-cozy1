@@ -11,6 +11,7 @@ import {
   recalculateFund,
   listLineItems,
   retireLineItem,
+  confirmLineItemAllocation,
   listContributions,
   addContribution,
   removeContribution,
@@ -22,6 +23,7 @@ import {
   updateFundBodySchema,
   listLineItemsQuerySchema,
   retireLineItemBodySchema,
+  confirmAllocationBodySchema,
   listContributionsQuerySchema,
   addContributionBodySchema,
   acceptReconciliationMatchBodySchema,
@@ -56,6 +58,14 @@ router.get(
   propertyAuthMiddleware,
   validate(listLineItemsQuerySchema.transform((query) => ({ query }))),
   listLineItems,
+);
+
+router.post(
+  '/properties/:propertyId/reserve-fund/line-items/:lineItemId/confirm-allocation',
+  propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
+  validateBody(confirmAllocationBodySchema),
+  confirmLineItemAllocation,
 );
 
 router.post(

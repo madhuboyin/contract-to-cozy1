@@ -83,10 +83,10 @@ test('Home Savings no longer owns a funding step for new journeys: Capital Timel
   assert.ok(steps.includes('capital-timeline:fund_capital_expense'));
   assert.equal(template.version, '1.3.0');
   const funding = GUIDANCE_STEP_PROOF_MATRIX['capital-timeline:fund_capital_expense'];
-  assert.match(funding.canonicalProof, /durable funding plan or reserve allocation/);
-  assert.match(funding.canonicalProof, /viewing projections/);
+  assert.match(funding.canonicalProof, /explicit confirmation of that expense/);
+  assert.match(funding.canonicalProof, /neither it, nor a generic reserve contribution/);
   assert.equal(GUIDANCE_STEP_PROOF_MATRIX['home-savings:evaluate_savings_funding'].verdict, 'WRONG_TOOL');
   assert.ok(GUIDANCE_STEP_PROOF_MATRIX['home-savings:evaluate_savings_funding'].retired);
   assert.equal(askGuidanceStepMode('home-savings', 'evaluate_savings_funding').mode, 'NAVIGATE', 'the old step is never completable in Ask');
-  assert.equal(askGuidanceStepMode('capital-timeline', 'fund_capital_expense').mode, 'NAVIGATE', 'not connected until its reporter exists');
+  assert.equal(askGuidanceStepMode('capital-timeline', 'fund_capital_expense').mode, 'IN_ASK', 'connected through the explicit allocation confirmation');
 });

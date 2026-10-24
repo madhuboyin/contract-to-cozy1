@@ -686,3 +686,22 @@ Owner decision: supersede, do not leave a permanent unsupported dead end, and do
 - **What it leaves alone.** Completed prior steps and later steps, a retired step that was already completed or skipped (no replacement is added to that journey, and the template sync will not insert one), a journey of another type, and
   a journey that is not open. The superseded row is hidden from the journey the homeowner sees (the same filter as `TEMPLATE_REMOVED`, now `HIDDEN_STEP_REASON_CODES`), so it is neither a dead end nor counted in progress.
 
+## 33. "Fund this expense": an explicit allocation confirmation (2026-10-24)
+
+Owner decision: the canonical expense-bound record is the reserve line item (it links directly to the capital timeline item), but a calculated line item is not proof, because the recalculation service creates and updates
+them automatically.
+
+- **Schema (owner runs `prisma db push`).** `HomeReserveFundLineItem` gains `allocationConfirmedAt`, `allocationConfirmedByUserId` and `allocationConfirmedMonthlyCents` (the amount the person confirmed). Nothing else sets them: a test fails if the
+  reserve services, the recalculation, the reconciliation or Ask's reserve command set any of them outside the confirmation, so a generic contribution, a balance correction, saving the parent fund or a recalculation can never complete the step.
+- **One write, one reporter.** `services/reserveAllocationOperations.ts` `confirmReserveAllocationWithEffects` re-reads the line item in this home's fund (active), writes the confirmation (person, time, current monthly amount), then reports to the journey step if one was
+  named. The Desktop route `POST /properties/:propertyId/reserve-fund/line-items/:lineItemId/confirm-allocation` (CONTRIBUTOR) and Ask's `RESERVE_FUND_COMMAND` action `reserve-fund-confirm-allocation` (a row action on the plan's
+  "Active reserve allocations") both call it.
+- **Exact binding, to the expense.** The report needs the capital-timeline `fund_capital_expense` step, open, on an open journey, **and the journey must be about this very expense**: the reserve-fund shortfall signal that starts these journeys names the
+  timeline item, which must equal the line item's. A journey from another source, or about another expense, is `WRONG_SUBJECT`; a stale, closed or other-tool step is refused likewise. In every refusal the confirmation is saved and nothing is
+  reported, and no other step is used instead. A failed report never undoes the confirmation.
+- **In Ask.** The journey step opens the capital reserve plan (`CAPITAL_RESERVE_PLAN`) carrying the step; the row action's step is taken from that execution's stored launch (this person, this home) and re-read at the proposal and the confirmation. The
+  proposal shows the expense, the monthly allocation and the target; a step that does not fit is remembered as refused (receipt: "not the one the journey step is about").
+- **Deliberate update.** The step completes on an explicit confirmation of the allocation as it stands. If a recalculation later changes the amount, the stored confirmed amount stays beside the current one and the plan's row action offers "Confirm this funding" again;
+  the confirmation is re-made, not carried over silently. Letting the homeowner set a different monthly amount (an override the recalculation would respect) is not built.
+- **Matrix.** `capital-timeline:fund_capital_expense` is CONNECTED (17 connected).
+

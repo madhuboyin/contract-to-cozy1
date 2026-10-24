@@ -29,7 +29,7 @@ test('reserve contribution capture accepts bounded ledger inputs', () => {
 test('traditional reserve fund mutations enforce the contributor role floor', () => {
   const routes = source('src/routes/homeReserveFund.routes.ts');
   const mutations = routes.match(/router\.(?:patch|post|delete)\([\s\S]*?\n\);/g) ?? [];
-  assert.equal(mutations.length, 6);
+  assert.equal(mutations.length, 7); // + confirm-allocation (continuation FRD section 33)
   for (const mutation of mutations) assert.match(mutation, /requireHouseholdRole\('CONTRIBUTOR'\)/);
 });
 

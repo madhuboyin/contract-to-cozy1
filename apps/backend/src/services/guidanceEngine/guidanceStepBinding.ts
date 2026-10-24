@@ -9,6 +9,8 @@ export type GuidanceStepBinding = {
   journeyId: string;
   signalIntentFamily: string | null;
   inventoryItemId: string | null;
+  /** Where the journey's signal came from: a tool's shortfall signal names the very record the journey is about. */
+  signalSource: { toolKey: string | null; entityType: string | null; entityId: string | null };
 };
 export type GuidanceStepRefusal = 'NOT_FOUND' | 'WRONG_TOOL' | 'WRONG_STEP' | 'WRONG_SUBJECT' | 'STEP_DONE' | 'STEP_CLOSED' | 'JOURNEY_CLOSED';
 export type GuidanceStepBindingResult = { ok: true; binding: GuidanceStepBinding } | { ok: false; reason: GuidanceStepRefusal };
@@ -24,7 +26,7 @@ export const GUIDANCE_STEP_REFUSAL_TEXT: Record<GuidanceStepRefusal, string> = {
 };
 
 type StepWhere = { id: string } | { journeyId: string; stepKey: string };
-const STEP_SELECT = { id: true, stepKey: true, toolKey: true, status: true, journey: { select: { id: true, status: true, inventoryItemId: true, primarySignal: { select: { signalIntentFamily: true } } } } } as const;
+const STEP_SELECT = { id: true, stepKey: true, toolKey: true, status: true, journey: { select: { id: true, status: true, inventoryItemId: true, primarySignal: { select: { signalIntentFamily: true, sourceToolKey: true, sourceEntityType: true, sourceEntityId: true } } } } } as const;
 
 async function resolve(propertyId: string, where: StepWhere, expected: { toolKey: string; stepKeys?: readonly string[] }): Promise<GuidanceStepBindingResult> {
   const step = await getGuidanceModels().guidanceJourneyStep.findFirst({ where: { ...where, journey: { propertyId } }, select: STEP_SELECT });
@@ -34,7 +36,8 @@ async function resolve(propertyId: string, where: StepWhere, expected: { toolKey
   if (!['ACTIVE', 'NOT_STARTED'].includes(String(step.journey.status))) return { ok: false, reason: 'JOURNEY_CLOSED' };
   if (step.status === 'COMPLETED') return { ok: false, reason: 'STEP_DONE' };
   if (!['PENDING', 'IN_PROGRESS'].includes(String(step.status))) return { ok: false, reason: 'STEP_CLOSED' };
-  return { ok: true, binding: { stepId: step.id ?? ('id' in where ? where.id : ''), stepKey: step.stepKey, journeyId: step.journey.id, signalIntentFamily: step.journey.primarySignal?.signalIntentFamily ?? null, inventoryItemId: step.journey.inventoryItemId ?? null } };
+  return { ok: true, binding: { stepId: step.id ?? ('id' in where ? where.id : ''), stepKey: step.stepKey, journeyId: step.journey.id, signalIntentFamily: step.journey.primarySignal?.signalIntentFamily ?? null, inventoryItemId: step.journey.inventoryItemId ?? null,
+    signalSource: { toolKey: step.journey.primarySignal?.sourceToolKey ?? null, entityType: step.journey.primarySignal?.sourceEntityType ?? null, entityId: step.journey.primarySignal?.sourceEntityId ?? null } } };
 }
 
 export const resolveGuidanceStepBinding = (propertyId: string, stepId: string, expected: { toolKey: string; stepKeys?: readonly string[] }) => resolve(propertyId, { id: stepId }, expected);
