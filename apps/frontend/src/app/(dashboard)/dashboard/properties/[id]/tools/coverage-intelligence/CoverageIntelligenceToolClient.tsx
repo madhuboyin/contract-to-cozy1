@@ -14,6 +14,7 @@ import { PropertyContextCapturePanel } from '@/components/property-context/Prope
 import PolicyRecordReadinessPanel from '@/components/coverage/PolicyRecordReadinessPanel';
 import CoverageReviewQuestionsPanel from '@/components/coverage/CoverageReviewQuestionsPanel';
 import CoverageComparisonPanel from '@/components/coverage/CoverageComparisonPanel';
+import CoverageTermReviewPanel from '@/components/coverage/CoverageTermReviewPanel';
 import InsuranceHandoffPanel from '@/components/coverage/InsuranceHandoffPanel';
 import InsuranceMarketContextPanel from '@/components/coverage/InsuranceMarketContextPanel';
 
@@ -172,6 +173,7 @@ export default function CoverageIntelligenceToolClient() {
       {activeStage === 'current' && (
         <div id="coverage-stage-current" role="tabpanel" className="space-y-4">
           <PolicyRecordReadinessPanel propertyId={propertyId} policyId={requestedPolicyId} />
+          <CoverageTermReviewPanel propertyId={propertyId} guidanceJourneyId={guidanceJourneyId} guidanceStepKey={guidanceStepKey} />
           <PropertyContextCapturePanel
             propertyId={propertyId}
             featureKey="COVERAGE_INTELLIGENCE"

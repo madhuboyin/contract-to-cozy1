@@ -1,4 +1,5 @@
-import { reviewCoverageTermsWithEffects } from '../services/coverageTermReviewOperations';
+import { prisma } from '../lib/prisma';
+import { currentCoverageTerms, reviewCoverageTermsWithEffects } from '../services/coverageTermReviewOperations';
 import { Response } from 'express';
 import { CustomRequest } from '../types';
 import {
@@ -324,10 +325,31 @@ export async function reviewCoverageTerms(req: CustomRequest, res: Response, nex
   try {
     const userId = req.user?.userId;
     if (!userId) return res.status(401).json({ success: false, message: 'Authentication required.' });
+    // The page knows its journey and step key, not the step id: resolve it here, inside this home, so the shared service re-reads and binds it exactly as it does for Ask.
+    let guidanceStepId: string | null = req.body.guidanceStepId ?? null;
+    if (!guidanceStepId && req.body.guidanceJourneyId && req.body.guidanceStepKey) {
+      const step = await prisma.guidanceJourneyStep.findFirst({ where: { journeyId: req.body.guidanceJourneyId, stepKey: req.body.guidanceStepKey, journey: { propertyId: req.params.propertyId } }, select: { id: true } });
+      guidanceStepId = step?.id ?? null;
+    }
     const result = await reviewCoverageTermsWithEffects(req.params.propertyId, userId, req.body.kind, {
-      guidanceStepId: req.body.guidanceStepId ?? null, inventoryItemId: req.body.inventoryItemId ?? null, expectedFingerprint: req.body.expectedFingerprint ?? null,
+      guidanceStepId, inventoryItemId: req.body.inventoryItemId ?? null, expectedFingerprint: req.body.expectedFingerprint ?? null,
     });
     return res.status(200).json({ success: true, data: { review: result.review, reused: result.reused, guidanceReported: result.guidanceReported } });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+/** The current policy or warranty terms in scope, the fingerprint a review is recorded against, and the latest review of exactly those terms. */
+export async function getCoverageTermReviewState(req: CustomRequest, res: Response, next: (error?: unknown) => void) {
+  try {
+    const kind = req.query.kind === 'WARRANTY' ? 'WARRANTY' : 'POLICY';
+    const inventoryItemId = typeof req.query.inventoryItemId === 'string' ? req.query.inventoryItemId : null;
+    const terms = await currentCoverageTerms(req.params.propertyId, kind, inventoryItemId);
+    const latest = terms.count === 0 ? null : await prisma.coverageTermReview.findFirst({
+      where: { propertyId: req.params.propertyId, termKind: kind, inventoryItemId, termFingerprint: terms.fingerprint }, orderBy: { reviewedAt: 'desc' }, select: { reviewedAt: true },
+    });
+    return res.status(200).json({ success: true, data: { kind, count: terms.count, fingerprint: terms.fingerprint, labels: terms.labels, latestReviewedAt: latest?.reviewedAt ?? null } });
   } catch (error) {
     return next(error);
   }
