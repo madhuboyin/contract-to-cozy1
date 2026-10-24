@@ -373,6 +373,22 @@ export async function completeGuidanceStep(
   return res.data;
 }
 
+/**
+ * Marks a review step (the guidance signal review) as reviewed. The server records the typed acknowledgement: the exact signal and its version, the step, you, the time and the outcome.
+ * A review step cannot be completed with free-form data, so this is the only way the page completes it.
+ */
+export async function acknowledgeGuidanceStep(
+  propertyId: string,
+  stepId: string,
+  payload?: { disposition?: 'act_now' | 'plan_soon' | 'monitor'; note?: string }
+): Promise<{ step: GuidanceStepDTO; journey: GuidanceJourneyDTO }> {
+  const res = await api.post<{ step: GuidanceStepDTO; journey: GuidanceJourneyDTO }>(
+    `/api/properties/${propertyId}/guidance/steps/${stepId}/acknowledge`,
+    payload ?? {}
+  );
+  return res.data;
+}
+
 export async function skipGuidanceStep(
   propertyId: string,
   stepId: string,

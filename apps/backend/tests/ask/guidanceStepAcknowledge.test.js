@@ -124,3 +124,52 @@ test('the command is registered like the other guided-journey writes: confirmati
   assert.equal(getAskDomainCommandByOperation(OP).roleFloor, 'CONTRIBUTOR');
   assert.equal(require('../../src/services/skills/skillRegistry.ts').getSkillForOperation(OP).id, 'guidance-overview');
 });
+
+// ── Desktop: the page acknowledges through the same recorder; the generic completion path no longer completes a review step (continuation FRD section 31) ──
+process.env.GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'test-key-not-used';
+const controller = require('../../src/controllers/guidance.controller.ts');
+
+const fakeReq = (over = {}) => ({ params: { propertyId: 'p1', stepId: 'step-r' }, body: {}, user: { userId: 'u1' }, ...over });
+const fakeRes = () => { const res = { body: null, json(value) { res.body = value; return res; } }; return res; };
+const run = async (handler, req) => { const res = fakeRes(); let error = null; await handler(req, res, (e) => { error = e; }); return { res, error }; };
+
+test('the page acknowledges a review step by id: the same typed proof, with the decision and note as extras that are not part of the proof of review', async () => {
+  const returned = { journey: { id: 'j1', status: 'ACTIVE', steps: [], inventoryItem: null }, step: { id: 'step-r', stepKey: 'review_signal', status: 'COMPLETED', journeyId: 'j1' } };
+  guidanceJourneyService.recordToolCompletion = async (input) => { completions.push(input); return returned; };
+  const outcome = await ack.acknowledgeGuidanceStepById('p1', 'u1', 'step-r', { disposition: 'plan_soon', note: 'Watch the water bill' });
+  assert.equal(outcome.ok, true);
+  const done = completions[0];
+  assert.deepEqual({ proofType: done.producedData.proofType, outcome: done.producedData.outcome, signalId: done.producedData.signalId, signalVersion: done.producedData.signalVersion, actorUserId: done.producedData.actorUserId, step: done.producedData.stepId },
+    { proofType: 'acknowledgement', outcome: 'REVIEWED', signalId: 'sig-1', signalVersion: SIGNAL_AT.toISOString(), actorUserId: 'u1', step: 'step-r' });
+  assert.deepEqual([done.producedData.signalDisposition, done.producedData.note], ['plan_soon', 'Watch the water bill']);
+  const { buildStepAcknowledgement } = ack;
+  const bare = buildStepAcknowledgement('p1', 'u1', { stepId: 's', stepKey: 'review_signal', journeyId: 'j', signalId: 'sig', signalVersion: 'v', acknowledgedAt: new Date() });
+  assert.equal('signalDisposition' in bare.producedData, false, 'an acknowledgement with no decision carries none');
+});
+
+test('the page cannot acknowledge a step that is not an open review step', async () => {
+  for (const [stale, reason] of [[null, 'NOT_FOUND'], [stepRow({ toolKey: 'price-finalization' }), 'WRONG_TOOL'], [stepRow({ stepKey: 'update_budget' }), 'WRONG_STEP'], [stepRow({ status: 'COMPLETED' }), 'STEP_DONE'], [stepRow({ journey: { id: 'j1', status: 'DISMISSED', inventoryItemId: null, primarySignal: null } }), 'JOURNEY_CLOSED']]) {
+    step = stale; completions.length = 0;
+    assert.deepEqual(await ack.acknowledgeGuidanceStepById('p1', 'u1', 'step-r'), { ok: false, reason });
+    assert.equal(completions.length, 0);
+  }
+  step = stepRow(); recordFails = true;
+  assert.deepEqual(await ack.acknowledgeGuidanceStepById('p1', 'u1', 'step-r'), { ok: false, reason: 'RECORD_FAILED' });
+});
+
+test('the page endpoint reports a refusal in the homeowner\'s words and the generic completion routes refuse a review step with no weaker path', async () => {
+  step = stepRow({ status: 'COMPLETED' });
+  const refused = await run(controller.acknowledgeGuidanceStepEndpoint, fakeReq());
+  assert.equal(refused.error.code, 'GUIDANCE_ACKNOWLEDGEMENT_STEP_DONE');
+  assert.equal(refused.error.statusCode, 409);
+  // The step-completion route: the review step is refused; another step is not stopped by this guard.
+  step = stepRow();
+  const blocked = await run(controller.completeGuidanceStep, fakeReq({ body: { producedData: { proofType: 'guided_overview_checkpoint' } } }));
+  assert.equal(blocked.error.code, 'GUIDANCE_ACKNOWLEDGEMENT_REQUIRED');
+  // The tool-completion route: a review step by tool and key is refused, whatever the payload.
+  const generic = await run(controller.recordGuidanceToolCompletion, fakeReq({ params: { propertyId: 'p1' }, body: { sourceToolKey: 'guidance-overview', stepKey: 'review_signal', status: 'COMPLETED', producedData: { proofType: 'acknowledgement' } } }));
+  assert.equal(generic.error.code, 'GUIDANCE_ACKNOWLEDGEMENT_REQUIRED');
+  assert.equal(completions.length, 0);
+  const other = await run(controller.recordGuidanceToolCompletion, fakeReq({ params: { propertyId: 'p1' }, body: { sourceToolKey: 'guidance-overview', stepKey: 'update_budget', status: 'COMPLETED' } }));
+  assert.notEqual(other.error?.code, 'GUIDANCE_ACKNOWLEDGEMENT_REQUIRED', 'only the review step is closed to the generic path');
+});

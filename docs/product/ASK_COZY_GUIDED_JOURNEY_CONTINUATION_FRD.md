@@ -629,7 +629,7 @@ CONNECTABLE now means the proof is decided and nothing needs a product call; wha
   signal rejects it, a step already done is a no-op, and a recording failure is a refusal (this is the write, so it is not swallowed). It is registered everywhere its sibling `GUIDANCE_STEP_SKIP` is (operation,
   domain command, audience policy, answer-trust boundary, semantic package, mutation impact, work provider, suggested actions, skill manifest, evaluation and adapter, coverage matrix, the governance
   irreversible-command list).
-- **Desktop.** The Desktop shell still completes `review_signal` through the generic completion endpoint; it does not yet use the typed acknowledgement. Moving it onto `acknowledgeGuidanceStep` is open.
+- **Desktop.** Moved onto the same recorder in section 31.
 - **Matrix.** `guidance-overview:review_signal` is CONNECTED (16 connected).
 
 ## 29. Project Create parity (2026-10-24)
@@ -660,4 +660,15 @@ Owner decision: `evaluate_savings_funding` is replaced for new journeys.
   run reporting is unchanged (the owner's instruction was not to change Desktop semantics to advance a journey); the matrix keeps the row, marked `retired`, so the coverage test still accounts for it.
 - **Not connected yet.** The new step's proof is decided but nothing reports it: it needs one shared reporter for the saved funding plan or allocation, used by Ask's capital timeline command and the Desktop save, bound to the
   exact step and to the journey's expense item (matrix row `capital-timeline:fund_capital_expense`: CONNECTABLE, "Build first"). Until then it is completed only the way every `NAVIGATE` step is.
+
+## 31. Desktop acknowledges through the same recorder (2026-10-24)
+
+Owner decision: Desktop `review_signal` uses `acknowledgeGuidanceStep`, and the generic path is removed for this step so Desktop cannot create weaker proof than Ask.
+
+- **Before.** The page's signal-review step called the generic step-completion route with free-form `producedData` (a checklist, a note and a decision), which marked the step complete on the homeowner's word.
+- **Now.** `POST /properties/:propertyId/guidance/steps/:stepId/acknowledge` (CONTRIBUTOR) calls `acknowledgeGuidanceStepById`: it re-reads the step (the `guidance-overview` tool's open acknowledgeable step on an open journey), names the signal as it stands, and
+  records the same typed proof Ask records (exact signal and version, step, actor, time, outcome REVIEWED). The page's quick decision (act now, plan soon, monitor) and note ride along as extras that are not part of the proof of review.
+  The inline step component calls this for `review_signal` and never the completion route.
+- **The generic path is closed for this step.** The step-completion route and the tool-completion route refuse a `guidance-overview` / `review_signal` completion with `GUIDANCE_ACKNOWLEDGEMENT_REQUIRED` (409), whatever the payload; every other step is untouched by this guard.
+- **Left as they are.** The other Desktop inline steps (Do-Nothing, Home Savings, Capital Timeline, Ownership Costs, Recall check, Price Finalization) still complete through the generic route with self-reported data. They are not review steps; moving each onto its tool's own proof is the work the matrix tracks.
 

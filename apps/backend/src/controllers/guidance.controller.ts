@@ -16,6 +16,9 @@ import {
   mapGuidanceEvidence,
 } from '../services/guidanceEngine/guidanceMapper';
 import { APIError } from '../middleware/error.middleware';
+import { ACKNOWLEDGEABLE_STEP_KEYS, ACKNOWLEDGEMENT_TOOL_KEY, acknowledgeGuidanceStepById } from '../services/guidanceEngine/guidanceAcknowledgement';
+import { GUIDANCE_STEP_REFUSAL_TEXT } from '../services/guidanceEngine/guidanceStepBinding';
+import { getGuidanceModels } from '../services/guidanceEngine/guidanceTypes';
 import { modelShortlistAdvisorService } from '../services/guidanceEngine/modelShortlistAdvisor.service';
 import { vendorSuggestionsAdvisorService } from '../services/guidanceEngine/vendorSuggestionsAdvisor.service';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
@@ -178,11 +181,31 @@ export async function resolveGuidanceSignal(req: CustomRequest, res: Response, n
   }
 }
 
+const ACKNOWLEDGEMENT_REQUIRED = () => new APIError('This is a review step: mark it as reviewed instead of completing it.', 409, 'GUIDANCE_ACKNOWLEDGEMENT_REQUIRED');
+
+/** The one way to complete a review step from the page: the same typed acknowledgement Ask records (exact signal and version, step, actor, time, REVIEWED). */
+export async function acknowledgeGuidanceStepEndpoint(req: CustomRequest, res: Response, next: NextFunction) {
+  try {
+    const userId = requireUserId(req);
+    const outcome = await acknowledgeGuidanceStepById(req.params.propertyId, userId, req.params.stepId, { disposition: req.body?.disposition ?? null, note: req.body?.note ?? null });
+    if (!outcome.ok) {
+      if (outcome.reason === 'RECORD_FAILED') throw new APIError('The review could not be recorded. Try again.', 500, 'GUIDANCE_ACKNOWLEDGEMENT_FAILED');
+      throw new APIError(GUIDANCE_STEP_REFUSAL_TEXT[outcome.reason], outcome.reason === 'NOT_FOUND' ? 404 : 409, `GUIDANCE_ACKNOWLEDGEMENT_${outcome.reason}`);
+    }
+    analyticsEmitter.track({ eventType: AnalyticsEvent.ACTION_COMPLETED, userId, propertyId: req.params.propertyId, moduleKey: AnalyticsModule.GUIDANCE, featureKey: AnalyticsFeature.GUIDANCE_ADVISOR, metadataJson: { actionType: 'acknowledge_step' } });
+    const { journey, step } = outcome.result;
+    res.json({ success: true, data: { step: mapGuidanceStep(step, { suppressGenericRepairReplace: journey?.inventoryItem?.category === 'HVAC' }), journey: mapGuidanceJourney(journey) } });
+  } catch (error) { next(error); }
+}
+
 export async function completeGuidanceStep(req: CustomRequest, res: Response, next: NextFunction) {
   try {
     const userId = requireUserId(req);
     const propertyId = req.params.propertyId;
     const stepId = req.params.stepId;
+    // A review step has no weaker path: self-reported producedData cannot complete it.
+    const target = await getGuidanceModels().guidanceJourneyStep.findFirst({ where: { id: stepId, journey: { propertyId } }, select: { stepKey: true, toolKey: true } });
+    if (target && target.toolKey === ACKNOWLEDGEMENT_TOOL_KEY && (ACKNOWLEDGEABLE_STEP_KEYS as readonly string[]).includes(target.stepKey)) throw ACKNOWLEDGEMENT_REQUIRED();
 
     const result = await guidanceStepResolverService.markStepStatus({
       propertyId,
@@ -334,6 +357,7 @@ export async function recordGuidanceToolCompletion(req: CustomRequest, res: Resp
   try {
     const userId = requireUserId(req);
     const propertyId = req.params.propertyId;
+    if (req.body?.sourceToolKey === ACKNOWLEDGEMENT_TOOL_KEY && (ACKNOWLEDGEABLE_STEP_KEYS as readonly string[]).includes(String(req.body?.stepKey ?? ''))) throw ACKNOWLEDGEMENT_REQUIRED();
 
     const result = await guidanceJourneyService.recordToolCompletion({
       propertyId,

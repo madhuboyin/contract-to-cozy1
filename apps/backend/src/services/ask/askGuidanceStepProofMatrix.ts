@@ -462,7 +462,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     homeownerJob: 'Review guidance signal',
     canonicalProof: 'A typed, durable acknowledgement recording the exact signal and version, the journey step, the actor, the time and the outcome. \'I reviewed this\' is valid because review is the promised job.',
     askOperation: 'GUIDANCE_STEP_ACKNOWLEDGE',
-    desktopReporter: 'guidanceAcknowledgement.acknowledgeGuidanceStep (Ask; the Desktop shell completes this step through the generic completion endpoint)',
+    desktopReporter: 'guidanceAcknowledgement.acknowledgeGuidanceStepById (the Desktop endpoint) and acknowledgeGuidanceStep (Ask): one recorder',
     launchPrerequisites: 'An open review step of the guidance-overview tool on an open journey; the step is carried as the launch entity.',
     binding: 'EXACT_STEP', verdict: 'CONNECTED',
     proofPolicy: 'ACKNOWLEDGEMENT',

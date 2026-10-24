@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { completeGuidanceStep, type GuidanceStepDTO } from '@/lib/api/guidanceApi';
+import { acknowledgeGuidanceStep, completeGuidanceStep, type GuidanceStepDTO } from '@/lib/api/guidanceApi';
 
 type StepOption = {
   label: string;
@@ -352,6 +352,16 @@ export function GuidanceOverviewInlineStep({
       const checkedItems = Object.entries(selectedChecklist)
         .filter(([, isChecked]) => isChecked)
         .map(([key]) => key);
+      // The signal review is a true review step: it is recorded as a typed acknowledgement (the same proof Ask records), never as free-form data.
+      if (step.stepKey === 'review_signal') {
+        const disposition = option.producedData?.signalDisposition;
+        await acknowledgeGuidanceStep(propertyId, step.id, {
+          ...(disposition === 'act_now' || disposition === 'plan_soon' || disposition === 'monitor' ? { disposition } : {}),
+          ...(note.trim() ? { note: note.trim().slice(0, 500) } : {}),
+        });
+        onComplete?.(nextStepKey ?? null);
+        return;
+      }
       await completeGuidanceStep(propertyId, step.id, {
         proofType: 'guided_overview_checkpoint',
         proofId: `${step.stepKey}:${option.label.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`,

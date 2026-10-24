@@ -9,6 +9,7 @@ import {
   branchGuidanceRepairReplace,
   changeGuidanceJourneyIssue,
   completeGuidanceStep,
+  acknowledgeGuidanceStepEndpoint,
   dismissGuidanceJourney,
   generateGuidanceModelShortlist,
   generateGuidanceVendorSuggestions,
@@ -91,6 +92,11 @@ const resolveSignalBodySchema = z.object({
 
 const completeStepBodySchema = z.object({
   producedData: z.record(z.string(), z.unknown()).optional(),
+});
+
+const acknowledgeStepBodySchema = z.object({
+  disposition: z.enum(['act_now', 'plan_soon', 'monitor']).optional(),
+  note: z.string().trim().max(500).optional(),
 });
 
 const skipStepBodySchema = z.object({
@@ -227,6 +233,15 @@ router.post(
   requireHouseholdRole('CONTRIBUTOR'),
   validateBody(completeStepBodySchema),
   completeGuidanceStep
+);
+
+router.post(
+  '/properties/:propertyId/guidance/steps/:stepId/acknowledge',
+  validate(propertyStepParamsSchema),
+  propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
+  validateBody(acknowledgeStepBodySchema),
+  acknowledgeGuidanceStepEndpoint
 );
 
 router.post(
