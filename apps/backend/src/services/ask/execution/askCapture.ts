@@ -44,8 +44,8 @@ import { HomePlantAddInputSchema, MaterialSpecAddInputSchema, OwnershipCostDecis
 import { RoomPlantRecommendationInputSchema } from '../support/commandInputs';
 import { homePlantAddResult, homePlantContextVersion, MATERIAL_SPEC_UPDATE_CAPTURE_KEY, materialSpecAddResult, materialSpecContextVersion, materialSpecUpdateResult } from '../handlers/homeRecordAdds.handler';
 import { negotiationShieldStartContextVersion, negotiationShieldStartResult } from '../handlers/negotiationShieldStart.handler';
-import { MAINTENANCE_EVIDENCE_CAPTURE_KEY, MaintenanceEvidenceAnswerSchema } from '../support/maintenanceEvidenceAttach';
-import { evidenceContextVersion, maintenanceEvidenceAttachResult } from '../handlers/maintenanceEvidenceAttach.handler';
+import { MAINTENANCE_EVIDENCE_CAPTURE_KEY, MAINTENANCE_LINK_CAPTURE_KEY, MaintenanceEvidenceAnswerSchema, MaintenanceLinkAnswerSchema } from '../support/maintenanceEvidenceAttach';
+import { evidenceContextVersion, maintenanceEvidenceAttachResult, maintenanceTaskLinkResult } from '../handlers/maintenanceEvidenceAttach.handler';
 import { isNegotiationStartScenario, NEGOTIATION_SHIELD_START_CAPTURE_KEY, NEGOTIATION_START_SCENARIO_SPECS, parseNegotiationStartAnswer } from '../support/negotiationShieldStart';
 import { negotiationShieldEditContextVersion, negotiationShieldEditResult } from '../handlers/negotiationShieldEdit.handler';
 import { HOME_DIGITAL_WILL_EDITOR_CAPTURE_KEY, HOME_DIGITAL_WILL_METADATA_CAPTURE_KEY, HomeDigitalWillContactInputSchema, HomeDigitalWillEntryInputSchema, HomeDigitalWillMetadataInputSchema, HomeDigitalWillSectionInputSchema, homeDigitalWillEditorResult, homeDigitalWillMetadataResult, homeDigitalWillPlanVersion, type HomeDigitalWillEditorKind } from '../handlers/homeDigitalWillCreate.handler';
@@ -1062,6 +1062,22 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     const evidenceLaunch = storedParameters.maintenanceEvidenceLaunch && typeof storedParameters.maintenanceEvidenceLaunch === 'object' && !Array.isArray(storedParameters.maintenanceEvidenceLaunch)
       ? storedParameters.maintenanceEvidenceLaunch as { stepId?: unknown; taskId?: unknown; sourceExecutionId?: unknown }
       : null;
+    const linkLaunch = storedParameters.maintenanceLinkLaunch && typeof storedParameters.maintenanceLinkLaunch === 'object' && !Array.isArray(storedParameters.maintenanceLinkLaunch)
+      ? storedParameters.maintenanceLinkLaunch as { stepId?: unknown; sourceExecutionId?: unknown }
+      : null;
+    if (input.captureKey === MAINTENANCE_LINK_CAPTURE_KEY && linkLaunch && typeof linkLaunch.stepId === 'string') {
+      const linkAccess = await ensurePropertyAccess(userId, execution.propertyId);
+      if (linkAccess.role === HouseholdRole.VIEWER) throw Object.assign(new Error('A contributor or owner is required to link a task.'), { code: 'ASK_PERMISSION_REQUIRED' });
+      const linkAnswer = MaintenanceLinkAnswerSchema.safeParse(input.answer);
+      if (!linkAnswer.success) throw Object.assign(new Error('Choose a task.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+      result = await maintenanceTaskLinkResult(userId, execution.propertyId, { stepId: linkLaunch.stepId, sourceExecutionId: typeof linkLaunch.sourceExecutionId === 'string' ? linkLaunch.sourceExecutionId : null }, linkAnswer.data);
+      if (typeof result.contextVersion === 'string' && input.expectedContextVersion !== result.contextVersion) {
+        throw Object.assign(new Error('Your tasks changed while this form was open. Choose Use an existing task again.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
+      }
+      captureId = input.idempotencyKey;
+      capturedContextVersion = input.expectedContextVersion;
+      canonicalOwner = 'GuidanceStepMaintenanceTaskLink';
+    } else {
     if (input.captureKey !== MAINTENANCE_EVIDENCE_CAPTURE_KEY || !evidenceLaunch || typeof evidenceLaunch.taskId !== 'string') {
       throw Object.assign(new Error('This evidence form is no longer active. Open Attach evidence again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
     }
@@ -1085,6 +1101,7 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     captureId = input.idempotencyKey;
     capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
     canonicalOwner = 'PropertyMaintenanceTaskEvidence';
+    }
   } else if (execution.operationId === 'RENOVATION_CASE_START') {
     if (input.captureKey !== RENOVATION_CASE_START_CAPTURE_KEY) {
       const error = new Error('This renovation case form is no longer active. Ask to start a renovation case again.');

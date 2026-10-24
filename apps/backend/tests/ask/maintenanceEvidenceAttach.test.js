@@ -80,3 +80,28 @@ test('confirming attaches through the shared service and says the step is record
   task.updatedAt = new Date('2026-10-02T00:00:00Z');
   await assert.rejects(() => confirmCapabilityInvoke(OP, ctx(proposal.parameters)), (e) => e.code === 'ASK_CONTEXT_VERSION_CONFLICT');
 });
+
+const linkOps = () => ops;
+test('Use an existing task: a no-task step offers it, the form lists this home\'s tasks, and nothing is matched by title', async () => {
+  links = [];
+  const none = await handler.maintenanceEvidenceAttachResult('u1', 'p1', { stepId: 's1', taskId: null, sourceExecutionId: null });
+  assert.ok(none.blocks.flatMap((b) => b.actions ?? []).some((a) => a.id === 'maintenance-link-existing' && a.operationId === OP));
+  const form = await handler.maintenanceTaskLinkResult('u1', 'p1', { stepId: 's1', sourceExecutionId: null });
+  assert.equal(form.status, 'NEEDS_CONTEXT');
+  assert.deepEqual(form.captureRequests[0].inputSchema.fields[0].inputSchema.options.map((o) => o.value), ['t1']);
+});
+
+test('Use an existing task: a task not offered is refused, an offered one is confirmed and linked through the shared service as ASK', async () => {
+  links = [];
+  const bad = await handler.maintenanceTaskLinkResult('u1', 'p1', { stepId: 's1', sourceExecutionId: null }, { taskId: 'someone-elses' });
+  assert.equal(bad.reasonCode, 'MAINTENANCE_LINK_TASK_UNAVAILABLE');
+  const calls = [];
+  prisma.guidanceStepMaintenanceTaskLink.findFirst = async () => null;
+  prisma.guidanceStepMaintenanceTaskLink.create = async ({ data }) => { calls.push(data); return { id: 'l1', ...data }; };
+  prisma.propertyMaintenanceTask.findFirst = async () => task;
+  const proposal = await handler.maintenanceTaskLinkResult('u1', 'p1', { stepId: 's1', sourceExecutionId: null }, { taskId: 't1' });
+  assert.equal(proposal.status, 'NEEDS_CONFIRMATION');
+  const done = await confirmCapabilityInvoke(OP, ctx(proposal.parameters));
+  assert.equal(done.result.reasonCode, 'MAINTENANCE_TASK_LINKED');
+  assert.deepEqual([calls[0].stepId, calls[0].maintenanceTaskId, calls[0].source], ['s1', 't1', 'ASK']);
+});

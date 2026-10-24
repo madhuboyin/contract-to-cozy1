@@ -780,3 +780,8 @@ A maintenance task counts toward `maintenance:complete_compliance_task` only thr
 ## 42. Ask: coverage-term review command
 
 `COVERAGE_TERM_REVIEW` (non-routable, confirmation-gated, CONTRIBUTOR floor) is opened by `review_current_policy_context` and `review_current_warranty_context`, carrying the step. The kind comes from the step, the scope from the journey; the proposal lists the current policies or warranties and binds the confirmation to their fingerprint (changed terms: `ASK_CONTEXT_VERSION_CONFLICT`). It calls `reviewCoverageTermsWithEffects`, the same service as the Desktop route. Both proof-matrix rows are CONNECTED. The Desktop coverage-page button is not built.
+
+## 43. Editable allocation amount and the existing-task picker
+
+- **Allocation amount:** the existing `RESERVE_FUND_COMMAND` confirmation for `reserve-fund-confirm-allocation` shows the suggested and the chosen monthly amount apart and carries an edit form (`reserve-fund-allocation`, positive dollars). Submitting re-proposes with the chosen amount; the confirm passes it as `monthlyCents` with the suggestion as `expectedSuggestedCents` to `confirmReserveAllocationWithEffects`. An expense with no monthly amount asks for one instead of confirming zero. No separate operation.
+- **Use an existing task:** a step with no linked task offers "Use an existing task" (same `MAINTENANCE_EVIDENCE_ATTACH` operation, a second message and capture key). The form lists this home's non-cancelled tasks not already linked to the step (newest 25, chosen by the person, never matched by title/category/asset); the confirmation links it through `linkMaintenanceTaskToStep(..., 'ASK')` after re-reading the step and the offered list.
