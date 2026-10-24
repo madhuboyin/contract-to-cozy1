@@ -869,7 +869,7 @@ const templateDefinitions: GuidanceJourneyTemplateDefinition[] = [
   {
     journeyTypeKey: 'financial_exposure_resolution',
     journeyKey: 'journey_financial_exposure_resolution',
-    version: '1.2.0',
+    version: '1.3.0',
     // P1-7: Removed cost_of_inaction_risk — it has its own template now
     signalIntentFamilies: ['financial_exposure'],
     issueDomain: 'FINANCIAL',
@@ -915,18 +915,20 @@ const templateDefinitions: GuidanceJourneyTemplateDefinition[] = [
         // Guidance-native step rendered in the focused shell; no standalone route.
         skipPolicy: 'DISCOURAGED',
       },
-      // P1-8: Relabeled to reflect what home-savings actually does
+      // Replaces `evaluate_savings_funding` (home-savings) for NEW journeys (owner decision 2026-10-24). That step's tool finds recurring savings; it cannot show the
+      // expense is funded. This step is owned by Capital Timeline and is complete only when a durable funding plan or reserve allocation is saved: viewing projections is not
+      // proof. Journeys created from the earlier template keep their `evaluate_savings_funding` step (unsupported in Ask); nothing from Home Savings completes it.
       {
         stepOrder: 4,
-        stepKey: 'evaluate_savings_funding',
+        stepKey: 'fund_capital_expense',
         stepType: 'DECISION',
-        label: 'Find savings to offset costs',
-        description: 'Identify recurring household savings that could offset the financial exposure.',
+        label: 'Fund this expense',
+        description: 'Save a funding plan or reserve allocation on the capital timeline that covers the expense.',
         decisionStage: 'DECISION',
         executionReadiness: 'NEEDS_CONTEXT',
         isRequired: true,
-        toolKey: 'home-savings',
-        // Guidance-native step rendered in the focused shell; no standalone route.
+        toolKey: 'capital-timeline',
+        routePath: '/dashboard/properties/:propertyId/tools/capital-timeline',
         skipPolicy: 'DISCOURAGED',
       },
       {

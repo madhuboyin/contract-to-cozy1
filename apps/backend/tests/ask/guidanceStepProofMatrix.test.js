@@ -24,7 +24,9 @@ test('every registered journey step has a verdict, and no row describes a step t
   const missing = registered.filter((step) => !GUIDANCE_STEP_PROOF_MATRIX[step.key]).map((step) => `${step.journey}/${step.key}`);
   assert.deepEqual(missing, [], 'classify new template steps in askGuidanceStepProofMatrix.ts');
   const known = new Set(registered.map((step) => step.key));
-  assert.deepEqual(Object.keys(GUIDANCE_STEP_PROOF_MATRIX).filter((key) => !known.has(key)), [], 'a row for a step that no template has');
+  // A retired step is the one exception: no template makes it any more, but journeys created earlier still carry it, so its row stays (and says why).
+  assert.deepEqual(Object.entries(GUIDANCE_STEP_PROOF_MATRIX).filter(([key, row]) => !known.has(key) && !row.retired).map(([key]) => key), [], 'a row for a step that no template has');
+  for (const [key, row] of Object.entries(GUIDANCE_STEP_PROOF_MATRIX)) if (row.retired) assert.ok(['WRONG_TOOL', 'UNSUPPORTED'].includes(row.verdict), `${key}: a retired step is never connected`);
 });
 
 test('every row is complete and uses only the declared vocabulary', () => {
@@ -53,7 +55,7 @@ test('CONNECTED means exactly what Ask can complete: the rows and the IN_ASK tab
 
 test('the matrix records the owner decisions: Home Savings is not advanced by a save or dismiss, estimate steps the price radar cannot produce are the wrong tool', () => {
   assert.equal(GUIDANCE_STEP_PROOF_MATRIX['home-savings:evaluate_savings_funding'].verdict, 'WRONG_TOOL');
-  assert.match(GUIDANCE_STEP_PROOF_MATRIX['home-savings:evaluate_savings_funding'].risk, /save or dismiss does not complete it/);
+  assert.match(GUIDANCE_STEP_PROOF_MATRIX['home-savings:evaluate_savings_funding'].risk, /save or dismiss from Home Savings does not complete it/);
   for (const step of ['estimate_uninsured_cost', 'estimate_repair_cost', 'estimate_improvement_cost']) assert.equal(GUIDANCE_STEP_PROOF_MATRIX[`service-price-radar:${step}`].verdict, 'WRONG_TOOL', step);
   assert.equal(GUIDANCE_STEP_PROOF_MATRIX['coverage-intelligence:check_coverage'].verdict, 'CONNECTABLE', 'the proof is decided (a fresh scoped evaluation); the command and reporter are still to build');
 });
@@ -72,4 +74,19 @@ test('acknowledgement is never the proof for a step that is not a true review st
   }
   assert.equal(GUIDANCE_STEP_PROOF_MATRIX['coverage-intelligence:compare_coverage_options'].proofPolicy, 'DECISION');
   for (const step of ['book_service', 'schedule_inspection']) assert.equal(GUIDANCE_STEP_PROOF_MATRIX[`booking:${step}`].proofPolicy, 'EXTERNAL_COMPLETION', step);
+});
+
+test('Home Savings no longer owns a funding step for new journeys: Capital Timeline does, and nothing from Home Savings completes the old one', () => {
+  const template = listGuidanceTemplates().find((t) => t.journeyTypeKey === 'financial_exposure_resolution');
+  const steps = template.steps.map((step) => `${step.toolKey}:${step.stepKey}`);
+  assert.equal(steps.includes('home-savings:evaluate_savings_funding'), false);
+  assert.ok(steps.includes('capital-timeline:fund_capital_expense'));
+  assert.equal(template.version, '1.3.0');
+  const funding = GUIDANCE_STEP_PROOF_MATRIX['capital-timeline:fund_capital_expense'];
+  assert.match(funding.canonicalProof, /durable funding plan or reserve allocation/);
+  assert.match(funding.canonicalProof, /viewing projections/);
+  assert.equal(GUIDANCE_STEP_PROOF_MATRIX['home-savings:evaluate_savings_funding'].verdict, 'WRONG_TOOL');
+  assert.ok(GUIDANCE_STEP_PROOF_MATRIX['home-savings:evaluate_savings_funding'].retired);
+  assert.equal(askGuidanceStepMode('home-savings', 'evaluate_savings_funding').mode, 'NAVIGATE', 'the old step is never completable in Ask');
+  assert.equal(askGuidanceStepMode('capital-timeline', 'fund_capital_expense').mode, 'NAVIGATE', 'not connected until its reporter exists');
 });

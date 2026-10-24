@@ -649,3 +649,15 @@ Owner decision: Ask and Desktop produce the same canonical project initializatio
 - **Not changed.** The Desktop request and response shapes (the controller still returns the project and the compliance envelope). Initial milestone content is whatever the caller supplies (Ask supplies the one
   first milestone its form collects; the page supplies its own plan); the service imposes no extra policy.
 
+## 30. Home Savings step replaced by a Capital Timeline funding step (2026-10-24)
+
+Owner decision: `evaluate_savings_funding` is replaced for new journeys.
+
+- **Template.** `financial_exposure_resolution` (the journey a reserve-fund shortfall signal rides) goes from 1.2.0 to 1.3.0. Step 4 is now `capital-timeline:fund_capital_expense` ("Fund this expense"; required, skip discouraged) instead of
+  the Home Savings step. It completes only when a durable funding plan or reserve allocation is saved on the capital timeline; viewing projections or a shortfall is not proof. Only journeys created after the change get it
+  (the template version is recorded on a journey for staleness detection; nothing re-reads an existing journey's steps from the template).
+- **Existing journeys.** Their `evaluate_savings_funding` rows stay as they are, unsupported in Ask, and no Home Savings save, dismiss, applied or switched outcome completes them from Ask. Desktop's own Home Savings
+  run reporting is unchanged (the owner's instruction was not to change Desktop semantics to advance a journey); the matrix keeps the row, marked `retired`, so the coverage test still accounts for it.
+- **Not connected yet.** The new step's proof is decided but nothing reports it: it needs one shared reporter for the saved funding plan or allocation, used by Ask's capital timeline command and the Desktop save, bound to the
+  exact step and to the journey's expense item (matrix row `capital-timeline:fund_capital_expense`: CONNECTABLE, "Build first"). Until then it is completed only the way every `NAVIGATE` step is.
+

@@ -23,6 +23,8 @@ export interface GuidanceStepProofRow {
   /** What kind of proof completes the step: ACKNOWLEDGEMENT (a true review step only), CANONICAL_MUTATION (a saved canonical record), VERIFIED_EVIDENCE, EXTERNAL_COMPLETION (work done outside Ask) or DECISION (an explicit saved decision). */
   proofPolicy: GuidanceStepProofPolicy;
   risk: string;
+  /** Set when no template produces the step any more; journeys created earlier still carry it. */
+  retired?: string;
 }
 
 export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepProofRow>> = {
@@ -205,6 +207,16 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     binding: 'NONE', verdict: 'NEEDS_PRODUCT_DECISION',
     proofPolicy: 'CANONICAL_MUTATION',
     risk: 'False completion: the timeline command changes a plan, not the step\'s promise.',
+  },
+  'capital-timeline:fund_capital_expense': {
+    homeownerJob: 'Fund this expense',
+    canonicalProof: 'A durable funding plan or reserve allocation saved on the capital timeline for the expense; viewing projections or a shortfall is not proof.',
+    askOperation: 'CAPITAL_TIMELINE_COMMAND',
+    desktopReporter: null,
+    launchPrerequisites: 'Build first: one shared reporter for the saved funding plan or allocation, used by Ask\'s capital timeline command and the Desktop save; the step is carried exactly and the plan must cover the journey\'s expense item.',
+    binding: 'EXACT_STEP', verdict: 'CONNECTABLE',
+    proofPolicy: 'CANONICAL_MUTATION',
+    risk: 'False completion if a projection or an unfunded plan is taken for funding; the allocation must actually cover the expense.',
   },
   'coverage-intelligence:check_compliance_coverage': {
     homeownerJob: 'Check if remediation costs are covered',
@@ -514,7 +526,8 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     launchPrerequisites: 'Connected utility accounts for a comparison run.',
     binding: 'NONE', verdict: 'WRONG_TOOL',
     proofPolicy: 'DECISION',
-    risk: 'Owner decision 2026-10-24: save or dismiss does not complete it, and Desktop semantics are not changed to advance a journey. Product chooses: a capital-funding step owned by another tool, a narrower relabelled proof, or a real comparison command in Ask.',
+    retired: 'Replaced for new journeys by capital-timeline:fund_capital_expense (owner decision 2026-10-24); journeys created from the earlier template keep this step, unsupported in Ask.',
+    risk: 'Owner decision 2026-10-24: a save or dismiss from Home Savings does not complete it and Desktop semantics are not changed to advance a journey; existing steps stay unsupported rather than assigned false proof.',
   },
   'home-savings:find_energy_savings': {
     homeownerJob: 'Identify savings to fund improvements',

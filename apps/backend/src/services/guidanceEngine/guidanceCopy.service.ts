@@ -34,6 +34,7 @@ const STEP_LABEL_MAP: Record<string, string> = {
   recall_resolution: 'Confirm Recall Resolution',
   compare_action_options: 'Compare Act Now vs Delay',
   evaluate_savings_funding: 'Review Savings and Funding Options',
+  fund_capital_expense: 'Fund This Expense',
   estimate_out_of_pocket_cost: 'Estimate Out-of-Pocket Cost',
   estimate_cost_impact: 'See the Cost Tradeoff of Repairing vs Replacing',
   route_financial_plan: 'Plan Capital Timeline',
