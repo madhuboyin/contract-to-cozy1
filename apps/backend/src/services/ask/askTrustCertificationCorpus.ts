@@ -284,6 +284,7 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   SEASONAL_CHECKLIST_SETUP: 'Your winter checklist is set up and its tasks are added to your maintenance list after confirmation.',
   GUIDANCE_JOURNEY_CONTINUE: 'The water heater journey is on its second of four steps, and the next step is to compare replacement quotes.',
   GUIDANCE_STEP_SKIP: 'The selected step of the guided journey is skipped after confirmation, when its policy allows it.',
+  GUIDANCE_STEP_ACKNOWLEDGE: 'The selected review step of the guided journey is marked as reviewed after confirmation, with the time and what was reviewed.',
   GUIDANCE_JOURNEY_DISMISS: 'The selected guided journey is dismissed after confirmation and leaves your list.',
   PROPERTY_BRIEFS_LIST: 'Yes. The property brief you sent your insurer is still shared through one live link, which expires on October 30, 2026.',
   PROPERTY_BRIEF_COMMAND: 'A Property Brief snapshot or controlled-link action is applied only after review and confirmation.',

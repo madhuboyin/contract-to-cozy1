@@ -252,13 +252,14 @@ test('a Home Action tied to a journey continues it in Ask; a more specific answe
 const { ASK_GUIDANCE_IN_ASK_STEPS } = require('../../src/services/ask/askGuidanceStepHandlers.ts');
 const { buildRecallMatchCompletion, buildDoNothingRunCompletion, buildServicePriceCheckCompletion } = require('../../src/services/guidanceEngine/guidanceToolReporting.ts');
 
-test('IN_ASK steps are exactly the steps a recall write, a do-nothing run, a price check, a negotiation analysis, a coverage decision, a price finalization or a project reports, and each operation exists', () => {
+test('IN_ASK steps are exactly the steps a recall write, a do-nothing run, a price check, a negotiation analysis, a coverage decision, a price finalization, a project or an acknowledgement reports, and each operation exists', () => {
   const reported = new Set([
     ...['CONFIRM', 'DISMISS', 'RESOLVE'].map((a) => `recalls:${buildRecallMatchCompletion('p1', a, { id: 'm1' }).stepKey}`),
     ...['validate_price', 'get_cleaning_quotes'].map((stepKey) => { const done = buildServicePriceCheckCompletion('p1', { id: 'c1' }, { stepKey }); return `${done.sourceToolKey}:${done.stepKey}`; }),
     `negotiation-shield:${require('../../src/services/negotiationShieldJourneyCompletion.ts').NEGOTIATION_SHIELD_DEFAULT_STEP_KEY}`,
     `project-tracker:${require('../../src/services/guidanceEngine/projectJourneyReporting.ts').PROJECT_CREATE_STEP_KEY}`,
     ...['track_work'].map((key) => `project-tracker:${key}`), ...['capture_proof', 'set_future_care', 'update_home_record', 'verify_outcome'].map((key) => `project-completion:${key}`), // the closing steps reportProjectClosure sends
+    `guidance-overview:${require('../../src/services/guidanceEngine/guidanceAcknowledgement.ts').ACKNOWLEDGEABLE_STEP_KEYS[0]}`, // the only step an acknowledgement may complete
     'price-finalization:finalize_price', // finalizing a record bound to the step reports it (a start does not)
     'coverage-intelligence:compare_coverage_options', // the coverage decision's proof; Ask binds it to this one step (a review step is not proved by a decision)
     ...['compare_action_options', 'model_cost_of_delay'].map((stepKey) => { const done = buildDoNothingRunCompletion('p1', { id: 'r1' }, { stepKey }); return `${done.sourceToolKey}:${done.stepKey}`; }),

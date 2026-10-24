@@ -346,6 +346,10 @@ export const OPERATION_SPECIFIC_CONTINUATION_RECIPES: Readonly<Partial<Record<As
     recipe('Review guidance journeys', 'Show my guidance journeys', 'GUIDANCE_JOURNEYS_LIST', 'REVIEW_GUIDANCE_JOURNEYS', 'GUIDANCE_SKIP_REVIEW_JOURNEYS'),
     recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'GUIDANCE_SKIP_REVIEW_HOME_ACTIONS'),
   ],
+  GUIDANCE_STEP_ACKNOWLEDGE: [
+    recipe('Review guidance journeys', 'Show my guidance journeys', 'GUIDANCE_JOURNEYS_LIST', 'REVIEW_GUIDANCE_JOURNEYS', 'GUIDANCE_ACKNOWLEDGE_REVIEW_JOURNEYS'),
+    recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'GUIDANCE_ACKNOWLEDGE_REVIEW_HOME_ACTIONS'),
+  ],
   GUIDANCE_JOURNEY_DISMISS: [
     recipe('Review guidance journeys', 'Show my guidance journeys', 'GUIDANCE_JOURNEYS_LIST', 'REVIEW_GUIDANCE_JOURNEYS', 'GUIDANCE_DISMISS_REVIEW_JOURNEYS'),
     recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'GUIDANCE_DISMISS_REVIEW_HOME_ACTIONS'),

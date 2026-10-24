@@ -118,7 +118,7 @@ export const ASK_WORK_PROVIDER_REGISTRY: readonly AskWorkProviderDefinition[] = 
   }),
   provider({
     id: 'GUIDANCE_JOURNEYS', label: 'Guided journeys', workType: 'GUIDANCE_JOURNEY', owner: 'guidance',
-    readOperationIds: ['GUIDANCE_JOURNEYS_LIST', 'GUIDANCE_JOURNEY_CONTINUE'], commandOperationIds: ['GUIDANCE_JOURNEY_DISMISS', 'GUIDANCE_STEP_SKIP'],
+    readOperationIds: ['GUIDANCE_JOURNEYS_LIST', 'GUIDANCE_JOURNEY_CONTINUE'], commandOperationIds: ['GUIDANCE_JOURNEY_DISMISS', 'GUIDANCE_STEP_SKIP', 'GUIDANCE_STEP_ACKNOWLEDGE'],
     readAuthority: 'OPERATION_FLOOR', lifecycleOperationId: 'GUIDANCE_JOURNEYS_LIST',
     reader: CONNECTED, precedence: 20, fallbackProjection: false, sourceAliasKinds: ['journey', 'workItem'],
     views: ['NEEDS_YOU', 'ACTIVE', 'COMPLETED', 'ARCHIVED'], statusOptions: statuses('NOT_STARTED', 'ACTIVE', 'COMPLETED', 'DISMISSED'), requiredForExit: true, freshnessSource: 'Journey last update',

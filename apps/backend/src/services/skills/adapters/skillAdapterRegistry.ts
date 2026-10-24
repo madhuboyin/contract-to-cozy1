@@ -86,6 +86,7 @@ const DEFINITIONS = [
   adapter('guidance-overview.journeys', 'Guidance Overview journeys (guidanceJourneyService)', 'GUIDANCE_JOURNEYS_LIST'),
   adapter('guidance-overview.continue', 'Guidance Overview continuation (guidanceJourneyService)', 'GUIDANCE_JOURNEY_CONTINUE'),
   adapter('guidance-overview.step-skip', 'Guidance Overview (guidanceStepResolverService)', 'GUIDANCE_STEP_SKIP', 'MUTATION_PREPARATION'),
+  adapter('guidance-overview.step-acknowledge', 'Guidance Overview (guidanceAcknowledgement)', 'GUIDANCE_STEP_ACKNOWLEDGE', 'MUTATION_PREPARATION'),
   adapter('guidance-overview.journey-dismiss', 'Guidance Overview (guidanceJourneyService)', 'GUIDANCE_JOURNEY_DISMISS', 'MUTATION_PREPARATION'),
   adapter('hoa-compliance.status', 'HOA Compliance records (HoaComplianceService)', 'HOA_COMPLIANCE_STATUS'),
   adapter('price-finalization.records', 'Price Finalization records (PriceFinalizationService)', 'PRICE_FINALIZATIONS_LIST'),

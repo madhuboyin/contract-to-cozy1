@@ -18,6 +18,7 @@ export const GUIDANCE_OVERVIEW_SKILL_EVALUATION = deepFreezeSkillPackage({
     { operationId: 'GUIDANCE_JOURNEYS_LIST', expectedAdapter: { id: 'guidance-overview.journeys', version: '1.0' } },
     { operationId: 'GUIDANCE_JOURNEY_CONTINUE', expectedAdapter: { id: 'guidance-overview.continue', version: '1.0' } },
     { operationId: 'GUIDANCE_STEP_SKIP', expectedAdapter: { id: 'guidance-overview.step-skip', version: '1.0' } },
+    { operationId: 'GUIDANCE_STEP_ACKNOWLEDGE', expectedAdapter: { id: 'guidance-overview.step-acknowledge', version: '1.0' } },
     { operationId: 'GUIDANCE_JOURNEY_DISMISS', expectedAdapter: { id: 'guidance-overview.journey-dismiss', version: '1.0' } },
   ],
   ambiguityCases: [
@@ -31,6 +32,7 @@ export const GUIDANCE_OVERVIEW_SKILL_EVALUATION = deepFreezeSkillPackage({
     { consumer: 'ASK', operationId: 'GUIDANCE_JOURNEYS_LIST', allowed: true },
     { consumer: 'ASK', operationId: 'GUIDANCE_JOURNEY_CONTINUE', allowed: true },
     { consumer: 'ASK', operationId: 'GUIDANCE_STEP_SKIP', allowed: true },
+    { consumer: 'ASK', operationId: 'GUIDANCE_STEP_ACKNOWLEDGE', allowed: true },
     { consumer: 'ASK', operationId: 'GUIDANCE_JOURNEY_DISMISS', allowed: true },
   ],
   contextCases: [
@@ -59,13 +61,13 @@ export const GUIDANCE_OVERVIEW_SKILL_EVALUATION = deepFreezeSkillPackage({
       expectedBehavior: 'DEGRADED_OR_UNAVAILABLE',
     },
   ],
-  expectedAdapters: [{ id: 'guidance-overview.journeys', version: '1.0' }, { id: 'guidance-overview.continue', version: '1.0' }, { id: 'guidance-overview.step-skip', version: '1.0' }, { id: 'guidance-overview.journey-dismiss', version: '1.0' }],
+  expectedAdapters: [{ id: 'guidance-overview.journeys', version: '1.0' }, { id: 'guidance-overview.continue', version: '1.0' }, { id: 'guidance-overview.step-skip', version: '1.0' }, { id: 'guidance-overview.step-acknowledge', version: '1.0' }, { id: 'guidance-overview.journey-dismiss', version: '1.0' }],
   prohibitedAdapters: ['inventory.lookup', 'intelligence-envelope.query'],
   expectedContextProviders: [PROPERTY_IDENTITY_CONTEXT_PROVIDER, PROPERTY_JOURNEY_CONTEXT_PROVIDER],
   prohibitedContextProviders: ['undeclared.financial-account'],
   expectedStatuses: ['ANSWERED', 'READY_WITH_LIMITATIONS'],
   expectedBlockTypes: ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'EMPTY_STATE', 'BOUNDARY', 'WORKFLOW_PROGRESS', 'TASK_GUIDE'],
-  expectedCanonicalCalls: [{ id: 'guidance-overview.journeys', version: '1.0' }, { id: 'guidance-overview.continue', version: '1.0' }, { id: 'guidance-overview.step-skip', version: '1.0' }, { id: 'guidance-overview.journey-dismiss', version: '1.0' }],
+  expectedCanonicalCalls: [{ id: 'guidance-overview.journeys', version: '1.0' }, { id: 'guidance-overview.continue', version: '1.0' }, { id: 'guidance-overview.step-skip', version: '1.0' }, { id: 'guidance-overview.step-acknowledge', version: '1.0' }, { id: 'guidance-overview.journey-dismiss', version: '1.0' }],
   prohibitedCanonicalCalls: ['inventory.lookup', 'intelligence-envelope.query'],
   modelDisabledCase: {
     message: 'Show my guided journeys',

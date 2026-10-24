@@ -280,6 +280,7 @@ export type AskOperationId =
   | 'HOME_BASICS_GUIDE'
   | 'HIRING_GUIDE'
   | 'GUIDANCE_STEP_SKIP'
+  | 'GUIDANCE_STEP_ACKNOWLEDGE'
   | 'GUIDANCE_JOURNEY_DISMISS'
   | 'HOA_COMPLIANCE_STATUS'
   | 'PRICE_FINALIZATIONS_LIST'
@@ -586,6 +587,7 @@ export const ASK_INTERNAL_OPERATION_IDS: ReadonlySet<AskOperationId> = new Set<A
   // Phase 3: skip one step / dismiss one journey. Confirmation-gated writes reached only by the declared actions on the
   // continuation view (and, for dismiss, its summary).
   'GUIDANCE_STEP_SKIP',
+  'GUIDANCE_STEP_ACKNOWLEDGE',
   'GUIDANCE_JOURNEY_DISMISS',
 ]);
 
@@ -768,6 +770,7 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   SEASONAL_CHECKLIST_SETUP: definition('SEASONAL_CHECKLIST_SETUP', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'OWNER', 'seasonal.checklist-setup', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
   GUIDANCE_JOURNEY_CONTINUE: definition('GUIDANCE_JOURNEY_CONTINUE', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'guidance-overview.continue', ['SUMMARY', 'TASK_GUIDE', 'BOUNDARY', 'EMPTY_STATE']),
   GUIDANCE_STEP_SKIP: definition('GUIDANCE_STEP_SKIP', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'guidance-overview.step-skip', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
+  GUIDANCE_STEP_ACKNOWLEDGE: definition('GUIDANCE_STEP_ACKNOWLEDGE', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'guidance-overview.step-acknowledge', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
   GUIDANCE_JOURNEY_DISMISS: definition('GUIDANCE_JOURNEY_DISMISS', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'guidance-overview.journey-dismiss', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
   // FRD v1.63: reads listPropertyBriefs, the call GET /properties/:id/property-briefs makes for the Property Brief page.
   PROPERTY_BRIEFS_LIST: definition('PROPERTY_BRIEFS_LIST', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'property-brief.briefs', ['SUMMARY', 'GROUPED_LIST', 'BOUNDARY']),

@@ -13,6 +13,7 @@
 import { DO_NOTHING_RUN_MESSAGE, SERVICE_PRICE_CHECK_MESSAGE } from './support/homeToolRunConstants';
 import { NEGOTIATION_SHIELD_START_MESSAGE } from './support/negotiationShieldStart';
 import { PROJECT_TRACKER_CREATE_MESSAGE } from './support/projectTrackerConstants';
+import { GUIDANCE_STEP_ACKNOWLEDGE_MESSAGE } from './support/guidanceAcknowledge';
 
 export type AskGuidanceStepMode = 'IN_ASK' | 'INLINE_CAPTURE' | 'NAVIGATE';
 
@@ -87,6 +88,12 @@ export const ASK_GUIDANCE_IN_ASK_STEPS: Readonly<Record<string, AskGuidanceInAsk
     operationId: 'SERVICE_PRICE_CHECK_RUN', message: SERVICE_PRICE_CHECK_MESSAGE, label: 'Check the cleaning quote', carriesStep: 'ENTITY',
     reason: 'You can check a cleaning quote here; the saved check is recorded on this journey.',
     outcome: 'A saved quote check is recorded as this step\'s proof.',
+  },
+  // A true review step: a typed, durable acknowledgement is the proof (proof policy ACKNOWLEDGEMENT; no other step may use it).
+  'guidance-overview:review_signal': {
+    operationId: 'GUIDANCE_STEP_ACKNOWLEDGE', message: GUIDANCE_STEP_ACKNOWLEDGE_MESSAGE, label: 'Mark as reviewed', carriesStep: 'ENTITY',
+    reason: 'You can mark this review step as reviewed here; your review is recorded with the time.',
+    outcome: 'Your review of the signal, recorded with the time and the signal version, is this step\'s proof.',
   },
   // A multi-stage flow: the step opens the start (reusing an existing review of the kind), then the analysis. The step id follows every stage and is
   // re-read at each one; the step completes only when the analysis is saved.

@@ -51,6 +51,7 @@ const OPERATION_BOUNDARIES: Partial<Record<AskOperationId, ReadonlySet<string>>>
   HOME_BASICS_GUIDE: new Set(['home-basics-boundary', 'home-basics-gas-emergency']),
   HIRING_GUIDE: new Set(['hiring-guide-boundary']),
   GUIDANCE_STEP_SKIP: new Set(['guidance-step-boundary']),
+  GUIDANCE_STEP_ACKNOWLEDGE: new Set(['guidance-step-boundary']),
   GUIDANCE_JOURNEY_DISMISS: new Set(['guidance-step-boundary']),
   HOA_COMPLIANCE_STATUS: new Set(['hoa-compliance-boundary']),
   PRICE_FINALIZATIONS_LIST: new Set(['price-finalization-boundary']),

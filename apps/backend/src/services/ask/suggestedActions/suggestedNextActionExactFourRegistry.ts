@@ -323,6 +323,7 @@ export const RESULT_OWNERSHIP_RELATIONSHIPS: Readonly<Record<string, readonly st
   GUIDANCE_JOURNEYS_LIST: operationSpecificContinuationOutcomeKeys('GUIDANCE_JOURNEYS_LIST'),
   GUIDANCE_JOURNEY_CONTINUE: operationSpecificContinuationOutcomeKeys('GUIDANCE_JOURNEY_CONTINUE'),
   GUIDANCE_STEP_SKIP: operationSpecificContinuationOutcomeKeys('GUIDANCE_STEP_SKIP'),
+  GUIDANCE_STEP_ACKNOWLEDGE: operationSpecificContinuationOutcomeKeys('GUIDANCE_STEP_ACKNOWLEDGE'),
   GUIDANCE_JOURNEY_DISMISS: operationSpecificContinuationOutcomeKeys('GUIDANCE_JOURNEY_DISMISS'),
   GUIDANCE_JOURNEY_CREATE: operationSpecificContinuationOutcomeKeys('GUIDANCE_JOURNEY_CREATE'),
   NEGOTIATION_SHIELD_CASES: operationSpecificContinuationOutcomeKeys('NEGOTIATION_SHIELD_CASES'),

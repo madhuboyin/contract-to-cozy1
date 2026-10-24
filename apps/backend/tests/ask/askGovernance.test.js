@@ -80,12 +80,12 @@ test('every material Ask command has governed confirmation, authorization, cance
     // changes shared property records needs CONTRIBUTOR or OWNER.
     if (definition.roleFloor === 'VIEWER') assert.equal(definition.authorization, 'CALLER_SCOPED', `${definition.id} has a VIEWER floor without caller-scoped authorization`);
     else assert.ok(['CONTRIBUTOR', 'OWNER'].includes(definition.roleFloor), `${definition.id} has an unexpected role floor ${definition.roleFloor}`);
-    // The recorded exceptions: GUIDANCE_JOURNEY_DISMISS (the guidance service has no way to reopen a dismissed journey: no route, no service method; only a new
+    // The recorded exceptions: GUIDANCE_STEP_ACKNOWLEDGE (a typed acknowledgement is an append-only record of a review; nothing in Ask takes it back) and GUIDANCE_JOURNEY_DISMISS (the guidance service has no way to reopen a dismissed journey: no route, no service method; only a new
     // journey can be started) and the two DIY project commands of step 7B (DIY_PROJECT_COMPLETE, DIY_PROJECT_ABANDON: claimOpenProject refuses any closed project and no
     // service method reopens one). Claiming a correction mode for any of them would be false, so each confirmation card says "cannot be undone in Cozy" before the person confirms.
     // DIY_COMPLETION_RECOVER (step 7C) is the same kind of exception for a different reason: it re-queues an idempotent request, which nothing can take back, and it changes no record
     // itself; its confirmation says it only asks Cozy to try again.
-    const IRREVERSIBLE = new Set(['GUIDANCE_JOURNEY_DISMISS', 'DIY_PROJECT_COMPLETE', 'DIY_PROJECT_ABANDON', 'DIY_COMPLETION_RECOVER']);
+    const IRREVERSIBLE = new Set(['GUIDANCE_JOURNEY_DISMISS', 'GUIDANCE_STEP_ACKNOWLEDGE', 'DIY_PROJECT_COMPLETE', 'DIY_PROJECT_ABANDON', 'DIY_COMPLETION_RECOVER']);
     // NEGOTIATION_SHIELD_CASE_ANALYZE is an append-only recomputation command: it creates a new analysis from already-saved case
     // inputs, a pending run is cancelled through confirmation, and a finished analysis is never edited or stopped. A correction is
     // made by editing the case (NEGOTIATION_SHIELD_CASE_UPDATE) and running a new analysis; earlier analyses are retained on purpose.

@@ -618,3 +618,17 @@ CONNECTABLE now means the proof is decided and nothing needs a product call; wha
 - **Home Savings.** `evaluate_savings_funding` is replaced for new journeys by a Capital Timeline funding step that completes only when a durable funding plan or allocation is saved (section 30).
   Existing journeys keep the old step as unsupported; no Home Savings outcome completes it.
 
+## 28. Acknowledgement proof and `review_signal` (2026-10-24)
+
+- **The proof.** `guidanceEngine/guidanceAcknowledgement.ts` records a typed, durable acknowledgement through the same completion path as every tool: `proofType: 'acknowledgement'`, outcome `REVIEWED`, the exact
+  signal id and its version (the signal's last-updated time), the step, the actor and the time, with a dedupe key of property, step, signal and signal version. It is stored as step evidence, so no schema change.
+  `ACKNOWLEDGEABLE_STEP_KEYS` is `['review_signal']` and nowhere else: `acknowledgeGuidanceStep` refuses any other step key, so a safety, financial, compliance, execution or repair step can never be completed by
+  self-attestation. `update_budget` keeps the canonical-mutation policy.
+- **The command.** New `GUIDANCE_STEP_ACKNOWLEDGE` (confirmation-gated, CONTRIBUTOR floor, non-routable, no correction mode, like a dismissal). Reached only by the journey step's own "Mark as reviewed" action. The
+  proposal re-reads the step (tool `guidance-overview`, step `review_signal`, open step, open journey) and ties the confirmation to the step and the signal as they stand; at the confirmation a changed step or a changed
+  signal rejects it, a step already done is a no-op, and a recording failure is a refusal (this is the write, so it is not swallowed). It is registered everywhere its sibling `GUIDANCE_STEP_SKIP` is (operation,
+  domain command, audience policy, answer-trust boundary, semantic package, mutation impact, work provider, suggested actions, skill manifest, evaluation and adapter, coverage matrix, the governance
+  irreversible-command list).
+- **Desktop.** The Desktop shell still completes `review_signal` through the generic completion endpoint; it does not yet use the typed acknowledgement. Moving it onto `acknowledgeGuidanceStep` is open.
+- **Matrix.** `guidance-overview:review_signal` is CONNECTED (16 connected).
+
