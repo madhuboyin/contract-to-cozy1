@@ -1,3 +1,5 @@
+import { MANUAL_DECLARATION_STEP_KEYS, MANUAL_DECLARATION_TOOL_KEY, declareGuidanceStep } from '../services/guidanceEngine/guidanceManualDeclaration';
+import { MAINTENANCE_LINKABLE_STEP_KEYS } from '../services/maintenanceTaskJourneyOperations';
 import { FINDINGS_STEP_KEY, FINDINGS_STEP_TOOL_KEY, checkFindingDecisionsWithEffects } from '../services/inspectionFindingsProofOperations';
 import { COVERAGE_RECORD_STEP_KEYS, COVERAGE_RECORD_TOOL_KEY, checkCoverageRecordWithEffects } from '../services/coverageRecordProofOperations';
 import { linkMaintenanceTaskToStep } from '../services/maintenanceTaskJourneyOperations';
@@ -184,6 +186,8 @@ export async function resolveGuidanceSignal(req: CustomRequest, res: Response, n
   }
 }
 
+const MANUAL_DECLARATION_REQUIRED = () => new APIError('This step is recorded as a declaration: choose the declaration instead of completing it.', 409, 'GUIDANCE_DECLARATION_REQUIRED');
+const MAINTENANCE_TASK_REQUIRED = () => new APIError('Link a maintenance task to this step and complete it with evidence: this step is not completed by marking it done or by having no open tasks.', 409, 'GUIDANCE_MAINTENANCE_TASK_REQUIRED');
 const FINDINGS_DECISION_REQUIRED = () => new APIError('Decide what to do about each finding, then check: this step is completed by the findings\' decisions, not by marking it done.', 409, 'GUIDANCE_FINDING_DECISIONS_REQUIRED');
 // The coverage record steps have no weaker path either: only a saved, active record completes them.
 const COVERAGE_RECORD_REQUIRED = () => new APIError('Save the plan, then check your records: this step is completed by a saved policy or warranty, not by marking it done.', 409, 'GUIDANCE_COVERAGE_RECORD_REQUIRED');
@@ -246,6 +250,20 @@ export async function checkFindingDecisionsEndpoint(req: CustomRequest, res: Res
   } catch (error) { next(error); }
 }
 
+/** An intentionally manual step: the caller names a declaration key; the server owns the words and the subject. */
+export async function declareGuidanceStepEndpoint(req: CustomRequest, res: Response, next: NextFunction) {
+  try {
+    const userId = requireUserId(req);
+    const outcome = await declareGuidanceStep(req.params.propertyId, userId, req.params.stepId, String(req.body?.declarationKey ?? ''));
+    if (!outcome.ok) {
+      if (outcome.reason === 'RECORD_FAILED') throw new APIError('The declaration could not be recorded. Try again.', 500, 'GUIDANCE_DECLARATION_FAILED');
+      if (outcome.reason === 'UNKNOWN_DECLARATION') throw new APIError('That is not a declaration this step accepts.', 400, 'GUIDANCE_DECLARATION_UNKNOWN');
+      throw new APIError(GUIDANCE_STEP_REFUSAL_TEXT[outcome.reason], outcome.reason === 'NOT_FOUND' ? 404 : 409, `GUIDANCE_DECLARATION_${outcome.reason}`);
+    }
+    res.json({ success: true, data: { declared: true } });
+  } catch (error) { next(error); }
+}
+
 export async function completeGuidanceStep(req: CustomRequest, res: Response, next: NextFunction) {
   try {
     const userId = requireUserId(req);
@@ -253,6 +271,8 @@ export async function completeGuidanceStep(req: CustomRequest, res: Response, ne
     const stepId = req.params.stepId;
     // A review step has no weaker path: self-reported producedData cannot complete it.
     const target = await getGuidanceModels().guidanceJourneyStep.findFirst({ where: { id: stepId, journey: { propertyId } }, select: { stepKey: true, toolKey: true } });
+    if (target && target.toolKey === MANUAL_DECLARATION_TOOL_KEY && MANUAL_DECLARATION_STEP_KEYS.includes(target.stepKey)) throw MANUAL_DECLARATION_REQUIRED();
+    if (target && target.toolKey === 'maintenance' && MAINTENANCE_LINKABLE_STEP_KEYS.includes(target.stepKey)) throw MAINTENANCE_TASK_REQUIRED();
     if (target && target.stepKey === FINDINGS_STEP_KEY && target.toolKey === FINDINGS_STEP_TOOL_KEY) throw FINDINGS_DECISION_REQUIRED();
     if (target && COVERAGE_RECORD_STEP_KEYS.includes(target.stepKey) && target.toolKey === COVERAGE_RECORD_TOOL_KEY) throw COVERAGE_RECORD_REQUIRED();
     if (target && target.toolKey === ACKNOWLEDGEMENT_TOOL_KEY && (ACKNOWLEDGEABLE_STEP_KEYS as readonly string[]).includes(target.stepKey)) throw ACKNOWLEDGEMENT_REQUIRED();
@@ -407,6 +427,8 @@ export async function recordGuidanceToolCompletion(req: CustomRequest, res: Resp
   try {
     const userId = requireUserId(req);
     const propertyId = req.params.propertyId;
+    if (req.body?.status === 'COMPLETED' && MANUAL_DECLARATION_STEP_KEYS.includes(String(req.body?.stepKey ?? '')) && (req.body?.sourceToolKey ?? MANUAL_DECLARATION_TOOL_KEY) === MANUAL_DECLARATION_TOOL_KEY) throw MANUAL_DECLARATION_REQUIRED();
+    if (req.body?.status === 'COMPLETED' && MAINTENANCE_LINKABLE_STEP_KEYS.includes(String(req.body?.stepKey ?? '')) && (req.body?.sourceToolKey ?? 'maintenance') === 'maintenance') throw MAINTENANCE_TASK_REQUIRED();
     if (req.body?.status === 'COMPLETED' && req.body?.stepKey === FINDINGS_STEP_KEY) throw FINDINGS_DECISION_REQUIRED();
     if (req.body?.status === 'COMPLETED' && COVERAGE_RECORD_STEP_KEYS.includes(String(req.body?.stepKey ?? ''))) throw COVERAGE_RECORD_REQUIRED();
     if (req.body?.sourceToolKey === ACKNOWLEDGEMENT_TOOL_KEY && (ACKNOWLEDGEABLE_STEP_KEYS as readonly string[]).includes(String(req.body?.stepKey ?? ''))) throw ACKNOWLEDGEMENT_REQUIRED();

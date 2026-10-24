@@ -16,7 +16,7 @@ const BINDINGS = ['EXACT_STEP', 'FAMILY_FALLBACK', 'NONE'];
 const POLICIES = ['ACKNOWLEDGEMENT', 'CANONICAL_MUTATION', 'VERIFIED_EVIDENCE', 'EXTERNAL_COMPLETION', 'DECISION'];
 // Acknowledgement completes only a true review step, never a safety, financial, compliance, execution or repair step (owner decision 2026-10-24).
 // The inspection review steps are the owner's other case: a persisted, versioned review record (never a bare confirmation) may complete a review step.
-const ACKNOWLEDGEMENT_MAY_COMPLETE = new Set(['guidance-overview:review_signal', 'inspection-report:review_inspection_report', 'inspection-report:review_maintenance_report', 'inspection-report:review_post_repair_report', 'inspection-report:review_pre_purchase_report']);
+const ACKNOWLEDGEMENT_MAY_COMPLETE = new Set(['guidance-overview:review_signal', 'guidance-overview:review_compliance_requirement', 'inspection-report:review_inspection_report', 'inspection-report:review_maintenance_report', 'inspection-report:review_post_repair_report', 'inspection-report:review_pre_purchase_report']);
 const templates = [...listGuidanceTemplates(), DEFAULT_TEMPLATE];
 const registered = templates.flatMap((template) => (template.steps ?? []).map((step) => ({ journey: template.journeyTypeKey, key: `${step.toolKey}:${step.stepKey}` })));
 
@@ -90,4 +90,25 @@ test('Home Savings no longer owns a funding step for new journeys: Capital Timel
   assert.ok(GUIDANCE_STEP_PROOF_MATRIX['home-savings:evaluate_savings_funding'].retired);
   assert.equal(askGuidanceStepMode('home-savings', 'evaluate_savings_funding').mode, 'NAVIGATE', 'the old step is never completable in Ask');
   assert.equal(askGuidanceStepMode('capital-timeline', 'fund_capital_expense').mode, 'IN_ASK', 'connected through the explicit allocation confirmation');
+});
+
+test('every step whose Desktop completion is not already a connected typed reporter is audited into exactly one Desktop path, and the path fits the proof policy', () => {
+  const { MANUAL_DECLARATIONS } = require('../../src/services/guidanceEngine/guidanceManualDeclaration.ts');
+  const PATHS = ['TYPED_CANONICAL_PROOF', 'TYPED_EXTERNAL_COMPLETION', 'TRUE_REVIEW_ACKNOWLEDGEMENT', 'INTENTIONALLY_MANUAL', 'WRONG_TOOL', 'UNSUPPORTED'];
+  for (const [key, row] of Object.entries(GUIDANCE_STEP_PROOF_MATRIX)) {
+    if (row.retired) continue;
+    const selfReported = row.desktopReporter === null || /generic completion endpoint/.test(row.desktopReporter) && !/refused/.test(row.desktopReporter);
+    if (!selfReported) { assert.equal(row.desktopTypedPathBuilt === false, false, `${key}: a built typed path is not flagged unbuilt`); continue; }
+    assert.ok(PATHS.includes(row.desktopPath), `${key}: needs exactly one audited Desktop path`);
+    const [, stepKey] = key.split(':');
+    if (row.desktopPath === 'INTENTIONALLY_MANUAL') {
+      assert.ok(['ACKNOWLEDGEMENT', 'DECISION'].includes(row.proofPolicy), `${key}: a manual declaration never stands in for a mutation, document, provider outcome or evidence`);
+      assert.ok(MANUAL_DECLARATIONS[stepKey], `${key}: a manual step has a server-owned declaration catalog`);
+    }
+    if (row.desktopPath === 'TRUE_REVIEW_ACKNOWLEDGEMENT') assert.equal(row.proofPolicy, 'ACKNOWLEDGEMENT', key);
+    if (row.desktopPath === 'TYPED_EXTERNAL_COMPLETION') assert.equal(row.proofPolicy, 'EXTERNAL_COMPLETION', key);
+    if (row.desktopPath === 'TYPED_CANONICAL_PROOF') assert.ok(['CANONICAL_MUTATION', 'VERIFIED_EVIDENCE', 'DECISION'].includes(row.proofPolicy), key);
+    if (row.desktopPath === 'WRONG_TOOL') assert.equal(row.verdict, 'WRONG_TOOL', key);
+    if (row.desktopPath === 'UNSUPPORTED') assert.equal(['UNSUPPORTED', 'NEEDS_PRODUCT_DECISION'].includes(row.verdict), true, key);
+  }
 });

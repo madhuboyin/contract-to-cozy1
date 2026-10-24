@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { acknowledgeGuidanceStep, checkFindingDecisions, completeGuidanceStep, type GuidanceStepDTO } from '@/lib/api/guidanceApi';
+import { acknowledgeGuidanceStep, checkFindingDecisions, completeGuidanceStep, declareGuidanceStep, type GuidanceStepDTO } from '@/lib/api/guidanceApi';
 
 type StepOption = {
   label: string;
@@ -353,6 +353,19 @@ export function GuidanceOverviewInlineStep({
         .filter(([, isChecked]) => isChecked)
         .map(([key]) => key);
       // The signal review is a true review step: it is recorded as a typed acknowledgement (the same proof Ask records), never as free-form data.
+      // Reading and understanding a compliance requirement is the same kind of review: a typed acknowledgement. Meeting the requirement is a different step.
+      if (step.stepKey === 'review_compliance_requirement') {
+        await acknowledgeGuidanceStep(propertyId, step.id, note.trim() ? { note: note.trim().slice(0, 500) } : undefined);
+        onComplete?.(nextStepKey ?? null);
+        return;
+      }
+      // The two intentionally manual steps are explicit declarations the server words and records; the page names only which one.
+      if (step.stepKey === 'prepare_property_access' || step.stepKey === 'select_cleaning_type') {
+        const chosen = step.stepKey === 'prepare_property_access' ? 'access_prepared' : String(option.producedData?.selectedCleaningType ?? '');
+        await declareGuidanceStep(propertyId, step.id, chosen);
+        onComplete?.(nextStepKey ?? null);
+        return;
+      }
       if (step.stepKey === 'review_signal') {
         const disposition = option.producedData?.signalDisposition;
         await acknowledgeGuidanceStep(propertyId, step.id, {

@@ -44,12 +44,12 @@ const propose = (launchContext = launch(), message = GUIDANCE_STEP_ACKNOWLEDGE_M
 const ctx = (parameters) => ({ userId: 'u1', execution: { id: 'exec-1', propertyId: 'p1', createdAt: new Date() }, access: { role }, parameters, command: getAskDomainCommandByOperation(OP) });
 
 test('only the review step is acknowledgeable, and the journey offers it as its in-Ask action', () => {
-  assert.deepEqual([...ack.ACKNOWLEDGEABLE_STEP_KEYS], ['review_signal']);
+  assert.deepEqual([...ack.ACKNOWLEDGEABLE_STEP_KEYS], ['review_signal', 'review_compliance_requirement']);
   const mode = askGuidanceStepMode('guidance-overview', 'review_signal');
   assert.deepEqual({ m: mode.mode, o: mode.inAsk.operationId, c: mode.inAsk.carriesStep }, { m: 'IN_ASK', o: OP, c: 'ENTITY' });
   // act_on_inspection_findings is an in-Ask step of its own (the findings' decisions are checked), not an acknowledgement.
   assert.equal(askGuidanceStepMode('guidance-overview', 'act_on_inspection_findings').inAsk.operationId, 'INSPECTION_FINDINGS_CHECK');
-  for (const other of ['update_budget', 'confirm_cleaning_complete', 'track_resolution', 'prepare_property_access', 'review_compliance_requirement']) {
+  for (const other of ['update_budget', 'confirm_cleaning_complete', 'track_resolution', 'prepare_property_access']) {
     assert.equal(askGuidanceStepMode('guidance-overview', other).mode, 'NAVIGATE', `${other}: not a true review step`);
   }
   const journey = { id: 'j1', status: 'ACTIVE', issueDomain: 'OTHER', executionReadiness: 'READY', isLowContext: false, primarySignalId: 'sig-1', primarySignal: { id: 'sig-1', signalIntentFamily: 'generic_actionable_signal' }, inventoryItem: null, currentStepKey: 'review_signal', missingContextKeys: [], evidences: [],

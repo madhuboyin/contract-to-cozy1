@@ -389,6 +389,11 @@ export async function acknowledgeGuidanceStep(
   return res.data;
 }
 
+/** An intentionally manual step: names one declaration the server owns (the words and the subject are the server's). */
+export async function declareGuidanceStep(propertyId: string, stepId: string, declarationKey: string): Promise<void> {
+  await api.post(`/api/properties/${propertyId}/guidance/steps/${stepId}/declare`, { declarationKey });
+}
+
 export async function skipGuidanceStep(
   propertyId: string,
   stepId: string,

@@ -13,7 +13,8 @@ import { guidanceJourneyService } from './guidanceEngine/guidanceJourney.service
 import { resolveGuidanceStepBinding, type GuidanceStepBinding } from './guidanceEngine/guidanceStepBinding';
 
 export const MAINTENANCE_STEP_TOOL_KEY = 'maintenance';
-export const MAINTENANCE_LINKABLE_STEP_KEYS = ['complete_compliance_task'];
+/** The maintenance-tool steps a linked task's verified completion proves. A task never completes a step by matching its category or by there being no open tasks. */
+export const MAINTENANCE_LINKABLE_STEP_KEYS = ['complete_compliance_task', 'protect_exposed_systems'];
 export type MaintenanceLinkSource = 'DESKTOP' | 'ASK';
 
 export type MaintenanceEvidenceRef = { source: 'HOME_RECORD' | 'LEGACY_DOCUMENT' | 'HOME_EVENT' | 'BOOKING'; id: string; versionId: string | null };

@@ -259,13 +259,13 @@ test('IN_ASK steps are exactly the steps a recall write, a do-nothing run, a pri
     `negotiation-shield:${require('../../src/services/negotiationShieldJourneyCompletion.ts').NEGOTIATION_SHIELD_DEFAULT_STEP_KEY}`,
     `project-tracker:${require('../../src/services/guidanceEngine/projectJourneyReporting.ts').PROJECT_CREATE_STEP_KEY}`,
     ...['track_work'].map((key) => `project-tracker:${key}`), ...['capture_proof', 'set_future_care', 'update_home_record', 'verify_outcome'].map((key) => `project-completion:${key}`), // the closing steps reportProjectClosure sends
-    `guidance-overview:${require('../../src/services/guidanceEngine/guidanceAcknowledgement.ts').ACKNOWLEDGEABLE_STEP_KEYS[0]}`, // the only step an acknowledgement may complete
+    ...require('../../src/services/guidanceEngine/guidanceAcknowledgement.ts').ACKNOWLEDGEABLE_STEP_KEYS.map((key) => `guidance-overview:${key}`), // the steps an acknowledgement may complete
     ...require('../../src/services/coverageAnalysisOperations.ts').COVERAGE_CHECK_STEP_KEYS.map((key) => `coverage-intelligence:${key}`), // a fresh, persisted, scoped coverage evaluation
     ...require('../../src/services/inspectionReportReviewOperations.ts').INSPECTION_REVIEW_STEP_KEYS.map((key) => `inspection-report:${key}`), // a review record of this version of the report
     'coverage-intelligence:review_current_policy_context', 'coverage-intelligence:review_current_warranty_context', // a persisted review of the current terms
     'documents:activate_warranty_coverage', 'documents:bind_policy_and_record_documents', // the saved, active coverage record
     'guidance-overview:act_on_inspection_findings', // every finding the journey is about has a decision
-    'maintenance:complete_compliance_task', // a task linked to the step, completed with Home Record evidence
+    'maintenance:complete_compliance_task', 'maintenance:protect_exposed_systems', // a task linked to the step, completed with Home Record evidence
     'capital-timeline:fund_capital_expense', // an explicit confirmation of the expense's reserve allocation
     'price-finalization:finalize_price', // finalizing a record bound to the step reports it (a start does not)
     'coverage-intelligence:compare_coverage_options', // the coverage decision's proof; Ask binds it to this one step (a review step is not proved by a decision)

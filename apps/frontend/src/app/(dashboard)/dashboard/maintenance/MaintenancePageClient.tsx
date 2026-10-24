@@ -324,52 +324,8 @@ export default function MaintenancePage() {
     openDrawer(targetTask);
   }, [taskIdFromUrl, hasConsumedTaskParam, tasksLoaded, allMaintenanceTasks, openDrawer, toast]);
 
-  // Auto-complete proof-backed guidance steps once all scoped tasks are cleared.
-  // Gated on tasksLoaded: an in-flight query yields an empty task list, which
-  // must not be mistaken for "everything is done".
-  useEffect(() => {
-    if (!tasksLoaded) return;
-    if (!effectivePropertyId || !guidanceJourneyId || !guidanceStepKey || guidanceProofCompleted) return;
-    if (guidanceScopedOpenTasks.length > 0) return;
-
-    let cancelled = false;
-    (async () => {
-      try {
-        await recordGuidanceToolStatus(effectivePropertyId, {
-          stepKey: guidanceStepKey,
-          journeyId: guidanceJourneyId,
-          signalIntentFamily: guidanceSignalIntentFamily || undefined,
-          sourceToolKey: 'maintenance',
-          status: 'COMPLETED',
-          producedData: {
-            proofType: 'maintenance_tasks_cleared',
-            proofId: `maintenance-cleared:${guidanceJourneyId}:${guidanceStepKey}`,
-            remainingScopedOpenTasks: 0,
-            scopedServiceCategories:
-              guidanceSignalIntentFamily
-                ? SIGNAL_FAMILY_MAINTENANCE_CATEGORIES[guidanceSignalIntentFamily] ?? null
-                : null,
-            completedAt: new Date().toISOString(),
-          },
-        });
-        if (!cancelled) setGuidanceProofCompleted(true);
-      } catch (error) {
-        console.error('[maintenance] failed to auto-complete proof-backed guidance step', error);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    tasksLoaded,
-    effectivePropertyId,
-    guidanceJourneyId,
-    guidanceProofCompleted,
-    guidanceScopedOpenTasks.length,
-    guidanceSignalIntentFamily,
-    guidanceStepKey,
-  ]);
+  // A maintenance journey step is no longer completed here by "no open tasks in these categories": that inferred completion from categories. The step is completed by a task explicitly linked to
+  // it and completed with evidence (continuation FRD section 48); the server refuses the generic completion for it.
 
   // ── Mutations ─────────────────────────────────────────────────────────────
   const invalidateTasks = useCallback(

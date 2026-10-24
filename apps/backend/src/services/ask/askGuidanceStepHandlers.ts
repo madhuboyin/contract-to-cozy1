@@ -101,6 +101,11 @@ export const ASK_GUIDANCE_IN_ASK_STEPS: Readonly<Record<string, AskGuidanceInAsk
     reason: 'You can mark this review step as reviewed here; your review is recorded with the time.',
     outcome: 'Your review of the signal, recorded with the time and the signal version, is this step\'s proof.',
   },
+  'guidance-overview:review_compliance_requirement': {
+    operationId: 'GUIDANCE_STEP_ACKNOWLEDGE', message: GUIDANCE_STEP_ACKNOWLEDGE_MESSAGE, label: 'Mark as reviewed', carriesStep: 'ENTITY',
+    reason: 'You can mark that you reviewed this requirement here; your review is recorded with the time.',
+    outcome: 'Your review of the requirement, recorded with the time and the signal version, is this step\'s proof. Meeting the requirement is a different step.',
+  },
   // A fresh, persisted coverage evaluation scoped to the journey's subject (its item, or the property) is the proof for every coverage check step; opening a review is not.
   'coverage-intelligence:check_coverage': {
     operationId: 'COVERAGE_ANALYSIS_RUN', message: COVERAGE_ANALYSIS_RUN_MESSAGE, label: 'Run a coverage check', carriesStep: 'ENTITY',
@@ -166,6 +171,11 @@ export const ASK_GUIDANCE_IN_ASK_STEPS: Readonly<Record<string, AskGuidanceInAsk
   // The compliance task step: completed by a task explicitly linked to this step being completed WITH Home Record evidence. The step opens the evidence form for its linked task (or offers to create one);
   // creating a task from the step links it, and completing it without evidence leaves the step open until evidence is attached.
   'maintenance:complete_compliance_task': {
+    operationId: 'MAINTENANCE_EVIDENCE_ATTACH', message: MAINTENANCE_EVIDENCE_ATTACH_MESSAGE, label: 'Add task evidence', carriesStep: 'ENTITY',
+    reason: 'You can create the compliance task, complete it and attach its evidence here; the step is done when the task is completed with evidence.',
+    outcome: 'The task you linked to this step, completed with Home Record evidence, is recorded as this step\'s proof.',
+  },
+  'maintenance:protect_exposed_systems': {
     operationId: 'MAINTENANCE_EVIDENCE_ATTACH', message: MAINTENANCE_EVIDENCE_ATTACH_MESSAGE, label: 'Add task evidence', carriesStep: 'ENTITY',
     reason: 'You can create the compliance task, complete it and attach its evidence here; the step is done when the task is completed with evidence.',
     outcome: 'The task you linked to this step, completed with Home Record evidence, is recorded as this step\'s proof.',

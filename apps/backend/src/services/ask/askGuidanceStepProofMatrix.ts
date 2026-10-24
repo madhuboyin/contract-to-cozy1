@@ -12,7 +12,13 @@
 export type GuidanceStepProofVerdict = 'CONNECTED' | 'CONNECTABLE' | 'NEEDS_PRODUCT_DECISION' | 'WRONG_TOOL' | 'UNSUPPORTED';
 export type GuidanceStepProofPolicy = 'ACKNOWLEDGEMENT' | 'CANONICAL_MUTATION' | 'VERIFIED_EVIDENCE' | 'EXTERNAL_COMPLETION' | 'DECISION';
 export type GuidanceStepBindingKind = 'EXACT_STEP' | 'FAMILY_FALLBACK' | 'NONE';
+/** How the Desktop completes the step, exactly one: a typed canonical proof, a typed external completion (a provider outcome), a true review acknowledgement, an intentionally manual explicit declaration (rare; never a mutation, document, provider outcome, financial decision or safety/compliance proof), a wrong tool, or unsupported. */
+export type GuidanceStepDesktopPath = 'TYPED_CANONICAL_PROOF' | 'TYPED_EXTERNAL_COMPLETION' | 'TRUE_REVIEW_ACKNOWLEDGEMENT' | 'INTENTIONALLY_MANUAL' | 'WRONG_TOOL' | 'UNSUPPORTED';
 export interface GuidanceStepProofRow {
+  /** Required for every step whose Desktop completion is not already a connected typed reporter (the audit of the remaining inline self-reports, FRD section 48). */
+  desktopPath?: GuidanceStepDesktopPath;
+  /** Whether that typed Desktop path exists yet. While false the generic self-report still runs for this step; the day it is true the generic endpoint refuses the step. */
+  desktopTypedPathBuilt?: boolean;
   homeownerJob: string;
   canonicalProof: string;
   askOperation: string | null;
@@ -189,6 +195,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     risk: 'External commitment to a provider (cost, scheduling, contact); Ask does not run the booking flow.',
   },
   'capital-timeline:plan_capital_improvements': {
+    desktopPath: 'UNSUPPORTED', desktopTypedPathBuilt: false,
     homeownerJob: 'Plan energy improvements on capital timeline',
     canonicalProof: 'Undefined: a capital plan entry or a routed plan has no step-level proof.',
     askOperation: 'CAPITAL_TIMELINE_COMMAND',
@@ -199,6 +206,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     risk: 'False completion: the timeline command changes a plan, not the step\'s promise.',
   },
   'capital-timeline:route_financial_plan': {
+    desktopPath: 'UNSUPPORTED', desktopTypedPathBuilt: false,
     homeownerJob: 'Route to capital plan timeline',
     canonicalProof: 'Undefined: a capital plan entry or a routed plan has no step-level proof.',
     askOperation: 'CAPITAL_TIMELINE_COMMAND',
@@ -329,6 +337,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     risk: 'A review of the policy or warranty term is proof only if it is persisted with its generation time and source term; a transient answer or an opened review is not.',
   },
   'coverage-intelligence:review_insurance_market': {
+    desktopPath: 'WRONG_TOOL', desktopTypedPathBuilt: false,
     homeownerJob: 'Review local premium trends',
     canonicalProof: 'A premium-trend read; the coverage tool produces no market review.',
     askOperation: null,
@@ -379,6 +388,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     risk: 'False completion if an uploaded document is taken for active coverage; the record\'s own status decides.',
   },
   'documents:update_policy_or_documents': {
+    desktopPath: 'TYPED_CANONICAL_PROOF', desktopTypedPathBuilt: false,
     homeownerJob: 'Update policy or upload documents',
     canonicalProof: 'A Home Record (policy, warranty or proof) saved or updated.',
     askOperation: null,
@@ -389,6 +399,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     risk: 'Records are saved by several Ask commands, none of which reports a journey step; the record proves a document exists, not that the plan was activated or bound.',
   },
   'frontend:confirm_replacement_path': {
+    desktopPath: 'UNSUPPORTED', desktopTypedPathBuilt: false,
     homeownerJob: 'Confirm replacement path',
     canonicalProof: 'A proof-backed completion payload sent by the focused shell (the engine rejects a frontend completion without proof).',
     askOperation: null,
@@ -399,6 +410,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     risk: 'No Ask surface for these guidance-native steps; completing them from Ask would need invented proof.',
   },
   'frontend:confirm_replacement_plan': {
+    desktopPath: 'UNSUPPORTED', desktopTypedPathBuilt: false,
     homeownerJob: 'Confirm replacement planning path',
     canonicalProof: 'A proof-backed completion payload sent by the focused shell (the engine rejects a frontend completion without proof).',
     askOperation: null,
@@ -409,6 +421,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     risk: 'No Ask surface for these guidance-native steps; completing them from Ask would need invented proof.',
   },
   'frontend:confirm_replacement_shopping_path': {
+    desktopPath: 'UNSUPPORTED', desktopTypedPathBuilt: false,
     homeownerJob: 'Confirm replacement shopping path',
     canonicalProof: 'A proof-backed completion payload sent by the focused shell (the engine rejects a frontend completion without proof).',
     askOperation: null,
@@ -429,6 +442,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     risk: 'One finding\'s decision must never complete a step about the whole report, and scheduling an inspection is separate proof.',
   },
   'guidance-overview:confirm_cleaning_complete': {
+    desktopPath: 'TYPED_EXTERNAL_COMPLETION', desktopTypedPathBuilt: false,
     homeownerJob: 'Confirm service completed',
     canonicalProof: 'Undefined: a guidance-native acknowledgement with no tool of its own.',
     askOperation: null,
@@ -439,22 +453,24 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     risk: 'False completion if an acknowledgement is treated as proof.',
   },
   'guidance-overview:prepare_property_access': {
+    desktopPath: 'INTENTIONALLY_MANUAL', desktopTypedPathBuilt: true,
     homeownerJob: 'Prepare property access',
     canonicalProof: 'Undefined: a guidance-native acknowledgement with no tool of its own.',
     askOperation: null,
-    desktopReporter: 'guidance.controller generic completion endpoint',
+    desktopReporter: 'guidanceManualDeclaration.declareGuidanceStep (route POST .../guidance/steps/:stepId/declare; the generic completion is refused for this step)',
     launchPrerequisites: 'Whatever the step asks the homeowner to confirm.',
     binding: 'NONE', verdict: 'NEEDS_PRODUCT_DECISION',
     proofPolicy: 'ACKNOWLEDGEMENT',
     risk: 'False completion if an acknowledgement is treated as proof.',
   },
   'guidance-overview:review_compliance_requirement': {
+    desktopPath: 'TRUE_REVIEW_ACKNOWLEDGEMENT', desktopTypedPathBuilt: true,
     homeownerJob: 'Review compliance requirement',
     canonicalProof: 'Undefined: a guidance-native acknowledgement with no tool of its own.',
-    askOperation: null,
-    desktopReporter: 'guidance.controller generic completion endpoint',
+    askOperation: 'GUIDANCE_STEP_ACKNOWLEDGE',
+    desktopReporter: 'guidanceAcknowledgement.acknowledgeGuidanceStepById (the generic completion is refused for this step)',
     launchPrerequisites: 'Whatever the step asks the homeowner to confirm.',
-    binding: 'NONE', verdict: 'NEEDS_PRODUCT_DECISION',
+    binding: 'EXACT_STEP', verdict: 'CONNECTED',
     proofPolicy: 'ACKNOWLEDGEMENT',
     risk: 'False completion if an acknowledgement is treated as proof.',
   },
@@ -469,16 +485,18 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     risk: 'Acknowledgement is allowed only for a true review step; it must not be reused for safety, financial, compliance, execution or repair steps.',
   },
   'guidance-overview:select_cleaning_type': {
+    desktopPath: 'INTENTIONALLY_MANUAL', desktopTypedPathBuilt: true,
     homeownerJob: 'Select cleaning service type',
     canonicalProof: 'Undefined: a guidance-native acknowledgement with no tool of its own.',
     askOperation: null,
-    desktopReporter: 'guidance.controller generic completion endpoint',
+    desktopReporter: 'guidanceManualDeclaration.declareGuidanceStep (route POST .../guidance/steps/:stepId/declare; the generic completion is refused for this step)',
     launchPrerequisites: 'Whatever the step asks the homeowner to confirm.',
     binding: 'NONE', verdict: 'NEEDS_PRODUCT_DECISION',
     proofPolicy: 'DECISION',
     risk: 'False completion if an acknowledgement is treated as proof.',
   },
   'guidance-overview:track_resolution': {
+    desktopPath: 'TYPED_EXTERNAL_COMPLETION', desktopTypedPathBuilt: false,
     homeownerJob: 'Confirm repair completed',
     canonicalProof: 'Undefined: a guidance-native acknowledgement with no tool of its own.',
     askOperation: null,
@@ -489,6 +507,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     risk: 'False completion if an acknowledgement is treated as proof.',
   },
   'guidance-overview:update_budget': {
+    desktopPath: 'TYPED_CANONICAL_PROOF', desktopTypedPathBuilt: false,
     homeownerJob: 'Update your budget for the new assessment',
     canonicalProof: 'An actual canonical budget or funding-plan mutation; an \'I did this\' confirmation is not proof.',
     askOperation: null,
@@ -499,6 +518,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     risk: 'False completion if a confirmation stands in for the budget change; needs the owning tool\'s canonical write.',
   },
   'history-verify:verify_history': {
+    desktopPath: 'TYPED_CANONICAL_PROOF', desktopTypedPathBuilt: false,
     homeownerJob: 'Verify issue & service history',
     canonicalProof: 'Undefined: verification of history has no step-level proof.',
     askOperation: null,
@@ -631,13 +651,13 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
   },
   'maintenance:protect_exposed_systems': {
     homeownerJob: 'Protect exposed systems',
-    canonicalProof: 'Undefined: a completed maintenance task would be the natural proof, but no surface reports it to the journey.',
-    askOperation: 'MAINTENANCE_TASK_UPDATE',
-    desktopReporter: null,
-    launchPrerequisites: 'A maintenance task linked to the journey.',
-    binding: 'NONE', verdict: 'NEEDS_PRODUCT_DECISION',
-    proofPolicy: 'EXTERNAL_COMPLETION',
-    risk: 'A reporter would have to be added to Desktop too, so both surfaces match.',
+    canonicalProof: 'A maintenance task explicitly linked to this exact journey step with verified completion (Home Record evidence, a verified Home Event of the task, or a provider-confirmed booking linked to the task). Having no open tasks in a category is not proof.',
+    askOperation: 'MAINTENANCE_EVIDENCE_ATTACH',
+    desktopReporter: 'maintenanceTaskJourneyOperations.reportLinkedTaskCompletion (the generic completion is refused for this step)',
+    launchPrerequisites: 'A task explicitly linked to this step (created from it in Ask, chosen from existing tasks, or linked on Desktop) completed with evidence; the same operation and proof as the compliance task step.',
+    binding: 'EXACT_STEP', verdict: 'CONNECTED',
+    proofPolicy: 'VERIFIED_EVIDENCE',
+    risk: 'Completing a step because no scoped task is open (inferred from categories) would be a false completion; that Desktop shortcut is removed.',
   },
   'negotiation-shield:prepare_negotiation': {
     homeownerJob: 'Prepare negotiation strategy',
@@ -650,26 +670,29 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     risk: 'Optional step Desktop auto-completes: Ask refuses a step already done so it makes no duplicate review.',
   },
   'ownership-costs:estimate_out_of_pocket_cost': {
+    desktopPath: 'TRUE_REVIEW_ACKNOWLEDGEMENT', desktopTypedPathBuilt: false,
     homeownerJob: 'Estimate out-of-pocket cost',
     canonicalProof: 'Undefined: an ownership-cost estimate is a read, not a durable event.',
     askOperation: 'OWNERSHIP_COST_COMMAND',
     desktopReporter: null,
     launchPrerequisites: 'Recorded costs for the home.',
     binding: 'NONE', verdict: 'NEEDS_PRODUCT_DECISION',
-    proofPolicy: 'CANONICAL_MUTATION',
+    proofPolicy: 'ACKNOWLEDGEMENT',
     risk: 'False completion: viewing an estimate is not doing the step.',
   },
   'ownership-costs:estimate_total_cost': {
+    desktopPath: 'TRUE_REVIEW_ACKNOWLEDGEMENT', desktopTypedPathBuilt: false,
     homeownerJob: 'Estimate total cost of ownership',
     canonicalProof: 'Undefined: an ownership-cost estimate is a read, not a durable event.',
     askOperation: 'OWNERSHIP_COST_COMMAND',
     desktopReporter: null,
     launchPrerequisites: 'Recorded costs for the home.',
     binding: 'NONE', verdict: 'NEEDS_PRODUCT_DECISION',
-    proofPolicy: 'CANONICAL_MUTATION',
+    proofPolicy: 'ACKNOWLEDGEMENT',
     risk: 'False completion: viewing an estimate is not doing the step.',
   },
   'ownership-costs:prepare_appeal': {
+    desktopPath: 'UNSUPPORTED', desktopTypedPathBuilt: false,
     homeownerJob: 'Estimate the financial impact and prepare an appeal',
     canonicalProof: 'Undefined: an ownership-cost estimate is a read, not a durable event.',
     askOperation: 'OWNERSHIP_COST_COMMAND',
@@ -750,6 +773,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     risk: 'Reported together with the other closing steps; only a verified-success completion reports, and only to the journey the project stores.',
   },
   'quote-comparison:compare_quotes': {
+    desktopPath: 'TYPED_CANONICAL_PROOF', desktopTypedPathBuilt: false,
     homeownerJob: 'Compare quotes side by side',
     canonicalProof: 'Undefined: neither surface reports a step when quotes are compared.',
     askOperation: 'QUOTE_COMPARISON_COMMAND',
@@ -770,6 +794,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     risk: 'Exact step and item: a recall action started from a journey completes only that journey step for that match\'s item; one started outside a journey keeps the signal-family path.',
   },
   'recalls:review_remedy_instructions': {
+    desktopPath: 'TRUE_REVIEW_ACKNOWLEDGEMENT', desktopTypedPathBuilt: false,
     homeownerJob: 'Review remedy instructions',
     canonicalProof: 'Undefined: reading remedy instructions leaves no durable event.',
     askOperation: null,
@@ -810,6 +835,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     risk: 'Ask has no command that runs the analysis (the replacement guidance answer is a read).',
   },
   'replacement-model-comparison:compare_replacement_models': {
+    desktopPath: 'UNSUPPORTED', desktopTypedPathBuilt: false,
     homeownerJob: 'Compare models and key specs',
     canonicalProof: 'Frontend-native replacement workflow state (priorities, shortlist, model comparison, purchase options and finalization).',
     askOperation: 'REPLACEMENT_GUIDANCE',
@@ -820,6 +846,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     risk: 'Ask offers a replacement guidance read only; none of these flow states can be written from Ask.',
   },
   'replacement-plan-followup:save_plan_and_follow_up': {
+    desktopPath: 'UNSUPPORTED', desktopTypedPathBuilt: false,
     homeownerJob: 'Save plan and follow-up',
     canonicalProof: 'Frontend-native replacement workflow state (priorities, shortlist, model comparison, purchase options and finalization).',
     askOperation: 'REPLACEMENT_GUIDANCE',
@@ -830,6 +857,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     risk: 'Ask offers a replacement guidance read only; none of these flow states can be written from Ask.',
   },
   'replacement-planning:set_budget_and_shortlist': {
+    desktopPath: 'UNSUPPORTED', desktopTypedPathBuilt: false,
     homeownerJob: 'Set budget and shortlist options',
     canonicalProof: 'Frontend-native replacement workflow state (priorities, shortlist, model comparison, purchase options and finalization).',
     askOperation: 'REPLACEMENT_GUIDANCE',
@@ -840,6 +868,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     risk: 'Ask offers a replacement guidance read only; none of these flow states can be written from Ask.',
   },
   'replacement-priorities-capture:set_replacement_priorities': {
+    desktopPath: 'UNSUPPORTED', desktopTypedPathBuilt: false,
     homeownerJob: 'Set your priorities',
     canonicalProof: 'Frontend-native replacement workflow state (priorities, shortlist, model comparison, purchase options and finalization).',
     askOperation: 'REPLACEMENT_GUIDANCE',
@@ -850,6 +879,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     risk: 'Ask offers a replacement guidance read only; none of these flow states can be written from Ask.',
   },
   'replacement-purchase-finalization:finalize_purchase_selection': {
+    desktopPath: 'UNSUPPORTED', desktopTypedPathBuilt: false,
     homeownerJob: 'Finalize purchase selection',
     canonicalProof: 'Frontend-native replacement workflow state (priorities, shortlist, model comparison, purchase options and finalization).',
     askOperation: 'REPLACEMENT_GUIDANCE',
@@ -860,6 +890,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     risk: 'Ask offers a replacement guidance read only; none of these flow states can be written from Ask.',
   },
   'replacement-purchase-options:compare_purchase_options': {
+    desktopPath: 'UNSUPPORTED', desktopTypedPathBuilt: false,
     homeownerJob: 'Compare vendors and purchase options',
     canonicalProof: 'Frontend-native replacement workflow state (priorities, shortlist, model comparison, purchase options and finalization).',
     askOperation: 'REPLACEMENT_GUIDANCE',
@@ -870,6 +901,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     risk: 'Ask offers a replacement guidance read only; none of these flow states can be written from Ask.',
   },
   'service-price-radar:estimate_improvement_cost': {
+    desktopPath: 'WRONG_TOOL', desktopTypedPathBuilt: false,
     homeownerJob: 'Estimate contractor cost for upgrades',
     canonicalProof: 'A benchmark of a quote the homeowner supplies; it does not estimate cost.',
     askOperation: 'SERVICE_PRICE_CHECK_RUN',
@@ -880,6 +912,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     risk: 'The step promises an estimate the tool cannot produce (section 16 of the continuation FRD); completing it would be false.',
   },
   'service-price-radar:estimate_repair_cost': {
+    desktopPath: 'WRONG_TOOL', desktopTypedPathBuilt: false,
     homeownerJob: 'Estimate repair scope and cost',
     canonicalProof: 'A benchmark of a quote the homeowner supplies; it does not estimate cost.',
     askOperation: 'SERVICE_PRICE_CHECK_RUN',
@@ -890,6 +923,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     risk: 'The step promises an estimate the tool cannot produce (section 16 of the continuation FRD); completing it would be false.',
   },
   'service-price-radar:estimate_uninsured_cost': {
+    desktopPath: 'WRONG_TOOL', desktopTypedPathBuilt: false,
     homeownerJob: 'Estimate uninsured service cost',
     canonicalProof: 'A benchmark of a quote the homeowner supplies; it does not estimate cost.',
     askOperation: 'SERVICE_PRICE_CHECK_RUN',

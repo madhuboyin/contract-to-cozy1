@@ -2,7 +2,8 @@
 //
 // It is recorded as step evidence through the same completion path every other tool uses, with a typed payload naming the exact signal and its version, the step,
 // the person, the time and the outcome. It is valid only for a true review step: a safety, financial, compliance, execution or repair step is never completed by a
-// self-attestation, so the allowed step keys are listed here and nowhere else.
+// self-attestation, so the allowed step keys are listed here and nowhere else. `review_compliance_requirement` is reading and understanding a requirement (what, when, what proof is needed);
+// meeting the requirement is a different step with its own proof.
 
 import { logger } from '../../lib/logger';
 import { guidanceJourneyService } from './guidanceJourney.service';
@@ -10,7 +11,7 @@ import { getGuidanceModels } from './guidanceTypes';
 import { resolveGuidanceStepBinding, type GuidanceStepRefusal } from './guidanceStepBinding';
 
 /** The steps an acknowledgement may complete (tool `guidance-overview`). Anything else needs its own proof. */
-export const ACKNOWLEDGEABLE_STEP_KEYS = ['review_signal'] as const;
+export const ACKNOWLEDGEABLE_STEP_KEYS = ['review_signal', 'review_compliance_requirement'] as const;
 export const ACKNOWLEDGEMENT_TOOL_KEY = 'guidance-overview';
 
 export type StepAcknowledgement = {

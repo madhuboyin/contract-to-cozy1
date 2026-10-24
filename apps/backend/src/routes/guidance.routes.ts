@@ -13,6 +13,7 @@ import {
   linkMaintenanceTaskEndpoint,
   checkCoverageRecordEndpoint,
   checkFindingDecisionsEndpoint,
+  declareGuidanceStepEndpoint,
   dismissGuidanceJourney,
   generateGuidanceModelShortlist,
   generateGuidanceVendorSuggestions,
@@ -272,6 +273,15 @@ router.post(
   requireHouseholdRole('CONTRIBUTOR'),
   validateBody(z.object({ guidanceStepId: z.string().uuid().optional(), guidanceJourneyId: z.string().uuid().optional() })),
   checkFindingDecisionsEndpoint
+);
+
+router.post(
+  '/properties/:propertyId/guidance/steps/:stepId/declare',
+  validate(propertyStepParamsSchema),
+  propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
+  validateBody(z.object({ declarationKey: z.string().trim().min(1).max(60) })),
+  declareGuidanceStepEndpoint
 );
 
 router.post(
