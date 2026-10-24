@@ -104,6 +104,8 @@ const OPERATION_BOUNDARIES: Partial<Record<AskOperationId, ReadonlySet<string>>>
 };
 
 const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<string>>>> = {
+  // A completed task linked to an open journey step offers to attach evidence; a step with no linked task offers to create one for it.
+  MAINTENANCE_TASK_COMPLETE: new Set(['maintenance-attach-evidence']),
   MAINTENANCE_STATUS: new Set(['create-maintenance', 'maintenance-templates-browse', 'add-purchase-date', 'seasonal-retry', 'seasonal-show-pending', 'seasonal-show-completed', 'seasonal-show-dismissed', 'seasonal-show-maintenance', 'seasonal-item-add', 'seasonal-item-snooze', 'seasonal-item-dismiss', 'seasonal-item-restore']),
   // + the claim transition item actions (FRD v1.42); the inline claim detail shows only those legal from the live status.
   // FRD v1.43: INSPECTION_FINDINGS had no entry, so even its "Open Inspection Hub" link was stripped; the finding
@@ -320,6 +322,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   COVERAGE_COMMAND: new Set(['coverage-back', 'coverage-back-review']),
   COVERAGE_ANALYSIS_RUN: new Set(['coverage-analysis-run-boundary']),
   INSPECTION_REPORT_REVIEW: new Set(['inspection-report-review-boundary']),
+  MAINTENANCE_EVIDENCE_ATTACH: new Set(['maintenance-evidence-attach-boundary', 'maintenance-create-for-step']),
   // Manage a saved Home Upgrade Planner option (register P0 Home Digital Twin / Upgrade Planner): record the decision, rename, archive or restore, recalculate (queued job) and delete an archived option. Confirmation-gated, declared-action only; never by fuzzy retrieval.
   HOME_UPGRADE_COMMAND: new Set(['home-upgrade-back']),
   // Add, change and remove a permit record (register P0 Permits, slice PM-B). Records the REPORTED status; the official status is the authority's and is not set here. Confirmation-gated, declared-action only; never by fuzzy retrieval.

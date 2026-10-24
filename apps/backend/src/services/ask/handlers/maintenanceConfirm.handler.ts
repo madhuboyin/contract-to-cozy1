@@ -1,3 +1,4 @@
+import { MAINTENANCE_EVIDENCE_ATTACH_MESSAGE, MAINTENANCE_TASK_ENTITY_TYPE } from '../support/maintenanceEvidenceAttach';
 import { logger } from '../../../lib/logger';
 // Moved out of askOrchestrator.service.ts unchanged (decomposition, FRD v1.98;
 // docs/architecture/ASK_ORCHESTRATOR_DECOMPOSITION_REVIEW.md). The handler registers itself, and the orchestrator
@@ -94,7 +95,10 @@ async function confirmMaintenanceTaskComplete(ctx: ConfirmCapabilityContext): Pr
           ...(updated.isRecurring ? [{ label: 'Next due', value: humanDate(updated.nextDueDate) ?? 'Not scheduled' }] : []),
           ...(projectOutcomeRequired ? [{ label: 'Project outcome', value: String(outcomeHealth).toLowerCase().replace(/_/g, ' ') }] : []),
         ],
-        actions: [receiptFollowUpAction('MAINTENANCE')],
+        actions: [
+          ...(openJourneyStepIds.length > 0 && !hasEvidence ? [{ id: 'maintenance-attach-evidence', label: 'Attach evidence', interactionType: 'START_WORKFLOW' as const, message: MAINTENANCE_EVIDENCE_ATTACH_MESSAGE, operationId: 'MAINTENANCE_EVIDENCE_ATTACH' as const, entityType: MAINTENANCE_TASK_ENTITY_TYPE, entityId: updated.id, style: 'PRIMARY' as const }] : []),
+          receiptFollowUpAction('MAINTENANCE'),
+        ],
       }],
       confirmation: null,
       suggestions: [],

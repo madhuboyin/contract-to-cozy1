@@ -44,6 +44,8 @@ import { HomePlantAddInputSchema, MaterialSpecAddInputSchema, OwnershipCostDecis
 import { RoomPlantRecommendationInputSchema } from '../support/commandInputs';
 import { homePlantAddResult, homePlantContextVersion, MATERIAL_SPEC_UPDATE_CAPTURE_KEY, materialSpecAddResult, materialSpecContextVersion, materialSpecUpdateResult } from '../handlers/homeRecordAdds.handler';
 import { negotiationShieldStartContextVersion, negotiationShieldStartResult } from '../handlers/negotiationShieldStart.handler';
+import { MAINTENANCE_EVIDENCE_CAPTURE_KEY, MaintenanceEvidenceAnswerSchema } from '../support/maintenanceEvidenceAttach';
+import { evidenceContextVersion, maintenanceEvidenceAttachResult } from '../handlers/maintenanceEvidenceAttach.handler';
 import { isNegotiationStartScenario, NEGOTIATION_SHIELD_START_CAPTURE_KEY, NEGOTIATION_START_SCENARIO_SPECS, parseNegotiationStartAnswer } from '../support/negotiationShieldStart';
 import { negotiationShieldEditContextVersion, negotiationShieldEditResult } from '../handlers/negotiationShieldEdit.handler';
 import { HOME_DIGITAL_WILL_EDITOR_CAPTURE_KEY, HOME_DIGITAL_WILL_METADATA_CAPTURE_KEY, HomeDigitalWillContactInputSchema, HomeDigitalWillEntryInputSchema, HomeDigitalWillMetadataInputSchema, HomeDigitalWillSectionInputSchema, homeDigitalWillEditorResult, homeDigitalWillMetadataResult, homeDigitalWillPlanVersion, type HomeDigitalWillEditorKind } from '../handlers/homeDigitalWillCreate.handler';
@@ -1053,6 +1055,36 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     captureId = input.idempotencyKey;
     capturedContextVersion = offer.contextVersion;
     canonicalOwner = 'NegotiationShieldDocument';
+  } else if (execution.operationId === 'MAINTENANCE_EVIDENCE_ATTACH') {
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson)
+      ? execution.parametersJson as Record<string, unknown>
+      : {};
+    const evidenceLaunch = storedParameters.maintenanceEvidenceLaunch && typeof storedParameters.maintenanceEvidenceLaunch === 'object' && !Array.isArray(storedParameters.maintenanceEvidenceLaunch)
+      ? storedParameters.maintenanceEvidenceLaunch as { stepId?: unknown; taskId?: unknown; sourceExecutionId?: unknown }
+      : null;
+    if (input.captureKey !== MAINTENANCE_EVIDENCE_CAPTURE_KEY || !evidenceLaunch || typeof evidenceLaunch.taskId !== 'string') {
+      throw Object.assign(new Error('This evidence form is no longer active. Open Attach evidence again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    }
+    const access = await ensurePropertyAccess(userId, execution.propertyId);
+    if (access.role === HouseholdRole.VIEWER) {
+      throw Object.assign(new Error('A contributor or owner is required to attach evidence.'), { code: 'ASK_PERMISSION_REQUIRED' });
+    }
+    const evidenceTask = await prisma.propertyMaintenanceTask.findFirst({ where: { id: evidenceLaunch.taskId, propertyId: execution.propertyId }, select: { id: true, updatedAt: true } });
+    if (!evidenceTask || evidenceContextVersion(evidenceTask) !== input.expectedContextVersion) {
+      throw Object.assign(new Error('The task changed while this form was open. Open Attach evidence again.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
+    }
+    const answer = MaintenanceEvidenceAnswerSchema.safeParse(input.answer);
+    if (!answer.success) {
+      throw Object.assign(new Error('Choose at least one Home Record as evidence.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+    }
+    result = await maintenanceEvidenceAttachResult(userId, execution.propertyId, {
+      stepId: typeof evidenceLaunch.stepId === 'string' ? evidenceLaunch.stepId : null,
+      taskId: evidenceLaunch.taskId,
+      sourceExecutionId: typeof evidenceLaunch.sourceExecutionId === 'string' ? evidenceLaunch.sourceExecutionId : null,
+    }, answer.data);
+    captureId = input.idempotencyKey;
+    capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
+    canonicalOwner = 'PropertyMaintenanceTaskEvidence';
   } else if (execution.operationId === 'RENOVATION_CASE_START') {
     if (input.captureKey !== RENOVATION_CASE_START_CAPTURE_KEY) {
       const error = new Error('This renovation case form is no longer active. Ask to start a renovation case again.');

@@ -622,10 +622,10 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
   'maintenance:complete_compliance_task': {
     homeownerJob: 'Complete required compliance tasks',
     canonicalProof: 'A maintenance task linked to this exact journey step, with verified completion (or the legally final status under its governing workflow). Reported-complete is not enough where verification or evidence is required; completion is never inferred from a matching title or category.',
-    askOperation: 'MAINTENANCE_TASK_UPDATE',
+    askOperation: 'MAINTENANCE_EVIDENCE_ATTACH',
     desktopReporter: 'maintenanceTaskJourneyOperations.reportLinkedTaskCompletion (called from PropertyMaintenanceTaskService on every completion; the link is made by the maintenance-link route)',
-    launchPrerequisites: 'The reporter, the explicit link, Ask\'s create-from-step linking at the confirmation and evidence attachment (shared attachMaintenanceTaskEvidence, Desktop route) exist. Still to build before this step is offered in Ask: choosing evidence documents in Ask (a picker/upload) and the "Use an existing task" picker; without them Ask could not finish the step and Desktop must not be required.',
-    binding: 'EXACT_STEP', verdict: 'CONNECTABLE',
+    launchPrerequisites: 'A task explicitly linked to this step (made by creating the task from the step in Ask, or by the Desktop link route) that is completed with at least one Home Record as evidence. Evidence is chosen from Home Records or uploaded into them in Ask; the step, link and records are re-read at the proposal and the confirmation. Completing without evidence leaves the step open.',
+    binding: 'EXACT_STEP', verdict: 'CONNECTED',
     proofPolicy: 'VERIFIED_EVIDENCE',
     risk: 'False completion if a self-reported task is taken for the obligation being met.',
   },

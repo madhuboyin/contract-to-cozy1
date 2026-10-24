@@ -262,6 +262,7 @@ test('IN_ASK steps are exactly the steps a recall write, a do-nothing run, a pri
     `guidance-overview:${require('../../src/services/guidanceEngine/guidanceAcknowledgement.ts').ACKNOWLEDGEABLE_STEP_KEYS[0]}`, // the only step an acknowledgement may complete
     ...require('../../src/services/coverageAnalysisOperations.ts').COVERAGE_CHECK_STEP_KEYS.map((key) => `coverage-intelligence:${key}`), // a fresh, persisted, scoped coverage evaluation
     ...require('../../src/services/inspectionReportReviewOperations.ts').INSPECTION_REVIEW_STEP_KEYS.map((key) => `inspection-report:${key}`), // a review record of this version of the report
+    'maintenance:complete_compliance_task', // a task linked to the step, completed with Home Record evidence
     'capital-timeline:fund_capital_expense', // an explicit confirmation of the expense's reserve allocation
     'price-finalization:finalize_price', // finalizing a record bound to the step reports it (a start does not)
     'coverage-intelligence:compare_coverage_options', // the coverage decision's proof; Ask binds it to this one step (a review step is not proved by a decision)
