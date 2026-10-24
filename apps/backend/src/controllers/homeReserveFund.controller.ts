@@ -145,7 +145,7 @@ export async function confirmLineItemAllocation(req: CustomRequest, res: Respons
   try {
     const userId = req.user?.userId;
     if (!userId) throw new APIError('Authentication required.', 401, 'AUTH_REQUIRED');
-    const result = await confirmReserveAllocationWithEffects(req.params.propertyId, userId, req.params.lineItemId, { guidanceStepId: req.body?.guidanceStepId ?? null });
+    const result = await confirmReserveAllocationWithEffects(req.params.propertyId, userId, req.params.lineItemId, { guidanceStepId: req.body?.guidanceStepId ?? null, monthlyCents: req.body?.monthlyCents ?? null, expectedSuggestedCents: req.body?.expectedSuggestedCents ?? null });
     res.json({ success: true, data: { lineItem: result.lineItem, guidanceReported: result.guidanceReported } });
   } catch (err) {
     next(err);

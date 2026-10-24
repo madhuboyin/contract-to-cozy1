@@ -53,6 +53,9 @@ export type ReserveFundLineItemDTO = {
   targetCostCents: number;
   allocatedMonthlyCents: number;
   allocatedBalanceCents: number;
+  allocationConfirmedAt?: string | null;
+  allocationConfirmedMonthlyCents?: number | null;
+  allocationSuggestedMonthlyCents?: number | null;
   retiredAt: string | null;
   retiredReason: ReserveFundRetiredReason;
   retiredEvidenceRef: string | null;
@@ -126,6 +129,19 @@ export async function retireLineItem(
   const res = await api.post(
     `/api/properties/${propertyId}/reserve-fund/line-items/${lineItemId}/retire`,
     { evidenceRef: evidenceRef ?? null }
+  );
+  return res.data?.lineItem as ReserveFundLineItemDTO;
+}
+
+/** The homeowner's explicit confirmation of one expense's monthly allocation (the same operation Ask uses). */
+export async function confirmLineItemAllocation(
+  propertyId: string,
+  lineItemId: string,
+  body: { monthlyCents: number; expectedSuggestedCents: number | null }
+): Promise<ReserveFundLineItemDTO> {
+  const res = await api.post(
+    `/api/properties/${propertyId}/reserve-fund/line-items/${lineItemId}/confirm-allocation`,
+    { monthlyCents: body.monthlyCents, ...(body.expectedSuggestedCents != null ? { expectedSuggestedCents: body.expectedSuggestedCents } : {}) }
   );
   return res.data?.lineItem as ReserveFundLineItemDTO;
 }

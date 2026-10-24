@@ -28,6 +28,7 @@ import {
   updateFund,
   recalculateFund,
   listLineItems,
+  confirmLineItemAllocation,
   listContributions,
   addContribution,
   removeContribution,
@@ -274,6 +275,10 @@ export default function ReserveFundClient() {
   const [drawerRooms, setDrawerRooms] = useState<InventoryRoom[]>([]);
   const [viewingItemId, setViewingItemId] = useState<string | null>(null);
   const [showCalcExplainer, setShowCalcExplainer] = useState(false);
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [confirmAmount, setConfirmAmount] = useState('');
+  const [confirmSaving, setConfirmSaving] = useState(false);
+  const [confirmError, setConfirmError] = useState<string | null>(null);
 
   async function handleViewItem(inventoryItemId: string) {
     if (!propertyId) return;
@@ -359,6 +364,29 @@ export default function ReserveFundClient() {
       setError(e instanceof Error ? e.message : 'Failed to update posture');
     } finally {
       setRecalculating(false);
+    }
+  }
+
+  async function handleConfirmAllocation(li: ReserveFundLineItemDTO) {
+    if (!propertyId) return;
+    const dollars = Number(confirmAmount);
+    const monthlyCents = Math.round(dollars * 100);
+    if (!Number.isFinite(dollars) || monthlyCents <= 0) {
+      setConfirmError('Enter a monthly amount greater than zero.');
+      return;
+    }
+    setConfirmSaving(true);
+    setConfirmError(null);
+    try {
+      await confirmLineItemAllocation(propertyId, li.id, { monthlyCents, expectedSuggestedCents: li.allocationSuggestedMonthlyCents ?? li.allocatedMonthlyCents });
+      setConfirmingId(null);
+      const [refreshedFund, refreshedLineItems] = await Promise.all([getFund(propertyId), listLineItems(propertyId)]);
+      setFund(refreshedFund.fund);
+      setLineItems(refreshedLineItems);
+    } catch (e: unknown) {
+      setConfirmError(e instanceof Error ? e.message : 'Could not confirm the allocation');
+    } finally {
+      setConfirmSaving(false);
     }
   }
 
@@ -836,6 +864,18 @@ export default function ReserveFundClient() {
                                 )}
                                 Why this estimate?
                               </button>
+                              {confirmingId !== li.id && (
+                                <button
+                                  onClick={() => {
+                                    setConfirmingId(li.id);
+                                    setConfirmError(null);
+                                    setConfirmAmount(li.allocatedMonthlyCents > 0 ? (li.allocatedMonthlyCents / 100).toFixed(2) : '');
+                                  }}
+                                  className="inline-flex min-h-[36px] items-center gap-1.5 rounded-full px-2 text-xs font-medium text-teal-700 transition-colors hover:text-teal-900 dark:text-teal-400"
+                                >
+                                  {li.allocationConfirmedAt ? 'Change allocation' : 'Confirm allocation'}
+                                </button>
+                              )}
                               {li.timelineItem.inventoryItemId && (
                                 <button
                                   onClick={() => handleViewItem(li.timelineItem.inventoryItemId as string)}
@@ -847,6 +887,38 @@ export default function ReserveFundClient() {
                                 </button>
                               )}
                             </div>
+                            {confirmingId === li.id && (
+                              <div className="mt-2 rounded-xl border border-slate-200/70 bg-white/70 p-3 text-xs dark:border-slate-700/70 dark:bg-slate-900/50">
+                                <p className="text-slate-600 dark:text-slate-300">
+                                  {itemName}: target {money(li.targetCostCents)}. Suggested{' '}
+                                  <span className="font-medium">{money(li.allocationSuggestedMonthlyCents ?? li.allocatedMonthlyCents)}/mo</span>
+                                  {li.allocationConfirmedMonthlyCents ? (
+                                    <>, confirmed <span className="font-medium">{money(li.allocationConfirmedMonthlyCents)}/mo</span></>
+                                  ) : null}
+                                  .
+                                </p>
+                                <label className="mt-2 flex items-center gap-2 text-slate-600 dark:text-slate-300">
+                                  Monthly amount ($)
+                                  <input
+                                    inputMode="decimal"
+                                    value={confirmAmount}
+                                    onChange={(e) => setConfirmAmount(e.target.value)}
+                                    className="w-28 rounded-lg border border-slate-300 bg-white px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-900"
+                                  />
+                                </label>
+                                {confirmError && <p className="mt-1 text-red-600">{confirmError}</p>}
+                                <div className="mt-2 flex gap-2">
+                                  <button
+                                    onClick={() => handleConfirmAllocation(li)}
+                                    disabled={confirmSaving}
+                                    className="rounded-full bg-teal-600 px-3 py-1.5 font-medium text-white disabled:opacity-50"
+                                  >
+                                    {confirmSaving ? 'Saving…' : 'Confirm allocation'}
+                                  </button>
+                                  <button onClick={() => setConfirmingId(null)} className="rounded-full px-3 py-1.5 text-slate-500">Cancel</button>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>

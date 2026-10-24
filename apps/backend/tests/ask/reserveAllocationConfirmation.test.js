@@ -20,7 +20,7 @@ const { askGuidanceStepMode } = require('../../src/services/ask/askGuidanceStepH
 const { RESERVE_FUND_ACTION_IDS } = require('../../src/services/ask/support/reserveFundConstants.ts');
 
 const OP = 'RESERVE_FUND_COMMAND';
-let line; let updates; let step; let sourceLaunch; let reports; let reportFails; let role; let saved;
+let fundUpdates; let line; let updates; let step; let sourceLaunch; let reports; let reportFails; let role; let saved;
 const stepRow = (over = {}) => ({ id: 'step-f', stepKey: 'fund_capital_expense', toolKey: 'capital-timeline', status: 'PENDING', journey: { id: 'j1', status: 'ACTIVE', inventoryItemId: 'item-1',
   primarySignal: { signalIntentFamily: 'financial_exposure', sourceToolKey: 'reserve-fund', sourceEntityType: 'RESERVE_FUND_LINE_ITEM', sourceEntityId: 'tl-1' } }, ...over });
 
@@ -28,7 +28,7 @@ test.beforeEach(() => {
   line = { id: 'li-1', fundId: 'fund-1', timelineItemId: 'tl-1', status: 'ACTIVE', allocatedMonthlyCents: 18500, targetCostCents: 900000, allocationConfirmedAt: null, allocationConfirmedByUserId: null, allocationConfirmedMonthlyCents: null,
     timelineItem: { category: 'HVAC', inventoryItem: { name: 'Furnace' } } };
   updates = []; step = stepRow(); sourceLaunch = null; reports = []; reportFails = false; role = 'CONTRIBUTOR';
-  saved = { models: ['guidanceSignal', 'guidanceJourney', 'guidanceJourneyEvent', 'guidanceStepEvidence', 'guidanceJourneyStep', 'homeReserveFundLineItem', 'askExecution'].map((name) => [name, prisma[name]]),
+  saved = { models: ['guidanceSignal', 'guidanceJourney', 'guidanceJourneyEvent', 'guidanceStepEvidence', 'guidanceJourneyStep', 'homeReserveFundLineItem', 'homeReserveFund', 'askExecution'].map((name) => [name, prisma[name]]).concat([['$transaction', prisma.$transaction]]),
     fund: calc.getOrCreateFund, resolve: propertyAccess.resolvePropertyAccess, rec: guidanceJourneyService.recordToolCompletion };
   prisma.guidanceSignal = {}; prisma.guidanceJourney = {}; prisma.guidanceJourneyEvent = {}; prisma.guidanceStepEvidence = {};
   prisma.guidanceJourneyStep = { findFirst: async () => step };
@@ -36,7 +36,11 @@ test.beforeEach(() => {
   prisma.homeReserveFundLineItem = {
     findFirst: async (args) => (args.where.id === line.id && args.where.fundId === 'fund-1' ? line : null),
     update: async ({ where, data }) => { updates.push({ where, data }); Object.assign(line, data); return line; },
+    findMany: async () => [line],
   };
+  fundUpdates = [];
+  prisma.homeReserveFund = { update: async (args) => { fundUpdates.push(args); return {}; } };
+  prisma.$transaction = async (fn) => fn(prisma);
   calc.getOrCreateFund = async () => ({ id: 'fund-1' });
   propertyAccess.resolvePropertyAccess = async () => ({ role, userId: 'u1', propertyId: 'p1' });
   guidanceJourneyService.recordToolCompletion = async (input) => { reports.push(input); if (reportFails) throw new Error('down'); return {}; };
@@ -49,7 +53,7 @@ test.afterEach(() => {
 test('confirming writes the person, the time and the monthly amount confirmed, and nothing else on the line item', async () => {
   const out = await ops.confirmReserveAllocationWithEffects('p1', 'u1', 'li-1');
   assert.equal(updates.length, 1);
-  assert.deepEqual(Object.keys(updates[0].data).sort(), ['allocationConfirmedAt', 'allocationConfirmedByUserId', 'allocationConfirmedMonthlyCents']);
+  assert.deepEqual(Object.keys(updates[0].data).sort(), ['allocatedMonthlyCents', 'allocationConfirmedAt', 'allocationConfirmedByUserId', 'allocationConfirmedMonthlyCents', 'allocationSuggestedMonthlyCents']);
   assert.deepEqual([updates[0].data.allocationConfirmedByUserId, updates[0].data.allocationConfirmedMonthlyCents], ['u1', 18500]);
   assert.ok(updates[0].data.allocationConfirmedAt instanceof Date);
   assert.deepEqual([out.guidanceReported, out.guidanceRefusal, reports.length], [null, null, 0], 'no journey step named: nothing reported');
@@ -106,7 +110,7 @@ test('Ask: the proposal shows the expense and the amount being confirmed, and ta
   sourceLaunch = { operationId: 'CAPITAL_RESERVE_PLAN', guidanceStepId: 'step-f' };
   const result = await reserveFundCommandResult('u1', 'p1', launch());
   assert.equal(result.status, 'NEEDS_CONFIRMATION');
-  assert.deepEqual(result.confirmation.fields.map((f) => [f.label, f.value]), [['Expense', 'Furnace'], ['Monthly allocation', '$185.00'], ['Target', '$9,000.00']]);
+  assert.deepEqual(result.confirmation.fields.map((f) => [f.label, f.value]), [['Expense', 'Furnace'], ['Suggested monthly amount', '$185.00'], ['Monthly allocation', '$185.00'], ['Target', '$9,000.00']]);
   assert.equal(result.parameters.reserveFundCommand.guidanceStepId, 'step-f');
   assert.equal(updates.length, 0, 'proposing writes nothing');
 });
@@ -151,4 +155,27 @@ test('nothing but the confirmation sets the confirmation: generic reserve writes
   const routes = fs.readFileSync(require.resolve('../../src/routes/homeReserveFund.routes.ts'), 'utf8');
   assert.match(routes, /line-items\/:lineItemId\/confirm-allocation',\s*propertyAuthMiddleware,\s*requireHouseholdRole\('CONTRIBUTOR'\)/);
   assert.match(fs.readFileSync(require.resolve('../../src/controllers/homeReserveFund.controller.ts'), 'utf8'), /confirmReserveAllocationWithEffects\(/);
+});
+
+test('the homeowner can choose another positive monthly amount: it becomes the allocation, the suggestion they overrode is recorded and the parent total is recomputed', async () => {
+  line.allocationSuggestedMonthlyCents = 18500;
+  const out = await ops.confirmReserveAllocationWithEffects('p1', 'u1', 'li-1', { monthlyCents: 25000, expectedSuggestedCents: 18500 });
+  assert.deepEqual([out.lineItem.allocatedMonthlyCents, out.lineItem.allocationConfirmedMonthlyCents, out.lineItem.allocationSuggestedMonthlyCents], [25000, 25000, 18500]);
+  assert.equal(fundUpdates[0].data.recommendedMonthlyContributionCents, 25000);
+});
+
+test('zero or a non-integer amount never funds the expense, and a suggestion that changed since it was shown is refused', async () => {
+  for (const monthlyCents of [0, -5, 12.5]) {
+    await assert.rejects(() => ops.confirmReserveAllocationWithEffects('p1', 'u1', 'li-1', { monthlyCents }), (e) => e.code === 'RESERVE_ALLOCATION_AMOUNT_INVALID');
+  }
+  line.allocatedMonthlyCents = 0;
+  await assert.rejects(() => ops.confirmReserveAllocationWithEffects('p1', 'u1', 'li-1'), (e) => e.code === 'RESERVE_ALLOCATION_AMOUNT_INVALID');
+  line.allocatedMonthlyCents = 18500; line.allocationSuggestedMonthlyCents = 20000;
+  await assert.rejects(() => ops.confirmReserveAllocationWithEffects('p1', 'u1', 'li-1', { expectedSuggestedCents: 18500 }), (e) => e.code === 'RESERVE_ALLOCATION_CHANGED');
+  assert.equal(updates.length, 0);
+});
+
+test('recalculation keeps a confirmed allocation instead of replacing it', () => {
+  const src = fs.readFileSync(require.resolve('../../src/services/homeReserveFundCalculation.service.ts'), 'utf8');
+  assert.match(src, /if \(keptCents != null\) allocatedMonthlyCents = keptCents;/);
 });

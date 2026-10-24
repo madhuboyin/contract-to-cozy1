@@ -211,6 +211,10 @@ export class HomeReserveFundCalculationService {
 
       const isNearTerm = item.windowStart <= nearTermCutoff;
       let allocatedMonthlyCents = 0;
+      // A homeowner-confirmed allocation is theirs: recalculation never replaces it (and never reconfirms or clears the confirmation).
+      const priorLine = existingByTimelineItemId.get(item.id);
+      let keptCents: number | null = null;
+      if (priorLine?.allocationConfirmedAt && (priorLine.allocationConfirmedMonthlyCents ?? 0) > 0) keptCents = priorLine.allocationConfirmedMonthlyCents;
 
       if (isNearTerm) {
         const shortfall = Math.max(0, targetCostCents - allocatedBalanceCents);
@@ -219,8 +223,10 @@ export class HomeReserveFundCalculationService {
       } else {
         const monthsUntil = Math.min(monthsBetween(now, item.windowStart), horizonCutoffMonths);
         allocatedMonthlyCents = Math.ceil(targetCostCents / monthsUntil);
-        recommendedMonthlyContributionCents += allocatedMonthlyCents;
       }
+      const suggestedMonthlyCents = allocatedMonthlyCents;
+      if (keptCents != null) allocatedMonthlyCents = keptCents;
+      recommendedMonthlyContributionCents += allocatedMonthlyCents;
 
       const existing = existingByTimelineItemId.get(item.id);
       if (!existing) itemsAdded++;
@@ -234,12 +240,14 @@ export class HomeReserveFundCalculationService {
             status: 'ACTIVE',
             targetCostCents,
             allocatedMonthlyCents,
+            allocationSuggestedMonthlyCents: suggestedMonthlyCents,
             allocatedBalanceCents,
           },
           update: {
             status: 'ACTIVE',
             targetCostCents,
             allocatedMonthlyCents,
+            allocationSuggestedMonthlyCents: suggestedMonthlyCents,
             allocatedBalanceCents,
             retiredAt: null,
             retiredReason: null,

@@ -1,10 +1,11 @@
+import { prisma } from '../lib/prisma';
 import { Response, NextFunction } from 'express';
 import { CustomRequest as Request } from '../types';
 import * as hubService from '../services/inspectionHub.service';
 import { ingestInspectionReport } from '../services/inspectionExtraction.service';
 import { applyWriteBacks, getWriteBackPreview } from '../services/inspectionWriteBack.service';
 import { APIError } from '../middleware/error.middleware';
-import { reviewInspectionReportWithEffects } from '../services/inspectionReportReviewOperations';
+import { inspectionReportFingerprint, reviewInspectionReportWithEffects } from '../services/inspectionReportReviewOperations';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 import { getProtectionContextDecisions } from '../services/protection/context';
 import { recordToolLifecycleEvents } from '../services/analytics/toolLifecycle';
@@ -106,7 +107,12 @@ export async function uploadReport(req: Request, res: Response, next: NextFuncti
 export async function getReport(req: Request, res: Response, next: NextFunction) {
   try {
     const report = await hubService.getReport(req.params.reportId, req.params.propertyId);
-    res.json({ success: true, data: { report } });
+    // The version a person is looking at (the review is recorded against it) and the latest review of that very version.
+    const current = await inspectionReportFingerprint(req.params.propertyId, req.params.reportId);
+    const latestReview = current
+      ? await prisma.inspectionReportReview.findFirst({ where: { propertyId: req.params.propertyId, reportId: req.params.reportId, contentFingerprint: current.fingerprint }, orderBy: { reviewedAt: 'desc' }, select: { outcome: true, reviewedAt: true } })
+      : null;
+    res.json({ success: true, data: { report: { ...report, reviewFingerprint: current?.fingerprint ?? null, latestReview } } });
   } catch (err) { next(err); }
 }
 
@@ -192,7 +198,7 @@ export async function getWriteBackPreviewHandler(req: Request, res: Response, ne
 export async function reviewReport(req: Request, res: Response, next: NextFunction) {
   try {
     const result = await reviewInspectionReportWithEffects(req.params.propertyId, req.user!.userId, req.params.reportId, {
-      outcome: req.body?.outcome, guidanceStepId: req.body?.guidanceStepId ?? null,
+      outcome: req.body?.outcome, guidanceStepId: req.body?.guidanceStepId ?? null, expectedFingerprint: req.body?.expectedFingerprint ?? null,
     });
     res.json({ success: true, data: { review: result.review, reused: result.reused, guidanceReported: result.guidanceReported } });
   } catch (err) { next(err); }

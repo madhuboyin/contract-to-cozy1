@@ -131,11 +131,12 @@ export async function reserveFundCommandResult(userId: string, propertyId: strin
     // refused, so nothing is reported to any journey; the allocation itself can still be confirmed.
     const supplied = launchedGuidanceStepId(launch) ?? await guidanceStepIdFromSourceExecution(userId, propertyId, launch?.sourceExecutionId ?? null);
     const bound = supplied ? await resolveFundingStepBinding(propertyId, supplied, line) : null;
+    command.expectedSuggestedCents = line.allocationSuggestedMonthlyCents ?? line.allocatedMonthlyCents;
     if (supplied) { command.guidanceStepId = bound?.ok ? supplied : null; if (!bound?.ok) command.guidanceStepRefused = true; }
     const expense = line.timelineItem?.inventoryItem?.name ?? String(line.timelineItem?.category ?? 'Capital item').toLowerCase().replace(/_/g, ' ');
     title = `Confirm the funding plan for ${expense}?`;
     description = `This records that you confirm saving ${usd(line.allocatedMonthlyCents)} a month toward ${usd(line.targetCostCents)} for this expense. It does not move money; it is your confirmation of the plan.`;
-    fields.push({ label: 'Expense', value: expense }, { label: 'Monthly allocation', value: usd(line.allocatedMonthlyCents) }, { label: 'Target', value: usd(line.targetCostCents) });
+    fields.push({ label: 'Expense', value: expense }, { label: 'Suggested monthly amount', value: usd(line.allocationSuggestedMonthlyCents ?? line.allocatedMonthlyCents) }, { label: 'Monthly allocation', value: usd(line.allocatedMonthlyCents) }, { label: 'Target', value: usd(line.targetCostCents) });
     if (supplied && !bound?.ok) fields.push({ label: 'Guided journey', value: bound ? GUIDANCE_STEP_REFUSAL_TEXT[bound.reason] : 'No journey step' });
   }
   else if (actionId === RESERVE_FUND_ACTION_IDS.ACCEPT_RECONCILIATION) { title = 'Mark this reserve item retired?'; description = 'The matched expense will be recorded as evidence that this planned need was completed.'; }
@@ -175,7 +176,7 @@ registerCapabilityHandler('reserve-fund.command', async (envelope) => {
 async function confirmReserveFundCommand(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
   const { execution, parameters, userId } = ctx;
   const propertyId = execution.propertyId;
-  const command = parameters.reserveFundCommand as { actionId: string; entityId?: string; posture?: HomeReserveFundPosture; input?: Contribution; balance?: { targetCents: number; baselineCents: number; note: string | null }; guidanceStepId?: string | null; guidanceStepRefused?: boolean };
+  const command = parameters.reserveFundCommand as { actionId: string; entityId?: string; posture?: HomeReserveFundPosture; input?: Contribution; balance?: { targetCents: number; baselineCents: number; note: string | null }; guidanceStepId?: string | null; guidanceStepRefused?: boolean; expectedSuggestedCents?: number };
   let artifactType = 'HOME_RESERVE_FUND';
   let artifactId = propertyId;
   let title = 'Reserve Fund updated';
@@ -211,7 +212,7 @@ async function confirmReserveFundCommand(ctx: ConfirmCapabilityContext): Promise
   } else if (command.actionId === RESERVE_FUND_ACTION_IDS.CONFIRM_ALLOCATION) {
     // The shared write and journey report (the Desktop route calls the same function). The confirmation is saved even if the step cannot be reported; a refused step reports nothing.
     const stepId = typeof command.guidanceStepId === 'string' ? command.guidanceStepId : null;
-    const confirmed = await confirmReserveAllocationWithEffects(propertyId, userId, command.entityId!, { guidanceStepId: stepId });
+    const confirmed = await confirmReserveAllocationWithEffects(propertyId, userId, command.entityId!, { guidanceStepId: stepId, expectedSuggestedCents: typeof command.expectedSuggestedCents === 'number' ? command.expectedSuggestedCents : null });
     artifactType = 'HOME_RESERVE_FUND_LINE_ITEM'; artifactId = confirmed.lineItem.id; title = 'Funding plan confirmed';
     journeyNote = stepId ? (confirmed.guidanceReported ? 'This step is recorded as done' : confirmed.guidanceRefusal ? GUIDANCE_STEP_REFUSAL_TEXT[confirmed.guidanceRefusal as keyof typeof GUIDANCE_STEP_REFUSAL_TEXT] ?? 'No journey step was updated' : 'The funding is confirmed, but the journey step could not be updated. Open the journey to check it')
       : command.guidanceStepRefused ? 'This expense is not the one the journey step is about, so no journey step was updated' : null;

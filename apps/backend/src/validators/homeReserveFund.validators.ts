@@ -22,6 +22,9 @@ export const listLineItemsQuerySchema = z.object({
 // Confirming a line item's allocation: the explicit homeowner confirmation that an expense is funded. The step is optional and only a hint (the server re-reads it).
 export const confirmAllocationBodySchema = z.object({
   guidanceStepId: z.string().uuid().optional(),
+  // The amount the homeowner chose (positive whole cents); absent confirms the current allocation. The suggestion they saw guards against a plan that changed meanwhile.
+  monthlyCents: z.number().int().positive().max(100_000_000).optional(),
+  expectedSuggestedCents: z.number().int().min(0).optional(),
 });
 
 export const retireLineItemBodySchema = z.object({

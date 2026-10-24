@@ -7026,6 +7026,10 @@ export interface InspectionReportSummary {
   confirmedAt?: string;
   processedAt?: string;
   createdAt: string;
+  /** The version of the report being shown; a review is recorded against it. */
+  reviewFingerprint?: string | null;
+  /** The latest review of exactly this version, if any. */
+  latestReview?: { outcome: 'REVIEWED' | 'ACCEPTED'; reviewedAt: string } | null;
 }
 
 export interface InspectionFinding {

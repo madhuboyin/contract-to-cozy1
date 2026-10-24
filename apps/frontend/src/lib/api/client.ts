@@ -6289,6 +6289,14 @@ class APIClient {
     return res.data ?? { writeBackCount: 0 };
   }
 
+  /** Records that the homeowner reviewed (or accepted) THIS version of the report: the same operation Ask uses. */
+  async reviewInspectionReport(propertyId: string, reportId: string, outcome: 'REVIEWED' | 'ACCEPTED', expectedFingerprint: string | null): Promise<void> {
+    await this.post(`/api/properties/${propertyId}/inspection-hub/reports/${reportId}/review`, {
+      outcome,
+      ...(expectedFingerprint ? { expectedFingerprint } : {}),
+    });
+  }
+
   async listInspectionOpenItems(
     propertyId: string,
     params?: { severity?: string; homeSystem?: string; reportId?: string; limit?: number; cursor?: string },

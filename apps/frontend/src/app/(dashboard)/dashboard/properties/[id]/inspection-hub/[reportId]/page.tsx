@@ -243,6 +243,7 @@ export default function ReportDetailPage() {
   const [loading, setLoading] = useState(true);
   const [confirming, setConfirming] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
+  const [reviewing, setReviewing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editingFinding, setEditingFinding] = useState<InspectionFinding | null>(null);
 
@@ -309,6 +310,20 @@ export default function ReportDetailPage() {
     }
   }
 
+  async function handleReview(outcome: 'REVIEWED' | 'ACCEPTED') {
+    setReviewing(true);
+    setError(null);
+    try {
+      await api.reviewInspectionReport(propertyId, reportId, outcome, report?.reviewFingerprint ?? null);
+      await load();
+    } catch (e: any) {
+      setError(e?.message ?? 'Failed to record the review');
+      await load();
+    } finally {
+      setReviewing(false);
+    }
+  }
+
   async function handleConfirm() {
     setConfirming(true);
     setError(null);
@@ -368,6 +383,32 @@ export default function ReportDetailPage() {
               entityId={reportId}
             />
           </>
+        )}
+
+        {/* Review of this version of the report */}
+        {report && (report.status === 'REVIEW_PENDING' || report.status === 'CONFIRMED') && (
+          <MobileCard className="space-y-2">
+            {report.latestReview ? (
+              <p className="text-sm text-slate-700">
+                {report.latestReview.outcome === 'ACCEPTED' ? 'You accepted' : 'You reviewed'} this report on{' '}
+                {new Date(report.latestReview.reviewedAt).toLocaleDateString()}. If it changes, it will need a new review.
+              </p>
+            ) : (
+              <p className="text-sm text-slate-700">Looked it over? Record that you reviewed this version of the report.</p>
+            )}
+            <div className="flex flex-wrap gap-2">
+              {report.latestReview?.outcome !== 'REVIEWED' && report.latestReview?.outcome !== 'ACCEPTED' && (
+                <Button className="min-h-[44px]" variant="outline" disabled={reviewing} onClick={() => handleReview('REVIEWED')}>
+                  {reviewing ? 'Saving…' : 'Mark as reviewed'}
+                </Button>
+              )}
+              {report.latestReview?.outcome !== 'ACCEPTED' && !hasSafetyFindings && (
+                <Button className="min-h-[44px]" variant="outline" disabled={reviewing} onClick={() => handleReview('ACCEPTED')}>
+                  Accept report
+                </Button>
+              )}
+            </div>
+          </MobileCard>
         )}
 
         {/* Safety warning banner */}

@@ -10691,6 +10691,8 @@ model HomeReserveFundLineItem {
   allocationConfirmedAt           DateTime?
   allocationConfirmedByUserId     String?
   allocationConfirmedMonthlyCents Int?
+  // The monthly amount the recalculation suggested when the homeowner confirmed (kept so an override is visible). The confirmed amount IS the actual allocation: recalculation keeps it.
+  allocationSuggestedMonthlyCents Int?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

@@ -138,7 +138,7 @@ router.post(
   '/properties/:propertyId/inspection-hub/reports/:reportId/review',
   propertyAuthMiddleware,
   requireHouseholdRole('CONTRIBUTOR'),
-  validateBody(z.object({ outcome: z.enum(['REVIEWED', 'ACCEPTED']).optional(), guidanceStepId: z.string().uuid().optional() })),
+  validateBody(z.object({ outcome: z.enum(['REVIEWED', 'ACCEPTED']).optional(), guidanceStepId: z.string().uuid().optional(), expectedFingerprint: z.string().length(64).optional() })),
   reviewReport,
 );
 
