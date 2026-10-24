@@ -720,3 +720,21 @@ Owner decision: build the Ask command that runs the same persisted analysis the 
   A gate's refusal is the homeowner's answer in the gate's own words. It is registered like `COVERAGE_COMMAND` (skill-less governed list) and everywhere its siblings are.
 - **Matrix.** The eight rows are CONNECTED (25 connected). `review_current_policy_context` and `review_current_warranty_context` (a persisted review of the term) remain to build.
 
+## 35. Inspection report review (2026-10-24)
+
+Owner decision: add persisted review evidence; do not overload `InspectionReport.status` or `confirmedAt` (they describe processing and the write-back confirmation, not homeowner review); prefer an append-only review record.
+
+- **Schema (owner runs `prisma db push`).** New `InspectionReportReview` (report, property, a content fingerprint of the version reviewed, the person, the time, the outcome `REVIEWED` or `ACCEPTED`, and the journey and step when launched from one; indexed by report) and the enum
+  `InspectionReportReviewOutcome`. Append-only. `REVIEWED` and `ACCEPTED` are distinct; only `REVIEWED` is used so far.
+- **A changed report needs a new review.** The fingerprint covers the report's own fields (type, status, counts, processed and confirmed times) and every finding's id, status and severity, so any change to the report or a finding is a different version and the earlier review does not cover it.
+  The same review of the same version by the same person for the same step returns the earlier row (no duplicate); the same review from a different step is its own row, which is how journey lineage stays exact.
+- **One service.** `services/inspectionReportReviewOperations.ts` `reviewInspectionReportWithEffects`: the report must be processed (review pending or confirmed; not still processing, not archived); a caller that showed a person a version (Ask's confirmation) records the review of **that** version
+  (`expectedFingerprint`) and a newer one is refused; the journey step is re-read first and its journey and step are stored on the row only when they fit; then the review is reported to the step. The page's route
+  `POST /properties/:propertyId/inspection-hub/reports/:reportId/review` (CONTRIBUTOR) and Ask both call it.
+- **Exact binding, to the report.** The step must be the inspection-report tool's open review step (`review_inspection_report`, `review_maintenance_report`, `review_post_repair_report`, `review_pre_purchase_report`) on an open journey, and the journey must be about this very report: the report was made for the
+  journey (`sourceJourneyId`) or the journey's signal is a finding of this report. The pre-purchase step also needs a pre-purchase report. Any refusal saves the review (without journey lineage), reports nothing and uses no other step; a failed report never undoes the review.
+- **In Ask.** New `INSPECTION_REPORT_REVIEW` (confirmation-gated, CONTRIBUTOR floor, non-routable, no correction mode: append-only evidence). The four review steps open it carrying the step; the **report is derived from the journey**, never named by the caller; the proposal shows the report, date and findings, and the confirmation is tied to the fingerprint
+  shown, so a report that changed in between is refused (`ASK_CONTEXT_VERSION_CONFLICT`) and nothing is written. Other inspection steps (`assess_urgency`, finding decisions) keep their own proofs.
+- **Matrix.** The four rows are CONNECTED (29 connected). They are the second case in which an acknowledgement-class proof may complete a step: a persisted, versioned review record, not a bare confirmation.
+- **Not built.** The page has no review button yet (the route exists); the Desktop UI to call it is open.
+

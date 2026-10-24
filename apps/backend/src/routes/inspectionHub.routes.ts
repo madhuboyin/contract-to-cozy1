@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import multer from 'multer';
+import { z } from 'zod';
 import { authenticate } from '../middleware/auth.middleware';
 import { propertyAuthMiddleware, requireHouseholdRole } from '../middleware/propertyAuth.middleware';
 import { validateBody } from '../middleware/validate.middleware';
@@ -24,6 +25,7 @@ import {
   dismissFinding,
   getWriteBackPreviewHandler,
   confirmReport,
+  reviewReport,
   listOpenItems,
   resolveFinding,
   compareReports,
@@ -129,6 +131,15 @@ router.post(
   propertyAuthMiddleware,
   requireHouseholdRole('CONTRIBUTOR'),
   confirmReport,
+);
+
+// A homeowner's review of the report (append-only evidence of review; separate from the write-back confirmation above).
+router.post(
+  '/properties/:propertyId/inspection-hub/reports/:reportId/review',
+  propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
+  validateBody(z.object({ outcome: z.enum(['REVIEWED', 'ACCEPTED']).optional(), guidanceStepId: z.string().uuid().optional() })),
+  reviewReport,
 );
 
 // ── Open items ────────────────────────────────────────────────────────────────

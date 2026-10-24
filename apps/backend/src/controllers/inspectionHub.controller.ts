@@ -4,6 +4,7 @@ import * as hubService from '../services/inspectionHub.service';
 import { ingestInspectionReport } from '../services/inspectionExtraction.service';
 import { applyWriteBacks, getWriteBackPreview } from '../services/inspectionWriteBack.service';
 import { APIError } from '../middleware/error.middleware';
+import { reviewInspectionReportWithEffects } from '../services/inspectionReportReviewOperations';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 import { getProtectionContextDecisions } from '../services/protection/context';
 import { recordToolLifecycleEvents } from '../services/analytics/toolLifecycle';
@@ -184,6 +185,16 @@ export async function getWriteBackPreviewHandler(req: Request, res: Response, ne
   try {
     const preview = await getWriteBackPreview(req.params.reportId, req.params.propertyId);
     res.json({ success: true, data: { preview } });
+  } catch (err) { next(err); }
+}
+
+/** The page's review of one report: the same shared record and journey report Ask uses. `status` and `confirmedAt` (processing and write-back) are separate and untouched. */
+export async function reviewReport(req: Request, res: Response, next: NextFunction) {
+  try {
+    const result = await reviewInspectionReportWithEffects(req.params.propertyId, req.user!.userId, req.params.reportId, {
+      outcome: req.body?.outcome, guidanceStepId: req.body?.guidanceStepId ?? null,
+    });
+    res.json({ success: true, data: { review: result.review, reused: result.reused, guidanceReported: result.guidanceReported } });
   } catch (err) { next(err); }
 }
 

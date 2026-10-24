@@ -15,7 +15,8 @@ const VERDICTS = ['CONNECTED', 'CONNECTABLE', 'NEEDS_PRODUCT_DECISION', 'WRONG_T
 const BINDINGS = ['EXACT_STEP', 'FAMILY_FALLBACK', 'NONE'];
 const POLICIES = ['ACKNOWLEDGEMENT', 'CANONICAL_MUTATION', 'VERIFIED_EVIDENCE', 'EXTERNAL_COMPLETION', 'DECISION'];
 // Acknowledgement completes only a true review step, never a safety, financial, compliance, execution or repair step (owner decision 2026-10-24).
-const ACKNOWLEDGEMENT_MAY_COMPLETE = new Set(['guidance-overview:review_signal']);
+// The inspection review steps are the owner's other case: a persisted, versioned review record (never a bare confirmation) may complete a review step.
+const ACKNOWLEDGEMENT_MAY_COMPLETE = new Set(['guidance-overview:review_signal', 'inspection-report:review_inspection_report', 'inspection-report:review_maintenance_report', 'inspection-report:review_post_repair_report', 'inspection-report:review_pre_purchase_report']);
 const templates = [...listGuidanceTemplates(), DEFAULT_TEMPLATE];
 const registered = templates.flatMap((template) => (template.steps ?? []).map((step) => ({ journey: template.journeyTypeKey, key: `${step.toolKey}:${step.stepKey}` })));
 

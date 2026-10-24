@@ -359,6 +359,7 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   PROPERTY_TAX_COMPARABLE_COMMAND: 'The comparable sale is shown for review and added to your appeal evidence only after you confirm; Cozy does not verify it or file anything.',
   STATUS_BOARD_COMMAND: 'Your correction is shown beside the estimate and saved only after you confirm; the estimate is not erased.',
   CAPITAL_TIMELINE_COMMAND: 'Your timeline adjustment is shown and saved only after you confirm; the timeline uses it the next time it is run and no contractor is contacted.',
+  INSPECTION_REPORT_REVIEW: 'The inspection report the selected journey step is about is marked as reviewed after confirmation, for the version of the report you were shown.',
   COVERAGE_ANALYSIS_RUN: 'The coverage check for the selected journey step runs and is saved only after you confirm; no policy is changed and no insurer is contacted.',
   COVERAGE_COMMAND: 'Your coverage step is shown and saved only after you confirm; no policy is changed and no insurer is contacted.',
   COVERAGE_REVIEW_STATUS: 'Your coverage review lists questions worth asking about the confirmed facts on your policy, and what is still missing; it does not say what a claim would pay.',

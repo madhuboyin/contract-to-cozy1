@@ -21127,11 +21127,40 @@ model InspectionReport {
   property   Property              @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   findings   InspectionFinding[]
   writeBacks InspectionWriteBack[]
+  reviews    InspectionReportReview[]
 
   @@index([propertyId, inspectionDate(sort: Desc)])
   @@index([propertyId, status])
   @@index([sourceEntityType, sourceEntityId])
   @@map("inspection_reports_v2")
+}
+
+enum InspectionReportReviewOutcome {
+  REVIEWED
+  ACCEPTED
+}
+
+// A homeowner's review of an inspection report, append-only. It is evidence that a person looked at THIS version of the report: `status` and `confirmedAt` on the report describe processing and the
+// write-back confirmation, not review, so neither is overloaded. A report that changes (its findings, their statuses, its confirmation) has a different `contentFingerprint`, so the earlier review does not
+// cover it and a new one is needed. REVIEWED and ACCEPTED are distinct outcomes; the first use is REVIEWED. The journey and step are set when the review was launched from a journey step.
+model InspectionReportReview {
+  id                 String                        @id @default(uuid())
+  propertyId         String
+  reportId           String
+  contentFingerprint String
+  outcome            InspectionReportReviewOutcome @default(REVIEWED)
+  reviewedByUserId   String
+  reviewedAt         DateTime                      @default(now())
+  journeyId          String?
+  stepId             String?
+  createdAt          DateTime                      @default(now())
+
+  report InspectionReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@index([reportId, reviewedAt(sort: Desc)])
+  @@index([propertyId, reportId])
+  @@index([journeyId, stepId])
+  @@map("inspection_report_reviews")
 }
 
 // One row per extracted finding. Survives across the life of the property record.

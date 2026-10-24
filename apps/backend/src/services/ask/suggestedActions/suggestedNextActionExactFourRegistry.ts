@@ -300,6 +300,7 @@ export const RESULT_OWNERSHIP_RELATIONSHIPS: Readonly<Record<string, readonly st
   COVERAGE_GAPS: operationSpecificContinuationOutcomeKeys('COVERAGE_GAPS'),
   COVERAGE_COMPARISON_STATUS: operationSpecificContinuationOutcomeKeys('COVERAGE_COMPARISON_STATUS'),
   COVERAGE_REVIEW_STATUS: operationSpecificContinuationOutcomeKeys('COVERAGE_REVIEW_STATUS'),
+  INSPECTION_REPORT_REVIEW: operationSpecificContinuationOutcomeKeys('INSPECTION_REPORT_REVIEW'),
   COVERAGE_ANALYSIS_RUN: operationSpecificContinuationOutcomeKeys('COVERAGE_ANALYSIS_RUN'),
   COVERAGE_COMMAND: operationSpecificContinuationOutcomeKeys('COVERAGE_COMMAND'),
   SAVINGS_OPPORTUNITIES: operationSpecificContinuationOutcomeKeys('SAVINGS_OPPORTUNITIES'),

@@ -15,6 +15,7 @@ import { NEGOTIATION_SHIELD_START_MESSAGE } from './support/negotiationShieldSta
 import { PROJECT_TRACKER_CREATE_MESSAGE } from './support/projectTrackerConstants';
 import { GUIDANCE_STEP_ACKNOWLEDGE_MESSAGE } from './support/guidanceAcknowledge';
 import { COVERAGE_ANALYSIS_RUN_MESSAGE } from './support/coverageAnalysisRun';
+import { INSPECTION_REPORT_REVIEW_MESSAGE } from './support/inspectionReportReview';
 
 export type AskGuidanceStepMode = 'IN_ASK' | 'INLINE_CAPTURE' | 'NAVIGATE';
 
@@ -136,6 +137,27 @@ export const ASK_GUIDANCE_IN_ASK_STEPS: Readonly<Record<string, AskGuidanceInAsk
     operationId: 'COVERAGE_ANALYSIS_RUN', message: COVERAGE_ANALYSIS_RUN_MESSAGE, label: 'Run a coverage check', carriesStep: 'ENTITY',
     reason: 'You can run the coverage check here; the saved evaluation is recorded on this journey.',
     outcome: 'A fresh, saved coverage evaluation for this journey\'s subject is recorded as this step\'s proof.',
+  },
+  // A review of the inspection report the journey is about: an append-only review record of this version of the report (reading a report is never proof).
+  'inspection-report:review_inspection_report': {
+    operationId: 'INSPECTION_REPORT_REVIEW', message: INSPECTION_REPORT_REVIEW_MESSAGE, label: 'Mark the report as reviewed', carriesStep: 'ENTITY',
+    reason: 'You can mark the inspection report as reviewed here; your review is recorded on this journey.',
+    outcome: 'Your review of this version of the report is recorded as this step\'s proof.',
+  },
+  'inspection-report:review_maintenance_report': {
+    operationId: 'INSPECTION_REPORT_REVIEW', message: INSPECTION_REPORT_REVIEW_MESSAGE, label: 'Mark the report as reviewed', carriesStep: 'ENTITY',
+    reason: 'You can mark the inspection report as reviewed here; your review is recorded on this journey.',
+    outcome: 'Your review of this version of the report is recorded as this step\'s proof.',
+  },
+  'inspection-report:review_post_repair_report': {
+    operationId: 'INSPECTION_REPORT_REVIEW', message: INSPECTION_REPORT_REVIEW_MESSAGE, label: 'Mark the report as reviewed', carriesStep: 'ENTITY',
+    reason: 'You can mark the inspection report as reviewed here; your review is recorded on this journey.',
+    outcome: 'Your review of this version of the report is recorded as this step\'s proof.',
+  },
+  'inspection-report:review_pre_purchase_report': {
+    operationId: 'INSPECTION_REPORT_REVIEW', message: INSPECTION_REPORT_REVIEW_MESSAGE, label: 'Mark the report as reviewed', carriesStep: 'ENTITY',
+    reason: 'You can mark the inspection report as reviewed here; your review is recorded on this journey.',
+    outcome: 'Your review of this version of the report is recorded as this step\'s proof.',
   },
   // The expense's allocation, explicitly confirmed by the homeowner (a calculated line item is not proof). The step opens the capital reserve plan; confirming one expense's funding from it
   // (the plan's own row action, started from this execution) completes the step when the journey is about that very expense.
