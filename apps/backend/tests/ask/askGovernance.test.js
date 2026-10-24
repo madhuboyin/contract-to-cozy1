@@ -90,7 +90,7 @@ test('every material Ask command has governed confirmation, authorization, cance
     // inputs, a pending run is cancelled through confirmation, and a finished analysis is never edited or stopped. A correction is
     // made by editing the case (NEGOTIATION_SHIELD_CASE_UPDATE) and running a new analysis; earlier analyses are retained on purpose.
     // Owner-confirmed 2026-10-14 (Presentation Quality Phase 1B).
-    const NO_CORRECTION_INPUT = new Set(['NEGOTIATION_SHIELD_CASE_ANALYZE']);
+    const NO_CORRECTION_INPUT = new Set(['NEGOTIATION_SHIELD_CASE_ANALYZE', 'COVERAGE_ANALYSIS_RUN']); // COVERAGE_ANALYSIS_RUN is the same kind of append-only run: each confirmed run saves a new analysis and earlier ones are retained
     if (!IRREVERSIBLE.has(definition.id) && !NO_CORRECTION_INPUT.has(definition.id)) assert.ok(definition.correctionModes.length > 0, `${definition.id} declares no correction mode`);
     else assert.deepEqual(definition.correctionModes, []);
     assert.ok(definition.cancellation.title);

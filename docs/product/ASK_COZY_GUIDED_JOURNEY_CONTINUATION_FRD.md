@@ -705,3 +705,18 @@ them automatically.
   the confirmation is re-made, not carried over silently. Letting the homeowner set a different monthly amount (an override the recalculation would respect) is not built.
 - **Matrix.** `capital-timeline:fund_capital_expense` is CONNECTED (17 connected).
 
+## 34. The canonical coverage analysis command (2026-10-24)
+
+Owner decision: build the Ask command that runs the same persisted analysis the page runs, bound to the exact step and the item or property scope, completing only the relevant `check_*` step.
+
+- **One shared service.** `services/coverageAnalysisOperations.ts` `runCoverageAnalysisWithEffects` runs the persisted analysis (the property's `run`, or one item's `runItemAnalysis` behind the page's item gates: the `ASSESS_ITEM_COVERAGE` feature gate and the coverage-state check),
+  emits the page's analytics event, and reports the journey step. The two page routes (`coverage-analysis/run` and `inventory/items/:itemId/coverage-analysis/run`) now call it and accept `guidanceStepId` as a hint; neither reported anything before.
+- **The proof** is a fresh, canonical, persisted evaluation scoped to the journey's subject: the analysis the call just saved, for the journey's item, or for the property when the journey has none, with its coverage status (the item's scenario state, or the property's insurance review state),
+  confidence and evaluation time, referenced by analysis id (its stored inputs are the source records) with the assumption set and preference profile it was built on. Opening a review, a transient answer, and a decision on a comparison are not proof.
+- **Exact binding and scope.** The step must be the `coverage-intelligence` tool's open check step on an open journey, and **the scope must equal the journey's subject**: a property analysis cannot prove an item journey, an item analysis cannot prove a property journey, and another item cannot prove either (`WRONG_SUBJECT`).
+  Every refusal saves the analysis, reports nothing and uses no other step; a failed report never undoes the analysis.
+- **The Ask command** `COVERAGE_ANALYSIS_RUN` (confirmation-gated, CONTRIBUTOR floor, non-routable, no correction mode: append-only like the negotiation analysis) is reached only by a check step's own action. One command supports all eight steps (`check_coverage`, `check_replacement_coverage`,
+  `check_inspection_coverage`, `check_recall_coverage`, `check_weather_coverage`, `check_financial_coverage`, `check_inaction_coverage`, `check_compliance_coverage`). The scope is **derived from the journey**, never taken from the caller; the step is re-read at the proposal and again at the confirmation, and a changed step rejects the confirmation.
+  A gate's refusal is the homeowner's answer in the gate's own words. It is registered like `COVERAGE_COMMAND` (skill-less governed list) and everywhere its siblings are.
+- **Matrix.** The eight rows are CONNECTED (25 connected). `review_current_policy_context` and `review_current_warranty_context` (a persisted review of the term) remain to build.
+

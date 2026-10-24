@@ -318,6 +318,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   CAPITAL_TIMELINE_COMMAND: new Set(['capital-timeline-back']),
   // Coverage Intelligence writes (register P0): prepare the coverage review, start a comparison against the verified policy, and record the keep / change / shop / defer decision. Owner-only, confirmation-gated, declared-action only; never by fuzzy retrieval.
   COVERAGE_COMMAND: new Set(['coverage-back', 'coverage-back-review']),
+  COVERAGE_ANALYSIS_RUN: new Set(['coverage-analysis-run-boundary']),
   // Manage a saved Home Upgrade Planner option (register P0 Home Digital Twin / Upgrade Planner): record the decision, rename, archive or restore, recalculate (queued job) and delete an archived option. Confirmation-gated, declared-action only; never by fuzzy retrieval.
   HOME_UPGRADE_COMMAND: new Set(['home-upgrade-back']),
   // Add, change and remove a permit record (register P0 Permits, slice PM-B). Records the REPORTED status; the official status is the authority's and is not set here. Confirmation-gated, declared-action only; never by fuzzy retrieval.

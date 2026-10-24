@@ -85,6 +85,8 @@ const itemCoverageOverridesSchema = z.object({
 
 const runItemCoverageBodySchema = z.object({
   overrides: itemCoverageOverridesSchema.optional(),
+  // The journey step this run is for (a hint; the server re-reads it and requires the evaluation to be for the journey's own item).
+  guidanceStepId: z.string().uuid().optional(),
   guidanceJourneyId: z.string().uuid().optional(),
   guidanceStepKey: z.string().trim().min(1).max(80).optional(),
   guidanceSignalIntentFamily: z.string().trim().min(1).max(120).optional(),

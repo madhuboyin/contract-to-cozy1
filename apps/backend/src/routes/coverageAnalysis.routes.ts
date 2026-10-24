@@ -31,6 +31,8 @@ const overrideSchema = z.object({
 const runBodySchema = z.object({
   overrides: overrideSchema.optional(),
   assumptionSetId: z.string().uuid().optional(),
+  // The journey step this run is for. Only a hint: the server re-reads it and reports only a step whose subject this analysis is for.
+  guidanceStepId: z.string().uuid().optional(),
   guidanceJourneyId: z.string().uuid().optional(),
   guidanceStepKey: z.string().trim().min(1).max(80).optional(),
   guidanceSignalIntentFamily: z.string().trim().min(1).max(120).optional(),

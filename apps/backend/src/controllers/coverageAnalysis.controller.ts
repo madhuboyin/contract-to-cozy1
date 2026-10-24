@@ -19,6 +19,7 @@ import {
   findCoverageComparison,
 } from '../services/coverageComparison.service';
 import { recordCoverageDecisionWithEffects } from '../services/coverageDecisionOperations';
+import { runCoverageAnalysisWithEffects } from '../services/coverageAnalysisOperations';
 
 const service = new CoverageIntelligenceService();
 const inventoryService = new InventoryService();
@@ -233,20 +234,9 @@ export async function runCoverageAnalysis(req: CustomRequest, res: Response) {
     const assumptionSetId =
       typeof req.body?.assumptionSetId === 'string' ? req.body.assumptionSetId : undefined;
 
-    const overrides = (req.body?.overrides ?? {}) as CoverageAnalysisOverrides;
-    const analysis = await service.run(propertyId, userId, overrides, { assumptionSetId });
-
-    analyticsEmitter.track({
-      eventType: AnalyticsEvent.ACTION_COMPLETED,
-      userId,
-      propertyId,
-      moduleKey: AnalyticsModule.FINANCIAL,
-      featureKey: AnalyticsFeature.COVERAGE_ANALYSIS,
-      metadataJson: {
-        actionType: 'run_analysis',
-        insuranceReviewState: analysis.insuranceReviewState,
-        confidence: analysis.confidence,
-      },
+    // The run, its analytics and the journey proof are the shared service's, so Ask runs the same analysis the same way.
+    const { analysis } = await runCoverageAnalysisWithEffects(propertyId, userId, { kind: 'PROPERTY' }, {
+      overrides: (req.body?.overrides ?? {}) as CoverageAnalysisOverrides, assumptionSetId, guidanceStepId: typeof req.body?.guidanceStepId === 'string' ? req.body.guidanceStepId : null,
     });
 
     return res.json({ success: true, data: { analysis } });
@@ -311,36 +301,9 @@ export async function runItemCoverageAnalysis(req: CustomRequest, res: Response)
       return res.status(401).json({ success: false, message: 'Authentication required.' });
     }
 
-    const overrides = (req.body?.overrides ?? {}) as ItemCoverageAnalysisOverrides;
-    const item = await inventoryService.getItem(propertyId, itemId);
-    const featureContext = await evaluateFeatureContext(propertyId, userId, {
-      featureKey: 'COVERAGE_INTELLIGENCE',
-      operationKey: 'ASSESS_ITEM_COVERAGE',
-      operationInput: {
-        inventoryItemId: itemId,
-        responsibilityScope: item.responsibilityScope ?? undefined,
-        hasDisclosedEstimate: item.replacementValueSource === 'ESTIMATED',
-      },
-    });
-    if (!featureContext.canExecute || !['MISSING', 'CONFIRMED'].includes(item.coverageState)) {
-      throw new APIError(
-        item.coverageState === 'MANAGED_ELSEWHERE'
-          ? 'This system is managed by another responsible party.'
-          : 'Complete the item coverage information before running an analysis.',
-        409,
-        'PROPERTY_CONTEXT_REQUIRED',
-        featureContext,
-      );
-    }
-    const analysis = await service.runItemAnalysis(propertyId, itemId, userId, overrides);
-
-    analyticsEmitter.track({
-      eventType: AnalyticsEvent.ACTION_COMPLETED,
-      userId,
-      propertyId,
-      moduleKey: AnalyticsModule.FINANCIAL,
-      featureKey: AnalyticsFeature.COVERAGE_ANALYSIS,
-      metadataJson: { actionType: 'run_item_analysis', itemId, scenarioComparisonReady: true },
+    // The item gates, the run, its analytics and the journey proof are the shared service's.
+    const { analysis } = await runCoverageAnalysisWithEffects(propertyId, userId, { kind: 'ITEM', itemId }, {
+      overrides: (req.body?.overrides ?? {}) as ItemCoverageAnalysisOverrides, guidanceStepId: typeof req.body?.guidanceStepId === 'string' ? req.body.guidanceStepId : null,
     });
 
     return res.json({ success: true, data: { analysis } });

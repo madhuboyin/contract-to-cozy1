@@ -223,6 +223,7 @@ export type AskOperationId =
   | 'CAPITAL_TIMELINE_COMMAND'
   // Coverage Intelligence writes (register P0): prepare the coverage review, start a comparison against the verified policy, and record the keep / change / shop / defer decision. Owner-only, confirmation-gated, declared-action only; never by fuzzy retrieval.
   | 'COVERAGE_COMMAND'
+  | 'COVERAGE_ANALYSIS_RUN'
   // Read the coverage review: the questions worth asking about the confirmed facts on the household's policy (register P0 Coverage Intelligence). Read-only; never generates a review.
   | 'COVERAGE_REVIEW_STATUS'
   // Manage a saved Home Upgrade Planner option (register P0 Home Digital Twin / Upgrade Planner): record the decision, rename, archive or restore, recalculate (queued job) and delete an archived option. Confirmation-gated, declared-action only; never by fuzzy retrieval.
@@ -524,6 +525,7 @@ export const ASK_INTERNAL_OPERATION_IDS: ReadonlySet<AskOperationId> = new Set<A
   'STATUS_BOARD_COMMAND',
   'CAPITAL_TIMELINE_COMMAND',
   'COVERAGE_COMMAND',
+  'COVERAGE_ANALYSIS_RUN',
   'HOME_UPGRADE_COMMAND',
   'PERMIT_TRACKER_COMMAND',
   'NEGOTIATION_SHIELD_BUYER_COMMAND',
@@ -888,6 +890,7 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   PROPERTY_TAX_COMPARABLE_COMMAND: definition('PROPERTY_TAX_COMPARABLE_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'property-tax.comparable-command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   STATUS_BOARD_COMMAND: definition('STATUS_BOARD_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'status-board.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   CAPITAL_TIMELINE_COMMAND: definition('CAPITAL_TIMELINE_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'capital-timeline.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
+  COVERAGE_ANALYSIS_RUN: definition('COVERAGE_ANALYSIS_RUN', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'coverage.analysis-run', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
   COVERAGE_COMMAND: definition('COVERAGE_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'coverage.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   COVERAGE_REVIEW_STATUS: definition('COVERAGE_REVIEW_STATUS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'coverage.review-status', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
   HOME_UPGRADE_COMMAND: definition('HOME_UPGRADE_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'home-digital-twin.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),

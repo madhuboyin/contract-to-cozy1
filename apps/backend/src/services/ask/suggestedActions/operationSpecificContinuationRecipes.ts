@@ -246,6 +246,10 @@ export const OPERATION_SPECIFIC_CONTINUATION_RECIPES: Readonly<Partial<Record<As
     recipe('Review coverage gaps', 'Show coverage gaps for my recorded items', 'COVERAGE_GAPS', 'REVIEW_COVERAGE_GAPS', 'COVERAGE_STATUS_REVIEW_GAPS'),
     recipe('Review recorded warranties', 'Show my recorded warranties', 'WARRANTY_LOOKUP', 'REVIEW_WARRANTIES', 'COVERAGE_STATUS_REVIEW_WARRANTIES'),
   ],
+  COVERAGE_ANALYSIS_RUN: [
+    recipe('Review guidance journeys', 'Show my guidance journeys', 'GUIDANCE_JOURNEYS_LIST', 'REVIEW_GUIDANCE_JOURNEYS', 'COVERAGE_ANALYSIS_REVIEW_JOURNEYS'),
+    recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'COVERAGE_ANALYSIS_REVIEW_HOME_ACTIONS'),
+  ],
   COVERAGE_COMMAND: [
     recipe('Review coverage status', 'Show my coverage review status', 'COVERAGE_REVIEW_STATUS', 'REVIEW_COVERAGE_STATUS', 'COVERAGE_UPDATED_REVIEW_STATUS'),
     recipe('Review coverage gaps', 'Show coverage gaps for my recorded items', 'COVERAGE_GAPS', 'REVIEW_COVERAGE_GAPS', 'COVERAGE_UPDATED_REVIEW_GAPS'),

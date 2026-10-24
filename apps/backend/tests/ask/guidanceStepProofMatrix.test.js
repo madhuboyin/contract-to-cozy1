@@ -57,7 +57,7 @@ test('the matrix records the owner decisions: Home Savings is not advanced by a 
   assert.equal(GUIDANCE_STEP_PROOF_MATRIX['home-savings:evaluate_savings_funding'].verdict, 'WRONG_TOOL');
   assert.match(GUIDANCE_STEP_PROOF_MATRIX['home-savings:evaluate_savings_funding'].risk, /save or dismiss from Home Savings does not complete it/);
   for (const step of ['estimate_uninsured_cost', 'estimate_repair_cost', 'estimate_improvement_cost']) assert.equal(GUIDANCE_STEP_PROOF_MATRIX[`service-price-radar:${step}`].verdict, 'WRONG_TOOL', step);
-  assert.equal(GUIDANCE_STEP_PROOF_MATRIX['coverage-intelligence:check_coverage'].verdict, 'CONNECTABLE', 'the proof is decided (a fresh scoped evaluation); the command and reporter are still to build');
+  assert.equal(GUIDANCE_STEP_PROOF_MATRIX['coverage-intelligence:check_coverage'].verdict, 'CONNECTED', 'a fresh scoped evaluation, run by the canonical analysis command');
 });
 
 test('acknowledgement is never the proof for a step that is not a true review step, and the owner\'s proof definitions are recorded', () => {

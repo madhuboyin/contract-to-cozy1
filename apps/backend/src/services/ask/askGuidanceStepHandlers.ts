@@ -14,6 +14,7 @@ import { DO_NOTHING_RUN_MESSAGE, SERVICE_PRICE_CHECK_MESSAGE } from './support/h
 import { NEGOTIATION_SHIELD_START_MESSAGE } from './support/negotiationShieldStart';
 import { PROJECT_TRACKER_CREATE_MESSAGE } from './support/projectTrackerConstants';
 import { GUIDANCE_STEP_ACKNOWLEDGE_MESSAGE } from './support/guidanceAcknowledge';
+import { COVERAGE_ANALYSIS_RUN_MESSAGE } from './support/coverageAnalysisRun';
 
 export type AskGuidanceStepMode = 'IN_ASK' | 'INLINE_CAPTURE' | 'NAVIGATE';
 
@@ -94,6 +95,47 @@ export const ASK_GUIDANCE_IN_ASK_STEPS: Readonly<Record<string, AskGuidanceInAsk
     operationId: 'GUIDANCE_STEP_ACKNOWLEDGE', message: GUIDANCE_STEP_ACKNOWLEDGE_MESSAGE, label: 'Mark as reviewed', carriesStep: 'ENTITY',
     reason: 'You can mark this review step as reviewed here; your review is recorded with the time.',
     outcome: 'Your review of the signal, recorded with the time and the signal version, is this step\'s proof.',
+  },
+  // A fresh, persisted coverage evaluation scoped to the journey's subject (its item, or the property) is the proof for every coverage check step; opening a review is not.
+  'coverage-intelligence:check_coverage': {
+    operationId: 'COVERAGE_ANALYSIS_RUN', message: COVERAGE_ANALYSIS_RUN_MESSAGE, label: 'Run a coverage check', carriesStep: 'ENTITY',
+    reason: 'You can run the coverage check here; the saved evaluation is recorded on this journey.',
+    outcome: 'A fresh, saved coverage evaluation for this journey\'s subject is recorded as this step\'s proof.',
+  },
+  'coverage-intelligence:check_replacement_coverage': {
+    operationId: 'COVERAGE_ANALYSIS_RUN', message: COVERAGE_ANALYSIS_RUN_MESSAGE, label: 'Run a coverage check', carriesStep: 'ENTITY',
+    reason: 'You can run the coverage check here; the saved evaluation is recorded on this journey.',
+    outcome: 'A fresh, saved coverage evaluation for this journey\'s subject is recorded as this step\'s proof.',
+  },
+  'coverage-intelligence:check_inspection_coverage': {
+    operationId: 'COVERAGE_ANALYSIS_RUN', message: COVERAGE_ANALYSIS_RUN_MESSAGE, label: 'Run a coverage check', carriesStep: 'ENTITY',
+    reason: 'You can run the coverage check here; the saved evaluation is recorded on this journey.',
+    outcome: 'A fresh, saved coverage evaluation for this journey\'s subject is recorded as this step\'s proof.',
+  },
+  'coverage-intelligence:check_recall_coverage': {
+    operationId: 'COVERAGE_ANALYSIS_RUN', message: COVERAGE_ANALYSIS_RUN_MESSAGE, label: 'Run a coverage check', carriesStep: 'ENTITY',
+    reason: 'You can run the coverage check here; the saved evaluation is recorded on this journey.',
+    outcome: 'A fresh, saved coverage evaluation for this journey\'s subject is recorded as this step\'s proof.',
+  },
+  'coverage-intelligence:check_weather_coverage': {
+    operationId: 'COVERAGE_ANALYSIS_RUN', message: COVERAGE_ANALYSIS_RUN_MESSAGE, label: 'Run a coverage check', carriesStep: 'ENTITY',
+    reason: 'You can run the coverage check here; the saved evaluation is recorded on this journey.',
+    outcome: 'A fresh, saved coverage evaluation for this journey\'s subject is recorded as this step\'s proof.',
+  },
+  'coverage-intelligence:check_financial_coverage': {
+    operationId: 'COVERAGE_ANALYSIS_RUN', message: COVERAGE_ANALYSIS_RUN_MESSAGE, label: 'Run a coverage check', carriesStep: 'ENTITY',
+    reason: 'You can run the coverage check here; the saved evaluation is recorded on this journey.',
+    outcome: 'A fresh, saved coverage evaluation for this journey\'s subject is recorded as this step\'s proof.',
+  },
+  'coverage-intelligence:check_inaction_coverage': {
+    operationId: 'COVERAGE_ANALYSIS_RUN', message: COVERAGE_ANALYSIS_RUN_MESSAGE, label: 'Run a coverage check', carriesStep: 'ENTITY',
+    reason: 'You can run the coverage check here; the saved evaluation is recorded on this journey.',
+    outcome: 'A fresh, saved coverage evaluation for this journey\'s subject is recorded as this step\'s proof.',
+  },
+  'coverage-intelligence:check_compliance_coverage': {
+    operationId: 'COVERAGE_ANALYSIS_RUN', message: COVERAGE_ANALYSIS_RUN_MESSAGE, label: 'Run a coverage check', carriesStep: 'ENTITY',
+    reason: 'You can run the coverage check here; the saved evaluation is recorded on this journey.',
+    outcome: 'A fresh, saved coverage evaluation for this journey\'s subject is recorded as this step\'s proof.',
   },
   // The expense's allocation, explicitly confirmed by the homeowner (a calculated line item is not proof). The step opens the capital reserve plan; confirming one expense's funding from it
   // (the plan's own row action, started from this execution) completes the step when the journey is about that very expense.
