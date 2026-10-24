@@ -480,3 +480,22 @@ actions. This slice fixes the structure and proves it with one step.
 - **Still the same rules.** The step must be this tool's open step on an open journey; a failed report never fails the saved check and the
   receipt says so; a step already done is not reported twice (idempotent `dedupeKey`).
 
+## 20. Home Savings and the remaining tools: why nothing further was connected (2026-10-24)
+
+Audit of the tools the plan named after Service Price Radar, against the rule that a step is IN_ASK only when an Ask write reports **that step's**
+completion with proof exactly as the page does. Nothing was built; this records what is missing.
+
+- **Home Savings (`evaluate_savings_funding`) is not connectable as planned.** The premise that it "already has an Ask run command" was wrong:
+  Ask has savings *decision* commands (`SAVINGS_BENEFIT_COMMAND`: save, dismiss, record an outcome), not a comparison run, and the comparison
+  needs connected utility accounts. On Desktop the step is reported only by `runHomeSavingsComparison`, and it completes only if a durable
+  decision (saved, dismissed, applied, switched) already exists when the comparison is run; otherwise it reports `IN_PROGRESS`
+  ("decision required"). `setHomeSavingsOpportunityStatus` reports nothing, so deciding alone does not move the step on either surface. The
+  other two Home Savings steps (`find_offset_savings`, `find_energy_savings`) have outcomes a recurring-cost decision does not prove.
+  Connecting the step needs a product decision: either completion follows a decision (a Desktop change too, so the surfaces still match) or it
+  follows a comparison run (which Ask cannot perform). Also, the savings commands launch from an opportunity row and carry no journey step.
+- **Negotiation Shield, price finalization and coverage already report from Ask**, through shared helpers (`negotiationShieldJourneyCompletion`,
+  `priceFinalizationOperations`, `coverageDecisionOperations`). They stay NAVIGATE as journey steps because the journey cannot start them: a
+  Negotiation Shield analysis needs an existing case (details, scenario) and the coverage and price-finalization commands pass no journey or
+  step, so they complete by signal family only. Each would need a start path that carries the step through a multi-part flow.
+- **Unchanged.** Every other tool key stays NAVIGATE with its plain "not in Ask yet" copy.
+
