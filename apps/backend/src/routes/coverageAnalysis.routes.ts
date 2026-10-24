@@ -15,6 +15,7 @@ import {
   recordCoverageComparisonDecision,
   runCoverageAnalysis,
   simulateCoverageAnalysis,
+  reviewCoverageTerms,
 } from '../controllers/coverageAnalysis.controller';
 
 const router = Router();
@@ -91,6 +92,20 @@ router.get(
 );
 
 // Starting a comparison writes: an explicit mutation, never a side effect of the GET above.
+// A homeowner's review of the current policy or warranty terms (append-only; the fingerprint names exactly the terms reviewed).
+router.post(
+  '/properties/:propertyId/coverage-term-reviews',
+  propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
+  validateBody(z.object({
+    kind: z.enum(['POLICY', 'WARRANTY']),
+    guidanceStepId: z.string().uuid().optional(),
+    inventoryItemId: z.string().uuid().optional(),
+    expectedFingerprint: z.string().length(64).optional(),
+  })),
+  reviewCoverageTerms
+);
+
 router.post(
   '/properties/:propertyId/coverage-comparison',
   propertyAuthMiddleware,

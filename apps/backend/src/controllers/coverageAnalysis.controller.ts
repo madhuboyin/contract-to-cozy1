@@ -1,3 +1,4 @@
+import { reviewCoverageTermsWithEffects } from '../services/coverageTermReviewOperations';
 import { Response } from 'express';
 import { CustomRequest } from '../types';
 import {
@@ -315,5 +316,19 @@ export async function runItemCoverageAnalysis(req: CustomRequest, res: Response)
       code: error instanceof APIError ? error.code : undefined,
       message: error?.message || 'Failed to run item coverage analysis.',
     });
+  }
+}
+
+/** The homeowner's explicit review of the current policy or warranty terms (the same operation Ask uses). */
+export async function reviewCoverageTerms(req: CustomRequest, res: Response, next: (error?: unknown) => void) {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) return res.status(401).json({ success: false, message: 'Authentication required.' });
+    const result = await reviewCoverageTermsWithEffects(req.params.propertyId, userId, req.body.kind, {
+      guidanceStepId: req.body.guidanceStepId ?? null, inventoryItemId: req.body.inventoryItemId ?? null, expectedFingerprint: req.body.expectedFingerprint ?? null,
+    });
+    return res.status(200).json({ success: true, data: { review: result.review, reused: result.reused, guidanceReported: result.guidanceReported } });
+  } catch (error) {
+    return next(error);
   }
 }

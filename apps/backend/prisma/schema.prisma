@@ -21183,6 +21183,26 @@ model GuidanceStepMaintenanceTaskLink {
   @@map("guidance_step_maintenance_task_links")
 }
 
+// A homeowner's review of the policy or warranty terms that are current for a property (or one item). Append-only: the fingerprint names exactly the terms that were reviewed,
+// so a changed term needs a new review. Opening the coverage tool proves nothing.
+model CoverageTermReview {
+  id               String   @id @default(uuid())
+  propertyId       String
+  termKind         String // POLICY | WARRANTY
+  inventoryItemId  String?
+  termFingerprint  String
+  termCount        Int
+  reviewedByUserId String
+  reviewedAt       DateTime @default(now())
+  journeyId        String?
+  stepId           String?
+  createdAt        DateTime @default(now())
+
+  @@index([propertyId, termKind, reviewedAt(sort: Desc)])
+  @@index([journeyId, stepId])
+  @@map("coverage_term_reviews")
+}
+
 // One row per extracted finding. Survives across the life of the property record.
 model InspectionFinding {
   id         String @id @default(uuid())
