@@ -18,6 +18,8 @@ export interface AskAction {
   entityType?: string;
   entityId?: string;
   actionId?: string;
+  /** The guided-journey step this action completes through its flow; the server re-reads and validates it. */
+  guidanceStepId?: string;
   style: 'PRIMARY' | 'SECONDARY' | 'QUIET';
 }
 
@@ -631,6 +633,7 @@ export interface CreateAskExecutionPayload {
     decisionThreadId?: string | null;
     workItemId?: string | null;
     journeyId?: string | null;
+    guidanceStepId?: string | null;
     contextVersion?: string | null;
     returnTo?: string | null;
     sourceExecutionId?: string | null;
@@ -761,6 +764,7 @@ export interface AskCapabilityPrompt {
     decisionThreadId?: string;
     workItemId?: string;
     journeyId?: string;
+    guidanceStepId?: string;
     contextVersion?: string;
     returnTo?: string;
     // ASK_COZY_INTERACTION_MODEL_UI_FRD MAINT-005/A12: the execution a row

@@ -83,6 +83,7 @@ export function useAskRequest({ sessionId, loading, executions, selectedProperty
           decisionThreadId: promptContext?.decisionThreadId,
           workItemId: promptContext?.workItemId,
           journeyId: promptContext?.journeyId,
+          guidanceStepId: promptContext?.guidanceStepId,
           contextVersion: promptContext?.contextVersion,
           returnTo: promptContext?.returnTo ?? (safeBackTo || null),
           sourceExecutionId: promptContext?.sourceExecutionId,

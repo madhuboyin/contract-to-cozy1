@@ -224,6 +224,7 @@ export function ExecutionCard({
       entityType: action.entityType,
       entityId: action.entityId,
       actionId: action.actionId,
+      guidanceStepId: action.guidanceStepId,
     });
   };
   // ASK_COZY_INTERACTION_MODEL_UI_FRD ACCESS-003: once nothing else is

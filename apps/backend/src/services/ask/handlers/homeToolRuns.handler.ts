@@ -25,7 +25,7 @@ import { enumLabel, readableCode } from '../askFormatting';
 import { HomeHabitCoachService } from '../../homeHabitCoach/homeHabitCoachService';
 import { DoNothingSimulatorService } from '../../doNothingSimulator.service';
 import { reportDoNothingRun, reportServicePriceCheck } from '../../guidanceEngine/guidanceToolReporting';
-import { getGuidanceModels } from '../../guidanceEngine/guidanceTypes';
+import { resolveGuidanceStepBinding } from '../support/guidanceStepBinding';
 import { ServicePriceRadarService } from '../../servicePriceRadar.service';
 import { assertProjectComplianceApplicable } from '../../projectCompliance/context';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsFeature, AnalyticsModule } from '../../analytics';
@@ -222,14 +222,9 @@ async function reportToJourneyStep(
   userId: string, propertyId: string, stepId: string, toolKey: string,
   report: (target: { journeyId: string; stepKey: string; signalIntentFamily: string | null }) => Promise<boolean>,
 ): Promise<string | null> {
-  const step = await getGuidanceModels().guidanceJourneyStep.findFirst({
-    where: { id: stepId, journey: { propertyId } },
-    select: { stepKey: true, toolKey: true, status: true, journey: { select: { id: true, status: true, primarySignal: { select: { signalIntentFamily: true } } } } },
-  });
-  if (!step || step.toolKey !== toolKey || !['ACTIVE', 'NOT_STARTED'].includes(String(step.journey.status))) return null;
-  if (step.status === 'COMPLETED') return 'This step was already done';
-  if (!['PENDING', 'IN_PROGRESS'].includes(String(step.status))) return null;
-  const recorded = await report({ journeyId: step.journey.id, stepKey: step.stepKey, signalIntentFamily: step.journey.primarySignal?.signalIntentFamily ?? null });
+  const bound = await resolveGuidanceStepBinding(propertyId, stepId, { toolKey });
+  if (!bound.ok) return bound.reason === 'STEP_DONE' ? 'This step was already done' : null;
+  const recorded = await report({ journeyId: bound.binding.journeyId, stepKey: bound.binding.stepKey, signalIntentFamily: bound.binding.signalIntentFamily });
   return recorded ? 'This step is recorded as done' : 'This is saved, but the journey step could not be updated. Open the journey to check it';
 }
 const reportRunToJourneyStep = (userId: string, propertyId: string, stepId: string, runId: string, run: RunSummary | null) =>

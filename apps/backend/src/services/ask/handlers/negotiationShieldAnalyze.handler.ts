@@ -23,6 +23,7 @@ import { recordNegotiationShieldAnalysisCompletion } from '../../negotiationShie
 import { assertProjectComplianceApplicable } from '../../projectCompliance/context';
 import { NEGOTIATION_SHIELD_ANALYZE_MESSAGE } from '../support/negotiationShieldAnalyze';
 import { NEGOTIATION_SHIELD_CASE_ENTITY_TYPE } from '../support/negotiationShieldStart';
+import { GUIDANCE_STEP_REFUSAL_TEXT, resolveGuidanceStepBinding } from '../support/guidanceStepBinding';
 import { negotiationShieldReviewFromView } from './negotiationShield.handler';
 
 const CONFIRMATION_MINUTES = 30;
@@ -55,6 +56,8 @@ export interface NegotiationAnalyzeLaunch {
   sourceExecutionId: string | null;
   journeyId?: string | null;
   stepKey?: string | null;
+  /** The exact journey step this analysis was started from. When present it is the only binding; there is no fallback to another step. */
+  guidanceStepId?: string | null;
 }
 
 export async function negotiationShieldAnalyzeResult(userId: string, propertyId: string, launch: NegotiationAnalyzeLaunch): Promise<AskOperationResult> {
@@ -74,6 +77,7 @@ export async function negotiationShieldAnalyzeResult(userId: string, propertyId:
     parameters: {
       negotiationShieldAnalyze: { caseId: review.case.id, title: review.case.title, scenarioType: review.case.scenarioType },
       sourceExecutionId: launch.sourceExecutionId, journeyId: launch.journeyId ?? null, stepKey: launch.stepKey ?? null,
+      ...(launch.guidanceStepId ? { guidanceStepId: launch.guidanceStepId } : {}),
       confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString(),
     },
     blocks: [{
@@ -104,7 +108,7 @@ registerCapabilityHandler('negotiation-shield.analyze', async (envelope) => {
   if (!declared) return notRoutable();
   return negotiationShieldAnalyzeResult(envelope.userId, envelope.propertyId!, {
     caseId: launch!.entityId ?? null, sourceExecutionId: launch!.sourceExecutionId ?? null,
-    journeyId: launch!.journeyId ?? null, stepKey: null,
+    journeyId: launch!.journeyId ?? null, stepKey: null, guidanceStepId: launch!.guidanceStepId ?? null,
   });
 });
 
@@ -120,6 +124,7 @@ async function confirmNegotiationShieldAnalyze(ctx: ConfirmCapabilityContext): P
   if (!before.hasInput) throw Object.assign(new Error('This review has no saved details to analyze.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
 
   // A retry of this same confirmation (a reclaimed worker) finds the analysis this execution already saved.
+  let journeyNote: string | null = null;
   const alreadyRun = Boolean(before.latestAnalysis && new Date(before.latestAnalysis.generatedAt).getTime() >= new Date(execution.createdAt).getTime());
   if (!alreadyRun) {
     // The same applicability gate the page's analyze controller runs before the service call.
@@ -128,11 +133,25 @@ async function confirmNegotiationShieldAnalyze(ctx: ConfirmCapabilityContext): P
     const { NegotiationShieldService } = await import('../../negotiationShield.service');
     const detail = await new NegotiationShieldService().analyzeCase(propertyId, caseId, gate.contextVersion);
     // One shared function, the same one the controller calls, so Ask and the page complete a guided step identically (best-effort).
-    await recordNegotiationShieldAnalysisCompletion({
-      propertyId, actorUserId: userId, detail,
-      journeyId: typeof parameters.journeyId === 'string' ? parameters.journeyId : null,
-      stepKey: typeof parameters.stepKey === 'string' ? parameters.stepKey : null,
-    });
+    // A step named by the launch is the exact binding: it is re-read here (home, journey, step, tool, status) and nothing else is completed in
+    // its place. With no step named, the caller's journey and step keys (or the signal family) behave exactly as they always have.
+    const stepId = typeof parameters.guidanceStepId === 'string' ? parameters.guidanceStepId : null;
+    if (stepId) {
+      const bound = await resolveGuidanceStepBinding(propertyId, stepId, { toolKey: 'negotiation-shield', stepKeys: ['prepare_negotiation'] });
+      if (!bound.ok) journeyNote = bound.reason === 'STEP_DONE' ? 'This step was already done' : GUIDANCE_STEP_REFUSAL_TEXT[bound.reason];
+      else {
+        const recorded = await recordNegotiationShieldAnalysisCompletion({
+          propertyId, actorUserId: userId, detail, journeyId: bound.binding.journeyId, stepKey: bound.binding.stepKey, signalIntentFamily: bound.binding.signalIntentFamily,
+        });
+        journeyNote = recorded ? 'This step is recorded as done' : 'The analysis is saved, but the journey step could not be updated. Open the journey to check it';
+      }
+    } else {
+      await recordNegotiationShieldAnalysisCompletion({
+        propertyId, actorUserId: userId, detail,
+        journeyId: typeof parameters.journeyId === 'string' ? parameters.journeyId : null,
+        stepKey: typeof parameters.stepKey === 'string' ? parameters.stepKey : null,
+      });
+    }
   }
 
   const after = await getNegotiationShieldCaseReviewForProperty(propertyId, caseId);
@@ -147,6 +166,7 @@ async function confirmNegotiationShieldAnalyze(ctx: ConfirmCapabilityContext): P
         details: [
           { label: 'Review', value: after.case.title },
           { label: 'Analyzed', value: humanDate(new Date(after.latestAnalysis.generatedAt)) ?? 'Just now' },
+          ...(journeyNote ? [{ label: 'Guided journey', value: journeyNote }] : []),
         ],
         actions: [],
       },

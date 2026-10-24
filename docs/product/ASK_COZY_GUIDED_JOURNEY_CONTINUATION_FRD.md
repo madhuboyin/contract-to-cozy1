@@ -499,3 +499,23 @@ completion with proof exactly as the page does. Nothing was built; this records 
   step, so they complete by signal family only. Each would need a start path that carries the step through a multi-part flow.
 - **Unchanged.** Every other tool key stays NAVIGATE with its plain "not in Ask yet" copy.
 
+## 21. Exact step binding and the Negotiation Shield journey flow (2026-10-24)
+
+Owner decisions (2026-10-24): Home Savings stays unavailable and Desktop save/dismiss semantics are not changed to advance a journey; Negotiation Shield
+gets "Start a negotiation review" with exact journey binding; Coverage and Price Finalization carry the exact step when launched from a journey.
+
+- **Carrier.** `AskAction.guidanceStepId` and `launchContext.guidanceStepId` (contract, client types, `ExecutionCard` and `useAskRequest`) name the journey
+  step a flow belongs to, for actions whose own entity is something else (a review, a comparison). The start actions of Do-Nothing, Service Price Radar and
+  Negotiation Shield still use the step as the launch entity; `launchedGuidanceStepId` reads either. The id is only a hint.
+- **One check.** `support/guidanceStepBinding.ts` `resolveGuidanceStepBinding(property, step, { toolKey, stepKeys })` re-reads the step inside the home and
+  requires the step's own tool (and step key), an open step and an open journey; otherwise it returns a reason (`NOT_FOUND`, `WRONG_TOOL`, `WRONG_STEP`,
+  `STEP_DONE`, `STEP_CLOSED`, `JOURNEY_CLOSED`). A refused step reports nothing and falls back to **no** other step. Do-Nothing and Service Price Radar now use it.
+- **Negotiation Shield (a multi-stage flow).** The `prepare_negotiation` step's action is "Start a negotiation review". The start re-reads the step, picks the
+  review type from the journey's signal (`coverage_gap` premium, `financial_exposure` claim, otherwise a contractor quote; a buyer-inspection signal is another
+  flow and is refused), and, if the home already has a non-archived review of that kind with details, offers "Run the analysis on it" before a second review
+  ("Start a separate review" skips the offer). The step id rides the form, the review card and the receipt, whose "Run the analysis" action carries it. The
+  analysis confirmation re-reads the step and only then reports (`journeyId` and `stepKey` from the step, never from the launch); the step completes only when
+  the analysis is saved; a failed report keeps the saved case and analysis and the receipt says so. With no step named, the analysis behaves exactly as before
+  (the caller's journey and step keys, else the signal family). A legacy journey whose step Desktop already auto-completed is refused at the start, so Ask
+  makes no duplicate review.
+

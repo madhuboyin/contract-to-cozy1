@@ -44,13 +44,16 @@ const AskActionSchema = z.object({
   entityType: z.string().trim().min(1).max(120).optional(),
   entityId: z.string().trim().min(1).max(160).optional(),
   actionId: z.string().trim().min(1).max(160).optional(),
+  // The guided-journey step this action carries through its flow (an action on its own entity, such as a coverage comparison, still completes the exact step it
+  // was offered from). Only a hint: the server re-reads the step, its journey, its tool and its status before it reports anything.
+  guidanceStepId: z.string().trim().min(1).max(160).optional(),
   style: z.enum(['PRIMARY', 'SECONDARY', 'QUIET']).default('SECONDARY'),
 }).superRefine((action, ctx) => {
   if (action.interactionType === 'START_WORKFLOW') {
     if (!action.message) ctx.addIssue({ code: 'custom', path: ['message'], message: 'START_WORKFLOW actions require a message.' });
     if (!action.operationId) ctx.addIssue({ code: 'custom', path: ['operationId'], message: 'START_WORKFLOW actions require an operationId.' });
     if (action.href) ctx.addIssue({ code: 'custom', path: ['href'], message: 'START_WORKFLOW actions must not also navigate.' });
-  } else if (action.message || action.operationId || action.outcomeKey || action.entityType || action.entityId || action.actionId) {
+  } else if (action.message || action.operationId || action.outcomeKey || action.entityType || action.entityId || action.actionId || action.guidanceStepId) {
     ctx.addIssue({ code: 'custom', path: ['interactionType'], message: 'Workflow metadata requires interactionType START_WORKFLOW.' });
   }
 });
@@ -1419,6 +1422,8 @@ export const CreateAskExecutionRequestSchema = z.object({
     decisionThreadId: z.string().trim().max(160).nullable().optional(),
     workItemId: z.string().trim().max(160).nullable().optional(),
     journeyId: z.string().trim().max(160).nullable().optional(),
+    // The guided-journey step this turn was started from; see AskActionSchema.guidanceStepId.
+    guidanceStepId: z.string().trim().max(160).nullable().optional(),
     contextVersion: z.string().trim().max(160).nullable().optional(),
     returnTo: z.string().trim().max(1000).nullable().optional(),
     // ASK_COZY_INTERACTION_MODEL_UI_FRD MAINT-005/A12: the execution this

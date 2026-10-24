@@ -941,7 +941,7 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
       ? execution.parametersJson as Record<string, unknown>
       : {};
     const startLaunch = storedParameters.negotiationStartLaunch && typeof storedParameters.negotiationStartLaunch === 'object' && !Array.isArray(storedParameters.negotiationStartLaunch)
-      ? storedParameters.negotiationStartLaunch as { scenarioType?: unknown; sourceExecutionId?: unknown }
+      ? storedParameters.negotiationStartLaunch as { scenarioType?: unknown; sourceExecutionId?: unknown; guidanceStepId?: unknown }
       : null;
     if (input.captureKey !== NEGOTIATION_SHIELD_START_CAPTURE_KEY || !startLaunch || !isNegotiationStartScenario(startLaunch.scenarioType)) {
       const error = new Error('This review form is no longer active. Start again from Start a review.');
@@ -971,6 +971,7 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     result = await negotiationShieldStartResult(userId, execution.propertyId, {
       scenarioType: startLaunch.scenarioType,
       sourceExecutionId: typeof startLaunch.sourceExecutionId === 'string' ? startLaunch.sourceExecutionId : null,
+      guidanceStepId: typeof startLaunch.guidanceStepId === 'string' ? startLaunch.guidanceStepId : null,
     }, answer.data);
     captureId = input.idempotencyKey;
     capturedContextVersion = currentVersion;

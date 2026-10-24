@@ -186,7 +186,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   // The row's Review action (opens one case's analysis and draft) and the review's way back to the list; the draft itself is text, not an action.
   NEGOTIATION_SHIELD_CASES: new Set(['negotiation-shield-review', 'negotiation-shield-back', 'negotiation-shield-start', 'negotiation-shield-analyze', 'negotiation-shield-edit', 'negotiation-shield-attach', 'price-finalization-start-negotiation']),
   // The receipt of a started review offers the slice 1 read of that case.
-  NEGOTIATION_SHIELD_CASE_START: new Set(['negotiation-shield-review', 'negotiation-shield-analyze']),
+  NEGOTIATION_SHIELD_CASE_START: new Set(['negotiation-shield-review', 'negotiation-shield-analyze', 'negotiation-shield-journey-use-existing', 'negotiation-shield-start-new']),
   // The receipt is the review, whose way back and re-run actions it carries.
   NEGOTIATION_SHIELD_CASE_ANALYZE: new Set(['negotiation-shield-back', 'negotiation-shield-analyze', 'negotiation-shield-edit', 'negotiation-shield-attach', 'price-finalization-start-negotiation']),
   // The receipt of an attached document offers the read of that review and a run of its analysis.

@@ -34,7 +34,8 @@ export type NegotiationShieldCompletionInput = {
   signalIntentFamily?: string | null;
 };
 
-export async function recordNegotiationShieldAnalysisCompletion(input: NegotiationShieldCompletionInput): Promise<void> {
+/** Returns whether the completion was recorded; a failure is logged and never thrown. */
+export async function recordNegotiationShieldAnalysisCompletion(input: NegotiationShieldCompletionInput): Promise<boolean> {
   const { detail } = input;
   const inferred = negotiationShieldCompletionSignal(detail.case.scenarioType);
   try {
@@ -49,6 +50,8 @@ export async function recordNegotiationShieldAnalysisCompletion(input: Negotiati
       sourceEntityId: detail.case.id,
       stepKey: input.stepKey ?? NEGOTIATION_SHIELD_DEFAULT_STEP_KEY,
       status: 'COMPLETED',
+      // One report per saved analysis, so a replay of the same confirmation does not add a second evidence row.
+      dedupeKey: `negotiation-shield:${input.propertyId}:${detail.case.id}:${detail.latestAnalysis?.id ?? 'none'}:${input.stepKey ?? NEGOTIATION_SHIELD_DEFAULT_STEP_KEY}`,
       producedData: {
         proofType: 'negotiation_analysis',
         proofId: detail.case.id,
@@ -62,7 +65,9 @@ export async function recordNegotiationShieldAnalysisCompletion(input: Negotiati
         draftType: detail.latestDraft?.draftType ?? null,
       },
     });
+    return true;
   } catch (guidanceError) {
     logger.warn({ guidanceError }, '[GUIDANCE] negotiation shield hook failed');
+    return false;
   }
 }

@@ -27,6 +27,19 @@ import {
   type NegotiationFieldSpec, type NegotiationStartInput, type NegotiationStartScenario,
 } from '../support/negotiationShieldStart';
 import { collectionDescriptor } from '../support/collectionDescriptor';
+import { prisma } from '../../../lib/prisma';
+import { GUIDANCE_STEP_REFUSAL_TEXT, launchedGuidanceStepId, resolveGuidanceStepBinding } from '../support/guidanceStepBinding';
+
+export const NEGOTIATION_SHIELD_START_NEW_ACTION_ID = 'negotiation-shield-start-new';
+export const NEGOTIATION_SHIELD_USE_EXISTING_ACTION_ID = 'negotiation-shield-journey-use-existing';
+const JOURNEY_STEP_KEYS = ['prepare_negotiation'] as const;
+/** The review a journey signal calls for. A buyer-inspection signal is a different tool flow, so it has none here. */
+function scenarioForJourneySignal(family: string | null): NegotiationStartScenario | null {
+  if (family === 'inspection_followup_needed') return null;
+  if (family === 'coverage_gap') return 'INSURANCE_PREMIUM_INCREASE';
+  if (family === 'financial_exposure') return 'INSURANCE_CLAIM_SETTLEMENT';
+  return 'CONTRACTOR_QUOTE_REVIEW';
+}
 
 const CONFIRMATION_MINUTES = 30;
 const REVIEW_MESSAGE = 'Review this negotiation case.';
@@ -44,6 +57,29 @@ const permissionBlocked = (): AskOperationResult => ({
 const notRoutable = (): AskOperationResult => ({
   status: 'NOT_APPLICABLE', reasonCode: 'ASK_NEGOTIATION_SHIELD_START_NOT_DIRECTLY_ROUTABLE',
   blocks: [{ type: 'SUMMARY', id: 'negotiation-shield-start-not-routable', title: 'Use Start a review', body: 'A review is started from Start a review on your negotiation reviews, or by asking to start a negotiation review. Nothing has changed.', tone: 'DEFAULT', actions: [] }],
+  suggestions: [],
+});
+
+const stepUnavailable = (body: string): AskOperationResult => ({
+  status: 'NOT_APPLICABLE', reasonCode: 'NEGOTIATION_SHIELD_JOURNEY_STEP_UNAVAILABLE',
+  blocks: [{ type: 'SUMMARY', id: 'negotiation-shield-journey-step-unavailable', title: 'This step cannot start a review', body: `${body} Nothing has changed.`, tone: 'DEFAULT', actions: [] }],
+  suggestions: [],
+});
+
+/** The home already has a review of this kind: use it for the step (no second one), or start a separate one on purpose. */
+const existingReviewOffer = (existing: { id: string; title: string }, guidanceStepId: string): AskOperationResult => ({
+  status: 'ANSWERED', reasonCode: 'NEGOTIATION_SHIELD_JOURNEY_EXISTING_REVIEW',
+  blocks: [{
+    type: 'SUMMARY', id: 'negotiation-shield-journey-existing', title: 'You already have a review for this',
+    body: `"${existing.title}" is saved for this home. Run its analysis for this step, or start a separate review.`, tone: 'DEFAULT',
+    actions: [{
+      id: NEGOTIATION_SHIELD_USE_EXISTING_ACTION_ID, label: 'Run the analysis on it', interactionType: 'START_WORKFLOW' as const, message: NEGOTIATION_SHIELD_ANALYZE_MESSAGE,
+      operationId: 'NEGOTIATION_SHIELD_CASE_ANALYZE', entityType: NEGOTIATION_SHIELD_CASE_ENTITY_TYPE, entityId: existing.id, guidanceStepId, style: 'PRIMARY' as const,
+    }, {
+      id: NEGOTIATION_SHIELD_START_NEW_ACTION_ID, label: 'Start a separate review', interactionType: 'START_WORKFLOW' as const, message: NEGOTIATION_SHIELD_START_MESSAGE,
+      operationId: 'NEGOTIATION_SHIELD_CASE_START', entityType: 'GUIDANCE_STEP', entityId: guidanceStepId, actionId: NEGOTIATION_SHIELD_START_NEW_ACTION_ID, style: 'SECONDARY' as const,
+    }],
+  }],
   suggestions: [],
 });
 
@@ -132,12 +168,28 @@ export const negotiationDetailLabel = (field: NegotiationFieldSpec, value: unkno
 export async function negotiationShieldStartResult(
   userId: string,
   propertyId: string,
-  launch: { scenarioType: NegotiationStartScenario | null; sourceExecutionId: string | null },
+  launch: { scenarioType: NegotiationStartScenario | null; sourceExecutionId: string | null; guidanceStepId?: string | null; forceNew?: boolean },
   supplied?: NegotiationStartInput,
 ): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
   if (access.role === HouseholdRole.VIEWER) return permissionBlocked();
-  const scenario = launch.scenarioType;
+  let scenario = launch.scenarioType;
+  // Started from a journey's step: the step is re-read first (home, journey, tool, status), the review type follows the journey's own signal, and a
+  // review the home already has for it is offered before a second one is made. A stale step starts nothing and falls back to nothing.
+  let guidanceStepId: string | null = null;
+  if (launch.guidanceStepId) {
+    const bound = await resolveGuidanceStepBinding(propertyId, launch.guidanceStepId, { toolKey: 'negotiation-shield', stepKeys: JOURNEY_STEP_KEYS });
+    if (!bound.ok) return stepUnavailable(GUIDANCE_STEP_REFUSAL_TEXT[bound.reason]);
+    guidanceStepId = bound.binding.stepId;
+    scenario = scenario ?? scenarioForJourneySignal(bound.binding.signalIntentFamily);
+    if (!scenario) return stepUnavailable('Ask cannot start this kind of negotiation review from here yet. Nothing has changed.');
+    if (!launch.forceNew && !supplied) {
+      const existing = await prisma.negotiationShieldCase.findFirst({
+        where: { propertyId, scenarioType: scenario, status: { not: 'ARCHIVED' }, inputs: { some: {} } }, orderBy: { createdAt: 'desc' }, select: { id: true, title: true },
+      });
+      if (existing) return existingReviewOffer(existing, guidanceStepId);
+    }
+  }
   if (!scenario) return scenarioChoice();
   const contextVersion = negotiationShieldStartContextVersion(propertyId, scenario);
   const spec = NEGOTIATION_START_SCENARIO_SPECS[scenario];
@@ -145,7 +197,7 @@ export async function negotiationShieldStartResult(
   if (!supplied) {
     return {
       status: 'NEEDS_CONTEXT', reasonCode: 'NEGOTIATION_SHIELD_START_INPUT_REQUIRED', contextVersion,
-      parameters: { negotiationStartLaunch: { scenarioType: scenario, sourceExecutionId: launch.sourceExecutionId } },
+      parameters: { negotiationStartLaunch: { scenarioType: scenario, sourceExecutionId: launch.sourceExecutionId, ...(guidanceStepId ? { guidanceStepId } : {}) } },
       blocks: [{ type: 'SUMMARY', id: 'negotiation-shield-start-input', title: `Start a review: ${spec.label.toLowerCase()}`, body: 'Nothing has been saved yet. Enter what you know, then review it before it is saved.', tone: 'DEFAULT', actions: [] }],
       captureRequests: [captureRequest(scenario, contextVersion)], suggestions: [],
     };
@@ -160,7 +212,7 @@ export async function negotiationShieldStartResult(
     status: 'NEEDS_CONFIRMATION', reasonCode: 'NEGOTIATION_SHIELD_START_CONFIRMATION_REQUIRED', contextVersion,
     parameters: {
       negotiationShieldStart: { scenarioType: scenario, title: supplied.title, structuredData: supplied.structuredData },
-      negotiationStartContextVersion: contextVersion, sourceExecutionId: launch.sourceExecutionId,
+      negotiationStartContextVersion: contextVersion, sourceExecutionId: launch.sourceExecutionId, ...(guidanceStepId ? { guidanceStepId } : {}),
       confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString(),
     },
     blocks: [{ type: 'SUMMARY', id: 'negotiation-shield-start-review', title: 'Review this negotiation review', body: 'You entered these details. Nothing is saved until you confirm.', tone: 'DEFAULT', actions: [] }],
@@ -183,6 +235,12 @@ registerCapabilityHandler('negotiation-shield.start', async (envelope) => {
   const chosenScenario = launch?.entityType === NEGOTIATION_SHIELD_SCENARIO_ENTITY && isNegotiationStartScenario(launch.entityId) ? launch.entityId : null;
   const chosenMessage = chosenScenario ? scenarioStartMessage(chosenScenario) : null;
   const declared = launch?.operationId === 'NEGOTIATION_SHIELD_CASE_START' && (envelope.message === NEGOTIATION_SHIELD_START_MESSAGE || envelope.message === chosenMessage);
+  const stepId = launchedGuidanceStepId(launch);
+  if (declared && stepId && envelope.message === NEGOTIATION_SHIELD_START_MESSAGE) {
+    return negotiationShieldStartResult(envelope.userId, envelope.propertyId!, {
+      scenarioType: null, sourceExecutionId: launch?.sourceExecutionId ?? null, guidanceStepId: stepId, forceNew: launch?.actionId === NEGOTIATION_SHIELD_START_NEW_ACTION_ID,
+    });
+  }
   if (declared) {
     return negotiationShieldStartResult(envelope.userId, envelope.propertyId!, { scenarioType: chosenScenario, sourceExecutionId: launch?.sourceExecutionId ?? null });
   }
@@ -227,18 +285,22 @@ async function confirmNegotiationShieldStart(ctx: ConfirmCapabilityContext): Pro
   });
   const caseId = detail.case.id;
   const spec = NEGOTIATION_START_SCENARIO_SPECS[scenario];
+  // The review is saved either way. The step only follows into the analysis if it is still this tool's open step; otherwise the receipt says so.
+  const stepId = typeof parameters.guidanceStepId === 'string' ? parameters.guidanceStepId : null;
+  const stepBound = stepId ? await resolveGuidanceStepBinding(propertyId, stepId, { toolKey: 'negotiation-shield', stepKeys: JOURNEY_STEP_KEYS }) : null;
+  const carriedStepId = stepBound?.ok ? stepBound.binding.stepId : null;
   const result: AskOperationResult = {
     status: 'COMPLETED', reasonCode: 'NEGOTIATION_SHIELD_REVIEW_STARTED',
     blocks: [{
       type: 'WORKFLOW_PROGRESS', id: `negotiation-shield-started-${caseId}`, title: 'Review started', status: 'COMPLETED',
       description: 'Saved as a draft review. It has not been analyzed yet and nothing has been sent.',
-      details: [{ label: 'Review', value: input.title }, { label: 'Type', value: spec.label }],
+      details: [{ label: 'Review', value: input.title }, { label: 'Type', value: spec.label }, ...(stepBound && !stepBound.ok ? [{ label: 'Guided journey', value: GUIDANCE_STEP_REFUSAL_TEXT[stepBound.reason] }] : [])],
       actions: [{
         id: 'negotiation-shield-review', label: 'Review', interactionType: 'START_WORKFLOW' as const, message: REVIEW_MESSAGE, operationId: 'NEGOTIATION_SHIELD_CASES',
         entityType: NEGOTIATION_SHIELD_CASE_ENTITY_TYPE, entityId: caseId, style: 'SECONDARY' as const,
       }, {
         id: NEGOTIATION_SHIELD_ANALYZE_ACTION_ID, label: 'Run the analysis', interactionType: 'START_WORKFLOW' as const, message: NEGOTIATION_SHIELD_ANALYZE_MESSAGE,
-        operationId: 'NEGOTIATION_SHIELD_CASE_ANALYZE', entityType: NEGOTIATION_SHIELD_CASE_ENTITY_TYPE, entityId: caseId, style: 'PRIMARY' as const,
+        operationId: 'NEGOTIATION_SHIELD_CASE_ANALYZE', entityType: NEGOTIATION_SHIELD_CASE_ENTITY_TYPE, entityId: caseId, ...(carriedStepId ? { guidanceStepId: carriedStepId } : {}), style: 'PRIMARY' as const,
       }],
     }],
     suggestions: [],

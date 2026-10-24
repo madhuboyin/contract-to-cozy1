@@ -11,6 +11,7 @@
 // silently default.
 
 import { DO_NOTHING_RUN_MESSAGE, SERVICE_PRICE_CHECK_MESSAGE } from './support/homeToolRunConstants';
+import { NEGOTIATION_SHIELD_START_MESSAGE } from './support/negotiationShieldStart';
 
 export type AskGuidanceStepMode = 'IN_ASK' | 'INLINE_CAPTURE' | 'NAVIGATE';
 
@@ -78,6 +79,13 @@ export const ASK_GUIDANCE_IN_ASK_STEPS: Readonly<Record<string, AskGuidanceInAsk
     operationId: 'SERVICE_PRICE_CHECK_RUN', message: SERVICE_PRICE_CHECK_MESSAGE, label: 'Check a quote', carriesStep: true,
     reason: 'You can check a contractor quote here; the saved check is recorded on this journey.',
     outcome: 'A saved quote check is recorded as this step\'s proof.',
+  },
+  // A multi-stage flow: the step opens the start (reusing an existing review of the kind), then the analysis. The step id follows every stage and is
+  // re-read at each one; the step completes only when the analysis is saved.
+  'negotiation-shield:prepare_negotiation': {
+    operationId: 'NEGOTIATION_SHIELD_CASE_START', message: NEGOTIATION_SHIELD_START_MESSAGE, label: 'Start a negotiation review', carriesStep: true,
+    reason: 'You can start and analyze a negotiation review here; the saved analysis is recorded on this journey.',
+    outcome: 'A saved analysis of your negotiation review is recorded as this step\'s proof.',
   },
   'do-nothing-simulator:model_cost_of_delay': {
     operationId: 'DO_NOTHING_SIMULATION_RUN', message: DO_NOTHING_RUN_MESSAGE, label: 'Run the simulation', carriesStep: true,
