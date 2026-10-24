@@ -105,6 +105,41 @@ describe('ConversationalCapture', () => {
   });
 });
 
+describe('Plant Advisor compact capture', () => {
+  it('uses the compact redesign without guessing pet access or skipping review', () => {
+    const plantRequest = {
+      requirementId: 'room-plant-recommendation-inputs', captureKey: 'ROOM_PLANT_RECOMMENDATION_INPUTS', classification: 'WORKFLOW_INPUT', state: 'UNKNOWN', presentation: 'FORM',
+      title: 'Find plants for a room', question: 'Choose the room and the growing conditions you want recommendations for.',
+      helpText: 'Light level is required because Plant Advisor does not guess it. Care effort, pets and goals refine the fit.',
+      allowNotSure: false, sensitivity: 'STANDARD', expectedContextVersion: 'v1', confirmationText: null,
+      destinationLabel: 'You’ll review these preferences before Cozy updates this room’s recommendations',
+      inputSchema: { type: 'GROUP', fields: [
+        { key: 'roomId', label: 'Room', required: true, inputSchema: { type: 'SINGLE_SELECT', options: [{ label: 'Kitchen', value: 'kitchen' }, { label: 'Dining', value: 'dining' }] } },
+        { key: 'lightLevel', label: 'Light level', required: true, inputSchema: { type: 'SINGLE_SELECT', options: [{ label: 'Low', value: 'LOW' }, { label: 'Bright indirect', value: 'BRIGHT_INDIRECT' }] } },
+        { key: 'maintenancePreference', label: 'Care effort (optional)', required: false, inputSchema: { type: 'SINGLE_SELECT', options: [{ label: 'Low', value: 'LOW' }, { label: 'Medium', value: 'MEDIUM' }] } },
+        { key: 'hasPets', label: 'Can pets access this room?', helpText: 'Choose Unsure if you cannot confidently rule out pet access.', required: true, inputSchema: { type: 'BOOLEAN', trueLabel: 'Yes', falseLabel: 'No', unknownLabel: 'Unsure' } },
+        { key: 'goals', label: 'Goals (optional)', helpText: 'Choose any that matter to you.', required: false, inputSchema: { type: 'MULTI_SELECT', options: [{ label: 'Decor', value: 'DECOR' }, { label: 'Low maintenance', value: 'LOW_MAINTENANCE' }], maxItems: 5 } },
+        { key: 'notes', label: 'Placement notes (optional)', helpText: 'For example, an AC vent, a narrow shelf or limited floor space.', required: false, inputSchema: { type: 'LONG_TEXT', maxLength: 1000 } },
+      ] }, currentAnswer: { goals: [] },
+    } as unknown as AskCaptureRequest;
+    const { container } = render(<InlineCaptureCard executionId="plant-capture" request={plantRequest} onCompleted={jest.fn()} />);
+
+    expect(container.querySelector('[data-plant-advisor-redesign="compact"]')).toBeInTheDocument();
+    expect(screen.getByText('Choose any that matter to you.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Yes' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('button', { name: 'No' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('button', { name: 'Unsure' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('button', { name: 'Continue to review' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Placement notes (optional)').tagName).toBe('TEXTAREA');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Kitchen' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Bright indirect' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Unsure' }));
+    expect(screen.getByRole('button', { name: 'Continue to review' })).toBeEnabled();
+  });
+});
+
 describe('grouped workflow capture', () => {
   beforeEach(() => window.localStorage.clear());
 

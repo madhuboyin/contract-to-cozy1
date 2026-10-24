@@ -756,19 +756,15 @@ export function InlineCaptureCard({
           </div>
           <ol className={cn('flex', compactContinuityPlan ? 'gap-3 border-b border-slate-100 pb-3' : 'gap-1')} aria-label="Completion form progress">{formGroups.map((group, index) => <li key={group.id} aria-current={index === activeGroupIndex ? 'step' : undefined} className={cn(compactContinuityPlan ? 'flex min-w-0 flex-1 items-center gap-2 text-xs font-semibold' : 'h-1.5 flex-1 rounded-full', compactContinuityPlan ? index === activeGroupIndex ? 'text-teal-800' : index < activeGroupIndex ? 'text-slate-700' : 'text-slate-400' : index <= activeGroupIndex ? 'bg-teal-700' : 'bg-slate-200')}><span className={compactContinuityPlan ? cn('grid h-5 w-5 shrink-0 place-items-center rounded-full text-[10px]', index <= activeGroupIndex ? 'bg-teal-700 text-white' : 'bg-slate-200 text-slate-500') : 'sr-only'}>{compactContinuityPlan ? index + 1 : group.title}</span>{compactContinuityPlan && <span className="truncate">{group.title}</span>}</li>)}</ol>
         </div>}
-        {compactPlantAdvisor ? <div className="space-y-5 md:col-span-2">
-          <section aria-labelledby={`plant-room-${executionId}`}>
-            <div className="mb-2"><h4 id={`plant-room-${executionId}`} className="text-sm font-semibold text-slate-950">1. Choose the room</h4><p className="mt-0.5 text-xs text-slate-500">Select where the plant will live.</p></div>
-            {renderPlantField('roomId')}
-          </section>
-          <section aria-labelledby={`plant-conditions-${executionId}`} className="border-t border-slate-100 pt-4">
-            <div className="mb-3"><h4 id={`plant-conditions-${executionId}`} className="text-sm font-semibold text-slate-950">2. Room conditions</h4><p className="mt-0.5 text-xs text-slate-500">Light is required. Care effort and pet access improve the match.</p></div>
-            <div className="grid gap-4 sm:grid-cols-2"><div>{renderPlantField('lightLevel')}</div><div>{renderPlantField('maintenancePreference')}</div><div className="sm:col-span-2">{renderPlantField('hasPets')}</div></div>
-          </section>
-          <section aria-labelledby={`plant-priorities-${executionId}`} className="border-t border-slate-100 pt-4">
-            <div className="mb-3"><h4 id={`plant-priorities-${executionId}`} className="text-sm font-semibold text-slate-950">3. Preferences</h4><p className="mt-0.5 text-xs text-slate-500">Optional—use these only when they matter for this room.</p></div>
-            <div className="space-y-4">{renderPlantField('goals')}{renderPlantField('notes')}</div>
-          </section>
+        {compactPlantAdvisor ? <div className="space-y-5 md:col-span-2" data-plant-advisor-redesign="compact">
+          <div className="grid gap-4 sm:grid-cols-2" aria-label="Room and growing conditions">
+            <div>{renderPlantField('roomId')}</div>
+            <div>{renderPlantField('lightLevel')}</div>
+            <div>{renderPlantField('maintenancePreference')}</div>
+            <div>{renderPlantField('hasPets')}</div>
+          </div>
+          <section aria-label="Optional plant goals" className="border-t border-slate-100 pt-4">{renderPlantField('goals')}</section>
+          <div>{renderPlantField('notes')}</div>
         </div> : sellHoldRentAssumptions ? <div className="space-y-3">
           <section aria-labelledby={`assumptions-property-${executionId}`} className="rounded-2xl border border-slate-200 p-3">
             <div className="mb-2"><h4 id={`assumptions-property-${executionId}`} className="text-sm font-semibold text-slate-950">Property and rent</h4><p className="mt-0.5 text-xs text-slate-500">Blank values continue using the model defaults from the comparison.</p></div>
