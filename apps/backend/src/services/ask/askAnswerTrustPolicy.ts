@@ -322,6 +322,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   COVERAGE_COMMAND: new Set(['coverage-back', 'coverage-back-review']),
   COVERAGE_ANALYSIS_RUN: new Set(['coverage-analysis-run-boundary']),
   INSPECTION_REPORT_REVIEW: new Set(['inspection-report-review-boundary']),
+  COVERAGE_RECORD_CHECK: new Set(['coverage-record-check-boundary']),
   COVERAGE_TERM_REVIEW: new Set(['coverage-term-review-boundary']),
   MAINTENANCE_EVIDENCE_ATTACH: new Set(['maintenance-evidence-attach-boundary', 'maintenance-create-for-step', 'maintenance-link-existing']),
   // Manage a saved Home Upgrade Planner option (register P0 Home Digital Twin / Upgrade Planner): record the decision, rename, archive or restore, recalculate (queued job) and delete an archived option. Confirmation-gated, declared-action only; never by fuzzy retrieval.

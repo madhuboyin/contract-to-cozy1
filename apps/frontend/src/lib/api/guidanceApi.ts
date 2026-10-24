@@ -443,6 +443,12 @@ export async function recordGuidanceToolCompletion(
   });
 }
 
+/** Checks the saved policy or warranty for a coverage-record step; the saved records decide (the same operation Ask uses). Throws when none has been saved. */
+export async function checkCoverageRecord(propertyId: string, payload: { guidanceJourneyId: string; guidanceStepKey: string }): Promise<{ recordId: string; recordKind: 'WARRANTY' | 'POLICY'; guidanceReported: boolean }> {
+  const res = await api.post<{ recordId: string; recordKind: 'WARRANTY' | 'POLICY'; guidanceReported: boolean }>(`/api/properties/${propertyId}/guidance/coverage-record-check`, payload);
+  return res.data;
+}
+
 export async function recordGuidanceToolStatus(
   propertyId: string,
   payload: {

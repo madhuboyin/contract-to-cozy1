@@ -6,7 +6,7 @@ import { usePathname, useSearchParams } from 'next/navigation';
 import { ArrowLeft, ChevronDown, ChevronRight, MoreHorizontal, RotateCcw, ShieldOff } from 'lucide-react';
 
 import { api } from '@/lib/api/client';
-import { recordGuidanceToolStatus } from '@/lib/api/guidanceApi';
+import { checkCoverageRecord, recordGuidanceToolStatus } from '@/lib/api/guidanceApi';
 import { InventoryItem, InventoryRoom } from '@/types';
 import { formatEnumLabel } from '@/lib/utils/formatters';
 import WhatsCoveredModal from '@/app/(dashboard)/dashboard/components/coverage/WhatsCoveredModal';
@@ -164,25 +164,33 @@ export default function CoverageClient({ propertyId }: { propertyId: string }) {
     if (!propertyId || !guidanceStepKey) return;
     setGuidanceProgressing(true);
     try {
+      if (isPolicyRecordingStep) {
+        // The saved records decide: a step that records a plan is done only when an active policy or warranty has actually been saved, never because it was marked done.
+        if (!guidanceJourneyId) return;
+        await checkCoverageRecord(propertyId, { guidanceJourneyId, guidanceStepKey });
+        setGuidanceProofCompleted(true);
+        return;
+      }
       await recordGuidanceToolStatus(propertyId, {
         stepKey: guidanceStepKey,
         journeyId: guidanceJourneyId,
-        sourceToolKey: isPolicyRecordingStep ? 'documents' : 'coverage-options',
-        status: isPolicyRecordingStep ? 'COMPLETED' : 'IN_PROGRESS',
+        sourceToolKey: 'coverage-options',
+        status: 'IN_PROGRESS',
         producedData: {
-          proofType: isPolicyRecordingStep ? 'coverage_record_update' : 'progress_checkpoint',
+          proofType: 'progress_checkpoint',
           proofId: `${guidanceStepKey}:coverage-progress`,
           progressNotedAt: new Date().toISOString(),
-          updatedPolicyRecord: isPolicyRecordingStep,
+          updatedPolicyRecord: false,
         },
       });
-      if (isPolicyRecordingStep) {
-        setGuidanceProofCompleted(true);
-      } else {
-        setGuidanceProgressRecorded(true);
-      }
+      setGuidanceProgressRecorded(true);
     } catch (e) {
       console.error('[CoverageClient] failed to record guidance progress', e);
+      toast({
+        title: isPolicyRecordingStep ? 'No saved plan found yet' : 'Could not record progress',
+        description: isPolicyRecordingStep ? 'Save the policy or warranty first, then check again.' : 'Please try again.',
+        variant: 'destructive',
+      });
     } finally {
       setGuidanceProgressing(false);
     }
@@ -293,7 +301,7 @@ export default function CoverageClient({ propertyId }: { propertyId: string }) {
                 ? 'Policy details recorded for this guidance step. Return to your guidance journey to continue.'
                 : 'Proof-backed completion recorded from current coverage state. Return to your guidance journey.'
               : isPolicyRecordingStep
-                ? 'After you record the selected plan details here, mark this policy step complete.'
+                ? 'After you save the selected plan, check your records: this step is done when an active policy or warranty has been saved.'
                 : 'Completion is proof-based. Update policy/documents in the linked tools to complete this step automatically.'}
           </p>
           {!guidanceProofCompleted && (
@@ -307,7 +315,7 @@ export default function CoverageClient({ propertyId }: { propertyId: string }) {
                 : guidanceProgressRecorded && !isPolicyRecordingStep
                   ? 'Progress recorded'
                   : isPolicyRecordingStep
-                    ? 'Complete policy step'
+                    ? 'Check my saved plan'
                     : 'Record progress'}
             </Button>
           )}

@@ -11,6 +11,7 @@ import {
   completeGuidanceStep,
   acknowledgeGuidanceStepEndpoint,
   linkMaintenanceTaskEndpoint,
+  checkCoverageRecordEndpoint,
   dismissGuidanceJourney,
   generateGuidanceModelShortlist,
   generateGuidanceVendorSuggestions,
@@ -254,6 +255,14 @@ router.post(
   requireHouseholdRole('CONTRIBUTOR'),
   validateBody(maintenanceLinkBodySchema),
   linkMaintenanceTaskEndpoint
+);
+
+router.post(
+  '/properties/:propertyId/guidance/coverage-record-check',
+  propertyAuthMiddleware,
+  requireHouseholdRole('CONTRIBUTOR'),
+  validateBody(z.object({ guidanceStepId: z.string().uuid().optional(), guidanceJourneyId: z.string().uuid().optional(), guidanceStepKey: z.string().min(1).max(120).optional() })),
+  checkCoverageRecordEndpoint
 );
 
 router.post(

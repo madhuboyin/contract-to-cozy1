@@ -15,6 +15,7 @@ import { NEGOTIATION_SHIELD_START_MESSAGE } from './support/negotiationShieldSta
 import { PROJECT_TRACKER_CREATE_MESSAGE } from './support/projectTrackerConstants';
 import { GUIDANCE_STEP_ACKNOWLEDGE_MESSAGE } from './support/guidanceAcknowledge';
 import { COVERAGE_ANALYSIS_RUN_MESSAGE } from './support/coverageAnalysisRun';
+import { COVERAGE_RECORD_CHECK_MESSAGE } from './support/coverageRecordCheck';
 import { COVERAGE_TERM_REVIEW_MESSAGE } from './support/coverageTermReview';
 import { MAINTENANCE_EVIDENCE_ATTACH_MESSAGE } from './support/maintenanceEvidenceAttach';
 import { INSPECTION_REPORT_REVIEW_MESSAGE } from './support/inspectionReportReview';
@@ -178,6 +179,17 @@ export const ASK_GUIDANCE_IN_ASK_STEPS: Readonly<Record<string, AskGuidanceInAsk
     operationId: 'COVERAGE_TERM_REVIEW', message: COVERAGE_TERM_REVIEW_MESSAGE, label: 'Mark warranty terms as reviewed', carriesStep: 'ENTITY',
     reason: 'You can review your current warranty terms here; your review is recorded on this journey.',
     outcome: 'Your review of the current terms is recorded as this step\'s proof.',
+  },
+  // The saved, active policy or warranty decides (an upload or a say-so is not coverage).
+  'documents:activate_warranty_coverage': {
+    operationId: 'COVERAGE_RECORD_CHECK', message: COVERAGE_RECORD_CHECK_MESSAGE, label: 'Check my saved plan', carriesStep: 'ENTITY',
+    reason: 'Once your plan is saved, check it here; the step is completed on the saved record.',
+    outcome: 'The active plan you saved is recorded as this step\'s proof.',
+  },
+  'documents:bind_policy_and_record_documents': {
+    operationId: 'COVERAGE_RECORD_CHECK', message: COVERAGE_RECORD_CHECK_MESSAGE, label: 'Check my saved plan', carriesStep: 'ENTITY',
+    reason: 'Once your plan is saved, check it here; the step is completed on the saved record.',
+    outcome: 'The active plan you saved is recorded as this step\'s proof.',
   },
   // The expense's allocation, explicitly confirmed by the homeowner (a calculated line item is not proof). The step opens the capital reserve plan; confirming one expense's funding from it
   // (the plan's own row action, started from this execution) completes the step when the journey is about that very expense.
