@@ -444,3 +444,25 @@ actions. This slice fixes the structure and proves it with one step.
   section 12), in-place list-to-journey drilling (opening a journey is still a new turn), and the other 27 tool keys. Nothing here was verified
   against a real database or in a browser.
 
+## 18. In-place opening and missing-detail classification (2026-10-24)
+
+- **Opening a journey in place.** From the guided-journey list, "Open journey" no longer adds a conversational turn. `GuidanceJourneyList.tsx`
+  requests the same `GUIDANCE_JOURNEY_CONTINUE` read without presenting it in the conversation (`presentation: 'WORKSPACE'`, the path the
+  maintenance detail already uses), shows the workspace in the same card with an "All journeys" Back control, and keeps the journey id as the
+  result's detail target (the same presentation state other lists use; browser Back closes it). The server is the authority every time: a
+  journey is re-read on open, on reload, and whenever the list refreshes (a step recorded, skipped or the journey dismissed). A journey that is
+  dismissed, removed, suppressed or unreadable returns the list with a one-line explanation, never a stale card. View state is kept per
+  browser tab (`sessionStorage`), so a reload in the same tab restores it; it does not follow the homeowner to another device.
+- **Missing details.** `missingContextKeys` holds task flags, not form fields. The backend now writes only three, through constants in
+  `guidanceEngine/guidanceContextKeys.ts` (`refresh_signal_context`, `inventory_item_link`, `skipped:<step>`); an API client can also send free
+  text when blocking a step. `askGuidanceContextKeys.ts` is the typed, fail-closed table: each entry has a homeowner label and explanation and
+  one resolution, `CAPTURE_FIELD` (schema, field, canonical write owner), `RUN_OPERATION` (a registered operation and governed action copy, up
+  to two offered as `resolve-missing-context-N`, contributor-only where required) or `UNAVAILABLE`. A key not in the table, or an entry missing
+  a required piece, is shown as "This journey needs additional information that Ask can't collect yet." (never the raw key) and the raw key is
+  logged once for coverage analysis. All three current keys are `UNAVAILABLE`: none is a field Ask can capture, and no existing operation
+  resolves them, so the workspace now says what is missing and why, in words, rather than offering something it cannot do.
+- **Coverage.** `tests/ask/guidanceContextKeys.test.js` requires every produced key to be classified, validates the table, and fails if any
+  producer writes a key as a string literal instead of the shared constant, so a new key cannot ship unclassified.
+- **Still open.** No key is capturable or operation-resolvable yet, so the `CAPTURE_FIELD` and `RUN_OPERATION` paths are tested but unused by
+  shipped data. The next connected step is Service Price Radar (`SERVICE_PRICE_CHECK_RUN`), then Home Savings.
+

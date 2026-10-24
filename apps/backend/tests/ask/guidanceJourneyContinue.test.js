@@ -143,11 +143,15 @@ test('step governance, the execution guard and missing details are all shown in 
   const result = await invoke(launch());
   assert.deepEqual(calls.find((c) => c[0] === 'guard')[1], { propertyId: 'p1', journeyId: 'j1', targetAction: 'BOOKING' });
   const boundary = block(result, 'guidance-journey-boundary');
-  for (const text of ['A licensed plumber should do this.', 'Shut off the water.', 'Call emergency services for a gas smell.', 'not available yet: Finish the inspection first.', 'Install Year']) {
+  for (const text of ['A licensed plumber should do this.', 'Shut off the water.', 'Call emergency services for a gas smell.', 'not available yet: Finish the inspection first.']) {
     assert.ok(boundary.body.includes(text), text);
   }
   assert.equal(workspace(result).main.facts.find((entry) => entry.label === 'Not available yet').value, 'Finish the inspection first.');
-  assert.match(workspace(result).chips[0].label, /Add 1 detail to continue/);
+  // An unclassified key is shown with generic copy, never as the raw key, and it is not offered as something Ask can collect.
+  assert.equal(workspace(result).chips[0].label, 'Needs information Ask can\u2019t collect yet');
+  assert.equal(fact(result, 'Missing: More information'), 'This journey needs additional information that Ask can\u2019t collect yet.');
+  assert.equal(JSON.stringify(result).includes('install_year'), false);
+  assert.equal(JSON.stringify(result).includes('Install Year'), false);
   // A non-execution current step never calls the guard.
   calls.length = 0;
   stored = journey();

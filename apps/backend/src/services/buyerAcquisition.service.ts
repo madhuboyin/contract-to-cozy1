@@ -31,6 +31,7 @@ import { resolveAndUpsertWorkItem } from '../modules/homeOperations/application/
 import { transitionWorkItem } from '../modules/homeOperations/application/transitionWorkItem.usecase';
 import { assertPropertyDocumentsExist, countPropertyDocuments, listPropertyDocuments, resolvePropertyDocuments, toWorkflowDocumentSummary } from './propertyDocuments/propertyDocumentInventory.service';
 import { homeRecordsService } from './homeRecords.service';
+import { GUIDANCE_CONTEXT_KEYS } from './guidanceEngine/guidanceContextKeys';
 
 const DAY_MS = 86_400_000;
 
@@ -1010,7 +1011,7 @@ export class BuyerAcquisitionService {
           sourceEntityId: finding.id,
           dedupeKey: `${propertyId}:maintenance_failure_risk:INSPECTION_FINDING:${finding.id}`,
           duplicateGroupKey: `${propertyId}:major-repair:inspection-finding:${finding.id}`,
-          missingContextKeys: finding.inventoryItemId ? [] : ['inventory_item_link'],
+          missingContextKeys: finding.inventoryItemId ? [] : [GUIDANCE_CONTEXT_KEYS.INVENTORY_ITEM_LINK],
           payloadJson: {
             findingId: finding.id,
             reportId: finding.report.id,

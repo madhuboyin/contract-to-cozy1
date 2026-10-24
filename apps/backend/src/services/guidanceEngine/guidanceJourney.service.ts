@@ -29,6 +29,7 @@ import { logger } from '../../lib/logger';
 import { recordToolLifecycleEvents } from '../analytics/toolLifecycle';
 import { reconcileCoverageGuidanceJourneyApplicability } from '../coverageJourneyReconciliation.service';
 import { runJourneyCompletionHooks } from './guidanceCompletionHooks.service';
+import { skippedStepContextKey, skippedStepKeyFrom } from './guidanceContextKeys';
 
 export const ACTIVE_GUIDANCE_JOURNEY_STATUSES = ['ACTIVE', 'NOT_STARTED'] as const;
 const REPLACEMENT_BRANCH_TYPE_BY_CHOICE: Record<
@@ -1386,7 +1387,7 @@ export class GuidanceJourneyService {
     }
 
     const filteredMissing = asStringArray(journey.missingContextKeys).filter(
-      (item) => item !== 'skipped:repair_replace_decision'
+      (item) => item !== skippedStepContextKey('repair_replace_decision')
     );
 
     await prisma.$transaction(async (tx) => {
@@ -1611,9 +1612,8 @@ export class GuidanceJourneyService {
     const invalidStepIds = new Set(invalidLaterSteps.map((step: any) => step.id));
     const invalidStepKeys = new Set(invalidLaterSteps.map((step: any) => step.stepKey));
     const filteredMissingContextKeys = asStringArray(journey.missingContextKeys).filter((key) => {
-      if (!key.startsWith('skipped:')) return true;
-      const skippedStepKey = key.slice('skipped:'.length);
-      return !invalidStepKeys.has(skippedStepKey);
+      const skippedStepKey = skippedStepKeyFrom(key);
+      return skippedStepKey === null || !invalidStepKeys.has(skippedStepKey);
     });
 
     await prisma.$transaction(async (tx) => {

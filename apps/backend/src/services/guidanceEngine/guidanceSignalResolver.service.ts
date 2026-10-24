@@ -1,6 +1,7 @@
 import { getGuidanceModels, clampConfidenceToDecimal, clampSeverityScore, GuidanceSignalSourceInput, NormalizedGuidanceSignalInput, GuidanceDecisionStage, GuidanceExecutionReadiness, GuidanceIssueDomain, GuidanceSeverity } from './guidanceTypes';
 import { guidanceValidationService } from './guidanceValidation.service';
 import { logger } from '../../lib/logger';
+import { GUIDANCE_CONTEXT_KEYS } from './guidanceContextKeys';
 
 const ISSUE_DOMAIN_BY_FAMILY: Record<string, GuidanceIssueDomain> = {
   lifecycle_end_or_past_life: 'ASSET_LIFECYCLE',
@@ -315,7 +316,7 @@ export class GuidanceSignalResolverService {
     const missingContextKeys = Array.from(
       new Set([
         ...(input.missingContextKeys ?? []),
-        ...(freshness.isStale ? ['refresh_signal_context'] : []),
+        ...(freshness.isStale ? [GUIDANCE_CONTEXT_KEYS.REFRESH_SIGNAL] : []),
       ])
     );
 

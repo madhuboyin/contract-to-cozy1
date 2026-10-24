@@ -15,6 +15,7 @@ import { propagateFindingResolutionFromExecution } from '../../modules/homeOpera
 import { logger } from '../../lib/logger';
 import type { RecommendationGovernance } from '../../productFramework/recommendationGovernance.contract';
 import { resolveGuidanceStepGovernance } from './guidanceGovernance.catalog';
+import { skippedStepContextKey } from './guidanceContextKeys';
 
 const VALID_STEP_TRANSITIONS: Record<GuidanceStepStatus, GuidanceStepStatus[]> = {
   PENDING: ['IN_PROGRESS', 'COMPLETED', 'SKIPPED', 'BLOCKED'],
@@ -392,7 +393,7 @@ export class GuidanceStepResolverService {
       (step.isRequired || skipPolicy !== 'ALLOWED')
     ) {
       const existingMissing = asStringArray(step.journey?.missingContextKeys ?? []);
-      const skipMarker = `skipped:${updated.stepKey}`;
+      const skipMarker = skippedStepContextKey(updated.stepKey);
       const nextMissing = Array.from(new Set([...existingMissing, skipMarker]));
       await guidanceJourney.update({
         where: { id: updated.journeyId },

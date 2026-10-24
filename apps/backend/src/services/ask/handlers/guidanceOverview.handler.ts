@@ -19,6 +19,7 @@ import { guidanceStepResolverService } from '../../guidanceEngine/guidanceStepRe
 import { getStepSkipPolicy } from '../../guidanceEngine/guidanceTemplateRegistry';
 import { getGuidanceModels } from '../../guidanceEngine/guidanceTypes';
 import { collectionDescriptor } from '../support/collectionDescriptor';
+import { classifyGuidanceContextKey, reportUnclassifiedGuidanceContextKey } from '../askGuidanceContextKeys';
 
 // Guidance Overview capability-card slice (FRD v1.65, product option A): reads guidanceJourneyService.getPropertyGuidance
 // and then drops journeys whose primary signal the protection-context reconciliation suppresses -- what
@@ -215,7 +216,15 @@ export function guidanceJourneyContinuation(journey: any, propertyId: string, op
   const position = current ? steps.findIndex((step) => step.id === current.id) + 1 : steps.length;
   const percent = steps.length ? Math.round((completedCount / steps.length) * 100) : 0;
   const readiness = GUIDANCE_READINESS_LABELS[journey.executionReadiness];
-  const currentMode = current ? askGuidanceStepMode(current.toolKey, current.stepKey) : null;
+  // What the journey still lacks, in homeowner words. A key Ask does not classify is shown with generic copy (never the raw key) and logged once.
+  const stepLabels = new Map(steps.map((step) => [step.stepKey as string, step.label as string]));
+  const missingItems = missing.map((key) => {
+    const item = classifyGuidanceContextKey(key, stepLabels);
+    if (!item.known) reportUnclassifiedGuidanceContextKey(key);
+    return item;
+  });
+  const shownMissing = missingItems.filter((item, index) => item.known || missingItems.findIndex((other) => !other.known) === index);
+  const resolvable = missingItems.filter((item) => item.resolution.type !== 'UNAVAILABLE' && (item.minimumRole !== 'CONTRIBUTOR' || options.canContribute === true));
 
   // One purpose-built workspace instead of a summary plus a generic list: where the journey stands, the step to do now (what it is, what it needs,
   // what finishing it records), the ordered rail, and what has been recorded. Skip and dismiss are quiet actions the client keeps behind a menu.
@@ -228,6 +237,14 @@ export function guidanceJourneyContinuation(journey: any, propertyId: string, op
       ...(currentInAsk.carriesStep && current ? { entityType: 'GUIDANCE_STEP', entityId: current.id } : {}),
     });
   }
+  // A missing detail an Ask operation can resolve is offered as its own governed action (at most two), after the step's primary action.
+  resolvable.filter((item) => item.resolution.type === 'RUN_OPERATION').slice(0, 2).forEach((item, index) => {
+    const resolution = item.resolution as Extract<typeof item.resolution, { type: 'RUN_OPERATION' }>;
+    actions.push({
+      id: `resolve-missing-context-${index + 1}`, label: resolution.label, interactionType: 'START_WORKFLOW' as const, message: resolution.message,
+      operationId: resolution.operationId, style: 'SECONDARY' as const,
+    });
+  });
   if (canSkip && current) {
     actions.push({
       id: 'skip-guided-journey-step', label: 'Skip this step', interactionType: 'START_WORKFLOW' as const, message: GUIDANCE_STEP_SKIP_MESSAGE,
@@ -249,7 +266,10 @@ export function guidanceJourneyContinuation(journey: any, propertyId: string, op
     ...(currentInAsk ? [{ label: 'Records', value: currentInAsk.outcome }] : []),
     ...(blockedReason ? [{ label: 'Blocked', value: blockedReason.slice(0, 200) }] : []),
     ...(unavailable ? [{ label: 'Not available yet', value: unavailable.slice(0, 200) }] : []),
-    ...(missing.length ? [{ label: 'Missing details', value: missing.map((key) => titleCase(key)).join(', ').slice(0, 200) }] : []),
+    ...shownMissing.slice(0, 3).map((item) => ({
+      label: `Missing: ${item.label}`.slice(0, 60),
+      value: `${item.explanation}${item.resolution.type === 'UNAVAILABLE' && item.known ? ' Ask can’t collect this yet.' : ''}`.slice(0, 200),
+    })),
   ] : [];
 
   blocks.push({
@@ -260,7 +280,9 @@ export function guidanceJourneyContinuation(journey: any, propertyId: string, op
     ].filter(Boolean).join(' '),
     eyebrow: ['Guided journey'], icon: journey.issueDomain === 'SAFETY' ? 'SAFETY' : 'TASK',
     chips: [{
-      label: missing.length ? `Add ${missing.length} detail${missing.length === 1 ? '' : 's'} to continue` : readiness ?? 'In progress', kind: 'STATUS' as const,
+      label: resolvable.length ? `Add ${resolvable.length} detail${resolvable.length === 1 ? '' : 's'} to continue`
+        : missing.length ? 'Needs information Ask can’t collect yet' : readiness ?? 'In progress',
+      kind: 'STATUS' as const,
     }],
     main: current ? { title: 'Current step', body: (current.description ?? current.label).slice(0, 800), facts } : null,
     history: evidenceRows.slice(0, 5).map((row) => ({
@@ -287,7 +309,6 @@ export function guidanceJourneyContinuation(journey: any, propertyId: string, op
     governance?.conservativeFallback,
     governance?.emergencyEscalation,
     options.guard?.blocked ? `This step is not available yet: ${options.guard.blockedReason ?? 'an earlier step is not done.'}` : null,
-    missing.length ? `More details are needed first: ${missing.map((key) => titleCase(key)).join(', ')}. Add them in the home record, then return here.` : null,
   ].filter((part): part is string => Boolean(part && part.trim()));
   blocks.push(boundary(boundaryParts.length ? boundaryParts.join(' ') : 'Each step is a suggested path built from what is recorded for this home. A professional should confirm anything safety-related.'));
 

@@ -169,7 +169,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   HOME_TIMELINE_EVENTS: new Set(['home-timeline-log-event', 'correct-title', 'correct-occurredAt', 'correct-summary', 'correct-visibility']),
   MATERIAL_SPECS_LIST: new Set(['add-material-spec']),
   GUIDANCE_JOURNEYS_LIST: new Set(['start-guided-plan']),
-  GUIDANCE_JOURNEY_CONTINUE: new Set(['continue-step-in-ask', 'skip-guided-journey-step', 'dismiss-guided-journey']),
+  GUIDANCE_JOURNEY_CONTINUE: new Set(['continue-step-in-ask', 'resolve-missing-context-1', 'resolve-missing-context-2', 'skip-guided-journey-step', 'dismiss-guided-journey']),
   // The answer's next steps (each opens a confirmation, an inline answer, or the home-record check) and the walkthrough's way on and back.
   SEASONAL_HOME_CARE: new Set(['seasonal-add-tasks', 'seasonal-walkthrough', 'seasonal-show-checklist', 'seasonal-update-home-details', 'seasonal-next-task', 'seasonal-back-to-plan']),
   SEASONAL_CHECKLIST_SETUP: new Set(['seasonal-show-checklist', 'seasonal-update-home-details']),
