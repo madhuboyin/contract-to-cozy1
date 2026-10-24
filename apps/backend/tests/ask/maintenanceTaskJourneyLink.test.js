@@ -65,3 +65,48 @@ test('linking a task that is not on the property is refused', async () => {
   const h = setup({ task: { id: 't1', propertyId: 'other' } });
   try { await assert.rejects(ops.linkMaintenanceTaskToStep('p1', 'u1', 't1', 's1', 'DESKTOP'), /not found/i); } finally { h.restore(); }
 });
+
+const { PropertyMaintenanceTaskService } = require('../../src/services/PropertyMaintenanceTask.service.ts');
+
+function evidenceSetup(task, docs) {
+  const h = setup({ task, docs, links: [{ stepId: 's1', journeyId: 'j1', maintenanceTaskId: task.id, propertyId: task.propertyId }] });
+  const writes = [];
+  const originalGet = PropertyMaintenanceTaskService.getTask;
+  PropertyMaintenanceTaskService.getTask = async () => task;
+  prisma.propertyMaintenanceTask.update = async ({ data }) => { writes.push(data); Object.assign(task, data); return task; };
+  prisma.guidanceJourneyStep = { findFirst: async () => ({ id: 's1', stepKey: 'complete_compliance_task', toolKey: 'maintenance', status: 'PENDING', journey: { id: 'j1', status: 'ACTIVE', inventoryItemId: null, primarySignal: null } }) };
+  return { ...h, writes, restore: () => { h.restore(); PropertyMaintenanceTaskService.getTask = originalGet; } };
+}
+
+test('evidence from another home or an unknown document is refused and nothing is written', async () => {
+  const task = { id: 't1', propertyId: 'p1', status: 'COMPLETED', completionMetadata: {}, lastCompletedDate: new Date() };
+  const h = evidenceSetup(task, [{ id: 'd1', propertyId: 'other' }]);
+  try {
+    await assert.rejects(ops.attachMaintenanceTaskEvidence('u1', 't1', ['d1']), (e) => e.code === 'MAINTENANCE_EVIDENCE_NOT_FOUND');
+    await assert.rejects(ops.attachMaintenanceTaskEvidence('u1', 't1', []), (e) => e.code === 'MAINTENANCE_EVIDENCE_REQUIRED');
+    assert.equal(h.writes.length, 0);
+  } finally { h.restore(); }
+});
+
+test('attaching evidence to an already-completed linked task reruns the shared reporter, with no reopening', async () => {
+  const task = { id: 't1', propertyId: 'p1', status: 'COMPLETED', completionMetadata: { photoDocumentIds: [] }, lastCompletedDate: new Date() };
+  const h = evidenceSetup(task, [{ id: 'd1', propertyId: 'p1' }]);
+  try {
+    const out = await ops.attachMaintenanceTaskEvidence('u1', 't1', ['d1', 'd1']);
+    assert.deepEqual(out.documentIds, ['d1']);
+    assert.deepEqual(out.reportedStepIds, ['s1']);
+    assert.equal(h.reported.length, 1);
+    assert.deepEqual(h.reported[0].producedData.evidenceDocumentIds, ['d1']);
+  } finally { h.restore(); }
+});
+
+test('evidence attached to a task that is not completed yet is kept but reports nothing', async () => {
+  const task = { id: 't1', propertyId: 'p1', status: 'IN_PROGRESS', completionMetadata: {}, lastCompletedDate: null };
+  const h = evidenceSetup(task, [{ id: 'd1', propertyId: 'p1' }]);
+  try {
+    const out = await ops.attachMaintenanceTaskEvidence('u1', 't1', ['d1']);
+    assert.deepEqual(out.reportedStepIds, []);
+    assert.equal(h.reported.length, 0);
+    assert.deepEqual(h.writes[0].completionMetadata.photoDocumentIds, ['d1']);
+  } finally { h.restore(); }
+});

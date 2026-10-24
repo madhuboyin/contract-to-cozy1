@@ -68,6 +68,9 @@ router.patch('/:taskId', propertyMaintenanceTaskController.handleUpdateTask);
  */
 router.patch('/:taskId/status', propertyMaintenanceTaskController.handleUpdateTaskStatus);
 
+/** Attach evidence documents (already saved to the home) to a task; reruns the journey report when the task is already completed. Body: { documentIds } */
+router.post('/:taskId/evidence', propertyMaintenanceTaskController.handleAttachEvidence);
+
 /**
  * DELETE /api/maintenance-tasks/:taskId
  * Delete a task (cannot delete ACTION_CENTER tasks)

@@ -1,6 +1,9 @@
 // Moved out of askOrchestrator.service.ts unchanged (decomposition, FRD v1.98;
 // docs/architecture/ASK_ORCHESTRATOR_DECOMPOSITION_REVIEW.md). The handler registers itself, and the orchestrator
 // re-exports the names below so existing imports keep working.
+import { MAINTENANCE_STEP_TOOL_KEY, MAINTENANCE_LINKABLE_STEP_KEYS } from '../../maintenanceTaskJourneyOperations';
+import { resolveGuidanceStepBinding } from '../../guidanceEngine/guidanceStepBinding';
+import { launchedGuidanceStepId } from '../support/guidanceStepBinding';
 import { HouseholdRole, MaintenanceTaskPriority, MaintenanceTaskStatus, RecurrenceFrequency, ServiceCategory } from '@prisma/client';
 import { createHash, randomUUID } from 'node:crypto';
 import { maintenanceTaskVersion } from '../suggestedActions/domainVersions';
@@ -246,6 +249,8 @@ export async function maintenanceTaskCreateResult(
   // A recommended-task template this add starts from (Maintenance Setup, inside Ask). `prefill` opens the form with the template's values; the id
   // is carried through the form and the confirmation so the write links the task to its template.
   template?: { id: string; prefill?: Partial<MaintenanceTaskWorkflowInput> } | null,
+  // The journey step this task is created for (compliance task step). Re-read here and again at the confirmation; the task is linked to it only if it still fits.
+  journeyStepId?: string | null,
 ): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
   if (access.role === HouseholdRole.VIEWER) {
@@ -264,6 +269,9 @@ export async function maintenanceTaskCreateResult(
     prisma.property.findUnique({ where: { id: propertyId }, select: { timezone: true } }),
     maintenanceWorkflowVersion(propertyId),
   ]);
+  const stepBinding = journeyStepId ? await resolveGuidanceStepBinding(propertyId, journeyStepId, { toolKey: MAINTENANCE_STEP_TOOL_KEY, stepKeys: MAINTENANCE_LINKABLE_STEP_KEYS }) : null;
+  const linkedStepId = stepBinding?.ok ? journeyStepId! : null;
+  const stepLabel = linkedStepId ? (await prisma.guidanceJourneyStep.findFirst({ where: { id: linkedStepId }, select: { label: true } }))?.label ?? 'Guided journey step' : null;
   const templatePrefill = !suppliedInput && template?.prefill ? template.prefill : null;
   const candidate = suppliedInput ?? templatePrefill ?? extractMaintenanceTaskInput(message, new Date(), safeTimezone(property?.timezone));
   const parsed = MaintenanceTaskWorkflowInputSchema.safeParse(candidate);
@@ -272,7 +280,7 @@ export async function maintenanceTaskCreateResult(
     const currentAnswer = Object.fromEntries(Object.entries(candidate).filter(([, value]) => value !== undefined));
     return {
       status: 'NEEDS_CONTEXT', reasonCode: 'MAINTENANCE_TASK_INPUT_REQUIRED', contextVersion: workflowVersion,
-      parameters: { maintenanceWorkflowVersion: workflowVersion, sourceExecutionId: sourceExecutionId ?? null, maintenanceTemplateId: template?.id ?? null },
+      parameters: { maintenanceWorkflowVersion: workflowVersion, sourceExecutionId: sourceExecutionId ?? null, maintenanceTemplateId: template?.id ?? null, maintenanceGuidanceStepId: linkedStepId },
       blocks: [{
         type: 'SUMMARY', id: 'maintenance-create-input', title: template ? 'Review the recommended task' : 'Add the task details',
         body: 'Nothing has been created yet. Add the minimum useful details, then review the task before it is saved.',
@@ -321,6 +329,7 @@ export async function maintenanceTaskCreateResult(
       maintenanceFrequency: parsed.data.frequency ?? null,
       maintenanceWorkflowVersion: workflowVersion,
       maintenanceTemplateId: template?.id ?? null,
+      maintenanceGuidanceStepId: linkedStepId,
       sourceExecutionId: sourceExecutionId ?? null,
       confirmationVersion,
       confirmationExpiresAt: expiresAt.toISOString(),
@@ -341,6 +350,8 @@ export async function maintenanceTaskCreateResult(
         { label: 'Due', value: parsed.data.nextDueDate ?? 'Not scheduled' },
         { label: 'Estimated cost', value: parsed.data.estimatedCostUsd == null ? 'Not recorded' : maintenanceMoney(parsed.data.estimatedCostUsd) ?? 'Not recorded' },
         { label: 'Recurrence', value: parsed.data.isRecurring && parsed.data.frequency ? parsed.data.frequency.toLowerCase().replace(/_/g, ' ') : 'One-time' },
+        ...(linkedStepId ? [{ label: 'Guided journey step', value: `${stepLabel} (this task will be linked to it; the step stays open until the task is completed with evidence)` }] : []),
+        ...(journeyStepId && !linkedStepId ? [{ label: 'Guided journey step', value: 'That step is no longer open, so this task will not be linked to it.' }] : []),
       ],
       editableFields: [], confirmLabel: 'Create task',
       consentText: 'I confirm these task details are correct and authorize adding them to this home’s shared Maintenance record.',
@@ -1319,7 +1330,9 @@ registerCapabilityHandler('maintenance.create', async (envelope) => {
     && envelope.launchContext.entityType === MAINTENANCE_TEMPLATE_ENTITY_TYPE
     && Boolean(envelope.launchContext.entityId)
     && envelope.message === MAINTENANCE_TEMPLATE_ADD_ACTION.message;
-  if (!fromTemplate) return maintenanceTaskCreateResult(envelope.userId, envelope.propertyId!, envelope.message, undefined, sourceExecutionId);
+  // Started from a journey step ("Create the task"): the step id travels to the confirmation, which links the new task to it.
+  const journeyStepId = envelope.launchContext?.operationId === 'MAINTENANCE_TASK_CREATE' ? launchedGuidanceStepId(envelope.launchContext) : null;
+  if (!fromTemplate) return maintenanceTaskCreateResult(envelope.userId, envelope.propertyId!, envelope.message, undefined, sourceExecutionId, null, journeyStepId);
   const templateId = envelope.launchContext!.entityId as string;
   const templates = await MaintenanceService.getMaintenanceTemplates(envelope.userId, envelope.propertyId!);
   const template = (templates as Array<{ id: string; title: string; description: string | null; defaultFrequency: RecurrenceFrequency; applicability?: { status?: string } }>)

@@ -1,3 +1,4 @@
+import { attachMaintenanceTaskEvidence } from '../services/maintenanceTaskJourneyOperations';
 // apps/backend/src/controllers/propertyMaintenanceTask.controller.ts
 import { Response, NextFunction } from 'express';
 import { PropertyMaintenanceTaskService } from '../services/PropertyMaintenanceTask.service';
@@ -595,7 +596,19 @@ const handleGetPropertyStats = async (
   }
 };
 
+const handleAttachEvidence = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required.' });
+    const documentIds = Array.isArray(req.body?.documentIds) ? req.body.documentIds : [];
+    const data = await attachMaintenanceTaskEvidence(req.user.userId, req.params.taskId, documentIds);
+    return res.status(200).json({ success: true, data });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 export const propertyMaintenanceTaskController = {
+  handleAttachEvidence,
   handleGetPropertyTasks,
   handleGetTask,
   handleCreateTask,

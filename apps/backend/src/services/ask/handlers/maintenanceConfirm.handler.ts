@@ -1,6 +1,8 @@
+import { logger } from '../../../lib/logger';
 // Moved out of askOrchestrator.service.ts unchanged (decomposition, FRD v1.98;
 // docs/architecture/ASK_ORCHESTRATOR_DECOMPOSITION_REVIEW.md). The handler registers itself, and the orchestrator
 // re-exports the names below so existing imports keep working.
+import { linkMaintenanceTaskToStep, openLinkedStepIds, verifiedCompletionEvidence } from '../../maintenanceTaskJourneyOperations';
 import { AskExecution, HouseholdRole, MaintenanceTaskStatus, Prisma } from '@prisma/client';
 import { prisma } from '../../../lib/prisma';
 import { ASK_RESPONSE_SCHEMA_VERSION, type AskExecutionResponse, type EditAskConfirmation } from '../../../productFramework/ask/ask.contract';
@@ -73,6 +75,10 @@ async function confirmMaintenanceTaskComplete(ctx: ConfirmCapabilityContext): Pr
         projectOutcomeRequired ? outcomeHealth as 'CONFIRMED_HEALTHY' | 'NEEDS_ATTENTION' | 'FAILED' : undefined,
         completionIdempotencyKey,
       );
+    // A task linked to an open journey step completes the step only with evidence attached; the receipt says so plainly when it has none.
+    const openJourneyStepIds = await openLinkedStepIds(updated.id);
+    const hasEvidence = (await verifiedCompletionEvidence(updated)).length > 0;
+    const journeyEvidenceReceipt = hasEvidence ? 'The evidence attached to this task is recorded on the journey step.' : 'The journey step stays open until evidence is attached to this task.';
     result = {
       status: 'COMPLETED', reasonCode: 'MAINTENANCE_TASK_COMPLETED', contextVersion: maintenanceTaskVersion(updated),
       blocks: [{
@@ -84,6 +90,7 @@ async function confirmMaintenanceTaskComplete(ctx: ConfirmCapabilityContext): Pr
           { label: 'Task', value: updated.title },
           { label: 'Completed', value: humanDate(updated.lastCompletedDate) ?? 'Recorded now' },
           { label: 'Actual cost', value: updated.actualCost == null ? 'Not recorded' : maintenanceMoney(updated.actualCost) ?? 'Not recorded' },
+          ...(openJourneyStepIds.length > 0 ? [{ label: 'Guided journey', value: journeyEvidenceReceipt }] : []),
           ...(updated.isRecurring ? [{ label: 'Next due', value: humanDate(updated.nextDueDate) ?? 'Not scheduled' }] : []),
           ...(projectOutcomeRequired ? [{ label: 'Project outcome', value: String(outcomeHealth).toLowerCase().replace(/_/g, ' ') }] : []),
         ],
@@ -173,6 +180,18 @@ async function confirmMaintenanceTaskCreate(ctx: ConfirmCapabilityContext): Prom
         if (!task) throw error;
       }
     }
+    // The journey step this was created for: re-read now, and the task is linked to it only if it still fits. A refused link never undoes the task.
+    const journeyStepId = typeof parameters.maintenanceGuidanceStepId === 'string' ? parameters.maintenanceGuidanceStepId : null;
+    let journeyNote: string | null = null;
+    if (journeyStepId) {
+      try {
+        await linkMaintenanceTaskToStep(execution.propertyId, userId, task.id, journeyStepId, 'ASK');
+        journeyNote = 'Linked to the journey step. The step completes when this task is completed with evidence attached.';
+      } catch (linkError) {
+        logger.warn({ linkError, taskId: task.id }, '[GUIDANCE] maintenance task link at creation failed');
+        journeyNote = 'The journey step is no longer open, so the task was not linked to it.';
+      }
+    }
     result = {
       status: 'COMPLETED', reasonCode: 'MAINTENANCE_TASK_CREATED', contextVersion: await maintenanceWorkflowVersion(execution.propertyId),
       blocks: [{
@@ -184,6 +203,7 @@ async function confirmMaintenanceTaskCreate(ctx: ConfirmCapabilityContext): Prom
           { label: 'Priority', value: task.priority.toLowerCase().replace(/_/g, ' ').replace(/^\w/, (letter) => letter.toUpperCase()) },
           { label: 'Due', value: task.nextDueDate ? humanDate(task.nextDueDate) ?? task.nextDueDate.toISOString() : 'Not scheduled' },
           { label: 'Recurrence', value: task.isRecurring && task.frequency ? task.frequency.toLowerCase().replace(/_/g, ' ') : 'One-time' },
+          ...(journeyNote ? [{ label: 'Guided journey', value: journeyNote }] : []),
         ],
         actions: [receiptFollowUpAction('MAINTENANCE')],
       }, {

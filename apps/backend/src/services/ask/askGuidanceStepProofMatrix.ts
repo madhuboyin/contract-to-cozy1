@@ -624,7 +624,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     canonicalProof: 'A maintenance task linked to this exact journey step, with verified completion (or the legally final status under its governing workflow). Reported-complete is not enough where verification or evidence is required; completion is never inferred from a matching title or category.',
     askOperation: 'MAINTENANCE_TASK_UPDATE',
     desktopReporter: 'maintenanceTaskJourneyOperations.reportLinkedTaskCompletion (called from PropertyMaintenanceTaskService on every completion; the link is made by the maintenance-link route)',
-    launchPrerequisites: 'The reporter and the explicit task-to-step link exist and are shared. Still to build for Ask: creating the link when a task is created from the step, and attaching completion evidence documents in Ask\'s completion; until then an Ask completion has no evidence and reports nothing.',
+    launchPrerequisites: 'The reporter, the explicit link, Ask\'s create-from-step linking at the confirmation and evidence attachment (shared attachMaintenanceTaskEvidence, Desktop route) exist. Still to build before this step is offered in Ask: choosing evidence documents in Ask (a picker/upload) and the "Use an existing task" picker; without them Ask could not finish the step and Desktop must not be required.',
     binding: 'EXACT_STEP', verdict: 'CONNECTABLE',
     proofPolicy: 'VERIFIED_EVIDENCE',
     risk: 'False completion if a self-reported task is taken for the obligation being met.',

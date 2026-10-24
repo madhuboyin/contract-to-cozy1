@@ -5,6 +5,7 @@
 // with nothing attached, proves nothing. Desktop and Ask both complete tasks through `PropertyMaintenanceTaskService`, which calls `reportLinkedTaskCompletion`.
 
 import { prisma } from '../lib/prisma';
+import { PropertyMaintenanceTaskService } from './PropertyMaintenanceTask.service';
 import { APIError } from '../middleware/error.middleware';
 import { logger } from '../lib/logger';
 import { guidanceJourneyService } from './guidanceEngine/guidanceJourney.service';
@@ -70,4 +71,33 @@ export async function reportLinkedTaskCompletion(actorUserId: string, taskId: st
     }
   }
   return reported;
+}
+
+/** Whether the task is linked to a journey step that is still open (so its completion matters to a journey). */
+export async function openLinkedStepIds(taskId: string): Promise<string[]> {
+  const links = await prisma.guidanceStepMaintenanceTaskLink.findMany({ where: { maintenanceTaskId: taskId } });
+  const open: string[] = [];
+  for (const link of links) {
+    const bound = await resolveGuidanceStepBinding(link.propertyId, link.stepId, { toolKey: MAINTENANCE_STEP_TOOL_KEY, stepKeys: MAINTENANCE_LINKABLE_STEP_KEYS });
+    if (bound.ok && bound.binding.journeyId === link.journeyId) open.push(link.stepId);
+  }
+  return open;
+}
+
+/**
+ * Attaches evidence documents (they must already exist on this task's property) to a task. When the task is already completed this reruns the shared reporter, so a
+ * completion that was waiting for evidence is reported without reopening or recompleting the task. Desktop and Ask both call this.
+ */
+export async function attachMaintenanceTaskEvidence(userId: string, taskId: string, documentIds: string[]): Promise<{ documentIds: string[]; reportedStepIds: string[] }> {
+  const task = await PropertyMaintenanceTaskService.getTask(userId, taskId, 'CONTRIBUTOR');
+  const requested = [...new Set(documentIds.filter((id) => typeof id === 'string' && id.length > 0))];
+  if (requested.length === 0) throw new APIError('Choose at least one document as evidence.', 400, 'MAINTENANCE_EVIDENCE_REQUIRED');
+  const found = await prisma.document.findMany({ where: { id: { in: requested }, propertyId: task.propertyId }, select: { id: true } });
+  if (found.length !== requested.length) throw new APIError('Evidence must be documents saved to this home.', 400, 'MAINTENANCE_EVIDENCE_NOT_FOUND');
+  const meta = task.completionMetadata && typeof task.completionMetadata === 'object' && !Array.isArray(task.completionMetadata) ? task.completionMetadata as Record<string, unknown> : {};
+  const existing = Array.isArray(meta.photoDocumentIds) ? meta.photoDocumentIds.filter((id): id is string => typeof id === 'string') : [];
+  const merged = [...new Set([...existing, ...requested])];
+  await prisma.propertyMaintenanceTask.update({ where: { id: taskId }, data: { completionMetadata: { ...meta, photoDocumentIds: merged } as any } });
+  const reportedStepIds = task.status === 'COMPLETED' ? await reportLinkedTaskCompletion(userId, taskId) : [];
+  return { documentIds: merged, reportedStepIds };
 }
