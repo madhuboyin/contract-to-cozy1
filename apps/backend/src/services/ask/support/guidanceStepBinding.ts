@@ -5,7 +5,7 @@
 // The older behaviour (completing by signal family when a command starts outside a journey) stays where a tool has it, as a compatibility path only.
 
 import { prisma } from '../../../lib/prisma';
-import { type GuidanceStepBinding } from '../../guidanceEngine/guidanceStepBinding';
+import { resolveGuidanceStepBinding, type GuidanceStepBinding, type GuidanceStepBindingResult } from '../../guidanceEngine/guidanceStepBinding';
 
 export * from '../../guidanceEngine/guidanceStepBinding';
 
@@ -31,3 +31,13 @@ export async function guidanceStepIdFromSourceExecution(userId: string, property
   } : null);
 }
 
+/**
+ * Whether a journey step may be completed by this recall action on this match: the step is the recalls tool's open step the action can complete (confirming is the safety alert,
+ * dismissing or resolving is the recall resolution) and the journey is about the very item the match is for, so confirming one recall can never advance another recall's journey.
+ */
+export async function resolveGuidanceRecallStep(propertyId: string, stepId: string, action: 'CONFIRM' | 'DISMISS' | 'RESOLVE', matchInventoryItemId: string | null): Promise<GuidanceStepBindingResult> {
+  const bound = await resolveGuidanceStepBinding(propertyId, stepId, { toolKey: 'recalls', stepKeys: [action === 'CONFIRM' ? 'safety_alert' : 'recall_resolution'] });
+  if (!bound.ok) return bound;
+  if (!matchInventoryItemId || bound.binding.inventoryItemId !== matchInventoryItemId) return { ok: false, reason: 'WRONG_SUBJECT' };
+  return bound;
+}

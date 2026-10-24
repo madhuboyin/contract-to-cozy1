@@ -37,21 +37,26 @@ let match;
 let calls;
 let reports;
 let reportFailure;
+let sourceLaunch;
+let stepRow;
 
 function install() {
   accessRole = 'CONTRIBUTOR';
   match = {
     id: 'match-1', propertyId: 'p1', status: 'NEEDS_CONFIRMATION', confirmedAt: null, dismissedAt: null, resolvedAt: null,
-    confidencePct: 40, maintenanceTaskId: null, updatedAt: UPDATED_AT,
+    confidencePct: 40, maintenanceTaskId: null, updatedAt: UPDATED_AT, inventoryItemId: 'item-1',
     recall: { title: 'Dishwasher Fire Hazard', severity: 'CRITICAL', hazard: 'Fire risk', remedy: 'Stop use and contact manufacturer', summary: null, status: 'ACTIVE' },
     inventoryItem: { name: 'Dishwasher', isVerified: false, manufacturer: null, modelNumber: null },
   };
   calls = { confirm: [], dismiss: [], resolve: [] };
   reports = [];
   reportFailure = false;
+  sourceLaunch = null; stepRow = null;
   guidanceJourneyService.recordToolCompletion = async (input) => { if (reportFailure) throw new Error('guidance down'); reports.push(input); return {}; };
   const models = {
-    askExecution: { findMany: async () => [] },
+    askExecution: { findMany: async () => [], findFirst: async () => (sourceLaunch ? { launchContextJson: sourceLaunch } : null) },
+    guidanceSignal: {}, guidanceJourney: {}, guidanceJourneyEvent: {}, guidanceStepEvidence: {},
+    guidanceJourneyStep: { findFirst: async () => stepRow },
     recallMatch: {
       findMany: async () => [match],
       findFirst: async ({ where }) => (where.id === match.id ? match : null),
@@ -221,3 +226,63 @@ test('a guidance reporting failure never fails the Ask write', async () => {
   assert.equal(calls.confirm.length, 1);
   assert.ok(response);
 });
+
+// ── Guided journey: a recall action started from a journey completes that exact step, for that exact item, or nothing (continuation FRD section 26) ──
+const recallStep = (over = {}) => ({ stepKey: 'safety_alert', toolKey: 'recalls', status: 'PENDING', journey: { id: 'j-recall', status: 'ACTIVE', inventoryItemId: 'item-1', primarySignal: { signalIntentFamily: 'recall_detected' } }, ...over });
+
+test('the journey\'s recall steps carry the step to the recall review', () => {
+  const { askGuidanceStepMode } = require('../../src/services/ask/askGuidanceStepHandlers.ts');
+  for (const step of ['safety_alert', 'recall_resolution']) assert.equal(askGuidanceStepMode('recalls', step).inAsk.carriesStep, 'FIELD', step);
+});
+
+test('an action started from a recall review the journey opened carries that step through the proposal and reports to exactly that journey', async () => {
+  sourceLaunch = { operationId: 'RECALL_REVIEW', guidanceStepId: 'step-r' }; stepRow = recallStep();
+  const proposal = await propose('Confirm this recall match.');
+  assert.equal(proposal.parameters.guidanceStepId, 'step-r');
+  const out = await confirm({ recallMatchId: 'match-1', recallMatchAction: 'CONFIRM', recallMatchContextVersion: version(), guidanceStepId: 'step-r' });
+  assert.deepEqual({ j: reports[0].journeyId, s: reports[0].stepKey, st: reports[0].status }, { j: 'j-recall', s: 'safety_alert', st: 'COMPLETED' });
+  assert.equal(out.result.blocks[0].details.find((d) => d.label === 'Guided journey').value, 'This step is recorded as done');
+  reports.length = 0; stepRow = recallStep({ stepKey: 'recall_resolution' });
+  await confirm({ recallMatchId: 'match-1', recallMatchAction: 'DISMISS', recallMatchContextVersion: version(), guidanceStepId: 'step-r' });
+  assert.deepEqual({ j: reports[0].journeyId, s: reports[0].stepKey, st: reports[0].status }, { j: 'j-recall', s: 'recall_resolution', st: 'SKIPPED' });
+});
+
+test('confirming one recall never advances another recall\'s journey: a different item, the wrong step for the action or a closed step reports nothing and does not fall back to the family', async () => {
+  sourceLaunch = { operationId: 'RECALL_REVIEW', guidanceStepId: 'step-r' };
+  for (const [step, why] of [
+    [recallStep({ journey: { id: 'j-other', status: 'ACTIVE', inventoryItemId: 'item-9', primarySignal: { signalIntentFamily: 'recall_detected' } } }), 'another item'],
+    [recallStep({ stepKey: 'recall_resolution' }), 'a resolution step for a confirmation'],
+    [recallStep({ status: 'COMPLETED' }), 'a step already done'],
+    [recallStep({ toolKey: 'coverage-intelligence' }), 'another tool'],
+    [recallStep({ journey: { id: 'j-recall', status: 'DISMISSED', inventoryItemId: 'item-1', primarySignal: null } }), 'a dismissed journey'],
+    [null, 'a step that is gone'],
+  ]) {
+    stepRow = step; reports.length = 0;
+    const proposal = await propose('Confirm this recall match.');
+    assert.equal(proposal.parameters.guidanceStepRefused, true, why);
+    assert.equal('guidanceStepId' in proposal.parameters, false, why);
+    const out = await confirm({ recallMatchId: 'match-1', recallMatchAction: 'CONFIRM', recallMatchContextVersion: version(), guidanceStepRefused: true });
+    assert.equal(reports.length, 0, `${why}: nothing is reported, not even by signal family`);
+    assert.equal(out.result.status, 'COMPLETED', 'the recall write itself is unaffected');
+    assert.match(out.result.blocks[0].details.find((d) => d.label === 'Guided journey').value, /no journey step was updated/);
+  }
+});
+
+test('the step is re-read at confirmation: one that closed since the proposal reports nothing', async () => {
+  stepRow = recallStep({ status: 'SKIPPED' });
+  const out = await confirm({ recallMatchId: 'match-1', recallMatchAction: 'CONFIRM', recallMatchContextVersion: version(), guidanceStepId: 'step-r' });
+  assert.equal(reports.length, 0);
+  assert.equal(out.result.status, 'COMPLETED');
+});
+
+test('an action that never came from a journey keeps the signal-family compatibility path, and a failed exact report never fails the write', async () => {
+  const proposal = await propose('Confirm this recall match.');
+  assert.equal('guidanceStepId' in proposal.parameters || 'guidanceStepRefused' in proposal.parameters, false);
+  await confirm({ recallMatchId: 'match-1', recallMatchAction: 'CONFIRM', recallMatchContextVersion: version() });
+  assert.deepEqual([reports[0].journeyId, reports[0].signalIntentFamily], [undefined, 'recall_detected']);
+  stepRow = recallStep(); reportFailure = true;
+  const out = await confirm({ recallMatchId: 'match-1', recallMatchAction: 'CONFIRM', recallMatchContextVersion: version(), guidanceStepId: 'step-r' });
+  assert.equal(out.result.status, 'COMPLETED');
+  assert.match(out.result.blocks[0].details.find((d) => d.label === 'Guided journey').value, /saved, but the journey step could not be updated/);
+});
+

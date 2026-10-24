@@ -13,6 +13,7 @@ import { assertCoverageConflictFree } from '../../coverageConflict.service';
 import { createOrUpdateRefinanceRateMonitor } from '../../../refinanceRadar/refinanceRateMonitor.service';
 import { PropertySaleCaseService } from '../../propertySaleCase.service';
 import { guidanceJourneyService } from '../../guidanceEngine/guidanceJourney.service';
+import { GUIDANCE_STEP_REFUSAL_TEXT, resolveGuidanceRecallStep } from '../support/guidanceStepBinding';
 import { reportRecallMatchStep, type RecallMatchReportAction, type RecallMatchReportRow } from '../../guidanceEngine/guidanceToolReporting';
 import { getOrCreateQuoteComparisonWorkspace } from '../../quoteComparison.service';
 import { upsertNotificationPreference } from '../../notificationPreference.service';
@@ -367,7 +368,20 @@ async function confirmRecallMatchUpdate(ctx: ConfirmCapabilityContext): Promise<
       };
     }
   }
-  await reportRecallMatchStep(execution.propertyId, action as RecallMatchReportAction, reportRow, userId);
+  // A step the proposal carried is the only binding (re-read here, and tied to this match's item); a step it refused reports nothing; an action that never came from a
+  // journey keeps the signal-family path, as the traditional page does.
+  let journeyNote: string | null = null;
+  const stepId = typeof parameters.guidanceStepId === 'string' ? parameters.guidanceStepId : null;
+  if (stepId) {
+    const bound = await resolveGuidanceRecallStep(execution.propertyId, stepId, action as RecallMatchReportAction, match.inventoryItemId ?? null);
+    if (!bound.ok) journeyNote = bound.reason === 'STEP_DONE' ? 'This step was already done' : GUIDANCE_STEP_REFUSAL_TEXT[bound.reason];
+    else journeyNote = (await reportRecallMatchStep(execution.propertyId, action as RecallMatchReportAction, reportRow, userId, { journeyId: bound.binding.journeyId }))
+      ? 'This step is recorded as done' : 'This is saved, but the journey step could not be updated. Open the journey to check it';
+  } else if (parameters.guidanceStepRefused === true) {
+    journeyNote = 'This recall is not the one this journey step is about, so no journey step was updated';
+  } else {
+    await reportRecallMatchStep(execution.propertyId, action as RecallMatchReportAction, reportRow, userId);
+  }
   const artifactType = 'RECALL_MATCH';
   const artifactId = match.id;
   const matchReasonCode = action === 'CONFIRM' ? 'RECALL_MATCH_CONFIRMED' : action === 'DISMISS' ? 'RECALL_MATCH_DISMISSED' : 'RECALL_MATCH_RESOLVED';
@@ -376,7 +390,7 @@ async function confirmRecallMatchUpdate(ctx: ConfirmCapabilityContext): Promise<
     blocks: [{
       type: 'WORKFLOW_PROGRESS', id: `recall-match-updated-${match.id}`, title: 'Recall match updated', status: 'COMPLETED',
       description: action === 'CONFIRM' ? 'The canonical recall match now reflects a confirmed product identity.' : action === 'DISMISS' ? 'The canonical recall match and any linked maintenance task were updated.' : 'The canonical recall match now records how this recall was handled.',
-      details: [{ label: 'Recall', value: match.recall.title }, { label: 'Action', value: String(action).toLowerCase() }],
+      details: [{ label: 'Recall', value: match.recall.title }, { label: 'Action', value: String(action).toLowerCase() }, ...(journeyNote ? [{ label: 'Guided journey', value: journeyNote }] : [])],
       actions: [receiptFollowUpAction('RECALLS')],
     }], suggestions: [],
   };

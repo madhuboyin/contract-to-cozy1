@@ -27,13 +27,21 @@ export type RecallMatchReportRow = {
   resolvedAt?: Date | string | null;
 };
 
+/** The exact journey a recall action was started for. Without it the report is matched by signal family (the compatibility path, for an action started outside a journey). */
+export type RecallReportTarget = { journeyId: string };
+
+/** The journey step a recall action can complete: confirming the match is the safety alert, dismissing or resolving it is the recall resolution. */
+export const recallStepKeyForAction = (action: RecallMatchReportAction): 'safety_alert' | 'recall_resolution' => (action === 'CONFIRM' ? 'safety_alert' : 'recall_resolution');
+
 export function buildRecallMatchCompletion(
   propertyId: string,
   action: RecallMatchReportAction,
   row: RecallMatchReportRow,
+  target?: RecallReportTarget | null,
 ) {
   const base = {
     propertyId,
+    ...(target ? { journeyId: target.journeyId } : {}),
     signalIntentFamily: 'recall_detected',
     issueDomain: 'SAFETY' as const,
     inventoryItemId: row.inventoryItemId ?? null,
@@ -97,14 +105,17 @@ export async function reportRecallMatchStep(
   action: RecallMatchReportAction,
   row: RecallMatchReportRow,
   actorUserId?: string | null,
-): Promise<void> {
+  target?: RecallReportTarget | null,
+): Promise<boolean> {
   try {
     await guidanceJourneyService.recordToolCompletion({
-      ...buildRecallMatchCompletion(propertyId, action, row),
+      ...buildRecallMatchCompletion(propertyId, action, row, target),
       ...(actorUserId ? { actorUserId } : {}),
     });
+    return true;
   } catch (guidanceError) {
     logger.warn({ guidanceError, action, matchId: row.id }, '[GUIDANCE] recall match completion report failed');
+    return false;
   }
 }
 

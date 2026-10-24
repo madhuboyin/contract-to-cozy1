@@ -10,13 +10,14 @@ export type GuidanceStepBinding = {
   signalIntentFamily: string | null;
   inventoryItemId: string | null;
 };
-export type GuidanceStepRefusal = 'NOT_FOUND' | 'WRONG_TOOL' | 'WRONG_STEP' | 'STEP_DONE' | 'STEP_CLOSED' | 'JOURNEY_CLOSED';
+export type GuidanceStepRefusal = 'NOT_FOUND' | 'WRONG_TOOL' | 'WRONG_STEP' | 'WRONG_SUBJECT' | 'STEP_DONE' | 'STEP_CLOSED' | 'JOURNEY_CLOSED';
 export type GuidanceStepBindingResult = { ok: true; binding: GuidanceStepBinding } | { ok: false; reason: GuidanceStepRefusal };
 
 export const GUIDANCE_STEP_REFUSAL_TEXT: Record<GuidanceStepRefusal, string> = {
   NOT_FOUND: 'The journey step this was started from is no longer available.',
   WRONG_TOOL: 'The journey step this was started from belongs to a different tool.',
   WRONG_STEP: 'The journey step this was started from is not one this can complete.',
+  WRONG_SUBJECT: 'The journey step this was started from is about a different item.',
   STEP_DONE: 'The journey step this was started from is already done.',
   STEP_CLOSED: 'The journey step this was started from is no longer open.',
   JOURNEY_CLOSED: 'The journey this was started from is no longer open.',

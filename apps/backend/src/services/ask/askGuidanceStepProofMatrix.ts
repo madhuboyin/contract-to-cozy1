@@ -677,8 +677,8 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     askOperation: 'RECALL_REVIEW',
     desktopReporter: 'guidanceToolReporting.reportRecallMatchStep',
     launchPrerequisites: 'An open recall match.',
-    binding: 'FAMILY_FALLBACK', verdict: 'CONNECTED',
-    risk: 'Reports by signal family, not the exact step: a follow-up is to carry the step as the Do-Nothing run does.',
+    binding: 'EXACT_STEP', verdict: 'CONNECTED',
+    risk: 'Exact step and item: a recall action started from a journey completes only that journey step for that match\'s item; one started outside a journey keeps the signal-family path.',
   },
   'recalls:review_remedy_instructions': {
     homeownerJob: 'Review remedy instructions',
@@ -695,8 +695,8 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     askOperation: 'RECALL_REVIEW',
     desktopReporter: 'guidanceToolReporting.reportRecallMatchStep',
     launchPrerequisites: 'An open recall match.',
-    binding: 'FAMILY_FALLBACK', verdict: 'CONNECTED',
-    risk: 'Reports by signal family, not the exact step: a follow-up is to carry the step as the Do-Nothing run does.',
+    binding: 'EXACT_STEP', verdict: 'CONNECTED',
+    risk: 'Exact step and item: a recall action started from a journey completes only that journey step for that match\'s item; one started outside a journey keeps the signal-family path.',
   },
   'replace-repair:assess_repair_or_replace': {
     homeownerJob: 'Assess repair vs replace for flagged items',

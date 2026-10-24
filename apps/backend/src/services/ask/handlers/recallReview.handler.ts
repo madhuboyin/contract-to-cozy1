@@ -12,6 +12,7 @@ import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { type CorrectionOption } from '../askCorrectionFields';
 import { ensurePropertyAccess, exactEntityMatch, type RecallResolution } from '../askHandlerSupport';
 import { listPropertyRecallMatches } from '../../recalls.service';
+import { guidanceStepIdFromSourceExecution, launchedGuidanceStepId, resolveGuidanceRecallStep } from '../support/guidanceStepBinding';
 
 const RECALL_STATUS_LABEL: Record<string, string> = {
   OPEN: 'Open',
@@ -111,12 +112,19 @@ async function recallMatchUpdateResult(userId: string, propertyId: string, messa
     };
   }
   const contextVersion = recallMatchVersion(selected);
+  // A recall action started from a journey belongs to that exact step, or to no journey at all: a step that does not fit this match (another recall's journey, a closed step)
+  // is remembered as refused, so the confirmation reports nothing instead of falling back to the signal family. Only an action that never came from a journey keeps the family path.
+  const suppliedStepId = launchedGuidanceStepId(launchContext) ?? await guidanceStepIdFromSourceExecution(userId, propertyId, launchContext?.sourceExecutionId ?? null);
+  const stepBinding = suppliedStepId
+    ? await resolveGuidanceRecallStep(propertyId, suppliedStepId, action, (selected as { inventoryItemId?: string | null }).inventoryItemId ?? selected.inventoryItem?.id ?? null)
+    : null;
+  const guidanceParameters = !suppliedStepId ? {} : stepBinding?.ok ? { guidanceStepId: suppliedStepId } : { guidanceStepRefused: true };
   const expiresAt = new Date(Date.now() + 30 * 60_000);
   const actionLabel = `${action[0]}${action.slice(1).toLowerCase()}`;
   return {
     status: 'NEEDS_CONFIRMATION', reasonCode: 'RECALL_MATCH_CONFIRMATION_REQUIRED', contextVersion,
     parameters: {
-      recallMatchId: selected.id, recallMatchAction: action, recallMatchContextVersion: contextVersion,
+      recallMatchId: selected.id, recallMatchAction: action, recallMatchContextVersion: contextVersion, ...guidanceParameters,
       ...(action === 'RESOLVE' ? { recallResolution: RECALL_RESOLUTION_DEFAULT } : {}),
       confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString(),
     },

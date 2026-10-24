@@ -583,3 +583,15 @@ The five rows the matrix called CONNECTABLE are now CONNECTED (matrix: 14 connec
 - **Not changed.** Minor-work completion (`completeMinorWork`) stays inline in the controller. Ask's project create still does not emit the analytics and lifecycle events the page does; that is a separate
   parity item, not part of the journey binding.
 
+## 26. Recalls: exact step and item binding (2026-10-24)
+
+Owner decision: a recall action started from a journey carries and validates the exact step; confirming one recall must never advance another recall's journey; signal-family behaviour stays only for actions
+started outside a journey.
+
+- **Carrier.** The two recall steps open `RECALL_REVIEW` with the step as `guidanceStepId` (a field). A match action started from a row of that answer takes the step from the source execution's stored launch.
+- **Validated at the proposal and again at the confirmation:** the step is the `recalls` tool's open step the action can complete (confirming completes `safety_alert`; dismissing or resolving completes `recall_resolution`), the
+  journey is open, and **the journey's item is the match's item** (`WRONG_SUBJECT` otherwise). A step that does not fit is remembered as refused, so the confirmation reports nothing and does **not** fall back to the signal
+  family; the receipt says no journey step was updated. A step that closed between proposal and confirmation also reports nothing.
+- **Reporting.** `reportRecallMatchStep` takes an optional exact `{ journeyId }` (the report is still the same builder, dedupe key and proofs as the traditional controller) and now returns whether it was recorded. With no step
+  at all (an action that never came from a journey) the report is unchanged: matched by signal family.
+

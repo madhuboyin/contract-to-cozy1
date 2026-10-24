@@ -61,12 +61,12 @@ export type AskGuidanceInAskStep = { operationId: string; message: string; label
 
 export const ASK_GUIDANCE_IN_ASK_STEPS: Readonly<Record<string, AskGuidanceInAskStep>> = Object.freeze({
   'recalls:safety_alert': {
-    operationId: 'RECALL_REVIEW', message: 'Show my open recall matches', label: 'Review recall matches here',
+    operationId: 'RECALL_REVIEW', message: 'Show my open recall matches', label: 'Review recall matches here', carriesStep: 'FIELD',
     reason: 'You can confirm the recall match here; it is recorded on this journey.',
     outcome: 'Your confirmation of the recall match is recorded as this step\'s proof.',
   },
   'recalls:recall_resolution': {
-    operationId: 'RECALL_REVIEW', message: 'Show my open recall matches', label: 'Review recall matches here',
+    operationId: 'RECALL_REVIEW', message: 'Show my open recall matches', label: 'Review recall matches here', carriesStep: 'FIELD',
     reason: 'You can dismiss or resolve the recall match here; it is recorded on this journey.',
     outcome: 'Dismissing or resolving the recall match is recorded as this step\'s proof.',
   },
