@@ -54,8 +54,9 @@ export const ASK_GUIDANCE_STEP_TOOL_MODES: Readonly<Record<string, { mode: AskGu
 // `safety_alert` on confirm, `recall_resolution` on dismiss and resolve); `review_remedy_instructions` is reported by
 // nothing in Ask, so it stays NAVIGATE. A test ties this table to the reporting helper so they cannot drift.
 // `outcome` is what finishing the step records, said before the homeowner starts. `carriesStep` sends the step with the launch, for an operation that
-// reports the step itself (the do-nothing run); the recall review finds its own matches and needs no step.
-export type AskGuidanceInAskStep = { operationId: string; message: string; label: string; reason: string; outcome: string; carriesStep?: boolean };
+// reports the step itself: as the launch entity ('ENTITY', a start that has no entity of its own) or as the separate `guidanceStepId` ('FIELD', a read whose
+// answer opens commands on other entities, which then belong to the same step). The recall review finds its own matches and needs no step.
+export type AskGuidanceInAskStep = { operationId: string; message: string; label: string; reason: string; outcome: string; carriesStep?: 'ENTITY' | 'FIELD' };
 
 export const ASK_GUIDANCE_IN_ASK_STEPS: Readonly<Record<string, AskGuidanceInAskStep>> = Object.freeze({
   'recalls:safety_alert': {
@@ -70,25 +71,31 @@ export const ASK_GUIDANCE_IN_ASK_STEPS: Readonly<Record<string, AskGuidanceInAsk
   },
   // The Do-Nothing Simulator's confirmed run is the same write the page makes, and reports the step it was started from (see reportDoNothingRun).
   'do-nothing-simulator:compare_action_options': {
-    operationId: 'DO_NOTHING_SIMULATION_RUN', message: DO_NOTHING_RUN_MESSAGE, label: 'Run the simulation', carriesStep: true,
+    operationId: 'DO_NOTHING_SIMULATION_RUN', message: DO_NOTHING_RUN_MESSAGE, label: 'Run the simulation', carriesStep: 'ENTITY',
     reason: 'You can run the simulation here; the result is recorded on this journey.',
     outcome: 'A saved simulation run is recorded as this step\'s proof.',
   },
   // A saved price check is the proof that a quote was validated. The page sends the journey with the check; Ask now reports it the same way.
   'service-price-radar:validate_price': {
-    operationId: 'SERVICE_PRICE_CHECK_RUN', message: SERVICE_PRICE_CHECK_MESSAGE, label: 'Check a quote', carriesStep: true,
+    operationId: 'SERVICE_PRICE_CHECK_RUN', message: SERVICE_PRICE_CHECK_MESSAGE, label: 'Check a quote', carriesStep: 'ENTITY',
     reason: 'You can check a contractor quote here; the saved check is recorded on this journey.',
     outcome: 'A saved quote check is recorded as this step\'s proof.',
   },
   // A multi-stage flow: the step opens the start (reusing an existing review of the kind), then the analysis. The step id follows every stage and is
   // re-read at each one; the step completes only when the analysis is saved.
   'negotiation-shield:prepare_negotiation': {
-    operationId: 'NEGOTIATION_SHIELD_CASE_START', message: NEGOTIATION_SHIELD_START_MESSAGE, label: 'Start a negotiation review', carriesStep: true,
+    operationId: 'NEGOTIATION_SHIELD_CASE_START', message: NEGOTIATION_SHIELD_START_MESSAGE, label: 'Start a negotiation review', carriesStep: 'ENTITY',
     reason: 'You can start and analyze a negotiation review here; the saved analysis is recorded on this journey.',
     outcome: 'A saved analysis of your negotiation review is recorded as this step\'s proof.',
   },
+  // The comparison is opened for this step; the decision recorded from it (the answer's own command, started from the comparison's execution) completes it.
+  'coverage-intelligence:compare_coverage_options': {
+    operationId: 'COVERAGE_COMPARISON_STATUS', message: 'Show my coverage comparison', label: 'Open the coverage comparison', carriesStep: 'FIELD',
+    reason: 'You can compare your coverage and record your decision here; the decision is recorded on this journey.',
+    outcome: 'Your recorded coverage decision is recorded as this step\'s proof.',
+  },
   'do-nothing-simulator:model_cost_of_delay': {
-    operationId: 'DO_NOTHING_SIMULATION_RUN', message: DO_NOTHING_RUN_MESSAGE, label: 'Run the simulation', carriesStep: true,
+    operationId: 'DO_NOTHING_SIMULATION_RUN', message: DO_NOTHING_RUN_MESSAGE, label: 'Run the simulation', carriesStep: 'ENTITY',
     reason: 'You can run the simulation here; the result is recorded on this journey.',
     outcome: 'A saved simulation run is recorded as this step\'s proof.',
   },

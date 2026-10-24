@@ -19,6 +19,7 @@ import { listPropertyDocuments } from '../../propertyDocuments/propertyDocumentI
 import { humanDate } from '../askFormatting';
 import { getOrCreateCoverageReview } from '../../coverageReview.service';
 import { recordCoverageDecisionWithEffects } from '../../coverageDecisionOperations';
+import { GUIDANCE_STEP_REFUSAL_TEXT, guidanceStepIdFromSourceExecution, launchedGuidanceStepId, resolveGuidanceStepBinding } from '../support/guidanceStepBinding';
 import {
   COVERAGE_COMMAND_ACTION_IDS, COVERAGE_COMMAND_MESSAGES, COVERAGE_COMPARISON_ENTITY_TYPE, COVERAGE_DECISIONS, COVERAGE_DECISION_CAPTURE_KEY,
   COVERAGE_COMMAND_KIND_ROLE_FLOORS, COVERAGE_DECISION_OPTION_LABELS, COVERAGE_PROPERTY_ENTITY_TYPE, coverageCommandKindFromMessage, coverageCommandTargetsProperty, parseCoverageDecisionAnswer,
@@ -32,7 +33,9 @@ const CONFIRMATION_MINUTES = 30;
 const sha = (text: string) => createHash('sha256').update(text).digest('hex');
 const database = prisma as any;
 
-export interface CoverageCommandLaunch { kind: CoverageCommandKind; entityId: string; sourceExecutionId: string | null }
+/** `guidanceStepId` is the journey step this command belongs to: the one the launch names, else the one the answer it was started from was opened for. */
+export interface CoverageCommandLaunch { kind: CoverageCommandKind; entityId: string; sourceExecutionId: string | null; guidanceStepId?: string | null }
+const COVERAGE_JOURNEY_STEP_KEYS = ['compare_coverage_options'] as const;
 
 const backToComparison = { id: 'coverage-back', label: 'Back to the comparison', interactionType: 'START_WORKFLOW' as const, message: 'Show my coverage comparison', operationId: 'COVERAGE_COMPARISON_STATUS' as const, style: 'SECONDARY' as const };
 const backToReview = { id: 'coverage-back-review', label: 'See the review', interactionType: 'START_WORKFLOW' as const, message: 'Show my coverage review', operationId: 'COVERAGE_REVIEW_STATUS' as const, style: 'PRIMARY' as const };
@@ -144,7 +147,7 @@ export async function coverageCommandResult(userId: string, propertyId: string, 
   // Generating a review needs the CONTRIBUTOR floor the review service enforces itself. A comparison and a decision are still the primary owner's.
   if (COVERAGE_COMMAND_KIND_ROLE_FLOORS[kind] === 'OWNER' && access.role !== HouseholdRole.OWNER) return ownerOnly();
   const expiresAt = new Date(Date.now() + CONFIRMATION_MINUTES * 60 * 1000);
-  const base = { sourceExecutionId: launch.sourceExecutionId, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() };
+  const base = { sourceExecutionId: launch.sourceExecutionId, ...(launch.guidanceStepId ? { guidanceStepId: launch.guidanceStepId } : {}), confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() };
   const confirm = (contextVersion: string, title: string, description: string, confirmLabel: string, fields: Array<{ label: string; value: string }>, parameters: Record<string, unknown>,
     capture?: AskCaptureRequest): AskOperationResult => ({
     status: 'NEEDS_CONFIRMATION', reasonCode: 'COVERAGE_COMMAND_CONFIRMATION_REQUIRED', contextVersion,
@@ -178,7 +181,7 @@ export async function coverageCommandResult(userId: string, propertyId: string, 
         'A quote is added from a document on file, and there is none. Ask cannot upload a file: add it to your home records, then ask again. Nothing has changed.');
     }
     const contextVersion = comparisonVersion(comparison);
-    const launchParameters = { coverageCommandLaunch: { kind, entityId: comparison.id, sourceExecutionId: launch.sourceExecutionId } };
+    const launchParameters = { coverageCommandLaunch: { kind, entityId: comparison.id, sourceExecutionId: launch.sourceExecutionId, ...(launch.guidanceStepId ? { guidanceStepId: launch.guidanceStepId } : {}) } };
     if (!suppliedQuote) {
       return {
         status: 'NEEDS_CONTEXT', reasonCode: 'COVERAGE_QUOTE_INPUT_REQUIRED', contextVersion, parameters: launchParameters,
@@ -204,7 +207,7 @@ export async function coverageCommandResult(userId: string, propertyId: string, 
     return unavailable('COVERAGE_DECISION_ALREADY_RECORDED', 'A decision is already recorded', 'This comparison already has a decision, which is not changed here. Nothing has changed.');
   }
   const contextVersion = comparisonVersion(comparison);
-  const launchParameters = { coverageCommandLaunch: { kind, entityId: comparison.id, sourceExecutionId: launch.sourceExecutionId } };
+  const launchParameters = { coverageCommandLaunch: { kind, entityId: comparison.id, sourceExecutionId: launch.sourceExecutionId, ...(launch.guidanceStepId ? { guidanceStepId: launch.guidanceStepId } : {}) } };
   if (!supplied) {
     return {
       status: 'NEEDS_CONTEXT', reasonCode: 'COVERAGE_DECISION_INPUT_REQUIRED', contextVersion, parameters: launchParameters,
@@ -234,7 +237,9 @@ registerCapabilityHandler('coverage.command', async (envelope) => {
   if (!kind || launch?.operationId !== 'COVERAGE_COMMAND' || launch.surface === 'ASK_REFRESH' || !launch.entityId) return notRoutable();
   const entityType = coverageCommandTargetsProperty(kind) ? COVERAGE_PROPERTY_ENTITY_TYPE : COVERAGE_COMPARISON_ENTITY_TYPE;
   if (launch.entityType !== entityType) return notRoutable();
-  return coverageCommandResult(envelope.userId, envelope.propertyId!, { kind, entityId: launch.entityId, sourceExecutionId: launch.sourceExecutionId ?? null });
+  const sourceExecutionId = launch.sourceExecutionId ?? null;
+  const guidanceStepId = launchedGuidanceStepId(launch) ?? await guidanceStepIdFromSourceExecution(envelope.userId, envelope.propertyId!, sourceExecutionId);
+  return coverageCommandResult(envelope.userId, envelope.propertyId!, { kind, entityId: launch.entityId, sourceExecutionId, guidanceStepId });
 });
 
 const stale = (message: string, code = 'ASK_CONFIRMATION_NOT_ACTIVE') => Object.assign(new Error(message), { code });
@@ -251,6 +256,7 @@ async function confirmCoverageCommand(ctx: ConfirmCapabilityContext): Promise<Co
   }
   try {
     let title: string; let description: string; let artifactType = 'COVERAGE_COMPARISON'; let artifactId = command.entityId;
+    let journeyNote: string | null = null;
     const actions: Array<Record<string, unknown>> = [];
     if (kind === 'START') {
       const result = await getOrCreateCoverageComparison(propertyId, userId, {});
@@ -289,10 +295,20 @@ async function confirmCoverageCommand(ctx: ConfirmCapabilityContext): Promise<Co
       }
       const checked = parseCoverageDecisionAnswer(parameters.coverageDecision);
       if (!checked.success) throw stale('The decision to record is invalid.');
+      // The decision belongs to the journey step it was started for only if that step is still this tool's open comparison step; otherwise it is saved as a
+      // plain decision and nothing else on any journey is completed in its place.
+      const stepId = typeof parameters.guidanceStepId === 'string' ? parameters.guidanceStepId : null;
+      const stepBound = stepId ? await resolveGuidanceStepBinding(propertyId, stepId, { toolKey: 'coverage-intelligence', stepKeys: COVERAGE_JOURNEY_STEP_KEYS }) : null;
       const result = await recordCoverageDecisionWithEffects(propertyId, comparison.id, userId, {
         decision: checked.data.decision, selectedOptionId: checked.data.selectedOptionId, rationale: checked.data.rationale,
         sourceActionId: `ask:${execution.id}:coverage-decision`,
+        ...(stepBound?.ok ? { guidanceJourneyId: stepBound.binding.journeyId, guidanceStepKey: stepBound.binding.stepKey } : {}),
       });
+      if (stepBound) {
+        journeyNote = !stepBound.ok ? (stepBound.reason === 'STEP_DONE' ? 'This step was already done' : GUIDANCE_STEP_REFUSAL_TEXT[stepBound.reason])
+          : result.guidanceReported === false ? 'The decision is saved, but the journey step could not be updated. Open the journey to check it'
+          : result.guidanceReported === true ? 'This step is recorded as done' : null;
+      }
       artifactType = 'COVERAGE_DECISION'; artifactId = result.decision.id;
       title = result.idempotentReplay ? 'Decision already recorded' : 'Decision recorded';
       description = 'It is saved to your home timeline. Your policy was not changed and no insurer was contacted.';
@@ -300,7 +316,7 @@ async function confirmCoverageCommand(ctx: ConfirmCapabilityContext): Promise<Co
     }
     const result: AskOperationResult = {
       status: 'COMPLETED', reasonCode: `COVERAGE_COMMAND_${kind}_COMPLETED`,
-      blocks: [{ type: 'WORKFLOW_PROGRESS', id: `coverage-command-${kind.toLowerCase()}-${artifactId}`, title, status: 'COMPLETED', description, details: [], actions: actions as never }],
+      blocks: [{ type: 'WORKFLOW_PROGRESS', id: `coverage-command-${kind.toLowerCase()}-${artifactId}`, title, status: 'COMPLETED', description, details: journeyNote ? [{ label: 'Guided journey', value: journeyNote }] : [], actions: actions as never }],
       suggestions: [],
     };
     const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);

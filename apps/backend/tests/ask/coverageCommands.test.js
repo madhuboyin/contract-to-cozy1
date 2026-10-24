@@ -322,3 +322,67 @@ test('Add a quote is offered on the open comparison and its action id is allowli
     operationId: 'COVERAGE_COMPARISON_STATUS', propertyId: 'prop-1', householdRole: 'CONTRIBUTOR', authoritativeSourceAvailable: true,
   }), true);
 });
+
+// ── Guided journey: the decision completes the exact step its comparison was opened for (continuation FRD section 22) ──
+const { askGuidanceStepMode } = require('../../src/services/ask/askGuidanceStepHandlers.ts');
+const decisionVersion = () => require('node:crypto').createHash('sha256').update(`coverage-decision:cmp-1:${COMPARISON.updatedAt.toISOString()}:DRAFT:${COMPARISON.options.map((o) => `${o.id}${o.equivalenceStatus}`).join(',')}`).digest('hex');
+const coverageStep = (over = {}) => ({ stepKey: 'compare_coverage_options', toolKey: 'coverage-intelligence', status: 'PENDING', journey: { id: 'j1', status: 'ACTIVE', inventoryItemId: null, primarySignal: { signalIntentFamily: 'coverage_gap' } }, ...over });
+function withJourney({ step, source }) {
+  const saved = ['guidanceSignal', 'guidanceJourney', 'guidanceJourneyEvent', 'guidanceStepEvidence', 'guidanceJourneyStep', 'askExecution'].map((name) => [name, prisma[name]]);
+  const seen = { steps: [], sources: [] };
+  prisma.guidanceSignal = {}; prisma.guidanceJourney = {}; prisma.guidanceJourneyEvent = {}; prisma.guidanceStepEvidence = {};
+  prisma.guidanceJourneyStep = { findFirst: async (args) => { seen.steps.push(args.where); return step; } };
+  prisma.askExecution = { findFirst: async (args) => { seen.sources.push(args.where); return source ?? null; } };
+  return { seen, restore() { for (const [name, model] of saved) prisma[name] = model; } };
+}
+const decideParams = (extra = {}) => ({ coverageCommand: { kind: 'DECIDE', entityId: 'cmp-1' }, coverageContextVersion: decisionVersion(), coverageDecision: { decision: 'KEEP' }, ...extra });
+
+test('the journey step offers the comparison as its in-Ask action, carrying the step as a field (the comparison is not the step)', () => {
+  const mode = askGuidanceStepMode('coverage-intelligence', 'compare_coverage_options');
+  assert.equal(mode.mode, 'IN_ASK');
+  assert.deepEqual({ o: mode.inAsk.operationId, carries: mode.inAsk.carriesStep }, { o: 'COVERAGE_COMPARISON_STATUS', carries: 'FIELD' });
+  assert.equal(askGuidanceStepMode('coverage-intelligence', 'check_coverage').mode, 'NAVIGATE', 'a review step is not proved by a decision');
+});
+
+test('a command started from a comparison the journey opened belongs to that step, read from the source execution (this person, this home)', async () => {
+  const restore = withData(); const restoreRole = withRole('OWNER'); const j = withJourney({ step: coverageStep(), source: { launchContextJson: { operationId: 'COVERAGE_COMPARISON_STATUS', guidanceStepId: 'step-c' } } });
+  try {
+    const result = await invoke(M.DECIDE, launchFor('DECIDE', 'cmp-1', { sourceExecutionId: 'src-1' }), 'OWNER');
+    assert.deepEqual(j.seen.sources[0], { id: 'src-1', userId: 'user-1', propertyId: 'prop-1' });
+    assert.equal(result.parameters.coverageCommandLaunch.guidanceStepId, 'step-c');
+    const plain = await invoke(M.DECIDE, launchFor('DECIDE', 'cmp-1'), 'OWNER');
+    assert.equal('guidanceStepId' in plain.parameters.coverageCommandLaunch, false, 'no source, no step');
+  } finally { j.restore(); restoreRole(); restore(); }
+});
+
+test('confirming the decision re-reads the step and reports the journey and step key from it; the decision is saved either way', async () => {
+  const restore = withData(); const w = installWrites(); const j = withJourney({ step: coverageStep() });
+  try {
+    decisionOperations.recordCoverageDecisionWithEffects = async (...a) => { w.calls.push(['decide', ...a]); return { decision: { id: 'dec-1' }, idempotentReplay: false, guidanceReported: true }; };
+    const out = await confirmCapabilityInvoke(OP, ctx(decideParams({ guidanceStepId: 'step-c' })));
+    assert.deepEqual(j.seen.steps[0], { id: 'step-c', journey: { propertyId: 'prop-1' } });
+    assert.deepEqual({ j: w.calls[0][4].guidanceJourneyId, s: w.calls[0][4].guidanceStepKey }, { j: 'j1', s: 'compare_coverage_options' });
+    assert.equal(out.result.blocks[0].details.find((d) => d.label === 'Guided journey').value, 'This step is recorded as done');
+    decisionOperations.recordCoverageDecisionWithEffects = async (...a) => { w.calls.push(['decide', ...a]); return { decision: { id: 'dec-1' }, idempotentReplay: false, guidanceReported: false }; };
+    const failed = await confirmCapabilityInvoke(OP, ctx(decideParams({ guidanceStepId: 'step-c' })));
+    assert.equal(failed.result.status, 'COMPLETED');
+    assert.match(failed.result.blocks[0].details.find((d) => d.label === 'Guided journey').value, /decision is saved, but the journey step could not be updated/);
+  } finally { j.restore(); w.restore(); restore(); }
+});
+
+test('a stale or incompatible step saves the decision as a plain one and names no journey; no other step is completed in its place', async () => {
+  for (const stale of [null, coverageStep({ toolKey: 'price-finalization' }), coverageStep({ stepKey: 'check_coverage' }), coverageStep({ status: 'COMPLETED' }), coverageStep({ status: 'SKIPPED' }), coverageStep({ journey: { id: 'j1', status: 'COMPLETED', inventoryItemId: null, primarySignal: null } })]) {
+    const restore = withData(); const w = installWrites(); const j = withJourney({ step: stale });
+    try {
+      const out = await confirmCapabilityInvoke(OP, ctx(decideParams({ guidanceStepId: 'step-c' })));
+      assert.equal(out.result.status, 'COMPLETED');
+      const body = w.calls[0][4];
+      assert.equal('guidanceJourneyId' in body || 'guidanceStepKey' in body, false);
+    } finally { j.restore(); w.restore(); restore(); }
+  }
+  const restore = withData(); const w = installWrites();
+  try {
+    await confirmCapabilityInvoke(OP, ctx(decideParams()));
+    assert.equal('guidanceJourneyId' in w.calls[0][4], false, 'outside a journey the decision behaves exactly as before');
+  } finally { w.restore(); restore(); }
+});

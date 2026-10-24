@@ -519,3 +519,16 @@ gets "Start a negotiation review" with exact journey binding; Coverage and Price
   (the caller's journey and step keys, else the signal family). A legacy journey whose step Desktop already auto-completed is refused at the start, so Ask
   makes no duplicate review.
 
+## 22. Coverage: the decision completes the exact comparison step (2026-10-24)
+
+- **What was wrong.** The earlier claim that Coverage completed "by signal family only" was incorrect. `recordCoverageDecisionWithEffects` reports a journey step only
+  when a journey id is passed, and Ask never passed one, so a coverage decision recorded in Ask advanced nothing.
+- **Binding.** The journey's `compare_coverage_options` step opens `COVERAGE_COMPARISON_STATUS` with the step as `guidanceStepId` (a field, not the launch entity: the
+  comparison is the entity of the commands that follow). A command started from a row of that comparison belongs to the same step: the handler reads the step from
+  the stored launch of the source execution (the same person's execution in the same home), keeps it through the form and the review card, and at confirmation
+  re-reads it (tool `coverage-intelligence`, step `compare_coverage_options`, open step, open journey). Only then are `guidanceJourneyId` and `guidanceStepKey` passed to the
+  shared decision effects. A stale, closed or incompatible step saves the decision as a plain one and completes nothing else; started outside a journey, the decision
+  behaves as before. The receipt says whether the step was updated; a failed report never undoes the decision.
+- **Scope.** Only a decision proves the comparison step. The other coverage steps (`check_coverage`, `review_current_*`, `check_*_coverage`) stay NAVIGATE: a review or
+  a decision does not show that they were done.
+

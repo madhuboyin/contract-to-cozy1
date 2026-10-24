@@ -252,11 +252,12 @@ test('a Home Action tied to a journey continues it in Ask; a more specific answe
 const { ASK_GUIDANCE_IN_ASK_STEPS } = require('../../src/services/ask/askGuidanceStepHandlers.ts');
 const { buildRecallMatchCompletion, buildDoNothingRunCompletion, buildServicePriceCheckCompletion } = require('../../src/services/guidanceEngine/guidanceToolReporting.ts');
 
-test('IN_ASK steps are exactly the steps a recall write, a do-nothing run, a price check or a negotiation analysis reports, and each operation exists', () => {
+test('IN_ASK steps are exactly the steps a recall write, a do-nothing run, a price check, a negotiation analysis or a coverage decision reports, and each operation exists', () => {
   const reported = new Set([
     ...['CONFIRM', 'DISMISS', 'RESOLVE'].map((a) => `recalls:${buildRecallMatchCompletion('p1', a, { id: 'm1' }).stepKey}`),
     ...[buildServicePriceCheckCompletion('p1', { id: 'c1' }, {})].map((done) => `${done.sourceToolKey}:${done.stepKey}`),
     `negotiation-shield:${require('../../src/services/negotiationShieldJourneyCompletion.ts').NEGOTIATION_SHIELD_DEFAULT_STEP_KEY}`,
+    'coverage-intelligence:compare_coverage_options', // the coverage decision's proof; Ask binds it to this one step (a review step is not proved by a decision)
     ...['compare_action_options', 'model_cost_of_delay'].map((stepKey) => { const done = buildDoNothingRunCompletion('p1', { id: 'r1' }, { stepKey }); return `${done.sourceToolKey}:${done.stepKey}`; }),
   ]);
   assert.deepEqual(new Set(Object.keys(ASK_GUIDANCE_IN_ASK_STEPS)), reported);

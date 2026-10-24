@@ -14,7 +14,7 @@ export type CoverageDecisionBody = Parameters<typeof recordCoverageDecision>[3];
 
 export async function recordCoverageDecisionWithEffects(propertyId: string, comparisonId: string, userId: string, body: CoverageDecisionBody) {
   const result = await recordCoverageDecision(propertyId, comparisonId, userId, body);
-  if (result.idempotentReplay) return result;
+  if (result.idempotentReplay) return { ...result, guidanceReported: null as boolean | null };
 
   try {
     await resolveCoverageHomeActionFromDecision({ propertyId, userId, sourceActionId: result.decision.sourceActionId, decisionId: result.decision.id });
@@ -22,6 +22,8 @@ export async function recordCoverageDecisionWithEffects(propertyId: string, comp
     logger.warn({ resolutionError }, '[COVERAGE] Home Action resolution hook failed');
   }
 
+  // Whether the journey step was updated: null when no journey was named, false when the report failed (the decision itself is saved either way).
+  let guidanceReported: boolean | null = null;
   if (body.guidanceJourneyId) {
     try {
       await guidanceJourneyService.recordToolCompletion({
@@ -30,7 +32,9 @@ export async function recordCoverageDecisionWithEffects(propertyId: string, comp
         stepKey: body.guidanceStepKey || 'compare_options', status: 'COMPLETED',
         producedData: { proofType: 'coverage_decision', proofId: result.decision.id, comparisonId, decision: result.decision.decision, homeEventId: result.homeEvent.id },
       });
+      guidanceReported = true;
     } catch (guidanceError) {
+      guidanceReported = false;
       logger.warn({ guidanceError }, '[GUIDANCE] coverage decision hook failed');
     }
   }
@@ -48,5 +52,5 @@ export async function recordCoverageDecisionWithEffects(propertyId: string, comp
     eventType: AnalyticsEvent.ACTION_COMPLETED, userId, propertyId, moduleKey: AnalyticsModule.FINANCIAL, featureKey: AnalyticsFeature.COVERAGE_ANALYSIS,
     metadataJson: { actionType: 'coverage_decision_recorded', comparisonId, decision: result.decision.decision, sourceActionId: body.sourceActionId ?? null },
   });
-  return result;
+  return { ...result, guidanceReported };
 }

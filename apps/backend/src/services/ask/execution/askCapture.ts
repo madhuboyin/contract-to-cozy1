@@ -1348,12 +1348,13 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     if (access.role === HouseholdRole.VIEWER) throw Object.assign(new Error('A contributor or owner is required to change coverage records.'), { code: 'ASK_PERMISSION_REQUIRED' });
     const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson) ? execution.parametersJson as Record<string, unknown> : {};
     const coverageLaunch = storedParameters.coverageCommandLaunch && typeof storedParameters.coverageCommandLaunch === 'object' && !Array.isArray(storedParameters.coverageCommandLaunch)
-      ? storedParameters.coverageCommandLaunch as { kind?: unknown; entityId?: unknown; sourceExecutionId?: unknown } : null;
+      ? storedParameters.coverageCommandLaunch as { kind?: unknown; entityId?: unknown; sourceExecutionId?: unknown; guidanceStepId?: unknown } : null;
     if (!coverageLaunch || coverageLaunch.kind !== (coverageQuoteForm ? 'ADD_QUOTE' : 'DECIDE') || typeof coverageLaunch.entityId !== 'string') {
       throw Object.assign(new Error('This coverage form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
     }
     const coverageLaunchArg = {
       kind: coverageLaunch.kind as CoverageCommandKind, entityId: coverageLaunch.entityId, sourceExecutionId: typeof coverageLaunch.sourceExecutionId === 'string' ? coverageLaunch.sourceExecutionId : null,
+      guidanceStepId: typeof coverageLaunch.guidanceStepId === 'string' ? coverageLaunch.guidanceStepId : null,
     };
     if (coverageQuoteForm) {
       const quoteAnswer = parseCoverageQuoteAnswer(input.answer);

@@ -234,7 +234,8 @@ export function guidanceJourneyContinuation(journey: any, propertyId: string, op
     actions.push({
       id: 'continue-step-in-ask', label: currentInAsk.label, interactionType: 'START_WORKFLOW' as const, message: currentInAsk.message,
       operationId: currentInAsk.operationId, style: 'PRIMARY' as const,
-      ...(currentInAsk.carriesStep && current ? { entityType: 'GUIDANCE_STEP', entityId: current.id } : {}),
+      ...(currentInAsk.carriesStep === 'ENTITY' && current ? { entityType: 'GUIDANCE_STEP', entityId: current.id } : {}),
+      ...(currentInAsk.carriesStep === 'FIELD' && current ? { guidanceStepId: current.id } : {}),
     });
   }
   // A missing detail an Ask operation can resolve is offered as its own governed action (at most two), after the step's primary action.
