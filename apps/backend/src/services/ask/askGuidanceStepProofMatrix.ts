@@ -526,8 +526,8 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     launchPrerequisites: 'Connected utility accounts for a comparison run.',
     binding: 'NONE', verdict: 'WRONG_TOOL',
     proofPolicy: 'DECISION',
-    retired: 'Replaced for new journeys by capital-timeline:fund_capital_expense (owner decision 2026-10-24); journeys created from the earlier template keep this step, unsupported in Ask.',
-    risk: 'Owner decision 2026-10-24: a save or dismiss from Home Savings does not complete it and Desktop semantics are not changed to advance a journey; existing steps stay unsupported rather than assigned false proof.',
+    retired: 'Replaced by capital-timeline:fund_capital_expense (owner decision 2026-10-24). An open step on an existing journey is superseded atomically (never completed, never merely skipped) and the replacement takes its position; one already completed or skipped is left as it is.',
+    risk: 'Owner decision 2026-10-24: a save or dismiss from Home Savings does not complete it and Desktop semantics are not changed to advance a journey; open steps are superseded by the Capital Timeline funding step, never assigned false proof.',
   },
   'home-savings:find_energy_savings': {
     homeownerJob: 'Identify savings to fund improvements',

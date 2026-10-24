@@ -656,7 +656,7 @@ Owner decision: `evaluate_savings_funding` is replaced for new journeys.
 - **Template.** `financial_exposure_resolution` (the journey a reserve-fund shortfall signal rides) goes from 1.2.0 to 1.3.0. Step 4 is now `capital-timeline:fund_capital_expense` ("Fund this expense"; required, skip discouraged) instead of
   the Home Savings step. It completes only when a durable funding plan or reserve allocation is saved on the capital timeline; viewing projections or a shortfall is not proof. Only journeys created after the change get it
   (the template version is recorded on a journey for staleness detection; nothing re-reads an existing journey's steps from the template).
-- **Existing journeys.** Their `evaluate_savings_funding` rows stay as they are, unsupported in Ask, and no Home Savings save, dismiss, applied or switched outcome completes them from Ask. Desktop's own Home Savings
+- **Existing journeys.** Superseded atomically in section 32 (this paragraph's earlier "left unsupported" is replaced). No Home Savings save, dismiss, applied or switched outcome completes the old step from Ask. Desktop's own Home Savings
   run reporting is unchanged (the owner's instruction was not to change Desktop semantics to advance a journey); the matrix keeps the row, marked `retired`, so the coverage test still accounts for it.
 - **Not connected yet.** The new step's proof is decided but nothing reports it: it needs one shared reporter for the saved funding plan or allocation, used by Ask's capital timeline command and the Desktop save, bound to the
   exact step and to the journey's expense item (matrix row `capital-timeline:fund_capital_expense`: CONNECTABLE, "Build first"). Until then it is completed only the way every `NAVIGATE` step is.
@@ -671,4 +671,18 @@ Owner decision: Desktop `review_signal` uses `acknowledgeGuidanceStep`, and the 
   The inline step component calls this for `review_signal` and never the completion route.
 - **The generic path is closed for this step.** The step-completion route and the tool-completion route refuse a `guidance-overview` / `review_signal` completion with `GUIDANCE_ACKNOWLEDGEMENT_REQUIRED` (409), whatever the payload; every other step is untouched by this guard.
 - **Left as they are.** The other Desktop inline steps (Do-Nothing, Home Savings, Capital Timeline, Ownership Costs, Recall check, Price Finalization) still complete through the generic route with self-reported data. They are not review steps; moving each onto its tool's own proof is the work the matrix tracks.
+
+## 32. Superseding the retired Home Savings step (2026-10-24)
+
+Owner decision: supersede, do not leave a permanent unsupported dead end, and do not merely skip.
+
+- **A defect this fixes.** `ensureTemplateSteps` copies the template's steps into an existing journey whenever its signal is ingested again. After section 30 it would have tried to insert `fund_capital_expense` at step order 4
+  while the old step still held it, and the `(journey, order)` unique constraint would have failed the ingest for every existing financial-exposure journey. The sync now supersedes first.
+- **The reconciliation** (`GuidanceStepResolverService.supersedeRetiredTemplateSteps`, driven by `SUPERSEDED_TEMPLATE_STEPS` in the template registry) runs in one transaction: the open retired step is marked **skipped with the reason
+  code `TEMPLATE_SUPERSEDED`** and `replacedBy=capital-timeline:fund_capital_expense;template=financial_exposure_resolution@1.3.0` (never completed), moved out of the order space (parked at order + 1000), the
+  replacement is inserted in the same position with the template's governance, a `STEP_SKIPPED` event records the replacement, and the journey's current step follows the replacement with its version incremented. If any part
+  fails the transaction rolls back and the old step stays exactly as it was; it is not skipped on its own. Because the replacement is a required pending step in the old step's place, the journey cannot advance without the new proof.
+- **When it runs.** At the start of every template sync, and in the same self-healing pass the page's journey reads already run (a single journey, and the property's list), followed by a recompute. It is idempotent.
+- **What it leaves alone.** Completed prior steps and later steps, a retired step that was already completed or skipped (no replacement is added to that journey, and the template sync will not insert one), a journey of another type, and
+  a journey that is not open. The superseded row is hidden from the journey the homeowner sees (the same filter as `TEMPLATE_REMOVED`, now `HIDDEN_STEP_REASON_CODES`), so it is neither a dead end nor counted in progress.
 

@@ -2349,6 +2349,23 @@ for (const template of [...templates, DEFAULT_TEMPLATE]) {
   stepSkipPolicyByJourney.set(template.journeyTypeKey, stepMap);
 }
 
+/**
+ * A template step that a newer template version replaced (owner decision 2026-10-24). A journey created from the earlier template still carries the retired step; it is superseded
+ * (never completed, never merely skipped) and the replacement is inserted in the same position, in one transaction, so the journey cannot advance without the new proof.
+ */
+export const SUPERSEDED_TEMPLATE_STEP_REASON_CODE = 'TEMPLATE_SUPERSEDED';
+export const SUPERSEDED_TEMPLATE_STEPS = [
+  {
+    journeyTypeKey: 'financial_exposure_resolution',
+    retired: { stepKey: 'evaluate_savings_funding', toolKey: 'home-savings' },
+    replacement: { stepKey: 'fund_capital_expense', toolKey: 'capital-timeline' },
+  },
+] as const;
+/** Skipped-reason codes that mean "this row is not part of the journey's visible path": removed from, or superseded in, the template. */
+export const HIDDEN_STEP_REASON_CODES: readonly string[] = ['TEMPLATE_REMOVED', SUPERSEDED_TEMPLATE_STEP_REASON_CODE];
+/** Where a retired step's row is parked so its order is free for the replacement (the (journey, order) pair is unique). */
+export const SUPERSEDED_STEP_ORDER_OFFSET = 1000;
+
 export function getStepSkipPolicy(
   journeyTypeKey: string | null | undefined,
   stepKey: string | null | undefined

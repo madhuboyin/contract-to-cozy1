@@ -16,7 +16,7 @@ import { registerConfirmCapabilityHandler, type ConfirmCapabilityContext, type C
 import { reconcileAskExecutionSideEffects } from '../execution/executeOperation';
 import { ensurePropertyAccess } from '../askHandlerSupport';
 import { guidanceStepResolverService } from '../../guidanceEngine/guidanceStepResolver.service';
-import { getStepSkipPolicy } from '../../guidanceEngine/guidanceTemplateRegistry';
+import { HIDDEN_STEP_REASON_CODES, getStepSkipPolicy } from '../../guidanceEngine/guidanceTemplateRegistry';
 import { getGuidanceModels } from '../../guidanceEngine/guidanceTypes';
 import { collectionDescriptor } from '../support/collectionDescriptor';
 import { classifyGuidanceContextKey, reportUnclassifiedGuidanceContextKey } from '../askGuidanceContextKeys';
@@ -196,7 +196,7 @@ export function guidanceJourneyContinuation(journey: any, propertyId: string, op
     };
   }
   const { progress } = mapGuidanceJourney(journey);
-  const steps = (journey.steps as any[]).map((step) => mapGuidanceStep(step)).filter((step) => step.skippedReasonCode !== 'TEMPLATE_REMOVED');
+  const steps = (journey.steps as any[]).map((step) => mapGuidanceStep(step)).filter((step) => !HIDDEN_STEP_REASON_CODES.includes(step.skippedReasonCode));
   const current = steps.find((step) => step.stepKey === journey.currentStepKey && step.status !== 'COMPLETED')
     ?? steps.find((step) => ['IN_PROGRESS', 'BLOCKED', 'PENDING'].includes(step.status)) ?? null;
   const followedBranch = options.requestedJourneyId !== journey.id;

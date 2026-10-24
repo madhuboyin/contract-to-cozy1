@@ -1330,6 +1330,13 @@ export class GuidanceJourneyService {
     };
   }
 
+  /** Supersedes a retired template step on this journey (see GuidanceStepResolverService.supersedeRetiredTemplateSteps), then recomputes the journey so its current step follows the replacement. */
+  private async reconcileSupersededTemplateSteps(args: { propertyId: string; journey: any }) {
+    const changed = await guidanceStepResolverService.supersedeRetiredTemplateSteps({ propertyId: args.propertyId, journeyId: args.journey.id });
+    if (changed) await guidanceStepResolverService.recomputeJourneyState({ propertyId: args.propertyId, journeyId: args.journey.id });
+    return changed;
+  }
+
   private isLegacyLifecycleCostStep(step: any) {
     const stepKey = String(step?.stepKey ?? '').toLowerCase();
     const toolKey = String(step?.toolKey ?? '').toLowerCase();
@@ -1735,7 +1742,9 @@ export class GuidanceJourneyService {
             journey,
           });
 
-    if (didBackfillLegacyEvidence || didReconcileLegacyState || didReconcileOutOfOrderState) {
+    const didSupersede = await this.reconcileSupersededTemplateSteps({ propertyId, journey });
+
+    if (didBackfillLegacyEvidence || didReconcileLegacyState || didReconcileOutOfOrderState || didSupersede) {
       journey = await fetchJourney(journey.id);
     }
 
@@ -1811,7 +1820,9 @@ export class GuidanceJourneyService {
               journey,
             });
 
-      if (didBackfill || didReconcile || didReconcileOutOfOrder) {
+      const didSupersede = await this.reconcileSupersededTemplateSteps({ propertyId, journey });
+
+      if (didBackfill || didReconcile || didReconcileOutOfOrder || didSupersede) {
         changed = true;
       }
     }

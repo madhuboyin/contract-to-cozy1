@@ -1,4 +1,5 @@
 import { decimalToNumber } from './guidanceTypes';
+import { HIDDEN_STEP_REASON_CODES } from './guidanceTemplateRegistry';
 import {
   buildRecommendationResponseContract,
   resolveRecommendationResponseStatus,
@@ -147,7 +148,7 @@ export function mapGuidanceJourney(journey: any) {
   // These are historically persisted steps that no longer exist in the current
   // template version — they should be invisible to the frontend in all contexts:
   // step strip, progress counts, and next-step resolution.
-  const steps = allSteps.filter((step: any) => step.skippedReasonCode !== 'TEMPLATE_REMOVED');
+  const steps = allSteps.filter((step: any) => !HIDDEN_STEP_REASON_CODES.includes(step.skippedReasonCode));
   const completedCount = steps.filter((step: any) => step.status === 'COMPLETED').length;
   const totalCount = steps.length;
   const confidence = decimalToNumber(journey.primarySignal?.confidenceScore);

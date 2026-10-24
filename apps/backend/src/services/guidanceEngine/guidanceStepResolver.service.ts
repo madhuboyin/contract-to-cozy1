@@ -9,7 +9,8 @@ import {
 } from './guidanceTypes';
 import { guidanceDerivedDataService } from './guidanceDerivedData.service';
 import { guidanceValidationService } from './guidanceValidation.service';
-import { getStepSkipPolicy } from './guidanceTemplateRegistry';
+import { getStepSkipPolicy, SUPERSEDED_STEP_ORDER_OFFSET, SUPERSEDED_TEMPLATE_STEPS, SUPERSEDED_TEMPLATE_STEP_REASON_CODE, getTemplateByJourneyTypeKey } from './guidanceTemplateRegistry';
+import { prisma } from '../../lib/prisma';
 import { runJourneyCompletionHooks, syncGuidanceWorkItemsOnCompletion } from './guidanceCompletionHooks.service';
 import { propagateFindingResolutionFromExecution } from '../../modules/homeOperations/adapters/inspectionFinding.adapter';
 import { logger } from '../../lib/logger';
@@ -87,6 +88,87 @@ function findUnmetPriorRequiredSteps(args: {
 }
 
 export class GuidanceStepResolverService {
+  /** The row a template step becomes when it is added to a journey (shared by journey creation, template sync and the supersede reconciliation). */
+  templateStepCreateData(journeyId: string, step: GuidanceStepTemplate, governance: ReturnType<typeof resolveGuidanceStepGovernance>) {
+    return {
+      journeyId,
+      stepOrder: step.stepOrder,
+      stepKey: step.stepKey,
+      stepType: step.stepType ?? null,
+      label: step.label,
+      description: step.description ?? null,
+      decisionStage: step.decisionStage,
+      executionReadiness: step.executionReadiness,
+      status: 'PENDING' as const,
+      isRequired: step.isRequired,
+      toolKey: step.toolKey ?? null,
+      routePath: step.routePath ?? null,
+      requiredContextKeys: step.requiredContextKeys ?? [],
+      missingContextKeys: [],
+      safetyTier: governance.safetyTier,
+      governancePolicyVersion: governance.policyVersion,
+      professionalBoundary: governance.professionalBoundary,
+      conservativeFallback: governance.conservativeFallback,
+      emergencyEscalation: governance.emergencyEscalation,
+      governanceJson: governance,
+    };
+  }
+
+  /**
+   * Supersedes retired template steps on a journey, atomically (owner decision 2026-10-24). An open retired step is marked superseded (a skipped row with the machine-readable reason
+   * code TEMPLATE_SUPERSEDED and the replacement named; never completed), moved out of the order space, and the replacement is inserted in the same position, with the journey's
+   * current step following it, all in one transaction: if any part fails nothing changes and the old step stays as it was. A retired step that is already completed or skipped is left
+   * alone, and no replacement is added to that journey. Idempotent.
+   */
+  async supersedeRetiredTemplateSteps(params: { propertyId: string; journeyId: string; actorUserId?: string | null }): Promise<boolean> {
+    const { guidanceJourney, guidanceJourneyStep } = getGuidanceModels();
+    const journey = await guidanceJourney.findFirst({ where: { id: params.journeyId, propertyId: params.propertyId }, select: { id: true, journeyTypeKey: true, status: true, currentStepKey: true } });
+    if (!journey || !['ACTIVE', 'NOT_STARTED'].includes(String(journey.status))) return false;
+    const entries = SUPERSEDED_TEMPLATE_STEPS.filter((entry) => entry.journeyTypeKey === journey.journeyTypeKey);
+    if (!entries.length) return false;
+    const template = getTemplateByJourneyTypeKey(journey.journeyTypeKey);
+    if (template.journeyTypeKey !== journey.journeyTypeKey) return false;
+    const steps = await guidanceJourneyStep.findMany({ where: { journeyId: journey.id }, orderBy: [{ stepOrder: 'asc' }] });
+    let changed = false;
+    for (const entry of entries) {
+      const old = steps.find((step: any) => step.stepKey === entry.retired.stepKey && step.toolKey === entry.retired.toolKey);
+      const replacementTemplate = template.steps.find((step) => step.stepKey === entry.replacement.stepKey);
+      if (!old || !replacementTemplate || steps.some((step: any) => step.stepKey === entry.replacement.stepKey)) continue;
+      if (!['PENDING', 'IN_PROGRESS', 'BLOCKED'].includes(String(old.status))) continue;
+      const governance = resolveGuidanceStepGovernance(template.governance, replacementTemplate);
+      const now = new Date();
+      await (prisma as any).$transaction(async (tx: any) => {
+        // Park the retired row first (its order is the replacement's order), then insert the replacement in that position.
+        await tx.guidanceJourneyStep.update({
+          where: { id: old.id },
+          data: {
+            status: 'SKIPPED', skippedAt: now, skippedReasonCode: SUPERSEDED_TEMPLATE_STEP_REASON_CODE,
+            skippedReason: `replacedBy=${entry.replacement.toolKey}:${entry.replacement.stepKey};template=${template.journeyTypeKey}@${template.version}`,
+            stepOrder: SUPERSEDED_STEP_ORDER_OFFSET + old.stepOrder,
+          },
+        });
+        const created = await tx.guidanceJourneyStep.create({ data: { ...this.templateStepCreateData(journey.id, { ...replacementTemplate, stepOrder: old.stepOrder }, governance) } });
+        await tx.guidanceJourneyEvent.create({
+          data: {
+            propertyId: params.propertyId, journeyId: journey.id, stepId: old.id, eventType: 'STEP_SKIPPED', actorType: params.actorUserId ? 'USER' : 'SYSTEM', actorUserId: params.actorUserId ?? null,
+            fromStepStatus: old.status, toStepStatus: 'SKIPPED', reasonCode: SUPERSEDED_TEMPLATE_STEP_REASON_CODE,
+            reasonMessage: `Replaced by ${entry.replacement.toolKey}:${entry.replacement.stepKey} (${template.journeyTypeKey}@${template.version})`,
+            payloadJson: { supersededStepKey: entry.retired.stepKey, replacementStepKey: entry.replacement.stepKey, replacementStepId: created.id, templateVersion: `${template.journeyTypeKey}@${template.version}` },
+          },
+        });
+        await tx.guidanceJourney.update({
+          where: { id: journey.id },
+          data: {
+            version: { increment: 1 }, lastTransitionAt: now,
+            ...(journey.currentStepKey === old.stepKey ? { currentStepKey: created.stepKey, currentStepOrder: created.stepOrder } : {}),
+          },
+        });
+      });
+      changed = true;
+    }
+    return changed;
+  }
+
   async ensureTemplateSteps(params: {
     propertyId: string;
     journeyId: string;
@@ -97,6 +179,9 @@ export class GuidanceStepResolverService {
   }) {
     const { guidanceJourneyStep } = getGuidanceModels();
 
+    // A journey from an earlier template version has its retired step superseded (atomically) before the template's steps are synced in, so the replacement takes its position.
+    await this.supersedeRetiredTemplateSteps({ propertyId: params.propertyId, journeyId: params.journeyId, actorUserId: params.actorUserId ?? null });
+
     const existing = await guidanceJourneyStep.findMany({
       where: { journeyId: params.journeyId },
       orderBy: [{ stepOrder: 'asc' }],
@@ -106,36 +191,20 @@ export class GuidanceStepResolverService {
     for (const step of existing) {
       existingByKey.set(step.stepKey, step);
     }
+    const journeyRow = await getGuidanceModels().guidanceJourney.findFirst({ where: { id: params.journeyId, propertyId: params.propertyId }, select: { journeyTypeKey: true } });
+    const retiredPredecessorKeys = new Set<string>(
+      SUPERSEDED_TEMPLATE_STEPS.filter((entry) => entry.journeyTypeKey === journeyRow?.journeyTypeKey && existingByKey.has(entry.retired.stepKey)).map((entry) => entry.replacement.stepKey),
+    );
 
     for (const step of params.templateSteps) {
       const existingStep = existingByKey.get(step.stepKey);
       const governance = resolveGuidanceStepGovernance(params.templateGovernance, step);
 
       if (!existingStep) {
-        await guidanceJourneyStep.create({
-          data: {
-            journeyId: params.journeyId,
-            stepOrder: step.stepOrder,
-            stepKey: step.stepKey,
-            stepType: step.stepType ?? null,
-            label: step.label,
-            description: step.description ?? null,
-            decisionStage: step.decisionStage,
-            executionReadiness: step.executionReadiness,
-            status: 'PENDING',
-            isRequired: step.isRequired,
-            toolKey: step.toolKey ?? null,
-            routePath: step.routePath ?? null,
-            requiredContextKeys: step.requiredContextKeys ?? [],
-            missingContextKeys: [],
-            safetyTier: governance.safetyTier,
-            governancePolicyVersion: governance.policyVersion,
-            professionalBoundary: governance.professionalBoundary,
-            conservativeFallback: governance.conservativeFallback,
-            emergencyEscalation: governance.emergencyEscalation,
-            governanceJson: governance,
-          },
-        });
+        // A journey that already carries this step's retired predecessor (finished or skipped before the template changed) does not get the replacement: the replacement is inserted only by
+        // the supersede reconciliation, which does it atomically with retiring the old step.
+        if (retiredPredecessorKeys.has(step.stepKey)) continue;
+        await guidanceJourneyStep.create({ data: this.templateStepCreateData(params.journeyId, step, governance) });
         continue;
       }
 
