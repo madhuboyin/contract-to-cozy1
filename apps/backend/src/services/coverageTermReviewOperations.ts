@@ -18,18 +18,21 @@ export const COVERAGE_TERM_STEP_KEY: Record<CoverageTermKind, string> = { POLICY
 const iso = (value: Date | null | undefined) => (value ? value.toISOString() : '');
 
 /** The current terms in scope and a stable fingerprint over them. Policies are the property's; warranties are the item's, or the property's and its items' when no item is named. */
-export async function currentCoverageTerms(propertyId: string, kind: CoverageTermKind, inventoryItemId: string | null): Promise<{ count: number; fingerprint: string }> {
+export async function currentCoverageTerms(propertyId: string, kind: CoverageTermKind, inventoryItemId: string | null): Promise<{ count: number; fingerprint: string; labels: string[] }> {
   const now = new Date();
   let parts: string[];
+  let labels: string[];
   if (kind === 'POLICY') {
     const rows = await prisma.insurancePolicy.findMany({ where: { propertyId, OR: [{ expiryDate: null }, { expiryDate: { gte: now } }] }, orderBy: { id: 'asc' } });
+    labels = rows.map((row: any) => `${row.carrierName}${row.coverageType ? ` (${row.coverageType})` : ''}`);
     parts = rows.map((row: any) => [row.id, row.carrierName, row.policyNumber, row.coverageType, iso(row.startDate), iso(row.expiryDate), row.deductibleCents ?? '', iso(row.updatedAt)].join(':'));
   } else {
     const scope = inventoryItemId ? { inventoryItemId } : { OR: [{ propertyId }, { inventoryItem: { propertyId } }] };
     const rows = await prisma.warranty.findMany({ where: { ...scope, expiryDate: { gte: now } }, orderBy: { id: 'asc' } });
+    labels = rows.map((row: any) => `${row.providerName}, expires ${iso(row.expiryDate).slice(0, 10)}`);
     parts = rows.map((row: any) => [row.id, row.providerName, row.inventoryItemId ?? '', iso(row.startDate), iso(row.expiryDate), iso(row.updatedAt)].join(':'));
   }
-  return { count: parts.length, fingerprint: createHash('sha256').update(parts.join('|')).digest('hex') };
+  return { count: parts.length, fingerprint: createHash('sha256').update(parts.join('|')).digest('hex'), labels };
 }
 
 /** Whether a step may be completed by reviewing this kind of term: the coverage tool's open review step of that kind, and the journey's item is the scope being reviewed. Re-read each time. */

@@ -15,6 +15,7 @@ import { NEGOTIATION_SHIELD_START_MESSAGE } from './support/negotiationShieldSta
 import { PROJECT_TRACKER_CREATE_MESSAGE } from './support/projectTrackerConstants';
 import { GUIDANCE_STEP_ACKNOWLEDGE_MESSAGE } from './support/guidanceAcknowledge';
 import { COVERAGE_ANALYSIS_RUN_MESSAGE } from './support/coverageAnalysisRun';
+import { COVERAGE_TERM_REVIEW_MESSAGE } from './support/coverageTermReview';
 import { MAINTENANCE_EVIDENCE_ATTACH_MESSAGE } from './support/maintenanceEvidenceAttach';
 import { INSPECTION_REPORT_REVIEW_MESSAGE } from './support/inspectionReportReview';
 
@@ -166,6 +167,17 @@ export const ASK_GUIDANCE_IN_ASK_STEPS: Readonly<Record<string, AskGuidanceInAsk
     operationId: 'MAINTENANCE_EVIDENCE_ATTACH', message: MAINTENANCE_EVIDENCE_ATTACH_MESSAGE, label: 'Add task evidence', carriesStep: 'ENTITY',
     reason: 'You can create the compliance task, complete it and attach its evidence here; the step is done when the task is completed with evidence.',
     outcome: 'The task you linked to this step, completed with Home Record evidence, is recorded as this step\'s proof.',
+  },
+  // A person's persisted review of the CURRENT policy or warranty terms (opening the coverage tool is never proof).
+  'coverage-intelligence:review_current_policy_context': {
+    operationId: 'COVERAGE_TERM_REVIEW', message: COVERAGE_TERM_REVIEW_MESSAGE, label: 'Mark policy terms as reviewed', carriesStep: 'ENTITY',
+    reason: 'You can review your current policy terms here; your review is recorded on this journey.',
+    outcome: 'Your review of the current terms is recorded as this step\'s proof.',
+  },
+  'coverage-intelligence:review_current_warranty_context': {
+    operationId: 'COVERAGE_TERM_REVIEW', message: COVERAGE_TERM_REVIEW_MESSAGE, label: 'Mark warranty terms as reviewed', carriesStep: 'ENTITY',
+    reason: 'You can review your current warranty terms here; your review is recorded on this journey.',
+    outcome: 'Your review of the current terms is recorded as this step\'s proof.',
   },
   // The expense's allocation, explicitly confirmed by the homeowner (a calculated line item is not proof). The step opens the capital reserve plan; confirming one expense's funding from it
   // (the plan's own row action, started from this execution) completes the step when the journey is about that very expense.
