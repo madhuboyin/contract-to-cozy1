@@ -32,8 +32,8 @@ export const createBookingSchema = z.object({
   maintenancePredictionId: z.string().uuid('Invalid maintenance prediction ID').optional(),
   inventoryItemId: z.string().uuid('Invalid inventory item ID').optional(),
   priceFinalizationId: z.string().uuid('Invalid price finalization ID').optional(),
-  guidanceJourneyId: z.string().uuid('Invalid guidance journey ID').optional(),
-  guidanceStepKey: z.string().optional(),
+  // The journey step the booking is made from. The booking's journey and step key come from it (re-read inside the home), never from the caller.
+  guidanceStepId: z.string().uuid('Invalid guidance step ID').optional(),
   guidanceSignalIntentFamily: z.string().optional(),
   workCategory: z.enum(PROVIDER_WORK_CATEGORIES).optional(),
   guidanceEnforceGuard: z.boolean().optional(),

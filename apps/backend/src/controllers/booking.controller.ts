@@ -1,3 +1,4 @@
+import { resolveGuidanceStepBinding } from '../services/guidanceEngine/guidanceStepBinding';
 // apps/backend/src/controllers/booking.controller.ts
 
 import { Response, NextFunction } from 'express';
@@ -50,17 +51,23 @@ export class BookingController {
       const input = createBookingSchema.parse(req.body) as CreateBookingInput;
 
       const {
-        guidanceJourneyId,
-        guidanceStepKey,
+        guidanceStepId,
         guidanceSignalIntentFamily,
         guidanceEnforceGuard,
         ...bookingInput
       } = input as CreateBookingInput & {
-        guidanceJourneyId?: string;
-        guidanceStepKey?: string;
+        guidanceStepId?: string;
         guidanceSignalIntentFamily?: string;
         guidanceEnforceGuard?: boolean;
       };
+      // The booking's journey and step come only from the supplied step, re-read inside this home (a booking-tool step). A step that does not fit stores neither, so the booking is
+      // an ordinary one and no journey is advanced; the signal family is never used instead. This stored journey is the explicit link a provider-completed booking later proves a step by.
+      let guidanceJourneyId: string | undefined;
+      let guidanceStepKey: string | undefined;
+      if (guidanceStepId) {
+        const bound = await resolveGuidanceStepBinding(bookingInput.propertyId, guidanceStepId, { toolKey: 'booking' });
+        if (bound.ok) { guidanceJourneyId = bound.binding.journeyId; guidanceStepKey = bound.binding.stepKey; }
+      }
 
       const shouldEnforceGuard = Boolean(
         guidanceEnforceGuard ||

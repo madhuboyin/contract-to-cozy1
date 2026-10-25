@@ -9,6 +9,7 @@ import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
 import { bookingCompletionEvidence, reportLinkedTaskCompletion, verifiedCompletionEvidence } from './maintenanceTaskJourneyOperations';
 import { invalidateEvidence, reopenStepAfterReversal, supersedeInvalidated } from './guidanceEngine/guidanceProofReversal';
+import { syncBookingJourneyProofs } from './bookingJourneyProofOperations';
 import { getGuidanceModels } from './guidanceEngine/guidanceTypes';
 
 function reversalReason(booking: { status: string }, disputed: boolean): { code: string; text: string } {
@@ -63,5 +64,10 @@ export async function syncBookingMaintenanceProofsSafely(bookingId: string): Pro
     await syncBookingMaintenanceProofs(bookingId);
   } catch (error) {
     logger.warn({ error, bookingId }, '[GUIDANCE] booking proof sync failed');
+  }
+  try {
+    await syncBookingJourneyProofs(bookingId);
+  } catch (error) {
+    logger.warn({ error, bookingId }, '[GUIDANCE] booking journey proof sync failed');
   }
 }

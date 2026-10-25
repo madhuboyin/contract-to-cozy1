@@ -190,7 +190,7 @@ export async function resolveGuidanceSignal(req: CustomRequest, res: Response, n
 /** Every step with a connected typed path (a reporter that reads the canonical state or the domain write) has no self-reported completion: the generic endpoints refuse it. */
 const TYPED_PATH_REQUIRED = () => new APIError('This step is completed by its own action in the tool, not by marking it done.', 409, 'GUIDANCE_TYPED_PATH_REQUIRED');
 const hasConnectedTypedPath = (toolKey: string | null | undefined, stepKey: string | null | undefined) =>
-  GUIDANCE_STEP_PROOF_MATRIX[`${toolKey ?? ''}:${stepKey ?? ''}`]?.verdict === 'CONNECTED';
+  (() => { const row = GUIDANCE_STEP_PROOF_MATRIX[`${toolKey ?? ''}:${stepKey ?? ''}`]; return row?.verdict === 'CONNECTED' || row?.desktopTypedPathBuilt === true; })();
 const MANUAL_DECLARATION_REQUIRED = () => new APIError('This step is recorded as a declaration: choose the declaration instead of completing it.', 409, 'GUIDANCE_DECLARATION_REQUIRED');
 const MAINTENANCE_TASK_REQUIRED = () => new APIError('Link a maintenance task to this step and complete it with evidence: this step is not completed by marking it done or by having no open tasks.', 409, 'GUIDANCE_MAINTENANCE_TASK_REQUIRED');
 const FINDINGS_DECISION_REQUIRED = () => new APIError('Decide what to do about each finding, then check: this step is completed by the findings\' decisions, not by marking it done.', 409, 'GUIDANCE_FINDING_DECISIONS_REQUIRED');

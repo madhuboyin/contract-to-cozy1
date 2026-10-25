@@ -78,32 +78,11 @@ function getInlineStepConfig(step: GuidanceStepDTO): {
         ],
       };
     case 'confirm_cleaning_complete':
+      // The provider's outcome, not the homeowner's say-so: a provider-completed booking from this journey completes the step (and a dispute or cancellation reopens it).
       return {
-        title: 'Confirm the cleaning service is complete',
-        subtitle: 'Mark the service complete once the provider has finished the job.',
-        checklist: [
-          {
-            key: 'service_finished',
-            label: 'The cleaning visit is finished',
-            description: 'The provider completed the service window for this job.',
-          },
-          {
-            key: 'quality_checked',
-            label: 'You checked the result',
-            description: 'You reviewed the work and do not need additional cleanup right now.',
-          },
-        ],
-        noteField: {
-          label: 'Service note',
-          placeholder: 'Add any quick notes about the service quality, missed areas, or follow-up needed.',
-          hint: 'Optional, but helpful if you may revisit this service later.',
-        },
-        options: [
-          {
-            label: 'Confirm service completed',
-            description: 'Save that the cleaning visit is done and the result has been checked.',
-          },
-        ],
+        title: 'Waiting for your provider to complete the service',
+        subtitle: 'This step is completed when your cleaning provider marks the booked job complete. You do not need to confirm it here.',
+        options: [],
       };
     case 'prepare_property_access':
       return {
@@ -222,44 +201,11 @@ function getInlineStepConfig(step: GuidanceStepDTO): {
         ],
       };
     case 'track_resolution':
+      // The repair's outcome is the provider's: a provider-completed booking from this journey completes the step. If you chose to monitor instead of repair, skip the step.
       return {
-        title: 'Record the current resolution status',
-        subtitle: 'Choose the status that best reflects what happened after the guided repair or follow-up.',
-        checklist: [
-          {
-            key: 'work_verified',
-            label: 'The result was verified',
-            description: 'You confirmed the repair, service, or resolution outcome rather than only scheduling it.',
-          },
-        ],
-        noteField: {
-          label: 'Resolution note',
-          placeholder: 'Add what was completed, what is still pending, or what should be monitored next.',
-          hint: 'Optional, especially useful if the repair is only partially complete.',
-        },
-        options: [
-          {
-            label: 'Repair completed and verified',
-            description: 'The work is done and you confirmed the issue is resolved.',
-            producedData: {
-              resolutionStatus: 'completed_and_verified',
-            },
-          },
-          {
-            label: 'Temporary fix in place',
-            description: 'Use this when immediate risk is reduced but permanent work is still pending.',
-            producedData: {
-              resolutionStatus: 'temporary_fix',
-            },
-          },
-          {
-            label: 'Monitoring instead of repairing',
-            description: 'Use this when you chose to track the issue rather than complete work now.',
-            producedData: {
-              resolutionStatus: 'monitoring',
-            },
-          },
-        ],
+        title: 'Waiting for the repair to be completed',
+        subtitle: 'This step is completed when your provider marks the booked repair complete. You do not need to confirm it here. If you are monitoring instead of repairing, you can skip this step.',
+        options: [],
       };
     // B4: DEFAULT_TEMPLATE review_signal step previously returned null → blank CTA area
     case 'review_signal':
