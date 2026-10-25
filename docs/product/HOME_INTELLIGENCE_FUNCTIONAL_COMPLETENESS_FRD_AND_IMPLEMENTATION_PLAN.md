@@ -63,6 +63,13 @@ Current functional failures include:
 
 These are functional completeness gaps. Redirect cleanup, visual consistency, dead-code removal, and historical model consolidation are useful supporting work but are not the primary scope of this FRD.
 
+**Home Record completeness clarification (2026-10-25):** County and County
+FIPS are optional address-enrichment metadata. They remain canonical Property
+Context facts for downstream jurisdiction-aware capabilities, but they do not
+count toward the homeowner-facing completeness numerator, denominator, missing
+total, or next steps. An enrichment miss must never prevent a homeowner from
+reaching 100% or imply that the homeowner should know or enter a FIPS code.
+
 ---
 
 ## 3. Goals

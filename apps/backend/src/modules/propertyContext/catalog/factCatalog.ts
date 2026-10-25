@@ -11,6 +11,11 @@ export interface PropertyFactDefinition {
   correctionPath: string | null;
   writable: boolean;
   /**
+   * Defaults to true. Optional system/enrichment metadata remains available
+   * in Property Context but does not lower homeowner-facing completeness.
+   */
+  countsTowardCompleteness?: boolean;
+  /**
    * The fact is NOT applicable to a property when ANY of these conditions holds
    * against that property's own facts. Non-applicable facts are excluded from
    * completeness (numerator and denominator) and never surfaced as a gap to fill.
@@ -50,8 +55,8 @@ export const PROPERTY_FACT_CATALOG = [
   { key: 'location.city', scope: 'LOCATION', canonicalOwner: 'Property.city', correctionPath: propertyPath('address'), writable: true },
   { key: 'location.state', scope: 'LOCATION', canonicalOwner: 'Property.state', correctionPath: propertyPath('address'), writable: true },
   { key: 'location.zipCode', scope: 'LOCATION', canonicalOwner: 'Property.zipCode', correctionPath: propertyPath('address'), writable: true },
-  { key: 'location.county', scope: 'LOCATION', canonicalOwner: 'Property.county', correctionPath: propertyPath('address'), writable: false },
-  { key: 'location.countyFips', scope: 'LOCATION', canonicalOwner: 'Property.countyFips', correctionPath: propertyPath('address'), writable: false },
+  { key: 'location.county', scope: 'LOCATION', canonicalOwner: 'Property.county', correctionPath: propertyPath('address'), writable: false, countsTowardCompleteness: false },
+  { key: 'location.countyFips', scope: 'LOCATION', canonicalOwner: 'Property.countyFips', correctionPath: propertyPath('address'), writable: false, countsTowardCompleteness: false },
   { key: 'location.timezone', scope: 'LOCATION', canonicalOwner: 'Property.timezone', correctionPath: propertyPath('address'), writable: true },
   { key: 'location.geocoded', scope: 'LOCATION', canonicalOwner: 'Property.latitude/longitude', correctionPath: propertyPath('address'), writable: false },
   { key: 'location.climateRegion', scope: 'LOCATION', canonicalOwner: 'PropertyClimateSetting.climateRegion', correctionPath: '/dashboard/properties/:propertyId/environment', writable: false },

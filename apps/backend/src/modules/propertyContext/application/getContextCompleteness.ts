@@ -21,6 +21,7 @@ export interface PropertyContextCompleteness {
 export function getContextCompleteness(snapshot: PropertyContextSnapshot): PropertyContextCompleteness {
   const scopes = snapshot.scopes.map((scope): PropertyContextScopeCompleteness => {
     const factKeys = getFactDefinitionsForScope(scope)
+      .filter((definition) => definition.countsTowardCompleteness !== false)
       .filter((definition) => isFactApplicable(definition, snapshot.facts))
       .map((definition) => definition.key);
     const knownFactKeys = factKeys.filter((key) => snapshot.facts[key]?.state === 'KNOWN');
