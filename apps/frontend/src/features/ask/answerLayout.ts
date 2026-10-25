@@ -21,7 +21,7 @@ export function askAnswerWidth(blocks: AskPresentationBlock[]): AskAnswerWidth {
   // responsive inside that measure and should not widen every surrounding card.
   if (blocks.some((block) => block.id === 'reserve-fund-overview')) return 'STANDARD';
   // A chart answer (Break-Even) is a few short tables around one chart; it reads at the standard measure, like Home Actions.
-  if (blocks.some((block) => block.type === 'TREND_CHART')) return 'STANDARD';
+  if (blocks.some((block) => block.type === 'TREND_CHART' || block.id.startsWith('break-even-'))) return 'STANDARD';
   // Sell / Hold / Rent and the Do-Nothing Simulator are the same kind of decision answer (summary, scenario cards, short tables), so it shares that measure.
   if (blocks.some((block) => block.id.startsWith('sell-hold-rent-') || block.id.startsWith('do-nothing-'))) return 'STANDARD';
   return blocks.some((block) => WIDE_BLOCK_TYPES.has(block.type)

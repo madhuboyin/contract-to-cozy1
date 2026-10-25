@@ -8,8 +8,8 @@ import type { AskBlockRenderer } from '../blocks/types';
 // markers and the range-switch actions are declared by the server; this renderer only scales and draws them.
 
 const WIDTH = 640;
-const HEIGHT = 240;
-const PAD = { left: 56, right: 14, top: 16, bottom: 26 };
+const HEIGHT = 185;
+const PAD = { left: 52, right: 14, top: 14, bottom: 22 };
 
 const STROKE = {
   DEFAULT: 'stroke-slate-600',
@@ -57,18 +57,20 @@ export const TrendChartBlock: AskBlockRenderer<'TREND_CHART'> = ({ block }) => {
   };
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-2xs" data-display-pattern="trend-chart">
-      <div className="flex flex-wrap items-start justify-between gap-2 border-b border-slate-100 bg-gradient-to-r from-slate-50/90 via-white to-teal-50/30 px-4 py-3.5 sm:px-5">
+    <section className="w-full rounded-2xl border border-slate-200/90 bg-white shadow-2xs" data-display-pattern="trend-chart">
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-t-2xl border-b border-slate-100 bg-gradient-to-r from-slate-50/90 via-white to-teal-50/30 px-4 py-2.5 sm:px-5">
         <div className="min-w-0">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-teal-700">Cumulative Trajectory</span>
-          <h3 className="text-base font-bold tracking-tight text-slate-950">{block.title}</h3>
-          {block.description && <p className="mt-0.5 text-xs text-slate-600">{block.description}</p>}
+          <div className="flex items-baseline gap-2">
+            <h3 className="text-sm font-bold tracking-tight text-slate-950 sm:text-base">{block.title}</h3>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-teal-700">Cumulative Trajectory</span>
+          </div>
+          {block.description && <p className="mt-0.5 text-xs text-slate-500">{block.description}</p>}
         </div>
         {block.actions.length > 0 && <div className="flex shrink-0 gap-2">{block.actions.map((action) => <ActionLink key={action.id} action={action} />)}</div>}
       </div>
-      <div className="p-4 sm:p-5">
+      <div className="p-3 sm:px-4 sm:py-3">
         <figure>
-          <div className="rounded-xl border border-slate-100 bg-slate-50/40 p-2 sm:p-3">
+          <div className="rounded-xl border border-slate-100 bg-slate-50/40 p-2">
             <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className="h-auto w-full" role="img"
               aria-label={`${block.title}. ${block.series.map((series) => `${series.label} ends at ${fullMoney(series.values[last])}`).join('; ')}.`}>
               <defs>
@@ -105,17 +107,17 @@ export const TrendChartBlock: AskBlockRenderer<'TREND_CHART'> = ({ block }) => {
               ))}
             </svg>
           </div>
-          <figcaption className="mt-3 flex flex-wrap items-center justify-between gap-2">
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs font-medium text-slate-700">
+          <figcaption className="mt-2 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-medium text-slate-700">
               {block.series.map((series) => (
-                <span key={series.id} className="inline-flex items-center gap-1.5 rounded-full border border-slate-200/80 bg-slate-50 px-2.5 py-1">
-                  <span className={cn('inline-block h-0.5 w-4', SWATCH[series.tone], series.style === 'DASHED' && 'opacity-70')} aria-hidden="true" />
+                <span key={series.id} className="inline-flex items-center gap-1.5 rounded-full border border-slate-200/80 bg-slate-50 px-2.5 py-0.5">
+                  <span className={cn('inline-block h-0.5 w-3.5', SWATCH[series.tone], series.style === 'DASHED' && 'opacity-70')} aria-hidden="true" />
                   <span>{series.label}</span>
                   {last >= 0 && <strong className="ml-0.5 font-bold tabular-nums text-slate-900" aria-hidden="true">({compactMoney(series.values[last])})</strong>}
                 </span>
               ))}
               {block.markers.map((marker) => (
-                <span key={marker.id} className="inline-flex items-center gap-1.5 rounded-full border border-teal-200 bg-teal-50 px-2.5 py-1 font-semibold text-teal-900">
+                <span key={marker.id} className="inline-flex items-center gap-1.5 rounded-full border border-teal-200 bg-teal-50 px-2.5 py-0.5 font-semibold text-teal-900">
                   <span className="inline-block h-2 w-2 rounded-full bg-teal-600" aria-hidden="true" />
                   {marker.label}
                 </span>
@@ -123,7 +125,7 @@ export const TrendChartBlock: AskBlockRenderer<'TREND_CHART'> = ({ block }) => {
             </div>
           </figcaption>
         </figure>
-        <p className="mt-2.5 text-xs text-slate-500">{block.basis}</p>
+        <p className="mt-1.5 text-xs text-slate-500">{block.basis}</p>
         <table className="sr-only">
           <caption>{block.title}</caption>
           <thead><tr><th>Year</th>{block.series.map((series) => <th key={series.id}>{series.label}</th>)}</tr></thead>

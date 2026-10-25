@@ -54,7 +54,7 @@ function StatusBoardSummaryCard({ block }: { block: Extract<AskPresentationBlock
     <section
       data-status-board-summary=""
       className={cn(
-        'relative overflow-hidden rounded-2xl border p-4 shadow-2xs sm:px-5 sm:py-4',
+        'relative w-full rounded-2xl border px-4 py-3.5 shadow-2xs sm:px-5',
         block.tone === 'CAUTION'
           ? 'border-amber-200/90 bg-gradient-to-r from-amber-50/90 via-white to-teal-50/40'
           : 'border-slate-200/90 bg-gradient-to-r from-slate-50 via-white to-teal-50/40',
@@ -110,7 +110,7 @@ function BudgetForecastSummaryCard({ block }: { block: Extract<AskPresentationBl
     <section
       data-budget-forecast-summary=""
       className={cn(
-        'relative overflow-hidden rounded-2xl border p-4 shadow-2xs sm:px-5 sm:py-4',
+        'relative w-full rounded-2xl border px-4 py-3.5 shadow-2xs sm:px-5',
         isBlocked
           ? 'border-amber-200/90 bg-gradient-to-r from-amber-50/90 via-white to-amber-50/30'
           : 'border-slate-200/90 bg-gradient-to-r from-slate-50 via-white to-teal-50/40',
@@ -145,13 +145,13 @@ function SellHoldRentSummaryCard({ block }: { block: Extract<AskPresentationBloc
     <section
       data-sell-hold-rent-summary=""
       className={cn(
-        'relative overflow-hidden rounded-2xl border p-4 shadow-2xs sm:px-5 sm:py-4',
+        'relative w-full rounded-2xl border px-4 py-3.5 shadow-2xs sm:px-5',
         block.tone === 'CAUTION'
           ? 'border-amber-200/90 bg-gradient-to-r from-amber-50/90 via-white to-teal-50/30'
           : 'border-emerald-200/90 bg-gradient-to-r from-emerald-50/70 via-white to-teal-50/40',
       )}
     >
-      <div className="flex flex-col justify-between gap-3.5 sm:flex-row sm:items-start">
+      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center gap-1.5 rounded-full bg-teal-900 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-teal-100">
@@ -159,8 +159,8 @@ function SellHoldRentSummaryCard({ block }: { block: Extract<AskPresentationBloc
               {isWhatIf ? 'What-If Scenario Analysis' : 'Sell · Hold · Rent Decision'}
             </span>
           </div>
-          <h3 className="mt-1.5 text-base font-bold tracking-tight text-slate-950 sm:text-lg">{block.title}</h3>
-          <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-700">{block.body}</p>
+          <h3 className="mt-1 text-base font-bold tracking-tight text-slate-950 sm:text-lg">{block.title}</h3>
+          <p className="mt-0.5 whitespace-pre-wrap text-sm leading-5 text-slate-700">{block.body}</p>
           {block.chips && block.chips.length > 0 && <AnswerChips chips={block.chips} />}
         </div>
         {block.actions.length > 0 && (
@@ -187,13 +187,13 @@ function BreakEvenSummaryCard({ block }: { block: Extract<AskPresentationBlock, 
     <section
       data-break-even-summary=""
       className={cn(
-        'relative overflow-hidden rounded-2xl border p-4 shadow-2xs sm:px-5 sm:py-4',
+        'relative w-full rounded-2xl border px-4 py-3 shadow-2xs sm:px-5',
         isCaution
           ? 'border-amber-200/90 bg-gradient-to-r from-amber-50/90 via-white to-rose-50/30'
           : 'border-emerald-200/90 bg-gradient-to-r from-emerald-50/80 via-white to-teal-50/40',
       )}
     >
-      <div className="flex flex-col justify-between gap-3.5 sm:flex-row sm:items-start">
+      <div className="flex flex-col justify-between gap-2.5 sm:flex-row sm:items-start">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center gap-1.5 rounded-full bg-teal-900 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-teal-100">
@@ -213,16 +213,16 @@ function BreakEvenSummaryCard({ block }: { block: Extract<AskPresentationBlock, 
               {isCaution ? 'Beyond Horizon' : 'Crossover Projected'}
             </span>
           </div>
-          <h3 className="mt-1.5 text-base font-bold tracking-tight text-slate-950 sm:text-lg">{block.title}</h3>
-          <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-700">{block.body}</p>
+          <h3 className="mt-1 text-base font-bold tracking-tight text-slate-950 sm:text-lg">{block.title}</h3>
+          <p className="mt-0.5 whitespace-pre-wrap text-xs leading-5 text-slate-700 sm:text-sm">{block.body}</p>
           {progressPct !== null && (
-            <div aria-hidden="true" className="mt-3 max-w-md rounded-xl border border-emerald-200/70 bg-white/80 px-3 py-2">
+            <div aria-hidden="true" className="mt-2 max-w-sm rounded-xl border border-emerald-200/70 bg-white/80 px-3 py-1.5">
               <div className="flex items-center justify-between text-[11px] font-semibold text-slate-600">
                 <span>Year 1</span>
                 <span className="font-bold text-emerald-800">Break-Even Crossover · Year {targetYear}</span>
                 <span>Year {horizonYears}</span>
               </div>
-              <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-slate-200">
+              <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-200">
                 <div className="h-full rounded-full bg-gradient-to-r from-teal-500 to-emerald-500" style={{ width: `${progressPct}%` }} />
               </div>
             </div>
@@ -245,16 +245,16 @@ function BreakEvenNextActionCard({ block }: { block: Extract<AskPresentationBloc
   return (
     <section
       data-break-even-next-action=""
-      className="overflow-hidden rounded-2xl border border-teal-200/80 bg-gradient-to-r from-teal-50/70 via-white to-emerald-50/40 p-4 shadow-2xs sm:px-5"
+      className="w-full rounded-2xl border border-teal-200/80 bg-gradient-to-r from-teal-50/70 via-white to-emerald-50/40 px-4 py-3 shadow-2xs sm:px-5"
     >
-      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+      <div className="flex flex-col justify-between gap-2.5 sm:flex-row sm:items-center">
         <div className="min-w-0 flex-1">
           <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-teal-800">
             <ArrowRight aria-hidden="true" className="h-3 w-3 text-teal-600" />
             Recommended Next Step
           </span>
-          <h3 className="mt-0.5 text-sm font-bold text-slate-950 sm:text-base">{block.title}</h3>
-          <p className="mt-0.5 text-xs leading-5 text-slate-600 sm:text-sm">{block.body}</p>
+          <h3 className="mt-0.5 text-sm font-bold text-slate-950">{block.title}</h3>
+          <p className="mt-0.5 text-xs leading-5 text-slate-600">{block.body}</p>
         </div>
         {block.actions.length > 0 && (
           <div className="flex shrink-0 flex-wrap items-center gap-2">
@@ -404,18 +404,19 @@ function BreakEvenMetricsCard({ block }: { block: Extract<AskPresentationBlock, 
   return (
     <section
       data-break-even-metrics=""
-      className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-2xs"
+      className="w-full rounded-2xl border border-slate-200/90 bg-white shadow-2xs"
     >
-      <div className="border-b border-slate-100 bg-gradient-to-r from-slate-50/90 via-white to-teal-50/30 px-4 py-3 sm:px-5">
-        <span className="text-[10px] font-bold uppercase tracking-wider text-teal-700">Financial Snapshot</span>
-        <h3 className="text-base font-bold tracking-tight text-slate-950">{block.title}</h3>
-        {block.description && <p className="mt-0.5 text-xs text-slate-600">{block.description}</p>}
+      <div className="flex flex-wrap items-baseline justify-between gap-2 rounded-t-2xl border-b border-slate-100 bg-gradient-to-r from-slate-50/90 via-white to-teal-50/30 px-4 py-2.5 sm:px-5">
+        <div className="flex items-baseline gap-2">
+          <h3 className="text-sm font-bold tracking-tight text-slate-950 sm:text-base">{block.title}</h3>
+          <span className="text-[10px] font-bold uppercase tracking-wider text-teal-700">Financial Snapshot</span>
+        </div>
+        {block.description && <p className="text-xs text-slate-500">{block.description}</p>}
       </div>
 
-      <div className="p-4 sm:p-5">
-        <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="p-3 sm:px-4 sm:py-3">
+        <dl className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           {block.metrics.map((metric, idx) => {
-            const isHero = idx < 2;
             const Icon =
               idx === 0
                 ? Calendar
@@ -435,22 +436,22 @@ function BreakEvenMetricsCard({ block }: { block: Extract<AskPresentationBlock, 
               <div
                 key={metric.label}
                 className={cn(
-                  'relative flex flex-col justify-between rounded-xl border p-3.5 transition-all',
+                  'relative flex flex-col justify-start rounded-xl border px-3 py-2 transition-all',
                   metric.tone === 'POSITIVE'
-                    ? 'border-emerald-200/90 bg-gradient-to-b from-emerald-50/70 to-white shadow-2xs'
+                    ? 'border-emerald-200/90 bg-gradient-to-b from-emerald-50/60 to-white'
                     : metric.tone === 'CAUTION'
-                      ? 'border-amber-200/90 bg-gradient-to-b from-amber-50/70 to-white shadow-2xs'
+                      ? 'border-amber-200/90 bg-gradient-to-b from-amber-50/60 to-white'
                       : metric.tone === 'CRITICAL'
                         ? 'border-red-200 bg-red-50'
                         : 'border-slate-200/80 bg-slate-50/70',
                 )}
               >
-                <div className="flex items-center justify-between gap-2">
-                  <dt className="text-xs font-bold uppercase tracking-wider text-slate-500">{metric.label}</dt>
+                <div className="flex items-center justify-between gap-1.5">
+                  <dt className="truncate text-[11px] font-bold uppercase tracking-wider text-slate-500">{metric.label}</dt>
                   <span
                     aria-hidden="true"
                     className={cn(
-                      'flex h-7 w-7 shrink-0 items-center justify-center rounded-lg',
+                      'flex h-5 w-5 shrink-0 items-center justify-center rounded-md',
                       metric.tone === 'POSITIVE'
                         ? 'bg-emerald-100 text-emerald-700'
                         : metric.tone === 'CAUTION'
@@ -462,43 +463,44 @@ function BreakEvenMetricsCard({ block }: { block: Extract<AskPresentationBlock, 
                               : 'bg-white text-slate-600 ring-1 ring-slate-200/80',
                     )}
                   >
-                    <Icon className="h-3.5 w-3.5" />
+                    <Icon className="h-3 w-3" />
                   </span>
                 </div>
-                <dd
-                  className={cn(
-                    'mt-1.5 font-bold tabular-nums tracking-tight',
-                    isHero ? 'text-xl sm:text-2xl' : 'text-lg',
-                    metric.tone === 'POSITIVE'
-                      ? 'text-emerald-950'
-                      : metric.tone === 'CAUTION'
-                        ? 'text-amber-950'
-                        : 'text-slate-950',
+                <div className="mt-0.5 flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+                  <dd
+                    className={cn(
+                      'text-base font-bold tabular-nums tracking-tight sm:text-lg',
+                      metric.tone === 'POSITIVE'
+                        ? 'text-emerald-950'
+                        : metric.tone === 'CAUTION'
+                          ? 'text-amber-950'
+                          : 'text-slate-950',
+                    )}
+                  >
+                    {metric.value}
+                  </dd>
+                  {metric.detail && (
+                    <span className="text-[11px] font-medium text-slate-500">({metric.detail})</span>
                   )}
-                >
-                  {metric.value}
-                </dd>
-                {metric.detail && (
-                  <p className="mt-0.5 text-xs font-medium text-slate-500">Calendar year {metric.detail}</p>
-                )}
+                </div>
               </div>
             );
           })}
         </dl>
 
         {totalCompare > 0 && costsMetric && appreciationMetric && (
-          <div aria-hidden="true" className="mt-4 rounded-xl border border-slate-200/80 bg-slate-50/70 p-3">
+          <div aria-hidden="true" className="mt-2.5 rounded-xl border border-slate-200/80 bg-slate-50/70 px-3 py-2">
             <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-semibold">
               <span className="inline-flex items-center gap-1.5 text-emerald-800">
-                <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
+                <span className="h-2 w-2 rounded-full bg-emerald-500" />
                 {appreciationMetric.label}: <strong className="font-bold">{appreciationMetric.value}</strong> ({appreciationPct}%)
               </span>
               <span className="inline-flex items-center gap-1.5 text-amber-900">
-                <span className="h-2.5 w-2.5 rounded-full bg-amber-500" />
+                <span className="h-2 w-2 rounded-full bg-amber-500" />
                 {costsMetric.label}: <strong className="font-bold">{costsMetric.value}</strong> ({costsPct}%)
               </span>
             </div>
-            <div className="mt-2 flex h-2.5 w-full overflow-hidden rounded-full bg-slate-200">
+            <div className="mt-1.5 flex h-2 w-full overflow-hidden rounded-full bg-slate-200">
               <div style={{ width: `${appreciationPct}%` }} className="h-full bg-emerald-500" />
               <div style={{ width: `${costsPct}%` }} className="h-full bg-amber-500" />
             </div>
@@ -628,7 +630,7 @@ export const LimitationBlock: AskBlockRenderer<'LIMITATION'> = ({ block }) => {
       <section
         data-sell-hold-rent-keep-in-mind={block.id === 'sell-hold-rent-keep-in-mind' ? '' : undefined}
         data-break-even-limitations={block.id === 'break-even-limitations' ? '' : undefined}
-        className="flex items-start gap-2.5 rounded-xl border border-amber-200/80 bg-amber-50/60 px-3.5 py-2.5 text-xs text-amber-950"
+        className="flex w-full items-start gap-2.5 rounded-2xl border border-amber-200/80 bg-amber-50/60 px-4 py-2.5 text-xs text-amber-950"
       >
         <AlertTriangle aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
         <div className="min-w-0 flex-1">

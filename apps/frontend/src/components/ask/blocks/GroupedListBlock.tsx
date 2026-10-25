@@ -288,10 +288,14 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
   const setPreference = (mode: GroupedListPresentationPreference) => controls?.change((view) => ({
     ...view, groupedListModes: { ...view.groupedListModes, [block.id]: mode },
   }));
+  const isDriversBlock = block.id === 'sell-hold-rent-drivers' || block.id === 'break-even-drivers';
   return (
-    <section className={cn('overflow-hidden rounded-2xl border border-slate-200 bg-white', block.id === 'home-work-items' && 'w-full max-w-[960px]')} data-grouped-list-presentation={presentation.toLowerCase()} data-list-density={dense ? 'dense' : undefined}>
-      <div className={cn('border-b border-slate-100', dense ? 'px-3 py-2.5' : 'px-4 py-3')}>
-        <h3 className="font-semibold text-slate-950">{block.title}</h3>
+    <section className={cn(isDriversBlock ? 'w-full rounded-2xl border border-slate-200/90 bg-white shadow-2xs' : 'overflow-hidden rounded-2xl border border-slate-200 bg-white', block.id === 'home-work-items' && 'w-full max-w-[960px]')} data-grouped-list-presentation={presentation.toLowerCase()} data-list-density={dense ? 'dense' : undefined}>
+      <div className={cn('border-b border-slate-100', isDriversBlock && 'rounded-t-2xl bg-gradient-to-r from-slate-50/90 via-white to-teal-50/30 px-4 py-2.5 sm:px-5', !isDriversBlock && (dense ? 'px-3 py-2.5' : 'px-4 py-3'))}>
+        <div className="flex items-baseline gap-2">
+          <h3 className={cn('text-slate-950', isDriversBlock ? 'text-sm font-bold tracking-tight sm:text-base' : 'font-semibold')}>{block.title}</h3>
+          {isDriversBlock && <span className="text-[10px] font-bold uppercase tracking-wider text-teal-700">Key Drivers</span>}
+        </div>
         {block.description && <p className="mt-1 text-xs text-slate-500">{block.description}</p>}
         {decision.offersChoice && controls && <div className="mt-3 flex flex-wrap items-center gap-1" role="group" aria-label={`View ${block.title}`}>
           {(['AUTO', 'LIST', 'CARDS'] as const).map((mode) => <button key={mode} type="button" aria-pressed={preference === mode} onClick={() => setPreference(mode)} className={cn('min-h-9 rounded-lg px-2.5 text-xs font-semibold', preference === mode ? 'bg-teal-700 text-white' : 'border border-slate-200 text-slate-700 hover:bg-slate-50')}>{mode === 'AUTO' ? 'Auto' : mode === 'LIST' ? 'List' : 'Cards'}</button>)}
@@ -325,8 +329,8 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
           const hiddenItemCount = canExpand ? section.items.length - declaredVisibleCount! : 0;
           const listId = `${block.id}-${section.id}-items`;
           return (
-          <div key={section.id} className={dense ? 'px-3 py-2.5' : 'p-4'}>
-            <div className={cn('flex items-center justify-between', dense ? 'mb-1.5' : 'mb-3')}>
+          <div key={section.id} className={isDriversBlock ? 'px-4 py-2.5 sm:px-5' : dense ? 'px-3 py-2.5' : 'p-4'}>
+            <div className={cn('flex items-center justify-between', isDriversBlock ? 'sr-only' : dense ? 'mb-1.5' : 'mb-3')}>
               <div>
                 <h4 className="text-sm font-semibold text-slate-800">{section.title}</h4>
                 {section.caption && <p className="mt-0.5 text-xs text-slate-500">{section.caption}</p>}
