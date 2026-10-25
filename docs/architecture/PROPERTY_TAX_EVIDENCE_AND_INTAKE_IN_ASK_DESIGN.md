@@ -12,6 +12,8 @@ Every statement about existing behaviour is **code-traced** (read in the source,
 
 ## 0. Summary of what the audit found
 
+**Homeowner-facing coverage boundary.** A Home Record or homeowner-confirmed tax fact does not satisfy the official-assessment-match requirement used to select reviewed jurisdiction rules. When that match or a current rule profile is unavailable, Ask must say that Cozy manages the official match and rule activation and that there is no homeowner setup step. It may direct the homeowner to verify the assessed value, deadline, eligibility, evidence standard, and form with the local assessor, but it must not offer evidence, document, comparable, or case actions that cannot unlock the unavailable rules.
+
 1. The register's description of this item ("needs a record picker and the reviewed rule's evidence shape") is partly wrong. **The desktop never attaches a document as appeal evidence**: its form requires a source URL and sends no `supportingDocumentId` (§1.3). A Home Record picker is therefore a new capability on both surfaces, not parity. The parity gap is narrower: Ask cannot record the three URL-based evidence shapes the desktop can.
 2. **Tax document intakes already live in Home Records** (the intake's `documentId` is a `PropertyRecord`), but the only way to create one is to upload a new file in the Property Tax tool. A tax notice already in Home Records cannot be used, and Ask cannot upload, so Ask has no path at all (§1.2).
 3. Two defects that exist today and would be inherited, not introduced, by Ask: the route accepts any URL scheme for evidence (§1.5), and the desktop TAX_CLASS form saves `officialRecordMismatch: true` without asking the person (§1.3).

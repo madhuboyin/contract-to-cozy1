@@ -306,7 +306,11 @@ async function propertyTaxAppealReadinessResult(userId: string, propertyId: stri
   const readiness: any = await propertyTaxAppealReadinessService.evaluate(propertyId, userId, ground);
   if (readiness.status === 'NOT_COVERED') return {
     status: 'READY_WITH_LIMITATIONS', reasonCode: 'PROPERTY_TAX_RULE_COVERAGE_UNAVAILABLE', contextVersion: context.contextVersion, captureRequests,
-    blocks: [{ type: 'SUMMARY', id: 'tax-readiness-not-covered', title: 'Reviewed appeal rules are not available for this property', body: readiness.reason ?? 'Ask cannot determine filing readiness without an active reviewed jurisdiction rule.', tone: 'CAUTION', actions: [] }, { type: 'BOUNDARY', id: 'tax-coverage-boundary', title: 'Verify with the official authority', body: readiness.professionalBoundary, severity: 'INFO', suggestions: [] }], suggestions: [],
+    blocks: [{
+      type: 'SUMMARY', id: 'tax-readiness-not-covered', title: 'Appeal readiness is not available for this property yet',
+      body: `${readiness.reason ?? 'Ask cannot determine filing readiness without an active reviewed jurisdiction rule.'} Cozy must match a reviewed official assessment and activate the jurisdiction rules; this is not a homeowner setup step. For now, verify the current assessed value, appeal deadline, eligibility, evidence standard, and required form with the local assessor or tax office.`,
+      tone: 'CAUTION', actions: [],
+    }, { type: 'BOUNDARY', id: 'tax-coverage-boundary', title: 'Verify with the official authority', body: readiness.professionalBoundary, severity: 'INFO', suggestions: [] }], suggestions: [],
   };
   const atStake = readiness.taxAtStake;
   const blocks: AskPresentationBlock[] = [{

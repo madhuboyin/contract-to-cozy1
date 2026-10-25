@@ -53,6 +53,9 @@ test('a covered jurisdiction with gaps, and one with no reviewed rules, link now
   taxService.propertyTaxAppealReadinessService.evaluate = async () => ({ status: 'NOT_COVERED', reason: null, professionalBoundary: 'Verify with the authority.' });
   const notCovered = await ask();
   assert.equal(notCovered.reasonCode, 'PROPERTY_TAX_RULE_COVERAGE_UNAVAILABLE');
+  assert.equal(notCovered.blocks[0].title, 'Appeal readiness is not available for this property yet');
+  assert.match(notCovered.blocks[0].body, /not a homeowner setup step/i);
+  assert.match(notCovered.blocks[0].body, /verify the current assessed value, appeal deadline, eligibility, evidence standard, and required form/i);
   assert.deepEqual(notCovered.blocks[0].actions, []);
   assert.equal(JSON.stringify(notCovered).includes('/dashboard/'), false);
 });
