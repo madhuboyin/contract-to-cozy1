@@ -49,7 +49,8 @@ test('only the review step is acknowledgeable, and the journey offers it as its 
   assert.deepEqual({ m: mode.mode, o: mode.inAsk.operationId, c: mode.inAsk.carriesStep }, { m: 'IN_ASK', o: OP, c: 'ENTITY' });
   // act_on_inspection_findings is an in-Ask step of its own (the findings' decisions are checked), not an acknowledgement.
   assert.equal(askGuidanceStepMode('guidance-overview', 'act_on_inspection_findings').inAsk.operationId, 'INSPECTION_FINDINGS_CHECK');
-  for (const other of ['update_budget', 'confirm_cleaning_complete', 'track_resolution', 'prepare_property_access']) {
+  assert.equal(askGuidanceStepMode('guidance-overview', 'prepare_property_access').inAsk.operationId, 'GUIDANCE_STEP_DECLARE', 'a manual declaration, not an acknowledgement');
+  for (const other of ['update_budget', 'confirm_cleaning_complete', 'track_resolution']) {
     assert.equal(askGuidanceStepMode('guidance-overview', other).mode, 'NAVIGATE', `${other}: not a true review step`);
   }
   const journey = { id: 'j1', status: 'ACTIVE', issueDomain: 'OTHER', executionReadiness: 'READY', isLowContext: false, primarySignalId: 'sig-1', primarySignal: { id: 'sig-1', signalIntentFamily: 'generic_actionable_signal' }, inventoryItem: null, currentStepKey: 'review_signal', missingContextKeys: [], evidences: [],

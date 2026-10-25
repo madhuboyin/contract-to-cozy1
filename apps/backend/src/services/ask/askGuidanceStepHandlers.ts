@@ -15,6 +15,7 @@ import { NEGOTIATION_SHIELD_START_MESSAGE } from './support/negotiationShieldSta
 import { PROJECT_TRACKER_CREATE_MESSAGE } from './support/projectTrackerConstants';
 import { GUIDANCE_STEP_ACKNOWLEDGE_MESSAGE } from './support/guidanceAcknowledge';
 import { COVERAGE_ANALYSIS_RUN_MESSAGE } from './support/coverageAnalysisRun';
+import { GUIDANCE_STEP_DECLARE_MESSAGE } from './support/guidanceStepDeclare';
 import { INSPECTION_FINDINGS_CHECK_MESSAGE } from './support/inspectionFindingsCheck';
 import { COVERAGE_RECORD_CHECK_MESSAGE } from './support/coverageRecordCheck';
 import { COVERAGE_TERM_REVIEW_MESSAGE } from './support/coverageTermReview';
@@ -222,6 +223,17 @@ export const ASK_GUIDANCE_IN_ASK_STEPS: Readonly<Record<string, AskGuidanceInAsk
     operationId: 'INSPECTION_FINDINGS_CHECK', message: INSPECTION_FINDINGS_CHECK_MESSAGE, label: 'Check my finding decisions', carriesStep: 'ENTITY',
     reason: 'Once you have decided what to do about each finding, check it here; the step is completed on those decisions.',
     outcome: 'Your decisions on the findings are recorded as this step\'s proof.',
+  },
+  // The two intentionally manual steps (rare and narrow): a declaration with server-owned wording.
+  'guidance-overview:prepare_property_access': {
+    operationId: 'GUIDANCE_STEP_DECLARE', message: GUIDANCE_STEP_DECLARE_MESSAGE, label: 'Confirm access is prepared', carriesStep: 'ENTITY',
+    reason: 'This step is completed by your declaration, recorded with fixed wording and the time.',
+    outcome: 'Your declaration, with its exact wording, who and when, is recorded as this step\'s proof.',
+  },
+  'guidance-overview:select_cleaning_type': {
+    operationId: 'GUIDANCE_STEP_DECLARE', message: GUIDANCE_STEP_DECLARE_MESSAGE, label: 'Choose the cleaning type', carriesStep: 'ENTITY',
+    reason: 'This step is completed by your declaration, recorded with fixed wording and the time.',
+    outcome: 'Your declaration, with its exact wording, who and when, is recorded as this step\'s proof.',
   },
   // The expense's allocation, explicitly confirmed by the homeowner (a calculated line item is not proof). The step opens the capital reserve plan; confirming one expense's funding from it
   // (the plan's own row action, started from this execution) completes the step when the journey is about that very expense.

@@ -322,6 +322,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   COVERAGE_COMMAND: new Set(['coverage-back', 'coverage-back-review']),
   COVERAGE_ANALYSIS_RUN: new Set(['coverage-analysis-run-boundary']),
   INSPECTION_REPORT_REVIEW: new Set(['inspection-report-review-boundary']),
+  GUIDANCE_STEP_DECLARE: new Set(['guidance-step-declare-boundary']),
   INSPECTION_FINDINGS_CHECK: new Set(['inspection-findings-check-boundary']),
   COVERAGE_RECORD_CHECK: new Set(['coverage-record-check-boundary']),
   COVERAGE_TERM_REVIEW: new Set(['coverage-term-review-boundary']),

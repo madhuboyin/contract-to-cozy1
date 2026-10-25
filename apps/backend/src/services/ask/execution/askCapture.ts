@@ -44,6 +44,8 @@ import { HomePlantAddInputSchema, MaterialSpecAddInputSchema, OwnershipCostDecis
 import { RoomPlantRecommendationInputSchema } from '../support/commandInputs';
 import { homePlantAddResult, homePlantContextVersion, MATERIAL_SPEC_UPDATE_CAPTURE_KEY, materialSpecAddResult, materialSpecContextVersion, materialSpecUpdateResult } from '../handlers/homeRecordAdds.handler';
 import { negotiationShieldStartContextVersion, negotiationShieldStartResult } from '../handlers/negotiationShieldStart.handler';
+import { GUIDANCE_STEP_DECLARE_CAPTURE_KEY, GUIDANCE_STEP_DECLARE_MESSAGE, GuidanceStepDeclareAnswerSchema } from '../support/guidanceStepDeclare';
+import { guidanceStepDeclareResult } from '../handlers/guidanceStepDeclare.handler';
 import { MAINTENANCE_EVIDENCE_CAPTURE_KEY, MAINTENANCE_LINK_CAPTURE_KEY, MaintenanceEvidenceAnswerSchema, MaintenanceLinkAnswerSchema } from '../support/maintenanceEvidenceAttach';
 import { evidenceContextVersion, maintenanceEvidenceAttachResult, maintenanceTaskLinkResult } from '../handlers/maintenanceEvidenceAttach.handler';
 import { isNegotiationStartScenario, NEGOTIATION_SHIELD_START_CAPTURE_KEY, NEGOTIATION_START_SCENARIO_SPECS, parseNegotiationStartAnswer } from '../support/negotiationShieldStart';
@@ -1055,6 +1057,24 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     captureId = input.idempotencyKey;
     capturedContextVersion = offer.contextVersion;
     canonicalOwner = 'NegotiationShieldDocument';
+  } else if (execution.operationId === 'GUIDANCE_STEP_DECLARE') {
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson)
+      ? execution.parametersJson as Record<string, unknown>
+      : {};
+    const declareLaunch = storedParameters.guidanceDeclareLaunch && typeof storedParameters.guidanceDeclareLaunch === 'object' && !Array.isArray(storedParameters.guidanceDeclareLaunch)
+      ? storedParameters.guidanceDeclareLaunch as { stepId?: unknown; sourceExecutionId?: unknown }
+      : null;
+    if (input.captureKey !== GUIDANCE_STEP_DECLARE_CAPTURE_KEY || !declareLaunch || typeof declareLaunch.stepId !== 'string') {
+      throw Object.assign(new Error('This form is no longer active. Open the step again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    }
+    const declareAnswer = GuidanceStepDeclareAnswerSchema.safeParse(input.answer);
+    if (!declareAnswer.success) throw Object.assign(new Error('Choose one of the options.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+    result = await guidanceStepDeclareResult(userId, execution.propertyId, GUIDANCE_STEP_DECLARE_MESSAGE,
+      { operationId: 'GUIDANCE_STEP_DECLARE', entityType: 'GUIDANCE_STEP', entityId: declareLaunch.stepId, sourceExecutionId: typeof declareLaunch.sourceExecutionId === 'string' ? declareLaunch.sourceExecutionId : undefined } as never,
+      declareAnswer.data.declarationKey);
+    captureId = input.idempotencyKey;
+    capturedContextVersion = input.expectedContextVersion;
+    canonicalOwner = 'GuidanceManualDeclaration';
   } else if (execution.operationId === 'MAINTENANCE_EVIDENCE_ATTACH') {
     const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson)
       ? execution.parametersJson as Record<string, unknown>

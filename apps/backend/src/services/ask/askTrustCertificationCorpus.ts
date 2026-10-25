@@ -360,6 +360,7 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   STATUS_BOARD_COMMAND: 'Your correction is shown beside the estimate and saved only after you confirm; the estimate is not erased.',
   CAPITAL_TIMELINE_COMMAND: 'Your timeline adjustment is shown and saved only after you confirm; the timeline uses it the next time it is run and no contractor is contacted.',
   INSPECTION_REPORT_REVIEW: 'The inspection report the selected journey step is about is marked as reviewed after confirmation, for the version of the report you were shown.',
+  GUIDANCE_STEP_DECLARE: "The two intentionally manual journey steps are completed by your declaration after confirmation, recorded with the server-owned wording, who, when and the signal version.",
   INSPECTION_FINDINGS_CHECK: "The \"Act on findings\" step is completed after confirmation, once every finding the journey is about has a decision.",
   COVERAGE_RECORD_CHECK: "The journey step is completed on the active policy or warranty record you have saved, after confirmation, for the record shown.",
   COVERAGE_TERM_REVIEW: "Your current policy or warranty terms for the selected journey step are marked as reviewed after confirmation, for the terms you were shown.",

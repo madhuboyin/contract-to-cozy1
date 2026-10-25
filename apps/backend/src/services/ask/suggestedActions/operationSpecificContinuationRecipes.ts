@@ -250,6 +250,10 @@ export const OPERATION_SPECIFIC_CONTINUATION_RECIPES: Readonly<Partial<Record<As
     recipe('Review guidance journeys', 'Show my guidance journeys', 'GUIDANCE_JOURNEYS_LIST', 'REVIEW_GUIDANCE_JOURNEYS', 'INSPECTION_REVIEW_REVIEW_JOURNEYS'),
     recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'INSPECTION_REVIEW_REVIEW_HOME_ACTIONS'),
   ],
+  GUIDANCE_STEP_DECLARE: [
+    recipe('Review guidance journeys', 'Show my guidance journeys', 'GUIDANCE_JOURNEYS_LIST', 'REVIEW_GUIDANCE_JOURNEYS', 'GUIDANCE_STEP_DECLARE_REVIEW_JOURNEYS'),
+    recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'GUIDANCE_STEP_DECLARE_REVIEW_HOME_ACTIONS'),
+  ],
   INSPECTION_FINDINGS_CHECK: [
     recipe('Review guidance journeys', 'Show my guidance journeys', 'GUIDANCE_JOURNEYS_LIST', 'REVIEW_GUIDANCE_JOURNEYS', 'INSPECTION_FINDINGS_CHECK_REVIEW_JOURNEYS'),
     recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'INSPECTION_FINDINGS_CHECK_REVIEW_HOME_ACTIONS'),
