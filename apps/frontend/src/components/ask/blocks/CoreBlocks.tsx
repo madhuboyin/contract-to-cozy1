@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, Sparkles } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Calendar, CheckCircle2, DollarSign, Home, Sparkles, TrendingDown, TrendingUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { workflowProgressStatusLabel } from '@/features/ask/presentationCompatibility';
 import { timelinePoint } from '@/features/ask/displayPatterns';
@@ -175,6 +175,99 @@ function SellHoldRentSummaryCard({ block }: { block: Extract<AskPresentationBloc
   );
 }
 
+function BreakEvenSummaryCard({ block }: { block: Extract<AskPresentationBlock, { type: 'SUMMARY' }> }) {
+  const isWhatIf = /^what if:/i.test(block.title);
+  const isCaution = block.tone === 'CAUTION';
+  const yearMatch = /year\s+(\d+)\s+of\s+(\d+)/i.exec(block.title);
+  const targetYear = yearMatch ? Number(yearMatch[1]) : null;
+  const horizonYears = yearMatch ? Number(yearMatch[2]) : null;
+  const progressPct = targetYear && horizonYears ? Math.min(100, Math.max(8, Math.round((targetYear / horizonYears) * 100))) : null;
+
+  return (
+    <section
+      data-break-even-summary=""
+      className={cn(
+        'relative overflow-hidden rounded-2xl border p-4 shadow-2xs sm:px-5 sm:py-4',
+        isCaution
+          ? 'border-amber-200/90 bg-gradient-to-r from-amber-50/90 via-white to-rose-50/30'
+          : 'border-emerald-200/90 bg-gradient-to-r from-emerald-50/80 via-white to-teal-50/40',
+      )}
+    >
+      <div className="flex flex-col justify-between gap-3.5 sm:flex-row sm:items-start">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-teal-900 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-teal-100">
+              <Sparkles aria-hidden="true" className="h-3 w-3 text-teal-300" />
+              {isWhatIf ? 'Break-Even What-If Simulation' : 'Break-Even Ownership Analysis'}
+            </span>
+            <span
+              aria-hidden="true"
+              className={cn(
+                'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider',
+                isCaution
+                  ? 'border-amber-300/80 bg-amber-100/80 text-amber-900'
+                  : 'border-emerald-300/80 bg-emerald-100/80 text-emerald-900',
+              )}
+            >
+              <span className={cn('h-1.5 w-1.5 rounded-full', isCaution ? 'bg-amber-600' : 'bg-emerald-600')} />
+              {isCaution ? 'Beyond Horizon' : 'Crossover Projected'}
+            </span>
+          </div>
+          <h3 className="mt-1.5 text-base font-bold tracking-tight text-slate-950 sm:text-lg">{block.title}</h3>
+          <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-700">{block.body}</p>
+          {progressPct !== null && (
+            <div aria-hidden="true" className="mt-3 max-w-md rounded-xl border border-emerald-200/70 bg-white/80 px-3 py-2">
+              <div className="flex items-center justify-between text-[11px] font-semibold text-slate-600">
+                <span>Year 1</span>
+                <span className="font-bold text-emerald-800">Break-Even Crossover · Year {targetYear}</span>
+                <span>Year {horizonYears}</span>
+              </div>
+              <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-slate-200">
+                <div className="h-full rounded-full bg-gradient-to-r from-teal-500 to-emerald-500" style={{ width: `${progressPct}%` }} />
+              </div>
+            </div>
+          )}
+          {block.chips && block.chips.length > 0 && <AnswerChips chips={block.chips} />}
+        </div>
+        {block.actions.length > 0 && (
+          <div className="flex shrink-0 flex-wrap items-center gap-2 sm:mt-1">
+            {block.actions.map((action) => (
+              <ActionLink key={action.id} action={action} />
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function BreakEvenNextActionCard({ block }: { block: Extract<AskPresentationBlock, { type: 'SUMMARY' }> }) {
+  return (
+    <section
+      data-break-even-next-action=""
+      className="overflow-hidden rounded-2xl border border-teal-200/80 bg-gradient-to-r from-teal-50/70 via-white to-emerald-50/40 p-4 shadow-2xs sm:px-5"
+    >
+      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+        <div className="min-w-0 flex-1">
+          <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-teal-800">
+            <ArrowRight aria-hidden="true" className="h-3 w-3 text-teal-600" />
+            Recommended Next Step
+          </span>
+          <h3 className="mt-0.5 text-sm font-bold text-slate-950 sm:text-base">{block.title}</h3>
+          <p className="mt-0.5 text-xs leading-5 text-slate-600 sm:text-sm">{block.body}</p>
+        </div>
+        {block.actions.length > 0 && (
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            {block.actions.map((action) => (
+              <ActionLink key={action.id} action={action} />
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
 export const SummaryBlock: AskBlockRenderer<'SUMMARY'> = ({ block }) => {
   const calm = useCalmChrome();
   // The seasonal plan's intro and next steps are their own cards in both shells (see SeasonalAnswerCards).
@@ -183,6 +276,8 @@ export const SummaryBlock: AskBlockRenderer<'SUMMARY'> = ({ block }) => {
   if (block.id === 'status-board-summary') return <StatusBoardSummaryCard block={block} />;
   if (block.id === 'budget-forecast-summary') return <BudgetForecastSummaryCard block={block} />;
   if (block.id === 'sell-hold-rent-summary' || block.id === 'sell-hold-rent-what-if-summary') return <SellHoldRentSummaryCard block={block} />;
+  if (block.id === 'break-even-summary') return <BreakEvenSummaryCard block={block} />;
+  if (block.id === 'break-even-next-action') return <BreakEvenNextActionCard block={block} />;
   if (calm) return <CalmSummary block={block} />;
   return (
     <section className={cn(
@@ -291,12 +386,138 @@ export const WorkflowProgressBlock: AskBlockRenderer<'WORKFLOW_PROGRESS'> = ({ b
   );
 };
 
-export const MetricRowBlock: AskBlockRenderer<'METRIC_ROW'> = ({ block }) => (
-  <section className="rounded-2xl border border-slate-200 bg-white p-4">
-    <h3 className="font-semibold text-slate-950">{block.title}</h3>{block.description && <p className="mt-1 text-sm text-slate-600">{block.description}</p>}
-    <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{block.metrics.map((metric) => <div key={metric.label} className={cn('rounded-xl border p-3', metric.tone === 'POSITIVE' ? 'border-emerald-200 bg-emerald-50' : metric.tone === 'CAUTION' ? 'border-amber-200 bg-amber-50' : metric.tone === 'CRITICAL' ? 'border-red-200 bg-red-50' : 'border-slate-100 bg-slate-50')}><dt className="text-xs text-slate-500">{metric.label}</dt><dd className="mt-1 text-lg font-semibold text-slate-950">{metric.value}</dd>{metric.detail && <p className="mt-1 text-xs text-slate-600">{metric.detail}</p>}</div>)}</dl>
-  </section>
-);
+const parseMetricDollar = (value: string | undefined) => {
+  if (!value) return null;
+  const parsed = Number(value.replace(/[^0-9.-]/g, ''));
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+function BreakEvenMetricsCard({ block }: { block: Extract<AskPresentationBlock, { type: 'METRIC_ROW' }> }) {
+  const costsMetric = block.metrics.find((m) => /^costs,/i.test(m.label));
+  const appreciationMetric = block.metrics.find((m) => /^appreciation,/i.test(m.label));
+  const costsVal = Math.max(0, parseMetricDollar(costsMetric?.value) ?? 0);
+  const appreciationVal = Math.max(0, parseMetricDollar(appreciationMetric?.value) ?? 0);
+  const totalCompare = costsVal + appreciationVal;
+  const appreciationPct = totalCompare > 0 ? Math.round((appreciationVal / totalCompare) * 100) : 50;
+  const costsPct = totalCompare > 0 ? 100 - appreciationPct : 50;
+
+  return (
+    <section
+      data-break-even-metrics=""
+      className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-2xs"
+    >
+      <div className="border-b border-slate-100 bg-gradient-to-r from-slate-50/90 via-white to-teal-50/30 px-4 py-3 sm:px-5">
+        <span className="text-[10px] font-bold uppercase tracking-wider text-teal-700">Financial Snapshot</span>
+        <h3 className="text-base font-bold tracking-tight text-slate-950">{block.title}</h3>
+        {block.description && <p className="mt-0.5 text-xs text-slate-600">{block.description}</p>}
+      </div>
+
+      <div className="p-4 sm:p-5">
+        <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {block.metrics.map((metric, idx) => {
+            const isHero = idx < 2;
+            const Icon =
+              idx === 0
+                ? Calendar
+                : idx === 1
+                  ? metric.tone === 'POSITIVE'
+                    ? TrendingUp
+                    : TrendingDown
+                  : idx === 2
+                    ? Home
+                    : idx === 3
+                      ? DollarSign
+                      : idx === 4
+                        ? TrendingDown
+                        : TrendingUp;
+
+            return (
+              <div
+                key={metric.label}
+                className={cn(
+                  'relative flex flex-col justify-between rounded-xl border p-3.5 transition-all',
+                  metric.tone === 'POSITIVE'
+                    ? 'border-emerald-200/90 bg-gradient-to-b from-emerald-50/70 to-white shadow-2xs'
+                    : metric.tone === 'CAUTION'
+                      ? 'border-amber-200/90 bg-gradient-to-b from-amber-50/70 to-white shadow-2xs'
+                      : metric.tone === 'CRITICAL'
+                        ? 'border-red-200 bg-red-50'
+                        : 'border-slate-200/80 bg-slate-50/70',
+                )}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <dt className="text-xs font-bold uppercase tracking-wider text-slate-500">{metric.label}</dt>
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      'flex h-7 w-7 shrink-0 items-center justify-center rounded-lg',
+                      metric.tone === 'POSITIVE'
+                        ? 'bg-emerald-100 text-emerald-700'
+                        : metric.tone === 'CAUTION'
+                          ? 'bg-amber-100 text-amber-700'
+                          : idx === 5
+                            ? 'bg-teal-100/80 text-teal-700'
+                            : idx === 4
+                              ? 'bg-rose-100/70 text-rose-700'
+                              : 'bg-white text-slate-600 ring-1 ring-slate-200/80',
+                    )}
+                  >
+                    <Icon className="h-3.5 w-3.5" />
+                  </span>
+                </div>
+                <dd
+                  className={cn(
+                    'mt-1.5 font-bold tabular-nums tracking-tight',
+                    isHero ? 'text-xl sm:text-2xl' : 'text-lg',
+                    metric.tone === 'POSITIVE'
+                      ? 'text-emerald-950'
+                      : metric.tone === 'CAUTION'
+                        ? 'text-amber-950'
+                        : 'text-slate-950',
+                  )}
+                >
+                  {metric.value}
+                </dd>
+                {metric.detail && (
+                  <p className="mt-0.5 text-xs font-medium text-slate-500">Calendar year {metric.detail}</p>
+                )}
+              </div>
+            );
+          })}
+        </dl>
+
+        {totalCompare > 0 && costsMetric && appreciationMetric && (
+          <div aria-hidden="true" className="mt-4 rounded-xl border border-slate-200/80 bg-slate-50/70 p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-semibold">
+              <span className="inline-flex items-center gap-1.5 text-emerald-800">
+                <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
+                {appreciationMetric.label}: <strong className="font-bold">{appreciationMetric.value}</strong> ({appreciationPct}%)
+              </span>
+              <span className="inline-flex items-center gap-1.5 text-amber-900">
+                <span className="h-2.5 w-2.5 rounded-full bg-amber-500" />
+                {costsMetric.label}: <strong className="font-bold">{costsMetric.value}</strong> ({costsPct}%)
+              </span>
+            </div>
+            <div className="mt-2 flex h-2.5 w-full overflow-hidden rounded-full bg-slate-200">
+              <div style={{ width: `${appreciationPct}%` }} className="h-full bg-emerald-500" />
+              <div style={{ width: `${costsPct}%` }} className="h-full bg-amber-500" />
+            </div>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+export const MetricRowBlock: AskBlockRenderer<'METRIC_ROW'> = ({ block }) => {
+  if (block.id === 'break-even-metrics') return <BreakEvenMetricsCard block={block} />;
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-white p-4">
+      <h3 className="font-semibold text-slate-950">{block.title}</h3>{block.description && <p className="mt-1 text-sm text-slate-600">{block.description}</p>}
+      <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{block.metrics.map((metric) => <div key={metric.label} className={cn('rounded-xl border p-3', metric.tone === 'POSITIVE' ? 'border-emerald-200 bg-emerald-50' : metric.tone === 'CAUTION' ? 'border-amber-200 bg-amber-50' : metric.tone === 'CRITICAL' ? 'border-red-200 bg-red-50' : 'border-slate-100 bg-slate-50')}><dt className="text-xs text-slate-500">{metric.label}</dt><dd className="mt-1 text-lg font-semibold text-slate-950">{metric.value}</dd>{metric.detail && <p className="mt-1 text-xs text-slate-600">{metric.detail}</p>}</div>)}</dl>
+    </section>
+  );
+};
 
 // The vertical timeline list: the fallback when a track cannot be drawn, and the List choice beside the track.
 // Dates read as recorded (FRD v1.77): "Feb 2024" for a month, never an invented day; an unreadable date shows as sent.
@@ -402,10 +623,11 @@ export const LimitationBlock: AskBlockRenderer<'LIMITATION'> = ({ block }) => {
       </section>
     );
   }
-  if (block.id === 'sell-hold-rent-keep-in-mind') {
+  if (block.id === 'sell-hold-rent-keep-in-mind' || block.id === 'break-even-limitations') {
     return (
       <section
-        data-sell-hold-rent-keep-in-mind=""
+        data-sell-hold-rent-keep-in-mind={block.id === 'sell-hold-rent-keep-in-mind' ? '' : undefined}
+        data-break-even-limitations={block.id === 'break-even-limitations' ? '' : undefined}
         className="flex items-start gap-2.5 rounded-xl border border-amber-200/80 bg-amber-50/60 px-3.5 py-2.5 text-xs text-amber-950"
       >
         <AlertTriangle aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />

@@ -355,7 +355,7 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
                   const visibleStatus = statusLabel?.trim().toLowerCase() === section.title.trim().toLowerCase() ? null : statusLabel;
                   const homeWorkItemList = block.id === 'home-work-items';
                   const overdueWorkItem = homeWorkItemList && item.tone === 'CRITICAL';
-                  const sellHoldRentDriversList = block.id === 'sell-hold-rent-drivers';
+                  const sellHoldRentDriversList = block.id === 'sell-hold-rent-drivers' || block.id === 'break-even-drivers';
                   const impactMatch = visibleStatus ? /^(high|medium|low)\s+impact$/i.exec(visibleStatus.trim()) : null;
                   const impactLevel = impactMatch ? impactMatch[1].toUpperCase() as 'HIGH' | 'MEDIUM' | 'LOW' : null;
                   return <li key={item.id} data-ask-task-id={item.id} tabIndex={-1} className={cn('border outline-offset-2', dense ? 'border-b-0 border-r-0 border-t-0 px-2 py-2' : 'rounded-xl', dense && (overdueWorkItem ? 'border-l-4 border-l-rose-400 bg-rose-50/70' : sellHoldRentDriversList && impactLevel === 'HIGH' ? 'border-l-4 border-l-amber-400 bg-amber-50/30 py-2.5' : sellHoldRentDriversList ? 'border-l-4 border-l-teal-500/60 py-2.5' : 'border-l-0'), !dense && (presentation === 'COMPACT_LIST' ? 'px-3 py-2' : 'p-3'), selected ? 'border-teal-600 bg-teal-50' : !dense && (presentation === 'COMPACT_LIST' ? 'border-transparent bg-white' : 'border-transparent bg-slate-50'))}>

@@ -105,3 +105,47 @@ test('renders Sell Hold Rent assumptions with baseline and override tiles alongs
   expect(screen.getByText('Override')).toBeInTheDocument();
   expect(screen.getByText('Baseline')).toBeInTheDocument();
 });
+
+test('renders Break-Even sensitivity cards, assumptions grid, and what-if delta cards', () => {
+  const sensitivityBlock: Extract<AskPresentationBlock, { type: 'TABLE' }> = {
+    type: 'TABLE',
+    id: 'break-even-sensitivity',
+    title: 'Break-even range',
+    description: '2 of 3 scenarios reach break-even within 10 years.',
+    columns: [
+      { key: 'scenario', label: 'Scenario' },
+      { key: 'breakEven', label: 'Breaks even' },
+      { key: 'net', label: 'Net at year 10' },
+    ],
+    rows: [
+      { id: 'break-even-conservative', values: { scenario: 'Conservative', breakEven: 'Not within 10 years', net: '-$8,000' } },
+      { id: 'break-even-base', values: { scenario: 'Base', breakEven: 'Year 6', net: '$42,000' } },
+      { id: 'break-even-optimistic', values: { scenario: 'Optimistic', breakEven: 'Year 4', net: '$90,000' } },
+    ],
+    actions: [],
+  };
+
+  const { container: sensitivityContainer } = render(<AdaptiveTableBlock block={sensitivityBlock} renderAction={() => null} />);
+  expect(sensitivityContainer.querySelector('[data-break-even-sensitivity]')).toBeInTheDocument();
+  expect(screen.getAllByText('Reached')).toHaveLength(2);
+  expect(screen.getByText('Unreached')).toBeInTheDocument();
+
+  const whatIfComparison: Extract<AskPresentationBlock, { type: 'TABLE' }> = {
+    type: 'TABLE',
+    id: 'break-even-what-if-comparison',
+    title: 'Your what-if against the standard projection',
+    columns: [
+      { key: 'measure', label: '' },
+      { key: 'standard', label: 'Standard' },
+      { key: 'whatIf', label: 'Your what-if' },
+    ],
+    rows: [
+      { id: 'break-even-what-if-when', values: { measure: 'Breaks even', standard: 'Year 6 (2032)', whatIf: 'Year 3 (2029)' } },
+    ],
+    actions: [],
+  };
+
+  const { container: whatIfContainer } = render(<AdaptiveTableBlock block={whatIfComparison} renderAction={() => null} />);
+  expect(whatIfContainer.querySelector('[data-break-even-what-if="break-even-what-if-comparison"]')).toBeInTheDocument();
+  expect(screen.getAllByText('Year 3 (2029)').length).toBeGreaterThanOrEqual(1);
+});

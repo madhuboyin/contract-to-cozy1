@@ -79,6 +79,10 @@ function DataTable({ block, className, rowDetail }: { block: TableBlock; classNa
 export const FACT_GRID_TABLE_IDS: ReadonlySet<string> = new Set(['property-summary-facts']);
 const SELL_HOLD_RENT_PROJECTION_ID = 'sell-hold-rent-projection';
 const SELL_HOLD_RENT_ASSUMPTIONS_ID = 'sell-hold-rent-assumptions';
+const BREAK_EVEN_SENSITIVITY_ID = 'break-even-sensitivity';
+const BREAK_EVEN_ASSUMPTIONS_ID = 'break-even-assumptions';
+const BREAK_EVEN_WHAT_IF_ASSUMPTIONS_ID = 'break-even-what-if-assumptions';
+const BREAK_EVEN_WHAT_IF_COMPARISON_ID = 'break-even-what-if-comparison';
 
 const numericMoney = (value: string | undefined) => {
   if (!value) return null;
@@ -245,7 +249,8 @@ function SellHoldRentAssumptionsBlock({
     <section
       className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-2xs"
       aria-labelledby={`ask-table-${block.id}`}
-      data-sell-hold-rent-assumptions=""
+      data-sell-hold-rent-assumptions={block.id === SELL_HOLD_RENT_ASSUMPTIONS_ID ? '' : undefined}
+      data-break-even-assumptions={block.id === BREAK_EVEN_ASSUMPTIONS_ID ? '' : undefined}
     >
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 bg-gradient-to-r from-slate-50/90 via-white to-teal-50/30 px-4 py-3.5 sm:px-5">
         <div>
@@ -282,9 +287,9 @@ function SellHoldRentAssumptionsBlock({
               <>
                 <LabeledCards block={block} className="sm:hidden" rowDetail={rowDetail} />
                 <div className="hidden sm:block">
-                  <dl className="grid grid-cols-2 gap-2.5 lg:grid-cols-4" aria-hidden="true">
+                  <dl className={cn('grid grid-cols-2 gap-2.5', block.rows.length === 5 ? 'lg:grid-cols-3' : 'lg:grid-cols-4')} aria-hidden="true">
                     {block.rows.map((row) => {
-                      const isOverridden = /what-if|scenario override/i.test(row.values.source || '');
+                      const isOverridden = /what-if|scenario override|used from this request/i.test(row.values.source || '');
                       return (
                         <div
                           key={row.id}
@@ -348,6 +353,203 @@ function SellHoldRentAssumptionsBlock({
   );
 }
 
+function BreakEvenSensitivityBlock({
+  block,
+  preference,
+  offersChoice,
+  hasControls,
+  setPreference,
+  decisionMode,
+  shownCount,
+  totalCount,
+  rowDetail,
+}: {
+  block: TableBlock;
+  preference: TablePresentationPreference;
+  offersChoice: boolean;
+  hasControls: boolean;
+  setPreference: (mode: TablePresentationPreference) => void;
+  decisionMode: 'RESPONSIVE' | 'CARDS' | 'TABLE';
+  shownCount: number;
+  totalCount: number;
+  rowDetail?: TableRowDetailControls;
+}) {
+  const netLabel = block.columns[2]?.label || 'Net at horizon';
+  return (
+    <section
+      className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-2xs"
+      aria-labelledby={`ask-table-${block.id}`}
+      data-break-even-sensitivity=""
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 bg-gradient-to-r from-slate-50/90 via-white to-teal-50/30 px-4 py-3.5 sm:px-5">
+        <div>
+          <span className="text-[10px] font-bold uppercase tracking-wider text-teal-700">Scenario Stress-Test</span>
+          <h3 id={`ask-table-${block.id}`} className="text-base font-bold tracking-tight text-slate-950">{block.title}</h3>
+          {block.description && <p className="mt-0.5 text-xs leading-5 text-slate-500">{block.description}</p>}
+        </div>
+        {offersChoice && hasControls && (
+          <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1" role="group" aria-label={`View ${block.title}`}>
+            {(['AUTO', 'CARDS', 'TABLE'] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                aria-pressed={preference === mode}
+                onClick={() => setPreference(mode)}
+                className={cn(
+                  'min-h-8 rounded-lg px-2.5 text-xs font-semibold transition-colors',
+                  preference === mode ? 'bg-white text-teal-800 shadow-2xs' : 'text-slate-600 hover:bg-white',
+                )}
+              >
+                {mode === 'AUTO' ? 'Auto' : mode === 'CARDS' ? 'Cards' : 'Table'}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="p-4 sm:p-5">
+        {decisionMode === 'RESPONSIVE' && (
+          <>
+            <LabeledCards block={block} className="sm:hidden" rowDetail={rowDetail} />
+            <div className="hidden sm:block">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3" aria-hidden="true">
+                {block.rows.map((row) => {
+                  const isBase = /base/i.test(row.id);
+                  const isOptimistic = /optimistic/i.test(row.id);
+                  const reached = !/not within/i.test(row.values.breakEven || '');
+                  const netNumber = numericMoney(row.values.net);
+                  const isPositiveNet = netNumber !== null && netNumber >= 0;
+
+                  return (
+                    <div
+                      key={row.id}
+                      className={cn(
+                        'relative flex flex-col justify-between rounded-xl border p-3.5 transition-all',
+                        isBase
+                          ? 'border-teal-300/90 bg-gradient-to-b from-teal-50/50 via-white to-white shadow-xs ring-1 ring-teal-500/20'
+                          : isOptimistic
+                            ? 'border-emerald-200/80 bg-gradient-to-b from-emerald-50/40 to-white'
+                            : 'border-slate-200/80 bg-slate-50/70',
+                      )}
+                    >
+                      <div>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                            {row.values.scenario}
+                          </span>
+                          <span
+                            className={cn(
+                              'rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide',
+                              reached
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : 'bg-amber-100 text-amber-900',
+                            )}
+                          >
+                            {reached ? 'Reached' : 'Unreached'}
+                          </span>
+                        </div>
+                        <p className="mt-2 text-lg font-bold tabular-nums text-slate-950">
+                          {row.values.breakEven}
+                        </p>
+                      </div>
+                      <div className="mt-3 border-t border-slate-100 pt-2.5">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{netLabel}</p>
+                        <p
+                          className={cn(
+                            'mt-0.5 text-sm font-bold tabular-nums',
+                            isPositiveNet ? 'text-emerald-800' : 'text-rose-700',
+                          )}
+                        >
+                          {row.values.net}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <DataTable block={block} className="sr-only" rowDetail={rowDetail} />
+            </div>
+          </>
+        )}
+        {decisionMode === 'CARDS' && <LabeledCards block={block} rowDetail={rowDetail} />}
+        {decisionMode === 'TABLE' && <DataTable block={block} rowDetail={rowDetail} />}
+
+        <p className="mt-3 text-xs text-slate-500" aria-live="polite">
+          {totalCount > shownCount ? `Showing ${shownCount} of ${totalCount} records.` : `${shownCount} ${shownCount === 1 ? 'record' : 'records'}.`}
+        </p>
+      </div>
+    </section>
+  );
+}
+
+function BreakEvenWhatIfBlock({
+  block,
+  shownCount,
+  totalCount,
+  rowDetail,
+}: {
+  block: TableBlock;
+  shownCount: number;
+  totalCount: number;
+  rowDetail?: TableRowDetailControls;
+}) {
+  const isComparison = block.id === BREAK_EVEN_WHAT_IF_COMPARISON_ID;
+  return (
+    <section
+      className="overflow-hidden rounded-2xl border border-teal-200/80 bg-white shadow-2xs"
+      aria-labelledby={`ask-table-${block.id}`}
+      data-break-even-what-if={block.id}
+    >
+      <div className="border-b border-teal-100/80 bg-gradient-to-r from-teal-50/70 via-white to-emerald-50/30 px-4 py-3.5 sm:px-5">
+        <span className="text-[10px] font-bold uppercase tracking-wider text-teal-800">
+          {isComparison ? 'Standard vs. What-If Delta' : 'Hypothetical Overrides'}
+        </span>
+        <h3 id={`ask-table-${block.id}`} className="text-base font-bold tracking-tight text-slate-950">{block.title}</h3>
+        {block.description && <p className="mt-0.5 text-xs leading-5 text-slate-600">{block.description}</p>}
+      </div>
+      <div className="p-4 sm:p-5">
+        {isComparison ? (
+          <>
+            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2" aria-hidden="true">
+              {block.rows.map((row) => (
+                <div key={row.id} className="rounded-xl border border-slate-200/80 bg-slate-50/60 p-3">
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-500">{row.values.measure}</p>
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    <div className="rounded-lg bg-white px-2.5 py-2 ring-1 ring-slate-200/70">
+                      <span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Standard</span>
+                      <span className="mt-0.5 block text-sm font-bold tabular-nums text-slate-700">{row.values.standard}</span>
+                    </div>
+                    <div className="rounded-lg bg-teal-50/80 px-2.5 py-2 ring-1 ring-teal-200/80">
+                      <span className="block text-[10px] font-bold uppercase tracking-wide text-teal-700">Your what-if</span>
+                      <span className="mt-0.5 block text-sm font-bold tabular-nums text-teal-950">{row.values.whatIf}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <DataTable block={block} className="sr-only" rowDetail={rowDetail} />
+          </>
+        ) : (
+          <>
+            <div className="flex flex-wrap gap-2.5" aria-hidden="true">
+              {block.rows.map((row) => (
+                <div key={row.id} className="inline-flex items-center gap-2.5 rounded-xl border border-teal-200 bg-teal-50/50 px-3.5 py-2">
+                  <span className="text-xs font-semibold text-slate-700">{row.values.assumption}:</span>
+                  <span className="rounded-lg bg-teal-700 px-2 py-0.5 text-xs font-bold tabular-nums text-white">{row.values.value}</span>
+                </div>
+              ))}
+            </div>
+            <DataTable block={block} className="sr-only" rowDetail={rowDetail} />
+          </>
+        )}
+        <p className="mt-3 text-xs text-slate-500" aria-live="polite">
+          {totalCount > shownCount ? `Showing ${shownCount} of ${totalCount} records.` : `${shownCount} ${shownCount === 1 ? 'record' : 'records'}.`}
+        </p>
+      </div>
+    </section>
+  );
+}
+
 function FactGridTable({ block, renderAction }: { block: TableBlock; renderAction: (action: AskAction) => ReactNode }) {
   const [labelKey, valueKey] = [block.columns[0]?.key, block.columns[1]?.key];
   return <section data-fact-grid={block.id} className="rounded-2xl border border-slate-200 bg-white p-4" aria-labelledby={`ask-table-${block.id}`}>
@@ -378,7 +580,7 @@ export function AdaptiveTableBlock({ block, renderAction, rowDetail }: { block: 
   const shownCount = block.rows.length;
   const totalCount = Math.max(block.totalCount ?? shownCount, shownCount);
 
-  if (block.id === SELL_HOLD_RENT_ASSUMPTIONS_ID && !rowDetail) {
+  if ((block.id === SELL_HOLD_RENT_ASSUMPTIONS_ID || block.id === BREAK_EVEN_ASSUMPTIONS_ID) && !rowDetail) {
     return (
       <SellHoldRentAssumptionsBlock
         block={block}
@@ -390,6 +592,33 @@ export function AdaptiveTableBlock({ block, renderAction, rowDetail }: { block: 
         shownCount={shownCount}
         totalCount={totalCount}
         renderAction={renderAction}
+        rowDetail={rowDetail}
+      />
+    );
+  }
+
+  if (block.id === BREAK_EVEN_SENSITIVITY_ID && !rowDetail) {
+    return (
+      <BreakEvenSensitivityBlock
+        block={block}
+        preference={preference}
+        offersChoice={decision.offersChoice}
+        hasControls={Boolean(controls)}
+        setPreference={setPreference}
+        decisionMode={decision.mode}
+        shownCount={shownCount}
+        totalCount={totalCount}
+        rowDetail={rowDetail}
+      />
+    );
+  }
+
+  if ((block.id === BREAK_EVEN_WHAT_IF_ASSUMPTIONS_ID || block.id === BREAK_EVEN_WHAT_IF_COMPARISON_ID) && !rowDetail) {
+    return (
+      <BreakEvenWhatIfBlock
+        block={block}
+        shownCount={shownCount}
+        totalCount={totalCount}
         rowDetail={rowDetail}
       />
     );
