@@ -109,8 +109,26 @@ export function BlockSequence({
   renderBlock: (block: AskPresentationBlock, index: number) => ReactNode;
 }) {
   const rendered: ReactNode[] = [];
+  const reserveFundAnswer = blocks.some((block) => block.id === 'reserve-fund-overview');
   for (let index = 0; index < blocks.length;) {
     const block = blocks[index];
+    if (reserveFundAnswer && block.id === 'reserve-allocations') {
+      const secondaryStart = index;
+      const secondary = blocks.slice(secondaryStart);
+      rendered.push(
+        <details key="reserve-plan-details" className="group overflow-hidden rounded-2xl border border-slate-200 bg-white" data-reserve-plan-details="">
+          <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-slate-800 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 [&::-webkit-details-marker]:hidden">
+            <span>Plan details</span>
+            <span className="text-xs font-medium text-slate-500 group-open:hidden">Allocations, ledger, sources, and assumptions</span>
+            <span className="hidden text-xs font-medium text-slate-500 group-open:inline">Hide details</span>
+          </summary>
+          <div className="space-y-3 border-t border-slate-100 bg-slate-50/40 p-3">
+            {secondary.map((secondaryBlock, offset) => renderBlock(secondaryBlock, secondaryStart + offset))}
+          </div>
+        </details>,
+      );
+      break;
+    }
     if (block.type !== 'CHANGE_SUMMARY') {
       rendered.push(renderBlock(block, index));
       index += 1;

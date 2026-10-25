@@ -14,6 +14,7 @@ const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 export const ProgressBlock: AskBlockRenderer<'PROGRESS'> = ({ block, onItemAction, itemActionsDisabled }) => {
   const percent = Math.max(0, Math.min(100, block.percent));
   const rounded = Math.round(percent);
+  const isReserveFund = block.id === 'reserve-fund-overview';
   if (block.id === 'digital-will-progress') {
     return <section className="rounded-2xl border border-slate-200 bg-white p-4" data-display-pattern="continuity-readiness">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -37,9 +38,9 @@ export const ProgressBlock: AskBlockRenderer<'PROGRESS'> = ({ block, onItemActio
     <section className="rounded-2xl border border-slate-200 bg-white p-4" data-display-pattern="progress">
       <h3 className="font-semibold text-slate-950">{block.title}</h3>
       {block.description && <p className="mt-1 text-sm text-slate-600">{block.description}</p>}
-      <div className="mt-3 flex flex-col items-center gap-4 sm:flex-row">
-        <div className="relative h-28 w-28 shrink-0" role="img" aria-label={`${rounded}% ready. ${block.basis}`}>
-          <svg viewBox="0 0 108 108" className="h-28 w-28 -rotate-90" aria-hidden="true">
+      <div className={cn('mt-3 flex flex-col gap-4 sm:flex-row', isReserveFund ? 'items-stretch sm:items-center' : 'items-center')}>
+        <div className={cn('relative shrink-0', isReserveFund ? 'h-24 w-24 self-center' : 'h-28 w-28')} role="img" aria-label={`${rounded}% ${isReserveFund ? 'funded' : 'ready'}. ${block.basis}`}>
+          <svg viewBox="0 0 108 108" className={cn('-rotate-90', isReserveFund ? 'h-24 w-24' : 'h-28 w-28')} aria-hidden="true">
             <circle cx="54" cy="54" r={RADIUS} fill="none" strokeWidth="10" className="stroke-slate-100" />
             <circle cx="54" cy="54" r={RADIUS} fill="none" strokeWidth="10" strokeLinecap="round" className="stroke-teal-600"
               strokeDasharray={`${((CIRCUMFERENCE * percent) / 100).toFixed(1)} ${CIRCUMFERENCE.toFixed(1)}`} />
@@ -51,11 +52,11 @@ export const ProgressBlock: AskBlockRenderer<'PROGRESS'> = ({ block, onItemActio
         <div className="w-full min-w-0 space-y-3">
           <p className="text-sm text-slate-700">{block.basis}</p>
           {block.metrics.length > 0 && (
-            <dl className="grid grid-cols-3 gap-2">
+            <dl className={cn('grid gap-2', isReserveFund ? 'grid-cols-1 sm:grid-cols-3' : 'grid-cols-3')}>
               {block.metrics.map((metric) => (
-                <div key={metric.label} className={cn('flex flex-col-reverse rounded-xl px-3 py-2', TONE_CHIP[metric.tone])}>
+                <div key={metric.label} className={cn('flex flex-col-reverse rounded-xl px-3 py-2', TONE_CHIP[metric.tone], isReserveFund && metric.label === 'Monthly plan' && 'sm:py-3')}>
                   <dt className="text-[11px] opacity-80">{metric.label}</dt>
-                  <dd className="text-base font-semibold tabular-nums">{metric.value}</dd>
+                  <dd className={cn('font-semibold tabular-nums', isReserveFund && metric.label === 'Monthly plan' ? 'text-lg' : 'text-base')}>{metric.value}</dd>
                 </div>
               ))}
             </dl>
@@ -64,13 +65,16 @@ export const ProgressBlock: AskBlockRenderer<'PROGRESS'> = ({ block, onItemActio
       </div>
       {block.nextSteps.length > 0 && (
         <div className="mt-4">
-          <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-600">Next steps</h4>
-          <ul className="space-y-2">
+          <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-600">{isReserveFund ? 'Upcoming needs' : 'Next steps'}</h4>
+          <ul className={cn(isReserveFund ? 'grid grid-cols-1 gap-2 md:grid-cols-3' : 'space-y-2')}>
             {block.nextSteps.map((step) => (
-              <li key={step.id} className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 px-3 py-2.5" data-ask-progress-step={step.id}>
+              <li key={step.id} className={cn('flex flex-wrap gap-3 rounded-xl border border-slate-200 px-3 py-2.5', isReserveFund ? 'items-start bg-slate-50/70' : 'items-center')} data-ask-progress-step={step.id}>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold text-slate-950">{step.title}</p>
-                  {(step.description || step.amountLabel) && <p className="text-xs text-slate-500">{[step.description, step.amountLabel].filter(Boolean).join(' · ')}</p>}
+                  {isReserveFund ? <>
+                    {step.amountLabel && <p className="mt-1 text-sm font-semibold tabular-nums text-slate-800">{step.amountLabel}</p>}
+                    {step.description && <p className="mt-1 text-xs leading-5 text-slate-500">{step.description}</p>}
+                  </> : (step.description || step.amountLabel) && <p className="text-xs text-slate-500">{[step.description, step.amountLabel].filter(Boolean).join(' · ')}</p>}
                 </div>
                 <ItemActionButtons item={step} actions={step.actions} onItemAction={onItemAction} disabled={itemActionsDisabled} />
                 {step.href && <AskContextLink href={step.href} className="inline-flex min-h-10 items-center px-1 text-xs font-semibold text-teal-700 hover:underline">Open<span className="sr-only"> {step.title}</span></AskContextLink>}

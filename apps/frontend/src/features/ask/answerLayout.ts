@@ -16,6 +16,10 @@ const WIDE_BLOCK_TYPES = new Set<AskPresentationBlock['type']>([
  * width. This is presentation-only: it never changes block selection or data.
  */
 export function askAnswerWidth(blocks: AskPresentationBlock[]): AskAnswerWidth {
+  // Reserve Fund is a decision answer with one supporting timeline. Keep the
+  // whole conversation at the Home Actions reading measure; the timeline is
+  // responsive inside that measure and should not widen every surrounding card.
+  if (blocks.some((block) => block.id === 'reserve-fund-overview')) return 'STANDARD';
   // A chart answer (Break-Even) is a few short tables around one chart; it reads at the standard measure, like Home Actions.
   if (blocks.some((block) => block.type === 'TREND_CHART')) return 'STANDARD';
   // Sell / Hold / Rent and the Do-Nothing Simulator are the same kind of decision answer (summary, scenario cards, short tables), so it shares that measure.

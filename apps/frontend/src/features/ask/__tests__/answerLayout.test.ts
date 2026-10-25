@@ -32,3 +32,9 @@ test('decision answers (a chart, or Sell / Hold / Rent) read at the standard mea
   expect(askAnswerWidth([summary, comparison])).toBe('STANDARD');
   expect(askAnswerWidth([summary, { ...table, id: 'do-nothing-items' }])).toBe('STANDARD');
 });
+
+test('keeps the reserve-fund decision answer at the Home Actions measure despite its timeline', () => {
+  const progress: AskPresentationBlock = { type: 'PROGRESS', id: 'reserve-fund-overview', title: 'Funding progress', percent: 0, basis: '$0 funded', metrics: [], nextSteps: [], actions: [] };
+  const timeline: AskPresentationBlock = { type: 'TIMELINE', id: 'capital-timeline', title: 'Capital timeline', items: [] };
+  expect(askAnswerWidth([summary, progress, timeline])).toBe('STANDARD');
+});

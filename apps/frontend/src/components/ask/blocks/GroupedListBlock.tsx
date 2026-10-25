@@ -79,12 +79,58 @@ function ItemActionRow({ item, disabled, onItemAction }: {
   );
 }
 
+function ReservePlanningControls({ block, disabled, onItemAction }: {
+  block: Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>;
+  disabled: boolean;
+  onItemAction: Parameters<AskBlockRenderer<'GROUPED_LIST'>>[0]['onItemAction'];
+}) {
+  const balance = block.sections.find((section) => section.id === 'fund-actions');
+  const postures = block.sections.find((section) => section.id === 'postures');
+  return (
+    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white" data-reserve-planning-controls="">
+      <div className="border-b border-slate-100 px-4 py-3">
+        <h3 className="font-semibold text-slate-950">{block.title}</h3>
+        {block.description && <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-500">{block.description}</p>}
+      </div>
+      <div className="space-y-5 p-4">
+        {balance && <div>
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">{balance.title}</h4>
+          <ul className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {balance.items.map((item) => <li key={item.id} className="flex flex-col rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+              <p className="text-sm font-semibold text-slate-950">{item.title}</p>
+              {item.description && <p className="mt-1 text-xs leading-5 text-slate-600">{item.description}</p>}
+              <div className="mt-auto pt-1"><ItemActionRow item={item} disabled={disabled} onItemAction={onItemAction} /></div>
+            </li>)}
+          </ul>
+        </div>}
+        {postures && <div>
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">{postures.title}</h4>
+          <ul className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-3" aria-label={postures.title}>
+            {postures.items.map((item) => {
+              const current = item.status === 'CURRENT';
+              return <li key={item.id} className={cn('flex flex-col rounded-xl border p-3', current ? 'border-teal-500 bg-teal-50/70 ring-1 ring-teal-500' : 'border-slate-200 bg-white')}>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-semibold text-slate-950">{item.title}</p>
+                  {current && <span className="rounded-full bg-teal-700 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">Current</span>}
+                </div>
+                {item.description && <p className="mt-2 text-xs leading-5 text-slate-600">{item.description}</p>}
+                {(item.actions?.length ?? 0) > 0 && <div className="mt-auto pt-1"><ItemActionRow item={item} disabled={disabled} onItemAction={onItemAction} /></div>}
+              </li>;
+            })}
+          </ul>
+        </div>}
+      </div>
+    </section>
+  );
+}
+
 export function GenericGroupedListBlock({ block, executionId, propertyId, onItemAction, itemActionsDisabled, onFilterClick, onCollectionPage }: Parameters<AskBlockRenderer<'GROUPED_LIST'>>[0]) {
   const controls = useContext(ResultViewContext);
   const workflowControls = useContext(AskBlockActionContext);
   const [focusedDisclosure, setFocusedDisclosure] = useState<'DETAILS' | 'SNOOZE' | null>(null);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
+  if (block.id === 'reserve-planning-controls') return <ReservePlanningControls block={block} disabled={itemActionsDisabled} onItemAction={onItemAction} />;
   if (block.id === 'focused-home-action-guidance') {
     const next = block.sections.find((section) => section.id === 'next-step');
     const why = block.sections.find((section) => section.id === 'why-it-matters')?.items[0];
