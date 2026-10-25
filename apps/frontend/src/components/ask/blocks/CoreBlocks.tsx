@@ -40,11 +40,76 @@ function CalmSummary({ block }: { block: Extract<AskPresentationBlock, { type: '
   );
 }
 
+function StatusBoardSummaryCard({ block }: { block: Extract<AskPresentationBlock, { type: 'SUMMARY' }> }) {
+  const isEmpty = block.title === 'Nothing is on the Status Board yet';
+  const countMatches = /(\d+)\s+need\s+action,\s*(\d+)\s+to\s+monitor,\s*(\d+)\s+in\s+good\s+shape/i.exec(block.title);
+  const actionCount = countMatches ? Number(countMatches[1]) : 0;
+  const monitorCount = countMatches ? Number(countMatches[2]) : 0;
+  const goodCount = countMatches ? Number(countMatches[3]) : 0;
+  const firstSentenceMatch = /^([^.]+\.)\s*(.*)$/.exec(block.body);
+  const primaryLead = firstSentenceMatch ? firstSentenceMatch[1] : block.body;
+  const secondaryDetail = firstSentenceMatch ? firstSentenceMatch[2] : '';
+
+  return (
+    <section
+      data-status-board-summary=""
+      className={cn(
+        'relative overflow-hidden rounded-2xl border p-4 shadow-2xs sm:px-5 sm:py-4',
+        block.tone === 'CAUTION'
+          ? 'border-amber-200/90 bg-gradient-to-r from-amber-50/90 via-white to-teal-50/40'
+          : 'border-slate-200/90 bg-gradient-to-r from-slate-50 via-white to-teal-50/40',
+      )}
+    >
+      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-teal-900 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-teal-100">
+              <Sparkles aria-hidden="true" className="h-3 w-3 text-teal-300" />
+              Home Status Board
+            </span>
+            {!isEmpty && countMatches && (
+              <div aria-hidden="true" className="flex flex-wrap items-center gap-1.5">
+                {actionCount > 0 && (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-800">
+                    <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
+                    {actionCount} Action
+                  </span>
+                )}
+                <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-900">
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                  {monitorCount} Monitor
+                </span>
+                <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                  {goodCount} Good
+                </span>
+              </div>
+            )}
+          </div>
+          <h3 className="mt-1.5 text-base font-bold tracking-tight text-slate-950 sm:text-lg">{block.title}</h3>
+          <p className="mt-1 text-sm font-medium leading-5 text-slate-700">
+            {primaryLead}
+            {secondaryDetail && <span className="sr-only"> {secondaryDetail}</span>}
+          </p>
+        </div>
+        {block.actions.length > 0 && (
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            {block.actions.map((action) => (
+              <ActionLink key={action.id} action={action} />
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
 export const SummaryBlock: AskBlockRenderer<'SUMMARY'> = ({ block }) => {
   const calm = useCalmChrome();
   // The seasonal plan's intro and next steps are their own cards in both shells (see SeasonalAnswerCards).
   if (isSeasonalIntroBlockId(block.id)) return <SeasonalIntroCard block={block} />;
   if (SEASONAL_NEXT_STEPS_BLOCK_IDS.has(block.id)) return <SeasonalNextSteps block={block} />;
+  if (block.id === 'status-board-summary') return <StatusBoardSummaryCard block={block} />;
   if (calm) return <CalmSummary block={block} />;
   return (
     <section className={cn(
