@@ -313,7 +313,23 @@ function StateBlock({ block }: { block: StateBlockType }) {
   );
 }
 
-export const LimitationBlock: AskBlockRenderer<'LIMITATION'> = ({ block }) => <StateBlock block={block} />;
+export const LimitationBlock: AskBlockRenderer<'LIMITATION'> = ({ block }) => {
+  if (block.id === 'status-board-limits') {
+    return (
+      <section
+        data-status-board-limits=""
+        className="flex items-center gap-2.5 rounded-xl border border-amber-200/80 bg-amber-50/70 px-3.5 py-2.5 text-xs text-amber-950"
+      >
+        <AlertTriangle aria-hidden="true" className="h-4 w-4 shrink-0 text-amber-600" />
+        <div className="min-w-0 flex-1">
+          <span className="sr-only">{block.title}. </span>
+          <span className="font-medium text-amber-900">{block.body}</span>
+        </div>
+      </section>
+    );
+  }
+  return <StateBlock block={block} />;
+};
 export const EmptyStateBlock: AskBlockRenderer<'EMPTY_STATE'> = ({ block }) => <StateBlock block={block} />;
 export const ErrorStateBlock: AskBlockRenderer<'ERROR_STATE'> = ({ block }) => <StateBlock block={block} />;
 
