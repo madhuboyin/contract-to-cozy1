@@ -149,3 +149,53 @@ test('renders Break-Even sensitivity cards, assumptions grid, and what-if delta 
   expect(whatIfContainer.querySelector('[data-break-even-what-if="break-even-what-if-comparison"]')).toBeInTheDocument();
   expect(screen.getAllByText('Year 3 (2029)').length).toBeGreaterThanOrEqual(1);
 });
+
+test('renders Ownership Costs category breakdown and forward period range cards alongside accessible tables', () => {
+  const categoriesBlock: Extract<AskPresentationBlock, { type: 'TABLE' }> = {
+    type: 'TABLE',
+    id: 'ownership-cost-categories',
+    title: 'Cost by category',
+    description: 'Included categories in the operating expense lens.',
+    preferredPresentation: 'TABLE',
+    columns: [
+      { key: 'category', label: 'Category' },
+      { key: 'monthly', label: 'Monthly' },
+      { key: 'annual', label: 'Annual' },
+      { key: 'evidence', label: 'Evidence' },
+    ],
+    rows: [
+      { id: 'tax', values: { category: 'Property tax', monthly: '$620', annual: '$7,440', evidence: 'Confirmed (tax record)' } },
+      { id: 'maintenance', values: { category: 'Maintenance', monthly: '$240', annual: '$2,880', evidence: 'Estimated (regional benchmark)' } },
+    ],
+    actions: [],
+  };
+
+  const { container: categoriesContainer } = render(<AdaptiveTableBlock block={categoriesBlock} renderAction={() => null} />);
+  expect(categoriesContainer.querySelector('[data-ownership-cost-categories]')).toBeInTheDocument();
+  expect(screen.getByRole('table', { name: 'Cost by category' })).toBeInTheDocument();
+  expect(screen.getAllByText('Property tax').length).toBeGreaterThanOrEqual(1);
+  expect(screen.getAllByText('$620').length).toBeGreaterThanOrEqual(1);
+
+  const forecastPeriodsBlock: Extract<AskPresentationBlock, { type: 'TABLE' }> = {
+    type: 'TABLE',
+    id: 'ownership-cost-forecast-periods',
+    title: 'Forward cost range',
+    preferredPresentation: 'TABLE',
+    columns: [
+      { key: 'period', label: 'Period' },
+      { key: 'low', label: 'Low' },
+      { key: 'base', label: 'Base' },
+      { key: 'high', label: 'High' },
+      { key: 'confidence', label: 'Confidence' },
+    ],
+    rows: [
+      { id: 'NEXT_12_MONTHS', values: { period: 'Next 12 months', low: '$15,200', base: '$17,040', high: '$19,500', confidence: 'medium' } },
+    ],
+    actions: [],
+  };
+
+  const { container: forecastContainer } = render(<AdaptiveTableBlock block={forecastPeriodsBlock} renderAction={() => null} />);
+  expect(forecastContainer.querySelector('[data-ownership-cost-periods="ownership-cost-forecast-periods"]')).toBeInTheDocument();
+  expect(screen.getByRole('table', { name: 'Forward cost range' })).toBeInTheDocument();
+  expect(screen.getAllByText('$17,040').length).toBeGreaterThanOrEqual(1);
+});

@@ -268,6 +268,186 @@ function BreakEvenNextActionCard({ block }: { block: Extract<AskPresentationBloc
   );
 }
 
+const OWNERSHIP_COST_SUMMARY_IDS: ReadonlySet<string> = new Set([
+  'ownership-costs-summary',
+  'ownership-cost-changes-summary',
+  'ownership-cost-forecast-summary',
+  'ownership-cost-buffer-summary',
+  'ownership-costs-unavailable',
+]);
+
+function OwnershipCostsSummaryCard({ block }: { block: Extract<AskPresentationBlock, { type: 'SUMMARY' }> }) {
+  const isCaution = block.tone === 'CAUTION';
+  const viewLabel =
+    block.id === 'ownership-cost-changes-summary'
+      ? 'Observed Period Comparison'
+      : block.id === 'ownership-cost-forecast-summary'
+        ? 'Forward Cost Range'
+        : block.id === 'ownership-cost-buffer-summary'
+          ? 'Variability & Buffer Plan'
+          : block.id === 'ownership-costs-unavailable'
+            ? 'Context Required'
+            : /cash outflow/i.test(block.body) || /cash outflow/i.test(block.title)
+              ? 'Cash Outflow Lens'
+              : 'Operating Expense Lens';
+
+  const annualMatch = /(\$[0-9,]+)\s+per\s+year/i.exec(block.body);
+  const confirmedMatch = /(\$[0-9,]+)\s+is\s+supported\s+by\s+confirmed\s+or\s+observed\s+records/i.exec(block.body);
+  const estimatedMatch = /and\s+(\$[0-9,]+)\s+is\s+estimated/i.exec(block.body);
+  const missingMatch = /(\d+)\s+included\s+categor(?:y|ies)\s+(?:is|are)\s+still\s+missing/i.exec(block.body);
+  const rangeMatch = /planning\s+range\s+is\s+(\$[0-9,]+)\s+to\s+(\$[0-9,]+)/i.exec(block.body);
+  const baseRangeMatch = /around\s+(\$[0-9,]+)/i.exec(block.title);
+
+  const annualVal = annualMatch ? parseMetricDollar(annualMatch[1]) : null;
+  const confirmedVal = confirmedMatch ? parseMetricDollar(confirmedMatch[1]) : null;
+  const estimatedVal = estimatedMatch ? parseMetricDollar(estimatedMatch[1]) : null;
+  const totalKnown = (confirmedVal ?? 0) + (estimatedVal ?? 0);
+  const confirmedPct = totalKnown > 0 ? Math.min(100, Math.max(0, Math.round(((confirmedVal ?? 0) / totalKnown) * 100))) : null;
+  const estimatedPct = confirmedPct !== null ? 100 - confirmedPct : null;
+
+  return (
+    <section
+      data-ownership-costs-summary={block.id}
+      className={cn(
+        'relative w-full rounded-2xl border px-4 py-3 shadow-2xs sm:px-5',
+        isCaution
+          ? 'border-amber-200/90 bg-gradient-to-r from-amber-50/85 via-white to-teal-50/30'
+          : 'border-emerald-200/90 bg-gradient-to-r from-emerald-50/75 via-white to-teal-50/40',
+      )}
+    >
+      <div className="flex flex-col justify-between gap-2.5 sm:flex-row sm:items-start">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-teal-900 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-teal-100">
+              <DollarSign aria-hidden="true" className="h-3 w-3 text-teal-300" />
+              Ownership Cost Intelligence
+            </span>
+            <span
+              aria-hidden="true"
+              className="inline-flex items-center rounded-full border border-teal-200/90 bg-white/90 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-teal-800"
+            >
+              {viewLabel}
+            </span>
+            {block.id === 'ownership-costs-summary' && (
+              <span
+                aria-hidden="true"
+                className={cn(
+                  'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider',
+                  isCaution
+                    ? 'border-amber-300/80 bg-amber-100/80 text-amber-900'
+                    : 'border-emerald-300/80 bg-emerald-100/80 text-emerald-900',
+                )}
+              >
+                <span className={cn('h-1.5 w-1.5 rounded-full', isCaution ? 'bg-amber-600' : 'bg-emerald-600')} />
+                {missingMatch ? `${missingMatch[1]} Missing` : isCaution ? 'Partial Coverage' : 'Coverage Complete'}
+              </span>
+            )}
+          </div>
+
+          <h3 className="mt-1 text-base font-bold tracking-tight text-slate-950 sm:text-lg">{block.title}</h3>
+          <p className="mt-0.5 whitespace-pre-wrap text-xs leading-5 text-slate-700 sm:text-sm">{block.body}</p>
+
+          {annualMatch && confirmedMatch && estimatedMatch && (
+            <div aria-hidden="true" className="mt-2.5 rounded-xl border border-slate-200/80 bg-white/90 px-3 py-2">
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">Annual Total</span>
+                  <span className="mt-0.5 block text-xs font-extrabold tabular-nums text-slate-950 sm:text-sm">{annualMatch[1]}/yr</span>
+                </div>
+                <div>
+                  <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-emerald-700">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
+                    Confirmed / Observed
+                  </span>
+                  <span className="mt-0.5 block text-xs font-extrabold tabular-nums text-emerald-900 sm:text-sm">
+                    {confirmedMatch[1]}
+                    {confirmedPct !== null && <span className="ml-1 text-[11px] font-semibold text-emerald-700">({confirmedPct}%)</span>}
+                  </span>
+                </div>
+                <div>
+                  <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-amber-700">
+                    <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                    Estimated
+                  </span>
+                  <span className="mt-0.5 block text-xs font-extrabold tabular-nums text-amber-900 sm:text-sm">
+                    {estimatedMatch[1]}
+                    {estimatedPct !== null && <span className="ml-1 text-[11px] font-semibold text-amber-700">({estimatedPct}%)</span>}
+                  </span>
+                </div>
+              </div>
+              {confirmedPct !== null && annualVal && annualVal > 0 && (
+                <div className="mt-1.5 flex h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+                  <div className="bg-emerald-600 transition-all" style={{ width: `${confirmedPct}%` }} />
+                  <div className="bg-amber-400 transition-all" style={{ width: `${estimatedPct ?? 0}%` }} />
+                </div>
+              )}
+            </div>
+          )}
+
+          {block.id === 'ownership-cost-forecast-summary' && rangeMatch && (
+            <div aria-hidden="true" className="mt-2 inline-flex flex-wrap items-center gap-2 rounded-xl border border-slate-200/80 bg-white/90 px-3 py-1.5 text-xs">
+              <span className="inline-flex items-center gap-1 font-semibold text-slate-600">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Low</span>
+                <span className="font-bold tabular-nums text-slate-900">{rangeMatch[1]}</span>
+              </span>
+              {baseRangeMatch && (
+                <>
+                  <span className="text-slate-300">·</span>
+                  <span className="inline-flex items-center gap-1 font-semibold text-teal-800">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-teal-600">Base</span>
+                    <span className="font-extrabold tabular-nums text-teal-950">{baseRangeMatch[1]}</span>
+                  </span>
+                </>
+              )}
+              <span className="text-slate-300">·</span>
+              <span className="inline-flex items-center gap-1 font-semibold text-slate-600">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">High</span>
+                <span className="font-bold tabular-nums text-slate-900">{rangeMatch[2]}</span>
+              </span>
+            </div>
+          )}
+
+          {block.chips && block.chips.length > 0 && <AnswerChips chips={block.chips} />}
+        </div>
+
+        {block.actions.length > 0 && (
+          <div className="flex shrink-0 flex-wrap items-center gap-2 sm:mt-0.5">
+            {block.actions.map((action) => (
+              <ActionLink key={action.id} action={action} />
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function OwnershipCostRefreshCard({ block }: { block: Extract<AskPresentationBlock, { type: 'SUMMARY' }> }) {
+  return (
+    <section
+      data-ownership-cost-refresh=""
+      className="w-full rounded-2xl border border-slate-200/90 bg-slate-50/75 px-4 py-2.5 shadow-2xs sm:px-5"
+    >
+      <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+            <h3 className="text-xs font-bold text-slate-900 sm:text-sm">{block.title}</h3>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-teal-700">Data Freshness</span>
+          </div>
+          <p className="mt-0.5 text-xs leading-5 text-slate-600">{block.body}</p>
+        </div>
+        {block.actions.length > 0 && (
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            {block.actions.map((action) => (
+              <ActionLink key={action.id} action={action} />
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
 export const SummaryBlock: AskBlockRenderer<'SUMMARY'> = ({ block }) => {
   const calm = useCalmChrome();
   // The seasonal plan's intro and next steps are their own cards in both shells (see SeasonalAnswerCards).
@@ -278,6 +458,8 @@ export const SummaryBlock: AskBlockRenderer<'SUMMARY'> = ({ block }) => {
   if (block.id === 'sell-hold-rent-summary' || block.id === 'sell-hold-rent-what-if-summary') return <SellHoldRentSummaryCard block={block} />;
   if (block.id === 'break-even-summary') return <BreakEvenSummaryCard block={block} />;
   if (block.id === 'break-even-next-action') return <BreakEvenNextActionCard block={block} />;
+  if (OWNERSHIP_COST_SUMMARY_IDS.has(block.id)) return <OwnershipCostsSummaryCard block={block} />;
+  if (block.id === 'ownership-cost-refresh') return <OwnershipCostRefreshCard block={block} />;
   if (calm) return <CalmSummary block={block} />;
   return (
     <section className={cn(

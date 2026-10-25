@@ -22,8 +22,8 @@ export function askAnswerWidth(blocks: AskPresentationBlock[]): AskAnswerWidth {
   if (blocks.some((block) => block.id === 'reserve-fund-overview')) return 'STANDARD';
   // A chart answer (Break-Even) is a few short tables around one chart; it reads at the standard measure, like Home Actions.
   if (blocks.some((block) => block.type === 'TREND_CHART' || block.id.startsWith('break-even-'))) return 'STANDARD';
-  // Sell / Hold / Rent and the Do-Nothing Simulator are the same kind of decision answer (summary, scenario cards, short tables), so it shares that measure.
-  if (blocks.some((block) => block.id.startsWith('sell-hold-rent-') || block.id.startsWith('do-nothing-'))) return 'STANDARD';
+  // Sell / Hold / Rent, Ownership Costs, and the Do-Nothing Simulator are the same kind of decision answer (summary, scenario cards, short tables), so they share that measure.
+  if (blocks.some((block) => block.id.startsWith('sell-hold-rent-') || block.id.startsWith('do-nothing-') || block.id.startsWith('ownership-cost'))) return 'STANDARD';
   return blocks.some((block) => WIDE_BLOCK_TYPES.has(block.type)
     || (block.type === 'PRIORITY_LIST' && block.items.length > 1)
     || (block.type === 'GROUPED_LIST' && Boolean(block.presentation)))

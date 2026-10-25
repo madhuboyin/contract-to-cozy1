@@ -83,6 +83,9 @@ const BREAK_EVEN_SENSITIVITY_ID = 'break-even-sensitivity';
 const BREAK_EVEN_ASSUMPTIONS_ID = 'break-even-assumptions';
 const BREAK_EVEN_WHAT_IF_ASSUMPTIONS_ID = 'break-even-what-if-assumptions';
 const BREAK_EVEN_WHAT_IF_COMPARISON_ID = 'break-even-what-if-comparison';
+const OWNERSHIP_COST_CATEGORIES_ID = 'ownership-cost-categories';
+const OWNERSHIP_COST_FORECAST_PERIODS_ID = 'ownership-cost-forecast-periods';
+const OWNERSHIP_COST_OBSERVED_VARIABILITY_ID = 'ownership-cost-observed-variability';
 
 const numericMoney = (value: string | undefined) => {
   if (!value) return null;
@@ -571,6 +574,303 @@ function FactGridTable({ block, renderAction }: { block: TableBlock; renderActio
   </section>;
 }
 
+function OwnershipCostCategoriesBlock({
+  block,
+  preference,
+  offersChoice,
+  hasControls,
+  setPreference,
+  decisionMode,
+  shownCount,
+  totalCount,
+  renderAction,
+  rowDetail,
+}: {
+  block: TableBlock;
+  preference: TablePresentationPreference;
+  offersChoice: boolean;
+  hasControls: boolean;
+  setPreference: (mode: TablePresentationPreference) => void;
+  decisionMode: 'RESPONSIVE' | 'CARDS' | 'TABLE';
+  shownCount: number;
+  totalCount: number;
+  renderAction: (action: AskAction) => ReactNode;
+  rowDetail?: TableRowDetailControls;
+}) {
+  const parsedRows = block.rows.map((row) => {
+    const monthlyStr = row.values.monthly ?? row.values.amount ?? '';
+    const annualStr = row.values.annual ?? '';
+    const evidenceStr = row.values.evidence ?? row.values.source ?? '';
+    const annualVal = Math.max(0, numericMoney(annualStr) ?? (numericMoney(monthlyStr) ?? 0) * 12);
+    const isEstimated = /estimat/i.test(evidenceStr);
+    const isStale = /stale/i.test(evidenceStr);
+    return {
+      row,
+      category: row.values.category || 'Category',
+      monthlyStr,
+      annualStr,
+      evidenceStr,
+      annualVal,
+      isEstimated,
+      isStale,
+    };
+  });
+
+  const totalAnnual = parsedRows.reduce((sum, item) => sum + item.annualVal, 0);
+
+  return (
+    <section
+      className="w-full rounded-2xl border border-slate-200/90 bg-white shadow-2xs"
+      aria-labelledby={`ask-table-${block.id}`}
+      data-ownership-cost-categories=""
+    >
+      <div className="flex flex-wrap items-start justify-between gap-2 rounded-t-2xl border-b border-slate-100 bg-gradient-to-r from-slate-50/90 via-white to-teal-50/30 px-4 py-2.5 sm:px-5">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-baseline gap-2">
+            <h3 id={`ask-table-${block.id}`} className="text-sm font-bold tracking-tight text-slate-950 sm:text-base">{block.title}</h3>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-teal-700">Category Breakdown</span>
+          </div>
+          {block.description && <p className="mt-0.5 text-xs leading-5 text-slate-500">{block.description}</p>}
+        </div>
+        {offersChoice && hasControls && (
+          <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-white p-0.5 shadow-2xs" role="group" aria-label={`View ${block.title}`}>
+            {(['AUTO', 'CARDS', 'TABLE'] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                aria-pressed={preference === mode}
+                onClick={() => setPreference(mode)}
+                className={cn(
+                  'min-h-8 rounded-lg px-2.5 text-xs font-semibold transition-colors',
+                  preference === mode ? 'bg-teal-700 text-white shadow-2xs' : 'text-slate-600 hover:bg-slate-50',
+                )}
+              >
+                {mode === 'AUTO' ? 'Auto' : mode === 'CARDS' ? 'Cards' : 'Table'}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="p-3 sm:px-4 sm:py-3">
+        {shownCount === 0 ? (
+          <p className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">No records are available for this result.</p>
+        ) : (
+          <>
+            {(decisionMode === 'RESPONSIVE' || decisionMode === 'TABLE') && (
+              <>
+                <div className="space-y-1.5" aria-hidden="true">
+                  {parsedRows.map(({ row, category, monthlyStr, annualStr, evidenceStr, annualVal, isEstimated, isStale }) => {
+                    const sharePct = totalAnnual > 0 ? Math.min(100, Math.max(4, Math.round((annualVal / totalAnnual) * 100))) : 0;
+                    const exactSharePct = totalAnnual > 0 ? Math.round((annualVal / totalAnnual) * 100) : null;
+                    return (
+                      <div
+                        key={row.id}
+                        className="rounded-xl border border-slate-200/80 bg-slate-50/55 px-3 py-2 transition-colors hover:border-teal-200 hover:bg-white"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex min-w-0 flex-wrap items-center gap-2">
+                            <span className="text-xs font-bold text-slate-900 sm:text-sm">{category}</span>
+                            {exactSharePct !== null && (
+                              <span className="rounded-md bg-slate-200/75 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-slate-700">
+                                {exactSharePct}%
+                              </span>
+                            )}
+                            {evidenceStr && (
+                              <span
+                                className={cn(
+                                  'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold',
+                                  isStale
+                                    ? 'border-rose-200 bg-rose-50 text-rose-800'
+                                    : isEstimated
+                                      ? 'border-amber-200 bg-amber-50 text-amber-900'
+                                      : 'border-emerald-200 bg-emerald-50 text-emerald-800',
+                                )}
+                              >
+                                <span
+                                  className={cn(
+                                    'h-1.5 w-1.5 rounded-full',
+                                    isStale ? 'bg-rose-500' : isEstimated ? 'bg-amber-500' : 'bg-emerald-600',
+                                  )}
+                                />
+                                {evidenceStr}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex shrink-0 items-baseline gap-2.5">
+                            {monthlyStr && (
+                              <span className="text-sm font-extrabold tabular-nums text-slate-950">
+                                {monthlyStr}
+                                <span className="ml-0.5 text-[11px] font-medium text-slate-500">/mo</span>
+                              </span>
+                            )}
+                            {annualStr && (
+                              <span className="text-xs font-semibold tabular-nums text-slate-500">
+                                {annualStr}
+                                <span className="ml-0.5 text-[10px] font-normal text-slate-400">/yr</span>
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        {totalAnnual > 0 && (
+                          <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-slate-200/75">
+                            <div
+                              className={cn(
+                                'h-full rounded-full transition-all',
+                                isStale ? 'bg-rose-500' : isEstimated ? 'bg-amber-500' : 'bg-teal-600',
+                              )}
+                              style={{ width: `${sharePct}%` }}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                <DataTable block={block} className="sr-only" rowDetail={rowDetail} />
+              </>
+            )}
+            {decisionMode === 'CARDS' && <LabeledCards block={block} rowDetail={rowDetail} />}
+          </>
+        )}
+
+        <p className="sr-only" aria-live="polite">
+          {totalCount > shownCount ? `Showing ${shownCount} of ${totalCount} records.` : `${shownCount} ${shownCount === 1 ? 'record' : 'records'}.`}
+        </p>
+
+        {block.actions.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-2 border-t border-slate-100 pt-2.5">
+            {block.actions.map((action) => (
+              <span key={action.id}>{renderAction(action)}</span>
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function OwnershipCostPeriodsBlock({
+  block,
+  preference,
+  offersChoice,
+  hasControls,
+  setPreference,
+  decisionMode,
+  shownCount,
+  totalCount,
+  rowDetail,
+}: {
+  block: TableBlock;
+  preference: TablePresentationPreference;
+  offersChoice: boolean;
+  hasControls: boolean;
+  setPreference: (mode: TablePresentationPreference) => void;
+  decisionMode: 'RESPONSIVE' | 'CARDS' | 'TABLE';
+  shownCount: number;
+  totalCount: number;
+  rowDetail?: TableRowDetailControls;
+}) {
+  const isForecast = block.id === OWNERSHIP_COST_FORECAST_PERIODS_ID;
+  return (
+    <section
+      className="w-full rounded-2xl border border-slate-200/90 bg-white shadow-2xs"
+      aria-labelledby={`ask-table-${block.id}`}
+      data-ownership-cost-periods={block.id}
+    >
+      <div className="flex flex-wrap items-start justify-between gap-2 rounded-t-2xl border-b border-slate-100 bg-gradient-to-r from-slate-50/90 via-white to-teal-50/30 px-4 py-2.5 sm:px-5">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-baseline gap-2">
+            <h3 id={`ask-table-${block.id}`} className="text-sm font-bold tracking-tight text-slate-950 sm:text-base">{block.title}</h3>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-teal-700">
+              {isForecast ? 'Forward Range' : 'Observed History'}
+            </span>
+          </div>
+          {block.description && <p className="mt-0.5 text-xs leading-5 text-slate-500">{block.description}</p>}
+        </div>
+        {offersChoice && hasControls && (
+          <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-white p-0.5 shadow-2xs" role="group" aria-label={`View ${block.title}`}>
+            {(['AUTO', 'CARDS', 'TABLE'] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                aria-pressed={preference === mode}
+                onClick={() => setPreference(mode)}
+                className={cn(
+                  'min-h-8 rounded-lg px-2.5 text-xs font-semibold transition-colors',
+                  preference === mode ? 'bg-teal-700 text-white shadow-2xs' : 'text-slate-600 hover:bg-slate-50',
+                )}
+              >
+                {mode === 'AUTO' ? 'Auto' : mode === 'CARDS' ? 'Cards' : 'Table'}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="p-3 sm:px-4 sm:py-3">
+        {shownCount === 0 ? (
+          <p className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">No records are available for this result.</p>
+        ) : (
+          <>
+            {(decisionMode === 'RESPONSIVE' || decisionMode === 'TABLE') && (
+              <>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2" aria-hidden="true">
+                  {block.rows.map((row) => (
+                    <div key={row.id} className="rounded-xl border border-slate-200/80 bg-slate-50/55 px-3 py-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-bold text-slate-900">{row.values.period}</span>
+                        {isForecast && row.values.confidence && (
+                          <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-600">
+                            {row.values.confidence} confidence
+                          </span>
+                        )}
+                      </div>
+                      {isForecast ? (
+                        <div className="mt-1.5 grid grid-cols-3 gap-1.5">
+                          <div className="rounded-lg bg-white px-2 py-1 ring-1 ring-slate-200/70">
+                            <span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Low</span>
+                            <span className="mt-0.5 block text-xs font-bold tabular-nums text-slate-700">{row.values.low}</span>
+                          </div>
+                          <div className="rounded-lg bg-teal-50/80 px-2 py-1 ring-1 ring-teal-200/80">
+                            <span className="block text-[10px] font-bold uppercase tracking-wide text-teal-700">Base</span>
+                            <span className="mt-0.5 block text-xs font-extrabold tabular-nums text-teal-950">{row.values.base}</span>
+                          </div>
+                          <div className="rounded-lg bg-white px-2 py-1 ring-1 ring-slate-200/70">
+                            <span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-400">High</span>
+                            <span className="mt-0.5 block text-xs font-bold tabular-nums text-slate-700">{row.values.high}</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="mt-1.5 grid grid-cols-2 gap-1.5">
+                          <div className="rounded-lg bg-white px-2.5 py-1 ring-1 ring-slate-200/70">
+                            <span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Recurring</span>
+                            <span className="mt-0.5 block text-xs font-bold tabular-nums text-slate-900">{row.values.recurring}</span>
+                          </div>
+                          <div className="rounded-lg bg-amber-50/60 px-2.5 py-1 ring-1 ring-amber-200/70">
+                            <span className="block text-[10px] font-semibold uppercase tracking-wide text-amber-800">One-time / capital</span>
+                            <span className="mt-0.5 block text-xs font-bold tabular-nums text-amber-950">{row.values.oneTime}</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <DataTable block={block} className="sr-only" rowDetail={rowDetail} />
+              </>
+            )}
+            {decisionMode === 'CARDS' && <LabeledCards block={block} rowDetail={rowDetail} />}
+          </>
+        )}
+
+        <p className="sr-only" aria-live="polite">
+          {totalCount > shownCount ? `Showing ${shownCount} of ${totalCount} records.` : `${shownCount} ${shownCount === 1 ? 'record' : 'records'}.`}
+        </p>
+      </div>
+    </section>
+  );
+}
+
 export function AdaptiveTableBlock({ block, renderAction, rowDetail }: { block: TableBlock; renderAction: (action: AskAction) => ReactNode; rowDetail?: TableRowDetailControls }) {
   const controls = useContext(ResultViewContext);
   if (block.id === SELL_HOLD_RENT_PROJECTION_ID && !rowDetail) return <SellHoldRentProjection block={block} />;
@@ -621,6 +921,39 @@ export function AdaptiveTableBlock({ block, renderAction, rowDetail }: { block: 
     return (
       <BreakEvenWhatIfBlock
         block={block}
+        shownCount={shownCount}
+        totalCount={totalCount}
+        rowDetail={rowDetail}
+      />
+    );
+  }
+
+  if (block.id === OWNERSHIP_COST_CATEGORIES_ID && !rowDetail) {
+    return (
+      <OwnershipCostCategoriesBlock
+        block={block}
+        preference={preference}
+        offersChoice={decision.offersChoice}
+        hasControls={Boolean(controls)}
+        setPreference={setPreference}
+        decisionMode={decision.mode}
+        shownCount={shownCount}
+        totalCount={totalCount}
+        renderAction={renderAction}
+        rowDetail={rowDetail}
+      />
+    );
+  }
+
+  if ((block.id === OWNERSHIP_COST_FORECAST_PERIODS_ID || block.id === OWNERSHIP_COST_OBSERVED_VARIABILITY_ID) && !rowDetail) {
+    return (
+      <OwnershipCostPeriodsBlock
+        block={block}
+        preference={preference}
+        offersChoice={decision.offersChoice}
+        hasControls={Boolean(controls)}
+        setPreference={setPreference}
+        decisionMode={decision.mode}
         shownCount={shownCount}
         totalCount={totalCount}
         rowDetail={rowDetail}

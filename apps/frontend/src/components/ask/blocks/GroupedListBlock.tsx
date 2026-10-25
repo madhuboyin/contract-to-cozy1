@@ -124,6 +124,77 @@ function ReservePlanningControls({ block, disabled, onItemAction }: {
   );
 }
 
+const OWNERSHIP_COST_BADGE_BY_ID: Record<string, string> = {
+  'ownership-cost-missing': 'Coverage Gaps',
+  'ownership-cost-changes': 'Category Deltas',
+  'ownership-cost-notifications': 'Cost Alerts',
+  'ownership-cost-forecast-drivers': 'Forecast Drivers',
+  'ownership-cost-forecast-actions': 'Next Steps',
+  'ownership-cost-scenarios': 'Scenario Simulator',
+  'ownership-cost-buffer-options': 'Reserve Sizing',
+};
+
+function OwnershipCostViewsBlock({ block, disabled, onItemAction }: {
+  block: Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>;
+  disabled: boolean;
+  onItemAction: Parameters<AskBlockRenderer<'GROUPED_LIST'>>[0]['onItemAction'];
+}) {
+  const views = block.sections.flatMap((section) => section.items);
+  return (
+    <section className="w-full rounded-2xl border border-slate-200/90 bg-white shadow-2xs" data-ownership-cost-views="">
+      <div className="flex flex-wrap items-baseline justify-between gap-2 rounded-t-2xl border-b border-slate-100 bg-gradient-to-r from-slate-50/90 via-white to-teal-50/30 px-4 py-2 sm:px-5">
+        <div className="flex items-baseline gap-2">
+          <h3 className="text-sm font-bold tracking-tight text-slate-950 sm:text-base">{block.title}</h3>
+          <span className="text-[10px] font-bold uppercase tracking-wider text-teal-700">Workspace Views</span>
+        </div>
+        {block.description && <p className="text-xs text-slate-500">{block.description}</p>}
+      </div>
+      <div className="p-3 sm:px-4 sm:py-3">
+        <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4" aria-label={block.title}>
+          {views.map((item) => {
+            const current = item.status === 'CURRENT';
+            const primaryAction = item.actions?.[0];
+            return (
+              <li
+                key={item.id}
+                data-ask-task-id={item.id}
+                className={cn(
+                  'flex flex-col rounded-xl border px-3 py-2 transition-colors',
+                  current
+                    ? 'border-teal-400 bg-teal-50/60 ring-1 ring-teal-500/20'
+                    : 'border-slate-200/80 bg-slate-50/55 hover:border-teal-200 hover:bg-white',
+                )}
+              >
+                <div className="flex items-center justify-between gap-1.5">
+                  <p className="text-xs font-bold text-slate-950 sm:text-sm">{item.title}</p>
+                  {current && (
+                    <span className="rounded-full bg-teal-700 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+                      Current
+                    </span>
+                  )}
+                </div>
+                {item.description && <p className="mt-1 text-[11px] leading-4 text-slate-600">{item.description}</p>}
+                {primaryAction && (
+                  <div className="mt-2 pt-0.5">
+                    <button
+                      type="button"
+                      disabled={disabled}
+                      onClick={() => onItemAction(primaryAction.entityType ?? item.entityType, primaryAction.entityId ?? item.id, primaryAction.message, primaryAction.operationId, primaryAction.interactionType)}
+                      className="inline-flex min-h-7 items-center rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-teal-800 shadow-2xs transition-colors hover:border-teal-300 hover:bg-teal-50/60 disabled:opacity-50"
+                    >
+                      {primaryAction.label}
+                    </button>
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    </section>
+  );
+}
+
 export function GenericGroupedListBlock({ block, executionId, propertyId, onItemAction, itemActionsDisabled, onFilterClick, onCollectionPage }: Parameters<AskBlockRenderer<'GROUPED_LIST'>>[0]) {
   const controls = useContext(ResultViewContext);
   const workflowControls = useContext(AskBlockActionContext);
@@ -131,6 +202,7 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
   if (block.id === 'reserve-planning-controls') return <ReservePlanningControls block={block} disabled={itemActionsDisabled} onItemAction={onItemAction} />;
+  if (block.id === 'ownership-cost-views') return <OwnershipCostViewsBlock block={block} disabled={itemActionsDisabled} onItemAction={onItemAction} />;
   if (block.id === 'focused-home-action-guidance') {
     const next = block.sections.find((section) => section.id === 'next-step');
     const why = block.sections.find((section) => section.id === 'why-it-matters')?.items[0];
@@ -289,12 +361,34 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
     ...view, groupedListModes: { ...view.groupedListModes, [block.id]: mode },
   }));
   const isDriversBlock = block.id === 'sell-hold-rent-drivers' || block.id === 'break-even-drivers';
+  const isOwnershipCostList = block.id.startsWith('ownership-cost-');
+  const isFramedDecisionList = isDriversBlock || isOwnershipCostList;
+  const ownershipCostBadge = OWNERSHIP_COST_BADGE_BY_ID[block.id];
   return (
-    <section className={cn(isDriversBlock ? 'w-full rounded-2xl border border-slate-200/90 bg-white shadow-2xs' : 'overflow-hidden rounded-2xl border border-slate-200 bg-white', block.id === 'home-work-items' && 'w-full max-w-[960px]')} data-grouped-list-presentation={presentation.toLowerCase()} data-list-density={dense ? 'dense' : undefined}>
-      <div className={cn('border-b border-slate-100', isDriversBlock && 'rounded-t-2xl bg-gradient-to-r from-slate-50/90 via-white to-teal-50/30 px-4 py-2.5 sm:px-5', !isDriversBlock && (dense ? 'px-3 py-2.5' : 'px-4 py-3'))}>
+    <section
+      data-ownership-cost-list={isOwnershipCostList ? block.id : undefined}
+      className={cn(
+        isFramedDecisionList ? 'w-full rounded-2xl border border-slate-200/90 bg-white shadow-2xs' : 'overflow-hidden rounded-2xl border border-slate-200 bg-white',
+        block.id === 'home-work-items' && 'w-full max-w-[960px]',
+      )}
+      data-grouped-list-presentation={presentation.toLowerCase()}
+      data-list-density={dense ? 'dense' : undefined}
+    >
+      <div
+        className={cn(
+          'border-b border-slate-100',
+          isFramedDecisionList && 'rounded-t-2xl bg-gradient-to-r from-slate-50/90 via-white to-teal-50/30 px-4 py-2.5 sm:px-5',
+          !isFramedDecisionList && (dense ? 'px-3 py-2.5' : 'px-4 py-3'),
+        )}
+      >
         <div className="flex items-baseline gap-2">
-          <h3 className={cn('text-slate-950', isDriversBlock ? 'text-sm font-bold tracking-tight sm:text-base' : 'font-semibold')}>{block.title}</h3>
+          <h3 className={cn('text-slate-950', isFramedDecisionList ? 'text-sm font-bold tracking-tight sm:text-base' : 'font-semibold')}>{block.title}</h3>
           {isDriversBlock && <span className="text-[10px] font-bold uppercase tracking-wider text-teal-700">Key Drivers</span>}
+          {ownershipCostBadge && (
+            <span className={cn('text-[10px] font-bold uppercase tracking-wider', block.id === 'ownership-cost-missing' ? 'text-amber-700' : 'text-teal-700')}>
+              {ownershipCostBadge}
+            </span>
+          )}
         </div>
         {block.description && <p className="mt-1 text-xs text-slate-500">{block.description}</p>}
         {decision.offersChoice && controls && <div className="mt-3 flex flex-wrap items-center gap-1" role="group" aria-label={`View ${block.title}`}>
@@ -329,8 +423,8 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
           const hiddenItemCount = canExpand ? section.items.length - declaredVisibleCount! : 0;
           const listId = `${block.id}-${section.id}-items`;
           return (
-          <div key={section.id} className={isDriversBlock ? 'px-4 py-2.5 sm:px-5' : dense ? 'px-3 py-2.5' : 'p-4'}>
-            <div className={cn('flex items-center justify-between', isDriversBlock ? 'sr-only' : dense ? 'mb-1.5' : 'mb-3')}>
+          <div key={section.id} className={isFramedDecisionList ? 'px-4 py-2.5 sm:px-5' : dense ? 'px-3 py-2.5' : 'p-4'}>
+            <div className={cn('flex items-center justify-between', isFramedDecisionList ? 'sr-only' : dense ? 'mb-1.5' : 'mb-3')}>
               <div>
                 <h4 className="text-sm font-semibold text-slate-800">{section.title}</h4>
                 {section.caption && <p className="mt-0.5 text-xs text-slate-500">{section.caption}</p>}
@@ -340,7 +434,7 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
             {section.items.length === 0 ? <AskCollectionState kind="EMPTY" title={section.title} action={block.sections.length === 1 && block.actions[0] ? <ActionLink action={block.actions[0]} /> : undefined} /> : (
               <AskCollection id={listId} className={cn(
                 block.id === 'project-detail-records' && 'grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3',
-                block.id !== 'project-detail-records' && (dense ? 'divide-y divide-slate-100' : presentation === 'COMPACT_LIST' ? 'space-y-1' : 'space-y-3'),
+                block.id !== 'project-detail-records' && (dense ? 'divide-y divide-slate-100' : presentation === 'COMPACT_LIST' ? 'space-y-1' : isOwnershipCostList ? 'space-y-2' : 'space-y-3'),
               )} data-project-record-grid={block.id === 'project-detail-records' ? '' : undefined}>
                 {visibleItems.map((sourceItem) => {
                   const item = block.id === 'maintenance-groups' ? formatLegacyAskMaintenanceItem(sourceItem) : sourceItem;
@@ -362,7 +456,7 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
                   const sellHoldRentDriversList = block.id === 'sell-hold-rent-drivers' || block.id === 'break-even-drivers';
                   const impactMatch = visibleStatus ? /^(high|medium|low)\s+impact$/i.exec(visibleStatus.trim()) : null;
                   const impactLevel = impactMatch ? impactMatch[1].toUpperCase() as 'HIGH' | 'MEDIUM' | 'LOW' : null;
-                  return <li key={item.id} data-ask-task-id={item.id} tabIndex={-1} className={cn('border outline-offset-2', dense ? 'border-b-0 border-r-0 border-t-0 px-2 py-2' : 'rounded-xl', dense && (overdueWorkItem ? 'border-l-4 border-l-rose-400 bg-rose-50/70' : sellHoldRentDriversList && impactLevel === 'HIGH' ? 'border-l-4 border-l-amber-400 bg-amber-50/30 py-2.5' : sellHoldRentDriversList ? 'border-l-4 border-l-teal-500/60 py-2.5' : 'border-l-0'), !dense && (presentation === 'COMPACT_LIST' ? 'px-3 py-2' : 'p-3'), selected ? 'border-teal-600 bg-teal-50' : !dense && (presentation === 'COMPACT_LIST' ? 'border-transparent bg-white' : 'border-transparent bg-slate-50'))}>
+                  return <li key={item.id} data-ask-task-id={item.id} tabIndex={-1} className={cn('border outline-offset-2', dense ? 'border-b-0 border-r-0 border-t-0 px-2 py-2' : 'rounded-xl', dense && (overdueWorkItem ? 'border-l-4 border-l-rose-400 bg-rose-50/70' : sellHoldRentDriversList && impactLevel === 'HIGH' ? 'border-l-4 border-l-amber-400 bg-amber-50/30 py-2.5' : sellHoldRentDriversList ? 'border-l-4 border-l-teal-500/60 py-2.5' : 'border-l-0'), !dense && (presentation === 'COMPACT_LIST' ? 'px-3 py-2' : isOwnershipCostList ? 'px-3 py-2' : 'p-3'), selected ? 'border-teal-600 bg-teal-50' : !dense && (presentation === 'COMPACT_LIST' ? 'border-transparent bg-white' : isOwnershipCostList ? 'border-slate-200/80 bg-slate-50/55' : 'border-transparent bg-slate-50'))}>
                     {dense ? <div className={cn('flex flex-col gap-1.5', !homeWorkItemList && 'sm:flex-row sm:items-center sm:justify-between sm:gap-3')} data-dense-row-content="">
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-baseline gap-x-2" data-dense-primary-line="">
@@ -393,11 +487,11 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
                       </div>}
                     </div> : <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        {item.href ? <AskContextLink className="font-medium text-slate-950 hover:text-teal-700" href={item.href}>{item.title}</AskContextLink> : <p className="font-medium text-slate-950">{item.title}</p>}
-                        {item.description && <p className="mt-1 text-sm leading-5 text-slate-600">{item.description}</p>}
-                        {item.meta.length > 0 && <p className="mt-2 text-xs text-slate-500">{item.meta.join(' · ')}</p>}
+                        {item.href ? <AskContextLink className={cn('font-medium text-slate-950 hover:text-teal-700', isOwnershipCostList && 'text-xs font-bold sm:text-sm')} href={item.href}>{item.title}</AskContextLink> : <p className={cn('font-medium text-slate-950', isOwnershipCostList && 'text-xs font-bold sm:text-sm')}>{item.title}</p>}
+                        {item.description && <p className={cn('text-slate-600', isOwnershipCostList ? 'mt-0.5 text-xs leading-5' : 'mt-1 text-sm leading-5')}>{item.description}</p>}
+                        {item.meta.length > 0 && <p className={cn('text-xs text-slate-500', isOwnershipCostList ? 'mt-1' : 'mt-2')}>{item.meta.join(' · ')}</p>}
                       </div>
-                      {item.status && <span className="rounded-full bg-white px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">{item.status.replace(/_/g, ' ')}</span>}
+                      {item.status && <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide', item.tone === 'CAUTION' ? 'border border-amber-200 bg-amber-50 text-amber-800' : item.tone === 'POSITIVE' ? 'border border-emerald-200 bg-emerald-50 text-emerald-800' : 'border border-slate-200 bg-white text-slate-600')}>{item.status.replace(/_/g, ' ')}</span>}
                     </div>}
                     {hasInlineDetails && (
                       <div className="mt-2">

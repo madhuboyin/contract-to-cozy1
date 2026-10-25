@@ -31,6 +31,7 @@ test('decision answers (a chart, or Sell / Hold / Rent) read at the standard mea
   expect(askAnswerWidth([summary, table, chart])).toBe('STANDARD');
   expect(askAnswerWidth([summary, comparison])).toBe('STANDARD');
   expect(askAnswerWidth([summary, { ...table, id: 'do-nothing-items' }])).toBe('STANDARD');
+  expect(askAnswerWidth([summary, { ...table, id: 'ownership-cost-categories' }])).toBe('STANDARD');
 });
 
 test('keeps the reserve-fund decision answer at the Home Actions measure despite its timeline', () => {
