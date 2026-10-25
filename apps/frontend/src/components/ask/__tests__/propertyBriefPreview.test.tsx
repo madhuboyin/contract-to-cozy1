@@ -3,14 +3,15 @@ import '@testing-library/jest-dom';
 import { PropertyBriefFactSheet, PropertyBriefHeader, PropertyBriefLimitation, PropertyBriefsListBlock, PropertyBriefsSummaryCard } from '../PropertyBriefPreview';
 
 type Props = Parameters<typeof PropertyBriefFactSheet>[0];
-const row = (id: string, title: string, meta: string[] = ['Source: Self-reported', 'As of Jul 27, 2026', 'Verified'], status = 'Included') => ({ id, title, description: null, meta, status });
+const row = (id: string, title: string, meta: string[] = ['Source: Self-reported', 'As of Jul 27, 2026', 'Verified'], status = 'Included', actions?: Array<Record<string, string>>) => ({ id, title, description: null, meta, status, actions });
 const sections = [
   { id: 'f', title: 'Selected property facts', count: 3, items: [row('location.city', 'City: Plainsboro Township'), row('core.dwellingType', 'Dwelling type: Townhouse'), row('systems.waterHeaterType', 'Water heater type: Tank', undefined, 'Sensitive')] },
   { id: 'h', title: 'Verified property history', count: 1, items: [{ id: 'h-empty', title: 'No eligible records were included', description: null, meta: ['As of Aug 5, 2026'], status: 'EMPTY' }] },
-  { id: 'g', title: 'Known gaps and unknowns', count: 1, items: [row('core.bedrooms', 'Bedrooms: Unknown or not recorded', ['Source: Home record', 'Unknown or not recorded'])] },
+  { id: 'g', title: 'Known gaps and unknowns', count: 1, items: [row('core.bedrooms', 'Bedrooms: Unknown or not recorded', ['Source: Home record', 'Unknown or not recorded'], 'Included', [{ id: 'property-brief-fill-core', label: 'Add detail', message: 'Fill in the missing core property details.', operationId: 'PROPERTY_CONTEXT_AREA_CAPTURE', interactionType: 'MUTATE_RECORD', entityType: 'PROPERTY_CONTEXT_AREA', entityId: 'CORE', style: 'SECONDARY' }])] },
 ];
 const block = { type: 'GROUPED_LIST', id: 'property-brief-preview-sections', title: 'Exact recipient preview', actions: [], filters: [], sections } as unknown as Props['block'];
-const renderSheet = () => render(<PropertyBriefFactSheet {...({ block } as unknown as Props)} />);
+const onItemAction = jest.fn();
+const renderSheet = () => render(<PropertyBriefFactSheet {...({ block, itemActionsDisabled: false, onItemAction } as unknown as Props)} />);
 
 describe('Property Brief preview', () => {
   it('groups facts semantically and drops layout controls and Included badges', () => {
@@ -27,6 +28,12 @@ describe('Property Brief preview', () => {
     expect(container.querySelector('details')).not.toHaveAttribute('open');
     expect(screen.getAllByText(/Source: Self-reported · As of Jul 27, 2026 · Verified/).length).toBeGreaterThan(0);
     expect(screen.queryByText('No eligible records were included')).toBeNull();
+  });
+  it('lets a contributor launch the governed area capture only from a known gap', () => {
+    renderSheet();
+    fireEvent.click(screen.getByRole('button', { name: 'Add detail' }));
+    expect(onItemAction).toHaveBeenCalledWith('PROPERTY_CONTEXT_AREA', 'CORE', 'Fill in the missing core property details.', 'PROPERTY_CONTEXT_AREA_CAPTURE', 'MUTATE_RECORD');
+    expect(screen.getAllByRole('button', { name: 'Add detail' })).toHaveLength(1);
   });
   it('shows a prominent stale banner with the refresh action, and the trust label near the title', () => {
     const summary = { type: 'SUMMARY', id: 'property-brief-preview-summary', title: 'Property Brief', tone: 'CAUTION',

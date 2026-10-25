@@ -127,7 +127,12 @@ function SourceDetails({ items }: { items: Item[] }) {
   );
 }
 
-function FactGroup({ group, anchorId }: { group: Group; anchorId: string }) {
+function FactGroup({ group, anchorId, itemActionsDisabled, onItemAction }: {
+  group: Group;
+  anchorId: string;
+  itemActionsDisabled: boolean;
+  onItemAction: Parameters<AskBlockRenderer<'GROUPED_LIST'>>[0]['onItemAction'];
+}) {
   const Icon = groupIcon(group.title, group.gaps);
   return (
     <section
@@ -206,6 +211,23 @@ function FactGroup({ group, anchorId }: { group: Group; anchorId: string }) {
                           {badge}
                         </span>
                       )}
+                      {group.gaps && (item.actions ?? []).map((action) => (
+                        <button
+                          key={action.id}
+                          type="button"
+                          disabled={itemActionsDisabled}
+                          onClick={() => onItemAction(
+                            action.entityType ?? item.entityType,
+                            action.entityId ?? item.id,
+                            action.message,
+                            action.operationId,
+                            action.interactionType,
+                          )}
+                          className="ml-1 min-h-8 rounded-lg border border-amber-300 bg-white px-2.5 py-1 text-xs font-semibold text-amber-900 transition-colors hover:bg-amber-50 disabled:opacity-50"
+                        >
+                          {action.label}
+                        </button>
+                      ))}
                     </div>
                   </dd>
                 </div>
@@ -220,12 +242,12 @@ function FactGroup({ group, anchorId }: { group: Group; anchorId: string }) {
 }
 
 // One canonical appearance: no Auto/List/Cards, because this is the exact recipient preview.
-export const PropertyBriefFactSheet: AskBlockRenderer<'GROUPED_LIST'> = ({ block }) => {
+export const PropertyBriefFactSheet: AskBlockRenderer<'GROUPED_LIST'> = ({ block, itemActionsDisabled, onItemAction }) => {
   const scope = useId();
   const groups = buildGroups(block);
   const anchor = (index: number) => `${scope}-group-${index}`;
   return (
-    <div data-property-brief-fact-sheet="" className="max-w-[860px] space-y-3.5">
+    <div data-property-brief-fact-sheet="" className="w-full space-y-3">
       {groups.length >= 4 && (
         <nav
           aria-label="Brief sections"
@@ -249,7 +271,7 @@ export const PropertyBriefFactSheet: AskBlockRenderer<'GROUPED_LIST'> = ({ block
         </nav>
       )}
       {groups.map((group, index) => (
-        <FactGroup key={group.id} group={group} anchorId={anchor(index)} />
+        <FactGroup key={group.id} group={group} anchorId={anchor(index)} itemActionsDisabled={itemActionsDisabled} onItemAction={onItemAction} />
       ))}
     </div>
   );
@@ -283,7 +305,7 @@ export function PropertyBriefHeader({ block }: { block: Summary }) {
     <header
       data-property-brief-header=""
       className={cn(
-        'max-w-[860px] space-y-3.5 overflow-hidden rounded-2xl border p-4 shadow-2xs sm:p-5',
+        'w-full space-y-3 rounded-2xl border p-4 shadow-2xs sm:px-5 sm:py-4',
         stale
           ? 'border-amber-200/90 bg-gradient-to-r from-amber-50/80 via-white to-teal-50/30'
           : 'border-slate-200/90 bg-gradient-to-r from-slate-50 via-white to-teal-50/40',
@@ -372,7 +394,7 @@ export function PropertyBriefsSummaryCard({ block }: { block: Summary }) {
     <section
       data-property-briefs-summary=""
       className={cn(
-        'max-w-[860px] overflow-hidden rounded-2xl border p-4 shadow-2xs sm:px-5 sm:py-4',
+        'w-full rounded-2xl border px-4 py-3.5 shadow-2xs sm:px-5',
         isCaution
           ? 'border-amber-200/90 bg-gradient-to-r from-amber-50/80 via-white to-teal-50/30'
           : 'border-slate-200/90 bg-gradient-to-r from-slate-50 via-white to-teal-50/40',
@@ -424,9 +446,9 @@ export const PropertyBriefsListBlock: AskBlockRenderer<'GROUPED_LIST'> = ({
     <section
       data-property-briefs-list=""
       aria-label={block.title}
-      className="max-w-[860px] overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-2xs"
+      className="w-full rounded-2xl border border-slate-200/90 bg-white shadow-2xs"
     >
-      <div className="border-b border-slate-100 bg-gradient-to-r from-slate-50/90 via-white to-teal-50/30 px-4 py-3.5 sm:px-5">
+      <div className="rounded-t-2xl border-b border-slate-100 bg-gradient-to-r from-slate-50/90 via-white to-teal-50/30 px-4 py-3 sm:px-5">
         <span className="text-[10px] font-bold uppercase tracking-wider text-teal-700">Governed Share History</span>
         <h3 className="text-base font-bold tracking-tight text-slate-950">{block.title}</h3>
         {block.description && <p className="mt-0.5 text-xs leading-5 text-slate-500">{block.description}</p>}
@@ -581,9 +603,9 @@ export const PropertyBriefSharePanel: AskBlockRenderer<'GROUPED_LIST'> = ({
     <section
       data-property-brief-shares=""
       aria-label={block.title}
-      className="max-w-[860px] overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-2xs"
+      className="w-full rounded-2xl border border-slate-200/90 bg-white shadow-2xs"
     >
-      <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/70 px-4 py-2.5 sm:px-5">
+      <div className="flex items-center justify-between rounded-t-2xl border-b border-slate-100 bg-slate-50/70 px-4 py-2.5 sm:px-5">
         <h4 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-700">
           <span
             aria-hidden="true"
@@ -680,7 +702,7 @@ export function PropertyBriefLimitation({ block }: { block: Extract<AskPresentat
     <aside
       data-property-brief-limitation=""
       aria-label={block.title}
-      className="max-w-[860px] rounded-2xl border border-slate-200/90 bg-slate-50/80 p-4 shadow-2xs sm:px-5"
+      className="w-full rounded-2xl border border-slate-200/90 bg-slate-50/80 px-4 py-3.5 shadow-2xs sm:px-5"
     >
       <h4 className="flex items-center gap-2 text-sm font-bold text-slate-800">
         <ShieldAlert className="h-4 w-4 text-teal-700" aria-hidden="true" />

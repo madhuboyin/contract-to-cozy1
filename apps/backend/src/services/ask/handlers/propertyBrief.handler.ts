@@ -9,7 +9,8 @@ import { humanDate, readableCode } from '../askFormatting';
 import { computeBriefStaleness, getPropertyBriefPreview, inspectPropertyBriefUpdates, listPropertyBriefs } from '../../../propertyBrief/propertyBrief.service';
 import { PROPERTY_BRIEF_TEMPLATES } from '../../../propertyBrief/propertyBrief.contracts';
 import { PROPERTY_BRIEF_ACTION_IDS, PROPERTY_BRIEF_COMMAND_MESSAGE } from '../support/propertyBriefConstants';
-import { ensurePropertyAccess } from '../askHandlerSupport';
+import { getFactDefinition } from '../../../modules/propertyContext/catalog/factCatalog';
+import { AREA_CAPTURE_MESSAGES, ensurePropertyAccess, isAreaCaptureScope } from '../askHandlerSupport';
 
 // Property Brief capability-card slice (FRD v1.63): the fifteenth new operation for a capability with none. Reads
 // listPropertyBriefs -- the call GET /properties/:id/property-briefs makes for the Property Brief page: every
@@ -160,6 +161,27 @@ export function propertyBriefPreviewRow(item: Record<string, unknown>, fallbackI
   };
 }
 
+export function propertyBriefGapAction(factKey: string, canManage: boolean) {
+  if (!canManage) return undefined;
+  let fact: ReturnType<typeof getFactDefinition>;
+  try {
+    fact = getFactDefinition(factKey);
+  } catch {
+    return undefined;
+  }
+  if (!fact.writable || !isAreaCaptureScope(fact.scope)) return undefined;
+  return {
+    id: `property-brief-fill-${fact.scope.toLowerCase()}`,
+    label: 'Add detail',
+    message: AREA_CAPTURE_MESSAGES[fact.scope],
+    operationId: 'PROPERTY_CONTEXT_AREA_CAPTURE',
+    interactionType: 'MUTATE_RECORD' as const,
+    entityType: 'PROPERTY_CONTEXT_AREA',
+    entityId: fact.scope,
+    style: 'SECONDARY' as const,
+  };
+}
+
 const sectionRecordCount = (section: { payload: unknown }) => {
   const payload = section.payload && typeof section.payload === 'object' && !Array.isArray(section.payload) ? section.payload as Record<string, unknown> : {};
   return Array.isArray(payload.items) ? payload.items.length : 0;
@@ -175,7 +197,12 @@ async function previewResult(propertyId: string, userId: string, briefId: string
     const rows = (Array.isArray(payload.items) ? payload.items : []).map((raw, index) => {
       const item: Record<string, unknown> = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw as Record<string, unknown> : { value: raw };
       const proof = evidence.get(String(item.key ?? ''));
-      return { ...propertyBriefPreviewRow(item, `${section.id}-${index}`, proof, section.asOf), status: section.sensitive ? 'Sensitive' : 'Included' };
+      const gapAction = section.sectionType === 'OPEN_UNKNOWNS' ? propertyBriefGapAction(String(item.key ?? ''), canManage) : undefined;
+      return {
+        ...propertyBriefPreviewRow(item, `${section.id}-${index}`, proof, section.asOf),
+        status: section.sensitive ? 'Sensitive' : 'Included',
+        ...(gapAction ? { actions: [gapAction] } : {}),
+      };
     });
     return { id: section.id, title: section.title, count: rows.length, items: rows.length ? rows : [{ id: `${section.id}-empty`, title: 'No eligible records were included', description: null, meta: [`As of ${humanDate(new Date(section.asOf))}`], status: 'EMPTY' }] };
   });

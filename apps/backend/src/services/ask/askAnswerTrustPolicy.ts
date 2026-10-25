@@ -342,7 +342,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   RENOVATION_PERMIT_READINESS: new Set(['renovation-case-start', 'renovation-readiness-refresh', 'renovation-readiness-acknowledge', 'renovation-readiness-revoke', 'renovation-readiness-reopen', 'renovation-readiness-satisfy', 'renovation-readiness-handoff']),
   // The receipt of saved details offers the read of that review and a run of its analysis.
   NEGOTIATION_SHIELD_CASE_UPDATE: new Set(['negotiation-shield-review', 'negotiation-shield-analyze']),
-  PROPERTY_BRIEFS_LIST: new Set(['property-brief-preview', 'property-brief-prepare', 'property-brief-share', 'property-brief-republish', 'property-brief-test-share', 'property-brief-revoke-share']),
+  PROPERTY_BRIEFS_LIST: new Set(['property-brief-preview', 'property-brief-prepare', 'property-brief-share', 'property-brief-republish', 'property-brief-test-share', 'property-brief-revoke-share', 'property-brief-fill-core', 'property-brief-fill-location', 'property-brief-fill-structure', 'property-brief-fill-systems']),
   // FRD v1.44: neither seller-prep operation had an entry, so every action they emitted (even the checklist link) was
   // stripped. The decision item actions are shown inline only when the item's live state allows them.
   SELLER_PREP_CHECKLIST: new Set(['sale-item-pursue', 'sale-item-unpursue', 'sale-item-waive', 'sale-item-reopen', 'seller-prep-case-start', 'seller-prep-case-dates', 'seller-prep-case-budget', 'seller-prep-case-status']),

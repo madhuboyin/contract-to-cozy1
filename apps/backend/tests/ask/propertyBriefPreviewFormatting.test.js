@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 
 require('ts-node/register');
 
-const { propertyBriefPreviewRow } = require('../../src/services/ask/handlers/propertyBrief.handler.ts');
+const { propertyBriefGapAction, propertyBriefPreviewRow } = require('../../src/services/ask/handlers/propertyBrief.handler.ts');
 
 test('property brief facts render as homeowner-readable facts rather than schema key dumps', () => {
   const row = propertyBriefPreviewRow(
@@ -25,4 +25,19 @@ test('property brief unknowns say what is missing without exposing enum codes', 
   );
   assert.equal(row.title, 'Bedrooms: Unknown or not recorded');
   assert.deepEqual(row.meta, ['Source: Home Record', 'As of Jul 27, 2026', 'Unknown or not recorded']);
+});
+
+test('a writable brief gap launches its governed property area capture', () => {
+  assert.deepEqual(propertyBriefGapAction('core.bedrooms', true), {
+    id: 'property-brief-fill-core',
+    label: 'Add detail',
+    message: 'Fill in the missing core property details.',
+    operationId: 'PROPERTY_CONTEXT_AREA_CAPTURE',
+    interactionType: 'MUTATE_RECORD',
+    entityType: 'PROPERTY_CONTEXT_AREA',
+    entityId: 'CORE',
+    style: 'SECONDARY',
+  });
+  assert.equal(propertyBriefGapAction('core.bedrooms', false), undefined, 'viewers cannot edit the shared home record');
+  assert.equal(propertyBriefGapAction('not.a.canonical.fact', true), undefined, 'unknown and non-canonical gaps stay read-only');
 });
