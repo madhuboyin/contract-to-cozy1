@@ -78,6 +78,7 @@ function DataTable({ block, className, rowDetail }: { block: TableBlock; classNa
 // three across on a wide screen, two on a tablet, one on a phone. The rows keep the table's data shape (`detail`, `recordedValue`).
 export const FACT_GRID_TABLE_IDS: ReadonlySet<string> = new Set(['property-summary-facts']);
 const SELL_HOLD_RENT_PROJECTION_ID = 'sell-hold-rent-projection';
+const SELL_HOLD_RENT_ASSUMPTIONS_ID = 'sell-hold-rent-assumptions';
 
 const numericMoney = (value: string | undefined) => {
   if (!value) return null;
@@ -88,12 +89,13 @@ const numericMoney = (value: string | undefined) => {
 function SellHoldRentProjection({ block }: { block: TableBlock }) {
   const points = block.rows.map((row) => ({
     year: row.values.year,
+    homeValue: numericMoney(row.values.homeValue),
     hold: numericMoney(row.values.hold),
     rent: numericMoney(row.values.rent),
-  })).filter((point): point is { year: string; hold: number; rent: number } => point.hold !== null && point.rent !== null);
+  })).filter((point): point is { year: string; homeValue: number | null; hold: number; rent: number } => point.hold !== null && point.rent !== null);
   const width = 720;
-  const height = 220;
-  const inset = { left: 48, right: 18, top: 18, bottom: 34 };
+  const height = 228;
+  const inset = { left: 52, right: 20, top: 20, bottom: 34 };
   const values = points.flatMap((point) => [point.hold, point.rent, 0]);
   const min = Math.min(...values);
   const max = Math.max(...values);
@@ -101,34 +103,249 @@ function SellHoldRentProjection({ block }: { block: TableBlock }) {
   const x = (index: number) => inset.left + (points.length <= 1 ? 0 : index * ((width - inset.left - inset.right) / (points.length - 1)));
   const y = (value: number) => inset.top + ((max - value) / span) * (height - inset.top - inset.bottom);
   const path = (key: 'hold' | 'rent') => points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${x(index)} ${y(point[key])}`).join(' ');
+  const areaPath = (key: 'hold' | 'rent') => {
+    if (points.length <= 1) return '';
+    const line = path(key);
+    const baselineY = y(Math.max(0, min));
+    return `${line} L ${x(points.length - 1)} ${baselineY} L ${x(0)} ${baselineY} Z`;
+  };
   const moneyLabel = (value: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: 'compact', maximumFractionDigits: 0 }).format(value);
 
-  return <section className="rounded-2xl border border-slate-200 bg-white p-4" aria-labelledby={`ask-table-${block.id}`} data-sell-hold-rent-projection="">
-    <h3 id={`ask-table-${block.id}`} className="font-semibold text-slate-950">{block.title}</h3>
-    {block.description && <p className="mt-1 text-xs leading-5 text-slate-500">{block.description}</p>}
-    {points.length > 1 ? <>
-      <div className="mt-3 flex flex-wrap gap-4 text-xs font-medium text-slate-600" aria-hidden="true">
-        <span className="inline-flex items-center gap-1.5"><span className="h-0.5 w-5 bg-slate-700" />Hold change</span>
-        <span className="inline-flex items-center gap-1.5"><span className="h-0.5 w-5 bg-teal-600" />Rent change</span>
+  const firstPoint = points[0];
+  const lastPoint = points.at(-1);
+  const holdDelta = firstPoint && lastPoint ? lastPoint.hold - firstPoint.hold : null;
+  const rentDelta = firstPoint && lastPoint ? lastPoint.rent - firstPoint.rent : null;
+
+  return <section className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-2xs" aria-labelledby={`ask-table-${block.id}`} data-sell-hold-rent-projection="">
+    <div className="border-b border-slate-100 bg-gradient-to-r from-slate-50/90 via-white to-teal-50/30 px-4 py-3.5 sm:px-5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <span className="text-[10px] font-bold uppercase tracking-wider text-teal-700">Multi-Year Trajectory</span>
+          <h3 id={`ask-table-${block.id}`} className="text-base font-bold tracking-tight text-slate-950">{block.title}</h3>
+        </div>
+        {points.length > 1 && (
+          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200/80 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs" aria-hidden="true">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-full bg-slate-700" />
+              Hold change
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-full bg-teal-600" />
+              Rent change
+            </span>
+          </div>
+        )}
       </div>
-      <svg className="mt-2 h-auto w-full" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`Annual modeled changes. Hold moves from ${moneyLabel(points[0].hold)} to ${moneyLabel(points.at(-1)!.hold)}; rent moves from ${moneyLabel(points[0].rent)} to ${moneyLabel(points.at(-1)!.rent)}.`}>
-        <line x1={inset.left} x2={width - inset.right} y1={y(0)} y2={y(0)} stroke="#cbd5e1" strokeDasharray="5 5" />
-        <path d={path('hold')} fill="none" stroke="#334155" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-        <path d={path('rent')} fill="none" stroke="#0d9488" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-        {points.map((point, index) => <g key={point.year}>
-          <circle cx={x(index)} cy={y(point.hold)} r="3.5" fill="#334155" />
-          <circle cx={x(index)} cy={y(point.rent)} r="3.5" fill="#0d9488" />
-          <text x={x(index)} y={height - 10} textAnchor="middle" className="fill-slate-500 text-[11px]">{point.year}</text>
-        </g>)}
-        <text x={inset.left} y={12} className="fill-slate-500 text-[11px]">{moneyLabel(max)}</text>
-        <text x={inset.left} y={height - inset.bottom + 14} className="fill-slate-500 text-[11px]">{moneyLabel(min)}</text>
-      </svg>
-      <details className="mt-2 text-sm">
-        <summary className="cursor-pointer font-semibold text-teal-800">View annual values</summary>
-        <DataTable block={block} className="mt-3" />
-      </details>
-    </> : <p className="mt-3 rounded-xl bg-slate-50 p-3 text-sm text-slate-600">Not enough annual data is available to draw the projection.</p>}
+      {block.description && <p className="mt-1 text-xs leading-5 text-slate-500">{block.description}</p>}
+    </div>
+
+    <div className="p-4 sm:p-5">
+      {points.length > 1 && firstPoint && lastPoint ? <>
+        <div className="mb-4 grid grid-cols-1 gap-2.5 sm:grid-cols-3" aria-hidden="true">
+          {firstPoint.homeValue !== null && lastPoint.homeValue !== null && (
+            <div className="rounded-xl border border-slate-200/80 bg-slate-50/70 px-3.5 py-2.5">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Projected Home Value</p>
+              <div className="mt-1 flex items-baseline gap-1.5">
+                <span className="text-sm font-bold tabular-nums text-slate-900">{moneyLabel(firstPoint.homeValue)}</span>
+                <span className="text-xs font-semibold text-slate-400">→</span>
+                <span className="text-base font-bold tabular-nums text-teal-800">{moneyLabel(lastPoint.homeValue)}</span>
+              </div>
+              <p className="mt-0.5 text-[11px] font-medium text-slate-500">Year 1 to Year {points.length}</p>
+            </div>
+          )}
+          <div className="rounded-xl border border-slate-200/80 bg-slate-50/70 px-3.5 py-2.5">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Hold Annual Trajectory</p>
+            <div className="mt-1 flex items-baseline gap-1.5">
+              <span className="text-sm font-bold tabular-nums text-slate-700">{moneyLabel(firstPoint.hold)}</span>
+              <span className="text-xs font-semibold text-slate-400">→</span>
+              <span className="text-base font-bold tabular-nums text-slate-950">{moneyLabel(lastPoint.hold)}</span>
+            </div>
+            {holdDelta !== null && (
+              <p className={cn('mt-0.5 text-[11px] font-semibold', holdDelta >= 0 ? 'text-emerald-700' : 'text-amber-700')}>
+                {holdDelta >= 0 ? `+${moneyLabel(holdDelta)}` : moneyLabel(holdDelta)} annual shift
+              </p>
+            )}
+          </div>
+          <div className="rounded-xl border border-teal-200/70 bg-teal-50/40 px-3.5 py-2.5">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-teal-800">Rent Annual Trajectory</p>
+            <div className="mt-1 flex items-baseline gap-1.5">
+              <span className="text-sm font-bold tabular-nums text-teal-800">{moneyLabel(firstPoint.rent)}</span>
+              <span className="text-xs font-semibold text-teal-500">→</span>
+              <span className="text-base font-bold tabular-nums text-teal-950">{moneyLabel(lastPoint.rent)}</span>
+            </div>
+            {rentDelta !== null && (
+              <p className={cn('mt-0.5 text-[11px] font-semibold', rentDelta >= 0 ? 'text-emerald-700' : 'text-amber-700')}>
+                {rentDelta >= 0 ? `+${moneyLabel(rentDelta)}` : moneyLabel(rentDelta)} annual shift
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-slate-100 bg-slate-50/40 p-2 sm:p-3">
+          <svg className="h-auto w-full" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`Annual modeled changes. Hold moves from ${moneyLabel(points[0].hold)} to ${moneyLabel(points.at(-1)!.hold)}; rent moves from ${moneyLabel(points[0].rent)} to ${moneyLabel(points.at(-1)!.rent)}.`}>
+            <defs>
+              <linearGradient id={`rent-grad-${block.id}`} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#0d9488" stopOpacity="0.20" />
+                <stop offset="100%" stopColor="#0d9488" stopOpacity="0.0" />
+              </linearGradient>
+              <linearGradient id={`hold-grad-${block.id}`} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#334155" stopOpacity="0.12" />
+                <stop offset="100%" stopColor="#334155" stopOpacity="0.0" />
+              </linearGradient>
+            </defs>
+            <line x1={inset.left} x2={width - inset.right} y1={inset.top} y2={inset.top} stroke="#f1f5f9" strokeWidth="1" />
+            <line x1={inset.left} x2={width - inset.right} y1={(inset.top + height - inset.bottom) / 2} y2={(inset.top + height - inset.bottom) / 2} stroke="#f1f5f9" strokeWidth="1" />
+            <line x1={inset.left} x2={width - inset.right} y1={y(0)} y2={y(0)} stroke="#cbd5e1" strokeDasharray="5 5" strokeWidth="1.5" />
+            <path d={areaPath('hold')} fill={`url(#hold-grad-${block.id})`} />
+            <path d={areaPath('rent')} fill={`url(#rent-grad-${block.id})`} />
+            <path d={path('hold')} fill="none" stroke="#334155" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+            <path d={path('rent')} fill="none" stroke="#0d9488" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+            {points.map((point, index) => <g key={point.year}>
+              <circle cx={x(index)} cy={y(point.hold)} r="4" fill="#ffffff" stroke="#334155" strokeWidth="2.5" />
+              <circle cx={x(index)} cy={y(point.rent)} r="4" fill="#ffffff" stroke="#0d9488" strokeWidth="2.5" />
+              <text x={x(index)} y={height - 10} textAnchor="middle" className="fill-slate-600 text-[11px] font-medium">{point.year}</text>
+            </g>)}
+            <text x={inset.left - 6} y={inset.top + 4} textAnchor="end" className="fill-slate-500 text-[11px] font-medium">{moneyLabel(max)}</text>
+            <text x={inset.left - 6} y={height - inset.bottom + 4} textAnchor="end" className="fill-slate-500 text-[11px] font-medium">{moneyLabel(min)}</text>
+          </svg>
+        </div>
+        <details className="group mt-3 rounded-xl border border-slate-200/80 bg-slate-50/60 px-3.5 py-2.5 text-sm">
+          <summary className="cursor-pointer font-semibold text-teal-800 hover:text-teal-900">View annual values</summary>
+          <DataTable block={block} className="mt-3 rounded-lg bg-white p-2" />
+        </details>
+      </> : <p className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">Not enough annual data is available to draw the projection.</p>}
+    </div>
   </section>;
+}
+
+function SellHoldRentAssumptionsBlock({
+  block,
+  preference,
+  offersChoice,
+  hasControls,
+  setPreference,
+  decisionMode,
+  shownCount,
+  totalCount,
+  renderAction,
+  rowDetail,
+}: {
+  block: TableBlock;
+  preference: TablePresentationPreference;
+  offersChoice: boolean;
+  hasControls: boolean;
+  setPreference: (mode: TablePresentationPreference) => void;
+  decisionMode: 'RESPONSIVE' | 'CARDS' | 'TABLE';
+  shownCount: number;
+  totalCount: number;
+  renderAction: (action: AskAction) => ReactNode;
+  rowDetail?: TableRowDetailControls;
+}) {
+  return (
+    <section
+      className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-2xs"
+      aria-labelledby={`ask-table-${block.id}`}
+      data-sell-hold-rent-assumptions=""
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 bg-gradient-to-r from-slate-50/90 via-white to-teal-50/30 px-4 py-3.5 sm:px-5">
+        <div>
+          <span className="text-[10px] font-bold uppercase tracking-wider text-teal-700">Scenario Parameters</span>
+          <h3 id={`ask-table-${block.id}`} className="text-base font-bold tracking-tight text-slate-950">{block.title}</h3>
+          {block.description && <p className="mt-0.5 text-xs leading-5 text-slate-500">{block.description}</p>}
+        </div>
+        {offersChoice && hasControls && (
+          <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1" role="group" aria-label={`View ${block.title}`}>
+            {(['AUTO', 'CARDS', 'TABLE'] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                aria-pressed={preference === mode}
+                onClick={() => setPreference(mode)}
+                className={cn(
+                  'min-h-8 rounded-lg px-2.5 text-xs font-semibold transition-colors',
+                  preference === mode ? 'bg-white text-teal-800 shadow-2xs' : 'text-slate-600 hover:bg-white',
+                )}
+              >
+                {mode === 'AUTO' ? 'Auto' : mode === 'CARDS' ? 'Cards' : 'Table'}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="p-4 sm:p-5">
+        {shownCount === 0 ? (
+          <p className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">No records are available for this result.</p>
+        ) : (
+          <>
+            {decisionMode === 'RESPONSIVE' && (
+              <>
+                <LabeledCards block={block} className="sm:hidden" rowDetail={rowDetail} />
+                <div className="hidden sm:block">
+                  <dl className="grid grid-cols-2 gap-2.5 lg:grid-cols-4" aria-hidden="true">
+                    {block.rows.map((row) => {
+                      const isOverridden = /what-if|scenario override/i.test(row.values.source || '');
+                      return (
+                        <div
+                          key={row.id}
+                          className={cn(
+                            'flex flex-col justify-between rounded-xl border px-3.5 py-2.5',
+                            isOverridden
+                              ? 'border-teal-300/90 bg-teal-50/50'
+                              : 'border-slate-200/80 bg-slate-50/70',
+                          )}
+                        >
+                          <div className="flex items-center justify-between gap-1.5">
+                            <dt className="truncate text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                              {row.values.input}
+                            </dt>
+                            <span
+                              className={cn(
+                                'shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide',
+                                isOverridden
+                                  ? 'bg-teal-100 text-teal-800'
+                                  : 'bg-white text-slate-500 border border-slate-200/70',
+                              )}
+                            >
+                              {isOverridden ? 'Override' : 'Baseline'}
+                            </span>
+                          </div>
+                          <dd className="mt-1 text-base font-bold tabular-nums text-slate-950">
+                            {row.values.value || 'Not recorded'}
+                          </dd>
+                          <p className="mt-0.5 truncate text-[11px] text-slate-500" title={row.values.source}>
+                            {row.values.source}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </dl>
+                  <DataTable block={block} className="sr-only" rowDetail={rowDetail} />
+                </div>
+              </>
+            )}
+            {decisionMode === 'CARDS' && <LabeledCards block={block} rowDetail={rowDetail} />}
+            {decisionMode === 'TABLE' && <DataTable block={block} rowDetail={rowDetail} />}
+          </>
+        )}
+
+        {rowDetail?.activeRowId && <div id={`ask-table-row-detail-${rowDetail.activeRowId}`}>{rowDetail.renderDetail(rowDetail.activeRowId)}</div>}
+
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
+          <p className="text-xs text-slate-500" aria-live="polite">
+            {totalCount > shownCount ? `Showing ${shownCount} of ${totalCount} records.` : `${shownCount} ${shownCount === 1 ? 'record' : 'records'}.`}
+          </p>
+          {block.actions.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {block.actions.map((action) => (
+                <span key={action.id}>{renderAction(action)}</span>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  );
 }
 
 function FactGridTable({ block, renderAction }: { block: TableBlock; renderAction: (action: AskAction) => ReactNode }) {
@@ -160,6 +377,23 @@ export function AdaptiveTableBlock({ block, renderAction, rowDetail }: { block: 
   }));
   const shownCount = block.rows.length;
   const totalCount = Math.max(block.totalCount ?? shownCount, shownCount);
+
+  if (block.id === SELL_HOLD_RENT_ASSUMPTIONS_ID && !rowDetail) {
+    return (
+      <SellHoldRentAssumptionsBlock
+        block={block}
+        preference={preference}
+        offersChoice={decision.offersChoice}
+        hasControls={Boolean(controls)}
+        setPreference={setPreference}
+        decisionMode={decision.mode}
+        shownCount={shownCount}
+        totalCount={totalCount}
+        renderAction={renderAction}
+        rowDetail={rowDetail}
+      />
+    );
+  }
 
   return <section className="rounded-2xl border border-slate-200 bg-white p-4" aria-labelledby={`ask-table-${block.id}`}>
     <div className="flex flex-wrap items-start justify-between gap-3">
