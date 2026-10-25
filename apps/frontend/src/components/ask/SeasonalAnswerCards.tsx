@@ -4,6 +4,7 @@ import { ArrowLeft, CheckCircle2, Clock, Flower2, Home, Leaf, ListChecks, ListPl
 import { cn } from '@/lib/utils';
 import type { AskAction, AskPresentationBlock } from '@/features/ask/types';
 import { ActionLink } from './blocks/context';
+import { SummaryBullets } from './blocks/SummaryBullets';
 
 type SummaryBlock = Extract<AskPresentationBlock, { type: 'SUMMARY' }>;
 
@@ -55,7 +56,8 @@ export function SeasonalIntroCard({ block }: { block: SummaryBlock }) {
       {Icon && <span className={cn('flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl', tone)} aria-hidden="true"><Icon className="h-6 w-6" /></span>}
       <div className="min-w-0">
         <h3 className="font-display text-[22px] font-medium leading-snug tracking-[-0.01em] text-slate-950 sm:text-[26px]">{block.title}</h3>
-        <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-700">{block.body}</p>
+        {(block.supportLine || !block.bullets) && <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-700">{block.supportLine || block.body}</p>}
+        {block.bullets && <SummaryBullets bullets={block.bullets} />}
         {block.actions.length > 0 && <div className="mt-3 flex flex-wrap gap-2">{block.actions.map((action) => <ActionLink key={action.id} action={action} />)}</div>}
       </div>
     </section>

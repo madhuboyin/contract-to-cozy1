@@ -68,7 +68,17 @@ const answer = (): AskExecutionResponse => ({
   sessionId: 'session', executionId: 'exec-plan', question: 'What should I do to get ready for next season?', status: 'COMPLETED', property: { id: 'home', label: 'Main' },
   createdAt: '2026-10-05T19:30:21.000Z', updatedAt: '2026-10-05T19:30:21.000Z', viewState: null,
   blocks: [
-    { type: 'SUMMARY', id: 'seasonal-home-care-summary', title: 'Getting ready for winter', body: 'Winter is the next season for your area. Here are 3 things to focus on.', tone: 'DEFAULT', actions: [] },
+    {
+      type: 'SUMMARY', id: 'seasonal-home-care-summary', title: 'Getting ready for winter',
+      body: 'Winter is the next season for your area. Here are 3 things to focus on.',
+      supportLine: 'Start with the 2 tasks under “Do these soon.”',
+      bullets: [
+        { label: 'Do soon', body: '2 priority tasks are listed first.' },
+        { label: 'Can wait', body: '1 task can wait until you have time.' },
+        { label: 'Plan basis', body: 'Winter is the next season for your area.' },
+      ],
+      tone: 'DEFAULT', actions: [],
+    },
     plan(),
     { type: 'BOUNDARY', id: 'seasonal-home-care-boundary', title: 'About this recommendation', body: 'These are general seasonal tasks for the climate region, not an assessment of this home.', severity: 'INFO', suggestions: [] },
     {
@@ -101,6 +111,10 @@ describe('seasonal answer in the workspace', () => {
     // The intro carries a season icon and every next step is offered, not only the first.
     const intro = view.container.querySelector('[data-seasonal-intro]') as HTMLElement;
     expect(intro).toHaveTextContent('Getting ready for winter');
+    expect(within(intro).getByRole('list', { name: 'Key points' })).toBeInTheDocument();
+    expect(within(intro).getAllByRole('listitem')).toHaveLength(3);
+    expect(intro).toHaveTextContent('Do soon: 2 priority tasks are listed first.');
+    expect(intro).not.toHaveTextContent('Here are 3 things to focus on.');
     expect(intro.querySelector('svg')).not.toBeNull();
     expect(view.container.querySelectorAll('[data-seasonal-next-steps] button')).toHaveLength(3);
     expect(view.container.querySelector('[data-seasonal-about]')).toHaveTextContent('not an assessment of this home');

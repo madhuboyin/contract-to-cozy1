@@ -65,6 +65,11 @@ const AskAnswerChipSchema = z.object({
   tone: AskDisplayToneSchema.default('DEFAULT'),
 });
 
+const AskSummaryBulletSchema = z.object({
+  label: z.string().trim().min(1).max(80).optional(),
+  body: z.string().trim().min(1).max(240),
+});
+
 const SummaryBlockSchema = z.object({
   type: z.literal('SUMMARY'),
   id: z.string(),
@@ -79,6 +84,9 @@ const SummaryBlockSchema = z.object({
   // counts as the chips. Optional so existing producers are unchanged; a client falls back to `title` and `body`.
   headline: z.string().max(200).optional(),
   supportLine: z.string().max(240).optional(),
+  // Typed, producer-authored scan points. Clients must render these as a semantic list and must not infer bullets by splitting prose.
+  // Bounded to four so SUMMARY stays an answer-first orientation block; longer content belongs in a list block.
+  bullets: z.array(AskSummaryBulletSchema).min(1).max(4).optional(),
   // Property Brief preview: typed header facts, so the client never parses `body`. Counts come from the section type,
   // not the section title. Optional so every other summary is unchanged.
   propertyBrief: z.object({

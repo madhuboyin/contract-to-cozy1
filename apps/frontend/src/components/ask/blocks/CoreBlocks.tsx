@@ -8,6 +8,7 @@ import { SEASONAL_ABOUT_BLOCK_IDS, SEASONAL_NEXT_STEPS_BLOCK_IDS, SeasonalAboutC
 import { useCalmAnswer, useCalmChrome, useCalmReceiptContinuation } from './calmContext';
 import type { AskBlockRenderer } from './types';
 import { ItemActionButtons } from '../patterns/PatternParts';
+import { SummaryBullets } from './SummaryBullets';
 
 function AnswerChips({ chips }: { chips: NonNullable<Extract<AskPresentationBlock, { type: 'SUMMARY' }>['chips']> }) {
   return (
@@ -26,14 +27,15 @@ function CalmSummary({ block }: { block: Extract<AskPresentationBlock, { type: '
   // IW-CONV-002: one primary action per turn. A domain that adopted the headline anatomy carries its actions on its list, so the
   // summary adds none; any other summary keeps only its first.
   const adopted = useCalmAnswer();
-  const actions = adopted ? [] : block.actions.slice(0, 1);
-  const declared = Boolean(block.headline?.trim());
+  const actions = adopted && !block.bullets ? [] : block.actions.slice(0, 1);
+  const declared = Boolean(block.headline?.trim() || block.supportLine?.trim() || block.bullets?.length);
   const headline = block.headline?.trim() || block.title;
   const supportLine = declared ? block.supportLine?.trim() || null : block.body;
   return (
     <section data-calm-summary="" className={cn('max-w-[800px]', CALM_TONE_RULE[block.tone])}>
       <h3 className="font-display text-[22px] font-medium leading-snug tracking-[-0.01em] text-slate-950 sm:text-[26px]">{headline}</h3>
       {supportLine && <p className={cn('mt-1 whitespace-pre-wrap text-sm leading-6', declared ? 'text-slate-500' : 'text-slate-700')}>{supportLine}</p>}
+      {block.bullets && <SummaryBullets bullets={block.bullets} />}
       {block.chips && block.chips.length > 0 && <AnswerChips chips={block.chips} />}
       {actions.length > 0 && <div className="mt-3 flex flex-wrap gap-2 text-sm">{actions.map((action) => <ActionLink key={action.id} action={{ ...action, style: 'SECONDARY' }} />)}</div>}
     </section>
@@ -524,7 +526,8 @@ export const SummaryBlock: AskBlockRenderer<'SUMMARY'> = ({ block }) => {
       block.tone === 'DEFAULT' && 'border-slate-200 bg-white',
     )}>
       <h3 className="font-semibold text-slate-950">{block.title}</h3>
-      <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">{block.body}</p>
+      {(block.supportLine || !block.bullets) && <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">{block.supportLine || block.body}</p>}
+      {block.bullets && <SummaryBullets bullets={block.bullets} />}
       {/* IW-PRES-013: answer-first number chips, taken by the server from the same records as the result. */}
       {block.chips && block.chips.length > 0 && <AnswerChips chips={block.chips} />}
       {block.actions.length > 0 && <div className="mt-4 flex flex-wrap gap-2">{block.actions.map((action) => <ActionLink key={action.id} action={action} />)}</div>}

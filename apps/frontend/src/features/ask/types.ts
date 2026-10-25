@@ -124,7 +124,7 @@ export type AskPresentationBlock =
     /** One entry per step, in order. Presence of an outline is what makes a TASK_GUIDE a stepped guide ("guide mode"). */
     outline?: AskTaskGuideOutlineEntry[];
   }
-  | { type: 'SUMMARY'; id: string; title: string; body: string; tone: 'DEFAULT' | 'POSITIVE' | 'CAUTION' | 'CRITICAL'; actions: AskAction[]; chips?: AskAnswerChip[]; headline?: string; supportLine?: string; propertyBrief?: AskPropertyBriefSummary }
+  | { type: 'SUMMARY'; id: string; title: string; body: string; tone: 'DEFAULT' | 'POSITIVE' | 'CAUTION' | 'CRITICAL'; actions: AskAction[]; chips?: AskAnswerChip[]; headline?: string; supportLine?: string; bullets?: Array<{ label?: string; body: string }>; propertyBrief?: AskPropertyBriefSummary }
   | { type: 'PROACTIVE_INSIGHT'; id: string; title: string; body: string; tone: 'DEFAULT' | 'POSITIVE' | 'CAUTION' | 'CRITICAL'; triggerSource: string; actions: AskAction[] }
   | { type: 'GROUPED_LIST'; id: string; title: string; description?: string | null; listDensity?: 'DENSE'; sections: Array<{ id: string; title: string; caption?: string | null; count: number; offset?: number; initialVisibleCount?: number; items: AskGroupedListItem[] }>; actions: AskAction[]; filters: AskGroupedListFilter[]; presentation?: AskGroupedListPresentation; collection?: AskCollectionDescriptor }
   | { type: 'TABLE'; id: string; title: string; description?: string | null; preferredPresentation?: 'AUTO' | 'TABLE' | 'CARDS'; columns: Array<{ key: string; label: string }>; rows: Array<{ id: string; values: Record<string, string> }>; totalCount?: number; actions: AskAction[] }

@@ -262,7 +262,19 @@ export function buildSeasonalHomeCareResult(input: SeasonalHomeCareInput): AskOp
   return {
     status: 'ANSWERED', reasonCode: 'SEASONAL_HOME_CARE_READY',
     blocks: [
-      { type: 'SUMMARY', id: 'seasonal-home-care-summary', title, body: `${judgment}${truncated} ${capitalize(seasonWord)} is ${relation} season for your area.${regionNote}`, tone: 'DEFAULT', actions: [] },
+      {
+        type: 'SUMMARY', id: 'seasonal-home-care-summary', title,
+        body: `${judgment}${truncated} ${capitalize(seasonWord)} is ${relation} season for your area.${regionNote}`,
+        supportLine: soon.length > 0
+          ? `Start with the ${soon.length} ${soon.length === 1 ? 'task' : 'tasks'} under “Do these soon.”`
+          : 'No tasks in this plan need immediate attention.',
+        bullets: [
+          { label: 'Do soon', body: soon.length > 0 ? `${soon.length} priority ${soon.length === 1 ? 'task is' : 'tasks are'} listed first.` : 'No priority tasks are due soon.' },
+          { label: 'Can wait', body: `${later.length} ${later.length === 1 ? 'task can' : 'tasks can'} wait until you have time.` },
+          { label: 'Plan basis', body: `${capitalize(seasonWord)} is ${relation} season for your area.${regionNote}` },
+        ],
+        tone: 'DEFAULT', actions: [],
+      },
       {
         type: 'GROUPED_LIST', id: 'seasonal-home-care-tasks', title: `${capitalize(seasonWord)} tasks`, actions: [], filters: [], sections,
         // Presentation Quality 3D: the plan shows the top MAX_ITEMS of the catalog's tasks; the catalog is the whole source and has no continuation.

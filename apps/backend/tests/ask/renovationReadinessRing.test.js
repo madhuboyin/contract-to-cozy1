@@ -101,5 +101,16 @@ test('the renovation readiness answer, with a case and without one, links to no 
   // a viewer is offered no action and is told who can, with no page.
   assert.deepEqual(none.blocks[0].actions, []);
   assert.match(none.blocks[0].body, /A contributor or owner can start a renovation case/);
+  assert.equal(none.blocks[0].supportLine, 'Readiness cannot be checked until the planned work is described.');
+  assert.deepEqual(none.blocks[0].bullets.map((bullet) => bullet.label), ['Why it is unavailable', 'Permit Tracker', 'Next step']);
+  assert.match(none.blocks[0].bullets[1].body, /2 permit records and 0 unresolved flags/);
+  AskPresentationBlockSchema.parse(none.blocks[0]);
   assert.equal(JSON.stringify(none).includes('/dashboard/'), false);
+});
+
+test('SUMMARY bullets are bounded scan points rather than unbounded replacement prose', () => {
+  const base = { type: 'SUMMARY', id: 'summary', title: 'Title', body: 'Fallback body', tone: 'DEFAULT', actions: [] };
+  assert.equal(AskPresentationBlockSchema.safeParse({ ...base, bullets: [{ label: 'Next step', body: 'Do the thing.' }] }).success, true);
+  assert.equal(AskPresentationBlockSchema.safeParse({ ...base, bullets: Array.from({ length: 5 }, (_, index) => ({ body: `Point ${index}` })) }).success, false);
+  assert.equal(AskPresentationBlockSchema.safeParse({ ...base, bullets: [{ label: 'Empty body', body: '   ' }] }).success, false);
 });

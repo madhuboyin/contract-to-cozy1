@@ -70,6 +70,9 @@ test('Seasonal baseline: the plan leads with the judgment, groups by producer pr
   assert.equal(result.status, 'ANSWERED');
   assert.equal(result.blocks[0].id, 'seasonal-home-care-summary');
   assert.match(result.blocks[0].body, /matter most|None of the/);
+  assert.equal(result.blocks[0].bullets.length, 3);
+  assert.deepEqual(result.blocks[0].bullets.map((bullet) => bullet.label), ['Do soon', 'Can wait', 'Plan basis']);
+  AskPresentationBlockSchema.parse(result.blocks[0]);
   const list = result.blocks.find((block) => block.id === 'seasonal-home-care-tasks');
   AskPresentationBlockSchema.parse(list);
   assert.deepEqual(list.sections.map((section) => section.id).filter((id) => ['seasonal-soon', 'seasonal-wait'].includes(id)), list.sections.map((section) => section.id));

@@ -398,7 +398,17 @@ async function renovationPermitReadinessResult(propertyId: string, message: stri
   const [cases, permitSummary] = await Promise.all([listRenovationCases(propertyId), permitTrackerService.getPermitSummary(propertyId)]);
   if (!cases.length) return {
     status: 'NEEDS_CONTEXT', reasonCode: 'RENOVATION_CASE_REQUIRED',
-    blocks: [{ type: 'SUMMARY', id: 'renovation-readiness-empty', title: 'No active renovation case is recorded', body: `No active renovation case is recorded, so readiness cannot be checked. The Permit Tracker currently shows ${permitSummary.totalPermits} permit record${permitSummary.totalPermits === 1 ? '' : 's'} and ${permitSummary.openFlags} unresolved flag${permitSummary.openFlags === 1 ? '' : 's'}, but those records cannot establish the scope of new work. ${canStart ? 'Start a renovation case to describe the work, then check its readiness.' : 'A contributor or owner can start a renovation case.'}`, tone: 'CAUTION', actions: canStart ? [{ id: RENOVATION_CASE_START_ACTION_ID, label: 'Start a renovation case', interactionType: 'START_WORKFLOW' as const, message: RENOVATION_CASE_START_MESSAGE, operationId: 'RENOVATION_CASE_START' as const, style: 'PRIMARY' as const }] : [] }, { type: 'BOUNDARY', id: 'renovation-empty-boundary', title: 'Scope and jurisdiction still control', body: 'Permit, zoning, HOA, licensing, inspection, and safety requirements depend on the exact scope and current authority rules. Absence of a record is not proof that approval is unnecessary.', severity: 'INFO', suggestions: [] }], suggestions: [],
+    blocks: [{
+      type: 'SUMMARY', id: 'renovation-readiness-empty', title: 'No active renovation case is recorded',
+      body: `No active renovation case is recorded, so readiness cannot be checked. The Permit Tracker currently shows ${permitSummary.totalPermits} permit record${permitSummary.totalPermits === 1 ? '' : 's'} and ${permitSummary.openFlags} unresolved flag${permitSummary.openFlags === 1 ? '' : 's'}, but those records cannot establish the scope of new work. ${canStart ? 'Start a renovation case to describe the work, then check its readiness.' : 'A contributor or owner can start a renovation case.'}`,
+      headline: 'No active renovation case is recorded', supportLine: 'Readiness cannot be checked until the planned work is described.',
+      bullets: [
+        { label: 'Why it is unavailable', body: 'No renovation scope is recorded for this home.' },
+        { label: 'Permit Tracker', body: `${permitSummary.totalPermits} permit record${permitSummary.totalPermits === 1 ? '' : 's'} and ${permitSummary.openFlags} unresolved flag${permitSummary.openFlags === 1 ? '' : 's'} are on file, but they do not define the new work.` },
+        { label: 'Next step', body: canStart ? 'Start a renovation case to describe the work, then check its readiness.' : 'A contributor or owner can start a renovation case.' },
+      ],
+      tone: 'CAUTION', actions: canStart ? [{ id: RENOVATION_CASE_START_ACTION_ID, label: 'Start a renovation case', interactionType: 'START_WORKFLOW' as const, message: RENOVATION_CASE_START_MESSAGE, operationId: 'RENOVATION_CASE_START' as const, style: 'PRIMARY' as const }] : [],
+    }, { type: 'BOUNDARY', id: 'renovation-empty-boundary', title: 'Scope and jurisdiction still control', body: 'Permit, zoning, HOA, licensing, inspection, and safety requirements depend on the exact scope and current authority rules. Absence of a record is not proof that approval is unnecessary.', severity: 'INFO', suggestions: [] }], suggestions: [],
   };
   const lower = message.toLowerCase();
   const selected = cases.find((candidate) => lower.includes(candidate.name.toLowerCase())) ?? cases[0];
