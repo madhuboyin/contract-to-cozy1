@@ -35,7 +35,7 @@ import { HomeContinuityPlanResultList } from '../HomeContinuityPlanResultList';
 import { PlantRecommendationResultList } from '../PlantRecommendationResultList';
 import { HomeRecordOverviewBlock } from '../HomeRecordOverviewBlock';
 import { GUIDANCE_JOURNEY_LIST_ID, GuidanceJourneyListView } from '../GuidanceJourneyList';
-import { PROPERTY_BRIEF_PREVIEW_IDS, PropertyBriefFactSheet, PropertyBriefSharePanel } from '../PropertyBriefPreview';
+import { PROPERTY_BRIEF_PREVIEW_IDS, PropertyBriefFactSheet, PropertyBriefSharePanel, PropertyBriefsListBlock } from '../PropertyBriefPreview';
 import { ActionLink, AskBlockActionContext, AskContextLink } from './context';
 import type { AskBlockRenderer } from './types';
 import { AskCollection, AskCollectionState } from '../presentation/AskLayoutPrimitives';
@@ -528,6 +528,7 @@ export const GroupedListBlock: AskBlockRenderer<'GROUPED_LIST'> = (props) => {
   // The Property Brief preview is one exact recipient snapshot: a fixed fact sheet, never the Auto/List/Cards chooser.
   if (props.block.id === PROPERTY_BRIEF_PREVIEW_IDS.sections) return <PropertyBriefFactSheet {...props} />;
   if (props.block.id === PROPERTY_BRIEF_PREVIEW_IDS.shares) return <PropertyBriefSharePanel {...props} />;
+  if (props.block.id === PROPERTY_BRIEF_PREVIEW_IDS.listItems) return <PropertyBriefsListBlock {...props} />;
   // The guided-journey list opens a journey in this same card (see GuidanceJourneyList).
   if (props.block.id === GUIDANCE_JOURNEY_LIST_ID) return <GuidanceJourneyListView props={props} renderList={(onItemAction) => <GenericGroupedListBlock {...props} onItemAction={onItemAction} />} />;
   if (props.block.id === 'property-record-index') return <HomeRecordOverviewBlock {...props} />;

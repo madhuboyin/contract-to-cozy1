@@ -1,6 +1,6 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { PropertyBriefFactSheet, PropertyBriefHeader, PropertyBriefLimitation } from '../PropertyBriefPreview';
+import { PropertyBriefFactSheet, PropertyBriefHeader, PropertyBriefLimitation, PropertyBriefsListBlock, PropertyBriefsSummaryCard } from '../PropertyBriefPreview';
 
 type Props = Parameters<typeof PropertyBriefFactSheet>[0];
 const row = (id: string, title: string, meta: string[] = ['Source: Self-reported', 'As of Jul 27, 2026', 'Verified'], status = 'Included') => ({ id, title, description: null, meta, status });
@@ -47,5 +47,59 @@ describe('Property Brief preview', () => {
     expect(screen.getAllByRole('listitem')).toHaveLength(4);
     expect(screen.getByText('Not an inspection.')).toBeInTheDocument();
     expect(screen.getByText('Read the full statement')).toBeInTheDocument();
+  });
+  it('renders saved briefs summary and governed dossier cards with live/stale badges and inline actions', () => {
+    const onItemAction = jest.fn();
+    render(
+      <>
+        <PropertyBriefsSummaryCard
+          block={{
+            type: 'SUMMARY',
+            id: 'property-briefs-summary',
+            title: '2 property briefs saved',
+            body: '1 is shared through 1 live link. 1 shared brief has not been refreshed in 90 days or more.',
+            tone: 'CAUTION',
+            actions: [],
+          }}
+        />
+        <PropertyBriefsListBlock
+          {...({
+            block: {
+              type: 'GROUPED_LIST',
+              id: 'property-briefs-items',
+              title: 'Saved briefs',
+              description: 'Newest first.',
+              filters: [],
+              actions: [],
+              sections: [
+                {
+                  id: 'property-briefs-live',
+                  title: 'Shared with a live link',
+                  count: 1,
+                  items: [
+                    {
+                      id: 'b-1',
+                      title: 'Insurer brief',
+                      description: 'Insurer or claim support · snapshot of Sep 10, 2026',
+                      meta: ['3 sections', '1 live link, expires Oct 30, 2026', 'Opened 2 times', 'Not refreshed in 95 days'],
+                      status: 'Shared',
+                      entityType: 'PROPERTY_BRIEF',
+                      actions: [{ id: 'property-brief-preview', label: 'Preview', style: 'PRIMARY', message: 'Preview this property brief.', operationId: 'PROPERTY_BRIEFS_LIST', interactionType: 'CONVERSATION_CONTINUE' }],
+                    },
+                  ],
+                },
+              ],
+            },
+            onItemAction,
+            itemActionsDisabled: false,
+          } as unknown as Props)}
+        />
+      </>,
+    );
+    expect(screen.getByText('2 property briefs saved')).toBeInTheDocument();
+    expect(screen.getByText('Insurer brief')).toBeInTheDocument();
+    expect(screen.getByText('Not refreshed in 95 days')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+    expect(onItemAction).toHaveBeenCalledWith('PROPERTY_BRIEF', 'b-1', 'Preview this property brief.', 'PROPERTY_BRIEFS_LIST', 'CONVERSATION_CONTINUE');
   });
 });
