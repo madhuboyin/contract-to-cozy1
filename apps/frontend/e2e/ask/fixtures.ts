@@ -1083,6 +1083,7 @@ function inventoryJourneyExecution(state: InventoryJourneyState) {
           meta: [item.category === 'HVAC' ? 'HVAC' : 'Appliance', 'Kitchen', item.missing ? 'Not verified' : 'Verified record'],
           // More than three corrections, so the detail folds them behind one "Correct a detail" disclosure.
           actions: [
+            ...(state.status === 'INCOMPLETE' && item.missing ? [itemAction('complete-missing-details', 'Add missing details', 'Complete the missing details for this inventory item.')] : []),
             itemAction('correct-installedOn', 'Correct install date', 'Correct the install date of this inventory item.'),
             itemAction('correct-condition', 'Correct condition', 'Correct the condition of this inventory item.'),
             itemAction('correct-purchaseCostCents', 'Correct purchase cost', 'Correct the purchase cost of this inventory item.'),

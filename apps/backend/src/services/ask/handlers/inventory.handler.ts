@@ -861,11 +861,15 @@ export function inventoryMissingCorrectionActions(
     ...(!item.serialNo && !item.serialNumber ? ['serialNo' as const] : []),
     ...(!item.purchasedOn ? ['purchasedOn' as const] : []),
   ];
-  return fields.map((field) => ({
+  return [{
+    id: 'complete-missing-details', label: 'Add missing details',
+    message: 'Complete the missing details for this inventory item.',
+    style: 'PRIMARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'INVENTORY_ITEM_CORRECT',
+  }, ...fields.map((field) => ({
     id: `correct-${field}`, label: `Add ${INVENTORY_CORRECTION_FIELDS[field].label}`,
     message: INVENTORY_CORRECTION_FIELDS[field].message,
     style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'INVENTORY_ITEM_CORRECT', outcomeKey: INVENTORY_CORRECTION_OUTCOME_BY_FIELD[field],
-  }));
+  }))];
 }
 
 /**

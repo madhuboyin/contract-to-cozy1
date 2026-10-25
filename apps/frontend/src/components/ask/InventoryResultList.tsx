@@ -15,6 +15,7 @@ import { ActionLink } from './blocks/context';
 
 type Block = Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>;
 type Item = Block['sections'][number]['items'][number];
+const COMPLETE_MISSING_DETAILS_ACTION_ID = 'complete-missing-details';
 
 function errorStatus(error: unknown): number | null {
   return error && typeof error === 'object' && typeof (error as { status?: unknown }).status === 'number'
@@ -132,7 +133,7 @@ function InventoryItemDetail({ itemId, expectedPropertyId, fallbackItem, disable
           <div><dt className="text-xs text-slate-500">Replacement cost</dt><dd className="mt-0.5 font-medium text-slate-900">{formatCents(item.replacementCostCents, item.currency)}</dd></div>
           <div><dt className="text-xs text-slate-500">Verification</dt><dd className="mt-0.5 font-medium text-slate-900">{item.isVerified ? 'Verified record' : 'Not verified'}</dd></div>
         </dl>
-        {onAction && <CorrectionActions actions={fallbackItem.actions ?? []} subject={item.name} entityType={fallbackItem.entityType} entityId={fallbackItem.id} disabled={disabled} onAction={onAction} />}
+        {onAction && <CorrectionActions actions={(fallbackItem.actions ?? []).filter((action) => action.id !== COMPLETE_MISSING_DETAILS_ACTION_ID)} subject={item.name} entityType={fallbackItem.entityType} entityId={fallbackItem.id} disabled={disabled} onAction={onAction} />}
         {onAction && fallbackItem.actions !== undefined && (
           <AttachEvidenceControl
             event={{ entityType: fallbackItem.entityType, id: fallbackItem.id, title: item.name }}
@@ -220,10 +221,12 @@ export function InventoryResultList({ block, propertyId, disabled, onAction, onF
             <tbody className="block divide-y divide-slate-200 bg-white md:table-row-group">
           {section.items.slice(0, controls ? visible : section.items.length).map((item) => {
             const selected = controls?.view.selectedTaskId === item.id;
+            const completeMissingDetails = item.actions?.find((action) => action.id === COMPLETE_MISSING_DETAILS_ACTION_ID);
             return <tr key={item.id} data-ask-task-id={item.id} tabIndex={-1} className={cn('block p-3 outline-offset-2 md:table-row md:p-0', selected && 'bg-teal-50')}>
               <th scope="row" className="block md:table-cell md:px-3 md:py-3 md:align-top">
                 <button type="button" data-inventory-detail-trigger={item.id} data-ask-detail-trigger={item.id} data-ask-detail-block={block.id} aria-expanded={detailItemId === item.id} aria-controls={`inventory-detail-${item.id}`} onClick={() => openDetail(item)} className="min-h-10 text-left font-semibold text-slate-950 underline-offset-4 hover:text-teal-800 hover:underline">{item.title}</button>
                 {item.description && <p className="font-normal text-xs leading-5 text-slate-500">{item.description}</p>}
+                {completeMissingDetails && onAction && <button type="button" disabled={disabled} onClick={() => onAction(item.entityType, item.id, completeMissingDetails.message, completeMissingDetails.operationId, completeMissingDetails.interactionType)} className="mt-2 inline-flex min-h-9 items-center rounded-lg bg-teal-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-60">{completeMissingDetails.label}</button>}
               </th>
               <td className="mt-1 block text-slate-600 md:mt-0 md:table-cell md:px-3 md:py-3 md:align-top"><span className="mr-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 md:hidden">Room / category:</span>{item.meta[0] ?? 'Not recorded'}</td>
               <td className="mt-1 block text-slate-600 md:mt-0 md:table-cell md:px-3 md:py-3 md:align-top"><span className="mr-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 md:hidden">Brand / model:</span>{item.meta[1] ?? 'Not recorded'}</td>

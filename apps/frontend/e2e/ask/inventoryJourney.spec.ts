@@ -41,6 +41,7 @@ test('filters replace the result: each chip continues the source, replaces one d
   // Status dimension.
   await status.getByRole('button', { name: 'Missing details' }).click();
   await expect(page.getByRole('heading', { name: '2 records are missing details.' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Add missing details' })).toHaveCount(2);
   await expect.poll(() => api.executionBodies.at(-1)).toMatchObject({ message: 'Only show items with missing details', launchContext: { sourceExecutionId: 'execution-inventory-journey-1' } });
   // The earlier answer is one quiet stub, its question kept, and there is one live copy of the primary step.
   await expect(page.getByText('Earlier version of this answer · show')).toBeVisible();

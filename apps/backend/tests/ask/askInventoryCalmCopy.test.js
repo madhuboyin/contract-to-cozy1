@@ -19,10 +19,16 @@ test('missing-detail continuation offers only missing inline-correctable fields'
     serialNo: null, serialNumber: null, purchasedOn: null,
   }, true);
   assert.deepEqual(actions.map(({ id, label }) => ({ id, label })), [
+    { id: 'complete-missing-details', label: 'Add missing details' },
     { id: 'correct-brand', label: 'Add brand' },
     { id: 'correct-serialNo', label: 'Add serial number' },
     { id: 'correct-purchasedOn', label: 'Add purchase date' },
   ]);
+  assert.deepEqual(actions[0], {
+    id: 'complete-missing-details', label: 'Add missing details',
+    message: 'Complete the missing details for this inventory item.',
+    style: 'PRIMARY', interactionType: 'MUTATE_RECORD', operationId: 'INVENTORY_ITEM_CORRECT',
+  });
   assert.equal(inventoryMissingCorrectionActions({}, false), undefined);
 });
 

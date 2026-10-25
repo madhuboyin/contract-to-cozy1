@@ -51,7 +51,7 @@ test('rich inventory correction actions publish the same registered outcomes use
   const all = inventoryCorrectionItemActions(true);
   assert.equal(all.length, Object.keys(INVENTORY_CORRECTION_FIELDS).length);
   assert.ok(all.every((action) => isRegisteredOutcome(action.operationId, action.outcomeKey)));
-  assert.deepEqual(inventoryMissingCorrectionActions(item(), true).map((action) => action.outcomeKey), ['ADD_BRAND', 'ADD_MODEL', 'ADD_SERIAL_NUMBER', 'ADD_PURCHASE_DATE']);
+  assert.deepEqual(inventoryMissingCorrectionActions(item(), true).map((action) => action.outcomeKey), [undefined, 'ADD_BRAND', 'ADD_MODEL', 'ADD_SERIAL_NUMBER', 'ADD_PURCHASE_DATE']);
 });
 
 test('a long item name keeps the label within the contract limit while the message keeps the full name', () => {

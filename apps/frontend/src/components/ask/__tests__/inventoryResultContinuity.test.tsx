@@ -186,6 +186,23 @@ test('inline inventory detail exposes declared correction actions and dispatches
 
 });
 
+test('an incomplete inventory row exposes Add missing details and dispatches the item-scoped completion flow', () => {
+  const complete = { id: 'complete-missing-details', label: 'Add missing details', message: 'Complete the missing details for this inventory item.', style: 'PRIMARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'INVENTORY_ITEM_CORRECT' };
+  const incomplete: typeof block = { ...block, sections: [{ ...block.sections[0], items: [
+    { ...block.sections[0].items[0], description: 'Missing: Brand, Model', actions: [complete] },
+    ...block.sections[0].items.slice(1),
+  ] }] };
+  const onAction = jest.fn();
+  const response = { ...execution(), blocks: [incomplete] } as AskExecutionResponse;
+  function Harness() {
+    const controls = useResultView(response);
+    return <ResultViewContext.Provider value={controls}><InventoryResultList block={incomplete} propertyId="home" onAction={onAction} onFilter={() => {}} onPage={() => {}} onAccessLost={() => {}} link={(_, label) => label} /></ResultViewContext.Provider>;
+  }
+  render(<Harness />);
+  fireEvent.click(screen.getByRole('button', { name: 'Add missing details' }));
+  expect(onAction).toHaveBeenCalledWith('INVENTORY_ITEM', 'item-0', 'Complete the missing details for this inventory item.', 'INVENTORY_ITEM_CORRECT', 'MUTATE_RECORD');
+});
+
 test('inventory detail renders no correction controls when the item declares no actions (viewer role)', async () => {
   window.history.replaceState({}, '', '/dashboard/ask?propertyId=home&sessionId=session');
   jest.spyOn(api, 'getInventoryItem').mockResolvedValue({ success: true, data: { item: canonicalItem() } } as Awaited<ReturnType<typeof api.getInventoryItem>>);
