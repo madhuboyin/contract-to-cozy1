@@ -279,16 +279,26 @@ export function ConfirmationCard({ executionId, confirmation, onCompleted, autoF
     finally { setSaving(false); }
   };
   return (
-    <section ref={containerRef} data-conversational-review={calm ? '' : undefined} className={calm ? 'space-y-3' : 'rounded-2xl border border-violet-200 bg-violet-50/70 p-4'}>
+    <section ref={containerRef} data-conversational-review={calm ? '' : undefined} className={calm ? 'w-full max-w-[680px] space-y-3 rounded-2xl border border-slate-200/90 bg-white p-4 shadow-2xs sm:p-5' : 'rounded-2xl border border-violet-200 bg-violet-50/70 p-4'}>
       {!calm && <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-violet-800">Confirmation required</p>}
       {/* ACUI-005: the stage in plain words. The consent box and the confirm button below are the "Confirm" step. */}
-      {calm && <p className="text-xs font-medium text-slate-500" data-conversational-stage="review">Review · nothing is saved until you confirm</p>}
-      <h3 className={calm ? 'text-[17px] font-medium leading-snug text-slate-900' : 'mt-1 font-semibold text-slate-950'}>{confirmation.title}</h3><p className={calm ? 'text-sm leading-5 text-slate-600' : 'mt-1 text-sm leading-5 text-slate-700'}>{confirmation.description}</p>
-      <dl data-confirmation-fields="" className={cn('grid gap-x-5 sm:grid-cols-2', calm ? 'border-y border-slate-100' : 'mt-4 rounded-xl border border-violet-100 bg-white px-3')}>
-        {confirmation.fields.map((field) => <div key={field.label} className="min-w-0 border-b border-slate-100 py-2.5 text-sm last:border-b-0 sm:[&:nth-last-child(-n+2)]:border-b-0"><dt className="text-xs text-slate-500">{field.label}</dt><dd className="mt-0.5 whitespace-pre-wrap font-medium text-slate-800">{field.value}</dd></div>)}
+      {calm && (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-teal-200/80 bg-teal-50/80 px-2.5 py-0.5 text-xs font-semibold text-teal-900" data-conversational-stage="review">
+            <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-teal-600" />
+            Review · nothing is saved until you confirm
+          </span>
+        </div>
+      )}
+      <div>
+        <h3 className={calm ? 'text-base font-bold leading-snug tracking-tight text-slate-950 sm:text-lg' : 'mt-1 font-semibold text-slate-950'}>{confirmation.title}</h3>
+        <p className={calm ? 'mt-0.5 text-xs leading-5 text-slate-600 sm:text-sm' : 'mt-1 text-sm leading-5 text-slate-700'}>{confirmation.description}</p>
+      </div>
+      <dl data-confirmation-fields="" className={cn('grid gap-x-5 sm:grid-cols-2', calm ? 'rounded-xl border border-slate-200/80 bg-slate-50/60 px-3.5 py-1' : 'mt-4 rounded-xl border border-violet-100 bg-white px-3')}>
+        {confirmation.fields.map((field) => <div key={field.label} className="min-w-0 border-b border-slate-200/70 py-2.5 text-sm last:border-b-0 sm:[&:nth-last-child(-n+2)]:border-b-0"><dt className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{field.label}</dt><dd className="mt-0.5 whitespace-pre-wrap font-semibold text-slate-900">{field.value}</dd></div>)}
         {confirmation.editableFields.map((field) => (
-          <div key={field.key} className="min-w-0 border-b border-slate-100 py-2.5 text-sm last:border-b-0 sm:col-span-2">
-            <dt className="text-xs text-slate-500">{field.label}</dt>
+          <div key={field.key} className="min-w-0 border-b border-slate-200/70 py-2.5 text-sm last:border-b-0 sm:col-span-2">
+            <dt className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{field.label}</dt>
             <dd className="mt-0.5">
               {editingKey === field.key ? (
                 <div className="flex flex-wrap items-center gap-2">
@@ -298,7 +308,7 @@ export function ConfirmationCard({ executionId, confirmation, onCompleted, autoF
                 </div>
               ) : (
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="whitespace-pre-wrap font-medium text-slate-800">{editableFieldDisplay(field, field.value)}</span>
+                  <span className="whitespace-pre-wrap font-semibold text-slate-900">{editableFieldDisplay(field, field.value)}</span>
                   <button type="button" onClick={() => setEditingKey(field.key)} className="text-xs font-semibold text-teal-700 underline underline-offset-2">Edit</button>
                 </div>
               )}
@@ -307,9 +317,9 @@ export function ConfirmationCard({ executionId, confirmation, onCompleted, autoF
         ))}
       </dl>
       {editError && <p className="mt-2 text-sm text-red-700" role="alert">{editError}</p>}
-      <label className={calm ? 'flex cursor-pointer items-start gap-3 text-sm text-slate-600' : 'mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-violet-200 bg-white p-3 text-sm text-slate-700'}><input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} className="mt-0.5 h-4 w-4" /><span>{confirmation.consentText}</span></label>
+      <label className={calm ? 'flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200/90 bg-slate-50/70 px-3 py-2.5 text-sm text-slate-700 transition-colors hover:border-teal-300/80' : 'mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-violet-200 bg-white p-3 text-sm text-slate-700'}><input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} className="mt-0.5 h-4 w-4 rounded border-slate-300 text-teal-700" /><span>{confirmation.consentText}</span></label>
       {expired && <p className="mt-3 text-sm text-amber-700">This review expired. Ask again to use current settings.</p>}{error && <p className="mt-3 text-sm text-red-700" role="alert">{error}</p>}
-      <div className="mt-4 flex flex-wrap gap-2"><button type="button" disabled={!consent || saving || expired || Boolean(editingKey) || confirmation.editableFields.some((field) => !field.value)} onClick={() => void confirm()} className="min-h-11 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{saving ? 'Working…' : confirmation.confirmLabel}</button><button type="button" disabled={saving} onClick={() => void cancel()} className="min-h-11 rounded-xl px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-white">Cancel</button></div>
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3"><button type="button" disabled={saving} onClick={() => void cancel()} className="min-h-10 rounded-xl px-3.5 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100">Cancel</button><button type="button" disabled={!consent || saving || expired || Boolean(editingKey) || confirmation.editableFields.some((field) => !field.value)} onClick={() => void confirm()} className="min-h-10 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50">{saving ? 'Working…' : confirmation.confirmLabel}</button></div>
     </section>
   );
 }
@@ -526,6 +536,7 @@ export function InlineCaptureCard({
   const compactInventoryCompletion = schema.type === 'GROUP' && request.captureKey === 'INVENTORY_ITEM_COMPLETE_DETAILS';
   const compactMaterialSpec = schema.type === 'GROUP' && request.captureKey === 'MATERIAL_SPEC_INPUTS';
   const compactPlantAdvisor = schema.type === 'GROUP' && request.captureKey === 'ROOM_PLANT_RECOMMENDATION_INPUTS';
+  const compactServicePriceCheck = schema.type === 'GROUP' && request.captureKey === 'SERVICE_PRICE_CHECK_INPUTS';
   const compactOwnershipScenario = schema.type === 'GROUP' && request.captureKey === 'OWNERSHIP_COST_SCENARIO_INPUTS';
   const sellHoldRentAssumptions = schema.type === 'GROUP' && request.captureKey === 'sell-hold-rent-assumptions';
   const financingProfile = schema.type === 'GROUP' && request.captureKey === 'FINANCING_PROFILE_UPDATE';
@@ -597,6 +608,19 @@ export function InlineCaptureCard({
     const field = assumptionFieldByKey.get(key);
     if (!field) return null;
     return <CaptureFieldControl key={key} field={field} value={values[field.key]} disabled={saving} allowNotSure={request.allowNotSure} compact propertyId={propertyId} onChange={(value) => setValues((current) => ({ ...current, [field.key]: value }))} />;
+  };
+  const serviceCategoryField = assumptionFieldByKey.get('serviceCategory');
+  const selectedServiceLabel = serviceCategoryField?.inputSchema.type === 'SINGLE_SELECT' && typeof values.serviceCategory === 'string'
+    ? serviceCategoryField.inputSchema.options.find((opt) => opt.value === values.serviceCategory)?.label ?? null
+    : null;
+  const formattedQuoteAmount = typeof values.quoteAmount === 'number' && Number.isFinite(values.quoteAmount) && values.quoteAmount > 0
+    ? `$${values.quoteAmount.toLocaleString('en-US', { maximumFractionDigits: 2 })}`
+    : null;
+  const renderPriceCheckField = (key: string, defaultHelpText?: string) => {
+    const field = assumptionFieldByKey.get(key);
+    if (!field) return null;
+    const normalizedField = defaultHelpText && !field.helpText ? { ...field, helpText: defaultHelpText } : field;
+    return <CaptureFieldControl key={key} field={normalizedField} value={values[field.key]} disabled={saving} allowNotSure={request.allowNotSure} compact propertyId={propertyId} onChange={(value) => setValues((current) => ({ ...current, [field.key]: value }))} />;
   };
 
   // `skipping` answers the question with the reserved skip marker: the server saves nothing and moves to the next question.
@@ -706,13 +730,38 @@ export function InlineCaptureCard({
   }
 
   return (
-    <form ref={containerRef as unknown as Ref<HTMLFormElement>} onSubmit={save} className={cn('rounded-2xl border', decisionInputWorkflow ? cn('mx-auto mb-24 w-full border-slate-200 bg-white p-4 shadow-sm sm:p-5', sellHoldRentAssumptions ? 'max-w-[760px]' : 'max-w-[900px]') : compactContinuityPlan ? 'mx-auto w-full max-w-[820px] border-slate-200 bg-white p-4 shadow-sm sm:p-5' : compactPlantAdvisor ? 'mx-auto w-full max-w-[760px] border-slate-200 bg-white p-4 shadow-sm sm:p-5' : compactWorkItemReschedule ? 'mx-auto w-full max-w-[680px] border-sky-200 bg-sky-50/80 p-4 sm:p-5' : compactEventAdd ? 'border-slate-200 bg-white p-4 shadow-sm sm:p-5' : compactProjectCreate ? 'p-3 sm:p-4' : 'p-4', !decisionInputWorkflow && !compactContinuityPlan && !compactPlantAdvisor && !compactWorkItemReschedule && !compactEventAdd && policy.border)} aria-busy={saving || cancelling} aria-label={request.title} data-home-continuity-capture={compactContinuityPlan ? '' : undefined} data-work-item-reschedule={compactWorkItemReschedule ? '' : undefined} data-decision-input-workflow={decisionInputWorkflow ? request.captureKey : undefined}>
+    <form ref={containerRef as unknown as Ref<HTMLFormElement>} onSubmit={save} className={cn('rounded-2xl border', decisionInputWorkflow ? cn('mx-auto mb-24 w-full border-slate-200 bg-white p-4 shadow-sm sm:p-5', sellHoldRentAssumptions ? 'max-w-[760px]' : 'max-w-[900px]') : compactContinuityPlan ? 'mx-auto w-full max-w-[820px] border-slate-200 bg-white p-4 shadow-sm sm:p-5' : compactPlantAdvisor ? 'mx-auto w-full max-w-[760px] border-slate-200 bg-white p-4 shadow-sm sm:p-5' : compactServicePriceCheck ? 'w-full max-w-[680px] border-slate-200/90 bg-white p-4 shadow-2xs sm:p-5' : compactWorkItemReschedule ? 'mx-auto w-full max-w-[680px] border-sky-200 bg-sky-50/80 p-4 sm:p-5' : compactEventAdd ? 'border-slate-200 bg-white p-4 shadow-sm sm:p-5' : compactProjectCreate ? 'p-3 sm:p-4' : 'p-4', !decisionInputWorkflow && !compactContinuityPlan && !compactPlantAdvisor && !compactServicePriceCheck && !compactWorkItemReschedule && !compactEventAdd && policy.border)} aria-busy={saving || cancelling} aria-label={request.title} data-home-continuity-capture={compactContinuityPlan ? '' : undefined} data-work-item-reschedule={compactWorkItemReschedule ? '' : undefined} data-service-price-check-capture={compactServicePriceCheck ? '' : undefined} data-decision-input-workflow={decisionInputWorkflow ? request.captureKey : undefined}>
       {compactWorkItemReschedule ? (
         <div>
           <h3 className="text-lg font-semibold tracking-tight text-slate-950">{request.title}</h3>
           <p className="mt-1 text-sm font-medium text-slate-700">{request.question}</p>
           {request.helpText && <p className="mt-1 text-xs text-slate-500">{request.helpText}</p>}
           {request.destinationLabel && <p className="mt-2 text-xs font-medium text-sky-900">{request.destinationLabel}.</p>}
+        </div>
+      ) : compactServicePriceCheck ? (
+        <div className="border-b border-slate-100 pb-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-teal-900 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-teal-100">
+              Service Price Radar
+            </span>
+            {selectedServiceLabel && formattedQuoteAmount ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold tabular-nums text-emerald-900">
+                <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
+                {selectedServiceLabel} · {formattedQuoteAmount}
+              </span>
+            ) : selectedServiceLabel || formattedQuoteAmount ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-teal-200 bg-teal-50/80 px-2.5 py-0.5 text-xs font-semibold tabular-nums text-teal-900">
+                {selectedServiceLabel ?? formattedQuoteAmount}
+              </span>
+            ) : (
+              <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-600">
+                Step 1 of 2 · Quote details
+              </span>
+            )}
+          </div>
+          <h3 className="mt-1.5 text-base font-bold tracking-tight text-slate-950 sm:text-lg">{request.title}</h3>
+          <p className="mt-0.5 text-xs font-medium text-slate-700 sm:text-sm">{request.question}</p>
+          {request.helpText && <p className="mt-0.5 text-xs leading-5 text-slate-500">{request.helpText}</p>}
         </div>
       ) : compactEventAdd || compactProjectCreate ? (
         <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
@@ -748,7 +797,7 @@ export function InlineCaptureCard({
           {request.destinationLabel && <p className="mt-2 text-xs font-medium text-sky-900">{request.classification === 'WORKFLOW_INPUT' ? `${request.destinationLabel}.` : `${request.destinationLabel} after you continue.`}</p>}
         </>
       )}
-      <div className={sellHoldRentAssumptions || financingProfile ? 'mt-4' : compactEventAdd || compactProjectCreate ? 'mt-3 grid gap-x-3 gap-y-2.5 md:grid-cols-6' : compactInventoryCompletion ? 'mt-4 grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3' : compactWorkItemReschedule ? 'mt-4 max-w-md' : compactWorkflow ? 'mt-4 grid gap-3 md:grid-cols-2' : 'mt-4 space-y-4'} data-compact-capture={sellHoldRentAssumptions ? 'sell-hold-rent-assumptions' : financingProfile ? 'financing-profile' : compactContinuityPlan ? 'home-continuity-plan' : compactMaintenanceTask ? 'maintenance-task' : compactInventoryCreate ? 'inventory-item-create' : compactInventoryCompletion ? 'inventory-item-completion' : compactMaterialSpec ? 'material-spec' : compactPlantAdvisor ? 'plant-advisor' : compactOwnershipScenario ? 'ownership-cost-scenario' : compactEventAdd ? 'timeline-event' : compactProjectCreate ? 'project-create' : compactProjectCommand ? 'project-command' : compactWorkItemReschedule ? 'work-item-reschedule' : undefined}>
+      <div className={sellHoldRentAssumptions || financingProfile ? 'mt-4' : compactEventAdd || compactProjectCreate ? 'mt-3 grid gap-x-3 gap-y-2.5 md:grid-cols-6' : compactInventoryCompletion ? 'mt-4 grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3' : compactWorkItemReschedule ? 'mt-4 max-w-md' : compactServicePriceCheck ? 'mt-3' : compactWorkflow ? 'mt-4 grid gap-3 md:grid-cols-2' : 'mt-4 space-y-4'} data-compact-capture={sellHoldRentAssumptions ? 'sell-hold-rent-assumptions' : financingProfile ? 'financing-profile' : compactContinuityPlan ? 'home-continuity-plan' : compactMaintenanceTask ? 'maintenance-task' : compactInventoryCreate ? 'inventory-item-create' : compactInventoryCompletion ? 'inventory-item-completion' : compactMaterialSpec ? 'material-spec' : compactPlantAdvisor ? 'plant-advisor' : compactServicePriceCheck ? 'service-price-check' : compactOwnershipScenario ? 'ownership-cost-scenario' : compactEventAdd ? 'timeline-event' : compactProjectCreate ? 'project-create' : compactProjectCommand ? 'project-command' : compactWorkItemReschedule ? 'work-item-reschedule' : undefined}>
         {activeGroup && <div className={compactProjectCreate || compactEventAdd ? 'md:col-span-6' : 'md:col-span-2'}>
           <div className="mb-3 flex items-start justify-between gap-3">
             <div><p className="text-sm font-semibold text-slate-950">{activeGroup.title}</p>{activeGroup.description && <p className="mt-0.5 text-xs text-slate-500">{activeGroup.description}</p>}</div>
@@ -756,7 +805,14 @@ export function InlineCaptureCard({
           </div>
           <ol className={cn('flex', compactContinuityPlan ? 'gap-3 border-b border-slate-100 pb-3' : 'gap-1')} aria-label="Completion form progress">{formGroups.map((group, index) => <li key={group.id} aria-current={index === activeGroupIndex ? 'step' : undefined} className={cn(compactContinuityPlan ? 'flex min-w-0 flex-1 items-center gap-2 text-xs font-semibold' : 'h-1.5 flex-1 rounded-full', compactContinuityPlan ? index === activeGroupIndex ? 'text-teal-800' : index < activeGroupIndex ? 'text-slate-700' : 'text-slate-400' : index <= activeGroupIndex ? 'bg-teal-700' : 'bg-slate-200')}><span className={compactContinuityPlan ? cn('grid h-5 w-5 shrink-0 place-items-center rounded-full text-[10px]', index <= activeGroupIndex ? 'bg-teal-700 text-white' : 'bg-slate-200 text-slate-500') : 'sr-only'}>{compactContinuityPlan ? index + 1 : group.title}</span>{compactContinuityPlan && <span className="truncate">{group.title}</span>}</li>)}</ol>
         </div>}
-        {compactPlantAdvisor ? <div className="space-y-5 md:col-span-2" data-plant-advisor-redesign="compact">
+        {compactServicePriceCheck ? <div className="space-y-3" data-service-price-check-redesign="compact">
+          <div className="rounded-xl border border-slate-200/80 bg-slate-50/60 p-3">{renderPriceCheckField('serviceCategory')}</div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="rounded-xl border border-slate-200/80 bg-slate-50/40 p-3">{renderPriceCheckField('quoteAmount')}</div>
+            <div className="rounded-xl border border-slate-200/80 bg-slate-50/40 p-3">{renderPriceCheckField('quoteVendorName', 'Optional: contractor or company name.')}</div>
+          </div>
+          <div className="rounded-xl border border-slate-200/80 bg-slate-50/40 p-3">{renderPriceCheckField('serviceLabelRaw')}</div>
+        </div> : compactPlantAdvisor ? <div className="space-y-5 md:col-span-2" data-plant-advisor-redesign="compact">
           <div className="grid gap-4 sm:grid-cols-2" aria-label="Room and growing conditions">
             <div>{renderPlantField('roomId')}</div>
             <div>{renderPlantField('lightLevel')}</div>
@@ -831,16 +887,19 @@ export function InlineCaptureCard({
           <span>{request.confirmationText ?? 'I confirm this information can be saved to the home record.'}</span>
         </label>
       )}
-      <div className={cn('flex flex-wrap items-center gap-2', (decisionInputWorkflow || compactContinuityPlan || compactPlantAdvisor || compactEventAdd || workItemForm) && 'mt-4 justify-between border-t border-slate-100 pt-4', !decisionInputWorkflow && !compactContinuityPlan && !compactPlantAdvisor && !compactEventAdd && !workItemForm && (compactProjectCreate ? 'mt-3' : 'mt-4'))}>
-        {(decisionInputWorkflow || compactContinuityPlan || compactPlantAdvisor || compactEventAdd || workItemForm) && <button type="button" disabled={saving || cancelling} onClick={() => void cancelContinuityWorkflow()} className="min-h-11 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-50">{cancelling ? 'Cancelling…' : decisionInputWorkflow ? 'Back to comparison' : 'Cancel'}</button>}
+      <div className={cn('flex flex-wrap items-center gap-2', (decisionInputWorkflow || compactContinuityPlan || compactPlantAdvisor || compactServicePriceCheck || compactEventAdd || workItemForm) && 'mt-4 justify-between border-t border-slate-100 pt-3', !decisionInputWorkflow && !compactContinuityPlan && !compactPlantAdvisor && !compactServicePriceCheck && !compactEventAdd && !workItemForm && (compactProjectCreate ? 'mt-3' : 'mt-4'))}>
+        <div className="flex flex-wrap items-center gap-2">
+          {(decisionInputWorkflow || compactContinuityPlan || compactPlantAdvisor || compactServicePriceCheck || compactEventAdd || workItemForm) && <button type="button" disabled={saving || cancelling} onClick={() => void cancelContinuityWorkflow()} className="min-h-10 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-50">{cancelling ? 'Cancelling…' : decisionInputWorkflow ? 'Back to comparison' : 'Cancel'}</button>}
+          {compactServicePriceCheck && request.destinationLabel && <span className="text-xs text-slate-500">{request.destinationLabel}.</span>}
+        </div>
         <div className="flex flex-wrap gap-2">
-        {activeGroupIndex > 0 && <button type="button" disabled={saving} onClick={() => setActiveGroupIndex((index) => Math.max(0, index - 1))} className="min-h-11 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50">Previous</button>}
+        {activeGroupIndex > 0 && <button type="button" disabled={saving} onClick={() => setActiveGroupIndex((index) => Math.max(0, index - 1))} className="min-h-10 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50">Previous</button>}
         {activeGroup && activeGroupIndex < formGroups.length - 1
-          ? <button type="button" disabled={saving || activeGroupMissingRequired} onClick={() => setActiveGroupIndex((index) => Math.min(formGroups.length - 1, index + 1))} className="min-h-11 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Next: {formGroups[activeGroupIndex + 1].title}</button>
-          : <button type="submit" disabled={saving || missingRequired || ((request.sensitivity === 'FINANCIAL' || request.sensitivity === 'SECURITY') && !sensitiveDataConfirmed)} className="min-h-11 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50">{saving ? 'Saving…' : compactWorkItemReschedule ? 'Review change' : request.classification === 'WORKFLOW_INPUT' ? 'Continue to review' : 'Save and update answer'}</button>}
-        {request.skippable && <button type="button" disabled={saving} onClick={(event) => void save(event as unknown as FormEvent, true)} className="min-h-11 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">Skip for now</button>}
-        {request.classification === 'ENHANCEMENT_ACCURACY' && <button type="button" disabled={saving} onClick={() => { window.localStorage.removeItem(captureDraftStorageKey(executionId, request.requirementId)); setDismissed(true); void api.recordAskCaptureEvent(executionId, { requirementId: request.requirementId, captureKey: request.captureKey, event: 'DISMISSED' }).catch(() => undefined); }} className="min-h-11 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-white">Use general estimate</button>}
-        {request.fallbackHref && <AskContextLink href={request.fallbackHref} onClick={() => void api.recordAskCaptureEvent(executionId, { requirementId: request.requirementId, captureKey: request.captureKey, event: 'FULL_FORM_OPENED' }).catch(() => undefined)} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700">Open full form <ExternalLink className="h-4 w-4" /></AskContextLink>}
+          ? <button type="button" disabled={saving || activeGroupMissingRequired} onClick={() => setActiveGroupIndex((index) => Math.min(formGroups.length - 1, index + 1))} className="min-h-10 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Next: {formGroups[activeGroupIndex + 1].title}</button>
+          : <button type="submit" disabled={saving || missingRequired || ((request.sensitivity === 'FINANCIAL' || request.sensitivity === 'SECURITY') && !sensitiveDataConfirmed)} className="min-h-10 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50">{saving ? 'Saving…' : compactWorkItemReschedule ? 'Review change' : request.classification === 'WORKFLOW_INPUT' ? 'Continue to review' : 'Save and update answer'}</button>}
+        {request.skippable && <button type="button" disabled={saving} onClick={(event) => void save(event as unknown as FormEvent, true)} className="min-h-10 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">Skip for now</button>}
+        {request.classification === 'ENHANCEMENT_ACCURACY' && <button type="button" disabled={saving} onClick={() => { window.localStorage.removeItem(captureDraftStorageKey(executionId, request.requirementId)); setDismissed(true); void api.recordAskCaptureEvent(executionId, { requirementId: request.requirementId, captureKey: request.captureKey, event: 'DISMISSED' }).catch(() => undefined); }} className="min-h-10 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-white">Use general estimate</button>}
+        {request.fallbackHref && <AskContextLink href={request.fallbackHref} onClick={() => void api.recordAskCaptureEvent(executionId, { requirementId: request.requirementId, captureKey: request.captureKey, event: 'FULL_FORM_OPENED' }).catch(() => undefined)} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700">Open full form <ExternalLink className="h-4 w-4" /></AskContextLink>}
         {compactContinuityPlan && activeGroup && activeGroupIndex < formGroups.length - 1 && activeGroupMissingRequired && <p className="basis-full text-right text-xs font-medium text-amber-700">Complete the required fields to continue.</p>}
         {compactEventAdd && missingRequired && <p className="basis-full text-right text-xs font-medium text-amber-700">Add a title, choose a type, and enter when it happened.</p>}
         </div>

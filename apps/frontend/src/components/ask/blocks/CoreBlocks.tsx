@@ -448,6 +448,59 @@ function OwnershipCostRefreshCard({ block }: { block: Extract<AskPresentationBlo
   );
 }
 
+function ServicePriceRadarSummaryCard({ block }: { block: Extract<AskPresentationBlock, { type: 'SUMMARY' }> }) {
+  const isCaution = block.tone === 'CAUTION';
+  const isPositive = block.tone === 'POSITIVE';
+  return (
+    <section
+      data-service-price-radar-summary={block.id}
+      className={cn(
+        'relative w-full rounded-2xl border px-4 py-3 shadow-2xs sm:px-5',
+        isCaution
+          ? 'border-amber-200/90 bg-gradient-to-r from-amber-50/85 via-white to-teal-50/30'
+          : isPositive
+            ? 'border-emerald-200/90 bg-gradient-to-r from-emerald-50/75 via-white to-teal-50/40'
+            : 'border-slate-200/90 bg-gradient-to-r from-slate-50/80 via-white to-teal-50/30',
+      )}
+    >
+      <div className="flex flex-col justify-between gap-2.5 sm:flex-row sm:items-start">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-teal-900 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-teal-100">
+              <DollarSign aria-hidden="true" className="h-3 w-3 text-teal-300" />
+              Service Price Radar
+            </span>
+            <span
+              aria-hidden="true"
+              className={cn(
+                'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider',
+                isCaution
+                  ? 'border-amber-300/80 bg-amber-100/80 text-amber-900'
+                  : isPositive
+                    ? 'border-emerald-300/80 bg-emerald-100/80 text-emerald-900'
+                    : 'border-slate-200 bg-white text-slate-600',
+              )}
+            >
+              <span className={cn('h-1.5 w-1.5 rounded-full', isCaution ? 'bg-amber-600' : isPositive ? 'bg-emerald-600' : 'bg-slate-400')} />
+              {isCaution ? 'Above Expected Range' : isPositive ? 'Within Expected Range' : 'Quote Benchmark'}
+            </span>
+          </div>
+          <h3 className="mt-1 text-base font-bold tracking-tight text-slate-950 sm:text-lg">{block.title}</h3>
+          <p className="mt-0.5 whitespace-pre-wrap text-xs leading-5 text-slate-700 sm:text-sm">{block.body}</p>
+          {block.chips && block.chips.length > 0 && <AnswerChips chips={block.chips} />}
+        </div>
+        {block.actions.length > 0 && (
+          <div className="flex shrink-0 flex-wrap items-center gap-2 sm:mt-0.5">
+            {block.actions.map((action) => (
+              <ActionLink key={action.id} action={action} />
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
 export const SummaryBlock: AskBlockRenderer<'SUMMARY'> = ({ block }) => {
   const calm = useCalmChrome();
   // The seasonal plan's intro and next steps are their own cards in both shells (see SeasonalAnswerCards).
@@ -460,6 +513,7 @@ export const SummaryBlock: AskBlockRenderer<'SUMMARY'> = ({ block }) => {
   if (block.id === 'break-even-next-action') return <BreakEvenNextActionCard block={block} />;
   if (OWNERSHIP_COST_SUMMARY_IDS.has(block.id)) return <OwnershipCostsSummaryCard block={block} />;
   if (block.id === 'ownership-cost-refresh') return <OwnershipCostRefreshCard block={block} />;
+  if (block.id === 'service-price-radar-summary') return <ServicePriceRadarSummaryCard block={block} />;
   if (calm) return <CalmSummary block={block} />;
   return (
     <section className={cn(

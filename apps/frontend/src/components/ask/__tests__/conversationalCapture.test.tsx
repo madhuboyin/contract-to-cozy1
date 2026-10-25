@@ -140,6 +140,85 @@ describe('Plant Advisor compact capture', () => {
   });
 });
 
+describe('Service Price Radar contractor quote compact capture', () => {
+  it('renders a compact white card with full-width service selector, $ currency prefix, live summary pill, and Cancel button', () => {
+    const priceCheckRequest = {
+      requirementId: 'service-price-check-inputs',
+      captureKey: 'SERVICE_PRICE_CHECK_INPUTS',
+      classification: 'WORKFLOW_INPUT',
+      state: 'UNKNOWN',
+      title: 'Check a contractor quote',
+      question: 'Which service is the quote for, and what is the amount?',
+      helpText: 'The check compares the amount with typical local prices for the service. You will review it before it is checked.',
+      allowNotSure: false,
+      sensitivity: 'STANDARD',
+      expectedContextVersion: 'v1',
+      confirmationText: null,
+      destinationLabel: 'Used to prepare this check; nothing is checked until you confirm',
+      inputSchema: {
+        type: 'GROUP',
+        fields: [
+          {
+            key: 'serviceCategory',
+            label: 'Service',
+            required: true,
+            inputSchema: {
+              type: 'SINGLE_SELECT',
+              options: [
+                { label: 'HVAC', value: 'HVAC' },
+                { label: 'Plumbing', value: 'PLUMBING' },
+                { label: 'Water Heater', value: 'WATER_HEATER' },
+              ],
+            },
+          },
+          {
+            key: 'quoteAmount',
+            label: 'Quote amount',
+            helpText: 'In dollars, up to $250,000.',
+            required: true,
+            inputSchema: { type: 'DECIMAL', min: 1, max: 250000, unit: 'USD' },
+          },
+          {
+            key: 'quoteVendorName',
+            label: 'Contractor',
+            required: false,
+            inputSchema: { type: 'SHORT_TEXT', maxLength: 160 },
+          },
+          {
+            key: 'serviceLabelRaw',
+            label: 'What the quote covers',
+            helpText: 'Optional: for example, replace the water heater.',
+            required: false,
+            inputSchema: { type: 'SHORT_TEXT', maxLength: 160 },
+          },
+        ],
+      },
+      currentAnswer: {},
+    } as unknown as AskCaptureRequest;
+
+    const { container } = render(<InlineCaptureCard executionId="price-check-capture" request={priceCheckRequest} onCompleted={jest.fn()} />);
+
+    const form = container.querySelector('[data-service-price-check-capture]');
+    expect(form).toHaveClass('max-w-[680px]', 'bg-white');
+    expect(container.querySelector('[data-service-price-check-redesign="compact"]')).toBeInTheDocument();
+    expect(screen.getByText('Service Price Radar')).toBeInTheDocument();
+    expect(screen.getByText('Step 1 of 2 · Quote details')).toBeInTheDocument();
+    expect(screen.queryByText('Complete this workflow')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Continue to review' })).toBeDisabled();
+
+    // USD DECIMAL field renders with a '$' currency prefix
+    const amountInput = screen.getByLabelText('Quote amount');
+    expect(amountInput.parentElement).toHaveTextContent('$');
+
+    // Selecting a service and entering an amount updates the live header pill and enables Continue to review
+    fireEvent.click(screen.getByRole('button', { name: 'HVAC' }));
+    fireEvent.change(amountInput, { target: { value: '7000' } });
+    expect(screen.getByText('HVAC · $7,000')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Continue to review' })).toBeEnabled();
+  });
+});
+
 describe('grouped workflow capture', () => {
   beforeEach(() => window.localStorage.clear());
 

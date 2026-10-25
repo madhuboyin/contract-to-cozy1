@@ -362,11 +362,13 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
   }));
   const isDriversBlock = block.id === 'sell-hold-rent-drivers' || block.id === 'break-even-drivers';
   const isOwnershipCostList = block.id.startsWith('ownership-cost-');
-  const isFramedDecisionList = isDriversBlock || isOwnershipCostList;
+  const isServicePriceRadarList = block.id === 'service-price-radar-checks';
+  const isFramedDecisionList = isDriversBlock || isOwnershipCostList || isServicePriceRadarList;
   const ownershipCostBadge = OWNERSHIP_COST_BADGE_BY_ID[block.id];
   return (
     <section
       data-ownership-cost-list={isOwnershipCostList ? block.id : undefined}
+      data-service-price-radar-checks={isServicePriceRadarList ? '' : undefined}
       className={cn(
         isFramedDecisionList ? 'w-full rounded-2xl border border-slate-200/90 bg-white shadow-2xs' : 'overflow-hidden rounded-2xl border border-slate-200 bg-white',
         block.id === 'home-work-items' && 'w-full max-w-[960px]',
@@ -384,6 +386,7 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
         <div className="flex items-baseline gap-2">
           <h3 className={cn('text-slate-950', isFramedDecisionList ? 'text-sm font-bold tracking-tight sm:text-base' : 'font-semibold')}>{block.title}</h3>
           {isDriversBlock && <span className="text-[10px] font-bold uppercase tracking-wider text-teal-700">Key Drivers</span>}
+          {isServicePriceRadarList && <span className="text-[10px] font-bold uppercase tracking-wider text-teal-700">Benchmark Comparison</span>}
           {ownershipCostBadge && (
             <span className={cn('text-[10px] font-bold uppercase tracking-wider', block.id === 'ownership-cost-missing' ? 'text-amber-700' : 'text-teal-700')}>
               {ownershipCostBadge}
@@ -434,7 +437,7 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
             {section.items.length === 0 ? <AskCollectionState kind="EMPTY" title={section.title} action={block.sections.length === 1 && block.actions[0] ? <ActionLink action={block.actions[0]} /> : undefined} /> : (
               <AskCollection id={listId} className={cn(
                 block.id === 'project-detail-records' && 'grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3',
-                block.id !== 'project-detail-records' && (dense ? 'divide-y divide-slate-100' : presentation === 'COMPACT_LIST' ? 'space-y-1' : isOwnershipCostList ? 'space-y-2' : 'space-y-3'),
+                block.id !== 'project-detail-records' && (dense ? 'divide-y divide-slate-100' : presentation === 'COMPACT_LIST' ? 'space-y-1' : isOwnershipCostList || isServicePriceRadarList ? 'space-y-2' : 'space-y-3'),
               )} data-project-record-grid={block.id === 'project-detail-records' ? '' : undefined}>
                 {visibleItems.map((sourceItem) => {
                   const item = block.id === 'maintenance-groups' ? formatLegacyAskMaintenanceItem(sourceItem) : sourceItem;
@@ -456,7 +459,9 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
                   const sellHoldRentDriversList = block.id === 'sell-hold-rent-drivers' || block.id === 'break-even-drivers';
                   const impactMatch = visibleStatus ? /^(high|medium|low)\s+impact$/i.exec(visibleStatus.trim()) : null;
                   const impactLevel = impactMatch ? impactMatch[1].toUpperCase() as 'HIGH' | 'MEDIUM' | 'LOW' : null;
-                  return <li key={item.id} data-ask-task-id={item.id} tabIndex={-1} className={cn('border outline-offset-2', dense ? 'border-b-0 border-r-0 border-t-0 px-2 py-2' : 'rounded-xl', dense && (overdueWorkItem ? 'border-l-4 border-l-rose-400 bg-rose-50/70' : sellHoldRentDriversList && impactLevel === 'HIGH' ? 'border-l-4 border-l-amber-400 bg-amber-50/30 py-2.5' : sellHoldRentDriversList ? 'border-l-4 border-l-teal-500/60 py-2.5' : 'border-l-0'), !dense && (presentation === 'COMPACT_LIST' ? 'px-3 py-2' : isOwnershipCostList ? 'px-3 py-2' : 'p-3'), selected ? 'border-teal-600 bg-teal-50' : !dense && (presentation === 'COMPACT_LIST' ? 'border-transparent bg-white' : isOwnershipCostList ? 'border-slate-200/80 bg-slate-50/55' : 'border-transparent bg-slate-50'))}>
+                  const quoteMeta = isServicePriceRadarList ? item.meta.find((m) => /^Quote\s+\$/i.test(m)) : null;
+                  const expectedMeta = isServicePriceRadarList ? item.meta.find((m) => /^Expected\s+/i.test(m)) : null;
+                  return <li key={item.id} data-ask-task-id={item.id} tabIndex={-1} className={cn('border outline-offset-2', dense ? 'border-b-0 border-r-0 border-t-0 px-2 py-2' : 'rounded-xl', dense && (overdueWorkItem ? 'border-l-4 border-l-rose-400 bg-rose-50/70' : sellHoldRentDriversList && impactLevel === 'HIGH' ? 'border-l-4 border-l-amber-400 bg-amber-50/30 py-2.5' : sellHoldRentDriversList ? 'border-l-4 border-l-teal-500/60 py-2.5' : 'border-l-0'), !dense && (presentation === 'COMPACT_LIST' ? 'px-3 py-2' : isOwnershipCostList || isServicePriceRadarList ? 'px-3 py-2.5' : 'p-3'), selected ? 'border-teal-600 bg-teal-50' : !dense && (presentation === 'COMPACT_LIST' ? 'border-transparent bg-white' : isOwnershipCostList || isServicePriceRadarList ? 'border-slate-200/80 bg-slate-50/55' : 'border-transparent bg-slate-50'))}>
                     {dense ? <div className={cn('flex flex-col gap-1.5', !homeWorkItemList && 'sm:flex-row sm:items-center sm:justify-between sm:gap-3')} data-dense-row-content="">
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-baseline gap-x-2" data-dense-primary-line="">
@@ -486,10 +491,24 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
                         </div>}
                       </div>}
                     </div> : <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        {item.href ? <AskContextLink className={cn('font-medium text-slate-950 hover:text-teal-700', isOwnershipCostList && 'text-xs font-bold sm:text-sm')} href={item.href}>{item.title}</AskContextLink> : <p className={cn('font-medium text-slate-950', isOwnershipCostList && 'text-xs font-bold sm:text-sm')}>{item.title}</p>}
-                        {item.description && <p className={cn('text-slate-600', isOwnershipCostList ? 'mt-0.5 text-xs leading-5' : 'mt-1 text-sm leading-5')}>{item.description}</p>}
-                        {item.meta.length > 0 && <p className={cn('text-xs text-slate-500', isOwnershipCostList ? 'mt-1' : 'mt-2')}>{item.meta.join(' · ')}</p>}
+                      <div className="min-w-0 flex-1">
+                        {item.href ? <AskContextLink className={cn('font-medium text-slate-950 hover:text-teal-700', (isOwnershipCostList || isServicePriceRadarList) && 'text-xs font-bold sm:text-sm')} href={item.href}>{item.title}</AskContextLink> : <p className={cn('font-medium text-slate-950', (isOwnershipCostList || isServicePriceRadarList) && 'text-xs font-bold sm:text-sm')}>{item.title}</p>}
+                        {item.description && <p className={cn('text-slate-600', isOwnershipCostList || isServicePriceRadarList ? 'mt-0.5 text-xs leading-5' : 'mt-1 text-sm leading-5')}>{item.description}</p>}
+                        {isServicePriceRadarList && (quoteMeta || expectedMeta) && (
+                          <div aria-hidden="true" className="mt-1.5 flex flex-wrap items-center gap-2">
+                            {quoteMeta && (
+                              <span className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-0.5 text-xs font-bold tabular-nums text-slate-900">
+                                {quoteMeta}
+                              </span>
+                            )}
+                            {expectedMeta && (
+                              <span className="inline-flex items-center gap-1 rounded-lg border border-teal-200/80 bg-teal-50/70 px-2 py-0.5 text-xs font-semibold tabular-nums text-teal-900">
+                                {expectedMeta}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                        {item.meta.length > 0 && <p className={cn('text-xs text-slate-500', isOwnershipCostList || isServicePriceRadarList ? 'mt-1' : 'mt-2')}>{item.meta.join(' · ')}</p>}
                       </div>
                       {item.status && <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide', item.tone === 'CAUTION' ? 'border border-amber-200 bg-amber-50 text-amber-800' : item.tone === 'POSITIVE' ? 'border border-emerald-200 bg-emerald-50 text-emerald-800' : 'border border-slate-200 bg-white text-slate-600')}>{item.status.replace(/_/g, ' ')}</span>}
                     </div>}
