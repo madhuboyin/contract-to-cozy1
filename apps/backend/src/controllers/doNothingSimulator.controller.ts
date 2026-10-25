@@ -1,3 +1,4 @@
+import { reportToExactStep } from '../services/guidanceEngine/exactStepReporting';
 import { Response } from 'express';
 import { CustomRequest } from '../types';
 import {
@@ -172,14 +173,12 @@ export async function runDoNothingSimulation(req: CustomRequest, res: Response) 
     }
 
     const payload = req.body as RunDoNothingSimulationInput & {
-      guidanceJourneyId?: string;
-      guidanceStepKey?: string;
+      guidanceStepId?: string;
       guidanceSignalIntentFamily?: string;
     };
 
     const {
-      guidanceJourneyId,
-      guidanceStepKey,
+      guidanceStepId,
       guidanceSignalIntentFamily,
       ...runInput
     } = payload;
@@ -192,12 +191,13 @@ export async function runDoNothingSimulation(req: CustomRequest, res: Response) 
       result.run.propertyContextVersion,
     );
 
-    await reportDoNothingRun(
-      propertyId,
-      result.run,
-      { journeyId: guidanceJourneyId ?? null, stepKey: guidanceStepKey ?? null, signalIntentFamily: guidanceSignalIntentFamily ?? null },
-      userId,
-    );
+    // Launched from a journey step: report to that exact, revalidated step only (never the signal family). Launched elsewhere: the family path, as before.
+    if (guidanceStepId) {
+      await reportToExactStep(propertyId, guidanceStepId, { toolKey: 'do-nothing-simulator', stepKeys: ['compare_action_options', 'model_cost_of_delay'] },
+        (binding) => reportDoNothingRun(propertyId, result.run, { journeyId: binding.journeyId, stepKey: binding.stepKey, signalIntentFamily: binding.signalIntentFamily }, userId));
+    } else {
+      await reportDoNothingRun(propertyId, result.run, { journeyId: null, stepKey: null, signalIntentFamily: guidanceSignalIntentFamily ?? null }, userId);
+    }
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.ACTION_COMPLETED,

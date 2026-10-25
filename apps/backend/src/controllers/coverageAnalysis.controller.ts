@@ -1,3 +1,4 @@
+import { resolveGuidanceStepBinding } from '../services/guidanceEngine/guidanceStepBinding';
 import { prisma } from '../lib/prisma';
 import { currentCoverageTerms, reviewCoverageTermsWithEffects } from '../services/coverageTermReviewOperations';
 import { Response } from 'express';
@@ -106,7 +107,13 @@ export async function recordCoverageComparisonDecision(req: CustomRequest, res: 
     if (!userId) {
       return res.status(401).json({ success: false, message: 'Authentication required.' });
     }
-    const result = await recordCoverageDecisionWithEffects(req.params.propertyId, req.params.comparisonId, userId, req.body);
+    const { guidanceStepId, ...decisionBody } = req.body ?? {};
+    const stepBound = guidanceStepId ? await resolveGuidanceStepBinding(req.params.propertyId, guidanceStepId, { toolKey: 'coverage-intelligence', stepKeys: ['compare_coverage_options'] }) : null;
+    // Only a step that still fits is reported to; a stale, closed or wrong-tool step is saved as a plain decision and nothing else is completed in its place.
+    const result = await recordCoverageDecisionWithEffects(req.params.propertyId, req.params.comparisonId, userId, {
+      ...decisionBody,
+      ...(stepBound?.ok ? { guidanceJourneyId: stepBound.binding.journeyId, guidanceStepKey: stepBound.binding.stepKey } : {}),
+    });
     if (result.idempotentReplay) {
       return res.status(200).json({ success: true, data: result });
     }

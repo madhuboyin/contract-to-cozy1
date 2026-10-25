@@ -108,6 +108,7 @@ type ValidationErrors = Partial<Record<'serviceCategory' | 'quoteAmount', string
 type GuidanceToolContext = {
   guidanceJourneyId: string | null;
   guidanceStepKey: string | null;
+  guidanceStepId?: string | null;
   guidanceSignalIntentFamily: string | null;
 };
 
@@ -323,11 +324,8 @@ function buildPayload(
           },
         ]
       : undefined,
-    ...(guidanceContext?.guidanceJourneyId
-      ? { guidanceJourneyId: guidanceContext.guidanceJourneyId }
-      : {}),
-    ...(guidanceContext?.guidanceStepKey
-      ? { guidanceStepKey: guidanceContext.guidanceStepKey }
+    ...(guidanceContext?.guidanceStepId
+      ? { guidanceStepId: guidanceContext.guidanceStepId }
       : {}),
     ...(guidanceContext?.guidanceSignalIntentFamily
       ? { guidanceSignalIntentFamily: guidanceContext.guidanceSignalIntentFamily }
@@ -694,6 +692,7 @@ export default function ServicePriceRadarClient() {
   const guidanceContext: GuidanceToolContext = {
     guidanceJourneyId: searchParams.get('guidanceJourneyId') ?? toolLaunchContext?.resolved.prefill.journeyId ?? null,
     guidanceStepKey: searchParams.get('guidanceStepKey'),
+    guidanceStepId: searchParams.get('guidanceStepId'),
     guidanceSignalIntentFamily: searchParams.get('guidanceSignalIntentFamily'),
   };
   const isGuidanceContext = Boolean(guidanceContext.guidanceJourneyId);

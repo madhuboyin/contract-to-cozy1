@@ -72,8 +72,8 @@ const comparisonDecisionSchema = z.object({
   decision: z.enum(['KEEP', 'CHANGE', 'SHOP', 'DEFER', 'PROFESSIONAL_REVIEW']),
   selectedOptionId: z.string().uuid().nullable().optional(),
   rationale: z.string().trim().max(2000).nullable().optional(),
-  guidanceJourneyId: z.string().uuid().nullable().optional(),
-  guidanceStepKey: z.string().trim().min(1).max(80).nullable().optional(),
+  // The journey step the decision is made from; the journey and step key come from it, re-read inside the home, never from the caller.
+  guidanceStepId: z.string().uuid().nullable().optional(),
   sourceActionId: z.string().trim().min(1).max(160).nullable().optional(),
 });
 

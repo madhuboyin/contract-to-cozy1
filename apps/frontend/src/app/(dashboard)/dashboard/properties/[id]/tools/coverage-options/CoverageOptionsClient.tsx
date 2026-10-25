@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { useParams, usePathname, useSearchParams } from 'next/navigation';
 import { CheckCircle } from 'lucide-react';
 import { api } from '@/lib/api/client';
-import { recordGuidanceToolStatus } from '@/lib/api/guidanceApi';
 import { Button } from '@/components/ui/button';
 import {
   ResultHeroCard,
@@ -44,8 +43,6 @@ export default function CoverageOptionsClient() {
   const [loading, setLoading] = React.useState(false);
   const [data, setData] = React.useState<any>(null);
   const [err, setErr] = React.useState<string | null>(null);
-  const [progressing, setProgressing] = React.useState(false);
-  const [proofCompleted, setProofCompleted] = React.useState(false);
 
   React.useEffect(() => {
     if (!propertyId) return;
@@ -70,34 +67,6 @@ export default function CoverageOptionsClient() {
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propertyId]);
-
-  async function handleMarkReviewed() {
-    if (!propertyId || !guidanceJourneyId) return;
-    setProgressing(true);
-    try {
-      await recordGuidanceToolStatus(propertyId, {
-        stepKey: guidanceStepKey,
-        journeyId: guidanceJourneyId,
-        sourceToolKey: 'coverage-intelligence',
-        status: 'COMPLETED',
-        producedData: {
-          proofType: 'coverage_options_review',
-          proofId: `coverage-options-review:${guidanceJourneyId}:${guidanceStepKey}`,
-          reviewedAt: new Date().toISOString(),
-          totalCoverageGaps: Number(totalGaps),
-          topCoverageGapType: topGap?.gapType ?? null,
-          topCoverageGapItemId: topGap?.inventoryItemId ?? null,
-          topCoverageGapItemName: topGap?.itemName ?? null,
-        },
-      });
-      setProofCompleted(true);
-      track('workflow_completed', { tool: 'coverage-intelligence', propertyId });
-    } catch (e) {
-      console.error('[CoverageOptions] failed to record completion', e);
-    } finally {
-      setProgressing(false);
-    }
-  }
 
   const gaps = React.useMemo(() => {
     const rows = Array.isArray(data?.gaps) ? data.gaps : [];
@@ -288,23 +257,19 @@ export default function CoverageOptionsClient() {
       {/* Guidance progress — only shown when user arrived via a guidance journey */}
       {guidanceJourneyId ? (
         <ScenarioInputCard
-          title="Mark Step Complete"
-          subtitle="Record that you've compared coverage options for this guidance journey."
+          title="Record your coverage decision"
+          subtitle="This step is completed by the decision you record in the coverage comparison, not by marking it done."
         >
-          {proofCompleted ? (
-            <div className="flex items-center gap-2 text-sm text-green-700">
-              <CheckCircle className="h-4 w-4" />
-              Completion recorded. Return to your guidance journey to continue.
-            </div>
-          ) : (
-            <Button
-              className="min-h-[44px] w-full"
-              onClick={handleMarkReviewed}
-              disabled={progressing}
-            >
-              {progressing ? 'Saving...' : 'Complete this step'}
-            </Button>
-          )}
+          <Button className="min-h-[44px] w-full" asChild>
+            <Link href={`/dashboard/properties/${propertyId}/tools/coverage-intelligence?${new URLSearchParams({
+              stage: 'compare',
+              ...(guidanceJourneyId ? { guidanceJourneyId } : {}),
+              guidanceStepKey,
+              ...(searchParams.get('guidanceStepId') ? { guidanceStepId: searchParams.get('guidanceStepId') as string } : {}),
+            }).toString()}`}>
+              Open the coverage comparison
+            </Link>
+          </Button>
         </ScenarioInputCard>
       ) : null}
     </div>

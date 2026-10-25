@@ -1,3 +1,4 @@
+import { GUIDANCE_STEP_PROOF_MATRIX } from '../services/ask/askGuidanceStepProofMatrix';
 import { MANUAL_DECLARATION_STEP_KEYS, MANUAL_DECLARATION_TOOL_KEY, declareGuidanceStep } from '../services/guidanceEngine/guidanceManualDeclaration';
 import { MAINTENANCE_LINKABLE_STEP_KEYS } from '../services/maintenanceTaskJourneyOperations';
 import { FINDINGS_STEP_KEY, FINDINGS_STEP_TOOL_KEY, checkFindingDecisionsWithEffects } from '../services/inspectionFindingsProofOperations';
@@ -21,7 +22,7 @@ import {
   mapGuidanceEvidence,
 } from '../services/guidanceEngine/guidanceMapper';
 import { APIError } from '../middleware/error.middleware';
-import { ACKNOWLEDGEABLE_STEP_KEYS, ACKNOWLEDGEMENT_TOOL_KEY, acknowledgeGuidanceStepById } from '../services/guidanceEngine/guidanceAcknowledgement';
+import { acknowledgeGuidanceStepById, isAcknowledgeableStep, isAcknowledgeableStepKey } from '../services/guidanceEngine/guidanceAcknowledgement';
 import { GUIDANCE_STEP_REFUSAL_TEXT } from '../services/guidanceEngine/guidanceStepBinding';
 import { getGuidanceModels } from '../services/guidanceEngine/guidanceTypes';
 import { modelShortlistAdvisorService } from '../services/guidanceEngine/modelShortlistAdvisor.service';
@@ -186,6 +187,10 @@ export async function resolveGuidanceSignal(req: CustomRequest, res: Response, n
   }
 }
 
+/** Every step with a connected typed path (a reporter that reads the canonical state or the domain write) has no self-reported completion: the generic endpoints refuse it. */
+const TYPED_PATH_REQUIRED = () => new APIError('This step is completed by its own action in the tool, not by marking it done.', 409, 'GUIDANCE_TYPED_PATH_REQUIRED');
+const hasConnectedTypedPath = (toolKey: string | null | undefined, stepKey: string | null | undefined) =>
+  GUIDANCE_STEP_PROOF_MATRIX[`${toolKey ?? ''}:${stepKey ?? ''}`]?.verdict === 'CONNECTED';
 const MANUAL_DECLARATION_REQUIRED = () => new APIError('This step is recorded as a declaration: choose the declaration instead of completing it.', 409, 'GUIDANCE_DECLARATION_REQUIRED');
 const MAINTENANCE_TASK_REQUIRED = () => new APIError('Link a maintenance task to this step and complete it with evidence: this step is not completed by marking it done or by having no open tasks.', 409, 'GUIDANCE_MAINTENANCE_TASK_REQUIRED');
 const FINDINGS_DECISION_REQUIRED = () => new APIError('Decide what to do about each finding, then check: this step is completed by the findings\' decisions, not by marking it done.', 409, 'GUIDANCE_FINDING_DECISIONS_REQUIRED');
@@ -275,7 +280,8 @@ export async function completeGuidanceStep(req: CustomRequest, res: Response, ne
     if (target && target.toolKey === 'maintenance' && MAINTENANCE_LINKABLE_STEP_KEYS.includes(target.stepKey)) throw MAINTENANCE_TASK_REQUIRED();
     if (target && target.stepKey === FINDINGS_STEP_KEY && target.toolKey === FINDINGS_STEP_TOOL_KEY) throw FINDINGS_DECISION_REQUIRED();
     if (target && COVERAGE_RECORD_STEP_KEYS.includes(target.stepKey) && target.toolKey === COVERAGE_RECORD_TOOL_KEY) throw COVERAGE_RECORD_REQUIRED();
-    if (target && target.toolKey === ACKNOWLEDGEMENT_TOOL_KEY && (ACKNOWLEDGEABLE_STEP_KEYS as readonly string[]).includes(target.stepKey)) throw ACKNOWLEDGEMENT_REQUIRED();
+    if (target && isAcknowledgeableStep(target.toolKey, target.stepKey)) throw ACKNOWLEDGEMENT_REQUIRED();
+    if (target && hasConnectedTypedPath(target.toolKey, target.stepKey)) throw TYPED_PATH_REQUIRED();
 
     const result = await guidanceStepResolverService.markStepStatus({
       propertyId,
@@ -431,7 +437,13 @@ export async function recordGuidanceToolCompletion(req: CustomRequest, res: Resp
     if (req.body?.status === 'COMPLETED' && MAINTENANCE_LINKABLE_STEP_KEYS.includes(String(req.body?.stepKey ?? '')) && (req.body?.sourceToolKey ?? 'maintenance') === 'maintenance') throw MAINTENANCE_TASK_REQUIRED();
     if (req.body?.status === 'COMPLETED' && req.body?.stepKey === FINDINGS_STEP_KEY) throw FINDINGS_DECISION_REQUIRED();
     if (req.body?.status === 'COMPLETED' && COVERAGE_RECORD_STEP_KEYS.includes(String(req.body?.stepKey ?? ''))) throw COVERAGE_RECORD_REQUIRED();
-    if (req.body?.sourceToolKey === ACKNOWLEDGEMENT_TOOL_KEY && (ACKNOWLEDGEABLE_STEP_KEYS as readonly string[]).includes(String(req.body?.stepKey ?? ''))) throw ACKNOWLEDGEMENT_REQUIRED();
+    if (req.body?.status === 'COMPLETED' && isAcknowledgeableStepKey(String(req.body?.stepKey ?? ''))) throw ACKNOWLEDGEMENT_REQUIRED();
+    if (req.body?.status === 'COMPLETED' && req.body?.stepKey) {
+      const named = req.body.journeyId
+        ? await getGuidanceModels().guidanceJourneyStep.findFirst({ where: { journeyId: req.body.journeyId, stepKey: req.body.stepKey, journey: { propertyId } }, select: { toolKey: true } })
+        : null;
+      if (hasConnectedTypedPath(named?.toolKey ?? req.body.sourceToolKey, req.body.stepKey)) throw TYPED_PATH_REQUIRED();
+    }
 
     const result = await guidanceJourneyService.recordToolCompletion({
       propertyId,

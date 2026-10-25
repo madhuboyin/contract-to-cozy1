@@ -106,6 +106,21 @@ export const ASK_GUIDANCE_IN_ASK_STEPS: Readonly<Record<string, AskGuidanceInAsk
     reason: 'You can mark that you reviewed this requirement here; your review is recorded with the time.',
     outcome: 'Your review of the requirement, recorded with the time and the signal version, is this step\'s proof. Meeting the requirement is a different step.',
   },
+  'recalls:review_remedy_instructions': {
+    operationId: 'GUIDANCE_STEP_ACKNOWLEDGE', message: GUIDANCE_STEP_ACKNOWLEDGE_MESSAGE, label: 'Mark as reviewed', carriesStep: 'ENTITY',
+    reason: 'You can mark that you reviewed this here; your review is recorded with the time.',
+    outcome: 'Your review, recorded with the time and the signal version, is this step\'s proof.',
+  },
+  'ownership-costs:estimate_total_cost': {
+    operationId: 'GUIDANCE_STEP_ACKNOWLEDGE', message: GUIDANCE_STEP_ACKNOWLEDGE_MESSAGE, label: 'Mark as reviewed', carriesStep: 'ENTITY',
+    reason: 'You can mark that you reviewed this here; your review is recorded with the time.',
+    outcome: 'Your review, recorded with the time and the signal version, is this step\'s proof.',
+  },
+  'ownership-costs:estimate_out_of_pocket_cost': {
+    operationId: 'GUIDANCE_STEP_ACKNOWLEDGE', message: GUIDANCE_STEP_ACKNOWLEDGE_MESSAGE, label: 'Mark as reviewed', carriesStep: 'ENTITY',
+    reason: 'You can mark that you reviewed this here; your review is recorded with the time.',
+    outcome: 'Your review, recorded with the time and the signal version, is this step\'s proof.',
+  },
   // A fresh, persisted coverage evaluation scoped to the journey's subject (its item, or the property) is the proof for every coverage check step; opening a review is not.
   'coverage-intelligence:check_coverage': {
     operationId: 'COVERAGE_ANALYSIS_RUN', message: COVERAGE_ANALYSIS_RUN_MESSAGE, label: 'Run a coverage check', carriesStep: 'ENTITY',

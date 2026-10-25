@@ -222,8 +222,8 @@ export type CoverageAnalysisOverrides = {
 };
 
 export type GuidanceToolContext = {
-  guidanceJourneyId?: string | null;
-  guidanceStepKey?: string | null;
+  /** The journey step the analysis is run from; reported to that exact, revalidated step only. */
+  guidanceStepId?: string | null;
   guidanceSignalIntentFamily?: string | null;
   inventoryItemId?: string | null;
   assumptionSetId?: string | null;
@@ -465,8 +465,8 @@ export async function recordCoverageDecision(
     decision: 'KEEP' | 'CHANGE' | 'SHOP' | 'DEFER' | 'PROFESSIONAL_REVIEW';
     selectedOptionId?: string | null;
     rationale?: string | null;
-    guidanceJourneyId?: string | null;
-    guidanceStepKey?: string | null;
+    /** The journey step the decision is made from; reported to that exact, revalidated step only. */
+    guidanceStepId?: string | null;
     sourceActionId?: string | null;
   }
 ): Promise<{ decision: CoverageComparisonDTO['decisions'][number]; homeEvent: { id: string } }> {
@@ -489,11 +489,8 @@ export async function runCoverageAnalysis(
     `/api/properties/${propertyId}/coverage-analysis/run`,
     {
       overrides: overrides ?? {},
-      ...(guidanceContext?.guidanceJourneyId
-        ? { guidanceJourneyId: guidanceContext.guidanceJourneyId }
-        : {}),
-      ...(guidanceContext?.guidanceStepKey
-        ? { guidanceStepKey: guidanceContext.guidanceStepKey }
+      ...(guidanceContext?.guidanceStepId
+        ? { guidanceStepId: guidanceContext.guidanceStepId }
         : {}),
       ...(guidanceContext?.guidanceSignalIntentFamily
         ? { guidanceSignalIntentFamily: guidanceContext.guidanceSignalIntentFamily }
@@ -546,11 +543,8 @@ export async function runItemCoverageAnalysis(
     `/api/properties/${propertyId}/inventory/items/${itemId}/coverage-analysis/run`,
     {
       overrides: overrides ?? {},
-      ...(guidanceContext?.guidanceJourneyId
-        ? { guidanceJourneyId: guidanceContext.guidanceJourneyId }
-        : {}),
-      ...(guidanceContext?.guidanceStepKey
-        ? { guidanceStepKey: guidanceContext.guidanceStepKey }
+      ...(guidanceContext?.guidanceStepId
+        ? { guidanceStepId: guidanceContext.guidanceStepId }
         : {}),
       ...(guidanceContext?.guidanceSignalIntentFamily
         ? { guidanceSignalIntentFamily: guidanceContext.guidanceSignalIntentFamily }

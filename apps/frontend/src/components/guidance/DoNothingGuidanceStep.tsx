@@ -4,7 +4,6 @@ import React from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, CheckCircle2, RefreshCw, ShieldAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { completeGuidanceStep } from '@/lib/api/guidanceApi';
 import {
   getLatestDoNothingRun,
   runDoNothingSimulation,
@@ -58,7 +57,6 @@ export function DoNothingGuidanceStep({
 }: DoNothingGuidanceStepProps) {
   const queryClient = useQueryClient();
   const [running, setRunning] = React.useState(false);
-  const [completing, setCompleting] = React.useState(false);
 
   const query = useQuery({
     queryKey: ['guidance', 'do-nothing-step', propertyId, journeyId],
@@ -73,39 +71,14 @@ export function DoNothingGuidanceStep({
   async function handleRun() {
     setRunning(true);
     try {
-      await runDoNothingSimulation(propertyId, { horizonMonths: 12 });
+      // The run is reported to this exact journey step by the server; the page sends no completion of its own, so this step is done only by a run, never by marking a summary reviewed.
+      await runDoNothingSimulation(propertyId, { horizonMonths: 12, guidanceStepId: stepId });
       await query.refetch();
-    } finally {
-      setRunning(false);
-    }
-  }
-
-  async function handleComplete() {
-    if (!run || !summary) return;
-    setCompleting(true);
-    try {
-      await completeGuidanceStep(propertyId, stepId, {
-        proofType: 'do_nothing_summary_reviewed',
-        proofId: `${journeyId}:${stepKey}:${run.id}`,
-        journeyId,
-        stepKey,
-        sourceToolKey: 'do-nothing-simulator',
-        runId: run.id,
-        horizonMonths: run.horizonMonths,
-        confidence: run.confidence,
-        riskScoreDelta: run.riskScoreDelta,
-        expectedCostDeltaCentsMin: run.expectedCostDeltaCentsMin,
-        expectedCostDeltaCentsMax: run.expectedCostDeltaCentsMax,
-        incidentLikelihood: run.incidentLikelihood,
-        topRiskDriver: summary.topRisk?.title ?? null,
-        topAvoidableLoss: summary.topLoss?.title ?? null,
-        computedAt: run.computedAt,
-      });
       queryClient.invalidateQueries({ queryKey: ['guidance', 'property', propertyId] });
       queryClient.invalidateQueries({ queryKey: ['guidance', 'journey', propertyId] });
       onComplete();
     } finally {
-      setCompleting(false);
+      setRunning(false);
     }
   }
 
@@ -197,13 +170,9 @@ export function DoNothingGuidanceStep({
           ) : null}
 
           <div className="flex flex-wrap gap-3">
-            <Button type="button" className="rounded-xl" disabled={completing} onClick={handleComplete}>
-              <CheckCircle2 className="mr-2 h-4 w-4" />
-              {completing ? 'Saving…' : 'Use this summary & continue'}
-            </Button>
             <Button type="button" variant="outline" className="rounded-xl" disabled={running} onClick={handleRun}>
               <RefreshCw className="mr-2 h-4 w-4" />
-              {running ? 'Refreshing…' : 'Refresh summary'}
+              {running ? 'Running…' : 'Run a new analysis and continue'}
             </Button>
           </div>
         </>

@@ -9,7 +9,8 @@ import {
   resolveRecallMatch,
 } from '../services/recalls.service';
 import { RecallResolutionType } from '@prisma/client';
-import { reportRecallMatchStep } from '../services/guidanceEngine/guidanceToolReporting';
+import { reportToExactStep } from '../services/guidanceEngine/exactStepReporting';
+import { recallStepKeyForAction, reportRecallMatchStep } from '../services/guidanceEngine/guidanceToolReporting';
 import { logger } from '../lib/logger';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 
@@ -38,13 +39,25 @@ export async function listRecalls(req: Request, res: Response) {
   });
 }
 
+/** A recall action started from a journey step reports to that exact step (and only if the journey is about this match's item); one started elsewhere keeps the family path. */
+async function reportRecall(req: Request, propertyId: string, action: 'CONFIRM' | 'DISMISS' | 'RESOLVE', row: any) {
+  const stepId = typeof req.query?.guidanceStepId === 'string' ? req.query.guidanceStepId : (typeof (req.body as any)?.guidanceStepId === 'string' ? (req.body as any).guidanceStepId : null);
+  if (!stepId) {
+    await reportRecallMatchStep(propertyId, action, row);
+    return;
+  }
+  await reportToExactStep(propertyId, stepId, { toolKey: 'recalls', stepKeys: [recallStepKeyForAction(action)] },
+    (binding) => reportRecallMatchStep(propertyId, action, row, req.user?.userId ?? null, { journeyId: binding.journeyId }),
+    (binding) => (row.inventoryItemId && binding.inventoryItemId === row.inventoryItemId ? null : 'WRONG_SUBJECT'));
+}
+
 export async function confirmMatch(req: Request, res: Response) {
   const { propertyId, matchId } = req.params as any;
 
   try {
     const row = await confirmRecallMatch(propertyId, matchId);
 
-    await reportRecallMatchStep(propertyId, 'CONFIRM', row);
+    await reportRecall(req, propertyId, 'CONFIRM', row);
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.ACTION_COMPLETED,
@@ -70,7 +83,7 @@ export async function dismissMatch(req: Request, res: Response) {
   try {
     const row = await dismissRecallMatch(propertyId, matchId);
 
-    await reportRecallMatchStep(propertyId, 'DISMISS', row);
+    await reportRecall(req, propertyId, 'DISMISS', row);
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.ACTION_COMPLETED,
@@ -110,7 +123,7 @@ export async function resolveMatch(req: Request, res: Response) {
       resolutionNotes: resolutionNotes || null,
     });
 
-    await reportRecallMatchStep(propertyId, 'RESOLVE', row);
+    await reportRecall(req, propertyId, 'RESOLVE', row);
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.ACTION_COMPLETED,

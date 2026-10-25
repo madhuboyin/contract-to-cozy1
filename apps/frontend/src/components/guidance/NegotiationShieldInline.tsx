@@ -17,7 +17,6 @@ import {
   NegotiationShieldFinding,
   NegotiationShieldRecommendedAction,
 } from '@/app/(dashboard)/dashboard/properties/[id]/tools/negotiation-shield/negotiationShieldApi';
-import { recordGuidanceToolStatus } from '@/lib/api/guidanceApi';
 import { formatCurrency } from '@/lib/utils/format';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -56,7 +55,7 @@ function asArray<T>(val: T[] | Record<string, unknown> | null | undefined): T[] 
 export function NegotiationShieldInline({
   propertyId,
   journeyId,
-  stepId: _stepId,
+  stepId,
   stepKey,
   inventoryItemId,
   assetName = 'this service',
@@ -114,8 +113,7 @@ export function NegotiationShieldInline({
         propertyId,
         withInput.case.id,
         {
-          guidanceJourneyId: journeyId,
-          guidanceStepKey: stepKey,
+          guidanceStepId: stepId,
           inventoryItemId: inventoryItemId ?? null,
         }
       );
@@ -134,17 +132,7 @@ export function NegotiationShieldInline({
     if (!caseDetail) return;
     setCompleting(true);
     try {
-      await recordGuidanceToolStatus(propertyId, {
-        journeyId,
-        stepKey,
-        sourceToolKey: 'negotiation-shield',
-        status: 'COMPLETED',
-        producedData: {
-          caseId: caseDetail.case.id,
-          quoteAmount: Number(quoteAmount),
-          analysisConfidence: caseDetail.latestAnalysis?.confidence ?? null,
-        },
-      });
+      // The saved analysis already reported to this exact step; "continue" sends no completion of its own.
       queryClient.invalidateQueries({ queryKey: ['guidance', 'property', propertyId] });
       queryClient.invalidateQueries({ queryKey: ['guidance', 'journey', propertyId] });
       setPhase('done');

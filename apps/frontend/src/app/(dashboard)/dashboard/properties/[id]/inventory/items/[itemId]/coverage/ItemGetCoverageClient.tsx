@@ -230,6 +230,7 @@ export default function ItemGetCoverageClient() {
     () => ({
       guidanceJourneyId: searchParams.get('guidanceJourneyId'),
       guidanceStepKey: searchParams.get('guidanceStepKey'),
+      guidanceStepId: searchParams.get('guidanceStepId'),
       guidanceSignalIntentFamily: searchParams.get('guidanceSignalIntentFamily'),
     }),
     [searchParams]

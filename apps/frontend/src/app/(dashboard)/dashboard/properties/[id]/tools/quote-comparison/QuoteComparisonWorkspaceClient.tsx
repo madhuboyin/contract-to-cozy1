@@ -782,8 +782,7 @@ export default function QuoteComparisonWorkspaceClient() {
       await createPriceFinalizationDraft(propertyId, {
         quoteComparisonWorkspaceId: workspaceId,
         sourceType: 'QUOTE_COMPARISON',
-        guidanceJourneyId,
-        guidanceStepKey,
+        guidanceStepId: searchParams.get('guidanceStepId'),
         guidanceSignalIntentFamily,
       });
       await loadQuotes();

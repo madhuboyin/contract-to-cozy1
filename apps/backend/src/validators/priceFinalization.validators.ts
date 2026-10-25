@@ -108,6 +108,8 @@ export const createPriceFinalizationBodySchema = z.object({
   inventoryItemId: uuidSchema.optional().nullable(),
   guidanceJourneyId: uuidSchema.optional().nullable(),
   guidanceStepKey: z.string().trim().min(1).max(80).optional().nullable(),
+  // The journey step a Desktop draft is started from. The journey and step key stored on the record come from this step, re-read inside the home, never from the caller.
+  guidanceStepId: uuidSchema.optional().nullable(),
   guidanceSignalIntentFamily: z.string().trim().min(1).max(120).optional().nullable(),
 
   sourceType: z.enum(PRICE_FINALIZATION_SOURCE_TYPES).optional(),

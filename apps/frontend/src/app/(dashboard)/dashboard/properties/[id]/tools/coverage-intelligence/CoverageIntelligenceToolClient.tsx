@@ -198,6 +198,7 @@ export default function CoverageIntelligenceToolClient() {
             propertyId={propertyId}
             guidanceJourneyId={guidanceJourneyId}
             guidanceStepKey={guidanceStepKey}
+            guidanceStepId={searchParams.get('guidanceStepId')}
             sourceActionId={searchParams.get('sourceActionId')}
           />
           <InsuranceHandoffPanel propertyId={propertyId} />

@@ -1,3 +1,4 @@
+import { resolveGuidanceStepBinding } from '../services/guidanceEngine/guidanceStepBinding';
 import { NextFunction, Response } from 'express';
 import { CustomRequest } from '../types';
 import { APIError } from '../middleware/error.middleware';
@@ -112,7 +113,15 @@ export async function createPriceFinalizationDraft(
 ) {
   try {
     const { userId } = requireUser(req);
-    const payload = req.body as CreatePriceFinalizationBody;
+    const { guidanceStepId, ...body } = req.body as CreatePriceFinalizationBody & { guidanceStepId?: string | null };
+    // The record's journey and step come only from the supplied step, re-read inside this home. A step that does not fit stores neither, so finalizing reports to no journey.
+    let guidanceJourneyId: string | null = null;
+    let guidanceStepKey: string | null = null;
+    if (guidanceStepId) {
+      const bound = await resolveGuidanceStepBinding(req.params.propertyId, guidanceStepId, { toolKey: 'price-finalization', stepKeys: ['finalize_price'] });
+      if (bound.ok) { guidanceJourneyId = bound.binding.journeyId; guidanceStepKey = bound.binding.stepKey; }
+    }
+    const payload = { ...body, guidanceJourneyId, guidanceStepKey } as CreatePriceFinalizationBody;
     const { detail, contextVersion } = await createPriceFinalizationDraftWithEffects(req.params.propertyId, userId, payload as never);
     const propertyContext = await getProjectComplianceEnvelope(
       req.params.propertyId,

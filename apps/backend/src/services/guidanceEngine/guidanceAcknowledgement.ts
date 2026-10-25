@@ -13,8 +13,23 @@ import { resolveGuidanceStepBinding, type GuidanceStepRefusal } from './guidance
 /** The steps an acknowledgement may complete (tool `guidance-overview`). Anything else needs its own proof. */
 export const ACKNOWLEDGEABLE_STEP_KEYS = ['review_signal', 'review_compliance_requirement'] as const;
 export const ACKNOWLEDGEMENT_TOOL_KEY = 'guidance-overview';
+/**
+ * Every step an acknowledgement may complete, by the tool that owns it. Reading a remedy's instructions and reviewing an ownership-cost estimate are reads with no durable event of their own,
+ * so a typed acknowledgement of THAT step (with the signal version) is their whole proof. Nothing that is a mutation, evidence, a provider outcome or a financial decision is listed.
+ */
+export const ACKNOWLEDGEABLE_STEPS_BY_TOOL: Readonly<Record<string, readonly string[]>> = {
+  [ACKNOWLEDGEMENT_TOOL_KEY]: ACKNOWLEDGEABLE_STEP_KEYS,
+  recalls: ['review_remedy_instructions'],
+  'ownership-costs': ['estimate_total_cost', 'estimate_out_of_pocket_cost'],
+};
+export const isAcknowledgeableStep = (toolKey: string | null | undefined, stepKey: string | null | undefined) =>
+  Boolean(toolKey && stepKey && ACKNOWLEDGEABLE_STEPS_BY_TOOL[toolKey]?.includes(stepKey));
+export const isAcknowledgeableStepKey = (stepKey: string | null | undefined) =>
+  Object.values(ACKNOWLEDGEABLE_STEPS_BY_TOOL).some((keys) => keys.includes(String(stepKey ?? '')));
 
 export type StepAcknowledgement = {
+  /** The tool that owns the step (defaults to guidance-overview). */
+  toolKey?: string | null;
   stepId: string;
   stepKey: string;
   journeyId: string;
@@ -39,7 +54,7 @@ export function buildStepAcknowledgement(propertyId: string, actorUserId: string
     journeyId: ack.journeyId,
     inventoryItemId: ack.inventoryItemId ?? null,
     signalIntentFamily: ack.signalIntentFamily ?? 'generic_actionable_signal',
-    sourceToolKey: ACKNOWLEDGEMENT_TOOL_KEY,
+    sourceToolKey: ack.toolKey ?? ACKNOWLEDGEMENT_TOOL_KEY,
     sourceEntityType: 'GUIDANCE_SIGNAL',
     sourceEntityId: ack.signalId ?? ack.stepId,
     stepKey: ack.stepKey,
@@ -62,7 +77,7 @@ export function buildStepAcknowledgement(propertyId: string, actorUserId: string
 
 /** Records an acknowledgement and returns what the guidance engine returned (the signal, journey and step), or null. This IS the write, so a failure is the caller's to report. */
 export async function recordStepAcknowledgement(propertyId: string, actorUserId: string, ack: StepAcknowledgement) {
-  if (!(ACKNOWLEDGEABLE_STEP_KEYS as readonly string[]).includes(ack.stepKey)) return null;
+  if (!isAcknowledgeableStep(ack.toolKey ?? ACKNOWLEDGEMENT_TOOL_KEY, ack.stepKey)) return null;
   try {
     return await guidanceJourneyService.recordToolCompletion(buildStepAcknowledgement(propertyId, actorUserId, ack));
   } catch (error) {
@@ -82,8 +97,16 @@ export type AcknowledgeByStepResult = { ok: true; result: NonNullable<Awaited<Re
  * The Desktop entry: acknowledge a step by id. It re-reads the step inside the home, requires the guidance-overview tool's open acknowledgeable step on an open journey, names the signal as it
  * stands now, and records the same typed proof Ask records. There is no other way for a review step to be completed.
  */
+/** The step's binding when (and only when) it is an acknowledgeable step of the tool that owns it. The tool is read from the step inside this home, never from the caller. */
+export async function resolveAcknowledgeableBinding(propertyId: string, stepId: string) {
+  const owner = await getGuidanceModels().guidanceJourneyStep.findFirst({ where: { id: stepId, journey: { propertyId } }, select: { toolKey: true } });
+  // A tool with no acknowledgeable steps is checked as the default tool, so the refusal is WRONG_TOOL.
+  const toolKey = owner?.toolKey && ACKNOWLEDGEABLE_STEPS_BY_TOOL[owner.toolKey] ? owner.toolKey : ACKNOWLEDGEMENT_TOOL_KEY;
+  return resolveGuidanceStepBinding(propertyId, stepId, { toolKey, stepKeys: ACKNOWLEDGEABLE_STEPS_BY_TOOL[toolKey] });
+}
+
 export async function acknowledgeGuidanceStepById(propertyId: string, actorUserId: string, stepId: string, extras: { disposition?: AcknowledgementDisposition | null; note?: string | null } = {}): Promise<AcknowledgeByStepResult> {
-  const bound = await resolveGuidanceStepBinding(propertyId, stepId, { toolKey: ACKNOWLEDGEMENT_TOOL_KEY, stepKeys: ACKNOWLEDGEABLE_STEP_KEYS });
+  const bound = await resolveAcknowledgeableBinding(propertyId, stepId);
   if (!bound.ok) return { ok: false, reason: bound.reason };
   const step = await getGuidanceModels().guidanceJourneyStep.findFirst({
     where: { id: stepId, journey: { propertyId } },
@@ -91,7 +114,7 @@ export async function acknowledgeGuidanceStepById(propertyId: string, actorUserI
   });
   const signal = step?.journey.primarySignal ?? null;
   const result = await recordStepAcknowledgement(propertyId, actorUserId, {
-    stepId, stepKey: bound.binding.stepKey, journeyId: bound.binding.journeyId, signalId: signal?.id ?? null,
+    stepId, toolKey: (await getGuidanceModels().guidanceJourneyStep.findFirst({ where: { id: stepId, journey: { propertyId } }, select: { toolKey: true } }))?.toolKey ?? ACKNOWLEDGEMENT_TOOL_KEY, stepKey: bound.binding.stepKey, journeyId: bound.binding.journeyId, signalId: signal?.id ?? null,
     signalVersion: signal?.updatedAt ? new Date(signal.updatedAt).toISOString() : null, inventoryItemId: bound.binding.inventoryItemId,
     signalIntentFamily: signal?.signalIntentFamily ?? null, acknowledgedAt: new Date(), disposition: extras.disposition ?? null, note: extras.note ?? null,
   });

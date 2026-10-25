@@ -60,11 +60,13 @@ export default function CoverageComparisonPanel({
   propertyId,
   guidanceJourneyId,
   guidanceStepKey,
+  guidanceStepId,
   sourceActionId,
 }: {
   propertyId: string;
   guidanceJourneyId?: string | null;
   guidanceStepKey?: string | null;
+  guidanceStepId?: string | null;
   sourceActionId?: string | null;
 }) {
   const [comparison, setComparison] = useState<CoverageComparisonDTO | null>(null);
@@ -193,8 +195,7 @@ export default function CoverageComparisonPanel({
         decision,
         selectedOptionId: decision === 'CHANGE' ? selectedOptionId || null : null,
         rationale: rationale.trim() || null,
-        guidanceJourneyId,
-        guidanceStepKey,
+        guidanceStepId,
         sourceActionId,
       });
       await load();

@@ -2375,8 +2375,7 @@ function CaseWorkspace({
         analysisType: caseDetail.case.scenarioType,
       });
       return analyzeNegotiationShieldCase(propertyId, caseDetail.case.id, {
-        guidanceJourneyId: searchParams.get('guidanceJourneyId'),
-        guidanceStepKey: searchParams.get('guidanceStepKey'),
+        guidanceStepId: searchParams.get('guidanceStepId'),
         guidanceSignalIntentFamily: searchParams.get('guidanceSignalIntentFamily'),
         inventoryItemId: searchParams.get('itemId'),
       });

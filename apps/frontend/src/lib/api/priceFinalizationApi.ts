@@ -69,8 +69,8 @@ export type PriceFinalizationTermInput = {
 
 export type PriceFinalizationDraftInput = {
   inventoryItemId?: string | null;
-  guidanceJourneyId?: string | null;
-  guidanceStepKey?: string | null;
+  /** The journey step the draft is started from; the record's journey and step come from it on the server. */
+  guidanceStepId?: string | null;
   guidanceSignalIntentFamily?: string | null;
   sourceType?: PriceFinalizationSourceType;
   serviceCategory?: ServiceCategory | null;

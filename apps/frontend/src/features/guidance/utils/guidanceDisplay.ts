@@ -101,6 +101,8 @@ function appendGuidanceContext(
   const selectedCleaningTypeLabel = getJourneySelectedCleaningTypeLabel(journey);
   params.set('guidanceJourneyId', journey.id);
   params.set('guidanceStepKey', step.stepKey);
+  // The exact step: tool actions launched from it report to this step only.
+  params.set('guidanceStepId', step.id);
   if (journey.primarySignal?.signalIntentFamily) {
     params.set('guidanceSignalIntentFamily', journey.primarySignal.signalIntentFamily);
   }

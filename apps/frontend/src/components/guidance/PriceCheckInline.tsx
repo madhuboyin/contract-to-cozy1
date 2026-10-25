@@ -203,8 +203,7 @@ export function PriceCheckInline({
         quoteAmount: Number(quoteAmount),
         quoteVendorName: vendorName.trim() || undefined,
         quoteSource: 'MANUAL',
-        guidanceJourneyId: journeyId,
-        guidanceStepKey: stepKey,
+        guidanceStepId: stepId,
         ...(inventoryItemId
           ? {
               linkedEntities: [

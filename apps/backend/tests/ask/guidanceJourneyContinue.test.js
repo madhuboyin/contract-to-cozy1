@@ -259,7 +259,7 @@ test('IN_ASK steps are exactly the steps a recall write, a do-nothing run, a pri
     `negotiation-shield:${require('../../src/services/negotiationShieldJourneyCompletion.ts').NEGOTIATION_SHIELD_DEFAULT_STEP_KEY}`,
     `project-tracker:${require('../../src/services/guidanceEngine/projectJourneyReporting.ts').PROJECT_CREATE_STEP_KEY}`,
     ...['track_work'].map((key) => `project-tracker:${key}`), ...['capture_proof', 'set_future_care', 'update_home_record', 'verify_outcome'].map((key) => `project-completion:${key}`), // the closing steps reportProjectClosure sends
-    ...require('../../src/services/guidanceEngine/guidanceAcknowledgement.ts').ACKNOWLEDGEABLE_STEP_KEYS.map((key) => `guidance-overview:${key}`), // the steps an acknowledgement may complete
+    ...Object.entries(require('../../src/services/guidanceEngine/guidanceAcknowledgement.ts').ACKNOWLEDGEABLE_STEPS_BY_TOOL).flatMap(([tool, keys]) => keys.map((key) => `${tool}:${key}`)), // the steps an acknowledgement may complete
     ...require('../../src/services/coverageAnalysisOperations.ts').COVERAGE_CHECK_STEP_KEYS.map((key) => `coverage-intelligence:${key}`), // a fresh, persisted, scoped coverage evaluation
     ...require('../../src/services/inspectionReportReviewOperations.ts').INSPECTION_REVIEW_STEP_KEYS.map((key) => `inspection-report:${key}`), // a review record of this version of the report
     'coverage-intelligence:review_current_policy_context', 'coverage-intelligence:review_current_warranty_context', // a persisted review of the current terms
@@ -279,7 +279,7 @@ test('IN_ASK steps are exactly the steps a recall write, a do-nothing run, a pri
     assert.ok(templates.some((t) => t.steps.some((s) => s.toolKey === toolKey && s.stepKey === stepKey)), `${key} is not a template step`);
   }
   assert.equal(askGuidanceStepMode('recalls', 'safety_alert').mode, 'IN_ASK');
-  assert.equal(askGuidanceStepMode('recalls', 'review_remedy_instructions').mode, 'NAVIGATE', 'nothing in Ask reports the remedy step');
+  assert.equal(askGuidanceStepMode('recalls', 'review_remedy_instructions').mode, 'IN_ASK', 'the remedy step is a typed acknowledgement');
   assert.equal(askGuidanceStepMode('recalls').mode, 'NAVIGATE');
   assert.equal(askGuidanceStepMode('booking', 'safety_alert').mode, 'NAVIGATE');
 });

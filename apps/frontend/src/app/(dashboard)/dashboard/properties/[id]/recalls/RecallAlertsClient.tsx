@@ -25,7 +25,6 @@ import {
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
 import { GuidanceInlinePanel } from '@/components/guidance/GuidanceInlinePanel';
-import { recordGuidanceToolStatus } from '@/lib/api/guidanceApi';
 
 // Step-specific copy for guidance-driven visits
 const RECALL_STEP_CONTENT: Record<
@@ -60,6 +59,7 @@ export default function RecallAlertsClient() {
   const highlightId = searchParams.get('matchId');
   const guidanceJourneyId = searchParams.get('guidanceJourneyId') ?? undefined;
   const guidanceStepKey = searchParams.get('guidanceStepKey') ?? undefined;
+  const guidanceStepId = searchParams.get('guidanceStepId') ?? undefined;
 
   const stepContent = guidanceStepKey ? RECALL_STEP_CONTENT[guidanceStepKey] : undefined;
 
@@ -102,58 +102,24 @@ export default function RecallAlertsClient() {
     return c;
   }, [rows]);
 
+  // A recall action started from a journey step carries that exact step; the server reports the result to it (and only if the journey is about this match's item). The page sends no completion
+  // of its own.
   async function onConfirm(matchId: string) {
-    await confirmRecallMatch(propertyId, matchId);
-    await recordRecallGuidanceProof({
-      action: 'confirm',
-      matchId,
-    });
+    await confirmRecallMatch(propertyId, matchId, guidanceStepId);
+    if (guidanceStepId) setGuidanceProofRecorded(true);
     await refresh();
   }
 
   async function onDismiss(matchId: string) {
-    await dismissRecallMatch(propertyId, matchId);
-    await recordRecallGuidanceProof({
-      action: 'dismiss',
-      matchId,
-    });
+    await dismissRecallMatch(propertyId, matchId, guidanceStepId);
+    if (guidanceStepId) setGuidanceProofRecorded(true);
     await refresh();
   }
 
   async function onResolve(matchId: string, payload: { resolutionType: RecallResolutionType; resolutionNotes?: string }) {
-    await resolveRecallMatch({ propertyId, matchId, ...payload });
-    await recordRecallGuidanceProof({
-      action: 'resolve',
-      matchId,
-      resolutionType: payload.resolutionType,
-    });
+    await resolveRecallMatch({ propertyId, matchId, guidanceStepId, ...payload });
+    if (guidanceStepId) setGuidanceProofRecorded(true);
     await refresh();
-  }
-
-  async function recordRecallGuidanceProof(params: {
-    action: 'confirm' | 'dismiss' | 'resolve';
-    matchId: string;
-    resolutionType?: RecallResolutionType;
-  }) {
-    if (!propertyId || !guidanceStepKey) return;
-    try {
-      await recordGuidanceToolStatus(propertyId, {
-        stepKey: guidanceStepKey,
-        journeyId: guidanceJourneyId,
-        sourceToolKey: 'recalls',
-        status: 'COMPLETED',
-        producedData: {
-          proofType: 'recall_action',
-          proofId: params.matchId,
-          action: params.action,
-          resolutionType: params.resolutionType ?? null,
-          completedAt: new Date().toISOString(),
-        },
-      });
-      setGuidanceProofRecorded(true);
-    } catch (e) {
-      console.error('[RecallAlertsClient] failed to record proof-backed completion', e);
-    }
   }
 
   // Subtitle changes based on which guidance step this page is serving

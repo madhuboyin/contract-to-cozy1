@@ -4,7 +4,7 @@ import React from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, CheckCircle2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { completeGuidanceStep } from '@/lib/api/guidanceApi';
+import { acknowledgeGuidanceStep } from '@/lib/api/guidanceApi';
 import {
   getOwnershipCosts,
   type OwnershipCostReadModel,
@@ -67,20 +67,8 @@ export function OwnershipCostsGuidanceStep({
     if (!query.data) return;
     setCompleting(true);
     try {
-      await completeGuidanceStep(propertyId, stepId, {
-        proofType: 'ownership_cost_snapshot_reviewed',
-        proofId: `${journeyId}:${stepKey}:${query.data.snapshot.id}`,
-        journeyId,
-        stepKey,
-        sourceToolKey: 'ownership-costs',
-        snapshotId: query.data.snapshot.id,
-        definitionVersion: query.data.definitionVersion,
-        methodVersion: query.data.methodVersion,
-        categoryDefinitionVersion: query.data.categoryDefinitionVersion,
-        lens: query.data.selectedLens,
-        annualTotalCents: query.data.snapshot.annualTotalCents,
-        calculatedAt: query.data.snapshot.calculatedAt,
-      });
+      // Reviewing the estimate is a read with no event of its own, so it is recorded as a typed acknowledgement of this exact step (with the time and the signal version), not as free-form data.
+      await acknowledgeGuidanceStep(propertyId, stepId);
       queryClient.invalidateQueries({
         queryKey: ['guidance', 'property', propertyId],
       });
@@ -162,15 +150,17 @@ export function OwnershipCostsGuidanceStep({
       </p>
 
       <div className="flex flex-wrap gap-3">
-        <Button
-          type="button"
-          className="rounded-xl"
-          disabled={completing}
-          onClick={handleComplete}
-        >
-          <CheckCircle2 className="mr-2 h-4 w-4" />
-          {completing ? 'Saving…' : 'Use this snapshot & continue'}
-        </Button>
+        {(stepKey === 'estimate_total_cost' || stepKey === 'estimate_out_of_pocket_cost') ? (
+          <Button
+            type="button"
+            className="rounded-xl"
+            disabled={completing}
+            onClick={handleComplete}
+          >
+            <CheckCircle2 className="mr-2 h-4 w-4" />
+            {completing ? 'Saving…' : 'Mark as reviewed & continue'}
+          </Button>
+        ) : null}
         <Button
           type="button"
           variant="outline"

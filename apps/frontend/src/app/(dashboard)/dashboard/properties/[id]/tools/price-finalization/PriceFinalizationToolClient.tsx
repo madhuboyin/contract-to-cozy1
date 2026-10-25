@@ -246,8 +246,7 @@ export default function PriceFinalizationToolClient() {
 
     return {
       inventoryItemId: itemId || undefined,
-      guidanceJourneyId: guidanceJourneyId || undefined,
-      guidanceStepKey: guidanceStepKey || undefined,
+      guidanceStepId: searchParams.get('guidanceStepId') || undefined,
       guidanceSignalIntentFamily: guidanceSignalIntentFamily || undefined,
       sourceType: 'MANUAL',
       serviceCategory: form.serviceCategory || undefined,

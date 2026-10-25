@@ -9,7 +9,7 @@ import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { registerConfirmCapabilityHandler, type ConfirmCapabilityContext, type ConfirmCapabilityResult } from '../confirmCapabilityHandlerRegistry';
 import { reconcileAskExecutionSideEffects } from '../execution/executeOperation';
 import { ensurePropertyAccess } from '../askHandlerSupport';
-import { ACKNOWLEDGEABLE_STEP_KEYS, ACKNOWLEDGEMENT_TOOL_KEY, acknowledgeGuidanceStep } from '../../guidanceEngine/guidanceAcknowledgement';
+import { acknowledgeGuidanceStep, resolveAcknowledgeableBinding } from '../../guidanceEngine/guidanceAcknowledgement';
 import { GUIDANCE_STEP_REFUSAL_TEXT, resolveGuidanceStepBinding } from '../support/guidanceStepBinding';
 import { GUIDANCE_STEP_ACKNOWLEDGE_MESSAGE } from '../support/guidanceAcknowledge';
 import { getGuidanceModels } from '../../guidanceEngine/guidanceTypes';
@@ -25,7 +25,7 @@ const writeError = (message: string, code: string) => Object.assign(new Error(me
 async function loadStep(propertyId: string, stepId: string) {
   const step = await getGuidanceModels().guidanceJourneyStep.findFirst({
     where: { id: stepId, journey: { propertyId } },
-    select: { id: true, label: true, stepKey: true, status: true, updatedAt: true, journey: { select: { id: true, status: true, inventoryItemId: true, primarySignal: { select: { id: true, signalIntentFamily: true, updatedAt: true } } } } },
+    select: { id: true, label: true, stepKey: true, toolKey: true, status: true, updatedAt: true, journey: { select: { id: true, status: true, inventoryItemId: true, primarySignal: { select: { id: true, signalIntentFamily: true, updatedAt: true } } } } },
   });
   if (!step) return null;
   const signal = step.journey.primarySignal;
@@ -40,7 +40,7 @@ export async function guidanceStepAcknowledgeResult(userId: string, propertyId: 
   const declared = launchContext?.operationId === 'GUIDANCE_STEP_ACKNOWLEDGE' && launchContext.surface !== 'ASK_REFRESH' && message.trim() === GUIDANCE_STEP_ACKNOWLEDGE_MESSAGE;
   if (!stepId || !declared) return boundary('Choose the step from its journey', 'Open the guided journey and use the step\'s own action. Nothing was changed.', 'NOT_APPLICABLE', 'GUIDANCE_STEP_REQUIRED');
   if (access.role === HouseholdRole.VIEWER) return boundary('A contributor or owner is needed', 'Only a contributor or owner can mark a step as reviewed in Ask. Nothing was changed.', 'BLOCKED', 'GUIDANCE_STEP_PERMISSION_REQUIRED');
-  const bound = await resolveGuidanceStepBinding(propertyId, stepId, { toolKey: ACKNOWLEDGEMENT_TOOL_KEY, stepKeys: ACKNOWLEDGEABLE_STEP_KEYS });
+  const bound = await resolveAcknowledgeableBinding(propertyId, stepId);
   if (!bound.ok) {
     if (bound.reason === 'STEP_DONE') return boundary('This step is already done', 'Nothing was changed.', 'NOT_APPLICABLE', 'GUIDANCE_STEP_ALREADY_COMPLETED');
     return boundary('This step cannot be marked as reviewed', `${GUIDANCE_STEP_REFUSAL_TEXT[bound.reason]} Only a review step can be completed this way. Nothing was changed.`, 'NOT_APPLICABLE', 'GUIDANCE_STEP_ACKNOWLEDGE_UNAVAILABLE');
@@ -75,10 +75,10 @@ async function confirmGuidanceStepAcknowledge(ctx: ConfirmCapabilityContext): Pr
     if (parameters.guidanceAcknowledgeContextVersion !== guidanceAcknowledgeContextVersion(step)) {
       throw writeError('This step or its signal changed while confirmation was open. Review it and try again.', 'ASK_CONTEXT_VERSION_CONFLICT');
     }
-    const bound = await resolveGuidanceStepBinding(execution.propertyId, stepId, { toolKey: ACKNOWLEDGEMENT_TOOL_KEY, stepKeys: ACKNOWLEDGEABLE_STEP_KEYS });
+    const bound = await resolveAcknowledgeableBinding(execution.propertyId, stepId);
     if (!bound.ok) throw writeError(`${GUIDANCE_STEP_REFUSAL_TEXT[bound.reason]} Nothing was changed.`, 'ASK_CONFIRMATION_NOT_ACTIVE');
     const recorded = await acknowledgeGuidanceStep(execution.propertyId, userId, {
-      stepId: step.id, stepKey: step.stepKey, journeyId: step.journey.id, signalId: step.signalId, signalVersion: step.signalVersion,
+      stepId: step.id, toolKey: step.toolKey ?? null, stepKey: step.stepKey, journeyId: step.journey.id, signalId: step.signalId, signalVersion: step.signalVersion,
       inventoryItemId: step.journey.inventoryItemId ?? null, signalIntentFamily: step.signalIntentFamily, acknowledgedAt: new Date(),
     });
     if (!recorded) throw writeError('The review could not be recorded. Nothing was changed; try again.', 'ASK_CONTEXT_VERSION_CONFLICT');

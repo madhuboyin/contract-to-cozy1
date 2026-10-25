@@ -29,12 +29,16 @@ export async function listInventoryItemRecalls(
   return res.data;
 }
 
+// `guidanceStepId` is the journey step the action is started from: the result is reported to that exact step only.
+const stepQuery = (guidanceStepId?: string | null) => (guidanceStepId ? `?guidanceStepId=${encodeURIComponent(guidanceStepId)}` : '');
+
 export async function confirmRecallMatch(
   propertyId: string,
-  matchId: string
+  matchId: string,
+  guidanceStepId?: string | null
 ): Promise<RecallMatchDTO> {
   const res = await api.post<RecallMatchDTO>(
-    `/api/properties/${propertyId}/recalls/matches/${matchId}/confirm`,
+    `/api/properties/${propertyId}/recalls/matches/${matchId}/confirm${stepQuery(guidanceStepId)}`,
     {}
   );
   return res.data;
@@ -42,10 +46,11 @@ export async function confirmRecallMatch(
 
 export async function dismissRecallMatch(
   propertyId: string,
-  matchId: string
+  matchId: string,
+  guidanceStepId?: string | null
 ): Promise<RecallMatchDTO> {
   const res = await api.post<RecallMatchDTO>(
-    `/api/properties/${propertyId}/recalls/matches/${matchId}/dismiss`,
+    `/api/properties/${propertyId}/recalls/matches/${matchId}/dismiss${stepQuery(guidanceStepId)}`,
     {}
   );
   return res.data;
@@ -56,9 +61,10 @@ export async function resolveRecallMatch(params: {
   matchId: string;
   resolutionType: RecallResolutionType;
   resolutionNotes?: string;
+  guidanceStepId?: string | null;
 }): Promise<RecallMatchDTO> {
   const res = await api.post<RecallMatchDTO>(
-    `/api/properties/${params.propertyId}/recalls/matches/${params.matchId}/resolve`,
+    `/api/properties/${params.propertyId}/recalls/matches/${params.matchId}/resolve${stepQuery(params.guidanceStepId)}`,
     {
       resolutionType: params.resolutionType,
       resolutionNotes: params.resolutionNotes,

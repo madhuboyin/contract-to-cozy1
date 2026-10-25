@@ -1,3 +1,4 @@
+import { reportToExactStep } from '../services/guidanceEngine/exactStepReporting';
 import { NextFunction, Response } from 'express';
 import { reportServicePriceCheck } from '../services/guidanceEngine/guidanceToolReporting';
 import { CustomRequest } from '../types';
@@ -57,15 +58,9 @@ export async function createServicePriceRadarCheck(
       currentContext.contextVersion,
     );
 
-    // The page sends the journey it was opened from; a check made outside a journey reports nothing (as before).
-    if (payload.guidanceJourneyId) {
-      await reportServicePriceCheck(
-        req.params.propertyId,
-        result.check as never,
-        { journeyId: payload.guidanceJourneyId, stepKey: payload.guidanceStepKey ?? null, signalIntentFamily: payload.guidanceSignalIntentFamily ?? null },
-        userId,
-      );
-    }
+    // The page sends the exact journey step it was opened from; the check is reported to that revalidated step only. A check made outside a journey reports nothing.
+    await reportToExactStep(req.params.propertyId, payload.guidanceStepId, { toolKey: 'service-price-radar', stepKeys: ['validate_price', 'get_cleaning_quotes'] },
+      (binding) => reportServicePriceCheck(req.params.propertyId, result.check as never, { journeyId: binding.journeyId, stepKey: binding.stepKey, signalIntentFamily: binding.signalIntentFamily }, userId));
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.TOOL_USED,

@@ -11,7 +11,6 @@ import {
   ScenarioInputCard,
   StatusChip,
 } from '@/components/mobile/dashboard/MobilePrimitives';
-import { completeGuidanceStep } from '@/lib/api/guidanceApi';
 import {
   createPriceFinalizationDraft,
   finalizePriceFinalization,
@@ -272,8 +271,7 @@ export function PriceFinalizationInline({
 
     return {
       inventoryItemId: inventoryItemId || undefined,
-      guidanceJourneyId: journeyId,
-      guidanceStepKey: stepKey,
+      guidanceStepId: stepId,
       guidanceSignalIntentFamily: guidanceSignalIntentFamily || undefined,
       sourceType: 'MANUAL',
       serviceCategory: form.serviceCategory || undefined,
@@ -360,15 +358,7 @@ export function PriceFinalizationInline({
         acceptedPrice: accepted,
       });
 
-      await completeGuidanceStep(propertyId, stepId, {
-        sourceToolKey: 'price-finalization',
-        finalizationId: finalized.id,
-        acceptedPrice: finalized.acceptedPrice,
-        quotePrice: finalized.quotePrice,
-        currency: finalized.currency,
-        vendorName: finalized.vendorName,
-        serviceCategory: finalized.serviceCategory,
-      });
+      // The finalization reports to this exact step itself (the record stored it when the draft was created); no separate completion is sent from the page.
 
       setItems((prev) => [finalized, ...prev.filter((entry) => entry.id !== finalized.id)]);
       setActiveId(finalized.id);

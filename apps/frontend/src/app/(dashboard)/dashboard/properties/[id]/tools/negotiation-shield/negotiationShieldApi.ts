@@ -310,18 +310,15 @@ export async function analyzeNegotiationShieldCase(
   propertyId: string,
   caseId: string,
   guidanceContext?: {
-    guidanceJourneyId?: string | null;
-    guidanceStepKey?: string | null;
+    /** The journey step the analysis is run from; reported to that exact, revalidated step only. */
+    guidanceStepId?: string | null;
     guidanceSignalIntentFamily?: string | null;
     inventoryItemId?: string | null;
   }
 ): Promise<NegotiationShieldCaseDetail> {
   const query = new URLSearchParams();
-  if (guidanceContext?.guidanceJourneyId) {
-    query.set('guidanceJourneyId', guidanceContext.guidanceJourneyId);
-  }
-  if (guidanceContext?.guidanceStepKey) {
-    query.set('guidanceStepKey', guidanceContext.guidanceStepKey);
+  if (guidanceContext?.guidanceStepId) {
+    query.set('guidanceStepId', guidanceContext.guidanceStepId);
   }
   if (guidanceContext?.guidanceSignalIntentFamily) {
     query.set('guidanceSignalIntentFamily', guidanceContext.guidanceSignalIntentFamily);

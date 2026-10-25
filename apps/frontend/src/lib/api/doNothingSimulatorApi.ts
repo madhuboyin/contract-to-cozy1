@@ -85,6 +85,8 @@ export type RunDoNothingSimulationPayload = {
   horizonMonths: 6 | 12 | 24 | 36;
   inputOverrides?: DoNothingInputOverrides;
   assumptionSetId?: string;
+  /** The journey step this run was started from; the run is reported to that exact step only. */
+  guidanceStepId?: string;
 };
 
 export async function listDoNothingScenarios(propertyId: string): Promise<DoNothingScenarioDTO[]> {

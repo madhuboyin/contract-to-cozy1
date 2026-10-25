@@ -59,6 +59,7 @@ function normaliseProperty(a: CoverageAnalysisDTO): NormalisedResult {
 export function CoverageCheckInline({
   propertyId,
   journeyId,
+  stepId,
   stepKey,
   inventoryItemId,
   assetName = 'this item',
@@ -101,8 +102,7 @@ export function CoverageCheckInline({
   const runItemMutation = useMutation({
     mutationFn: () =>
       runItemCoverageAnalysis(propertyId, inventoryItemId!, undefined, {
-        guidanceJourneyId: journeyId,
-        guidanceStepKey: stepKey,
+        guidanceStepId: stepId,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({
@@ -114,8 +114,7 @@ export function CoverageCheckInline({
   const runPropertyMutation = useMutation({
     mutationFn: () =>
       runCoverageAnalysis(propertyId, undefined, {
-        guidanceJourneyId: journeyId,
-        guidanceStepKey: stepKey,
+        guidanceStepId: stepId,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({

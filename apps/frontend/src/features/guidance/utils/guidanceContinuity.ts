@@ -1,6 +1,8 @@
 export type GuidanceContinuityContext = {
   guidanceJourneyId?: string | null;
   guidanceStepKey?: string | null;
+  /** The exact journey step a tool action was launched from. */
+  guidanceStepId?: string | null;
   guidanceSignalIntentFamily?: string | null;
   itemId?: string | null;
 };
@@ -17,6 +19,7 @@ function buildGuidanceParams(context: GuidanceContinuityContext): URLSearchParam
   const params = new URLSearchParams();
   if (context.guidanceJourneyId) params.set('guidanceJourneyId', context.guidanceJourneyId);
   if (context.guidanceStepKey) params.set('guidanceStepKey', context.guidanceStepKey);
+  if (context.guidanceStepId) params.set('guidanceStepId', context.guidanceStepId);
   if (context.guidanceSignalIntentFamily) {
     params.set('guidanceSignalIntentFamily', context.guidanceSignalIntentFamily);
   }
@@ -35,6 +38,7 @@ export function extractGuidanceContinuityContext(searchParams: SearchParamLike):
   return {
     guidanceJourneyId,
     guidanceStepKey,
+    guidanceStepId: searchParams.get('guidanceStepId'),
     guidanceSignalIntentFamily: searchParams.get('guidanceSignalIntentFamily'),
     itemId,
   };

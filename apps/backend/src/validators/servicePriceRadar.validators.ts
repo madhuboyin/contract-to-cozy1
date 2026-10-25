@@ -86,7 +86,7 @@ export const createServicePriceRadarBodySchema = z.object({
     )
     .max(10)
     .optional(),
-  guidanceJourneyId: z.string().uuid().optional(),
+  guidanceStepId: z.string().uuid().optional(),
   guidanceStepKey: z.string().trim().min(1).max(80).optional(),
   guidanceSignalIntentFamily: z.string().trim().min(1).max(120).optional(),
 }).superRefine((value, ctx) => {

@@ -1,7 +1,8 @@
+import { reportToExactStep } from '../services/guidanceEngine/exactStepReporting';
 import { NextFunction, Response } from 'express';
 import { CustomRequest } from '../types';
 import { APIError } from '../middleware/error.middleware';
-import { recordNegotiationShieldAnalysisCompletion } from '../services/negotiationShieldJourneyCompletion';
+import { NEGOTIATION_SHIELD_DEFAULT_STEP_KEY, recordNegotiationShieldAnalysisCompletion } from '../services/negotiationShieldJourneyCompletion';
 import {
   AttachNegotiationShieldDocumentPayload,
   CreateNegotiationShieldCaseInput,
@@ -225,14 +226,19 @@ export async function analyzeNegotiationShieldCase(
     );
 
     // The journey completion is shared with Ask (negotiationShieldJourneyCompletion.ts) so both surfaces keep identical side effects.
-    await recordNegotiationShieldAnalysisCompletion({
-      propertyId: req.params.propertyId,
-      actorUserId: userId,
-      detail,
-      journeyId: readQueryString(req.query.guidanceJourneyId),
-      stepKey: readQueryString(req.query.guidanceStepKey),
-      signalIntentFamily: readQueryString(req.query.guidanceSignalIntentFamily)?.toLowerCase() ?? null,
-    });
+    const guidanceStepId = readQueryString(req.query.guidanceStepId);
+    if (guidanceStepId) {
+      // Launched from a journey step: that exact, revalidated step only; never the signal family.
+      await reportToExactStep(req.params.propertyId, guidanceStepId, { toolKey: 'negotiation-shield', stepKeys: [NEGOTIATION_SHIELD_DEFAULT_STEP_KEY] },
+        (binding) => recordNegotiationShieldAnalysisCompletion({ propertyId: req.params.propertyId, actorUserId: userId, detail, journeyId: binding.journeyId, stepKey: binding.stepKey, signalIntentFamily: binding.signalIntentFamily }));
+    } else {
+      await recordNegotiationShieldAnalysisCompletion({
+        propertyId: req.params.propertyId,
+        actorUserId: userId,
+        detail,
+        signalIntentFamily: readQueryString(req.query.guidanceSignalIntentFamily)?.toLowerCase() ?? null,
+      });
+    }
 
     const propertyContext = await getProjectComplianceEnvelope(
       req.params.propertyId,

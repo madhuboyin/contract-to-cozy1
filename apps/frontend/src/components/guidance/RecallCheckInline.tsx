@@ -22,7 +22,7 @@ import {
   resolveRecallMatch,
 } from '@/app/(dashboard)/dashboard/properties/[id]/recalls/recallsApi';
 import RecallMatchCard from '@/app/(dashboard)/dashboard/components/recalls/RecallMatchCard';
-import { completeGuidanceStep } from '@/lib/api/guidanceApi';
+import { acknowledgeGuidanceStep } from '@/lib/api/guidanceApi';
 import type { RecallMatchDTO, RecallResolutionType } from '@/types/recalls.types';
 
 // ---------------------------------------------------------------------------
@@ -130,7 +130,7 @@ export function RecallCheckInline({
   async function handleConfirm(matchId: string) {
     setActionError(null);
     try {
-      await confirmRecallMatch(propertyId, matchId);
+      await confirmRecallMatch(propertyId, matchId, stepId);
       invalidateRecalls();
     } catch {
       setActionError('Failed to confirm match. Please try again.');
@@ -140,7 +140,7 @@ export function RecallCheckInline({
   async function handleDismiss(matchId: string) {
     setActionError(null);
     try {
-      await dismissRecallMatch(propertyId, matchId);
+      await dismissRecallMatch(propertyId, matchId, stepId);
       invalidateRecalls();
     } catch {
       setActionError('Failed to dismiss match. Please try again.');
@@ -153,7 +153,7 @@ export function RecallCheckInline({
   ) {
     setActionError(null);
     try {
-      await resolveRecallMatch({ propertyId, matchId, ...payload });
+      await resolveRecallMatch({ propertyId, matchId, guidanceStepId: stepId, ...payload });
       invalidateRecalls();
     } catch {
       setActionError('Failed to resolve match. Please try again.');
@@ -161,20 +161,19 @@ export function RecallCheckInline({
   }
 
   // ---- Complete step ----
+  // Confirming a match completes the safety alert and dismissing or resolving it completes the recall outcome: those actions report to this exact step on the server, so the page sends no completion of
+  // its own for them. Reading the remedy instructions is a review with no other event, so it alone is recorded as a typed acknowledgement.
+  const canAcknowledge = stepKey === 'review_remedy_instructions';
   async function handleComplete() {
     setCompleting(true);
     try {
-      await completeGuidanceStep(propertyId, stepId, {
-        openRecallCount: activeMatches.length,
-        totalRecallCount: allMatches.length,
-        sourceToolKey: 'recalls',
-      });
+      await acknowledgeGuidanceStep(propertyId, stepId);
       queryClient.invalidateQueries({ queryKey: ['guidance', 'property', propertyId] });
       queryClient.invalidateQueries({ queryKey: ['guidance', 'journey', propertyId] });
       setCompleteDone(true);
       onComplete();
     } catch (err) {
-      console.error('[RecallCheckInline] complete failed', err);
+      console.error('[RecallCheckInline] acknowledgement failed', err);
     } finally {
       setCompleting(false);
     }
@@ -207,9 +206,11 @@ export function RecallCheckInline({
       <div className="space-y-3">
         <p className="text-xs text-rose-700">Failed to load recalls. You can still complete this step or open the full recalls page.</p>
         <div className="flex flex-col gap-2">
-          <Button className="min-h-[48px] w-full rounded-2xl shadow-sm transition-shadow hover:shadow-md" disabled={completing} onClick={handleComplete}>
-            {completing ? 'Saving…' : copy.cta}
-          </Button>
+          {canAcknowledge && (
+            <Button className="min-h-[48px] w-full rounded-2xl shadow-sm transition-shadow hover:shadow-md" disabled={completing} onClick={handleComplete}>
+              {completing ? 'Saving…' : copy.cta}
+            </Button>
+          )}
           {!isGuided && (
             <Link
               href={fullRecallsHref}
@@ -263,14 +264,18 @@ export function RecallCheckInline({
 
       {/* Always-present completion actions */}
       <div className="flex flex-col gap-2">
-        <Button className="min-h-[52px] w-full rounded-2xl shadow-sm transition-shadow hover:shadow-md" disabled={completing} onClick={handleComplete}>
-          {completing ? 'Saving…' : (
-            <span className="inline-flex items-center gap-2">
-              {copy.cta}
-              <ArrowRight className="h-4 w-4" />
-            </span>
-          )}
-        </Button>
+        {canAcknowledge ? (
+          <Button className="min-h-[52px] w-full rounded-2xl shadow-sm transition-shadow hover:shadow-md" disabled={completing} onClick={handleComplete}>
+            {completing ? 'Saving…' : (
+              <span className="inline-flex items-center gap-2">
+                {copy.cta}
+                <ArrowRight className="h-4 w-4" />
+              </span>
+            )}
+          </Button>
+        ) : (
+          <p className="text-xs text-[hsl(var(--mobile-text-secondary))]">This step is completed by the recall action you take on a match above.</p>
+        )}
         {!isGuided && (
           <Link
             href={fullRecallsHref}
