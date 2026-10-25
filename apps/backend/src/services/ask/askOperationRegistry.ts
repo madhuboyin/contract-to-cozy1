@@ -586,9 +586,8 @@ export const ASK_INTERNAL_OPERATION_IDS: ReadonlySet<AskOperationId> = new Set<A
   // Recommended maintenance tasks (the Maintenance Setup catalogue, inside Ask): launch-only, reached by the declared action on a maintenance answer, never by
   // message (it would compete with MAINTENANCE_STATUS and MAINTENANCE_TASK_CREATE).
   'MAINTENANCE_TEMPLATES_BROWSE',
-  // Seasonal home care (exact-four starter source, inventory D-O4/D-O16): a pure, data-independent read of the general tasks for this
-  // home's climate region and season. Reached only by a stored starter's typed launch; not retrievable by message, because seasonal
-  // questions already route to MAINTENANCE_STATUS over the homeowner's generated checklist and this must not compete with it.
+  // General seasonal care has a narrow deterministic route for its canonical starters and equivalent preparation wording below. Keep it
+  // out of fuzzy retrieval so broader seasonal/checklist language continues to belong to MAINTENANCE_STATUS.
   'SEASONAL_HOME_CARE',
   // Reached only by the declared 'Add these to my tasks' action on the seasonal home-care answer.
   'SEASONAL_CHECKLIST_SETUP',
@@ -1118,6 +1117,10 @@ const unsafeRestrictedPattern = /\b(?:bypass|avoid|evade|skip|work around)\b.{0,
 const unauthorizedDataAccessPattern = /\b(?:show|list|give|export|send|reveal|access|download|delete|remove)\b.{0,50}\b(?:every|all|another|other)\b.{0,35}\b(?:users?[’']?s?|households?|homeowners?|customers?)\b.{0,45}\b(?:propert(?:y|ies)|records?|documents?|data|accounts?)\b|\b(?:uploaded|attached)\b.{0,40}\b(?:invoice|document|file)\b.{0,50}\b(?:says|instructs?|asks?)\b.{0,50}\b(?:send|share|upload|export)\b.{0,40}\b(?:records?|documents?|data)\b|\b(?:turn on|turn off|enable|disable|change|delete|remove|update|modify)\b.{0,60}\bfor\b.{0,20}\b(?:another|other|someone else'?s?)\b.{0,30}\b(?:users?|households?|homeowners?|customers?|person|member)\b|\b(?:change|modify|update|edit)\b.{0,80}\bpropert(?:y|ies)\b.{0,30}\b(?:i |that i )?(?:cannot|can'?t|do not|don'?t) access\b/i;
 const outOfScopePattern = /\b(python|javascript|typescript|coding interview|video game|write (?:me )?(?:a )?program|never[- ]ending loop|system prompt|developer message|ignore\b.{0,20}\b(?:previous|prior) instructions|forget\b.{0,20}\b(?:previous|prior) instructions|override (?:the )?(?:system|developer|safety) instructions|pretend (?:that )?you are|act as (?:dan|an unrestricted)|reveal (?:your |the )?(?:prompt|instructions)|jailbreak|base64[- ]decode (?:this|the prompt)|drop (?:a )?(?:table|database)|(?:run|execute|apply) (?:this |the |a )?(?:sql|database query)|production database|delete (?:every|all) (?:property|user|record)|shell command|malware|ransomware|phishing|steal (?:a )?(?:password|credential)|celebrity news|school essay)\b/i;
 const maintenancePattern = /\b(maintenance|maintain|task|tasks|overdue|due soon|what(?:'s| is) due|completed work|pending work|service history|what did (?:i|we) complete|work (?:i |we )?(?:completed|finished)|what should (?:i|we) do before (?:winter|spring|summer|fall|autumn))\b/i;
+// General climate-region seasonal guidance. This intentionally excludes the homeowner's recorded checklist/task language, which remains
+// MAINTENANCE_STATUS. The canonical starters must also work when typed or resent without their original discovery launch context.
+const seasonalHomeCarePattern = /\b(?:what home care should (?:i|we) do (?:for |in )?(?:this|the current|next|the next|coming|upcoming) season|what should (?:i|we) do to get ready for (?:the )?(?:next|coming|upcoming) season|(?:how (?:do|should) (?:i|we)|what should (?:i|we) do to) prepare (?:my |our |the )?home for (?:the )?(?:next|coming|upcoming) season|get(?:ting)? ready for (?:the )?(?:next|coming|upcoming) season)\b/i;
+const seasonalHomeCareRecordedIntentPattern = /\b(?:checklist|recorded|pending|completed|overdue|my tasks|our tasks|task status)\b/i;
 const maintenanceCreatePattern = /\b(?:create|add|schedule|set up)\b.{0,80}\b(?:maintenance(?: task)?|tasks?|gutter (?:cleaning|inspection)|clean(?:ing)? (?:the )?gutters?|filter change|(?:hvac|furnace|boiler|roof|water heater) (?:service|inspection|cleaning|repair|replacement))\b|\b(?:remind me to|put on my maintenance list)\b/i;
 // Deliberately checked before the very broad maintenancePattern below
 // (which matches on the bare word "maintenance"/"task" alone and would
@@ -1814,6 +1817,9 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   }
   if (homeActionsPattern.test(message) && !explicitCapabilityPattern.test(message) && !maintenancePattern.test(message)) {
     return resolved('HOME_ACTIONS', 0.96);
+  }
+  if (seasonalHomeCarePattern.test(message) && !seasonalHomeCareRecordedIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
+    return resolved('SEASONAL_HOME_CARE', 0.98);
   }
   if (maintenancePattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('MAINTENANCE_STATUS', 0.94);

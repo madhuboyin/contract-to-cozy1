@@ -1,4 +1,4 @@
-import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from 'react';
+import { useRef, type Dispatch, type MutableRefObject, type RefObject, type SetStateAction } from 'react';
 import { api } from '@/lib/api/client';
 import { track } from '@/lib/analytics/events';
 import { mergeResultExecutions, readResultView, resultRequestKey, resultViewKey, type createResultRequestTracker } from '@/features/ask/resultViewState';
@@ -33,10 +33,16 @@ export function useAskRequest({ sessionId, loading, executions, selectedProperty
   setJustUpdatedExecutionId: (value: string | null) => void;
   setRecentSessionsEpoch: Dispatch<SetStateAction<number>>;
 }) {
+  const editResendContextRef = useRef<{ question: string; declaredOperationId: string } | null>(null);
   const ask = async (question: string, attribution?: AskPromptAttribution, promptContext?: AskCapabilityPrompt['context'], options?: { presentInConversation?: boolean; suggestedAction?: { actionId: string; fromExecutionId: string }; sessionIdOverride?: string; firstMessageOverride?: boolean }) => {
     const message = question.trim();
     const requestedSessionId = options?.sessionIdOverride ?? sessionId;
     if (!message || !requestedSessionId || loading) return;
+    const editResendContext = editResendContextRef.current;
+    editResendContextRef.current = null;
+    if (!promptContext && editResendContext && message === editResendContext.question.trim()) {
+      promptContext = { operationId: editResendContext.declaredOperationId };
+    }
     // ASK_COZY_INTERACTION_MODEL_UI_FRD FRESH-003/CTX-002: capture which
     // session this request belongs to. Switching property mid-flight resets
     // `executions` and starts a new session (the effect above), but nothing
@@ -189,7 +195,11 @@ export function useAskRequest({ sessionId, loading, executions, selectedProperty
     window.setTimeout(() => textareaRef.current?.focus(), 0);
   };
   // FRD v1.96: bring an earlier question back into the composer to change and send again. The earlier answer stays.
-  const editAndResend = (question: string) => {
+  const editAndResend = (execution: AskExecutionResponse) => {
+    const question = execution.question;
+    editResendContextRef.current = execution.declaredOperationId
+      ? { question, declaredOperationId: execution.declaredOperationId }
+      : null;
     setError(null);
     setInput(question);
     if (sessionId) window.localStorage.setItem(draftStorageKey(selectedPropertyId, sessionId), question);

@@ -114,6 +114,7 @@ export function preservedExecutionHistory(existingResultJson: unknown, freshBloc
 export function mapPersistedExecution(execution: {
   id: string; sessionId: string; message: string; status: AskExecutionStatus; reasonCode?: string | null; propertyId: string | null; operationId: string | null;
   operationVersion: string | null; intentFamily: string | null; contextVersion: string | null; resultJson: Prisma.JsonValue | null;
+  launchContextJson?: Prisma.JsonValue | null;
   parametersJson?: Prisma.JsonValue | null;
   skillId?: string | null; skillVersion?: string | null; skillDomain?: string | null;
   createdAt: Date; updatedAt: Date;
@@ -146,6 +147,10 @@ export function mapPersistedExecution(execution: {
     : null;
   const storedSchemaVersion = typeof stored.schemaVersion === 'string' ? stored.schemaVersion : ASK_RESPONSE_SCHEMA_VERSION;
   const operationDefinition = operationId ? getAskOperationDefinition(operationId) : null;
+  const storedLaunch = execution.launchContextJson && typeof execution.launchContextJson === 'object' && !Array.isArray(execution.launchContextJson)
+    ? execution.launchContextJson as { operationId?: unknown }
+    : null;
+  const declaredOperationId = operationId && storedLaunch?.operationId === operationId ? operationId : null;
   const successfulAnswer = ['ANSWERED', 'READY_WITH_LIMITATIONS'].includes(execution.status);
   const correctionCapabilities = {
     intent: successfulAnswer,
@@ -166,6 +171,7 @@ export function mapPersistedExecution(execution: {
     skill,
     skillHandoff: stored.skillHandoff ?? null,
     operation: execution.operationId ? { id: execution.operationId, version: execution.operationVersion ?? '1.0', family: execution.intentFamily ?? 'UNKNOWN' } : null,
+    declaredOperationId,
     continuesExecutionId: typeof stored.continuesExecutionId === 'string' ? stored.continuesExecutionId : null,
     originalResponse: stored.originalResponse && typeof stored.originalResponse === 'object' && !Array.isArray(stored.originalResponse)
       ? stored.originalResponse
@@ -217,6 +223,7 @@ export function mapPersistedExecution(execution: {
     skill,
     skillHandoff: null,
     operation: execution.operationId ? { id: execution.operationId, version: execution.operationVersion ?? 'unknown', family: execution.intentFamily ?? 'UNKNOWN' } : null,
+    declaredOperationId,
     contextVersion: execution.contextVersion,
     blocks: [{
       type: 'SUMMARY', id: 'ask-schema-fallback', title: 'This saved response needs to be refreshed',

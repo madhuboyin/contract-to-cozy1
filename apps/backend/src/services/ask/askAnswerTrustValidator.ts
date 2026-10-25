@@ -351,14 +351,16 @@ export function validateAskAnswerTrustPipeline(input: {
         repaired: true,
       };
     }
+    const clearMismatch = semantic.outcome === 'FAIL';
+    // An UNKNOWN score is not evidence that the competing operation is relevant. Offering it as a choice exposed arbitrary semantic
+    // neighbors (for example, Home Record export for a seasonal-care question). Only a clear mismatch may offer the competitor.
     const candidateOperationIds = [...new Set([
       input.operationId,
-      semantic.competingOperationId,
+      ...(clearMismatch ? [semantic.competingOperationId] : []),
     ].filter((operationId): operationId is AskOperationId => Boolean(operationId)))]
       .filter((operationId) => !getAskOperationDefinition(operationId).safetyClass.endsWith('_BOUNDARY'))
       .slice(0, 3);
     const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
-    const clearMismatch = semantic.outcome === 'FAIL';
     const clarification = {
       version: 1,
       question: clearMismatch

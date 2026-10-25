@@ -427,6 +427,7 @@ export interface AskExecutionResponse {
     };
   } | null;
   operation: { id: string; version: string; family: string } | null;
+  declaredOperationId?: string | null;
   // ASK_COZY_INTERACTION_MODEL_UI_FRD RES-003/MAINT-003: set only for a bare
   // filter refinement of an existing read result (e.g. "only show urgent").
   continuesExecutionId?: string | null;

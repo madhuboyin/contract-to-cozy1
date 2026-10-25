@@ -587,6 +587,7 @@ test('semantic uncertainty requests focused clarification without claiming a mis
   assert.equal(uncertain.result.status, 'NEEDS_CLARIFICATION');
   assert.equal(uncertain.result.reasonCode, 'ASK_ANSWER_RELEVANCE_UNCERTAIN_CLARIFICATION_REQUIRED');
   assert.match(uncertain.result.blocks[0].body, /could not confidently connect/i);
+  assert.deepEqual(uncertain.result.clarification.options.map((option) => option.operationId), ['MAINTENANCE_STATUS'], 'UNKNOWN does not advertise an unproven semantic competitor');
 
   const afterClarification = validateAskAnswerTrustPipeline({
     question: 'What maintenance is pending? Clarification: pending upkeep',

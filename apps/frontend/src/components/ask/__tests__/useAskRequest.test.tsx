@@ -195,9 +195,23 @@ describe('stopAsking and editAndResend', () => {
 
   it('edit and send again puts an earlier question in the box with its draft and clears the error', () => {
     const { hook, fns } = setup();
-    act(() => hook.result.current.editAndResend('Earlier question'));
+    act(() => hook.result.current.editAndResend(exec('earlier', { question: 'Earlier question' })));
     expect(fns.setError).toHaveBeenCalledWith(null);
     expect(fns.setInput).toHaveBeenCalledWith('Earlier question');
     expect(window.localStorage.getItem(draftStorageKey('p1', 's1'))).toBe('Earlier question');
+  });
+
+  it('preserves a declared operation only when the resent text is unchanged', async () => {
+    create.mockImplementation(() => ok(exec('next')));
+    const unchanged = setup();
+    act(() => unchanged.hook.result.current.editAndResend(exec('seasonal', { question: 'What should I do to get ready for next season?', declaredOperationId: 'SEASONAL_HOME_CARE' })));
+    await act(async () => { await unchanged.hook.result.current.ask('What should I do to get ready for next season?'); });
+    expect(create.mock.calls[0][0].launchContext.operationId).toBe('SEASONAL_HOME_CARE');
+
+    create.mockClear();
+    const changed = setup();
+    act(() => changed.hook.result.current.editAndResend(exec('seasonal', { question: 'What should I do to get ready for next season?', declaredOperationId: 'SEASONAL_HOME_CARE' })));
+    await act(async () => { await changed.hook.result.current.ask('What should I do to get ready for winter?'); });
+    expect(create.mock.calls[0][0].launchContext.operationId).toBeUndefined();
   });
 });

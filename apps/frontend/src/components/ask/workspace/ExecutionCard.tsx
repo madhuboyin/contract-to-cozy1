@@ -140,7 +140,7 @@ export function ExecutionCard({
   onToggleFold?: () => void;
   onTogglePin?: () => void;
   // FRD v1.96: puts this result's question back in the composer to change and send again.
-  onEditQuestion?: (question: string) => void;
+  onEditQuestion?: (execution: AskExecutionResponse) => void;
 }) {
   const headingRef = useRef<HTMLHeadingElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -285,7 +285,7 @@ export function ExecutionCard({
       controls.change((view) => ({ ...view, scrollOffset, selectedTaskId: url.searchParams.get('taskId') ?? view.selectedTaskId }));
     }}>
       <div className="ml-auto w-fit max-w-[88%] rounded-2xl rounded-br-md bg-slate-900 px-4 py-3 text-sm leading-6 text-white">{execution.question}</div>
-      {onEditQuestion && <div className="flex justify-end"><button type="button" disabled={loading} onClick={() => onEditQuestion(execution.question)} aria-label="Change and resend this question" className="rounded-lg px-2 py-1 text-xs font-semibold text-slate-500 opacity-0 transition hover:bg-slate-100 hover:opacity-100 focus:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 max-lg:opacity-100">Change and resend</button></div>}
+      {onEditQuestion && <div className="flex justify-end"><button type="button" disabled={loading} onClick={() => onEditQuestion(execution)} aria-label="Change and resend this question" className="rounded-lg px-2 py-1 text-xs font-semibold text-slate-500 opacity-0 transition hover:bg-slate-100 hover:opacity-100 focus:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 max-lg:opacity-100">Change and resend</button></div>}
       <div className={cn('mr-auto w-full', askAnswerWidthClass(answerWidth), calmChrome ? 'space-y-3' : 'space-y-3 rounded-3xl border border-slate-200 bg-white/60 p-3 shadow-sm sm:p-4')}>
         {calmChrome ? <div className="flex items-center justify-between gap-2">
           <h2 ref={headingRef} tabIndex={-1} className="flex items-center gap-2 text-xs font-semibold text-teal-800 focus:outline-none"><span aria-hidden="true" className="grid h-6 w-6 place-items-center rounded-full bg-teal-700 text-[11px] font-bold text-white">C</span><span>Cozy<span className="sr-only"> response</span></span></h2>

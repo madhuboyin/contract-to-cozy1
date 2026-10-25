@@ -1512,6 +1512,9 @@ const AskExecutionResponseBaseSchema = z.object({
     }).default({ propertyId: null, sourceEntityType: null, sourceEntityId: null, sourceHomeActionId: null, decisionThreadId: null, workItemId: null, journeyId: null, contextVersion: null, returnDestination: null }),
   }).nullable().default(null),
   operation: z.object({ id: z.string(), version: z.string(), family: z.string() }).nullable(),
+  // Present only when this execution's stored launch context declared the same operation that actually ran. This lets an unchanged
+  // "Change and resend" preserve reviewed starter/action routing without treating an inferred operation as a client-owned declaration.
+  declaredOperationId: z.string().trim().min(1).max(120).nullable().default(null),
   // ASK_COZY_INTERACTION_MODEL_UI_FRD RES-003/MAINT-003: set only when this
   // execution is a bare filter refinement of an existing read result (e.g.
   // "only show urgent") -- askFollowUpContext.ts's isFilterContinuation

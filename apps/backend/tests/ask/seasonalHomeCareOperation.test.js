@@ -19,9 +19,9 @@ const { getAskAudiencePolicy } = require('../../src/services/ask/askAudiencePoli
 const { KNOWN_UNGOVERNED_OPERATIONS, validateSkillOperationGovernanceCoverage } = require('../../src/services/intelligence/skillOperationGovernance.contract.ts');
 const { ASK_INTERACTION_COVERAGE_MATRIX, validateAskInteractionCoverageMatrix } = require('../../src/services/ask/askInteractionCoverageMatrix.ts');
 
-test('registered as a non-routable, deterministic, viewer-floor, standard-safety, property-scoped read that every operating mode may use', () => {
+test('registered as a deterministic-pattern-only, viewer-floor, standard-safety, property-scoped read that every operating mode may use', () => {
   const definition = ASK_OPERATION_DEFINITIONS.SEASONAL_HOME_CARE;
-  assert.equal(definition.messageRoutable, false);
+  assert.equal(definition.messageRoutable, false, 'excluded from fuzzy retrieval; canonical wording has a narrow deterministic route');
   assert.equal(definition.executionMode, 'DETERMINISTIC');
   assert.equal(definition.propertyRoleFloor, 'VIEWER');
   assert.equal(definition.safetyClass, 'STANDARD');
@@ -37,11 +37,12 @@ test('skill-less by design: it is in KNOWN_UNGOVERNED_OPERATIONS, and the boot-t
   assert.deepEqual(validateAskInteractionCoverageMatrix(), []);
 });
 
-test('routing is untouched: the existing seasonal questions still route where they did, and no message resolves to the new operation', () => {
-  const messages = ['What home care should I do this season?', 'What should I do to get ready for next season?', 'What are my fall maintenance tasks?', 'Show my seasonal checklist', 'What should I do this winter?', 'seasonal home care', 'What maintenance do I need to do in spring?'];
-  for (const message of messages) assert.notEqual(resolveAskOperation(message).operationId, 'SEASONAL_HOME_CARE', message);
+test('canonical and equivalent general seasonal questions route directly, while recorded checklist questions stay in Maintenance', () => {
+  const general = ['What home care should I do this season?', 'What should I do to get ready for next season?', 'How should we prepare our home for the coming season?', 'Getting ready for the upcoming season'];
+  for (const message of general) assert.equal(resolveAskOperation(message).operationId, 'SEASONAL_HOME_CARE', message);
   assert.equal(resolveAskOperation('What are my fall maintenance tasks?').operationId, 'MAINTENANCE_STATUS');
   assert.equal(resolveAskOperation('What maintenance do I need to do in spring?').operationId, 'MAINTENANCE_STATUS');
+  assert.equal(resolveAskOperation('Show my pending seasonal checklist tasks').operationId, 'MAINTENANCE_STATUS');
 });
 
 test('the focus comes from the stored starter message: the two constants select this and next season; anything else is this season', () => {
