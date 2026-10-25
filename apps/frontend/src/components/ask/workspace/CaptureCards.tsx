@@ -607,6 +607,77 @@ export function InlineCaptureCard({
   const renderPlantField = (key: string) => {
     const field = assumptionFieldByKey.get(key);
     if (!field) return null;
+    if (key === 'hasPets') {
+      return (
+        <div>
+          <CaptureFieldControl
+            field={{ ...field, helpText: undefined }}
+            value={values[field.key]}
+            disabled={saving}
+            allowNotSure={request.allowNotSure}
+            compact
+            propertyId={propertyId}
+            onChange={(value) => setValues((current) => ({ ...current, [field.key]: value }))}
+          />
+          {field.helpText && <p className="mt-1 text-[11px] leading-4 text-slate-400">{field.helpText}</p>}
+        </div>
+      );
+    }
+    if (key === 'goals' && field.inputSchema.type === 'MULTI_SELECT') {
+      const schema = field.inputSchema;
+      const current = Array.isArray(values.goals) ? values.goals.filter((item): item is string => typeof item === 'string') : [];
+      return (
+        <fieldset className="min-w-0 border-0 p-0">
+          <div className="mb-1.5 flex flex-wrap items-baseline justify-between gap-2">
+            <legend className="text-xs font-semibold leading-4 text-slate-800">{field.label}</legend>
+            {field.helpText && <p className="text-xs leading-4 text-slate-500">{field.helpText}</p>}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {schema.options.map((option) => {
+              const selected = current.includes(option.value);
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  aria-pressed={selected}
+                  disabled={saving}
+                  onClick={() => {
+                    const next = selected ? current.filter((item) => item !== option.value) : [...current, option.value].slice(0, schema.maxItems);
+                    setValues((prev) => ({ ...prev, goals: next }));
+                  }}
+                  className={cn(
+                    'rounded-xl border px-3 py-1.5 text-xs font-semibold transition-colors sm:text-sm',
+                    selected ? 'border-teal-700 bg-teal-700 text-white shadow-2xs' : 'border-slate-200 bg-white text-slate-700 hover:border-teal-300 hover:bg-teal-50',
+                  )}
+                >
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
+        </fieldset>
+      );
+    }
+    if (key === 'notes' && field.inputSchema.type === 'LONG_TEXT') {
+      return (
+        <div>
+          <label htmlFor={`plant-notes-${executionId}`} className="mb-1 block text-xs font-semibold leading-4 text-slate-800">
+            {field.label}
+          </label>
+          <textarea
+            id={`plant-notes-${executionId}`}
+            aria-label={field.label}
+            rows={1}
+            maxLength={field.inputSchema.maxLength}
+            placeholder={field.helpText ?? 'For example, an AC vent, a narrow shelf or limited floor space.'}
+            value={typeof values.notes === 'string' ? values.notes : ''}
+            disabled={saving}
+            onChange={(event) => setValues((current) => ({ ...current, notes: event.target.value }))}
+            className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-1.5 text-sm text-slate-900 placeholder:text-slate-400 outline-none transition-colors focus:border-teal-600 focus:bg-white focus:ring-2 focus:ring-teal-600/15"
+          />
+        </div>
+      );
+    }
     return <CaptureFieldControl key={key} field={field} value={values[field.key]} disabled={saving} allowNotSure={request.allowNotSure} compact propertyId={propertyId} onChange={(value) => setValues((current) => ({ ...current, [field.key]: value }))} />;
   };
   const plantRoomField = assumptionFieldByKey.get('roomId');
@@ -738,7 +809,7 @@ export function InlineCaptureCard({
   }
 
   return (
-    <form ref={containerRef as unknown as Ref<HTMLFormElement>} onSubmit={save} className={cn('rounded-2xl border', decisionInputWorkflow ? cn('mx-auto mb-24 w-full border-slate-200 bg-white p-4 shadow-sm sm:p-5', sellHoldRentAssumptions ? 'max-w-[760px]' : 'max-w-[900px]') : compactContinuityPlan ? 'mx-auto w-full max-w-[820px] border-slate-200 bg-white p-4 shadow-sm sm:p-5' : compactPlantAdvisor ? 'w-full max-w-[760px] border-slate-200/90 bg-white p-4 shadow-2xs sm:p-5' : compactServicePriceCheck ? 'w-full max-w-[680px] border-slate-200/90 bg-white p-4 shadow-2xs sm:p-5' : compactWorkItemReschedule ? 'mx-auto w-full max-w-[680px] border-sky-200 bg-sky-50/80 p-4 sm:p-5' : compactEventAdd ? 'border-slate-200 bg-white p-4 shadow-sm sm:p-5' : compactProjectCreate ? 'p-3 sm:p-4' : 'p-4', !decisionInputWorkflow && !compactContinuityPlan && !compactPlantAdvisor && !compactServicePriceCheck && !compactWorkItemReschedule && !compactEventAdd && policy.border)} aria-busy={saving || cancelling} aria-label={request.title} data-home-continuity-capture={compactContinuityPlan ? '' : undefined} data-work-item-reschedule={compactWorkItemReschedule ? '' : undefined} data-service-price-check-capture={compactServicePriceCheck ? '' : undefined} data-plant-advisor-capture={compactPlantAdvisor ? '' : undefined} data-decision-input-workflow={decisionInputWorkflow ? request.captureKey : undefined}>
+    <form ref={containerRef as unknown as Ref<HTMLFormElement>} onSubmit={save} className={cn('rounded-2xl border', decisionInputWorkflow ? cn('mx-auto mb-24 w-full border-slate-200 bg-white p-4 shadow-sm sm:p-5', sellHoldRentAssumptions ? 'max-w-[760px]' : 'max-w-[900px]') : compactContinuityPlan ? 'mx-auto w-full max-w-[820px] border-slate-200 bg-white p-4 shadow-sm sm:p-5' : compactPlantAdvisor ? 'w-full max-w-[640px] border-slate-200/90 bg-white p-4 shadow-2xs sm:p-5' : compactServicePriceCheck ? 'w-full max-w-[680px] border-slate-200/90 bg-white p-4 shadow-2xs sm:p-5' : compactWorkItemReschedule ? 'mx-auto w-full max-w-[680px] border-sky-200 bg-sky-50/80 p-4 sm:p-5' : compactEventAdd ? 'border-slate-200 bg-white p-4 shadow-sm sm:p-5' : compactProjectCreate ? 'p-3 sm:p-4' : 'p-4', !decisionInputWorkflow && !compactContinuityPlan && !compactPlantAdvisor && !compactServicePriceCheck && !compactWorkItemReschedule && !compactEventAdd && policy.border)} aria-busy={saving || cancelling} aria-label={request.title} data-home-continuity-capture={compactContinuityPlan ? '' : undefined} data-work-item-reschedule={compactWorkItemReschedule ? '' : undefined} data-service-price-check-capture={compactServicePriceCheck ? '' : undefined} data-plant-advisor-capture={compactPlantAdvisor ? '' : undefined} data-decision-input-workflow={decisionInputWorkflow ? request.captureKey : undefined}>
       {compactWorkItemReschedule ? (
         <div>
           <h3 className="text-lg font-semibold tracking-tight text-slate-950">{request.title}</h3>
@@ -825,7 +896,7 @@ export function InlineCaptureCard({
           {request.destinationLabel && <p className="mt-2 text-xs font-medium text-sky-900">{request.classification === 'WORKFLOW_INPUT' ? `${request.destinationLabel}.` : `${request.destinationLabel} after you continue.`}</p>}
         </>
       )}
-      <div className={sellHoldRentAssumptions || financingProfile ? 'mt-4' : compactEventAdd || compactProjectCreate ? 'mt-3 grid gap-x-3 gap-y-2.5 md:grid-cols-6' : compactInventoryCompletion ? 'mt-4 grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3' : compactWorkItemReschedule ? 'mt-4 max-w-md' : compactServicePriceCheck ? 'mt-3' : compactWorkflow ? 'mt-4 grid gap-3 md:grid-cols-2' : 'mt-4 space-y-4'} data-compact-capture={sellHoldRentAssumptions ? 'sell-hold-rent-assumptions' : financingProfile ? 'financing-profile' : compactContinuityPlan ? 'home-continuity-plan' : compactMaintenanceTask ? 'maintenance-task' : compactInventoryCreate ? 'inventory-item-create' : compactInventoryCompletion ? 'inventory-item-completion' : compactMaterialSpec ? 'material-spec' : compactPlantAdvisor ? 'plant-advisor' : compactServicePriceCheck ? 'service-price-check' : compactOwnershipScenario ? 'ownership-cost-scenario' : compactEventAdd ? 'timeline-event' : compactProjectCreate ? 'project-create' : compactProjectCommand ? 'project-command' : compactWorkItemReschedule ? 'work-item-reschedule' : undefined}>
+      <div className={sellHoldRentAssumptions || financingProfile ? 'mt-4' : compactEventAdd || compactProjectCreate ? 'mt-3 grid gap-x-3 gap-y-2.5 md:grid-cols-6' : compactInventoryCompletion ? 'mt-4 grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3' : compactWorkItemReschedule ? 'mt-4 max-w-md' : compactServicePriceCheck || compactPlantAdvisor ? 'mt-3' : compactWorkflow ? 'mt-4 grid gap-3 md:grid-cols-2' : 'mt-4 space-y-4'} data-compact-capture={sellHoldRentAssumptions ? 'sell-hold-rent-assumptions' : financingProfile ? 'financing-profile' : compactContinuityPlan ? 'home-continuity-plan' : compactMaintenanceTask ? 'maintenance-task' : compactInventoryCreate ? 'inventory-item-create' : compactInventoryCompletion ? 'inventory-item-completion' : compactMaterialSpec ? 'material-spec' : compactPlantAdvisor ? 'plant-advisor' : compactServicePriceCheck ? 'service-price-check' : compactOwnershipScenario ? 'ownership-cost-scenario' : compactEventAdd ? 'timeline-event' : compactProjectCreate ? 'project-create' : compactProjectCommand ? 'project-command' : compactWorkItemReschedule ? 'work-item-reschedule' : undefined}>
         {activeGroup && <div className={compactProjectCreate || compactEventAdd ? 'md:col-span-6' : 'md:col-span-2'}>
           <div className="mb-3 flex items-start justify-between gap-3">
             <div><p className="text-sm font-semibold text-slate-950">{activeGroup.title}</p>{activeGroup.description && <p className="mt-0.5 text-xs text-slate-500">{activeGroup.description}</p>}</div>
@@ -841,16 +912,16 @@ export function InlineCaptureCard({
           </div>
           <div className="rounded-xl border border-slate-200/80 bg-slate-50/40 p-3">{renderPriceCheckField('serviceLabelRaw')}</div>
         </div> : compactPlantAdvisor ? <div className="space-y-3 md:col-span-2" data-plant-advisor-redesign="compact">
-          <div className="grid gap-3 sm:grid-cols-2" aria-label="Room and growing conditions">
-            <div className="rounded-xl border border-slate-200/80 bg-slate-50/60 p-3">{renderPlantField('roomId')}</div>
-            <div className="rounded-xl border border-slate-200/80 bg-slate-50/60 p-3">{renderPlantField('lightLevel')}</div>
-            <div className="rounded-xl border border-slate-200/80 bg-slate-50/40 p-3">{renderPlantField('maintenancePreference')}</div>
-            <div className="rounded-xl border border-slate-200/80 bg-slate-50/40 p-3">{renderPlantField('hasPets')}</div>
+          <div className="space-y-3" aria-label="Room and growing conditions">
+            <div>{renderPlantField('roomId')}</div>
+            <div className="border-t border-slate-100 pt-2.5">{renderPlantField('lightLevel')}</div>
+            <div className="grid gap-3 border-t border-slate-100 pt-2.5 sm:grid-cols-2">
+              <div>{renderPlantField('hasPets')}</div>
+              <div>{renderPlantField('maintenancePreference')}</div>
+            </div>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <section aria-label="Optional plant goals" className="rounded-xl border border-slate-200/80 bg-slate-50/40 p-3">{renderPlantField('goals')}</section>
-            <div className="rounded-xl border border-slate-200/80 bg-slate-50/40 p-3">{renderPlantField('notes')}</div>
-          </div>
+          <section aria-label="Optional plant goals" className="border-t border-slate-100 pt-2.5">{renderPlantField('goals')}</section>
+          <div className="border-t border-slate-100 pt-2.5">{renderPlantField('notes')}</div>
         </div> : sellHoldRentAssumptions ? <div className="space-y-3">
           <section aria-labelledby={`assumptions-property-${executionId}`} className="rounded-2xl border border-slate-200 p-3">
             <div className="mb-2"><h4 id={`assumptions-property-${executionId}`} className="text-sm font-semibold text-slate-950">Property and rent</h4><p className="mt-0.5 text-xs text-slate-500">Blank values continue using the model defaults from the comparison.</p></div>

@@ -491,8 +491,8 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
             {section.items.length === 0 ? <AskCollectionState kind="EMPTY" title={section.title} action={block.sections.length === 1 && block.actions[0] ? <ActionLink action={block.actions[0]} /> : undefined} /> : (
               <AskCollection id={listId} className={cn(
                 block.id === 'project-detail-records' && 'grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3',
-                (block.id === 'coverage-groups' || isPlantCareList) && 'grid grid-cols-1 gap-2.5 sm:grid-cols-2',
-                block.id !== 'project-detail-records' && block.id !== 'coverage-groups' && !isPlantCareList && (dense ? 'divide-y divide-slate-100' : presentation === 'COMPACT_LIST' ? 'space-y-1' : isOwnershipCostList || isServicePriceRadarList || isCoverageGroupsList ? 'space-y-2' : 'space-y-3'),
+                block.id === 'coverage-groups' && 'grid grid-cols-1 gap-2.5 sm:grid-cols-2',
+                block.id !== 'project-detail-records' && block.id !== 'coverage-groups' && (dense ? 'divide-y divide-slate-100' : presentation === 'COMPACT_LIST' ? 'space-y-1' : isOwnershipCostList || isServicePriceRadarList || isCoverageGroupsList || isPlantCareList ? 'space-y-2' : 'space-y-3'),
               )} data-project-record-grid={block.id === 'project-detail-records' ? '' : undefined} data-coverage-groups-grid={block.id === 'coverage-groups' ? '' : undefined} data-plant-care-grid={isPlantCareList ? '' : undefined}>
                 {visibleItems.map((sourceItem) => {
                   const item = block.id === 'maintenance-groups' ? formatLegacyAskMaintenanceItem(sourceItem) : sourceItem;
