@@ -7,7 +7,10 @@ const row = (id: string, title: string, meta: string[] = ['Source: Self-reported
 const sections = [
   { id: 'f', title: 'Selected property facts', count: 3, items: [row('location.city', 'City: Plainsboro Township'), row('core.dwellingType', 'Dwelling type: Townhouse'), row('systems.waterHeaterType', 'Water heater type: Tank', undefined, 'Sensitive')] },
   { id: 'h', title: 'Verified property history', count: 1, items: [{ id: 'h-empty', title: 'No eligible records were included', description: null, meta: ['As of Aug 5, 2026'], status: 'EMPTY' }] },
-  { id: 'g', title: 'Known gaps and unknowns', count: 1, items: [row('core.bedrooms', 'Bedrooms: Unknown or not recorded', ['Source: Home record', 'Unknown or not recorded'], 'Included', [{ id: 'property-brief-fill-core', label: 'Add detail', message: 'Fill in the missing core property details.', operationId: 'PROPERTY_CONTEXT_AREA_CAPTURE', interactionType: 'MUTATE_RECORD', entityType: 'PROPERTY_CONTEXT_AREA', entityId: 'CORE', style: 'SECONDARY' }])] },
+  { id: 'g', title: 'Known gaps and unknowns', count: 2, items: [
+    row('core.bedrooms', 'Bedrooms: Unknown or not recorded', ['Source: Home record', 'Unknown or not recorded'], 'Included', [{ id: 'property-brief-fill-core', label: 'Add detail', message: 'Fill in the missing core property details.', operationId: 'PROPERTY_CONTEXT_AREA_CAPTURE', interactionType: 'MUTATE_RECORD', entityType: 'PROPERTY_CONTEXT_AREA', entityId: 'CORE', style: 'SECONDARY' }]),
+    { ...row('core.bathrooms', 'Bathrooms: Unknown or not recorded', ['Source: Home record', 'Unknown or not recorded'], 'Included', [{ id: 'property-brief-republish', label: 'Refresh brief', message: 'Manage this property brief.', operationId: 'PROPERTY_BRIEF_COMMAND', interactionType: 'MUTATE_RECORD', entityType: 'PROPERTY_BRIEF', entityId: 'brief-1', style: 'SECONDARY' }]), description: 'This detail is now recorded in your home record.' },
+  ] },
 ];
 const block = { type: 'GROUPED_LIST', id: 'property-brief-preview-sections', title: 'Exact recipient preview', actions: [], filters: [], sections } as unknown as Props['block'];
 const onItemAction = jest.fn();
@@ -34,6 +37,12 @@ describe('Property Brief preview', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Add detail' }));
     expect(onItemAction).toHaveBeenCalledWith('PROPERTY_CONTEXT_AREA', 'CORE', 'Fill in the missing core property details.', 'PROPERTY_CONTEXT_AREA_CAPTURE', 'MUTATE_RECORD');
     expect(screen.getAllByRole('button', { name: 'Add detail' })).toHaveLength(1);
+  });
+  it('offers a brief refresh instead of an empty capture when the live record resolved a frozen gap', () => {
+    renderSheet();
+    expect(screen.getByText('This detail is now recorded in your home record.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh brief' }));
+    expect(onItemAction).toHaveBeenCalledWith('PROPERTY_BRIEF', 'brief-1', 'Manage this property brief.', 'PROPERTY_BRIEF_COMMAND', 'MUTATE_RECORD');
   });
   it('shows a prominent stale banner with the refresh action, and the trust label near the title', () => {
     const summary = { type: 'SUMMARY', id: 'property-brief-preview-summary', title: 'Property Brief', tone: 'CAUTION',

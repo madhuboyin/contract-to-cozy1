@@ -194,7 +194,10 @@ function FactGroup({ group, anchorId, itemActionsDisabled, onItemAction }: {
                       group.gaps || isUnrecorded(item) ? 'italic text-slate-500' : 'text-slate-900',
                     )}
                   >
-                    <span>{value || 'Not recorded'}</span>
+                    <span>
+                      {value || 'Not recorded'}
+                      {group.gaps && item.description && <span className="mt-0.5 block text-xs font-medium not-italic text-teal-800">{item.description}</span>}
+                    </span>
                     <div className="flex flex-wrap items-center gap-1.5 not-italic">
                       {verified && !group.gaps && (
                         <span

@@ -11,6 +11,8 @@ import { PROPERTY_BRIEF_TEMPLATES } from '../../../propertyBrief/propertyBrief.c
 import { PROPERTY_BRIEF_ACTION_IDS, PROPERTY_BRIEF_COMMAND_MESSAGE } from '../support/propertyBriefConstants';
 import { getFactDefinition } from '../../../modules/propertyContext/catalog/factCatalog';
 import { AREA_CAPTURE_MESSAGES, ensurePropertyAccess, isAreaCaptureScope } from '../askHandlerSupport';
+import { getPropertyContext } from '../../../modules/propertyContext/application/getPropertyContext';
+import type { PropertyFactState } from '../../../modules/propertyContext/domain/contracts';
 
 // Property Brief capability-card slice (FRD v1.63): the fifteenth new operation for a capability with none. Reads
 // listPropertyBriefs -- the call GET /properties/:id/property-briefs makes for the Property Brief page: every
@@ -161,8 +163,8 @@ export function propertyBriefPreviewRow(item: Record<string, unknown>, fallbackI
   };
 }
 
-export function propertyBriefGapAction(factKey: string, canManage: boolean) {
-  if (!canManage) return undefined;
+export function propertyBriefGapAction(factKey: string, canManage: boolean, liveState?: PropertyFactState) {
+  if (!canManage || !liveState || liveState === 'KNOWN') return undefined;
   let fact: ReturnType<typeof getFactDefinition>;
   try {
     fact = getFactDefinition(factKey);
@@ -188,20 +190,29 @@ const sectionRecordCount = (section: { payload: unknown }) => {
 };
 
 async function previewResult(propertyId: string, userId: string, briefId: string, role: HouseholdRole): Promise<AskOperationResult> {
-  const preview = await getPropertyBriefPreview(propertyId, userId, briefId);
   const canManage = role !== HouseholdRole.VIEWER;
-  const updateStatus = await inspectPropertyBriefUpdates({ propertyId, briefId, role });
+  const [preview, updateStatus, liveContext] = await Promise.all([
+    getPropertyBriefPreview(propertyId, userId, briefId),
+    inspectPropertyBriefUpdates({ propertyId, briefId, role }),
+    getPropertyContext(propertyId, { userId }, { scopes: ['CORE', 'LOCATION', 'STRUCTURE', 'SYSTEMS'] }).catch(() => null),
+  ]);
   const sections = preview.sections.map((section) => {
     const payload = section.payload && typeof section.payload === 'object' && !Array.isArray(section.payload) ? section.payload as Record<string, unknown> : {};
     const evidence = new Map(section.evidenceLinks.map((link) => [link.itemKey, link]));
     const rows = (Array.isArray(payload.items) ? payload.items : []).map((raw, index) => {
       const item: Record<string, unknown> = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw as Record<string, unknown> : { value: raw };
       const proof = evidence.get(String(item.key ?? ''));
-      const gapAction = section.sectionType === 'OPEN_UNKNOWNS' ? propertyBriefGapAction(String(item.key ?? ''), canManage) : undefined;
+      const factKey = String(item.key ?? '');
+      const liveState = liveContext?.facts[factKey]?.state;
+      const gapAction = section.sectionType === 'OPEN_UNKNOWNS' ? propertyBriefGapAction(factKey, canManage, liveState) : undefined;
+      const refreshAction = section.sectionType === 'OPEN_UNKNOWNS' && canManage && liveState === 'KNOWN'
+        ? { ...commandAction(PROPERTY_BRIEF_ACTION_IDS.REPUBLISH, 'Refresh brief'), entityType: 'PROPERTY_BRIEF', entityId: preview.id }
+        : undefined;
       return {
         ...propertyBriefPreviewRow(item, `${section.id}-${index}`, proof, section.asOf),
         status: section.sensitive ? 'Sensitive' : 'Included',
-        ...(gapAction ? { actions: [gapAction] } : {}),
+        ...(liveState === 'KNOWN' ? { description: 'This detail is now recorded in your home record.' } : {}),
+        ...(gapAction ? { actions: [gapAction] } : refreshAction ? { actions: [refreshAction] } : {}),
       };
     });
     return { id: section.id, title: section.title, count: rows.length, items: rows.length ? rows : [{ id: `${section.id}-empty`, title: 'No eligible records were included', description: null, meta: [`As of ${humanDate(new Date(section.asOf))}`], status: 'EMPTY' }] };

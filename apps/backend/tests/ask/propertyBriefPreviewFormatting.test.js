@@ -28,7 +28,7 @@ test('property brief unknowns say what is missing without exposing enum codes', 
 });
 
 test('a writable brief gap launches its governed property area capture', () => {
-  assert.deepEqual(propertyBriefGapAction('core.bedrooms', true), {
+  assert.deepEqual(propertyBriefGapAction('core.bedrooms', true, 'UNKNOWN'), {
     id: 'property-brief-fill-core',
     label: 'Add detail',
     message: 'Fill in the missing core property details.',
@@ -39,5 +39,6 @@ test('a writable brief gap launches its governed property area capture', () => {
     style: 'SECONDARY',
   });
   assert.equal(propertyBriefGapAction('core.bedrooms', false), undefined, 'viewers cannot edit the shared home record');
+  assert.equal(propertyBriefGapAction('core.bedrooms', true, 'KNOWN'), undefined, 'a frozen gap that is now recorded must refresh the brief instead of opening an empty capture');
   assert.equal(propertyBriefGapAction('not.a.canonical.fact', true), undefined, 'unknown and non-canonical gaps stay read-only');
 });
