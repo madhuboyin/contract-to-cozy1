@@ -67,6 +67,13 @@ export default function RecallAlertsClient() {
   const [rows, setRows] = useState<RecallMatchDTO[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [guidanceProofRecorded, setGuidanceProofRecorded] = useState(false);
+  const [guidanceReportRefused, setGuidanceReportRefused] = useState(false);
+
+  function applyGuidanceReport(result: { guidanceReport?: { reported: boolean | null } }) {
+    if (!guidanceStepId) return;
+    setGuidanceProofRecorded(result.guidanceReport?.reported === true);
+    setGuidanceReportRefused(result.guidanceReport?.reported === false);
+  }
 
   async function refresh() {
     setLoading(true);
@@ -105,20 +112,20 @@ export default function RecallAlertsClient() {
   // A recall action started from a journey step carries that exact step; the server reports the result to it (and only if the journey is about this match's item). The page sends no completion
   // of its own.
   async function onConfirm(matchId: string) {
-    await confirmRecallMatch(propertyId, matchId, guidanceStepId);
-    if (guidanceStepId) setGuidanceProofRecorded(true);
+    const result = await confirmRecallMatch(propertyId, matchId, guidanceStepId);
+    applyGuidanceReport(result);
     await refresh();
   }
 
   async function onDismiss(matchId: string) {
-    await dismissRecallMatch(propertyId, matchId, guidanceStepId);
-    if (guidanceStepId) setGuidanceProofRecorded(true);
+    const result = await dismissRecallMatch(propertyId, matchId, guidanceStepId);
+    applyGuidanceReport(result);
     await refresh();
   }
 
   async function onResolve(matchId: string, payload: { resolutionType: RecallResolutionType; resolutionNotes?: string }) {
-    await resolveRecallMatch({ propertyId, matchId, guidanceStepId, ...payload });
-    if (guidanceStepId) setGuidanceProofRecorded(true);
+    const result = await resolveRecallMatch({ propertyId, matchId, guidanceStepId, ...payload });
+    applyGuidanceReport(result);
     await refresh();
   }
 
@@ -165,6 +172,10 @@ export default function RecallAlertsClient() {
               <CheckCircle className="h-4 w-4" />
               Step completed from recall evidence.
             </div>
+          ) : guidanceReportRefused ? (
+            <p className="text-sm text-amber-700">
+              The recall action was saved, but this journey step was not updated because it is no longer the matching open step.
+            </p>
           ) : (
             <p className="text-sm text-muted-foreground">
               Use Confirm, Dismiss, or Resolve on recall matches below to generate completion proof.

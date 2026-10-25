@@ -2,6 +2,7 @@
 // proof). It records, before any step is connected to Ask, what the step promises, what durable record would prove it, which Ask command and Desktop reporter exist,
 // what a launch needs, how the step is bound, and a verdict:
 //   CONNECTED               an Ask write reports this step with proof (it is in ASK_GUIDANCE_IN_ASK_STEPS)
+//   EXTERNAL_COMPLETION     a typed provider outcome reports the exact step; Ask truthfully renders a waiting state and has no homeowner write
 //   CONNECTABLE             the proof is decided and nothing needs a product call; what is left to build (an Ask command, a shared reporter) is in the prerequisite
 //   NEEDS_PRODUCT_DECISION  the proof is undefined, or a surface does not report it; connecting it now would invent a meaning
 //   WRONG_TOOL              the step promises something its tool does not produce
@@ -9,7 +10,7 @@
 // `tests/ask/guidanceStepProofMatrix.test.js` requires a row for every registered journey step, requires CONNECTED to match the IN_ASK table exactly, and fails on
 // a row with no step. Order of work: by existing Ask command and proof clarity, not tool count. See the continuation FRD, section 24.
 
-export type GuidanceStepProofVerdict = 'CONNECTED' | 'CONNECTABLE' | 'NEEDS_PRODUCT_DECISION' | 'WRONG_TOOL' | 'UNSUPPORTED';
+export type GuidanceStepProofVerdict = 'CONNECTED' | 'EXTERNAL_COMPLETION' | 'CONNECTABLE' | 'NEEDS_PRODUCT_DECISION' | 'WRONG_TOOL' | 'UNSUPPORTED';
 export type GuidanceStepProofPolicy = 'ACKNOWLEDGEMENT' | 'CANONICAL_MUTATION' | 'VERIFIED_EVIDENCE' | 'EXTERNAL_COMPLETION' | 'DECISION';
 export type GuidanceStepBindingKind = 'EXACT_STEP' | 'FAMILY_FALLBACK' | 'NONE';
 /** How the Desktop completes the step, exactly one: a typed canonical proof, a typed external completion (a provider outcome), a true review acknowledgement, an intentionally manual explicit declaration (rare; never a mutation, document, provider outcome, financial decision or safety/compliance proof), a wrong tool, or unsupported. */
@@ -444,35 +445,35 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
   'guidance-overview:confirm_cleaning_complete': {
     desktopPath: 'TYPED_EXTERNAL_COMPLETION', desktopTypedPathBuilt: true,
     homeownerJob: 'Confirm service completed',
-    canonicalProof: 'Undefined: a guidance-native acknowledgement with no tool of its own.',
+    canonicalProof: 'The booking explicitly bound to this journey is completed by its provider, with no dispute opened after completion.',
     askOperation: null,
     desktopReporter: 'bookingJourneyProofOperations.syncBookingJourneyProofs (a provider-completed booking of this journey; the generic completion is refused for this step)',
-    launchPrerequisites: 'Build first: Ask has nothing to do for this step because the provider completes it; the journey workspace should show the waiting state and the booking it waits on.',
-    binding: 'NONE', verdict: 'NEEDS_PRODUCT_DECISION',
+    launchPrerequisites: 'The journey workspace shows the booking and a waiting state. The provider outcome advances it externally; there is intentionally no homeowner write command.',
+    binding: 'EXACT_STEP', verdict: 'EXTERNAL_COMPLETION',
     proofPolicy: 'EXTERNAL_COMPLETION',
     risk: 'False completion if an acknowledgement is treated as proof.',
   },
   'guidance-overview:prepare_property_access': {
     desktopPath: 'INTENTIONALLY_MANUAL', desktopTypedPathBuilt: true,
     homeownerJob: 'Prepare property access',
-    canonicalProof: 'Undefined: a guidance-native acknowledgement with no tool of its own.',
+    canonicalProof: 'A typed manual declaration using the server-owned access-prepared wording, recorded against the exact step, subject and signal version.',
     askOperation: 'GUIDANCE_STEP_DECLARE',
     desktopReporter: 'guidanceManualDeclaration.declareGuidanceStep (route POST .../guidance/steps/:stepId/declare; the generic completion is refused for this step)',
-    launchPrerequisites: 'Whatever the step asks the homeowner to confirm.',
+    launchPrerequisites: 'The exact open prepare_property_access step; the homeowner confirms the one server-owned declaration.',
     binding: 'EXACT_STEP', verdict: 'CONNECTED',
-    proofPolicy: 'ACKNOWLEDGEMENT',
-    risk: 'False completion if an acknowledgement is treated as proof.',
+    proofPolicy: 'DECISION',
+    risk: 'The declaration must remain narrowly allowlisted and cannot substitute for provider, evidence, mutation or financial proof.',
   },
   'guidance-overview:review_compliance_requirement': {
     desktopPath: 'TRUE_REVIEW_ACKNOWLEDGEMENT', desktopTypedPathBuilt: true,
     homeownerJob: 'Review compliance requirement',
-    canonicalProof: 'Undefined: a guidance-native acknowledgement with no tool of its own.',
+    canonicalProof: 'A typed manual declaration selecting one server-owned cleaning-service type against the exact step, subject and signal version.',
     askOperation: 'GUIDANCE_STEP_ACKNOWLEDGE',
     desktopReporter: 'guidanceAcknowledgement.acknowledgeGuidanceStepById (the generic completion is refused for this step)',
-    launchPrerequisites: 'Whatever the step asks the homeowner to confirm.',
+    launchPrerequisites: 'The exact open select_cleaning_type step and one server-owned catalog choice.',
     binding: 'EXACT_STEP', verdict: 'CONNECTED',
     proofPolicy: 'ACKNOWLEDGEMENT',
-    risk: 'False completion if an acknowledgement is treated as proof.',
+    risk: 'Free-form declarations or use for any other step would turn this into a generic completion escape hatch.',
   },
   'guidance-overview:review_signal': {
     homeownerJob: 'Review guidance signal',
@@ -487,7 +488,7 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
   'guidance-overview:select_cleaning_type': {
     desktopPath: 'INTENTIONALLY_MANUAL', desktopTypedPathBuilt: true,
     homeownerJob: 'Select cleaning service type',
-    canonicalProof: 'Undefined: a guidance-native acknowledgement with no tool of its own.',
+    canonicalProof: 'The booking explicitly bound to this journey is completed by its provider, with no dispute opened after completion.',
     askOperation: 'GUIDANCE_STEP_DECLARE',
     desktopReporter: 'guidanceManualDeclaration.declareGuidanceStep (route POST .../guidance/steps/:stepId/declare; the generic completion is refused for this step)',
     launchPrerequisites: 'Whatever the step asks the homeowner to confirm.',
@@ -501,8 +502,8 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
     canonicalProof: 'Undefined: a guidance-native acknowledgement with no tool of its own.',
     askOperation: null,
     desktopReporter: 'bookingJourneyProofOperations.syncBookingJourneyProofs (a provider-completed booking of this journey; the generic completion is refused for this step)',
-    launchPrerequisites: 'Build first: Ask has nothing to do for this step because the provider completes it; the journey workspace should show the waiting state and the booking it waits on.',
-    binding: 'NONE', verdict: 'NEEDS_PRODUCT_DECISION',
+    launchPrerequisites: 'The journey workspace shows the booking and a waiting state. The provider outcome advances it externally; there is intentionally no homeowner write command.',
+    binding: 'EXACT_STEP', verdict: 'EXTERNAL_COMPLETION',
     proofPolicy: 'EXTERNAL_COMPLETION',
     risk: 'False completion if an acknowledgement is treated as proof.',
   },
@@ -672,24 +673,24 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
   'ownership-costs:estimate_out_of_pocket_cost': {
     desktopPath: 'TRUE_REVIEW_ACKNOWLEDGEMENT', desktopTypedPathBuilt: true,
     homeownerJob: 'Estimate out-of-pocket cost',
-    canonicalProof: 'Undefined: an ownership-cost estimate is a read, not a durable event.',
+    canonicalProof: 'A typed, durable acknowledgement that the homeowner reviewed the rendered out-of-pocket estimate for this exact step and signal version.',
     askOperation: 'GUIDANCE_STEP_ACKNOWLEDGE',
     desktopReporter: 'guidanceAcknowledgement.acknowledgeGuidanceStepById (the generic completion is refused for this step)',
     launchPrerequisites: 'Recorded costs for the home.',
     binding: 'EXACT_STEP', verdict: 'CONNECTED',
     proofPolicy: 'ACKNOWLEDGEMENT',
-    risk: 'False completion: viewing an estimate is not doing the step.',
+    risk: 'Passive rendering is not proof; the explicit typed review acknowledgement is required.',
   },
   'ownership-costs:estimate_total_cost': {
     desktopPath: 'TRUE_REVIEW_ACKNOWLEDGEMENT', desktopTypedPathBuilt: true,
     homeownerJob: 'Estimate total cost of ownership',
-    canonicalProof: 'Undefined: an ownership-cost estimate is a read, not a durable event.',
+    canonicalProof: 'A typed, durable acknowledgement that the homeowner reviewed the rendered total-cost estimate for this exact step and signal version.',
     askOperation: 'GUIDANCE_STEP_ACKNOWLEDGE',
     desktopReporter: 'guidanceAcknowledgement.acknowledgeGuidanceStepById (the generic completion is refused for this step)',
     launchPrerequisites: 'Recorded costs for the home.',
     binding: 'EXACT_STEP', verdict: 'CONNECTED',
     proofPolicy: 'ACKNOWLEDGEMENT',
-    risk: 'False completion: viewing an estimate is not doing the step.',
+    risk: 'Passive rendering is not proof; the explicit typed review acknowledgement is required.',
   },
   'ownership-costs:prepare_appeal': {
     desktopPath: 'UNSUPPORTED', desktopTypedPathBuilt: false,
@@ -796,13 +797,13 @@ export const GUIDANCE_STEP_PROOF_MATRIX: Readonly<Record<string, GuidanceStepPro
   'recalls:review_remedy_instructions': {
     desktopPath: 'TRUE_REVIEW_ACKNOWLEDGEMENT', desktopTypedPathBuilt: true,
     homeownerJob: 'Review remedy instructions',
-    canonicalProof: 'Undefined: reading remedy instructions leaves no durable event.',
+    canonicalProof: 'A typed, durable acknowledgement that the homeowner reviewed the recall remedy instructions for this exact step and signal version.',
     askOperation: 'GUIDANCE_STEP_ACKNOWLEDGE',
     desktopReporter: 'guidanceAcknowledgement.acknowledgeGuidanceStepById (the generic completion is refused for this step)',
     launchPrerequisites: 'An open recall match.',
     binding: 'EXACT_STEP', verdict: 'CONNECTED',
     proofPolicy: 'ACKNOWLEDGEMENT',
-    risk: 'False completion: nothing in Ask reports this step.',
+    risk: 'Passive rendering is not proof; Ask and Desktop must use the typed acknowledgement.',
   },
   'recalls:safety_alert': {
     homeownerJob: 'Acknowledge safety alert',

@@ -17,6 +17,10 @@ import {
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 import { getProjectComplianceEnvelope } from '../services/projectCompliance/context';
 
+/** Property-scoped journeys accept any record in the home; item-scoped journeys accept only that exact item. */
+export const priceFinalizationSubjectMatches = (journeyInventoryItemId: string | null, recordInventoryItemId: string | null) =>
+  !journeyInventoryItemId || journeyInventoryItemId === recordInventoryItemId;
+
 function requireUser(req: CustomRequest) {
   const userId = req.user?.userId;
   if (!userId) {
@@ -119,7 +123,9 @@ export async function createPriceFinalizationDraft(
     let guidanceStepKey: string | null = null;
     if (guidanceStepId) {
       const bound = await resolveGuidanceStepBinding(req.params.propertyId, guidanceStepId, { toolKey: 'price-finalization', stepKeys: ['finalize_price'] });
-      if (bound.ok) { guidanceJourneyId = bound.binding.journeyId; guidanceStepKey = bound.binding.stepKey; }
+      const requestedItemId = body.inventoryItemId ?? null;
+      const subjectMatches = bound.ok && priceFinalizationSubjectMatches(bound.binding.inventoryItemId, requestedItemId);
+      if (bound.ok && subjectMatches) { guidanceJourneyId = bound.binding.journeyId; guidanceStepKey = bound.binding.stepKey; }
     }
     const payload = { ...body, guidanceJourneyId, guidanceStepKey } as CreatePriceFinalizationBody;
     const { detail, contextVersion } = await createPriceFinalizationDraftWithEffects(req.params.propertyId, userId, payload as never);

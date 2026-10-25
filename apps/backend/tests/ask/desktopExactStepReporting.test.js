@@ -9,6 +9,7 @@ const { reportToExactStep } = require('../../src/services/guidanceEngine/exactSt
 const { guidanceJourneyService } = require('../../src/services/guidanceEngine/guidanceJourney.service.ts');
 const recallsService = require('../../src/services/recalls.service.ts');
 const recallsController = require('../../src/controllers/recalls.controller.ts');
+const { priceFinalizationSubjectMatches } = require('../../src/controllers/priceFinalization.controller.ts');
 
 let step; let reports; let saved; let rec;
 const stepRow = (over = {}) => ({ id: 's1', stepKey: 'safety_alert', toolKey: 'recalls', status: 'PENDING', journey: { id: 'j1', status: 'ACTIVE', inventoryItemId: 'item-1', primarySignal: null }, ...over });
@@ -47,21 +48,31 @@ test('a subject check can refuse a step about another item; a failed report is f
   assert.deepEqual([failed.supplied, failed.reported], [true, false]);
 });
 
+test('an item-scoped price-finalization step binds only to a record for that exact item', () => {
+  assert.equal(priceFinalizationSubjectMatches('item-1', 'item-1'), true);
+  assert.equal(priceFinalizationSubjectMatches('item-1', 'item-2'), false);
+  assert.equal(priceFinalizationSubjectMatches('item-1', null), false);
+  assert.equal(priceFinalizationSubjectMatches(null, 'item-2'), true, 'a property-scoped journey may use an item record in that home');
+});
+
 test('Desktop recall action: a supplied step reports only for the match\'s own item, the match is saved either way, and no step id keeps the family path', async () => {
   const row = { id: 'm1', propertyId: 'p1', inventoryItemId: 'item-1', recallId: 'r1' };
   const saves = [];
   const savedConfirm = recallsService.confirmRecallMatch;
   recallsService.confirmRecallMatch = async () => { saves.push('saved'); return row; };
-  const res = () => ({ json() { return this; }, status() { return this; } });
+  const responses = [];
+  const res = () => ({ json(value) { responses.push(value); return this; }, status() { return this; } });
   try {
     await recallsController.confirmMatch({ params: { propertyId: 'p1', matchId: 'm1' }, query: { guidanceStepId: 's1' }, body: {}, user: { userId: 'u1' } }, res());
     assert.equal(reports.length, 1);
     assert.equal(reports[0].journeyId, 'j1');
+    assert.equal(responses.at(-1).guidanceReport.reported, true, 'the UI receives the actual reporting outcome');
     reports.length = 0;
     step = stepRow({ journey: { id: 'j1', status: 'ACTIVE', inventoryItemId: 'item-9', primarySignal: null } });
     await recallsController.confirmMatch({ params: { propertyId: 'p1', matchId: 'm1' }, query: { guidanceStepId: 's1' }, body: {}, user: { userId: 'u1' } }, res());
     assert.equal(reports.length, 0, 'a journey about another item is not advanced');
     assert.equal(saves.length, 2, 'the domain write is saved either way');
+    assert.equal(responses.at(-1).guidanceReport.refusal, 'WRONG_SUBJECT', 'a saved recall action does not masquerade as journey proof');
     await recallsController.confirmMatch({ params: { propertyId: 'p1', matchId: 'm1' }, query: {}, body: {}, user: { userId: 'u1' } }, res());
     assert.equal(reports.length, 1, 'outside a journey the family path still reports');
     assert.equal(reports[0].journeyId, undefined);

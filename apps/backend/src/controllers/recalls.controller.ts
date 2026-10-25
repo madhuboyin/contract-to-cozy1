@@ -44,9 +44,9 @@ async function reportRecall(req: Request, propertyId: string, action: 'CONFIRM' 
   const stepId = typeof req.query?.guidanceStepId === 'string' ? req.query.guidanceStepId : (typeof (req.body as any)?.guidanceStepId === 'string' ? (req.body as any).guidanceStepId : null);
   if (!stepId) {
     await reportRecallMatchStep(propertyId, action, row);
-    return;
+    return { supplied: false, reported: null, refusal: null } as const;
   }
-  await reportToExactStep(propertyId, stepId, { toolKey: 'recalls', stepKeys: [recallStepKeyForAction(action)] },
+  return reportToExactStep(propertyId, stepId, { toolKey: 'recalls', stepKeys: [recallStepKeyForAction(action)] },
     (binding) => reportRecallMatchStep(propertyId, action, row, req.user?.userId ?? null, { journeyId: binding.journeyId }),
     (binding) => (row.inventoryItemId && binding.inventoryItemId === row.inventoryItemId ? null : 'WRONG_SUBJECT'));
 }
@@ -57,7 +57,7 @@ export async function confirmMatch(req: Request, res: Response) {
   try {
     const row = await confirmRecallMatch(propertyId, matchId);
 
-    await reportRecall(req, propertyId, 'CONFIRM', row);
+    const guidanceReport = await reportRecall(req, propertyId, 'CONFIRM', row);
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.ACTION_COMPLETED,
@@ -68,7 +68,7 @@ export async function confirmMatch(req: Request, res: Response) {
       metadataJson: { actionType: 'confirm_match', matchId, recallId: row.recallId },
     });
 
-    return res.json(row);
+    return res.json({ ...row, guidanceReport });
   } catch (err: any) {
     if (isNotFoundError(err)) return res.status(404).json({ message: 'Recall match not found' });
     if (err?.statusCode) return res.status(err.statusCode).json({ code: err.code, message: err.message });
@@ -83,7 +83,7 @@ export async function dismissMatch(req: Request, res: Response) {
   try {
     const row = await dismissRecallMatch(propertyId, matchId);
 
-    await reportRecall(req, propertyId, 'DISMISS', row);
+    const guidanceReport = await reportRecall(req, propertyId, 'DISMISS', row);
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.ACTION_COMPLETED,
@@ -94,7 +94,7 @@ export async function dismissMatch(req: Request, res: Response) {
       metadataJson: { actionType: 'dismiss_match', matchId, recallId: row.recallId },
     });
 
-    return res.json(row);
+    return res.json({ ...row, guidanceReport });
   } catch (err: any) {
     if (isNotFoundError(err)) return res.status(404).json({ message: 'Recall match not found' });
     if (err?.statusCode) return res.status(err.statusCode).json({ code: err.code, message: err.message });
@@ -123,7 +123,7 @@ export async function resolveMatch(req: Request, res: Response) {
       resolutionNotes: resolutionNotes || null,
     });
 
-    await reportRecall(req, propertyId, 'RESOLVE', row);
+    const guidanceReport = await reportRecall(req, propertyId, 'RESOLVE', row);
 
     analyticsEmitter.track({
       eventType: AnalyticsEvent.ACTION_COMPLETED,
@@ -134,7 +134,7 @@ export async function resolveMatch(req: Request, res: Response) {
       metadataJson: { actionType: 'resolve_match', matchId, resolutionType: row.resolutionType },
     });
 
-    return res.json(row);
+    return res.json({ ...row, guidanceReport });
   } catch (err: any) {
     if (isNotFoundError(err)) return res.status(404).json({ message: 'Recall match not found' });
     logger.error({ err }, 'resolveMatch error');

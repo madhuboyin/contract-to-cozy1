@@ -11,7 +11,7 @@ const { ASK_GUIDANCE_IN_ASK_STEPS, askGuidanceStepMode } = require('../../src/se
 const { ASK_OPERATION_DEFINITIONS } = require('../../src/services/ask/askOperationRegistry.ts');
 const { listGuidanceTemplates, DEFAULT_TEMPLATE } = require('../../src/services/guidanceEngine/guidanceTemplateRegistry.ts');
 
-const VERDICTS = ['CONNECTED', 'CONNECTABLE', 'NEEDS_PRODUCT_DECISION', 'WRONG_TOOL', 'UNSUPPORTED'];
+const VERDICTS = ['CONNECTED', 'EXTERNAL_COMPLETION', 'CONNECTABLE', 'NEEDS_PRODUCT_DECISION', 'WRONG_TOOL', 'UNSUPPORTED'];
 const BINDINGS = ['EXACT_STEP', 'FAMILY_FALLBACK', 'NONE'];
 const POLICIES = ['ACKNOWLEDGEMENT', 'CANONICAL_MUTATION', 'VERIFIED_EVIDENCE', 'EXTERNAL_COMPLETION', 'DECISION'];
 // Acknowledgement completes only a true review step, never a safety, financial, compliance, execution or repair step (owner decision 2026-10-24).
@@ -41,6 +41,11 @@ test('every row is complete and uses only the declared vocabulary', () => {
     // Connectable means the proof is decided: anything still missing (an Ask command, a shared reporter) is said as what to build first.
     if (row.verdict === 'CONNECTABLE' && !(row.askOperation && row.desktopReporter)) assert.match(row.launchPrerequisites, /^Build/, `${key}: a connectable step with no Ask command or reporter yet says what to build first`);
     if (row.verdict === 'CONNECTED') assert.notEqual(row.binding, 'NONE', `${key}: a connected step is bound`);
+    if (row.verdict === 'EXTERNAL_COMPLETION') {
+      assert.equal(row.proofPolicy, 'EXTERNAL_COMPLETION', `${key}: external verdict uses external proof`);
+      assert.equal(row.desktopTypedPathBuilt, true, `${key}: external reporter is built`);
+      assert.notEqual(row.binding, 'NONE', `${key}: external completion is exactly bound`);
+    }
   }
 });
 

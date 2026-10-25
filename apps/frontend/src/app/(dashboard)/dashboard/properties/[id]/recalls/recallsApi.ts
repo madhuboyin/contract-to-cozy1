@@ -10,6 +10,10 @@ export type ListInventoryItemRecallsResponse = {
   matches: RecallMatchDTO[];
 };
 
+export type RecallActionResult = RecallMatchDTO & {
+  guidanceReport?: { supplied: boolean; reported: boolean | null; refusal: string | null };
+};
+
 export async function listPropertyRecalls(
   propertyId: string
 ): Promise<ListPropertyRecallsResponse> {
@@ -36,8 +40,8 @@ export async function confirmRecallMatch(
   propertyId: string,
   matchId: string,
   guidanceStepId?: string | null
-): Promise<RecallMatchDTO> {
-  const res = await api.post<RecallMatchDTO>(
+): Promise<RecallActionResult> {
+  const res = await api.post<RecallActionResult>(
     `/api/properties/${propertyId}/recalls/matches/${matchId}/confirm${stepQuery(guidanceStepId)}`,
     {}
   );
@@ -48,8 +52,8 @@ export async function dismissRecallMatch(
   propertyId: string,
   matchId: string,
   guidanceStepId?: string | null
-): Promise<RecallMatchDTO> {
-  const res = await api.post<RecallMatchDTO>(
+): Promise<RecallActionResult> {
+  const res = await api.post<RecallActionResult>(
     `/api/properties/${propertyId}/recalls/matches/${matchId}/dismiss${stepQuery(guidanceStepId)}`,
     {}
   );
@@ -62,8 +66,8 @@ export async function resolveRecallMatch(params: {
   resolutionType: RecallResolutionType;
   resolutionNotes?: string;
   guidanceStepId?: string | null;
-}): Promise<RecallMatchDTO> {
-  const res = await api.post<RecallMatchDTO>(
+}): Promise<RecallActionResult> {
+  const res = await api.post<RecallActionResult>(
     `/api/properties/${params.propertyId}/recalls/matches/${params.matchId}/resolve${stepQuery(params.guidanceStepId)}`,
     {
       resolutionType: params.resolutionType,
