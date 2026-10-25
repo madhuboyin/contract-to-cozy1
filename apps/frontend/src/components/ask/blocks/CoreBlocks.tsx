@@ -9,6 +9,7 @@ import { useCalmAnswer, useCalmChrome, useCalmReceiptContinuation } from './calm
 import type { AskBlockRenderer } from './types';
 import { ItemActionButtons } from '../patterns/PatternParts';
 import { SummaryBullets } from './SummaryBullets';
+import { PLANT_ADVISOR_ANSWER_WIDTH_CLASS } from '../plantAdvisorLayout';
 
 function AnswerChips({ chips }: { chips: NonNullable<Extract<AskPresentationBlock, { type: 'SUMMARY' }>['chips']> }) {
   return (
@@ -677,7 +678,8 @@ function PlantAdvisorSummaryCard({ block }: { block: Extract<AskPresentationBloc
     <section
       data-plant-advisor-summary={block.id}
       className={cn(
-        'relative w-full rounded-2xl border px-4 py-3 shadow-2xs sm:px-5',
+        PLANT_ADVISOR_ANSWER_WIDTH_CLASS,
+        'relative rounded-2xl border px-4 py-3 shadow-2xs sm:px-5',
         isCaution
           ? 'border-amber-200/90 bg-gradient-to-r from-amber-50/85 via-white to-emerald-50/35'
           : isPositive

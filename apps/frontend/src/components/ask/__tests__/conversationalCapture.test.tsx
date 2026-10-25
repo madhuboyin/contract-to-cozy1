@@ -124,6 +124,7 @@ describe('Plant Advisor compact capture', () => {
     } as unknown as AskCaptureRequest;
     const { container } = render(<InlineCaptureCard executionId="plant-capture" request={plantRequest} onCompleted={jest.fn()} />);
 
+    expect(container.querySelector('[data-plant-advisor-capture]')).toHaveClass('w-full', 'max-w-[760px]');
     expect(container.querySelector('[data-plant-advisor-redesign="compact"]')).toBeInTheDocument();
     expect(screen.getByText('Choose any that matter to you.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Yes' })).toHaveAttribute('aria-pressed', 'false');

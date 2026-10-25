@@ -32,7 +32,8 @@ const block: Block = {
 } as unknown as Block;
 
 test('shows scannable fit and safety facts while keeping weak matches collapsed', () => {
-  render(<PlantRecommendationResultList block={block} onAction={jest.fn()} />);
+  const { container } = render(<PlantRecommendationResultList block={block} onAction={jest.fn()} />);
+  expect(container.querySelector('[data-plant-recommendations]')).toHaveClass('w-full', 'max-w-[920px]');
   expect(screen.getByText('Best match')).toBeVisible();
   expect(screen.getByText('Pet-safe')).toBeVisible();
   expect(screen.getByText(/Kitchen · Medium light/)).toBeVisible();
@@ -85,7 +86,7 @@ test('renders Plant Advisor executive summary cards and 2-column weather-aware c
   };
 
   const { container: summaryContainer } = render(<SummaryBlock block={careSummary} renderAction={() => null} />);
-  expect(summaryContainer.querySelector('[data-plant-advisor-summary="plant-care-summary"]')).toBeInTheDocument();
+  expect(summaryContainer.querySelector('[data-plant-advisor-summary="plant-care-summary"]')).toHaveClass('w-full', 'max-w-[920px]');
   expect(screen.getByText('Weather-Aware Care')).toBeInTheDocument();
   expect(screen.getByText('2 Urgent Changes')).toBeInTheDocument();
   expect(screen.getByText('Tracked Flora')).toBeInTheDocument();

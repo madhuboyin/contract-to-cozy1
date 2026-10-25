@@ -5,6 +5,7 @@ import { AlertTriangle, ChevronDown, ChevronUp, Droplets, Leaf, MapPin, PawPrint
 import type { AskItemActionInteractionType, AskPresentationBlock } from '@/features/ask/types';
 import { cn } from '@/lib/utils';
 import { ActionLink } from './blocks/context';
+import { PLANT_ADVISOR_ANSWER_WIDTH_CLASS } from './plantAdvisorLayout';
 
 type Block = Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>;
 type Item = Block['sections'][number]['items'][number];
@@ -235,7 +236,7 @@ export function PlantRecommendationResultList({ block, disabled, onAction }: { b
   const changeAction = block.actions.find((action) => action.interactionType === 'START_WORKFLOW');
 
   return (
-    <section className="w-full max-w-[760px] rounded-2xl border border-slate-200/90 bg-white shadow-2xs" data-plant-recommendations="">
+    <section className={cn(PLANT_ADVISOR_ANSWER_WIDTH_CLASS, 'rounded-2xl border border-slate-200/90 bg-white shadow-2xs')} data-plant-recommendations="">
       <header className="flex flex-wrap items-start justify-between gap-2.5 rounded-t-2xl border-b border-slate-100 bg-gradient-to-r from-slate-50/90 via-white to-emerald-50/30 px-4 py-3 sm:px-5">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
