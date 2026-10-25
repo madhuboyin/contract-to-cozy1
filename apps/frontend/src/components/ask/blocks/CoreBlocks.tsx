@@ -503,6 +503,154 @@ function ServicePriceRadarSummaryCard({ block }: { block: Extract<AskPresentatio
   );
 }
 
+const COVERAGE_SUMMARY_IDS: ReadonlySet<string> = new Set([
+  'coverage-summary',
+  'coverage-comparison-summary',
+  'coverage-comparison-baseline-required',
+  'coverage-comparison-not-started',
+]);
+
+function CoverageSummaryCard({ block }: { block: Extract<AskPresentationBlock, { type: 'SUMMARY' }> }) {
+  const isCaution = block.tone === 'CAUTION';
+  const isPositive = block.tone === 'POSITIVE';
+  const isGapAudit = block.id === 'coverage-summary';
+  const countsMatch = /(\d+)\s+confirmed\s+missing\s+or\s+expired,\s*(\d+)\s+unclear,\s+and\s+(\d+)\s+missing\s+supporting\s+evidence/i.exec(block.body);
+  const confirmedGaps = countsMatch ? Number(countsMatch[1]) : null;
+  const unclearCount = countsMatch ? Number(countsMatch[2]) : null;
+  const missingEvidence = countsMatch ? Number(countsMatch[3]) : null;
+  const totalFlagged = (confirmedGaps ?? 0) + (unclearCount ?? 0) + (missingEvidence ?? 0);
+  const confirmedPct = totalFlagged > 0 ? Math.round(((confirmedGaps ?? 0) / totalFlagged) * 100) : 0;
+  const unclearPct = totalFlagged > 0 ? Math.round(((unclearCount ?? 0) / totalFlagged) * 100) : 0;
+  const evidencePct = totalFlagged > 0 ? Math.max(0, 100 - confirmedPct - unclearPct) : 0;
+
+  return (
+    <section
+      data-coverage-summary={block.id}
+      className={cn(
+        'relative w-full rounded-2xl border px-4 py-3 shadow-2xs sm:px-5',
+        isCaution
+          ? 'border-amber-200/90 bg-gradient-to-r from-amber-50/85 via-white to-teal-50/30'
+          : isPositive
+            ? 'border-emerald-200/90 bg-gradient-to-r from-emerald-50/75 via-white to-teal-50/40'
+            : 'border-slate-200/90 bg-gradient-to-r from-slate-50/85 via-white to-teal-50/30',
+      )}
+    >
+      <div className="flex flex-col justify-between gap-2.5 sm:flex-row sm:items-start">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-teal-900 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-teal-100">
+              {isCaution ? (
+                <AlertTriangle aria-hidden="true" className="h-3 w-3 text-amber-300" />
+              ) : (
+                <CheckCircle2 aria-hidden="true" className="h-3 w-3 text-teal-300" />
+              )}
+              Coverage Intelligence
+            </span>
+            <span
+              aria-hidden="true"
+              className="inline-flex items-center rounded-full border border-teal-200/90 bg-white/90 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-teal-800"
+            >
+              {isGapAudit ? 'Gap & Evidence Audit' : 'Policy Comparison'}
+            </span>
+            {isGapAudit && (
+              <span
+                aria-hidden="true"
+                className={cn(
+                  'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider',
+                  (confirmedGaps ?? 0) > 0
+                    ? 'border-rose-300/80 bg-rose-100/80 text-rose-900'
+                    : isCaution
+                      ? 'border-amber-300/80 bg-amber-100/80 text-amber-900'
+                      : isPositive
+                        ? 'border-emerald-300/80 bg-emerald-100/80 text-emerald-900'
+                        : 'border-sky-300/80 bg-sky-100/80 text-sky-900',
+                )}
+              >
+                <span
+                  className={cn(
+                    'h-1.5 w-1.5 rounded-full',
+                    (confirmedGaps ?? 0) > 0
+                      ? 'bg-rose-600'
+                      : isCaution
+                        ? 'bg-amber-600'
+                        : isPositive
+                          ? 'bg-emerald-600'
+                          : 'bg-sky-600',
+                  )}
+                />
+                {(confirmedGaps ?? 0) > 0
+                  ? `${confirmedGaps} Confirmed Gap${confirmedGaps === 1 ? '' : 's'}`
+                  : (unclearCount ?? 0) > 0
+                    ? `${unclearCount} Unclear`
+                    : (missingEvidence ?? 0) > 0
+                      ? `${missingEvidence} Missing Evidence`
+                      : 'No Gaps Surfaced'}
+              </span>
+            )}
+          </div>
+
+          <h3 className="mt-1 text-base font-bold tracking-tight text-slate-950 sm:text-lg">{block.title}</h3>
+          <p className="mt-0.5 whitespace-pre-wrap text-xs leading-5 text-slate-700 sm:text-sm">{block.body}</p>
+
+          {countsMatch && confirmedGaps !== null && unclearCount !== null && missingEvidence !== null && (
+            <div aria-hidden="true" className="mt-2.5 rounded-xl border border-slate-200/80 bg-white/90 px-3 py-2">
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-rose-700">
+                    <span className="h-1.5 w-1.5 rounded-full bg-rose-600" />
+                    Confirmed Gaps
+                  </span>
+                  <div className="mt-0.5 flex flex-wrap items-baseline gap-1">
+                    <span className="text-xs font-extrabold tabular-nums text-rose-950 sm:text-sm">{confirmedGaps}</span>
+                    <span className="text-[11px] font-medium text-slate-500">missing / expired</span>
+                  </div>
+                </div>
+                <div>
+                  <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-amber-700">
+                    <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                    Coverage Unclear
+                  </span>
+                  <div className="mt-0.5 flex flex-wrap items-baseline gap-1">
+                    <span className="text-xs font-extrabold tabular-nums text-amber-950 sm:text-sm">{unclearCount}</span>
+                    <span className="text-[11px] font-medium text-slate-500">needs check</span>
+                  </div>
+                </div>
+                <div>
+                  <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-sky-700">
+                    <span className="h-1.5 w-1.5 rounded-full bg-sky-600" />
+                    Evidence Missing
+                  </span>
+                  <div className="mt-0.5 flex flex-wrap items-baseline gap-1">
+                    <span className="text-xs font-extrabold tabular-nums text-sky-950 sm:text-sm">{missingEvidence}</span>
+                    <span className="text-[11px] font-medium text-slate-500">no document</span>
+                  </div>
+                </div>
+              </div>
+              {totalFlagged > 0 && (
+                <div className="mt-1.5 flex h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+                  {confirmedPct > 0 && <div className="bg-rose-500 transition-all" style={{ width: `${confirmedPct}%` }} />}
+                  {unclearPct > 0 && <div className="bg-amber-400 transition-all" style={{ width: `${unclearPct}%` }} />}
+                  {evidencePct > 0 && <div className="bg-sky-500 transition-all" style={{ width: `${evidencePct}%` }} />}
+                </div>
+              )}
+            </div>
+          )}
+
+          {block.chips && block.chips.length > 0 && <AnswerChips chips={block.chips} />}
+        </div>
+
+        {block.actions.length > 0 && (
+          <div className="flex shrink-0 flex-wrap items-center gap-2 sm:mt-0.5">
+            {block.actions.map((action) => (
+              <ActionLink key={action.id} action={action} />
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
 export const SummaryBlock: AskBlockRenderer<'SUMMARY'> = ({ block }) => {
   const calm = useCalmChrome();
   // The seasonal plan's intro and next steps are their own cards in both shells (see SeasonalAnswerCards).
@@ -516,6 +664,7 @@ export const SummaryBlock: AskBlockRenderer<'SUMMARY'> = ({ block }) => {
   if (OWNERSHIP_COST_SUMMARY_IDS.has(block.id)) return <OwnershipCostsSummaryCard block={block} />;
   if (block.id === 'ownership-cost-refresh') return <OwnershipCostRefreshCard block={block} />;
   if (block.id === 'service-price-radar-summary') return <ServicePriceRadarSummaryCard block={block} />;
+  if (COVERAGE_SUMMARY_IDS.has(block.id)) return <CoverageSummaryCard block={block} />;
   if (calm) return <CalmSummary block={block} />;
   return (
     <section className={cn(

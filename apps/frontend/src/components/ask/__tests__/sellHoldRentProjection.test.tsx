@@ -1,6 +1,8 @@
 import { render, screen, within } from '@testing-library/react';
 import { AdaptiveTableBlock } from '../AdaptiveTableBlock';
 import { ComparisonStripBlock } from '../ComparisonStripBlock';
+import { SummaryBlock } from '../blocks/CoreBlocks';
+import { GenericGroupedListBlock } from '../blocks/GroupedListBlock';
 import type { AskPresentationBlock } from '@/features/ask/types';
 
 const block: Extract<AskPresentationBlock, { type: 'TABLE' }> = {
@@ -198,4 +200,72 @@ test('renders Ownership Costs category breakdown and forward period range cards 
   expect(forecastContainer.querySelector('[data-ownership-cost-periods="ownership-cost-forecast-periods"]')).toBeInTheDocument();
   expect(screen.getByRole('table', { name: 'Forward cost range' })).toBeInTheDocument();
   expect(screen.getAllByText('$17,040').length).toBeGreaterThanOrEqual(1);
+});
+
+test('renders Coverage Gaps executive summary card and 2-column grouped item grid without view toggles', () => {
+  const coverageSummary: Extract<AskPresentationBlock, { type: 'SUMMARY' }> = {
+    type: 'SUMMARY',
+    id: 'coverage-summary',
+    title: 'Protection gaps and missing coverage evidence',
+    body: 'This review separates confirmed coverage gaps from items where coverage is unclear or supporting documents are missing: 2 confirmed missing or expired, 0 unclear, and 4 missing supporting evidence.',
+    tone: 'WARNING',
+    actions: [],
+  };
+
+  const { container: summaryContainer } = render(<SummaryBlock block={coverageSummary} renderAction={() => null} />);
+  expect(summaryContainer.querySelector('[data-coverage-summary="coverage-summary"]')).toBeInTheDocument();
+  expect(screen.getByText('Coverage Intelligence')).toBeInTheDocument();
+  expect(screen.getByText('2 Confirmed Gaps')).toBeInTheDocument();
+  expect(screen.getByText('Confirmed Gaps')).toBeInTheDocument();
+  expect(screen.getByText('Coverage Unclear')).toBeInTheDocument();
+  expect(screen.getByText('Evidence Missing')).toBeInTheDocument();
+
+  const coverageGroups: Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }> = {
+    type: 'GROUPED_LIST',
+    id: 'coverage-groups',
+    title: 'Coverage review',
+    sections: [
+      {
+        id: 'coverage-confirmed-gaps',
+        title: 'No coverage confirmed',
+        description: 'Recorded inventory or policy data shows no active coverage or expired coverage.',
+        items: [
+          {
+            id: 'microwave',
+            title: 'Microwave',
+            subtitle: 'No warranty or insurance coverage is linked to Microwave.',
+            badge: 'NO_COVERAGE',
+            meta: ['Kitchen'],
+            actions: [],
+          },
+        ],
+      },
+      {
+        id: 'coverage-evidence-missing',
+        title: 'Evidence missing',
+        description: 'Coverage is linked, but policy details or supporting documents are incomplete.',
+        items: [
+          {
+            id: 'hvac-furnace',
+            title: 'HVAC Furnace',
+            subtitle: 'HVAC Furnace is marked covered, but no warranty or insurance document is linked.',
+            badge: 'EVIDENCE_MISSING',
+            meta: ['hvac', '$6,000 recorded exposure'],
+            actions: [],
+          },
+        ],
+      },
+    ],
+    filters: [],
+    actions: [],
+  };
+
+  const { container: groupsContainer } = render(<GenericGroupedListBlock block={coverageGroups} renderAction={() => null} />);
+  expect(groupsContainer.querySelector('[data-coverage-groups-list="coverage-groups"]')).toBeInTheDocument();
+  expect(groupsContainer.querySelectorAll('[data-coverage-groups-grid]').length).toBe(2);
+  expect(screen.getByText('Item-Level Protection')).toBeInTheDocument();
+  expect(screen.getByText('HVAC')).toBeInTheDocument();
+  expect(screen.getAllByText('$6,000 recorded exposure').length).toBeGreaterThanOrEqual(1);
+  expect(screen.queryByRole('button', { name: 'Auto' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Cards' })).not.toBeInTheDocument();
 });
