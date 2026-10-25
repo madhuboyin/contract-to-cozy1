@@ -100,7 +100,9 @@ test('coverage that is not current, or not configured, is disclosed rather than 
   assert.ok(degraded.blocks.some((block) => block.type === 'LIMITATION'));
   const none = neighborhoodChangeFeedFromView(view({ items: [], coverage: { state: 'NOT_CONFIGURED', comprehensive: false, sources: [], limitations: ['No reviewed local-change source coverage is configured for this property.'] } }), 'p1');
   assert.equal(none.reasonCode, 'NEIGHBORHOOD_COVERAGE_NOT_CONFIGURED');
-  assert.equal(none.blocks[0].title, 'Local-change coverage is not set up for this home yet');
+  assert.equal(none.blocks[0].title, 'Local-change coverage is not available for this location yet');
+  assert.match(none.blocks[0].body, /there is nothing you need to configure/i);
+  assert.deepEqual(none.blocks[0].actions, []);
   assert.equal(none.blocks.some((block) => block.type === 'GROUPED_LIST' || block.type === 'EVIDENCE'), false);
 });
 
@@ -109,7 +111,7 @@ test('every block and the boundary survive the answer-trust validator, and the s
   const result = { ...raw, parameters: { answerTrustEvidence: { schemaVersion: '1.0', sources: [{ sourceId: 'neighborhood-change.feed', operationId: 'NEIGHBORHOOD_CHANGE_FEED', status: 'COMPLETE', scope: 'FULL', freshness: 'CURRENT', observedAt: '2026-09-23T00:00:00.000Z' }] } } };
   const { result: validated } = validateAskAnswerTrust({ question: "What's changing around my home?", operationId: 'NEIGHBORHOOD_CHANGE_FEED', result, propertyId: 'p1' });
   assert.deepEqual(validated.blocks.map((block) => block.id), result.blocks.map((block) => block.id));
-  // Around Your Home is a read of reviewed sources; there is nothing for a homeowner to add, so the summary carries no action at all.
+  // Reviewed source activation is an administrator-governed trust boundary, not a homeowner setup step.
   assert.deepEqual(result.blocks[0].actions, []);
 });
 

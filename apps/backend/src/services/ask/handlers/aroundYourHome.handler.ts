@@ -30,12 +30,12 @@ export function neighborhoodChangeFeedFromView(view: AroundYourHomeView, propert
     type: 'SUMMARY', id: 'neighborhood-change-summary',
     title: active.length
       ? `${active.length} reviewed local change${active.length === 1 ? '' : 's'} matched this home`
-      : sourceCount ? 'The reviewed local-change sources show nothing new matched to this home' : 'Local-change coverage is not set up for this home yet',
+      : sourceCount ? 'The reviewed local-change sources show nothing new matched to this home' : 'Local-change coverage is not available for this location yet',
     body: sourceCount
       ? `From ${sourceCount} reviewed source${sourceCount === 1 ? '' : 's'} (coverage ${readableCode(view.coverage.state)}).${setAside ? ` ${setAside} item${setAside === 1 ? '' : 's'} you dismissed or marked not relevant ${setAside === 1 ? 'is' : 'are'} not listed.` : ''} These are source facts matched to the home's geography, not a judgment of their effect.`
-      : 'Around Your Home only reports changes from reviewed local sources, and none covers this home yet.',
+      : 'Around Your Home only reports changes from reviewed local sources. Cozy has not approved a source that covers this location yet; there is nothing you need to configure.',
     tone: 'DEFAULT',
-    // Around Your Home is a read of reviewed sources: there is nothing for the homeowner to add, so no action is offered.
+    // Source activation requires provider-contract and geography review by an administrator. Do not imply that a homeowner can configure it.
     actions: [],
   }];
   if (!coverageCurrent) {

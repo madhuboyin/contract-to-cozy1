@@ -34,6 +34,12 @@ Administrators can still use the shared `/api/admin/property-intelligence/source
 coverage, and ingest endpoints; `/api/admin/around-your-home/quality` provides the filtered
 pilot-family quality view.
 
+When no reviewed source covers a home's location, homeowner surfaces must describe coverage as
+not yet available rather than “not set up.” They must also say that Cozy manages source and
+geography review and that the homeowner has nothing to configure. No setup action is offered,
+because allowing a household member to activate an unreviewed source would violate this trust
+boundary.
+
 ## Source and revision flow
 
 1. An administrator registers a provider under one of the allowed source families: `PLANNING`,

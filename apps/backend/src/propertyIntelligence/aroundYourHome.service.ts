@@ -213,7 +213,7 @@ export async function getAroundYourHome(
       comprehensive: false,
       sources: coverage,
       limitations: coverage.length === 0
-        ? ['No reviewed local-change source coverage is configured for this property.']
+        ? ["No reviewed local-change source currently covers this property's location. Coverage is managed by Cozy after source and geography review; there is nothing for the homeowner to configure."]
         : ['Coverage is limited to the listed reviewed sources, record types, and geographies.'],
     },
     items,
