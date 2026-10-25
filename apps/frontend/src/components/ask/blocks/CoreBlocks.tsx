@@ -104,12 +104,48 @@ function StatusBoardSummaryCard({ block }: { block: Extract<AskPresentationBlock
   );
 }
 
+function BudgetForecastSummaryCard({ block }: { block: Extract<AskPresentationBlock, { type: 'SUMMARY' }> }) {
+  const isBlocked = block.tone === 'CAUTION';
+  return (
+    <section
+      data-budget-forecast-summary=""
+      className={cn(
+        'relative overflow-hidden rounded-2xl border p-4 shadow-2xs sm:px-5 sm:py-4',
+        isBlocked
+          ? 'border-amber-200/90 bg-gradient-to-r from-amber-50/90 via-white to-amber-50/30'
+          : 'border-slate-200/90 bg-gradient-to-r from-slate-50 via-white to-teal-50/40',
+      )}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-teal-900 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-teal-100">
+              <Sparkles aria-hidden="true" className="h-3 w-3 text-teal-300" />
+              Budget Planner
+            </span>
+          </div>
+          <h3 className="mt-1.5 text-base font-bold tracking-tight text-slate-950 sm:text-lg">{block.title}</h3>
+          <p className="mt-0.5 text-xs font-medium leading-5 text-slate-600">{block.body}</p>
+        </div>
+        {block.actions.length > 0 && (
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            {block.actions.map((action) => (
+              <ActionLink key={action.id} action={action} />
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
 export const SummaryBlock: AskBlockRenderer<'SUMMARY'> = ({ block }) => {
   const calm = useCalmChrome();
   // The seasonal plan's intro and next steps are their own cards in both shells (see SeasonalAnswerCards).
   if (isSeasonalIntroBlockId(block.id)) return <SeasonalIntroCard block={block} />;
   if (SEASONAL_NEXT_STEPS_BLOCK_IDS.has(block.id)) return <SeasonalNextSteps block={block} />;
   if (block.id === 'status-board-summary') return <StatusBoardSummaryCard block={block} />;
+  if (block.id === 'budget-forecast-summary') return <BudgetForecastSummaryCard block={block} />;
   if (calm) return <CalmSummary block={block} />;
   return (
     <section className={cn(
@@ -314,15 +350,16 @@ function StateBlock({ block }: { block: StateBlockType }) {
 }
 
 export const LimitationBlock: AskBlockRenderer<'LIMITATION'> = ({ block }) => {
-  if (block.id === 'status-board-limits') {
+  if (block.id === 'status-board-limits' || block.id === 'budget-forecast-assumed-age') {
     return (
       <section
-        data-status-board-limits=""
+        data-status-board-limits={block.id === 'status-board-limits' ? '' : undefined}
+        data-budget-assumed-age={block.id === 'budget-forecast-assumed-age' ? '' : undefined}
         className="flex items-center gap-2.5 rounded-xl border border-amber-200/80 bg-amber-50/70 px-3.5 py-2.5 text-xs text-amber-950"
       >
         <AlertTriangle aria-hidden="true" className="h-4 w-4 shrink-0 text-amber-600" />
         <div className="min-w-0 flex-1">
-          <span className="sr-only">{block.title}. </span>
+          <span className="font-bold text-amber-950">{block.title}: </span>
           <span className="font-medium text-amber-900">{block.body}</span>
         </div>
       </section>
