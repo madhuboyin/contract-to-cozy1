@@ -905,6 +905,16 @@ Each material category should route to its canonical owner:
 
 The result must not send all categories to a generic savings page.
 
+**Ask implementation clarification (2026-10-25):** the Ownership Costs
+`Review utilities` continuation keeps its utility intent when it hands off to
+Savings and Benefits. That result is limited to electricity/gas recurring-cost
+opportunities, utility incentives, energy credits, and their recorded
+in-progress or realized outcomes. Property-tax, coverage, and refinance
+pointers are excluded from this scoped view. When no qualifying utility result
+exists, Ask says that no utility opportunity is currently recorded (not that
+savings are zero) and discloses that utility-bill review remains in Energy
+Audit and is not yet available inline.
+
 ### 5.9 Control gaps
 
 Homeowners should be able to:

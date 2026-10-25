@@ -28,6 +28,18 @@ const homeSavingsService = new HomeSavingsService();
 
 const hiddenAssetService = new HiddenAssetService();
 
+const UTILITY_BENEFIT_CATEGORIES = new Set(['UTILITY_INCENTIVE', 'ENERGY_CREDIT']);
+
+export function isUtilitySavingsMessage(message: string): boolean {
+  return /\butilit(?:y|ies)\b/i.test(message);
+}
+
+export function isUtilitySavingsItem(family: string, category: string): boolean {
+  return family === 'RECURRING_COST'
+    ? category === 'ELECTRICITY_GAS'
+    : family === 'BENEFIT' && UTILITY_BENEFIT_CATEGORIES.has(category);
+}
+
 function savingsValue(value: number | null, currency: string, basis: string): string | null {
   if (value == null) return null;
   const amount = currency === 'USD'
@@ -40,6 +52,7 @@ function savingsValue(value: number | null, currency: string, basis: string): st
 async function savingsOpportunitiesResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
   const realizedFocus = /\b(realized|received|already saved)\b/i.test(message);
   const paybackFocus = /\b(?:fastest|shortest|best) payback\b/i.test(message);
+  const utilityFocus = isUtilitySavingsMessage(message);
   const [access, homeSavings, benefits, unified, context] = await Promise.all([
     ensurePropertyAccess(userId, propertyId),
     homeSavingsService.getSummary(propertyId, userId),
@@ -78,6 +91,7 @@ async function savingsOpportunitiesResult(userId: string, propertyId: string, me
   }] : [];
 
   const recurringAll = homeSavings.categories
+    .filter(({ category }) => !utilityFocus || category.key === 'ELECTRICITY_GAS')
     .filter((category) => category.topOpportunity && category.status === 'FOUND_SAVINGS')
     .map(({ category, topOpportunity }) => {
       const opportunity = topOpportunity!;
@@ -107,7 +121,8 @@ async function savingsOpportunitiesResult(userId: string, propertyId: string, me
   const recurring = recurringAll.slice(0, 8)
     .map(({ paybackMonths: _paybackMonths, ...item }) => item);
 
-  const reviewedBenefits = benefits.matches.slice(0, 8).map((match) => {
+  const scopedBenefitMatches = benefits.matches.filter((match) => !utilityFocus || UTILITY_BENEFIT_CATEGORIES.has(String(match.category)));
+  const reviewedBenefits = scopedBenefitMatches.slice(0, 8).map((match) => {
     const value = match.estimatedValue != null
       ? savingsValue(match.estimatedValue, match.currency, match.benefitPeriod)
       : match.estimatedValueMin != null || match.estimatedValueMax != null
@@ -128,7 +143,8 @@ async function savingsOpportunitiesResult(userId: string, propertyId: string, me
     };
   });
 
-  const inProgress = unified.inProgress.slice(0, 8).map((item) => ({
+  const scopedInProgress = unified.inProgress.filter((item) => !utilityFocus || isUtilitySavingsItem(item.family, item.category));
+  const inProgress = scopedInProgress.slice(0, 8).map((item) => ({
     id: `progress-${item.family}-${item.id}`,
     title: item.title,
     description: item.explanation,
@@ -145,7 +161,8 @@ async function savingsOpportunitiesResult(userId: string, propertyId: string, me
     ] : [],
   }));
 
-  const realized = unified.realized.slice(0, 8).map((item) => ({
+  const scopedRealized = unified.realized.filter((item) => !utilityFocus || isUtilitySavingsItem(item.family, item.category));
+  const realized = scopedRealized.slice(0, 8).map((item) => ({
     id: `realized-${item.family}-${item.id}`,
     title: item.title,
     description: item.explanation,
@@ -157,7 +174,8 @@ async function savingsOpportunitiesResult(userId: string, propertyId: string, me
     href: null,
   }));
 
-  const related = unified.relatedOpportunities.slice(0, 5).map((item) => ({
+  const scopedRelated = utilityFocus ? [] : unified.relatedOpportunities;
+  const related = scopedRelated.slice(0, 5).map((item) => ({
     id: `related-${item.domain}`,
     title: item.domain === 'PROPERTY_TAX' ? 'Property tax opportunity' : item.domain === 'COVERAGE' ? 'Coverage and premium review' : 'Mortgage refinance review',
     description: item.summary,
@@ -167,27 +185,33 @@ async function savingsOpportunitiesResult(userId: string, propertyId: string, me
   }));
 
   const relatedActions: Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>['actions'] = [];
-  if (unified.relatedOpportunities.some((item) => item.domain === 'PROPERTY_TAX')) relatedActions.push({
+  if (scopedRelated.some((item) => item.domain === 'PROPERTY_TAX')) relatedActions.push({
     id: 'review-property-tax-opportunity', label: 'Review property tax opportunity', interactionType: 'START_WORKFLOW',
     message: 'Review my property-tax appeal readiness.', operationId: 'PROPERTY_TAX_APPEAL_READINESS', style: 'SECONDARY',
   });
-  if (unified.relatedOpportunities.some((item) => item.domain === 'COVERAGE')) relatedActions.push({
+  if (scopedRelated.some((item) => item.domain === 'COVERAGE')) relatedActions.push({
     id: 'review-coverage-opportunity', label: 'Review coverage gaps', interactionType: 'START_WORKFLOW',
     message: 'Show my current coverage gaps.', operationId: 'COVERAGE_GAPS', style: 'SECONDARY',
   });
-  if (unified.relatedOpportunities.some((item) => item.domain === 'REFINANCE')) relatedActions.push({
+  if (scopedRelated.some((item) => item.domain === 'REFINANCE')) relatedActions.push({
     id: 'review-refinance-opportunity', label: 'Review refinance opportunity', interactionType: 'START_WORKFLOW',
     message: 'Review my current refinance analysis.', operationId: 'REFINANCE_ANALYSIS', style: 'SECONDARY',
   });
 
-  const availableCount = recurring.length + reviewedBenefits.length;
+  const availableCount = recurringAll.length + scopedBenefitMatches.length;
   const hasAnyResult = availableCount + inProgress.length + realized.length + related.length > 0;
   const neverAnalyzed = !homeSavings.propertyContextVersion && benefits.summary.lastScanAt === null;
   const realizedTotal = unified.totals.realizedValueTotal;
   const realizedCurrency = unified.totals.realizedValueCurrency;
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY', id: 'savings-summary',
-    title: realizedFocus
+    title: utilityFocus
+      ? availableCount > 0
+        ? `${availableCount} utility savings ${availableCount === 1 ? 'opportunity is' : 'opportunities are'} ready to review`
+        : hasAnyResult
+          ? 'Here is the current utility savings picture for this home'
+          : 'No utility savings opportunity is currently recorded'
+      : realizedFocus
       ? unified.totals.realizedCount === 0
         ? 'No realized savings outcome is recorded yet'
         : realizedTotal != null && realizedCurrency
@@ -204,7 +228,11 @@ async function savingsOpportunitiesResult(userId: string, propertyId: string, me
           : hasAnyResult
             ? 'Here is the current savings picture for this home'
             : 'No current savings opportunity is recorded—not the same as zero savings',
-    body: realizedFocus
+    body: utilityFocus
+      ? hasAnyResult
+        ? 'This view is limited to electricity and gas savings, utility incentives, energy credits, and their recorded outcomes. Unrelated insurance, property-tax, and refinance decisions are excluded.'
+        : 'No electricity or gas saving, utility incentive, or energy credit is currently recorded. This does not mean no utility savings exist. Utility-bill review requires the Energy Audit, which is not yet available inside Ask.'
+      : realizedFocus
       ? unified.totals.realizedCount === 0
         ? 'Realized value is counted only after a benefit or saving is recorded as received; estimates and actions in progress are kept separate.'
         : 'These savings or benefits were recorded as received. Verification labels distinguish homeowner-reported values from independently verified ones.'
@@ -215,25 +243,27 @@ async function savingsOpportunitiesResult(userId: string, propertyId: string, me
       : neverAnalyzed
         ? 'No savings analysis has been run for this home yet, and running one is not currently available in Ask. Ask will not infer that no savings exist from an empty record.'
         : 'The sections below separate available estimates, actions already in progress, verified or homeowner-recorded outcomes, and opportunities owned by other domain tools.',
-    tone: homeSavings.potentialAnnualSavings > 0 || availableCount > 0 ? 'POSITIVE' : 'DEFAULT',
+    tone: (utilityFocus ? availableCount > 0 : homeSavings.potentialAnnualSavings > 0 || availableCount > 0) ? 'POSITIVE' : 'DEFAULT',
     actions: [],
   }];
 
   if (hasAnyResult) {
     const sections = [
       { id: 'recurring', title: 'Recurring-cost opportunities', count: recurringAll.length, items: recurring },
-      { id: 'benefits', title: 'Benefits and rebates to review', count: benefits.matches.length, items: reviewedBenefits },
-      { id: 'in-progress', title: 'Already in progress', count: unified.totals.inProgressCount, items: inProgress },
-      { id: 'realized', title: 'Recorded realized savings', count: unified.totals.realizedCount, items: realized },
-      { id: 'related', title: 'Related savings decisions', count: unified.relatedOpportunities.length, items: related },
+      { id: 'benefits', title: 'Benefits and rebates to review', count: scopedBenefitMatches.length, items: reviewedBenefits },
+      { id: 'in-progress', title: 'Already in progress', count: scopedInProgress.length, items: inProgress },
+      { id: 'realized', title: 'Recorded realized savings', count: scopedRealized.length, items: realized },
+      { id: 'related', title: 'Related savings decisions', count: scopedRelated.length, items: related },
     ].filter((section) => section.count > 0);
     blocks.push({
-      type: 'GROUPED_LIST', filters: [], id: 'savings-opportunity-groups', title: 'Savings and benefits',
-      description: 'Available estimates are planning signals. Realized value appears only after a saving or benefit is recorded as received.',
+      type: 'GROUPED_LIST', filters: [], id: 'savings-opportunity-groups', title: utilityFocus ? 'Utility savings' : 'Savings and benefits',
+      description: utilityFocus
+        ? 'Only utility-related estimates and outcomes are shown. Available estimates are planning signals, not provider quotes.'
+        : 'Available estimates are planning signals. Realized value appears only after a saving or benefit is recorded as received.',
       sections,
       collection: collectionDescriptor({
-        sourceTotal: recurringAll.length + benefits.matches.length + unified.totals.inProgressCount + unified.totals.realizedCount + unified.relatedOpportunities.length,
-        fetchedCount: recurringAll.length + benefits.matches.length + unified.inProgress.length + unified.realized.length + unified.relatedOpportunities.length,
+        sourceTotal: recurringAll.length + scopedBenefitMatches.length + scopedInProgress.length + scopedRealized.length + scopedRelated.length,
+        fetchedCount: recurringAll.length + scopedBenefitMatches.length + scopedInProgress.length + scopedRealized.length + scopedRelated.length,
         sections,
         nextPageAvailable: false,
       }),
@@ -244,8 +274,8 @@ async function savingsOpportunitiesResult(userId: string, propertyId: string, me
   const evidenceItems = [
     ...reviewedBenefits.slice(0, 5).map((item, index) => ({
       label: item.title,
-      source: benefits.matches[index]?.sourceLabel ?? 'Reviewed Savings and Benefits registry',
-      observedAt: benefits.matches[index]?.lastVerifiedAt ?? benefits.matches[index]?.lastEvaluatedAt ?? null,
+      source: scopedBenefitMatches[index]?.sourceLabel ?? 'Reviewed Savings and Benefits registry',
+      observedAt: scopedBenefitMatches[index]?.lastVerifiedAt ?? scopedBenefitMatches[index]?.lastEvaluatedAt ?? null,
     })),
     ...(homeSavings.propertyContextVersion ? [{ label: 'Recurring-cost comparison', source: 'Home Savings analysis', observedAt: homeSavings.updatedAt }] : []),
   ];
