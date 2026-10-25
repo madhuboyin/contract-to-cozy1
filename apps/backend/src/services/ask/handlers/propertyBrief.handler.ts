@@ -28,7 +28,7 @@ const PROPERTY_BRIEF_STATUS_LABELS: Record<string, string> = { DRAFT: 'Draft', R
 
 const commandAction = (id: string, label: string, style: 'PRIMARY' | 'SECONDARY' | 'QUIET' = 'SECONDARY') => ({
   id, label, interactionType: 'MUTATE_RECORD' as const, message: PROPERTY_BRIEF_COMMAND_MESSAGE,
-  operationId: 'PROPERTY_BRIEF_COMMAND', style,
+  operationId: 'PROPERTY_BRIEF_COMMAND', actionId: id, style,
 });
 
 export function propertyBriefsFromView(briefs: readonly PropertyBriefListView[], propertyId: string, now: Date = new Date(), canManage = false): AskOperationResult {

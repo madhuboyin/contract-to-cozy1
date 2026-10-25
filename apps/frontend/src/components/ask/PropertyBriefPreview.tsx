@@ -225,6 +225,8 @@ function FactGroup({ group, anchorId, itemActionsDisabled, onItemAction }: {
                             action.message,
                             action.operationId,
                             action.interactionType,
+                            undefined,
+                            action.id,
                           )}
                           className="ml-1 min-h-8 rounded-lg border border-amber-300 bg-white px-2.5 py-1 text-xs font-semibold text-amber-900 transition-colors hover:bg-amber-50 disabled:opacity-50"
                         >
@@ -570,6 +572,8 @@ export const PropertyBriefsListBlock: AskBlockRenderer<'GROUPED_LIST'> = ({
                                   action.message,
                                   action.operationId,
                                   action.interactionType,
+                                  undefined,
+                                  action.id,
                                 )
                               }
                               className={cn(
@@ -668,6 +672,8 @@ export const PropertyBriefSharePanel: AskBlockRenderer<'GROUPED_LIST'> = ({
                             action.message,
                             action.operationId,
                             action.interactionType,
+                            undefined,
+                            action.id,
                           )
                         }
                         className={cn(

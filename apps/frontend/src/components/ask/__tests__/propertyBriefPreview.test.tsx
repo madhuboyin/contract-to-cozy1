@@ -35,14 +35,14 @@ describe('Property Brief preview', () => {
   it('lets a contributor launch the governed area capture only from a known gap', () => {
     renderSheet();
     fireEvent.click(screen.getByRole('button', { name: 'Add detail' }));
-    expect(onItemAction).toHaveBeenCalledWith('PROPERTY_CONTEXT_AREA', 'CORE', 'Fill in the missing core property details.', 'PROPERTY_CONTEXT_AREA_CAPTURE', 'MUTATE_RECORD');
+    expect(onItemAction).toHaveBeenCalledWith('PROPERTY_CONTEXT_AREA', 'CORE', 'Fill in the missing core property details.', 'PROPERTY_CONTEXT_AREA_CAPTURE', 'MUTATE_RECORD', undefined, 'property-brief-fill-core');
     expect(screen.getAllByRole('button', { name: 'Add detail' })).toHaveLength(1);
   });
   it('offers a brief refresh instead of an empty capture when the live record resolved a frozen gap', () => {
     renderSheet();
     expect(screen.getByText('This detail is now recorded in your home record.')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Refresh brief' }));
-    expect(onItemAction).toHaveBeenCalledWith('PROPERTY_BRIEF', 'brief-1', 'Manage this property brief.', 'PROPERTY_BRIEF_COMMAND', 'MUTATE_RECORD');
+    expect(onItemAction).toHaveBeenCalledWith('PROPERTY_BRIEF', 'brief-1', 'Manage this property brief.', 'PROPERTY_BRIEF_COMMAND', 'MUTATE_RECORD', undefined, 'property-brief-republish');
   });
   it('shows a prominent stale banner with the refresh action, and the trust label near the title', () => {
     const summary = { type: 'SUMMARY', id: 'property-brief-preview-summary', title: 'Property Brief', tone: 'CAUTION',
@@ -116,6 +116,6 @@ describe('Property Brief preview', () => {
     expect(screen.getByText('Insurer brief')).toBeInTheDocument();
     expect(screen.getByText('Not refreshed in 95 days')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
-    expect(onItemAction).toHaveBeenCalledWith('PROPERTY_BRIEF', 'b-1', 'Preview this property brief.', 'PROPERTY_BRIEFS_LIST', 'CONVERSATION_CONTINUE');
+    expect(onItemAction).toHaveBeenCalledWith('PROPERTY_BRIEF', 'b-1', 'Preview this property brief.', 'PROPERTY_BRIEFS_LIST', 'CONVERSATION_CONTINUE', undefined, 'property-brief-preview');
   });
 });

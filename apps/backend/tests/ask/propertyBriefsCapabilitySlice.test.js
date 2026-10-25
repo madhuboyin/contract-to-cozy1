@@ -101,6 +101,12 @@ test('no live link is said plainly; nothing saved is not an all-clear', () => {
   assert.equal(none.blocks.at(-1).title, 'A snapshot the household assembled, not a disclosure');
 });
 
+test('management actions carry the selected Property Brief command through Ask', () => {
+  const result = propertyBriefsFromView(rows(), 'p1', NOW, true);
+  assert.equal(result.blocks[0].actions[0].actionId, 'property-brief-prepare');
+  assert.equal(result.blocks[1].sections[0].items[0].actions[1].actionId, 'property-brief-republish');
+});
+
 test('every block and the boundary survive the answer-trust validator, and nothing links to a desktop page', () => {
   const raw = propertyBriefsFromView(rows(), 'p1', NOW);
   const result = { ...raw, parameters: { answerTrustEvidence: { schemaVersion: '1.0', sources: [{ sourceId: 'property-brief.briefs', operationId: 'PROPERTY_BRIEFS_LIST', status: 'COMPLETE', scope: 'FULL', freshness: 'CURRENT', observedAt: NOW.toISOString() }] } } };
