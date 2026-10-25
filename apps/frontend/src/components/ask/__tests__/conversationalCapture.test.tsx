@@ -135,6 +135,7 @@ describe('Plant Advisor compact capture', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Kitchen' }));
     fireEvent.click(screen.getByRole('button', { name: 'Bright indirect' }));
+    expect(screen.getByText('Kitchen · Bright indirect light')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Unsure' }));
     expect(screen.getByRole('button', { name: 'Continue to review' })).toBeEnabled();
   });

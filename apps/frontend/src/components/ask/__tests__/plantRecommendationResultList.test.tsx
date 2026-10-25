@@ -1,8 +1,13 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import type { AskPresentationBlock } from '@/features/ask/types';
 import { PlantRecommendationResultList } from '../PlantRecommendationResultList';
+import { SummaryBlock } from '../blocks/CoreBlocks';
+import { GenericGroupedListBlock } from '../blocks/GroupedListBlock';
 
-jest.mock('../blocks/context', () => ({ ActionLink: ({ action }: { action: { label: string } }) => <button type="button">{action.label}</button> }));
+jest.mock('../blocks/context', () => ({
+  ...jest.requireActual('../blocks/context'),
+  ActionLink: ({ action }: { action: { label: string } }) => <button type="button">{action.label}</button>,
+}));
 
 type Block = Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>;
 const actions = [
@@ -67,4 +72,73 @@ test('upgrades legacy stored detail strings without repeating rationale or fallb
   expect(screen.getByText('Use a high shelf.')).toBeVisible();
   expect(screen.queryByText(/Fits kitchen conditions. Tradeoff/)).not.toBeInTheDocument();
   expect(screen.queryByText('Works, but not ideal under current room inputs.')).not.toBeInTheDocument();
+});
+
+test('renders Plant Advisor executive summary cards and 2-column weather-aware care outlook grid', () => {
+  const careSummary: Extract<AskPresentationBlock, { type: 'SUMMARY' }> = {
+    type: 'SUMMARY',
+    id: 'plant-care-summary',
+    title: '2 plant care changes to make now or soon',
+    body: 'Tracking 3 plants and 1 garden zone. USDA hardiness zone 7b.',
+    tone: 'CAUTION',
+    actions: [],
+  };
+
+  const { container: summaryContainer } = render(<SummaryBlock block={careSummary} renderAction={() => null} />);
+  expect(summaryContainer.querySelector('[data-plant-advisor-summary="plant-care-summary"]')).toBeInTheDocument();
+  expect(screen.getByText('Weather-Aware Care')).toBeInTheDocument();
+  expect(screen.getByText('2 Urgent Changes')).toBeInTheDocument();
+  expect(screen.getByText('Tracked Flora')).toBeInTheDocument();
+  expect(screen.getByText('USDA 7b')).toBeInTheDocument();
+
+  const careItems: Block = {
+    type: 'GROUPED_LIST',
+    id: 'plant-care-items',
+    title: 'Plant care outlook',
+    description: 'Care changes for your plants and plans for your garden zones, from the current forecast.',
+    filters: [],
+    actions: [],
+    sections: [
+      {
+        id: 'plant-care-now',
+        title: 'Do now',
+        count: 2,
+        items: [
+          {
+            id: 'care-1',
+            title: 'Monstera: Water deeply before heat wave',
+            description: 'Soil dries faster during high indoor heat.',
+            meta: ['Living Room', 'Heat wave', 'check every 4 days'],
+            status: 'NOW',
+          },
+          {
+            id: 'care-2',
+            title: 'Fiddle Leaf Fig: Shield from dry draft',
+            description: 'Keep away from direct AC vent.',
+            meta: ['Study', 'Low humidity', 'check every 5 days'],
+            status: 'NOW',
+          },
+        ],
+      },
+    ],
+  } as unknown as Block;
+
+  const { container: careContainer } = render(
+    <GenericGroupedListBlock
+      block={careItems}
+      executionId="exec-1"
+      propertyId="prop-1"
+      onItemAction={jest.fn()}
+      itemActionsDisabled={false}
+      onFilterClick={jest.fn()}
+      onCollectionPage={jest.fn()}
+      onAccessLost={jest.fn()}
+    />,
+  );
+  expect(careContainer.querySelector('[data-plant-care-list="plant-care-items"]')).toBeInTheDocument();
+  expect(careContainer.querySelector('[data-plant-care-grid]')).toBeInTheDocument();
+  expect(screen.getByText('Forecast & Cadence')).toBeInTheDocument();
+  expect(screen.getByText('Living Room')).toBeInTheDocument();
+  expect(screen.getAllByText('check every 4 days').length).toBeGreaterThanOrEqual(1);
+  expect(screen.queryByRole('button', { name: 'Auto' })).not.toBeInTheDocument();
 });

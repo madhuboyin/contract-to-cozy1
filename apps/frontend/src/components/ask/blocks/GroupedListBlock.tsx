@@ -364,13 +364,15 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
   const isOwnershipCostList = block.id.startsWith('ownership-cost-');
   const isServicePriceRadarList = block.id === 'service-price-radar-checks';
   const isCoverageGroupsList = block.id === 'coverage-groups' || block.id === 'coverage-comparison-options';
-  const isFramedDecisionList = isDriversBlock || isOwnershipCostList || isServicePriceRadarList || isCoverageGroupsList;
+  const isPlantCareList = block.id === 'plant-care-items';
+  const isFramedDecisionList = isDriversBlock || isOwnershipCostList || isServicePriceRadarList || isCoverageGroupsList || isPlantCareList;
   const ownershipCostBadge = OWNERSHIP_COST_BADGE_BY_ID[block.id];
   return (
     <section
       data-ownership-cost-list={isOwnershipCostList ? block.id : undefined}
       data-service-price-radar-checks={isServicePriceRadarList ? '' : undefined}
       data-coverage-groups-list={isCoverageGroupsList ? block.id : undefined}
+      data-plant-care-list={isPlantCareList ? block.id : undefined}
       className={cn(
         isFramedDecisionList ? 'w-full rounded-2xl border border-slate-200/90 bg-white shadow-2xs' : 'overflow-hidden rounded-2xl border border-slate-200 bg-white',
         block.id === 'home-work-items' && 'w-full max-w-[960px]',
@@ -394,6 +396,11 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
               {block.id === 'coverage-groups' ? 'Item-Level Protection' : 'Policy Options'}
             </span>
           )}
+          {isPlantCareList && (
+            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">
+              Forecast &amp; Cadence
+            </span>
+          )}
           {ownershipCostBadge && (
             <span className={cn('text-[10px] font-bold uppercase tracking-wider', block.id === 'ownership-cost-missing' ? 'text-amber-700' : 'text-teal-700')}>
               {ownershipCostBadge}
@@ -401,7 +408,7 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
           )}
         </div>
         {block.description && <p className="mt-1 text-xs text-slate-500">{block.description}</p>}
-        {decision.offersChoice && controls && !isCoverageGroupsList && <div className="mt-3 flex flex-wrap items-center gap-1" role="group" aria-label={`View ${block.title}`}>
+        {decision.offersChoice && controls && !isCoverageGroupsList && !isPlantCareList && <div className="mt-3 flex flex-wrap items-center gap-1" role="group" aria-label={`View ${block.title}`}>
           {(['AUTO', 'LIST', 'CARDS'] as const).map((mode) => <button key={mode} type="button" aria-pressed={preference === mode} onClick={() => setPreference(mode)} className={cn('min-h-9 rounded-lg px-2.5 text-xs font-semibold', preference === mode ? 'bg-teal-700 text-white' : 'border border-slate-200 text-slate-700 hover:bg-slate-50')}>{mode === 'AUTO' ? 'Auto' : mode === 'LIST' ? 'List' : 'Cards'}</button>)}
         </div>}
         {block.filters.length > 0 && (
@@ -435,40 +442,47 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
           const isConfirmedGapSection = block.id === 'coverage-groups' && (section.id === 'no_coverage' || section.id === 'expired');
           const isUnclearOrExpiringSection = block.id === 'coverage-groups' && (section.id === 'coverage_unclear' || section.id === 'expiring_soon');
           const isEvidenceMissingSection = block.id === 'coverage-groups' && section.id === 'evidence_missing';
+          const isPlantCareNowSection = isPlantCareList && section.id === 'plant-care-now';
+          const isPlantCareSoonSection = isPlantCareList && section.id === 'plant-care-soon';
+          const isPlantCareRoutineSection = isPlantCareList && (section.id === 'plant-care-routine' || section.id === 'plant-care-garden');
           return (
           <div key={section.id} className={isFramedDecisionList ? 'px-4 py-3 sm:px-5' : dense ? 'px-3 py-2.5' : 'p-4'}>
-            <div className={cn('flex items-center justify-between', isFramedDecisionList && !isCoverageGroupsList ? 'sr-only' : isCoverageGroupsList ? 'mb-2.5' : dense ? 'mb-1.5' : 'mb-3')}>
+            <div className={cn('flex items-center justify-between', isFramedDecisionList && !isCoverageGroupsList && !isPlantCareList ? 'sr-only' : isCoverageGroupsList || isPlantCareList ? 'mb-2.5' : dense ? 'mb-1.5' : 'mb-3')}>
               <div className="flex items-center gap-2">
-                {block.id === 'coverage-groups' && (
+                {(block.id === 'coverage-groups' || isPlantCareList) && (
                   <span
                     aria-hidden="true"
                     className={cn(
                       'h-2 w-2 shrink-0 rounded-full',
-                      isConfirmedGapSection
+                      isConfirmedGapSection || isPlantCareNowSection
                         ? 'bg-rose-500'
-                        : isUnclearOrExpiringSection
+                        : isUnclearOrExpiringSection || isPlantCareSoonSection
                           ? 'bg-amber-500'
                           : isEvidenceMissingSection
                             ? 'bg-sky-500'
-                            : 'bg-teal-500',
+                            : isPlantCareRoutineSection
+                              ? 'bg-emerald-500'
+                              : 'bg-teal-500',
                     )}
                   />
                 )}
                 <div>
-                  <h4 className={cn('font-semibold text-slate-800', isCoverageGroupsList ? 'text-xs font-bold uppercase tracking-wider text-slate-700' : 'text-sm')}>{section.title}</h4>
+                  <h4 className={cn('font-semibold text-slate-800', isCoverageGroupsList || isPlantCareList ? 'text-xs font-bold uppercase tracking-wider text-slate-700' : 'text-sm')}>{section.title}</h4>
                   {section.caption && <p className="mt-0.5 text-xs text-slate-500">{section.caption}</p>}
                 </div>
               </div>
               <span
                 className={cn(
                   'rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums',
-                  isConfirmedGapSection
+                  isConfirmedGapSection || isPlantCareNowSection
                     ? 'border border-rose-200 bg-rose-50 text-rose-800'
-                    : isUnclearOrExpiringSection
+                    : isUnclearOrExpiringSection || isPlantCareSoonSection
                       ? 'border border-amber-200 bg-amber-50 text-amber-800'
                       : isEvidenceMissingSection
                         ? 'border border-sky-200 bg-sky-50 text-sky-800'
-                        : 'bg-slate-100 text-slate-600',
+                        : isPlantCareRoutineSection
+                          ? 'border border-emerald-200 bg-emerald-50 text-emerald-800'
+                          : 'bg-slate-100 text-slate-600',
                 )}
               >
                 {section.count}
@@ -477,9 +491,9 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
             {section.items.length === 0 ? <AskCollectionState kind="EMPTY" title={section.title} action={block.sections.length === 1 && block.actions[0] ? <ActionLink action={block.actions[0]} /> : undefined} /> : (
               <AskCollection id={listId} className={cn(
                 block.id === 'project-detail-records' && 'grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3',
-                block.id === 'coverage-groups' && 'grid grid-cols-1 gap-2.5 sm:grid-cols-2',
-                block.id !== 'project-detail-records' && block.id !== 'coverage-groups' && (dense ? 'divide-y divide-slate-100' : presentation === 'COMPACT_LIST' ? 'space-y-1' : isOwnershipCostList || isServicePriceRadarList || isCoverageGroupsList ? 'space-y-2' : 'space-y-3'),
-              )} data-project-record-grid={block.id === 'project-detail-records' ? '' : undefined} data-coverage-groups-grid={block.id === 'coverage-groups' ? '' : undefined}>
+                (block.id === 'coverage-groups' || isPlantCareList) && 'grid grid-cols-1 gap-2.5 sm:grid-cols-2',
+                block.id !== 'project-detail-records' && block.id !== 'coverage-groups' && !isPlantCareList && (dense ? 'divide-y divide-slate-100' : presentation === 'COMPACT_LIST' ? 'space-y-1' : isOwnershipCostList || isServicePriceRadarList || isCoverageGroupsList ? 'space-y-2' : 'space-y-3'),
+              )} data-project-record-grid={block.id === 'project-detail-records' ? '' : undefined} data-coverage-groups-grid={block.id === 'coverage-groups' ? '' : undefined} data-plant-care-grid={isPlantCareList ? '' : undefined}>
                 {visibleItems.map((sourceItem) => {
                   const item = block.id === 'maintenance-groups' ? formatLegacyAskMaintenanceItem(sourceItem) : sourceItem;
                   const selected = controls?.view.selectedTaskId === item.id;
@@ -506,7 +520,10 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
                   const isConfirmedGapItem = isCoverageGapItem && (item.status === 'NO_COVERAGE' || item.status === 'EXPIRED');
                   const isUnclearGapItem = isCoverageGapItem && (item.status === 'COVERAGE_UNCLEAR' || item.status === 'EXPIRING_SOON');
                   const isEvidenceGapItem = isCoverageGapItem && item.status === 'EVIDENCE_MISSING';
-                  const coverageLocationMeta = isCoverageGapItem && item.meta[0]
+                  const isPlantCareNowItem = isPlantCareList && item.status === 'NOW';
+                  const isPlantCareSoonItem = isPlantCareList && item.status === 'SOON';
+                  const isPlantCareRoutineItem = isPlantCareList && (item.status === 'ROUTINE' || item.status === 'SEASONAL');
+                  const coverageLocationMeta = (isCoverageGapItem || isPlantCareList) && item.meta[0]
                     ? (/^hvac$/i.test(item.meta[0].trim())
                       ? 'HVAC'
                       : /^[a-z][a-z0-9_ ]*$/.test(item.meta[0].trim())
@@ -514,10 +531,10 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
                         : item.meta[0].trim())
                     : null;
                   const coverageExposureMeta = isCoverageGapItem ? item.meta.find((m) => /exposure|replacement value/i.test(m)) : null;
-                  const coverageOtherMeta = isCoverageGapItem
+                  const coverageOtherMeta = (isCoverageGapItem || isPlantCareList)
                     ? item.meta.slice(1).filter((m) => m !== coverageExposureMeta)
                     : [];
-                  return <li key={item.id} data-ask-task-id={item.id} tabIndex={-1} className={cn('border outline-offset-2', dense ? 'border-b-0 border-r-0 border-t-0 px-2 py-2' : 'rounded-xl', dense && (overdueWorkItem ? 'border-l-4 border-l-rose-400 bg-rose-50/70' : sellHoldRentDriversList && impactLevel === 'HIGH' ? 'border-l-4 border-l-amber-400 bg-amber-50/30 py-2.5' : sellHoldRentDriversList ? 'border-l-4 border-l-teal-500/60 py-2.5' : 'border-l-0'), !dense && (presentation === 'COMPACT_LIST' ? 'px-3 py-2' : isCoverageGapItem ? 'px-3.5 py-2.5' : isOwnershipCostList || isServicePriceRadarList ? 'px-3 py-2.5' : 'p-3'), selected ? 'border-teal-600 bg-teal-50' : !dense && (isConfirmedGapItem ? 'border-rose-200/85 border-l-4 border-l-rose-500 bg-gradient-to-br from-rose-50/35 via-white to-white shadow-2xs' : isUnclearGapItem ? 'border-amber-200/85 border-l-4 border-l-amber-500 bg-gradient-to-br from-amber-50/35 via-white to-white shadow-2xs' : isEvidenceGapItem ? 'border-slate-200/90 border-l-4 border-l-sky-500 bg-slate-50/50' : presentation === 'COMPACT_LIST' ? 'border-transparent bg-white' : isOwnershipCostList || isServicePriceRadarList || isCoverageGroupsList ? 'border-slate-200/80 bg-slate-50/55' : 'border-transparent bg-slate-50'))}>
+                  return <li key={item.id} data-ask-task-id={item.id} tabIndex={-1} className={cn('border outline-offset-2', dense ? 'border-b-0 border-r-0 border-t-0 px-2 py-2' : 'rounded-xl', dense && (overdueWorkItem ? 'border-l-4 border-l-rose-400 bg-rose-50/70' : sellHoldRentDriversList && impactLevel === 'HIGH' ? 'border-l-4 border-l-amber-400 bg-amber-50/30 py-2.5' : sellHoldRentDriversList ? 'border-l-4 border-l-teal-500/60 py-2.5' : 'border-l-0'), !dense && (presentation === 'COMPACT_LIST' ? 'px-3 py-2' : isCoverageGapItem || isPlantCareList ? 'px-3.5 py-2.5' : isOwnershipCostList || isServicePriceRadarList ? 'px-3 py-2.5' : 'p-3'), selected ? 'border-teal-600 bg-teal-50' : !dense && (isConfirmedGapItem || isPlantCareNowItem ? 'border-rose-200/85 border-l-4 border-l-rose-500 bg-gradient-to-br from-rose-50/35 via-white to-white shadow-2xs' : isUnclearGapItem || isPlantCareSoonItem ? 'border-amber-200/85 border-l-4 border-l-amber-500 bg-gradient-to-br from-amber-50/35 via-white to-white shadow-2xs' : isPlantCareRoutineItem ? 'border-emerald-200/85 border-l-4 border-l-emerald-500 bg-gradient-to-br from-emerald-50/30 via-white to-white shadow-2xs' : isEvidenceGapItem ? 'border-slate-200/90 border-l-4 border-l-sky-500 bg-slate-50/50' : presentation === 'COMPACT_LIST' ? 'border-transparent bg-white' : isOwnershipCostList || isServicePriceRadarList || isCoverageGroupsList || isPlantCareList ? 'border-slate-200/80 bg-slate-50/55' : 'border-transparent bg-slate-50'))}>
                     {dense ? <div className={cn('flex flex-col gap-1.5', !homeWorkItemList && 'sm:flex-row sm:items-center sm:justify-between sm:gap-3')} data-dense-row-content="">
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-baseline gap-x-2" data-dense-primary-line="">
@@ -549,14 +566,14 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
                     </div> : <div className="flex items-start justify-between gap-2.5">
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-1.5">
-                          {item.href ? <AskContextLink className={cn('font-medium text-slate-950 hover:text-teal-700', (isOwnershipCostList || isServicePriceRadarList || isCoverageGroupsList) && 'text-xs font-bold sm:text-sm')} href={item.href}>{item.title}</AskContextLink> : <p className={cn('font-medium text-slate-950', (isOwnershipCostList || isServicePriceRadarList || isCoverageGroupsList) && 'text-xs font-bold sm:text-sm')}>{item.title}</p>}
+                          {item.href ? <AskContextLink className={cn('font-medium text-slate-950 hover:text-teal-700', (isOwnershipCostList || isServicePriceRadarList || isCoverageGroupsList || isPlantCareList) && 'text-xs font-bold sm:text-sm')} href={item.href}>{item.title}</AskContextLink> : <p className={cn('font-medium text-slate-950', (isOwnershipCostList || isServicePriceRadarList || isCoverageGroupsList || isPlantCareList) && 'text-xs font-bold sm:text-sm')}>{item.title}</p>}
                           {coverageLocationMeta && (
                             <span aria-hidden="true" className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">
                               {coverageLocationMeta}
                             </span>
                           )}
                         </div>
-                        {item.description && <p className={cn('text-slate-600', isOwnershipCostList || isServicePriceRadarList || isCoverageGroupsList ? 'mt-0.5 text-xs leading-5' : 'mt-1 text-sm leading-5')}>{item.description}</p>}
+                        {item.description && <p className={cn('text-slate-600', isOwnershipCostList || isServicePriceRadarList || isCoverageGroupsList || isPlantCareList ? 'mt-0.5 text-xs leading-5' : 'mt-1 text-sm leading-5')}>{item.description}</p>}
                         {isServicePriceRadarList && (quoteMeta || expectedMeta) && (
                           <div aria-hidden="true" className="mt-1.5 flex flex-wrap items-center gap-2">
                             {quoteMeta && (
@@ -571,7 +588,7 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
                             )}
                           </div>
                         )}
-                        {isCoverageGapItem && item.meta.length > 0 && (
+                        {(isCoverageGapItem || isPlantCareList) && item.meta.length > 0 && (
                           <div aria-hidden="true" className="mt-1.5 flex flex-wrap items-center gap-1.5">
                             {coverageExposureMeta && (
                               <span
@@ -592,7 +609,7 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
                                   'inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-medium',
                                   /no linked policy/i.test(metaItem)
                                     ? 'border-rose-200/70 bg-rose-50/50 text-rose-800'
-                                    : /^expires|^expired/i.test(metaItem)
+                                    : /^expires|^expired|^check every/i.test(metaItem)
                                       ? 'border-teal-200/70 bg-teal-50/50 text-teal-900'
                                       : 'border-slate-200/80 bg-white text-slate-600',
                                 )}
@@ -602,9 +619,9 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
                             ))}
                           </div>
                         )}
-                        {item.meta.length > 0 && <p className={cn('text-xs text-slate-500', isCoverageGapItem ? 'sr-only' : isOwnershipCostList || isServicePriceRadarList ? 'mt-1' : 'mt-2')}>{item.meta.join(' · ')}</p>}
+                        {item.meta.length > 0 && <p className={cn('text-xs text-slate-500', isCoverageGapItem || isPlantCareList ? 'sr-only' : isOwnershipCostList || isServicePriceRadarList ? 'mt-1' : 'mt-2')}>{item.meta.join(' · ')}</p>}
                       </div>
-                      {item.status && <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide', isConfirmedGapItem ? 'border border-rose-200 bg-rose-50 text-rose-800' : isUnclearGapItem ? 'border border-amber-200 bg-amber-50 text-amber-800' : isEvidenceGapItem ? 'border border-sky-200 bg-sky-50 text-sky-800' : item.tone === 'CAUTION' ? 'border border-amber-200 bg-amber-50 text-amber-800' : item.tone === 'POSITIVE' ? 'border border-emerald-200 bg-emerald-50 text-emerald-800' : 'border border-slate-200 bg-white text-slate-600')}>{item.status.replace(/_/g, ' ')}</span>}
+                      {item.status && <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide', isConfirmedGapItem || isPlantCareNowItem ? 'border border-rose-200 bg-rose-50 text-rose-800' : isUnclearGapItem || isPlantCareSoonItem ? 'border border-amber-200 bg-amber-50 text-amber-800' : isPlantCareRoutineItem ? 'border border-emerald-200 bg-emerald-50 text-emerald-800' : isEvidenceGapItem ? 'border border-sky-200 bg-sky-50 text-sky-800' : item.tone === 'CAUTION' ? 'border border-amber-200 bg-amber-50 text-amber-800' : item.tone === 'POSITIVE' ? 'border border-emerald-200 bg-emerald-50 text-emerald-800' : 'border border-slate-200 bg-white text-slate-600')}>{item.status.replace(/_/g, ' ')}</span>}
                     </div>}
                     {hasInlineDetails && (
                       <div className="mt-2">
@@ -746,7 +763,7 @@ export const GroupedListBlock: AskBlockRenderer<'GROUPED_LIST'> = (props) => {
   if (props.block.id === 'digital-will-items') {
     return <HomeContinuityPlanResultList block={props.block} propertyId={props.propertyId} disabled={props.itemActionsDisabled} onAction={props.onItemAction} />;
   }
-  if (props.block.id === 'room-plant-recommendations') {
+  if (props.block.id === 'room-plant-recommendations' || props.block.id === 'previous-room-plant-recommendations') {
     return <PlantRecommendationResultList block={props.block} disabled={props.itemActionsDisabled} onAction={props.onItemAction} />;
   }
   // Maintenance keeps its own component in both layouts, so its live-record detail, paging and selection are the

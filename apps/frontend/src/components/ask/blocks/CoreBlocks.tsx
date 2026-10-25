@@ -651,6 +651,155 @@ function CoverageSummaryCard({ block }: { block: Extract<AskPresentationBlock, {
   );
 }
 
+const PLANT_ADVISOR_SUMMARY_IDS: ReadonlySet<string> = new Set([
+  'plant-care-summary',
+  'plant-recommendation-summary',
+]);
+
+function PlantAdvisorSummaryCard({ block }: { block: Extract<AskPresentationBlock, { type: 'SUMMARY' }> }) {
+  const isCaution = block.tone === 'CAUTION';
+  const isPositive = block.tone === 'POSITIVE';
+  const isCareSummary = block.id === 'plant-care-summary';
+
+  const urgentMatch = /(\d+)\s+plant\s+care\s+changes?\s+to\s+make\s+now\s+or\s+soon/i.exec(block.title);
+  const urgentCount = urgentMatch ? Number(urgentMatch[1]) : null;
+  const trackingMatch = /Tracking\s+(\d+)\s+plants?(?:\s+and\s+(\d+)\s+garden\s+zones?)?/i.exec(block.body);
+  const trackedPlants = trackingMatch ? Number(trackingMatch[1]) : null;
+  const trackedZones = trackingMatch && trackingMatch[2] ? Number(trackingMatch[2]) : 0;
+  const hardinessMatch = /USDA\s+hardiness\s+zone\s+([0-9a-z]+)/i.exec(block.body);
+  const hardinessZone = hardinessMatch ? hardinessMatch[1] : null;
+  const recommendedMatch = /(\d+)\s+plants?\s+recommended\s+for\s+(.+)/i.exec(block.title);
+  const recommendedCount = recommendedMatch ? Number(recommendedMatch[1]) : null;
+  const recommendedRoom = recommendedMatch ? recommendedMatch[2].trim() : null;
+  const isUntracked = isCareSummary && /no\s+plants\s+or\s+garden\s+zones\s+tracked/i.test(block.title);
+
+  return (
+    <section
+      data-plant-advisor-summary={block.id}
+      className={cn(
+        'relative w-full rounded-2xl border px-4 py-3 shadow-2xs sm:px-5',
+        isCaution
+          ? 'border-amber-200/90 bg-gradient-to-r from-amber-50/85 via-white to-emerald-50/35'
+          : isPositive
+            ? 'border-emerald-200/90 bg-gradient-to-r from-emerald-50/80 via-white to-teal-50/40'
+            : 'border-emerald-200/75 bg-gradient-to-r from-emerald-50/60 via-white to-teal-50/30',
+      )}
+    >
+      <div className="flex flex-col justify-between gap-2.5 sm:flex-row sm:items-start">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-teal-900 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-teal-100">
+              {isCaution ? (
+                <AlertTriangle aria-hidden="true" className="h-3 w-3 text-amber-300" />
+              ) : (
+                <CheckCircle2 aria-hidden="true" className="h-3 w-3 text-emerald-300" />
+              )}
+              Plant Advisor
+            </span>
+            <span
+              aria-hidden="true"
+              className="inline-flex items-center rounded-full border border-emerald-200/90 bg-white/90 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-800"
+            >
+              {isCareSummary ? 'Weather-Aware Care' : 'Room Fit Recommendations'}
+            </span>
+            <span
+              aria-hidden="true"
+              className={cn(
+                'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider',
+                (urgentCount ?? 0) > 0 || isCaution
+                  ? 'border-amber-300/80 bg-amber-100/80 text-amber-900'
+                  : isUntracked
+                    ? 'border-teal-200/90 bg-teal-50/90 text-teal-900'
+                    : 'border-emerald-300/80 bg-emerald-100/80 text-emerald-900',
+              )}
+            >
+              <span
+                className={cn(
+                  'h-1.5 w-1.5 rounded-full',
+                  (urgentCount ?? 0) > 0 || isCaution
+                    ? 'bg-amber-600'
+                    : isUntracked
+                      ? 'bg-teal-600'
+                      : 'bg-emerald-600',
+                )}
+              />
+              {(urgentCount ?? 0) > 0
+                ? `${urgentCount} Urgent Change${urgentCount === 1 ? '' : 's'}`
+                : recommendedCount !== null
+                  ? `${recommendedCount} Room Match${recommendedCount === 1 ? '' : 'es'}`
+                  : isUntracked
+                    ? 'Ready to Track'
+                    : isCaution
+                      ? 'Check Conditions'
+                      : 'Routine Cadence'}
+            </span>
+          </div>
+
+          <h3 className="mt-1 text-base font-bold tracking-tight text-slate-950 sm:text-lg">{block.title}</h3>
+          <p className="mt-0.5 whitespace-pre-wrap text-xs leading-5 text-slate-700 sm:text-sm">{block.body}</p>
+
+          {isCareSummary && trackedPlants !== null && (
+            <div aria-hidden="true" className="mt-2.5 grid grid-cols-3 gap-2 rounded-xl border border-slate-200/80 bg-white/90 px-3 py-2">
+              <div>
+                <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Tracked Flora</span>
+                <div className="mt-0.5 flex flex-wrap items-baseline gap-1">
+                  <span className="text-xs font-extrabold tabular-nums text-slate-950 sm:text-sm">{trackedPlants}</span>
+                  <span className="text-[11px] font-medium text-slate-500">
+                    plant{trackedPlants === 1 ? '' : 's'}
+                    {trackedZones > 0 ? ` · ${trackedZones} zone${trackedZones === 1 ? '' : 's'}` : ''}
+                  </span>
+                </div>
+              </div>
+              <div>
+                <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Climate Zone</span>
+                <div className="mt-0.5 flex flex-wrap items-baseline gap-1">
+                  <span className="text-xs font-extrabold tabular-nums text-emerald-900 sm:text-sm">
+                    {hardinessZone ? `USDA ${hardinessZone}` : 'Local forecast'}
+                  </span>
+                </div>
+              </div>
+              <div>
+                <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Care Posture</span>
+                <div className="mt-0.5 flex flex-wrap items-baseline gap-1">
+                  <span
+                    className={cn(
+                      'text-xs font-extrabold tabular-nums sm:text-sm',
+                      (urgentCount ?? 0) > 0 ? 'text-amber-900' : 'text-teal-900',
+                    )}
+                  >
+                    {(urgentCount ?? 0) > 0 ? `${urgentCount} due now/soon` : 'On schedule'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {!isCareSummary && recommendedCount !== null && recommendedRoom && (
+            <div aria-hidden="true" className="mt-2 flex flex-wrap items-center gap-1.5">
+              <span className="inline-flex items-center rounded-lg border border-emerald-200/80 bg-white/90 px-2.5 py-0.5 text-xs font-bold text-emerald-900">
+                Room: {recommendedRoom}
+              </span>
+              <span className="inline-flex items-center rounded-lg border border-slate-200/80 bg-white/90 px-2.5 py-0.5 text-xs font-semibold tabular-nums text-slate-700">
+                {recommendedCount} ranked candidate{recommendedCount === 1 ? '' : 's'}
+              </span>
+            </div>
+          )}
+
+          {block.chips && block.chips.length > 0 && <AnswerChips chips={block.chips} />}
+        </div>
+
+        {block.actions.length > 0 && (
+          <div className="flex shrink-0 flex-wrap items-center gap-2 sm:mt-0.5">
+            {block.actions.map((action) => (
+              <ActionLink key={action.id} action={action} />
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
 export const SummaryBlock: AskBlockRenderer<'SUMMARY'> = ({ block }) => {
   const calm = useCalmChrome();
   // The seasonal plan's intro and next steps are their own cards in both shells (see SeasonalAnswerCards).
@@ -665,6 +814,7 @@ export const SummaryBlock: AskBlockRenderer<'SUMMARY'> = ({ block }) => {
   if (block.id === 'ownership-cost-refresh') return <OwnershipCostRefreshCard block={block} />;
   if (block.id === 'service-price-radar-summary') return <ServicePriceRadarSummaryCard block={block} />;
   if (COVERAGE_SUMMARY_IDS.has(block.id)) return <CoverageSummaryCard block={block} />;
+  if (PLANT_ADVISOR_SUMMARY_IDS.has(block.id)) return <PlantAdvisorSummaryCard block={block} />;
   if (calm) return <CalmSummary block={block} />;
   return (
     <section className={cn(

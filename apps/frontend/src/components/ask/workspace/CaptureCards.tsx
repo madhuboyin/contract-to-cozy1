@@ -609,6 +609,14 @@ export function InlineCaptureCard({
     if (!field) return null;
     return <CaptureFieldControl key={key} field={field} value={values[field.key]} disabled={saving} allowNotSure={request.allowNotSure} compact propertyId={propertyId} onChange={(value) => setValues((current) => ({ ...current, [field.key]: value }))} />;
   };
+  const plantRoomField = assumptionFieldByKey.get('roomId');
+  const selectedPlantRoomLabel = plantRoomField?.inputSchema.type === 'SINGLE_SELECT' && typeof values.roomId === 'string'
+    ? plantRoomField.inputSchema.options.find((opt) => opt.value === values.roomId)?.label ?? null
+    : null;
+  const plantLightField = assumptionFieldByKey.get('lightLevel');
+  const selectedPlantLightLabel = plantLightField?.inputSchema.type === 'SINGLE_SELECT' && typeof values.lightLevel === 'string'
+    ? plantLightField.inputSchema.options.find((opt) => opt.value === values.lightLevel)?.label ?? null
+    : null;
   const serviceCategoryField = assumptionFieldByKey.get('serviceCategory');
   const selectedServiceLabel = serviceCategoryField?.inputSchema.type === 'SINGLE_SELECT' && typeof values.serviceCategory === 'string'
     ? serviceCategoryField.inputSchema.options.find((opt) => opt.value === values.serviceCategory)?.label ?? null
@@ -730,7 +738,7 @@ export function InlineCaptureCard({
   }
 
   return (
-    <form ref={containerRef as unknown as Ref<HTMLFormElement>} onSubmit={save} className={cn('rounded-2xl border', decisionInputWorkflow ? cn('mx-auto mb-24 w-full border-slate-200 bg-white p-4 shadow-sm sm:p-5', sellHoldRentAssumptions ? 'max-w-[760px]' : 'max-w-[900px]') : compactContinuityPlan ? 'mx-auto w-full max-w-[820px] border-slate-200 bg-white p-4 shadow-sm sm:p-5' : compactPlantAdvisor ? 'mx-auto w-full max-w-[760px] border-slate-200 bg-white p-4 shadow-sm sm:p-5' : compactServicePriceCheck ? 'w-full max-w-[680px] border-slate-200/90 bg-white p-4 shadow-2xs sm:p-5' : compactWorkItemReschedule ? 'mx-auto w-full max-w-[680px] border-sky-200 bg-sky-50/80 p-4 sm:p-5' : compactEventAdd ? 'border-slate-200 bg-white p-4 shadow-sm sm:p-5' : compactProjectCreate ? 'p-3 sm:p-4' : 'p-4', !decisionInputWorkflow && !compactContinuityPlan && !compactPlantAdvisor && !compactServicePriceCheck && !compactWorkItemReschedule && !compactEventAdd && policy.border)} aria-busy={saving || cancelling} aria-label={request.title} data-home-continuity-capture={compactContinuityPlan ? '' : undefined} data-work-item-reschedule={compactWorkItemReschedule ? '' : undefined} data-service-price-check-capture={compactServicePriceCheck ? '' : undefined} data-decision-input-workflow={decisionInputWorkflow ? request.captureKey : undefined}>
+    <form ref={containerRef as unknown as Ref<HTMLFormElement>} onSubmit={save} className={cn('rounded-2xl border', decisionInputWorkflow ? cn('mx-auto mb-24 w-full border-slate-200 bg-white p-4 shadow-sm sm:p-5', sellHoldRentAssumptions ? 'max-w-[760px]' : 'max-w-[900px]') : compactContinuityPlan ? 'mx-auto w-full max-w-[820px] border-slate-200 bg-white p-4 shadow-sm sm:p-5' : compactPlantAdvisor ? 'w-full max-w-[760px] border-slate-200/90 bg-white p-4 shadow-2xs sm:p-5' : compactServicePriceCheck ? 'w-full max-w-[680px] border-slate-200/90 bg-white p-4 shadow-2xs sm:p-5' : compactWorkItemReschedule ? 'mx-auto w-full max-w-[680px] border-sky-200 bg-sky-50/80 p-4 sm:p-5' : compactEventAdd ? 'border-slate-200 bg-white p-4 shadow-sm sm:p-5' : compactProjectCreate ? 'p-3 sm:p-4' : 'p-4', !decisionInputWorkflow && !compactContinuityPlan && !compactPlantAdvisor && !compactServicePriceCheck && !compactWorkItemReschedule && !compactEventAdd && policy.border)} aria-busy={saving || cancelling} aria-label={request.title} data-home-continuity-capture={compactContinuityPlan ? '' : undefined} data-work-item-reschedule={compactWorkItemReschedule ? '' : undefined} data-service-price-check-capture={compactServicePriceCheck ? '' : undefined} data-plant-advisor-capture={compactPlantAdvisor ? '' : undefined} data-decision-input-workflow={decisionInputWorkflow ? request.captureKey : undefined}>
       {compactWorkItemReschedule ? (
         <div>
           <h3 className="text-lg font-semibold tracking-tight text-slate-950">{request.title}</h3>
@@ -769,9 +777,29 @@ export function InlineCaptureCard({
           <p className="text-xs leading-4 text-slate-600">{compactEventAdd ? 'Nothing is saved until you review and confirm.' : 'Add the essentials and one real milestone. You’ll review before anything is created.'}</p>
         </div>
       ) : compactPlantAdvisor ? (
-        <div className="flex items-start gap-3 border-b border-slate-100 pb-4">
-          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-emerald-50 text-emerald-700"><Leaf className="h-4.5 w-4.5" aria-hidden="true" /></span>
-          <div><p className="text-xs font-bold uppercase tracking-[0.12em] text-emerald-700">Plant advisor</p><h3 className="mt-0.5 text-lg font-semibold tracking-tight text-slate-950">{request.title}</h3><p className="mt-1 text-sm leading-5 text-slate-600">Tell Cozy about the room. You’ll review before its recommendations change.</p></div>
+        <div className="border-b border-slate-100 pb-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-teal-900 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-teal-100">
+              <Leaf className="h-3 w-3 text-emerald-300" aria-hidden="true" />
+              Plant Advisor
+            </span>
+            {selectedPlantRoomLabel && selectedPlantLightLabel ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-900">
+                <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
+                {selectedPlantRoomLabel} · {selectedPlantLightLabel} light
+              </span>
+            ) : selectedPlantRoomLabel || selectedPlantLightLabel ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-teal-200 bg-teal-50/80 px-2.5 py-0.5 text-xs font-semibold text-teal-900">
+                {selectedPlantRoomLabel ?? `${selectedPlantLightLabel} light`}
+              </span>
+            ) : (
+              <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-600">
+                Step 1 of 2 · Room conditions
+              </span>
+            )}
+          </div>
+          <h3 className="mt-1.5 text-base font-bold tracking-tight text-slate-950 sm:text-lg">{request.title}</h3>
+          <p className="mt-0.5 text-xs leading-5 text-slate-600 sm:text-sm">Tell Cozy about the room. You’ll review before its recommendations change.</p>
         </div>
       ) : compactContinuityPlan ? (
         <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-4">
@@ -812,15 +840,17 @@ export function InlineCaptureCard({
             <div className="rounded-xl border border-slate-200/80 bg-slate-50/40 p-3">{renderPriceCheckField('quoteVendorName', 'Optional: contractor or company name.')}</div>
           </div>
           <div className="rounded-xl border border-slate-200/80 bg-slate-50/40 p-3">{renderPriceCheckField('serviceLabelRaw')}</div>
-        </div> : compactPlantAdvisor ? <div className="space-y-5 md:col-span-2" data-plant-advisor-redesign="compact">
-          <div className="grid gap-4 sm:grid-cols-2" aria-label="Room and growing conditions">
-            <div>{renderPlantField('roomId')}</div>
-            <div>{renderPlantField('lightLevel')}</div>
-            <div>{renderPlantField('maintenancePreference')}</div>
-            <div>{renderPlantField('hasPets')}</div>
+        </div> : compactPlantAdvisor ? <div className="space-y-3 md:col-span-2" data-plant-advisor-redesign="compact">
+          <div className="grid gap-3 sm:grid-cols-2" aria-label="Room and growing conditions">
+            <div className="rounded-xl border border-slate-200/80 bg-slate-50/60 p-3">{renderPlantField('roomId')}</div>
+            <div className="rounded-xl border border-slate-200/80 bg-slate-50/60 p-3">{renderPlantField('lightLevel')}</div>
+            <div className="rounded-xl border border-slate-200/80 bg-slate-50/40 p-3">{renderPlantField('maintenancePreference')}</div>
+            <div className="rounded-xl border border-slate-200/80 bg-slate-50/40 p-3">{renderPlantField('hasPets')}</div>
           </div>
-          <section aria-label="Optional plant goals" className="border-t border-slate-100 pt-4">{renderPlantField('goals')}</section>
-          <div>{renderPlantField('notes')}</div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <section aria-label="Optional plant goals" className="rounded-xl border border-slate-200/80 bg-slate-50/40 p-3">{renderPlantField('goals')}</section>
+            <div className="rounded-xl border border-slate-200/80 bg-slate-50/40 p-3">{renderPlantField('notes')}</div>
+          </div>
         </div> : sellHoldRentAssumptions ? <div className="space-y-3">
           <section aria-labelledby={`assumptions-property-${executionId}`} className="rounded-2xl border border-slate-200 p-3">
             <div className="mb-2"><h4 id={`assumptions-property-${executionId}`} className="text-sm font-semibold text-slate-950">Property and rent</h4><p className="mt-0.5 text-xs text-slate-500">Blank values continue using the model defaults from the comparison.</p></div>
