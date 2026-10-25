@@ -14,7 +14,8 @@ const {
   SAVED_RESULTS_PAGE_SIZE, buildSavedViewState, resolveSavedState, savedResultsChips, savedResultsFromPage, savedStateFromViewState,
 } = require('../../src/services/ask/handlers/savedResults.handler.ts');
 const { AskPresentationBlockSchema } = require('../../src/productFramework/ask/ask.contract.ts');
-const { validateAskAnswerTrust } = require('../../src/services/ask/askAnswerTrustValidator.ts');
+const { validateAskAnswerTrust, validateAskAnswerTrustPipeline } = require('../../src/services/ask/askAnswerTrustValidator.ts');
+const { matchesSavedResultsAnswerContract, matchesWorkOverviewAnswerContract } = require('../../src/services/ask/askWorkSavedIntent.ts');
 const { resolveAskRoutingCascade } = require('../../src/services/ask/askRoutingCascade.ts');
 const { containsFilterContinuation } = require('../../src/services/ask/askFollowUpContext.ts');
 const { ASK_OPERATION_DEFINITIONS } = require('../../src/services/ask/askOperationRegistry.ts');
@@ -114,6 +115,33 @@ test('Work blocks pass the response schema and the answer-trust validator unchan
   assert.equal(JSON.stringify(result).includes('/dashboard/'), false);
 });
 
+test('the exact What needs me prompt keeps canonical Work collection states through semantic validation', () => {
+  const partial = answer(workPage([workRow()], {
+    partial: true, total: null, totalScope: 'PARTIAL',
+    providers: [{ providerId: 'REPAIRS', label: 'Repairs', workType: 'REPAIR', state: 'FAILED', reason: 'Could not be read.', total: null, delivered: 0, required: true }],
+  }));
+  const restricted = {
+    status: 'READY_WITH_LIMITATIONS', reasonCode: 'WORK_RESTRICTED',
+    blocks: [
+      { type: 'EMPTY_STATE', id: 'work-overview-restricted', title: 'Work is not available for your household role', body: 'Nothing was read, so this is not an empty list.', actions: [] },
+      { type: 'BOUNDARY', id: 'work-overview-boundary', title: 'Each item stays with its own record', body: 'Nothing is copied or changed here.', severity: 'INFO', suggestions: [] },
+    ], suggestions: [],
+  };
+  const results = [answer(workPage([workRow()])), answer(workPage([])), partial, answer(workPage([workRow()], state({ view: 'ACTIVE' }))), restricted];
+  for (const result of results) {
+    assert.equal(matchesWorkOverviewAnswerContract(result), true);
+    const validated = validateAskAnswerTrustPipeline({
+      question: 'What needs me?', operationId: 'WORK_OVERVIEW', semanticEnabled: true, propertyId: 'p1',
+      result: { ...result, parameters: { ...result.parameters, ...evidence('WORK_OVERVIEW', 'work.overview') } },
+    });
+    assert.equal(validated.result.status, result.status);
+    assert.equal(validated.semantic.outcome, 'PASS');
+    assert.ok(validated.semantic.reasonCodes.includes('CANONICAL_TYPED_ANSWER_CONTRACT_MATCH'));
+    assert.deepEqual(validated.result.blocks.map((block) => block.id), result.blocks.map((block) => block.id));
+  }
+  assert.equal(matchesWorkOverviewAnswerContract({ ...results[0], blocks: [...results[0].blocks, { type: 'SUMMARY', id: 'foreign-summary', title: 'Wrong', body: 'Wrong', actions: [] }] }), false);
+});
+
 const artifact = (overrides = {}) => ({
   artifactKey: 'comparison:q1', artifactType: 'QUOTE_COMPARISON', category: 'COMPARISON', owner: 'quote-comparison', entity: { type: 'QUOTE_COMPARISON_WORKSPACE', id: 'q1' }, propertyId: 'p1', sourceExecutionId: null,
   title: 'Roofing quotes', summary: 'Selected Acme', createdAt: '2026-10-01T12:00:00.000Z', updatedAt: '2026-10-07T12:00:00.000Z', sourceAsOf: '2026-10-07T12:00:00.000Z',
@@ -175,6 +203,33 @@ test('Saved blocks pass the response schema and the answer-trust validator uncha
   const { result: validated } = validateAskAnswerTrust({ question: 'Show my saved results', operationId: 'SAVED_RESULTS', result: { ...result, parameters: { ...result.parameters, ...evidence('SAVED_RESULTS', 'saved.results') } }, propertyId: 'p1' });
   assert.deepEqual(validated.blocks.map((block) => block.id), result.blocks.map((block) => block.id));
   assert.equal(JSON.stringify(result).includes('/dashboard/'), false);
+});
+
+test('the exact Show my saved results prompt keeps canonical Saved collection states through semantic validation', () => {
+  const partial = savedAnswer(savedPage([artifact()], {
+    partial: true, total: null, totalScope: 'PARTIAL',
+    types: [{ artifactType: 'HOME_REPORT_EXPORT', label: 'Reports', state: 'FAILED', reason: 'Could not be read.', total: null, delivered: 0 }],
+  }));
+  const restricted = {
+    status: 'READY_WITH_LIMITATIONS', reasonCode: 'SAVED_RESTRICTED',
+    blocks: [
+      { type: 'EMPTY_STATE', id: 'saved-results-restricted', title: 'Saved results are not available for your household role', body: 'Nothing was read, so this is not an empty list.', actions: [] },
+      { type: 'BOUNDARY', id: 'saved-results-boundary', title: 'Saved only finds and reopens', body: 'Nothing is changed here.', severity: 'INFO', suggestions: [] },
+    ], suggestions: [],
+  };
+  const results = [savedAnswer(savedPage([artifact()])), savedAnswer(savedPage([])), partial, savedAnswer(savedPage([artifact()], savedState({ freshness: 'STALE' }))), restricted];
+  for (const result of results) {
+    assert.equal(matchesSavedResultsAnswerContract(result), true);
+    const validated = validateAskAnswerTrustPipeline({
+      question: 'Show my saved results', operationId: 'SAVED_RESULTS', semanticEnabled: true, propertyId: 'p1',
+      result: { ...result, parameters: { ...result.parameters, ...evidence('SAVED_RESULTS', 'saved.results') } },
+    });
+    assert.equal(validated.result.status, result.status);
+    assert.equal(validated.semantic.outcome, 'PASS');
+    assert.ok(validated.semantic.reasonCodes.includes('CANONICAL_TYPED_ANSWER_CONTRACT_MATCH'));
+    assert.deepEqual(validated.result.blocks.map((block) => block.id), result.blocks.map((block) => block.id));
+  }
+  assert.equal(matchesSavedResultsAnswerContract({ ...results[0], blocks: [...results[0].blocks, { type: 'SUMMARY', id: 'foreign-summary', title: 'Wrong', body: 'Wrong', actions: [] }] }), false);
 });
 
 test('the questions these operations own route here, and the ones other operations own keep them', () => {

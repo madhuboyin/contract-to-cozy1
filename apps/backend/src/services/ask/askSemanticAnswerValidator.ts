@@ -16,8 +16,9 @@ import { matchesHomeChangeSummaryAnswerContract } from './askHomeChangeIntent';
 import { matchesStatusBoardAnswerContract } from './askStatusBoardIntent';
 import { matchesPropertySummaryAnswerContract } from './askPropertySummaryIntent';
 import { matchesCoverageGapsAnswerContract } from './askCoverageIntent';
+import { matchesSavedResultsAnswerContract, matchesWorkOverviewAnswerContract } from './askWorkSavedIntent';
 
-export const ASK_SEMANTIC_ANSWER_VALIDATOR_VERSION = 'local-relevance-3.6';
+export const ASK_SEMANTIC_ANSWER_VALIDATOR_VERSION = 'local-relevance-3.7';
 
 export interface AskSemanticAnswerRelevanceResult {
   schemaVersion: '1.0';
@@ -87,6 +88,22 @@ export function validateAskSemanticAnswerRelevance(input: {
   }
   if (input.operationId === 'PROPERTY_SUMMARY'
     && matchesPropertySummaryAnswerContract(input.result)) {
+    return finish({
+      outcome: 'PASS', selectedOperationId: input.operationId, competingOperationId: null,
+      selectedOperationScore: 1, competingOperationScore: 0, questionAnswerScore: 1,
+      reasonCodes: ['CANONICAL_TYPED_ANSWER_CONTRACT_MATCH'],
+    });
+  }
+  if (input.operationId === 'WORK_OVERVIEW'
+    && matchesWorkOverviewAnswerContract(input.result)) {
+    return finish({
+      outcome: 'PASS', selectedOperationId: input.operationId, competingOperationId: null,
+      selectedOperationScore: 1, competingOperationScore: 0, questionAnswerScore: 1,
+      reasonCodes: ['CANONICAL_TYPED_ANSWER_CONTRACT_MATCH'],
+    });
+  }
+  if (input.operationId === 'SAVED_RESULTS'
+    && matchesSavedResultsAnswerContract(input.result)) {
     return finish({
       outcome: 'PASS', selectedOperationId: input.operationId, competingOperationId: null,
       selectedOperationScore: 1, competingOperationScore: 0, questionAnswerScore: 1,
