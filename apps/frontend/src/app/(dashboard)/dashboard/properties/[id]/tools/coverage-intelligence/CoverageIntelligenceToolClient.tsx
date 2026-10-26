@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect } from 'react';
+import Link from 'next/link';
+import { Sparkles } from 'lucide-react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import HomeToolsRail from '../../components/HomeToolsRail';
 import { track } from '@/lib/analytics/events';
@@ -9,6 +11,7 @@ import { coverageLoopTrust } from '@/lib/trust/trustPresets';
 import ToolWorkspaceTemplate from '../../components/route-templates/ToolWorkspaceTemplate';
 import InsuranceTrendClient from '../insurance-trend/InsuranceTrendClient';
 import RiskPremiumOptimizerPanel from '@/components/ai/RiskPremiumOptimizerPanel';
+import { buildAskWorkspaceHref } from '@/lib/navigation/askNavigation';
 import { buildGuidanceOverviewHref } from '@/lib/navigation/guidanceOverviewHref';
 import { PropertyContextCapturePanel } from '@/components/property-context/PropertyContextCapturePanel';
 import PolicyRecordReadinessPanel from '@/components/coverage/PolicyRecordReadinessPanel';
@@ -27,6 +30,13 @@ const STAGES: { key: CoverageStage; label: string; description: string }[] = [
   { key: 'compare', label: 'Compare choices', description: 'See equivalence, unknowns, and tradeoffs.' },
   { key: 'risk', label: 'Reduce loss risk', description: 'Plan loss-prevention work without savings promises.' },
 ];
+
+// Only stages whose question maps to an existing deterministic coverage operation seed a prompt; Renewal and Risk open Ask unseeded.
+const ASK_STAGE_QUESTIONS: Partial<Record<CoverageStage, string>> = {
+  current: 'Show gaps in my home protection.',
+  questions: 'What questions should I ask my insurer?',
+  compare: 'Compare my current insurance policy against alternatives.',
+};
 
 export default function CoverageIntelligenceToolClient() {
   const params = useParams<{ id: string }>();
@@ -124,6 +134,16 @@ export default function CoverageIntelligenceToolClient() {
     sourceLabel: 'Linked policy records + property inventory + homeowner-confirmed details',
   });
 
+  const currentQuery = searchParams.toString();
+  const askHref = buildAskWorkspaceHref({
+    propertyId,
+    question: ASK_STAGE_QUESTIONS[activeStage],
+    from: 'coverage-intelligence',
+    launchSurface: 'COVERAGE_INTELLIGENCE_TOOL',
+    launchCapabilityId: 'coverage-intelligence',
+    backTo: `/dashboard/properties/${propertyId}/tools/coverage-intelligence${currentQuery ? `?${currentQuery}` : ''}`,
+  });
+
   const tabNav = (
     <div role="tablist" aria-label="Coverage and premium review stages" className="grid gap-1 rounded-xl border border-border bg-muted/40 p-1 sm:grid-cols-2 lg:grid-cols-5">
       {STAGES.map(({ key, label, description }) => (
@@ -159,7 +179,16 @@ export default function CoverageIntelligenceToolClient() {
       }
       trust={trust}
       introAction={
-        <HomeToolsRail propertyId={propertyId} showDesktop={false} />
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href={askHref}
+            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-teal-200 bg-teal-50 px-3 text-sm font-semibold text-teal-900 hover:bg-teal-100"
+          >
+            <Sparkles className="h-4 w-4" aria-hidden="true" />
+            Ask Cozy
+          </Link>
+          <HomeToolsRail propertyId={propertyId} showDesktop={false} />
+        </div>
       }
     >
       {/* Tab navigation */}
