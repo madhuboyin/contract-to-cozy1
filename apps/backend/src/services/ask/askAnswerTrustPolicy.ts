@@ -115,7 +115,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   // The Open Documents link was never declared, so the validator removed it from the answer and from its empty state (found in Documents D-1).
   INCIDENT_CLAIM_STATUS: new Set(['claim-file-start', 'claim-start', 'claim-submit', 'claim-under-review', 'claim-approve', 'claim-deny', 'claim-close', 'claim-checklist']),
   // Plus the row steps (FRD v1.323): save, dismiss, stop pursuing, record the outcome.
-  SAVINGS_OPPORTUNITIES: new Set(['review-all-savings', 'review-property-tax-opportunity', 'review-coverage-opportunity', 'review-refinance-opportunity', 'savings-benefit-save', 'savings-benefit-dismiss', 'savings-benefit-stop', 'savings-benefit-outcome', 'savings-benefit-applied', 'savings-benefit-switched', 'savings-recurring-plan', 'savings-recurring-check']),
+  SAVINGS_OPPORTUNITIES: new Set(['review-all-savings', 'review-property-tax-opportunity', 'review-coverage-opportunity', 'review-refinance-opportunity', 'savings-benefit-save', 'savings-benefit-dismiss', 'savings-benefit-stop', 'savings-benefit-outcome', 'savings-benefit-applied', 'savings-benefit-switched', 'savings-benefits-scan', 'savings-recurring-plan', 'savings-recurring-check']),
   OWNERSHIP_COSTS: new Set([
     'ownership-cost-view-current', 'ownership-cost-view-changes', 'ownership-cost-view-forecast', 'ownership-cost-view-variability', 'ownership-cost-refresh-sources',
     'ownership-cost-review-property_tax', 'ownership-cost-review-insurance', 'ownership-cost-review-hoa', 'ownership-cost-review-utilities',

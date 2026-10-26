@@ -23,7 +23,7 @@ import {
 } from '../support/savingsBenefitCommand';
 import { OWNERSHIP_COST_ACTION_IDS, OWNERSHIP_COST_COMMAND_MESSAGE } from '../support/ownershipCostConstants';
 import { collectionDescriptor } from '../support/collectionDescriptor';
-import { SAVINGS_COMMAND_ACTION_IDS as RECURRING_ACTION_IDS, SAVINGS_COMMAND_MESSAGES as RECURRING_MESSAGES, RECURRING_ROW_ACTION_LABELS, recurringRowActionKinds } from '../support/savingsBenefitCommand';
+import { SAVINGS_COMMAND_ACTION_IDS as RECURRING_ACTION_IDS, SAVINGS_COMMAND_MESSAGES as RECURRING_MESSAGES, RECURRING_ROW_ACTION_LABELS, SAVINGS_BENEFITS_SCAN_ENTITY_ID, SAVINGS_BENEFITS_SCAN_ENTITY_TYPE, recurringRowActionKinds } from '../support/savingsBenefitCommand';
 import { SAVINGS_RECURRING_ALL, SAVINGS_RECURRING_CATEGORIES, SAVINGS_RECURRING_CATEGORY_ENTITY_TYPE, formatPlanAmount, savingsRecurringRow, type SavingsRecurringCategory } from '../support/savingsRecurringSetup';
 
 const homeSavingsService = new HomeSavingsService();
@@ -131,6 +131,15 @@ export function savingsHeadlineMetrics(input: { potentialAnnualSavings: number; 
     ...(input.realizedCount > 0 ? [{ label: 'Realized', value: String(input.realizedCount), detail: input.realizedCount === 1 ? 'recorded outcome' : 'recorded outcomes', tone: 'DEFAULT' as const }] : []),
   ];
   return metrics.length >= 2 ? { type: 'METRIC_ROW', id: 'savings-headline', title: 'At a glance', metrics } : null;
+}
+
+/** "Scan for benefits" the first time and "Re-scan" after, as the desktop labels it; the primary action while the home has never been scanned. */
+export function benefitsScanAction(hasScanned: boolean) {
+  return {
+    id: RECURRING_ACTION_IDS.SCAN, label: hasScanned ? 'Re-scan for benefits' : 'Scan for benefits', message: RECURRING_MESSAGES.SCAN, operationId: 'SAVINGS_BENEFIT_COMMAND' as const,
+    interactionType: 'START_WORKFLOW' as const, style: hasScanned ? 'SECONDARY' as const : 'PRIMARY' as const,
+    entityType: SAVINGS_BENEFITS_SCAN_ENTITY_TYPE, entityId: SAVINGS_BENEFITS_SCAN_ENTITY_ID,
+  };
 }
 
 /**
@@ -361,12 +370,13 @@ async function savingsOpportunitiesResult(userId: string, propertyId: string, me
       : homeSavings.potentialAnnualSavings > 0
       ? `This is the highest single net annual estimate, not a sum across categories. Ask also found ${reviewedBenefits.length} reviewed benefit or rebate match${reviewedBenefits.length === 1 ? '' : 'es'}, ${inProgress.length} item${inProgress.length === 1 ? '' : 's'} in progress, and ${realized.length} recorded realized outcome${realized.length === 1 ? '' : 's'}. Estimates are not provider quotes or eligibility guarantees.`
       : neverAnalyzed
-        ? `${canChangeSavings ? 'No savings analysis has been run for this home yet. Set up a recurring cost below to start one.' : 'No savings analysis has been run for this home yet. The home’s primary owner can set one up.'} Ask will not infer that no savings exist from an empty record.`
+        ? `${canChangeSavings ? 'No savings analysis has been run for this home yet. Set up a recurring cost below or scan for benefits to start one.' : 'No savings analysis has been run for this home yet. The home’s primary owner can set one up.'} Ask will not infer that no savings exist from an empty record.`
         : hasAnyResult
           ? 'Estimates are planning signals. Realized value counts only after a saving or benefit is recorded as received.'
           : `${savingsEmptyCategoriesSentence(emptyCategories) ?? 'Nothing is recorded yet.'} That is not the same as zero savings.`,
     tone: (utilityFocus ? availableCount > 0 : homeSavings.potentialAnnualSavings > 0 || availableCount > 0) ? 'POSITIVE' : 'DEFAULT',
-    actions: [],
+    // Scanning for benefits is the primary owner's step; the answer offers it for the savings picture, not for a results-only question (realized, payback).
+    actions: canChangeSavings && !realizedFocus && !paybackFocus ? [benefitsScanAction(benefits.summary.lastScanAt != null)] : [],
   }];
 
   const headline = hasAnyResult && !utilityFocus && !realizedFocus && !paybackFocus

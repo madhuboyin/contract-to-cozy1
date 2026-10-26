@@ -16,14 +16,18 @@ export const SAVINGS_COMMAND_MESSAGES = {
   CHECK: 'Check my recurring costs for savings.',
   APPLIED: 'Record that I applied for this savings opportunity myself.',
   SWITCHED: 'Record that I switched to this savings opportunity myself.',
+  SCAN: 'Scan this home for benefits and rebates.',
 } as const;
 export type SavingsCommandKind = keyof typeof SAVINGS_COMMAND_MESSAGES;
-export const SAVINGS_COMMAND_ACTION_IDS = { SAVE: 'savings-benefit-save', DISMISS: 'savings-benefit-dismiss', STOP: 'savings-benefit-stop', OUTCOME: 'savings-benefit-outcome', PLAN: 'savings-recurring-plan', CHECK: 'savings-recurring-check', APPLIED: 'savings-benefit-applied', SWITCHED: 'savings-benefit-switched' } as const;
+export const SAVINGS_COMMAND_ACTION_IDS = { SAVE: 'savings-benefit-save', DISMISS: 'savings-benefit-dismiss', STOP: 'savings-benefit-stop', OUTCOME: 'savings-benefit-outcome', PLAN: 'savings-recurring-plan', CHECK: 'savings-recurring-check', APPLIED: 'savings-benefit-applied', SWITCHED: 'savings-benefit-switched', SCAN: 'savings-benefits-scan' } as const;
 export const savingsCommandKindFromMessage = (message: string): SavingsCommandKind | null =>
   ((Object.entries(SAVINGS_COMMAND_MESSAGES) as Array<[SavingsCommandKind, string]>).find(([, value]) => value === message)?.[0]) ?? null;
 /** The recurring-cost setup acts on a category (or all of them), not on one opportunity. */
 export const isRecurringSetupKind = (kind: SavingsCommandKind): kind is 'PLAN' | 'CHECK' => kind === 'PLAN' || kind === 'CHECK';
-export const savingsCommandEntityType = (kind: SavingsCommandKind) => isRecurringSetupKind(kind) ? 'HOME_SAVINGS_CATEGORY' :
+/** The benefits scan acts on the whole home, not on one opportunity or category. */
+export const SAVINGS_BENEFITS_SCAN_ENTITY_TYPE = 'SAVINGS_BENEFITS_SCAN';
+export const SAVINGS_BENEFITS_SCAN_ENTITY_ID = 'BENEFITS';
+export const savingsCommandEntityType = (kind: SavingsCommandKind) => kind === 'SCAN' ? SAVINGS_BENEFITS_SCAN_ENTITY_TYPE : isRecurringSetupKind(kind) ? 'HOME_SAVINGS_CATEGORY' :
   kind === 'SAVE' || kind === 'DISMISS' || kind === 'APPLIED' || kind === 'SWITCHED' ? SAVINGS_AVAILABLE_ENTITY_TYPE : SAVINGS_IN_PROGRESS_ENTITY_TYPE;
 export const SAVINGS_OUTCOME_CAPTURE_KEY = 'SAVINGS_BENEFIT_OUTCOME';
 
