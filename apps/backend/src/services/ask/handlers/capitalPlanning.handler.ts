@@ -394,7 +394,7 @@ export function renovationReadinessProgress(
 const READINESS_COMMAND_ACTIONS = READINESS_COMMAND_ACTION_IDS;
 const READINESS_ITEM_LABELS: Record<ReadinessCommandKind, string> = {
   REFRESH: 'Refresh readiness', ACKNOWLEDGE: 'Acknowledge the risk', REVOKE: 'Withdraw the acknowledgement', REOPEN: 'Reopen', SATISFY: 'Mark satisfied with a document',
-  HANDOFF: 'Create the execution project', GENERATE: 'Generate requirements research', SATISFY_CONDITION: 'Mark satisfied with a document',
+  HANDOFF: 'Create the execution project', GENERATE: 'Generate requirements research', SATISFY_CONDITION: 'Mark satisfied with a document', ATTACH_RECORD: 'Attach a permit or HOA record',
 };
 
 async function renovationPermitReadinessResult(propertyId: string, message: string, canStart = false, isOwner = false): Promise<AskOperationResult> {
@@ -506,8 +506,13 @@ export async function renovationComplianceResult(propertyId: string, selected: {
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY', id: 'renovation-compliance-summary',
     title: blockers ? `${blockers} approval condition${blockers === 1 ? '' : 's'} still block${blockers === 1 ? 's' : ''} closeout for ${selected.name}` : `Permits, HOA approvals and conditions for ${selected.name}`,
-    body: `${workflow.coverage.permit.message} ${workflow.coverage.hoa.message} Official status comes from an authority or the association; reported status is what the household recorded. ${parts.alerts.length ? ` Expiring soon: ${parts.alerts.join(' ')}` : ''} ${canChange ? 'You can mark a condition satisfied here; attaching records is not currently available in Ask.' : 'Attaching records and satisfying conditions are not currently available in Ask.'}`,
-    tone: blockers || parts.alerts.length ? 'CAUTION' : 'DEFAULT', actions: [],
+    body: `${workflow.coverage.permit.message} ${workflow.coverage.hoa.message} Official status comes from an authority or the association; reported status is what the household recorded. ${parts.alerts.length ? ` Expiring soon: ${parts.alerts.join(' ')}` : ''} ${canChange ? 'You can attach a permit or HOA record and mark a condition satisfied here.' : 'A contributor or owner can attach records and mark conditions satisfied.'}`,
+    tone: blockers || parts.alerts.length ? 'CAUTION' : 'DEFAULT',
+    // Attaching a record is a contributor's step on the case; the action is offered only to someone who can take it.
+    actions: canChange ? [{
+      id: READINESS_COMMAND_ACTIONS.ATTACH_RECORD, label: READINESS_ITEM_LABELS.ATTACH_RECORD, interactionType: 'START_WORKFLOW' as const, message: READINESS_COMMAND_MESSAGES.ATTACH_RECORD,
+      operationId: 'RENOVATION_READINESS_COMMAND' as const, entityType: RENOVATION_READINESS_CASE_ENTITY_TYPE, entityId: selected.id, style: 'SECONDARY' as const,
+    }] : [],
   }];
   if (caseListBlock) blocks.push(caseListBlock);
   blocks.push({ type: 'GROUPED_LIST', filters: [], id: 'renovation-compliance', title: 'Permit and HOA workflow', description: 'A record attached here belongs to this case\u2019s current scope.', sections: sections as any, actions: [] });

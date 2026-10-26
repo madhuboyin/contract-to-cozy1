@@ -63,7 +63,7 @@ export function renovationCaseRows(cases: readonly RenovationCaseOverviewInput[]
     return {
       id: `renovation-case-${renovationCase.id}`,
       title: renovationCase.name,
-      description: `Next: ${next.title}.${next.inAsk ? '' : RENOVATION_COMPLIANCE_STAGES.has(renovationCase.lifecycle) ? ' You can review the approvals here; recording them is not currently available in Ask.' : RENOVATION_REQUIREMENT_STAGES.has(renovationCase.lifecycle) ? ' You can review the requirements here; recording a determination is not currently available in Ask.' : ' This step is not currently available in Ask.'}`,
+      description: `Next: ${next.title}.${next.inAsk ? '' : RENOVATION_COMPLIANCE_STAGES.has(renovationCase.lifecycle) ? ' You can review the approvals here, attach records and mark conditions satisfied; confirming an HOA document reading is not currently available in Ask.' : RENOVATION_REQUIREMENT_STAGES.has(renovationCase.lifecycle) ? ' You can review the requirements here; recording a determination is not currently available in Ask.' : ' This step is not currently available in Ask.'}`,
       meta: [
         renovationLifecycleLabel(renovationCase.lifecycle),
         READINESS_LABELS[summary.state ?? 'NOT_EVALUATED'] ?? READINESS_LABELS.NOT_EVALUATED,

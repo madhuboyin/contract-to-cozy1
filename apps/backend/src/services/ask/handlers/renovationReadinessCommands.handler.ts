@@ -15,10 +15,10 @@ import { listPropertyDocuments } from '../../propertyDocuments/propertyDocumentI
 import { offerableNegotiationDocuments, type NegotiationAttachCandidate } from '../support/negotiationShieldAttach';
 import { humanDate } from '../askFormatting';
 import { generateRequirementCandidates } from '../../renovationRequirement.service';
-import { updateCondition } from '../../renovationComplianceWorkflow.service';
+import { attachComplianceRecord, updateCondition } from '../../renovationComplianceWorkflow.service';
 import { evaluateReadiness, governOverride, handoffToProject, loadHandoffPrefill, updateReadinessItem } from '../../renovationReadiness.service';
 import {
-  HANDOFF_FUNDING_LABELS, HANDOFF_PROJECT_TYPES, READINESS_COMMAND_MESSAGES, READINESS_FORM_CAPTURE_KEYS, handoffServiceInput, readinessCommandEntityType,
+  HANDOFF_FUNDING_LABELS, HANDOFF_PROJECT_TYPES, attachRecordServiceInput, READINESS_COMMAND_MESSAGES, READINESS_FORM_CAPTURE_KEYS, handoffServiceInput, readinessCommandEntityType,
   readinessCommandKindFromMessage, readinessKindNeedsOwner, readinessServiceInput, parseReadinessFormAnswer, type ReadinessCommandKind, type ReadinessFormKind,
   type ReadinessFormValues, type ReadinessItemFormKind,
 } from '../support/renovationReadinessCommand';
@@ -56,6 +56,41 @@ const loadCase = async (propertyId: string, caseId: string) => database.renovati
   where: { id: caseId, propertyId }, select: { id: true, name: true, updatedAt: true, readinessSummary: true, currentScopeVersionId: true },
 }) as Promise<{ id: string; name: string; updatedAt: Date; readinessSummary: unknown; currentScopeVersionId: string | null } | null>;
 const itemVersion = (kind: ReadinessCommandKind, item: ItemRow) => sha(`readiness:${kind}:${item.id}:${item.status}:${item.overrideAcknowledgedAt?.toISOString() ?? ''}:${item.updatedAt.toISOString()}`);
+const titleCase = (value: string | null | undefined) => (value ?? 'unknown').replace(/_/g, ' ').toLowerCase().replace(/^\w/, (c) => c.toUpperCase());
+const ATTACH_OFFER_LIMIT = 25;
+/**
+ * The permits and HOA approvals a case could take: active records on this home that no renovation case holds yet. Stricter than the desktop picker, which
+ * lists them all and lets the service refuse one held by another case; the service still re-checks. Capped, newest first, so a long list stays a choice.
+ */
+async function attachableRecords(propertyId: string) {
+  const [permits, approvals] = await Promise.all([
+    database.propertyPermitRecord.findMany({ where: { propertyId, isActive: true }, orderBy: { updatedAt: 'desc' }, take: 100, select: { id: true, permitNumber: true, category: true, status: true } }),
+    database.hoaApprovalRecord.findMany({ where: { propertyId, isActive: true }, orderBy: { updatedAt: 'desc' }, take: 100, select: { id: true, workType: true, reportedStatus: true, decisionStatus: true } }),
+  ]) as [Array<{ id: string; permitNumber: string | null; category: string | null; status: string | null }>, Array<{ id: string; workType: string | null; reportedStatus: string | null; decisionStatus: string | null }>];
+  const held = await database.renovationCaseLink.findMany({
+    where: { OR: [{ linkType: 'PERMIT', targetId: { in: permits.map((record) => record.id) } }, { linkType: 'HOA_APPROVAL', targetId: { in: approvals.map((record) => record.id) } }] },
+    select: { linkType: true, targetId: true },
+  }) as Array<{ linkType: string; targetId: string }>;
+  const taken = new Set(held.map((link) => `${link.linkType}:${link.targetId}`));
+  const options = [
+    ...permits.filter((record) => !taken.has(`PERMIT:${record.id}`)).map((record) => ({ value: `PERMIT:${record.id}`, label: `Permit ${record.permitNumber || titleCase(record.category)} (official: ${titleCase(record.status).toLowerCase()})` })),
+    ...approvals.filter((record) => !taken.has(`HOA_APPROVAL:${record.id}`)).map((record) => ({ value: `HOA_APPROVAL:${record.id}`, label: `HOA approval, ${titleCase(record.workType).toLowerCase()} (decision: ${titleCase(record.decisionStatus).toLowerCase()}; reported: ${titleCase(record.reportedStatus).toLowerCase()})` })),
+  ];
+  return { options: options.slice(0, ATTACH_OFFER_LIMIT), total: options.length };
+}
+const caseLinkCount = (caseId: string): Promise<number> => database.renovationCaseLink.count({ where: { renovationCaseId: caseId, linkType: { in: ['PERMIT', 'HOA_APPROVAL'] } } });
+const attachVersion = (renovationCase: { id: string; updatedAt: Date }, scopeVersionId: string, linked: number) => sha(`compliance:ATTACH_RECORD:${renovationCase.id}:${scopeVersionId}:${linked}:${renovationCase.updatedAt.toISOString()}`);
+function attachCapture(contextVersion: string, caseName: string, options: Array<{ value: string; label: string }>, entered: ReadinessFormValues = {}): AskCaptureRequest {
+  return {
+    requirementId: 'renovation-compliance-attach-record-inputs', captureKey: READINESS_FORM_CAPTURE_KEYS.ATTACH_RECORD, classification: 'WORKFLOW_INPUT', state: 'UNKNOWN',
+    title: `Attach a record to ${caseName}`, question: 'Which permit or HOA approval belongs to this renovation?',
+    helpText: 'Only records not already attached to a renovation case are listed. Nothing is saved until you confirm.',
+    inputSchema: { type: 'GROUP', fields: [{ key: 'record', label: 'Record', required: true, inputSchema: { type: 'SINGLE_SELECT' as const, options: options.map((option) => ({ label: option.label, value: option.value })) } }] } as unknown as AskCaptureRequest['inputSchema'],
+    currentAnswer: Object.fromEntries(Object.entries(entered).filter(([, v]) => v !== null && v !== undefined && v !== '')), allowNotSure: false, sensitivity: 'STANDARD',
+    destinationLabel: 'Used to prepare this step; nothing is saved until you confirm', confirmationText: null, expectedContextVersion: contextVersion,
+  };
+}
+
 type ConditionRow = { id: string; renovationCaseId: string; title: string; status: string; isBlocking: boolean; updatedAt: Date };
 const loadCondition = async (propertyId: string, conditionId: string): Promise<ConditionRow | null> => database.renovationComplianceCondition.findFirst({
   where: { id: conditionId, propertyId }, select: { id: true, renovationCaseId: true, title: true, status: true, isBlocking: true, updatedAt: true },
@@ -181,6 +216,36 @@ export async function readinessCommandResult(userId: string, propertyId: string,
     confirmationId: `renovation-readiness-${id}-1`, version: 1, title: spec.title, description: spec.description, fields: spec.fields, editableFields: [] as never[],
     confirmLabel: spec.confirmLabel, consentText: 'I authorize this change to the shared home record.', expiresAt: expiresAt.toISOString(),
   });
+
+  if (kind === 'ATTACH_RECORD') {
+    const renovationCase = await loadCase(propertyId, launch.entityId);
+    if (!renovationCase) return unavailable('RENOVATION_CASE_NOT_FOUND', 'That renovation case is no longer available', 'Ask could not find that case. Nothing has changed.');
+    if (!renovationCase.currentScopeVersionId) return unavailable('RENOVATION_SCOPE_MISSING', 'This case has no scope to attach records to', 'Records are attached to the case’s current scope, and this case does not have one. Defining scope is not currently available in Ask. Nothing has changed.');
+    const offered = await attachableRecords(propertyId);
+    if (!offered.options.length) return unavailable('RENOVATION_NO_ATTACHABLE_RECORD', 'There is no record to attach', 'Every permit and HOA approval on file for this home is already attached to a renovation case, or none has been recorded. Nothing has changed.');
+    const contextVersion = attachVersion(renovationCase, renovationCase.currentScopeVersionId, await caseLinkCount(renovationCase.id));
+    if (!supplied) {
+      return {
+        status: 'NEEDS_CONTEXT', reasonCode: 'RENOVATION_ATTACH_RECORD_INPUT_REQUIRED', contextVersion,
+        parameters: { readinessCommandLaunch: { kind, entityId: renovationCase.id, sourceExecutionId: launch.sourceExecutionId } },
+        blocks: [{ type: 'SUMMARY', id: 'readiness-attach-input', title: `Attach a record to ${renovationCase.name}`, body: `${offered.total > offered.options.length ? `Showing the ${offered.options.length} most recent of ${offered.total} records that are not attached to a case. ` : ''}Nothing has been saved yet.`, tone: 'DEFAULT', actions: [] }],
+        captureRequests: [attachCapture(contextVersion, renovationCase.name, offered.options)], suggestions: [],
+      };
+    }
+    const chosen = offered.options.find((option) => option.value === supplied.record) ?? null;
+    if (!chosen) return unavailable('RENOVATION_ATTACH_RECORD_NOT_OFFERED', 'Choose a record from the list', 'That record is not one that can be attached now. Nothing has changed.');
+    return {
+      status: 'NEEDS_CONFIRMATION', reasonCode: 'RENOVATION_ATTACH_RECORD_CONFIRMATION_REQUIRED', contextVersion,
+      parameters: { readinessForm: supplied, readinessCommand: { kind, entityId: renovationCase.id }, readinessContextVersion: contextVersion, ...base },
+      blocks: [{ type: 'SUMMARY', id: 'readiness-attach-review', title: `Attach this record to ${renovationCase.name}?`, body: 'Nothing is saved until you confirm.', tone: 'DEFAULT', actions: [] }],
+      confirmation: confirmation(`attach-${sha(`${renovationCase.id}:${chosen.value}`).slice(0, 12)}`, {
+        title: `Attach this record to ${renovationCase.name}?`, confirmLabel: 'Attach the record',
+        description: 'This links the record to this case’s current scope and marks it as belonging to this case, so it cannot be attached to another. For an HOA approval granted with conditions, those conditions are added as a blocking item to resolve before closeout. It does not change the record’s status, apply to an authority or contact anyone. Attaching it again changes nothing.',
+        fields: [{ label: 'Case', value: renovationCase.name }, { label: 'Record', value: chosen.label }],
+      }),
+      captureRequests: [attachCapture(contextVersion, renovationCase.name, offered.options, supplied)], suggestions: [],
+    };
+  }
 
   if (kind === 'SATISFY_CONDITION') {
     const condition = await loadCondition(propertyId, launch.entityId);
@@ -382,7 +447,18 @@ async function confirmReadinessCommand(ctx: ConfirmCapabilityContext): Promise<C
   const propertyId = execution.propertyId;
   let title: string; let description: string; let artifactId = command.entityId; let artifactType = 'RENOVATION_READINESS_ITEM'; let workItemSynced: boolean | undefined; let backAction: typeof backToReadiness = backToReadiness;
   try {
-    if (kind === 'SATISFY_CONDITION') {
+    if (kind === 'ATTACH_RECORD') {
+      const renovationCase = await loadCase(propertyId, command.entityId);
+      if (!renovationCase || !renovationCase.currentScopeVersionId) throw stale('That renovation case or its scope is no longer available.');
+      if (parameters.readinessContextVersion !== attachVersion(renovationCase, renovationCase.currentScopeVersionId, await caseLinkCount(renovationCase.id))) throw stale('This case changed while the confirmation was open. Review it again and try again.', 'ASK_CONTEXT_VERSION_CONFLICT');
+      const checked = parseReadinessFormAnswer('ATTACH_RECORD', parameters.readinessForm);
+      if (!checked.success) throw stale('The details to save are invalid.');
+      const offered = await attachableRecords(propertyId);
+      if (!offered.options.some((option) => option.value === checked.data.record)) throw stale('That record can no longer be attached (it may already belong to a case). Review it again and try again.');
+      await attachComplianceRecord(propertyId, renovationCase.id, userId, attachRecordServiceInput(checked.data));
+      backAction = { ...backToReadiness, label: 'See approvals', message: `Show the compliance status for my renovation ${renovationCase.name.slice(0, 120)}.` };
+      title = 'Record attached'; description = 'It is linked to this case’s current scope. Its status was not changed, and nothing was sent to an authority.';
+    } else if (kind === 'SATISFY_CONDITION') {
       const condition = await loadCondition(propertyId, command.entityId);
       if (!condition) throw stale('That condition is no longer available.');
       if (parameters.readinessContextVersion !== conditionVersion(condition)) throw stale('This condition changed while the confirmation was open. Review it again and try again.', 'ASK_CONTEXT_VERSION_CONFLICT');
@@ -459,7 +535,7 @@ async function confirmReadinessCommand(ctx: ConfirmCapabilityContext): Promise<C
   }
   const result: AskOperationResult = {
     status: 'COMPLETED', reasonCode: `RENOVATION_READINESS_${kind}_COMPLETED`,
-    blocks: [{ type: 'WORKFLOW_PROGRESS', id: `readiness-command-${kind.toLowerCase()}-${artifactId}`, title, status: 'COMPLETED', description, details: [], actions: [{ ...backAction, label: kind === 'SATISFY_CONDITION' ? 'See approvals' : 'See readiness', style: 'PRIMARY' as const }] }],
+    blocks: [{ type: 'WORKFLOW_PROGRESS', id: `readiness-command-${kind.toLowerCase()}-${artifactId}`, title, status: 'COMPLETED', description, details: [], actions: [{ ...backAction, label: kind === 'SATISFY_CONDITION' || kind === 'ATTACH_RECORD' ? 'See approvals' : 'See readiness', style: 'PRIMARY' as const }] }],
     suggestions: [],
   };
   const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);

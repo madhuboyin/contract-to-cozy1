@@ -19,23 +19,25 @@ export const READINESS_COMMAND_MESSAGES = {
   HANDOFF: 'Create the execution project for this renovation case.',
   GENERATE: 'Generate the requirements research for this renovation case.',
   SATISFY_CONDITION: 'Mark this compliance condition satisfied with a document.',
+  ATTACH_RECORD: 'Attach a permit or HOA record to this renovation case.',
 } as const;
 export type ReadinessCommandKind = keyof typeof READINESS_COMMAND_MESSAGES;
 export const READINESS_COMMAND_ACTION_IDS = {
-  REFRESH: 'renovation-readiness-refresh', ACKNOWLEDGE: 'renovation-readiness-acknowledge', REVOKE: 'renovation-readiness-revoke', REOPEN: 'renovation-readiness-reopen', SATISFY: 'renovation-readiness-satisfy', HANDOFF: 'renovation-readiness-handoff', GENERATE: 'renovation-readiness-generate', SATISFY_CONDITION: 'renovation-condition-satisfy',
+  REFRESH: 'renovation-readiness-refresh', ACKNOWLEDGE: 'renovation-readiness-acknowledge', REVOKE: 'renovation-readiness-revoke', REOPEN: 'renovation-readiness-reopen', SATISFY: 'renovation-readiness-satisfy', HANDOFF: 'renovation-readiness-handoff', GENERATE: 'renovation-readiness-generate', SATISFY_CONDITION: 'renovation-condition-satisfy', ATTACH_RECORD: 'renovation-compliance-attach',
 } as const;
 export const readinessCommandKindFromMessage = (message: string): ReadinessCommandKind | null =>
   ((Object.entries(READINESS_COMMAND_MESSAGES) as Array<[ReadinessCommandKind, string]>).find(([, value]) => value === message)?.[0]) ?? null;
-export const readinessCommandEntityType = (kind: ReadinessCommandKind) => kind === 'SATISFY_CONDITION' ? RENOVATION_COMPLIANCE_CONDITION_ENTITY_TYPE : (kind === 'REFRESH' || kind === 'HANDOFF' || kind === 'GENERATE' ? RENOVATION_READINESS_CASE_ENTITY_TYPE : RENOVATION_READINESS_ITEM_ENTITY_TYPE);
+export const readinessCommandEntityType = (kind: ReadinessCommandKind) => kind === 'SATISFY_CONDITION' ? RENOVATION_COMPLIANCE_CONDITION_ENTITY_TYPE : (kind === 'REFRESH' || kind === 'HANDOFF' || kind === 'GENERATE' || kind === 'ATTACH_RECORD' ? RENOVATION_READINESS_CASE_ENTITY_TYPE : RENOVATION_READINESS_ITEM_ENTITY_TYPE);
 /** Acknowledging a risk and creating the execution project are an owner's decisions; both routes are owner-only. */
 export const readinessKindNeedsOwner = (kind: ReadinessCommandKind) => kind === 'ACKNOWLEDGE' || kind === 'REVOKE' || kind === 'HANDOFF';
 
-export type ReadinessFormKind = 'ACKNOWLEDGE' | 'REVOKE' | 'REOPEN' | 'SATISFY' | 'SATISFY_CONDITION' | 'HANDOFF';
+export type ReadinessFormKind = 'ACKNOWLEDGE' | 'REVOKE' | 'REOPEN' | 'SATISFY' | 'SATISFY_CONDITION' | 'ATTACH_RECORD' | 'HANDOFF';
 /** The kinds that act on one readiness item (the handoff acts on the case). */
-export type ReadinessItemFormKind = Exclude<ReadinessFormKind, 'HANDOFF'>;
+export type ReadinessItemFormKind = Exclude<ReadinessFormKind, 'HANDOFF' | 'ATTACH_RECORD'>;
 export const READINESS_FORM_CAPTURE_KEYS: Record<ReadinessFormKind, string> = {
   ACKNOWLEDGE: 'RENOVATION_READINESS_ACKNOWLEDGE', REVOKE: 'RENOVATION_READINESS_REVOKE', REOPEN: 'RENOVATION_READINESS_REOPEN', SATISFY: 'RENOVATION_READINESS_SATISFY',
   HANDOFF: 'RENOVATION_READINESS_HANDOFF', SATISFY_CONDITION: 'RENOVATION_COMPLIANCE_CONDITION_SATISFY',
+  ATTACH_RECORD: 'RENOVATION_COMPLIANCE_ATTACH_RECORD',
 };
 export const readinessFormKindFromCaptureKey = (key: string): ReadinessFormKind | null =>
   ((Object.entries(READINESS_FORM_CAPTURE_KEYS) as Array<[ReadinessFormKind, string]>).find(([, value]) => value === key)?.[0]) ?? null;
@@ -57,6 +59,8 @@ export const READINESS_FORM_SCHEMAS = {
   REVOKE: z.object({ reason: z.string().trim().min(10).max(5000) }).strict(),
   REOPEN: z.object({ notes: z.string().trim().min(1).max(5000) }).strict(),
   SATISFY: z.object({ evidenceDocumentId: z.string().trim().min(1).max(160), notes: z.string().trim().min(1).max(5000) }).strict(),
+  // One choice among the offered records, as "<TYPE>:<id>"; the route's own input is split from it.
+  ATTACH_RECORD: z.object({ record: z.string().trim().regex(/^(?:PERMIT|HOA_APPROVAL):[^:\s]{1,160}$/) }).strict(),
   SATISFY_CONDITION: z.object({ evidenceDocumentId: z.string().trim().min(1).max(160), notes: z.string().trim().min(1).max(5000) }).strict(),
   HANDOFF: z.object({
     projectType: z.enum(HANDOFF_PROJECT_TYPES),
@@ -106,4 +110,10 @@ export function readinessServiceInput(kind: ReadinessItemFormKind, form: Readine
   if (kind === 'SATISFY_CONDITION') return { status: 'SATISFIED' as const, verificationNotes: String(form.notes), sourceDocumentId: String(form.evidenceDocumentId) };
   if (kind === 'SATISFY') return { status: 'SATISFIED' as const, evidenceDocumentId: String(form.evidenceDocumentId), satisfactionNotes: String(form.notes) };
   return { status: 'OPEN' as const, satisfactionNotes: String(form.notes) };
+}
+
+/** The route's input for attaching a compliance record, from the validated choice ("PERMIT:<id>" or "HOA_APPROVAL:<id>"). */
+export function attachRecordServiceInput(form: ReadinessFormValues): { subjectType: 'PERMIT' | 'HOA_APPROVAL'; subjectId: string } {
+  const [subjectType, ...rest] = String(form.record).split(':');
+  return { subjectType: subjectType as 'PERMIT' | 'HOA_APPROVAL', subjectId: rest.join(':') };
 }
