@@ -67,7 +67,7 @@ for (const role of ['VIEWER', 'CONTRIBUTOR']) {
     assert.ok(['ANSWERED', 'READY_WITH_LIMITATIONS'].includes(result.status), result.status);
     const summary = result.blocks[0];
     assert.equal(summary.type, 'SUMMARY');
-    assert.match(summary.title, /Property Context is \d+% complete/, summary.title);
+    assert.match(summary.title, /property details are \d+% complete/, summary.title);
     assert.ok(result.blocks.some((block) => block.id === 'property-completeness'), 'the list of areas that can improve is present');
     assert.ok(result.blocks.length >= 3, `${result.blocks.length} blocks`);
     assert.equal(result.blocks[0].type === 'EMPTY_STATE', false);

@@ -81,6 +81,14 @@ test('no applicable facts means no ring', () => {
   assert.equal(propertyCompletenessProgress({ completenessPercent: 100, scopes: [{ scope: 'CORE', totalFacts: 0, knownFacts: 0, completenessPercent: 100, missingFactKeys: [], conflictedFactKeys: [], staleFactKeys: [] }] }, [], 'p1', true), null);
 });
 
+test('a measurable 100% result keeps the ring as the calm completion state', () => {
+  const ring = propertyCompletenessProgress({ completenessPercent: 100, scopes: [{ scope: 'CORE', totalFacts: 2, knownFacts: 2, completenessPercent: 100, missingFactKeys: [], conflictedFactKeys: [], staleFactKeys: [] }] }, [], 'p1', true);
+  assert.equal(ring.percent, 100);
+  assert.equal(ring.title, 'Property details completeness');
+  assert.match(ring.description, /not every room, item, document, warranty or timeline record/);
+  assert.deepEqual(ring.nextSteps, []);
+});
+
 test('PROGRESS is allowed for the operation in the registry and the property record skill', () => {
   assert.ok(ASK_OPERATION_DEFINITIONS.PROPERTY_SUMMARY.allowedBlockTypes.includes('PROGRESS'));
   assert.ok(getSkillForOperation('PROPERTY_SUMMARY').allowedResultBlocks.includes('PROGRESS'));

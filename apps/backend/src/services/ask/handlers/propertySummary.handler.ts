@@ -53,8 +53,8 @@ export function propertyCompletenessProgress(
   const sum = (pick: (scope: typeof completeness.scopes[number]) => number) => completeness.scopes.reduce((count, scope) => count + pick(scope), 0);
   const metric = (label: string, value: number) => ({ label, value: String(value), tone: value ? 'CAUTION' as const : 'DEFAULT' as const });
   return {
-    type: 'PROGRESS', id: 'property-completeness-progress', title: 'Property record completeness',
-    description: 'Counts the governed property facts that apply to this home and are known. Facts that are missing, conflicted or out of date are not counted as known.',
+    type: 'PROGRESS', id: 'property-completeness-progress', title: 'Property details completeness',
+    description: 'This score covers governed property facts, not every room, item, document, warranty or timeline record in the broader Living Home Record. Facts that are missing, conflicted or out of date are not counted as known.',
     percent: completeness.completenessPercent,
     basis: `${known} of ${total} applicable facts known across ${completeness.scopes.length} area${completeness.scopes.length === 1 ? '' : 's'}`,
     metrics: [
@@ -262,7 +262,7 @@ async function propertySummaryResult(userId: string, propertyId: string, message
       : `${completenessCounts.missing} missing, ${completenessCounts.conflicted} conflicted, and ${completenessCounts.stale} stale detail${pendingDetailCount === 1 ? '' : 's'} were found across ${incompleteScopes.length} area${incompleteScopes.length === 1 ? '' : 's'}. ${captureRequests.length ? 'The highest-priority detail is ready to answer below.' : 'Open the property record to review the affected areas.'}`
     : 'Property Context details are temporarily unavailable, so Ask cannot reliably determine which details are pending.';
   const vagueOverview = !roomFocus && !completenessFocus && !completeRecordFocus;
-  const factRows = vagueOverview ? propertyOverviewFactRows(property, { includeOccupantCount: access.role === HouseholdRole.OWNER }) : [];
+  const factRows = (vagueOverview || completenessFocus) ? propertyOverviewFactRows(property, { includeOccupantCount: access.role === HouseholdRole.OWNER }) : [];
   const missingLine = vagueOverview ? propertyOverviewMissingLine(property) : null;
   const statusObservation = vagueOverview ? propertyOverviewStatusObservation(pendingDetailCount) : null;
   // The recorded areas this overview can count without reading them again (a null is an area that could not be read, never zero).
@@ -275,7 +275,7 @@ async function propertySummaryResult(userId: string, propertyId: string, message
         : `Rooms for ${propertyName}`
       : completenessFocus
       ? percent != null
-        ? `${propertyName}’s Property Context is ${percent}% complete`
+        ? `${propertyName}’s property details are ${percent}% complete`
         : `Here is the current Living Home Record for ${propertyName}`
       : completeRecordFocus
       ? `Browse ${propertyName}’s home record`
@@ -285,7 +285,7 @@ async function propertySummaryResult(userId: string, propertyId: string, message
         ? 'Select a room to see the items recorded there.'
         : 'Room details are temporarily unavailable for this home.'
       : completenessFocus
-      ? completenessBody
+      ? `${completenessBody} This percentage covers governed property details; the broader Living Home Record also includes rooms, systems and inventory, documents, warranties, household access and home history.`
       : completeRecordFocus
       ? 'Choose an area to continue in this conversation. Sections that need review appear first.'
       : statusObservation ?? '',
@@ -296,10 +296,16 @@ async function propertySummaryResult(userId: string, propertyId: string, message
     actions: [],
   }];
 
-  if (vagueOverview && factRows.length > 0) {
+  if (completenessFocus) {
+    // IW-PRES-020 (FRD v1.91): the ring remains visible at 100%, where it becomes the positive completion state.
+    const ring = completeness ? propertyCompletenessProgress(completeness, incompleteScopes, propertyId, canImproveContext) : null;
+    if (ring) blocks.push(ring);
+  }
+
+  if ((vagueOverview || completenessFocus) && factRows.length > 0) {
     blocks.push({
       type: 'TABLE', id: 'property-summary-facts', title: 'Home record summary',
-      description: ['Recorded facts from this home’s current canonical record.', missingLine].filter(Boolean).join(' '),
+      description: ['Recorded high-level facts from this home’s current canonical record.', vagueOverview ? missingLine : null].filter(Boolean).join(' '),
       preferredPresentation: 'TABLE',
       columns: [{ key: 'detail', label: 'Detail' }, { key: 'recordedValue', label: 'Recorded value' }],
       rows: factRows,
@@ -371,9 +377,6 @@ async function propertySummaryResult(userId: string, propertyId: string, message
   }
 
   if (completenessFocus && incompleteScopes.length) {
-    // IW-PRES-020 (FRD v1.91): the ring leads the list of areas that can improve.
-    const ring = completeness ? propertyCompletenessProgress(completeness, incompleteScopes, propertyId, canImproveContext) : null;
-    if (ring) blocks.push(ring);
     blocks.push({
       type: 'GROUPED_LIST', filters: [], id: 'property-completeness', title: 'Areas that can improve',
       description: 'Internal fact keys are intentionally hidden. Open the property record or answer the inline prompt to add canonical information.',
