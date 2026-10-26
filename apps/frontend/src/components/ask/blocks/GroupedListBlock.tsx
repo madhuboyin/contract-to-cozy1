@@ -57,10 +57,11 @@ const itemActionClass = (style: string | undefined) => cn(
 );
 
 // Presentation Quality 2C: a row shows at most two actions inline; the rest sit behind "More" so a row never becomes a wall of pills.
-function ItemActionRow({ item, disabled, onItemAction }: {
+function ItemActionRow({ item, disabled, onItemAction, className }: {
   item: Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>['sections'][number]['items'][number];
   disabled: boolean;
   onItemAction: Parameters<AskBlockRenderer<'GROUPED_LIST'>>[0]['onItemAction'];
+  className?: string;
 }) {
   const actions = item.actions ?? [];
   const ordered = [...actions.filter((action) => action.style === 'PRIMARY'), ...actions.filter((action) => action.style !== 'PRIMARY')];
@@ -68,7 +69,7 @@ function ItemActionRow({ item, disabled, onItemAction }: {
   const overflow = ordered.slice(MAX_INLINE_ITEM_ACTIONS);
   const run = (action: (typeof actions)[number]) => onItemAction(action.entityType ?? item.entityType, action.entityId ?? item.id, action.message, action.operationId, action.interactionType);
   return (
-    <div className="mt-3 flex flex-wrap items-center gap-2">
+    <div className={cn('mt-3 flex flex-wrap items-center gap-2', className)}>
       {inline.map((action) => <button key={action.id} type="button" disabled={disabled} onClick={() => run(action)} className={itemActionClass(action.style)}>{action.label}</button>)}
       {overflow.length > 0 && <details className="relative">
         <summary className="flex min-h-8 cursor-pointer list-none items-center rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50">More<span className="sr-only"> actions for {item.title}</span></summary>
@@ -590,7 +591,7 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
                           </div>
                         )}
                         {(isCoverageGapItem || isPlantCareList) && item.meta.length > 0 && (
-                          <div aria-hidden="true" className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                          <div aria-hidden="true" className={cn('mt-1.5 flex flex-wrap items-center gap-1.5', isConfirmedGapItem && 'sm:flex-nowrap')} data-coverage-item-meta={isCoverageGapItem ? '' : undefined}>
                             {coverageExposureMeta && (
                               <span
                                 className={cn(
@@ -639,17 +640,21 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
                         {itemDetailsExpanded && <p id={`${block.id}-${section.id}-${item.id}-details`} className="whitespace-pre-line rounded-lg bg-white px-3 py-2 text-xs leading-5 text-slate-600">{item.detail}</p>}
                       </div>
                     )}
-                    {!dense && block.id !== 'project-detail-records' && item.actions && item.actions.length > 0 && (
+                    {!dense && block.id !== 'project-detail-records' && !isEvidenceGapItem && item.actions && item.actions.length > 0 && (
                       <ItemActionRow item={item} disabled={itemActionsDisabled} onItemAction={onItemAction} />
                     )}
                     {isEvidenceGapItem && item.entityType === 'INVENTORY_ITEM' && item.actions !== undefined && (
-                      <AttachEvidenceControl
-                        event={{ entityType: item.entityType, id: item.id, title: item.title }}
-                        propertyId={propertyId}
-                        disabled={itemActionsDisabled}
-                        label="Add evidence"
-                        onAttached={(documentId) => onItemAction(item.entityType, item.id, EVIDENCE_ATTACH_MESSAGES.INVENTORY_ITEM, 'CAPTURE_EVIDENCE_CONFIRM', 'MUTATE_RECORD', documentId)}
-                      />
+                      <div className="mt-2 flex flex-wrap items-center gap-2" data-coverage-item-actions="">
+                        {item.actions.length > 0 && <ItemActionRow item={item} disabled={itemActionsDisabled} onItemAction={onItemAction} className="mt-0" />}
+                        <AttachEvidenceControl
+                          event={{ entityType: item.entityType, id: item.id, title: item.title }}
+                          propertyId={propertyId}
+                          disabled={itemActionsDisabled}
+                          label="Add evidence"
+                          className="mt-0"
+                          onAttached={(documentId) => onItemAction(item.entityType, item.id, EVIDENCE_ATTACH_MESSAGES.INVENTORY_ITEM, 'CAPTURE_EVIDENCE_CONFIRM', 'MUTATE_RECORD', documentId)}
+                        />
+                      </div>
                     )}
                     {dominantProjectAction && (
                       <div className="mt-3 flex items-center gap-2" data-project-record-actions="">

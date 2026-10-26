@@ -269,6 +269,12 @@ test('renders Coverage Gaps executive summary card and 2-column grouped item gri
   expect(screen.getAllByText('$6,000 recorded exposure').length).toBeGreaterThanOrEqual(1);
   expect(screen.getByRole('button', { name: 'Update coverage' })).toBeVisible();
   expect(screen.getByRole('button', { name: 'Add evidence for HVAC Furnace' })).toBeVisible();
+  const coverageActions = groupsContainer.querySelector('[data-coverage-item-actions]');
+  expect(coverageActions).toHaveClass('flex', 'flex-wrap');
+  expect(coverageActions).toContainElement(screen.getByRole('button', { name: 'Update coverage' }));
+  expect(coverageActions).toContainElement(screen.getByRole('button', { name: 'Add evidence for HVAC Furnace' }));
+  const confirmedMeta = groupsContainer.querySelector('[data-coverage-item-meta]');
+  expect(confirmedMeta).toHaveClass('sm:flex-nowrap');
   expect(screen.queryByRole('button', { name: 'Auto' })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Cards' })).not.toBeInTheDocument();
 });
