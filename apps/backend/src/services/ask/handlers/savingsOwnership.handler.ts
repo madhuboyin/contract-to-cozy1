@@ -23,7 +23,7 @@ import {
 } from '../support/savingsBenefitCommand';
 import { OWNERSHIP_COST_ACTION_IDS, OWNERSHIP_COST_COMMAND_MESSAGE } from '../support/ownershipCostConstants';
 import { collectionDescriptor } from '../support/collectionDescriptor';
-import { SAVINGS_COMMAND_ACTION_IDS as RECURRING_ACTION_IDS, SAVINGS_COMMAND_MESSAGES as RECURRING_MESSAGES } from '../support/savingsBenefitCommand';
+import { SAVINGS_COMMAND_ACTION_IDS as RECURRING_ACTION_IDS, SAVINGS_COMMAND_MESSAGES as RECURRING_MESSAGES, RECURRING_ROW_ACTION_LABELS, recurringRowActionKinds } from '../support/savingsBenefitCommand';
 import { SAVINGS_RECURRING_ALL, SAVINGS_RECURRING_CATEGORIES, SAVINGS_RECURRING_CATEGORY_ENTITY_TYPE, formatPlanAmount, savingsRecurringRow, type SavingsRecurringCategory } from '../support/savingsRecurringSetup';
 
 const homeSavingsService = new HomeSavingsService();
@@ -252,8 +252,7 @@ async function savingsOpportunitiesResult(userId: string, propertyId: string, me
         href: null,
         entityType: SAVINGS_AVAILABLE_ENTITY_TYPE,
         actions: canChangeSavings ? [
-          ...(['NEW', 'VIEWED'].includes(String(opportunity.status)) ? [savingsAction('SAVE', 'Save for later', 'SECONDARY')] : []),
-          ...(['NEW', 'VIEWED', 'SAVED'].includes(String(opportunity.status)) ? [savingsAction('DISMISS', 'Dismiss', 'QUIET')] : []),
+          ...recurringRowActionKinds(String(opportunity.status)).map((kind) => savingsAction(kind, RECURRING_ROW_ACTION_LABELS[kind], kind === 'DISMISS' ? 'QUIET' : 'SECONDARY')),
         ] : [],
         paybackMonths: opportunity.estimatedPaybackMonths,
       };

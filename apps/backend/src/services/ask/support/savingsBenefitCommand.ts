@@ -14,15 +14,17 @@ export const SAVINGS_COMMAND_MESSAGES = {
   OUTCOME: 'Record the outcome of this savings opportunity.',
   PLAN: 'Set up my current plan for this recurring cost.',
   CHECK: 'Check my recurring costs for savings.',
+  APPLIED: 'Record that I applied for this savings opportunity myself.',
+  SWITCHED: 'Record that I switched to this savings opportunity myself.',
 } as const;
 export type SavingsCommandKind = keyof typeof SAVINGS_COMMAND_MESSAGES;
-export const SAVINGS_COMMAND_ACTION_IDS = { SAVE: 'savings-benefit-save', DISMISS: 'savings-benefit-dismiss', STOP: 'savings-benefit-stop', OUTCOME: 'savings-benefit-outcome', PLAN: 'savings-recurring-plan', CHECK: 'savings-recurring-check' } as const;
+export const SAVINGS_COMMAND_ACTION_IDS = { SAVE: 'savings-benefit-save', DISMISS: 'savings-benefit-dismiss', STOP: 'savings-benefit-stop', OUTCOME: 'savings-benefit-outcome', PLAN: 'savings-recurring-plan', CHECK: 'savings-recurring-check', APPLIED: 'savings-benefit-applied', SWITCHED: 'savings-benefit-switched' } as const;
 export const savingsCommandKindFromMessage = (message: string): SavingsCommandKind | null =>
   ((Object.entries(SAVINGS_COMMAND_MESSAGES) as Array<[SavingsCommandKind, string]>).find(([, value]) => value === message)?.[0]) ?? null;
 /** The recurring-cost setup acts on a category (or all of them), not on one opportunity. */
 export const isRecurringSetupKind = (kind: SavingsCommandKind): kind is 'PLAN' | 'CHECK' => kind === 'PLAN' || kind === 'CHECK';
 export const savingsCommandEntityType = (kind: SavingsCommandKind) => isRecurringSetupKind(kind) ? 'HOME_SAVINGS_CATEGORY' :
-  kind === 'SAVE' || kind === 'DISMISS' ? SAVINGS_AVAILABLE_ENTITY_TYPE : SAVINGS_IN_PROGRESS_ENTITY_TYPE;
+  kind === 'SAVE' || kind === 'DISMISS' || kind === 'APPLIED' || kind === 'SWITCHED' ? SAVINGS_AVAILABLE_ENTITY_TYPE : SAVINGS_IN_PROGRESS_ENTITY_TYPE;
 export const SAVINGS_OUTCOME_CAPTURE_KEY = 'SAVINGS_BENEFIT_OUTCOME';
 
 export type SavingsFamily = 'BENEFIT' | 'RECURRING_COST';
@@ -94,3 +96,23 @@ export const SAVINGS_OUTCOME_INVALID_MESSAGES: Record<SavingsOutcomeInvalid, str
   OBSERVATION_WINDOW_TOO_SHORT: 'A recurring saving must be observed for at least 28 days before it counts as received.',
   FUTURE_WINDOW: 'The observed period cannot be in the future.',
 };
+
+/**
+ * "I applied" and "I switched" (the desktop's Applied and Switched, recurring-cost opportunities only): the household records that it did this itself, with
+ * the provider. They are available while the opportunity is still undecided or saved, so the answer's row action and the confirmation agree.
+ */
+export const RECURRING_APPLY_STATUSES: readonly string[] = ['NEW', 'VIEWED', 'SAVED'];
+export const recurringStatusAllowsApply = (status: string) => RECURRING_APPLY_STATUSES.includes(status);
+export const isApplyKind = (kind: SavingsCommandKind): kind is 'APPLIED' | 'SWITCHED' => kind === 'APPLIED' || kind === 'SWITCHED';
+/** The canonical action types behind them (the desktop's own mapping): applying is an externally submitted application. */
+export const applyActionType = (kind: 'APPLIED' | 'SWITCHED') => (kind === 'SWITCHED' ? 'SWITCHED' : 'EXTERNALLY_SUBMITTED') as 'SWITCHED' | 'EXTERNALLY_SUBMITTED';
+
+/** The steps a recurring-cost saving offers, in the order they are shown, from its status (the row and the confirmation share the gates above). */
+export function recurringRowActionKinds(status: string): Array<'SAVE' | 'SWITCHED' | 'APPLIED' | 'DISMISS'> {
+  return [
+    ...(['NEW', 'VIEWED'].includes(status) ? ['SAVE' as const] : []),
+    ...(recurringStatusAllowsApply(status) ? ['SWITCHED' as const, 'APPLIED' as const] : []),
+    ...(['NEW', 'VIEWED', 'SAVED'].includes(status) ? ['DISMISS' as const] : []),
+  ];
+}
+export const RECURRING_ROW_ACTION_LABELS = { SAVE: 'Save for later', SWITCHED: 'I switched', APPLIED: 'I applied', DISMISS: 'Dismiss' } as const;

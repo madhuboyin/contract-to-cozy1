@@ -16,7 +16,7 @@ import { humanDate, money } from '../askFormatting';
 import { createCanonicalAction, getCanonicalOpportunityDetail, recordCanonicalActionOutcome, updateCanonicalAction } from '../../savingsBenefitsCanonical.service';
 import {
   SAVINGS_COMMAND_MESSAGES, SAVINGS_OUTCOME_CAPTURE_KEY, SAVINGS_OUTCOME_INVALID_MESSAGES, SAVINGS_OUTCOME_STAGES, SAVINGS_OUTCOME_STAGE_LABELS,
-  isRecurringSetupKind, parseSavingsOutcomeAnswer, parseSavingsRowId, savingsCommandEntityType, savingsCommandKindFromMessage,
+  applyActionType, isApplyKind, isRecurringSetupKind, parseSavingsOutcomeAnswer, recurringStatusAllowsApply, parseSavingsRowId, savingsCommandEntityType, savingsCommandKindFromMessage,
   type SavingsCommandKind, type SavingsFamily, type SavingsOutcomeForm, type SavingsTarget,
 } from '../support/savingsBenefitCommand';
 
@@ -111,6 +111,28 @@ export async function savingsCommandResult(userId: string, propertyId: string, l
   const opportunity = await loadOpportunity(userId, propertyId, target);
   if (!opportunity) return unavailable('SAVINGS_OPPORTUNITY_NOT_FOUND', 'That opportunity is no longer available', 'Ask could not find that savings opportunity. Nothing has changed.');
   const familyLabel = opportunity.family === 'BENEFIT' ? 'benefit or rebate' : 'recurring-cost saving';
+
+  if (isApplyKind(kind)) {
+    // The desktop offers Applied and Switched on recurring-cost opportunities only; a benefit is pursued through its program's own steps.
+    if (opportunity.family !== 'RECURRING_COST') return unavailable('SAVINGS_APPLY_NOT_AVAILABLE', 'That is not a recurring-cost saving', 'Only a recurring-cost saving can be marked applied or switched here. Nothing has changed.');
+    if (!recurringStatusAllowsApply(opportunity.status)) return unavailable('SAVINGS_APPLY_NOT_AVAILABLE', 'That opportunity has already moved on', `It is ${opportunity.status.toLowerCase()}, so it cannot be marked ${kind.toLowerCase()} now. Nothing has changed.`);
+    const contextVersion = opportunityVersion(kind, opportunity);
+    const switched = kind === 'SWITCHED';
+    return {
+      status: 'NEEDS_CONFIRMATION', reasonCode: `SAVINGS_${kind}_CONFIRMATION_REQUIRED`, contextVersion,
+      parameters: { savingsCommand: { kind, entityId: launch.entityId }, savingsContextVersion: contextVersion, ...base },
+      blocks: [{ type: 'SUMMARY', id: 'savings-command-review', title: `${switched ? 'Switched' : 'Applied'}: ${opportunity.title}`, body: 'Nothing changes until you confirm.', tone: 'DEFAULT', actions: [] }],
+      confirmation: {
+        confirmationId: `savings-${kind.toLowerCase()}-${sha(`${propertyId}:${opportunity.id}`).slice(0, 12)}-1`, version: 1,
+        title: `Record that you ${switched ? 'switched' : 'applied'}?`,
+        description: `This records that you ${switched ? 'switched to this option' : 'applied for this option'} yourself, with the provider. Cozy has not contacted anyone and cannot confirm it. It moves to In progress, where you can record what happened. It is not counted as a saving until you record that you received it.`,
+        fields: [{ label: 'Opportunity', value: opportunity.title }, { label: 'You are recording', value: switched ? 'I switched' : 'I applied' }],
+        editableFields: [], confirmLabel: switched ? 'Record the switch' : 'Record the application',
+        consentText: 'I authorize this change to the shared home record.', expiresAt: expiresAt.toISOString(),
+      },
+      suggestions: [],
+    };
+  }
 
   if (kind === 'SAVE' || kind === 'DISMISS') {
     const contextVersion = opportunityVersion(kind, opportunity);
@@ -212,7 +234,17 @@ async function confirmSavingsCommand(ctx: ConfirmCapabilityContext): Promise<Con
   try {
     const opportunity = await loadOpportunity(userId, propertyId, target);
     if (!opportunity) throw stale('That opportunity is no longer available.');
-    if (kind === 'SAVE' || kind === 'DISMISS') {
+    if (isApplyKind(kind)) {
+      if (parameters.savingsContextVersion !== opportunityVersion(kind, opportunity)) throw stale('This opportunity changed while the confirmation was open. Review it again and try again.', 'ASK_CONTEXT_VERSION_CONFLICT');
+      if (opportunity.family !== 'RECURRING_COST' || !recurringStatusAllowsApply(opportunity.status)) throw stale('That opportunity cannot be marked this way now.');
+      // One key per execution: repeating this same confirmation is an idempotent replay, never a second action (as the project handoff does).
+      const created: any = await createCanonicalAction(propertyId, opportunity.id, userId, {
+        idempotencyKey: `ask:${execution.id}:${kind.toLowerCase()}`, family: 'RECURRING_COST', actionType: applyActionType(kind), followUpAt: null,
+      } as never);
+      artifactId = created?.id ?? opportunity.id;
+      title = kind === 'SWITCHED' ? 'Switch recorded' : 'Application recorded';
+      description = 'It is now in progress. Record what happened when you know; it counts as a saving only once you record that you received it.';
+    } else if (kind === 'SAVE' || kind === 'DISMISS') {
       if (parameters.savingsContextVersion !== opportunityVersion(kind, opportunity)) throw stale('This opportunity changed while the confirmation was open. Review it again and try again.', 'ASK_CONTEXT_VERSION_CONFLICT');
       const actionType = kind === 'SAVE' ? 'SAVE' : 'DISMISS';
       const created: any = await createCanonicalAction(propertyId, opportunity.id, userId, {
