@@ -151,6 +151,66 @@ test('Add warranty: Continue enables once required fields are valid and submits 
   });
 });
 
+const coverageRequest = {
+  requirementId: 'inventory-item-coverage', captureKey: 'INVENTORY_ITEM_COVERAGE_EVIDENCE', classification: 'REQUIRED_APPLICABILITY', state: 'KNOWN', presentation: 'FORM',
+  title: 'Confirm current coverage for Microwave', question: 'Do you have warranty or insurance coverage for Microwave?', helpText: 'An empty Home Record means coverage has not been entered.',
+  allowNotSure: false, sensitivity: 'FINANCIAL', destinationLabel: null, confirmationText: null, expectedContextVersion: 'coverage-v1',
+  inputSchema: { type: 'RELATIONAL_UPDATE', entityType: 'INVENTORY_ITEM', entityId: 'item-1', updateLabel: 'Save and finish', currentValues: { coverageChoice: 'NO_COVERAGE' }, fields: [
+    { key: 'coverageChoice', label: 'Coverage information', required: true, inputSchema: { type: 'SINGLE_SELECT', options: [
+      { label: 'Use warranty: Choice Home Warranty', value: 'WARRANTY:w1' }, { label: 'I do not have coverage', value: 'NO_COVERAGE' }, { label: 'I’m not sure', value: 'NOT_SURE' },
+      { label: 'Add insurance policy', value: 'ADD_INSURANCE' }, { label: 'Add warranty', value: 'ADD_WARRANTY' },
+    ] } },
+    { key: 'carrierName', label: 'Insurance carrier', required: true, when: { fieldKey: 'coverageChoice', operator: 'EQUALS', value: 'ADD_INSURANCE' }, inputSchema: { type: 'SHORT_TEXT', maxLength: 120 } },
+    { key: 'insurancePolicyNumber', label: 'Policy number', required: true, when: { fieldKey: 'coverageChoice', operator: 'EQUALS', value: 'ADD_INSURANCE' }, inputSchema: { type: 'SHORT_TEXT', maxLength: 120 } },
+    { key: 'insuranceCoverageType', label: 'Coverage type', required: true, when: { fieldKey: 'coverageChoice', operator: 'EQUALS', value: 'ADD_INSURANCE' }, inputSchema: { type: 'SINGLE_SELECT', options: [{ label: 'HOMEOWNER', value: 'HOMEOWNER' }, { label: 'OTHER', value: 'OTHER' }] } },
+    { key: 'insurancePremiumUsd', label: 'Annual premium', required: true, when: { fieldKey: 'coverageChoice', operator: 'EQUALS', value: 'ADD_INSURANCE' }, inputSchema: { type: 'DECIMAL', min: 0, unit: 'USD' } },
+    { key: 'insuranceStartDate', label: 'Policy start date', required: true, when: { fieldKey: 'coverageChoice', operator: 'EQUALS', value: 'ADD_INSURANCE' }, inputSchema: { type: 'SHORT_TEXT', maxLength: 10 } },
+    { key: 'insuranceExpiryDate', label: 'Policy expiry date', required: true, when: { fieldKey: 'coverageChoice', operator: 'EQUALS', value: 'ADD_INSURANCE' }, inputSchema: { type: 'SHORT_TEXT', maxLength: 10 } },
+    { key: 'warrantyProviderName', label: 'Warranty provider', required: true, when: { fieldKey: 'coverageChoice', operator: 'EQUALS', value: 'ADD_WARRANTY' }, inputSchema: { type: 'SHORT_TEXT', maxLength: 120 } },
+    { key: 'warrantyCategory', label: 'Warranty category', required: true, when: { fieldKey: 'coverageChoice', operator: 'EQUALS', value: 'ADD_WARRANTY' }, inputSchema: { type: 'SINGLE_SELECT', options: [{ label: 'APPLIANCE', value: 'APPLIANCE' }] } },
+    { key: 'warrantyStartDate', label: 'Warranty start date', required: true, when: { fieldKey: 'coverageChoice', operator: 'EQUALS', value: 'ADD_WARRANTY' }, inputSchema: { type: 'SHORT_TEXT', maxLength: 10 } },
+    { key: 'warrantyExpiryDate', label: 'Warranty expiry date', required: true, when: { fieldKey: 'coverageChoice', operator: 'EQUALS', value: 'ADD_WARRANTY' }, inputSchema: { type: 'SHORT_TEXT', maxLength: 10 } },
+  ] },
+} as unknown as AskCaptureRequest;
+
+test('item coverage uses one editor and reveals only the selected insurance or warranty section', () => {
+  const view = render(<InlineCaptureCard executionId="coverage-1" request={coverageRequest} onCompleted={jest.fn()} />);
+  expect(view.container.querySelector('[data-record-editor]')).toBeInTheDocument();
+  expect(screen.getAllByRole('group').map((group) => group.querySelector('legend')?.textContent)).toEqual(['Coverage source']);
+  expect(screen.getByLabelText(/^Coverage source/).tagName).toBe('SELECT');
+  expect(screen.queryByRole('button', { name: 'Add insurance policy' })).not.toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText(/^Coverage source/), { target: { value: 'ADD_INSURANCE' } });
+  expect(screen.getAllByRole('group').map((group) => group.querySelector('legend')?.textContent)).toEqual(['Coverage source', 'Insurance policy']);
+  expect(screen.getByLabelText(/^Policy start date/)).toHaveAttribute('type', 'date');
+  expect(screen.getByRole('option', { name: 'Homeowner' })).toBeInTheDocument();
+  expect(screen.getByText('$')).toBeVisible();
+  fireEvent.change(screen.getByLabelText(/^Coverage source/), { target: { value: 'ADD_WARRANTY' } });
+  expect(screen.getAllByRole('group').map((group) => group.querySelector('legend')?.textContent)).toEqual(['Coverage source', 'Warranty']);
+  expect(screen.queryByLabelText(/^Insurance carrier/)).not.toBeInTheDocument();
+});
+
+test('item insurance coverage submits the relational update with normalized editor values', async () => {
+  jest.spyOn(api, 'submitAskCapture').mockResolvedValue({ success: true, data: { executionId: 'coverage-1' } } as never);
+  render(<InlineCaptureCard executionId="coverage-1" request={coverageRequest} onCompleted={jest.fn()} />);
+  fireEvent.change(screen.getByLabelText(/^Coverage source/), { target: { value: 'ADD_INSURANCE' } });
+  fireEvent.change(screen.getByLabelText(/^Insurance carrier/), { target: { value: 'Acme Insurance' } });
+  fireEvent.change(screen.getByLabelText(/^Policy number/), { target: { value: 'POL-42' } });
+  fireEvent.change(screen.getByLabelText(/^Coverage type/), { target: { value: 'HOMEOWNER' } });
+  fireEvent.change(screen.getByLabelText(/^Annual premium/), { target: { value: '1200' } });
+  fireEvent.change(screen.getByLabelText(/^Policy start date/), { target: { value: '2026-01-01' } });
+  fireEvent.change(screen.getByLabelText(/^Policy expiry date/), { target: { value: '2027-01-01' } });
+  fireEvent.click(screen.getByRole('checkbox', { name: 'I’m ready to review this coverage information.' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Continue to review' }));
+  await waitFor(() => expect(api.submitAskCapture).toHaveBeenCalledTimes(1));
+  expect((api.submitAskCapture as jest.Mock).mock.calls[0][1]).toMatchObject({
+    sensitiveDataConfirmed: true,
+    answer: { mode: 'UPDATE', entityId: 'item-1', values: {
+      coverageChoice: 'ADD_INSURANCE', carrierName: 'Acme Insurance', insurancePolicyNumber: 'POL-42', insuranceCoverageType: 'HOMEOWNER', insurancePremiumUsd: '1200.00',
+      insuranceStartDate: '2026-01-01', insuranceExpiryDate: '2027-01-01', warrantyProviderName: '', warrantyCategory: '', warrantyStartDate: '', warrantyExpiryDate: '',
+    } },
+  });
+});
+
 const hoaFields = [
   { key: 'name', label: 'Association name', kind: 'TEXT', section: 'association', required: true },
   { key: 'managementCompany', label: 'Management company', kind: 'TEXT', section: 'association', required: false },

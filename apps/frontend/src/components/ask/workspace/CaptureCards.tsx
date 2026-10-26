@@ -5,7 +5,7 @@ import { ExternalLink, Leaf } from 'lucide-react';
 import { api } from '@/lib/api/client';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { cn } from '@/lib/utils';
-import type { AskCaptureRequest, AskClarification, AskConfirmation, AskConfirmationEditableField, AskExecutionResponse } from '@/features/ask/types';
+import type { AskCaptureRequest, AskClarification, AskConfirmation, AskConfirmationEditableField, AskExecutionResponse, AskRecordEditor, AskRecordEditorField } from '@/features/ask/types';
 import { CaptureFieldControl } from '@/components/property-context/CaptureFieldControl';
 import { useCalmAnswers } from '@/features/ask/calmAnswers';
 import { canAskConversationally } from '@/features/ask/conversationalCapture';
@@ -20,6 +20,19 @@ import { ACCESS_LOST_CODES, FOCUSABLE_SELECTOR, askFailureCode, captureDraftStor
 const warrantyDateOrder = (values: Record<string, string>): Record<string, string> => (
   values.startDate && values.expiryDate && values.expiryDate <= values.startDate ? { expiryDate: 'The expiration date must be after the start date.' } : {}
 );
+
+/** Date ordering for the two mutually exclusive coverage-detail sections. */
+const coverageDateOrder = (values: Record<string, string>): Record<string, string> => {
+  if (values.coverageChoice === 'ADD_INSURANCE' && values.insuranceStartDate && values.insuranceExpiryDate && values.insuranceExpiryDate <= values.insuranceStartDate) {
+    return { insuranceExpiryDate: 'The policy expiration date must be after the start date.' };
+  }
+  if (values.coverageChoice === 'ADD_WARRANTY' && values.warrantyStartDate && values.warrantyExpiryDate && values.warrantyExpiryDate <= values.warrantyStartDate) {
+    return { warrantyExpiryDate: 'The warranty expiration date must be after the start date.' };
+  }
+  return {};
+};
+
+const friendlyEnumLabel = (value: string) => value.toLowerCase().split('_').map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`).join(' ');
 
 const hoaDuesPair = (values: Record<string, string>): Record<string, string> => {
   if (Boolean(values.duesAmount) === Boolean(values.duesFrequency)) return {};
@@ -715,7 +728,7 @@ export function InlineCaptureCard({
         captureKey: request.captureKey,
         expectedContextVersion: request.expectedContextVersion,
         idempotencyKey,
-        answer: skipping ? { $skip: true } : schema.type === 'RELATIONAL_UPDATE' ? { mode: 'UPDATE', entityId: schema.entityId, values } : override ?? values,
+        answer: skipping ? { $skip: true } : schema.type === 'RELATIONAL_UPDATE' ? { mode: 'UPDATE', entityId: schema.entityId, values: override ?? values } : override ?? values,
         sensitiveDataConfirmed: !skipping && (request.sensitivity === 'FINANCIAL' || request.sensitivity === 'SECURITY') ? sensitiveDataConfirmed : undefined,
       });
       if (!response.success || !response.data) throw new Error(response.message || 'Could not save this home detail.');
@@ -765,6 +778,54 @@ export function InlineCaptureCard({
     return <RecordEditor mode={request.editor.mode ?? (hoa && !request.editor.original.name ? 'add' : 'edit')} saveLabel={request.editor.saveLabel} editor={request.editor} initialValues={entered} crossFieldErrors={request.captureKey === 'WARRANTY_UPDATE_INPUTS' ? warrantyDateOrder : hoa ? hoaDuesPair : undefined} title={request.title} saving={saving} cancelling={cancelling} error={error} autoFocus={autoFocus}
       sensitiveConsent={request.sensitivity === 'FINANCIAL' || request.sensitivity === 'SECURITY' ? { checked: sensitiveDataConfirmed, label: 'I’m ready to review these financial details.', onChange: setSensitiveDataConfirmed } : undefined}
       onSubmit={(editorValues) => void save(null, false, editorValues)} onCancel={() => void cancelContinuityWorkflow()} />;
+  }
+
+  // Item coverage is one record-level decision. Keep its source and the conditional insurance/warranty details in the
+  // same shared editor instead of presenting every field as an unrelated card.
+  if (schema.type === 'RELATIONAL_UPDATE' && request.captureKey === 'INVENTORY_ITEM_COVERAGE_EVIDENCE') {
+    const sectionFor = (key: string) => key === 'coverageChoice' ? 'source' : key.startsWith('insurance') || key === 'carrierName' ? 'insurance' : 'warranty';
+    const kindFor = (field: typeof schema.fields[number]): AskRecordEditorField['kind'] => {
+      if (field.key.endsWith('StartDate') || field.key.endsWith('ExpiryDate')) return 'DATE';
+      if (field.inputSchema.type === 'SINGLE_SELECT') return 'SELECT';
+      if (field.inputSchema.type === 'DECIMAL' && field.inputSchema.unit === 'USD') return 'MONEY';
+      return 'TEXT';
+    };
+    const editorFields: AskRecordEditorField[] = schema.fields.map((field) => {
+      const options = field.inputSchema.type === 'SINGLE_SELECT'
+        ? field.inputSchema.options.map((option) => ({ ...option, label: option.label === option.value ? friendlyEnumLabel(option.value) : option.label }))
+        : undefined;
+      const conditionalValue = field.when?.operator === 'EQUALS' && typeof field.when.value === 'string' ? field.when.value : null;
+      return {
+        key: field.key,
+        label: field.key === 'coverageChoice' ? 'Coverage source' : field.label,
+        shortLabel: field.key === 'coverageChoice' ? 'coverage source' : field.label.toLowerCase(),
+        kind: kindFor(field),
+        section: sectionFor(field.key),
+        required: field.required,
+        ...(field.inputSchema.type === 'SHORT_TEXT' ? { maxLength: field.inputSchema.maxLength } : {}),
+        ...(options ? { options } : {}),
+        ...(field.key === 'coverageChoice' ? { helpText: 'Choose existing coverage, record new coverage, or confirm that coverage is unknown or unavailable.' } : {}),
+        ...(conditionalValue ? { visibleWhen: { field: field.when!.fieldKey, in: [conditionalValue] } } : {}),
+      };
+    });
+    const asStrings = (source: Record<string, unknown>) => Object.fromEntries(editorFields.map((field) => {
+      const raw = source[field.key];
+      return [field.key, raw === null || raw === undefined ? '' : String(raw)];
+    }));
+    const coverageEditor: AskRecordEditor = {
+      recordLabel: request.title,
+      saveLabel: 'Continue to review',
+      sections: [
+        { id: 'source', title: 'Coverage source' },
+        { id: 'insurance', title: 'Insurance policy' },
+        { id: 'warranty', title: 'Warranty' },
+      ],
+      fields: editorFields,
+      original: asStrings(schema.currentValues),
+    };
+    return <RecordEditor mode="edit" saveLabel={coverageEditor.saveLabel} editor={coverageEditor} initialValues={asStrings(values)} title={request.title} saving={saving} cancelling={cancelling} error={error} autoFocus={autoFocus}
+      crossFieldErrors={coverageDateOrder} sensitiveConsent={{ checked: sensitiveDataConfirmed, label: 'I’m ready to review this coverage information.', onChange: setSensitiveDataConfirmed }}
+      onSubmit={(entered) => void save(null, false, entered)} onCancel={() => void cancelContinuityWorkflow()} />;
   }
 
   // Add a warranty (FRD v1.385): the same RecordEditor as Edit warranty, started empty, so the two forms cannot drift apart.

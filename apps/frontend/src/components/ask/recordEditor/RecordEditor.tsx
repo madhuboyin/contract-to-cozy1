@@ -122,26 +122,25 @@ export function RecordEditor({ editor, initialValues, title, mode = 'edit', savi
 
   const normalizedRaw = useMemo(() => Object.fromEntries(editor.fields.map((field) => [field.key, normalizeEditorFieldValue(field, values[field.key] ?? '')])), [editor.fields, values]);
   // A field that depends on another (an amount only for a purchase) is shown only for the right value, and is submitted empty while hidden.
-  const isShown = (field: AskRecordEditorField) => !field.visibleWhen || field.visibleWhen.in.includes(normalizedRaw[field.visibleWhen.field] ?? '');
-  const normalized = useMemo(() => Object.fromEntries(editor.fields.map((field) => [field.key, isShown(field) ? normalizedRaw[field.key] : ''])),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [editor.fields, normalizedRaw]);
+  const shownKeys = useMemo(() => new Set(editor.fields.filter((field) => !field.visibleWhen || field.visibleWhen.in.includes(normalizedRaw[field.visibleWhen.field] ?? '')).map((field) => field.key)), [editor.fields, normalizedRaw]);
+  const normalized = useMemo(() => Object.fromEntries(editor.fields.map((field) => [field.key, shownKeys.has(field.key) ? normalizedRaw[field.key] : ''])), [editor.fields, normalizedRaw, shownKeys]);
   const changedKeys = editor.fields.filter((field) => normalized[field.key] !== (editor.original[field.key] ?? '')).map((field) => field.key);
   const dirty = changedKeys.length > 0;
   const changedSet = new Set(changedKeys);
   const problems = useMemo(() => {
     const found: Record<string, string> = {};
     for (const field of editor.fields) {
+      if (!shownKeys.has(field.key)) continue;
       const message = editorFieldProblem(field, normalized[field.key]);
       if (message) found[field.key] = message;
     }
     return found;
-  }, [editor.fields, normalized]);
+  }, [editor.fields, normalized, shownKeys]);
   const cross = useMemo(() => crossFieldErrors?.(normalized) ?? {}, [crossFieldErrors, normalized]);
   const serverErrors = Object.fromEntries(Object.entries(editor.errors ?? {}).filter(([key]) => !staleServerErrors[key]));
   // An empty required field is flagged only after a submit attempt: flagging it on blur shifted the layout under the pointer mid-click.
   const visibleError = (key: string): string | null => serverErrors[key] ?? cross[key] ?? ((attempted || (touched[key] && normalized[key])) ? problems[key] ?? null : null);
-  const missing = editor.fields.filter((field) => field.required && !normalized[field.key]).map((field) => (field.shortLabel ?? field.label).toLowerCase());
+  const missing = editor.fields.filter((field) => shownKeys.has(field.key) && field.required && !normalized[field.key]).map((field) => (field.shortLabel ?? field.label).toLowerCase());
   const blockers = new Set([...Object.keys(problems), ...Object.keys(cross)]).size;
   const disabledReason = busy ? null
     : adding && missing.length > 0 ? `Add the ${missing.length > 1 ? `${missing.slice(0, -1).join(', ')} and ${missing[missing.length - 1]}` : missing[0]} to continue.`
@@ -252,7 +251,7 @@ export function RecordEditor({ editor, initialValues, title, mode = 'edit', savi
         </header>
         <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 py-4 sm:px-5">
           {editor.sections.map((section) => {
-            const fields = editor.fields.filter((field) => field.section === section.id && isShown(field));
+            const fields = editor.fields.filter((field) => field.section === section.id && shownKeys.has(field.key));
             if (fields.length === 0) return null;
             const spans = fieldSpans(fields);
             const grid = <div className="grid gap-x-4 gap-y-3 md:grid-cols-12">{fields.map((field) => renderField(field, spans[field.key]))}</div>;
