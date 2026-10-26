@@ -48,7 +48,12 @@ async function coverageResult(userId: string, propertyId: string, message: strin
       ? (b.exposureCents ?? -1) - (a.exposureCents ?? -1)
       : (a.expiryDate?.getTime() ?? Number.MAX_SAFE_INTEGER) - (b.expiryDate?.getTime() ?? Number.MAX_SAFE_INTEGER));
 
-  const captureCandidate = focused.find((item) => item.group === 'COVERAGE_UNCLEAR');
+  // A row action scopes the review to one exact item and deliberately reopens
+  // its coverage editor. Unscoped reads retain the old minimum-path behavior:
+  // only an unclear item asks for optional context.
+  const captureCandidate = inventoryItemId
+    ? focused.find((item) => item.inventoryItemId === inventoryItemId)
+    : focused.find((item) => item.group === 'COVERAGE_UNCLEAR');
   const evaluation = captureCandidate
     ? await evaluateFeatureContext(propertyId, userId, {
       featureKey: 'COVERAGE_INTELLIGENCE', operationKey: 'ASSESS_ITEM_COVERAGE',
@@ -56,6 +61,10 @@ async function coverageResult(userId: string, propertyId: string, message: strin
         inventoryItemId: captureCandidate.inventoryItemId,
         responsibilityScope: captureCandidate.responsibilityScope,
         hasDisclosedEstimate: captureCandidate.replacementValueSource === 'ESTIMATED',
+        ...(inventoryItemId ? {
+          editCoverageEvidence: true,
+          preferredCaptureKey: 'INVENTORY_ITEM_COVERAGE_EVIDENCE',
+        } : {}),
       },
     })
     : null;
@@ -101,6 +110,14 @@ async function coverageResult(userId: string, propertyId: string, message: strin
           item.missingContext.length ? `Needs: ${item.missingContext.map(coverageContextLabel).join(', ')}` : null,
         ].filter((value): value is string => Boolean(value)),
         href: null,
+        actions: access.role === HouseholdRole.VIEWER ? undefined : [{
+          id: 'edit-item-coverage',
+          label: group === 'NO_COVERAGE' || group === 'COVERAGE_UNCLEAR' ? 'Add coverage' : 'Update coverage',
+          message: `Update the coverage information for "${item.itemName}".`,
+          style: 'PRIMARY' as const,
+          interactionType: 'MUTATE_RECORD' as const,
+          operationId: 'COVERAGE_GAPS' as const,
+        }],
       })),
     }];
   });

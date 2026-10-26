@@ -39,6 +39,7 @@ import { PROPERTY_BRIEF_PREVIEW_IDS, PropertyBriefFactSheet, PropertyBriefShareP
 import { ActionLink, AskBlockActionContext, AskContextLink } from './context';
 import type { AskBlockRenderer } from './types';
 import { AskCollection, AskCollectionState } from '../presentation/AskLayoutPrimitives';
+import { AttachEvidenceControl, EVIDENCE_ATTACH_MESSAGES } from '../AttachEvidenceControl';
 
 // Blocks whose items carry longer text revealed on demand (`item.detail`). The Negotiation Shield draft is collapsed by default so a long
 // message does not push the analysis down; the producer sets the id, the client only implements the expand/collapse.
@@ -640,6 +641,15 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
                     )}
                     {!dense && block.id !== 'project-detail-records' && item.actions && item.actions.length > 0 && (
                       <ItemActionRow item={item} disabled={itemActionsDisabled} onItemAction={onItemAction} />
+                    )}
+                    {isEvidenceGapItem && item.entityType === 'INVENTORY_ITEM' && item.actions !== undefined && (
+                      <AttachEvidenceControl
+                        event={{ entityType: item.entityType, id: item.id, title: item.title }}
+                        propertyId={propertyId}
+                        disabled={itemActionsDisabled}
+                        label="Add evidence"
+                        onAttached={(documentId) => onItemAction(item.entityType, item.id, EVIDENCE_ATTACH_MESSAGES.INVENTORY_ITEM, 'CAPTURE_EVIDENCE_CONFIRM', 'MUTATE_RECORD', documentId)}
+                      />
                     )}
                     {dominantProjectAction && (
                       <div className="mt-3 flex items-center gap-2" data-project-record-actions="">

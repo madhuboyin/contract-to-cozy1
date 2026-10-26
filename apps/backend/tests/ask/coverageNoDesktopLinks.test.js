@@ -44,8 +44,17 @@ test('coverage review rows open the inline inventory record and carry no desktop
   for (const row of rows) {
     assert.equal(row.entityType, 'INVENTORY_ITEM', row.id);
     assert.equal(row.href, null, row.id);
+    assert.equal(row.actions?.[0]?.operationId, 'COVERAGE_GAPS', row.id);
+    assert.match(row.actions?.[0]?.label ?? '', /coverage/i, row.id);
   }
   assert.equal(JSON.stringify(result).includes('/dashboard/'), false);
+});
+
+test('a viewer sees coverage records without mutation controls', async () => {
+  gapService.getCoverageReviewItems = async () => [reviewItem('i1')];
+  const result = await capabilityInvoke('COVERAGE_GAPS', { userId: 'u1', propertyId: 'p1', message: 'Which items have no coverage?' }, access('VIEWER'));
+  const row = result.blocks.find((block) => block.id === 'coverage-groups').sections[0].items[0];
+  assert.equal(row.actions, undefined);
 });
 
 test('with no verified policy the comparison says adding one is not available in Ask, and links nowhere', async () => {

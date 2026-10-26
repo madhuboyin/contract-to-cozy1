@@ -233,8 +233,8 @@ test('renders Coverage Gaps executive summary card and 2-column grouped item gri
           {
             id: 'microwave',
             title: 'Microwave',
-            subtitle: 'No warranty or insurance coverage is linked to Microwave.',
-            badge: 'NO_COVERAGE',
+            description: 'No warranty or insurance coverage is linked to Microwave.',
+            status: 'NO_COVERAGE',
             meta: ['Kitchen'],
             actions: [],
           },
@@ -248,10 +248,11 @@ test('renders Coverage Gaps executive summary card and 2-column grouped item gri
           {
             id: 'hvac-furnace',
             title: 'HVAC Furnace',
-            subtitle: 'HVAC Furnace is marked covered, but no warranty or insurance document is linked.',
-            badge: 'EVIDENCE_MISSING',
+            entityType: 'INVENTORY_ITEM',
+            description: 'HVAC Furnace is marked covered, but no warranty or insurance document is linked.',
+            status: 'EVIDENCE_MISSING',
             meta: ['hvac', '$6,000 recorded exposure'],
-            actions: [],
+            actions: [{ id: 'edit-item-coverage', label: 'Update coverage', message: 'Update the coverage information for "HVAC Furnace".', operationId: 'COVERAGE_GAPS', interactionType: 'MUTATE_RECORD', style: 'PRIMARY' }],
           },
         ],
       },
@@ -266,6 +267,8 @@ test('renders Coverage Gaps executive summary card and 2-column grouped item gri
   expect(screen.getByText('Item-Level Protection')).toBeInTheDocument();
   expect(screen.getByText('HVAC')).toBeInTheDocument();
   expect(screen.getAllByText('$6,000 recorded exposure').length).toBeGreaterThanOrEqual(1);
+  expect(screen.getByRole('button', { name: 'Update coverage' })).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Add evidence for HVAC Furnace' })).toBeVisible();
   expect(screen.queryByRole('button', { name: 'Auto' })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Cards' })).not.toBeInTheDocument();
 });

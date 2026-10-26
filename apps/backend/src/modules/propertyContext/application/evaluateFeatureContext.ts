@@ -154,6 +154,12 @@ function requirementState(
         : 'UNKNOWN';
     }
     if (requirement.collectionPredicate === 'SELECTED_ITEM_COVERAGE_EVIDENCE_INCOMPLETE') {
+      // A coverage-card edit is allowed to reopen this canonical relational
+      // capture even when the item already records "no coverage" or has a
+      // linked record. The current value is prefilled by the adapter, so this
+      // remains an explicit correction rather than treating known data as
+      // missing in ordinary feature evaluations.
+      if (operationInput?.editCoverageEvidence === true) return 'STALE';
       return selectedItemCoverageEvidenceState(item);
     }
   }
@@ -253,7 +259,16 @@ async function evaluateFeatureContextInternal(
     .map((requirement) => evaluateRequirement(contractKey, requirement, context, input.operationInput))))
     .filter((value): value is EvaluatedContextRequirement => Boolean(value))
     .map(applyRequirementPolicy)
-    .sort((left, right) => REQUIRED_CLASSIFICATION_RANK[left.classification] - REQUIRED_CLASSIFICATION_RANK[right.classification]);
+    .sort((left, right) => {
+      const preferredCaptureKey = typeof input.operationInput?.preferredCaptureKey === 'string'
+        ? input.operationInput.preferredCaptureKey
+        : null;
+      if (preferredCaptureKey) {
+        if (left.capture.captureKey === preferredCaptureKey && right.capture.captureKey !== preferredCaptureKey) return -1;
+        if (right.capture.captureKey === preferredCaptureKey && left.capture.captureKey !== preferredCaptureKey) return 1;
+      }
+      return REQUIRED_CLASSIFICATION_RANK[left.classification] - REQUIRED_CLASSIFICATION_RANK[right.classification];
+    });
   const enhancements = (await Promise.all(contract.enhancements
     .filter(selectable)
     .sort((left, right) => left.priority - right.priority)
