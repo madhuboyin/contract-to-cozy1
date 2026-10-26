@@ -13,7 +13,7 @@
  *   node scripts/run-tests-chunked.js [paths...] [options]
  *     paths                     files or directories to search for *.test.js (default: tests/ask)
  *     --chunk-size=N            files per chunk (default 12)
- *     --concurrency=N           files run in parallel inside a chunk (default 2)
+ *     --concurrency=N           files run in parallel inside a chunk (default 3)
  *     --from=N                  start at chunk N (1-based), e.g. to resume after a stop
  *     --only=N                  run just chunk N
  *     --list                    print the chunks and exit
@@ -28,7 +28,7 @@ const os = require('node:os');
 const path = require('node:path');
 
 function parseArgs(argv) {
-  const options = { paths: [], chunkSize: 12, concurrency: 2, from: 1, only: null, list: false, typecheck: false, logDir: path.join(os.tmpdir(), 'backend-test-chunks') };
+  const options = { paths: [], chunkSize: 12, concurrency: 3, from: 1, only: null, list: false, typecheck: false, logDir: path.join(os.tmpdir(), 'backend-test-chunks') };
   for (const arg of argv) {
     const [key, value] = arg.split('=');
     if (key === '--chunk-size') options.chunkSize = Number(value);
@@ -95,7 +95,12 @@ function main() {
 
   fs.mkdirSync(options.logDir, { recursive: true });
   const env = { ...process.env };
-  if (!options.typecheck) env.TS_NODE_TRANSPILE_ONLY = 'true';
+  if (!options.typecheck) {
+    env.TS_NODE_TRANSPILE_ONLY = 'true';
+    // tsconfig.test-cache.json swaps in scripts/cachedTranspiler.js so the ~400 src files are transpiled once per
+    // change, not once per test process (a warm run is ~4x faster). C2C_TS_CACHE=off bypasses it.
+    if (!env.TS_NODE_PROJECT && env.C2C_TS_CACHE !== 'off') env.TS_NODE_PROJECT = path.resolve(__dirname, '..', 'tsconfig.test-cache.json');
+  }
   console.log(`${files.length} test files in ${chunks.length} chunks of up to ${options.chunkSize}; ${options.concurrency} at a time inside a chunk; ${options.typecheck ? 'ts-node type-checking ON' : 'transpile-only (run npm run typecheck for types)'}. Logs: ${options.logDir}`);
 
   const totals = { tests: 0, pass: 0, fail: 0, cancelled: 0, skipped: 0, todo: 0 };
