@@ -15,6 +15,7 @@ import { listPropertyDocuments } from '../../propertyDocuments/propertyDocumentI
 import { offerableNegotiationDocuments, type NegotiationAttachCandidate } from '../support/negotiationShieldAttach';
 import { humanDate } from '../askFormatting';
 import { generateRequirementCandidates } from '../../renovationRequirement.service';
+import { updateCondition } from '../../renovationComplianceWorkflow.service';
 import { evaluateReadiness, governOverride, handoffToProject, loadHandoffPrefill, updateReadinessItem } from '../../renovationReadiness.service';
 import {
   HANDOFF_FUNDING_LABELS, HANDOFF_PROJECT_TYPES, READINESS_COMMAND_MESSAGES, READINESS_FORM_CAPTURE_KEYS, handoffServiceInput, readinessCommandEntityType,
@@ -55,6 +56,13 @@ const loadCase = async (propertyId: string, caseId: string) => database.renovati
   where: { id: caseId, propertyId }, select: { id: true, name: true, updatedAt: true, readinessSummary: true, currentScopeVersionId: true },
 }) as Promise<{ id: string; name: string; updatedAt: Date; readinessSummary: unknown; currentScopeVersionId: string | null } | null>;
 const itemVersion = (kind: ReadinessCommandKind, item: ItemRow) => sha(`readiness:${kind}:${item.id}:${item.status}:${item.overrideAcknowledgedAt?.toISOString() ?? ''}:${item.updatedAt.toISOString()}`);
+type ConditionRow = { id: string; renovationCaseId: string; title: string; status: string; isBlocking: boolean; updatedAt: Date };
+const loadCondition = async (propertyId: string, conditionId: string): Promise<ConditionRow | null> => database.renovationComplianceCondition.findFirst({
+  where: { id: conditionId, propertyId }, select: { id: true, renovationCaseId: true, title: true, status: true, isBlocking: true, updatedAt: true },
+});
+const conditionVersion = (condition: ConditionRow) => sha(`compliance:SATISFY_CONDITION:${condition.id}:${condition.status}:${condition.updatedAt.toISOString()}`);
+/** Only an open condition can be satisfied; the service re-checks. The one place shared by the compliance answer's row action and the confirmation. */
+export const conditionCanBeSatisfied = (condition: { status: string }) => condition.status === 'OPEN';
 /** Requirements research is generated against the case's current scope; the count is part of the version so a confirmation made before another request researched it is stale. */
 const currentRequirementCount = async (propertyId: string, caseId: string, scopeVersionId: string): Promise<number> => database.renovationRequirement.count({
   where: { renovationCaseId: caseId, propertyId, scopeVersionId, recordStatus: 'CURRENT' },
@@ -104,6 +112,14 @@ function formCapture(kind: ReadinessItemFormKind, contextVersion: string, label:
       fields: [
         { key: 'evidenceDocumentId', label: 'Document', required: true, inputSchema: { type: 'SINGLE_SELECT' as const, options: options.map((option) => ({ label: optionLabel(option), value: option.id })) } },
         text('notes', 'What you checked', 'It is kept with the item.'),
+      ],
+    },
+    SATISFY_CONDITION: {
+      title: `Mark satisfied: ${label}`, question: 'Which document shows this condition is met, and what did you check?',
+      helpText: 'A condition is satisfied only with a property document as evidence. Only documents your whole household can already see are listed, because everyone on this case can see its evidence. Nothing is saved until you confirm, and the document is not read or verified.',
+      fields: [
+        { key: 'evidenceDocumentId', label: 'Document', required: true, inputSchema: { type: 'SINGLE_SELECT' as const, options: options.map((option) => ({ label: optionLabel(option), value: option.id })) } },
+        text('notes', 'What you checked', 'It is kept with the condition.'),
       ],
     },
   };
@@ -165,6 +181,39 @@ export async function readinessCommandResult(userId: string, propertyId: string,
     confirmationId: `renovation-readiness-${id}-1`, version: 1, title: spec.title, description: spec.description, fields: spec.fields, editableFields: [] as never[],
     confirmLabel: spec.confirmLabel, consentText: 'I authorize this change to the shared home record.', expiresAt: expiresAt.toISOString(),
   });
+
+  if (kind === 'SATISFY_CONDITION') {
+    const condition = await loadCondition(propertyId, launch.entityId);
+    if (!condition) return unavailable('RENOVATION_CONDITION_NOT_FOUND', 'That condition is no longer available', 'Ask could not find that condition. Nothing has changed.');
+    if (!conditionCanBeSatisfied(condition)) return unavailable('RENOVATION_CONDITION_STEP_NOT_AVAILABLE', 'That condition is not open', 'Only an open condition can be marked satisfied here. Nothing has changed.');
+    const contextVersion = conditionVersion(condition);
+    const evidence = await evidenceOptions(propertyId, access.role);
+    if (!evidence.options.length) {
+      return unavailable('RENOVATION_READINESS_NO_EVIDENCE_RECORD', 'There is no document to attach yet',
+        `A condition is satisfied with a document on file that your whole household can see. ${evidence.excludedPrivate ? `${evidence.excludedPrivate} owner-only record${evidence.excludedPrivate === 1 ? ' is' : 's are'} not offered, because everyone on this case can see its evidence. ` : ''}Add the document to your Home Records first. Nothing has changed.`);
+    }
+    if (!supplied) {
+      return {
+        status: 'NEEDS_CONTEXT', reasonCode: 'RENOVATION_CONDITION_SATISFY_INPUT_REQUIRED', contextVersion,
+        parameters: { readinessCommandLaunch: { kind, entityId: condition.id, sourceExecutionId: launch.sourceExecutionId } },
+        blocks: [{ type: 'SUMMARY', id: 'readiness-condition-input', title: condition.title, body: 'This condition is open. Nothing has been saved yet.', tone: 'DEFAULT', actions: [] }],
+        captureRequests: [formCapture('SATISFY_CONDITION', contextVersion, condition.title, {}, evidence.options)], suggestions: [],
+      };
+    }
+    const chosen = evidence.options.find((option) => option.id === supplied.evidenceDocumentId) ?? null;
+    if (!chosen) return unavailable('RENOVATION_READINESS_EVIDENCE_NOT_OFFERED', 'Choose a document from the list', 'That document is not one your whole household can see. Nothing has changed.');
+    return {
+      status: 'NEEDS_CONFIRMATION', reasonCode: 'RENOVATION_CONDITION_SATISFY_CONFIRMATION_REQUIRED', contextVersion,
+      parameters: { readinessForm: supplied, readinessCommand: { kind, entityId: condition.id }, readinessContextVersion: contextVersion, ...base },
+      blocks: [{ type: 'SUMMARY', id: 'readiness-condition-review', title: `Mark "${condition.title}" satisfied?`, body: 'Nothing is saved until you confirm.', tone: 'DEFAULT', actions: [] }],
+      confirmation: confirmation(`condition-${sha(`${condition.id}:${JSON.stringify(supplied)}`).slice(0, 12)}`, {
+        title: `Mark "${condition.title}" satisfied?`, confirmLabel: 'Mark it satisfied',
+        description: `This records that you checked this condition against the document below, which everyone on this case can see. Ask does not read or verify the file${condition.isBlocking ? ', and a satisfied condition no longer blocks closeout' : ''}. ${BOUNDARY}`,
+        fields: [{ label: 'Condition', value: condition.title }, { label: 'Document', value: chosen.title }, { label: 'Kind', value: chosen.kindLabel }, { label: 'What you checked', value: String(supplied.notes) }],
+      }),
+      captureRequests: [formCapture('SATISFY_CONDITION', contextVersion, condition.title, supplied, evidence.options)], suggestions: [],
+    };
+  }
 
   if (kind === 'GENERATE') {
     const renovationCase = await loadCase(propertyId, launch.entityId);
@@ -331,9 +380,23 @@ async function confirmReadinessCommand(ctx: ConfirmCapabilityContext): Promise<C
   if (!kind || !(kind in READINESS_COMMAND_MESSAGES) || typeof command?.entityId !== 'string') throw stale('The change to make is invalid.');
   if (readinessKindNeedsOwner(kind) && ctx.access.role !== HouseholdRole.OWNER) throw stale('Only an owner can acknowledge a risk.', 'ASK_PERMISSION_REQUIRED');
   const propertyId = execution.propertyId;
-  let title: string; let description: string; let artifactId = command.entityId; let artifactType = 'RENOVATION_READINESS_ITEM'; let workItemSynced: boolean | undefined;
+  let title: string; let description: string; let artifactId = command.entityId; let artifactType = 'RENOVATION_READINESS_ITEM'; let workItemSynced: boolean | undefined; let backAction: typeof backToReadiness = backToReadiness;
   try {
-    if (kind === 'GENERATE') {
+    if (kind === 'SATISFY_CONDITION') {
+      const condition = await loadCondition(propertyId, command.entityId);
+      if (!condition) throw stale('That condition is no longer available.');
+      if (parameters.readinessContextVersion !== conditionVersion(condition)) throw stale('This condition changed while the confirmation was open. Review it again and try again.', 'ASK_CONTEXT_VERSION_CONFLICT');
+      if (!conditionCanBeSatisfied(condition)) throw stale('That condition is not open now.');
+      const checked = parseReadinessFormAnswer('SATISFY_CONDITION', parameters.readinessForm);
+      if (!checked.success) throw stale('The details to save are invalid.');
+      const offered = await evidenceOptions(propertyId, ctx.access.role);
+      if (!offered.options.some((option) => option.id === checked.data.evidenceDocumentId)) throw stale('That document is no longer one your whole household can see. Review it again and try again.');
+      await updateCondition(propertyId, condition.renovationCaseId, condition.id, userId, readinessServiceInput('SATISFY_CONDITION', checked.data), ctx.access.role);
+      artifactId = condition.id;
+      const owningCase = await loadCase(propertyId, condition.renovationCaseId);
+      backAction = { ...backToReadiness, label: 'See approvals', message: `Show the compliance status for my renovation ${(owningCase?.name ?? '').slice(0, 120)}.`.replace(' .', '.') };
+      title = 'Condition marked satisfied'; description = `It is recorded with the document you chose${condition.isBlocking ? ', and it no longer blocks closeout' : ''}. Nothing was read or verified.`;
+    } else if (kind === 'GENERATE') {
       const renovationCase = await loadCase(propertyId, command.entityId);
       if (!renovationCase || !renovationCase.currentScopeVersionId) throw stale('That renovation case or its scope is no longer available.');
       const existing = await currentRequirementCount(propertyId, renovationCase.id, renovationCase.currentScopeVersionId);
@@ -396,7 +459,7 @@ async function confirmReadinessCommand(ctx: ConfirmCapabilityContext): Promise<C
   }
   const result: AskOperationResult = {
     status: 'COMPLETED', reasonCode: `RENOVATION_READINESS_${kind}_COMPLETED`,
-    blocks: [{ type: 'WORKFLOW_PROGRESS', id: `readiness-command-${kind.toLowerCase()}-${artifactId}`, title, status: 'COMPLETED', description, details: [], actions: [{ ...backToReadiness, label: 'See readiness', style: 'PRIMARY' as const }] }],
+    blocks: [{ type: 'WORKFLOW_PROGRESS', id: `readiness-command-${kind.toLowerCase()}-${artifactId}`, title, status: 'COMPLETED', description, details: [], actions: [{ ...backAction, label: kind === 'SATISFY_CONDITION' ? 'See approvals' : 'See readiness', style: 'PRIMARY' as const }] }],
     suggestions: [],
   };
   const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);

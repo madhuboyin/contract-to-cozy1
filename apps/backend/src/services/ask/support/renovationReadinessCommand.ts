@@ -9,6 +9,7 @@ import { z } from 'zod';
 
 export const RENOVATION_READINESS_CASE_ENTITY_TYPE = 'RENOVATION_READINESS_CASE';
 export const RENOVATION_READINESS_ITEM_ENTITY_TYPE = 'RENOVATION_READINESS_ITEM';
+export const RENOVATION_COMPLIANCE_CONDITION_ENTITY_TYPE = 'RENOVATION_COMPLIANCE_CONDITION';
 export const READINESS_COMMAND_MESSAGES = {
   REFRESH: 'Refresh the readiness check for this renovation case.',
   ACKNOWLEDGE: 'Acknowledge the risk of this open readiness item.',
@@ -17,23 +18,24 @@ export const READINESS_COMMAND_MESSAGES = {
   SATISFY: 'Mark this readiness item satisfied with a document.',
   HANDOFF: 'Create the execution project for this renovation case.',
   GENERATE: 'Generate the requirements research for this renovation case.',
+  SATISFY_CONDITION: 'Mark this compliance condition satisfied with a document.',
 } as const;
 export type ReadinessCommandKind = keyof typeof READINESS_COMMAND_MESSAGES;
 export const READINESS_COMMAND_ACTION_IDS = {
-  REFRESH: 'renovation-readiness-refresh', ACKNOWLEDGE: 'renovation-readiness-acknowledge', REVOKE: 'renovation-readiness-revoke', REOPEN: 'renovation-readiness-reopen', SATISFY: 'renovation-readiness-satisfy', HANDOFF: 'renovation-readiness-handoff', GENERATE: 'renovation-readiness-generate',
+  REFRESH: 'renovation-readiness-refresh', ACKNOWLEDGE: 'renovation-readiness-acknowledge', REVOKE: 'renovation-readiness-revoke', REOPEN: 'renovation-readiness-reopen', SATISFY: 'renovation-readiness-satisfy', HANDOFF: 'renovation-readiness-handoff', GENERATE: 'renovation-readiness-generate', SATISFY_CONDITION: 'renovation-condition-satisfy',
 } as const;
 export const readinessCommandKindFromMessage = (message: string): ReadinessCommandKind | null =>
   ((Object.entries(READINESS_COMMAND_MESSAGES) as Array<[ReadinessCommandKind, string]>).find(([, value]) => value === message)?.[0]) ?? null;
-export const readinessCommandEntityType = (kind: ReadinessCommandKind) => (kind === 'REFRESH' || kind === 'HANDOFF' || kind === 'GENERATE' ? RENOVATION_READINESS_CASE_ENTITY_TYPE : RENOVATION_READINESS_ITEM_ENTITY_TYPE);
+export const readinessCommandEntityType = (kind: ReadinessCommandKind) => kind === 'SATISFY_CONDITION' ? RENOVATION_COMPLIANCE_CONDITION_ENTITY_TYPE : (kind === 'REFRESH' || kind === 'HANDOFF' || kind === 'GENERATE' ? RENOVATION_READINESS_CASE_ENTITY_TYPE : RENOVATION_READINESS_ITEM_ENTITY_TYPE);
 /** Acknowledging a risk and creating the execution project are an owner's decisions; both routes are owner-only. */
 export const readinessKindNeedsOwner = (kind: ReadinessCommandKind) => kind === 'ACKNOWLEDGE' || kind === 'REVOKE' || kind === 'HANDOFF';
 
-export type ReadinessFormKind = 'ACKNOWLEDGE' | 'REVOKE' | 'REOPEN' | 'SATISFY' | 'HANDOFF';
+export type ReadinessFormKind = 'ACKNOWLEDGE' | 'REVOKE' | 'REOPEN' | 'SATISFY' | 'SATISFY_CONDITION' | 'HANDOFF';
 /** The kinds that act on one readiness item (the handoff acts on the case). */
 export type ReadinessItemFormKind = Exclude<ReadinessFormKind, 'HANDOFF'>;
 export const READINESS_FORM_CAPTURE_KEYS: Record<ReadinessFormKind, string> = {
   ACKNOWLEDGE: 'RENOVATION_READINESS_ACKNOWLEDGE', REVOKE: 'RENOVATION_READINESS_REVOKE', REOPEN: 'RENOVATION_READINESS_REOPEN', SATISFY: 'RENOVATION_READINESS_SATISFY',
-  HANDOFF: 'RENOVATION_READINESS_HANDOFF',
+  HANDOFF: 'RENOVATION_READINESS_HANDOFF', SATISFY_CONDITION: 'RENOVATION_COMPLIANCE_CONDITION_SATISFY',
 };
 export const readinessFormKindFromCaptureKey = (key: string): ReadinessFormKind | null =>
   ((Object.entries(READINESS_FORM_CAPTURE_KEYS) as Array<[ReadinessFormKind, string]>).find(([, value]) => value === key)?.[0]) ?? null;
@@ -55,6 +57,7 @@ export const READINESS_FORM_SCHEMAS = {
   REVOKE: z.object({ reason: z.string().trim().min(10).max(5000) }).strict(),
   REOPEN: z.object({ notes: z.string().trim().min(1).max(5000) }).strict(),
   SATISFY: z.object({ evidenceDocumentId: z.string().trim().min(1).max(160), notes: z.string().trim().min(1).max(5000) }).strict(),
+  SATISFY_CONDITION: z.object({ evidenceDocumentId: z.string().trim().min(1).max(160), notes: z.string().trim().min(1).max(5000) }).strict(),
   HANDOFF: z.object({
     projectType: z.enum(HANDOFF_PROJECT_TYPES),
     contractorName: z.preprocess(blankToUndefined, z.string().trim().min(1).max(200).optional()),
@@ -99,6 +102,8 @@ export function handoffServiceInput(form: ReadinessFormValues, fulfillmentMode: 
 export function readinessServiceInput(kind: ReadinessItemFormKind, form: ReadinessFormValues) {
   if (kind === 'ACKNOWLEDGE') return { action: 'ACKNOWLEDGE' as const, reason: String(form.reason), riskAcknowledged: true as const };
   if (kind === 'REVOKE') return { action: 'REVOKE' as const, reason: String(form.reason) };
+  // A compliance condition is updated through the compliance workflow's own input (route schema: status, verificationNotes, sourceDocumentId).
+  if (kind === 'SATISFY_CONDITION') return { status: 'SATISFIED' as const, verificationNotes: String(form.notes), sourceDocumentId: String(form.evidenceDocumentId) };
   if (kind === 'SATISFY') return { status: 'SATISFIED' as const, evidenceDocumentId: String(form.evidenceDocumentId), satisfactionNotes: String(form.notes) };
   return { status: 'OPEN' as const, satisfactionNotes: String(form.notes) };
 }

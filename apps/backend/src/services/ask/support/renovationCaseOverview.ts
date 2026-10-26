@@ -6,6 +6,7 @@
 /** "Show my renovation cases / renovations / remodel plans": the overview, not a readiness question about one case. */
 // Narrow on purpose: "which renovations add value" or "my renovation costs" are other questions. Either name the cases, or ask for my/all/the list of renovations and stop.
 const OVERVIEW_PATTERN = /\b(?:renovation|remodel)\s+cases?\b|\b(?:my|all|list|show)\s+(?:current\s+|active\s+|open\s+)?(?:renovations?|remodels?)(?:\s+(?:plans?|projects?))?\s*[?.!]*\s*$/i;
+import { READINESS_COMMAND_ACTION_IDS, READINESS_COMMAND_MESSAGES, RENOVATION_COMPLIANCE_CONDITION_ENTITY_TYPE } from './renovationReadinessCommand';
 export const isRenovationCaseOverviewRequest = (message: string) => OVERVIEW_PATTERN.test(message);
 
 export const RENOVATION_CASE_SHOW_READINESS_ACTION_ID = 'renovation-case-show-readiness';
@@ -180,7 +181,7 @@ export interface RenovationComplianceInput {
  * Official status and reported status are different things and are kept apart: a record shows what an authority recorded (and from what source) separately
  * from what the household reported, and says plainly when nothing authority-backed exists. Candidate extractions from HOA documents are never decisions.
  */
-export function renovationComplianceSections(workflow: RenovationComplianceInput, dateLabel: (value: Date) => string) {
+export function renovationComplianceSections(workflow: RenovationComplianceInput, dateLabel: (value: Date) => string, canChange = false) {
   const date = (value: unknown) => { const parsed = asDate(value); return parsed && !Number.isNaN(parsed.getTime()) ? dateLabel(parsed) : null; };
   const permits = workflow.permits.map((record) => ({
     id: `permit-${record.id}`, title: record.permitNumber || titleCase(record.category ?? 'Permit'), description: record.officialTruthLayer
@@ -200,6 +201,11 @@ export function renovationComplianceSections(workflow: RenovationComplianceInput
     id: `condition-${entry.id}`, title: entry.title, description: entry.description ?? null,
     meta: [titleCase(entry.status), ...(entry.isBlocking && entry.status === 'OPEN' ? ['Blocks closeout'] : []), ...(date(entry.dueAt) ? [`Due ${date(entry.dueAt)}`] : [])],
     status: entry.status, href: null, ...(entry.sourceReference ? { detail: `Source: ${entry.sourceReference}` } : {}),
+    // Marking a condition satisfied is a contributor's step on an open condition; the row carries its own action.
+    ...(canChange && entry.status === 'OPEN' ? { entityType: RENOVATION_COMPLIANCE_CONDITION_ENTITY_TYPE, actions: [{
+      id: READINESS_COMMAND_ACTION_IDS.SATISFY_CONDITION, label: 'Mark satisfied with a document', message: READINESS_COMMAND_MESSAGES.SATISFY_CONDITION,
+      operationId: 'RENOVATION_READINESS_COMMAND', interactionType: 'MUTATE_RECORD' as const, style: 'SECONDARY' as const, entityType: RENOVATION_COMPLIANCE_CONDITION_ENTITY_TYPE, entityId: entry.id,
+    }] } : {}),
   });
   const reviews = workflow.hoaDocumentReviews.map((review) => {
     const extracted = Array.isArray(review.extractedConditions) ? review.extractedConditions as Array<{ title?: string; description?: string }> : [];

@@ -394,7 +394,7 @@ export function renovationReadinessProgress(
 const READINESS_COMMAND_ACTIONS = READINESS_COMMAND_ACTION_IDS;
 const READINESS_ITEM_LABELS: Record<ReadinessCommandKind, string> = {
   REFRESH: 'Refresh readiness', ACKNOWLEDGE: 'Acknowledge the risk', REVOKE: 'Withdraw the acknowledgement', REOPEN: 'Reopen', SATISFY: 'Mark satisfied with a document',
-  HANDOFF: 'Create the execution project', GENERATE: 'Generate requirements research',
+  HANDOFF: 'Create the execution project', GENERATE: 'Generate requirements research', SATISFY_CONDITION: 'Mark satisfied with a document',
 };
 
 async function renovationPermitReadinessResult(propertyId: string, message: string, canStart = false, isOwner = false): Promise<AskOperationResult> {
@@ -426,7 +426,7 @@ async function renovationPermitReadinessResult(propertyId: string, message: stri
     status: 'ANSWERED', contextVersion: cases[0].updatedAt.toISOString(), suggestions: [],
     blocks: [{ type: 'SUMMARY', id: 'renovation-cases-summary', title: `You have ${cases.length} renovation cases`, body: `They are listed with their stage, readiness and next step. The most recently updated is ${cases[0].name} (${renovationLifecycleLabel(cases[0].lifecycle).toLowerCase()}).`, tone: 'DEFAULT', actions: [] }, caseList(null)],
   };
-  if (isRenovationComplianceRequest(message) && !isRenovationRequirementsRequest(message)) return renovationComplianceResult(propertyId, selected, cases.length > 1 && !named ? caseList(selected.id) : null);
+  if (isRenovationComplianceRequest(message) && !isRenovationRequirementsRequest(message)) return renovationComplianceResult(propertyId, selected, cases.length > 1 && !named ? caseList(selected.id) : null, canStart);
   if (isRenovationRequirementsRequest(message)) return renovationRequirementsResult(propertyId, selected, cases.length > 1 && !named ? caseList(selected.id) : null, canStart);
   let readiness: any;
   try { readiness = await getRenovationReadiness(propertyId, selected.id); } catch { readiness = { summary: { state: 'NOT_EVALUATED', disclaimer: 'Readiness has not been evaluated for the current scope.' }, items: [], project: null }; }
@@ -484,7 +484,7 @@ async function renovationPermitReadinessResult(propertyId: string, message: stri
 
 // Slice 3a of the Renovations parity review: the read view of Desktop's permit and HOA workflow. Official status and reported status are shown apart, a
 // missing record is never read as "not required", and HOA document extractions are candidates. Attaching records and satisfying conditions are not in Ask yet.
-export async function renovationComplianceResult(propertyId: string, selected: { id: string; name: string; updatedAt: Date }, caseListBlock: AskPresentationBlock | null): Promise<AskOperationResult> {
+export async function renovationComplianceResult(propertyId: string, selected: { id: string; name: string; updatedAt: Date }, caseListBlock: AskPresentationBlock | null, canChange = false): Promise<AskOperationResult> {
   let workflow: any = null;
   try { workflow = await getComplianceWorkflow(propertyId, selected.id); } catch { workflow = null; }
   const contextVersion = selected.updatedAt.toISOString();
@@ -493,7 +493,7 @@ export async function renovationComplianceResult(propertyId: string, selected: {
     blocks: [{ type: 'SUMMARY', id: 'renovation-compliance-unavailable', title: `${selected.name} has no scope to track approvals against yet`, body: 'Permits, HOA approvals and conditions are tracked against the case\u2019s current scope, and this case does not have one recorded. Defining scope is not currently available in Ask.', tone: 'CAUTION', actions: [] }],
   };
   const dateLabel = (value: Date) => humanDate(value) ?? value.toISOString().slice(0, 10);
-  const parts = renovationComplianceSections(workflow, dateLabel);
+  const parts = renovationComplianceSections(workflow, dateLabel, canChange);
   const blockers = (workflow.blockers ?? []).length;
   const sections = [
     { id: 'permits', title: 'Permits', caption: workflow.coverage.permit.message, count: parts.permits.length, items: parts.permits },
@@ -506,7 +506,7 @@ export async function renovationComplianceResult(propertyId: string, selected: {
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY', id: 'renovation-compliance-summary',
     title: blockers ? `${blockers} approval condition${blockers === 1 ? '' : 's'} still block${blockers === 1 ? 's' : ''} closeout for ${selected.name}` : `Permits, HOA approvals and conditions for ${selected.name}`,
-    body: `${workflow.coverage.permit.message} ${workflow.coverage.hoa.message} Official status comes from an authority or the association; reported status is what the household recorded. ${parts.alerts.length ? ` Expiring soon: ${parts.alerts.join(' ')}` : ''} Attaching records and satisfying conditions are not currently available in Ask.`,
+    body: `${workflow.coverage.permit.message} ${workflow.coverage.hoa.message} Official status comes from an authority or the association; reported status is what the household recorded. ${parts.alerts.length ? ` Expiring soon: ${parts.alerts.join(' ')}` : ''} ${canChange ? 'You can mark a condition satisfied here; attaching records is not currently available in Ask.' : 'Attaching records and satisfying conditions are not currently available in Ask.'}`,
     tone: blockers || parts.alerts.length ? 'CAUTION' : 'DEFAULT', actions: [],
   }];
   if (caseListBlock) blocks.push(caseListBlock);
