@@ -12,12 +12,16 @@ export const SAVINGS_COMMAND_MESSAGES = {
   DISMISS: 'Dismiss this savings opportunity.',
   STOP: 'Stop pursuing this savings opportunity.',
   OUTCOME: 'Record the outcome of this savings opportunity.',
+  PLAN: 'Set up my current plan for this recurring cost.',
+  CHECK: 'Check my recurring costs for savings.',
 } as const;
 export type SavingsCommandKind = keyof typeof SAVINGS_COMMAND_MESSAGES;
-export const SAVINGS_COMMAND_ACTION_IDS = { SAVE: 'savings-benefit-save', DISMISS: 'savings-benefit-dismiss', STOP: 'savings-benefit-stop', OUTCOME: 'savings-benefit-outcome' } as const;
+export const SAVINGS_COMMAND_ACTION_IDS = { SAVE: 'savings-benefit-save', DISMISS: 'savings-benefit-dismiss', STOP: 'savings-benefit-stop', OUTCOME: 'savings-benefit-outcome', PLAN: 'savings-recurring-plan', CHECK: 'savings-recurring-check' } as const;
 export const savingsCommandKindFromMessage = (message: string): SavingsCommandKind | null =>
   ((Object.entries(SAVINGS_COMMAND_MESSAGES) as Array<[SavingsCommandKind, string]>).find(([, value]) => value === message)?.[0]) ?? null;
-export const savingsCommandEntityType = (kind: SavingsCommandKind) =>
+/** The recurring-cost setup acts on a category (or all of them), not on one opportunity. */
+export const isRecurringSetupKind = (kind: SavingsCommandKind): kind is 'PLAN' | 'CHECK' => kind === 'PLAN' || kind === 'CHECK';
+export const savingsCommandEntityType = (kind: SavingsCommandKind) => isRecurringSetupKind(kind) ? 'HOME_SAVINGS_CATEGORY' :
   kind === 'SAVE' || kind === 'DISMISS' ? SAVINGS_AVAILABLE_ENTITY_TYPE : SAVINGS_IN_PROGRESS_ENTITY_TYPE;
 export const SAVINGS_OUTCOME_CAPTURE_KEY = 'SAVINGS_BENEFIT_OUTCOME';
 

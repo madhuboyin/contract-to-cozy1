@@ -68,6 +68,8 @@ import { statusBoardCommandResult } from '../handlers/statusBoardCommands.handle
 import { appealFormKindFromCaptureKey, parseAppealFormAnswer } from '../support/propertyTaxAppealCommand';
 import { appealCommandResult } from '../handlers/propertyTaxAppealCommands.handler';
 import { SAVINGS_OUTCOME_CAPTURE_KEY, SAVINGS_OUTCOME_INVALID_MESSAGES, parseSavingsOutcomeAnswer, parseSavingsRowId } from '../support/savingsBenefitCommand';
+import { SAVINGS_RECURRING_PLAN_CAPTURE_KEY, isSavingsRecurringCategory, parseSavingsPlanAnswer } from '../support/savingsRecurringSetup';
+import { recurringSetupResult } from '../handlers/savingsRecurringSetup.handler';
 import { savingsCommandResult } from '../handlers/savingsBenefitCommands.handler';
 import { parseReadinessFormAnswer, readinessFormKindFromCaptureKey } from '../support/renovationReadinessCommand';
 import { readinessCommandResult } from '../handlers/renovationReadinessCommands.handler';
@@ -1516,12 +1518,26 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
     canonicalOwner = 'PropertyTaxAppealCase';
   } else if (execution.operationId === 'SAVINGS_BENEFIT_COMMAND') {
-    if (input.captureKey !== SAVINGS_OUTCOME_CAPTURE_KEY) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    if (input.captureKey !== SAVINGS_OUTCOME_CAPTURE_KEY && input.captureKey !== SAVINGS_RECURRING_PLAN_CAPTURE_KEY) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
     const access = await ensurePropertyAccess(userId, execution.propertyId);
     if (access.role === HouseholdRole.VIEWER) throw Object.assign(new Error('A contributor or owner is required to change savings records.'), { code: 'ASK_PERMISSION_REQUIRED' });
     const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson) ? execution.parametersJson as Record<string, unknown> : {};
     const savingsLaunch = storedParameters.savingsCommandLaunch && typeof storedParameters.savingsCommandLaunch === 'object' && !Array.isArray(storedParameters.savingsCommandLaunch)
       ? storedParameters.savingsCommandLaunch as { kind?: unknown; entityId?: unknown; sourceExecutionId?: unknown } : null;
+    if (input.captureKey === SAVINGS_RECURRING_PLAN_CAPTURE_KEY) {
+      // The recurring-cost plan form: the category comes from the stored launch, never from the answer.
+      if (!savingsLaunch || savingsLaunch.kind !== 'PLAN' || !isSavingsRecurringCategory(savingsLaunch.entityId)) {
+        throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+      }
+      const planAnswer = parseSavingsPlanAnswer(savingsLaunch.entityId, input.answer);
+      if (!planAnswer.success) throw Object.assign(new Error('Check the amount, billing period and dates.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+      result = await recurringSetupResult(userId, execution.propertyId, {
+        kind: 'PLAN', entityId: savingsLaunch.entityId, sourceExecutionId: typeof savingsLaunch.sourceExecutionId === 'string' ? savingsLaunch.sourceExecutionId : null,
+      }, planAnswer.data);
+      captureId = input.idempotencyKey;
+      capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
+      canonicalOwner = 'HomeSavingsAccount';
+    } else {
     const savingsTarget = savingsLaunch && typeof savingsLaunch.entityId === 'string' ? parseSavingsRowId(savingsLaunch.entityId) : null;
     if (!savingsLaunch || savingsLaunch.kind !== 'OUTCOME' || !savingsTarget) {
       throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
@@ -1536,6 +1552,7 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     captureId = input.idempotencyKey;
     capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
     canonicalOwner = 'SavingsBenefitAction';
+    }
   } else if (execution.operationId === 'RENOVATION_READINESS_COMMAND') {
     const readinessKind = readinessFormKindFromCaptureKey(input.captureKey);
     if (!readinessKind) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });

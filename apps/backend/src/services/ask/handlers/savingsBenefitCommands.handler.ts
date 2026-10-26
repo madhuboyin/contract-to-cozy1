@@ -16,9 +16,11 @@ import { humanDate, money } from '../askFormatting';
 import { createCanonicalAction, getCanonicalOpportunityDetail, recordCanonicalActionOutcome, updateCanonicalAction } from '../../savingsBenefitsCanonical.service';
 import {
   SAVINGS_COMMAND_MESSAGES, SAVINGS_OUTCOME_CAPTURE_KEY, SAVINGS_OUTCOME_INVALID_MESSAGES, SAVINGS_OUTCOME_STAGES, SAVINGS_OUTCOME_STAGE_LABELS,
-  parseSavingsOutcomeAnswer, parseSavingsRowId, savingsCommandEntityType, savingsCommandKindFromMessage,
+  isRecurringSetupKind, parseSavingsOutcomeAnswer, parseSavingsRowId, savingsCommandEntityType, savingsCommandKindFromMessage,
   type SavingsCommandKind, type SavingsFamily, type SavingsOutcomeForm, type SavingsTarget,
 } from '../support/savingsBenefitCommand';
+
+import { confirmRecurringSetup, recurringSetupResult } from './savingsRecurringSetup.handler';
 
 const CONFIRMATION_MINUTES = 30;
 const sha = (text: string) => createHash('sha256').update(text).digest('hex');
@@ -188,6 +190,8 @@ registerCapabilityHandler('savings-benefit.command', async (envelope) => {
   const kind = savingsCommandKindFromMessage(envelope.message);
   if (!kind || launch?.operationId !== 'SAVINGS_BENEFIT_COMMAND' || launch.surface === 'ASK_REFRESH' || !launch.entityId) return notRoutable();
   if (launch.entityType !== savingsCommandEntityType(kind)) return notRoutable();
+  // Recurring-cost setup acts on a category, not an opportunity, and has its own form and checks (savingsRecurringSetup.handler).
+  if (isRecurringSetupKind(kind)) return recurringSetupResult(envelope.userId, envelope.propertyId!, { kind, entityId: launch.entityId, sourceExecutionId: launch.sourceExecutionId ?? null });
   return savingsCommandResult(envelope.userId, envelope.propertyId!, { kind, entityId: launch.entityId, sourceExecutionId: launch.sourceExecutionId ?? null });
 });
 
@@ -198,6 +202,7 @@ async function confirmSavingsCommand(ctx: ConfirmCapabilityContext): Promise<Con
   const command = parameters.savingsCommand as { kind?: unknown; entityId?: unknown } | undefined;
   const kind = command?.kind as SavingsCommandKind | undefined;
   if (!kind || !(kind in SAVINGS_COMMAND_MESSAGES) || typeof command?.entityId !== 'string') throw stale('The change to make is invalid.');
+  if (isRecurringSetupKind(kind)) return confirmRecurringSetup(ctx, kind, command.entityId);
   const target = parseSavingsRowId(command.entityId);
   if (!target) throw stale('The change to make is invalid.');
   const propertyId = execution.propertyId;

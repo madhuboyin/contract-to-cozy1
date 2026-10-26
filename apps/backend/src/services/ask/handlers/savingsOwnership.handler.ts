@@ -23,6 +23,8 @@ import {
 } from '../support/savingsBenefitCommand';
 import { OWNERSHIP_COST_ACTION_IDS, OWNERSHIP_COST_COMMAND_MESSAGE } from '../support/ownershipCostConstants';
 import { collectionDescriptor } from '../support/collectionDescriptor';
+import { SAVINGS_COMMAND_ACTION_IDS as RECURRING_ACTION_IDS, SAVINGS_COMMAND_MESSAGES as RECURRING_MESSAGES } from '../support/savingsBenefitCommand';
+import { SAVINGS_RECURRING_ALL, SAVINGS_RECURRING_CATEGORIES, SAVINGS_RECURRING_CATEGORY_ENTITY_TYPE, formatPlanAmount, savingsRecurringRow, type SavingsRecurringCategory } from '../support/savingsRecurringSetup';
 
 const homeSavingsService = new HomeSavingsService();
 
@@ -129,6 +131,39 @@ export function savingsHeadlineMetrics(input: { potentialAnnualSavings: number; 
     ...(input.realizedCount > 0 ? [{ label: 'Realized', value: String(input.realizedCount), detail: input.realizedCount === 1 ? 'recorded outcome' : 'recorded outcomes', tone: 'DEFAULT' as const }] : []),
   ];
   return metrics.length >= 2 ? { type: 'METRIC_ROW', id: 'savings-headline', title: 'At a glance', metrics } : null;
+}
+
+/**
+ * The recurring costs the desktop tab sets up, always listed so the way to start is on the answer: each of the four with the saved plan or "Not set up", and a
+ * Set up or Update action for the home's primary owner; a Check action once any plan is saved. Utility focus lists electricity and gas only.
+ */
+export function savingsRecurringSetupBlock(
+  categories: ReadonlyArray<{ category: { key: string }; status: string; account?: any; topOpportunity?: any }>,
+  options: { utilityFocus: boolean; canChange: boolean },
+): AskPresentationBlock | null {
+  if (!options.canChange) return null;
+  const byKey = new Map(categories.map((entry) => [entry.category.key, entry]));
+  const keys = SAVINGS_RECURRING_CATEGORIES.filter((key) => !options.utilityFocus || key === 'ELECTRICITY_GAS');
+  const items = keys.map((key: SavingsRecurringCategory) => {
+    const { hasPlan, ...row } = savingsRecurringRow(key, byKey.get(key) ?? null, { money: formatPlanAmount, date: (value) => humanDate(new Date(value)) ?? null });
+    return {
+      ...row, entityType: SAVINGS_RECURRING_CATEGORY_ENTITY_TYPE,
+      actions: [{
+        id: RECURRING_ACTION_IDS.PLAN, label: hasPlan ? 'Update plan' : 'Set up plan', message: RECURRING_MESSAGES.PLAN, operationId: 'SAVINGS_BENEFIT_COMMAND' as const,
+        interactionType: 'MUTATE_RECORD' as const, style: hasPlan ? 'SECONDARY' as const : 'PRIMARY' as const, entityType: SAVINGS_RECURRING_CATEGORY_ENTITY_TYPE, entityId: key,
+      }],
+    };
+  });
+  const anyPlan = keys.some((key) => byKey.get(key)?.account);
+  return {
+    type: 'GROUPED_LIST', filters: [], id: 'savings-recurring-setup', title: 'Your recurring costs',
+    description: 'Add what you pay now and Ask compares it with benchmarks for your area. These are estimates, not quotes.',
+    sections: [{ id: 'recurring-setup', title: 'Costs to compare', count: items.length, items: items as any }],
+    actions: anyPlan ? [{
+      id: RECURRING_ACTION_IDS.CHECK, label: 'Check for savings', message: RECURRING_MESSAGES.CHECK, operationId: 'SAVINGS_BENEFIT_COMMAND' as const,
+      interactionType: 'START_WORKFLOW' as const, style: 'SECONDARY' as const, entityType: SAVINGS_RECURRING_CATEGORY_ENTITY_TYPE, entityId: SAVINGS_RECURRING_ALL,
+    }] : [],
+  };
 }
 
 /** Desktop's realized-value safeguards: totals per currency with the independently verified amount, and the overlapping-program caution. */
@@ -327,7 +362,7 @@ async function savingsOpportunitiesResult(userId: string, propertyId: string, me
       : homeSavings.potentialAnnualSavings > 0
       ? `This is the highest single net annual estimate, not a sum across categories. Ask also found ${reviewedBenefits.length} reviewed benefit or rebate match${reviewedBenefits.length === 1 ? '' : 'es'}, ${inProgress.length} item${inProgress.length === 1 ? '' : 's'} in progress, and ${realized.length} recorded realized outcome${realized.length === 1 ? '' : 's'}. Estimates are not provider quotes or eligibility guarantees.`
       : neverAnalyzed
-        ? 'No savings analysis has been run for this home yet, and running one is not currently available in Ask. Ask will not infer that no savings exist from an empty record.'
+        ? `${canChangeSavings ? 'No savings analysis has been run for this home yet. Set up a recurring cost below to start one.' : 'No savings analysis has been run for this home yet. The home’s primary owner can set one up.'} Ask will not infer that no savings exist from an empty record.`
         : hasAnyResult
           ? 'Estimates are planning signals. Realized value counts only after a saving or benefit is recorded as received.'
           : `${savingsEmptyCategoriesSentence(emptyCategories) ?? 'Nothing is recorded yet.'} That is not the same as zero savings.`,
@@ -335,6 +370,13 @@ async function savingsOpportunitiesResult(userId: string, propertyId: string, me
     actions: [],
   }];
 
+  const headline = hasAnyResult && !utilityFocus && !realizedFocus && !paybackFocus
+    ? savingsHeadlineMetrics({ potentialAnnualSavings: homeSavings.potentialAnnualSavings, availableCount, inProgressCount: scopedInProgress.length, realizedCount: scopedRealized.length })
+    : null;
+  if (headline) blocks.push(headline);
+  // The way to start sits on the answer itself, not only after something is recorded; paybackFocus and realizedFocus are about results, so they omit it.
+  const recurringSetup = !realizedFocus && !paybackFocus ? savingsRecurringSetupBlock(homeSavings.categories as any, { utilityFocus, canChange: canChangeSavings }) : null;
+  if (recurringSetup) blocks.push(recurringSetup);
   // A home that has never been analyzed keeps the explicit "not completed" state; an analyzed home lists what it has and names what is empty.
   if (hasAnyResult || !neverAnalyzed) {
     const sections = savingsLifecycleSections({
@@ -346,10 +388,6 @@ async function savingsOpportunitiesResult(userId: string, propertyId: string, me
     });
     const sourceTotal = recurringAll.length + scopedBenefitMatches.length + scopedInProgress.length + scopedRealized.length + scopedRelated.length;
     // The canonical totals are not utility-scoped, so the utility lens omits them rather than show an unrelated sum.
-    const headline = !utilityFocus && !realizedFocus && !paybackFocus
-      ? savingsHeadlineMetrics({ potentialAnnualSavings: homeSavings.potentialAnnualSavings, availableCount, inProgressCount: scopedInProgress.length, realizedCount: scopedRealized.length })
-      : null;
-    if (headline) blocks.push(headline);
     if (!utilityFocus && scopedRealized.length > 0) blocks.push(...savingsRealizedSafeguardBlocks(unified.totals));
     if (sections.length > 0) blocks.push({
       type: 'GROUPED_LIST', filters: [], id: 'savings-opportunity-groups', title: utilityFocus ? 'Utility savings' : 'By category',
