@@ -27,5 +27,5 @@ test('the utility result suppresses unrelated decision pointers and has an hones
   const source = fs.readFileSync(path.join(__dirname, '../../src/services/ask/handlers/savingsOwnership.handler.ts'), 'utf8');
   assert.match(source, /const scopedRelated = utilityFocus \? \[\] : unified\.relatedOpportunities/);
   assert.match(source, /No utility savings opportunity is currently recorded/);
-  assert.match(source, /title: utilityFocus \? 'Utility savings' : 'Savings and benefits'/);
+  assert.match(source, /title: utilityFocus \? 'Utility savings' : 'By category'/);
 });

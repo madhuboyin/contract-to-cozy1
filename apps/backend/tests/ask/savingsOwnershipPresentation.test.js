@@ -5,6 +5,9 @@ require('ts-node/register/transpile-only');
 
 const {
   savingsLifecycleSections,
+  savingsEmptyCategories,
+  savingsEmptyCategoriesSentence,
+  savingsHeadlineMetrics,
   savingsRealizedSafeguardBlocks,
   savingsRelatedItems,
 } = require('../../src/services/ask/handlers/savingsOwnership.handler.ts');
@@ -20,15 +23,36 @@ test('more than eight records stay reachable behind Show more with a matching co
   assert.equal(recurring.items.length, 12);
   assert.equal(recurring.count, 12);
   assert.equal(recurring.initialVisibleCount, 8);
-  assert.equal(sections.find((section) => section.id === 'benefits').initialVisibleCount, undefined);
+  assert.equal(sections.find((section) => section.id === 'benefits'), undefined, 'an empty category is not a section');
+  const small = savingsLifecycleSections({ recurring: { items: rows(3, 'r'), count: 3 }, benefits: empty, inProgress: empty, realized: empty, related: empty });
+  assert.equal(small[0].initialVisibleCount, undefined, 'three records need no Show more');
 });
 
-test('an analyzed home keeps all four lifecycle categories with empty states and shows related only when present', () => {
+test('only categories with records are listed; the empty ones are named in one sentence', () => {
   const related = savingsRelatedItems([{ domain: 'COVERAGE', summary: '2 coverage gaps' }]);
   const sections = savingsLifecycleSections({ recurring: empty, benefits: empty, inProgress: empty, realized: empty, related: { items: related, count: 1 } });
-  assert.deepEqual(sections.map((section) => section.id), ['recurring', 'benefits', 'in-progress', 'realized', 'related']);
-  for (const section of sections.slice(0, 4)) assert.ok(section.caption, `${section.id} explains why it is empty`);
-  assert.equal(savingsLifecycleSections({ recurring: empty, benefits: empty, inProgress: empty, realized: empty, related: empty }).length, 4);
+  assert.deepEqual(sections.map((section) => section.id), ['related']);
+  for (const section of sections) assert.equal(section.caption, undefined, 'no per-section empty caption');
+  assert.deepEqual(savingsLifecycleSections({ recurring: empty, benefits: empty, inProgress: empty, realized: empty, related: empty }), []);
+  const some = savingsLifecycleSections({ recurring: { items: rows(2, 'r'), count: 2 }, benefits: empty, inProgress: empty, realized: { items: rows(1, 'x'), count: 1 }, related: empty });
+  assert.deepEqual(some.map((section) => section.id), ['recurring', 'realized']);
+  assert.deepEqual(savingsEmptyCategories({ recurring: 2, benefits: 0, inProgress: 0, realized: 1 }), ['benefits and rebates', 'work in progress']);
+  assert.equal(savingsEmptyCategoriesSentence(['benefits and rebates', 'work in progress']), 'Nothing is recorded yet for benefits and rebates or work in progress.');
+  assert.equal(savingsEmptyCategoriesSentence(['realized savings']), 'Nothing is recorded yet for realized savings.');
+  assert.equal(savingsEmptyCategoriesSentence(savingsEmptyCategories({ recurring: 1, benefits: 1, inProgress: 1, realized: 1 })), null);
+  assert.match(savingsEmptyCategoriesSentence(savingsEmptyCategories({ recurring: 0, benefits: 0, inProgress: 0, realized: 0 })), /recurring-cost opportunities, benefits and rebates, work in progress or realized savings\.$/);
+});
+
+test('the headline tiles carry only what has data, and fewer than two is not a row', () => {
+  const full = savingsHeadlineMetrics({ potentialAnnualSavings: 312, availableCount: 3, inProgressCount: 1, realizedCount: 2 });
+  assert.equal(full.type, 'METRIC_ROW');
+  assert.deepEqual(full.metrics.map((metric) => metric.label), ['Best recurring estimate', 'Ready to review', 'In progress', 'Realized']);
+  assert.equal(full.metrics[0].value, '$312/year');
+  assert.equal(full.metrics[0].tone, 'POSITIVE');
+  assert.deepEqual(savingsHeadlineMetrics({ potentialAnnualSavings: 0, availableCount: 0, inProgressCount: 2, realizedCount: 0 }), null);
+  assert.deepEqual(savingsHeadlineMetrics({ potentialAnnualSavings: 0, availableCount: 0, inProgressCount: 0, realizedCount: 0 }), null);
+  assert.deepEqual(savingsHeadlineMetrics({ potentialAnnualSavings: 0, availableCount: 1, inProgressCount: 1, realizedCount: 0 }).metrics.map((metric) => metric.label), ['Ready to review', 'In progress']);
+  assert.ok(AskPresentationBlockSchema.safeParse(full).success);
 });
 
 test('each related decision carries its own action', () => {
@@ -73,13 +97,16 @@ test('related-row actions survive the answer-trust validator', () => {
   assert.ok(validated.blocks.some((block) => block.type === 'METRIC_ROW'), 'the totals block is allowed for this operation');
 });
 
-test('empty lifecycle sections survive the answer-trust validator', () => {
-  const sections = savingsLifecycleSections({ recurring: empty, benefits: empty, inProgress: empty, realized: empty, related: empty });
+test('an answer with the headline row, a populated list and the related actions survives the answer-trust validator', () => {
+  const related = savingsRelatedItems([{ domain: 'COVERAGE', summary: 'b' }]);
+  const sections = savingsLifecycleSections({ recurring: { items: rows(2, 'r'), count: 2 }, benefits: empty, inProgress: empty, realized: empty, related: { items: related, count: 1 } });
   const result = { status: 'ANSWERED', blocks: [
     { type: 'SUMMARY', id: 'savings-summary', title: 'Here is the current savings picture for this home', body: 'Estimates are planning signals.', tone: 'DEFAULT', actions: [] },
-    { type: 'GROUPED_LIST', id: 'savings-opportunity-groups', title: 'Savings and benefits', filters: [], sections, actions: [] },
+    savingsHeadlineMetrics({ potentialAnnualSavings: 100, availableCount: 2, inProgressCount: 0, realizedCount: 0 }),
+    { type: 'GROUPED_LIST', id: 'savings-opportunity-groups', title: 'By category', description: savingsEmptyCategoriesSentence(['benefits and rebates']), filters: [], sections, actions: [] },
   ], suggestions: [],
   parameters: { answerTrustEvidence: { schemaVersion: '1.0', sources: [{ sourceId: 'savings.opportunities', operationId: 'SAVINGS_OPPORTUNITIES', status: 'COMPLETE', scope: 'FULL', freshness: 'CURRENT', observedAt: '2026-10-26T00:00:00.000Z' }] } } };
   const { result: validated } = validateAskAnswerTrust({ question: 'Where could I save money on this home?', operationId: 'SAVINGS_OPPORTUNITIES', result, propertyId: 'p1' });
+  assert.ok(validated.blocks.some((block) => block.id === 'savings-headline'));
   assert.ok(validated.blocks.some((block) => block.id === 'savings-opportunity-groups'));
 });

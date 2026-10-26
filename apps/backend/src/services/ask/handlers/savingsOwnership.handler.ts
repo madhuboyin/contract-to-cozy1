@@ -85,27 +85,50 @@ export function savingsRelatedItems(related: readonly SavingsRelatedPointer[]) {
 type SavingsSectionInput = { items: readonly unknown[]; count: number };
 
 /**
- * The four desktop lifecycle categories stay visible once a home has been analyzed, each with a short empty state, so a
- * missing category is never mistaken for a hidden one. Related decisions are a pointer strip, shown only when present.
+ * Only the categories that have records are listed: an empty category is a line of text, not a card, so the answer is the savings picture and not four empty
+ * lists. `savingsEmptyCategories` names what has nothing recorded. Related decisions are a pointer strip, shown only when present.
  */
 export function savingsLifecycleSections(input: {
   recurring: SavingsSectionInput; benefits: SavingsSectionInput; inProgress: SavingsSectionInput; realized: SavingsSectionInput; related: SavingsSectionInput;
 }): SavingsListSection[] {
-  const section = (id: string, title: string, emptyCaption: string, source: SavingsSectionInput): SavingsListSection => {
+  const section = (id: string, title: string, source: SavingsSectionInput): SavingsListSection => {
     const items = source.items.slice(0, SAVINGS_SECTION_ROW_LIMIT) as SavingsListSection['items'];
     return {
       id, title, count: source.count, items,
-      ...(items.length === 0 ? { caption: emptyCaption } : {}),
       ...(items.length > SAVINGS_INITIAL_VISIBLE ? { initialVisibleCount: SAVINGS_INITIAL_VISIBLE } : {}),
     };
   };
   return [
-    section('recurring', 'Recurring-cost opportunities', 'No recurring-cost saving is recorded for this home.', input.recurring),
-    section('benefits', 'Benefits and rebates to review', 'No benefit or rebate match is recorded for this home.', input.benefits),
-    section('in-progress', 'Already in progress', 'Nothing is in progress. Opportunities you start appear here.', input.inProgress),
-    section('realized', 'Recorded realized savings', 'Nothing realized yet. Estimates are not counted as realized value.', input.realized),
-    ...(input.related.count > 0 ? [section('related', 'Related savings decisions', '', input.related)] : []),
+    section('recurring', 'Recurring-cost opportunities', input.recurring),
+    section('benefits', 'Benefits and rebates to review', input.benefits),
+    section('in-progress', 'Already in progress', input.inProgress),
+    section('realized', 'Recorded realized savings', input.realized),
+    section('related', 'Related savings decisions', input.related),
+  ].filter((entry) => entry.count > 0);
+}
+
+/** The desktop's four lifecycle categories that have nothing recorded, in desktop order, so a missing one is named rather than hidden. */
+export function savingsEmptyCategories(input: { recurring: number; benefits: number; inProgress: number; realized: number }): string[] {
+  return [
+    ...(input.recurring === 0 ? ['recurring-cost opportunities'] : []),
+    ...(input.benefits === 0 ? ['benefits and rebates'] : []),
+    ...(input.inProgress === 0 ? ['work in progress'] : []),
+    ...(input.realized === 0 ? ['realized savings'] : []),
   ];
+}
+export const savingsEmptyCategoriesSentence = (empty: readonly string[]) => (empty.length
+  ? `Nothing is recorded yet for ${empty.length === 1 ? empty[0] : `${empty.slice(0, -1).join(', ')} or ${empty[empty.length - 1]}`}.`
+  : null);
+
+/** The numbers the answer is about, as tiles above the detail. Only tiles with data are shown, and fewer than two is not a row. */
+export function savingsHeadlineMetrics(input: { potentialAnnualSavings: number; availableCount: number; inProgressCount: number; realizedCount: number }): AskPresentationBlock | null {
+  const metrics = [
+    ...(input.potentialAnnualSavings > 0 ? [{ label: 'Best recurring estimate', value: `${money(input.potentialAnnualSavings)}/year`, detail: 'The highest single net estimate, not a sum', tone: 'POSITIVE' as const }] : []),
+    ...(input.availableCount > 0 ? [{ label: 'Ready to review', value: String(input.availableCount), detail: input.availableCount === 1 ? 'opportunity or benefit' : 'opportunities and benefits', tone: 'DEFAULT' as const }] : []),
+    ...(input.inProgressCount > 0 ? [{ label: 'In progress', value: String(input.inProgressCount), detail: 'actions you started', tone: 'DEFAULT' as const }] : []),
+    ...(input.realizedCount > 0 ? [{ label: 'Realized', value: String(input.realizedCount), detail: input.realizedCount === 1 ? 'recorded outcome' : 'recorded outcomes', tone: 'DEFAULT' as const }] : []),
+  ];
+  return metrics.length >= 2 ? { type: 'METRIC_ROW', id: 'savings-headline', title: 'At a glance', metrics } : null;
 }
 
 /** Desktop's realized-value safeguards: totals per currency with the independently verified amount, and the overlapping-program caution. */
@@ -263,6 +286,7 @@ async function savingsOpportunitiesResult(userId: string, propertyId: string, me
   const availableCount = recurringAll.length + scopedBenefitMatches.length;
   const hasAnyResult = availableCount + scopedInProgress.length + scopedRealized.length + related.length > 0;
   const neverAnalyzed = !homeSavings.propertyContextVersion && benefits.summary.lastScanAt === null;
+  const emptyCategories = savingsEmptyCategories({ recurring: recurringAll.length, benefits: scopedBenefitMatches.length, inProgress: scopedInProgress.length, realized: scopedRealized.length });
   const realizedTotal = unified.totals.realizedValueTotal;
   const realizedCurrency = unified.totals.realizedValueCurrency;
   const blocks: AskPresentationBlock[] = [{
@@ -304,12 +328,14 @@ async function savingsOpportunitiesResult(userId: string, propertyId: string, me
       ? `This is the highest single net annual estimate, not a sum across categories. Ask also found ${reviewedBenefits.length} reviewed benefit or rebate match${reviewedBenefits.length === 1 ? '' : 'es'}, ${inProgress.length} item${inProgress.length === 1 ? '' : 's'} in progress, and ${realized.length} recorded realized outcome${realized.length === 1 ? '' : 's'}. Estimates are not provider quotes or eligibility guarantees.`
       : neverAnalyzed
         ? 'No savings analysis has been run for this home yet, and running one is not currently available in Ask. Ask will not infer that no savings exist from an empty record.'
-        : 'The sections below separate available estimates, actions already in progress, verified or homeowner-recorded outcomes, and opportunities owned by other domain tools.',
+        : hasAnyResult
+          ? 'Estimates are planning signals. Realized value counts only after a saving or benefit is recorded as received.'
+          : `${savingsEmptyCategoriesSentence(emptyCategories) ?? 'Nothing is recorded yet.'} That is not the same as zero savings.`,
     tone: (utilityFocus ? availableCount > 0 : homeSavings.potentialAnnualSavings > 0 || availableCount > 0) ? 'POSITIVE' : 'DEFAULT',
     actions: [],
   }];
 
-  // A home that has never been analyzed keeps the explicit "not completed" state; an analyzed home always shows its categories.
+  // A home that has never been analyzed keeps the explicit "not completed" state; an analyzed home lists what it has and names what is empty.
   if (hasAnyResult || !neverAnalyzed) {
     const sections = savingsLifecycleSections({
       recurring: { items: recurring, count: recurringAll.length },
@@ -320,12 +346,16 @@ async function savingsOpportunitiesResult(userId: string, propertyId: string, me
     });
     const sourceTotal = recurringAll.length + scopedBenefitMatches.length + scopedInProgress.length + scopedRealized.length + scopedRelated.length;
     // The canonical totals are not utility-scoped, so the utility lens omits them rather than show an unrelated sum.
+    const headline = !utilityFocus && !realizedFocus && !paybackFocus
+      ? savingsHeadlineMetrics({ potentialAnnualSavings: homeSavings.potentialAnnualSavings, availableCount, inProgressCount: scopedInProgress.length, realizedCount: scopedRealized.length })
+      : null;
+    if (headline) blocks.push(headline);
     if (!utilityFocus && scopedRealized.length > 0) blocks.push(...savingsRealizedSafeguardBlocks(unified.totals));
-    blocks.push({
-      type: 'GROUPED_LIST', filters: [], id: 'savings-opportunity-groups', title: utilityFocus ? 'Utility savings' : 'Savings and benefits',
+    if (sections.length > 0) blocks.push({
+      type: 'GROUPED_LIST', filters: [], id: 'savings-opportunity-groups', title: utilityFocus ? 'Utility savings' : 'By category',
       description: utilityFocus
         ? 'Only utility-related estimates and outcomes are shown. Available estimates are planning signals, not provider quotes.'
-        : 'Available estimates are planning signals. Realized value appears only after a saving or benefit is recorded as received.',
+        : savingsEmptyCategoriesSentence(emptyCategories),
       sections,
       collection: collectionDescriptor({ sourceTotal, fetchedCount: sourceTotal, sections, nextPageAvailable: false }),
       actions: [],
