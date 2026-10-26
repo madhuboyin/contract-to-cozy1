@@ -9,7 +9,7 @@
     },
     "src/services/ask/conversationalUnderstanding/conversationalCapture.ts": {
       "category": "CONVERSATIONAL_CAPTURE",
-      "sites": 2,
+      "sites": 3,
       "finalizer": "PENDING_INTERACTION",
       "note": "child capture executions are created NEEDS_CONFIRMATION with suggestions: []"
     },
@@ -81,7 +81,7 @@
     },
     "src/services/ask/handlers/recordConfirm.handler.ts": {
       "category": "CONFIRM_HANDLER",
-      "sites": 5,
+      "sites": 4,
       "finalizer": "PENDING_INTERACTION",
       "note": "confirmation edit writes"
     },

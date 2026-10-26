@@ -38,8 +38,12 @@ const overview = {
     inventory: { status: 'AVAILABLE', data: { count: 0 } },
     documents: { status: 'AVAILABLE', data: { count: 0, latest: null } },
     household: { status: 'AVAILABLE', data: { count: 1 } },
+    warranties: { status: 'AVAILABLE', data: { totalCount: 0, activeCount: 0, items: [] } },
   },
-  tools: { statusBoard: { status: 'AVAILABLE', data: { updatedAt: null } } },
+  tools: {
+    statusBoard: { status: 'AVAILABLE', data: { updatedAt: null } },
+    homeTimeline: { status: 'AVAILABLE', data: { confirmedCount: 0, recent: [] } },
+  },
 };
 
 async function run(message, role) {

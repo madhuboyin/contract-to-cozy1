@@ -6,7 +6,6 @@ require('ts-node/register');
 const { ASK_CAPABILITY_UNIQUE_OPERATION } = require('../../src/services/intelligence/capabilitySkillGuidanceBridge.registry.ts');
 
 test('a capabilityId mapped to exactly one operation resolves to that operation', () => {
-  assert.equal(ASK_CAPABILITY_UNIQUE_OPERATION['coverage-intelligence'], 'COVERAGE_GAPS');
   assert.equal(ASK_CAPABILITY_UNIQUE_OPERATION['savings-benefits'], 'SAVINGS_OPPORTUNITIES');
   assert.equal(ASK_CAPABILITY_UNIQUE_OPERATION['home-records'], 'INVENTORY_LOOKUP');
 });
@@ -16,6 +15,8 @@ test('a capabilityId shared by multiple operations is excluded rather than guess
   // HOME_DEADLINE_MONITOR — a launch context naming it doesn't tell us
   // which, so it must never bias routing.
   assert.equal(ASK_CAPABILITY_UNIQUE_OPERATION['maintenance'], undefined);
+  // 'coverage-intelligence' fronts COVERAGE_GAPS, COVERAGE_REVIEW_STATUS and COVERAGE_COMPARISON_STATUS.
+  assert.equal(ASK_CAPABILITY_UNIQUE_OPERATION['coverage-intelligence'], undefined);
   // 'mortgage-refinance-radar' fronts both REFINANCE_ANALYSIS and
   // REFINANCE_RATE_MONITOR.
   assert.equal(ASK_CAPABILITY_UNIQUE_OPERATION['mortgage-refinance-radar'], undefined);

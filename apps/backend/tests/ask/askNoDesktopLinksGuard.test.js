@@ -21,6 +21,9 @@ const ASK_ROOT = path.join(__dirname, '..', '..', 'src', 'services', 'ask');
 const EXEMPT = new Set([
   'askAnswerTrustPolicy.ts', // defines the rule and its tests of paths
   'askInteractionCoverageMatrix.ts', // documentation strings only
+  'askRouteRetirementRegistry.ts', // the registry of retired desktop routes: naming them is its whole job
+  'askNotificationContinuationRegistry.ts', // names the one same-site fallback prefix and the account link, both marked legacy and filtered by answer trust
+  'askGuidanceStepProofMatrix.ts', // internal metadata ("desktopReporter") describing which code reports a step, never shown as copy
 ]);
 
 // A desktop path: /dashboard... other than /dashboard/ask, or the public closeout recipient page.

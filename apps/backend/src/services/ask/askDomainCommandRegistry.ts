@@ -108,6 +108,8 @@ export const ASK_DOMAIN_COMMAND_IDS = [
   'PROJECT_TRACKER_COMMAND',
   'HOME_HABITS_GENERATE',
   'DO_NOTHING_SIMULATION_RUN',
+  // Home Continuity Plan authoring (create, details, publish, entry/contact/section CRUD): every write is confirmation-gated.
+  'HOME_DIGITAL_WILL_CREATE',
   'SERVICE_PRICE_CHECK_RUN',
   'INVENTORY_ITEM_CREATE',
   'PROPERTY_CONTEXT_AREA_CAPTURE',
@@ -294,6 +296,7 @@ export const ASK_DOMAIN_COMMAND_REGISTRY: Readonly<Record<AskDomainCommandId, As
   HOME_HABITS_GENERATE: command('HOME_HABITS_GENERATE', 'HOME_HABITS_GENERATE', 'home-habits.generate', 'CONTRIBUTOR', 'HOME_HABIT', ['STOP'], { title: 'Habits not suggested', body: 'No habit was suggested.', suggestion: 'Show my home habits' }),
   DO_NOTHING_SIMULATION_RUN: command('DO_NOTHING_SIMULATION_RUN', 'DO_NOTHING_SIMULATION_RUN', 'do-nothing-simulator.run', 'CONTRIBUTOR', 'DO_NOTHING_SIMULATION_RUN', ['EDIT', 'STOP'], { title: 'Simulation not run', body: 'No simulation was run.', suggestion: 'Show my do-nothing simulation' }),
   SERVICE_PRICE_CHECK_RUN: command('SERVICE_PRICE_CHECK_RUN', 'SERVICE_PRICE_CHECK_RUN', 'service-price-radar.check', 'CONTRIBUTOR', 'SERVICE_RADAR_CHECK', ['EDIT', 'STOP'], { title: 'Quote not checked', body: 'No quote was checked.', suggestion: 'Show my service price radar' }),
+  HOME_DIGITAL_WILL_CREATE: command('HOME_DIGITAL_WILL_CREATE', 'HOME_DIGITAL_WILL_CREATE', 'home-digital-will.create', 'CONTRIBUTOR', 'HOME_DIGITAL_WILL', ['STOP'], { title: 'Plan not changed', body: 'The Home Continuity Plan was not changed.', suggestion: 'Show my home continuity plan' }),
   MATERIAL_SPEC_UPDATE: command('MATERIAL_SPEC_UPDATE', 'MATERIAL_SPEC_UPDATE', 'material-spec.update', 'CONTRIBUTOR', 'MATERIAL_SPEC', ['EDIT', 'STOP'], { title: 'Material not changed', body: 'The material was not changed.', suggestion: 'Show my material specs' }),
   HOME_PLANT_ADD: command('HOME_PLANT_ADD', 'HOME_PLANT_ADD', 'home-plant.add', 'CONTRIBUTOR', 'HOME_PLANT', ['EDIT', 'STOP'], { title: 'Plant not added', body: 'No plant was added.', suggestion: 'Show my plant care outlook' }),
   ROOM_PLANT_RECOMMENDATIONS: command('ROOM_PLANT_RECOMMENDATIONS', 'ROOM_PLANT_RECOMMENDATIONS', 'plant-advisor.room-recommendations', 'CONTRIBUTOR', 'ROOM_PLANT_RECOMMENDATION_SET', ['EDIT', 'STOP'], { title: 'Plant recommendations not changed', body: 'No room profile, recommendation status, or home plant was changed.', suggestion: 'Find plants that fit a room' }),

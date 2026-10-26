@@ -119,7 +119,10 @@ test('every coverage check step opens this command carrying the step; other cove
     const mode = askGuidanceStepMode('coverage-intelligence', key);
     assert.deepEqual({ m: mode.mode, o: mode.inAsk.operationId, c: mode.inAsk.carriesStep }, { m: 'IN_ASK', o: OP, c: 'ENTITY' }, key);
   }
-  assert.equal(askGuidanceStepMode('coverage-intelligence', 'review_current_policy_context').mode, 'NAVIGATE');
+  // The term-review steps are in Ask too, but they open their own command, not this one.
+  const review = askGuidanceStepMode('coverage-intelligence', 'review_current_policy_context');
+  assert.deepEqual({ m: review.mode, o: review.inAsk.operationId }, { m: 'IN_ASK', o: 'COVERAGE_TERM_REVIEW' });
+  assert.notEqual(review.inAsk.operationId, OP);
 });
 
 test('Ask: the proposal derives the scope from the journey, shows what will run, and writes nothing; only the declared action starts it', async () => {

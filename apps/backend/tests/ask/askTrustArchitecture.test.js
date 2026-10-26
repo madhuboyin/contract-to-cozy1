@@ -709,21 +709,22 @@ test('a non-answer result keeps its explanation block even when the operation do
 });
 
 test('the Skill presentation guard preserves non-answer explanations after trust validation', () => {
+  // An operation whose answer allowlist excludes SUMMARY (HOME_CHANGE_SUMMARY now allows it).
   const clarification = {
     status: 'NEEDS_CLARIFICATION', reasonCode: 'ASK_SEMANTIC_ANSWER_UNCERTAIN',
     blocks: [{ type: 'SUMMARY', id: 'answer-clarification', title: 'One detail is needed', body: 'Which recent home change should I review?', tone: 'DEFAULT', actions: [] }],
     suggestions: [],
   };
 
-  assert.doesNotThrow(() => assertSkillResultBlocksAllowed('HOME_CHANGE_SUMMARY', clarification));
+  assert.doesNotThrow(() => assertSkillResultBlocksAllowed('HVAC_DECISION_OUTCOME_VIEW', clarification));
 
   const answered = { ...clarification, status: 'ANSWERED' };
   assert.throws(
-    () => assertSkillResultBlocksAllowed('HOME_CHANGE_SUMMARY', answered),
+    () => assertSkillResultBlocksAllowed('HVAC_DECISION_OUTCOME_VIEW', answered),
     /undeclared block type SUMMARY/,
   );
   try {
-    assertSkillResultBlocksAllowed('HOME_CHANGE_SUMMARY', answered);
+    assertSkillResultBlocksAllowed('HVAC_DECISION_OUTCOME_VIEW', answered);
   } catch (error) {
     assert.equal(askFailureStatus(error), 'FAILED_TERMINAL');
   }

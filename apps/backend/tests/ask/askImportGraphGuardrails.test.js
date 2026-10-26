@@ -110,7 +110,10 @@ test('askHandlerSupport.ts only re-exports support modules, and no support modul
   // validation) is imported directly by its handler: re-exporting dozens of them would only create name collisions. Such a module must still be
   // used: some file other than the facade, or another support module, imports it.
   const importers = new Map(present.map((name) => [name, 0]));
-  for (const [file, targets] of graph) {
+  // Importers are searched across every Ask file, not just the decomposed layers: a support module may serve the root *.service.ts files
+  // and governance/ (providerTimeout does), which the cycle graph above deliberately leaves out.
+  const wholeAskGraph = new Map(tsFiles(ASK_DIR).map((file) => [file, importsOf(file)]));
+  for (const [file, targets] of wholeAskGraph) {
     if (file.endsWith('askHandlerSupport.ts')) continue;
     for (const target of targets) {
       const name = rel(target).startsWith('support/') ? rel(target).slice('support/'.length, -3) : null;

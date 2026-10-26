@@ -18,6 +18,9 @@ const BACKEND = path.resolve(__dirname, '..');
 const SCAN_ROOT = path.join(BACKEND, 'src/services/ask');
 const BASELINE = path.resolve(BACKEND, '../../docs/architecture/ask-raw-suggestion-producers.json');
 
+// The mutation-impact registry's `suggestions` is a ledger-refresh policy ('REFRESH_VISIBLE' | 'NONE'), not follow-up chip text.
+const NOT_CHIP_TEXT = new Set(['src/services/ask/governance/askMutationImpactRegistry.ts']);
+
 const rel = (file) => path.relative(BACKEND, file).split(path.sep).join('/');
 
 function walk(dir, out = []) {
@@ -60,6 +63,7 @@ function countRawProducers(fileName, text) {
 function scan() {
   const files = {};
   for (const abs of walk(SCAN_ROOT)) {
+    if (NOT_CHIP_TEXT.has(rel(abs))) continue;
     const count = countRawProducers(abs, fs.readFileSync(abs, 'utf8'));
     if (count > 0) files[rel(abs)] = count;
   }

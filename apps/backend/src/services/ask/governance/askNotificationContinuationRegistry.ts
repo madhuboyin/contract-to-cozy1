@@ -83,6 +83,14 @@ export const ASK_NOTIFICATION_CONTINUATION_RULES: readonly ContinuationRule[] = 
     },
   },
   {
+    id: 'guidance-journey', kind: 'WORK',
+    match: (n) => entityIs(n, 'GUIDANCE_JOURNEY'),
+    resolve: async (n) => {
+      const journey = n.entityId ? await prisma.guidanceJourney.findFirst({ where: { id: n.entityId }, select: { id: true, propertyId: true } }) : null;
+      return journey ? { state: 'FOUND', destination: { kind: 'WORK', workKey: `journey:${journey.id}` }, propertyId: journey.propertyId } : { state: 'MISSING', propertyId: meta(n, 'propertyId') };
+    },
+  },
+  {
     id: 'incident', kind: 'WORK',
     match: (n) => entityIs(n, 'INCIDENT'),
     resolve: async (n) => {
@@ -197,6 +205,7 @@ export const ASK_NOTIFICATION_KNOWN_TYPES: Readonly<Record<string, string>> = Ob
   CLAIM_SUBMITTED: 'claim',
   CLAIM_CLOSED: 'claim',
   FOLLOW_UP_DUE: 'claim',
+  GUIDANCE_STEP_REOPENED: 'guidance-journey',
 });
 
 export function validateAskNotificationContinuationRegistry(rules: readonly ContinuationRule[] = ASK_NOTIFICATION_CONTINUATION_RULES): string[] {
