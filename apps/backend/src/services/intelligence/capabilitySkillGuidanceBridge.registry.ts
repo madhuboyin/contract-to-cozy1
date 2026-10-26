@@ -24,7 +24,7 @@ const OPERATIONS_BY_CAPABILITY: Record<string, readonly AskOperationId[]> = {
   'seasonal-maintenance': ['SEASONAL_HOME_CARE', 'SEASONAL_CHECKLIST_SETUP'],
   // The Home Briefing reads the same canonical property-change store as HOME_CHANGE_SUMMARY (reconcileCanonicalPropertyChanges / propertyChange).
   'home-briefing': ['HOME_CHANGE_SUMMARY'],
-  'coverage-intelligence': ['COVERAGE_GAPS'],
+  'coverage-intelligence': ['COVERAGE_GAPS', 'COVERAGE_REVIEW_STATUS', 'COVERAGE_COMPARISON_STATUS'],
   'savings-benefits': ['SAVINGS_OPPORTUNITIES'],
   'ownership-costs': ['OWNERSHIP_COSTS'],
   'home-records': ['INVENTORY_LOOKUP'],

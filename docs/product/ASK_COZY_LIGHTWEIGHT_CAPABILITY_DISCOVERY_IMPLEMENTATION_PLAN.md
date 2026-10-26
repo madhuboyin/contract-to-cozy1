@@ -6,6 +6,8 @@
 **Supporting requirement:** `CAPABILITY_DISCOVERY_AND_RECOMMENDATION_PLATFORM_FRD.md` v1.2
 **Related but separate system:** `ASK_COZY_SUGGESTED_NEXT_ACTIONS_IMPLEMENTATION_PLAN.md`
 
+**Coverage discoverability extension, October 26, 2026:** More ideas now exposes three Ask-native Coverage Intelligence reads: missing protection, policy-review questions, and coverage comparison. All three continue inside Ask through `COVERAGE_GAPS`, `COVERAGE_REVIEW_STATUS`, or `COVERAGE_COMPARISON_STATUS`; none navigates to the Desktop Coverage & Premium Review page.
+
 ## 1. Objective
 
 Make important Ask Cozy capabilities discoverable before the homeowner knows what to type and

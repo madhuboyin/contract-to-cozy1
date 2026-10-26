@@ -83,6 +83,22 @@ test('More ideas explicitly advertises the Home Continuity Plan and Material Spe
   assert.ok(entries[1].aliases.includes('material specs'));
 });
 
+test('More ideas exposes the complete Coverage Intelligence read path inside Ask', () => {
+  const entries = ['protect-coverage', 'protect-coverage-review', 'protect-coverage-compare'].map((id) => explorerEntryById(id));
+  assert.deepEqual(entries.map((entry) => [entry.capabilityId, entry.operationId, entry.groupId, entry.label]), [
+    ['coverage-intelligence', 'COVERAGE_GAPS', 'DECIDE', 'Which items are missing coverage?'],
+    ['coverage-intelligence', 'COVERAGE_REVIEW_STATUS', 'DECIDE', 'Review my policy questions'],
+    ['coverage-intelligence', 'COVERAGE_COMPARISON_STATUS', 'DECIDE', 'Compare my coverage choices'],
+  ]);
+  assert.deepEqual(entries.map((entry) => entry.question), [
+    'Which items are missing coverage?',
+    'What questions should I ask my insurer?',
+    'Compare my current insurance policy against alternatives',
+  ]);
+  assert.ok(entries.every((entry) => entry.kind === 'READ' && entry.launch === 'MESSAGE'));
+  assert.ok(entries.every((entry) => !('href' in entry)), 'coverage discovery stays inside Ask');
+});
+
 test('More ideas advertises the broad reviewed tool shelf from canonical card reads without importing ownership disagreements', () => {
   assert.equal(ASK_ADVERTISED_CARD_READ_CAPABILITY_IDS.length, 30);
   for (const capabilityId of ASK_ADVERTISED_CARD_READ_CAPABILITY_IDS) {
