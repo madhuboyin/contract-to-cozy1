@@ -120,6 +120,23 @@ export function readinessServiceInput(kind: ReadinessItemFormKind, form: Readine
   return { status: 'OPEN' as const, satisfactionNotes: String(form.notes) };
 }
 
+/**
+ * Why a record is missing from the attach picker. The picker offers only records no case holds, so a record that is not listed is either already on this case
+ * (it shows in the case's approvals) or on another case; one record belongs to one case at a time. Null when nothing was left out.
+ */
+export function attachExclusionNote(excluded: { thisCase: number; otherCases: number; otherCaseNames: readonly string[] }): string | null {
+  const total = excluded.thisCase + excluded.otherCases;
+  if (total === 0) return null;
+  const records = (count: number) => `${count} ${count === 1 ? 'record' : 'records'}`;
+  const names = [...new Set(excluded.otherCaseNames)];
+  const named = names.length ? ` (${names.slice(0, 3).join(', ')}${names.length > 3 ? `, and ${names.length - 3} more` : ''})` : '';
+  const here = `already attached to this case`;
+  const elsewhere = `attached to ${names.length > 1 || excluded.otherCases > 1 ? 'other cases' : 'another case'}${named}`;
+  if (excluded.thisCase > 0 && excluded.otherCases > 0) return `${records(total)} ${total === 1 ? 'is' : 'are'} not listed: ${excluded.thisCase} ${here} and ${excluded.otherCases} ${elsewhere}. A record belongs to one case at a time.`;
+  if (excluded.thisCase > 0) return `${records(excluded.thisCase)} ${excluded.thisCase === 1 ? 'is' : 'are'} not listed because ${excluded.thisCase === 1 ? 'it is' : 'they are'} ${here}.`;
+  return `${records(excluded.otherCases)} ${excluded.otherCases === 1 ? 'is' : 'are'} not listed because ${excluded.otherCases === 1 ? 'it is' : 'they are'} ${elsewhere}. A record belongs to one case at a time.`;
+}
+
 /** The route's input for attaching a compliance record, from the validated choice ("PERMIT:<id>" or "HOA_APPROVAL:<id>"). */
 export function attachRecordServiceInput(form: ReadinessFormValues): { subjectType: 'PERMIT' | 'HOA_APPROVAL'; subjectId: string } {
   const [subjectType, ...rest] = String(form.record).split(':');

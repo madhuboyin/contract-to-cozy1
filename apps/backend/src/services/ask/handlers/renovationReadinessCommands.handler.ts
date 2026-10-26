@@ -20,7 +20,7 @@ import { createRetroactiveRenovationCase, detectRetroactiveCandidates } from '..
 import { authorityWriteResult, confirmAuthorityWrite, isAuthorityWriteKind } from './renovationAuthorityWrites.handler';
 import { evaluateReadiness, governOverride, handoffToProject, loadHandoffPrefill, updateReadinessItem } from '../../renovationReadiness.service';
 import {
-  HANDOFF_FUNDING_LABELS, HANDOFF_PROJECT_TYPES, attachRecordServiceInput, READINESS_COMMAND_MESSAGES, READINESS_FORM_CAPTURE_KEYS, handoffServiceInput, readinessCommandEntityType,
+  HANDOFF_FUNDING_LABELS, HANDOFF_PROJECT_TYPES, attachExclusionNote, attachRecordServiceInput, READINESS_COMMAND_MESSAGES, READINESS_FORM_CAPTURE_KEYS, handoffServiceInput, readinessCommandEntityType,
   readinessCommandKindFromMessage, readinessKindNeedsOwner, readinessServiceInput, parseReadinessFormAnswer, type ReadinessCommandKind, type ReadinessFormKind,
   type ReadinessFormValues, type ReadinessItemFormKind,
 } from '../support/renovationReadinessCommand';
@@ -64,21 +64,28 @@ const ATTACH_OFFER_LIMIT = 25;
  * The permits and HOA approvals a case could take: active records on this home that no renovation case holds yet. Stricter than the desktop picker, which
  * lists them all and lets the service refuse one held by another case; the service still re-checks. Capped, newest first, so a long list stays a choice.
  */
-async function attachableRecords(propertyId: string) {
+async function attachableRecords(propertyId: string, caseId: string) {
   const [permits, approvals] = await Promise.all([
     database.propertyPermitRecord.findMany({ where: { propertyId, isActive: true }, orderBy: { updatedAt: 'desc' }, take: 100, select: { id: true, permitNumber: true, category: true, status: true } }),
     database.hoaApprovalRecord.findMany({ where: { propertyId, isActive: true }, orderBy: { updatedAt: 'desc' }, take: 100, select: { id: true, workType: true, reportedStatus: true, decisionStatus: true } }),
   ]) as [Array<{ id: string; permitNumber: string | null; category: string | null; status: string | null }>, Array<{ id: string; workType: string | null; reportedStatus: string | null; decisionStatus: string | null }>];
   const held = await database.renovationCaseLink.findMany({
     where: { OR: [{ linkType: 'PERMIT', targetId: { in: permits.map((record) => record.id) } }, { linkType: 'HOA_APPROVAL', targetId: { in: approvals.map((record) => record.id) } }] },
-    select: { linkType: true, targetId: true },
-  }) as Array<{ linkType: string; targetId: string }>;
+    select: { linkType: true, targetId: true, renovationCaseId: true },
+  }) as Array<{ linkType: string; targetId: string; renovationCaseId: string }>;
   const taken = new Set(held.map((link) => `${link.linkType}:${link.targetId}`));
+  // Say why a record is missing, rather than leaving it out silently: on this case already, or on another case (named).
+  const otherIds = [...new Set(held.filter((link) => link.renovationCaseId !== caseId).map((link) => link.renovationCaseId))];
+  const otherCases = otherIds.length ? await database.renovationCase.findMany({ where: { id: { in: otherIds }, propertyId }, select: { id: true, name: true } }) as Array<{ id: string; name: string }> : [];
+  const note = attachExclusionNote({
+    thisCase: held.filter((link) => link.renovationCaseId === caseId).length, otherCases: held.filter((link) => link.renovationCaseId !== caseId).length,
+    otherCaseNames: otherCases.map((entry) => entry.name),
+  });
   const options = [
     ...permits.filter((record) => !taken.has(`PERMIT:${record.id}`)).map((record) => ({ value: `PERMIT:${record.id}`, label: `Permit ${record.permitNumber || titleCase(record.category)} (official: ${titleCase(record.status).toLowerCase()})` })),
     ...approvals.filter((record) => !taken.has(`HOA_APPROVAL:${record.id}`)).map((record) => ({ value: `HOA_APPROVAL:${record.id}`, label: `HOA approval, ${titleCase(record.workType).toLowerCase()} (decision: ${titleCase(record.decisionStatus).toLowerCase()}; reported: ${titleCase(record.reportedStatus).toLowerCase()})` })),
   ];
-  return { options: options.slice(0, ATTACH_OFFER_LIMIT), total: options.length };
+  return { options: options.slice(0, ATTACH_OFFER_LIMIT), total: options.length, note };
 }
 const retroactiveVersion = (candidate: { timelineEventId: string; existingRenovationCaseId: string | null }) => sha(`retroactive:REVIEW:${candidate.timelineEventId}:${candidate.existingRenovationCaseId ?? 'none'}`);
 const findRetroactiveCandidate = async (propertyId: string, timelineEventId: string) => (await detectRetroactiveCandidates(propertyId, 25)).find((candidate) => candidate.timelineEventId === timelineEventId) ?? null;
@@ -246,14 +253,14 @@ export async function readinessCommandResult(userId: string, propertyId: string,
     const renovationCase = await loadCase(propertyId, launch.entityId);
     if (!renovationCase) return unavailable('RENOVATION_CASE_NOT_FOUND', 'That renovation case is no longer available', 'Ask could not find that case. Nothing has changed.');
     if (!renovationCase.currentScopeVersionId) return unavailable('RENOVATION_SCOPE_MISSING', 'This case has no scope to attach records to', 'Records are attached to the case’s current scope, and this case does not have one. Defining scope is not currently available in Ask. Nothing has changed.');
-    const offered = await attachableRecords(propertyId);
-    if (!offered.options.length) return unavailable('RENOVATION_NO_ATTACHABLE_RECORD', 'There is no record to attach', 'Every permit and HOA approval on file for this home is already attached to a renovation case, or none has been recorded. Nothing has changed.');
+    const offered = await attachableRecords(propertyId, renovationCase.id);
+    if (!offered.options.length) return unavailable('RENOVATION_NO_ATTACHABLE_RECORD', 'There is no record to attach', offered.note ? `No permit or HOA approval can be attached right now. ${offered.note} Nothing has changed.` : 'No permit or HOA approval is recorded for this home, so there is nothing to attach. Nothing has changed.');
     const contextVersion = attachVersion(renovationCase, renovationCase.currentScopeVersionId, await caseLinkCount(renovationCase.id));
     if (!supplied) {
       return {
         status: 'NEEDS_CONTEXT', reasonCode: 'RENOVATION_ATTACH_RECORD_INPUT_REQUIRED', contextVersion,
         parameters: { readinessCommandLaunch: { kind, entityId: renovationCase.id, sourceExecutionId: launch.sourceExecutionId } },
-        blocks: [{ type: 'SUMMARY', id: 'readiness-attach-input', title: `Attach a record to ${renovationCase.name}`, body: `${offered.total > offered.options.length ? `Showing the ${offered.options.length} most recent of ${offered.total} records that are not attached to a case. ` : ''}Nothing has been saved yet.`, tone: 'DEFAULT', actions: [] }],
+        blocks: [{ type: 'SUMMARY', id: 'readiness-attach-input', title: `Attach a record to ${renovationCase.name}`, body: `${offered.total > offered.options.length ? `Showing the ${offered.options.length} most recent of ${offered.total} records that are not attached to a case. ` : ''}${offered.note ? `${offered.note} ` : ''}Nothing has been saved yet.`, tone: 'DEFAULT', actions: [] }],
         captureRequests: [attachCapture(contextVersion, renovationCase.name, offered.options)], suggestions: [],
       };
     }
@@ -489,7 +496,7 @@ async function confirmReadinessCommand(ctx: ConfirmCapabilityContext): Promise<C
       if (parameters.readinessContextVersion !== attachVersion(renovationCase, renovationCase.currentScopeVersionId, await caseLinkCount(renovationCase.id))) throw stale('This case changed while the confirmation was open. Review it again and try again.', 'ASK_CONTEXT_VERSION_CONFLICT');
       const checked = parseReadinessFormAnswer('ATTACH_RECORD', parameters.readinessForm);
       if (!checked.success) throw stale('The details to save are invalid.');
-      const offered = await attachableRecords(propertyId);
+      const offered = await attachableRecords(propertyId, renovationCase.id);
       if (!offered.options.some((option) => option.value === checked.data.record)) throw stale('That record can no longer be attached (it may already belong to a case). Review it again and try again.');
       await attachComplianceRecord(propertyId, renovationCase.id, userId, attachRecordServiceInput(checked.data));
       backAction = { ...backToReadiness, label: 'See approvals', message: `Show the compliance status for my renovation ${renovationCase.name.slice(0, 120)}.` };

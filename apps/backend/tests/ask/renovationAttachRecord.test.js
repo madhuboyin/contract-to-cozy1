@@ -39,15 +39,18 @@ function withRole(role) {
   propertyAccess.resolvePropertyAccess = async () => ({ role, userId: 'user-1', propertyId: 'prop-1' });
   return () => { propertyAccess.resolvePropertyAccess = saved; };
 }
-function withData({ scope = SCOPE, permits = [PERMIT, PERMIT_HELD], approvals = [HOA], linked = 0 } = {}) {
+function withData({ scope = SCOPE, permits = [PERMIT, PERMIT_HELD], approvals = [HOA], linked = 0, held = [{ linkType: 'PERMIT', targetId: 'p2', renovationCaseId: 'other-case' }] } = {}) {
   const saved = { c: prisma.renovationCase, p: prisma.propertyPermitRecord, h: prisma.hoaApprovalRecord, l: prisma.renovationCaseLink, a: complianceService.attachComplianceRecord, r: executeOperation.reconcileAskExecutionSideEffects };
   const calls = [];
-  prisma.renovationCase = { findFirst: async (args) => (args.where.id === CASE ? { id: CASE, name: 'Kitchen remodel', updatedAt: UPDATED, readinessSummary: null, currentScopeVersionId: scope } : null) };
+  prisma.renovationCase = {
+    findFirst: async (args) => (args.where.id === CASE ? { id: CASE, name: 'Kitchen remodel', updatedAt: UPDATED, readinessSummary: null, currentScopeVersionId: scope } : null),
+    findMany: async () => [{ id: 'other-case', name: 'Deck' }],
+  };
   prisma.propertyPermitRecord = { findMany: async () => permits };
   prisma.hoaApprovalRecord = { findMany: async () => approvals };
   prisma.renovationCaseLink = {
     // The held permit is attached to another case; the count is this case's own links.
-    findMany: async () => [{ linkType: 'PERMIT', targetId: 'p2' }],
+    findMany: async () => held,
     count: async () => linked,
   };
   complianceService.attachComplianceRecord = async (...args) => { calls.push(args); return {}; };
@@ -99,7 +102,11 @@ test('the review names the record and what attaching does; refusals happen befor
     w.restore(); w = withData({ scope: null });
     assert.equal((await invoke(launch())).reasonCode, 'RENOVATION_SCOPE_MISSING');
     w.restore(); w = withData({ permits: [PERMIT_HELD], approvals: [] });
-    assert.equal((await invoke(launch())).reasonCode, 'RENOVATION_NO_ATTACHABLE_RECORD');
+    const allHeld = await invoke(launch());
+    assert.equal(allHeld.reasonCode, 'RENOVATION_NO_ATTACHABLE_RECORD');
+    assert.match(allHeld.blocks[0].body, /1 record is not listed because it is attached to another case \(Deck\)\. A record belongs to one case at a time\./);
+    w.restore(); w = withData({ permits: [], approvals: [], held: [] });
+    assert.match((await invoke(launch())).blocks[0].body, /No permit or HOA approval is recorded for this home, so there is nothing to attach/);
   } finally { w.restore(); restoreRole(); }
 });
 
@@ -136,4 +143,30 @@ test('the compliance answer offers Attach only to a contributor, and the action 
     assert.match((await summary(false)).body, /A contributor or owner can attach records/);
     assert.equal(isAskActionApplicable({ action: { ...offered.actions[0] }, operationId: 'RENOVATION_PERMIT_READINESS', propertyId: 'prop-1', householdRole: 'CONTRIBUTOR', authoritativeSourceAvailable: true }), true);
   } finally { Object.assign(prisma, { renovationScopeVersion: saved.s, renovationCase: saved.c, renovationCaseLink: saved.l, propertyPermitRecord: saved.p, hoaApprovalRecord: saved.h, renovationComplianceCondition: saved.k, hoaApprovalDocumentReview: saved.r }); }
+});
+
+test('the note says why records are missing: on this case, on another case (named), or both; and nothing when none was left out', () => {
+  const note = command.attachExclusionNote;
+  assert.equal(note({ thisCase: 0, otherCases: 0, otherCaseNames: [] }), null);
+  assert.equal(note({ thisCase: 1, otherCases: 0, otherCaseNames: [] }), '1 record is not listed because it is already attached to this case.');
+  assert.equal(note({ thisCase: 2, otherCases: 0, otherCaseNames: [] }), '2 records are not listed because they are already attached to this case.');
+  assert.equal(note({ thisCase: 0, otherCases: 1, otherCaseNames: ['Deck'] }), '1 record is not listed because it is attached to another case (Deck). A record belongs to one case at a time.');
+  assert.equal(note({ thisCase: 0, otherCases: 3, otherCaseNames: ['Deck', 'Roof'] }), '3 records are not listed because they are attached to other cases (Deck, Roof). A record belongs to one case at a time.');
+  assert.equal(note({ thisCase: 1, otherCases: 1, otherCaseNames: ['Deck'] }), '2 records are not listed: 1 already attached to this case and 1 attached to another case (Deck). A record belongs to one case at a time.');
+  assert.match(note({ thisCase: 0, otherCases: 5, otherCaseNames: ['A', 'B', 'C', 'D', 'E'] }), /\(A, B, C, and 2 more\)/);
+  assert.equal(note({ thisCase: 0, otherCases: 1, otherCaseNames: [] }), '1 record is not listed because it is attached to another case. A record belongs to one case at a time.', 'a case that is gone is not named');
+});
+
+test('the picker says what it left out, and the held record is still not offered', async () => {
+  const restoreRole = withRole('CONTRIBUTOR'); let w = withData();
+  try {
+    const form = await invoke(launch());
+    assert.equal(form.status, 'NEEDS_CONTEXT');
+    assert.match(form.blocks[0].body, /1 record is not listed because it is attached to another case \(Deck\)\. A record belongs to one case at a time\. Nothing has been saved yet\./);
+    assert.deepEqual(form.captureRequests[0].inputSchema.fields[0].inputSchema.options.map((option) => option.value), ['PERMIT:p1', 'HOA_APPROVAL:h1']);
+    w.restore(); w = withData({ held: [{ linkType: 'PERMIT', targetId: 'p2', renovationCaseId: CASE }] });
+    assert.match((await invoke(launch())).blocks[0].body, /1 record is not listed because it is already attached to this case\./);
+    w.restore(); w = withData({ permits: [PERMIT], held: [] });
+    assert.doesNotMatch((await invoke(launch())).blocks[0].body, /not listed/, 'nothing is said when nothing was left out');
+  } finally { w.restore(); restoreRole(); }
 });
