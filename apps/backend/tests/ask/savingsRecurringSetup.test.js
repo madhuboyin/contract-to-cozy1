@@ -70,7 +70,7 @@ test('the payload is the desktop buildPayload: dates as ISO, speed in usage, rat
     providerName: 'Comcast', planName: 'Gigabit', billingCadence: 'MONTHLY', amount: 89.99, contractEndDate: '2027-03-01T00:00:00.000Z', usageJson: { speedTier: '1000 Mbps' },
   });
   assert.deepEqual(setup.savingsPlanPayload('ELECTRICITY_GAS', setup.parseSavingsPlanAnswer('ELECTRICITY_GAS', { billingCadence: 'MONTHLY', amount: 140, rateType: 'VARIABLE', usageKwh: '850' }).data), {
-    billingCadence: 'MONTHLY', amount: 140, planDetailsJson: { rateType: 'VARIABLE' }, usageJson: { kwhMonthly: 850 },
+    providerName: null, planName: null, billingCadence: 'MONTHLY', amount: 140, planDetailsJson: { rateType: 'VARIABLE' }, usageJson: { kwhMonthly: 850 },
   });
 });
 
@@ -185,4 +185,53 @@ test('the setup block and its action ids survive the answer-trust validator for 
   for (const id of Object.values({ plan: commands.SAVINGS_COMMAND_ACTION_IDS.PLAN, check: commands.SAVINGS_COMMAND_ACTION_IDS.CHECK })) {
     assert.equal(isAskActionApplicable({ action: { id, label: 'x', interactionType: 'MUTATE_RECORD', message: 'm', operationId: OP, style: 'SECONDARY' }, operationId: 'SAVINGS_OPPORTUNITIES', propertyId: 'prop-1', householdRole: 'OWNER', authoritativeSourceAvailable: true }), true, id);
   }
+});
+
+test('a blank optional field is sent as an explicit null so it really clears, only for the fields a category asks for', () => {
+  const payload = (category, answer) => setup.savingsPlanPayload(category, setup.parseSavingsPlanAnswer(category, answer).data);
+  const cleared = payload('HOME_WARRANTY', { billingCadence: 'ANNUAL', amount: 500, providerName: '', planName: '', renewalDate: '', contractEndDate: '' });
+  assert.deepEqual([cleared.providerName, cleared.planName, cleared.renewalDate, cleared.contractEndDate], [null, null, null, null]);
+  const insurance = payload('HOME_INSURANCE', { billingCadence: 'ANNUAL', amount: 1800, providerName: 'Acme' });
+  assert.equal(insurance.providerName, 'Acme');
+  assert.equal(insurance.renewalDate, null, 'a renewal date left blank is cleared');
+  assert.equal('contractEndDate' in insurance, false, 'insurance does not ask for a contract end, so it is left alone');
+  assert.equal('renewalDate' in payload('INTERNET', FORM), false);
+});
+
+test('the review names what a blank answer removes from the saved plan, and says blanks are cleared', async () => {
+  const restoreRole = withRole('OWNER'); const w = withData({ account: { ...account, renewalDate: new Date('2027-05-01T00:00:00Z') } });
+  try {
+    const review = await recurringSetupResult('user-1', 'prop-1', { kind: 'PLAN', entityId: 'INTERNET', sourceExecutionId: null }, setup.parseSavingsPlanAnswer('INTERNET', { billingCadence: 'MONTHLY', amount: 80 }).data);
+    assert.equal(review.status, 'NEEDS_CONFIRMATION');
+    assert.equal(review.confirmation.fields.find((field) => field.label === 'Clearing').value, 'Provider, Plan name, Contract end date');
+    assert.match(review.confirmation.description, /A field you leave blank is cleared from the saved plan\./);
+    const keep = await recurringSetupResult('user-1', 'prop-1', { kind: 'PLAN', entityId: 'INTERNET', sourceExecutionId: null }, setup.parseSavingsPlanAnswer('INTERNET', FORM).data);
+    assert.equal(keep.confirmation.fields.some((field) => field.label === 'Clearing'), false, 'nothing is cleared when nothing is blank');
+  } finally { w.restore(); restoreRole(); }
+});
+
+test('a plan that lives on a linked policy or warranty record is read from there: Ask refuses to save over it and the row offers no edit', async () => {
+  const restoreRole = withRole('OWNER');
+  let w = withData({ account: { ...account, insurancePolicyId: 'pol-1', insurancePolicy: { id: 'pol-1' }, warrantyId: null, warranty: null } });
+  try {
+    const refused = await invoke('PLAN', 'HOME_INSURANCE');
+    assert.equal(refused.reasonCode, 'SAVINGS_PLAN_FROM_RECORD');
+    assert.match(refused.blocks[0].body, /read from your insurance policy record.*a plan saved here would change nothing.*Ask cannot edit an insurance policy yet/);
+    await assert.rejects(() => confirmCapabilityInvoke(OP, ctx({ savingsCommand: { kind: 'PLAN', entityId: 'HOME_INSURANCE' }, savingsContextVersion: planVersion('HOME_INSURANCE', account), savingsPlan: { billingCadence: 'ANNUAL', amount: 1800 } })), (error) => error.code === 'ASK_CONFIRMATION_NOT_ACTIVE' && /linked record/.test(error.message));
+    assert.equal(w.calls.length, 0, 'nothing is written over a linked record');
+    w.restore(); w = withData({ account: { ...account, insurancePolicyId: null, insurancePolicy: null, warrantyId: 'war-1', warranty: { id: 'war-1' } } });
+    assert.match((await invoke('PLAN', 'HOME_WARRANTY')).blocks[0].body, /warranty record.*Update the warranty record itself and the comparison follows it/);
+    w.restore(); w = withData({ account: { ...account, insurancePolicyId: 'pol-1', insurancePolicy: null } });
+    assert.equal((await invoke('PLAN', 'HOME_INSURANCE')).status, 'NEEDS_CONTEXT', 'a link to a record that no longer exists is not a linked account');
+  } finally { w.restore(); restoreRole(); }
+  const categories = [
+    { category: { key: 'HOME_INSURANCE' }, status: 'CONNECTED', account: { providerName: 'Acme', planName: 'HO-3', amount: 1800, billingCadence: 'ANNUAL', renewalDate: null, canonicalSource: 'INSURANCE_POLICY' }, topOpportunity: null },
+    { category: { key: 'INTERNET' }, status: 'CONNECTED', account: { providerName: 'Comcast', planName: 'Gigabit', amount: 90, billingCadence: 'MONTHLY', renewalDate: null, canonicalSource: null }, topOpportunity: null },
+  ];
+  const items = savingsRecurringSetupBlock(categories, { utilityFocus: false, canChange: true }).sections[0].items;
+  const insurance = items.find((item) => item.title === 'Home insurance');
+  assert.equal(insurance.actions, undefined, 'no edit is offered on a linked row');
+  assert.match(insurance.description, /come from your insurance policy record, so they are read from there and cannot be changed here/);
+  assert.equal(insurance.meta[0], 'From your insurance policy record');
+  assert.deepEqual(items.find((item) => item.title === 'Internet').actions.map((action) => action.label), ['Update plan'], 'an unlinked row is unchanged');
 });

@@ -55,6 +55,8 @@ export type HomeSavingsAccountDTO = {
   providerName: string | null;
   planName: string | null;
   accountNumberMasked: string | null;
+  /** Where the facts come from: a linked insurance policy or warranty record (the comparison reads those, not this row), or null when the account holds its own. */
+  canonicalSource: 'INSURANCE_POLICY' | 'WARRANTY' | null;
   billingCadence: HomeSavingsBillingCadence;
   amount: number | null;
   monthlyAmount: number | null;
@@ -240,6 +242,7 @@ function serializeAccount(account: HomeSavingsAccountWithCanonical): HomeSavings
     providerName: facts.providerName ?? null,
     planName: facts.planName ?? null,
     accountNumberMasked: facts.accountNumberMasked ?? null,
+    canonicalSource: account.insurancePolicyId && account.insurancePolicy ? 'INSURANCE_POLICY' : account.warrantyId && account.warranty ? 'WARRANTY' : null,
     billingCadence: facts.billingCadence,
     amount,
     monthlyAmount,

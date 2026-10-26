@@ -154,7 +154,9 @@ export function savingsRecurringSetupBlock(
   const byKey = new Map(categories.map((entry) => [entry.category.key, entry]));
   const keys = SAVINGS_RECURRING_CATEGORIES.filter((key) => !options.utilityFocus || key === 'ELECTRICITY_GAS');
   const items = keys.map((key: SavingsRecurringCategory) => {
-    const { hasPlan, ...row } = savingsRecurringRow(key, byKey.get(key) ?? null, { money: formatPlanAmount, date: (value) => humanDate(new Date(value)) ?? null });
+    const { hasPlan, fromRecord, ...row } = savingsRecurringRow(key, byKey.get(key) ?? null, { money: formatPlanAmount, date: (value) => humanDate(new Date(value)) ?? null });
+    // A plan that lives on a linked policy or warranty record is read from there, so the row offers no edit that would change nothing.
+    if (fromRecord) return row;
     return {
       ...row, entityType: SAVINGS_RECURRING_CATEGORY_ENTITY_TYPE,
       actions: [{

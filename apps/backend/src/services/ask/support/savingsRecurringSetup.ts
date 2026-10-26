@@ -17,6 +17,8 @@ export const SAVINGS_RECURRING_ALL = 'ALL';
 export const SAVINGS_RECURRING_LABELS: Record<SavingsRecurringCategory, string> = {
   HOME_INSURANCE: 'Home insurance', HOME_WARRANTY: 'Home warranty', INTERNET: 'Internet', ELECTRICITY_GAS: 'Electricity and gas',
 };
+/** What a linked account's facts come from, in the household's words. */
+export const SAVINGS_SOURCE_LABELS = { INSURANCE_POLICY: 'insurance policy record', WARRANTY: 'warranty record' } as const;
 export const SAVINGS_BILLING_CADENCES = ['MONTHLY', 'QUARTERLY', 'ANNUAL', 'OTHER'] as const;
 export const SAVINGS_BILLING_CADENCE_LABELS: Record<string, string> = { MONTHLY: 'Monthly', QUARTERLY: 'Quarterly', ANNUAL: 'Annual', OTHER: 'Other' };
 export const SAVINGS_RATE_TYPES = ['FIXED', 'VARIABLE'] as const;
@@ -68,13 +70,16 @@ const iso = (day: string) => new Date(`${day}T00:00:00.000Z`).toISOString();
 
 /** The request the account route takes: the desktop form's own mapping (dates as ISO, speed in usage, rate type in plan details, monthly kWh in usage). */
 export function savingsPlanPayload(category: SavingsRecurringCategory, form: SavingsPlanForm) {
+  const allowed = savingsPlanFields(category);
+  // A field left blank is sent as an explicit null: the service only changes a field that is present, so an omitted one would keep its old value while the
+  // review said it was cleared. Dates are cleared only for the categories that ask for them.
   return {
-    ...(form.providerName ? { providerName: form.providerName } : {}),
-    ...(form.planName ? { planName: form.planName } : {}),
+    providerName: form.providerName ?? null,
+    planName: form.planName ?? null,
     billingCadence: form.billingCadence,
     amount: form.amount,
-    ...(form.renewalDate ? { renewalDate: iso(form.renewalDate) } : {}),
-    ...(form.contractEndDate ? { contractEndDate: iso(form.contractEndDate) } : {}),
+    ...(allowed.renewalDate ? { renewalDate: form.renewalDate ? iso(form.renewalDate) : null } : {}),
+    ...(allowed.contractEndDate ? { contractEndDate: form.contractEndDate ? iso(form.contractEndDate) : null } : {}),
     ...(category === 'INTERNET' ? { usageJson: { speedTier: form.speedTier || undefined } } : {}),
     ...(category === 'ELECTRICITY_GAS' ? { planDetailsJson: { rateType: form.rateType || undefined }, usageJson: { kwhMonthly: form.usageKwh ?? undefined } } : {}),
   };
@@ -83,21 +88,24 @@ export function savingsPlanPayload(category: SavingsRecurringCategory, form: Sav
 /** What the setup row says about a category: the saved plan in a line, or that nothing is set up. */
 export function savingsRecurringRow(
   category: SavingsRecurringCategory,
-  summary: { status: string; account?: { providerName?: string | null; planName?: string | null; amount?: number | null; billingCadence?: string | null; renewalDate?: string | null } | null; topOpportunity?: { headline?: string | null } | null } | null,
+  summary: { status: string; account?: { providerName?: string | null; planName?: string | null; amount?: number | null; billingCadence?: string | null; renewalDate?: string | null; canonicalSource?: 'INSURANCE_POLICY' | 'WARRANTY' | null } | null; topOpportunity?: { headline?: string | null } | null } | null,
   helpers: { money: (value: number) => string; date: (value: string) => string | null },
 ) {
   const account = summary?.account ?? null;
   const plan = account ? [account.providerName, account.planName].filter(Boolean).join(' · ') : '';
   const cost = account?.amount != null ? `${helpers.money(account.amount)} ${(account.billingCadence ?? 'MONTHLY').toLowerCase()}` : null;
   const renews = account?.renewalDate ? helpers.date(account.renewalDate) : null;
+  const source = account?.canonicalSource ?? null;
   return {
     id: `recurring-setup-${category}`, title: SAVINGS_RECURRING_LABELS[category],
-    description: account ? (plan || 'Plan saved') : 'Not set up yet. Add what you pay now and Ask will compare it.',
+    description: source
+      ? `${plan || 'Plan'}. These details come from your ${SAVINGS_SOURCE_LABELS[source]}, so they are read from there and cannot be changed here.`
+      : account ? (plan || 'Plan saved') : 'Not set up yet. Add what you pay now and Ask will compare it.',
     meta: [
-      account ? 'Plan saved' : 'Not set up',
+      source ? `From your ${SAVINGS_SOURCE_LABELS[source]}` : account ? 'Plan saved' : 'Not set up',
       ...(cost ? [cost] : []), ...(renews ? [`Renews ${renews}`] : []),
       ...(summary?.status === 'FOUND_SAVINGS' ? ['Possible saving found'] : []),
     ],
-    status: summary?.status ?? 'NOT_SET_UP', href: null, hasPlan: Boolean(account),
+    status: summary?.status ?? 'NOT_SET_UP', href: null, hasPlan: Boolean(account), fromRecord: Boolean(source),
   };
 }

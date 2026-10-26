@@ -15,7 +15,7 @@ import { humanDate } from '../askFormatting';
 import { HomeSavingsService } from '../../homeSavings.service';
 import {
   SAVINGS_BILLING_CADENCES, SAVINGS_BILLING_CADENCE_LABELS, SAVINGS_RATE_TYPES, SAVINGS_RECURRING_ALL, SAVINGS_RECURRING_LABELS, SAVINGS_RECURRING_PLAN_CAPTURE_KEY,
-  formatPlanAmount, isSavingsRecurringCategory, parseSavingsPlanAnswer, savingsPlanFields, savingsPlanPayload, type SavingsPlanForm, type SavingsRecurringCategory,
+  formatPlanAmount, SAVINGS_SOURCE_LABELS, isSavingsRecurringCategory, parseSavingsPlanAnswer, savingsPlanFields, savingsPlanPayload, type SavingsPlanForm, type SavingsRecurringCategory,
 } from '../support/savingsRecurringSetup';
 
 const CONFIRMATION_MINUTES = 30;
@@ -37,11 +37,23 @@ const stale = (message: string, code = 'ASK_CONFIRMATION_NOT_ACTIVE') => Object.
 const isPrimaryOwner = async (userId: string, propertyId: string) =>
   Boolean(await database.property.findFirst({ where: { id: propertyId, homeownerProfile: { userId } }, select: { id: true } }));
 
-interface AccountRow { id: string; providerName: string | null; planName: string | null; billingCadence: string; amount: unknown; renewalDate: Date | null; contractEndDate: Date | null; usageJson: unknown; planDetailsJson: unknown; updatedAt: Date }
-const loadAccount = async (propertyId: string, category: SavingsRecurringCategory): Promise<AccountRow | null> => database.homeSavingsAccount.findFirst({
-  where: { propertyId, categoryKey: category }, orderBy: { updatedAt: 'desc' },
-  select: { id: true, providerName: true, planName: true, billingCadence: true, amount: true, renewalDate: true, contractEndDate: true, usageJson: true, planDetailsJson: true, updatedAt: true },
-});
+interface AccountRow { canonicalSource: 'INSURANCE_POLICY' | 'WARRANTY' | null; id: string; providerName: string | null; planName: string | null; billingCadence: string; amount: unknown; renewalDate: Date | null; contractEndDate: Date | null; usageJson: unknown; planDetailsJson: unknown; updatedAt: Date }
+/**
+ * The saved plan, and whether its facts really live on a linked insurance policy or warranty record. The comparison reads those records and ignores the
+ * account row's own values for a linked account, so a plan saved over one here would change nothing; Ask says so instead of saving it.
+ */
+const loadAccount = async (propertyId: string, category: SavingsRecurringCategory): Promise<AccountRow | null> => {
+  const row = await database.homeSavingsAccount.findFirst({
+    where: { propertyId, categoryKey: category }, orderBy: { updatedAt: 'desc' },
+    select: {
+      id: true, providerName: true, planName: true, billingCadence: true, amount: true, renewalDate: true, contractEndDate: true, usageJson: true, planDetailsJson: true, updatedAt: true,
+      insurancePolicyId: true, warrantyId: true, insurancePolicy: { select: { id: true } }, warranty: { select: { id: true } },
+    },
+  });
+  if (!row) return null;
+  const { insurancePolicyId, warrantyId, insurancePolicy, warranty, ...own } = row;
+  return { ...own, canonicalSource: insurancePolicyId && insurancePolicy ? 'INSURANCE_POLICY' : warrantyId && warranty ? 'WARRANTY' : null };
+};
 const day = (value: Date | null) => (value ? value.toISOString().slice(0, 10) : '');
 const record = (value: unknown): Record<string, unknown> => (value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {});
 
@@ -124,6 +136,11 @@ export async function recurringSetupResult(userId: string, propertyId: string, l
   const category = launch.entityId;
   const label = SAVINGS_RECURRING_LABELS[category];
   const account = await loadAccount(propertyId, category);
+  if (account?.canonicalSource) {
+    const source = SAVINGS_SOURCE_LABELS[account.canonicalSource];
+    return unavailable('SAVINGS_PLAN_FROM_RECORD', `Your ${label.toLowerCase()} plan comes from your ${source}`,
+      `The provider, price and dates for this cost are read from your ${source}, and the comparison uses that record, so a plan saved here would change nothing. ${account.canonicalSource === 'WARRANTY' ? 'Update the warranty record itself and the comparison follows it.' : 'Ask cannot edit an insurance policy yet; the comparison uses the policy as recorded.'} Nothing has changed.`);
+  }
   const contextVersion = planVersion(category, account);
   if (!supplied) {
     return {
@@ -135,18 +152,25 @@ export async function recurringSetupResult(userId: string, propertyId: string, l
   }
   const date = (value: string | null | undefined) => (value ? humanDate(new Date(`${value}T12:00:00.000Z`)) ?? value : null);
   const row = (name: string, value: string | null) => (value ? [{ label: name, value }] : []);
+  // What a blank answer removes from the saved plan, named so the review never looks like it kept a value it will clear.
+  const allowed = savingsPlanFields(category);
+  const before = prefill(category, account);
+  const cleared = [
+    ...(before.providerName && !supplied.providerName ? ['Provider'] : []), ...(before.planName && !supplied.planName ? ['Plan name'] : []),
+    ...(allowed.renewalDate && before.renewalDate && !supplied.renewalDate ? ['Renewal date'] : []), ...(allowed.contractEndDate && before.contractEndDate && !supplied.contractEndDate ? ['Contract end date'] : []),
+  ];
   return {
     status: 'NEEDS_CONFIRMATION', reasonCode: 'SAVINGS_RECURRING_PLAN_CONFIRMATION_REQUIRED', contextVersion,
     parameters: { savingsPlan: supplied, savingsCommand: { kind: 'PLAN', entityId: category }, savingsContextVersion: contextVersion, ...base },
     blocks: [{ type: 'SUMMARY', id: 'savings-recurring-plan-review', title: `Review your ${label.toLowerCase()} plan`, body: 'Nothing is saved until you confirm.', tone: 'DEFAULT', actions: [] }],
     confirmation: confirmation(`plan-${sha(`${category}:${JSON.stringify(supplied)}`).slice(0, 12)}`, {
       title: `${account ? 'Update' : 'Save'} your ${label.toLowerCase()} plan?`, confirmLabel: account ? 'Update the plan' : 'Save the plan',
-      description: 'This saves the plan to the shared home record and compares it with benchmarks for this home and area, which refreshes your savings list. The result is an estimate, not a quote, and nothing is sent to a provider.',
+      description: `This saves the plan to the shared home record and compares it with benchmarks for this home and area, which refreshes your savings list. The result is an estimate, not a quote, and nothing is sent to a provider.${account ? ' A field you leave blank is cleared from the saved plan.' : ''}`,
       fields: [
         { label: 'Cost', value: label }, ...row('Provider', supplied.providerName ?? null), ...row('Plan', supplied.planName ?? null),
         { label: 'You pay', value: `${formatPlanAmount(supplied.amount)} ${SAVINGS_BILLING_CADENCE_LABELS[supplied.billingCadence].toLowerCase()}` },
         ...row('Renews', date(supplied.renewalDate)), ...row('Contract ends', date(supplied.contractEndDate)), ...row('Speed', supplied.speedTier ?? null),
-        ...row('Rate type', supplied.rateType ? (supplied.rateType === 'FIXED' ? 'Fixed' : 'Variable') : null), ...row('Monthly usage', supplied.usageKwh != null ? `${supplied.usageKwh} kWh` : null),
+        ...row('Clearing', cleared.length ? cleared.join(', ') : null), ...row('Rate type', supplied.rateType ? (supplied.rateType === 'FIXED' ? 'Fixed' : 'Variable') : null), ...row('Monthly usage', supplied.usageKwh != null ? `${supplied.usageKwh} kWh` : null),
       ],
     }),
     captureRequests: [planCapture(category, contextVersion, supplied as unknown as Record<string, unknown>)], suggestions: [],
@@ -162,6 +186,7 @@ export async function confirmRecurringSetup(ctx: ConfirmCapabilityContext, kind:
     if (kind === 'PLAN') {
       if (!isSavingsRecurringCategory(entityId)) throw stale('The change to make is invalid.');
       const account = await loadAccount(propertyId, entityId);
+      if (account?.canonicalSource) throw stale('This plan now comes from a linked record, so it cannot be changed here.');
       if (parameters.savingsContextVersion !== planVersion(entityId, account)) throw stale('This plan changed while the confirmation was open. Review it again and try again.', 'ASK_CONTEXT_VERSION_CONFLICT');
       const checked = parseSavingsPlanAnswer(entityId, parameters.savingsPlan);
       if (!checked.success) throw stale('The details to save are invalid.');
