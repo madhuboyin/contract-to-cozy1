@@ -203,7 +203,11 @@ async function documentLookupResult(userId: string, propertyId: string, message:
     return {
       status: 'ANSWERED',
       reasonCode: 'NO_DOCUMENTS_ON_FILE',
-      blocks: [{ type: 'EMPTY_STATE', id: 'document-lookup-empty', title: 'No documents on file for this property', body: 'Ask found no documents recorded for this home yet.', actions: [] }, DOCUMENT_LOOKUP_BOUNDARY],
+      blocks: [{
+        type: 'EMPTY_STATE', id: 'document-lookup-empty', title: 'No documents yet',
+        body: 'Add warranties, receipts, policies, inspection reports, or photos to your Home Records. Cozy won\'t read a file until you choose to.',
+        actions: [{ id: 'document-add-first', label: 'Add your first document', interactionType: 'OPEN_FILE_INTAKE', style: 'PRIMARY' }],
+      }, DOCUMENT_LOOKUP_BOUNDARY],
       suggestions: [],
     };
   }

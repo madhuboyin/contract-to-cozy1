@@ -64,8 +64,8 @@ export function ActionLink({ action, icon }: { action: AskAction; icon?: ReactNo
     'inline-flex min-h-10 items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50',
     action.style === 'PRIMARY' ? 'bg-teal-700 text-white hover:bg-teal-800' : 'border border-slate-200 bg-white text-slate-800 hover:bg-slate-50',
   );
-  if (action.interactionType === 'START_WORKFLOW') {
-    const supported = Boolean(action.message && action.operationId && workflowControls);
+  if (action.interactionType === 'START_WORKFLOW' || action.interactionType === 'OPEN_FILE_INTAKE') {
+    const supported = Boolean(workflowControls && (action.interactionType === 'OPEN_FILE_INTAKE' || (action.message && action.operationId)));
     return (
       <button
         type="button"

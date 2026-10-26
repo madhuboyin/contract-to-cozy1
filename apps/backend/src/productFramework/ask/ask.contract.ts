@@ -33,8 +33,9 @@ const AskActionSchema = z.object({
   label: z.string().trim().min(1).max(160),
   href: z.string().trim().min(1).max(1200).optional(),
   // Response-level workflow actions use the same server-owned Ask command
-  // path as row actions, while legacy destinations remain ordinary hrefs.
-  interactionType: z.literal('START_WORKFLOW').optional(),
+  // path as row actions. OPEN_FILE_INTAKE launches the existing local intake
+  // dialog, while legacy destinations remain ordinary hrefs.
+  interactionType: z.enum(['START_WORKFLOW', 'OPEN_FILE_INTAKE']).optional(),
   message: z.string().trim().min(1).max(300).optional(),
   operationId: z.string().trim().min(1).max(120).optional(),
   // A rich response action may target the same registered outcome as a compact
@@ -53,6 +54,10 @@ const AskActionSchema = z.object({
     if (!action.message) ctx.addIssue({ code: 'custom', path: ['message'], message: 'START_WORKFLOW actions require a message.' });
     if (!action.operationId) ctx.addIssue({ code: 'custom', path: ['operationId'], message: 'START_WORKFLOW actions require an operationId.' });
     if (action.href) ctx.addIssue({ code: 'custom', path: ['href'], message: 'START_WORKFLOW actions must not also navigate.' });
+  } else if (action.interactionType === 'OPEN_FILE_INTAKE') {
+    if (action.href || action.message || action.operationId || action.outcomeKey || action.entityType || action.entityId || action.actionId || action.guidanceStepId) {
+      ctx.addIssue({ code: 'custom', path: ['interactionType'], message: 'OPEN_FILE_INTAKE actions must not navigate or carry workflow metadata.' });
+    }
   } else if (action.message || action.operationId || action.outcomeKey || action.entityType || action.entityId || action.actionId || action.guidanceStepId) {
     ctx.addIssue({ code: 'custom', path: ['interactionType'], message: 'Workflow metadata requires interactionType START_WORKFLOW.' });
   }

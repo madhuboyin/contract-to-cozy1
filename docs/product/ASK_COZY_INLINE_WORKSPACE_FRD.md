@@ -1,9 +1,11 @@
 # Ask Cozy — Inline Workspace Product Requirements Document
 
-**Version:** 1.406
-**Date:** October 24, 2026
+**Version:** 1.408
+**Date:** October 26, 2026
 **Status:** Approved product direction; implementation is partial and tracked by requirement
 **Scope:** Ask Cozy interaction across homeowner-facing domains on desktop and mobile, including lightweight capability discovery and Ask-native completion
+
+**Revision 1.408 — Documents empty state starts the existing Ask file intake (2026-10-26):** `DOCUMENT_LOOKUP` no longer ends at “No documents on file” when the canonical inventory is empty. It explains representative files a homeowner can add and that Cozy does not read one until the person chooses to, then offers **Add your first document**. The action is a typed client intake launch (`OPEN_FILE_INTAKE`), not a desktop Home Records link and not a second uploader: it opens the existing `AskIntakeDialog`, preserving its safety, privacy, retention, review and confirmation behavior from FR-INPUT-001–005. When the original file is stored as a Home Record, the originating document lookup is revalidated so the empty answer reflects the new record without requiring another question. The composer paperclip continues to open the same dialog independently. Focused backend and frontend tests pin the trust-policy survival, no-desktop-link rule and dialog launch; runtime storage and browser acceptance remain pending.
 
 **Revision 1.407 — Plant Advisor width alignment (owner-approved adjustment, 2026-10-25):** Plant Advisor summary and recommendation-result surfaces now use the standard 920px Ask answer measure, matching peer answer panels and removing the visibly narrow result column. **Find plants for a room** remains a deliberately narrower workflow, but now honors its documented 760px cap instead of the accidental 640px implementation. Both measures are shared layout constants, remain full-width below their caps and are pinned by focused frontend assertions. No ranking, content, actions, review or confirmation behavior changes. Not browser-verified.
 

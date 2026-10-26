@@ -94,7 +94,7 @@ test('the boundary survives the trust validator, and the handler emits no Open H
   assert.ok(!validated.trust.reasonCodes.includes('INAPPLICABLE_ACTION_REMOVED'), 'nothing was left for the trust pass to strip');
 });
 
-test('an empty record is not read as "nothing exists", offers no desktop link and states what the answer shows', async () => {
+test('an empty record offers the in-Ask file intake without a desktop link and states what the answer shows', async () => {
   install([], []);
   const result = await run();
   assert.equal(result.blocks[0].id, 'document-lookup-empty');
@@ -103,7 +103,11 @@ test('an empty record is not read as "nothing exists", offers no desktop link an
     question: 'Show my documents', operationId: 'DOCUMENT_LOOKUP', propertyId: 'p1',
     result: attachAskAuthoritativeSourceEvidence(result, [completedAskAuthoritativeSourceEvidence('DOCUMENT_LOOKUP')]),
   });
-  assert.deepEqual(validated.result.blocks[0].actions.map((action) => action.id), []);
+  assert.deepEqual(validated.result.blocks[0].actions, [{
+    id: 'document-add-first', label: 'Add your first document', interactionType: 'OPEN_FILE_INTAKE', style: 'PRIMARY',
+  }]);
+  assert.equal(JSON.stringify(validated.result).includes('/dashboard/'), false);
+  assert.ok(!validated.trust.reasonCodes.includes('INAPPLICABLE_ACTION_REMOVED'));
 });
 
 test('a request that matches nothing and a full list link to no desktop page, and every row opens inline', async () => {

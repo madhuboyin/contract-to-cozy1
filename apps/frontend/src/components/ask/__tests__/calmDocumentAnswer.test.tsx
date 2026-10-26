@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { ExecutionCard } from '../workspace/ExecutionCard';
 import { CALM_ANSWERS_STORAGE_KEY } from '@/features/ask/calmAnswers';
 import type { AskExecutionResponse } from '@/features/ask/types';
@@ -14,9 +14,9 @@ const blocks = () => [
     actions: [{ id: 'open-documents-list', label: 'Open Documents', href: '/dashboard/properties/home/documents', style: 'SECONDARY' }] },
   { type: 'BOUNDARY', id: 'document-lookup-boundary', title: 'Recorded information only', body: 'Ask has not read or interpreted the documents themselves.', severity: 'INFO', suggestions: [] },
 ];
-const execution = () => ({
+const execution = (executionBlocks = blocks()) => ({
   sessionId: 'session', executionId: 'execution', question: 'Show my documents', status: 'ANSWERED', property: { id: 'home', label: 'Main' },
-  createdAt: '2026-09-26T19:32:55.000Z', updatedAt: '2026-09-26T19:32:55.000Z', viewState: null, blocks: blocks(),
+  createdAt: '2026-09-26T19:32:55.000Z', updatedAt: '2026-09-26T19:32:55.000Z', viewState: null, blocks: executionBlocks,
   captureRequests: [], confirmation: null, clarification: null, correctionCapabilities: { retryResponse: false, intent: false, entity: false, homeRecord: false },
 } as unknown as AskExecutionResponse);
 const card = () => render(
@@ -49,5 +49,15 @@ describe('calm Documents answer', () => {
     expect(await screen.findByRole('heading', { name: '2 documents on file' })).toBeInTheDocument();
     expect(container.querySelector('[data-calm-summary]')).toBeNull();
     expect(screen.getAllByText('Open Documents')).toHaveLength(1);
+  });
+
+  it('opens the existing file intake from the no-documents empty state', () => {
+    const onOpenFileIntake = jest.fn();
+    const empty = execution([{ type: 'EMPTY_STATE', id: 'document-lookup-empty', title: 'No documents yet', body: 'Add a document or photo.', actions: [{ id: 'document-add-first', label: 'Add your first document', interactionType: 'OPEN_FILE_INTAKE', style: 'PRIMARY' }] }] as never);
+    render(<ExecutionCard execution={empty} isSuperseded={false} justUpdatedExecutionId={null} updateExecution={jest.fn()} loading={false} ask={jest.fn()} selectedPropertyId="home"
+      setInput={jest.fn()} visibleSuggestions={[]} activeSessionRef={{ current: 'session' }} refreshResult={jest.fn()} refreshPending={false} onAccessLost={jest.fn()}
+      contextOpen={false} onOpenContext={jest.fn()} onOpenFileIntake={onOpenFileIntake} />);
+    fireEvent.click(screen.getByRole('button', { name: /Add your first document/ }));
+    expect(onOpenFileIntake).toHaveBeenCalledWith(empty, expect.any(HTMLButtonElement));
   });
 });

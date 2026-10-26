@@ -8,6 +8,7 @@ import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { cn } from '@/lib/utils';
 import { VoiceInputButton } from './VoiceInputButton';
 import { ComposerIntakeButton } from './intake/ComposerIntakeButton';
+import { AskIntakeDialog } from './intake/AskIntakeDialog';
 import type { AskCapabilityPrompt, AskExecutionResponse, AskPendingWorkItem, AskRecentSessionSummary, AskSessionChange } from '@/features/ask/types';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { track } from '@/lib/analytics/events';
@@ -78,6 +79,9 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   // IW-PRES-021 (FRD v1.95): folded and pinned results, kept for this browser session.
   const conversationView = useConversationView(sessionId, executions);
   const [input, setInput] = useState('');
+  const [intakeOpen, setIntakeOpen] = useState(false);
+  const intakeOpenerRef = useRef<HTMLElement | null>(null);
+  const intakeSourceExecutionRef = useRef<AskExecutionResponse | null>(null);
   const inputRef = useRef('');
   inputRef.current = input;
   const [loading, setLoading] = useState(false);
@@ -117,6 +121,15 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const activeSessionRef = useRef('');
   const { refreshIssues, setRefreshIssues, refreshRequests, setRefreshRequests, redactAccessLostResult, refreshResult, updateExecution } = useResultRefresh({ executions, activeSessionRef, requests, deniedProperties, setExecutions, setPendingWork, setJustUpdatedExecutionId });
+  const openFileIntake = useCallback((opener: HTMLElement, sourceExecution: AskExecutionResponse | null = null) => {
+    intakeOpenerRef.current = opener;
+    intakeSourceExecutionRef.current = sourceExecution;
+    setIntakeOpen(true);
+  }, []);
+  const refreshIntakeSource = useCallback(() => {
+    const source = intakeSourceExecutionRef.current;
+    if (source) void refreshResult(source);
+  }, [refreshResult]);
   const activeSessionPropertyRef = useRef<string | undefined>(undefined);
   const { clearHistory, startNewSession } = useSessionLifecycle({ mode, sessionId, executions, selectedPropertyId, initialQuestion, initialSessionId, initialExecutionId, propertyMismatch, availabilityEpoch, historyLoading, loading, requests, deniedProperties, activeSessionRef, activeSessionPropertyRef, textareaRef, refreshResult, setSessionId, setInput, setExecutions, setRefreshIssues, setRefreshRequests, setHistoryLoading, setError, setLoading, setConfirmClear, setJustUpdatedExecutionId, setServiceUnavailable, setRecentSessionsEpoch, setHistoryDrawerOpen });
   const redactHistoryAccessLoss = useCallback((propertyId: string) => {
@@ -362,7 +375,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
         {latestExecution && composerAffordances.map((affordance) => <AttachEvidenceControl key={affordance.id} variant="composer" label={affordance.label}
           event={{ entityType: affordance.target.entityType, id: affordance.target.id, title: affordance.target.title }} propertyId={selectedPropertyId} disabled={loading || !sessionId}
           onAttached={(documentId) => void ask(affordance.target.message, undefined, { entityType: affordance.target.entityType, entityId: affordance.target.id, sourceExecutionId: latestExecution.executionId, operationId: 'CAPTURE_EVIDENCE_CONFIRM', documentId })} />)}
-        <ComposerIntakeButton propertyId={selectedPropertyId} disabled={loading} embedded={placement === 'hero' && calm} />
+        <ComposerIntakeButton propertyId={selectedPropertyId} disabled={loading} embedded={placement === 'hero' && calm} onOpen={(opener) => openFileIntake(opener)} />
         <VoiceInputButton large={placement === 'hero' && !calm} embedded={placement === 'hero' && calm} disabled={loading || !sessionId} getValue={() => inputRef.current}
           onChange={(value) => { setInput(value); if (sessionId) window.localStorage.setItem(draftStorageKey(selectedPropertyId, sessionId), value); }} />
         {loading && inFlight.current
@@ -375,6 +388,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
 
   return (
     <AskInlineContext.Provider value={inlineApi}>
+    <AskIntakeDialog open={intakeOpen} onOpenChange={setIntakeOpen} propertyId={selectedPropertyId} returnFocusRef={intakeOpenerRef} onRecordChanged={refreshIntakeSource} />
     <div data-ask-layout={mode === 'page' ? 'full-window' : 'panel'} className={cn('flex min-h-0 flex-col', mode === 'page' ? 'h-full bg-white' : 'h-full bg-slate-50', calm && 'ask-calm')}>
       {/* Safe-area padding only changes anything on the mobile full-screen
           sheet (mode="panel" below the lg breakpoint, where this header sits
@@ -505,6 +519,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
                   onAccessLost={redactAccessLostResult}
                   contextOpen={contextExecutionId === execution.executionId}
                   onOpenContext={(trigger) => openResponseContext(execution, trigger)}
+                  onOpenFileIntake={(sourceExecution, opener) => openFileIntake(opener, sourceExecution)}
                   folded={conversationView.view.folded.includes(execution.executionId)}
                   pinned={conversationView.view.pinned.includes(execution.executionId)}
                   onToggleFold={() => conversationView.toggleFold(execution.executionId)}

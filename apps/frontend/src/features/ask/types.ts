@@ -9,7 +9,7 @@ export interface AskAction {
   id: string;
   label: string;
   href?: string;
-  interactionType?: 'START_WORKFLOW';
+  interactionType?: 'START_WORKFLOW' | 'OPEN_FILE_INTAKE';
   message?: string;
   operationId?: string;
   /** Registered semantic outcome used by the server to deduplicate richer and compact action surfaces. */

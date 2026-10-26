@@ -89,6 +89,14 @@ describe('AskIntakeDialog', () => {
     expect(await screen.findByText(/Check each detail/)).toBeInTheDocument();
   });
 
+  it('reports once when the uploaded original becomes a Home Record', async () => {
+    const onRecordChanged = jest.fn();
+    mocks.uploadAskIntakeFile.mockResolvedValue(ok(view()));
+    render(<AskIntakeDialog open onOpenChange={jest.fn()} propertyId="home-1" onRecordChanged={onRecordChanged} />);
+    await upload();
+    await waitFor(() => expect(onRecordChanged).toHaveBeenCalledTimes(1));
+  });
+
   it('reads a label photo locally with no AI acknowledgement, and never offers an inspection for a photo', async () => {
     const photo = view({ provenance: { ...view().provenance, original: { ...view().provenance.original, fileName: 'label.png', mimeType: 'image/png' } } });
     mocks.uploadAskIntakeFile.mockResolvedValue(ok(photo));

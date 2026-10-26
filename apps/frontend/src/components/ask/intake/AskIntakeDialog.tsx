@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, type ClipboardEvent, type DragEvent } from 'react';
+import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { IntakeCandidates, IntakeLabelReview, IntakePicker, IntakeProvenance, IntakeReadStep } from './IntakeSteps';
 import { RESULT_COPY, intakeResultQuestion, originalQuestion, pickSingleFile } from './intakePresentation';
@@ -15,14 +15,21 @@ const PRIMARY_LINK = 'inline-flex min-h-11 items-center justify-center rounded-x
  * involves, then each proposed detail is accepted, edited, rejected or left for later. Nothing reaches the home without "Add to my home" or
  * "Add to inventory". Every step has a keyboard and form path: the camera, drop and paste are shortcuts to the same file chooser.
  */
-export function AskIntakeDialog({ open, onOpenChange, propertyId, returnFocusRef }: { open: boolean; onOpenChange: (open: boolean) => void; propertyId: string | undefined; returnFocusRef?: React.RefObject<HTMLElement | null> }) {
+export function AskIntakeDialog({ open, onOpenChange, propertyId, returnFocusRef, onRecordChanged }: { open: boolean; onOpenChange: (open: boolean) => void; propertyId: string | undefined; returnFocusRef?: React.RefObject<HTMLElement | null>; onRecordChanged?: () => void }) {
   const intake = useAskIntake(propertyId, open);
   const { view, config, busy, error } = intake;
   const [kept, setKept] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
+  const reportedRecordId = useRef<string | null>(null);
 
   useEffect(() => { if (!open) { intake.reset(); setKept(false); setProblem(null); setDragging(false); } }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!open) { reportedRecordId.current = null; return; }
+    if (!view?.recordId || reportedRecordId.current === view.recordId) return;
+    reportedRecordId.current = view.recordId;
+    onRecordChanged?.();
+  }, [onRecordChanged, open, view?.recordId]);
 
   const accept = (files: ArrayLike<File> | null | undefined, sensitivity = 'STANDARD') => {
     if (view || busy) return;

@@ -104,7 +104,7 @@ export function ExecutionFeedback({ executionId, propertyId, capabilities, calm 
 }
 
 export function ExecutionCard({
-  execution, isSuperseded, justUpdatedExecutionId, updateExecution, loading, ask, retryExecution, selectedPropertyId, setInput, visibleSuggestions, activeSessionRef, refreshIssue, refreshResult, refreshPending, onAccessLost, contextOpen, onOpenContext, folded = false, pinned = false, onToggleFold, onTogglePin, onEditQuestion,
+  execution, isSuperseded, justUpdatedExecutionId, updateExecution, loading, ask, retryExecution, selectedPropertyId, setInput, visibleSuggestions, activeSessionRef, refreshIssue, refreshResult, refreshPending, onAccessLost, contextOpen, onOpenContext, onOpenFileIntake, folded = false, pinned = false, onToggleFold, onTogglePin, onEditQuestion,
 }: {
   execution: AskExecutionResponse;
   isSuperseded: boolean;
@@ -134,6 +134,7 @@ export function ExecutionCard({
   onAccessLost: (execution: Pick<AskExecutionResponse, 'sessionId' | 'property' | 'executionId'>) => void;
   contextOpen: boolean;
   onOpenContext: (trigger: HTMLButtonElement) => void;
+  onOpenFileIntake?: (execution: AskExecutionResponse, opener: HTMLButtonElement) => void;
   // IW-PRES-021 (FRD v1.95): folding and pinning only change what is shown; they never re-run the request.
   folded?: boolean;
   pinned?: boolean;
@@ -213,6 +214,12 @@ export function ExecutionCard({
   };
   const dispatchBlockAction = (action: AskAction) => {
     setItemActionIssue(null);
+    if (action.interactionType === 'OPEN_FILE_INTAKE') {
+      const opener = document.activeElement instanceof HTMLButtonElement ? document.activeElement : null;
+      if (opener && onOpenFileIntake) onOpenFileIntake(execution, opener);
+      else setItemActionIssue('Adding a file is not available here right now.');
+      return;
+    }
     if (action.interactionType !== 'START_WORKFLOW' || !action.message || !action.operationId) {
       setItemActionIssue('This action is not available inline yet. Use the traditional navigation option instead.');
       return;
