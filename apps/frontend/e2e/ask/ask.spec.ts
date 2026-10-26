@@ -1746,7 +1746,7 @@ test('on a phone, lifespan bars and their facts fit the screen with no sideways 
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
-test('rooms answer as a room map by floor; a tile opens the live room detail in a side drawer with its corrections (FRD v1.79)', async ({ page }) => {
+test('rooms answer as a room map by floor; a tile opens the live room detail inline with its corrections (FRD v1.149)', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
@@ -1763,16 +1763,15 @@ test('rooms answer as a room map by floor; a tile opens the live room detail in 
   await expect(response.getByRole('list', { name: 'Floor 1, 2 rooms' }).getByRole('button', { name: /Office/ })).toContainText('1 open task');
   await response.getByRole('button', { name: /^Ground floor/ }).click();
   await kitchen.click();
-  const drawer = page.getByRole('dialog', { name: 'Room detail: Kitchen' });
-  await expect(drawer.getByText('Good · 82/100')).toBeVisible();
-  const box = await drawer.boundingBox();
-  expect(box && Math.round(box.x + box.width)).toBeGreaterThanOrEqual(1439);
-  await drawer.getByRole('button', { name: /Rename room/ }).click();
+  const detail = response.locator('[data-inline-room-detail]');
+  await expect(detail.getByText('Good · 82/100')).toBeVisible();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await detail.getByRole('button', { name: /Rename room/ }).click();
   await expect.poll(() => api.executionBodies.some((body) => body.message === 'Rename this room.'
     && (body.launchContext as { entityId?: string } | undefined)?.entityId === 'room-property-summary')).toBe(true);
 });
 
-test('on a phone, the room map tiles fit the screen and a room opens as a bottom sheet; List shows the counts (FRD v1.79)', async ({ page }) => {
+test('on a phone, the room map tiles and inline room detail fit the screen; List shows the counts (FRD v1.149)', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
@@ -1788,12 +1787,11 @@ test('on a phone, the room map tiles fit the screen and a room opens as a bottom
   }
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await response.locator('[data-ask-room-tile="room-property-summary"]').click();
-  const sheet = page.getByRole('dialog', { name: 'Room detail: Kitchen' });
-  await expect(sheet.getByText('Good · 82/100')).toBeVisible();
-  const box = await sheet.boundingBox();
-  expect(box && Math.round(box.y + box.height)).toBeGreaterThanOrEqual(843);
-  await page.keyboard.press('Escape');
-  await expect(sheet).toBeHidden();
+  const detail = response.locator('[data-inline-room-detail]');
+  await expect(detail.getByText('Good · 82/100')).toBeVisible();
+  const box = await detail.boundingBox();
+  expect(box && box.x >= 0 && box.x + box.width <= 390).toBe(true);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
   await response.getByRole('button', { name: 'List', exact: true }).click();
   await expect(response.getByText('Kitchen · 8 items · 2 open tasks · Updated Sep 1, 2026')).toBeVisible();
 });

@@ -856,7 +856,7 @@ test('inventory item actions: routing reaches INVENTORY_ITEM_CORRECT for room an
 });
 
 // ── Inventory propose: each field kind builds the right editable field on the confirmation card ──
-const proposeItem = { id: 'item-1', name: 'Water heater', category: 'PLUMBING', condition: 'GOOD', room: null, roomId: null, installedOn: new Date('2022-01-15T00:00:00.000Z'), purchasedOn: null, lastServicedOn: null, brand: 'Rheem', model: 'XE50', serialNo: 'SN-1', purchaseCostCents: 85000, replacementCostCents: null, notes: 'Basement utility closet.', updatedAt: itemUpdatedAt };
+const proposeItem = { id: 'item-1', propertyId: 'p1', name: 'Water heater', category: 'PLUMBING', condition: 'GOOD', room: null, roomId: null, installedOn: new Date('2022-01-15T00:00:00.000Z'), purchasedOn: null, lastServicedOn: null, brand: 'Rheem', model: 'XE50', serialNo: 'SN-1', purchaseCostCents: 85000, replacementCostCents: null, notes: 'Basement utility closet.', updatedAt: itemUpdatedAt };
 const proposeInventory = async (message) => {
   const original = InventoryService.prototype.listItems;
   InventoryService.prototype.listItems = async () => [proposeItem];
@@ -908,11 +908,33 @@ test('inventory completion opens one item-scoped form containing every supported
   assert.equal(calls.updateItem.length, 0, 'opening the completion form writes nothing');
 });
 
-test('inventory item actions: contributors get one action per correctable field, all pinned to the operation; the row schema accepts them', () => {
+test('inventory edit opens one prefilled multi-field editor and reviews only changed values', async () => {
+  models.inventoryRoom = { findMany: async () => [{ id: 'room-1', name: 'Utility room' }] };
+  models.inventoryItem = { findFirst: async () => proposeItem };
+  const opened = await proposeInventory('Edit this inventory item.');
+  assert.equal(opened.status, 'NEEDS_CONTEXT');
+  const request = opened.captureRequests[0];
+  assert.equal(request.editor.recordLabel, 'Water heater');
+  assert.equal(request.editor.fields.length, 13);
+  assert.equal(request.currentAnswer.brand, 'Rheem');
+  assert.equal(request.currentAnswer.roomId, 'NONE');
+
+  const changed = await proposeInventory('Edit this inventory item.');
+  models.inventoryRoom = { findMany: async () => [{ id: 'room-1', name: 'Utility room' }] };
+  models.inventoryItem = { findFirst: async () => proposeItem };
+  const handler = require('../../src/services/ask/handlers/inventory.handler.ts');
+  const reviewed = await handler.inventoryEditResult('u1', 'p1', 'item-1', { ...changed.captureRequests[0].currentAnswer, brand: 'A. O. Smith', model: 'Signature 100' });
+  assert.equal(reviewed.status, 'NEEDS_CONFIRMATION');
+  assert.equal(reviewed.parameters.inventoryCompletion.corrections.length, 2);
+  assert.deepEqual(reviewed.parameters.inventoryCompletion.corrections.map(({ field }) => field), ['brand', 'model']);
+  assert.equal(reviewed.confirmation.fields.length, 3, 'item plus two changed fields');
+});
+
+test('inventory item actions: contributors get one full-editor action pinned to the operation; the row schema accepts it', () => {
   const { AskPresentationBlockSchema } = require('../../src/productFramework/ask/ask.contract.ts');
   assert.ok(AskPresentationBlockSchema, 'the block schema export must exist for this test to mean anything');
   const source = readAskOrchestratorSources();
-  assert.match(source, /function inventoryCorrectionItemActions\(canManage: boolean\) \{\s*if \(!canManage\) return undefined;\s*return \(Object\.keys\(INVENTORY_CORRECTION_FIELDS\)/);
+  assert.match(source, /function inventoryCorrectionItemActions\(canManage: boolean\) \{\s*if \(!canManage\) return undefined;\s*return \[\{ id: 'edit-inventory-item'/);
   // ten actions on one row must validate (the row schema used to cap actions at three)
   const row = { id: 'item-1', title: 'Water heater', meta: [], actions: Array.from({ length: 10 }, (_, index) => ({ id: `a${index}`, label: `A${index}`, message: 'Correct the condition of this inventory item.', style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId: 'INVENTORY_ITEM_CORRECT' })) };
   const block = { type: 'GROUPED_LIST', id: 'inventory-results', title: 'Inventory', filters: [], sections: [{ id: 's', title: 's', count: 1, items: [row] }], actions: [] };

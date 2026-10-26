@@ -11,8 +11,7 @@ import { api } from '@/lib/api/client';
 import type { InventoryItem } from '@/types';
 
 // ASK_COZY_INLINE_WORKSPACE_FRD §11.10 IW-PRES-019 (FRD v1.79): the home record's rooms as a room map. Rooms keep
-// their own component in both layouts, so a tile opens the same live room detail (in the drawer or bottom sheet)
-// with its corrections.
+// their own component in both layouts, so a tile opens the same live room detail inline with its corrections.
 
 jest.mock('@/app/(dashboard)/dashboard/inventory/inventoryApi', () => ({ getRoomInsights: jest.fn() }));
 const mockedGetRoomInsights = getRoomInsights as jest.MockedFunction<typeof getRoomInsights>;
@@ -88,17 +87,19 @@ test('the room map shows every room by default and keeps floor filters with coun
   expect(within(screen.getByRole('list', { name: 'Other, 1 room' })).getByRole('button', { name: /Garage/ })).toHaveTextContent('1 open task');
 });
 
-test('a tile opens the live room detail in the sheet, with its corrections', async () => {
+test('a tile opens the live room detail inline, with its corrections', async () => {
   mockedGetRoomInsights.mockResolvedValueOnce(canonicalRoom());
   const onItemAction = jest.fn();
   render(<Harness onItemAction={onItemAction} />);
   fireEvent.click(await screen.findByRole('button', { name: /Kitchen/ }));
-  const sheet = await screen.findByRole('dialog', { name: 'Room detail: Kitchen' });
-  await waitFor(() => expect(within(sheet).getByText('Oven Range')).toBeInTheDocument());
-  expect(within(sheet).getByText('Dishwasher')).toBeInTheDocument();
-  expect(within(sheet).getByRole('link', { name: /Open full room record/ })).toHaveAttribute('href', '/dashboard/properties/home/rooms/kitchen');
+  await waitFor(() => expect(document.querySelector('[data-inline-room-detail]')).toBeInTheDocument());
+  const detail = document.querySelector('[data-inline-room-detail]') as HTMLElement;
+  await waitFor(() => expect(within(detail).getByText('Oven Range')).toBeInTheDocument());
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(within(detail).getByText('Dishwasher')).toBeInTheDocument();
+  expect(within(detail).getByRole('link', { name: /Open full room record/ })).toHaveAttribute('href', '/dashboard/properties/home/rooms/kitchen');
   expect(mockedGetRoomInsights).toHaveBeenCalledWith('home', 'kitchen');
-  fireEvent.click(within(sheet).getByRole('button', { name: /Rename room/ }));
+  fireEvent.click(within(detail).getByRole('button', { name: /Rename room/ }));
   expect(onItemAction).toHaveBeenCalledWith('INVENTORY_ROOM', 'kitchen', 'Rename this room.', 'ROOM_RENAME', 'MUTATE_RECORD');
 });
 
@@ -109,18 +110,19 @@ test('a room item opens the shared canonical item detail, exposes governed edits
   render(<Harness onItemAction={onItemAction} />);
 
   fireEvent.click(await screen.findByRole('button', { name: /Kitchen/ }));
-  const sheet = await screen.findByRole('dialog', { name: 'Room detail: Kitchen' });
-  expect(await within(sheet).findAllByText('Editing available')).toHaveLength(2);
-  fireEvent.click(within(sheet).getByRole('button', { name: 'View details for Oven Range' }));
+  await waitFor(() => expect(document.querySelector('[data-inline-room-detail]')).toBeInTheDocument());
+  const detail = document.querySelector('[data-inline-room-detail]') as HTMLElement;
+  expect(await within(detail).findAllByText('Editing available')).toHaveLength(2);
+  fireEvent.click(within(detail).getByRole('button', { name: 'View details for Oven Range' }));
 
-  expect(await within(sheet).findByText('Gas range in the kitchen.')).toBeInTheDocument();
+  expect(await within(detail).findByText('Gas range in the kitchen.')).toBeInTheDocument();
   expect(api.getInventoryItem).toHaveBeenCalledWith('home', 'oven');
-  fireEvent.click(within(sheet).getByRole('button', { name: /Correct brand/ }));
-  expect(onItemAction).toHaveBeenCalledWith('INVENTORY_ITEM', 'oven', 'Correct the brand of this inventory item.', 'INVENTORY_ITEM_CORRECT', 'MUTATE_RECORD');
-  expect(within(sheet).getByText('Attach a document')).toBeInTheDocument();
+  fireEvent.click(within(detail).getByRole('button', { name: /^Edit item/ }));
+  expect(onItemAction).toHaveBeenCalledWith('INVENTORY_ITEM', 'oven', 'Edit this inventory item.', 'INVENTORY_ITEM_CORRECT', 'MUTATE_RECORD');
+  expect(within(detail).getByText('Attach a document')).toBeInTheDocument();
 
-  fireEvent.click(within(sheet).getByRole('button', { name: 'Back to Kitchen' }));
-  expect(await within(sheet).findByRole('button', { name: 'View details for Oven Range' })).toBeInTheDocument();
+  fireEvent.click(within(detail).getByRole('button', { name: 'Back to Kitchen' }));
+  expect(await within(detail).findByRole('button', { name: 'View details for Oven Range' })).toBeInTheDocument();
 });
 
 test('a viewer can inspect a room item but receives no inventory write or evidence controls', async () => {
@@ -130,13 +132,14 @@ test('a viewer can inspect a room item but receives no inventory write or eviden
   render(<RoomResultList block={viewer} propertyId="home" onAction={jest.fn()} onAccessLost={() => {}} link={(href, content) => <a href={href}>{content}</a>} layout="MAP" />);
 
   fireEvent.click(await screen.findByRole('button', { name: /Kitchen/ }));
-  const sheet = await screen.findByRole('dialog', { name: 'Room detail: Kitchen' });
-  expect(await within(sheet).findAllByText('View only')).toHaveLength(2);
-  fireEvent.click(within(sheet).getByRole('button', { name: 'View details for Oven Range' }));
+  await waitFor(() => expect(document.querySelector('[data-inline-room-detail]')).toBeInTheDocument());
+  const detail = document.querySelector('[data-inline-room-detail]') as HTMLElement;
+  expect(await within(detail).findAllByText('View only')).toHaveLength(2);
+  fireEvent.click(within(detail).getByRole('button', { name: 'View details for Oven Range' }));
 
-  expect(await within(sheet).findByText('Gas range in the kitchen.')).toBeInTheDocument();
-  expect(within(sheet).queryByRole('button', { name: /Correct brand/ })).not.toBeInTheDocument();
-  expect(within(sheet).queryByText('Attach a document')).not.toBeInTheDocument();
+  expect(await within(detail).findByText('Gas range in the kitchen.')).toBeInTheDocument();
+  expect(within(detail).queryByRole('button', { name: /^Edit item/ })).not.toBeInTheDocument();
+  expect(within(detail).queryByText('Attach a document')).not.toBeInTheDocument();
 });
 
 test('the focused room answer removes duplicate chrome and keeps room and add actions inside Ask', async () => {
@@ -157,9 +160,10 @@ test('the focused room answer removes duplicate chrome and keeps room and add ac
   expect(invoke).toHaveBeenCalledWith(focused.actions[0]);
 
   fireEvent.click(screen.getByRole('button', { name: /Kitchen/ }));
-  const sheet = await screen.findByRole('dialog', { name: 'Room detail: Kitchen' });
-  expect(await within(sheet).findByText('Oven Range')).toBeInTheDocument();
-  fireEvent.click(within(sheet).getByRole('button', { name: 'Add an item' }));
+  await waitFor(() => expect(document.querySelector('[data-inline-room-detail]')).toBeInTheDocument());
+  const detail = document.querySelector('[data-inline-room-detail]') as HTMLElement;
+  expect(await within(detail).findByText('Oven Range')).toBeInTheDocument();
+  fireEvent.click(within(detail).getByRole('button', { name: 'Add an item' }));
   expect(onAction).toHaveBeenCalledWith('INVENTORY_ROOM', 'kitchen', 'Add an item to my home inventory.', 'INVENTORY_ITEM_CREATE', 'CONVERSATION_CONTINUE');
 });
 
@@ -175,5 +179,6 @@ test('the Room map / List switch keeps the rooms component: the list shows the c
   expect(screen.queryByRole('dialog')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Room map' }));
   expect(container.querySelector('[data-display-pattern="room_map"]')).toBeInTheDocument();
-  expect(await screen.findByRole('dialog', { name: 'Room detail: Kitchen' })).toBeInTheDocument();
+  await waitFor(() => expect(container.querySelector('[data-inline-room-detail]')).toBeInTheDocument());
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 });

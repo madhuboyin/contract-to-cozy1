@@ -27,6 +27,7 @@ import { correctionFieldForOutcome } from '../suggestedActions/suggestedNextActi
 import { staleSuggestedActionResult } from '../suggestedActions/staleSuggestedActionResult';
 import { resolveTypedActionTarget } from '../suggestedActions/typedTarget';
 import { DEFAULT_CANDIDATE_SIGNALS, DEFAULT_CANDIDATE_TRAITS, type SuggestedNextActionCandidate } from '../suggestedActions/suggestedNextActionCandidate';
+import { diffEditorValues, editorToGroupSchema, readEditorAnswer, type RecordEditorDescriptor, type RecordEditorField } from '../recordEditor/recordEditor.contract';
 
 export const inventoryService = new InventoryService();
 
@@ -583,6 +584,7 @@ const INVENTORY_CATEGORY_OPTIONS: readonly CorrectionOption[] = INVENTORY_CATEGO
 // and HOME_EVENT_CORRECT's HOME_EVENT_LINK_NONE_VALUE) -- an editable field's value is always a non-empty string.
 export const INVENTORY_CORRECTION_NO_ROOM_VALUE = 'NONE';
 export const INVENTORY_COMPLETE_DETAILS_CAPTURE_KEY = 'INVENTORY_ITEM_COMPLETE_DETAILS';
+export const INVENTORY_EDIT_MESSAGE = 'Edit this inventory item.';
 
 export const INVENTORY_CORRECTION_FIELDS = {
   // The homeowner-facing label only (max matches the inventory update validator). It is NOT the item's appliance
@@ -651,6 +653,96 @@ function inventoryCompletionCaptureRequest(item: Record<string, unknown> & { id:
     allowNotSure: true, sensitivity: 'STANDARD',
     destinationLabel: `Used to prepare updates to ${item.name}; nothing changes until you confirm`,
     confirmationText: null, expectedContextVersion: contextVersion,
+  };
+}
+
+type InventoryEditorItem = Record<string, unknown> & {
+  id: string;
+  propertyId: string;
+  name: string;
+  category: string;
+  roomId?: string | null;
+  updatedAt: Date;
+};
+
+async function inventoryEditorDescriptor(item: InventoryEditorItem): Promise<RecordEditorDescriptor> {
+  const roomOptions = await inventoryRoomLinkOptions(item.propertyId);
+  const fields = (Object.keys(INVENTORY_CORRECTION_FIELDS) as InventoryCorrectionField[]).map((field): RecordEditorField => {
+    const meta = INVENTORY_CORRECTION_FIELDS[field];
+    const section = ['name', 'category', 'roomId', 'condition'].includes(field) ? 'identity'
+      : ['brand', 'model', 'serialNo', 'notes'].includes(field) ? 'details' : 'dates-costs';
+    return {
+      key: field,
+      label: meta.label.replace(/^./, (letter) => letter.toUpperCase()),
+      kind: meta.kind,
+      section,
+      required: field === 'name' || field === 'category' || field === 'roomId',
+      ...(meta.max ? { maxLength: meta.max } : {}),
+      ...(meta.kind === 'SELECT' ? { options: field === 'roomId' ? roomOptions : meta.options } : {}),
+      ...(field === 'roomId' ? { emptyLabel: 'No room (whole-home)' } : {}),
+    };
+  });
+  const original = Object.fromEntries(fields.map((field) => {
+    const key = field.key as InventoryCorrectionField;
+    const value = key === 'roomId' ? (item.roomId ? String(item.roomId) : INVENTORY_CORRECTION_NO_ROOM_VALUE) : inventoryFieldCurrent(item, key) ?? '';
+    return [key, value];
+  }));
+  return {
+    recordLabel: item.name,
+    sections: [
+      { id: 'identity', title: 'Item and location' },
+      { id: 'details', title: 'Product details' },
+      { id: 'dates-costs', title: 'Dates and costs' },
+    ],
+    fields,
+    original,
+    version: inventoryItemContextVersion(item),
+  };
+}
+
+async function inventoryEditCaptureRequest(item: InventoryEditorItem, entered?: Record<string, string>, errors?: Record<string, string>): Promise<AskCaptureRequest> {
+  const descriptor = await inventoryEditorDescriptor(item);
+  return {
+    requirementId: `inventory-edit-${item.id}`, captureKey: INVENTORY_COMPLETE_DETAILS_CAPTURE_KEY, classification: 'WORKFLOW_INPUT', state: 'KNOWN',
+    title: `Edit ${item.name}`, question: 'Change any details that need updating.',
+    helpText: 'Update several fields together. You will review only what changed before anything is saved.',
+    inputSchema: editorToGroupSchema(descriptor), currentAnswer: entered ?? descriptor.original,
+    allowNotSure: false, sensitivity: 'STANDARD', destinationLabel: `Used to prepare updates to ${item.name}; nothing changes until you confirm`, confirmationText: null,
+    expectedContextVersion: descriptor.version, presentation: 'FORM',
+    editor: {
+      recordLabel: descriptor.recordLabel, sections: descriptor.sections.map((section) => ({ ...section })),
+      fields: descriptor.fields.map((field) => ({ ...field, options: field.options?.map((option) => ({ ...option })) })),
+      original: { ...descriptor.original }, saveLabel: 'Continue to review', ...(errors && Object.keys(errors).length ? { errors } : {}),
+    },
+  };
+}
+
+export async function inventoryEditResult(userId: string, propertyId: string, itemId: string, answer?: unknown, sourceExecutionId?: string | null): Promise<AskOperationResult> {
+  const access = await ensurePropertyAccess(userId, propertyId);
+  if (access.role === HouseholdRole.VIEWER) return { status: 'BLOCKED', reasonCode: 'ASK_PERMISSION_REQUIRED', blocks: [{ type: 'SUMMARY', id: 'inventory-edit-permission', title: 'A contributor or owner can edit this item', body: 'Your role can view inventory details but cannot change them.', tone: 'CAUTION', actions: [] }], suggestions: [] };
+  const item = await prisma.inventoryItem.findFirst({ where: { id: itemId, propertyId } });
+  if (!item) return { status: 'BLOCKED', reasonCode: 'INVENTORY_ITEM_NOT_FOUND', blocks: [{ type: 'SUMMARY', id: 'inventory-edit-missing', title: 'This inventory item is no longer available', body: 'Show your home inventory and choose another item.', tone: 'CAUTION', actions: [] }], suggestions: [] };
+  const descriptor = await inventoryEditorDescriptor(item as unknown as Record<string, unknown> & typeof item);
+  const editorBlock = { type: 'SUMMARY' as const, id: 'inventory-edit-input', title: `Edit ${item.name}`, body: 'Nothing has been saved. Change everything you need, then review only what changed.', tone: 'DEFAULT' as const, actions: [] };
+  if (!answer) return { status: 'NEEDS_CONTEXT', reasonCode: 'INVENTORY_ITEM_EDIT_INPUT_REQUIRED', contextVersion: descriptor.version, parameters: { inventoryCompletionItemId: item.id, inventoryEditAll: true, sourceExecutionId: sourceExecutionId ?? null }, blocks: [editorBlock], captureRequests: [await inventoryEditCaptureRequest(item as unknown as Record<string, unknown> & typeof item)], suggestions: [] };
+  const { values, errors } = readEditorAnswer(descriptor.fields, answer, descriptor.original);
+  for (const field of descriptor.fields) {
+    const value = values[field.key] ?? '';
+    if (!value || errors[field.key]) continue;
+    const problem = await inventoryFieldValueError(propertyId, field.key as InventoryCorrectionField, value);
+    if (problem) errors[field.key] = problem;
+  }
+  if (Object.keys(errors).length) return { status: 'NEEDS_CONTEXT', reasonCode: 'INVENTORY_ITEM_EDIT_INVALID', contextVersion: descriptor.version, parameters: { inventoryCompletionItemId: item.id, inventoryEditAll: true, sourceExecutionId: sourceExecutionId ?? null }, blocks: [{ ...editorBlock, id: 'inventory-edit-invalid', title: 'Check the highlighted fields', body: 'Nothing has been saved. Fix the highlighted fields, then review again.', tone: 'CAUTION' }], captureRequests: [await inventoryEditCaptureRequest(item as unknown as Record<string, unknown> & typeof item, values, errors)], suggestions: [] };
+  const changes = diffEditorValues(descriptor.fields, descriptor.original, values);
+  if (!changes.length) return { status: 'NEEDS_CONTEXT', reasonCode: 'INVENTORY_ITEM_EDIT_NO_CHANGES', contextVersion: descriptor.version, parameters: { inventoryCompletionItemId: item.id, inventoryEditAll: true, sourceExecutionId: sourceExecutionId ?? null }, blocks: [{ ...editorBlock, id: 'inventory-edit-no-changes', title: 'Nothing has changed', body: 'These details match the recorded item. Change a field to review an update.' }], captureRequests: [await inventoryEditCaptureRequest(item as unknown as Record<string, unknown> & typeof item, values)], suggestions: [] };
+  const corrections = changes.map((change) => ({ field: change.key as InventoryCorrectionField, value: values[change.key] || null }));
+  const expiresAt = new Date(Date.now() + 30 * 60_000);
+  return {
+    status: 'NEEDS_CONFIRMATION', reasonCode: 'INVENTORY_ITEM_EDIT_CONFIRMATION_REQUIRED', contextVersion: descriptor.version,
+    parameters: { inventoryCompletion: { itemId: item.id, corrections }, inventoryCorrectionContextVersion: descriptor.version, sourceExecutionId: sourceExecutionId ?? null, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() },
+    blocks: [{ type: 'SUMMARY', id: 'inventory-edit-review', title: `Review ${changes.length === 1 ? 'this change' : `these ${changes.length} changes`}`, body: 'No inventory record has changed yet. Only what you changed is listed.', tone: 'DEFAULT', actions: [] }],
+    confirmation: { confirmationId: `inventory-edit-${item.id}-1`, version: 1, title: `Save ${changes.length === 1 ? '1 change' : `${changes.length} changes`} to ${item.name}?`, description: 'This updates the canonical inventory record and refreshes dependent analyses.', fields: [{ label: 'Item', value: item.name }, ...changes.map((change) => ({ label: change.label, value: `${change.before} → ${change.after}` }))], editableFields: [], confirmLabel: 'Save changes', consentText: 'I authorize these changes to the shared home inventory record.', expiresAt: expiresAt.toISOString() },
+    captureRequests: [await inventoryEditCaptureRequest(item as unknown as Record<string, unknown> & typeof item, values)], suggestions: [],
   };
 }
 
@@ -846,16 +938,12 @@ export { inventoryItemContextVersion };
 // only -- a VIEWER never receives a control implying the write will be accepted.
 export function inventoryCorrectionItemActions(canManage: boolean) {
   if (!canManage) return undefined;
-  return (Object.keys(INVENTORY_CORRECTION_FIELDS) as InventoryCorrectionField[]).map((field) => ({
-    id: `correct-${field}`, label: INVENTORY_CORRECTION_FIELDS[field].action, message: INVENTORY_CORRECTION_FIELDS[field].message,
-    style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'INVENTORY_ITEM_CORRECT', outcomeKey: INVENTORY_CORRECTION_OUTCOME_BY_FIELD[field],
-  }));
+  return [{ id: 'edit-inventory-item', label: 'Edit item', message: INVENTORY_EDIT_MESSAGE, style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'INVENTORY_ITEM_CORRECT' }];
 }
 
 /**
- * The incomplete-record continuation is deliberately narrower than ordinary item detail: it offers only fields that
- * are both missing and supported by the canonical correction command. Documents use the detail's evidence control;
- * coverage evidence remains a disclosed traditional-inventory boundary.
+ * The incomplete-record continuation keeps one direct entry into the full editor. Documents use the detail's evidence
+ * control; coverage evidence remains a disclosed traditional-inventory boundary.
  */
 export function inventoryMissingCorrectionActions(
   item: {
@@ -866,24 +954,19 @@ export function inventoryMissingCorrectionActions(
   canManage: boolean,
 ) {
   if (!canManage) return undefined;
-  const fields: InventoryCorrectionField[] = [
+  const hasMissingFields = [
     ...(!item.brand && !item.manufacturer ? ['brand' as const] : []),
     ...(!item.model && !item.modelNumber ? ['model' as const] : []),
     ...(!item.serialNo && !item.serialNumber ? ['serialNo' as const] : []),
     ...(!item.purchasedOn ? ['purchasedOn' as const] : []),
-  ];
+  ].length > 0;
   const coverageUnknown = !item.warrantyId && !item.insurancePolicyId && (!item.coverageEvidenceStatus || item.coverageEvidenceStatus === 'UNKNOWN');
   return [
-    ...(fields.length ? [{
+    ...(hasMissingFields ? [{
       id: 'complete-missing-details', label: 'Add missing details',
       message: 'Complete the missing details for this inventory item.',
       style: 'PRIMARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'INVENTORY_ITEM_CORRECT' as const,
     }] : []),
-    ...fields.map((field) => ({
-    id: `correct-${field}`, label: `Add ${INVENTORY_CORRECTION_FIELDS[field].label}`,
-    message: INVENTORY_CORRECTION_FIELDS[field].message,
-    style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'INVENTORY_ITEM_CORRECT', outcomeKey: INVENTORY_CORRECTION_OUTCOME_BY_FIELD[field],
-    })),
     ...(coverageUnknown ? [{
       id: 'review-coverage-information', label: 'Review coverage information',
       message: 'Review the coverage information for this inventory item.',
@@ -995,6 +1078,9 @@ async function inventoryItemCorrectResult(userId: string, propertyId: string, me
   }
   const field = inventoryCorrectionFieldFor(message, launchContext?.outcomeKey);
   if (!field) {
+    if (message.trim() === INVENTORY_EDIT_MESSAGE) {
+      return inventoryEditResult(userId, propertyId, selected.id, undefined, launchContext?.sourceExecutionId);
+    }
     if (/\b(?:complete|add|update|fill in)\b.{0,35}\bmissing details\b/i.test(message)) {
       return inventoryCompleteDetailsResult(userId, propertyId, selected.id, undefined, launchContext?.sourceExecutionId);
     }

@@ -47,11 +47,10 @@ test('each candidate is schema-valid, names the exact item, uses a registered ou
   }
 });
 
-test('rich inventory correction actions publish the same registered outcomes used by compact candidates', () => {
+test('inventory detail exposes one full-editor action while compact next actions retain registered field outcomes', () => {
   const all = inventoryCorrectionItemActions(true);
-  assert.equal(all.length, Object.keys(INVENTORY_CORRECTION_FIELDS).length);
-  assert.ok(all.every((action) => isRegisteredOutcome(action.operationId, action.outcomeKey)));
-  assert.deepEqual(inventoryMissingCorrectionActions(item(), true).map((action) => action.outcomeKey), [undefined, 'ADD_BRAND', 'ADD_MODEL', 'ADD_SERIAL_NUMBER', 'ADD_PURCHASE_DATE']);
+  assert.deepEqual(all.map(({ label, message, operationId }) => ({ label, message, operationId })), [{ label: 'Edit item', message: 'Edit this inventory item.', operationId: 'INVENTORY_ITEM_CORRECT' }]);
+  assert.deepEqual(inventoryMissingCorrectionActions(item(), true).map((action) => action.id), ['complete-missing-details', 'review-coverage-information']);
 });
 
 test('a long item name keeps the label within the contract limit while the message keeps the full name', () => {

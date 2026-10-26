@@ -7,7 +7,6 @@ import type { AskItemActionInteractionType, AskPresentationBlock } from '@/featu
 import { ResultViewContext } from '@/features/ask/useResultView';
 import { cn } from '@/lib/utils';
 import { ActionLink } from './blocks/context';
-import { DetailSheetFrame } from './patterns/PatternParts';
 import { RoomMapView } from './patterns/RoomMapView';
 import { InventoryItemDetail, type InventoryAskItem, type InventoryItemActionHandler } from './InventoryResultList';
 
@@ -32,22 +31,6 @@ function label(value: string | null | undefined): string {
 
 type RoomItemActionHandler = (entityType: string | null | undefined, entityId: string, message: string, operationId: string, interactionType: AskItemActionInteractionType, documentId?: string) => void;
 
-const ROOM_ITEM_CORRECTIONS = [
-  ['name', 'Rename item', 'Rename this inventory item.'],
-  ['installedOn', 'Correct install date', 'Correct the install date of this inventory item.'],
-  ['purchasedOn', 'Correct purchase date', 'Correct the purchase date of this inventory item.'],
-  ['lastServicedOn', 'Correct last serviced date', 'Correct the last serviced date of this inventory item.'],
-  ['condition', 'Correct condition', 'Correct the condition of this inventory item.'],
-  ['brand', 'Correct brand', 'Correct the brand of this inventory item.'],
-  ['model', 'Correct model', 'Correct the model of this inventory item.'],
-  ['serialNo', 'Correct serial number', 'Correct the serial number of this inventory item.'],
-  ['purchaseCostCents', 'Correct purchase cost', 'Correct the purchase cost of this inventory item.'],
-  ['replacementCostCents', 'Correct replacement cost', 'Correct the replacement cost of this inventory item.'],
-  ['notes', 'Correct notes', 'Correct the notes of this inventory item.'],
-  ['category', 'Correct category', 'Correct the category of this inventory item.'],
-  ['roomId', 'Correct room', 'Correct the room of this inventory item.'],
-] as const;
-
 function roomInventoryItem(item: RoomInsightsDTO['items'][number], canManage: boolean): InventoryAskItem {
   return {
     id: item.id,
@@ -58,10 +41,7 @@ function roomInventoryItem(item: RoomInsightsDTO['items'][number], canManage: bo
     href: null,
     meta: [label(item.category), item.condition ? label(item.condition) : 'Condition not recorded'],
     actions: canManage ? [
-      ...ROOM_ITEM_CORRECTIONS.map(([field, actionLabel, message]) => ({
-        id: `correct-${field}`, label: actionLabel, message, style: 'SECONDARY' as const,
-        interactionType: 'MUTATE_RECORD' as const, operationId: 'INVENTORY_ITEM_CORRECT',
-      })),
+      { id: 'edit-inventory-item', label: 'Edit item', message: 'Edit this inventory item.', style: 'PRIMARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'INVENTORY_ITEM_CORRECT' },
       { id: 'review-coverage-information', label: 'Review coverage information', message: 'Review the coverage information for this inventory item.', style: 'SECONDARY' as const, interactionType: 'CONVERSATION_CONTINUE' as const, operationId: 'COVERAGE_GAPS' },
     ] : undefined,
   };
@@ -223,10 +203,7 @@ export function RoomResultList({ block, propertyId, disabled, onAction, onAccess
       </ul>
       {section.count > section.items.length && <p className="mt-3 text-sm text-slate-500">+{section.count - section.items.length} more rooms are available through the full Rooms collection.</p>}
     </div>)}
-    {layout === 'LIST' && detailRoomId && detailItem && roomDetail(detailRoomId, detailItem)}
-    {layout === 'MAP' && <DetailSheetFrame open={Boolean(detailRoomId && detailItem)} onOpenChange={(open) => { if (!open) closeDetail(); }} title={detailItem ? `Room detail: ${detailItem.title}` : 'Room detail'}>
-      {detailRoomId && detailItem && roomDetail(detailRoomId, detailItem)}
-    </DetailSheetFrame>}
+    {detailRoomId && detailItem && <div data-inline-room-detail="" className="border-b border-slate-100">{roomDetail(detailRoomId, detailItem)}</div>}
     {block.actions.some((action) => action.href || action.interactionType === 'START_WORKFLOW') && <div data-ask-action-footer="" className={cn('flex flex-wrap gap-2 text-sm font-semibold text-teal-800', focused ? 'px-4 pb-2 pt-3' : 'px-4 py-3')}>{block.actions.map((action) => action.href ? <span key={action.id}>{link(action.href, <>{action.label}<ExternalLink className="ml-1 inline h-3.5 w-3.5" aria-hidden="true" /></>)}</span> : action.interactionType === 'START_WORKFLOW' ? <ActionLink key={action.id} action={action} /> : null)}</div>}
   </section>;
 }

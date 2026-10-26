@@ -7,7 +7,7 @@ const summary: AskPresentationBlock = {
 
 test('keeps ordinary conversational answers at a readable measure', () => {
   expect(askAnswerWidth([summary])).toBe('STANDARD');
-  expect(askAnswerWidthClass('STANDARD')).toContain('max-w-[920px]');
+  expect(askAnswerWidthClass('STANDARD')).toContain('max-w-[960px]');
 });
 
 test.each<AskPresentationBlock>([
@@ -39,4 +39,10 @@ test('keeps the reserve-fund decision answer at the Home Actions measure despite
   const progress: AskPresentationBlock = { type: 'PROGRESS', id: 'reserve-fund-overview', title: 'Funding progress', percent: 0, basis: '$0 funded', metrics: [], nextSteps: [], actions: [] };
   const timeline: AskPresentationBlock = { type: 'TIMELINE', id: 'capital-timeline', title: 'Capital timeline', items: [] };
   expect(askAnswerWidth([summary, progress, timeline])).toBe('STANDARD');
+});
+
+test('keeps property completeness and its summary at the Home Actions measure', () => {
+  const progress: AskPresentationBlock = { type: 'PROGRESS', id: 'property-completeness-progress', title: 'Property details completeness', percent: 100, basis: '66 of 66 applicable facts known', metrics: [], nextSteps: [], actions: [] };
+  const facts: AskPresentationBlock = { type: 'GROUPED_LIST', id: 'property-summary-facts', title: 'Home record summary', sections: [], filters: [], actions: [] };
+  expect(askAnswerWidth([summary, progress, facts])).toBe('STANDARD');
 });

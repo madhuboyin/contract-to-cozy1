@@ -32,7 +32,8 @@ test('name is a correctable text field, offered first, capped like the inventory
   assert.deepEqual({ ...INVENTORY_CORRECTION_FIELDS.name, options: undefined }, { label: 'name', action: 'Rename item', message: 'Rename this inventory item.', kind: 'TEXT', max: 120, options: undefined });
   assert.equal(InventoryItemCorrectionInputSchema.safeParse({ itemId: 'i', field: 'name', value: 'Basement freezer' }).success, true);
   const actions = inventoryCorrectionItemActions(true);
-  assert.equal(actions[0].label, 'Rename item');
+  assert.equal(actions[0].label, 'Edit item');
+  assert.equal(actions[0].message, 'Edit this inventory item.');
   assert.equal(actions[0].operationId, 'INVENTORY_ITEM_CORRECT');
   assert.equal(actions[0].interactionType, 'MUTATE_RECORD');
   assert.equal(inventoryCorrectionItemActions(false), undefined, 'a viewer is never offered a write control');

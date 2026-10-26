@@ -232,20 +232,29 @@ async function confirmHouseholdInvitation(ctx: ConfirmCapabilityContext): Promis
 
 async function confirmInventoryItemCorrect(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
   const { execution, userId, parameters } = ctx;
-  const completion = z.object({ itemId: z.string(), corrections: z.array(z.object({ field: z.enum(['name', 'installedOn', 'purchasedOn', 'lastServicedOn', 'condition', 'brand', 'model', 'serialNo', 'purchaseCostCents', 'replacementCostCents', 'notes', 'category', 'roomId']), value: z.string() })).min(1).max(12) }).safeParse(parameters.inventoryCompletion);
+  const completion = z.object({ itemId: z.string(), corrections: z.array(z.object({ field: z.enum(['name', 'installedOn', 'purchasedOn', 'lastServicedOn', 'condition', 'brand', 'model', 'serialNo', 'purchaseCostCents', 'replacementCostCents', 'notes', 'category', 'roomId']), value: z.string().nullable() })).min(1).max(13) }).safeParse(parameters.inventoryCompletion);
   if (completion.success) {
     const item = await prisma.inventoryItem.findFirst({ where: { id: completion.data.itemId, propertyId: execution.propertyId! } });
     if (!item) throw Object.assign(new Error('This inventory item is no longer available. It may have been deleted.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
     const patch: Record<string, unknown> = {};
+    const normalizedCorrections: Array<{ field: keyof typeof INVENTORY_CORRECTION_FIELDS; normalized: string | null }> = [];
     let alreadyApplied = true;
     for (const correction of completion.data.corrections) {
-      const invalid = await inventoryFieldValueError(execution.propertyId!, correction.field, correction.value);
-      if (invalid) throw Object.assign(new Error(invalid), { code: 'ASK_INVALID_CONFIRMATION_EDIT' });
-      const normalized = inventoryFieldNormalized(correction.field, correction.value);
-      const blocker = await inventoryCorrectionBlocker(execution.propertyId!, item, correction.field, normalized);
+      const invalid = correction.value === null ? null : await inventoryFieldValueError(execution.propertyId!, correction.field, correction.value);
+      if (invalid || (correction.value === null && ['name', 'category', 'roomId'].includes(correction.field))) throw Object.assign(new Error(invalid ?? 'This required detail cannot be cleared.'), { code: 'ASK_INVALID_CONFIRMATION_EDIT' });
+      const normalized = correction.value === null ? null : inventoryFieldNormalized(correction.field, correction.value);
+      const expected = correction.field === INVENTORY_ROOM_LINK_FIELD && normalized === INVENTORY_CORRECTION_NO_ROOM_VALUE ? null : normalized;
+      if (inventoryFieldCurrent(item, correction.field) !== expected) alreadyApplied = false;
+      Object.assign(patch, normalized === null ? { [correction.field]: null } : inventoryFieldPatch(correction.field, normalized));
+      normalizedCorrections.push({ field: correction.field, normalized });
+    }
+    // Cross-field rules must see the complete proposed record. For example,
+    // assigning a room and changing to a room-required category in the same
+    // editor save is valid regardless of field order.
+    const proposedItem = { ...item, ...patch };
+    for (const correction of normalizedCorrections) {
+      const blocker = correction.normalized === null ? null : await inventoryCorrectionBlocker(execution.propertyId!, proposedItem, correction.field, correction.normalized);
       if (blocker) throw Object.assign(new Error(blocker), { code: 'ASK_INVALID_CONFIRMATION_EDIT' });
-      if (inventoryFieldCurrent(item, correction.field) !== normalized) alreadyApplied = false;
-      Object.assign(patch, inventoryFieldPatch(correction.field, normalized));
     }
     if (!alreadyApplied && parameters.inventoryCorrectionContextVersion !== inventoryItemContextVersion(item)) throw Object.assign(new Error('This inventory item changed while confirmation was open. Review it and try again.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
     if (!alreadyApplied) {

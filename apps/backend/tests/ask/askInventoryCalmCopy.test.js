@@ -13,7 +13,7 @@ test('a plain list states how many items are recorded and how many are missing d
   assert.equal(inventoryCalmCopy(counts({ matchCount: 1, shownCount: 1, missingCount: 1 })).headline, '1 item recorded, 1 with missing details.');
 });
 
-test('missing-detail continuation offers only missing inline-correctable fields', () => {
+test('missing-detail continuation offers one entry into the full multi-field editor', () => {
   const actions = inventoryMissingCorrectionActions({
     brand: null, manufacturer: null, model: 'XR-1', modelNumber: null,
     serialNo: null, serialNumber: null, purchasedOn: null,
@@ -21,9 +21,6 @@ test('missing-detail continuation offers only missing inline-correctable fields'
   }, true);
   assert.deepEqual(actions.map(({ id, label }) => ({ id, label })), [
     { id: 'complete-missing-details', label: 'Add missing details' },
-    { id: 'correct-brand', label: 'Add brand' },
-    { id: 'correct-serialNo', label: 'Add serial number' },
-    { id: 'correct-purchasedOn', label: 'Add purchase date' },
   ]);
   assert.deepEqual(actions[0], {
     id: 'complete-missing-details', label: 'Add missing details',

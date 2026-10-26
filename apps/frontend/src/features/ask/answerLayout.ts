@@ -16,6 +16,11 @@ const WIDE_BLOCK_TYPES = new Set<AskPresentationBlock['type']>([
  * width. This is presentation-only: it never changes block selection or data.
  */
 export function askAnswerWidth(blocks: AskPresentationBlock[]): AskAnswerWidth {
+  // Property completeness is a compact record readout. Its fact-grid happens to
+  // use TABLE semantics, but it should align with Home Actions rather than
+  // widening the whole conversation like a comparison artifact.
+  if (blocks.some((block) => block.id === 'property-completeness-progress')
+    && blocks.some((block) => block.id === 'property-summary-facts')) return 'STANDARD';
   // Reserve Fund is a decision answer with one supporting timeline. Keep the
   // whole conversation at the Home Actions reading measure; the timeline is
   // responsive inside that measure and should not widen every surrounding card.
@@ -32,5 +37,5 @@ export function askAnswerWidth(blocks: AskPresentationBlock[]): AskAnswerWidth {
 }
 
 export function askAnswerWidthClass(width: AskAnswerWidth): string {
-  return width === 'WIDE' ? 'w-full max-w-[1140px]' : 'w-full max-w-[920px]';
+  return width === 'WIDE' ? 'w-full max-w-[1140px]' : 'w-full max-w-[960px]';
 }
