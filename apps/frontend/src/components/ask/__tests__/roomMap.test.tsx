@@ -7,6 +7,8 @@ import { ResultViewContext, useResultView } from '@/features/ask/useResultView';
 import { floorLabel, roomFloors } from '@/features/ask/displayPatterns';
 import type { AskExecutionResponse, AskPresentationBlock } from '@/features/ask/types';
 import { getRoomInsights, type RoomInsightsDTO } from '@/app/(dashboard)/dashboard/inventory/inventoryApi';
+import { api } from '@/lib/api/client';
+import type { InventoryItem } from '@/types';
 
 // ASK_COZY_INLINE_WORKSPACE_FRD §11.10 IW-PRES-019 (FRD v1.79): the home record's rooms as a room map. Rooms keep
 // their own component in both layouts, so a tile opens the same live room detail (in the drawer or bottom sheet)
@@ -54,7 +56,16 @@ const canonicalRoom = (): RoomInsightsDTO => ({
   kitchen: { missingAppliances: [], quickWins: [] },
 } as RoomInsightsDTO);
 
-beforeEach(() => { window.sessionStorage.clear(); jest.clearAllMocks(); });
+const canonicalItem = (): InventoryItem => ({
+  id: 'oven', propertyId: 'home', roomId: 'kitchen', warrantyId: null, insurancePolicyId: null,
+  name: 'Oven Range', category: 'APPLIANCE' as InventoryItem['category'], condition: 'GOOD' as InventoryItem['condition'],
+  brand: 'Samsung', model: 'NX60', serialNo: 'OVEN-1', installedOn: '2022-01-15T00:00:00.000Z', purchasedOn: '2022-01-10T00:00:00.000Z',
+  lastServicedOn: null, purchaseCostCents: 85000, replacementCostCents: 120000, currency: 'USD', notes: 'Gas range in the kitchen.',
+  tags: [], sourceHash: null, coverageNotRequired: false, isVerified: true, documents: [], warranty: null,
+  createdAt: '2022-01-15T00:00:00.000Z', updatedAt: '2026-09-01T00:00:00.000Z',
+} as InventoryItem);
+
+beforeEach(() => { window.sessionStorage.clear(); jest.restoreAllMocks(); jest.clearAllMocks(); });
 
 test('floor labels follow Ask\'s floor convention: ground floor is 0, below zero is below ground', () => {
   expect([-2, -1, 0, 1, 3].map(floorLabel)).toEqual(['Basement level 2', 'Basement', 'Ground floor', 'Floor 1', 'Floor 3']);
@@ -89,6 +100,43 @@ test('a tile opens the live room detail in the sheet, with its corrections', asy
   expect(mockedGetRoomInsights).toHaveBeenCalledWith('home', 'kitchen');
   fireEvent.click(within(sheet).getByRole('button', { name: /Rename room/ }));
   expect(onItemAction).toHaveBeenCalledWith('INVENTORY_ROOM', 'kitchen', 'Rename this room.', 'ROOM_RENAME', 'MUTATE_RECORD');
+});
+
+test('a room item opens the shared canonical item detail, exposes governed edits, and returns to the room', async () => {
+  mockedGetRoomInsights.mockResolvedValueOnce(canonicalRoom());
+  jest.spyOn(api, 'getInventoryItem').mockResolvedValueOnce({ success: true, data: { item: canonicalItem() } } as Awaited<ReturnType<typeof api.getInventoryItem>>);
+  const onItemAction = jest.fn();
+  render(<Harness onItemAction={onItemAction} />);
+
+  fireEvent.click(await screen.findByRole('button', { name: /Kitchen/ }));
+  const sheet = await screen.findByRole('dialog', { name: 'Room detail: Kitchen' });
+  expect(await within(sheet).findAllByText('Editing available')).toHaveLength(2);
+  fireEvent.click(within(sheet).getByRole('button', { name: 'View details for Oven Range' }));
+
+  expect(await within(sheet).findByText('Gas range in the kitchen.')).toBeInTheDocument();
+  expect(api.getInventoryItem).toHaveBeenCalledWith('home', 'oven');
+  fireEvent.click(within(sheet).getByRole('button', { name: /Correct brand/ }));
+  expect(onItemAction).toHaveBeenCalledWith('INVENTORY_ITEM', 'oven', 'Correct the brand of this inventory item.', 'INVENTORY_ITEM_CORRECT', 'MUTATE_RECORD');
+  expect(within(sheet).getByText('Attach a document')).toBeInTheDocument();
+
+  fireEvent.click(within(sheet).getByRole('button', { name: 'Back to Kitchen' }));
+  expect(await within(sheet).findByRole('button', { name: 'View details for Oven Range' })).toBeInTheDocument();
+});
+
+test('a viewer can inspect a room item but receives no inventory write or evidence controls', async () => {
+  mockedGetRoomInsights.mockResolvedValueOnce(canonicalRoom());
+  jest.spyOn(api, 'getInventoryItem').mockResolvedValueOnce({ success: true, data: { item: canonicalItem() } } as Awaited<ReturnType<typeof api.getInventoryItem>>);
+  const viewer: Block = { ...block, sections: block.sections.map((section) => ({ ...section, items: section.items.map((item) => ({ ...item, actions: undefined })) })) };
+  render(<RoomResultList block={viewer} propertyId="home" onAction={jest.fn()} onAccessLost={() => {}} link={(href, content) => <a href={href}>{content}</a>} layout="MAP" />);
+
+  fireEvent.click(await screen.findByRole('button', { name: /Kitchen/ }));
+  const sheet = await screen.findByRole('dialog', { name: 'Room detail: Kitchen' });
+  expect(await within(sheet).findAllByText('View only')).toHaveLength(2);
+  fireEvent.click(within(sheet).getByRole('button', { name: 'View details for Oven Range' }));
+
+  expect(await within(sheet).findByText('Gas range in the kitchen.')).toBeInTheDocument();
+  expect(within(sheet).queryByRole('button', { name: /Correct brand/ })).not.toBeInTheDocument();
+  expect(within(sheet).queryByText('Attach a document')).not.toBeInTheDocument();
 });
 
 test('the focused room answer removes duplicate chrome and keeps room and add actions inside Ask', async () => {

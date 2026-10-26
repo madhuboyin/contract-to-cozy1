@@ -1,7 +1,7 @@
 'use client';
 
 import { type ReactNode, useContext, useEffect, useRef, useState } from 'react';
-import { ExternalLink, Loader2, Package, Plus, X } from 'lucide-react';
+import { ChevronRight, ExternalLink, Loader2, LockKeyhole, Package, Pencil, Plus, X } from 'lucide-react';
 import { getRoomInsights, type RoomInsightsDTO } from '@/app/(dashboard)/dashboard/inventory/inventoryApi';
 import type { AskItemActionInteractionType, AskPresentationBlock } from '@/features/ask/types';
 import { ResultViewContext } from '@/features/ask/useResultView';
@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils';
 import { ActionLink } from './blocks/context';
 import { DetailSheetFrame } from './patterns/PatternParts';
 import { RoomMapView } from './patterns/RoomMapView';
+import { InventoryItemDetail, type InventoryAskItem, type InventoryItemActionHandler } from './InventoryResultList';
 
 type Block = Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>;
 type Item = Block['sections'][number]['items'][number];
@@ -29,7 +30,42 @@ function label(value: string | null | undefined): string {
   return value ? value.toLowerCase().replace(/_/g, ' ').replace(/^\w/, (letter) => letter.toUpperCase()) : 'Not recorded';
 }
 
-type RoomItemActionHandler = (entityType: string | null | undefined, entityId: string, message: string, operationId: string, interactionType: AskItemActionInteractionType) => void;
+type RoomItemActionHandler = (entityType: string | null | undefined, entityId: string, message: string, operationId: string, interactionType: AskItemActionInteractionType, documentId?: string) => void;
+
+const ROOM_ITEM_CORRECTIONS = [
+  ['name', 'Rename item', 'Rename this inventory item.'],
+  ['installedOn', 'Correct install date', 'Correct the install date of this inventory item.'],
+  ['purchasedOn', 'Correct purchase date', 'Correct the purchase date of this inventory item.'],
+  ['lastServicedOn', 'Correct last serviced date', 'Correct the last serviced date of this inventory item.'],
+  ['condition', 'Correct condition', 'Correct the condition of this inventory item.'],
+  ['brand', 'Correct brand', 'Correct the brand of this inventory item.'],
+  ['model', 'Correct model', 'Correct the model of this inventory item.'],
+  ['serialNo', 'Correct serial number', 'Correct the serial number of this inventory item.'],
+  ['purchaseCostCents', 'Correct purchase cost', 'Correct the purchase cost of this inventory item.'],
+  ['replacementCostCents', 'Correct replacement cost', 'Correct the replacement cost of this inventory item.'],
+  ['notes', 'Correct notes', 'Correct the notes of this inventory item.'],
+  ['category', 'Correct category', 'Correct the category of this inventory item.'],
+  ['roomId', 'Correct room', 'Correct the room of this inventory item.'],
+] as const;
+
+function roomInventoryItem(item: RoomInsightsDTO['items'][number], canManage: boolean): InventoryAskItem {
+  return {
+    id: item.id,
+    title: item.name,
+    entityType: 'INVENTORY_ITEM',
+    description: null,
+    status: item.condition,
+    href: null,
+    meta: [label(item.category), item.condition ? label(item.condition) : 'Condition not recorded'],
+    actions: canManage ? [
+      ...ROOM_ITEM_CORRECTIONS.map(([field, actionLabel, message]) => ({
+        id: `correct-${field}`, label: actionLabel, message, style: 'SECONDARY' as const,
+        interactionType: 'MUTATE_RECORD' as const, operationId: 'INVENTORY_ITEM_CORRECT',
+      })),
+      { id: 'review-coverage-information', label: 'Review coverage information', message: 'Review the coverage information for this inventory item.', style: 'SECONDARY' as const, interactionType: 'CONVERSATION_CONTINUE' as const, operationId: 'COVERAGE_GAPS' },
+    ] : undefined,
+  };
+}
 
 function RoomDetail({ roomId, expectedPropertyId, fallbackItem, disabled, onAction, onAccessLost, onClose, fullRecord }: {
   roomId: string;
@@ -42,6 +78,7 @@ function RoomDetail({ roomId, expectedPropertyId, fallbackItem, disabled, onActi
   fullRecord?: ReactNode;
 }) {
   const [room, setRoom] = useState<RoomInsightsDTO | null>(null);
+  const [detailItem, setDetailItem] = useState<InventoryAskItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<'ROOM_NOT_FOUND' | 'REVALIDATION_FAILED' | null>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -78,6 +115,11 @@ function RoomDetail({ roomId, expectedPropertyId, fallbackItem, disabled, onActi
     if (!loading) headingRef.current?.focus();
   }, [loading]);
 
+  const canManageItems = Boolean(onAction && fallbackItem.actions !== undefined);
+  const itemAction: InventoryItemActionHandler | undefined = onAction;
+
+  if (detailItem) return <InventoryItemDetail itemId={detailItem.id} expectedPropertyId={expectedPropertyId} fallbackItem={detailItem} disabled={disabled} onAction={itemAction} onAccessLost={onAccessLost} onClose={() => setDetailItem(null)} backLabel={`Back to ${room?.room.name ?? fallbackItem.title}`} />;
+
   return <aside className="border-t border-teal-100 bg-teal-50/40 p-4" aria-labelledby={`room-detail-${roomId}`}>
     <div className="flex items-start justify-between gap-3">
       <div>
@@ -99,10 +141,11 @@ function RoomDetail({ roomId, expectedPropertyId, fallbackItem, disabled, onActi
         {room.items.length ? <ul className="mt-2 divide-y divide-slate-100">
           {room.items.map((item) => <li key={item.id} className="flex items-center gap-3 py-2.5">
             <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600" aria-hidden="true"><Package className="h-4 w-4" /></span>
-            <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-slate-900">{item.name}</span><span className="block text-xs text-slate-500">{label(item.category)}{item.condition ? ` · ${label(item.condition)}` : ''}</span></span>
+            <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-slate-900">{item.name}</span><span className="block text-xs text-slate-500">{label(item.category)}{item.condition ? ` · ${label(item.condition)}` : ''}</span><span className={cn('mt-1 flex items-center gap-1 text-xs font-medium', canManageItems ? 'text-teal-700' : 'text-slate-500')}>{canManageItems ? <Pencil className="h-3.5 w-3.5" aria-hidden="true" /> : <LockKeyhole className="h-3.5 w-3.5" aria-hidden="true" />}{canManageItems ? 'Editing available' : 'View only'}</span></span>
+            <button type="button" onClick={() => setDetailItem(roomInventoryItem(item, canManageItems))} className="inline-flex min-h-10 shrink-0 items-center gap-1 text-sm font-semibold text-teal-800" aria-label={`View details for ${item.name}`}>View details <ChevronRight className="h-4 w-4" aria-hidden="true" /></button>
           </li>)}
         </ul> : <p className="mt-2 text-sm text-slate-500">No items are recorded in this room yet.</p>}
-        {room.itemsTruncated && <p className="mt-2 text-xs text-slate-500">Showing the first 20 of {room.stats.itemCount} items.</p>}
+        {room.itemsTruncated && <p className="mt-2 text-xs text-slate-500">Showing the first 20 of {room.stats.itemCount} items. Open the full room record below to see every item.</p>}
       </div>
       {onAction && (fallbackItem.actions?.length ?? 0) > 0 && <button type="button" disabled={disabled} onClick={() => onAction('INVENTORY_ROOM', roomId, 'Add an item to my home inventory.', 'INVENTORY_ITEM_CREATE', 'CONVERSATION_CONTINUE')}
         className="mt-3 inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-teal-200 bg-white px-3 py-2 text-sm font-semibold text-teal-800 disabled:opacity-50"><Plus className="h-4 w-4" aria-hidden="true" />Add an item</button>}

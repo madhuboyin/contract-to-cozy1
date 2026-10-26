@@ -14,7 +14,8 @@ import type { InventoryItem } from '@/types';
 import { ActionLink } from './blocks/context';
 
 type Block = Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>;
-type Item = Block['sections'][number]['items'][number];
+export type InventoryAskItem = Block['sections'][number]['items'][number];
+type Item = InventoryAskItem;
 const COMPLETE_MISSING_DETAILS_ACTION_ID = 'complete-missing-details';
 const REVIEW_COVERAGE_ACTION_ID = 'review-coverage-information';
 
@@ -35,7 +36,7 @@ function errorCode(error: unknown): string | null {
   return typeof code === 'string' ? code : null;
 }
 
-type InventoryItemActionHandler = (entityType: string | null | undefined, entityId: string, message: string, operationId: string, interactionType: AskItemActionInteractionType, documentId?: string) => void;
+export type InventoryItemActionHandler = (entityType: string | null | undefined, entityId: string, message: string, operationId: string, interactionType: AskItemActionInteractionType, documentId?: string) => void;
 
 function formatDate(value: string | null | undefined): string {
   if (!value) return 'Not recorded';
@@ -53,7 +54,7 @@ function fieldLabel(value: string | null | undefined): string {
   return value ? value.toLowerCase().replace(/_/g, ' ').replace(/^\w/, (letter) => letter.toUpperCase()) : 'Not recorded';
 }
 
-function InventoryItemDetail({ itemId, expectedPropertyId, fallbackItem, disabled, onAction, onAccessLost, onClose }: {
+export function InventoryItemDetail({ itemId, expectedPropertyId, fallbackItem, disabled, onAction, onAccessLost, onClose, backLabel }: {
   itemId: string;
   expectedPropertyId?: string;
   fallbackItem: Item;
@@ -61,6 +62,7 @@ function InventoryItemDetail({ itemId, expectedPropertyId, fallbackItem, disable
   onAction?: InventoryItemActionHandler;
   onAccessLost: () => void;
   onClose: () => void;
+  backLabel?: string;
 }) {
   const [item, setItem] = useState<InventoryItem | null>(null);
   const [loading, setLoading] = useState(true);
@@ -110,7 +112,7 @@ function InventoryItemDetail({ itemId, expectedPropertyId, fallbackItem, disable
           <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-teal-700">Item detail</p>
           <h4 ref={headingRef} tabIndex={-1} id={`inventory-detail-${itemId}`} className="mt-1 text-lg font-semibold text-slate-950 outline-none">{item?.name ?? fallbackItem.title}</h4>
         </div>
-        <button type="button" onClick={onClose} className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-xl text-slate-600 hover:bg-white" aria-label={`Close item detail for ${fallbackItem.title}`}><X className="h-4 w-4" /></button>
+        <button type="button" onClick={onClose} className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl px-2 text-sm font-semibold text-slate-600 hover:bg-white" aria-label={backLabel ?? `Close item detail for ${fallbackItem.title}`}>{backLabel ? <><ChevronRight className="h-4 w-4 rotate-180" aria-hidden="true" />{backLabel}</> : <X className="h-4 w-4" />}</button>
       </div>
       {loading && <p className="mt-4 flex items-center gap-2 text-sm text-slate-600" role="status"><Loader2 className="h-4 w-4 animate-spin" />Loading the current inventory record…</p>}
       {error && <div className="mt-4 rounded-xl border border-amber-200 bg-white p-3" role="alert">
