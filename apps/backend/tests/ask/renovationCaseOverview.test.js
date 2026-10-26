@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 
 require('ts-node/register/transpile-only');
 
-const { isRenovationCaseOverviewRequest, renovationCaseRows, renovationNextStep, renovationLifecycleLabel } = require('../../src/services/ask/support/renovationCaseOverview.ts');
+const { isRenovationRequirementsRequest, renovationRequirementRows, isRenovationCaseOverviewRequest, renovationCaseRows, renovationNextStep, renovationLifecycleLabel } = require('../../src/services/ask/support/renovationCaseOverview.ts');
 const { resolveAskOperation } = require('../../src/services/ask/askOperationRegistry.ts');
 const { AskPresentationBlockSchema } = require('../../src/productFramework/ask/ask.contract.ts');
 const { validateAskAnswerTrust } = require('../../src/services/ask/askAnswerTrustValidator.ts');
@@ -52,5 +52,39 @@ test('the case list is schema-valid and its row actions survive the answer-trust
   };
   const { result: validated } = validateAskAnswerTrust({ question: 'Show my renovation cases', operationId: 'RENOVATION_PERMIT_READINESS', result, propertyId: 'p1' });
   const kept = validated.blocks.find((block) => block.id === 'renovation-cases').sections[0].items.flatMap((item) => item.actions ?? []);
-  assert.equal(kept.length, 1);
+  assert.deepEqual(kept.map((action) => action.id), ['renovation-case-show-requirements', 'renovation-case-show-readiness', 'renovation-case-show-requirements']);
+});
+
+const requirement = (id, overrides = {}) => ({
+  id, family: 'BUILDING_PERMIT', question: 'Does this scope need a building permit?', advisoryLikelihood: 'LIKELY_APPLIES', determination: 'UNDETERMINED', truthLayer: 'ADVISORY',
+  confidence: 'MEDIUM', exactNextAction: 'Ask the building department.', dueAt: null, isBlocking: true, ...overrides,
+});
+
+test('a requirements request is narrow and routes to the renovation answer', () => {
+  for (const yes of ['What requirements apply to my renovation?', 'Show the permit requirements for my remodel']) assert.equal(isRenovationRequirementsRequest(yes), true, yes);
+  for (const no of ['Is my renovation ready to start?', 'Show my renovation cases', 'What are the requirements for a mortgage?']) assert.equal(isRenovationRequirementsRequest(no), false, no);
+  assert.equal(resolveAskOperation('What requirements apply to my renovation?').operationId, 'RENOVATION_PERMIT_READINESS');
+});
+
+test('research candidates and sourced determinations are shown apart, with who confirmed what', () => {
+  const { unresolved, determined } = renovationRequirementRows([
+    requirement('a', { dueAt: new Date('2026-11-01T00:00:00Z'), limitation: 'Local rules vary.' }),
+    requirement('b', { family: 'HOA_APPROVAL', determination: 'APPLIES', truthLayer: 'AUTHORITY_CONFIRMED', confirmedByName: 'J. Rivera', sourceUrl: 'https://www.cityname.gov/permits', sourceSection: 'Sec. 4', isBlocking: false }),
+  ], () => 'Nov 1, 2026');
+  assert.equal(unresolved.length, 1);
+  assert.deepEqual(unresolved[0].meta, ['Research needed', 'Advisory likelihood: likely applies', 'Confidence: medium', 'Blocks starting']);
+  assert.match(unresolved[0].detail, /Next step: Ask the building department\.\nResearch due Nov 1, 2026\nLimitation: Local rules vary\./);
+  assert.equal(determined[0].title, 'Hoa approval');
+  assert.match(determined[0].detail, /Confirmed by: J\. Rivera\nSource: cityname\.gov, Sec\. 4/);
+  assert.equal(determined[0].meta.includes('Blocks starting'), false);
+});
+
+test('cases in a requirements stage offer Show requirements, and the rows are schema-valid', () => {
+  const rows = renovationCaseRows([caseRow('a', 'Deck', 'REQUIREMENTS_RESEARCH'), caseRow('b', 'Roof', 'IN_EXECUTION')], 'b');
+  assert.deepEqual(rows[0].actions.map((action) => action.id), ['renovation-case-show-readiness', 'renovation-case-show-requirements']);
+  assert.equal(rows[1].actions, undefined);
+  assert.equal(rows[0].actions[1].message, 'Show the requirements for my renovation Deck.');
+  const { unresolved } = renovationRequirementRows([requirement('a')], () => 'x');
+  const list = { type: 'GROUPED_LIST', filters: [], id: 'renovation-requirements', title: 'Requirements', sections: [{ id: 'unresolved', title: 'Needs research', count: 1, items: unresolved }], actions: [] };
+  assert.ok(AskPresentationBlockSchema.safeParse(list).success);
 });

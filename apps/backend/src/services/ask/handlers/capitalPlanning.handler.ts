@@ -24,7 +24,8 @@ import {
   APPEAL_REMINDER_ENTITY_TYPE, APPEAL_STATUS_LABELS, appealCaseAvailableKinds, type AppealCommandKind,
 } from '../support/propertyTaxAppealCommand';
 import { listRenovationCases } from '../../renovationCase.service';
-import { isRenovationCaseOverviewRequest, renovationCaseRows, renovationLifecycleLabel } from '../support/renovationCaseOverview';
+import { isRenovationCaseOverviewRequest, isRenovationRequirementsRequest, renovationCaseRows, renovationLifecycleLabel, renovationRequirementRows } from '../support/renovationCaseOverview';
+import { listRequirements, listAuthorityProfiles } from '../../renovationRequirement.service';
 import { getReadiness as getRenovationReadiness } from '../../renovationReadiness.service';
 import { PermitTrackerService } from '../../permitTracker.service';
 import { getAskPropertyTimezone } from '../askExecutionContext';
@@ -424,6 +425,7 @@ async function renovationPermitReadinessResult(propertyId: string, message: stri
     status: 'ANSWERED', contextVersion: cases[0].updatedAt.toISOString(), suggestions: [],
     blocks: [{ type: 'SUMMARY', id: 'renovation-cases-summary', title: `You have ${cases.length} renovation cases`, body: `They are listed with their stage, readiness and next step. The most recently updated is ${cases[0].name} (${renovationLifecycleLabel(cases[0].lifecycle).toLowerCase()}).`, tone: 'DEFAULT', actions: [] }, caseList(null)],
   };
+  if (isRenovationRequirementsRequest(message)) return renovationRequirementsResult(propertyId, selected, cases.length > 1 && !named ? caseList(selected.id) : null);
   let readiness: any;
   try { readiness = await getRenovationReadiness(propertyId, selected.id); } catch { readiness = { summary: { state: 'NOT_EVALUATED', disclaimer: 'Readiness has not been evaluated for the current scope.' }, items: [], project: null }; }
   const summary = readiness.summary ?? {};
@@ -476,6 +478,42 @@ async function renovationPermitReadinessResult(propertyId: string, message: stri
   blocks.push({ type: 'EVIDENCE', id: 'renovation-readiness-evidence', title: 'Readiness sources', items: items.slice(0, 25).map((item) => ({ label: item.title, source: String(item.sourceType ?? 'Renovation readiness').toLowerCase().replace(/_/g, ' '), observedAt: item.sourceObservedAt?.toISOString?.() ?? item.derivedAt?.toISOString?.() ?? null })) });
   blocks.push({ type: 'BOUNDARY', id: 'renovation-readiness-boundary', title: 'Project organization—not legal compliance approval', body: 'Confirm current requirements with the permit authority, HOA, licensed professionals, and inspectors. A “ready” app state cannot authorize unsafe work or replace official approval.', severity: 'INFO', suggestions: [] });
   return { status: summary.state === 'READY' && permitSummary.openFlags === 0 ? 'ANSWERED' : 'READY_WITH_LIMITATIONS', reasonCode: summary.state === 'READY' ? (permitSummary.openFlags ? 'PERMIT_FLAGS_OPEN' : undefined) : `RENOVATION_${summary.state ?? 'NOT_READY'}`, contextVersion: selected.updatedAt.toISOString(), blocks, suggestions: [] };
+}
+
+// Slice 2a of the Renovations parity review: the read view of Desktop's Requirements page. Advisor results are research candidates; only sourced
+// authority or professional evidence establishes a requirement, and the answer keeps that distinction. Recording a determination is not in Ask yet.
+async function renovationRequirementsResult(propertyId: string, selected: { id: string; name: string; updatedAt: Date }, caseListBlock: AskPresentationBlock | null): Promise<AskOperationResult> {
+  let requirements: any[] | null = null;
+  let profiles: any[] = [];
+  try {
+    [requirements, profiles] = await Promise.all([listRequirements(propertyId, selected.id), listAuthorityProfiles(propertyId, selected.id)]);
+  } catch { requirements = null; }
+  const contextVersion = selected.updatedAt.toISOString();
+  if (requirements === null) return {
+    status: 'READY_WITH_LIMITATIONS', reasonCode: 'RENOVATION_REQUIREMENTS_UNAVAILABLE', contextVersion, suggestions: [],
+    blocks: [{ type: 'SUMMARY', id: 'renovation-requirements-unavailable', title: `${selected.name} has no scope to research yet`, body: 'Requirements are researched against the case\u2019s current scope, and this case does not have one recorded. Defining scope is not currently available in Ask.', tone: 'CAUTION', actions: [] }],
+  };
+  const { unresolved, determined } = renovationRequirementRows(requirements, (value) => humanDate(value) ?? value.toISOString().slice(0, 10));
+  const confirmedProfile = profiles.find((profile) => profile.status === 'CONFIRMED');
+  const profileLine = confirmedProfile
+    ? `Jurisdiction profile: ${confirmedProfile.authorityName ?? 'authority'} confirmed${confirmedProfile.confirmedByName || confirmedProfile.confirmedByOrg ? ` by ${confirmedProfile.confirmedByName || confirmedProfile.confirmedByOrg}` : ''}.`
+    : 'No jurisdiction profile has been confirmed for this case.';
+  const blocks: AskPresentationBlock[] = [{
+    type: 'SUMMARY', id: 'renovation-requirements-summary',
+    title: requirements.length === 0 ? `No requirements have been researched for ${selected.name}` : unresolved.length ? `${unresolved.length} of ${requirements.length} requirement${requirements.length === 1 ? '' : 's'} still need research for ${selected.name}` : `All ${requirements.length} requirement${requirements.length === 1 ? ' is' : 's are'} determined for ${selected.name}`,
+    body: `Advisor results are research candidates. Only sourced authority or professional evidence establishes a requirement. ${profileLine}${requirements.length === 0 ? ' Generating research candidates and recording determinations are not currently available in Ask.' : unresolved.length ? ' Recording a determination is not currently available in Ask.' : ''}`,
+    tone: unresolved.length ? 'CAUTION' : 'DEFAULT', actions: [],
+  }];
+  if (caseListBlock) blocks.push(caseListBlock);
+  if (requirements.length) blocks.push({
+    type: 'GROUPED_LIST', filters: [], id: 'renovation-requirements', title: 'Requirements', description: 'Each is a research question for this case\u2019s current scope, not a compliance conclusion.',
+    sections: [
+      { id: 'unresolved', title: 'Needs research', caption: 'Blocking ones stop the work from starting until they are determined.', count: unresolved.length, items: unresolved.slice(0, 100) as any, ...(unresolved.length > 8 ? { initialVisibleCount: 8 } : {}) },
+      { id: 'determined', title: 'Determined', count: determined.length, items: determined.slice(0, 100) as any, ...(determined.length > 8 ? { initialVisibleCount: 8 } : {}) },
+    ].filter((section) => section.count > 0), actions: [],
+  });
+  blocks.push({ type: 'BOUNDARY', id: 'renovation-readiness-boundary', title: 'Project organization\u2014not legal compliance approval', body: 'Confirm current requirements with the permit authority, HOA, licensed professionals, and inspectors. A \u201cready\u201d app state cannot authorize unsafe work or replace official approval.', severity: 'INFO', suggestions: [] });
+  return { status: 'ANSWERED', contextVersion, blocks, suggestions: [] };
 }
 
 async function majorEventEntryResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {

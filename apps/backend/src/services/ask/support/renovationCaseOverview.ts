@@ -62,7 +62,7 @@ export function renovationCaseRows(cases: readonly RenovationCaseOverviewInput[]
     return {
       id: `renovation-case-${renovationCase.id}`,
       title: renovationCase.name,
-      description: `Next: ${next.title}.${next.inAsk ? '' : ' This step is not currently available in Ask.'}`,
+      description: `Next: ${next.title}.${next.inAsk ? '' : RENOVATION_REQUIREMENT_STAGES.has(renovationCase.lifecycle) ? ' You can review the requirements here; recording a determination is not currently available in Ask.' : ' This step is not currently available in Ask.'}`,
       meta: [
         renovationLifecycleLabel(renovationCase.lifecycle),
         READINESS_LABELS[summary.state ?? 'NOT_EVALUATED'] ?? READINESS_LABELS.NOT_EVALUATED,
@@ -71,12 +71,82 @@ export function renovationCaseRows(cases: readonly RenovationCaseOverviewInput[]
       ],
       status: renovationCase.lifecycle,
       href: null,
-      ...(renovationCase.id === shownId ? {} : {
-        actions: [{
-          id: RENOVATION_CASE_SHOW_READINESS_ACTION_ID, label: 'Show readiness', interactionType: 'CONVERSATION_CONTINUE' as const,
-          message: `Is my renovation ${renovationCase.name.slice(0, 120)} ready to start?`, operationId: 'RENOVATION_PERMIT_READINESS', style: 'SECONDARY' as const,
-        }],
+      ...(renovationCase.id === shownId && !RENOVATION_REQUIREMENT_STAGES.has(renovationCase.lifecycle) ? {} : {
+        actions: [
+          ...(renovationCase.id === shownId ? [] : [{
+            id: RENOVATION_CASE_SHOW_READINESS_ACTION_ID, label: 'Show readiness', interactionType: 'CONVERSATION_CONTINUE' as const,
+            message: `Is my renovation ${renovationCase.name.slice(0, 120)} ready to start?`, operationId: 'RENOVATION_PERMIT_READINESS', style: 'SECONDARY' as const,
+          }]),
+          ...(RENOVATION_REQUIREMENT_STAGES.has(renovationCase.lifecycle) ? [{
+            id: RENOVATION_CASE_SHOW_REQUIREMENTS_ACTION_ID, label: 'Show requirements', interactionType: 'CONVERSATION_CONTINUE' as const,
+            message: `Show the requirements for my renovation ${renovationCase.name.slice(0, 120)}.`, operationId: 'RENOVATION_PERMIT_READINESS', style: 'SECONDARY' as const,
+          }] : []),
+        ],
       }),
     };
   });
+}
+
+// ---- Requirements (slice 2a: the read view of Desktop's Requirements page) ----
+
+/** "What requirements apply to my renovation", "show the permit requirements for my remodel". Narrow: needs the plural noun next to renovation or remodel. */
+const REQUIREMENTS_PATTERN = /\b(?:renovation|remodel)\b.{0,50}\brequirements\b|\brequirements\b.{0,50}\b(?:renovation|remodel)\b/i;
+export const isRenovationRequirementsRequest = (message: string) => REQUIREMENTS_PATTERN.test(message);
+
+export const RENOVATION_CASE_SHOW_REQUIREMENTS_ACTION_ID = 'renovation-case-show-requirements';
+/** Stages where Desktop's next step is the requirements page, so the case row also offers the requirements view. */
+export const RENOVATION_REQUIREMENT_STAGES = new Set(['IDEA', 'FEASIBILITY', 'SCOPE_DEFINITION', 'REQUIREMENTS_RESEARCH', 'HISTORICAL_RESEARCH', 'ON_HOLD', 'CANCELLED']);
+
+const titleCase = (value: string) => value.replace(/_/g, ' ').toLowerCase().replace(/^\w/, (c) => c.toUpperCase());
+
+export interface RenovationRequirementInput {
+  id: string;
+  family: string;
+  question: string;
+  advisoryLikelihood: string;
+  determination: string;
+  truthLayer: string;
+  confidence: string;
+  limitation?: string | null;
+  exactNextAction: string;
+  dueAt?: Date | null;
+  isBlocking: boolean;
+  sourceUrl?: string | null;
+  sourceSection?: string | null;
+  confirmedByName?: string | null;
+  confirmedByOrg?: string | null;
+}
+
+const sourceHost = (url?: string | null) => {
+  if (!url) return null;
+  try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return null; }
+};
+
+/** Research candidates are not requirements: an undetermined row says what to research, a determined one says who confirmed it and from what source. */
+export function renovationRequirementRows(requirements: readonly RenovationRequirementInput[], dateLabel: (value: Date) => string) {
+  const row = (requirement: RenovationRequirementInput) => {
+    const determined = requirement.determination !== 'UNDETERMINED';
+    const confirmer = requirement.confirmedByName || requirement.confirmedByOrg;
+    const host = sourceHost(requirement.sourceUrl);
+    return {
+      id: `requirement-${requirement.id}`,
+      title: titleCase(requirement.family),
+      description: requirement.question,
+      meta: [
+        determined ? titleCase(requirement.determination) : 'Research needed',
+        `Advisory likelihood: ${titleCase(requirement.advisoryLikelihood).toLowerCase()}`,
+        `Confidence: ${requirement.confidence.toLowerCase()}`,
+        ...(requirement.isBlocking && !determined ? ['Blocks starting'] : []),
+      ],
+      status: requirement.determination,
+      href: null,
+      detail: determined
+        ? [`Source type: ${titleCase(requirement.truthLayer).toLowerCase()}`, confirmer ? `Confirmed by: ${confirmer}` : null, host ? `Source: ${host}${requirement.sourceSection ? `, ${requirement.sourceSection}` : ''}` : null].filter(Boolean).join('\n')
+        : [`Next step: ${requirement.exactNextAction}`, requirement.dueAt ? `Research due ${dateLabel(requirement.dueAt)}` : null, requirement.limitation ? `Limitation: ${requirement.limitation}` : null].filter(Boolean).join('\n'),
+    };
+  };
+  return {
+    unresolved: requirements.filter((requirement) => requirement.determination === 'UNDETERMINED').map(row),
+    determined: requirements.filter((requirement) => requirement.determination !== 'UNDETERMINED').map(row),
+  };
 }
