@@ -139,6 +139,7 @@ export const SAVINGS_SKILL_EVALUATION = deepFreezeSkillPackage({
   ],
   "expectedBlockTypes": [
     "SUMMARY",
+    "METRIC_ROW",
     "GROUPED_LIST",
     "TABLE",
     "EVIDENCE",

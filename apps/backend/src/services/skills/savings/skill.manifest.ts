@@ -61,6 +61,7 @@ export const SAVINGS_SKILL = Object.freeze({
   "authorizationFloor": "VIEWER",
   "allowedResultBlocks": [
     "SUMMARY",
+    "METRIC_ROW",
     "GROUPED_LIST",
     "TABLE",
     "EVIDENCE",
