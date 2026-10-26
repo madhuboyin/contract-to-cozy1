@@ -57,13 +57,20 @@ async function upload(file = pdf()) {
 describe('AskIntakeDialog', () => {
   beforeEach(() => { for (const mock of Object.values(mocks)) mock.mockReset(); mocks.getAskIntakeConfig.mockResolvedValue({ success: true, data: config() }); });
 
-  it('states retention, sharing and that nothing is read before the person chooses, and offers a plain file chooser as well as the camera', async () => {
+  it('leads with save-before-read, keeps detailed disclosures available, and makes both save actions explicit', async () => {
     renderDialog();
+    expect(await screen.findByText('Step 1 of 3 · Choose file')).toBeInTheDocument();
+    expect(screen.getByText('Your file is saved to Home Records first.')).toBeInTheDocument();
+    expect(screen.getByText(/won't read it until you review/)).toBeInTheDocument();
+    const disclosureSummary = screen.getByText('How storage and security work');
+    const disclosures = disclosureSummary.closest('details') as HTMLDetailsElement;
+    expect(disclosures.open).toBe(false);
+    fireEvent.click(disclosureSummary);
+    expect(disclosures.open).toBe(true);
     expect(await screen.findByText(/kept in your Home Records until you remove it/)).toBeInTheDocument();
     expect(screen.getByText(/Household members can see the file/)).toBeInTheDocument();
-    expect(screen.getByText(/Nothing is read until you choose to/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Choose a file/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Take a photo/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Choose and save a file' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Take and save a photo' })).toBeInTheDocument();
     expect(screen.getByLabelText('Who can see this file')).toHaveValue('STANDARD');
     expect(mocks.uploadAskIntakeFile).not.toHaveBeenCalled();
     expect(mocks.analyzeAskIntake).not.toHaveBeenCalled();

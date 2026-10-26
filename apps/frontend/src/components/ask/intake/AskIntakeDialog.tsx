@@ -83,14 +83,14 @@ export function AskIntakeDialog({ open, onOpenChange, propertyId, returnFocusRef
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className={`max-h-[85vh] w-[calc(100vw-2rem)] max-w-xl overflow-y-auto p-0 sm:rounded-2xl ${dragging ? 'ring-2 ring-emerald-700' : ''}`} aria-describedby="ask-intake-description" onCloseAutoFocus={(event) => { if (returnFocusRef?.current) { event.preventDefault(); returnFocusRef.current.focus(); } }}
+        className={`flex max-h-[85vh] w-[calc(100vw-2rem)] max-w-2xl flex-col gap-0 overflow-hidden p-0 sm:rounded-2xl ${dragging ? 'ring-2 ring-emerald-700' : ''}`} aria-describedby="ask-intake-description" onCloseAutoFocus={(event) => { if (returnFocusRef?.current) { event.preventDefault(); returnFocusRef.current.focus(); } }}
         onDragOver={(event) => { if (!view) { event.preventDefault(); setDragging(true); } }} onDragLeave={() => setDragging(false)} onDrop={onDrop} onPaste={onPaste}
       >
-        <div className="border-b border-slate-200 px-4 pb-3 pt-4">
+        <div className="shrink-0 border-b border-slate-200 bg-white px-4 pb-3 pt-4 pr-16">
           <DialogTitle className="text-lg font-semibold text-slate-950">Add a file to your home</DialogTitle>
           <DialogDescription id="ask-intake-description" className="mt-1 text-sm text-slate-600">Add a document or photo. Cozy proposes the details; you decide what is added.</DialogDescription>
         </div>
-        <div className="space-y-4 px-4 py-4" aria-live="polite" aria-busy={busy !== null}>
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4" aria-live="polite" aria-busy={busy !== null}>
           {error && <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800" role="alert" data-intake-error>{error}</p>}
           {body}
           {view && view.state !== 'DISCARDED' && !kept && <IntakeProvenance view={view} onOpenOriginal={() => askAbout(originalQuestion())} />}

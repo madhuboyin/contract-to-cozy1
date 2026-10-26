@@ -18,12 +18,17 @@ export function IntakePicker({ config, busy, onFile, problem }: { config: AskInt
   const take = (list: FileList | null, input: HTMLInputElement | null) => { const file = list?.[0]; if (input) input.value = ''; if (file) onFile(file, sensitivity); };
   return (
     <div className="space-y-4">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-emerald-800">Step 1 of 3 · Choose file</p>
+        <p className="mt-1 text-sm font-semibold text-slate-900">Your file is saved to Home Records first.</p>
+        <p className="mt-0.5 text-sm text-slate-600">Cozy won&apos;t read it until you review the next step and approve.</p>
+      </div>
       <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-center" data-intake-dropzone>
         <p className="text-sm font-semibold text-slate-900">Add a PDF or photo</p>
         <p className="mt-1 text-xs text-slate-600">A warranty, receipt, insurance policy, inspection report, or an appliance label. Up to {formatBytes(config.maxBytes)}. You can also drop or paste a file here.</p>
         <div className="mt-3 flex flex-wrap justify-center gap-2">
-          <button type="button" className={PRIMARY} disabled={busy} onClick={() => chooser.current?.click()}>{busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <FileUp className="h-4 w-4" aria-hidden="true" />}{busy ? 'Adding…' : 'Choose a file'}</button>
-          <button type="button" className={SECONDARY} disabled={busy} onClick={() => camera.current?.click()}><Camera className="h-4 w-4" aria-hidden="true" />Take a photo</button>
+          <button type="button" className={PRIMARY} disabled={busy} onClick={() => chooser.current?.click()}>{busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <FileUp className="h-4 w-4" aria-hidden="true" />}{busy ? 'Saving…' : 'Choose and save a file'}</button>
+          <button type="button" className={SECONDARY} disabled={busy} onClick={() => camera.current?.click()}><Camera className="h-4 w-4" aria-hidden="true" />Take and save a photo</button>
         </div>
         <input ref={chooser} type="file" accept={accept} className="sr-only" tabIndex={-1} aria-label="Choose a file to add" onChange={(event) => take(event.target.files, chooser.current)} />
         <input ref={camera} type="file" accept="image/*" capture="environment" className="sr-only" tabIndex={-1} aria-label="Take a photo to add" onChange={(event) => take(event.target.files, camera.current)} />
@@ -34,13 +39,22 @@ export function IntakePicker({ config, busy, onFile, problem }: { config: AskInt
         <select id="ask-intake-sensitivity" value={sensitivity} onChange={(event) => setSensitivity(event.target.value)} className="mt-1 block min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900">
           {SENSITIVITY_CHOICES.filter((choice) => config.sensitivities.includes(choice.value)).map((choice) => <option key={choice.value} value={choice.value}>{choice.label}: {choice.hint}</option>)}
         </select>
+        <p className="mt-1 text-xs text-slate-600">This setting controls which household members can open the saved file.</p>
       </div>
-      <div className="space-y-1 text-xs text-slate-600" data-intake-disclosures>
-        <p>{config.disclosures.retention}</p>
-        <p>{config.disclosures.sharing}</p>
-        <p data-intake-safety>{config.safetyChecks.statement}</p>
-        <p className="font-semibold text-slate-800">The file is kept first. Nothing is read until you choose to.</p>
-      </div>
+      <details className="group rounded-xl border border-slate-200 bg-white" data-intake-disclosures>
+        <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 rounded-xl px-3 py-2 text-sm font-semibold text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700 [&::-webkit-details-marker]:hidden">
+          How storage and security work
+          <span className="text-lg font-normal text-slate-500 transition-transform group-open:rotate-45" aria-hidden="true">+</span>
+        </summary>
+        <div className="space-y-3 border-t border-slate-200 px-3 py-3 text-xs leading-relaxed text-slate-600">
+          <div><p className="font-semibold text-slate-800">Storage</p><p className="mt-0.5">{config.disclosures.retention}</p></div>
+          <div><p className="font-semibold text-slate-800">Visibility</p><p className="mt-0.5">{config.disclosures.sharing}</p></div>
+          <div className={config.safetyChecks.engine === 'NONE' ? 'rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-amber-950' : undefined}>
+            <p className="font-semibold">Security checks</p>
+            <p className="mt-0.5" data-intake-safety>{config.safetyChecks.statement}</p>
+          </div>
+        </div>
+      </details>
     </div>
   );
 }
