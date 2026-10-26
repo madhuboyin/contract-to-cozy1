@@ -120,13 +120,11 @@ test('the requirements answer offers Generate only to a contributor, and only wh
   try {
     stub([]);
     const offered = summary(await renovationRequirementsResult('prop-1', selected, null, true));
-    assert.equal(offered.actions.length, 1);
-    assert.equal(offered.actions[0].operationId, OP);
-    assert.equal(offered.actions[0].message, M.GENERATE);
-    assert.equal(offered.actions[0].entityId, CASE);
-    assert.equal(offered.actions[0].entityType, command.RENOVATION_READINESS_CASE_ENTITY_TYPE);
-    assert.equal(summary(await renovationRequirementsResult('prop-1', selected, null, false)).actions.length, 0, 'a viewer is not offered it');
+    const generate = offered.actions.find((action) => action.id === command.READINESS_COMMAND_ACTION_IDS.GENERATE);
+    assert.deepEqual([generate.operationId, generate.message, generate.entityId, generate.entityType], [OP, M.GENERATE, CASE, command.RENOVATION_READINESS_CASE_ENTITY_TYPE]);
+    assert.deepEqual(offered.actions.map((action) => action.id), [command.READINESS_COMMAND_ACTION_IDS.AUTHORITY_PROFILE, command.READINESS_COMMAND_ACTION_IDS.GENERATE], 'the jurisdiction step is offered beside it');
+    assert.equal(summary(await renovationRequirementsResult('prop-1', selected, null, false)).actions.length, 0, 'a viewer is not offered either');
     stub([{ id: 'r1', family: 'PERMIT', question: 'q', advisoryLikelihood: 'UNKNOWN', determination: 'UNDETERMINED', truthLayer: 'ADVISORY', confidence: 'LOW', exactNextAction: 'n', isBlocking: true }]);
-    assert.equal(summary(await renovationRequirementsResult('prop-1', selected, null, true)).actions.length, 0, 'researched cases are not offered it again');
+    assert.deepEqual(summary(await renovationRequirementsResult('prop-1', selected, null, true)).actions.map((action) => action.id), [command.READINESS_COMMAND_ACTION_IDS.AUTHORITY_PROFILE], 'researched cases are not offered Generate again');
   } finally { prisma.renovationCase = saved.c; prisma.renovationRequirement = saved.r; prisma.renovationAuthorityProfile = saved.a; }
 });

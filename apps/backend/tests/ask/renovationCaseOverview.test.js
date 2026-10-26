@@ -21,7 +21,9 @@ test('the overview request routes to the renovation case answer, and the start c
 });
 
 test('next steps follow the lifecycle and say which ones Ask cannot do yet', () => {
-  assert.deepEqual(renovationNextStep('REQUIREMENTS_RESEARCH'), { title: 'Determine permit, HOA and safety requirements', inAsk: false });
+  assert.deepEqual(renovationNextStep('REQUIREMENTS_RESEARCH'), { title: 'Determine permit, HOA and safety requirements', inAsk: true });
+  assert.deepEqual(renovationNextStep('IDEA'), { title: 'Clarify the idea and constraints', inAsk: false });
+  assert.equal(renovationNextStep('APPROVALS_IN_PROGRESS').inAsk, true);
   assert.deepEqual(renovationNextStep('PREPARING_TO_START', 'NOT_READY', 2), { title: 'Resolve 2 blocking readiness items', inAsk: true });
   assert.equal(renovationNextStep('PREPARING_TO_START', 'READY').title, 'Create or open the execution project');
   assert.equal(renovationNextStep('PREPARING_TO_START', null).title, 'Evaluate start readiness');
@@ -37,7 +39,7 @@ test('each case row carries its stage, readiness, next step and its own action, 
   assert.equal(rows[0].actions, undefined);
   assert.match(rows[0].description, /Resolve 3 blocking readiness items/);
   assert.deepEqual(rows[1].meta, ['Researching requirements', 'Readiness not evaluated']);
-  assert.match(rows[1].description, /not currently available in Ask/);
+  assert.doesNotMatch(rows[1].description, /not currently available in Ask/, 'requirements research can be done in Ask now');
   assert.equal(rows[1].actions[0].message, 'Is my renovation Deck ready to start?');
   assert.equal(rows[1].actions[0].operationId, 'RENOVATION_PERMIT_READINESS');
 });

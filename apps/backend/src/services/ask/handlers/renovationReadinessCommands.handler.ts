@@ -16,6 +16,7 @@ import { offerableNegotiationDocuments, type NegotiationAttachCandidate } from '
 import { humanDate } from '../askFormatting';
 import { generateRequirementCandidates } from '../../renovationRequirement.service';
 import { attachComplianceRecord, updateCondition } from '../../renovationComplianceWorkflow.service';
+import { authorityWriteResult, confirmAuthorityWrite, isAuthorityWriteKind } from './renovationAuthorityWrites.handler';
 import { evaluateReadiness, governOverride, handoffToProject, loadHandoffPrefill, updateReadinessItem } from '../../renovationReadiness.service';
 import {
   HANDOFF_FUNDING_LABELS, HANDOFF_PROJECT_TYPES, attachRecordServiceInput, READINESS_COMMAND_MESSAGES, READINESS_FORM_CAPTURE_KEYS, handoffServiceInput, readinessCommandEntityType,
@@ -210,6 +211,8 @@ export async function readinessCommandResult(userId: string, propertyId: string,
       ? blocked('ASK_OWNER_REQUIRED', 'Only an owner can create the project', 'Creating the execution project from a renovation case is an owner’s decision. Nothing has changed.')
       : blocked('ASK_OWNER_REQUIRED', 'Only an owner can acknowledge a risk', 'Accepting the risk of proceeding with an open item is an owner’s decision. Nothing has changed.');
   }
+  // Confirming a jurisdiction, recording a determination and deciding an HOA reading have their own forms and checks (renovationAuthorityWrites.handler).
+  if (isAuthorityWriteKind(kind)) return authorityWriteResult(userId, propertyId, access.role as HouseholdRole, { kind, entityId: launch.entityId, sourceExecutionId: launch.sourceExecutionId }, supplied);
   const expiresAt = new Date(Date.now() + CONFIRMATION_MINUTES * 60 * 1000);
   const base = { sourceExecutionId: launch.sourceExecutionId, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() };
   const confirmation = (id: string, spec: { title: string; description: string; confirmLabel: string; fields: Array<{ label: string; value: string }> }) => ({
@@ -444,6 +447,7 @@ async function confirmReadinessCommand(ctx: ConfirmCapabilityContext): Promise<C
   const kind = command?.kind as ReadinessCommandKind | undefined;
   if (!kind || !(kind in READINESS_COMMAND_MESSAGES) || typeof command?.entityId !== 'string') throw stale('The change to make is invalid.');
   if (readinessKindNeedsOwner(kind) && ctx.access.role !== HouseholdRole.OWNER) throw stale('Only an owner can acknowledge a risk.', 'ASK_PERMISSION_REQUIRED');
+  if (isAuthorityWriteKind(kind)) return confirmAuthorityWrite(ctx, kind, command.entityId);
   const propertyId = execution.propertyId;
   let title: string; let description: string; let artifactId = command.entityId; let artifactType = 'RENOVATION_READINESS_ITEM'; let workItemSynced: boolean | undefined; let backAction: typeof backToReadiness = backToReadiness;
   try {

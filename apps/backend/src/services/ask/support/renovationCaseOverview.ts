@@ -7,6 +7,7 @@
 // Narrow on purpose: "which renovations add value" or "my renovation costs" are other questions. Either name the cases, or ask for my/all/the list of renovations and stop.
 const OVERVIEW_PATTERN = /\b(?:renovation|remodel)\s+cases?\b|\b(?:my|all|list|show)\s+(?:current\s+|active\s+|open\s+)?(?:renovations?|remodels?)(?:\s+(?:plans?|projects?))?\s*[?.!]*\s*$/i;
 import { READINESS_COMMAND_ACTION_IDS, READINESS_COMMAND_MESSAGES, RENOVATION_COMPLIANCE_CONDITION_ENTITY_TYPE } from './renovationReadinessCommand';
+import { RENOVATION_HOA_READING_ENTITY_TYPE, RENOVATION_REQUIREMENT_ENTITY_TYPE } from './renovationAuthorityWrites';
 export const isRenovationCaseOverviewRequest = (message: string) => OVERVIEW_PATTERN.test(message);
 
 export const RENOVATION_CASE_SHOW_READINESS_ACTION_ID = 'renovation-case-show-readiness';
@@ -37,8 +38,9 @@ export function renovationNextStep(lifecycle: string, readinessState?: string | 
   switch (lifecycle) {
     case 'IDEA': case 'FEASIBILITY': return { title: 'Clarify the idea and constraints', inAsk: false };
     case 'SCOPE_DEFINITION': return { title: 'Confirm the working scope', inAsk: false };
-    case 'REQUIREMENTS_RESEARCH': case 'HISTORICAL_RESEARCH': case 'ON_HOLD': case 'CANCELLED': return { title: lifecycle === 'ON_HOLD' ? 'Review the paused plan' : lifecycle === 'CANCELLED' ? 'Review the retained case record' : 'Determine permit, HOA and safety requirements', inAsk: false };
-    case 'APPROVALS_IN_PROGRESS': return { title: 'Advance the permit and HOA approvals', inAsk: false };
+    case 'REQUIREMENTS_RESEARCH': case 'HISTORICAL_RESEARCH': return { title: 'Determine permit, HOA and safety requirements', inAsk: true };
+    case 'ON_HOLD': case 'CANCELLED': return { title: lifecycle === 'ON_HOLD' ? 'Review the paused plan' : 'Review the retained case record', inAsk: false };
+    case 'APPROVALS_IN_PROGRESS': return { title: 'Advance the permit and HOA approvals', inAsk: true };
     case 'PREPARING_TO_START': case 'READY_TO_START':
       return {
         title: readinessState === 'NOT_READY' ? `Resolve ${blockingItems} blocking readiness item${blockingItems === 1 ? '' : 's'}`
@@ -63,7 +65,7 @@ export function renovationCaseRows(cases: readonly RenovationCaseOverviewInput[]
     return {
       id: `renovation-case-${renovationCase.id}`,
       title: renovationCase.name,
-      description: `Next: ${next.title}.${next.inAsk ? '' : RENOVATION_COMPLIANCE_STAGES.has(renovationCase.lifecycle) ? ' You can review the approvals here, attach records and mark conditions satisfied; confirming an HOA document reading is not currently available in Ask.' : RENOVATION_REQUIREMENT_STAGES.has(renovationCase.lifecycle) ? ' You can review the requirements here; recording a determination is not currently available in Ask.' : ' This step is not currently available in Ask.'}`,
+      description: `Next: ${next.title}.${next.inAsk ? '' : RENOVATION_COMPLIANCE_STAGES.has(renovationCase.lifecycle) ? ' You can review the approvals here, attach records, mark conditions satisfied and review HOA document readings.' : RENOVATION_REQUIREMENT_STAGES.has(renovationCase.lifecycle) ? ' This step is not currently available in Ask; you can review the requirements here.' : ' This step is not currently available in Ask.'}`,
       meta: [
         renovationLifecycleLabel(renovationCase.lifecycle),
         READINESS_LABELS[summary.state ?? 'NOT_EVALUATED'] ?? READINESS_LABELS.NOT_EVALUATED,
@@ -128,7 +130,7 @@ const sourceHost = (url?: string | null) => {
 };
 
 /** Research candidates are not requirements: an undetermined row says what to research, a determined one says who confirmed it and from what source. */
-export function renovationRequirementRows(requirements: readonly RenovationRequirementInput[], dateLabel: (value: Date) => string) {
+export function renovationRequirementRows(requirements: readonly RenovationRequirementInput[], dateLabel: (value: Date) => string, canChange = false) {
   const row = (requirement: RenovationRequirementInput) => {
     const determined = requirement.determination !== 'UNDETERMINED';
     const confirmer = requirement.confirmedByName || requirement.confirmedByOrg;
@@ -145,6 +147,11 @@ export function renovationRequirementRows(requirements: readonly RenovationRequi
       ],
       status: requirement.determination,
       href: null,
+      // Recording a sourced determination is a contributor's step on a requirement still needing research; the row carries its own action.
+      ...(canChange && !determined ? { entityType: RENOVATION_REQUIREMENT_ENTITY_TYPE, actions: [{
+        id: READINESS_COMMAND_ACTION_IDS.DETERMINE_REQUIREMENT, label: 'Record a determination', message: READINESS_COMMAND_MESSAGES.DETERMINE_REQUIREMENT,
+        operationId: 'RENOVATION_READINESS_COMMAND', interactionType: 'MUTATE_RECORD' as const, style: 'SECONDARY' as const, entityType: RENOVATION_REQUIREMENT_ENTITY_TYPE, entityId: requirement.id,
+      }] } : {}),
       detail: determined
         ? [`Source type: ${titleCase(requirement.truthLayer).toLowerCase()}`, confirmer ? `Confirmed by: ${confirmer}` : null, host ? `Source: ${host}${requirement.sourceSection ? `, ${requirement.sourceSection}` : ''}` : null].filter(Boolean).join('\n')
         : [`Next step: ${requirement.exactNextAction}`, requirement.dueAt ? `Research due ${dateLabel(requirement.dueAt)}` : null, requirement.limitation ? `Limitation: ${requirement.limitation}` : null].filter(Boolean).join('\n'),
@@ -213,6 +220,11 @@ export function renovationComplianceSections(workflow: RenovationComplianceInput
       id: `hoa-review-${review.id}`, title: 'HOA document reading', description: `Candidate decision: ${titleCase(review.extractedDecisionStatus ?? 'unknown')}. Extracted details are candidates until a homeowner reviews them.`,
       meta: [titleCase(review.status), ...(review.extractedReferenceNumber ? [`Reference ${review.extractedReferenceNumber}`] : []), ...(date(review.extractedExpirationDate) ? [`Candidate expiration ${date(review.extractedExpirationDate)}`] : [])],
       status: review.status, href: null,
+      // Deciding a reading is a contributor's step on a reading still waiting for review; once decided it cannot be decided again.
+      ...(canChange && review.status === 'NEEDS_REVIEW' ? { entityType: RENOVATION_HOA_READING_ENTITY_TYPE, actions: [{
+        id: READINESS_COMMAND_ACTION_IDS.REVIEW_HOA_READING, label: 'Review this reading', message: READINESS_COMMAND_MESSAGES.REVIEW_HOA_READING,
+        operationId: 'RENOVATION_READINESS_COMMAND', interactionType: 'MUTATE_RECORD' as const, style: 'SECONDARY' as const, entityType: RENOVATION_HOA_READING_ENTITY_TYPE, entityId: review.id,
+      }] } : {}),
       ...(extracted.length ? { detail: extracted.slice(0, 10).map((entry) => `${entry.title ?? 'Condition'}: ${entry.description ?? ''}`.trim()).join('\n') } : {}),
     };
   });

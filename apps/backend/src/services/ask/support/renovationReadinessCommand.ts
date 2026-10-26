@@ -6,6 +6,7 @@
 // item satisfied needs an evidence document from the property's record (FRD v1.358: a Home Record the whole household can see, picked from a list, since the
 // case is shared). Authority, safety and source-controlled blockers cannot be overridden, and the service says so.
 import { z } from 'zod';
+import { AUTHORITY_PROFILE_SCHEMA, DETERMINATION_SCHEMA, HOA_READING_SCHEMA, RENOVATION_HOA_READING_ENTITY_TYPE, RENOVATION_REQUIREMENT_ENTITY_TYPE } from './renovationAuthorityWrites';
 
 export const RENOVATION_READINESS_CASE_ENTITY_TYPE = 'RENOVATION_READINESS_CASE';
 export const RENOVATION_READINESS_ITEM_ENTITY_TYPE = 'RENOVATION_READINESS_ITEM';
@@ -20,24 +21,27 @@ export const READINESS_COMMAND_MESSAGES = {
   GENERATE: 'Generate the requirements research for this renovation case.',
   SATISFY_CONDITION: 'Mark this compliance condition satisfied with a document.',
   ATTACH_RECORD: 'Attach a permit or HOA record to this renovation case.',
+  AUTHORITY_PROFILE: 'Confirm the jurisdiction for this renovation case.',
+  DETERMINE_REQUIREMENT: 'Record a sourced determination for this requirement.',
+  REVIEW_HOA_READING: 'Review this reading of an HOA document.',
 } as const;
 export type ReadinessCommandKind = keyof typeof READINESS_COMMAND_MESSAGES;
 export const READINESS_COMMAND_ACTION_IDS = {
-  REFRESH: 'renovation-readiness-refresh', ACKNOWLEDGE: 'renovation-readiness-acknowledge', REVOKE: 'renovation-readiness-revoke', REOPEN: 'renovation-readiness-reopen', SATISFY: 'renovation-readiness-satisfy', HANDOFF: 'renovation-readiness-handoff', GENERATE: 'renovation-readiness-generate', SATISFY_CONDITION: 'renovation-condition-satisfy', ATTACH_RECORD: 'renovation-compliance-attach',
+  REFRESH: 'renovation-readiness-refresh', ACKNOWLEDGE: 'renovation-readiness-acknowledge', REVOKE: 'renovation-readiness-revoke', REOPEN: 'renovation-readiness-reopen', SATISFY: 'renovation-readiness-satisfy', HANDOFF: 'renovation-readiness-handoff', GENERATE: 'renovation-readiness-generate', SATISFY_CONDITION: 'renovation-condition-satisfy', ATTACH_RECORD: 'renovation-compliance-attach', AUTHORITY_PROFILE: 'renovation-authority-profile', DETERMINE_REQUIREMENT: 'renovation-requirement-determine', REVIEW_HOA_READING: 'renovation-hoa-reading-review',
 } as const;
 export const readinessCommandKindFromMessage = (message: string): ReadinessCommandKind | null =>
   ((Object.entries(READINESS_COMMAND_MESSAGES) as Array<[ReadinessCommandKind, string]>).find(([, value]) => value === message)?.[0]) ?? null;
-export const readinessCommandEntityType = (kind: ReadinessCommandKind) => kind === 'SATISFY_CONDITION' ? RENOVATION_COMPLIANCE_CONDITION_ENTITY_TYPE : (kind === 'REFRESH' || kind === 'HANDOFF' || kind === 'GENERATE' || kind === 'ATTACH_RECORD' ? RENOVATION_READINESS_CASE_ENTITY_TYPE : RENOVATION_READINESS_ITEM_ENTITY_TYPE);
+export const readinessCommandEntityType = (kind: ReadinessCommandKind) => kind === 'DETERMINE_REQUIREMENT' ? RENOVATION_REQUIREMENT_ENTITY_TYPE : kind === 'REVIEW_HOA_READING' ? RENOVATION_HOA_READING_ENTITY_TYPE : kind === 'SATISFY_CONDITION' ? RENOVATION_COMPLIANCE_CONDITION_ENTITY_TYPE : (kind === 'REFRESH' || kind === 'HANDOFF' || kind === 'GENERATE' || kind === 'ATTACH_RECORD' || kind === 'AUTHORITY_PROFILE' ? RENOVATION_READINESS_CASE_ENTITY_TYPE : RENOVATION_READINESS_ITEM_ENTITY_TYPE);
 /** Acknowledging a risk and creating the execution project are an owner's decisions; both routes are owner-only. */
 export const readinessKindNeedsOwner = (kind: ReadinessCommandKind) => kind === 'ACKNOWLEDGE' || kind === 'REVOKE' || kind === 'HANDOFF';
 
-export type ReadinessFormKind = 'ACKNOWLEDGE' | 'REVOKE' | 'REOPEN' | 'SATISFY' | 'SATISFY_CONDITION' | 'ATTACH_RECORD' | 'HANDOFF';
+export type ReadinessFormKind = 'ACKNOWLEDGE' | 'REVOKE' | 'REOPEN' | 'SATISFY' | 'SATISFY_CONDITION' | 'ATTACH_RECORD' | 'AUTHORITY_PROFILE' | 'DETERMINE_REQUIREMENT' | 'REVIEW_HOA_READING' | 'HANDOFF';
 /** The kinds that act on one readiness item (the handoff acts on the case). */
-export type ReadinessItemFormKind = Exclude<ReadinessFormKind, 'HANDOFF' | 'ATTACH_RECORD'>;
+export type ReadinessItemFormKind = Exclude<ReadinessFormKind, 'HANDOFF' | 'ATTACH_RECORD' | 'AUTHORITY_PROFILE' | 'DETERMINE_REQUIREMENT' | 'REVIEW_HOA_READING'>;
 export const READINESS_FORM_CAPTURE_KEYS: Record<ReadinessFormKind, string> = {
   ACKNOWLEDGE: 'RENOVATION_READINESS_ACKNOWLEDGE', REVOKE: 'RENOVATION_READINESS_REVOKE', REOPEN: 'RENOVATION_READINESS_REOPEN', SATISFY: 'RENOVATION_READINESS_SATISFY',
   HANDOFF: 'RENOVATION_READINESS_HANDOFF', SATISFY_CONDITION: 'RENOVATION_COMPLIANCE_CONDITION_SATISFY',
-  ATTACH_RECORD: 'RENOVATION_COMPLIANCE_ATTACH_RECORD',
+  ATTACH_RECORD: 'RENOVATION_COMPLIANCE_ATTACH_RECORD', AUTHORITY_PROFILE: 'RENOVATION_AUTHORITY_PROFILE', DETERMINE_REQUIREMENT: 'RENOVATION_REQUIREMENT_DETERMINE', REVIEW_HOA_READING: 'RENOVATION_HOA_READING_REVIEW',
 };
 export const readinessFormKindFromCaptureKey = (key: string): ReadinessFormKind | null =>
   ((Object.entries(READINESS_FORM_CAPTURE_KEYS) as Array<[ReadinessFormKind, string]>).find(([, value]) => value === key)?.[0]) ?? null;
@@ -61,6 +65,7 @@ export const READINESS_FORM_SCHEMAS = {
   SATISFY: z.object({ evidenceDocumentId: z.string().trim().min(1).max(160), notes: z.string().trim().min(1).max(5000) }).strict(),
   // One choice among the offered records, as "<TYPE>:<id>"; the route's own input is split from it.
   ATTACH_RECORD: z.object({ record: z.string().trim().regex(/^(?:PERMIT|HOA_APPROVAL):[^:\s]{1,160}$/) }).strict(),
+  AUTHORITY_PROFILE: AUTHORITY_PROFILE_SCHEMA, DETERMINE_REQUIREMENT: DETERMINATION_SCHEMA, REVIEW_HOA_READING: HOA_READING_SCHEMA,
   SATISFY_CONDITION: z.object({ evidenceDocumentId: z.string().trim().min(1).max(160), notes: z.string().trim().min(1).max(5000) }).strict(),
   HANDOFF: z.object({
     projectType: z.enum(HANDOFF_PROJECT_TYPES),

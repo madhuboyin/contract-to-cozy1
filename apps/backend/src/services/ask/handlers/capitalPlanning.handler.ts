@@ -395,6 +395,7 @@ const READINESS_COMMAND_ACTIONS = READINESS_COMMAND_ACTION_IDS;
 const READINESS_ITEM_LABELS: Record<ReadinessCommandKind, string> = {
   REFRESH: 'Refresh readiness', ACKNOWLEDGE: 'Acknowledge the risk', REVOKE: 'Withdraw the acknowledgement', REOPEN: 'Reopen', SATISFY: 'Mark satisfied with a document',
   HANDOFF: 'Create the execution project', GENERATE: 'Generate requirements research', SATISFY_CONDITION: 'Mark satisfied with a document', ATTACH_RECORD: 'Attach a permit or HOA record',
+  AUTHORITY_PROFILE: 'Confirm the jurisdiction', DETERMINE_REQUIREMENT: 'Record a determination', REVIEW_HOA_READING: 'Review this reading',
 };
 
 async function renovationPermitReadinessResult(propertyId: string, message: string, canStart = false, isOwner = false): Promise<AskOperationResult> {
@@ -506,7 +507,7 @@ export async function renovationComplianceResult(propertyId: string, selected: {
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY', id: 'renovation-compliance-summary',
     title: blockers ? `${blockers} approval condition${blockers === 1 ? '' : 's'} still block${blockers === 1 ? 's' : ''} closeout for ${selected.name}` : `Permits, HOA approvals and conditions for ${selected.name}`,
-    body: `${workflow.coverage.permit.message} ${workflow.coverage.hoa.message} Official status comes from an authority or the association; reported status is what the household recorded. ${parts.alerts.length ? ` Expiring soon: ${parts.alerts.join(' ')}` : ''} ${canChange ? 'You can attach a permit or HOA record and mark a condition satisfied here.' : 'A contributor or owner can attach records and mark conditions satisfied.'}`,
+    body: `${workflow.coverage.permit.message} ${workflow.coverage.hoa.message} Official status comes from an authority or the association; reported status is what the household recorded. ${parts.alerts.length ? ` Expiring soon: ${parts.alerts.join(' ')}` : ''} ${canChange ? 'You can attach a permit or HOA record, mark a condition satisfied and review HOA document readings here.' : 'A contributor or owner can attach records, mark conditions satisfied and review HOA document readings.'}`,
     tone: blockers || parts.alerts.length ? 'CAUTION' : 'DEFAULT',
     // Attaching a record is a contributor's step on the case; the action is offered only to someone who can take it.
     actions: canChange ? [{
@@ -533,7 +534,7 @@ export async function renovationRequirementsResult(propertyId: string, selected:
     status: 'READY_WITH_LIMITATIONS', reasonCode: 'RENOVATION_REQUIREMENTS_UNAVAILABLE', contextVersion, suggestions: [],
     blocks: [{ type: 'SUMMARY', id: 'renovation-requirements-unavailable', title: `${selected.name} has no scope to research yet`, body: 'Requirements are researched against the case\u2019s current scope, and this case does not have one recorded. Defining scope is not currently available in Ask.', tone: 'CAUTION', actions: [] }],
   };
-  const { unresolved, determined } = renovationRequirementRows(requirements, (value) => humanDate(value) ?? value.toISOString().slice(0, 10));
+  const { unresolved, determined } = renovationRequirementRows(requirements, (value) => humanDate(value) ?? value.toISOString().slice(0, 10), canStart);
   const confirmedProfile = profiles.find((profile) => profile.status === 'CONFIRMED');
   const profileLine = confirmedProfile
     ? `Jurisdiction profile: ${confirmedProfile.authorityName ?? 'authority'} confirmed${confirmedProfile.confirmedByName || confirmedProfile.confirmedByOrg ? ` by ${confirmedProfile.confirmedByName || confirmedProfile.confirmedByOrg}` : ''}.`
@@ -541,13 +542,16 @@ export async function renovationRequirementsResult(propertyId: string, selected:
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY', id: 'renovation-requirements-summary',
     title: requirements.length === 0 ? `No requirements have been researched for ${selected.name}` : unresolved.length ? `${unresolved.length} of ${requirements.length} requirement${requirements.length === 1 ? '' : 's'} still need research for ${selected.name}` : `All ${requirements.length} requirement${requirements.length === 1 ? ' is' : 's are'} determined for ${selected.name}`,
-    body: `Advisor results are research candidates. Only sourced authority or professional evidence establishes a requirement. ${profileLine}${requirements.length === 0 ? (canStart ? ' Generating research candidates creates the questions to research; recording a determination is not currently available in Ask.' : ' A contributor or owner can generate the research candidates.') : unresolved.length ? ' Recording a determination is not currently available in Ask.' : ''}`,
+    body: `Advisor results are research candidates. Only sourced authority or professional evidence establishes a requirement. ${profileLine}${requirements.length === 0 ? (canStart ? ' Generating research candidates creates the questions to research.' : ' A contributor or owner can generate the research candidates.') : unresolved.length ? (canStart ? ' Record a determination on each one once you have its source.' : ' A contributor or owner can record determinations.') : ''}`,
     tone: unresolved.length ? 'CAUTION' : 'DEFAULT',
     // Generating is a contributor's step on the case; the answer offers it only while nothing has been researched for the current scope.
-    actions: requirements.length === 0 && canStart ? [{
+    actions: [...(canStart ? [{
+      id: READINESS_COMMAND_ACTIONS.AUTHORITY_PROFILE, label: confirmedProfile ? 'Update the jurisdiction' : READINESS_ITEM_LABELS.AUTHORITY_PROFILE, interactionType: 'START_WORKFLOW' as const, message: READINESS_COMMAND_MESSAGES.AUTHORITY_PROFILE,
+      operationId: 'RENOVATION_READINESS_COMMAND' as const, entityType: RENOVATION_READINESS_CASE_ENTITY_TYPE, entityId: selected.id, style: 'SECONDARY' as const,
+    }] : []), ...(requirements.length === 0 && canStart ? [{
       id: READINESS_COMMAND_ACTIONS.GENERATE, label: READINESS_ITEM_LABELS.GENERATE, interactionType: 'START_WORKFLOW' as const, message: READINESS_COMMAND_MESSAGES.GENERATE,
       operationId: 'RENOVATION_READINESS_COMMAND' as const, entityType: RENOVATION_READINESS_CASE_ENTITY_TYPE, entityId: selected.id, style: 'PRIMARY' as const,
-    }] : [],
+    }] : [])],
   }];
   if (caseListBlock) blocks.push(caseListBlock);
   if (requirements.length) blocks.push({
