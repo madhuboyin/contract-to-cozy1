@@ -49,6 +49,89 @@ function savingsValue(value: number | null, currency: string, basis: string): st
   return `${amount}${suffix}`;
 }
 
+type SavingsListSection = Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>['sections'][number];
+type SavingsRelatedPointer = { domain: string; summary: string };
+type SavingsRealizedTotals = Pick<Awaited<ReturnType<typeof savingsBenefitsUnifiedService.getUnified>>['totals'], 'realizedValueByCurrency' | 'verifiedValueByCurrency' | 'exclusionConflicts'>;
+
+// The contract allows 100 rows per section; a section keeps its true count and "Show more" discloses beyond the first screen.
+const SAVINGS_SECTION_ROW_LIMIT = 100;
+const SAVINGS_INITIAL_VISIBLE = 8;
+
+const RELATED_SAVINGS_DOMAINS: Record<string, { title: string; label: string; message: string; operationId: AskOperationId }> = {
+  PROPERTY_TAX: { title: 'Property tax opportunity', label: 'Review property tax opportunity', message: 'Review my property-tax appeal readiness.', operationId: 'PROPERTY_TAX_APPEAL_READINESS' },
+  COVERAGE: { title: 'Coverage and premium review', label: 'Review coverage gaps', message: 'Show my current coverage gaps.', operationId: 'COVERAGE_GAPS' },
+  REFINANCE: { title: 'Mortgage refinance review', label: 'Review refinance opportunity', message: 'Review my current refinance analysis.', operationId: 'REFINANCE_ANALYSIS' },
+};
+
+/** Each related decision carries its own action, so the row and the step that opens it stay together. */
+export function savingsRelatedItems(related: readonly SavingsRelatedPointer[]) {
+  return related.map((item) => {
+    const domain = RELATED_SAVINGS_DOMAINS[item.domain] ?? RELATED_SAVINGS_DOMAINS.REFINANCE;
+    return {
+      id: `related-${item.domain}`,
+      title: domain.title,
+      description: item.summary,
+      meta: ['Review this estimate separately before deciding'],
+      status: 'RELATED',
+      href: null,
+      actions: [{
+        id: `review-${item.domain.toLowerCase().replace(/_/g, '-')}-opportunity`, label: domain.label, message: domain.message,
+        operationId: domain.operationId, interactionType: 'CONVERSATION_CONTINUE' as const, style: 'SECONDARY' as const,
+      }],
+    };
+  });
+}
+
+type SavingsSectionInput = { items: readonly unknown[]; count: number };
+
+/**
+ * The four desktop lifecycle categories stay visible once a home has been analyzed, each with a short empty state, so a
+ * missing category is never mistaken for a hidden one. Related decisions are a pointer strip, shown only when present.
+ */
+export function savingsLifecycleSections(input: {
+  recurring: SavingsSectionInput; benefits: SavingsSectionInput; inProgress: SavingsSectionInput; realized: SavingsSectionInput; related: SavingsSectionInput;
+}): SavingsListSection[] {
+  const section = (id: string, title: string, emptyCaption: string, source: SavingsSectionInput): SavingsListSection => {
+    const items = source.items.slice(0, SAVINGS_SECTION_ROW_LIMIT) as SavingsListSection['items'];
+    return {
+      id, title, count: source.count, items,
+      ...(items.length === 0 ? { caption: emptyCaption } : {}),
+      ...(items.length > SAVINGS_INITIAL_VISIBLE ? { initialVisibleCount: SAVINGS_INITIAL_VISIBLE } : {}),
+    };
+  };
+  return [
+    section('recurring', 'Recurring-cost opportunities', 'No recurring-cost saving is recorded for this home.', input.recurring),
+    section('benefits', 'Benefits and rebates to review', 'No benefit or rebate match is recorded for this home.', input.benefits),
+    section('in-progress', 'Already in progress', 'Nothing is in progress. Opportunities you start appear here.', input.inProgress),
+    section('realized', 'Recorded realized savings', 'Nothing realized yet. Estimates are not counted as realized value.', input.realized),
+    ...(input.related.count > 0 ? [section('related', 'Related savings decisions', '', input.related)] : []),
+  ];
+}
+
+/** Desktop's realized-value safeguards: totals per currency with the independently verified amount, and the overlapping-program caution. */
+export function savingsRealizedSafeguardBlocks(totals: SavingsRealizedTotals): AskPresentationBlock[] {
+  const currencies = Object.keys(totals.realizedValueByCurrency);
+  if (currencies.length === 0) return [];
+  const blocks: AskPresentationBlock[] = [{
+    type: 'METRIC_ROW', id: 'savings-realized-totals', title: 'Recorded received value',
+    description: 'Grouped by currency; amounts in different currencies are never added together.',
+    metrics: currencies.slice(0, 6).map((currency) => ({
+      label: currency,
+      value: savingsValue(totals.realizedValueByCurrency[currency], currency, 'UNKNOWN') ?? '',
+      detail: `${savingsValue(totals.verifiedValueByCurrency[currency] ?? 0, currency, 'UNKNOWN')} independently verified`,
+      tone: 'DEFAULT' as const,
+    })),
+  }];
+  if (totals.exclusionConflicts.length > 0) {
+    const sets = totals.exclusionConflicts.length;
+    blocks.push({
+      type: 'SUMMARY', id: 'savings-exclusion-conflicts', title: 'Check overlapping programs', tone: 'CAUTION', actions: [],
+      body: `You have realized value recorded on ${sets === 1 ? 'a pair' : `${sets} sets`} of programs normally treated as mutually exclusive. The total above still includes every recorded amount — worth double-checking with each program that both are actually valid together.`,
+    });
+  }
+  return blocks;
+}
+
 async function savingsOpportunitiesResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
   const realizedFocus = /\b(realized|received|already saved)\b/i.test(message);
   const paybackFocus = /\b(?:fastest|shortest|best) payback\b/i.test(message);
@@ -118,11 +201,11 @@ async function savingsOpportunitiesResult(userId: string, propertyId: string, me
       };
     })
     .sort((left, right) => (left.paybackMonths ?? Number.POSITIVE_INFINITY) - (right.paybackMonths ?? Number.POSITIVE_INFINITY));
-  const recurring = recurringAll.slice(0, 8)
+  const recurring = recurringAll
     .map(({ paybackMonths: _paybackMonths, ...item }) => item);
 
   const scopedBenefitMatches = benefits.matches.filter((match) => !utilityFocus || UTILITY_BENEFIT_CATEGORIES.has(String(match.category)));
-  const reviewedBenefits = scopedBenefitMatches.slice(0, 8).map((match) => {
+  const reviewedBenefits = scopedBenefitMatches.map((match) => {
     const value = match.estimatedValue != null
       ? savingsValue(match.estimatedValue, match.currency, match.benefitPeriod)
       : match.estimatedValueMin != null || match.estimatedValueMax != null
@@ -144,7 +227,7 @@ async function savingsOpportunitiesResult(userId: string, propertyId: string, me
   });
 
   const scopedInProgress = unified.inProgress.filter((item) => !utilityFocus || isUtilitySavingsItem(item.family, item.category));
-  const inProgress = scopedInProgress.slice(0, 8).map((item) => ({
+  const inProgress = scopedInProgress.map((item) => ({
     id: `progress-${item.family}-${item.id}`,
     title: item.title,
     description: item.explanation,
@@ -162,7 +245,7 @@ async function savingsOpportunitiesResult(userId: string, propertyId: string, me
   }));
 
   const scopedRealized = unified.realized.filter((item) => !utilityFocus || isUtilitySavingsItem(item.family, item.category));
-  const realized = scopedRealized.slice(0, 8).map((item) => ({
+  const realized = scopedRealized.map((item) => ({
     id: `realized-${item.family}-${item.id}`,
     title: item.title,
     description: item.explanation,
@@ -175,31 +258,10 @@ async function savingsOpportunitiesResult(userId: string, propertyId: string, me
   }));
 
   const scopedRelated = utilityFocus ? [] : unified.relatedOpportunities;
-  const related = scopedRelated.slice(0, 5).map((item) => ({
-    id: `related-${item.domain}`,
-    title: item.domain === 'PROPERTY_TAX' ? 'Property tax opportunity' : item.domain === 'COVERAGE' ? 'Coverage and premium review' : 'Mortgage refinance review',
-    description: item.summary,
-    meta: ['Review this estimate separately before deciding'],
-    status: 'RELATED',
-    href: null,
-  }));
-
-  const relatedActions: Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>['actions'] = [];
-  if (scopedRelated.some((item) => item.domain === 'PROPERTY_TAX')) relatedActions.push({
-    id: 'review-property-tax-opportunity', label: 'Review property tax opportunity', interactionType: 'START_WORKFLOW',
-    message: 'Review my property-tax appeal readiness.', operationId: 'PROPERTY_TAX_APPEAL_READINESS', style: 'SECONDARY',
-  });
-  if (scopedRelated.some((item) => item.domain === 'COVERAGE')) relatedActions.push({
-    id: 'review-coverage-opportunity', label: 'Review coverage gaps', interactionType: 'START_WORKFLOW',
-    message: 'Show my current coverage gaps.', operationId: 'COVERAGE_GAPS', style: 'SECONDARY',
-  });
-  if (scopedRelated.some((item) => item.domain === 'REFINANCE')) relatedActions.push({
-    id: 'review-refinance-opportunity', label: 'Review refinance opportunity', interactionType: 'START_WORKFLOW',
-    message: 'Review my current refinance analysis.', operationId: 'REFINANCE_ANALYSIS', style: 'SECONDARY',
-  });
+  const related = savingsRelatedItems(scopedRelated);
 
   const availableCount = recurringAll.length + scopedBenefitMatches.length;
-  const hasAnyResult = availableCount + inProgress.length + realized.length + related.length > 0;
+  const hasAnyResult = availableCount + scopedInProgress.length + scopedRealized.length + related.length > 0;
   const neverAnalyzed = !homeSavings.propertyContextVersion && benefits.summary.lastScanAt === null;
   const realizedTotal = unified.totals.realizedValueTotal;
   const realizedCurrency = unified.totals.realizedValueCurrency;
@@ -247,27 +309,26 @@ async function savingsOpportunitiesResult(userId: string, propertyId: string, me
     actions: [],
   }];
 
-  if (hasAnyResult) {
-    const sections = [
-      { id: 'recurring', title: 'Recurring-cost opportunities', count: recurringAll.length, items: recurring },
-      { id: 'benefits', title: 'Benefits and rebates to review', count: scopedBenefitMatches.length, items: reviewedBenefits },
-      { id: 'in-progress', title: 'Already in progress', count: scopedInProgress.length, items: inProgress },
-      { id: 'realized', title: 'Recorded realized savings', count: scopedRealized.length, items: realized },
-      { id: 'related', title: 'Related savings decisions', count: scopedRelated.length, items: related },
-    ].filter((section) => section.count > 0);
+  // A home that has never been analyzed keeps the explicit "not completed" state; an analyzed home always shows its categories.
+  if (hasAnyResult || !neverAnalyzed) {
+    const sections = savingsLifecycleSections({
+      recurring: { items: recurring, count: recurringAll.length },
+      benefits: { items: reviewedBenefits, count: scopedBenefitMatches.length },
+      inProgress: { items: inProgress, count: scopedInProgress.length },
+      realized: { items: realized, count: scopedRealized.length },
+      related: { items: related, count: scopedRelated.length },
+    });
+    const sourceTotal = recurringAll.length + scopedBenefitMatches.length + scopedInProgress.length + scopedRealized.length + scopedRelated.length;
+    // The canonical totals are not utility-scoped, so the utility lens omits them rather than show an unrelated sum.
+    if (!utilityFocus && scopedRealized.length > 0) blocks.push(...savingsRealizedSafeguardBlocks(unified.totals));
     blocks.push({
       type: 'GROUPED_LIST', filters: [], id: 'savings-opportunity-groups', title: utilityFocus ? 'Utility savings' : 'Savings and benefits',
       description: utilityFocus
         ? 'Only utility-related estimates and outcomes are shown. Available estimates are planning signals, not provider quotes.'
         : 'Available estimates are planning signals. Realized value appears only after a saving or benefit is recorded as received.',
       sections,
-      collection: collectionDescriptor({
-        sourceTotal: recurringAll.length + scopedBenefitMatches.length + scopedInProgress.length + scopedRealized.length + scopedRelated.length,
-        fetchedCount: recurringAll.length + scopedBenefitMatches.length + scopedInProgress.length + scopedRealized.length + scopedRelated.length,
-        sections,
-        nextPageAvailable: false,
-      }),
-      actions: relatedActions,
+      collection: collectionDescriptor({ sourceTotal, fetchedCount: sourceTotal, sections, nextPageAvailable: false }),
+      actions: [],
     });
   }
 
