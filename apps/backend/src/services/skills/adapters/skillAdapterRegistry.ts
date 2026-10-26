@@ -48,6 +48,7 @@ const DEFINITIONS = [
   adapter('decision-platform.hvac.outcome.unlink', 'Decision Platform Outcomes', 'HVAC_DECISION_OUTCOME_UNLINK', 'MUTATION_PREPARATION'),
   adapter('refinance.analysis', 'Refinance Radar', 'REFINANCE_ANALYSIS'),
   adapter('refinance.monitor', 'Refinance Rate Monitor', 'REFINANCE_RATE_MONITOR', 'MUTATION_PREPARATION'),
+  adapter('refinance.command', 'Refinance Workflow Command', 'REFINANCE_COMMAND', 'MUTATION_PREPARATION'),
   adapter('property.summary', 'Property Record Overview', 'PROPERTY_SUMMARY'),
   adapter('intelligence-envelope.query', 'IntelligenceEnvelopeQueryService', 'INTELLIGENCE_ENVELOPE_QUERY'),
   adapter('inventory.lookup', 'InventoryService', 'INVENTORY_LOOKUP'),

@@ -245,6 +245,7 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   CAPABILITY_DISCOVERY: 'The guided records workflow is available for organizing this home paperwork.',
   REPLACEMENT_GUIDANCE: 'The dishwasher age and repair cost make replacement the stronger planning option.',
   REFINANCE_ANALYSIS: 'The refinance analysis shows that refinancing the current mortgage does not yet improve the break-even numbers.',
+  REFINANCE_COMMAND: 'The reviewed refinance scenario, Loan Estimate comparison, decision, or alert preference is ready to save after confirmation.',
   REFINANCE_RATE_MONITOR: 'A mortgage-rate alert can watch for the five-percent threshold after confirmation.',
   SELL_HOLD_RENT_ANALYSIS: 'The recorded assumptions currently favor becoming a landlord and renting over putting the house on the market.',
   SELL_HOLD_RENT_COMMAND: 'The homeowner reviewed and confirmed a change to the sell, hold, or rent assumptions or tracked decision plan.',

@@ -151,7 +151,10 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   REFINANCE_ANALYSIS: new Set([
     'refinance-test-scenario', 'refinance-start-monitor', 'refinance-compare-offers',
     'refinance-record-decision', 'refinance-adjust-scenario', 'financing-profile-update',
+    'refinance-save-scenario', 'refinance-alert-settings', 'refinance-add-comparison',
+    'refinance-delete-comparison', 'refinance-record-decision-inline',
   ]),
+  REFINANCE_COMMAND: new Set(['refinance-command-back']),
   BREAK_EVEN_ANALYSIS: new Set(['rerun-break-even-5', 'rerun-break-even-10', 'break-even-next-sell-hold-rent', 'break-even-next-capital-timeline', 'financing-profile-update']),
   SELL_HOLD_RENT_ANALYSIS: new Set(['sell-hold-rent-horizon-5', 'sell-hold-rent-horizon-10', 'sell-hold-rent-edit-assumptions', 'sell-hold-rent-start-plan', 'sell-hold-rent-stop-plan', 'financing-profile-update']),
   SELL_HOLD_RENT_COMMAND: new Set(['sell-hold-rent-back']),

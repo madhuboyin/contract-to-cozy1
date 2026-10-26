@@ -6,6 +6,7 @@ import { PROPERTY_JOURNEY_CONTEXT_PROVIDER } from '../context/propertyJourneyCon
 export const REFINANCE_SKILL_OPERATIONS: AskOperationId[] = [
   'REFINANCE_ANALYSIS',
   'REFINANCE_RATE_MONITOR',
+  'REFINANCE_COMMAND',
 ];
 
 export const REFINANCE_SKILL = Object.freeze({
@@ -23,6 +24,7 @@ export const REFINANCE_SKILL = Object.freeze({
   allowedAdapters: [
     { id: 'refinance.analysis', version: '1.0' },
     { id: 'refinance.monitor', version: '1.0' },
+    { id: 'refinance.command', version: '1.0' },
   ],
   allowedExternalConnectors: [],
   consumerPolicy: [{ consumer: 'ASK', operations: REFINANCE_SKILL_OPERATIONS }],
@@ -40,7 +42,7 @@ export const REFINANCE_SKILL = Object.freeze({
   // it or confirmRefinanceRateMonitor's new reconciliation-failure block
   // would hit assertSkillResultBlocksAllowed's hard throw instead of
   // degrading honestly.
-  allowedResultBlocks: ['SUMMARY', 'PROACTIVE_INSIGHT', 'TABLE', 'COMPARISON', 'ASSUMPTIONS', 'EVIDENCE', 'WORKFLOW_PROGRESS', 'MONITOR', 'CAPABILITY_LIST', 'LIMITATION', 'BOUNDARY'],
+  allowedResultBlocks: ['SUMMARY', 'PROACTIVE_INSIGHT', 'TABLE', 'GROUPED_LIST', 'COMPARISON', 'ASSUMPTIONS', 'EVIDENCE', 'WORKFLOW_PROGRESS', 'MONITOR', 'CAPABILITY_LIST', 'LIMITATION', 'BOUNDARY'],
   dependencies: [
     { type: 'CONTEXT_PROVIDER', id: PROPERTY_IDENTITY_CONTEXT_PROVIDER.id, version: PROPERTY_IDENTITY_CONTEXT_PROVIDER.version, required: true },
     { type: 'CONTEXT_PROVIDER', id: PROPERTY_JOURNEY_CONTEXT_PROVIDER.id, version: PROPERTY_JOURNEY_CONTEXT_PROVIDER.version, required: false },

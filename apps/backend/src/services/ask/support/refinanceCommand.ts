@@ -1,0 +1,78 @@
+import { z } from 'zod';
+
+export const REFINANCE_COMMAND_ACTIONS = {
+  SAVE_SCENARIO: 'refinance-save-scenario',
+  ALERT_SETTINGS: 'refinance-alert-settings',
+  ADD_COMPARISON: 'refinance-add-comparison',
+  DELETE_COMPARISON: 'refinance-delete-comparison',
+  RECORD_DECISION: 'refinance-record-decision-inline',
+} as const;
+
+export type RefinanceCommandKind = keyof typeof REFINANCE_COMMAND_ACTIONS;
+export type RefinanceFormKind = 'ALERT_SETTINGS' | 'ADD_COMPARISON' | 'RECORD_DECISION';
+
+export const REFINANCE_CAPTURE_KEYS: Record<RefinanceFormKind, string> = {
+  ALERT_SETTINGS: 'REFINANCE_ALERT_SETTINGS_INPUTS',
+  ADD_COMPARISON: 'REFINANCE_LOAN_ESTIMATE_COMPARISON_INPUTS',
+  RECORD_DECISION: 'REFINANCE_DECISION_INPUTS',
+};
+
+export function refinanceKindFromAction(actionId: string | null | undefined): RefinanceCommandKind | null {
+  return (Object.entries(REFINANCE_COMMAND_ACTIONS).find(([, id]) => id === actionId)?.[0] as RefinanceCommandKind | undefined) ?? null;
+}
+
+export function refinanceFormKindFromCaptureKey(key: string): RefinanceFormKind | null {
+  return (Object.entries(REFINANCE_CAPTURE_KEYS).find(([, value]) => value === key)?.[0] as RefinanceFormKind | undefined) ?? null;
+}
+
+const optionalMoney = z.coerce.number().min(0).max(100_000_000).optional();
+const offer = (prefix: 'a' | 'b') => ({
+  [`${prefix}Lender`]: z.string().trim().min(1).max(200),
+  [`${prefix}Amount`]: z.coerce.number().min(1_000).max(100_000_000),
+  [`${prefix}TermYears`]: z.coerce.number().int().min(1).max(50),
+  [`${prefix}LoanType`]: z.enum(['FIXED', 'ARM', 'OTHER']),
+  [`${prefix}Rate`]: z.coerce.number().min(0.01).max(30),
+  [`${prefix}Apr`]: z.coerce.number().min(0.01).max(30),
+  [`${prefix}MonthlyPI`]: z.coerce.number().min(1).max(1_000_000),
+  [`${prefix}LoanCosts`]: z.coerce.number().min(0).max(10_000_000),
+  [`${prefix}LenderCredits`]: z.coerce.number().min(0).max(10_000_000),
+  [`${prefix}CashToClose`]: z.coerce.number().min(0).max(100_000_000),
+  [`${prefix}CashDirection`]: z.enum(['FROM_BORROWER', 'TO_BORROWER', 'UNKNOWN']),
+  [`${prefix}MonthlyMI`]: optionalMoney,
+  [`${prefix}TotalPayment`]: optionalMoney,
+});
+
+export const refinanceAlertAnswerSchema = z.object({
+  emailEnabled: z.boolean(), pushEnabled: z.boolean(),
+  cadence: z.enum(['IMMEDIATE', 'DAILY_DIGEST', 'WEEKLY_BRIEF', 'MUTED']),
+  sensitivity: z.enum(['EARLY', 'CONSERVATIVE', 'BALANCED']),
+  quietStart: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+  quietEnd: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+  timezone: z.string().trim().min(1).max(100),
+});
+
+export const refinanceComparisonAnswerSchema = z.object({
+  label: z.string().trim().max(120).optional(), ...offer('a'), ...offer('b'),
+});
+
+export const refinanceDecisionAnswerSchema = z.object({
+  status: z.enum(['EXPLORING', 'DEFERRED', 'KEEP_CURRENT_LOAN', 'PROCEEDING', 'APPLICATION_IN_PROGRESS', 'DECLINED', 'ABANDONED', 'CLOSED']),
+  rationale: z.string().trim().max(2000).optional(),
+  nextReviewAt: z.string().optional(),
+  currentMortgageBalanceUsd: optionalMoney,
+  interestRatePct: z.coerce.number().min(0.01).max(30).optional(),
+  remainingTermMonths: z.coerce.number().int().min(1).max(600).optional(),
+  monthlyPaymentUsd: optionalMoney,
+  closingCostUsd: optionalMoney,
+}).superRefine((value, ctx) => {
+  if (value.status === 'DEFERRED' && !value.nextReviewAt) ctx.addIssue({ code: 'custom', path: ['nextReviewAt'], message: 'Choose a future review date.' });
+  if (value.status === 'CLOSED' && (value.currentMortgageBalanceUsd == null || value.interestRatePct == null || value.remainingTermMonths == null)) {
+    ctx.addIssue({ code: 'custom', path: ['currentMortgageBalanceUsd'], message: 'A verified closing requires the new balance, rate, and term.' });
+  }
+});
+
+export function parseRefinanceCommandAnswer(kind: RefinanceFormKind, value: unknown) {
+  return kind === 'ALERT_SETTINGS' ? refinanceAlertAnswerSchema.safeParse(value)
+    : kind === 'ADD_COMPARISON' ? refinanceComparisonAnswerSchema.safeParse(value)
+      : refinanceDecisionAnswerSchema.safeParse(value);
+}

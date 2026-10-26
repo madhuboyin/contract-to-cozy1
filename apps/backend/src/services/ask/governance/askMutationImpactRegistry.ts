@@ -152,6 +152,7 @@ const DECLARED: Readonly<Record<string, Declared>> = {
   CAPITAL_TIMELINE_COMMAND: impact(['CAPITAL_RESERVE_PLAN'], { artifactTypes: ['CAPITAL_TIMELINE_ANALYSIS'], notifications: ['capital-timeline', 'reserve-fund'] }),
   SAVINGS_BENEFIT_COMMAND: impact(['SAVINGS_OPPORTUNITIES'], { notifications: ['savings-action', 'savings-match'] }),
   REFINANCE_RATE_MONITOR: impact(['REFINANCE_ANALYSIS'], { artifactTypes: ['REFINANCE_SCENARIO'], notifications: ['refinance'] }),
+  REFINANCE_COMMAND: impact(['REFINANCE_ANALYSIS'], { artifactTypes: ['REFINANCE_SCENARIO'], notifications: ['refinance'] }),
   QUOTE_COMPARISON_CREATE: impact(['QUOTE_COMPARISON_REVIEW'], { artifactTypes: ['QUOTE_COMPARISON'] }),
   QUOTE_COMPARISON_COMMAND: impact(['QUOTE_COMPARISON_REVIEW'], { artifactTypes: ['QUOTE_COMPARISON'] }),
   SERVICE_PRICE_CHECK_RUN: impact(['SERVICE_PRICE_CHECKS']),

@@ -37,6 +37,14 @@ The page presents one staged journey:
 6. decision and outcome tracking; and
 7. expandable monitoring, source, freshness, eligibility, assumptions, and alert settings.
 
+Ask Cozy provides the same central journey inline. It reuses the canonical evaluation and scenario
+engine, exposes up to 52 governed weekly benchmark observations, can save a modeled scenario,
+captures and saves a reviewed two-offer Loan Estimate comparison, manages refinance alert
+preferences, and records decision transitions including verified closing writeback. These writes
+use explicit review and confirmation with current authorization and freshness revalidation. Binary
+Loan Estimate upload/OCR remains a file-processing boundary; Ask accepts reviewed figures rather
+than duplicating that intake pipeline.
+
 Supported result states are:
 
 - `OPEN`: a material modeled opportunity is worth reviewing;

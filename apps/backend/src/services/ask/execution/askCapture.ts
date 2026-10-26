@@ -98,6 +98,7 @@ import { DOCUMENT_FACTS_CAPTURE_KEY, parseDocumentFactsAnswer } from '../support
 import { documentFactsResult } from '../handlers/propertyTaxDocumentFactsCommands.handler';
 import { cdCommandResult } from '../handlers/buyerClosingDisclosureCommands.handler';
 import { leCommandResult } from '../handlers/buyerLoanEstimateCommands.handler';
+import { parseRefinanceCommandAnswer, refinanceFormKindFromCaptureKey, refinanceCommandResult } from '../handlers/refinanceCommands.handler';
 import { setupCommandResult } from '../handlers/buyerPlanSetupCommands.handler';
 import { parseSetupAnswer, setupKindFromCaptureKey } from '../support/buyerPlanSetupCommand';
 import { leFormKindFromCaptureKey, parseLeAnswer } from '../support/buyerLoanEstimateCommand';
@@ -1933,6 +1934,20 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     captureId = input.idempotencyKey;
     capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
     canonicalOwner = 'BuyerClosingDisclosureRevision';
+  } else if (execution.operationId === 'REFINANCE_COMMAND') {
+    const refinanceKind = refinanceFormKindFromCaptureKey(input.captureKey);
+    if (!refinanceKind) throw Object.assign(new Error('This refinance form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    const access = await ensurePropertyAccess(userId, execution.propertyId);
+    if (access.role === HouseholdRole.VIEWER) throw Object.assign(new Error('A contributor or owner is required to change refinance records.'), { code: 'ASK_PERMISSION_REQUIRED' });
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson) ? execution.parametersJson as Record<string, unknown> : {};
+    const launch = storedParameters.refinanceLaunch && typeof storedParameters.refinanceLaunch === 'object' && !Array.isArray(storedParameters.refinanceLaunch)
+      ? storedParameters.refinanceLaunch as { kind?: unknown; entityId?: unknown; message?: unknown } : null;
+    if (!launch || launch.kind !== refinanceKind) throw Object.assign(new Error('This refinance form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    if (!parseRefinanceCommandAnswer(refinanceKind, input.answer).success) throw Object.assign(new Error('Fill in the required refinance details.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+    result = await refinanceCommandResult(userId, execution.propertyId, refinanceKind, typeof launch.entityId === 'string' ? launch.entityId : null, typeof launch.message === 'string' ? launch.message : execution.message, input.answer as Record<string, unknown>);
+    captureId = input.idempotencyKey;
+    capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
+    canonicalOwner = 'MortgageRefinanceRadar';
   } else if (execution.operationId === 'BUYER_LOAN_ESTIMATE_COMMAND') {
     const leKind = leFormKindFromCaptureKey(input.captureKey);
     if (!leKind) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });

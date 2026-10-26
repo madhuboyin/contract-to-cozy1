@@ -20,6 +20,7 @@ import { money } from '../askFormatting';
 import { BREAK_EVEN_WHAT_IF_LABELS, parseBreakEvenWhatIf, type BreakEvenWhatIf } from '../support/breakEvenWhatIf';
 import { askContextFingerprint, durableFreeTextClarification, ensurePropertyAccess } from '../askHandlerSupport';
 import { FINANCING_PROFILE_ACTION_ID, FINANCING_PROFILE_COMMAND_MESSAGE, FINANCING_PROFILE_ENTITY_TYPE } from '../support/financingProfileCommand';
+import { REFINANCE_COMMAND_ACTIONS } from '../support/refinanceCommand';
 
 const refinanceRadarService = new RefinanceRadarService();
 
@@ -43,6 +44,14 @@ type RefinanceScenarioEdit = {
 
 function refinanceWorkflowAction(id: string, label: string, message: string, operationId = 'REFINANCE_ANALYSIS', style: 'PRIMARY' | 'SECONDARY' | 'QUIET' = 'SECONDARY') {
   return { id, label, interactionType: 'START_WORKFLOW' as const, message, operationId, style };
+}
+
+function refinanceCommandAction(id: string, label: string, message: string, style: 'PRIMARY' | 'SECONDARY' | 'QUIET' = 'SECONDARY', entityId?: string) {
+  return { id, label, message, operationId: 'REFINANCE_COMMAND' as const, actionId: id, interactionType: 'START_WORKFLOW' as const, style, entityType: 'REFINANCE_RECORD', ...(entityId ? { entityId } : {}) };
+}
+
+function refinanceItemCommandAction(id: string, label: string, message: string, style: 'PRIMARY' | 'SECONDARY' | 'QUIET', entityId: string) {
+  return { id, label, message, operationId: 'REFINANCE_COMMAND' as const, actionId: id, interactionType: 'MUTATE_RECORD' as const, style, entityType: 'REFINANCE_RECORD', entityId };
 }
 
 function refinanceNextActions(favorable: boolean, triggerRatePct: number | null) {
@@ -74,12 +83,11 @@ async function refinanceJourneyResult(propertyId: string, intent: NonNullable<Re
       status: 'ANSWERED', reasonCode: 'REFINANCE_LOAN_ESTIMATES',
       blocks: [{
         type: 'SUMMARY', id: 'refinance-offers-summary', title: comparisons.length ? `${comparisons.length} saved Loan Estimate comparison${comparisons.length === 1 ? '' : 's'}` : 'No Loan Estimate comparison is saved yet',
-        body: comparisons.length ? 'Your saved comparisons are listed below. Adding or reviewing Loan Estimates is not currently available in Ask. Ask keeps official lender terms separate from modeled scenarios.' : 'No Loan Estimate comparison is saved yet. Adding official lender disclosures to compare is not currently available in Ask.',
-        tone: 'DEFAULT', actions: [],
+        body: comparisons.length ? 'Your reviewed comparisons are listed below. You can add another official comparison without leaving this conversation.' : 'No Loan Estimate comparison is saved yet. Add two reviewed official disclosures to compare their recorded terms.',
+        tone: 'DEFAULT', actions: [refinanceCommandAction(REFINANCE_COMMAND_ACTIONS.ADD_COMPARISON, comparisons.length ? 'Compare another pair' : 'Compare Loan Estimates', 'Compare and save two official refinance Loan Estimates.', 'PRIMARY')],
       }, ...(comparisons.length ? [{
-        type: 'TABLE' as const, id: 'refinance-saved-offers', title: 'Saved official-offer comparisons',
-        columns: [{ key: 'label', label: 'Comparison' }, { key: 'offers', label: 'Lenders' }, { key: 'updated', label: 'Last updated' }],
-        rows: comparisons.map((comparison) => ({ id: comparison.id, values: { label: comparison.label ?? 'Saved comparison', offers: comparison.offers.map((offer) => offer.lenderName).join(' · '), updated: comparison.updatedAt.slice(0, 10) } })), actions: [],
+        type: 'GROUPED_LIST' as const, id: 'refinance-saved-offers', title: 'Saved official-offer comparisons', filters: [],
+        sections: [{ id: 'refinance-comparison-items', title: 'Saved comparisons', count: comparisons.length, items: comparisons.map((comparison) => ({ id: comparison.id, title: comparison.label ?? 'Saved comparison', description: comparison.offers.map((offer) => offer.lenderName).join(' · '), meta: [`Updated ${comparison.updatedAt.slice(0, 10)}`], entityType: 'REFINANCE_LOAN_ESTIMATE_COMPARISON', actions: [refinanceItemCommandAction(REFINANCE_COMMAND_ACTIONS.DELETE_COMPARISON, 'Delete', 'Delete this saved refinance Loan Estimate comparison.', 'QUIET', comparison.id)] })) }], actions: [],
       }] : []), {
         type: 'BOUNDARY', id: 'refinance-offers-boundary', title: 'Official disclosures still require homeowner review',
         body: 'ContractToCozy compares the disclosures you review; it does not select, endorse, contact, or transmit information to a lender.', severity: 'INFO', suggestions: [],
@@ -96,8 +104,8 @@ async function refinanceJourneyResult(propertyId: string, intent: NonNullable<Re
       status: 'ANSWERED', reasonCode: 'REFINANCE_DECISION_JOURNEY',
       blocks: [{
         type: 'SUMMARY', id: 'refinance-decision-summary', title: decision ? `Current refinance decision: ${decision.status.replace(/_/g, ' ').toLowerCase()}` : 'No refinance decision is recorded yet',
-        body: decision ? `This decision was updated ${decision.updatedAt.slice(0, 10)}. ${scenarios.length} saved scenario${scenarios.length === 1 ? '' : 's'} and ${comparisons.length} saved offer comparison${comparisons.length === 1 ? '' : 's'} are available to support the next step.` : 'No refinance decision is recorded yet. Recording what you plan to do is not currently available in Ask.',
-        tone: 'DEFAULT', actions: [],
+        body: decision ? `This decision was updated ${decision.updatedAt.slice(0, 10)}. ${scenarios.length} saved scenario${scenarios.length === 1 ? '' : 's'} and ${comparisons.length} saved offer comparison${comparisons.length === 1 ? '' : 's'} are available to support the next step.` : 'No refinance decision is recorded yet. Record an exploring, defer, keep, proceed, application, decline, abandon, or verified-closing state here.',
+        tone: 'DEFAULT', actions: [refinanceCommandAction(REFINANCE_COMMAND_ACTIONS.RECORD_DECISION, decision ? 'Update decision' : 'Record decision', 'Record or update my refinance decision.', 'PRIMARY')],
       }, ...(decision?.history?.length ? [{
         type: 'TABLE' as const, id: 'refinance-decision-history', title: 'Decision history',
         columns: [{ key: 'date', label: 'Date' }, { key: 'from', label: 'From' }, { key: 'to', label: 'To' }],
@@ -108,14 +116,14 @@ async function refinanceJourneyResult(propertyId: string, intent: NonNullable<Re
       }], suggestions: [],
     };
   }
-  const history = await refinanceRadarService.getRateHistory(propertyId, 12);
+  const history = await refinanceRadarService.getRateHistory(propertyId, 52);
   return {
     status: 'ANSWERED', reasonCode: 'REFINANCE_RATE_HISTORY',
     blocks: [{
       type: 'SUMMARY', id: 'refinance-rate-history-summary', title: history.trendSummary.trendLabel,
       body: `Latest governed benchmarks: ${history.trendSummary.current30yr?.toFixed(3) ?? '—'}% for 30-year fixed and ${history.trendSummary.current15yr?.toFixed(3) ?? '—'}% for 15-year fixed.`, tone: 'DEFAULT', actions: [],
     }, {
-      type: 'TABLE', id: 'refinance-rate-history', title: 'Recent governed mortgage-rate history',
+      type: 'TABLE', id: 'refinance-rate-history', title: 'Up to 52 weeks of governed mortgage-rate history',
       columns: [{ key: 'date', label: 'Date' }, { key: 'thirty', label: '30-year fixed' }, { key: 'fifteen', label: '15-year fixed' }, { key: 'source', label: 'Source' }],
       rows: history.snapshots.map((snapshot) => ({ id: snapshot.id, values: { date: snapshot.date, thirty: `${snapshot.rate30yr.toFixed(3)}%`, fifteen: `${snapshot.rate15yr.toFixed(3)}%`, source: snapshot.source } })), actions: [],
     }, {
@@ -522,8 +530,8 @@ export function refinanceScenarioAnswer(input: {
       tone: 'DEFAULT',
       actions: [
         refinanceWorkflowAction('refinance-adjust-scenario', 'Adjust this scenario', `What if I refinanced at ${targetRatePct}% for ${termLabel} with $6,000 closing costs?`, 'REFINANCE_ANALYSIS', 'PRIMARY'),
+        refinanceCommandAction(REFINANCE_COMMAND_ACTIONS.SAVE_SCENARIO, 'Save this scenario', `What if I refinanced at ${targetRatePct}% for ${termLabel} with $6,000 closing costs? Save this scenario.`),
         refinanceWorkflowAction('refinance-compare-offers', 'Compare Loan Estimates', 'Help me compare official Loan Estimates for this refinance.'),
-        refinanceWorkflowAction('refinance-record-decision', 'Record my decision', 'Help me record what I plan to do about refinancing.'),
       ],
     }, refinanceScenarioComparison(current, scenario, targetRatePct, termLabel), {
       type: 'TABLE', id: 'refinance-scenario-details', title: 'Scenario details and tradeoffs',
@@ -587,7 +595,7 @@ export function refinanceCanonicalAnswer(input: {
     blocks: [{
       type: 'SUMMARY', id: 'refinance-analysis-summary', title: favorable ? 'Refinancing may be worth comparing now' : 'Current conditions do not meet the radar’s actionable threshold',
       body: result.radarSummary, tone: favorable ? 'POSITIVE' : 'DEFAULT',
-      actions: refinanceNextActions(favorable, result.triggerRatePct),
+      actions: [...refinanceNextActions(favorable, result.triggerRatePct), refinanceCommandAction(REFINANCE_COMMAND_ACTIONS.ALERT_SETTINGS, 'Alert settings', 'Review my refinance alert settings.')],
     }, {
       type: 'TABLE', id: 'refinance-analysis-table', title: 'Current loan versus governed benchmark',
       description: 'The benchmark is not a personalized lender offer or guaranteed available rate.',

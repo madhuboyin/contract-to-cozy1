@@ -46,6 +46,7 @@ import './handlers/recallReview.handler';
 import './handlers/documents.handler';
 import './handlers/quotes.handler';
 import './handlers/refinance.handler';
+import './handlers/refinanceCommands.handler';
 import './handlers/homeRecordWrites.handler';
 import './handlers/homeSettingsWrites.handler';
 import './handlers/maintenanceTemplates.handler';
