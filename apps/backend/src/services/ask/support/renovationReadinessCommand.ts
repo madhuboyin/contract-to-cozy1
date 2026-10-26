@@ -11,6 +11,8 @@ import { AUTHORITY_PROFILE_SCHEMA, DETERMINATION_SCHEMA, HOA_READING_SCHEMA, REN
 export const RENOVATION_READINESS_CASE_ENTITY_TYPE = 'RENOVATION_READINESS_CASE';
 export const RENOVATION_READINESS_ITEM_ENTITY_TYPE = 'RENOVATION_READINESS_ITEM';
 export const RENOVATION_COMPLIANCE_CONDITION_ENTITY_TYPE = 'RENOVATION_COMPLIANCE_CONDITION';
+/** A completed improvement on the home timeline, the thing a historical review starts from. */
+export const RENOVATION_RETROACTIVE_ENTITY_TYPE = 'HOME_TIMELINE_IMPROVEMENT';
 export const READINESS_COMMAND_MESSAGES = {
   REFRESH: 'Refresh the readiness check for this renovation case.',
   ACKNOWLEDGE: 'Acknowledge the risk of this open readiness item.',
@@ -24,14 +26,15 @@ export const READINESS_COMMAND_MESSAGES = {
   AUTHORITY_PROFILE: 'Confirm the jurisdiction for this renovation case.',
   DETERMINE_REQUIREMENT: 'Record a sourced determination for this requirement.',
   REVIEW_HOA_READING: 'Review this reading of an HOA document.',
+  RETROACTIVE_REVIEW: 'Start a historical compliance review of this past work.',
 } as const;
 export type ReadinessCommandKind = keyof typeof READINESS_COMMAND_MESSAGES;
 export const READINESS_COMMAND_ACTION_IDS = {
-  REFRESH: 'renovation-readiness-refresh', ACKNOWLEDGE: 'renovation-readiness-acknowledge', REVOKE: 'renovation-readiness-revoke', REOPEN: 'renovation-readiness-reopen', SATISFY: 'renovation-readiness-satisfy', HANDOFF: 'renovation-readiness-handoff', GENERATE: 'renovation-readiness-generate', SATISFY_CONDITION: 'renovation-condition-satisfy', ATTACH_RECORD: 'renovation-compliance-attach', AUTHORITY_PROFILE: 'renovation-authority-profile', DETERMINE_REQUIREMENT: 'renovation-requirement-determine', REVIEW_HOA_READING: 'renovation-hoa-reading-review',
+  REFRESH: 'renovation-readiness-refresh', ACKNOWLEDGE: 'renovation-readiness-acknowledge', REVOKE: 'renovation-readiness-revoke', REOPEN: 'renovation-readiness-reopen', SATISFY: 'renovation-readiness-satisfy', HANDOFF: 'renovation-readiness-handoff', GENERATE: 'renovation-readiness-generate', SATISFY_CONDITION: 'renovation-condition-satisfy', ATTACH_RECORD: 'renovation-compliance-attach', AUTHORITY_PROFILE: 'renovation-authority-profile', DETERMINE_REQUIREMENT: 'renovation-requirement-determine', REVIEW_HOA_READING: 'renovation-hoa-reading-review', RETROACTIVE_REVIEW: 'renovation-retroactive-review',
 } as const;
 export const readinessCommandKindFromMessage = (message: string): ReadinessCommandKind | null =>
   ((Object.entries(READINESS_COMMAND_MESSAGES) as Array<[ReadinessCommandKind, string]>).find(([, value]) => value === message)?.[0]) ?? null;
-export const readinessCommandEntityType = (kind: ReadinessCommandKind) => kind === 'DETERMINE_REQUIREMENT' ? RENOVATION_REQUIREMENT_ENTITY_TYPE : kind === 'REVIEW_HOA_READING' ? RENOVATION_HOA_READING_ENTITY_TYPE : kind === 'SATISFY_CONDITION' ? RENOVATION_COMPLIANCE_CONDITION_ENTITY_TYPE : (kind === 'REFRESH' || kind === 'HANDOFF' || kind === 'GENERATE' || kind === 'ATTACH_RECORD' || kind === 'AUTHORITY_PROFILE' ? RENOVATION_READINESS_CASE_ENTITY_TYPE : RENOVATION_READINESS_ITEM_ENTITY_TYPE);
+export const readinessCommandEntityType = (kind: ReadinessCommandKind) => kind === 'RETROACTIVE_REVIEW' ? RENOVATION_RETROACTIVE_ENTITY_TYPE : kind === 'DETERMINE_REQUIREMENT' ? RENOVATION_REQUIREMENT_ENTITY_TYPE : kind === 'REVIEW_HOA_READING' ? RENOVATION_HOA_READING_ENTITY_TYPE : kind === 'SATISFY_CONDITION' ? RENOVATION_COMPLIANCE_CONDITION_ENTITY_TYPE : (kind === 'REFRESH' || kind === 'HANDOFF' || kind === 'GENERATE' || kind === 'ATTACH_RECORD' || kind === 'AUTHORITY_PROFILE' ? RENOVATION_READINESS_CASE_ENTITY_TYPE : RENOVATION_READINESS_ITEM_ENTITY_TYPE);
 /** Acknowledging a risk and creating the execution project are an owner's decisions; both routes are owner-only. */
 export const readinessKindNeedsOwner = (kind: ReadinessCommandKind) => kind === 'ACKNOWLEDGE' || kind === 'REVOKE' || kind === 'HANDOFF';
 

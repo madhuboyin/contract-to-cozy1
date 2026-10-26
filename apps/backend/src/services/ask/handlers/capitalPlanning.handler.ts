@@ -24,6 +24,8 @@ import {
   APPEAL_REMINDER_ENTITY_TYPE, APPEAL_STATUS_LABELS, appealCaseAvailableKinds, type AppealCommandKind,
 } from '../support/propertyTaxAppealCommand';
 import { listRenovationCases } from '../../renovationCase.service';
+import { detectRetroactiveCandidates } from '../../../homeRenovationAdvisor/engine/retroactive/retroactiveCompliance.service';
+import { RENOVATION_RETROACTIVE_LIST_ACTION_ID, RENOVATION_RETROACTIVE_MESSAGE, isRenovationRetroactiveRequest, renovationRetroactiveRows } from '../support/renovationCaseOverview';
 import { isRenovationCaseOverviewRequest, isRenovationRequirementsRequest, isRenovationComplianceRequest, renovationComplianceSections, renovationCaseRows, renovationLifecycleLabel, renovationRequirementRows } from '../support/renovationCaseOverview';
 import { listRequirements, listAuthorityProfiles } from '../../renovationRequirement.service';
 import { getComplianceWorkflow } from '../../renovationComplianceWorkflow.service';
@@ -395,11 +397,12 @@ const READINESS_COMMAND_ACTIONS = READINESS_COMMAND_ACTION_IDS;
 const READINESS_ITEM_LABELS: Record<ReadinessCommandKind, string> = {
   REFRESH: 'Refresh readiness', ACKNOWLEDGE: 'Acknowledge the risk', REVOKE: 'Withdraw the acknowledgement', REOPEN: 'Reopen', SATISFY: 'Mark satisfied with a document',
   HANDOFF: 'Create the execution project', GENERATE: 'Generate requirements research', SATISFY_CONDITION: 'Mark satisfied with a document', ATTACH_RECORD: 'Attach a permit or HOA record',
-  AUTHORITY_PROFILE: 'Confirm the jurisdiction', DETERMINE_REQUIREMENT: 'Record a determination', REVIEW_HOA_READING: 'Review this reading',
+  AUTHORITY_PROFILE: 'Confirm the jurisdiction', DETERMINE_REQUIREMENT: 'Record a determination', REVIEW_HOA_READING: 'Review this reading', RETROACTIVE_REVIEW: 'Start a historical review',
 };
 
 async function renovationPermitReadinessResult(propertyId: string, message: string, canStart = false, isOwner = false): Promise<AskOperationResult> {
   const [cases, permitSummary] = await Promise.all([listRenovationCases(propertyId), permitTrackerService.getPermitSummary(propertyId)]);
+  if (isRenovationRetroactiveRequest(message)) return renovationRetroactiveResult(propertyId, cases, canStart);
   if (!cases.length) return {
     status: 'NEEDS_CONTEXT', reasonCode: 'RENOVATION_CASE_REQUIRED',
     blocks: [{
@@ -411,7 +414,7 @@ async function renovationPermitReadinessResult(propertyId: string, message: stri
         { label: 'Permit Tracker', body: `${permitSummary.totalPermits} permit record${permitSummary.totalPermits === 1 ? '' : 's'} and ${permitSummary.openFlags} unresolved flag${permitSummary.openFlags === 1 ? '' : 's'} are on file, but they do not define the new work.` },
         { label: 'Next step', body: canStart ? 'Start a renovation case to describe the work, then check its readiness.' : 'A contributor or owner can start a renovation case.' },
       ],
-      tone: 'CAUTION', actions: canStart ? [{ id: RENOVATION_CASE_START_ACTION_ID, label: 'Start a renovation case', interactionType: 'START_WORKFLOW' as const, message: RENOVATION_CASE_START_MESSAGE, operationId: 'RENOVATION_CASE_START' as const, style: 'PRIMARY' as const }] : [],
+      tone: 'CAUTION', actions: canStart ? [{ id: RENOVATION_CASE_START_ACTION_ID, label: 'Start a renovation case', interactionType: 'START_WORKFLOW' as const, message: RENOVATION_CASE_START_MESSAGE, operationId: 'RENOVATION_CASE_START' as const, style: 'PRIMARY' as const }, reviewPastWorkAction()] : [],
     }, { type: 'BOUNDARY', id: 'renovation-empty-boundary', title: 'Scope and jurisdiction still control', body: 'Permit, zoning, HOA, licensing, inspection, and safety requirements depend on the exact scope and current authority rules. Absence of a record is not proof that approval is unnecessary.', severity: 'INFO', suggestions: [] }], suggestions: [],
   };
   const lower = message.toLowerCase();
@@ -425,7 +428,7 @@ async function renovationPermitReadinessResult(propertyId: string, message: stri
   });
   if (cases.length > 1 && !named && isRenovationCaseOverviewRequest(message)) return {
     status: 'ANSWERED', contextVersion: cases[0].updatedAt.toISOString(), suggestions: [],
-    blocks: [{ type: 'SUMMARY', id: 'renovation-cases-summary', title: `You have ${cases.length} renovation cases`, body: `They are listed with their stage, readiness and next step. The most recently updated is ${cases[0].name} (${renovationLifecycleLabel(cases[0].lifecycle).toLowerCase()}).`, tone: 'DEFAULT', actions: [] }, caseList(null)],
+    blocks: [{ type: 'SUMMARY', id: 'renovation-cases-summary', title: `You have ${cases.length} renovation cases`, body: `They are listed with their stage, readiness and next step. The most recently updated is ${cases[0].name} (${renovationLifecycleLabel(cases[0].lifecycle).toLowerCase()}).`, tone: 'DEFAULT', actions: [reviewPastWorkAction()] }, caseList(null)],
   };
   if (isRenovationComplianceRequest(message) && !isRenovationRequirementsRequest(message)) return renovationComplianceResult(propertyId, selected, cases.length > 1 && !named ? caseList(selected.id) : null, canStart);
   if (isRenovationRequirementsRequest(message)) return renovationRequirementsResult(propertyId, selected, cases.length > 1 && !named ? caseList(selected.id) : null, canStart);
@@ -481,6 +484,40 @@ async function renovationPermitReadinessResult(propertyId: string, message: stri
   blocks.push({ type: 'EVIDENCE', id: 'renovation-readiness-evidence', title: 'Readiness sources', items: items.slice(0, 25).map((item) => ({ label: item.title, source: String(item.sourceType ?? 'Renovation readiness').toLowerCase().replace(/_/g, ' '), observedAt: item.sourceObservedAt?.toISOString?.() ?? item.derivedAt?.toISOString?.() ?? null })) });
   blocks.push({ type: 'BOUNDARY', id: 'renovation-readiness-boundary', title: 'Project organization—not legal compliance approval', body: 'Confirm current requirements with the permit authority, HOA, licensed professionals, and inspectors. A “ready” app state cannot authorize unsafe work or replace official approval.', severity: 'INFO', suggestions: [] });
   return { status: summary.state === 'READY' && permitSummary.openFlags === 0 ? 'ANSWERED' : 'READY_WITH_LIMITATIONS', reasonCode: summary.state === 'READY' ? (permitSummary.openFlags ? 'PERMIT_FLAGS_OPEN' : undefined) : `RENOVATION_${summary.state ?? 'NOT_READY'}`, contextVersion: selected.updatedAt.toISOString(), blocks, suggestions: [] };
+}
+
+/** "Review past work": the completed improvements on the timeline that a historical review could start from (the desktop's "Start historical review"). */
+const reviewPastWorkAction = () => ({
+  id: RENOVATION_RETROACTIVE_LIST_ACTION_ID, label: 'Review past work', interactionType: 'START_WORKFLOW' as const, message: RENOVATION_RETROACTIVE_MESSAGE,
+  operationId: 'RENOVATION_PERMIT_READINESS' as const, style: 'SECONDARY' as const,
+});
+
+/**
+ * Slice 4 of the Renovations parity review: the historical review's candidates. Completed improvements on the home timeline that a review could check for
+ * permit, tax, licensing, zoning and closeout gaps. Starting one is a contributor's declared step; a review already started says so and offers its requirements.
+ */
+export async function renovationRetroactiveResult(propertyId: string, cases: ReadonlyArray<{ id: string; name: string; updatedAt: Date }>, canChange: boolean): Promise<AskOperationResult> {
+  const candidates = await detectRetroactiveCandidates(propertyId, 10);
+  const contextVersion = (cases[0]?.updatedAt ?? new Date(0)).toISOString();
+  const open = candidates.filter((candidate) => !candidate.existingRenovationCaseId);
+  if (candidates.length === 0) return {
+    status: 'READY_WITH_LIMITATIONS', reasonCode: 'RENOVATION_RETROACTIVE_NO_CANDIDATES', contextVersion, suggestions: [],
+    blocks: [{ type: 'SUMMARY', id: 'renovation-retroactive-summary', title: 'No completed improvement is on your home timeline to review', body: 'A historical review starts from completed work recorded on the home timeline, and none is recorded as an improvement. That is not evidence that no work was done: work that is not on the timeline cannot be reviewed from here.', tone: 'DEFAULT', actions: [] }],
+  };
+  const rows = renovationRetroactiveRows(candidates, new Map(cases.map((entry) => [entry.id, entry.name])), {
+    canChange, date: (value) => humanDate(new Date(value)) ?? null, money: (value) => money(value),
+  });
+  return {
+    status: 'ANSWERED', contextVersion, suggestions: [],
+    blocks: [{
+      type: 'SUMMARY', id: 'renovation-retroactive-summary',
+      title: open.length ? `${open.length} past improvement${open.length === 1 ? '' : 's'} could be reviewed for compliance` : 'Every past improvement on your timeline already has a review',
+      body: `A historical review checks completed work for permit, tax, licensing, zoning and closeout gaps. It records what your timeline says and organizes the questions; it does not decide that the work was compliant.${canChange ? '' : ' A contributor or owner can start one.'}`,
+      tone: 'DEFAULT', actions: [],
+    }, {
+      type: 'GROUPED_LIST', filters: [], id: 'renovation-retroactive', title: 'Past work on your timeline', sections: [{ id: 'past-work', title: 'Completed improvements', count: rows.length, items: rows as any }], actions: [],
+    }, { type: 'BOUNDARY', id: 'renovation-readiness-boundary', title: 'Project organization\u2014not legal compliance approval', body: 'Confirm current requirements with the permit authority, HOA, licensed professionals, and inspectors. A \u201cready\u201d app state cannot authorize unsafe work or replace official approval.', severity: 'INFO', suggestions: [] }],
+  };
 }
 
 // Slice 3a of the Renovations parity review: the read view of Desktop's permit and HOA workflow. Official status and reported status are shown apart, a

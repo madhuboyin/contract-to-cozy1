@@ -6,7 +6,7 @@
 /** "Show my renovation cases / renovations / remodel plans": the overview, not a readiness question about one case. */
 // Narrow on purpose: "which renovations add value" or "my renovation costs" are other questions. Either name the cases, or ask for my/all/the list of renovations and stop.
 const OVERVIEW_PATTERN = /\b(?:renovation|remodel)\s+cases?\b|\b(?:my|all|list|show)\s+(?:current\s+|active\s+|open\s+)?(?:renovations?|remodels?)(?:\s+(?:plans?|projects?))?\s*[?.!]*\s*$/i;
-import { READINESS_COMMAND_ACTION_IDS, READINESS_COMMAND_MESSAGES, RENOVATION_COMPLIANCE_CONDITION_ENTITY_TYPE } from './renovationReadinessCommand';
+import { READINESS_COMMAND_ACTION_IDS, READINESS_COMMAND_MESSAGES, RENOVATION_COMPLIANCE_CONDITION_ENTITY_TYPE, RENOVATION_RETROACTIVE_ENTITY_TYPE } from './renovationReadinessCommand';
 import { RENOVATION_HOA_READING_ENTITY_TYPE, RENOVATION_REQUIREMENT_ENTITY_TYPE } from './renovationAuthorityWrites';
 export const isRenovationCaseOverviewRequest = (message: string) => OVERVIEW_PATTERN.test(message);
 
@@ -235,4 +235,42 @@ export function renovationComplianceSections(workflow: RenovationComplianceInput
     reviews,
     alerts: workflow.alerts.map((alert) => `${alert.message}${date(alert.expiresAt) ? ` (${date(alert.expiresAt)})` : ''}`),
   };
+}
+
+// ---- Historical (retroactive) review: past work worth checking for permit, tax, licensing and closeout gaps (desktop Renovations "Start historical review") ----
+
+/** "Review my past renovation work", "historical compliance review", "retroactive review". Narrow: it must name a past-work or review phrase. */
+const RETROACTIVE_PATTERN = /\b(?:retroactive|historical)\s+(?:compliance\s+)?(?:review|check)\b|\b(?:review|check)\b.{0,40}\b(?:past|previous|prior|completed|old|earlier)\b.{0,30}\b(?:renovations?|remodels?|improvements?)\b|\b(?:past|previous|prior|completed|old|earlier)\b.{0,30}\b(?:renovations?|remodels?|improvements?)\b.{0,40}\b(?:compliance|permits?|reviewed?)\b/i;
+export const isRenovationRetroactiveRequest = (message: string) => RETROACTIVE_PATTERN.test(message);
+export const RENOVATION_RETROACTIVE_MESSAGE = 'Show the past renovation work I could review for compliance.';
+export const RENOVATION_RETROACTIVE_LIST_ACTION_ID = 'renovation-retroactive-list';
+
+export interface RetroactiveCandidateInput {
+  timelineEventId: string; eventTitle: string; occurredAt: string; amount: number | null;
+  suggestedRenovationLabel: string | null; existingRenovationCaseId: string | null;
+}
+
+/** One row per completed improvement; a review already started is said so and offers its requirements, otherwise the row offers to start one. */
+export function renovationRetroactiveRows(
+  candidates: readonly RetroactiveCandidateInput[], caseNameById: ReadonlyMap<string, string>, options: { canChange: boolean; date: (value: string) => string | null; money: (value: number) => string },
+) {
+  return candidates.map((candidate) => {
+    const started = candidate.existingRenovationCaseId;
+    const startedName = started ? caseNameById.get(started) ?? null : null;
+    const when = options.date(candidate.occurredAt);
+    return {
+      id: `retroactive-${candidate.timelineEventId}`, title: candidate.eventTitle,
+      description: started ? 'A historical review of this work has been started.' : 'Completed work on your home timeline. A review checks it for permit, tax, licensing, zoning and closeout gaps.',
+      meta: [...(when ? [`Completed ${when}`] : []), ...(candidate.amount != null ? [options.money(candidate.amount)] : []), ...(candidate.suggestedRenovationLabel ? [candidate.suggestedRenovationLabel] : []), started ? 'Review started' : 'Not reviewed yet'],
+      status: started ? 'STARTED' : 'NOT_STARTED', href: null,
+      ...(options.canChange && !started ? { entityType: RENOVATION_RETROACTIVE_ENTITY_TYPE, actions: [{
+        id: READINESS_COMMAND_ACTION_IDS.RETROACTIVE_REVIEW, label: 'Start a historical review', message: READINESS_COMMAND_MESSAGES.RETROACTIVE_REVIEW,
+        operationId: 'RENOVATION_READINESS_COMMAND', interactionType: 'MUTATE_RECORD' as const, style: 'SECONDARY' as const, entityType: RENOVATION_RETROACTIVE_ENTITY_TYPE, entityId: candidate.timelineEventId,
+      }] } : {}),
+      ...(started && startedName ? { actions: [{
+        id: RENOVATION_CASE_SHOW_REQUIREMENTS_ACTION_ID, label: 'Show requirements', interactionType: 'CONVERSATION_CONTINUE' as const,
+        message: `Show the requirements for my renovation ${startedName.slice(0, 120)}.`, operationId: 'RENOVATION_PERMIT_READINESS', style: 'SECONDARY' as const,
+      }] } : {}),
+    };
+  });
 }

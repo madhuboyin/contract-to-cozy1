@@ -16,6 +16,7 @@ import { offerableNegotiationDocuments, type NegotiationAttachCandidate } from '
 import { humanDate } from '../askFormatting';
 import { generateRequirementCandidates } from '../../renovationRequirement.service';
 import { attachComplianceRecord, updateCondition } from '../../renovationComplianceWorkflow.service';
+import { createRetroactiveRenovationCase, detectRetroactiveCandidates } from '../../../homeRenovationAdvisor/engine/retroactive/retroactiveCompliance.service';
 import { authorityWriteResult, confirmAuthorityWrite, isAuthorityWriteKind } from './renovationAuthorityWrites.handler';
 import { evaluateReadiness, governOverride, handoffToProject, loadHandoffPrefill, updateReadinessItem } from '../../renovationReadiness.service';
 import {
@@ -79,6 +80,8 @@ async function attachableRecords(propertyId: string) {
   ];
   return { options: options.slice(0, ATTACH_OFFER_LIMIT), total: options.length };
 }
+const retroactiveVersion = (candidate: { timelineEventId: string; existingRenovationCaseId: string | null }) => sha(`retroactive:REVIEW:${candidate.timelineEventId}:${candidate.existingRenovationCaseId ?? 'none'}`);
+const findRetroactiveCandidate = async (propertyId: string, timelineEventId: string) => (await detectRetroactiveCandidates(propertyId, 25)).find((candidate) => candidate.timelineEventId === timelineEventId) ?? null;
 const caseLinkCount = (caseId: string): Promise<number> => database.renovationCaseLink.count({ where: { renovationCaseId: caseId, linkType: { in: ['PERMIT', 'HOA_APPROVAL'] } } });
 const attachVersion = (renovationCase: { id: string; updatedAt: Date }, scopeVersionId: string, linked: number) => sha(`compliance:ATTACH_RECORD:${renovationCase.id}:${scopeVersionId}:${linked}:${renovationCase.updatedAt.toISOString()}`);
 function attachCapture(contextVersion: string, caseName: string, options: Array<{ value: string; label: string }>, entered: ReadinessFormValues = {}): AskCaptureRequest {
@@ -219,6 +222,25 @@ export async function readinessCommandResult(userId: string, propertyId: string,
     confirmationId: `renovation-readiness-${id}-1`, version: 1, title: spec.title, description: spec.description, fields: spec.fields, editableFields: [] as never[],
     confirmLabel: spec.confirmLabel, consentText: 'I authorize this change to the shared home record.', expiresAt: expiresAt.toISOString(),
   });
+
+  if (kind === 'RETROACTIVE_REVIEW') {
+    const candidate = await findRetroactiveCandidate(propertyId, launch.entityId);
+    if (!candidate) return unavailable('RENOVATION_RETROACTIVE_CANDIDATE_NOT_FOUND', 'That past work is no longer available', 'Ask could not find that completed improvement on your home timeline. Nothing has changed.');
+    if (candidate.existingRenovationCaseId) return unavailable('RENOVATION_RETROACTIVE_ALREADY_STARTED', 'A review of this work has already been started', 'A historical review already exists for it, so there is nothing to start. Nothing has changed.');
+    const contextVersion = retroactiveVersion(candidate);
+    const when = humanDate(new Date(candidate.occurredAt)) ?? candidate.occurredAt.slice(0, 10);
+    return {
+      status: 'NEEDS_CONFIRMATION', reasonCode: 'RENOVATION_RETROACTIVE_CONFIRMATION_REQUIRED', contextVersion,
+      parameters: { readinessCommand: { kind, entityId: candidate.timelineEventId }, readinessContextVersion: contextVersion, ...base },
+      blocks: [{ type: 'SUMMARY', id: 'readiness-retroactive-review', title: `Start a historical review of ${candidate.eventTitle}?`, body: 'Nothing changes until you confirm.', tone: 'DEFAULT', actions: [] }],
+      confirmation: confirmation(`retroactive-${sha(candidate.timelineEventId).slice(0, 12)}`, {
+        title: `Start a historical review of ${candidate.eventTitle}?`, confirmLabel: 'Start the review',
+        description: 'This creates a renovation case from this completed work, marked compliance sensitive and opened at historical research. Its first scope records only what your timeline says: the title, the date and the amount. It organizes the permit, tax, licensing, zoning and closeout questions; it does not decide that the work was or was not compliant, and nothing is applied for, filed or sent anywhere. Starting it again changes nothing.',
+        fields: [{ label: 'Work', value: candidate.eventTitle }, { label: 'Completed', value: when }, ...(candidate.amount != null ? [{ label: 'Amount', value: `$${Math.round(candidate.amount).toLocaleString('en-US')}` }] : []), ...(candidate.suggestedRenovationLabel ? [{ label: 'Kind of work', value: candidate.suggestedRenovationLabel }] : [])],
+      }),
+      suggestions: [],
+    };
+  }
 
   if (kind === 'ATTACH_RECORD') {
     const renovationCase = await loadCase(propertyId, launch.entityId);
@@ -451,7 +473,17 @@ async function confirmReadinessCommand(ctx: ConfirmCapabilityContext): Promise<C
   const propertyId = execution.propertyId;
   let title: string; let description: string; let artifactId = command.entityId; let artifactType = 'RENOVATION_READINESS_ITEM'; let workItemSynced: boolean | undefined; let backAction: typeof backToReadiness = backToReadiness;
   try {
-    if (kind === 'ATTACH_RECORD') {
+    if (kind === 'RETROACTIVE_REVIEW') {
+      const candidate = await findRetroactiveCandidate(propertyId, command.entityId);
+      if (!candidate) throw stale('That past work is no longer available.');
+      if (parameters.readinessContextVersion !== retroactiveVersion(candidate)) throw stale('This work changed while the confirmation was open. Review it again and try again.', 'ASK_CONTEXT_VERSION_CONFLICT');
+      if (candidate.existingRenovationCaseId) throw stale('A review of this work has already been started.');
+      // Idempotent by the service's own key (retroactive-home-event:<event>): repeating the same confirmation returns the case already made.
+      const created: any = await createRetroactiveRenovationCase(propertyId, candidate.timelineEventId, userId);
+      artifactId = created?.id ?? candidate.timelineEventId;
+      backAction = { ...backToReadiness, label: 'See requirements', message: `Show the requirements for my renovation ${String(created?.name ?? candidate.eventTitle).slice(0, 120)}.` };
+      title = 'Historical review started'; description = 'The case is open at historical research, with what your timeline says as its first scope. Nothing was applied for or sent anywhere.';
+    } else if (kind === 'ATTACH_RECORD') {
       const renovationCase = await loadCase(propertyId, command.entityId);
       if (!renovationCase || !renovationCase.currentScopeVersionId) throw stale('That renovation case or its scope is no longer available.');
       if (parameters.readinessContextVersion !== attachVersion(renovationCase, renovationCase.currentScopeVersionId, await caseLinkCount(renovationCase.id))) throw stale('This case changed while the confirmation was open. Review it again and try again.', 'ASK_CONTEXT_VERSION_CONFLICT');
@@ -539,7 +571,7 @@ async function confirmReadinessCommand(ctx: ConfirmCapabilityContext): Promise<C
   }
   const result: AskOperationResult = {
     status: 'COMPLETED', reasonCode: `RENOVATION_READINESS_${kind}_COMPLETED`,
-    blocks: [{ type: 'WORKFLOW_PROGRESS', id: `readiness-command-${kind.toLowerCase()}-${artifactId}`, title, status: 'COMPLETED', description, details: [], actions: [{ ...backAction, label: kind === 'SATISFY_CONDITION' || kind === 'ATTACH_RECORD' ? 'See approvals' : 'See readiness', style: 'PRIMARY' as const }] }],
+    blocks: [{ type: 'WORKFLOW_PROGRESS', id: `readiness-command-${kind.toLowerCase()}-${artifactId}`, title, status: 'COMPLETED', description, details: [], actions: [{ ...backAction, label: kind === 'RETROACTIVE_REVIEW' ? 'See requirements' : kind === 'SATISFY_CONDITION' || kind === 'ATTACH_RECORD' ? 'See approvals' : 'See readiness', style: 'PRIMARY' as const }] }],
     suggestions: [],
   };
   const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);

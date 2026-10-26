@@ -227,5 +227,6 @@ test('every id the flow emits is allowlisted for the operation that emits it, an
   const result = { ...raw, parameters: { audiencePresentation: { householdRole: 'CONTRIBUTOR' }, answerTrustEvidence: { schemaVersion: '1.0', sources: [{
     sourceId: 'renovation-permit.readiness', operationId: 'RENOVATION_PERMIT_READINESS', status: 'COMPLETE', scope: 'FULL', freshness: 'CURRENT', observedAt: '2026-10-12T00:00:00.000Z' }] } } };
   const { result: validated } = validateAskAnswerTrust({ question: 'Is my renovation ready to start?', operationId: 'RENOVATION_PERMIT_READINESS', result, propertyId: 'prop-1' });
-  assert.deepEqual(validated.blocks[0].actions.map((a) => a.id), ['renovation-case-start']);
+  // The empty state also offers a review of past work (the historical review), and both survive the answer checker.
+  assert.deepEqual(validated.blocks[0].actions.map((a) => a.id), ['renovation-case-start', 'renovation-retroactive-list']);
 });
