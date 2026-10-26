@@ -3,7 +3,7 @@
 import { sectionHasNextPage } from '@/features/ask/collectionStatus';
 import { useCalmAnswer, useCalmChrome } from './blocks/calmContext';
 import { ReactNode, useContext, useEffect, useRef, useState } from 'react';
-import { ExternalLink, Loader2, X } from 'lucide-react';
+import { ChevronRight, ExternalLink, Loader2, LockKeyhole, Pencil, X } from 'lucide-react';
 import type { AskItemActionInteractionType, AskPresentationBlock } from '@/features/ask/types';
 import { ResultViewContext } from '@/features/ask/useResultView';
 import { api } from '@/lib/api/client';
@@ -16,6 +16,7 @@ import { ActionLink } from './blocks/context';
 type Block = Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>;
 type Item = Block['sections'][number]['items'][number];
 const COMPLETE_MISSING_DETAILS_ACTION_ID = 'complete-missing-details';
+const REVIEW_COVERAGE_ACTION_ID = 'review-coverage-information';
 
 function errorStatus(error: unknown): number | null {
   return error && typeof error === 'object' && typeof (error as { status?: unknown }).status === 'number'
@@ -216,21 +217,24 @@ export function InventoryResultList({ block, propertyId, disabled, onAction, onF
         <div className="mt-3 overflow-hidden rounded-xl border border-slate-200">
           <table className="block w-full text-left text-sm md:table" aria-label={`${section.title} inventory items`}>
             <thead className="hidden bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 md:table-header-group">
-              <tr><th scope="col" className="px-3 py-2.5">Item</th><th scope="col" className="px-3 py-2.5">Room / category</th><th scope="col" className="px-3 py-2.5">Brand / model</th><th scope="col" className="px-3 py-2.5">Condition</th></tr>
+              <tr><th scope="col" className="px-3 py-2.5">Item</th><th scope="col" className="px-3 py-2.5">Room / category</th><th scope="col" className="px-3 py-2.5">Brand / model</th><th scope="col" className="px-3 py-2.5">Condition</th><th scope="col" className="px-3 py-2.5"><span className="sr-only">Details</span></th></tr>
             </thead>
             <tbody className="block divide-y divide-slate-200 bg-white md:table-row-group">
           {section.items.slice(0, controls ? visible : section.items.length).map((item) => {
             const selected = controls?.view.selectedTaskId === item.id;
-            const completeMissingDetails = item.actions?.find((action) => action.id === COMPLETE_MISSING_DETAILS_ACTION_ID);
+            const directActions = (item.actions ?? []).filter((action) => action.id === COMPLETE_MISSING_DETAILS_ACTION_ID || action.id === REVIEW_COVERAGE_ACTION_ID);
+            const canEdit = Boolean(onAction && item.actions !== undefined);
             return <tr key={item.id} data-ask-task-id={item.id} tabIndex={-1} className={cn('block p-3 outline-offset-2 md:table-row md:p-0', selected && 'bg-teal-50')}>
               <th scope="row" className="block md:table-cell md:px-3 md:py-3 md:align-top">
                 <button type="button" data-inventory-detail-trigger={item.id} data-ask-detail-trigger={item.id} data-ask-detail-block={block.id} aria-expanded={detailItemId === item.id} aria-controls={`inventory-detail-${item.id}`} onClick={() => openDetail(item)} className="min-h-10 text-left font-semibold text-slate-950 underline-offset-4 hover:text-teal-800 hover:underline">{item.title}</button>
                 {item.description && <p className="font-normal text-xs leading-5 text-slate-500">{item.description}</p>}
-                {completeMissingDetails && onAction && <button type="button" disabled={disabled} onClick={() => onAction(item.entityType, item.id, completeMissingDetails.message, completeMissingDetails.operationId, completeMissingDetails.interactionType)} className="mt-2 inline-flex min-h-9 items-center rounded-lg bg-teal-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-60">{completeMissingDetails.label}</button>}
+                <span className={cn('mt-1.5 flex items-center gap-1.5 text-xs font-medium', canEdit ? 'text-teal-700' : 'text-slate-500')}>{canEdit ? <Pencil className="h-3.5 w-3.5" aria-hidden="true" /> : <LockKeyhole className="h-3.5 w-3.5" aria-hidden="true" />}{canEdit ? 'Editing available' : 'View only'}</span>
+                {directActions.length > 0 && onAction && <div className="mt-2 flex flex-wrap gap-2">{directActions.map((action) => <button key={action.id} type="button" disabled={disabled} onClick={() => onAction(item.entityType, item.id, action.message, action.operationId, action.interactionType)} className={cn('inline-flex min-h-9 items-center rounded-lg px-3 py-1.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60', action.id === COMPLETE_MISSING_DETAILS_ACTION_ID ? 'bg-teal-700 text-white hover:bg-teal-800' : 'border border-slate-200 bg-white text-slate-800 hover:bg-slate-50')}>{action.label}</button>)}</div>}
               </th>
               <td className="mt-1 block text-slate-600 md:mt-0 md:table-cell md:px-3 md:py-3 md:align-top"><span className="mr-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 md:hidden">Room / category:</span>{item.meta[0] ?? 'Not recorded'}</td>
               <td className="mt-1 block text-slate-600 md:mt-0 md:table-cell md:px-3 md:py-3 md:align-top"><span className="mr-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 md:hidden">Brand / model:</span>{item.meta[1] ?? 'Not recorded'}</td>
               <td className="mt-1 block md:mt-0 md:table-cell md:px-3 md:py-3 md:align-top"><span className="mr-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 md:hidden">Condition:</span><span className="text-xs font-semibold text-slate-600">{item.status?.replace(/_/g, ' ') ?? 'Not recorded'}</span></td>
+              <td className="mt-2 block md:mt-0 md:table-cell md:px-3 md:py-3 md:text-right md:align-top"><button type="button" aria-label={`View details for ${item.title}`} onClick={() => openDetail(item)} className="inline-flex min-h-10 items-center gap-1 text-sm font-semibold text-teal-800">View details <ChevronRight className={cn('h-4 w-4 transition-transform', detailItemId === item.id && 'rotate-90')} aria-hidden="true" /></button></td>
             </tr>;
           })}
             </tbody>

@@ -46,6 +46,8 @@ test('inventory collections render as a responsive semantic table with one row p
   expect(screen.getAllByRole('row')).toHaveLength(4);
   expect(screen.getByRole('columnheader', { name: 'Room / category' })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Water heater' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'View details for Water heater' })).toBeInTheDocument();
+  expect(screen.getAllByText('View only')).toHaveLength(3);
 });
 
 test('clicking an inventory item title opens canonical detail inline without navigating', async () => {
@@ -199,8 +201,20 @@ test('an incomplete inventory row exposes Add missing details and dispatches the
     return <ResultViewContext.Provider value={controls}><InventoryResultList block={incomplete} propertyId="home" onAction={onAction} onFilter={() => {}} onPage={() => {}} onAccessLost={() => {}} link={(_, label) => label} /></ResultViewContext.Provider>;
   }
   render(<Harness />);
+  expect(screen.getByText('Editing available')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Add missing details' }));
   expect(onAction).toHaveBeenCalledWith('INVENTORY_ITEM', 'item-0', 'Complete the missing details for this inventory item.', 'INVENTORY_ITEM_CORRECT', 'MUTATE_RECORD');
+});
+
+test('an incomplete inventory row routes missing coverage to the governed item-scoped coverage review', () => {
+  const reviewCoverage = { id: 'review-coverage-information', label: 'Review coverage information', message: 'Review the coverage information for this inventory item.', style: 'SECONDARY' as const, interactionType: 'CONVERSATION_CONTINUE' as const, operationId: 'COVERAGE_GAPS' };
+  const incomplete: typeof block = { ...block, sections: [{ ...block.sections[0], items: [
+    { ...block.sections[0].items[0], description: 'Missing: Coverage evidence', actions: [reviewCoverage] },
+  ] }] };
+  const onAction = jest.fn();
+  render(<InventoryResultList block={incomplete} propertyId="home" onAction={onAction} onFilter={() => {}} onPage={() => {}} onAccessLost={() => {}} link={(_, label) => label} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Review coverage information' }));
+  expect(onAction).toHaveBeenCalledWith('INVENTORY_ITEM', 'item-0', 'Review the coverage information for this inventory item.', 'COVERAGE_GAPS', 'CONVERSATION_CONTINUE');
 });
 
 test('inventory detail renders no correction controls when the item declares no actions (viewer role)', async () => {

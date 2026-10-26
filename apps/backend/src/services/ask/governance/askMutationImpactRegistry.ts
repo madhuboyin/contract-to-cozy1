@@ -41,7 +41,7 @@ const DECLARED: Readonly<Record<string, Declared>> = {
   CAPTURE_FACT_CONFIRM: impact(['PROPERTY_SUMMARY', 'INVENTORY_LOOKUP'], { recordSections: ['property-facts'] }),
   CAPTURE_EVENT_CONFIRM: impact(['PROPERTY_SUMMARY', 'INVENTORY_LOOKUP', 'HOME_TIMELINE_EVENTS'], { recordSections: ['timeline'] }),
   CAPTURE_WARRANTY_CONFIRM: impact(['PROPERTY_SUMMARY', 'INVENTORY_LOOKUP', 'WARRANTY_LOOKUP'], { recordSections: ['warranties'], notifications: ['warranty'] }),
-  CAPTURE_EVIDENCE_CONFIRM: impact(['DOCUMENT_LOOKUP', 'PROPERTY_SUMMARY'], { recordSections: ['documents', 'timeline'] }),
+  CAPTURE_EVIDENCE_CONFIRM: impact(['DOCUMENT_LOOKUP', 'PROPERTY_SUMMARY', 'INVENTORY_LOOKUP'], { recordSections: ['documents', 'timeline'] }),
   DOCUMENT_PROMOTION_CONFIRM: impact(['DOCUMENT_PROMOTION_REVIEW', 'DOCUMENT_LOOKUP', 'PROPERTY_SUMMARY']),
   INVENTORY_ITEM_CREATE: impact(['PROPERTY_SUMMARY', 'INVENTORY_LOOKUP']),
   INVENTORY_ITEM_CORRECT: impact(['INVENTORY_LOOKUP', 'PROPERTY_SUMMARY', 'HOME_ACTIONS', 'HOME_STATUS_BOARD']),

@@ -1075,7 +1075,7 @@ function inventoryJourneyExecution(state: InventoryJourneyState) {
     viewState: { resultId: 'inventory-journey-result', domainScopePhrase: state.category, dateScopePhrase: null, statusFilter: state.status, selectedTaskId: null, revision: state.revision },
     blocks: [
       { type: 'SUMMARY', id: 'inventory-summary', title: `${items.length} inventory records match this request`, headline, body: `${items.length} records.`, tone: 'DEFAULT',
-        chips: [{ label: `${items.length} records`, tone: 'DEFAULT' }, { label: `${missing} missing details`, tone: missing ? 'CAUTION' : 'DEFAULT' }],
+        chips: [{ label: `${items.length} records`, tone: 'DEFAULT' }, { label: `${missing} ${missing === 1 ? 'record needs' : 'records need'} details`, tone: missing ? 'CAUTION' : 'DEFAULT' }],
         actions: [{ id: 'open-inventory', label: 'Open home inventory', href: `/dashboard/properties/${propertyId}/inventory?tab=items`, style: 'PRIMARY' }] },
       { type: 'GROUPED_LIST', id: 'inventory-results', title: listTitle, filters: chips,
         sections: [{ id: 'items', title: 'Living Home Record', count: items.length, items: items.map((item) => ({
@@ -1083,7 +1083,7 @@ function inventoryJourneyExecution(state: InventoryJourneyState) {
           meta: [item.category === 'HVAC' ? 'HVAC' : 'Appliance', 'Kitchen', item.missing ? 'Not verified' : 'Verified record'],
           // More than three corrections, so the detail folds them behind one "Correct a detail" disclosure.
           actions: [
-            ...(state.status === 'INCOMPLETE' && item.missing ? [itemAction('complete-missing-details', 'Add missing details', 'Complete the missing details for this inventory item.')] : []),
+            ...(item.missing ? [itemAction('complete-missing-details', 'Add missing details', 'Complete the missing details for this inventory item.')] : []),
             itemAction('correct-installedOn', 'Correct install date', 'Correct the install date of this inventory item.'),
             itemAction('correct-condition', 'Correct condition', 'Correct the condition of this inventory item.'),
             itemAction('correct-purchaseCostCents', 'Correct purchase cost', 'Correct the purchase cost of this inventory item.'),

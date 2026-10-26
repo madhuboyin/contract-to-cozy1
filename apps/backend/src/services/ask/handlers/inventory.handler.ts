@@ -101,7 +101,7 @@ export function inventoryCalmCopy(counts: {
   }
   const chips: Array<{ label: string; tone: 'DEFAULT' | 'CAUTION' | 'CRITICAL' }> = [
     { label: inventoryCount(matchCount, 'record', 'records'), tone: 'DEFAULT' },
-    { label: `${missingCount} missing details`, tone: missingCount > 0 ? 'CAUTION' : 'DEFAULT' },
+    { label: `${missingCount} ${missingCount === 1 ? 'record needs' : 'records need'} details`, tone: missingCount > 0 ? 'CAUTION' : 'DEFAULT' },
     { label: `${lifecycleCount} near end of life`, tone: lifecycleCount > 0 ? 'CAUTION' : 'DEFAULT' },
   ];
   return shownCount < matchCount
@@ -449,12 +449,19 @@ async function inventoryLookupResult(
       id: 'items', title: 'Living Home Record', count: matches.length,
       items: shown.map((item) => {
         const missingFacts = inventoryMissingFacts(item);
+        const canManageItem = access.role !== HouseholdRole.VIEWER;
+        const missingActions = missingFacts.length ? inventoryMissingCorrectionActions(item, canManageItem) : undefined;
+        const correctionActions = inventoryCorrectionItemActions(canManageItem);
+        const missingActionIds = new Set((missingActions ?? []).map((action) => action.id));
+        const itemActions = incompleteFocus
+          ? missingActions
+          : missingActions && correctionActions
+            ? [...missingActions, ...correctionActions.filter((action) => !missingActionIds.has(action.id))]
+            : correctionActions;
         const identity = [item.brand ?? item.manufacturer, item.model ?? item.modelNumber].filter(Boolean).join(' ');
         const lifecycleDate = item.purchasedOn;
         return {
-          id: item.id, title: item.name, entityType: 'INVENTORY_ITEM', actions: incompleteFocus
-            ? inventoryMissingCorrectionActions(item, access.role !== HouseholdRole.VIEWER)
-            : inventoryCorrectionItemActions(access.role !== HouseholdRole.VIEWER),
+          id: item.id, title: item.name, entityType: 'INVENTORY_ITEM', actions: itemActions,
           description: incompleteFocus && missingFacts.length ? `Missing: ${missingFacts.join(', ')}` : item.notes,
           meta: [
             item.room?.name ?? item.category.toLowerCase().replace(/_/g, ' '),
@@ -851,7 +858,11 @@ export function inventoryCorrectionItemActions(canManage: boolean) {
  * coverage evidence remains a disclosed traditional-inventory boundary.
  */
 export function inventoryMissingCorrectionActions(
-  item: { brand?: string | null; manufacturer?: string | null; model?: string | null; modelNumber?: string | null; serialNo?: string | null; serialNumber?: string | null; purchasedOn?: Date | string | null },
+  item: {
+    brand?: string | null; manufacturer?: string | null; model?: string | null; modelNumber?: string | null;
+    serialNo?: string | null; serialNumber?: string | null; purchasedOn?: Date | string | null;
+    warrantyId?: string | null; insurancePolicyId?: string | null; coverageEvidenceStatus?: string | null;
+  },
   canManage: boolean,
 ) {
   if (!canManage) return undefined;
@@ -861,15 +872,24 @@ export function inventoryMissingCorrectionActions(
     ...(!item.serialNo && !item.serialNumber ? ['serialNo' as const] : []),
     ...(!item.purchasedOn ? ['purchasedOn' as const] : []),
   ];
-  return [{
-    id: 'complete-missing-details', label: 'Add missing details',
-    message: 'Complete the missing details for this inventory item.',
-    style: 'PRIMARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'INVENTORY_ITEM_CORRECT',
-  }, ...fields.map((field) => ({
+  const coverageUnknown = !item.warrantyId && !item.insurancePolicyId && (!item.coverageEvidenceStatus || item.coverageEvidenceStatus === 'UNKNOWN');
+  return [
+    ...(fields.length ? [{
+      id: 'complete-missing-details', label: 'Add missing details',
+      message: 'Complete the missing details for this inventory item.',
+      style: 'PRIMARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'INVENTORY_ITEM_CORRECT' as const,
+    }] : []),
+    ...fields.map((field) => ({
     id: `correct-${field}`, label: `Add ${INVENTORY_CORRECTION_FIELDS[field].label}`,
     message: INVENTORY_CORRECTION_FIELDS[field].message,
     style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'INVENTORY_ITEM_CORRECT', outcomeKey: INVENTORY_CORRECTION_OUTCOME_BY_FIELD[field],
-  }))];
+    })),
+    ...(coverageUnknown ? [{
+      id: 'review-coverage-information', label: 'Review coverage information',
+      message: 'Review the coverage information for this inventory item.',
+      style: 'SECONDARY' as const, interactionType: 'CONVERSATION_CONTINUE' as const, operationId: 'COVERAGE_GAPS' as const,
+    }] : []),
+  ];
 }
 
 /**

@@ -16,7 +16,7 @@ test('direct answer, concise hierarchy, one dominant step, quiet page link, and 
   await installAskApi(page);
   await startInventory(page);
   await expect(page.getByRole('heading', { name: '4 items recorded, 2 with missing details.' })).toBeVisible();
-  await expect(page.getByRole('list', { name: 'At a glance' })).toContainText('2 missing details');
+  await expect(page.getByRole('list', { name: 'At a glance' })).toContainText('2 records need details');
   await expect(page.getByRole('button', { name: /Add an item/ })).toHaveClass(/bg-teal-700/);
   // The full inventory page is a quiet secondary link, drawn once.
   const pageLink = page.getByRole('link', { name: /Open home inventory/ });

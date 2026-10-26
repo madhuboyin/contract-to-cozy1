@@ -7,7 +7,7 @@ import type { AskExecutionResponse } from '@/features/ask/types';
 const item = (id: string, title: string) => ({ id, title, meta: ['Kitchen', 'Brand/model not recorded'], status: 'GOOD', entityType: 'INVENTORY_ITEM', actions: [] });
 const blocks = (overrides: { workflow?: boolean } = {}) => [
   { type: 'SUMMARY', id: 'inventory-summary', title: '12 inventory records match this request', headline: '12 items recorded, 5 with missing details.', supportLine: 'Showing the first 10. Each row reflects the canonical inventory record.',
-    body: 'Showing the first 10.', tone: 'DEFAULT', chips: [{ label: '12 records', tone: 'DEFAULT' }, { label: '5 missing details', tone: 'CAUTION' }, { label: '0 near end of life', tone: 'DEFAULT' }],
+    body: 'Showing the first 10.', tone: 'DEFAULT', chips: [{ label: '12 records', tone: 'DEFAULT' }, { label: '5 records need details', tone: 'CAUTION' }, { label: '0 near end of life', tone: 'DEFAULT' }],
     actions: [{ id: 'open-inventory', label: 'Open home inventory', href: '/dashboard/properties/home/inventory?tab=items', style: 'PRIMARY' }] },
   { type: 'GROUPED_LIST', id: 'inventory-results', title: 'Inventory details', filters: [], presentation: undefined,
     sections: [{ id: 'items', title: 'Living Home Record', count: 12, items: [item('i1', 'Water heater'), item('i2', 'Refrigerator')] }],
@@ -35,7 +35,7 @@ describe('calm Inventory answer', () => {
     const { container } = card(execution());
     expect(await screen.findByRole('heading', { name: '12 items recorded, 5 with missing details.' })).toBeInTheDocument();
     expect(container.querySelector('[data-calm-summary]')).toHaveTextContent('Showing the first 10.');
-    expect(screen.getByRole('list', { name: 'At a glance' })).toHaveTextContent('5 missing details');
+    expect(screen.getByRole('list', { name: 'At a glance' })).toHaveTextContent('5 records need details');
     // The summary's own action is dropped in an adopted answer; the list carries the one quiet link.
     expect(screen.getAllByText('Open home inventory')).toHaveLength(1);
   });

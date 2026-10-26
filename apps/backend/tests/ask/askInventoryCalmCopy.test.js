@@ -17,6 +17,7 @@ test('missing-detail continuation offers only missing inline-correctable fields'
   const actions = inventoryMissingCorrectionActions({
     brand: null, manufacturer: null, model: 'XR-1', modelNumber: null,
     serialNo: null, serialNumber: null, purchasedOn: null,
+    warrantyId: 'warranty-1', insurancePolicyId: null, coverageEvidenceStatus: 'UNKNOWN',
   }, true);
   assert.deepEqual(actions.map(({ id, label }) => ({ id, label })), [
     { id: 'complete-missing-details', label: 'Add missing details' },
@@ -30,6 +31,18 @@ test('missing-detail continuation offers only missing inline-correctable fields'
     style: 'PRIMARY', interactionType: 'MUTATE_RECORD', operationId: 'INVENTORY_ITEM_CORRECT',
   });
   assert.equal(inventoryMissingCorrectionActions({}, false), undefined);
+});
+
+test('missing coverage routes to the governed item-scoped review, while evidence-only gaps never open an empty completion form', () => {
+  const coverageOnly = inventoryMissingCorrectionActions({
+    brand: 'Rheem', manufacturer: null, model: 'XE50', modelNumber: null,
+    serialNo: 'SN-1', serialNumber: null, purchasedOn: new Date('2024-01-01'),
+    warrantyId: null, insurancePolicyId: null, coverageEvidenceStatus: 'UNKNOWN',
+  }, true);
+  assert.deepEqual(coverageOnly.map(({ id, label, operationId }) => ({ id, label, operationId })), [{
+    id: 'review-coverage-information', label: 'Review coverage information', operationId: 'COVERAGE_GAPS',
+  }]);
+  assert.equal(coverageOnly.some((action) => action.id === 'complete-missing-details'), false);
 });
 
 test('"none missing" is scoped to the details Ask checks, never a claim that the records are complete', () => {
@@ -47,7 +60,7 @@ test('chips come from the same counts, and only a non-zero problem count is a ca
   const chips = inventoryCalmCopy(counts({ matchCount: 6, shownCount: 6, missingCount: 2, lifecycleCount: 0 })).chips;
   assert.deepEqual(chips, [
     { label: '6 records', tone: 'DEFAULT' },
-    { label: '2 missing details', tone: 'CAUTION' },
+    { label: '2 records need details', tone: 'CAUTION' },
     { label: '0 near end of life', tone: 'DEFAULT' },
   ]);
 });

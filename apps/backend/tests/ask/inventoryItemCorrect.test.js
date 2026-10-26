@@ -78,6 +78,9 @@ test('correction item actions are only declared for contributor-and-up on both i
   assert.match(helper, /if \(!canManage\) return undefined;/);
   const uses = source.match(/actions: inventoryCorrectionItemActions\(access\.role !== HouseholdRole\.VIEWER\)/g) ?? [];
   assert.equal(uses.length, 1, 'inventory-entity-selection keeps the complete correction set');
-  assert.match(source, /incompleteFocus\s*\? inventoryMissingCorrectionActions\(item, access\.role !== HouseholdRole\.VIEWER\)\s*:\s*inventoryCorrectionItemActions\(access\.role !== HouseholdRole\.VIEWER\)/,
-    'inventory-results narrows incomplete-record detail to missing fields, while ordinary detail keeps the complete set');
+  assert.match(source, /const missingActions = missingFacts\.length \? inventoryMissingCorrectionActions\(item, canManageItem\) : undefined/);
+  assert.match(source, /incompleteFocus\s*\? missingActions/,
+    'the missing-details filter narrows item actions to missing fields');
+  assert.match(source, /\.\.\.missingActions, \.\.\.correctionActions\.filter/,
+    'the ordinary inventory keeps full corrections while adding the consolidated missing-detail opportunity');
 });
