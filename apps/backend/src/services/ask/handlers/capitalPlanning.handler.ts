@@ -393,7 +393,7 @@ export function renovationReadinessProgress(
 const READINESS_COMMAND_ACTIONS = READINESS_COMMAND_ACTION_IDS;
 const READINESS_ITEM_LABELS: Record<ReadinessCommandKind, string> = {
   REFRESH: 'Refresh readiness', ACKNOWLEDGE: 'Acknowledge the risk', REVOKE: 'Withdraw the acknowledgement', REOPEN: 'Reopen', SATISFY: 'Mark satisfied with a document',
-  HANDOFF: 'Create the execution project',
+  HANDOFF: 'Create the execution project', GENERATE: 'Generate requirements research',
 };
 
 async function renovationPermitReadinessResult(propertyId: string, message: string, canStart = false, isOwner = false): Promise<AskOperationResult> {
@@ -425,7 +425,7 @@ async function renovationPermitReadinessResult(propertyId: string, message: stri
     status: 'ANSWERED', contextVersion: cases[0].updatedAt.toISOString(), suggestions: [],
     blocks: [{ type: 'SUMMARY', id: 'renovation-cases-summary', title: `You have ${cases.length} renovation cases`, body: `They are listed with their stage, readiness and next step. The most recently updated is ${cases[0].name} (${renovationLifecycleLabel(cases[0].lifecycle).toLowerCase()}).`, tone: 'DEFAULT', actions: [] }, caseList(null)],
   };
-  if (isRenovationRequirementsRequest(message)) return renovationRequirementsResult(propertyId, selected, cases.length > 1 && !named ? caseList(selected.id) : null);
+  if (isRenovationRequirementsRequest(message)) return renovationRequirementsResult(propertyId, selected, cases.length > 1 && !named ? caseList(selected.id) : null, canStart);
   let readiness: any;
   try { readiness = await getRenovationReadiness(propertyId, selected.id); } catch { readiness = { summary: { state: 'NOT_EVALUATED', disclaimer: 'Readiness has not been evaluated for the current scope.' }, items: [], project: null }; }
   const summary = readiness.summary ?? {};
@@ -482,7 +482,7 @@ async function renovationPermitReadinessResult(propertyId: string, message: stri
 
 // Slice 2a of the Renovations parity review: the read view of Desktop's Requirements page. Advisor results are research candidates; only sourced
 // authority or professional evidence establishes a requirement, and the answer keeps that distinction. Recording a determination is not in Ask yet.
-async function renovationRequirementsResult(propertyId: string, selected: { id: string; name: string; updatedAt: Date }, caseListBlock: AskPresentationBlock | null): Promise<AskOperationResult> {
+export async function renovationRequirementsResult(propertyId: string, selected: { id: string; name: string; updatedAt: Date }, caseListBlock: AskPresentationBlock | null, canStart: boolean): Promise<AskOperationResult> {
   let requirements: any[] | null = null;
   let profiles: any[] = [];
   try {
@@ -501,8 +501,13 @@ async function renovationRequirementsResult(propertyId: string, selected: { id: 
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY', id: 'renovation-requirements-summary',
     title: requirements.length === 0 ? `No requirements have been researched for ${selected.name}` : unresolved.length ? `${unresolved.length} of ${requirements.length} requirement${requirements.length === 1 ? '' : 's'} still need research for ${selected.name}` : `All ${requirements.length} requirement${requirements.length === 1 ? ' is' : 's are'} determined for ${selected.name}`,
-    body: `Advisor results are research candidates. Only sourced authority or professional evidence establishes a requirement. ${profileLine}${requirements.length === 0 ? ' Generating research candidates and recording determinations are not currently available in Ask.' : unresolved.length ? ' Recording a determination is not currently available in Ask.' : ''}`,
-    tone: unresolved.length ? 'CAUTION' : 'DEFAULT', actions: [],
+    body: `Advisor results are research candidates. Only sourced authority or professional evidence establishes a requirement. ${profileLine}${requirements.length === 0 ? (canStart ? ' Generating research candidates creates the questions to research; recording a determination is not currently available in Ask.' : ' A contributor or owner can generate the research candidates.') : unresolved.length ? ' Recording a determination is not currently available in Ask.' : ''}`,
+    tone: unresolved.length ? 'CAUTION' : 'DEFAULT',
+    // Generating is a contributor's step on the case; the answer offers it only while nothing has been researched for the current scope.
+    actions: requirements.length === 0 && canStart ? [{
+      id: READINESS_COMMAND_ACTIONS.GENERATE, label: READINESS_ITEM_LABELS.GENERATE, interactionType: 'START_WORKFLOW' as const, message: READINESS_COMMAND_MESSAGES.GENERATE,
+      operationId: 'RENOVATION_READINESS_COMMAND' as const, entityType: RENOVATION_READINESS_CASE_ENTITY_TYPE, entityId: selected.id, style: 'PRIMARY' as const,
+    }] : [],
   }];
   if (caseListBlock) blocks.push(caseListBlock);
   if (requirements.length) blocks.push({

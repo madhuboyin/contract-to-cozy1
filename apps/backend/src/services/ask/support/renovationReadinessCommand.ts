@@ -16,14 +16,15 @@ export const READINESS_COMMAND_MESSAGES = {
   REOPEN: 'Reopen this readiness item.',
   SATISFY: 'Mark this readiness item satisfied with a document.',
   HANDOFF: 'Create the execution project for this renovation case.',
+  GENERATE: 'Generate the requirements research for this renovation case.',
 } as const;
 export type ReadinessCommandKind = keyof typeof READINESS_COMMAND_MESSAGES;
 export const READINESS_COMMAND_ACTION_IDS = {
-  REFRESH: 'renovation-readiness-refresh', ACKNOWLEDGE: 'renovation-readiness-acknowledge', REVOKE: 'renovation-readiness-revoke', REOPEN: 'renovation-readiness-reopen', SATISFY: 'renovation-readiness-satisfy', HANDOFF: 'renovation-readiness-handoff',
+  REFRESH: 'renovation-readiness-refresh', ACKNOWLEDGE: 'renovation-readiness-acknowledge', REVOKE: 'renovation-readiness-revoke', REOPEN: 'renovation-readiness-reopen', SATISFY: 'renovation-readiness-satisfy', HANDOFF: 'renovation-readiness-handoff', GENERATE: 'renovation-readiness-generate',
 } as const;
 export const readinessCommandKindFromMessage = (message: string): ReadinessCommandKind | null =>
   ((Object.entries(READINESS_COMMAND_MESSAGES) as Array<[ReadinessCommandKind, string]>).find(([, value]) => value === message)?.[0]) ?? null;
-export const readinessCommandEntityType = (kind: ReadinessCommandKind) => (kind === 'REFRESH' || kind === 'HANDOFF' ? RENOVATION_READINESS_CASE_ENTITY_TYPE : RENOVATION_READINESS_ITEM_ENTITY_TYPE);
+export const readinessCommandEntityType = (kind: ReadinessCommandKind) => (kind === 'REFRESH' || kind === 'HANDOFF' || kind === 'GENERATE' ? RENOVATION_READINESS_CASE_ENTITY_TYPE : RENOVATION_READINESS_ITEM_ENTITY_TYPE);
 /** Acknowledging a risk and creating the execution project are an owner's decisions; both routes are owner-only. */
 export const readinessKindNeedsOwner = (kind: ReadinessCommandKind) => kind === 'ACKNOWLEDGE' || kind === 'REVOKE' || kind === 'HANDOFF';
 

@@ -14,6 +14,7 @@ import { ensurePropertyAccess } from '../askHandlerSupport';
 import { listPropertyDocuments } from '../../propertyDocuments/propertyDocumentInventory.service';
 import { offerableNegotiationDocuments, type NegotiationAttachCandidate } from '../support/negotiationShieldAttach';
 import { humanDate } from '../askFormatting';
+import { generateRequirementCandidates } from '../../renovationRequirement.service';
 import { evaluateReadiness, governOverride, handoffToProject, loadHandoffPrefill, updateReadinessItem } from '../../renovationReadiness.service';
 import {
   HANDOFF_FUNDING_LABELS, HANDOFF_PROJECT_TYPES, READINESS_COMMAND_MESSAGES, READINESS_FORM_CAPTURE_KEYS, handoffServiceInput, readinessCommandEntityType,
@@ -51,9 +52,14 @@ const loadItem = async (propertyId: string, itemId: string): Promise<ItemRow | n
   select: { id: true, renovationCaseId: true, title: true, status: true, isBlocking: true, overrideAllowed: true, manualSatisfactionAllowed: true, overrideAcknowledgedAt: true, manuallySatisfiedAt: true, updatedAt: true, reason: true },
 });
 const loadCase = async (propertyId: string, caseId: string) => database.renovationCase.findFirst({
-  where: { id: caseId, propertyId }, select: { id: true, name: true, updatedAt: true, readinessSummary: true },
-}) as Promise<{ id: string; name: string; updatedAt: Date; readinessSummary: unknown } | null>;
+  where: { id: caseId, propertyId }, select: { id: true, name: true, updatedAt: true, readinessSummary: true, currentScopeVersionId: true },
+}) as Promise<{ id: string; name: string; updatedAt: Date; readinessSummary: unknown; currentScopeVersionId: string | null } | null>;
 const itemVersion = (kind: ReadinessCommandKind, item: ItemRow) => sha(`readiness:${kind}:${item.id}:${item.status}:${item.overrideAcknowledgedAt?.toISOString() ?? ''}:${item.updatedAt.toISOString()}`);
+/** Requirements research is generated against the case's current scope; the count is part of the version so a confirmation made before another request researched it is stale. */
+const currentRequirementCount = async (propertyId: string, caseId: string, scopeVersionId: string): Promise<number> => database.renovationRequirement.count({
+  where: { renovationCaseId: caseId, propertyId, scopeVersionId, recordStatus: 'CURRENT' },
+});
+const requirementsVersion = (renovationCase: { id: string; updatedAt: Date }, scopeVersionId: string, count: number) => sha(`readiness:GENERATE:${renovationCase.id}:${scopeVersionId}:${count}:${renovationCase.updatedAt.toISOString()}`);
 const caseVersion = (renovationCase: { id: string; updatedAt: Date }) => sha(`readiness:REFRESH:${renovationCase.id}:${renovationCase.updatedAt.toISOString()}`);
 
 /** What an item allows now (the service re-checks): the one place shared by the answer's row actions and the confirmation. */
@@ -159,6 +165,26 @@ export async function readinessCommandResult(userId: string, propertyId: string,
     confirmationId: `renovation-readiness-${id}-1`, version: 1, title: spec.title, description: spec.description, fields: spec.fields, editableFields: [] as never[],
     confirmLabel: spec.confirmLabel, consentText: 'I authorize this change to the shared home record.', expiresAt: expiresAt.toISOString(),
   });
+
+  if (kind === 'GENERATE') {
+    const renovationCase = await loadCase(propertyId, launch.entityId);
+    if (!renovationCase) return unavailable('RENOVATION_CASE_NOT_FOUND', 'That renovation case is no longer available', 'Ask could not find that case. Nothing has changed.');
+    if (!renovationCase.currentScopeVersionId) return unavailable('RENOVATION_SCOPE_MISSING', 'This case has no scope to research', 'Requirements are researched against the case’s current scope, and this case does not have one. Defining scope is not currently available in Ask. Nothing has changed.');
+    const existing = await currentRequirementCount(propertyId, renovationCase.id, renovationCase.currentScopeVersionId);
+    if (existing > 0) return unavailable('RENOVATION_REQUIREMENTS_ALREADY_RESEARCHED', 'Requirements are already researched for this case', 'Research candidates already exist for the current scope, so there is nothing to generate. Nothing has changed.');
+    const contextVersion = requirementsVersion(renovationCase, renovationCase.currentScopeVersionId, existing);
+    return {
+      status: 'NEEDS_CONFIRMATION', reasonCode: 'RENOVATION_REQUIREMENTS_GENERATE_CONFIRMATION_REQUIRED', contextVersion,
+      parameters: { readinessCommand: { kind, entityId: renovationCase.id }, readinessContextVersion: contextVersion, ...base },
+      blocks: [{ type: 'SUMMARY', id: 'readiness-generate-review', title: `Generate requirements research for ${renovationCase.name}?`, body: 'Nothing changes until you confirm.', tone: 'DEFAULT', actions: [] }],
+      confirmation: confirmation(`generate-${sha(renovationCase.id).slice(0, 12)}`, {
+        title: `Generate requirements research for ${renovationCase.name}?`, confirmLabel: 'Generate research',
+        description: 'This creates research questions for permits, contractor licensing, zoning, HOA and similar rules, each marked as needing research. They are candidates, not requirements: nothing is applied for, nothing is confirmed, and no determination is recorded. Where a guidance service is configured, your city, state, ZIP and this case’s scope summary are sent to it to look up guidance. Repeating this never duplicates a question.',
+        fields: [{ label: 'Case', value: renovationCase.name }, { label: 'Creates', value: 'Research questions for the current scope' }],
+      }),
+      suggestions: [],
+    };
+  }
 
   if (kind === 'REFRESH') {
     const renovationCase = await loadCase(propertyId, launch.entityId);
@@ -307,7 +333,15 @@ async function confirmReadinessCommand(ctx: ConfirmCapabilityContext): Promise<C
   const propertyId = execution.propertyId;
   let title: string; let description: string; let artifactId = command.entityId; let artifactType = 'RENOVATION_READINESS_ITEM'; let workItemSynced: boolean | undefined;
   try {
-    if (kind === 'REFRESH') {
+    if (kind === 'GENERATE') {
+      const renovationCase = await loadCase(propertyId, command.entityId);
+      if (!renovationCase || !renovationCase.currentScopeVersionId) throw stale('That renovation case or its scope is no longer available.');
+      const existing = await currentRequirementCount(propertyId, renovationCase.id, renovationCase.currentScopeVersionId);
+      if (parameters.readinessContextVersion !== requirementsVersion(renovationCase, renovationCase.currentScopeVersionId, existing)) throw stale('This case changed while the confirmation was open. Review it again and try again.', 'ASK_CONTEXT_VERSION_CONFLICT');
+      // Idempotent by the service's own requirement keys: a repeat creates only the questions that are missing.
+      await generateRequirementCandidates(propertyId, renovationCase.id, userId, {});
+      title = 'Requirements research generated'; description = 'The questions are recorded as research candidates for this case’s current scope. Nothing is determined yet, and nothing was applied for.';
+    } else if (kind === 'REFRESH') {
       const renovationCase = await loadCase(propertyId, command.entityId);
       if (!renovationCase) throw stale('That renovation case is no longer available.');
       if (parameters.readinessContextVersion !== caseVersion(renovationCase)) throw stale('This case changed while the confirmation was open. Review it again and try again.', 'ASK_CONTEXT_VERSION_CONFLICT');
