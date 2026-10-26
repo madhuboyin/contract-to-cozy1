@@ -31,6 +31,7 @@ export const REVIEWED_OPERATIONS: Readonly<Record<string, string>> = {
   MATERIAL_SPECS_LIST: 'record-explorer fixture',
   HOME_TIMELINE_EVENTS: 'timeline fixture',
   COVERAGE_REVIEW_STATUS: 'audited against the ATTENTION profile; fixture',
+  RISK_MITIGATION_PLAN: 'audited against the ATTENTION profile; fixture',
   DOCUMENT_LOOKUP: 'collection descriptor (Phase 5)',
   INVENTORY_LOOKUP: 'collection descriptor and gated Next control (Phase 2)',
   HOME_EVENT_RADAR_FEED: 'collection descriptor with cursor continuation (Phase 2)',

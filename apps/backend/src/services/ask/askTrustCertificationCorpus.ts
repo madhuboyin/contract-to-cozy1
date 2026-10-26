@@ -150,6 +150,8 @@ const CERTIFICATION_ROWS: ReadonlyArray<Omit<AskRoutingCertificationFixture, 'fi
   { operationId: 'SAVED_RESULTS', message: 'Which of my saved results are out of date?', category: 'PARAPHRASE' },
   { operationId: 'HOME_RECORD_EXPORT', message: 'Export my warranties', category: 'PARAPHRASE' },
   { operationId: 'HOME_RECORD_EXPORT_STATUS', message: 'Check on the status of my export', category: 'PARAPHRASE' },
+  // Coverage & Premium Review "Reduce loss risk" (2026-10-26). Appended at the END, as above: the fixtureId is positional.
+  { operationId: 'RISK_MITIGATION_PLAN', message: 'What loss-prevention work matters most?', category: 'PARAPHRASE' },
 ];
 
 export const ASK_ROUTING_CERTIFICATION_FIXTURES: readonly AskRoutingCertificationFixture[] = Object.freeze(
@@ -367,6 +369,7 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   MAINTENANCE_EVIDENCE_ATTACH: "The Home Records you chose are attached to the maintenance task as evidence after confirmation, and the journey step is updated only if the task is completed and linked to it.",
   COVERAGE_ANALYSIS_RUN: 'The coverage check for the selected journey step runs and is saved only after you confirm; no policy is changed and no insurer is contacted.',
   COVERAGE_COMMAND: 'Your coverage step is shown and saved only after you confirm; no policy is changed and no insurer is contacted.',
+  RISK_MITIGATION_PLAN: 'Your loss-prevention plan lists the open steps in order of the premium driver each addresses, then how ready you are to act; a carrier credit is shown only where it was confirmed.',
   COVERAGE_REVIEW_STATUS: 'Your coverage review lists questions worth asking about the confirmed facts on your policy, and what is still missing; it does not say what a claim would pay.',
   HOME_UPGRADE_COMMAND: 'Your upgrade option change is shown and saved only after you confirm; a decision does not start any work.',
   PERMIT_TRACKER_COMMAND: 'Your permit change is shown and saved only after you confirm; the official status is not changed and nothing is filed or sent.',

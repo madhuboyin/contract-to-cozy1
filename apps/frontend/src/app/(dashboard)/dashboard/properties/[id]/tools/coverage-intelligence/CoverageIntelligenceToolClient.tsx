@@ -31,11 +31,12 @@ const STAGES: { key: CoverageStage; label: string; description: string }[] = [
   { key: 'risk', label: 'Reduce loss risk', description: 'Plan loss-prevention work without savings promises.' },
 ];
 
-// Only stages whose question maps to an existing deterministic coverage operation seed a prompt; Renewal and Risk open Ask unseeded.
+// Only stages whose question maps to an existing deterministic Ask operation seed a prompt; Renewal opens Ask unseeded until a renewal comparison exists.
 const ASK_STAGE_QUESTIONS: Partial<Record<CoverageStage, string>> = {
   current: 'Show gaps in my home protection.',
   questions: 'What questions should I ask my insurer?',
   compare: 'Compare my current insurance policy against alternatives.',
+  risk: 'What loss-prevention work matters most?',
 };
 
 // Opened from a guided journey, the link continues that journey in Ask (the read that shows where it stands and its in-Ask step action) instead of a stage

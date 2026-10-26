@@ -57,6 +57,7 @@ const OPERATION_BOUNDARIES: Partial<Record<AskOperationId, ReadonlySet<string>>>
   PRICE_FINALIZATIONS_LIST: new Set(['price-finalization-boundary']),
   PERMIT_TRACKER_STATUS: new Set(['permit-tracker-boundary']),
   COVERAGE_REVIEW_STATUS: new Set(['coverage-review-boundary']),
+  RISK_MITIGATION_PLAN: new Set(['risk-mitigation-boundary']),
   FINANCING_OVERVIEW: new Set(['financing-boundary']),
   DO_NOTHING_SIMULATION: new Set(['do-nothing-boundary']),
   WARRANTY_LOOKUP: new Set(['warranty-boundary']),
@@ -358,6 +359,8 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   // The comparison answer offers Start a comparison / Record my decision, and the review answer offers Review my coverage, to a contributor or owner.
   COVERAGE_COMPARISON_STATUS: new Set(['coverage-start-comparison', 'coverage-record-decision', 'coverage-add-quote']),
   COVERAGE_REVIEW_STATUS: new Set(['coverage-generate-review']),
+  // The coverage-conflict state points at the coverage review.
+  RISK_MITIGATION_PLAN: new Set(['risk-plan-see-coverage-review']),
   // The upgrade options answer's Manage options rows offer these to a contributor or owner.
   HOME_UPGRADE_SCENARIOS: new Set(['home-upgrade-decide', 'home-upgrade-compute', 'home-upgrade-rename', 'home-upgrade-archive', 'home-upgrade-restore', 'home-upgrade-delete']),
   // The buyer negotiation list's rows offer Start negotiating and Record the seller response to a contributor or owner.

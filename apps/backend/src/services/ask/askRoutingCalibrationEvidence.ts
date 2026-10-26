@@ -213,6 +213,8 @@ const ROWS: readonly ObservationTuple[] = [
   ['116-expected', '116', 'SAVED_RESULTS', 0.5999, true], ['116-competitor', '116', 'HOME_UPGRADE_SCENARIOS', 0.223, false],
   ['117-expected', '117', 'HOME_RECORD_EXPORT', 0.5025, true], ['117-competitor', '117', 'WARRANTY_LOOKUP', 0.3834, false],
   ['118-expected', '118', 'HOME_RECORD_EXPORT_STATUS', 0.5002, true], ['118-competitor', '118', 'BUYER_PLAN_STATUS', 0.2333, false],
+  // Coverage & Premium Review "Reduce loss risk": 119 is the loss-prevention plan fixture, appended after 118 so no earlier row is renumbered.
+  ['119-expected', '119', 'RISK_MITIGATION_PLAN', 0.2553, true], ['119-competitor', '119', 'WORK_OVERVIEW', 0.2036, false],
   // Exporting the home record (FRD v1.2 §1.2): 117-118 are their fixtures; 024 re-derived because HOME_RECORD_EXPORT_STATUS became its strongest competitor (expected operation unchanged).
 ];
 

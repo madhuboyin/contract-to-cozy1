@@ -8,6 +8,7 @@ import { validateAskOperationSemanticPackages } from './askOperationSemanticPack
 import { parseReserveFundMessage } from './support/reserveFundMessage';
 import { isNegotiationShieldStartRequest } from './support/negotiationShieldStart';
 import { isRenovationCaseStartRequest } from './support/renovationCaseStart';
+import { isRiskMitigationPlanRequest } from './support/riskMitigationPlan';
 import { isRenovationCaseOverviewRequest, isRenovationRequirementsRequest, isRenovationComplianceRequest, isRenovationRetroactiveRequest } from './support/renovationCaseOverview';
 import { isPermitTrackerReadRequest } from './support/permitTrackerRead';
 import { isFinancingRequest } from './support/financingRead';
@@ -233,6 +234,8 @@ export type AskOperationId =
   | 'MAINTENANCE_EVIDENCE_ATTACH'
   // Read the coverage review: the questions worth asking about the confirmed facts on the household's policy (register P0 Coverage Intelligence). Read-only; never generates a review.
   | 'COVERAGE_REVIEW_STATUS'
+  // Read the saved loss-prevention plan (the Risk Premium Optimizer's plan), ranked by the premium driver each step addresses and then by readiness (register: Coverage & Premium Review "Reduce loss risk"). Read-only, primary owner; never prepares or changes a plan, and never promises a saving.
+  | 'RISK_MITIGATION_PLAN'
   // Manage a saved Home Upgrade Planner option (register P0 Home Digital Twin / Upgrade Planner): record the decision, rename, archive or restore, recalculate (queued job) and delete an archived option. Confirmation-gated, declared-action only; never by fuzzy retrieval.
   | 'HOME_UPGRADE_COMMAND'
   // Add, change and remove a permit record (register P0 Permits, slice PM-B). Records the REPORTED status; the official status is the authority's and is not set here. Confirmation-gated, declared-action only; never by fuzzy retrieval.
@@ -910,6 +913,7 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   MAINTENANCE_EVIDENCE_ATTACH: definition('MAINTENANCE_EVIDENCE_ATTACH', 'COMMAND', true, 'DETERMINISTIC', 'STANDARD', 'CONTRIBUTOR', 'maintenance.evidence-attach', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
   COVERAGE_ANALYSIS_RUN: definition('COVERAGE_ANALYSIS_RUN', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'coverage.analysis-run', ['SUMMARY', 'WORKFLOW_PROGRESS', 'BOUNDARY']),
   COVERAGE_COMMAND: definition('COVERAGE_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'coverage.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
+  RISK_MITIGATION_PLAN: definition('RISK_MITIGATION_PLAN', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'risk-mitigation.plan', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
   COVERAGE_REVIEW_STATUS: definition('COVERAGE_REVIEW_STATUS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'coverage.review-status', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
   HOME_UPGRADE_COMMAND: definition('HOME_UPGRADE_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'home-digital-twin.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   PERMIT_TRACKER_COMMAND: definition('PERMIT_TRACKER_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'permits.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
@@ -1705,6 +1709,10 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   }
   if (maintenanceForecastPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('MAINTENANCE_FORECAST', 0.96);
+  }
+  // "What loss-prevention work matters most?" is the saved plan, not the coverage review or a coverage comparison.
+  if (isRiskMitigationPlanRequest(message) && !explicitCapabilityPattern.test(message)) {
+    return resolved('RISK_MITIGATION_PLAN', 0.96);
   }
   if (coverageReviewPattern.test(message) && !coverageComparisonPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('COVERAGE_REVIEW_STATUS', 0.96);

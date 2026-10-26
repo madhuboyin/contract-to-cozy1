@@ -30,6 +30,7 @@ test.each([
   ['', 'Show gaps in my home protection.'],
   ['stage=questions', 'What questions should I ask my insurer?'],
   ['stage=compare', 'Compare my current insurance policy against alternatives.'],
+  ['stage=risk', 'What loss-prevention work matters most?'],
 ])('stage %p seeds its validated question and returns to the same tab', (q, question) => {
   query = q;
   render(<CoverageIntelligenceToolClient />);
@@ -41,7 +42,7 @@ test.each([
   expect(params.get('backTo')).toBe(`/dashboard/properties/p1/tools/coverage-intelligence${q ? `?${q}` : ''}`);
 });
 
-test.each(['renewal', 'risk'])('%s stage opens Ask without a seeded question', (stage) => {
+test.each(['renewal'])('%s stage opens Ask without a seeded question', (stage) => {
   query = `stage=${stage}`;
   render(<CoverageIntelligenceToolClient />);
   const params = askParams();

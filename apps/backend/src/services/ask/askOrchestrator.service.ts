@@ -159,6 +159,7 @@ import './handlers/statusBoardCommands.handler';
 import './handlers/capitalTimelineCommands.handler';
 import './handlers/coverageCommands.handler';
 import './handlers/coverageReview.handler';
+import './handlers/riskMitigationPlan.handler';
 import './handlers/homeUpgradeCommands.handler';
 import './handlers/permitTrackerCommands.handler';
 import './handlers/financing.handler';

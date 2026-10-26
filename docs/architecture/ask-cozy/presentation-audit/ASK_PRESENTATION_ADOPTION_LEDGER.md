@@ -2,7 +2,7 @@
 
 **Generated:** by `apps/backend/scripts/generate-ask-adoption-ledger.js` from the live operation registry. Do not edit by hand.
 
-**Operations:** 197
+**Operations:** 224
 
 Each registered Ask operation has exactly one class. The class is derived from registry facts (family, allowed block types) plus an explicit
 list of operations this effort reviewed (`REVIEWED_OPERATIONS` in `apps/backend/src/services/ask/presentation/adoptionLedger.ts`). A test fails
@@ -11,10 +11,10 @@ contract-level journey, or explicit producer-contract review; it is not verified
 
 | Class | Operations |
 |---|---:|
-| Reviewed implementation (fixture, journey, or producer-contract review; not runtime-verified) | 100 |
-| Requires collection adoption | 11 |
+| Reviewed implementation (fixture, journey, or producer-contract review; not runtime-verified) | 102 |
+| Requires collection adoption | 20 |
 | Requires trust or rationale adoption | 0 |
-| Compact receipt: no rich migration needed | 83 |
+| Compact receipt: no rich migration needed | 99 |
 | Specialized workflow requiring later review | 0 |
 | Not applicable (boundary operations) | 3 |
 
@@ -65,6 +65,7 @@ contract-level journey, or explicit producer-contract review; it is not verified
 | `HOME_DIGITAL_WILL` | Covered in this effort: the enabled-entry and trusted-contact sections declare their complete in-memory totals. |
 | `HOME_EVENT_CORRECT` | Covered in this effort: the ambiguous-target command pairs its bounded event read with an authoritative visible-event count. |
 | `HOME_EVENT_RADAR_FEED` | Covered in this effort: collection descriptor with cursor continuation (Phase 2). |
+| `HOME_EVENT_UPDATE` | Covered in this effort: the ambiguous-target command pairs its bounded event read with an authoritative visible-event count. |
 | `HOME_EVENT_VISIBILITY` | Covered in this effort: the ambiguous-target command pairs its bounded event read with an authoritative visible-event count. |
 | `HOME_STATUS_BOARD` | Covered in this effort: collection descriptor, unknown-is-not-good section, lead sentence; fixtures and journey 1. |
 | `HOME_TIMELINE_EVENTS` | Covered in this effort: timeline fixture. |
@@ -111,6 +112,7 @@ contract-level journey, or explicit producer-contract review; it is not verified
 | `REFINANCE_RATE_MONITOR` | Covered in this effort: monitor proposal declares the governed benchmark, exact threshold, delivery cadence, quiet hours, source boundary and consent before confirmation. |
 | `RENOVATION_PERMIT_READINESS` | Covered in this effort: renovation-readiness fixtures cover the blocking-item basis, dated readiness sources and the legal-compliance boundary. |
 | `REPLACEMENT_GUIDANCE` | Covered in this effort: item-carrying warranty follow-up, journey 4. |
+| `RISK_MITIGATION_PLAN` | Covered in this effort: audited against the ATTENTION profile; fixture. |
 | `ROOM_CREATE` | Covered in this effort: producer-contract review: the actual workflow emits capture, summary and confirmation blocks only; its broad command allow-list does not represent a list-producing path. |
 | `ROOM_RENAME` | Covered in this effort: the ambiguous-target command pairs its bounded room read with an authoritative room count. |
 | `SAVINGS_OPPORTUNITIES` | Covered in this effort: available, in-progress, realized and related savings sections distinguish authoritative source totals, fetched rows and bounded delivery. |
@@ -120,24 +122,33 @@ contract-level journey, or explicit producer-contract review; it is not verified
 | `SELL_HOLD_RENT_ANALYSIS` | Covered in this effort: comparison and what-if fixtures cover the directional rationale, dated model sources, material assumptions and financial/tax/legal boundary. |
 | `SELL_HOLD_RENT_GOAL_CAPTURE` | Covered in this effort: producer-contract review: the real workflow is internal conversational capture and the defensive direct handler emits only a boundary, not a collection. |
 | `SERVICE_PRICE_CHECKS` | Covered in this effort: the bounded recent-check read is paired with an authoritative database total and no unsupported continuation. |
-| `WARRANTY_CORRECT` | Covered in this effort: the ambiguous-target command declares the requester-owned warranty total and bounded fetched selection rows. |
 | `WARRANTY_LOOKUP` | Covered in this effort: item-scoped answer, journey 4 (the whole-home list is not yet migrated). |
+| `WARRANTY_UPDATE` | Covered in this effort: the ambiguous-target command declares the requester-owned warranty total and bounded fetched selection rows. |
 
 ## Requires collection adoption
 
 | Operation | Why |
 |---|---|
+| `ENVIRONMENT_REPORT` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
 | `HOA_COMPLIANCE_STATUS` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
 | `HOME_BASICS_GUIDE` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
 | `HOME_BRIEFING_VIEW` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
+| `HOME_DIGITAL_WILL_CREATE` | A command whose result may carry a list (for example a choice of target): collection semantics apply, and the boundary derives them until the producer declares its own. |
 | `HOME_HABITS` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
+| `HOME_RECORD_EXPORT_STATUS` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
 | `HOME_WORK_ITEMS` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
+| `HOUSEHOLD_ACCESS_SUMMARY` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
+| `MATERIAL_SPEC_UPDATE` | A command whose result may carry a list (for example a choice of target): collection semantics apply, and the boundary derives them until the producer declares its own. |
+| `NOTIFICATIONS_OVERVIEW` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
+| `NOTIFICATION_SETTINGS_OVERVIEW` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
 | `PERMIT_TRACKER_STATUS` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
 | `PLANT_CARE_OUTLOOK` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
 | `PROPERTY_BRIEFS_LIST` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
 | `RECALL_MATCH_UPDATE` | A command whose result may carry a list (for example a choice of target): collection semantics apply, and the boundary derives them until the producer declares its own. |
 | `RECALL_REVIEW` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
 | `ROOM_PLANT_RECOMMENDATIONS` | A command whose result may carry a list (for example a choice of target): collection semantics apply, and the boundary derives them until the producer declares its own. |
+| `SAVED_RESULTS` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
+| `WORK_OVERVIEW` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
 
 ## Requires trust or rationale adoption
 
@@ -166,7 +177,10 @@ contract-level journey, or explicit producer-contract review; it is not verified
 | `CAPTURE_WARRANTY_CONFIRM` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
 | `CLAIM_ACTIVITY_COMMAND` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
 | `CLAIM_FILE` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
+| `COVERAGE_ANALYSIS_RUN` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
 | `COVERAGE_COMMAND` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
+| `COVERAGE_RECORD_CHECK` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
+| `COVERAGE_TERM_REVIEW` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
 | `DIY_COMPLETION_RECOVER` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
 | `DIY_PROJECT_ABANDON` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
 | `DIY_PROJECT_COMPLETE` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
@@ -177,8 +191,11 @@ contract-level journey, or explicit producer-contract review; it is not verified
 | `DOCUMENT_PROMOTION_CONFIRM` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
 | `DO_NOTHING_SCENARIO_COMMAND` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
 | `DO_NOTHING_SIMULATION_RUN` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
+| `ENVIRONMENT_REPORT_COMMAND` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
 | `FINANCING_PROFILE_COMMAND` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
 | `GUIDANCE_JOURNEY_DISMISS` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
+| `GUIDANCE_STEP_ACKNOWLEDGE` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
+| `GUIDANCE_STEP_DECLARE` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
 | `GUIDANCE_STEP_SKIP` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
 | `HOA_COMPLIANCE_COMMAND` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
 | `HOME_BRIEFING_COMMAND` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
@@ -193,6 +210,8 @@ contract-level journey, or explicit producer-contract review; it is not verified
 | `HOME_HABIT_UPDATE` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
 | `HOME_JOURNEY_SET` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
 | `HOME_PLANT_ADD` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
+| `HOME_RECORD_EXPORT` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
+| `HOME_RECORD_EXPORT_SHARE` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
 | `HOME_RECORD_STATE_COMMAND` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
 | `HOME_UPGRADE_COMMAND` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
 | `HOME_WORK_ITEM_COMMAND` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
@@ -200,8 +219,11 @@ contract-level journey, or explicit producer-contract review; it is not verified
 | `HVAC_DECISION_ABANDON` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
 | `HVAC_PREFERENCE_FORGET` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
 | `HVAC_PREFERENCE_SAVE` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
+| `INSPECTION_FINDINGS_CHECK` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
 | `INSPECTION_FINDING_DECISION_COMMAND` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
 | `INSPECTION_REPORT_COMMAND` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
+| `INSPECTION_REPORT_REVIEW` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
+| `MAINTENANCE_EVIDENCE_ATTACH` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
 | `MAINTENANCE_TASK_COMPLETE` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
 | `MAINTENANCE_TASK_CREATE` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
 | `MATERIAL_SPEC_ADD` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
@@ -209,6 +231,8 @@ contract-level journey, or explicit producer-contract review; it is not verified
 | `NEGOTIATION_SHIELD_CASE_ATTACH` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
 | `NEGOTIATION_SHIELD_CASE_UPDATE` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
 | `NEIGHBORHOOD_INTERACTION_COMMAND` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
+| `NOTIFICATION_COMMAND` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
+| `NOTIFICATION_SETTINGS_COMMAND` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
 | `OWNERSHIP_COST_COMMAND` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
 | `PAST_HAZARD_OUTCOME_COMMAND` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
 | `PERMIT_TRACKER_COMMAND` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
@@ -225,12 +249,15 @@ contract-level journey, or explicit producer-contract review; it is not verified
 | `RENOVATION_CASE_START` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
 | `RENOVATION_READINESS_COMMAND` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
 | `RESERVE_FUND_COMMAND` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
+| `SAVED_ARCHIVE_COMMAND` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
 | `SAVINGS_BENEFIT_COMMAND` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
 | `SEASONAL_CHECKLIST_SETUP` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
 | `SEASONAL_ITEM_COMMAND` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
 | `SELLER_PREP_CASE_COMMAND` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
+| `SELL_HOLD_RENT_COMMAND` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
 | `SERVICE_PRICE_CHECK_RUN` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
 | `STATUS_BOARD_COMMAND` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
+| `WORK_REQUEST_COMMAND` | A confirmed write or proposal that is allowed only compact blocks (no list, table or timeline), so its result is a receipt or review card and no rich pattern migration applies. Receipt quality checks (answer first, one primary action) can use the evaluator. |
 
 ## Specialized workflow requiring later review
 
