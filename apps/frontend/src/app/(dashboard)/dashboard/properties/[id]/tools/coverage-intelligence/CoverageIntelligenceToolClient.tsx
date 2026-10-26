@@ -38,6 +38,11 @@ const ASK_STAGE_QUESTIONS: Partial<Record<CoverageStage, string>> = {
   compare: 'Compare my current insurance policy against alternatives.',
 };
 
+// Opened from a guided journey, the link continues that journey in Ask (the read that shows where it stands and its in-Ask step action) instead of a stage
+// question. Only the journey travels: the Ask coverage answers are about the home's current policy, not one policy chosen by id, and the journey's own step
+// action carries the step. The journey id is checked against the property on the server.
+const ASK_JOURNEY_QUESTION = 'Continue this guided journey.';
+
 export default function CoverageIntelligenceToolClient() {
   const params = useParams<{ id: string }>();
   const propertyId = params.id;
@@ -137,7 +142,15 @@ export default function CoverageIntelligenceToolClient() {
   const currentQuery = searchParams.toString();
   const askHref = buildAskWorkspaceHref({
     propertyId,
-    question: ASK_STAGE_QUESTIONS[activeStage],
+    ...(guidanceJourneyId
+      ? {
+        question: ASK_JOURNEY_QUESTION,
+        launchOperationId: 'GUIDANCE_JOURNEY_CONTINUE',
+        launchEntityType: 'GUIDANCE_JOURNEY',
+        launchEntityId: guidanceJourneyId,
+        launchJourneyId: guidanceJourneyId,
+      }
+      : { question: ASK_STAGE_QUESTIONS[activeStage] }),
     from: 'coverage-intelligence',
     launchSurface: 'COVERAGE_INTELLIGENCE_TOOL',
     launchCapabilityId: 'coverage-intelligence',
@@ -185,7 +198,7 @@ export default function CoverageIntelligenceToolClient() {
             className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-teal-200 bg-teal-50 px-3 text-sm font-semibold text-teal-900 hover:bg-teal-100"
           >
             <Sparkles className="h-4 w-4" aria-hidden="true" />
-            Ask Cozy
+            {guidanceJourneyId ? 'Continue in Ask Cozy' : 'Ask Cozy'}
           </Link>
           <HomeToolsRail propertyId={propertyId} showDesktop={false} />
         </div>

@@ -48,3 +48,35 @@ test.each(['renewal', 'risk'])('%s stage opens Ask without a seeded question', (
   expect(params.has('question')).toBe(false);
   expect(params.get('backTo')).toContain(`stage=${stage}`);
 });
+
+describe('opened from a guided journey', () => {
+  test.each(['', 'stage=compare', 'stage=risk'])('stage %p continues the journey in Ask instead of asking a stage question', (stage) => {
+    query = `guidanceJourneyId=j1&guidanceStepKey=check_coverage${stage ? `&${stage}` : ''}`;
+    render(<CoverageIntelligenceToolClient />);
+    const params = askParams();
+    expect(params.get('launchOperationId')).toBe('GUIDANCE_JOURNEY_CONTINUE');
+    expect(params.get('launchEntityType')).toBe('GUIDANCE_JOURNEY');
+    expect(params.get('launchEntityId')).toBe('j1');
+    expect(params.get('launchJourneyId')).toBe('j1');
+    expect(params.get('question')).toBe('Continue this guided journey.');
+    expect(params.get('propertyId')).toBe('p1');
+    expect(params.get('launchCapabilityId')).toBe('coverage-intelligence');
+    expect(params.get('backTo')).toContain('guidanceJourneyId=j1');
+    expect(screen.getByRole('link', { name: /continue in ask cozy/i })).toBeTruthy();
+  });
+
+  test('only the journey travels: no policy or step id is sent, and without a journey nothing launches an operation', () => {
+    query = 'guidanceJourneyId=j1&policyId=pol-1&guidanceStepKey=check_coverage';
+    const { unmount } = render(<CoverageIntelligenceToolClient />);
+    const journey = askParams();
+    expect([...journey.keys()].some((key) => /policy/i.test(key))).toBe(false);
+    expect(journey.get('launchEntityId')).toBe('j1');
+    unmount();
+    query = 'policyId=pol-1';
+    render(<CoverageIntelligenceToolClient />);
+    const plain = askParams();
+    expect(plain.has('launchOperationId')).toBe(false);
+    expect(plain.has('launchEntityType')).toBe(false);
+    expect(plain.get('question')).toBe('Show gaps in my home protection.');
+  });
+});
