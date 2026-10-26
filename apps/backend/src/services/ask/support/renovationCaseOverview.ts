@@ -62,7 +62,7 @@ export function renovationCaseRows(cases: readonly RenovationCaseOverviewInput[]
     return {
       id: `renovation-case-${renovationCase.id}`,
       title: renovationCase.name,
-      description: `Next: ${next.title}.${next.inAsk ? '' : RENOVATION_REQUIREMENT_STAGES.has(renovationCase.lifecycle) ? ' You can review the requirements here; recording a determination is not currently available in Ask.' : ' This step is not currently available in Ask.'}`,
+      description: `Next: ${next.title}.${next.inAsk ? '' : RENOVATION_COMPLIANCE_STAGES.has(renovationCase.lifecycle) ? ' You can review the approvals here; recording them is not currently available in Ask.' : RENOVATION_REQUIREMENT_STAGES.has(renovationCase.lifecycle) ? ' You can review the requirements here; recording a determination is not currently available in Ask.' : ' This step is not currently available in Ask.'}`,
       meta: [
         renovationLifecycleLabel(renovationCase.lifecycle),
         READINESS_LABELS[summary.state ?? 'NOT_EVALUATED'] ?? READINESS_LABELS.NOT_EVALUATED,
@@ -71,12 +71,16 @@ export function renovationCaseRows(cases: readonly RenovationCaseOverviewInput[]
       ],
       status: renovationCase.lifecycle,
       href: null,
-      ...(renovationCase.id === shownId && !RENOVATION_REQUIREMENT_STAGES.has(renovationCase.lifecycle) ? {} : {
+      ...(renovationCase.id === shownId && !RENOVATION_REQUIREMENT_STAGES.has(renovationCase.lifecycle) && !RENOVATION_COMPLIANCE_STAGES.has(renovationCase.lifecycle) ? {} : {
         actions: [
           ...(renovationCase.id === shownId ? [] : [{
             id: RENOVATION_CASE_SHOW_READINESS_ACTION_ID, label: 'Show readiness', interactionType: 'CONVERSATION_CONTINUE' as const,
             message: `Is my renovation ${renovationCase.name.slice(0, 120)} ready to start?`, operationId: 'RENOVATION_PERMIT_READINESS', style: 'SECONDARY' as const,
           }]),
+          ...(RENOVATION_COMPLIANCE_STAGES.has(renovationCase.lifecycle) ? [{
+            id: RENOVATION_CASE_SHOW_COMPLIANCE_ACTION_ID, label: 'Show approvals', interactionType: 'CONVERSATION_CONTINUE' as const,
+            message: `Show the compliance status for my renovation ${renovationCase.name.slice(0, 120)}.`, operationId: 'RENOVATION_PERMIT_READINESS', style: 'SECONDARY' as const,
+          }] : []),
           ...(RENOVATION_REQUIREMENT_STAGES.has(renovationCase.lifecycle) ? [{
             id: RENOVATION_CASE_SHOW_REQUIREMENTS_ACTION_ID, label: 'Show requirements', interactionType: 'CONVERSATION_CONTINUE' as const,
             message: `Show the requirements for my renovation ${renovationCase.name.slice(0, 120)}.`, operationId: 'RENOVATION_PERMIT_READINESS', style: 'SECONDARY' as const,
@@ -148,5 +152,69 @@ export function renovationRequirementRows(requirements: readonly RenovationRequi
   return {
     unresolved: requirements.filter((requirement) => requirement.determination === 'UNDETERMINED').map(row),
     determined: requirements.filter((requirement) => requirement.determination !== 'UNDETERMINED').map(row),
+  };
+}
+
+// ---- Compliance (slice 3a: the read view of Desktop's permit and HOA workflow page) ----
+
+/** "Show the compliance status for my renovation", "what approvals does my remodel still need". Narrow: needs renovation or remodel beside the compliance noun. */
+const COMPLIANCE_PATTERN = /\b(?:renovation|remodel)\b.{0,50}\b(?:compliance|approvals?|conditions|closeout)\b|\b(?:compliance|approvals?|conditions|closeout)\b.{0,50}\b(?:renovation|remodel)\b/i;
+export const isRenovationComplianceRequest = (message: string) => COMPLIANCE_PATTERN.test(message);
+
+export const RENOVATION_CASE_SHOW_COMPLIANCE_ACTION_ID = 'renovation-case-show-compliance';
+/** Stages where Desktop's next step is the compliance page, so the case row also offers the compliance view. */
+export const RENOVATION_COMPLIANCE_STAGES = new Set(['APPROVALS_IN_PROGRESS', 'INSPECTION_AND_CLOSEOUT', 'COMPLETED_WITH_OPEN_ITEMS']);
+
+const asDate = (value: unknown): Date | null => (value instanceof Date ? value : typeof value === 'string' ? new Date(value) : null);
+
+export interface RenovationComplianceInput {
+  permits: ReadonlyArray<{ id: string; permitNumber?: string | null; category?: string | null; status?: string | null; reportedStatus?: string | null; officialTruthLayer?: string | null; officialSourceReference?: string | null; expirationDate?: Date | string | null }>;
+  hoaApprovals: ReadonlyArray<{ id: string; workType?: string | null; decisionStatus?: string | null; reportedStatus?: string | null; decisionTruthLayer?: string | null; decisionSourceReference?: string | null; expirationDate?: Date | string | null }>;
+  conditions: ReadonlyArray<{ id: string; title: string; description?: string | null; status: string; isBlocking: boolean; sourceReference?: string | null; dueAt?: Date | string | null }>;
+  hoaDocumentReviews: ReadonlyArray<{ id: string; status: string; extractedDecisionStatus?: string | null; extractedReferenceNumber?: string | null; extractedExpirationDate?: Date | string | null; extractedConditions?: unknown }>;
+  alerts: ReadonlyArray<{ type: string; subjectId: string; message: string; expiresAt?: Date | string | null }>;
+  coverage: { permit: { state: string; message: string }; hoa: { state: string; message: string } };
+}
+
+/**
+ * Official status and reported status are different things and are kept apart: a record shows what an authority recorded (and from what source) separately
+ * from what the household reported, and says plainly when nothing authority-backed exists. Candidate extractions from HOA documents are never decisions.
+ */
+export function renovationComplianceSections(workflow: RenovationComplianceInput, dateLabel: (value: Date) => string) {
+  const date = (value: unknown) => { const parsed = asDate(value); return parsed && !Number.isNaN(parsed.getTime()) ? dateLabel(parsed) : null; };
+  const permits = workflow.permits.map((record) => ({
+    id: `permit-${record.id}`, title: record.permitNumber || titleCase(record.category ?? 'Permit'), description: record.officialTruthLayer
+      ? `${titleCase(record.officialTruthLayer)}${record.officialSourceReference ? ` · ${record.officialSourceReference}` : ' · evidence attached'}`
+      : 'No authority-backed status has been recorded.',
+    meta: [`Official: ${titleCase(record.status ?? 'unknown')}`, `Reported: ${titleCase(record.reportedStatus ?? 'unknown')}`, ...(date(record.expirationDate) ? [`Expires ${date(record.expirationDate)}`] : [])],
+    status: record.status ?? 'UNKNOWN', href: null,
+  }));
+  const hoaApprovals = workflow.hoaApprovals.map((record) => ({
+    id: `hoa-${record.id}`, title: titleCase(record.workType ?? 'HOA approval'), description: record.decisionTruthLayer
+      ? `${titleCase(record.decisionTruthLayer)}${record.decisionSourceReference ? ` · ${record.decisionSourceReference}` : ' · evidence attached'}`
+      : 'No association-backed decision has been recorded.',
+    meta: [`Decision: ${titleCase(record.decisionStatus ?? 'unknown')}`, `Reported: ${titleCase(record.reportedStatus ?? 'unknown')}`, ...(date(record.expirationDate) ? [`Expires ${date(record.expirationDate)}`] : [])],
+    status: record.decisionStatus ?? 'UNKNOWN', href: null,
+  }));
+  const condition = (entry: RenovationComplianceInput['conditions'][number]) => ({
+    id: `condition-${entry.id}`, title: entry.title, description: entry.description ?? null,
+    meta: [titleCase(entry.status), ...(entry.isBlocking && entry.status === 'OPEN' ? ['Blocks closeout'] : []), ...(date(entry.dueAt) ? [`Due ${date(entry.dueAt)}`] : [])],
+    status: entry.status, href: null, ...(entry.sourceReference ? { detail: `Source: ${entry.sourceReference}` } : {}),
+  });
+  const reviews = workflow.hoaDocumentReviews.map((review) => {
+    const extracted = Array.isArray(review.extractedConditions) ? review.extractedConditions as Array<{ title?: string; description?: string }> : [];
+    return {
+      id: `hoa-review-${review.id}`, title: 'HOA document reading', description: `Candidate decision: ${titleCase(review.extractedDecisionStatus ?? 'unknown')}. Extracted details are candidates until a homeowner reviews them.`,
+      meta: [titleCase(review.status), ...(review.extractedReferenceNumber ? [`Reference ${review.extractedReferenceNumber}`] : []), ...(date(review.extractedExpirationDate) ? [`Candidate expiration ${date(review.extractedExpirationDate)}`] : [])],
+      status: review.status, href: null,
+      ...(extracted.length ? { detail: extracted.slice(0, 10).map((entry) => `${entry.title ?? 'Condition'}: ${entry.description ?? ''}`.trim()).join('\n') } : {}),
+    };
+  });
+  return {
+    permits, hoaApprovals,
+    openConditions: workflow.conditions.filter((entry) => entry.status !== 'SATISFIED').map(condition),
+    satisfiedConditions: workflow.conditions.filter((entry) => entry.status === 'SATISFIED').map(condition),
+    reviews,
+    alerts: workflow.alerts.map((alert) => `${alert.message}${date(alert.expiresAt) ? ` (${date(alert.expiresAt)})` : ''}`),
   };
 }

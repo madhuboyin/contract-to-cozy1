@@ -24,8 +24,9 @@ import {
   APPEAL_REMINDER_ENTITY_TYPE, APPEAL_STATUS_LABELS, appealCaseAvailableKinds, type AppealCommandKind,
 } from '../support/propertyTaxAppealCommand';
 import { listRenovationCases } from '../../renovationCase.service';
-import { isRenovationCaseOverviewRequest, isRenovationRequirementsRequest, renovationCaseRows, renovationLifecycleLabel, renovationRequirementRows } from '../support/renovationCaseOverview';
+import { isRenovationCaseOverviewRequest, isRenovationRequirementsRequest, isRenovationComplianceRequest, renovationComplianceSections, renovationCaseRows, renovationLifecycleLabel, renovationRequirementRows } from '../support/renovationCaseOverview';
 import { listRequirements, listAuthorityProfiles } from '../../renovationRequirement.service';
+import { getComplianceWorkflow } from '../../renovationComplianceWorkflow.service';
 import { getReadiness as getRenovationReadiness } from '../../renovationReadiness.service';
 import { PermitTrackerService } from '../../permitTracker.service';
 import { getAskPropertyTimezone } from '../askExecutionContext';
@@ -425,6 +426,7 @@ async function renovationPermitReadinessResult(propertyId: string, message: stri
     status: 'ANSWERED', contextVersion: cases[0].updatedAt.toISOString(), suggestions: [],
     blocks: [{ type: 'SUMMARY', id: 'renovation-cases-summary', title: `You have ${cases.length} renovation cases`, body: `They are listed with their stage, readiness and next step. The most recently updated is ${cases[0].name} (${renovationLifecycleLabel(cases[0].lifecycle).toLowerCase()}).`, tone: 'DEFAULT', actions: [] }, caseList(null)],
   };
+  if (isRenovationComplianceRequest(message) && !isRenovationRequirementsRequest(message)) return renovationComplianceResult(propertyId, selected, cases.length > 1 && !named ? caseList(selected.id) : null);
   if (isRenovationRequirementsRequest(message)) return renovationRequirementsResult(propertyId, selected, cases.length > 1 && !named ? caseList(selected.id) : null, canStart);
   let readiness: any;
   try { readiness = await getRenovationReadiness(propertyId, selected.id); } catch { readiness = { summary: { state: 'NOT_EVALUATED', disclaimer: 'Readiness has not been evaluated for the current scope.' }, items: [], project: null }; }
@@ -478,6 +480,39 @@ async function renovationPermitReadinessResult(propertyId: string, message: stri
   blocks.push({ type: 'EVIDENCE', id: 'renovation-readiness-evidence', title: 'Readiness sources', items: items.slice(0, 25).map((item) => ({ label: item.title, source: String(item.sourceType ?? 'Renovation readiness').toLowerCase().replace(/_/g, ' '), observedAt: item.sourceObservedAt?.toISOString?.() ?? item.derivedAt?.toISOString?.() ?? null })) });
   blocks.push({ type: 'BOUNDARY', id: 'renovation-readiness-boundary', title: 'Project organization—not legal compliance approval', body: 'Confirm current requirements with the permit authority, HOA, licensed professionals, and inspectors. A “ready” app state cannot authorize unsafe work or replace official approval.', severity: 'INFO', suggestions: [] });
   return { status: summary.state === 'READY' && permitSummary.openFlags === 0 ? 'ANSWERED' : 'READY_WITH_LIMITATIONS', reasonCode: summary.state === 'READY' ? (permitSummary.openFlags ? 'PERMIT_FLAGS_OPEN' : undefined) : `RENOVATION_${summary.state ?? 'NOT_READY'}`, contextVersion: selected.updatedAt.toISOString(), blocks, suggestions: [] };
+}
+
+// Slice 3a of the Renovations parity review: the read view of Desktop's permit and HOA workflow. Official status and reported status are shown apart, a
+// missing record is never read as "not required", and HOA document extractions are candidates. Attaching records and satisfying conditions are not in Ask yet.
+export async function renovationComplianceResult(propertyId: string, selected: { id: string; name: string; updatedAt: Date }, caseListBlock: AskPresentationBlock | null): Promise<AskOperationResult> {
+  let workflow: any = null;
+  try { workflow = await getComplianceWorkflow(propertyId, selected.id); } catch { workflow = null; }
+  const contextVersion = selected.updatedAt.toISOString();
+  if (!workflow) return {
+    status: 'READY_WITH_LIMITATIONS', reasonCode: 'RENOVATION_COMPLIANCE_UNAVAILABLE', contextVersion, suggestions: [],
+    blocks: [{ type: 'SUMMARY', id: 'renovation-compliance-unavailable', title: `${selected.name} has no scope to track approvals against yet`, body: 'Permits, HOA approvals and conditions are tracked against the case\u2019s current scope, and this case does not have one recorded. Defining scope is not currently available in Ask.', tone: 'CAUTION', actions: [] }],
+  };
+  const dateLabel = (value: Date) => humanDate(value) ?? value.toISOString().slice(0, 10);
+  const parts = renovationComplianceSections(workflow, dateLabel);
+  const blockers = (workflow.blockers ?? []).length;
+  const sections = [
+    { id: 'permits', title: 'Permits', caption: workflow.coverage.permit.message, count: parts.permits.length, items: parts.permits },
+    { id: 'hoa', title: 'HOA approvals', caption: workflow.coverage.hoa.message, count: parts.hoaApprovals.length, items: parts.hoaApprovals },
+    { id: 'open-conditions', title: 'Conditions still open', caption: 'A condition is satisfied only with a property document as verification evidence.', count: parts.openConditions.length, items: parts.openConditions },
+    { id: 'satisfied-conditions', title: 'Conditions satisfied', count: parts.satisfiedConditions.length, items: parts.satisfiedConditions },
+    { id: 'hoa-readings', title: 'HOA document readings', caption: 'Extracted decisions and conditions are candidates until a homeowner reviews them.', count: parts.reviews.length, items: parts.reviews },
+  ].map((section) => ({ ...section, items: section.items.slice(0, 100) as any, ...(section.items.length > 8 ? { initialVisibleCount: 8 } : {}) }))
+    .filter((section) => section.count > 0 || section.id === 'permits' || section.id === 'hoa');
+  const blocks: AskPresentationBlock[] = [{
+    type: 'SUMMARY', id: 'renovation-compliance-summary',
+    title: blockers ? `${blockers} approval condition${blockers === 1 ? '' : 's'} still block${blockers === 1 ? 's' : ''} closeout for ${selected.name}` : `Permits, HOA approvals and conditions for ${selected.name}`,
+    body: `${workflow.coverage.permit.message} ${workflow.coverage.hoa.message} Official status comes from an authority or the association; reported status is what the household recorded. ${parts.alerts.length ? ` Expiring soon: ${parts.alerts.join(' ')}` : ''} Attaching records and satisfying conditions are not currently available in Ask.`,
+    tone: blockers || parts.alerts.length ? 'CAUTION' : 'DEFAULT', actions: [],
+  }];
+  if (caseListBlock) blocks.push(caseListBlock);
+  blocks.push({ type: 'GROUPED_LIST', filters: [], id: 'renovation-compliance', title: 'Permit and HOA workflow', description: 'A record attached here belongs to this case\u2019s current scope.', sections: sections as any, actions: [] });
+  blocks.push({ type: 'BOUNDARY', id: 'renovation-readiness-boundary', title: 'Project organization\u2014not legal compliance approval', body: 'Confirm current requirements with the permit authority, HOA, licensed professionals, and inspectors. A \u201cready\u201d app state cannot authorize unsafe work or replace official approval.', severity: 'INFO', suggestions: [] });
+  return { status: 'ANSWERED', contextVersion, blocks, suggestions: [] };
 }
 
 // Slice 2a of the Renovations parity review: the read view of Desktop's Requirements page. Advisor results are research candidates; only sourced
