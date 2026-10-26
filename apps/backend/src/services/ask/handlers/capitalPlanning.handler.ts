@@ -24,6 +24,7 @@ import {
   APPEAL_REMINDER_ENTITY_TYPE, APPEAL_STATUS_LABELS, appealCaseAvailableKinds, type AppealCommandKind,
 } from '../support/propertyTaxAppealCommand';
 import { listRenovationCases } from '../../renovationCase.service';
+import { isRenovationCaseOverviewRequest, renovationCaseRows, renovationLifecycleLabel } from '../support/renovationCaseOverview';
 import { getReadiness as getRenovationReadiness } from '../../renovationReadiness.service';
 import { PermitTrackerService } from '../../permitTracker.service';
 import { getAskPropertyTimezone } from '../askExecutionContext';
@@ -411,14 +412,25 @@ async function renovationPermitReadinessResult(propertyId: string, message: stri
     }, { type: 'BOUNDARY', id: 'renovation-empty-boundary', title: 'Scope and jurisdiction still control', body: 'Permit, zoning, HOA, licensing, inspection, and safety requirements depend on the exact scope and current authority rules. Absence of a record is not proof that approval is unnecessary.', severity: 'INFO', suggestions: [] }], suggestions: [],
   };
   const lower = message.toLowerCase();
-  const selected = cases.find((candidate) => lower.includes(candidate.name.toLowerCase())) ?? cases[0];
+  const named = cases.find((candidate) => lower.includes(candidate.name.toLowerCase()));
+  const selected = named ?? cases[0];
+  // Several cases: say so and list them, so the case detailed below is never a silent pick (desktop lists every case with its stage and next step).
+  const caseList = (shownId: string | null): AskPresentationBlock => ({
+    type: 'GROUPED_LIST', filters: [], id: 'renovation-cases', title: 'Your renovation cases',
+    description: shownId ? `Showing ${selected.name}${named ? '' : ', the most recently updated'}. Pick another case to see its readiness.` : 'Pick a case to see its readiness checklist.',
+    sections: [{ id: 'cases', title: 'Renovation cases', count: cases.length, items: renovationCaseRows(cases, shownId) as any }], actions: [],
+  });
+  if (cases.length > 1 && !named && isRenovationCaseOverviewRequest(message)) return {
+    status: 'ANSWERED', contextVersion: cases[0].updatedAt.toISOString(), suggestions: [],
+    blocks: [{ type: 'SUMMARY', id: 'renovation-cases-summary', title: `You have ${cases.length} renovation cases`, body: `They are listed with their stage, readiness and next step. The most recently updated is ${cases[0].name} (${renovationLifecycleLabel(cases[0].lifecycle).toLowerCase()}).`, tone: 'DEFAULT', actions: [] }, caseList(null)],
+  };
   let readiness: any;
   try { readiness = await getRenovationReadiness(propertyId, selected.id); } catch { readiness = { summary: { state: 'NOT_EVALUATED', disclaimer: 'Readiness has not been evaluated for the current scope.' }, items: [], project: null }; }
   const summary = readiness.summary ?? {};
   const items: any[] = readiness.items ?? [];
   const blockers = items.filter((item) => item.isBlocking && item.status !== 'SATISFIED');
   const open = items.filter((item) => item.status !== 'SATISFIED');
-  const blocks: AskPresentationBlock[] = [{ type: 'SUMMARY', id: 'renovation-readiness-summary', title: summary.state === 'READY' ? `${selected.name} is recorded as ready to start` : summary.state === 'NOT_EVALUATED' ? `${selected.name} needs a current readiness evaluation` : `${blockers.length} blocking item${blockers.length === 1 ? '' : 's'} remain for ${selected.name}`, body: `${summary.disclaimer ?? 'This organizes canonical project records and does not establish legal compliance.'} Permit Tracker: ${permitSummary.activePermits} active permit${permitSummary.activePermits === 1 ? '' : 's'}, ${permitSummary.finaledPermits} finaled, and ${permitSummary.openFlags} unresolved flag${permitSummary.openFlags === 1 ? '' : 's'}.`, tone: summary.state === 'READY' && permitSummary.openFlags === 0 ? 'DEFAULT' : 'CAUTION',
+  const blocks: AskPresentationBlock[] = [{ type: 'SUMMARY', id: 'renovation-readiness-summary', title: summary.state === 'READY' ? `${selected.name} is recorded as ready to start` : summary.state === 'NOT_EVALUATED' ? `${selected.name} needs a current readiness evaluation` : `${blockers.length} blocking item${blockers.length === 1 ? '' : 's'} remain for ${selected.name}`, body: `Stage: ${renovationLifecycleLabel(selected.lifecycle)}. ${summary.disclaimer ?? 'This organizes canonical project records and does not establish legal compliance.'} Permit Tracker: ${permitSummary.activePermits} active permit${permitSummary.activePermits === 1 ? '' : 's'}, ${permitSummary.finaledPermits} finaled, and ${permitSummary.openFlags} unresolved flag${permitSummary.openFlags === 1 ? '' : 's'}.`, tone: summary.state === 'READY' && permitSummary.openFlags === 0 ? 'DEFAULT' : 'CAUTION',
     // FRD v1.324: re-evaluating readiness is a contributor's step on the case.
     actions: canStart ? [{
       id: READINESS_COMMAND_ACTIONS.REFRESH, label: summary.state === 'NOT_EVALUATED' ? 'Run the readiness check' : 'Refresh readiness', interactionType: 'START_WORKFLOW' as const,
@@ -432,6 +444,7 @@ async function renovationPermitReadinessResult(propertyId: string, message: stri
     }] : [])] : [] }];
   // IW-PRES-020 (FRD v1.94): the blocking items as a ring, ahead of the checklist.
   const ring = renovationReadinessProgress(items);
+  if (cases.length > 1) blocks.push(caseList(selected.id));
   if (ring) blocks.push(ring);
   // Plan layout (FRD Appendix C.9): numbered across both groups. Blocking items are the urgent group; the next action and the evidence it needs
   // open under the card (they were long chips), and each card says whether it blocks starting.

@@ -8,6 +8,7 @@ import { validateAskOperationSemanticPackages } from './askOperationSemanticPack
 import { parseReserveFundMessage } from './support/reserveFundMessage';
 import { isNegotiationShieldStartRequest } from './support/negotiationShieldStart';
 import { isRenovationCaseStartRequest } from './support/renovationCaseStart';
+import { isRenovationCaseOverviewRequest } from './support/renovationCaseOverview';
 import { isPermitTrackerReadRequest } from './support/permitTrackerRead';
 import { isFinancingRequest } from './support/financingRead';
 
@@ -1687,7 +1688,7 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   if (isPermitTrackerReadRequest(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('PERMIT_TRACKER_STATUS', 0.96);
   }
-  if (renovationPermitPattern.test(message) && !explicitCapabilityPattern.test(message)) {
+  if ((renovationPermitPattern.test(message) || isRenovationCaseOverviewRequest(message)) && !explicitCapabilityPattern.test(message)) {
     return resolved('RENOVATION_PERMIT_READINESS', 0.97);
   }
   if (sellerPrepItemDecisionPattern.test(message) && !explicitCapabilityPattern.test(message)) {
