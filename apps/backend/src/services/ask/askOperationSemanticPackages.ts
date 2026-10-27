@@ -134,7 +134,7 @@ const jobs: Record<AskOperationId, string> = {
   NOTIFICATION_COMMAND: 'mark one notification read or unread, dismiss it or bring it back in my own inbox, after confirmation',
   NOTIFICATION_SETTINGS_OVERVIEW: 'show which notification categories are muted, snoozed or on, the quiet hours, and email consent',
   NOTIFICATION_SETTINGS_COMMAND: 'mute, snooze or turn on a notification category, set quiet hours, or give or withdraw email consent, after confirmation',
-  SEASONAL_ITEM_COMMAND: 'add a seasonal task to maintenance, snooze it, set it aside, or bring it back, after confirmation',
+  SEASONAL_ITEM_COMMAND: 'add a seasonal task to maintenance or remove it, snooze it, set it aside, or bring it back, or add all critical tasks or dismiss a whole seasonal checklist, after confirmation',
   HOME_WORK_ITEM_COMMAND: 'snooze, reschedule, accept routine home work, or attach or remove its evidence, after confirmation',
   HOME_WORK_ITEMS: 'list the home\'s open operational work items with due dates and snoozes',
   HOME_RECORD_EXPORT: 'export the home record, or the sections named, as a PDF after showing exactly what is included and left out',

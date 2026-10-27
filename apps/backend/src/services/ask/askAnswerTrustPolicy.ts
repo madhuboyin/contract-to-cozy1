@@ -107,7 +107,7 @@ const OPERATION_BOUNDARIES: Partial<Record<AskOperationId, ReadonlySet<string>>>
 const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<string>>>> = {
   // A completed task linked to an open journey step offers to attach evidence; a step with no linked task offers to create one for it.
   MAINTENANCE_TASK_COMPLETE: new Set(['maintenance-attach-evidence']),
-  MAINTENANCE_STATUS: new Set(['create-maintenance', 'maintenance-templates-browse', 'add-purchase-date', 'seasonal-retry', 'seasonal-show-pending', 'seasonal-show-completed', 'seasonal-show-dismissed', 'seasonal-show-maintenance', 'seasonal-item-add', 'seasonal-item-snooze', 'seasonal-item-dismiss', 'seasonal-item-restore']),
+  MAINTENANCE_STATUS: new Set(['create-maintenance', 'maintenance-templates-browse', 'add-purchase-date', 'seasonal-retry', 'seasonal-show-pending', 'seasonal-show-completed', 'seasonal-show-dismissed', 'seasonal-show-maintenance', 'seasonal-item-add', 'seasonal-item-snooze', 'seasonal-item-dismiss', 'seasonal-item-restore', 'seasonal-item-remove', 'seasonal-checklist-add-critical', 'seasonal-checklist-dismiss']),
   // + the claim transition item actions (FRD v1.42); the inline claim detail shows only those legal from the live status.
   // FRD v1.43: INSPECTION_FINDINGS had no entry, so even its "Open Inspection Hub" link was stripped; the finding
   // actions are shown in the inline detail only when the live state allows them.

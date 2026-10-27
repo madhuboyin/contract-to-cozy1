@@ -12,8 +12,9 @@ import { reconcileAskExecutionSideEffects } from '../execution/executeOperation'
 import { ensurePropertyAccess } from '../askHandlerSupport';
 import { humanDate } from '../askFormatting';
 import { SeasonalChecklistService } from '../../seasonalChecklist.service';
-import { addSeasonalTaskToMaintenance } from '../../seasonalChecklistIntegration.service';
+import { addSeasonalTaskToMaintenance, removeSeasonalTaskFromMaintenance } from '../../seasonalChecklistIntegration.service';
 import {
+  SEASONAL_CHECKLIST_ENTITY_TYPE, SEASONAL_CHECKLIST_MESSAGES, seasonalChecklistKindFromMessage, seasonalChecklistKinds, type SeasonalChecklistKind,
   SEASONAL_ITEM_ENTITY_TYPE, SEASONAL_ITEM_MESSAGES, SEASONAL_SNOOZE_CAPTURE_KEY, SEASONAL_SNOOZE_CHOICES, parseSeasonalSnoozeAnswer, seasonalItemKindFromMessage,
   seasonalItemKinds, type SeasonalItemKind,
 } from '../support/seasonalItemCommand';
@@ -90,6 +91,11 @@ export async function seasonalItemResult(
     },
     DISMISS: { title: 'Set this task aside for the season?', label: 'Set it aside', description: `You can bring it back later.${linked ? `${linked} cancelled while it is set aside.` : ''}`, field: { label: 'Task', value: 'On the list → Set aside' } },
     RESTORE: { title: 'Bring this task back?', label: 'Bring it back', description: `It returns to the season’s list.${item.maintenanceTask?.status === 'CANCELLED' ? ' Its cancelled maintenance task is reactivated.' : ''}`, field: { label: 'Task', value: 'Set aside → On the list' } },
+    REMOVE: {
+      title: 'Remove this task from your maintenance?', label: 'Remove from maintenance',
+      description: 'This unlinks the maintenance task from the seasonal checklist and puts the seasonal task back as recommended. The maintenance task itself is not deleted: it stays in your maintenance list as a separate task, and this seasonal task will not be added to maintenance again on its own.',
+      field: { label: 'Task', value: 'In maintenance → Recommended again (the maintenance task is kept)' },
+    },
   }[kind];
   return {
     status: 'NEEDS_CONFIRMATION', reasonCode: `SEASONAL_ITEM_${kind}_CONFIRMATION_REQUIRED`, contextVersion,
@@ -105,8 +111,113 @@ export async function seasonalItemResult(
   };
 }
 
+interface ChecklistRow { id: string; season: string; year: number; status: string; updatedAt: Date; items: Array<{ id: string; title: string; status: string; priority: string }> }
+async function loadChecklist(propertyId: string, id: string): Promise<ChecklistRow | null> {
+  return prisma.seasonalChecklist.findFirst({
+    where: { id, propertyId },
+    select: { id: true, season: true, year: true, status: true, updatedAt: true, items: { select: { id: true, title: true, status: true, priority: true } } },
+  }) as Promise<ChecklistRow | null>;
+}
+const checklistVersion = (kind: SeasonalChecklistKind, checklist: ChecklistRow) =>
+  sha(`seasonal-checklist:${kind}:${checklist.id}:${checklist.status}:${checklist.updatedAt.toISOString()}:${[...checklist.items].map((item) => `${item.id}.${item.status}.${item.priority}`).sort().join(',')}`);
+const checklistLabel = (checklist: ChecklistRow) => `${checklist.season.charAt(0)}${checklist.season.slice(1).toLowerCase()} ${checklist.year}`;
+const waitingCritical = (checklist: ChecklistRow) => checklist.items.filter((item) => item.priority === 'CRITICAL' && item.status === 'RECOMMENDED');
+const waitingToSetAside = (checklist: ChecklistRow) => checklist.items.filter((item) => item.status === 'RECOMMENDED');
+const listTitles = (items: Array<{ title: string }>) => `${items.slice(0, 8).map((item) => item.title).join('; ')}${items.length > 8 ? `; and ${items.length - 8} more` : ''}`;
+
+/** The whole-checklist controls: review (names exactly which tasks the canonical service would touch), then a confirmation bound to the checklist's state. */
+export async function seasonalChecklistResult(userId: string, propertyId: string, launch: { kind: SeasonalChecklistKind; entityId: string; sourceExecutionId: string | null }): Promise<AskOperationResult> {
+  const access = await ensurePropertyAccess(userId, propertyId);
+  if (access.role === HouseholdRole.VIEWER) {
+    return { status: 'BLOCKED', reasonCode: 'ASK_PERMISSION_REQUIRED', blocks: [{ type: 'SUMMARY', id: 'seasonal-checklist-permission', title: 'A contributor or owner can change seasonal checklists', body: 'Your role can view this home but not change it. Nothing has changed.', tone: 'DEFAULT', actions: [backToSeasonal] }], suggestions: [] };
+  }
+  const checklist = await loadChecklist(propertyId, launch.entityId);
+  if (!checklist) return unavailable('SEASONAL_CHECKLIST_NOT_FOUND', 'That seasonal checklist is no longer available', 'Ask could not find that checklist. Nothing has changed.');
+  const primary = await isPrimaryHolder(userId, propertyId);
+  const { kind } = launch;
+  if (!seasonalChecklistKinds({ status: checklist.status, items: checklist.items }, { canManage: true, isPrimaryHolder: primary }).includes(kind)) {
+    return unavailable(!primary ? 'SEASONAL_CHECKLIST_PRIMARY_HOLDER_ONLY' : 'SEASONAL_CHECKLIST_STEP_NOT_AVAILABLE',
+      !primary ? 'Only the home’s primary account holder can do that' : 'That is not available for this checklist now',
+      !primary ? 'Adding every critical task and dismissing a whole seasonal checklist are kept for the home’s primary account holder. Nothing has changed.'
+        : kind === 'ADD_ALL_CRITICAL' ? 'No high-priority task is waiting on this checklist. Nothing has changed.' : 'This checklist is already dismissed. Nothing has changed.');
+  }
+  const contextVersion = checklistVersion(kind, checklist);
+  const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+  const label = checklistLabel(checklist);
+  const critical = waitingCritical(checklist);
+  const toSetAside = waitingToSetAside(checklist);
+  const spec = kind === 'ADD_ALL_CRITICAL'
+    ? {
+      title: `Add all ${critical.length} critical ${label} tasks to your maintenance?`, confirmLabel: 'Add them all',
+      description: 'Each high-priority task that is still waiting on this checklist is added to your maintenance and linked to its seasonal task. Nothing is scheduled with anyone. A task that cannot be added is skipped and reported.',
+      fields: [{ label: 'Checklist', value: label }, { label: 'Tasks to add', value: listTitles(critical) }],
+    }
+    : {
+      title: `Dismiss the ${label} checklist?`, confirmLabel: 'Dismiss this season',
+      description: `The checklist is marked dismissed and every task still waiting on it is set aside, including high-priority ones. Tasks already added to maintenance are not changed.${toSetAside.length ? '' : ' No task is waiting.'} Individual set-aside tasks can be brought back; the checklist itself is not offered again here.`,
+      fields: [{ label: 'Checklist', value: label }, { label: 'Tasks set aside', value: toSetAside.length ? `${toSetAside.length}: ${listTitles(toSetAside)}` : 'None waiting' }],
+    };
+  return {
+    status: 'NEEDS_CONFIRMATION', reasonCode: `SEASONAL_CHECKLIST_${kind}_CONFIRMATION_REQUIRED`, contextVersion,
+    parameters: { seasonalChecklistCommand: { kind, entityId: checklist.id }, seasonalChecklistContextVersion: contextVersion, sourceExecutionId: launch.sourceExecutionId, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() },
+    blocks: [{ type: 'SUMMARY', id: 'seasonal-checklist-review', title: `${label} checklist`, body: 'Nothing is saved until you confirm.', tone: 'DEFAULT', actions: [] }],
+    confirmation: {
+      confirmationId: `seasonal-checklist-${kind.toLowerCase()}-${sha(checklist.id).slice(0, 12)}-1`, version: 1, title: spec.title, description: spec.description,
+      fields: spec.fields, editableFields: [], confirmLabel: spec.confirmLabel,
+      consentText: 'I authorize this change to the shared home record.', expiresAt: expiresAt.toISOString(),
+    },
+    suggestions: [],
+  };
+}
+
+async function confirmSeasonalChecklist(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
+  const { execution, userId, parameters } = ctx;
+  const command = parameters.seasonalChecklistCommand as { kind?: unknown; entityId?: unknown } | undefined;
+  const kind = command?.kind as SeasonalChecklistKind | undefined;
+  if (!kind || !(kind in SEASONAL_CHECKLIST_MESSAGES) || typeof command?.entityId !== 'string') throw stale('The change to make is invalid.');
+  const propertyId = execution.propertyId;
+  const checklist = await loadChecklist(propertyId, command.entityId);
+  if (!checklist) throw stale('That seasonal checklist is no longer available.');
+  if (parameters.seasonalChecklistContextVersion !== checklistVersion(kind, checklist)) throw stale('This checklist changed while the confirmation was open. Review it again and try again.', 'ASK_CONTEXT_VERSION_CONFLICT');
+  const primary = await isPrimaryHolder(userId, propertyId);
+  if (!seasonalChecklistKinds({ status: checklist.status, items: checklist.items }, { canManage: true, isPrimaryHolder: primary }).includes(kind)) throw stale('That change is not available for this checklist now.');
+  const label = checklistLabel(checklist);
+  let title: string;
+  let description: string;
+  try {
+    if (kind === 'ADD_ALL_CRITICAL') {
+      const expected = waitingCritical(checklist).length;
+      const added = await SeasonalChecklistService.addAllCriticalTasks(checklist.id, userId);
+      title = added.tasksAdded === expected ? `Added ${added.tasksAdded} critical ${added.tasksAdded === 1 ? 'task' : 'tasks'}` : `Added ${added.tasksAdded} of ${expected} critical tasks`;
+      description = added.tasksAdded === expected ? 'They are in your maintenance and linked to the seasonal checklist.' : 'The others could not be added and were skipped. Ask for your seasonal tasks to see which are still waiting.';
+    } else {
+      await SeasonalChecklistService.dismissChecklist(checklist.id, userId);
+      title = `${label} checklist dismissed`;
+      description = 'The tasks that were waiting are set aside. Tasks already in maintenance were not changed.';
+    }
+  } catch (error) {
+    if (error instanceof Error && (!(error as { code?: unknown }).code || (error as { statusCode?: unknown }).statusCode)) throw stale(error.message);
+    throw error;
+  }
+  const result: AskOperationResult = {
+    status: 'COMPLETED', reasonCode: `SEASONAL_CHECKLIST_${kind}_COMPLETED`,
+    blocks: [{ type: 'WORKFLOW_PROGRESS', id: `seasonal-checklist-${kind.toLowerCase()}-${checklist.id}`, title, status: 'COMPLETED', description, details: [], actions: [{ ...backToSeasonal, label: 'See my seasonal tasks' }] }],
+    suggestions: [],
+  };
+  const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
+  if (refresh.attemptedAndFailed) {
+    result.blocks.push({ type: 'LIMITATION', id: `seasonal-checklist-refresh-failed-${checklist.id}`, severity: 'CAUTION', title: 'Saved; view could not refresh',
+      body: 'The change was saved. The answer you were viewing could not refresh automatically, so ask for it again to see it.' });
+  }
+  return { result, artifactType: 'SEASONAL_CHECKLIST', artifactId: checklist.id, refreshedExecutions: refresh.refreshedExecutions };
+}
+
 registerCapabilityHandler('seasonal-item.command', async (envelope) => {
   const launch = envelope.launchContext;
+  const checklistKind = seasonalChecklistKindFromMessage(envelope.message);
+  if (checklistKind && launch?.operationId === 'SEASONAL_ITEM_COMMAND' && launch.surface !== 'ASK_REFRESH' && launch.entityType === SEASONAL_CHECKLIST_ENTITY_TYPE && launch.entityId) {
+    return seasonalChecklistResult(envelope.userId, envelope.propertyId!, { kind: checklistKind, entityId: launch.entityId, sourceExecutionId: launch.sourceExecutionId ?? null });
+  }
   const kind = seasonalItemKindFromMessage(envelope.message);
   if (!kind || launch?.operationId !== 'SEASONAL_ITEM_COMMAND' || launch.surface === 'ASK_REFRESH' || launch.entityType !== SEASONAL_ITEM_ENTITY_TYPE || !launch.entityId) {
     return unavailable('ASK_SEASONAL_ITEM_NOT_DIRECTLY_ROUTABLE', 'Open your seasonal tasks first', 'A seasonal task is changed from your seasonal task list. Nothing has changed.');
@@ -135,6 +246,10 @@ async function confirmSeasonalItem(ctx: ConfirmCapabilityContext): Promise<Confi
       const added = await addSeasonalTaskToMaintenance(userId, item.id);
       if (!added.success) throw stale(added.message);
       title = 'Added to maintenance';
+    } else if (kind === 'REMOVE') {
+      const removed = await removeSeasonalTaskFromMaintenance(userId, item.id);
+      if (!removed.success) throw stale(removed.message);
+      title = 'Removed from maintenance';
     } else if (kind === 'SNOOZE') {
       const days = Number(parameters.seasonalItemDays);
       if (![7, 14, 30].includes(days)) throw stale('The snooze to apply is invalid.');
@@ -153,7 +268,7 @@ async function confirmSeasonalItem(ctx: ConfirmCapabilityContext): Promise<Confi
   }
   const result: AskOperationResult = {
     status: 'COMPLETED', reasonCode: `SEASONAL_ITEM_${kind}_COMPLETED`,
-    blocks: [{ type: 'WORKFLOW_PROGRESS', id: `seasonal-item-${kind.toLowerCase()}-${command.entityId}`, title, status: 'COMPLETED', description: 'It is on your seasonal checklist.', details: [], actions: [{ ...backToSeasonal, label: 'See my seasonal tasks', style: 'PRIMARY' as const }] }],
+    blocks: [{ type: 'WORKFLOW_PROGRESS', id: `seasonal-item-${kind.toLowerCase()}-${command.entityId}`, title, status: 'COMPLETED', description: kind === 'REMOVE' ? 'The maintenance task was kept and is no longer linked to this seasonal task.' : 'It is on your seasonal checklist.', details: [], actions: [{ ...backToSeasonal, label: 'See my seasonal tasks', style: 'PRIMARY' as const }] }],
     suggestions: [],
   };
   const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
@@ -163,4 +278,4 @@ async function confirmSeasonalItem(ctx: ConfirmCapabilityContext): Promise<Confi
   }
   return { result, artifactType: 'SEASONAL_CHECKLIST_ITEM', artifactId: command.entityId, refreshedExecutions: refresh.refreshedExecutions };
 }
-registerConfirmCapabilityHandler('seasonal-item.command', confirmSeasonalItem);
+registerConfirmCapabilityHandler('seasonal-item.command', (ctx) => (ctx.parameters.seasonalChecklistCommand ? confirmSeasonalChecklist(ctx) : confirmSeasonalItem(ctx)));

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { SEASONAL_ITEM_ACTION_IDS, SEASONAL_ITEM_MESSAGES, seasonalItemKinds } from './support/seasonalItemCommand';
+import { SEASONAL_CHECKLIST_ACTION_IDS, SEASONAL_CHECKLIST_ENTITY_TYPE, SEASONAL_CHECKLIST_MESSAGES, SEASONAL_ITEM_ACTION_IDS, SEASONAL_ITEM_MESSAGES, seasonalChecklistKinds, seasonalItemKinds } from './support/seasonalItemCommand';
 import { seasonalLeadSentence, seasonalTaskFacts, seasonalTemplateByKey } from './support/seasonalHomeCare';
 import type { AskOperationResult } from './askOperationRegistry';
 import type {
@@ -193,7 +193,15 @@ export function buildSeasonalMaintenanceResult(input: {
       : `No matching seasonal checklist is recorded for this home. Ask did not substitute an empty Maintenance search.`;
   const blocks: AskOperationResult['blocks'] = [{
     type: 'SUMMARY', id: 'seasonal-maintenance-summary', title, body: summaryBody,
-    tone: matches.some(({ item }) => item.priority === 'CRITICAL') ? 'CAUTION' : 'DEFAULT', actions: [],
+    tone: matches.some(({ item }) => item.priority === 'CRITICAL') ? 'CAUTION' : 'DEFAULT',
+    // The whole-checklist controls belong to one checklist, so they are offered only when exactly one is in view.
+    actions: checklists.length === 1
+      ? seasonalChecklistKinds({ status: checklists[0].status, items: checklists[0].items }, { canManage: Boolean(input.canManage), isPrimaryHolder: Boolean(input.isPrimaryHolder) }).map((kind) => ({
+        id: SEASONAL_CHECKLIST_ACTION_IDS[kind], label: kind === 'ADD_ALL_CRITICAL' ? 'Add all critical tasks' : 'Dismiss this season',
+        message: SEASONAL_CHECKLIST_MESSAGES[kind], interactionType: 'START_WORKFLOW' as const, operationId: 'SEASONAL_ITEM_COMMAND' as const,
+        entityType: SEASONAL_CHECKLIST_ENTITY_TYPE, entityId: checklists[0].id, style: kind === 'ADD_ALL_CRITICAL' ? 'PRIMARY' as const : 'QUIET' as const,
+      }))
+      : [],
   }];
   if (matches.length) {
     let number = 0;
@@ -230,7 +238,7 @@ export function buildSeasonalMaintenanceResult(input: {
           { status: item.status, priority: item.priority, maintenanceTaskId: item.maintenanceTask?.id ?? null, completed: status === 'COMPLETED' },
           { canManage: Boolean(input.canManage), isPrimaryHolder: Boolean(input.isPrimaryHolder) },
         ).map((kind) => ({
-          id: SEASONAL_ITEM_ACTION_IDS[kind], label: kind === 'ADD' ? 'Add to maintenance' : kind === 'SNOOZE' ? 'Snooze' : kind === 'DISMISS' ? 'Set aside' : 'Bring back',
+          id: SEASONAL_ITEM_ACTION_IDS[kind], label: kind === 'ADD' ? 'Add to maintenance' : kind === 'REMOVE' ? 'Remove from maintenance' : kind === 'SNOOZE' ? 'Snooze' : kind === 'DISMISS' ? 'Set aside' : 'Bring back',
           message: SEASONAL_ITEM_MESSAGES[kind], interactionType: 'MUTATE_RECORD' as const, operationId: 'SEASONAL_ITEM_COMMAND' as const,
           style: kind === 'ADD' ? 'PRIMARY' as const : 'QUIET' as const,
         })),
