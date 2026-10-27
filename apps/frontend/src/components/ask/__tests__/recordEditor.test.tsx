@@ -476,6 +476,28 @@ test('Sell/Hold/Rent assumption consent describes planning settings instead of a
   expect(view.container.querySelector('[data-compact-capture="sell-hold-rent-assumptions"]')).not.toHaveClass('grid');
 });
 
+test('Mortgage Refinance Radar renders an editable, clearly transient Scenario Planner', () => {
+  const request = {
+    requirementId: 'refinance-scenario-inputs', captureKey: 'REFINANCE_SCENARIO_INPUTS', classification: 'SCENARIO_INPUT', state: 'KNOWN', presentation: 'FORM',
+    title: 'Scenario Planner', question: 'What loan scenario would you like to compare?', helpText: 'Change any value.', allowNotSure: false,
+    sensitivity: 'FINANCIAL', destinationLabel: 'Used only for this hypothetical comparison; your mortgage record stays unchanged', confirmationText: null,
+    expectedContextVersion: 'ctx-1', currentAnswer: { targetRatePct: 5.25, targetTerm: 'TWENTY_YEAR', closingCostAmount: 7250, objective: 'LOWER_PAYMENT' },
+    inputSchema: { type: 'GROUP', fields: [
+      { key: 'targetRatePct', label: 'Interest rate to test', required: true, inputSchema: { type: 'DECIMAL', min: 0.01, max: 30, unit: '%' } },
+      { key: 'targetTerm', label: 'New loan term', required: true, inputSchema: { type: 'SINGLE_SELECT', options: [{ value: 'THIRTY_YEAR', label: '30-year fixed' }, { value: 'TWENTY_YEAR', label: '20-year fixed' }, { value: 'FIFTEEN_YEAR', label: '15-year fixed' }] } },
+      { key: 'closingCostAmount', label: 'Estimated closing costs', required: true, inputSchema: { type: 'DECIMAL', min: 0, max: 1000000, unit: 'USD' } },
+      { key: 'objective', label: 'What matters most?', required: true, inputSchema: { type: 'SINGLE_SELECT', options: [{ value: 'BALANCED', label: 'Balance monthly payment and long-term savings' }, { value: 'LOWER_PAYMENT', label: 'Lower my monthly payment' }] } },
+    ] },
+  } as unknown as AskCaptureRequest;
+  const view = render(<InlineCaptureCard executionId="refinance-scenario" request={request} onCompleted={jest.fn()} />);
+  expect(view.container.querySelector('[data-refinance-scenario-planner]')).toBeInTheDocument();
+  expect(screen.getByText('Mortgage Refinance Radar')).toBeVisible();
+  expect(screen.getByText('Private what-if · Nothing saved')).toBeVisible();
+  expect(screen.getByLabelText('Interest rate to test')).toHaveValue(5.25);
+  expect(screen.getByRole('button', { name: 'Run this scenario' })).toBeEnabled();
+  expect(screen.queryByText('I confirm this information can be saved to the home record.')).not.toBeInTheDocument();
+});
+
 test('Changed markers belong to Edit: Add never shows them', () => {
   render(<InlineCaptureCard executionId="ev1" request={eventAddRequest()} onCompleted={jest.fn()} />);
   fireEvent.change(screen.getByLabelText(/^Title/), { target: { value: 'Roof' } });

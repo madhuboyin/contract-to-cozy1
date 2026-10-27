@@ -49,6 +49,25 @@ test('the scenario branch renders the canonical comparison alongside the scenari
 });
 
 const { refinanceScenarioComparison, parseRefinanceScenarioEdit } = require('../../src/services/ask/askOrchestrator.service.ts');
+const { refinanceScenarioCaptureSchema, refinanceScenarioMessage } = require('../../src/services/ask/support/refinanceScenario.ts');
+
+test('the inline Scenario Planner keeps rate, term, costs, and objective as editable typed inputs', () => {
+  const answer = refinanceScenarioCaptureSchema.parse({ targetRatePct: 5.25, targetTerm: 'TWENTY_YEAR', closingCostAmount: 7250, objective: 'LOWER_PAYMENT' });
+  assert.equal(refinanceScenarioMessage(answer), 'What if I refinanced at 5.25% for 20 years with $7250 closing costs, with a lower payment objective?');
+  assert.equal(refinanceScenarioCaptureSchema.safeParse({ ...answer, targetRatePct: 0 }).success, false);
+  assert.equal(refinanceScenarioCaptureSchema.safeParse({ ...answer, targetTerm: 'TEN_YEAR' }).success, false);
+});
+
+test('scenario results use bounded scan points instead of the former paragraph', () => {
+  const start = orchestratorSource.indexOf('export function refinanceScenarioAnswer(');
+  const end = orchestratorSource.indexOf('\ntype RefinanceRadarEvaluation', start);
+  const source = orchestratorSource.slice(start, end);
+  assert.match(source, /bullets:\s*\[/);
+  assert.match(source, /label: 'Monthly payment'/);
+  assert.match(source, /label: 'Break-even'/);
+  assert.doesNotMatch(source, /For an established home/);
+  assert.match(source, /refinance-adjust-scenario', 'Change scenario assumptions'/);
+});
 
 test('the conversational scenario parser accepts the desktop planner assumptions without changing canonical facts', () => {
   assert.deepEqual(

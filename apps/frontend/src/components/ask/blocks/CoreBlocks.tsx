@@ -19,6 +19,30 @@ function AnswerChips({ chips }: { chips: NonNullable<Extract<AskPresentationBloc
   );
 }
 
+function RefinanceScenarioSummaryCard({ block }: { block: Extract<AskPresentationBlock, { type: 'SUMMARY' }> }) {
+  const paymentHigher = /raises your modeled payment/i.test(block.title);
+  return (
+    <section data-refinance-scenario-summary="" className="overflow-hidden rounded-2xl border border-teal-200/80 bg-gradient-to-br from-white via-white to-teal-50/60 shadow-sm">
+      <div className="border-b border-teal-100 px-4 py-4 sm:px-5">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-teal-900 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-teal-100">
+            <Sparkles className="h-3 w-3 text-teal-300" aria-hidden="true" /> Mortgage Refinance Radar
+          </span>
+          <span className={cn('rounded-full border px-2.5 py-1 text-xs font-semibold', paymentHigher ? 'border-amber-200 bg-amber-50 text-amber-900' : 'border-emerald-200 bg-emerald-50 text-emerald-800')}>
+            {paymentHigher ? 'Payment increases' : 'Payment comparison'}
+          </span>
+        </div>
+        <h3 className="mt-3 font-display text-xl font-medium leading-snug tracking-tight text-slate-950 sm:text-2xl">{block.title}</h3>
+        {block.supportLine && <p className="mt-1 text-sm text-slate-600">{block.supportLine}</p>}
+      </div>
+      <div className="px-4 py-4 sm:px-5">
+        {block.bullets && <SummaryBullets bullets={block.bullets} />}
+        {block.actions.length > 0 && <div className="mt-4 flex flex-wrap gap-2 border-t border-teal-100 pt-4">{block.actions.map((action) => <ActionLink key={action.id} action={action} />)}</div>}
+      </div>
+    </section>
+  );
+}
+
 // IW-CALM-001/002 (FRD v1.111): the answer as a headline, one supporting line and chips, with no frame or tint. A producer that
 // declares `headline`/`supportLine` gets the compact form; any other summary keeps its title as the headline and its body as
 // ordinary text (it may be the whole answer, so it is never muted). A caution or critical tone keeps a thin colored rule.
@@ -806,6 +830,7 @@ export const SummaryBlock: AskBlockRenderer<'SUMMARY'> = ({ block }) => {
   const calm = useCalmChrome();
   // The seasonal plan's intro and next steps are their own cards in both shells (see SeasonalAnswerCards).
   if (isSeasonalIntroBlockId(block.id)) return <SeasonalIntroCard block={block} />;
+  if (block.id === 'refinance-scenario-summary') return <RefinanceScenarioSummaryCard block={block} />;
   if (SEASONAL_NEXT_STEPS_BLOCK_IDS.has(block.id)) return <SeasonalNextSteps block={block} />;
   if (block.id === 'status-board-summary') return <StatusBoardSummaryCard block={block} />;
   if (block.id === 'budget-forecast-summary') return <BudgetForecastSummaryCard block={block} />;

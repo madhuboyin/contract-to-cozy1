@@ -219,5 +219,8 @@ test('the main refinance answer carries the history, saved-scenario and saved-co
   });
   const more = answer.blocks.find((block) => block.id === 'refinance-more-tools');
   assert.ok(more.actions.every((a) => isAskActionAllowedForHouseholdRole(a, 'VIEWER')));
-  assert.equal(answer.blocks[0].actions[0].label, 'Compare a different rate or loan term');
+  const planner = answer.blocks.find((block) => block.id === 'refinance-scenario-planner');
+  assert.equal(planner.title, 'Test loan scenarios');
+  assert.equal(planner.actions[0].label, 'Open Scenario Planner');
+  assert.equal(answer.blocks[0].actions.some((action) => action.id === 'refinance-test-scenario'), false, 'the planner owns the scenario CTA so it is not duplicated');
 });

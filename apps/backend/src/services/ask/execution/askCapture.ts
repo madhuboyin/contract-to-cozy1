@@ -101,8 +101,9 @@ import { documentFactsResult } from '../handlers/propertyTaxDocumentFactsCommand
 import { cdCommandResult } from '../handlers/buyerClosingDisclosureCommands.handler';
 import { leCommandResult } from '../handlers/buyerLoanEstimateCommands.handler';
 import { parseRefinanceCommandAnswer, refinanceFormKindFromCaptureKey, refinanceCommandResult } from '../handlers/refinanceCommands.handler';
-import { refinanceLenderBriefResult } from '../handlers/refinance.handler';
+import { refinanceLenderBriefResult, refinanceScenarioCaptureResult } from '../handlers/refinance.handler';
 import { REFINANCE_LENDER_BRIEF_CAPTURE_KEY, refinanceLenderBriefAnswerSchema } from '../support/refinanceCommand';
+import { REFINANCE_SCENARIO_CAPTURE_KEY, refinanceScenarioCaptureSchema } from '../support/refinanceScenario';
 import { setupCommandResult } from '../handlers/buyerPlanSetupCommands.handler';
 import { parseSetupAnswer, setupKindFromCaptureKey } from '../support/buyerPlanSetupCommand';
 import { leFormKindFromCaptureKey, parseLeAnswer } from '../support/buyerLoanEstimateCommand';
@@ -422,7 +423,7 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
       return mapPersistedExecution(execution, await propertySummary(execution.propertyId));
     }
     // The lender brief is a typed-launch read: re-running its message would route it as a fresh refinance question and replace the brief (and fire its analytics again).
-    if (execution.operationId === 'REFINANCE_ANALYSIS' && input.captureKey === REFINANCE_LENDER_BRIEF_CAPTURE_KEY) {
+    if (execution.operationId === 'REFINANCE_ANALYSIS' && (input.captureKey === REFINANCE_LENDER_BRIEF_CAPTURE_KEY || input.captureKey === REFINANCE_SCENARIO_CAPTURE_KEY)) {
       askInlineCapturesTotal.inc({ operation: execution.operationId, outcome: 'RESUMED' });
       return mapPersistedExecution(execution, await propertySummary(execution.propertyId));
     }
@@ -1980,6 +1981,14 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     if (!briefLaunch || typeof briefLaunch.comparisonId !== 'string') throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
     if (!refinanceLenderBriefAnswerSchema.safeParse(input.answer).success) throw Object.assign(new Error('Choose the offer and confirm all three statements.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
     result = await refinanceLenderBriefResult(userId, execution.propertyId, briefLaunch.comparisonId, input.answer, input.expectedContextVersion);
+    captureId = input.idempotencyKey;
+    capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
+    canonicalOwner = 'MortgageRefinanceRadar';
+  } else if (execution.operationId === 'REFINANCE_ANALYSIS' && input.captureKey === REFINANCE_SCENARIO_CAPTURE_KEY) {
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson) ? execution.parametersJson as Record<string, unknown> : {};
+    if (storedParameters.refinanceScenarioLaunch !== true) throw Object.assign(new Error('This scenario planner is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    if (!refinanceScenarioCaptureSchema.safeParse(input.answer).success) throw Object.assign(new Error('Enter a rate, loan term, closing costs, and planning goal.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+    result = await refinanceScenarioCaptureResult(userId, execution.propertyId, input.answer, input.expectedContextVersion);
     captureId = input.idempotencyKey;
     capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
     canonicalOwner = 'MortgageRefinanceRadar';

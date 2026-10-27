@@ -25,6 +25,7 @@ import { BREAK_EVEN_WHAT_IF_LABELS, parseBreakEvenWhatIf, type BreakEvenWhatIf }
 import { askContextFingerprint, durableFreeTextClarification, ensurePropertyAccess } from '../askHandlerSupport';
 import { FINANCING_PROFILE_ACTION_ID, FINANCING_PROFILE_COMMAND_MESSAGE, FINANCING_PROFILE_ENTITY_TYPE } from '../support/financingProfileCommand';
 import { REFINANCE_BRIEF_ACKNOWLEDGEMENTS, REFINANCE_COMMAND_ACTIONS, REFINANCE_LENDER_BRIEF_ACTION_ID, REFINANCE_LENDER_BRIEF_CAPTURE_KEY, refinanceLenderBriefAnswerSchema } from '../support/refinanceCommand';
+import { REFINANCE_SCENARIO_CAPTURE_KEY, refinanceScenarioCaptureSchema, refinanceScenarioMessage, type RefinanceScenarioCaptureAnswer } from '../support/refinanceScenario';
 
 const refinanceRadarService = new RefinanceRadarService();
 
@@ -78,6 +79,63 @@ function refinanceNextActions(favorable: boolean, triggerRatePct: number | null)
       ];
 }
 
+function refinanceScenarioForm(contextVersion: string, seed: RefinanceScenarioCaptureAnswer): AskOperationResult {
+  return {
+    status: 'NEEDS_CONTEXT', reasonCode: 'REFINANCE_SCENARIO_INPUT_REQUIRED', contextVersion,
+    parameters: { refinanceScenarioLaunch: true },
+    blocks: [{
+      type: 'SUMMARY', id: 'refinance-scenario-planner-intro', title: 'Test a loan scenario',
+      headline: 'See how a different rate or loan term changes your costs',
+      supportLine: 'Adjust the assumptions below. This is a private planning estimate—not a lender quote—and nothing is saved unless you choose to save the result.',
+      body: 'Adjust the assumptions below.', tone: 'DEFAULT', actions: [],
+    }],
+    captureRequests: [{
+      requirementId: 'refinance-scenario-inputs', captureKey: REFINANCE_SCENARIO_CAPTURE_KEY, classification: 'SCENARIO_INPUT', state: 'KNOWN', presentation: 'FORM',
+      title: 'Scenario Planner', question: 'What loan scenario would you like to compare?',
+      helpText: 'Change any value. The comparison will use your current mortgage as the baseline.',
+      inputSchema: { type: 'GROUP', fields: [
+        { key: 'targetRatePct', label: 'Interest rate to test', helpText: 'Enter a hypothetical rate. This is not a lender quote.', required: true, inputSchema: { type: 'DECIMAL', min: 0.01, max: 30, unit: '%' } },
+        { key: 'targetTerm', label: 'New loan term', required: true, inputSchema: { type: 'SINGLE_SELECT', options: [
+          { value: 'THIRTY_YEAR', label: '30-year fixed' }, { value: 'TWENTY_YEAR', label: '20-year fixed' }, { value: 'FIFTEEN_YEAR', label: '15-year fixed' },
+        ] } },
+        { key: 'closingCostAmount', label: 'Estimated closing costs', helpText: 'Include lender and third-party costs you expect to pay.', required: true, inputSchema: { type: 'DECIMAL', min: 0, max: 1_000_000, unit: 'USD' } },
+        { key: 'objective', label: 'What matters most?', required: true, inputSchema: { type: 'SINGLE_SELECT', options: [
+          { value: 'BALANCED', label: 'Balance monthly payment and long-term savings' },
+          { value: 'LOWER_PAYMENT', label: 'Lower my monthly payment' },
+          { value: 'FASTER_PAYOFF', label: 'Pay off the mortgage sooner' },
+          { value: 'LOWER_TOTAL_COST', label: 'Reduce total interest and costs' },
+        ] } },
+      ] },
+      currentAnswer: seed, allowNotSure: false, sensitivity: 'FINANCIAL',
+      destinationLabel: 'Used only for this hypothetical comparison; your mortgage record stays unchanged', confirmationText: null,
+      expectedContextVersion: contextVersion,
+    }],
+    suggestions: [],
+  };
+}
+
+export async function refinanceScenarioPlannerResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
+  const [financialContext, marketSnapshot] = await Promise.all([
+    getFinancialContextDecisions(propertyId, userId, 'REFINANCE_RADAR'), mortgageRateService.getLatestSnapshot(),
+  ]);
+  const parsed = parseRefinanceScenarioEdit(message);
+  const term = parsed?.targetTerm ?? RefinanceScenarioTerm.THIRTY_YEAR;
+  return refinanceScenarioForm(financialContext.contextVersion, {
+    targetRatePct: parsed?.targetRatePct ?? marketSnapshot?.rate30yr ?? 5.5,
+    targetTerm: term === RefinanceScenarioTerm.FIFTEEN_YEAR ? 'FIFTEEN_YEAR' : term === RefinanceScenarioTerm.TWENTY_YEAR ? 'TWENTY_YEAR' : 'THIRTY_YEAR',
+    closingCostAmount: parsed?.closingCostAmount ?? 6_000,
+    objective: parsed?.objective ?? 'BALANCED',
+  });
+}
+
+export async function refinanceScenarioCaptureResult(userId: string, propertyId: string, answer: unknown, expectedContextVersion?: string | null): Promise<AskOperationResult> {
+  const parsed = refinanceScenarioCaptureSchema.safeParse(answer);
+  if (!parsed.success) throw Object.assign(new Error('Enter a rate, loan term, closing costs, and planning goal.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+  const current = await getFinancialContextDecisions(propertyId, userId, 'REFINANCE_RADAR');
+  if (expectedContextVersion !== current.contextVersion) return refinanceScenarioForm(current.contextVersion, parsed.data);
+  return refinanceAnalysisWithMonitorsResult(userId, propertyId, refinanceScenarioMessage(parsed.data));
+}
+
 /** The saved records and history behind the radar, reachable from the answer itself; reads only, so every role sees them. A summary block holds at most 3 actions. */
 function refinanceMoreToolsBlock() {
   return {
@@ -88,6 +146,17 @@ function refinanceMoreToolsBlock() {
       refinanceWorkflowAction('refinance-saved-scenarios', 'Saved loan scenarios', 'Show my saved refinance scenarios.'),
       refinanceWorkflowAction('refinance-saved-comparisons', 'Saved comparisons', 'Review my saved Loan Estimate comparisons.'),
     ],
+  };
+}
+
+function refinanceScenarioPlannerBlock(triggerRatePct: number | null) {
+  const rate = triggerRatePct == null ? 5.5 : Number(triggerRatePct.toFixed(3));
+  return {
+    type: 'SUMMARY' as const, id: 'refinance-scenario-planner', title: 'Test loan scenarios',
+    headline: 'Test loan scenarios',
+    supportLine: 'Use the Scenario Planner to change the interest rate, loan term, closing costs, and your goal. You will see the payment, break-even point, and lifetime interest beside your current mortgage.',
+    body: 'Open the Scenario Planner to compare a hypothetical refinance with your current mortgage.', tone: 'DEFAULT' as const,
+    actions: [refinanceWorkflowAction('refinance-test-scenario', 'Open Scenario Planner', `What if I refinanced at ${rate}% for 15 years with $6,000 closing costs?`, 'REFINANCE_ANALYSIS', 'PRIMARY')],
   };
 }
 
@@ -769,11 +838,18 @@ export function refinanceScenarioAnswer(input: {
     blocks: [{
       type: 'SUMMARY', id: 'refinance-scenario-summary',
       title: tradeoff.title,
-      body: `${tradeoff.lead} ${scenario.recommendationExplanation} This is a hypothetical recalculation only: nothing was saved, and your recorded mortgage rate and term are unchanged. Your current comparison is shown below, unchanged.`,
+      body: 'A quick summary of this hypothetical comparison.',
+      supportLine: 'Compared with your current mortgage:',
+      bullets: [
+        { label: 'Monthly payment', body: scenario.monthlySavings > 0 ? `${money(scenario.monthlySavings)} lower per month` : scenario.monthlySavings < 0 ? `${money(Math.abs(scenario.monthlySavings))} higher per month` : 'About the same' },
+        { label: 'Up-front costs', body: `${money(scenario.closingCostUsd)} estimated cash at closing` },
+        { label: 'Break-even', body: scenario.breakEvenMonths == null ? 'Not reached in the modeled period' : `About ${scenario.breakEvenMonths} months` },
+        { label: 'Lifetime interest', body: scenario.lifetimeSavings >= 0 ? `${money(scenario.lifetimeSavings)} less after costs` : `${money(Math.abs(scenario.lifetimeSavings))} more after costs` },
+      ],
       tone: 'DEFAULT',
       actions: [
-        refinanceWorkflowAction('refinance-adjust-scenario', 'Change the rate, loan term, or costs', `What if I refinanced at ${targetRatePct}% for ${termLabel} with $6,000 closing costs?`, 'REFINANCE_ANALYSIS', 'PRIMARY'),
-        refinanceCommandAction(REFINANCE_COMMAND_ACTIONS.SAVE_SCENARIO, 'Save this loan scenario', `What if I refinanced at ${targetRatePct}% for ${termLabel} with $6,000 closing costs? Save this scenario.`),
+        refinanceWorkflowAction('refinance-adjust-scenario', 'Change scenario assumptions', `What if I refinanced at ${targetRatePct}% for ${termLabel} with $${scenario.closingCostUsd} closing costs, with a ${scenario.objective.replace(/_/g, ' ').toLowerCase()} objective?`, 'REFINANCE_ANALYSIS', 'PRIMARY'),
+        refinanceCommandAction(REFINANCE_COMMAND_ACTIONS.SAVE_SCENARIO, 'Save this loan scenario', `What if I refinanced at ${targetRatePct}% for ${termLabel} with $${scenario.closingCostUsd} closing costs, with a ${scenario.objective.replace(/_/g, ' ').toLowerCase()} objective? Save this scenario.`),
         refinanceWorkflowAction('refinance-compare-offers', 'Compare Loan Estimates', 'Help me compare official Loan Estimates for this refinance.'),
       ],
     }, refinanceScenarioComparison(current, scenario, targetRatePct, termLabel), {
@@ -842,9 +918,9 @@ export function refinanceCanonicalAnswer(input: {
       // A summary block holds at most 3 actions; a fourth fails schema validation and replaces the whole answer with the refresh fallback.
       // The closed state already offers "Notify me at this rate", so Alert settings takes the place of the decision action only when the radar is open.
       actions: favorable
-        ? [...refinanceNextActions(true, result.triggerRatePct).slice(0, 2), refinanceCommandAction(REFINANCE_COMMAND_ACTIONS.ALERT_SETTINGS, 'Alert settings', 'Review my refinance alert settings.')]
-        : refinanceNextActions(false, result.triggerRatePct),
-    }, {
+        ? [refinanceWorkflowAction('refinance-compare-offers', 'Compare Loan Estimates', 'Help me compare official Loan Estimates for this refinance.'), refinanceCommandAction(REFINANCE_COMMAND_ACTIONS.ALERT_SETTINGS, 'Alert settings', 'Review my refinance alert settings.')]
+        : refinanceNextActions(false, result.triggerRatePct).slice(1),
+    }, refinanceScenarioPlannerBlock(result.triggerRatePct), {
       type: 'TABLE', id: 'refinance-analysis-table', title: 'Current loan versus governed benchmark',
       description: 'The benchmark is not a personalized lender offer or guaranteed available rate.',
       columns: [{ key: 'metric', label: 'Metric' }, { key: 'value', label: 'Estimate' }, { key: 'meaning', label: 'What it represents' }], rows, actions: [],
@@ -1048,6 +1124,9 @@ async function refinanceRateMonitorResult(userId: string, propertyId: string, me
 
 registerCapabilityHandler('refinance.analysis', async (envelope) => {
   const launch = envelope.launchContext;
+  if ((launch?.actionId === 'refinance-test-scenario' || launch?.actionId === 'refinance-adjust-scenario') && launch.surface !== 'ASK_REFRESH') {
+    return refinanceScenarioPlannerResult(envelope.userId, envelope.propertyId!, envelope.message);
+  }
   // The saved-comparison row's own "Show shareable summary" action: the comparison is the row's entity, read for this home only.
   if (launch?.actionId === 'refinance-share-comparison' && launch.entityType === 'REFINANCE_LOAN_ESTIMATE_COMPARISON' && launch.entityId && launch.surface !== 'ASK_REFRESH') {
     return refinanceComparisonSummaryResult(envelope.propertyId!, launch.entityId);
