@@ -156,10 +156,11 @@ const detailCheck = (overrides = {}) => ({
   explanationJson: { summary: 'x', reasonCodes: [], notes: [], limitations: [] },
   pricingFactorsJson: {
     property: { propertySize: 2000, yearBuilt: 1990, dwellingType: 'SINGLE_FAMILY' }, region: { city: 'Austin', state: 'TX' },
-    benchmark: { matched: true, sourceName: 'Regional Cost Index', releaseVersion: '2026.2', regionType: 'METRO', regionKey: 'austin', observationStart: '2026-01-01T00:00:00.000Z', observationEnd: '2026-06-30T00:00:00.000Z', sampleSize: 140, unit: 'PER_JOB', methodologySummary: 'Median of completed jobs.' },
+    benchmark: { matched: true, sourceName: 'Regional Cost Index', releaseVersion: '2026.2', regionType: 'METRO', regionKey: 'austin', observationStart: '2026-01-01T00:00:00.000Z', observationEnd: '2026-06-30T00:00:00.000Z', sampleSize: 140, unit: 'PER_JOB', methodologySummary: 'Median of completed jobs.', sourceUrl: 'https://example.org/index', expiresAt: '2027-01-01T00:00:00.000Z', retrievedAt: '2026-07-02T00:00:00.000Z', effectiveAt: '2026-07-01T00:00:00.000Z', percentileLow: 900, percentileHigh: 1500, normalizedScopeKey: 'plumbing:leak_fix', benchmarkId: 'bm-1', releaseId: 'rel-9' },
     confidence: { score: 0.7, band: 'MEDIUM' },
     adjustments: [{ code: 'OLDER_HOME', effect: 'up', multiplier: 1.08, note: 'Homes built before 2000 cost more to service.' }],
   },
+  propertySnapshotJson: { systems: { roofType: 'ASPHALT_SHINGLE', hasDrainageIssues: true } },
   linkedEntities: [{ linkedEntityType: 'APPLIANCE', linkedEntityId: 'a1', relevanceScore: 1, label: 'Water heater', summary: 'Installed 2012' }],
   ...overrides,
 });
@@ -181,7 +182,7 @@ test('detail shows provenance, confidence, adjustments, home facts and linked re
   assert.deepEqual(seen, [['p1', 'plumb', 'u1']]);
   assert.equal(result.reasonCode, 'SERVICE_PRICE_CHECK_DETAIL_READY');
   const text = JSON.stringify(result.blocks);
-  for (const needle of ['Regional Cost Index', '2026.2', '140', '70%', 'Homes built before 2000', 'Water heater', 'Austin']) assert.ok(text.includes(needle), needle);
+  for (const needle of ['https://example.org/index', 'bm-1', 'rel-9', 'plumbing', '$900 to $1,500', 'Jan 1, 2027', 'Regional Cost Index', '2026.2', '140', '70%', 'Homes built before 2000', 'Water heater', 'Austin', 'asphalt shingle', 'Drainage issues']) assert.ok(text.includes(needle), needle);
   assert.equal(/"href":"/.test(text), false);
   const result2 = { ...result, parameters: { answerTrustEvidence: { schemaVersion: '1.0', sources: [{ sourceId: 'service-price-radar.checks', operationId: 'SERVICE_PRICE_CHECKS', status: 'COMPLETE', scope: 'FULL', freshness: 'CURRENT', observedAt: '2026-09-24T00:00:00.000Z' }] } } };
   const { result: validated } = validateAskAnswerTrust({ question: 'Show the details of this quote check.', operationId: 'SERVICE_PRICE_CHECKS', result: result2, propertyId: 'p1' });
@@ -189,7 +190,7 @@ test('detail shows provenance, confidence, adjustments, home facts and linked re
 });
 
 test('a check without a qualified benchmark says so and omits the benchmark section; a missing check is not applicable', async () => {
-  ServicePriceRadarService.prototype.getCheckDetail = async () => ({ check: detailCheck({ verdict: 'INSUFFICIENT_DATA', expectedLow: null, expectedHigh: null, pricingFactorsJson: { benchmark: { matched: false } }, explanationJson: { limitations: ['No current, reviewed benchmark with complete provenance was available.'] }, linkedEntities: [] }) });
+  ServicePriceRadarService.prototype.getCheckDetail = async () => ({ check: detailCheck({ verdict: 'INSUFFICIENT_DATA', expectedLow: null, expectedHigh: null, pricingFactorsJson: { benchmark: { matched: false } }, propertySnapshotJson: null, explanationJson: { limitations: ['No current, reviewed benchmark with complete provenance was available.'] }, linkedEntities: [] }) });
   const launchContext = { operationId: 'SERVICE_PRICE_CHECKS', surface: 'ASK_PAGE', entityType: 'SERVICE_PRICE_CHECK', entityId: 'roof' };
   const msg = 'Show the details of this quote check.';
   const rough = await capabilityInvoke('SERVICE_PRICE_CHECKS', { ...envelope, message: msg, launchContext }, { propertyAccess: { role: 'OWNER', userId: 'u1', propertyId: 'p1' } });

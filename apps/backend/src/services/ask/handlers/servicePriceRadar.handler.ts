@@ -9,7 +9,7 @@ import { humanDate, readableCode } from '../askFormatting';
 import { ServicePriceRadarService } from '../../servicePriceRadar.service';
 import { SERVICE_PRICE_CHECK_ACTION_ID, SERVICE_PRICE_CHECK_DETAIL_ACTION_ID, SERVICE_PRICE_CHECK_DETAIL_MESSAGE, SERVICE_PRICE_CHECK_ENTITY_TYPE, SERVICE_PRICE_CHECK_MESSAGE, SERVICE_PRICE_CHECKS_FOR_RECORD_ACTION_ID, SERVICE_PRICE_CHECKS_FOR_RECORD_MESSAGE } from '../support/homeToolRunConstants';
 import { collectionDescriptor } from '../support/collectionDescriptor';
-import { parseServicePriceLink } from '../support/servicePriceLinkOptions';
+import { SERVICE_PRICE_STORED_LINK_TYPES, parseServicePriceLink } from '../support/servicePriceLinkOptions';
 
 // Service Price Radar capability-card slice (FRD v1.60): the twelfth new operation for a capability with none. Reads
 // ServicePriceRadarService.listChecks with the page's own limit (12), the call GET
@@ -147,7 +147,7 @@ export function servicePriceCheckDetailFromView(check: ServicePriceCheckDetailVi
     tone: check.verdict === 'HIGH' || check.verdict === 'VERY_HIGH' ? 'CAUTION' : 'DEFAULT', actions: [backAction],
   }];
 
-  const attr = (label: string, value: string | number | null | undefined) => (value == null || value === '' ? null : { label, value: String(value) });
+  const attr = (label: string, value: string | number | null | undefined) => (value == null || value === '' ? null : { label, value: String(value).slice(0, 160) });
   type DetailRow = { id: string; title: string; description: string | null; meta: string[]; status: string | null; href: null; attributes?: Array<{ label: string; value: string }>; actions?: Array<{ id: string; entityType: string; entityId: string; label: string; message: string; style: 'QUIET'; interactionType: 'CONVERSATION_CONTINUE'; operationId: 'SERVICE_PRICE_CHECKS' }> };
   const rows: DetailRow[] = [];
   rows.push({
@@ -163,8 +163,12 @@ export function servicePriceCheckDetailFromView(check: ServicePriceCheckDetailVi
     rows.push({
       id: 'benchmark', title: 'Benchmark behind the range', description: typeof benchmark.methodologySummary === 'string' ? benchmark.methodologySummary : null, meta: [], status: null, href: null,
       attributes: [
-        attr('Source', benchmark.sourceName), attr('Release', benchmark.releaseVersion), attr('Area', benchmark.regionKey ? `${readableCode(String(benchmark.regionType ?? ''))} ${benchmark.regionKey}`.trim() : null),
-        attr('Observed', observed || null), attr('Sample size', benchmark.sampleSize), attr('Priced per', benchmark.unit ? readableCode(String(benchmark.unit)) : null),
+        attr('Source', benchmark.sourceName), attr('Source link', typeof benchmark.sourceUrl === 'string' ? benchmark.sourceUrl : null), attr('Release', benchmark.releaseVersion),
+        attr('Area', benchmark.regionKey ? `${readableCode(String(benchmark.regionType ?? ''))} ${benchmark.regionKey}`.trim() : null),
+        attr('Observed', observed || null), attr('Retrieved', detailDate(benchmark.retrievedAt)), attr('Effective', detailDate(benchmark.effectiveAt)), attr('Expires', detailDate(benchmark.expiresAt)),
+        attr('Sample size', benchmark.sampleSize), attr('Priced per', benchmark.unit ? readableCode(String(benchmark.unit)) : null),
+        attr('Percentile range', benchmark.percentileLow != null && benchmark.percentileHigh != null ? `${servicePriceMoney(Number(benchmark.percentileLow))} to ${servicePriceMoney(Number(benchmark.percentileHigh))}` : null),
+        attr('Scope', benchmark.normalizedScopeKey ? readableCode(String(benchmark.normalizedScopeKey)) : null), attr('Benchmark ID', benchmark.benchmarkId), attr('Release ID', benchmark.releaseId),
       ].filter((entry): entry is { label: string; value: string } => entry !== null),
     });
   }
@@ -177,9 +181,12 @@ export function servicePriceCheckDetailFromView(check: ServicePriceCheckDetailVi
   }
   const property = asRecord(factors.property);
   const region = asRecord(factors.region);
+  const systems = asRecord(asRecord(check.propertySnapshotJson).systems);
   const usedFactors = [
     attr('Home size', property.propertySize ? `${Number(property.propertySize).toLocaleString('en-US')} sq ft` : null), attr('Year built', property.yearBuilt),
     attr('Home type', property.dwellingType ? readableCode(String(property.dwellingType)) : null), attr('Location', [region.city, region.state].filter(Boolean).join(', ') || null),
+    ...Object.entries({ roofType: 'Roof', heatingType: 'Heating', coolingType: 'Cooling', waterHeaterType: 'Water heater', foundationType: 'Foundation', sidingType: 'Siding' }).map(([key, label]) => (typeof systems[key] === 'string' && systems[key] ? attr(label, readableCode(systems[key])) : null)),
+    attr('Drainage issues', systems.hasDrainageIssues === true ? 'Yes' : systems.hasDrainageIssues === false ? 'No' : null),
   ].filter((entry): entry is { label: string; value: string } => entry !== null);
   if (usedFactors.length) rows.push({ id: 'home-facts', title: 'Home facts used', description: null, meta: [], status: null, href: null, attributes: usedFactors });
   for (const entity of check.linkedEntities.slice(0, 8)) {
@@ -188,6 +195,13 @@ export function servicePriceCheckDetailFromView(check: ServicePriceCheckDetailVi
       description: entity.summary, meta: [], status: null, href: null,
       actions: [{ id: SERVICE_PRICE_CHECKS_FOR_RECORD_ACTION_ID, entityType: entity.linkedEntityType, entityId: entity.linkedEntityId, label: 'Other checks for this', message: SERVICE_PRICE_CHECKS_FOR_RECORD_MESSAGE, style: 'QUIET' as const, interactionType: 'CONVERSATION_CONTINUE' as const, operationId: 'SERVICE_PRICE_CHECKS' as const }],
     });
+  }
+  // A row shows at most eight facts; a longer set continues in a second row of the same title.
+  for (let i = rows.length - 1; i >= 0; i--) {
+    const attributes = rows[i].attributes ?? [];
+    if (attributes.length <= 8) continue;
+    const chunks = Array.from({ length: Math.ceil(attributes.length / 8) }, (_, n) => attributes.slice(n * 8, n * 8 + 8));
+    rows.splice(i, 1, ...chunks.map((chunk, n) => ({ ...rows[i], id: n ? `${rows[i].id}-${n + 1}` : rows[i].id, title: n ? `${rows[i].title} (continued)` : rows[i].title, description: n ? null : rows[i].description, attributes: chunk })));
   }
   const sections = [{ id: 'service-price-radar-detail-sections', title: 'How it was checked', count: rows.length, items: rows }];
   blocks.push({
@@ -216,7 +230,7 @@ async function servicePriceCheckDetailResult(propertyId: string, userId: string,
 }
 
 async function servicePriceChecksForRecordResult(propertyId: string, userId: string, linkedEntityType: string, linkedEntityId: string): Promise<AskOperationResult> {
-  const link = parseServicePriceLink(`${linkedEntityType}:${linkedEntityId}`);
+  const link = parseServicePriceLink(`${linkedEntityType}:${linkedEntityId}`, SERVICE_PRICE_STORED_LINK_TYPES);
   if (!link) return servicePriceChecksFromView([], propertyId, 0, true);
   try {
     const result = await new ServicePriceRadarService().listChecks(propertyId, userId, { limit: SERVICE_PRICE_RADAR_ASK_LIMIT, ...link });

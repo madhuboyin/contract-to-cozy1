@@ -410,6 +410,6 @@ test('price check: a related record can be chosen from the home\'s own records, 
   calls.createCheck.length = 0;
   await confirm('SERVICE_PRICE_CHECK_RUN', linked.parameters);
   assert.deepEqual(calls.createCheck[0][2].linkedEntities, [{ linkedEntityType: 'SYSTEM', linkedEntityId: 'i1' }]);
-  assert.equal(ServicePriceCheckInputSchema.safeParse({ serviceCategory: 'PLUMBING', quoteAmount: 5, linkedEntity: 'BOGUS:1' }).success, false);
+  for (const bad of ['BOGUS:1', 'OTHER:anything', 'APPLIANCE:a1', 'SYSTEM:']) assert.equal(ServicePriceCheckInputSchema.safeParse({ serviceCategory: 'PLUMBING', quoteAmount: 5, linkedEntity: bad }).success, false, bad);
   assert.equal(ServicePriceCheckInputSchema.parse({ serviceCategory: 'PLUMBING', quoteAmount: 5, linkedEntity: '__NO_LINK__' }).linkedEntity, null);
 });

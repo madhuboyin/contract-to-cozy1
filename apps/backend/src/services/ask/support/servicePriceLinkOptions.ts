@@ -8,15 +8,17 @@ import { SERVICE_RADAR_LINKED_ENTITY_TYPE_VALUES, type ServiceRadarLinkedEntityT
 export const SERVICE_PRICE_NO_LINK_VALUE = '__NO_LINK__';
 export const SERVICE_PRICE_LINK_TYPE_LABELS: Record<string, string> = { SYSTEM: 'Item', APPLIANCE: 'Appliance', ROOM: 'Room', DOCUMENT: 'Record', INCIDENT: 'Incident' };
 const LINK_OPTION_TYPES = ['SYSTEM', 'ROOM', 'DOCUMENT', 'INCIDENT'] as const;
+/** What the form may submit: only the kinds it offers, each backed by a record the radar validates against the property. OTHER and APPLIANCE are never accepted from intake. */
+const INTAKE_LINK_TYPES: readonly string[] = LINK_OPTION_TYPES;
 
-/** `TYPE:id` as the form stores it, or null when it is not a well-formed choice. */
-export function parseServicePriceLink(value: string | null | undefined): { linkedEntityType: ServiceRadarLinkedEntityTypeValue; linkedEntityId: string } | null {
+/** `TYPE:id` as the form stores it, or null when it is not a well-formed choice of one of `allowed` (default: the intake kinds). */
+export function parseServicePriceLink(value: string | null | undefined, allowed: readonly string[] = INTAKE_LINK_TYPES): { linkedEntityType: ServiceRadarLinkedEntityTypeValue; linkedEntityId: string } | null {
   const text = String(value ?? '');
   const at = text.indexOf(':');
   if (at < 1) return null;
   const type = text.slice(0, at);
   const id = text.slice(at + 1);
-  if (!id || !(SERVICE_RADAR_LINKED_ENTITY_TYPE_VALUES as readonly string[]).includes(type)) return null;
+  if (!id || !(SERVICE_RADAR_LINKED_ENTITY_TYPE_VALUES as readonly string[]).includes(type) || !allowed.includes(type)) return null;
   return { linkedEntityType: type as ServiceRadarLinkedEntityTypeValue, linkedEntityId: id };
 }
 
@@ -33,3 +35,6 @@ export async function loadServicePriceLinkOptions(propertyId: string, role: Hous
     ...records.map((row) => option('DOCUMENT', row.id, row.title)), ...incidents.map((row) => option('INCIDENT', row.id, row.title)),
   ];
 }
+
+/** The kinds a saved check can already carry (Desktop can store an appliance), for reading checks back by record. */
+export const SERVICE_PRICE_STORED_LINK_TYPES: readonly string[] = SERVICE_RADAR_LINKED_ENTITY_TYPE_VALUES.filter((type) => type !== 'OTHER');
