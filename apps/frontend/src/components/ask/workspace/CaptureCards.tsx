@@ -14,6 +14,7 @@ import { AskContextLink } from '../blocks/context';
 import { HomeContinuityCaptureField } from '../HomeContinuityCaptureField';
 import { RecordEditor } from '../recordEditor/RecordEditor';
 import { PLANT_ADVISOR_WORKFLOW_WIDTH_CLASS } from '../plantAdvisorLayout';
+import { PushNotificationSetting } from '@/components/system/PushNotificationSetting';
 import { ACCESS_LOST_CODES, FOCUSABLE_SELECTOR, askFailureCode, captureDraftStorageKey, capturePolicy, confirmationAttemptStorageKey, newId, useAutoFocusFirstControl } from './support';
 
 /** The one rule the warranty forms share: the expiration date must be after the start date (the server enforces it too). */
@@ -554,6 +555,7 @@ export function InlineCaptureCard({
   const compactOwnershipScenario = schema.type === 'GROUP' && request.captureKey === 'OWNERSHIP_COST_SCENARIO_INPUTS';
   const sellHoldRentAssumptions = schema.type === 'GROUP' && request.captureKey === 'sell-hold-rent-assumptions';
   const financingProfile = schema.type === 'GROUP' && request.captureKey === 'FINANCING_PROFILE_UPDATE';
+  const refinanceAlertSettings = schema.type === 'GROUP' && request.captureKey === 'REFINANCE_ALERT_SETTINGS_INPUTS';
   const decisionInputWorkflow = sellHoldRentAssumptions || financingProfile;
   const compactProjectCreate = schema.type === 'GROUP' && request.captureKey === 'PROJECT_TRACKER_CREATE_INPUTS';
   const compactProjectCommand = schema.type === 'GROUP' && request.captureKey === 'PROJECT_TRACKER_COMMAND_INPUTS';
@@ -1043,6 +1045,14 @@ export function InlineCaptureCard({
           </div>;
         })}
       </div>
+      {refinanceAlertSettings && values.pushEnabled === true && (
+        <section className="mt-4 rounded-xl border border-sky-200 bg-sky-50/70 p-3" aria-label="Push delivery on this device">
+          <p className="mb-2 text-xs text-slate-600">
+            Push alerts also need this browser to be registered. This permission applies only to this device; your refinance preference is saved separately after review and confirmation.
+          </p>
+          <PushNotificationSetting />
+        </section>
+      )}
       {error && <p className="mt-3 text-sm text-red-700" role="alert">{error}</p>}
       {(request.sensitivity === 'FINANCIAL' || request.sensitivity === 'SECURITY') && (!compactContinuityPlan || finalGroupActive) && (!financingProfile || finalGroupActive) && (
         <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-sky-200 bg-white p-3 text-sm text-slate-700">

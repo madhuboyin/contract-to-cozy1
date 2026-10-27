@@ -65,7 +65,10 @@ function capture(kind: RefinanceFormKind, version: string, currentAnswer: Record
   return { requirementId: `refinance-${kind.toLowerCase()}-inputs`, captureKey: REFINANCE_CAPTURE_KEYS[kind], classification: 'WORKFLOW_INPUT', state: 'UNKNOWN', title,
     question: kind === 'ADD_COMPARISON' ? 'Enter the figures exactly as shown on two reviewed Loan Estimates.' : 'Review the values before continuing.',
     helpText: kind === 'ADD_COMPARISON' ? 'The comparison does not select a lender or transmit information. Nothing is saved until you confirm.' : 'Nothing changes until you confirm.',
-    inputSchema: { type: 'GROUP', fields: fieldsFor(kind, links) } as AskCaptureRequest['inputSchema'], currentAnswer, allowNotSure: false, sensitivity: 'FINANCIAL', destinationLabel: 'Saved to the canonical refinance records after confirmation', confirmationText: null, expectedContextVersion: version };
+    inputSchema: { type: 'GROUP', fields: fieldsFor(kind, links) } as AskCaptureRequest['inputSchema'], currentAnswer, allowNotSure: false, sensitivity: 'FINANCIAL', destinationLabel: 'Saved to the canonical refinance records after confirmation', confirmationText: null, expectedContextVersion: version,
+    // Browser permission requires a direct gesture. Keep alert settings together
+    // as a form so Ask can register this device without leaving the conversation.
+    ...(kind === 'ALERT_SETTINGS' ? { presentation: 'FORM' as const } : {}) };
 }
 
 /** True when a link names a record this home does not have saved, or an offer that is not one of the chosen comparison's. */
