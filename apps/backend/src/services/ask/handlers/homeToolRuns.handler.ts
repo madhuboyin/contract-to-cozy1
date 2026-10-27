@@ -313,10 +313,11 @@ function priceCheckCaptureRequest(contextVersion: string, entered?: Partial<Pric
     inputSchema: { type: 'GROUP', fields: [
       { key: 'serviceCategory', label: 'Service', required: true, inputSchema: { type: 'SINGLE_SELECT', options: SERVICE_PRICE_CATEGORY_CHOICES.map((value) => ({ label: categoryLabel(value), value })) } },
       { key: 'quoteAmount', label: 'Quote amount', helpText: `In dollars, up to ${usd(SERVICE_PRICE_MAX_QUOTE)}.`, required: true, inputSchema: { type: 'DECIMAL', min: 1, max: SERVICE_PRICE_MAX_QUOTE, unit: 'USD' } },
+      { key: 'serviceSubcategory', label: 'Service detail', helpText: 'Optional: repair, replacement, leak fix, panel upgrade. A closer match can give a closer range.', required: false, inputSchema: { type: 'SHORT_TEXT', maxLength: 120 } },
       { key: 'quoteVendorName', label: 'Contractor', required: false, inputSchema: { type: 'SHORT_TEXT', maxLength: 120 } },
       { key: 'serviceLabelRaw', label: 'What the quote covers', helpText: 'Optional: for example, replace the water heater.', required: false, inputSchema: { type: 'SHORT_TEXT', maxLength: 200 } },
     ] },
-    currentAnswer: Object.fromEntries(Object.entries({ serviceCategory: entered?.serviceCategory, quoteAmount: entered?.quoteAmount, quoteVendorName: entered?.quoteVendorName, serviceLabelRaw: entered?.serviceLabelRaw }).filter(([, value]) => value !== undefined && value !== null)),
+    currentAnswer: Object.fromEntries(Object.entries({ serviceCategory: entered?.serviceCategory, quoteAmount: entered?.quoteAmount, serviceSubcategory: entered?.serviceSubcategory, quoteVendorName: entered?.quoteVendorName, serviceLabelRaw: entered?.serviceLabelRaw }).filter(([, value]) => value !== undefined && value !== null)),
     allowNotSure: false, sensitivity: 'STANDARD', destinationLabel: 'Used to prepare this check; nothing is checked until you confirm', confirmationText: null,
     expectedContextVersion: contextVersion,
   };
@@ -347,6 +348,7 @@ export async function servicePriceCheckResult(userId: string, propertyId: string
       description: 'This compares the amount with typical local prices for the service and stores the check, the same record Service Price Radar keeps. It is a price check, not a review of the contractor or the scope.',
       fields: [
         { label: 'Service', value: categoryLabel(supplied.serviceCategory) }, { label: 'Quote', value: usd(supplied.quoteAmount) },
+        ...(supplied.serviceSubcategory ? [{ label: 'Service detail', value: supplied.serviceSubcategory }] : []),
         ...(supplied.quoteVendorName ? [{ label: 'Contractor', value: supplied.quoteVendorName }] : []), ...(supplied.serviceLabelRaw ? [{ label: 'Covers', value: supplied.serviceLabelRaw }] : []),
       ],
       editableFields: [], confirmLabel: 'Check quote', consentText: 'I authorize checking this quote and storing the result for this home.', expiresAt: expiresAt.toISOString(),
@@ -377,7 +379,7 @@ async function confirmServicePriceCheck(ctx: ConfirmCapabilityContext): Promise<
       const context = await assertProjectComplianceApplicable(propertyId, userId, 'SERVICE_PRICE_RADAR', { serviceCategory: input.serviceCategory } as never, 'localPriceBenchmarking');
       const created = await priceRadar.createCheck(propertyId, userId, {
         serviceCategory: input.serviceCategory, quoteAmount: input.quoteAmount, quoteCurrency: 'USD', quoteSource: 'MANUAL', linkedEntities: [],
-        ...(input.quoteVendorName ? { quoteVendorName: input.quoteVendorName } : {}), ...(input.serviceLabelRaw ? { serviceLabelRaw: input.serviceLabelRaw } : {}),
+        ...(input.serviceSubcategory ? { serviceSubcategory: input.serviceSubcategory } : {}), ...(input.quoteVendorName ? { quoteVendorName: input.quoteVendorName } : {}), ...(input.serviceLabelRaw ? { serviceLabelRaw: input.serviceLabelRaw } : {}),
       } as never, (context as { contextVersion?: string | null }).contextVersion ?? null);
       check = created.check as unknown as CheckSummary;
     } catch (error) {

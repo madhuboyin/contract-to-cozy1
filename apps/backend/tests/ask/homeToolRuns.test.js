@@ -301,7 +301,7 @@ test('price check: a viewer and a household member who is not the primary accoun
 
 test('price check: the amount must be a positive number up to $250,000 and the service a supported one', () => {
   const parse = (value) => ServicePriceCheckInputSchema.safeParse(value);
-  assert.deepEqual(parse({ serviceCategory: 'ROOFING', quoteAmount: '12999.499', quoteVendorName: '' }).data, { serviceCategory: 'ROOFING', quoteAmount: 12999.5, quoteVendorName: null, serviceLabelRaw: null });
+  assert.deepEqual(parse({ serviceCategory: 'ROOFING', quoteAmount: '12999.499', quoteVendorName: '' }).data, { serviceCategory: 'ROOFING', quoteAmount: 12999.5, serviceSubcategory: null, quoteVendorName: null, serviceLabelRaw: null });
   for (const bad of [{ serviceCategory: 'ROOFING', quoteAmount: 0 }, { serviceCategory: 'ROOFING', quoteAmount: -5 }, { serviceCategory: 'ROOFING', quoteAmount: 250000.01 }, { serviceCategory: 'ROOFING', quoteAmount: 'lots' }, { serviceCategory: 'INSURANCE', quoteAmount: 500 }, { serviceCategory: 'NOT_A_SERVICE', quoteAmount: 500 }]) {
     assert.equal(parse(bad).success, false, JSON.stringify(bad));
   }
@@ -385,3 +385,15 @@ test('price check: the cleaning-quote step is completed the same way, and a step
   }
 });
 
+
+test('price check: the optional service detail is asked for, shown on the review and sent to the radar; blank is left out', async () => {
+  const withDetail = await servicePriceCheckResult('u1', 'p1', ServicePriceCheckInputSchema.parse({ serviceCategory: 'PLUMBING', quoteAmount: 1450, serviceSubcategory: ' Leak fix ' }), null);
+  assert.ok(withDetail.confirmation.fields.some((field) => field.label === 'Service detail' && field.value === 'Leak fix'));
+  assert.equal(withDetail.captureRequests[0].inputSchema.fields.find((field) => field.key === 'serviceSubcategory').required, false);
+  assert.equal(withDetail.captureRequests[0].currentAnswer.serviceSubcategory, 'Leak fix');
+  calls.createCheck.length = 0;
+  await confirm('SERVICE_PRICE_CHECK_RUN', withDetail.parameters);
+  assert.equal(calls.createCheck[0][2].serviceSubcategory, 'Leak fix');
+  const blank = await servicePriceCheckResult('u1', 'p1', ServicePriceCheckInputSchema.parse({ serviceCategory: 'PLUMBING', quoteAmount: 1450, serviceSubcategory: '  ' }), null);
+  assert.equal(blank.confirmation.fields.some((field) => field.label === 'Service detail'), false);
+});

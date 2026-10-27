@@ -339,6 +339,8 @@ const SUPPORTED_PRICE_CATEGORIES = SERVICE_RADAR_CATEGORY_VALUES.filter((value) 
 export const ServicePriceCheckInputSchema = z.object({
   serviceCategory: z.enum(SUPPORTED_PRICE_CATEGORIES as [string, ...string[]]),
   quoteAmount: z.coerce.number().positive().max(SERVICE_PRICE_MAX_QUOTE).transform((value) => Math.round(value * 100) / 100),
+  // The page's free-text "Service detail" (repair, replacement, leak fix...); the radar normalizes it and uses it to match a benchmark.
+  serviceSubcategory: optionalText(120),
   quoteVendorName: optionalText(120),
   serviceLabelRaw: optionalText(200),
 }).strict();
