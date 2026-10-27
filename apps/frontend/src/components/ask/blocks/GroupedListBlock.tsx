@@ -21,6 +21,7 @@ import { HomeEventResultList } from '../HomeEventResultList';
 import { HouseholdResultList } from '../HouseholdResultList';
 import { InventoryResultList } from '../InventoryResultList';
 import { MaintenanceResultList } from '../MaintenanceResultList';
+import { MaintenanceForecastResultList } from '../MaintenanceForecastResultList';
 import { ClaimResultList } from '../ClaimResultList';
 import { InspectionFindingResultList } from '../InspectionFindingResultList';
 import { SellerPrepItemResultList } from '../SellerPrepItemResultList';
@@ -795,6 +796,9 @@ export const GroupedListBlock: AskBlockRenderer<'GROUPED_LIST'> = (props) => {
       link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>}
       layout={decision.pattern === 'SHELVES' ? 'SHELVES' : 'LIST'}
       onChooseLayout={declaresShelves && decision.offersChoice && controls ? (layout) => setPreference(layout === 'LIST' ? 'LIST' : 'AUTO') : undefined} />;
+  }
+  if (props.block.id === 'maintenance-forecast-items') {
+    return <MaintenanceForecastResultList block={props.block} />;
   }
   // Rooms keep their own component in both layouts too, so the live room detail and its corrections stay (FRD v1.79).
   if (props.block.id === 'property-rooms') {

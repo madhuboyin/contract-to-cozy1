@@ -56,7 +56,7 @@ export function isCalmAdopter(execution: Pick<AskExecutionResponse, 'blocks'>): 
   const isPropertySummarySynthesis = !isPropertySummaryDump && !hasFocusedRoomsOrCompleteness
     && blocks.some((block) => block.type === 'SUMMARY' && block.id === 'property-summary');
   return isPropertySummarySynthesis || blocks.some((block) => (block.type === 'GROUPED_LIST' && (
-    block.id === 'maintenance-groups' || block.id === 'inventory-results' || block.id === 'warranty-results' || block.id === 'incident-claim-list' || block.id === 'home-event-radar-feed' || block.id === 'document-lookup-groups'
+    block.id === 'maintenance-groups' || block.id === 'maintenance-forecast-items' || block.id === 'inventory-results' || block.id === 'warranty-results' || block.id === 'incident-claim-list' || block.id === 'home-event-radar-feed' || block.id === 'document-lookup-groups'
     || (block.id === 'property-rooms' && block.presentation?.pattern === 'ROOM_MAP' && block.presentation.focused === true)
     || (block.id === 'property-completeness' && !isPropertySummaryDump)
   )) || (block.type === 'PRIORITY_LIST' && block.id === 'home-actions-priority-list') || block.type === 'ENVIRONMENT_REPORT');

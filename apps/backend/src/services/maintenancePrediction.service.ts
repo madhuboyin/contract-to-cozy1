@@ -93,6 +93,12 @@ export type ForecastPredictionDTO = MaintenancePredictionWithItem & {
   recommendedServiceCategory: ServiceCategory;
 };
 
+export type ForecastObligationDTO = ForecastPredictionDTO & {
+  occurrenceCount: number;
+  intervalMonths: number | null;
+  additionalPredictedDates: Date[];
+};
+
 export type ForecastStatusUpdateResult = {
   prediction: ForecastPredictionDTO;
   streak: StreakUpdateResult | null;
@@ -259,6 +265,48 @@ function predictionKey(inventoryItemId: string | null, taskName: string, predict
   const year = predictedDate.getUTCFullYear();
   const month = predictedDate.getUTCMonth() + 1;
   return `${inventoryItemId ?? 'none'}::${taskName.toLowerCase()}::${year}-${month}`;
+}
+
+function obligationKey(prediction: Pick<ForecastPredictionDTO, 'id' | 'inventoryItemId' | 'taskName'>): string {
+  return `${prediction.inventoryItemId ?? prediction.id}::${prediction.taskName.trim().toLowerCase()}`;
+}
+
+function ruleIntervalMonths(prediction: ForecastPredictionDTO): number | null {
+  if (!prediction.inventoryItem) return null;
+  const group = resolveRuleGroup(prediction.inventoryItem);
+  return group
+    ? MAINTENANCE_RULES[group].find((rule) => rule.taskName.trim().toLowerCase() === prediction.taskName.trim().toLowerCase())?.intervalMonths ?? null
+    : null;
+}
+
+/**
+ * Ask and other summary surfaces reason about a maintenance obligation, not
+ * every calendar occurrence of that obligation. Keep the earliest occurrence
+ * as the canonical row and retain the rest as recurrence context.
+ */
+export function collapseForecastPredictions(predictions: ForecastPredictionDTO[]): ForecastObligationDTO[] {
+  const sorted = [...predictions].sort((left, right) => left.predictedDate.getTime() - right.predictedDate.getTime());
+  const obligations = new Map<string, ForecastObligationDTO>();
+
+  for (const prediction of sorted) {
+    const key = obligationKey(prediction);
+    const existing = obligations.get(key);
+    if (!existing) {
+      obligations.set(key, {
+        ...prediction,
+        occurrenceCount: 1,
+        intervalMonths: ruleIntervalMonths(prediction),
+        additionalPredictedDates: [],
+      });
+      continue;
+    }
+    existing.occurrenceCount += 1;
+    existing.additionalPredictedDates.push(prediction.predictedDate);
+    existing.priority = Math.max(existing.priority, prediction.priority);
+    if (prediction.status === PredictionStatus.OVERDUE) existing.status = PredictionStatus.OVERDUE;
+  }
+
+  return Array.from(obligations.values());
 }
 
 function isOnTimeCompletion(predictedDate: Date, completedAt: Date): boolean {
@@ -530,7 +578,22 @@ export async function listForecast(
     ...(limit ? { take: limit } : {}),
   });
 
-  return rows.map(toForecastDTO);
+  // The database constraint prevents new exact duplicates once migrated, but
+  // this read guard also protects homes that still contain historical rows.
+  const seen = new Set<string>();
+  return rows.flatMap((row) => {
+    const key = predictionKey(row.inventoryItemId, row.taskName, row.predictedDate);
+    if (seen.has(key)) return [];
+    seen.add(key);
+    return [toForecastDTO(row)];
+  });
+}
+
+/** Refreshes deterministic rules and performs the generator's duplicate
+ * reconciliation before returning the authoritative forecast. */
+export async function reconcileForecast(propertyId: string): Promise<ForecastPredictionDTO[]> {
+  await generateForecast(propertyId);
+  return listForecast(propertyId);
 }
 
 export async function updateForecastStatus(

@@ -21,7 +21,7 @@ import { skillContextProviderKey } from '../../skills/context/skillContextProvid
 import { loadCanonicalMaintenanceTaskSet, type MaintenanceTaskContext, type MaintenanceTaskContextTask } from '../../skills/context/maintenanceTaskContext.provider';
 import type { SeasonalChecklistContext } from '../../skills/context/seasonalChecklistContext.provider';
 import { MAINTENANCE_TASK_CONTEXT_PROVIDER, SEASONAL_CHECKLIST_CONTEXT_PROVIDER } from '../../skills/maintenance/skill.manifest';
-import { generateForecast, listForecast } from '../../maintenancePrediction.service';
+import { collapseForecastPredictions, reconcileForecast, type ForecastObligationDTO } from '../../maintenancePrediction.service';
 import { type AskOperationResult } from '../askOperationRegistry';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { calendarAwareTimeZone, humanDate } from '../askFormatting';
@@ -1236,19 +1236,11 @@ const MAINTENANCE_FORECAST_PRIORITY_LABELS: Record<number, string> = {
 async function maintenanceForecastResult(userId: string, propertyId: string): Promise<AskOperationResult> {
   await ensurePropertyAccess(userId, propertyId);
 
-  let predictions = await listForecast(propertyId);
-  // listForecast never lazily generates (confirmed by reading it) -- unlike
-  // Coverage Comparison's own getOrCreateCoverageComparison, an empty
-  // result here could mean "never generated" rather than "genuinely
-  // nothing to forecast." generateForecast is cheap, deterministic, and
-  // local-only (verified by reading its implementation -- no external
-  // calls, dedup'd via an in-flight map), so materializing it once as part
-  // of this read follows the same precedent Coverage Comparison already
-  // established, rather than answering a stale empty state.
-  if (predictions.length === 0) {
-    await generateForecast(propertyId);
-    predictions = await listForecast(propertyId);
-  }
+  // Reconcile on every authoritative read. Generation is deterministic and
+  // in-flight deduplicated, and is also the owner of historical duplicate
+  // cleanup. Reading first and refreshing only an empty forecast allowed a
+  // non-empty stale/duplicated forecast to survive forever.
+  const predictions = await reconcileForecast(propertyId);
 
   if (predictions.length === 0) {
     return {
@@ -1265,42 +1257,67 @@ async function maintenanceForecastResult(userId: string, propertyId: string): Pr
     };
   }
 
-  const overdueCount = predictions.filter((prediction) => prediction.status === 'OVERDUE').length;
+  const obligations = collapseForecastPredictions(predictions);
+  const overdueCount = obligations.filter((prediction) => prediction.status === 'OVERDUE').length;
+  const now = new Date();
+  const inDays = (days: number) => new Date(now.getTime() + days * 86_400_000);
+  const groups: Array<{ id: string; title: string; records: ForecastObligationDTO[] }> = [
+    { id: 'coming-soon', title: 'Next 30 days', records: obligations.filter((item) => item.predictedDate <= inDays(30)) },
+    { id: 'this-season', title: 'This season', records: obligations.filter((item) => item.predictedDate > inDays(30) && item.predictedDate <= inDays(90)) },
+    { id: 'later', title: 'Later', records: obligations.filter((item) => item.predictedDate > inDays(90)) },
+  ].filter((group) => group.records.length > 0);
+  const cadence = (prediction: ForecastObligationDTO) => prediction.intervalMonths
+    ? `Every ${prediction.intervalMonths} month${prediction.intervalMonths === 1 ? '' : 's'}`
+    : prediction.occurrenceCount > 1 ? `${prediction.occurrenceCount} forecast dates` : 'One forecast date';
+  const item = (prediction: ForecastObligationDTO) => ({
+    id: prediction.id,
+    title: prediction.taskName,
+    description: prediction.reasoning ?? null,
+    meta: [
+      prediction.inventoryItem?.name ?? null,
+      cadence(prediction),
+      prediction.occurrenceCount > 1 ? `${prediction.occurrenceCount - 1} later forecast date${prediction.occurrenceCount === 2 ? '' : 's'}` : null,
+      MAINTENANCE_FORECAST_PRIORITY_LABELS[prediction.priority] ?? `Priority ${prediction.priority}`,
+      `${prediction.status === 'OVERDUE' ? 'Overdue since' : 'Next expected'} ${humanDate(prediction.predictedDate)}`,
+    ].filter((value): value is string => Boolean(value)),
+    badgeLabel: prediction.status === 'OVERDUE' ? 'Overdue' : humanDate(prediction.predictedDate),
+    status: prediction.status,
+    tone: prediction.status === 'OVERDUE' ? 'CRITICAL' as const : prediction.predictedDate <= inDays(30) ? 'CAUTION' as const : 'DEFAULT' as const,
+    href: null,
+  });
+  const sections = groups.map((group) => ({
+    id: group.id,
+    title: group.title,
+    count: group.records.length,
+    initialVisibleCount: 6,
+    items: group.records.map(item),
+  }));
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY',
     id: 'maintenance-forecast-summary',
-    title: `${predictions.length} predicted maintenance item${predictions.length === 1 ? '' : 's'}`,
-    body: overdueCount
-      ? `${overdueCount} already overdue based on this forecast.`
-      : `Next predicted: ${predictions[0].taskName} around ${humanDate(predictions[0].predictedDate)}.`,
+    title: `${obligations.length} maintenance need${obligations.length === 1 ? '' : 's'} may be coming up`,
+    headline: `${obligations.length} maintenance need${obligations.length === 1 ? '' : 's'} may be coming up`,
+    supportLine: overdueCount
+      ? `${overdueCount} ${overdueCount === 1 ? 'is' : 'are'} already overdue; each recurring need is shown once.`
+      : `Next: ${obligations[0].taskName} around ${humanDate(obligations[0].predictedDate)}; recurring needs are shown once.`,
+    body: 'Based on the verified systems recorded for this home.',
+    chips: [
+      ...(overdueCount ? [{ label: `${overdueCount} overdue`, tone: 'CRITICAL' as const }] : []),
+      { label: `${groups.find((group) => group.id === 'coming-soon')?.records.length ?? 0} in 30 days`, tone: 'CAUTION' as const },
+      { label: `${obligations.length} distinct needs`, tone: 'DEFAULT' as const },
+    ],
     tone: overdueCount ? 'CAUTION' : 'DEFAULT',
     actions: [],
   }, {
     type: 'GROUPED_LIST', filters: [],
     id: 'maintenance-forecast-items',
-    title: 'Predicted maintenance',
-    description: 'A rule-based forecast for verified HVAC, roof, and water-heater inventory items -- not a substitute for a professional inspection.',
-    sections: [{
-      id: 'maintenance-forecast-all',
-      title: overdueCount ? 'Predicted or overdue' : 'Predicted',
-      count: predictions.length,
-      items: predictions.slice(0, 20).map((prediction) => ({
-        id: prediction.id,
-        title: prediction.taskName,
-        description: prediction.reasoning ?? null,
-        meta: [
-          prediction.inventoryItem?.name ?? null,
-          MAINTENANCE_FORECAST_PRIORITY_LABELS[prediction.priority] ?? `Priority ${prediction.priority}`,
-          `${prediction.status === 'OVERDUE' ? 'Overdue since' : 'Predicted'} ${humanDate(prediction.predictedDate)}`,
-        ].filter((value): value is string => Boolean(value)),
-        status: prediction.status,
-        href: null,
-      })),
-    }],
+    title: 'Upcoming maintenance',
+    description: 'One card per system and maintenance need, grouped by its next expected date.',
+    sections,
     collection: collectionDescriptor({
-      sourceTotal: predictions.length,
-      fetchedCount: predictions.length,
-      sections: [{ items: predictions.slice(0, 20) }],
+      sourceTotal: obligations.length,
+      fetchedCount: obligations.length,
+      sections,
       nextPageAvailable: false,
     }),
     actions: [],

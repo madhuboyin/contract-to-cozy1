@@ -1130,6 +1130,8 @@ A Cards/Table switch shows the same options as rows, marking the leading value i
 
 Otherwise it renders the grouped list (IW-PRES-012). The renderer never infers a pattern from block ids or titles. Patterns are shared components, and each domain maps its data onto them instead of building its own list. The 13 domain-specific result lists are retired as their blocks move to shared patterns, keeping their inline detail, correction and action behaviour.
 
+**Maintenance forecast clarification (October 27, 2026).** A forecast occurrence is not a separate maintenance need. `MAINTENANCE_FORECAST` presents one obligation per recorded asset and rule (for example, one furnace-filter-change need), with its next expected date, cadence, priority, and the number of later occurrences retained as forecast context. The authoritative read reconciles the deterministic forecast before presentation and suppresses historical exact duplicates. The answer uses the calm anatomy, groups obligations by next expected timing, hides rule reasoning behind “Why this?”, and does not expose generic Auto/List/Cards controls. Distinct recorded assets remain distinct even when their display names match.
+
 **Rules for every pattern** (from the prototype): horizontal strips have visible arrows and item counts; nothing moves by itself; reduced motion is respected; every swipe has a button equivalent; partial results say "Showing N of M"; details open in place and never navigate to a traditional page.
 
 **First adopters.** Block ids come from the September 24 trace. Each slice re-traces its page, route and service before building.

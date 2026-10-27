@@ -17,6 +17,7 @@ require('ts-node/register');
 const { resolveAskRoutingCascade } = require('../../src/services/ask/askRoutingCascade.ts');
 const { ASK_OPERATION_DEFINITIONS } = require('../../src/services/ask/askOperationRegistry.ts');
 const { resolveHierarchicalSkillRouting } = require('../../src/services/skills/skillRouter.ts');
+const { collapseForecastPredictions } = require('../../src/services/maintenancePrediction.service.ts');
 
 function routeOf(message) {
   return resolveAskRoutingCascade(message, { localRoutingEnabled: true }).operation.operationId;
@@ -77,11 +78,11 @@ function handlerBody() {
   return orchestratorSource.slice(start, end + 2);
 }
 
-test('maintenanceForecastResult calls listForecast, and generates once (only) when the forecast has never been materialized', () => {
+test('maintenanceForecastResult reconciles the deterministic forecast on every authoritative read', () => {
   const body = handlerBody();
   assert.match(body, /await ensurePropertyAccess\(userId, propertyId\);/);
-  assert.match(body, /let predictions = await listForecast\(propertyId\);/);
-  assert.match(body, /if \(predictions\.length === 0\) \{\s*\n\s*await generateForecast\(propertyId\);\s*\n\s*predictions = await listForecast\(propertyId\);\s*\n\s*\}/);
+  assert.match(body, /const predictions = await reconcileForecast\(propertyId\);/);
+  assert.match(body, /const obligations = collapseForecastPredictions\(predictions\);/);
 });
 
 test('maintenanceForecastResult returns NOT_APPLICABLE only when the forecast is still empty after generation, and never calls updateForecastStatus', () => {
@@ -94,9 +95,40 @@ test('maintenanceForecastResult returns NOT_APPLICABLE only when the forecast is
 test('maintenanceForecastResult renders a GROUPED_LIST with priority/date meta and a professional-inspection boundary', () => {
   const body = handlerBody();
   assert.match(body, /type: 'GROUPED_LIST'/);
-  assert.match(body, /collection: collectionDescriptor\(\{[\s\S]*sourceTotal: predictions\.length,[\s\S]*fetchedCount: predictions\.length/);
+  assert.match(body, /collection: collectionDescriptor\(\{[\s\S]*sourceTotal: obligations\.length,[\s\S]*fetchedCount: obligations\.length/);
   assert.match(body, /type: 'BOUNDARY'/);
   assert.match(body, /MAINTENANCE_FORECAST_PRIORITY_LABELS\[prediction\.priority\]/);
+  assert.match(body, /title: 'Upcoming maintenance'/);
+  assert.match(body, /initialVisibleCount: 6/);
+  assert.match(body, /each recurring need is shown once/);
+});
+
+test('recurring forecast dates collapse to one obligation per inventory item and task', () => {
+  const prediction = (id, inventoryItemId, taskName, predictedDate, overrides = {}) => ({
+    id, propertyId: 'p1', inventoryItemId, taskName, predictedDate: new Date(predictedDate), priority: 3,
+    reasoning: 'Rule based.', confidenceScore: 0.85, status: 'PENDING', createdAt: new Date(), updatedAt: new Date(), booking: null,
+    inventoryItem: { id: inventoryItemId, name: inventoryItemId === 'hvac-1' ? 'Furnace' : 'Upstairs furnace', category: 'HVAC', lastServicedOn: null, isVerified: true },
+    recommendedServiceCategory: 'HVAC', ...overrides,
+  });
+  const obligations = collapseForecastPredictions([
+    prediction('one', 'hvac-1', 'Filter Change', '2026-11-01T12:00:00Z'),
+    prediction('two', 'hvac-1', 'Filter Change', '2027-02-01T12:00:00Z'),
+    prediction('three', 'hvac-1', 'Filter Change', '2027-05-01T12:00:00Z'),
+    prediction('other-asset', 'hvac-2', 'Filter Change', '2026-12-01T12:00:00Z'),
+    prediction('tuneup', 'hvac-1', 'Professional Tune-up', '2027-04-15T12:00:00Z'),
+  ]);
+  assert.equal(obligations.length, 3);
+  const filter = obligations.find((item) => item.inventoryItemId === 'hvac-1' && item.taskName === 'Filter Change');
+  assert.equal(filter.id, 'one');
+  assert.equal(filter.occurrenceCount, 3);
+  assert.equal(filter.intervalMonths, 3);
+  assert.deepEqual(filter.additionalPredictedDates.map((date) => date.toISOString()), ['2027-02-01T12:00:00.000Z', '2027-05-01T12:00:00.000Z']);
+});
+
+test('the Prisma model prevents new exact duplicate prediction rows', () => {
+  const schema = readFileSync(resolve(__dirname, '../../prisma/schema.prisma'), 'utf8');
+  const model = schema.slice(schema.indexOf('model MaintenancePrediction {'), schema.indexOf('enum PredictionStatus'));
+  assert.match(model, /@@unique\(\[inventoryItemId, taskName, predictedDate\]\)/);
 });
 
 test('the capability handler and captureFallbackHref registrations both exist for MAINTENANCE_FORECAST', () => {
