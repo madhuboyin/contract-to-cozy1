@@ -222,5 +222,7 @@ test('the main refinance answer carries the history, saved-scenario and saved-co
   const planner = answer.blocks.find((block) => block.id === 'refinance-scenario-planner');
   assert.equal(planner.title, 'Test loan scenarios');
   assert.equal(planner.actions[0].label, 'Open Scenario Planner');
+  assert.equal(planner.actions[0].message, 'Open the refinance Scenario Planner.', 'the CTA must not post a made-up scenario as the homeowner\'s question');
+  assert.equal(planner.actions[0].actionId, 'refinance-test-scenario', 'the client must carry the typed action into launchContext');
   assert.equal(answer.blocks[0].actions.some((action) => action.id === 'refinance-test-scenario'), false, 'the planner owns the scenario CTA so it is not duplicated');
 });

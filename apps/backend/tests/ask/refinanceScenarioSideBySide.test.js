@@ -67,6 +67,7 @@ test('scenario results use bounded scan points instead of the former paragraph',
   assert.match(source, /label: 'Break-even'/);
   assert.doesNotMatch(source, /For an established home/);
   assert.match(source, /refinance-adjust-scenario', 'Change scenario assumptions'/);
+  assert.match(orchestratorSource, /return \{ id, actionId: id, label, interactionType: 'START_WORKFLOW'/, 'scenario actions must reach the typed launch branch rather than execute their canned message');
 });
 
 test('the conversational scenario parser accepts the desktop planner assumptions without changing canonical facts', () => {
@@ -88,6 +89,14 @@ test('the conversational scenario parser accepts the desktop planner assumptions
       objective: 'LOWER_PAYMENT',
     },
   );
+});
+
+test('the neutral edit instruction preserves the scenario values for the editable planner', () => {
+  const edit = parseRefinanceScenarioEdit('Edit refinance scenario assumptions: 1.41% rate, 15-year term, $6000 closing costs, balanced objective.');
+  assert.equal(edit.targetRatePct, 1.41);
+  assert.equal(edit.targetTerm, 'FIFTEEN_YEAR');
+  assert.equal(edit.closingCostAmount, 6000);
+  assert.equal(edit.objective, 'BALANCED');
 });
 
 // The strip builder is given deliberately different numbers for the canonical evaluation and the hypothetical, so a
