@@ -18,6 +18,10 @@ export const NO_SAVED_SCENARIO_VALUE = '__NO_SCENARIO__';
 export const SERVICE_PRICE_CHECK_MESSAGE = 'Check a contractor quote.';
 export const SERVICE_PRICE_CHECK_CAPTURE_KEY = 'SERVICE_PRICE_CHECK_INPUTS';
 export const SERVICE_PRICE_CHECK_ACTION_ID = 'check-service-quote';
+// A saved check opens inline from its row (same operation as the list; the row carries the check id as the launch entity).
+export const SERVICE_PRICE_CHECK_DETAIL_MESSAGE = 'Show the details of this quote check.';
+export const SERVICE_PRICE_CHECK_DETAIL_ACTION_ID = 'service-price-check-detail';
+export const SERVICE_PRICE_CHECK_ENTITY_TYPE = 'SERVICE_PRICE_CHECK';
 /** The regulated professional-service categories the radar refuses (its validator's list), so the form never offers them. */
 export const SERVICE_PRICE_UNSUPPORTED_CATEGORIES = ['INSURANCE', 'ATTORNEY', 'FINANCE'] as const;
 export const SERVICE_PRICE_MAX_QUOTE = 250000;

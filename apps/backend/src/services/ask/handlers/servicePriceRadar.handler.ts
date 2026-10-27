@@ -7,7 +7,7 @@ import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { APIError } from '../../../middleware/error.middleware';
 import { humanDate, readableCode } from '../askFormatting';
 import { ServicePriceRadarService } from '../../servicePriceRadar.service';
-import { SERVICE_PRICE_CHECK_ACTION_ID, SERVICE_PRICE_CHECK_MESSAGE } from '../support/homeToolRunConstants';
+import { SERVICE_PRICE_CHECK_ACTION_ID, SERVICE_PRICE_CHECK_DETAIL_ACTION_ID, SERVICE_PRICE_CHECK_DETAIL_MESSAGE, SERVICE_PRICE_CHECK_ENTITY_TYPE, SERVICE_PRICE_CHECK_MESSAGE } from '../support/homeToolRunConstants';
 import { collectionDescriptor } from '../support/collectionDescriptor';
 
 // Service Price Radar capability-card slice (FRD v1.60): the twelfth new operation for a capability with none. Reads
@@ -82,6 +82,8 @@ export function servicePriceChecksFromView(checks: readonly ServicePriceCheckVie
         description: check.explanationShort,
         meta: [`Quote ${servicePriceMoney(check.quoteAmount)}`, low && high ? `Expected ${low} to ${high}` : 'Broad range only', ...(check.quoteVendorName ? [check.quoteVendorName] : []), `Checked ${humanDate(new Date(check.createdAt))}`],
         status: check.verdict ? SERVICE_PRICE_VERDICT_LABELS[check.verdict] ?? 'Need more context' : 'Need more context', href: null,
+        entityType: SERVICE_PRICE_CHECK_ENTITY_TYPE,
+        actions: [{ id: SERVICE_PRICE_CHECK_DETAIL_ACTION_ID, label: 'See how it was checked', message: SERVICE_PRICE_CHECK_DETAIL_MESSAGE, style: 'SECONDARY' as const, interactionType: 'CONVERSATION_CONTINUE' as const, operationId: 'SERVICE_PRICE_CHECKS' as const }],
       };
     }),
   }];
@@ -105,4 +107,108 @@ async function servicePriceChecksResult(propertyId: string, userId: string): Pro
   }
 }
 
-registerCapabilityHandler('service-price-radar.checks', async (envelope) => servicePriceChecksResult(envelope.propertyId!, envelope.userId));
+type ServicePriceCheckDetailView = Awaited<ReturnType<ServicePriceRadarService['getCheckDetail']>>['check'];
+const asRecord = (value: unknown): Record<string, any> => (value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, any> : {});
+const asStrings = (value: unknown): string[] => (Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0) : []);
+const detailDate = (value: unknown) => (typeof value === 'string' && value ? humanDate(new Date(value)) : null);
+const LINKED_TYPE_LABELS: Record<string, string> = { SYSTEM: 'System', APPLIANCE: 'Appliance', DOCUMENT: 'Document', INCIDENT: 'Incident', ROOM: 'Room' };
+
+// The saved check as the page's detail shows it: what was compared, the benchmark behind the range and its provenance, the confidence, the
+// pricing factors and adjustments, and the home records the check used. Read-only; a check is immutable.
+export function servicePriceCheckDetailFromView(check: ServicePriceCheckDetailView | null): AskOperationResult {
+  const backAction = { id: SERVICE_PRICE_CHECK_ACTION_ID, label: 'Check a quote', interactionType: 'START_WORKFLOW' as const, message: SERVICE_PRICE_CHECK_MESSAGE, operationId: 'SERVICE_PRICE_CHECK_RUN', style: 'PRIMARY' as const };
+  if (!check) {
+    return { status: 'NOT_APPLICABLE', reasonCode: 'SERVICE_PRICE_CHECK_NOT_FOUND', blocks: [{ type: 'SUMMARY', id: 'service-price-radar-detail-missing', title: 'That quote check is no longer available', body: 'Ask could not find that check. Nothing has changed.', tone: 'DEFAULT', actions: [] }], suggestions: [] };
+  }
+  const factors = asRecord(check.pricingFactorsJson);
+  const explanation = asRecord(check.explanationJson);
+  const benchmark = asRecord(factors.benchmark);
+  const confidence = asRecord(factors.confidence);
+  const matched = benchmark.matched === true;
+  const low = servicePriceMoney(check.expectedLow);
+  const high = servicePriceMoney(check.expectedHigh);
+  const verdict = check.verdict ? SERVICE_PRICE_VERDICT_LABELS[check.verdict] ?? 'Need more context' : 'Need more context';
+  const title = `${servicePriceCategoryLabel(check.serviceCategory)}${check.serviceSubcategory ? ` · ${servicePriceCategoryLabel(check.serviceSubcategory)}` : ''}`;
+  const blocks: AskPresentationBlock[] = [{
+    type: 'SUMMARY', id: 'service-price-radar-detail', title,
+    body: [
+      `Quote ${servicePriceMoney(check.quoteAmount)}${check.quoteVendorName ? ` from ${check.quoteVendorName}` : ''}${low && high ? `; expected ${low} to ${high}` : '; no qualified range'}.`,
+      check.explanationShort ?? '',
+      `Checked ${humanDate(new Date(check.createdAt))}.`,
+    ].filter(Boolean).join(' '),
+    tone: check.verdict === 'HIGH' || check.verdict === 'VERY_HIGH' ? 'CAUTION' : 'DEFAULT', actions: [backAction],
+  }];
+
+  const attr = (label: string, value: string | number | null | undefined) => (value == null || value === '' ? null : { label, value: String(value) });
+  const rows: Array<{ id: string; title: string; description: string | null; meta: string[]; status: string | null; href: null; attributes?: Array<{ label: string; value: string }> }> = [];
+  rows.push({
+    id: 'result', title: 'Result', description: null, meta: [], status: verdict, href: null,
+    attributes: [
+      attr('Quote', servicePriceMoney(check.quoteAmount)), attr('Expected range', low && high ? `${low} to ${high}` : 'Broad range only'), attr('Typical (median)', servicePriceMoney(check.expectedMedian)),
+      attr('Confidence', check.confidenceScore == null ? null : `${Math.round(check.confidenceScore * 100)}%${confidence.band ? ` (${readableCode(String(confidence.band))})` : ''}`),
+      attr('Evidence', matched ? 'Reviewed local benchmark' : 'Rough planning range only'),
+    ].filter((entry): entry is { label: string; value: string } => entry !== null),
+  });
+  if (matched) {
+    const observed = [detailDate(benchmark.observationStart), detailDate(benchmark.observationEnd)].filter(Boolean).join(' to ');
+    rows.push({
+      id: 'benchmark', title: 'Benchmark behind the range', description: typeof benchmark.methodologySummary === 'string' ? benchmark.methodologySummary : null, meta: [], status: null, href: null,
+      attributes: [
+        attr('Source', benchmark.sourceName), attr('Release', benchmark.releaseVersion), attr('Area', benchmark.regionKey ? `${readableCode(String(benchmark.regionType ?? ''))} ${benchmark.regionKey}`.trim() : null),
+        attr('Observed', observed || null), attr('Sample size', benchmark.sampleSize), attr('Priced per', benchmark.unit ? readableCode(String(benchmark.unit)) : null),
+      ].filter((entry): entry is { label: string; value: string } => entry !== null),
+    });
+  }
+  const adjustments = Array.isArray(factors.adjustments) ? factors.adjustments.map(asRecord).filter((entry) => typeof entry.note === 'string') : [];
+  if (adjustments.length) {
+    rows.push({
+      id: 'adjustments', title: 'What moved the range', description: null, meta: [], status: null, href: null,
+      attributes: adjustments.slice(0, 8).map((entry) => ({ label: readableCode(String(entry.code ?? 'adjustment')).replace(/^\w/, (c) => c.toUpperCase()), value: `${entry.effect === 'up' ? 'Raised' : entry.effect === 'down' ? 'Lowered' : 'No change'}: ${String(entry.note).slice(0, 120)}` })),
+    });
+  }
+  const property = asRecord(factors.property);
+  const region = asRecord(factors.region);
+  const usedFactors = [
+    attr('Home size', property.propertySize ? `${Number(property.propertySize).toLocaleString('en-US')} sq ft` : null), attr('Year built', property.yearBuilt),
+    attr('Home type', property.dwellingType ? readableCode(String(property.dwellingType)) : null), attr('Location', [region.city, region.state].filter(Boolean).join(', ') || null),
+  ].filter((entry): entry is { label: string; value: string } => entry !== null);
+  if (usedFactors.length) rows.push({ id: 'home-facts', title: 'Home facts used', description: null, meta: [], status: null, href: null, attributes: usedFactors });
+  if (check.linkedEntities.length) {
+    rows.push({
+      id: 'linked', title: 'Home records used', description: null, meta: [], status: null, href: null,
+      attributes: check.linkedEntities.slice(0, 8).map((entity) => ({ label: LINKED_TYPE_LABELS[entity.linkedEntityType] ?? readableCode(entity.linkedEntityType), value: [entity.label, entity.summary].filter(Boolean).join(' · ').slice(0, 160) })),
+    });
+  }
+  const sections = [{ id: 'service-price-radar-detail-sections', title: 'How it was checked', count: rows.length, items: rows }];
+  blocks.push({
+    type: 'GROUPED_LIST', filters: [], id: 'service-price-radar-detail-list', title: 'How this check was made', description: null, sections,
+    collection: collectionDescriptor({ sourceTotal: rows.length, fetchedCount: rows.length, sections, nextPageAvailable: false }), actions: [],
+  });
+  const limitations = asStrings(explanation.limitations);
+  if (limitations.length) blocks.push({ type: 'LIMITATION', id: 'service-price-radar-detail-limits', title: 'What this check cannot tell you', body: limitations.join(' '), severity: 'INFO' });
+  blocks.push({
+    type: 'BOUNDARY', id: 'service-price-radar-boundary', title: 'A price check, not a quote review',
+    body: 'Expected ranges come from typical local prices for the service, not an inspection of the job. Scope, materials and access can move a fair price, so ask the contractor about a quote that falls outside the range before deciding.',
+    severity: 'INFO', suggestions: [],
+  });
+  return { status: 'ANSWERED', reasonCode: 'SERVICE_PRICE_CHECK_DETAIL_READY', blocks, suggestions: [] };
+}
+
+async function servicePriceCheckDetailResult(propertyId: string, userId: string, checkId: string): Promise<AskOperationResult> {
+  try {
+    const { check } = await new ServicePriceRadarService().getCheckDetail(propertyId, checkId, userId);
+    return servicePriceCheckDetailFromView(check);
+  } catch (error) {
+    if (error instanceof APIError && error.code === 'PROPERTY_ACCESS_DENIED') return servicePriceChecksFromView('PRIMARY_OWNER_ONLY', propertyId);
+    if (error instanceof APIError && error.code === 'SERVICE_RADAR_CHECK_NOT_FOUND') return servicePriceCheckDetailFromView(null);
+    throw error;
+  }
+}
+
+registerCapabilityHandler('service-price-radar.checks', async (envelope) => {
+  const launch = envelope.launchContext;
+  if (envelope.message === SERVICE_PRICE_CHECK_DETAIL_MESSAGE && launch?.entityType === SERVICE_PRICE_CHECK_ENTITY_TYPE && launch.entityId) {
+    return servicePriceCheckDetailResult(envelope.propertyId!, envelope.userId, launch.entityId);
+  }
+  return servicePriceChecksResult(envelope.propertyId!, envelope.userId);
+});

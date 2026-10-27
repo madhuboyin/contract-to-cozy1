@@ -18,7 +18,7 @@ const { getSkillForOperation } = require('../../src/services/skills/skillRegistr
 const { ASK_OPERATION_CAPABILITY } = require('../../src/services/intelligence/capabilitySkillGuidanceBridge.registry.ts');
 const { ServicePriceRadarService } = require('../../src/services/servicePriceRadar.service.ts');
 
-const originals = { prisma: prismaModule.prisma, list: ServicePriceRadarService.prototype.listChecks };
+const originals = { prisma: prismaModule.prisma, list: ServicePriceRadarService.prototype.listChecks, detail: ServicePriceRadarService.prototype.getCheckDetail };
 let calls;
 
 const check = (id, overrides = {}) => ({
@@ -46,6 +46,7 @@ function install() {
 function restore() {
   prismaModule.prisma = originals.prisma;
   ServicePriceRadarService.prototype.listChecks = originals.list;
+  ServicePriceRadarService.prototype.getCheckDetail = originals.detail;
 }
 
 test.beforeEach(install);
@@ -147,4 +148,57 @@ test('the operation is fully registered: its own skill, the bridge, and the card
   assert.equal(ASK_OPERATION_CAPABILITY.SERVICE_PRICE_CHECKS, 'service-price-radar');
   const launch = capabilityCardLaunch('service-price-radar').inlineLaunch;
   assert.equal(resolveAskRoutingCascade(launch.message, { localRoutingEnabled: true }).operation.operationId, 'SERVICE_PRICE_CHECKS');
+});
+
+// Saved-check detail (parity review 2026-10-26): the same operation, opened from a row with the check as the launch entity.
+const detailCheck = (overrides = {}) => ({
+  ...check('plumb'),
+  explanationJson: { summary: 'x', reasonCodes: [], notes: [], limitations: [] },
+  pricingFactorsJson: {
+    property: { propertySize: 2000, yearBuilt: 1990, dwellingType: 'SINGLE_FAMILY' }, region: { city: 'Austin', state: 'TX' },
+    benchmark: { matched: true, sourceName: 'Regional Cost Index', releaseVersion: '2026.2', regionType: 'METRO', regionKey: 'austin', observationStart: '2026-01-01T00:00:00.000Z', observationEnd: '2026-06-30T00:00:00.000Z', sampleSize: 140, unit: 'PER_JOB', methodologySummary: 'Median of completed jobs.' },
+    confidence: { score: 0.7, band: 'MEDIUM' },
+    adjustments: [{ code: 'OLDER_HOME', effect: 'up', multiplier: 1.08, note: 'Homes built before 2000 cost more to service.' }],
+  },
+  linkedEntities: [{ linkedEntityType: 'APPLIANCE', linkedEntityId: 'a1', relevanceScore: 1, label: 'Water heater', summary: 'Installed 2012' }],
+  ...overrides,
+});
+const labelsOf = (result) => result.blocks.find((block) => block.type === 'GROUPED_LIST').sections[0].items;
+
+test('every row opens its own check; the action names the same operation and the row carries the entity', async () => {
+  const owner = await capabilityInvoke('SERVICE_PRICE_CHECKS', envelope, { propertyAccess: { role: 'OWNER', userId: 'u1', propertyId: 'p1' } });
+  const rows = owner.blocks.find((block) => block.type === 'GROUPED_LIST').sections[0].items;
+  for (const row of rows) {
+    assert.equal(row.entityType, 'SERVICE_PRICE_CHECK');
+    assert.deepEqual([row.actions[0].interactionType, row.actions[0].operationId], ['CONVERSATION_CONTINUE', 'SERVICE_PRICE_CHECKS']);
+  }
+});
+
+test('detail shows provenance, confidence, adjustments, home facts and linked records; the launch entity selects the check', async () => {
+  const seen = [];
+  ServicePriceRadarService.prototype.getCheckDetail = async (...args) => { seen.push(args); return { check: detailCheck() }; };
+  const result = await capabilityInvoke('SERVICE_PRICE_CHECKS', { ...envelope, message: 'Show the details of this quote check.', launchContext: { operationId: 'SERVICE_PRICE_CHECKS', surface: 'ASK_PAGE', entityType: 'SERVICE_PRICE_CHECK', entityId: 'plumb' } }, { propertyAccess: { role: 'OWNER', userId: 'u1', propertyId: 'p1' } });
+  assert.deepEqual(seen, [['p1', 'plumb', 'u1']]);
+  assert.equal(result.reasonCode, 'SERVICE_PRICE_CHECK_DETAIL_READY');
+  const text = JSON.stringify(result.blocks);
+  for (const needle of ['Regional Cost Index', '2026.2', '140', '70%', 'Homes built before 2000', 'Water heater', 'Austin']) assert.ok(text.includes(needle), needle);
+  assert.equal(/"href":"/.test(text), false);
+  const result2 = { ...result, parameters: { answerTrustEvidence: { schemaVersion: '1.0', sources: [{ sourceId: 'service-price-radar.checks', operationId: 'SERVICE_PRICE_CHECKS', status: 'COMPLETE', scope: 'FULL', freshness: 'CURRENT', observedAt: '2026-09-24T00:00:00.000Z' }] } } };
+  const { result: validated } = validateAskAnswerTrust({ question: 'Show the details of this quote check.', operationId: 'SERVICE_PRICE_CHECKS', result: result2, propertyId: 'p1' });
+  assert.deepEqual(validated.blocks.map((block) => block.id), result.blocks.map((block) => block.id));
+});
+
+test('a check without a qualified benchmark says so and omits the benchmark section; a missing check is not applicable', async () => {
+  ServicePriceRadarService.prototype.getCheckDetail = async () => ({ check: detailCheck({ verdict: 'INSUFFICIENT_DATA', expectedLow: null, expectedHigh: null, pricingFactorsJson: { benchmark: { matched: false } }, explanationJson: { limitations: ['No current, reviewed benchmark with complete provenance was available.'] }, linkedEntities: [] }) });
+  const launchContext = { operationId: 'SERVICE_PRICE_CHECKS', surface: 'ASK_PAGE', entityType: 'SERVICE_PRICE_CHECK', entityId: 'roof' };
+  const msg = 'Show the details of this quote check.';
+  const rough = await capabilityInvoke('SERVICE_PRICE_CHECKS', { ...envelope, message: msg, launchContext }, { propertyAccess: { role: 'OWNER', userId: 'u1', propertyId: 'p1' } });
+  const ids = labelsOf(rough).map((row) => row.id);
+  assert.deepEqual(ids, ['result']);
+  assert.ok(JSON.stringify(rough.blocks).includes('Rough planning range only'));
+  assert.ok(rough.blocks.some((block) => block.type === 'LIMITATION'));
+  const { APIError } = require('../../src/middleware/error.middleware.ts');
+  ServicePriceRadarService.prototype.getCheckDetail = async () => { throw new APIError('nf', 404, 'SERVICE_RADAR_CHECK_NOT_FOUND'); };
+  const missing = await capabilityInvoke('SERVICE_PRICE_CHECKS', { ...envelope, message: msg, launchContext }, { propertyAccess: { role: 'OWNER', userId: 'u1', propertyId: 'p1' } });
+  assert.equal(missing.reasonCode, 'SERVICE_PRICE_CHECK_NOT_FOUND');
 });
