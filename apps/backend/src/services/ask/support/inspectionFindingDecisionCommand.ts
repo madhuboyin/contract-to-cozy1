@@ -10,6 +10,7 @@ export const INSPECTION_FINDING_DECISION_MESSAGES = {
   ALREADY_RESOLVED: 'Mark this inspection finding as already resolved.',
   NOT_APPLICABLE: 'Mark this inspection finding as not applicable to my home.',
   DUPLICATE: 'Mark this inspection finding as a duplicate of other work.',
+  DISMISS: 'Dismiss this inspection finding from the report under review.',
   EDIT: 'Edit the details of this inspection finding.',
   CORRECT: 'Correct the extracted details of this inspection finding.',
   FIX: 'Plan to fix this inspection finding before listing.',
@@ -18,7 +19,7 @@ export const INSPECTION_FINDING_DECISION_MESSAGES = {
 } as const;
 export type InspectionFindingDecisionKind = keyof typeof INSPECTION_FINDING_DECISION_MESSAGES;
 export const INSPECTION_FINDING_DECISION_ACTION_IDS = {
-  MONITOR: 'inspection-finding-monitor', ALREADY_RESOLVED: 'inspection-finding-already-resolved', NOT_APPLICABLE: 'inspection-finding-not-applicable', DUPLICATE: 'inspection-finding-duplicate', EDIT: 'inspection-finding-edit', CORRECT: 'inspection-finding-correct', FIX: 'inspection-finding-fix', DISCLOSE_PRICE_ADJUST: 'inspection-finding-disclose-price', DISCLOSE_CREDIT: 'inspection-finding-disclose-credit',
+  MONITOR: 'inspection-finding-monitor', ALREADY_RESOLVED: 'inspection-finding-already-resolved', NOT_APPLICABLE: 'inspection-finding-not-applicable', DUPLICATE: 'inspection-finding-duplicate', DISMISS: 'inspection-finding-dismiss', EDIT: 'inspection-finding-edit', CORRECT: 'inspection-finding-correct', FIX: 'inspection-finding-fix', DISCLOSE_PRICE_ADJUST: 'inspection-finding-disclose-price', DISCLOSE_CREDIT: 'inspection-finding-disclose-credit',
 } as const;
 /** The two kinds that open a form (v1.446): edit a finding's details on a report not yet confirmed, or correct a wrong extraction on a confirmed one. */
 export const INSPECTION_FINDING_EDIT_KINDS = ['EDIT', 'CORRECT'] as const;
@@ -75,8 +76,8 @@ interface ReportState { status: string; reportType: string }
  * does not overwrite someone's notes).
  */
 export function inspectionFindingDecisionKinds(report: ReportState, finding: FindingState): InspectionFindingDecisionKind[] {
-  // Before the report is confirmed the page lets a finding's details be edited (a dismissed finding cannot be); nothing else is decided yet.
-  if (report.status === 'REVIEW_PENDING') return finding.status !== 'DISMISSED' ? ['EDIT'] : [];
+  // Before the report is confirmed the page lets a finding's details be edited or the finding dismissed (a dismissed finding cannot be either); nothing else is decided yet.
+  if (report.status === 'REVIEW_PENDING') return finding.status !== 'DISMISSED' ? ['EDIT', 'DISMISS'] : [];
   if (report.status !== 'CONFIRMED') return [];
   const kinds: InspectionFindingDecisionKind[] = [];
   if (finding.status === 'OPEN' && finding.workDisposition !== 'MONITOR' && finding.workDisposition !== 'ACCEPTED') kinds.push('MONITOR');

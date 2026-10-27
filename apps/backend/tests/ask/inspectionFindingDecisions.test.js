@@ -60,7 +60,7 @@ test('which decisions a finding allows: monitor when open and not yet accepted o
   assert.ok(!k({ status: 'CONFIRMED', reportType: 'PRE_PURCHASE' }, { status: 'OPEN', workDisposition: 'DUPLICATE', resolutionNotes: null }).includes('DUPLICATE'), 'already a duplicate');
   assert.ok(!k({ status: 'CONFIRMED', reportType: 'PRE_PURCHASE' }, { status: 'OPEN', workDisposition: 'PENDING_REVIEW', resolutionNotes: null, severity: 'INFORMATIONAL' }).includes('DUPLICATE'), 'an informational finding never becomes work');
   assert.ok(k({ status: 'CONFIRMED', reportType: 'PRE_PURCHASE' }, { status: 'OPEN', workDisposition: 'ACCEPTED', resolutionNotes: 'their notes' }).includes('DUPLICATE'), 'the page offers it whatever the notes say; it writes none');
-  assert.deepEqual(k({ status: 'REVIEW_PENDING', reportType: 'PRE_LISTING' }, { status: 'OPEN', workDisposition: 'PENDING_REVIEW', resolutionNotes: null }), ['EDIT'], 'before confirming, only the details can be edited');
+  assert.deepEqual(k({ status: 'REVIEW_PENDING', reportType: 'PRE_LISTING' }, { status: 'OPEN', workDisposition: 'PENDING_REVIEW', resolutionNotes: null }), ['EDIT', 'DISMISS'], 'before confirming, only the details can be edited');
   assert.deepEqual(k({ status: 'REVIEW_PENDING', reportType: 'PRE_LISTING' }, { status: 'DISMISSED', workDisposition: 'PENDING_REVIEW', resolutionNotes: null }), [], 'a dismissed finding cannot be edited');
   assert.deepEqual(k({ status: 'ARCHIVED', reportType: 'PRE_LISTING' }, { status: 'OPEN', workDisposition: 'PENDING_REVIEW', resolutionNotes: null }), []);
   assert.deepEqual(k(pre, { status: 'DISMISSED', workDisposition: 'NOT_APPLICABLE', resolutionNotes: null }), []);
@@ -353,4 +353,28 @@ test('duplicate: a picker of the home\'s other open work (never the finding\'s o
     list.listWorkItems = async () => [items[0]];
     assert.equal((await invoke(CMD, M.DUPLICATE, launch(CMD, 'INSPECTION_FINDING', 'f1'))).reasonCode, 'INSPECTION_FINDING_DUPLICATE_NO_CHOICES');
   } finally { w.restore(); wiRepo.findWorkItemByWorkKey = saved.f; list.listWorkItems = saved.l; get.getWorkItem = saved.g; }
+});
+
+test('dismiss on a report awaiting review: offered with edit, reviewed honestly, written through the page\'s own dismiss, and refused once confirmed or already dismissed', async () => {
+  const savedDismiss = hubService.dismissFinding;
+  const dismissed = [];
+  hubService.dismissFinding = async (...a) => { dismissed.push(a); return {}; };
+  let w = install('CONTRIBUTOR', finding({ report: pending }));
+  try {
+    const review = await invoke(CMD, M.DISMISS, launch(CMD, 'INSPECTION_FINDING', 'f1'));
+    assert.equal(review.status, 'NEEDS_CONFIRMATION');
+    assert.ok(review.confirmation.fields.some((f) => f.label === 'Finding becomes' && f.value === 'Dismissed'));
+    assert.equal(dismissed.length, 0, 'review writes nothing');
+    await confirmCapabilityInvoke(CMD, ctx(p('DISMISS', version('DISMISS', finding({ report: pending })))));
+    assert.deepEqual(dismissed[0].slice(0, 3).concat(dismissed[0][4]), ['f1', 'r1', 'prop-1', 'u1']);
+    await assert.rejects(() => confirmCapabilityInvoke(CMD, ctx(p('DISMISS', 'old'))), (e) => e.code === 'ASK_CONTEXT_VERSION_CONFLICT');
+    assert.equal(dismissed.length, 1, 'a stale confirmation writes nothing');
+  } finally { w.restore(); }
+  // a confirmed report's finding is dismissed through the existing update, not here; a dismissed one is not offered it
+  w = install('CONTRIBUTOR', finding());
+  try { assert.equal((await invoke(CMD, M.DISMISS, launch(CMD, 'INSPECTION_FINDING', 'f1'))).reasonCode, 'INSPECTION_FINDING_DECISION_NOT_AVAILABLE'); } finally { w.restore(); }
+  w = install('CONTRIBUTOR', finding({ report: pending, status: 'DISMISSED' }));
+  try { assert.equal((await invoke(CMD, M.DISMISS, launch(CMD, 'INSPECTION_FINDING', 'f1'))).reasonCode, 'INSPECTION_FINDING_DECISION_NOT_AVAILABLE'); } finally { w.restore(); }
+  w = install('VIEWER', finding({ report: pending }));
+  try { assert.equal((await invoke(CMD, M.DISMISS, launch(CMD, 'INSPECTION_FINDING', 'f1'))).reasonCode, 'ASK_PERMISSION_REQUIRED'); } finally { w.restore(); hubService.dismissFinding = savedDismiss; }
 });

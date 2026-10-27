@@ -192,6 +192,23 @@ export async function inspectionFindingDecisionResult(userId: string, propertyId
   const plan = parseFixDisclosure(finding.resolutionNotes);
   const isMonitor = kind === 'MONITOR';
   const closing = kind === 'ALREADY_RESOLVED' || kind === 'NOT_APPLICABLE';
+  if (kind === 'DISMISS') {
+    return {
+      status: 'NEEDS_CONFIRMATION', reasonCode: 'INSPECTION_FINDING_DISMISS_CONFIRMATION_REQUIRED', contextVersion,
+      parameters: {
+        inspectionFindingDecisionCommand: { kind, entityId: finding.id }, inspectionFindingDecisionContextVersion: contextVersion,
+        sourceExecutionId: launch.sourceExecutionId, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString(),
+      },
+      blocks: [{ type: 'SUMMARY', id: 'inspection-finding-dismiss-review', title: titleOf(finding), body: `${finding.inspectorDescription} Nothing changes until you confirm.`, tone: 'DEFAULT', actions: [] }],
+      confirmation: {
+        confirmationId: `inspection-finding-decision-dismiss-${sha(finding.id).slice(0, 12)}-1`, version: 1, title: 'Dismiss this finding?',
+        description: 'This removes the finding from the report you are reviewing, as the page’s Dismiss does, and closes any work item for it. It records the change on the inspection record only and contacts no one.',
+        fields: [{ label: 'Finding', value: titleOf(finding) }, { label: 'Finding becomes', value: 'Dismissed' }],
+        editableFields: [], confirmLabel: 'Dismiss it', consentText: 'I authorize this change to the shared inspection record.', expiresAt: expiresAt.toISOString(),
+      },
+      suggestions: [],
+    };
+  }
   return {
     status: 'NEEDS_CONFIRMATION', reasonCode: `INSPECTION_FINDING_${kind}_CONFIRMATION_REQUIRED`, contextVersion,
     parameters: {
@@ -245,6 +262,8 @@ async function confirmInspectionFindingDecision(ctx: ConfirmCapabilityContext): 
     if (!inspectionFindingDecisionKinds(finding.report, finding).includes(kind)) throw stale('That decision is not available for this finding now.');
     if (kind === 'MONITOR' || kind === 'ALREADY_RESOLVED' || kind === 'NOT_APPLICABLE') {
       await hubService.dispositionFindingAsWork(finding.id, finding.reportId, propertyId, userId, { disposition: kind });
+    } else if (kind === 'DISMISS') {
+      await hubService.dismissFinding(finding.id, finding.reportId, propertyId, 'Dismissed through Ask after homeowner confirmation.', userId);
     } else if (kind === 'DUPLICATE') {
       const targetId = parameters.inspectionFindingDuplicateOf;
       if (typeof targetId !== 'string') throw stale('The work item to merge into is invalid.');
@@ -276,7 +295,7 @@ async function confirmInspectionFindingDecision(ctx: ConfirmCapabilityContext): 
   const result: AskOperationResult = {
     status: 'COMPLETED', reasonCode: `INSPECTION_FINDING_${kind}_COMPLETED`,
     blocks: [{
-      type: 'WORKFLOW_PROGRESS', id: `inspection-finding-decision-${kind.toLowerCase()}-${command.entityId}`, title: isInspectionFindingEditKind(kind) ? 'Finding updated' : kind === 'MONITOR' ? 'Now keeping an eye on it' : kind === 'ALREADY_RESOLVED' ? 'Marked as resolved' : kind === 'NOT_APPLICABLE' ? 'Marked as not applicable' : kind === 'DUPLICATE' ? 'Marked as a duplicate' : 'Plan recorded', status: 'COMPLETED',
+      type: 'WORKFLOW_PROGRESS', id: `inspection-finding-decision-${kind.toLowerCase()}-${command.entityId}`, title: isInspectionFindingEditKind(kind) ? 'Finding updated' : kind === 'MONITOR' ? 'Now keeping an eye on it' : kind === 'ALREADY_RESOLVED' ? 'Marked as resolved' : kind === 'NOT_APPLICABLE' ? 'Marked as not applicable' : kind === 'DUPLICATE' ? 'Marked as a duplicate' : kind === 'DISMISS' ? 'Finding dismissed' : 'Plan recorded', status: 'COMPLETED',
       description: kind === 'MONITOR' ? 'It will come back for review in about 90 days. Nothing was sent to anyone.' : 'It is on the inspection record. Nothing was sent to anyone.', details: [],
       actions: [{ ...reportsAction, label: 'See my inspection reports', style: 'PRIMARY' as const }],
     }],
