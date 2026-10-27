@@ -21,7 +21,7 @@ const executeOperation = require('../../src/services/ask/execution/executeOperat
 require('../../src/services/ask/askOrchestrator.service.ts');
 const { NegotiationShieldService } = require('../../src/services/negotiationShield.service.ts');
 const { negotiationShieldReviewFromView } = require('../../src/services/ask/handlers/negotiationShield.handler.ts');
-const { negotiationShieldAttachContextVersion } = require('../../src/services/ask/handlers/negotiationShieldAttach.handler.ts');
+const { negotiationShieldAttachContextVersion, negotiationShieldAttachResult } = require('../../src/services/ask/handlers/negotiationShieldAttach.handler.ts');
 const attach = require('../../src/services/ask/support/negotiationShieldAttach.ts');
 
 const OP = 'NEGOTIATION_SHIELD_CASE_ATTACH';
@@ -61,9 +61,26 @@ test('each scenario offers only the document roles its rules engine counts, and 
   assert.deepEqual([...attach.NEGOTIATION_ATTACH_DOCUMENT_TYPES.INSURANCE_PREMIUM_INCREASE], ['PREMIUM_NOTICE', 'SUPPORTING_DOCUMENT']);
   assert.deepEqual([...attach.NEGOTIATION_ATTACH_DOCUMENT_TYPES.INSURANCE_CLAIM_SETTLEMENT], ['CLAIM_SETTLEMENT_NOTICE', 'CLAIM_ESTIMATE', 'SUPPORTING_DOCUMENT']);
   assert.deepEqual([...attach.NEGOTIATION_ATTACH_DOCUMENT_TYPES.CONTRACTOR_URGENCY_PRESSURE], ['CONTRACTOR_RECOMMENDATION', 'CONTRACTOR_ESTIMATE', 'SUPPORTING_DOCUMENT']);
-  assert.equal(attach.parseNegotiationAttachAnswer('CONTRACTOR_QUOTE_REVIEW', { documentType: 'QUOTE', recordId: 'rec-1' }).success, true);
-  for (const bad of [{ documentType: 'PREMIUM_NOTICE', recordId: 'rec-1' }, { documentType: 'QUOTE' }, { documentType: 'QUOTE', recordId: '' }, { documentType: 'QUOTE', recordId: 'r', fileUrl: 'x' }]) {
+  // The document field is a picker that can upload, so it answers with a list; exactly one id is required and it is normalized to recordId.
+  assert.deepEqual(attach.parseNegotiationAttachAnswer('CONTRACTOR_QUOTE_REVIEW', { documentType: 'QUOTE', recordIds: [' rec-1 '] }), { success: true, data: { documentType: 'QUOTE', recordId: 'rec-1' } });
+  for (const bad of [
+    { documentType: 'PREMIUM_NOTICE', recordIds: ['rec-1'] }, { documentType: 'QUOTE' }, { documentType: 'QUOTE', recordIds: [] }, { documentType: 'QUOTE', recordIds: ['a', 'b'] },
+    { documentType: 'QUOTE', recordIds: [''] }, { documentType: 'QUOTE', recordIds: [7] }, { documentType: 'QUOTE', recordIds: 'rec-1' }, { documentType: 'QUOTE', recordId: 'rec-1' },
+    { documentType: 'QUOTE', recordIds: ['r'], fileUrl: 'x' },
+  ]) {
     assert.equal(attach.parseNegotiationAttachAnswer('CONTRACTOR_QUOTE_REVIEW', bad).success, false, JSON.stringify(bad));
+  }
+  // The stored confirmation keeps the single recordId and is validated on its own.
+  assert.equal(attach.parseStoredNegotiationAttach('CONTRACTOR_QUOTE_REVIEW', { documentType: 'QUOTE', recordId: 'rec-1' }).success, true);
+  assert.equal(attach.parseStoredNegotiationAttach('CONTRACTOR_QUOTE_REVIEW', { documentType: 'QUOTE', recordIds: ['rec-1'] }).success, false);
+});
+
+test('an upload is filed by the role chosen, with the page\'s own mapping', () => {
+  const types = attach.NEGOTIATION_DOCUMENT_RECORD_TYPES;
+  assert.deepEqual([types.PREMIUM_NOTICE, types.CLAIM_SETTLEMENT_NOTICE, types.CLAIM_ESTIMATE, types.INSPECTION_REPORT], ['INSURANCE_POLICY', 'CLAIM', 'CLAIM', 'INSPECTION_REPORT']);
+  for (const role of ['QUOTE', 'CONTRACTOR_ESTIMATE', 'CONTRACTOR_RECOMMENDATION', 'BUYER_REQUEST', 'SUPPORTING_DOCUMENT']) assert.equal(types[role], 'OTHER', role);
+  for (const scenario of Object.keys(attach.NEGOTIATION_ATTACH_DOCUMENT_TYPES)) {
+    for (const role of attach.NEGOTIATION_ATTACH_DOCUMENT_TYPES[scenario]) assert.ok(types[role], `${scenario}/${role} has a record type`);
   }
 });
 
@@ -147,9 +164,20 @@ test('the form offers the two choices, from Home Records the whole household can
     assert.equal(capture.captureKey, attach.NEGOTIATION_SHIELD_ATTACH_CAPTURE_KEY);
     const [role, record] = capture.inputSchema.fields;
     assert.deepEqual(role.inputSchema.options.map((o) => o.value), ['QUOTE', 'SUPPORTING_DOCUMENT']);
+    assert.equal(record.key, 'recordIds');
     assert.deepEqual(record.inputSchema.options.map((o) => o.value), ['rec-shared']);
+    // The picker can upload a new Home Record: neutral description, a notice before the file picker, a record type taken from the role chosen above.
+    assert.equal(record.inputSchema.type, 'DOCUMENT_MULTI_SELECT');
+    assert.deepEqual([record.inputSchema.maxItems, record.inputSchema.allowUpload, record.inputSchema.uploadTarget], [1, true, 'HOME_RECORDS']);
+    assert.match(record.inputSchema.uploadRecord.description, /^Workflow document: /);
+    assert.doesNotMatch(record.inputSchema.uploadRecord.description, /Project document/);
+    assert.match(record.inputSchema.uploadRecord.notice, /shared Home Records immediately.*confirm separately/);
+    assert.equal(record.inputSchema.uploadRecord.recordTypeFrom.fieldKey, 'documentType');
+    assert.equal(record.inputSchema.uploadRecord.recordTypeFrom.byValue.PREMIUM_NOTICE, 'INSURANCE_POLICY');
     assert.match(record.inputSchema.options[0].label, /^Acme roof estimate \(Other, added /);
-    assert.equal(capture.expectedContextVersion, negotiationShieldAttachContextVersion('case-1', ['rec-shared']));
+    assert.equal(capture.expectedContextVersion, negotiationShieldAttachContextVersion('case-1', []));
+    assert.equal(negotiationShieldAttachContextVersion('case-1', ['a', 'b']), negotiationShieldAttachContextVersion('case-1', ['b', 'a']));
+    assert.notEqual(negotiationShieldAttachContextVersion('case-1', ['a']), negotiationShieldAttachContextVersion('case-1', []));
     assert.equal(st.listCalls[0].includeLegacy, undefined, 'Home Records only');
     assert.equal(JSON.stringify(result).includes('Private contract'), false);
     assert.equal(JSON.stringify(result).includes('Attorney letter'), false);
@@ -174,19 +202,21 @@ test('a buyer inspection review gets the form with the buyer document roles, and
     assert.equal(form.status, 'NEEDS_CONTEXT');
     const roles = form.captureRequests[0].inputSchema.fields.find((f) => f.key === 'documentType').inputSchema.options.map((o) => o.value);
     assert.deepEqual(roles, ['INSPECTION_REPORT', 'BUYER_REQUEST', 'SUPPORTING_DOCUMENT']);
-    assert.equal(attach.parseNegotiationAttachAnswer('BUYER_INSPECTION_NEGOTIATION', { documentType: 'QUOTE', recordId: 'rec-shared' }).success, false);
-    assert.equal(attach.parseNegotiationAttachAnswer('BUYER_INSPECTION_NEGOTIATION', { documentType: 'BUYER_REQUEST', recordId: 'rec-shared' }).success, true);
+    assert.equal(attach.parseNegotiationAttachAnswer('BUYER_INSPECTION_NEGOTIATION', { documentType: 'QUOTE', recordIds: ['rec-shared'] }).success, false);
+    assert.equal(attach.parseNegotiationAttachAnswer('BUYER_INSPECTION_NEGOTIATION', { documentType: 'BUYER_REQUEST', recordIds: ['rec-shared'] }).success, true);
   } finally { st.restore(); }
 });
 
-test('with no record to offer it says so honestly, without a way to add one that Ask does not have', async () => {
+test('with no shared record to pick the form still opens, so a file can be uploaded, and says why nothing is listed', async () => {
   const st = install({ records: [RECORDS[1], RECORDS[2]] });
   try {
     const result = await invoke(LAUNCH);
-    assert.equal(result.reasonCode, 'NEGOTIATION_SHIELD_ATTACH_NO_RECORDS');
+    assert.equal(result.reasonCode, 'NEGOTIATION_SHIELD_ATTACH_INPUT_REQUIRED');
+    assert.match(result.blocks[0].body, /upload a file/);
     assert.match(result.blocks[0].body, /private or of a more sensitive kind/);
-    assert.match(result.blocks[0].body, /not currently available in Ask/);
-    assert.equal(result.captureRequests, undefined);
+    const field = result.captureRequests[0].inputSchema.fields.find((f) => f.key === 'recordIds');
+    assert.deepEqual(field.inputSchema.options, []);
+    assert.equal(field.inputSchema.allowUpload, true);
     assert.equal(JSON.stringify(result).includes('Private contract'), false);
   } finally { st.restore(); }
 });
@@ -327,4 +357,33 @@ test('the receipt survives the answer-trust validator', async () => {
     assert.deepEqual(ids(validated), ids(receipt));
     assert.deepEqual(validated.blocks.map((b) => b.id), receipt.blocks.map((b) => b.id));
   } finally { w.restore(); st.restore(); }
+});
+
+test('a file just uploaded (not in the list the form opened with) is accepted on submit, and the form\'s version does not change with the list', async () => {
+  const st = install({ records: [...RECORDS] });
+  try {
+    const opened = await invoke(LAUNCH);
+    const before = opened.captureRequests[0].expectedContextVersion;
+    // The upload adds a Home Record; the offered list grows but nothing is attached.
+    st.records.push({ ...RECORDS[0], id: 'rec-new', title: 'Fresh quote', addedAt: new Date('2026-10-26T00:00:00Z') });
+    const grown = await invoke(LAUNCH);
+    assert.equal(grown.captureRequests[0].expectedContextVersion, before);
+    const reviewed = await negotiationShieldAttachResult('user-1', 'prop-1', { caseId: 'case-1', sourceExecutionId: null }, { documentType: 'QUOTE', recordId: 'rec-new' });
+    assert.equal(reviewed.status, 'NEEDS_CONFIRMATION');
+    assert.equal(reviewed.parameters.negotiationShieldAttach.recordId, 'rec-new');
+  } finally { st.restore(); }
+});
+
+test('an uploaded file that is already attached, or that Home Records already held as a private copy, gets its own message and writes nothing', async () => {
+  const st = install();
+  try {
+    st.record = caseRow({ documents: [{ id: 'link-1', documentId: 'rec-shared', documentType: 'QUOTE', document: { title: 'Acme roof estimate', visibility: 'HOUSEHOLD', currentVersion: { scanStatus: 'CLEAN', integrityStatus: 'VERIFIED' } } }] });
+    const attached = await negotiationShieldAttachResult('user-1', 'prop-1', { caseId: 'case-1', sourceExecutionId: null }, { documentType: 'QUOTE', recordId: 'rec-shared' });
+    assert.equal(attached.reasonCode, 'NEGOTIATION_SHIELD_ATTACH_RECORD_UNAVAILABLE');
+    assert.match(attached.blocks[0].title, /already attached/);
+    const privateCopy = await negotiationShieldAttachResult('user-1', 'prop-1', { caseId: 'case-1', sourceExecutionId: null }, { documentType: 'QUOTE', recordId: 'rec-private' });
+    assert.equal(privateCopy.reasonCode, 'NEGOTIATION_SHIELD_ATTACH_RECORD_UNAVAILABLE');
+    assert.match(privateCopy.blocks[0].body, /that copy may be private/);
+    assert.equal(privateCopy.captureRequests.length, 1, 'the form is kept so another file can be chosen');
+  } finally { st.restore(); }
 });

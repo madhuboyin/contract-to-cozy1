@@ -26,7 +26,7 @@ import { getNegotiationShieldCaseReviewForProperty } from '../../negotiationShie
 import { listPropertyDocuments } from '../../propertyDocuments/propertyDocumentInventory.service';
 import {
   NEGOTIATION_ATTACH_ALLOWED_SENSITIVITIES, NEGOTIATION_ATTACH_DOCUMENT_TYPES, NEGOTIATION_DOCUMENT_TYPE_LABELS, NEGOTIATION_SHIELD_ATTACH_CAPTURE_KEY,
-  NEGOTIATION_SHIELD_ATTACH_MESSAGE, offerableNegotiationDocuments, parseNegotiationAttachAnswer, type NegotiationAttachCandidate,
+  NEGOTIATION_DOCUMENT_RECORD_TYPES, NEGOTIATION_SHIELD_ATTACH_MESSAGE, offerableNegotiationDocuments, parseStoredNegotiationAttach, type NegotiationAttachCandidate,
 } from '../support/negotiationShieldAttach';
 import { NEGOTIATION_SHIELD_ANALYZE_ACTION_ID, NEGOTIATION_SHIELD_ANALYZE_MESSAGE } from '../support/negotiationShieldAnalyze';
 import { isNegotiationEditScenario, NEGOTIATION_SHIELD_CASE_ENTITY_TYPE, type NegotiationEditScenario } from '../support/negotiationShieldStart';
@@ -35,10 +35,14 @@ const CONFIRMATION_MINUTES = 30;
 const REVIEW_MESSAGE = 'Review this negotiation case.';
 const sha = (text: string) => createHash('sha256').update(text).digest('hex');
 const backToReviews = { id: 'negotiation-shield-back', label: 'Back to my reviews', interactionType: 'START_WORKFLOW' as const, message: 'Show my negotiation shield cases', operationId: 'NEGOTIATION_SHIELD_CASES' as const, style: 'SECONDARY' as const };
+export const UPLOAD_NOTICE = 'Uploading adds this file to this home\u2019s shared Home Records immediately. You will review and confirm separately before it is attached to this negotiation review.';
 const SENSITIVITY_LABELS: Record<string, string> = { STANDARD: 'Standard', FINANCIAL: 'Financial', INSURANCE: 'Insurance', CLAIM: 'Claim' };
 
-/** Bound to the case and the records the form offered, so a form opened before the household's records changed is refused as out of date. */
-export const negotiationShieldAttachContextVersion = (caseId: string, optionIds: readonly string[]) => sha(`negotiation-shield-attach:${caseId}:${[...optionIds].sort().join(',')}`);
+/**
+ * Bound to the case and what is already attached to it, not to the offered list: the form can upload a new Home Record, which changes the offered list but
+ * not the review, and must not invalidate its own submit. The record chosen is re-read at confirmation, so a list that drifted is still caught there.
+ */
+export const negotiationShieldAttachContextVersion = (caseId: string, attachedRecordIds: readonly string[]) => sha(`negotiation-shield-attach:${caseId}:${[...attachedRecordIds].sort().join(',')}`);
 
 const permissionBlocked = (): AskOperationResult => ({
   status: 'BLOCKED', reasonCode: 'ASK_PERMISSION_REQUIRED',
@@ -80,9 +84,18 @@ function captureRequest(scenario: NegotiationEditScenario, title: string, contex
       { key: 'documentType', label: 'What is it?', required: true, inputSchema: {
         type: 'SINGLE_SELECT', options: NEGOTIATION_ATTACH_DOCUMENT_TYPES[scenario].map((value) => ({ label: NEGOTIATION_DOCUMENT_TYPE_LABELS[value] ?? value, value })),
       } },
-      { key: 'recordId', label: 'Document', required: true, inputSchema: { type: 'SINGLE_SELECT', options: options.map((option) => ({ label: optionLabel(option), value: option.id })) } },
+      // A picker that can also upload. The file becomes a household-visible Home Record at once, before this attachment is reviewed or confirmed, and stays
+      // one if the attachment is not confirmed; the notice says so before the file picker opens. The record type follows the role chosen above.
+      { key: 'recordIds', label: 'Document', required: true, inputSchema: {
+        type: 'DOCUMENT_MULTI_SELECT', maxItems: 1, allowUpload: true, uploadTarget: 'HOME_RECORDS', options: options.map((option) => ({ label: optionLabel(option), value: option.id })),
+        uploadRecord: {
+          description: `Workflow document: ${title}`.slice(0, 500),
+          notice: UPLOAD_NOTICE,
+          recordTypeFrom: { fieldKey: 'documentType', byValue: NEGOTIATION_DOCUMENT_RECORD_TYPES },
+        },
+      } },
     ] } as unknown as AskCaptureRequest['inputSchema'],
-    currentAnswer: { ...(entered?.documentType ? { documentType: entered.documentType } : {}), ...(entered?.recordId ? { recordId: entered.recordId } : {}) },
+    currentAnswer: { ...(entered?.documentType ? { documentType: entered.documentType } : {}), ...(entered?.recordId ? { recordIds: [entered.recordId] } : {}) },
     allowNotSure: false, sensitivity: 'FINANCIAL', destinationLabel: 'Used to prepare this change; nothing is attached until you confirm', confirmationText: null,
     expectedContextVersion: contextVersion,
   };
@@ -94,7 +107,7 @@ export async function negotiationShieldAttachOffer(propertyId: string, role: Hou
   if (!review) return null;
   const attachedIds = new Set(review.documents.map((document) => document.documentId));
   const offered = offerableNegotiationDocuments(await loadCandidates(propertyId, role), attachedIds);
-  return { review, ...offered, contextVersion: negotiationShieldAttachContextVersion(caseId, offered.options.map((option) => option.id)) };
+  return { review, ...offered, contextVersion: negotiationShieldAttachContextVersion(caseId, [...attachedIds]) };
 }
 
 export async function negotiationShieldAttachResult(
@@ -110,19 +123,16 @@ export async function negotiationShieldAttachResult(
     return unavailable('NEGOTIATION_SHIELD_ATTACH_UNSUPPORTED', 'Attaching to this kind of review is not currently available in Ask',
       'Ask cannot attach a document to this kind of review. Nothing has changed.');
   }
-  if (offer.options.length === 0) {
-    const hidden = offer.excludedPrivate + offer.excludedSensitive;
-    return unavailable('NEGOTIATION_SHIELD_ATTACH_NO_RECORDS', 'There is no record to attach yet',
-      'Only records already shared with your household and filed as standard, financial, insurance or claim documents can be attached here. '
+  const hidden = offer.excludedPrivate + offer.excludedSensitive;
+  const noRecords = offer.options.length === 0
+    ? ' There is no shared record to pick yet, so upload a file. '
       + (hidden > 0 ? 'Some records are not offered because they are private or of a more sensitive kind. ' : '')
-      + 'Adding a new file to your Home Records is not currently available in Ask. Nothing has changed.');
-  }
-
+    : '';
   if (!submitted) {
     return {
       status: 'NEEDS_CONTEXT', reasonCode: 'NEGOTIATION_SHIELD_ATTACH_INPUT_REQUIRED', contextVersion: offer.contextVersion,
       parameters: { negotiationAttachLaunch: { caseId: offer.review.case.id, scenarioType: scenario, sourceExecutionId: launch.sourceExecutionId } },
-      blocks: [{ type: 'SUMMARY', id: 'negotiation-shield-attach-input', title: `Attach a document: ${offer.review.case.title}`, body: 'Choose what it is and which record. Nothing has been attached yet, and attaching does not read the file.', tone: 'DEFAULT', actions: [] }],
+      blocks: [{ type: 'SUMMARY', id: 'negotiation-shield-attach-input', title: `Attach a document: ${offer.review.case.title}`, body: `Choose what it is, then pick a shared record or upload a file. Nothing has been attached yet, and attaching does not read the file.${noRecords}`, tone: 'DEFAULT', actions: [] }],
       captureRequests: [captureRequest(scenario, offer.review.case.title, offer.contextVersion, offer.options)], suggestions: [],
     };
   }
@@ -132,7 +142,11 @@ export async function negotiationShieldAttachResult(
     return {
       status: 'NEEDS_CONTEXT', reasonCode: 'NEGOTIATION_SHIELD_ATTACH_RECORD_UNAVAILABLE', contextVersion: offer.contextVersion,
       parameters: { negotiationAttachLaunch: { caseId: offer.review.case.id, scenarioType: scenario, sourceExecutionId: launch.sourceExecutionId } },
-      blocks: [{ type: 'SUMMARY', id: 'negotiation-shield-attach-record-missing', title: 'That record is not available to attach', body: 'Choose another record. Nothing has been attached.', tone: 'CAUTION', actions: [] }],
+      blocks: [{ type: 'SUMMARY', id: 'negotiation-shield-attach-record-missing', ...(offer.review.documents.some((document) => document.documentId === submitted.recordId)
+        ? { title: 'That file is already attached to this review', body: 'It is already counted in the analysis. Choose another record or upload a different file. Nothing has changed.' }
+        // An upload of a file Home Records already holds returns that existing record, whatever its visibility or kind; only a shareable one can be attached.
+        : { title: 'That record is not available to attach', body: 'Choose another record. If you just uploaded a file that is already in your Home Records, that copy may be private or of a kind Ask does not attach. Nothing has been attached.' }),
+      tone: 'CAUTION', actions: [] }],
       captureRequests: [captureRequest(scenario, offer.review.case.title, offer.contextVersion, offer.options, { documentType: submitted.documentType })], suggestions: [],
     };
   }
@@ -177,7 +191,7 @@ async function confirmNegotiationShieldAttach(ctx: ConfirmCapabilityContext): Pr
   const stored = parameters.negotiationShieldAttach as { caseId?: unknown; scenarioType?: unknown; recordId?: unknown; documentType?: unknown } | undefined;
   const invalid = () => Object.assign(new Error('The attachment to make is invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
   if (!stored || typeof stored.caseId !== 'string' || !stored.caseId || !isNegotiationEditScenario(stored.scenarioType)) throw invalid();
-  const checked = parseNegotiationAttachAnswer(stored.scenarioType, { documentType: stored.documentType, recordId: stored.recordId });
+  const checked = parseStoredNegotiationAttach(stored.scenarioType, { documentType: stored.documentType, recordId: stored.recordId });
   if (!checked.success) throw invalid();
   const propertyId = execution.propertyId;
   const caseId = stored.caseId;

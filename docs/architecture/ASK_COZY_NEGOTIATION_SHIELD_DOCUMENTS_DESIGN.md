@@ -1,6 +1,6 @@
 # Ask Cozy — Negotiation Shield documents (attach, read, parse): design
 
-**Status:** Decisions accepted as recommended (2026-10-12). D-A3 (the visibility correction) is built and verified (section 8a; FRD v1.300). 3a (attach, with the Documents list) is built and verified (section 8b; FRD v1.301); attach was widened to buyer reviews in FRD v1.433. 3b (parse) and 3c (upload) are designed in section 13 (2026-10-26) and not built.
+**Status:** Decisions accepted as recommended (2026-10-12). D-A3 (the visibility correction) is built and verified (section 8a; FRD v1.300). 3a (attach, with the Documents list) is built and verified (section 8b; FRD v1.301); attach was widened to buyer reviews in FRD v1.433. 3c (upload) is built (section 13.3; FRD v1.434); 3b (parse) is designed in section 13 and not built.
 **Date:** October 12, 2026
 **Parent:** `docs/architecture/ASK_COZY_NEGOTIATION_SHIELD_SLICE2_DESIGN.md` (decision D7 deferred documents and OCR; slices 2a–2c shipped as FRD v1.297–v1.299).
 **Method:** `docs/architecture/AUDIT_METHODOLOGY.md`. Each claim is labelled **code-traced** (read in source, not run), **executed** (run), or **inferred**. This repository has no database or browser; nothing here was run against either.

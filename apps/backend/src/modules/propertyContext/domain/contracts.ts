@@ -28,6 +28,14 @@ export const PROPERTY_CONTEXT_SCOPES = [
   'SALE_PREP',
 ] as const;
 
+/** Metadata for a Home Records upload from a document field (the field's own description, a notice shown before the file picker, and the record type, fixed or taken from a sibling field's value). */
+export interface DocumentUploadRecord {
+  description?: string;
+  notice?: string;
+  recordType?: string;
+  recordTypeFrom?: { fieldKey: string; byValue: Record<string, string> };
+}
+
 export type PropertyContextScope = typeof PROPERTY_CONTEXT_SCOPES[number];
 export type PropertyFactState = 'KNOWN' | 'UNKNOWN' | 'CONFLICTED' | 'STALE';
 export type PropertyFactSource =
@@ -125,7 +133,7 @@ export type ScalarCaptureInputSchema =
   | { type: 'BOOLEAN'; trueLabel: string; falseLabel: string }
   | { type: 'SINGLE_SELECT'; options: Array<{ label: string; value: string }> }
   | { type: 'MULTI_SELECT'; options: Array<{ label: string; value: string }>; maxItems?: number }
-  | { type: 'DOCUMENT_MULTI_SELECT'; options: Array<{ label: string; value: string }>; maxItems?: number; allowUpload?: boolean; /** Where an upload from this field is stored: Home Records through the canonical upload (project documents), else the Ask evidence route. */ uploadTarget?: 'HOME_RECORDS' }
+  | { type: 'DOCUMENT_MULTI_SELECT'; options: Array<{ label: string; value: string }>; maxItems?: number; allowUpload?: boolean; /** Where an upload from this field is stored: Home Records through the canonical upload (project documents), else the Ask evidence route. */ uploadTarget?: 'HOME_RECORDS'; /** How a Home Records upload from this field is described and filed. */ uploadRecord?: DocumentUploadRecord }
   | { type: 'INTEGER'; min?: number; max?: number; unit?: string }
   | { type: 'DECIMAL'; min?: number; max?: number; unit?: string }
   | { type: 'SHORT_TEXT'; maxLength: number }

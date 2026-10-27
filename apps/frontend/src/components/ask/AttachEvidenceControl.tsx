@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react';
 import { Loader2, Paperclip } from 'lucide-react';
 import { api } from '@/lib/api/client';
+import type { PropertyRecordType } from '@/app/(dashboard)/dashboard/properties/[id]/tools/home-records/types';
 import { uploadRecordForWorkflow } from '@/app/(dashboard)/dashboard/properties/[id]/tools/home-records/homeRecordsApi';
 import { cn } from '@/lib/utils';
 
@@ -21,7 +22,7 @@ export const EVIDENCE_ATTACH_MESSAGES = {
 export const EVIDENCE_UPLOAD_ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'application/pdf'];
 export const EVIDENCE_UPLOAD_MAX_BYTES = 10 * 1024 * 1024;
 
-export function AttachEvidenceControl({ event, propertyId, disabled, onAttached, label = 'Attach evidence', variant = 'inline', store = 'ASK_EVIDENCE', className }: {
+export function AttachEvidenceControl({ event, propertyId, disabled, onAttached, label = 'Attach evidence', variant = 'inline', store = 'ASK_EVIDENCE', uploadRecord, className }: {
   event: { entityType: string | null | undefined; id: string; title: string };
   propertyId?: string;
   disabled?: boolean;
@@ -34,6 +35,12 @@ export function AttachEvidenceControl({ event, propertyId, disabled, onAttached,
    * Home Record through the canonical workflow upload and the callback receives the record id (owner ruling D-P5).
    */
   store?: 'ASK_EVIDENCE' | 'HOME_RECORDS';
+  /**
+   * How a Home Records upload is described and filed. Without it the file is described as a project document and filed as OTHER (Project Tracker's values).
+   * `notice` is shown above the button, before the file picker can be opened. `blockedReason` disables the button and says why (for example, the role the
+   * record type depends on has not been chosen yet).
+   */
+  uploadRecord?: { description?: string; recordType?: PropertyRecordType; notice?: string; blockedReason?: string | null };
   className?: string;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -49,7 +56,7 @@ export function AttachEvidenceControl({ event, propertyId, disabled, onAttached,
     try {
       if (store === 'HOME_RECORDS') {
         const recordId = await uploadRecordForWorkflow(propertyId, {
-          file, title: file.name, description: `Project document: ${event.title}`, recordType: 'OTHER', sensitivity: 'STANDARD',
+          file, title: file.name, description: uploadRecord?.description ?? `Project document: ${event.title}`, recordType: uploadRecord?.recordType ?? 'OTHER', sensitivity: 'STANDARD',
         });
         setStatus('IDLE');
         onAttached(recordId);
@@ -67,13 +74,15 @@ export function AttachEvidenceControl({ event, propertyId, disabled, onAttached,
 
   return (
     <div className={cn(variant === 'composer' ? 'relative' : 'mt-3', className)}>
+      {uploadRecord?.notice && <p className="mb-2 text-xs text-slate-600">{uploadRecord.notice}</p>}
+      {uploadRecord?.blockedReason && <p className="mb-2 text-xs text-slate-500">{uploadRecord.blockedReason}</p>}
       <input
         ref={inputRef} type="file" accept={EVIDENCE_UPLOAD_ALLOWED_TYPES.join(',')} className="sr-only" tabIndex={-1}
         aria-label={`Attach evidence file for ${event.title}`}
         onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; if (file) void handleFile(file); }}
       />
       <button
-        type="button" disabled={disabled || status === 'UPLOADING'}
+        type="button" disabled={disabled || status === 'UPLOADING' || Boolean(uploadRecord?.blockedReason)}
         title={variant === 'composer' ? `${label} for ${event.title}` : undefined}
         className={variant === 'composer' ? 'inline-flex min-h-10 items-center gap-1.5 rounded-xl px-2.5 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-50' : 'inline-flex min-h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 disabled:opacity-50'}
         onClick={() => inputRef.current?.click()}

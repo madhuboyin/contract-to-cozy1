@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import type { ApproximateDateCaptureValue, CaptureDatePrecision, ScalarCaptureInputSchema } from './featureContextTypes';
+import type { ApproximateDateCaptureValue, CaptureDatePrecision, DocumentUploadRecord, ScalarCaptureInputSchema } from './featureContextTypes';
+import type { PropertyRecordType } from '@/app/(dashboard)/dashboard/properties/[id]/tools/home-records/types';
 import { AttachEvidenceControl } from '@/components/ask/AttachEvidenceControl';
 
 const DATE_PRECISION_OPTIONS: Array<{ value: CaptureDatePrecision; label: string }> = [
@@ -12,9 +13,24 @@ const DATE_PRECISION_OPTIONS: Array<{ value: CaptureDatePrecision; label: string
   { value: 'UNKNOWN', label: 'I’m not sure' },
 ];
 
+/** The upload metadata for a document field: its description and notice, and a record type that is fixed or taken from a sibling answer (blocked until that answer exists). */
+function uploadRecordFor(config: DocumentUploadRecord | undefined, siblings: Record<string, unknown> | undefined):
+  { description?: string; recordType?: PropertyRecordType; notice?: string; blockedReason?: string | null } | undefined {
+  if (!config) return undefined;
+  let recordType = config.recordType as PropertyRecordType | undefined;
+  let blockedReason: string | null = null;
+  if (config.recordTypeFrom) {
+    const chosen = siblings?.[config.recordTypeFrom.fieldKey];
+    const mapped = typeof chosen === 'string' ? config.recordTypeFrom.byValue[chosen] : undefined;
+    if (mapped) recordType = mapped as PropertyRecordType;
+    else blockedReason = 'Choose what the document is first, then upload.';
+  }
+  return { description: config.description, notice: config.notice, recordType, blockedReason };
+}
+
 export type CaptureField = { key: string; label: string; helpText?: string; required: boolean; inputSchema: ScalarCaptureInputSchema };
 
-export function CaptureFieldControl({ field, value, disabled, allowNotSure = false, onChange, bare = false, compact = false, dense = false, propertyId }: {
+export function CaptureFieldControl({ field, value, disabled, allowNotSure = false, onChange, bare = false, compact = false, dense = false, propertyId, siblingValues }: {
   field: CaptureField;
   value: unknown;
   disabled: boolean;
@@ -29,6 +45,8 @@ export function CaptureFieldControl({ field, value, disabled, allowNotSure = fal
   // proportional to the value without reducing the accessible hit height.
   dense?: boolean;
   propertyId?: string;
+  /** The other answers in the same form, for a field whose upload metadata depends on one of them. */
+  siblingValues?: Record<string, unknown>;
 }) {
   const [expandedOptions, setExpandedOptions] = useState(false);
   const schema = field.inputSchema;
@@ -69,7 +87,7 @@ export function CaptureFieldControl({ field, value, disabled, allowNotSure = fal
           const selected = current.includes(option.value);
           return <button key={option.value} type="button" aria-pressed={selected} disabled={disabled} onClick={() => onChange(selected ? current.filter((item) => item !== option.value) : [...current, option.value].slice(0, schema.maxItems))} className={`mr-2 rounded-xl border px-3 py-2 text-sm font-semibold ${selected ? 'border-teal-700 bg-teal-700 text-white' : 'border-slate-200 bg-white text-slate-700'}`}>{option.label}</button>;
         })}
-        {schema.allowUpload ? <AttachEvidenceControl event={{ entityType: 'PROJECT_RECORD', id: field.key, title: field.label }} propertyId={propertyId} store={schema.uploadTarget === 'HOME_RECORDS' ? 'HOME_RECORDS' : undefined} disabled={disabled} label="Upload document" onAttached={(documentId) => {
+        {schema.allowUpload ? <AttachEvidenceControl event={{ entityType: 'PROJECT_RECORD', id: field.key, title: field.label }} propertyId={propertyId} store={schema.uploadTarget === 'HOME_RECORDS' ? 'HOME_RECORDS' : undefined} uploadRecord={uploadRecordFor(schema.uploadRecord, siblingValues)} disabled={disabled} label="Upload document" onAttached={(documentId) => {
           const current = Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
           onChange([...current.filter((id) => id !== documentId), documentId].slice(0, schema.maxItems));
         }} /> : null}

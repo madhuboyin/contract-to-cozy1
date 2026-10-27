@@ -62,16 +62,41 @@ export function offerableNegotiationDocuments(candidates: readonly NegotiationAt
   return { options: options.slice(0, NEGOTIATION_ATTACH_MAX_OPTIONS), excludedPrivate, excludedSensitive };
 }
 
+/** The Negotiation Shield role to the Home Record type an upload is filed under; the page's own mapping (the rest are OTHER). */
+export const NEGOTIATION_DOCUMENT_RECORD_TYPES: Record<string, string> = {
+  PREMIUM_NOTICE: 'INSURANCE_POLICY',
+  CLAIM_SETTLEMENT_NOTICE: 'CLAIM',
+  CLAIM_ESTIMATE: 'CLAIM',
+  INSPECTION_REPORT: 'INSPECTION_REPORT',
+  QUOTE: 'OTHER',
+  CONTRACTOR_ESTIMATE: 'OTHER',
+  CONTRACTOR_RECOMMENDATION: 'OTHER',
+  BUYER_REQUEST: 'OTHER',
+  SUPPORTING_DOCUMENT: 'OTHER',
+};
+
+/**
+ * The form's answer. The document field is a document picker that can also upload, and such a picker always answers with a list, so the record arrives as
+ * `recordIds`; exactly one is required and it is normalized to the single `recordId` the rest of the flow, the stored confirmation and the canonical call use.
+ */
 export function negotiationAttachAnswerSchema(scenario: NegotiationEditScenario) {
   const types = NEGOTIATION_ATTACH_DOCUMENT_TYPES[scenario] as readonly [string, ...string[]];
   return z.object({
     documentType: z.enum(types),
-    recordId: z.string().trim().min(1).max(160),
+    recordIds: z.array(z.string().trim().min(1).max(160)).length(1),
   }).strict();
 }
 
 export function parseNegotiationAttachAnswer(scenario: NegotiationEditScenario, answer: unknown):
   { success: true; data: { documentType: string; recordId: string } } | { success: false } {
   const parsed = negotiationAttachAnswerSchema(scenario).safeParse(answer);
+  return parsed.success ? { success: true, data: { documentType: parsed.data.documentType, recordId: parsed.data.recordIds[0] } } : { success: false };
+}
+
+/** The shape stored with a confirmation (and re-validated at execution): one `recordId`. */
+export function parseStoredNegotiationAttach(scenario: NegotiationEditScenario, stored: unknown):
+  { success: true; data: { documentType: string; recordId: string } } | { success: false } {
+  const types = NEGOTIATION_ATTACH_DOCUMENT_TYPES[scenario] as readonly [string, ...string[]];
+  const parsed = z.object({ documentType: z.enum(types), recordId: z.string().trim().min(1).max(160) }).strict().safeParse(stored);
   return parsed.success ? { success: true, data: parsed.data } : { success: false };
 }

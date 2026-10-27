@@ -1039,7 +1039,7 @@ export function InlineCaptureCard({
             : null;
           return <div key={field.key} className={fieldLayout}>
             {assumptionsSection && <div className={cn('mb-2', fieldIndex > 0 && 'mt-2', field.key !== 'resetAll' && 'md:col-span-2')}><p className="text-sm font-semibold text-slate-950">{assumptionsSection}</p>{field.key === 'homeValueNow' && <p className="mt-0.5 text-xs text-slate-500">Use values for the planning case you want to compare.</p>}</div>}
-            {compactContinuityPlan ? <HomeContinuityCaptureField field={field} value={values[field.key]} disabled={saving || cancelling} onChange={(value) => setValues((current) => ({ ...current, [field.key]: value }))} /> : <CaptureFieldControl field={field} value={values[field.key]} disabled={saving} allowNotSure={request.allowNotSure} compact={compactWorkflow} dense={decisionInputWorkflow} propertyId={propertyId} onChange={(value) => setValues((current) => ({ ...current, [field.key]: value }))} />}
+            {compactContinuityPlan ? <HomeContinuityCaptureField field={field} value={values[field.key]} disabled={saving || cancelling} onChange={(value) => setValues((current) => ({ ...current, [field.key]: value }))} /> : <CaptureFieldControl field={field} value={values[field.key]} disabled={saving} allowNotSure={request.allowNotSure} compact={compactWorkflow} dense={decisionInputWorkflow} propertyId={propertyId} siblingValues={values} onChange={(value) => setValues((current) => ({ ...current, [field.key]: value }))} />}
           </div>;
         })}
       </div>

@@ -1,3 +1,11 @@
+/** How a Home Records upload from a document field is described and filed (mirrors the backend contract). */
+export interface DocumentUploadRecord {
+  description?: string;
+  notice?: string;
+  recordType?: string;
+  recordTypeFrom?: { fieldKey: string; byValue: Record<string, string> };
+}
+
 export type FeatureContextReadiness =
   | 'READY'
   | 'READY_WITH_LIMITATIONS'
@@ -10,7 +18,7 @@ export type ScalarCaptureInputSchema =
   | { type: 'BOOLEAN'; trueLabel: string; falseLabel: string; unknownLabel?: string }
   | { type: 'SINGLE_SELECT'; options: Array<{ label: string; value: string }> }
   | { type: 'MULTI_SELECT'; options: Array<{ label: string; value: string }>; maxItems?: number }
-  | { type: 'DOCUMENT_MULTI_SELECT'; options: Array<{ label: string; value: string }>; maxItems?: number; allowUpload?: boolean; uploadTarget?: 'HOME_RECORDS' }
+  | { type: 'DOCUMENT_MULTI_SELECT'; options: Array<{ label: string; value: string }>; maxItems?: number; allowUpload?: boolean; uploadTarget?: 'HOME_RECORDS'; uploadRecord?: DocumentUploadRecord }
   | { type: 'INTEGER' | 'DECIMAL'; min?: number; max?: number; unit?: string }
   | { type: 'NUMBER'; min?: number; max?: number }
   | { type: 'MONEY'; currency: string; min?: number; max?: number }
