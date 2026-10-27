@@ -6,15 +6,17 @@ export const REFINANCE_COMMAND_ACTIONS = {
   ADD_COMPARISON: 'refinance-add-comparison',
   DELETE_COMPARISON: 'refinance-delete-comparison',
   RECORD_DECISION: 'refinance-record-decision-inline',
+  LENDER_BRIEF: 'refinance-lender-brief',
 } as const;
 
 export type RefinanceCommandKind = keyof typeof REFINANCE_COMMAND_ACTIONS;
-export type RefinanceFormKind = 'ALERT_SETTINGS' | 'ADD_COMPARISON' | 'RECORD_DECISION';
+export type RefinanceFormKind = 'ALERT_SETTINGS' | 'ADD_COMPARISON' | 'RECORD_DECISION' | 'LENDER_BRIEF';
 
 export const REFINANCE_CAPTURE_KEYS: Record<RefinanceFormKind, string> = {
   ALERT_SETTINGS: 'REFINANCE_ALERT_SETTINGS_INPUTS',
   ADD_COMPARISON: 'REFINANCE_LOAN_ESTIMATE_COMPARISON_INPUTS',
   RECORD_DECISION: 'REFINANCE_DECISION_INPUTS',
+  LENDER_BRIEF: 'REFINANCE_LENDER_BRIEF_INPUTS',
 };
 
 export function refinanceKindFromAction(actionId: string | null | undefined): RefinanceCommandKind | null {
@@ -55,14 +57,17 @@ export const refinanceComparisonAnswerSchema = z.object({
   label: z.string().trim().max(120).optional(), ...offer('a'), ...offer('b'),
 });
 
-const optionalLinkId = z.preprocess((value) => (value === '' || value === null ? undefined : value), z.string().trim().min(1).max(100).optional());
+/** The "no link" choice in the decision form: it removes a saved link, where leaving the field blank keeps it. */
+export const REFINANCE_NO_LINK = 'NONE';
+/** blank keeps the saved link, an id links that record, REFINANCE_NO_LINK removes the link (null). */
+const optionalLinkId = z.preprocess((value) => (value === '' || value === undefined ? undefined : value === REFINANCE_NO_LINK || value === null ? null : value), z.string().trim().min(1).max(100).nullable().optional());
 
 export const refinanceDecisionAnswerSchema = z.object({
   /** Optional links to what the decision rests on; each is checked against this home's saved records before anything is written. */
   scenarioSnapshotId: optionalLinkId,
   loanEstimateComparisonId: optionalLinkId,
   selectedOfferId: optionalLinkId,
-  status: z.enum(['EXPLORING', 'DEFERRED', 'KEEP_CURRENT_LOAN', 'PROCEEDING', 'APPLICATION_IN_PROGRESS', 'DECLINED', 'ABANDONED', 'CLOSED']),
+  status: z.enum(['EXPLORING', 'DEFERRED', 'KEEP_CURRENT_LOAN', 'PROCEEDING', 'OFFER_SELECTED', 'APPLICATION_IN_PROGRESS', 'DECLINED', 'ABANDONED', 'CLOSED']),
   rationale: z.string().trim().max(2000).optional(),
   nextReviewAt: z.string().optional(),
   currentMortgageBalanceUsd: optionalMoney,
@@ -71,6 +76,7 @@ export const refinanceDecisionAnswerSchema = z.object({
   monthlyPaymentUsd: optionalMoney,
   closingCostUsd: optionalMoney,
 }).superRefine((value, ctx) => {
+  if (value.status === 'OFFER_SELECTED' && (!value.loanEstimateComparisonId || !value.selectedOfferId)) ctx.addIssue({ code: 'custom', path: ['selectedOfferId'], message: 'Selecting an offer needs the saved comparison and the offer from it.' });
   if (value.selectedOfferId && !value.loanEstimateComparisonId) ctx.addIssue({ code: 'custom', path: ['loanEstimateComparisonId'], message: 'Choose the saved comparison the offer belongs to.' });
   if (value.status === 'DEFERRED' && !value.nextReviewAt) ctx.addIssue({ code: 'custom', path: ['nextReviewAt'], message: 'Choose a future review date.' });
   if (value.status === 'CLOSED' && (value.currentMortgageBalanceUsd == null || value.interestRatePct == null || value.remainingTermMonths == null)) {
@@ -78,8 +84,21 @@ export const refinanceDecisionAnswerSchema = z.object({
   }
 });
 
+/** Desktop's three acknowledgements before the lender-discussion brief; each is its own required answer and none can be collapsed into a generic confirmation. */
+export const REFINANCE_BRIEF_ACKNOWLEDGEMENTS = [
+  { key: 'figuresVerified', label: 'I checked the selected figures against the latest official Loan Estimate.' },
+  { key: 'sameLoanRequestConfirmed', label: 'The offers reflect my intended loan request, or I understand the visible differences.' },
+  { key: 'manualSharingUnderstood', label: 'I understand this only shows a brief here; ContractToCozy will not send it or contact a lender.' },
+] as const;
+
+export const refinanceLenderBriefAnswerSchema = z.object({
+  selectedOfferId: z.string().trim().min(1).max(100),
+  figuresVerified: z.literal(true), sameLoanRequestConfirmed: z.literal(true), manualSharingUnderstood: z.literal(true),
+});
+
 export function parseRefinanceCommandAnswer(kind: RefinanceFormKind, value: unknown) {
   return kind === 'ALERT_SETTINGS' ? refinanceAlertAnswerSchema.safeParse(value)
     : kind === 'ADD_COMPARISON' ? refinanceComparisonAnswerSchema.safeParse(value)
-      : refinanceDecisionAnswerSchema.safeParse(value);
+      : kind === 'LENDER_BRIEF' ? refinanceLenderBriefAnswerSchema.safeParse(value)
+        : refinanceDecisionAnswerSchema.safeParse(value);
 }

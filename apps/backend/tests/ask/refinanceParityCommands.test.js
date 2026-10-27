@@ -87,3 +87,127 @@ test('a link to a record this home does not have, or an offer from another compa
     assert.equal(handler.decisionLinksUnavailable({ selectedOfferId: 'a-1' }, links), true, 'an offer with no comparison chosen');
   } finally { restore(); }
 });
+
+// ───────────────────────────── OFFER_SELECTED, link removal, missed window ─────────────────────────────
+
+const { resolveDecisionLinks } = require('../../src/refinanceRadar/refinanceDecision.service.ts');
+const { recordRefinanceDecisionSchema } = require('../../src/refinanceRadar/validators/refinanceRadar.validators.ts');
+const { refinanceMissedWindowBlock } = require('../../src/services/ask/handlers/refinance.handler.ts');
+
+test('OFFER_SELECTED is a form choice and needs both the comparison and the offer', () => {
+  assert.equal(handler.fieldsFor('RECORD_DECISION').find((f) => f.key === 'status').inputSchema.options.some((o) => o.value === 'OFFER_SELECTED'), true);
+  assert.equal(refinanceDecisionAnswerSchema.safeParse({ status: 'OFFER_SELECTED', loanEstimateComparisonId: 'cmp-1', selectedOfferId: 'a-1' }).success, true);
+  assert.equal(refinanceDecisionAnswerSchema.safeParse({ status: 'OFFER_SELECTED', loanEstimateComparisonId: 'cmp-1' }).success, false);
+  assert.equal(refinanceDecisionAnswerSchema.safeParse({ status: 'OFFER_SELECTED' }).success, false);
+  assert.equal(refinanceDecisionAnswerSchema.safeParse({ status: 'OFFER_SELECTED', loanEstimateComparisonId: 'NONE', selectedOfferId: 'a-1' }).success, false, 'removing the comparison cannot also select an offer');
+});
+
+test('the "no link" choice is kept through validation as a removal; blank still means unchanged', () => {
+  const removed = refinanceDecisionAnswerSchema.safeParse({ status: 'EXPLORING', scenarioSnapshotId: 'NONE', loanEstimateComparisonId: 'NONE', selectedOfferId: 'NONE' });
+  assert.equal(removed.success, true);
+  assert.deepEqual([removed.data.scenarioSnapshotId, removed.data.loanEstimateComparisonId, removed.data.selectedOfferId], [null, null, null]);
+  const options = handler.fieldsFor('RECORD_DECISION', { scenarios: [{ value: 'sc-1', label: 'S' }], comparisons: [{ value: 'cmp-1', label: 'C', offerIds: ['a-1'] }], offers: [{ value: 'a-1', label: 'A', comparisonId: 'cmp-1' }] });
+  for (const key of ['scenarioSnapshotId', 'loanEstimateComparisonId', 'selectedOfferId']) {
+    assert.equal(options.find((f) => f.key === key).inputSchema.options.some((o) => o.value === 'NONE'), true, key);
+  }
+});
+
+test('the confirmation says which links are removed, kept as saved, or dropped with their comparison', () => {
+  const links = { scenarios: [{ value: 'sc-1', label: 'Scenario one' }], comparisons: [{ value: 'cmp-1', label: 'October', offerIds: ['a-1'] }, { value: 'cmp-2', label: 'November', offerIds: ['c-1'] }], offers: [{ value: 'a-1', label: 'Lender A', comparisonId: 'cmp-1' }, { value: 'c-1', label: 'Lender C', comparisonId: 'cmp-2' }] };
+  const saved = { scenarioSnapshotId: 'sc-1', loanEstimateComparisonId: 'cmp-1', selectedOfferId: 'a-1' };
+  const by = (fields) => Object.fromEntries(fields.map((f) => [f.label, f.value]));
+  const cleared = by(handler.decisionConfirmationFields({ status: 'EXPLORING', scenarioSnapshotId: 'NONE', loanEstimateComparisonId: 'NONE' }, links, saved));
+  assert.equal(cleared['Saved scenario'], 'Removed');
+  assert.equal(cleared['Loan Estimate comparison'], 'Removed');
+  assert.match(cleared.Offer, /Removed/);
+  const kept = by(handler.decisionConfirmationFields({ status: 'PROCEEDING' }, links, saved));
+  assert.match(kept['Saved scenario'], /kept as saved/);
+  assert.match(kept.Offer, /Lender A.*kept as saved/);
+  const moved = by(handler.decisionConfirmationFields({ status: 'PROCEEDING', loanEstimateComparisonId: 'cmp-2' }, links, saved));
+  assert.match(moved.Offer, /earlier comparison/);
+});
+
+test('the canonical decision patch distinguishes unchanged, link, and remove', () => {
+  const current = { scenarioSnapshotId: 'sc-1', loanEstimateComparisonId: 'cmp-1', selectedOfferId: 'a-1' };
+  assert.deepEqual(resolveDecisionLinks(current, {}), current);
+  assert.deepEqual(resolveDecisionLinks(current, { scenarioSnapshotId: null }), { ...current, scenarioSnapshotId: null });
+  assert.deepEqual(resolveDecisionLinks(current, { loanEstimateComparisonId: null }), { scenarioSnapshotId: 'sc-1', loanEstimateComparisonId: null, selectedOfferId: null }, 'removing the comparison removes its offer');
+  assert.equal(resolveDecisionLinks(current, { loanEstimateComparisonId: 'cmp-2' }).selectedOfferId, null, 'a different comparison drops the old offer');
+  assert.equal(resolveDecisionLinks(current, { loanEstimateComparisonId: 'cmp-2', selectedOfferId: 'c-1' }).selectedOfferId, 'c-1');
+  assert.equal(resolveDecisionLinks(current, { loanEstimateComparisonId: 'cmp-1' }).selectedOfferId, 'a-1', 'the same comparison keeps its offer');
+  assert.deepEqual(resolveDecisionLinks(null, {}), { scenarioSnapshotId: null, loanEstimateComparisonId: null, selectedOfferId: null });
+  const uuid = '11111111-1111-4111-8111-111111111111';
+  assert.equal(recordRefinanceDecisionSchema.safeParse({ status: 'EXPLORING', clientMutationId: 'abcdefgh1', scenarioSnapshotId: null }).success, true);
+  assert.equal(recordRefinanceDecisionSchema.safeParse({ status: 'PROCEEDING', clientMutationId: 'abcdefgh1', loanEstimateComparisonId: null, selectedOfferId: 'a-1' }).success, false);
+  assert.equal(recordRefinanceDecisionSchema.safeParse({ status: 'OFFER_SELECTED', clientMutationId: 'abcdefgh1', loanEstimateComparisonId: uuid, selectedOfferId: 'a-1' }).success, true);
+});
+
+test('the missed-window card carries the summary, best rate, date and peak savings, and is absent when there was no missed window', () => {
+  assert.equal(refinanceMissedWindowBlock(null), null);
+  assert.equal(refinanceMissedWindowBlock({ hasMissedOpportunity: false, summary: 'x', bestHistoricalRate30yr: null, bestHistoricalDate: null, bestMonthlySavingsAtPeak: null }), null);
+  const block = refinanceMissedWindowBlock({ hasMissedOpportunity: true, summary: 'Rates were lower in March.', bestHistoricalRate30yr: 5.9, bestHistoricalDate: '2026-03-12', bestMonthlySavingsAtPeak: 240 });
+  assert.equal(block.type, 'SUMMARY');
+  assert.match(block.body, /Rates were lower in March\./);
+  assert.match(block.body, /5\.900%/);
+  assert.match(block.body, /2026-03-12/);
+  assert.match(block.body, /\$240/);
+});
+
+// ───────────────────────────── lender discussion brief (three acknowledgements) ─────────────────────────────
+
+test('the lender brief needs the selected offer and each of the three acknowledgements, separately', () => {
+  assert.equal(refinanceKindFromAction('refinance-lender-brief'), 'LENDER_BRIEF');
+  assert.equal(refinanceFormKindFromCaptureKey('REFINANCE_LENDER_BRIEF_INPUTS'), 'LENDER_BRIEF');
+  const all = { selectedOfferId: 'a-1', figuresVerified: true, sameLoanRequestConfirmed: true, manualSharingUnderstood: true };
+  assert.equal(handler.parseRefinanceCommandAnswer('LENDER_BRIEF', all).success, true);
+  for (const key of ['figuresVerified', 'sameLoanRequestConfirmed', 'manualSharingUnderstood']) {
+    assert.equal(handler.parseRefinanceCommandAnswer('LENDER_BRIEF', { ...all, [key]: false }).success, false, key);
+    const { [key]: _omitted, ...rest } = all;
+    assert.equal(handler.parseRefinanceCommandAnswer('LENDER_BRIEF', rest).success, false, `${key} missing`);
+  }
+  assert.equal(handler.parseRefinanceCommandAnswer('LENDER_BRIEF', { ...all, selectedOfferId: '' }).success, false);
+  const fields = handler.fieldsFor('LENDER_BRIEF', { scenarios: [], comparisons: [], offers: [{ value: 'a-1', label: 'Lender A', comparisonId: 'cmp-1' }] });
+  assert.deepEqual(fields.map((f) => f.key), ['selectedOfferId', 'figuresVerified', 'sameLoanRequestConfirmed', 'manualSharingUnderstood']);
+  assert.equal(fields.every((f) => f.required), true);
+});
+
+test('the lender brief is shown only after the confirmation, from the saved comparison, with the selected lender', async () => {
+  const restore = withSavedRecords();
+  const propertyAccess = require('../../src/services/propertyAccess.service.ts');
+  const financial = require('../../src/services/financialContext/context.ts');
+  const prefs = require('../../src/refinanceRadar/refinanceAlertPreference.service.ts');
+  const decisions = require('../../src/refinanceRadar/refinanceDecision.service.ts');
+  const { RefinanceRadarService } = require('../../src/refinanceRadar/refinanceRadar.service.ts');
+  const { confirmCapabilityInvoke } = require('../../src/services/ask/confirmCapabilityHandlerRegistry.ts');
+  const saved = { a: propertyAccess.resolvePropertyAccess, f: financial.getFinancialContextDecisions, p: prefs.getRefinanceAlertPreference, d: decisions.getCurrentRefinanceDecision, s: RefinanceRadarService.prototype.getSavedScenarios, prop: prisma.property };
+  propertyAccess.resolvePropertyAccess = async () => ({ role: 'CONTRIBUTOR', userId: 'u1', propertyId: 'prop-1' });
+  financial.getFinancialContextDecisions = async () => ({ contextVersion: 'ctx-1' });
+  prefs.getRefinanceAlertPreference = async () => null;
+  decisions.getCurrentRefinanceDecision = async () => null;
+  RefinanceRadarService.prototype.getSavedScenarios = async () => [];
+  prisma.property = { findUnique: async () => ({ address: '1 Main St', city: 'Austin', state: 'TX', zipCode: '78701' }) };
+  try {
+    const form = await handler.refinanceCommandResult('u1', 'prop-1', 'LENDER_BRIEF', 'cmp-1', 'Prepare a lender discussion brief.');
+    assert.equal(form.status, 'NEEDS_CONTEXT');
+    assert.deepEqual(form.captureRequests[0].inputSchema.fields.find((f) => f.key === 'selectedOfferId').inputSchema.options.map((o) => o.label), ['Lender A', 'Lender B']);
+    assert.equal(JSON.stringify(form).includes('Lender discussion brief:'), false, 'no brief before the acknowledgements');
+    const answer = { selectedOfferId: 'a-1', figuresVerified: true, sameLoanRequestConfirmed: true, manualSharingUnderstood: true };
+    const refused = await handler.refinanceCommandResult('u1', 'prop-1', 'LENDER_BRIEF', 'cmp-1', 'x', { ...answer, manualSharingUnderstood: false });
+    assert.equal(refused.status, 'NOT_APPLICABLE');
+    const wrongOffer = await handler.refinanceCommandResult('u1', 'prop-1', 'LENDER_BRIEF', 'cmp-1', 'x', { ...answer, selectedOfferId: 'z-9' });
+    assert.equal(wrongOffer.status, 'NEEDS_CONTEXT');
+    const review = await handler.refinanceCommandResult('u1', 'prop-1', 'LENDER_BRIEF', 'cmp-1', 'x', answer);
+    assert.equal(review.status, 'NEEDS_CONFIRMATION');
+    assert.equal(review.confirmation.fields.filter((f) => f.label === 'You confirmed').length, 3);
+    assert.equal(review.confirmation.fields[0].value, 'Lender A');
+    const done = await confirmCapabilityInvoke('REFINANCE_COMMAND', { userId: 'u1', execution: { id: 'exec-1', propertyId: 'prop-1', createdAt: new Date() }, access: { role: 'CONTRIBUTOR' }, parameters: review.parameters, command: null });
+    assert.equal(done.result.status, 'COMPLETED');
+    const text = JSON.stringify(done.result.blocks);
+    assert.match(text, /Lender discussion brief: Lender A/);
+    assert.match(text, /Ask has not sent it to anyone/);
+    const { AskPresentationBlockSchema } = require('../../src/productFramework/ask/ask.contract.ts');
+    for (const block of done.result.blocks) assert.equal(AskPresentationBlockSchema.safeParse(block).success, true, block.id);
+  } finally {
+    propertyAccess.resolvePropertyAccess = saved.a; financial.getFinancialContextDecisions = saved.f; prefs.getRefinanceAlertPreference = saved.p; decisions.getCurrentRefinanceDecision = saved.d; RefinanceRadarService.prototype.getSavedScenarios = saved.s; prisma.property = saved.prop; restore();
+  }
+});

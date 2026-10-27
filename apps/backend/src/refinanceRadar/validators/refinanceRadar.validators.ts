@@ -118,9 +118,10 @@ export const recordRefinanceDecisionSchema = z.object({
   clientMutationId: z.string().trim().min(8).max(120),
   expectedVersion: z.number().int().positive().optional(),
   radarOpportunityId: z.string().uuid().optional(),
-  scenarioSnapshotId: z.string().uuid().optional(),
-  loanEstimateComparisonId: z.string().uuid().optional(),
-  selectedOfferId: z.string().trim().min(1).max(80).optional(),
+  // Link patch contract: omitted = leave the saved link unchanged, an id = link that record, null = remove the link.
+  scenarioSnapshotId: z.string().uuid().nullable().optional(),
+  loanEstimateComparisonId: z.string().uuid().nullable().optional(),
+  selectedOfferId: z.string().trim().min(1).max(80).nullable().optional(),
   rationale: z.string().trim().max(2000).optional(),
   nextReviewAt: z.string().datetime({ offset: true }).optional(),
   completedMortgage: completedMortgageSchema.optional(),
@@ -137,6 +138,13 @@ export const recordRefinanceDecisionSchema = z.object({
       code: 'custom',
       path: ['selectedOfferId'],
       message: 'Selecting an offer requires its reviewed offer reference.',
+    });
+  }
+  if (value.selectedOfferId && value.loanEstimateComparisonId === null) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['selectedOfferId'],
+      message: 'An offer cannot be linked while its comparison is being removed.',
     });
   }
   if (value.status === 'CLOSED' && !value.completedMortgage) {

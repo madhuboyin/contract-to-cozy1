@@ -10,9 +10,11 @@ import { RefinanceRadarService } from '../../../refinanceRadar/refinanceRadar.se
 import { getFinancialContextDecisions } from '../../financialContext/context';
 import { getRefinanceAlertPreference, updateRefinanceAlertPreference } from '../../../refinanceRadar/refinanceAlertPreference.service';
 import { deleteSavedRefinanceLoanEstimateComparison, listSavedRefinanceLoanEstimateComparisons, saveRefinanceLoanEstimateComparison } from '../../../refinanceRadar/refinanceLoanEstimateSnapshot.service';
-import { getCurrentRefinanceDecision, recordRefinanceDecision } from '../../../refinanceRadar/refinanceDecision.service';
-import { parseRefinanceScenarioEdit } from './refinance.handler';
-import { REFINANCE_CAPTURE_KEYS, parseRefinanceCommandAnswer, refinanceAlertAnswerSchema, refinanceComparisonAnswerSchema, refinanceDecisionAnswerSchema, refinanceFormKindFromCaptureKey, refinanceKindFromAction, type RefinanceCommandKind, type RefinanceFormKind } from '../support/refinanceCommand';
+import { assertRefinanceDecisionTransition, getCurrentRefinanceDecision, recordRefinanceDecision } from '../../../refinanceRadar/refinanceDecision.service';
+import { markdownSummaryResult, parseRefinanceScenarioEdit } from './refinance.handler';
+import { buildRefinanceLoanEstimateHandoffMarkdown } from '../../../refinanceRadar/refinanceLoanEstimateMarkdown';
+import { prisma } from '../../../lib/prisma';
+import { REFINANCE_CAPTURE_KEYS, REFINANCE_NO_LINK, parseRefinanceCommandAnswer, refinanceAlertAnswerSchema, refinanceComparisonAnswerSchema, refinanceDecisionAnswerSchema, refinanceFormKindFromCaptureKey, REFINANCE_BRIEF_ACKNOWLEDGEMENTS, refinanceKindFromAction, refinanceLenderBriefAnswerSchema, type RefinanceCommandKind, type RefinanceFormKind } from '../support/refinanceCommand';
 
 const radar = new RefinanceRadarService();
 const sha = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -49,25 +51,28 @@ export function fieldsFor(kind: RefinanceFormKind, links?: DecisionLinkOptions) 
   const bool = (key: string, label: string) => ({ key, label, required: true, inputSchema: { type: 'BOOLEAN' as const } });
   const select = (key: string, label: string, options: string[]) => ({ key, label, required: true, inputSchema: { type: 'SINGLE_SELECT' as const, options: options.map((value) => ({ value, label: value.replace(/_/g, ' ').toLowerCase().replace(/^./, (c) => c.toUpperCase()) })) } });
   if (kind === 'ALERT_SETTINGS') return [bool('emailEnabled', 'Email alerts'), bool('pushEnabled', 'Push alerts'), select('cadence', 'Cadence', ['IMMEDIATE', 'DAILY_DIGEST', 'WEEKLY_BRIEF', 'MUTED']), select('sensitivity', 'Sensitivity', ['EARLY', 'CONSERVATIVE', 'BALANCED']), text('quietStart', 'Quiet hours start (HH:mm)', true), text('quietEnd', 'Quiet hours end (HH:mm)', true), text('timezone', 'Timezone', true)];
+  const noLink = (label: string) => ({ value: REFINANCE_NO_LINK, label });
+  if (kind === 'LENDER_BRIEF') return [{ key: 'selectedOfferId', label: 'Selected lender', required: true, inputSchema: { type: 'SINGLE_SELECT' as const, options: (links?.offers ?? []).map(({ value, label }) => ({ value, label })) } },
+    ...REFINANCE_BRIEF_ACKNOWLEDGEMENTS.map(({ key, label }) => bool(key, label))];
   const optionalSelect = (key: string, label: string, options: Array<{ value: string; label: string }>) => ({ key, label, required: false, inputSchema: { type: 'SINGLE_SELECT' as const, options } });
-  if (kind === 'RECORD_DECISION') return [select('status', 'Decision', ['EXPLORING', 'DEFERRED', 'KEEP_CURRENT_LOAN', 'PROCEEDING', 'APPLICATION_IN_PROGRESS', 'DECLINED', 'ABANDONED', 'CLOSED']), text('rationale', 'Reason or note'), text('nextReviewAt', 'Review again (ISO date and time)'), number('currentMortgageBalanceUsd', 'New mortgage balance ($)'), number('interestRatePct', 'New interest rate (%)', false, 0.01, 30), number('remainingTermMonths', 'New remaining term (months)', false, 1, 600), number('monthlyPaymentUsd', 'New monthly payment ($)'), number('closingCostUsd', 'Recorded closing costs ($)'),
-    ...(links?.scenarios.length ? [optionalSelect('scenarioSnapshotId', 'Saved scenario this rests on', links.scenarios)] : []),
-    ...(links?.comparisons.length ? [optionalSelect('loanEstimateComparisonId', 'Saved Loan Estimate comparison', links.comparisons.map(({ value, label }) => ({ value, label })))] : []),
-    ...(links?.offers.length ? [optionalSelect('selectedOfferId', 'Offer you are leaning toward (from that comparison)', links.offers.map(({ value, label }) => ({ value, label })))] : [])];
+  if (kind === 'RECORD_DECISION') return [select('status', 'Decision', ['EXPLORING', 'DEFERRED', 'KEEP_CURRENT_LOAN', 'PROCEEDING', 'OFFER_SELECTED', 'APPLICATION_IN_PROGRESS', 'DECLINED', 'ABANDONED', 'CLOSED']), text('rationale', 'Reason or note'), text('nextReviewAt', 'Review again (ISO date and time)'), number('currentMortgageBalanceUsd', 'New mortgage balance ($)'), number('interestRatePct', 'New interest rate (%)', false, 0.01, 30), number('remainingTermMonths', 'New remaining term (months)', false, 1, 600), number('monthlyPaymentUsd', 'New monthly payment ($)'), number('closingCostUsd', 'Recorded closing costs ($)'),
+    ...(links?.scenarios.length ? [optionalSelect('scenarioSnapshotId', 'Saved scenario this rests on', [...links.scenarios, noLink('No linked scenario')])] : []),
+    ...(links?.comparisons.length ? [optionalSelect('loanEstimateComparisonId', 'Saved Loan Estimate comparison', [...links.comparisons.map(({ value, label }) => ({ value, label })), noLink('No linked comparison (also removes the offer)')])] : []),
+    ...(links?.offers.length ? [optionalSelect('selectedOfferId', 'Offer you selected or are leaning toward (from that comparison)', [...links.offers.map(({ value, label }) => ({ value, label })), noLink('No selected offer')])] : [])];
   const offerFields = (p: 'a' | 'b', label: string) => [text(`${p}Lender`, `${label} lender`, true), number(`${p}Amount`, `${label} loan amount ($)`, true, 1000), number(`${p}TermYears`, `${label} term (years)`, true, 1, 50), select(`${p}LoanType`, `${label} loan type`, ['FIXED', 'ARM', 'OTHER']), number(`${p}Rate`, `${label} note rate (%)`, true, 0.01, 30), number(`${p}Apr`, `${label} APR (%)`, true, 0.01, 30), number(`${p}MonthlyPI`, `${label} monthly principal and interest ($)`, true, 1), number(`${p}MonthlyMI`, `${label} monthly mortgage insurance ($)`), number(`${p}TotalPayment`, `${label} estimated total payment ($)`), number(`${p}LoanCosts`, `${label} loan costs ($)`, true), number(`${p}LenderCredits`, `${label} lender credits ($)`, true), number(`${p}CashToClose`, `${label} cash to close ($)`, true), select(`${p}CashDirection`, `${label} cash direction`, ['FROM_BORROWER', 'TO_BORROWER', 'UNKNOWN'])];
   return [text('label', 'Comparison label'), ...offerFields('a', 'Offer 1'), ...offerFields('b', 'Offer 2')];
 }
 
 function capture(kind: RefinanceFormKind, version: string, currentAnswer: Record<string, unknown>, links?: DecisionLinkOptions): AskCaptureRequest {
-  const title = kind === 'ALERT_SETTINGS' ? 'Refinance alert settings' : kind === 'ADD_COMPARISON' ? 'Compare two official Loan Estimates' : 'Record your refinance decision';
+  const title = kind === 'ALERT_SETTINGS' ? 'Refinance alert settings' : kind === 'ADD_COMPARISON' ? 'Compare two official Loan Estimates' : kind === 'LENDER_BRIEF' ? 'Prepare a lender discussion brief' : 'Record your refinance decision';
   return { requirementId: `refinance-${kind.toLowerCase()}-inputs`, captureKey: REFINANCE_CAPTURE_KEYS[kind], classification: 'WORKFLOW_INPUT', state: 'UNKNOWN', title,
-    question: kind === 'ADD_COMPARISON' ? 'Enter the figures exactly as shown on two reviewed Loan Estimates.' : 'Review the values before continuing.',
+    question: kind === 'ADD_COMPARISON' ? 'Enter the figures exactly as shown on two reviewed Loan Estimates.' : kind === 'LENDER_BRIEF' ? 'Choose the one reviewed offer the brief is about, then confirm each statement. All three are required.' : 'Review the values before continuing.',
     helpText: kind === 'ADD_COMPARISON' ? 'The comparison does not select a lender or transmit information. Nothing is saved until you confirm.' : 'Nothing changes until you confirm.',
     inputSchema: { type: 'GROUP', fields: fieldsFor(kind, links) } as AskCaptureRequest['inputSchema'], currentAnswer, allowNotSure: false, sensitivity: 'FINANCIAL', destinationLabel: 'Saved to the canonical refinance records after confirmation', confirmationText: null, expectedContextVersion: version };
 }
 
 /** True when a link names a record this home does not have saved, or an offer that is not one of the chosen comparison's. */
-export function decisionLinksUnavailable(data: { scenarioSnapshotId?: string; loanEstimateComparisonId?: string; selectedOfferId?: string }, links: DecisionLinkOptions): boolean {
+export function decisionLinksUnavailable(data: { scenarioSnapshotId?: string | null; loanEstimateComparisonId?: string | null; selectedOfferId?: string | null }, links: DecisionLinkOptions): boolean {
   const comparison = links.comparisons.find((item) => item.value === data.loanEstimateComparisonId);
   return Boolean((data.scenarioSnapshotId && !links.scenarios.some((item) => item.value === data.scenarioSnapshotId))
     || (data.loanEstimateComparisonId && !comparison)
@@ -75,17 +80,25 @@ export function decisionLinksUnavailable(data: { scenarioSnapshotId?: string; lo
 }
 
 /** What the decision confirmation shows: the status, the note, any link by its label, and the closing figures when the refinance closed. */
-function decisionConfirmationFields(supplied: Record<string, unknown>, links?: DecisionLinkOptions): Array<{ label: string; value: string }> {
+export function decisionConfirmationFields(supplied: Record<string, unknown>, links?: DecisionLinkOptions, current?: { scenarioSnapshotId: string | null; loanEstimateComparisonId: string | null; selectedOfferId: string | null } | null): Array<{ label: string; value: string }> {
   const parsed = refinanceDecisionAnswerSchema.safeParse(supplied);
   if (!parsed.success) return [];
   const d = parsed.data;
-  const label = (list: Array<{ value: string; label: string }> | undefined, id?: string) => list?.find((item) => item.value === id)?.label;
+  const label = (list: Array<{ value: string; label: string }> | undefined, id?: string | null) => list?.find((item) => item.value === id)?.label;
+  // A link left blank stays as saved; a link set to "none" is removed. Say which, so the confirmation never hides what will remain.
+  const link = (name: string, patch: string | null | undefined, saved: string | null | undefined, list: Array<{ value: string; label: string }> | undefined, fallback: string) => {
+    if (patch === null) return saved ? [{ label: name, value: 'Removed' }] : [];
+    const id = patch ?? saved;
+    return id ? [{ label: name, value: `${label(list, id) ?? fallback}${patch === undefined ? ' (kept as saved)' : ''}` }] : [];
+  };
+  const comparisonChanged = d.loanEstimateComparisonId !== undefined && (d.loanEstimateComparisonId ?? null) !== (current?.loanEstimateComparisonId ?? null);
+  const offerDropped = current?.selectedOfferId && d.selectedOfferId === undefined && (d.loanEstimateComparisonId === null || comparisonChanged);
   return [
     { label: 'Decision', value: d.status.replace(/_/g, ' ').toLowerCase().replace(/^./, (c) => c.toUpperCase()) },
     ...(d.rationale ? [{ label: 'Note', value: d.rationale }] : []),
-    ...(d.scenarioSnapshotId ? [{ label: 'Saved scenario', value: label(links?.scenarios, d.scenarioSnapshotId) ?? 'Linked scenario' }] : []),
-    ...(d.loanEstimateComparisonId ? [{ label: 'Loan Estimate comparison', value: label(links?.comparisons, d.loanEstimateComparisonId) ?? 'Linked comparison' }] : []),
-    ...(d.selectedOfferId ? [{ label: 'Offer', value: label(links?.offers, d.selectedOfferId) ?? 'Selected offer' }] : []),
+    ...link('Saved scenario', d.scenarioSnapshotId, current?.scenarioSnapshotId, links?.scenarios, 'Linked scenario'),
+    ...link('Loan Estimate comparison', d.loanEstimateComparisonId, current?.loanEstimateComparisonId, links?.comparisons, 'Linked comparison'),
+    ...(offerDropped ? [{ label: 'Offer', value: 'Removed (it belonged to the earlier comparison)' }] : link('Offer', d.selectedOfferId, current?.selectedOfferId, links?.offers, 'Selected offer')),
     ...(d.status === 'CLOSED' ? [{ label: 'New loan', value: `$${Number(d.currentMortgageBalanceUsd).toLocaleString('en-US')} at ${d.interestRatePct}% for ${d.remainingTermMonths} months` }, { label: 'Financing Profile', value: 'Updated with these figures after you confirm' }] : []),
   ];
 }
@@ -96,37 +109,55 @@ export async function refinanceCommandResult(userId: string, propertyId: string,
   const access = await ensurePropertyAccess(userId, propertyId);
   if (access.role === HouseholdRole.VIEWER) return { status: 'BLOCKED', reasonCode: 'ASK_PERMISSION_REQUIRED', blocks: [summary('A contributor or owner is required', 'You can review this information, but your role cannot change refinance records or notification settings.')], suggestions: [] };
   const version = await commandVersion(userId, propertyId);
-  const formKind = kind === 'ALERT_SETTINGS' || kind === 'ADD_COMPARISON' || kind === 'RECORD_DECISION' ? kind : null;
+  const formKind = kind === 'ALERT_SETTINGS' || kind === 'ADD_COMPARISON' || kind === 'RECORD_DECISION' || kind === 'LENDER_BRIEF' ? kind : null;
+  // The lender discussion brief is about one saved comparison: its offers are the choices, and nothing else is ever offered.
+  let briefLinks: DecisionLinkOptions | undefined;
+  if (kind === 'LENDER_BRIEF') {
+    const comparison = entityId ? (await listSavedRefinanceLoanEstimateComparisons(propertyId)).find((item) => item.id === entityId) : undefined;
+    if (!comparison) return { status: 'NOT_APPLICABLE', reasonCode: 'REFINANCE_COMPARISON_NOT_FOUND', blocks: [summary('That saved comparison is no longer available', 'Nothing was shown.')], suggestions: [] };
+    briefLinks = { scenarios: [], comparisons: [], offers: comparison.offers.map((offer) => ({ value: offer.id, label: offer.lenderName, comparisonId: comparison.id })) };
+  }
   if (formKind && !supplied) {
     const preference = formKind === 'ALERT_SETTINGS' ? await getRefinanceAlertPreference(userId, propertyId) : null;
     const decision = formKind === 'RECORD_DECISION' ? await getCurrentRefinanceDecision(propertyId) : null;
     const seed = preference ? { emailEnabled: preference.emailEnabled, pushEnabled: preference.pushEnabled, cadence: preference.cadence, sensitivity: preference.sensitivity, quietStart: preference.quietStart ?? '21:00', quietEnd: preference.quietEnd ?? '07:00', timezone: preference.timezone }
+      : formKind === 'LENDER_BRIEF' ? { figuresVerified: false, sameLoanRequestConfirmed: false, manualSharingUnderstood: false }
       : formKind === 'RECORD_DECISION' ? { status: decision?.status ?? 'EXPLORING', rationale: decision?.rationale ?? '', nextReviewAt: decision?.nextReviewAt ?? '', ...(decision?.scenarioSnapshotId ? { scenarioSnapshotId: decision.scenarioSnapshotId } : {}), ...(decision?.loanEstimateComparisonId ? { loanEstimateComparisonId: decision.loanEstimateComparisonId } : {}), ...(decision?.selectedOfferId ? { selectedOfferId: decision.selectedOfferId } : {}) } : {};
-    const links = formKind === 'RECORD_DECISION' ? await loadDecisionLinkOptions(propertyId) : undefined;
+    const links = formKind === 'RECORD_DECISION' ? await loadDecisionLinkOptions(propertyId) : briefLinks;
     return { status: 'NEEDS_CONTEXT', reasonCode: `REFINANCE_${formKind}_INPUT_REQUIRED`, contextVersion: version, parameters: { refinanceLaunch: { kind, entityId, message } }, blocks: [summary('Review the refinance details', 'Enter the details below. You will see a confirmation before anything is saved.')], captureRequests: [capture(formKind, version, seed, links)], suggestions: [] };
   }
   if (formKind && supplied && !parseRefinanceCommandAnswer(formKind, supplied).success) return { status: 'NOT_APPLICABLE', reasonCode: 'REFINANCE_COMMAND_INPUT_INVALID', blocks: [summary('Check the refinance details', 'Fill in the required fields and make sure the values match the official source.')], suggestions: [] };
   // A decision's links must be this home's own saved records, and the offer must belong to the comparison chosen with it: refuse here, with the form kept.
   let decisionLinks: DecisionLinkOptions | undefined;
+  let currentDecision: Awaited<ReturnType<typeof getCurrentRefinanceDecision>> = null;
   if (kind === 'RECORD_DECISION' && supplied) {
-    decisionLinks = await loadDecisionLinkOptions(propertyId);
+    [decisionLinks, currentDecision] = await Promise.all([loadDecisionLinkOptions(propertyId), getCurrentRefinanceDecision(propertyId)]);
     const answer = parseRefinanceCommandAnswer('RECORD_DECISION', supplied);
-    const data = answer.success ? answer.data as { scenarioSnapshotId?: string; loanEstimateComparisonId?: string; selectedOfferId?: string } : {};
-    if (decisionLinksUnavailable(data, decisionLinks)) {
-      return { status: 'NEEDS_CONTEXT', reasonCode: 'REFINANCE_DECISION_LINK_UNAVAILABLE', contextVersion: version, parameters: { refinanceLaunch: { kind, entityId, message } },
-        blocks: [{ type: 'SUMMARY', id: 'refinance-decision-link-missing', title: 'One of those saved records is not available', body: 'Choose a saved scenario, a saved comparison, and an offer from that comparison, or leave them blank. Nothing has been saved.', tone: 'CAUTION', actions: [] }],
-        captureRequests: [capture('RECORD_DECISION', version, supplied, decisionLinks)], suggestions: [] };
+    const data = answer.success ? answer.data as { status?: RefinanceDecisionStatus; scenarioSnapshotId?: string | null; loanEstimateComparisonId?: string | null; selectedOfferId?: string | null } : {};
+    const cautionForm = (reasonCode: string, id: string, title: string, body: string): AskOperationResult => ({ status: 'NEEDS_CONTEXT', reasonCode, contextVersion: version, parameters: { refinanceLaunch: { kind, entityId, message } },
+      blocks: [{ type: 'SUMMARY', id, title, body, tone: 'CAUTION', actions: [] }], captureRequests: [capture('RECORD_DECISION', version, supplied, decisionLinks)], suggestions: [] });
+    if (decisionLinksUnavailable(data, decisionLinks)) return cautionForm('REFINANCE_DECISION_LINK_UNAVAILABLE', 'refinance-decision-link-missing', 'One of those saved records is not available', 'Choose a saved scenario, a saved comparison, and an offer from that comparison, or leave them blank. Nothing has been saved.');
+    // The same transition rule the canonical service enforces, checked before the confirmation so a move it would refuse never reaches one.
+    if (data.status) {
+      try { assertRefinanceDecisionTransition(currentDecision?.status ?? null, data.status); } catch {
+        return cautionForm('REFINANCE_DECISION_TRANSITION_INVALID', 'refinance-decision-transition-invalid', 'That step does not follow from where this decision is', currentDecision ? `A decision that is ${currentDecision.status.replace(/_/g, ' ').toLowerCase()} cannot move straight to ${data.status.replace(/_/g, ' ').toLowerCase()}. Choose the next step in order. Nothing has been saved.` : 'A refinance decision starts as exploring, deferred, keeping the current loan, or proceeding. Nothing has been saved.');
+      }
     }
+  }
+  if (kind === 'LENDER_BRIEF' && !briefLinks?.offers.some((offer) => offer.value === (supplied as { selectedOfferId?: unknown } | undefined)?.selectedOfferId)) {
+    return { status: 'NEEDS_CONTEXT', reasonCode: 'REFINANCE_BRIEF_OFFER_UNAVAILABLE', contextVersion: version, parameters: { refinanceLaunch: { kind, entityId, message } },
+      blocks: [{ type: 'SUMMARY', id: 'refinance-brief-offer-missing', title: 'Choose one of the offers in this comparison', body: 'Nothing has been shown.', tone: 'CAUTION', actions: [] }],
+      captureRequests: [capture('LENDER_BRIEF', version, supplied ?? {}, briefLinks)], suggestions: [] };
   }
   if (kind === 'DELETE_COMPARISON' && !entityId) return { status: 'NOT_APPLICABLE', reasonCode: 'REFINANCE_COMPARISON_NOT_FOUND', blocks: [summary('That saved comparison is no longer available', 'Nothing was deleted.')], suggestions: [] };
   const scenario = kind === 'SAVE_SCENARIO' ? parseRefinanceScenarioEdit(message) : null;
   if (kind === 'SAVE_SCENARIO' && !scenario?.targetRatePct) return { status: 'NOT_APPLICABLE', reasonCode: 'REFINANCE_SCENARIO_INVALID', blocks: [summary('The scenario could not be saved', 'Run a scenario with a target rate first, then choose Save.')], suggestions: [] };
   const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
-  const title = kind === 'ALERT_SETTINGS' ? 'Save these alert settings?' : kind === 'ADD_COMPARISON' ? 'Save and compare these Loan Estimates?' : kind === 'RECORD_DECISION' ? 'Record this refinance decision?' : kind === 'DELETE_COMPARISON' ? 'Permanently delete this comparison?' : 'Save this refinance scenario?';
+  const title = kind === 'LENDER_BRIEF' ? 'Show the lender discussion brief?' : kind === 'ALERT_SETTINGS' ? 'Save these alert settings?' : kind === 'ADD_COMPARISON' ? 'Save and compare these Loan Estimates?' : kind === 'RECORD_DECISION' ? 'Record this refinance decision?' : kind === 'DELETE_COMPARISON' ? 'Permanently delete this comparison?' : 'Save this refinance scenario?';
   return { status: 'NEEDS_CONFIRMATION', reasonCode: 'REFINANCE_COMMAND_CONFIRMATION_REQUIRED', contextVersion: version,
     parameters: { refinanceCommand: { kind, entityId, message }, refinanceForm: supplied ?? null, refinanceContextVersion: version, confirmationVersion: 1, confirmationExpiresAt: expiresAt },
-    blocks: [summary(title, 'Nothing changes until you confirm.')], captureRequests: formKind ? [capture(formKind, version, supplied!, decisionLinks)] : [],
-    confirmation: { confirmationId: `refinance-${sha({ kind, entityId, supplied, message }).slice(0, 16)}`, version: 1, title, description: kind === 'ADD_COMPARISON' ? 'This stores the reviewed figures and compares disclosed metrics without choosing or contacting a lender.' : 'The canonical refinance record will be updated only after confirmation.', fields: kind === 'RECORD_DECISION' ? decisionConfirmationFields(supplied!, decisionLinks) : [], editableFields: [], confirmLabel: kind === 'DELETE_COMPARISON' ? 'Delete permanently' : 'Confirm', consentText: 'I reviewed these refinance details and authorize this change.', expiresAt }, suggestions: [] };
+    blocks: [summary(title, 'Nothing changes until you confirm.')], captureRequests: formKind ? [capture(formKind, version, supplied!, decisionLinks ?? briefLinks)] : [],
+    confirmation: { confirmationId: `refinance-${sha({ kind, entityId, supplied, message }).slice(0, 16)}`, version: 1, title, description: kind === 'LENDER_BRIEF' ? 'This only shows the brief here. Nothing is sent to a lender and no recipient is stored.' : kind === 'ADD_COMPARISON' ? 'This stores the reviewed figures and compares disclosed metrics without choosing or contacting a lender.' : 'The canonical refinance record will be updated only after confirmation.', fields: kind === 'RECORD_DECISION' ? decisionConfirmationFields(supplied!, decisionLinks, currentDecision) : kind === 'LENDER_BRIEF' ? [{ label: 'Selected lender', value: briefLinks!.offers.find((offer) => offer.value === (supplied as { selectedOfferId: string }).selectedOfferId)?.label ?? 'Selected offer' }, ...REFINANCE_BRIEF_ACKNOWLEDGEMENTS.map(({ label }) => ({ label: 'You confirmed', value: label }))] : [], editableFields: [], confirmLabel: kind === 'DELETE_COMPARISON' ? 'Delete permanently' : kind === 'LENDER_BRIEF' ? 'Show the brief' : 'Confirm', consentText: 'I reviewed these refinance details and authorize this change.', expiresAt }, suggestions: [] };
 }
 
 registerCapabilityHandler('refinance.command', async (envelope) => {
@@ -155,6 +186,18 @@ async function confirmRefinanceCommandUnchecked(ctx: ConfirmCapabilityContext): 
   if (parameters.refinanceContextVersion !== await commandVersion(userId, execution.propertyId)) throw stale('The refinance data changed while this confirmation was open. Review it again.', 'ASK_CONTEXT_VERSION_CONFLICT');
   const form = (parameters.refinanceForm ?? {}) as Record<string, unknown>;
   let title = 'Refinance record updated';
+  if (command.kind === 'LENDER_BRIEF') {
+    // A read: the acknowledgements were required again here, the saved comparison is reloaded for this home, and nothing is written or sent.
+    const parsed = refinanceLenderBriefAnswerSchema.safeParse(parameters.refinanceForm ?? {}); if (!parsed.success) throw stale('The acknowledgements are incomplete. Start the brief again.');
+    const comparison = command.entityId ? (await listSavedRefinanceLoanEstimateComparisons(execution.propertyId)).find((item) => item.id === command.entityId) : undefined;
+    if (!comparison || !comparison.offers.some((offer) => offer.id === parsed.data.selectedOfferId)) throw stale('That saved comparison or offer is no longer available.', 'ASK_CONTEXT_VERSION_CONFLICT');
+    const property = await prisma.property.findUnique({ where: { id: execution.propertyId }, select: { address: true, city: true, state: true, zipCode: true } });
+    const markdown = buildRefinanceLoanEstimateHandoffMarkdown({ propertyLabel: property ? `${property.address}, ${property.city}, ${property.state} ${property.zipCode}` : 'This home', generatedAt: new Date(), offers: comparison.offers, selectedOfferId: parsed.data.selectedOfferId });
+    const shown = markdownSummaryResult('REFINANCE_LENDER_BRIEF', 'refinance-lender-brief', `Lender discussion brief: ${comparison.offers.find((offer) => offer.id === parsed.data.selectedOfferId)?.lenderName ?? 'selected offer'}`,
+      'The same brief Desktop downloads, shown here to read or copy. Competitor lender names are excluded. Ask has not sent it to anyone.', markdown,
+      { title: 'Disclosed figures, not advice', body: 'ContractToCozy does not send this brief, contact a lender, or store a recipient. Share it yourself if you choose.' });
+    return { result: { ...shown, status: 'COMPLETED', reasonCode: 'REFINANCE_LENDER_BRIEF' }, artifactType: 'REFINANCE_SCENARIO', artifactId: command.entityId ?? execution.propertyId, refreshedExecutions: [] };
+  }
   if (command.kind === 'ALERT_SETTINGS') {
     const parsed = refinanceAlertAnswerSchema.safeParse(form); if (!parsed.success) throw stale('The alert settings are invalid.');
     await updateRefinanceAlertPreference(userId, execution.propertyId, parsed.data); title = 'Alert settings saved';
@@ -167,7 +210,7 @@ async function confirmRefinanceCommandUnchecked(ctx: ConfirmCapabilityContext): 
   } else if (command.kind === 'RECORD_DECISION') {
     const parsed = refinanceDecisionAnswerSchema.safeParse(form); if (!parsed.success) throw stale('The decision details are invalid.'); const d = parsed.data;
     const current = await getCurrentRefinanceDecision(execution.propertyId);
-    await recordRefinanceDecision({ propertyId: execution.propertyId, userId, body: { status: d.status as RefinanceDecisionStatus, clientMutationId: `ask-refinance-${execution.id}`, ...(current ? { expectedVersion: current.version } : {}), ...(d.rationale ? { rationale: d.rationale } : {}), ...(d.scenarioSnapshotId ? { scenarioSnapshotId: d.scenarioSnapshotId } : {}), ...(d.loanEstimateComparisonId ? { loanEstimateComparisonId: d.loanEstimateComparisonId } : {}), ...(d.selectedOfferId ? { selectedOfferId: d.selectedOfferId } : {}), ...(d.status === 'DEFERRED' && d.nextReviewAt ? { nextReviewAt: new Date(d.nextReviewAt).toISOString() } : {}), ...(d.status === 'CLOSED' ? { completedMortgage: { currentMortgageBalanceUsd: d.currentMortgageBalanceUsd!, interestRatePct: d.interestRatePct!, remainingTermMonths: d.remainingTermMonths!, ...(d.monthlyPaymentUsd != null ? { monthlyPaymentUsd: d.monthlyPaymentUsd } : {}), ...(d.closingCostUsd != null ? { closingCostUsd: d.closingCostUsd } : {}), mortgageBalanceAsOfDate: new Date().toISOString() } } : {}) } }); title = d.status === 'CLOSED' ? 'Refinance closed and Financing updated' : 'Refinance decision recorded';
+    await recordRefinanceDecision({ propertyId: execution.propertyId, userId, body: { status: d.status as RefinanceDecisionStatus, clientMutationId: `ask-refinance-${execution.id}`, ...(current ? { expectedVersion: current.version } : {}), ...(d.rationale ? { rationale: d.rationale } : {}), ...(d.scenarioSnapshotId !== undefined ? { scenarioSnapshotId: d.scenarioSnapshotId } : {}), ...(d.loanEstimateComparisonId !== undefined ? { loanEstimateComparisonId: d.loanEstimateComparisonId } : {}), ...(d.selectedOfferId !== undefined ? { selectedOfferId: d.selectedOfferId } : {}), ...(d.status === 'DEFERRED' && d.nextReviewAt ? { nextReviewAt: new Date(d.nextReviewAt).toISOString() } : {}), ...(d.status === 'CLOSED' ? { completedMortgage: { currentMortgageBalanceUsd: d.currentMortgageBalanceUsd!, interestRatePct: d.interestRatePct!, remainingTermMonths: d.remainingTermMonths!, ...(d.monthlyPaymentUsd != null ? { monthlyPaymentUsd: d.monthlyPaymentUsd } : {}), ...(d.closingCostUsd != null ? { closingCostUsd: d.closingCostUsd } : {}), mortgageBalanceAsOfDate: new Date().toISOString() } } : {}) } }); title = d.status === 'CLOSED' ? 'Refinance closed and Financing updated' : 'Refinance decision recorded';
   } else {
     const edit = parseRefinanceScenarioEdit(command.message ?? ''); if (!edit?.targetRatePct) throw stale('The scenario details are no longer available.');
     const context = await getFinancialContextDecisions(execution.propertyId, userId, 'REFINANCE_RADAR');

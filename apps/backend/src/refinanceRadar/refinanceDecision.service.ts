@@ -193,6 +193,26 @@ async function validateLinkedRecords(
   };
 }
 
+/**
+ * The links a decision holds after this change. omitted keeps the saved link, an id replaces it, null removes it. An offer belongs to one
+ * comparison, so removing or changing the comparison without naming a new offer removes the offer with it.
+ */
+export function resolveDecisionLinks(
+  current: { scenarioSnapshotId: string | null; loanEstimateComparisonId: string | null; selectedOfferId: string | null } | null,
+  body: { scenarioSnapshotId?: string | null; loanEstimateComparisonId?: string | null; selectedOfferId?: string | null },
+) {
+  const keep = <T>(patch: T | null | undefined, saved: T | null | undefined): T | null => (patch === undefined ? saved ?? null : patch);
+  const loanEstimateComparisonId = keep(body.loanEstimateComparisonId, current?.loanEstimateComparisonId);
+  const comparisonChanged = body.loanEstimateComparisonId !== undefined && loanEstimateComparisonId !== (current?.loanEstimateComparisonId ?? null);
+  return {
+    scenarioSnapshotId: keep(body.scenarioSnapshotId, current?.scenarioSnapshotId),
+    loanEstimateComparisonId,
+    selectedOfferId: loanEstimateComparisonId === null || (comparisonChanged && body.selectedOfferId === undefined)
+      ? null
+      : keep(body.selectedOfferId, current?.selectedOfferId),
+  };
+}
+
 async function loadDecision(tx: Prisma.TransactionClient, decisionId: string) {
   return tx.refinanceDecision.findUniqueOrThrow({
     where: { id: decisionId },
@@ -331,6 +351,7 @@ export async function recordRefinanceDecision(input: {
     }
 
     const linked = await validateLinkedRecords(tx, input.propertyId, input.body);
+    const links = resolveDecisionLinks(current, input.body);
     const previousMortgage = toStatus === RefinanceDecisionStatus.CLOSED
       ? await tx.propertyFinancingProfile.findUnique({ where: { propertyId: input.propertyId } })
       : null;
@@ -375,9 +396,9 @@ export async function recordRefinanceDecision(input: {
           recordedByUserId: input.userId,
           status: toStatus,
           radarOpportunityId: linked.radarOpportunityId,
-          scenarioSnapshotId: input.body.scenarioSnapshotId,
-          loanEstimateComparisonId: input.body.loanEstimateComparisonId,
-          selectedOfferId: input.body.selectedOfferId,
+          scenarioSnapshotId: input.body.scenarioSnapshotId ?? null,
+          loanEstimateComparisonId: input.body.loanEstimateComparisonId ?? null,
+          selectedOfferId: input.body.selectedOfferId ?? null,
           rationale: input.body.rationale,
           nextReviewAt,
           completedAt: OUTCOME_STATUSES.has(toStatus) ? now : null,
@@ -398,10 +419,9 @@ export async function recordRefinanceDecision(input: {
             : input.propertyId,
           recordedByUserId: input.userId,
           radarOpportunityId: linked.radarOpportunityId ?? current.radarOpportunityId,
-          scenarioSnapshotId: input.body.scenarioSnapshotId ?? current.scenarioSnapshotId,
-          loanEstimateComparisonId:
-            input.body.loanEstimateComparisonId ?? current.loanEstimateComparisonId,
-          selectedOfferId: input.body.selectedOfferId ?? current.selectedOfferId,
+          scenarioSnapshotId: links.scenarioSnapshotId,
+          loanEstimateComparisonId: links.loanEstimateComparisonId,
+          selectedOfferId: links.selectedOfferId,
           rationale: input.body.rationale ?? current.rationale,
           nextReviewAt,
           completedAt: OUTCOME_STATUSES.has(toStatus) ? now : null,
@@ -433,9 +453,9 @@ export async function recordRefinanceDecision(input: {
         metadataJson: {
           version,
           radarOpportunityId: linked.radarOpportunityId,
-          scenarioSnapshotId: input.body.scenarioSnapshotId ?? null,
-          loanEstimateComparisonId: input.body.loanEstimateComparisonId ?? null,
-          selectedOfferId: input.body.selectedOfferId ?? null,
+          scenarioSnapshotId: links.scenarioSnapshotId,
+          loanEstimateComparisonId: links.loanEstimateComparisonId,
+          selectedOfferId: links.selectedOfferId,
         },
       },
     });
@@ -491,7 +511,7 @@ export async function recordRefinanceDecision(input: {
       toStatus,
       occurredAt: history.occurredAt,
       recommendationSnapshotId: influencingRecommendationSnapshotId,
-      selectedOfferId: input.body.selectedOfferId ?? current?.selectedOfferId ?? null,
+      selectedOfferId: links.selectedOfferId,
       closingCostUsd: input.body.completedMortgage?.closingCostUsd ?? null,
     });
 
