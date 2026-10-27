@@ -24,7 +24,7 @@ test('property brief unknowns say what is missing without exposing enum codes', 
     { sourceLabel: 'Canonical property record gap', sourceAsOf: '2026-07-27T00:00:00.000Z', verification: 'UNKNOWN_OR_NOT_RECORDED' },
   );
   assert.equal(row.title, 'Bedrooms: Unknown or not recorded');
-  assert.deepEqual(row.meta, ['Source: Home Record', 'As of Jul 27, 2026', 'Unknown or not recorded']);
+  assert.deepEqual(row.meta, ['Source: Home record', 'As of Jul 27, 2026', 'Unknown or not recorded']);
 });
 
 test('a writable brief gap launches its governed property area capture', () => {

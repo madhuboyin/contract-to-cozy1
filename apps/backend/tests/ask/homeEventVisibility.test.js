@@ -49,7 +49,7 @@ test('propose never writes and never offers an event the requester cannot see; c
   assert.match(propose, /NEEDS_CONFIRMATION/);
   // The exact same exclusion the read producers and HOME_EVENT_CORRECT use: a PRIVATE event not created by this
   // user must never be selectable, proposed, or shown in the disambiguation list.
-  assert.match(propose, /visibility: \{ not: 'PRIVATE' \}.*createdById: userId/, 'propose must exclude another member\'s PRIVATE events from both selection and the disambiguation list');
+  assert.match(propose, /visibility: \{ not: 'PRIVATE'(?: as const)? \}.*createdById: userId/, 'propose must exclude another member\'s PRIVATE events from both selection and the disambiguation list');
   const confirm = body('async function confirmHomeEventVisibility(', "registerConfirmCapabilityHandler('home-event.visibility'");
   assert.match(confirm, /homeEventsServiceForCapture\.setVisibility\(/);
   assert.doesNotMatch(confirm, /updateHomeEvent\(/, 'visibility is an in-place write, never a superseding correction');

@@ -217,17 +217,19 @@ test('D-O11: the finalizer populates the current-outcome set from the verified l
   const executeSource = fs.readFileSync(path.join(__dirname, '../../src/services/ask/execution/executeOperation.ts'), 'utf8');
   assert.ok(/take: 5,\s*\n\s*select: \{ message: true, operationId: true \}/.test(executeSource), 'the history window is the last 5 completed executions');
   // Executed: a REPEATABLE outcome whose stored message was asked recently is still suppressed by the prompt-history rule.
-  const restore = registerProvisional([spec('HOME_STATUS_BOARD')], { repeatable: true });
+  // An operation with no real outcome entry (a real one would ignore the provisional outcome and make it unregistered).
+  const PROBE_OP = POOL_OPERATIONS[0];
+  const restore = registerProvisional([spec(PROBE_OP)], { repeatable: true });
   try {
-    assert.equal(outcomes.isRepeatableOutcome('HOME_STATUS_BOARD', spec('HOME_STATUS_BOARD').outcomeKey), true);
+    assert.equal(outcomes.isRepeatableOutcome(PROBE_OP, spec(PROBE_OP).outcomeKey), true);
     const availability = await availabilityFor({ role: 'VIEWER', mode: 'UNKNOWN' });
     const ctx = {
       mode: 'NORMAL', sourcePropertyId: PROPERTY, operationAvailability: availability, operationRequiresProperty: () => true, operationTargetEntityType: () => null,
       entities: new Map(), validatedEntityTypes: new Set(), pendingInteractionActive: false, completedSemanticKeyHashes: new Set(),
-      askedMessageKeys: new Set([suggestionKey(spec('HOME_STATUS_BOARD').message)]), messageKey: suggestionKey, currentOutcomeKeyHashes: new Set(),
+      askedMessageKeys: new Set([suggestionKey(spec(PROBE_OP).message)]), messageKey: suggestionKey, currentOutcomeKeyHashes: new Set(),
     };
     const { SuggestedNextActionCandidateSchema } = require('../../src/services/ask/suggestedActions/suggestedNextActionCandidate.ts');
-    const verdict = evaluateSuggestedNextActionEligibility(SuggestedNextActionCandidateSchema.parse(starterCandidate(spec('HOME_STATUS_BOARD'))), ctx);
+    const verdict = evaluateSuggestedNextActionEligibility(SuggestedNextActionCandidateSchema.parse(starterCandidate(spec(PROBE_OP))), ctx);
     assert.equal(verdict.state, 'SUPPRESSED');
     assert.deepEqual(verdict.reasonCodes, ['EQUIVALENT_PROMPT_ASKED']);
   } finally { restore(); }

@@ -70,13 +70,14 @@ test('one fact per turn: the first still-unknown fact wins, in ask order, and ev
   assert.deepEqual(calls, [], 'a non-gap insight evaluates nothing');
 });
 
-test('a derived capture is shown inline, stores its own feature for submit, and demotes the link to an optional escape hatch', () => {
+test('a derived capture is shown inline, stores its own feature for submit, and drops the desktop link', () => {
   const feature = healthGapCaptureFeature('core.yearBuilt');
   const captureRequest = { requirementId: 'req-1', captureKey: 'CORE_YEARBUILT' };
   const result = focused(insight('Property Age (Year Built)'), { canContribute: true, captureFeature: feature }, captureRequest);
   assert.deepEqual(result.captureRequests, [captureRequest]);
   assert.deepEqual(result.parameters.captureFeature, feature, 'capture-submit re-derives this card from the stored feature');
-  assert.deepEqual(guidance(result).actions.map((action) => [action.label, action.style]), [['Add year built', 'SECONDARY']]);
+  // The capture IS the answer, so the desktop link is omitted rather than demoted (Ask never links out to a desktop page).
+  assert.deepEqual(guidance(result).actions, []);
   // Nothing outstanding (or a viewer): no capture, and the link stays the primary way forward.
   const plain = focused(insight('Property Age (Year Built)'), { canContribute: true });
   assert.equal(plain.captureRequests, undefined);
@@ -172,5 +173,5 @@ test('handler wiring: viewers are never offered capture, and the derived feature
   // Derived cards never offer "Not sure": it is stored as an UNKNOWN observation and would re-ask the same question.
   assert.match(source, /baseCaptureRequest && derivedCapture \? \{ \.\.\.baseCaptureRequest, allowNotSure: false \} : baseCaptureRequest/);
   assert.match(source, /prisma\.inventoryItem\.count\(\{ where: \{ propertyId, category: 'APPLIANCE' \} \}\)/);
-  assert.match(source, /\{ canContribute: access\.role !== HouseholdRole\.VIEWER, policyConflict, captureFeature, applianceCount, applianceNeedingDetails \}/);
+  assert.match(source, /\{ canContribute: access\.role !== HouseholdRole\.VIEWER, policyConflict, captureFeature, applianceCount, applianceNeedingDetails(?:, workEvidence)? \}/);
 });

@@ -32,7 +32,8 @@ test('every represented Skill operation resolves to one registered immutable ada
   // + diy.template-browse and diy.project-start (DIY project start from Ask, step 8).
   // + home-event.update (one multi-field timeline event editor, FRD v1.386).
   // Includes Home Continuity Plan's first Ask-native write adapter (FRD v1.381).
-  assert.equal(Object.keys(SKILL_ADAPTER_DEFINITIONS).length, 120);
+  // + guidance-overview.step-acknowledge (guided step acknowledgement) and refinance.command (refinance radar workflows).
+  assert.equal(Object.keys(SKILL_ADAPTER_DEFINITIONS).length, 122);
   for (const skill of Object.values(SKILL_DEFINITIONS)) {
     for (const operation of skill.operations) {
       const reference = skill.allowedAdapters.find((candidate) => candidate.id === getSkillAdapterForOperation(operation.operationId).id);

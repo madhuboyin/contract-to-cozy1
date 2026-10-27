@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 require('ts-node/register');
+const { visibleInventoryItemWhere } = require('../../src/services/riskAssetApplicability.ts');
 
 // ASK_COZY_INLINE_WORKSPACE_FRD §11.10 (IW-PRES-019, FRD v1.79): the home record's rooms render as a room map. The
 // real PROPERTY_SUMMARY handler runs with the real property-record overview against a fake prisma that answers only
@@ -67,7 +68,7 @@ test('the overview reads floor level, item counts and only pending or in-progres
   assert.deepEqual(query.where, { propertyId: 'p1' });
   assert.deepEqual(query.orderBy, [{ sortOrder: 'asc' }, { name: 'asc' }]);
   assert.equal(query.select.floorLevel, true);
-  assert.deepEqual(query.select._count, { select: { items: true, maintenanceTasks: { where: { status: { in: ['PENDING', 'IN_PROGRESS'] } } } } });
+  assert.deepEqual(query.select._count, { select: { items: { where: visibleInventoryItemWhere() }, maintenanceTasks: { where: { status: { in: ['PENDING', 'IN_PROGRESS'] } } } } });
 });
 
 test('the rooms list declares the room map with each room\'s floor, item count and open-task badge', async () => {

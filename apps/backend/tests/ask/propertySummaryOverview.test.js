@@ -184,14 +184,14 @@ test('the real handler: an owner sees the occupant count, a viewer does not, and
   install({}, FULL, 'OWNER');
   const owner = (await invoke()).blocks.find((block) => block.id === 'property-summary-facts');
   assert.ok(owner.rows.some((row) => row.id === 'occupants'));
-  assert.equal(owner.description, 'Recorded facts from this home’s current canonical record.');
+  assert.equal(owner.description, 'Recorded high-level facts from this home’s current canonical record.');
   install({}, FULL, 'VIEWER');
   const viewer = (await invoke()).blocks.find((block) => block.id === 'property-summary-facts');
   assert.ok(!viewer.rows.some((row) => row.id === 'occupants'));
   assert.ok(viewer.rows.some((row) => row.id === 'occupancy'));
   install({}, { ...FULL, bedrooms: null, bathrooms: null }, 'OWNER');
   const sparse = (await invoke()).blocks.find((block) => block.id === 'property-summary-facts');
-  assert.equal(sparse.description, 'Recorded facts from this home’s current canonical record. Not recorded yet: bedrooms, bathrooms.');
+  assert.equal(sparse.description, 'Recorded high-level facts from this home’s current canonical record. Not recorded yet: bedrooms, bathrooms.');
   AskPresentationBlockSchema.parse(sparse);
 });
 

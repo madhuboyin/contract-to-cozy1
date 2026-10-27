@@ -230,10 +230,10 @@ test('the Material Specs answer offers Add a material to a contributor or owner,
 test('the plant care answer offers Add a plant, its copy no longer says to open a page, and its rows carry no link', () => {
   const empty = { plants: [], zones: [], careRecommendations: [], gardenRecommendations: [], sourceStatus: { weather: 'OK', airQuality: 'OK', drought: 'OK', hardiness: 'OK' }, hardinessZone: null, applicability: { outdoor: { status: 'NOT_APPLICABLE', reasonCodes: ['NO_PRIVATE_OUTDOOR_SPACE'] } } };
   const owner = plantCareOutlookFromView(empty, 'p1', true);
-  assert.deepEqual(owner.blocks[0].actions.map((action) => [action.id, action.operationId, action.href]), [['add-home-plant', 'HOME_PLANT_ADD', undefined]]);
+  assert.deepEqual(owner.blocks[0].actions.map((action) => [action.id, action.operationId, action.href]), [['find-plants-for-room', 'ROOM_PLANT_RECOMMENDATIONS', undefined], ['add-home-plant', 'HOME_PLANT_ADD', undefined]]);
   assert.doesNotMatch(owner.blocks[0].body, /open it|Plant Advisor/i);
   assert.deepEqual(plantCareOutlookFromView(empty, 'p1', false).blocks[0].actions, []);
   const withPlants = plantCareOutlookFromView({ ...empty, plants: [{ id: 'pl1' }], careRecommendations: [{ id: 'r1', plantName: 'Monstera', title: 'Water', guidance: 'Water it.', placementWarning: null, locationName: 'Den', triggers: [], priority: 'NOW', adjustedCheckCadenceDays: null }] }, 'p1', true);
   assert.doesNotMatch(JSON.stringify(withPlants.blocks), /\/dashboard\/|"href"/);
-  assert.equal(withPlants.blocks[0].actions[0].id, 'add-home-plant');
+  assert.ok(withPlants.blocks[0].actions.some((action) => action.id === 'add-home-plant'));
 });

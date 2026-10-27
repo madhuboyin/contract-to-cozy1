@@ -342,7 +342,10 @@ test('the journey step offers the comparison as its in-Ask action, carrying the 
   assert.equal(mode.mode, 'IN_ASK');
   assert.deepEqual({ o: mode.inAsk.operationId, carries: mode.inAsk.carriesStep }, { o: 'COVERAGE_COMPARISON_STATUS', carries: 'FIELD' });
   assert.equal(askGuidanceStepMode('coverage-intelligence', 'check_coverage').inAsk.operationId, 'COVERAGE_ANALYSIS_RUN', 'a coverage check is proved by a fresh scoped evaluation, not by a decision');
-  assert.equal(askGuidanceStepMode('coverage-intelligence', 'review_current_policy_context').mode, 'NAVIGATE', 'a review step is not proved by a decision');
+  // A review step is not proved by a decision: it opens its own term-review command, never the comparison.
+  const review = askGuidanceStepMode('coverage-intelligence', 'review_current_policy_context');
+  assert.equal(review.inAsk.operationId, 'COVERAGE_TERM_REVIEW');
+  assert.notEqual(review.inAsk.operationId, 'COVERAGE_COMPARISON_STATUS');
 });
 
 test('a command started from a comparison the journey opened belongs to that step, read from the source execution (this person, this home)', async () => {

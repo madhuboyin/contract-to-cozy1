@@ -95,7 +95,7 @@ const NO_LINK = /\/dashboard\/|"href"/;
 // ───────────────────────────── Home Habit Coach: suggest habits ─────────────────────────────
 test('habits: the empty answer offers Suggest habits only to someone who can change the home', () => {
   const view = { habits: [], hasMore: false, nextCursor: null };
-  assert.deepEqual(homeHabitsFromView(view, 'p1', new Date(), true).blocks[0].actions.map((action) => [action.id, action.operationId, action.interactionType]), [['generate-home-habits', 'HOME_HABITS_GENERATE', 'START_WORKFLOW']]);
+  assert.deepEqual(homeHabitsFromView(view, 'p1', new Date(), true).blocks[0].actions.map((action) => [action.id, action.operationId, action.interactionType]), [['generate-home-habits', 'HOME_HABITS_GENERATE', 'START_WORKFLOW'], ['home-habit-coach-settings', 'HOME_HABIT_PREFERENCES_COMMAND', 'START_WORKFLOW']]);
   assert.deepEqual(homeHabitsFromView(view, 'p1', new Date(), false).blocks[0].actions, []);
 });
 

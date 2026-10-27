@@ -53,7 +53,7 @@ test('propose never writes; confirm writes only via updateHomeEvent with the ide
   const propose = body('async function homeEventCorrectResult(', "registerCapabilityHandler('home-event.correct'");
   assert.doesNotMatch(propose, /updateHomeEvent\(/);
   assert.match(propose, /NEEDS_CONFIRMATION/);
-  assert.match(propose, /visibility: \{ not: 'PRIVATE' \}/, 'propose must not offer events the requester cannot see');
+  assert.match(propose, /visibility: \{ not: 'PRIVATE'(?: as const)? \} \}, \{ createdById: userId \}/, 'propose must not offer events the requester cannot see');
   const confirm = body('async function confirmHomeEventCorrect(', "registerConfirmCapabilityHandler('home-event.correct'");
   assert.match(confirm, /homeEventsServiceForCapture\.updateHomeEvent\(/);
   assert.match(confirm, /ask-correction:\$\{execution\.id\}/);

@@ -37,6 +37,7 @@ test('SP4 registers Repair or Replace and Refinance as valid immutable Skills', 
   assert.deepEqual(SKILL_DEFINITIONS.refinance.operations.map(({ operationId }) => operationId), [
     'REFINANCE_ANALYSIS',
     'REFINANCE_RATE_MONITOR',
+    'REFINANCE_COMMAND',
   ]);
   for (const operationId of repairReplaceOperations) assert.equal(getSkillForOperation(operationId).id, 'repair-replace');
   assert.equal(getSkillForOperation('REFINANCE_ANALYSIS').id, 'refinance');

@@ -45,7 +45,7 @@ const empties = () => ({
   'Negotiation Shield (contributor)': negotiationShieldCasesFromView([], 'p1', true),
 });
 // The only actions an empty state may carry: a typed Ask command for the primary account holder's tools (the answer reaches no one else).
-const EXPECTED_ACTION_OPERATIONS = { 'Service Price Radar': ['SERVICE_PRICE_CHECK_RUN'], 'Project Tracker': ['PROJECT_TRACKER_CREATE'], 'Do-Nothing Simulator': ['DO_NOTHING_SIMULATION_RUN'], 'Negotiation Shield (contributor)': ['NEGOTIATION_SHIELD_CASE_START'] };
+const EXPECTED_ACTION_OPERATIONS = { 'Home Continuity Plan': ['HOME_DIGITAL_WILL_CREATE'], 'Service Price Radar': ['SERVICE_PRICE_CHECK_RUN'], 'Project Tracker': ['PROJECT_TRACKER_CREATE'], 'Do-Nothing Simulator': ['DO_NOTHING_SIMULATION_RUN'], 'Negotiation Shield (contributor)': ['NEGOTIATION_SHIELD_CASE_START'] };
 
 test('every empty state links nowhere, invites no page, and offers only a typed Ask command it really has', () => {
   for (const [name, result] of Object.entries(empties())) {
@@ -59,8 +59,8 @@ test('every empty state links nowhere, invites no page, and offers only a typed 
 });
 
 test('where Ask cannot do the thing yet, the empty state says so plainly', () => {
-  // Service Price Radar, Home Habit Coach, Project Tracker and Do-Nothing Simulator now start in Ask; these remain product decisions (audit section 3).
-  const cannot = ['Home Continuity Plan', 'Negotiation Shield'];
+  // Service Price Radar, Home Habit Coach, Project Tracker, Do-Nothing Simulator and the Home Continuity Plan now start in Ask; these remain product decisions (audit section 3).
+  const cannot = ['Negotiation Shield'];
   const all = empties();
   for (const name of cannot) assert.match(all[name].blocks[0].body, /Ask cannot start(?: or edit)? one/, name);
   // Around Your Home is a read of reviewed sources: there is nothing a homeowner adds, so it says what the sources cover and promises no Ask action.

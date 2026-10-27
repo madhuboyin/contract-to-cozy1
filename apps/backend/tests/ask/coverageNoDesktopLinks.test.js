@@ -52,6 +52,8 @@ test('coverage review rows open the inline inventory record and carry no desktop
 
 test('a viewer sees coverage records without mutation controls', async () => {
   gapService.getCoverageReviewItems = async () => [reviewItem('i1')];
+  // The gaps handler reads the role through ensurePropertyAccess (not the injected deps), so the viewer is stubbed where it is resolved.
+  propertyAccess.resolvePropertyAccess = async () => ({ role: 'VIEWER', userId: 'u1', propertyId: 'p1' });
   const result = await capabilityInvoke('COVERAGE_GAPS', { userId: 'u1', propertyId: 'p1', message: 'Which items have no coverage?' }, access('VIEWER'));
   const row = result.blocks.find((block) => block.id === 'coverage-groups').sections[0].items[0];
   assert.equal(row.actions, undefined);

@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 require('ts-node/register');
+const { OPERATION_SPECIFIC_CONTINUATION_RECIPES } = require('../../src/services/ask/suggestedActions/operationSpecificContinuationRecipes.ts');
 
 const { SuggestedNextActionCandidateSchema, candidateIdentityFields } = require('../../src/services/ask/suggestedActions/suggestedNextActionCandidate.ts');
 const { selectSuggestedNextActions, candidateSemanticKeyHash } = require('../../src/services/ask/suggestedActions/suggestedNextActionPolicy.ts');
@@ -551,7 +552,9 @@ test('ownership relationships: every owned outcome is a registered outcome of an
       assert.ok(operationId in ASK_OPERATION_DEFINITIONS, `${entry}: target operation exists`);
       assert.ok((SUGGESTED_ACTION_OUTCOMES[operationId] ?? []).includes(outcomeKey), `${entry} is a registered outcome`);
     }
-    if (!PLATFORM_RECOVERY.has(sourceOperation)) assert.ok(handlerSource.includes(`sourceOperationId: '${sourceOperation}'`), `${sourceOperation} is a real handler call site`);
+    // A relationship is declared either by a handler's own candidate or by an operation-specific continuation recipe for that source.
+    const recipeDeclared = Boolean(OPERATION_SPECIFIC_CONTINUATION_RECIPES[sourceOperation]);
+    if (!PLATFORM_RECOVERY.has(sourceOperation) && !recipeDeclared) assert.ok(handlerSource.includes(`sourceOperationId: '${sourceOperation}'`), `${sourceOperation} is a real handler call site`);
   }
   assert.equal(registry.currentOperationOwnsOutcome('INVENTORY_ITEM_CORRECT', { operationId: 'HOME_EVENT_CORRECT', outcomeKey: 'ADD_AMOUNT' }), false);
   assert.equal(registry.currentOperationOwnsOutcome('HOME_EVENT_CORRECT', { operationId: 'HOME_EVENT_CORRECT', outcomeKey: 'ADD_AMOUNT' }), true);

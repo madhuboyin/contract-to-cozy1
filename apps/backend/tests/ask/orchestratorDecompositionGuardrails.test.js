@@ -31,7 +31,10 @@ test('no handler, lifecycle or support file imports the orchestrator', () => {
 
 test('every handler file is imported by the orchestrator, so it registers before anything is dispatched', () => {
   const facade = readFileSync(FACADE, 'utf8');
+  // Only a file that registers a handler must be loaded by the facade; a helper module a registering handler imports is loaded through it.
+  const registers = (file) => /register(?:Confirm)?CapabilityHandler\(/.test(readFileSync(file, 'utf8'));
   const missing = [...files(join(ASK_DIR, 'handlers')), ...files(join(ASK_DIR, 'execution'))]
+    .filter(registers)
     .map((file) => file.slice(ASK_DIR.length + 1).replace(/\.ts$/, ''))
     .filter((module) => !facade.includes(`'./${module}'`));
   assert.deepEqual(missing, []);

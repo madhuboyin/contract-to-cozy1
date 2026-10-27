@@ -90,7 +90,8 @@ test('the exact inventory-details prompt survives persistence without the schema
     assert.notEqual(mapped.blocks[0]?.id, 'ask-schema-fallback');
     assert.equal(mapped.status, 'ANSWERED');
     assert.ok(mapped.blocks.some((block) => block.id === 'inventory-results'));
-    assert.equal(list(result).sections[0].items[0].actions.length, 13, 'all governed correction actions remain available');
+    // The per-field corrections now live in one shared record editor opened by a single Edit action.
+    assert.deepEqual(list(result).sections[0].items[0].actions.map((action) => [action.id, action.operationId, action.interactionType]), [['edit-inventory-item', 'INVENTORY_ITEM_CORRECT', 'MUTATE_RECORD']]);
   } finally { restore(); }
 });
 
