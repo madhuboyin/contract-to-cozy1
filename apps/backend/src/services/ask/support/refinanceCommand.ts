@@ -25,6 +25,7 @@ export function refinanceFormKindFromCaptureKey(key: string): RefinanceFormKind 
   return (Object.entries(REFINANCE_CAPTURE_KEYS).find(([, value]) => value === key)?.[0] as RefinanceFormKind | undefined) ?? null;
 }
 
+const blankIsAbsent = <T extends z.ZodType>(schema: T) => z.preprocess((value) => (value === '' || value === null ? undefined : value), schema.optional());
 const optionalMoney = z.coerce.number().min(0).max(100_000_000).optional();
 const offer = (prefix: 'a' | 'b') => ({
   [`${prefix}Lender`]: z.string().trim().min(1).max(200),
@@ -40,6 +41,13 @@ const offer = (prefix: 'a' | 'b') => ({
   [`${prefix}CashDirection`]: z.enum(['FROM_BORROWER', 'TO_BORROWER', 'UNKNOWN']),
   [`${prefix}MonthlyMI`]: optionalMoney,
   [`${prefix}TotalPayment`]: optionalMoney,
+  // The figures Desktop's form and the Loan Estimate reader also carry; the five-year pair and the date rules are the canonical schema's, applied at review.
+  // Blank means "not on the form", never 0: a zero five-year total would be saved as a figure.
+  [`${prefix}DiscountPointsPct`]: blankIsAbsent(z.coerce.number().min(0).max(10)),
+  [`${prefix}DiscountPointsUsd`]: blankIsAbsent(z.coerce.number().min(0).max(100_000_000)),
+  [`${prefix}FiveYearTotalPaid`]: blankIsAbsent(z.coerce.number().min(0).max(100_000_000)),
+  [`${prefix}FiveYearPrincipalPaid`]: blankIsAbsent(z.coerce.number().min(0).max(100_000_000)),
+  [`${prefix}IssuedDate`]: z.preprocess((value) => (value === '' ? undefined : value), z.string().trim().max(10).optional()),
 });
 
 export const refinanceAlertAnswerSchema = z.object({
@@ -95,6 +103,25 @@ export const refinanceLenderBriefAnswerSchema = z.object({
   selectedOfferId: z.string().trim().min(1).max(100),
   figuresVerified: z.literal(true), sameLoanRequestConfirmed: z.literal(true), manualSharingUnderstood: z.literal(true),
 });
+
+/** One offer of the comparison answer in the canonical Loan Estimate input shape (the shape Desktop saves and its schema validates). */
+export function refinanceOfferFromAnswer(d: Record<string, unknown>, p: 'a' | 'b', id: string) {
+  const has = (key: string) => d[key] != null && d[key] !== '';
+  const num = (key: string) => Number(d[key]);
+  return {
+    id, lenderName: String(d[`${p}Lender`]), loanAmountUsd: num(`${p}Amount`), loanTermYears: num(`${p}TermYears`), loanType: d[`${p}LoanType`] as 'FIXED' | 'ARM' | 'OTHER',
+    noteRatePct: num(`${p}Rate`), aprPct: num(`${p}Apr`), monthlyPrincipalAndInterestUsd: num(`${p}MonthlyPI`),
+    ...(has(`${p}MonthlyMI`) ? { monthlyMortgageInsuranceUsd: num(`${p}MonthlyMI`) } : {}),
+    ...(has(`${p}TotalPayment`) ? { estimatedTotalMonthlyPaymentUsd: num(`${p}TotalPayment`) } : {}),
+    loanCostsUsd: num(`${p}LoanCosts`), lenderCreditsUsd: num(`${p}LenderCredits`),
+    ...(has(`${p}DiscountPointsPct`) ? { discountPointsPct: num(`${p}DiscountPointsPct`) } : {}),
+    ...(has(`${p}DiscountPointsUsd`) ? { discountPointsUsd: num(`${p}DiscountPointsUsd`) } : {}),
+    cashToCloseUsd: num(`${p}CashToClose`), cashToCloseDirection: d[`${p}CashDirection`] as 'FROM_BORROWER' | 'TO_BORROWER' | 'UNKNOWN',
+    ...(has(`${p}FiveYearTotalPaid`) ? { fiveYearTotalPaidUsd: num(`${p}FiveYearTotalPaid`) } : {}),
+    ...(has(`${p}FiveYearPrincipalPaid`) ? { fiveYearPrincipalPaidUsd: num(`${p}FiveYearPrincipalPaid`) } : {}),
+    ...(has(`${p}IssuedDate`) ? { issuedDate: String(d[`${p}IssuedDate`]) } : {}),
+  };
+}
 
 export function parseRefinanceCommandAnswer(kind: RefinanceFormKind, value: unknown) {
   return kind === 'ALERT_SETTINGS' ? refinanceAlertAnswerSchema.safeParse(value)

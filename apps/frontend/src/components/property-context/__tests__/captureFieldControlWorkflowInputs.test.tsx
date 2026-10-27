@@ -85,6 +85,16 @@ describe('a document field that uploads to Home Records with its own metadata', 
     const { container } = render(<CaptureFieldControl compact propertyId="home-1" field={plain} value={[]} disabled={false} onChange={jest.fn()} />);
     fireEvent.change(container.querySelector('input[type="file"]') as HTMLInputElement, { target: { files: [new File(['x'], 'r.pdf', { type: 'application/pdf' })] } });
     await waitFor(() => expect(workflow.uploadRecordForWorkflow).toHaveBeenCalled());
-    expect(workflow.uploadRecordForWorkflow.mock.calls[0][1]).toEqual(expect.objectContaining({ description: 'Project document: Document', recordType: 'OTHER' }));
+    expect(workflow.uploadRecordForWorkflow.mock.calls[0][1]).toEqual(expect.objectContaining({ description: 'Project document: Document', recordType: 'OTHER', sensitivity: 'STANDARD' }));
+  });
+
+  it('files the record with the sensitivity the field declares', async () => {
+    const workflow = jest.requireMock('@/app/(dashboard)/dashboard/properties/[id]/tools/home-records/homeRecordsApi') as { uploadRecordForWorkflow: jest.Mock };
+    workflow.uploadRecordForWorkflow.mockClear(); workflow.uploadRecordForWorkflow.mockResolvedValue('record-4');
+    const financial = { ...uploadField, inputSchema: { ...uploadField.inputSchema, uploadRecord: { description: 'Loan Estimate', recordType: 'CLOSING_DOCUMENT', sensitivity: 'FINANCIAL' } } };
+    const { container } = render(<CaptureFieldControl compact propertyId="home-1" field={financial} value={[]} disabled={false} onChange={jest.fn()} />);
+    fireEvent.change(container.querySelector('input[type="file"]') as HTMLInputElement, { target: { files: [new File(['x'], 'le.pdf', { type: 'application/pdf' })] } });
+    await waitFor(() => expect(workflow.uploadRecordForWorkflow).toHaveBeenCalled());
+    expect(workflow.uploadRecordForWorkflow.mock.calls[0][1]).toEqual(expect.objectContaining({ recordType: 'CLOSING_DOCUMENT', sensitivity: 'FINANCIAL' }));
   });
 });

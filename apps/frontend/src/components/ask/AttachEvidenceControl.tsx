@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react';
 import { Loader2, Paperclip } from 'lucide-react';
 import { api } from '@/lib/api/client';
-import type { PropertyRecordType } from '@/app/(dashboard)/dashboard/properties/[id]/tools/home-records/types';
+import type { PropertyRecordSensitivity, PropertyRecordType } from '@/app/(dashboard)/dashboard/properties/[id]/tools/home-records/types';
 import { uploadRecordForWorkflow } from '@/app/(dashboard)/dashboard/properties/[id]/tools/home-records/homeRecordsApi';
 import { cn } from '@/lib/utils';
 
@@ -40,7 +40,7 @@ export function AttachEvidenceControl({ event, propertyId, disabled, onAttached,
    * `notice` is shown above the button, before the file picker can be opened. `blockedReason` disables the button and says why (for example, the role the
    * record type depends on has not been chosen yet).
    */
-  uploadRecord?: { description?: string; recordType?: PropertyRecordType; notice?: string; blockedReason?: string | null };
+  uploadRecord?: { description?: string; recordType?: PropertyRecordType; sensitivity?: PropertyRecordSensitivity; notice?: string; blockedReason?: string | null };
   className?: string;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -56,7 +56,7 @@ export function AttachEvidenceControl({ event, propertyId, disabled, onAttached,
     try {
       if (store === 'HOME_RECORDS') {
         const recordId = await uploadRecordForWorkflow(propertyId, {
-          file, title: file.name, description: uploadRecord?.description ?? `Project document: ${event.title}`, recordType: uploadRecord?.recordType ?? 'OTHER', sensitivity: 'STANDARD',
+          file, title: file.name, description: uploadRecord?.description ?? `Project document: ${event.title}`, recordType: uploadRecord?.recordType ?? 'OTHER', sensitivity: uploadRecord?.sensitivity ?? 'STANDARD',
         });
         setStatus('IDLE');
         onAttached(recordId);

@@ -1,6 +1,6 @@
 # Ask Cozy — Loan Estimate extraction (read an official Loan Estimate into a comparison): design
 
-**Status:** Design for owner review. Nothing here is built.
+**Status:** Decisions D-L1 to D-L9 accepted as recommended (2026-10-27). The two prerequisites (configurable upload sensitivity; the widened offer form checked against Desktop's schema) are built (section 13). The read step and everything after it are **not built** and stay gated on the Pi measurement (D-L7, section 6).
 **Date:** October 27, 2026
 **Parent:** `ASK_COZY_ALL_TOOLS_PARITY_IMPLEMENTATION.md` (Mortgage Refinance Radar row); FRD revisions 1.435–1.438.
 **Template:** `ASK_COZY_NEGOTIATION_SHIELD_DOCUMENTS_DESIGN.md` §13 (upload 3c is built; parse 3b is designed and gated).
@@ -104,6 +104,8 @@ The read step is not a write to the refinance record, but it does create a Home 
 
 ## 9. Decisions
 
+Owner (2026-10-27): **go with the recommendations on D-L1 to D-L9.** D-L1 to D-L6, D-L8 and D-L9 are therefore settled; D-L7 stays a measurement-gated rule.
+
 | # | Decision | Recommendation | Why |
 | --- | --- | --- | --- |
 | D-L1 | Where the bytes live: **Home Records** (retained, household-visible) or **read-only, not stored** (as Desktop) | **Home Records**, as you directed, with D-L2 copy; revisit only if the household-visible retention of a loan document is unacceptable | The shared upload is the only upload path Ask has; a not-stored read would need a second, Ask-specific multipart route and a client that posts files outside the capture protocol. It also gives the homeowner a durable copy of the document the comparison came from. |
@@ -112,7 +114,7 @@ The read step is not a write to the refinance record, but it does create a Home 
 | D-L4 | `documentId` in the envelope | The Home Record id (Desktop sends null) | Provenance can then point at the stored document. The attestation covers the envelope as built, so this is safe. |
 | D-L5 | Widen the Ask offer form to carry discount points, five-year pair and issued date | **Yes**, optional fields, both-or-neither for the five-year pair | Otherwise extraction drops figures Desktop keeps and Ask's comparison cannot show five-year metrics. The form is already long (27 fields); splitting it into one step per offer is advisable and is a separate small change. |
 | D-L6 | Operation shape | New kind on `REFINANCE_COMMAND` (§7) | Reuses the proven machinery. |
-| D-L7 | Execution model | **Open: decide from §6** | Needs the Pi measurement. |
+| D-L7 | Execution model | **Open: decide from §6** (the rule stands: synchronous behind the capture submit, one at a time per process, only if the measured worst case fits; otherwise a background job) | Needs the Pi measurement; the owner's "go with your recommendations" has no recommendation to adopt here beyond that rule. |
 | D-L8 | Confirmation shows confidence per extracted figure | Yes | The "explicit review" asked for; costs one line per figure. |
 | D-L9 | Who may read | Contributor and owner | The upload and the save both require it; a viewer reading would create nothing usable. |
 
@@ -138,3 +140,15 @@ The read step is not a write to the refinance record, but it does create a Home 
 3. Build the read step and review table behind the measured execution model.
 4. Wire prefill, confirmation tiers and provenance on save; tests of §8.
 5. FRD revision; parity register; record the measurement here.
+
+## 13. Prerequisites built (2026-10-27)
+
+Both were agreed in §12 step 2 and are useful without the read step.
+
+1. **Configurable upload sensitivity (D-L3).** `DocumentUploadRecord` (frontend and backend contract) gains an optional `sensitivity`; `CaptureFieldControl` passes it and `AttachEvidenceControl` uses it, defaulting to `STANDARD`, so Project Tracker and Negotiation Shield uploads are unchanged. Jest: a field declaring `FINANCIAL` files `FINANCIAL`; a field declaring nothing still files `STANDARD`.
+2. **The widened offer (D-L5).** The Ask comparison form and answer schema gain, per offer: discount points (% and $), total and principal paid in the first five years, and the issued date, all optional, with **blank meaning absent, never $0**. A shared `refinanceOfferFromAnswer` builds the canonical input used for both validation and save.
+3. **Ask offers now meet Desktop's rules.** Before the confirmation, Ask runs both offers through Desktop's own `compareLoanEstimatesSchema` (five-year pair both-or-neither and principal not above total, points consistency, real calendar dates, ranges). A failure keeps the form with the schema's message ("Offer 1: ...") and saves nothing. **Before this change Ask built offers without any of those cross-field checks**, so this also closes a quiet gap for hand-typed offers.
+
+Tests: `refinanceParityCommands.test.js` (blank is absent; figures kept; the canonical rules reject a half pair, principal above total and 2026-02-30; the command path returns the caution form and accepts a valid pair).
+
+Not done, on purpose: the read step, the review table, the upload field on the comparison form, the provenance on save, and any change to the form's length (one step per offer remains advisable).

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import type { ApproximateDateCaptureValue, CaptureDatePrecision, DocumentUploadRecord, ScalarCaptureInputSchema } from './featureContextTypes';
-import type { PropertyRecordType } from '@/app/(dashboard)/dashboard/properties/[id]/tools/home-records/types';
+import type { PropertyRecordSensitivity, PropertyRecordType } from '@/app/(dashboard)/dashboard/properties/[id]/tools/home-records/types';
 import { AttachEvidenceControl } from '@/components/ask/AttachEvidenceControl';
 
 const DATE_PRECISION_OPTIONS: Array<{ value: CaptureDatePrecision; label: string }> = [
@@ -15,7 +15,7 @@ const DATE_PRECISION_OPTIONS: Array<{ value: CaptureDatePrecision; label: string
 
 /** The upload metadata for a document field: its description and notice, and a record type that is fixed or taken from a sibling answer (blocked until that answer exists). */
 function uploadRecordFor(config: DocumentUploadRecord | undefined, siblings: Record<string, unknown> | undefined):
-  { description?: string; recordType?: PropertyRecordType; notice?: string; blockedReason?: string | null } | undefined {
+  { description?: string; recordType?: PropertyRecordType; sensitivity?: PropertyRecordSensitivity; notice?: string; blockedReason?: string | null } | undefined {
   if (!config) return undefined;
   let recordType = config.recordType as PropertyRecordType | undefined;
   let blockedReason: string | null = null;
@@ -25,7 +25,7 @@ function uploadRecordFor(config: DocumentUploadRecord | undefined, siblings: Rec
     if (mapped) recordType = mapped as PropertyRecordType;
     else blockedReason = 'Choose what the document is first, then upload.';
   }
-  return { description: config.description, notice: config.notice, recordType, blockedReason };
+  return { description: config.description, notice: config.notice, recordType, sensitivity: config.sensitivity as PropertyRecordSensitivity | undefined, blockedReason };
 }
 
 export type CaptureField = { key: string; label: string; helpText?: string; required: boolean; inputSchema: ScalarCaptureInputSchema };

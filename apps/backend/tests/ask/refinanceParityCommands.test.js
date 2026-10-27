@@ -285,6 +285,7 @@ test('submitAskCapture: a changed comparison refreshes the form; a retried submi
     refinanceLoanEstimateComparisonSnapshot: { findMany: async () => [{ id: 'cmp-1', propertyId: 'prop-1', label: 'October offers', offersJson: dbOffers, createdAt: new Date('2026-10-05T00:00:00Z'), updatedAt: comparisonUpdatedAt }] },
     askExecution: {
       findFirst: async () => row,
+      findUnique: async () => row,
       updateMany: async ({ data }) => { row = { ...row, ...data }; return { count: 1 }; },
       findUniqueOrThrow: async () => row,
       update: async ({ data }) => { row = { ...row, ...data }; return row; },
@@ -338,4 +339,53 @@ test('submitAskCapture: a changed comparison refreshes the form; a retried submi
   } finally {
     prismaModule.prisma = realPrisma; analytics.analyticsEmitter.track = saved.track; propertyAccess.resolvePropertyAccess = saved.access;
   }
+});
+
+// ───────────────────────────── widened Loan Estimate offer (discount points, five-year pair, issued date) ─────────────────────────────
+
+const OFFER_ANSWER = (over = {}) => {
+  const base = (p, name) => ({ [`${p}Lender`]: name, [`${p}Amount`]: 320000, [`${p}TermYears`]: 30, [`${p}LoanType`]: 'FIXED', [`${p}Rate`]: 5.5, [`${p}Apr`]: 5.7, [`${p}MonthlyPI`]: 1817, [`${p}LoanCosts`]: 4200, [`${p}LenderCredits`]: 0, [`${p}CashToClose`]: 6000, [`${p}CashDirection`]: 'FROM_BORROWER' });
+  return { label: 'October', ...base('a', 'Lender A'), ...base('b', 'Lender B'), ...over };
+};
+
+test('the comparison form carries the extra figures, blank means absent, and the offers keep them', () => {
+  const keys = handler.fieldsFor('ADD_COMPARISON').map((f) => f.key);
+  for (const p of ['a', 'b']) for (const k of ['DiscountPointsPct', 'DiscountPointsUsd', 'FiveYearTotalPaid', 'FiveYearPrincipalPaid', 'IssuedDate']) assert.equal(keys.includes(`${p}${k}`), true, `${p}${k}`);
+  const blank = refinanceComparisonAnswerSchema.safeParse(OFFER_ANSWER({ aFiveYearTotalPaid: '', aFiveYearPrincipalPaid: '', aDiscountPointsPct: '', aIssuedDate: '' }));
+  assert.equal(blank.success, true);
+  const offerA = briefSupport.refinanceOfferFromAnswer(blank.data, 'a', 'a');
+  assert.equal('fiveYearTotalPaidUsd' in offerA, false, 'a blank five-year total is not saved as $0');
+  assert.equal('discountPointsPct' in offerA, false);
+  assert.equal('issuedDate' in offerA, false);
+  const full = refinanceComparisonAnswerSchema.safeParse(OFFER_ANSWER({ aFiveYearTotalPaid: 70000, aFiveYearPrincipalPaid: 21000, aDiscountPointsPct: 0.5, aDiscountPointsUsd: 1600, aIssuedDate: '2026-10-01' }));
+  assert.deepEqual([briefSupport.refinanceOfferFromAnswer(full.data, 'a', 'a').fiveYearTotalPaidUsd, briefSupport.refinanceOfferFromAnswer(full.data, 'a', 'a').issuedDate], [70000, '2026-10-01']);
+});
+
+test('Ask offers are held to Desktop\'s canonical Loan Estimate rules before the confirmation', async () => {
+  const { compareLoanEstimatesSchema } = require('../../src/refinanceRadar/validators/refinanceRadar.validators.ts');
+  const offers = (over) => { const d = refinanceComparisonAnswerSchema.parse(OFFER_ANSWER(over)); return { offers: [briefSupport.refinanceOfferFromAnswer(d, 'a', 'a'), briefSupport.refinanceOfferFromAnswer(d, 'b', 'b')] }; };
+  assert.equal(compareLoanEstimatesSchema.safeParse(offers({})).success, true);
+  assert.equal(compareLoanEstimatesSchema.safeParse(offers({ aFiveYearTotalPaid: 70000 })).success, false, 'half of the five-year pair');
+  assert.equal(compareLoanEstimatesSchema.safeParse(offers({ aFiveYearTotalPaid: 70000, aFiveYearPrincipalPaid: 80000 })).success, false, 'principal above total');
+  assert.equal(compareLoanEstimatesSchema.safeParse(offers({ aIssuedDate: '2026-02-30' })).success, false, 'not a calendar date');
+
+  const propertyAccess = require('../../src/services/propertyAccess.service.ts');
+  const financial = require('../../src/services/financialContext/context.ts');
+  const prefs = require('../../src/refinanceRadar/refinanceAlertPreference.service.ts');
+  const decisions = require('../../src/refinanceRadar/refinanceDecision.service.ts');
+  const restore = withSavedRecords();
+  const saved = { a: propertyAccess.resolvePropertyAccess, f: financial.getFinancialContextDecisions, p: prefs.getRefinanceAlertPreference, d: decisions.getCurrentRefinanceDecision, s: RefinanceRadarService.prototype.getSavedScenarios };
+  propertyAccess.resolvePropertyAccess = async () => ({ role: 'CONTRIBUTOR', userId: 'u1', propertyId: 'prop-1' });
+  financial.getFinancialContextDecisions = async () => ({ contextVersion: 'ctx-1' });
+  prefs.getRefinanceAlertPreference = async () => null;
+  decisions.getCurrentRefinanceDecision = async () => null;
+  RefinanceRadarService.prototype.getSavedScenarios = async () => [];
+  try {
+    const bad = await handler.refinanceCommandResult('u1', 'prop-1', 'ADD_COMPARISON', null, 'Compare', OFFER_ANSWER({ aFiveYearTotalPaid: 70000 }));
+    assert.equal(bad.status, 'NEEDS_CONTEXT');
+    assert.equal(bad.reasonCode, 'REFINANCE_COMPARISON_FIGURES_INVALID');
+    assert.match(JSON.stringify(bad.blocks), /Offer 1: .*five-year/i);
+    const ok = await handler.refinanceCommandResult('u1', 'prop-1', 'ADD_COMPARISON', null, 'Compare', OFFER_ANSWER({ aFiveYearTotalPaid: 70000, aFiveYearPrincipalPaid: 21000 }));
+    assert.equal(ok.status, 'NEEDS_CONFIRMATION');
+  } finally { propertyAccess.resolvePropertyAccess = saved.a; financial.getFinancialContextDecisions = saved.f; prefs.getRefinanceAlertPreference = saved.p; decisions.getCurrentRefinanceDecision = saved.d; RefinanceRadarService.prototype.getSavedScenarios = saved.s; restore(); }
 });

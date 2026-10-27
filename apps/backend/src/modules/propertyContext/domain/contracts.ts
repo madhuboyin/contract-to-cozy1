@@ -33,6 +33,8 @@ export interface DocumentUploadRecord {
   description?: string;
   notice?: string;
   recordType?: string;
+  /** How sensitive the stored record is; omitted means STANDARD. */
+  sensitivity?: string;
   recordTypeFrom?: { fieldKey: string; byValue: Record<string, string> };
 }
 

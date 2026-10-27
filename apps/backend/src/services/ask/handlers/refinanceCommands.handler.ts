@@ -12,7 +12,8 @@ import { getRefinanceAlertPreference, updateRefinanceAlertPreference } from '../
 import { deleteSavedRefinanceLoanEstimateComparison, listSavedRefinanceLoanEstimateComparisons, saveRefinanceLoanEstimateComparison } from '../../../refinanceRadar/refinanceLoanEstimateSnapshot.service';
 import { assertRefinanceDecisionTransition, getCurrentRefinanceDecision, recordRefinanceDecision } from '../../../refinanceRadar/refinanceDecision.service';
 import { parseRefinanceScenarioEdit } from './refinance.handler';
-import { REFINANCE_CAPTURE_KEYS, REFINANCE_NO_LINK, parseRefinanceCommandAnswer, refinanceAlertAnswerSchema, refinanceComparisonAnswerSchema, refinanceDecisionAnswerSchema, refinanceFormKindFromCaptureKey, refinanceKindFromAction, type RefinanceCommandKind, type RefinanceFormKind } from '../support/refinanceCommand';
+import { compareLoanEstimatesSchema } from '../../../refinanceRadar/validators/refinanceRadar.validators';
+import { REFINANCE_CAPTURE_KEYS, refinanceOfferFromAnswer, REFINANCE_NO_LINK, parseRefinanceCommandAnswer, refinanceAlertAnswerSchema, refinanceComparisonAnswerSchema, refinanceDecisionAnswerSchema, refinanceFormKindFromCaptureKey, refinanceKindFromAction, type RefinanceCommandKind, type RefinanceFormKind } from '../support/refinanceCommand';
 
 const radar = new RefinanceRadarService();
 const sha = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -55,7 +56,7 @@ export function fieldsFor(kind: RefinanceFormKind, links?: DecisionLinkOptions) 
     ...(links?.scenarios.length ? [optionalSelect('scenarioSnapshotId', 'Saved scenario this rests on', [...links.scenarios, noLink('No linked scenario')])] : []),
     ...(links?.comparisons.length ? [optionalSelect('loanEstimateComparisonId', 'Saved Loan Estimate comparison', [...links.comparisons.map(({ value, label }) => ({ value, label })), noLink('No linked comparison (also removes the offer)')])] : []),
     ...(links?.offers.length ? [optionalSelect('selectedOfferId', 'Offer you selected or are leaning toward (from that comparison)', [...links.offers.map(({ value, label }) => ({ value, label })), noLink('No selected offer')])] : [])];
-  const offerFields = (p: 'a' | 'b', label: string) => [text(`${p}Lender`, `${label} lender`, true), number(`${p}Amount`, `${label} loan amount ($)`, true, 1000), number(`${p}TermYears`, `${label} term (years)`, true, 1, 50), select(`${p}LoanType`, `${label} loan type`, ['FIXED', 'ARM', 'OTHER']), number(`${p}Rate`, `${label} note rate (%)`, true, 0.01, 30), number(`${p}Apr`, `${label} APR (%)`, true, 0.01, 30), number(`${p}MonthlyPI`, `${label} monthly principal and interest ($)`, true, 1), number(`${p}MonthlyMI`, `${label} monthly mortgage insurance ($)`), number(`${p}TotalPayment`, `${label} estimated total payment ($)`), number(`${p}LoanCosts`, `${label} loan costs ($)`, true), number(`${p}LenderCredits`, `${label} lender credits ($)`, true), number(`${p}CashToClose`, `${label} cash to close ($)`, true), select(`${p}CashDirection`, `${label} cash direction`, ['FROM_BORROWER', 'TO_BORROWER', 'UNKNOWN'])];
+  const offerFields = (p: 'a' | 'b', label: string) => [text(`${p}Lender`, `${label} lender`, true), number(`${p}Amount`, `${label} loan amount ($)`, true, 1000), number(`${p}TermYears`, `${label} term (years)`, true, 1, 50), select(`${p}LoanType`, `${label} loan type`, ['FIXED', 'ARM', 'OTHER']), number(`${p}Rate`, `${label} note rate (%)`, true, 0.01, 30), number(`${p}Apr`, `${label} APR (%)`, true, 0.01, 30), number(`${p}MonthlyPI`, `${label} monthly principal and interest ($)`, true, 1), number(`${p}MonthlyMI`, `${label} monthly mortgage insurance ($)`), number(`${p}TotalPayment`, `${label} estimated total payment ($)`), number(`${p}DiscountPointsPct`, `${label} discount points (% of the loan)`, false, 0, 10), number(`${p}DiscountPointsUsd`, `${label} discount points ($)`), number(`${p}FiveYearTotalPaid`, `${label} total paid in the first 5 years ($)`), number(`${p}FiveYearPrincipalPaid`, `${label} principal paid in the first 5 years ($)`), text(`${p}IssuedDate`, `${label} issued date (YYYY-MM-DD)`), number(`${p}LoanCosts`, `${label} loan costs ($)`, true), number(`${p}LenderCredits`, `${label} lender credits ($)`, true), number(`${p}CashToClose`, `${label} cash to close ($)`, true), select(`${p}CashDirection`, `${label} cash direction`, ['FROM_BORROWER', 'TO_BORROWER', 'UNKNOWN'])];
   return [text('label', 'Comparison label'), ...offerFields('a', 'Offer 1'), ...offerFields('b', 'Offer 2')];
 }
 
@@ -115,6 +116,17 @@ export async function refinanceCommandResult(userId: string, propertyId: string,
     return { status: 'NEEDS_CONTEXT', reasonCode: `REFINANCE_${formKind}_INPUT_REQUIRED`, contextVersion: version, parameters: { refinanceLaunch: { kind, entityId, message } }, blocks: [summary('Review the refinance details', 'Enter the details below. You will see a confirmation before anything is saved.')], captureRequests: [capture(formKind, version, seed, links)], suggestions: [] };
   }
   if (formKind && supplied && !parseRefinanceCommandAnswer(formKind, supplied).success) return { status: 'NOT_APPLICABLE', reasonCode: 'REFINANCE_COMMAND_INPUT_INVALID', blocks: [summary('Check the refinance details', 'Fill in the required fields and make sure the values match the official source.')], suggestions: [] };
+  // The canonical Loan Estimate rules (five-year pair, point amounts, dates, ranges) are Desktop's schema; Ask's offers are held to the same ones before anything is confirmed.
+  if (kind === 'ADD_COMPARISON' && supplied) {
+    const canonical = compareLoanEstimatesSchema.safeParse({ offers: [refinanceOfferFromAnswer(supplied, 'a', 'a'), refinanceOfferFromAnswer(supplied, 'b', 'b')] });
+    if (!canonical.success) {
+      const issue = canonical.error.issues[0];
+      const where = issue.path[0] === 'offers' ? `Offer ${Number(issue.path[1]) + 1}` : 'The comparison';
+      return { status: 'NEEDS_CONTEXT', reasonCode: 'REFINANCE_COMPARISON_FIGURES_INVALID', contextVersion: version, parameters: { refinanceLaunch: { kind, entityId, message } },
+        blocks: [{ type: 'SUMMARY', id: 'refinance-comparison-figures-invalid', title: 'Check these Loan Estimate figures', body: `${where}: ${issue.message} Nothing has been saved.`, tone: 'CAUTION', actions: [] }],
+        captureRequests: [capture('ADD_COMPARISON', version, supplied)], suggestions: [] };
+    }
+  }
   // A decision's links must be this home's own saved records, and the offer must belong to the comparison chosen with it: refuse here, with the form kept.
   let decisionLinks: DecisionLinkOptions | undefined;
   let currentDecision: Awaited<ReturnType<typeof getCurrentRefinanceDecision>> = null;
@@ -174,7 +186,7 @@ async function confirmRefinanceCommandUnchecked(ctx: ConfirmCapabilityContext): 
     await updateRefinanceAlertPreference(userId, execution.propertyId, parsed.data); title = 'Alert settings saved';
   } else if (command.kind === 'ADD_COMPARISON') {
     const parsed = refinanceComparisonAnswerSchema.safeParse(form); if (!parsed.success) throw stale('The Loan Estimate figures are invalid.'); const d = parsed.data as Record<string, unknown>;
-    const offer = (p: 'a' | 'b') => ({ id: `${p}-${randomUUID()}`, lenderName: String(d[`${p}Lender`]), loanAmountUsd: Number(d[`${p}Amount`]), loanTermYears: Number(d[`${p}TermYears`]), loanType: d[`${p}LoanType`] as 'FIXED' | 'ARM' | 'OTHER', noteRatePct: Number(d[`${p}Rate`]), aprPct: Number(d[`${p}Apr`]), monthlyPrincipalAndInterestUsd: Number(d[`${p}MonthlyPI`]), ...(d[`${p}MonthlyMI`] != null ? { monthlyMortgageInsuranceUsd: Number(d[`${p}MonthlyMI`]) } : {}), ...(d[`${p}TotalPayment`] != null ? { estimatedTotalMonthlyPaymentUsd: Number(d[`${p}TotalPayment`]) } : {}), loanCostsUsd: Number(d[`${p}LoanCosts`]), lenderCreditsUsd: Number(d[`${p}LenderCredits`]), cashToCloseUsd: Number(d[`${p}CashToClose`]), cashToCloseDirection: d[`${p}CashDirection`] as 'FROM_BORROWER' | 'TO_BORROWER' | 'UNKNOWN' });
+    const offer = (p: 'a' | 'b') => refinanceOfferFromAnswer(d, p, `${p}-${randomUUID()}`);
     await saveRefinanceLoanEstimateComparison({ propertyId: execution.propertyId, label: typeof d.label === 'string' ? d.label : undefined, offers: [offer('a'), offer('b')] }); title = 'Loan Estimates compared and saved';
   } else if (command.kind === 'DELETE_COMPARISON') {
     if (!command.entityId || !await deleteSavedRefinanceLoanEstimateComparison(execution.propertyId, command.entityId)) throw stale('That saved comparison is no longer available.'); title = 'Saved comparison deleted';
