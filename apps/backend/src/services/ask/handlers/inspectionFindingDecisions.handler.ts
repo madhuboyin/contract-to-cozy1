@@ -22,6 +22,7 @@ const DECISION_BUTTONS: Record<InspectionFindingDecisionKind, { label: string; s
   MONITOR: { label: 'Keep an eye on it', style: 'SECONDARY' },
   ALREADY_RESOLVED: { label: 'Already resolved', style: 'QUIET' },
   NOT_APPLICABLE: { label: 'Not applicable', style: 'QUIET' },
+  DUPLICATE: { label: 'Duplicate', style: 'QUIET' },
   EDIT: { label: 'Edit details', style: 'SECONDARY' },
   CORRECT: { label: 'Correct extraction', style: 'QUIET' },
   FIX: { label: 'Plan to fix', style: 'SECONDARY' },

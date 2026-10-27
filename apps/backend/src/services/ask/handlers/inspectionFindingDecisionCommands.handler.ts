@@ -11,10 +11,16 @@ import { registerConfirmCapabilityHandler, type ConfirmCapabilityContext, type C
 import { reconcileAskExecutionSideEffects } from '../execution/executeOperation';
 import { ensurePropertyAccess } from '../askHandlerSupport';
 import * as hubService from '../../inspectionHub.service';
+import { listWorkItems } from '../../../modules/homeOperations/application/listWorkItems.usecase';
+import { getWorkItem as loadWorkItem } from '../../../modules/homeOperations/application/getWorkItem.usecase';
+import { findWorkItemByWorkKey } from '../../../modules/homeOperations/infrastructure/workItemRepository';
+import { resolveInspectionFindingWorkKey } from '../../../modules/homeOperations/adapters/inspectionFinding.adapter';
+import { workItemChangeable } from '../support/homeWorkItemCommand';
+import { humanDate } from '../askFormatting';
 import {
   INSPECTION_FINDING_DECISION_MESSAGES, INSPECTION_FINDING_ENTITY_TYPE, INSPECTION_FIX_DISCLOSE_LABELS, inspectionFindingDecisionKindFromMessage, inspectionFindingDecisionKinds,
   INSPECTION_FINDING_EDIT_CAPTURE_KEY, INSPECTION_HOME_SYSTEMS, INSPECTION_HOME_SYSTEM_LABELS, INSPECTION_SEVERITIES, INSPECTION_SEVERITY_LABELS, InspectionFindingEditSchema,
-  isInspectionFindingEditKind, parseFixDisclosure, type InspectionFindingDecisionKind,
+  isInspectionFindingEditKind, parseFixDisclosure, type InspectionFindingDecisionKind, INSPECTION_FINDING_DUPLICATE_CAPTURE_KEY, InspectionFindingDuplicateSchema,
 } from '../support/inspectionFindingDecisionCommand';
 
 const sha = (text: string) => createHash('sha256').update(text).digest('hex');
@@ -115,6 +121,59 @@ function editResult(finding: FindingWithReport, kind: 'EDIT' | 'CORRECT', contex
   };
 }
 
+// ── Duplicate (FRD v1.456): the page asks for a raw work-item id; Ask offers the home's other open work, re-read on every use ──────────────────────────────────
+interface DuplicateTarget { id: string; propertyId: string; title: string; state: string; supersededByWorkItemId: string | null; dueAt: Date | null }
+const DUPLICATE_PICK_LIMIT = 25;
+/** The finding's own work item, if one exists yet; it can never be what the finding repeats. */
+async function ownWorkItemId(propertyId: string, findingId: string): Promise<string | null> {
+  return (await findWorkItemByWorkKey(propertyId, resolveInspectionFindingWorkKey(findingId, propertyId)))?.id ?? null;
+}
+async function duplicateChoices(propertyId: string, findingId: string): Promise<Array<{ label: string; value: string }>> {
+  const [all, own] = await Promise.all([listWorkItems({ propertyId }) as unknown as Promise<DuplicateTarget[]>, ownWorkItemId(propertyId, findingId)]);
+  return all.filter((other) => other.id !== own && workItemChangeable(other)).slice(0, DUPLICATE_PICK_LIMIT)
+    .map((other) => ({ label: `${other.title}${other.dueAt ? ` · due ${humanDate(other.dueAt)}` : ''}`, value: other.id }));
+}
+function duplicateCapture(finding: FindingWithReport, contextVersion: string, choices: Array<{ label: string; value: string }>): AskCaptureRequest {
+  return {
+    requirementId: 'inspection-finding-duplicate-inputs', captureKey: INSPECTION_FINDING_DUPLICATE_CAPTURE_KEY, classification: 'WORKFLOW_INPUT', state: 'UNKNOWN',
+    title: `What does ${titleOf(finding)} repeat?`, question: 'Choose the work item that already covers this finding.',
+    helpText: 'The work item for this finding is set aside in favor of the one you pick. Nothing is deleted. Nothing is saved until you confirm.',
+    inputSchema: { type: 'GROUP', fields: [{ key: 'target', label: 'Repeats', required: true, inputSchema: { type: 'SINGLE_SELECT', options: choices } }] } as unknown as AskCaptureRequest['inputSchema'],
+    currentAnswer: {}, allowNotSure: false, sensitivity: 'STANDARD', destinationLabel: 'Used to prepare this change; nothing is saved until you confirm', confirmationText: null, expectedContextVersion: contextVersion,
+  };
+}
+async function duplicateResult(propertyId: string, finding: FindingWithReport, contextVersion: string, expiresAt: Date, launch: { entityId: string; sourceExecutionId: string | null }, supplied?: Record<string, unknown>): Promise<AskOperationResult> {
+  const choices = await duplicateChoices(propertyId, finding.id);
+  if (!choices.length) return unavailable('INSPECTION_FINDING_DUPLICATE_NO_CHOICES', 'No other work to choose from', 'There is no other open work item this could repeat. Nothing has changed.');
+  if (!supplied) {
+    return {
+      status: 'NEEDS_CONTEXT', reasonCode: 'INSPECTION_FINDING_DUPLICATE_INPUT_REQUIRED', contextVersion,
+      parameters: { inspectionFindingDecisionLaunch: { kind: 'DUPLICATE', entityId: finding.id, sourceExecutionId: launch.sourceExecutionId } },
+      blocks: [{ type: 'SUMMARY', id: 'inspection-finding-duplicate-input', title: titleOf(finding), body: `${finding.inspectorDescription} Nothing has been saved yet.`, tone: 'DEFAULT', actions: [] }],
+      captureRequests: [duplicateCapture(finding, contextVersion, choices)], suggestions: [],
+    };
+  }
+  const parsed = InspectionFindingDuplicateSchema.safeParse(supplied);
+  const picked = parsed.success ? choices.find((choice) => choice.value === parsed.data.target) : undefined;
+  if (!parsed.success || !picked) return unavailable('INSPECTION_FINDING_DUPLICATE_TARGET_INVALID', 'Choose one of the listed work items', 'That work item is not available to choose. Nothing has changed.');
+  return {
+    status: 'NEEDS_CONFIRMATION', reasonCode: 'INSPECTION_FINDING_DUPLICATE_CONFIRMATION_REQUIRED', contextVersion,
+    parameters: {
+      inspectionFindingDecisionCommand: { kind: 'DUPLICATE', entityId: finding.id }, inspectionFindingDecisionContextVersion: contextVersion, inspectionFindingDuplicateOf: picked.value,
+      sourceExecutionId: launch.sourceExecutionId, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString(),
+    },
+    blocks: [{ type: 'SUMMARY', id: 'inspection-finding-duplicate-review', title: titleOf(finding), body: 'Nothing is saved until you confirm.', tone: 'DEFAULT', actions: [] }],
+    confirmation: {
+      confirmationId: `inspection-finding-decision-duplicate-${sha(`${finding.id}:${picked.value}`).slice(0, 12)}-1`, version: 1,
+      title: 'Mark this finding as a duplicate?',
+      description: 'This sets the finding’s work item aside in favor of the one you picked and marks the finding as a duplicate. Nothing is deleted, and nothing is sent to anyone.',
+      fields: [{ label: 'Finding', value: titleOf(finding) }, { label: 'Repeats', value: picked.label }],
+      editableFields: [], confirmLabel: 'Mark as a duplicate', consentText: 'I authorize this change to the shared inspection record.', expiresAt: expiresAt.toISOString(),
+    },
+    captureRequests: [duplicateCapture(finding, contextVersion, choices)], suggestions: [],
+  };
+}
+
 export async function inspectionFindingDecisionResult(userId: string, propertyId: string, launch: { kind: InspectionFindingDecisionKind; entityId: string; sourceExecutionId: string | null }, supplied?: Record<string, unknown>): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
   if (access.role === HouseholdRole.VIEWER) {
@@ -129,6 +188,7 @@ export async function inspectionFindingDecisionResult(userId: string, propertyId
   const contextVersion = findingVersion(kind, finding);
   const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
   if (isInspectionFindingEditKind(kind)) return editResult(finding, kind, contextVersion, expiresAt, launch, supplied);
+  if (kind === 'DUPLICATE') return duplicateResult(propertyId, finding, contextVersion, expiresAt, launch, supplied);
   const plan = parseFixDisclosure(finding.resolutionNotes);
   const isMonitor = kind === 'MONITOR';
   const closing = kind === 'ALREADY_RESOLVED' || kind === 'NOT_APPLICABLE';
@@ -185,6 +245,12 @@ async function confirmInspectionFindingDecision(ctx: ConfirmCapabilityContext): 
     if (!inspectionFindingDecisionKinds(finding.report, finding).includes(kind)) throw stale('That decision is not available for this finding now.');
     if (kind === 'MONITOR' || kind === 'ALREADY_RESOLVED' || kind === 'NOT_APPLICABLE') {
       await hubService.dispositionFindingAsWork(finding.id, finding.reportId, propertyId, userId, { disposition: kind });
+    } else if (kind === 'DUPLICATE') {
+      const targetId = parameters.inspectionFindingDuplicateOf;
+      if (typeof targetId !== 'string') throw stale('The work item to merge into is invalid.');
+      const [target, own] = await Promise.all([loadWorkItem(targetId) as unknown as Promise<DuplicateTarget | null>, ownWorkItemId(propertyId, finding.id)]);
+      if (!target || target.propertyId !== propertyId || !workItemChangeable(target) || target.id === own) throw stale('That work item is no longer available.');
+      await hubService.dispositionFindingAsWork(finding.id, finding.reportId, propertyId, userId, { disposition: 'DUPLICATE', duplicateOfWorkItemId: targetId });
     } else if (isInspectionFindingEditKind(kind)) {
       const answer = InspectionFindingEditSchema.safeParse(parameters.inspectionFindingEditForm);
       if (!answer.success) throw stale('The details to save are invalid.');
@@ -210,7 +276,7 @@ async function confirmInspectionFindingDecision(ctx: ConfirmCapabilityContext): 
   const result: AskOperationResult = {
     status: 'COMPLETED', reasonCode: `INSPECTION_FINDING_${kind}_COMPLETED`,
     blocks: [{
-      type: 'WORKFLOW_PROGRESS', id: `inspection-finding-decision-${kind.toLowerCase()}-${command.entityId}`, title: isInspectionFindingEditKind(kind) ? 'Finding updated' : kind === 'MONITOR' ? 'Now keeping an eye on it' : kind === 'ALREADY_RESOLVED' ? 'Marked as resolved' : kind === 'NOT_APPLICABLE' ? 'Marked as not applicable' : 'Plan recorded', status: 'COMPLETED',
+      type: 'WORKFLOW_PROGRESS', id: `inspection-finding-decision-${kind.toLowerCase()}-${command.entityId}`, title: isInspectionFindingEditKind(kind) ? 'Finding updated' : kind === 'MONITOR' ? 'Now keeping an eye on it' : kind === 'ALREADY_RESOLVED' ? 'Marked as resolved' : kind === 'NOT_APPLICABLE' ? 'Marked as not applicable' : kind === 'DUPLICATE' ? 'Marked as a duplicate' : 'Plan recorded', status: 'COMPLETED',
       description: kind === 'MONITOR' ? 'It will come back for review in about 90 days. Nothing was sent to anyone.' : 'It is on the inspection record. Nothing was sent to anyone.', details: [],
       actions: [{ ...reportsAction, label: 'See my inspection reports', style: 'PRIMARY' as const }],
     }],

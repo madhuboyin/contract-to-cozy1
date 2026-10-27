@@ -9,6 +9,7 @@ export const INSPECTION_FINDING_DECISION_MESSAGES = {
   MONITOR: 'Keep an eye on this inspection finding.',
   ALREADY_RESOLVED: 'Mark this inspection finding as already resolved.',
   NOT_APPLICABLE: 'Mark this inspection finding as not applicable to my home.',
+  DUPLICATE: 'Mark this inspection finding as a duplicate of other work.',
   EDIT: 'Edit the details of this inspection finding.',
   CORRECT: 'Correct the extracted details of this inspection finding.',
   FIX: 'Plan to fix this inspection finding before listing.',
@@ -17,12 +18,15 @@ export const INSPECTION_FINDING_DECISION_MESSAGES = {
 } as const;
 export type InspectionFindingDecisionKind = keyof typeof INSPECTION_FINDING_DECISION_MESSAGES;
 export const INSPECTION_FINDING_DECISION_ACTION_IDS = {
-  MONITOR: 'inspection-finding-monitor', ALREADY_RESOLVED: 'inspection-finding-already-resolved', NOT_APPLICABLE: 'inspection-finding-not-applicable', EDIT: 'inspection-finding-edit', CORRECT: 'inspection-finding-correct', FIX: 'inspection-finding-fix', DISCLOSE_PRICE_ADJUST: 'inspection-finding-disclose-price', DISCLOSE_CREDIT: 'inspection-finding-disclose-credit',
+  MONITOR: 'inspection-finding-monitor', ALREADY_RESOLVED: 'inspection-finding-already-resolved', NOT_APPLICABLE: 'inspection-finding-not-applicable', DUPLICATE: 'inspection-finding-duplicate', EDIT: 'inspection-finding-edit', CORRECT: 'inspection-finding-correct', FIX: 'inspection-finding-fix', DISCLOSE_PRICE_ADJUST: 'inspection-finding-disclose-price', DISCLOSE_CREDIT: 'inspection-finding-disclose-credit',
 } as const;
 /** The two kinds that open a form (v1.446): edit a finding's details on a report not yet confirmed, or correct a wrong extraction on a confirmed one. */
 export const INSPECTION_FINDING_EDIT_KINDS = ['EDIT', 'CORRECT'] as const;
 export const isInspectionFindingEditKind = (kind: string): kind is (typeof INSPECTION_FINDING_EDIT_KINDS)[number] => (INSPECTION_FINDING_EDIT_KINDS as readonly string[]).includes(kind);
 export const INSPECTION_FINDING_EDIT_CAPTURE_KEY = 'INSPECTION_FINDING_EDIT_INPUTS';
+/** The Duplicate decision's form (v1.456): the page asks for a raw work-item id; Ask offers the home's other open work to pick from. */
+export const INSPECTION_FINDING_DUPLICATE_CAPTURE_KEY = 'INSPECTION_FINDING_DUPLICATE_INPUTS';
+export const InspectionFindingDuplicateSchema = z.object({ target: z.string().trim().min(1).max(100) }).strict();
 export const INSPECTION_SEVERITIES = ['SAFETY', 'MAJOR', 'MINOR', 'MONITOR', 'INFORMATIONAL'] as const;
 export const INSPECTION_SEVERITY_LABELS: Record<string, string> = { SAFETY: 'Safety', MAJOR: 'Major', MINOR: 'Minor', MONITOR: 'Monitor', INFORMATIONAL: 'Informational' };
 export const INSPECTION_HOME_SYSTEMS = ['ROOF', 'EXTERIOR', 'FOUNDATION', 'BASEMENT_CRAWLSPACE', 'STRUCTURAL', 'ELECTRICAL', 'PLUMBING', 'HVAC', 'INTERIOR', 'ATTIC_INSULATION', 'APPLIANCES', 'GARAGE', 'SITE_GRADING'] as const;
@@ -63,7 +67,7 @@ export function parseFixDisclosure(notes: string | null | undefined): { decision
   return null;
 }
 
-interface FindingState { status: string; workDisposition: string; resolutionNotes: string | null }
+interface FindingState { status: string; workDisposition: string; resolutionNotes: string | null; severity?: string }
 interface ReportState { status: string; reportType: string }
 /**
  * The decisions a finding allows now. Monitor: an open finding on a confirmed report not already accepted or monitored. Fix or disclose: a pre-listing
@@ -76,8 +80,11 @@ export function inspectionFindingDecisionKinds(report: ReportState, finding: Fin
   if (report.status !== 'CONFIRMED') return [];
   const kinds: InspectionFindingDecisionKind[] = [];
   if (finding.status === 'OPEN' && finding.workDisposition !== 'MONITOR' && finding.workDisposition !== 'ACCEPTED') kinds.push('MONITOR');
+  // The page's Duplicate: an open finding, not already marked duplicate. An informational finding never becomes work, so there is nothing to merge (the page would record the label and merge nothing).
+  const duplicable = finding.status === 'OPEN' && finding.workDisposition !== 'DUPLICATE' && finding.severity !== 'INFORMATIONAL';
   // Already resolved and not applicable close the finding and write its resolution note, as the page's own buttons do, so a finding that already carries notes (a plan included) is left alone.
   if (finding.status === 'OPEN' && !finding.resolutionNotes) kinds.push('ALREADY_RESOLVED', 'NOT_APPLICABLE');
+  if (duplicable) kinds.push('DUPLICATE');
   if (report.reportType === 'PRE_LISTING' && (finding.status === 'OPEN' || finding.status === 'RESOLVED')) {
     const plan = parseFixDisclosure(finding.resolutionNotes);
     if (!finding.resolutionNotes || plan) {

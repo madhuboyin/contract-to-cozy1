@@ -52,11 +52,14 @@ const p = (kind, version2, entityId = 'f1') => ({ inspectionFindingDecisionComma
 test('which decisions a finding allows: monitor when open and not yet accepted or monitored; a plan only on a pre-listing report with no notes of its own', () => {
   const k = command.inspectionFindingDecisionKinds;
   const pre = { status: 'CONFIRMED', reportType: 'PRE_LISTING' };
-  assert.deepEqual(k(pre, { status: 'OPEN', workDisposition: 'PENDING_REVIEW', resolutionNotes: null }), ['MONITOR', 'ALREADY_RESOLVED', 'NOT_APPLICABLE', 'FIX', 'DISCLOSE_PRICE_ADJUST', 'DISCLOSE_CREDIT', 'CORRECT']);
-  assert.deepEqual(k(pre, { status: 'OPEN', workDisposition: 'MONITOR', resolutionNotes: JSON.stringify({ fixDisclosure: 'FIX' }) }), ['DISCLOSE_PRICE_ADJUST', 'DISCLOSE_CREDIT', 'CORRECT']);
-  assert.deepEqual(k(pre, { status: 'OPEN', workDisposition: 'ACCEPTED', resolutionNotes: 'Roofer fixed the flashing' }), ['CORRECT'], 'their own notes are not replaced, and a wrong extraction can still be corrected');
+  assert.deepEqual(k(pre, { status: 'OPEN', workDisposition: 'PENDING_REVIEW', resolutionNotes: null }), ['MONITOR', 'ALREADY_RESOLVED', 'NOT_APPLICABLE', 'DUPLICATE', 'FIX', 'DISCLOSE_PRICE_ADJUST', 'DISCLOSE_CREDIT', 'CORRECT']);
+  assert.deepEqual(k(pre, { status: 'OPEN', workDisposition: 'MONITOR', resolutionNotes: JSON.stringify({ fixDisclosure: 'FIX' }) }), ['DUPLICATE', 'DISCLOSE_PRICE_ADJUST', 'DISCLOSE_CREDIT', 'CORRECT']);
+  assert.deepEqual(k(pre, { status: 'OPEN', workDisposition: 'ACCEPTED', resolutionNotes: 'Roofer fixed the flashing' }), ['DUPLICATE', 'CORRECT'], 'their own notes are not replaced, and a wrong extraction can still be corrected');
   assert.deepEqual(k(pre, { status: 'RESOLVED', workDisposition: 'PENDING_REVIEW', resolutionNotes: null }), ['FIX', 'DISCLOSE_PRICE_ADJUST', 'DISCLOSE_CREDIT']);
-  assert.deepEqual(k({ status: 'CONFIRMED', reportType: 'PRE_PURCHASE' }, { status: 'OPEN', workDisposition: 'PENDING_REVIEW', resolutionNotes: null }), ['MONITOR', 'ALREADY_RESOLVED', 'NOT_APPLICABLE', 'CORRECT']);
+  assert.deepEqual(k({ status: 'CONFIRMED', reportType: 'PRE_PURCHASE' }, { status: 'OPEN', workDisposition: 'PENDING_REVIEW', resolutionNotes: null }), ['MONITOR', 'ALREADY_RESOLVED', 'NOT_APPLICABLE', 'DUPLICATE', 'CORRECT']);
+  assert.ok(!k({ status: 'CONFIRMED', reportType: 'PRE_PURCHASE' }, { status: 'OPEN', workDisposition: 'DUPLICATE', resolutionNotes: null }).includes('DUPLICATE'), 'already a duplicate');
+  assert.ok(!k({ status: 'CONFIRMED', reportType: 'PRE_PURCHASE' }, { status: 'OPEN', workDisposition: 'PENDING_REVIEW', resolutionNotes: null, severity: 'INFORMATIONAL' }).includes('DUPLICATE'), 'an informational finding never becomes work');
+  assert.ok(k({ status: 'CONFIRMED', reportType: 'PRE_PURCHASE' }, { status: 'OPEN', workDisposition: 'ACCEPTED', resolutionNotes: 'their notes' }).includes('DUPLICATE'), 'the page offers it whatever the notes say; it writes none');
   assert.deepEqual(k({ status: 'REVIEW_PENDING', reportType: 'PRE_LISTING' }, { status: 'OPEN', workDisposition: 'PENDING_REVIEW', resolutionNotes: null }), ['EDIT'], 'before confirming, only the details can be edited');
   assert.deepEqual(k({ status: 'REVIEW_PENDING', reportType: 'PRE_LISTING' }, { status: 'DISMISSED', workDisposition: 'PENDING_REVIEW', resolutionNotes: null }), [], 'a dismissed finding cannot be edited');
   assert.deepEqual(k({ status: 'ARCHIVED', reportType: 'PRE_LISTING' }, { status: 'OPEN', workDisposition: 'PENDING_REVIEW', resolutionNotes: null }), []);
@@ -80,7 +83,7 @@ test('the report row offers its findings once confirmed; the findings list shows
       return item.actions.map((a) => a.id);
     } finally { w.restore(); }
   };
-  assert.deepEqual(await ids('CONTRIBUTOR'), ['inspection-finding-monitor', 'inspection-finding-disclose-price', 'inspection-finding-disclose-credit', 'inspection-finding-correct']);
+  assert.deepEqual(await ids('CONTRIBUTOR'), ['inspection-finding-monitor', 'inspection-finding-duplicate', 'inspection-finding-disclose-price', 'inspection-finding-disclose-credit', 'inspection-finding-correct']);
   assert.deepEqual(await ids('VIEWER'), []);
 });
 
@@ -223,7 +226,7 @@ test('already resolved and not applicable: offered on an open finding with no no
   const k = command.inspectionFindingDecisionKinds;
   const report = { status: 'CONFIRMED', reportType: 'PRE_PURCHASE' };
   assert.deepEqual(k(report, { status: 'RESOLVED', workDisposition: 'ALREADY_RESOLVED', resolutionNotes: null }), [], 'a closed finding cannot be closed again');
-  assert.deepEqual(k(report, { status: 'OPEN', workDisposition: 'ACCEPTED', resolutionNotes: 'Roofer fixed it' }), ['CORRECT'], 'their notes are not replaced');
+  assert.deepEqual(k(report, { status: 'OPEN', workDisposition: 'ACCEPTED', resolutionNotes: 'Roofer fixed it' }), ['DUPLICATE', 'CORRECT'], 'their notes are not replaced, and a duplicate writes none'); // the allowlist loop above covers the duplicate action id
   let w = install('CONTRIBUTOR');
   try {
     for (const [kind, copy] of [['ALREADY_RESOLVED', /closes the finding as resolved/], ['NOT_APPLICABLE', /dismisses the finding as not applying/]]) {
@@ -310,4 +313,44 @@ test('confirming an edit calls the page\'s own update with only what changed; a 
     assert.ok(out.result.blocks.some((b) => /not marked as correction requested/.test(b.title || '')), 'a failed mark is reported, not hidden');
     assert.equal(w.calls[0][0], 'edit', 'the details stay saved');
   } finally { w.restore(); }
+});
+
+test('duplicate: a picker of the home\'s other open work (never the finding\'s own), a review naming the pick, and the page\'s own disposition call with that id', async () => {
+  const wiRepo = require('../../src/modules/homeOperations/infrastructure/workItemRepository.ts');
+  const list = require('../../src/modules/homeOperations/application/listWorkItems.usecase.ts');
+  const get = require('../../src/modules/homeOperations/application/getWorkItem.usecase.ts');
+  const saved = { f: wiRepo.findWorkItemByWorkKey, l: list.listWorkItems, g: get.getWorkItem };
+  const items = [
+    { id: 'own', propertyId: 'prop-1', title: 'Fix flashing', state: 'ACCEPTED', supersededByWorkItemId: null, dueAt: null },
+    { id: 'w2', propertyId: 'prop-1', title: 'Reflash the roof', state: 'ACCEPTED', supersededByWorkItemId: null, dueAt: null },
+    { id: 'w3', propertyId: 'prop-1', title: 'Old job', state: 'CLOSED', supersededByWorkItemId: null, dueAt: null },
+  ];
+  wiRepo.findWorkItemByWorkKey = async () => ({ id: 'own' });
+  list.listWorkItems = async () => items;
+  get.getWorkItem = async (id) => items.find((i) => i.id === id) ?? null;
+  const w = install('CONTRIBUTOR', finding({ report: { status: 'CONFIRMED', reportType: 'PRE_PURCHASE' } }));
+  try {
+    const first = await invoke(CMD, M.DUPLICATE, launch(CMD, 'INSPECTION_FINDING', 'f1'));
+    assert.equal(first.status, 'NEEDS_CONTEXT');
+    assert.deepEqual(first.captureRequests[0].inputSchema.fields[0].inputSchema.options, [{ label: 'Reflash the roof', value: 'w2' }], 'not its own item, not finished work');
+    assert.equal(first.captureRequests[0].captureKey, command.INSPECTION_FINDING_DUPLICATE_CAPTURE_KEY);
+    const launchArg = { kind: 'DUPLICATE', entityId: 'f1', sourceExecutionId: null };
+    for (const bad of [{ target: 'own' }, { target: 'w3' }, { target: 'nope' }, {}]) {
+      assert.equal((await inspectionFindingDecisionResult('u1', 'prop-1', launchArg, bad)).status, 'NOT_APPLICABLE', JSON.stringify(bad));
+    }
+    const review = await inspectionFindingDecisionResult('u1', 'prop-1', launchArg, { target: 'w2' });
+    assert.equal(review.status, 'NEEDS_CONFIRMATION');
+    assert.ok(review.confirmation.fields.some((f) => f.label === 'Repeats' && f.value === 'Reflash the roof'));
+    assert.equal(w.calls.length, 0, 'review writes nothing');
+    const ver = version('DUPLICATE', finding({ report: { status: 'CONFIRMED', reportType: 'PRE_PURCHASE' } }));
+    const params = { ...p('DUPLICATE', ver), inspectionFindingDuplicateOf: 'w2' };
+    await confirmCapabilityInvoke(CMD, ctx(params));
+    assert.deepEqual(w.calls[0].slice(1, 5).concat([w.calls[0][5]]), ['f1', 'r1', 'prop-1', 'u1', { disposition: 'DUPLICATE', duplicateOfWorkItemId: 'w2' }]);
+    for (const target of ['own', 'w3', undefined]) {
+      await assert.rejects(() => confirmCapabilityInvoke(CMD, ctx({ ...params, inspectionFindingDuplicateOf: target })), /no longer available|invalid/);
+    }
+    assert.equal(w.calls.length, 1, 'a target that went stale writes nothing');
+    list.listWorkItems = async () => [items[0]];
+    assert.equal((await invoke(CMD, M.DUPLICATE, launch(CMD, 'INSPECTION_FINDING', 'f1'))).reasonCode, 'INSPECTION_FINDING_DUPLICATE_NO_CHOICES');
+  } finally { w.restore(); wiRepo.findWorkItemByWorkKey = saved.f; list.listWorkItems = saved.l; get.getWorkItem = saved.g; }
 });
