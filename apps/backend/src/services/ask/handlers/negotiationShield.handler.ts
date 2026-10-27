@@ -234,7 +234,7 @@ export function negotiationShieldReviewFromView(review: NegotiationShieldCaseRev
   const { case: item, latestAnalysis: analysis, latestDraft: draft } = review;
   const scenario = NEGOTIATION_SCENARIO_LABELS[item.scenarioType] ?? readableCode(item.scenarioType);
   const canEdit = canRun && isNegotiationStartScenario(item.scenarioType);
-  // A buyer inspection review's details are editable too, but its documents and finalize steps are not Ask's (those stay with canEdit).
+  // A buyer inspection review's details and documents are Ask's too; the finalize step (a vendor price) is not, so it stays with canEdit.
   const canEditDetails = canRun && isNegotiationEditScenario(item.scenarioType);
   const pricing = (analysis?.pricingAssessment ?? null) as Record<string, unknown> | null;
   const confidenceLabel = pricing && typeof pricing.confidenceLabel === 'string' ? NEGOTIATION_LEVEL_LABELS[pricing.confidenceLabel] ?? null : null;
@@ -262,7 +262,7 @@ export function negotiationShieldReviewFromView(review: NegotiationShieldCaseRev
         backToReviews,
       ],
     });
-    const notAnalyzedDocuments = documentsBlock(review, canEdit);
+    const notAnalyzedDocuments = documentsBlock(review, canEditDetails);
     if (notAnalyzedDocuments) blocks.push(notAnalyzedDocuments);
     const notAnalyzedFinalize = finalizeBlock(review, canEdit);
     if (notAnalyzedFinalize) blocks.push(notAnalyzedFinalize);
@@ -332,7 +332,7 @@ export function negotiationShieldReviewFromView(review: NegotiationShieldCaseRev
   if (analysis.confidenceExplanation) {
     blocks.push({ type: 'LIMITATION', id: 'negotiation-shield-confidence', title: 'How confident this is', body: text(analysis.confidenceExplanation, 600), severity: 'INFO' });
   }
-  const analysedDocuments = documentsBlock(review, canEdit);
+  const analysedDocuments = documentsBlock(review, canEditDetails);
   if (analysedDocuments) blocks.push(analysedDocuments);
   if (draft && text(draft.body, 20000)) {
     const parts = chunkNegotiationDraft(text(draft.body, 20000));

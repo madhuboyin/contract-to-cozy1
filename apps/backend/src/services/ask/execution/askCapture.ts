@@ -1030,7 +1030,7 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     const attachLaunch = storedParameters.negotiationAttachLaunch && typeof storedParameters.negotiationAttachLaunch === 'object' && !Array.isArray(storedParameters.negotiationAttachLaunch)
       ? storedParameters.negotiationAttachLaunch as { caseId?: unknown; scenarioType?: unknown; sourceExecutionId?: unknown }
       : null;
-    if (input.captureKey !== NEGOTIATION_SHIELD_ATTACH_CAPTURE_KEY || !attachLaunch || typeof attachLaunch.caseId !== 'string' || !isNegotiationStartScenario(attachLaunch.scenarioType)) {
+    if (input.captureKey !== NEGOTIATION_SHIELD_ATTACH_CAPTURE_KEY || !attachLaunch || typeof attachLaunch.caseId !== 'string' || !isNegotiationEditScenario(attachLaunch.scenarioType)) {
       const error = new Error('This attach form is no longer active. Open Attach a document again.');
       (error as Error & { code?: string }).code = 'ASK_CAPTURE_NOT_ACTIVE';
       throw error;

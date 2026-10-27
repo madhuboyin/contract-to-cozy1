@@ -2,7 +2,7 @@
 // document roles each scenario counts, which records may be offered, and the answer validation. Strings and rules only, so the review, the handler, the
 // capture path and the tests share one definition.
 import { z } from 'zod';
-import type { NegotiationStartScenario } from './negotiationShieldStart';
+import type { NegotiationEditScenario } from './negotiationShieldStart';
 
 export const NEGOTIATION_SHIELD_ATTACH_MESSAGE = 'Attach a document to this negotiation review.';
 export const NEGOTIATION_SHIELD_ATTACH_CAPTURE_KEY = 'NEGOTIATION_SHIELD_ATTACH_INPUTS';
@@ -23,12 +23,13 @@ export const NEGOTIATION_DOCUMENT_TYPE_LABELS: Record<string, string> = {
   SUPPORTING_DOCUMENT: 'Supporting document',
 };
 
-/** The roles a document can play in each review: exactly the ones that scenario's rules engine counts (design G3). Buyer inspection arrives with buyer mode. */
-export const NEGOTIATION_ATTACH_DOCUMENT_TYPES: Record<NegotiationStartScenario, readonly string[]> = {
+/** The roles a document can play in each review: exactly the ones that scenario's rules engine counts (design G3). A buyer inspection review takes the roles the page offers it. */
+export const NEGOTIATION_ATTACH_DOCUMENT_TYPES: Record<NegotiationEditScenario, readonly string[]> = {
   CONTRACTOR_QUOTE_REVIEW: ['QUOTE', 'SUPPORTING_DOCUMENT'],
   INSURANCE_PREMIUM_INCREASE: ['PREMIUM_NOTICE', 'SUPPORTING_DOCUMENT'],
   INSURANCE_CLAIM_SETTLEMENT: ['CLAIM_SETTLEMENT_NOTICE', 'CLAIM_ESTIMATE', 'SUPPORTING_DOCUMENT'],
   CONTRACTOR_URGENCY_PRESSURE: ['CONTRACTOR_RECOMMENDATION', 'CONTRACTOR_ESTIMATE', 'SUPPORTING_DOCUMENT'],
+  BUYER_INSPECTION_NEGOTIATION: ['INSPECTION_REPORT', 'BUYER_REQUEST', 'SUPPORTING_DOCUMENT'],
 };
 
 /**
@@ -61,7 +62,7 @@ export function offerableNegotiationDocuments(candidates: readonly NegotiationAt
   return { options: options.slice(0, NEGOTIATION_ATTACH_MAX_OPTIONS), excludedPrivate, excludedSensitive };
 }
 
-export function negotiationAttachAnswerSchema(scenario: NegotiationStartScenario) {
+export function negotiationAttachAnswerSchema(scenario: NegotiationEditScenario) {
   const types = NEGOTIATION_ATTACH_DOCUMENT_TYPES[scenario] as readonly [string, ...string[]];
   return z.object({
     documentType: z.enum(types),
@@ -69,7 +70,7 @@ export function negotiationAttachAnswerSchema(scenario: NegotiationStartScenario
   }).strict();
 }
 
-export function parseNegotiationAttachAnswer(scenario: NegotiationStartScenario, answer: unknown):
+export function parseNegotiationAttachAnswer(scenario: NegotiationEditScenario, answer: unknown):
   { success: true; data: { documentType: string; recordId: string } } | { success: false } {
   const parsed = negotiationAttachAnswerSchema(scenario).safeParse(answer);
   return parsed.success ? { success: true, data: parsed.data } : { success: false };

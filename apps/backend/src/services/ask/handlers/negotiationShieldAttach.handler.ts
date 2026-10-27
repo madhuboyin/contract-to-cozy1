@@ -29,7 +29,7 @@ import {
   NEGOTIATION_SHIELD_ATTACH_MESSAGE, offerableNegotiationDocuments, parseNegotiationAttachAnswer, type NegotiationAttachCandidate,
 } from '../support/negotiationShieldAttach';
 import { NEGOTIATION_SHIELD_ANALYZE_ACTION_ID, NEGOTIATION_SHIELD_ANALYZE_MESSAGE } from '../support/negotiationShieldAnalyze';
-import { isNegotiationStartScenario, NEGOTIATION_SHIELD_CASE_ENTITY_TYPE, type NegotiationStartScenario } from '../support/negotiationShieldStart';
+import { isNegotiationEditScenario, NEGOTIATION_SHIELD_CASE_ENTITY_TYPE, type NegotiationEditScenario } from '../support/negotiationShieldStart';
 
 const CONFIRMATION_MINUTES = 30;
 const REVIEW_MESSAGE = 'Review this negotiation case.';
@@ -71,7 +71,7 @@ async function loadCandidates(propertyId: string, role: HouseholdRole): Promise<
 
 const optionLabel = (candidate: NegotiationAttachCandidate) => `${candidate.title} (${candidate.kindLabel}, added ${humanDate(candidate.addedAt) ?? 'earlier'})`;
 
-function captureRequest(scenario: NegotiationStartScenario, title: string, contextVersion: string, options: NegotiationAttachCandidate[], entered?: { documentType?: string; recordId?: string }): AskCaptureRequest {
+function captureRequest(scenario: NegotiationEditScenario, title: string, contextVersion: string, options: NegotiationAttachCandidate[], entered?: { documentType?: string; recordId?: string }): AskCaptureRequest {
   return {
     requirementId: 'negotiation-shield-attach-inputs', captureKey: NEGOTIATION_SHIELD_ATTACH_CAPTURE_KEY, classification: 'WORKFLOW_INPUT', state: 'UNKNOWN',
     title: `Attach a document: ${title}`, question: 'Which document, and what is it for this review?',
@@ -106,9 +106,9 @@ export async function negotiationShieldAttachResult(
   const offer = await negotiationShieldAttachOffer(propertyId, access.role, launch.caseId);
   if (!offer) return unavailable('NEGOTIATION_SHIELD_CASE_NOT_FOUND', 'That review is no longer available', 'Ask could not find that negotiation review for this home. It may have been removed. Nothing has changed.');
   const scenario = offer.review.case.scenarioType;
-  if (!isNegotiationStartScenario(scenario)) {
+  if (!isNegotiationEditScenario(scenario)) {
     return unavailable('NEGOTIATION_SHIELD_ATTACH_UNSUPPORTED', 'Attaching to this kind of review is not currently available in Ask',
-      'A buyer inspection negotiation is started from selected findings and is not changed here. Nothing has changed.');
+      'Ask cannot attach a document to this kind of review. Nothing has changed.');
   }
   if (offer.options.length === 0) {
     const hidden = offer.excludedPrivate + offer.excludedSensitive;
@@ -176,7 +176,7 @@ async function confirmNegotiationShieldAttach(ctx: ConfirmCapabilityContext): Pr
   const { execution, userId, parameters, access } = ctx;
   const stored = parameters.negotiationShieldAttach as { caseId?: unknown; scenarioType?: unknown; recordId?: unknown; documentType?: unknown } | undefined;
   const invalid = () => Object.assign(new Error('The attachment to make is invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
-  if (!stored || typeof stored.caseId !== 'string' || !stored.caseId || !isNegotiationStartScenario(stored.scenarioType)) throw invalid();
+  if (!stored || typeof stored.caseId !== 'string' || !stored.caseId || !isNegotiationEditScenario(stored.scenarioType)) throw invalid();
   const checked = parseNegotiationAttachAnswer(stored.scenarioType, { documentType: stored.documentType, recordId: stored.recordId });
   if (!checked.success) throw invalid();
   const propertyId = execution.propertyId;

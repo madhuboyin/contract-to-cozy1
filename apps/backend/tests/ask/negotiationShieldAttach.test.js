@@ -87,7 +87,7 @@ test('the review lists attached documents by title, role and readiness only, and
   assert.equal(JSON.stringify(block).includes('storage'), false);
 });
 
-test('a viewer sees what is attached but no action; with nothing attached a viewer sees no block; a buyer review offers no attach', () => {
+test('a viewer sees what is attached but no action; with nothing attached a viewer sees no block; a buyer review offers attach to a contributor only', () => {
   const docs = [{ id: 'link-1', documentId: 'rec-1', documentType: 'QUOTE', title: 'Acme estimate', shared: true, ready: true }];
   assert.deepEqual(docsBlock(negotiationShieldReviewFromView(reviewDto({ documents: docs }), false)).actions, []);
   assert.equal(docsBlock(negotiationShieldReviewFromView(reviewDto(), false)), undefined);
@@ -95,7 +95,8 @@ test('a viewer sees what is attached but no action; with nothing attached a view
   assert.equal(empty.sections[0].count, 0);
   assert.match(empty.description, /Nothing is attached yet/);
   const buyer = reviewDto(); buyer.case.scenarioType = 'BUYER_INSPECTION_NEGOTIATION';
-  assert.equal(docsBlock(negotiationShieldReviewFromView(buyer, true)), undefined);
+  assert.equal(docsBlock(negotiationShieldReviewFromView(buyer, true)).actions[0].id, 'negotiation-shield-attach');
+  assert.equal(docsBlock(negotiationShieldReviewFromView(buyer, false)), undefined);
 });
 
 // ───────────────────────────── propose ─────────────────────────────
@@ -155,15 +156,26 @@ test('the form offers the two choices, from Home Records the whole household can
   } finally { st.restore(); }
 });
 
-test('a viewer, an undeclared message, a refresh, another property and a buyer review never get a form', async () => {
+test('a viewer, an undeclared message, a refresh, and another property never get a form', async () => {
   const st = install();
   try {
     assert.notEqual((await invoke(LAUNCH, 'VIEWER')).status, 'NEEDS_CONTEXT');
     assert.equal((await invoke(null, 'CONTRIBUTOR', 'prop-1', 'attach a document')).reasonCode, 'ASK_NEGOTIATION_SHIELD_ATTACH_NOT_DIRECTLY_ROUTABLE');
     assert.equal((await invoke({ ...LAUNCH, surface: 'ASK_REFRESH' })).reasonCode, 'ASK_NEGOTIATION_SHIELD_ATTACH_NOT_DIRECTLY_ROUTABLE');
     assert.equal((await invoke(LAUNCH, 'CONTRIBUTOR', 'prop-2')).reasonCode, 'NEGOTIATION_SHIELD_CASE_NOT_FOUND');
+  } finally { st.restore(); }
+});
+
+test('a buyer inspection review gets the form with the buyer document roles, and a quote role is refused for it', async () => {
+  const st = install();
+  try {
     st.record = caseRow({ scenarioType: 'BUYER_INSPECTION_NEGOTIATION' });
-    assert.equal((await invoke(LAUNCH)).reasonCode, 'NEGOTIATION_SHIELD_ATTACH_UNSUPPORTED');
+    const form = await invoke(LAUNCH);
+    assert.equal(form.status, 'NEEDS_CONTEXT');
+    const roles = form.captureRequests[0].inputSchema.fields.find((f) => f.key === 'documentType').inputSchema.options.map((o) => o.value);
+    assert.deepEqual(roles, ['INSPECTION_REPORT', 'BUYER_REQUEST', 'SUPPORTING_DOCUMENT']);
+    assert.equal(attach.parseNegotiationAttachAnswer('BUYER_INSPECTION_NEGOTIATION', { documentType: 'QUOTE', recordId: 'rec-shared' }).success, false);
+    assert.equal(attach.parseNegotiationAttachAnswer('BUYER_INSPECTION_NEGOTIATION', { documentType: 'BUYER_REQUEST', recordId: 'rec-shared' }).success, true);
   } finally { st.restore(); }
 });
 
@@ -224,6 +236,15 @@ function installWrite(st) {
   return { calls, restore() { NegotiationShieldService.prototype.attachDocumentMetadata = saved.attach; executeOperation.reconcileAskExecutionSideEffects = saved.reconcile; } };
 }
 
+test('confirming attaches a record to a buyer inspection review in a buyer role', async () => {
+  const st = install(); st.record = caseRow({ scenarioType: 'BUYER_INSPECTION_NEGOTIATION' });
+  const w = installWrite(st);
+  try {
+    await confirmCapabilityInvoke(OP, ctx(CONFIRMED({ scenarioType: 'BUYER_INSPECTION_NEGOTIATION', documentType: 'INSPECTION_REPORT' })));
+    assert.deepEqual(w.calls[0].payload, { documentType: 'INSPECTION_REPORT', documentId: 'rec-shared' });
+  } finally { w.restore(); st.restore(); }
+});
+
 test('confirming attaches the record by id through the canonical service, with the caller\'s role and no file details', async () => {
   const st = install();
   const w = installWrite(st);
@@ -264,7 +285,7 @@ test('a forged or changed record is refused at confirmation before anything is l
     ]) {
       await assert.rejects(() => confirmCapabilityInvoke(OP, ctx(parameters)), (e) => e.code === 'ASK_CONFIRMATION_NOT_ACTIVE', JSON.stringify(parameters).slice(0, 80));
     }
-    for (const parameters of [{}, CONFIRMED({ documentType: 'PREMIUM_NOTICE' }), CONFIRMED({ scenarioType: 'BUYER_INSPECTION_NEGOTIATION' }), CONFIRMED({ caseId: '' })]) {
+    for (const parameters of [{}, CONFIRMED({ documentType: 'PREMIUM_NOTICE' }), CONFIRMED({ scenarioType: 'BUYER_INSPECTION_NEGOTIATION' }), CONFIRMED({ scenarioType: 'WHOLE_HOME_SWAP' }), CONFIRMED({ caseId: '' })]) {
       await assert.rejects(() => confirmCapabilityInvoke(OP, ctx(parameters)), (e) => e.code === 'ASK_CONFIRMATION_NOT_ACTIVE');
     }
     assert.equal(w.calls.length, 0);
