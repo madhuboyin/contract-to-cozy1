@@ -204,6 +204,10 @@ records with no more than a 5% duplicate rate.
 
 See [Mortgage Refinance Radar measurement and optimization](../operations/MORTGAGE_REFINANCE_RADAR_MEASUREMENT_AND_OPTIMIZATION.md).
 
+## Ask Cozy rate-history presentation
+
+“Show the mortgage rate history” leads with an interactive percentage trend graph inside Ask Cozy. The graph supports both benchmarks together or focused 30-year and 15-year views, mouse and touch inspection of exact observations, 13-week and available-year ranges, and governed opportunity markers. The exact weekly source table remains available in a collapsed disclosure below the graph so it supports verification and accessibility without dominating the answer. The chart and table use governed national benchmarks and must retain the national-benchmark-versus-lender-quote boundary.
+
 ## API surface
 
 All property routes require authentication and `propertyAuthMiddleware`. The surface includes:

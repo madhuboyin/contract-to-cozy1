@@ -25,6 +25,16 @@ export const TableBlock: AskBlockRenderer<'TABLE'> = (props) => {
   if (block.id === 'capital-timeline-table') {
     return <CapitalTimelineTableBlock block={block} propertyId={propertyId} onAccessLost={onAccessLost} renderAction={renderAction} />;
   }
+  if (block.id === 'refinance-rate-history') {
+    return <details className="group rounded-2xl border border-slate-200/90 bg-white shadow-2xs" data-refinance-rate-table="">
+      <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-slate-800 marker:content-none sm:px-5">
+        <span>View exact weekly rate data <span className="font-normal text-slate-500">({block.rows.length} observations)</span></span>
+        <span className="text-xs font-semibold text-teal-700 group-open:hidden">Show</span>
+        <span className="hidden text-xs font-semibold text-teal-700 group-open:inline">Hide</span>
+      </summary>
+      <div className="border-t border-slate-100"><AdaptiveTableBlock block={block} renderAction={renderAction} /></div>
+    </details>;
+  }
   return <AdaptiveTableBlock block={block} renderAction={renderAction} />;
 };
 

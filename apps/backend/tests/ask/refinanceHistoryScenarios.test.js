@@ -60,6 +60,11 @@ test('rate history draws a percent chart framed to the data, with at most 40 poi
     const table = result.blocks.find((b) => b.id === 'refinance-rate-history');
     assert.equal(table.rows.length, 52);
     assert.equal(table.rows[0].values.date, weekly(52)[51].date, 'newest first');
+    const { validateAskAnswerTrust } = require('../../src/services/ask/askAnswerTrustValidator.ts');
+    const { completedAskAuthoritativeSourceEvidence } = require('../../src/services/ask/askAnswerTrustPolicy.ts');
+    const withEvidence = { ...result, parameters: { answerTrustEvidence: { schemaVersion: '1.0', sources: [completedAskAuthoritativeSourceEvidence('REFINANCE_ANALYSIS')] } } };
+    const validated = validateAskAnswerTrust({ question: 'Show the mortgage rate history.', operationId: 'REFINANCE_ANALYSIS', propertyId: 'prop-1', result: withEvidence }).result;
+    assert.ok(validated.blocks.some((block) => block.id === 'refinance-rate-history-chart'), 'the governed chart must survive final answer validation');
   } finally { restore(); }
 });
 

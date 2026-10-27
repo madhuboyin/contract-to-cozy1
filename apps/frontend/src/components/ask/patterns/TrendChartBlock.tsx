@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { ActionLink } from '../blocks/context';
 import type { AskBlockRenderer } from '../blocks/types';
@@ -42,10 +43,16 @@ const compactPercent = (value: number) => `${value.toFixed(2)}%`;
 const fullPercent = (value: number) => `${value.toFixed(3)}%`;
 
 export const TrendChartBlock: AskBlockRenderer<'TREND_CHART'> = ({ block }) => {
+  const rateHistory = block.id === 'refinance-rate-history-chart';
+  const [rateView, setRateView] = useState<'BOTH' | '30' | '15'>('BOTH');
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const visibleSeries = rateHistory && rateView !== 'BOTH'
+    ? block.series.filter((series) => rateView === '30' ? series.id === 'rate-30' : series.id === 'rate-15')
+    : block.series;
   const percent = block.valueFormat === 'PERCENT';
   const compact = percent ? compactPercent : compactMoney;
   const full = percent ? fullPercent : fullMoney;
-  const all = block.series.flatMap((series) => series.values);
+  const all = visibleSeries.flatMap((series) => series.values);
   const fit = block.scale === 'FIT';
   const lowest = Math.min(...all);
   const highest = Math.max(...all);
@@ -64,6 +71,12 @@ export const TrendChartBlock: AskBlockRenderer<'TREND_CHART'> = ({ block }) => {
     const linePoints = values.map((value, index) => `${index === 0 ? 'M' : 'L'} ${x(index).toFixed(1)} ${y(value).toFixed(1)}`).join(' ');
     return `${linePoints} L ${x(values.length - 1).toFixed(1)} ${baselineY.toFixed(1)} L ${x(0).toFixed(1)} ${baselineY.toFixed(1)} Z`;
   };
+  const activateNearest = (clientX: number, svg: SVGSVGElement) => {
+    const rect = svg.getBoundingClientRect();
+    const chartX = ((clientX - rect.left) / Math.max(1, rect.width)) * WIDTH;
+    const approximate = Math.round(((chartX - PAD.left) / Math.max(1, WIDTH - PAD.left - PAD.right)) * Math.max(1, last));
+    setActiveIndex(Math.min(last, Math.max(0, approximate)));
+  };
 
   return (
     <section className="w-full rounded-2xl border border-slate-200/90 bg-white shadow-2xs" data-display-pattern="trend-chart">
@@ -79,11 +92,17 @@ export const TrendChartBlock: AskBlockRenderer<'TREND_CHART'> = ({ block }) => {
       </div>
       <div className="p-3 sm:px-4 sm:py-3">
         <figure>
+          {rateHistory && <div className="mb-3 flex flex-wrap items-center gap-2" aria-label="Mortgage rate series">
+            {([['BOTH', 'Both rates'], ['30', '30-year'], ['15', '15-year']] as const).map(([value, label]) => <button key={value} type="button" aria-pressed={rateView === value} onClick={() => { setRateView(value); setActiveIndex(null); }} className={cn('min-h-8 rounded-full border px-3 text-xs font-semibold transition-colors', rateView === value ? 'border-teal-700 bg-teal-700 text-white' : 'border-slate-200 bg-white text-slate-600 hover:border-teal-300')}>{label}</button>)}
+          </div>}
           <div className="rounded-xl border border-slate-100 bg-slate-50/40 p-2">
             <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className="h-auto w-full" role="img"
-              aria-label={`${block.title}. ${block.series.map((series) => `${series.label} ends at ${full(series.values[last])}`).join('; ')}.`}>
+              aria-label={`${block.title}. ${visibleSeries.map((series) => `${series.label} ends at ${full(series.values[last])}`).join('; ')}.`}
+              onMouseMove={rateHistory ? (event) => activateNearest(event.clientX, event.currentTarget) : undefined}
+              onMouseLeave={rateHistory ? () => setActiveIndex(null) : undefined}
+              onTouchMove={rateHistory ? (event) => { const touch = event.touches[0]; if (touch) activateNearest(touch.clientX, event.currentTarget); } : undefined}>
               <defs>
-                {block.series.map((series) => (
+                {visibleSeries.map((series) => (
                   <linearGradient key={`grad-${series.id}`} id={`trend-grad-${block.id}-${series.id}`} x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor={FILL_HEX[series.tone]} stopOpacity="0.16" />
                     <stop offset="100%" stopColor={FILL_HEX[series.tone]} stopOpacity="0.0" />
@@ -100,16 +119,17 @@ export const TrendChartBlock: AskBlockRenderer<'TREND_CHART'> = ({ block }) => {
               {block.categories.map((category, index) => (index % labelEvery === 0 || index === last) && (
                 <text key={category} x={x(index)} y={HEIGHT - 8} textAnchor="middle" className="fill-slate-600 font-medium" fontSize="11">{category}</text>
               ))}
-              {block.series.map((series) => (
+              {visibleSeries.map((series) => (
                 <path key={`area-${series.id}`} d={areaD(series.values)} fill={`url(#trend-grad-${block.id}-${series.id})`} />
               ))}
               {block.markers.map((marker) => (
                 <g key={marker.id}>
                   <line x1={x(marker.categoryIndex)} x2={x(marker.categoryIndex)} y1={PAD.top} y2={HEIGHT - PAD.bottom} className="stroke-teal-600" strokeWidth="1.5" strokeDasharray="3 3" />
-                  <circle cx={x(marker.categoryIndex)} cy={y(block.series[0].values[marker.categoryIndex])} r="5" className="fill-teal-600 stroke-white" strokeWidth="2" />
+                  <circle cx={x(marker.categoryIndex)} cy={y(visibleSeries[0].values[marker.categoryIndex])} r="5" className="fill-teal-600 stroke-white" strokeWidth="2" />
                 </g>
               ))}
-              {block.series.map((series) => (
+              {activeIndex != null && rateHistory && <line x1={x(activeIndex)} x2={x(activeIndex)} y1={PAD.top} y2={HEIGHT - PAD.bottom} className="stroke-slate-500" strokeWidth="1" strokeDasharray="3 3" />}
+              {visibleSeries.map((series) => (
                 <polyline key={series.id} fill="none" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round"
                   strokeDasharray={series.style === 'DASHED' ? '6 4' : undefined} className={STROKE[series.tone]}
                   points={series.values.map((value, index) => `${x(index).toFixed(1)},${y(value).toFixed(1)}`).join(' ')} />
@@ -118,7 +138,7 @@ export const TrendChartBlock: AskBlockRenderer<'TREND_CHART'> = ({ block }) => {
           </div>
           <figcaption className="mt-2 flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-medium text-slate-700">
-              {block.series.map((series) => (
+              {visibleSeries.map((series) => (
                 <span key={series.id} className="inline-flex items-center gap-1.5 rounded-full border border-slate-200/80 bg-slate-50 px-2.5 py-0.5">
                   <span className={cn('inline-block h-0.5 w-3.5', SWATCH[series.tone], series.style === 'DASHED' && 'opacity-70')} aria-hidden="true" />
                   <span>{series.label}</span>
@@ -133,12 +153,16 @@ export const TrendChartBlock: AskBlockRenderer<'TREND_CHART'> = ({ block }) => {
               ))}
             </div>
           </figcaption>
+          {rateHistory && activeIndex != null && <div className="mt-2 rounded-xl border border-teal-100 bg-teal-50/70 px-3 py-2 text-xs text-slate-700" role="status">
+            <strong className="text-slate-950">{block.categories[activeIndex]}</strong>
+            {visibleSeries.map((series) => <span key={series.id} className="ml-3">{series.label}: <strong>{full(series.values[activeIndex])}</strong></span>)}
+          </div>}
         </figure>
         <p className="mt-1.5 text-xs text-slate-500">{block.basis}</p>
         <table className="sr-only">
           <caption>{block.title}</caption>
-          <thead><tr><th>{percent ? 'Date' : 'Year'}</th>{block.series.map((series) => <th key={series.id}>{series.label}</th>)}</tr></thead>
-          <tbody>{block.categories.map((category, index) => <tr key={category}><td>{category}</td>{block.series.map((series) => <td key={series.id}>{full(series.values[index])}</td>)}</tr>)}</tbody>
+          <thead><tr><th>{percent ? 'Date' : 'Year'}</th>{visibleSeries.map((series) => <th key={series.id}>{series.label}</th>)}</tr></thead>
+          <tbody>{block.categories.map((category, index) => <tr key={category}><td>{category}</td>{visibleSeries.map((series) => <td key={series.id}>{full(series.values[index])}</td>)}</tr>)}</tbody>
         </table>
       </div>
     </section>
