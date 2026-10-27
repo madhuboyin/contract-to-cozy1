@@ -775,6 +775,18 @@ A banner on the `FinancingCalculatorSheet` shows "Rates updated [N days ago] —
 
 ---
 
+## Ask Cozy financing workspace
+
+Ask Cozy is the primary homeowner surface for financing. “Show my home financing overview” renders a financing-specific workspace rather than a generic fact list. It includes:
+
+- a compact mortgage-and-equity dashboard with readable loan labels, source/freshness context, HELOC capacity, and an explicit equity refresh;
+- an editable project-cost calculator using the canonical financing calculation endpoint;
+- selectable HELOC, home-equity-loan, personal-loan, contractor-financing, and cash comparisons;
+- scenario naming and saving; and
+- inline saved-scenario detail and archive controls.
+
+Mortgage-profile changes remain owner-only and use the governed `FINANCING_PROFILE_COMMAND` review and confirmation flow. The financing workspace does not link or hand off to the Desktop Financing Center.
+
 ## Current Limitations
 
 - No live rate API. All rates come from admin-managed `FinancingRateConfig`. Admins should update weekly using published Bankrate or Freddie Mac surveys. The "rates as of" date is shown to users.

@@ -40,6 +40,7 @@ import { ActionLink, AskBlockActionContext, AskContextLink } from './context';
 import type { AskBlockRenderer } from './types';
 import { AskCollection, AskCollectionState } from '../presentation/AskLayoutPrimitives';
 import { AttachEvidenceControl, EVIDENCE_ATTACH_MESSAGES } from '../AttachEvidenceControl';
+import { FinancingNumbers, FinancingOptions, FinancingPlanner, FinancingScenarios } from '../FinancingOverviewResult';
 
 // Blocks whose items carry longer text revealed on demand (`item.detail`). The Negotiation Shield draft is collapsed by default so a long
 // message does not push the analysis down; the producer sets the id, the client only implements the expand/collapse.
@@ -768,6 +769,10 @@ export const GroupedListBlock: AskBlockRenderer<'GROUPED_LIST'> = (props) => {
   const setPreference = (mode: GroupedListPresentationPreference) => controls?.change((view) => ({
     ...view, groupedListModes: { ...view.groupedListModes, [props.block.id]: mode },
   }));
+  if (props.block.id === 'financing-numbers') return <FinancingNumbers block={props.block} propertyId={props.propertyId} />;
+  if (props.block.id === 'financing-planner') return <FinancingPlanner block={props.block} propertyId={props.propertyId} />;
+  if (props.block.id === 'financing-options') return <FinancingOptions block={props.block} />;
+  if (props.block.id === 'financing-scenarios') return <FinancingScenarios block={props.block} propertyId={props.propertyId} />;
   // The Property Brief preview is one exact recipient snapshot: a fixed fact sheet, never the Auto/List/Cards chooser.
   if (props.block.id === PROPERTY_BRIEF_PREVIEW_IDS.sections) return <PropertyBriefFactSheet {...props} />;
   if (props.block.id === PROPERTY_BRIEF_PREVIEW_IDS.shares) return <PropertyBriefSharePanel {...props} />;

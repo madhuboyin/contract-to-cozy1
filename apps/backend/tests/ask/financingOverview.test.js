@@ -40,17 +40,18 @@ test('the project cost is read from dollars, k and m; implausible or missing amo
   assert.equal(amount('a $50 fix'), null);
 });
 
-const PROFILE = { mortgageStatus: 'MORTGAGED', mortgageType: 'CONVENTIONAL', currentMortgageBalanceCents: 21000000, interestRateBps: 650, monthlyPaymentCents: 195000, remainingTermMonths: 300 };
+const PROFILE = { mortgageStatus: 'MORTGAGED', mortgageType: 'FIXED_30', currentMortgageBalanceCents: 21000000, mortgageBalanceAsOfDate: new Date('2026-10-01'), interestRateBps: 650, monthlyPaymentCents: 195000, remainingTermMonths: 300 };
 const EQUITY = { id: 'e-1', estimatedValueCents: 50000000, estimatedValueSource: 'APPRECIATION_TRACKER', equityCents: 29000000, equityPercent: '58', ltvPercent: '42', helocCapacityCents: 21500000, helocEligible: true, computedAt: new Date() };
 const CALC = new FinancingCalculatorService().computeAll(4_000_000, { helocRateBps: 900, helRateBps: 875, personalLoanMinRateBps: 1100, personalLoanMaxRateBps: 2000, contractorPromoMonths: 12, contractorOngoingAprBps: 2699, opportunityCostRateBps: 600 }, { helocEligible: true, helocCapacityCents: 21500000 }, '2026-10-01T00:00:00.000Z');
 
-test('the overview shows the mortgage and equity numbers and a hint to name a project; it never claims what it was not given', () => {
+test('the overview shows readable mortgage and equity numbers plus an editable planner; it never claims what it was not given', () => {
   const result = financingFromView({ profile: PROFILE, equity: EQUITY, scenarios: [], calc: null, amountDollars: null, isOwner: true });
   assert.equal(result.status, 'ANSWERED');
   assert.match(result.blocks[0].title, /About 58% equity/);
   const facts = Object.fromEntries(result.blocks.find((b) => b.id === 'financing-numbers').sections[0].items.map((i) => [i.title, i.description]));
-  assert.deepEqual([facts.Mortgage, facts.Balance, facts.Rate, facts.Equity, facts.HELOC], ['Has a mortgage', '$210,000', '6.5%', '$290,000 (58%)', 'May qualify, up to $215,000']);
-  assert.ok(result.blocks.some((b) => b.id === 'financing-amount-hint'));
+  assert.deepEqual([facts.Mortgage, facts['Loan type'], facts['Mortgage balance'], facts['Interest rate'], facts['Home equity'], facts['Estimated HELOC capacity']], ['Has a mortgage', '30-year fixed', '$210,000', '6.5%', '$290,000 (58%)', 'Up to $215,000']);
+  assert.ok(result.blocks.some((b) => b.id === 'financing-planner'));
+  assert.ok(result.blocks.some((b) => b.id === 'financing-scenarios'), 'the empty saved-scenario state is still rendered');
   assert.equal(result.blocks.at(-1).id, 'financing-boundary');
 });
 
@@ -70,10 +71,10 @@ test('a named project cost compares the five ways to pay with the calculator num
   assert.match(options.description, /national averages/);
   assert.equal(options.sections[0].items[0].status, 'You may qualify');
   assert.match(options.sections[0].items[1].description, /\$\d[\d,]*\/month over 10 years/);
-  assert.equal(result.blocks.some((b) => b.id === 'financing-amount-hint'), false);
+  assert.equal(result.blocks.find((b) => b.id === 'financing-planner').sections[0].items[0].meta[0], '4000000 cents');
 });
 
-test('saved scenarios are listed read-only and a not-eligible HELOC is labelled for comparison only', () => {
+test('saved scenarios are exposed to the inline workspace and a not-eligible HELOC is labelled for comparison only', () => {
   const result = financingFromView({
     profile: PROFILE, equity: { ...EQUITY, helocEligible: false }, calc: { ...CALC, helocEligible: false, helocCapacityCents: 0 }, amountDollars: 40000, isOwner: true,
     scenarios: [{ id: 's-1', title: 'Kitchen', projectCostCents: 4000000, status: 'SAVED', selectedOption: 'HOME_EQUITY_LOAN', createdAt: new Date('2026-09-01') }],
@@ -81,7 +82,7 @@ test('saved scenarios are listed read-only and a not-eligible HELOC is labelled 
   assert.match(result.blocks[0].body, /does not look sufficient for a HELOC/);
   const scenarios = result.blocks.find((b) => b.id === 'financing-scenarios');
   assert.equal(scenarios.sections[0].items[0].status, 'Saved');
-  assert.match(scenarios.description, /Saving a new one is not currently available in Ask/);
+  assert.match(scenarios.description, /Open a saved comparison here/);
 });
 
 test('the capability reads the canonical calls and survives the answer-trust validator', async () => {

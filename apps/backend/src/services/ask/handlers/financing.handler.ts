@@ -62,17 +62,18 @@ export function financingFromView(input: { profile: Profile; equity: Equity | nu
   });
 
   // The numbers behind the answer.
-  const facts: Array<{ label: string; value: string | null }> = [
-    { label: 'Mortgage', value: profile ? MORTGAGE_STATUS_LABELS[profile.mortgageStatus] ?? null : 'Not recorded' },
-    { label: 'Type', value: profile?.mortgageType ? MORTGAGE_TYPE_LABELS[String(profile.mortgageType)] ?? String(profile.mortgageType) : null },
-    { label: 'Balance', value: dollars(profile?.currentMortgageBalanceCents) },
-    { label: 'Rate', value: rate(profile?.interestRateBps) },
-    { label: 'Monthly payment', value: dollars(profile?.monthlyPaymentCents) ? `${dollars(profile?.monthlyPaymentCents)}/month` : null },
-    { label: 'Remaining term', value: profile?.remainingTermMonths ? `${Math.round(profile.remainingTermMonths / 12 * 10) / 10} years` : null },
+  const facts: Array<{ id: string; label: string; value: string | null; meta?: string[] }> = [
+    { id: 'mortgage-status', label: 'Mortgage', value: profile ? MORTGAGE_STATUS_LABELS[profile.mortgageStatus] ?? null : 'Not recorded' },
+    { id: 'mortgage-type', label: 'Loan type', value: profile?.mortgageType ? MORTGAGE_TYPE_LABELS[String(profile.mortgageType)] ?? 'Other mortgage' : null },
+    { id: 'mortgage-balance', label: 'Mortgage balance', value: dollars(profile?.currentMortgageBalanceCents), meta: profile?.mortgageBalanceAsOfDate ? [`Balance recorded ${humanDate(new Date(profile.mortgageBalanceAsOfDate))}`] : [] },
+    { id: 'mortgage-rate', label: 'Interest rate', value: rate(profile?.interestRateBps) },
+    { id: 'mortgage-payment', label: 'Monthly payment', value: dollars(profile?.monthlyPaymentCents) ? `${dollars(profile?.monthlyPaymentCents)}/month` : null },
+    { id: 'mortgage-term', label: 'Remaining term', value: profile?.remainingTermMonths ? `${Math.round(profile.remainingTermMonths / 12 * 10) / 10} years` : null },
     ...(equity && equity.estimatedValueCents > 0 ? [
-      { label: 'Equity', value: `${dollars(equity.equityCents)} (${Number(equity.equityPercent)}%)` },
-      { label: 'Loan to value', value: `${Number(equity.ltvPercent)}%` },
-      { label: 'HELOC', value: equity.helocEligible ? `May qualify, up to ${dollars(equity.helocCapacityCents)}` : 'Not likely at this equity level' },
+      { id: 'home-value', label: 'Estimated home value', value: dollars(equity.estimatedValueCents), meta: [`Source: ${EQUITY_SOURCE_LABELS[String(equity.estimatedValueSource)] ?? 'recorded home value'}`] },
+      { id: 'home-equity', label: 'Home equity', value: `${dollars(equity.equityCents)} (${Number(equity.equityPercent)}%)`, meta: [`Calculated ${humanDate(new Date(equity.computedAt))}`] },
+      { id: 'loan-to-value', label: 'Loan to value', value: `${Number(equity.ltvPercent)}%` },
+      { id: 'heloc-capacity', label: 'Estimated HELOC capacity', value: equity.helocEligible ? `Up to ${dollars(equity.helocCapacityCents)}` : 'Not likely at this equity level' },
     ] : []),
   ].filter((fact) => fact.value);
   if (isOwner && facts.length) {
@@ -80,10 +81,19 @@ export function financingFromView(input: { profile: Profile; equity: Equity | nu
       type: 'GROUPED_LIST', filters: [], id: 'financing-numbers', title: 'Your numbers',
       description: hasProfile ? 'From the financing details recorded for this home.' : 'Little is recorded, so these are partial.',
       sections: [{ id: 'financing-numbers-all', title: 'Mortgage and equity', count: facts.length,
-        items: facts.map((fact, index) => ({ id: `financing-fact-${index}`, title: fact.label, description: fact.value, meta: [], status: null, href: null })) }],
+        items: facts.map((fact) => ({ id: fact.id, title: fact.label, description: fact.value, meta: fact.meta ?? [], status: null, href: null })) }],
       actions: [],
     });
   }
+
+  blocks.push({
+    type: 'GROUPED_LIST', filters: [], id: 'financing-planner', title: 'Plan how to pay for a home project',
+    description: 'Enter a project cost, compare realistic payment options, and save the scenario for later.',
+    sections: [{ id: 'financing-planner-input', title: 'Project financing calculator', count: 1, items: [{
+      id: 'financing-project-cost', title: 'Project cost', description: amountDollars === null ? null : money(amountDollars),
+      meta: amountDollars === null ? [] : [`${amountDollars * 100} cents`], status: null, href: null,
+    }] }], actions: [],
+  });
 
   if (calc) {
     const options: Array<{ id: string; title: string; description: string; meta: string[]; status: string | null }> = [
@@ -124,24 +134,17 @@ export function financingFromView(input: { profile: Profile; equity: Equity | nu
       type: 'EVIDENCE', id: 'financing-options-evidence', title: 'Rates used',
       items: [{ label: 'Rate assumptions for the ways to pay', source: 'Financing calculator rate assumptions', observedAt: new Date(calc.ratesAsOf).toISOString() }],
     });
-  } else if (amountDollars === null) {
-    blocks.push({
-      type: 'LIMITATION', id: 'financing-amount-hint', severity: 'INFO', title: 'Ask about a specific project',
-      body: 'Name a project cost, for example "what would a $40,000 project cost to finance", and the options are compared side by side.',
-    });
   }
 
-  if (scenarios.length) {
-    blocks.push({
-      type: 'GROUPED_LIST', filters: [], id: 'financing-scenarios', title: 'Saved scenarios',
-      description: 'Calculations you saved earlier. Saving a new one is not currently available in Ask.',
-      sections: [{ id: 'financing-scenarios-all', title: 'Scenarios', count: scenarios.length, items: scenarios.slice(0, 10).map((scenario) => ({
-        id: scenario.id, title: scenario.title || 'Untitled scenario', description: scenario.selectedOption ? `Leaning toward: ${String(scenario.selectedOption).toLowerCase().replace(/_/g, ' ')}` : null,
-        meta: [money(scenario.projectCostCents / 100), `Saved ${humanDate(new Date(scenario.createdAt))}`], status: SCENARIO_STATUS_LABELS[String(scenario.status)] ?? String(scenario.status), href: null,
-      })) }],
-      actions: [],
-    });
-  }
+  blocks.push({
+    type: 'GROUPED_LIST', filters: [], id: 'financing-scenarios', title: 'Saved scenarios',
+    description: 'Open a saved comparison here, or archive one you no longer need.',
+    sections: [{ id: 'financing-scenarios-all', title: 'Scenarios', count: scenarios.length, items: scenarios.slice(0, 10).map((scenario) => ({
+      id: scenario.id, title: scenario.title || 'Untitled scenario', description: scenario.selectedOption ? `Leaning toward: ${String(scenario.selectedOption).toLowerCase().replace(/_/g, ' ')}` : null,
+      meta: [money(scenario.projectCostCents / 100), `Saved ${humanDate(new Date(scenario.createdAt))}`], status: SCENARIO_STATUS_LABELS[String(scenario.status)] ?? String(scenario.status), href: null,
+    })) }],
+    actions: [],
+  });
   blocks.push(BOUNDARY);
   return { status: 'ANSWERED', reasonCode: !isOwner || hasProfile || calc ? undefined : 'FINANCING_PROFILE_MISSING', blocks, suggestions: [] };
 }

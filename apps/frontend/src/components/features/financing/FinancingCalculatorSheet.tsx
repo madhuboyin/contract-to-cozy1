@@ -24,6 +24,8 @@ interface FinancingCalculatorSheetProps {
   sourceEntityId?: string;
   equity?: EquityPosition | null;
   onScenarioSaved?: (scenarioId: string) => void;
+  /** Ask Cozy keeps profile editing inline, so it suppresses the Desktop route. */
+  profileHref?: string | null;
 }
 
 export default function FinancingCalculatorSheet({
@@ -35,6 +37,7 @@ export default function FinancingCalculatorSheet({
   sourceEntityId,
   equity,
   onScenarioSaved,
+  profileHref = `/dashboard/properties/${propertyId}/tools/financing/profile`,
 }: FinancingCalculatorSheetProps) {
   const [costStr, setCostStr] = useState(
     initialCostCents ? String(Math.round(initialCostCents / 100)) : '',
@@ -141,13 +144,7 @@ export default function FinancingCalculatorSheet({
             </p>
           ) : (
             <p className="text-slate-500">
-              <a
-                href={`/dashboard/properties/${propertyId}/tools/financing/profile`}
-                className="underline"
-              >
-                Add your mortgage details
-              </a>{' '}
-              to see HELOC options.
+              {profileHref ? <><a href={profileHref} className="underline">Add your mortgage details</a>{' '}to see HELOC options.</> : 'Update your mortgage details using the action above to see HELOC options.'}
             </p>
           )}
         </div>

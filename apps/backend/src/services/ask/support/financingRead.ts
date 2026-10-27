@@ -6,6 +6,9 @@
 
 export const MORTGAGE_STATUS_LABELS: Record<string, string> = { UNKNOWN: 'Not recorded', MORTGAGED: 'Has a mortgage', NO_MORTGAGE: 'No mortgage' };
 export const MORTGAGE_TYPE_LABELS: Record<string, string> = {
+  FIXED_30: '30-year fixed', FIXED_20: '20-year fixed', FIXED_15: '15-year fixed',
+  ARM_5: '5/1 adjustable-rate', ARM_7: '7/1 adjustable-rate', FHA_30: '30-year FHA', VA_30: '30-year VA', JUMBO_30: '30-year jumbo',
+  // Legacy values remain readable for records created before the canonical MortgageType enum was narrowed.
   CONVENTIONAL: 'Conventional', FHA: 'FHA', VA: 'VA', USDA: 'USDA', JUMBO: 'Jumbo', ARM: 'Adjustable rate', FIXED: 'Fixed rate', OTHER: 'Other',
 };
 export const EQUITY_SOURCE_LABELS: Record<string, string> = {
