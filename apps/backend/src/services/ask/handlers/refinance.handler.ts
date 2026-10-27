@@ -595,7 +595,11 @@ export function refinanceCanonicalAnswer(input: {
     blocks: [{
       type: 'SUMMARY', id: 'refinance-analysis-summary', title: favorable ? 'Refinancing may be worth comparing now' : 'Current conditions do not meet the radar’s actionable threshold',
       body: result.radarSummary, tone: favorable ? 'POSITIVE' : 'DEFAULT',
-      actions: [...refinanceNextActions(favorable, result.triggerRatePct), refinanceCommandAction(REFINANCE_COMMAND_ACTIONS.ALERT_SETTINGS, 'Alert settings', 'Review my refinance alert settings.')],
+      // A summary block holds at most 3 actions; a fourth fails schema validation and replaces the whole answer with the refresh fallback.
+      // The closed state already offers "Notify me at this rate", so Alert settings takes the place of the decision action only when the radar is open.
+      actions: favorable
+        ? [...refinanceNextActions(true, result.triggerRatePct).slice(0, 2), refinanceCommandAction(REFINANCE_COMMAND_ACTIONS.ALERT_SETTINGS, 'Alert settings', 'Review my refinance alert settings.')]
+        : refinanceNextActions(false, result.triggerRatePct),
     }, {
       type: 'TABLE', id: 'refinance-analysis-table', title: 'Current loan versus governed benchmark',
       description: 'The benchmark is not a personalized lender offer or guaranteed available rate.',

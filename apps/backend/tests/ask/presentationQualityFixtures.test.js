@@ -445,3 +445,13 @@ test('3F: an empty record says it is not a statement about coverage', () => {
   assert.equal(result.status, 'READY_WITH_LIMITATIONS');
   assert.match(result.blocks[0].body, /does not mean nothing is covered/);
 });
+
+test('3D: every canonical refinance block parses against the presentation schema in both radar states', () => {
+  const { AskPresentationBlockSchema } = require('../../src/productFramework/ask/ask.contract.ts');
+  for (const overrides of [{}, { result: { radarState: 'CLOSED', breakEvenMonths: null, triggerRatePct: null, confidenceLevel: null } }]) {
+    for (const block of canonicalRefinance(overrides).blocks) {
+      const parsed = AskPresentationBlockSchema.safeParse(block);
+      assert.equal(parsed.success, true, `${block.id}: ${parsed.success ? '' : JSON.stringify(parsed.error.issues)}`);
+    }
+  }
+});
