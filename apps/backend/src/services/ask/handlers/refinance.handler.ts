@@ -167,7 +167,8 @@ export function markdownSummaryResult(reasonCode: string, id: string, title: str
 const LENDER_BRIEF_ACKNOWLEDGEMENT_VERSION = '2026-07-25';
 
 type SavedComparison = Awaited<ReturnType<typeof listSavedRefinanceLoanEstimateComparisons>>[number];
-const lenderBriefVersion = (comparison: SavedComparison) => askContextFingerprint({ id: comparison.id, updatedAt: comparison.updatedAt, offers: comparison.offers.map((offer) => offer.id) });
+/** Binds the acknowledgements to the figures they were made against: the comparison's id, its update time and every offer's content. */
+const lenderBriefVersion = (comparison: SavedComparison) => askContextFingerprint({ id: comparison.id, updatedAt: comparison.updatedAt, offers: comparison.offers });
 
 /** The lender-discussion brief's form: the one offer it is about and Desktop's three acknowledgements as separate required answers. A read, so any household role may open it. */
 function lenderBriefForm(comparison: SavedComparison, supplied: Record<string, unknown>, caution?: string): AskOperationResult {
@@ -195,9 +196,13 @@ export async function refinanceLenderBriefStart(propertyId: string, comparisonId
 }
 
 /** The submitted form: all three acknowledgements and an offer of this saved comparison, re-checked now, then Desktop's brief inline. Read-only; the same analytics event as Desktop's export, with an Ask source. */
-export async function refinanceLenderBriefResult(userId: string, propertyId: string, comparisonId: string, answer: unknown): Promise<AskOperationResult> {
+export async function refinanceLenderBriefResult(userId: string, propertyId: string, comparisonId: string, answer: unknown, expectedContextVersion?: string | null): Promise<AskOperationResult> {
   const comparison = (await listSavedRefinanceLoanEstimateComparisons(propertyId)).find((item) => item.id === comparisonId);
   if (!comparison) return refinanceLenderBriefStart(propertyId, comparisonId);
+  // The acknowledgements were made against the figures the form showed: if the comparison changed while it was open, show the refreshed form instead.
+  if (expectedContextVersion !== lenderBriefVersion(comparison)) {
+    return { ...lenderBriefForm(comparison, {}, 'This comparison changed while the form was open'), reasonCode: 'ASK_CONTEXT_VERSION_CONFLICT' };
+  }
   const parsed = refinanceLenderBriefAnswerSchema.safeParse(answer);
   if (!parsed.success) return lenderBriefForm(comparison, {}, 'All three statements need your confirmation');
   const selected = comparison.offers.find((offer) => offer.id === parsed.data.selectedOfferId);

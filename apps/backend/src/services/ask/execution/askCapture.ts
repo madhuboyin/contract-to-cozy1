@@ -419,6 +419,11 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
       askInlineCapturesTotal.inc({ operation: execution.operationId, outcome: 'RESUMED' });
       return mapPersistedExecution(execution, await propertySummary(execution.propertyId));
     }
+    // The lender brief is a typed-launch read: re-running its message would route it as a fresh refinance question and replace the brief (and fire its analytics again).
+    if (execution.operationId === 'REFINANCE_ANALYSIS' && input.captureKey === REFINANCE_LENDER_BRIEF_CAPTURE_KEY) {
+      askInlineCapturesTotal.inc({ operation: execution.operationId, outcome: 'RESUMED' });
+      return mapPersistedExecution(execution, await propertySummary(execution.propertyId));
+    }
     const operation = resolveAskOperation(execution.message);
     const replayed = await executeOperation({ userId, sessionId: execution.sessionId, executionId: execution.id, message: execution.message, propertyId: execution.propertyId, operation });
     const resumed = await prisma.askExecution.update({
@@ -1956,7 +1961,7 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     const briefLaunch = storedParameters.refinanceBriefLaunch && typeof storedParameters.refinanceBriefLaunch === 'object' && !Array.isArray(storedParameters.refinanceBriefLaunch) ? storedParameters.refinanceBriefLaunch as { comparisonId?: unknown } : null;
     if (!briefLaunch || typeof briefLaunch.comparisonId !== 'string') throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
     if (!refinanceLenderBriefAnswerSchema.safeParse(input.answer).success) throw Object.assign(new Error('Choose the offer and confirm all three statements.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
-    result = await refinanceLenderBriefResult(userId, execution.propertyId, briefLaunch.comparisonId, input.answer);
+    result = await refinanceLenderBriefResult(userId, execution.propertyId, briefLaunch.comparisonId, input.answer, input.expectedContextVersion);
     captureId = input.idempotencyKey;
     capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
     canonicalOwner = 'MortgageRefinanceRadar';

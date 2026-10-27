@@ -194,13 +194,18 @@ test('the brief form states where it goes; the brief is shown only after all ack
 
     const answer = { selectedOfferId: 'a-1', figuresVerified: true, sameLoanRequestConfirmed: true, manualSharingUnderstood: true };
     for (const bad of [{ ...answer, manualSharingUnderstood: false }, { ...answer, selectedOfferId: 'z-9' }]) {
-      const again = await refinanceReads.refinanceLenderBriefResult('viewer-1', 'prop-1', 'cmp-1', bad);
+      const again = await refinanceReads.refinanceLenderBriefResult('viewer-1', 'prop-1', 'cmp-1', bad, form.contextVersion);
       assert.equal(again.status, 'NEEDS_CONTEXT');
       assert.equal(JSON.stringify(again).includes('Lender discussion brief: '), false);
     }
     assert.equal(events.length, 0, 'no event before the brief is shown');
 
-    const done = await refinanceReads.refinanceLenderBriefResult('viewer-1', 'prop-1', 'cmp-1', answer);
+    const stale = await refinanceReads.refinanceLenderBriefResult('viewer-1', 'prop-1', 'cmp-1', answer, 'an-older-version');
+    assert.equal(stale.reasonCode, 'ASK_CONTEXT_VERSION_CONFLICT');
+    assert.equal(stale.status, 'NEEDS_CONTEXT');
+    assert.equal(JSON.stringify(stale).includes('Lender discussion brief: '), false, 'acknowledgements made against older figures never produce a brief');
+    assert.equal(events.length, 0);
+    const done = await refinanceReads.refinanceLenderBriefResult('viewer-1', 'prop-1', 'cmp-1', answer, form.contextVersion);
     assert.equal(done.status, 'ANSWERED');
     assert.match(JSON.stringify(done.blocks), /Lender discussion brief: Lender A/);
     for (const block of done.blocks) assert.equal(AskPresentationBlockSchema.safeParse(block).success, true, block.id);
@@ -254,4 +259,83 @@ test('rerunning a saved scenario reconstructs credit band, objective, costs, esc
     prisma.refinanceScenarioSnapshot = { findFirst: async () => null };
     assert.equal(await service.rerunSavedScenario('prop-1', 'other', 'ctx-9'), null);
   } finally { prisma.refinanceScenarioSnapshot = saved; RefinanceRadarService.prototype.runScenario = original; }
+});
+
+// ───────────────────────────── endpoint level: submitAskCapture for the lender brief ─────────────────────────────
+
+test('submitAskCapture: a changed comparison refreshes the form; a retried submission keeps the brief and fires analytics once', async () => {
+  const prismaModule = require('../../src/lib/prisma.ts');
+  const analytics = require('../../src/services/analytics');
+  const propertyAccess = require('../../src/services/propertyAccess.service.ts');
+  const { submitAskCapture } = require('../../src/services/ask/execution/askCapture.ts');
+  const realPrisma = prismaModule.prisma;
+  const saved = { track: analytics.analyticsEmitter.track, access: propertyAccess.resolvePropertyAccess };
+  const events = [];
+  analytics.analyticsEmitter.track = (event) => { events.push(event); };
+  propertyAccess.resolvePropertyAccess = async () => ({ role: 'VIEWER', userId: 'viewer-1', propertyId: 'prop-1' });
+
+  const log = { receipts: [], eventsCreated: [] };
+  const dbOffers = [OFFER('a-1', 'Lender A'), OFFER('b-1', 'Lender B')];
+  let comparisonUpdatedAt = new Date('2026-10-05T00:00:00Z');
+  const form = () => refinanceReads.refinanceLenderBriefStart('prop-1', 'cmp-1');
+  let row;
+  const models = {
+    askSession: { update: async () => ({}) },
+    property: { findUnique: async () => ({ id: 'prop-1', address: '1 Main St', city: 'Austin', state: 'TX', zipCode: '78701', timezone: 'America/New_York' }) },
+    refinanceLoanEstimateComparisonSnapshot: { findMany: async () => [{ id: 'cmp-1', propertyId: 'prop-1', label: 'October offers', offersJson: dbOffers, createdAt: new Date('2026-10-05T00:00:00Z'), updatedAt: comparisonUpdatedAt }] },
+    askExecution: {
+      findFirst: async () => row,
+      updateMany: async ({ data }) => { row = { ...row, ...data }; return { count: 1 }; },
+      findUniqueOrThrow: async () => row,
+      update: async ({ data }) => { row = { ...row, ...data }; return row; },
+    },
+    askCaptureReceipt: {
+      findUnique: async ({ where }) => log.receipts.find((r) => r.idempotencyKey === where.executionId_idempotencyKey.idempotencyKey) ?? null,
+      upsert: async ({ create }) => { log.receipts.push(create); return create; },
+    },
+    askExecutionEvent: { create: async ({ data }) => { log.eventsCreated.push(data.eventType); return data; } },
+  };
+  prismaModule.prisma = new Proxy({}, { get(_t, model) {
+    if (model === 'then') return undefined;
+    if (model === '$transaction') return async (fn) => fn(prismaModule.prisma);
+    if (!models[model]) throw new Error(`Unexpected prisma.${String(model)} access`);
+    return models[model];
+  } });
+  try {
+    const opened = await form();
+    const startRow = () => ({
+      id: 'exec-1', userId: 'viewer-1', sessionId: 'sess-1', propertyId: 'prop-1', operationId: 'REFINANCE_ANALYSIS', message: 'Prepare a lender discussion brief from this saved Loan Estimate comparison.',
+      status: 'NEEDS_CONTEXT', reasonCode: opened.reasonCode, contextVersion: opened.contextVersion, parametersJson: opened.parameters, createdAt: new Date(), updatedAt: new Date(), completedAt: null,
+      resultJson: { schemaVersion: 1, blocks: opened.blocks, captureRequests: opened.captureRequests, confirmation: null, clarification: null, suggestions: [] },
+    });
+    const answer = { selectedOfferId: 'a-1', figuresVerified: true, sameLoanRequestConfirmed: true, manualSharingUnderstood: true };
+    const submit = (key, expectedContextVersion) => submitAskCapture('viewer-1', 'exec-1', { captureKey: 'REFINANCE_LENDER_BRIEF_INPUTS', requirementId: 'refinance-lender-brief-inputs', idempotencyKey: key, answer, expectedContextVersion });
+    const brief = (response) => JSON.stringify(response).includes('Lender discussion brief: Lender A');
+
+    // 1. the figures changed while the form was open (same offer id): the acknowledgements are not accepted
+    row = startRow();
+    dbOffers[0] = { ...dbOffers[0], aprPct: 6.9 };
+    comparisonUpdatedAt = new Date('2026-10-06T00:00:00Z');
+    const conflicted = await submit('key-stale', opened.contextVersion);
+    assert.equal(brief(conflicted), false);
+    assert.equal(row.reasonCode, 'ASK_CONTEXT_VERSION_CONFLICT');
+    assert.equal(conflicted.status, 'NEEDS_CONTEXT');
+    assert.equal(events.length, 0);
+    const refreshedVersion = conflicted.captureRequests[0].expectedContextVersion;
+    assert.notEqual(refreshedVersion, opened.contextVersion);
+
+    // 2. the refreshed form is acknowledged against the current figures; a retry of the same key keeps the brief
+    row = startRow();
+    const first = await submit('key-1', refreshedVersion);
+    assert.equal(brief(first), true);
+    assert.equal(events.length, 1);
+    const retried = await submit('key-1', refreshedVersion);
+    assert.equal(brief(retried), true, 'the retry returns the persisted brief, not a rerouted refinance answer');
+    assert.equal(events.length, 1, 'analytics fires once');
+    assert.equal(row.reasonCode, 'REFINANCE_LENDER_BRIEF', 'the persisted execution is still the brief');
+    assert.equal(retried.status, first.status);
+    assert.equal(log.receipts.filter((r) => r.idempotencyKey === 'key-1').length, 1);
+  } finally {
+    prismaModule.prisma = realPrisma; analytics.analyticsEmitter.track = saved.track; propertyAccess.resolvePropertyAccess = saved.access;
+  }
 });
