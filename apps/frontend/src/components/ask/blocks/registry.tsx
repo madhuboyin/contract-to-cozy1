@@ -98,6 +98,57 @@ export function BlockView(props: AskBlockRendererProps) {
   return <Renderer {...props} />;
 }
 
+const rateValue = (value: string | undefined) => {
+  if (!value) return null;
+  const parsed = Number.parseFloat(value.replace('%', '').trim());
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+/**
+ * Older/staggered backend deployments may return the governed refinance-rate
+ * table without the chart block. The table contains the same dated benchmark
+ * series, so recover the visual locally instead of silently degrading to a
+ * long table. A server-authored chart always wins because it can include
+ * opportunity markers and range actions that the table cannot represent.
+ */
+export function ensureRefinanceRateHistoryChart(blocks: AskPresentationBlock[]): AskPresentationBlock[] {
+  if (blocks.some((block) => block.type === 'TREND_CHART' && block.id === 'refinance-rate-history-chart')) return blocks;
+  const tableIndex = blocks.findIndex((block) => block.type === 'TABLE' && block.id === 'refinance-rate-history');
+  if (tableIndex < 0) return blocks;
+  const table = blocks[tableIndex] as Extract<AskPresentationBlock, { type: 'TABLE' }>;
+  const observations = table.rows.flatMap((row) => {
+    const thirty = rateValue(row.values.thirty);
+    const fifteen = rateValue(row.values.fifteen);
+    const date = row.values.date?.trim();
+    return date && thirty != null && fifteen != null ? [{ date, thirty, fifteen }] : [];
+  });
+  if (observations.length < 2) return blocks;
+
+  const chronological = [...observations].sort((a, b) => a.date.localeCompare(b.date));
+  const stride = chronological.length > 26 ? 2 : 1;
+  const plotted = chronological.filter((_, index) => index % stride === 0 || index === chronological.length - 1);
+  const chart: Extract<AskPresentationBlock, { type: 'TREND_CHART' }> = {
+    type: 'TREND_CHART',
+    id: 'refinance-rate-history-chart',
+    title: `Mortgage rates, last ${observations.length} weeks`,
+    description: 'Compare weekly 30-year and 15-year benchmark movements.',
+    basis: `Governed national weekly benchmarks, not a lender quote.${stride > 1 ? ' Every other week is plotted to fit; the table has every week.' : ''}`,
+    valueFormat: 'PERCENT',
+    scale: 'FIT',
+    categories: plotted.map(({ date }) => {
+      const [, month = '', day = ''] = date.split('-');
+      return `${month}/${day}`;
+    }),
+    series: [
+      { id: 'rate-30', label: '30-year fixed', style: 'SOLID', tone: 'DEFAULT', values: plotted.map(({ thirty }) => thirty) },
+      { id: 'rate-15', label: '15-year fixed', style: 'DASHED', tone: 'POSITIVE', values: plotted.map(({ fifteen }) => fifteen) },
+    ],
+    markers: [],
+    actions: [],
+  };
+  return [...blocks.slice(0, tableIndex), chart, ...blocks.slice(tableIndex)];
+}
+
 /** Groups consecutive change blocks into one compact activity list while
  * preserving the general one-block/one-renderer registry for every other
  * response type. */
@@ -108,13 +159,14 @@ export function BlockSequence({
   blocks: AskPresentationBlock[];
   renderBlock: (block: AskPresentationBlock, index: number) => ReactNode;
 }) {
+  const presentationBlocks = ensureRefinanceRateHistoryChart(blocks);
   const rendered: ReactNode[] = [];
-  const reserveFundAnswer = blocks.some((block) => block.id === 'reserve-fund-overview');
-  for (let index = 0; index < blocks.length;) {
-    const block = blocks[index];
+  const reserveFundAnswer = presentationBlocks.some((block) => block.id === 'reserve-fund-overview');
+  for (let index = 0; index < presentationBlocks.length;) {
+    const block = presentationBlocks[index];
     if (reserveFundAnswer && block.id === 'reserve-allocations') {
       const secondaryStart = index;
-      const secondary = blocks.slice(secondaryStart);
+      const secondary = presentationBlocks.slice(secondaryStart);
       rendered.push(
         <details key="reserve-plan-details" className="group overflow-hidden rounded-2xl border border-slate-200 bg-white" data-reserve-plan-details="">
           <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-slate-800 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 [&::-webkit-details-marker]:hidden">
@@ -135,8 +187,8 @@ export function BlockSequence({
       continue;
     }
     const changes: Extract<AskPresentationBlock, { type: 'CHANGE_SUMMARY' }>[] = [];
-    while (index < blocks.length && blocks[index].type === 'CHANGE_SUMMARY') {
-      changes.push(blocks[index] as Extract<AskPresentationBlock, { type: 'CHANGE_SUMMARY' }>);
+    while (index < presentationBlocks.length && presentationBlocks[index].type === 'CHANGE_SUMMARY') {
+      changes.push(presentationBlocks[index] as Extract<AskPresentationBlock, { type: 'CHANGE_SUMMARY' }>);
       index += 1;
     }
     rendered.push(<ChangeSummaryList key={`change-summary-${changes[0].id}`} blocks={changes} />);
