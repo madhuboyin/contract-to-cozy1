@@ -11,6 +11,7 @@ import { reconcileAskExecutionSideEffects } from '../execution/executeOperation'
 import { ensurePropertyAccess } from '../askHandlerSupport';
 import { humanDate } from '../askFormatting';
 import { PropertySaleCaseService } from '../../propertySaleCase.service';
+import { prisma } from '../../../lib/prisma';
 import {
   BUDGET_RANGES, BUDGET_RANGE_LABELS, SALE_CASE_FORM_CAPTURE_KEYS, SALE_CASE_MESSAGES, SALE_STATUS_LABELS, legalNextStatuses, parseSaleCaseAnswer, saleCaseKindFromMessage,
   type SaleCaseFormKind, type SaleCaseKind,
@@ -26,7 +27,22 @@ const day = (value: unknown) => (typeof value === 'string' ? humanDate(new Date(
 const versionOf = (c: { id?: string; status?: string; targetListDate?: Date | null; targetCloseDate?: Date | null; budgetRange?: string | null; updatedAt?: Date } | null, propertyId: string) =>
   sha(`sale-case:${c?.id ?? propertyId}:${c?.status ?? 'none'}:${iso(c?.targetListDate) ?? ''}:${iso(c?.targetCloseDate) ?? ''}:${c?.budgetRange ?? ''}:${c?.updatedAt?.toISOString() ?? ''}`);
 
-function formCapture(kind: SaleCaseFormKind, contextVersion: string, saleCase: { status: string; targetListDate: Date | null; targetCloseDate: Date | null; budgetRange: string | null }): AskCaptureRequest {
+const UPGRADE_TYPE_LABELS: Record<string, string> = { PROJECT: 'completed project', MATERIAL_SPEC: 'as-built material', TIMELINE_EVENT: 'timeline event' };
+const upgradeKey = (c: { sourceEntityType: string; sourceEntityId: string }) => `${c.sourceEntityType}:${c.sourceEntityId}`;
+interface UpgradeState { candidates: Array<{ key: string; title: string; type: string; confirmed: boolean }>; hidden: string[] }
+/** The candidates the page lists, plus any confirmed key no longer among them: the service replaces the whole set, so Ask keeps those rather than dropping them silently. */
+async function loadUpgrades(userId: string, propertyId: string): Promise<UpgradeState> {
+  const [{ candidates }, profile] = await Promise.all([
+    PropertySaleCaseService.getNotableUpgradeCandidates(userId, propertyId),
+    (prisma as any).propertySalePrepProfile.findUnique({ where: { propertyId }, select: { confirmedUpgradeKeys: true } }) as Promise<{ confirmedUpgradeKeys: string[] } | null>,
+  ]);
+  const list = candidates.map((c) => ({ key: upgradeKey(c), title: c.title, type: c.sourceEntityType, confirmed: c.confirmed }));
+  const shown = new Set(list.map((c) => c.key));
+  return { candidates: list, hidden: (profile?.confirmedUpgradeKeys ?? []).filter((key) => !shown.has(key)).sort() };
+}
+const upgradesVersion = (base: string, state: UpgradeState) => sha(`${base}:upgrades:${state.candidates.map((c) => `${c.key}=${c.confirmed ? 1 : 0}`).sort().join(',')}:${state.hidden.join(',')}`);
+
+function formCapture(kind: SaleCaseFormKind, contextVersion: string, saleCase: { status: string; targetListDate: Date | null; targetCloseDate: Date | null; budgetRange: string | null }, upgrades?: UpgradeState): AskCaptureRequest {
   const date = (key: string, label: string) => ({ key, label, required: false, inputSchema: { type: 'APPROXIMATE_DATE' as const, allowedPrecisions: ['EXACT_DATE'], allowFuture: true } });
   const forms = {
     DATES: { title: 'Target dates for the sale', question: 'When do you want to list and close?', help: 'A blank keeps the date as it is. These are your own targets, not dates anyone has agreed to.',
@@ -35,6 +51,9 @@ function formCapture(kind: SaleCaseFormKind, contextVersion: string, saleCase: {
       fields: [{ key: 'budgetRange', label: 'Budget range', required: true, inputSchema: { type: 'SINGLE_SELECT' as const, options: [...BUDGET_RANGES, 'NONE'].map((v) => ({ label: BUDGET_RANGE_LABELS[v], value: v })) } }], seed: { budgetRange: saleCase.budgetRange ?? 'NONE' } },
     STATUS: { title: 'Where does the sale stand?', question: 'Which stage has it reached?', help: 'This records where your sale stands. It lists, contracts or closes nothing with anyone.',
       fields: [{ key: 'status', label: 'Next stage', required: true, inputSchema: { type: 'SINGLE_SELECT' as const, options: legalNextStatuses(saleCase.status).map((v) => ({ label: v === 'CANCELLED' ? 'Cancel the sale' : SALE_STATUS_LABELS[v], value: v })) } }], seed: {} },
+    UPGRADES: { title: 'Notable upgrades', question: 'Which of these upgrades should count toward your sale readiness?', help: 'These come from your completed projects, as-built materials and important improvements. Tick the ones that are real; nothing is published or sent to anyone.',
+      fields: [{ key: 'upgrades', label: 'Upgrades to confirm', required: false, inputSchema: { type: 'MULTI_SELECT' as const, maxItems: 50, options: (upgrades?.candidates ?? []).map((c) => ({ label: `${c.title} (${UPGRADE_TYPE_LABELS[c.type] ?? 'record'})`.slice(0, 120), value: c.key })) } }],
+      seed: { upgrades: (upgrades?.candidates ?? []).filter((c) => c.confirmed).map((c) => c.key) } },
   } as const;
   const spec = forms[kind];
   return {
@@ -59,7 +78,7 @@ export async function saleCaseCommandResult(userId: string, propertyId: string, 
     confirmationId: `seller-prep-case-${id}-1`, version: 1, title: spec.title, description: spec.description, fields: spec.fields, editableFields: [] as never[],
     confirmLabel: spec.confirmLabel, consentText: 'I authorize this change to the shared home record.', expiresAt: expiresAt.toISOString(),
   });
-  const contextVersion = versionOf(saleCase, propertyId);
+  let contextVersion = versionOf(saleCase, propertyId);
 
   if (kind === 'START') {
     if (saleCase) return unavailable('SELLER_PREP_CASE_EXISTS', 'A sale case already exists', 'Nothing has changed.');
@@ -78,11 +97,17 @@ export async function saleCaseCommandResult(userId: string, propertyId: string, 
   if (!saleCase) return unavailable('SELLER_PREP_NO_ACTIVE_CASE', 'There is no sale case yet', 'Start a sale case first. Nothing has changed.');
   const formKind = kind as SaleCaseFormKind;
   if (kind === 'STATUS' && !legalNextStatuses(saleCase.status).length) return unavailable('SELLER_PREP_STATUS_FINAL', 'The sale is already finished', 'There is no next stage. Nothing has changed.');
+  let upgrades: UpgradeState | undefined;
+  if (kind === 'UPGRADES') {
+    upgrades = await loadUpgrades(userId, propertyId);
+    if (!upgrades.candidates.length) return unavailable('SELLER_PREP_NO_UPGRADE_CANDIDATES', 'No upgrades to confirm yet', 'Completed projects, as-built materials and important improvements in your home record appear here. Nothing has changed.');
+    contextVersion = upgradesVersion(contextVersion, upgrades);
+  }
   if (!supplied) {
     return {
       status: 'NEEDS_CONTEXT', reasonCode: `SELLER_PREP_CASE_${kind}_INPUT_REQUIRED`, contextVersion, parameters: { saleCaseLaunch: { kind, entityId: propertyId, sourceExecutionId: launch.sourceExecutionId } },
       blocks: [{ type: 'SUMMARY', id: 'seller-prep-case-input', title: 'Your sale case', body: `It is ${SALE_STATUS_LABELS[saleCase.status]?.toLowerCase() ?? saleCase.status.toLowerCase()}. Nothing has been saved yet.`, tone: 'DEFAULT', actions: [] }],
-      captureRequests: [formCapture(formKind, contextVersion, saleCase)], suggestions: [],
+      captureRequests: [formCapture(formKind, contextVersion, saleCase, upgrades)], suggestions: [],
     };
   }
   const parsed = parseSaleCaseAnswer(formKind, supplied);
@@ -97,6 +122,23 @@ export async function saleCaseCommandResult(userId: string, propertyId: string, 
       fields: [
         ...(d.targetListDate ? [{ label: 'Target listing date', value: `${humanDate(saleCase.targetListDate ?? null) ?? 'Not set'} → ${day(d.targetListDate)}` }] : []),
         ...(d.targetCloseDate ? [{ label: 'Target closing date', value: `${humanDate(saleCase.targetCloseDate ?? null) ?? 'Not set'} → ${day(d.targetCloseDate)}` }] : []),
+      ],
+    };
+  } else if (formKind === 'UPGRADES') {
+    const chosen = new Set((d.upgrades as string[] | undefined) ?? []);
+    const known = new Map(upgrades!.candidates.map((c) => [c.key, c]));
+    if ([...chosen].some((key) => !known.has(key))) return unavailable('SELLER_PREP_UPGRADE_NOT_FOUND', 'One of those upgrades is no longer listed', 'Choose again from the current list. Nothing has changed.');
+    const added = [...chosen].filter((key) => !known.get(key)!.confirmed).map((key) => known.get(key)!.title);
+    const removed = upgrades!.candidates.filter((c) => c.confirmed && !chosen.has(c.key)).map((c) => c.title);
+    if (!added.length && !removed.length) return unavailable('SELLER_PREP_UPGRADES_UNCHANGED', 'Nothing would change', 'That is already your confirmed list. Nothing has changed.');
+    spec = {
+      title: 'Save the confirmed upgrades?', confirmLabel: 'Save upgrades',
+      description: 'Confirmed upgrades are added to your sale readiness checklist as items. Nothing is published, listed or sent to anyone.',
+      fields: [
+        { label: 'Confirmed upgrades', value: `${upgrades!.candidates.filter((c) => c.confirmed).length} → ${chosen.size}` },
+        ...(added.length ? [{ label: 'Adding', value: added.join('; ').slice(0, 300) }] : []),
+        ...(removed.length ? [{ label: 'Removing', value: removed.join('; ').slice(0, 300) }] : []),
+        ...(upgrades!.hidden.length ? [{ label: 'Kept', value: `${upgrades!.hidden.length} earlier confirmation${upgrades!.hidden.length === 1 ? '' : 's'} no longer in the list` }] : []),
       ],
     };
   } else if (formKind === 'BUDGET') {
@@ -117,7 +159,7 @@ export async function saleCaseCommandResult(userId: string, propertyId: string, 
     parameters: { saleCaseForm: supplied, saleCaseCommand: { kind, entityId: propertyId }, saleCaseContextVersion: contextVersion, ...base },
     blocks: [{ type: 'SUMMARY', id: 'seller-prep-case-review', title: spec.title, body: 'Nothing is saved until you confirm.', tone: d.status === 'CANCELLED' ? 'CAUTION' : 'DEFAULT', actions: [] }],
     confirmation: confirmation(`${kind.toLowerCase()}-${sha(JSON.stringify(supplied)).slice(0, 12)}`, spec),
-    captureRequests: [formCapture(formKind, contextVersion, saleCase)], suggestions: [],
+    captureRequests: [formCapture(formKind, contextVersion, saleCase, upgrades)], suggestions: [],
   };
 }
 
@@ -142,7 +184,10 @@ async function confirmSaleCase(ctx: ConfirmCapabilityContext): Promise<ConfirmCa
   try {
     const overview = await PropertySaleCaseService.getCase(userId, propertyId);
     const saleCase = overview.saleCase as { status: string; targetListDate: Date | null; targetCloseDate: Date | null; budgetRange: string | null; updatedAt?: Date; id: string } | null;
-    if (parameters.saleCaseContextVersion !== versionOf(saleCase, propertyId)) throw stale('Your sale case changed while the confirmation was open. Review it again and try again.', 'ASK_CONTEXT_VERSION_CONFLICT');
+    let currentVersion = versionOf(saleCase, propertyId);
+    let upgrades: UpgradeState | undefined;
+    if (kind === 'UPGRADES') { upgrades = await loadUpgrades(userId, propertyId); currentVersion = upgradesVersion(currentVersion, upgrades); }
+    if (parameters.saleCaseContextVersion !== currentVersion) throw stale('Your sale case changed while the confirmation was open. Review it again and try again.', 'ASK_CONTEXT_VERSION_CONFLICT');
     if (kind === 'START') {
       if (saleCase) throw stale('A sale case already exists.');
       await PropertySaleCaseService.createCase(userId, propertyId); title = 'Sale case started';
@@ -157,6 +202,11 @@ async function confirmSaleCase(ctx: ConfirmCapabilityContext): Promise<ConfirmCa
           ...(typeof d.targetCloseDate === 'string' ? { targetCloseDate: new Date(`${d.targetCloseDate}T12:00:00.000Z`) } : {}),
         });
         title = 'Target dates saved';
+      } else if (kind === 'UPGRADES') {
+        const chosen = (d.upgrades as string[] | undefined) ?? [];
+        if (chosen.some((key) => !upgrades!.candidates.some((c) => c.key === key))) throw stale('One of those upgrades is no longer listed.');
+        await PropertySaleCaseService.confirmNotableUpgrades(userId, propertyId, [...new Set([...chosen, ...upgrades!.hidden])]);
+        title = 'Notable upgrades saved';
       } else if (kind === 'BUDGET') {
         await PropertySaleCaseService.updateBudgetRange(userId, propertyId, d.budgetRange === 'NONE' ? null : (d.budgetRange as never));
         title = 'Prep budget range saved';

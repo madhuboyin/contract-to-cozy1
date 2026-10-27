@@ -10,6 +10,7 @@ const sharpPath = require.resolve('sharp');
 require.cache[sharpPath] = { id: sharpPath, filename: sharpPath, loaded: true, exports: () => { throw new Error('sharp is stubbed in tests'); }, children: [], paths: [] };
 
 const propertyAccess = require('../../src/services/propertyAccess.service.ts');
+const { prisma } = require('../../src/lib/prisma.ts');
 const { capabilityInvoke } = require('../../src/services/ask/capabilityHandlerRegistry.ts');
 const { confirmCapabilityInvoke } = require('../../src/services/ask/confirmCapabilityHandlerRegistry.ts');
 const { isAskActionApplicable } = require('../../src/services/ask/askAnswerTrustPolicy.ts');
@@ -20,6 +21,7 @@ require('../../src/services/ask/askOrchestrator.service.ts');
 const { PropertySaleCaseService } = require('../../src/services/propertySaleCase.service.ts');
 const command = require('../../src/services/ask/support/sellerPrepCaseCommand.ts');
 const { sellerPrepCaseActions } = require('../../src/services/ask/handlers/sellHoldRent.handler.ts');
+const { saleCaseCommandResult } = require('../../src/services/ask/handlers/sellerPrepCaseCommands.handler.ts');
 
 const OP = 'SELLER_PREP_CASE_COMMAND';
 const T = new Date('2026-09-01T00:00:00Z');
@@ -28,9 +30,9 @@ const caseRow = (over = {}) => ({ id: 'case-1', status: 'PREPARING', targetListD
 const version = (c, propertyId = 'prop-1') =>
   sha(`sale-case:${c?.id ?? propertyId}:${c?.status ?? 'none'}:${c?.targetListDate?.toISOString().slice(0, 10) ?? ''}:${c?.targetCloseDate?.toISOString().slice(0, 10) ?? ''}:${c?.budgetRange ?? ''}:${c?.updatedAt?.toISOString() ?? ''}`);
 
-function install(role, saleCase, canCreate = true) {
+function install(role, saleCase, canCreate = true, upgrades = { candidates: [], confirmedKeys: [] }) {
   const S = PropertySaleCaseService;
-  const saved = { a: propertyAccess.resolvePropertyAccess, g: S.getCase, c: S.createCase, d: S.updateTargetDates, b: S.updateBudgetRange, t: S.transitionStatus, e: executeOperation.reconcileAskExecutionSideEffects };
+  const saved = { a: propertyAccess.resolvePropertyAccess, g: S.getCase, c: S.createCase, d: S.updateTargetDates, b: S.updateBudgetRange, t: S.transitionStatus, e: executeOperation.reconcileAskExecutionSideEffects, u: S.getNotableUpgradeCandidates, k: S.confirmNotableUpgrades, p: prisma.propertySalePrepProfile };
   const calls = [];
   propertyAccess.resolvePropertyAccess = async () => ({ role, userId: 'u1', propertyId: 'prop-1' });
   S.getCase = async () => ({ propertyId: 'prop-1', saleCase, canCreate, readinessItems: [], transitions: [] });
@@ -38,8 +40,11 @@ function install(role, saleCase, canCreate = true) {
   S.updateTargetDates = async (...a) => { calls.push(['dates', ...a]); return {}; };
   S.updateBudgetRange = async (...a) => { calls.push(['budget', ...a]); return {}; };
   S.transitionStatus = async (...a) => { calls.push(['status', ...a]); return {}; };
+  S.getNotableUpgradeCandidates = async () => ({ candidates: upgrades.candidates });
+  S.confirmNotableUpgrades = async (...a) => { calls.push(['upgrades', ...a]); return {}; };
+  prisma.propertySalePrepProfile = { findUnique: async () => ({ confirmedUpgradeKeys: upgrades.confirmedKeys }) };
   executeOperation.reconcileAskExecutionSideEffects = async () => ({ attemptedAndFailed: false, refreshedExecutions: [] });
-  return { calls, restore() { propertyAccess.resolvePropertyAccess = saved.a; S.getCase = saved.g; S.createCase = saved.c; S.updateTargetDates = saved.d; S.updateBudgetRange = saved.b; S.transitionStatus = saved.t; executeOperation.reconcileAskExecutionSideEffects = saved.e; } };
+  return { calls, restore() { propertyAccess.resolvePropertyAccess = saved.a; S.getCase = saved.g; S.createCase = saved.c; S.updateTargetDates = saved.d; S.updateBudgetRange = saved.b; S.transitionStatus = saved.t; executeOperation.reconcileAskExecutionSideEffects = saved.e; S.getNotableUpgradeCandidates = saved.u; S.confirmNotableUpgrades = saved.k; prisma.propertySalePrepProfile = saved.p; } };
 }
 const launch = (kind, over = {}) => ({ operationId: OP, surface: 'ASK_PAGE', entityId: 'prop-1', entityType: command.SALE_CASE_ENTITY_TYPE, ...over, _kind: kind });
 const invoke = (kind, launchContext) => capabilityInvoke(OP, { userId: 'u1', propertyId: 'prop-1', message: command.SALE_CASE_MESSAGES[kind], launchContext: launchContext ?? launch(kind) });
@@ -146,4 +151,59 @@ test('the checklist answer offers the case actions to contributors only, stage o
   });
   for (const id of Object.values(command.SALE_CASE_ACTION_IDS)) assert.equal(applicable(id, 'SELLER_PREP_CHECKLIST'), true, id);
   assert.equal(applicable('seller-prep-back', OP), true);
+});
+
+const cand = (type, id, title, confirmed = false) => ({ sourceEntityType: type, sourceEntityId: id, title, detail: null, confirmed });
+const upgradesVersion = (c, candidates, hidden = []) => sha(`${version(c)}:upgrades:${candidates.map((x) => `${x.sourceEntityType}:${x.sourceEntityId}=${x.confirmed ? 1 : 0}`).sort().join(',')}:${hidden.join(',')}`);
+
+test('notable upgrades: a seeded multi-select of the page\'s own candidates, a review of exactly what is added and removed, and the earlier confirmations the list no longer shows are kept', async () => {
+  const c = caseRow();
+  const candidates = [cand('PROJECT', 'p1', 'New roof', true), cand('MATERIAL_SPEC', 'm1', 'Quartz counters'), cand('TIMELINE_EVENT', 'e1', 'Heat pump installed')];
+  const w = install('CONTRIBUTOR', c, true, { candidates, confirmedKeys: ['PROJECT:p1', 'PROJECT:gone'] });
+  try {
+    const form = await invoke('UPGRADES');
+    assert.equal(form.status, 'NEEDS_CONTEXT');
+    const field = form.captureRequests[0].inputSchema.fields[0];
+    assert.equal(field.inputSchema.type, 'MULTI_SELECT');
+    assert.deepEqual(field.inputSchema.options.map((o) => o.value), ['PROJECT:p1', 'MATERIAL_SPEC:m1', 'TIMELINE_EVENT:e1']);
+    assert.deepEqual(form.captureRequests[0].currentAnswer, { upgrades: ['PROJECT:p1'] });
+    assert.equal(form.contextVersion, upgradesVersion(c, candidates, ['PROJECT:gone']));
+    const review = await saleCaseCommandResult('u1', 'prop-1', { kind: 'UPGRADES', sourceExecutionId: null }, { upgrades: ['MATERIAL_SPEC:m1'] });
+    assert.equal(review.status, 'NEEDS_CONFIRMATION');
+    const byLabel = Object.fromEntries(review.confirmation.fields.map((x) => [x.label, x.value]));
+    assert.equal(byLabel.Adding, 'Quartz counters');
+    assert.equal(byLabel.Removing, 'New roof');
+    assert.match(byLabel.Kept, /1 earlier confirmation/);
+    assert.match(review.confirmation.description, /Nothing is published, listed or sent to anyone/);
+    const same = await saleCaseCommandResult('u1', 'prop-1', { kind: 'UPGRADES', sourceExecutionId: null }, { upgrades: ['PROJECT:p1'] });
+    assert.equal(same.reasonCode, 'SELLER_PREP_UPGRADES_UNCHANGED');
+    const unknown = await saleCaseCommandResult('u1', 'prop-1', { kind: 'UPGRADES', sourceExecutionId: null }, { upgrades: ['PROJECT:nope'] });
+    assert.equal(unknown.reasonCode, 'SELLER_PREP_UPGRADE_NOT_FOUND');
+    assert.equal(w.calls.length, 0, 'review writes nothing');
+    const params = { saleCaseCommand: { kind: 'UPGRADES', entityId: 'prop-1' }, saleCaseForm: { upgrades: ['MATERIAL_SPEC:m1'] }, saleCaseContextVersion: upgradesVersion(c, candidates, ['PROJECT:gone']) };
+    await confirmCapabilityInvoke(OP, ctx(params));
+    assert.deepEqual(w.calls[0], ['upgrades', 'u1', 'prop-1', ['MATERIAL_SPEC:m1', 'PROJECT:gone']]);
+    await assert.rejects(() => confirmCapabilityInvoke(OP, ctx({ ...params, saleCaseContextVersion: 'old' })), (e) => e.code === 'ASK_CONTEXT_VERSION_CONFLICT');
+    assert.equal(w.calls.length, 1);
+  } finally { w.restore(); }
+  let v = install('CONTRIBUTOR', c, true, { candidates: [], confirmedKeys: [] });
+  try { assert.equal((await invoke('UPGRADES')).reasonCode, 'SELLER_PREP_NO_UPGRADE_CANDIDATES'); } finally { v.restore(); }
+  v = install('VIEWER', c, true, { candidates, confirmedKeys: [] });
+  try { assert.equal((await invoke('UPGRADES')).reasonCode, 'ASK_PERMISSION_REQUIRED'); } finally { v.restore(); }
+});
+
+test('the checklist answer shows the upgrades block to everyone and the button to contributors; the id is allowlisted', async () => {
+  const candidates = [cand('PROJECT', 'p1', 'New roof', true), cand('MATERIAL_SPEC', 'm1', 'Quartz counters')];
+  const blockFor = async (role) => {
+    const w = install(role, caseRow(), true, { candidates, confirmedKeys: [] });
+    try {
+      const out = await capabilityInvoke('SELLER_PREP_CHECKLIST', { userId: 'u1', propertyId: 'prop-1', message: 'Show my seller prep checklist' });
+      return out.blocks.find((b) => b.id === 'seller-prep-upgrades');
+    } finally { w.restore(); }
+  };
+  const contributor = await blockFor('CONTRIBUTOR');
+  assert.match(contributor.body, /1 of 2 recorded upgrades confirmed/);
+  assert.deepEqual(contributor.actions.map((a) => a.id), ['seller-prep-case-upgrades']);
+  assert.deepEqual((await blockFor('VIEWER')).actions, []);
+  assert.equal(isAskActionApplicable({ action: { ...contributor.actions[0] }, operationId: 'SELLER_PREP_CHECKLIST', propertyId: 'prop-1', householdRole: 'CONTRIBUTOR', authoritativeSourceAvailable: true }), true);
 });

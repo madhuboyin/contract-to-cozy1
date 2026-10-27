@@ -29,6 +29,7 @@ function install(nextItems, nextRole = 'CONTRIBUTOR') {
   role = nextRole;
   prismaModule.prisma = new Proxy({}, { get(_t, model) { if (model === 'then') return undefined; throw new Error(`Unexpected prisma.${String(model)} access`); } });
   PropertySaleCaseService.getCase = async () => ({ propertyId: 'p1', saleCase: { id: 'case-1', updatedAt: new Date('2026-09-20T00:00:00Z') }, readinessItems: items, transitions: [] });
+  PropertySaleCaseService.getNotableUpgradeCandidates = async () => ({ candidates: [] });
   propertyAccess.resolvePropertyAccess = async () => ({ role, userId: 'u1', propertyId: 'p1' });
 }
 test.afterEach(() => {

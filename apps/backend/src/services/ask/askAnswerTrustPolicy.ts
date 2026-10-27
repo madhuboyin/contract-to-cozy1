@@ -350,7 +350,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   PROPERTY_BRIEFS_LIST: new Set(['property-brief-preview', 'property-brief-prepare', 'property-brief-share', 'property-brief-republish', 'property-brief-test-share', 'property-brief-revoke-share', 'property-brief-fill-core', 'property-brief-fill-location', 'property-brief-fill-structure', 'property-brief-fill-systems']),
   // FRD v1.44: neither seller-prep operation had an entry, so every action they emitted (even the checklist link) was
   // stripped. The decision item actions are shown inline only when the item's live state allows them.
-  SELLER_PREP_CHECKLIST: new Set(['sale-item-pursue', 'sale-item-unpursue', 'sale-item-waive', 'sale-item-reopen', 'seller-prep-case-start', 'seller-prep-case-dates', 'seller-prep-case-budget', 'seller-prep-case-status']),
+  SELLER_PREP_CHECKLIST: new Set(['sale-item-pursue', 'sale-item-unpursue', 'sale-item-waive', 'sale-item-reopen', 'seller-prep-case-start', 'seller-prep-case-dates', 'seller-prep-case-budget', 'seller-prep-case-status', 'seller-prep-case-upgrades']),
   GUIDANCE_JOURNEY_CREATE: new Set(['open-journey']),
   QUOTE_COMPARISON_CREATE: new Set(['open-workspace']),
   QUOTE_COMPARISON_REVIEW: new Set(['create-comparison', 'quote-comparison-add-quote', 'quote-comparison-import-quote', 'quote-comparison-select-quote', 'quote-comparison-reject-quote', 'quote-comparison-restore-quote', 'quote-comparison-remove-quote', 'quote-comparison-edit-quote', 'quote-comparison-confirm-quote', 'quote-comparison-clarify-quote', 'quote-comparison-resolve-clarification', 'quote-comparison-close-decision', 'price-finalization-start-quote']),

@@ -483,6 +483,22 @@ async function sellerPrepChecklistResult(userId: string, propertyId: string): Pr
     actions: caseActions,
   }];
 
+  // Notable upgrades (FRD v1.443): the page's pick-list of completed projects, as-built materials and key improvements. Its own block, because the summary
+  // above already holds the three actions a summary block allows. Shown to every role (a read); only a contributor gets the button.
+  const { candidates: upgradeCandidates } = await PropertySaleCaseService.getNotableUpgradeCandidates(userId, propertyId);
+  if (upgradeCandidates.length) {
+    const confirmedUpgrades = upgradeCandidates.filter((candidate) => candidate.confirmed).length;
+    blocks.push({
+      type: 'SUMMARY', id: 'seller-prep-upgrades', title: 'Notable upgrades',
+      body: `${confirmedUpgrades} of ${upgradeCandidates.length} recorded upgrade${upgradeCandidates.length === 1 ? '' : 's'} confirmed for your sale readiness. Confirming adds them to the checklist; nothing is shared with anyone.`,
+      tone: 'DEFAULT',
+      actions: access.role === HouseholdRole.VIEWER ? [] : [{
+        id: SALE_CASE_ACTION_IDS.UPGRADES, label: confirmedUpgrades ? 'Review notable upgrades' : 'Confirm notable upgrades', message: SALE_CASE_MESSAGES.UPGRADES, style: 'SECONDARY' as const,
+        interactionType: 'START_WORKFLOW' as const, operationId: 'SELLER_PREP_CASE_COMMAND' as const,
+      }],
+    });
+  }
+
   // IW-PRES-020 (FRD v1.80): the sale case's own readiness figure as a ring, with the must-address counts and the next
   // three open must-address items (blockers first), each with the two decisions an open item allows.
   const figure = saleReadinessFigure(overview.readinessItems);

@@ -51,6 +51,7 @@ function install() {
     },
   });
   PropertySaleCaseService.getCase = async () => ({ propertyId: 'p1', saleCase: { id: 'case-1', updatedAt: UPDATED_AT }, readinessItems: items, transitions: [] });
+  PropertySaleCaseService.getNotableUpgradeCandidates = async () => ({ candidates: [] });
   PropertySaleCaseService.setItemDecision = async (...args) => { calls.decisions.push(args); return {}; };
   propertyAccess.resolvePropertyAccess = async () => ({ role: accessRole, userId: 'u1', propertyId: 'p1' });
 }
