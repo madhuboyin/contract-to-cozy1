@@ -2,7 +2,7 @@
 // statuses (the service's own order, mirrored so the form only offers what the service would accept).
 //
 // Item decisions (waive, pursue, reopen) already exist. What the page also lets a household do to the case is start it, set its target dates and its prep
-// budget range, and move it through listed, under contract and closed (or cancel it). Notable-upgrades confirmation (v1.443) is a fourth form here; the buyer-package hand-off stays on the page.
+// budget range, and move it through listed, under contract and closed (or cancel it). Notable-upgrades confirmation (v1.443) is a fourth form here; the ownership transition and buyer-package hand-off (v1.444) are three more kinds.
 import { z } from 'zod';
 
 export const SALE_CASE_ENTITY_TYPE = 'SELLER_PREP_CASE';
@@ -12,13 +12,20 @@ export const SALE_CASE_MESSAGES = {
   BUDGET: 'Set the prep budget range for this sale.',
   STATUS: 'Move this sale to its next stage.',
   UPGRADES: 'Confirm the notable upgrades for this sale.',
+  TRANSITION_START: 'Start the ownership transition for this sale.',
+  TRANSITION: 'Set the buyer package and retention decision for this ownership transition.',
+  COMPLETE: 'Complete the ownership transition for this sale.',
 } as const;
 export type SaleCaseKind = keyof typeof SALE_CASE_MESSAGES;
-export const SALE_CASE_ACTION_IDS = { START: 'seller-prep-case-start', DATES: 'seller-prep-case-dates', BUDGET: 'seller-prep-case-budget', STATUS: 'seller-prep-case-status', UPGRADES: 'seller-prep-case-upgrades' } as const;
+export const SALE_CASE_ACTION_IDS = { START: 'seller-prep-case-start', DATES: 'seller-prep-case-dates', BUDGET: 'seller-prep-case-budget', STATUS: 'seller-prep-case-status', UPGRADES: 'seller-prep-case-upgrades',
+  TRANSITION_START: 'seller-prep-transition-start', TRANSITION: 'seller-prep-transition-details', COMPLETE: 'seller-prep-transition-complete' } as const;
 export const saleCaseKindFromMessage = (message: string): SaleCaseKind | null =>
   ((Object.entries(SALE_CASE_MESSAGES) as Array<[SaleCaseKind, string]>).find(([, value]) => value === message)?.[0]) ?? null;
-export type SaleCaseFormKind = 'DATES' | 'BUDGET' | 'STATUS' | 'UPGRADES';
-export const SALE_CASE_FORM_CAPTURE_KEYS: Record<SaleCaseFormKind, string> = { DATES: 'SELLER_PREP_CASE_DATES', BUDGET: 'SELLER_PREP_CASE_BUDGET', STATUS: 'SELLER_PREP_CASE_STATUS', UPGRADES: 'SELLER_PREP_CASE_UPGRADES' };
+export type SaleCaseFormKind = 'DATES' | 'BUDGET' | 'STATUS' | 'UPGRADES' | 'TRANSITION' | 'COMPLETE';
+/** The ownership-transition kinds (FRD v1.444): handled by sellerPrepTransition.handler, under the same declared command. */
+export const SALE_TRANSITION_KINDS = ['TRANSITION_START', 'TRANSITION', 'COMPLETE'] as const;
+export const isSaleTransitionKind = (kind: string): kind is (typeof SALE_TRANSITION_KINDS)[number] => (SALE_TRANSITION_KINDS as readonly string[]).includes(kind);
+export const SALE_CASE_FORM_CAPTURE_KEYS: Record<SaleCaseFormKind, string> = { DATES: 'SELLER_PREP_CASE_DATES', BUDGET: 'SELLER_PREP_CASE_BUDGET', STATUS: 'SELLER_PREP_CASE_STATUS', UPGRADES: 'SELLER_PREP_CASE_UPGRADES', TRANSITION: 'SELLER_PREP_TRANSITION_DETAILS', COMPLETE: 'SELLER_PREP_TRANSITION_COMPLETE' };
 export const saleCaseFormKindFromCaptureKey = (key: string): SaleCaseFormKind | null =>
   ((Object.entries(SALE_CASE_FORM_CAPTURE_KEYS) as Array<[SaleCaseFormKind, string]>).find(([, value]) => value === key)?.[0]) ?? null;
 
@@ -37,7 +44,16 @@ export const SaleCaseBudgetSchema = z.object({ budgetRange: z.enum([...BUDGET_RA
 export const SaleCaseStatusSchema = z.object({ status: z.enum(['LISTED', 'UNDER_CONTRACT', 'CLOSED', 'CANCELLED']) }).strict();
 /** The upgrades to confirm as `TYPE:id` keys, the page's own shape; an empty list (nothing ticked) is a real answer. */
 export const SaleCaseUpgradesSchema = z.object({ upgrades: z.array(z.string().trim().min(1).max(120)).max(50).default([]) }).strict();
-export const SALE_CASE_FORM_SCHEMAS = { DATES: SaleCaseDatesSchema, BUDGET: SaleCaseBudgetSchema, STATUS: SaleCaseStatusSchema, UPGRADES: SaleCaseUpgradesSchema } as const;
+/** A blank keeps the saved value; `NONE` on the package unlinks it. Notes can be replaced but not cleared here (a blank is indistinguishable from "left as is"). */
+export const SALE_TRANSITION_NO_PACKAGE = 'NONE';
+export const RETENTION_DECISION_LABELS: Record<string, string> = { RETAIN_PRIVATE_ONLY: 'Keep the history private', SHARE_SELECTED_HISTORY: 'Share selected history with the buyer' };
+export const SaleTransitionDetailsSchema = z.object({
+  buyerPackageId: z.preprocess(blank, z.string().trim().min(1).max(100).nullable()).optional(),
+  sellerRetentionDecision: z.preprocess(blank, z.enum(['RETAIN_PRIVATE_ONLY', 'SHARE_SELECTED_HISTORY']).nullable()).optional(),
+  sellerRetentionNotes: z.preprocess(blank, z.string().trim().max(1000).nullable()).optional(),
+}).strict();
+export const SaleTransitionCompleteSchema = z.object({ revokeShareIds: z.array(z.string().trim().min(1).max(100)).max(20).default([]) }).strict();
+export const SALE_CASE_FORM_SCHEMAS = { DATES: SaleCaseDatesSchema, BUDGET: SaleCaseBudgetSchema, STATUS: SaleCaseStatusSchema, UPGRADES: SaleCaseUpgradesSchema, TRANSITION: SaleTransitionDetailsSchema, COMPLETE: SaleTransitionCompleteSchema } as const;
 
 export function parseSaleCaseAnswer(kind: SaleCaseFormKind, answer: unknown): { success: true; data: Record<string, unknown> } | { success: false; reason: 'INVALID' | 'NOTHING' | 'ORDER' } {
   const parsed = (SALE_CASE_FORM_SCHEMAS[kind] as z.ZodType).safeParse(answer);

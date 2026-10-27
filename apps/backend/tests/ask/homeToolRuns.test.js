@@ -325,7 +325,9 @@ test('price check: declining is declared; confirming runs the controller\'s comp
   assert.equal(calls.track[0].metadataJson.actionType, 'check_generated');
   assert.equal(result.reasonCode, 'SERVICE_PRICE_CHECK_COMPLETED');
   assert.deepEqual(result.blocks[0].details.map((detail) => [detail.label, detail.value]), [['Service', 'Water Heater'], ['Quote', '$9,800'], ['Expected range', '$4,000 to $6,000'], ['Result', 'Above the expected range']]);
-  assert.deepEqual(result.blocks[0].actions.map((action) => action.operationId), ['SERVICE_PRICE_CHECKS']);
+  // An above-range result also offers Desktop's "Need help responding?" hand-off, opened from the stored check.
+  assert.deepEqual(result.blocks[0].actions.map((action) => action.operationId), ['NEGOTIATION_SHIELD_CASE_START', 'SERVICE_PRICE_CHECKS']);
+  assert.deepEqual([result.blocks[0].actions[0].entityType, result.blocks[0].actions[0].label], ['SERVICE_PRICE_CHECK', 'Need help responding?']);
 });
 
 test('price check: execution re-checks the primary-holder test and the input, and a retry that finds its own check records nothing twice', async () => {
@@ -350,7 +352,8 @@ test('price check from a journey step: the step rides through the form and revie
   assert.deepEqual([form.parameters.sourceExecutionId, form.parameters.guidanceStepId], ['source-1', 'step-p']);
   const card = await servicePriceCheckResult('u1', 'p1', ServicePriceCheckInputSchema.parse({ serviceCategory: 'PLUMBING', quoteAmount: '5000' }), 'source-1', 'step-p');
   assert.equal(card.parameters.guidanceStepId, 'step-p');
-  assert.equal(calls.guidance.length, 0, 'nothing is reported before the homeowner confirms');
+  // The step is re-read to prefill the form (lookups only); nothing is reported before the homeowner confirms.
+  assert.equal(calls.guidance.some((entry) => entry[0] === 'record'), false, 'nothing is reported before the homeowner confirms');
   const { result } = await confirm('SERVICE_PRICE_CHECK_RUN', card.parameters);
   const report = calls.guidance.find((entry) => entry[0] === 'record')[1];
   assert.deepEqual({ j: report.journeyId, s: report.stepKey, tool: report.sourceToolKey, proof: report.producedData.proofType, id: report.producedData.proofId, min: report.producedData.fairPriceMin, max: report.producedData.fairPriceMax, actor: report.actorUserId },

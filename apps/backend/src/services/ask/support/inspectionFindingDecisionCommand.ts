@@ -2,19 +2,45 @@
 //
 // Accept as work, dismiss and resolve already exist (INSPECTION_FINDING_UPDATE). Added here: keep an eye on a finding (the page's Monitor disposition),
 // and, for a pre-listing report, the seller's plan for a finding: fix it, disclose it with a price adjustment, or disclose it with a credit.
+import { z } from 'zod';
+
 export const INSPECTION_FINDING_ENTITY_TYPE = 'INSPECTION_FINDING';
 export const INSPECTION_FINDING_DECISION_MESSAGES = {
   MONITOR: 'Keep an eye on this inspection finding.',
   ALREADY_RESOLVED: 'Mark this inspection finding as already resolved.',
   NOT_APPLICABLE: 'Mark this inspection finding as not applicable to my home.',
+  EDIT: 'Edit the details of this inspection finding.',
+  CORRECT: 'Correct the extracted details of this inspection finding.',
   FIX: 'Plan to fix this inspection finding before listing.',
   DISCLOSE_PRICE_ADJUST: 'Disclose this inspection finding and adjust the price.',
   DISCLOSE_CREDIT: 'Disclose this inspection finding and offer a credit.',
 } as const;
 export type InspectionFindingDecisionKind = keyof typeof INSPECTION_FINDING_DECISION_MESSAGES;
 export const INSPECTION_FINDING_DECISION_ACTION_IDS = {
-  MONITOR: 'inspection-finding-monitor', ALREADY_RESOLVED: 'inspection-finding-already-resolved', NOT_APPLICABLE: 'inspection-finding-not-applicable', FIX: 'inspection-finding-fix', DISCLOSE_PRICE_ADJUST: 'inspection-finding-disclose-price', DISCLOSE_CREDIT: 'inspection-finding-disclose-credit',
+  MONITOR: 'inspection-finding-monitor', ALREADY_RESOLVED: 'inspection-finding-already-resolved', NOT_APPLICABLE: 'inspection-finding-not-applicable', EDIT: 'inspection-finding-edit', CORRECT: 'inspection-finding-correct', FIX: 'inspection-finding-fix', DISCLOSE_PRICE_ADJUST: 'inspection-finding-disclose-price', DISCLOSE_CREDIT: 'inspection-finding-disclose-credit',
 } as const;
+/** The two kinds that open a form (v1.446): edit a finding's details on a report not yet confirmed, or correct a wrong extraction on a confirmed one. */
+export const INSPECTION_FINDING_EDIT_KINDS = ['EDIT', 'CORRECT'] as const;
+export const isInspectionFindingEditKind = (kind: string): kind is (typeof INSPECTION_FINDING_EDIT_KINDS)[number] => (INSPECTION_FINDING_EDIT_KINDS as readonly string[]).includes(kind);
+export const INSPECTION_FINDING_EDIT_CAPTURE_KEY = 'INSPECTION_FINDING_EDIT_INPUTS';
+export const INSPECTION_SEVERITIES = ['SAFETY', 'MAJOR', 'MINOR', 'MONITOR', 'INFORMATIONAL'] as const;
+export const INSPECTION_SEVERITY_LABELS: Record<string, string> = { SAFETY: 'Safety', MAJOR: 'Major', MINOR: 'Minor', MONITOR: 'Monitor', INFORMATIONAL: 'Informational' };
+export const INSPECTION_HOME_SYSTEMS = ['ROOF', 'EXTERIOR', 'FOUNDATION', 'BASEMENT_CRAWLSPACE', 'STRUCTURAL', 'ELECTRICAL', 'PLUMBING', 'HVAC', 'INTERIOR', 'ATTIC_INSULATION', 'APPLIANCES', 'GARAGE', 'SITE_GRADING'] as const;
+export const INSPECTION_HOME_SYSTEM_LABELS: Record<string, string> = {
+  ROOF: 'Roof', EXTERIOR: 'Exterior', FOUNDATION: 'Foundation', BASEMENT_CRAWLSPACE: 'Basement / Crawlspace', STRUCTURAL: 'Structural', ELECTRICAL: 'Electrical', PLUMBING: 'Plumbing', HVAC: 'HVAC',
+  INTERIOR: 'Interior', ATTIC_INSULATION: 'Attic / Insulation', APPLIANCES: 'Appliances', GARAGE: 'Garage', SITE_GRADING: 'Site / Grading',
+};
+const blank = (value: unknown) => (value === '' || value === undefined || value === null ? undefined : value);
+/** The page's edit sheet: severity, home system, interpretation and the cost range in dollars. A blank keeps what is saved (the page cannot clear a field either). */
+export const InspectionFindingEditSchema = z.object({
+  severity: z.preprocess(blank, z.enum(INSPECTION_SEVERITIES).optional()),
+  homeSystem: z.preprocess(blank, z.enum(INSPECTION_HOME_SYSTEMS).optional()),
+  aiInterpretation: z.preprocess(blank, z.string().trim().min(1).max(2000).optional()),
+  costLow: z.preprocess(blank, z.coerce.number().min(0).max(10_000_000).optional()),
+  costHigh: z.preprocess(blank, z.coerce.number().min(0).max(10_000_000).optional()),
+}).strict();
+export type InspectionFindingEditAnswer = z.infer<typeof InspectionFindingEditSchema>;
+
 export const INSPECTION_FINDINGS_OF_REPORT_MESSAGE = 'Show the findings in this inspection report.';
 export const INSPECTION_FINDINGS_OF_REPORT_ACTION_ID = 'inspection-report-findings';
 export const inspectionFindingDecisionKindFromMessage = (message: string): InspectionFindingDecisionKind | null =>
@@ -45,6 +71,8 @@ interface ReportState { status: string; reportType: string }
  * does not overwrite someone's notes).
  */
 export function inspectionFindingDecisionKinds(report: ReportState, finding: FindingState): InspectionFindingDecisionKind[] {
+  // Before the report is confirmed the page lets a finding's details be edited (a dismissed finding cannot be); nothing else is decided yet.
+  if (report.status === 'REVIEW_PENDING') return finding.status !== 'DISMISSED' ? ['EDIT'] : [];
   if (report.status !== 'CONFIRMED') return [];
   const kinds: InspectionFindingDecisionKind[] = [];
   if (finding.status === 'OPEN' && finding.workDisposition !== 'MONITOR' && finding.workDisposition !== 'ACCEPTED') kinds.push('MONITOR');
@@ -56,6 +84,8 @@ export function inspectionFindingDecisionKinds(report: ReportState, finding: Fin
       for (const kind of ['FIX', 'DISCLOSE_PRICE_ADJUST', 'DISCLOSE_CREDIT'] as const) if (plan?.decision !== kind) kinds.push(kind);
     }
   }
+  // The page's "Correct extraction" on an open finding: fix a wrongly extracted detail.
+  if (finding.status === 'OPEN') kinds.push('CORRECT');
   return kinds;
 }
 

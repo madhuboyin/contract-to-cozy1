@@ -70,13 +70,14 @@ test('the list offers confirm to a contributor on a report waiting for review, a
   ];
   const ids = (viewer) => Object.fromEntries(inspectionReportsFromRows(rows, !viewer).blocks[1].sections[0].items.map((i) => [i.id, i.actions.map((a) => a.id)]));
   const contributor = ids(false);
-  assert.deepEqual(contributor[R1], ['inspection-report-confirm', 'inspection-report-archive']);
+  // A report awaiting review also lists its findings (FRD v1.446), so a finding's details can be edited before the report is confirmed.
+  assert.deepEqual(contributor[R1], ['inspection-report-confirm', 'inspection-report-findings', 'inspection-report-archive']);
   assert.deepEqual(contributor[R2], ['inspection-report-negotiation', 'inspection-report-findings', 'inspection-report-archive', 'inspection-report-compare']);
   assert.deepEqual(contributor.r3, ['inspection-report-negotiation', 'inspection-report-findings', 'inspection-report-archive']);
   assert.deepEqual(contributor.r5, []);
   assert.equal('r4' in contributor, false, 'archived reports are not listed');
   const viewer = ids(true);
-  assert.deepEqual(viewer[R1], []);
+  assert.deepEqual(viewer[R1], ['inspection-report-findings'], 'a viewer can read the findings, with no edit action');
   assert.deepEqual(viewer[R2], ['inspection-report-findings', 'inspection-report-compare']);
   assert.equal(inspectionReportsFromRows([], true).reasonCode, 'NO_INSPECTION_REPORTS');
 });

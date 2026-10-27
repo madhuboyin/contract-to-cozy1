@@ -22,6 +22,8 @@ const DECISION_BUTTONS: Record<InspectionFindingDecisionKind, { label: string; s
   MONITOR: { label: 'Keep an eye on it', style: 'SECONDARY' },
   ALREADY_RESOLVED: { label: 'Already resolved', style: 'QUIET' },
   NOT_APPLICABLE: { label: 'Not applicable', style: 'QUIET' },
+  EDIT: { label: 'Edit details', style: 'SECONDARY' },
+  CORRECT: { label: 'Correct extraction', style: 'QUIET' },
   FIX: { label: 'Plan to fix', style: 'SECONDARY' },
   DISCLOSE_PRICE_ADJUST: { label: 'Disclose with a price adjustment', style: 'QUIET' },
   DISCLOSE_CREDIT: { label: 'Disclose with a credit', style: 'QUIET' },
@@ -72,7 +74,7 @@ export function inspectionReportFindingsFromRows(
   const blocks: AskPresentationBlock[] = [
     {
       type: 'SUMMARY', id: 'inspection-report-findings-summary', title: `${type}, ${when}`,
-      body: `${findings.length} finding${findings.length === 1 ? '' : 's'}, ${open.length} still open.${report.reportType === 'PRE_LISTING' ? ' Because this is a pre-listing report, you can record whether you plan to fix or disclose each one.' : ''}`,
+      body: `${findings.length} finding${findings.length === 1 ? '' : 's'}, ${open.length} still open.${report.status === 'REVIEW_PENDING' ? ' This report is not confirmed yet; you can correct a finding’s details before you confirm it.' : report.reportType === 'PRE_LISTING' ? ' Because this is a pre-listing report, you can record whether you plan to fix or disclose each one.' : ''}`,
       tone: 'DEFAULT', actions: [reportsAction],
     },
     { type: 'GROUPED_LIST', filters: [], id: 'inspection-report-findings', title: 'Findings', description: 'Most serious first.', sections,
@@ -93,7 +95,7 @@ registerCapabilityHandler('inspection-report-findings.view', async (envelope, de
   const access = await (deps?.propertyAccess ?? ensurePropertyAccess(envelope.userId, propertyId));
   const report = await (prisma as any).inspectionReport.findFirst({ where: { id: launch.entityId, propertyId }, select: { id: true, reportType: true, status: true, inspectionDate: true } });
   if (!report) return notFound('INSPECTION_REPORT_NOT_FOUND', 'That report is no longer available', 'Ask could not find that inspection report.');
-  if (report.status !== 'CONFIRMED') return notFound('INSPECTION_REPORT_NOT_CONFIRMED', 'Confirm the report first', 'A report’s findings are listed once you have reviewed and confirmed it.');
+  if (report.status !== 'CONFIRMED' && report.status !== 'REVIEW_PENDING') return notFound('INSPECTION_REPORT_NOT_CONFIRMED', 'Review the report first', 'A report’s findings are listed once it has been analyzed and is ready for your review.');
   const where = { reportId: report.id };
   const [findings, sourceTotal] = await Promise.all([
     (prisma as any).inspectionFinding.findMany({

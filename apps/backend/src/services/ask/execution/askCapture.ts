@@ -82,6 +82,8 @@ import { claimActivityResult } from '../handlers/claimActivity.handler';
 import { doNothingFormKindFromCaptureKey, parseDoNothingScenarioAnswer } from '../support/doNothingScenarioCommand';
 import { doNothingScenarioResult } from '../handlers/doNothingScenarioCommands.handler';
 import { parseSaleCaseAnswer, saleCaseFormKindFromCaptureKey } from '../support/sellerPrepCaseCommand';
+import { INSPECTION_FINDING_EDIT_CAPTURE_KEY, InspectionFindingEditSchema } from '../support/inspectionFindingDecisionCommand';
+import { inspectionFindingDecisionResult } from '../handlers/inspectionFindingDecisionCommands.handler';
 import { saleCaseCommandResult } from '../handlers/sellerPrepCaseCommands.handler';
 import { negotiationPackageResult } from '../handlers/inspectionNegotiationPackage.handler';
 import { workItemCommandResult } from '../handlers/homeWorkItemCommands.handler';
@@ -1767,6 +1769,22 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     captureId = input.idempotencyKey;
     capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
     canonicalOwner = 'PropertySaleCase';
+  } else if (execution.operationId === 'INSPECTION_FINDING_DECISION_COMMAND') {
+    // The finding edit and correct forms (FRD v1.446): the form is live only while the launch stored with this execution names the same kind of finding decision.
+    if (input.captureKey !== INSPECTION_FINDING_EDIT_CAPTURE_KEY) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    const access = await ensurePropertyAccess(userId, execution.propertyId);
+    if (access.role === HouseholdRole.VIEWER) throw Object.assign(new Error('A contributor or owner is required to change an inspection finding.'), { code: 'ASK_PERMISSION_REQUIRED' });
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson) ? execution.parametersJson as Record<string, unknown> : {};
+    const ifLaunch = storedParameters.inspectionFindingDecisionLaunch && typeof storedParameters.inspectionFindingDecisionLaunch === 'object' && !Array.isArray(storedParameters.inspectionFindingDecisionLaunch)
+      ? storedParameters.inspectionFindingDecisionLaunch as { kind?: unknown; entityId?: unknown; sourceExecutionId?: unknown } : null;
+    if (!ifLaunch || (ifLaunch.kind !== 'EDIT' && ifLaunch.kind !== 'CORRECT') || typeof ifLaunch.entityId !== 'string') throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    if (!InspectionFindingEditSchema.safeParse(input.answer).success) throw Object.assign(new Error('Check the details: a number must be zero or more.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+    result = await inspectionFindingDecisionResult(userId, execution.propertyId, {
+      kind: ifLaunch.kind, entityId: ifLaunch.entityId, sourceExecutionId: typeof ifLaunch.sourceExecutionId === 'string' ? ifLaunch.sourceExecutionId : null,
+    }, input.answer as Record<string, unknown>);
+    captureId = input.idempotencyKey;
+    capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
+    canonicalOwner = 'InspectionFinding';
   } else if (execution.operationId === 'INSPECTION_NEGOTIATION_PACKAGE') {
     if (input.captureKey !== NEGOTIATION_PACKAGE_CAPTURE_KEY) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
     const access = await ensurePropertyAccess(userId, execution.propertyId);

@@ -143,7 +143,7 @@ const jobs: Record<AskOperationId, string> = {
   WORK_OVERVIEW: 'summarize the work for this home by what needs the homeowner, is under way, waiting, scheduled, finished or set aside',
   SAVED_RESULTS: 'list what the homeowner has saved for this home and whether each saved item is still current',
   INSPECTION_NEGOTIATION_PACKAGE: 'build a negotiation package from a pre-purchase inspection report',
-  INSPECTION_FINDING_DECISION_COMMAND: 'keep an eye on an inspection finding, mark it already resolved or not applicable, or record the plan to fix or disclose it, after confirmation',
+  INSPECTION_FINDING_DECISION_COMMAND: 'keep an eye on an inspection finding, mark it already resolved or not applicable, edit or correct its details, or record the plan to fix or disclose it, after confirmation',
   INSPECTION_REPORT_FINDINGS: 'list the findings in one inspection report and what can be decided for each',
   INSPECTION_REPORT_COMMAND: 'review and confirm an inspection report, or archive one, after confirmation',
   INSPECTION_REPORT_COMPARE: 'compare a confirmed inspection report with the one before it',

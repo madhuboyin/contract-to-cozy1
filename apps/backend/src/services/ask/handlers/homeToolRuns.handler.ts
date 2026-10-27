@@ -27,6 +27,7 @@ import { HomeHabitCoachService } from '../../homeHabitCoach/homeHabitCoachServic
 import { DoNothingSimulatorService } from '../../doNothingSimulator.service';
 import { reportDoNothingRun, reportServicePriceCheck } from '../../guidanceEngine/guidanceToolReporting';
 import { resolveGuidanceStepBinding } from '../support/guidanceStepBinding';
+import { servicePriceNegotiateAction } from './servicePriceRadar.handler';
 import { ServicePriceRadarService } from '../../servicePriceRadar.service';
 import { assertProjectComplianceApplicable } from '../../projectCompliance/context';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsFeature, AnalyticsModule } from '../../analytics';
@@ -325,6 +326,12 @@ function priceCheckCaptureRequest(contextVersion: string, linkOptions: Array<{ l
   };
 }
 
+const PRICE_STEP_KEYS = ['validate_price', 'get_cleaning_quotes'] as const;
+async function journeyItemForStep(propertyId: string, stepId: string): Promise<string | null> {
+  const bound = await resolveGuidanceStepBinding(propertyId, stepId, { toolKey: 'service-price-radar', stepKeys: PRICE_STEP_KEYS });
+  return bound.ok ? bound.binding.inventoryItemId : null;
+}
+
 export async function servicePriceCheckResult(userId: string, propertyId: string, supplied: PriceCheckInput | undefined, sourceExecutionId: string | null, guidanceStepId: string | null = null): Promise<AskOperationResult> {
   // A check started from a guided journey's step carries that step through the form and the review; the confirmation re-checks it before reporting.
   const launch = { sourceExecutionId, ...(guidanceStepId ? { guidanceStepId } : {}) };
@@ -332,12 +339,15 @@ export async function servicePriceCheckResult(userId: string, propertyId: string
   if (access.role === HouseholdRole.VIEWER) return blocked('price-check-permission', 'ASK_PERMISSION_REQUIRED', 'A contributor or owner can check a quote', 'Your role can view this home but not change it. Nothing has changed.');
   if (!(await isPrimaryAccountHolder(userId, propertyId))) return primaryHolderOnly('price-check-primary-only', 'SERVICE_PRICE_RADAR_PRIMARY_OWNER_ONLY', 'check a quote');
   const contextVersion = priceCheckVersion(propertyId);
-  const linkOptions = await loadServicePriceLinkOptions(propertyId, access.role);
+  // A check started from a journey step about an item opens linked to that item (Desktop's guided prefill). The step is re-read in this home, never trusted from the launch,
+  // and the item must be this home's; a stale or mismatched step prefills nothing (the confirmation still re-checks the step before reporting).
+  const journeyItemId = guidanceStepId ? await journeyItemForStep(propertyId, guidanceStepId) : null;
+  const linkOptions = await loadServicePriceLinkOptions(propertyId, access.role, journeyItemId);
   if (!supplied) {
     return {
       status: 'NEEDS_CONTEXT', reasonCode: 'SERVICE_PRICE_CHECK_INPUT_REQUIRED', contextVersion, parameters: launch,
       blocks: [{ type: 'SUMMARY', id: 'price-check-input', title: 'Check a contractor quote', body: 'Nothing has been checked yet. Enter the service and the amount, then review it before it is checked.', tone: 'DEFAULT', actions: [] }],
-      captureRequests: [priceCheckCaptureRequest(contextVersion, linkOptions)], suggestions: [],
+      captureRequests: [priceCheckCaptureRequest(contextVersion, linkOptions, journeyItemId && linkOptions.some((option) => option.value === `SYSTEM:${journeyItemId}`) ? { linkedEntity: `SYSTEM:${journeyItemId}` } : undefined)], suggestions: [],
     };
   }
   const expiresAt = new Date(Date.now() + CONFIRMATION_MINUTES * 60 * 1000);
@@ -411,7 +421,7 @@ async function confirmServicePriceCheck(ctx: ConfirmCapabilityContext): Promise<
         ...(check?.verdict ? [{ label: 'Result', value: VERDICT_LABELS[check.verdict] ?? readableCode(check.verdict) }] : []),
         ...(journeyOutcome ? [{ label: 'Guided journey', value: journeyOutcome }] : []),
       ],
-      actions: [receiptFollowUpAction('PRICE_CHECKS')],
+      actions: [...(check?.verdict && check.verdict !== 'FAIR' ? [servicePriceNegotiateAction(checkId)] : []), receiptFollowUpAction('PRICE_CHECKS')],
     }],
     suggestions: [],
   };

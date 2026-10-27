@@ -7,7 +7,7 @@ import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { APIError } from '../../../middleware/error.middleware';
 import { humanDate, readableCode } from '../askFormatting';
 import { ServicePriceRadarService } from '../../servicePriceRadar.service';
-import { SERVICE_PRICE_CHECK_ACTION_ID, SERVICE_PRICE_CHECK_DETAIL_ACTION_ID, SERVICE_PRICE_CHECK_DETAIL_MESSAGE, SERVICE_PRICE_CHECK_ENTITY_TYPE, SERVICE_PRICE_CHECK_MESSAGE, SERVICE_PRICE_CHECKS_FOR_RECORD_ACTION_ID, SERVICE_PRICE_CHECKS_FOR_RECORD_MESSAGE } from '../support/homeToolRunConstants';
+import { SERVICE_PRICE_CHECK_ACTION_ID, SERVICE_PRICE_CHECK_DETAIL_ACTION_ID, SERVICE_PRICE_CHECK_DETAIL_MESSAGE, SERVICE_PRICE_CHECK_ENTITY_TYPE, SERVICE_PRICE_CHECK_MESSAGE, SERVICE_PRICE_CHECKS_FOR_RECORD_ACTION_ID, SERVICE_PRICE_CHECKS_FOR_RECORD_MESSAGE, SERVICE_PRICE_NEGOTIATE_ACTION_ID, SERVICE_PRICE_NEGOTIATE_LABEL, SERVICE_PRICE_NEGOTIATE_MESSAGE } from '../support/homeToolRunConstants';
 import { collectionDescriptor } from '../support/collectionDescriptor';
 import { SERVICE_PRICE_STORED_LINK_TYPES, parseServicePriceLink } from '../support/servicePriceLinkOptions';
 
@@ -22,7 +22,7 @@ type ServicePriceCheckView = Awaited<ReturnType<ServicePriceRadarService['listCh
 // The page's own labels (ServicePriceRadarClient verdictMeta, servicePriceRadarApi category options).
 const SERVICE_PRICE_VERDICT_LABELS: Record<string, string> = { FAIR: 'Fair', HIGH: 'Above range', VERY_HIGH: 'Well above range', UNDERPRICED: 'Below range' };
 const SERVICE_PRICE_CATEGORY_LABELS: Record<string, string> = { HVAC: 'HVAC', WINDOWS_DOORS: 'Windows & Doors', LANDSCAPING_DRAINAGE: 'Landscaping & Drainage', SECURITY_SAFETY: 'Security & Safety' };
-const servicePriceCategoryLabel = (value: string) => SERVICE_PRICE_CATEGORY_LABELS[value] ?? readableCode(value).replace(/\b\w/g, (c) => c.toUpperCase());
+export const servicePriceCategoryLabel = (value: string) => SERVICE_PRICE_CATEGORY_LABELS[value] ?? readableCode(value).replace(/\b\w/g, (c) => c.toUpperCase());
 const servicePriceMoney = (value: number | null | undefined) => (value == null ? null : `$${Math.round(value).toLocaleString('en-US')}`);
 
 export function servicePriceChecksFromView(checks: readonly ServicePriceCheckView[] | 'PRIMARY_OWNER_ONLY', propertyId: string, sourceTotal?: number, forRecord = false): AskOperationResult {
@@ -123,6 +123,12 @@ const LINKED_TYPE_LABELS: Record<string, string> = { SYSTEM: 'System', APPLIANCE
 
 // The saved check as the page's detail shows it: what was compared, the benchmark behind the range and its provenance, the confidence, the
 // pricing factors and adjustments, and the home records the check used. Read-only; a check is immutable.
+/** Desktop's "Need help responding?": hand-off from a check whose price is not simply fair. Opens the contractor-quote review form with the check's vendor, amount and service. */
+export const servicePriceNegotiateAction = (checkId: string) => ({
+  id: SERVICE_PRICE_NEGOTIATE_ACTION_ID, label: SERVICE_PRICE_NEGOTIATE_LABEL, interactionType: 'START_WORKFLOW' as const, message: SERVICE_PRICE_NEGOTIATE_MESSAGE,
+  operationId: 'NEGOTIATION_SHIELD_CASE_START' as const, entityType: SERVICE_PRICE_CHECK_ENTITY_TYPE, entityId: checkId, style: 'SECONDARY' as const,
+});
+
 export function servicePriceCheckDetailFromView(check: ServicePriceCheckDetailView | null): AskOperationResult {
   const backAction = { id: SERVICE_PRICE_CHECK_ACTION_ID, label: 'Check a quote', interactionType: 'START_WORKFLOW' as const, message: SERVICE_PRICE_CHECK_MESSAGE, operationId: 'SERVICE_PRICE_CHECK_RUN', style: 'PRIMARY' as const };
   if (!check) {
@@ -144,7 +150,7 @@ export function servicePriceCheckDetailFromView(check: ServicePriceCheckDetailVi
       check.explanationShort ?? '',
       `Checked ${humanDate(new Date(check.createdAt))}.`,
     ].filter(Boolean).join(' '),
-    tone: check.verdict === 'HIGH' || check.verdict === 'VERY_HIGH' ? 'CAUTION' : 'DEFAULT', actions: [backAction],
+    tone: check.verdict === 'HIGH' || check.verdict === 'VERY_HIGH' ? 'CAUTION' : 'DEFAULT', actions: [...(check.verdict === 'FAIR' ? [] : [servicePriceNegotiateAction(check.id)]), backAction],
   }];
 
   const attr = (label: string, value: string | number | null | undefined) => (value == null || value === '' ? null : { label, value: String(value).slice(0, 160) });

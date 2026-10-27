@@ -139,7 +139,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   ROOM_PLANT_RECOMMENDATIONS: new Set(['plant-recommendation-save', 'plant-recommendation-dismiss', 'plant-recommendation-add-home', 'find-plants-again']),
   HOME_HABITS_GENERATE: new Set(),
   DO_NOTHING_SIMULATION_RUN: new Set(),
-  SERVICE_PRICE_CHECK_RUN: new Set(),
+  SERVICE_PRICE_CHECK_RUN: new Set(['service-price-check-negotiate']),
   INVENTORY_ITEM_CREATE: new Set(['open-rooms', 'view-inventory-item']),
   PROPERTY_CONTEXT_AREA_CAPTURE: new Set(['continue-area-capture']),
   // Every action id PROPERTY_SUMMARY actually emits: the contributor-only inline add workflow actions (Ask links to no desktop page).
@@ -173,7 +173,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   PROJECT_TRACKER_PROJECTS: new Set(['project-tracker-create', 'project-tracker-review', 'project-tracker-start', 'project-tracker-pause', 'project-tracker-resume', 'project-tracker-cancel', 'project-tracker-add-milestone', 'project-tracker-complete-milestone', 'project-tracker-mark-payment-paid', 'project-tracker-log-progress', 'project-tracker-log-issue', 'project-tracker-resolve-issue', 'project-tracker-add-payment', 'project-tracker-add-change-order', 'project-tracker-review-change-order', 'project-tracker-approve-change-order', 'project-tracker-reject-change-order', 'project-tracker-void-change-order', 'project-tracker-complete-project', 'project-tracker-share-closeout', 'project-tracker-edit-project', 'project-tracker-edit-milestone', 'project-tracker-delete-milestone', 'project-tracker-edit-payment', 'project-tracker-delete-payment', 'project-tracker-edit-change-order', 'project-tracker-delete-log', 'project-tracker-edit-issue', 'project-tracker-retry-alignment', 'project-tracker-replace-milestone-template', 'project-tracker-add-issue-note', 'project-tracker-escalate-issue', 'project-tracker-generate-dispute-package', 'project-tracker-add-material', 'project-tracker-edit-material', 'project-tracker-advance-material', 'project-tracker-substitute-material']),
   PROJECT_TRACKER_CREATE: new Set(['project-tracker-show-projects']),
   PROJECT_TRACKER_COMMAND: new Set(['project-tracker-show-projects']),
-  SERVICE_PRICE_CHECKS: new Set(['check-service-quote']),
+  SERVICE_PRICE_CHECKS: new Set(['check-service-quote', 'service-price-check-negotiate']),
   HOME_TIMELINE_EVENTS: new Set(['home-timeline-log-event', 'correct-title', 'correct-occurredAt', 'correct-summary', 'correct-visibility']),
   MATERIAL_SPECS_LIST: new Set(['add-material-spec']),
   GUIDANCE_JOURNEYS_LIST: new Set(['start-guided-plan']),
@@ -268,7 +268,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   // Keep an eye on an inspection finding, or record the seller's plan to fix or disclose it (register P2 Inspection Hub). Confirmation-gated, declared-action only.
   INSPECTION_FINDING_DECISION_COMMAND: new Set(['inspection-reports-back']),
   // List the findings in one confirmed inspection report with their state and decisions (register P2 Inspection Hub). Read-only; launched from a report row.
-  INSPECTION_REPORT_FINDINGS: new Set(['inspection-reports-back', 'inspection-finding-monitor', 'inspection-finding-already-resolved', 'inspection-finding-not-applicable', 'inspection-finding-fix', 'inspection-finding-disclose-price', 'inspection-finding-disclose-credit']),
+  INSPECTION_REPORT_FINDINGS: new Set(['inspection-reports-back', 'inspection-finding-monitor', 'inspection-finding-already-resolved', 'inspection-finding-not-applicable', 'inspection-finding-edit', 'inspection-finding-correct', 'inspection-finding-fix', 'inspection-finding-disclose-price', 'inspection-finding-disclose-credit']),
   // Review and confirm an inspection report, with the write-back preview shown first (register P2 Inspection Hub). Confirmation-gated, declared-action only.
   INSPECTION_REPORT_COMMAND: new Set(['inspection-reports-back']),
   // Compare a confirmed inspection report with the confirmed one before it (register P2 Inspection Hub). Read-only; launched from a report row.
@@ -350,7 +350,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   PROPERTY_BRIEFS_LIST: new Set(['property-brief-preview', 'property-brief-prepare', 'property-brief-share', 'property-brief-republish', 'property-brief-test-share', 'property-brief-revoke-share', 'property-brief-fill-core', 'property-brief-fill-location', 'property-brief-fill-structure', 'property-brief-fill-systems']),
   // FRD v1.44: neither seller-prep operation had an entry, so every action they emitted (even the checklist link) was
   // stripped. The decision item actions are shown inline only when the item's live state allows them.
-  SELLER_PREP_CHECKLIST: new Set(['sale-item-pursue', 'sale-item-unpursue', 'sale-item-waive', 'sale-item-reopen', 'seller-prep-case-start', 'seller-prep-case-dates', 'seller-prep-case-budget', 'seller-prep-case-status', 'seller-prep-case-upgrades']),
+  SELLER_PREP_CHECKLIST: new Set(['sale-item-pursue', 'sale-item-unpursue', 'sale-item-waive', 'sale-item-reopen', 'seller-prep-case-start', 'seller-prep-case-dates', 'seller-prep-case-budget', 'seller-prep-case-status', 'seller-prep-case-upgrades', 'seller-prep-transition-start', 'seller-prep-transition-details', 'seller-prep-transition-complete']),
   GUIDANCE_JOURNEY_CREATE: new Set(['open-journey']),
   QUOTE_COMPARISON_CREATE: new Set(['open-workspace']),
   QUOTE_COMPARISON_REVIEW: new Set(['create-comparison', 'quote-comparison-add-quote', 'quote-comparison-import-quote', 'quote-comparison-select-quote', 'quote-comparison-reject-quote', 'quote-comparison-restore-quote', 'quote-comparison-remove-quote', 'quote-comparison-edit-quote', 'quote-comparison-confirm-quote', 'quote-comparison-clarify-quote', 'quote-comparison-resolve-clarification', 'quote-comparison-close-decision', 'price-finalization-start-quote']),

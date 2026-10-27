@@ -20,6 +20,7 @@ require('../../src/services/ask/askOrchestrator.service.ts');
 const hubService = require('../../src/services/inspectionHub.service.ts');
 const command = require('../../src/services/ask/support/inspectionFindingDecisionCommand.ts');
 const { inspectionReportsFromRows } = require('../../src/services/ask/handlers/inspectionReports.handler.ts');
+const { inspectionFindingDecisionResult } = require('../../src/services/ask/handlers/inspectionFindingDecisionCommands.handler.ts');
 
 const CMD = 'INSPECTION_FINDING_DECISION_COMMAND';
 const M = command.INSPECTION_FINDING_DECISION_MESSAGES;
@@ -27,20 +28,21 @@ const T = new Date('2026-09-01T00:00:00Z');
 const sha = (text) => crypto.createHash('sha256').update(text).digest('hex');
 const finding = (over = {}) => ({
   id: 'f1', reportId: 'r1', homeSystem: 'ROOF', subsystem: 'Flashing', severity: 'MAJOR', inspectorDescription: 'Flashing is lifting.', status: 'OPEN', workDisposition: 'PENDING_REVIEW',
-  resolutionNotes: null, estimatedCostCentsLow: 50000, estimatedCostCentsHigh: 90000, updatedAt: T, report: { status: 'CONFIRMED', reportType: 'PRE_LISTING' }, ...over,
+  resolutionNotes: null, aiInterpretation: 'The flashing may leak.', estimatedCostCentsLow: 50000, estimatedCostCentsHigh: 90000, updatedAt: T, report: { status: 'CONFIRMED', reportType: 'PRE_LISTING' }, ...over,
 });
 const version = (kind, f) => sha(`inspection-finding-decision:${kind}:${f.id}:${f.status}:${f.workDisposition}:${f.updatedAt.toISOString()}:${sha(f.resolutionNotes ?? '')}:${f.report.status}`);
 
 function install(role, row = finding()) {
-  const saved = { a: propertyAccess.resolvePropertyAccess, f: prisma.inspectionFinding, r: prisma.inspectionReport, d: hubService.dispositionFindingAsWork, s: hubService.saveFixDisclosureDecisions, e: executeOperation.reconcileAskExecutionSideEffects };
+  const saved = { u: hubService.updateFinding, a: propertyAccess.resolvePropertyAccess, f: prisma.inspectionFinding, r: prisma.inspectionReport, d: hubService.dispositionFindingAsWork, s: hubService.saveFixDisclosureDecisions, e: executeOperation.reconcileAskExecutionSideEffects };
   const calls = [];
   propertyAccess.resolvePropertyAccess = async () => ({ role, userId: 'u1', propertyId: 'prop-1' });
   prisma.inspectionFinding = { findFirst: async () => row, findMany: async () => (Array.isArray(row) ? row : [row]), count: async () => (Array.isArray(row) ? row.length : 1) };
   prisma.inspectionReport = { findFirst: async () => ({ id: 'r1', reportType: 'PRE_LISTING', status: 'CONFIRMED', inspectionDate: new Date('2026-08-01T12:00:00Z') }) };
   hubService.dispositionFindingAsWork = async (...a) => { calls.push(['disposition', ...a]); return {}; };
   hubService.saveFixDisclosureDecisions = async (...a) => { calls.push(['plan', ...a]); return { saved: 1 }; };
+  hubService.updateFinding = async (...a) => { calls.push(['edit', ...a]); return {}; };
   executeOperation.reconcileAskExecutionSideEffects = async () => ({ attemptedAndFailed: false, refreshedExecutions: [] });
-  return { calls, restore() { propertyAccess.resolvePropertyAccess = saved.a; prisma.inspectionFinding = saved.f; prisma.inspectionReport = saved.r; hubService.dispositionFindingAsWork = saved.d; hubService.saveFixDisclosureDecisions = saved.s; executeOperation.reconcileAskExecutionSideEffects = saved.e; } };
+  return { calls, restore() { hubService.updateFinding = saved.u; propertyAccess.resolvePropertyAccess = saved.a; prisma.inspectionFinding = saved.f; prisma.inspectionReport = saved.r; hubService.dispositionFindingAsWork = saved.d; hubService.saveFixDisclosureDecisions = saved.s; executeOperation.reconcileAskExecutionSideEffects = saved.e; } };
 }
 const launch = (operationId, entityType, entityId, over = {}) => ({ operationId, surface: 'ASK_PAGE', entityType, entityId, ...over });
 const invoke = (operationId, message, launchContext) => capabilityInvoke(operationId, { userId: 'u1', propertyId: 'prop-1', message, launchContext });
@@ -50,12 +52,14 @@ const p = (kind, version2, entityId = 'f1') => ({ inspectionFindingDecisionComma
 test('which decisions a finding allows: monitor when open and not yet accepted or monitored; a plan only on a pre-listing report with no notes of its own', () => {
   const k = command.inspectionFindingDecisionKinds;
   const pre = { status: 'CONFIRMED', reportType: 'PRE_LISTING' };
-  assert.deepEqual(k(pre, { status: 'OPEN', workDisposition: 'PENDING_REVIEW', resolutionNotes: null }), ['MONITOR', 'ALREADY_RESOLVED', 'NOT_APPLICABLE', 'FIX', 'DISCLOSE_PRICE_ADJUST', 'DISCLOSE_CREDIT']);
-  assert.deepEqual(k(pre, { status: 'OPEN', workDisposition: 'MONITOR', resolutionNotes: JSON.stringify({ fixDisclosure: 'FIX' }) }), ['DISCLOSE_PRICE_ADJUST', 'DISCLOSE_CREDIT']);
-  assert.deepEqual(k(pre, { status: 'OPEN', workDisposition: 'ACCEPTED', resolutionNotes: 'Roofer fixed the flashing' }), [], 'their own notes are not replaced');
+  assert.deepEqual(k(pre, { status: 'OPEN', workDisposition: 'PENDING_REVIEW', resolutionNotes: null }), ['MONITOR', 'ALREADY_RESOLVED', 'NOT_APPLICABLE', 'FIX', 'DISCLOSE_PRICE_ADJUST', 'DISCLOSE_CREDIT', 'CORRECT']);
+  assert.deepEqual(k(pre, { status: 'OPEN', workDisposition: 'MONITOR', resolutionNotes: JSON.stringify({ fixDisclosure: 'FIX' }) }), ['DISCLOSE_PRICE_ADJUST', 'DISCLOSE_CREDIT', 'CORRECT']);
+  assert.deepEqual(k(pre, { status: 'OPEN', workDisposition: 'ACCEPTED', resolutionNotes: 'Roofer fixed the flashing' }), ['CORRECT'], 'their own notes are not replaced, and a wrong extraction can still be corrected');
   assert.deepEqual(k(pre, { status: 'RESOLVED', workDisposition: 'PENDING_REVIEW', resolutionNotes: null }), ['FIX', 'DISCLOSE_PRICE_ADJUST', 'DISCLOSE_CREDIT']);
-  assert.deepEqual(k({ status: 'CONFIRMED', reportType: 'PRE_PURCHASE' }, { status: 'OPEN', workDisposition: 'PENDING_REVIEW', resolutionNotes: null }), ['MONITOR', 'ALREADY_RESOLVED', 'NOT_APPLICABLE']);
-  assert.deepEqual(k({ status: 'REVIEW_PENDING', reportType: 'PRE_LISTING' }, { status: 'OPEN', workDisposition: 'PENDING_REVIEW', resolutionNotes: null }), []);
+  assert.deepEqual(k({ status: 'CONFIRMED', reportType: 'PRE_PURCHASE' }, { status: 'OPEN', workDisposition: 'PENDING_REVIEW', resolutionNotes: null }), ['MONITOR', 'ALREADY_RESOLVED', 'NOT_APPLICABLE', 'CORRECT']);
+  assert.deepEqual(k({ status: 'REVIEW_PENDING', reportType: 'PRE_LISTING' }, { status: 'OPEN', workDisposition: 'PENDING_REVIEW', resolutionNotes: null }), ['EDIT'], 'before confirming, only the details can be edited');
+  assert.deepEqual(k({ status: 'REVIEW_PENDING', reportType: 'PRE_LISTING' }, { status: 'DISMISSED', workDisposition: 'PENDING_REVIEW', resolutionNotes: null }), [], 'a dismissed finding cannot be edited');
+  assert.deepEqual(k({ status: 'ARCHIVED', reportType: 'PRE_LISTING' }, { status: 'OPEN', workDisposition: 'PENDING_REVIEW', resolutionNotes: null }), []);
   assert.deepEqual(k(pre, { status: 'DISMISSED', workDisposition: 'NOT_APPLICABLE', resolutionNotes: null }), []);
 });
 
@@ -64,7 +68,7 @@ test('the report row offers its findings once confirmed; the findings list shows
     { id: 'r2', reportType: 'PRE_LISTING', inspectionDate: new Date('2026-08-02T12:00:00Z'), inspectorName: null, inspectorCompany: null, status: 'REVIEW_PENDING', totalFindings: 1, openFindings: 1, safetyFindings: 0, majorFindings: 0 }];
   const list = inspectionReportsFromRows(rows, false).blocks[1].sections[0].items;
   assert.ok(list.find((i) => i.id === 'r1').actions.some((a) => a.id === 'inspection-report-findings'));
-  assert.ok(!list.find((i) => i.id === 'r2').actions.some((a) => a.id === 'inspection-report-findings'));
+  assert.ok(list.find((i) => i.id === 'r2').actions.some((a) => a.id === 'inspection-report-findings'), 'a report awaiting review lists its findings so they can be edited');
   const row = finding({ resolutionNotes: JSON.stringify({ fixDisclosure: 'FIX', estimatedFixCostCents: 120000, sellerNote: 'Roofer quoted' }) });
   const ids = async (role) => {
     const w = install(role, [row]);
@@ -76,7 +80,7 @@ test('the report row offers its findings once confirmed; the findings list shows
       return item.actions.map((a) => a.id);
     } finally { w.restore(); }
   };
-  assert.deepEqual(await ids('CONTRIBUTOR'), ['inspection-finding-monitor', 'inspection-finding-disclose-price', 'inspection-finding-disclose-credit']);
+  assert.deepEqual(await ids('CONTRIBUTOR'), ['inspection-finding-monitor', 'inspection-finding-disclose-price', 'inspection-finding-disclose-credit', 'inspection-finding-correct']);
   assert.deepEqual(await ids('VIEWER'), []);
 });
 
@@ -219,7 +223,7 @@ test('already resolved and not applicable: offered on an open finding with no no
   const k = command.inspectionFindingDecisionKinds;
   const report = { status: 'CONFIRMED', reportType: 'PRE_PURCHASE' };
   assert.deepEqual(k(report, { status: 'RESOLVED', workDisposition: 'ALREADY_RESOLVED', resolutionNotes: null }), [], 'a closed finding cannot be closed again');
-  assert.deepEqual(k(report, { status: 'OPEN', workDisposition: 'ACCEPTED', resolutionNotes: 'Roofer fixed it' }), [], 'their notes are not replaced');
+  assert.deepEqual(k(report, { status: 'OPEN', workDisposition: 'ACCEPTED', resolutionNotes: 'Roofer fixed it' }), ['CORRECT'], 'their notes are not replaced');
   let w = install('CONTRIBUTOR');
   try {
     for (const [kind, copy] of [['ALREADY_RESOLVED', /closes the finding as resolved/], ['NOT_APPLICABLE', /dismisses the finding as not applying/]]) {
@@ -240,4 +244,70 @@ test('already resolved and not applicable: offered on an open finding with no no
   try { assert.equal((await invoke(CMD, M.NOT_APPLICABLE, launch(CMD, 'INSPECTION_FINDING', 'f1'))).reasonCode, 'ASK_PERMISSION_REQUIRED'); } finally { w.restore(); }
   w = install('CONTRIBUTOR', finding({ status: 'DISMISSED' }));
   try { assert.equal((await invoke(CMD, M.ALREADY_RESOLVED, launch(CMD, 'INSPECTION_FINDING', 'f1'))).reasonCode, 'INSPECTION_FINDING_DECISION_NOT_AVAILABLE'); } finally { w.restore(); }
+});
+
+const pending = { status: 'REVIEW_PENDING', reportType: 'PRE_PURCHASE' };
+const reviewEdit = (kind, answer) => inspectionFindingDecisionResult('u1', 'prop-1', { kind, entityId: 'f1', sourceExecutionId: null }, answer);
+
+test('edit and correct: a seeded form of the page\'s edit sheet, a review of exactly what changes, and the cents the service stores', async () => {
+  let w = install('CONTRIBUTOR', finding({ report: pending }));
+  try {
+    const form = await invoke(CMD, M.EDIT, launch(CMD, 'INSPECTION_FINDING', 'f1'));
+    assert.equal(form.status, 'NEEDS_CONTEXT');
+    const request = form.captureRequests[0];
+    assert.deepEqual(request.inputSchema.fields.map((f) => f.key), ['severity', 'homeSystem', 'aiInterpretation', 'costLow', 'costHigh']);
+    assert.deepEqual(request.currentAnswer, { severity: 'MAJOR', homeSystem: 'ROOF', aiInterpretation: 'The flashing may leak.', costLow: 500, costHigh: 900 });
+    assert.equal(form.contextVersion, version('EDIT', finding({ report: pending })));
+    const out = await reviewEdit('EDIT', { severity: 'SAFETY', homeSystem: 'ROOF', costLow: '600', costHigh: '' });
+    assert.equal(out.status, 'NEEDS_CONFIRMATION');
+    assert.deepEqual(out.confirmation.fields, [{ label: 'Severity', value: 'Major → Safety' }, { label: 'Estimated cost, low', value: '$500 → $600' }], 'unchanged and blank values are not listed');
+    assert.doesNotMatch(out.confirmation.description, /correction requested/);
+    assert.equal((await reviewEdit('EDIT', { severity: 'MAJOR', costLow: '500' })).reasonCode, 'INSPECTION_FINDING_EDIT_UNCHANGED');
+    assert.equal((await reviewEdit('EDIT', { costLow: '950' })).reasonCode, 'INSPECTION_FINDING_EDIT_RANGE_INVERTED');
+    assert.equal((await reviewEdit('EDIT', { severity: 'NOPE' })).reasonCode, 'INSPECTION_FINDING_EDIT_INPUT_INVALID');
+    assert.equal((await reviewEdit('CORRECT', { severity: 'SAFETY' })).reasonCode, 'INSPECTION_FINDING_DECISION_NOT_AVAILABLE', 'correcting an extraction is for a confirmed report');
+    assert.equal(w.calls.length, 0, 'review writes nothing');
+  } finally { w.restore(); }
+  w = install('VIEWER', finding({ report: pending }));
+  try { assert.equal((await invoke(CMD, M.EDIT, launch(CMD, 'INSPECTION_FINDING', 'f1'))).reasonCode, 'ASK_PERMISSION_REQUIRED'); } finally { w.restore(); }
+  w = install('CONTRIBUTOR', finding({ report: pending, status: 'DISMISSED' }));
+  try { assert.equal((await invoke(CMD, M.EDIT, launch(CMD, 'INSPECTION_FINDING', 'f1'))).reasonCode, 'INSPECTION_FINDING_DECISION_NOT_AVAILABLE'); } finally { w.restore(); }
+});
+
+test('confirming an edit calls the page\'s own update with only what changed; a correction also marks it correction requested, and says so if that mark fails', async () => {
+  const f = finding({ report: pending });
+  let w = install('CONTRIBUTOR', f);
+  try {
+    await confirmCapabilityInvoke(CMD, { ...ctx(p('EDIT', version('EDIT', f))), parameters: { ...p('EDIT', version('EDIT', f)), inspectionFindingEditForm: { severity: 'SAFETY', costLow: '600', aiInterpretation: '' } } });
+    assert.deepEqual(w.calls, [['edit', 'f1', 'r1', 'prop-1', { severity: 'SAFETY', estimatedCostCentsLow: 60000 }]]);
+    await assert.rejects(() => confirmCapabilityInvoke(CMD, { ...ctx(p('EDIT', 'old')), parameters: { ...p('EDIT', 'old'), inspectionFindingEditForm: { severity: 'SAFETY' } } }), (e) => e.code === 'ASK_CONTEXT_VERSION_CONFLICT');
+    assert.equal(w.calls.length, 1);
+  } finally { w.restore(); }
+  const confirmed = finding();
+  w = install('CONTRIBUTOR', confirmed);
+  try {
+    const out = await reviewEdit('CORRECT', { homeSystem: 'PLUMBING' });
+    assert.match(out.confirmation.description, /marks the finding as correction requested/);
+    const params = { ...p('CORRECT', version('CORRECT', confirmed)), inspectionFindingEditForm: { homeSystem: 'PLUMBING' } };
+    await confirmCapabilityInvoke(CMD, { ...ctx(params), parameters: params });
+    assert.deepEqual(w.calls[0], ['edit', 'f1', 'r1', 'prop-1', { homeSystem: 'PLUMBING' }]);
+    assert.deepEqual(w.calls[1], ['disposition', 'f1', 'r1', 'prop-1', 'u1', { disposition: 'CORRECTION_REQUESTED' }], 'details first, then the mark');
+  } finally { w.restore(); }
+  const monitored = finding({ workDisposition: 'MONITOR' });
+  w = install('CONTRIBUTOR', monitored);
+  try {
+    assert.doesNotMatch((await reviewEdit('CORRECT', { homeSystem: 'PLUMBING' })).confirmation.description, /correction requested/, 'an earlier decision is not overwritten');
+    const params = { ...p('CORRECT', version('CORRECT', monitored)), inspectionFindingEditForm: { homeSystem: 'PLUMBING' } };
+    await confirmCapabilityInvoke(CMD, { ...ctx(params), parameters: params });
+    assert.deepEqual(w.calls.map((c) => c[0]), ['edit']);
+  } finally { w.restore(); }
+  w = install('CONTRIBUTOR', confirmed);
+  try {
+    hubService.dispositionFindingAsWork = async () => { throw new Error('work item service down'); };
+    const params = { ...p('CORRECT', version('CORRECT', confirmed)), inspectionFindingEditForm: { homeSystem: 'PLUMBING' } };
+    const out = await confirmCapabilityInvoke(CMD, { ...ctx(params), parameters: params });
+    assert.equal(out.result.status, 'COMPLETED');
+    assert.ok(out.result.blocks.some((b) => /not marked as correction requested/.test(b.title || '')), 'a failed mark is reported, not hidden');
+    assert.equal(w.calls[0][0], 'edit', 'the details stay saved');
+  } finally { w.restore(); }
 });

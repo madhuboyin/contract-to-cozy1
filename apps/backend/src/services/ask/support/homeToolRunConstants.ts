@@ -22,6 +22,11 @@ export const SERVICE_PRICE_CHECK_ACTION_ID = 'check-service-quote';
 export const SERVICE_PRICE_CHECK_DETAIL_MESSAGE = 'Show the details of this quote check.';
 export const SERVICE_PRICE_CHECK_DETAIL_ACTION_ID = 'service-price-check-detail';
 export const SERVICE_PRICE_CHECK_ENTITY_TYPE = 'SERVICE_PRICE_CHECK';
+/** "Need help responding?" on a saved check or a fresh result: opens the Negotiation Shield contractor-quote form prefilled from the check (the page's own hand-off, FRD v1.445). */
+export const SERVICE_PRICE_NEGOTIATE_ACTION_ID = 'service-price-check-negotiate';
+export const SERVICE_PRICE_NEGOTIATE_LABEL = 'Need help responding?';
+/** The Negotiation Shield start message for the contractor-quote scenario; the one declared message that also carries a quote check as its launch entity. */
+export const SERVICE_PRICE_NEGOTIATE_MESSAGE = 'Start a contractor quote review.';
 // The checks tied to one home record: opened from a linked record on a check's detail (launch entity = that record).
 export const SERVICE_PRICE_CHECKS_FOR_RECORD_MESSAGE = 'Show the quote checks for this record.';
 export const SERVICE_PRICE_CHECKS_FOR_RECORD_ACTION_ID = 'service-price-checks-for-record';

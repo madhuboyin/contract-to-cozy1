@@ -22,7 +22,8 @@ export function parseServicePriceLink(value: string | null | undefined, allowed:
   return { linkedEntityType: type as ServiceRadarLinkedEntityTypeValue, linkedEntityId: id };
 }
 
-export async function loadServicePriceLinkOptions(propertyId: string, role: HouseholdRole): Promise<Array<{ label: string; value: string }>> {
+/** `ensureItemId`: an inventory item the form should offer even when it is not among the recent ones (the item a journey step is about); it must belong to this home. */
+export async function loadServicePriceLinkOptions(propertyId: string, role: HouseholdRole, ensureItemId: string | null = null): Promise<Array<{ label: string; value: string }>> {
   const [items, rooms, records, incidents] = await Promise.all([
     prisma.inventoryItem.findMany({ where: { propertyId }, orderBy: { createdAt: 'desc' }, take: 10, select: { id: true, name: true } }),
     prisma.inventoryRoom.findMany({ where: { propertyId }, orderBy: { name: 'asc' }, take: 6, select: { id: true, name: true } }),
@@ -30,7 +31,10 @@ export async function loadServicePriceLinkOptions(propertyId: string, role: Hous
     prisma.incident.findMany({ where: { propertyId }, orderBy: { createdAt: 'desc' }, take: 6, select: { id: true, title: true } }),
   ]);
   const option = (type: (typeof LINK_OPTION_TYPES)[number], id: string, name: string) => ({ label: `${SERVICE_PRICE_LINK_TYPE_LABELS[type]}: ${name}`.slice(0, 120), value: `${type}:${id}` });
+  const pinned = ensureItemId && !items.some((row) => row.id === ensureItemId)
+    ? await prisma.inventoryItem.findFirst({ where: { id: ensureItemId, propertyId }, select: { id: true, name: true } }) : null;
   return [
+    ...(pinned ? [option('SYSTEM', pinned.id, pinned.name)] : []),
     ...items.map((row) => option('SYSTEM', row.id, row.name)), ...rooms.map((row) => option('ROOM', row.id, row.name)),
     ...records.map((row) => option('DOCUMENT', row.id, row.title)), ...incidents.map((row) => option('INCIDENT', row.id, row.title)),
   ];

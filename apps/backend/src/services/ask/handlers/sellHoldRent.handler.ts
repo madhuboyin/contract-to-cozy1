@@ -499,6 +499,28 @@ async function sellerPrepChecklistResult(userId: string, propertyId: string): Pr
     });
   }
 
+  // Ownership transition (FRD v1.444): on a closed sale, the record of how ownership transferred. A read for every role; a contributor gets the step the transition is at.
+  if (overview.saleCase.status === 'CLOSED') {
+    const transition = (overview.transitions ?? [])[0] as { sellerRetentionDecision: string | null; buyerPackageId: string | null; completedAt: Date | null } | undefined;
+    const transitionAction = (kind: 'TRANSITION_START' | 'TRANSITION' | 'COMPLETE', label: string, style: 'PRIMARY' | 'SECONDARY' = 'SECONDARY') => ({
+      id: SALE_CASE_ACTION_IDS[kind], label, message: SALE_CASE_MESSAGES[kind], style, interactionType: 'START_WORKFLOW' as const, operationId: 'SELLER_PREP_CASE_COMMAND' as const,
+    });
+    const canChange = access.role !== HouseholdRole.VIEWER;
+    blocks.push(!transition ? {
+      type: 'SUMMARY', id: 'seller-prep-transition', title: 'Ownership transition',
+      body: 'The sale is closed. Record how ownership transferred: the buyer hand-off, what you keep or share, and access cleanup.', tone: 'DEFAULT',
+      actions: canChange ? [transitionAction('TRANSITION_START', 'Start ownership transition', 'PRIMARY')] : [],
+    } : transition.completedAt ? {
+      type: 'SUMMARY', id: 'seller-prep-transition', title: 'Ownership transition complete',
+      body: `Completed ${humanDate(transition.completedAt) ?? 'on record'}. The hand-off is locked.`, tone: 'POSITIVE', actions: [],
+    } : {
+      type: 'SUMMARY', id: 'seller-prep-transition', title: 'Ownership transition in progress',
+      body: `${transition.sellerRetentionDecision ? 'A retention decision is recorded.' : 'No retention decision yet.'} ${transition.buyerPackageId ? 'A buyer package is linked; completing needs its recipient to have opened it.' : 'No buyer package is linked.'}`,
+      tone: 'DEFAULT',
+      actions: canChange ? [transitionAction('TRANSITION', 'Set buyer hand-off'), ...(transition.sellerRetentionDecision ? [transitionAction('COMPLETE', 'Complete transition', 'PRIMARY')] : [])] : [],
+    });
+  }
+
   // IW-PRES-020 (FRD v1.80): the sale case's own readiness figure as a ring, with the must-address counts and the next
   // three open must-address items (blockers first), each with the two decisions an open item allows.
   const figure = saleReadinessFigure(overview.readinessItems);

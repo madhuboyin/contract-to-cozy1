@@ -12,8 +12,9 @@ import { ensurePropertyAccess } from '../askHandlerSupport';
 import { humanDate } from '../askFormatting';
 import { PropertySaleCaseService } from '../../propertySaleCase.service';
 import { prisma } from '../../../lib/prisma';
+import { confirmSaleTransition, saleTransitionResult } from './sellerPrepTransition';
 import {
-  BUDGET_RANGES, BUDGET_RANGE_LABELS, SALE_CASE_FORM_CAPTURE_KEYS, SALE_CASE_MESSAGES, SALE_STATUS_LABELS, legalNextStatuses, parseSaleCaseAnswer, saleCaseKindFromMessage,
+  BUDGET_RANGES, BUDGET_RANGE_LABELS, SALE_CASE_FORM_CAPTURE_KEYS, SALE_CASE_MESSAGES, SALE_STATUS_LABELS, isSaleTransitionKind, legalNextStatuses, parseSaleCaseAnswer, saleCaseKindFromMessage,
   type SaleCaseFormKind, type SaleCaseKind,
 } from '../support/sellerPrepCaseCommand';
 
@@ -42,7 +43,8 @@ async function loadUpgrades(userId: string, propertyId: string): Promise<Upgrade
 }
 const upgradesVersion = (base: string, state: UpgradeState) => sha(`${base}:upgrades:${state.candidates.map((c) => `${c.key}=${c.confirmed ? 1 : 0}`).sort().join(',')}:${state.hidden.join(',')}`);
 
-function formCapture(kind: SaleCaseFormKind, contextVersion: string, saleCase: { status: string; targetListDate: Date | null; targetCloseDate: Date | null; budgetRange: string | null }, upgrades?: UpgradeState): AskCaptureRequest {
+type PlainFormKind = Exclude<SaleCaseFormKind, 'TRANSITION' | 'COMPLETE'>;
+function formCapture(kind: PlainFormKind, contextVersion: string, saleCase: { status: string; targetListDate: Date | null; targetCloseDate: Date | null; budgetRange: string | null }, upgrades?: UpgradeState): AskCaptureRequest {
   const date = (key: string, label: string) => ({ key, label, required: false, inputSchema: { type: 'APPROXIMATE_DATE' as const, allowedPrecisions: ['EXACT_DATE'], allowFuture: true } });
   const forms = {
     DATES: { title: 'Target dates for the sale', question: 'When do you want to list and close?', help: 'A blank keeps the date as it is. These are your own targets, not dates anyone has agreed to.',
@@ -65,6 +67,7 @@ function formCapture(kind: SaleCaseFormKind, contextVersion: string, saleCase: {
 }
 
 export async function saleCaseCommandResult(userId: string, propertyId: string, launch: { kind: SaleCaseKind; sourceExecutionId: string | null }, supplied?: Record<string, unknown>): Promise<AskOperationResult> {
+  if (isSaleTransitionKind(launch.kind)) return saleTransitionResult(userId, propertyId, { kind: launch.kind, sourceExecutionId: launch.sourceExecutionId }, supplied);
   const access = await ensurePropertyAccess(userId, propertyId);
   if (access.role === HouseholdRole.VIEWER) {
     return { status: 'BLOCKED', reasonCode: 'ASK_PERMISSION_REQUIRED', blocks: [{ type: 'SUMMARY', id: 'seller-prep-case-permission', title: 'A contributor or owner can change the sale case', body: 'Your role can view this home but not change it. Nothing has changed.', tone: 'CAUTION', actions: [] }], suggestions: [] };
@@ -95,7 +98,7 @@ export async function saleCaseCommandResult(userId: string, propertyId: string, 
     };
   }
   if (!saleCase) return unavailable('SELLER_PREP_NO_ACTIVE_CASE', 'There is no sale case yet', 'Start a sale case first. Nothing has changed.');
-  const formKind = kind as SaleCaseFormKind;
+  const formKind = kind as PlainFormKind;
   if (kind === 'STATUS' && !legalNextStatuses(saleCase.status).length) return unavailable('SELLER_PREP_STATUS_FINAL', 'The sale is already finished', 'There is no next stage. Nothing has changed.');
   let upgrades: UpgradeState | undefined;
   if (kind === 'UPGRADES') {
@@ -179,6 +182,7 @@ async function confirmSaleCase(ctx: ConfirmCapabilityContext): Promise<ConfirmCa
   const command = parameters.saleCaseCommand as { kind?: unknown } | undefined;
   const kind = command?.kind as SaleCaseKind | undefined;
   if (!kind || !(kind in SALE_CASE_MESSAGES)) throw stale('The change to make is invalid.');
+  if (isSaleTransitionKind(kind)) return confirmSaleTransition(ctx, kind);
   const propertyId = execution.propertyId;
   let title: string;
   try {

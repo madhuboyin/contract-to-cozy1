@@ -49,7 +49,7 @@ export function inspectionReportsFromRows(rows: ReportRow[], canChange: boolean,
         id: NEGOTIATION_PACKAGE_ACTION_ID, label: 'Build a negotiation package', message: NEGOTIATION_PACKAGE_MESSAGE,
         interactionType: 'CONVERSATION_CONTINUE' as const, operationId: 'INSPECTION_NEGOTIATION_PACKAGE' as const, style: 'SECONDARY' as const,
       }] : []),
-      ...(row.status === 'CONFIRMED' ? [{
+      ...(row.status === 'CONFIRMED' || row.status === 'REVIEW_PENDING' ? [{
         id: INSPECTION_FINDINGS_OF_REPORT_ACTION_ID, label: 'See its findings', message: INSPECTION_FINDINGS_OF_REPORT_MESSAGE,
         interactionType: 'CONVERSATION_CONTINUE' as const, operationId: 'INSPECTION_REPORT_FINDINGS' as const, style: 'SECONDARY' as const,
       }] : []),

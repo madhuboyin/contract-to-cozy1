@@ -27,6 +27,8 @@ import {
   type NegotiationFieldSpec, type NegotiationStartInput, type NegotiationStartScenario,
 } from '../support/negotiationShieldStart';
 import { collectionDescriptor } from '../support/collectionDescriptor';
+import { SERVICE_PRICE_CHECK_ENTITY_TYPE, SERVICE_PRICE_NEGOTIATE_MESSAGE } from '../support/homeToolRunConstants';
+import { servicePriceCategoryLabel } from './servicePriceRadar.handler';
 import { prisma } from '../../../lib/prisma';
 import { GUIDANCE_STEP_REFUSAL_TEXT, launchedGuidanceStepId, resolveGuidanceStepBinding } from '../support/guidanceStepBinding';
 
@@ -168,7 +170,7 @@ export const negotiationDetailLabel = (field: NegotiationFieldSpec, value: unkno
 export async function negotiationShieldStartResult(
   userId: string,
   propertyId: string,
-  launch: { scenarioType: NegotiationStartScenario | null; sourceExecutionId: string | null; guidanceStepId?: string | null; forceNew?: boolean },
+  launch: { scenarioType: NegotiationStartScenario | null; sourceExecutionId: string | null; guidanceStepId?: string | null; forceNew?: boolean; prefill?: Pick<NegotiationStartInput, 'title' | 'structuredData'> },
   supplied?: NegotiationStartInput,
 ): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
@@ -199,7 +201,7 @@ export async function negotiationShieldStartResult(
       status: 'NEEDS_CONTEXT', reasonCode: 'NEGOTIATION_SHIELD_START_INPUT_REQUIRED', contextVersion,
       parameters: { negotiationStartLaunch: { scenarioType: scenario, sourceExecutionId: launch.sourceExecutionId, ...(guidanceStepId ? { guidanceStepId } : {}) } },
       blocks: [{ type: 'SUMMARY', id: 'negotiation-shield-start-input', title: `Start a review: ${spec.label.toLowerCase()}`, body: 'Nothing has been saved yet. Enter what you know, then review it before it is saved.', tone: 'DEFAULT', actions: [] }],
-      captureRequests: [captureRequest(scenario, contextVersion)], suggestions: [],
+      captureRequests: [captureRequest(scenario, contextVersion, launch.prefill)], suggestions: [],
     };
   }
 
@@ -235,6 +237,21 @@ registerCapabilityHandler('negotiation-shield.start', async (envelope) => {
   const chosenScenario = launch?.entityType === NEGOTIATION_SHIELD_SCENARIO_ENTITY && isNegotiationStartScenario(launch.entityId) ? launch.entityId : null;
   const chosenMessage = chosenScenario ? scenarioStartMessage(chosenScenario) : null;
   const declared = launch?.operationId === 'NEGOTIATION_SHIELD_CASE_START' && (envelope.message === NEGOTIATION_SHIELD_START_MESSAGE || envelope.message === chosenMessage);
+  // Started from a saved Service Price Radar check (Desktop's "Need help responding?" hand-off): the contractor-quote form opens with what the check holds. The values are
+  // read from the check in this home, never taken from the launch, and the person still reviews and confirms the form as usual.
+  if (launch?.operationId === 'NEGOTIATION_SHIELD_CASE_START' && launch.entityType === SERVICE_PRICE_CHECK_ENTITY_TYPE && launch.entityId && envelope.message === SERVICE_PRICE_NEGOTIATE_MESSAGE) {
+    const check = await prisma.serviceRadarCheck.findFirst({ where: { id: launch.entityId, propertyId: envelope.propertyId! }, select: { quoteVendorName: true, quoteAmount: true, serviceCategory: true } });
+    const amount = check ? Number(check.quoteAmount) : NaN;
+    const structuredData: Record<string, unknown> = check ? {
+      ...(check.quoteVendorName ? { contractorName: check.quoteVendorName } : {}),
+      ...(Number.isFinite(amount) && amount > 0 ? { quoteAmount: amount } : {}),
+      serviceCategory: servicePriceCategoryLabel(String(check.serviceCategory)),
+    } : {};
+    return negotiationShieldStartResult(envelope.userId, envelope.propertyId!, {
+      scenarioType: 'CONTRACTOR_QUOTE_REVIEW', sourceExecutionId: launch.sourceExecutionId ?? null,
+      ...(check ? { prefill: { title: NEGOTIATION_START_SCENARIO_SPECS.CONTRACTOR_QUOTE_REVIEW.label, structuredData } } : {}),
+    });
+  }
   const stepId = launchedGuidanceStepId(launch);
   if (declared && stepId && envelope.message === NEGOTIATION_SHIELD_START_MESSAGE) {
     return negotiationShieldStartResult(envelope.userId, envelope.propertyId!, {
