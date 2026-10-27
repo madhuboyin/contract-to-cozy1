@@ -20,6 +20,8 @@ const STATUS_LABELS: Record<string, string> = { OPEN: 'Open', ACCEPTED_AS_IS: 'A
 const DISPOSITION_LABELS: Record<string, string> = { ACCEPTED: 'Tracked as work', MONITOR: 'Being monitored', DUPLICATE: 'Duplicate', ALREADY_RESOLVED: 'Already resolved', NOT_APPLICABLE: 'Not applicable', CORRECTION_REQUESTED: 'Correction requested' };
 const DECISION_BUTTONS: Record<InspectionFindingDecisionKind, { label: string; style: 'PRIMARY' | 'SECONDARY' | 'QUIET' }> = {
   MONITOR: { label: 'Keep an eye on it', style: 'SECONDARY' },
+  ALREADY_RESOLVED: { label: 'Already resolved', style: 'QUIET' },
+  NOT_APPLICABLE: { label: 'Not applicable', style: 'QUIET' },
   FIX: { label: 'Plan to fix', style: 'SECONDARY' },
   DISCLOSE_PRICE_ADJUST: { label: 'Disclose with a price adjustment', style: 'QUIET' },
   DISCLOSE_CREDIT: { label: 'Disclose with a credit', style: 'QUIET' },

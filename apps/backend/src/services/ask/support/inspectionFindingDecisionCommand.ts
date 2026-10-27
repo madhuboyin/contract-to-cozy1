@@ -5,13 +5,15 @@
 export const INSPECTION_FINDING_ENTITY_TYPE = 'INSPECTION_FINDING';
 export const INSPECTION_FINDING_DECISION_MESSAGES = {
   MONITOR: 'Keep an eye on this inspection finding.',
+  ALREADY_RESOLVED: 'Mark this inspection finding as already resolved.',
+  NOT_APPLICABLE: 'Mark this inspection finding as not applicable to my home.',
   FIX: 'Plan to fix this inspection finding before listing.',
   DISCLOSE_PRICE_ADJUST: 'Disclose this inspection finding and adjust the price.',
   DISCLOSE_CREDIT: 'Disclose this inspection finding and offer a credit.',
 } as const;
 export type InspectionFindingDecisionKind = keyof typeof INSPECTION_FINDING_DECISION_MESSAGES;
 export const INSPECTION_FINDING_DECISION_ACTION_IDS = {
-  MONITOR: 'inspection-finding-monitor', FIX: 'inspection-finding-fix', DISCLOSE_PRICE_ADJUST: 'inspection-finding-disclose-price', DISCLOSE_CREDIT: 'inspection-finding-disclose-credit',
+  MONITOR: 'inspection-finding-monitor', ALREADY_RESOLVED: 'inspection-finding-already-resolved', NOT_APPLICABLE: 'inspection-finding-not-applicable', FIX: 'inspection-finding-fix', DISCLOSE_PRICE_ADJUST: 'inspection-finding-disclose-price', DISCLOSE_CREDIT: 'inspection-finding-disclose-credit',
 } as const;
 export const INSPECTION_FINDINGS_OF_REPORT_MESSAGE = 'Show the findings in this inspection report.';
 export const INSPECTION_FINDINGS_OF_REPORT_ACTION_ID = 'inspection-report-findings';
@@ -46,6 +48,8 @@ export function inspectionFindingDecisionKinds(report: ReportState, finding: Fin
   if (report.status !== 'CONFIRMED') return [];
   const kinds: InspectionFindingDecisionKind[] = [];
   if (finding.status === 'OPEN' && finding.workDisposition !== 'MONITOR' && finding.workDisposition !== 'ACCEPTED') kinds.push('MONITOR');
+  // Already resolved and not applicable close the finding and write its resolution note, as the page's own buttons do, so a finding that already carries notes (a plan included) is left alone.
+  if (finding.status === 'OPEN' && !finding.resolutionNotes) kinds.push('ALREADY_RESOLVED', 'NOT_APPLICABLE');
   if (report.reportType === 'PRE_LISTING' && (finding.status === 'OPEN' || finding.status === 'RESOLVED')) {
     const plan = parseFixDisclosure(finding.resolutionNotes);
     if (!finding.resolutionNotes || plan) {

@@ -268,7 +268,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   // Keep an eye on an inspection finding, or record the seller's plan to fix or disclose it (register P2 Inspection Hub). Confirmation-gated, declared-action only.
   INSPECTION_FINDING_DECISION_COMMAND: new Set(['inspection-reports-back']),
   // List the findings in one confirmed inspection report with their state and decisions (register P2 Inspection Hub). Read-only; launched from a report row.
-  INSPECTION_REPORT_FINDINGS: new Set(['inspection-reports-back', 'inspection-finding-monitor', 'inspection-finding-fix', 'inspection-finding-disclose-price', 'inspection-finding-disclose-credit']),
+  INSPECTION_REPORT_FINDINGS: new Set(['inspection-reports-back', 'inspection-finding-monitor', 'inspection-finding-already-resolved', 'inspection-finding-not-applicable', 'inspection-finding-fix', 'inspection-finding-disclose-price', 'inspection-finding-disclose-credit']),
   // Review and confirm an inspection report, with the write-back preview shown first (register P2 Inspection Hub). Confirmation-gated, declared-action only.
   INSPECTION_REPORT_COMMAND: new Set(['inspection-reports-back']),
   // Compare a confirmed inspection report with the confirmed one before it (register P2 Inspection Hub). Read-only; launched from a report row.

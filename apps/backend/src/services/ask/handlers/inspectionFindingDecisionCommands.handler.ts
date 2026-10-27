@@ -33,6 +33,12 @@ async function loadFinding(propertyId: string, findingId: string) {
 }
 const findingVersion = (kind: InspectionFindingDecisionKind, f: FindingWithReport) =>
   sha(`inspection-finding-decision:${kind}:${f.id}:${f.status}:${f.workDisposition}:${f.updatedAt.toISOString()}:${sha(f.resolutionNotes ?? '')}:${f.report.status}`);
+const CLOSING_COPY = {
+  ALREADY_RESOLVED: { title: 'Mark this finding as already resolved?', confirm: 'Mark as resolved', becomes: 'Resolved, and any work item for it is closed as not needed',
+    description: 'This closes the finding as resolved before any work was accepted, and closes the work item Ask created for it, if there is one. It records the change on the inspection record only and contacts no one.' },
+  NOT_APPLICABLE: { title: 'Mark this finding as not applicable?', confirm: 'Mark as not applicable', becomes: 'Dismissed, and any work item for it is closed as not needed',
+    description: 'This dismisses the finding as not applying to your home and closes the work item Ask created for it, if there is one. It records the change on the inspection record only and contacts no one.' },
+} as const;
 const titleOf = (f: FindingWithReport) => `${f.homeSystem}${f.subsystem ? `: ${f.subsystem}` : ''}`;
 
 export async function inspectionFindingDecisionResult(userId: string, propertyId: string, launch: { kind: InspectionFindingDecisionKind; entityId: string; sourceExecutionId: string | null }): Promise<AskOperationResult> {
@@ -50,6 +56,7 @@ export async function inspectionFindingDecisionResult(userId: string, propertyId
   const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
   const plan = parseFixDisclosure(finding.resolutionNotes);
   const isMonitor = kind === 'MONITOR';
+  const closing = kind === 'ALREADY_RESOLVED' || kind === 'NOT_APPLICABLE';
   return {
     status: 'NEEDS_CONFIRMATION', reasonCode: `INSPECTION_FINDING_${kind}_CONFIRMATION_REQUIRED`, contextVersion,
     parameters: {
@@ -59,17 +66,19 @@ export async function inspectionFindingDecisionResult(userId: string, propertyId
     blocks: [{ type: 'SUMMARY', id: 'inspection-finding-decision-review', title: titleOf(finding), body: `${finding.inspectorDescription} Nothing changes until you confirm.`, tone: 'DEFAULT', actions: [] }],
     confirmation: {
       confirmationId: `inspection-finding-decision-${kind.toLowerCase()}-${sha(finding.id).slice(0, 12)}-1`, version: 1,
-      title: isMonitor ? 'Keep an eye on this finding?' : `${INSPECTION_FIX_DISCLOSE_LABELS[kind]} for this finding?`,
+      title: isMonitor ? 'Keep an eye on this finding?' : closing ? CLOSING_COPY[kind].title : `${INSPECTION_FIX_DISCLOSE_LABELS[kind]} for this finding?`,
       description: isMonitor
         ? 'This keeps the finding on your work list as deferred and brings it back for review in about 90 days. It does not accept the work or contact anyone.'
+        : closing ? CLOSING_COPY[kind].description
         : 'This records your plan for the sale. It does not contact a buyer, an agent or a contractor, and it keeps an earlier cost estimate and note if you set one.',
       fields: [
         { label: 'Finding', value: titleOf(finding) },
         ...(isMonitor
           ? [{ label: 'Work', value: 'Deferred, review in about 90 days' }]
+          : closing ? [{ label: 'Finding becomes', value: CLOSING_COPY[kind].becomes }]
           : [{ label: 'Plan', value: `${plan ? (INSPECTION_FIX_DISCLOSE_LABELS[plan.decision] ?? plan.decision) : 'None recorded'} → ${INSPECTION_FIX_DISCLOSE_LABELS[kind]}` }]),
       ],
-      editableFields: [], confirmLabel: isMonitor ? 'Keep an eye on it' : 'Record the plan',
+      editableFields: [], confirmLabel: isMonitor ? 'Keep an eye on it' : closing ? CLOSING_COPY[kind].confirm : 'Record the plan',
       consentText: 'I authorize this change to the shared inspection record.', expiresAt: expiresAt.toISOString(),
     },
     suggestions: [],
@@ -98,8 +107,8 @@ async function confirmInspectionFindingDecision(ctx: ConfirmCapabilityContext): 
     if (!finding) throw stale('That finding is no longer available.');
     if (parameters.inspectionFindingDecisionContextVersion !== findingVersion(kind, finding)) throw stale('This finding changed while the confirmation was open. Review it again and try again.', 'ASK_CONTEXT_VERSION_CONFLICT');
     if (!inspectionFindingDecisionKinds(finding.report, finding).includes(kind)) throw stale('That decision is not available for this finding now.');
-    if (kind === 'MONITOR') {
-      await hubService.dispositionFindingAsWork(finding.id, finding.reportId, propertyId, userId, { disposition: 'MONITOR' });
+    if (kind === 'MONITOR' || kind === 'ALREADY_RESOLVED' || kind === 'NOT_APPLICABLE') {
+      await hubService.dispositionFindingAsWork(finding.id, finding.reportId, propertyId, userId, { disposition: kind });
     } else {
       const earlier = parseFixDisclosure(finding.resolutionNotes);
       await hubService.saveFixDisclosureDecisions(finding.reportId, propertyId, [{
@@ -115,7 +124,7 @@ async function confirmInspectionFindingDecision(ctx: ConfirmCapabilityContext): 
   const result: AskOperationResult = {
     status: 'COMPLETED', reasonCode: `INSPECTION_FINDING_${kind}_COMPLETED`,
     blocks: [{
-      type: 'WORKFLOW_PROGRESS', id: `inspection-finding-decision-${kind.toLowerCase()}-${command.entityId}`, title: kind === 'MONITOR' ? 'Now keeping an eye on it' : 'Plan recorded', status: 'COMPLETED',
+      type: 'WORKFLOW_PROGRESS', id: `inspection-finding-decision-${kind.toLowerCase()}-${command.entityId}`, title: kind === 'MONITOR' ? 'Now keeping an eye on it' : kind === 'ALREADY_RESOLVED' ? 'Marked as resolved' : kind === 'NOT_APPLICABLE' ? 'Marked as not applicable' : 'Plan recorded', status: 'COMPLETED',
       description: kind === 'MONITOR' ? 'It will come back for review in about 90 days. Nothing was sent to anyone.' : 'It is on the inspection record. Nothing was sent to anyone.', details: [],
       actions: [{ ...reportsAction, label: 'See my inspection reports', style: 'PRIMARY' as const }],
     }],

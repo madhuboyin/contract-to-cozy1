@@ -50,11 +50,11 @@ const p = (kind, version2, entityId = 'f1') => ({ inspectionFindingDecisionComma
 test('which decisions a finding allows: monitor when open and not yet accepted or monitored; a plan only on a pre-listing report with no notes of its own', () => {
   const k = command.inspectionFindingDecisionKinds;
   const pre = { status: 'CONFIRMED', reportType: 'PRE_LISTING' };
-  assert.deepEqual(k(pre, { status: 'OPEN', workDisposition: 'PENDING_REVIEW', resolutionNotes: null }), ['MONITOR', 'FIX', 'DISCLOSE_PRICE_ADJUST', 'DISCLOSE_CREDIT']);
+  assert.deepEqual(k(pre, { status: 'OPEN', workDisposition: 'PENDING_REVIEW', resolutionNotes: null }), ['MONITOR', 'ALREADY_RESOLVED', 'NOT_APPLICABLE', 'FIX', 'DISCLOSE_PRICE_ADJUST', 'DISCLOSE_CREDIT']);
   assert.deepEqual(k(pre, { status: 'OPEN', workDisposition: 'MONITOR', resolutionNotes: JSON.stringify({ fixDisclosure: 'FIX' }) }), ['DISCLOSE_PRICE_ADJUST', 'DISCLOSE_CREDIT']);
   assert.deepEqual(k(pre, { status: 'OPEN', workDisposition: 'ACCEPTED', resolutionNotes: 'Roofer fixed the flashing' }), [], 'their own notes are not replaced');
   assert.deepEqual(k(pre, { status: 'RESOLVED', workDisposition: 'PENDING_REVIEW', resolutionNotes: null }), ['FIX', 'DISCLOSE_PRICE_ADJUST', 'DISCLOSE_CREDIT']);
-  assert.deepEqual(k({ status: 'CONFIRMED', reportType: 'PRE_PURCHASE' }, { status: 'OPEN', workDisposition: 'PENDING_REVIEW', resolutionNotes: null }), ['MONITOR']);
+  assert.deepEqual(k({ status: 'CONFIRMED', reportType: 'PRE_PURCHASE' }, { status: 'OPEN', workDisposition: 'PENDING_REVIEW', resolutionNotes: null }), ['MONITOR', 'ALREADY_RESOLVED', 'NOT_APPLICABLE']);
   assert.deepEqual(k({ status: 'REVIEW_PENDING', reportType: 'PRE_LISTING' }, { status: 'OPEN', workDisposition: 'PENDING_REVIEW', resolutionNotes: null }), []);
   assert.deepEqual(k(pre, { status: 'DISMISSED', workDisposition: 'NOT_APPLICABLE', resolutionNotes: null }), []);
 });
@@ -213,4 +213,31 @@ test('the answer shape: positional keys parse, anything else does not; the actio
   assert.equal(report.parseNegotiationAnswer({ f0: 'x', f1: 'accept_as_is' }, 2).success, false);
   assert.equal(report.parseNegotiationAnswer({ f0: 'request_repair', f1: 'accept_as_is', extra: 1 }, 2).success, false);
   assert.equal(isAskActionApplicable({ action: { id: report.NEGOTIATION_PACKAGE_ACTION_ID, label: 'x', interactionType: 'CONVERSATION_CONTINUE', message: 'm', operationId: NEG, style: 'QUIET' }, operationId: 'INSPECTION_REPORTS', propertyId: 'prop-1', householdRole: 'CONTRIBUTOR', authoritativeSourceAvailable: true }), true);
+});
+
+test('already resolved and not applicable: offered on an open finding with no notes, reviewed honestly, written through the page\'s own disposition call', async () => {
+  const k = command.inspectionFindingDecisionKinds;
+  const report = { status: 'CONFIRMED', reportType: 'PRE_PURCHASE' };
+  assert.deepEqual(k(report, { status: 'RESOLVED', workDisposition: 'ALREADY_RESOLVED', resolutionNotes: null }), [], 'a closed finding cannot be closed again');
+  assert.deepEqual(k(report, { status: 'OPEN', workDisposition: 'ACCEPTED', resolutionNotes: 'Roofer fixed it' }), [], 'their notes are not replaced');
+  let w = install('CONTRIBUTOR');
+  try {
+    for (const [kind, copy] of [['ALREADY_RESOLVED', /closes the finding as resolved/], ['NOT_APPLICABLE', /dismisses the finding as not applying/]]) {
+      const review = await invoke(CMD, M[kind], launch(CMD, 'INSPECTION_FINDING', 'f1'));
+      assert.equal(review.status, 'NEEDS_CONFIRMATION');
+      assert.match(review.confirmation.description, copy);
+      assert.match(review.confirmation.description, /contacts no one/);
+    }
+    assert.equal(w.calls.length, 0);
+    for (const kind of ['ALREADY_RESOLVED', 'NOT_APPLICABLE']) {
+      const out = await confirmCapabilityInvoke(CMD, ctx(p(kind, version(kind, finding()))));
+      assert.equal(out.result.status, 'COMPLETED');
+    }
+    assert.deepEqual(w.calls.map((c) => c[5]), [{ disposition: 'ALREADY_RESOLVED' }, { disposition: 'NOT_APPLICABLE' }]);
+    await assert.rejects(() => confirmCapabilityInvoke(CMD, ctx(p('NOT_APPLICABLE', 'old'))), (e) => e.code === 'ASK_CONTEXT_VERSION_CONFLICT');
+  } finally { w.restore(); }
+  w = install('VIEWER');
+  try { assert.equal((await invoke(CMD, M.NOT_APPLICABLE, launch(CMD, 'INSPECTION_FINDING', 'f1'))).reasonCode, 'ASK_PERMISSION_REQUIRED'); } finally { w.restore(); }
+  w = install('CONTRIBUTOR', finding({ status: 'DISMISSED' }));
+  try { assert.equal((await invoke(CMD, M.ALREADY_RESOLVED, launch(CMD, 'INSPECTION_FINDING', 'f1'))).reasonCode, 'INSPECTION_FINDING_DECISION_NOT_AVAILABLE'); } finally { w.restore(); }
 });
