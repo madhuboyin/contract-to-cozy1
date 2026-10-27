@@ -12,10 +12,12 @@ import { ensurePropertyAccess } from '../askHandlerSupport';
 import { humanDate } from '../askFormatting';
 import { BuyerContractService } from '../../buyerContract.service';
 import {
-  CONTINGENCY_STATUS_LABELS, CONTRACT_CAPTURE_KEYS, CONTRACT_ENTITY_TYPE, CONTRACT_FIELD_LABELS, CONTRACT_MESSAGES, confirmableFields, contractKindFromMessage,
+  CONTINGENCY_STATUS_LABELS, CONTRACT_CAPTURE_KEYS, CONTRACT_CONTINGENCY_TYPES, CONTRACT_ENTITY_TYPE, CONTRACT_FIELD_LABELS, CONTRACT_MESSAGES, confirmableFields, contractKindFromMessage,
   parseContractAnswer, type ContractFormKind, type ContractKind,
 } from '../support/buyerContractCommand';
 
+/** The list fields of a draft the edit form can replace, with their labels (one entry per line). */
+const LIST_FIELDS: Array<[string, string]> = [['buyerNames', 'Buyer name(s)'], ['sellerNames', 'Seller name(s)'], ['includedItems', 'Included items'], ['excludedItems', 'Excluded items'], ['agreedRepairs', 'Agreed repairs']];
 const sha = (text: string) => createHash('sha256').update(text).digest('hex');
 const stale = (message: string, code = 'ASK_CONFIRMATION_NOT_ACTIVE') => Object.assign(new Error(message), { code });
 const back = { id: 'buyer-contract-back', label: 'Back to my contract timeline', interactionType: 'START_WORKFLOW' as const, message: 'Show my contract timeline', operationId: 'BUYER_CONTRACT_TIMELINE' as const, style: 'SECONDARY' as const };
@@ -51,8 +53,17 @@ function formCapture(kind: ContractFormKind, contextVersion: string, draft: Revi
       day('acceptedDate', 'Acceptance date'), day('targetClosingDate', 'Target closing date'), day('possessionDate', 'Possession date'),
       money('earnestMoney', 'Earnest money ($)'), { key: 'earnestRecipient', label: 'Earnest money held by', required: false, inputSchema: { type: 'SHORT_TEXT' as const, maxLength: 300 } },
       money('sellerCredits', 'Seller credits ($)'), { key: 'specialConditions', label: 'Special conditions', required: false, inputSchema: { type: 'LONG_TEXT' as const, maxLength: 4000 } },
+      ...LIST_FIELDS.map(([key, label]) => ({
+        key, label, required: false, helpText: `One per line. ${(draft as unknown as Record<string, string[]> | null)?.[key]?.length ? `Now: ${(draft as unknown as Record<string, string[]>)[key].join('; ').slice(0, 160)}. Typing here replaces the whole list; type "none" to empty it.` : 'Leave blank to keep the list as it is.'}`,
+        inputSchema: { type: 'LONG_TEXT' as const, maxLength: 4000 },
+      })),
     ] },
     CONTINGENCY_UPDATE: { title: `Update ${contingency?.label ?? 'this contingency'}`, question: 'Where does it stand?', seed: { status: contingency?.status ?? 'ACTIVE' }, fields: [
+      { key: 'status', label: 'Status', required: true, inputSchema: { type: 'SINGLE_SELECT' as const, options: Object.entries(CONTINGENCY_STATUS_LABELS).map(([value, label]) => ({ label, value })) } },
+      day('dueDate', 'Deadline'),
+    ] },
+    CONTINGENCY_ADD: { title: 'Add a contingency to the draft', question: 'Which protection does your contract include, and where does it stand?', seed: { status: 'ACTIVE' }, fields: [
+      { key: 'type', label: 'Contingency', required: true, inputSchema: { type: 'SINGLE_SELECT' as const, options: Object.entries(CONTRACT_CONTINGENCY_TYPES).filter(([value]) => !(draft?.contingencies ?? []).some((c) => c.type === value)).map(([value, label]) => ({ label, value })) } },
       { key: 'status', label: 'Status', required: true, inputSchema: { type: 'SINGLE_SELECT' as const, options: Object.entries(CONTINGENCY_STATUS_LABELS).map(([value, label]) => ({ label, value })) } },
       day('dueDate', 'Deadline'),
     ] },
@@ -105,6 +116,9 @@ export async function contractCommandResult(
   if (!draft) return unavailable('BUYER_CONTRACT_NO_DRAFT', 'There is no draft to change', 'Start a revision first. Nothing has changed.');
   const contingency = launch.entityId ? draft.contingencies.find((c) => c.id === launch.entityId) ?? null : null;
   if (kind === 'CONTINGENCY_UPDATE' && !contingency) return unavailable('BUYER_CONTRACT_CONTINGENCY_NOT_FOUND', 'That contingency is no longer in the draft', 'Nothing has changed.');
+  if (kind === 'CONTINGENCY_ADD' && Object.keys(CONTRACT_CONTINGENCY_TYPES).every((type) => draft.contingencies.some((c) => c.type === type))) {
+    return unavailable('BUYER_CONTRACT_NO_CONTINGENCY_TO_ADD', 'Every contingency is already in the draft', 'Update one from the draft instead. Nothing has changed.');
+  }
   const formKind = kind as ContractFormKind;
   if (kind === 'CONFIRM' && !draft.propertyAddress) {
     return unavailable('BUYER_CONTRACT_INCOMPLETE', 'The draft needs the property address', 'Complete the property address before confirming. Nothing has changed.');
@@ -132,8 +146,18 @@ export async function contractCommandResult(
       ...(d.earnestRecipient ? [{ label: 'Earnest money held by', value: `${draft.earnestMoneyRecipient ?? 'Not set'} → ${String(d.earnestRecipient)}` }] : []),
       ...(d.sellerCredits !== undefined ? [{ label: 'Seller credits', value: `${draft.sellerCreditsCents != null ? dollars(draft.sellerCreditsCents) : 'Not set'} → ${dollars(Number(d.sellerCredits) * 100)}` }] : []),
       ...(d.specialConditions ? [{ label: 'Special conditions', value: 'Updated' }] : []),
+      ...LIST_FIELDS.filter(([key]) => d[key] !== undefined).map(([key, label]) => ({
+        label, value: `${((draft as unknown as Record<string, string[]>)[key] ?? []).length} → ${(d[key] as string[]).length ? (d[key] as string[]).join('; ').slice(0, 200) : 'none'}`,
+      })),
     ];
     spec = confirmation(id, 'Save these changes to the draft?', 'This changes the draft only. Your plan and deadlines do not change until you confirm the draft against your signed contract.', 'Save to the draft', fields);
+  } else if (formKind === 'CONTINGENCY_ADD') {
+    if (draft.contingencies.some((c) => c.type === d.type)) return unavailable('BUYER_CONTRACT_CONTINGENCY_EXISTS', 'That contingency is already in the draft', 'Update it instead. Nothing has changed.');
+    spec = confirmation(id, 'Add this contingency to the draft?', 'This records a contingency your contract includes, in the draft only. It does not start, waive or satisfy anything with the seller, and the plan does not change until you confirm the draft.', 'Add to the draft', [
+      { label: 'Contingency', value: CONTRACT_CONTINGENCY_TYPES[String(d.type)] },
+      { label: 'Status', value: CONTINGENCY_STATUS_LABELS[String(d.status)] },
+      ...(d.dueDate ? [{ label: 'Deadline', value: shown(String(d.dueDate)) }] : []),
+    ]);
   } else if (formKind === 'CONTINGENCY_UPDATE') {
     spec = confirmation(id, 'Update this contingency in the draft?', 'This records your own note in the draft. It does not waive or satisfy anything with the seller, and the plan does not change until you confirm the draft.', 'Update the draft', [
       { label: 'Contingency', value: contingency!.label },
@@ -210,8 +234,18 @@ async function confirmContract(ctx: ConfirmCapabilityContext): Promise<ConfirmCa
           ...(d.earnestRecipient ? { earnestMoneyRecipient: String(d.earnestRecipient) } : {}),
           ...(d.sellerCredits !== undefined ? { sellerCreditsCents: Math.round(Number(d.sellerCredits) * 100) } : {}),
           ...(d.specialConditions ? { specialConditions: String(d.specialConditions) } : {}),
+          ...Object.fromEntries(LIST_FIELDS.filter(([key]) => d[key] !== undefined).map(([key]) => [key, d[key]])),
         } as never);
         title = 'Draft updated';
+      } else if (kind === 'CONTINGENCY_ADD') {
+        if (draft.contingencies.some((c) => c.type === d.type)) throw stale('That contingency is already in the draft.');
+        await BuyerContractService.updateDraft(userId, propertyId, draft.id, {
+          contingencies: [
+            ...draft.contingencies.map((c) => ({ contingencyKey: c.contingencyKey, type: c.type, label: c.label, status: c.status, ...(c.dueAt ? { dueAt: c.dueAt } : {}), ...(c.notes ? { notes: c.notes } : {}) })),
+            { contingencyKey: `contract:${String(d.type).toLowerCase()}`, type: d.type, label: CONTRACT_CONTINGENCY_TYPES[String(d.type)], status: d.status ?? 'ACTIVE', ...(d.dueDate ? { dueAt: isoDay(String(d.dueDate)) } : {}) },
+          ],
+        } as never);
+        title = 'Contingency added';
       } else if (kind === 'CONTINGENCY_UPDATE') {
         const target = draft.contingencies.find((c) => c.id === entityId);
         if (!target) throw stale('That contingency is no longer in the draft.');

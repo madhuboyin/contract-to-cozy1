@@ -1089,7 +1089,7 @@ async function buyerContractTimelineResult(userId: string, propertyId: string): 
     operationId: 'BUYER_CONTRACT_COMMAND' as const, style: 'SECONDARY' as const,
   });
   const contractActions = !canChange ? [] : draft
-    ? [contractAction('DRAFT_EDIT', 'Edit the draft'), contractAction('CONFIRM', 'Confirm the draft')]
+    ? [contractAction('DRAFT_EDIT', 'Edit the draft'), contractAction('CONTINGENCY_ADD', 'Add a contingency'), contractAction('CONFIRM', 'Confirm the draft')]
     : [contractAction('DRAFT_START', 'Start a revision')];
   const draftBlock = draft ? [{
     type: 'GROUPED_LIST' as const, filters: [], id: 'buyer-contract-draft', title: `Draft revision ${draft.revisionNumber}`, description: 'Not part of your plan until you confirm it against the signed contract.',

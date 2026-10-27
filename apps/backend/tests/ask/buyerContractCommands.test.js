@@ -139,3 +139,52 @@ test('the action ids are allowlisted on the timeline answer and the back action 
   for (const id of Object.values(command.CONTRACT_ACTION_IDS)) assert.equal(applicable(id, 'BUYER_CONTRACT_TIMELINE'), true, id);
   assert.equal(applicable('buyer-contract-back', OP), true);
 });
+
+// ---- names, lists and adding a contingency (FRD v1.453) -------------------------------------------------------------------------------------------
+test('the edit form takes names and the three lists: one per line, blank keeps, "none" empties, and the limits are the service\'s', () => {
+  const p = command.parseContractAnswer;
+  const ok = p('DRAFT_EDIT', { buyerNames: 'Sam Lee\n Pat Lee \n', includedItems: 'Fridge\nWasher', excludedItems: 'none', agreedRepairs: '' });
+  assert.equal(ok.success, true);
+  assert.deepEqual([ok.data.buyerNames, ok.data.includedItems, ok.data.excludedItems, ok.data.agreedRepairs], [['Sam Lee', 'Pat Lee'], ['Fridge', 'Washer'], [], undefined]);
+  assert.equal(p('DRAFT_EDIT', { buyerNames: Array.from({ length: 11 }, (_, i) => `n${i}`).join('\n') }).success, false, 'more than ten names');
+  assert.equal(p('DRAFT_EDIT', { agreedRepairs: 'x'.repeat(501) }).success, false, 'a repair longer than the service allows');
+  assert.equal(p('DRAFT_EDIT', { agreedRepairs: '' }).success, false, 'blank everywhere is nothing to save');
+});
+
+test('editing the lists reviews the before and after, and the confirmation sends only what was entered', async () => {
+  const revisions = [rev(), draft({ buyerNames: ['Sam'], includedItems: ['Fridge'] })];
+  const w = install('CONTRIBUTOR', revisions);
+  try {
+    const review = await run('DRAFT_EDIT', null, { buyerNames: 'Sam\nPat', excludedItems: 'none' });
+    assert.equal(review.status, 'NEEDS_CONFIRMATION');
+    assert.deepEqual(review.confirmation.fields.map((f) => [f.label, f.value]), [['Buyer name(s)', '1 → Sam; Pat'], ['Excluded items', '0 → none']]);
+    assert.equal(w.calls.length, 0);
+    await confirmCapabilityInvoke(OP, ctx({ contractCommand: { kind: 'DRAFT_EDIT', entityId: null }, contractForm: { buyerNames: 'Sam\nPat', excludedItems: 'none' }, contractContextVersion: version(revisions) }));
+    assert.deepEqual(w.calls[0][4], { buyerNames: ['Sam', 'Pat'], excludedItems: [] });
+  } finally { w.restore(); }
+});
+
+test('add a contingency: only types the draft lacks are offered, the review is draft-only, and the confirmation keeps the existing ones and adds the new', async () => {
+  const revisions = [rev(), draft()];
+  const w = install('CONTRIBUTOR', revisions);
+  try {
+    assert.equal(command.contractKindFromMessage(M.CONTINGENCY_ADD), 'CONTINGENCY_ADD');
+    const ask = await invoke('CONTINGENCY_ADD', launch());
+    assert.equal(ask.status, 'NEEDS_CONTEXT');
+    const options = ask.captureRequests[0].inputSchema.fields.find((f) => f.key === 'type').inputSchema.options.map((o) => o.value);
+    assert.equal(options.includes('INSPECTION'), false, 'the draft already has an inspection contingency');
+    assert.equal(options.includes('FINANCING'), true);
+    const review = await run('CONTINGENCY_ADD', null, { type: 'FINANCING', status: 'ACTIVE', dueDate: '2026-09-20' });
+    assert.equal(review.status, 'NEEDS_CONFIRMATION');
+    assert.match(review.confirmation.description, /draft only/);
+    assert.equal((await run('CONTINGENCY_ADD', null, { type: 'INSPECTION', status: 'ACTIVE' })).reasonCode, 'BUYER_CONTRACT_CONTINGENCY_EXISTS');
+    await confirmCapabilityInvoke(OP, ctx({ contractCommand: { kind: 'CONTINGENCY_ADD', entityId: null }, contractForm: { type: 'FINANCING', status: 'ACTIVE', dueDate: '2026-09-20' }, contractContextVersion: version(revisions) }));
+    assert.deepEqual(w.calls[0][4].contingencies.map((c) => [c.type, c.status, c.dueAt ?? null]), [['INSPECTION', 'ACTIVE', '2026-09-10T12:00:00.000Z'], ['FINANCING', 'ACTIVE', '2026-09-20T12:00:00.000Z']]);
+    assert.equal(w.calls[0][4].contingencies[1].contingencyKey, 'contract:financing');
+    await assert.rejects(() => confirmCapabilityInvoke(OP, ctx({ contractCommand: { kind: 'CONTINGENCY_ADD', entityId: null }, contractForm: { type: 'INSPECTION', status: 'ACTIVE' }, contractContextVersion: version(revisions) })), (e) => e.code === 'ASK_CONFIRMATION_NOT_ACTIVE');
+    assert.equal(w.calls.length, 1);
+  } finally { w.restore(); }
+  const all = [rev(), draft({ contingencies: Object.keys(command.CONTRACT_CONTINGENCY_TYPES).map((type, i) => ({ id: `c${i}`, contingencyKey: `contract:${type.toLowerCase()}`, type, label: type, status: 'ACTIVE', dueAt: null, notes: null })) })];
+  const w2 = install('CONTRIBUTOR', all);
+  try { assert.equal((await invoke('CONTINGENCY_ADD', launch())).reasonCode, 'BUYER_CONTRACT_NO_CONTINGENCY_TO_ADD'); } finally { w2.restore(); }
+});
