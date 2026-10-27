@@ -111,14 +111,14 @@ test('browse lists a governed, applicable template with the start action for a c
   assert.deepEqual(collectionOf(result), { sourceTotal: 1, fetchedCount: 1, deliveredCount: 1, nextPageAvailable: false, deliveryTruncated: false });
   const [row] = rowsOf(result);
   assert.deepEqual([row.id, row.title, row.entityType, row.status ?? null], ['t1', 'Repaint a hallway', 'DIY_TEMPLATE', null]);
-  assert.deepEqual(row.actions, [{ id: 'diy-template-start', label: 'Start this project', message: 'Start this project.', style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId: 'DIY_PROJECT_START' }]);
+  assert.deepEqual(row.actions, [{ id: 'diy-template-assess', label: 'Should I do this myself?', message: 'Should I do this project myself?', style: 'QUIET', interactionType: 'CONVERSATION_CONTINUE', operationId: 'DIY_TEMPLATE_BROWSE' }, { id: 'diy-template-start', label: 'Start this project', message: 'Start this project.', style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId: 'DIY_PROJECT_START' }]);
   assert.deepEqual(result.suggestedNextActionCandidates.map((candidate) => [candidate.label, candidate.operationId, candidate.outcomeKey, candidate.entityContext.entityType, candidate.entityContext.entityId]), [
     ['Start Repaint a hallway', 'DIY_PROJECT_START', 'START_REVIEWED_PROJECT', 'DIY_TEMPLATE', 't1'],
   ], 'the sticky composer gets the exact reviewed project action, not a generic starter');
   for (const block of result.blocks) AskPresentationBlockSchema.parse(block);
   const trusted = validate('DIY_TEMPLATE_BROWSE', result, 'CONTRIBUTOR');
   assert.equal(trusted.blocks.length, result.blocks.length, 'no block was stripped by the trust policy');
-  assert.deepEqual(trusted.blocks.find((b) => b.type === 'GROUPED_LIST').sections[0].items[0].actions.map((a) => a.id), ['diy-template-start'], 'the row action survives validation');
+  assert.deepEqual(trusted.blocks.find((b) => b.type === 'GROUPED_LIST').sections[0].items[0].actions.map((a) => a.id), ['diy-template-assess', 'diy-template-start'], 'the row actions survive validation');
   role = 'VIEWER';
   const viewer = await browse();
   assert.equal(rowsOf(viewer)[0].actions, undefined, 'a viewer can browse but is offered no start');
@@ -276,4 +276,50 @@ test('the receipt and the "already started" receipt keep their guide action thro
   assert.deepEqual(trusted.blocks[0].actions.map((a) => a.id), ['diy-start-guide']);
   const again = await confirm(parameters);
   assert.deepEqual(validate('DIY_PROJECT_START', again.result, 'OWNER').blocks[0].actions.map((a) => a.id), ['diy-start-guide']);
+});
+
+// ---- assessment (Desktop's "DIY Assessment" on the template page) -------------------------------------------------------------------------------------
+const ASSESS = 'Should I do this project myself?';
+const assess = (overrides = {}, message = ASSESS) => capabilityInvoke('DIY_TEMPLATE_BROWSE', { userId: 'u1', propertyId: 'prop-1', message, launchContext: { surface: 'ASK_WORKSPACE', operationId: 'DIY_TEMPLATE_BROWSE', entityType: 'DIY_TEMPLATE', entityId: 't1', sourceExecutionId: null, ...overrides } });
+const { diyDecisionService } = require('../../src/services/diyDecision.service.ts');
+const realScore = diyDecisionService.score;
+let scored;
+test.beforeEach(() => { scored = []; diyDecisionService.score = async (input) => { scored.push(input); return { verdict: 'DIY_RECOMMENDED', score: 82, factors: [{ code: 'SKILL', label: 'Skill fit', effect: 'positive', contributionPoints: 20, description: 'Matches your level.' }, { code: 'TIME', label: 'Time', effect: 'negative', contributionPoints: -3, description: 'About two hours.' }], blockers: [], savingsEstimateCents: 25000, reasoning: 'A good fit.' }; }; });
+test.afterEach(() => { diyDecisionService.score = realScore; });
+
+test('the assessment scores the template from its own fields and the caller, offers the start for a contributor, and passes the block schema and trust policy', async () => {
+  const result = await assess();
+  assert.equal(result.reasonCode, 'DIY_ASSESSMENT_READY');
+  assert.equal(scored.length, 1);
+  assert.deepEqual([scored[0].projectCategory, scored[0].difficultyLevel, scored[0].requiredSkillLevel, scored[0].userId], ['PAINTING', 'EASY', 'BEGINNER', 'u1']);
+  assert.match(result.blocks[0].title, /Repaint a hallway: DIY recommended \(82\/100\)/);
+  assert.match(result.blocks[0].body, /save about \$250/);
+  assert.deepEqual(result.blocks[0].actions.map((a) => a.id), ['diy-template-start', 'diy-template-browse']);
+  assert.equal(result.blocks[0].actions[0].entityId, 't1');
+  for (const block of result.blocks) AskPresentationBlockSchema.parse(block);
+  const trusted = validate('DIY_TEMPLATE_BROWSE', result, 'CONTRIBUTOR');
+  assert.equal(trusted.blocks.length, result.blocks.length);
+  assert.deepEqual(trusted.blocks[0].actions.map((a) => a.id), ['diy-template-start', 'diy-template-browse']);
+  assert.equal(tracked.filter((e) => e.metadataJson?.via === 'ask' && e.metadataJson?.verdict).length, 1);
+  role = 'VIEWER';
+  assert.deepEqual((await assess()).blocks[0].actions.map((a) => a.id), ['diy-template-browse'], 'a viewer can read the assessment but is not offered the start');
+});
+
+test('the assessment is reached only by its declared launch, and an unavailable template is assessed as nothing', async () => {
+  for (const overrides of [{ operationId: 'DIY_PROJECT_START' }, { entityType: 'DIY_PROJECT' }, { entityId: null }, { surface: 'ASK_REFRESH' }]) {
+    const result = await assess(overrides);
+    assert.notEqual(result.reasonCode, 'DIY_ASSESSMENT_READY');
+  }
+  assert.equal((await assess({}, 'Something else')).reasonCode, 'DIY_TEMPLATE_BROWSE_READY');
+  const missing = await assess({ entityId: 'nope' });
+  assert.equal(missing.reasonCode, 'DIY_ASSESSMENT_TEMPLATE_UNAVAILABLE');
+  assert.equal(scored.length, 0, 'nothing was scored for the refused launches');
+});
+
+test('a hire-required verdict offers no start, and an already-started project is not offered a second one', async () => {
+  diyDecisionService.score = async () => ({ verdict: 'HIRE_REQUIRED', score: 10, factors: [], blockers: ['Needs a licensed professional.'], savingsEstimateCents: 0, reasoning: 'Too risky.' });
+  const hire = await assess();
+  assert.deepEqual(hire.blocks[0].actions.map((a) => a.id), ['diy-template-browse']);
+  assert.ok(hire.blocks.some((b) => b.id === 'diy-assessment-blockers'));
+  for (const block of hire.blocks) AskPresentationBlockSchema.parse(block);
 });

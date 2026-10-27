@@ -13,10 +13,11 @@ import { registerConfirmCapabilityHandler, type ConfirmCapabilityContext, type C
 import { reconcileAskExecutionSideEffects } from '../execution/executeOperation';
 import { ensurePropertyAccess } from '../askHandlerSupport';
 import { diyService } from '../../diy.service';
+import { diyDecisionService } from '../../diyDecision.service';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsFeature, AnalyticsModule } from '../../analytics';
 import { logger } from '../../../lib/logger';
 import {
-  DIY_PROJECT_ENTITY_TYPE, DIY_PROJECT_START_ACTION, DIY_START_GUIDE_ACTION_ID, DIY_TEMPLATE_ENTITY_TYPE,
+  DIY_PROJECT_ENTITY_TYPE, DIY_PROJECT_START_ACTION, DIY_TEMPLATE_BROWSE_ACTION, DIY_START_GUIDE_ACTION_ID, DIY_TEMPLATE_ENTITY_TYPE,
 } from '../../diy/projectGuide';
 import { diyProjectGuideCandidate, diyTemplateStartCandidate } from '../suggestedActions/diyProjectCandidates';
 import { collectionDescriptor } from '../support/collectionDescriptor';
@@ -85,6 +86,9 @@ export function diyTemplateBrowseFromItems(view: { items: StartableTemplate[]; h
         ? { actions: [{ id: 'guide-diy-project', label: 'Guide me through this project', message: 'Guide me through this project.', style: 'SECONDARY' as const, interactionType: 'CONVERSATION_CONTINUE' as const, operationId: 'DIY_PROJECT_GUIDE' as const }] }
         : canStart ? {
           actions: [{
+            id: DIY_ASSESS_ACTION.id, label: DIY_ASSESS_ACTION.label, message: DIY_ASSESS_ACTION.message, style: 'QUIET' as const,
+            interactionType: 'CONVERSATION_CONTINUE' as const, operationId: 'DIY_TEMPLATE_BROWSE' as const,
+          }, {
             id: DIY_PROJECT_START_ACTION.id, label: DIY_PROJECT_START_ACTION.label, message: DIY_PROJECT_START_ACTION.message, style: 'SECONDARY' as const,
             interactionType: 'MUTATE_RECORD' as const, operationId: 'DIY_PROJECT_START' as const,
           }],
@@ -104,8 +108,74 @@ export function diyTemplateBrowseFromItems(view: { items: StartableTemplate[]; h
   return { status: 'ANSWERED', reasonCode: 'DIY_TEMPLATE_BROWSE_READY', blocks, suggestions: SUGGESTIONS, suggestedNextActionCandidates };
 }
 
+// Desktop's template page shows a "DIY Assessment" (verdict, score, blockers, savings) from the template and the person's skill profile. Here it is a declared row action on a browse row.
+const DIY_ASSESS_ACTION = { id: 'diy-template-assess', label: 'Should I do this myself?', message: 'Should I do this project myself?' };
+const VERDICT_LABELS: Record<string, string> = { DIY_RECOMMENDED: 'DIY recommended', BORDERLINE: 'Borderline', HIRE_RECOMMENDED: 'Hiring is recommended', HIRE_REQUIRED: 'Hire a professional' };
+const usd = (cents: number) => `$${Math.round(cents / 100).toLocaleString('en-US')}`;
+
+/** Pure: the assessment card. `canStart` offers the start action under a verdict that does not require a professional. */
+export function diyAssessmentFromResult(
+  detail: { id: string; title: string },
+  result: { verdict: string; score: number; reasoning: string; blockers: string[]; savingsEstimateCents: number; factors: Array<{ code: string; label: string; effect: string; contributionPoints: number; description: string }> },
+  canStart: boolean,
+  alreadyStarted: boolean,
+): AskOperationResult {
+  const label = VERDICT_LABELS[result.verdict] ?? result.verdict;
+  const hireRequired = result.verdict === 'HIRE_REQUIRED';
+  const blocks: AskPresentationBlock[] = [{
+    type: 'SUMMARY', id: 'diy-assessment-summary', title: `${detail.title}: ${label} (${result.score}/100)`,
+    body: `${result.reasoning}${result.savingsEstimateCents > 0 ? ` You could save about ${usd(result.savingsEstimateCents)} compared with hiring.` : ''}`,
+    tone: hireRequired || result.verdict === 'HIRE_RECOMMENDED' ? 'CAUTION' : 'DEFAULT',
+    actions: [
+      ...(canStart && !hireRequired && !alreadyStarted ? [{
+        id: DIY_PROJECT_START_ACTION.id, label: DIY_PROJECT_START_ACTION.label, message: DIY_PROJECT_START_ACTION.message, interactionType: 'START_WORKFLOW' as const,
+        operationId: 'DIY_PROJECT_START' as const, entityType: DIY_TEMPLATE_ENTITY_TYPE, entityId: detail.id, style: 'PRIMARY' as const,
+      }] : []),
+      { id: DIY_TEMPLATE_BROWSE_ACTION.id, label: 'Back to the projects', interactionType: 'START_WORKFLOW' as const, message: DIY_TEMPLATE_BROWSE_ACTION.message, operationId: 'DIY_TEMPLATE_BROWSE' as const, style: 'SECONDARY' as const },
+    ],
+  }];
+  if (result.blockers.length) blocks.push({ type: 'LIMITATION', id: 'diy-assessment-blockers', title: 'What stands in the way', body: result.blockers.join(' '), severity: 'CAUTION' });
+  if (result.factors.length) {
+    blocks.push({
+      type: 'GROUPED_LIST', filters: [], id: 'diy-assessment-factors', title: 'What went into this', description: 'Points are added to or taken from the score.',
+      sections: [{ id: 'factors', title: 'Factors', count: result.factors.length, items: result.factors.map((factor) => ({
+        id: factor.code, title: factor.label, description: factor.description,
+        status: factor.effect === 'positive' ? 'Helps' : factor.effect === 'negative' ? 'Hurts' : 'Neutral', meta: [`${factor.contributionPoints >= 0 ? '+' : ''}${factor.contributionPoints} points`],
+      })) }],
+      collection: collectionDescriptor({ sourceTotal: result.factors.length, fetchedCount: result.factors.length, sections: [{ id: 'factors', count: result.factors.length, items: result.factors } as never], nextPageAvailable: false }),
+      actions: [],
+    });
+  }
+  blocks.push({ type: 'BOUNDARY', id: BOUNDARY_ID, title: 'A guide, not a guarantee', body: 'The score weighs the project\'s difficulty, safety, permit needs, the time it takes, the tools you own and your recorded skill level. Stop and call a professional if anything feels beyond you.', severity: 'INFO', suggestions: SUGGESTIONS });
+  return { status: 'ANSWERED', reasonCode: 'DIY_ASSESSMENT_READY', blocks, suggestions: SUGGESTIONS };
+}
+
+async function diyAssessmentResult(userId: string, propertyId: string, templateId: string, canStart: boolean): Promise<AskOperationResult> {
+  // listStartableTemplates is the same reviewed, low-risk and home-applicability gate the browse and the start use; a template outside it is not assessed.
+  const startable = await diyService.listStartableTemplates(propertyId, userId, { templateId });
+  const item = startable.items.find((entry) => entry.id === templateId);
+  if (!item) return boundary('That project is not available', 'It is not a reviewed project that fits this home, so it cannot be assessed here. Nothing has changed.', 'NOT_APPLICABLE', 'DIY_ASSESSMENT_TEMPLATE_UNAVAILABLE');
+  const detail = await diyService.getTemplateDetail(templateId);
+  const result = await diyDecisionService.score({
+    projectCategory: detail.category, difficultyLevel: detail.difficultyLevel, safetyLevel: detail.safetyLevel, permitRequirement: detail.permitRequirement,
+    requiredSkillLevel: detail.requiredSkillLevel, estimatedMinutes: detail.estimatedMinutes,
+    requiredToolCanonicalIds: (detail.tools as Array<{ canonicalId?: string | null }>).filter((tool) => tool.canonicalId).map((tool) => tool.canonicalId as string),
+    estimatedMaterialCostMinCents: detail.estimatedMaterialCostMinCents ?? undefined, estimatedMaterialCostMaxCents: detail.estimatedMaterialCostMaxCents ?? undefined,
+    professionalCostMinCents: detail.professionalCostMinCents ?? undefined, professionalCostMaxCents: detail.professionalCostMaxCents ?? undefined, userId,
+  } as never);
+  analyticsEmitter.track({
+    eventType: AnalyticsEvent.TOOL_USED, userId, propertyId, moduleKey: AnalyticsModule.FINANCIAL, featureKey: AnalyticsFeature.DIY_DECISION,
+    metadataJson: { verdict: result.verdict, score: result.score, via: 'ask' },
+  });
+  return diyAssessmentFromResult({ id: templateId, title: detail.title }, result as never, canStart, Boolean(item.openProjectId));
+}
+
 registerCapabilityHandler('diy.template-browse', async (envelope) => {
   const access = await ensurePropertyAccess(envelope.userId, envelope.propertyId!);
+  const launch = envelope.launchContext;
+  if (launch?.operationId === 'DIY_TEMPLATE_BROWSE' && launch.surface !== 'ASK_REFRESH' && launch.entityType === DIY_TEMPLATE_ENTITY_TYPE && launch.entityId && envelope.message.trim() === DIY_ASSESS_ACTION.message) {
+    return diyAssessmentResult(envelope.userId, envelope.propertyId!, launch.entityId, access.role !== HouseholdRole.VIEWER);
+  }
   const view = await diyService.listStartableTemplates(envelope.propertyId!, envelope.userId);
   return diyTemplateBrowseFromItems(view, envelope.propertyId!, access.role !== HouseholdRole.VIEWER);
 });
