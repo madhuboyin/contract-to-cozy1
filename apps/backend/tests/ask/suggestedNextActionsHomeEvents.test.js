@@ -104,12 +104,13 @@ const EVENTS = [
   { id: 'ev-twin', title: 'Water heater repair', revision: 3, occurredAt: new Date('2026-04-01'), datePrecision: 'EXACT_DATE', summary: null, amount: null, type: 'REPAIR', importance: 'NORMAL', roomId: null, inventoryItemId: null },
 ];
 const withStubs = async (events, fn) => {
-  const o = [prisma.householdMember.findUnique, prisma.homeEvent.findMany, prisma.inventoryItem.findMany, prisma.inventoryRoom.findMany];
+  const o = [prisma.householdMember.findUnique, prisma.homeEvent.findMany, prisma.inventoryItem.findMany, prisma.inventoryRoom.findMany, prisma.homeEvent.count];
   prisma.householdMember.findUnique = async () => ({ role: 'OWNER', isPrimaryOwner: true });
   prisma.homeEvent.findMany = async () => events;
+  prisma.homeEvent.count = async () => events.length; // the handler also reads the total for its collection contract
   prisma.inventoryItem.findMany = async () => [{ id: 'item-1', name: 'Water heater' }];
   prisma.inventoryRoom.findMany = async () => [{ id: 'room-1', name: 'Kitchen' }];
-  try { return await fn(); } finally { prisma.householdMember.findUnique = o[0]; prisma.homeEvent.findMany = o[1]; prisma.inventoryItem.findMany = o[2]; prisma.inventoryRoom.findMany = o[3]; }
+  try { return await fn(); } finally { prisma.householdMember.findUnique = o[0]; prisma.homeEvent.findMany = o[1]; prisma.inventoryItem.findMany = o[2]; prisma.inventoryRoom.findMany = o[3]; prisma.homeEvent.count = o[4]; }
 };
 const invoke = (message, launchContext) => capabilityInvoke('HOME_EVENT_CORRECT', { userId: 'u1', propertyId: 'prop-1', message, launchContext });
 const launch = (over = {}) => ({ surface: 'ASK_SUGGESTED_ACTION', operationId: 'HOME_EVENT_CORRECT', entityType: 'HOME_EVENT', entityId: 'ev-room', contextVersion: homeEventContextVersion({ id: 'ev-room', revision: 1 }), outcomeKey: 'ADD_AMOUNT', ...over });
