@@ -317,6 +317,7 @@ async function documentLookupResult(userId: string, propertyId: string, message:
           { id: HOME_RECORD_ACTION_IDS.VERIFICATION, label: 'Record verification', message: HOME_RECORD_MESSAGES.VERIFICATION, interactionType: 'MUTATE_RECORD' as const, operationId: 'HOME_RECORD_STATE_COMMAND' as const, style: 'QUIET' as const },
           { id: HOME_RECORD_ACTION_IDS.EFFECTIVE_PERIOD, label: 'Set when it is in effect', message: HOME_RECORD_MESSAGES.EFFECTIVE_PERIOD, interactionType: 'MUTATE_RECORD' as const, operationId: 'HOME_RECORD_STATE_COMMAND' as const, style: 'QUIET' as const },
           { id: HOME_RECORD_ACTION_IDS.ARCHIVE, label: 'Archive', message: HOME_RECORD_MESSAGES.ARCHIVE, interactionType: 'MUTATE_RECORD' as const, operationId: 'HOME_RECORD_STATE_COMMAND' as const, style: 'QUIET' as const },
+          { id: HOME_RECORD_ACTION_IDS.OPTIONS, label: 'More options', message: HOME_RECORD_MESSAGES.OPTIONS, interactionType: 'MUTATE_RECORD' as const, operationId: 'HOME_RECORD_STATE_COMMAND' as const, style: 'QUIET' as const },
         ] : [],
       })),
     })),

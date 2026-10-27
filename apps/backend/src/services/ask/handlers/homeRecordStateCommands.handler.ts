@@ -12,7 +12,7 @@ import { ensurePropertyAccess } from '../askHandlerSupport';
 import { humanDate } from '../askFormatting';
 import { homeRecordsService } from '../../homeRecords.service';
 import {
-  HOME_RECORD_CAPTURE_KEYS, HOME_RECORD_ENTITY_TYPE, HOME_RECORD_MESSAGES, VERIFICATION_LABELS, homeRecordKindFromMessage, parseHomeRecordAnswer,
+  HOME_RECORD_ACTION_IDS, HOME_RECORD_CAPTURE_KEYS, HOME_RECORD_ENTITY_TYPE, HOME_RECORD_MESSAGES, LEGAL_HOLD_LABELS, TRASH_IMPACT_LABELS, VERIFICATION_LABELS, homeRecordKindFromMessage, parseHomeRecordAnswer,
   type HomeRecordFormKind, type HomeRecordKind,
 } from '../support/homeRecordStateCommand';
 
@@ -24,16 +24,26 @@ const unavailable = (reasonCode: string, title: string, body: string): AskOperat
 });
 const iso = (v: unknown) => (v ? new Date(v as string).toISOString() : '');
 
-interface RecordView { id: string; title: string; lifecycleStatus: string; verificationStatus: string; verificationNotes: string | null; effectiveFrom: string | Date | null; effectiveTo: string | Date | null; updatedAt: string | Date }
+interface RecordView { id: string; title: string; lifecycleStatus: string; verificationStatus: string; verificationNotes: string | null; effectiveFrom: string | Date | null; effectiveTo: string | Date | null; updatedAt: string | Date; legalHoldReason?: string | null; retainUntil?: string | Date | null; links?: unknown[] }
 async function load(propertyId: string, recordId: string, role: HouseholdRole): Promise<RecordView | null> {
   try { return await homeRecordsService.get(propertyId, recordId, role) as unknown as RecordView; } catch { return null; }
 }
-const version = (r: RecordView) => sha(`home-record:${r.id}:${r.lifecycleStatus}:${r.verificationStatus}:${iso(r.effectiveFrom)}:${iso(r.effectiveTo)}:${iso(r.updatedAt)}`);
+const version = (r: RecordView) => sha(`home-record:${r.id}:${r.lifecycleStatus}:${r.verificationStatus}:${iso(r.effectiveFrom)}:${iso(r.effectiveTo)}:${iso(r.updatedAt)}:${r.legalHoldReason ?? ''}:${iso(r.retainUntil)}:${r.links?.length ?? 0}`);
 const day = (value: unknown) => (value ? humanDate(new Date(value as string)) ?? 'Not set' : 'Not set');
 
 function formCapture(kind: HomeRecordFormKind, contextVersion: string, record: RecordView, entered?: Record<string, unknown>): AskCaptureRequest {
   const dateField = (key: string, label: string) => ({ key, label, required: false, inputSchema: { type: 'APPROXIMATE_DATE' as const, allowedPrecisions: ['EXACT_DATE'], allowFuture: true } });
-  const spec = kind === 'VERIFICATION'
+  const spec = kind === 'TRASH'
+    ? { title: `${record.title} is used as evidence`, question: `It has ${record.links?.length ?? 0} link${record.links?.length === 1 ? '' : 's'} to other records. What should happen to them?`, seed: {},
+      fields: [{ key: 'impact', label: 'Its links', required: true, inputSchema: { type: 'SINGLE_SELECT' as const, options: Object.entries(TRASH_IMPACT_LABELS).map(([value, label]) => ({ label, value })) } }] }
+    : kind === 'RETENTION'
+    ? { title: `Retention for ${record.title}`, question: 'A legal hold stops the record from ever being permanently removed. A keep-until date does the same until that day.', seed: { legalHold: 'NO_CHANGE' },
+      fields: [
+        { key: 'legalHold', label: 'Legal hold', required: true, inputSchema: { type: 'SINGLE_SELECT' as const, options: Object.entries(LEGAL_HOLD_LABELS).map(([value, label]) => ({ label, value })) } },
+        { key: 'reason', label: 'Why it is on hold', helpText: 'Needed when placing a hold.', required: false, inputSchema: { type: 'SHORT_TEXT' as const, maxLength: 500 } },
+        dateField('retainUntil', 'Keep until'),
+      ] }
+    : kind === 'VERIFICATION'
     ? { title: `Have you verified ${record.title}?`, question: 'Choose where it stands.', seed: { status: record.verificationStatus },
       fields: [
         { key: 'status', label: 'Verification', required: true, inputSchema: { type: 'SINGLE_SELECT' as const, options: Object.entries(VERIFICATION_LABELS).map(([value, label]) => ({ label, value })) } },
@@ -58,7 +68,12 @@ export async function homeRecordStateResult(
   const kind = launch.kind;
   const record = await load(propertyId, launch.entityId, access.role);
   if (!record) return unavailable('HOME_RECORD_NOT_FOUND', 'That record is no longer available', 'Ask could not find that record. Nothing has changed.');
-  if (record.lifecycleStatus === 'TRASHED') return unavailable('HOME_RECORD_TRASHED', 'That record is in the trash', 'Nothing has changed.');
+  if (kind === 'RESTORE' ? record.lifecycleStatus !== 'TRASHED' : record.lifecycleStatus === 'TRASHED') {
+    return unavailable(kind === 'RESTORE' ? 'HOME_RECORD_NOT_TRASHED' : 'HOME_RECORD_TRASHED', kind === 'RESTORE' ? 'That record is not in the trash' : 'That record is in the trash', 'Nothing has changed.');
+  }
+  if (kind === 'RETENTION' && access.role !== HouseholdRole.OWNER) {
+    return { status: 'BLOCKED', reasonCode: 'ASK_PERMISSION_REQUIRED', blocks: [{ type: 'SUMMARY', id: 'home-record-retention-owner', title: 'Only an owner can set retention or a legal hold', body: 'Your role can change this record but not how long it is kept. Nothing has changed.', tone: 'DEFAULT', actions: [back] }], suggestions: [] };
+  }
   if (kind === 'ARCHIVE' && record.lifecycleStatus !== 'ACTIVE') return unavailable('HOME_RECORD_NOT_ACTIVE', 'That record is already archived', 'Nothing has changed.');
   const contextVersion = version(record);
   const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
@@ -67,13 +82,34 @@ export async function homeRecordStateResult(
     confirmationId: `home-record-${id}-1`, version: 1, title, description, fields, editableFields: [] as never[], confirmLabel,
     consentText: 'I authorize this change to the shared home record.', expiresAt: expiresAt.toISOString(),
   });
-  if (kind === 'ARCHIVE') {
+  const here = { entityType: HOME_RECORD_ENTITY_TYPE, entityId: record.id, operationId: 'HOME_RECORD_STATE_COMMAND' as const, interactionType: 'START_WORKFLOW' as const };
+  if (kind === 'OPTIONS') {
     return {
-      status: 'NEEDS_CONFIRMATION', reasonCode: 'HOME_RECORD_ARCHIVE_CONFIRMATION_REQUIRED', contextVersion,
+      status: 'ANSWERED', reasonCode: 'HOME_RECORD_OPTIONS_READY', contextVersion,
+      blocks: [{
+        type: 'SUMMARY', id: 'home-record-options', title: `More for ${record.title}`, tone: 'DEFAULT',
+        body: `Moving a record to the trash keeps it for 30 days so you can restore it${access.role === HouseholdRole.OWNER ? '; a legal hold or keep-until date stops it from ever being permanently removed' : ''}. Nothing changes until you confirm.`,
+        actions: [
+          { id: HOME_RECORD_ACTION_IDS.TRASH, label: 'Move to trash', message: HOME_RECORD_MESSAGES.TRASH, style: 'SECONDARY' as const, ...here },
+          ...(access.role === HouseholdRole.OWNER ? [{ id: HOME_RECORD_ACTION_IDS.RETENTION, label: 'Retention or legal hold', message: HOME_RECORD_MESSAGES.RETENTION, style: 'SECONDARY' as const, ...here }] : []),
+          back,
+        ],
+      }],
+      suggestions: [],
+    };
+  }
+  const linkCount = record.links?.length ?? 0;
+  if (kind === 'RESTORE' || kind === 'ARCHIVE' || (kind === 'TRASH' && linkCount === 0)) {
+    const copy = kind === 'RESTORE'
+      ? { id: 'restore', title: 'Restore this record?', description: 'It returns to your active records with its versions. Links that were removed are not brought back.', confirm: 'Restore it', state: 'Trash → Active', review: `Restore ${record.title}?` }
+      : kind === 'TRASH'
+        ? { id: 'trash', title: 'Move this record to the trash?', description: 'It leaves your records but is kept for 30 days, and you can restore it until then. After that it can be permanently removed unless a hold or keep-until date applies.', confirm: 'Move to trash', state: `${record.lifecycleStatus === 'ARCHIVED' ? 'Archived' : 'Active'} → Trash`, review: `Move ${record.title} to the trash?` }
+        : { id: 'archive', title: 'Archive this record?', description: 'It moves out of your active records but is kept, with its versions and links. It is not deleted.', confirm: 'Archive it', state: 'Active → Archived', review: `Archive ${record.title}?` };
+    return {
+      status: 'NEEDS_CONFIRMATION', reasonCode: `HOME_RECORD_${kind}_CONFIRMATION_REQUIRED`, contextVersion,
       parameters: { homeRecordCommand: { kind, entityId: record.id }, homeRecordContextVersion: contextVersion, ...base },
-      blocks: [{ type: 'SUMMARY', id: 'home-record-archive-review', title: `Archive ${record.title}?`, body: 'Nothing changes until you confirm.', tone: 'DEFAULT', actions: [] }],
-      confirmation: confirmation(`archive-${sha(record.id).slice(0, 12)}`, 'Archive this record?',
-        'It moves out of your active records but is kept, with its versions and links. It is not deleted.', 'Archive it', [{ label: 'Record', value: record.title }, { label: 'State', value: 'Active → Archived' }]),
+      blocks: [{ type: 'SUMMARY', id: `home-record-${copy.id}-review`, title: copy.review, body: 'Nothing changes until you confirm.', tone: 'DEFAULT', actions: [] }],
+      confirmation: confirmation(`${copy.id}-${sha(record.id).slice(0, 12)}`, copy.title, copy.description, copy.confirm, [{ label: 'Record', value: record.title }, { label: 'State', value: copy.state }]),
       suggestions: [],
     };
   }
@@ -91,7 +127,20 @@ export async function homeRecordStateResult(
   const d = parsed.data;
   let spec: ReturnType<typeof confirmation>;
   const id = `${kind.toLowerCase()}-${sha(JSON.stringify(supplied)).slice(0, 12)}`;
-  if (formKind === 'VERIFICATION') {
+  if (formKind === 'TRASH') {
+    spec = confirmation(id, 'Move this record to the trash?', d.impact === 'REMOVE_LINKS'
+      ? `It leaves your records and ${linkCount} link${linkCount === 1 ? '' : 's'} to it will be removed. It is kept for 30 days, but removed links are not brought back if you restore it.`
+      : `It leaves your records and its ${linkCount} link${linkCount === 1 ? '' : 's'} stay in place. It is kept for 30 days and you can restore it until then.`,
+      'Move to trash', [{ label: 'Record', value: record.title }, { label: 'Its links', value: TRASH_IMPACT_LABELS[d.impact!] }]);
+  } else if (formKind === 'RETENTION') {
+    spec = confirmation(id, d.legalHold === 'HOLD' ? 'Place a legal hold?' : d.legalHold === 'RELEASE' ? 'Release the legal hold?' : 'Set how long to keep it?',
+      'A hold or keep-until date stops the record from being permanently removed. It does not change the record itself. Ask did not review any legal requirement.',
+      'Save it', [
+        { label: 'Record', value: record.title },
+        ...(d.legalHold !== 'NO_CHANGE' ? [{ label: 'Legal hold', value: `${record.legalHoldReason ? 'On hold' : 'No hold'} → ${d.legalHold === 'HOLD' ? `On hold: ${d.reason}` : 'No hold'}` }] : []),
+        ...(d.retainUntil ? [{ label: 'Keep until', value: `${day(record.retainUntil)} → ${day(`${d.retainUntil}T12:00:00.000Z`)}` }] : []),
+      ]);
+  } else if (formKind === 'VERIFICATION') {
     spec = confirmation(id, 'Record this verification?',
       d.status === 'VERIFIED' ? 'This records that you checked this record yourself. Ask did not read or verify it.' : 'This records your own note about the record. Ask did not read or verify it.',
       'Record it', [{ label: 'Record', value: record.title }, { label: 'Verification', value: `${VERIFICATION_LABELS[record.verificationStatus] ?? record.verificationStatus} → ${VERIFICATION_LABELS[d.status!]}` }]);
@@ -131,9 +180,29 @@ async function confirmHomeRecordState(ctx: ConfirmCapabilityContext): Promise<Co
   let title: string;
   try {
     const record = await load(propertyId, command.entityId, role);
-    if (!record || record.lifecycleStatus === 'TRASHED') throw stale('That record is no longer available.');
+    if (!record || (kind === 'RESTORE' ? record.lifecycleStatus !== 'TRASHED' : record.lifecycleStatus === 'TRASHED')) throw stale('That record is no longer available.');
     if (parameters.homeRecordContextVersion !== version(record)) throw stale('This record changed while the confirmation was open. Review it again and try again.', 'ASK_CONTEXT_VERSION_CONFLICT');
-    if (kind === 'ARCHIVE') {
+    if (kind === 'OPTIONS') throw stale('The change to make is invalid.');
+    if (kind === 'RETENTION' && role !== HouseholdRole.OWNER) throw Object.assign(new Error('Only an owner can set retention or a legal hold. Nothing was changed.'), { code: 'ASK_PERMISSION_REQUIRED' });
+    if (kind === 'RESTORE') {
+      await homeRecordsService.restore(propertyId, record.id, role);
+      title = 'Record restored';
+    } else if (kind === 'TRASH') {
+      const parsed = (record.links?.length ?? 0) > 0 ? parseHomeRecordAnswer('TRASH', parameters.homeRecordForm) : null;
+      if (parsed && !parsed.success) throw stale('The details to save are invalid.');
+      await homeRecordsService.trash({ propertyId, recordId: record.id, userId, role, ...(parsed?.success ? { impactDecision: parsed.data.impact as 'KEEP_LINKS' | 'REMOVE_LINKS' } : {}) });
+      title = 'Record moved to the trash';
+    } else if (kind === 'RETENTION') {
+      const parsed = parseHomeRecordAnswer('RETENTION', parameters.homeRecordForm);
+      if (!parsed.success) throw stale('The details to save are invalid.');
+      const d = parsed.data;
+      await homeRecordsService.setRetention({
+        propertyId, recordId: record.id, role,
+        ...(d.legalHold === 'HOLD' ? { legalHoldReason: d.reason } : d.legalHold === 'RELEASE' ? { legalHoldReason: null } : {}),
+        ...(d.retainUntil ? { retainUntil: new Date(`${d.retainUntil}T12:00:00.000Z`) } : {}),
+      });
+      title = 'Retention saved';
+    } else if (kind === 'ARCHIVE') {
       if (record.lifecycleStatus !== 'ACTIVE') throw stale('That record is not active.');
       await homeRecordsService.archive(propertyId, record.id, role);
       title = 'Record archived';
@@ -159,7 +228,7 @@ async function confirmHomeRecordState(ctx: ConfirmCapabilityContext): Promise<Co
   }
   const result: AskOperationResult = {
     status: 'COMPLETED', reasonCode: `HOME_RECORD_${kind}_COMPLETED`,
-    blocks: [{ type: 'WORKFLOW_PROGRESS', id: `home-record-${kind.toLowerCase()}-${command.entityId}`, title, status: 'COMPLETED', description: 'It is on the home record. Nothing was deleted.', details: [], actions: [{ ...back, label: 'See my documents', style: 'PRIMARY' as const }] }],
+    blocks: [{ type: 'WORKFLOW_PROGRESS', id: `home-record-${kind.toLowerCase()}-${command.entityId}`, title, status: 'COMPLETED', description: kind === 'TRASH' ? 'It is in the trash for 30 days. Nothing has been permanently removed.' : 'It is on the home record. Nothing was deleted.', details: [], actions: [...(kind === 'TRASH' ? [{ id: HOME_RECORD_ACTION_IDS.RESTORE, label: 'Undo: restore it', message: HOME_RECORD_MESSAGES.RESTORE, entityType: HOME_RECORD_ENTITY_TYPE, entityId: command.entityId as string, operationId: 'HOME_RECORD_STATE_COMMAND' as const, interactionType: 'START_WORKFLOW' as const, style: 'SECONDARY' as const }] : []), { ...back, label: 'See my documents', style: 'PRIMARY' as const }] }],
     suggestions: [],
   };
   const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);
