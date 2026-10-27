@@ -20,6 +20,7 @@ import {
   DO_NOTHING_HORIZONS, DO_NOTHING_RUN_CAPTURE_KEY, DO_NOTHING_RUN_MESSAGE, HOME_HABITS_GENERATE_MESSAGE, NO_SAVED_SCENARIO_VALUE,
   SERVICE_PRICE_CHECK_CAPTURE_KEY, SERVICE_PRICE_CHECK_MESSAGE, SERVICE_PRICE_MAX_QUOTE,
 } from '../support/homeToolRunConstants';
+import { CAPITAL_BUNDLE_ENTITY_TYPE, servicePriceCategoryForCapital } from '../support/capitalBundle';
 import { SERVICE_PRICE_NO_LINK_VALUE, loadServicePriceLinkOptions, parseServicePriceLink } from '../support/servicePriceLinkOptions';
 import { receiptFollowUpAction } from '../support/receiptFollowUps';
 import { enumLabel, readableCode } from '../askFormatting';
@@ -52,7 +53,7 @@ const usd = (value: number) => `$${Math.round(value).toLocaleString('en-US')}`;
 const usdFromCents = (cents: number | null | undefined) => (cents == null ? null : usd(cents / 100));
 
 /** The home's primary account holder: the same test both services make (`homeownerProfile: { userId }`), narrower than the owner role. */
-async function isPrimaryAccountHolder(userId: string, propertyId: string): Promise<boolean> {
+export async function isPrimaryAccountHolder(userId: string, propertyId: string): Promise<boolean> {
   return Boolean(await prisma.property.findFirst({ where: { id: propertyId, homeownerProfile: { userId } }, select: { id: true } }));
 }
 const primaryHolderOnly = (id: string, reasonCode: string, what: string) => blocked(id, reasonCode, `Only the home's primary account holder can ${what}`, 'This tool is kept for the home\'s primary account holder. Nothing has changed.');
@@ -332,7 +333,17 @@ async function journeyItemForStep(propertyId: string, stepId: string): Promise<s
   return bound.ok ? bound.binding.inventoryItemId : null;
 }
 
-export async function servicePriceCheckResult(userId: string, propertyId: string, supplied: PriceCheckInput | undefined, sourceExecutionId: string | null, guidanceStepId: string | null = null): Promise<AskOperationResult> {
+// Desktop's "Price-check this bundle" opens the radar with the bundle's first item as the service and label. The item is re-read in this home; a stale or foreign id prefills nothing.
+async function capitalBundlePrefill(propertyId: string, itemId: string | null): Promise<Partial<PriceCheckInput>> {
+  if (!itemId) return {};
+  const item = await prisma.homeCapitalTimelineItem.findFirst({ where: { id: itemId, propertyId }, select: { category: true, inventoryItemId: true } });
+  if (!item) return {};
+  const inventory = item.inventoryItemId ? await prisma.inventoryItem.findFirst({ where: { id: item.inventoryItemId, propertyId }, select: { name: true } }) : null;
+  const serviceCategory = servicePriceCategoryForCapital(item.category);
+  return { ...(SERVICE_PRICE_CATEGORY_CHOICES.includes(serviceCategory) ? { serviceCategory } : {}), ...(inventory?.name ? { serviceLabelRaw: inventory.name.slice(0, 200) } : {}) };
+}
+
+export async function servicePriceCheckResult(userId: string, propertyId: string, supplied: PriceCheckInput | undefined, sourceExecutionId: string | null, guidanceStepId: string | null = null, capitalItemId: string | null = null): Promise<AskOperationResult> {
   // A check started from a guided journey's step carries that step through the form and the review; the confirmation re-checks it before reporting.
   const launch = { sourceExecutionId, ...(guidanceStepId ? { guidanceStepId } : {}) };
   const access = await ensurePropertyAccess(userId, propertyId);
@@ -347,7 +358,7 @@ export async function servicePriceCheckResult(userId: string, propertyId: string
     return {
       status: 'NEEDS_CONTEXT', reasonCode: 'SERVICE_PRICE_CHECK_INPUT_REQUIRED', contextVersion, parameters: launch,
       blocks: [{ type: 'SUMMARY', id: 'price-check-input', title: 'Check a contractor quote', body: 'Nothing has been checked yet. Enter the service and the amount, then review it before it is checked.', tone: 'DEFAULT', actions: [] }],
-      captureRequests: [priceCheckCaptureRequest(contextVersion, linkOptions, journeyItemId && linkOptions.some((option) => option.value === `SYSTEM:${journeyItemId}`) ? { linkedEntity: `SYSTEM:${journeyItemId}` } : undefined)], suggestions: [],
+      captureRequests: [priceCheckCaptureRequest(contextVersion, linkOptions, { ...(journeyItemId && linkOptions.some((option) => option.value === `SYSTEM:${journeyItemId}`) ? { linkedEntity: `SYSTEM:${journeyItemId}` } : {}), ...(await capitalBundlePrefill(propertyId, capitalItemId)) })], suggestions: [],
     };
   }
   const expiresAt = new Date(Date.now() + CONFIRMATION_MINUTES * 60 * 1000);
@@ -374,7 +385,7 @@ export async function servicePriceCheckResult(userId: string, propertyId: string
 
 registerCapabilityHandler('service-price-radar.check', async (envelope) => {
   const declared = envelope.launchContext?.operationId === 'SERVICE_PRICE_CHECK_RUN' && envelope.launchContext.surface !== 'ASK_REFRESH' && envelope.message === SERVICE_PRICE_CHECK_MESSAGE;
-  if (declared) return servicePriceCheckResult(envelope.userId, envelope.propertyId!, undefined, envelope.launchContext?.sourceExecutionId ?? null, envelope.launchContext?.entityType === 'GUIDANCE_STEP' ? envelope.launchContext.entityId ?? null : null);
+  if (declared) return servicePriceCheckResult(envelope.userId, envelope.propertyId!, undefined, envelope.launchContext?.sourceExecutionId ?? null, envelope.launchContext?.entityType === 'GUIDANCE_STEP' ? envelope.launchContext.entityId ?? null : null, envelope.launchContext?.entityType === CAPITAL_BUNDLE_ENTITY_TYPE ? envelope.launchContext.entityId ?? null : null);
   return notRoutable('price-check-not-routable', 'Use the Check a quote button', 'A quote is checked from the Check a quote button on the quote checks answer. Nothing has changed.', 'ASK_SERVICE_PRICE_CHECK_NOT_DIRECTLY_ROUTABLE');
 });
 
