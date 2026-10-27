@@ -152,6 +152,8 @@ const CERTIFICATION_ROWS: ReadonlyArray<Omit<AskRoutingCertificationFixture, 'fi
   { operationId: 'HOME_RECORD_EXPORT_STATUS', message: 'Check on the status of my export', category: 'PARAPHRASE' },
   // Coverage & Premium Review "Reduce loss risk" (2026-10-26). Appended at the END, as above: the fixtureId is positional.
   { operationId: 'RISK_MITIGATION_PLAN', message: 'What loss-prevention work matters most?', category: 'PARAPHRASE' },
+  // Refinance radar parity (REFINANCE_COMMAND). Appended at the END: the fixtureId is positional.
+  { operationId: 'REFINANCE_COMMAND', message: 'Remember the refinance scenario I just ran', category: 'PARAPHRASE' },
 ];
 
 export const ASK_ROUTING_CERTIFICATION_FIXTURES: readonly AskRoutingCertificationFixture[] = Object.freeze(

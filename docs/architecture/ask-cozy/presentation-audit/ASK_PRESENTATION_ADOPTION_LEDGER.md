@@ -2,7 +2,7 @@
 
 **Generated:** by `apps/backend/scripts/generate-ask-adoption-ledger.js` from the live operation registry. Do not edit by hand.
 
-**Operations:** 224
+**Operations:** 225
 
 Each registered Ask operation has exactly one class. The class is derived from registry facts (family, allowed block types) plus an explicit
 list of operations this effort reviewed (`REVIEWED_OPERATIONS` in `apps/backend/src/services/ask/presentation/adoptionLedger.ts`). A test fails
@@ -12,7 +12,7 @@ contract-level journey, or explicit producer-contract review; it is not verified
 | Class | Operations |
 |---|---:|
 | Reviewed implementation (fixture, journey, or producer-contract review; not runtime-verified) | 102 |
-| Requires collection adoption | 20 |
+| Requires collection adoption | 21 |
 | Requires trust or rationale adoption | 0 |
 | Compact receipt: no rich migration needed | 99 |
 | Specialized workflow requiring later review | 0 |
@@ -146,6 +146,7 @@ contract-level journey, or explicit producer-contract review; it is not verified
 | `PROPERTY_BRIEFS_LIST` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
 | `RECALL_MATCH_UPDATE` | A command whose result may carry a list (for example a choice of target): collection semantics apply, and the boundary derives them until the producer declares its own. |
 | `RECALL_REVIEW` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
+| `REFINANCE_COMMAND` | A command whose result may carry a list (for example a choice of target): collection semantics apply, and the boundary derives them until the producer declares its own. |
 | `ROOM_PLANT_RECOMMENDATIONS` | A command whose result may carry a list (for example a choice of target): collection semantics apply, and the boundary derives them until the producer declares its own. |
 | `SAVED_RESULTS` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |
 | `WORK_OVERVIEW` | A read that can return a list or table. The boundary derives a conservative descriptor (no continuation unless it pages) so no Next control is offered that nothing serves; the producer should declare its true source total. |

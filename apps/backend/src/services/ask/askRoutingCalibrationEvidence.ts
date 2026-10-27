@@ -36,6 +36,7 @@ const ROWS: readonly ObservationTuple[] = [
   ['012-expected', '012', 'CAPABILITY_DISCOVERY', .7095, true], ['012-competitor', '012', 'HOUSEHOLD_INVITATION', .5232, false],
   ['013-expected', '013', 'REPLACEMENT_GUIDANCE', .718, true], ['013-competitor', '013', 'HVAC_DECISION_START', .6671, false],
   ['014-expected', '014', 'REFINANCE_ANALYSIS', .6936, true], ['014-competitor', '014', 'PAST_HAZARD_EXPOSURE', .5002, false],
+  // 101 re-derived because REFINANCE_COMMAND (refinance radar parity) became its strongest competitor; the expected operation is unchanged and wins by 2x.
   ['015-expected', '015', 'REFINANCE_RATE_MONITOR', .6678, true], ['015-competitor', '015', 'HOME_DEADLINE_MONITOR', .3509, false],
   ['016-expected', '016', 'SELL_HOLD_RENT_ANALYSIS', .5358, true], ['016-competitor', '016', 'INSPECTION_FINDINGS', .4609, false],
   ['017-expected', '017', 'HOUSEHOLD_INVITATION', 0.6546, true], ['017-competitor', '017', 'HOUSEHOLD_ACCESS_SUMMARY', 0.4261, false],
@@ -194,7 +195,7 @@ const ROWS: readonly ObservationTuple[] = [
   ['098-expected', '098', 'PROPERTY_BRIEF_COMMAND', 0.6204, true], ['098-competitor', '098', 'MAJOR_EVENT_ENTRY', 0.5863, false],
   ['099-expected', '099', 'ROOM_PLANT_RECOMMENDATIONS', 0.1569, true], ['099-competitor', '099', 'HOUSEHOLD_ACCESS_SUMMARY', 0.1319, false],
   ['100-expected', '100', 'RESERVE_FUND_COMMAND', 0.2544, true], ['100-competitor', '100', 'BUYER_FINDING_DISPOSITION', 0.1279, false],
-  ['101-expected', '101', 'BUYER_LOAN_ESTIMATES', 0.3497, true], ['101-competitor', '101', 'BUYER_COST_READINESS', 0.1689, false],
+  ['101-expected', '101', 'BUYER_LOAN_ESTIMATES', 0.3497, true], ['101-competitor', '101', 'REFINANCE_COMMAND', 0.1732, false],
   ['102-expected', '102', 'BUYER_INSURANCE_READINESS', 0.7623, true], ['102-competitor', '102', 'COVERAGE_COMPARISON_STATUS', 0.6476, false],
   ['103-expected', '103', 'HOME_WORK_ITEMS', 0.7589, true], ['103-competitor', '103', 'SELLER_PREP_CHECKLIST', 0.7377, false],
   ['104-expected', '104', 'INSPECTION_NEGOTIATION_PACKAGE', 0.3321, true], ['104-competitor', '104', 'BUYER_NEGOTIATION_READINESS', 0.3075, false],
@@ -215,6 +216,8 @@ const ROWS: readonly ObservationTuple[] = [
   ['118-expected', '118', 'HOME_RECORD_EXPORT_STATUS', 0.5002, true], ['118-competitor', '118', 'BUYER_PLAN_STATUS', 0.2333, false],
   // Coverage & Premium Review "Reduce loss risk": 119 is the loss-prevention plan fixture, appended after 118 so no earlier row is renumbered.
   ['119-expected', '119', 'RISK_MITIGATION_PLAN', 0.2553, true], ['119-competitor', '119', 'WORK_OVERVIEW', 0.2036, false],
+  // 120 is the REFINANCE_COMMAND fixture, appended after 119 so no earlier row is renumbered.
+  ['120-expected', '120', 'REFINANCE_COMMAND', 0.7099, true], ['120-competitor', '120', 'HVAC_DECISION_SCENARIO', 0.476, false],
   // Exporting the home record (FRD v1.2 §1.2): 117-118 are their fixtures; 024 re-derived because HOME_RECORD_EXPORT_STATUS became its strongest competitor (expected operation unchanged).
 ];
 

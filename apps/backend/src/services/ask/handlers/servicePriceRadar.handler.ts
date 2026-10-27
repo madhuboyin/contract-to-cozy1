@@ -7,8 +7,9 @@ import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { APIError } from '../../../middleware/error.middleware';
 import { humanDate, readableCode } from '../askFormatting';
 import { ServicePriceRadarService } from '../../servicePriceRadar.service';
-import { SERVICE_PRICE_CHECK_ACTION_ID, SERVICE_PRICE_CHECK_DETAIL_ACTION_ID, SERVICE_PRICE_CHECK_DETAIL_MESSAGE, SERVICE_PRICE_CHECK_ENTITY_TYPE, SERVICE_PRICE_CHECK_MESSAGE } from '../support/homeToolRunConstants';
+import { SERVICE_PRICE_CHECK_ACTION_ID, SERVICE_PRICE_CHECK_DETAIL_ACTION_ID, SERVICE_PRICE_CHECK_DETAIL_MESSAGE, SERVICE_PRICE_CHECK_ENTITY_TYPE, SERVICE_PRICE_CHECK_MESSAGE, SERVICE_PRICE_CHECKS_FOR_RECORD_ACTION_ID, SERVICE_PRICE_CHECKS_FOR_RECORD_MESSAGE } from '../support/homeToolRunConstants';
 import { collectionDescriptor } from '../support/collectionDescriptor';
+import { parseServicePriceLink } from '../support/servicePriceLinkOptions';
 
 // Service Price Radar capability-card slice (FRD v1.60): the twelfth new operation for a capability with none. Reads
 // ServicePriceRadarService.listChecks with the page's own limit (12), the call GET
@@ -24,7 +25,7 @@ const SERVICE_PRICE_CATEGORY_LABELS: Record<string, string> = { HVAC: 'HVAC', WI
 const servicePriceCategoryLabel = (value: string) => SERVICE_PRICE_CATEGORY_LABELS[value] ?? readableCode(value).replace(/\b\w/g, (c) => c.toUpperCase());
 const servicePriceMoney = (value: number | null | undefined) => (value == null ? null : `$${Math.round(value).toLocaleString('en-US')}`);
 
-export function servicePriceChecksFromView(checks: readonly ServicePriceCheckView[] | 'PRIMARY_OWNER_ONLY', propertyId: string, sourceTotal?: number): AskOperationResult {
+export function servicePriceChecksFromView(checks: readonly ServicePriceCheckView[] | 'PRIMARY_OWNER_ONLY', propertyId: string, sourceTotal?: number, forRecord = false): AskOperationResult {
   // The answer reaches only the home's primary account holder, who can check a quote from it, inside Ask.
   const checkAction = (label: string) => ({ id: SERVICE_PRICE_CHECK_ACTION_ID, label, interactionType: 'START_WORKFLOW' as const, message: SERVICE_PRICE_CHECK_MESSAGE, operationId: 'SERVICE_PRICE_CHECK_RUN', style: 'PRIMARY' as const });
   const boundary: AskPresentationBlock = {
@@ -43,6 +44,13 @@ export function servicePriceChecksFromView(checks: readonly ServicePriceCheckVie
       suggestions: [],
     };
   }
+  if (!checks.length && forRecord) {
+    return {
+      status: 'ANSWERED', reasonCode: 'SERVICE_PRICE_RADAR_NO_CHECKS_FOR_RECORD',
+      blocks: [{ type: 'SUMMARY', id: 'service-price-radar-summary', title: 'No quote checks for this record', body: 'No quote check has been tied to this record. A check can be tied to a record when it is made. Nothing has changed.', tone: 'DEFAULT', actions: [checkAction('Check a quote')] }, boundary],
+      suggestions: [],
+    };
+  }
   if (!checks.length) {
     return {
       status: 'ANSWERED', reasonCode: 'SERVICE_PRICE_RADAR_NO_CHECKS',
@@ -57,7 +65,7 @@ export function servicePriceChecksFromView(checks: readonly ServicePriceCheckVie
   const above = checks.filter((check) => check.verdict === 'HIGH' || check.verdict === 'VERY_HIGH').length;
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY', id: 'service-price-radar-summary',
-    title: `${checks.length} recent quote check${checks.length === 1 ? '' : 's'}`,
+    title: forRecord ? `${checks.length} quote check${checks.length === 1 ? '' : 's'} for this record` : `${checks.length} recent quote check${checks.length === 1 ? '' : 's'}`,
     body: [
       above ? `${above} ${above === 1 ? 'quote looks' : 'quotes look'} above the expected range.` : 'None of them look above the expected range.',
       `Latest checked ${humanDate(new Date(checks[0].createdAt))}.`,
@@ -72,7 +80,7 @@ export function servicePriceChecksFromView(checks: readonly ServicePriceCheckVie
     });
   }
   const sections = [{
-    id: 'service-price-radar-recent', title: 'Recent checks', count: checks.length,
+    id: 'service-price-radar-recent', title: forRecord ? 'Checks for this record' : 'Recent checks', count: checks.length,
     items: checks.map((check) => {
       const low = servicePriceMoney(check.expectedLow);
       const high = servicePriceMoney(check.expectedHigh);
@@ -140,7 +148,8 @@ export function servicePriceCheckDetailFromView(check: ServicePriceCheckDetailVi
   }];
 
   const attr = (label: string, value: string | number | null | undefined) => (value == null || value === '' ? null : { label, value: String(value) });
-  const rows: Array<{ id: string; title: string; description: string | null; meta: string[]; status: string | null; href: null; attributes?: Array<{ label: string; value: string }> }> = [];
+  type DetailRow = { id: string; title: string; description: string | null; meta: string[]; status: string | null; href: null; attributes?: Array<{ label: string; value: string }>; actions?: Array<{ id: string; entityType: string; entityId: string; label: string; message: string; style: 'QUIET'; interactionType: 'CONVERSATION_CONTINUE'; operationId: 'SERVICE_PRICE_CHECKS' }> };
+  const rows: DetailRow[] = [];
   rows.push({
     id: 'result', title: 'Result', description: null, meta: [], status: verdict, href: null,
     attributes: [
@@ -173,10 +182,11 @@ export function servicePriceCheckDetailFromView(check: ServicePriceCheckDetailVi
     attr('Home type', property.dwellingType ? readableCode(String(property.dwellingType)) : null), attr('Location', [region.city, region.state].filter(Boolean).join(', ') || null),
   ].filter((entry): entry is { label: string; value: string } => entry !== null);
   if (usedFactors.length) rows.push({ id: 'home-facts', title: 'Home facts used', description: null, meta: [], status: null, href: null, attributes: usedFactors });
-  if (check.linkedEntities.length) {
+  for (const entity of check.linkedEntities.slice(0, 8)) {
     rows.push({
-      id: 'linked', title: 'Home records used', description: null, meta: [], status: null, href: null,
-      attributes: check.linkedEntities.slice(0, 8).map((entity) => ({ label: LINKED_TYPE_LABELS[entity.linkedEntityType] ?? readableCode(entity.linkedEntityType), value: [entity.label, entity.summary].filter(Boolean).join(' · ').slice(0, 160) })),
+      id: `linked-${entity.linkedEntityType}-${entity.linkedEntityId}`, title: `${LINKED_TYPE_LABELS[entity.linkedEntityType] ?? readableCode(entity.linkedEntityType)} used: ${entity.label}`.slice(0, 160),
+      description: entity.summary, meta: [], status: null, href: null,
+      actions: [{ id: SERVICE_PRICE_CHECKS_FOR_RECORD_ACTION_ID, entityType: entity.linkedEntityType, entityId: entity.linkedEntityId, label: 'Other checks for this', message: SERVICE_PRICE_CHECKS_FOR_RECORD_MESSAGE, style: 'QUIET' as const, interactionType: 'CONVERSATION_CONTINUE' as const, operationId: 'SERVICE_PRICE_CHECKS' as const }],
     });
   }
   const sections = [{ id: 'service-price-radar-detail-sections', title: 'How it was checked', count: rows.length, items: rows }];
@@ -205,8 +215,23 @@ async function servicePriceCheckDetailResult(propertyId: string, userId: string,
   }
 }
 
+async function servicePriceChecksForRecordResult(propertyId: string, userId: string, linkedEntityType: string, linkedEntityId: string): Promise<AskOperationResult> {
+  const link = parseServicePriceLink(`${linkedEntityType}:${linkedEntityId}`);
+  if (!link) return servicePriceChecksFromView([], propertyId, 0, true);
+  try {
+    const result = await new ServicePriceRadarService().listChecks(propertyId, userId, { limit: SERVICE_PRICE_RADAR_ASK_LIMIT, ...link });
+    return servicePriceChecksFromView(result.items, propertyId, result.totalCount ?? result.items.length, true);
+  } catch (error) {
+    if (error instanceof APIError && error.code === 'PROPERTY_ACCESS_DENIED') return servicePriceChecksFromView('PRIMARY_OWNER_ONLY', propertyId);
+    throw error;
+  }
+}
+
 registerCapabilityHandler('service-price-radar.checks', async (envelope) => {
   const launch = envelope.launchContext;
+  if (envelope.message === SERVICE_PRICE_CHECKS_FOR_RECORD_MESSAGE && launch?.entityType && launch.entityId) {
+    return servicePriceChecksForRecordResult(envelope.propertyId!, envelope.userId, launch.entityType, launch.entityId);
+  }
   if (envelope.message === SERVICE_PRICE_CHECK_DETAIL_MESSAGE && launch?.entityType === SERVICE_PRICE_CHECK_ENTITY_TYPE && launch.entityId) {
     return servicePriceCheckDetailResult(envelope.propertyId!, envelope.userId, launch.entityId);
   }

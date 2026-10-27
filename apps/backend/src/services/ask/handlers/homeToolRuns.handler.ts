@@ -20,6 +20,7 @@ import {
   DO_NOTHING_HORIZONS, DO_NOTHING_RUN_CAPTURE_KEY, DO_NOTHING_RUN_MESSAGE, HOME_HABITS_GENERATE_MESSAGE, NO_SAVED_SCENARIO_VALUE,
   SERVICE_PRICE_CHECK_CAPTURE_KEY, SERVICE_PRICE_CHECK_MESSAGE, SERVICE_PRICE_MAX_QUOTE,
 } from '../support/homeToolRunConstants';
+import { SERVICE_PRICE_NO_LINK_VALUE, loadServicePriceLinkOptions, parseServicePriceLink } from '../support/servicePriceLinkOptions';
 import { receiptFollowUpAction } from '../support/receiptFollowUps';
 import { enumLabel, readableCode } from '../askFormatting';
 import { HomeHabitCoachService } from '../../homeHabitCoach/homeHabitCoachService';
@@ -305,7 +306,7 @@ const SERVICE_CATEGORY_LABELS: Record<string, string> = {
 const categoryLabel = (value: string) => SERVICE_CATEGORY_LABELS[value] ?? enumLabel(value);
 export const priceCheckVersion = (propertyId: string) => sha(`service-price-check:${propertyId}`);
 
-function priceCheckCaptureRequest(contextVersion: string, entered?: Partial<PriceCheckInput>): AskCaptureRequest {
+function priceCheckCaptureRequest(contextVersion: string, linkOptions: Array<{ label: string; value: string }>, entered?: Partial<PriceCheckInput>): AskCaptureRequest {
   return {
     requirementId: 'service-price-check-inputs', captureKey: SERVICE_PRICE_CHECK_CAPTURE_KEY, classification: 'WORKFLOW_INPUT', state: 'UNKNOWN',
     title: 'Check a contractor quote', question: 'Which service is the quote for, and what is the amount?',
@@ -314,10 +315,11 @@ function priceCheckCaptureRequest(contextVersion: string, entered?: Partial<Pric
       { key: 'serviceCategory', label: 'Service', required: true, inputSchema: { type: 'SINGLE_SELECT', options: SERVICE_PRICE_CATEGORY_CHOICES.map((value) => ({ label: categoryLabel(value), value })) } },
       { key: 'quoteAmount', label: 'Quote amount', helpText: `In dollars, up to ${usd(SERVICE_PRICE_MAX_QUOTE)}.`, required: true, inputSchema: { type: 'DECIMAL', min: 1, max: SERVICE_PRICE_MAX_QUOTE, unit: 'USD' } },
       { key: 'serviceSubcategory', label: 'Service detail', helpText: 'Optional: repair, replacement, leak fix, panel upgrade. A closer match can give a closer range.', required: false, inputSchema: { type: 'SHORT_TEXT', maxLength: 120 } },
+      ...(linkOptions.length ? [{ key: 'linkedEntity', label: 'Related home record', helpText: 'Optional: tie the check to an item, room, record or incident so it can be found from there and the range can use its details.', required: false, inputSchema: { type: 'SINGLE_SELECT' as const, options: [{ label: 'None', value: SERVICE_PRICE_NO_LINK_VALUE }, ...linkOptions] } }] : []),
       { key: 'quoteVendorName', label: 'Contractor', required: false, inputSchema: { type: 'SHORT_TEXT', maxLength: 120 } },
       { key: 'serviceLabelRaw', label: 'What the quote covers', helpText: 'Optional: for example, replace the water heater.', required: false, inputSchema: { type: 'SHORT_TEXT', maxLength: 200 } },
     ] },
-    currentAnswer: Object.fromEntries(Object.entries({ serviceCategory: entered?.serviceCategory, quoteAmount: entered?.quoteAmount, serviceSubcategory: entered?.serviceSubcategory, quoteVendorName: entered?.quoteVendorName, serviceLabelRaw: entered?.serviceLabelRaw }).filter(([, value]) => value !== undefined && value !== null)),
+    currentAnswer: Object.fromEntries(Object.entries({ serviceCategory: entered?.serviceCategory, quoteAmount: entered?.quoteAmount, serviceSubcategory: entered?.serviceSubcategory, linkedEntity: entered?.linkedEntity ?? (linkOptions.length ? SERVICE_PRICE_NO_LINK_VALUE : undefined), quoteVendorName: entered?.quoteVendorName, serviceLabelRaw: entered?.serviceLabelRaw }).filter(([, value]) => value !== undefined && value !== null)),
     allowNotSure: false, sensitivity: 'STANDARD', destinationLabel: 'Used to prepare this check; nothing is checked until you confirm', confirmationText: null,
     expectedContextVersion: contextVersion,
   };
@@ -330,11 +332,12 @@ export async function servicePriceCheckResult(userId: string, propertyId: string
   if (access.role === HouseholdRole.VIEWER) return blocked('price-check-permission', 'ASK_PERMISSION_REQUIRED', 'A contributor or owner can check a quote', 'Your role can view this home but not change it. Nothing has changed.');
   if (!(await isPrimaryAccountHolder(userId, propertyId))) return primaryHolderOnly('price-check-primary-only', 'SERVICE_PRICE_RADAR_PRIMARY_OWNER_ONLY', 'check a quote');
   const contextVersion = priceCheckVersion(propertyId);
+  const linkOptions = await loadServicePriceLinkOptions(propertyId, access.role);
   if (!supplied) {
     return {
       status: 'NEEDS_CONTEXT', reasonCode: 'SERVICE_PRICE_CHECK_INPUT_REQUIRED', contextVersion, parameters: launch,
       blocks: [{ type: 'SUMMARY', id: 'price-check-input', title: 'Check a contractor quote', body: 'Nothing has been checked yet. Enter the service and the amount, then review it before it is checked.', tone: 'DEFAULT', actions: [] }],
-      captureRequests: [priceCheckCaptureRequest(contextVersion)], suggestions: [],
+      captureRequests: [priceCheckCaptureRequest(contextVersion, linkOptions)], suggestions: [],
     };
   }
   const expiresAt = new Date(Date.now() + CONFIRMATION_MINUTES * 60 * 1000);
@@ -349,11 +352,12 @@ export async function servicePriceCheckResult(userId: string, propertyId: string
       fields: [
         { label: 'Service', value: categoryLabel(supplied.serviceCategory) }, { label: 'Quote', value: usd(supplied.quoteAmount) },
         ...(supplied.serviceSubcategory ? [{ label: 'Service detail', value: supplied.serviceSubcategory }] : []),
+        ...(supplied.linkedEntity ? [{ label: 'Related record', value: linkOptions.find((option) => option.value === supplied.linkedEntity)?.label ?? 'A record in this home' }] : []),
         ...(supplied.quoteVendorName ? [{ label: 'Contractor', value: supplied.quoteVendorName }] : []), ...(supplied.serviceLabelRaw ? [{ label: 'Covers', value: supplied.serviceLabelRaw }] : []),
       ],
       editableFields: [], confirmLabel: 'Check quote', consentText: 'I authorize checking this quote and storing the result for this home.', expiresAt: expiresAt.toISOString(),
     },
-    captureRequests: [priceCheckCaptureRequest(contextVersion, supplied)],
+    captureRequests: [priceCheckCaptureRequest(contextVersion, linkOptions, supplied)],
     suggestions: [],
   };
 }
@@ -378,7 +382,7 @@ async function confirmServicePriceCheck(ctx: ConfirmCapabilityContext): Promise<
       // The same applicability check the traditional POST controller makes; its context version is stored with the check.
       const context = await assertProjectComplianceApplicable(propertyId, userId, 'SERVICE_PRICE_RADAR', { serviceCategory: input.serviceCategory } as never, 'localPriceBenchmarking');
       const created = await priceRadar.createCheck(propertyId, userId, {
-        serviceCategory: input.serviceCategory, quoteAmount: input.quoteAmount, quoteCurrency: 'USD', quoteSource: 'MANUAL', linkedEntities: [],
+        serviceCategory: input.serviceCategory, quoteAmount: input.quoteAmount, quoteCurrency: 'USD', quoteSource: 'MANUAL', linkedEntities: input.linkedEntity ? [parseServicePriceLink(input.linkedEntity)!] : [],
         ...(input.serviceSubcategory ? { serviceSubcategory: input.serviceSubcategory } : {}), ...(input.quoteVendorName ? { quoteVendorName: input.quoteVendorName } : {}), ...(input.serviceLabelRaw ? { serviceLabelRaw: input.serviceLabelRaw } : {}),
       } as never, (context as { contextVersion?: string | null }).contextVersion ?? null);
       check = created.check as unknown as CheckSummary;

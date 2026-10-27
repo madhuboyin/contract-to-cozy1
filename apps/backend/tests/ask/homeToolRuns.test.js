@@ -44,6 +44,8 @@ test.beforeEach(() => {
     propertyHabit: { findMany: async () => aliveTemplates.map((habitTemplateId) => ({ habitTemplateId })) },
     doNothingSimulationRun: { findFirst: async () => earlierRun },
     serviceRadarCheck: { findFirst: async () => earlierCheck },
+    inventoryItem: { findMany: async () => [{ id: 'i1', name: 'Water heater' }] }, inventoryRoom: { findMany: async () => [{ id: 'r1', name: 'Garage' }] },
+    propertyRecord: { findMany: async () => [{ id: 'd1', title: 'Warranty' }] }, incident: { findMany: async () => [{ id: 'n1', title: 'Pipe leak' }] },
     askExecution: { findMany: async () => [] },
     guidanceSignal: {}, guidanceJourney: {}, guidanceJourneyEvent: {}, guidanceStepEvidence: {},
     guidanceJourneyStep: { findFirst: async (args) => { calls.guidance.push(['lookup', args.where]); return stepRow; } },
@@ -301,7 +303,7 @@ test('price check: a viewer and a household member who is not the primary accoun
 
 test('price check: the amount must be a positive number up to $250,000 and the service a supported one', () => {
   const parse = (value) => ServicePriceCheckInputSchema.safeParse(value);
-  assert.deepEqual(parse({ serviceCategory: 'ROOFING', quoteAmount: '12999.499', quoteVendorName: '' }).data, { serviceCategory: 'ROOFING', quoteAmount: 12999.5, serviceSubcategory: null, quoteVendorName: null, serviceLabelRaw: null });
+  assert.deepEqual(parse({ serviceCategory: 'ROOFING', quoteAmount: '12999.499', quoteVendorName: '' }).data, { serviceCategory: 'ROOFING', quoteAmount: 12999.5, serviceSubcategory: null, linkedEntity: null, quoteVendorName: null, serviceLabelRaw: null });
   for (const bad of [{ serviceCategory: 'ROOFING', quoteAmount: 0 }, { serviceCategory: 'ROOFING', quoteAmount: -5 }, { serviceCategory: 'ROOFING', quoteAmount: 250000.01 }, { serviceCategory: 'ROOFING', quoteAmount: 'lots' }, { serviceCategory: 'INSURANCE', quoteAmount: 500 }, { serviceCategory: 'NOT_A_SERVICE', quoteAmount: 500 }]) {
     assert.equal(parse(bad).success, false, JSON.stringify(bad));
   }
@@ -396,4 +398,18 @@ test('price check: the optional service detail is asked for, shown on the review
   assert.equal(calls.createCheck[0][2].serviceSubcategory, 'Leak fix');
   const blank = await servicePriceCheckResult('u1', 'p1', ServicePriceCheckInputSchema.parse({ serviceCategory: 'PLUMBING', quoteAmount: 1450, serviceSubcategory: '  ' }), null);
   assert.equal(blank.confirmation.fields.some((field) => field.label === 'Service detail'), false);
+});
+
+test('price check: a related record can be chosen from the home\'s own records, is shown on the review and sent as the linked entity; a malformed choice is refused', async () => {
+  const card = await servicePriceCheckResult('u1', 'p1', ServicePriceCheckInputSchema.parse({ serviceCategory: 'PLUMBING', quoteAmount: 1450 }), null);
+  const field = card.captureRequests[0].inputSchema.fields.find((entry) => entry.key === 'linkedEntity');
+  assert.deepEqual(field.inputSchema.options.map((option) => option.value), ['__NO_LINK__', 'SYSTEM:i1', 'ROOM:r1', 'DOCUMENT:d1', 'INCIDENT:n1']);
+  assert.equal(card.confirmation.fields.some((entry) => entry.label === 'Related record'), false);
+  const linked = await servicePriceCheckResult('u1', 'p1', ServicePriceCheckInputSchema.parse({ serviceCategory: 'PLUMBING', quoteAmount: 1450, linkedEntity: 'SYSTEM:i1' }), null);
+  assert.ok(linked.confirmation.fields.some((entry) => entry.label === 'Related record' && entry.value === 'Item: Water heater'));
+  calls.createCheck.length = 0;
+  await confirm('SERVICE_PRICE_CHECK_RUN', linked.parameters);
+  assert.deepEqual(calls.createCheck[0][2].linkedEntities, [{ linkedEntityType: 'SYSTEM', linkedEntityId: 'i1' }]);
+  assert.equal(ServicePriceCheckInputSchema.safeParse({ serviceCategory: 'PLUMBING', quoteAmount: 5, linkedEntity: 'BOGUS:1' }).success, false);
+  assert.equal(ServicePriceCheckInputSchema.parse({ serviceCategory: 'PLUMBING', quoteAmount: 5, linkedEntity: '__NO_LINK__' }).linkedEntity, null);
 });

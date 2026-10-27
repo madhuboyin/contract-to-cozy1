@@ -111,11 +111,20 @@ test('J2 refinance: the scenario the homeowner adjusts is the same subject, its 
   assert.match(source, /saveScenario: false/);
 });
 
-test('J2 refinance: the follow-up actions reach the journey they name, and the consequential write stays an owner-confirmed command', () => {
+test('J2 refinance: the follow-up actions reach the journey they name, and the consequential write stays a confirmed command', () => {
   const answer = refinance.refinanceScenarioAnswer(scenarioInput(refinance.parseRefinanceScenarioEdit('What if I refinanced at 5.5% for 15 years with $6,000 closing costs?')));
   const byId = Object.fromEntries(answer.blocks[0].actions.map((action) => [action.id, action]));
+  // Comparing Loan Estimates still opens the compare journey; recording a decision is now its own inline form on the refinance command.
   assert.equal(refinance.refinanceJourneyIntent(byId['refinance-compare-offers'].message), 'COMPARE_OFFERS');
-  assert.equal(refinance.refinanceJourneyIntent(byId['refinance-record-decision'].message), 'RECORD_DECISION');
+  // Saving the scenario is a typed command (not a message that merely reads like one), and that command is a confirmed material write.
+  const save = byId['refinance-save-scenario'];
+  assert.ok(save, 'the scenario answer offers to save the scenario');
+  assert.deepEqual([save.operationId, save.interactionType, save.entityType], ['REFINANCE_COMMAND', 'START_WORKFLOW', 'REFINANCE_RECORD']);
+  registered(save.operationId);
+  const refinanceCommand = getAskDomainCommandByOperation('REFINANCE_COMMAND');
+  assert.ok(refinanceCommand, 'saving a scenario is a confirmed command');
+  assert.equal(refinanceCommand.material, true);
+  // The changing of mortgage facts remains an owner-only confirmed command.
   const profile = getAskDomainCommandByOperation('FINANCING_PROFILE_COMMAND');
   assert.ok(profile, 'changing mortgage facts is a confirmed command');
   assert.equal(profile.material, true);

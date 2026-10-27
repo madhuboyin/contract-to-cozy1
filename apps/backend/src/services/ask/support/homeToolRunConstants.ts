@@ -22,6 +22,9 @@ export const SERVICE_PRICE_CHECK_ACTION_ID = 'check-service-quote';
 export const SERVICE_PRICE_CHECK_DETAIL_MESSAGE = 'Show the details of this quote check.';
 export const SERVICE_PRICE_CHECK_DETAIL_ACTION_ID = 'service-price-check-detail';
 export const SERVICE_PRICE_CHECK_ENTITY_TYPE = 'SERVICE_PRICE_CHECK';
+// The checks tied to one home record: opened from a linked record on a check's detail (launch entity = that record).
+export const SERVICE_PRICE_CHECKS_FOR_RECORD_MESSAGE = 'Show the quote checks for this record.';
+export const SERVICE_PRICE_CHECKS_FOR_RECORD_ACTION_ID = 'service-price-checks-for-record';
 /** The regulated professional-service categories the radar refuses (its validator's list), so the form never offers them. */
 export const SERVICE_PRICE_UNSUPPORTED_CATEGORIES = ['INSURANCE', 'ATTORNEY', 'FINANCE'] as const;
 export const SERVICE_PRICE_MAX_QUOTE = 250000;

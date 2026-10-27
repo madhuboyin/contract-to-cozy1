@@ -10,24 +10,32 @@ require('ts-node/register');
 // maintenanceViewStateContinuity.test.js's mergeMaintenanceViewContinuation.
 const { parseRefinanceScenarioEdit } = require('../../src/services/ask/askOrchestrator.service.ts');
 
+// The parse also carries cost and objective fields (closing costs, points, credit band, ...); these tests are about the rate and term.
+const rateAndTerm = (parsed) => ({ targetRatePct: parsed.targetRatePct, targetTerm: parsed.targetTerm });
+
+test('a rate-only message does not invent any cost or fee value', () => {
+  const result = parseRefinanceScenarioEdit('What if my rate were 5.5%?');
+  for (const field of ['closingCostAmount', 'discountPoints', 'cashOutAmount', 'additionalFeesAmount', 'lenderCreditsAmount']) assert.equal(result[field], undefined, field);
+});
+
 test('an explicit rate-only hypothetical is recognized', () => {
   const result = parseRefinanceScenarioEdit('What if my rate were 5.5%?');
-  assert.deepEqual(result, { targetRatePct: 5.5, targetTerm: null });
+  assert.deepEqual(rateAndTerm(result), { targetRatePct: 5.5, targetTerm: null });
 });
 
 test('an explicit term-only hypothetical is recognized', () => {
   const result = parseRefinanceScenarioEdit('What if I refinanced to a 15-year loan?');
-  assert.deepEqual(result, { targetRatePct: null, targetTerm: 'FIFTEEN_YEAR' });
+  assert.deepEqual(rateAndTerm(result), { targetRatePct: null, targetTerm: 'FIFTEEN_YEAR' });
 });
 
 test('a combined rate and term hypothetical captures both', () => {
   const result = parseRefinanceScenarioEdit('Suppose I refinanced to a 20 year loan at 6.25%');
-  assert.deepEqual(result, { targetRatePct: 6.25, targetTerm: 'TWENTY_YEAR' });
+  assert.deepEqual(rateAndTerm(result), { targetRatePct: 6.25, targetTerm: 'TWENTY_YEAR' });
 });
 
 test('"instead of my current rate" is recognized as scenario framing', () => {
   const result = parseRefinanceScenarioEdit('Instead of my current rate, what about 5%?');
-  assert.deepEqual(result, { targetRatePct: 5, targetTerm: null });
+  assert.deepEqual(rateAndTerm(result), { targetRatePct: 5, targetTerm: null });
 });
 
 test('a bare rate or term mention with no hypothetical framing is NOT treated as an edit', () => {
@@ -50,5 +58,5 @@ test('an unrelated question is never mistaken for a scenario edit', () => {
 
 test('the term pattern recognizes word-form numbers too', () => {
   const result = parseRefinanceScenarioEdit('What if I went with a thirty year term?');
-  assert.deepEqual(result, { targetRatePct: null, targetTerm: 'THIRTY_YEAR' });
+  assert.deepEqual(rateAndTerm(result), { targetRatePct: null, targetTerm: 'THIRTY_YEAR' });
 });

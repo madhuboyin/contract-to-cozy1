@@ -202,3 +202,20 @@ test('a check without a qualified benchmark says so and omits the benchmark sect
   const missing = await capabilityInvoke('SERVICE_PRICE_CHECKS', { ...envelope, message: msg, launchContext }, { propertyAccess: { role: 'OWNER', userId: 'u1', propertyId: 'p1' } });
   assert.equal(missing.reasonCode, 'SERVICE_PRICE_CHECK_NOT_FOUND');
 });
+
+test('a linked record on the detail opens the checks tied to it; a record with none says so', async () => {
+  const seen = [];
+  ServicePriceRadarService.prototype.listChecks = async (...args) => { seen.push(args); return { items: [check('plumb')], totalCount: 1 }; };
+  const launchContext = { operationId: 'SERVICE_PRICE_CHECKS', surface: 'ASK_PAGE', entityType: 'APPLIANCE', entityId: 'a1' };
+  const msg = 'Show the quote checks for this record.';
+  const found = await capabilityInvoke('SERVICE_PRICE_CHECKS', { ...envelope, message: msg, launchContext }, { propertyAccess: { role: 'OWNER', userId: 'u1', propertyId: 'p1' } });
+  assert.deepEqual(seen, [['p1', 'u1', { limit: 12, linkedEntityType: 'APPLIANCE', linkedEntityId: 'a1' }]]);
+  assert.equal(found.blocks[0].title, '1 quote check for this record');
+  ServicePriceRadarService.prototype.listChecks = async () => ({ items: [], totalCount: 0 });
+  const none = await capabilityInvoke('SERVICE_PRICE_CHECKS', { ...envelope, message: msg, launchContext }, { propertyAccess: { role: 'OWNER', userId: 'u1', propertyId: 'p1' } });
+  assert.equal(none.reasonCode, 'SERVICE_PRICE_RADAR_NO_CHECKS_FOR_RECORD');
+  ServicePriceRadarService.prototype.getCheckDetail = async () => ({ check: { ...check('plumb'), explanationJson: null, pricingFactorsJson: null, linkedEntities: [{ linkedEntityType: 'APPLIANCE', linkedEntityId: 'a1', relevanceScore: 1, label: 'Water heater', summary: null }] } });
+  const detail = await capabilityInvoke('SERVICE_PRICE_CHECKS', { ...envelope, message: 'Show the details of this quote check.', launchContext: { operationId: 'SERVICE_PRICE_CHECKS', surface: 'ASK_PAGE', entityType: 'SERVICE_PRICE_CHECK', entityId: 'plumb' } }, { propertyAccess: { role: 'OWNER', userId: 'u1', propertyId: 'p1' } });
+  const action = labelsOf(detail).find((row) => row.id.startsWith('linked-')).actions[0];
+  assert.deepEqual([action.operationId, action.entityType, action.entityId, action.message], ['SERVICE_PRICE_CHECKS', 'APPLIANCE', 'a1', msg]);
+});

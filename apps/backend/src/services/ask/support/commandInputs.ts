@@ -14,6 +14,7 @@ import { HOME_JOURNEY_OPTIONS } from './homeSettingsConstants';
 import { WHOLE_HOME_VALUE } from './homeRecordAddConstants';
 import { DO_NOTHING_HORIZONS, NO_SAVED_SCENARIO_VALUE, SERVICE_PRICE_MAX_QUOTE, SERVICE_PRICE_UNSUPPORTED_CATEGORIES } from './homeToolRunConstants';
 import { SERVICE_RADAR_CATEGORY_VALUES } from '../../servicePriceRadar.types';
+import { SERVICE_PRICE_NO_LINK_VALUE, parseServicePriceLink } from './servicePriceLinkOptions';
 import { OWNERSHIP_COST_CATEGORIES } from '../../ownershipCosts/ownershipCost.contract';
 
 export const MaintenanceTaskWorkflowInputSchema = z.object({
@@ -341,6 +342,8 @@ export const ServicePriceCheckInputSchema = z.object({
   quoteAmount: z.coerce.number().positive().max(SERVICE_PRICE_MAX_QUOTE).transform((value) => Math.round(value * 100) / 100),
   // The page's free-text "Service detail" (repair, replacement, leak fix...); the radar normalizes it and uses it to match a benchmark.
   serviceSubcategory: optionalText(120),
+  // One related home record as `TYPE:id` (item, room, home record or incident), or none.
+  linkedEntity: z.string().trim().max(220).nullish().transform((value) => (!value || value === SERVICE_PRICE_NO_LINK_VALUE ? null : value)).refine((value) => value === null || parseServicePriceLink(value) !== null, 'Choose a record from the list.'),
   quoteVendorName: optionalText(120),
   serviceLabelRaw: optionalText(200),
 }).strict();
