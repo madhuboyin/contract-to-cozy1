@@ -6,6 +6,7 @@ import { prisma } from '../../../lib/prisma';
 import { type AskPresentationBlock } from '../../../productFramework/ask/ask.contract';
 import { type AskOperationResult } from '../askOperationRegistry';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
+import { NEGOTIATION_QUOTE_WORKSPACE_ACTION_ID, NEGOTIATION_QUOTE_WORKSPACE_MESSAGE } from '../support/negotiationShieldStart';
 import { getQuoteComparisonWorkspace, getWorkspaceComparability } from '../../quoteComparison.service';
 import { money } from '../askFormatting';
 import { askContextFingerprint, durableFreeTextClarification, QuoteWorkspaceCommandInputSchema, ensurePropertyAccess } from '../askHandlerSupport';
@@ -178,6 +179,18 @@ async function quoteComparisonReviewResult(propertyId: string, canChange = false
       operationId: 'PRICE_FINALIZATION_COMMAND' as const, entityType: QUOTE_WORKSPACE_ENTITY_TYPE, entityId: latest.id, style: 'SECONDARY' as const,
     }] : [])] : [],
   }];
+  // Desktop's "Continue this decision": once a proposal is selected, negotiation is prepared for it (or, once prepared, reviewed). Its own block, because the summary holds three actions.
+  const selected = workspace.selectedQuote as { vendorName?: string } | null;
+  if (canChange && latest.outcome === 'OPEN' && selected) {
+    const linked = workspace.negotiationCase as { id: string; title: string; status: string } | null;
+    blocks.push({
+      type: 'SUMMARY', id: 'quote-review-continue', title: `Continue with ${selected.vendorName ?? 'the selected proposal'}`, tone: 'DEFAULT',
+      body: linked ? `Negotiation is prepared: "${linked.title}".` : 'Prepare a negotiation review for this proposal. It is saved as a draft, linked to this decision, and nothing is sent to anyone.',
+      actions: [linked
+        ? { id: 'negotiation-shield-review', label: 'Review the negotiation', interactionType: 'START_WORKFLOW' as const, message: 'Review this negotiation case.', operationId: 'NEGOTIATION_SHIELD_CASES' as const, entityType: 'NEGOTIATION_SHIELD_CASE', entityId: linked.id, style: 'SECONDARY' as const }
+        : { id: NEGOTIATION_QUOTE_WORKSPACE_ACTION_ID, label: 'Prepare negotiation', interactionType: 'START_WORKFLOW' as const, message: NEGOTIATION_QUOTE_WORKSPACE_MESSAGE, operationId: 'NEGOTIATION_SHIELD_CASE_START' as const, entityType: QUOTE_WORKSPACE_ENTITY_TYPE, entityId: latest.id, style: 'SECONDARY' as const }],
+    });
+  }
   // IW-PRES-016 (FRD v1.76): two to four quotes still in play render as a comparison strip; one quote, or five and
   // more, keep the table below with every quote.
   const strip = quoteReviewComparison(quotes, comparability);

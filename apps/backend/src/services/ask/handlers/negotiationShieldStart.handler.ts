@@ -23,10 +23,11 @@ import { assertProjectComplianceApplicable } from '../../projectCompliance/conte
 import {
   inferNegotiationStartScenario, isNegotiationShieldStartRequest, isNegotiationStartScenario, NEGOTIATION_SHIELD_CASE_ENTITY_TYPE,
   NEGOTIATION_SHIELD_SCENARIO_ACTION_ID, NEGOTIATION_SHIELD_SCENARIO_ENTITY, NEGOTIATION_SHIELD_START_CAPTURE_KEY, NEGOTIATION_SHIELD_START_MESSAGE,
-  NEGOTIATION_START_SCENARIOS, NEGOTIATION_START_SCENARIO_SPECS, parseNegotiationStartAnswer,
+  NEGOTIATION_QUOTE_WORKSPACE_MESSAGE, NEGOTIATION_START_SCENARIOS, NEGOTIATION_START_SCENARIO_SPECS, parseNegotiationStartAnswer,
   type NegotiationFieldSpec, type NegotiationStartInput, type NegotiationStartScenario,
 } from '../support/negotiationShieldStart';
 import { collectionDescriptor } from '../support/collectionDescriptor';
+import { QUOTE_WORKSPACE_ENTITY_TYPE } from '../support/quoteComparisonCommand';
 import { SERVICE_PRICE_CHECK_ENTITY_TYPE, SERVICE_PRICE_NEGOTIATE_MESSAGE } from '../support/homeToolRunConstants';
 import { servicePriceCategoryLabel } from './servicePriceRadar.handler';
 import { prisma } from '../../../lib/prisma';
@@ -170,7 +171,7 @@ export const negotiationDetailLabel = (field: NegotiationFieldSpec, value: unkno
 export async function negotiationShieldStartResult(
   userId: string,
   propertyId: string,
-  launch: { scenarioType: NegotiationStartScenario | null; sourceExecutionId: string | null; guidanceStepId?: string | null; forceNew?: boolean; prefill?: Pick<NegotiationStartInput, 'title' | 'structuredData'> },
+  launch: { scenarioType: NegotiationStartScenario | null; sourceExecutionId: string | null; guidanceStepId?: string | null; forceNew?: boolean; prefill?: Pick<NegotiationStartInput, 'title' | 'structuredData'>; quoteWorkspace?: { id: string; selectedQuoteId: string; vendorName: string } },
   supplied?: NegotiationStartInput,
 ): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
@@ -199,7 +200,7 @@ export async function negotiationShieldStartResult(
   if (!supplied) {
     return {
       status: 'NEEDS_CONTEXT', reasonCode: 'NEGOTIATION_SHIELD_START_INPUT_REQUIRED', contextVersion,
-      parameters: { negotiationStartLaunch: { scenarioType: scenario, sourceExecutionId: launch.sourceExecutionId, ...(guidanceStepId ? { guidanceStepId } : {}) } },
+      parameters: { negotiationStartLaunch: { scenarioType: scenario, sourceExecutionId: launch.sourceExecutionId, ...(guidanceStepId ? { guidanceStepId } : {}), ...(launch.quoteWorkspace ? { quoteWorkspace: launch.quoteWorkspace } : {}) } },
       blocks: [{ type: 'SUMMARY', id: 'negotiation-shield-start-input', title: `Start a review: ${spec.label.toLowerCase()}`, body: 'Nothing has been saved yet. Enter what you know, then review it before it is saved.', tone: 'DEFAULT', actions: [] }],
       captureRequests: [captureRequest(scenario, contextVersion, launch.prefill)], suggestions: [],
     };
@@ -215,14 +216,15 @@ export async function negotiationShieldStartResult(
     parameters: {
       negotiationShieldStart: { scenarioType: scenario, title: supplied.title, structuredData: supplied.structuredData },
       negotiationStartContextVersion: contextVersion, sourceExecutionId: launch.sourceExecutionId, ...(guidanceStepId ? { guidanceStepId } : {}),
+      ...(launch.quoteWorkspace ? { negotiationQuoteWorkspace: launch.quoteWorkspace } : {}),
       confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString(),
     },
     blocks: [{ type: 'SUMMARY', id: 'negotiation-shield-start-review', title: 'Review this negotiation review', body: 'You entered these details. Nothing is saved until you confirm.', tone: 'DEFAULT', actions: [] }],
     confirmation: {
       confirmationId: `negotiation-shield-start-${sha(`${propertyId}:${scenario}:${supplied.title}`).slice(0, 12)}-1`, version: 1,
       title: `Start "${supplied.title}"?`,
-      description: 'This saves a draft review with these details, the same record the Negotiation Shield page creates. It is not analyzed and nothing is sent to anyone.',
-      fields: [{ label: 'Type', value: spec.label }, { label: 'Name', value: supplied.title }, ...details],
+      description: `This saves a draft review with these details, the same record the Negotiation Shield page creates. It is not analyzed and nothing is sent to anyone.${launch.quoteWorkspace ? ' It is linked to your quote decision, which moves to the negotiation stage.' : ''}`,
+      fields: [{ label: 'Type', value: spec.label }, { label: 'Name', value: supplied.title }, ...(launch.quoteWorkspace ? [{ label: 'Quote decision', value: `${launch.quoteWorkspace.vendorName} (selected proposal)` }] : []), ...details],
       editableFields: [], confirmLabel: 'Start review', consentText: 'I authorize saving this review to the shared home record.', expiresAt: expiresAt.toISOString(),
     },
     // Kept so the entry can be changed and resubmitted before confirming.
@@ -231,12 +233,63 @@ export async function negotiationShieldStartResult(
   };
 }
 
+const quoteWorkspaceUnavailable = (title: string, body: string): AskOperationResult => ({
+  status: 'NOT_APPLICABLE', reasonCode: 'NEGOTIATION_SHIELD_QUOTE_WORKSPACE_UNAVAILABLE',
+  blocks: [{ type: 'SUMMARY', id: 'negotiation-shield-quote-workspace-unavailable', title, body: `${body} Nothing has changed.`, tone: 'DEFAULT', actions: [] }], suggestions: [],
+});
+/** The selected proposal of an open quote decision, or why there is none. Re-read on every use, in this home. */
+export async function loadQuoteNegotiationSource(propertyId: string, workspaceId: string) {
+  return (prisma as any).quoteComparisonWorkspace.findFirst({
+    where: { id: workspaceId, propertyId },
+    select: {
+      id: true, outcome: true, selectedQuoteId: true,
+      selectedQuote: { select: { vendorName: true, quoteAmount: true, serviceCategory: true } },
+      negotiationCase: { select: { id: true, title: true } },
+    },
+  }) as Promise<null | { id: string; outcome: string; selectedQuoteId: string | null; selectedQuote: { vendorName: string; quoteAmount: unknown; serviceCategory: string } | null; negotiationCase: { id: string; title: string } | null }>;
+}
+async function quoteWorkspaceNegotiationResult(userId: string, propertyId: string, workspaceId: string, sourceExecutionId: string | null): Promise<AskOperationResult> {
+  const source = await loadQuoteNegotiationSource(propertyId, workspaceId);
+  if (!source) return quoteWorkspaceUnavailable('That quote decision is no longer available', 'Ask could not find it.');
+  if (source.negotiationCase) {
+    return {
+      status: 'ANSWERED', reasonCode: 'NEGOTIATION_SHIELD_QUOTE_WORKSPACE_ALREADY_LINKED',
+      blocks: [{
+        type: 'SUMMARY', id: 'negotiation-shield-quote-linked', title: 'Negotiation is already prepared', body: `"${source.negotiationCase.title}" is linked to this quote decision.`, tone: 'DEFAULT',
+        actions: [{ id: 'negotiation-shield-review', label: 'Review it', interactionType: 'START_WORKFLOW' as const, message: REVIEW_MESSAGE, operationId: 'NEGOTIATION_SHIELD_CASES', entityType: NEGOTIATION_SHIELD_CASE_ENTITY_TYPE, entityId: source.negotiationCase.id, style: 'PRIMARY' as const }],
+      }],
+      suggestions: [],
+    };
+  }
+  if (source.outcome !== 'OPEN' || !source.selectedQuoteId || !source.selectedQuote) {
+    return quoteWorkspaceUnavailable('Select a proposal first', 'Negotiation is prepared for the proposal you selected, while the decision is open.');
+  }
+  const amount = Number(source.selectedQuote.quoteAmount);
+  return negotiationShieldStartResult(userId, propertyId, {
+    scenarioType: 'CONTRACTOR_QUOTE_REVIEW', sourceExecutionId,
+    quoteWorkspace: { id: source.id, selectedQuoteId: source.selectedQuoteId, vendorName: source.selectedQuote.vendorName },
+    prefill: {
+      title: `Review ${source.selectedQuote.vendorName} proposal`.slice(0, 160),
+      structuredData: {
+        contractorName: source.selectedQuote.vendorName,
+        ...(Number.isFinite(amount) && amount > 0 ? { quoteAmount: amount } : {}),
+        serviceCategory: servicePriceCategoryLabel(String(source.selectedQuote.serviceCategory)),
+      },
+    },
+  });
+}
+
 registerCapabilityHandler('negotiation-shield.start', async (envelope) => {
   const launch = envelope.launchContext;
   if (launch?.surface === 'ASK_REFRESH') return notRoutable();
   const chosenScenario = launch?.entityType === NEGOTIATION_SHIELD_SCENARIO_ENTITY && isNegotiationStartScenario(launch.entityId) ? launch.entityId : null;
   const chosenMessage = chosenScenario ? scenarioStartMessage(chosenScenario) : null;
   const declared = launch?.operationId === 'NEGOTIATION_SHIELD_CASE_START' && (envelope.message === NEGOTIATION_SHIELD_START_MESSAGE || envelope.message === chosenMessage);
+  // Started from the selected proposal of a Quote Comparison decision (Desktop's "Prepare negotiation"): the contractor-quote form opens with the selected proposal, the case is
+  // linked to the decision, and the decision moves to its negotiation stage when the case is created. Everything is read from the workspace in this home, never the launch.
+  if (launch?.operationId === 'NEGOTIATION_SHIELD_CASE_START' && launch.entityType === QUOTE_WORKSPACE_ENTITY_TYPE && launch.entityId && envelope.message === NEGOTIATION_QUOTE_WORKSPACE_MESSAGE) {
+    return quoteWorkspaceNegotiationResult(envelope.userId, envelope.propertyId!, launch.entityId, launch.sourceExecutionId ?? null);
+  }
   // Started from a saved Service Price Radar check (Desktop's "Need help responding?" hand-off): the contractor-quote form opens with what the check holds. The values are
   // read from the check in this home, never taken from the launch, and the person still reviews and confirms the form as usual.
   if (launch?.operationId === 'NEGOTIATION_SHIELD_CASE_START' && launch.entityType === SERVICE_PRICE_CHECK_ENTITY_TYPE && launch.entityId && envelope.message === SERVICE_PRICE_NEGOTIATE_MESSAGE) {
@@ -288,6 +341,17 @@ async function confirmNegotiationShieldStart(ctx: ConfirmCapabilityContext): Pro
   const input = candidate.data;
   const propertyId = execution.propertyId;
 
+  // Started from a quote decision: the selected proposal and the open decision are re-checked, because the case links to it and advances its stage.
+  const quoteWorkspace = parameters.negotiationQuoteWorkspace as { id?: unknown; selectedQuoteId?: unknown } | undefined;
+  let quoteWorkspaceId: string | null = null;
+  if (quoteWorkspace) {
+    if (typeof quoteWorkspace.id !== 'string' || typeof quoteWorkspace.selectedQuoteId !== 'string') throw Object.assign(new Error('The quote decision is invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
+    const current = await loadQuoteNegotiationSource(propertyId, quoteWorkspace.id);
+    if (!current || current.outcome !== 'OPEN' || current.selectedQuoteId !== quoteWorkspace.selectedQuoteId) {
+      throw Object.assign(new Error('The selected proposal changed while the confirmation was open. Review it again and try again.'), { code: 'ASK_CONTEXT_VERSION_CONFLICT' });
+    }
+    quoteWorkspaceId = current.id;
+  }
   // The same applicability gate the page's create runs before the service call.
   await assertProjectComplianceApplicable(propertyId, userId, 'NEGOTIATION_SHIELD', {}, 'negotiationShield');
   // Loaded here, not at boot: the service pulls in document parsing and OCR, which Ask's reads deliberately avoid.
@@ -297,6 +361,7 @@ async function confirmNegotiationShieldStart(ctx: ConfirmCapabilityContext): Pro
     title: input.title,
     description: null,
     sourceType: 'MANUAL',
+    ...(quoteWorkspaceId ? { quoteDecisionWorkspaceId: quoteWorkspaceId } : {}),
     idempotencyKey: negotiationShieldStartIdempotencyKey(execution.id),
     initialInput: { inputType: input.inputType, rawText: null, structuredData: input.structuredData },
   });
@@ -311,7 +376,7 @@ async function confirmNegotiationShieldStart(ctx: ConfirmCapabilityContext): Pro
     blocks: [{
       type: 'WORKFLOW_PROGRESS', id: `negotiation-shield-started-${caseId}`, title: 'Review started', status: 'COMPLETED',
       description: 'Saved as a draft review. It has not been analyzed yet and nothing has been sent.',
-      details: [{ label: 'Review', value: input.title }, { label: 'Type', value: spec.label }, ...(stepBound && !stepBound.ok ? [{ label: 'Guided journey', value: GUIDANCE_STEP_REFUSAL_TEXT[stepBound.reason] }] : [])],
+      details: [{ label: 'Review', value: input.title }, { label: 'Type', value: spec.label }, ...(quoteWorkspaceId ? [{ label: 'Quote decision', value: 'Linked; now at the negotiation stage' }] : []), ...(stepBound && !stepBound.ok ? [{ label: 'Guided journey', value: GUIDANCE_STEP_REFUSAL_TEXT[stepBound.reason] }] : [])],
       actions: [{
         id: 'negotiation-shield-review', label: 'Review', interactionType: 'START_WORKFLOW' as const, message: REVIEW_MESSAGE, operationId: 'NEGOTIATION_SHIELD_CASES',
         entityType: NEGOTIATION_SHIELD_CASE_ENTITY_TYPE, entityId: caseId, style: 'SECONDARY' as const,

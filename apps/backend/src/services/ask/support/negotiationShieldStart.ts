@@ -8,6 +8,9 @@
 import { z } from 'zod';
 
 export const NEGOTIATION_SHIELD_START_MESSAGE = 'Start a negotiation review.';
+/** Desktop's "Prepare negotiation" on a selected Quote Comparison proposal: the one declared message that also carries a quote decision workspace as its launch entity (FRD v1.455). */
+export const NEGOTIATION_QUOTE_WORKSPACE_MESSAGE = 'Prepare negotiation for the selected proposal.';
+export const NEGOTIATION_QUOTE_WORKSPACE_ACTION_ID = 'quote-comparison-prepare-negotiation';
 export const NEGOTIATION_SHIELD_START_CAPTURE_KEY = 'NEGOTIATION_SHIELD_START_INPUTS';
 /** The "Start a review" action on the list and the empty state. */
 export const NEGOTIATION_SHIELD_START_ACTION_ID = 'negotiation-shield-start';
