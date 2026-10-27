@@ -244,7 +244,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   // Add a seasonal checklist task to maintenance, snooze it, set it aside, or bring it back (register P2 Seasonal Home Care). Confirmation-gated, declared-action only.
   SEASONAL_ITEM_COMMAND: new Set(['seasonal-item-back']),
   // Snooze or reschedule a Home Operations work item, or accept the routine low-risk candidates in bulk (register P2 Maintenance and Home Operations). Confirmation-gated, declared-action only.
-  HOME_WORK_ITEM_COMMAND: new Set(['home-work-items-back']),
+  HOME_WORK_ITEM_COMMAND: new Set(['home-work-items-back', 'work-item-assign-owner', 'work-item-add-watcher', 'work-item-remove-watcher', 'work-item-mark-duplicate', 'work-item-undo-duplicate']),
   // List the home's open Home Operations work items with state, due date and snooze (register P2 Maintenance and Home Operations). Read-only.
   // Work and Saved as conversations (FRD v1.1 §1.2). Read-only; every control is a row action or a chip, so no block-level action is declared.
   // Create an export of the home record (FRD v1.2 §1.2). Confirmation-gated; the receipt offers the status check, and the empty status answer offers the start.
@@ -258,6 +258,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   NOTIFICATION_SETTINGS_OVERVIEW: new Set(),
   HOME_WORK_ITEMS: new Set([
     'home-work-items-back',
+    'work-item-options',
     'work-item-snooze',
     'work-item-reschedule',
     'work-items-accept-routine',

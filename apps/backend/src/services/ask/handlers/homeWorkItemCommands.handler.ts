@@ -20,9 +20,13 @@ import { EvidenceNotWithdrawableError, HOMEOWNER_WITHDRAWABLE_EVIDENCE, removeEv
 import { listPropertyDocuments, resolvePropertyDocuments } from '../../propertyDocuments/propertyDocumentInventory.service';
 import { batchTransitionWorkItems } from '../../../modules/homeOperations/application/batchTransitionWorkItems.usecase';
 import { transitionWorkItem } from '../../../modules/homeOperations/application/transitionWorkItem.usecase';
+import { assignWorkItemOwner } from '../../../modules/homeOperations/application/assignOwner.usecase';
+import { addWatcher, removeWatcher } from '../../../modules/homeOperations/application/watchers.usecase';
+import { recordDuplicateDecision, reverseDuplicateDecision } from '../../../modules/homeOperations/application/recordDuplicateDecision.usecase';
+import { HouseholdService } from '../../household.service';
 import { assertUserWorkItemTransition } from '../../../modules/homeOperations/domain/userGovernance';
 import {
-  SNOOZE_CHOICES, WORK_ITEM_BATCH_MAX, WORK_ITEM_ENTITY_TYPE, WORK_ITEM_FORM_CAPTURE_KEYS, WORK_ITEM_MESSAGES, parseWorkItemAnswer, snoozeUntil, workItemBatchEligible,
+  OWNER_NO_ONE, SNOOZE_CHOICES, WORK_ITEM_ACTION_IDS, WORK_ITEM_BATCH_MAX, WORK_ITEM_ENTITY_TYPE, WORK_ITEM_FORM_CAPTURE_KEYS, WORK_ITEM_MESSAGES, parseWorkItemAnswer, snoozeUntil, workItemBatchEligible,
   workItemChangeable, workItemKindFromMessage, WORK_ITEM_FORM_ERRORS, formatEvidenceRef, parseEvidenceRef, WORK_ITEM_ATTACH_KINDS, type WorkEvidenceRefType, type WorkItemCommandKind, type WorkItemFormKind,
 } from '../support/homeWorkItemCommand';
 
@@ -34,9 +38,9 @@ const unavailable = (reasonCode: string, title: string, body: string): AskOperat
 const iso = (value: Date | null | undefined) => (value ? value.toISOString() : '');
 const dayOf = (value: string) => humanDate(new Date(`${value}T12:00:00.000Z`)) ?? value;
 
-interface ItemRow { id: string; propertyId: string; title: string; state: OperationalWorkItemState; safetyTier: RecommendationSafetyTier; dueAt: Date | null; dueWindowStart: Date | null; dueWindowEnd: Date | null; snoozedUntil: Date | null; supersededByWorkItemId: string | null; ownerUserId: string | null; legalNextStates: OperationalWorkItemState[]; closureDispositionRule: 'REQUIRED' | 'FORBIDDEN' | 'OPTIONAL' | null }
+interface ItemRow { id: string; propertyId: string; title: string; state: OperationalWorkItemState; safetyTier: RecommendationSafetyTier; dueAt: Date | null; dueWindowStart: Date | null; dueWindowEnd: Date | null; snoozedUntil: Date | null; supersededByWorkItemId: string | null; ownerUserId: string | null; watchers?: Array<{ userId: string }>; legalNextStates: OperationalWorkItemState[]; closureDispositionRule: 'REQUIRED' | 'FORBIDDEN' | 'OPTIONAL' | null }
 const itemVersion = (kind: string, item: ItemRow) =>
-  sha(`work-item:${kind}:${item.id}:${item.state}:${iso(item.dueAt)}:${iso(item.dueWindowStart)}:${iso(item.dueWindowEnd)}:${iso(item.snoozedUntil)}:${item.supersededByWorkItemId ?? ''}`);
+  sha(`work-item:${kind}:${item.id}:${item.state}:${iso(item.dueAt)}:${iso(item.dueWindowStart)}:${iso(item.dueWindowEnd)}:${iso(item.snoozedUntil)}:${item.supersededByWorkItemId ?? ''}:${item.ownerUserId ?? ''}:${(item.watchers ?? []).map((w) => w.userId).sort().join(',')}`);
 const batchVersion = (items: Array<{ id: string; state: string }>) => sha(`work-batch:${items.map((i) => `${i.id}:${i.state}`).sort().join('|')}`);
 
 async function loadItem(propertyId: string, id: string): Promise<ItemRow | null> {
@@ -112,6 +116,29 @@ async function resolveEvidenceRef(propertyId: string, role: HouseholdRole, userI
   return fact ? humanFactKey(fact.factKey) : null;
 }
 
+
+// ---- people and duplicates (FRD v1.454): the household's members and the property's other open work, re-read on every use ----------------------------------
+type Member = { userId: string; name: string };
+async function householdMembers(propertyId: string): Promise<Member[]> {
+  const rows = await new HouseholdService().listMembers(propertyId) as unknown as Array<{ userId: string; displayName?: string | null; user: { firstName: string; lastName: string } }>;
+  return rows.map((row) => ({ userId: row.userId, name: row.displayName || `${row.user.firstName} ${row.user.lastName}`.trim() }));
+}
+const DUPLICATE_PICK_LIMIT = 25;
+async function duplicateChoices(propertyId: string, item: ItemRow): Promise<Choice[]> {
+  const all = await listWorkItems({ propertyId }) as unknown as Array<ItemRow>;
+  return all.filter((other) => other.id !== item.id && workItemChangeable(other)).slice(0, DUPLICATE_PICK_LIMIT)
+    .map((other) => ({ label: `${other.title}${other.dueAt ? ` · due ${humanDate(other.dueAt)}` : ''}`, value: other.id }));
+}
+async function peopleChoices(kind: WorkItemFormKind, propertyId: string, item: ItemRow): Promise<Choice[]> {
+  if (kind === 'MARK_DUPLICATE') return duplicateChoices(propertyId, item);
+  const members = await householdMembers(propertyId);
+  const watching = new Set((item.watchers ?? []).map((w) => w.userId));
+  if (kind === 'ASSIGN_OWNER') return [{ label: 'No one', value: OWNER_NO_ONE }, ...members.map((m) => ({ label: m.userId === item.ownerUserId ? `${m.name} (current owner)` : m.name, value: m.userId }))];
+  if (kind === 'ADD_WATCHER') return members.filter((m) => !watching.has(m.userId)).map((m) => ({ label: m.name, value: m.userId }));
+  return members.filter((m) => watching.has(m.userId)).map((m) => ({ label: m.name, value: m.userId }));
+}
+const PEOPLE_KINDS: readonly WorkItemFormKind[] = ['ASSIGN_OWNER', 'ADD_WATCHER', 'REMOVE_WATCHER', 'MARK_DUPLICATE'];
+
 function formCapture(kind: WorkItemFormKind, contextVersion: string, item: ItemRow, choices: Choice[] = []): AskCaptureRequest {
   const spec = kind === 'ATTACH_EXISTING' || kind === 'SUBMIT_COMPLETION_EVIDENCE'
     ? { title: kind === 'SUBMIT_COMPLETION_EVIDENCE' ? `Submit completion evidence for ${item.title}` : `Attach a record to ${item.title}`,
@@ -121,6 +148,18 @@ function formCapture(kind: WorkItemFormKind, contextVersion: string, item: ItemR
     : kind === 'REMOVE_EVIDENCE'
     ? { title: `Remove evidence from ${item.title}`, question: 'Which evidence should be removed?', help: 'Only evidence you added that has not been verified can be removed. To replace it, remove it and add the new one.',
         fields: [{ key: 'evidence', label: 'Evidence', required: true, inputSchema: { type: 'SINGLE_SELECT' as const, options: choices } }], seed: {} }
+    : kind === 'ASSIGN_OWNER'
+    ? { title: `Who owns ${item.title}?`, question: 'Choose the household member responsible for it.', help: 'The owner is shown on the work item. Nobody is notified or scheduled. Nothing is saved until you confirm.',
+        fields: [{ key: 'member', label: 'Owner', required: true, inputSchema: { type: 'SINGLE_SELECT' as const, options: choices } }], seed: { member: item.ownerUserId ?? OWNER_NO_ONE } }
+    : kind === 'ADD_WATCHER'
+    ? { title: `Add a watcher to ${item.title}`, question: 'Who should follow this work?', help: 'A watcher follows the work item. Nothing is saved until you confirm.',
+        fields: [{ key: 'member', label: 'Watcher', required: true, inputSchema: { type: 'SINGLE_SELECT' as const, options: choices } }], seed: {} }
+    : kind === 'REMOVE_WATCHER'
+    ? { title: `Remove a watcher from ${item.title}`, question: 'Who should stop following this work?', help: 'Nothing is saved until you confirm.',
+        fields: [{ key: 'member', label: 'Watcher', required: true, inputSchema: { type: 'SINGLE_SELECT' as const, options: choices } }], seed: {} }
+    : kind === 'MARK_DUPLICATE'
+    ? { title: `What does ${item.title} repeat?`, question: 'Choose the work item that covers the same thing.', help: 'This item is set aside in favor of the one you pick. It is not deleted, and you can undo it. Nothing is saved until you confirm.',
+        fields: [{ key: 'target', label: 'Repeats', required: true, inputSchema: { type: 'SINGLE_SELECT' as const, options: choices } }], seed: {} }
     : kind === 'UPDATE_STATUS'
     ? { title: `Update the status of ${item.title}`, question: 'What should happen next?', help: 'Only changes currently allowed for this work are shown. A reason is required when removing a suggestion.',
         fields: [
@@ -180,14 +219,58 @@ export async function workItemCommandResult(
   if (!launch.entityId) return unavailable('HOME_WORK_ITEM_TARGET_REQUIRED', 'Choose a work item first', 'A change is made from an item in your work list. Nothing has changed.');
   const item = await loadItem(propertyId, launch.entityId);
   if (!item) return unavailable('HOME_WORK_ITEM_NOT_FOUND', 'That work item is no longer available', 'Ask could not find that work item. Nothing has changed.');
+  if (kind === 'UNDO_DUPLICATE') {
+    if (!item.supersededByWorkItemId || FINISHED.has(item.state)) return unavailable('HOME_WORK_ITEM_NOT_DUPLICATE', 'That work item is not set aside as a duplicate', 'Nothing has changed.');
+    const contextVersion = itemVersion(kind, item);
+    return {
+      status: 'NEEDS_CONFIRMATION', reasonCode: 'HOME_WORK_ITEM_UNDO_DUPLICATE_CONFIRMATION_REQUIRED', contextVersion,
+      parameters: { workItemCommand: { kind, entityId: item.id }, workItemChange: {}, workItemContextVersion: contextVersion, ...base },
+      blocks: [{ type: 'SUMMARY', id: 'home-work-item-review', title: item.title, body: 'Nothing is saved until you confirm.', tone: 'DEFAULT', actions: [] }],
+      confirmation: {
+        confirmationId: `home-work-undo-duplicate-${sha(item.id).slice(0, 12)}-1`, version: 1, title: 'Bring this work item back?', description: 'It returns to your list as its own work item. Nothing is deleted.',
+        fields: [{ label: 'Work item', value: item.title }, { label: 'Duplicate decision', value: 'Set aside → Back on the list' }], editableFields: [], confirmLabel: 'Bring it back', consentText: consent, expiresAt: expiresAt.toISOString(),
+      },
+      suggestions: [],
+    };
+  }
   if (!workItemChangeable(item)) return unavailable('HOME_WORK_ITEM_FINISHED', 'That work is already finished', 'Finished or replaced work is not changed here. Nothing has changed.');
   if (kind === 'UPDATE_STATUS' && item.legalNextStates.length === 0) return unavailable('HOME_WORK_ITEM_NO_STATUS_CHANGES', 'No status changes are available', 'This work is controlled by its linked workflow or has no homeowner-managed next state. Nothing has changed.');
+  if (kind === 'OPTIONS') {
+    const members = await householdMembers(propertyId);
+    const name = (id: string | null | undefined) => members.find((m) => m.userId === id)?.name ?? 'Someone in the household';
+    const watchers = item.watchers ?? [];
+    // One row: a row's id is the work item the launch carries, so the people and duplicate controls share it.
+    const actions = [
+      { id: WORK_ITEM_ACTION_IDS.ASSIGN_OWNER, label: item.ownerUserId ? 'Change the owner' : 'Assign an owner', message: WORK_ITEM_MESSAGES.ASSIGN_OWNER },
+      { id: WORK_ITEM_ACTION_IDS.ADD_WATCHER, label: 'Add a watcher', message: WORK_ITEM_MESSAGES.ADD_WATCHER },
+      ...(watchers.length ? [{ id: WORK_ITEM_ACTION_IDS.REMOVE_WATCHER, label: 'Remove a watcher', message: WORK_ITEM_MESSAGES.REMOVE_WATCHER }] : []),
+      { id: WORK_ITEM_ACTION_IDS.MARK_DUPLICATE, label: 'Mark as a duplicate', message: WORK_ITEM_MESSAGES.MARK_DUPLICATE },
+    ].map((a) => ({ ...a, interactionType: 'MUTATE_RECORD' as const, operationId: 'HOME_WORK_ITEM_COMMAND' as const, style: 'SECONDARY' as const }));
+    const rows = [{
+      id: item.id, title: item.title, status: null, href: null, entityType: WORK_ITEM_ENTITY_TYPE, meta: [],
+      description: `Owner: ${item.ownerUserId ? name(item.ownerUserId) : 'no one'}. Watching: ${watchers.length ? watchers.map((w) => name(w.userId)).join(', ') : 'no one'}.`,
+      actions,
+    }];
+    return {
+      status: 'ANSWERED', reasonCode: 'HOME_WORK_ITEM_OPTIONS_READY', contextVersion: itemVersion(kind, item),
+      blocks: [
+        { type: 'SUMMARY', id: 'home-work-item-options', title: `More for ${item.title}`, body: 'Each change is reviewed before it is saved. Nobody is notified or scheduled.', tone: 'DEFAULT', actions: [backToList] },
+        { type: 'GROUPED_LIST', filters: [], id: 'home-work-item-options-list', title: 'People and duplicates', description: 'Marking a duplicate sets this item aside in favor of another; it can be undone.', sections: [{ id: 'options', title: 'This work item', count: 1, items: rows }], actions: [] },
+      ],
+      suggestions: [],
+    };
+  }
   const contextVersion = itemVersion(kind, item);
   const formKind = kind as WorkItemFormKind;
   const evidenceKind = WORK_ITEM_ATTACH_KINDS.includes(formKind) || formKind === 'REMOVE_EVIDENCE';
+  const peopleKind = PEOPLE_KINDS.includes(formKind);
   const choices = evidenceKind
     ? (formKind === 'REMOVE_EVIDENCE' ? await removeChoices(item.id) : await attachChoices(propertyId, access.role, userId, item.id))
-    : [];
+    : peopleKind ? await peopleChoices(formKind, propertyId, item) : [];
+  if (peopleKind && choices.length === 0) {
+    return unavailable('HOME_WORK_ITEM_NO_CHOICES', formKind === 'MARK_DUPLICATE' ? 'No other work items to choose from' : formKind === 'REMOVE_WATCHER' ? 'No one is watching this' : 'Everyone is already watching this',
+      'Nothing has changed.');
+  }
   if (evidenceKind && choices.length === 0) {
     return unavailable(formKind === 'REMOVE_EVIDENCE' ? 'HOME_WORK_ITEM_NO_REMOVABLE_EVIDENCE' : 'HOME_WORK_ITEM_NO_RECORDS_TO_ATTACH',
       formKind === 'REMOVE_EVIDENCE' ? 'No evidence can be removed' : 'No other records to attach',
@@ -236,6 +319,19 @@ export async function workItemCommandResult(
       description: 'It is added as pending evidence and reviewed by the record that governs this work. It does not mark the work complete.',
       field: { label: EVIDENCE_TYPE_LABEL[ref.type], value: name }, stored: { evidenceType: ref.type, evidenceEntityId: ref.id },
     };
+  } else if (peopleKind) {
+    const pick = answer.member ?? answer.target;
+    const picked = choices.find((choice) => choice.value === pick);
+    if (!picked) return unavailable('HOME_WORK_ITEM_CHOICE_NOT_AVAILABLE', 'That choice is not available', 'It may have changed since the form was opened. Nothing has changed.');
+    const label = picked.label.replace(/ \(current owner\)$/, '');
+    spec = formKind === 'ASSIGN_OWNER'
+      ? { title: pick === OWNER_NO_ONE ? 'Clear the owner?' : 'Assign this owner?', confirmLabel: pick === OWNER_NO_ONE ? 'Clear the owner' : 'Assign them', description: 'The owner is shown on the work item. Nobody is notified, scheduled or contacted.',
+          field: { label: 'Owner', value: `${item.ownerUserId ? (await householdMembers(propertyId)).find((m) => m.userId === item.ownerUserId)?.name ?? 'Someone' : 'No one'} → ${label}` }, stored: { ownerUserId: pick === OWNER_NO_ONE ? null : pick } }
+      : formKind === 'ADD_WATCHER'
+      ? { title: 'Add this watcher?', confirmLabel: 'Add them', description: 'A watcher follows the work item. Nobody is scheduled or contacted.', field: { label: 'Watcher', value: label }, stored: { watcherUserId: pick } }
+      : formKind === 'REMOVE_WATCHER'
+      ? { title: 'Remove this watcher?', confirmLabel: 'Remove them', description: 'They stop following the work item. Nothing else changes.', field: { label: 'Watcher', value: label }, stored: { watcherUserId: pick } }
+      : { title: 'Set this aside as a duplicate?', confirmLabel: 'Mark as duplicate', description: 'This work item is set aside in favor of the one you picked. It is not deleted, and the receipt lets you undo it.', field: { label: 'Repeats', value: label }, stored: { duplicateOfWorkItemId: pick } };
   } else if (formKind === 'REMOVE_EVIDENCE') {
     const picked = choices.find((choice) => choice.value === answer.evidence);
     if (!picked) return unavailable('HOME_WORK_ITEM_EVIDENCE_NOT_AVAILABLE', 'That evidence cannot be removed', 'It may already be gone or verified. Nothing has changed.');
@@ -272,6 +368,7 @@ registerCapabilityHandler('home-work-item.command', async (envelope) => {
   return workItemCommandResult(envelope.userId, envelope.propertyId!, { kind, entityId: launch.entityId ?? null, sourceExecutionId: launch.sourceExecutionId ?? null });
 });
 
+const FINISHED = new Set(['CLOSED', 'VERIFIED']);
 const stale = (message: string, code = 'ASK_CONFIRMATION_NOT_ACTIVE') => Object.assign(new Error(message), { code });
 
 async function confirmWorkItemCommand(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
@@ -298,9 +395,14 @@ async function confirmWorkItemCommand(ctx: ConfirmCapabilityContext): Promise<Co
       const item = await loadItem(propertyId, command.entityId);
       if (!item) throw stale('That work item is no longer available.');
       if (parameters.workItemContextVersion !== itemVersion(kind, item)) throw stale('This work item changed while the confirmation was open. Review it again and try again.', 'ASK_CONTEXT_VERSION_CONFLICT');
-      if (!workItemChangeable(item)) throw stale('That work is already finished.');
+      if (kind !== 'UNDO_DUPLICATE' && !workItemChangeable(item)) throw stale('That work is already finished.');
       const change = (parameters.workItemChange ?? {}) as Record<string, unknown>;
-      if (kind === 'UPDATE_STATUS') {
+      if (kind === 'UNDO_DUPLICATE') {
+        if (!item.supersededByWorkItemId || FINISHED.has(item.state)) throw stale('That work item is not set aside as a duplicate.');
+        await reverseDuplicateDecision({ workItemId: item.id, actorUserId: userId, idempotencyKey: `ask:${execution.id}:work-duplicate-undo` });
+        title = 'Back on your list';
+        description = 'The duplicate decision was undone. Nothing was deleted.';
+      } else if (kind === 'UPDATE_STATUS') {
         const status = change.status as OperationalWorkItemState | undefined;
         const disposition = change.disposition as OperationalWorkItemDisposition | null | undefined;
         if (!status) throw stale('The status to apply is invalid.');
@@ -336,6 +438,36 @@ async function confirmWorkItemCommand(ctx: ConfirmCapabilityContext): Promise<Co
           throw error;
         }
         description = 'It no longer counts as evidence for this work. The removal stays in the work’s history.';
+      } else if (kind === 'ASSIGN_OWNER' || kind === 'ADD_WATCHER' || kind === 'REMOVE_WATCHER') {
+        const memberId = kind === 'ASSIGN_OWNER' ? change.ownerUserId : change.watcherUserId;
+        if (memberId !== null && typeof memberId !== 'string') throw stale('The person to apply is invalid.');
+        const members = await householdMembers(propertyId);
+        if (memberId !== null && !members.some((m) => m.userId === memberId)) throw stale('That person is not in this household.');
+        if (kind === 'ASSIGN_OWNER') {
+          await assignWorkItemOwner({ workItemId: item.id, ownerUserId: memberId as string | null, actorUserId: userId, idempotencyKey: `ask:${execution.id}:work-owner` });
+          title = memberId ? 'Owner assigned' : 'Owner cleared';
+          description = 'It is on the work item. Nobody was notified or scheduled.';
+        } else if (kind === 'ADD_WATCHER') {
+          if (!memberId) throw stale('The person to apply is invalid.');
+          if (!(item.watchers ?? []).some((w) => w.userId === memberId)) await addWatcher({ workItemId: item.id, userId: memberId as string, addedByUserId: userId, idempotencyKey: `ask:${execution.id}:work-watcher-add` });
+          title = 'Watcher added';
+          description = 'They follow this work item. Nobody was scheduled or contacted.';
+        } else {
+          if (!memberId) throw stale('The person to apply is invalid.');
+          await removeWatcher({ workItemId: item.id, userId: memberId as string, actorUserId: userId, idempotencyKey: `ask:${execution.id}:work-watcher-remove` });
+          title = 'Watcher removed';
+          description = 'They no longer follow this work item.';
+        }
+      } else if (kind === 'MARK_DUPLICATE') {
+        const targetId = change.duplicateOfWorkItemId;
+        if (typeof targetId !== 'string' || targetId === item.id) throw stale('The work item to merge into is invalid.');
+        const target = await loadItem(propertyId, targetId);
+        if (!target || !workItemChangeable(target)) throw stale('That work item is no longer available.');
+        await recordDuplicateDecision({ workItemId: item.id, supersededByWorkItemId: targetId, actorUserId: userId, idempotencyKey: `ask:${execution.id}:work-duplicate` });
+        title = 'Marked as a duplicate';
+        description = 'It is set aside in favor of the other work item. Nothing was deleted, and you can undo it.';
+      } else if (kind === 'OPTIONS') {
+        throw stale('The change to make is invalid.');
       } else {
         if (typeof change.dueAt !== 'string') throw stale('The due date to apply is invalid.');
         await rescheduleWorkItem({ workItemId: item.id, dueAt: new Date(change.dueAt), actorUserId: userId, idempotencyKey: crypto.randomUUID() });
@@ -349,7 +481,7 @@ async function confirmWorkItemCommand(ctx: ConfirmCapabilityContext): Promise<Co
   }
   const result: AskOperationResult = {
     status: 'COMPLETED', reasonCode: `HOME_WORK_ITEM_${kind}_COMPLETED`,
-    blocks: [{ type: 'WORKFLOW_PROGRESS', id: `home-work-item-${kind.toLowerCase()}-${typeof command?.entityId === 'string' ? command.entityId : 'batch'}`, title, status: 'COMPLETED', description, details: [], actions: [{ ...backToList, label: 'See my work items', style: 'PRIMARY' as const }] }],
+    blocks: [{ type: 'WORKFLOW_PROGRESS', id: `home-work-item-${kind.toLowerCase()}-${typeof command?.entityId === 'string' ? command.entityId : 'batch'}`, title, status: 'COMPLETED', description, details: [], actions: [...(kind === 'MARK_DUPLICATE' && typeof command?.entityId === 'string' ? [{ id: WORK_ITEM_ACTION_IDS.UNDO_DUPLICATE, label: 'Undo: bring it back', message: WORK_ITEM_MESSAGES.UNDO_DUPLICATE, entityType: WORK_ITEM_ENTITY_TYPE, entityId: command.entityId, operationId: 'HOME_WORK_ITEM_COMMAND' as const, interactionType: 'START_WORKFLOW' as const, style: 'SECONDARY' as const }] : []), { ...backToList, label: 'See my work items', style: 'PRIMARY' as const }] }],
     suggestions: [],
   };
   const refresh = await reconcileAskExecutionSideEffects(userId, execution, parameters);

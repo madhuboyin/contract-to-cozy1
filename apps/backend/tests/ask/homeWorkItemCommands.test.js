@@ -32,7 +32,7 @@ const T = new Date('2026-09-01T00:00:00Z');
 const sha = (text) => crypto.createHash('sha256').update(text).digest('hex');
 const iso = (v) => (v ? v.toISOString() : '');
 const item = (over = {}) => ({ id: 'w1', propertyId: 'prop-1', title: 'Flush water heater', state: 'ACCEPTED', safetyTier: 'LOW_CONSEQUENCE', obligationType: 'MAINTENANCE', dueAt: new Date('2026-10-01T12:00:00Z'), dueWindowStart: null, dueWindowEnd: null, snoozedUntil: null, supersededByWorkItemId: null, ownerUserId: null, isRoutine: false, legalNextStates: ['SCHEDULED', 'IN_PROGRESS', 'BLOCKED', 'DEFERRED', 'REOPENED'], closureDispositionRule: 'OPTIONAL', ...over });
-const version = (kind, i) => sha(`work-item:${kind}:${i.id}:${i.state}:${iso(i.dueAt)}:${iso(i.dueWindowStart)}:${iso(i.dueWindowEnd)}:${iso(i.snoozedUntil)}:${i.supersededByWorkItemId ?? ''}`);
+const version = (kind, i) => sha(`work-item:${kind}:${i.id}:${i.state}:${iso(i.dueAt)}:${iso(i.dueWindowStart)}:${iso(i.dueWindowEnd)}:${iso(i.snoozedUntil)}:${i.supersededByWorkItemId ?? ''}:${i.ownerUserId ?? ''}:${(i.watchers ?? []).map((w) => w.userId).sort().join(',')}`);
 const batchVersion = (items) => sha(`work-batch:${items.map((i) => `${i.id}:${i.state}`).sort().join('|')}`);
 
 function install(role, items = [item()]) {
@@ -71,7 +71,7 @@ test('the list drops finished or replaced work, sorts by due date, and offers co
   assert.equal(contributor.blocks[1].listDensity, 'DENSE');
   assert.deepEqual(contributor.blocks[1].sections.map((section) => section.initialVisibleCount), [2, 1]);
   assert.equal(contributor.blocks[1].description, null);
-  assert.deepEqual(contributor.blocks[1].sections[0].items[0].actions.map((a) => a.id), ['work-item-update-status', 'work-item-snooze', 'work-item-reschedule']);
+  assert.deepEqual(contributor.blocks[1].sections[0].items[0].actions.map((a) => a.id), ['work-item-update-status', 'work-item-snooze', 'work-item-reschedule', 'work-item-options']);
   assert.deepEqual(contributor.blocks[0].actions.map((a) => a.id), ['work-items-accept-routine']);
   const viewer = view(false);
   assert.ok(viewer.blocks[1].sections.flatMap((section) => section.items).every((i) => i.actions.length === 0));
@@ -107,7 +107,7 @@ test('the list distinguishes overdue adopted work, paused reminders, reported co
   assert.equal(rows.find((row) => row.id === 'reported').tone, 'DEFAULT');
   assert.equal(rows.find((row) => row.id === 'reported').status, 'Waiting for verification');
   assert.match(rows.find((row) => row.id === 'reported').meta.join(' · '), /stays here until the outcome is verified/);
-  assert.deepEqual(rows.find((row) => row.id === 'reported').actions.map((action) => action.label), ['Add evidence', 'Update status']);
+  assert.deepEqual(rows.find((row) => row.id === 'reported').actions.map((action) => action.label), ['Add evidence', 'Update status', 'More options']);
   assert.equal(rows.find((row) => row.id === 'candidate').status, 'Not added');
   assert.equal(rows.find((row) => row.id === 'candidate').description, 'Recommendation · decision');
   assert.match(rows.find((row) => row.id === 'candidate').meta.join(' · '), /Not yet added to your work/);
@@ -205,8 +205,9 @@ test('the action ids are allowlisted on the list and the back action on the comm
   const applicable = (id, operationId) => isAskActionApplicable({
     action: { id, label: 'x', interactionType: 'START_WORKFLOW', message: 'm', operationId, style: 'QUIET' }, operationId, propertyId: 'prop-1', householdRole: 'CONTRIBUTOR', authoritativeSourceAvailable: true,
   });
-  for (const id of Object.values(command.WORK_ITEM_ACTION_IDS)) assert.equal(applicable(id, 'HOME_WORK_ITEMS'), true, id);
-  assert.equal(applicable('home-work-items-back', OP), true);
+  const A = command.WORK_ITEM_ACTION_IDS;
+  for (const id of [A.SNOOZE, A.RESCHEDULE, A.ACCEPT_ROUTINE, A.UPDATE_STATUS, A.ATTACH_EVIDENCE, A.OPTIONS]) assert.equal(applicable(id, 'HOME_WORK_ITEMS'), true, id);
+  for (const id of ['home-work-items-back', A.ASSIGN_OWNER, A.ADD_WATCHER, A.REMOVE_WATCHER, A.MARK_DUPLICATE, A.UNDO_DUPLICATE]) assert.equal(applicable(id, OP), true, id);
 });
 
 // FRD 1.401: attach an existing record, submit completion evidence, remove evidence. Prisma delegates and the document inventory are faked; nothing else is.
@@ -301,4 +302,106 @@ test('attach existing, confirm twice: a record already on the work writes nothin
     // The work-items list and the Home Actions feed (where the focused card shows the evidence) are both re-read after a change.
     assert.deepEqual([...executeOperation.ASK_MUTATION_IMPACT_MAP.HOME_WORK_ITEM_COMMAND].sort(), ['HOME_ACTIONS', 'HOME_WORK_ITEMS']);
   } finally { e.restore(); w.restore(); }
+});
+
+// ---- owner, watchers and duplicates (FRD v1.454) --------------------------------------------------------------------------------------------------
+const assignUse = require('../../src/modules/homeOperations/application/assignOwner.usecase.ts');
+const watchUse = require('../../src/modules/homeOperations/application/watchers.usecase.ts');
+const dupUse = require('../../src/modules/homeOperations/application/recordDuplicateDecision.usecase.ts');
+const { HouseholdService } = require('../../src/services/household.service.ts');
+const member = (userId, first, displayName = null) => ({ userId, displayName, user: { firstName: first, lastName: 'Lee' } });
+function installPeople(role, items, members = [member('u1', 'Sam'), member('u2', 'Pat'), member('u3', 'Kim', 'Kimmy')]) {
+  const w = install(role, items);
+  const saved = { as: assignUse.assignWorkItemOwner, aw: watchUse.addWatcher, rw: watchUse.removeWatcher, rd: dupUse.recordDuplicateDecision, ud: dupUse.reverseDuplicateDecision, lm: HouseholdService.prototype.listMembers };
+  assignUse.assignWorkItemOwner = async (a) => { w.calls.push(['owner', a]); };
+  watchUse.addWatcher = async (a) => { w.calls.push(['watch', a]); };
+  watchUse.removeWatcher = async (a) => { w.calls.push(['unwatch', a]); };
+  dupUse.recordDuplicateDecision = async (a) => { w.calls.push(['dup', a]); };
+  dupUse.reverseDuplicateDecision = async (a) => { w.calls.push(['undup', a]); };
+  HouseholdService.prototype.listMembers = async () => members;
+  const base = w.restore;
+  w.restore = () => { base(); assignUse.assignWorkItemOwner = saved.as; watchUse.addWatcher = saved.aw; watchUse.removeWatcher = saved.rw; dupUse.recordDuplicateDecision = saved.rd; dupUse.reverseDuplicateDecision = saved.ud; HouseholdService.prototype.listMembers = saved.lm; };
+  return w;
+}
+const answer = async (kind, form, id = 'w1') => command.parseWorkItemAnswer && (await require('../../src/services/ask/handlers/homeWorkItemCommands.handler.ts').workItemCommandResult('u1', 'prop-1', { kind, entityId: id, sourceExecutionId: null }, form));
+const cp = (kind, items, change, id = 'w1') => ({ workItemCommand: { kind, entityId: id }, workItemChange: change, workItemContextVersion: version(kind, items.find((i) => i.id === id)) });
+
+test('more options: one row with the people and duplicate controls, names resolved from the household; viewers refused; the list row gains the entry', async () => {
+  const items = [item({ ownerUserId: 'u2', watchers: [{ userId: 'u3' }] })];
+  let w = installPeople('CONTRIBUTOR', items);
+  try {
+    const result = await invoke('OPTIONS', launch());
+    const row = result.blocks.find((b) => b.type === 'GROUPED_LIST').sections[0].items[0];
+    assert.equal(row.id, 'w1');
+    assert.equal(row.description, 'Owner: Pat Lee. Watching: Kimmy.');
+    assert.deepEqual(row.actions.map((a) => a.id), ['work-item-assign-owner', 'work-item-add-watcher', 'work-item-remove-watcher', 'work-item-mark-duplicate']);
+    assert.equal(w.calls.length, 0);
+    const list = homeWorkItemsFromRows([item()], true, new Date('2026-09-15T00:00:00Z'));
+    assert.ok(list.blocks.find((b) => b.type === 'GROUPED_LIST').sections.flatMap((x) => x.items)[0].actions.some((a) => a.id === 'work-item-options'));
+    assert.ok(!homeWorkItemsFromRows([item()], false, new Date('2026-09-15T00:00:00Z')).blocks.find((b) => b.type === 'GROUPED_LIST').sections.flatMap((x) => x.items)[0].actions.some((a) => a.id === 'work-item-options'));
+  } finally { w.restore(); }
+  w = installPeople('VIEWER', items);
+  try { assert.equal((await invoke('OPTIONS', launch())).reasonCode, 'ASK_PERMISSION_REQUIRED'); } finally { w.restore(); }
+});
+
+test('assign the owner: the picker lists the household and No one, the review shows before and after, the confirmation calls the usecase, a stranger is refused', async () => {
+  const items = [item({ ownerUserId: 'u2' })];
+  const w = installPeople('CONTRIBUTOR', items);
+  try {
+    const ask = await invoke('ASSIGN_OWNER', launch());
+    assert.deepEqual(ask.captureRequests[0].inputSchema.fields[0].inputSchema.options.map((o) => o.label), ['No one', 'Sam Lee', 'Pat Lee (current owner)', 'Kimmy']);
+    const review = await answer('ASSIGN_OWNER', { member: 'u3' });
+    assert.equal(review.status, 'NEEDS_CONFIRMATION');
+    assert.equal(review.confirmation.fields[1].value, 'Pat Lee → Kimmy');
+    assert.equal((await answer('ASSIGN_OWNER', { member: 'stranger' })).reasonCode, 'HOME_WORK_ITEM_CHOICE_NOT_AVAILABLE');
+    await confirmCapabilityInvoke(OP, ctx(cp('ASSIGN_OWNER', items, { ownerUserId: 'u3' })));
+    assert.deepEqual(w.calls[0], ['owner', { workItemId: 'w1', ownerUserId: 'u3', actorUserId: 'u1', idempotencyKey: 'ask:exec-1:work-owner' }]);
+    await confirmCapabilityInvoke(OP, ctx(cp('ASSIGN_OWNER', items, { ownerUserId: null })));
+    assert.equal(w.calls[1][1].ownerUserId, null);
+    await assert.rejects(() => confirmCapabilityInvoke(OP, ctx(cp('ASSIGN_OWNER', items, { ownerUserId: 'stranger' }))), (e) => e.code === 'ASK_CONFIRMATION_NOT_ACTIVE');
+    assert.equal(w.calls.length, 2);
+  } finally { w.restore(); }
+});
+
+test('watchers: add offers only non-watchers, remove only watchers, and the confirmation is idempotent for a member already watching', async () => {
+  const items = [item({ watchers: [{ userId: 'u2' }] })];
+  const w = installPeople('CONTRIBUTOR', items);
+  try {
+    assert.deepEqual((await invoke('ADD_WATCHER', launch())).captureRequests[0].inputSchema.fields[0].inputSchema.options.map((o) => o.value), ['u1', 'u3']);
+    assert.deepEqual((await invoke('REMOVE_WATCHER', launch())).captureRequests[0].inputSchema.fields[0].inputSchema.options.map((o) => o.value), ['u2']);
+    await confirmCapabilityInvoke(OP, ctx(cp('ADD_WATCHER', items, { watcherUserId: 'u3' })));
+    assert.equal(w.calls[0][0], 'watch');
+    await confirmCapabilityInvoke(OP, ctx(cp('ADD_WATCHER', items, { watcherUserId: 'u2' })));
+    assert.equal(w.calls.length, 1, 'already watching writes nothing');
+    await confirmCapabilityInvoke(OP, ctx(cp('REMOVE_WATCHER', items, { watcherUserId: 'u2' })));
+    assert.deepEqual(w.calls[1], ['unwatch', { workItemId: 'w1', userId: 'u2', actorUserId: 'u1', idempotencyKey: 'ask:exec-1:work-watcher-remove' }]);
+  } finally { w.restore(); }
+  const none = installPeople('CONTRIBUTOR', [item()]);
+  try { assert.equal((await invoke('REMOVE_WATCHER', launch())).reasonCode, 'HOME_WORK_ITEM_NO_CHOICES'); } finally { none.restore(); }
+});
+
+test('duplicates: the picker lists only the other open work, the confirmation re-checks the target, and the receipt offers the undo which reverses it', async () => {
+  const items = [item(), item({ id: 'w2', title: 'Clean gutters' }), item({ id: 'w3', title: 'Old', state: 'CLOSED' })];
+  const w = installPeople('CONTRIBUTOR', items);
+  try {
+    assert.deepEqual((await invoke('MARK_DUPLICATE', launch())).captureRequests[0].inputSchema.fields[0].inputSchema.options.map((o) => o.value), ['w2']);
+    const review = await answer('MARK_DUPLICATE', { target: 'w2' });
+    assert.match(review.confirmation.description, /not deleted/);
+    const done = await confirmCapabilityInvoke(OP, ctx(cp('MARK_DUPLICATE', items, { duplicateOfWorkItemId: 'w2' })));
+    assert.deepEqual(w.calls[0], ['dup', { workItemId: 'w1', supersededByWorkItemId: 'w2', actorUserId: 'u1', idempotencyKey: 'ask:exec-1:work-duplicate' }]);
+    const undo = done.result.blocks[0].actions.find((a) => a.id === 'work-item-undo-duplicate');
+    assert.equal(undo.entityId, 'w1');
+    for (const bad of ['w1', 'w3', 'nope']) await assert.rejects(() => confirmCapabilityInvoke(OP, ctx(cp('MARK_DUPLICATE', items, { duplicateOfWorkItemId: bad }))), (e) => e.code === 'ASK_CONFIRMATION_NOT_ACTIVE', bad);
+    assert.equal(w.calls.length, 1);
+  } finally { w.restore(); }
+  const set = [item({ supersededByWorkItemId: 'w2' }), item({ id: 'w2', title: 'Clean gutters' })];
+  const w2 = installPeople('CONTRIBUTOR', set);
+  try {
+    assert.equal((await invoke('UNDO_DUPLICATE', launch())).status, 'NEEDS_CONFIRMATION');
+    await confirmCapabilityInvoke(OP, ctx(cp('UNDO_DUPLICATE', set, {})));
+    assert.deepEqual(w2.calls[0], ['undup', { workItemId: 'w1', actorUserId: 'u1', idempotencyKey: 'ask:exec-1:work-duplicate-undo' }]);
+    assert.equal((await invoke('MARK_DUPLICATE', launch())).reasonCode, 'HOME_WORK_ITEM_FINISHED', 'a set-aside item is not marked again');
+  } finally { w2.restore(); }
+  const plain = installPeople('CONTRIBUTOR', [item()]);
+  try { assert.equal((await invoke('UNDO_DUPLICATE', launch())).reasonCode, 'HOME_WORK_ITEM_NOT_DUPLICATE'); } finally { plain.restore(); }
 });

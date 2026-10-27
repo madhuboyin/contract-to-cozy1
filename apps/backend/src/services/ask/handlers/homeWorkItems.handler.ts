@@ -79,11 +79,12 @@ export function homeWorkItemsFromRows(items: WorkItemView[], canChange: boolean,
           { id: WORK_ITEM_ACTION_IDS.SNOOZE, label: 'Snooze', message: WORK_ITEM_MESSAGES.SNOOZE, interactionType: 'MUTATE_RECORD' as const, operationId: 'HOME_WORK_ITEM_COMMAND' as const, style: 'QUIET' as const },
           { id: WORK_ITEM_ACTION_IDS.RESCHEDULE, label: 'Change due date', message: WORK_ITEM_MESSAGES.RESCHEDULE, interactionType: 'MUTATE_RECORD' as const, operationId: 'HOME_WORK_ITEM_COMMAND' as const, style: 'SECONDARY' as const },
         ];
+    const moreOptions = canChange ? [{ id: WORK_ITEM_ACTION_IDS.OPTIONS, label: 'More options', message: WORK_ITEM_MESSAGES.OPTIONS, interactionType: 'MUTATE_RECORD' as const, operationId: 'HOME_WORK_ITEM_COMMAND' as const, style: 'QUIET' as const }] : [];
     return {
       id: item.id, title: item.title, description: context, meta, status: STATE_LABELS[item.state] ?? null, href: null,
       tone: overdue ? 'CRITICAL' as const : 'DEFAULT' as const,
       entityType: WORK_ITEM_ENTITY_TYPE,
-      actions,
+      actions: [...actions, ...moreOptions],
     };
   };
   const rows = sorted.map((item) => ({ item, row: row(item) }));
