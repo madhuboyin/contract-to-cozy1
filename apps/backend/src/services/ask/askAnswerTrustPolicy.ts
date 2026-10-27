@@ -5,6 +5,7 @@ import { isAskActionAllowedForHouseholdRole } from './askAudiencePresentation';
 import { getAskOperationDefinition, type AskOperationId, type AskOperationResult } from './askOperationRegistry';
 import type { AskAnswerTrustEvidence, AskAuthoritativeSourceEvidence } from './askTrust.contract';
 import { isReceiptFollowUpAction } from './support/receiptFollowUps';
+import { DIY_FILTER_ACTION_IDS } from './support/diyTemplateBrowseFilter';
 
 type AskAction = Extract<AskPresentationBlock, { type: 'SUMMARY' }>['actions'][number];
 
@@ -165,7 +166,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   PLANT_CARE_OUTLOOK: new Set(['find-plants-for-room', 'add-home-plant']),
   DIY_PROJECTS: new Set(['diy-template-browse', 'diy-skill-profile', 'diy-project-note']),
   DIY_PROJECT_GUIDE: new Set(['diy-step-complete', 'diy-step-skip', 'diy-step-previous', 'diy-step-back', 'diy-step-reopen', 'diy-review-last-step', 'diy-project-finish', 'diy-project-more', 'diy-project-stop', 'diy-project-handoff', 'diy-record-again', 'diy-task-record-again']),
-  DIY_TEMPLATE_BROWSE: new Set(['diy-template-start', 'diy-template-browse']),
+  DIY_TEMPLATE_BROWSE: new Set(['diy-template-start', 'diy-template-browse', ...DIY_FILTER_ACTION_IDS]),
   DIY_PROJECT_START: new Set(['diy-start-guide']),
   DIY_STEP_UPDATE: new Set(['diy-continue-guide']),
   DIY_PROJECT_ABANDON: new Set(['diy-show-projects']),

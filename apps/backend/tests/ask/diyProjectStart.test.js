@@ -323,3 +323,50 @@ test('a hire-required verdict offers no start, and an already-started project is
   assert.ok(hire.blocks.some((b) => b.id === 'diy-assessment-blockers'));
   for (const block of hire.blocks) AskPresentationBlockSchema.parse(block);
 });
+
+// ---- browse filters (FRD v1.459) ---------------------------------------------------------------------------------------------------------------
+
+test('browse filters: declared messages parse from a closed list, narrow by category and difficulty, offer only values the catalogue has, and typed wording carries none', async () => {
+  const filterModule = require('../../src/services/ask/support/diyTemplateBrowseFilter.ts');
+  const { diyTemplateBrowseFromItems } = require('../../src/services/ask/handlers/diyProjectStart.handler.ts');
+  const base = 'Show the DIY projects I can start.';
+  assert.deepEqual(filterModule.parseDiyBrowseFilter(base), {});
+  assert.deepEqual(filterModule.parseDiyBrowseFilter(`${base} Category: PLUMBING. Difficulty: EASY.`), { category: 'PLUMBING', difficulty: 'EASY' });
+  for (const bad of [`${base} Category: NOPE.`, `${base} Difficulty: easy.`, `${base} Category: PLUMBING. extra`, `${base}; drop`, 'Show me projects', `${base} Difficulty: EASY. Category: PLUMBING.`]) {
+    assert.equal(filterModule.parseDiyBrowseFilter(bad), null, bad);
+  }
+  const row = (id, category, difficultyLevel, title = id) => ({ id, revisionId: `rev-${id}`, slug: id, title, shortDescription: 'x', category, difficultyLevel, estimatedMinutes: 60, stepCount: 3, toolCount: 0, openProjectId: null });
+  const items = [row('a', 'PLUMBING', 'EASY'), row('b', 'PLUMBING', 'HARD'), row('c', 'PAINTING', 'EASY'), row('d', 'HVAC', 'MODERATE')];
+  const view = { items, hasMore: false, sourceTotal: 4 };
+  const ids = (result) => rowsOf(result).map((r) => r.id).sort();
+  const chipIds = (result) => [...result.blocks.find((b) => b.type === 'SUMMARY').actions, ...result.blocks.find((b) => b.type === 'GROUPED_LIST').actions].map((a) => a.id);
+
+  const all = diyTemplateBrowseFromItems(view, 'prop-1', true);
+  assert.deepEqual(ids(all), ['a', 'b', 'c', 'd']);
+  assert.deepEqual(chipIds(all).sort(), ['diy-template-filter-category-hvac', 'diy-template-filter-category-painting', 'diy-template-filter-category-plumbing', 'diy-template-filter-difficulty-easy', 'diy-template-filter-difficulty-hard', 'diy-template-filter-difficulty-moderate']);
+  const plumbing = diyTemplateBrowseFromItems(view, 'prop-1', true, { category: 'PLUMBING' });
+  assert.deepEqual(ids(plumbing), ['a', 'b']);
+  assert.ok(chipIds(plumbing).includes('diy-template-filter-clear') && !chipIds(plumbing).includes('diy-template-filter-category-plumbing'), 'clear is offered, the active value is not');
+  const easyPlumbing = diyTemplateBrowseFromItems(view, 'prop-1', true, { category: 'PLUMBING', difficulty: 'EASY' });
+  assert.deepEqual(ids(easyPlumbing), ['a']);
+  // a chip keeps the other dimension: choosing HVAC while Easy is active asks for both
+  const chip = (result, id) => [...result.blocks.find((b) => b.type === 'SUMMARY').actions, ...result.blocks.find((b) => b.type === 'GROUPED_LIST').actions].find((a) => a.id === id);
+  assert.equal(chip(easyPlumbing, 'diy-template-filter-category-painting').message, `${base} Category: PAINTING. Difficulty: EASY.`);
+  assert.equal(chip(easyPlumbing, 'diy-template-filter-clear').message, base);
+  const none = diyTemplateBrowseFromItems(view, 'prop-1', true, { category: 'HVAC', difficulty: 'EASY' });
+  assert.equal(none.reasonCode, 'DIY_TEMPLATE_BROWSE_FILTER_EMPTY');
+  assert.deepEqual(none.blocks[0].actions.map((a) => a.id), ['diy-template-filter-clear']);
+  // one value only: no chip that would filter nothing
+  assert.deepEqual(chipIds(diyTemplateBrowseFromItems({ items: [row('a', 'PLUMBING', 'EASY')], hasMore: false }, 'prop-1', true)).sort(), []);
+  // every block passes the schema and the trust policy
+  for (const result of [all, plumbing, easyPlumbing, none]) {
+    for (const block of result.blocks) AskPresentationBlockSchema.parse(block);
+    assert.equal(validate('DIY_TEMPLATE_BROWSE', result, 'CONTRIBUTOR').blocks.length, result.blocks.length);
+  }
+  // the handler honors a filter only on the declared launch; typed wording is unfiltered
+  const filtered = (message, launchContext) => capabilityInvoke('DIY_TEMPLATE_BROWSE', { userId: 'u1', propertyId: 'prop-1', message, launchContext });
+  const declared = { surface: 'ASK_WORKSPACE', operationId: 'DIY_TEMPLATE_BROWSE', sourceExecutionId: null };
+  assert.equal((await filtered(`${base} Category: PLUMBING.`, declared)).reasonCode, 'DIY_TEMPLATE_BROWSE_FILTER_EMPTY', 'the fake catalogue has one PAINTING template');
+  assert.equal(rowsOf(await filtered(`${base} Category: PAINTING.`, declared)).length, 1);
+  assert.equal(rowsOf(await filtered(`${base} Category: PLUMBING.`, undefined)).length, 1, 'no declared launch: unfiltered');
+});

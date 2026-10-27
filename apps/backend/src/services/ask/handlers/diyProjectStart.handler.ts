@@ -21,6 +21,7 @@ import {
 } from '../../diy/projectGuide';
 import { diyProjectGuideCandidate, diyTemplateStartCandidate } from '../suggestedActions/diyProjectCandidates';
 import { collectionDescriptor } from '../support/collectionDescriptor';
+import { DIY_DIFFICULTY_LABELS, DIY_FILTER_CLEAR_ACTION_ID, diyBrowseFilterMessage, diyFilterActionId, parseDiyBrowseFilter, type DiyBrowseFilter } from '../support/diyTemplateBrowseFilter';
 
 const BOUNDARY_ID = 'diy-template-boundary';
 const SUGGESTIONS = ['Show my DIY projects'];
@@ -45,10 +46,28 @@ const minutes = (value: number | null | undefined) => (!value ? null : value < 6
 // ---- browse (read-only) ---------------------------------------------------------------------------------------------------------------------------------
 
 /** Pure: the card. `canStart` is whether the person may change the property (a contributor or owner); only then do rows carry the start action. */
-export function diyTemplateBrowseFromItems(view: { items: StartableTemplate[]; hasMore: boolean; sourceTotal?: number }, propertyId: string, canStart: boolean): AskOperationResult {
+const DIY_BROWSE_LIMIT = 12;
+/** One filter chip: a declared browse message (the current filter with one value changed). */
+const filterChip = (id: string, label: string, filter: DiyBrowseFilter) => ({
+  id, label, message: diyBrowseFilterMessage(filter), style: 'QUIET' as const, interactionType: 'START_WORKFLOW' as const, operationId: 'DIY_TEMPLATE_BROWSE' as const,
+});
+export function diyTemplateBrowseFromItems(view: { items: StartableTemplate[]; hasMore: boolean; sourceTotal?: number }, propertyId: string, canStart: boolean, filter: DiyBrowseFilter = {}): AskOperationResult {
   // Reviewed production catalogues must never expose an accidentally published test fixture.
   const visibleItems = view.items.filter((item) => !/^\s*\[test\]/i.test(item.title) && !/^\s*test(?:\s+template)?\s*:/i.test(item.shortDescription ?? ''));
-  view = { ...view, items: visibleItems, sourceTotal: Math.min(view.sourceTotal ?? visibleItems.length, visibleItems.length) };
+  // The desktop page narrows by category and difficulty; the chips below offer only values this home's catalogue has, and the list is cut to the browse limit after the filter.
+  const matching = visibleItems.filter((item) => (!filter.category || item.category === filter.category) && (!filter.difficulty || item.difficultyLevel === filter.difficulty));
+  const filtered = Boolean(filter.category || filter.difficulty);
+  const countBy = (pick: (item: StartableTemplate) => string) => visibleItems.reduce((map, item) => map.set(pick(item), (map.get(pick(item)) ?? 0) + 1), new Map<string, number>());
+  const categoryCounts = countBy((item) => item.category);
+  const difficultyPresent = new Set(visibleItems.map((item) => item.difficultyLevel));
+  const filterLabel = [filter.category ? CATEGORY_LABELS[filter.category] ?? filter.category : null, filter.difficulty ? DIY_DIFFICULTY_LABELS[filter.difficulty] ?? filter.difficulty : null].filter(Boolean).join(', ');
+  const clearChip = filtered ? [filterChip(DIY_FILTER_CLEAR_ACTION_ID, 'Show all projects', {})] : [];
+  // A chip is offered only when the catalogue has more than one value to choose between.
+  const categoryChips = (categoryCounts.size < 2 ? [] : [...categoryCounts.entries()]).filter(([category]) => category !== filter.category).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 6 - clearChip.length)
+    .map(([category]) => filterChip(diyFilterActionId('category', category), CATEGORY_LABELS[category] ?? category, { ...filter, category }));
+  const difficultyChips = (['EASY', 'MODERATE', 'HARD', 'EXPERT_ONLY'] as const).filter((level) => difficultyPresent.size > 1 && difficultyPresent.has(level) && level !== filter.difficulty).slice(0, 3)
+    .map((level) => filterChip(diyFilterActionId('difficulty', level), DIY_DIFFICULTY_LABELS[level], { ...filter, difficulty: level }));
+  view = { ...view, items: matching.slice(0, DIY_BROWSE_LIMIT), hasMore: matching.length > DIY_BROWSE_LIMIT || (view.hasMore && !filtered), sourceTotal: matching.length };
   const scope: AskPresentationBlock = {
     type: 'BOUNDARY', id: BOUNDARY_ID, title: 'Only reviewed, low-risk projects',
     body: 'Only reviewed templates that fit this home are offered here. Electrical panel or wiring work, gas lines, structural work, active leaks or flooding, and hazardous materials are for a licensed professional. Stop if anything feels unsafe.',
@@ -56,24 +75,26 @@ export function diyTemplateBrowseFromItems(view: { items: StartableTemplate[]; h
   };
   if (!view.items.length) {
     return {
-      status: 'ANSWERED', reasonCode: 'DIY_TEMPLATE_BROWSE_EMPTY',
+      status: 'ANSWERED', reasonCode: filtered && visibleItems.length ? 'DIY_TEMPLATE_BROWSE_FILTER_EMPTY' : 'DIY_TEMPLATE_BROWSE_EMPTY',
       blocks: [{
-        type: 'EMPTY_STATE', id: 'diy-template-browse-empty', title: 'No reviewed projects to start yet',
-        body: 'There are no reviewed DIY projects that fit this home right now. Check back once one is published.', actions: [],
+        type: 'EMPTY_STATE', id: 'diy-template-browse-empty',
+        title: filtered && visibleItems.length ? `No projects match ${filterLabel}` : 'No reviewed projects to start yet',
+        body: filtered && visibleItems.length ? 'Try another category or difficulty, or show every project.' : 'There are no reviewed DIY projects that fit this home right now. Check back once one is published.',
+        actions: filtered && visibleItems.length ? clearChip : [],
       }, scope],
       suggestions: SUGGESTIONS,
     };
   }
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY', id: 'diy-template-browse-summary',
-    title: `${view.items.length}${view.hasMore ? '+' : ''} reviewed project${view.items.length === 1 && !view.hasMore ? '' : 's'} you can start`,
+    title: `${filtered ? view.sourceTotal : view.items.length}${view.hasMore && !filtered ? '+' : ''} reviewed project${view.items.length === 1 && !view.hasMore ? '' : 's'} you can start${filtered ? ` · ${filterLabel}` : ''}`,
     body: canStart
       ? 'Starting one creates a project record with its steps, and you can stop it later. Nothing is booked, bought or scheduled.'
       : 'A contributor or owner of this home can start one. Nothing is booked, bought or scheduled.',
-    tone: 'DEFAULT', actions: [],
+    tone: 'DEFAULT', actions: difficultyChips,
   }];
   if (view.hasMore) {
-    blocks.push({ type: 'LIMITATION', id: 'diy-template-browse-limit', title: `Showing the first ${view.items.length}`, body: 'There are more reviewed projects than are shown here.', severity: 'INFO' });
+    blocks.push({ type: 'LIMITATION', id: 'diy-template-browse-limit', title: `Showing the first ${view.items.length}`, body: filtered ? 'More projects match than are shown here. Narrow it further with a category or difficulty.' : 'There are more reviewed projects than are shown here. Narrow them with a category or difficulty.', severity: 'INFO' });
   }
   const sections = [{
     id: 'diy-templates', title: 'Reviewed projects', count: view.sourceTotal ?? view.items.length,
@@ -99,7 +120,7 @@ export function diyTemplateBrowseFromItems(view: { items: StartableTemplate[]; h
     type: 'GROUPED_LIST', filters: [], id: 'diy-template-browse', title: 'Projects you can start', description: 'Reviewed templates that fit this home, in alphabetical order.',
     sections,
     collection: collectionDescriptor({ sourceTotal: view.sourceTotal ?? null, fetchedCount: view.sourceTotal ?? view.items.length, sections, nextPageAvailable: false }),
-    actions: [],
+    actions: [...clearChip, ...categoryChips],
   });
   blocks.push(scope);
   const suggestedNextActionCandidates = view.items.slice(0, 4).flatMap((item) => item.openProjectId
@@ -176,8 +197,10 @@ registerCapabilityHandler('diy.template-browse', async (envelope) => {
   if (launch?.operationId === 'DIY_TEMPLATE_BROWSE' && launch.surface !== 'ASK_REFRESH' && launch.entityType === DIY_TEMPLATE_ENTITY_TYPE && launch.entityId && envelope.message.trim() === DIY_ASSESS_ACTION.message) {
     return diyAssessmentResult(envelope.userId, envelope.propertyId!, launch.entityId, access.role !== HouseholdRole.VIEWER);
   }
-  const view = await diyService.listStartableTemplates(envelope.propertyId!, envelope.userId);
-  return diyTemplateBrowseFromItems(view, envelope.propertyId!, access.role !== HouseholdRole.VIEWER);
+  // A filter is honored only on the declared browse launch (a refresh keeps it); typed wording never carries one.
+  const filter = launch?.operationId === 'DIY_TEMPLATE_BROWSE' ? parseDiyBrowseFilter(envelope.message) ?? {} : {};
+  const view = await diyService.listStartableTemplates(envelope.propertyId!, envelope.userId, { limit: 200 });
+  return diyTemplateBrowseFromItems(view, envelope.propertyId!, access.role !== HouseholdRole.VIEWER, filter);
 });
 
 // ---- start (confirmation-gated write) ------------------------------------------------------------------------------------------------------------------
