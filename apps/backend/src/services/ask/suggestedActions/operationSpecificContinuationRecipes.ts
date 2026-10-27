@@ -786,6 +786,59 @@ export const OPERATION_SPECIFIC_CONTINUATION_RECIPES: Readonly<Partial<Record<As
     recipe('Review capital outlook', 'Show my capital reserve outlook', 'CAPITAL_RESERVE_PLAN', 'REVIEW_CAPITAL_OUTLOOK', 'RESERVE_FUND_REVIEW_CAPITAL'),
     recipe('Review ownership costs', 'Show my home ownership costs', 'OWNERSHIP_COSTS', 'REVIEW_OWNERSHIP_COSTS', 'RESERVE_FUND_REVIEW_COSTS'),
   ],
+  // Commands and reads that had no reviewed continuation (coverage ledger). A command receipt returns to the read that owns the record it changed;
+  // a read points to its closest related read. Every destination is an existing Ask operation, rechecked by the shared availability, role and exact-four policy.
+  HOME_DIGITAL_WILL_CREATE: [
+    recipe('Review my continuity plan', 'Show my home continuity plan', 'HOME_DIGITAL_WILL', 'REVIEW_HOME_CONTINUITY', 'CONTINUITY_PLAN_REVIEW'),
+  ],
+  HOME_RECORD_EXPORT: [
+    recipe('Check my export', 'Check my export status', 'HOME_RECORD_EXPORT_STATUS', 'REVIEW_EXPORT_STATUS', 'EXPORT_REVIEW_STATUS'),
+  ],
+  HOME_RECORD_EXPORT_SHARE: [
+    recipe('Check my export', 'Check my export status', 'HOME_RECORD_EXPORT_STATUS', 'REVIEW_EXPORT_STATUS', 'EXPORT_SHARE_REVIEW_STATUS'),
+  ],
+  HOME_RECORD_EXPORT_STATUS: [
+    recipe('Check my home record', 'How complete is my home record?', 'PROPERTY_SUMMARY', 'REVIEW_COMPLETENESS', 'EXPORT_STATUS_REVIEW_COMPLETENESS'),
+  ],
+  HOUSEHOLD_ACCESS_SUMMARY: [
+    recipe('Browse my home record', 'Browse my home record', 'PROPERTY_SUMMARY', 'REVIEW_HOME_SUMMARY', 'HOUSEHOLD_ACCESS_REVIEW_RECORD'),
+  ],
+  NOTIFICATIONS_OVERVIEW: [
+    recipe('Review notification settings', 'Show my notification settings', 'NOTIFICATION_SETTINGS_OVERVIEW', 'REVIEW_NOTIFICATION_SETTINGS', 'NOTIFICATIONS_REVIEW_SETTINGS'),
+    recipe('See what needs me', 'Show my work', 'WORK_OVERVIEW', 'REVIEW_WORK', 'NOTIFICATIONS_REVIEW_WORK'),
+  ],
+  NOTIFICATION_COMMAND: [
+    recipe('Review my notifications', 'Show my notifications', 'NOTIFICATIONS_OVERVIEW', 'REVIEW_NOTIFICATIONS', 'NOTIFICATION_COMMAND_REVIEW'),
+  ],
+  NOTIFICATION_SETTINGS_COMMAND: [
+    recipe('Review notification settings', 'Show my notification settings', 'NOTIFICATION_SETTINGS_OVERVIEW', 'REVIEW_NOTIFICATION_SETTINGS', 'NOTIFICATION_SETTINGS_COMMAND_REVIEW'),
+  ],
+  NOTIFICATION_SETTINGS_OVERVIEW: [
+    recipe('Review my notifications', 'Show my notifications', 'NOTIFICATIONS_OVERVIEW', 'REVIEW_NOTIFICATIONS', 'NOTIFICATION_SETTINGS_REVIEW_NOTIFICATIONS'),
+  ],
+  REFINANCE_COMMAND: [
+    recipe('Review my refinance options', 'Should I refinance now?', 'REFINANCE_ANALYSIS', 'REVIEW_REFINANCE', 'REFINANCE_COMMAND_REVIEW'),
+  ],
+  RISK_MITIGATION_PLAN: [
+    recipe('Check my coverage gaps', 'Which items are missing coverage?', 'COVERAGE_GAPS', 'REVIEW_COVERAGE_GAPS', 'RISK_PLAN_REVIEW_COVERAGE'),
+    recipe('Review pending maintenance', 'What maintenance is pending?', 'MAINTENANCE_STATUS', 'REVIEW_MAINTENANCE_STATUS', 'RISK_PLAN_REVIEW_MAINTENANCE'),
+  ],
+  SAVED_ARCHIVE_COMMAND: [
+    recipe('Review my saved results', 'Show my saved results', 'SAVED_RESULTS', 'REVIEW_SAVED_RESULTS', 'SAVED_ARCHIVE_REVIEW'),
+  ],
+  SAVED_RESULTS: [
+    recipe('See what needs me', 'Show my work', 'WORK_OVERVIEW', 'REVIEW_WORK', 'SAVED_RESULTS_REVIEW_WORK'),
+  ],
+  SELL_HOLD_RENT_COMMAND: [
+    recipe('Review sell, hold, or rent', 'Should I sell, hold, or rent this home?', 'SELL_HOLD_RENT_ANALYSIS', 'CONTINUE_SELL_HOLD_RENT_PLAN', 'SELL_HOLD_RENT_COMMAND_REVIEW'),
+  ],
+  WORK_OVERVIEW: [
+    recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'WORK_REVIEW_HOME_ACTIONS'),
+    recipe('Review my saved results', 'Show my saved results', 'SAVED_RESULTS', 'REVIEW_SAVED_RESULTS', 'WORK_REVIEW_SAVED'),
+  ],
+  WORK_REQUEST_COMMAND: [
+    recipe('See what is under way', 'What work is under way?', 'WORK_OVERVIEW', 'REVIEW_WORK', 'WORK_REQUEST_REVIEW_WORK'),
+  ],
 });
 
 export function operationSpecificContinuationOutcomeKeys(sourceOperationId: string): readonly string[] {

@@ -93,7 +93,7 @@ async function row({ role = 'VIEWER', mode = 'UNKNOWN', disabled = null, asked =
   const nominations = new Map(Object.entries(PRODUCERS));
   return selectExactFourSuggestedNextActions({ nominations, eligibility, actionableCompleteness: 0.95, slotGrants });
 }
-const hashOf = (c) => suggestedNextActionSemanticKeyHash({ operationId: c.operationId, interactionType: 'CONVERSATION_CONTINUE', propertyId: PROPERTY, entityType: null, entityId: null, outcomeKey: c.outcomeKey });
+const hashOf = (c) => suggestedNextActionSemanticKeyHash({ operationId: c.operationId, interactionType: c.interactionType, propertyId: PROPERTY, entityType: null, entityId: null, outcomeKey: c.outcomeKey });
 
 test('with BOTH entries (the approved target), every state still reaches exactly four: one operation disabled x the launched outcome excluded x five starters asked and completed, for every role and mode', async () => {
   await withEntries(async () => {

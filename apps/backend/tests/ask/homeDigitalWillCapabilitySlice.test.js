@@ -296,3 +296,8 @@ test('new plans are titled Home Continuity Plan', () => {
   assert.match(source, /title: body\.title \?\? 'Home Continuity Plan'/);
   assert.doesNotMatch(source, /body\.title \?\? 'Home Digital Will'/);
 });
+
+test('a viewer is not offered to create the plan, a contributor is', () => {
+  assert.deepEqual(digitalWillFromView(null, 'p1', false).blocks[0].actions, []);
+  assert.deepEqual(digitalWillFromView(null, 'p1', true).blocks[0].actions.map((action) => action.operationId), ['HOME_DIGITAL_WILL_CREATE']);
+});

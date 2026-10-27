@@ -53,7 +53,23 @@ test('PROPERTY_SUMMARY completeness focus: the stored message decides the focus,
   assert.equal(isPropertyCompletenessRequest('Show me a summary of my home record'), false, 'a plain summary message does not trigger the completeness focus');
 });
 
-// ---- what the empty states offer, classified by viewer usability --------------------------------------------------------------------------
+// ---- what the empty states offer, for a VIEWER ---------------------------------------------------------------------------------------------
+// Ask never links to a desktop page (owner decision, 2026-10-10), so an empty state may carry NO navigation link. A viewer's empty state may carry only
+// a typed Ask action the viewer is authorized for; whether the viewer is left at a dead end is decided by the whole path (handler result, audience
+// presentation, suggested-action finalization), so it is checked through the real finalizer below, not by the pure builder.
+
+const { prisma } = require('../../src/lib/prisma.ts');
+const { readAskOperationalControls } = require('../../src/config/askOperationalControls.ts');
+const { evaluateAskOperationAvailability } = require('../../src/services/ask/support/answerGuards.ts');
+const { finalizeSuggestedNextActionsWithReport } = require('../../src/services/ask/suggestedActions/finalizeSuggestedNextActions.ts');
+const { SUGGESTED_NEXT_ACTION_LIMITS } = require('../../src/services/ask/suggestedActions/suggestedNextActionRegistry.ts');
+
+const NOW = new Date('2026-10-05T12:00:00.000Z');
+const VIEWER_EMPTY_HOME_RESULTS = {
+  ...EMPTY_HOME_RESULTS,
+  HOME_HABITS: () => homeHabitsFromView({ habits: [], hasMore: false, nextCursor: null }, PID, NOW, false),
+  PROJECT_TRACKER_PROJECTS: () => trackedProjectsFromView([], PID, false),
+};
 
 /** Every action object reachable in a result's blocks, classified. */
 function actionsOf(result) {
@@ -62,8 +78,8 @@ function actionsOf(result) {
     if (!node || typeof node !== 'object') return;
     if (Array.isArray(node)) { node.forEach(walk); return; }
     if (Array.isArray(node.actions)) for (const action of node.actions) {
-      if (action.operationId) out.push({ kind: 'TYPED', id: action.id, operationId: action.operationId, floor: getAskOperationDefinition(action.operationId).propertyRoleFloor });
-      else if (action.href) out.push({ kind: 'NAVIGATION', id: action.id, href: action.href });
+      if (action.href) out.push({ kind: 'NAVIGATION', id: action.id, href: action.href });
+      else if (action.operationId) out.push({ kind: 'TYPED', id: action.id, operationId: action.operationId, floor: getAskOperationDefinition(action.operationId).propertyRoleFloor });
       else out.push({ kind: 'OTHER', id: action.id });
     }
     Object.values(node).forEach(walk);
@@ -72,18 +88,47 @@ function actionsOf(result) {
   return out;
 }
 
-test('EXECUTED: each executed empty state offers exactly ONE action, a navigation link a viewer can open; none is a typed or contributor-only action', () => {
-  for (const [operationId, build] of Object.entries(EMPTY_HOME_RESULTS)) {
-    const actions = actionsOf(build());
-    assert.equal(actions.length, 1, `${operationId}: ${JSON.stringify(actions)}`);
-    assert.equal(actions[0].kind, 'NAVIGATION', operationId);
-    assert.match(actions[0].href, /^\/dashboard\//, operationId);
-    assert.equal(actions.some((action) => action.kind === 'TYPED' && action.floor && action.floor !== 'VIEWER'), false, `${operationId} offers no contributor-only action`);
+test('EXECUTED: a viewer\'s empty state carries no link out of Ask and no contributor-only action', () => {
+  for (const [operationId, build] of Object.entries(VIEWER_EMPTY_HOME_RESULTS)) {
+    const result = build();
+    assert.doesNotMatch(JSON.stringify(result.blocks), /\/dashboard\/|"href":"(?!null)/, `${operationId}: no link out of Ask`);
+    for (const action of actionsOf(result)) {
+      assert.notEqual(action.kind, 'NAVIGATION', `${operationId}: ${action.id} is a link`);
+      if (action.kind === 'TYPED') assert.equal(action.floor, 'VIEWER', `${operationId}: ${action.id} (${action.operationId}) needs ${action.floor}, a viewer cannot use it`);
+    }
   }
 });
 
-test('WHAT THIS DOES NOT ESTABLISH: whether the destination page is useful to a VIEWER. That an empty state is a viewer dead end is a PRODUCT JUDGMENT (the only next step is leaving Ask for a page whose add-data actions a viewer lacks), not something this test proves', () => {
-  // Deliberately an executable reminder, not a proof: the classification above shows a viewer CAN follow every offered action.
-  const offered = Object.keys(EMPTY_HOME_RESULTS).flatMap((operationId) => actionsOf(EMPTY_HOME_RESULTS[operationId]()));
-  assert.ok(offered.every((action) => action.kind === 'NAVIGATION'), 'all offered actions are navigation links');
+async function viewerAvailability() {
+  const original = prisma.propertyOnboarding.findUnique;
+  prisma.propertyOnboarding.findUnique = async () => null;
+  try {
+    return await evaluateAskOperationAvailability({ propertyId: PID, propertyAccess: { role: 'VIEWER' }, controls: { ...readAskOperationalControls(), audienceDiscoveryEnabled: true, operationEnabled: () => true } });
+  } finally { prisma.propertyOnboarding.findUnique = original; }
+}
+
+test('EXECUTED: after finalization a viewer\'s settled empty state still has somewhere to go (the governed footer), so it is not a dead end', async () => {
+  const availability = await viewerAvailability();
+  for (const [operationId, build] of Object.entries(VIEWER_EMPTY_HOME_RESULTS)) {
+    const { result } = await finalizeSuggestedNextActionsWithReport(
+      { result: build(), executionId: 'e1', userId: 'u1', sessionId: 's1', propertyId: PID, operationId, message: 'show it', recentCompletedMessages: [], completedSemanticKeyHashes: new Set() },
+      {
+        clock: { now: () => NOW },
+        loadOperationAvailability: async () => availability,
+        loadExecutionExpiresAt: async () => new Date(NOW.getTime() + 24 * 3600_000),
+        loadCurrentOutcomeKeyHashes: async () => new Set(),
+        loadLifecycleState: async () => ({ cooldownKeys: new Set(), completedKeys: new Set(), lastOfferedAtMs: new Map(), ok: true }),
+        loadActionableCompleteness: async () => ({ fraction: 1, audienceUncertain: false }),
+        loadActionableProfileState: async () => ({ denominatorVersion: 'actionable-profile-1:BASE', audiences: [], audienceUncertain: false, fraction: 1, knownWeight: 1, totalWeight: 1, unresolved: [], unresolvedByArea: {} }),
+        loadUrgentHomeActionState: async () => ({ nowCount: 0 }),
+        loadHomeOpportunityState: async () => ({ contextVersion: 'v1', capitalItemsUpcoming: false, warrantyExpiring: false, openFindings: false }),
+        loadActivePlanState: async () => ({ sellHoldRentActive: false }),
+        loadOperationSpecificContinuationState: async () => ({}),
+        recordOffers: async (input) => ({ attempted: input.offers.length, ok: true }),
+        recordImpressions: () => {}, recordSuppression: () => {},
+      },
+    );
+    const shown = result.suggestedNextActions ?? [];
+    assert.ok(shown.length > 0 && shown.length <= SUGGESTED_NEXT_ACTION_LIMITS.maxShown, `${operationId}: ${shown.length} governed actions after finalization`);
+  }
 });

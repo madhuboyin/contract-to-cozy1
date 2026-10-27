@@ -167,7 +167,7 @@ export function environmentReportFromView(
         },
         BOUNDARY_BLOCK,
       ],
-      suggestions: ['Show my home summary', 'What needs my attention around the home?'],
+      suggestions: [],
     };
   }
 
@@ -262,7 +262,7 @@ export function environmentReportFromView(
         },
         BOUNDARY_BLOCK,
       ],
-      suggestions: ['Show my home summary', 'What needs my attention around the home?'],
+      suggestions: [],
     };
   }
 
@@ -770,11 +770,7 @@ export function environmentReportFromView(
     status: hasLimitations ? 'READY_WITH_LIMITATIONS' : 'ANSWERED',
     reasonCode: hasLimitations ? 'ENVIRONMENT_REPORT_PARTIAL_SOURCES' : 'ENVIRONMENT_REPORT_READY',
     blocks,
-    suggestions: [
-      'Show my home event radar feed',
-      'Show my past hazard exposure',
-      'What maintenance is pending?',
-    ],
+    suggestions: [],
   };
 }
 
@@ -799,7 +795,7 @@ registerCapabilityHandler('environment-report.read', async (envelope, deps) => {
         },
         BOUNDARY_BLOCK,
       ],
-      suggestions: ['Show my home summary'],
+      suggestions: [],
     };
   }
 

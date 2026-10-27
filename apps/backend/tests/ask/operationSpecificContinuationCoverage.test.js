@@ -17,7 +17,7 @@ const {
   validateOperationSpecificContinuationCoverage,
 } = require('../../src/services/ask/suggestedActions/operationSpecificContinuationCoverage.ts');
 
-const REVIEWED_OPERATION_REGISTRY_HASH = '0e95239c203d425bae361cfe50d4a4afc799c3120635e6e8f00a15d157bd1de2';
+const REVIEWED_OPERATION_REGISTRY_HASH = '174f1057fd2f37a12b70e914b50bc36597583fe177e24806370f6470d35c192a';
 const registryIds = () => Object.keys(ASK_OPERATION_DEFINITIONS).sort();
 const registryHash = () => createHash('sha256').update(registryIds().join('\n')).digest('hex');
 

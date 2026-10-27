@@ -1,12 +1,14 @@
 // Moved out of askOrchestrator.service.ts unchanged (decomposition phase 1, FRD v1.98;
 // docs/architecture/ASK_ORCHESTRATOR_DECOMPOSITION_REVIEW.md). The handler registers itself, and the orchestrator
 // re-exports the names below so existing imports keep working.
+import { HouseholdRole } from '@prisma/client';
 import { type AskPresentationBlock } from '../../../productFramework/ask/ask.contract';
 import { type AskOperationResult } from '../askOperationRegistry';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { humanDate, readableCode } from '../askFormatting';
 import { HomeDigitalWillService, evaluateHomeDigitalWillHandoffReadiness } from '../../homeDigitalWill.service';
 import { collectionDescriptor } from '../support/collectionDescriptor';
+import { ensurePropertyAccess } from '../askHandlerSupport';
 
 // Home Digital Will (Home Continuity Plan) capability-card slice (FRD v1.54): the sixth new operation for a capability
 // with none. Reads HomeDigitalWillService.getByProperty, the same call the page's route makes, behind the same
@@ -49,7 +51,7 @@ export function digitalWillHandoffProgress(
   };
 }
 
-export function digitalWillFromView(will: DigitalWillView, propertyId: string): AskOperationResult {
+export function digitalWillFromView(will: DigitalWillView, propertyId: string, canContribute = true): AskOperationResult {
   const boundary: AskPresentationBlock = {
     type: 'BOUNDARY', id: 'digital-will-boundary', title: 'A home knowledge plan, not a legal will',
     body: 'Not a legal will or estate document. Sensitive entry and contact details are not repeated in the conversation.',
@@ -63,7 +65,8 @@ export function digitalWillFromView(will: DigitalWillView, propertyId: string): 
         type: 'SUMMARY', id: 'digital-will-summary', title: 'No Home Continuity Plan yet',
         body: 'A Home Continuity Plan records emergency instructions, key contacts, utilities and how the home runs, for whoever needs to take over. None has been started for this home.',
         tone: 'DEFAULT',
-        actions: [{ id: 'home-continuity-create', label: 'Create my plan', interactionType: 'START_WORKFLOW', message: 'Create my home continuity plan', operationId: 'HOME_DIGITAL_WILL_CREATE', style: 'PRIMARY' }],
+        // Creating the plan needs the CONTRIBUTOR floor, so a viewer is never offered it (the server check stays authoritative).
+        actions: canContribute ? [{ id: 'home-continuity-create', label: 'Create my plan', interactionType: 'START_WORKFLOW', message: 'Create my home continuity plan', operationId: 'HOME_DIGITAL_WILL_CREATE', style: 'PRIMARY' }] : [],
       }, boundary],
       suggestions: [],
     };
@@ -173,8 +176,9 @@ export function digitalWillFromView(will: DigitalWillView, propertyId: string): 
   };
 }
 
-async function digitalWillResult(propertyId: string): Promise<AskOperationResult> {
-  return digitalWillFromView(await new HomeDigitalWillService().getByProperty(propertyId), propertyId);
+async function digitalWillResult(userId: string, propertyId: string, role?: HouseholdRole): Promise<AskOperationResult> {
+  const access = role ? { role } : await ensurePropertyAccess(userId, propertyId);
+  return digitalWillFromView(await new HomeDigitalWillService().getByProperty(propertyId), propertyId, access.role !== HouseholdRole.VIEWER);
 }
 
-registerCapabilityHandler('home-digital-will.read', async (envelope) => digitalWillResult(envelope.propertyId!));
+registerCapabilityHandler('home-digital-will.read', async (envelope, deps) => digitalWillResult(envelope.userId, envelope.propertyId!, deps?.propertyAccess?.role));

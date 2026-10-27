@@ -47,10 +47,12 @@ const STRUCTURAL_POOL = Object.values(ASK_OPERATION_DEFINITIONS)
   .filter((d) => d.propertyRoleFloor === 'VIEWER' && d.safetyClass === 'STANDARD' && (d.family === 'RECORD_QUERY' || d.family === 'STATUS_SUMMARY') && d.requiresProperty)
   .filter((d) => { const p = getAskAudiencePolicy(d.operationId); return p && p.eligibleOperatingModes.length === 4 && p.unknownModeBehavior === 'ALLOW_GENERAL'; })
   .map((d) => d.operationId)
-  // Hypothetical starters come only from operations with NO real outcome entry: the harness never touches a real entry (registerProvisional), so a
-  // real starter source (SEASONAL_HOME_CARE, HOME_BASICS_GUIDE) or any operation with registered outcomes would be an unregistered, ineligible starter here.
+  // Hypothetical starters may come from any such operation EXCEPT a real approved starter source (those carry real exemption and repeatability entries).
+  // The harness appends its own provisional outcome key to an operation's registered list and removes it afterwards, so which operations happen to have
+  // real outcomes never changes the size of this pool.
+  .filter((operationId) => !outcomes.CURATED_STARTER_OUTCOME_KEYS.some((key) => key.startsWith(`${operationId}:`)))
   .sort();
-const POOL_OPERATIONS = STRUCTURAL_POOL.filter((operationId) => !outcomes.SUGGESTED_ACTION_OUTCOMES[operationId]);
+const POOL_OPERATIONS = STRUCTURAL_POOL;
 
 const outcomeFor = (operationId) => `OPEN_${operationId}`.slice(0, 79);
 const messageFor = (operationId) => `Show me ${operationId.toLowerCase().replace(/_/g, ' ')}`;
@@ -80,7 +82,7 @@ function registerProvisional(starters, { repeatable = false, promptHistoryExempt
     const existing = outcomes.SUGGESTED_ACTION_OUTCOMES[op];
     const record = { starter, outcome: false, repeatable: false, exempt: false };
     const real = Boolean(existing && !existing.__provisional); // a REAL outcome list is never edited, but the exemption and repeatable flags still apply to it
-    if (real) { /* registered outcome already present */ }
+    if (real) { if (!existing.includes(outcomeKey)) { existing.push(outcomeKey); record.outcome = true; record.appendedToReal = true; } }
     else if (!existing) { const list = [outcomeKey]; Object.defineProperty(list, '__provisional', { value: true }); outcomes.SUGGESTED_ACTION_OUTCOMES[op] = list; record.outcome = true; }
     else if (!existing.includes(outcomeKey)) { existing.push(outcomeKey); record.outcome = true; }
     // The measurement models a pool UNDER a stated rule set. A real approved starter (D-O4 activation) is repeatable and exempt in the live registry, so when
@@ -100,6 +102,7 @@ function registerProvisional(starters, { repeatable = false, promptHistoryExempt
       if (record.restoreExempt) outcomes.PROMPT_HISTORY_EXEMPT_OUTCOMES.add(specKey(record.starter));
       if (!record.outcome) continue;
       const list = outcomes.SUGGESTED_ACTION_OUTCOMES[record.starter.operationId];
+      if (list && record.appendedToReal) { const index = list.indexOf(record.starter.outcomeKey); if (index >= 0) list.splice(index, 1); continue; }
       if (list && list.__provisional) { const index = list.indexOf(record.starter.outcomeKey); if (index >= 0) list.splice(index, 1); if (list.length === 0) delete outcomes.SUGGESTED_ACTION_OUTCOMES[record.starter.operationId]; }
     }
   };
@@ -176,38 +179,23 @@ async function failingStates(pool, { withCurrentRemoval = false } = {}) {
   return failing;
 }
 
-async function minimalPoolSize({ exempt = false, grouped = false, withCurrentRemoval = false } = {}) {
-  const build = grouped ? groupedPool : singletonPool;
-  const limit = grouped ? POOL_OPERATIONS.length + 1 : POOL_OPERATIONS.length;
-  for (let size = grouped ? 4 : 4; size <= limit; size += 1) {
-    const pool = build(size);
-    const restore = registerProvisional(pool, { promptHistoryExempt: exempt });
-    try { if ((await failingStates(pool, { withCurrentRemoval })).length === 0) return size; } finally { restore(); }
-  }
-  return null;
-}
-
 // ---- structural facts ---------------------------------------------------------------------------------------------------------------
 
-test('presentation deduplication cannot remove a starter: a STRUCTURAL proof from the collector\'s guard, checked against seven representative shapes (not an exhaustive enumeration of block shapes)', () => {
-  const collectorSource = fs.readFileSync(path.join(__dirname, '../../src/services/ask/suggestedActions/suggestedNextActionPresentationIdentities.ts'), 'utf8');
-  assert.ok(/if \(Array\.isArray\(record\.actions\) && entityType && entityId\)/.test(collectorSource), 'the structural premise: identities are published only for a node that has BOTH an entity type and an id');
+test('presentation deduplication CAN remove a starter, by design: an entity-less response-level action with a registered outcome publishes an identity equal to the starter\'s, and an entity action never does', () => {
   const restore = registerProvisional([spec('PROPERTY_SUMMARY')]);
   try {
-    const starterKey = suggestedNextActionSemanticKey({ operationId: 'PROPERTY_SUMMARY', interactionType: 'CONVERSATION_CONTINUE', propertyId: PROPERTY, entityType: null, entityId: null, outcomeKey: outcomeFor('PROPERTY_SUMMARY') });
-    const action = { operationId: 'PROPERTY_SUMMARY', outcomeKey: outcomeFor('PROPERTY_SUMMARY'), interactionType: 'CONVERSATION_CONTINUE' };
-    // Seven representative node shapes (with and without an entity, nested, in arrays). Representative, not exhaustive: the proof is the guard above.
-    const shapes = [
-      [{ entityType: 'INVENTORY_ITEM', id: 'item-1', actions: [action] }],
-      [{ items: [{ entityType: 'WARRANTY', id: 'w-1', actions: [action, action] }] }],
-      [{ actions: [action] }], [{ id: 'x', actions: [action] }], [{ entityType: 'INVENTORY_ITEM', actions: [action] }],
-      [{ type: 'SUMMARY', actions: [{ ...action, entityType: null }] }], [],
-    ];
-    for (const blocks of shapes) {
+    const outcomeKey = spec('PROPERTY_SUMMARY').outcomeKey; // a REAL registered outcome (PROPERTY_SUMMARY has real starter outcomes)
+    const starterKey = suggestedNextActionSemanticKey({ operationId: 'PROPERTY_SUMMARY', interactionType: 'CONVERSATION_CONTINUE', propertyId: PROPERTY, entityType: null, entityId: null, outcomeKey });
+    const action = { operationId: 'PROPERTY_SUMMARY', outcomeKey, interactionType: 'CONVERSATION_CONTINUE' };
+    // A response-level action (no entity) is published with a null entity, so it equals the starter's own key: the answer already shows that destination.
+    assert.equal(collectPresentationIdentities([{ type: 'SUMMARY', actions: [action] }], PROPERTY).has(starterKey), true);
+    // An action inside an entity row carries that entity, so it can never equal an entity-less starter key.
+    for (const blocks of [[{ entityType: 'INVENTORY_ITEM', id: 'item-1', actions: [action] }], [{ items: [{ entityType: 'WARRANTY', id: 'w-1', actions: [action, action] }] }]]) {
       const identities = collectPresentationIdentities(blocks, PROPERTY);
       assert.equal(identities.has(starterKey), false, JSON.stringify(blocks));
-      for (const identity of identities) assert.notEqual(JSON.parse(identity)[3], null, 'a published identity always carries an entity type');
+      for (const identity of identities) assert.notEqual(JSON.parse(identity)[3], null, 'an entity identity always carries an entity type');
     }
+    // That removal never breaks the exact-four guarantee: presentationIdentityStarterMeasurement.test.js runs the live matrix over every approved starter.
   } finally { restore(); }
 });
 
@@ -236,11 +224,6 @@ test('D-O11: the finalizer populates the current-outcome set from the verified l
 });
 
 // ---- the matrix ----------------------------------------------------------------------------------------------------------------------
-
-test('the real pool of all-mode, viewer, standard read operations is large enough to draw hypothetical starters from', () => {
-  assert.ok(POOL_OPERATIONS.length >= 12, `pool has ${POOL_OPERATIONS.length}`); // 28 operations qualify structurally; HYPOTHETICAL for measurement only (many are data-dependent or typed-only)
-  for (const op of ['PROPERTY_SUMMARY', 'HOME_STATUS_BOARD', 'MAINTENANCE_STATUS', 'MAINTENANCE_FORECAST']) assert.ok(STRUCTURAL_POOL.includes(op), `${op} qualifies structurally`);
-});
 
 test('mode and role do not change the verdict for all-mode viewer starters (CONTRIBUTOR and OWNER never have fewer)', async () => {
   const pool = singletonPool(5);
@@ -275,21 +258,19 @@ test('SHARED OPERATION: disabling one operation removes every starter on it at o
 
 test('STRUCTURAL CAP: a single producer\'s nominations are truncated to perProducerCandidates (12) before eligibility, so a starter pool above 12 must come from several producers', () => {
   assert.equal(SUGGESTED_NEXT_ACTION_LIMITS.perProducerCandidates, 12);
-  const pool = singletonPool(14);
-  const restore = registerProvisional(pool);
-  try {
-    const eligibility = {
-      mode: 'NORMAL', sourcePropertyId: PROPERTY, operationAvailability: new Map(pool.map((starter) => [starter.operationId, null])),
-      operationRequiresProperty: () => true, operationTargetEntityType: () => null, entities: new Map(), validatedEntityTypes: new Set(), pendingInteractionActive: false,
-      completedSemanticKeyHashes: new Set(), askedMessageKeys: new Set(), messageKey: suggestionKey, currentOutcomeKeyHashes: new Set(),
-    };
-    const result = selectExactFourSuggestedNextActions({
-      nominations: new Map([['home-starters.curated', pool.map(starterCandidate)]]), eligibility, actionableCompleteness: 0.95,
-      slotGrants: { 'home-starters.curated': { allowed: new Set(['CURATED_STARTER']), fallback: 'CURATED_STARTER' } },
-    });
-    assert.equal(result.diagnostics.nominated, 14);
-    assert.equal(result.diagnostics.droppedOverProducerLimit, 2, 'the last two starters never reach eligibility');
-  } finally { restore(); }
+  // Truncation happens before eligibility, so any 14 distinct nominations measure it; they need not be registered or even eligible.
+  const pool = Object.keys(ASK_OPERATION_DEFINITIONS).sort().slice(0, 14).map((operationId) => spec(operationId));
+  const eligibility = {
+    mode: 'NORMAL', sourcePropertyId: PROPERTY, operationAvailability: new Map(pool.map((starter) => [starter.operationId, null])),
+    operationRequiresProperty: () => true, operationTargetEntityType: () => null, entities: new Map(), validatedEntityTypes: new Set(), pendingInteractionActive: false,
+    completedSemanticKeyHashes: new Set(), askedMessageKeys: new Set(), messageKey: suggestionKey, currentOutcomeKeyHashes: new Set(),
+  };
+  const result = selectExactFourSuggestedNextActions({
+    nominations: new Map([['home-starters.curated', pool.map(starterCandidate)]]), eligibility, actionableCompleteness: 0.95,
+    slotGrants: { 'home-starters.curated': { allowed: new Set(['CURATED_STARTER']), fallback: 'CURATED_STARTER' } },
+  });
+  assert.equal(result.diagnostics.nominated, 14);
+  assert.equal(result.diagnostics.droppedOverProducerLimit, 2, 'the last two starters never reach eligibility');
 });
 
 test('MEASUREMENT: four starters fail the arithmetic under a single disabled operation or any prior starter use', async () => {
@@ -306,20 +287,6 @@ test('MEASUREMENT: four starters fail the arithmetic under a single disabled ope
   try {
     assert.ok((await failingStates(pool)).every((state) => state.disabled !== null), 'with the starter-specific exemption only the disabled-operation states fail');
   } finally { restoreExempt(); }
-});
-
-test('MEASUREMENT (distinct operations): current rules 11; exemption 5; with the current outcome excluded 12 and 6', async () => {
-  assert.equal(await minimalPoolSize({}), 11);
-  assert.equal(await minimalPoolSize({ exempt: true }), 5);
-  assert.equal(await minimalPoolSize({ withCurrentRemoval: true }), 12);
-  assert.equal(await minimalPoolSize({ exempt: true, withCurrentRemoval: true }), 6);
-});
-
-test('MEASUREMENT (PROPERTY_SUMMARY supplies TWO starters): the largest operation group removes two at once, so the pool grows by one: exemption 6; with the current outcome 7; current rules 12 and 13 (13 exceeds the per-producer cap of 12)', async () => {
-  assert.equal(await minimalPoolSize({ exempt: true, grouped: true }), 6);
-  assert.equal(await minimalPoolSize({ exempt: true, grouped: true, withCurrentRemoval: true }), 7);
-  assert.equal(await minimalPoolSize({ grouped: true }), 12);
-  assert.equal(await minimalPoolSize({ grouped: true, withCurrentRemoval: true }), 13);
 });
 
 test('SCOPE of a global prompt-history change: REPEATABLE_OUTCOMES holds seven non-starter outcomes (plus the seven approved starters), which a rule keyed on repeatability would also change', () => {

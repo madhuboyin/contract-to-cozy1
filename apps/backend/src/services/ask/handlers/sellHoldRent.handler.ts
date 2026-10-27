@@ -338,10 +338,7 @@ async function sellHoldRentAnalysisResult(userId: string, propertyId: string, me
     parameters: { viewState },
     captureRequests,
     blocks,
-    suggestions: [
-      'What if I rent it for $3,200 and vacancy is 8%?',
-      'What if appreciation is 4% and selling costs are 7%?',
-    ],
+    suggestions: [],
   };
 }
 
