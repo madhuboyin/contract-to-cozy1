@@ -158,6 +158,9 @@ Written after attach reached every review kind (FRD v1.433) and the buyer edit a
 | H4 | `parseCaseDocument` now (a) refuses a record that is not `HOUSEHOLD`-visible (409 `NEGOTIATION_SHIELD_DOCUMENT_NOT_SHARED`), (b) supports all five scenarios including `BUYER_INSPECTION_NEGOTIATION`, (c) refreshes **one parsed input per case document** (`_meta.caseDocumentId`), so re-parsing is idempotent. It takes `(propertyId, caseId, caseDocumentId)` and no role; the HTTP route supplies the contributor floor. | code-traced | G10 is partly closed (visibility). The sensitivity rule of D-A2 is still not enforced at parse (13.4). |
 | H5 | Parsing is local: `pdf-parse` (text layer only), `sharp` + `tesseract.js` for images (resized to 2,200 px wide, English), then label/regex extraction. No model call. The Desktop shows the parsed fields and lets the household correct them with manual input, which wins. | code-traced | A scanned PDF with no text layer yields little text; the result must say so (13.4). OCR time and memory on the Pi remain **unmeasured** (G11). |
 | H6 | The attach form's context version is `sha(caseId + sorted ids of the offered options)`. | code-traced | An upload changes the offered list, so the form's own version goes stale the moment the upload succeeds (13.3). |
+| H8 | **`DOCUMENT_MULTI_SELECT` always submits an array**, even with `maxItems: 1` (`['record-id']`), and the attach answer parser requires `recordId` to be a string. | code-traced | The field cannot replace `recordId` as-is; see 13.3. |
+| H9 | **Two different "nothing found" cases.** Extracted text under 20 characters makes `parseNegotiationShieldDocument` throw 422 `NEGOTIATION_SHIELD_DOCUMENT_PARSE_EMPTY` before any write. Text of 20 or more characters with **zero extracted fields** is not an error: `parseCaseDocument` still creates or updates the parsed input (raw text, warnings, `parsedFieldCount: 0`). | code-traced | The first draft of 13.4 said an empty parse leaves the review unchanged; that is true only for the first case. See 13.4. |
+| H10 | `AttachEvidenceControl` writes the upload's description as `Project document: <field title>` and records `recordType: 'OTHER'`, `sensitivity: 'STANDARD'` unconditionally. | code-traced | Both must become configurable for this use (13.3). |
 | H7 | The Ask Edit form pre-fills only the manual input's values; parsed values are not shown there (parsed inputs are immutable and merged under the manual one). | code-traced | After a parse, fields the parser filled look empty in Edit details. Recorded as a limitation, not blocking (13.5). |
 
 ### 13.2 Order
@@ -172,9 +175,11 @@ They stay separate operations. A combined "attach and read" step is a later conv
 
 **Behavior.** In the existing Attach a document form, the Document field becomes "pick a record or upload a file":
 
-- The `recordId` field changes from a plain select to `DOCUMENT_MULTI_SELECT` (`maxItems: 1`, `allowUpload: true`, `uploadTarget: 'HOME_RECORDS'`), with the same options as today (household-visible, active, allowed sensitivity, not already attached, newest 25, titles only).
+- The `recordId` field changes from a plain select to `DOCUMENT_MULTI_SELECT` (`maxItems: 1`, `allowUpload: true`, `uploadTarget: 'HOME_RECORDS'`), with the same options as today. **Because that field submits an array (H8), the answer key becomes `recordIds`**; the answer schema requires exactly one non-empty string in it and normalizes it to the single `recordId` the rest of the handler, the stored confirmation parameters and the canonical call already use. Tests: an empty array, two ids, a non-string or empty element, a bare string (the old shape, now rejected), and the one-element array an upload produces. Stored confirmation parameters keep `recordId`, so a confirmation opened before the change still validates (household-visible, active, allowed sensitivity, not already attached, newest 25, titles only).
 - Choosing "Upload document" opens the file picker; the file is stored as a Home Record by the shared workflow upload and its id is selected. The role field ("What is it?") stays; the existing review and confirmation steps follow unchanged. **Uploading never attaches by itself** (FRD IW-CONV-023); attach still needs the review and the confirm.
-- The form copy must say that uploading adds the file to the household's Home Records, where every household member can see it, even if the person does not finish attaching. This is the one real side effect outside the case, and it happens before confirmation (the same trade Project Tracker accepted in D-P5). It is stated, not hidden.
+- **Pre-confirmation copy, shown before the file picker opens** (owner decision D-U1): "Uploading adds this file to this home's shared Home Records immediately. You will review and confirm separately before it is attached to this negotiation review." The confirmation step must not imply that declining the attachment removes the uploaded record; it does not. This is the one real side effect outside the case, and it happens before confirmation (the same trade Project Tracker accepted in D-P5).
+- **Upload metadata is configurable (H10).** `AttachEvidenceControl` takes the record type, sensitivity and description from the field instead of hard-coding them. For this form the description is neutral ("Workflow document: <review title>"), never "Project document". Project Tracker keeps its current values as the control's defaults, so nothing changes there.
+- **Record type follows the chosen role (owner decision D-U2),** passed from the form's "What is it?" answer to the control: premium notice to `INSURANCE_POLICY`; claim settlement notice or repair estimate to `CLAIM`; inspection report to `INSPECTION_REPORT`; quote, contractor estimate, contractor recommendation, buyer request and supporting document to `OTHER` (the page's own mapping). If the role is not yet chosen when the file is picked, the control asks for the role first or the field is disabled until it is chosen. If this dependency makes 3c materially larger, `OTHER` is acceptable only as a documented first-slice limitation, not the intended end state. Sensitivity stays `STANDARD`, as on the page.
 
 **Server changes.**
 - `captureRequest` in `negotiationShieldAttach.handler.ts` emits the upload-enabled field. Nothing is written to storage by the backend handler; the client does the upload, as for projects.
@@ -183,7 +188,7 @@ They stay separate operations. A combined "attach and read" step is a later conv
 - **Duplicate content (H2).** The upload may return an existing record. If it is already attached, say "That file is already attached to this review" rather than the generic message. If it is not offerable (private, or a sensitivity Ask does not offer), say that a copy already exists in Home Records but is not shared in a way Ask can attach, and that nothing was added. The duplicate helper returns the id without regard to eligibility, so the server-side filter is the control.
 - No change to the confirmation, the execution-time record check or the canonical `attachDocumentMetadata` call.
 
-**Differences from the page, stated.** Ask accepts only JPEG, PNG, WEBP and PDF up to 10 MB; the page's accepted types were not compared. The record type is `OTHER` unless D-U2 is accepted.
+**Differences from the page, stated.** Ask accepts only JPEG, PNG, WEBP and PDF up to 10 MB (owner decision D-U3); the page's accepted types were not compared.
 
 **Not in this slice.** Replacing a file with a new version, detaching, and multi-file upload.
 
@@ -198,7 +203,9 @@ They stay separate operations. A combined "attach and read" step is a later conv
 2. Confirmation: "This reads *<title>* on the server and saves the details it finds with this review. Details you entered yourself always take priority, and you can still edit them. Nothing is sent to anyone." If a parsed input already exists for this document, add: "This replaces the details found last time."
 3. On confirm, call `NegotiationShieldService.parseCaseDocument` through a dynamic import (the module pulls in OCR; Ask's reads avoid it, as attach does). Re-check the record again at execution time.
 4. Result block: the count of fields found; the **normalized fields** as label and value pairs where the value is a number, a date, a yes/no or a short string; for long text fields (inspection issues, requested repairs, notes) only "found" and its length, never the text; the parser's warnings in plain words; and **never** the raw text, the file name or a link (D-P3). Actions: **Review** and, if details exist, **Run the analysis** or **Run it again** (the existing "details changed after the analysis" signal covers the stale case).
-5. A parse that finds nothing is an honest result ("Ask could not find any details in this file"), not an error. A PDF with no text layer says it may be a scan and suggests a clearer photo, because the PDF path does not OCR (H5).
+5. **Two outcomes, kept distinct (H9), preserving the canonical service rather than changing it.**
+   - *No readable text* (under 20 characters; the service throws 422 before any write): the review is unchanged. Say "Ask could not read any text in this file" and, for a PDF, that it may be a scan, because the PDF path does not OCR (H5); suggest a clearer photo.
+   - *Text read, no details found* (zero fields): the service **does** save a parsed input with its raw text, warnings and a field count of zero, and Ask reports it honestly: "Ask read the file but could not find any details in it." That attempt is recorded on purpose: it keeps retries, diagnostics and the "this replaces the details found last time" wording coherent. The receipt must not say "nothing was saved". Note that a zero-field re-parse replaces an earlier parse that did find fields; the confirmation's replace sentence (step 2) is what warns of that.
 
 **Idempotency.** Re-parsing refreshes the same parsed input for that case document (H4), so a retried confirmation is safe. The operation identity is the link id.
 
@@ -207,7 +214,7 @@ They stay separate operations. A combined "attach and read" step is a later conv
 **Cost and safety (D-P2 stays open until measured).**
 - One parse at a time per API process: a second concurrent parse returns "busy, try again in a moment" instead of queueing OCR workers on the Pi.
 - The request must finish inside the existing Ask execution budget; if the measurement says it cannot, the alternative is a background job with a status read, a separate larger design that this one does not assume.
-- A parse failure after a confirmed write attempt (parser throws, empty text) leaves the review unchanged and says so.
+- A parser that throws (including the under-20-character case) writes nothing, so the review is unchanged and the receipt says so. A zero-field parse is not a failure and is not unchanged (13.4, step 5).
 
 ### 13.5 Measurement before 3b is built (D-P2)
 
@@ -217,7 +224,7 @@ On the production-class Pi, time and peak memory for: a one-page text PDF; a thr
 
 - **H7:** Edit details shows only manual values, so fields filled from a document look empty there. A "found in a document" hint on that form is a possible follow-up. Typing a value saves it as manual, and it then wins.
 - The page can detach nothing and neither can Ask (D-X).
-- `recordType: 'OTHER'` for Ask uploads (D-U2).
+- If the role-to-type mapping is deferred, uploads are filed as `OTHER` (13.3).
 
 ### 13.7 Registry and validation checklist (3b adds an operation; 3c does not)
 
@@ -226,6 +233,8 @@ On the production-class Pi, time and peak memory for: a one-page text PDF; a thr
 ### 13.8 Tests that must fail on HEAD
 
 **3c**
+- The answer schema takes `recordIds` with exactly one id (empty, two, malformed and bare-string values are rejected) and normalizes to `recordId`; an upload's one-element array is accepted.
+- The upload control sends the neutral description and the role-derived record type; Project Tracker's default values are unchanged.
 - The attach form's document field declares `uploadTarget: 'HOME_RECORDS'` and `allowUpload`.
 - A record that was not in the form's option list at open time (the just-uploaded one) is accepted on submit; the old version, bound to the option list, refuses it.
 - A duplicate-content record that is already attached, and one that is private or of a sensitivity Ask does not offer, each get their specific message and write nothing.
@@ -235,24 +244,31 @@ On the production-class Pi, time and peak memory for: a one-page text PDF; a thr
 - A non-household, wrongly sensitive, failed-scan or other-property document is refused before any parse call.
 - The confirmation states manual-wins and that nothing is sent; a re-parse says it replaces the earlier details.
 - The result lists fields and warnings and contains no raw text, file name or link (assert on the serialized blocks).
-- A second concurrent parse returns "busy"; a parse that finds nothing is not an error; a throwing parser leaves the review unchanged.
+- A second concurrent parse returns "busy"; unreadable text (the 422) leaves the review unchanged and says so; a zero-field parse persists and the receipt says the file was read but no details were found; a throwing parser writes nothing.
 - The Documents block shows **Read this document** to a contributor and not to a viewer, for all five scenarios, and every action id survives the answer-trust validator.
 
-### 13.9 Decisions needed from the owner
+### 13.9 Decisions
 
-| # | Decision | Recommendation | Why |
+Recorded from the owner's review (2026-10-26) unless marked open.
+
+| # | Decision | Outcome | Notes |
 | --- | --- | --- | --- |
-| D-U1 | Build 3c with the shared workflow upload, accepting that the file lands in Home Records, household-visible, before the attach is confirmed | **Yes**, with the copy in 13.3 | Same trade as Project Tracker D-P5; the alternative (upload only after confirm) needs a new two-phase control. |
-| D-U2 | Record type for an Ask upload | **Keep `OTHER` in the first slice**; pass the chosen role to the control later if the filing difference matters | It affects Home Records filing and search, not the review; the role is chosen in the same form, so passing it needs a control change. |
-| D-U3 | Upload limits | **Keep the control's JPEG/PNG/WEBP/PDF, 10 MB** | The parser also reads text files, but the shared control is the reviewed path; widen only on request. |
-| D-P1 | Parse in Ask now | **Yes, after 3c, behind the measurement** | Attach is built; the original gate (owner has seen attach working) should be confirmed by you. |
-| D-P2 | Synchronous parse | **Decide from 13.5** | The only unmeasured risk. |
-| D-P3 | Show fields and warnings only | **Yes** (unchanged), with long text shown as "found", not quoted | The engine never needs the text echoed. |
-| D-P4 | Enforce the D-A2 sensitivity rule at parse | **Yes**, in Ask's check at confirmation and execution | Defense in depth; the service does not enforce it. |
+| D-U1 | Household-visible Home Record created before the attach is confirmed | **Accepted** | With the pre-confirmation copy in 13.3; the confirmation must not imply that declining removes the record. |
+| D-U2 | Record type for an Ask upload | **Follow the chosen role** (mapping in 13.3); `OTHER` only as a documented first-slice fallback | Durable records should file and search properly; the page already maps them. |
+| D-U3 | Upload limits | **Keep JPEG, PNG, WEBP, PDF, 10 MB** | Do not widen merely because the parser reads more. |
+| D-U4 | Answer shape | **`recordIds`, exactly one, normalized to `recordId`** (H8) | Cleaner than a temporary dual-shape parser. |
+| D-P1 | Gate for parse: owner has seen attach working | **Not satisfied.** Attach is code-traced and unit-tested only; no browser or database run. 3b stays gated until an owner observation is recorded here | Live verification of upload plus attach (3c) is the natural way to satisfy it. |
+| D-P2 | Synchronous parse | **Open: decide from 13.5** | Needs the Pi measurement. |
+| D-P3 | Show fields and warnings only | **Yes**; long text shown as "found", not quoted | Unchanged. |
+| D-P4 | Enforce the D-A2 sensitivity rule at parse | **Yes**, in Ask's check at confirmation and execution | The service does not. |
+| D-P5 | Zero-field parse | **Preserve the canonical behavior** (persist and report honestly); the under-20-character case stays an unchanged-review error (H9) | Recording the attempt keeps retries, diagnostics and the replace wording coherent. |
+
+**Sequence.** (1) This amendment; (2) make the upload description and metadata configurable; (3) build 3c with the current limits and the pre-confirmation copy; (4) verify upload and attach through the real UI and record it here; (5) measure OCR on the Pi; (6) build synchronous 3b only if the measurement fits the request and memory budgets, otherwise design the background job.
 
 ### 13.10 Risks and what stays unverified
 
 - Everything here is code-traced. The upload control inside an Ask form has not been exercised for this field, only for Project Tracker's; whether `CaptureFieldControl` renders the same way in the Ask capture form is **inferred** from Project Tracker's use of the same field type.
 - OCR time and memory on the Pi (G11) are unmeasured.
+- The `DOCUMENT_MULTI_SELECT` field has been exercised in Ask by Project Tracker only; that its array answer reaches this handler as `recordIds` is **inferred** from the capture path and is covered only by the new tests.
 - The synchronous "CLEAN" flag is a heuristic, not antivirus (H3). Ask's parse and attach inherit exactly the page's assurance, no more.
 
