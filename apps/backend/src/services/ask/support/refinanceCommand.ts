@@ -55,7 +55,13 @@ export const refinanceComparisonAnswerSchema = z.object({
   label: z.string().trim().max(120).optional(), ...offer('a'), ...offer('b'),
 });
 
+const optionalLinkId = z.preprocess((value) => (value === '' || value === null ? undefined : value), z.string().trim().min(1).max(100).optional());
+
 export const refinanceDecisionAnswerSchema = z.object({
+  /** Optional links to what the decision rests on; each is checked against this home's saved records before anything is written. */
+  scenarioSnapshotId: optionalLinkId,
+  loanEstimateComparisonId: optionalLinkId,
+  selectedOfferId: optionalLinkId,
   status: z.enum(['EXPLORING', 'DEFERRED', 'KEEP_CURRENT_LOAN', 'PROCEEDING', 'APPLICATION_IN_PROGRESS', 'DECLINED', 'ABANDONED', 'CLOSED']),
   rationale: z.string().trim().max(2000).optional(),
   nextReviewAt: z.string().optional(),
@@ -65,6 +71,7 @@ export const refinanceDecisionAnswerSchema = z.object({
   monthlyPaymentUsd: optionalMoney,
   closingCostUsd: optionalMoney,
 }).superRefine((value, ctx) => {
+  if (value.selectedOfferId && !value.loanEstimateComparisonId) ctx.addIssue({ code: 'custom', path: ['loanEstimateComparisonId'], message: 'Choose the saved comparison the offer belongs to.' });
   if (value.status === 'DEFERRED' && !value.nextReviewAt) ctx.addIssue({ code: 'custom', path: ['nextReviewAt'], message: 'Choose a future review date.' });
   if (value.status === 'CLOSED' && (value.currentMortgageBalanceUsd == null || value.interestRatePct == null || value.remainingTermMonths == null)) {
     ctx.addIssue({ code: 'custom', path: ['currentMortgageBalanceUsd'], message: 'A verified closing requires the new balance, rate, and term.' });
