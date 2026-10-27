@@ -1,4 +1,5 @@
 import type { AskPresentationBlock } from '../../../productFramework/ask/ask.contract';
+import { prisma } from '../../../lib/prisma';
 import { listBoard } from '../../homeStatusBoard.service';
 import { listBoardQuerySchema } from '../../../validators/homeStatusBoard.validators';
 import type { AskOperationResult } from '../askOperationRegistry';
@@ -7,7 +8,7 @@ import { readableCode } from '../askFormatting';
 import { ensurePropertyAccess } from '../askHandlerSupport';
 import { collectionDescriptor } from '../support/collectionDescriptor';
 import {
-  STATUS_BOARD_COMMAND_ACTION_IDS, STATUS_BOARD_COMMAND_MESSAGES, STATUS_BOARD_ITEM_ENTITY_TYPE, STATUS_BOARD_PROPERTY_ENTITY_TYPE,
+  STATUS_BOARD_COMMAND_ACTION_IDS, STATUS_BOARD_COMMAND_MESSAGES, STATUS_BOARD_HIDDEN_ACTION_ID, STATUS_BOARD_HIDDEN_MESSAGE, STATUS_BOARD_ITEM_ENTITY_TYPE, STATUS_BOARD_PROPERTY_ENTITY_TYPE,
 } from '../support/statusBoardCommand';
 
 // Status Board handler (HOME_STATUS_BOARD, adapter `status-board.read`). Moved out of askOrchestrator.service.ts as the
@@ -95,32 +96,40 @@ export function statusBoardLead(input: { items: any[]; actionNeeded: number; mon
   return `${lead}${unrated} Condition is estimated from recorded age, expected life, warranty and maintenance, across ${total} recorded ${plural(total, 'item', 'items')}${truncated ? ` (counts cover the ${items.length} shown)` : ''}.`;
 }
 
-export function statusBoardFromView(view: StatusBoardView, propertyId: string, canChange = false): AskOperationResult {
-  const items: any[] = view.items ?? [];
-  const total: number = view.pagination?.total ?? items.length;
+export function statusBoardFromView(view: StatusBoardView, propertyId: string, canChange = false, hidden: { count?: number; only?: boolean } = {}): AskOperationResult {
+  const items: any[] = (view.items ?? []).filter((item: any) => !hidden.only || item.isHidden);
+  const total: number = hidden.only ? items.length : view.pagination?.total ?? items.length;
   const unknownCount = items.filter(statusBoardIsUnknown).length;
   const count = (condition: string) => items.filter((item) => item.condition === condition && !statusBoardIsUnknown(item)).length;
   const needsDate = items.filter((item) => item.needsInstallDateForPrediction).length;
   const truncated = total > items.length;
   const limitations = [
+    ...(hidden.only && (view.pagination?.total ?? 0) > (view.items ?? []).length ? [`Only the first ${(view.items ?? []).length} of ${view.pagination?.total} items were searched for hidden ones.`] : []),
     ...(truncated ? [`Showing the first ${items.length} of ${total} items, pinned and most urgent first; the rest are on the Status Board.`] : []),
     ...(needsDate ? [`${needsDate} item${needsDate === 1 ? ' needs' : 's need'} an install or purchase date before ${needsDate === 1 ? 'its' : 'their'} condition can be predicted.`] : []),
   ];
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY', id: 'status-board-summary',
-    title: total
+    title: hidden.only
+      ? (total ? `${total} hidden ${total === 1 ? 'item' : 'items'}` : 'No items are hidden')
+      : total
       ? `${count('ACTION_NEEDED')} need action, ${count('MONITOR')} to monitor, ${count('GOOD')} in good shape`
       : 'Nothing is on the Status Board yet',
-    body: total
+    body: hidden.only
+      ? (total ? 'These items are kept off the board and out of its counts. Open one to show it again.' : 'Every item is on the board.')
+      : total
       ? statusBoardLead({ items, actionNeeded: count('ACTION_NEEDED'), monitor: count('MONITOR'), good: count('GOOD'), unknown: unknownCount, total, truncated })
       : canChange
         ? 'The Status Board tracks appliances and systems recorded in Inventory. If you have recorded some, refresh the board to bring them in; otherwise add them there to see their condition here.'
         : 'The Status Board tracks appliances and systems recorded in Inventory. Add them there to see their condition here.',
-    tone: count('ACTION_NEEDED') ? 'CAUTION' : 'DEFAULT',
-    actions: canChange ? [{
+    tone: !hidden.only && count('ACTION_NEEDED') ? 'CAUTION' : 'DEFAULT',
+    actions: hidden.only ? [{ id: 'status-board-back-to-board', label: 'Back to the status board', interactionType: 'START_WORKFLOW' as const, message: 'Show my status board', operationId: 'HOME_STATUS_BOARD' as const, style: 'PRIMARY' as const }] : [
+      ...(hidden.count ? [{ id: STATUS_BOARD_HIDDEN_ACTION_ID, label: `Show hidden items (${hidden.count})`, interactionType: 'START_WORKFLOW' as const, message: STATUS_BOARD_HIDDEN_MESSAGE, operationId: 'HOME_STATUS_BOARD' as const, style: 'SECONDARY' as const }] : []),
+      ...(canChange ? [{
       id: STATUS_BOARD_COMMAND_ACTION_IDS.REFRESH, label: 'Refresh the board', interactionType: 'START_WORKFLOW' as const, message: STATUS_BOARD_COMMAND_MESSAGES.REFRESH,
       operationId: 'STATUS_BOARD_COMMAND' as const, entityType: STATUS_BOARD_PROPERTY_ENTITY_TYPE, entityId: propertyId, style: 'SECONDARY' as const,
-    }] : [],
+    }] : []),
+    ],
   }];
   if (limitations.length) blocks.push({ type: 'LIMITATION', id: 'status-board-limits', title: 'What this does not cover', body: limitations.join(' '), severity: 'INFO' });
   const sectionDefs = [
@@ -180,12 +189,16 @@ export function statusBoardFromView(view: StatusBoardView, propertyId: string, c
   };
 }
 
-async function homeStatusBoardResult(userId: string, propertyId: string, canChange: boolean): Promise<AskOperationResult> {
-  const view = await listBoard(propertyId, listBoardQuerySchema.parse({ limit: String(STATUS_BOARD_ASK_LIMIT) }), userId, { readOnly: true });
-  return statusBoardFromView(view, propertyId, canChange);
+async function homeStatusBoardResult(userId: string, propertyId: string, canChange: boolean, hiddenOnly = false): Promise<AskOperationResult> {
+  const view = await listBoard(propertyId, listBoardQuerySchema.parse({ limit: String(STATUS_BOARD_ASK_LIMIT), ...(hiddenOnly ? { includeHidden: 'true' } : {}) }), userId, { readOnly: true });
+  if (hiddenOnly) return statusBoardFromView(view, propertyId, canChange, { only: true });
+  // The board leaves hidden items out, so the way back to them is offered only when there are some.
+  const count = await prisma.homeItem.count({ where: { propertyId, status: { is: { isHidden: true } } } });
+  return statusBoardFromView(view, propertyId, canChange, { count });
 }
 
 registerCapabilityHandler('status-board.read', async (envelope, deps) => {
   const access = deps.propertyAccess ?? await ensurePropertyAccess(envelope.userId, envelope.propertyId!);
-  return homeStatusBoardResult(envelope.userId, envelope.propertyId!, access.role !== 'VIEWER');
+  const hiddenOnly = envelope.launchContext?.operationId === 'HOME_STATUS_BOARD' && envelope.launchContext.surface !== 'ASK_REFRESH' && envelope.message === STATUS_BOARD_HIDDEN_MESSAGE;
+  return homeStatusBoardResult(envelope.userId, envelope.propertyId!, access.role !== 'VIEWER', hiddenOnly);
 });

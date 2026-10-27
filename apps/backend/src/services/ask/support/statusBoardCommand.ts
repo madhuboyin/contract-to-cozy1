@@ -12,6 +12,9 @@ export const STATUS_BOARD_COMMAND_MESSAGES = {
   CORRECT: 'Correct the status of this home item.',
 } as const;
 export type StatusBoardCommandKind = keyof typeof STATUS_BOARD_COMMAND_MESSAGES;
+/** Desktop's "Include hidden": the read of items kept off the board, where each can be shown again (a declared action on the board summary, never typed). */
+export const STATUS_BOARD_HIDDEN_MESSAGE = 'Show the home items I have hidden from my status board.';
+export const STATUS_BOARD_HIDDEN_ACTION_ID = 'status-board-hidden';
 export const STATUS_BOARD_COMMAND_ACTION_IDS = { REFRESH: 'status-board-refresh', CORRECT: 'status-board-correct' } as const;
 export const statusBoardCommandKindFromMessage = (message: string): StatusBoardCommandKind | null =>
   ((Object.entries(STATUS_BOARD_COMMAND_MESSAGES) as Array<[StatusBoardCommandKind, string]>).find(([, value]) => value === message)?.[0]) ?? null;

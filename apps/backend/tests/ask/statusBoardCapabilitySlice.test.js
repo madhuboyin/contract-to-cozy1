@@ -20,6 +20,8 @@ const propertyAccess = require('../../src/services/propertyAccess.service.ts');
 
 const originals = { prisma: prismaModule.prisma, list: statusBoard.listBoard, resolveAccess: propertyAccess.resolvePropertyAccess };
 let calls;
+let hiddenCount;
+let countArgs;
 
 const item = (id, condition, overrides = {}) => ({
   id, displayName: `Item ${id}`, category: 'APPLIANCE', condition, recommendation: condition === 'ACTION_NEEDED' ? 'REPLACE_SOON' : 'OK', ageYears: 12.5,
@@ -36,9 +38,12 @@ const view = (overrides = {}) => ({
 
 function install() {
   calls = [];
+  hiddenCount = 0;
+  countArgs = null;
   prismaModule.prisma = new Proxy({}, {
     get(_target, model) {
       if (model === 'then') return undefined;
+      if (model === 'homeItem') return { count: async (args) => { countArgs = args; return hiddenCount; } };
       throw new Error(`Unexpected prisma.${String(model)} access`);
     },
   });
@@ -216,4 +221,31 @@ test('the typed status board contract matches each block id to its type, so a kn
   const wrongType = { ...real, blocks: real.blocks.map((block) => block.id === 'status-board-items' ? { ...block, type: 'TABLE' } : block) };
   assert.equal(matchesStatusBoardAnswerContract(wrongType), false);
   assert.equal(matchesStatusBoardAnswerContract({ ...real, blocks: [...real.blocks, { type: 'SUMMARY', id: 'other', title: 't', body: 'b', actions: [] }] }), false);
+});
+
+test('hidden items: the board offers them only when some exist, and the declared action lists just those with their way back', async () => {
+  const none = await capabilityInvoke('HOME_STATUS_BOARD', { userId: 'u1', propertyId: 'p1', message: 'Show my status board' });
+  assert.ok(!none.blocks[0].actions.some((a) => a.id === 'status-board-hidden'));
+  assert.deepEqual(countArgs.where, { propertyId: 'p1', status: { is: { isHidden: true } } });
+
+  hiddenCount = 2;
+  const some = await capabilityInvoke('HOME_STATUS_BOARD', { userId: 'u1', propertyId: 'p1', message: 'Show my status board' });
+  const open = some.blocks[0].actions.find((a) => a.id === 'status-board-hidden');
+  assert.equal(open.label, 'Show hidden items (2)');
+  assert.equal(open.operationId, 'HOME_STATUS_BOARD');
+
+  statusBoard.listBoard = async (...args) => { calls.push(args); return view({ items: [item('v', 'GOOD'), item('h', 'MONITOR', { isHidden: true })], pagination: { page: 1, limit: 100, total: 2, totalPages: 1 } }); };
+  const hidden = await capabilityInvoke('HOME_STATUS_BOARD', { userId: 'u1', propertyId: 'p1', message: open.message, launchContext: { operationId: 'HOME_STATUS_BOARD', surface: 'ASK_CARD' } });
+  assert.equal(calls[calls.length - 1][1].includeHidden, true);
+  assert.equal(hidden.blocks[0].title, '1 hidden item');
+  const rows = hidden.blocks.find((b) => b.id === 'status-board-items').sections.flatMap((x) => x.items);
+  assert.deepEqual(rows.map((r) => r.title), ['Item h']);
+  assert.equal(hidden.blocks[0].actions[0].id, 'status-board-back-to-board');
+});
+
+test('the hidden list is reached only by its declared action, never by the message alone', async () => {
+  hiddenCount = 1;
+  statusBoard.listBoard = async (...args) => { calls.push(args); return view(); };
+  await capabilityInvoke('HOME_STATUS_BOARD', { userId: 'u1', propertyId: 'p1', message: 'Show the home items I have hidden from my status board.' });
+  assert.equal(calls[calls.length - 1][1].includeHidden, false);
 });

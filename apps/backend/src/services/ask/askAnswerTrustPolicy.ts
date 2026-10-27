@@ -358,7 +358,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   PRICE_FINALIZATIONS_LIST: new Set(['price-finalization-start-manual', 'price-finalization-finalize', 'price-finalization-edit']),
   // The permit list offers Add a permit (a SUMMARY action) and Change / Remove on a row to a contributor or owner.
   // The status board's next steps (FRD v1.319): refresh the board, correct one item; the install-date capture kept from the earlier slice.
-  HOME_STATUS_BOARD: new Set(['status-board-refresh', 'status-board-correct', 'correct-installedOn']),
+  HOME_STATUS_BOARD: new Set(['status-board-refresh', 'status-board-correct', 'correct-installedOn', 'status-board-hidden', 'status-board-back-to-board']),
   PERMIT_TRACKER_STATUS: new Set(['permit-tracker-add', 'permit-tracker-edit', 'permit-tracker-remove']),
   // The comparison answer offers Start a comparison / Record my decision, and the review answer offers Review my coverage, to a contributor or owner.
   COVERAGE_COMPARISON_STATUS: new Set(['coverage-start-comparison', 'coverage-record-decision', 'coverage-add-quote']),
