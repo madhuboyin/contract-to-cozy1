@@ -78,6 +78,19 @@ function refinanceNextActions(favorable: boolean, triggerRatePct: number | null)
       ];
 }
 
+/** The saved records and history behind the radar, reachable from the answer itself; reads only, so every role sees them. A summary block holds at most 3 actions. */
+function refinanceMoreToolsBlock() {
+  return {
+    type: 'SUMMARY' as const, id: 'refinance-more-tools', title: 'More refinance tools',
+    body: 'Look back at rate movement, reopen what you saved, or review your Loan Estimate comparisons.', tone: 'DEFAULT' as const,
+    actions: [
+      refinanceWorkflowAction('refinance-history-52', 'Rate history', 'Show the mortgage rate history for the last 52 weeks.'),
+      refinanceWorkflowAction('refinance-saved-scenarios', 'Saved scenarios', 'Show my saved refinance scenarios.'),
+      refinanceWorkflowAction('refinance-saved-comparisons', 'Saved comparisons', 'Review my saved Loan Estimate comparisons.'),
+    ],
+  };
+}
+
 export type RefinanceJourneyIntent = 'COMPARE_OFFERS' | 'RECORD_DECISION' | 'RATE_HISTORY' | 'SAVED_SCENARIOS';
 export function refinanceJourneyIntent(message: string): RefinanceJourneyIntent | null {
   if (/\bsaved\b.*\b(?:refinance )?scenarios?\b/i.test(message)) return 'SAVED_SCENARIOS';
@@ -835,7 +848,7 @@ export function refinanceCanonicalAnswer(input: {
       type: 'TABLE', id: 'refinance-analysis-table', title: 'Current loan versus governed benchmark',
       description: 'The benchmark is not a personalized lender offer or guaranteed available rate.',
       columns: [{ key: 'metric', label: 'Metric' }, { key: 'value', label: 'Estimate' }, { key: 'meaning', label: 'What it represents' }], rows, actions: [],
-    }, ...(missedWindow ? [missedWindow] : []), {
+    }, ...(missedWindow ? [missedWindow] : []), refinanceMoreToolsBlock(), {
       type: 'EVIDENCE', id: 'refinance-evidence', title: 'Sources used', items: [
         { label: 'Current mortgage details', source: 'Property Financing Profile', observedAt: profile.mortgageBalanceAsOfDate?.toISOString() ?? profile.updatedAt.toISOString() },
         { label: '30-year market benchmark', source: `${marketSnapshot.source}${marketSnapshot.sourceRef ? ` · ${marketSnapshot.sourceRef}` : ''}`, observedAt: `${marketSnapshot.date}T00:00:00.000Z` },

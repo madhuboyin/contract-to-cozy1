@@ -190,3 +190,29 @@ test('Test again keeps a non-whole-dollar closing cost exactly', async () => {
     assert.equal(refinance.parseRefinanceScenarioEdit(item.actions[0].message).closingCostAmount, 6000.75);
   } finally { restore(); }
 });
+
+test('the main refinance answer carries the history, saved-scenario and saved-comparison reads through the trust validator, for a viewer too', () => {
+  const { validateAskAnswerTrust } = require('../../src/services/ask/askAnswerTrustValidator.ts');
+  const { completedAskAuthoritativeSourceEvidence } = require('../../src/services/ask/askAnswerTrustPolicy.ts');
+  for (const radarState of ['OPEN', 'CLOSED']) {
+    const answer = refinance.refinanceCanonicalAnswer({
+      result: { available: true, radarState, radarSummary: 'Summary.', currentRatePct: 6.875, marketRatePct: 6.125, rateGapPct: 0.75, triggerRatePct: 6.25, triggerRateExplanation: 'x', monthlySavings: 210, lifetimeSavings: 41000, closingCostAssumptionUsd: 6400, breakEvenMonths: 28, confidenceLevel: 'MEDIUM' },
+      marketSnapshot: { date: '2026-10-09', source: 'FRED', sourceRef: null },
+      profile: { mortgageBalanceAsOfDate: new Date('2026-09-01T00:00:00.000Z'), updatedAt: new Date('2026-09-02T00:00:00.000Z') },
+      contextVersion: 'ctx-1',
+    });
+    const withEvidence = { ...answer, parameters: { answerTrustEvidence: { schemaVersion: '1.0', sources: [completedAskAuthoritativeSourceEvidence('REFINANCE_ANALYSIS')] } } };
+    const { result } = validateAskAnswerTrust({ question: 'Is refinancing worth reviewing now?', operationId: 'REFINANCE_ANALYSIS', propertyId: 'prop-1', result: withEvidence });
+    const more = result.blocks.find((block) => block.id === 'refinance-more-tools');
+    assert.ok(more, `${radarState}: the tools block survives`);
+    assert.deepEqual(more.actions.map((a) => a.id), ['refinance-history-52', 'refinance-saved-scenarios', 'refinance-saved-comparisons']);
+    assert.ok(more.actions.length <= 3);
+  }
+  const { isAskActionAllowedForHouseholdRole } = require('../../src/services/ask/askAudiencePresentation.ts');
+  const answer = refinance.refinanceCanonicalAnswer({
+    result: { available: true, radarState: 'CLOSED', radarSummary: 'S', currentRatePct: 2.6, marketRatePct: 7.3, rateGapPct: -4.7, triggerRatePct: 1.4, triggerRateExplanation: 'x', monthlySavings: -487, lifetimeSavings: -388627, closingCostAssumptionUsd: 8000, breakEvenMonths: null, confidenceLevel: null },
+    marketSnapshot: { date: '2026-10-22', source: 'FRED', sourceRef: null }, profile: { mortgageBalanceAsOfDate: null, updatedAt: new Date() }, contextVersion: 'c',
+  });
+  const more = answer.blocks.find((block) => block.id === 'refinance-more-tools');
+  assert.ok(more.actions.every((a) => isAskActionAllowedForHouseholdRole(a, 'VIEWER')));
+});

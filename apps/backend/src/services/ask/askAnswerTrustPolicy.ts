@@ -153,7 +153,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
     'refinance-record-decision', 'refinance-adjust-scenario', 'financing-profile-update',
     'refinance-save-scenario', 'refinance-alert-settings', 'refinance-add-comparison',
     'refinance-delete-comparison', 'refinance-record-decision-inline',
-    'refinance-retest-scenario', 'refinance-saved-scenarios', 'refinance-share-comparison', 'refinance-share-scenario', 'refinance-lender-brief', 'refinance-history-13', 'refinance-history-52',
+    'refinance-retest-scenario', 'refinance-saved-scenarios', 'refinance-saved-comparisons', 'refinance-share-comparison', 'refinance-share-scenario', 'refinance-lender-brief', 'refinance-history-13', 'refinance-history-52',
   ]),
   REFINANCE_COMMAND: new Set(['refinance-command-back']),
   BREAK_EVEN_ANALYSIS: new Set(['rerun-break-even-5', 'rerun-break-even-10', 'break-even-next-sell-hold-rent', 'break-even-next-capital-timeline', 'financing-profile-update']),
