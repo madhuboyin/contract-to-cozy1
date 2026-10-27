@@ -405,3 +405,83 @@ test('duplicates: the picker lists only the other open work, the confirmation re
   const plain = installPeople('CONTRIBUTOR', [item()]);
   try { assert.equal((await invoke('UNDO_DUPLICATE', launch())).reasonCode, 'HOME_WORK_ITEM_NOT_DUPLICATE'); } finally { plain.restore(); }
 });
+
+// ── v1.457: the owner's confirmation of material or safety work ("Confirm the result") ────────────────────────────────────────────────
+test('confirm the result: owner-only, offered on a reported-complete item that needs approval, evidence picked from what is on the work, policy checked before and at confirm', async () => {
+  const approveUse = require('../../src/modules/homeOperations/application/approveMaterialWork.usecase.ts');
+  const { workItemCommandResult } = require('../../src/services/ask/handlers/homeWorkItemCommands.handler.ts');
+  const T2 = new Date('2026-09-03T00:00:00Z');
+  const evidence = [
+    { id: 'ev-row-1', evidenceType: 'DOCUMENT', evidenceEntityId: 'doc-9', verificationStatus: 'PENDING', observedAt: T2 },
+    { id: 'ev-row-2', evidenceType: 'USER_ATTESTATION', evidenceEntityId: 'att-1', verificationStatus: 'PENDING', observedAt: T2 },
+  ];
+  const needs = (over = {}) => item({ state: 'REPORTED_COMPLETE', safetyTier: 'MATERIAL_FINANCIAL', materialApprovalRequired: true, materialApprovedAt: null, evidence, sources: [], executions: [], ...over });
+  const versionOf = (i) => sha(`work-item:APPROVE_MATERIAL:${iso(i.materialApprovedAt)}:${i.evidence.map((e) => `${e.id}=${e.verificationStatus}`).sort().join(',')}:${i.id}:${i.state}:${iso(i.dueAt)}:${iso(i.dueWindowStart)}:${iso(i.dueWindowEnd)}:${iso(i.snoozedUntil)}:${i.supersededByWorkItemId ?? ''}:${i.ownerUserId ?? ''}:${(i.watchers ?? []).map((x) => x.userId).sort().join(',')}`);
+  const savedApprove = approveUse.approveMaterialWork;
+  const calls = [];
+  approveUse.approveMaterialWork = async (a) => { calls.push(a); };
+  const L = { kind: 'APPROVE_MATERIAL', entityId: 'w1', sourceExecutionId: null };
+  const answer = { evidence: 'ev-row-1', note: 'Plumber replaced it; no leaks.', cost: '420.5', observedResult: 'CONFIRMED_HEALTHY' };
+  let w = install('OWNER', [needs()]); let e = installEvidence({ attached: evidence });
+  try {
+    // the list offers the action to the owner only, and only on work that awaits approval
+    const rows = (canApprove, i) => homeWorkItemsFromRows([i], true, new Date('2026-09-15T00:00:00Z'), canApprove).blocks.find((b) => b.type === 'GROUPED_LIST').sections.flatMap((s) => s.items)[0].actions.map((a) => a.id);
+    assert.ok(rows(true, needs()).includes('work-item-approve-material'));
+    assert.ok(!rows(false, needs()).includes('work-item-approve-material'), 'contributors are not offered it');
+    assert.ok(!rows(true, needs({ materialApprovedAt: T2 })).includes('work-item-approve-material'), 'already confirmed');
+    assert.ok(!rows(true, needs({ materialApprovalRequired: false })).includes('work-item-approve-material'), 'no approval needed');
+    assert.ok(!rows(true, needs({ state: 'ACCEPTED' })).includes('work-item-approve-material'), 'not reported done');
+
+    // the form lists the evidence already on the work, and a material item also asks for cost and a result
+    const form = await invoke('APPROVE_MATERIAL', launch());
+    assert.equal(form.status, 'NEEDS_CONTEXT');
+    const fields = form.captureRequests[0].inputSchema.fields;
+    assert.deepEqual(fields.map((f) => f.key), ['evidence', 'note', 'cost', 'observedResult']);
+    assert.deepEqual(fields[0].inputSchema.options.map((o) => o.value), ['ev-row-1', 'ev-row-2']);
+
+    // review: names the pick, note, cost and result; writes nothing
+    const review = await workItemCommandResult('u1', 'prop-1', L, answer);
+    assert.equal(review.status, 'NEEDS_CONFIRMATION');
+    assert.deepEqual(review.parameters.workItemChange, { evidenceId: 'ev-row-1', decisionNote: 'Plumber replaced it; no leaks.', costCents: 42050, observedResult: 'CONFIRMED_HEALTHY' });
+    assert.ok(['Your note', 'Cost', 'Result'].every((label) => review.confirmation.fields.some((f) => f.label === label)));
+    assert.equal(calls.length, 0, 'review writes nothing');
+    // the policy is said before confirming: a material item needs a cost or a result; a forged evidence id resolves to nothing
+    assert.equal((await workItemCommandResult('u1', 'prop-1', L, { evidence: 'ev-row-1', note: 'ok' })).reasonCode, 'HOME_WORK_ITEM_APPROVAL_POLICY_NOT_MET');
+    assert.equal((await workItemCommandResult('u1', 'prop-1', L, { ...answer, evidence: 'someone-elses' })).reasonCode, 'HOME_WORK_ITEM_EVIDENCE_NOT_AVAILABLE');
+    assert.equal((await workItemCommandResult('u1', 'prop-1', L, { ...answer, note: '' })).reasonCode, 'HOME_WORK_ITEM_INPUT_INVALID');
+
+    // confirm: owner, same governed usecase with the owner's role and the exact values
+    const params = { workItemCommand: { kind: 'APPROVE_MATERIAL', entityId: 'w1' }, workItemChange: review.parameters.workItemChange, workItemContextVersion: versionOf(needs()) };
+    const ownerCtx = { ...ctx(params), access: { role: 'OWNER' } };
+    await confirmCapabilityInvoke(OP, ownerCtx);
+    assert.equal(calls.length, 1);
+    assert.deepEqual([calls[0].evidenceId, calls[0].decisionNote, calls[0].costCents, calls[0].observedResult, calls[0].role, calls[0].actorUserId], ['ev-row-1', 'Plumber replaced it; no leaks.', 42050, 'CONFIRMED_HEALTHY', 'OWNER', 'u1']);
+    // a contributor's confirmation, a stale version, and a usecase refusal each write nothing more and surface as stale
+    await assert.rejects(() => confirmCapabilityInvoke(OP, ctx(params)), (err) => err.code === 'ASK_PERMISSION_REQUIRED');
+    await assert.rejects(() => confirmCapabilityInvoke(OP, { ...ownerCtx, parameters: { ...params, workItemContextVersion: 'old' } }), (err) => err.code === 'ASK_CONTEXT_VERSION_CONFLICT');
+    approveUse.approveMaterialWork = async () => { throw new approveUse.MaterialApprovalRequestError(400, 'EVIDENCE_REQUIRED', 'Select evidence attached to this work item.'); };
+    await assert.rejects(() => confirmCapabilityInvoke(OP, ownerCtx), (err) => err.code === 'ASK_CONFIRMATION_NOT_ACTIVE');
+    assert.equal(calls.length, 1);
+  } finally { e.restore(); w.restore(); approveUse.approveMaterialWork = savedApprove; }
+
+  // a contributor cannot even open the form; work not awaiting approval is refused
+  w = install('CONTRIBUTOR', [needs()]); e = installEvidence({ attached: evidence });
+  try { assert.equal((await invoke('APPROVE_MATERIAL', launch())).reasonCode, 'ASK_PERMISSION_REQUIRED'); } finally { e.restore(); w.restore(); }
+  w = install('OWNER', [needs({ materialApprovedAt: T2 })]); e = installEvidence({ attached: evidence });
+  try { assert.equal((await invoke('APPROVE_MATERIAL', launch())).reasonCode, 'HOME_WORK_ITEM_NOT_AWAITING_APPROVAL'); } finally { e.restore(); w.restore(); }
+  // no evidence yet: say to add some first (the page says the same)
+  w = install('OWNER', [needs({ evidence: [] })]); e = installEvidence({ attached: [] });
+  try { assert.equal((await invoke('APPROVE_MATERIAL', launch())).reasonCode, 'HOME_WORK_ITEM_NO_EVIDENCE_TO_CONFIRM'); } finally { e.restore(); w.restore(); }
+  // safety work: a plain document cannot confirm it, said at review (the registry policy requires a domain completion record); no cost field is asked
+  const safety = needs({ safetyTier: 'SAFETY_EMERGENCY' });
+  w = install('OWNER', [safety]); e = installEvidence({ attached: evidence });
+  try {
+    const form = await invoke('APPROVE_MATERIAL', launch());
+    assert.deepEqual(form.captureRequests[0].inputSchema.fields.map((f) => f.key), ['evidence', 'note']);
+    const refused = await workItemCommandResult('u1', 'prop-1', L, { evidence: 'ev-row-1', note: 'Looks fixed' });
+    assert.equal(refused.reasonCode, 'HOME_WORK_ITEM_APPROVAL_POLICY_NOT_MET');
+    assert.match(refused.blocks[0].body, /domain completion record/);
+  } finally { e.restore(); w.restore(); }
+  // the action id is allowlisted on the list
+  assert.ok(isAskActionApplicable({ action: { id: 'work-item-approve-material', label: 'x', interactionType: 'MUTATE_RECORD', message: M.APPROVE_MATERIAL, operationId: OP, style: 'PRIMARY' }, operationId: 'HOME_WORK_ITEMS', propertyId: 'prop-1', householdRole: 'OWNER', authoritativeSourceAvailable: true }));
+});

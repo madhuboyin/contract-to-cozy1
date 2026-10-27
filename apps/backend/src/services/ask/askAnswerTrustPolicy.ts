@@ -264,6 +264,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
     'work-items-accept-routine',
     'work-item-update-status',
     'work-item-attach-evidence',
+    'work-item-approve-material',
   ]),
   // Build a negotiation package from a confirmed pre-purchase inspection report: choose a decision per open finding and see the credit total (register P2 Inspection Hub). Calculation only; saves nothing.
   INSPECTION_NEGOTIATION_PACKAGE: new Set(['inspection-reports-back']),

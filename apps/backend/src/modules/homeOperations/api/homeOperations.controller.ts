@@ -18,9 +18,8 @@ import { prisma } from '../../../lib/prisma';
 import { listPendingReconciliations } from '../infrastructure/reconciliationRepository';
 import { retryHomeOperationsReconciliation } from '../../../services/homeOperationsReconciliation.service';
 import { resolvePropertyAccess } from '../../../services/propertyAccess.service';
-import { approveMaterialWorkItem, recordWorkEvent } from '../infrastructure/workItemRepository';
-import { assertMaterialApprovalEvidenceSatisfiesPolicy, MaterialApprovalEvidencePolicyViolationError } from '../../../services/homeOperationsMaterialApprovalEvidence.service';
-import { recordOperationalWorkOutcome } from '../../../services/decisionPlatform/outcomeObservationService';
+import { approveMaterialWork, MaterialApprovalRequestError } from '../application/approveMaterialWork.usecase';
+import { MaterialApprovalEvidencePolicyViolationError } from '../../../services/homeOperationsMaterialApprovalEvidence.service';
 import {
   completeAcceptedOperationalWorkItem,
   CompletionEvidencePolicyViolationError,
@@ -249,61 +248,15 @@ export async function approveMaterialWorkHandler(req: CustomRequest, res: Respon
     if (!context) return;
     const item = await loadWorkItemForMutation(req, res, context);
     if (!item) return;
-    if (!item.materialApprovalRequired) {
-      return res.status(409).json({ success: false, error: { code: 'APPROVAL_NOT_REQUIRED', message: 'This work does not require material approval.' } });
-    }
-    const evidence = await prisma.operationalWorkEvidence.findFirst({
-      where: { id: req.body.evidenceId, workItemId: item.id },
-    });
-    if (!evidence) {
-      return res.status(400).json({ success: false, error: { code: 'EVIDENCE_REQUIRED', message: 'Select evidence attached to this work item.' } });
-    }
-    // Home Intelligence Functional Completeness FRD Phase 4 review finding
-    // 1 gap fix: consult the same consequence-based policy the quick-
-    // complete path already enforces (HI-OUT-002) -- this was previously
-    // the one completion path that never checked it, so REGULATED_COVERAGE
-    // work accepted any evidence type and SAFETY_EMERGENCY's ad hoc
-    // DOCUMENT/PROPERTY_FACT check never proved the evidence was tied to a
-    // real domain record.
     try {
-      await assertMaterialApprovalEvidenceSatisfiesPolicy(item, req.householdRole!, evidence, {
-        costCents: req.body.costCents ?? null,
-        observedResult: req.body.observedResult ?? null,
+      await approveMaterialWork({
+        item, role: req.householdRole!, actorUserId: req.user!.userId, evidenceId: req.body.evidenceId, decisionNote: req.body.decisionNote,
+        costCents: req.body.costCents ?? null, observedResult: req.body.observedResult ?? null,
       });
     } catch (err) {
-      return handleWorkItemMutationError(err, res);
-    }
-    await prisma.operationalWorkEvidence.update({
-      where: { id: evidence.id },
-      data: { verificationStatus: 'VERIFIED' },
-    });
-    await approveMaterialWorkItem(item.id, req.user!.userId);
-    await recordWorkEvent({
-      workItemId: item.id,
-      eventType: 'WORK_APPROVED',
-      actorType: 'USER',
-      actorUserId: req.user!.userId,
-      idempotencyKey: `material-approval:${item.id}:${evidence.id}`,
-      payload: { evidenceId: evidence.id, decisionNote: req.body.decisionNote },
-    });
-    if (item.state === 'REPORTED_COMPLETE') {
-      const verified = await transitionWorkItem({
-        workItemId: item.id,
-        to: 'VERIFIED',
-        actorType: 'USER',
-        actorUserId: req.user!.userId,
-        idempotencyKey: `material-approved-verified:${item.id}:${evidence.id}`,
-      });
-      // HI-OUT-005/006: the quick-complete path already records an
-      // OutcomeObservation on VERIFIED; this approval path -- the one
-      // reserved for the highest-consequence work -- previously did not.
-      await recordOperationalWorkOutcome({
-        propertyId: verified.propertyId,
-        workItemId: verified.id,
-        userId: req.user!.userId,
-        costCents: req.body.costCents ?? null,
-        recommendationSnapshotId: await resolveWorkItemRecommendationSnapshotId(verified.propertyId, verified.id),
-      });
+      if (err instanceof MaterialApprovalRequestError) return res.status(err.status).json({ success: false, error: { code: err.code, message: err.message } });
+      if (err instanceof MaterialApprovalEvidencePolicyViolationError) return handleWorkItemMutationError(err, res);
+      throw err;
     }
     return res.json({ success: true, data: await loadWorkItem(item.id) });
   } catch (err) { next(err); }

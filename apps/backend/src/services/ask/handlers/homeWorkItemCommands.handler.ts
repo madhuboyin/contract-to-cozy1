@@ -23,10 +23,13 @@ import { transitionWorkItem } from '../../../modules/homeOperations/application/
 import { assignWorkItemOwner } from '../../../modules/homeOperations/application/assignOwner.usecase';
 import { addWatcher, removeWatcher } from '../../../modules/homeOperations/application/watchers.usecase';
 import { recordDuplicateDecision, reverseDuplicateDecision } from '../../../modules/homeOperations/application/recordDuplicateDecision.usecase';
+import { approveMaterialWork, MaterialApprovalRequestError } from '../../../modules/homeOperations/application/approveMaterialWork.usecase';
+import { assertMaterialApprovalEvidenceSatisfiesPolicy, MaterialApprovalEvidencePolicyViolationError } from '../../homeOperationsMaterialApprovalEvidence.service';
+import { evidencePolicyFor } from '../../homeActionCompletion.service';
 import { HouseholdService } from '../../household.service';
 import { assertUserWorkItemTransition } from '../../../modules/homeOperations/domain/userGovernance';
 import {
-  OWNER_NO_ONE, SNOOZE_CHOICES, WORK_ITEM_ACTION_IDS, WORK_ITEM_BATCH_MAX, WORK_ITEM_ENTITY_TYPE, WORK_ITEM_FORM_CAPTURE_KEYS, WORK_ITEM_MESSAGES, parseWorkItemAnswer, snoozeUntil, workItemBatchEligible,
+  APPROVAL_RESULT_LABELS, OWNER_NO_ONE, SNOOZE_CHOICES, workItemAwaitsApproval, WORK_ITEM_ACTION_IDS, WORK_ITEM_BATCH_MAX, WORK_ITEM_ENTITY_TYPE, WORK_ITEM_FORM_CAPTURE_KEYS, WORK_ITEM_MESSAGES, parseWorkItemAnswer, snoozeUntil, workItemBatchEligible,
   workItemChangeable, workItemKindFromMessage, WORK_ITEM_FORM_ERRORS, formatEvidenceRef, parseEvidenceRef, WORK_ITEM_ATTACH_KINDS, type WorkEvidenceRefType, type WorkItemCommandKind, type WorkItemFormKind,
 } from '../support/homeWorkItemCommand';
 
@@ -38,9 +41,9 @@ const unavailable = (reasonCode: string, title: string, body: string): AskOperat
 const iso = (value: Date | null | undefined) => (value ? value.toISOString() : '');
 const dayOf = (value: string) => humanDate(new Date(`${value}T12:00:00.000Z`)) ?? value;
 
-interface ItemRow { id: string; propertyId: string; title: string; state: OperationalWorkItemState; safetyTier: RecommendationSafetyTier; dueAt: Date | null; dueWindowStart: Date | null; dueWindowEnd: Date | null; snoozedUntil: Date | null; supersededByWorkItemId: string | null; ownerUserId: string | null; watchers?: Array<{ userId: string }>; legalNextStates: OperationalWorkItemState[]; closureDispositionRule: 'REQUIRED' | 'FORBIDDEN' | 'OPTIONAL' | null }
+interface ItemRow { id: string; propertyId: string; title: string; state: OperationalWorkItemState; safetyTier: RecommendationSafetyTier; dueAt: Date | null; dueWindowStart: Date | null; dueWindowEnd: Date | null; snoozedUntil: Date | null; supersededByWorkItemId: string | null; ownerUserId: string | null; watchers?: Array<{ userId: string }>; materialApprovalRequired?: boolean; materialApprovedAt?: Date | null; evidence?: Array<{ id: string; evidenceType: string; evidenceEntityId: string; verificationStatus: string }>; legalNextStates: OperationalWorkItemState[]; closureDispositionRule: 'REQUIRED' | 'FORBIDDEN' | 'OPTIONAL' | null }
 const itemVersion = (kind: string, item: ItemRow) =>
-  sha(`work-item:${kind}:${item.id}:${item.state}:${iso(item.dueAt)}:${iso(item.dueWindowStart)}:${iso(item.dueWindowEnd)}:${iso(item.snoozedUntil)}:${item.supersededByWorkItemId ?? ''}:${item.ownerUserId ?? ''}:${(item.watchers ?? []).map((w) => w.userId).sort().join(',')}`);
+  sha(`work-item:${kind}:${kind === 'APPROVE_MATERIAL' ? `${iso(item.materialApprovedAt)}:${(item.evidence ?? []).map((e) => `${e.id}=${e.verificationStatus}`).sort().join(',')}:` : ''}${item.id}:${item.state}:${iso(item.dueAt)}:${iso(item.dueWindowStart)}:${iso(item.dueWindowEnd)}:${iso(item.snoozedUntil)}:${item.supersededByWorkItemId ?? ''}:${item.ownerUserId ?? ''}:${(item.watchers ?? []).map((w) => w.userId).sort().join(',')}`);
 const batchVersion = (items: Array<{ id: string; state: string }>) => sha(`work-batch:${items.map((i) => `${i.id}:${i.state}`).sort().join('|')}`);
 
 async function loadItem(propertyId: string, id: string): Promise<ItemRow | null> {
@@ -53,7 +56,7 @@ async function eligibleBatch(propertyId: string) {
 }
 
 type Choice = { label: string; value: string };
-const EVIDENCE_TYPE_LABEL: Record<string, string> = { DOCUMENT: 'Document', HOME_EVENT: 'Timeline event', PROPERTY_FACT: 'Home fact' };
+const EVIDENCE_TYPE_LABEL: Record<string, string> = { DOCUMENT: 'Document', HOME_EVENT: 'Timeline event', PROPERTY_FACT: 'Home fact', DOMAIN_COMPLETION_RECORD: 'Completion record', USER_ATTESTATION: 'Your confirmation', SYSTEM_DERIVATION: 'System record' };
 const humanFactKey = (key: string) => {
   const words = key.replace(/[._-]+/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2').trim().toLowerCase();
   return words ? words.charAt(0).toUpperCase() + words.slice(1) : 'Home fact';
@@ -103,6 +106,22 @@ async function removeChoices(workItemId: string): Promise<Choice[]> {
   const documents = documentIds.length ? await prisma.document.findMany({ where: { id: { in: documentIds } }, select: { id: true, name: true } }) : [];
   const names = new Map<string, string>([...events.map((e) => [e.id, e.title] as const), ...documents.map((d) => [d.id, d.name] as const)]);
   return rows.map((row) => ({ label: `${EVIDENCE_TYPE_LABEL[row.evidenceType] ?? 'Evidence'} · ${names.get(row.evidenceEntityId) ?? 'Record'}`, value: row.id }));
+}
+
+/** The evidence already on this work, for the owner's confirmation: any kind and status, newest first. */
+async function approvalChoices(item: ItemRow): Promise<Choice[]> {
+  const rows = await prisma.operationalWorkEvidence.findMany({ where: { workItemId: item.id }, orderBy: { observedAt: 'desc' }, take: 20 });
+  const documentIds = rows.filter((row) => row.evidenceType === 'DOCUMENT').map((row) => row.evidenceEntityId);
+  const eventIds = rows.filter((row) => row.evidenceType === 'HOME_EVENT').map((row) => row.evidenceEntityId);
+  const [events, documents] = await Promise.all([
+    eventIds.length ? prisma.homeEvent.findMany({ where: { id: { in: eventIds } }, select: { id: true, title: true } }) : [],
+    documentIds.length ? prisma.document.findMany({ where: { id: { in: documentIds } }, select: { id: true, name: true } }) : [],
+  ]);
+  const names = new Map<string, string>([...events.map((e) => [e.id, e.title] as const), ...documents.map((d) => [d.id, d.name] as const)]);
+  return rows.map((row) => {
+    const name = names.get(row.evidenceEntityId);
+    return { label: `${EVIDENCE_TYPE_LABEL[row.evidenceType] ?? 'Evidence'}${name ? ` · ${name}` : ''} (${humanDate(row.observedAt) ?? 'undated'})`, value: row.id };
+  });
 }
 
 /** Resolves a picked record to its display name, scoped to this home; null when it is not (or no longer) there. */
@@ -160,6 +179,17 @@ function formCapture(kind: WorkItemFormKind, contextVersion: string, item: ItemR
     : kind === 'MARK_DUPLICATE'
     ? { title: `What does ${item.title} repeat?`, question: 'Choose the work item that covers the same thing.', help: 'This item is set aside in favor of the one you pick. It is not deleted, and you can undo it. Nothing is saved until you confirm.',
         fields: [{ key: 'target', label: 'Repeats', required: true, inputSchema: { type: 'SINGLE_SELECT' as const, options: choices } }], seed: {} }
+    : kind === 'APPROVE_MATERIAL'
+    ? { title: `Confirm the result of ${item.title}`, question: 'Which record shows it is done, and what did you find?',
+        help: `This affects ${item.safetyTier === 'SAFETY_EMERGENCY' ? 'safety' : item.safetyTier === 'REGULATED_COVERAGE' ? 'coverage' : 'a big expense'}, so it needs a quick check. Nothing is saved until you confirm.`,
+        fields: [
+          { key: 'evidence', label: 'Evidence', required: true, inputSchema: { type: 'SINGLE_SELECT' as const, options: choices } },
+          { key: 'note', label: 'What did you find?', required: true, inputSchema: { type: 'LONG_TEXT' as const, maxLength: 1000 } },
+          ...(evidencePolicyFor(item.safetyTier).costOrObservedResult === 'REQUIRED' ? [
+            { key: 'cost', label: 'Cost ($), if known', required: false, inputSchema: { type: 'NUMBER' as const, min: 0, max: 1_000_000 } },
+            { key: 'observedResult', label: 'How does it look?', required: false, inputSchema: { type: 'SINGLE_SELECT' as const, options: (Object.entries(APPROVAL_RESULT_LABELS) as Array<[string, string]>).map(([value, label]) => ({ label, value })) } },
+          ] : []),
+        ], seed: {} }
     : kind === 'UPDATE_STATUS'
     ? { title: `Update the status of ${item.title}`, question: 'What should happen next?', help: 'Only changes currently allowed for this work are shown. A reason is required when removing a suggestion.',
         fields: [
@@ -235,6 +265,12 @@ export async function workItemCommandResult(
   }
   if (!workItemChangeable(item)) return unavailable('HOME_WORK_ITEM_FINISHED', 'That work is already finished', 'Finished or replaced work is not changed here. Nothing has changed.');
   if (kind === 'UPDATE_STATUS' && item.legalNextStates.length === 0) return unavailable('HOME_WORK_ITEM_NO_STATUS_CHANGES', 'No status changes are available', 'This work is controlled by its linked workflow or has no homeowner-managed next state. Nothing has changed.');
+  if (kind === 'APPROVE_MATERIAL') {
+    if (access.role !== HouseholdRole.OWNER) {
+      return { status: 'BLOCKED', reasonCode: 'ASK_PERMISSION_REQUIRED', blocks: [{ type: 'SUMMARY', id: 'home-work-item-approve-permission', title: 'Only the home’s owner can confirm this result', body: 'Confirming the result of safety or big-expense work is reserved for the owner. Nothing has changed.', tone: 'CAUTION', actions: [] }], suggestions: [] };
+    }
+    if (!workItemAwaitsApproval(item)) return unavailable('HOME_WORK_ITEM_NOT_AWAITING_APPROVAL', 'This work is not waiting for your confirmation', 'It is either not reported done, does not need approval, or was already confirmed. Nothing has changed.');
+  }
   if (kind === 'OPTIONS') {
     const members = await householdMembers(propertyId);
     const name = (id: string | null | undefined) => members.find((m) => m.userId === id)?.name ?? 'Someone in the household';
@@ -264,12 +300,16 @@ export async function workItemCommandResult(
   const formKind = kind as WorkItemFormKind;
   const evidenceKind = WORK_ITEM_ATTACH_KINDS.includes(formKind) || formKind === 'REMOVE_EVIDENCE';
   const peopleKind = PEOPLE_KINDS.includes(formKind);
-  const choices = evidenceKind
+  const approveKind = formKind === 'APPROVE_MATERIAL';
+  const choices = approveKind ? await approvalChoices(item) : evidenceKind
     ? (formKind === 'REMOVE_EVIDENCE' ? await removeChoices(item.id) : await attachChoices(propertyId, access.role, userId, item.id))
     : peopleKind ? await peopleChoices(formKind, propertyId, item) : [];
   if (peopleKind && choices.length === 0) {
     return unavailable('HOME_WORK_ITEM_NO_CHOICES', formKind === 'MARK_DUPLICATE' ? 'No other work items to choose from' : formKind === 'REMOVE_WATCHER' ? 'No one is watching this' : 'Everyone is already watching this',
       'Nothing has changed.');
+  }
+  if (approveKind && choices.length === 0) {
+    return unavailable('HOME_WORK_ITEM_NO_EVIDENCE_TO_CONFIRM', 'Add a photo or document first', 'Add evidence to this work with its Add evidence action, then come back to confirm. Nothing has changed.');
   }
   if (evidenceKind && choices.length === 0) {
     return unavailable(formKind === 'REMOVE_EVIDENCE' ? 'HOME_WORK_ITEM_NO_REMOVABLE_EVIDENCE' : 'HOME_WORK_ITEM_NO_RECORDS_TO_ATTACH',
@@ -287,7 +327,7 @@ export async function workItemCommandResult(
   const parsed = parseWorkItemAnswer(formKind, supplied);
   if (!parsed.success) return unavailable('HOME_WORK_ITEM_INPUT_INVALID', 'Check the details', `${WORK_ITEM_FORM_ERRORS[formKind]} Nothing has changed.`);
   const answer = parsed.data as Record<string, string>;
-  let spec: { title: string; description: string; confirmLabel: string; field: { label: string; value: string }; stored: Record<string, unknown> };
+  let spec: { title: string; description: string; confirmLabel: string; field: { label: string; value: string }; extraFields?: Array<{ label: string; value: string }>; stored: Record<string, unknown> };
   if (formKind === 'UPDATE_STATUS') {
     const status = answer.status as OperationalWorkItemState;
     const disposition = answer.disposition as OperationalWorkItemDisposition | undefined;
@@ -332,6 +372,31 @@ export async function workItemCommandResult(
       : formKind === 'REMOVE_WATCHER'
       ? { title: 'Remove this watcher?', confirmLabel: 'Remove them', description: 'They stop following the work item. Nothing else changes.', field: { label: 'Watcher', value: label }, stored: { watcherUserId: pick } }
       : { title: 'Set this aside as a duplicate?', confirmLabel: 'Mark as duplicate', description: 'This work item is set aside in favor of the one you picked. It is not deleted, and the receipt lets you undo it.', field: { label: 'Repeats', value: label }, stored: { duplicateOfWorkItemId: pick } };
+  } else if (formKind === 'APPROVE_MATERIAL') {
+    const picked = choices.find((choice) => choice.value === answer.evidence);
+    const evidenceRow = (item.evidence ?? []).find((row) => row.id === answer.evidence);
+    if (!picked || !evidenceRow) return unavailable('HOME_WORK_ITEM_EVIDENCE_NOT_AVAILABLE', 'That evidence is not available', 'It may have changed since the form was opened. Nothing has changed.');
+    const costCents = answer.cost !== undefined && answer.cost !== null ? Math.round(Number(answer.cost) * 100) : null;
+    const observedResult = answer.observedResult || null;
+    // The route's own policy gate, run now so a record that cannot be approved is said so before anything is confirmed; it runs again when you confirm.
+    try {
+      await assertMaterialApprovalEvidenceSatisfiesPolicy(item as unknown as Parameters<typeof assertMaterialApprovalEvidenceSatisfiesPolicy>[0], access.role, evidenceRow as Parameters<typeof assertMaterialApprovalEvidenceSatisfiesPolicy>[2], { costCents, observedResult });
+    } catch (error) {
+      if (error instanceof MaterialApprovalEvidencePolicyViolationError) return unavailable('HOME_WORK_ITEM_APPROVAL_POLICY_NOT_MET', 'This cannot be confirmed with that evidence', `${error.message} Nothing has changed.`);
+      throw error;
+    }
+    spec = {
+      title: 'Confirm this result?', confirmLabel: 'Confirm the result',
+      description: 'This approves the work and marks the chosen evidence as verified. It records your note and the outcome. Nobody is contacted.',
+      field: { label: 'Evidence', value: picked.label },
+      extraFields: [
+        { label: 'Your note', value: answer.note },
+        ...(costCents !== null ? [{ label: 'Cost', value: `$${(costCents / 100).toLocaleString('en-US', { maximumFractionDigits: 2 })}` }] : []),
+        ...(observedResult ? [{ label: 'Result', value: APPROVAL_RESULT_LABELS[observedResult as keyof typeof APPROVAL_RESULT_LABELS] ?? observedResult }] : []),
+        { label: 'Work becomes', value: 'Approved and done' },
+      ],
+      stored: { evidenceId: picked.value, decisionNote: answer.note, costCents, observedResult },
+    };
   } else if (formKind === 'REMOVE_EVIDENCE') {
     const picked = choices.find((choice) => choice.value === answer.evidence);
     if (!picked) return unavailable('HOME_WORK_ITEM_EVIDENCE_NOT_AVAILABLE', 'That evidence cannot be removed', 'It may already be gone or verified. Nothing has changed.');
@@ -352,7 +417,7 @@ export async function workItemCommandResult(
     blocks: [{ type: 'SUMMARY', id: 'home-work-item-review', title: item.title, body: 'Nothing is saved until you confirm.', tone: 'DEFAULT', actions: [] }],
     confirmation: {
       confirmationId: `home-work-${kind.toLowerCase()}-${sha(`${item.id}:${JSON.stringify(spec.stored)}`).slice(0, 12)}-1`, version: 1, title: spec.title, description: spec.description,
-      fields: [{ label: 'Work item', value: item.title }, spec.field], editableFields: [], confirmLabel: spec.confirmLabel, consentText: consent, expiresAt: expiresAt.toISOString(),
+      fields: [{ label: 'Work item', value: item.title }, spec.field, ...(spec.extraFields ?? [])], editableFields: [], confirmLabel: spec.confirmLabel, consentText: consent, expiresAt: expiresAt.toISOString(),
     },
     captureRequests: [formCapture(formKind, contextVersion, item, choices)], suggestions: [],
   };
@@ -372,7 +437,7 @@ const FINISHED = new Set(['CLOSED', 'VERIFIED']);
 const stale = (message: string, code = 'ASK_CONFIRMATION_NOT_ACTIVE') => Object.assign(new Error(message), { code });
 
 async function confirmWorkItemCommand(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
-  const { execution, userId, parameters } = ctx;
+  const { execution, userId, parameters, access: confirmAccess } = ctx;
   const command = parameters.workItemCommand as { kind?: unknown; entityId?: unknown } | undefined;
   const kind = command?.kind as WorkItemCommandKind | undefined;
   if (!kind || !(kind in WORK_ITEM_MESSAGES)) throw stale('The change to make is invalid.');
@@ -428,6 +493,19 @@ async function confirmWorkItemCommand(ctx: ConfirmCapabilityContext): Promise<Co
         }
         title = already ? 'Already on this work' : kind === 'SUBMIT_COMPLETION_EVIDENCE' ? 'Completion evidence submitted' : 'Evidence attached';
         description = 'It is pending review by the record that governs this work. The work itself is unchanged.';
+      } else if (kind === 'APPROVE_MATERIAL') {
+        if (confirmAccess.role !== HouseholdRole.OWNER) throw stale('Only the home’s owner can confirm this result.', 'ASK_PERMISSION_REQUIRED');
+        if (!workItemAwaitsApproval(item)) throw stale('This work is no longer waiting for your confirmation.');
+        const observed = change.observedResult;
+        if (typeof change.evidenceId !== 'string' || typeof change.decisionNote !== 'string' || (change.costCents !== null && typeof change.costCents !== 'number') || (observed !== null && typeof observed !== 'string')) throw stale('The confirmation to apply is invalid.');
+        try {
+          await approveMaterialWork({ item: item as unknown as Parameters<typeof approveMaterialWork>[0]['item'], role: confirmAccess.role, actorUserId: userId, evidenceId: change.evidenceId, decisionNote: change.decisionNote, costCents: change.costCents as number | null, observedResult: observed as string | null });
+        } catch (error) {
+          if (error instanceof MaterialApprovalRequestError || error instanceof MaterialApprovalEvidencePolicyViolationError) throw stale(error.message);
+          throw error;
+        }
+        title = 'Result confirmed';
+        description = 'The work is approved and the evidence is verified. Nobody was contacted.';
       } else if (kind === 'REMOVE_EVIDENCE') {
         if (typeof change.evidenceId !== 'string') throw stale('The evidence to remove is invalid.');
         try {

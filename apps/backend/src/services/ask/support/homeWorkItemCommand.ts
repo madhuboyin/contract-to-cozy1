@@ -1,7 +1,7 @@
 // Home Operations work items inside Ask (register P2 "Maintenance and Home Operations"; FRD v1.342). Pure: declared messages, action ids, forms and
 // validation. Snooze hides an item's reminders until a date and touches nothing else; reschedule overwrites its due date; accept-routine bulk-accepts
 // the low-consequence candidates the desktop's batch scheduling accepts. Since FRD v1.454: the owner, watchers and duplicate decisions, reached through one
-// *More options* step. Material approval and completion stay with their own flows.
+// *More options* step. Since FRD v1.457: the owner's *Confirm the result* of material or safety work. Completion stays with its own flows.
 import { z } from 'zod';
 
 export const WORK_ITEM_ENTITY_TYPE = 'OPERATIONAL_WORK_ITEM';
@@ -19,21 +19,23 @@ export const WORK_ITEM_MESSAGES = {
   REMOVE_WATCHER: 'Remove a watcher from this work item.',
   MARK_DUPLICATE: 'Mark this work item as a duplicate of another.',
   UNDO_DUPLICATE: 'Undo the duplicate decision on this work item.',
+  APPROVE_MATERIAL: 'Confirm the result of this work item.',
 } as const;
 export type WorkItemCommandKind = keyof typeof WORK_ITEM_MESSAGES;
 export const WORK_ITEM_ACTION_IDS = {
   SNOOZE: 'work-item-snooze', RESCHEDULE: 'work-item-reschedule', ACCEPT_ROUTINE: 'work-items-accept-routine',
   UPDATE_STATUS: 'work-item-update-status', ATTACH_EVIDENCE: 'work-item-attach-evidence',
   OPTIONS: 'work-item-options', ASSIGN_OWNER: 'work-item-assign-owner', ADD_WATCHER: 'work-item-add-watcher', REMOVE_WATCHER: 'work-item-remove-watcher',
-  MARK_DUPLICATE: 'work-item-mark-duplicate', UNDO_DUPLICATE: 'work-item-undo-duplicate',
+  MARK_DUPLICATE: 'work-item-mark-duplicate', UNDO_DUPLICATE: 'work-item-undo-duplicate', APPROVE_MATERIAL: 'work-item-approve-material',
 } as const;
 export const workItemKindFromMessage = (message: string): WorkItemCommandKind | null =>
   ((Object.entries(WORK_ITEM_MESSAGES) as Array<[WorkItemCommandKind, string]>).find(([, value]) => value === message)?.[0]) ?? null;
-export type WorkItemFormKind = 'SNOOZE' | 'RESCHEDULE' | 'ATTACH_EXISTING' | 'SUBMIT_COMPLETION_EVIDENCE' | 'REMOVE_EVIDENCE' | 'UPDATE_STATUS' | 'ASSIGN_OWNER' | 'ADD_WATCHER' | 'REMOVE_WATCHER' | 'MARK_DUPLICATE';
+export type WorkItemFormKind = 'SNOOZE' | 'RESCHEDULE' | 'ATTACH_EXISTING' | 'SUBMIT_COMPLETION_EVIDENCE' | 'REMOVE_EVIDENCE' | 'UPDATE_STATUS' | 'ASSIGN_OWNER' | 'ADD_WATCHER' | 'REMOVE_WATCHER' | 'MARK_DUPLICATE' | 'APPROVE_MATERIAL';
 export const WORK_ITEM_FORM_CAPTURE_KEYS: Record<WorkItemFormKind, string> = {
   SNOOZE: 'WORK_ITEM_SNOOZE', RESCHEDULE: 'WORK_ITEM_RESCHEDULE', ATTACH_EXISTING: 'WORK_ITEM_ATTACH_EXISTING',
   SUBMIT_COMPLETION_EVIDENCE: 'WORK_ITEM_SUBMIT_COMPLETION_EVIDENCE', REMOVE_EVIDENCE: 'WORK_ITEM_REMOVE_EVIDENCE',
   UPDATE_STATUS: 'WORK_ITEM_UPDATE_STATUS', ASSIGN_OWNER: 'WORK_ITEM_ASSIGN_OWNER', ADD_WATCHER: 'WORK_ITEM_ADD_WATCHER', REMOVE_WATCHER: 'WORK_ITEM_REMOVE_WATCHER', MARK_DUPLICATE: 'WORK_ITEM_MARK_DUPLICATE',
+  APPROVE_MATERIAL: 'WORK_ITEM_APPROVE_MATERIAL',
 };
 /** The two kinds that write evidence from an existing record (the third form, removal, picks from what is already attached). */
 export const WORK_ITEM_ATTACH_KINDS: readonly WorkItemFormKind[] = ['ATTACH_EXISTING', 'SUBMIT_COMPLETION_EVIDENCE'];
@@ -74,16 +76,29 @@ export const OWNER_NO_ONE = 'NO_ONE';
 export const WorkItemAssignOwnerSchema = z.object({ member: z.string().trim().min(1).max(100) }).strict();
 export const WorkItemWatcherSchema = z.object({ member: z.string().trim().min(1).max(100) }).strict();
 export const WorkItemMarkDuplicateSchema = z.object({ target: z.string().trim().min(1).max(100) }).strict();
+const blank = (value: unknown) => (value === '' || value === undefined || value === null ? undefined : value);
+/** The owner's confirmation of material or safety work (v1.457): the evidence that shows it is done, a note, and, where the tier asks for it, a cost or an observed result. */
+export const WorkItemApproveMaterialSchema = z.object({
+  evidence: z.string().trim().min(1).max(100),
+  note: z.string().trim().min(1).max(1000),
+  cost: z.preprocess(blank, z.coerce.number().min(0).max(1_000_000).optional()),
+  observedResult: z.preprocess(blank, z.enum(['CONFIRMED_HEALTHY', 'NEEDS_ATTENTION', 'FAILED']).optional()),
+}).strict();
+export const APPROVAL_RESULT_LABELS = { CONFIRMED_HEALTHY: 'Looks good', NEEDS_ATTENTION: 'Needs attention', FAILED: 'Failed' } as const;
+/** Work that needs the owner's confirmation: reported done, material approval required, not yet approved. */
+export const workItemAwaitsApproval = (item: { state: string; materialApprovalRequired?: boolean; materialApprovedAt?: Date | string | null }) =>
+  item.state === 'REPORTED_COMPLETE' && Boolean(item.materialApprovalRequired) && !item.materialApprovedAt;
 export const WORK_ITEM_FORM_SCHEMAS = {
   SNOOZE: WorkItemSnoozeSchema, RESCHEDULE: WorkItemRescheduleSchema, ATTACH_EXISTING: WorkItemAttachExistingSchema,
   SUBMIT_COMPLETION_EVIDENCE: WorkItemAttachExistingSchema, REMOVE_EVIDENCE: WorkItemRemoveEvidenceSchema,
-  UPDATE_STATUS: WorkItemUpdateStatusSchema, ASSIGN_OWNER: WorkItemAssignOwnerSchema, ADD_WATCHER: WorkItemWatcherSchema, REMOVE_WATCHER: WorkItemWatcherSchema, MARK_DUPLICATE: WorkItemMarkDuplicateSchema,
+  UPDATE_STATUS: WorkItemUpdateStatusSchema, ASSIGN_OWNER: WorkItemAssignOwnerSchema, ADD_WATCHER: WorkItemWatcherSchema, REMOVE_WATCHER: WorkItemWatcherSchema, MARK_DUPLICATE: WorkItemMarkDuplicateSchema, APPROVE_MATERIAL: WorkItemApproveMaterialSchema,
 } as const;
 export const WORK_ITEM_FORM_ERRORS: Record<WorkItemFormKind, string> = {
   SNOOZE: 'Choose how long to snooze.', RESCHEDULE: 'Choose a due date.', ATTACH_EXISTING: 'Choose a record to attach.',
   SUBMIT_COMPLETION_EVIDENCE: 'Choose a record to submit.', REMOVE_EVIDENCE: 'Choose the evidence to remove.',
   UPDATE_STATUS: 'Choose an available status and include a reason when required.',
   ASSIGN_OWNER: 'Choose a household member.', ADD_WATCHER: 'Choose a household member.', REMOVE_WATCHER: 'Choose a watcher to remove.', MARK_DUPLICATE: 'Choose the work item this repeats.',
+  APPROVE_MATERIAL: 'Choose the evidence and add a short note; cost or a result may also be needed.',
 };
 export function parseWorkItemAnswer(kind: WorkItemFormKind, answer: unknown) {
   return (WORK_ITEM_FORM_SCHEMAS[kind] as z.ZodType<Record<string, string>>).safeParse(answer);

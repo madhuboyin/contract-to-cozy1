@@ -9,7 +9,7 @@ import { humanDate, readableCode } from '../askFormatting';
 import { listWorkItems } from '../../../modules/homeOperations/application/listWorkItems.usecase';
 import { legalUserWorkItemTransitions } from '../../../modules/homeOperations/domain/userGovernance';
 import {
-  WORK_ITEM_ACTION_IDS, WORK_ITEM_ENTITY_TYPE, WORK_ITEM_MESSAGES, workItemBatchEligible, workItemChangeable,
+  WORK_ITEM_ACTION_IDS, WORK_ITEM_ENTITY_TYPE, WORK_ITEM_MESSAGES, workItemAwaitsApproval, workItemBatchEligible, workItemChangeable,
 } from '../support/homeWorkItemCommand';
 
 const STATE_LABELS: Record<string, string> = {
@@ -19,10 +19,10 @@ const STATE_LABELS: Record<string, string> = {
 
 export interface WorkItemView {
   id: string; title: string; state: OperationalWorkItemState; obligationType: string; safetyTier: RecommendationSafetyTier; dueAt: Date | null; dueWindowEnd: Date | null; snoozedUntil: Date | null;
-  isRoutine: boolean; supersededByWorkItemId: string | null; subjectType?: string; homeownerReason?: string | null;
+  isRoutine: boolean; supersededByWorkItemId: string | null; subjectType?: string; homeownerReason?: string | null; materialApprovalRequired?: boolean; materialApprovedAt?: Date | null;
 }
 
-export function homeWorkItemsFromRows(items: WorkItemView[], canChange: boolean, now: Date): AskOperationResult {
+export function homeWorkItemsFromRows(items: WorkItemView[], canChange: boolean, now: Date, canApprove = false): AskOperationResult {
   const open = items.filter(workItemChangeable);
   if (open.length === 0) {
     return {
@@ -71,6 +71,8 @@ export function homeWorkItemsFromRows(items: WorkItemView[], canChange: boolean,
       ? [
         { id: WORK_ITEM_ACTION_IDS.ATTACH_EVIDENCE, label: 'Add evidence', message: WORK_ITEM_MESSAGES.ATTACH_EXISTING, interactionType: 'MUTATE_RECORD' as const, operationId: 'HOME_WORK_ITEM_COMMAND' as const, style: 'SECONDARY' as const },
         ...updateStatus,
+        ...(canApprove && workItemAwaitsApproval(item)
+          ? [{ id: WORK_ITEM_ACTION_IDS.APPROVE_MATERIAL, label: 'Confirm the result', message: WORK_ITEM_MESSAGES.APPROVE_MATERIAL, interactionType: 'MUTATE_RECORD' as const, operationId: 'HOME_WORK_ITEM_COMMAND' as const, style: 'PRIMARY' as const }] : []),
       ]
       : item.state === 'CANDIDATE'
         ? updateStatus
@@ -118,5 +120,5 @@ export function homeWorkItemsFromRows(items: WorkItemView[], canChange: boolean,
 registerCapabilityHandler('home-work-items.list', async (envelope, deps) => {
   const access = await (deps?.propertyAccess ?? ensurePropertyAccess(envelope.userId, envelope.propertyId!));
   const items = await listWorkItems({ propertyId: envelope.propertyId! });
-  return homeWorkItemsFromRows(items as unknown as WorkItemView[], access.role !== HouseholdRole.VIEWER, new Date());
+  return homeWorkItemsFromRows(items as unknown as WorkItemView[], access.role !== HouseholdRole.VIEWER, new Date(), access.role === HouseholdRole.OWNER);
 });

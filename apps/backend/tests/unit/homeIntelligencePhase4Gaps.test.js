@@ -24,6 +24,7 @@ const claimsService = read('../../src/services/claims/claims.service.ts');
 const extractionService = read('../../src/services/homeRecordsExtraction.service.ts');
 const coverageComparisonService = read('../../src/services/coverageComparison.service.ts');
 const homeOperationsController = read('../../src/modules/homeOperations/api/homeOperations.controller.ts');
+const approveMaterialWorkUsecase = read('../../src/modules/homeOperations/application/approveMaterialWork.usecase.ts');
 const materialApprovalEvidenceService = read('../../src/services/homeOperationsMaterialApprovalEvidence.service.ts');
 const saleReadinessReconciliation = read('../../src/services/saleReadinessWorkReconciliation.service.ts');
 const propertySaleCaseService = read('../../src/services/propertySaleCase.service.ts');
@@ -144,15 +145,18 @@ test('recordCoverageDecision records a COVERAGE_DECISION outcome inside its own 
 
 // --- Second review round: findings 1, 2, 3, 5, 6 -----------------------
 
-test('approveMaterialWorkHandler consults the completion evidence policy before verifying, and records an attributed outcome on VERIFIED', () => {
+test('the material approval (route and Ask share one usecase) consults the completion evidence policy before verifying, and records an attributed outcome on VERIFIED', () => {
   const fnStart = homeOperationsController.indexOf('export async function approveMaterialWorkHandler(');
-  const fnEnd = homeOperationsController.indexOf('\nexport async function batchTransitionWorkItemsHandler', fnStart);
-  const fn = homeOperationsController.slice(fnStart, fnEnd);
+  const fnEnd = homeOperationsController.indexOf('\n/**', fnStart);
+  assert.match(homeOperationsController.slice(fnStart, fnEnd), /approveMaterialWork\(\{/, 'the route runs the shared usecase');
+  const fn = approveMaterialWorkUsecase;
   // The role param (added Documents slice S5c) lets the policy check resolve a claim-document evidence
   // reference through either store — the legacy Document table or Home Records.
-  assert.match(fn, /assertMaterialApprovalEvidenceSatisfiesPolicy\(item, req\.householdRole!, evidence,/);
+  assert.match(fn, /assertMaterialApprovalEvidenceSatisfiesPolicy\(item, input\.role, evidence,/);
   assert.match(fn, /recordOperationalWorkOutcome\(\{/);
   assert.match(fn, /resolveWorkItemRecommendationSnapshotId\(verified\.propertyId, verified\.id\)/);
+  // The policy must run before the evidence is marked verified.
+  assert.ok(fn.indexOf('assertMaterialApprovalEvidenceSatisfiesPolicy(') < fn.indexOf("verificationStatus: 'VERIFIED'"));
   // The old unconditional SAFETY_EMERGENCY-only check must be gone, not
   // just supplemented -- REGULATED_COVERAGE must go through the same gate.
   assert.doesNotMatch(fn, /AUTHORITATIVE_EVIDENCE_REQUIRED/);
