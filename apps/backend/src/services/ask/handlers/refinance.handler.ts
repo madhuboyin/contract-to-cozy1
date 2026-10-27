@@ -67,12 +67,12 @@ function refinanceNextActions(favorable: boolean, triggerRatePct: number | null)
   const threshold = triggerRatePct == null ? 5.5 : Number(triggerRatePct.toFixed(3));
   return favorable
     ? [
-        refinanceWorkflowAction('refinance-test-scenario', 'Test another scenario', 'What if I refinanced at 5.5% for 15 years with $6,000 closing costs?', 'REFINANCE_ANALYSIS', 'PRIMARY'),
+        refinanceWorkflowAction('refinance-test-scenario', 'Compare a different rate or loan term', 'What if I refinanced at 5.5% for 15 years with $6,000 closing costs?', 'REFINANCE_ANALYSIS', 'PRIMARY'),
         refinanceWorkflowAction('refinance-compare-offers', 'Compare Loan Estimates', 'Help me compare official Loan Estimates for this refinance.'),
         refinanceWorkflowAction('refinance-record-decision', 'Record my decision', 'Help me record what I plan to do about refinancing.'),
       ]
     : [
-        refinanceWorkflowAction('refinance-test-scenario', 'Test another scenario', `What if I refinanced at ${threshold}% for 15 years with $6,000 closing costs?`, 'REFINANCE_ANALYSIS', 'PRIMARY'),
+        refinanceWorkflowAction('refinance-test-scenario', 'Compare a different rate or loan term', `What if I refinanced at ${threshold}% for 15 years with $6,000 closing costs?`, 'REFINANCE_ANALYSIS', 'PRIMARY'),
         refinanceWorkflowAction('refinance-start-monitor', 'Notify me at this rate', `Notify me when 30-year mortgage rates reach ${threshold}%.`, 'REFINANCE_RATE_MONITOR'),
         refinanceWorkflowAction('refinance-record-decision', 'Keep or revisit this decision', 'Help me record what I plan to do about refinancing.'),
       ];
@@ -82,10 +82,10 @@ function refinanceNextActions(favorable: boolean, triggerRatePct: number | null)
 function refinanceMoreToolsBlock() {
   return {
     type: 'SUMMARY' as const, id: 'refinance-more-tools', title: 'More refinance tools',
-    body: 'Look back at rate movement, reopen what you saved, or review your Loan Estimate comparisons.', tone: 'DEFAULT' as const,
+    body: 'Look back at mortgage rates, recalculate a loan scenario you saved, or review your Loan Estimate comparisons.', tone: 'DEFAULT' as const,
     actions: [
       refinanceWorkflowAction('refinance-history-52', 'Rate history', 'Show the mortgage rate history for the last 52 weeks.'),
-      refinanceWorkflowAction('refinance-saved-scenarios', 'Saved scenarios', 'Show my saved refinance scenarios.'),
+      refinanceWorkflowAction('refinance-saved-scenarios', 'Saved loan scenarios', 'Show my saved refinance scenarios.'),
       refinanceWorkflowAction('refinance-saved-comparisons', 'Saved comparisons', 'Review my saved Loan Estimate comparisons.'),
     ],
   };
@@ -264,8 +264,8 @@ async function refinanceJourneyResult(propertyId: string, intent: RefinanceJourn
       status: 'ANSWERED', reasonCode: 'REFINANCE_SAVED_SCENARIOS',
       blocks: [{
         type: 'SUMMARY', id: 'refinance-scenarios-summary', title: scenarios.length ? `${scenarios.length} saved refinance scenario${scenarios.length === 1 ? '' : 's'}` : 'No refinance scenario is saved yet',
-        body: scenarios.length ? 'Each is a modeled what-if, not a lender quote. Test one again to see it against today\u2019s numbers.' : 'Test a scenario and choose Save this scenario to keep it here.', tone: 'DEFAULT',
-        actions: scenarios.length ? [] : [refinanceWorkflowAction('refinance-test-scenario', 'Test a scenario', 'What if I refinanced at 5.5% for 15 years with $6,000 closing costs?', 'REFINANCE_ANALYSIS', 'PRIMARY')],
+        body: scenarios.length ? 'Each saved scenario estimates how a different interest rate, loan length, and closing cost would affect your payment and break-even point. Recalculate one with today\u2019s mortgage information.' : 'Compare a different interest rate or loan length to see the estimated payment, interest, cash needed at closing, and break-even point. This is a planning estimate, not a lender offer.', tone: 'DEFAULT',
+        actions: scenarios.length ? [] : [refinanceWorkflowAction('refinance-test-scenario', 'Compare a rate and loan term', 'What if I refinanced at 5.5% for 15 years with $6,000 closing costs?', 'REFINANCE_ANALYSIS', 'PRIMARY')],
       }, ...(scenarios.length ? [{
         type: 'GROUPED_LIST' as const, id: 'refinance-saved-scenarios', title: 'Saved scenarios', filters: [],
         sections: [{ id: 'refinance-scenario-items', title: 'Newest first', count: scenarios.length, items: scenarios.map((scenario) => {
@@ -275,7 +275,7 @@ async function refinanceJourneyResult(propertyId: string, intent: RefinanceJourn
           return {
             id: scenario.id, title: `${term.label} at ${scenario.targetRatePct.toFixed(3)}%`, description: `${savings} · ${breakEven} · closing costs ${money(scenario.closingCostUsd)}`,
             meta: [`Saved ${scenario.createdAt.slice(0, 10)}`], entityType: 'REFINANCE_SCENARIO',
-            actions: [refinanceItemContinueAction('refinance-retest-scenario', 'Test again', `What if I refinanced at ${scenario.targetRatePct}% for ${term.years} years with $${Number(scenario.closingCostUsd.toFixed(2))} closing costs?`, 'REFINANCE_SCENARIO', scenario.id), refinanceItemContinueAction('refinance-share-scenario', 'Show shareable summary', 'Show the shareable summary for this saved refinance scenario.', 'REFINANCE_SCENARIO', scenario.id)],
+            actions: [refinanceItemContinueAction('refinance-retest-scenario', 'Recalculate with today\u2019s mortgage information', `What if I refinanced at ${scenario.targetRatePct}% for ${term.years} years with $${Number(scenario.closingCostUsd.toFixed(2))} closing costs?`, 'REFINANCE_SCENARIO', scenario.id), refinanceItemContinueAction('refinance-share-scenario', 'Show a summary I can copy', 'Show the shareable summary for this saved refinance scenario.', 'REFINANCE_SCENARIO', scenario.id)],
           };
         }) }], actions: [],
       }] : []), {
@@ -772,8 +772,8 @@ export function refinanceScenarioAnswer(input: {
       body: `${tradeoff.lead} ${scenario.recommendationExplanation} This is a hypothetical recalculation only: nothing was saved, and your recorded mortgage rate and term are unchanged. Your current comparison is shown below, unchanged.`,
       tone: 'DEFAULT',
       actions: [
-        refinanceWorkflowAction('refinance-adjust-scenario', 'Adjust this scenario', `What if I refinanced at ${targetRatePct}% for ${termLabel} with $6,000 closing costs?`, 'REFINANCE_ANALYSIS', 'PRIMARY'),
-        refinanceCommandAction(REFINANCE_COMMAND_ACTIONS.SAVE_SCENARIO, 'Save this scenario', `What if I refinanced at ${targetRatePct}% for ${termLabel} with $6,000 closing costs? Save this scenario.`),
+        refinanceWorkflowAction('refinance-adjust-scenario', 'Change the rate, loan term, or costs', `What if I refinanced at ${targetRatePct}% for ${termLabel} with $6,000 closing costs?`, 'REFINANCE_ANALYSIS', 'PRIMARY'),
+        refinanceCommandAction(REFINANCE_COMMAND_ACTIONS.SAVE_SCENARIO, 'Save this loan scenario', `What if I refinanced at ${targetRatePct}% for ${termLabel} with $6,000 closing costs? Save this scenario.`),
         refinanceWorkflowAction('refinance-compare-offers', 'Compare Loan Estimates', 'Help me compare official Loan Estimates for this refinance.'),
       ],
     }, refinanceScenarioComparison(current, scenario, targetRatePct, termLabel), {

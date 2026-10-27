@@ -116,6 +116,7 @@ test('saved scenarios list the numbers and offer to test each one again with its
     assert.match(first.description, /saves \$210\/mo · break-even 28 months · closing costs \$6,000/);
     assert.match(second.description, /costs \$40\/mo · no break-even/);
     assert.deepEqual(first.actions.map((a) => a.id), ['refinance-retest-scenario', 'refinance-share-scenario']);
+    assert.deepEqual(first.actions.map((a) => a.label), ['Recalculate with today’s mortgage information', 'Show a summary I can copy']);
     assert.equal(first.actions[1].entityId, 'sc-1');
     assert.equal(first.actions[0].message, 'What if I refinanced at 5.5% for 15 years with $6000 closing costs?');
     assert.equal(second.actions[0].message, 'What if I refinanced at 6.25% for 30 years with $9000 closing costs?');
@@ -128,7 +129,9 @@ test('with none saved it says so and offers a first scenario', async () => {
   try {
     const result = await run('Show my saved refinance scenarios.');
     assert.match(result.blocks[0].title, /No refinance scenario is saved yet/);
+    assert.match(result.blocks[0].body, /interest rate or loan length/);
     assert.equal(result.blocks[0].actions[0].id, 'refinance-test-scenario');
+    assert.equal(result.blocks[0].actions[0].label, 'Compare a rate and loan term');
     assert.equal(result.blocks.some((b) => b.id === 'refinance-saved-scenarios'), false);
   } finally { restore(); }
 });
@@ -181,7 +184,7 @@ test('every block the history, scenarios and summary answers produce passes the 
   } finally { restore(); }
 });
 
-test('Test again keeps a non-whole-dollar closing cost exactly', async () => {
+test('recalculating with today’s mortgage information keeps a non-whole-dollar closing cost exactly', async () => {
   const restore = stub({ scenarios: [mapScenarioToDTO(scenarioRow({ closingCost: dec(6000.75) }))] });
   try {
     const result = await run('Show my saved refinance scenarios.');
@@ -206,6 +209,7 @@ test('the main refinance answer carries the history, saved-scenario and saved-co
     const more = result.blocks.find((block) => block.id === 'refinance-more-tools');
     assert.ok(more, `${radarState}: the tools block survives`);
     assert.deepEqual(more.actions.map((a) => a.id), ['refinance-history-52', 'refinance-saved-scenarios', 'refinance-saved-comparisons']);
+    assert.equal(more.actions[1].label, 'Saved loan scenarios');
     assert.ok(more.actions.length <= 3);
   }
   const { isAskActionAllowedForHouseholdRole } = require('../../src/services/ask/askAudiencePresentation.ts');
@@ -215,4 +219,5 @@ test('the main refinance answer carries the history, saved-scenario and saved-co
   });
   const more = answer.blocks.find((block) => block.id === 'refinance-more-tools');
   assert.ok(more.actions.every((a) => isAskActionAllowedForHouseholdRole(a, 'VIEWER')));
+  assert.equal(answer.blocks[0].actions[0].label, 'Compare a different rate or loan term');
 });
