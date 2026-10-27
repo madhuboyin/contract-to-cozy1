@@ -478,6 +478,22 @@ describe('lifespan, progress, timeline, chips and badges', () => {
     expect(screen.getByRole('button', { name: 'Show 5-year horizon' })).toBeInTheDocument();
   });
 
+  test('a percent trend chart labels rates to the hundredth, frames the plotted range instead of starting at zero, and names the dates in its table', () => {
+    const { container } = render(<Harness onItemAction={jest.fn()} block={{
+      type: 'TREND_CHART', id: 'rates', title: 'Mortgage rates, last 3 weeks', basis: 'Governed national weekly benchmarks.', valueFormat: 'PERCENT', scale: 'FIT',
+      categories: ['10/06', '10/13', '10/20'],
+      series: [{ id: 'rate-30', label: '30-year fixed', style: 'SOLID', tone: 'DEFAULT', values: [6.4, 6.3, 6.25] }],
+      markers: [], actions: [],
+    }} />);
+    expect(screen.getByRole('img', { name: /30-year fixed ends at 6\.250%/ })).toBeInTheDocument();
+    expect(screen.getByText('(6.25%)')).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/\$/);
+    // Zero is not on the axis: the lowest tick is just under the lowest rate.
+    const ticks = Array.from(container.querySelectorAll('svg text')).map((node) => node.textContent ?? '').filter((text) => /%$/.test(text)).map((text) => parseFloat(text));
+    expect(Math.min(...ticks)).toBeGreaterThan(6);
+    expect(container.querySelector('table.sr-only th')?.textContent).toBe('Date');
+  });
+
   test('progress shows the declared percent with its basis, not a count of the steps', () => {
     const onItemAction = jest.fn();
     render(<Harness onItemAction={onItemAction} block={{

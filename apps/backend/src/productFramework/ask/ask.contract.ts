@@ -608,7 +608,9 @@ const ProgressBlockSchema = z.object({
 const TrendChartBlockSchema = z.object({
   type: z.literal('TREND_CHART'), id: z.string(), title: z.string(), description: z.string().nullable().optional(),
   basis: z.string().trim().min(1).max(300),
-  valueFormat: z.enum(['CURRENCY']).default('CURRENCY'),
+  valueFormat: z.enum(['CURRENCY', 'PERCENT']).default('CURRENCY'),
+  // ZERO draws the value axis from zero (cumulative dollars); FIT frames the plotted range, for a series that moves in a narrow band (a mortgage rate).
+  scale: z.enum(['ZERO', 'FIT']).default('ZERO'),
   categories: z.array(z.string().trim().min(1).max(12)).min(1).max(40),
   series: z.array(z.object({
     id: z.string(), label: z.string().trim().min(1).max(60),

@@ -38,18 +38,27 @@ const compactMoney = (value: number) => {
   return `${sign}$${Math.round(abs)}`;
 };
 const fullMoney = (value: number) => `${value < 0 ? '-' : ''}$${Math.round(Math.abs(value)).toLocaleString('en-US')}`;
+const compactPercent = (value: number) => `${value.toFixed(2)}%`;
+const fullPercent = (value: number) => `${value.toFixed(3)}%`;
 
 export const TrendChartBlock: AskBlockRenderer<'TREND_CHART'> = ({ block }) => {
+  const percent = block.valueFormat === 'PERCENT';
+  const compact = percent ? compactPercent : compactMoney;
+  const full = percent ? fullPercent : fullMoney;
   const all = block.series.flatMap((series) => series.values);
-  const min = Math.min(0, ...all);
-  const max = Math.max(0, ...all);
+  const fit = block.scale === 'FIT';
+  const lowest = Math.min(...all);
+  const highest = Math.max(...all);
+  const margin = fit ? ((highest - lowest) || Math.abs(highest) * 0.05 || 1) * 0.12 : 0;
+  const min = fit ? lowest - margin : Math.min(0, ...all);
+  const max = fit ? highest + margin : Math.max(0, ...all);
   const span = max - min || 1;
   const last = block.categories.length - 1;
   const x = (index: number) => PAD.left + (last === 0 ? 0 : (index / last) * (WIDTH - PAD.left - PAD.right));
   const y = (value: number) => PAD.top + (1 - (value - min) / span) * (HEIGHT - PAD.top - PAD.bottom);
   const ticks = [min, min + span / 2, max];
   const labelEvery = Math.ceil(block.categories.length / 6);
-  const baselineY = y(Math.max(0, min));
+  const baselineY = y(fit ? min : Math.max(0, min));
   const areaD = (values: number[]) => {
     if (values.length <= 1) return '';
     const linePoints = values.map((value, index) => `${index === 0 ? 'M' : 'L'} ${x(index).toFixed(1)} ${y(value).toFixed(1)}`).join(' ');
@@ -62,7 +71,7 @@ export const TrendChartBlock: AskBlockRenderer<'TREND_CHART'> = ({ block }) => {
         <div className="min-w-0">
           <div className="flex items-baseline gap-2">
             <h3 className="text-sm font-bold tracking-tight text-slate-950 sm:text-base">{block.title}</h3>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-teal-700">Cumulative Trajectory</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-teal-700">{percent ? 'Rate trend' : 'Cumulative Trajectory'}</span>
           </div>
           {block.description && <p className="mt-0.5 text-xs text-slate-500">{block.description}</p>}
         </div>
@@ -72,7 +81,7 @@ export const TrendChartBlock: AskBlockRenderer<'TREND_CHART'> = ({ block }) => {
         <figure>
           <div className="rounded-xl border border-slate-100 bg-slate-50/40 p-2">
             <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className="h-auto w-full" role="img"
-              aria-label={`${block.title}. ${block.series.map((series) => `${series.label} ends at ${fullMoney(series.values[last])}`).join('; ')}.`}>
+              aria-label={`${block.title}. ${block.series.map((series) => `${series.label} ends at ${full(series.values[last])}`).join('; ')}.`}>
               <defs>
                 {block.series.map((series) => (
                   <linearGradient key={`grad-${series.id}`} id={`trend-grad-${block.id}-${series.id}`} x1="0" y1="0" x2="0" y2="1">
@@ -84,10 +93,10 @@ export const TrendChartBlock: AskBlockRenderer<'TREND_CHART'> = ({ block }) => {
               {ticks.map((tick) => (
                 <g key={tick}>
                   <line x1={PAD.left} x2={WIDTH - PAD.right} y1={y(tick)} y2={y(tick)} className="stroke-slate-200/70" strokeWidth="1" />
-                  <text x={PAD.left - 6} y={y(tick) + 3} textAnchor="end" className="fill-slate-500 font-medium" fontSize="11">{compactMoney(tick)}</text>
+                  <text x={PAD.left - 6} y={y(tick) + 3} textAnchor="end" className="fill-slate-500 font-medium" fontSize="11">{compact(tick)}</text>
                 </g>
               ))}
-              {min < 0 && <line x1={PAD.left} x2={WIDTH - PAD.right} y1={y(0)} y2={y(0)} className="stroke-slate-300" strokeWidth="1" />}
+              {!fit && min < 0 && <line x1={PAD.left} x2={WIDTH - PAD.right} y1={y(0)} y2={y(0)} className="stroke-slate-300" strokeWidth="1" />}
               {block.categories.map((category, index) => (index % labelEvery === 0 || index === last) && (
                 <text key={category} x={x(index)} y={HEIGHT - 8} textAnchor="middle" className="fill-slate-600 font-medium" fontSize="11">{category}</text>
               ))}
@@ -113,7 +122,7 @@ export const TrendChartBlock: AskBlockRenderer<'TREND_CHART'> = ({ block }) => {
                 <span key={series.id} className="inline-flex items-center gap-1.5 rounded-full border border-slate-200/80 bg-slate-50 px-2.5 py-0.5">
                   <span className={cn('inline-block h-0.5 w-3.5', SWATCH[series.tone], series.style === 'DASHED' && 'opacity-70')} aria-hidden="true" />
                   <span>{series.label}</span>
-                  {last >= 0 && <strong className="ml-0.5 font-bold tabular-nums text-slate-900" aria-hidden="true">({compactMoney(series.values[last])})</strong>}
+                  {last >= 0 && <strong className="ml-0.5 font-bold tabular-nums text-slate-900" aria-hidden="true">({compact(series.values[last])})</strong>}
                 </span>
               ))}
               {block.markers.map((marker) => (
@@ -128,8 +137,8 @@ export const TrendChartBlock: AskBlockRenderer<'TREND_CHART'> = ({ block }) => {
         <p className="mt-1.5 text-xs text-slate-500">{block.basis}</p>
         <table className="sr-only">
           <caption>{block.title}</caption>
-          <thead><tr><th>Year</th>{block.series.map((series) => <th key={series.id}>{series.label}</th>)}</tr></thead>
-          <tbody>{block.categories.map((category, index) => <tr key={category}><td>{category}</td>{block.series.map((series) => <td key={series.id}>{fullMoney(series.values[index])}</td>)}</tr>)}</tbody>
+          <thead><tr><th>{percent ? 'Date' : 'Year'}</th>{block.series.map((series) => <th key={series.id}>{series.label}</th>)}</tr></thead>
+          <tbody>{block.categories.map((category, index) => <tr key={category}><td>{category}</td>{block.series.map((series) => <td key={series.id}>{full(series.values[index])}</td>)}</tr>)}</tbody>
         </table>
       </div>
     </section>

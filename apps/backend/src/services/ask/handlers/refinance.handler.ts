@@ -15,6 +15,8 @@ import { getRefinanceAlertPreference } from '../../../refinanceRadar/refinanceAl
 import { listRefinanceRateMonitors, type RefinanceRateMonitorDTO } from '../../../refinanceRadar/refinanceRateMonitor.service';
 import { getCurrentRefinanceDecision } from '../../../refinanceRadar/refinanceDecision.service';
 import { listSavedRefinanceLoanEstimateComparisons } from '../../../refinanceRadar/refinanceLoanEstimateSnapshot.service';
+import { buildRefinanceLoanEstimateComparisonMarkdown } from '../../../refinanceRadar/refinanceLoanEstimateMarkdown';
+import { prisma } from '../../../lib/prisma';
 import { BreakEvenService, type BreakEvenDTO } from '../../breakEven.service';
 import { money } from '../askFormatting';
 import { BREAK_EVEN_WHAT_IF_LABELS, parseBreakEvenWhatIf, type BreakEvenWhatIf } from '../support/breakEvenWhatIf';
@@ -50,6 +52,11 @@ function refinanceCommandAction(id: string, label: string, message: string, styl
   return { id, label, message, operationId: 'REFINANCE_COMMAND' as const, actionId: id, interactionType: 'START_WORKFLOW' as const, style, entityType: 'REFINANCE_RECORD', ...(entityId ? { entityId } : {}) };
 }
 
+/** A row-level read or continuation (not a write): continues the conversation with the row as its entity. */
+function refinanceItemContinueAction(id: string, label: string, message: string, entityType: string, entityId?: string) {
+  return { id, label, message, operationId: 'REFINANCE_ANALYSIS' as const, actionId: id, interactionType: 'CONVERSATION_CONTINUE' as const, style: 'SECONDARY' as const, entityType, ...(entityId ? { entityId } : {}) };
+}
+
 function refinanceItemCommandAction(id: string, label: string, message: string, style: 'PRIMARY' | 'SECONDARY' | 'QUIET', entityId: string) {
   return { id, label, message, operationId: 'REFINANCE_COMMAND' as const, actionId: id, interactionType: 'MUTATE_RECORD' as const, style, entityType: 'REFINANCE_RECORD', entityId };
 }
@@ -69,14 +76,95 @@ function refinanceNextActions(favorable: boolean, triggerRatePct: number | null)
       ];
 }
 
-export function refinanceJourneyIntent(message: string): 'COMPARE_OFFERS' | 'RECORD_DECISION' | 'RATE_HISTORY' | null {
+export type RefinanceJourneyIntent = 'COMPARE_OFFERS' | 'RECORD_DECISION' | 'RATE_HISTORY' | 'SAVED_SCENARIOS';
+export function refinanceJourneyIntent(message: string): RefinanceJourneyIntent | null {
+  if (/\bsaved\b.*\b(?:refinance )?scenarios?\b/i.test(message)) return 'SAVED_SCENARIOS';
   if (/\b(?:compare|review|upload|official)\b.*\b(?:loan estimates?|lender offers?|quotes?)\b/i.test(message)) return 'COMPARE_OFFERS';
   if (/\b(?:record|update|review|help me)\b.*\b(?:refinance )?(?:decision|plan|what i plan)\b/i.test(message)) return 'RECORD_DECISION';
   if (/\b(?:rate|market)\b.*\b(?:history|trend|movement|changed)\b/i.test(message)) return 'RATE_HISTORY';
   return null;
 }
 
-async function refinanceJourneyResult(propertyId: string, intent: NonNullable<ReturnType<typeof refinanceJourneyIntent>>): Promise<AskOperationResult> {
+/** The weeks of rate history a request asks for: a quarter, else the full year Ask keeps. */
+export function refinanceHistoryWeeks(message: string): 13 | 52 {
+  return /\b(?:13 weeks?|3 months?|three months?|quarter)\b/i.test(message) ? 13 : 52;
+}
+
+const SCENARIO_TERM_LABELS: Record<string, { label: string; years: number }> = {
+  THIRTY_YEAR: { label: '30-year', years: 30 }, TWENTY_YEAR: { label: '20-year', years: 20 }, FIFTEEN_YEAR: { label: '15-year', years: 15 }, TEN_YEAR: { label: '10-year', years: 10 },
+};
+
+/** Paragraph-aware chunks so a long summary survives the per-row text limit. */
+function chunkSummary(body: string, max = 1100): string[] {
+  const parts: string[] = [];
+  let current = '';
+  for (const line of body.split('\n')) {
+    if (current && current.length + line.length + 1 > max) { parts.push(current.trimEnd()); current = ''; }
+    current += `${line}\n`;
+  }
+  if (current.trim()) parts.push(current.trimEnd());
+  return parts;
+}
+
+const MMDD = (isoDate: string) => `${isoDate.slice(5, 7)}/${isoDate.slice(8, 10)}`;
+/** At most `limit` evenly spaced indices that always include the first and last point. */
+function evenIndices(length: number, limit: number): number[] {
+  if (length <= limit) return Array.from({ length }, (_, i) => i);
+  return Array.from({ length: limit }, (_, i) => Math.round((i * (length - 1)) / (limit - 1)));
+}
+
+/** A saved Loan Estimate comparison as the shareable summary Desktop exports as Markdown, shown here to read or copy; nothing is sent anywhere. */
+export async function refinanceComparisonSummaryResult(propertyId: string, comparisonId: string): Promise<AskOperationResult> {
+  const comparison = (await listSavedRefinanceLoanEstimateComparisons(propertyId)).find((item) => item.id === comparisonId);
+  if (!comparison) {
+    return { status: 'NOT_APPLICABLE', reasonCode: 'REFINANCE_COMPARISON_NOT_FOUND', blocks: [{ type: 'SUMMARY', id: 'refinance-summary-missing', title: 'That saved comparison is no longer available', body: 'Nothing was shown or changed.', tone: 'DEFAULT', actions: [refinanceWorkflowAction('refinance-compare-offers', 'Compare Loan Estimates', 'Help me compare official Loan Estimates for this refinance.')] }], suggestions: [] };
+  }
+  const property = await prisma.property.findUnique({ where: { id: propertyId }, select: { address: true, city: true, state: true, zipCode: true } });
+  const markdown = buildRefinanceLoanEstimateComparisonMarkdown({
+    propertyLabel: property ? `${property.address}, ${property.city}, ${property.state} ${property.zipCode}` : 'This home',
+    generatedAt: new Date(), offers: comparison.offers,
+  });
+  const parts = chunkSummary(markdown);
+  return {
+    status: 'ANSWERED', reasonCode: 'REFINANCE_COMPARISON_SUMMARY',
+    blocks: [{
+      type: 'GROUPED_LIST', id: 'refinance-comparison-summary', title: `Shareable summary: ${comparison.label ?? 'Saved comparison'}`, filters: [],
+      description: 'The same summary Desktop exports as a file, shown here to read or copy. Ask has not sent it to anyone.',
+      sections: [{ id: 'refinance-comparison-summary-parts', title: 'Summary', count: parts.length, items: parts.map((part, index) => ({
+        id: `summary-${index}`, title: parts.length > 1 ? `Summary (part ${index + 1} of ${parts.length})` : 'Summary', description: null, meta: [], status: 'Summary', href: null, detail: part,
+      })) }], actions: [],
+    }, {
+      type: 'BOUNDARY', id: 'refinance-comparison-summary-boundary', title: 'Disclosed figures, not advice', body: 'ContractToCozy compares the disclosures you reviewed; it does not select, endorse, contact, or transmit information to a lender.', severity: 'INFO', suggestions: [],
+    }], suggestions: [],
+  };
+}
+
+async function refinanceJourneyResult(propertyId: string, intent: RefinanceJourneyIntent, message = ''): Promise<AskOperationResult> {
+  if (intent === 'SAVED_SCENARIOS') {
+    const scenarios = await refinanceRadarService.getSavedScenarios(propertyId);
+    return {
+      status: 'ANSWERED', reasonCode: 'REFINANCE_SAVED_SCENARIOS',
+      blocks: [{
+        type: 'SUMMARY', id: 'refinance-scenarios-summary', title: scenarios.length ? `${scenarios.length} saved refinance scenario${scenarios.length === 1 ? '' : 's'}` : 'No refinance scenario is saved yet',
+        body: scenarios.length ? 'Each is a modeled what-if, not a lender quote. Test one again to see it against today\u2019s numbers.' : 'Test a scenario and choose Save this scenario to keep it here.', tone: 'DEFAULT',
+        actions: scenarios.length ? [] : [refinanceWorkflowAction('refinance-test-scenario', 'Test a scenario', 'What if I refinanced at 5.5% for 15 years with $6,000 closing costs?', 'REFINANCE_ANALYSIS', 'PRIMARY')],
+      }, ...(scenarios.length ? [{
+        type: 'GROUPED_LIST' as const, id: 'refinance-saved-scenarios', title: 'Saved scenarios', filters: [],
+        sections: [{ id: 'refinance-scenario-items', title: 'Newest first', count: scenarios.length, items: scenarios.map((scenario) => {
+          const term = SCENARIO_TERM_LABELS[scenario.targetTerm] ?? { label: String(scenario.targetTerm).replace(/_/g, ' ').toLowerCase(), years: Math.round(scenario.targetTermMonths / 12) };
+          const savings = scenario.monthlySavings == null ? 'monthly savings not available' : `${scenario.monthlySavings >= 0 ? 'saves' : 'costs'} ${money(Math.abs(scenario.monthlySavings))}/mo`;
+          const breakEven = scenario.breakEvenMonths == null ? 'no break-even' : `break-even ${scenario.breakEvenMonths} months`;
+          return {
+            id: scenario.id, title: `${term.label} at ${scenario.targetRatePct.toFixed(3)}%`, description: `${savings} · ${breakEven} · closing costs ${money(scenario.closingCostUsd)}`,
+            meta: [`Saved ${scenario.createdAt.slice(0, 10)}`], entityType: 'REFINANCE_SCENARIO',
+            actions: [refinanceItemContinueAction('refinance-retest-scenario', 'Test again', `What if I refinanced at ${scenario.targetRatePct}% for ${term.years} years with $${Math.round(scenario.closingCostUsd)} closing costs?`, 'REFINANCE_SCENARIO', scenario.id)],
+          };
+        }) }], actions: [],
+      }] : []), {
+        type: 'BOUNDARY', id: 'refinance-scenarios-boundary', title: 'Modeled, not offered', body: 'Saved scenarios use the rate and costs you gave. A lender\u2019s offer depends on underwriting.', severity: 'INFO', suggestions: [],
+      }], suggestions: [],
+    };
+  }
   if (intent === 'COMPARE_OFFERS') {
     const comparisons = await listSavedRefinanceLoanEstimateComparisons(propertyId);
     return {
@@ -87,7 +175,7 @@ async function refinanceJourneyResult(propertyId: string, intent: NonNullable<Re
         tone: 'DEFAULT', actions: [refinanceCommandAction(REFINANCE_COMMAND_ACTIONS.ADD_COMPARISON, comparisons.length ? 'Compare another pair' : 'Compare Loan Estimates', 'Compare and save two official refinance Loan Estimates.', 'PRIMARY')],
       }, ...(comparisons.length ? [{
         type: 'GROUPED_LIST' as const, id: 'refinance-saved-offers', title: 'Saved official-offer comparisons', filters: [],
-        sections: [{ id: 'refinance-comparison-items', title: 'Saved comparisons', count: comparisons.length, items: comparisons.map((comparison) => ({ id: comparison.id, title: comparison.label ?? 'Saved comparison', description: comparison.offers.map((offer) => offer.lenderName).join(' · '), meta: [`Updated ${comparison.updatedAt.slice(0, 10)}`], entityType: 'REFINANCE_LOAN_ESTIMATE_COMPARISON', actions: [refinanceItemCommandAction(REFINANCE_COMMAND_ACTIONS.DELETE_COMPARISON, 'Delete', 'Delete this saved refinance Loan Estimate comparison.', 'QUIET', comparison.id)] })) }], actions: [],
+        sections: [{ id: 'refinance-comparison-items', title: 'Saved comparisons', count: comparisons.length, items: comparisons.map((comparison) => ({ id: comparison.id, title: comparison.label ?? 'Saved comparison', description: comparison.offers.map((offer) => offer.lenderName).join(' · '), meta: [`Updated ${comparison.updatedAt.slice(0, 10)}`], entityType: 'REFINANCE_LOAN_ESTIMATE_COMPARISON', actions: [refinanceItemContinueAction('refinance-share-comparison', 'Show shareable summary', 'Show the shareable summary for this saved Loan Estimate comparison.', 'REFINANCE_LOAN_ESTIMATE_COMPARISON', comparison.id), refinanceItemCommandAction(REFINANCE_COMMAND_ACTIONS.DELETE_COMPARISON, 'Delete', 'Delete this saved refinance Loan Estimate comparison.', 'QUIET', comparison.id)] })) }], actions: [],
       }] : []), {
         type: 'BOUNDARY', id: 'refinance-offers-boundary', title: 'Official disclosures still require homeowner review',
         body: 'ContractToCozy compares the disclosures you review; it does not select, endorse, contact, or transmit information to a lender.', severity: 'INFO', suggestions: [],
@@ -105,7 +193,7 @@ async function refinanceJourneyResult(propertyId: string, intent: NonNullable<Re
       blocks: [{
         type: 'SUMMARY', id: 'refinance-decision-summary', title: decision ? `Current refinance decision: ${decision.status.replace(/_/g, ' ').toLowerCase()}` : 'No refinance decision is recorded yet',
         body: decision ? `This decision was updated ${decision.updatedAt.slice(0, 10)}. ${scenarios.length} saved scenario${scenarios.length === 1 ? '' : 's'} and ${comparisons.length} saved offer comparison${comparisons.length === 1 ? '' : 's'} are available to support the next step.` : 'No refinance decision is recorded yet. Record an exploring, defer, keep, proceed, application, decline, abandon, or verified-closing state here.',
-        tone: 'DEFAULT', actions: [refinanceCommandAction(REFINANCE_COMMAND_ACTIONS.RECORD_DECISION, decision ? 'Update decision' : 'Record decision', 'Record or update my refinance decision.', 'PRIMARY')],
+        tone: 'DEFAULT', actions: [refinanceCommandAction(REFINANCE_COMMAND_ACTIONS.RECORD_DECISION, decision ? 'Update decision' : 'Record decision', 'Record or update my refinance decision.', 'PRIMARY'), ...(scenarios.length ? [refinanceWorkflowAction('refinance-saved-scenarios', 'See saved scenarios', 'Show my saved refinance scenarios.')] : [])],
       }, ...(decision?.history?.length ? [{
         type: 'TABLE' as const, id: 'refinance-decision-history', title: 'Decision history',
         columns: [{ key: 'date', label: 'Date' }, { key: 'from', label: 'From' }, { key: 'to', label: 'To' }],
@@ -116,18 +204,54 @@ async function refinanceJourneyResult(propertyId: string, intent: NonNullable<Re
       }], suggestions: [],
     };
   }
+  const weeks = refinanceHistoryWeeks(message);
   const history = await refinanceRadarService.getRateHistory(propertyId, 52);
+  const ordered = [...history.snapshots].sort((a, b) => a.date.localeCompare(b.date));
+  const visible = ordered.slice(-weeks);
+  const plotted = evenIndices(visible.length, 40).map((index) => visible[index]);
+  const visibleIds = new Set(visible.map((snapshot) => snapshot.id));
+  const dateBySnapshot = new Map(visible.map((snapshot) => [snapshot.id, snapshot.date]));
+  // The radar's own opportunity opens and closes, as Desktop's markers and windows: pair each OPEN with the next CLOSED.
+  const transitions = [...history.transitions].filter((item) => item.transitionType === 'OPEN' || item.transitionType === 'CLOSED').sort((a, b) => Date.parse(a.occurredAt) - Date.parse(b.occurredAt));
+  const windows: Array<{ from: string; to: string | null }> = [];
+  for (const transition of transitions) {
+    const date = transition.occurredAt.slice(0, 10);
+    if (transition.transitionType === 'OPEN' && !windows.some((item) => item.to === null)) windows.push({ from: date, to: null });
+    if (transition.transitionType === 'CLOSED') { const open = [...windows].reverse().find((item) => item.to === null); if (open) open.to = date; }
+  }
+  const markers = transitions.filter((item) => visibleIds.has(item.snapshotId)).slice(-4).flatMap((item, index) => {
+    const date = dateBySnapshot.get(item.snapshotId);
+    const categoryIndex = plotted.findIndex((snapshot) => snapshot.id === item.snapshotId) >= 0
+      ? plotted.findIndex((snapshot) => snapshot.id === item.snapshotId)
+      : plotted.findIndex((snapshot) => date != null && snapshot.date >= date);
+    return categoryIndex < 0 ? [] : [{ id: `refinance-transition-${index}`, label: `${item.transitionType === 'OPEN' ? 'Opportunity opened' : 'Opportunity closed'} ${date ? MMDD(date) : ''}`.trim(), categoryIndex }];
+  });
+  const rangeAction = (id: string, label: string, text: string) => refinanceWorkflowAction(id, label, text, 'REFINANCE_ANALYSIS', 'QUIET');
   return {
     status: 'ANSWERED', reasonCode: 'REFINANCE_RATE_HISTORY',
     blocks: [{
       type: 'SUMMARY', id: 'refinance-rate-history-summary', title: history.trendSummary.trendLabel,
-      body: `Latest governed benchmarks: ${history.trendSummary.current30yr?.toFixed(3) ?? '—'}% for 30-year fixed and ${history.trendSummary.current15yr?.toFixed(3) ?? '—'}% for 15-year fixed.`, tone: 'DEFAULT', actions: [],
-    }, {
-      type: 'TABLE', id: 'refinance-rate-history', title: 'Up to 52 weeks of governed mortgage-rate history',
+      body: `Latest governed benchmarks: ${history.trendSummary.current30yr?.toFixed(3) ?? '\u2014'}% for 30-year fixed and ${history.trendSummary.current15yr?.toFixed(3) ?? '\u2014'}% for 15-year fixed.`, tone: 'DEFAULT', actions: [],
+    }, ...(plotted.length >= 2 ? [{
+      type: 'TREND_CHART' as const, id: 'refinance-rate-history-chart', title: `Mortgage rates, last ${visible.length} weeks`, description: null,
+      basis: 'Governed national weekly benchmarks, not a lender quote.' + (visible.length > plotted.length ? ' Every other week is plotted to fit; the table has every week.' : ''),
+      valueFormat: 'PERCENT' as const, scale: 'FIT' as const, categories: plotted.map((snapshot) => MMDD(snapshot.date)),
+      series: [
+        { id: 'rate-30', label: '30-year fixed', style: 'SOLID' as const, tone: 'DEFAULT' as const, values: plotted.map((snapshot) => snapshot.rate30yr) },
+        { id: 'rate-15', label: '15-year fixed', style: 'DASHED' as const, tone: 'POSITIVE' as const, values: plotted.map((snapshot) => snapshot.rate15yr) },
+      ],
+      markers,
+      actions: [weeks === 13 ? rangeAction('refinance-history-52', 'Last 52 weeks', 'Show the mortgage rate history for the last 52 weeks.') : rangeAction('refinance-history-13', 'Last 13 weeks', 'Show the mortgage rate history for the last 13 weeks.')],
+    }] : []), {
+      type: 'TABLE', id: 'refinance-rate-history', title: `${visible.length} weeks of governed mortgage-rate history`,
       columns: [{ key: 'date', label: 'Date' }, { key: 'thirty', label: '30-year fixed' }, { key: 'fifteen', label: '15-year fixed' }, { key: 'source', label: 'Source' }],
-      rows: history.snapshots.map((snapshot) => ({ id: snapshot.id, values: { date: snapshot.date, thirty: `${snapshot.rate30yr.toFixed(3)}%`, fifteen: `${snapshot.rate15yr.toFixed(3)}%`, source: snapshot.source } })), actions: [],
-    }, {
-      type: 'BOUNDARY', id: 'refinance-rate-history-boundary', title: 'National benchmark—not personalized pricing', body: 'These snapshots describe governed national benchmarks. Eligibility and available lender pricing depend on underwriting.', severity: 'INFO', suggestions: [],
+      rows: [...visible].reverse().map((snapshot) => ({ id: snapshot.id, values: { date: snapshot.date, thirty: `${snapshot.rate30yr.toFixed(3)}%`, fifteen: `${snapshot.rate15yr.toFixed(3)}%`, source: snapshot.source } })), actions: [],
+    }, ...(windows.length ? [{
+      type: 'TABLE' as const, id: 'refinance-opportunity-windows', title: 'When refinancing looked worth reviewing for this home',
+      columns: [{ key: 'from', label: 'Opened' }, { key: 'to', label: 'Closed' }],
+      rows: windows.slice(-6).reverse().map((item, index) => ({ id: `window-${index}`, values: { from: item.from, to: item.to ?? 'Still open' } })), actions: [],
+    }] : []), {
+      type: 'BOUNDARY', id: 'refinance-rate-history-boundary', title: 'National benchmark\u2014not personalized pricing', body: 'These snapshots describe governed national benchmarks. Eligibility and available lender pricing depend on underwriting.', severity: 'INFO', suggestions: [],
     }], suggestions: [],
   };
 }
@@ -292,7 +416,7 @@ export function breakEvenAnalysisFromDto(dto: BreakEvenDTO, propertyId: string, 
     type: 'TREND_CHART', id: 'break-even-chart', title: 'Cost vs appreciation',
     description: 'Cumulative ownership costs against cumulative projected appreciation.',
     basis: `Planning projection over ${years} years; ${debtOn ? 'mortgage interest counts as a cost and principal paydown as gain' : 'mortgage costs are not included'}.`,
-    valueFormat: 'CURRENCY',
+    valueFormat: 'CURRENCY', scale: 'ZERO',
     categories: dto.projection.map((row) => String(row.year)),
     series: [
       { id: 'costs', label: 'Cumulative costs', style: 'SOLID', tone: 'CAUTION', values: dto.projection.map((row) => row.cumulativeExpenses) },
@@ -618,7 +742,7 @@ export function refinanceCanonicalAnswer(input: {
 
 async function refinanceAnalysisResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
   const journeyIntent = refinanceJourneyIntent(message);
-  if (journeyIntent) return refinanceJourneyResult(propertyId, journeyIntent);
+  if (journeyIntent) return refinanceJourneyResult(propertyId, journeyIntent, message);
   const [profile, financialContext, marketSnapshot, access] = await Promise.all([
     getProfile(propertyId),
     getFinancialContextDecisions(propertyId, userId, 'REFINANCE_RADAR'),
@@ -802,7 +926,14 @@ async function refinanceRateMonitorResult(userId: string, propertyId: string, me
   };
 }
 
-registerCapabilityHandler('refinance.analysis', async (envelope) => refinanceAnalysisWithMonitorsResult(envelope.userId, envelope.propertyId!, envelope.message));
+registerCapabilityHandler('refinance.analysis', async (envelope) => {
+  const launch = envelope.launchContext;
+  // The saved-comparison row's own "Show shareable summary" action: the comparison is the row's entity, read for this home only.
+  if (launch?.actionId === 'refinance-share-comparison' && launch.entityType === 'REFINANCE_LOAN_ESTIMATE_COMPARISON' && launch.entityId && launch.surface !== 'ASK_REFRESH') {
+    return refinanceComparisonSummaryResult(envelope.propertyId!, launch.entityId);
+  }
+  return refinanceAnalysisWithMonitorsResult(envelope.userId, envelope.propertyId!, envelope.message);
+});
 
 registerCapabilityHandler('refinance.monitor', async (envelope) => refinanceRateMonitorResult(envelope.userId, envelope.propertyId!, envelope.message));
 
