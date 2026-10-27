@@ -6,17 +6,15 @@ export const REFINANCE_COMMAND_ACTIONS = {
   ADD_COMPARISON: 'refinance-add-comparison',
   DELETE_COMPARISON: 'refinance-delete-comparison',
   RECORD_DECISION: 'refinance-record-decision-inline',
-  LENDER_BRIEF: 'refinance-lender-brief',
 } as const;
 
 export type RefinanceCommandKind = keyof typeof REFINANCE_COMMAND_ACTIONS;
-export type RefinanceFormKind = 'ALERT_SETTINGS' | 'ADD_COMPARISON' | 'RECORD_DECISION' | 'LENDER_BRIEF';
+export type RefinanceFormKind = 'ALERT_SETTINGS' | 'ADD_COMPARISON' | 'RECORD_DECISION';
 
 export const REFINANCE_CAPTURE_KEYS: Record<RefinanceFormKind, string> = {
   ALERT_SETTINGS: 'REFINANCE_ALERT_SETTINGS_INPUTS',
   ADD_COMPARISON: 'REFINANCE_LOAN_ESTIMATE_COMPARISON_INPUTS',
   RECORD_DECISION: 'REFINANCE_DECISION_INPUTS',
-  LENDER_BRIEF: 'REFINANCE_LENDER_BRIEF_INPUTS',
 };
 
 export function refinanceKindFromAction(actionId: string | null | undefined): RefinanceCommandKind | null {
@@ -84,7 +82,9 @@ export const refinanceDecisionAnswerSchema = z.object({
   }
 });
 
-/** Desktop's three acknowledgements before the lender-discussion brief; each is its own required answer and none can be collapsed into a generic confirmation. */
+/** The lender-discussion brief is a read on the refinance answer (not a command), so viewers can use it. Desktop's three acknowledgements before it; each is its own required answer and none can be collapsed into a generic confirmation. */
+export const REFINANCE_LENDER_BRIEF_ACTION_ID = 'refinance-lender-brief';
+export const REFINANCE_LENDER_BRIEF_CAPTURE_KEY = 'REFINANCE_LENDER_BRIEF_INPUTS';
 export const REFINANCE_BRIEF_ACKNOWLEDGEMENTS = [
   { key: 'figuresVerified', label: 'I checked the selected figures against the latest official Loan Estimate.' },
   { key: 'sameLoanRequestConfirmed', label: 'The offers reflect my intended loan request, or I understand the visible differences.' },
@@ -99,6 +99,5 @@ export const refinanceLenderBriefAnswerSchema = z.object({
 export function parseRefinanceCommandAnswer(kind: RefinanceFormKind, value: unknown) {
   return kind === 'ALERT_SETTINGS' ? refinanceAlertAnswerSchema.safeParse(value)
     : kind === 'ADD_COMPARISON' ? refinanceComparisonAnswerSchema.safeParse(value)
-      : kind === 'LENDER_BRIEF' ? refinanceLenderBriefAnswerSchema.safeParse(value)
-        : refinanceDecisionAnswerSchema.safeParse(value);
+      : refinanceDecisionAnswerSchema.safeParse(value);
 }

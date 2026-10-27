@@ -4,7 +4,8 @@
 import { planningHomeValueRequestResult } from '../support/planningHomeValueRequest';
 import { HouseholdRole, RefinanceRateMonitorProduct, RefinanceScenarioTerm } from '@prisma/client';
 import { logger } from '../../../lib/logger';
-import { type AskPresentationBlock } from '../../../productFramework/ask/ask.contract';
+import { type AskCaptureRequest, type AskPresentationBlock } from '../../../productFramework/ask/ask.contract';
+import { analyticsEmitter, AnalyticsEvent, AnalyticsFeature, AnalyticsModule } from '../../analytics';
 import { type AskOperationResult } from '../askOperationRegistry';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { getFinancialContextDecisions } from '../../financialContext/context';
@@ -15,7 +16,7 @@ import { getRefinanceAlertPreference } from '../../../refinanceRadar/refinanceAl
 import { listRefinanceRateMonitors, type RefinanceRateMonitorDTO } from '../../../refinanceRadar/refinanceRateMonitor.service';
 import { getCurrentRefinanceDecision } from '../../../refinanceRadar/refinanceDecision.service';
 import { listSavedRefinanceLoanEstimateComparisons } from '../../../refinanceRadar/refinanceLoanEstimateSnapshot.service';
-import { buildRefinanceLoanEstimateComparisonMarkdown } from '../../../refinanceRadar/refinanceLoanEstimateMarkdown';
+import { buildRefinanceLoanEstimateComparisonMarkdown, buildRefinanceLoanEstimateHandoffMarkdown } from '../../../refinanceRadar/refinanceLoanEstimateMarkdown';
 import { buildRefinanceScenarioMarkdown } from '../../../refinanceRadar/refinanceScenarioMarkdown';
 import { prisma } from '../../../lib/prisma';
 import { BreakEvenService, type BreakEvenDTO } from '../../breakEven.service';
@@ -23,7 +24,7 @@ import { money } from '../askFormatting';
 import { BREAK_EVEN_WHAT_IF_LABELS, parseBreakEvenWhatIf, type BreakEvenWhatIf } from '../support/breakEvenWhatIf';
 import { askContextFingerprint, durableFreeTextClarification, ensurePropertyAccess } from '../askHandlerSupport';
 import { FINANCING_PROFILE_ACTION_ID, FINANCING_PROFILE_COMMAND_MESSAGE, FINANCING_PROFILE_ENTITY_TYPE } from '../support/financingProfileCommand';
-import { REFINANCE_COMMAND_ACTIONS } from '../support/refinanceCommand';
+import { REFINANCE_BRIEF_ACKNOWLEDGEMENTS, REFINANCE_COMMAND_ACTIONS, REFINANCE_LENDER_BRIEF_ACTION_ID, REFINANCE_LENDER_BRIEF_CAPTURE_KEY, refinanceLenderBriefAnswerSchema } from '../support/refinanceCommand';
 
 const refinanceRadarService = new RefinanceRadarService();
 
@@ -134,13 +135,8 @@ export async function refinanceScenarioSummaryResult(userId: string, propertyId:
     return { status: 'NOT_APPLICABLE', reasonCode: 'REFINANCE_SCENARIO_NOT_FOUND', blocks: [{ type: 'SUMMARY', id: 'refinance-scenario-summary-missing', title: 'That saved scenario is no longer available', body: 'Nothing was shown or changed.', tone: 'DEFAULT', actions: [refinanceWorkflowAction('refinance-saved-scenarios', 'See saved scenarios', 'Show my saved refinance scenarios.')] }], suggestions: [] };
   }
   const context = await getFinancialContextDecisions(propertyId, userId, 'REFINANCE_RADAR');
-  const breakdown = saved.costBreakdown;
-  const result = await refinanceRadarService.runScenario(propertyId, {
-    targetRate: saved.targetRatePct, targetTerm: saved.targetTerm as RefinanceScenarioTerm,
-    closingCostAmount: breakdown ? breakdown.baseClosingCostsUsd : saved.closingCostUsd,
-    ...(breakdown ? { discountPoints: breakdown.discountPoints, additionalFeesAmount: breakdown.additionalFeesUsd, lenderCreditsAmount: breakdown.lenderCreditsUsd } : {}),
-    borrowerCreditBand: 'UNKNOWN', objective: 'BALANCED', saveScenario: false, propertyContextVersion: context.contextVersion,
-  });
+  const result = await refinanceRadarService.rerunSavedScenario(propertyId, scenarioId, context.contextVersion);
+  if (!result) return { status: 'NOT_APPLICABLE', reasonCode: 'REFINANCE_SCENARIO_NOT_FOUND', blocks: [{ type: 'SUMMARY', id: 'refinance-scenario-summary-missing', title: 'That saved scenario is no longer available', body: 'Nothing was shown or changed.', tone: 'DEFAULT', actions: [] }], suggestions: [] };
   const [property, status] = await Promise.all([
     prisma.property.findUnique({ where: { id: propertyId }, select: { address: true, city: true, state: true, zipCode: true } }),
     refinanceRadarService.getCurrentStatus(propertyId, context.contextVersion),
@@ -166,6 +162,56 @@ export function markdownSummaryResult(reasonCode: string, id: string, title: str
       })) }], actions: [],
     }, { type: 'BOUNDARY', id: `${id}-boundary`, title: boundary.title, body: boundary.body, severity: 'INFO', suggestions: [] }], suggestions: [],
   };
+}
+
+const LENDER_BRIEF_ACKNOWLEDGEMENT_VERSION = '2026-07-25';
+
+type SavedComparison = Awaited<ReturnType<typeof listSavedRefinanceLoanEstimateComparisons>>[number];
+const lenderBriefVersion = (comparison: SavedComparison) => askContextFingerprint({ id: comparison.id, updatedAt: comparison.updatedAt, offers: comparison.offers.map((offer) => offer.id) });
+
+/** The lender-discussion brief's form: the one offer it is about and Desktop's three acknowledgements as separate required answers. A read, so any household role may open it. */
+function lenderBriefForm(comparison: SavedComparison, supplied: Record<string, unknown>, caution?: string): AskOperationResult {
+  const version = lenderBriefVersion(comparison);
+  const capture: AskCaptureRequest = {
+    requirementId: 'refinance-lender-brief-inputs', captureKey: REFINANCE_LENDER_BRIEF_CAPTURE_KEY, classification: 'WORKFLOW_INPUT', state: 'UNKNOWN',
+    title: 'Prepare a lender discussion brief', question: 'Choose the one reviewed offer the brief is about, then confirm each statement. All three are required.',
+    helpText: 'The brief is only shown here. Nothing is sent to a lender and nothing is added to your refinance record.',
+    inputSchema: { type: 'GROUP', fields: [
+      { key: 'selectedOfferId', label: 'Selected lender', required: true, inputSchema: { type: 'SINGLE_SELECT', options: comparison.offers.map((offer) => ({ value: offer.id, label: offer.lenderName })) } },
+      ...REFINANCE_BRIEF_ACKNOWLEDGEMENTS.map(({ key, label }) => ({ key, label, required: true, inputSchema: { type: 'BOOLEAN' as const } })),
+    ] } as AskCaptureRequest['inputSchema'],
+    currentAnswer: Object.keys(supplied).length ? supplied : { figuresVerified: false, sameLoanRequestConfirmed: false, manualSharingUnderstood: false },
+    allowNotSure: false, sensitivity: 'FINANCIAL', destinationLabel: 'Shown only in this conversation after you submit; nothing is sent or added to the refinance record', confirmationText: null, expectedContextVersion: version,
+  };
+  return { status: 'NEEDS_CONTEXT', reasonCode: 'REFINANCE_LENDER_BRIEF_INPUT_REQUIRED', contextVersion: version, parameters: { refinanceBriefLaunch: { comparisonId: comparison.id } },
+    blocks: [{ type: 'SUMMARY', id: 'refinance-lender-brief-form', title: caution ?? 'Review before the brief is shown', body: caution ? 'Nothing has been shown.' : 'The brief carries only the lender you choose; competitor lender names are excluded.', tone: caution ? 'CAUTION' : 'DEFAULT', actions: [] }], captureRequests: [capture], suggestions: [] };
+}
+
+/** Opens the form for a saved comparison of this home, or says it is gone. */
+export async function refinanceLenderBriefStart(propertyId: string, comparisonId: string): Promise<AskOperationResult> {
+  const comparison = (await listSavedRefinanceLoanEstimateComparisons(propertyId)).find((item) => item.id === comparisonId);
+  if (!comparison) return { status: 'NOT_APPLICABLE', reasonCode: 'REFINANCE_COMPARISON_NOT_FOUND', blocks: [{ type: 'SUMMARY', id: 'refinance-brief-missing', title: 'That saved comparison is no longer available', body: 'Nothing was shown.', tone: 'DEFAULT', actions: [] }], suggestions: [] };
+  return lenderBriefForm(comparison, {});
+}
+
+/** The submitted form: all three acknowledgements and an offer of this saved comparison, re-checked now, then Desktop's brief inline. Read-only; the same analytics event as Desktop's export, with an Ask source. */
+export async function refinanceLenderBriefResult(userId: string, propertyId: string, comparisonId: string, answer: unknown): Promise<AskOperationResult> {
+  const comparison = (await listSavedRefinanceLoanEstimateComparisons(propertyId)).find((item) => item.id === comparisonId);
+  if (!comparison) return refinanceLenderBriefStart(propertyId, comparisonId);
+  const parsed = refinanceLenderBriefAnswerSchema.safeParse(answer);
+  if (!parsed.success) return lenderBriefForm(comparison, {}, 'All three statements need your confirmation');
+  const selected = comparison.offers.find((offer) => offer.id === parsed.data.selectedOfferId);
+  if (!selected) return lenderBriefForm(comparison, {}, 'Choose one of the offers in this comparison');
+  const property = await prisma.property.findUnique({ where: { id: propertyId }, select: { address: true, city: true, state: true, zipCode: true } });
+  const markdown = buildRefinanceLoanEstimateHandoffMarkdown({ propertyLabel: property ? `${property.address}, ${property.city}, ${property.state} ${property.zipCode}` : 'This home', generatedAt: new Date(), offers: comparison.offers, selectedOfferId: selected.id });
+  analyticsEmitter.track({
+    eventType: AnalyticsEvent.ACTION_COMPLETED, eventName: 'refinance_loan_estimate_handoff_package_exported', userId, propertyId,
+    moduleKey: AnalyticsModule.FINANCIAL, featureKey: AnalyticsFeature.MORTGAGE_REFINANCE_RADAR, source: 'ask_loan_estimate_homeowner_handoff',
+    metadataJson: { offerCount: comparison.offers.length, selectedOfferPosition: comparison.offers.findIndex((offer) => offer.id === selected.id) + 1, acknowledgementVersion: LENDER_BRIEF_ACKNOWLEDGEMENT_VERSION, externallyTransmitted: false, surface: 'ASK' },
+  });
+  return { ...markdownSummaryResult('REFINANCE_LENDER_BRIEF', 'refinance-lender-brief', `Lender discussion brief: ${selected.lenderName}`,
+    'The same brief Desktop downloads, shown here to read or copy. Competitor lender names are excluded. Ask has not sent it to anyone.', markdown,
+    { title: 'Disclosed figures, not advice', body: 'ContractToCozy does not send this brief, contact a lender, or store a recipient. Share it yourself if you choose.' }), contextVersion: lenderBriefVersion(comparison) };
 }
 
 export async function refinanceComparisonSummaryResult(propertyId: string, comparisonId: string): Promise<AskOperationResult> {
@@ -229,7 +275,7 @@ async function refinanceJourneyResult(propertyId: string, intent: RefinanceJourn
         tone: 'DEFAULT', actions: [refinanceCommandAction(REFINANCE_COMMAND_ACTIONS.ADD_COMPARISON, comparisons.length ? 'Compare another pair' : 'Compare Loan Estimates', 'Compare and save two official refinance Loan Estimates.', 'PRIMARY')],
       }, ...(comparisons.length ? [{
         type: 'GROUPED_LIST' as const, id: 'refinance-saved-offers', title: 'Saved official-offer comparisons', filters: [],
-        sections: [{ id: 'refinance-comparison-items', title: 'Saved comparisons', count: comparisons.length, items: comparisons.map((comparison) => ({ id: comparison.id, title: comparison.label ?? 'Saved comparison', description: comparison.offers.map((offer) => offer.lenderName).join(' · '), meta: [`Updated ${comparison.updatedAt.slice(0, 10)}`], entityType: 'REFINANCE_LOAN_ESTIMATE_COMPARISON', actions: [refinanceItemContinueAction('refinance-share-comparison', 'Show shareable summary', 'Show the shareable summary for this saved Loan Estimate comparison.', 'REFINANCE_LOAN_ESTIMATE_COMPARISON', comparison.id), refinanceItemCommandAction(REFINANCE_COMMAND_ACTIONS.LENDER_BRIEF, 'Lender discussion brief', 'Prepare a lender discussion brief from this saved Loan Estimate comparison.', 'QUIET', comparison.id), refinanceItemCommandAction(REFINANCE_COMMAND_ACTIONS.DELETE_COMPARISON, 'Delete', 'Delete this saved refinance Loan Estimate comparison.', 'QUIET', comparison.id)] })) }], actions: [],
+        sections: [{ id: 'refinance-comparison-items', title: 'Saved comparisons', count: comparisons.length, items: comparisons.map((comparison) => ({ id: comparison.id, title: comparison.label ?? 'Saved comparison', description: comparison.offers.map((offer) => offer.lenderName).join(' · '), meta: [`Updated ${comparison.updatedAt.slice(0, 10)}`], entityType: 'REFINANCE_LOAN_ESTIMATE_COMPARISON', actions: [refinanceItemContinueAction('refinance-share-comparison', 'Show shareable summary', 'Show the shareable summary for this saved Loan Estimate comparison.', 'REFINANCE_LOAN_ESTIMATE_COMPARISON', comparison.id), refinanceItemContinueAction(REFINANCE_LENDER_BRIEF_ACTION_ID, 'Lender discussion brief', 'Prepare a lender discussion brief from this saved Loan Estimate comparison.', 'REFINANCE_LOAN_ESTIMATE_COMPARISON', comparison.id), refinanceItemCommandAction(REFINANCE_COMMAND_ACTIONS.DELETE_COMPARISON, 'Delete', 'Delete this saved refinance Loan Estimate comparison.', 'QUIET', comparison.id)] })) }], actions: [],
       }] : []), {
         type: 'BOUNDARY', id: 'refinance-offers-boundary', title: 'Official disclosures still require homeowner review',
         body: 'ContractToCozy compares the disclosures you review; it does not select, endorse, contact, or transmit information to a lender.', severity: 'INFO', suggestions: [],
@@ -987,6 +1033,9 @@ registerCapabilityHandler('refinance.analysis', async (envelope) => {
   // The saved-comparison row's own "Show shareable summary" action: the comparison is the row's entity, read for this home only.
   if (launch?.actionId === 'refinance-share-comparison' && launch.entityType === 'REFINANCE_LOAN_ESTIMATE_COMPARISON' && launch.entityId && launch.surface !== 'ASK_REFRESH') {
     return refinanceComparisonSummaryResult(envelope.propertyId!, launch.entityId);
+  }
+  if (launch?.actionId === REFINANCE_LENDER_BRIEF_ACTION_ID && launch.entityType === 'REFINANCE_LOAN_ESTIMATE_COMPARISON' && launch.entityId && launch.surface !== 'ASK_REFRESH') {
+    return refinanceLenderBriefStart(envelope.propertyId!, launch.entityId);
   }
   if (launch?.actionId === 'refinance-share-scenario' && launch.entityType === 'REFINANCE_SCENARIO' && launch.entityId && launch.surface !== 'ASK_REFRESH') {
     return refinanceScenarioSummaryResult(envelope.userId, envelope.propertyId!, launch.entityId);

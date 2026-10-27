@@ -739,7 +739,7 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   // DOCUMENT_PROMOTION_CONFIRM above -- confirmRefinanceRateMonitor's
   // reconciliation-failure block would otherwise be silently stripped.
   REFINANCE_RATE_MONITOR: definition('REFINANCE_RATE_MONITOR', 'MONITOR', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'refinance.monitor', ['SUMMARY', 'MONITOR', 'WORKFLOW_PROGRESS', 'LIMITATION']),
-  REFINANCE_COMMAND: definition('REFINANCE_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'refinance.command', ['SUMMARY', 'TABLE', 'COMPARISON', 'WORKFLOW_PROGRESS', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
+  REFINANCE_COMMAND: definition('REFINANCE_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'refinance.command', ['SUMMARY', 'TABLE', 'COMPARISON', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   // FRD Sec22 decision (DECIDED 2026-09-17, Option B --
   // docs/architecture/ASK_COZY_PHASE0_COVERAGE_AUDIT.md SS4.8): DECISION_PROGRESS/
   // WHY_NOW added so this read can surface an existing SELL_HOLD_RENT_GOAL_CAPTURE

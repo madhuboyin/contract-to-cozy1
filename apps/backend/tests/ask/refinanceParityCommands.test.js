@@ -153,61 +153,105 @@ test('the missed-window card carries the summary, best rate, date and peak savin
   assert.match(block.body, /\$240/);
 });
 
-// ───────────────────────────── lender discussion brief (three acknowledgements) ─────────────────────────────
+// ───────────────────────────── lender discussion brief (a read; three acknowledgements) ─────────────────────────────
 
-test('the lender brief needs the selected offer and each of the three acknowledgements, separately', () => {
-  assert.equal(refinanceKindFromAction('refinance-lender-brief'), 'LENDER_BRIEF');
-  assert.equal(refinanceFormKindFromCaptureKey('REFINANCE_LENDER_BRIEF_INPUTS'), 'LENDER_BRIEF');
+const briefSupport = require('../../src/services/ask/support/refinanceCommand.ts');
+const refinanceReads = require('../../src/services/ask/handlers/refinance.handler.ts');
+const { RefinanceRadarService } = require('../../src/refinanceRadar/refinanceRadar.service.ts');
+const { AskPresentationBlockSchema } = require('../../src/productFramework/ask/ask.contract.ts');
+
+test('the lender brief is not a command: it needs the offer and each of the three acknowledgements, separately', () => {
+  assert.equal(refinanceKindFromAction('refinance-lender-brief'), null, 'not routed through the contributor-only command');
   const all = { selectedOfferId: 'a-1', figuresVerified: true, sameLoanRequestConfirmed: true, manualSharingUnderstood: true };
-  assert.equal(handler.parseRefinanceCommandAnswer('LENDER_BRIEF', all).success, true);
+  assert.equal(briefSupport.refinanceLenderBriefAnswerSchema.safeParse(all).success, true);
   for (const key of ['figuresVerified', 'sameLoanRequestConfirmed', 'manualSharingUnderstood']) {
-    assert.equal(handler.parseRefinanceCommandAnswer('LENDER_BRIEF', { ...all, [key]: false }).success, false, key);
+    assert.equal(briefSupport.refinanceLenderBriefAnswerSchema.safeParse({ ...all, [key]: false }).success, false, key);
     const { [key]: _omitted, ...rest } = all;
-    assert.equal(handler.parseRefinanceCommandAnswer('LENDER_BRIEF', rest).success, false, `${key} missing`);
+    assert.equal(briefSupport.refinanceLenderBriefAnswerSchema.safeParse(rest).success, false, `${key} missing`);
   }
-  assert.equal(handler.parseRefinanceCommandAnswer('LENDER_BRIEF', { ...all, selectedOfferId: '' }).success, false);
-  const fields = handler.fieldsFor('LENDER_BRIEF', { scenarios: [], comparisons: [], offers: [{ value: 'a-1', label: 'Lender A', comparisonId: 'cmp-1' }] });
-  assert.deepEqual(fields.map((f) => f.key), ['selectedOfferId', 'figuresVerified', 'sameLoanRequestConfirmed', 'manualSharingUnderstood']);
-  assert.equal(fields.every((f) => f.required), true);
+  assert.equal(briefSupport.refinanceLenderBriefAnswerSchema.safeParse({ ...all, selectedOfferId: '' }).success, false);
 });
 
-test('the lender brief is shown only after the confirmation, from the saved comparison, with the selected lender', async () => {
+test('the brief form states where it goes; the brief is shown only after all acknowledgements, with an Ask-attributed analytics event, for any role', async () => {
   const restore = withSavedRecords();
-  const propertyAccess = require('../../src/services/propertyAccess.service.ts');
-  const financial = require('../../src/services/financialContext/context.ts');
-  const prefs = require('../../src/refinanceRadar/refinanceAlertPreference.service.ts');
-  const decisions = require('../../src/refinanceRadar/refinanceDecision.service.ts');
-  const { RefinanceRadarService } = require('../../src/refinanceRadar/refinanceRadar.service.ts');
-  const { confirmCapabilityInvoke } = require('../../src/services/ask/confirmCapabilityHandlerRegistry.ts');
-  const saved = { a: propertyAccess.resolvePropertyAccess, f: financial.getFinancialContextDecisions, p: prefs.getRefinanceAlertPreference, d: decisions.getCurrentRefinanceDecision, s: RefinanceRadarService.prototype.getSavedScenarios, prop: prisma.property };
-  propertyAccess.resolvePropertyAccess = async () => ({ role: 'CONTRIBUTOR', userId: 'u1', propertyId: 'prop-1' });
-  financial.getFinancialContextDecisions = async () => ({ contextVersion: 'ctx-1' });
-  prefs.getRefinanceAlertPreference = async () => null;
-  decisions.getCurrentRefinanceDecision = async () => null;
-  RefinanceRadarService.prototype.getSavedScenarios = async () => [];
+  const analytics = require('../../src/services/analytics');
+  const events = [];
+  const savedTrack = analytics.analyticsEmitter.track;
+  analytics.analyticsEmitter.track = (event) => { events.push(event); };
+  const savedProp = prisma.property;
   prisma.property = { findUnique: async () => ({ address: '1 Main St', city: 'Austin', state: 'TX', zipCode: '78701' }) };
   try {
-    const form = await handler.refinanceCommandResult('u1', 'prop-1', 'LENDER_BRIEF', 'cmp-1', 'Prepare a lender discussion brief.');
+    const form = await refinanceReads.refinanceLenderBriefStart('prop-1', 'cmp-1');
     assert.equal(form.status, 'NEEDS_CONTEXT');
-    assert.deepEqual(form.captureRequests[0].inputSchema.fields.find((f) => f.key === 'selectedOfferId').inputSchema.options.map((o) => o.label), ['Lender A', 'Lender B']);
-    assert.equal(JSON.stringify(form).includes('Lender discussion brief:'), false, 'no brief before the acknowledgements');
+    const capture = form.captureRequests[0];
+    assert.equal(capture.captureKey, 'REFINANCE_LENDER_BRIEF_INPUTS');
+    assert.match(capture.destinationLabel, /Shown only in this conversation/);
+    assert.doesNotMatch(capture.destinationLabel, /Saved to the canonical/);
+    assert.deepEqual(capture.inputSchema.fields.map((f) => f.key), ['selectedOfferId', 'figuresVerified', 'sameLoanRequestConfirmed', 'manualSharingUnderstood']);
+    assert.deepEqual(capture.inputSchema.fields[0].inputSchema.options.map((o) => o.label), ['Lender A', 'Lender B']);
+    assert.equal(form.parameters.refinanceBriefLaunch.comparisonId, 'cmp-1');
+    assert.equal((await refinanceReads.refinanceLenderBriefStart('prop-1', 'cmp-other')).status, 'NOT_APPLICABLE');
+
     const answer = { selectedOfferId: 'a-1', figuresVerified: true, sameLoanRequestConfirmed: true, manualSharingUnderstood: true };
-    const refused = await handler.refinanceCommandResult('u1', 'prop-1', 'LENDER_BRIEF', 'cmp-1', 'x', { ...answer, manualSharingUnderstood: false });
-    assert.equal(refused.status, 'NOT_APPLICABLE');
-    const wrongOffer = await handler.refinanceCommandResult('u1', 'prop-1', 'LENDER_BRIEF', 'cmp-1', 'x', { ...answer, selectedOfferId: 'z-9' });
-    assert.equal(wrongOffer.status, 'NEEDS_CONTEXT');
-    const review = await handler.refinanceCommandResult('u1', 'prop-1', 'LENDER_BRIEF', 'cmp-1', 'x', answer);
-    assert.equal(review.status, 'NEEDS_CONFIRMATION');
-    assert.equal(review.confirmation.fields.filter((f) => f.label === 'You confirmed').length, 3);
-    assert.equal(review.confirmation.fields[0].value, 'Lender A');
-    const done = await confirmCapabilityInvoke('REFINANCE_COMMAND', { userId: 'u1', execution: { id: 'exec-1', propertyId: 'prop-1', createdAt: new Date() }, access: { role: 'CONTRIBUTOR' }, parameters: review.parameters, command: null });
-    assert.equal(done.result.status, 'COMPLETED');
-    const text = JSON.stringify(done.result.blocks);
-    assert.match(text, /Lender discussion brief: Lender A/);
-    assert.match(text, /Ask has not sent it to anyone/);
-    const { AskPresentationBlockSchema } = require('../../src/productFramework/ask/ask.contract.ts');
-    for (const block of done.result.blocks) assert.equal(AskPresentationBlockSchema.safeParse(block).success, true, block.id);
-  } finally {
-    propertyAccess.resolvePropertyAccess = saved.a; financial.getFinancialContextDecisions = saved.f; prefs.getRefinanceAlertPreference = saved.p; decisions.getCurrentRefinanceDecision = saved.d; RefinanceRadarService.prototype.getSavedScenarios = saved.s; prisma.property = saved.prop; restore();
-  }
+    for (const bad of [{ ...answer, manualSharingUnderstood: false }, { ...answer, selectedOfferId: 'z-9' }]) {
+      const again = await refinanceReads.refinanceLenderBriefResult('viewer-1', 'prop-1', 'cmp-1', bad);
+      assert.equal(again.status, 'NEEDS_CONTEXT');
+      assert.equal(JSON.stringify(again).includes('Lender discussion brief: '), false);
+    }
+    assert.equal(events.length, 0, 'no event before the brief is shown');
+
+    const done = await refinanceReads.refinanceLenderBriefResult('viewer-1', 'prop-1', 'cmp-1', answer);
+    assert.equal(done.status, 'ANSWERED');
+    assert.match(JSON.stringify(done.blocks), /Lender discussion brief: Lender A/);
+    for (const block of done.blocks) assert.equal(AskPresentationBlockSchema.safeParse(block).success, true, block.id);
+    assert.equal(events.length, 1);
+    assert.equal(events[0].eventName, 'refinance_loan_estimate_handoff_package_exported');
+    assert.equal(events[0].metadataJson.acknowledgementVersion, '2026-07-25');
+    assert.equal(events[0].metadataJson.externallyTransmitted, false);
+    assert.equal(events[0].metadataJson.surface, 'ASK');
+    assert.equal(events[0].metadataJson.selectedOfferPosition, 1);
+  } finally { analytics.analyticsEmitter.track = savedTrack; prisma.property = savedProp; restore(); }
+});
+
+test('the lender brief action is allowlisted on the read operation, not on the command', () => {
+  const src = require('node:fs').readFileSync(require.resolve('../../src/services/ask/askAnswerTrustPolicy.ts'), 'utf8');
+  const commandList = src.slice(src.indexOf("'refinance-save-scenario'"), src.indexOf("'refinance-save-scenario'") + 260);
+  assert.equal(commandList.includes('refinance-lender-brief'), false);
+  assert.equal(src.includes("'refinance-lender-brief'"), true);
+});
+
+// ───────────────────────────── saved scenario rerun uses every saved assumption ─────────────────────────────
+
+test('rerunning a saved scenario reconstructs credit band, objective, costs, escrow, penalty, principal, recast and cash-out', async () => {
+  const saved = prisma.refinanceScenarioSnapshot;
+  const calls = [];
+  const original = RefinanceRadarService.prototype.runScenario;
+  RefinanceRadarService.prototype.runScenario = async function (propertyId, input) { calls.push(input); return { ok: true }; };
+  const row = (metadataJson, over = {}) => ({ id: 'sc-1', propertyId: 'prop-1', targetRate: 5.25, targetTerm: 'FIFTEEN_YEAR', closingCost: dec(7200), isSaved: true, metadataJson, ...over });
+  try {
+    const service = new RefinanceRadarService();
+    prisma.refinanceScenarioSnapshot = { findFirst: async () => row({
+      closingCostSource: 'PROVIDED_AMOUNT', closingCostPctUsed: 0.02, discountPoints: 0.5, additionalFeesUsd: 300, lenderCreditsUsd: 500,
+      costBreakdown: { baseClosingCostsUsd: 6000, discountPoints: 0.5, discountPointsUsd: 1500, additionalFeesUsd: 300, lenderCreditsUsd: 500, grossClosingCostsUsd: 7800, netClosingCostsUsd: 7300 },
+      escrowFundingUsd: 1200, prepaymentPenaltyUsd: 900, extraPrincipalUsd: 20000, recastPrincipalUsd: 15000, recastFeeUsd: 250, cashOutAmountUsd: 30000, borrowerCreditBand: 'EXCELLENT', objective: 'LOWER_TOTAL_COST',
+    }) };
+    await service.rerunSavedScenario('prop-1', 'sc-1', 'ctx-9');
+    assert.deepEqual(calls[0], {
+      targetRate: 5.25, targetTerm: 'FIFTEEN_YEAR', closingCostAmount: 6000, discountPoints: 0.5, additionalFeesAmount: 300, lenderCreditsAmount: 500,
+      escrowFundingAmount: 1200, prepaymentPenaltyAmount: 900, extraPrincipalAmount: 20000, recastPrincipalAmount: 15000, recastFeeAmount: 250, cashOutAmount: 30000,
+      borrowerCreditBand: 'EXCELLENT', objective: 'LOWER_TOTAL_COST', saveScenario: false, propertyContextVersion: 'ctx-9',
+    });
+    // a percentage stays a percentage, the default stays the default, and a scenario saved before these fields existed still reruns
+    prisma.refinanceScenarioSnapshot = { findFirst: async () => row({ closingCostSource: 'PROVIDED_PCT', closingCostPctUsed: 0.03, borrowerCreditBand: 'GOOD' }) };
+    await service.rerunSavedScenario('prop-1', 'sc-1', 'ctx-9');
+    assert.equal(calls[1].closingCostPercent, 0.03); assert.equal(calls[1].closingCostAmount, undefined); assert.equal(calls[1].borrowerCreditBand, 'GOOD'); assert.equal(calls[1].objective, 'BALANCED');
+    prisma.refinanceScenarioSnapshot = { findFirst: async () => row({ closingCostSource: 'DEFAULT_2_5_PCT' }) };
+    await service.rerunSavedScenario('prop-1', 'sc-1', 'ctx-9');
+    assert.equal(calls[2].closingCostAmount, undefined); assert.equal(calls[2].closingCostPercent, undefined);
+    prisma.refinanceScenarioSnapshot = { findFirst: async () => row(null) };
+    await service.rerunSavedScenario('prop-1', 'sc-1', 'ctx-9');
+    assert.equal(calls[3].closingCostAmount, 7200); assert.equal(calls[3].borrowerCreditBand, 'UNKNOWN');
+    prisma.refinanceScenarioSnapshot = { findFirst: async () => null };
+    assert.equal(await service.rerunSavedScenario('prop-1', 'other', 'ctx-9'), null);
+  } finally { prisma.refinanceScenarioSnapshot = saved; RefinanceRadarService.prototype.runScenario = original; }
 });

@@ -678,6 +678,36 @@ export class RefinanceRadarService {
   }
 
   /**
+   * Run a saved scenario again today from its complete saved inputs (nothing is saved). The snapshot keeps every assumption in metadataJson, so the
+   * rerun uses the same credit band, objective, costs, escrow, penalty, extra/recast principal and cash-out, and the closing cost in the form it was given
+   * (an amount stays an amount; a percentage stays a percentage; the default stays the default). Null when the scenario is not this home's saved one.
+   */
+  async rerunSavedScenario(propertyId: string, scenarioId: string, propertyContextVersion: string): Promise<RefinanceScenarioResult | null> {
+    const row = await prisma.refinanceScenarioSnapshot.findFirst({ where: { id: scenarioId, propertyId, isSaved: true } });
+    if (!row) return null;
+    const meta = (row.metadataJson && typeof row.metadataJson === 'object' && !Array.isArray(row.metadataJson) ? row.metadataJson : {}) as Record<string, unknown>;
+    const num = (key: string): number | undefined => (typeof meta[key] === 'number' && Number.isFinite(meta[key] as number) ? meta[key] as number : undefined);
+    const positive = (value: number | undefined) => (value != null && value > 0 ? value : undefined);
+    const breakdown = (meta.costBreakdown && typeof meta.costBreakdown === 'object' ? meta.costBreakdown : {}) as Record<string, unknown>;
+    const base = typeof breakdown.baseClosingCostsUsd === 'number' ? breakdown.baseClosingCostsUsd : undefined;
+    const source = meta.closingCostSource;
+    const closing = source === 'PROVIDED_PCT' ? { closingCostPercent: num('closingCostPctUsed') }
+      : source === 'DEFAULT_2_5_PCT' ? {}
+        : { closingCostAmount: base ?? row.closingCost.toNumber() };
+    const bands = ['EXCELLENT', 'GOOD', 'FAIR', 'LIMITED', 'UNKNOWN'] as const;
+    const objectives = ['BALANCED', 'LOWER_PAYMENT', 'LOWER_TOTAL_COST', 'FASTER_PAYOFF'] as const;
+    return this.runScenario(propertyId, {
+      targetRate: row.targetRate, targetTerm: row.targetTerm, ...closing,
+      discountPoints: positive(num('discountPoints')), additionalFeesAmount: positive(num('additionalFeesUsd')), lenderCreditsAmount: positive(num('lenderCreditsUsd')),
+      escrowFundingAmount: positive(num('escrowFundingUsd')), prepaymentPenaltyAmount: positive(num('prepaymentPenaltyUsd')), extraPrincipalAmount: positive(num('extraPrincipalUsd')),
+      recastPrincipalAmount: positive(num('recastPrincipalUsd')), recastFeeAmount: positive(num('recastFeeUsd')), cashOutAmount: positive(num('cashOutAmountUsd')),
+      borrowerCreditBand: (bands as readonly unknown[]).includes(meta.borrowerCreditBand) ? meta.borrowerCreditBand as typeof bands[number] : 'UNKNOWN',
+      objective: (objectives as readonly unknown[]).includes(meta.objective) ? meta.objective as typeof objectives[number] : 'BALANCED',
+      saveScenario: false, propertyContextVersion,
+    });
+  }
+
+  /**
    * Run a refinance scenario calculation and optionally persist it.
    */
   async runScenario(

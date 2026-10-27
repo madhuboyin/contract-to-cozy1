@@ -99,6 +99,8 @@ import { documentFactsResult } from '../handlers/propertyTaxDocumentFactsCommand
 import { cdCommandResult } from '../handlers/buyerClosingDisclosureCommands.handler';
 import { leCommandResult } from '../handlers/buyerLoanEstimateCommands.handler';
 import { parseRefinanceCommandAnswer, refinanceFormKindFromCaptureKey, refinanceCommandResult } from '../handlers/refinanceCommands.handler';
+import { refinanceLenderBriefResult } from '../handlers/refinance.handler';
+import { REFINANCE_LENDER_BRIEF_CAPTURE_KEY, refinanceLenderBriefAnswerSchema } from '../support/refinanceCommand';
 import { setupCommandResult } from '../handlers/buyerPlanSetupCommands.handler';
 import { parseSetupAnswer, setupKindFromCaptureKey } from '../support/buyerPlanSetupCommand';
 import { leFormKindFromCaptureKey, parseLeAnswer } from '../support/buyerLoanEstimateCommand';
@@ -1945,6 +1947,16 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     if (!launch || launch.kind !== refinanceKind) throw Object.assign(new Error('This refinance form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
     if (!parseRefinanceCommandAnswer(refinanceKind, input.answer).success) throw Object.assign(new Error('Fill in the required refinance details.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
     result = await refinanceCommandResult(userId, execution.propertyId, refinanceKind, typeof launch.entityId === 'string' ? launch.entityId : null, typeof launch.message === 'string' ? launch.message : execution.message, input.answer as Record<string, unknown>);
+    captureId = input.idempotencyKey;
+    capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
+    canonicalOwner = 'MortgageRefinanceRadar';
+  } else if (execution.operationId === 'REFINANCE_ANALYSIS' && input.captureKey === REFINANCE_LENDER_BRIEF_CAPTURE_KEY) {
+    // A read, not a command: any household role may open it. The stored launch names the saved comparison; the three acknowledgements are required here and nothing is written.
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson) ? execution.parametersJson as Record<string, unknown> : {};
+    const briefLaunch = storedParameters.refinanceBriefLaunch && typeof storedParameters.refinanceBriefLaunch === 'object' && !Array.isArray(storedParameters.refinanceBriefLaunch) ? storedParameters.refinanceBriefLaunch as { comparisonId?: unknown } : null;
+    if (!briefLaunch || typeof briefLaunch.comparisonId !== 'string') throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    if (!refinanceLenderBriefAnswerSchema.safeParse(input.answer).success) throw Object.assign(new Error('Choose the offer and confirm all three statements.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+    result = await refinanceLenderBriefResult(userId, execution.propertyId, briefLaunch.comparisonId, input.answer);
     captureId = input.idempotencyKey;
     capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
     canonicalOwner = 'MortgageRefinanceRadar';
