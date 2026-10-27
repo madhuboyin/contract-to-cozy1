@@ -9,7 +9,7 @@ import { ensurePropertyAccess } from '../askHandlerSupport';
 import { NEGOTIATION_SHIELD_START_ACTION_ID, NEGOTIATION_SHIELD_START_MESSAGE } from '../support/negotiationShieldStart';
 import { NEGOTIATION_SHIELD_ANALYZE_ACTION_ID, NEGOTIATION_SHIELD_ANALYZE_MESSAGE } from '../support/negotiationShieldAnalyze';
 import { NEGOTIATION_SHIELD_EDIT_ACTION_ID, NEGOTIATION_SHIELD_EDIT_MESSAGE } from '../support/negotiationShieldEdit';
-import { isNegotiationStartScenario } from '../support/negotiationShieldStart';
+import { isNegotiationEditScenario, isNegotiationStartScenario } from '../support/negotiationShieldStart';
 import { NEGOTIATION_DOCUMENT_TYPE_LABELS, NEGOTIATION_SHIELD_ATTACH_ACTION_ID, NEGOTIATION_SHIELD_ATTACH_MESSAGE } from '../support/negotiationShieldAttach';
 import { PRICE_COMMAND_ACTION_IDS, PRICE_COMMAND_MESSAGES } from '../support/priceFinalizationCommand';
 import { humanDate, money, readableCode } from '../askFormatting';
@@ -234,6 +234,8 @@ export function negotiationShieldReviewFromView(review: NegotiationShieldCaseRev
   const { case: item, latestAnalysis: analysis, latestDraft: draft } = review;
   const scenario = NEGOTIATION_SCENARIO_LABELS[item.scenarioType] ?? readableCode(item.scenarioType);
   const canEdit = canRun && isNegotiationStartScenario(item.scenarioType);
+  // A buyer inspection review's details are editable too, but its documents and finalize steps are not Ask's (those stay with canEdit).
+  const canEditDetails = canRun && isNegotiationEditScenario(item.scenarioType);
   const pricing = (analysis?.pricingAssessment ?? null) as Record<string, unknown> | null;
   const confidenceLabel = pricing && typeof pricing.confidenceLabel === 'string' ? NEGOTIATION_LEVEL_LABELS[pricing.confidenceLabel] ?? null : null;
   // The saved details changed after this analysis was run, so its findings and draft describe older details.
@@ -256,7 +258,7 @@ export function negotiationShieldReviewFromView(review: NegotiationShieldCaseRev
       tone: 'DEFAULT', supportLine: [scenario, `Updated ${humanDate(new Date(item.updatedAt))}`].join(' · '),
       actions: [
         ...(canRun && review.hasInput ? [runAnalysisAction(item.id, 'Run the analysis')] : []),
-        ...(canEdit ? [editDetailsAction(item.id, review.hasInput)] : []),
+        ...(canEditDetails ? [editDetailsAction(item.id, review.hasInput)] : []),
         backToReviews,
       ],
     });
@@ -273,7 +275,7 @@ export function negotiationShieldReviewFromView(review: NegotiationShieldCaseRev
     tone: 'DEFAULT', supportLine,
     actions: [
       ...(canRun && stale ? [runAnalysisAction(item.id, 'Run it again')] : []),
-      ...(canEdit ? [editDetailsAction(item.id, true)] : []),
+      ...(canEditDetails ? [editDetailsAction(item.id, true)] : []),
       backToReviews,
     ],
   });

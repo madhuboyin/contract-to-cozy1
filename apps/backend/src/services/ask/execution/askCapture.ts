@@ -48,7 +48,7 @@ import { GUIDANCE_STEP_DECLARE_CAPTURE_KEY, GUIDANCE_STEP_DECLARE_MESSAGE, Guida
 import { guidanceStepDeclareResult } from '../handlers/guidanceStepDeclare.handler';
 import { MAINTENANCE_EVIDENCE_CAPTURE_KEY, MAINTENANCE_LINK_CAPTURE_KEY, MaintenanceEvidenceAnswerSchema, MaintenanceLinkAnswerSchema } from '../support/maintenanceEvidenceAttach';
 import { evidenceContextVersion, maintenanceEvidenceAttachResult, maintenanceTaskLinkResult } from '../handlers/maintenanceEvidenceAttach.handler';
-import { isNegotiationStartScenario, NEGOTIATION_SHIELD_START_CAPTURE_KEY, NEGOTIATION_START_SCENARIO_SPECS, parseNegotiationStartAnswer } from '../support/negotiationShieldStart';
+import { isNegotiationEditScenario, isNegotiationStartScenario, NEGOTIATION_EDIT_SCENARIO_SPECS, NEGOTIATION_SHIELD_START_CAPTURE_KEY, NEGOTIATION_START_SCENARIO_SPECS, parseNegotiationStartAnswer } from '../support/negotiationShieldStart';
 import { negotiationShieldEditContextVersion, negotiationShieldEditResult } from '../handlers/negotiationShieldEdit.handler';
 import { HOME_DIGITAL_WILL_EDITOR_CAPTURE_KEY, HOME_DIGITAL_WILL_METADATA_CAPTURE_KEY, HomeDigitalWillContactInputSchema, HomeDigitalWillEntryInputSchema, HomeDigitalWillMetadataInputSchema, HomeDigitalWillSectionInputSchema, homeDigitalWillEditorResult, homeDigitalWillMetadataResult, homeDigitalWillPlanVersion, type HomeDigitalWillEditorKind } from '../handlers/homeDigitalWillCreate.handler';
 import { NEGOTIATION_SHIELD_EDIT_CAPTURE_KEY, parseNegotiationEditAnswer } from '../support/negotiationShieldEdit';
@@ -991,7 +991,7 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     const editLaunch = storedParameters.negotiationEditLaunch && typeof storedParameters.negotiationEditLaunch === 'object' && !Array.isArray(storedParameters.negotiationEditLaunch)
       ? storedParameters.negotiationEditLaunch as { caseId?: unknown; scenarioType?: unknown; sourceExecutionId?: unknown }
       : null;
-    if (input.captureKey !== NEGOTIATION_SHIELD_EDIT_CAPTURE_KEY || !editLaunch || typeof editLaunch.caseId !== 'string' || !isNegotiationStartScenario(editLaunch.scenarioType)) {
+    if (input.captureKey !== NEGOTIATION_SHIELD_EDIT_CAPTURE_KEY || !editLaunch || typeof editLaunch.caseId !== 'string' || !isNegotiationEditScenario(editLaunch.scenarioType)) {
       const error = new Error('This details form is no longer active. Open Edit details again.');
       (error as Error & { code?: string }).code = 'ASK_CAPTURE_NOT_ACTIVE';
       throw error;
@@ -1002,7 +1002,7 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
       (error as Error & { code?: string }).code = 'ASK_PERMISSION_REQUIRED';
       throw error;
     }
-    const editSpec = NEGOTIATION_START_SCENARIO_SPECS[editLaunch.scenarioType];
+    const editSpec = NEGOTIATION_EDIT_SCENARIO_SPECS[editLaunch.scenarioType];
     const editable = await getNegotiationShieldEditableInputForProperty(execution.propertyId, editLaunch.caseId, editSpec.inputType, editSpec.fields.map((field) => field.key));
     const currentVersion = editable ? negotiationShieldEditContextVersion(editable.case.id, editable.inputId, editable.inputUpdatedAt) : null;
     if (!currentVersion || currentVersion !== input.expectedContextVersion) {

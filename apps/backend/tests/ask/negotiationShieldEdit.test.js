@@ -200,17 +200,15 @@ test('Edit details opens the scenario form pre-filled from what is saved, bound 
   } finally { st.restore(); }
 });
 
-test('a viewer, an undeclared message, a refresh, another property, and a buyer inspection review never get a form', async () => {
+test('a viewer, an undeclared message, a refresh and another property never get a form', async () => {
   const st = readerStore(reviewable());
   try {
     assert.notEqual((await invoke(edit.NEGOTIATION_SHIELD_EDIT_MESSAGE, LAUNCH, 'VIEWER')).status, 'NEEDS_CONTEXT');
     assert.equal((await invoke('edit the details', null)).reasonCode, 'ASK_NEGOTIATION_SHIELD_EDIT_NOT_DIRECTLY_ROUTABLE');
     assert.equal((await invoke(edit.NEGOTIATION_SHIELD_EDIT_MESSAGE, { ...LAUNCH, surface: 'ASK_REFRESH' })).reasonCode, 'ASK_NEGOTIATION_SHIELD_EDIT_NOT_DIRECTLY_ROUTABLE');
     assert.equal((await invoke(edit.NEGOTIATION_SHIELD_EDIT_MESSAGE, LAUNCH, 'CONTRIBUTOR', 'prop-2')).reasonCode, 'NEGOTIATION_SHIELD_CASE_NOT_FOUND');
-    st.record = reviewable({ scenarioType: 'BUYER_INSPECTION_NEGOTIATION' });
-    const buyer = await invoke(edit.NEGOTIATION_SHIELD_EDIT_MESSAGE, LAUNCH);
-    assert.equal(buyer.reasonCode, 'NEGOTIATION_SHIELD_EDIT_UNSUPPORTED');
-    assert.equal(buyer.captureRequests, undefined);
+    st.record = reviewable({ scenarioType: 'INSURANCE_PREMIUM_INCREASE' });
+    assert.equal((await invoke(edit.NEGOTIATION_SHIELD_EDIT_MESSAGE, LAUNCH)).status, 'NEEDS_CONTEXT');
   } finally { st.restore(); }
 });
 
@@ -364,12 +362,13 @@ const reviewDto = (scenarioType, hasInput = true) => ({
 });
 const summaryActionIds = (result) => result.blocks.find((b) => b.id === 'negotiation-shield-review-summary').actions.map((a) => a.id);
 
-test('Edit details is offered to a contributor for the four scenarios and not for a buyer inspection or a viewer', () => {
+test('Edit details is offered to a contributor for the four scenarios and a buyer inspection, never a viewer', () => {
   for (const scenario of start.NEGOTIATION_START_SCENARIOS) {
     assert.ok(summaryActionIds(negotiationShieldReviewFromView(reviewDto(scenario), true)).includes('negotiation-shield-edit'), scenario);
     assert.equal(summaryActionIds(negotiationShieldReviewFromView(reviewDto(scenario), false)).includes('negotiation-shield-edit'), false, `${scenario} viewer`);
   }
-  assert.equal(summaryActionIds(negotiationShieldReviewFromView(reviewDto('BUYER_INSPECTION_NEGOTIATION'), true)).includes('negotiation-shield-edit'), false);
+  assert.ok(summaryActionIds(negotiationShieldReviewFromView(reviewDto('BUYER_INSPECTION_NEGOTIATION'), true)).includes('negotiation-shield-edit'));
+  assert.equal(summaryActionIds(negotiationShieldReviewFromView(reviewDto('BUYER_INSPECTION_NEGOTIATION'), false)).includes('negotiation-shield-edit'), false);
 });
 
 test('every action of the edit receipt and of the review survives the answer-trust validator', async () => {
@@ -393,4 +392,18 @@ test('every action of the edit receipt and of the review survives the answer-tru
       assert.ok(ids(review.blocks).includes('negotiation-shield-edit'), op);
     }
   } finally { w.restore(); st.restore(); }
+});
+
+test('a buyer inspection review gets a pre-filled form of the page\'s own buyer fields (no raw text), and its diff and answer use that list', () => {
+  const spec = start.NEGOTIATION_EDIT_SCENARIO_SPECS.BUYER_INSPECTION_NEGOTIATION;
+  assert.equal(spec.inputType, 'BUYER_INSPECTION');
+  assert.deepEqual(spec.fields.map((f) => f.key), ['requestedConcessionAmount', 'inspectionIssuesSummary', 'requestedRepairs', 'recentUpgradeNotes', 'reportDate', 'notes']);
+  assert.equal(start.isNegotiationEditScenario('BUYER_INSPECTION_NEGOTIATION'), true);
+  assert.equal(start.isNegotiationStartScenario('BUYER_INSPECTION_NEGOTIATION'), false);
+  const ok = edit.parseNegotiationEditAnswer('BUYER_INSPECTION_NEGOTIATION', { requestedConcessionAmount: '4500', requestedRepairs: ' Fix the roof ' });
+  assert.deepEqual(ok.values, { requestedConcessionAmount: 4500, inspectionIssuesSummary: null, requestedRepairs: 'Fix the roof', recentUpgradeNotes: null, reportDate: null, notes: null });
+  assert.equal(edit.parseNegotiationEditAnswer('BUYER_INSPECTION_NEGOTIATION', { rawText: 'x' }).success, false);
+  const diff = edit.diffNegotiationEdit('BUYER_INSPECTION_NEGOTIATION', { requestedConcessionAmount: 3000, notes: 'old' }, ok.values);
+  assert.deepEqual(diff.set, { requestedConcessionAmount: 4500, requestedRepairs: 'Fix the roof' });
+  assert.deepEqual(diff.remove, ['notes']);
 });

@@ -5,8 +5,8 @@
 // exactly what would change, and writes only after the homeowner confirms: NegotiationShieldService.updateManualInputFields, which merges into the saved
 // input (so a field only the page saved is kept) and saves through the canonical saveManualInput.
 //
-// Not editable here: the title (the page cannot change it either), a buyer inspection review (buyer mode), parsed-document inputs (immutable by rule),
-// and raw text. The saved analysis is NOT re-run: the review then says its details changed and offers Run it again (slice 2b).
+// A buyer inspection review is edited with its own field list (NEGOTIATION_EDIT_SCENARIO_SPECS); it is still started only from selected findings.
+// Not editable here: the title (the page cannot change it either), parsed-document inputs (immutable by rule), and raw text. The saved analysis is NOT re-run: the review then says its details changed and offers Run it again (slice 2b).
 //
 // Freshness: the form is bound to the input's last-saved time, so a form opened before the page changed the details is refused. Idempotency: a retry of
 // this confirmation finds the details already as intended and reports them, instead of failing on the freshness check its own write just tripped.
@@ -24,7 +24,7 @@ import {
 } from '../support/negotiationShieldEdit';
 import { NEGOTIATION_SHIELD_ANALYZE_ACTION_ID, NEGOTIATION_SHIELD_ANALYZE_MESSAGE } from '../support/negotiationShieldAnalyze';
 import {
-  isNegotiationStartScenario, NEGOTIATION_SHIELD_CASE_ENTITY_TYPE, NEGOTIATION_START_SCENARIO_SPECS, type NegotiationFieldSpec, type NegotiationStartScenario,
+  isNegotiationEditScenario, NEGOTIATION_EDIT_SCENARIO_SPECS, NEGOTIATION_SHIELD_CASE_ENTITY_TYPE, type NegotiationEditScenario, type NegotiationFieldSpec,
 } from '../support/negotiationShieldStart';
 import { negotiationDetailLabel } from './negotiationShieldStart.handler';
 
@@ -52,9 +52,9 @@ const unavailable = (reasonCode: string, title: string, body: string): AskOperat
   suggestions: [],
 });
 
-const currentAnswerFor = (scenario: NegotiationStartScenario, values: Record<string, unknown>): Record<string, unknown> => {
+const currentAnswerFor = (scenario: NegotiationEditScenario, values: Record<string, unknown>): Record<string, unknown> => {
   const answer: Record<string, unknown> = {};
-  for (const field of NEGOTIATION_START_SCENARIO_SPECS[scenario].fields) {
+  for (const field of NEGOTIATION_EDIT_SCENARIO_SPECS[scenario].fields) {
     const value = values[field.key];
     if (value === undefined || value === null) continue;
     answer[field.key] = field.kind === 'YES_NO' ? (value === true ? 'yes' : value === false ? 'no' : 'unknown') : value;
@@ -72,8 +72,8 @@ function fieldInput(field: NegotiationFieldSpec): Record<string, unknown> {
   }
 }
 
-function captureRequest(scenario: NegotiationStartScenario, title: string, contextVersion: string, values: Record<string, unknown>, hasSaved: boolean): AskCaptureRequest {
-  const spec = NEGOTIATION_START_SCENARIO_SPECS[scenario];
+function captureRequest(scenario: NegotiationEditScenario, title: string, contextVersion: string, values: Record<string, unknown>, hasSaved: boolean): AskCaptureRequest {
+  const spec = NEGOTIATION_EDIT_SCENARIO_SPECS[scenario];
   return {
     requirementId: 'negotiation-shield-edit-inputs', captureKey: NEGOTIATION_SHIELD_EDIT_CAPTURE_KEY, classification: 'WORKFLOW_INPUT', state: 'UNKNOWN',
     title: `${hasSaved ? 'Edit' : 'Add'} details: ${title}`, question: hasSaved ? 'What should the saved details say?' : spec.question,
@@ -98,11 +98,11 @@ export async function negotiationShieldEditResult(
   const review = await getNegotiationShieldCaseReviewForProperty(propertyId, launch.caseId);
   if (!review) return unavailable('NEGOTIATION_SHIELD_CASE_NOT_FOUND', 'That review is no longer available', 'Ask could not find that negotiation review for this home. It may have been removed. Nothing has changed.');
   const scenario = review.case.scenarioType;
-  if (!isNegotiationStartScenario(scenario)) {
+  if (!isNegotiationEditScenario(scenario)) {
     return unavailable('NEGOTIATION_SHIELD_EDIT_UNSUPPORTED', 'Editing this kind of review is not currently available in Ask',
-      'A buyer inspection negotiation is started from selected findings and is not edited here. Nothing has changed.');
+      'Ask cannot edit the details of this kind of review. Nothing has changed.');
   }
-  const spec = NEGOTIATION_START_SCENARIO_SPECS[scenario];
+  const spec = NEGOTIATION_EDIT_SCENARIO_SPECS[scenario];
   const editable = await getNegotiationShieldEditableInputForProperty(propertyId, launch.caseId, spec.inputType, spec.fields.map((field) => field.key));
   if (!editable) return unavailable('NEGOTIATION_SHIELD_CASE_NOT_FOUND', 'That review is no longer available', 'Ask could not find that negotiation review for this home. It may have been removed. Nothing has changed.');
   const contextVersion = negotiationShieldEditContextVersion(editable.case.id, editable.inputId, editable.inputUpdatedAt);
@@ -167,9 +167,9 @@ async function confirmNegotiationShieldEdit(ctx: ConfirmCapabilityContext): Prom
   const { execution, userId, parameters } = ctx;
   const stored = parameters.negotiationShieldEdit as { caseId?: unknown; scenarioType?: unknown; inputId?: unknown; set?: unknown; remove?: unknown } | undefined;
   const invalid = () => Object.assign(new Error('The change to save is invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
-  if (!stored || typeof stored.caseId !== 'string' || !stored.caseId || !isNegotiationStartScenario(stored.scenarioType)) throw invalid();
+  if (!stored || typeof stored.caseId !== 'string' || !stored.caseId || !isNegotiationEditScenario(stored.scenarioType)) throw invalid();
   const scenario = stored.scenarioType;
-  const spec = NEGOTIATION_START_SCENARIO_SPECS[scenario];
+  const spec = NEGOTIATION_EDIT_SCENARIO_SPECS[scenario];
   const keys = new Set(spec.fields.map((field) => field.key));
   const set = stored.set && typeof stored.set === 'object' && !Array.isArray(stored.set) ? stored.set as Record<string, unknown> : null;
   const remove = Array.isArray(stored.remove) ? stored.remove : null;

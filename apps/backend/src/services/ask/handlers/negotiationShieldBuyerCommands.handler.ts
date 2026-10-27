@@ -6,7 +6,12 @@
 // passing the caller's role, both honored here). Recording some outcomes also resolves the finding and completes its Buyer Plan task; the review card says
 // so before anything is written. Nothing is sent to the seller: Ask records what the household did and was told.
 //
-// Not here: attaching completion evidence, the buyer analysis and draft message, and classifying a finding for negotiation (the Buyer Plan's own step).
+// Not in this file: classifying a finding for negotiation (the Buyer Plan's own step). The buyer analysis, its draft and editing its details are the
+// generic Negotiation Shield handlers (negotiationShield*.handler.ts), which do not exclude buyer cases.
+//
+// Completion evidence: like Desktop, the outcome form can name one record already attached to the case (the canonical service refuses any other). Ask offers
+// only the attached records it would offer for a document anyway: household-visible, active, standard/financial/insurance/claim sensitivity, shown by title.
+// Attaching a new record to a buyer case is not in Ask yet.
 import { createHash } from 'node:crypto';
 import { HouseholdRole } from '@prisma/client';
 import { prisma } from '../../../lib/prisma';
@@ -18,8 +23,9 @@ import { registerConfirmCapabilityHandler, type ConfirmCapabilityContext, type C
 import { reconcileAskExecutionSideEffects } from '../execution/executeOperation';
 import { ensurePropertyAccess } from '../askHandlerSupport';
 import { money } from '../askFormatting';
+import { NEGOTIATION_ATTACH_ALLOWED_SENSITIVITIES } from '../support/negotiationShieldAttach';
 import {
-  BUYER_FINDING_ENTITY_TYPE, BUYER_NEGOTIATION_ACTION_IDS, BUYER_NEGOTIATION_CAPTURE_KEYS, BUYER_NEGOTIATION_MESSAGES, BUYER_OUTCOMES, BUYER_OUTCOME_LABELS,
+  BUYER_FINDING_ENTITY_TYPE, BUYER_NEGOTIATION_ACTION_IDS, BUYER_NEGOTIATION_CAPTURE_KEYS, BUYER_NO_COMPLETION_EVIDENCE, BUYER_NEGOTIATION_MESSAGES, BUYER_OUTCOMES, BUYER_OUTCOME_LABELS,
   BUYER_REQUEST_LABELS, BUYER_REQUEST_TYPES, BUYER_SELLER_RESPONSES, BUYER_SELLER_RESPONSE_LABELS, buyerNegotiationKindFromMessage, buyerOutcomeConsequence,
   parseBuyerNegotiationAnswer, type BuyerNegotiationFormData, type BuyerNegotiationKind, type BuyerOutcomeInput, type BuyerStartInput,
 } from '../support/negotiationShieldBuyer';
@@ -51,7 +57,7 @@ type FindingRow = {
   updatedAt: Date; report: { status: string };
   negotiationCaseLinks: Array<{
     id: string; caseId: string; requestType: string; requestedCreditCents: number | null; sellerResponse: string; sellerResponseNotes: string | null;
-    outcome: string; agreedCreditCents: number | null; outcomeNotes: string | null; updatedAt: Date;
+    outcome: string; agreedCreditCents: number | null; outcomeNotes: string | null; outcomeDocumentId?: string | null; updatedAt: Date;
   }>;
 };
 async function loadFinding(propertyId: string, findingId: string): Promise<FindingRow | null> {
@@ -60,16 +66,30 @@ async function loadFinding(propertyId: string, findingId: string): Promise<Findi
     select: {
       id: true, homeSystem: true, inspectorDescription: true, severity: true, status: true, buyerDisposition: true, buyerTaskId: true, updatedAt: true,
       report: { select: { status: true } },
-      negotiationCaseLinks: { select: { id: true, caseId: true, requestType: true, requestedCreditCents: true, sellerResponse: true, sellerResponseNotes: true, outcome: true, agreedCreditCents: true, outcomeNotes: true, updatedAt: true } },
+      negotiationCaseLinks: { select: { id: true, caseId: true, requestType: true, requestedCreditCents: true, sellerResponse: true, sellerResponseNotes: true, outcome: true, agreedCreditCents: true, outcomeNotes: true, outcomeDocumentId: true, updatedAt: true } },
     },
   });
 }
 const systemLabel = (finding: FindingRow) => finding.homeSystem.toLowerCase().replace(/_/g, ' ');
 /** Bound to the finding's last change and its negotiation link, so a confirmation opened before either changed is refused as out of date. */
 export const buyerNegotiationContextVersion = (finding: FindingRow) =>
-  sha(`buyer-negotiation:${finding.id}:${finding.updatedAt.toISOString()}:${finding.status}:${finding.buyerDisposition}:${finding.negotiationCaseLinks.map((l) => `${l.id}${l.updatedAt.toISOString()}${l.sellerResponse}${l.outcome}`).join(',')}`);
+  sha(`buyer-negotiation:${finding.id}:${finding.updatedAt.toISOString()}:${finding.status}:${finding.buyerDisposition}:${finding.negotiationCaseLinks.map((l) => `${l.id}${l.updatedAt.toISOString()}${l.sellerResponse}${l.outcome}${l.outcomeDocumentId ?? ''}`).join(',')}`);
 
-function formCapture(kind: BuyerNegotiationKind, contextVersion: string, finding: FindingRow, entered?: Record<string, unknown>): AskCaptureRequest {
+export interface EvidenceOption { id: string; title: string }
+/** Records attached to this case that Ask may offer as completion evidence (a title only; never a file, link or text). */
+async function loadEvidenceOptions(propertyId: string, caseId: string): Promise<EvidenceOption[]> {
+  const rows = await database.negotiationShieldDocument.findMany({
+    where: { caseId, negotiationShieldCase: { propertyId }, document: { propertyId, visibility: 'HOUSEHOLD', lifecycleStatus: 'ACTIVE' } },
+    select: { document: { select: { id: true, title: true, sensitivity: true } } },
+    orderBy: { uploadedAt: 'desc' },
+    take: 25,
+  }) as Array<{ document: { id: string; title: string | null; sensitivity: string | null } }>;
+  return rows
+    .filter((row) => row.document.sensitivity && NEGOTIATION_ATTACH_ALLOWED_SENSITIVITIES.has(row.document.sensitivity))
+    .map((row) => ({ id: row.document.id, title: (row.document.title ?? 'Untitled record').slice(0, 120) }));
+}
+
+function formCapture(kind: BuyerNegotiationKind, contextVersion: string, finding: FindingRow, entered?: Record<string, unknown>, evidence: EvidenceOption[] = []): AskCaptureRequest {
   const base = { classification: 'WORKFLOW_INPUT' as const, state: 'UNKNOWN' as const, allowNotSure: false, sensitivity: 'FINANCIAL' as const, confirmationText: null, expectedContextVersion: contextVersion };
   const clean = (value?: Record<string, unknown>) => Object.fromEntries(Object.entries(value ?? {}).filter(([, v]) => v !== null && v !== undefined && v !== ''));
   const select = (key: string, label: string, values: readonly string[], labels: Record<string, string>, required = true) =>
@@ -94,6 +114,10 @@ function formCapture(kind: BuyerNegotiationKind, contextVersion: string, finding
       select('outcome', 'Outcome', BUYER_OUTCOMES, BUYER_OUTCOME_LABELS),
       { key: 'agreedCredit', label: 'Credit agreed ($)', required: false, helpText: 'Needed when the seller agreed to a credit.', inputSchema: { type: 'NUMBER', min: 0, max: 10_000_000 } },
       { key: 'outcomeNotes', label: 'Notes', required: false, inputSchema: { type: 'LONG_TEXT', maxLength: 4000 } },
+      ...(evidence.length > 0 ? [{
+        key: 'completionDocumentId', label: 'Completion evidence', required: false, helpText: 'A record already attached to this negotiation. Leave it as it is to keep what is saved.',
+        inputSchema: { type: 'SINGLE_SELECT' as const, options: [{ label: 'No attached document', value: BUYER_NO_COMPLETION_EVIDENCE }, ...evidence.map((option) => ({ label: option.title, value: option.id }))] },
+      }] : []),
     ] } as unknown as AskCaptureRequest['inputSchema'],
     currentAnswer: clean(entered), destinationLabel: 'Records the seller response and outcome after confirmation' };
 }
@@ -163,21 +187,33 @@ export async function buyerNegotiationResult(userId: string, propertyId: string,
     sellerResponse: link.sellerResponse, sellerResponseNotes: link.sellerResponseNotes, outcome: link.outcome,
     agreedCredit: link.agreedCreditCents === null ? null : link.agreedCreditCents / 100, outcomeNotes: link.outcomeNotes,
   };
+  const evidence = await loadEvidenceOptions(propertyId, link.caseId);
+  if (link.outcomeDocumentId && evidence.some((option) => option.id === link.outcomeDocumentId)) current.completionDocumentId = link.outcomeDocumentId;
   if (!supplied) {
     return {
       status: 'NEEDS_CONTEXT', reasonCode: 'BUYER_NEGOTIATION_OUTCOME_INPUT_REQUIRED', contextVersion, parameters,
       blocks: [{ type: 'SUMMARY', id: 'buyer-negotiation-outcome-input', title: `Seller response: ${label}`, body: `Currently: ${BUYER_SELLER_RESPONSE_LABELS[link.sellerResponse] ?? link.sellerResponse}; ${BUYER_OUTCOME_LABELS[link.outcome] ?? link.outcome}.`, tone: 'DEFAULT', actions: [] }],
-      captureRequests: [formCapture('OUTCOME', contextVersion, finding, current)], suggestions: [],
+      captureRequests: [formCapture('OUTCOME', contextVersion, finding, current, evidence)], suggestions: [],
     };
   }
   const input = supplied as BuyerOutcomeInput;
+  const chosenEvidence = typeof input.completionDocumentId === 'string' ? evidence.find((option) => option.id === input.completionDocumentId) : undefined;
+  if (typeof input.completionDocumentId === 'string' && !chosenEvidence) {
+    return {
+      status: 'NEEDS_CONTEXT', reasonCode: 'BUYER_NEGOTIATION_EVIDENCE_UNAVAILABLE', contextVersion, parameters,
+      blocks: [{ type: 'SUMMARY', id: 'buyer-negotiation-evidence-missing', title: 'That record is not available as evidence', body: 'Choose another attached record, or none. Nothing has been saved.', tone: 'CAUTION', actions: [] }],
+      captureRequests: [formCapture('OUTCOME', contextVersion, finding, { ...input, agreedCredit: input.agreedCreditCents === null ? null : input.agreedCreditCents / 100, completionDocumentId: undefined }, evidence)], suggestions: [],
+    };
+  }
   const consequence = buyerOutcomeConsequence(input.outcome, Boolean(finding.buyerTaskId));
+  // The form's own shape: absent keeps the saved evidence, NONE clears it.
+  const evidenceParameter = input.completionDocumentId === undefined ? {} : { completionDocumentId: input.completionDocumentId ?? BUYER_NO_COMPLETION_EVIDENCE };
   return {
     status: 'NEEDS_CONFIRMATION', reasonCode: 'BUYER_NEGOTIATION_OUTCOME_CONFIRMATION_REQUIRED', contextVersion,
     parameters: {
       buyerNegotiationOutcome: {
         sellerResponse: input.sellerResponse, sellerResponseNotes: input.sellerResponseNotes, outcome: input.outcome,
-        agreedCredit: input.agreedCreditCents === null ? null : input.agreedCreditCents / 100, outcomeNotes: input.outcomeNotes,
+        agreedCredit: input.agreedCreditCents === null ? null : input.agreedCreditCents / 100, outcomeNotes: input.outcomeNotes, ...evidenceParameter,
       },
       buyerNegotiationCommand: { kind, entityId: finding.id }, buyerNegotiationContextVersion: contextVersion, ...confirmBase },
     blocks: [{ type: 'SUMMARY', id: 'buyer-negotiation-outcome-review', title: 'Review this outcome', body: 'Nothing is saved until you confirm.', tone: consequence ? 'CAUTION' : 'DEFAULT', actions: [] }],
@@ -191,10 +227,11 @@ export async function buyerNegotiationResult(userId: string, propertyId: string,
         ...(input.agreedCreditCents !== null ? [{ label: 'Credit agreed', value: money(input.agreedCreditCents / 100) }] : []),
         ...(input.sellerResponseNotes ? [{ label: 'What the seller said', value: input.sellerResponseNotes }] : []),
         ...(input.outcomeNotes ? [{ label: 'Notes', value: input.outcomeNotes }] : []),
+        ...(input.completionDocumentId === undefined ? [] : [{ label: 'Completion evidence', value: chosenEvidence ? chosenEvidence.title : 'None (any saved evidence is removed)' }]),
       ],
       editableFields: [], confirmLabel: 'Record outcome', consentText: 'I authorize recording this outcome in the shared purchase record.', expiresAt: expiresAt.toISOString(),
     },
-    captureRequests: [formCapture('OUTCOME', contextVersion, finding, { ...input, agreedCredit: input.agreedCreditCents === null ? null : input.agreedCreditCents / 100 })],
+    captureRequests: [formCapture('OUTCOME', contextVersion, finding, { ...input, agreedCredit: input.agreedCreditCents === null ? null : input.agreedCreditCents / 100, completionDocumentId: input.completionDocumentId === null ? BUYER_NO_COMPLETION_EVIDENCE : input.completionDocumentId }, evidence)],
     suggestions: [],
   };
 }
@@ -245,9 +282,14 @@ async function confirmBuyerNegotiation(ctx: ConfirmCapabilityContext): Promise<C
       const checked = parseBuyerNegotiationAnswer('OUTCOME', parameters.buyerNegotiationOutcome);
       if (!checked.success) throw stale('The outcome to record is invalid.');
       const input = checked.data as BuyerOutcomeInput;
+      // Re-checked here, not trusted from the stored form: the record must still be attached to this case and offerable.
+      if (typeof input.completionDocumentId === 'string' && !(await loadEvidenceOptions(propertyId, link.caseId)).some((option) => option.id === input.completionDocumentId)) {
+        throw stale('That record is no longer available as evidence.');
+      }
       await service.recordBuyerNegotiationOutcome(propertyId, link.caseId, userId, {
         findingId: finding.id, sellerResponse: input.sellerResponse, sellerResponseNotes: input.sellerResponseNotes, outcome: input.outcome,
         agreedCreditCents: input.agreedCreditCents, outcomeNotes: input.outcomeNotes,
+        ...(input.completionDocumentId === undefined ? {} : { completionDocumentId: input.completionDocumentId }),
       }, access.role);
       title = 'Outcome recorded'; description = buyerOutcomeConsequence(input.outcome, Boolean(finding.buyerTaskId)) ?? 'The seller’s response and the outcome are saved.';
       details.push({ label: 'Seller response', value: BUYER_SELLER_RESPONSE_LABELS[input.sellerResponse] ?? input.sellerResponse }, { label: 'Outcome', value: BUYER_OUTCOME_LABELS[input.outcome] ?? input.outcome });

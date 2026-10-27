@@ -35,10 +35,12 @@ function withRole(role) {
   propertyAccess.resolvePropertyAccess = async () => ({ role, userId: 'user-1', propertyId: 'prop-1' });
   return () => { propertyAccess.resolvePropertyAccess = saved; };
 }
-function withFinding(finding) {
-  const saved = prisma.inspectionFinding;
+// Records attached to case-1, as the evidence query returns them (the fake applies no where: the handler's own sensitivity filter is what is tested).
+function withFinding(finding, attached = []) {
+  const saved = prisma.inspectionFinding; const savedDocs = prisma.negotiationShieldDocument;
   prisma.inspectionFinding = { findFirst: async (args) => (finding && args.where.id === finding.id && args.where.propertyId === 'prop-1' ? finding : null) };
-  return () => { prisma.inspectionFinding = saved; };
+  prisma.negotiationShieldDocument = { findMany: async () => attached.map((document) => ({ document })) };
+  return () => { prisma.inspectionFinding = saved; prisma.negotiationShieldDocument = savedDocs; };
 }
 const invoke = (message, launchContext, role = 'CONTRIBUTOR') => capabilityInvoke(OP, { userId: 'user-1', propertyId: 'prop-1', message, launchContext }, { propertyAccess: { role } });
 const launch = (entityId = 'f-1', over = {}) => ({ operationId: OP, surface: 'ASK_PAGE', entityType: buyer.BUYER_FINDING_ENTITY_TYPE, entityId, ...over });
@@ -209,4 +211,72 @@ test('the negotiation list rows carry Start or Record for a contributor (and not
   });
   for (const id of ['buyer-negotiation-start', 'buyer-negotiation-outcome']) assert.equal(applicable(id, 'BUYER_NEGOTIATION_READINESS'), true, id);
   for (const id of ['buyer-negotiation-outcome', 'buyer-negotiation-back']) assert.equal(applicable(id, OP), true, id);
+});
+
+// ───────────────────────────── completion evidence ─────────────────────────────
+
+const DOC_OK = { id: 'rec-1', title: 'Repair invoice', sensitivity: 'FINANCIAL' };
+const DOC_SENSITIVE = { id: 'rec-2', title: 'Medical note', sensitivity: 'MEDICAL' };
+const OUTCOME_ANSWER = { sellerResponse: 'ACCEPTED', outcome: 'SELLER_REPAIRED' };
+
+test('the outcome form offers only attached records of an allowed sensitivity, by title, and omits the field when there are none', async () => {
+  const finding = { ...FINDING, negotiationCaseLinks: [{ ...LINK, outcomeDocumentId: 'rec-1' }] };
+  const restoreRole = withRole('CONTRIBUTOR'); let restore = withFinding(finding, [DOC_OK, DOC_SENSITIVE]);
+  try {
+    const form = await invoke(M.OUTCOME, launch());
+    const field = form.captureRequests[0].inputSchema.fields.find((f) => f.key === 'completionDocumentId');
+    assert.deepEqual(field.inputSchema.options, [{ label: 'No attached document', value: 'NONE' }, { label: 'Repair invoice', value: 'rec-1' }]);
+    assert.equal(form.captureRequests[0].currentAnswer.completionDocumentId, 'rec-1');
+    restore(); restore = withFinding(finding, []);
+    const bare = await invoke(M.OUTCOME, launch());
+    assert.equal(bare.captureRequests[0].inputSchema.fields.some((f) => f.key === 'completionDocumentId'), false);
+  } finally { restore(); restoreRole(); }
+});
+
+test('the answer keeps saved evidence when the field is absent, clears it on NONE, and names the record otherwise', () => {
+  assert.equal('completionDocumentId' in buyer.parseBuyerNegotiationAnswer('OUTCOME', OUTCOME_ANSWER).data, false);
+  assert.equal('completionDocumentId' in buyer.parseBuyerNegotiationAnswer('OUTCOME', { ...OUTCOME_ANSWER, completionDocumentId: '' }).data, false);
+  assert.equal(buyer.parseBuyerNegotiationAnswer('OUTCOME', { ...OUTCOME_ANSWER, completionDocumentId: 'NONE' }).data.completionDocumentId, null);
+  assert.equal(buyer.parseBuyerNegotiationAnswer('OUTCOME', { ...OUTCOME_ANSWER, completionDocumentId: 'rec-1' }).data.completionDocumentId, 'rec-1');
+});
+
+test('a chosen record is shown by title in the review; one that is not offered is refused with the form kept', async () => {
+  const finding = { ...FINDING, negotiationCaseLinks: [LINK] };
+  const restoreRole = withRole('CONTRIBUTOR'); const restore = withFinding(finding, [DOC_OK, DOC_SENSITIVE]);
+  try {
+    const run = (completionDocumentId) => handler.buyerNegotiationResult('user-1', 'prop-1', { kind: 'OUTCOME', entityId: 'f-1', sourceExecutionId: null },
+      buyer.parseBuyerNegotiationAnswer('OUTCOME', { ...OUTCOME_ANSWER, completionDocumentId }).data);
+    const ok = await run('rec-1');
+    assert.equal(ok.status, 'NEEDS_CONFIRMATION');
+    assert.equal(ok.confirmation.fields.find((f) => f.label === 'Completion evidence').value, 'Repair invoice');
+    assert.equal(ok.parameters.buyerNegotiationOutcome.completionDocumentId, 'rec-1');
+    assert.equal(buyer.parseBuyerNegotiationAnswer('OUTCOME', ok.parameters.buyerNegotiationOutcome).data.completionDocumentId, 'rec-1');
+    const cleared = await run('NONE');
+    assert.match(cleared.confirmation.fields.find((f) => f.label === 'Completion evidence').value, /^None/);
+    assert.equal(cleared.parameters.buyerNegotiationOutcome.completionDocumentId, 'NONE');
+    const sensitive = await run('rec-2');
+    assert.equal(sensitive.reasonCode, 'BUYER_NEGOTIATION_EVIDENCE_UNAVAILABLE');
+    assert.equal(sensitive.captureRequests.length, 1);
+    const kept = await handler.buyerNegotiationResult('user-1', 'prop-1', { kind: 'OUTCOME', entityId: 'f-1', sourceExecutionId: null }, buyer.parseBuyerNegotiationAnswer('OUTCOME', OUTCOME_ANSWER).data);
+    assert.equal(kept.confirmation.fields.some((f) => f.label === 'Completion evidence'), false);
+    assert.equal('completionDocumentId' in kept.parameters.buyerNegotiationOutcome, false);
+  } finally { restore(); restoreRole(); }
+});
+
+test('confirming passes the evidence id (or null to clear) to the canonical record, omits it when untouched, and refuses a record no longer offered', async () => {
+  const finding = { ...FINDING, negotiationCaseLinks: [LINK] };
+  const restore = withFinding(finding, [DOC_OK]); const w = installWrites();
+  try {
+    const confirm = (extra) => confirmCapabilityInvoke(OP, ctx({
+      buyerNegotiationOutcome: { ...OUTCOME_ANSWER, ...extra }, buyerNegotiationCommand: { kind: 'OUTCOME', entityId: 'f-1' }, buyerNegotiationContextVersion: version(finding),
+    }));
+    await confirm({ completionDocumentId: 'rec-1' });
+    assert.equal(w.calls[0][4].completionDocumentId, 'rec-1');
+    await confirm({ completionDocumentId: 'NONE' });
+    assert.equal(w.calls[1][4].completionDocumentId, null);
+    await confirm({});
+    assert.equal('completionDocumentId' in w.calls[2][4], false);
+    await assert.rejects(() => confirm({ completionDocumentId: 'rec-2' }), (e) => e.code === 'ASK_CONFIRMATION_NOT_ACTIVE');
+    assert.equal(w.calls.length, 3);
+  } finally { w.restore(); restore(); }
 });

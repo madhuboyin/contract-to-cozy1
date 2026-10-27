@@ -31,7 +31,7 @@ export interface NegotiationFieldSpec { key: string; label: string; kind: Negoti
 export interface NegotiationScenarioSpec {
   label: string;
   /** The case input type the canonical service and the rules engine read. */
-  inputType: 'CONTRACTOR_QUOTE' | 'INSURANCE_PREMIUM' | 'INSURANCE_CLAIM_SETTLEMENT' | 'CONTRACTOR_URGENCY';
+  inputType: 'CONTRACTOR_QUOTE' | 'INSURANCE_PREMIUM' | 'INSURANCE_CLAIM_SETTLEMENT' | 'CONTRACTOR_URGENCY' | 'BUYER_INSPECTION';
   summary: string;
   question: string;
   fields: NegotiationFieldSpec[];
@@ -94,6 +94,33 @@ export const NEGOTIATION_START_SCENARIO_SPECS: Record<NegotiationStartScenario, 
       NOTES,
     ],
   },
+};
+
+/**
+ * Editing only: a buyer inspection review is started from selected findings (never from this form), but its saved analysis details are edited with the
+ * same form machinery. The fields are the page's own buyer inspection form (BuyerInspectionFormValues) minus raw text, which Ask never loads or sends.
+ */
+export type NegotiationEditScenario = NegotiationStartScenario | 'BUYER_INSPECTION_NEGOTIATION';
+export const isNegotiationEditScenario = (value: unknown): value is NegotiationEditScenario =>
+  value === 'BUYER_INSPECTION_NEGOTIATION' || isNegotiationStartScenario(value);
+
+const BUYER_INSPECTION_EDIT_SPEC: NegotiationScenarioSpec = {
+  label: 'Buyer inspection negotiation', inputType: 'BUYER_INSPECTION',
+  summary: 'The details the inspection negotiation analysis works from.',
+  question: 'What should the saved inspection details say?',
+  fields: [
+    { key: 'requestedConcessionAmount', label: 'Requested concession ($)', kind: 'MONEY' },
+    { key: 'inspectionIssuesSummary', label: 'Inspection issues', kind: 'NOTES', max: 1000, help: 'The findings and why they matter to the purchase.' },
+    { key: 'requestedRepairs', label: 'Repairs or credit requested', kind: 'NOTES', max: 1000 },
+    { key: 'recentUpgradeNotes', label: 'Seller repair or upgrade evidence', kind: 'NOTES', max: 1000 },
+    { key: 'reportDate', label: 'Report date', kind: 'DATE' },
+    NOTES,
+  ],
+};
+
+export const NEGOTIATION_EDIT_SCENARIO_SPECS: Record<NegotiationEditScenario, NegotiationScenarioSpec> = {
+  ...NEGOTIATION_START_SCENARIO_SPECS,
+  BUYER_INSPECTION_NEGOTIATION: BUYER_INSPECTION_EDIT_SPEC,
 };
 
 const MAX_MONEY = 100_000_000;

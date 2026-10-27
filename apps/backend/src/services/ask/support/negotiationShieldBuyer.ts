@@ -50,12 +50,17 @@ export const BuyerOutcomeInputSchema = z.object({
   outcome: z.enum(BUYER_OUTCOMES),
   agreedCredit: dollars,
   outcomeNotes: text(4000),
+  /** A record attached to the case as completion evidence; absent keeps what is saved, NONE clears it (Desktop sends null for "No attached document"). */
+  completionDocumentId: z.preprocess(blank, z.string().trim().max(64).nullable()).optional(),
 }).strict();
+export const BUYER_NO_COMPLETION_EVIDENCE = 'NONE';
 
 export interface BuyerStartInput { requestType: (typeof BUYER_REQUEST_TYPES)[number]; requestedCreditCents: number | null; notes: string | null }
 export interface BuyerOutcomeInput {
   sellerResponse: (typeof BUYER_SELLER_RESPONSES)[number]; sellerResponseNotes: string | null;
   outcome: (typeof BUYER_OUTCOMES)[number]; agreedCreditCents: number | null; outcomeNotes: string | null;
+  /** undefined: leave the saved evidence as it is; null: clear it; a string: the attached record to use. */
+  completionDocumentId?: string | null;
 }
 export type BuyerNegotiationFormData = BuyerStartInput | BuyerOutcomeInput;
 
@@ -78,6 +83,9 @@ export function parseBuyerNegotiationAnswer(kind: BuyerNegotiationKind, answer: 
     data: {
       sellerResponse: parsed.data.sellerResponse, sellerResponseNotes: (parsed.data.sellerResponseNotes ?? null) as string | null,
       outcome: parsed.data.outcome, agreedCreditCents, outcomeNotes: (parsed.data.outcomeNotes ?? null) as string | null,
+      ...(typeof parsed.data.completionDocumentId === 'string'
+        ? { completionDocumentId: parsed.data.completionDocumentId === BUYER_NO_COMPLETION_EVIDENCE ? null : parsed.data.completionDocumentId }
+        : {}),
     },
   };
 }
