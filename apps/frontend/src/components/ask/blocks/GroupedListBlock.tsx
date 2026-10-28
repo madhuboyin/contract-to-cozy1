@@ -83,6 +83,55 @@ function ItemActionRow({ item, disabled, onItemAction, className }: {
   );
 }
 
+function RecurringCostsGrid({ block, disabled, onItemAction }: {
+  block: Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>;
+  disabled: boolean;
+  onItemAction: Parameters<AskBlockRenderer<'GROUPED_LIST'>>[0]['onItemAction'];
+}) {
+  const items = block.sections.flatMap((section) => section.items);
+  const statusLabel = (status: string | null | undefined) => {
+    if (!status || status === 'NOT_SET_UP') return 'Not set up';
+    if (status === 'FOUND_SAVINGS') return 'Saving found';
+    return status.replace(/_/g, ' ').toLowerCase().replace(/^./, (letter) => letter.toUpperCase());
+  };
+  const conciseDescription = (description: string | null | undefined, status: string | null | undefined) => {
+    if (!description) return null;
+    return status === 'NOT_SET_UP' ? description.replace(/^Not set up yet\.\s*/i, '') : description;
+  };
+
+  return (
+    <section className="w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xs" data-savings-recurring-grid="">
+      <div className="flex flex-col gap-1 border-b border-slate-100 bg-gradient-to-r from-slate-50/90 via-white to-teal-50/30 px-4 py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4 sm:px-5">
+        <div>
+          <h3 className="text-sm font-bold tracking-tight text-slate-950 sm:text-base">Recurring costs to compare</h3>
+          {block.description && <p className="mt-1 max-w-3xl text-xs leading-5 text-slate-500">{block.description}</p>}
+        </div>
+        <span className="mt-1 shrink-0 text-xs font-semibold text-slate-500">{items.length} {items.length === 1 ? 'cost' : 'costs'}</span>
+      </div>
+      <ul className={cn('grid grid-cols-1 gap-2.5 p-3 sm:p-4', items.length > 1 && 'md:grid-cols-2')} aria-label="Recurring costs to compare">
+        {items.map((item) => {
+          const label = statusLabel(item.status);
+          const description = conciseDescription(item.description, item.status);
+          const metadata = item.meta.filter((value) => !/^not set up$|^plan saved$/i.test(value));
+          const positive = item.status === 'FOUND_SAVINGS';
+          return (
+            <li key={item.id} data-ask-task-id={item.id} className="flex min-h-28 flex-col rounded-xl border border-slate-200/90 bg-slate-50/55 p-3.5">
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-sm font-semibold text-slate-950">{item.title}</p>
+                <span className={cn('shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide', positive ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-slate-200 bg-white text-slate-600')}>{label}</span>
+              </div>
+              {description && <p className="mt-1 text-xs leading-5 text-slate-600">{description}</p>}
+              {metadata.length > 0 && <p className="mt-1 text-xs font-medium text-slate-500">{metadata.join(' · ')}</p>}
+              {(item.actions?.length ?? 0) > 0 && <div className="mt-auto flex justify-end pt-3"><ItemActionRow item={item} disabled={disabled} onItemAction={onItemAction} className="mt-0 justify-end" /></div>}
+            </li>
+          );
+        })}
+      </ul>
+      {block.actions.length > 0 && <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 bg-slate-50/50 px-4 py-2.5 sm:px-5">{block.actions.map((action) => <ActionLink key={action.id} action={action} />)}</div>}
+    </section>
+  );
+}
+
 function ReservePlanningControls({ block, disabled, onItemAction }: {
   block: Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>;
   disabled: boolean;
@@ -205,6 +254,7 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
   const [focusedDisclosure, setFocusedDisclosure] = useState<'DETAILS' | 'SNOOZE' | null>(null);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
+  if (block.id === 'savings-recurring-setup') return <RecurringCostsGrid block={block} disabled={itemActionsDisabled} onItemAction={onItemAction} />;
   if (block.id === 'reserve-planning-controls') return <ReservePlanningControls block={block} disabled={itemActionsDisabled} onItemAction={onItemAction} />;
   if (block.id === 'ownership-cost-views') return <OwnershipCostViewsBlock block={block} disabled={itemActionsDisabled} onItemAction={onItemAction} />;
   if (block.id === 'focused-home-action-guidance') {
