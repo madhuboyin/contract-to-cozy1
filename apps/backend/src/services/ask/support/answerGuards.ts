@@ -5,6 +5,7 @@ import { AskExecutionStatus, HouseholdRole } from '@prisma/client';
 import { z } from 'zod';
 import { ASK_OPERATION_DEFINITIONS, getAskOperationDefinition, type AskOperationId, type AskOperationResolution, type AskOperationResult } from '../askOperationRegistry';
 import { prisma } from '../../../lib/prisma';
+import { logger } from '../../../lib/logger';
 import { askAnswerTrustTotal, askAnswerTrustUnlistedActionTotal, askResultSynthesisTotal, askSemanticAnswerValidationDurationSeconds, askSemanticAnswerValidationTotal, askSkillPresentationDurationSeconds } from '../../../lib/metrics';
 import { operatingModeForOwnershipState, type PropertyJourneyContext } from '../../skills/context/propertyJourneyContext.contract';
 import { isAskOperationDiscoverableForAudience, type AskAudienceApplicabilityDecision } from '../askAudiencePolicy';
@@ -96,6 +97,18 @@ export function recordAskAnswerTrustMetrics(
     source: validation.trust.checks.sourceIntegrity,
     repaired: validation.repaired ? 'yes' : 'no',
   });
+  // A blocked or clarified answer reaches the homeowner as a generic "couldn't verify" card; this is the only place the reason is visible.
+  if (validation.trust.outcome === 'BLOCK' || validation.trust.outcome === 'CLARIFY') {
+    logger.warn({
+      operationId,
+      outcome: validation.trust.outcome,
+      reasonCodes: validation.trust.reasonCodes,
+      checks: validation.trust.checks,
+      validatorVersion: validation.trust.validatorVersion,
+      semanticOutcome: validation.semantic?.outcome ?? null,
+      competingOperationId: validation.semantic?.competingOperationId ?? null,
+    }, 'Ask answer trust blocked an answer');
+  }
   if (validation.trust.reasonCodes.includes('UNLISTED_ACTION_RETAINED')) askAnswerTrustUnlistedActionTotal.inc({ operation: operationId });
   if (validation.semantic) {
     askSemanticAnswerValidationTotal.inc({ operation: operationId, outcome: validation.semantic.outcome });
