@@ -4,6 +4,7 @@ import { BlockView } from '../blocks/registry';
 import { ResultViewContext, useResultView } from '@/features/ask/useResultView';
 import type { AskExecutionResponse, AskPresentationBlock } from '@/features/ask/types';
 import { CalmAnswerContext, CalmChromeContext } from '../blocks/calmContext';
+import { api } from '@/lib/api/client';
 
 // ASK_COZY_INLINE_WORKSPACE_FRD §11.10 (IW-PRES-014, FRD v1.82): Home Actions as read-only shelves.
 
@@ -77,6 +78,36 @@ describe('Home Action shelves', () => {
     expect(screen.getByRole('button', { name: 'Mark useful' })).toBeInTheDocument();
     fireEvent.click(review);
     expect(onItemAction).toHaveBeenCalledWith('HOME_ACTION', 'a1', 'What should I do next for “Replace the HVAC filter”?', 'HOME_ACTIONS', 'CONVERSATION_CONTINUE', undefined, 'a1');
+  });
+
+  test('opening another rating closes the previous one, and saved feedback closes its rating', async () => {
+    const onItemAction = jest.fn();
+    const submitFeedback = jest.spyOn(api, 'submitHomeActionUsefulnessFeedback').mockResolvedValue({ success: true, data: { id: 'feedback-1', rating: 'USEFUL' } });
+    const item = (id: string) => ({
+      homeActionId: id, title: `Action ${id}`, rawPriority: 'SOON' as const, consumerPriority: 'PLAN_SOON' as const, comparativeReasonCodes: [], confidenceLabel: 'HIGH' as const, deadlineAt: null, dependencyRefs: [],
+      cta: null, inlineLaunch: null, watchState: null, suppressed: false, completed: false, unavailable: false, stale: false,
+    });
+    const priority: AskPresentationBlock = {
+      type: 'PRIORITY_LIST', id: 'home-actions-priority-list', title: 'What matters now', propertyId: 'home',
+      rankingPolicyVersion: 'priority-list-policy-v1', generatedAt: '2026-09-27T12:00:00.000Z', sourceFreshnessAt: null, truncated: false,
+      items: [item('a1'), item('a2')],
+    };
+    render(<CalmChromeContext.Provider value><CalmAnswerContext.Provider value>
+      <BlockView block={priority} executionId="e" propertyId="home" onItemAction={onItemAction} itemActionsDisabled={false} onFilterClick={() => undefined} onCollectionPage={() => undefined} onAccessLost={() => undefined} />
+    </CalmAnswerContext.Provider></CalmChromeContext.Provider>);
+
+    const overflows = screen.getAllByRole('button', { name: 'More options' });
+    fireEvent.click(overflows[0]);
+    expect(overflows[0]).toHaveAttribute('aria-expanded', 'true');
+    fireEvent.pointerDown(overflows[1]);
+    fireEvent.click(overflows[1]);
+    expect(overflows[0]).toHaveAttribute('aria-expanded', 'false');
+    expect(overflows[1]).toHaveAttribute('aria-expanded', 'true');
+
+    fireEvent.click(within(overflows[1].closest('details')!).getByRole('button', { name: 'Mark useful' }));
+    await waitFor(() => expect(submitFeedback).toHaveBeenCalledWith('e', 'a2', { rating: 'USEFUL' }));
+    await waitFor(() => expect(overflows[1]).toHaveAttribute('aria-expanded', 'false'));
+    submitFeedback.mockRestore();
   });
 
   test('the calm ranked view has timing filters with full-feed counts, one Start here row, and no horizontal overflow classes', () => {

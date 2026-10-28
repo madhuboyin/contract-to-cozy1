@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { MoreHorizontal, ThumbsDown, ThumbsUp } from 'lucide-react';
 import { api } from '@/lib/api/client';
 import { cn } from '@/lib/utils';
@@ -27,7 +27,7 @@ function priorityReason(codes: string[]): string | null {
 // Ask Intelligence FRD §22.1/Phase 9B "usefulness feedback" deliverable —
 // per-PRIORITY_LIST-item rating, distinct from ExecutionFeedback's
 // whole-response UP/DOWN thumbs.
-function HomeActionUsefulnessButtons({ executionId, homeActionId, bare = false }: { executionId: string; homeActionId: string; bare?: boolean }) {
+function HomeActionUsefulnessButtons({ executionId, homeActionId, bare = false, onSaved }: { executionId: string; homeActionId: string; bare?: boolean; onSaved?: () => void }) {
   const [rating, setRating] = useState<'USEFUL' | 'NOT_USEFUL' | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -35,7 +35,10 @@ function HomeActionUsefulnessButtons({ executionId, homeActionId, bare = false }
     setSaving(true);
     try {
       const response = await api.submitHomeActionUsefulnessFeedback(executionId, homeActionId, { rating: nextRating });
-      if (response.success) setRating(nextRating);
+      if (response.success) {
+        setRating(nextRating);
+        onSaved?.();
+      }
     } finally { setSaving(false); }
   };
 
@@ -57,10 +60,29 @@ function HomeActionUsefulnessButtons({ executionId, homeActionId, bare = false }
 
 // Calm rows keep the rating out of the way: one overflow button opens the same two-button rating.
 function HomeActionOverflow({ executionId, homeActionId }: { executionId: string; homeActionId: string }) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDetailsElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (!containerRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('pointerdown', closeOnOutsidePointer);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsidePointer);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [open]);
+
   return (
-    <details className="relative shrink-0">
-      <summary role="button" aria-label="More options" className="flex h-9 w-9 cursor-pointer list-none items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"><MoreHorizontal className="h-4 w-4" aria-hidden="true" /></summary>
-      <div className="absolute right-0 z-10 mt-1 rounded-xl border border-slate-200 bg-white p-1.5 shadow-md"><HomeActionUsefulnessButtons executionId={executionId} homeActionId={homeActionId} bare /></div>
+    <details ref={containerRef} open={open} className="relative shrink-0">
+      <summary role="button" aria-label="More options" aria-expanded={open} onClick={(event) => { event.preventDefault(); setOpen((current) => !current); }} className="flex h-9 w-9 cursor-pointer list-none items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"><MoreHorizontal className="h-4 w-4" aria-hidden="true" /></summary>
+      <div className="absolute right-0 z-10 mt-1 rounded-xl border border-slate-200 bg-white p-1.5 shadow-md"><HomeActionUsefulnessButtons executionId={executionId} homeActionId={homeActionId} bare onSaved={() => setOpen(false)} /></div>
     </details>
   );
 }
