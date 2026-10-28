@@ -4,6 +4,8 @@
 // capability completion, and analytics the decision route runs, shared rather than copied). A decision is the homeowner's own record: it does not change a
 // policy, contact an insurer or bind coverage. Adding a quote (FRD v1.366) goes through addCoverageComparisonOption, the route's own call, from a Home Record
 // the owner picks. Not here: adding another verified policy term, and the property-level coverage analysis run and simulation.
+import { confirmInsurancePolicy, insurancePolicyCommandResult } from './insurancePolicyCommands.handler';
+import { insurancePolicyKindFromMessage } from '../support/insurancePolicyCommand';
 import { createHash } from 'node:crypto';
 import { HouseholdRole } from '@prisma/client';
 import { prisma } from '../../../lib/prisma';
@@ -233,6 +235,11 @@ export async function coverageCommandResult(userId: string, propertyId: string, 
 
 registerCapabilityHandler('coverage.command', async (envelope) => {
   const launch = envelope.launchContext;
+  const policyKind = insurancePolicyKindFromMessage(envelope.message);
+  if (policyKind) {
+    if (launch?.operationId !== 'COVERAGE_COMMAND' || launch.surface === 'ASK_REFRESH' || (policyKind !== 'ADD' && !launch.entityId)) return notRoutable();
+    return insurancePolicyCommandResult(envelope.userId, envelope.propertyId!, { kind: policyKind, entityId: launch.entityId ?? null, sourceExecutionId: launch.sourceExecutionId ?? null });
+  }
   const kind = coverageCommandKindFromMessage(envelope.message);
   if (!kind || launch?.operationId !== 'COVERAGE_COMMAND' || launch.surface === 'ASK_REFRESH' || !launch.entityId) return notRoutable();
   const entityType = coverageCommandTargetsProperty(kind) ? COVERAGE_PROPERTY_ENTITY_TYPE : COVERAGE_COMPARISON_ENTITY_TYPE;
@@ -246,6 +253,8 @@ const stale = (message: string, code = 'ASK_CONFIRMATION_NOT_ACTIVE') => Object.
 
 async function confirmCoverageCommand(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
   const { execution, userId, parameters } = ctx;
+  const policy = await confirmInsurancePolicy(ctx);
+  if (policy) return policy;
   const command = parameters.coverageCommand as { kind?: unknown; entityId?: unknown } | undefined;
   const kind = command?.kind as CoverageCommandKind | undefined;
   if (!kind || !(kind in COVERAGE_COMMAND_MESSAGES) || typeof command?.entityId !== 'string') throw stale('The step to take is invalid.');

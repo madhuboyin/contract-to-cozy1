@@ -11,7 +11,7 @@ type AskAction = Extract<AskPresentationBlock, { type: 'SUMMARY' }>['actions'][n
 
 const OPERATION_BOUNDARIES: Partial<Record<AskOperationId, ReadonlySet<string>>> = {
   MAINTENANCE_STATUS: new Set(['maintenance-purchase-date-missing', 'maintenance-record-boundary']),
-  COVERAGE_GAPS: new Set(['coverage-boundary']),
+  COVERAGE_GAPS: new Set(['coverage-boundary', 'insurance-policy-add']),
   OWNERSHIP_COSTS: new Set(['ownership-cost-lens-boundary', 'ownership-cost-change-boundary', 'ownership-cost-forecast-boundary', 'ownership-cost-buffer-boundary']),
   HOME_ACTIONS: new Set(['home-actions-boundary', 'focused-home-action-boundary']),
   REPLACEMENT_GUIDANCE: new Set(['repair-replace-boundary']),
@@ -334,7 +334,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   // Adjust what the Capital Timeline assumes for an item (register P1 Capital Timeline): planned date or window, cost range, remaining life, leave it off, or a note; and remove an adjustment. Confirmation-gated, declared-action only; never by fuzzy retrieval.
   CAPITAL_TIMELINE_COMMAND: new Set(['capital-timeline-back']),
   // Coverage Intelligence writes (register P0): prepare the coverage review, start a comparison against the verified policy, and record the keep / change / shop / defer decision. Owner-only, confirmation-gated, declared-action only; never by fuzzy retrieval.
-  COVERAGE_COMMAND: new Set(['coverage-back', 'coverage-back-review']),
+  COVERAGE_COMMAND: new Set(['coverage-back', 'coverage-back-review', 'insurance-policies-show']),
   COVERAGE_ANALYSIS_RUN: new Set(['coverage-analysis-run-boundary']),
   INSPECTION_REPORT_REVIEW: new Set(['inspection-report-review-boundary']),
   GUIDANCE_STEP_DECLARE: new Set(['guidance-step-declare-boundary']),

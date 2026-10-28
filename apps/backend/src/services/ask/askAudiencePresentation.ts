@@ -5,6 +5,7 @@ import type { AskOperationResult } from './askOperationRegistry';
 import { HOME_JOURNEY_SET_MESSAGE } from './support/homeSettingsConstants';
 import { QUOTE_COMMAND_ACTION_IDS } from './support/quoteComparisonCommand';
 import { GUIDANCE_JOURNEY_RESTORE_ACTION_ID } from './support/guidanceJourneyRestore';
+import { INSURANCE_POLICY_ACTION_IDS } from './support/insurancePolicyCommand';
 import { COVERAGE_COMMAND_ACTION_IDS, COVERAGE_COMMAND_KIND_ROLE_FLOORS, type CoverageCommandKind } from './support/coverageCommand';
 
 type AskAction = Extract<AskPresentationBlock, { type: 'SUMMARY' }>['actions'][number];
@@ -29,6 +30,8 @@ const ACTION_ROLE_FLOORS: Readonly<Record<string, HouseholdRole>> = Object.freez
     [QUOTE_COMMAND_ACTION_IDS.CONSENT, 'OWNER'],
     // Bringing a dismissed journey back is a contributor's write, like dismissing it (FRD v1.462).
     [GUIDANCE_JOURNEY_RESTORE_ACTION_ID, 'CONTRIBUTOR'],
+    // Adding an insurance policy is a contributor's write, as the coverage command's own floor (FRD v1.475).
+    [INSURANCE_POLICY_ACTION_IDS.ADD, 'CONTRIBUTOR'],
     // Restoring a trashed Home Record from the Trash view is a contributor's write, as the command's own floor (FRD v1.463).
     ['home-record-restore', 'CONTRIBUTOR'],
     // A repair or replace what-if is a contributor's re-run, as Desktop's run route (FRD v1.466).

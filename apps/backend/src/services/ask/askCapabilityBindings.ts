@@ -228,6 +228,7 @@ export const ASK_DISCOVERY_BINDINGS: readonly AskCapabilityBinding[] = Object.fr
   read('protect-coverage', 'coverage-intelligence', 'COVERAGE_GAPS', 'Which items are missing coverage?', 'Which items are missing coverage?'),
   read('protect-coverage-review', 'coverage-intelligence', 'COVERAGE_REVIEW_STATUS', 'What questions should I ask my insurer?', 'Review my policy questions'),
   read('protect-warranties', 'coverage-intelligence', 'WARRANTY_LOOKUP', 'Show my warranties', 'Review and manage my warranties'),
+  read('protect-insurance-policies', 'coverage-intelligence', 'COVERAGE_GAPS', 'Show my insurance policies', 'Review and manage my insurance policies'),
   read('protect-coverage-compare', 'coverage-intelligence', 'COVERAGE_COMPARISON_STATUS', 'Compare my current insurance policy against alternatives', 'Compare my coverage choices'),
   read('protect-changes', 'home-briefing', 'HOME_CHANGE_SUMMARY', 'What changed recently for this home?', 'What changed recently for this home?'),
 

@@ -48,6 +48,8 @@ import { MATERIAL_SPEC_EXPORT_CAPTURE_KEY, MaterialSpecExportAnswerSchema } from
 import { materialSpecStateResult } from '../handlers/materialSpecStateCommands.handler';
 import { EXPENSE_CAPTURE_KEY, isExpenseActionId, parseExpenseAnswer } from '../support/expenseCommand';
 import { expenseCommandResult } from '../handlers/expenseCommands.handler';
+import { insurancePolicyCommandResult } from '../handlers/insurancePolicyCommands.handler';
+import { INSURANCE_POLICY_CAPTURE_KEY, parseInsurancePolicyAnswer } from '../support/insurancePolicyCommand';
 import { roomDetailResult } from '../handlers/roomDetailCommands.handler';
 import { itemDocumentsResult } from '../handlers/inventoryDocumentCommands.handler';
 import { ITEM_DOCUMENT_CAPTURE_KEY, ROOM_DETAIL_CAPTURE_KEY } from '../support/roomDetailCommand';
@@ -1511,6 +1513,21 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     captureId = input.idempotencyKey;
     capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
     canonicalOwner = 'HomeDigitalTwinScenario';
+  } else if (execution.operationId === 'COVERAGE_COMMAND' && input.captureKey === INSURANCE_POLICY_CAPTURE_KEY) {
+    // The insurance policy form (FRD v1.475): it only prepares the confirmation; the policy is written when that is confirmed.
+    const access = await ensurePropertyAccess(userId, execution.propertyId);
+    if (access.role === HouseholdRole.VIEWER) throw Object.assign(new Error('A contributor or owner is required to change insurance policies.'), { code: 'ASK_PERMISSION_REQUIRED' });
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson) ? execution.parametersJson as Record<string, unknown> : {};
+    const policyLaunch = storedParameters.insurancePolicyLaunch && typeof storedParameters.insurancePolicyLaunch === 'object' && !Array.isArray(storedParameters.insurancePolicyLaunch)
+      ? storedParameters.insurancePolicyLaunch as { kind?: unknown; entityId?: unknown; sourceExecutionId?: unknown } : null;
+    if (!policyLaunch || (policyLaunch.kind !== 'ADD' && policyLaunch.kind !== 'EDIT')) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    if (!parseInsurancePolicyAnswer(input.answer).success) throw Object.assign(new Error('Enter the company, a policy number, an annual premium above zero and dates where the policy expires after it starts.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+    result = await insurancePolicyCommandResult(userId, execution.propertyId, {
+      kind: policyLaunch.kind, entityId: typeof policyLaunch.entityId === 'string' ? policyLaunch.entityId : null, sourceExecutionId: typeof policyLaunch.sourceExecutionId === 'string' ? policyLaunch.sourceExecutionId : null,
+    }, input.answer as Record<string, unknown>);
+    captureId = input.idempotencyKey;
+    capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
+    canonicalOwner = 'InsurancePolicy';
   } else if (execution.operationId === 'COVERAGE_COMMAND') {
     const coverageQuoteForm = input.captureKey === COVERAGE_QUOTE_CAPTURE_KEY;
     if (input.captureKey !== COVERAGE_DECISION_CAPTURE_KEY && !coverageQuoteForm) throw Object.assign(new Error('This coverage form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
