@@ -257,6 +257,16 @@ test('an entity-less response action suppresses the same compact workflow outcom
   assert.deepEqual([...identities], [key]);
 });
 
+test('the recent-changes inline older-history action suppresses the duplicate Home Timeline suggestion', () => {
+  const blocks = [{ type: 'CHANGE_SUMMARY', id: 'change-1', actions: [{
+    id: 'home-change-older-history', operationId: 'HOME_TIMELINE_EVENTS', interactionType: 'START_WORKFLOW',
+    outcomeKey: 'REVIEW_HOME_TIMELINE', label: 'View older home history', message: 'Show my home timeline',
+  }] }];
+  const identities = collectPresentationIdentities(blocks, 'prop-1');
+  const key = suggestedNextActionSemanticKey({ operationId: 'HOME_TIMELINE_EVENTS', interactionType: 'START_WORKFLOW', propertyId: 'prop-1', entityType: null, entityId: null, outcomeKey: 'REVIEW_HOME_TIMELINE' });
+  assert.deepEqual([...identities], [key]);
+});
+
 // ---- policy ----------------------------------------------------------------------------------------------------------
 
 const nominations = (...lists) => new Map(lists.map((list, i) => [`producer-${i}`, list]));

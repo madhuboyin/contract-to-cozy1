@@ -67,6 +67,50 @@ export function homeChangeDisplayTitle(input: {
   return input.canonicalActionTitle ?? input.canonicalEventTitle ?? sourceTypeLabel(input.sourceType);
 }
 
+const HOME_ACTION_STATE_COPY: Record<string, string> = {
+  CANDIDATE: 'A new home priority was identified.',
+  ACCEPTED: 'Added to your home priorities.',
+  SCHEDULED: 'The work was scheduled.',
+  IN_PROGRESS: 'The work started.',
+  IN_GUIDANCE: 'A guided review started.',
+  IN_PROJECT: 'Moved into an active project.',
+  BLOCKED: 'The work is blocked and may need your attention.',
+  DEFERRED: 'Moved to a later date.',
+  REPORTED_COMPLETE: 'Reported complete.',
+  REOPENED: 'Reopened for follow-up.',
+  VERIFIED: 'Completion was verified.',
+  FOLLOW_UP_DUE: 'A follow-up is due.',
+  CLOSED: 'Closed.',
+};
+
+export function homeActionStateChangeSummary(state: string): string {
+  return HOME_ACTION_STATE_COPY[state] ?? `Status changed to ${state.replace(/_/g, ' ').toLowerCase()}.`;
+}
+
+const MATERIALITY_REASON_COPY: Record<string, string> = {
+  URGENT_SAFETY_CONDITION: 'This may involve a safety concern and needs attention now.',
+  CANONICAL_ACTION_NOW: 'This home priority needs attention now.',
+  CANONICAL_ACTION_SOON: 'This home priority should be reviewed soon.',
+  PROPERTY_EFFECT_CONFIRMED: 'The result was confirmed in your home records.',
+  RELEVANT_LIFECYCLE_ADVANCED: 'This item moved to its next stage.',
+  HOMEOWNER_RELEVANT: 'This update may affect how you manage your home.',
+  CANONICAL_ACTION_PLAN: 'This is worth planning for.',
+};
+
+export function homeChangeWhyItMatters(reasonCodes: readonly string[], materiality: string): string {
+  const explanations = [...new Set(reasonCodes.map((code) => MATERIALITY_REASON_COPY[code]).filter(Boolean))];
+  if (explanations.length) return explanations.slice(0, 2).join(' ');
+  if (materiality === 'URGENT') return 'This change needs attention now.';
+  if (materiality === 'IMPORTANT') return 'This change is worth reviewing soon.';
+  return 'This is a meaningful update to your home records.';
+}
+
+export function homeChangeDateLabel(sourceType: string): 'Changed' | 'Due' | 'Recorded' {
+  if (sourceType === 'OPERATIONAL_WORK_DUE') return 'Due';
+  if (sourceType === 'OPERATIONAL_WORK_EVENT') return 'Changed';
+  return 'Recorded';
+}
+
 /**
  * A recent-change item must tell the homeowner something beyond the source
  * category. Category-only fallbacks such as "Property record updated" are

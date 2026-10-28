@@ -168,9 +168,8 @@ function ChangeSummaryCard({ block }: { block: ChangeSummary }) {
     : block.materiality === 'IMPORTANT' ? 'bg-amber-100 text-amber-900'
       : block.materiality === 'MEANINGFUL' ? 'bg-teal-50 text-teal-800'
         : 'bg-slate-100 text-slate-600';
-  const sameDate = block.effectiveAt
-    && new Date(block.effectiveAt).toLocaleDateString() === new Date(block.detectedAt).toLocaleDateString();
   const detailsId = `${block.id}-details`;
+  const displayDate = changeDate(block);
   return (
     <article className="border-b border-slate-200 last:border-b-0">
       <button
@@ -181,7 +180,7 @@ function ChangeSummaryCard({ block }: { block: ChangeSummary }) {
         onClick={() => setExpanded((value) => !value)}
       >
         <span className="hidden pt-0.5 text-xs font-medium text-slate-500 sm:inline-flex sm:items-center sm:gap-1.5">
-          <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />{dateHeading(block)}
+          <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />{block.dateLabel} {dateHeading(block)}
         </span>
         <span className="min-w-0">
           <span className="flex flex-wrap items-center gap-2">
@@ -190,7 +189,7 @@ function ChangeSummaryCard({ block }: { block: ChangeSummary }) {
           </span>
           <span className="mt-1 block text-sm leading-5 text-slate-700">{block.summary}</span>
           <span className="mt-1 inline-flex items-center gap-1.5 text-xs text-slate-500 sm:hidden">
-            <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />{dateHeading(block)} · {block.source}
+            <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />{block.dateLabel} {dateHeading(block)}
           </span>
         </span>
         <ChevronDown className={cn('mt-1 h-4 w-4 text-slate-500 transition-transform', expanded && 'rotate-180')} aria-hidden="true" />
@@ -198,9 +197,8 @@ function ChangeSummaryCard({ block }: { block: ChangeSummary }) {
       {expanded && (
         <div id={detailsId} className="pb-4 pl-1 pr-8 sm:ml-[7.75rem] sm:pl-3 sm:pr-12">
           <dl className="grid gap-x-6 gap-y-2 text-xs text-slate-600 sm:grid-cols-2">
-            <div><dt className="font-semibold text-slate-500">Source</dt><dd className="mt-0.5 text-slate-800">{block.source}</dd></div>
-            <div><dt className="font-semibold text-slate-500">Timing</dt><dd className="mt-0.5 text-slate-800">{sameDate ? `Recorded ${dateHeading(block)}` : `Detected ${new Date(block.detectedAt).toLocaleDateString()}${block.effectiveAt ? ` · effective ${new Date(block.effectiveAt).toLocaleDateString()}` : ''}`}</dd></div>
-            {block.materialityReasonCodes.length > 0 && <div className="sm:col-span-2"><dt className="font-semibold text-slate-500">Why it matters</dt><dd className="mt-0.5 text-slate-800">{block.materialityReasonCodes.map((code) => code.replace(/_/g, ' ').toLowerCase()).join(' · ')}</dd></div>}
+            <div className="sm:col-span-2"><dt className="font-semibold text-slate-500">Why this matters</dt><dd className="mt-0.5 text-slate-800">{block.whyItMatters}</dd></div>
+            <div><dt className="font-semibold text-slate-500">When</dt><dd className="mt-0.5 text-slate-800">{block.dateLabel} {displayDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</dd></div>
           </dl>
           {(block.reviewAction || block.linkedAction) && <div className="mt-3 flex flex-wrap items-center gap-3">
             {block.reviewAction && <ActionLink action={block.reviewAction} />}
@@ -213,18 +211,26 @@ function ChangeSummaryCard({ block }: { block: ChangeSummary }) {
 }
 
 export function ChangeSummaryList({ blocks }: { blocks: ChangeSummary[] }) {
+  const olderHistoryAction = blocks.flatMap((block) => block.actions).find((action) => action.operationId === 'HOME_TIMELINE_EVENTS');
   return (
     <section data-testid="change-summary-list" aria-label="Recent home changes" className="w-full max-w-6xl rounded-3xl border border-teal-100 bg-teal-50/30 p-4 sm:p-5">
       <div className="flex items-start gap-3">
         <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-teal-700 text-white shadow-sm" aria-hidden="true"><Sparkles className="h-5 w-5" /></span>
         <div>
-          <h2 className="text-lg font-semibold text-slate-950">Here’s what changed around your home</h2>
-          <p className="mt-1 text-sm leading-5 text-slate-600">I found {blocks.length} recent verified {blocks.length === 1 ? 'change' : 'changes'} with enough detail to review.</p>
+          <h2 className="text-lg font-semibold text-slate-950">Important changes from the last 30 days</h2>
+          <p className="mt-1 text-sm leading-5 text-slate-600">{blocks.length} recent {blocks.length === 1 ? 'update may' : 'updates may'} affect your home, priorities, or recommendations.</p>
         </div>
       </div>
       <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white/60">
         {blocks.map((block) => <ChangeSummaryCard key={block.id} block={block} />)}
       </div>
+      {olderHistoryAction && <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-teal-100 bg-white/70 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h3 className="text-sm font-semibold text-slate-900">Looking for older history?</h3>
+          <p className="mt-1 text-sm leading-5 text-slate-600">Home Timeline includes recorded repairs, improvements, purchases, inspections, and claims from earlier periods.</p>
+        </div>
+        <div className="shrink-0"><ActionLink action={olderHistoryAction} /></div>
+      </div>}
     </section>
   );
 }

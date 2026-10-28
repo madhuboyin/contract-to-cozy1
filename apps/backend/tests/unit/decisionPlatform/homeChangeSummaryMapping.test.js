@@ -7,6 +7,9 @@ const {
   sourceTypeLabel,
   buildChangeSummaryText,
   homeChangeDisplayTitle,
+  homeActionStateChangeSummary,
+  homeChangeWhyItMatters,
+  homeChangeDateLabel,
   hasSpecificHomeChangeContent,
   homeChangeLinkedAction,
   homeChangeCanonicalIdentity,
@@ -71,6 +74,15 @@ test('category-only change content is withheld from the homeowner-facing summary
   assert.equal(hasSpecificHomeChangeContent({
     title: 'Kitchen renovation', source: 'Project', summary: 'Kitchen renovation is now in progress.',
   }), true);
+});
+
+test('home-action states and materiality reasons use homeowner-facing language', () => {
+  assert.equal(homeActionStateChangeSummary('IN_PROGRESS'), 'The work started.');
+  assert.equal(homeActionStateChangeSummary('ACCEPTED'), 'Added to your home priorities.');
+  assert.equal(homeChangeWhyItMatters(['CANONICAL_ACTION_NOW'], 'URGENT'), 'This home priority needs attention now.');
+  assert.equal(homeChangeWhyItMatters(['UNKNOWN_INTERNAL_CODE'], 'IMPORTANT'), 'This change is worth reviewing soon.');
+  assert.equal(homeChangeDateLabel('OPERATIONAL_WORK_DUE'), 'Due');
+  assert.equal(homeChangeDateLabel('OPERATIONAL_WORK_EVENT'), 'Changed');
 });
 
 test('linked changes deep-link to their exact canonical work item or event', () => {

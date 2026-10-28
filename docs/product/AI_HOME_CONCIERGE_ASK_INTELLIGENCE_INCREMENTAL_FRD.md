@@ -1320,13 +1320,19 @@ disposable, non-authoritative cache rather than a durable model. In-product only
 delivery path exists for this operation. The defined precision/recall targets have no measurement
 pipeline computing them yet. The Ask surface presents consecutive `CHANGE_SUMMARY` blocks as one
 compact, chronological disclosure list with a short answer lead-in. Each row keeps the specific change,
-timing, and materiality visible, while source lineage, materiality reasons, and actions expand in place.
+homeowner-readable date meaning, and materiality visible. Expanded content explains why the change matters
+without exposing internal source names, detection terminology, or materiality reason codes. A Home Action
+state uses concise change copy such as “The work started,” never a repetition of its title.
 Category-only fallbacks such as “Property record updated” are withheld because they do not answer the
 homeowner's question. Qualifying rows use the linked canonical Home Action or Home Event title when
 available and deep-link to the exact canonical work item or event rather than the general dashboard. Operational Work rows created before canonical
 action links were recorded recover the title and exact action link from their property-scoped source
 work item; replaying the source revision also repairs the missing canonical link. The list becomes a
 stacked disclosure on narrow screens and remains conversational rather than becoming an administrative table.
+The answer always identifies its rolling 30-day scope and ends with one governed “View older home history”
+continuation into `HOME_TIMELINE_EVENTS`. That continuation defines Home Timeline as the durable record of
+repairs, improvements, purchases, inspections, and claims from earlier periods; it is semantically deduplicated
+from the general suggested-next-action row.
 
 ### Phase 9B — P1/P2 Priority Intelligence and Concierge Home
 

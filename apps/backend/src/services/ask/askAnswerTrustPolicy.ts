@@ -177,6 +177,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   PROJECT_TRACKER_COMMAND: new Set(['project-tracker-show-projects']),
   SERVICE_PRICE_CHECKS: new Set(['check-service-quote', 'service-price-check-negotiate']),
   HOME_TIMELINE_EVENTS: new Set(['home-timeline-log-event', 'correct-title', 'correct-occurredAt', 'correct-summary', 'correct-visibility']),
+  HOME_CHANGE_SUMMARY: new Set(['home-change-older-history']),
   MATERIAL_SPECS_LIST: new Set(['add-material-spec']),
   GUIDANCE_JOURNEYS_LIST: new Set(['start-guided-plan']),
   GUIDANCE_JOURNEY_CONTINUE: new Set(['continue-step-in-ask', 'resolve-missing-context-1', 'resolve-missing-context-2', 'skip-guided-journey-step', 'dismiss-guided-journey']),

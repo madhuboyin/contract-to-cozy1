@@ -29,7 +29,7 @@ import { hvacDecisionStartResult } from '../handlers/hvacDecision.handler';
 import { extractMaintenanceCompletionInput, maintenanceCompletionMatch, maintenanceMonitorSubject, maintenanceTaskCompleteResult, maintenanceTaskUpdateResult, maintenanceTaskVersion, maintenanceWorkflowVersion } from '../handlers/maintenance.handler';
 import * as decisionPreferenceService from '../../decisionPlatform/decisionPreferenceService';
 import { listPropertyChanges } from '../../../propertyChanges/propertyChange.service';
-import { buildChangeSummaryText, hasSpecificHomeChangeContent, homeChangeCanonicalIdentity, homeChangeDisplayTitle, homeChangeInlineReviewAction, homeChangeLinkedAction, liveHomeChangeCanonicalIdentity, resolveLiveHomeChangeAction, selectUniqueHomeChanges, shouldIncludeHomeChange, sourceTypeLabel } from '../../decisionPlatform/homeChangeSummaryMapping';
+import { buildChangeSummaryText, hasSpecificHomeChangeContent, homeActionStateChangeSummary, homeChangeCanonicalIdentity, homeChangeDateLabel, homeChangeDisplayTitle, homeChangeInlineReviewAction, homeChangeLinkedAction, homeChangeWhyItMatters, liveHomeChangeCanonicalIdentity, resolveLiveHomeChangeAction, selectUniqueHomeChanges, shouldIncludeHomeChange, sourceTypeLabel } from '../../decisionPlatform/homeChangeSummaryMapping';
 import { getHomeActionFeed } from '../../homeActions.service';
 import { type SkillExecutionTimingTrace } from '../../skills/skillExecutionTelemetry';
 import { resolveAskEnvelopeQueryScope } from '../askEnvelopeQueryScope';
@@ -388,6 +388,16 @@ const HOME_CHANGE_SUMMARY_COVERED_SOURCES = [
   'maintenance records', 'Home Actions', 'HVAC repair/replace recommendations', 'saved decision preferences',
 ];
 
+const olderHomeHistoryAction = {
+  id: 'home-change-older-history',
+  label: 'View older home history',
+  interactionType: 'START_WORKFLOW' as const,
+  message: 'Show my home timeline',
+  operationId: 'HOME_TIMELINE_EVENTS',
+  outcomeKey: 'REVIEW_HOME_TIMELINE',
+  style: 'QUIET' as const,
+};
+
 async function homeChangeSummaryResult(userId: string, propertyId: string): Promise<AskOperationResult> {
   await ensurePropertyAccess(userId, propertyId);
   const since = new Date(Date.now() - HOME_CHANGE_SUMMARY_WINDOW_DAYS * 24 * 60 * 60 * 1000);
@@ -404,7 +414,7 @@ async function homeChangeSummaryResult(userId: string, propertyId: string): Prom
       blocks: [{
         type: 'SUMMARY', id: 'home-change-summary-unavailable', title: 'Recent home changes are temporarily unavailable',
         body: 'Ask could not verify recent change records against the current governed Home Action feed, so it will not show possibly stale or duplicate cards.',
-        tone: 'CAUTION', actions: [],
+        tone: 'CAUTION', actions: [olderHomeHistoryAction],
       }],
       suggestions: [],
     };
@@ -417,7 +427,7 @@ async function homeChangeSummaryResult(userId: string, propertyId: string): Prom
       blocks: [{
         type: 'EMPTY_STATE', id: 'home-change-summary-empty', title: 'No material changes in the last 30 days',
         body: `This covers ${HOME_CHANGE_SUMMARY_COVERED_SOURCES.join(', ')}. It is not a confirmation that nothing at all happened at this property -- only that no material change was recorded in these sources.`,
-        actions: [],
+        actions: [olderHomeHistoryAction],
       }],
       suggestions: [],
     };
@@ -470,7 +480,7 @@ async function homeChangeSummaryResult(userId: string, propertyId: string): Prom
       blocks: [{
         type: 'EMPTY_STATE', id: 'home-change-summary-empty', title: 'No current material changes to review',
         body: 'Recent Operational Work ledger entries no longer map to an active governed Home Action. Ask has left them out rather than presenting expired work or a review control that cannot open.',
-        actions: [],
+        actions: [olderHomeHistoryAction],
       }],
       suggestions: [],
     };
@@ -485,11 +495,18 @@ async function homeChangeSummaryResult(userId: string, propertyId: string): Prom
     const source = sourceTypeLabel(change.sourceType);
     const fallbackWorkItem = fallbackWorkItems.get(change.sourceEntityId);
     const title = homeChangeDisplayTitle({ sourceType: change.sourceType, canonicalActionTitle: change.canonicalAction?.title ?? fallbackWorkItem?.title, canonicalEventTitle: change.canonicalEvent?.title });
-    if (!detailOverride && change.canonicalAction?.title && change.changeType === 'ACTION_STATE_CHANGED') {
-      detailOverride = `${change.canonicalAction.title} is now ${change.canonicalAction.state.replace(/_/g, ' ').toLowerCase()}.`;
+    if (!detailOverride && change.canonicalAction?.title && change.sourceType === 'OPERATIONAL_WORK_DUE') {
+      detailOverride = 'The due date is approaching.';
+    } else if (!detailOverride && change.canonicalAction?.title && change.changeType === 'OUTCOME_CONFIRMED') {
+      detailOverride = 'Completion was verified.';
+    } else if (!detailOverride && change.canonicalAction?.title && change.changeType === 'SOURCE_RECORD_CREATED') {
+      detailOverride = 'A new home priority was identified.';
+    } else if (!detailOverride && change.canonicalAction?.title && change.changeType === 'ACTION_STATE_CHANGED') {
+      detailOverride = homeActionStateChangeSummary(change.canonicalAction.state);
     } else if (!detailOverride && change.canonicalEvent?.title) {
-      const eventVerb = change.changeType === 'SOURCE_RECORD_CREATED' ? 'was added' : 'was updated';
-      detailOverride = `${change.canonicalEvent.title} ${eventVerb}.`;
+      detailOverride = change.changeType === 'SOURCE_RECORD_CREATED'
+        ? 'Added to your Home Timeline.'
+        : 'The recorded timeline event was updated.';
     }
     const linkedAction = homeChangeLinkedAction({ propertyId, canonicalActionId, canonicalEventId: change.canonicalEvent?.id });
     const reviewAction = liveAction
@@ -507,9 +524,12 @@ async function homeChangeSummaryResult(userId: string, propertyId: string): Prom
       detectedAt: change.detectedAt.toISOString(),
       materiality: change.materiality,
       materialityReasonCodes: change.materialityReasonCodes,
+      whyItMatters: homeChangeWhyItMatters(change.materialityReasonCodes, change.materiality),
+      dateLabel: homeChangeDateLabel(change.sourceType),
       confidence: change.confidence,
       linkedAction,
       reviewAction,
+      actions: [olderHomeHistoryAction],
     };
   }));
   const changeBlocks = candidateBlocks
@@ -521,15 +541,15 @@ async function homeChangeSummaryResult(userId: string, propertyId: string): Prom
       blocks: [{
         type: 'EMPTY_STATE', id: 'home-change-summary-empty', title: 'No recent changes with enough detail to show',
         body: 'Recent records were detected, but they did not identify a specific verified change. Ask left them out rather than showing labels such as “Property record updated” without useful context.',
-        actions: [],
+        actions: [olderHomeHistoryAction],
       }],
       suggestions: [],
     };
   }
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY', id: 'home-change-summary',
-    title: `${changeBlocks.length} material change${changeBlocks.length === 1 ? '' : 's'} in the last 30 days`,
-    body: `These changes were reconciled against the current governed Home Action feed and deduplicated by canonical identity. This covers ${HOME_CHANGE_SUMMARY_COVERED_SOURCES.join(', ')}.`,
+    title: `${changeBlocks.length} important change${changeBlocks.length === 1 ? '' : 's'} from the last 30 days`,
+    body: 'These are recent updates that may affect your home, priorities, or recommendations. For older recorded repairs, improvements, purchases, inspections, and claims, use Home Timeline.',
     tone: 'DEFAULT', actions: [],
   }, ...changeBlocks];
 

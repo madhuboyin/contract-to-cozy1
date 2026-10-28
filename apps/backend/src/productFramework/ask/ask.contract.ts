@@ -824,9 +824,12 @@ const ChangeSummaryBlockSchema = z.object({
   detectedAt: z.string(),
   materiality: z.enum(['INFORMATIONAL', 'MEANINGFUL', 'IMPORTANT', 'URGENT']),
   materialityReasonCodes: z.array(z.string()).max(12),
+  whyItMatters: z.string().trim().min(1).max(400),
+  dateLabel: z.enum(['Changed', 'Due', 'Recorded']),
   confidence: z.number().min(0).max(1).nullable(),
   linkedAction: z.object({ label: z.string(), href: z.string() }).nullable(),
   reviewAction: AskActionSchema.nullable(),
+  actions: z.array(AskActionSchema).max(1).default([]),
 });
 
 // Ask Intelligence FRD §17/§21.2, Phase 9B. Renders the versioned,
