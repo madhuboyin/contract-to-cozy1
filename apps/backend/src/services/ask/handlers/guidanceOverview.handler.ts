@@ -1,7 +1,7 @@
 // Moved out of askOrchestrator.service.ts unchanged (decomposition phase 1, FRD v1.98;
 // docs/architecture/ASK_ORCHESTRATOR_DECOMPOSITION_REVIEW.md). The handler registers itself, and the orchestrator
 // re-exports the names below so existing imports keep working.
-import { type AskPresentationBlock, type CreateAskExecutionRequest } from '../../../productFramework/ask/ask.contract';
+import { type AskCaptureRequest, type AskPresentationBlock, type CreateAskExecutionRequest } from '../../../productFramework/ask/ask.contract';
 import { type AskOperationResult } from '../askOperationRegistry';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { guidanceJourneyService } from '../../guidanceEngine/guidanceJourney.service';
@@ -20,6 +20,10 @@ import { HIDDEN_STEP_REASON_CODES, getStepSkipPolicy } from '../../guidanceEngin
 import { getGuidanceModels } from '../../guidanceEngine/guidanceTypes';
 import { collectionDescriptor } from '../support/collectionDescriptor';
 import { classifyGuidanceContextKey, reportUnclassifiedGuidanceContextKey } from '../askGuidanceContextKeys';
+import {
+  GUIDANCE_DISMISS_REASONS, GUIDANCE_JOURNEY_DISMISS_REASON_CAPTURE_KEY, GUIDANCE_JOURNEY_RESTORE_ACTION_ID, GUIDANCE_JOURNEY_RESTORE_MESSAGE, GuidanceDismissReasonAnswerSchema,
+  dismissalReasonText,
+} from '../support/guidanceJourneyRestore';
 
 // Guidance Overview capability-card slice (FRD v1.65, product option A): reads guidanceJourneyService.getPropertyGuidance
 // and then drops journeys whose primary signal the protection-context reconciliation suppresses -- what
@@ -50,7 +54,7 @@ const GUIDANCE_READINESS_LABELS: Record<string, string> = { NOT_READY: 'Blocked'
 /** The declared action on an empty journeys list. It starts the existing GUIDANCE_JOURNEY_CREATE, which asks which recorded item or approved service the plan covers and confirms before anything is created. */
 export const GUIDANCE_START_ACTION = { id: 'start-guided-plan', label: 'Start a guided plan', message: 'Start a guided plan.' } as const;
 
-export function guidanceJourneysFromView(payload: Pick<GuidancePayload, 'journeys' | 'next'>, suppressedSignalIds: ReadonlySet<string>, propertyId: string, canStart = false): AskOperationResult {
+export function guidanceJourneysFromView(payload: Pick<GuidancePayload, 'journeys' | 'next'>, suppressedSignalIds: ReadonlySet<string>, propertyId: string, canStart = false, recentlyDismissed: any[] = []): AskOperationResult {
   // Starting a journey is the existing confirmation-gated GUIDANCE_JOURNEY_CREATE; it asks which recorded item or service the plan should cover. A viewer is offered nothing.
   const startActions = canStart ? [{ id: GUIDANCE_START_ACTION.id, label: GUIDANCE_START_ACTION.label, interactionType: 'START_WORKFLOW' as const, message: GUIDANCE_START_ACTION.message, operationId: 'GUIDANCE_JOURNEY_CREATE', style: 'PRIMARY' as const }] : [];
   const boundary: AskPresentationBlock = {
@@ -59,6 +63,19 @@ export function guidanceJourneysFromView(payload: Pick<GuidancePayload, 'journey
     severity: 'INFO', suggestions: [],
   };
   const journeys = (payload.journeys as any[]).filter((journey) => journey.status !== 'DISMISSED' && !suppressedSignalIds.has(journey.primarySignalId));
+  // Set-aside journeys can be brought back (FRD v1.462): the most recent few, to a contributor or owner only, each with its own declared action.
+  const setAside: AskPresentationBlock[] = canStart && recentlyDismissed.length ? [{
+    type: 'GROUPED_LIST', filters: [], id: 'guidance-journeys-set-aside', title: 'Set aside recently',
+    description: 'You dismissed these. Bringing one back returns it to where it was, with its steps and history.',
+    sections: [{ id: 'guidance-journeys-dismissed', title: 'Dismissed', count: recentlyDismissed.length, items: recentlyDismissed.map((journey) => ({
+      id: journey.id, title: journeyTitleFor(journey),
+      description: journey.dismissedAt ? `Dismissed ${new Date(journey.dismissedAt).toISOString().slice(0, 10)}` : 'Dismissed',
+      meta: journey.dismissedReason ? [`Reason: ${journey.dismissedReason}`] : [], status: null, href: null, entityType: 'GUIDANCE_JOURNEY',
+      // A row action that writes is a MUTATE_RECORD, as on the other lists.
+      actions: [{ ...restoreJourneyAction(journey.id), label: 'Bring back', interactionType: 'MUTATE_RECORD' as const }],
+    })) }],
+    actions: [],
+  }] : [];
   if (!journeys.length) {
     return {
       status: 'ANSWERED', reasonCode: 'GUIDANCE_JOURNEYS_EMPTY',
@@ -68,7 +85,7 @@ export function guidanceJourneysFromView(payload: Pick<GuidancePayload, 'journey
           ? 'A guided journey walks through a home issue step by step, such as an aging system, a coverage gap or an inspection follow-up. Start one and say which recorded item or service it should cover; nothing is started until you confirm.'
           : 'A guided journey walks through a home issue step by step, such as an aging system, a coverage gap or an inspection follow-up. None is in progress, and a contributor or owner of this home can start one.',
         tone: 'DEFAULT', actions: startActions,
-      }, boundary],
+      }, ...setAside, boundary],
       suggestions: [],
     };
   }
@@ -128,17 +145,18 @@ export function guidanceJourneysFromView(payload: Pick<GuidancePayload, 'journey
       sections,
       collection: collectionDescriptor({ sourceTotal: rows.length, fetchedCount: rows.length, sections, nextPageAvailable: false }),
       actions: [],
-    }, boundary],
+    }, ...setAside, boundary],
     suggestions: [],
   };
 }
 
 async function guidanceJourneysResult(propertyId: string, userId: string, canStart: boolean): Promise<AskOperationResult> {
-  const [payload, protectionContext] = await Promise.all([
+  const [payload, protectionContext, recentlyDismissed] = await Promise.all([
     guidanceJourneyService.getPropertyGuidance(propertyId, {}),
     getProtectionContextDecisions(propertyId, userId),
+    canStart ? guidanceJourneyService.listRecentlyDismissedJourneys(propertyId) : Promise.resolve([]),
   ]);
-  return guidanceJourneysFromView(payload, new Set(protectionContext.reconciliation.suppressedGuidanceSignalIds), propertyId, canStart);
+  return guidanceJourneysFromView(payload, new Set(protectionContext.reconciliation.suppressedGuidanceSignalIds), propertyId, canStart, recentlyDismissed);
 }
 
 registerCapabilityHandler('guidance-overview.journeys', async (envelope, deps) => {
@@ -154,12 +172,17 @@ registerCapabilityHandler('guidance-overview.journeys', async (envelope, deps) =
 // step is finished on the homeowner's word: the steps link to their tools.
 export const GUIDANCE_STEP_SKIP_MESSAGE = 'Skip this guided journey step.';
 export const GUIDANCE_JOURNEY_DISMISS_MESSAGE = 'Dismiss this guided journey.';
+/** The declared "Bring back" action on a dismissed journey (FRD v1.462). It runs through GUIDANCE_JOURNEY_DISMISS, told apart by its message. */
+const restoreJourneyAction = (journeyId: string, style: 'PRIMARY' | 'SECONDARY' | 'QUIET' = 'SECONDARY') => ({
+  id: GUIDANCE_JOURNEY_RESTORE_ACTION_ID, label: 'Bring this journey back', interactionType: 'START_WORKFLOW' as const, message: GUIDANCE_JOURNEY_RESTORE_MESSAGE,
+  operationId: 'GUIDANCE_JOURNEY_DISMISS' as const, entityType: 'GUIDANCE_JOURNEY', entityId: journeyId, style,
+});
 
 type ContinueGuard = { blocked: boolean; blockedReason: string | null; targetAction: string } | null;
 
 const ENDED_JOURNEY_TEXT: Record<string, [string, string, string]> = {
   COMPLETED: ['GUIDANCE_JOURNEY_COMPLETED', 'This guided journey is complete', 'Every required step is done. Nothing further is needed here.'],
-  DISMISSED: ['GUIDANCE_JOURNEY_DISMISSED', 'This guided journey was dismissed', 'It was set aside, so Ask will not continue it. A new one can be started from your guided journeys list.'],
+  DISMISSED: ['GUIDANCE_JOURNEY_DISMISSED', 'This guided journey was dismissed', 'It was set aside, so Ask will not continue it unless you bring it back.'],
   ABORTED: ['GUIDANCE_JOURNEY_ENDED', 'This guided journey was stopped', 'It is no longer active, so Ask will not continue it.'],
   ARCHIVED: ['GUIDANCE_JOURNEY_ENDED', 'This guided journey is archived', 'It is no longer active, so Ask will not continue it.'],
 };
@@ -191,7 +214,7 @@ export function guidanceJourneyContinuation(journey: any, propertyId: string, op
   if (ended) {
     return {
       status: 'ANSWERED', reasonCode: ended[0],
-      blocks: [{ type: 'SUMMARY', id: 'guidance-journey-summary', title: ended[1], body: `${title}. ${ended[2]}`, tone: 'DEFAULT', actions: [] }, boundary('Guidance is a suggested path built from what is recorded for this home, not a professional assessment.')],
+      blocks: [{ type: 'SUMMARY', id: 'guidance-journey-summary', title: ended[1], body: `${title}. ${ended[2]}`, tone: 'DEFAULT', actions: journey.status === 'DISMISSED' && options.canContribute === true ? [restoreJourneyAction(journey.id, 'PRIMARY')] : [] }, boundary('Guidance is a suggested path built from what is recorded for this home, not a professional assessment.')],
       suggestions: [],
     };
   }
@@ -430,7 +453,22 @@ async function guidanceStepSkipResult(userId: string, propertyId: string, messag
   };
 }
 
-async function guidanceJourneyDismissResult(userId: string, propertyId: string, message: string, launchContext?: CreateAskExecutionRequest['launchContext']): Promise<AskOperationResult> {
+function dismissReasonCapture(contextVersion: string, entered?: Record<string, unknown>): AskCaptureRequest {
+  return {
+    requirementId: 'guidance-journey-dismiss-reason-inputs', captureKey: GUIDANCE_JOURNEY_DISMISS_REASON_CAPTURE_KEY, classification: 'WORKFLOW_INPUT', state: 'UNKNOWN',
+    title: 'Why are you setting this aside?', question: 'You can tell us why, or just continue without saying.',
+    helpText: 'Optional. It is feedback only: it is not treated as a fact about your home and changes nothing else. Please leave out payment or personal identification details.',
+    inputSchema: { type: 'GROUP', fields: [
+      { key: 'reason', label: 'Reason', required: false, inputSchema: { type: 'SINGLE_SELECT', options: GUIDANCE_DISMISS_REASONS.map((entry) => ({ label: entry.label, value: entry.value })) } },
+      { key: 'note', label: 'Anything to add (optional)', required: false, inputSchema: { type: 'SHORT_TEXT', maxLength: 300 } },
+    ] } as unknown as AskCaptureRequest['inputSchema'],
+    currentAnswer: entered ?? {}, allowNotSure: false, sensitivity: 'STANDARD',
+    destinationLabel: 'Used to prepare this change; nothing is saved until you confirm', confirmationText: null, expectedContextVersion: contextVersion,
+  };
+}
+
+export async function guidanceJourneyDismissResult(userId: string, propertyId: string, message: string, launchContext?: CreateAskExecutionRequest['launchContext'], supplied?: Record<string, unknown>): Promise<AskOperationResult> {
+  if (message.trim() === GUIDANCE_JOURNEY_RESTORE_MESSAGE) return guidanceJourneyRestoreResult(userId, propertyId, launchContext);
   const access = await ensurePropertyAccess(userId, propertyId);
   const journeyId = launchContext?.entityType === 'GUIDANCE_JOURNEY' ? launchContext.entityId : null;
   const declared = launchContext?.operationId === 'GUIDANCE_JOURNEY_DISMISS' && launchContext.surface !== 'ASK_REFRESH' && message.trim() === GUIDANCE_JOURNEY_DISMISS_MESSAGE;
@@ -446,17 +484,68 @@ async function guidanceJourneyDismissResult(userId: string, propertyId: string, 
   }
   const contextVersion = guidanceJourneyDismissContextVersion(journey);
   const expiresAt = new Date(Date.now() + 30 * 60_000);
+  const launchParameters = { guidanceJourneyDismissLaunch: { journeyId: journey.id, sourceExecutionId: launchContext?.sourceExecutionId ?? null } };
+  // The reason is optional (owner ruling D3b): the form is asked once, and submitting it empty, or choosing "rather not say", dismisses with no reason.
+  if (!supplied) {
+    return {
+      status: 'NEEDS_CONTEXT', reasonCode: 'GUIDANCE_JOURNEY_DISMISS_REASON_REQUESTED', contextVersion, parameters: launchParameters,
+      blocks: [{ type: 'SUMMARY', id: 'guidance-journey-dismiss-reason', title: `Dismiss ${journeyTitleFor(journey)}?`, body: 'Nothing has changed yet. You can say why, or continue without saying.', tone: 'DEFAULT', actions: [] }],
+      captureRequests: [dismissReasonCapture(contextVersion)], suggestions: [],
+    };
+  }
+  const answer = GuidanceDismissReasonAnswerSchema.safeParse(supplied);
+  if (!answer.success) return guidanceWriteBoundary(propertyId, 'Check the reason', 'Choose one of the listed reasons, or leave it blank. Nothing was changed.', 'NOT_APPLICABLE', 'GUIDANCE_JOURNEY_DISMISS_REASON_INVALID');
+  const reasonText = dismissalReasonText(answer.data);
   return {
     status: 'NEEDS_CONFIRMATION', reasonCode: 'GUIDANCE_JOURNEY_DISMISS_CONFIRMATION_REQUIRED', contextVersion,
     parameters: {
-      guidanceJourneyId: journey.id, guidanceJourneyDismissContextVersion: contextVersion, sourceExecutionId: launchContext?.sourceExecutionId ?? null,
-      confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString(),
+      guidanceJourneyId: journey.id, guidanceJourneyDismissContextVersion: contextVersion, guidanceJourneyDismissReason: reasonText, ...launchParameters,
+      sourceExecutionId: launchContext?.sourceExecutionId ?? null, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString(),
     },
-    blocks: [{ type: 'SUMMARY', id: 'guidance-journey-dismiss-review', title: `Review dismissing ${journeyTitleFor(journey)}`, body: 'Nothing has changed yet. A dismissed journey leaves your guided journeys list, and Ask cannot reopen it; a new plan can be started later.', tone: 'CAUTION', actions: [] }],
+    blocks: [{ type: 'SUMMARY', id: 'guidance-journey-dismiss-review', title: `Review dismissing ${journeyTitleFor(journey)}`, body: 'Nothing has changed yet. A dismissed journey leaves your guided journeys list, and you can bring it back later with its steps and history.', tone: 'CAUTION', actions: [] }],
     confirmation: {
-      confirmationId: `guidance-journey-dismiss-${journey.id}-1`, version: 1, title: 'Dismiss this guided journey?', description: `${journeyTitleFor(journey)}. A dismissed journey cannot be reopened; a new plan can be started later.`,
-      fields: [{ label: 'Journey', value: journeyTitleFor(journey) }],
+      confirmationId: `guidance-journey-dismiss-${journey.id}-1`, version: 1, title: 'Dismiss this guided journey?', description: `${journeyTitleFor(journey)}. You can bring it back later; its steps and history are kept.`,
+      fields: [{ label: 'Journey', value: journeyTitleFor(journey) }, { label: 'Reason', value: reasonText ?? 'None given' }],
       editableFields: [], confirmLabel: 'Dismiss journey', consentText: 'I do not want to pursue this guided journey.', expiresAt: expiresAt.toISOString(),
+    },
+    captureRequests: [dismissReasonCapture(contextVersion, answer.data as unknown as Record<string, unknown>)],
+    suggestions: [],
+  };
+}
+
+/** Brings a dismissed journey back (owner ruling D3a): the same journey, to where it was, only while it is still valid; otherwise it says why and a new one can be started. */
+async function guidanceJourneyRestoreResult(userId: string, propertyId: string, launchContext?: CreateAskExecutionRequest['launchContext']): Promise<AskOperationResult> {
+  const access = await ensurePropertyAccess(userId, propertyId);
+  const journeyId = launchContext?.entityType === 'GUIDANCE_JOURNEY' ? launchContext.entityId : null;
+  const declared = launchContext?.operationId === 'GUIDANCE_JOURNEY_DISMISS' && launchContext.surface !== 'ASK_REFRESH';
+  if (!journeyId || !declared) return guidanceWriteBoundary(propertyId, 'Choose the journey first', 'Open the guided journey and use its own action. Nothing was changed.', 'NOT_APPLICABLE', 'GUIDANCE_JOURNEY_REQUIRED');
+  if (access.role === HouseholdRole.VIEWER) return guidanceWriteBoundary(propertyId, 'A contributor or owner is needed', 'Only a contributor or owner can bring a journey back in Ask. Nothing was changed.', 'BLOCKED', 'GUIDANCE_JOURNEY_PERMISSION_REQUIRED');
+  let assessment;
+  try { assessment = await guidanceJourneyService.assessJourneyRestoration(propertyId, journeyId); } catch (error: any) {
+    if (error?.code === 'GUIDANCE_JOURNEY_NOT_FOUND') return guidanceWriteBoundary(propertyId, 'This journey is no longer available', 'It was removed or does not belong to this home. Nothing was changed.', 'NOT_APPLICABLE', 'GUIDANCE_JOURNEY_NOT_FOUND');
+    throw error;
+  }
+  const title = journeyTitleFor(assessment.journey);
+  if (assessment.outcome === 'ALREADY_OPEN') {
+    return { status: 'COMPLETED', reasonCode: 'GUIDANCE_JOURNEY_ALREADY_RESTORED', blocks: [{ type: 'WORKFLOW_PROGRESS', id: `guidance-journey-restore-${assessment.journey.id}`, title: 'Already back', status: 'COMPLETED', description: 'This journey is already open. Nothing was changed.', details: [{ label: 'Journey', value: title }], actions: [] }], suggestions: [] };
+  }
+  if (assessment.outcome === 'NOT_RESTORABLE') {
+    return {
+      status: 'NOT_APPLICABLE', reasonCode: assessment.reasonCode,
+      blocks: [{ type: 'BOUNDARY', id: 'guidance-step-boundary', title: 'This journey cannot be brought back', body: `${assessment.message} Nothing was changed, and a new guided plan can be started instead.`, severity: 'INFO', suggestions: ['Start a guided plan', 'Show my guided journeys'] }],
+      suggestions: [],
+    };
+  }
+  const contextVersion = guidanceJourneyDismissContextVersion(assessment.journey);
+  const expiresAt = new Date(Date.now() + 30 * 60_000);
+  return {
+    status: 'NEEDS_CONFIRMATION', reasonCode: 'GUIDANCE_JOURNEY_RESTORE_CONFIRMATION_REQUIRED', contextVersion,
+    parameters: { guidanceJourneyRestoreId: assessment.journey.id, guidanceJourneyRestoreContextVersion: contextVersion, sourceExecutionId: launchContext?.sourceExecutionId ?? null, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() },
+    blocks: [{ type: 'SUMMARY', id: 'guidance-journey-restore-review', title: `Review bringing back ${title}`, body: 'Nothing has changed yet. The journey returns to where it was, with its steps and history.', tone: 'DEFAULT', actions: [] }],
+    confirmation: {
+      confirmationId: `guidance-journey-restore-${assessment.journey.id}-1`, version: 1, title: 'Bring this guided journey back?', description: `${title}. It returns to ${assessment.restoreTo === 'NOT_STARTED' ? 'not started' : 'in progress'}, as it was before it was dismissed.`,
+      fields: [{ label: 'Journey', value: title }, ...(assessment.dismissedReason ? [{ label: 'You dismissed it because', value: assessment.dismissedReason }] : [])],
+      editableFields: [], confirmLabel: 'Bring it back', consentText: 'I want to continue this guided journey.', expiresAt: expiresAt.toISOString(),
     },
     suggestions: [],
   };
@@ -502,7 +591,29 @@ async function confirmGuidanceStepSkip(ctx: ConfirmCapabilityContext): Promise<C
   }, alreadyApplied ? 'GUIDANCE_STEP_ALREADY_SKIPPED' : 'GUIDANCE_STEP_SKIPPED', 'GUIDANCE_JOURNEY_STEP');
 }
 
+async function confirmGuidanceJourneyRestore(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
+  const { execution, userId, parameters, access } = ctx;
+  if (access.role === HouseholdRole.VIEWER) throw guidanceWriteError('A contributor or owner is required to bring a journey back in Ask.', 'ASK_PERMISSION_REQUIRED');
+  const journeyId = typeof parameters.guidanceJourneyRestoreId === 'string' ? parameters.guidanceJourneyRestoreId : null;
+  if (!journeyId) throw guidanceWriteError('The journey selection is invalid.', 'ASK_CONFIRMATION_NOT_ACTIVE');
+  const journey = await loadGuidanceJourneyForWrite(execution.propertyId, journeyId);
+  if (!journey) throw guidanceWriteError('This guided journey is no longer available.', 'ASK_CONTEXT_VERSION_CONFLICT');
+  const alreadyApplied = journey.status !== 'DISMISSED';
+  if (!alreadyApplied) {
+    if (parameters.guidanceJourneyRestoreContextVersion !== guidanceJourneyDismissContextVersion(journey)) {
+      throw guidanceWriteError('This journey changed while confirmation was open. Review it and try again.', 'ASK_CONTEXT_VERSION_CONFLICT');
+    }
+    try { await guidanceJourneyService.restoreJourney(execution.propertyId, journeyId, userId); } catch (error) { guidanceServiceRefusal(error); }
+  }
+  return guidanceWriteReceipt(ctx, journey.id, {
+    type: 'WORKFLOW_PROGRESS', id: `guidance-journey-restore-${journey.id}`, title: alreadyApplied ? 'Already back' : 'Journey brought back', status: 'COMPLETED',
+    description: alreadyApplied ? 'Nothing was changed.' : 'It is open again, where it was, with its steps and history.',
+    details: [{ label: 'Journey', value: journeyTitleFor(journey) }], actions: [],
+  }, alreadyApplied ? 'GUIDANCE_JOURNEY_ALREADY_RESTORED' : 'GUIDANCE_JOURNEY_RESTORED', 'GUIDANCE_JOURNEY');
+}
+
 async function confirmGuidanceJourneyDismiss(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
+  if (typeof ctx.parameters.guidanceJourneyRestoreId === 'string') return confirmGuidanceJourneyRestore(ctx);
   const { execution, userId, parameters, access } = ctx;
   if (access.role === HouseholdRole.VIEWER) throw guidanceWriteError('A contributor or owner is required to dismiss a journey in Ask.', 'ASK_PERMISSION_REQUIRED');
   const journeyId = typeof parameters.guidanceJourneyId === 'string' ? parameters.guidanceJourneyId : null;
@@ -514,12 +625,14 @@ async function confirmGuidanceJourneyDismiss(ctx: ConfirmCapabilityContext): Pro
     if (parameters.guidanceJourneyDismissContextVersion !== guidanceJourneyDismissContextVersion(journey)) {
       throw guidanceWriteError('This journey changed while confirmation was open. Review it and try again.', 'ASK_CONTEXT_VERSION_CONFLICT');
     }
-    await guidanceJourneyService.dismissJourney(execution.propertyId, journeyId, userId, null);
+    // The optional reason was re-validated into text when the confirmation was prepared; it is feedback only and never blocks the dismissal.
+    const reason = typeof parameters.guidanceJourneyDismissReason === 'string' && parameters.guidanceJourneyDismissReason.trim() ? parameters.guidanceJourneyDismissReason.trim().slice(0, 500) : null;
+    await guidanceJourneyService.dismissJourney(execution.propertyId, journeyId, userId, reason);
   }
   return guidanceWriteReceipt(ctx, journey.id, {
     type: 'WORKFLOW_PROGRESS', id: `guidance-journey-dismiss-${journey.id}`, title: alreadyApplied ? 'Already dismissed' : 'Journey dismissed', status: 'COMPLETED',
-    description: alreadyApplied ? 'Nothing was changed.' : 'It no longer appears in your guided journeys.',
-    details: [{ label: 'Journey', value: journeyTitleFor(journey) }], actions: [],
+    description: alreadyApplied ? 'Nothing was changed.' : 'It no longer appears in your guided journeys. You can bring it back at any time.',
+    details: [{ label: 'Journey', value: journeyTitleFor(journey) }], actions: alreadyApplied ? [] : [restoreJourneyAction(journey.id)],
   }, alreadyApplied ? 'GUIDANCE_JOURNEY_ALREADY_DISMISSED' : 'GUIDANCE_JOURNEY_DISMISSED', 'GUIDANCE_JOURNEY');
 }
 

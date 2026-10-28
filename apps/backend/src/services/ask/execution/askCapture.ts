@@ -44,6 +44,8 @@ import { HomePlantAddInputSchema, MaterialSpecAddInputSchema, OwnershipCostDecis
 import { RoomPlantRecommendationInputSchema } from '../support/commandInputs';
 import { homePlantAddResult, homePlantContextVersion, MATERIAL_SPEC_UPDATE_CAPTURE_KEY, materialSpecAddResult, materialSpecContextVersion, materialSpecUpdateResult } from '../handlers/homeRecordAdds.handler';
 import { negotiationShieldStartContextVersion, negotiationShieldStartResult } from '../handlers/negotiationShieldStart.handler';
+import { GUIDANCE_JOURNEY_DISMISS_REASON_CAPTURE_KEY, GuidanceDismissReasonAnswerSchema } from '../support/guidanceJourneyRestore';
+import { guidanceJourneyDismissResult, GUIDANCE_JOURNEY_DISMISS_MESSAGE } from '../handlers/guidanceOverview.handler';
 import { GUIDANCE_STEP_DECLARE_CAPTURE_KEY, GUIDANCE_STEP_DECLARE_MESSAGE, GuidanceStepDeclareAnswerSchema } from '../support/guidanceStepDeclare';
 import { guidanceStepDeclareResult } from '../handlers/guidanceStepDeclare.handler';
 import { MAINTENANCE_EVIDENCE_CAPTURE_KEY, MAINTENANCE_LINK_CAPTURE_KEY, MaintenanceEvidenceAnswerSchema, MaintenanceLinkAnswerSchema } from '../support/maintenanceEvidenceAttach';
@@ -1074,6 +1076,20 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     captureId = input.idempotencyKey;
     capturedContextVersion = offer.contextVersion;
     canonicalOwner = 'NegotiationShieldDocument';
+  } else if (execution.operationId === 'GUIDANCE_JOURNEY_DISMISS') {
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson) ? execution.parametersJson as Record<string, unknown> : {};
+    const dismissLaunch = storedParameters.guidanceJourneyDismissLaunch && typeof storedParameters.guidanceJourneyDismissLaunch === 'object' && !Array.isArray(storedParameters.guidanceJourneyDismissLaunch)
+      ? storedParameters.guidanceJourneyDismissLaunch as { journeyId?: unknown; sourceExecutionId?: unknown } : null;
+    if (input.captureKey !== GUIDANCE_JOURNEY_DISMISS_REASON_CAPTURE_KEY || !dismissLaunch || typeof dismissLaunch.journeyId !== 'string') {
+      throw Object.assign(new Error('This form is no longer active. Open the journey again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    }
+    if (!GuidanceDismissReasonAnswerSchema.safeParse(input.answer).success) throw Object.assign(new Error('Choose one of the listed reasons, or leave it blank.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+    result = await guidanceJourneyDismissResult(userId, execution.propertyId, GUIDANCE_JOURNEY_DISMISS_MESSAGE,
+      { operationId: 'GUIDANCE_JOURNEY_DISMISS', surface: 'ASK_WORKSPACE', entityType: 'GUIDANCE_JOURNEY', entityId: dismissLaunch.journeyId, sourceExecutionId: typeof dismissLaunch.sourceExecutionId === 'string' ? dismissLaunch.sourceExecutionId : undefined } as never,
+      input.answer as Record<string, unknown>);
+    captureId = input.idempotencyKey;
+    capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
+    canonicalOwner = 'GuidanceJourneyDismissal';
   } else if (execution.operationId === 'GUIDANCE_STEP_DECLARE') {
     const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson)
       ? execution.parametersJson as Record<string, unknown>

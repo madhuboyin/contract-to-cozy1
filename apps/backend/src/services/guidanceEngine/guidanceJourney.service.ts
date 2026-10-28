@@ -2397,6 +2397,91 @@ export class GuidanceJourneyService {
     return updated;
   }
 
+  /** Journeys the person set aside recently, newest first, for the "bring it back" list. Dismissal never deletes anything, so each still has its steps and history. */
+  async listRecentlyDismissedJourneys(propertyId: string, options: { limit?: number; sinceDays?: number } = {}) {
+    const { guidanceJourney } = getGuidanceModels();
+    const since = new Date(Date.now() - (options.sinceDays ?? 90) * 24 * 60 * 60 * 1000);
+    return guidanceJourney.findMany({
+      where: { propertyId, status: 'DISMISSED', dismissedAt: { gte: since } },
+      orderBy: [{ dismissedAt: 'desc' }],
+      take: options.limit ?? 5,
+      include: { inventoryItem: { select: { name: true } }, primarySignal: { select: { signalIntentFamily: true } }, steps: { orderBy: [{ stepOrder: 'asc' }] } },
+    });
+  }
+
+  /**
+   * Whether a dismissed journey can be brought back, and to what. It returns to the status it held when it was dismissed (read from the dismissal
+   * event, never assumed), and only while what it was about still holds: the item it covered is still recorded, its source signal is still active,
+   * and no newer journey for the same thing is already open. Nothing is written.
+   */
+  async assessJourneyRestoration(propertyId: string, journeyId: string): Promise<
+    | { outcome: 'ALREADY_OPEN'; journey: any }
+    | { outcome: 'RESTORABLE'; journey: any; restoreTo: 'ACTIVE' | 'NOT_STARTED'; dismissedAt: Date | null; dismissedReason: string | null }
+    | { outcome: 'NOT_RESTORABLE'; journey: any; reasonCode: string; message: string }
+  > {
+    const { guidanceJourney, guidanceJourneyEvent } = getGuidanceModels();
+    const journey = await guidanceJourney.findFirst({
+      where: { id: journeyId, propertyId },
+      include: { primarySignal: { select: { id: true, status: true } }, inventoryItem: { select: { id: true } } },
+    });
+    if (!journey) throw new APIError('Guidance journey not found.', 404, 'GUIDANCE_JOURNEY_NOT_FOUND');
+    if ((ACTIVE_GUIDANCE_JOURNEY_STATUSES as readonly string[]).includes(String(journey.status))) return { outcome: 'ALREADY_OPEN', journey };
+    const notRestorable = (reasonCode: string, message: string) => ({ outcome: 'NOT_RESTORABLE' as const, journey, reasonCode, message });
+    if (journey.status !== 'DISMISSED') return notRestorable('GUIDANCE_JOURNEY_NOT_DISMISSED', 'Only a dismissed journey can be brought back.');
+
+    const dismissal = await guidanceJourneyEvent.findFirst({ where: { journeyId, eventType: 'JOURNEY_DISMISSED' }, orderBy: [{ createdAt: 'desc' }] });
+    const restoreTo = dismissal?.fromJourneyStatus as string | undefined;
+    if (restoreTo !== 'ACTIVE' && restoreTo !== 'NOT_STARTED') {
+      return notRestorable('GUIDANCE_JOURNEY_NO_RECORDED_STATE', 'Its state before it was dismissed was not recorded, so it cannot be brought back safely.');
+    }
+    if ((journey.scopeCategory ?? 'ITEM') === 'ITEM' && !journey.inventoryItemId) {
+      return notRestorable('GUIDANCE_JOURNEY_ITEM_REMOVED', 'The item this journey covered is no longer in your home record.');
+    }
+    if (journey.primarySignal && journey.primarySignal.status !== 'ACTIVE') {
+      return notRestorable('GUIDANCE_JOURNEY_SIGNAL_INACTIVE', 'What prompted this journey is no longer active.');
+    }
+    const newer = await guidanceJourney.findFirst({
+      where: {
+        propertyId, id: { not: journeyId }, status: { in: [...ACTIVE_GUIDANCE_JOURNEY_STATUSES] },
+        journeyTypeKey: journey.journeyTypeKey ?? null, inventoryItemId: journey.inventoryItemId ?? null, serviceKey: journey.serviceKey ?? null,
+      },
+      select: { id: true },
+    });
+    if (newer) return notRestorable('GUIDANCE_JOURNEY_NEWER_EXISTS', 'A newer journey for the same thing is already in progress.');
+    return { outcome: 'RESTORABLE', journey, restoreTo, dismissedAt: journey.dismissedAt ?? null, dismissedReason: journey.dismissedReason ?? null };
+  }
+
+  /**
+   * Brings a dismissed journey back to the status it held before, with its steps and history untouched. Idempotent: a journey that is already open is
+   * returned as it is and records nothing. The restoration is one auditable event (a status change with reason USER_RESTORED, naming the dismissal it undoes).
+   */
+  async restoreJourney(propertyId: string, journeyId: string, actorUserId: string) {
+    const { guidanceJourney, guidanceJourneyEvent } = getGuidanceModels();
+    const assessment = await this.assessJourneyRestoration(propertyId, journeyId);
+    if (assessment.outcome === 'ALREADY_OPEN') return { journey: assessment.journey, restored: false };
+    if (assessment.outcome === 'NOT_RESTORABLE') throw new APIError(assessment.message, 409, assessment.reasonCode);
+    const now = new Date();
+    // Guarded on the status, so two restores at once cannot both write.
+    const changed = await guidanceJourney.updateMany({
+      where: { id: journeyId, propertyId, status: 'DISMISSED' },
+      data: { status: assessment.restoreTo, dismissedReason: null, dismissedAt: null, lastTransitionAt: now, version: { increment: 1 } },
+    });
+    if (!changed.count) {
+      const current = await guidanceJourney.findFirst({ where: { id: journeyId, propertyId } });
+      return { journey: current, restored: false };
+    }
+    await guidanceJourneyEvent.create({
+      data: {
+        propertyId, journeyId, signalId: assessment.journey.primarySignalId ?? null, eventType: 'JOURNEY_STATUS_CHANGED',
+        fromJourneyStatus: 'DISMISSED' as any, toJourneyStatus: assessment.restoreTo as any, actorType: 'USER', actorUserId,
+        reasonCode: 'USER_RESTORED', reasonMessage: null,
+        payloadJson: { dismissedAt: assessment.dismissedAt ? assessment.dismissedAt.toISOString() : null, dismissedReason: assessment.dismissedReason },
+      },
+    });
+    const restored = await guidanceJourney.findFirst({ where: { id: journeyId, propertyId }, include: { steps: { orderBy: [{ stepOrder: 'asc' }] } } });
+    return { journey: restored, restored: true };
+  }
+
   async changeIssueForJourney(
     propertyId: string,
     journeyId: string,

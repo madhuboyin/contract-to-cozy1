@@ -265,6 +265,7 @@ Status line above (section heading "design, nothing built") is superseded: Phase
   no service method), so the command declares none and `askGovernance.test.js` carries a one-line exception to its "every
   command has a correction mode" invariant. The confirmation card says it cannot be reopened and a new plan can be started.
   Skip declares `REOPEN` because the page can restore a skipped step; Ask does not offer that yet.
+- **Superseded 2026-10-28 (owner rulings D3a and D3b; Inline Workspace FRD 1.462):** a dismissed journey can now be brought back (`restoreJourney`, declared message on `GUIDANCE_JOURNEY_DISMISS`) and dismissal asks for an optional reason. The two decisions below are kept as history.
 - **Decision (2026-10-01): irreversible dismiss stays offered from Ask.** Product confirmed the lean to keep "Dismiss this
   journey" in Ask. It stays confirmation-gated (the card says it cannot be reopened and a new plan can be started), CONTRIBUTOR
   only, with no correction mode and no reason text. This closes the open item; nothing in code changed. Revisit only if a

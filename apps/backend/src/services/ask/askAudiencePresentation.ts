@@ -4,6 +4,7 @@ import type { PropertyJourneyContext } from '../skills/context/propertyJourneyCo
 import type { AskOperationResult } from './askOperationRegistry';
 import { HOME_JOURNEY_SET_MESSAGE } from './support/homeSettingsConstants';
 import { QUOTE_COMMAND_ACTION_IDS } from './support/quoteComparisonCommand';
+import { GUIDANCE_JOURNEY_RESTORE_ACTION_ID } from './support/guidanceJourneyRestore';
 import { COVERAGE_COMMAND_ACTION_IDS, COVERAGE_COMMAND_KIND_ROLE_FLOORS, type CoverageCommandKind } from './support/coverageCommand';
 
 type AskAction = Extract<AskPresentationBlock, { type: 'SUMMARY' }>['actions'][number];
@@ -26,6 +27,8 @@ const ACTION_ROLE_FLOORS: Readonly<Record<string, HouseholdRole>> = Object.freez
     ...(Object.keys(COVERAGE_COMMAND_KIND_ROLE_FLOORS) as CoverageCommandKind[]).map((kind): [string, HouseholdRole] => [COVERAGE_COMMAND_ACTION_IDS[kind], COVERAGE_COMMAND_KIND_ROLE_FLOORS[kind]]),
     // Sharing a quote decision's outcome is a data-sharing consent: the owner's choice, as on Desktop (FRD v1.460).
     [QUOTE_COMMAND_ACTION_IDS.CONSENT, 'OWNER'],
+    // Bringing a dismissed journey back is a contributor's write, like dismissing it (FRD v1.462).
+    [GUIDANCE_JOURNEY_RESTORE_ACTION_ID, 'CONTRIBUTOR'],
   ],
 ) as Record<string, HouseholdRole>);
 

@@ -404,10 +404,14 @@ test('skip: confirm re-reads live state (stale, viewer) and returns a service re
   assert.match((await confirmWrite('GUIDANCE_STEP_SKIP', proposal.parameters).catch((e) => e)).message, /^db$/, 'a server error is not dressed up');
 });
 
-test('dismiss: confirm-gated, says it cannot be reopened, idempotent, and stale or viewer attempts are refused', async () => {
-  const proposal = await proposeWrite('GUIDANCE_JOURNEY_DISMISS', GUIDANCE_JOURNEY_DISMISS_MESSAGE, dismissLaunch());
+const { guidanceJourneyDismissResult } = require('../../src/services/ask/handlers/guidanceOverview.handler.ts');
+test('dismiss: asks for an optional reason first, then is confirm-gated, says it can be brought back, idempotent, and stale or viewer attempts are refused', async () => {
+  const reasonStep = await proposeWrite('GUIDANCE_JOURNEY_DISMISS', GUIDANCE_JOURNEY_DISMISS_MESSAGE, dismissLaunch());
+  assert.equal(reasonStep.status, 'NEEDS_CONTEXT', 'the optional reason is asked once');
+  assert.ok(reasonStep.captureRequests[0].inputSchema.fields.every((field) => field.required === false), 'nothing is required: dismissal is never blocked on a reason');
+  const proposal = await guidanceJourneyDismissResult('u1', 'p1', GUIDANCE_JOURNEY_DISMISS_MESSAGE, dismissLaunch(), {});
   assert.equal(proposal.status, 'NEEDS_CONFIRMATION');
-  assert.match(proposal.confirmation.description, /cannot be reopened/);
+  assert.match(proposal.confirmation.description, /bring it back later/);
   assert.deepEqual(writes, []);
   assert.equal(await codeOfP(confirmWrite('GUIDANCE_JOURNEY_DISMISS', proposal.parameters, 'VIEWER')), 'ASK_PERMISSION_REQUIRED');
   const { result } = await confirmWrite('GUIDANCE_JOURNEY_DISMISS', proposal.parameters);
