@@ -29,6 +29,8 @@ const ACTION_ROLE_FLOORS: Readonly<Record<string, HouseholdRole>> = Object.freez
     [QUOTE_COMMAND_ACTION_IDS.CONSENT, 'OWNER'],
     // Bringing a dismissed journey back is a contributor's write, like dismissing it (FRD v1.462).
     [GUIDANCE_JOURNEY_RESTORE_ACTION_ID, 'CONTRIBUTOR'],
+    // Restoring a trashed Home Record from the Trash view is a contributor's write, as the command's own floor (FRD v1.463).
+    ['home-record-restore', 'CONTRIBUTOR'],
   ],
 ) as Record<string, HouseholdRole>);
 

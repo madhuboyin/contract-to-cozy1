@@ -12,6 +12,8 @@ import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { humanDate } from '../askFormatting';
 import { ensurePropertyAccess, exactEntityMatch } from '../askHandlerSupport';
 import { listPropertyDocuments, type PropertyDocument } from '../../propertyDocuments/propertyDocumentInventory.service';
+import { visibleRecordWhere } from '../../homeRecordsAccess';
+import { TRASH_RECOVERY_DAYS } from '../../homeRecords.service';
 import { type AskViewState } from '../support/executionState';
 import { loadAskViewState } from './maintenance.handler';
 import { containsFilterContinuation } from '../askFollowUpContext';
@@ -152,18 +154,47 @@ export function resolveDocumentRefinement(
   return { verification: verification ?? prior.statusFilter as DocumentVerificationFilter, kind: allTypes ? null : kind ?? priorKind };
 }
 
-export function buildDocumentViewState(prior: AskViewState | null | undefined, verification: DocumentVerificationFilter, kind: string | null): AskViewState {
+// FRD v1.463: which set of Home Records the list shows. Current is the default (every active record); the others narrow it to what needs review or
+// is expiring, or switch to the archived or trashed records. A view is a declared chip like the filters above and rides in the view state's
+// otherwise unused dateScopePhrase, so it continues across refinements and is cleared by "Clear filters".
+export type DocumentView = 'CURRENT' | 'NEEDS_REVIEW' | 'EXPIRING' | 'ARCHIVED' | 'TRASHED';
+export const DOCUMENT_VIEW_MESSAGES: Readonly<Record<DocumentView, string>> = {
+  CURRENT: 'Now show current documents',
+  NEEDS_REVIEW: 'Only show documents that need review',
+  EXPIRING: 'Only show documents that are expired or expiring',
+  ARCHIVED: 'Only show archived documents',
+  TRASHED: 'Only show documents in the trash',
+};
+const DOCUMENT_VIEWS: ReadonlySet<string> = new Set(Object.keys(DOCUMENT_VIEW_MESSAGES));
+/** The view a declared chip message names, exactly as the chip sends it; typed wording never switches the view. */
+export function documentViewFromMessage(message: string): DocumentView | null {
+  const text = message.trim().replace(/\.$/, '').toLowerCase();
+  return (Object.entries(DOCUMENT_VIEW_MESSAGES) as Array<[DocumentView, string]>).find(([, value]) => value.toLowerCase() === text)?.[0] ?? null;
+}
+const documentViewFromState = (prior: AskViewState | null | undefined): DocumentView =>
+  prior && prior.dateScopePhrase && DOCUMENT_VIEWS.has(prior.dateScopePhrase) ? prior.dateScopePhrase as DocumentView : 'CURRENT';
+
+export function buildDocumentViewState(prior: AskViewState | null | undefined, verification: DocumentVerificationFilter, kind: string | null, view: DocumentView = 'CURRENT'): AskViewState {
   return {
     resultId: prior?.resultId ?? randomUUID(),
-    // Documents reuse the generic fields: the kind key rides in domainScopePhrase, the verification filter in statusFilter.
-    domainScopePhrase: kind, dateScopePhrase: null, statusFilter: verification, selectedTaskId: null, revision: (prior?.revision ?? 0) + 1,
+    // Documents reuse the generic fields: the kind key rides in domainScopePhrase, the verification filter in statusFilter, the view in dateScopePhrase.
+    domainScopePhrase: kind, dateScopePhrase: view === 'CURRENT' ? null : view, statusFilter: verification, selectedTaskId: null, revision: (prior?.revision ?? 0) + 1,
   };
 }
 
 /** The declared chips: type chips only for kinds this home actually has, and a way back once a filter is applied. */
 export function documentFilterChips(
   verification: DocumentVerificationFilter, kind: string | null, present: { kinds: ReadonlyArray<{ kind: string; label: string }>; pending: boolean; rejected: boolean },
+  views?: { view: DocumentView; needsReview: boolean; expiring: boolean; archived: number; trashed: number; canSeeTrash: boolean },
 ) {
+  // A view chip is offered only when the view has something (or is the one shown), so none leads to a dead end; the trash is for a contributor or owner.
+  const viewChips = views ? [
+    ...(views.view !== 'CURRENT' ? [{ id: 'view-current', label: 'Current', message: DOCUMENT_VIEW_MESSAGES.CURRENT, active: false }] : []),
+    ...(views.needsReview || views.view === 'NEEDS_REVIEW' ? [{ id: 'view-needs-review', label: 'Needs review', message: DOCUMENT_VIEW_MESSAGES.NEEDS_REVIEW, active: views.view === 'NEEDS_REVIEW' }] : []),
+    ...(views.expiring || views.view === 'EXPIRING' ? [{ id: 'view-expiring', label: 'Expired or expiring', message: DOCUMENT_VIEW_MESSAGES.EXPIRING, active: views.view === 'EXPIRING' }] : []),
+    ...(views.archived > 0 || views.view === 'ARCHIVED' ? [{ id: 'view-archived', label: 'Archived', message: DOCUMENT_VIEW_MESSAGES.ARCHIVED, active: views.view === 'ARCHIVED' }] : []),
+    ...(views.canSeeTrash && (views.trashed > 0 || views.view === 'TRASHED') ? [{ id: 'view-trash', label: 'Trash', message: DOCUMENT_VIEW_MESSAGES.TRASHED, active: views.view === 'TRASHED' }] : []),
+  ] : [];
   return [
     { id: 'status-all', label: 'All', message: 'Now show all documents', active: verification === 'ALL' },
     { id: 'status-verified', label: 'Verified', message: 'Only show verified documents', active: verification === 'VERIFIED' },
@@ -174,7 +205,8 @@ export function documentFilterChips(
       { id: 'type-all', label: 'All types', message: 'Now show all document types', active: kind === null },
       ...present.kinds.map((entry) => ({ id: `type-${entry.kind.toLowerCase()}`, label: entry.label, message: `Only show ${entry.label}`, active: kind === entry.kind })),
     ] : []),
-    ...(verification !== 'ALL' || kind ? [{ id: 'clear-all', label: 'Clear filters', message: CLEAR_MESSAGE, active: false }] : []),
+    ...viewChips,
+    ...(verification !== 'ALL' || kind || (views && views.view !== 'CURRENT') ? [{ id: 'clear-all', label: 'Clear filters', message: CLEAR_MESSAGE, active: false }] : []),
   ];
 }
 
@@ -198,8 +230,21 @@ async function documentLookupResult(userId: string, propertyId: string, message:
   // The transitional legacy branch is requested by name: it is removed once no domain still needs it.
   const inventory = await listPropertyDocuments({ propertyId, role: access.role, includeLegacy: true });
   const documents = inventory.items;
+  // The views (FRD v1.463): archived and trashed records are listed on request only, and the trash is for a contributor or owner.
+  const canSeeTrash = access.role !== HouseholdRole.VIEWER;
+  const continuing = Boolean(priorViewState && VERIFICATION_FILTERS.has(priorViewState.statusFilter) && containsFilterContinuation(message));
+  const chipView = continuing ? documentViewFromMessage(message) : null;
+  const requestedView: DocumentView = continuing ? (CLEAR_PATTERN.test(message) ? 'CURRENT' : chipView ?? documentViewFromState(priorViewState)) : 'CURRENT';
+  const view: DocumentView = requestedView === 'TRASHED' && !canSeeTrash ? 'CURRENT' : requestedView;
+  const [archivedCount, trashedCount] = await Promise.all([
+    prisma.propertyRecord.count({ where: { propertyId, lifecycleStatus: 'ARCHIVED', ...visibleRecordWhere(access.role) } }),
+    canSeeTrash ? prisma.propertyRecord.count({ where: { propertyId, lifecycleStatus: 'TRASHED', ...visibleRecordWhere(access.role) } }) : Promise.resolve(0),
+  ]);
+  const viewDocuments = view === 'ARCHIVED' || view === 'TRASHED' ? (await listPropertyDocuments({ propertyId, role: access.role, lifecycle: view })).items : documents;
+  const scope = viewDocuments.filter((document) => view === 'NEEDS_REVIEW' ? document.needsReview === true
+    : view === 'EXPIRING' ? document.expiry === 'EXPIRED' || document.expiry === 'EXPIRING_SOON' : true);
 
-  if (documents.length === 0) {
+  if (documents.length === 0 && view === 'CURRENT') {
     return {
       status: 'ANSWERED',
       reasonCode: 'NO_DOCUMENTS_ON_FILE',
@@ -213,27 +258,37 @@ async function documentLookupResult(userId: string, propertyId: string, message:
   }
 
   // D-2: the chips reflect every recorded document (never the filtered subset), so a filter can always be widened or cleared.
-  const presentKinds = [...new Map(documents.map((document) => [document.kind, document.kindLabel] as const)).entries()]
+  const presentKinds = [...new Map(scope.map((document) => [document.kind, document.kindLabel] as const)).entries()]
     .map(([kind, label]) => ({ kind, label }))
     .sort((left, right) => left.label.localeCompare(right.label));
-  const refinement = resolveDocumentRefinement(message, priorViewState, presentKinds);
+  // Switching view starts that view clean: a status or type filter from the view before could otherwise hide everything in the new one.
+  const refinement = chipView && continuing ? { verification: 'ALL' as DocumentVerificationFilter, kind: null as string | null } : resolveDocumentRefinement(message, priorViewState, presentKinds);
   const focus = refinement ?? documentFocus(message, presentKinds);
   const verificationFilter = focus.verification;
   const kindFilter = focus.kind;
   const isFiltered = verificationFilter !== 'ALL' || kindFilter !== null;
-  const matched = documents.filter((document) => (!kindFilter || document.kind === kindFilter) && (verificationFilter === 'ALL' || (document.verification ?? 'UNVERIFIED') === verificationFilter));
-  const present = { kinds: presentKinds, pending: documents.some((document) => document.verification === 'PENDING'), rejected: documents.some((document) => document.verification === 'REJECTED') };
-  const viewState = buildDocumentViewState(priorViewState, verificationFilter, kindFilter);
-  const chips = documentFilterChips(verificationFilter, kindFilter, present);
+  const matched = scope.filter((document) => (!kindFilter || document.kind === kindFilter) && (verificationFilter === 'ALL' || (document.verification ?? 'UNVERIFIED') === verificationFilter));
+  const present = { kinds: presentKinds, pending: scope.some((document) => document.verification === 'PENDING'), rejected: scope.some((document) => document.verification === 'REJECTED') };
+  const viewState = buildDocumentViewState(priorViewState, verificationFilter, kindFilter, view);
+  const chips = documentFilterChips(verificationFilter, kindFilter, present, {
+    view, needsReview: documents.some((document) => document.needsReview === true), expiring: documents.some((document) => document.expiry === 'EXPIRED' || document.expiry === 'EXPIRING_SOON'),
+    archived: archivedCount, trashed: trashedCount, canSeeTrash,
+  });
 
-  if (matched.length === 0 && refinement) {
-    // A filter that matches nothing still continues the result and keeps every chip, so it can be widened or cleared.
+  if (matched.length === 0 && (refinement || view !== 'CURRENT')) {
+    // A filter that matches nothing still continues the result and keeps every chip, so it can be widened or cleared. An empty view says so.
+    const emptyView = !isFiltered && view !== 'CURRENT';
+    const emptyCopy: Record<DocumentView, [string, string]> = {
+      CURRENT: ['No documents on file.', 'Nothing is recorded as current.'], NEEDS_REVIEW: ['Nothing needs review.', 'No document has extracted facts waiting for you.'],
+      EXPIRING: ['Nothing is expired or expiring soon.', 'No document has an in-effect period that is ending or over.'], ARCHIVED: ['No archived documents.', 'Documents you archive are kept here, out of your current list.'],
+      TRASHED: ['The trash is empty.', 'A document moved to the trash can be restored here for 30 days.'],
+    };
     return {
-      status: 'ANSWERED', reasonCode: 'DOCUMENT_FILTER_NO_MATCH', parameters: { viewState },
+      status: 'ANSWERED', reasonCode: emptyView ? 'DOCUMENT_VIEW_EMPTY' : 'DOCUMENT_FILTER_NO_MATCH', parameters: { viewState },
       blocks: [{
-        type: 'SUMMARY', id: 'document-lookup-summary', title: 'No recorded documents match these filters', headline: 'No documents match these filters.',
-        supportLine: `This home has ${documents.length} recorded ${documents.length === 1 ? 'document' : 'documents'}. Widen or clear a filter to see them.`,
-        body: `This home has ${documents.length} recorded ${documents.length === 1 ? 'document' : 'documents'}, but none match the selected filters.`, tone: 'DEFAULT',
+        type: 'SUMMARY', id: 'document-lookup-summary', title: emptyView ? emptyCopy[view][0] : 'No recorded documents match these filters', headline: emptyView ? emptyCopy[view][0] : 'No documents match these filters.',
+        supportLine: emptyView ? emptyCopy[view][1] : `This ${view === 'CURRENT' ? 'home' : 'view'} has ${scope.length} recorded ${scope.length === 1 ? 'document' : 'documents'}. Widen or clear a filter to see them.`,
+        body: emptyView ? emptyCopy[view][1] : `This ${view === 'CURRENT' ? 'home' : 'view'} has ${scope.length} recorded ${scope.length === 1 ? 'document' : 'documents'}, but none match the selected filters.`, tone: 'DEFAULT',
         actions: [],
       }, {
         type: 'GROUPED_LIST', filters: chips, id: 'document-lookup-groups', title: 'Documents by type',
@@ -266,14 +321,31 @@ async function documentLookupResult(userId: string, propertyId: string, message:
   const unverifiedCount = count((document) => document.verification === 'UNVERIFIED' || document.verification === 'PENDING');
   const needsReviewCount = count((document) => document.needsReview === true);
   const matchWord = matched.length === 1 ? 'matches' : 'match';
+  const viewTitleSuffix: Record<DocumentView, string> = { CURRENT: 'on file', NEEDS_REVIEW: 'need review', EXPIRING: 'expired or expiring soon', ARCHIVED: 'archived', TRASHED: 'in the trash' };
+  // What each view says, from the recorded rows only. The trash states its recovery window and that a legal hold keeps a record; nothing says what a document means.
+  const viewCopy = (current: Exclude<DocumentView, 'CURRENT'>, total: number): { headline: string; supportLine: string; chips: Array<{ label: string; tone: 'DEFAULT' | 'CAUTION' | 'CRITICAL' }> } => {
+    const noun = `${total} ${total === 1 ? 'document' : 'documents'}`;
+    const copy: Record<typeof current, [string, string]> = {
+      NEEDS_REVIEW: [`${noun} ${total === 1 ? 'needs' : 'need'} review.`, 'Facts extracted from these are waiting for your review.'],
+      EXPIRING: [`${noun} expired or expiring soon.`, 'From the period each record says it is in effect.'],
+      ARCHIVED: [`${noun} archived.`, 'Archived documents are kept, and left out of your current list.'],
+      TRASHED: [`${noun} in the trash.`, `A document can be restored for ${TRASH_RECOVERY_DAYS} days after it is moved here; one on a legal hold is kept.`],
+    };
+    return { headline: copy[current][0], supportLine: copy[current][1], chips: [] };
+  };
+  const trashMeta = (document: PropertyDocument): string[] => {
+    if (document.lifecycle !== 'TRASHED' || !document.trashedAt) return [];
+    const until = new Date(document.trashedAt.getTime() + TRASH_RECOVERY_DAYS * 24 * 60 * 60 * 1000);
+    return [`in the trash since ${humanDate(document.trashedAt)}`, document.legalHold ? 'on legal hold' : `restorable until ${humanDate(until)}`];
+  };
 
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY',
     id: 'document-lookup-summary',
-    title: isFiltered ? `${matched.length} document${matched.length === 1 ? '' : 's'} ${matchWord} this request` : `${documents.length} document${documents.length === 1 ? '' : 's'} on file`,
+    title: isFiltered ? `${matched.length} document${matched.length === 1 ? '' : 's'} ${matchWord} this request` : `${scope.length} document${scope.length === 1 ? '' : 's'} ${view === 'CURRENT' ? 'on file' : viewTitleSuffix[view]}`,
     body: needsReviewCount || unverifiedCount ? `${needsReviewCount + unverifiedCount} need attention.` : 'Nothing recorded needs review.',
     tone: needsReviewCount || unverifiedCount ? 'CAUTION' : 'DEFAULT',
-    ...documentsCalmCopy({
+    ...(view !== 'CURRENT' ? viewCopy(view, matched.length) : documentsCalmCopy({
       total: matched.length,
       needsReview: needsReviewCount,
       expired: count((document) => document.expiry === 'EXPIRED'),
@@ -284,7 +356,7 @@ async function documentLookupResult(userId: string, propertyId: string, message:
       legacy: count((document) => document.transitional),
       newest: { name: matched[0].title, addedOn: humanDate(matched[0].addedAt) || null },
       truncatedKinds: [...grouped.values()].filter((group) => group.docs.length > 20).length,
-    }),
+    })),
     actions: [],
   }, {
     // ASK_COZY_INLINE_WORKSPACE_FRD Phase 3: entityType routes each row to its own inline detail. A Home Record is read through the record
@@ -307,18 +379,24 @@ async function documentLookupResult(userId: string, propertyId: string, message:
           document.needsReview ? 'needs review' : null,
           document.expiry === 'EXPIRED' ? 'expired' : document.expiry === 'EXPIRING_SOON' ? 'expiring soon' : null,
           humanDate(document.addedAt),
+          document.lifecycle === 'ARCHIVED' ? 'archived' : null,
+          ...trashMeta(document),
           document.transitional ? 'older vault' : null,
         ].filter((value): value is string => Boolean(value)),
         status: document.verification ?? (document.needsReview ? 'NEEDS_REVIEW' : document.expiry === 'EXPIRED' ? 'EXPIRED' : null),
         // Rows open as inline records (entityType); Ask links to no desktop Home Records page (owner decision 2026-10-10).
         href: null,
         // FRD v1.350: a Home Record's own state controls, to contributors and owners (legacy vault rows have none).
-        actions: document.source === 'HOME_RECORD' && access.role !== HouseholdRole.VIEWER ? [
-          { id: HOME_RECORD_ACTION_IDS.VERIFICATION, label: 'Record verification', message: HOME_RECORD_MESSAGES.VERIFICATION, interactionType: 'MUTATE_RECORD' as const, operationId: 'HOME_RECORD_STATE_COMMAND' as const, style: 'QUIET' as const },
-          { id: HOME_RECORD_ACTION_IDS.EFFECTIVE_PERIOD, label: 'Set when it is in effect', message: HOME_RECORD_MESSAGES.EFFECTIVE_PERIOD, interactionType: 'MUTATE_RECORD' as const, operationId: 'HOME_RECORD_STATE_COMMAND' as const, style: 'QUIET' as const },
-          { id: HOME_RECORD_ACTION_IDS.ARCHIVE, label: 'Archive', message: HOME_RECORD_MESSAGES.ARCHIVE, interactionType: 'MUTATE_RECORD' as const, operationId: 'HOME_RECORD_STATE_COMMAND' as const, style: 'QUIET' as const },
-          { id: HOME_RECORD_ACTION_IDS.OPTIONS, label: 'More options', message: HOME_RECORD_MESSAGES.OPTIONS, interactionType: 'MUTATE_RECORD' as const, operationId: 'HOME_RECORD_STATE_COMMAND' as const, style: 'QUIET' as const },
-        ] : [],
+        // A trashed record offers only Restore (the same command the trash receipt's Undo runs); an archived one is not offered Archive again.
+        actions: document.source !== 'HOME_RECORD' || access.role === HouseholdRole.VIEWER ? []
+          : document.lifecycle === 'TRASHED' ? [
+            { id: HOME_RECORD_ACTION_IDS.RESTORE, label: 'Restore', message: HOME_RECORD_MESSAGES.RESTORE, interactionType: 'MUTATE_RECORD' as const, operationId: 'HOME_RECORD_STATE_COMMAND' as const, style: 'SECONDARY' as const },
+          ] : [
+            { id: HOME_RECORD_ACTION_IDS.VERIFICATION, label: 'Record verification', message: HOME_RECORD_MESSAGES.VERIFICATION, interactionType: 'MUTATE_RECORD' as const, operationId: 'HOME_RECORD_STATE_COMMAND' as const, style: 'QUIET' as const },
+            { id: HOME_RECORD_ACTION_IDS.EFFECTIVE_PERIOD, label: 'Set when it is in effect', message: HOME_RECORD_MESSAGES.EFFECTIVE_PERIOD, interactionType: 'MUTATE_RECORD' as const, operationId: 'HOME_RECORD_STATE_COMMAND' as const, style: 'QUIET' as const },
+            ...(document.lifecycle === 'ARCHIVED' ? [] : [{ id: HOME_RECORD_ACTION_IDS.ARCHIVE, label: 'Archive', message: HOME_RECORD_MESSAGES.ARCHIVE, interactionType: 'MUTATE_RECORD' as const, operationId: 'HOME_RECORD_STATE_COMMAND' as const, style: 'QUIET' as const }]),
+            { id: HOME_RECORD_ACTION_IDS.OPTIONS, label: 'More options', message: HOME_RECORD_MESSAGES.OPTIONS, interactionType: 'MUTATE_RECORD' as const, operationId: 'HOME_RECORD_STATE_COMMAND' as const, style: 'QUIET' as const },
+          ],
       })),
     })),
     actions: [],
@@ -334,7 +412,7 @@ async function documentLookupResult(userId: string, propertyId: string, message:
   return {
     status: 'ANSWERED',
     reasonCode: needsReviewCount || unverifiedCount ? 'DOCUMENTS_INCLUDE_UNVERIFIED' : 'DOCUMENTS_ALL_VERIFIED',
-    contextVersion: createHash('sha256').update(JSON.stringify(documents.map((document) => ({ id: document.id, source: document.source, verification: document.verification, needsReview: document.needsReview, updatedAt: document.updatedAt })))).digest('hex'),
+    contextVersion: createHash('sha256').update(JSON.stringify([view, ...scope.map((document) => ({ id: document.id, source: document.source, verification: document.verification, needsReview: document.needsReview, lifecycle: document.lifecycle, updatedAt: document.updatedAt }))])).digest('hex'),
     parameters: { viewState },
     blocks,
     suggestions: [],

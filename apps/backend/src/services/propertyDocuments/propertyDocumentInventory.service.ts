@@ -39,7 +39,10 @@ export interface PropertyDocument {
   /** Home Records only: from the record's effective-to date. Null when none is recorded or for a legacy row. */
   expiry: 'CURRENT' | 'EXPIRING_SOON' | 'EXPIRED' | null;
   /** Home Records only: what the caller's role may do is decided per record elsewhere; this is the record's own state. */
-  lifecycle: 'ACTIVE' | 'ARCHIVED' | null;
+  lifecycle: 'ACTIVE' | 'ARCHIVED' | 'TRASHED' | null;
+  /** Home Records only, and only for a trashed record: when it was moved to the trash, and whether a legal hold keeps it from being removed. */
+  trashedAt?: Date | null;
+  legalHold?: boolean;
   /** Home Records only. */
   sensitivity: string | null;
   visibility: string | null;
@@ -81,19 +84,23 @@ export async function listPropertyDocuments(input: {
   includeInventoryLinkedLegacy?: boolean;
   /** Only documents of these kinds (kind keys from either store), for a picker such as "contracts". */
   kinds?: string[];
+  /** Which Home Records to list: the active ones by default; archived or trashed for the Ask views of them. Only active records can come from the legacy branch. */
+  lifecycle?: 'ACTIVE' | 'ARCHIVED' | 'TRASHED';
 }): Promise<PropertyDocumentInventory> {
-  const records = await homeRecordsService.list(input.propertyId, input.role, { lifecycleStatus: 'ACTIVE' });
+  const lifecycle = input.lifecycle ?? 'ACTIVE';
+  const records = await homeRecordsService.list(input.propertyId, input.role, { lifecycleStatus: lifecycle });
   const fromRecords: PropertyDocument[] = records.map((record) => ({
     id: record.id, source: 'HOME_RECORD', transitional: false,
     title: record.title, kind: record.recordType, kindLabel: propertyDocumentKindLabel(record.recordType),
     description: record.description ?? null, addedAt: record.createdAt, updatedAt: record.updatedAt,
     verification: record.verificationStatus, verifiedAt: record.verifiedAt ?? null, needsReview: record.needsReview, expiry: record.expiryStatus,
-    lifecycle: record.lifecycleStatus === 'ARCHIVED' ? 'ARCHIVED' : 'ACTIVE',
+    lifecycle: record.lifecycleStatus === 'ARCHIVED' ? 'ARCHIVED' : record.lifecycleStatus === 'TRASHED' ? 'TRASHED' : 'ACTIVE',
+    ...(record.lifecycleStatus === 'TRASHED' ? { trashedAt: record.trashedAt ?? null, legalHold: Boolean(record.legalHoldReason) } : {}),
     sensitivity: record.sensitivity, visibility: record.visibility,
   }));
 
   let fromLegacy: PropertyDocument[] = [];
-  if (input.includeLegacy) {
+  if (input.includeLegacy && lifecycle === 'ACTIVE') {
     const rows = await prisma.document.findMany({
       where: {
         deletedAt: null,

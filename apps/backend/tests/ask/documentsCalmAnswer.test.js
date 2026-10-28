@@ -30,6 +30,8 @@ function install(records, legacyRows = [], role = 'VIEWER') {
   prismaModule.prisma = new Proxy({}, { get(_t, model) {
     if (model === 'then') return undefined;
     if (model === 'document') return { findMany: async () => legacyRows };
+    // The archived and trashed counts behind the view chips (FRD v1.463): none in these homes.
+    if (model === 'propertyRecord') return { count: async () => 0 };
     throw new Error(`Unexpected prisma.${String(model)} access`);
   } });
   propertyAccess.resolvePropertyAccess = async () => ({ role, userId: 'u1', propertyId: 'p1' });

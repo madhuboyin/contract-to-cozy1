@@ -16,7 +16,7 @@ import { presignGetObject } from './storage/presign';
 import { syncPropertyRecordWorkItem } from '../modules/homeOperations/adapters/propertyRecord.adapter';
 import { assertVisibilitySelectable, visibleRecordWhere } from './homeRecordsAccess';
 
-const TRASH_RECOVERY_DAYS = 30;
+export const TRASH_RECOVERY_DAYS = 30;
 
 type RecordFile = {
   buffer: Buffer;
