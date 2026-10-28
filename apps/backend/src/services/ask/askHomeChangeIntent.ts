@@ -24,7 +24,9 @@ export function matchesHomeChangeSummaryAnswerContract(result: AskOperationResul
     && substantiveBlocks[0].id === 'home-change-summary-empty';
   if (isEmptyEnvelope) return true;
 
-  return substantiveBlocks.every((block) => (
+  // The found-changes envelope leads with its own 'home-change-summary' SUMMARY, then one CHANGE_SUMMARY per change.
+  const changeBlocks = substantiveBlocks.filter((block) => block.id !== 'home-change-summary');
+  return changeBlocks.length > 0 && changeBlocks.every((block) => (
     block.type === 'CHANGE_SUMMARY'
     && block.id.startsWith('home-change-')
   ));

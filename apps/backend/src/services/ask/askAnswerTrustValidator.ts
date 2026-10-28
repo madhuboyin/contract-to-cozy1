@@ -105,7 +105,7 @@ function authoredPresentationText(block: AskPresentationBlock): string {
 function operationSpecificFirstBlock(operationId: AskOperationId, blocks: AskPresentationBlock[]): boolean {
   const first = blocks[0];
   if (!first) return false;
-  if (operationId === 'HOME_CHANGE_SUMMARY') return first.type === 'CHANGE_SUMMARY' || first.type === 'EMPTY_STATE';
+  if (operationId === 'HOME_CHANGE_SUMMARY') return first.type === 'CHANGE_SUMMARY' || first.type === 'EMPTY_STATE' || (first.type === 'SUMMARY' && first.id === 'home-change-summary');
   if (operationId === 'HVAC_DECISION_CONTINUE') return ['DECISION_PROGRESS', 'EMPTY_STATE'].includes(first.type);
   if (operationId === 'HVAC_DECISION_OUTCOME_VIEW') return ['OUTCOME_SUMMARY', 'EMPTY_STATE'].includes(first.type);
   if (operationId.endsWith('_BOUNDARY')) return first.type === 'BOUNDARY';
