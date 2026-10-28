@@ -36,9 +36,11 @@ export function notificationCategoryFromWords(message: string): NotificationCate
 export const NOTIFICATION_COMMAND_ENTITY_TYPE = 'ASK_NOTIFICATION';
 export const NOTIFICATION_COMMAND_MESSAGES = {
   READ: 'Mark this notification read', UNREAD: 'Mark this notification unread', DISMISS: 'Dismiss this notification', RESTORE: 'Bring this notification back',
+  // The "was this useful" feedback the Notifications page records (FRD v1.476): marking it, and taking the mark back.
+  USEFUL: 'Mark this notification useful', USEFUL_REMOVE: 'Remove my useful mark from this notification',
 } as const;
 export type NotificationCommandKind = keyof typeof NOTIFICATION_COMMAND_MESSAGES;
-export const NOTIFICATION_COMMAND_ACTION_IDS = { READ: 'notification-read', UNREAD: 'notification-unread', DISMISS: 'notification-dismiss', RESTORE: 'notification-restore' } as const;
+export const NOTIFICATION_COMMAND_ACTION_IDS = { READ: 'notification-read', UNREAD: 'notification-unread', DISMISS: 'notification-dismiss', RESTORE: 'notification-restore', USEFUL: 'notification-useful', USEFUL_REMOVE: 'notification-useful-remove' } as const;
 export const notificationCommandKindFromMessage = (message: string): NotificationCommandKind | null =>
   ((Object.entries(NOTIFICATION_COMMAND_MESSAGES) as Array<[NotificationCommandKind, string]>).find(([, prefix]) => message.startsWith(prefix))?.[0]) ?? null;
 export const notificationCommandMessage = (kind: NotificationCommandKind, title: string): string =>

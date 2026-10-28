@@ -9,6 +9,7 @@ import { registerConfirmCapabilityHandler, type ConfirmCapabilityContext, type C
 import { reconcileAskExecutionSideEffects } from '../execution/executeOperation';
 import { ensurePropertyAccess } from '../askHandlerSupport';
 import { setAskNotificationDismissed, setAskNotificationRead } from '../askNotificationInbox.service';
+import { recordNotificationOutcome, revokeNotificationOutcome } from '../../notificationPreference.service';
 import { NOTIFICATIONS_OVERVIEW_MESSAGE, NOTIFICATION_COMMAND_ENTITY_TYPE, notificationCommandKindFromMessage, type NotificationCommandKind } from '../support/notificationConversation';
 
 const sha = (text: string) => createHash('sha256').update(text).digest('hex');
@@ -17,16 +18,21 @@ const unavailable = (reasonCode: string, title: string, body: string): AskOperat
   status: 'NOT_APPLICABLE', reasonCode, blocks: [{ type: 'SUMMARY', id: 'notification-unavailable', title, body, tone: 'DEFAULT', actions: [backToInbox] }], suggestions: [],
 });
 
-interface Row { id: string; title: string; isRead: boolean; dismissedAt: Date | null }
-const load = (userId: string, id: string): Promise<Row | null> => prisma.notification.findFirst({ where: { id, userId }, select: { id: true, title: true, isRead: true, dismissedAt: true } });
-const versionOf = (kind: NotificationCommandKind, row: Row) => sha(`notification:${kind}:${row.id}:${row.isRead}:${row.dismissedAt?.toISOString() ?? ''}`);
+interface Row { id: string; title: string; isRead: boolean; dismissedAt: Date | null; markedUseful: boolean }
+const load = async (userId: string, id: string): Promise<Row | null> => {
+  const row = await prisma.notification.findFirst({ where: { id, userId }, select: { id: true, title: true, isRead: true, dismissedAt: true, outcomes: { where: { userId, type: 'USEFUL' }, select: { type: true } } } });
+  return row ? { id: row.id, title: row.title, isRead: row.isRead, dismissedAt: row.dismissedAt, markedUseful: row.outcomes.length > 0 } : null;
+};
+const versionOf = (kind: NotificationCommandKind, row: Row) => sha(`notification:${kind}:${row.id}:${row.isRead}:${row.dismissedAt?.toISOString() ?? ''}:${row.markedUseful}`);
 const alreadyThatWay = (kind: NotificationCommandKind, row: Row) =>
-  (kind === 'READ' && row.isRead) || (kind === 'UNREAD' && !row.isRead) || (kind === 'DISMISS' && row.dismissedAt !== null) || (kind === 'RESTORE' && row.dismissedAt === null);
+  (kind === 'READ' && row.isRead) || (kind === 'UNREAD' && !row.isRead) || (kind === 'DISMISS' && row.dismissedAt !== null) || (kind === 'RESTORE' && row.dismissedAt === null) || (kind === 'USEFUL' && row.markedUseful) || (kind === 'USEFUL_REMOVE' && !row.markedUseful);
 const COPY: Record<NotificationCommandKind, { title: string; confirm: string; done: string; description: string }> = {
   READ: { title: 'Mark this notification read?', confirm: 'Mark read', done: 'Marked read', description: 'It stays in your inbox, no longer counted as unread.' },
   UNREAD: { title: 'Mark this notification unread?', confirm: 'Mark unread', done: 'Marked unread', description: 'It stays in your inbox and counts as unread again.' },
   DISMISS: { title: 'Dismiss this notification?', confirm: 'Dismiss it', done: 'Dismissed', description: 'It leaves your inbox and can be brought back from the dismissed list. Nothing else changes.' },
   RESTORE: { title: 'Bring this notification back?', confirm: 'Bring it back', done: 'Brought back', description: 'It returns to your inbox. Nothing else changes.' },
+  USEFUL: { title: 'Mark this notification useful?', confirm: 'Mark useful', done: 'Marked useful', description: 'This tells Cozy this kind of notification helps you. It stays where it is and nothing else changes.' },
+  USEFUL_REMOVE: { title: 'Remove your useful mark?', confirm: 'Remove mark', done: 'Useful mark removed', description: 'Cozy no longer counts this notification as helpful to you. It stays where it is and nothing else changes.' },
 };
 
 export async function notificationProposal(userId: string, propertyId: string, launch: { kind: NotificationCommandKind; notificationId: string; sourceExecutionId: string | null }): Promise<AskOperationResult> {
@@ -63,13 +69,16 @@ const stale = (message: string, code = 'ASK_CONFIRMATION_NOT_ACTIVE') => Object.
 async function confirmNotification(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
   const { execution, userId, parameters } = ctx;
   const command = parameters.notificationCommand as { kind?: unknown; notificationId?: unknown } | undefined;
-  const kind = command?.kind;
-  if ((kind !== 'READ' && kind !== 'UNREAD' && kind !== 'DISMISS' && kind !== 'RESTORE') || typeof command?.notificationId !== 'string') throw stale('The change to make is invalid.');
+  if (typeof command?.kind !== 'string' || !(command.kind in COPY) || typeof command?.notificationId !== 'string') throw stale('The change to make is invalid.');
+  const kind = command.kind as NotificationCommandKind;
   const row = await load(userId, command.notificationId);
   if (!row) throw stale('That notification is no longer available.');
   if (parameters.notificationContextVersion !== versionOf(kind, row)) throw stale('This notification changed while the confirmation was open. Review it again and try again.', 'ASK_CONTEXT_VERSION_CONFLICT');
-  if (kind === 'READ' || kind === 'UNREAD') await setAskNotificationRead(userId, row.id, kind === 'READ');
-  else await setAskNotificationDismissed(userId, row.id, kind === 'DISMISS');
+  const commandKind = kind;
+  if (commandKind === 'READ' || commandKind === 'UNREAD') await setAskNotificationRead(userId, row.id, commandKind === 'READ');
+  else if (commandKind === 'USEFUL') await recordNotificationOutcome(userId, row.id, 'USEFUL');
+  else if (commandKind === 'USEFUL_REMOVE') await revokeNotificationOutcome(userId, row.id, 'USEFUL');
+  else await setAskNotificationDismissed(userId, row.id, commandKind === 'DISMISS');
   const result: AskOperationResult = {
     status: 'COMPLETED', reasonCode: `NOTIFICATION_${kind}_COMPLETED`,
     blocks: [{ type: 'WORKFLOW_PROGRESS', id: `notification-${kind.toLowerCase()}-${row.id}`, title: COPY[kind].done, status: 'COMPLETED', description: COPY[kind].description, details: [{ label: 'Notification', value: row.title.slice(0, 200) }], actions: [backToInbox] }],

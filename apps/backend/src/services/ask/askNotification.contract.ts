@@ -27,6 +27,8 @@ export interface AskNotificationItem {
   expired: boolean;
   isRead: boolean;
   dismissed: boolean;
+  /** The person marked this notification useful (the same feedback the Notifications page records). */
+  markedUseful: boolean;
   /** Where opening it will lead, known without reading anything: used to label the action, not to navigate. */
   continuationKind: AskNotificationDestinationKind | 'NONE';
   /** This category's external delivery is muted or snoozed by the person. The in-app item is always kept. */

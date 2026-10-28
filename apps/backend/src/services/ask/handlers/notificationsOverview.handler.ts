@@ -93,13 +93,13 @@ function notificationRow(item: AskNotificationItem) {
     : item.continuationKind === 'WORK' ? { id: 'notification-open', label: 'Open', message: 'What needs me?', interactionType: 'CONVERSATION_CONTINUE' as const, operationId: 'WORK_OVERVIEW' as const, style: 'PRIMARY' as const }
     : item.continuationKind === 'SAVED' ? { id: 'notification-open', label: 'Open', message: 'Show my saved results', interactionType: 'CONVERSATION_CONTINUE' as const, operationId: 'SAVED_RESULTS' as const, style: 'PRIMARY' as const }
     : null;
-  const command = (kind: 'READ' | 'UNREAD' | 'DISMISS' | 'RESTORE', label: string) => ({
+  const command = (kind: 'READ' | 'UNREAD' | 'DISMISS' | 'RESTORE' | 'USEFUL' | 'USEFUL_REMOVE', label: string) => ({
     id: NOTIFICATION_COMMAND_ACTION_IDS[kind], label, message: notificationCommandMessage(kind, item.title), interactionType: 'MUTATE_RECORD' as const, operationId: 'NOTIFICATION_COMMAND' as const,
     entityType: NOTIFICATION_COMMAND_ENTITY_TYPE, entityId: item.id, style: 'QUIET' as const,
   });
   return {
     id: item.id, title: item.title, description: truncate(item.message, 240), status: item.isRead ? null : 'Unread', entityType: null, href: null, meta,
-    actions: [...(open ? [open] : []), item.dismissed ? command('RESTORE', 'Bring back') : command('DISMISS', 'Dismiss'), item.isRead ? command('UNREAD', 'Mark unread') : command('READ', 'Mark read')].slice(0, 3),
+    actions: [...(open ? [open] : []), item.dismissed ? command('RESTORE', 'Bring back') : command('DISMISS', 'Dismiss'), item.isRead ? command('UNREAD', 'Mark unread') : command('READ', 'Mark read'), item.markedUseful ? command('USEFUL_REMOVE', 'Remove useful mark') : command('USEFUL', 'This was useful')].slice(0, 4),
   };
 }
 

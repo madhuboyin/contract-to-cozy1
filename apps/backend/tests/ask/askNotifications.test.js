@@ -133,7 +133,7 @@ test('opening reauthorizes the home first: lost access, removed targets and noth
 
 test('the inbox lists a person\'s own items with home, category, why, source time, stated expiry and where it leads', async () => {
   const calls = [];
-  const row = (id, day, extra = {}) => ({ id, type: 'CLAIM_SUBMITTED', title: `Title ${id}`, message: 'Body', entityType: 'CLAIM', entityId: 'c1', actionUrl: null, isRead: false, dismissedAt: null, createdAt: at(day), metadata: { propertyId: 'p1', notificationPolicy: { category: 'WORKFLOW', urgency: 'MATERIAL' }, expiresAt: '2026-10-19T00:00:00.000Z' }, ...extra });
+  const row = (id, day, extra = {}) => ({ id, type: 'CLAIM_SUBMITTED', title: `Title ${id}`, message: 'Body', entityType: 'CLAIM', entityId: 'c1', actionUrl: null, outcomes: [], isRead: false, dismissedAt: null, createdAt: at(day), metadata: { propertyId: 'p1', notificationPolicy: { category: 'WORKFLOW', urgency: 'MATERIAL' }, expiresAt: '2026-10-19T00:00:00.000Z' }, ...extra });
   prisma.notification = { findMany: async (args) => { calls.push(args); return [row('a', 5), row('b', 4, { metadata: { propertyId: 'gone-home' } }), row('c', 3, { metadata: null, type: 'SEASONAL_CHECKLIST_READY', entityType: 'SEASONAL_CHECKLIST' })]; }, count: async () => 3 };
   prisma.notificationPreference = { findMany: async () => [{ category: 'WORKFLOW', cadence: 'MUTED', enabled: false, snoozedUntil: null }] };
   installAccess(['p1']);

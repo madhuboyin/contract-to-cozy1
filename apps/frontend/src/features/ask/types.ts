@@ -1408,6 +1408,8 @@ export interface AskNotificationItem {
   expired: boolean;
   isRead: boolean;
   dismissed: boolean;
+  /** The person marked it useful; optional because older cached pages lack it. */
+  markedUseful?: boolean;
   continuationKind: AskNotificationDestination['kind'] | 'NONE';
   deliveryPaused: 'MUTED' | 'SNOOZED' | null;
 }

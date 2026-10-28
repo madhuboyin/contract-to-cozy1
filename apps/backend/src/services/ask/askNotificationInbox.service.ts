@@ -84,7 +84,7 @@ export async function listAskNotifications(userId: string, query: AskNotificatio
   const [rows, total, unreadCount, dismissedCount, accessible, preferences] = await Promise.all([
     prisma.notification.findMany({
       where: paged, orderBy: [{ createdAt: 'desc' }, { id: 'asc' }], take: limit + 1,
-      select: { id: true, type: true, title: true, message: true, entityType: true, entityId: true, actionUrl: true, isRead: true, dismissedAt: true, metadata: true, createdAt: true },
+      select: { id: true, type: true, title: true, message: true, entityType: true, entityId: true, actionUrl: true, isRead: true, dismissedAt: true, metadata: true, createdAt: true, outcomes: { where: { userId, type: 'USEFUL' }, select: { type: true } } },
     }),
     prisma.notification.count({ where: inView }),
     prisma.notification.count({ where: { userId, isRead: false, dismissedAt: null } }),
@@ -111,7 +111,7 @@ export async function listAskNotifications(userId: string, query: AskNotificatio
       id: row.id, type: row.type, category: cat, categoryLabel: NOTIFICATION_CATEGORY_LABELS[cat], urgency: notificationUrgencyOf(row.type, metadata), title: row.title, message: row.message,
       whyItAppeared: NOTIFICATION_WHY[cat], propertyId, propertyLabel: propertyId ? properties.get(propertyId) ?? null : null,
       propertyAccess: !propertyId ? 'NONE' : properties.has(propertyId) ? 'ACCESSIBLE' : 'LOST',
-      createdAt: row.createdAt.toISOString(), expiresAt: expires?.toISOString() ?? null, expired: expires !== null && expires <= now, isRead: row.isRead, dismissed: row.dismissedAt !== null,
+      createdAt: row.createdAt.toISOString(), expiresAt: expires?.toISOString() ?? null, expired: expires !== null && expires <= now, isRead: row.isRead, dismissed: row.dismissedAt !== null, markedUseful: row.outcomes.length > 0,
       continuationKind: rule.kind, deliveryPaused: pauseFor(cat),
     };
   });

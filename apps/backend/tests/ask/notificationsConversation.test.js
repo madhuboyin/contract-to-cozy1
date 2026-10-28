@@ -65,8 +65,8 @@ test('the inbox answer states the count, offers Open only where it leads somewhe
   for (const block of result.blocks) AskPresentationBlockSchema.parse(block);
   assert.match(result.blocks[0].headline, /2 notifications, 1 unread/);
   const rows = result.blocks[1].sections[0].items;
-  assert.deepEqual(rows[0].actions.map((a) => a.id), ['notification-open', 'notification-dismiss', 'notification-read']);
-  assert.deepEqual(rows[1].actions.map((a) => a.id), ['notification-dismiss', 'notification-unread']);
+  assert.deepEqual(rows[0].actions.map((a) => a.id), ['notification-open', 'notification-dismiss', 'notification-read', 'notification-useful']);
+  assert.deepEqual(rows[1].actions.map((a) => a.id), ['notification-dismiss', 'notification-unread', 'notification-useful']);
   assert.ok(rows[0].actions.slice(1).every((a) => a.entityId === 'n1' && a.operationId === 'NOTIFICATION_COMMAND'));
   assert.ok(result.blocks[1].filters.map((f) => f.message).every((m) => /^(Only|Now) show/.test(m)));
 });
@@ -117,7 +117,7 @@ test('the commands are caller-scoped and agree with the registries', () => {
 });
 
 test('dismiss: a review first, nothing done; the confirmed change writes once and the receipt offers the inbox', async () => {
-  const w = install({ row: { id: 'n1', title: 'Replace filter', isRead: false, dismissedAt: null } });
+  const w = install({ row: { id: 'n1', title: 'Replace filter', isRead: false, dismissedAt: null, outcomes: [] } });
   try {
     const proposal = await capabilityInvoke('NOTIFICATION_COMMAND', { userId: 'u1', propertyId: 'p1', message: g.notificationCommandMessage('DISMISS', 'Replace filter'), launchContext: launch() });
     assert.equal(proposal.status, 'NEEDS_CONFIRMATION');
@@ -131,7 +131,7 @@ test('dismiss: a review first, nothing done; the confirmed change writes once an
 });
 
 test('a change already in place, a missing notification and a typed attempt are refused with nothing changed', async () => {
-  const w = install({ row: { id: 'n1', title: 'Replace filter', isRead: true, dismissedAt: null } });
+  const w = install({ row: { id: 'n1', title: 'Replace filter', isRead: true, dismissedAt: null, outcomes: [] } });
   try {
     const already = await capabilityInvoke('NOTIFICATION_COMMAND', { userId: 'u1', propertyId: 'p1', message: g.notificationCommandMessage('READ', 'x'), launchContext: launch() });
     assert.equal(already.status, 'NOT_APPLICABLE');
@@ -147,7 +147,7 @@ test('a change already in place, a missing notification and a typed attempt are 
 });
 
 test('a confirmation goes stale when the notification changed meanwhile', async () => {
-  let row = { id: 'n1', title: 'Replace filter', isRead: false, dismissedAt: null };
+  let row = { id: 'n1', title: 'Replace filter', isRead: false, dismissedAt: null, outcomes: [] };
   const w = install({ row });
   try {
     const proposal = await capabilityInvoke('NOTIFICATION_COMMAND', { userId: 'u1', propertyId: 'p1', message: g.notificationCommandMessage('READ', 'x'), launchContext: launch() });
@@ -218,4 +218,48 @@ test('a settings confirmation goes stale when the settings changed; an unclear s
     assert.equal(unclear.reasonCode, 'ASK_NOTIFICATION_SETTINGS_UNCLEAR');
     assert.equal(w2.calls.length, 0);
   } finally { w2.restore(); }
+});
+
+// FRD v1.476: the "was this useful" feedback the Notifications page records, as a row action with a review and a confirmation.
+const preferenceService = require('../../src/services/notificationPreference.service.ts');
+test('useful: marking and taking back the mark each review first, then use the Notifications page\'s own outcome writes; a mark already in place is refused', async () => {
+  const outcomeCalls = [];
+  const saved = { record: preferenceService.recordNotificationOutcome, revoke: preferenceService.revokeNotificationOutcome };
+  preferenceService.recordNotificationOutcome = async (...a) => { outcomeCalls.push(['record', ...a]); return {}; };
+  preferenceService.revokeNotificationOutcome = async (...a) => { outcomeCalls.push(['revoke', ...a]); return {}; };
+  try {
+    const w = install({ row: { id: 'n1', title: 'Replace filter', isRead: false, dismissedAt: null, outcomes: [] } });
+    try {
+      const proposal = await capabilityInvoke('NOTIFICATION_COMMAND', { userId: 'u1', propertyId: 'p1', message: g.notificationCommandMessage('USEFUL', 'Replace filter'), launchContext: launch() });
+      assert.equal(proposal.status, 'NEEDS_CONFIRMATION');
+      AskConfirmationSchema.parse(proposal.confirmation);
+      assert.equal(outcomeCalls.length, 0, 'the review writes nothing');
+      const done = await confirmCapabilityInvoke('NOTIFICATION_COMMAND', ctx('NOTIFICATION_COMMAND', proposal.parameters));
+      assert.deepEqual(outcomeCalls, [['record', 'u1', 'n1', 'USEFUL']]);
+      assert.equal(done.result.reasonCode, 'NOTIFICATION_USEFUL_COMPLETED');
+      const nothingToRemove = await capabilityInvoke('NOTIFICATION_COMMAND', { userId: 'u1', propertyId: 'p1', message: g.notificationCommandMessage('USEFUL_REMOVE', 'Replace filter'), launchContext: launch() });
+      assert.equal(nothingToRemove.reasonCode, 'NOTIFICATION_ALREADY');
+    } finally { w.restore(); }
+    outcomeCalls.length = 0;
+    const marked = install({ row: { id: 'n1', title: 'Replace filter', isRead: false, dismissedAt: null, outcomes: [{ type: 'USEFUL' }] } });
+    try {
+      const already = await capabilityInvoke('NOTIFICATION_COMMAND', { userId: 'u1', propertyId: 'p1', message: g.notificationCommandMessage('USEFUL', 'Replace filter'), launchContext: launch() });
+      assert.equal(already.reasonCode, 'NOTIFICATION_ALREADY');
+      const proposal = await capabilityInvoke('NOTIFICATION_COMMAND', { userId: 'u1', propertyId: 'p1', message: g.notificationCommandMessage('USEFUL_REMOVE', 'Replace filter'), launchContext: launch() });
+      assert.equal(proposal.status, 'NEEDS_CONFIRMATION');
+      await confirmCapabilityInvoke('NOTIFICATION_COMMAND', ctx('NOTIFICATION_COMMAND', proposal.parameters));
+      assert.deepEqual(outcomeCalls, [['revoke', 'u1', 'n1', 'USEFUL']]);
+    } finally { marked.restore(); }
+  } finally { preferenceService.recordNotificationOutcome = saved.record; preferenceService.revokeNotificationOutcome = saved.revoke; }
+});
+
+test('useful: the row offers "This was useful", or "Remove useful mark" once marked, and the declared messages read back to their kind', () => {
+  const result = overview.notificationsFromPage({ page: page([item(), item({ id: 'n2', markedUseful: true })]), state: state(), viewState: overview.buildNotificationsViewState(null, state()) });
+  const rows = result.blocks[1].sections[0].items;
+  assert.ok(rows[0].actions.some((a) => a.id === 'notification-useful' && a.label === 'This was useful'));
+  assert.ok(rows[1].actions.some((a) => a.id === 'notification-useful-remove' && a.label === 'Remove useful mark'));
+  assert.ok(rows.every((row) => row.actions.length <= 4));
+  assert.equal(g.notificationCommandKindFromMessage(g.notificationCommandMessage('USEFUL', 'x')), 'USEFUL');
+  assert.equal(g.notificationCommandKindFromMessage(g.notificationCommandMessage('USEFUL_REMOVE', 'x')), 'USEFUL_REMOVE');
+  assert.equal(g.notificationCommandKindFromMessage(g.notificationCommandMessage('READ', 'x')), 'READ');
 });
