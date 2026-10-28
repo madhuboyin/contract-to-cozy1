@@ -17,6 +17,7 @@ import { evaluateFeatureContext } from '../../../modules/propertyContext/applica
 import { assertCoverageConflictFree } from '../../coverageConflict.service';
 import { queryIntelligenceEnvelope } from '../../intelligenceEnvelope';
 import { ReplaceRepairService } from '../../replaceRepairAnalysis.service';
+import { REPAIR_REPLACE_WHAT_IF_ACTION_ID, REPAIR_REPLACE_WHAT_IF_CAPTURE_KEY, REPAIR_REPLACE_WHAT_IF_MESSAGE, RepairReplaceWhatIfAnswerSchema, whatIfOverrides, whatIfSummary, type RepairReplaceOverrides } from '../support/repairReplaceWhatIf';
 import { humanDate, money } from '../askFormatting';
 import { getAskPropertyTimezone } from '../askExecutionContext';
 import { buildMaintenanceImportanceResult } from '../support/maintenanceImportance';
@@ -174,7 +175,10 @@ export async function homeDeadlineMonitorResult(userId: string, propertyId: stri
   };
 }
 
-async function replacementGuidanceResult(userId: string, propertyId: string, message: string, focusedInventoryItemId: string | null | undefined, executionId: string): Promise<AskOperationResult> {
+/** A what-if run (FRD v1.466): the homeowner's own numbers, computed without saving. Absent for the ordinary analysis. */
+interface RepairReplaceWhatIf { overrides: RepairReplaceOverrides }
+
+async function replacementGuidanceResult(userId: string, propertyId: string, message: string, focusedInventoryItemId: string | null | undefined, executionId: string, whatIf?: RepairReplaceWhatIf): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
   const allItems = await prisma.inventoryItem.findMany({
     where: { propertyId }, orderBy: [{ isVerified: 'desc' }, { updatedAt: 'desc' }], take: 200,
@@ -230,7 +234,7 @@ async function replacementGuidanceResult(userId: string, propertyId: string, mes
   const evaluation = await evaluateFeatureContext(propertyId, userId, {
     featureKey: 'REPAIR_REPLACE', operationKey: 'RUN_ANALYSIS', operationInput: { inventoryItemId: item.id },
   });
-  const captureRequests: AskCaptureRequest[] = access.role === HouseholdRole.VIEWER ? [] : evaluation.requirements.slice(0, 1).map((requirement) => ({
+  const captureRequests: AskCaptureRequest[] = access.role === HouseholdRole.VIEWER || whatIf ? [] : evaluation.requirements.slice(0, 1).map((requirement) => ({
     requirementId: requirement.requirementId,
     captureKey: requirement.capture.captureKey,
     classification: requirement.classification,
@@ -246,7 +250,7 @@ async function replacementGuidanceResult(userId: string, propertyId: string, mes
     confirmationText: null,
     expectedContextVersion: evaluation.contextVersion,
   }));
-  const analysis = await replaceRepairService.runItemAnalysis(propertyId, item.id, userId, undefined, evaluation.contextVersion);
+  const analysis = await replaceRepairService.runItemAnalysis(propertyId, item.id, userId, whatIf?.overrides, evaluation.contextVersion, { preview: Boolean(whatIf) });
   const verdict = analysis.verdict.toLowerCase().replace(/_/g, ' ');
   const rows = [
     { id: 'repair', values: { path: 'Estimated next repair', amount: analysis.estimatedNextRepairCostCents == null ? 'Not available' : money(analysis.estimatedNextRepairCostCents / 100), meaning: 'Modeled from category defaults, condition, and recorded repair history' } },
@@ -277,13 +281,13 @@ async function replacementGuidanceResult(userId: string, propertyId: string, mes
   });
   return {
     status: captureRequests.length || analysis.confidence !== 'HIGH' ? 'READY_WITH_LIMITATIONS' : 'ANSWERED',
-    reasonCode: captureRequests.length ? 'LIFECYCLE_CONTEXT_OPTIONAL' : analysis.confidence !== 'HIGH' ? 'REPAIR_REPLACE_CONFIDENCE_LIMITED' : undefined,
+    reasonCode: whatIf ? 'REPAIR_REPLACE_WHAT_IF' : captureRequests.length ? 'LIFECYCLE_CONTEXT_OPTIONAL' : analysis.confidence !== 'HIGH' ? 'REPAIR_REPLACE_CONFIDENCE_LIMITED' : undefined,
     contextVersion: evaluation.contextVersion,
     parameters: { inventoryItemId: item.id },
     captureRequests,
     blocks: [{
       type: 'SUMMARY', id: 'repair-replace-guidance', title: `${item.name}: ${verdict}`,
-      body: `${analysis.summary ?? `The canonical model currently indicates ${verdict}.`} Confidence is ${analysis.confidence.toLowerCase()}.${analysis.breakEvenMonths == null ? '' : ` Modeled break-even is about ${analysis.breakEvenMonths} months.`}`,
+      body: `${whatIf ? `This is a what-if using ${whatIfSummary(whatIf.overrides).join(', ')}. Nothing was saved, and the item's recorded analysis is unchanged. ` : ''}${analysis.summary ?? `The canonical model currently indicates ${verdict}.`} Confidence is ${analysis.confidence.toLowerCase()}.${analysis.breakEvenMonths == null ? '' : ` Modeled break-even is about ${analysis.breakEvenMonths} months.`}`,
       tone: ['REPLACE_NOW', 'REPLACE_SOON'].includes(analysis.verdict) ? 'CAUTION' : 'DEFAULT',
       // The complete canonical Repair vs Replace analysis is already rendered
       // below. Do not eject the homeowner to the legacy desktop surface. The one follow-up is a typed Ask action carrying this
@@ -291,15 +295,81 @@ async function replacementGuidanceResult(userId: string, propertyId: string, mes
       actions: [{
         id: 'repair-replace-check-warranty', label: 'Is it under warranty?', interactionType: 'START_WORKFLOW' as const,
         message: `Is ${item.name} still under warranty?`, operationId: 'WARRANTY_LOOKUP', entityType: 'INVENTORY_ITEM', entityId: item.id, style: 'SECONDARY' as const,
-      }],
+      },
+      // Try different numbers (FRD v1.466): a contributor's what-if, as Desktop's page lets them. After one, a way back to the recorded analysis.
+      ...(access.role === HouseholdRole.VIEWER ? [] : [{
+        id: REPAIR_REPLACE_WHAT_IF_ACTION_ID, label: whatIf ? 'Change the numbers' : 'Try different numbers', interactionType: 'START_WORKFLOW' as const, message: REPAIR_REPLACE_WHAT_IF_MESSAGE,
+        operationId: 'REPLACEMENT_GUIDANCE' as const, entityType: 'INVENTORY_ITEM', entityId: item.id, style: 'SECONDARY' as const,
+      }]),
+      ...(whatIf ? [{
+        id: 'repair-replace-back-to-recorded', label: 'Back to the recorded analysis', interactionType: 'START_WORKFLOW' as const, message: `Should I repair or replace ${item.name}?`,
+        operationId: 'REPLACEMENT_GUIDANCE' as const, entityType: 'INVENTORY_ITEM', entityId: item.id, style: 'QUIET' as const,
+      }] : [])],
     }, { type: 'TABLE', id: 'repair-replace-costs', title: 'Modeled decision inputs', description: 'Amounts are planning estimates from the canonical Repair vs Replace engine.', columns: [{ key: 'path', label: 'Measure' }, { key: 'amount', label: 'Amount' }, { key: 'meaning', label: 'How to interpret it' }], rows, actions: [] },
     { type: 'TABLE', id: 'repair-replace-trace', title: 'Decision factors', description: 'How the item and its recorded history influenced this recommendation.', columns: [{ key: 'factor', label: 'Factor' }, { key: 'evidence', label: 'Evidence used' }, { key: 'effect', label: 'Effect on recommendation' }], rows: factorRows, totalCount: analysis.decisionTrace.length, actions: [] },
-    { type: 'EVIDENCE', id: 'repair-replace-evidence', title: 'Record and model freshness', items: [{ label: item.name, source: 'Living Home Record and Repair vs Replace engine', observedAt: analysis.computedAt }] },
+    { type: 'EVIDENCE', id: 'repair-replace-evidence', title: 'Record and model freshness', items: [{ label: item.name, source: whatIf ? 'Your numbers and the Repair vs Replace engine (not saved)' : 'Living Home Record and Repair vs Replace engine', observedAt: analysis.computedAt }] },
     { type: 'BOUNDARY', id: 'repair-replace-boundary', title: 'Planning guidance—not a diagnosis or quote', body: 'A qualified technician should diagnose safety, performance, and repairability. Actual repair and replacement prices, efficiency gains, warranties, and code requirements may differ.', severity: 'INFO', suggestions: [] }],
     // Suggestions are submitted as new turns, so keep the inventory referent
     // explicit instead of making the router guess what "this item" means.
     suggestions: [],
   };
+}
+
+function whatIfCapture(contextVersion: string, item: { id: string; name: string }, entered?: Record<string, unknown>, prior?: { estimatedNextRepairCostCents?: number | null; estimatedReplacementCostCents?: number | null; remainingYears?: number | null } | null): AskCaptureRequest {
+  const usd = (centsValue: number | null | undefined) => (centsValue == null ? undefined : Math.round(centsValue) / 100);
+  const prefill = Object.fromEntries(Object.entries({
+    estimatedNextRepairCostUsd: usd(prior?.estimatedNextRepairCostCents), estimatedReplacementCostUsd: usd(prior?.estimatedReplacementCostCents), expectedRemainingYears: prior?.remainingYears ?? undefined,
+  }).filter(([, value]) => value !== undefined));
+  const money = (key: string, label: string) => ({ key, label, required: false, inputSchema: { type: 'NUMBER' as const, min: 0, max: 10_000_000 } });
+  const levels = (key: string, label: string) => ({ key, label, required: false, inputSchema: { type: 'SINGLE_SELECT' as const, options: [{ label: 'Low', value: 'LOW' }, { label: 'Medium', value: 'MEDIUM' }, { label: 'High', value: 'HIGH' }] } });
+  return {
+    requirementId: 'repair-replace-what-if-inputs', captureKey: REPAIR_REPLACE_WHAT_IF_CAPTURE_KEY, classification: 'WORKFLOW_INPUT', state: 'UNKNOWN',
+    title: `Try different numbers for ${item.name}`, question: 'Which numbers would you like to change?',
+    helpText: 'Change only what you know. A field left as it is keeps the model\u2019s own number. This is a what-if: nothing is saved and the recorded analysis stays as it is.',
+    inputSchema: { type: 'GROUP', fields: [
+      money('estimatedNextRepairCostUsd', 'Next repair cost ($)'), money('estimatedReplacementCostUsd', 'Replacement cost ($)'),
+      { key: 'expectedRemainingYears', label: 'Years of life left', required: false, inputSchema: { type: 'NUMBER' as const, min: 0, max: 40 } },
+      money('cashBufferUsd', 'Cash you have set aside for this ($)'), levels('riskTolerance', 'How much repair risk you will accept'), levels('usageIntensity', 'How hard it is used'),
+    ] } as unknown as AskCaptureRequest['inputSchema'],
+    currentAnswer: entered ?? prefill, allowNotSure: false, sensitivity: 'FINANCIAL', destinationLabel: 'Used for this what-if only; nothing is saved', confirmationText: null, expectedContextVersion: contextVersion,
+  };
+}
+
+/** The what-if on one item (FRD v1.466): only the declared action starts it, a contributor or owner, a non-HVAC item (HVAC has its own decision thread). */
+export async function repairReplaceWhatIfResult(
+  userId: string, propertyId: string, launch: { entityType?: string | null; entityId?: string | null; operationId?: string | null; surface?: string | null } | undefined, executionId: string,
+  supplied?: Record<string, unknown>,
+): Promise<AskOperationResult> {
+  const notice = (reasonCode: string, title: string, body: string, status: AskOperationResult['status'] = 'NOT_APPLICABLE'): AskOperationResult => ({
+    status, reasonCode, blocks: [{ type: 'SUMMARY', id: 'repair-replace-what-if-notice', title, body, tone: 'DEFAULT', actions: [] }], suggestions: [],
+  });
+  if (launch?.operationId !== 'REPLACEMENT_GUIDANCE' || launch.surface === 'ASK_REFRESH' || launch.entityType !== 'INVENTORY_ITEM' || !launch.entityId) {
+    return notice('REPAIR_REPLACE_WHAT_IF_TARGET_REQUIRED', 'Open the analysis first', 'Use Try different numbers on a repair or replace analysis. Nothing has changed.');
+  }
+  const access = await ensurePropertyAccess(userId, propertyId);
+  if (access.role === HouseholdRole.VIEWER) return notice('ASK_PERMISSION_REQUIRED', 'A contributor or owner can try different numbers', 'Your role can view this analysis but not re-run it. Nothing has changed.', 'BLOCKED');
+  const item = await prisma.inventoryItem.findFirst({ where: { id: launch.entityId, propertyId }, select: { id: true, name: true, category: true } });
+  if (!item) return notice('REPAIR_REPLACE_ITEM_NOT_FOUND', 'That item is no longer available', 'It may have been removed. Nothing has changed.');
+  if (item.category === 'HVAC') return notice('REPAIR_REPLACE_WHAT_IF_HVAC', 'HVAC has its own what-if', 'A heating or cooling system is decided in its own repair or replace decision, where a scenario can be added. Nothing has changed.');
+  const contextVersion = createHash('sha256').update(`repair-replace-what-if:${item.id}`).digest('hex');
+  if (!supplied) {
+    const prior = await replaceRepairService.getLatestForItem(propertyId, item.id, userId).catch(() => null) as { estimatedNextRepairCostCents?: number | null; estimatedReplacementCostCents?: number | null; remainingYears?: number | null } | null;
+    return {
+      status: 'NEEDS_CONTEXT', reasonCode: 'REPAIR_REPLACE_WHAT_IF_INPUT_REQUIRED', contextVersion, parameters: { inventoryItemId: item.id },
+      blocks: [{ type: 'SUMMARY', id: 'repair-replace-what-if-input', title: `Try different numbers for ${item.name}`, body: 'The form shows the numbers behind the recorded analysis. Change what you know; nothing is saved.', tone: 'DEFAULT', actions: [] }],
+      captureRequests: [whatIfCapture(contextVersion, item, undefined, prior)], suggestions: [],
+    };
+  }
+  const parsed = RepairReplaceWhatIfAnswerSchema.safeParse(supplied);
+  const overrides = parsed.success ? whatIfOverrides(parsed.data) : {};
+  if (!parsed.success || Object.keys(overrides).length === 0) {
+    return {
+      status: 'NEEDS_CONTEXT', reasonCode: 'REPAIR_REPLACE_WHAT_IF_INPUT_INVALID', contextVersion, parameters: { inventoryItemId: item.id },
+      blocks: [{ type: 'SUMMARY', id: 'repair-replace-what-if-invalid', title: 'Change at least one number', body: 'Enter a valid amount, years between 0 and 40, or a level. Nothing has been run.', tone: 'CAUTION', actions: [] }],
+      captureRequests: [whatIfCapture(contextVersion, item, supplied)], suggestions: [],
+    };
+  }
+  return replacementGuidanceResult(userId, propertyId, REPAIR_REPLACE_WHAT_IF_MESSAGE, item.id, executionId, { overrides });
 }
 
 // Ask Intelligence FRD Phase 8A — HVAC Decision Thread foundation. Distinct
@@ -834,7 +904,9 @@ registerCapabilityHandler('intelligence-envelope.query', async (envelope) => int
 
 registerCapabilityHandler('home-operations.update', async (envelope) => operationalWorkUpdateResult(envelope.propertyId!, envelope.message, envelope.launchContext));
 
-registerCapabilityHandler('inventory.replacement', async (envelope) => replacementGuidanceResult(
+registerCapabilityHandler('inventory.replacement', async (envelope) => envelope.message.trim() === REPAIR_REPLACE_WHAT_IF_MESSAGE
+  ? repairReplaceWhatIfResult(envelope.userId, envelope.propertyId!, envelope.launchContext ?? undefined, envelope.executionId)
+  : replacementGuidanceResult(
   envelope.userId,
   envelope.propertyId!,
   envelope.message,

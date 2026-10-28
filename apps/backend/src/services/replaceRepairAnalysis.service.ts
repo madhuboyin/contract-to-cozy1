@@ -356,6 +356,7 @@ export class ReplaceRepairService {
     userId: string,
     overrides?: ReplaceRepairOverrides,
     propertyContextVersion?: string | null,
+    options: { preview?: boolean } = {},
   ) {
     const property = await assertPropertyForUser(propertyId, userId);
     const item = await this.assertItemForProperty(propertyId, itemId);
@@ -642,6 +643,57 @@ export class ReplaceRepairService {
       });
     }
 
+    const analysisData = {
+      homeownerProfileId: property.homeownerProfileId,
+      propertyId,
+      inventoryItemId: item.id,
+      currentMarker: CURRENT_REPLACE_REPAIR_MARKER,
+      status: ReplaceRepairAnalysisStatus.READY,
+      verdict,
+      confidence,
+      impactLevel,
+      summary: summaryByVerdict[verdict],
+      nextSteps: dedupeSteps(nextSteps).slice(0, 6),
+      decisionTrace: decisionTrace.slice(0, 12),
+      inputsSnapshot: {
+        _propertyContextVersion: propertyContextVersion ?? null,
+        item: {
+          itemId: item.id,
+          name: item.name,
+          category: item.category,
+          condition: item.condition,
+          installedOn: item.installedOn?.toISOString() ?? null,
+          purchasedOn: item.purchasedOn?.toISOString() ?? null,
+          lastServicedOn: item.lastServicedOn?.toISOString() ?? null,
+        },
+        overridesUsed: overrides ?? {},
+        assumptions: {
+          riskTolerance,
+          usageIntensity,
+          defaults,
+          repairSpendCentsLast30Months,
+          repairEventCountLast30Months,
+          failureProbability: Number(failureProb.toFixed(4)),
+          annualRepairRiskAfterReplaceCents,
+          annualRepairRiskDeltaCents,
+        },
+      },
+      ageYears,
+      remainingYears,
+      estimatedNextRepairCostCents,
+      estimatedReplacementCostCents,
+      expectedAnnualRepairRiskCents,
+      expectedAnnualOwnershipDeltaCents: annualRepairRiskDeltaCents,
+      breakEvenMonths,
+    };
+
+    // A what-if (FRD v1.466) computes the same analysis from the given numbers and saves nothing: no row is written, no earlier analysis is
+    // superseded and no outcome is tracked, so the item's saved analysis stays as it was.
+    if (options.preview) {
+      const now = new Date();
+      return mapAnalysisToDto({ ...analysisData, id: 'preview', currentMarker: null, computedAt: now, createdAt: now, updatedAt: now } as unknown as ReplaceRepairAnalysis);
+    }
+
     const analysis = await prisma.$transaction(async (tx) => {
       await tx.replaceRepairAnalysis.updateMany({
         where: {
@@ -655,51 +707,7 @@ export class ReplaceRepairService {
         },
       });
 
-      return tx.replaceRepairAnalysis.create({
-        data: {
-          homeownerProfileId: property.homeownerProfileId,
-          propertyId,
-          inventoryItemId: item.id,
-          currentMarker: CURRENT_REPLACE_REPAIR_MARKER,
-          status: ReplaceRepairAnalysisStatus.READY,
-          verdict,
-          confidence,
-          impactLevel,
-          summary: summaryByVerdict[verdict],
-          nextSteps: dedupeSteps(nextSteps).slice(0, 6),
-          decisionTrace: decisionTrace.slice(0, 12),
-          inputsSnapshot: {
-            _propertyContextVersion: propertyContextVersion ?? null,
-            item: {
-              itemId: item.id,
-              name: item.name,
-              category: item.category,
-              condition: item.condition,
-              installedOn: item.installedOn?.toISOString() ?? null,
-              purchasedOn: item.purchasedOn?.toISOString() ?? null,
-              lastServicedOn: item.lastServicedOn?.toISOString() ?? null,
-            },
-            overridesUsed: overrides ?? {},
-            assumptions: {
-              riskTolerance,
-              usageIntensity,
-              defaults,
-              repairSpendCentsLast30Months,
-              repairEventCountLast30Months,
-              failureProbability: Number(failureProb.toFixed(4)),
-              annualRepairRiskAfterReplaceCents,
-              annualRepairRiskDeltaCents,
-            },
-          },
-          ageYears,
-          remainingYears,
-          estimatedNextRepairCostCents,
-          estimatedReplacementCostCents,
-          expectedAnnualRepairRiskCents,
-          expectedAnnualOwnershipDeltaCents: annualRepairRiskDeltaCents,
-          breakEvenMonths,
-        },
-      });
+      return tx.replaceRepairAnalysis.create({ data: analysisData });
     });
 
     // Track outcome generated for the user

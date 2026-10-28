@@ -46,6 +46,8 @@ import { homePlantAddResult, homePlantContextVersion, MATERIAL_SPEC_UPDATE_CAPTU
 import { negotiationShieldStartContextVersion, negotiationShieldStartResult } from '../handlers/negotiationShieldStart.handler';
 import { MATERIAL_SPEC_EXPORT_CAPTURE_KEY, MaterialSpecExportAnswerSchema } from '../support/materialSpecStateCommand';
 import { materialSpecStateResult } from '../handlers/materialSpecStateCommands.handler';
+import { REPAIR_REPLACE_WHAT_IF_CAPTURE_KEY, RepairReplaceWhatIfAnswerSchema } from '../support/repairReplaceWhatIf';
+import { repairReplaceWhatIfResult } from '../handlers/miscHandlers.handler';
 import { GUIDANCE_JOURNEY_DISMISS_REASON_CAPTURE_KEY, GuidanceDismissReasonAnswerSchema } from '../support/guidanceJourneyRestore';
 import { guidanceJourneyDismissResult, GUIDANCE_JOURNEY_DISMISS_MESSAGE } from '../handlers/guidanceOverview.handler';
 import { GUIDANCE_STEP_DECLARE_CAPTURE_KEY, GUIDANCE_STEP_DECLARE_MESSAGE, GuidanceStepDeclareAnswerSchema } from '../support/guidanceStepDeclare';
@@ -2432,6 +2434,15 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
       (error as Error & { code?: string }).code = 'ASK_CAPTURE_NOT_ACTIVE';
       throw error;
     }
+  } else if (execution.operationId === 'REPLACEMENT_GUIDANCE' && input.captureKey === REPAIR_REPLACE_WHAT_IF_CAPTURE_KEY) {
+    // A what-if on one item's repair or replace analysis (FRD v1.466): the form's numbers are run and shown, and nothing is saved.
+    const whatIfParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson) ? execution.parametersJson as Record<string, unknown> : {};
+    if (typeof whatIfParameters.inventoryItemId !== 'string') throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    if (!RepairReplaceWhatIfAnswerSchema.safeParse(input.answer).success) throw Object.assign(new Error('Enter valid numbers: amounts of zero or more, and years between 0 and 40.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+    result = await repairReplaceWhatIfResult(userId, execution.propertyId, { operationId: 'REPLACEMENT_GUIDANCE', entityType: 'INVENTORY_ITEM', entityId: whatIfParameters.inventoryItemId, surface: 'ASK_WORKSPACE' }, execution.id, input.answer as Record<string, unknown>);
+    captureId = input.idempotencyKey;
+    capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
+    canonicalOwner = 'RepairReplaceWhatIf';
   } else if (execution.operationId === 'REPLACEMENT_GUIDANCE') {
     const parameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson)
       ? execution.parametersJson as Record<string, unknown>
