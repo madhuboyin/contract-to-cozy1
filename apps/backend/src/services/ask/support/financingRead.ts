@@ -16,7 +16,7 @@ export const EQUITY_SOURCE_LABELS: Record<string, string> = {
 };
 export const SCENARIO_STATUS_LABELS: Record<string, string> = { DRAFT: 'Draft', SAVED: 'Saved', ARCHIVED: 'Archived' };
 
-const financingPattern = /\b(?:how much (?:home )?equity|home[- ]equity|heloc|equity (?:position|loan|line)|loan[- ]to[- ]value|\bltv\b)\b|\b(?:finance|financing)\b.{0,40}\b(?:project|remodel|renovation|repair|roof|kitchen|bath(?:room)?|addition|work|options?)\b|\boptions? (?:to|for) financ\w+|\bhow (?:should|could|can|would) i (?:pay for|finance)\b|\bcost to finance\b|\bshow my financing\b/i;
+const financingPattern = /\b(?:how much (?:home )?equity|home[- ]equity|heloc|equity (?:position|loan|line)|loan[- ]to[- ]value|\bltv\b)\b|\b(?:finance|financing)\b.{0,40}\b(?:project|remodel|renovation|repair|roof|kitchen|bath(?:room)?|addition|work|options?)\b|\boptions? (?:to|for) financ\w+|\bhow (?:should|could|can|would) i (?:pay for|finance)\b|\bcost to finance\b|\bshow my (?:home )?financing\b|\b(?:home )?financing overview\b/i;
 const excluded = /\b(?:refinanc\w*|closing|lender|contingenc\w*|mortgage rates?|loan estimate|underwriting|appraisal)\b/i;
 export const isFinancingRequest = (message: string): boolean => financingPattern.test(message) && !excluded.test(message);
 

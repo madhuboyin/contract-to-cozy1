@@ -22,7 +22,7 @@ const OP = 'FINANCING_OVERVIEW';
 const route = (message) => resolveAskRoutingCascade(message, { localRoutingEnabled: true }).operation?.operationId;
 
 test('equity, HELOC and "cost to finance" questions reach the read; refinancing and closing financing keep their routes', () => {
-  for (const message of ['How much equity do I have in my home?', 'Can I get a HELOC for the roof?', 'What would a $40,000 project cost to finance?', 'how should I finance the kitchen remodel', 'show my financing', 'what are my options to finance a new roof']) {
+  for (const message of ['How much equity do I have in my home?', 'Can I get a HELOC for the roof?', 'What would a $40,000 project cost to finance?', 'how should I finance the kitchen remodel', 'show my financing', 'Show my home financing overview', 'what are my options to finance a new roof']) {
     assert.equal(route(message), OP, message);
   }
   for (const message of ['Should I refinance my mortgage?', 'Is refinancing worth reviewing now?', "What's the lender status for closing?"]) {
