@@ -51,6 +51,24 @@ describe('calm shell, any domain', () => {
     expect(ask).not.toHaveBeenCalled();
   });
 
+  it('explains compatibility recovery, current-record recomputation and retained history', async () => {
+    window.localStorage.setItem(CALM_ANSWERS_STORAGE_KEY, '1');
+    const fallback = {
+      type: 'SUMMARY', id: 'ask-schema-fallback', title: 'This saved response can’t be displayed', tone: 'CAUTION', actions: [],
+      body: 'This saved response isn’t compatible with the current Ask experience, so Ask hid its details instead of showing a broken or misleading result. Trying again creates a new answer from your current home records; this original response remains in your history.',
+    } as AskPresentationBlock;
+    const retryExecution = jest.fn();
+    render(
+      <ExecutionCard execution={execution({ status: 'UNAVAILABLE', blocks: [fallback] })} isSuperseded={false} justUpdatedExecutionId={null} updateExecution={jest.fn()} loading={false} ask={jest.fn()} retryExecution={retryExecution} selectedPropertyId="home"
+        setInput={jest.fn()} visibleSuggestions={[]} activeSessionRef={{ current: 'session' }} refreshResult={jest.fn()} refreshPending={false} onAccessLost={jest.fn()}
+        contextOpen={false} onOpenContext={jest.fn()} onToggleFold={jest.fn()} onTogglePin={jest.fn()} />,
+    );
+    expect(await screen.findByRole('heading', { name: 'This saved response can’t be displayed' })).toBeInTheDocument();
+    expect(screen.getByText(/creates a new answer from your current home records/)).toHaveTextContent('original response remains in your history');
+    fireEvent.click(screen.getByRole('button', { name: 'Try again with current records' }));
+    expect(retryExecution).toHaveBeenCalledWith(expect.objectContaining({ executionId: 'execution' }));
+  });
+
   it('puts Refresh, Pin and Collapse behind one menu and removes the per-answer frame', async () => {
     window.localStorage.setItem(CALM_ANSWERS_STORAGE_KEY, '1');
     const { container } = card(execution());

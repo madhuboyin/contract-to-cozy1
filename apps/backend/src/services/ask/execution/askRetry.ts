@@ -7,7 +7,8 @@ import {
   type RetryAskExecution,
 } from '../../../productFramework/ask/ask.contract';
 import type { AskAccountRole } from '../askAccountEligibility';
-import { asInputJson } from '../askHandlerSupport';
+import { asInputJson, compatibilityPresentationCanRetry, isCompatibilityPresentationFallback, mapPersistedExecution, propertySummary } from '../askHandlerSupport';
+import { ASK_OPERATION_DEFINITIONS, type AskOperationId } from '../askOperationRegistry';
 import { createAskExecution } from './createAskExecution';
 
 export function askExecutionCanRetry(status: AskExecutionStatus, reasonCode?: string | null): boolean {
@@ -41,6 +42,17 @@ export function buildAskRetryRequest(source: {
   });
 }
 
+export function hasRetryableCompatibilityFallback(
+  source: Parameters<typeof mapPersistedExecution>[0],
+  property: Parameters<typeof mapPersistedExecution>[1],
+): boolean {
+  const operationId = source.operationId && source.operationId in ASK_OPERATION_DEFINITIONS
+    ? source.operationId as AskOperationId
+    : null;
+  if (!compatibilityPresentationCanRetry(source.status, operationId)) return false;
+  return isCompatibilityPresentationFallback(mapPersistedExecution(source, property));
+}
+
 export async function retryAskExecution(
   userId: string,
   executionId: string,
@@ -49,23 +61,16 @@ export async function retryAskExecution(
 ): Promise<AskExecutionResponse> {
   const source = await prisma.askExecution.findFirst({
     where: { id: executionId, userId },
-    select: {
-      id: true,
-      sessionId: true,
-      propertyId: true,
-      message: true,
-      operationId: true,
-      status: true,
-      reasonCode: true,
-      launchContextJson: true,
-    },
   });
   if (!source) {
     const error = new Error('Ask execution not found.');
     (error as Error & { code?: string }).code = 'ASK_EXECUTION_NOT_FOUND';
     throw error;
   }
-  if (!askExecutionCanRetry(source.status, source.reasonCode)) {
+  const ordinaryRetry = askExecutionCanRetry(source.status, source.reasonCode);
+  const compatibilityRetry = !ordinaryRetry
+    && hasRetryableCompatibilityFallback(source, await propertySummary(source.propertyId));
+  if (!ordinaryRetry && !compatibilityRetry) {
     const error = new Error('This response no longer needs a retry.');
     (error as Error & { code?: string }).code = 'ASK_EXECUTION_NOT_RETRYABLE';
     throw error;

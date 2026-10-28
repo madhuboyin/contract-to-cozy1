@@ -14,6 +14,18 @@ import { isAskInConversationHref } from '../askAnswerTrustPolicy';
 import { propertySummary } from './propertyContext';
 import { readStoredSuggestedNextActions } from '../suggestedActions/suggestedNextAction.contract';
 const inConversationOrNull = (href: string | null): string | null => (href && isAskInConversationHref(href) ? href : null);
+export const ASK_SCHEMA_FALLBACK_BLOCK_ID = 'ask-schema-fallback';
+
+export function compatibilityPresentationCanRetry(status: AskExecutionStatus, operationId: AskOperationId | null): boolean {
+  if (!operationId || !['ANSWERED', 'READY_WITH_LIMITATIONS'].includes(status)) return false;
+  // Recompute read/guidance answers only. A historical command receipt must never
+  // become authority to replay a consequential action merely because its UI is old.
+  return ASK_OPERATION_DEFINITIONS[operationId].family !== 'COMMAND';
+}
+
+export function isCompatibilityPresentationFallback(response: AskExecutionResponse): boolean {
+  return response.blocks.some((block) => block.id === ASK_SCHEMA_FALLBACK_BLOCK_ID);
+}
 
 // ASK_COZY_INTERACTION_MODEL_UI_FRD RES-001-005/FRESH-001: an explicit
 // representation of "what the homeowner is currently looking at," separate
@@ -213,6 +225,8 @@ export function mapPersistedExecution(execution: {
   if (parsed.success) return parsed.data;
   // The fallback hides WHY a saved answer no longer parses; record the failing paths (never the content) so it can be diagnosed.
   logger.warn({ executionId: execution.id, operationId: execution.operationId, storedSchemaVersion, issues: parsed.error.issues.slice(0, 10).map((issue) => ({ path: issue.path.join('.'), code: issue.code })) }, 'Saved Ask response failed schema validation; showing the refresh fallback');
+  const compatibilityRetry = compatibilityPresentationCanRetry(execution.status, operationId);
+  const retryResponse = correctionCapabilities.retryResponse || compatibilityRetry;
   return AskExecutionResponseSchema.parse({
     schemaVersion: ASK_RESPONSE_SCHEMA_VERSION,
     executionId: execution.id,
@@ -226,14 +240,16 @@ export function mapPersistedExecution(execution: {
     declaredOperationId,
     contextVersion: execution.contextVersion,
     blocks: [{
-      type: 'SUMMARY', id: 'ask-schema-fallback', title: 'This saved response needs to be refreshed',
-      body: 'The response was saved with an unsupported presentation version. Ask preserved the execution and hid incompatible details instead of showing a broken or misleading result.',
+      type: 'SUMMARY', id: ASK_SCHEMA_FALLBACK_BLOCK_ID, title: 'This saved response can’t be displayed',
+      body: retryResponse
+        ? 'This saved response isn’t compatible with the current Ask experience, so Ask hid its details instead of showing a broken or misleading result. Trying again creates a new answer from your current home records; this original response remains in your history.'
+        : 'This saved response isn’t compatible with the current Ask experience, so Ask hid its details instead of showing a broken or misleading result. This original response remains in your history.',
       tone: 'CAUTION', actions: [],
     }],
     captureRequests: [],
     confirmation: null,
     clarification: null,
-    correctionCapabilities: { intent: false, entity: false, homeRecord: false, retryResponse: true },
+    correctionCapabilities: { intent: false, entity: false, homeRecord: false, retryResponse },
     suggestions: [],
     createdAt: execution.createdAt.toISOString(),
     updatedAt: execution.updatedAt.toISOString(),
