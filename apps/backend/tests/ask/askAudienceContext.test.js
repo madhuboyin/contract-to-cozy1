@@ -175,6 +175,29 @@ test('journey-neutral workflows do not add lifecycle copy or a journey-correctio
   assert.equal(presented.parameters.audiencePresentation.journeyCorrectionOffered, false);
 });
 
+test('property completeness presents lifecycle framing as a key point instead of rebuilding a paragraph', () => {
+  const result = {
+    status: 'ANSWERED', reasonCode: 'PROPERTY_SUMMARY', suggestions: [],
+    blocks: [{
+      type: 'SUMMARY', id: 'property-summary', title: 'Main’s property details are 100% complete', body: 'Fallback summary.', tone: 'DEFAULT', actions: [],
+      bullets: [
+        { label: 'Property details', body: 'The available Property Context is complete and current.' },
+        { label: 'What the score covers', body: 'Governed property facts.' },
+        { label: 'Broader home record', body: 'Rooms and records are tracked separately.' },
+      ],
+    }],
+  };
+  const presented = applyAskAudiencePresentation({
+    result,
+    householdRole: 'OWNER',
+    journeyContext: { propertyId: 'property-1', ownershipState: 'ESTABLISHED_OWNER', operatingMode: 'OWNING', entryPath: null, propertyOrigin: null, contextVersion: 'journey-v2', capturedAt: null },
+  });
+
+  assert.deepEqual(presented.blocks[0].bullets.map((bullet) => bullet.label), ['Guidance focus', 'Property details', 'What the score covers', 'Broader home record']);
+  assert.match(presented.blocks[0].bullets[0].body, /established home/);
+  assert.equal(presented.blocks[0].body, 'Fallback summary.');
+});
+
 // ---- RECALL_REVIEW: explicit all-mode viewer policy (exact-four urgent-work launch) -----------------------------------------------
 
 test('RECALL_REVIEW has an explicit all-mode, viewer-floor, discoverable audience policy that matches its previous implicit behavior', () => {

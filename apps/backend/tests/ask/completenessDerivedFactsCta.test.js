@@ -65,8 +65,9 @@ test('optional county metadata does not lower completeness or appear as missing'
   install(facts);
   const result = await invoke();
   assert.match(result.blocks[0].title, /property details are 100% complete/);
-  assert.match(result.blocks[0].body, /No pending governed property details/);
-  assert.match(result.blocks[0].body, /broader Living Home Record/);
+  assert.deepEqual(result.blocks[0].bullets.map((bullet) => bullet.label), ['Property details', 'What the score covers', 'Broader home record']);
+  assert.match(result.blocks[0].bullets[0].body, /No pending governed property details/);
+  assert.match(result.blocks[0].bullets[2].body, /rooms, systems and inventory/i);
   const progress = result.blocks.find((block) => block.id === 'property-completeness-progress');
   assert.equal(progress.percent, 100);
   assert.deepEqual(progress.metrics.map((metric) => [metric.label, metric.value]), [['Missing', '0'], ['Conflicted', '0'], ['Stale', '0']]);

@@ -163,9 +163,13 @@ export function applyAskAudiencePresentation(input: {
     : null;
   if (summaryIndex >= 0 && framingText) {
     const summary = blocks[summaryIndex] as Extract<AskPresentationBlock, { type: 'SUMMARY' }>;
+    const propertyCompletenessBullets = summary.id === 'property-summary' && summary.bullets?.length
+      ? [{ label: 'Guidance focus', body: framingText }, ...summary.bullets].slice(0, 4)
+      : summary.bullets;
     blocks[summaryIndex] = {
       ...summary,
-      body: `${framingText} ${summary.body}`,
+      body: propertyCompletenessBullets === summary.bullets ? `${framingText} ${summary.body}` : summary.body,
+      ...(propertyCompletenessBullets ? { bullets: propertyCompletenessBullets } : {}),
       actions: journeyCorrectionAction && summary.actions.length < 3
         ? [...summary.actions, journeyCorrectionAction]
         : summary.actions,

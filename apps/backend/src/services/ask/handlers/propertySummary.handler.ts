@@ -289,6 +289,13 @@ async function propertySummaryResult(userId: string, propertyId: string, message
       : completeRecordFocus
       ? 'Choose an area to continue in this conversation. Sections that need review appear first.'
       : statusObservation ?? '',
+    ...(completenessFocus ? {
+      bullets: [
+        { label: 'Property details', body: completenessBody },
+        { label: 'What the score covers', body: 'Governed property facts. Missing, conflicted, or out-of-date facts are not counted as known.' },
+        { label: 'Broader home record', body: 'Rooms, systems and inventory, documents, warranties, household access, and home history are tracked separately.' },
+      ],
+    } : {}),
     tone: roomFocus ? (rooms ? 'DEFAULT' : 'CAUTION') : (completenessFocus || completeRecordFocus) && degradedSections.length ? 'CAUTION' : 'DEFAULT',
     // Browsing the record answers first (FRD v1.1 §1.2): how much is recorded, how complete it is, and what needs the homeowner, in two lines.
     ...(completeRecordFocus ? recordOverviewLines({ percent, counts: recordAreaCounts, pendingDetails: completenessCounts.missing + completenessCounts.conflicted + completenessCounts.stale, documentsNeedingReview: documents?.needsReviewCount ?? 0 }) : {}),
