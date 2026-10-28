@@ -29,6 +29,10 @@ export function askAnswerWidth(blocks: AskPresentationBlock[]): AskAnswerWidth {
   if (blocks.some((block) => block.type === 'TREND_CHART' || block.id.startsWith('break-even-'))) return 'STANDARD';
   // Sell / Hold / Rent, Ownership Costs, Coverage Reviews, and the Do-Nothing Simulator are the same kind of decision answer (summary, scenario cards, short tables), so they share that measure.
   if (blocks.some((block) => block.id.startsWith('sell-hold-rent-') || block.id.startsWith('do-nothing-') || block.id.startsWith('ownership-cost') || block.id.startsWith('coverage-'))) return 'STANDARD';
+  // Home Operations is a scan-heavy operational artifact. Its desktop rows use
+  // aligned metadata, state and action columns, so give the list the wider
+  // workspace measure while retaining the ordinary single-column mobile flow.
+  if (blocks.some((block) => block.id === 'home-work-items')) return 'WIDE';
   return blocks.some((block) => WIDE_BLOCK_TYPES.has(block.type)
     || (block.type === 'PRIORITY_LIST' && block.items.length > 1)
     || (block.type === 'GROUPED_LIST' && Boolean(block.presentation)))

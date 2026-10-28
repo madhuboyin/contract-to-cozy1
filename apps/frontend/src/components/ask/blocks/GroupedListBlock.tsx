@@ -379,7 +379,7 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
       data-plant-care-list={isPlantCareList ? block.id : undefined}
       className={cn(
         isFramedDecisionList ? 'w-full rounded-2xl border border-slate-200/90 bg-white shadow-2xs' : 'overflow-hidden rounded-2xl border border-slate-200 bg-white',
-        block.id === 'home-work-items' && 'w-full max-w-[960px]',
+        block.id === 'home-work-items' && 'w-full',
       )}
       data-grouped-list-presentation={presentation.toLowerCase()}
       data-list-density={dense ? 'dense' : undefined}
@@ -387,6 +387,7 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
       <div
         className={cn(
           'border-b border-slate-100',
+          block.id === 'home-work-items' && 'sr-only',
           isFramedDecisionList && 'rounded-t-2xl bg-gradient-to-r from-slate-50/90 via-white to-teal-50/30 px-4 py-2.5 sm:px-5',
           !isFramedDecisionList && (dense ? 'px-3 py-2.5' : 'px-4 py-3'),
         )}
@@ -539,7 +540,7 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
                     ? item.meta.slice(1).filter((m) => m !== coverageExposureMeta)
                     : [];
                   return <li key={item.id} data-ask-task-id={item.id} tabIndex={-1} className={cn('border outline-offset-2', dense ? 'border-b-0 border-r-0 border-t-0 px-2 py-2' : 'rounded-xl', dense && (overdueWorkItem ? 'border-l-4 border-l-rose-400 bg-rose-50/70' : sellHoldRentDriversList && impactLevel === 'HIGH' ? 'border-l-4 border-l-amber-400 bg-amber-50/30 py-2.5' : sellHoldRentDriversList ? 'border-l-4 border-l-teal-500/60 py-2.5' : 'border-l-0'), !dense && (presentation === 'COMPACT_LIST' ? 'px-3 py-2' : isCoverageGapItem || isPlantCareList ? 'px-3.5 py-2.5' : isOwnershipCostList || isServicePriceRadarList ? 'px-3 py-2.5' : 'p-3'), selected ? 'border-teal-600 bg-teal-50' : !dense && (isConfirmedGapItem || isPlantCareNowItem ? 'border-rose-200/85 border-l-4 border-l-rose-500 bg-gradient-to-br from-rose-50/35 via-white to-white shadow-2xs' : isUnclearGapItem || isPlantCareSoonItem ? 'border-amber-200/85 border-l-4 border-l-amber-500 bg-gradient-to-br from-amber-50/35 via-white to-white shadow-2xs' : isPlantCareRoutineItem ? 'border-emerald-200/85 border-l-4 border-l-emerald-500 bg-gradient-to-br from-emerald-50/30 via-white to-white shadow-2xs' : isEvidenceGapItem ? 'border-slate-200/90 border-l-4 border-l-sky-500 bg-slate-50/50' : presentation === 'COMPACT_LIST' ? 'border-transparent bg-white' : isOwnershipCostList || isServicePriceRadarList || isCoverageGroupsList || isPlantCareList ? 'border-slate-200/80 bg-slate-50/55' : 'border-transparent bg-slate-50'))}>
-                    {dense ? <div className={cn('flex flex-col gap-1.5', !homeWorkItemList && 'sm:flex-row sm:items-center sm:justify-between sm:gap-3')} data-dense-row-content="">
+                    {dense ? <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3" data-dense-row-content="">
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-baseline gap-x-2" data-dense-primary-line="">
                           {item.href ? <AskContextLink className="font-medium text-slate-950 hover:text-teal-700" href={item.href}>{item.title}</AskContextLink> : <p className={cn('font-medium text-slate-950', sellHoldRentDriversList && 'font-semibold')}>{item.title}</p>}
@@ -547,7 +548,7 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
                         </div>
                         {item.meta.length > 0 && <p className="mt-0.5 truncate text-xs text-slate-500" title={item.meta.join(' · ')}>{item.meta.join(' · ')}</p>}
                       </div>
-                      {(visibleStatus || overdueWorkItem || inlineDenseActions.length > 0) && <div className={cn('flex shrink-0 items-center gap-1.5', homeWorkItemList && 'w-full flex-wrap')}>
+                      {(visibleStatus || overdueWorkItem || inlineDenseActions.length > 0) && <div className={cn('flex shrink-0 items-center gap-1.5', homeWorkItemList && 'w-full flex-wrap sm:w-auto sm:flex-nowrap sm:justify-end')}>
                         {overdueWorkItem && <span className="rounded-full bg-rose-100 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-rose-700">Overdue</span>}
                         {impactLevel && (
                           <span aria-hidden="true" className="inline-flex items-end gap-0.5 px-1">
@@ -557,7 +558,7 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
                           </span>
                         )}
                         {visibleStatus && <span data-item-status={visibleStatus.toLowerCase()} className={cn('rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-wide', impactLevel === 'HIGH' ? 'border border-amber-200 bg-amber-100/80 text-amber-900' : impactLevel === 'MEDIUM' ? 'border border-teal-200 bg-teal-50 text-teal-800' : impactLevel === 'LOW' ? 'border border-slate-200 bg-slate-100 text-slate-600' : 'bg-white text-slate-500')}>{visibleStatus}</span>}
-                        {inlineDenseActions.length > 0 && <div className={cn('flex items-center gap-1.5', homeWorkItemList && 'mt-1 basis-full border-t border-slate-100 pt-2')} data-home-work-item-actions={homeWorkItemList ? '' : undefined}>
+                        {inlineDenseActions.length > 0 && <div className={cn('flex items-center gap-1.5', homeWorkItemList && 'mt-1 basis-full border-t border-slate-100 pt-2 sm:mt-0 sm:basis-auto sm:border-t-0 sm:pt-0')} data-home-work-item-actions={homeWorkItemList ? '' : undefined}>
                           {inlineDenseActions.map((itemAction) => <button key={itemAction.id} type="button" disabled={itemActionsDisabled} onClick={() => onItemAction(item.entityType, item.id, itemAction.message, itemAction.operationId, itemAction.interactionType)} className={cn('min-h-8 rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors disabled:opacity-50', itemAction.style === 'PRIMARY' ? 'bg-teal-700 text-white hover:bg-teal-800' : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50')}>{itemAction.label}</button>)}
                           {overflowDenseActions.length > 0 && <details className="relative">
                             <summary className="flex min-h-8 cursor-pointer list-none items-center rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50">More</summary>

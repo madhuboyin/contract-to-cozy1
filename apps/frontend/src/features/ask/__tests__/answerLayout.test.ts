@@ -15,6 +15,7 @@ test.each<AskPresentationBlock>([
   { type: 'TIMELINE', id: 'timeline', title: 'History', items: [] },
   { type: 'COMPARISON', id: 'comparison', title: 'Options', options: [], actions: [] },
   { type: 'GROUPED_LIST', id: 'shelves', title: 'Items', sections: [], filters: [], actions: [], presentation: { pattern: 'SHELVES' } },
+  { type: 'GROUPED_LIST', id: 'home-work-items', title: 'Work items', sections: [], filters: [], actions: [], listDensity: 'DENSE' },
   { type: 'PRIORITY_LIST', id: 'priorities', title: 'Priorities', propertyId: 'home', rankingPolicyVersion: 'v1', generatedAt: '2026-10-01T00:00:00.000Z', sourceFreshnessAt: null, truncated: false, items: [
     { homeActionId: 'one', title: 'One', consumerPriority: 'WATCH', comparativeReasonCodes: [], confidenceLabel: 'MEDIUM', deadlineAt: null, dependencyRefs: [], cta: null, inlineLaunch: null, watchState: null, suppressed: false, completed: false, unavailable: false, stale: false },
     { homeActionId: 'two', title: 'Two', consumerPriority: 'WATCH', comparativeReasonCodes: [], confidenceLabel: 'MEDIUM', deadlineAt: null, dependencyRefs: [], cta: null, inlineLaunch: null, watchState: null, suppressed: false, completed: false, unavailable: false, stale: false },
