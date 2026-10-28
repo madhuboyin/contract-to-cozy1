@@ -1,4 +1,6 @@
 import { createHash } from 'node:crypto';
+import { confirmExpenseCommand, expenseCommandResult } from './expenseCommands.handler';
+import { isExpenseActionId } from '../support/expenseCommand';
 import { HouseholdRole } from '@prisma/client';
 import type { AskCaptureRequest } from '../../../productFramework/ask/ask.contract';
 import type { AskOperationResult } from '../askOperationRegistry';
@@ -85,10 +87,13 @@ export async function ownershipCostCommandResult(userId: string, propertyId: str
 registerCapabilityHandler('ownership-costs.command', async (envelope) => {
   const launch = envelope.launchContext;
   if (launch?.operationId !== 'OWNERSHIP_COST_COMMAND' || launch.surface === 'ASK_REFRESH' || envelope.message !== OWNERSHIP_COST_COMMAND_MESSAGE) return ownershipCostCommandResult(envelope.userId, envelope.propertyId!, null);
+  // Expenses (FRD v1.467) are extra actions of this command with their own handler.
+  if (isExpenseActionId(launch.actionId)) return expenseCommandResult(envelope.userId, envelope.propertyId!, { actionId: launch.actionId, entityId: launch.entityId ?? null, sourceExecutionId: launch.sourceExecutionId ?? null });
   return ownershipCostCommandResult(envelope.userId, envelope.propertyId!, launch);
 });
 
 async function confirmOwnershipCostCommand(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
+  if (ctx.parameters.ownershipCostExpense) return confirmExpenseCommand(ctx);
   const { execution, userId, parameters } = ctx; const propertyId = execution.propertyId;
   const command = parameters.ownershipCostCommand as { actionId: string; entityId: string; decision?: OwnershipCostDecisionAction; input?: Record<string, unknown> };
   let artifactType = 'OWNERSHIP_COST_DECISION'; let artifactId = command.entityId || propertyId; let title = 'Ownership Costs updated';

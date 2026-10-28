@@ -127,6 +127,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
     'ownership-cost-save-forecast', 'ownership-cost-create-scenario', 'ownership-cost-rename-scenario', 'ownership-cost-archive-scenario', 'ownership-cost-delete-scenario',
     'ownership-cost-record-monthly-buffer', 'ownership-cost-record-capital-reserve', 'ownership-cost-change-accept', 'ownership-cost-change-save', 'ownership-cost-change-snooze',
     'ownership-cost-change-no-action', 'ownership-cost-change-resolve', 'ownership-cost-change-dismiss', 'ownership-cost-change-reopen', 'ownership-cost-toggle-notification',
+    'ownership-cost-expense-add',
   ]),
   OWNERSHIP_COST_COMMAND: new Set(['ownership-cost-show-current']),
   INVENTORY_LOOKUP: new Set(['add-inventory', 'show-inventory', 'add-inventory-item']),

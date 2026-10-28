@@ -46,6 +46,8 @@ import { homePlantAddResult, homePlantContextVersion, MATERIAL_SPEC_UPDATE_CAPTU
 import { negotiationShieldStartContextVersion, negotiationShieldStartResult } from '../handlers/negotiationShieldStart.handler';
 import { MATERIAL_SPEC_EXPORT_CAPTURE_KEY, MaterialSpecExportAnswerSchema } from '../support/materialSpecStateCommand';
 import { materialSpecStateResult } from '../handlers/materialSpecStateCommands.handler';
+import { EXPENSE_CAPTURE_KEY, isExpenseActionId, parseExpenseAnswer } from '../support/expenseCommand';
+import { expenseCommandResult } from '../handlers/expenseCommands.handler';
 import { REPAIR_REPLACE_WHAT_IF_CAPTURE_KEY, RepairReplaceWhatIfAnswerSchema } from '../support/repairReplaceWhatIf';
 import { repairReplaceWhatIfResult } from '../handlers/miscHandlers.handler';
 import { GUIDANCE_JOURNEY_DISMISS_REASON_CAPTURE_KEY, GuidanceDismissReasonAnswerSchema } from '../support/guidanceJourneyRestore';
@@ -1277,6 +1279,21 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     captureId = input.idempotencyKey;
     capturedContextVersion = currentVersion;
     canonicalOwner = 'RoomPlantProfile';
+  } else if (execution.operationId === 'OWNERSHIP_COST_COMMAND' && input.captureKey === EXPENSE_CAPTURE_KEY) {
+    // The expense form (FRD v1.467): it only prepares the confirmation; the expense is written when that is confirmed.
+    const access = await ensurePropertyAccess(userId, execution.propertyId);
+    if (access.role === HouseholdRole.VIEWER) throw Object.assign(new Error('A contributor or owner is required to change expenses.'), { code: 'ASK_PERMISSION_REQUIRED' });
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson) ? execution.parametersJson as Record<string, unknown> : {};
+    const expenseLaunch = storedParameters.expenseLaunch && typeof storedParameters.expenseLaunch === 'object' && !Array.isArray(storedParameters.expenseLaunch)
+      ? storedParameters.expenseLaunch as { actionId?: unknown; entityId?: unknown; sourceExecutionId?: unknown } : null;
+    if (!expenseLaunch || !isExpenseActionId(typeof expenseLaunch.actionId === 'string' ? expenseLaunch.actionId : null)) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    if (!parseExpenseAnswer(input.answer).success) throw Object.assign(new Error('Enter what it was for, a category, an amount above zero and a date that is not in the future.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+    result = await expenseCommandResult(userId, execution.propertyId, {
+      actionId: expenseLaunch.actionId as never, entityId: typeof expenseLaunch.entityId === 'string' ? expenseLaunch.entityId : null, sourceExecutionId: typeof expenseLaunch.sourceExecutionId === 'string' ? expenseLaunch.sourceExecutionId : null,
+    }, input.answer as Record<string, unknown>);
+    captureId = input.idempotencyKey;
+    capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
+    canonicalOwner = 'Expense';
   } else if (execution.operationId === 'OWNERSHIP_COST_COMMAND') {
     if (input.captureKey !== OWNERSHIP_COST_SCENARIO_CAPTURE_KEY && input.captureKey !== OWNERSHIP_COST_DECISION_CAPTURE_KEY) {
       const error = new Error('This ownership-cost form is no longer active.');

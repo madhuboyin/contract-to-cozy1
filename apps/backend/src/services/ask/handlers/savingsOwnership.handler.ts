@@ -22,6 +22,7 @@ import {
   SAVINGS_AVAILABLE_ENTITY_TYPE, SAVINGS_COMMAND_ACTION_IDS, SAVINGS_COMMAND_MESSAGES, SAVINGS_IN_PROGRESS_ENTITY_TYPE, type SavingsCommandKind,
 } from '../support/savingsBenefitCommand';
 import { OWNERSHIP_COST_ACTION_IDS, OWNERSHIP_COST_COMMAND_MESSAGE } from '../support/ownershipCostConstants';
+import { EXPENSE_ACTION_IDS, EXPENSE_CATEGORY_FOR_OWNERSHIP_CATEGORY, EXPENSE_CATEGORY_LABELS, type ExpenseCategory } from '../support/expenseCommand';
 import { collectionDescriptor } from '../support/collectionDescriptor';
 import { SAVINGS_COMMAND_ACTION_IDS as RECURRING_ACTION_IDS, SAVINGS_COMMAND_MESSAGES as RECURRING_MESSAGES, RECURRING_ROW_ACTION_LABELS, SAVINGS_BENEFITS_SCAN_ENTITY_ID, SAVINGS_BENEFITS_SCAN_ENTITY_TYPE, recurringRowActionKinds } from '../support/savingsBenefitCommand';
 import { SAVINGS_RECURRING_ALL, SAVINGS_RECURRING_CATEGORIES, SAVINGS_RECURRING_CATEGORY_ENTITY_TYPE, formatPlanAmount, savingsRecurringRow, type SavingsRecurringCategory } from '../support/savingsRecurringSetup';
@@ -518,6 +519,48 @@ const moneyFromCents = (cents: number | null | undefined) => cents == null ? 'Un
 const codeLabel = (value: string) => value.toLowerCase().replace(/_/g, ' ').replace(/^./, (letter) => letter.toUpperCase());
 const ownershipCommandAction = (id: string, label: string, entityId: string, style: 'PRIMARY' | 'SECONDARY' = 'SECONDARY') => ({ id, label, interactionType: 'MUTATE_RECORD' as const, message: OWNERSHIP_COST_COMMAND_MESSAGE, operationId: 'OWNERSHIP_COST_COMMAND', style, entityId, entityType: 'OWNERSHIP_COST_ACTION' });
 
+/** The label of the Add action a category's correction offers, in the words Desktop's expense page uses. */
+const EXPENSE_ADD_LABELS: Record<string, string> = { UTILITIES: 'Add a utility expense', HOA: 'Add an HOA fee', PROPERTY_TAX: 'Add a property tax payment', KNOWN_REPAIR: 'Add a repair expense' };
+/** Asking for the expenses themselves, or to record one, rather than for the cost totals. */
+const expenseFocusPattern = /\b(?:my|our|recent|recorded)\s+expenses\b|\bexpenses?\s+(?:list|log|history|tracker)\b|\b(?:add|record|log|enter)\s+(?:an?|my|another)\s+(?:new\s+)?expense\b/i;
+
+interface OwnExpenseRow { id: string; description: string; category: ExpenseCategory; amount: unknown; transactionDate: Date; projectId: string | null }
+/** The expenses the caller recorded for this home (Desktop's page is the same: an expense belongs to the profile that recorded it), newest first. */
+async function ownExpenses(userId: string, propertyId: string): Promise<{ rows: OwnExpenseRow[]; total: number }> {
+  const db = prisma as any;
+  const profile = await db.homeownerProfile.findFirst({ where: { userId }, select: { id: true } });
+  if (!profile) return { rows: [], total: 0 };
+  const where = { propertyId, homeownerProfileId: profile.id };
+  const [rows, total] = await Promise.all([
+    db.expense.findMany({ where, orderBy: [{ transactionDate: 'desc' }, { id: 'asc' }], take: 10, select: { id: true, description: true, category: true, amount: true, transactionDate: true, projectId: true } }),
+    db.expense.count({ where }),
+  ]);
+  return { rows, total };
+}
+
+/** The "Expenses you recorded" list (FRD v1.467): the source of five cost categories, with Add on the header and Change and Delete on each row. */
+export function ownershipExpensesBlock(expenses: { rows: readonly OwnExpenseRow[]; total: number }, canChange: boolean): AskPresentationBlock | null {
+  if (!expenses.rows.length && !canChange) return null;
+  const action = (id: string, label: string, entityId: string) => ({ ...ownershipCommandAction(id, label, entityId), style: 'QUIET' as const });
+  const items = expenses.rows.map((row) => ({
+    id: row.id, entityType: 'EXPENSE', title: row.description, description: null,
+    meta: [EXPENSE_CATEGORY_LABELS[row.category] ?? codeLabel(String(row.category)), `$${Number(row.amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, row.transactionDate.toISOString().slice(0, 10), row.projectId ? 'From a project' : null].filter((value): value is string => Boolean(value)),
+    status: null, href: null,
+    // An expense a project created is changed with the project, so it carries no action here.
+    actions: canChange && !row.projectId ? [action(EXPENSE_ACTION_IDS.EDIT, 'Change', row.id), action(EXPENSE_ACTION_IDS.DELETE, 'Delete', row.id)] : [],
+  }));
+  return {
+    type: 'GROUPED_LIST', id: 'ownership-cost-expenses', title: 'Expenses you recorded',
+    description: expenses.rows.length
+      ? `${expenses.total > expenses.rows.length ? `The newest ${expenses.rows.length} of ${expenses.total}. ` : ''}Utility, HOA, property-tax, repair and project expenses feed the totals above; expenses other household members recorded count too but are not listed here.`
+      : 'You have not recorded an expense for this home. Utility, HOA, property-tax, repair and project expenses feed the totals above.',
+    filters: [], sections: [{ id: 'recorded-expenses', title: 'Expenses', count: expenses.total, items }],
+    // A list's own action is a workflow start; the row actions below are record changes.
+    actions: canChange ? [{ ...ownershipCommandAction(EXPENSE_ACTION_IDS.ADD, 'Add an expense', '', 'PRIMARY'), interactionType: 'START_WORKFLOW' as const }] : [],
+  };
+}
+
+
 async function ownershipChangesResult(userId: string, propertyId: string, lens: OwnershipCostCurrentLens): Promise<AskOperationResult> {
   const [changes, decisions, access] = await Promise.all([
     ownershipCostChangeService.getObservedChanges(propertyId, userId, lens),
@@ -641,6 +684,7 @@ async function ownershipCostsResult(userId: string, propertyId: string, message:
   ]);
   const activeRequirement = context.requirements[0];
   const canImproveContext = access.role !== HouseholdRole.VIEWER;
+  const canChange = canImproveContext;
   const captureSupported = activeRequirement
     && canImproveContext
     && activeRequirement.capture.actionKey !== 'PERMISSION_REQUIRED'
@@ -689,6 +733,8 @@ async function ownershipCostsResult(userId: string, propertyId: string, message:
     category.includedInSelectedLens
     && category.applicability !== 'NOT_APPLICABLE'
     && category.amountCents == null);
+  const expenses = await ownExpenses(userId, propertyId).catch(() => ({ rows: [] as OwnExpenseRow[], total: 0 }));
+  const expenseFocus = expenseFocusPattern.test(message);
   const categoryFocus = /\b(?:largest|biggest|highest|most expensive|which (?:cost |expense )?categor(?:y|ies))\b/i.test(message);
   const largestCategory = included[0];
   const lensLabel = lens === 'CASH_OUTFLOW' ? 'cash outflow' : 'operating expense';
@@ -702,7 +748,9 @@ async function ownershipCostsResult(userId: string, propertyId: string, message:
 
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY', id: 'ownership-costs-summary',
-    title: categoryFocus && largestCategory?.monthlyAmountCents != null
+    title: expenseFocus
+      ? `You recorded ${expenses.total} expense${expenses.total === 1 ? '' : 's'} for this home`
+      : categoryFocus && largestCategory?.monthlyAmountCents != null
       ? `${largestCategory.label} is the largest recorded category at about ${money(largestCategory.monthlyAmountCents / 100)} per month`
       : `This home’s recorded ${lensLabel} is about ${monthly} per month`,
     body: `${annual} per year is included in the ${lensLabel} lens.${categoryFocus && largestCategory ? ` ${largestCategory.label} represents ${costs.snapshot.annualTotalCents > 0 ? Math.round(((largestCategory.amountCents ?? 0) / costs.snapshot.annualTotalCents) * 100) : 0}% of that recorded total.` : ''} ${money(costs.evidenceSummary.confirmedAnnualCents / 100)} is supported by confirmed or observed records and ${money(costs.evidenceSummary.estimatedAnnualCents / 100)} is estimated. ${missing.length ? `${missing.length} included categor${missing.length === 1 ? 'y is' : 'ies are'} still missing and not counted as zero.` : 'No included category is currently marked missing.'}`,
@@ -738,7 +786,9 @@ async function ownershipCostsResult(userId: string, propertyId: string, message:
           id: category.category, entityType: 'OWNERSHIP_COST_CATEGORY', title: category.label,
           description: category.missingDependencies.length ? category.missingDependencies.join(' · ') : 'No usable current amount is recorded.',
           status: 'MISSING', meta: [],
-          actions: [{ id: `ownership-cost-review-${category.category.toLowerCase()}`, label: review.label, interactionType: 'CONVERSATION_CONTINUE', message: review.message, operationId: review.operationId, style: 'PRIMARY' }],
+          actions: [{ id: `ownership-cost-review-${category.category.toLowerCase()}`, label: review.label, interactionType: 'CONVERSATION_CONTINUE', message: review.message, operationId: review.operationId, style: 'PRIMARY' },
+            // The correction for a category an expense feeds (FRD v1.467): record the expense here, in Ask, with that category already chosen.
+            ...(canChange && EXPENSE_CATEGORY_FOR_OWNERSHIP_CATEGORY[category.category] ? [ownershipCommandAction(EXPENSE_ACTION_IDS.ADD, EXPENSE_ADD_LABELS[category.category], EXPENSE_CATEGORY_FOR_OWNERSHIP_CATEGORY[category.category]!)] : [])],
         };
       }) }], actions: [],
     });
@@ -756,6 +806,8 @@ async function ownershipCostsResult(userId: string, propertyId: string, message:
       text: `${category.label}: ${category.monthlyAmountCents == null ? 'monthly amount unknown' : `${money(category.monthlyAmountCents / 100)} per month`} and ${category.amountCents == null ? 'annual amount unknown' : `${money(category.amountCents / 100)} per year`}.`,
     },
   }));
+  const expensesBlock = ownershipExpensesBlock(expenses, canChange);
+  if (expensesBlock) blocks.push(expensesBlock);
   if (evidence.length) blocks.push({ type: 'EVIDENCE', id: 'ownership-cost-evidence', title: 'Sources and periods', items: evidence });
   blocks.push(ownershipViewSwitcher('current'));
   blocks.push({

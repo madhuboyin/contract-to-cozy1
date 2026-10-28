@@ -33,6 +33,8 @@ const ACTION_ROLE_FLOORS: Readonly<Record<string, HouseholdRole>> = Object.freez
     ['home-record-restore', 'CONTRIBUTOR'],
     // A repair or replace what-if is a contributor's re-run, as Desktop's run route (FRD v1.466).
     ['repair-replace-what-if', 'CONTRIBUTOR'],
+    // Recording, changing and deleting an expense are contributor writes (FRD v1.467).
+    ...['ownership-cost-expense-add', 'ownership-cost-expense-edit', 'ownership-cost-expense-delete'].map((id): [string, HouseholdRole] => [id, 'CONTRIBUTOR']),
     // Material state controls and the materials export are contributor writes, as the page's own routes (FRD v1.465).
     ...['material-spec-archive', 'material-spec-restore', 'material-spec-delete', 'material-spec-export'].map((id): [string, HouseholdRole] => [id, 'CONTRIBUTOR']),
   ],
