@@ -133,6 +133,14 @@ test('every block and the boundary survive the answer-trust validator, and nothi
   assert.equal(JSON.stringify(result).includes('/dashboard/'), false);
 });
 
+test('the typed upgrade-planner answer passes the semantic relevance check for the phrasing that used to ask for a clarification', () => {
+  const { validateAskSemanticAnswerRelevance } = require('../../src/services/ask/askSemanticAnswerValidator.ts');
+  const result = homeUpgradeScenariosFromView(scenarios(), 'p1', NOW);
+  const verdict = validateAskSemanticAnswerRelevance({ question: 'Show my upgrade planner options', operationId: 'HOME_UPGRADE_SCENARIOS', result });
+  assert.equal(verdict.outcome, 'PASS');
+  assert.deepEqual(verdict.reasonCodes, ['CANONICAL_TYPED_ANSWER_CONTRACT_MATCH']);
+});
+
 test('saved-option phrasing routes here; repair-or-replace advice and creating or running options do not', () => {
   const route = (message) => resolveAskRoutingCascade(message, { localRoutingEnabled: true }).operation?.operationId;
   for (const message of ['Show my upgrade planner options', 'Open my home digital twin', 'Which saved what-if scenarios have results ready?', 'How do our saved upgrade options compare on cost?']) {

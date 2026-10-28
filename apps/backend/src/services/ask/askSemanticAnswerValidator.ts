@@ -6,6 +6,7 @@ import { projectAskSemanticResponse } from './askSemanticResponseProjection';
 import { matchesInventoryAnswerContract } from './askInventoryIntent';
 import { matchesMaintenanceStatusAnswerContract } from './askMaintenanceIntent';
 import { matchesSavingsOpportunitiesAnswerContract } from './askSavingsIntent';
+import { matchesHomeUpgradeScenariosAnswerContract } from './askHomeUpgradeIntent';
 import { matchesOwnershipCostsAnswerContract } from './askOwnershipCostsIntent';
 import { matchesHomeActionsAnswerContract } from './askHomeActionsIntent';
 import { matchesQuoteComparisonReviewAnswerContract } from './askQuoteReviewIntent';
@@ -192,6 +193,14 @@ export function validateAskSemanticAnswerRelevance(input: {
   }
   if (input.operationId === 'REFINANCE_ANALYSIS'
     && matchesRefinanceScenarioAnswerContract(input.result)) {
+    return finish({
+      outcome: 'PASS', selectedOperationId: input.operationId, competingOperationId: null,
+      selectedOperationScore: 1, competingOperationScore: 0, questionAnswerScore: 1,
+      reasonCodes: ['CANONICAL_TYPED_ANSWER_CONTRACT_MATCH'],
+    });
+  }
+  if (input.operationId === 'HOME_UPGRADE_SCENARIOS'
+    && matchesHomeUpgradeScenariosAnswerContract(input.result)) {
     return finish({
       outcome: 'PASS', selectedOperationId: input.operationId, competingOperationId: null,
       selectedOperationScore: 1, competingOperationScore: 0, questionAnswerScore: 1,
