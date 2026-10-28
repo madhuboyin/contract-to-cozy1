@@ -204,6 +204,10 @@ export const ASK_DISCOVERY_BINDINGS: readonly AskCapabilityBinding[] = Object.fr
   read('understand-completeness', 'property-brief', 'PROPERTY_SUMMARY', PROPERTY_SUMMARY_COMPLETENESS_STARTER_MESSAGE, 'How complete is my home record?'),
   // Key contextual tools need an explicit shelf in More ideas: otherwise a homeowner must already know the product name or the exact question
   // that routes to them. Keep these as pure Ask reads; the answer can explain the tool and offer its existing page handoff.
+  // Records a homeowner can add, change and delete on their own. Each opens the list whose rows and Add action carry those changes, so a
+  // homeowner can find them without knowing the exact question; every change still ends in a review and a confirmation.
+  read('understand-inventory', 'home-records', 'INVENTORY_LOOKUP', 'Show my home inventory', 'Browse and update my home inventory'),
+  read('understand-rooms', 'property-brief', 'PROPERTY_SUMMARY', 'Show my rooms', 'Review and update my rooms'),
   read('understand-continuity-plan', 'home-digital-will', 'HOME_DIGITAL_WILL', 'Show my home continuity plan', 'Review my Home Continuity Plan'),
   read('understand-material-specs', 'material-specs', 'MATERIAL_SPECS_LIST', 'Show my material specs', 'Review my Material Specs'),
 
@@ -223,11 +227,13 @@ export const ASK_DISCOVERY_BINDINGS: readonly AskCapabilityBinding[] = Object.fr
 
   read('protect-coverage', 'coverage-intelligence', 'COVERAGE_GAPS', 'Which items are missing coverage?', 'Which items are missing coverage?'),
   read('protect-coverage-review', 'coverage-intelligence', 'COVERAGE_REVIEW_STATUS', 'What questions should I ask my insurer?', 'Review my policy questions'),
+  read('protect-warranties', 'coverage-intelligence', 'WARRANTY_LOOKUP', 'Show my warranties', 'Review and manage my warranties'),
   read('protect-coverage-compare', 'coverage-intelligence', 'COVERAGE_COMPARISON_STATUS', 'Compare my current insurance policy against alternatives', 'Compare my coverage choices'),
   read('protect-changes', 'home-briefing', 'HOME_CHANGE_SUMMARY', 'What changed recently for this home?', 'What changed recently for this home?'),
 
   read('save-opportunities', 'savings-benefits', 'SAVINGS_OPPORTUNITIES', 'Where could I save money on this home?', 'Where could I save money?'),
   read('save-costs', 'ownership-costs', 'OWNERSHIP_COSTS', 'What are my biggest ownership costs?', 'What are my biggest ownership costs?'),
+  read('save-expenses', 'ownership-costs', 'OWNERSHIP_COSTS', 'Show my expenses', 'Track my expenses'),
 
   // `quote-comparison` is a workflow-only capability (CAP-FR-035), so its review is not offered as a general idea; the validator rejects a binding to it.
 

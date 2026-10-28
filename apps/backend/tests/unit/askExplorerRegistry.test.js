@@ -225,3 +225,22 @@ test('the capability-card bindings are the same source, unchanged, and validated
   assert.match(validateAskCapabilityBindings({ nope: { operationId: 'HOME_ACTIONS', message: 'x' } }).join('\n'), /card-binding\/nope: unknown capability/);
   assert.match(validateAskCapabilityBindings({ maintenance: { operationId: 'NOT_AN_OPERATION', message: 'x' } }).join('\n'), /unknown operation NOT_AN_OPERATION/);
 });
+
+// FRD 1.474: the records a homeowner can add, change and delete on their own are discoverable, each as a READ that opens the list carrying those actions.
+test('inventory, rooms, warranties and expenses each have a reviewed READ entry that opens their list', () => {
+  const expected = {
+    'understand-inventory': ['INVENTORY_LOOKUP', 'Show my home inventory'],
+    'understand-rooms': ['PROPERTY_SUMMARY', 'Show my rooms'],
+    'protect-warranties': ['WARRANTY_LOOKUP', 'Show my warranties'],
+    'save-expenses': ['OWNERSHIP_COSTS', 'Show my expenses'],
+  };
+  for (const [id, [operationId, question]] of Object.entries(expected)) {
+    const entry = explorerEntryById(id);
+    assert.ok(entry, id);
+    assert.equal(entry.operationId, operationId);
+    assert.equal(entry.question, question);
+    assert.equal(entry.kind, 'READ');
+    assert.equal(entry.launch, 'MESSAGE');
+  }
+  assert.deepEqual(validateAskExplorerRegistry(), []);
+});
