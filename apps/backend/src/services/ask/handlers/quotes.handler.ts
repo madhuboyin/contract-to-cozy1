@@ -11,6 +11,7 @@ import { getQuoteComparisonWorkspace, getWorkspaceComparability } from '../../qu
 import { money } from '../askFormatting';
 import { askContextFingerprint, durableFreeTextClarification, QuoteWorkspaceCommandInputSchema, ensurePropertyAccess } from '../askHandlerSupport';
 import { PRICE_COMMAND_ACTION_IDS, PRICE_COMMAND_MESSAGES } from '../support/priceFinalizationCommand';
+import { SERVICE_QUOTE_OUTCOME_CONSENT_COPY } from '../../quoteOutcomeConsentCopy';
 import { QUOTE_COMMAND_ACTION_IDS, QUOTE_COMMAND_MESSAGES, QUOTE_ENTITY_TYPE, QUOTE_WORKSPACE_ENTITY_TYPE } from '../support/quoteComparisonCommand';
 
 export async function quoteWorkspaceContextVersion(propertyId: string): Promise<string> {
@@ -141,8 +142,8 @@ export function quoteReviewComparison(
   };
 }
 
-async function quoteComparisonReviewResult(propertyId: string, canChange = false): Promise<AskOperationResult> {
-  const latest = await prisma.quoteComparisonWorkspace.findFirst({ where: { propertyId }, orderBy: { updatedAt: 'desc' }, select: { id: true, outcome: true, journeyStage: true, selectedQuoteId: true } });
+async function quoteComparisonReviewResult(propertyId: string, canChange = false, isOwner = false): Promise<AskOperationResult> {
+  const latest = await prisma.quoteComparisonWorkspace.findFirst({ where: { propertyId }, orderBy: { updatedAt: 'desc' }, select: { id: true, outcome: true, journeyStage: true, selectedQuoteId: true, outcomeMeasurementConsentedAt: true, outcomeMeasurementConsentRevokedAt: true } });
   if (!latest) return {
     status: 'READY_WITH_LIMITATIONS', reasonCode: 'QUOTE_COMPARISON_NOT_STARTED',
     blocks: [{ type: 'SUMMARY', id: 'quote-review-empty', title: 'No quote comparison is recorded yet', body: canChange
@@ -189,6 +190,18 @@ async function quoteComparisonReviewResult(propertyId: string, canChange = false
       actions: [linked
         ? { id: 'negotiation-shield-review', label: 'Review the negotiation', interactionType: 'START_WORKFLOW' as const, message: 'Review this negotiation case.', operationId: 'NEGOTIATION_SHIELD_CASES' as const, entityType: 'NEGOTIATION_SHIELD_CASE', entityId: linked.id, style: 'SECONDARY' as const }
         : { id: NEGOTIATION_QUOTE_WORKSPACE_ACTION_ID, label: 'Prepare negotiation', interactionType: 'START_WORKFLOW' as const, message: NEGOTIATION_QUOTE_WORKSPACE_MESSAGE, operationId: 'NEGOTIATION_SHIELD_CASE_START' as const, entityType: QUOTE_WORKSPACE_ENTITY_TYPE, entityId: latest.id, style: 'SECONDARY' as const }],
+    });
+  }
+  // Outcome sharing is the owner's voluntary choice (FRD v1.460): offered only to the owner, never preselected, and unrelated to using the comparison.
+  if (isOwner) {
+    const sharing = Boolean(latest.outcomeMeasurementConsentedAt && !latest.outcomeMeasurementConsentRevokedAt);
+    blocks.push({
+      type: 'SUMMARY', id: 'quote-review-outcome-sharing', title: SERVICE_QUOTE_OUTCOME_CONSENT_COPY.title, tone: 'DEFAULT',
+      body: `${SERVICE_QUOTE_OUTCOME_CONSENT_COPY.scope} ${SERVICE_QUOTE_OUTCOME_CONSENT_COPY.exclusions} ${SERVICE_QUOTE_OUTCOME_CONSENT_COPY.revocation} ${sharing ? 'Sharing is on.' : 'Sharing is off.'}`,
+      actions: [{
+        id: QUOTE_COMMAND_ACTION_IDS.CONSENT, label: sharing ? 'Stop sharing outcomes' : 'Share outcomes', interactionType: 'START_WORKFLOW' as const, message: QUOTE_COMMAND_MESSAGES.CONSENT,
+        operationId: 'QUOTE_COMPARISON_COMMAND' as const, entityType: QUOTE_WORKSPACE_ENTITY_TYPE, entityId: latest.id, style: 'QUIET' as const,
+      }],
     });
   }
   // IW-PRES-016 (FRD v1.76): two to four quotes still in play render as a comparison strip; one quote, or five and
@@ -243,5 +256,5 @@ registerCapabilityHandler('quote-comparison.create', async (envelope) => quoteCo
 
 registerCapabilityHandler('quote-comparison.review', async (envelope, deps) => {
   const access = deps.propertyAccess ?? await ensurePropertyAccess(envelope.userId, envelope.propertyId!);
-  return quoteComparisonReviewResult(envelope.propertyId!, access.role !== 'VIEWER');
+  return quoteComparisonReviewResult(envelope.propertyId!, access.role !== 'VIEWER', access.role === 'OWNER');
 });

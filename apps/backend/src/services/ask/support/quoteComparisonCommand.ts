@@ -21,6 +21,7 @@ export const QUOTE_COMMAND_MESSAGES = {
   CLARIFY: 'Ask the provider a question about this proposal.',
   RESOLVE: 'Record the provider answer to a question.',
   CLOSE: 'Close this quote decision.',
+  CONSENT: 'Change whether the outcome of this quote decision is shared.',
 } as const;
 export type QuoteCommandKind = keyof typeof QUOTE_COMMAND_MESSAGES;
 
@@ -36,10 +37,11 @@ export const QUOTE_COMMAND_ACTION_IDS = {
   CLARIFY: 'quote-comparison-clarify-quote',
   RESOLVE: 'quote-comparison-resolve-clarification',
   CLOSE: 'quote-comparison-close-decision',
+  CONSENT: 'quote-comparison-outcome-sharing',
 } as const;
 
 /** The decision itself is the target of Add and Close; every other command targets one proposal. */
-export const quoteCommandTargetsWorkspace = (kind: QuoteCommandKind): boolean => kind === 'ADD' || kind === 'CLOSE' || kind === 'IMPORT';
+export const quoteCommandTargetsWorkspace = (kind: QuoteCommandKind): boolean => kind === 'ADD' || kind === 'CLOSE' || kind === 'IMPORT' || kind === 'CONSENT';
 
 export function quoteCommandKindFromMessage(message: string): QuoteCommandKind | null {
   const found = (Object.entries(QUOTE_COMMAND_MESSAGES) as Array<[QuoteCommandKind, string]>).find(([, value]) => value === message);

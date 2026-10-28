@@ -238,7 +238,8 @@ test('every action id the review and the receipt emit is allowlisted for the ope
     action: { id, label: 'x', interactionType: 'START_WORKFLOW', message: 'm', operationId, style: 'PRIMARY' },
     operationId, propertyId: 'prop-1', householdRole: role, authoritativeSourceAvailable: true,
   });
-  for (const id of Object.values(command.QUOTE_COMMAND_ACTION_IDS)) assert.equal(applicable(id, 'QUOTE_COMPARISON_REVIEW'), true, id);
+  // Outcome sharing is the owner's own consent (FRD v1.460); every other action is a contributor's.
+  for (const id of Object.values(command.QUOTE_COMMAND_ACTION_IDS)) assert.equal(applicable(id, 'QUOTE_COMPARISON_REVIEW', id === command.QUOTE_COMMAND_ACTION_IDS.CONSENT ? 'OWNER' : 'CONTRIBUTOR'), true, id);
   assert.equal(applicable('quote-comparison-back', OP), true);
 });
 

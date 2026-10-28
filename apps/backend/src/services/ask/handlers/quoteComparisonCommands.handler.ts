@@ -19,9 +19,10 @@ import { registerConfirmCapabilityHandler, type ConfirmCapabilityContext, type C
 import { reconcileAskExecutionSideEffects } from '../execution/executeOperation';
 import { ensurePropertyAccess } from '../askHandlerSupport';
 import { humanDate, money } from '../askFormatting';
+import { SERVICE_QUOTE_OUTCOME_CONSENT_COPY, SERVICE_QUOTE_OUTCOME_CONSENT_FIELDS, SERVICE_QUOTE_OUTCOME_POLICY_VERSION } from '../../quoteOutcomeConsentCopy';
 import {
   confirmQuoteProposal, createQuoteClarification, createQuoteProposal, deleteQuoteProposal, getQuoteReview, getWorkspaceComparability, resolveQuoteClarification,
-  selectQuoteForDecision, setQuoteProposalDisposition, transitionQuoteDecision, updateQuoteProposal,
+  selectQuoteForDecision, setQuoteProposalDisposition, setServiceQuoteOutcomeMeasurementConsent, transitionQuoteDecision, updateQuoteProposal,
 } from '../../quoteComparison.service';
 import { assertProjectComplianceDecisionsApplicable } from '../../projectCompliance/context';
 import { emitServiceQuoteDecisionAnalytics, ServiceQuoteDecisionEvent } from '../../serviceQuoteDecisionAnalytics.service';
@@ -84,6 +85,14 @@ async function loadQuote(propertyId: string, quoteId: string): Promise<{ quote: 
   if (!quote) return null;
   const { workspace, ...rest } = quote;
   return { quote: rest as QuoteRow, workspace: workspace as WorkspaceRow };
+}
+
+/** Whether the owner's outcome-sharing consent is on now: given, and not since revoked. Read from the record, never from the conversation. */
+async function outcomeConsentOn(propertyId: string, workspaceId: string): Promise<boolean> {
+  const row = await database.quoteComparisonWorkspace.findFirst({
+    where: { id: workspaceId, propertyId }, select: { outcomeMeasurementConsentedAt: true, outcomeMeasurementConsentRevokedAt: true },
+  });
+  return Boolean(row?.outcomeMeasurementConsentedAt && !row?.outcomeMeasurementConsentRevokedAt);
 }
 
 const isoDate = (value: Date | null) => (value ? value.toISOString().slice(0, 10) : null);
@@ -210,6 +219,35 @@ export async function quoteCommandResult(userId: string, propertyId: string, lau
   if (quoteCommandTargetsWorkspace(kind)) {
     const workspace = await loadWorkspace(propertyId, launch.entityId);
     if (!workspace) return unavailable('QUOTE_WORKSPACE_NOT_FOUND', 'That comparison is no longer available', 'Ask could not find that quote comparison for this home. Nothing has changed.');
+    // Outcome sharing is the owner's own data-sharing choice (as on Desktop), and it stays available on a closed decision: the figures it covers arrive after the work.
+    if (kind === 'CONSENT') {
+      if (access.role !== HouseholdRole.OWNER) {
+        return { status: 'BLOCKED', reasonCode: 'ASK_PERMISSION_REQUIRED', blocks: [{ type: 'SUMMARY', id: 'quote-consent-owner-only', title: 'Only the owner can change this', body: `${SERVICE_QUOTE_OUTCOME_CONSENT_COPY.ownerOnly} Nothing has changed.`, tone: 'CAUTION', actions: [backToReview] }], suggestions: [] };
+      }
+      const contextVersion = quoteCommandContextVersion(workspace);
+      const turnOn = !(await outcomeConsentOn(propertyId, workspace.id));
+      const title = turnOn ? 'Share the outcome of this quote decision?' : 'Stop sharing the outcome of this quote decision?';
+      const description = turnOn
+        ? `${SERVICE_QUOTE_OUTCOME_CONSENT_COPY.scope} ${SERVICE_QUOTE_OUTCOME_CONSENT_COPY.exclusions} ${SERVICE_QUOTE_OUTCOME_CONSENT_COPY.revocation}`
+        : 'This stops future capture of the final price and change-order totals. It does not affect recommendations or booking, and you can turn it on again later.';
+      return {
+        status: 'NEEDS_CONFIRMATION', reasonCode: 'QUOTE_CONSENT_CONFIRMATION_REQUIRED', contextVersion,
+        parameters: { quoteConsent: { consented: turnOn }, quoteCommand: { kind, entityId: workspace.id }, quoteCommandContextVersion: contextVersion, ...base },
+        blocks: [{ type: 'SUMMARY', id: 'quote-consent-review', title, body: 'Nothing changes until you confirm. This is your choice alone and is not needed to use the comparison.', tone: 'DEFAULT', actions: [] }],
+        confirmation: {
+          confirmationId: `quote-consent-${sha(`${propertyId}:${workspace.id}:${turnOn}`).slice(0, 12)}-1`, version: 1, title, description,
+          fields: [
+            { label: 'Shared if you agree', value: 'The final price and material change-order totals, after completed work' },
+            { label: 'Never included', value: 'Estimates, contractor notes and quote text' },
+            { label: 'Policy', value: SERVICE_QUOTE_OUTCOME_POLICY_VERSION },
+          ],
+          editableFields: [], confirmLabel: turnOn ? 'Share outcome' : 'Stop sharing',
+          consentText: turnOn ? 'I choose to share the final price and change-order totals of this quote decision to improve price guidance.' : 'I choose to stop sharing the outcome of this quote decision.',
+          expiresAt: expiresAt.toISOString(),
+        },
+        suggestions: [],
+      };
+    }
     if (workspace.outcome !== 'OPEN') return unavailable('QUOTE_WORKSPACE_CLOSED', 'This quote decision is closed', `${closedMessage} Nothing has changed.`);
     const contextVersion = quoteCommandContextVersion(workspace);
     const formKind: QuoteFormKind = kind === 'CLOSE' ? 'CLOSE' : kind === 'IMPORT' ? 'IMPORT' : 'ADD';
@@ -518,6 +556,18 @@ async function confirmQuoteCommand(ctx: ConfirmCapabilityContext): Promise<Confi
       description = imported.alreadyImported
         ? 'Its current version is already one of your proposals. Nothing was added.'
         : `${(imported.quote.lineItems ?? []).length} line item${(imported.quote.lineItems ?? []).length === 1 ? '' : 's'} and ${(imported.quote.terms ?? []).length} term${(imported.quote.terms ?? []).length === 1 ? '' : 's'} were read. Nothing is confirmed yet: use Confirm the facts on the proposal to review every value.`;
+    } else if (kind === 'CONSENT') {
+      const stored = parameters.quoteConsent as { consented?: unknown } | undefined;
+      if (ctx.access.role !== HouseholdRole.OWNER) throw stale(SERVICE_QUOTE_OUTCOME_CONSENT_COPY.ownerOnly);
+      if (typeof stored?.consented !== 'boolean') throw stale('The sharing choice is invalid.');
+      if (stored.consented === await outcomeConsentOn(propertyId, workspace.id)) throw stale('Outcome sharing is already set that way. Review it again.', 'ASK_CONTEXT_VERSION_CONFLICT');
+      await setServiceQuoteOutcomeMeasurementConsent(propertyId, workspace.id, userId, { consented: stored.consented, ...SERVICE_QUOTE_OUTCOME_CONSENT_FIELDS, policyVersion: SERVICE_QUOTE_OUTCOME_POLICY_VERSION });
+      artifactType = 'QUOTE_COMPARISON_WORKSPACE';
+      title = stored.consented ? 'Outcome sharing is on' : 'Outcome sharing is off';
+      description = stored.consented
+        ? 'The final price and change-order totals will be captured after completed work. You can turn this off at any time.'
+        : 'Future capture has stopped. Recommendations and booking are unaffected.';
+      details.push({ label: 'Policy', value: SERVICE_QUOTE_OUTCOME_POLICY_VERSION });
     } else if (kind === 'CLOSE') {
       const checked = parseQuoteFormAnswer('CLOSE', parameters.quoteClose);
       if (!checked.success) throw stale('The way to close this decision is invalid.');

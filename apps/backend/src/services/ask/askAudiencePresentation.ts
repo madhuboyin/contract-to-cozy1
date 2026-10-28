@@ -3,6 +3,7 @@ import type { AskPresentationBlock } from '../../productFramework/ask/ask.contra
 import type { PropertyJourneyContext } from '../skills/context/propertyJourneyContext.contract';
 import type { AskOperationResult } from './askOperationRegistry';
 import { HOME_JOURNEY_SET_MESSAGE } from './support/homeSettingsConstants';
+import { QUOTE_COMMAND_ACTION_IDS } from './support/quoteComparisonCommand';
 import { COVERAGE_COMMAND_ACTION_IDS, COVERAGE_COMMAND_KIND_ROLE_FLOORS, type CoverageCommandKind } from './support/coverageCommand';
 
 type AskAction = Extract<AskPresentationBlock, { type: 'SUMMARY' }>['actions'][number];
@@ -21,8 +22,12 @@ const ROLE_RANK: Record<HouseholdRole, number> = { VIEWER: 0, CONTRIBUTOR: 1, OW
  * checks below cannot express that, and the handler and command enforce it independently; this keeps the policy layer in agreement.
  */
 const ACTION_ROLE_FLOORS: Readonly<Record<string, HouseholdRole>> = Object.freeze(Object.fromEntries(
-  (Object.keys(COVERAGE_COMMAND_KIND_ROLE_FLOORS) as CoverageCommandKind[]).map((kind) => [COVERAGE_COMMAND_ACTION_IDS[kind], COVERAGE_COMMAND_KIND_ROLE_FLOORS[kind]]),
-));
+  [
+    ...(Object.keys(COVERAGE_COMMAND_KIND_ROLE_FLOORS) as CoverageCommandKind[]).map((kind): [string, HouseholdRole] => [COVERAGE_COMMAND_ACTION_IDS[kind], COVERAGE_COMMAND_KIND_ROLE_FLOORS[kind]]),
+    // Sharing a quote decision's outcome is a data-sharing consent: the owner's choice, as on Desktop (FRD v1.460).
+    [QUOTE_COMMAND_ACTION_IDS.CONSENT, 'OWNER'],
+  ],
+) as Record<string, HouseholdRole>);
 
 export function isAskActionAllowedForHouseholdRole(action: AskAction, householdRole: HouseholdRole): boolean {
   const floor = ACTION_ROLE_FLOORS[action.id];
