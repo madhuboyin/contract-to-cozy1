@@ -36,6 +36,7 @@ import { CAPITAL_BUNDLE_ACTION_ID, CAPITAL_BUNDLE_ENTITY_TYPE, capitalBundle } f
 import { SERVICE_PRICE_CHECK_MESSAGE } from '../support/homeToolRunConstants';
 import { isPrimaryAccountHolder } from './homeToolRuns.handler';
 import { RESERVE_FUND_ACTION_IDS, RESERVE_FUND_COMMAND_MESSAGE } from '../support/reserveFundConstants';
+import { completedAskAuthoritativeSourceEvidence } from '../askAnswerTrustPolicy';
 import { RENOVATION_CASE_START_ACTION_ID, RENOVATION_CASE_START_MESSAGE } from '../support/renovationCaseStart';
 import {
   READINESS_COMMAND_ACTION_IDS, READINESS_COMMAND_MESSAGES, RENOVATION_READINESS_CASE_ENTITY_TYPE, RENOVATION_READINESS_ITEM_ENTITY_TYPE, type ReadinessCommandKind,
@@ -426,6 +427,8 @@ async function renovationPermitReadinessResult(propertyId: string, message: stri
   if (isRenovationRetroactiveRequest(message)) return renovationRetroactiveResult(propertyId, cases, canStart);
   if (!cases.length) return {
     status: 'NEEDS_CONTEXT', reasonCode: 'RENOVATION_CASE_REQUIRED',
+    // NEEDS_CONTEXT is not an evidence-bearing status, so without this the answer-trust validator treats the read as unavailable and strips the Start CTA.
+    parameters: { answerTrustEvidence: { schemaVersion: '1.0', sources: [completedAskAuthoritativeSourceEvidence('RENOVATION_PERMIT_READINESS')] } },
     blocks: [{
       type: 'SUMMARY', id: 'renovation-readiness-empty', title: 'No active renovation case is recorded',
       body: `No active renovation case is recorded, so readiness cannot be checked. The Permit Tracker currently shows ${permitSummary.totalPermits} permit record${permitSummary.totalPermits === 1 ? '' : 's'} and ${permitSummary.openFlags} unresolved flag${permitSummary.openFlags === 1 ? '' : 's'}, but those records cannot establish the scope of new work. ${canStart ? 'Start a renovation case to describe the work, then check its readiness.' : 'A contributor or owner can start a renovation case.'}`,

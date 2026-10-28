@@ -224,8 +224,8 @@ test('every id the flow emits is allowlisted for the operation that emits it, an
   assert.equal(applicable('renovation-case-start', 'RENOVATION_PERMIT_READINESS'), true);
   assert.equal(applicable('renovation-case-readiness', OP), true);
   const raw = await emptyReadiness('CONTRIBUTOR');
-  const result = { ...raw, parameters: { audiencePresentation: { householdRole: 'CONTRIBUTOR' }, answerTrustEvidence: { schemaVersion: '1.0', sources: [{
-    sourceId: 'renovation-permit.readiness', operationId: 'RENOVATION_PERMIT_READINESS', status: 'COMPLETE', scope: 'FULL', freshness: 'CURRENT', observedAt: '2026-10-12T00:00:00.000Z' }] } } };
+  // No hand-attached evidence: the handler itself must supply it, or the real pipeline strips the CTA from this NEEDS_CONTEXT answer.
+  const result = { ...raw, parameters: { ...raw.parameters, audiencePresentation: { householdRole: 'CONTRIBUTOR' } } };
   const { result: validated } = validateAskAnswerTrust({ question: 'Is my renovation ready to start?', operationId: 'RENOVATION_PERMIT_READINESS', result, propertyId: 'prop-1' });
   // The empty state also offers a review of past work (the historical review), and both survive the answer checker.
   assert.deepEqual(validated.blocks[0].actions.map((a) => a.id), ['renovation-case-start', 'renovation-retroactive-list']);
