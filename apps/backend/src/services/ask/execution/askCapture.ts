@@ -90,6 +90,8 @@ import { workItemCommandResult } from '../handlers/homeWorkItemCommands.handler'
 import { seasonalItemResult } from '../handlers/seasonalItemCommands.handler';
 import { walkthroughCommandResult } from '../handlers/buyerWalkthroughCommands.handler';
 import { closingItemResult } from '../handlers/buyerClosingItemCommands.handler';
+import { professionalCloseResult } from '../handlers/buyerProfessionalClose.handler';
+import { PROFESSIONAL_CLOSE_CAPTURE_KEY, parseProfessionalCloseAnswer } from '../support/buyerProfessionalCloseCommand';
 import { insuranceCommandResult } from '../handlers/buyerInsuranceCommands.handler';
 import { contractCommandResult } from '../handlers/buyerContractCommands.handler';
 import { comparableCommandResult } from '../handlers/propertyTaxComparableCommands.handler';
@@ -1886,6 +1888,18 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     captureId = input.idempotencyKey;
     capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
     canonicalOwner = 'BuyerWalkthroughWorkspace';
+  } else if (execution.operationId === 'BUYER_CLOSING_ITEM_COMMAND' && input.captureKey === PROFESSIONAL_CLOSE_CAPTURE_KEY) {
+    const access = await ensurePropertyAccess(userId, execution.propertyId);
+    if (access.role === HouseholdRole.VIEWER) throw Object.assign(new Error('A contributor or owner is required to change this.'), { code: 'ASK_PERMISSION_REQUIRED' });
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson) ? execution.parametersJson as Record<string, unknown> : {};
+    const pcLaunch = storedParameters.professionalCloseLaunch && typeof storedParameters.professionalCloseLaunch === 'object' && !Array.isArray(storedParameters.professionalCloseLaunch)
+      ? storedParameters.professionalCloseLaunch as { sourceExecutionId?: unknown } : null;
+    if (!pcLaunch) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    if (!parseProfessionalCloseAnswer(input.answer).success) throw Object.assign(new Error('Choose a day that is not in the future.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+    result = await professionalCloseResult(userId, execution.propertyId, { sourceExecutionId: typeof pcLaunch.sourceExecutionId === 'string' ? pcLaunch.sourceExecutionId : null }, input.answer as Record<string, unknown>);
+    captureId = input.idempotencyKey;
+    capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
+    canonicalOwner = 'BuyerClosingDayWorkspace';
   } else if (execution.operationId === 'BUYER_CLOSING_ITEM_COMMAND') {
     const ciKind = closingItemKindFromCaptureKey(input.captureKey);
     if (!ciKind) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });

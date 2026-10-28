@@ -229,6 +229,8 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   BUYER_INSPECTION_REVIEW: new Set(['buyer-setup-inspection']),
   BUYER_DISCLOSURE_FUNDS_READINESS: new Set(['buyer-cd-draft-start', 'buyer-cd-draft-edit', 'buyer-cd-confirm', 'buyer-cd-funds-update']),
   BUYER_CONTRACT_TIMELINE: new Set(['buyer-contract-draft-start', 'buyer-contract-draft-edit', 'buyer-contract-contingency-update', 'buyer-contract-contingency-add', 'buyer-contract-confirm']),
+  // Recording the professional close, on the closing-day readiness answer (FRD v1.461).
+  BUYER_CLOSING_DAY_READINESS: new Set(['buyer-closing-day-professional-close']),
   BUYER_FINANCING_READINESS: new Set(['closing-lender-condition-add', 'closing-lender-condition-update', 'closing-lender-appraisal', 'closing-lender-underwriting']),
   BUYER_TITLE_ESCROW_READINESS: new Set(['closing-title-issue-add', 'closing-title-issue-update', 'buyer-setup-title-contact']),
   // Final-walkthrough readiness answer: the plan, observation and completion actions and the observation and issue row actions (FRD v1.345).

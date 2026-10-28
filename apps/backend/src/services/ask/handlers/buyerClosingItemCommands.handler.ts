@@ -10,6 +10,8 @@ import { registerConfirmCapabilityHandler, type ConfirmCapabilityContext, type C
 import { reconcileAskExecutionSideEffects } from '../execution/executeOperation';
 import { ensurePropertyAccess } from '../askHandlerSupport';
 import { humanDate } from '../askFormatting';
+import { confirmProfessionalCloseCommand, professionalCloseResult } from './buyerProfessionalClose.handler';
+import { PROFESSIONAL_CLOSE_ENTITY_TYPE, PROFESSIONAL_CLOSE_MESSAGE } from '../support/buyerProfessionalCloseCommand';
 import { BuyerPurchaseLenderReadinessService } from '../../buyerPurchaseLenderReadiness.service';
 import { BuyerTitleEscrowService } from '../../buyerTitleEscrow.service';
 import {
@@ -181,6 +183,16 @@ export async function closingItemResult(
 
 registerCapabilityHandler('buyer-closing-item.command', async (envelope) => {
   const launch = envelope.launchContext;
+  // Recording the professional close (FRD v1.461) shares this command but not its trackers: it has its own handler.
+  if (envelope.message === PROFESSIONAL_CLOSE_MESSAGE) {
+    if (launch?.operationId !== 'BUYER_CLOSING_ITEM_COMMAND' || launch.surface === 'ASK_REFRESH' || launch.entityType !== PROFESSIONAL_CLOSE_ENTITY_TYPE) {
+      return {
+        status: 'NOT_APPLICABLE', reasonCode: 'ASK_BUYER_CLOSING_ITEM_NOT_DIRECTLY_ROUTABLE',
+        blocks: [{ type: 'SUMMARY', id: 'buyer-closing-item-not-routable', title: 'Open your closing-day readiness first', body: 'The professional close is recorded from your closing-day readiness. Nothing has changed.', tone: 'DEFAULT', actions: [] }], suggestions: [],
+      };
+    }
+    return professionalCloseResult(envelope.userId, envelope.propertyId!, { sourceExecutionId: launch.sourceExecutionId ?? null });
+  }
   const kind = closingItemKindFromMessage(envelope.message);
   const update = kind ? isUpdateKind(kind) : false;
   const expectedType = kind && closingItemTracker(kind) === 'LENDER' ? CLOSING_ITEM_ENTITY_TYPES.LENDER : CLOSING_ITEM_ENTITY_TYPES.TITLE;
@@ -194,6 +206,7 @@ registerCapabilityHandler('buyer-closing-item.command', async (envelope) => {
 });
 
 async function confirmClosingItem(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
+  if (ctx.parameters.professionalClose) return confirmProfessionalCloseCommand(ctx);
   const { execution, userId, parameters } = ctx;
   const command = parameters.closingItemCommand as { kind?: unknown; entityId?: unknown } | undefined;
   const kind = command?.kind as ClosingItemKind | undefined;

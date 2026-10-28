@@ -28,6 +28,7 @@ const closingItemRowAction = (kind: ClosingItemKind, labelText: string) => ({
 });
 import { BuyerClosingDisclosureService } from '../../buyerClosingDisclosure.service';
 import { BuyerClosingDayService } from '../../buyerClosingDay.service';
+import { PROFESSIONAL_CLOSE_ACTION_ID, PROFESSIONAL_CLOSE_ENTITY_TYPE, PROFESSIONAL_CLOSE_MESSAGE } from '../support/buyerProfessionalCloseCommand';
 import { BuyerContractService } from '../../buyerContract.service';
 import { buyerPlanContextProvider } from '../../skills/context/buyerPlanContext.provider';
 import { type AskOperationResult } from '../askOperationRegistry';
@@ -1033,6 +1034,7 @@ async function buyerClosingDayReadinessResult(userId: string, propertyId: string
   if (data.presentationMode === 'CANDIDATE' || !data.overview) {
     return buyerNotActiveResult(propertyId, data.contextVersion, 'This purchase property does not have an active Buyer Plan yet, so there is no closing-day checklist to review.');
   }
+  const canRecordClose = (await ensurePropertyAccess(userId, propertyId)).role !== HouseholdRole.VIEWER;
   const closingDayData = await BuyerClosingDayService.get(userId, propertyId);
   const workspace = closingDayData.workspace as unknown as { identificationReady: boolean; requiredDocumentsReady: boolean; fundsReadinessReviewed: boolean; blockersReviewed: boolean; questionsResolved: boolean; professionalClosingConfirmedAt: string | null } | null;
   const blockers = (closingDayData as { blockers?: Array<{ id: string; title: string; status: string }> }).blockers ?? [];
@@ -1044,7 +1046,11 @@ async function buyerClosingDayReadinessResult(userId: string, propertyId: string
     title: professionalConfirmed ? 'The professional close is confirmed complete' : blockers.length ? `${blockers.length} blocker${blockers.length === 1 ? '' : 's'} remain before closing day` : `${readyCount} of ${checklist.length || 5} closing-day items ready`,
     body: professionalConfirmed ? 'This purchase has moved to the first-90-day homeowner experience.' : 'Confirm your appointment, identification, required documents, funds readiness, and questions before closing day.',
     tone: blockers.length ? 'CAUTION' : 'DEFAULT',
-    actions: [],
+    // Recording the professional close (FRD v1.461): a contributor or owner, once, and only until it is recorded. The command checks every prerequisite.
+    actions: !professionalConfirmed && workspace && canRecordClose ? [{
+      id: PROFESSIONAL_CLOSE_ACTION_ID, label: 'Record that my closing is complete', interactionType: 'START_WORKFLOW' as const, message: PROFESSIONAL_CLOSE_MESSAGE,
+      operationId: 'BUYER_CLOSING_ITEM_COMMAND' as const, entityType: PROFESSIONAL_CLOSE_ENTITY_TYPE, entityId: propertyId, style: 'SECONDARY' as const,
+    }] : [],
   }];
   // IW-PRES-020 (FRD v1.91): the workspace's five checks as a ring, ahead of the blockers list.
   const ring = buyerClosingDayProgress(workspace, blockers);
