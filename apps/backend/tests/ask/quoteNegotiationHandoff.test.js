@@ -113,7 +113,7 @@ test('the quote review offers Prepare negotiation once a proposal is selected (R
   const saved = { a: propertyAccess.resolvePropertyAccess, p: prismaModule.prisma, g: quoteService.getQuoteComparisonWorkspace, c: quoteService.getWorkspaceComparability };
   const build = async (role, ws) => {
     propertyAccess.resolvePropertyAccess = async () => ({ role, userId: 'u1', propertyId: 'p1' });
-    prismaModule.prisma = new Proxy({}, { get(_t, model) { if (model === 'then') return undefined; if (model === 'quoteComparisonWorkspace') return { findFirst: async () => ({ id: 'ws1', outcome: ws.outcome, journeyStage: 'REVIEW', selectedQuoteId: ws.selectedQuoteId }) }; throw new Error(`Unexpected prisma.${String(model)}`); } });
+    prismaModule.prisma = new Proxy({}, { get(_t, model) { if (model === 'then') return undefined; if (model === 'quoteComparisonWorkspace') return { findFirst: async () => ({ id: 'ws1', outcome: ws.outcome, journeyStage: 'REVIEW', selectedQuoteId: ws.selectedQuoteId }), findMany: async () => [] }; throw new Error(`Unexpected prisma.${String(model)}`); } });
     quoteService.getQuoteComparisonWorkspace = async () => ({ ...ws, quotes: [] });
     quoteService.getWorkspaceComparability = async () => ({ status: 'NOT_COMPARABLE', reasons: ['x'], eligibleQuoteIds: [] });
     return capabilityInvoke('QUOTE_COMPARISON_REVIEW', { userId: 'u1', propertyId: 'p1', message: 'Compare my roofing quotes' });

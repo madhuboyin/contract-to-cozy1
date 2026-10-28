@@ -246,7 +246,7 @@ test('every action id the review and the receipt emit is allowlisted for the ope
 async function review(role, outcome = 'OPEN') {
   const savedWs = prisma.quoteComparisonWorkspace;
   const savedGet = quoteService.getQuoteComparisonWorkspace; const savedCompare = quoteService.getWorkspaceComparability;
-  prisma.quoteComparisonWorkspace = { findFirst: async () => ({ id: 'ws-1', outcome, journeyStage: 'SCOPE_REVIEW' }) };
+  prisma.quoteComparisonWorkspace = { findFirst: async () => ({ id: 'ws-1', outcome, journeyStage: 'SCOPE_REVIEW' }), findMany: async () => [] };
   quoteService.getQuoteComparisonWorkspace = async () => ({ updatedAt: new Date('2026-10-01T00:00:00Z'), quotes: [
     { id: 'q-1', vendorName: 'Acme', quoteAmount: 100, currency: 'USD', decision: 'UNDECIDED', isSelected: false, readinessStage: 'COMPARISON_READY', terms: [] },
     { id: 'q-2', vendorName: 'Beta', quoteAmount: 120, currency: 'USD', decision: 'REJECTED', isSelected: false, readinessStage: 'NEEDS_SCOPE_REVIEW', terms: [] },

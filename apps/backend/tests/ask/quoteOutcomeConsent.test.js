@@ -77,7 +77,7 @@ test('the command is declared-action only and its action is allowlisted for the 
 
 async function review(role, consent) {
   const savedWs = prisma.quoteComparisonWorkspace; const savedGet = quoteService.getQuoteComparisonWorkspace; const savedCompare = quoteService.getWorkspaceComparability;
-  prisma.quoteComparisonWorkspace = { findFirst: async () => ({ id: 'ws-1', outcome: 'OPEN', journeyStage: 'SCOPE_REVIEW', selectedQuoteId: null, ...consent }) };
+  prisma.quoteComparisonWorkspace = { findFirst: async () => ({ id: 'ws-1', outcome: 'OPEN', journeyStage: 'SCOPE_REVIEW', selectedQuoteId: null, ...consent }), findMany: async () => [] };
   quoteService.getQuoteComparisonWorkspace = async () => ({ updatedAt: new Date('2026-10-01T00:00:00Z'), quotes: [{ id: 'q-1', vendorName: 'Acme', quoteAmount: 100, currency: 'USD', decision: 'UNDECIDED', isSelected: false, readinessStage: 'COMPARISON_READY', terms: [] }] });
   quoteService.getWorkspaceComparability = async () => ({ status: 'COMPARABLE', eligibleQuoteIds: ['q-1'], reasons: [] });
   try {

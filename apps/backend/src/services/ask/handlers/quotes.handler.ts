@@ -8,11 +8,14 @@ import { type AskOperationResult } from '../askOperationRegistry';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { NEGOTIATION_QUOTE_WORKSPACE_ACTION_ID, NEGOTIATION_QUOTE_WORKSPACE_MESSAGE } from '../support/negotiationShieldStart';
 import { getQuoteComparisonWorkspace, getWorkspaceComparability } from '../../quoteComparison.service';
-import { money } from '../askFormatting';
+import { money, humanDate, titleCase } from '../askFormatting';
 import { askContextFingerprint, durableFreeTextClarification, QuoteWorkspaceCommandInputSchema, ensurePropertyAccess } from '../askHandlerSupport';
 import { PRICE_COMMAND_ACTION_IDS, PRICE_COMMAND_MESSAGES } from '../support/priceFinalizationCommand';
 import { SERVICE_QUOTE_OUTCOME_CONSENT_COPY } from '../../quoteOutcomeConsentCopy';
 import { QUOTE_COMMAND_ACTION_IDS, QUOTE_COMMAND_MESSAGES, QUOTE_ENTITY_TYPE, QUOTE_WORKSPACE_ENTITY_TYPE } from '../support/quoteComparisonCommand';
+
+/** The declared Open on another quote comparison (FRD v1.464). It re-runs the review focused on that comparison; the message is the review's own. */
+export const QUOTE_OPEN_WORKSPACE_ACTION_ID = 'quote-comparison-open-workspace';
 
 export async function quoteWorkspaceContextVersion(propertyId: string): Promise<string> {
   const workspaces = await prisma.quoteComparisonWorkspace.findMany({ where: { propertyId }, select: { id: true, status: true, updatedAt: true }, orderBy: { id: 'asc' } });
@@ -142,9 +145,21 @@ export function quoteReviewComparison(
   };
 }
 
-async function quoteComparisonReviewResult(propertyId: string, canChange = false, isOwner = false): Promise<AskOperationResult> {
-  const latest = await prisma.quoteComparisonWorkspace.findFirst({ where: { propertyId }, orderBy: { updatedAt: 'desc' }, select: { id: true, outcome: true, journeyStage: true, selectedQuoteId: true, outcomeMeasurementConsentedAt: true, outcomeMeasurementConsentRevokedAt: true } });
-  if (!latest) return {
+async function quoteComparisonReviewResult(propertyId: string, canChange = false, isOwner = false, requestedWorkspaceId: string | null = null): Promise<AskOperationResult> {
+  const reviewSelect = { id: true, outcome: true, journeyStage: true, selectedQuoteId: true, outcomeMeasurementConsentedAt: true, outcomeMeasurementConsentRevokedAt: true };
+  // The most recent comparison by default; a declared "Open" on one of the others (FRD v1.464) shows that one instead, with its own stage, outcome and controls.
+  const shown = await prisma.quoteComparisonWorkspace.findFirst({
+    where: requestedWorkspaceId ? { id: requestedWorkspaceId, propertyId } : { propertyId }, orderBy: { updatedAt: 'desc' }, select: reviewSelect,
+  });
+  if (requestedWorkspaceId && !shown) {
+    return {
+      status: 'NOT_APPLICABLE', reasonCode: 'QUOTE_WORKSPACE_NOT_FOUND',
+      blocks: [{ type: 'SUMMARY', id: 'quote-review-workspace-missing', title: 'That comparison is no longer available', body: 'Ask could not find that quote comparison for this home. It may have been removed. Nothing has changed.', tone: 'DEFAULT',
+        actions: [{ id: QUOTE_OPEN_WORKSPACE_ACTION_ID, label: 'Show my latest comparison', interactionType: 'START_WORKFLOW' as const, message: 'Compare my service quotes', operationId: 'QUOTE_COMPARISON_REVIEW' as const, style: 'SECONDARY' as const }] }],
+      suggestions: [],
+    };
+  }
+  if (!shown) return {
     status: 'READY_WITH_LIMITATIONS', reasonCode: 'QUOTE_COMPARISON_NOT_STARTED',
     blocks: [{ type: 'SUMMARY', id: 'quote-review-empty', title: 'No quote comparison is recorded yet', body: canChange
       ? 'Create a workspace, then record at least two proposals. Ask will not compare unrecorded prices or infer missing scope and terms.'
@@ -152,7 +167,7 @@ async function quoteComparisonReviewResult(propertyId: string, canChange = false
     suggestions: [],
   };
   const [workspace, comparability] = await Promise.all([
-    getQuoteComparisonWorkspace(propertyId, latest.id), getWorkspaceComparability(propertyId, latest.id),
+    getQuoteComparisonWorkspace(propertyId, shown.id), getWorkspaceComparability(propertyId, shown.id),
   ]);
   if (!workspace) throw new Error('Quote comparison workspace is unavailable.');
   const quotes = (workspace.quotes ?? []) as Array<any>;
@@ -160,47 +175,56 @@ async function quoteComparisonReviewResult(propertyId: string, canChange = false
   const amounts = quotes.map((quote) => Number(quote.quoteAmount)).filter(Number.isFinite);
   const lowest = amounts.length ? Math.min(...amounts) : null;
   const highest = amounts.length ? Math.max(...amounts) : null;
+  // The other comparisons on this home (FRD v1.464): a decision started earlier stays reachable, and a viewed earlier one can return to the latest.
+  const [others, mostRecent] = await Promise.all([
+    prisma.quoteComparisonWorkspace.findMany({
+      where: { propertyId, id: { not: shown.id } }, orderBy: { updatedAt: 'desc' }, take: 6,
+      select: { id: true, serviceCategory: true, journeyStage: true, outcome: true, updatedAt: true, scopeSummary: true, _count: { select: { quotes: true } } },
+    }),
+    requestedWorkspaceId ? prisma.quoteComparisonWorkspace.findFirst({ where: { propertyId }, orderBy: { updatedAt: 'desc' }, select: { id: true } }) : Promise.resolve(null),
+  ]);
+  const viewingEarlier = Boolean(requestedWorkspaceId && mostRecent && mostRecent.id !== shown.id);
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY', id: 'quote-review-summary', title: quotes.length < 2 ? 'Add another proposal before comparing' : comparability.status === 'COMPARABLE' ? `${quotes.length} proposals are ready for a scope-aligned review` : 'The recorded proposals are not safely comparable yet',
-    body: `${comparability.reasons.join(' ')}${lowest != null && highest != null ? ` Recorded prices range from ${money(lowest)} to ${money(highest)}.` : ''} A lower total is not automatically a better fit; scope, exclusions, warranty, licensing, insurance, payment terms, and homeowner-confirmed facts remain material.`,
+    body: `${viewingEarlier ? 'This is an earlier comparison, not your most recent one. ' : ''}${comparability.reasons.join(' ')}${lowest != null && highest != null ? ` Recorded prices range from ${money(lowest)} to ${money(highest)}.` : ''} A lower total is not automatically a better fit; scope, exclusions, warranty, licensing, insurance, payment terms, and homeowner-confirmed facts remain material.`,
     tone: comparability.status === 'COMPARABLE' ? 'DEFAULT' : 'CAUTION',
     // A contributor or owner can record another proposal while the decision is open; a viewer is offered nothing it would refuse.
-    actions: canChange && latest.outcome === 'OPEN' ? [{
+    actions: canChange && shown.outcome === 'OPEN' ? [{
       id: QUOTE_COMMAND_ACTION_IDS.ADD, label: 'Add a proposal', interactionType: 'START_WORKFLOW' as const, message: QUOTE_COMMAND_MESSAGES.ADD,
-      operationId: 'QUOTE_COMPARISON_COMMAND' as const, entityType: QUOTE_WORKSPACE_ENTITY_TYPE, entityId: latest.id, style: 'PRIMARY' as const,
+      operationId: 'QUOTE_COMPARISON_COMMAND' as const, entityType: QUOTE_WORKSPACE_ENTITY_TYPE, entityId: shown.id, style: 'PRIMARY' as const,
     }, {
       id: QUOTE_COMMAND_ACTION_IDS.IMPORT, label: 'Add one from a document', interactionType: 'START_WORKFLOW' as const, message: QUOTE_COMMAND_MESSAGES.IMPORT,
-      operationId: 'QUOTE_COMPARISON_COMMAND' as const, entityType: QUOTE_WORKSPACE_ENTITY_TYPE, entityId: latest.id, style: 'SECONDARY' as const,
+      operationId: 'QUOTE_COMPARISON_COMMAND' as const, entityType: QUOTE_WORKSPACE_ENTITY_TYPE, entityId: shown.id, style: 'SECONDARY' as const,
     }, {
       id: QUOTE_COMMAND_ACTION_IDS.CLOSE, label: 'Close this decision', interactionType: 'START_WORKFLOW' as const, message: QUOTE_COMMAND_MESSAGES.CLOSE,
-      operationId: 'QUOTE_COMPARISON_COMMAND' as const, entityType: QUOTE_WORKSPACE_ENTITY_TYPE, entityId: latest.id, style: 'QUIET' as const,
-    }, ...(latest.selectedQuoteId ? [{
+      operationId: 'QUOTE_COMPARISON_COMMAND' as const, entityType: QUOTE_WORKSPACE_ENTITY_TYPE, entityId: shown.id, style: 'QUIET' as const,
+    }, ...(shown.selectedQuoteId ? [{
       // A selected proposal continues into final terms (Price Finalization), the page's own next step.
       id: PRICE_COMMAND_ACTION_IDS.START_QUOTE, label: 'Record the final price', interactionType: 'START_WORKFLOW' as const, message: PRICE_COMMAND_MESSAGES.START_QUOTE,
-      operationId: 'PRICE_FINALIZATION_COMMAND' as const, entityType: QUOTE_WORKSPACE_ENTITY_TYPE, entityId: latest.id, style: 'SECONDARY' as const,
+      operationId: 'PRICE_FINALIZATION_COMMAND' as const, entityType: QUOTE_WORKSPACE_ENTITY_TYPE, entityId: shown.id, style: 'SECONDARY' as const,
     }] : [])] : [],
   }];
   // Desktop's "Continue this decision": once a proposal is selected, negotiation is prepared for it (or, once prepared, reviewed). Its own block, because the summary holds three actions.
   const selected = workspace.selectedQuote as { vendorName?: string } | null;
-  if (canChange && latest.outcome === 'OPEN' && selected) {
+  if (canChange && shown.outcome === 'OPEN' && selected) {
     const linked = workspace.negotiationCase as { id: string; title: string; status: string } | null;
     blocks.push({
       type: 'SUMMARY', id: 'quote-review-continue', title: `Continue with ${selected.vendorName ?? 'the selected proposal'}`, tone: 'DEFAULT',
       body: linked ? `Negotiation is prepared: "${linked.title}".` : 'Prepare a negotiation review for this proposal. It is saved as a draft, linked to this decision, and nothing is sent to anyone.',
       actions: [linked
         ? { id: 'negotiation-shield-review', label: 'Review the negotiation', interactionType: 'START_WORKFLOW' as const, message: 'Review this negotiation case.', operationId: 'NEGOTIATION_SHIELD_CASES' as const, entityType: 'NEGOTIATION_SHIELD_CASE', entityId: linked.id, style: 'SECONDARY' as const }
-        : { id: NEGOTIATION_QUOTE_WORKSPACE_ACTION_ID, label: 'Prepare negotiation', interactionType: 'START_WORKFLOW' as const, message: NEGOTIATION_QUOTE_WORKSPACE_MESSAGE, operationId: 'NEGOTIATION_SHIELD_CASE_START' as const, entityType: QUOTE_WORKSPACE_ENTITY_TYPE, entityId: latest.id, style: 'SECONDARY' as const }],
+        : { id: NEGOTIATION_QUOTE_WORKSPACE_ACTION_ID, label: 'Prepare negotiation', interactionType: 'START_WORKFLOW' as const, message: NEGOTIATION_QUOTE_WORKSPACE_MESSAGE, operationId: 'NEGOTIATION_SHIELD_CASE_START' as const, entityType: QUOTE_WORKSPACE_ENTITY_TYPE, entityId: shown.id, style: 'SECONDARY' as const }],
     });
   }
   // Outcome sharing is the owner's voluntary choice (FRD v1.460): offered only to the owner, never preselected, and unrelated to using the comparison.
   if (isOwner) {
-    const sharing = Boolean(latest.outcomeMeasurementConsentedAt && !latest.outcomeMeasurementConsentRevokedAt);
+    const sharing = Boolean(shown.outcomeMeasurementConsentedAt && !shown.outcomeMeasurementConsentRevokedAt);
     blocks.push({
       type: 'SUMMARY', id: 'quote-review-outcome-sharing', title: SERVICE_QUOTE_OUTCOME_CONSENT_COPY.title, tone: 'DEFAULT',
       body: `${SERVICE_QUOTE_OUTCOME_CONSENT_COPY.scope} ${SERVICE_QUOTE_OUTCOME_CONSENT_COPY.exclusions} ${SERVICE_QUOTE_OUTCOME_CONSENT_COPY.revocation} ${sharing ? 'Sharing is on.' : 'Sharing is off.'}`,
       actions: [{
         id: QUOTE_COMMAND_ACTION_IDS.CONSENT, label: sharing ? 'Stop sharing outcomes' : 'Share outcomes', interactionType: 'START_WORKFLOW' as const, message: QUOTE_COMMAND_MESSAGES.CONSENT,
-        operationId: 'QUOTE_COMPARISON_COMMAND' as const, entityType: QUOTE_WORKSPACE_ENTITY_TYPE, entityId: latest.id, style: 'QUIET' as const,
+        operationId: 'QUOTE_COMPARISON_COMMAND' as const, entityType: QUOTE_WORKSPACE_ENTITY_TYPE, entityId: shown.id, style: 'QUIET' as const,
       }],
     });
   }
@@ -213,7 +237,7 @@ async function quoteComparisonReviewResult(propertyId: string, canChange = false
     columns: [{ key: 'vendor', label: 'Provider' }, { key: 'amount', label: 'Price' }, { key: 'readiness', label: 'Readiness' }, { key: 'scope', label: 'Scope' }],
     rows: quotes.map((quote) => ({ id: quote.id, values: { vendor: quote.vendorName, amount: `${quote.currency ?? 'USD'} ${Number(quote.quoteAmount).toLocaleString(undefined, { maximumFractionDigits: 2 })}`, readiness: comparisonReady.has(quote.id) ? 'Comparison ready' : String(quote.readinessStage ?? 'Needs review').toLowerCase().replace(/_/g, ' '), scope: quote.scopeSummary ?? quote.serviceLabelRaw ?? 'Scope not confirmed' } })), actions: [],
   });
-  const locked = latest.outcome !== 'OPEN' || ['FINALIZATION', 'BOOKING', 'SCHEDULED', 'COMPLETED', 'CLOSED'].includes(String(latest.journeyStage));
+  const locked = shown.outcome !== 'OPEN' || ['FINALIZATION', 'BOOKING', 'SCHEDULED', 'COMPLETED', 'CLOSED'].includes(String(shown.journeyStage));
   if (canChange && !locked && quotes.length) {
     const item = (quote: any) => {
       const rejected = quote.decision === 'REJECTED';
@@ -248,6 +272,22 @@ async function quoteComparisonReviewResult(propertyId: string, canChange = false
   }
   blocks.push({ type: 'GROUPED_LIST', filters: [], id: 'quote-review-gaps', title: 'Comparison controls', description: 'These are the scope or fact gaps the recorded proposals still have. Use Confirm the facts, or Change details, on the proposal.', sections: [{ id: 'controls', title: comparability.status === 'COMPARABLE' ? 'Aligned comparison' : 'What still needs attention', count: Math.max(1, comparability.reasons.length), items: comparability.reasons.map((reason, index) => ({ id: `quote-reason-${index}`, title: reason, description: null, meta: [], status: comparability.status, href: null })) }], actions: [] });
   blocks.push({ type: 'EVIDENCE', id: 'quote-review-evidence', title: 'Proposal freshness', items: quotes.slice(0, 20).map((quote) => ({ label: quote.vendorName, source: quote.sourceType ? `Quote · ${String(quote.sourceType).toLowerCase()}` : 'Recorded quote', observedAt: quote.updatedAt?.toISOString?.() ?? quote.createdAt?.toISOString?.() ?? null })) });
+  if (others.length) {
+    const open = { id: QUOTE_OPEN_WORKSPACE_ACTION_ID, label: 'Open', message: 'Compare my service quotes', operationId: 'QUOTE_COMPARISON_REVIEW' as const, interactionType: 'CONVERSATION_CONTINUE' as const, style: 'SECONDARY' as const };
+    blocks.push({
+      type: 'GROUPED_LIST', filters: [], id: 'quote-review-other-comparisons', title: viewingEarlier ? 'Your other comparisons' : 'Earlier comparisons',
+      description: 'Open one to review its proposals. Each keeps its own decision.',
+      sections: [{ id: 'quote-other-comparisons', title: 'Comparisons', count: others.length, items: others.map((other) => ({
+        id: other.id, title: `${titleCase(String(other.serviceCategory ?? 'Service'))} comparison`, description: other.scopeSummary ?? null,
+        meta: [
+          titleCase(String(other.journeyStage)), other.outcome !== 'OPEN' ? titleCase(String(other.outcome)) : null,
+          `${other._count.quotes} proposal${other._count.quotes === 1 ? '' : 's'}`, `Updated ${humanDate(other.updatedAt)}`, mostRecent && mostRecent.id === other.id ? 'Most recent' : null,
+        ].filter((value): value is string => Boolean(value)),
+        status: null, href: null, entityType: QUOTE_WORKSPACE_ENTITY_TYPE, actions: [open],
+      })) }],
+      actions: [],
+    });
+  }
   blocks.push({ type: 'BOUNDARY', id: 'quote-review-boundary', title: 'Comparison support—not provider endorsement', body: 'Verify scope, credentials, insurance, references, permits, warranties, payment milestones, and final terms. Ask does not accept a quote, rank provider trust, or guarantee workmanship.', severity: 'INFO', suggestions: [] });
   return { status: comparability.status === 'COMPARABLE' ? 'ANSWERED' : 'READY_WITH_LIMITATIONS', reasonCode: comparability.status === 'COMPARABLE' ? undefined : `QUOTE_${comparability.status}`, contextVersion: workspace.updatedAt?.toISOString?.() ?? null, blocks, suggestions: [] };
 }
@@ -256,5 +296,8 @@ registerCapabilityHandler('quote-comparison.create', async (envelope) => quoteCo
 
 registerCapabilityHandler('quote-comparison.review', async (envelope, deps) => {
   const access = deps.propertyAccess ?? await ensurePropertyAccess(envelope.userId, envelope.propertyId!);
-  return quoteComparisonReviewResult(envelope.propertyId!, access.role !== 'VIEWER', access.role === 'OWNER');
+  // A focused read: the declared Open on one comparison carries its workspace as the entity, and a refresh keeps that focus.
+  const launch = envelope.launchContext;
+  const requested = launch?.entityType === QUOTE_WORKSPACE_ENTITY_TYPE && typeof launch.entityId === 'string' && launch.entityId.trim() ? launch.entityId : null;
+  return quoteComparisonReviewResult(envelope.propertyId!, access.role !== 'VIEWER', access.role === 'OWNER', requested);
 });

@@ -631,7 +631,8 @@ async function confirmQuoteCommand(ctx: ConfirmCapabilityContext): Promise<Confi
       status: 'COMPLETED', reasonCode: `QUOTE_COMMAND_${kind}_COMPLETED`,
       blocks: [{
         type: 'WORKFLOW_PROGRESS', id: `quote-command-${kind.toLowerCase()}-${artifactId}`, title, status: 'COMPLETED', description, details,
-        actions: [{ ...backToReview, label: 'See the comparison', style: 'PRIMARY' as const }],
+        // The receipt returns to the comparison that was changed, which may not be the most recent one (FRD v1.464).
+        actions: [{ ...backToReview, label: 'See the comparison', style: 'PRIMARY' as const, entityType: QUOTE_WORKSPACE_ENTITY_TYPE, entityId: workspace.id }],
       }],
       suggestions: [],
     };
