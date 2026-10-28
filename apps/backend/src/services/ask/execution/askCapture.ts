@@ -44,6 +44,8 @@ import { HomePlantAddInputSchema, MaterialSpecAddInputSchema, OwnershipCostDecis
 import { RoomPlantRecommendationInputSchema } from '../support/commandInputs';
 import { homePlantAddResult, homePlantContextVersion, MATERIAL_SPEC_UPDATE_CAPTURE_KEY, materialSpecAddResult, materialSpecContextVersion, materialSpecUpdateResult } from '../handlers/homeRecordAdds.handler';
 import { negotiationShieldStartContextVersion, negotiationShieldStartResult } from '../handlers/negotiationShieldStart.handler';
+import { MATERIAL_SPEC_EXPORT_CAPTURE_KEY, MaterialSpecExportAnswerSchema } from '../support/materialSpecStateCommand';
+import { materialSpecStateResult } from '../handlers/materialSpecStateCommands.handler';
 import { GUIDANCE_JOURNEY_DISMISS_REASON_CAPTURE_KEY, GuidanceDismissReasonAnswerSchema } from '../support/guidanceJourneyRestore';
 import { guidanceJourneyDismissResult, GUIDANCE_JOURNEY_DISMISS_MESSAGE } from '../handlers/guidanceOverview.handler';
 import { GUIDANCE_STEP_DECLARE_CAPTURE_KEY, GUIDANCE_STEP_DECLARE_MESSAGE, GuidanceStepDeclareAnswerSchema } from '../support/guidanceStepDeclare';
@@ -758,6 +760,19 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     captureId = input.idempotencyKey;
     capturedContextVersion = currentVersion;
     canonicalOwner = 'InventoryRoom';
+  } else if (execution.operationId === 'MATERIAL_SPEC_UPDATE' && input.captureKey === MATERIAL_SPEC_EXPORT_CAPTURE_KEY) {
+    // The materials export's title (FRD v1.465): the form only prepares the confirmation; the export is created when it is confirmed.
+    const access = await ensurePropertyAccess(userId, execution.propertyId);
+    if (access.role === HouseholdRole.VIEWER) throw Object.assign(new Error('A contributor or owner is required to export materials.'), { code: 'ASK_PERMISSION_REQUIRED' });
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson) ? execution.parametersJson as Record<string, unknown> : {};
+    const exportLaunch = storedParameters.materialSpecStateLaunch && typeof storedParameters.materialSpecStateLaunch === 'object' && !Array.isArray(storedParameters.materialSpecStateLaunch)
+      ? storedParameters.materialSpecStateLaunch as { sourceExecutionId?: unknown } : null;
+    if (!exportLaunch) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    if (!MaterialSpecExportAnswerSchema.safeParse(input.answer).success) throw Object.assign(new Error('Give the export a title of up to 200 characters.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+    result = await materialSpecStateResult(userId, execution.propertyId, 'EXPORT', { sourceExecutionId: typeof exportLaunch.sourceExecutionId === 'string' ? exportLaunch.sourceExecutionId : null }, input.answer as Record<string, unknown>);
+    captureId = input.idempotencyKey;
+    capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
+    canonicalOwner = 'MaterialSpecExport';
   } else if (execution.operationId === 'MATERIAL_SPEC_UPDATE') {
     // Shared RecordEditor submit (FRD v1.390): the answer is every editor field; the target is the material the editor was opened for.
     if (input.captureKey !== MATERIAL_SPEC_UPDATE_CAPTURE_KEY) {

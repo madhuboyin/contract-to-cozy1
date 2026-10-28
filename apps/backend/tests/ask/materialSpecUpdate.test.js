@@ -73,8 +73,9 @@ test('the list: compact rows with a View details target, friendly status key, th
   const result = materialSpecsFromView(view, 'p1', true);
   const list = result.blocks.find((block) => block.id === 'material-specs-items');
   const item = list.sections[0].items[0];
-  assert.deepEqual([item.entityType, item.status, item.actions.map((a) => [a.id, a.operationId, a.message])], ['MATERIAL_SPEC', 'PROPOSED', [['edit-material', 'MATERIAL_SPEC_UPDATE', 'Edit this material.']]]);
-  assert.deepEqual(list.actions.map((a) => a.operationId), ['MATERIAL_SPEC_ADD']);
+  assert.deepEqual([item.entityType, item.status, item.actions.map((a) => [a.id, a.operationId, a.message])], ['MATERIAL_SPEC', 'PROPOSED', [['edit-material', 'MATERIAL_SPEC_UPDATE', 'Edit this material.'], ['material-spec-archive', 'MATERIAL_SPEC_UPDATE', 'Stop using this material.'], ['material-spec-delete', 'MATERIAL_SPEC_UPDATE', 'Delete this material.']]]);
+  // Add, then Export my materials (FRD v1.465).
+  assert.deepEqual(list.actions.map((a) => a.operationId), ['MATERIAL_SPEC_ADD', 'MATERIAL_SPEC_UPDATE']);
   assert.deepEqual(result.blocks[0].actions, [], 'the Add action moved out of the summary into the collection header');
   assert.equal(result.blocks[0].title, '1 saved material');
   assert.equal(result.blocks[0].body, 'Paint used in this home.');

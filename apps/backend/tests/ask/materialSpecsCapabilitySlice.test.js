@@ -42,6 +42,8 @@ function install() {
   prismaModule.prisma = new Proxy({}, {
     get(_target, model) {
       if (model === 'then') return undefined;
+      // The recent materials exports behind the list's export block (FRD v1.465): none here.
+      if (model === 'materialSpecExport') return { findMany: async () => [] };
       throw new Error(`Unexpected prisma.${String(model)} access`);
     },
   });

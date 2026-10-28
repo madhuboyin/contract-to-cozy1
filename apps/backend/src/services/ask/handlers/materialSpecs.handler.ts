@@ -10,6 +10,8 @@ import { HouseholdRole } from '@prisma/client';
 import { ensurePropertyAccess } from '../askHandlerSupport';
 import { MATERIAL_SPEC_ADD_ACTION_ID, MATERIAL_SPEC_ADD_MESSAGE } from '../support/homeRecordAddConstants';
 import { MATERIAL_CATEGORY_LABELS } from '../support/materialSpecEditor';
+import { MATERIAL_SPEC_STATE_ACTION_IDS, MATERIAL_SPEC_STATE_MESSAGES, materialSpecDeletable } from '../support/materialSpecStateCommand';
+import { humanDate } from '../askFormatting';
 
 const materialSpecService = new MaterialSpecService();
 
@@ -25,10 +27,43 @@ export { MATERIAL_CATEGORY_LABELS };
 
 export const MATERIAL_SPEC_EDIT_MESSAGE = 'Edit this material.';
 
-export function materialSpecsFromView(view: MaterialSpecListView, propertyId: string, canAdd = false): AskOperationResult {
+/** A recent materials export as the list shows it (FRD v1.465). Status is the service's own; a completed file past its keep-until date reads as expired. */
+export interface MaterialExportRow { id: string; status: string; title: string; totalSpecs: number | null; expiresAt: Date | null; createdAt: Date }
+const EXPORT_STATUS_LABELS: Record<string, string> = { PENDING: 'Preparing', GENERATING: 'Preparing', COMPLETED: 'Ready', FAILED: 'Failed', EXPIRED: 'Expired' };
+export const MATERIAL_SPEC_EXPORT_ENTITY_TYPE = 'MATERIAL_SPEC_EXPORT';
+
+/** The recent materials exports, newest first: still preparing, ready to download, or failed in the last 7 days. Expired files are left out. */
+function exportsBlock(exportRows: readonly MaterialExportRow[], now: Date): AskPresentationBlock[] {
+  const recent = exportRows
+    .map((row) => ({ ...row, status: row.status === 'COMPLETED' && row.expiresAt && row.expiresAt.getTime() <= now.getTime() ? 'EXPIRED' : row.status }))
+    .filter((row) => row.status !== 'EXPIRED' && now.getTime() - row.createdAt.getTime() <= 7 * 24 * 60 * 60 * 1000)
+    .slice(0, 3);
+  if (!recent.length) return [];
+  const items = recent.map((row) => ({
+    id: row.id, title: row.title, description: row.status === 'FAILED' ? 'The export could not be prepared. Ask to export again to try once more.' : null,
+    meta: [row.totalSpecs != null ? `${row.totalSpecs} ${row.totalSpecs === 1 ? 'material' : 'materials'}` : null, row.status === 'COMPLETED' && row.expiresAt ? `Download until ${humanDate(row.expiresAt)}` : null].filter((value): value is string => Boolean(value)),
+    status: EXPORT_STATUS_LABELS[row.status] ?? row.status.toLowerCase(), entityType: MATERIAL_SPEC_EXPORT_ENTITY_TYPE, href: null,
+  }));
+  return [{
+    type: 'GROUPED_LIST', filters: [], id: 'material-specs-exports', title: 'Your materials exports', description: 'A PDF of the recorded materials. A ready export can be downloaded below the answer, by anyone with access to this home.',
+    sections: [{ id: 'material-exports', title: 'Recent exports', count: items.length, items }], actions: [],
+  }];
+}
+
+export function materialSpecsFromView(view: MaterialSpecListView, propertyId: string, canAdd = false, exportRows: readonly MaterialExportRow[] = [], now: Date = new Date()): AskOperationResult {
   // A contributor or owner can record a material from here, inside Ask; a viewer reads the list only.
   // Edit is declared per row for contributors and owners only (FRD v1.390); a viewer reads the list and the canonical detail.
-  const editActions = canAdd ? [{ id: 'edit-material', label: 'Edit material', message: MATERIAL_SPEC_EDIT_MESSAGE, interactionType: 'MUTATE_RECORD' as const, operationId: 'MATERIAL_SPEC_UPDATE', style: 'SECONDARY' as const }] : undefined;
+  const editAction = { id: 'edit-material', label: 'Edit material', message: MATERIAL_SPEC_EDIT_MESSAGE, interactionType: 'MUTATE_RECORD' as const, operationId: 'MATERIAL_SPEC_UPDATE', style: 'SECONDARY' as const };
+  // Stop using or use again, and delete (a proposed material only: the service keeps the history of the rest), are declared per row for contributors and owners (FRD v1.465).
+  const stateAction = (id: keyof typeof MATERIAL_SPEC_STATE_ACTION_IDS, label: string) => ({
+    id: MATERIAL_SPEC_STATE_ACTION_IDS[id], label, message: MATERIAL_SPEC_STATE_MESSAGES[id], interactionType: 'MUTATE_RECORD' as const, operationId: 'MATERIAL_SPEC_UPDATE' as const, style: 'QUIET' as const,
+  });
+  const rowActions = (spec: { isActive: boolean; lifecycleStatus: string }) => canAdd ? [
+    editAction,
+    spec.isActive ? stateAction('ARCHIVE', 'Stop using') : stateAction('RESTORE', 'Use again'),
+    ...(materialSpecDeletable(spec.lifecycleStatus) ? [stateAction('DELETE', 'Delete')] : []),
+  ] : undefined;
+  const exportAction = canAdd ? [{ id: MATERIAL_SPEC_STATE_ACTION_IDS.EXPORT, label: 'Export my materials', interactionType: 'START_WORKFLOW' as const, message: MATERIAL_SPEC_STATE_MESSAGES.EXPORT, operationId: 'MATERIAL_SPEC_UPDATE' as const, style: 'SECONDARY' as const }] : [];
   const addActions = canAdd ? [{ id: MATERIAL_SPEC_ADD_ACTION_ID, label: 'Add a material', interactionType: 'START_WORKFLOW' as const, message: MATERIAL_SPEC_ADD_MESSAGE, operationId: 'MATERIAL_SPEC_ADD', style: 'PRIMARY' as const }] : [];
   const boundary: AskPresentationBlock = {
     type: 'BOUNDARY', id: 'material-specs-boundary', title: 'As recorded, not checked against the product',
@@ -86,18 +121,19 @@ export function materialSpecsFromView(view: MaterialSpecListView, propertyId: st
         ].filter((value): value is string => Boolean(value)),
         // The canonical lifecycle key; the client shows the friendly label (Planned, Installed ...) and explains it in the detail.
         status: spec.lifecycleStatus,
-        actions: editActions,
+        actions: rowActions(spec),
       })),
     })),
     // The collection's one primary step sits in its header, beside the summary, instead of on a row of its own.
-    actions: addActions,
+    actions: [...addActions, ...exportAction],
   });
-  blocks.push(boundary);
+  blocks.push(...exportsBlock(exportRows, now), boundary);
   return { status: 'ANSWERED', reasonCode: 'MATERIAL_SPECS_READY', blocks, suggestions: [] };
 }
 
 async function materialSpecsResult(propertyId: string, canAdd: boolean): Promise<AskOperationResult> {
-  return materialSpecsFromView(await materialSpecService.listSpecs(propertyId, {}), propertyId, canAdd);
+  const [view, exportRows] = await Promise.all([materialSpecService.listSpecs(propertyId, {}), materialSpecService.listExports(propertyId)]);
+  return materialSpecsFromView(view, propertyId, canAdd, exportRows as unknown as MaterialExportRow[]);
 }
 
 registerCapabilityHandler('material-specs.list', async (envelope, deps) => {

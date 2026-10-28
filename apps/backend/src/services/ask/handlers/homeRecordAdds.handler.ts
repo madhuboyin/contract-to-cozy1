@@ -3,6 +3,8 @@
 //   - HOME_PLANT_ADD     an indoor plant in one of the home's rooms (Plant Advisor).
 // Each is reached only by its declared action (no message pattern, no fuzzy retrieval), asks for the details in an inline form, shows a review card,
 // and writes only after the homeowner confirms, through the same service the desktop page calls, repeating the side effects its controller adds.
+import { confirmMaterialSpecState, materialSpecStateResult } from './materialSpecStateCommands.handler';
+import { materialSpecStateKindFromMessage } from '../support/materialSpecStateCommand';
 import { createHash } from 'node:crypto';
 import { HouseholdRole } from '@prisma/client';
 import { prisma } from '../../../lib/prisma';
@@ -284,9 +286,21 @@ export async function materialSpecUpdateResult(
   };
 }
 
-registerCapabilityHandler('material-spec.update', async (envelope) => materialSpecUpdateResult(envelope.userId, envelope.propertyId!, envelope.message, envelope.launchContext));
+registerCapabilityHandler('material-spec.update', async (envelope) => {
+  // Stop using, use again, delete and export (FRD v1.465) share this operation, told apart by their declared messages; only the declared action starts them.
+  const stateKind = materialSpecStateKindFromMessage(envelope.message);
+  if (stateKind) {
+    const launch = envelope.launchContext;
+    const declared = launch?.operationId === 'MATERIAL_SPEC_UPDATE' && launch.surface !== 'ASK_REFRESH'
+      && (stateKind === 'EXPORT' || (launch.entityType === 'MATERIAL_SPEC' && Boolean(launch.entityId)));
+    if (!declared) return notRoutable('material-spec-state-target', 'Open the materials first', 'Use the action on a material in the Material Specs answer. Nothing has changed.', 'MATERIAL_SPEC_TARGET_REQUIRED');
+    return materialSpecStateResult(envelope.userId, envelope.propertyId!, stateKind, { entityId: launch?.entityId ?? null, sourceExecutionId: launch?.sourceExecutionId ?? null });
+  }
+  return materialSpecUpdateResult(envelope.userId, envelope.propertyId!, envelope.message, envelope.launchContext);
+});
 
 async function confirmMaterialSpecUpdate(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
+  if (ctx.parameters.materialSpecState) return confirmMaterialSpecState(ctx);
   const { execution, userId, parameters } = ctx;
   const candidate = MaterialSpecUpdateInputSchema.safeParse(parameters.materialSpecUpdate);
   if (!candidate.success) throw Object.assign(new Error('The material update is invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });

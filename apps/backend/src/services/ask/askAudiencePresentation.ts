@@ -31,6 +31,8 @@ const ACTION_ROLE_FLOORS: Readonly<Record<string, HouseholdRole>> = Object.freez
     [GUIDANCE_JOURNEY_RESTORE_ACTION_ID, 'CONTRIBUTOR'],
     // Restoring a trashed Home Record from the Trash view is a contributor's write, as the command's own floor (FRD v1.463).
     ['home-record-restore', 'CONTRIBUTOR'],
+    // Material state controls and the materials export are contributor writes, as the page's own routes (FRD v1.465).
+    ...['material-spec-archive', 'material-spec-restore', 'material-spec-delete', 'material-spec-export'].map((id): [string, HouseholdRole] => [id, 'CONTRIBUTOR']),
   ],
 ) as Record<string, HouseholdRole>);
 

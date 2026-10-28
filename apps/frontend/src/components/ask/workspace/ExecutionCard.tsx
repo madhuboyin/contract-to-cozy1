@@ -14,6 +14,7 @@ import { AskBlockActionContext } from '../blocks/context';
 import { CalmAnswerContext, CalmChromeContext, CalmReceiptContext, CalmSecondaryContext } from '../blocks/calmContext';
 import { BlockSequence, BlockView } from '../blocks/registry';
 import { ExportDownloadStrip } from '../ExportDownloadStrip';
+import { MaterialExportDownloadStrip } from '../MaterialExportDownloadStrip';
 import { ResultViewContext, useResultView } from '@/features/ask/useResultView';
 import { canFoldResult, resultHeadline } from '@/features/ask/conversationView';
 import { askAnswerWidth, askAnswerWidthClass } from '@/features/ask/answerLayout';
@@ -350,6 +351,7 @@ export function ExecutionCard({
           {calmChrome && hasResponseContext(execution) && <div data-calm-trust-line=""><ResponseContextSummary execution={execution} open={contextOpen} onOpen={onOpenContext} /></div>}
           {itemActionIssue && <p role="alert" className="text-xs font-semibold text-red-700">{itemActionIssue}</p>}
           <ExportDownloadStrip execution={execution} />
+          <MaterialExportDownloadStrip execution={execution} />
         </div>
         {execution.status === 'NEEDS_PROPERTY' && <PropertySelectionCard executionId={execution.executionId} onCompleted={updateExecution} autoFocus={isJustUpdated} />}
         {execution.correctionCapabilities.retryResponse && <div><button type="button" disabled={loading} onClick={() => void (retryExecution ? retryExecution(execution) : ask(execution.question))} className="min-h-11 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Try again with current records</button></div>}
