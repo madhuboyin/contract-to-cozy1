@@ -33,6 +33,8 @@ const { editCaptureWarrantyCandidate, buildUserAddedEventConfirmation, editCaptu
 const realPrisma = prismaModule.prisma;
 const originals = {
   updateRoom: InventoryService.prototype.updateRoom,
+  deleteRoom: InventoryService.prototype.deleteRoom,
+  deleteItem: InventoryService.prototype.deleteItem,
   createRoom: InventoryService.prototype.createRoom,
   createItem: InventoryService.prototype.createItem,
   updateItem: InventoryService.prototype.updateItem,
@@ -96,6 +98,8 @@ function install() {
 function restore() {
   prismaModule.prisma = realPrisma;
   InventoryService.prototype.updateRoom = originals.updateRoom;
+  InventoryService.prototype.deleteRoom = originals.deleteRoom;
+  InventoryService.prototype.deleteItem = originals.deleteItem;
   InventoryService.prototype.createRoom = originals.createRoom;
   InventoryService.prototype.createItem = originals.createItem;
   InventoryService.prototype.updateItem = originals.updateItem;
@@ -275,13 +279,13 @@ test('room propose: "rename" always means the name, even for a room called "Floo
   assert.equal(result.parameters.roomRename.value, 'Studio');
 });
 
-test('room actions: a contributor gets rename, type and floor level (all pinned to the operation, three stay inline); a viewer gets none', () => {
+test('room actions: a contributor gets rename, type, floor level and delete (all pinned to the operation, the first three stay inline); a viewer gets none', () => {
   const actions = roomRenameItemActions(true);
   assert.deepEqual(actions.map((action) => [action.id, action.message]), [
-    ['rename-room', 'Rename this room.'], ['correct-room-type', 'Change the type of this room.'], ['correct-room-floorLevel', 'Change the floor level of this room.'],
+    ['rename-room', 'Rename this room.'], ['correct-room-type', 'Change the type of this room.'], ['correct-room-floorLevel', 'Change the floor level of this room.'], ['delete-room', 'Delete this room.'],
   ]);
   assert.ok(actions.every((action) => action.operationId === 'ROOM_RENAME' && action.interactionType === 'MUTATE_RECORD'));
-  assert.ok(actions.length <= 3, 'more than three would fold behind the disclosure');
+  assert.equal(actions.length, 4, 'the fourth, destructive action folds behind the disclosure');
   assert.equal(roomRenameItemActions(false), undefined);
 });
 
@@ -934,7 +938,7 @@ test('inventory item actions: contributors get one full-editor action pinned to 
   const { AskPresentationBlockSchema } = require('../../src/productFramework/ask/ask.contract.ts');
   assert.ok(AskPresentationBlockSchema, 'the block schema export must exist for this test to mean anything');
   const source = readAskOrchestratorSources();
-  assert.match(source, /function inventoryCorrectionItemActions\(canManage: boolean\) \{\s*if \(!canManage\) return undefined;\s*return \[\{ id: 'edit-inventory-item'/);
+  assert.match(source, /function inventoryCorrectionItemActions\(canManage: boolean\) \{\s*if \(!canManage\) return undefined;\s*return \[\s*\{ id: 'edit-inventory-item'/);
   // ten actions on one row must validate (the row schema used to cap actions at three)
   const row = { id: 'item-1', title: 'Water heater', meta: [], actions: Array.from({ length: 10 }, (_, index) => ({ id: `a${index}`, label: `A${index}`, message: 'Correct the condition of this inventory item.', style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId: 'INVENTORY_ITEM_CORRECT' })) };
   const block = { type: 'GROUPED_LIST', id: 'inventory-results', title: 'Inventory', filters: [], sections: [{ id: 's', title: 's', count: 1, items: [row] }], actions: [] };
@@ -1809,4 +1813,50 @@ test('event edit confirm: a stale revision, a retried execution, a private event
   setupEventEdit({ createdById: 'u1', visibility: 'PRIVATE' });
   await invoke('HOME_EVENT_UPDATE', eventUpdateParams({ visibility: 'HOUSEHOLD' }));
   assert.equal(calls.setVisibility.length, 1, 'the creator can move their own event out of private');
+});
+
+// ───────────────────────────── Inventory item / room delete ─────────────────────────────
+const deleteUpdatedAt = new Date('2026-09-01T00:00:00.000Z');
+const deleteLaunch = (operationId, entityType, entityId, message) => capabilityInvoke(operationId, { userId: 'u1', propertyId: 'p1', message, launchContext: { surface: 'ASK_WORKSPACE', entityType, entityId, operationId } });
+
+test('delete item: review first, nothing written, then the canonical delete and every stale marker run on confirm', async () => {
+  InventoryService.prototype.deleteItem = async function (...args) { calls.deleteItem = args; };
+  models.inventoryItem = { findFirst: async () => ({ id: 'item-1', name: 'Water heater', category: 'APPLIANCE', updatedAt: deleteUpdatedAt, room: { name: 'Garage' }, _count: { documents: 2 } }) };
+  const review = await deleteLaunch('INVENTORY_ITEM_CORRECT', 'INVENTORY_ITEM', 'item-1', 'Delete this inventory item.');
+  assert.equal(review.status, 'NEEDS_CONFIRMATION');
+  assert.equal(calls.deleteItem, undefined, 'review must not write');
+  assert.deepEqual(review.parameters.inventoryDelete, { kind: 'ITEM', id: 'item-1' });
+  const confirmed = await invoke('INVENTORY_ITEM_CORRECT', review.parameters);
+  assert.equal(confirmed.result.reasonCode, 'INVENTORY_ITEM_DELETED');
+  assert.deepEqual(calls.deleteItem, ['p1', 'item-1']);
+  for (const marker of ['coverage', 'itemCoverage', 'replaceRepair', 'risk', 'doNothing']) assert.ok(calls.markers.includes(marker), marker);
+});
+
+test('delete item: a change during confirmation or a vanished item is a context conflict and deletes nothing', async () => {
+  InventoryService.prototype.deleteItem = async function (...args) { calls.deleteItem = args; };
+  models.inventoryItem = { findFirst: async () => ({ id: 'item-1', name: 'Water heater', category: 'APPLIANCE', updatedAt: new Date('2026-09-02T00:00:00.000Z') }) };
+  await assert.rejects(() => invoke('INVENTORY_ITEM_CORRECT', { inventoryDelete: { kind: 'ITEM', id: 'item-1' }, inventoryDeleteContextVersion: sha(`item-1:${deleteUpdatedAt.toISOString()}`) }), (error) => error.code === 'ASK_CONTEXT_VERSION_CONFLICT');
+  models.inventoryItem = { findFirst: async () => null };
+  await assert.rejects(() => invoke('INVENTORY_ITEM_CORRECT', { inventoryDelete: { kind: 'ITEM', id: 'item-1' }, inventoryDeleteContextVersion: 'x' }), (error) => error.code === 'ASK_CONTEXT_VERSION_CONFLICT');
+  assert.equal(calls.deleteItem, undefined);
+  const missing = await deleteLaunch('INVENTORY_ITEM_CORRECT', 'INVENTORY_ITEM', 'item-1', 'Delete this inventory item.');
+  assert.equal(missing.status, 'NOT_APPLICABLE');
+});
+
+test('delete room: review states how many items become unassigned; confirm deletes through the service and marks coverage, risk and do-nothing stale', async () => {
+  InventoryService.prototype.deleteRoom = async function (...args) { calls.deleteRoom = args; };
+  models.inventoryRoom = { findFirst: async () => ({ id: 'room-1', name: 'Garage', type: 'GARAGE', floorLevel: 0, updatedAt: deleteUpdatedAt, _count: { items: 3 } }) };
+  const review = await deleteLaunch('ROOM_RENAME', 'INVENTORY_ROOM', 'room-1', 'Delete this room.');
+  assert.equal(review.status, 'NEEDS_CONFIRMATION');
+  assert.ok(review.confirmation.fields.some((field) => field.value === '3'));
+  assert.equal(calls.deleteRoom, undefined);
+  const confirmed = await invoke('ROOM_RENAME', review.parameters);
+  assert.equal(confirmed.result.reasonCode, 'ROOM_DELETED');
+  assert.deepEqual(calls.deleteRoom, ['p1', 'room-1']);
+  for (const marker of ['coverage', 'risk', 'doNothing']) assert.ok(calls.markers.includes(marker), marker);
+});
+
+test('delete: a viewer is stopped by the contributor floor of the owning command ops', () => {
+  assert.equal(getAskDomainCommandByOperation('INVENTORY_ITEM_CORRECT').roleFloor ?? 'CONTRIBUTOR', 'CONTRIBUTOR');
+  assert.equal(getAskDomainCommandByOperation('ROOM_RENAME').roleFloor ?? 'CONTRIBUTOR', 'CONTRIBUTOR');
 });

@@ -4,6 +4,7 @@
 export const RECEIPT_FOLLOW_UPS = {
   TIMELINE: { label: 'Show my home timeline', message: 'Show my home timeline', operationId: 'HOME_TIMELINE_EVENTS' },
   WARRANTIES: { label: 'Show my warranties', message: 'Show my warranties', operationId: 'WARRANTY_LOOKUP' },
+  INVENTORY: { label: 'Show my home inventory', message: 'Show my home inventory', operationId: 'INVENTORY_LOOKUP' },
   ROOMS: { label: 'Show my rooms', message: 'Show my rooms', operationId: 'PROPERTY_SUMMARY' },
   PROPERTY_RECORD: { label: 'Show my home record', message: 'Give me a summary of my home record', operationId: 'PROPERTY_SUMMARY' },
   DOCUMENTS: { label: 'Show my documents', message: 'Show my documents', operationId: 'DOCUMENT_LOOKUP' },

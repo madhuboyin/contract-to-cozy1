@@ -42,6 +42,7 @@ import { approveMaterialWorkItem, recordWorkEvent } from '../../../modules/homeO
 import { assertMaterialApprovalEvidenceSatisfiesPolicy } from '../../homeOperationsMaterialApprovalEvidence.service';
 import { completeAcceptedOperationalWorkItem } from '../../homeActionCompletion.service';
 import { resolveWorkItemRecommendationSnapshotId } from '../../decisionPlatform/homeActionDecisionLineage';
+import { confirmInventoryDelete } from './inventoryDeleteCommands.handler';
 import { receiptFollowUpAction } from '../support/receiptFollowUps';
 
 const materialSpecService = new MaterialSpecService();
@@ -232,6 +233,8 @@ async function confirmHouseholdInvitation(ctx: ConfirmCapabilityContext): Promis
 
 async function confirmInventoryItemCorrect(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
   const { execution, userId, parameters } = ctx;
+  const deleted = await confirmInventoryDelete(ctx);
+  if (deleted) return deleted;
   const completion = z.object({ itemId: z.string(), corrections: z.array(z.object({ field: z.enum(['name', 'installedOn', 'purchasedOn', 'lastServicedOn', 'condition', 'brand', 'model', 'serialNo', 'purchaseCostCents', 'replacementCostCents', 'notes', 'category', 'roomId']), value: z.string().nullable() })).min(1).max(13) }).safeParse(parameters.inventoryCompletion);
   if (completion.success) {
     const item = await prisma.inventoryItem.findFirst({ where: { id: completion.data.itemId, propertyId: execution.propertyId! } });
@@ -587,6 +590,8 @@ registerConfirmCapabilityHandler('warranty.update', confirmWarrantyUpdate);
 
 async function confirmRoomRename(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
   const { execution, userId, parameters } = ctx;
+  const deleted = await confirmInventoryDelete(ctx);
+  if (deleted) return deleted;
   const candidate = RoomRenameInputSchema.safeParse(parameters.roomRename);
   if (!candidate.success) throw Object.assign(new Error('The room correction is invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
   const { roomId, field, value } = candidate.data;

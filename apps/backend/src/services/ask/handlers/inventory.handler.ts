@@ -1,6 +1,8 @@
 // Moved out of askOrchestrator.service.ts unchanged (decomposition, FRD v1.98;
 // docs/architecture/ASK_ORCHESTRATOR_DECOMPOSITION_REVIEW.md). The handler registers itself, and the orchestrator
 // re-exports the names below so existing imports keep working.
+import { inventoryDeleteResult, isInventoryDeleteMessage } from './inventoryDeleteCommands.handler';
+import { INVENTORY_DELETE_MESSAGE } from '../support/inventoryDeleteCommand';
 import { HouseholdRole } from '@prisma/client';
 import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
@@ -938,7 +940,10 @@ export { inventoryItemContextVersion };
 // only -- a VIEWER never receives a control implying the write will be accepted.
 export function inventoryCorrectionItemActions(canManage: boolean) {
   if (!canManage) return undefined;
-  return [{ id: 'edit-inventory-item', label: 'Edit item', message: INVENTORY_EDIT_MESSAGE, style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'INVENTORY_ITEM_CORRECT' }];
+  return [
+    { id: 'edit-inventory-item', label: 'Edit item', message: INVENTORY_EDIT_MESSAGE, style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'INVENTORY_ITEM_CORRECT' },
+    { id: 'delete-inventory-item', label: 'Delete item', message: INVENTORY_DELETE_MESSAGE, style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'INVENTORY_ITEM_CORRECT' },
+  ];
 }
 
 /**
@@ -1051,6 +1056,7 @@ export function inventoryCorrectionConfirmation(item: { id: string; name: string
 
 async function inventoryItemCorrectResult(userId: string, propertyId: string, message: string, launchContext?: CreateAskExecutionRequest['launchContext']): Promise<AskOperationResult> {
   await ensurePropertyAccess(userId, propertyId);
+  if (isInventoryDeleteMessage(message)) return inventoryDeleteResult(userId, propertyId, launchContext);
   const items = await inventoryService.listItems(propertyId, {});
   // A selected suggestion's item is authoritative: gone or changed since it was offered means stale, never a title match.
   const typedTarget = resolveTypedActionTarget(items, launchContext, {
