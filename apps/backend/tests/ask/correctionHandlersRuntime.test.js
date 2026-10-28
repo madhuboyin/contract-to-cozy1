@@ -15,6 +15,9 @@ require('ts-node/register');
 
 const prismaModule = require('../../src/lib/prisma.ts');
 require('../../src/services/ask/askOrchestrator.service.ts');
+const { roomDetailResult } = require('../../src/services/ask/handlers/roomDetailCommands.handler.ts');
+const { itemDocumentsResult } = require('../../src/services/ask/handlers/inventoryDocumentCommands.handler.ts');
+const { RoomInsightsService } = require('../../src/services/roomInsights.service.ts');
 const { roomCreateResult, inventoryItemCreateResult, roomRenameItemActions, HOME_EVENT_VISIBILITY_MESSAGE, EVIDENCE_ATTACH_MESSAGE, EVIDENCE_ATTACH_MESSAGES } = require('../../src/services/ask/askOrchestrator.service.ts');
 const { confirmCapabilityInvoke } = require('../../src/services/ask/confirmCapabilityHandlerRegistry.ts');
 const { getAskDomainCommandByOperation } = require('../../src/services/ask/askDomainCommandRegistry.ts');
@@ -33,6 +36,9 @@ const { editCaptureWarrantyCandidate, buildUserAddedEventConfirmation, editCaptu
 const realPrisma = prismaModule.prisma;
 const originals = {
   updateRoom: InventoryService.prototype.updateRoom,
+  linkDocument: InventoryService.prototype.linkDocument,
+  unlinkDocument: InventoryService.prototype.unlinkDocument,
+  roomInsights: Object.fromEntries(['updateRoomProfile', 'createRoomChecklistItem', 'updateRoomChecklistItem', 'deleteRoomChecklistItem'].map((m) => [m, RoomInsightsService.prototype[m]])),
   deleteRoom: InventoryService.prototype.deleteRoom,
   deleteItem: InventoryService.prototype.deleteItem,
   createRoom: InventoryService.prototype.createRoom,
@@ -98,6 +104,10 @@ function install() {
 function restore() {
   prismaModule.prisma = realPrisma;
   InventoryService.prototype.updateRoom = originals.updateRoom;
+  InventoryService.prototype.linkDocument = originals.linkDocument;
+  InventoryService.prototype.unlinkDocument = originals.unlinkDocument;
+  for (const method of Object.keys(originals.roomInsights)) RoomInsightsService.prototype[method] = originals.roomInsights[method];
+  for (const key of Object.keys(roomInsightCalls)) delete roomInsightCalls[key];
   InventoryService.prototype.deleteRoom = originals.deleteRoom;
   InventoryService.prototype.deleteItem = originals.deleteItem;
   InventoryService.prototype.createRoom = originals.createRoom;
@@ -279,13 +289,13 @@ test('room propose: "rename" always means the name, even for a room called "Floo
   assert.equal(result.parameters.roomRename.value, 'Studio');
 });
 
-test('room actions: a contributor gets rename, type, floor level and delete (all pinned to the operation, the first three stay inline); a viewer gets none', () => {
+test('room actions: a contributor gets rename, type, floor level and more options (all pinned to the operation, the first three stay inline); a viewer gets none', () => {
   const actions = roomRenameItemActions(true);
   assert.deepEqual(actions.map((action) => [action.id, action.message]), [
-    ['rename-room', 'Rename this room.'], ['correct-room-type', 'Change the type of this room.'], ['correct-room-floorLevel', 'Change the floor level of this room.'], ['delete-room', 'Delete this room.'],
+    ['rename-room', 'Rename this room.'], ['correct-room-type', 'Change the type of this room.'], ['correct-room-floorLevel', 'Change the floor level of this room.'], ['room-more', 'More options for this room.'],
   ]);
   assert.ok(actions.every((action) => action.operationId === 'ROOM_RENAME' && action.interactionType === 'MUTATE_RECORD'));
-  assert.equal(actions.length, 4, 'the fourth, destructive action folds behind the disclosure');
+  assert.equal(actions.length, 4, 'the fourth action folds behind the disclosure');
   assert.equal(roomRenameItemActions(false), undefined);
 });
 
@@ -1859,4 +1869,93 @@ test('delete room: review states how many items become unassigned; confirm delet
 test('delete: a viewer is stopped by the contributor floor of the owning command ops', () => {
   assert.equal(getAskDomainCommandByOperation('INVENTORY_ITEM_CORRECT').roleFloor ?? 'CONTRIBUTOR', 'CONTRIBUTOR');
   assert.equal(getAskDomainCommandByOperation('ROOM_RENAME').roleFloor ?? 'CONTRIBUTOR', 'CONTRIBUTOR');
+});
+
+// ───────────────────────────── Room options (profile, checklist) and item documents ─────────────────────────────
+const detailRoom = { id: 'room-1', name: 'Garage', type: 'GARAGE', profile: { style: 'MODERN' }, updatedAt: deleteUpdatedAt };
+const detailItems = [{ id: 'ck-1', title: 'Test the door sensor', status: 'OPEN', frequency: 'MONTHLY', updatedAt: deleteUpdatedAt }, { id: 'ck-2', title: 'Sweep floor', status: 'DONE', frequency: 'WEEKLY', updatedAt: deleteUpdatedAt }];
+const roomInsightCalls = {};
+function installRoomDetail() {
+  models.inventoryRoom = { findFirst: async () => detailRoom };
+  models.roomChecklistItem = { findMany: async () => detailItems, findFirst: async ({ where }) => detailItems.find((item) => item.id === where.id) ?? null };
+  for (const method of ['updateRoomProfile', 'createRoomChecklistItem', 'updateRoomChecklistItem', 'deleteRoomChecklistItem']) RoomInsightsService.prototype[method] = async function (...args) { roomInsightCalls[method] = args; return {}; };
+}
+const detail = (stored, answer) => roomDetailResult('u1', 'p1', { surface: 'ASK_WORKSPACE', entityId: 'room-1' }, stored, answer);
+
+test('room options: the first form offers the profile, an add, each checklist item and delete, and writes nothing', async () => {
+  installRoomDetail();
+  const result = await detail(undefined, undefined);
+  assert.equal(result.status, 'NEEDS_CONTEXT');
+  const values = result.captureRequests[0].inputSchema.fields[0].inputSchema.options.map((option) => option.value);
+  assert.deepEqual(values, ['profile', 'add', 'done:ck-1', 'edit:ck-1', 'remove:ck-1', 'reopen:ck-2', 'edit:ck-2', 'remove:ck-2', 'delete-room']);
+  assert.deepEqual(Object.keys(roomInsightCalls), []);
+});
+
+test('room options: the profile form shows this kind of room and the review lists only what changes; confirm merges into the stored profile', async () => {
+  installRoomDetail();
+  const form = await detail({ roomId: 'room-1' }, { choice: 'profile' });
+  const keys = form.captureRequests[0].inputSchema.fields.map((field) => field.key);
+  assert.ok(keys.includes('carCapacity') && keys.includes('doorType') && !keys.includes('countertops'));
+  const review = await detail({ roomId: 'room-1', choice: 'profile' }, { style: 'MODERN', carCapacity: '2', doorType: '__NOT_SET__' });
+  assert.equal(review.status, 'NEEDS_CONFIRMATION');
+  assert.deepEqual(review.parameters.roomDetail, { kind: 'PROFILE', roomId: 'room-1', set: { carCapacity: '2' }, clear: [] });
+  const bad = await detail({ roomId: 'room-1', choice: 'profile' }, { carCapacity: '9' });
+  assert.equal(bad.status, 'NOT_APPLICABLE');
+  const confirmed = await invoke('ROOM_RENAME', review.parameters);
+  assert.equal(confirmed.result.reasonCode, 'ROOM_DETAIL_PROFILE');
+  assert.deepEqual(roomInsightCalls.updateRoomProfile, ['p1', 'room-1', { style: 'MODERN', carCapacity: '2' }]);
+});
+
+test('room options: add, rename, mark done, reopen and remove each review first and use the room checklist service on confirm', async () => {
+  installRoomDetail();
+  const add = await detail({ roomId: 'room-1' }, { choice: 'add' });
+  assert.equal(add.status, 'NEEDS_CONTEXT');
+  const addReview = await detail({ roomId: 'room-1', choice: 'add' }, { title: '  Oil the track ', frequency: 'QUARTERLY' });
+  assert.equal(addReview.status, 'NEEDS_CONFIRMATION');
+  await invoke('ROOM_RENAME', addReview.parameters);
+  assert.deepEqual(roomInsightCalls.createRoomChecklistItem, ['p1', 'room-1', { title: 'Oil the track', frequency: 'QUARTERLY' }]);
+  const done = await detail({ roomId: 'room-1' }, { choice: 'done:ck-1' });
+  await invoke('ROOM_RENAME', done.parameters);
+  assert.deepEqual(roomInsightCalls.updateRoomChecklistItem, ['p1', 'room-1', 'ck-1', { status: 'DONE' }]);
+  const reopen = await detail({ roomId: 'room-1' }, { choice: 'reopen:ck-2' });
+  await invoke('ROOM_RENAME', reopen.parameters);
+  assert.deepEqual(roomInsightCalls.updateRoomChecklistItem, ['p1', 'room-1', 'ck-2', { status: 'OPEN' }]);
+  const rename = await detail({ roomId: 'room-1', choice: 'edit:ck-1' }, { title: 'Test sensor', frequency: 'MONTHLY' });
+  await invoke('ROOM_RENAME', rename.parameters);
+  assert.deepEqual(roomInsightCalls.updateRoomChecklistItem, ['p1', 'room-1', 'ck-1', { title: 'Test sensor', frequency: 'MONTHLY' }]);
+  const remove = await detail({ roomId: 'room-1' }, { choice: 'remove:ck-2' });
+  assert.equal(remove.blocks[0].tone, 'CAUTION');
+  await invoke('ROOM_RENAME', remove.parameters);
+  assert.deepEqual(roomInsightCalls.deleteRoomChecklistItem, ['p1', 'room-1', 'ck-2']);
+});
+
+test('room options: a checklist item changed during confirmation is a conflict; choosing delete reuses the delete review', async () => {
+  installRoomDetail();
+  const done = await detail({ roomId: 'room-1' }, { choice: 'done:ck-1' });
+  detailItems[0] = { ...detailItems[0], updatedAt: new Date('2026-09-05T00:00:00.000Z') };
+  try {
+    await assert.rejects(() => invoke('ROOM_RENAME', done.parameters), (error) => error.code === 'ASK_CONTEXT_VERSION_CONFLICT');
+  } finally { detailItems[0] = { ...detailItems[0], updatedAt: deleteUpdatedAt }; }
+  models.inventoryRoom = { findFirst: async () => ({ ...detailRoom, _count: { items: 2 } }) };
+  const del = await detail({ roomId: 'room-1' }, { choice: 'delete-room' });
+  assert.equal(del.reasonCode, 'ROOM_DELETE_CONFIRMATION_REQUIRED');
+});
+
+test('item documents: the form lists unlink for linked and link for the rest; confirm calls the canonical link or unlink', async () => {
+  const calls2 = {};
+  InventoryService.prototype.linkDocument = async function (...args) { calls2.link = args; };
+  InventoryService.prototype.unlinkDocument = async function (...args) { calls2.unlink = args; };
+  models.inventoryItem = { findFirst: async () => ({ id: 'item-1', name: 'Water heater', updatedAt: deleteUpdatedAt }) };
+  const docs = { 'doc-a': { id: 'doc-a', name: 'Manual.pdf', inventoryItemId: 'item-1' }, 'doc-b': { id: 'doc-b', name: 'Receipt.pdf', inventoryItemId: null } };
+  models.document = { findMany: async ({ where }) => where.inventoryItemId === 'item-1' ? [docs['doc-a']] : [docs['doc-b']], findFirst: async ({ where }) => docs[where.id] ?? null };
+  const form = await itemDocumentsResult('u1', 'p1', { surface: 'ASK_WORKSPACE', entityId: 'item-1' });
+  assert.deepEqual(form.captureRequests[0].inputSchema.fields[0].inputSchema.options.map((option) => option.value), ['unlink:doc-a', 'link:doc-b']);
+  const link = await itemDocumentsResult('u1', 'p1', undefined, { itemId: 'item-1' }, { document: 'link:doc-b' });
+  await invoke('INVENTORY_ITEM_CORRECT', link.parameters);
+  assert.deepEqual(calls2.link, ['p1', 'item-1', 'doc-b']);
+  const unlink = await itemDocumentsResult('u1', 'p1', undefined, { itemId: 'item-1' }, { document: 'unlink:doc-a' });
+  await invoke('INVENTORY_ITEM_CORRECT', unlink.parameters);
+  assert.deepEqual(calls2.unlink, ['p1', 'item-1', 'doc-a']);
+  const gone = await itemDocumentsResult('u1', 'p1', undefined, { itemId: 'item-1' }, { document: 'link:nope' });
+  assert.equal(gone.status, 'NOT_APPLICABLE');
 });

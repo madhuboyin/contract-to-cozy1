@@ -20,7 +20,8 @@ import { correctionFieldForOutcome } from '../suggestedActions/suggestedNextActi
 import { DEFAULT_CANDIDATE_SIGNALS, DEFAULT_CANDIDATE_TRAITS, type SuggestedNextActionCandidate } from '../suggestedActions/suggestedNextActionCandidate';
 import { durableFreeTextClarification, ensurePropertyAccess, exactEntityMatch, HOME_EVENT_CORRECTION_FIELDS, HOME_EVENT_LINK_FIELDS, HOME_EVENT_VISIBILITY_LABELS, HomeEventCorrectionField, HomeEventCorrectionInputSchema, HomeEventVisibilityInputSchema, HouseholdInvitationInputSchema, invitationRoleCopy, isValidDateEditInput, propertySummary, readablePropertyValue, ROOM_TYPE_VALUES, RoomCreateInputSchema, RoomRenameInputSchema, WarrantyUpdateInputSchema } from '../askHandlerSupport';
 import { isRoomDeleteMessage, roomDeleteResult } from './inventoryDeleteCommands.handler';
-import { ROOM_DELETE_MESSAGE } from '../support/inventoryDeleteCommand';
+import { ROOM_MORE_MESSAGE } from '../support/roomDetailCommand';
+import { isRoomMoreMessage, roomDetailResult } from './roomDetailCommands.handler';
 import { collectionDescriptor } from '../support/collectionDescriptor';
 import { HOME_EVENT_EDIT_MESSAGE, homeEventEditItemActions } from '../support/homeEventCorrection';
 import { editorToGroupSchema, type RecordEditorChange } from '../recordEditor/recordEditor.contract';
@@ -852,7 +853,7 @@ export function roomRenameItemActions(canManage: boolean) {
   return [...(Object.keys(ROOM_CORRECTION_FIELDS) as RoomCorrectionField[]).map((field) => ({
     id: field === 'name' ? 'rename-room' : `correct-room-${field}`, label: ROOM_CORRECTION_FIELDS[field].action, message: ROOM_CORRECTION_FIELDS[field].message,
     style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'ROOM_RENAME',
-  })), { id: 'delete-room', label: 'Delete room', message: ROOM_DELETE_MESSAGE, style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'ROOM_RENAME' }];
+  })), { id: 'room-more', label: 'More room options', message: ROOM_MORE_MESSAGE, style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'ROOM_RENAME' }];
 }
 
 export function roomRenameConfirmation(room: { id: string; name: string }, field: RoomCorrectionField, current: string | null, proposed: string | null, version: number, expiresAt: Date) {
@@ -875,6 +876,7 @@ export function roomRenameConfirmation(room: { id: string; name: string }, field
 async function roomRenameResult(userId: string, propertyId: string, message: string, launchContext?: CreateAskExecutionRequest['launchContext']): Promise<AskOperationResult> {
   await ensurePropertyAccess(userId, propertyId);
   if (isRoomDeleteMessage(message)) return roomDeleteResult(userId, propertyId, launchContext);
+  if (isRoomMoreMessage(message)) return roomDetailResult(userId, propertyId, launchContext);
   const [rooms, sourceTotal] = await Promise.all([prisma.inventoryRoom.findMany({
     where: { propertyId }, orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }], take: 200,
     select: { id: true, name: true, type: true, floorLevel: true, updatedAt: true },

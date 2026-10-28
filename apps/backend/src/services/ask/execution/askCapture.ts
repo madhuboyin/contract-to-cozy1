@@ -48,6 +48,9 @@ import { MATERIAL_SPEC_EXPORT_CAPTURE_KEY, MaterialSpecExportAnswerSchema } from
 import { materialSpecStateResult } from '../handlers/materialSpecStateCommands.handler';
 import { EXPENSE_CAPTURE_KEY, isExpenseActionId, parseExpenseAnswer } from '../support/expenseCommand';
 import { expenseCommandResult } from '../handlers/expenseCommands.handler';
+import { roomDetailResult } from '../handlers/roomDetailCommands.handler';
+import { itemDocumentsResult } from '../handlers/inventoryDocumentCommands.handler';
+import { ITEM_DOCUMENT_CAPTURE_KEY, ROOM_DETAIL_CAPTURE_KEY } from '../support/roomDetailCommand';
 import { REPAIR_REPLACE_WHAT_IF_CAPTURE_KEY, RepairReplaceWhatIfAnswerSchema } from '../support/repairReplaceWhatIf';
 import { repairReplaceWhatIfResult } from '../handlers/miscHandlers.handler';
 import { GUIDANCE_JOURNEY_DISMISS_REASON_CAPTURE_KEY, GuidanceDismissReasonAnswerSchema } from '../support/guidanceJourneyRestore';
@@ -1294,6 +1297,27 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     captureId = input.idempotencyKey;
     capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
     canonicalOwner = 'Expense';
+  } else if ((execution.operationId === 'ROOM_RENAME' && input.captureKey === ROOM_DETAIL_CAPTURE_KEY) || (execution.operationId === 'INVENTORY_ITEM_CORRECT' && input.captureKey === ITEM_DOCUMENT_CAPTURE_KEY)) {
+    // The room options and item document forms (FRD v1.470): they only prepare the next form or the confirmation; nothing is written until that is confirmed.
+    const access = await ensurePropertyAccess(userId, execution.propertyId);
+    if (access.role === HouseholdRole.VIEWER) throw Object.assign(new Error('A contributor or owner is required to change shared home records.'), { code: 'ASK_PERMISSION_REQUIRED' });
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson) ? execution.parametersJson as Record<string, unknown> : {};
+    const answer = input.answer && typeof input.answer === 'object' && !Array.isArray(input.answer) ? input.answer as Record<string, unknown> : {};
+    if (input.captureKey === ROOM_DETAIL_CAPTURE_KEY) {
+      const launched = storedParameters.roomDetailLaunch as { roomId?: unknown; choice?: unknown; sourceExecutionId?: unknown } | undefined;
+      if (!launched || typeof launched.roomId !== 'string') throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+      result = await roomDetailResult(userId, execution.propertyId, undefined, {
+        roomId: launched.roomId, choice: typeof launched.choice === 'string' ? launched.choice : undefined, sourceExecutionId: typeof launched.sourceExecutionId === 'string' ? launched.sourceExecutionId : null,
+      }, answer);
+      canonicalOwner = 'InventoryRoom';
+    } else {
+      const launched = storedParameters.itemDocumentLaunch as { itemId?: unknown; sourceExecutionId?: unknown } | undefined;
+      if (!launched || typeof launched.itemId !== 'string') throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+      result = await itemDocumentsResult(userId, execution.propertyId, undefined, { itemId: launched.itemId, sourceExecutionId: typeof launched.sourceExecutionId === 'string' ? launched.sourceExecutionId : null }, answer);
+      canonicalOwner = 'InventoryItem';
+    }
+    captureId = input.idempotencyKey;
+    capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
   } else if (execution.operationId === 'OWNERSHIP_COST_COMMAND') {
     if (input.captureKey !== OWNERSHIP_COST_SCENARIO_CAPTURE_KEY && input.captureKey !== OWNERSHIP_COST_DECISION_CAPTURE_KEY) {
       const error = new Error('This ownership-cost form is no longer active.');
