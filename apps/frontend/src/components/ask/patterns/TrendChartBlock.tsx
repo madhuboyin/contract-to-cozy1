@@ -49,6 +49,9 @@ export const TrendChartBlock: AskBlockRenderer<'TREND_CHART'> = ({ block }) => {
   const visibleSeries = rateHistory && rateView !== 'BOTH'
     ? block.series.filter((series) => rateView === '30' ? series.id === 'rate-30' : series.id === 'rate-15')
     : block.series;
+  const visibleSeriesIds = new Set(visibleSeries.map((series) => series.id));
+  const visibleReferenceLines = (block.referenceLines ?? []).filter((line) => !line.seriesId || visibleSeriesIds.has(line.seriesId));
+  const visibleHighlights = (block.highlights ?? []).filter((highlight) => visibleSeriesIds.has(highlight.seriesId));
   const percent = block.valueFormat === 'PERCENT';
   const compact = percent ? compactPercent : compactMoney;
   const full = percent ? fullPercent : fullMoney;
@@ -66,6 +69,8 @@ export const TrendChartBlock: AskBlockRenderer<'TREND_CHART'> = ({ block }) => {
   const ticks = [min, min + span / 2, max];
   const labelEvery = Math.ceil(block.categories.length / 6);
   const baselineY = y(fit ? min : Math.max(0, min));
+  const inRangeReferenceLines = visibleReferenceLines.filter((line) => line.value >= min && line.value <= max);
+  const outOfRangeReferenceLines = visibleReferenceLines.filter((line) => line.value < min || line.value > max);
   const areaD = (values: number[]) => {
     if (values.length <= 1) return '';
     const linePoints = values.map((value, index) => `${index === 0 ? 'M' : 'L'} ${x(index).toFixed(1)} ${y(value).toFixed(1)}`).join(' ');
@@ -97,7 +102,7 @@ export const TrendChartBlock: AskBlockRenderer<'TREND_CHART'> = ({ block }) => {
           </div>}
           <div className="rounded-xl border border-slate-100 bg-slate-50/40 p-2">
             <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className="h-auto w-full" role="img"
-              aria-label={`${block.title}. ${visibleSeries.map((series) => `${series.label} ends at ${full(series.values[last])}`).join('; ')}.`}
+              aria-label={`${block.title}. ${visibleSeries.map((series) => `${series.label} ends at ${full(series.values[last])}`).join('; ')}.${visibleHighlights.length ? ` ${visibleHighlights.map((item) => item.label).join('; ')}.` : ''}${visibleReferenceLines.length ? ` ${visibleReferenceLines.map((item) => item.label).join('; ')}.` : ''}${(block.ranges ?? []).length ? ` ${(block.ranges ?? []).length} historical opportunity window${(block.ranges ?? []).length === 1 ? '' : 's'}.` : ''}`}
               onMouseMove={rateHistory ? (event) => activateNearest(event.clientX, event.currentTarget) : undefined}
               onMouseLeave={rateHistory ? () => setActiveIndex(null) : undefined}
               onTouchMove={rateHistory ? (event) => { const touch = event.touches[0]; if (touch) activateNearest(touch.clientX, event.currentTarget); } : undefined}>
@@ -109,13 +114,24 @@ export const TrendChartBlock: AskBlockRenderer<'TREND_CHART'> = ({ block }) => {
                   </linearGradient>
                 ))}
               </defs>
+              {(block.ranges ?? []).map((range) => {
+                const startX = x(range.startIndex);
+                const endX = x(range.endIndex);
+                return <rect key={range.id} x={Math.max(PAD.left, startX - 3)} y={PAD.top} width={Math.max(6, endX - startX + 6)} height={HEIGHT - PAD.top - PAD.bottom} fill={FILL_HEX[range.tone]} fillOpacity="0.08" aria-hidden="true" />;
+              })}
               {ticks.map((tick) => (
                 <g key={tick}>
                   <line x1={PAD.left} x2={WIDTH - PAD.right} y1={y(tick)} y2={y(tick)} className="stroke-slate-200/70" strokeWidth="1" />
-                  <text x={PAD.left - 6} y={y(tick) + 3} textAnchor="end" className="fill-slate-500 font-medium" fontSize="11">{compact(tick)}</text>
+                  <text data-chart-axis-tick="y" x={PAD.left - 6} y={y(tick) + 3} textAnchor="end" className="fill-slate-500 font-medium" fontSize="11">{compact(tick)}</text>
                 </g>
               ))}
               {!fit && min < 0 && <line x1={PAD.left} x2={WIDTH - PAD.right} y1={y(0)} y2={y(0)} className="stroke-slate-300" strokeWidth="1" />}
+              {inRangeReferenceLines.map((line) => (
+                <g key={line.id}>
+                  <line x1={PAD.left} x2={WIDTH - PAD.right} y1={y(line.value)} y2={y(line.value)} stroke={FILL_HEX[line.tone]} strokeWidth="1.5" strokeDasharray={line.style === 'DASHED' ? '6 4' : undefined} />
+                  <text x={WIDTH - PAD.right - 2} y={Math.max(PAD.top + 10, y(line.value) - 5)} textAnchor="end" fill={FILL_HEX[line.tone]} fontSize="9.5" fontWeight="600">{line.label}</text>
+                </g>
+              ))}
               {block.categories.map((category, index) => (index % labelEvery === 0 || index === last) && (
                 <text key={category} x={x(index)} y={HEIGHT - 8} textAnchor="middle" className="fill-slate-600 font-medium" fontSize="11">{category}</text>
               ))}
@@ -134,6 +150,17 @@ export const TrendChartBlock: AskBlockRenderer<'TREND_CHART'> = ({ block }) => {
                   strokeDasharray={series.style === 'DASHED' ? '6 4' : undefined} className={STROKE[series.tone]}
                   points={series.values.map((value, index) => `${x(index).toFixed(1)},${y(value).toFixed(1)}`).join(' ')} />
               ))}
+              {activeIndex != null && visibleSeries.map((series) => <circle key={`active-${series.id}`} cx={x(activeIndex)} cy={y(series.values[activeIndex])} r="4" fill={FILL_HEX[series.tone]} stroke="white" strokeWidth="2" />)}
+              {visibleHighlights.map((highlight) => {
+                const series = visibleSeries.find((item) => item.id === highlight.seriesId);
+                const value = series?.values[highlight.categoryIndex];
+                if (value == null) return null;
+                const isHigh = highlight.id.includes('high');
+                return <g key={highlight.id}>
+                  <circle cx={x(highlight.categoryIndex)} cy={y(value)} r="4.5" fill={FILL_HEX[highlight.tone]} stroke="white" strokeWidth="2" />
+                  <text x={x(highlight.categoryIndex)} y={y(value) + (isHigh ? -8 : 13)} textAnchor="middle" fill={FILL_HEX[highlight.tone]} fontSize="9.5" fontWeight="700">{highlight.label}</text>
+                </g>;
+              })}
             </svg>
           </div>
           <figcaption className="mt-2 flex flex-wrap items-center justify-between gap-2">
@@ -151,8 +178,17 @@ export const TrendChartBlock: AskBlockRenderer<'TREND_CHART'> = ({ block }) => {
                   {marker.label}
                 </span>
               ))}
+              {(block.ranges ?? []).map((range) => (
+                <span key={range.id} className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 font-semibold text-emerald-900">
+                  <span className="inline-block h-2 w-3 rounded-sm bg-emerald-200" aria-hidden="true" />
+                  {range.label}
+                </span>
+              ))}
             </div>
           </figcaption>
+          {outOfRangeReferenceLines.length > 0 && <div className="mt-2 flex flex-wrap gap-2" aria-label="Rates outside the displayed benchmark range">
+            {outOfRangeReferenceLines.map((line) => <span key={line.id} className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700">{line.value < min ? '↓' : '↑'} {line.label} — {line.value < min ? 'below' : 'above'} chart range</span>)}
+          </div>}
           {rateHistory && activeIndex != null && <div className="mt-2 rounded-xl border border-teal-100 bg-teal-50/70 px-3 py-2 text-xs text-slate-700" role="status">
             <strong className="text-slate-950">{block.categories[activeIndex]}</strong>
             {visibleSeries.map((series) => <span key={series.id} className="ml-3">{series.label}: <strong>{full(series.values[activeIndex])}</strong></span>)}

@@ -124,15 +124,16 @@ export function ensureRefinanceRateHistoryChart(blocks: AskPresentationBlock[]):
   });
   if (observations.length < 2) return blocks;
 
-  const chronological = [...observations].sort((a, b) => a.date.localeCompare(b.date));
-  const stride = chronological.length > 26 ? 2 : 1;
-  const plotted = chronological.filter((_, index) => index % stride === 0 || index === chronological.length - 1);
+  const plotted = [...observations].sort((a, b) => a.date.localeCompare(b.date));
+  const thirtyYearValues = plotted.map(({ thirty }) => thirty);
+  const lowIndex = thirtyYearValues.indexOf(Math.min(...thirtyYearValues));
+  const highIndex = thirtyYearValues.indexOf(Math.max(...thirtyYearValues));
   const chart: Extract<AskPresentationBlock, { type: 'TREND_CHART' }> = {
     type: 'TREND_CHART',
     id: 'refinance-rate-history-chart',
     title: `Mortgage rates, last ${observations.length} weeks`,
     description: 'Compare weekly 30-year and 15-year benchmark movements.',
-    basis: `Governed national weekly benchmarks, not a lender quote.${stride > 1 ? ' Every other week is plotted to fit; the table has every week.' : ''}`,
+    basis: 'Every available weekly observation is plotted from governed national benchmarks, not a lender quote.',
     valueFormat: 'PERCENT',
     scale: 'FIT',
     categories: plotted.map(({ date }) => {
@@ -144,6 +145,12 @@ export function ensureRefinanceRateHistoryChart(blocks: AskPresentationBlock[]):
       { id: 'rate-15', label: '15-year fixed', style: 'DASHED', tone: 'POSITIVE', values: plotted.map(({ fifteen }) => fifteen) },
     ],
     markers: [],
+    ranges: [],
+    referenceLines: [],
+    highlights: [
+      { id: 'rate-30-low', label: `${observations.length}-week low ${plotted[lowIndex].thirty.toFixed(3)}%`, categoryIndex: lowIndex, seriesId: 'rate-30', tone: 'POSITIVE' },
+      { id: 'rate-30-high', label: `${observations.length}-week high ${plotted[highIndex].thirty.toFixed(3)}%`, categoryIndex: highIndex, seriesId: 'rate-30', tone: 'CAUTION' },
+    ],
     actions: [],
   };
   return [...blocks.slice(0, tableIndex), chart, ...blocks.slice(tableIndex)];

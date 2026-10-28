@@ -23,9 +23,9 @@ const weekly = (count) => Array.from({ length: count }, (_, i) => {
 });
 const TREND = { trendLabel: 'Rates are drifting lower', current30yr: 6.0, current15yr: 5.3 };
 
-function stub({ snapshots = weekly(52), transitions = [], scenarios = [], comparisons = [] } = {}) {
+function stub({ snapshots = weekly(52), transitions = [], scenarios = [], comparisons = [], currentRatePct = 7.25, triggerRatePct = 5.75 } = {}) {
   const saved = { history: RefinanceRadarService.prototype.getRateHistory, scenarios: RefinanceRadarService.prototype.getSavedScenarios, snap: prisma.refinanceLoanEstimateComparisonSnapshot, property: prisma.property, monitor: prisma.refinanceRateMonitor };
-  RefinanceRadarService.prototype.getRateHistory = async () => ({ snapshots, trendSummary: TREND, transitions, initialRadarState: 'NOT_OPEN' });
+  RefinanceRadarService.prototype.getRateHistory = async () => ({ snapshots, trendSummary: TREND, transitions, initialRadarState: 'CLOSED', currentRatePct, triggerRatePct });
   RefinanceRadarService.prototype.getSavedScenarios = async () => scenarios;
   prisma.refinanceLoanEstimateComparisonSnapshot = { findMany: async () => comparisons };
   prisma.property = { findUnique: async () => ({ address: '1 Main St', city: 'Austin', state: 'TX', zipCode: '78701' }) };
@@ -44,7 +44,7 @@ test('the intents: rate history, a quarter of it, and saved scenarios', () => {
   assert.equal(refinance.refinanceJourneyIntent('What if I refinanced at 5.5% for 15 years with $6,000 closing costs?'), null, 'a what-if is not the saved list');
 });
 
-test('rate history draws a percent chart framed to the data, with at most 40 points, a range switch, and the table below', async () => {
+test('rate history draws every weekly point with personalized references, a range switch, and the table below', async () => {
   const restore = stub();
   try {
     const result = await run('Show the mortgage rate history.');
@@ -52,10 +52,12 @@ test('rate history draws a percent chart framed to the data, with at most 40 poi
     const chart = result.blocks.find((b) => b.type === 'TREND_CHART');
     assert.equal(chart.valueFormat, 'PERCENT');
     assert.equal(chart.scale, 'FIT');
-    assert.ok(chart.categories.length <= 40 && chart.categories.length >= 2);
+    assert.equal(chart.categories.length, 52);
     assert.equal(chart.series.length, 2);
     assert.ok(chart.series.every((s) => s.values.length === chart.categories.length));
     assert.equal(chart.series[0].values[chart.series[0].values.length - 1], weekly(52)[51].rate30yr, 'the newest week is always plotted');
+    assert.deepEqual(chart.highlights.map((item) => item.id), ['rate-30-low', 'rate-30-high']);
+    assert.deepEqual(chart.referenceLines.map((item) => item.id), ['review-threshold', 'current-mortgage-rate']);
     assert.deepEqual(chart.actions.map((a) => a.id), ['refinance-history-13']);
     const table = result.blocks.find((b) => b.id === 'refinance-rate-history');
     assert.equal(table.rows.length, 52);
@@ -93,6 +95,7 @@ test('opportunity opens and closes become markers on the plotted weeks and a tab
     assert.equal(chart.markers.length, 3);
     assert.match(chart.markers[0].label, /^Opportunity opened \d\d\/\d\d$/);
     assert.ok(chart.markers.every((m) => m.categoryIndex >= 0 && m.categoryIndex < chart.categories.length));
+    assert.deepEqual(chart.ranges.map((range) => [range.startIndex, range.endIndex]), [[30, 40], [48, 51]]);
     const windows = result.blocks.find((b) => b.id === 'refinance-opportunity-windows');
     assert.deepEqual(windows.rows.map((r) => r.values.to), ['Still open', snaps[40].date]);
   } finally { restore(); }

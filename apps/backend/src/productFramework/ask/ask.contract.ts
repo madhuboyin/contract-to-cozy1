@@ -611,14 +611,27 @@ const TrendChartBlockSchema = z.object({
   valueFormat: z.enum(['CURRENCY', 'PERCENT']).default('CURRENCY'),
   // ZERO draws the value axis from zero (cumulative dollars); FIT frames the plotted range, for a series that moves in a narrow band (a mortgage rate).
   scale: z.enum(['ZERO', 'FIT']).default('ZERO'),
-  categories: z.array(z.string().trim().min(1).max(12)).min(1).max(40),
+  categories: z.array(z.string().trim().min(1).max(12)).min(1).max(52),
   series: z.array(z.object({
     id: z.string(), label: z.string().trim().min(1).max(60),
     style: z.enum(['SOLID', 'DASHED']).default('SOLID'),
     tone: AskDisplayToneSchema.default('DEFAULT'),
-    values: z.array(z.number().finite()).min(1).max(40),
+    values: z.array(z.number().finite()).min(1).max(52),
   })).min(1).max(4),
-  markers: z.array(z.object({ id: z.string(), label: z.string().trim().min(1).max(60), categoryIndex: z.number().int().min(0).max(39) })).max(4).default([]),
+  markers: z.array(z.object({ id: z.string(), label: z.string().trim().min(1).max(60), categoryIndex: z.number().int().min(0).max(51) })).max(8).default([]),
+  ranges: z.array(z.object({
+    id: z.string(), label: z.string().trim().min(1).max(60),
+    startIndex: z.number().int().min(0).max(51), endIndex: z.number().int().min(0).max(51),
+    tone: AskDisplayToneSchema.default('POSITIVE'),
+  })).max(6).optional(),
+  referenceLines: z.array(z.object({
+    id: z.string(), label: z.string().trim().min(1).max(80), value: z.number().finite(),
+    tone: AskDisplayToneSchema.default('DEFAULT'), style: z.enum(['SOLID', 'DASHED']).default('DASHED'), seriesId: z.string().optional(),
+  })).max(4).optional(),
+  highlights: z.array(z.object({
+    id: z.string(), label: z.string().trim().min(1).max(80), categoryIndex: z.number().int().min(0).max(51),
+    seriesId: z.string(), tone: AskDisplayToneSchema.default('DEFAULT'),
+  })).max(8).optional(),
   actions: z.array(AskActionSchema).max(3).default([]),
 }).superRefine((block, ctx) => {
   block.series.forEach((series, index) => {
@@ -626,6 +639,15 @@ const TrendChartBlockSchema = z.object({
   });
   block.markers.forEach((marker, index) => {
     if (marker.categoryIndex >= block.categories.length) ctx.addIssue({ code: 'custom', path: ['markers', index, 'categoryIndex'], message: 'A marker must point at a category.' });
+  });
+  (block.ranges ?? []).forEach((range, index) => {
+    if (range.startIndex >= block.categories.length || range.endIndex >= block.categories.length || range.endIndex < range.startIndex) ctx.addIssue({ code: 'custom', path: ['ranges', index], message: 'A range must use ordered category indexes.' });
+  });
+  (block.highlights ?? []).forEach((highlight, index) => {
+    if (highlight.categoryIndex >= block.categories.length || !block.series.some((series) => series.id === highlight.seriesId)) ctx.addIssue({ code: 'custom', path: ['highlights', index], message: 'A highlight must point at a category and declared series.' });
+  });
+  (block.referenceLines ?? []).forEach((line, index) => {
+    if (line.seriesId && !block.series.some((series) => series.id === line.seriesId)) ctx.addIssue({ code: 'custom', path: ['referenceLines', index, 'seriesId'], message: 'A reference line series must be declared.' });
   });
 });
 

@@ -486,16 +486,27 @@ describe('lifespan, progress, timeline, chips and badges', () => {
         { id: 'rate-30', label: '30-year fixed', style: 'SOLID', tone: 'DEFAULT', values: [6.4, 6.3, 6.25] },
         { id: 'rate-15', label: '15-year fixed', style: 'DASHED', tone: 'POSITIVE', values: [5.9, 5.8, 5.75] },
       ],
-      markers: [], actions: [],
+      markers: [],
+      ranges: [{ id: 'window', label: 'Refinance opportunity window', startIndex: 1, endIndex: 2, tone: 'POSITIVE' }],
+      referenceLines: [
+        { id: 'threshold', label: 'Today’s review threshold: 6.300% or lower', value: 6.3, tone: 'POSITIVE', style: 'DASHED', seriesId: 'rate-30' },
+        { id: 'outside', label: 'Your current mortgage rate: 4.000%', value: 4, tone: 'DEFAULT', style: 'DASHED', seriesId: 'rate-30' },
+      ],
+      highlights: [{ id: 'rate-30-low', label: '3-week low 6.250%', categoryIndex: 2, seriesId: 'rate-30', tone: 'POSITIVE' }],
+      actions: [],
     }} />);
     expect(screen.getByRole('img', { name: /30-year fixed ends at 6\.250%/ })).toBeInTheDocument();
     expect(screen.getByText('(6.25%)')).toBeInTheDocument();
     expect(container.textContent).not.toMatch(/\$/);
     // Zero is not on the axis: the lowest tick is just under the lowest rate.
-    const ticks = Array.from(container.querySelectorAll('svg text')).map((node) => node.textContent ?? '').filter((text) => /%$/.test(text)).map((text) => parseFloat(text));
+    const ticks = Array.from(container.querySelectorAll('[data-chart-axis-tick="y"]')).map((node) => parseFloat(node.textContent ?? ''));
     expect(Math.min(...ticks)).toBeGreaterThan(5);
     expect(container.querySelector('table.sr-only th')?.textContent).toBe('Date');
     expect(container.querySelectorAll('polyline')).toHaveLength(2);
+    expect(screen.getByText('3-week low 6.250%')).toBeInTheDocument();
+    expect(screen.getByText('Today’s review threshold: 6.300% or lower')).toBeInTheDocument();
+    expect(screen.getByText(/Your current mortgage rate: 4.000% — below chart range/)).toBeInTheDocument();
+    expect(screen.getByText('Refinance opportunity window')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '30-year' }));
     expect(container.querySelectorAll('polyline')).toHaveLength(1);
     expect(screen.getByRole('button', { name: '30-year' })).toHaveAttribute('aria-pressed', 'true');

@@ -22,7 +22,7 @@ import {
   TERM_TO_MONTHS,
 } from './engine/refinanceCalculation.engine';
 import { MortgageRateService } from './engine/mortgageRate.service';
-import { RefinanceRadarEngine } from './engine/refinanceRadar.engine';
+import { calculateTriggerRate, RefinanceRadarEngine } from './engine/refinanceRadar.engine';
 import {
   mapOpportunityToDTO,
   mapScenarioToDTO,
@@ -622,8 +622,10 @@ export class RefinanceRadarService {
     trendSummary: ReturnType<MortgageRateService['computeTrendSummary']>;
     transitions: RefinanceTransitionDTO[];
     initialRadarState: RefinanceRadarState;
+    currentRatePct: number | null;
+    triggerRatePct: number | null;
   }> {
-    const [snapshots, transitionRows] = await Promise.all([
+    const [snapshots, transitionRows, mortgageContext] = await Promise.all([
       this.rateService.getRecentSnapshots(limit),
       prisma.domainEvent.findMany({
         where: {
@@ -645,6 +647,7 @@ export class RefinanceRadarService {
           createdAt: true,
         },
       }),
+      this.getMortgageContext(propertyId),
     ]);
     const trendSummary = this.rateService.computeTrendSummary(snapshots);
     const snapshotIds = new Set(snapshots.map((snapshot) => snapshot.id));
@@ -674,6 +677,8 @@ export class RefinanceRadarService {
       trendSummary,
       transitions,
       initialRadarState: priorTransition?.nextState ?? RefinanceRadarState.CLOSED,
+      currentRatePct: mortgageContext?.currentRatePct ?? null,
+      triggerRatePct: mortgageContext ? calculateTriggerRate(mortgageContext) : null,
     };
   }
 

@@ -30,3 +30,15 @@ test('keeps the richer server-authored refinance chart without adding a duplicat
   const blocks = [chart, table];
   expect(ensureRefinanceRateHistoryChart(blocks)).toBe(blocks);
 });
+
+test('the recovery chart keeps every weekly observation instead of downsampling a full year', () => {
+  const rows = Array.from({ length: 52 }, (_, index) => ({
+    id: `week-${index}`,
+    values: { date: `2026-${String(Math.floor(index / 28) + 1).padStart(2, '0')}-${String((index % 28) + 1).padStart(2, '0')}`, thirty: `${(7 - index / 100).toFixed(3)}%`, fifteen: `${(6.4 - index / 100).toFixed(3)}%` },
+  }));
+  const table = { type: 'TABLE', id: 'refinance-rate-history', title: '52 weeks', columns: [], rows, actions: [] } as Extract<AskPresentationBlock, { type: 'TABLE' }>;
+  const chart = ensureRefinanceRateHistoryChart([table])[0] as Extract<AskPresentationBlock, { type: 'TREND_CHART' }>;
+  expect(chart.categories).toHaveLength(52);
+  expect(chart.series[0].values).toHaveLength(52);
+  expect(chart.highlights?.map((item) => item.id)).toEqual(['rate-30-low', 'rate-30-high']);
+});

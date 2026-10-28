@@ -193,11 +193,6 @@ function chunkSummary(body: string, max = 1100): string[] {
 }
 
 const MMDD = (isoDate: string) => `${isoDate.slice(5, 7)}/${isoDate.slice(8, 10)}`;
-/** At most `limit` evenly spaced indices that always include the first and last point. */
-function evenIndices(length: number, limit: number): number[] {
-  if (length <= limit) return Array.from({ length }, (_, i) => i);
-  return Array.from({ length: limit }, (_, i) => Math.round((i * (length - 1)) / (limit - 1)));
-}
 
 /** A saved Loan Estimate comparison as the shareable summary Desktop exports as Markdown, shown here to read or copy; nothing is sent anywhere. */
 /** Desktop's Missed Window Insight: the governed summary plus the best 30-year rate, when it was, and the savings at that peak. Null when there was no missed window. */
@@ -398,7 +393,7 @@ async function refinanceJourneyResult(propertyId: string, intent: RefinanceJourn
   const missedWindow = refinanceMissedWindowBlock(missed);
   const ordered = [...history.snapshots].sort((a, b) => a.date.localeCompare(b.date));
   const visible = ordered.slice(-weeks);
-  const plotted = evenIndices(visible.length, 40).map((index) => visible[index]);
+  const plotted = visible;
   const visibleIds = new Set(visible.map((snapshot) => snapshot.id));
   const dateBySnapshot = new Map(visible.map((snapshot) => [snapshot.id, snapshot.date]));
   // The radar's own opportunity opens and closes, as Desktop's markers and windows: pair each OPEN with the next CLOSED.
@@ -409,13 +404,36 @@ async function refinanceJourneyResult(propertyId: string, intent: RefinanceJourn
     if (transition.transitionType === 'OPEN' && !windows.some((item) => item.to === null)) windows.push({ from: date, to: null });
     if (transition.transitionType === 'CLOSED') { const open = [...windows].reverse().find((item) => item.to === null); if (open) open.to = date; }
   }
-  const markers = transitions.filter((item) => visibleIds.has(item.snapshotId)).slice(-4).flatMap((item, index) => {
+  const markers = transitions.filter((item) => visibleIds.has(item.snapshotId)).slice(-8).flatMap((item, index) => {
     const date = dateBySnapshot.get(item.snapshotId);
     const categoryIndex = plotted.findIndex((snapshot) => snapshot.id === item.snapshotId) >= 0
       ? plotted.findIndex((snapshot) => snapshot.id === item.snapshotId)
       : plotted.findIndex((snapshot) => date != null && snapshot.date >= date);
     return categoryIndex < 0 ? [] : [{ id: `refinance-transition-${index}`, label: `${item.transitionType === 'OPEN' ? 'Opportunity opened' : 'Opportunity closed'} ${date ? MMDD(date) : ''}`.trim(), categoryIndex }];
   });
+  const ranges: Array<{ id: string; label: string; startIndex: number; endIndex: number; tone: 'POSITIVE' }> = [];
+  let openStartIndex: number | null = history.initialRadarState === 'OPEN' ? 0 : null;
+  transitions.filter((item) => visibleIds.has(item.snapshotId)).forEach((transition) => {
+    const index = plotted.findIndex((snapshot) => snapshot.id === transition.snapshotId);
+    if (index < 0) return;
+    if (transition.transitionType === 'OPEN' && openStartIndex == null) openStartIndex = index;
+    if (transition.transitionType === 'CLOSED' && openStartIndex != null) {
+      ranges.push({ id: `refinance-window-${ranges.length}`, label: 'Refinance opportunity window', startIndex: openStartIndex, endIndex: index, tone: 'POSITIVE' });
+      openStartIndex = null;
+    }
+  });
+  if (openStartIndex != null && plotted.length) ranges.push({ id: `refinance-window-${ranges.length}`, label: 'Refinance opportunity window', startIndex: openStartIndex, endIndex: plotted.length - 1, tone: 'POSITIVE' });
+  const thirtyYearValues = plotted.map((snapshot) => snapshot.rate30yr);
+  const lowIndex = thirtyYearValues.indexOf(Math.min(...thirtyYearValues));
+  const highIndex = thirtyYearValues.indexOf(Math.max(...thirtyYearValues));
+  const highlights = plotted.length ? [
+    { id: 'rate-30-low', label: `${weeks}-week low ${plotted[lowIndex].rate30yr.toFixed(3)}%`, categoryIndex: lowIndex, seriesId: 'rate-30', tone: 'POSITIVE' as const },
+    { id: 'rate-30-high', label: `${weeks}-week high ${plotted[highIndex].rate30yr.toFixed(3)}%`, categoryIndex: highIndex, seriesId: 'rate-30', tone: 'CAUTION' as const },
+  ] : [];
+  const referenceLines = [
+    ...(history.triggerRatePct == null ? [] : [{ id: 'review-threshold', label: `Today’s review threshold: ${history.triggerRatePct.toFixed(3)}% or lower`, value: history.triggerRatePct, tone: 'POSITIVE' as const, style: 'DASHED' as const, seriesId: 'rate-30' }]),
+    ...(history.currentRatePct == null ? [] : [{ id: 'current-mortgage-rate', label: `Your current mortgage rate: ${history.currentRatePct.toFixed(3)}%`, value: history.currentRatePct, tone: 'DEFAULT' as const, style: 'DASHED' as const, seriesId: 'rate-30' }]),
+  ];
   const rangeAction = (id: string, label: string, text: string) => refinanceWorkflowAction(id, label, text, 'REFINANCE_ANALYSIS', 'QUIET');
   return {
     status: 'ANSWERED', reasonCode: 'REFINANCE_RATE_HISTORY',
@@ -424,13 +442,16 @@ async function refinanceJourneyResult(propertyId: string, intent: RefinanceJourn
       body: `Latest governed benchmarks: ${history.trendSummary.current30yr?.toFixed(3) ?? '\u2014'}% for 30-year fixed and ${history.trendSummary.current15yr?.toFixed(3) ?? '\u2014'}% for 15-year fixed.`, tone: 'DEFAULT', actions: [],
     }, ...(plotted.length >= 2 ? [{
       type: 'TREND_CHART' as const, id: 'refinance-rate-history-chart', title: `Mortgage rates, last ${visible.length} weeks`, description: null,
-      basis: 'Governed national weekly benchmarks, not a lender quote.' + (visible.length > plotted.length ? ' Every other week is plotted to fit; the table has every week.' : ''),
+      basis: 'Every available weekly observation is plotted from governed national benchmarks, not a lender quote. The review threshold uses today’s recorded mortgage assumptions; shaded windows come from historical radar transitions.',
       valueFormat: 'PERCENT' as const, scale: 'FIT' as const, categories: plotted.map((snapshot) => MMDD(snapshot.date)),
       series: [
         { id: 'rate-30', label: '30-year fixed', style: 'SOLID' as const, tone: 'DEFAULT' as const, values: plotted.map((snapshot) => snapshot.rate30yr) },
         { id: 'rate-15', label: '15-year fixed', style: 'DASHED' as const, tone: 'POSITIVE' as const, values: plotted.map((snapshot) => snapshot.rate15yr) },
       ],
       markers,
+      ranges,
+      referenceLines,
+      highlights,
       actions: [weeks === 13 ? rangeAction('refinance-history-52', 'Last 52 weeks', 'Show the mortgage rate history for the last 52 weeks.') : rangeAction('refinance-history-13', 'Last 13 weeks', 'Show the mortgage rate history for the last 13 weeks.')],
     }] : []), {
       type: 'TABLE', id: 'refinance-rate-history', title: `${visible.length} weeks of governed mortgage-rate history`,

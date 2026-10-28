@@ -145,14 +145,20 @@ test('audience framing keeps a summary\'s answer chips', () => {
   assert.deepEqual(result.blocks[0].chips, [{ label: '2 overdue', tone: 'CRITICAL' }]);
 });
 
-test('TREND_CHART: one value per category for every series, markers inside the categories, at most four series', () => {
+test('TREND_CHART: validates series, markers, ranges, highlights, and reference lines', () => {
   const block = (extra) => ({ type: 'TREND_CHART', id: 'chart', title: 'Cost vs appreciation', basis: 'Planning projection.', categories: ['2027', '2028'], series: [{ id: 'a', label: 'A', values: [1, 2] }], ...extra });
   const parsed = AskPresentationBlockSchema.parse(block({}));
   assert.equal(parsed.series[0].style, 'SOLID');
   assert.deepEqual(parsed.markers, []);
+  assert.equal(parsed.ranges, undefined);
+  assert.equal(parsed.referenceLines, undefined);
+  assert.equal(parsed.highlights, undefined);
   assert.deepEqual(parsed.actions, []);
   assert.equal(AskPresentationBlockSchema.safeParse(block({ series: [{ id: 'a', label: 'A', values: [1] }] })).success, false);
   assert.equal(AskPresentationBlockSchema.safeParse(block({ markers: [{ id: 'm', label: 'M', categoryIndex: 2 }] })).success, false);
+  assert.equal(AskPresentationBlockSchema.safeParse(block({ ranges: [{ id: 'r', label: 'Window', startIndex: 1, endIndex: 0, tone: 'POSITIVE' }] })).success, false);
+  assert.equal(AskPresentationBlockSchema.safeParse(block({ highlights: [{ id: 'h', label: 'Low', categoryIndex: 0, seriesId: 'missing', tone: 'POSITIVE' }] })).success, false);
+  assert.equal(AskPresentationBlockSchema.safeParse(block({ referenceLines: [{ id: 'l', label: 'Threshold', value: 5.5, seriesId: 'missing' }] })).success, false);
   assert.equal(AskPresentationBlockSchema.safeParse(block({ basis: '' })).success, false);
 });
 
