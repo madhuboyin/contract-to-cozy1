@@ -3,6 +3,7 @@ import { prisma } from '../../../lib/prisma';
 import { type AskPresentationBlock } from '../../../productFramework/ask/ask.contract';
 import { type AskOperationResult } from '../askOperationRegistry';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
+import { getConflictedWarrantyGroups } from '../../coverageConflict.service';
 import { evaluateCoverageRecord } from '../../coverage/contextPolicy';
 import { humanDate } from '../askFormatting';
 import { ensurePropertyAccess, HOME_DEADLINE_DEFAULT_LEAD_DAYS, readablePropertyValue } from '../askHandlerSupport';
@@ -215,11 +216,12 @@ const truncate = (text: string, max: number) => (text.length > max ? `${text.sli
  * accepts); a viewer or a non-owner gets no correction actions and never sees a control that would fail.
  */
 export function warrantiesFromRecords(input: {
-  message: string; propertyId: string; records: readonly WarrantyRecord[]; canWrite: boolean; ownedIds: ReadonlySet<string>; now?: Date;
+  message: string; propertyId: string; records: readonly WarrantyRecord[]; canWrite: boolean; ownedIds: ReadonlySet<string>; conflictedIds?: ReadonlySet<string>; now?: Date;
   /** The source result's view state, when a declared filter chip continues it (W-2). */
   priorViewState?: AskViewState | null;
 }): AskOperationResult {
   const { message, propertyId, records, canWrite, ownedIds, priorViewState } = input;
+  const conflictedIds = input.conflictedIds ?? new Set<string>();
   const now = input.now ?? new Date();
   const addAction = { id: 'add-warranty', label: 'Add a warranty', interactionType: 'START_WORKFLOW' as const, message: WARRANTY_ADD_MESSAGE, operationId: 'CAPTURE_WARRANTY_CONFIRM', style: 'PRIMARY' as const };
 
@@ -331,14 +333,14 @@ export function warrantiesFromRecords(input: {
       items: shown.map((entry) => ({
         id: entry.record.id, title: entry.record.providerName, entityType: 'WARRANTY', href: null,
         // Recorded coverage text, unchanged and never interpreted.
-        description: entry.record.coverageDetails?.trim() ? truncate(entry.record.coverageDetails.trim(), 240) : 'No coverage details recorded.',
+        description: `${conflictedIds.has(entry.record.id) ? `Conflicts with another ${readablePropertyValue(entry.record.category)} warranty. ` : ''}${entry.record.coverageDetails?.trim() ? truncate(entry.record.coverageDetails.trim(), 240) : 'No coverage details recorded.'}`,
         status: entry.status.key,
         meta: [
           readablePropertyValue(entry.record.category), expiryLine(entry),
           ...(entry.record.inventoryItem?.name ? [`Linked to ${entry.record.inventoryItem.name}`] : []),
           `${entry.record.documents?.length ?? 0} document${(entry.record.documents?.length ?? 0) === 1 ? '' : 's'}`,
         ],
-        actions: warrantyEditItemActions(canWrite, ownedIds.has(entry.record.id)),
+        actions: warrantyEditItemActions(canWrite, ownedIds.has(entry.record.id), conflictedIds.has(entry.record.id)),
       })),
     }],
     // Presentation Quality 3: the matched warranties are the whole collection for this request; the first MAX_RESULT_ITEMS are shown
@@ -375,7 +377,9 @@ async function warrantiesResult(userId: string, propertyId: string, message: str
   const ownedIds = canWrite
     ? new Set((await prisma.warranty.findMany({ where: { propertyId, homeownerProfile: { userId } }, select: { id: true } })).map((row) => row.id))
     : new Set<string>();
-  return warrantiesFromRecords({ message, propertyId, records: rows, canWrite, ownedIds, priorViewState });
+  // Only a writer can act on a conflict, so a viewer's answer costs no extra query.
+  const conflictedIds = canWrite ? new Set((await getConflictedWarrantyGroups(propertyId, prisma)).flatMap((group) => group.warranties.map((row) => row.id))) : new Set<string>();
+  return warrantiesFromRecords({ message, propertyId, records: rows, canWrite, ownedIds, conflictedIds, priorViewState });
 }
 
 // Presentation Quality 4: a warranty question asked about one recorded item (launched from its repair-or-replace answer with the

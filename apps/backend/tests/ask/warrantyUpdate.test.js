@@ -51,12 +51,13 @@ test('owner-only: propose and confirm both verify the requester owns the warrant
   assert.match(confirm, /homeownerProfile\.userId !== userId/);
   assert.match(confirm, /ASK_PERMISSION_REQUIRED/);
   assert.match(body('export function warrantyEditItemActions(', 'export function warrantyUpdateCaptureRequest('), /if \(!canManage \|\| !owned\) return undefined;/);
-  assert.match(source, /warrantyEditItemActions\(canWrite, ownedIds\.has\(entry\.record\.id\)\)/);
+  assert.match(source, /warrantyEditItemActions\(canWrite, ownedIds\.has\(entry\.record\.id\), conflictedIds\.has\(entry\.record\.id\)\)/);
 });
 
 test('the seven "Correct ..." actions are retired: one Edit warranty action, and no single-field correction code remains', () => {
   const actions = require('../../src/services/ask/handlers/homeRecordWrites.handler.ts').warrantyEditItemActions(true, true);
-  assert.deepEqual(actions.map((action) => [action.id, action.label, action.operationId]), [['edit-warranty', 'Edit warranty', 'WARRANTY_UPDATE']]);
+  assert.deepEqual(actions.map((action) => [action.id, action.label, action.operationId]), [['edit-warranty', 'Edit warranty', 'WARRANTY_UPDATE'], ['delete-warranty', 'Delete warranty', 'WARRANTY_UPDATE']]);
+  assert.deepEqual(require('../../src/services/ask/handlers/homeRecordWrites.handler.ts').warrantyEditItemActions(true, true, true).map((action) => action.id), ['edit-warranty', 'keep-warranty', 'delete-warranty']);
   assert.equal(require('../../src/services/ask/handlers/homeRecordWrites.handler.ts').warrantyEditItemActions(true, false), undefined);
   assert.doesNotMatch(source, /WARRANTY_CORRECTION_FIELDS|WarrantyCorrectionInputSchema|warrantyCorrectionConfirmation|editWarrantyCorrectConfirmation/);
 });

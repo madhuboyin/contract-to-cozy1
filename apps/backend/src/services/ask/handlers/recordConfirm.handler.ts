@@ -42,6 +42,7 @@ import { approveMaterialWorkItem, recordWorkEvent } from '../../../modules/homeO
 import { assertMaterialApprovalEvidenceSatisfiesPolicy } from '../../homeOperationsMaterialApprovalEvidence.service';
 import { completeAcceptedOperationalWorkItem } from '../../homeActionCompletion.service';
 import { resolveWorkItemRecommendationSnapshotId } from '../../decisionPlatform/homeActionDecisionLineage';
+import { confirmWarrantyRemoval } from './warrantyRemoval.handler';
 import { confirmInventoryDelete } from './inventoryDeleteCommands.handler';
 import { confirmItemDocument } from './inventoryDocumentCommands.handler';
 import { confirmRoomDetail } from './roomDetailCommands.handler';
@@ -526,6 +527,8 @@ registerConfirmCapabilityHandler('home-event.update', confirmHomeEventUpdate);
 
 async function confirmWarrantyUpdate(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
   const { execution, userId, parameters } = ctx;
+  const removal = await confirmWarrantyRemoval(ctx);
+  if (removal) return removal;
   const candidate = WarrantyUpdateInputSchema.safeParse(parameters.warrantyUpdate);
   if (!candidate.success) throw Object.assign(new Error('The warranty update is invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });
   const { warrantyId, changes } = candidate.data;

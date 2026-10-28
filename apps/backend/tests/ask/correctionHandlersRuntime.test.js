@@ -15,6 +15,7 @@ require('ts-node/register');
 
 const prismaModule = require('../../src/lib/prisma.ts');
 require('../../src/services/ask/askOrchestrator.service.ts');
+const { warrantyRemovalResult } = require('../../src/services/ask/handlers/warrantyRemoval.handler.ts');
 const { roomDetailResult } = require('../../src/services/ask/handlers/roomDetailCommands.handler.ts');
 const { itemDocumentsResult } = require('../../src/services/ask/handlers/inventoryDocumentCommands.handler.ts');
 const { RoomInsightsService } = require('../../src/services/roomInsights.service.ts');
@@ -1958,4 +1959,60 @@ test('item documents: the form lists unlink for linked and link for the rest; co
   assert.deepEqual(calls2.unlink, ['p1', 'item-1', 'doc-a']);
   const gone = await itemDocumentsResult('u1', 'p1', undefined, { itemId: 'item-1' }, { document: 'link:nope' });
   assert.equal(gone.status, 'NOT_APPLICABLE');
+});
+
+// ───────────────────────────── Warranty delete and conflict resolution ─────────────────────────────
+const warrantyAt = new Date('2026-09-01T00:00:00.000Z');
+const wRow = (id, providerName, extra = {}) => ({ id, providerName, category: 'ROOFING', expiryDate: new Date('2030-01-01T00:00:00.000Z'), updatedAt: warrantyAt, ...extra });
+function installWarranty({ conflict = [wRow('w-1', 'Acme'), wRow('w-2', 'Beta'), wRow('w-3', 'Gamma')], mine = ['w-1', 'w-2'] } = {}) {
+  models.homeownerProfile = { findFirst: async () => ({ id: 'hp-1' }) };
+  models.warranty = {
+    findFirst: async ({ where }) => (where.homeownerProfileId === 'hp-1' && mine.includes(where.id) ? conflict.find((row) => row.id === where.id) ?? null : null),
+    findMany: async ({ where }) => where.homeownerProfileId ? conflict.filter((row) => where.id.in.includes(row.id) && mine.includes(row.id)).map((row) => ({ id: row.id })) : conflict,
+  };
+  homeManagement.deleteWarranty = async (...args) => { calls.deleteWarranty = args; };
+  homeManagement.resolveWarrantyConflict = async (...args) => { calls.resolveWarranty = args; return { keptWarrantyId: args[0], removedWarrantyIds: ['w-2'], propertyId: 'p1' }; };
+}
+const wLaunch = (message, id) => warrantyRemovalResult('u1', 'p1', message, { surface: 'ASK_WORKSPACE', entityType: 'WARRANTY', entityId: id });
+
+test('warranty delete: review first, then the canonical delete scoped to the requester\'s profile; a changed or foreign warranty deletes nothing', async () => {
+  const originalDelete = homeManagement.deleteWarranty; const originalResolve = homeManagement.resolveWarrantyConflict;
+  try {
+    installWarranty();
+    const review = await wLaunch('Delete this warranty.', 'w-1');
+    assert.equal(review.status, 'NEEDS_CONFIRMATION');
+    assert.equal(calls.deleteWarranty, undefined);
+    const done = await invoke('WARRANTY_UPDATE', review.parameters);
+    assert.equal(done.result.reasonCode, 'WARRANTY_DELETED');
+    assert.deepEqual(calls.deleteWarranty, ['w-1', 'hp-1']);
+    const foreign = await wLaunch('Delete this warranty.', 'w-3');
+    assert.equal(foreign.status, 'NOT_APPLICABLE');
+    installWarranty({ conflict: [wRow('w-1', 'Acme', { updatedAt: new Date('2026-09-09T00:00:00.000Z') })] });
+    calls.deleteWarranty = undefined;
+    await assert.rejects(() => invoke('WARRANTY_UPDATE', review.parameters), (error) => error.code === 'ASK_CONTEXT_VERSION_CONFLICT');
+    assert.equal(calls.deleteWarranty, undefined);
+  } finally { homeManagement.deleteWarranty = originalDelete; homeManagement.resolveWarrantyConflict = originalResolve; }
+});
+
+test('warranty conflict: the review removes only the requester\'s own conflicting warranties and says another member\'s stays; confirm calls the canonical resolve', async () => {
+  const originalDelete = homeManagement.deleteWarranty; const originalResolve = homeManagement.resolveWarrantyConflict;
+  try {
+    installWarranty();
+    const review = await wLaunch('Keep this warranty and remove the conflicting ones.', 'w-1');
+    assert.equal(review.status, 'NEEDS_CONFIRMATION');
+    assert.deepEqual(review.parameters.warrantyRemoval.removedIds, ['w-2']);
+    assert.ok(review.confirmation.fields.some((field) => field.label === 'Remove' && /Beta/.test(field.value)));
+    assert.ok(!review.confirmation.fields.some((field) => /Gamma/.test(field.value)), 'another member\'s warranty is not removed');
+    assert.match(review.confirmation.description, /another household member stays/);
+    const done = await invoke('WARRANTY_UPDATE', review.parameters);
+    assert.equal(done.result.reasonCode, 'WARRANTY_CONFLICT_RESOLVED');
+    assert.deepEqual(calls.resolveWarranty, ['w-1', 'hp-1']);
+    calls.resolveWarranty = undefined;
+    installWarranty({ conflict: [wRow('w-1', 'Acme'), wRow('w-2', 'Beta'), wRow('w-4', 'Delta')], mine: ['w-1', 'w-2', 'w-4'] });
+    await assert.rejects(() => invoke('WARRANTY_UPDATE', review.parameters), (error) => error.code === 'ASK_CONTEXT_VERSION_CONFLICT');
+    assert.equal(calls.resolveWarranty, undefined, 'a conflict that grew since the review removes nothing');
+    installWarranty({ conflict: [wRow('w-1', 'Acme'), wRow('w-2', 'Acme')], mine: ['w-1', 'w-2'] });
+    const none = await wLaunch('Keep this warranty and remove the conflicting ones.', 'w-1');
+    assert.equal(none.reasonCode, 'WARRANTY_NOT_IN_CONFLICT');
+  } finally { homeManagement.deleteWarranty = originalDelete; homeManagement.resolveWarrantyConflict = originalResolve; }
 });

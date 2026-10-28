@@ -22,6 +22,8 @@ import { durableFreeTextClarification, ensurePropertyAccess, exactEntityMatch, H
 import { isRoomDeleteMessage, roomDeleteResult } from './inventoryDeleteCommands.handler';
 import { ROOM_MORE_MESSAGE } from '../support/roomDetailCommand';
 import { isRoomMoreMessage, roomDetailResult } from './roomDetailCommands.handler';
+import { isWarrantyDeleteMessage, isWarrantyKeepMessage, warrantyRemovalResult } from './warrantyRemoval.handler';
+import { WARRANTY_DELETE_MESSAGE, WARRANTY_KEEP_MESSAGE } from '../support/warrantyRemoval';
 import { collectionDescriptor } from '../support/collectionDescriptor';
 import { HOME_EVENT_EDIT_MESSAGE, homeEventEditItemActions } from '../support/homeEventCorrection';
 import { editorToGroupSchema, type RecordEditorChange } from '../recordEditor/recordEditor.contract';
@@ -511,12 +513,14 @@ export const WARRANTY_UPDATE_CAPTURE_KEY = 'WARRANTY_UPDATE_INPUTS';
 export { warrantyContextVersion };
 
 // `owned` is decided by the caller from the requester's own homeownerProfile -- never from role alone.
-export function warrantyEditItemActions(canManage: boolean, owned: boolean) {
+export function warrantyEditItemActions(canManage: boolean, owned: boolean, conflicted = false) {
   if (!canManage || !owned) return undefined;
-  return [{
-    id: 'edit-warranty', label: 'Edit warranty', message: WARRANTY_EDIT_MESSAGE,
-    style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'WARRANTY_UPDATE',
-  }];
+  const action = (id: string, label: string, message: string) => ({ id, label, message, style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'WARRANTY_UPDATE' });
+  return [
+    action('edit-warranty', 'Edit warranty', WARRANTY_EDIT_MESSAGE),
+    ...(conflicted ? [action('keep-warranty', 'Keep this one', WARRANTY_KEEP_MESSAGE)] : []),
+    action('delete-warranty', 'Delete warranty', WARRANTY_DELETE_MESSAGE),
+  ];
 }
 
 export function warrantyUpdateCaptureRequest(row: WarrantyEditorRow, entered?: Record<string, string>, errors?: Record<string, string>): AskCaptureRequest {
@@ -778,7 +782,9 @@ export function warrantyUpdateConfirmation(warranty: { id: string; providerName:
   };
 }
 
-registerCapabilityHandler('warranty.update', async (envelope) => warrantyUpdateResult(envelope.userId, envelope.propertyId!, envelope.message, envelope.launchContext));
+registerCapabilityHandler('warranty.update', async (envelope) => (isWarrantyDeleteMessage(envelope.message) || isWarrantyKeepMessage(envelope.message))
+  ? warrantyRemovalResult(envelope.userId, envelope.propertyId!, envelope.message, envelope.launchContext)
+  : warrantyUpdateResult(envelope.userId, envelope.propertyId!, envelope.message, envelope.launchContext));
 
 
 export const roomTypeLabel = (value: string): string => value.charAt(0) + value.slice(1).toLowerCase().replace(/_/g, ' ');
