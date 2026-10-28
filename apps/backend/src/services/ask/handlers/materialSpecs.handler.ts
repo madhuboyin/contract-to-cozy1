@@ -12,6 +12,7 @@ import { MATERIAL_SPEC_ADD_ACTION_ID, MATERIAL_SPEC_ADD_MESSAGE } from '../suppo
 import { MATERIAL_CATEGORY_LABELS } from '../support/materialSpecEditor';
 import { MATERIAL_SPEC_STATE_ACTION_IDS, MATERIAL_SPEC_STATE_MESSAGES, materialSpecDeletable } from '../support/materialSpecStateCommand';
 import { humanDate } from '../askFormatting';
+import { MATERIAL_SPECS_SHOW_ALL_ACTION_ID, MATERIAL_SPECS_SHOW_ALL_MESSAGE, materialSearchTerm } from '../support/materialSpecSearch';
 
 const materialSpecService = new MaterialSpecService();
 
@@ -50,7 +51,7 @@ function exportsBlock(exportRows: readonly MaterialExportRow[], now: Date): AskP
   }];
 }
 
-export function materialSpecsFromView(view: MaterialSpecListView, propertyId: string, canAdd = false, exportRows: readonly MaterialExportRow[] = [], now: Date = new Date()): AskOperationResult {
+export function materialSpecsFromView(view: MaterialSpecListView, propertyId: string, canAdd = false, exportRows: readonly MaterialExportRow[] = [], now: Date = new Date(), search: { term: string } | null = null): AskOperationResult {
   // A contributor or owner can record a material from here, inside Ask; a viewer reads the list only.
   // Edit is declared per row for contributors and owners only (FRD v1.390); a viewer reads the list and the canonical detail.
   const editAction = { id: 'edit-material', label: 'Edit material', message: MATERIAL_SPEC_EDIT_MESSAGE, interactionType: 'MUTATE_RECORD' as const, operationId: 'MATERIAL_SPEC_UPDATE', style: 'SECONDARY' as const };
@@ -71,6 +72,19 @@ export function materialSpecsFromView(view: MaterialSpecListView, propertyId: st
     severity: 'INFO', suggestions: [],
   };
   const specs = view.specs;
+  // A search that finds nothing says so and offers the whole list; it never claims the home has no materials.
+  const showAll = { id: MATERIAL_SPECS_SHOW_ALL_ACTION_ID, label: 'Show all my materials', interactionType: 'START_WORKFLOW' as const, message: MATERIAL_SPECS_SHOW_ALL_MESSAGE, operationId: 'MATERIAL_SPECS_LIST' as const, style: 'SECONDARY' as const };
+  if (search && !specs.length) {
+    return {
+      status: 'ANSWERED', reasonCode: 'MATERIAL_SPECS_SEARCH_EMPTY',
+      blocks: [{
+        type: 'SUMMARY', id: 'material-specs-summary', title: `No recorded material matches “${search.term}”`,
+        body: 'The search looks at each material\'s name, supplier, product, colour code, SKU and notes, among the materials still in use. Try another word, or show the whole list.',
+        tone: 'DEFAULT', actions: [showAll, ...addActions].slice(0, 3),
+      }, boundary],
+      suggestions: [],
+    };
+  }
   if (!specs.length) {
     return {
       status: 'ANSWERED', reasonCode: 'MATERIAL_SPECS_EMPTY',
@@ -88,18 +102,18 @@ export function materialSpecsFromView(view: MaterialSpecListView, propertyId: st
   const categoryNames = [...categories.keys()].map((category) => MATERIAL_CATEGORY_LABELS[category] ?? readableCode(category));
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY', id: 'material-specs-summary',
-    title: `${specs.length}${view.hasMore ? '+' : ''} saved material${specs.length === 1 && !view.hasMore ? '' : 's'}`,
+    title: search ? `${specs.length}${view.hasMore ? '+' : ''} material${specs.length === 1 && !view.hasMore ? '' : 's'} match${specs.length === 1 && !view.hasMore ? 'es' : ''} “${search.term}”` : `${specs.length}${view.hasMore ? '+' : ''} saved material${specs.length === 1 && !view.hasMore ? '' : 's'}`,
     body: [
       categories.size === 1 ? `${categoryNames[0]} used in this home.` : `${categories.size} types used in this home: ${categoryNames.join(', ')}.`,
       discontinued ? `${discontinued} ${discontinued === 1 ? 'is' : 'are'} marked discontinued by the supplier.` : null,
     ].filter(Boolean).join(' '),
     tone: discontinued ? 'CAUTION' : 'DEFAULT',
-    actions: [],
+    actions: search ? [showAll] : [],
   }];
   if (view.hasMore) {
     blocks.push({
       type: 'LIMITATION', id: 'material-specs-limit', title: `Showing the first ${specs.length} materials`,
-      body: 'This home has more recorded materials than this. Ask about one category, such as paint or flooring, to narrow it.', severity: 'INFO',
+      body: search ? 'More materials match than this. Add another word, such as a room or a colour code, to narrow it.' : 'This home has more recorded materials than this. Search by a product, supplier or colour code, such as “find paint SW 7008”, to narrow it.', severity: 'INFO',
     });
   }
   blocks.push({
@@ -131,12 +145,17 @@ export function materialSpecsFromView(view: MaterialSpecListView, propertyId: st
   return { status: 'ANSWERED', reasonCode: 'MATERIAL_SPECS_READY', blocks, suggestions: [] };
 }
 
-async function materialSpecsResult(propertyId: string, canAdd: boolean): Promise<AskOperationResult> {
-  const [view, exportRows] = await Promise.all([materialSpecService.listSpecs(propertyId, {}), materialSpecService.listExports(propertyId)]);
-  return materialSpecsFromView(view, propertyId, canAdd, exportRows as unknown as MaterialExportRow[]);
+async function materialSpecsResult(propertyId: string, canAdd: boolean, message = ''): Promise<AskOperationResult> {
+  const term = materialSearchTerm(message);
+  const [view, exportRows] = await Promise.all([
+    // The call Desktop's search box makes (active materials, the first 20), or the page's own list when no word was asked for.
+    term ? materialSpecService.searchSpecs(propertyId, term).then((specs) => ({ specs, hasMore: specs.length >= 20 }) as unknown as MaterialSpecListView) : materialSpecService.listSpecs(propertyId, {}),
+    materialSpecService.listExports(propertyId),
+  ]);
+  return materialSpecsFromView(view, propertyId, canAdd, exportRows as unknown as MaterialExportRow[], new Date(), term ? { term } : null);
 }
 
 registerCapabilityHandler('material-specs.list', async (envelope, deps) => {
   const access = deps.propertyAccess ?? await ensurePropertyAccess(envelope.userId, envelope.propertyId!);
-  return materialSpecsResult(envelope.propertyId!, access.role !== HouseholdRole.VIEWER);
+  return materialSpecsResult(envelope.propertyId!, access.role !== HouseholdRole.VIEWER, envelope.message);
 });

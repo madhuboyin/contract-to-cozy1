@@ -1422,8 +1422,8 @@ const propertyBriefsPattern = /\bproperty briefs?\b|\b(?:my|our|saved|shared) (?
 const propertyBriefsOtherIntentPattern = /\b(?:create|make|prepare|build|generate|new|send|email|revoke|republish|refresh|update|delete|archive|remove)\b|\bshare (?:my|our|the|a|this|it)\b/i;
 // The finishes and products recorded in Material Specs ("what paint colour is the living room?"). Choosing, buying or
 // adding a material is not this read.
-const materialSpecsPattern = /\bmaterial specs?\b|\b(?:my|our|recorded) (?:materials|finishes)\b|\bpaint colou?rs?\b|\bwhat (?:paint|colou?r|tile|flooring|grout|countertops?|cabinets?|wallpaper|siding|trim)\b.{0,50}\b(?:use|used|is|are|did|was|in|on)\b/i;
-const materialSpecsOtherIntentPattern = /\b(?:should|recommend|suggest|choose|pick|buy|order|new|add|record|log|best|trend(?:ing|s)?|ideas?)\b/i;
+const materialSpecsPattern = /\bmaterial specs?\b|\b(?:search|find|look (?:up|for))\b.{0,30}\b(?:my |our |the )?(?:materials?|paint|tiles?|flooring|grout|finishes)\b|\b(?:my|our|which|what) (?:materials?|paints?|tiles?|finishes)\b.{0,30}\b(?:from|by|made by|matching|with (?:code|sku))\b|\b(?:paint|colou?r|tile|grout) (?:code|number|sku)\b|\b(?:my|our|recorded) (?:materials|finishes)\b|\bpaint colou?rs?\b|\bwhat (?:paint|colou?r|tile|flooring|grout|countertops?|cabinets?|wallpaper|siding|trim)\b.{0,50}\b(?:use|used|is|are|did|was|in|on)\b/i;
+const materialSpecsOtherIntentPattern = /\b(?:should|recommend|suggest|choose|pick|buy|order|new|add|record|log|best|good|better|nicer?|trend(?:ing|s)?|ideas?|find me|get me|give me)\b/i;
 // The whole-home history on the Home Timeline. Recent changes are HOME_CHANGE_SUMMARY, past hazards are
 // PAST_HAZARD_EXPOSURE, one item's history is INVENTORY_LOOKUP, and logging or correcting an event is a write.
 const homeTimelinePattern = /\bhome timeline\b|\b(?:my|our|the) (?:home|house|property)(?:'s)? (?:timeline|history)\b|\btimeline (?:of|for) (?:my|our|the) (?:home|house|property)\b|\bhistory of (?:my|our|the|this) (?:home|house|property)\b/i;
