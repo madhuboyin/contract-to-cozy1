@@ -29,7 +29,7 @@ import { hvacDecisionStartResult } from '../handlers/hvacDecision.handler';
 import { extractMaintenanceCompletionInput, maintenanceCompletionMatch, maintenanceMonitorSubject, maintenanceTaskCompleteResult, maintenanceTaskUpdateResult, maintenanceTaskVersion, maintenanceWorkflowVersion } from '../handlers/maintenance.handler';
 import * as decisionPreferenceService from '../../decisionPlatform/decisionPreferenceService';
 import { listPropertyChanges } from '../../../propertyChanges/propertyChange.service';
-import { buildChangeSummaryText, homeChangeCanonicalIdentity, homeChangeDisplayTitle, homeChangeInlineReviewAction, homeChangeLinkedAction, liveHomeChangeCanonicalIdentity, resolveLiveHomeChangeAction, selectUniqueHomeChanges, shouldIncludeHomeChange, sourceTypeLabel } from '../../decisionPlatform/homeChangeSummaryMapping';
+import { buildChangeSummaryText, hasSpecificHomeChangeContent, homeChangeCanonicalIdentity, homeChangeDisplayTitle, homeChangeInlineReviewAction, homeChangeLinkedAction, liveHomeChangeCanonicalIdentity, resolveLiveHomeChangeAction, selectUniqueHomeChanges, shouldIncludeHomeChange, sourceTypeLabel } from '../../decisionPlatform/homeChangeSummaryMapping';
 import { getHomeActionFeed } from '../../homeActions.service';
 import { type SkillExecutionTimingTrace } from '../../skills/skillExecutionTelemetry';
 import { resolveAskEnvelopeQueryScope } from '../askEnvelopeQueryScope';
@@ -461,7 +461,7 @@ async function homeChangeSummaryResult(userId: string, propertyId: string): Prom
           canonicalActionId,
           canonicalEventId: change.canonicalEvent?.id,
         }),
-    HOME_CHANGE_SUMMARY_MAX_ITEMS,
+    200,
   );
 
   if (!material.length) {
@@ -476,7 +476,7 @@ async function homeChangeSummaryResult(userId: string, propertyId: string): Prom
     };
   }
 
-  const changeBlocks: AskPresentationBlock[] = await Promise.all(material.map(async ({ change, canonicalActionId, liveAction }) => {
+  const candidateBlocks = await Promise.all(material.map(async ({ change, canonicalActionId, liveAction }): Promise<AskPresentationBlock | null> => {
     let detailOverride: string | null = null;
     if (change.sourceType === 'DECISION_PREFERENCE_VALUE') {
       const [detail] = await decisionPreferenceService.getPreferenceReferenceDetails([change.sourceRevision]);
@@ -485,16 +485,24 @@ async function homeChangeSummaryResult(userId: string, propertyId: string): Prom
     const source = sourceTypeLabel(change.sourceType);
     const fallbackWorkItem = fallbackWorkItems.get(change.sourceEntityId);
     const title = homeChangeDisplayTitle({ sourceType: change.sourceType, canonicalActionTitle: change.canonicalAction?.title ?? fallbackWorkItem?.title, canonicalEventTitle: change.canonicalEvent?.title });
+    if (!detailOverride && change.canonicalAction?.title && change.changeType === 'ACTION_STATE_CHANGED') {
+      detailOverride = `${change.canonicalAction.title} is now ${change.canonicalAction.state.replace(/_/g, ' ').toLowerCase()}.`;
+    } else if (!detailOverride && change.canonicalEvent?.title) {
+      const eventVerb = change.changeType === 'SOURCE_RECORD_CREATED' ? 'was added' : 'was updated';
+      detailOverride = `${change.canonicalEvent.title} ${eventVerb}.`;
+    }
     const linkedAction = homeChangeLinkedAction({ propertyId, canonicalActionId, canonicalEventId: change.canonicalEvent?.id });
     const reviewAction = liveAction
       ? homeChangeInlineReviewAction({ title, canonicalActionId: liveAction.id })
       : homeChangeInlineReviewAction({ title, canonicalEventId: change.canonicalEvent?.id });
+    const summary = buildChangeSummaryText({ sourceType: change.sourceType, changeType: change.changeType, detailOverride });
+    if (!hasSpecificHomeChangeContent({ title, source, summary })) return null;
     return {
       type: 'CHANGE_SUMMARY', id: `home-change-${change.id}`,
       title,
       source,
       changeType: change.changeType,
-      summary: buildChangeSummaryText({ sourceType: change.sourceType, changeType: change.changeType, detailOverride }),
+      summary,
       effectiveAt: change.occurredAt ? change.occurredAt.toISOString() : null,
       detectedAt: change.detectedAt.toISOString(),
       materiality: change.materiality,
@@ -504,6 +512,20 @@ async function homeChangeSummaryResult(userId: string, propertyId: string): Prom
       reviewAction,
     };
   }));
+  const changeBlocks = candidateBlocks
+    .filter((block): block is AskPresentationBlock => block !== null)
+    .slice(0, HOME_CHANGE_SUMMARY_MAX_ITEMS);
+  if (!changeBlocks.length) {
+    return {
+      status: 'ANSWERED', reasonCode: 'HOME_CHANGE_SUMMARY_NONE',
+      blocks: [{
+        type: 'EMPTY_STATE', id: 'home-change-summary-empty', title: 'No recent changes with enough detail to show',
+        body: 'Recent records were detected, but they did not identify a specific verified change. Ask left them out rather than showing labels such as “Property record updated” without useful context.',
+        actions: [],
+      }],
+      suggestions: [],
+    };
+  }
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY', id: 'home-change-summary',
     title: `${changeBlocks.length} material change${changeBlocks.length === 1 ? '' : 's'} in the last 30 days`,

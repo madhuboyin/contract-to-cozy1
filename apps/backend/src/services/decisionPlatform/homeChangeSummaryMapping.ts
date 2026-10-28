@@ -67,6 +67,31 @@ export function homeChangeDisplayTitle(input: {
   return input.canonicalActionTitle ?? input.canonicalEventTitle ?? sourceTypeLabel(input.sourceType);
 }
 
+/**
+ * A recent-change item must tell the homeowner something beyond the source
+ * category. Category-only fallbacks such as "Property record updated" are
+ * useful for diagnostics, but they do not answer "What changed?" and must not
+ * consume a slot in the homeowner-facing summary.
+ */
+export function hasSpecificHomeChangeContent(input: {
+  title: string;
+  source: string;
+  summary: string;
+}): boolean {
+  const title = input.title.trim().toLocaleLowerCase();
+  const source = input.source.trim().toLocaleLowerCase();
+  const summary = input.summary.trim().toLocaleLowerCase();
+  if (!title || title === source) return false;
+
+  const genericSummaries = new Set([
+    `${source} added.`,
+    `${source} updated.`,
+    `${source} changed.`,
+    `${source} confirmed.`,
+  ]);
+  return Boolean(summary) && !genericSummaries.has(summary);
+}
+
 export function homeChangeLinkedAction(input: {
   propertyId: string;
   canonicalActionId?: string | null;

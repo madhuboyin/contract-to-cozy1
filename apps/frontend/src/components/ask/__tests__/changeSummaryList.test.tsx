@@ -34,22 +34,25 @@ test('renders canonical titles as conversational action cards with exact work-it
 
   const list = screen.getByTestId('change-summary-list');
   expect(within(list).getByRole('heading', { name: 'Here’s what changed around your home' })).toBeInTheDocument();
-  expect(within(list).getByText('I found 2 recent updates. Review each change here, or open its full record when needed.')).toBeInTheDocument();
+  expect(within(list).getByText('I found 2 recent verified changes with enough detail to review.')).toBeInTheDocument();
   expect(within(list).queryByText('Updated.')).toBeNull();
   expect(within(list).getByText('Chimney cleaning and inspection')).toBeInTheDocument();
   expect(within(list).getByText('Replace the aging water heater')).toBeInTheDocument();
   expect(within(list).getAllByRole('article')).toHaveLength(2);
   expect(list).toHaveClass('max-w-6xl');
-  expect(list.querySelector('.grid')).toHaveClass('lg:grid-cols-3');
-  expect(within(list).getAllByText('Home action')).toHaveLength(2);
   expect(within(list).getAllByText('Home action updated.')).toHaveLength(2);
 
   const firstCard = within(list).getByText('Chimney cleaning and inspection').closest('article');
   expect(firstCard).not.toBeNull();
-  expect(firstCard).not.toHaveClass('min-h-36');
+  const disclosure = within(firstCard as HTMLElement).getByRole('button', { name: /Chimney cleaning and inspection/ });
+  expect(disclosure).toHaveAttribute('aria-expanded', 'false');
+  fireEvent.click(disclosure);
+  expect(disclosure).toHaveAttribute('aria-expanded', 'true');
+  expect(within(firstCard as HTMLElement).getByText('Home action')).toBeInTheDocument();
+  expect(within(firstCard as HTMLElement).getByText('Why it matters')).toBeInTheDocument();
   fireEvent.click(within(firstCard as HTMLElement).getByRole('button', { name: 'Review in Ask' }));
   expect(invoke).toHaveBeenCalledWith(expect.objectContaining({ entityType: 'HOME_ACTION', entityId: 'work-1', operationId: 'HOME_ACTIONS' }));
-  expect(within(firstCard as HTMLElement).getByRole('link', { name: /Full record/ })).toHaveAttribute(
+  expect(within(firstCard as HTMLElement).getByRole('link', { name: /View full record/ })).toHaveAttribute(
     'href',
     '/dashboard/properties/property-1/home-operations?focusWorkItemId=work-1&openManage=1',
   );

@@ -7,6 +7,7 @@ const {
   sourceTypeLabel,
   buildChangeSummaryText,
   homeChangeDisplayTitle,
+  hasSpecificHomeChangeContent,
   homeChangeLinkedAction,
   homeChangeCanonicalIdentity,
   homeChangeInlineReviewAction,
@@ -58,6 +59,18 @@ test('canonical entity titles replace generic source labels in the homeowner-fac
   assert.equal(homeChangeDisplayTitle({ sourceType: 'OPERATIONAL_WORK_EVENT', canonicalActionTitle: 'Chimney cleaning and inspection' }), 'Chimney cleaning and inspection');
   assert.equal(homeChangeDisplayTitle({ sourceType: 'HOME_EVENT', canonicalEventTitle: 'Kitchen remodel completed' }), 'Kitchen remodel completed');
   assert.equal(homeChangeDisplayTitle({ sourceType: 'DOCUMENT' }), 'Document');
+});
+
+test('category-only change content is withheld from the homeowner-facing summary', () => {
+  assert.equal(hasSpecificHomeChangeContent({
+    title: 'Property record', source: 'Property record', summary: 'Property record updated.',
+  }), false);
+  assert.equal(hasSpecificHomeChangeContent({
+    title: 'Kitchen renovation', source: 'Project', summary: 'Project changed.',
+  }), false);
+  assert.equal(hasSpecificHomeChangeContent({
+    title: 'Kitchen renovation', source: 'Project', summary: 'Kitchen renovation is now in progress.',
+  }), true);
 });
 
 test('linked changes deep-link to their exact canonical work item or event', () => {

@@ -1319,13 +1319,14 @@ change-tracking system, matching this phase's own constraint that `HomeChangeVie
 disposable, non-authoritative cache rather than a durable model. In-product only; no external
 delivery path exists for this operation. The defined precision/recall targets have no measurement
 pipeline computing them yet. The Ask surface presents consecutive `CHANGE_SUMMARY` blocks as one
-conversational card cluster with a short answer lead-in. Cards use the linked canonical Home Action
-or Home Event title when available, keep timing and source context visible, and deep-link to the exact canonical work
-item or event rather than the general dashboard. Operational Work rows created before canonical
+compact, chronological disclosure list with a short answer lead-in. Each row keeps the specific change,
+timing, and materiality visible, while source lineage, materiality reasons, and actions expand in place.
+Category-only fallbacks such as “Property record updated” are withheld because they do not answer the
+homeowner's question. Qualifying rows use the linked canonical Home Action or Home Event title when
+available and deep-link to the exact canonical work item or event rather than the general dashboard. Operational Work rows created before canonical
 action links were recorded recover the title and exact action link from their property-scoped source
-work item; replaying the source revision also repairs the missing canonical link. Each update is a
-self-contained, responsive card with semantic materiality styling and a direct review action, so the
-answer reads as conversational guidance rather than an administrative activity table.
+work item; replaying the source revision also repairs the missing canonical link. The list becomes a
+stacked disclosure on narrow screens and remains conversational rather than becoming an administrative table.
 
 ### Phase 9B — P1/P2 Priority Intelligence and Concierge Home
 
