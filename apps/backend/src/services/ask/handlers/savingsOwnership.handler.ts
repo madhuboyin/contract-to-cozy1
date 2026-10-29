@@ -517,7 +517,13 @@ const categoryReview: Record<OwnershipCostCategory, { label: string; operationId
 
 const moneyFromCents = (cents: number | null | undefined) => cents == null ? 'Unknown' : money(cents / 100);
 const codeLabel = (value: string) => value.toLowerCase().replace(/_/g, ' ').replace(/^./, (letter) => letter.toUpperCase());
-const ownershipCommandAction = (id: string, label: string, entityId: string, style: 'PRIMARY' | 'SECONDARY' = 'SECONDARY') => ({ id, label, interactionType: 'MUTATE_RECORD' as const, message: OWNERSHIP_COST_COMMAND_MESSAGE, operationId: 'OWNERSHIP_COST_COMMAND', style, entityId, entityType: 'OWNERSHIP_COST_ACTION' });
+const ownershipCommandAction = (id: string, label: string, entityId: string, style: 'PRIMARY' | 'SECONDARY' = 'SECONDARY') => ({
+  id, label, interactionType: 'MUTATE_RECORD' as const, message: OWNERSHIP_COST_COMMAND_MESSAGE,
+  operationId: 'OWNERSHIP_COST_COMMAND', style,
+  // A home-level command has no target entity. Persisting an empty identifier
+  // violates the action contract and makes the entire saved answer unreadable.
+  ...(entityId ? { entityId, entityType: 'OWNERSHIP_COST_ACTION' } : {}),
+});
 
 /** The label of the Add action a category's correction offers, in the words Desktop's expense page uses. */
 const EXPENSE_ADD_LABELS: Record<string, string> = { UTILITIES: 'Add a utility expense', HOA: 'Add an HOA fee', PROPERTY_TAX: 'Add a property tax payment', KNOWN_REPAIR: 'Add a repair expense' };

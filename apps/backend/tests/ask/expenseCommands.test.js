@@ -24,6 +24,7 @@ const HomeManagement = require('../../src/services/home-management.service.ts');
 const { ownershipCostReadModelService } = require('../../src/services/ownershipCosts/ownershipCostReadModel.service.ts');
 const { ownershipExpensesBlock } = require('../../src/services/ask/handlers/savingsOwnership.handler.ts');
 const { expenseCommandResult } = require('../../src/services/ask/handlers/expenseCommands.handler.ts');
+const { AskPresentationBlockSchema } = require('../../src/productFramework/ask/ask.contract.ts');
 const x = require('../../src/services/ask/support/expenseCommand.ts');
 
 const OP = 'OWNERSHIP_COST_COMMAND';
@@ -202,6 +203,10 @@ const block = (result, id) => result.blocks.find((b) => b.id === id);
 test('a missing category an expense feeds offers Add an expense with that category chosen; the others do not', async () => {
   installOwnership();
   const result = await ask('How much does my home cost?');
+  for (const answerBlock of result.blocks) {
+    const parsed = AskPresentationBlockSchema.safeParse(answerBlock);
+    assert.ok(parsed.success, `${answerBlock.id} must satisfy the persisted presentation contract: ${parsed.success ? '' : JSON.stringify(parsed.error.issues)}`);
+  }
   const items = Object.fromEntries(block(result, 'ownership-cost-missing').sections[0].items.map((item) => [item.id, item.actions.map((a) => [a.id, a.label, a.entityId])]));
   assert.deepEqual(items.UTILITIES.slice(1), [[A.ADD, 'Add a utility expense', 'UTILITY']]);
   assert.deepEqual(items.HOA.slice(1), [[A.ADD, 'Add an HOA fee', 'HOA_FEE']]);
@@ -209,6 +214,7 @@ test('a missing category an expense feeds offers Add an expense with that catego
   assert.equal(items.INSURANCE.length, 1, 'insurance is fed by policy terms, not expenses');
   assert.ok(block(result, 'ownership-cost-expenses'), 'the list is part of the answer');
   assert.equal(result.blocks[0].id, 'ownership-costs-summary');
+  assert.equal(block(result, 'ownership-cost-expenses').actions[0].entityId, undefined, 'a home-level Add action does not persist an empty entity id');
   assert.doesNotMatch(result.blocks[0].title, /You recorded/);
   role = 'VIEWER';
   const viewer = await ask('How much does my home cost?', 'VIEWER');
