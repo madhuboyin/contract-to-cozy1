@@ -18,6 +18,7 @@ import { inventoryAddItemAction } from './inventoryAskActions';
 import { askCaptureRequest, capabilityResult, ensurePropertyAccess, isCapitalTimelineAnalysisStale, parseCapitalTimelineHorizonRequest } from '../askHandlerSupport';
 import { HomeCapitalTimelineService } from '../../homeCapitalTimeline.service';
 import { propertyTaxActionBlocks } from './propertyTaxActionCommands.handler';
+import { renovationExploreBlocks } from './renovationExploreCommands.handler';
 import { propertyTaxAppealReadinessService } from '../../propertyTax/propertyTaxAppealReadiness.service';
 import { propertyTaxAppealCaseService } from '../../propertyTax/propertyTaxAppealCase.service';
 import {
@@ -650,7 +651,11 @@ registerCapabilityHandler('property-tax.appeal-readiness', async (envelope) => p
 
 registerCapabilityHandler('renovation-permit.readiness', async (envelope, deps) => {
   const access = deps.propertyAccess ?? await ensurePropertyAccess(envelope.userId, envelope.propertyId!);
-  return renovationPermitReadinessResult(envelope.propertyId!, envelope.message, access.role !== HouseholdRole.VIEWER, access.role === HouseholdRole.OWNER);
+  const canChange = access.role !== HouseholdRole.VIEWER;
+  const result = await renovationPermitReadinessResult(envelope.propertyId!, envelope.message, canChange, access.role === HouseholdRole.OWNER);
+  // FRD v1.487: the upgrade ideas explored for this home sit beside the readiness answer (a read; nothing is generated here).
+  if (Array.isArray(result.blocks) && result.blocks.length) result.blocks.push(...await renovationExploreBlocks(envelope.propertyId!, canChange) as AskPresentationBlock[]);
+  return result;
 });
 
 registerCapabilityHandler('major-event.entry', async (envelope) => majorEventEntryResult(envelope.userId, envelope.propertyId!, envelope.message));

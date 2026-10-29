@@ -19,6 +19,8 @@ import { reconcileAskExecutionSideEffects } from '../execution/executeOperation'
 import { ensurePropertyAccess } from '../askHandlerSupport';
 import { humanDate, money } from '../askFormatting';
 import { createRenovationCase } from '../../renovationCase.service';
+import { isRenovationExploreActionId, RENOVATION_EXPLORE_MESSAGES } from '../support/renovationExploreCommand';
+import { confirmRenovationExploreCommand, renovationExploreCommandResult } from './renovationExploreCommands.handler';
 import {
   isRenovationCaseStartRequest, parseRenovationCaseStartAnswer, RENOVATION_CASE_START_CAPTURE_KEY, RENOVATION_CASE_START_MESSAGE, RENOVATION_CASE_TYPES,
   RENOVATION_CASE_TYPE_LABELS, RENOVATION_RESPONSIBILITIES, RENOVATION_RESPONSIBILITY_LABELS, renovationCaseCreatePayload, type RenovationCaseStartInput,
@@ -118,6 +120,10 @@ export async function renovationCaseStartResult(
 registerCapabilityHandler('renovation-case.start', async (envelope) => {
   const launch = envelope.launchContext;
   if (launch?.surface === 'ASK_REFRESH') return notRoutable();
+  // Exploring upgrade ideas (FRD v1.487) is a set of extra actions of this command with their own handler.
+  if (launch?.operationId === 'RENOVATION_CASE_START' && isRenovationExploreActionId(launch.actionId) && envelope.message === RENOVATION_EXPLORE_MESSAGES[launch.actionId]) {
+    return renovationExploreCommandResult(envelope.userId, envelope.propertyId!, { actionId: launch.actionId, entityId: launch.entityId ?? null, sourceExecutionId: launch.sourceExecutionId ?? null });
+  }
   const declared = launch?.operationId === 'RENOVATION_CASE_START' && envelope.message === RENOVATION_CASE_START_MESSAGE;
   if (declared || isRenovationCaseStartRequest(envelope.message)) {
     return renovationCaseStartResult(envelope.userId, envelope.propertyId!, { sourceExecutionId: launch?.sourceExecutionId ?? null });
@@ -127,6 +133,7 @@ registerCapabilityHandler('renovation-case.start', async (envelope) => {
 
 async function confirmRenovationCaseStart(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
   const { execution, userId, parameters } = ctx;
+  if (parameters.renovationExploreCommand) return confirmRenovationExploreCommand(ctx);
   // Re-validate what was stored: the confirmation is the only thing between these parameters and the canonical write.
   const candidate = parseRenovationCaseStartAnswer(parameters.renovationCaseStart);
   if (!candidate.success) throw Object.assign(new Error('The renovation case to start is invalid.'), { code: 'ASK_CONFIRMATION_NOT_ACTIVE' });

@@ -132,7 +132,8 @@ test('refresh: confirmed first, then the canonical listAndRefresh; with no revie
 test('the answer lists the stored steps as text with no link, offers actions to the primary owner only, and every id is allowlisted', async () => {
   let s = stubs({ rows: [row({ status: 'COMPLETED', decidedAt: UPDATED, decisionJson: { note: 'done', externalReference: 'REF-9' } })] });
   try {
-    const [owner] = await propertyTaxActionBlocks('user-1', 'prop-1', true);
+    const [recordBlock, owner] = await propertyTaxActionBlocks('user-1', 'prop-1', true);
+    assert.deepEqual(recordBlock.actions.map((a) => [a.id, a.interactionType]), [[IDS.RECORD, 'START_WORKFLOW']]);
     const item = owner.sections[0].items[0];
     assert.equal(item.status, 'Completed');
     assert.equal(item.href, null);
@@ -147,15 +148,49 @@ test('the answer lists the stored steps as text with no link, offers actions to 
   } finally { s.restore(); }
   s = stubs({ rows: [] });
   try {
-    const [empty] = await propertyTaxActionBlocks('user-1', 'prop-1', true);
+    const [, empty] = await propertyTaxActionBlocks('user-1', 'prop-1', true);
     assert.deepEqual(empty.sections, []);
     assert.deepEqual(empty.actions.map((a) => a.label), ['Check for steps']);
   } finally { s.restore(); }
   s = stubs({ coverage: 'UNREVIEWED' });
-  try { assert.deepEqual(await propertyTaxActionBlocks('user-1', 'prop-1', true), []); } finally { s.restore(); }
+  try {
+    assert.deepEqual((await propertyTaxActionBlocks('user-1', 'prop-1', true)).map((b) => b.id), ['tax-record-enter']);
+    assert.deepEqual(await propertyTaxActionBlocks('user-1', 'prop-1', false), []);
+  } finally { s.restore(); }
   for (const id of Object.values(IDS)) {
     assert.equal(isAskActionApplicable({
       action: { id, label: 'x', interactionType: 'START_WORKFLOW', message: 'm', operationId: OP, style: 'SECONDARY' }, operationId: 'PROPERTY_TAX_APPEAL_READINESS', propertyId: 'prop-1', householdRole: 'OWNER', authoritativeSourceAvailable: true,
     }), true, id);
+  }
+});
+
+test('typed-in figures: the form, a review, then the canonical recordHomeownerValues with the rate as a fraction, bound to the record version', async () => {
+  const { propertyTaxRecordService } = require('../../src/services/propertyTax/propertyTaxRecord.service.ts');
+  const { propertyTaxActionCommandResult } = require('../../src/services/ask/handlers/propertyTaxActionCommands.handler.ts');
+  const s = stubs();
+  const saved = { a: prisma.propertyTaxAssessmentRecord, b: prisma.propertyTaxBillRecord, r: propertyTaxRecordService.recordHomeownerValues };
+  const T = new Date('2026-08-01T00:00:00Z');
+  prisma.propertyTaxAssessmentRecord = { findFirst: async () => ({ updatedAt: T }) };
+  prisma.propertyTaxBillRecord = { findFirst: async () => null };
+  propertyTaxRecordService.recordHomeownerValues = async (...args) => { s.calls.push(['record', ...args]); return {}; };
+  try {
+    const form = await invoke(IDS.RECORD, 'prop-1');
+    assert.equal(form.status, 'NEEDS_CONTEXT');
+    assert.deepEqual(form.captureRequests[0].inputSchema.fields.map((f) => f.key), ['taxYear', 'parcelId', 'totalAssessedValue', 'taxRatePercent', 'billAmount']);
+    const launchInput = { actionId: IDS.RECORD, entityId: 'prop-1', sourceExecutionId: null };
+    assert.equal((await propertyTaxActionCommandResult('user-1', 'prop-1', launchInput, { taxYear: 2026 })).reasonCode, 'PROPERTY_TAX_RECORD_NOTHING_ENTERED');
+    assert.equal((await propertyTaxActionCommandResult('user-1', 'prop-1', launchInput, { taxYear: 1800, billAmount: 5 })).reasonCode, 'PROPERTY_TAX_RECORD_INPUT_INVALID');
+    const review = await propertyTaxActionCommandResult('user-1', 'prop-1', launchInput, { taxYear: 2026, totalAssessedValue: '450000', taxRatePercent: 1.25, billAmount: '5600.5', parcelId: '' });
+    assert.equal(review.status, 'NEEDS_CONFIRMATION');
+    assert.deepEqual(review.confirmation.fields.map((f) => f.label), ['Tax year', 'Assessed value', 'Tax rate', 'Bill amount']);
+    assert.equal(s.calls.length, 0);
+    const out = await confirmCapabilityInvoke(OP, ctx(review.parameters));
+    assert.deepEqual(s.calls[0], ['record', 'prop-1', 'user-1', { taxYear: 2026, parcelId: undefined, totalAssessedValue: 450000, billAmount: 5600.5, effectiveTaxRate: 0.0125 }]);
+    assert.equal(out.result.blocks[0].title, 'Figures saved');
+    prisma.propertyTaxBillRecord = { findFirst: async () => ({ updatedAt: T }) };
+    await assert.rejects(() => confirmCapabilityInvoke(OP, ctx(review.parameters)), (e) => e.code === 'ASK_CONTEXT_VERSION_CONFLICT');
+    assert.equal(s.calls.length, 1);
+  } finally {
+    prisma.propertyTaxAssessmentRecord = saved.a; prisma.propertyTaxBillRecord = saved.b; propertyTaxRecordService.recordHomeownerValues = saved.r; s.restore();
   }
 });

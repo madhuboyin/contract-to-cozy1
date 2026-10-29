@@ -160,6 +160,8 @@ import { parsePriceFormAnswer, priceFormKindForCommand, priceFormKindFromCapture
 import { NEGOTIATION_SHIELD_ATTACH_CAPTURE_KEY, parseNegotiationAttachAnswer } from '../support/negotiationShieldAttach';
 import { renovationCaseStartContextVersion, renovationCaseStartResult } from '../handlers/renovationCaseStart.handler';
 import { parseRenovationCaseStartAnswer, RENOVATION_CASE_START_CAPTURE_KEY } from '../support/renovationCaseStart';
+import { RENOVATION_EXPLORE_CAPTURE_KEY, isRenovationExploreActionId } from '../support/renovationExploreCommand';
+import { renovationExploreCommandResult } from '../handlers/renovationExploreCommands.handler';
 import { plantRecommendationContextVersion, roomPlantRecommendationResult } from '../handlers/plantRecommendations.handler';
 import { PLANT_RECOMMENDATIONS_CAPTURE_KEY } from '../support/plantRecommendationConstants';
 import { doNothingRunContextVersion, doNothingRunResult, priceCheckVersion, servicePriceCheckResult } from '../handlers/homeToolRuns.handler';
@@ -1198,6 +1200,20 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
     canonicalOwner = 'PropertyMaintenanceTaskEvidence';
     }
+  } else if (execution.operationId === 'RENOVATION_CASE_START' && input.captureKey === RENOVATION_EXPLORE_CAPTURE_KEY) {
+    // The goals form for exploring upgrade ideas (FRD v1.487): it only prepares the confirmation; nothing is generated or saved until that is confirmed.
+    const access = await ensurePropertyAccess(userId, execution.propertyId);
+    if (access.role === HouseholdRole.VIEWER) throw Object.assign(new Error('A contributor or owner is required to explore upgrade ideas.'), { code: 'ASK_PERMISSION_REQUIRED' });
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson) ? execution.parametersJson as Record<string, unknown> : {};
+    const exploreLaunch = storedParameters.renovationExploreLaunch && typeof storedParameters.renovationExploreLaunch === 'object' && !Array.isArray(storedParameters.renovationExploreLaunch)
+      ? storedParameters.renovationExploreLaunch as { actionId?: unknown; entityId?: unknown; sourceExecutionId?: unknown } : null;
+    if (!exploreLaunch || !isRenovationExploreActionId(typeof exploreLaunch.actionId === 'string' ? exploreLaunch.actionId : null)) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    result = await renovationExploreCommandResult(userId, execution.propertyId, {
+      actionId: exploreLaunch.actionId as never, entityId: typeof exploreLaunch.entityId === 'string' ? exploreLaunch.entityId : null, sourceExecutionId: typeof exploreLaunch.sourceExecutionId === 'string' ? exploreLaunch.sourceExecutionId : null,
+    }, input.answer as Record<string, unknown>);
+    captureId = input.idempotencyKey;
+    capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
+    canonicalOwner = 'RenovationExploration';
   } else if (execution.operationId === 'RENOVATION_CASE_START') {
     if (input.captureKey !== RENOVATION_CASE_START_CAPTURE_KEY) {
       const error = new Error('This renovation case form is no longer active. Ask to start a renovation case again.');

@@ -13,10 +13,11 @@ import { reconcileAskExecutionSideEffects } from '../execution/executeOperation'
 import { ensurePropertyAccess } from '../askHandlerSupport';
 import { humanDate } from '../askFormatting';
 import { propertyTaxHomeownerActionService } from '../../propertyTax/propertyTaxHomeownerAction.service';
+import { propertyTaxRecordService } from '../../propertyTax/propertyTaxRecord.service';
 import { propertyTaxRuleService } from '../../propertyTax/propertyTaxRule.service';
 import {
   PROPERTY_TAX_ACTION_CAPTURE_KEY, PROPERTY_TAX_ACTION_DECISIONS, PROPERTY_TAX_ACTION_DECISION_LABELS, PROPERTY_TAX_ACTION_ENTITY_TYPE, PROPERTY_TAX_ACTION_IDS,
-  PROPERTY_TAX_ACTION_MESSAGES, PROPERTY_TAX_ACTION_STATUS_LABELS, parsePropertyTaxActionDecision, type PropertyTaxActionId,
+  PROPERTY_TAX_ACTION_MESSAGES, PROPERTY_TAX_ACTION_STATUS_LABELS, parsePropertyTaxActionDecision, parsePropertyTaxRecordForm, type PropertyTaxActionId,
 } from '../support/propertyTaxActionCommand';
 import { APPEAL_PROPERTY_ENTITY_TYPE } from '../support/propertyTaxAppealCommand';
 
@@ -42,6 +43,33 @@ const host = (url: string) => { try { return new URL(url).hostname; } catch { re
 async function refreshVersion(propertyId: string): Promise<string> {
   const latest = await database.propertyTaxHomeownerAction.findFirst({ where: { propertyId }, orderBy: { updatedAt: 'desc' }, select: { updatedAt: true } });
   return sha(`tax-actions-refresh:${propertyId}:${latest?.updatedAt?.toISOString() ?? 'none'}`);
+}
+
+async function recordVersion(propertyId: string): Promise<string> {
+  const [assessment, bill] = await Promise.all([
+    database.propertyTaxAssessmentRecord.findFirst({ where: { propertyId }, orderBy: { updatedAt: 'desc' }, select: { updatedAt: true } }),
+    database.propertyTaxBillRecord.findFirst({ where: { propertyId }, orderBy: { updatedAt: 'desc' }, select: { updatedAt: true } }),
+  ]);
+  return sha(`tax-record:${propertyId}:${assessment?.updatedAt?.toISOString() ?? 'none'}:${bill?.updatedAt?.toISOString() ?? 'none'}`);
+}
+
+const money = (value: number) => `$${value.toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
+function recordFormCapture(contextVersion: string, entered: Record<string, unknown>): AskCaptureRequest {
+  const num = (key: string, label: string, max: number) => ({ key, label, required: false, inputSchema: { type: 'NUMBER' as const, min: 0, max } });
+  return {
+    requirementId: 'property-tax-record-inputs', captureKey: PROPERTY_TAX_ACTION_CAPTURE_KEY, classification: 'WORKFLOW_INPUT', state: 'UNKNOWN', sensitivity: 'FINANCIAL',
+    title: 'Your property tax figures', question: 'What do your tax papers say?',
+    helpText: 'Enter what you know from your assessment notice or tax bill; at least one figure besides the year. They are saved as figures you reported, not verified by Cozy. Nothing is saved until you confirm.',
+    inputSchema: { type: 'GROUP', fields: [
+      { key: 'taxYear', label: 'Tax year', required: true, inputSchema: { type: 'NUMBER', min: 1900, max: new Date().getFullYear() + 2 } },
+      { key: 'parcelId', label: 'Parcel number', required: false, inputSchema: { type: 'SHORT_TEXT', maxLength: 120 } },
+      num('totalAssessedValue', 'Assessed value ($)', 1_000_000_000),
+      num('taxRatePercent', 'Tax rate (%)', 100),
+      num('billAmount', 'Bill amount ($)', 1_000_000_000),
+    ] } as unknown as AskCaptureRequest['inputSchema'],
+    currentAnswer: Object.fromEntries(Object.entries(entered).filter(([, v]) => v !== undefined && v !== null && v !== '')),
+    allowNotSure: false, destinationLabel: 'Used to prepare this change; nothing is saved until you confirm', confirmationText: null, expectedContextVersion: contextVersion,
+  };
 }
 
 function formCapture(contextVersion: string, entered: Record<string, unknown>, title: string): AskCaptureRequest {
@@ -83,6 +111,33 @@ export async function propertyTaxActionCommandResult(userId: string, propertyId:
     return confirmation(contextVersion, { actionId: launch.actionId }, 'Check for exemption and correction steps?',
       'This looks up the reviewed steps for your jurisdiction and lists them on your appeal readiness answer. It changes none of your decisions.', 'Check for steps',
       [{ label: 'What changes', value: 'The list of steps is refreshed' }], 'I authorize refreshing the list of steps.', `refresh-${contextVersion.slice(0, 12)}`);
+  }
+
+  if (launch.actionId === PROPERTY_TAX_ACTION_IDS.RECORD) {
+    const contextVersion = await recordVersion(propertyId);
+    if (!supplied) {
+      return {
+        status: 'NEEDS_CONTEXT', reasonCode: 'PROPERTY_TAX_RECORD_INPUT_REQUIRED', contextVersion, parameters: launchParameters,
+        blocks: [{ type: 'SUMMARY', id: 'tax-record-input', title: 'Enter your property tax figures', body: 'Nothing has been saved.', tone: 'DEFAULT', actions: [] }],
+        captureRequests: [recordFormCapture(contextVersion, {})], suggestions: [],
+      };
+    }
+    const entered = parsePropertyTaxRecordForm(supplied);
+    if (!entered.success) {
+      return unavailable(entered.reason === 'NOTHING_ENTERED' ? 'PROPERTY_TAX_RECORD_NOTHING_ENTERED' : 'PROPERTY_TAX_RECORD_INPUT_INVALID', 'Check your figures',
+        entered.reason === 'NOTHING_ENTERED' ? 'Enter at least one figure besides the year: parcel number, assessed value, tax rate or bill amount. Nothing has changed.' : 'The year or a figure is out of range. Nothing has changed.');
+    }
+    const f = entered.data;
+    return {
+      ...confirmation(contextVersion, { actionId: launch.actionId, input: f }, `Save your ${f.taxYear} property tax figures?`,
+        'This saves the figures as ones you reported. Cozy does not check them against the county, and they replace any earlier figures you typed in for the same year.', 'Save figures',
+        [{ label: 'Tax year', value: String(f.taxYear) }, ...(f.parcelId ? [{ label: 'Parcel number', value: f.parcelId }] : []),
+          ...(f.totalAssessedValue !== undefined ? [{ label: 'Assessed value', value: money(f.totalAssessedValue) }] : []),
+          ...(f.taxRatePercent !== undefined ? [{ label: 'Tax rate', value: `${f.taxRatePercent}%` }] : []),
+          ...(f.billAmount !== undefined ? [{ label: 'Bill amount', value: money(f.billAmount) }] : [])],
+        'I authorize saving these figures.', `record-${sha(JSON.stringify(f)).slice(0, 12)}`),
+      captureRequests: [recordFormCapture(contextVersion, f)],
+    };
   }
 
   const row = launch.entityId
@@ -131,6 +186,17 @@ export async function confirmPropertyTaxActionCommand(ctx: ConfirmCapabilityCont
       } else {
         title = 'Steps refreshed'; description = `${out.actions.length} step${out.actions.length === 1 ? '' : 's'} listed on your appeal readiness answer.`;
       }
+    } else if (actionId === PROPERTY_TAX_ACTION_IDS.RECORD) {
+      if (parameters.propertyTaxActionContextVersion !== await recordVersion(propertyId)) throw stale('Your tax record changed while the confirmation was open. Review again and try again.', 'ASK_CONTEXT_VERSION_CONFLICT');
+      const parsed = parsePropertyTaxRecordForm(stored?.input);
+      if (!parsed.success) throw stale('The figures to save are invalid.');
+      const f = parsed.data;
+      await propertyTaxRecordService.recordHomeownerValues(propertyId, userId, {
+        taxYear: f.taxYear, parcelId: f.parcelId, totalAssessedValue: f.totalAssessedValue, billAmount: f.billAmount,
+        effectiveTaxRate: f.taxRatePercent === undefined ? undefined : f.taxRatePercent / 100,
+      } as never);
+      title = 'Figures saved'; description = `Your ${f.taxYear} property tax figures are saved as figures you reported.`;
+      details.push({ label: 'Tax year', value: String(f.taxYear) });
     } else if (actionId === PROPERTY_TAX_ACTION_IDS.DECIDE) {
       const rowId = typeof stored?.entityId === 'string' ? stored.entityId : null;
       const row = rowId ? await database.propertyTaxHomeownerAction.findFirst({ where: { id: rowId, propertyId, property: { homeownerProfile: { userId } } }, select: ACTION_SELECT }) as ActionRow | null : null;
@@ -163,19 +229,27 @@ export async function confirmPropertyTaxActionCommand(ctx: ConfirmCapabilityCont
 
 /** The reviewed steps beside the appeal readiness check, read from what is stored (a read never writes); the primary owner can record a decision on each. */
 export async function propertyTaxActionBlocks(userId: string, propertyId: string, canChange: boolean): Promise<Array<Record<string, any>>> {
+  // A read beside the answer: if the owner lookup fails, the steps still show, without actions.
+  const ownerCanChange = canChange && await isPrimaryOwner(userId, propertyId).catch(() => false);
+  const recordBlock: Array<Record<string, any>> = ownerCanChange ? [{
+    type: 'SUMMARY', id: 'tax-record-enter', title: 'Your own tax figures', body: 'No bill to upload? Type in the figures you know. They are kept as figures you reported.', tone: 'DEFAULT',
+    actions: [{
+      id: PROPERTY_TAX_ACTION_IDS.RECORD, label: 'Enter my tax figures', interactionType: 'START_WORKFLOW' as const, message: PROPERTY_TAX_ACTION_MESSAGES[PROPERTY_TAX_ACTION_IDS.RECORD],
+      operationId: 'PROPERTY_TAX_APPEAL_COMMAND' as const, actionId: PROPERTY_TAX_ACTION_IDS.RECORD, entityType: APPEAL_PROPERTY_ENTITY_TYPE, entityId: propertyId, style: 'SECONDARY' as const,
+    }],
+  }] : [];
   let profileId: string | null = null;
   try {
     const rules: any = await propertyTaxRuleService.getForProperty(propertyId, userId);
     if (rules.coverage === 'REVIEWED' && rules.profile) profileId = rules.profile.id;
-  } catch { return []; }
-  if (!profileId) return [];
-  const ownerCanChange = canChange && await isPrimaryOwner(userId, propertyId);
+  } catch { return recordBlock; }
+  if (!profileId) return recordBlock;
   const rows: ActionRow[] = await database.propertyTaxHomeownerAction.findMany({ where: { propertyId, ruleProfileId: profileId }, orderBy: [{ status: 'asc' }, { type: 'asc' }], select: ACTION_SELECT });
   const refreshAction = ownerCanChange ? [{
     id: PROPERTY_TAX_ACTION_IDS.REFRESH, label: rows.length ? 'Refresh the steps' : 'Check for steps', interactionType: 'START_WORKFLOW' as const, message: PROPERTY_TAX_ACTION_MESSAGES[PROPERTY_TAX_ACTION_IDS.REFRESH],
     operationId: 'PROPERTY_TAX_APPEAL_COMMAND' as const, actionId: PROPERTY_TAX_ACTION_IDS.REFRESH, entityType: APPEAL_PROPERTY_ENTITY_TYPE, entityId: propertyId, style: 'SECONDARY' as const,
   }] : [];
-  return [{
+  return [...recordBlock, {
     type: 'GROUPED_LIST', filters: [], id: 'tax-actions', title: 'Exemption and correction steps',
     description: rows.length
       ? 'Eligibility is never assumed. Do each step on the official site, then record your decision here.'
