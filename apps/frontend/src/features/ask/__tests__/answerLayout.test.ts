@@ -48,3 +48,12 @@ test('keeps property completeness and its summary at the Home Actions measure', 
   const facts: AskPresentationBlock = { type: 'GROUPED_LIST', id: 'property-summary-facts', title: 'Home record summary', sections: [], filters: [], actions: [] };
   expect(askAnswerWidth([summary, progress, facts])).toBe('STANDARD');
 });
+
+test('keeps the room map aligned with Home Actions instead of widening for its presentation hint', () => {
+  const rooms: AskPresentationBlock = {
+    type: 'GROUPED_LIST', id: 'property-rooms', title: 'Rooms', sections: [], filters: [], actions: [],
+    presentation: { pattern: 'ROOM_MAP' },
+  };
+  expect(askAnswerWidth([summary, rooms])).toBe('STANDARD');
+  expect(askAnswerWidthClass(askAnswerWidth([summary, rooms]))).toContain('max-w-[960px]');
+});

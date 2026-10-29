@@ -21,6 +21,10 @@ export function askAnswerWidth(blocks: AskPresentationBlock[]): AskAnswerWidth {
   // widening the whole conversation like a comparison artifact.
   if (blocks.some((block) => block.id === 'property-completeness-progress')
     && blocks.some((block) => block.id === 'property-summary-facts')) return 'STANDARD';
+  // The room map is a compact home-record overview, not a scan-heavy workspace.
+  // Keep it aligned with Home Actions and the other ordinary conversation turns;
+  // its responsive tile grid already adapts within the standard measure.
+  if (blocks.some((block) => block.id === 'property-rooms')) return 'STANDARD';
   // Reserve Fund is a decision answer with one supporting timeline. Keep the
   // whole conversation at the Home Actions reading measure; the timeline is
   // responsive inside that measure and should not widen every surrounding card.
