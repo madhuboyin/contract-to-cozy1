@@ -139,6 +139,8 @@ import { NEGOTIATION_PACKAGE_CAPTURE_KEY } from '../support/inspectionReportComm
 import { HABIT_COACH_PREFERENCES_CAPTURE_KEY, parseHabitCoachPreferencesAnswer } from '../support/habitCoachPreferencesCommand';
 import { habitCoachPreferencesResult } from '../handlers/habitCoachPreferencesCommands.handler';
 import { FINANCING_PROFILE_CAPTURE_KEY, parseFinancingProfileAnswer } from '../support/financingProfileCommand';
+import { PROPERTY_TAX_ACTION_CAPTURE_KEY, isPropertyTaxActionId } from '../support/propertyTaxActionCommand';
+import { propertyTaxActionCommandResult } from '../handlers/propertyTaxActionCommands.handler';
 import { FINANCING_SCENARIO_CAPTURE_KEY, isFinancingScenarioActionId } from '../support/financingScenarioCommand';
 import { financingScenarioCommandResult } from '../handlers/financingScenarioCommands.handler';
 import { financingProfileCommandResult } from '../handlers/financingProfileCommands.handler';
@@ -1629,6 +1631,20 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     captureId = input.idempotencyKey;
     capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
     canonicalOwner = 'HomeItemStatus';
+  } else if (execution.operationId === 'PROPERTY_TAX_APPEAL_COMMAND' && input.captureKey === PROPERTY_TAX_ACTION_CAPTURE_KEY) {
+    // The decision form on a property tax step (FRD v1.485): it only prepares the confirmation; nothing is written until that is confirmed.
+    const access = await ensurePropertyAccess(userId, execution.propertyId);
+    if (access.role === HouseholdRole.VIEWER) throw Object.assign(new Error('A contributor or owner is required to record this.'), { code: 'ASK_PERMISSION_REQUIRED' });
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson) ? execution.parametersJson as Record<string, unknown> : {};
+    const taxLaunch = storedParameters.propertyTaxActionLaunch && typeof storedParameters.propertyTaxActionLaunch === 'object' && !Array.isArray(storedParameters.propertyTaxActionLaunch)
+      ? storedParameters.propertyTaxActionLaunch as { actionId?: unknown; entityId?: unknown; sourceExecutionId?: unknown } : null;
+    if (!taxLaunch || !isPropertyTaxActionId(typeof taxLaunch.actionId === 'string' ? taxLaunch.actionId : null)) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    result = await propertyTaxActionCommandResult(userId, execution.propertyId, {
+      actionId: taxLaunch.actionId as never, entityId: typeof taxLaunch.entityId === 'string' ? taxLaunch.entityId : null, sourceExecutionId: typeof taxLaunch.sourceExecutionId === 'string' ? taxLaunch.sourceExecutionId : null,
+    }, input.answer as Record<string, unknown>);
+    captureId = input.idempotencyKey;
+    capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
+    canonicalOwner = 'PropertyTaxHomeownerAction';
   } else if (execution.operationId === 'PROPERTY_TAX_APPEAL_COMMAND') {
     const appealKind = appealFormKindFromCaptureKey(input.captureKey);
     if (!appealKind) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });

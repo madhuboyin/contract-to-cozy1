@@ -21,6 +21,8 @@ import {
   appealCaseAvailableKinds, appealCommandEntityType, appealCommandKindFromMessage, appealInstant, appealReminderKey, isAppealFormKind, parseAppealFormAnswer,
   type AppealCommandKind, type AppealFormKind, type AppealFormValues,
 } from '../support/propertyTaxAppealCommand';
+import { isPropertyTaxActionId, PROPERTY_TAX_ACTION_MESSAGES } from '../support/propertyTaxActionCommand';
+import { confirmPropertyTaxActionCommand, propertyTaxActionCommandResult } from './propertyTaxActionCommands.handler';
 
 const CONFIRMATION_MINUTES = 30;
 const sha = (text: string) => createHash('sha256').update(text).digest('hex');
@@ -298,6 +300,10 @@ export async function appealCommandResult(userId: string, propertyId: string, la
 
 registerCapabilityHandler('property-tax.appeal-command', async (envelope) => {
   const launch = envelope.launchContext;
+  // The exemption and correction steps (FRD v1.485) are extra actions of this command with their own handler.
+  if (launch?.operationId === 'PROPERTY_TAX_APPEAL_COMMAND' && launch.surface !== 'ASK_REFRESH' && isPropertyTaxActionId(launch.actionId) && envelope.message === PROPERTY_TAX_ACTION_MESSAGES[launch.actionId]) {
+    return propertyTaxActionCommandResult(envelope.userId, envelope.propertyId!, { actionId: launch.actionId, entityId: launch.entityId ?? null, sourceExecutionId: launch.sourceExecutionId ?? null });
+  }
   const kind = appealCommandKindFromMessage(envelope.message);
   if (!kind || launch?.operationId !== 'PROPERTY_TAX_APPEAL_COMMAND' || launch.surface === 'ASK_REFRESH' || !launch.entityId) return notRoutable();
   if (launch.entityType !== appealCommandEntityType(kind)) return notRoutable();
@@ -307,6 +313,7 @@ registerCapabilityHandler('property-tax.appeal-command', async (envelope) => {
 const stale = (message: string, code = 'ASK_CONFIRMATION_NOT_ACTIVE') => Object.assign(new Error(message), { code });
 
 async function confirmAppealCommand(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
+  if (ctx.parameters.propertyTaxActionCommand) return confirmPropertyTaxActionCommand(ctx);
   const { execution, userId, parameters } = ctx;
   const command = parameters.appealCommand as { kind?: unknown; entityId?: unknown } | undefined;
   const kind = command?.kind as AppealCommandKind | undefined;
