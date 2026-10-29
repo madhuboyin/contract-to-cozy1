@@ -307,3 +307,22 @@ test('Slice 4 API and UI expose observed evidence without legacy history', () =>
   assert.match(client, /View source evidence/);
   assert.doesNotMatch(client, /modeledSeries|projection.*What changed/);
 });
+
+test('Ask refreshes change evidence and keeps recovery and scheduled revisits visible', () => {
+  const handler = fs.readFileSync(
+    path.resolve(__dirname, '../../src/services/ask/handlers/savingsOwnership.handler.ts'),
+    'utf8',
+  );
+  const renderer = fs.readFileSync(
+    path.resolve(__dirname, '../../../frontend/src/components/ask/blocks/GroupedListBlock.tsx'),
+    'utf8',
+  );
+  assert.match(handler, /getCurrent\(propertyId, userId, lens, \{ refresh: true \}\)/);
+  assert.match(handler, /refreshObservedChanges\(propertyId, userId, lens\)/);
+  assert.match(handler, /ownership-cost-refresh-and-compare/);
+  assert.match(handler, /decisions\.revisitEvents\.length/);
+  assert.match(handler, /ownership-cost-revisits/);
+  assert.match(renderer, /OwnershipCostNotificationsBlock/);
+  assert.match(renderer, /role="switch"/);
+  assert.match(renderer, /data-ownership-cost-views/);
+});

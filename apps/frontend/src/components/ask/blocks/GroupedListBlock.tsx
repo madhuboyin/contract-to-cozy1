@@ -194,16 +194,9 @@ function OwnershipCostViewsBlock({ block, disabled, onItemAction }: {
 }) {
   const views = block.sections.flatMap((section) => section.items);
   return (
-    <section className="w-full rounded-2xl border border-slate-200/90 bg-white shadow-2xs" data-ownership-cost-views="">
-      <div className="flex flex-wrap items-baseline justify-between gap-2 rounded-t-2xl border-b border-slate-100 bg-gradient-to-r from-slate-50/90 via-white to-teal-50/30 px-4 py-2 sm:px-5">
-        <div className="flex items-baseline gap-2">
-          <h3 className="text-sm font-bold tracking-tight text-slate-950 sm:text-base">{block.title}</h3>
-          <span className="text-[10px] font-bold uppercase tracking-wider text-teal-700">Workspace Views</span>
-        </div>
-        {block.description && <p className="text-xs text-slate-500">{block.description}</p>}
-      </div>
-      <div className="p-3 sm:px-4 sm:py-3">
-        <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4" aria-label={block.title}>
+    <nav className="w-full" aria-label={block.title} data-ownership-cost-views="">
+      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Explore ownership costs</p>
+      <ul className="flex flex-wrap gap-2">
           {views.map((item) => {
             const current = item.status === 'CURRENT';
             const primaryAction = item.actions?.[0];
@@ -211,40 +204,68 @@ function OwnershipCostViewsBlock({ block, disabled, onItemAction }: {
               <li
                 key={item.id}
                 data-ask-task-id={item.id}
-                className={cn(
-                  'flex flex-col rounded-xl border px-3 py-2 transition-colors',
-                  current
-                    ? 'border-teal-400 bg-teal-50/60 ring-1 ring-teal-500/20'
-                    : 'border-slate-200/80 bg-slate-50/55 hover:border-teal-200 hover:bg-white',
-                )}
+                className="flex"
               >
-                <div className="flex items-center justify-between gap-1.5">
-                  <p className="text-xs font-bold text-slate-950 sm:text-sm">{item.title}</p>
-                  {current && (
-                    <span className="rounded-full bg-teal-700 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
-                      Current
-                    </span>
-                  )}
-                </div>
-                {item.description && <p className="mt-1 text-[11px] leading-4 text-slate-600">{item.description}</p>}
-                {primaryAction && (
-                  <div className="mt-2 pt-0.5">
+                {current ? (
+                  <span aria-current="page" className="inline-flex min-h-9 items-center rounded-full bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white">
+                    {item.title}
+                  </span>
+                ) : primaryAction ? (
                     <button
                       type="button"
                       disabled={disabled}
                       onClick={() => onItemAction(primaryAction.entityType ?? item.entityType, primaryAction.entityId ?? item.id, primaryAction.message, primaryAction.operationId, primaryAction.interactionType)}
-                      className="inline-flex min-h-7 items-center rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-teal-800 shadow-2xs transition-colors hover:border-teal-300 hover:bg-teal-50/60 disabled:opacity-50"
+                      className="inline-flex min-h-9 items-center rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:border-teal-300 hover:bg-teal-50/60 hover:text-teal-900 disabled:opacity-50"
                     >
-                      {primaryAction.label}
+                      {item.title}
                     </button>
-                  </div>
-                )}
+                ) : null}
               </li>
             );
           })}
-        </ul>
+      </ul>
+    </nav>
+  );
+}
+
+function OwnershipCostNotificationsBlock({ block, disabled, onItemAction }: {
+  block: Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>;
+  disabled: boolean;
+  onItemAction: Parameters<AskBlockRenderer<'GROUPED_LIST'>>[0]['onItemAction'];
+}) {
+  const items = block.sections.flatMap((section) => section.items);
+  return (
+    <details className="w-full rounded-xl border border-slate-200 bg-white" data-ownership-cost-notifications="">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-2.5 text-sm font-semibold text-slate-900">
+        <span>Cost alerts</span>
+        <span className="text-xs font-normal text-slate-500">{items.filter((item) => item.status === 'ON').length} on</span>
+      </summary>
+      <div className="border-t border-slate-100 px-3.5 py-2">
+        {items.map((item) => {
+          const action = item.actions?.[0];
+          const enabled = item.status === 'ON';
+          return (
+            <div key={item.id} className="flex min-h-10 items-center justify-between gap-3 border-b border-slate-100 py-2 last:border-b-0">
+              <span className="text-sm text-slate-700">{item.title}</span>
+              {action ? (
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={enabled}
+                  aria-label={`${item.title}: ${action.label}`}
+                  disabled={disabled}
+                  onClick={() => onItemAction(action.entityType ?? item.entityType, action.entityId ?? item.id, action.message, action.operationId, action.interactionType)}
+                  className={cn('relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-50', enabled ? 'bg-teal-700' : 'bg-slate-300')}
+                >
+                  <span className={cn('absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition-transform', enabled ? 'left-6' : 'left-1')} />
+                </button>
+              ) : <span className="text-xs text-slate-500">{enabled ? 'On' : 'Off'}</span>}
+            </div>
+          );
+        })}
+        {block.description && <p className="pt-2 text-xs leading-5 text-slate-500">{block.description}</p>}
       </div>
-    </section>
+    </details>
   );
 }
 
@@ -257,6 +278,7 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
   if (block.id === 'savings-recurring-setup') return <RecurringCostsGrid block={block} disabled={itemActionsDisabled} onItemAction={onItemAction} />;
   if (block.id === 'reserve-planning-controls') return <ReservePlanningControls block={block} disabled={itemActionsDisabled} onItemAction={onItemAction} />;
   if (block.id === 'ownership-cost-views') return <OwnershipCostViewsBlock block={block} disabled={itemActionsDisabled} onItemAction={onItemAction} />;
+  if (block.id === 'ownership-cost-notifications') return <OwnershipCostNotificationsBlock block={block} disabled={itemActionsDisabled} onItemAction={onItemAction} />;
   if (block.id === 'focused-home-action-guidance') {
     const next = block.sections.find((section) => section.id === 'next-step');
     const why = block.sections.find((section) => section.id === 'why-it-matters')?.items[0];

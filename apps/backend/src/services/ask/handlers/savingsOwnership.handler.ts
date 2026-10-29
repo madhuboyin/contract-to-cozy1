@@ -562,8 +562,12 @@ export function ownershipExpensesBlock(expenses: { rows: readonly OwnExpenseRow[
 
 
 async function ownershipChangesResult(userId: string, propertyId: string, lens: OwnershipCostCurrentLens): Promise<AskOperationResult> {
+  // Match the traditional workspace's load path: refresh the canonical current
+  // snapshot before comparing observed periods. The read-model refresh owns
+  // fingerprinting/deduplication, so asking twice does not manufacture history.
+  await ownershipCostReadModelService.getCurrent(propertyId, userId, lens, { refresh: true }).catch(() => null);
   const [changes, decisions, access] = await Promise.all([
-    ownershipCostChangeService.getObservedChanges(propertyId, userId, lens),
+    ownershipCostChangeService.refreshObservedChanges(propertyId, userId, lens),
     ownershipCostDecisionService.list(propertyId, userId),
     ensurePropertyAccess(userId, propertyId),
   ]);
@@ -573,7 +577,13 @@ async function ownershipChangesResult(userId: string, propertyId: string, lens: 
     type: 'SUMMARY', id: 'ownership-cost-changes-summary',
     title: changes.comparable ? `${changes.changes.length} ownership-cost change${changes.changes.length === 1 ? '' : 's'} found` : 'More history is needed to compare ownership costs',
     body: changes.comparable ? `Recurring costs changed by ${moneyFromCents(changes.totalRecurringDeltaCents)} and one-time costs changed by ${moneyFromCents(changes.totalOneTimeDeltaCents)} across the compared periods.` : changes.reason ?? 'There are not yet two comparable observed periods.',
-    tone: changes.changes.some((change) => change.materiality.material) ? 'CAUTION' : 'DEFAULT', actions: [],
+    tone: changes.changes.some((change) => change.materiality.material) ? 'CAUTION' : 'DEFAULT',
+    actions: changes.comparable ? [] : [{
+      id: 'ownership-cost-refresh-and-compare', label: 'Refresh and compare',
+      interactionType: 'START_WORKFLOW',
+      message: `Refresh my ${lens === 'CASH_OUTFLOW' ? 'cash outflow' : 'operating expense'} ownership cost sources and show what changed`,
+      operationId: 'OWNERSHIP_COSTS', style: 'PRIMARY',
+    }],
   }];
   if (changes.changes.length) blocks.push({
     type: 'GROUPED_LIST', id: 'ownership-cost-changes', title: 'What changed', filters: [],
@@ -603,6 +613,15 @@ async function ownershipChangesResult(userId: string, propertyId: string, lens: 
     sections: [{ id: 'ownership-cost-notification-preferences', title: 'Reminder preferences', count: 4, items: (Object.entries(decisions.notificationPreferences) as Array<[keyof typeof decisions.notificationPreferences, boolean]>).map(([type, enabled]) => ({
       id: type, entityType: 'OWNERSHIP_COST_NOTIFICATION', title: codeLabel(type), description: enabled ? 'Enabled' : 'Disabled', status: enabled ? 'ON' : 'OFF', meta: [],
       actions: canChange ? [ownershipCommandAction(OWNERSHIP_COST_ACTION_IDS.TOGGLE_NOTIFICATION, enabled ? 'Turn off' : 'Turn on', `${type}:${String(!enabled)}`)] : undefined,
+    })) }], actions: [],
+  });
+  if (decisions.revisitEvents.length) blocks.push({
+    type: 'GROUPED_LIST', id: 'ownership-cost-revisits', title: 'Scheduled revisits',
+    description: 'Snoozed ownership-cost decisions that will return to your attention.', filters: [],
+    sections: [{ id: 'ownership-cost-revisit-events', title: 'Upcoming', count: decisions.revisitEvents.length, items: decisions.revisitEvents.map((event) => ({
+      id: event.decisionId, entityType: 'OWNERSHIP_COST_DECISION', title: codeLabel(event.category),
+      description: event.reason, status: 'SCHEDULED',
+      meta: [`Revisit ${event.revisitAt.slice(0, 10)}`], actions: [],
     })) }], actions: [],
   });
   blocks.push(ownershipViewSwitcher('changes'));
