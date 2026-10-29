@@ -11,6 +11,7 @@ import { type ConfirmCapabilityContext, type ConfirmCapabilityResult } from '../
 import { reconcileAskExecutionSideEffects } from '../execution/executeOperation';
 import { ensurePropertyAccess } from '../askHandlerSupport';
 import { money } from '../askFormatting';
+import { logger } from '../../../lib/logger';
 import { convertOptionToCase, createExploration, updateOptionDisposition } from '../../renovationExplore.service';
 import {
   exploreGoalLabels, optionEntityId, parseOptionEntityId, parseRenovationExploreAnswer, RENOVATION_EXPLORE_ACTION_IDS, RENOVATION_EXPLORE_CAPTURE_KEY, RENOVATION_EXPLORE_MESSAGES,
@@ -26,6 +27,19 @@ const ideasAction = { id: 'renovation-explore-ideas', label: 'See my upgrade ide
 const unavailable = (reasonCode: string, title: string, body: string): AskOperationResult => ({
   status: 'NOT_APPLICABLE', reasonCode, blocks: [{ type: 'SUMMARY', id: 'renovation-explore-unavailable', title, body, tone: 'DEFAULT', actions: [{ ...ideasAction, style: 'SECONDARY' as const }] }], suggestions: [],
 });
+
+// The advisor call can outlast the confirmation's 60-second claim, and a lapsed claim lets recovery start a second run. While it works, the claim is
+// renewed every 15 seconds; a renewal stops as soon as the receipt is no longer CLAIMED.
+const LEASE_RENEW_MS = 15_000;
+async function withRenewedClaim<T>(executionId: string, work: () => Promise<T>): Promise<T> {
+  const timer = setInterval(() => {
+    Promise.resolve(database.askConfirmationReceipt.updateMany({ where: { executionId, status: 'CLAIMED' }, data: { leaseExpiresAt: new Date(Date.now() + 60_000) } })).catch(() => undefined);
+  }, LEASE_RENEW_MS);
+  try { return await work(); } finally { clearInterval(timer); }
+}
+
+const FACT_WORDS: Record<string, string> = { 'core.yearBuilt': 'the year the home was built' };
+const factLabel = (key: string) => FACT_WORDS[key] ?? key.split('.').pop()!.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase();
 
 export interface RenovationExploreLaunch { actionId: RenovationExploreActionId; entityId: string | null; sourceExecutionId: string | null }
 
@@ -132,7 +146,20 @@ export async function confirmRenovationExploreCommand(ctx: ConfirmCapabilityCont
       if (parameters.renovationExploreContextVersion !== await exploreVersion(propertyId)) throw stale('Your upgrade ideas changed while the confirmation was open. Review again and try again.', 'ASK_CONTEXT_VERSION_CONFLICT');
       const parsed = parseRenovationExploreAnswer(stored?.input);
       if (!parsed.success) throw stale('The goals to explore are invalid.');
-      const created: any = await createExploration(propertyId, userId, renovationExploreServiceInput(parsed.data as RenovationExploreForm, `ask:${execution.id}:renovation-explore`));
+      const idempotencyKey = `ask:${execution.id}:renovation-explore`;
+      const startedAt = Date.now();
+      const receipt = await database.askConfirmationReceipt.findUnique({ where: { executionId: execution.id }, select: { attemptCount: true } }).catch(() => null);
+      const recovered = Number(receipt?.attemptCount ?? 1) > 1;
+      let created: any;
+      try {
+        const alreadyExisted = Boolean(await database.renovationExploration.findFirst({ where: { propertyId, idempotencyKey }, select: { id: true } }));
+        created = await withRenewedClaim(execution.id, () => createExploration(propertyId, userId, renovationExploreServiceInput(parsed.data as RenovationExploreForm, idempotencyKey)));
+        // Only counts and timings are logged: never goals, spaces, property facts or generated text.
+        logger.info({ event: 'ask.renovation_explore.generated', outcome: 'success', durationMs: Date.now() - startedAt, optionCount: Array.isArray(created.options) ? created.options.length : 0, returnedExisting: alreadyExisted, recovered: recovered }, 'Ask renovation explore generation');
+      } catch (error) {
+        logger.warn({ event: 'ask.renovation_explore.generated', outcome: 'failure', durationMs: Date.now() - startedAt, timedOut: /time ?out|timed out|abort/i.test(String((error as Error)?.message ?? '')), recovered: recovered }, 'Ask renovation explore generation');
+        throw error;
+      }
       const count = Array.isArray(created.options) ? created.options.length : 0;
       artifactId = String(created.id);
       title = count ? 'Upgrade ideas ready' : 'No ideas to suggest yet';
@@ -185,7 +212,7 @@ export async function renovationExploreBlocks(propertyId: string, canChange: boo
   try {
     exploration = await database.renovationExploration.findFirst({
       where: { propertyId, archivedAt: null }, orderBy: { createdAt: 'desc' },
-      select: { id: true, goals: true, options: { orderBy: { position: 'asc' }, select: { id: true, title: true, description: true, status: true, costMinCents: true, costMaxCents: true, timeline: true, professionalToConsult: true, permitGuidance: true, benefits: true, renovationCaseId: true } } },
+      select: { id: true, goals: true, missingFacts: true, options: { orderBy: { position: 'asc' }, select: { id: true, title: true, description: true, status: true, costMinCents: true, costMaxCents: true, timeline: true, professionalToConsult: true, permitGuidance: true, benefits: true, renovationCaseId: true } } },
     });
   } catch { return []; }
   const exploreAction = canChange ? [{
@@ -194,6 +221,13 @@ export async function renovationExploreBlocks(propertyId: string, canChange: boo
   }] : [];
   const options: any[] = exploration?.options ?? [];
   if (!options.length && !exploreAction.length) return [];
+  const missing = options.length && Array.isArray(exploration?.missingFacts)
+    ? [...new Set((exploration.missingFacts as Array<{ factKey?: unknown }>).map((fact) => (typeof fact.factKey === 'string' ? factLabel(fact.factKey) : '')).filter(Boolean))].slice(0, 6)
+    : [];
+  const missingBlock = missing.length ? [{
+    type: 'SUMMARY', id: 'renovation-ideas-missing-facts', title: 'Better ideas with a few more details', tone: 'DEFAULT',
+    body: `These ideas were limited because Cozy does not have: ${missing.join('; ')}. Tell Ask these about your home and explore again for ideas that fit better.`,
+  }] : [];
   return [{
     type: 'GROUPED_LIST', filters: [], id: 'renovation-ideas', title: 'Upgrade ideas',
     description: options.length
@@ -218,5 +252,5 @@ export async function renovationExploreBlocks(propertyId: string, canChange: boo
       })),
     }] : [],
     actions: exploreAction,
-  }];
+  }, ...missingBlock];
 }

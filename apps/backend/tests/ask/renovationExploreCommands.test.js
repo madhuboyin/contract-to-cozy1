@@ -28,16 +28,19 @@ const option = (over = {}) => ({ id: 'opt-1', explorationId: 'exp-1', title: 'Wi
 const version = (o) => require('node:crypto').createHash('sha256').update(`explore-option:${o.id}:${o.status}:${o.renovationCaseId ?? ''}:${o.updatedAt.toISOString()}`).digest('hex');
 
 function stubs({ role = 'OWNER', opt = option(), exploration = null } = {}) {
-  const saved = { a: propertyAccess.resolvePropertyAccess, e: prisma.renovationExploration, o: prisma.renovationUpgradeOption, c: exploreService.createExploration, u: exploreService.updateOptionDisposition, v: exploreService.convertOptionToCase, q: executeOperation.reconcileAskExecutionSideEffects };
+  const saved = { a: propertyAccess.resolvePropertyAccess, r: prisma.askConfirmationReceipt, e: prisma.renovationExploration, o: prisma.renovationUpgradeOption, c: exploreService.createExploration, u: exploreService.updateOptionDisposition, v: exploreService.convertOptionToCase, q: executeOperation.reconcileAskExecutionSideEffects };
   const calls = [];
   propertyAccess.resolvePropertyAccess = async () => ({ role, userId: 'user-1', propertyId: 'prop-1' });
+  const receipts = [];
+  prisma.askConfirmationReceipt = { findUnique: async () => ({ attemptCount: 1 }), updateMany: async (args) => { receipts.push(args); return { count: 1 }; } };
   prisma.renovationExploration = { findFirst: async () => exploration };
   prisma.renovationUpgradeOption = { findFirst: async (args) => (opt && args.where.id === opt.id && args.where.explorationId === opt.explorationId ? opt : null) };
   exploreService.createExploration = async (...args) => { calls.push(['create', ...args]); return { id: 'exp-9', options: [{}, {}, {}] }; };
   exploreService.updateOptionDisposition = async (...args) => { calls.push(['disposition', ...args]); return {}; };
   exploreService.convertOptionToCase = async (...args) => { calls.push(['convert', ...args]); return { id: 'case-1', name: 'Widen the doorways' }; };
   executeOperation.reconcileAskExecutionSideEffects = async () => ({ attemptedAndFailed: false, refreshedExecutions: [] });
-  return { calls, restore: () => {
+  return { calls, receipts, restore: () => {
+    prisma.askConfirmationReceipt = saved.r;
     propertyAccess.resolvePropertyAccess = saved.a; prisma.renovationExploration = saved.e; prisma.renovationUpgradeOption = saved.o; exploreService.createExploration = saved.c;
     exploreService.updateOptionDisposition = saved.u; exploreService.convertOptionToCase = saved.v; executeOperation.reconcileAskExecutionSideEffects = saved.q;
   } };
@@ -171,4 +174,36 @@ test('the ideas are read from what is stored with no link; only a contributor or
       action: { id, label: 'x', interactionType: 'START_WORKFLOW', message: 'm', operationId: OP, style: 'SECONDARY' }, operationId: 'RENOVATION_PERMIT_READINESS', propertyId: 'prop-1', householdRole: 'OWNER', authoritativeSourceAvailable: true,
     }), true, id);
   }
+});
+
+test('a generation longer than the 60-second claim keeps renewing it, and stops renewing when done', async (t) => {
+  const s = stubs();
+  t.mock.timers.enable({ apis: ['setInterval'] });
+  try {
+    const review = await renovationExploreCommandResult('user-1', 'prop-1', { actionId: IDS.START, entityId: null, sourceExecutionId: null }, { goal: 'energy' });
+    let finish;
+    exploreService.createExploration = async () => new Promise((resolve) => { finish = () => resolve({ id: 'exp-9', options: [{}] }); });
+    const pending = confirmCapabilityInvoke(OP, ctx(review.parameters));
+    for (let i = 0; i < 20 && !finish; i += 1) await new Promise((resolve) => setImmediate(resolve));
+    t.mock.timers.tick(15_000 * 5);
+    assert.equal(s.receipts.length, 5);
+    assert.ok(s.receipts.every((r) => r.where.executionId === 'exec-1' && r.where.status === 'CLAIMED' && r.data.leaseExpiresAt > new Date()));
+    finish();
+    await pending;
+    t.mock.timers.tick(15_000 * 3);
+    assert.equal(s.receipts.length, 5);
+  } finally { s.restore(); t.mock.timers.reset(); }
+});
+
+test('the same goal twice is refused, and what is missing from the home record is listed without a link', async () => {
+  assert.equal(command.parseRenovationExploreAnswer({ goal: 'energy', secondGoal: 'energy' }).success, false);
+  const exploration = { id: 'exp-1', goals: ['Increase resale value'], missingFacts: [{ factKey: 'core.yearBuilt', correctionAction: '/dashboard/properties/p/profile' }, { factKey: 'structure.roofMaterial' }],
+    options: [{ id: 'o1', title: 'New', description: 'd', status: 'GENERATED', costMinCents: null, costMaxCents: null, timeline: null, professionalToConsult: '', permitGuidance: '', benefits: [], renovationCaseId: null }] };
+  const s = stubs({ exploration });
+  try {
+    const blocks = await renovationExploreBlocks('prop-1', true);
+    assert.equal(blocks.length, 2);
+    assert.match(blocks[1].body, /the year the home was built; roof material/);
+    assert.ok(!JSON.stringify(blocks[1]).includes('/dashboard'));
+  } finally { s.restore(); }
 });

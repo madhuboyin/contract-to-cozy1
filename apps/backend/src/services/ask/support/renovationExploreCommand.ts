@@ -58,7 +58,7 @@ const ExploreSchema = z.object({
   spaces: z.preprocess(blank, z.string().trim().max(400).optional()),
   budgetMax: z.preprocess(blank, z.coerce.number().positive().max(100_000_000).optional()),
   targetTiming: z.preprocess(blank, z.string().trim().max(240).optional()),
-}).strict();
+}).strict().refine((value) => !value.secondGoal || value.secondGoal !== value.goal, { message: 'Pick a different second goal', path: ['secondGoal'] });
 export type RenovationExploreForm = z.infer<typeof ExploreSchema>;
 
 export function parseRenovationExploreAnswer(answer: unknown): { success: true; data: RenovationExploreForm } | { success: false } {
