@@ -16,7 +16,10 @@ export function matchesOwnershipCostsAnswerContract(result: AskOperationResult):
     'ownership-costs-summary',
     'ownership-cost-categories',
     'ownership-cost-missing',
+    'ownership-cost-expenses',
     'ownership-cost-evidence',
+    'ownership-cost-views',
+    'ownership-cost-refresh',
     'ownership-cost-lens-boundary',
     'related-capabilities',
     // Same gap as askMaintenanceIntent.ts's identical whitelist (fixed

@@ -38,6 +38,20 @@ function ownershipCostsResult(status = 'READY_WITH_LIMITATIONS') {
       rows: [{ id: 'PROPERTY_TAX', values: { category: 'Property taxes', annual: '$6,000' } }],
       actions: [],
     }, {
+      type: 'GROUPED_LIST', id: 'ownership-cost-expenses', title: 'Expenses you recorded', description: 'Recorded expenses feed the totals above.', filters: [],
+      sections: [{ id: 'recorded-expenses', title: 'Expenses', count: 1, items: [{ id: 'expense-1', entityType: 'EXPENSE', title: 'Tax payment', description: null, status: null, meta: ['Property tax', '$500.00'], actions: [] }] }],
+      actions: [],
+    }, {
+      type: 'EVIDENCE', id: 'ownership-cost-evidence', title: 'Sources and periods',
+      items: [{ label: 'Property taxes', source: 'property tax · confirmed', observedAt: '2026-10-28T00:00:00.000Z' }],
+    }, {
+      type: 'GROUPED_LIST', id: 'ownership-cost-views', title: 'Explore ownership costs', description: 'Continue with another view.', filters: [],
+      sections: [{ id: 'ownership-cost-view-options', title: 'Views', count: 1, items: [{ id: 'current', entityType: 'OWNERSHIP_COST_VIEW', title: 'Current cost', description: 'Recorded cost and evidence.', status: 'CURRENT', meta: [] }] }],
+      actions: [],
+    }, {
+      type: 'SUMMARY', id: 'ownership-cost-refresh', title: 'Refresh source records',
+      body: 'Re-read canonical ownership-cost sources.', tone: 'DEFAULT', actions: [],
+    }, {
       type: 'BOUNDARY', id: 'ownership-cost-lens-boundary', title: 'Operating expense lens',
       body: 'Operating expense excludes mortgage principal and capital projects.',
       severity: 'INFO', suggestions: [],
@@ -101,6 +115,22 @@ test('ownership-cost contract rejects unrelated operation blocks', () => {
     status: 'ANSWERED', suggestions: [],
     blocks: [{ type: 'SUMMARY', id: 'savings-summary', title: 'Savings', body: 'Opportunities.', tone: 'DEFAULT', actions: [] }],
   }), false);
+});
+
+test('current canonical ownership-cost blocks do not turn a direct question into a verification clarification', () => {
+  const result = ownershipCostsResult();
+  assert.deepEqual(result.blocks.map((block) => block.id), [
+    'ownership-costs-summary', 'ownership-cost-categories', 'ownership-cost-expenses', 'ownership-cost-evidence',
+    'ownership-cost-views', 'ownership-cost-refresh', 'ownership-cost-lens-boundary',
+  ]);
+  assert.equal(matchesOwnershipCostsAnswerContract(result), true);
+  const validation = validateAskAnswerTrustPipeline({
+    question: QUESTIONS[0], operationId: 'OWNERSHIP_COSTS', propertyId: 'property-1', semanticEnabled: true,
+    result: attachAskAuthoritativeSourceEvidence(result, [completedAskAuthoritativeSourceEvidence('OWNERSHIP_COSTS')]),
+  });
+  assert.equal(validation.semantic.outcome, 'PASS');
+  assert.equal(validation.result.status, 'READY_WITH_LIMITATIONS');
+  assert.equal(validation.result.clarification, undefined);
 });
 
 test('ownership-cost answers stay in Ask and make missing categories and all four desktop views actionable', () => {
