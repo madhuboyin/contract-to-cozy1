@@ -74,6 +74,8 @@ import { parseQuoteFormAnswer, quoteFormKindFromCaptureKey } from '../support/qu
 import { priceCommandResult } from '../handlers/priceFinalizationCommands.handler';
 import { buyerNegotiationResult } from '../handlers/negotiationShieldBuyerCommands.handler';
 import { permitCommandResult } from '../handlers/permitTrackerCommands.handler';
+import { permitExtraCommandResult } from '../handlers/permitTrackerExtraCommands.handler';
+import { PERMIT_EXTRA_CAPTURE_KEY, isPermitExtraActionId, type PermitExtraActionId } from '../support/permitTrackerExtra';
 import { upgradeCommandResult } from '../handlers/homeUpgradeCommands.handler';
 import { coverageCommandResult } from '../handlers/coverageCommands.handler';
 import { capitalCommandResult } from '../handlers/capitalTimelineCommands.handler';
@@ -1514,6 +1516,22 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     captureId = input.idempotencyKey;
     capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
     canonicalOwner = 'NegotiationShieldBuyer';
+  } else if (execution.operationId === 'PERMIT_TRACKER_COMMAND' && input.captureKey === PERMIT_EXTRA_CAPTURE_KEY) {
+    // The extra permit steps' forms (record work, add or update an inspection step; FRD v1.488), chosen by the stored launch's action.
+    const access = await ensurePropertyAccess(userId, execution.propertyId);
+    if (access.role === HouseholdRole.VIEWER) throw Object.assign(new Error('A contributor or owner is required to change permit records.'), { code: 'ASK_PERMISSION_REQUIRED' });
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson) ? execution.parametersJson as Record<string, unknown> : {};
+    const extraLaunch = storedParameters.permitExtraLaunch && typeof storedParameters.permitExtraLaunch === 'object' && !Array.isArray(storedParameters.permitExtraLaunch)
+      ? storedParameters.permitExtraLaunch as { actionId?: unknown; entityId?: unknown; sourceExecutionId?: unknown } : null;
+    if (!extraLaunch || !isPermitExtraActionId(String(extraLaunch.actionId)) || typeof extraLaunch.entityId !== 'string') {
+      throw Object.assign(new Error('This permit form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    }
+    result = await permitExtraCommandResult(userId, execution.propertyId, {
+      actionId: extraLaunch.actionId as PermitExtraActionId, entityId: extraLaunch.entityId, sourceExecutionId: typeof extraLaunch.sourceExecutionId === 'string' ? extraLaunch.sourceExecutionId : null,
+    }, input.answer);
+    captureId = input.idempotencyKey;
+    capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
+    canonicalOwner = 'PermitTracker';
   } else if (execution.operationId === 'PERMIT_TRACKER_COMMAND') {
     const permitForm = permitFormKindFromCaptureKey(input.captureKey);
     if (!permitForm) throw Object.assign(new Error('This permit form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });

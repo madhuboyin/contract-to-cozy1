@@ -9,6 +9,7 @@ export const WORK_ITEM_MESSAGES = {
   SNOOZE: 'Snooze this work item.',
   RESCHEDULE: 'Change the due date of this work item.',
   ACCEPT_ROUTINE: 'Accept the routine low-risk work suggested for my home.',
+  RETRY_SYNC: 'Retry finishing my pending work updates.',
   ATTACH_EXISTING: 'Attach an existing record as evidence for this work item.',
   SUBMIT_COMPLETION_EVIDENCE: 'Submit completion evidence for this work item.',
   REMOVE_EVIDENCE: 'Remove evidence from this work item.',
@@ -23,7 +24,7 @@ export const WORK_ITEM_MESSAGES = {
 } as const;
 export type WorkItemCommandKind = keyof typeof WORK_ITEM_MESSAGES;
 export const WORK_ITEM_ACTION_IDS = {
-  SNOOZE: 'work-item-snooze', RESCHEDULE: 'work-item-reschedule', ACCEPT_ROUTINE: 'work-items-accept-routine',
+  SNOOZE: 'work-item-snooze', RESCHEDULE: 'work-item-reschedule', ACCEPT_ROUTINE: 'work-items-accept-routine', RETRY_SYNC: 'work-items-retry-sync',
   UPDATE_STATUS: 'work-item-update-status', ATTACH_EVIDENCE: 'work-item-attach-evidence',
   OPTIONS: 'work-item-options', ASSIGN_OWNER: 'work-item-assign-owner', ADD_WATCHER: 'work-item-add-watcher', REMOVE_WATCHER: 'work-item-remove-watcher',
   MARK_DUPLICATE: 'work-item-mark-duplicate', UNDO_DUPLICATE: 'work-item-undo-duplicate', APPROVE_MATERIAL: 'work-item-approve-material',

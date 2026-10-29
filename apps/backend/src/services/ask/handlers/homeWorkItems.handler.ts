@@ -6,6 +6,7 @@ import { type AskOperationResult } from '../askOperationRegistry';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { ensurePropertyAccess } from '../askHandlerSupport';
 import { humanDate, readableCode } from '../askFormatting';
+import { listPendingReconciliations } from '../../../modules/homeOperations/infrastructure/reconciliationRepository';
 import { listWorkItems } from '../../../modules/homeOperations/application/listWorkItems.usecase';
 import { legalUserWorkItemTransitions } from '../../../modules/homeOperations/domain/userGovernance';
 import {
@@ -120,5 +121,17 @@ export function homeWorkItemsFromRows(items: WorkItemView[], canChange: boolean,
 registerCapabilityHandler('home-work-items.list', async (envelope, deps) => {
   const access = await (deps?.propertyAccess ?? ensurePropertyAccess(envelope.userId, envelope.propertyId!));
   const items = await listWorkItems({ propertyId: envelope.propertyId! });
-  return homeWorkItemsFromRows(items as unknown as WorkItemView[], access.role !== HouseholdRole.VIEWER, new Date(), access.role === HouseholdRole.OWNER);
+  const canChange = access.role !== HouseholdRole.VIEWER;
+  const result = homeWorkItemsFromRows(items as unknown as WorkItemView[], canChange, new Date(), access.role === HouseholdRole.OWNER);
+  // Desktop's "Finishing N work updates" banner: saved activity whose follow-up update has not finished yet. The list is still given if this cannot be read.
+  const pending = await listPendingReconciliations(envelope.propertyId!).then((rows) => rows.length).catch(() => 0);
+  if (!pending) return result;
+  return {
+    ...result,
+    blocks: [{
+      type: 'SUMMARY', id: 'home-work-items-sync', title: `Finishing ${pending} work update${pending === 1 ? '' : 's'}`, tone: 'CAUTION',
+      body: 'What you saved is safe. Cozy keeps retrying the follow-up updates automatically.',
+      actions: canChange ? [{ id: WORK_ITEM_ACTION_IDS.RETRY_SYNC, label: 'Retry now', message: WORK_ITEM_MESSAGES.RETRY_SYNC, interactionType: 'START_WORKFLOW' as const, operationId: 'HOME_WORK_ITEM_COMMAND' as const, style: 'SECONDARY' as const }] : [],
+    }, ...result.blocks],
+  };
 });

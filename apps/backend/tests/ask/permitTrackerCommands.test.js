@@ -201,9 +201,10 @@ test('the permit list offers a contributor Add and Change/Remove per row, and a 
   const permit = { id: 'p-1', permitNumber: 'B-100', category: 'ROOFING', workTypes: ['ROOF_REPLACEMENT'], description: null, status: 'UNKNOWN', reportedStatus: 'SUBMITTED', source: 'MANUAL_ENTRY', hasOpenInspections: false };
   const summary = { totalPermits: 1, activePermits: 1, finaledPermits: 0, openFlags: 0, statusCounts: {} };
   const owner = permitTrackerFromView([permit], summary, [], false, true, 'prop-1');
-  assert.deepEqual(owner.blocks[0].actions.map((a) => [a.id, a.entityType, a.entityId]), [['permit-tracker-add', command.PERMIT_PROPERTY_ENTITY_TYPE, 'prop-1']]);
+  // Add first, then the extra permit steps of FRD v1.488 (records lookup, scan, record work), all on the property.
+  assert.deepEqual(owner.blocks[0].actions.map((a) => [a.id, a.entityType, a.entityId]), ['permit-tracker-add', 'permit-fetch-records', 'permit-flags-scan', 'permit-flag-add'].map((id) => [id, command.PERMIT_PROPERTY_ENTITY_TYPE, 'prop-1']));
   const row = owner.blocks.find((b) => b.id === 'permit-tracker-permits').sections[0].items[0];
-  assert.deepEqual(row.actions.map((a) => a.id), ['permit-tracker-edit', 'permit-tracker-remove']);
+  assert.deepEqual(row.actions.map((a) => a.id), ['permit-tracker-edit', 'permit-inspection-add', 'permit-tracker-remove']);
   assert.equal(row.entityType, command.PERMIT_ENTITY_TYPE);
   const viewer = permitTrackerFromView([permit], summary, [], false, false, 'prop-1');
   assert.deepEqual(viewer.blocks[0].actions, []);

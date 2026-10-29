@@ -278,6 +278,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   INSPECTION_NEGOTIATION_PACKAGE: new Set(['inspection-reports-back']),
   // Keep an eye on an inspection finding, or record the seller's plan to fix or disclose it (register P2 Inspection Hub). Confirmation-gated, declared-action only.
   INSPECTION_FINDING_DECISION_COMMAND: new Set(['inspection-reports-back']),
+    'work-items-retry-sync',
   // List the findings in one confirmed inspection report with their state and decisions (register P2 Inspection Hub). Read-only; launched from a report row.
   INSPECTION_REPORT_FINDINGS: new Set(['inspection-reports-back', 'inspection-finding-monitor', 'inspection-finding-already-resolved', 'inspection-finding-not-applicable', 'inspection-finding-duplicate', 'inspection-finding-dismiss', 'inspection-finding-edit', 'inspection-finding-correct', 'inspection-finding-fix', 'inspection-finding-disclose-price', 'inspection-finding-disclose-credit']),
   // Review and confirm an inspection report, with the write-back preview shown first (register P2 Inspection Hub). Confirmation-gated, declared-action only.
@@ -370,7 +371,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   // The permit list offers Add a permit (a SUMMARY action) and Change / Remove on a row to a contributor or owner.
   // The status board's next steps (FRD v1.319): refresh the board, correct one item; the install-date capture kept from the earlier slice.
   HOME_STATUS_BOARD: new Set(['status-board-refresh', 'status-board-correct', 'correct-installedOn', 'status-board-hidden', 'status-board-back-to-board']),
-  PERMIT_TRACKER_STATUS: new Set(['permit-tracker-add', 'permit-tracker-edit', 'permit-tracker-remove']),
+  PERMIT_TRACKER_STATUS: new Set(['permit-tracker-add', 'permit-tracker-edit', 'permit-tracker-remove', 'permit-fetch-records', 'permit-flags-scan', 'permit-flag-add', 'permit-flag-research', 'permit-flag-remediate', 'permit-inspection-add', 'permit-inspection-update', 'permit-inspection-remove']),
   COMMUNITY_UPDATES: new Set(['community-show-all', 'community-show-events', 'community-show-alerts', 'community-show-trash']),
   // The comparison answer offers Start a comparison / Record my decision, and the review answer offers Review my coverage, to a contributor or owner.
   COVERAGE_COMPARISON_STATUS: new Set(['coverage-start-comparison', 'coverage-record-decision', 'coverage-add-quote']),

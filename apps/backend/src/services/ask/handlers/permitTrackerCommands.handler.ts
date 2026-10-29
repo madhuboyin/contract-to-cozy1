@@ -26,6 +26,8 @@ import {
   PERMIT_REPORTED_STATUSES, PERMIT_WORK_TYPES, PERMIT_WORK_TYPE_OPTION_LABELS, parsePermitFormAnswer, permitCommandKindFromMessage, permitCommandTargetsProperty,
   permitCreateBody, permitEditChanges, permitUpdateBody, type PermitCommandKind, type PermitCurrentValues, type PermitFormInput,
 } from '../support/permitTrackerCommand';
+import { PERMIT_EXTRA_MESSAGES, PERMIT_EXTRA_TARGETS, PERMIT_FLAG_ENTITY_TYPE, PERMIT_INSPECTION_ENTITY_TYPE, isPermitExtraActionId } from '../support/permitTrackerExtra';
+import { confirmPermitExtraCommand, permitExtraCommandResult } from './permitTrackerExtraCommands.handler';
 
 const CONFIRMATION_MINUTES = 30;
 const sha = (text: string) => createHash('sha256').update(text).digest('hex');
@@ -212,6 +214,13 @@ function formAnswer(input: PermitFormInput) {
 
 registerCapabilityHandler('permits.command', async (envelope) => {
   const launch = envelope.launchContext;
+  // The extra permit steps (records lookup, flags, inspection steps; FRD v1.488) are declared actions of this same command.
+  if (isPermitExtraActionId(launch?.actionId)) {
+    const target = PERMIT_EXTRA_TARGETS[launch.actionId];
+    const entityType = target === 'PROPERTY' ? PERMIT_PROPERTY_ENTITY_TYPE : target === 'PERMIT' ? PERMIT_ENTITY_TYPE : target === 'FLAG' ? PERMIT_FLAG_ENTITY_TYPE : PERMIT_INSPECTION_ENTITY_TYPE;
+    if (launch.operationId !== 'PERMIT_TRACKER_COMMAND' || launch.surface === 'ASK_REFRESH' || !launch.entityId || launch.entityType !== entityType || envelope.message !== PERMIT_EXTRA_MESSAGES[launch.actionId]) return notRoutable();
+    return permitExtraCommandResult(envelope.userId, envelope.propertyId!, { actionId: launch.actionId, entityId: launch.entityId, sourceExecutionId: launch.sourceExecutionId ?? null });
+  }
   const kind = permitCommandKindFromMessage(envelope.message);
   if (!kind || launch?.operationId !== 'PERMIT_TRACKER_COMMAND' || launch.surface === 'ASK_REFRESH' || !launch.entityId) return notRoutable();
   const entityType = permitCommandTargetsProperty(kind) ? PERMIT_PROPERTY_ENTITY_TYPE : PERMIT_ENTITY_TYPE;
@@ -223,6 +232,7 @@ const stale = (message: string, code = 'ASK_CONFIRMATION_NOT_ACTIVE') => Object.
 
 async function confirmPermitCommand(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
   const { execution, userId, parameters } = ctx;
+  if (parameters.permitExtraCommand) return confirmPermitExtraCommand(ctx);
   const command = parameters.permitCommand as { kind?: unknown; entityId?: unknown } | undefined;
   const kind = command?.kind as PermitCommandKind | undefined;
   if (!kind || !(kind in PERMIT_COMMAND_MESSAGES) || typeof command?.entityId !== 'string') throw stale('The change to make is invalid.');

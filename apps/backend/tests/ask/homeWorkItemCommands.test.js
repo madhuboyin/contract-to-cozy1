@@ -485,3 +485,33 @@ test('confirm the result: owner-only, offered on a reported-complete item that n
   // the action id is allowlisted on the list
   assert.ok(isAskActionApplicable({ action: { id: 'work-item-approve-material', label: 'x', interactionType: 'MUTATE_RECORD', message: M.APPROVE_MATERIAL, operationId: OP, style: 'PRIMARY' }, operationId: 'HOME_WORK_ITEMS', propertyId: 'prop-1', householdRole: 'OWNER', authoritativeSourceAvailable: true }));
 });
+
+test('retry pending work updates: the list shows the banner (contributors get Retry now), the review binds to the pending set, and each is retried through the canonical service', async () => {
+  const repo = require('../../src/modules/homeOperations/infrastructure/reconciliationRepository.ts');
+  const service = require('../../src/services/homeOperationsReconciliation.service.ts');
+  const saved = { l: repo.listPendingReconciliations, r: service.retryHomeOperationsReconciliation };
+  let pending = [{ id: 'r1' }, { id: 'r2' }];
+  const retried = [];
+  repo.listPendingReconciliations = async () => pending;
+  service.retryHomeOperationsReconciliation = async (propertyId, id) => { retried.push([propertyId, id]); return { id, status: id === 'r1' ? 'RESOLVED' : 'FAILED' }; };
+  const w = install('CONTRIBUTOR');
+  try {
+    const listed = await capabilityInvoke('HOME_WORK_ITEMS', { userId: 'u1', propertyId: 'prop-1', message: 'Show my home operations work items' }, { propertyAccess: { role: 'CONTRIBUTOR' } });
+    assert.equal(listed.blocks[0].id, 'home-work-items-sync');
+    assert.match(listed.blocks[0].title, /Finishing 2 work updates/);
+    assert.deepEqual(listed.blocks[0].actions.map((a) => a.id), [command.WORK_ITEM_ACTION_IDS.RETRY_SYNC]);
+    const viewer = await capabilityInvoke('HOME_WORK_ITEMS', { userId: 'u1', propertyId: 'prop-1', message: 'Show my home operations work items' }, { propertyAccess: { role: 'VIEWER' } });
+    assert.deepEqual(viewer.blocks[0].actions, []);
+    const review = await invoke('RETRY_SYNC', { operationId: OP, surface: 'ASK_PAGE' });
+    assert.equal(review.status, 'NEEDS_CONFIRMATION');
+    assert.equal(retried.length, 0);
+    const out = await confirmCapabilityInvoke(OP, ctx(review.parameters));
+    assert.deepEqual(retried, [['prop-1', 'r1'], ['prop-1', 'r2']]);
+    assert.equal(out.result.blocks[0].title, '1 of 2 work updates finished');
+    pending = [{ id: 'r1' }];
+    await assert.rejects(() => confirmCapabilityInvoke(OP, ctx(review.parameters)), (e) => e.code === 'ASK_CONTEXT_VERSION_CONFLICT');
+    pending = [];
+    assert.equal((await invoke('RETRY_SYNC', { operationId: OP, surface: 'ASK_PAGE' })).reasonCode, 'HOME_WORK_ITEMS_NO_PENDING_SYNC');
+    assert.equal(isAskActionApplicable({ action: { id: command.WORK_ITEM_ACTION_IDS.RETRY_SYNC, label: 'x', interactionType: 'START_WORKFLOW', message: 'm', operationId: OP, style: 'SECONDARY' }, operationId: 'HOME_WORK_ITEMS', propertyId: 'prop-1', householdRole: 'CONTRIBUTOR', authoritativeSourceAvailable: true }), true);
+  } finally { w.restore(); repo.listPendingReconciliations = saved.l; service.retryHomeOperationsReconciliation = saved.r; }
+});

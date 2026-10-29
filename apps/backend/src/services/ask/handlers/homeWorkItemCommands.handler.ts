@@ -18,6 +18,8 @@ import { rescheduleWorkItem } from '../../../modules/homeOperations/application/
 import { recordEvidence } from '../../../modules/homeOperations/application/recordEvidence.usecase';
 import { EvidenceNotWithdrawableError, HOMEOWNER_WITHDRAWABLE_EVIDENCE, removeEvidence } from '../../../modules/homeOperations/application/removeEvidence.usecase';
 import { listPropertyDocuments, resolvePropertyDocuments } from '../../propertyDocuments/propertyDocumentInventory.service';
+import { listPendingReconciliations } from '../../../modules/homeOperations/infrastructure/reconciliationRepository';
+import { retryHomeOperationsReconciliation } from '../../homeOperationsReconciliation.service';
 import { batchTransitionWorkItems } from '../../../modules/homeOperations/application/batchTransitionWorkItems.usecase';
 import { transitionWorkItem } from '../../../modules/homeOperations/application/transitionWorkItem.usecase';
 import { assignWorkItemOwner } from '../../../modules/homeOperations/application/assignOwner.usecase';
@@ -223,6 +225,24 @@ export async function workItemCommandResult(
   const base = { sourceExecutionId: launch.sourceExecutionId, confirmationVersion: 1, confirmationExpiresAt: expiresAt.toISOString() };
   const consent = 'I authorize this change to the shared home record.';
 
+  if (kind === 'RETRY_SYNC') {
+    // Desktop's "Finishing N work updates / Retry now" banner: the activity is already saved; this asks the pending follow-up updates to run again now.
+    const pending = await listPendingReconciliations(propertyId);
+    if (pending.length === 0) return unavailable('HOME_WORK_ITEMS_NO_PENDING_SYNC', 'Nothing is waiting to finish', 'Every work update has finished. Nothing has changed.');
+    const contextVersion = syncVersion(pending.map((row) => row.id));
+    return {
+      status: 'NEEDS_CONFIRMATION', reasonCode: 'HOME_WORK_ITEMS_RETRY_SYNC_CONFIRMATION_REQUIRED', contextVersion,
+      parameters: { workItemCommand: { kind, entityId: null }, workItemSyncIds: pending.map((row) => row.id), workItemContextVersion: contextVersion, ...base },
+      blocks: [{ type: 'SUMMARY', id: 'home-work-item-sync-review', title: `Finish ${pending.length} pending work update${pending.length === 1 ? '' : 's'} now?`, body: 'Nothing changes until you confirm.', tone: 'DEFAULT', actions: [] }],
+      confirmation: {
+        confirmationId: `home-work-sync-${sha(contextVersion).slice(0, 12)}-1`, version: 1, title: `Finish ${pending.length} pending work update${pending.length === 1 ? '' : 's'} now?`,
+        description: 'What you already saved stays saved. This asks the follow-up updates that have not finished to run again now instead of waiting for the automatic retry.',
+        fields: [{ label: 'Updates to retry', value: String(pending.length) }], editableFields: [], confirmLabel: 'Retry now', consentText: consent, expiresAt: expiresAt.toISOString(),
+      },
+      suggestions: [],
+    };
+  }
+
   if (kind === 'ACCEPT_ROUTINE') {
     const batch = await eligibleBatch(propertyId);
     if (batch.length === 0) return unavailable('HOME_WORK_ITEMS_NO_ROUTINE_CANDIDATES', 'No routine suggestions to accept', 'Nothing is waiting that can be accepted together. Nothing has changed.');
@@ -426,13 +446,14 @@ export async function workItemCommandResult(
 registerCapabilityHandler('home-work-item.command', async (envelope) => {
   const launch = envelope.launchContext;
   const kind = workItemKindFromMessage(envelope.message);
-  const entityOk = kind === 'ACCEPT_ROUTINE' || (launch?.entityType === WORK_ITEM_ENTITY_TYPE && Boolean(launch.entityId));
+  const entityOk = kind === 'ACCEPT_ROUTINE' || kind === 'RETRY_SYNC' || (launch?.entityType === WORK_ITEM_ENTITY_TYPE && Boolean(launch.entityId));
   if (!kind || launch?.operationId !== 'HOME_WORK_ITEM_COMMAND' || launch.surface === 'ASK_REFRESH' || !entityOk) {
     return unavailable('ASK_HOME_WORK_ITEM_NOT_DIRECTLY_ROUTABLE', 'Open your work items first', 'Work is changed from your list of work items. Nothing has changed.');
   }
   return workItemCommandResult(envelope.userId, envelope.propertyId!, { kind, entityId: launch.entityId ?? null, sourceExecutionId: launch.sourceExecutionId ?? null });
 });
 
+const syncVersion = (ids: readonly string[]) => sha(`work-item-sync:${[...ids].join('|')}`);
 const FINISHED = new Set(['CLOSED', 'VERIFIED']);
 const stale = (message: string, code = 'ASK_CONFIRMATION_NOT_ACTIVE') => Object.assign(new Error(message), { code });
 
@@ -445,7 +466,17 @@ async function confirmWorkItemCommand(ctx: ConfirmCapabilityContext): Promise<Co
   let title: string;
   let description: string;
   try {
-    if (kind === 'ACCEPT_ROUTINE') {
+    if (kind === 'RETRY_SYNC') {
+      const ids = Array.isArray(parameters.workItemSyncIds) ? parameters.workItemSyncIds.filter((id): id is string => typeof id === 'string') : [];
+      const current = (await listPendingReconciliations(propertyId)).map((row) => row.id);
+      if (!ids.length || parameters.workItemContextVersion !== syncVersion(current) || ids.join('|') !== current.join('|')) {
+        throw stale('Your pending updates changed while the confirmation was open. Review them again and try again.', 'ASK_CONTEXT_VERSION_CONFLICT');
+      }
+      const results = await Promise.allSettled(ids.map((id) => retryHomeOperationsReconciliation(propertyId, id)));
+      const finished = results.filter((r) => r.status === 'fulfilled' && (r.value as { status?: string })?.status === 'RESOLVED').length;
+      title = finished === ids.length ? 'Work updates finished' : `${finished} of ${ids.length} work updates finished`;
+      description = finished === ids.length ? 'Everything you saved is fully up to date.' : 'The rest will keep retrying automatically; what you saved is safe.';
+    } else if (kind === 'ACCEPT_ROUTINE') {
       const ids = Array.isArray(parameters.workItemBatchIds) ? parameters.workItemBatchIds.filter((id): id is string => typeof id === 'string') : [];
       const current = await eligibleBatch(propertyId);
       if (!ids.length || parameters.workItemContextVersion !== batchVersion(current) || ids.join('|') !== current.map((c) => c.id).join('|')) {
