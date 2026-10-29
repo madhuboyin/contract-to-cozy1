@@ -82,7 +82,7 @@ test('saved scenarios are exposed to the inline workspace and a not-eligible HEL
   assert.match(result.blocks[0].body, /does not look sufficient for a HELOC/);
   const scenarios = result.blocks.find((b) => b.id === 'financing-scenarios');
   assert.equal(scenarios.sections[0].items[0].status, 'Saved');
-  assert.match(scenarios.description, /Open a saved comparison here/);
+  assert.match(scenarios.description, /archive one you no longer need/);
 });
 
 test('the capability reads the canonical calls and survives the answer-trust validator', async () => {

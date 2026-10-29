@@ -139,6 +139,8 @@ import { NEGOTIATION_PACKAGE_CAPTURE_KEY } from '../support/inspectionReportComm
 import { HABIT_COACH_PREFERENCES_CAPTURE_KEY, parseHabitCoachPreferencesAnswer } from '../support/habitCoachPreferencesCommand';
 import { habitCoachPreferencesResult } from '../handlers/habitCoachPreferencesCommands.handler';
 import { FINANCING_PROFILE_CAPTURE_KEY, parseFinancingProfileAnswer } from '../support/financingProfileCommand';
+import { FINANCING_SCENARIO_CAPTURE_KEY, isFinancingScenarioActionId } from '../support/financingScenarioCommand';
+import { financingScenarioCommandResult } from '../handlers/financingScenarioCommands.handler';
 import { financingProfileCommandResult } from '../handlers/financingProfileCommands.handler';
 import { SELL_HOLD_RENT_ASSUMPTIONS_CAPTURE_KEY } from '../support/sellHoldRentCommand';
 import { sellHoldRentCommandResult } from '../handlers/sellHoldRentCommands.handler';
@@ -1805,6 +1807,20 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     captureId = input.idempotencyKey;
     capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
     canonicalOwner = 'HomeBriefingShare';
+  } else if (execution.operationId === 'FINANCING_PROFILE_COMMAND' && input.captureKey === FINANCING_SCENARIO_CAPTURE_KEY) {
+    // The save-a-comparison and choose-a-way-to-pay forms (FRD v1.484): they only prepare the confirmation; nothing is written until that is confirmed.
+    const access = await ensurePropertyAccess(userId, execution.propertyId);
+    if (access.role !== HouseholdRole.OWNER) throw Object.assign(new Error('Only an owner can change saved financing.'), { code: 'ASK_PERMISSION_REQUIRED' });
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson) ? execution.parametersJson as Record<string, unknown> : {};
+    const scenarioLaunch = storedParameters.financingScenarioLaunch && typeof storedParameters.financingScenarioLaunch === 'object' && !Array.isArray(storedParameters.financingScenarioLaunch)
+      ? storedParameters.financingScenarioLaunch as { actionId?: unknown; entityId?: unknown; sourceExecutionId?: unknown } : null;
+    if (!scenarioLaunch || !isFinancingScenarioActionId(typeof scenarioLaunch.actionId === 'string' ? scenarioLaunch.actionId : null)) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    result = await financingScenarioCommandResult(userId, execution.propertyId, {
+      actionId: scenarioLaunch.actionId as never, entityId: typeof scenarioLaunch.entityId === 'string' ? scenarioLaunch.entityId : null, sourceExecutionId: typeof scenarioLaunch.sourceExecutionId === 'string' ? scenarioLaunch.sourceExecutionId : null,
+    }, input.answer as Record<string, unknown>);
+    captureId = input.idempotencyKey;
+    capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
+    canonicalOwner = 'FinancingScenario';
   } else if (execution.operationId === 'FINANCING_PROFILE_COMMAND') {
     if (input.captureKey !== FINANCING_PROFILE_CAPTURE_KEY) throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
     const access = await ensurePropertyAccess(userId, execution.propertyId);

@@ -9,6 +9,7 @@ import { type AskPresentationBlock } from '../../../productFramework/ask/ask.con
 import { type AskOperationResult } from '../askOperationRegistry';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { ensurePropertyAccess } from '../askHandlerSupport';
+import { FINANCING_SCENARIO_ACTION_IDS, FINANCING_PROJECT_COST_ENTITY_TYPE, FINANCING_SCENARIO_ENTITY_TYPE } from '../support/financingScenarioCommand';
 import { FINANCING_PROFILE_ACTION_ID, FINANCING_PROFILE_COMMAND_MESSAGE, FINANCING_PROFILE_ENTITY_TYPE } from '../support/financingProfileCommand';
 import { humanDate, money } from '../askFormatting';
 import { calculate, getLatestEquity, getProfile, listScenarios } from '../../financing.service';
@@ -58,6 +59,9 @@ export function financingFromView(input: { profile: Profile; equity: Equity | nu
     actions: input.isOwner && input.propertyId ? [{
       id: FINANCING_PROFILE_ACTION_ID, label: 'Update my mortgage and purchase details', interactionType: 'START_WORKFLOW' as const, message: FINANCING_PROFILE_COMMAND_MESSAGE,
       operationId: 'FINANCING_PROFILE_COMMAND' as const, entityType: FINANCING_PROFILE_ENTITY_TYPE, entityId: input.propertyId, style: 'SECONDARY' as const,
+    }, {
+      id: FINANCING_SCENARIO_ACTION_IDS.REFRESH_EQUITY, label: 'Refresh my equity', interactionType: 'START_WORKFLOW' as const, message: FINANCING_PROFILE_COMMAND_MESSAGE,
+      operationId: 'FINANCING_PROFILE_COMMAND' as const, actionId: FINANCING_SCENARIO_ACTION_IDS.REFRESH_EQUITY, entityType: FINANCING_PROFILE_ENTITY_TYPE, entityId: input.propertyId, style: 'SECONDARY' as const,
     }] : [],
   });
 
@@ -127,7 +131,11 @@ export function financingFromView(input: { profile: Profile; equity: Equity | nu
       type: 'GROUPED_LIST', filters: [], id: 'financing-options', title: 'Ways to pay',
       description: `Rates as of ${humanDate(new Date(calc.ratesAsOf)) ?? 'the latest update'}. ${calc.disclaimer}`,
       sections: [{ id: 'financing-options-all', title: `For ${money(calc.projectCostCents / 100)}`, count: options.length, items: options.map((option) => ({ ...option, href: null })) }],
-      actions: [],
+      // Saving keeps today's rates and the equity snapshot, which only an owner can see (FRD v1.484).
+      actions: isOwner && input.propertyId ? [{
+        id: FINANCING_SCENARIO_ACTION_IDS.SAVE, label: 'Save this comparison', interactionType: 'START_WORKFLOW' as const, message: FINANCING_PROFILE_COMMAND_MESSAGE,
+        operationId: 'FINANCING_PROFILE_COMMAND' as const, actionId: FINANCING_SCENARIO_ACTION_IDS.SAVE, entityType: FINANCING_PROJECT_COST_ENTITY_TYPE, entityId: String(calc.projectCostCents), style: 'PRIMARY' as const,
+      }] : [],
     });
     // Presentation Quality 5: the date the comparison's rates are as of, as structured evidence rather than only prose in a description.
     blocks.push({
@@ -138,10 +146,14 @@ export function financingFromView(input: { profile: Profile; equity: Equity | nu
 
   blocks.push({
     type: 'GROUPED_LIST', filters: [], id: 'financing-scenarios', title: 'Saved scenarios',
-    description: 'Open a saved comparison here, or archive one you no longer need.',
+    description: isOwner ? 'Comparisons saved for this home. Choose the way to pay you are leaning toward, or archive one you no longer need.' : 'Comparisons saved for this home. Only an owner can change them.',
     sections: [{ id: 'financing-scenarios-all', title: 'Scenarios', count: scenarios.length, items: scenarios.slice(0, 10).map((scenario) => ({
       id: scenario.id, title: scenario.title || 'Untitled scenario', description: scenario.selectedOption ? `Leaning toward: ${String(scenario.selectedOption).toLowerCase().replace(/_/g, ' ')}` : null,
       meta: [money(scenario.projectCostCents / 100), `Saved ${humanDate(new Date(scenario.createdAt))}`], status: SCENARIO_STATUS_LABELS[String(scenario.status)] ?? String(scenario.status), href: null,
+      actions: isOwner ? [FINANCING_SCENARIO_ACTION_IDS.CHOOSE, FINANCING_SCENARIO_ACTION_IDS.ARCHIVE].map((actionId) => ({
+        id: actionId, label: actionId === FINANCING_SCENARIO_ACTION_IDS.CHOOSE ? 'Choose a way to pay' : 'Archive', interactionType: 'MUTATE_RECORD' as const, message: FINANCING_PROFILE_COMMAND_MESSAGE,
+        operationId: 'FINANCING_PROFILE_COMMAND' as const, actionId, entityType: FINANCING_SCENARIO_ENTITY_TYPE, entityId: scenario.id, style: 'SECONDARY' as const,
+      })) : [],
     })) }],
     actions: [],
   });

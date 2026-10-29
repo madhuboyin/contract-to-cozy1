@@ -296,7 +296,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   // Change the Home Habit Coach's property-wide settings: on or off, how many habits it shows, which kinds it hides (register P2 Home Habit Coach). Confirmation-gated, declared-action only.
   HOME_HABIT_PREFERENCES_COMMAND: new Set(['home-habits-back']),
   // Change the home's recorded mortgage and purchase facts (the financing profile). Owner only; confirmation-gated; declared-action only; exact before and after in the confirmation, redacted receipt (owner ruling 2026-10-13).
-  FINANCING_OVERVIEW: new Set(['financing-profile-update']),
+  FINANCING_OVERVIEW: new Set(['financing-profile-update', 'financing-scenario-save', 'financing-scenario-choose', 'financing-scenario-archive', 'financing-equity-refresh']),
   FINANCING_PROFILE_COMMAND: new Set(['financing-profile-back']),
   // Create or stop a public, expiring link to explicitly selected, share-eligible Home Briefing updates (register P1 Home Briefing; owner ruling 2026-10-13). Owner only; confirmation-gated; declared-action only.
   HOME_BRIEFING_SHARE_COMMAND: new Set(['home-briefing-back', 'home-briefing-open-share']),

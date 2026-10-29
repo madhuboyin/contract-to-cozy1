@@ -20,6 +20,8 @@ import {
   FIELD_LABELS, FINANCING_PROFILE_CAPTURE_KEY, FINANCING_PROFILE_COMMAND_MESSAGE, FINANCING_PROFILE_ENTITY_TYPE, MORTGAGE_STATUS_CHOICES, MORTGAGE_STATUS_CHOICE_LABELS,
   MORTGAGE_TYPE_CHOICES, MORTGAGE_TYPE_CHOICE_LABELS, parseFinancingProfileAnswer,
 } from '../support/financingProfileCommand';
+import { isFinancingScenarioActionId } from '../support/financingScenarioCommand';
+import { confirmFinancingScenarioCommand, financingScenarioCommandResult } from './financingScenarioCommands.handler';
 
 const CONFIRMATION_MINUTES = 30;
 const sha = (text: string) => createHash('sha256').update(text).digest('hex');
@@ -159,6 +161,10 @@ export async function financingProfileCommandResult(userId: string, propertyId: 
 
 registerCapabilityHandler('financing-profile.command', async (envelope) => {
   const launch = envelope.launchContext;
+  // Saved scenarios and the equity refresh (FRD v1.484) are extra actions of this command with their own handler.
+  if (envelope.message === FINANCING_PROFILE_COMMAND_MESSAGE && launch?.operationId === 'FINANCING_PROFILE_COMMAND' && launch.surface !== 'ASK_REFRESH' && isFinancingScenarioActionId(launch.actionId)) {
+    return financingScenarioCommandResult(envelope.userId, envelope.propertyId!, { actionId: launch.actionId, entityId: launch.entityId ?? null, sourceExecutionId: launch.sourceExecutionId ?? null });
+  }
   if (envelope.message !== FINANCING_PROFILE_COMMAND_MESSAGE || launch?.operationId !== 'FINANCING_PROFILE_COMMAND' || launch.surface === 'ASK_REFRESH' || !launch.entityId
     || launch.entityType !== FINANCING_PROFILE_ENTITY_TYPE) {
     return unavailable('ASK_FINANCING_PROFILE_NOT_DIRECTLY_ROUTABLE', 'Open your financing first', 'Your mortgage and purchase details are changed from your financing answer. Nothing has changed.');
@@ -169,6 +175,7 @@ registerCapabilityHandler('financing-profile.command', async (envelope) => {
 const stale = (message: string, code = 'ASK_CONFIRMATION_NOT_ACTIVE') => Object.assign(new Error(message), { code });
 
 async function confirmFinancingProfile(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
+  if (ctx.parameters.financingScenarioCommand) return confirmFinancingScenarioCommand(ctx);
   const { execution, userId, parameters } = ctx;
   if (ctx.access.role !== HouseholdRole.OWNER) throw stale('Only an owner can change the financing profile.', 'ASK_PERMISSION_REQUIRED');
   const propertyId = execution.propertyId;

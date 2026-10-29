@@ -148,7 +148,7 @@ test('confirming calls the canonical writer bound to the version shown; the rece
 test('the answer offers the update to an owner only, and the id is allowlisted', () => {
   const base = { profile: profile(), equity: null, scenarios: [], calc: null, amountDollars: null, propertyId: 'prop-1' };
   const owner = financingFromView({ ...base, isOwner: true });
-  assert.deepEqual(owner.blocks[0].actions.map((a) => a.id), ['financing-profile-update']);
+  assert.deepEqual(owner.blocks[0].actions.map((a) => a.id), ['financing-profile-update', 'financing-equity-refresh']);
   assert.deepEqual(financingFromView({ ...base, isOwner: false }).blocks[0].actions, []);
   const applicable = (id, operationId) => isAskActionApplicable({
     action: { id, label: 'x', interactionType: 'START_WORKFLOW', message: 'm', operationId, style: 'SECONDARY' }, operationId, propertyId: 'prop-1', householdRole: 'OWNER', authoritativeSourceAvailable: true,
