@@ -62,26 +62,45 @@ test('form rules: premium above zero, real dates, expiry after start, default co
   assert.deepEqual(insurancePolicyChanges(ok.data, { ...ok.data, premiumAmount: 2200, policyNumber: 'ZZ-111122' }).map((change) => [change.field, change.before, change.after]), [['policyNumber', 'ending 8877', 'ending 1122'], ['premiumAmount', '$2,100.00', '$2,200.00']]);
 });
 
-test('the list shows only the caller\'s policies with a masked number, Add on the answer and Edit / Delete on each row for a writer; a viewer gets no actions', async () => {
+test('the list shows every policy for the home with who recorded it; Edit and Delete only on the caller\'s own, Add only to the profile that owns the home; a viewer gets no actions', async () => {
+  rows = [policy({ homeownerProfileId: 'hp-1', homeownerProfile: { user: { firstName: 'Ana' } } }), policy({ id: 'pol-2', carrierName: 'Allstate', policyNumber: 'AL-555500', homeownerProfileId: 'hp-2', homeownerProfile: { user: { firstName: 'Sam' } } })];
   const result = await insurancePoliciesResult('u1', 'p1');
   assert.equal(result.status, 'ANSWERED');
-  const list = result.blocks.find((block) => block.type === 'GROUPED_LIST');
-  const item = list.sections[0].items[0];
-  assert.match(item.description, /ending 3456/);
-  assert.doesNotMatch(JSON.stringify(result), /SF-123456/);
-  assert.deepEqual(item.actions.map((action) => action.id), ['insurance-policy-edit', 'insurance-policy-delete']);
+  const items = result.blocks.find((block) => block.type === 'GROUPED_LIST').sections[0].items;
+  assert.equal(items.length, 2);
+  assert.match(items[0].description, /ending 3456/);
+  assert.doesNotMatch(JSON.stringify(result), /SF-123456|AL-555500/);
+  assert.ok(items[0].meta.includes('Recorded by you') && items[1].meta.includes('Recorded by Sam'));
+  assert.deepEqual(items[0].actions.map((action) => action.id), ['insurance-policy-edit', 'insurance-policy-delete']);
+  assert.equal(items[1].actions, undefined, 'another member\'s policy is read-only');
+  assert.match(result.blocks[0].body, /1 recorded under your profile; you can change only those/);
   assert.equal(result.blocks[0].actions[0].id, 'insurance-policy-add');
   role = 'VIEWER';
   const viewer = await insurancePoliciesResult('u1', 'p1');
   assert.deepEqual(viewer.blocks[0].actions, []);
-  assert.equal(viewer.blocks.find((block) => block.type === 'GROUPED_LIST').sections[0].items[0].actions, undefined);
-  role = 'CONTRIBUTOR';
+  assert.ok(viewer.blocks.find((block) => block.type === 'GROUPED_LIST').sections[0].items.every((item) => item.actions === undefined));
+  assert.equal(viewer.blocks.find((block) => block.type === 'GROUPED_LIST').sections[0].items.length, 2, 'a viewer still reads every policy');
+});
+
+test('a contributor whose profile does not own the home is never offered Add, on the list or the empty state; another member\'s policies are shown to them read-only', async () => {
+  ownsHome = false;
+  rows = [policy({ homeownerProfileId: 'hp-2', homeownerProfile: { user: { firstName: null } } })];
+  const result = await insurancePoliciesResult('u1', 'p1');
+  assert.deepEqual(result.blocks[0].actions, [], 'no Add on the answer');
+  assert.match(result.blocks[0].body, /None were recorded under your profile, so they are shown for reading only/);
+  const item = result.blocks.find((block) => block.type === 'GROUPED_LIST').sections[0].items[0];
+  assert.equal(item.actions, undefined);
+  assert.ok(item.meta.includes('Recorded by another household member'));
   rows = [];
   const none = await insurancePoliciesResult('u1', 'p1');
   assert.equal(none.reasonCode, 'INSURANCE_POLICIES_NONE');
   assert.equal(none.blocks[0].type, 'EMPTY_STATE');
-  assert.equal(none.blocks[0].actions[0].id, 'insurance-policy-add');
-  assert.equal(none.blocks[0].actions[0].style, 'PRIMARY');
+  assert.deepEqual(none.blocks[0].actions, [], 'the empty state has no button that would be refused');
+  assert.match(none.blocks[0].body, /Only the member whose profile owns this home record can add a policy/);
+  ownsHome = true;
+  const owner = await insurancePoliciesResult('u1', 'p1');
+  assert.equal(owner.blocks[0].actions[0].id, 'insurance-policy-add');
+  assert.equal(owner.blocks[0].actions[0].style, 'PRIMARY');
   role = 'VIEWER';
   const viewerNone = await insurancePoliciesResult('u1', 'p1');
   assert.deepEqual(viewerNone.blocks[0].actions, []);

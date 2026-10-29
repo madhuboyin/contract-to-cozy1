@@ -36,30 +36,48 @@ const unavailable = (reasonCode: string, title: string, body: string): AskOperat
   status: 'NOT_APPLICABLE', reasonCode, blocks: [{ type: 'SUMMARY', id: 'insurance-policy-unavailable', title, body, tone: 'CAUTION', actions: [backAction] }], suggestions: [],
 });
 
-/** The read: the caller's own policies for this home, with Add on the answer and Edit / Delete on each row for a writer. */
+/**
+ * The read: every policy recorded for this home, so the shared-home answer is truthful, each labelled with who recorded it. A policy belongs to the
+ * profile that recorded it, so Edit and Delete appear only on the caller's own, and Add appears only to the profile that owns the home record (the canonical
+ * create refuses anyone else), never to a member who would be refused. Everyone else's policies are read-only.
+ */
 export async function insurancePoliciesResult(userId: string, propertyId: string): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
   const canWrite = access.role !== HouseholdRole.VIEWER;
   const profileId = await ownProfileId(userId);
-  const rows: PolicyRow[] = profileId ? await prisma.insurancePolicy.findMany({ where: { propertyId, homeownerProfileId: profileId }, orderBy: [{ expiryDate: 'asc' }, { id: 'asc' }], take: 50, select: SELECT }) : [];
+  const [rows, ownsHome]: [Array<PolicyRow & { homeownerProfileId: string; homeownerProfile: { user: { firstName: string | null } | null } | null }>, boolean] = await Promise.all([
+    prisma.insurancePolicy.findMany({
+      where: { propertyId }, orderBy: [{ expiryDate: 'asc' }, { id: 'asc' }], take: 50,
+      select: { ...SELECT, homeownerProfileId: true, homeownerProfile: { select: { user: { select: { firstName: true } } } } },
+    }) as never,
+    profileId && canWrite ? prisma.property.findFirst({ where: { id: propertyId, homeownerProfileId: profileId }, select: { id: true } }).then(Boolean) : Promise.resolve(false),
+  ]);
+  const canAdd = canWrite && ownsHome;
+  const mine = (row: { homeownerProfileId: string }) => Boolean(profileId) && row.homeownerProfileId === profileId;
   const now = Date.now();
   const status = (row: PolicyRow) => (!row.expiryDate ? 'NEEDS_REVIEW' : row.expiryDate.getTime() < now ? 'EXPIRED' : row.expiryDate.getTime() - now <= 60 * 86_400_000 ? 'EXPIRING' : 'ACTIVE');
   const contextVersion = sha(JSON.stringify(rows.map((row) => [row.id, row.updatedAt.toISOString()])));
-  const summary = {
-    type: 'SUMMARY' as const, id: 'insurance-policies-summary',
-    title: `${rows.length} insurance ${rows.length === 1 ? 'policy' : 'policies'} recorded under your profile`,
-    body: `${rows.filter((row) => status(row) === 'EXPIRING').length} expiring within 60 days. Policies other household members recorded are not shown here.`,
-    tone: rows.some((row) => status(row) === 'EXPIRING' || status(row) === 'EXPIRED') ? 'CAUTION' as const : 'DEFAULT' as const,
-    actions: canWrite ? [addAction('SECONDARY')] : [],
-  };
+  const recordedBy = (row: (typeof rows)[number]) => (mine(row) ? 'Recorded by you' : row.homeownerProfile?.user?.firstName?.trim() ? `Recorded by ${row.homeownerProfile.user.firstName.trim()}` : 'Recorded by another household member');
   if (!rows.length) return {
     status: 'ANSWERED', reasonCode: 'INSURANCE_POLICIES_NONE', contextVersion,
     blocks: [{
-      type: 'EMPTY_STATE', id: 'insurance-policies-empty', title: 'No insurance policy recorded under your profile',
-      body: canWrite ? 'Add a policy to track its renewal, premium and documents. Nothing is saved until you confirm.' : 'A contributor or owner can add a policy.',
-      actions: canWrite ? [addAction()] : [],
+      type: 'EMPTY_STATE', id: 'insurance-policies-empty', title: 'No insurance policy recorded for this home',
+      body: canAdd ? 'Add a policy to track its renewal, premium and documents. Nothing is saved until you confirm.'
+        : canWrite ? 'Only the member whose profile owns this home record can add a policy.' : 'A contributor or owner can add a policy.',
+      actions: canAdd ? [addAction()] : [],
     }],
     suggestions: [],
+  };
+  const own = rows.filter(mine).length;
+  const summary = {
+    type: 'SUMMARY' as const, id: 'insurance-policies-summary',
+    title: `${rows.length} insurance ${rows.length === 1 ? 'policy' : 'policies'} recorded for this home`,
+    body: [
+      `${rows.filter((row) => status(row) === 'EXPIRING').length} expiring within 60 days.`,
+      own === rows.length ? 'All were recorded under your profile.' : own ? `${own} recorded under your profile; you can change only those.` : 'None were recorded under your profile, so they are shown for reading only.',
+    ].join(' '),
+    tone: rows.some((row) => status(row) === 'EXPIRING' || status(row) === 'EXPIRED') ? 'CAUTION' as const : 'DEFAULT' as const,
+    actions: canAdd ? [addAction('SECONDARY')] : [],
   };
   const rowAction = (id: string, label: string, message: string) => ({ id, label, message, style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'COVERAGE_COMMAND' as const });
   const sections = [{
@@ -68,8 +86,8 @@ export async function insurancePoliciesResult(userId: string, propertyId: string
       id: row.id, title: row.carrierName, entityType: INSURANCE_POLICY_ENTITY_TYPE, href: null,
       description: `${row.coverageType || 'Homeowner'} · policy ${maskedPolicyNumber(row.policyNumber)}`,
       status: status(row),
-      meta: [row.premiumAmount != null ? `${money(Number(row.premiumAmount))} a year` : 'No premium recorded', row.expiryDate ? `Expires ${humanDate(row.expiryDate) ?? day(row.expiryDate)}` : 'No expiry date recorded'],
-      actions: canWrite ? [rowAction(INSURANCE_POLICY_ACTION_IDS.EDIT, 'Edit policy', INSURANCE_POLICY_MESSAGES.EDIT), rowAction(INSURANCE_POLICY_ACTION_IDS.DELETE, 'Delete policy', INSURANCE_POLICY_MESSAGES.DELETE)] : undefined,
+      meta: [row.premiumAmount != null ? `${money(Number(row.premiumAmount))} a year` : 'No premium recorded', row.expiryDate ? `Expires ${humanDate(row.expiryDate) ?? day(row.expiryDate)}` : 'No expiry date recorded', recordedBy(row)],
+      actions: canWrite && mine(row) ? [rowAction(INSURANCE_POLICY_ACTION_IDS.EDIT, 'Edit policy', INSURANCE_POLICY_MESSAGES.EDIT), rowAction(INSURANCE_POLICY_ACTION_IDS.DELETE, 'Delete policy', INSURANCE_POLICY_MESSAGES.DELETE)] : undefined,
     })),
   }];
   return {

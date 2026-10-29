@@ -13,7 +13,7 @@ import { ensurePropertyAccess } from '../askHandlerSupport';
 import { MaterialSpecService } from '../../materialSpec.service';
 import { receiptFollowUpAction } from '../support/receiptFollowUps';
 import {
-  MATERIAL_SPEC_EXPORT_CAPTURE_KEY, MATERIAL_SPEC_STATE_ACTION_IDS, MaterialSpecExportAnswerSchema, materialSpecDeletable,
+  MATERIAL_SPEC_EXPORT_CAPTURE_KEY, MATERIAL_SPEC_PHOTO_CAPTURE_KEY, MATERIAL_SPEC_STATE_ACTION_IDS, MaterialSpecExportAnswerSchema, MaterialSpecPhotoAnswerSchema, materialSpecDeletable,
   type MaterialSpecStateKind,
 } from '../support/materialSpecStateCommand';
 
@@ -29,6 +29,20 @@ const unavailable = (reasonCode: string, title: string, body: string, actions: A
 const SPEC_SELECT = { id: true, label: true, isActive: true, lifecycleStatus: true, updatedAt: true } as const;
 type SpecRow = { id: string; label: string; isActive: boolean; lifecycleStatus: string; updatedAt: Date };
 const specVersion = (spec: SpecRow) => sha(`material-state:${spec.id}:${spec.updatedAt.toISOString()}:${spec.isActive}:${spec.lifecycleStatus}`);
+
+type PhotoRow = { id: string; caption: string | null; sortOrder: number };
+const photoLabel = (photo: PhotoRow, index: number) => `Photo ${index + 1}${photo.caption?.trim() ? `: ${photo.caption.trim().slice(0, 80)}` : ''}`;
+const photosVersion = (spec: SpecRow, photos: readonly PhotoRow[]) => sha(`material-photos:${spec.id}:${photos.map((photo) => photo.id).join(',')}`);
+const loadPhotos = (propertyId: string, specId: string): Promise<PhotoRow[]> => prisma.materialSpecPhoto.findMany({ where: { materialSpecId: specId, propertyId }, orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }], select: { id: true, caption: true, sortOrder: true } });
+
+function photoCapture(spec: SpecRow, photos: readonly PhotoRow[], contextVersion: string, entered?: Record<string, unknown>): AskCaptureRequest {
+  return {
+    requirementId: 'material-spec-photo-inputs', captureKey: MATERIAL_SPEC_PHOTO_CAPTURE_KEY, classification: 'WORKFLOW_INPUT', state: 'UNKNOWN', presentation: 'FORM',
+    title: `Remove a photo from ${spec.label}`, question: 'Which photo should be removed?', helpText: 'The photos are shown in the material\'s detail, in this order. Nothing is removed until you confirm.',
+    inputSchema: { type: 'GROUP', fields: [{ key: 'photoId', label: 'Photo', required: true, inputSchema: { type: 'SINGLE_SELECT', options: photos.map((photo, index) => ({ label: photoLabel(photo, index), value: photo.id })) } }] } as unknown as AskCaptureRequest['inputSchema'],
+    currentAnswer: entered ?? {}, allowNotSure: false, sensitivity: 'STANDARD', destinationLabel: 'Used to prepare this change; nothing is removed until you confirm', confirmationText: null, expectedContextVersion: contextVersion,
+  } as AskCaptureRequest;
+}
 
 async function exportState(propertyId: string) {
   const [count, latest, inFlight] = await Promise.all([
@@ -103,6 +117,33 @@ export async function materialSpecStateResult(
     },
     suggestions: [],
   });
+  if (kind === 'PHOTO_DELETE') {
+    const photos = await loadPhotos(propertyId, spec.id);
+    if (!photos.length) return unavailable('MATERIAL_SPEC_NO_PHOTOS', 'This material has no photos', `Nothing is attached to "${spec.label}". Nothing has changed.`);
+    const photoVersion = photosVersion(spec, photos);
+    if (!supplied) {
+      return {
+        status: 'NEEDS_CONTEXT', reasonCode: 'MATERIAL_SPEC_PHOTO_CHOICE_REQUIRED', contextVersion: photoVersion, parameters: { materialSpecStateLaunch: { kind, specId: spec.id, sourceExecutionId } },
+        blocks: [{ type: 'SUMMARY', id: 'material-spec-photo-input', title: `Remove a photo from ${spec.label}`, body: `${photos.length} ${photos.length === 1 ? 'photo is' : 'photos are'} attached. Nothing is removed until you confirm.`, tone: 'DEFAULT', actions: [] }],
+        captureRequests: [photoCapture(spec, photos, photoVersion)], suggestions: [],
+      };
+    }
+    const parsed = MaterialSpecPhotoAnswerSchema.safeParse(supplied);
+    const index = parsed.success ? photos.findIndex((photo) => photo.id === parsed.data.photoId) : -1;
+    if (!parsed.success || index < 0) return unavailable('MATERIAL_SPEC_PHOTO_NOT_FOUND', 'That photo is no longer attached', 'It may already have been removed. Nothing has changed.');
+    const photo = photos[index];
+    return {
+      status: 'NEEDS_CONFIRMATION', reasonCode: 'MATERIAL_SPEC_PHOTO_DELETE_CONFIRMATION_REQUIRED', contextVersion: photoVersion,
+      parameters: { materialSpecState: { kind, specId: spec.id, photoId: photo.id }, materialSpecStateContextVersion: photoVersion, materialSpecStateLaunch: { kind, specId: spec.id, sourceExecutionId }, ...base },
+      blocks: [{ type: 'SUMMARY', id: 'material-spec-photo-review', title: `Review removing ${photoLabel(photo, index)}`, body: 'Nothing has been removed yet. Removing a photo cannot be undone.', tone: 'CAUTION', actions: [] }],
+      confirmation: {
+        confirmationId: `material-spec-photo-delete-${photo.id}-1`, version: 1, title: `Remove ${photoLabel(photo, index)} from "${spec.label}"?`,
+        description: 'The photo is removed from this material\'s record. This cannot be undone.', fields: [{ label: 'Material', value: spec.label }, { label: 'Photo', value: photoLabel(photo, index) }],
+        editableFields: [], confirmLabel: 'Remove photo', consentText: 'I authorize removing this photo from the shared home record.', expiresAt: expiresAt.toISOString(),
+      },
+      captureRequests: [photoCapture(spec, photos, photoVersion, parsed.data as unknown as Record<string, unknown>)], suggestions: [],
+    };
+  }
   if (kind === 'ARCHIVE') {
     if (!spec.isActive) return unavailable('MATERIAL_SPEC_ALREADY_ARCHIVED', 'Already marked no longer in use', 'Nothing has changed.');
     return confirmation(`Stop using "${spec.label}"?`, 'It stays in your Material Specs, marked no longer in use, and you can use it again later. Nothing is deleted.', 'Stop using it', 'DEFAULT', 'I authorize this change to the shared home record.');
@@ -122,9 +163,9 @@ export async function materialSpecStateResult(
 export async function confirmMaterialSpecState(ctx: ConfirmCapabilityContext): Promise<ConfirmCapabilityResult> {
   const { execution, userId, parameters, access } = ctx;
   if (access.role === HouseholdRole.VIEWER) throw stale('A contributor or owner is required to change materials.', 'ASK_PERMISSION_REQUIRED');
-  const stored = parameters.materialSpecState as { kind?: unknown; specId?: unknown; title?: unknown } | undefined;
+  const stored = parameters.materialSpecState as { kind?: unknown; specId?: unknown; title?: unknown; photoId?: unknown } | undefined;
   const kind = stored?.kind as MaterialSpecStateKind | undefined;
-  if (kind !== 'ARCHIVE' && kind !== 'RESTORE' && kind !== 'DELETE' && kind !== 'EXPORT') throw stale('The change to make is invalid.');
+  if (kind !== 'ARCHIVE' && kind !== 'RESTORE' && kind !== 'DELETE' && kind !== 'EXPORT' && kind !== 'PHOTO_DELETE') throw stale('The change to make is invalid.');
   const propertyId = execution.propertyId;
   let title: string; let description: string; let artifactType = 'MATERIAL_SPEC'; let artifactId = propertyId; const details: Array<{ label: string; value: string }> = [];
   try {
@@ -142,6 +183,17 @@ export async function confirmMaterialSpecState(ctx: ConfirmCapabilityContext): P
       const specId = typeof stored?.specId === 'string' ? stored.specId : null;
       const spec = specId ? await prisma.materialSpec.findFirst({ where: { id: specId, propertyId }, select: SPEC_SELECT }) as SpecRow | null : null;
       if (!spec || !specId) throw stale('That material is no longer available. It may have been removed.', 'ASK_CONTEXT_VERSION_CONFLICT');
+      if (kind === 'PHOTO_DELETE') {
+        const photos = await loadPhotos(propertyId, specId);
+        const photoId = typeof stored?.photoId === 'string' ? stored.photoId : null;
+        const index = photoId ? photos.findIndex((photo) => photo.id === photoId) : -1;
+        if (index < 0 || !photoId) throw stale('That photo is no longer attached. It may already have been removed.', 'ASK_CONTEXT_VERSION_CONFLICT');
+        if (parameters.materialSpecStateContextVersion !== photosVersion(spec, photos)) throw stale('This material\'s photos changed while the confirmation was open. Review them and try again.', 'ASK_CONTEXT_VERSION_CONFLICT');
+        await materialSpecService.deletePhoto(propertyId, specId, photoId);
+        artifactId = specId;
+        details.push({ label: 'Material', value: spec.label }, { label: 'Photo', value: photoLabel(photos[index], index) });
+        title = 'Photo removed'; description = 'The photo was removed from this material\'s record.';
+      } else {
       if (parameters.materialSpecStateContextVersion !== specVersion(spec)) throw stale('This material changed while the confirmation was open. Review it and try again.', 'ASK_CONTEXT_VERSION_CONFLICT');
       artifactId = specId;
       details.push({ label: 'Material', value: spec.label });
@@ -152,6 +204,7 @@ export async function confirmMaterialSpecState(ctx: ConfirmCapabilityContext): P
         await materialSpecService.updateSpec(propertyId, specId, { isActive: kind === 'RESTORE' } as never);
         title = kind === 'RESTORE' ? 'Material in use again' : 'Material marked no longer in use';
         description = kind === 'RESTORE' ? 'It is marked in use again.' : 'It stays in your Material Specs, marked no longer in use.';
+      }
       }
     }
   } catch (error) {

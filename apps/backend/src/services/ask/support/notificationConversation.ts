@@ -40,13 +40,20 @@ export const NOTIFICATION_COMMAND_MESSAGES = {
   READ: 'Mark this notification read', UNREAD: 'Mark this notification unread', DISMISS: 'Dismiss this notification', RESTORE: 'Bring this notification back',
   // The "was this useful" feedback the Notifications page records (FRD v1.476): marking it, and taking the mark back.
   USEFUL: 'Mark this notification useful', USEFUL_REMOVE: 'Remove my useful mark from this notification',
+  // The rest of the page's feedback (FRD v1.480): "Not relevant" and "Already handled" mark it read and set it aside from the inbox, as on the page, and the
+  // feedback can be undone. One row action, Give feedback, opens the choice; the others are what the choice leads to.
+  FEEDBACK: 'Give feedback on this notification', NOT_RELEVANT: 'Mark this notification not relevant', ALREADY_HANDLED: 'Mark this notification already handled',
+  FEEDBACK_UNDO: 'Undo feedback on this notification',
 } as const;
 export type NotificationCommandKind = keyof typeof NOTIFICATION_COMMAND_MESSAGES;
-export const NOTIFICATION_COMMAND_ACTION_IDS = { READ: 'notification-read', UNREAD: 'notification-unread', DISMISS: 'notification-dismiss', RESTORE: 'notification-restore', USEFUL: 'notification-useful', USEFUL_REMOVE: 'notification-useful-remove' } as const;
+export const NOTIFICATION_COMMAND_ACTION_IDS = { READ: 'notification-read', UNREAD: 'notification-unread', DISMISS: 'notification-dismiss', RESTORE: 'notification-restore', USEFUL: 'notification-useful', USEFUL_REMOVE: 'notification-useful-remove' , FEEDBACK: 'notification-feedback', NOT_RELEVANT: 'notification-not-relevant', ALREADY_HANDLED: 'notification-already-handled', FEEDBACK_UNDO: 'notification-feedback-undo' } as const;
 export const notificationCommandKindFromMessage = (message: string): NotificationCommandKind | null =>
   ((Object.entries(NOTIFICATION_COMMAND_MESSAGES) as Array<[NotificationCommandKind, string]>).find(([, prefix]) => message.startsWith(prefix))?.[0]) ?? null;
 export const notificationCommandMessage = (kind: NotificationCommandKind, title: string): string =>
   `${NOTIFICATION_COMMAND_MESSAGES[kind]}: ${title.replace(/\s+/g, ' ').trim()}`.slice(0, 300);
+export const NOTIFICATION_FEEDBACK_CAPTURE_KEY = 'NOTIFICATION_FEEDBACK_INPUTS';
+/** The outcomes that set a notification aside from the inbox, as on the Notifications page. */
+export const NOTIFICATION_HIDING_OUTCOMES = ['NOT_RELEVANT', 'ALREADY_HANDLED'] as const;
 export const NOTIFICATIONS_OVERVIEW_MESSAGE = "What's new?";
 
 // ── The settings ──────────────────────────────────────────────────────────────────────────────────

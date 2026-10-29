@@ -193,6 +193,7 @@ export const COVERAGE_SKILL_EVALUATION = deepFreezeSkillPackage({
     "COMPARISON",
     "EVIDENCE",
     "CAPABILITY_LIST",
+    "EMPTY_STATE",
     "BOUNDARY"
   ],
   "expectedCanonicalCalls": [

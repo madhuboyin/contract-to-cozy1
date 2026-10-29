@@ -59,10 +59,12 @@ export function materialSpecsFromView(view: MaterialSpecListView, propertyId: st
   const stateAction = (id: keyof typeof MATERIAL_SPEC_STATE_ACTION_IDS, label: string) => ({
     id: MATERIAL_SPEC_STATE_ACTION_IDS[id], label, message: MATERIAL_SPEC_STATE_MESSAGES[id], interactionType: 'MUTATE_RECORD' as const, operationId: 'MATERIAL_SPEC_UPDATE' as const, style: 'QUIET' as const,
   });
-  const rowActions = (spec: { isActive: boolean; lifecycleStatus: string }) => canAdd ? [
+  const rowActions = (spec: { isActive: boolean; lifecycleStatus: string; photos?: readonly unknown[] }) => canAdd ? [
     editAction,
     spec.isActive ? stateAction('ARCHIVE', 'Stop using') : stateAction('RESTORE', 'Use again'),
     ...(materialSpecDeletable(spec.lifecycleStatus) ? [stateAction('DELETE', 'Delete')] : []),
+    // Only a material with a photo offers Remove a photo; the list reads the first photo, which is enough to know there is one.
+    ...(spec.photos?.length ? [stateAction('PHOTO_DELETE', 'Remove a photo')] : []),
   ] : undefined;
   const exportAction = canAdd ? [{ id: MATERIAL_SPEC_STATE_ACTION_IDS.EXPORT, label: 'Export my materials', interactionType: 'START_WORKFLOW' as const, message: MATERIAL_SPEC_STATE_MESSAGES.EXPORT, operationId: 'MATERIAL_SPEC_UPDATE' as const, style: 'SECONDARY' as const }] : [];
   const addActions = canAdd ? [{ id: MATERIAL_SPEC_ADD_ACTION_ID, label: 'Add a material', interactionType: 'START_WORKFLOW' as const, message: MATERIAL_SPEC_ADD_MESSAGE, operationId: 'MATERIAL_SPEC_ADD', style: 'PRIMARY' as const }] : [];

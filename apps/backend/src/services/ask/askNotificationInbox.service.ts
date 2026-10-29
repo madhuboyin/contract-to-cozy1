@@ -6,6 +6,7 @@ import { NotificationCategorySchema, type NotificationCategory, type Notificatio
 import { inferNotificationCategory, inferNotificationUrgency, notificationPreferenceCategories, recordNotificationOutcome } from '../notificationPreference.service';
 import type { AskAccountRole } from './askAccountEligibility';
 import { ensureAskServiceAccountEligibility } from './support/propertyContext';
+import { NOTIFICATION_HIDING_OUTCOMES } from './support/notificationConversation';
 import { askHistoryAccessiblePropertyWhere } from './askSessionHistoryPagination';
 import { continuationRuleFor, type NotificationForContinuation } from './governance/askNotificationContinuationRegistry';
 import {
@@ -74,7 +75,11 @@ export async function listAskNotifications(userId: string, query: AskNotificatio
       throw new AskNotificationInvalidRequestError('cursor is not valid.');
     }
   }
-  const filters: Prisma.NotificationWhereInput[] = [{ userId }, view === 'DISMISSED' ? { dismissedAt: { not: null } } : { dismissedAt: null }];
+  // As on the Notifications page, a notification the person marked not relevant or already handled is set aside from the inbox; the "dismissed" view is where
+  // everything the person put away lives (dismissed, or set aside by feedback), so each can be brought back.
+  const hidingOutcome = { type: { in: [...NOTIFICATION_HIDING_OUTCOMES] as Array<'NOT_RELEVANT' | 'ALREADY_HANDLED'> } };
+  const putAway: Prisma.NotificationWhereInput = { OR: [{ dismissedAt: { not: null } }, { outcomes: { some: { userId, ...hidingOutcome } } }] };
+  const filters: Prisma.NotificationWhereInput[] = [{ userId }, view === 'DISMISSED' ? putAway : { dismissedAt: null, outcomes: { none: { userId, ...hidingOutcome } } }];
   if (query.unreadOnly) filters.push({ isRead: false });
   if (category?.success) filters.push({ metadata: { path: ['notificationPolicy', 'category'], equals: category.data } });
   if (query.propertyId) filters.push({ metadata: { path: ['propertyId'], equals: query.propertyId } });
@@ -84,11 +89,11 @@ export async function listAskNotifications(userId: string, query: AskNotificatio
   const [rows, total, unreadCount, dismissedCount, accessible, preferences] = await Promise.all([
     prisma.notification.findMany({
       where: paged, orderBy: [{ createdAt: 'desc' }, { id: 'asc' }], take: limit + 1,
-      select: { id: true, type: true, title: true, message: true, entityType: true, entityId: true, actionUrl: true, isRead: true, dismissedAt: true, metadata: true, createdAt: true, outcomes: { where: { userId, type: 'USEFUL' }, select: { type: true } } },
+      select: { id: true, type: true, title: true, message: true, entityType: true, entityId: true, actionUrl: true, isRead: true, dismissedAt: true, metadata: true, createdAt: true, outcomes: { where: { userId, type: { in: ['USEFUL', 'NOT_RELEVANT', 'ALREADY_HANDLED'] } }, select: { type: true } } },
     }),
     prisma.notification.count({ where: inView }),
-    prisma.notification.count({ where: { userId, isRead: false, dismissedAt: null } }),
-    prisma.notification.count({ where: { userId, dismissedAt: { not: null } } }),
+    prisma.notification.count({ where: { userId, isRead: false, dismissedAt: null, outcomes: { none: { userId, ...hidingOutcome } } } }),
+    prisma.notification.count({ where: { userId, ...putAway } }),
     prisma.property.findMany({ where: askHistoryAccessiblePropertyWhere(userId), select: { id: true, name: true, address: true, city: true } }),
     prisma.notificationPreference.findMany({ where: { userId, channel: 'EMAIL' }, select: { category: true, cadence: true, enabled: true, snoozedUntil: true } }),
   ]);
@@ -111,7 +116,7 @@ export async function listAskNotifications(userId: string, query: AskNotificatio
       id: row.id, type: row.type, category: cat, categoryLabel: NOTIFICATION_CATEGORY_LABELS[cat], urgency: notificationUrgencyOf(row.type, metadata), title: row.title, message: row.message,
       whyItAppeared: NOTIFICATION_WHY[cat], propertyId, propertyLabel: propertyId ? properties.get(propertyId) ?? null : null,
       propertyAccess: !propertyId ? 'NONE' : properties.has(propertyId) ? 'ACCESSIBLE' : 'LOST',
-      createdAt: row.createdAt.toISOString(), expiresAt: expires?.toISOString() ?? null, expired: expires !== null && expires <= now, isRead: row.isRead, dismissed: row.dismissedAt !== null, markedUseful: row.outcomes.length > 0,
+      createdAt: row.createdAt.toISOString(), expiresAt: expires?.toISOString() ?? null, expired: expires !== null && expires <= now, isRead: row.isRead, dismissed: row.dismissedAt !== null, markedUseful: row.outcomes.some((outcome) => outcome.type === 'USEFUL'), hiddenBy: (row.outcomes.find((outcome) => outcome.type === 'NOT_RELEVANT' || outcome.type === 'ALREADY_HANDLED')?.type as 'NOT_RELEVANT' | 'ALREADY_HANDLED' | undefined) ?? null,
       continuationKind: rule.kind, deliveryPaused: pauseFor(cat),
     };
   });

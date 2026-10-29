@@ -29,6 +29,8 @@ export interface AskNotificationItem {
   dismissed: boolean;
   /** The person marked this notification useful (the same feedback the Notifications page records). */
   markedUseful: boolean;
+  /** Set aside from the inbox by the person's own feedback (not relevant, or already handled), as on the Notifications page; null otherwise. */
+  hiddenBy: 'NOT_RELEVANT' | 'ALREADY_HANDLED' | null;
   /** Where opening it will lead, known without reading anything: used to label the action, not to navigate. */
   continuationKind: AskNotificationDestinationKind | 'NONE';
   /** This category's external delivery is muted or snoozed by the person. The in-app item is always kept. */

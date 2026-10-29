@@ -10,6 +10,8 @@ export const MATERIAL_SPEC_STATE_MESSAGES = {
   RESTORE: 'Use this material again.',
   DELETE: 'Delete this material.',
   EXPORT: 'Export my materials.',
+  // Removing one of a material's photos (FRD v1.480); adding one needs the file-intake dialog to carry a target and stays on the Material Specs page.
+  PHOTO_DELETE: 'Remove a photo from this material.',
 } as const;
 export type MaterialSpecStateKind = keyof typeof MATERIAL_SPEC_STATE_MESSAGES;
 
@@ -18,9 +20,12 @@ export const MATERIAL_SPEC_STATE_ACTION_IDS = {
   RESTORE: 'material-spec-restore',
   DELETE: 'material-spec-delete',
   EXPORT: 'material-spec-export',
+  PHOTO_DELETE: 'material-spec-photo-delete',
 } as const;
 
 export const MATERIAL_SPEC_EXPORT_CAPTURE_KEY = 'MATERIAL_SPEC_EXPORT_INPUTS';
+export const MATERIAL_SPEC_PHOTO_CAPTURE_KEY = 'MATERIAL_SPEC_PHOTO_INPUTS';
+export const MaterialSpecPhotoAnswerSchema = z.object({ photoId: z.string().trim().min(1).max(100) }).strict();
 /** The export's title, as Desktop's page asks for it (the service stores it and names the file from it). */
 export const MaterialSpecExportAnswerSchema = z.object({ title: z.string().trim().min(1).max(200) }).strict();
 

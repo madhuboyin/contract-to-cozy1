@@ -65,8 +65,8 @@ test('the inbox answer states the count, offers Open only where it leads somewhe
   for (const block of result.blocks) AskPresentationBlockSchema.parse(block);
   assert.match(result.blocks[0].headline, /2 notifications, 1 unread/);
   const rows = result.blocks[1].sections[0].items;
-  assert.deepEqual(rows[0].actions.map((a) => a.id), ['notification-open', 'notification-dismiss', 'notification-read', 'notification-useful']);
-  assert.deepEqual(rows[1].actions.map((a) => a.id), ['notification-dismiss', 'notification-unread', 'notification-useful']);
+  assert.deepEqual(rows[0].actions.map((a) => a.id), ['notification-open', 'notification-dismiss', 'notification-read', 'notification-feedback']);
+  assert.deepEqual(rows[1].actions.map((a) => a.id), ['notification-dismiss', 'notification-unread', 'notification-feedback']);
   assert.ok(rows[0].actions.slice(1).every((a) => a.entityId === 'n1' && a.operationId === 'NOTIFICATION_COMMAND'));
   assert.ok(result.blocks[1].filters.map((f) => f.message).every((m) => /^(Only|Now) show/.test(m)));
 });
@@ -253,13 +253,56 @@ test('useful: marking and taking back the mark each review first, then use the N
   } finally { preferenceService.recordNotificationOutcome = saved.record; preferenceService.revokeNotificationOutcome = saved.revoke; }
 });
 
-test('useful: the row offers "This was useful", or "Remove useful mark" once marked, and the declared messages read back to their kind', () => {
-  const result = overview.notificationsFromPage({ page: page([item(), item({ id: 'n2', markedUseful: true })]), state: state(), viewState: overview.buildNotificationsViewState(null, state()) });
+test('feedback: each row offers Give feedback, a set-aside row offers Undo feedback instead of Dismiss, and the declared messages read back to their kind', () => {
+  const result = overview.notificationsFromPage({ page: page([item(), item({ id: 'n2', hiddenBy: 'NOT_RELEVANT', isRead: true, continuationKind: 'QUESTION' }), item({ id: 'n3', dismissed: true, isRead: true, continuationKind: 'QUESTION' })]), state: state({ dismissed: true }), viewState: overview.buildNotificationsViewState(null, state({ dismissed: true })) });
   const rows = result.blocks[1].sections[0].items;
-  assert.ok(rows[0].actions.some((a) => a.id === 'notification-useful' && a.label === 'This was useful'));
-  assert.ok(rows[1].actions.some((a) => a.id === 'notification-useful-remove' && a.label === 'Remove useful mark'));
+  assert.ok(rows[0].actions.some((a) => a.id === 'notification-feedback' && a.label === 'Give feedback'));
+  assert.deepEqual(rows[1].actions.map((a) => a.id), ['notification-feedback-undo', 'notification-unread', 'notification-feedback']);
+  assert.deepEqual(rows[2].actions.map((a) => a.id), ['notification-restore', 'notification-unread', 'notification-feedback']);
   assert.ok(rows.every((row) => row.actions.length <= 4));
-  assert.equal(g.notificationCommandKindFromMessage(g.notificationCommandMessage('USEFUL', 'x')), 'USEFUL');
-  assert.equal(g.notificationCommandKindFromMessage(g.notificationCommandMessage('USEFUL_REMOVE', 'x')), 'USEFUL_REMOVE');
-  assert.equal(g.notificationCommandKindFromMessage(g.notificationCommandMessage('READ', 'x')), 'READ');
+  assert.match(result.blocks[0].headline ?? result.blocks[0].title, /dismissed or set-aside|Dismissed|dismissed/i);
+  for (const kind of ['USEFUL', 'USEFUL_REMOVE', 'NOT_RELEVANT', 'ALREADY_HANDLED', 'FEEDBACK_UNDO', 'FEEDBACK', 'READ', 'RESTORE']) assert.equal(g.notificationCommandKindFromMessage(g.notificationCommandMessage(kind, 'x')), kind, kind);
+});
+
+test('feedback: the choice lists only what applies; not relevant and already handled record the page\'s own outcome after a review; undo removes what is set; a repeat is refused', async () => {
+  const outcomeCalls = [];
+  const saved = { record: preferenceService.recordNotificationOutcome, revoke: preferenceService.revokeNotificationOutcome };
+  preferenceService.recordNotificationOutcome = async (...a) => { outcomeCalls.push(['record', ...a]); return {}; };
+  preferenceService.revokeNotificationOutcome = async (...a) => { outcomeCalls.push(['revoke', ...a]); return {}; };
+  try {
+    const w = install({ row: { id: 'n1', title: 'Replace filter', isRead: false, dismissedAt: null, outcomes: [] } });
+    try {
+      const choice = await capabilityInvoke('NOTIFICATION_COMMAND', { userId: 'u1', propertyId: 'p1', message: g.notificationCommandMessage('FEEDBACK', 'Replace filter'), launchContext: launch() });
+      assert.equal(choice.status, 'NEEDS_CONTEXT');
+      assert.deepEqual(choice.captureRequests[0].inputSchema.fields[0].inputSchema.options.map((o) => o.value), ['USEFUL', 'NOT_RELEVANT', 'ALREADY_HANDLED']);
+      assert.equal(outcomeCalls.length, 0);
+      const { notificationFeedbackFromChoice } = require('../../src/services/ask/handlers/notificationCommand.handler.ts');
+      const review = await notificationFeedbackFromChoice('u1', 'p1', { notificationId: 'n1', sourceExecutionId: null }, 'NOT_RELEVANT');
+      assert.equal(review.status, 'NEEDS_CONFIRMATION');
+      assert.match(review.confirmation.description, /marked read and set aside from your inbox/);
+      assert.equal(outcomeCalls.length, 0, 'the review writes nothing');
+      await confirmCapabilityInvoke('NOTIFICATION_COMMAND', ctx('NOTIFICATION_COMMAND', review.parameters));
+      assert.deepEqual(outcomeCalls, [['record', 'u1', 'n1', 'NOT_RELEVANT']]);
+      const bad = await notificationFeedbackFromChoice('u1', 'p1', { notificationId: 'n1', sourceExecutionId: null }, 'MUTE_TYPE');
+      assert.equal(bad.reasonCode, 'NOTIFICATION_FEEDBACK_CHOICE_INVALID');
+      outcomeCalls.length = 0;
+      const handled = await notificationFeedbackFromChoice('u1', 'p1', { notificationId: 'n1', sourceExecutionId: null }, 'ALREADY_HANDLED');
+      await confirmCapabilityInvoke('NOTIFICATION_COMMAND', ctx('NOTIFICATION_COMMAND', handled.parameters));
+      assert.deepEqual(outcomeCalls, [['record', 'u1', 'n1', 'ALREADY_HANDLED']]);
+      const nothingToUndo = await notificationFeedbackFromChoice('u1', 'p1', { notificationId: 'n1', sourceExecutionId: null }, 'FEEDBACK_UNDO');
+      assert.equal(nothingToUndo.reasonCode, 'NOTIFICATION_ALREADY');
+    } finally { w.restore(); }
+    outcomeCalls.length = 0;
+    const set = install({ row: { id: 'n1', title: 'Replace filter', isRead: true, dismissedAt: null, outcomes: [{ type: 'NOT_RELEVANT' }, { type: 'USEFUL' }] } });
+    try {
+      const choice = await capabilityInvoke('NOTIFICATION_COMMAND', { userId: 'u1', propertyId: 'p1', message: g.notificationCommandMessage('FEEDBACK', 'Replace filter'), launchContext: launch() });
+      assert.deepEqual(choice.captureRequests[0].inputSchema.fields[0].inputSchema.options.map((o) => o.value), ['USEFUL_REMOVE', 'ALREADY_HANDLED', 'FEEDBACK_UNDO']);
+      const { notificationFeedbackFromChoice } = require('../../src/services/ask/handlers/notificationCommand.handler.ts');
+      const again = await notificationFeedbackFromChoice('u1', 'p1', { notificationId: 'n1', sourceExecutionId: null }, 'NOT_RELEVANT');
+      assert.equal(again.reasonCode, 'NOTIFICATION_ALREADY');
+      const undo = await notificationFeedbackFromChoice('u1', 'p1', { notificationId: 'n1', sourceExecutionId: null }, 'FEEDBACK_UNDO');
+      await confirmCapabilityInvoke('NOTIFICATION_COMMAND', ctx('NOTIFICATION_COMMAND', undo.parameters));
+      assert.deepEqual(outcomeCalls, [['revoke', 'u1', 'n1', 'NOT_RELEVANT']], 'only the feedback that is set is removed, and the useful mark is left');
+    } finally { set.restore(); }
+  } finally { preferenceService.recordNotificationOutcome = saved.record; preferenceService.revokeNotificationOutcome = saved.revoke; }
 });

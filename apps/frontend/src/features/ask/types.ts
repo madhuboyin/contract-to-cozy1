@@ -1410,6 +1410,8 @@ export interface AskNotificationItem {
   dismissed: boolean;
   /** The person marked it useful; optional because older cached pages lack it. */
   markedUseful?: boolean;
+  /** Set aside from the inbox by the person's own feedback; optional because older cached pages lack it. */
+  hiddenBy?: 'NOT_RELEVANT' | 'ALREADY_HANDLED' | null;
   continuationKind: AskNotificationDestination['kind'] | 'NONE';
   deliveryPaused: 'MUTED' | 'SNOOZED' | null;
 }

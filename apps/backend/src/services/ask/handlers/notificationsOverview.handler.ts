@@ -75,7 +75,7 @@ export function notificationsChips(page: AskNotificationPage, state: Notificatio
   return [
     { id: 'unread', label: `Unread${page.unreadCount ? ` · ${page.unreadCount}` : ''}`, message: UNREAD_MESSAGE, active: state.unreadOnly },
     ...categories,
-    { id: state.dismissed ? 'show-inbox' : 'show-dismissed', label: state.dismissed ? 'Not dismissed' : `Dismissed${page.dismissedCount ? ` · ${page.dismissedCount}` : ''}`, message: state.dismissed ? INBOX_MESSAGE : DISMISSED_MESSAGE, active: false },
+    { id: state.dismissed ? 'show-inbox' : 'show-dismissed', label: state.dismissed ? 'Not dismissed' : `Dismissed or set aside${page.dismissedCount ? ` · ${page.dismissedCount}` : ''}`, message: state.dismissed ? INBOX_MESSAGE : DISMISSED_MESSAGE, active: false },
     ...(page.nextCursor && state.limit < ASK_NOTIFICATION_MAX_LIMIT ? [{ id: 'show-more', label: 'Show more', message: MORE_MESSAGE, active: false }] : []),
     ...(state.unreadOnly || state.category ? [{ id: 'clear-all', label: 'Clear filters', message: CLEAR_MESSAGE, active: false }] : []),
   ].slice(0, 16);
@@ -93,19 +93,20 @@ function notificationRow(item: AskNotificationItem) {
     : item.continuationKind === 'WORK' ? { id: 'notification-open', label: 'Open', message: 'What needs me?', interactionType: 'CONVERSATION_CONTINUE' as const, operationId: 'WORK_OVERVIEW' as const, style: 'PRIMARY' as const }
     : item.continuationKind === 'SAVED' ? { id: 'notification-open', label: 'Open', message: 'Show my saved results', interactionType: 'CONVERSATION_CONTINUE' as const, operationId: 'SAVED_RESULTS' as const, style: 'PRIMARY' as const }
     : null;
-  const command = (kind: 'READ' | 'UNREAD' | 'DISMISS' | 'RESTORE' | 'USEFUL' | 'USEFUL_REMOVE', label: string) => ({
+  const command = (kind: 'READ' | 'UNREAD' | 'DISMISS' | 'RESTORE' | 'FEEDBACK' | 'FEEDBACK_UNDO', label: string) => ({
     id: NOTIFICATION_COMMAND_ACTION_IDS[kind], label, message: notificationCommandMessage(kind, item.title), interactionType: 'MUTATE_RECORD' as const, operationId: 'NOTIFICATION_COMMAND' as const,
     entityType: NOTIFICATION_COMMAND_ENTITY_TYPE, entityId: item.id, style: 'QUIET' as const,
   });
   return {
     id: item.id, title: item.title, description: truncate(item.message, 240), status: item.isRead ? null : 'Unread', entityType: null, href: null, meta,
-    actions: [...(open ? [open] : []), item.dismissed ? command('RESTORE', 'Bring back') : command('DISMISS', 'Dismiss'), item.isRead ? command('UNREAD', 'Mark unread') : command('READ', 'Mark read'), item.markedUseful ? command('USEFUL_REMOVE', 'Remove useful mark') : command('USEFUL', 'This was useful')].slice(0, 4),
+    // Put away by dismissing (Bring back) or by feedback (Undo feedback); otherwise Dismiss. Give feedback opens the useful, not relevant and already handled choice.
+    actions: [...(open ? [open] : []), item.dismissed ? command('RESTORE', 'Bring back') : item.hiddenBy ? command('FEEDBACK_UNDO', 'Undo feedback') : command('DISMISS', 'Dismiss'), item.isRead ? command('UNREAD', 'Mark unread') : command('READ', 'Mark read'), command('FEEDBACK', 'Give feedback')].slice(0, 4),
   };
 }
 
 const BOUNDARY: AskPresentationBlock = {
   type: 'BOUNDARY', id: 'notifications-boundary', title: 'Dismissing only tidies your inbox',
-  body: 'Dismissing or marking read changes only what you see here. The notification, its history and its delivery are untouched, and you can bring a dismissed one back.',
+  body: 'Dismissing or marking read changes only what you see here. Marking one not relevant or already handled also tells Cozy what is useful to you. The notification, its history and its delivery are untouched, and you can bring a dismissed or set-aside one back.',
   severity: 'INFO', suggestions: [],
 };
 
@@ -115,19 +116,19 @@ export function notificationsFromPage(input: { page: AskNotificationPage; state:
   const rows = page.items.slice(0, state.limit);
   const chips = notificationsChips(page, state);
   const total = page.total;
-  const scope = [state.dismissed ? 'dismissed' : 'in your inbox', state.unreadOnly ? 'unread' : null, state.category ? NOTIFICATION_CATEGORY_LABELS[state.category].toLowerCase() : null].filter(Boolean).join(' · ');
+  const scope = [state.dismissed ? 'dismissed or set aside' : 'in your inbox', state.unreadOnly ? 'unread' : null, state.category ? NOTIFICATION_CATEGORY_LABELS[state.category].toLowerCase() : null].filter(Boolean).join(' · ');
   const shownLine = `Showing ${scope} · newest first.`;
   const noun = total === 1 ? 'notification' : 'notifications';
   const headline = total === 0
-    ? state.dismissed ? 'Nothing is dismissed.' : state.unreadOnly || state.category ? 'No notifications match.' : 'Nothing new. Your inbox is empty.'
-    : `${total} ${state.dismissed ? 'dismissed' : ''} ${noun}${!state.dismissed && !state.unreadOnly && page.unreadCount ? `, ${page.unreadCount} unread` : ''}.`.replace(/\s+/g, ' ');
+    ? state.dismissed ? 'Nothing is dismissed or set aside.' : state.unreadOnly || state.category ? 'No notifications match.' : 'Nothing new. Your inbox is empty.'
+    : `${total} ${state.dismissed ? 'dismissed or set-aside' : ''} ${noun}${!state.dismissed && !state.unreadOnly && page.unreadCount ? `, ${page.unreadCount} unread` : ''}.`.replace(/\s+/g, ' ');
   const summary: AskPresentationBlock = { type: 'SUMMARY', id: 'notifications-summary', title: headline.replace(/\.$/, ''), body: [headline, shownLine].join(' '), headline, supportLine: shownLine, tone: 'DEFAULT', actions: [] };
   if (total === 0) {
     return { status: 'ANSWERED', parameters: { viewState }, blocks: [summary, { type: 'GROUPED_LIST', id: 'notifications-list', title: 'Notifications', filters: chips, sections: [], actions: [] }, BOUNDARY], suggestions: [] };
   }
   const list: AskPresentationBlock = {
-    type: 'GROUPED_LIST', id: 'notifications-list', title: state.dismissed ? 'Dismissed' : 'Notifications', filters: chips,
-    sections: [{ id: 'notifications', title: state.dismissed ? 'Dismissed notifications' : 'Notifications', count: total, items: rows.map(notificationRow) }],
+    type: 'GROUPED_LIST', id: 'notifications-list', title: state.dismissed ? 'Dismissed and set aside' : 'Notifications', filters: chips,
+    sections: [{ id: 'notifications', title: state.dismissed ? 'Dismissed and set-aside notifications' : 'Notifications', count: total, items: rows.map(notificationRow) }],
     collection: collectionDescriptor({ sourceTotal: total, fetchedCount: rows.length, sections: [{ items: rows }], nextPageAvailable: Boolean(page.nextCursor) && state.limit < ASK_NOTIFICATION_MAX_LIMIT }),
     actions: [],
   };

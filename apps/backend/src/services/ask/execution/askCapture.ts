@@ -44,13 +44,15 @@ import { HomePlantAddInputSchema, MaterialSpecAddInputSchema, OwnershipCostDecis
 import { RoomPlantRecommendationInputSchema } from '../support/commandInputs';
 import { homePlantAddResult, homePlantContextVersion, MATERIAL_SPEC_UPDATE_CAPTURE_KEY, materialSpecAddResult, materialSpecContextVersion, materialSpecUpdateResult } from '../handlers/homeRecordAdds.handler';
 import { negotiationShieldStartContextVersion, negotiationShieldStartResult } from '../handlers/negotiationShieldStart.handler';
-import { MATERIAL_SPEC_EXPORT_CAPTURE_KEY, MaterialSpecExportAnswerSchema } from '../support/materialSpecStateCommand';
+import { MATERIAL_SPEC_EXPORT_CAPTURE_KEY, MATERIAL_SPEC_PHOTO_CAPTURE_KEY, MaterialSpecExportAnswerSchema, MaterialSpecPhotoAnswerSchema } from '../support/materialSpecStateCommand';
 import { materialSpecStateResult } from '../handlers/materialSpecStateCommands.handler';
 import { EXPENSE_CAPTURE_KEY, isExpenseActionId, parseExpenseAnswer } from '../support/expenseCommand';
 import { expenseCommandResult } from '../handlers/expenseCommands.handler';
 import { insurancePolicyCommandResult } from '../handlers/insurancePolicyCommands.handler';
 import { INSURANCE_POLICY_CAPTURE_KEY, parseInsurancePolicyAnswer } from '../support/insurancePolicyCommand';
 import { roomDetailResult } from '../handlers/roomDetailCommands.handler';
+import { notificationFeedbackFromChoice } from '../handlers/notificationCommand.handler';
+import { NOTIFICATION_FEEDBACK_CAPTURE_KEY } from '../support/notificationConversation';
 import { itemDocumentsResult } from '../handlers/inventoryDocumentCommands.handler';
 import { ITEM_DOCUMENT_CAPTURE_KEY, ROOM_DETAIL_CAPTURE_KEY } from '../support/roomDetailCommand';
 import { REPAIR_REPLACE_WHAT_IF_CAPTURE_KEY, RepairReplaceWhatIfAnswerSchema } from '../support/repairReplaceWhatIf';
@@ -769,6 +771,19 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     captureId = input.idempotencyKey;
     capturedContextVersion = currentVersion;
     canonicalOwner = 'InventoryRoom';
+  } else if (execution.operationId === 'MATERIAL_SPEC_UPDATE' && input.captureKey === MATERIAL_SPEC_PHOTO_CAPTURE_KEY) {
+    // The photo choice (FRD v1.480): it only prepares the confirmation; the photo is removed when that is confirmed.
+    const access = await ensurePropertyAccess(userId, execution.propertyId);
+    if (access.role === HouseholdRole.VIEWER) throw Object.assign(new Error('A contributor or owner is required to change materials.'), { code: 'ASK_PERMISSION_REQUIRED' });
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson) ? execution.parametersJson as Record<string, unknown> : {};
+    const photoLaunch = storedParameters.materialSpecStateLaunch && typeof storedParameters.materialSpecStateLaunch === 'object' && !Array.isArray(storedParameters.materialSpecStateLaunch)
+      ? storedParameters.materialSpecStateLaunch as { kind?: unknown; specId?: unknown; sourceExecutionId?: unknown } : null;
+    if (!photoLaunch || photoLaunch.kind !== 'PHOTO_DELETE' || typeof photoLaunch.specId !== 'string') throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    if (!MaterialSpecPhotoAnswerSchema.safeParse(input.answer).success) throw Object.assign(new Error('Choose the photo to remove.'), { code: 'ASK_CAPTURE_VALIDATION_ERROR' });
+    result = await materialSpecStateResult(userId, execution.propertyId, 'PHOTO_DELETE', { entityId: photoLaunch.specId, sourceExecutionId: typeof photoLaunch.sourceExecutionId === 'string' ? photoLaunch.sourceExecutionId : null }, input.answer as Record<string, unknown>);
+    captureId = input.idempotencyKey;
+    capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
+    canonicalOwner = 'MaterialSpecPhoto';
   } else if (execution.operationId === 'MATERIAL_SPEC_UPDATE' && input.captureKey === MATERIAL_SPEC_EXPORT_CAPTURE_KEY) {
     // The materials export's title (FRD v1.465): the form only prepares the confirmation; the export is created when it is confirmed.
     const access = await ensurePropertyAccess(userId, execution.propertyId);
@@ -1299,6 +1314,16 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     captureId = input.idempotencyKey;
     capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
     canonicalOwner = 'Expense';
+  } else if (execution.operationId === 'NOTIFICATION_COMMAND' && input.captureKey === NOTIFICATION_FEEDBACK_CAPTURE_KEY) {
+    // The Give feedback choice (FRD v1.480): it only prepares the confirmation for the kind chosen; nothing is written until that is confirmed.
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson) ? execution.parametersJson as Record<string, unknown> : {};
+    const launched = storedParameters.notificationFeedbackLaunch as { notificationId?: unknown; sourceExecutionId?: unknown } | undefined;
+    if (!launched || typeof launched.notificationId !== 'string') throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    const answer = input.answer && typeof input.answer === 'object' && !Array.isArray(input.answer) ? input.answer as Record<string, unknown> : {};
+    result = await notificationFeedbackFromChoice(userId, execution.propertyId, { notificationId: launched.notificationId, sourceExecutionId: typeof launched.sourceExecutionId === 'string' ? launched.sourceExecutionId : null }, answer.choice);
+    captureId = input.idempotencyKey;
+    capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
+    canonicalOwner = 'Notification';
   } else if ((execution.operationId === 'ROOM_RENAME' && input.captureKey === ROOM_DETAIL_CAPTURE_KEY) || (execution.operationId === 'INVENTORY_ITEM_CORRECT' && input.captureKey === ITEM_DOCUMENT_CAPTURE_KEY)) {
     // The room options and item document forms (FRD v1.470): they only prepare the next form or the confirmation; nothing is written until that is confirmed.
     const access = await ensurePropertyAccess(userId, execution.propertyId);

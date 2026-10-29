@@ -34,7 +34,7 @@ const listRow = (over = {}) => ({ ...spec(), category: 'PAINT', manufacturer: nu
 const originals = { prisma: { spec: prisma.materialSpec, exp: prisma.materialSpecExport }, access: propertyAccess.resolvePropertyAccess, reconcile: executeOperation.reconcileAskExecutionSideEffects, proto: { u: MaterialSpecService.prototype.updateSpec, d: MaterialSpecService.prototype.deleteSpec, r: MaterialSpecService.prototype.requestExport } };
 let db; let role; let calls;
 function install(over = {}) {
-  db = { specs: over.specs ?? [spec()], inFlight: over.inFlight ?? false };
+  db = { specs: over.specs ?? [spec()], inFlight: over.inFlight ?? false, photos: over.photos ?? [{ id: 'ph1', caption: 'Front wall', sortOrder: 0 }, { id: 'ph2', caption: null, sortOrder: 1 }] };
   calls = [];
   role = over.role ?? 'CONTRIBUTOR';
   prisma.materialSpec = {
@@ -42,6 +42,8 @@ function install(over = {}) {
     count: async () => db.specs.length,
   };
   prisma.materialSpecExport = { findFirst: async () => (db.inFlight ? { id: 'e-busy' } : null) };
+  prisma.materialSpecPhoto = { findMany: async () => db.photos };
+  MaterialSpecService.prototype.deletePhoto = async (...a) => { calls.push(['deletePhoto', ...a]); };
   propertyAccess.resolvePropertyAccess = async () => ({ role, userId: 'user-1', propertyId: 'prop-1' });
   executeOperation.reconcileAskExecutionSideEffects = async () => ({ attemptedAndFailed: false, refreshedExecutions: [] });
   MaterialSpecService.prototype.updateSpec = async (...a) => { calls.push(['update', ...a]); return {}; };
@@ -212,4 +214,39 @@ test('the actions are allowlisted for the list and a viewer is refused them', ()
     assert.equal(isAskActionAllowedForHouseholdRole(action, 'CONTRIBUTOR'), true, id);
     assert.equal(isAskActionAllowedForHouseholdRole(action, 'VIEWER'), false, id);
   }
+});
+
+// ───────────────────────────── Remove a photo (FRD v1.480) ─────────────────────────────
+
+test('Remove a photo: offered only on a material that has a photo; a choice lists the photos in order; the review writes nothing; confirm removes that one through the service', async () => {
+  const withPhoto = materialSpecsFromView({ specs: [listRow({ id: 's1', photos: [{ photoUrl: 'u', fileKey: 'k' }] }), listRow({ id: 's2', photos: [] })], hasMore: false, nextCursor: null }, 'prop-1', true, []);
+  assert.ok(rowActionIds(withPhoto, 's1').includes('material-spec-photo-delete'));
+  assert.ok(!rowActionIds(withPhoto, 's2').includes('material-spec-photo-delete'));
+  assert.ok(rowActionIds(withPhoto, 's1').length <= 4);
+  const choice = await invoke('PHOTO_DELETE');
+  assert.equal(choice.status, 'NEEDS_CONTEXT');
+  assert.deepEqual(choice.captureRequests[0].inputSchema.fields[0].inputSchema.options, [{ label: 'Photo 1: Front wall', value: 'ph1' }, { label: 'Photo 2', value: 'ph2' }]);
+  assert.equal(writes().length, 0);
+  const review = await materialSpecStateResult('user-1', 'prop-1', 'PHOTO_DELETE', { entityId: 's1' }, { photoId: 'ph2' });
+  assert.equal(review.status, 'NEEDS_CONFIRMATION');
+  assert.equal(review.blocks[0].tone, 'CAUTION');
+  assert.equal(writes().length, 0, 'the review writes nothing');
+  const done = await confirmCapabilityInvoke(OP, ctx(review.parameters));
+  assert.equal(done.result.reasonCode, 'MATERIAL_SPEC_PHOTO_DELETE_COMPLETED');
+  assert.deepEqual(writes(), [['deletePhoto', 'prop-1', 's1', 'ph2']]);
+});
+
+test('Remove a photo: no photos, an unknown photo and a viewer change nothing; photos that changed during the confirmation are a conflict', async () => {
+  install({ photos: [] });
+  assert.equal((await invoke('PHOTO_DELETE')).reasonCode, 'MATERIAL_SPEC_NO_PHOTOS');
+  install();
+  const unknown = await materialSpecStateResult('user-1', 'prop-1', 'PHOTO_DELETE', { entityId: 's1' }, { photoId: 'nope' });
+  assert.equal(unknown.reasonCode, 'MATERIAL_SPEC_PHOTO_NOT_FOUND');
+  assert.equal((await invoke('PHOTO_DELETE', launch('PHOTO_DELETE'), 'VIEWER')).status, 'BLOCKED');
+  const review = await materialSpecStateResult('user-1', 'prop-1', 'PHOTO_DELETE', { entityId: 's1' }, { photoId: 'ph1' });
+  db.photos = [{ id: 'ph1', caption: 'Front wall', sortOrder: 0 }];
+  await assert.rejects(() => confirmCapabilityInvoke(OP, ctx(review.parameters)), (error) => error.code === 'ASK_CONTEXT_VERSION_CONFLICT');
+  db.photos = [];
+  await assert.rejects(() => confirmCapabilityInvoke(OP, ctx(review.parameters)), (error) => error.code === 'ASK_CONTEXT_VERSION_CONFLICT');
+  assert.equal(writes().length, 0);
 });

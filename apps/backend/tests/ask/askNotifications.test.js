@@ -154,6 +154,7 @@ test('the inbox lists a person\'s own items with home, category, why, source tim
   const where = JSON.stringify(calls[0].where);
   assert.match(where, /"userId":"u1"/);
   assert.match(where, /"dismissedAt":null/);
+  assert.match(where, /"outcomes":\{"none":\{"userId":"u1","type":\{"in":\["NOT_RELEVANT","ALREADY_HANDLED"\]\}\}\}/, 'the inbox leaves out what the person marked not relevant or already handled, as the page does');
   assert.match(where, /"isRead":false/);
   assert.match(where, /"path":\["notificationPolicy","category"\],"equals":"WORKFLOW"/);
   assert.match(where, /"path":\["propertyId"\],"equals":"p1"/);
@@ -165,6 +166,7 @@ test('the inbox lists a person\'s own items with home, category, why, source tim
   await assert.rejects(() => inbox.listAskNotifications('u1', { category: 'NOPE' }, 'HOMEOWNER', NOW), /category is not valid/);
   const dismissed = await inbox.listAskNotifications('u1', { view: 'DISMISSED' }, 'HOMEOWNER', NOW);
   assert.match(JSON.stringify(calls.at(-1).where), /"dismissedAt":\{"not":null\}/);
+  assert.match(JSON.stringify(calls.at(-1).where), /"outcomes":\{"some":\{"userId":"u1","type":\{"in":\["NOT_RELEVANT","ALREADY_HANDLED"\]\}\}\}/, 'the dismissed view is where everything put away lives, so feedback can be undone');
   assert.equal(dismissed.view, 'DISMISSED');
 });
 
@@ -271,4 +273,13 @@ test('delivery policy honors a snooze on the server: email pauses until it lapse
   assert.equal(email(await policyFor(null)).enabled, true);
   const critical = await policyFor(future, { urgency: 'CRITICAL' });
   assert.equal(critical.channels.find((c) => c.channel === 'IN_APP').enabled, true);
+});
+
+test('an item reports its own feedback: marked useful, and set aside by not relevant or already handled', async () => {
+  const row = (id, outcomes) => ({ id, type: 'CLAIM_SUBMITTED', title: `T ${id}`, message: 'B', entityType: 'CLAIM', entityId: 'c1', actionUrl: null, outcomes, isRead: true, dismissedAt: null, createdAt: at(5), metadata: null });
+  prisma.notification = { findMany: async () => [row('a', [{ type: 'USEFUL' }]), row('b', [{ type: 'ALREADY_HANDLED' }]), row('c', [])], count: async () => 0 };
+  prisma.notificationPreference = { findMany: async () => [] };
+  installAccess(['p1']);
+  const page = await inbox.listAskNotifications('u1', { view: 'DISMISSED' }, 'HOMEOWNER', NOW);
+  assert.deepEqual(page.items.map((item) => [item.markedUseful, item.hiddenBy]), [[true, null], [false, 'ALREADY_HANDLED'], [false, null]]);
 });
