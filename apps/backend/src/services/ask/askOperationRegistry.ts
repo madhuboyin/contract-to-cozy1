@@ -1181,6 +1181,8 @@ const warrantyCorrectPattern = /^\s*(?:edit|update|change|correct)\s+(?:this|the
 // Room correction (Phase 3 write slice 4, extended to type and floor level): an explicit rename/correct verb
 // for the name, type or floor level, tied to the word "room".
 const roomRenamePattern = /\brename\b.{0,40}\broom\b|\b(?:correct|fix|change|update|edit)\b.{0,40}\bname\b.{0,40}\broom\b|\broom\b.{0,60}\b(?:correct|fix|change|update|edit)\b.{0,30}\bname\b|\b(?:correct|fix|change|update|edit)\b.{0,40}\b(?:type|floor(?:\s+level)?)\b.{0,40}\broom\b|\b(?:correct|fix|change|update|edit)\b.{0,40}\broom\s+(?:type|floor(?:\s+level)?)\b|\broom\b.{0,60}\b(?:correct|fix|change|update|edit)\b.{0,30}\b(?:type|floor(?:\s+level)?)\b/i;
+// A cost edit names the maintenance fields ("estimated cost", "actual cost"); a project, permit, quote or expense that shares the words is not a task.
+const maintenanceCostEditPattern = /^(?!.*\b(?:projects?|permits?|quotes?|expenses?|renovation|claims?|invoices?|warrant(?:y|ies)|polic(?:y|ies))\b).*\b(?:change|set|update|edit|correct|fix|adjust)\b.{0,40}\b(?:estimated cost|actual cost)\b.{0,100}\d/i;
 const maintenanceUpdatePattern = /\b(?:reschedule|move|change|update|edit|assign|unassign|archive|cancel|reopen|restore)\b.{0,100}\b(?:maintenance|task|gutter|filter|service|inspection|cleaning|repair)\b|\b(?:maintenance|task|gutter|filter|service|inspection|cleaning|repair)\b.{0,100}\b(?:reschedule|assign|archive|cancel|reopen|priority|due date)\b/i;
 const guidanceJourneyCreatePattern = /\b(?:start|create|open|begin)\b.{0,50}\b(?:guided plan|guidance journey|guided journey|step-by-step plan)\b/i;
 const quoteComparisonCreatePattern = /\b(?:create|start|open|set up)\b.{0,50}\b(?:quote comparison|comparison workspace|workspace for (?:my )?(?:quotes|bids|proposals))\b/i;
@@ -1643,7 +1645,7 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   if (maintenanceCompletePattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('MAINTENANCE_TASK_COMPLETE', 0.97);
   }
-  if (maintenanceUpdatePattern.test(message)) {
+  if (maintenanceUpdatePattern.test(message) || maintenanceCostEditPattern.test(message)) {
     return resolved('MAINTENANCE_TASK_UPDATE', 0.97);
   }
   if (guidanceJourneyCreatePattern.test(message)) {

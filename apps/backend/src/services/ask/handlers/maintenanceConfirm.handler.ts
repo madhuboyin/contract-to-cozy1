@@ -316,6 +316,8 @@ async function confirmMaintenanceTaskUpdate(ctx: ConfirmCapabilityContext): Prom
           ...(candidate.data.isRecurring !== undefined ? { isRecurring: candidate.data.isRecurring } : {}),
           ...(candidate.data.frequency !== undefined ? { frequency: candidate.data.frequency } : {}),
           ...(candidate.data.serviceCategory !== undefined ? { serviceCategory: candidate.data.serviceCategory } : {}),
+          ...(candidate.data.estimatedCostUsd !== undefined ? { estimatedCost: candidate.data.estimatedCostUsd } : {}),
+          ...(candidate.data.actualCostUsd !== undefined ? { actualCost: candidate.data.actualCostUsd } : {}),
           ...(candidate.data.snoozedUntil !== undefined ? { snoozedUntil: candidate.data.snoozedUntil } : {}),
         }, { expectedUpdatedAt: current.updatedAt, idempotencyKey: updateIdempotencyKey });
       } catch (raceError) {
@@ -340,6 +342,8 @@ async function confirmMaintenanceTaskUpdate(ctx: ConfirmCapabilityContext): Prom
       blocks: [{ type: 'WORKFLOW_PROGRESS', id: `maintenance-update-${updated.id}`, title: 'Maintenance task updated', status: candidate.data.action === 'ARCHIVE' ? 'CANCELLED' : 'COMPLETED', description: 'The canonical Maintenance record and its downstream work state were updated.', details: [{ label: 'Task', value: updated.title }, { label: 'Action', value: candidate.data.action.toLowerCase() }, { label: 'Status', value: updated.status.toLowerCase().replace(/_/g, ' ') }, { label: 'Due', value: humanDate(updated.nextDueDate) ?? 'Not scheduled' },
         ...(candidate.data.isRecurring !== undefined || candidate.data.frequency !== undefined ? [{ label: 'Recurrence', value: updated.isRecurring && updated.frequency ? updated.frequency.toLowerCase().replace(/_/g, ' ') : 'One-time' }] : []),
         ...(candidate.data.serviceCategory !== undefined ? [{ label: 'Service category', value: updated.serviceCategory?.toLowerCase().replace(/_/g, ' ') ?? 'Not set' }] : []),
+        ...(candidate.data.estimatedCostUsd !== undefined ? [{ label: 'Estimated cost', value: maintenanceMoney(updated.estimatedCost) ?? 'Not recorded' }] : []),
+        ...(candidate.data.actualCostUsd !== undefined ? [{ label: 'Actual cost', value: maintenanceMoney(updated.actualCost) ?? 'Not recorded' }] : []),
         ...(candidate.data.action === 'SNOOZE' || candidate.data.action === 'UNSNOOZE' ? [{ label: 'Reminders', value: updated.snoozedUntil ? `Snoozed until ${humanDate(updated.snoozedUntil)}` : 'Active' }] : []),
         { label: 'Assignee', value: updated.assignedTo?.email ?? 'Unassigned' }], actions: [] }],
       confirmation: null, suggestions: [],

@@ -58,6 +58,9 @@ export const MaintenanceTaskUpdateInputSchema = z.object({
   isRecurring: z.boolean().optional(),
   frequency: z.nativeEnum(RecurrenceFrequency).nullable().optional(),
   serviceCategory: z.nativeEnum(ServiceCategory).optional(),
+  // The task's costs, in dollars, as Desktop's Edit Task form sets them (FRD v1.478); a cost is never cleared, as on Desktop.
+  estimatedCostUsd: z.number().min(0.01).max(10_000_000).optional(),
+  actualCostUsd: z.number().min(0.01).max(10_000_000).optional(),
   assigneeUserId: z.string().trim().min(1).max(160).nullable().optional(),
   snoozedUntil: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
 }).strict().superRefine((value, context) => {

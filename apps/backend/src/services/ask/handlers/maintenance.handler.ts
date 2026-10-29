@@ -607,6 +607,9 @@ export function maintenanceUpdateSubject(message: string): string {
   return message.toLowerCase()
     .replace(/\b(?:reschedule|move|change|update|edit|assign|unassign|archive|cancel|remove|delete|reopen|restore|snooze|unsnooze|resume|reminders?|maintenance|task|priority|due date)\b/g, ' ')
     .replace(/\b(?:to|on|until|for|as)\s+\d{4}-\d{2}-\d{2}\b/g, ' ')
+    .replace(/\$\s*[\d,]+(?:\.\d{1,2})?/g, ' ')
+    .replace(/\b(?:to|at|is|was|as)\s+[\d,]+(?:\.\d{1,2})?\b/g, ' ')
+    .replace(/\b(?:estimated|actual|estimate|budget|cost|adjust|correct|set)\b/g, ' ')
     .replace(/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/gi, ' ')
     .replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
 }
@@ -636,6 +639,28 @@ export function maintenanceUpdateRecurrence(message: string): { isRecurring: boo
           : /\bweekly\b|\bevery week\b/i.test(message) ? RecurrenceFrequency.WEEKLY
             : /\bdaily\b|\bevery day\b/i.test(message) ? RecurrenceFrequency.DAILY : null;
   return frequency ? { isRecurring: true, frequency } : null;
+}
+
+/**
+ * The costs a maintenance edit names: "estimated cost $250", "actual cost was $180". A bare "cost $90" is the actual cost on a completed task and the
+ * estimate otherwise. An amount must be above zero (Desktop's form drops a zero or empty cost, so a cost is never cleared) and is dollars, to the cent.
+ */
+export function maintenanceUpdateCosts(message: string, taskStatus?: string | null): { estimatedCostUsd?: number; actualCostUsd?: number } {
+  // The amount follows the label directly ("estimated cost $250", "cost to $250") or after the task's name ("actual cost of Clean gutters to $180"); it
+  // needs a dollar sign or a joining word so a digit inside a task's title is never read as a cost.
+  const amount = '(?:\\s+(?:of|for)\\s+[^$]{1,80}?)?(?:\\s+(?:is|was|to|as|at)\\s*\\$?|\\s*\\$)\\s*([\\d,]+(?:\\.\\d{1,2})?)';
+  const lead = '';
+  const read = (pattern: RegExp): number | undefined => {
+    const raw = message.match(pattern)?.[1];
+    const value = raw ? Number(raw.replace(/,/g, '')) : NaN;
+    return Number.isFinite(value) && value >= 0.01 && value <= 10_000_000 ? Math.round(value * 100) / 100 : undefined;
+  };
+  const estimated = read(new RegExp(`\\b(?:estimated cost|estimate|budget)\\b${lead}${amount}`, 'i'));
+  const actual = read(new RegExp(`\\bactual cost\\b${lead}${amount}`, 'i'));
+  if (estimated !== undefined || actual !== undefined) return { ...(estimated !== undefined ? { estimatedCostUsd: estimated } : {}), ...(actual !== undefined ? { actualCostUsd: actual } : {}) };
+  const plain = read(new RegExp(`\\bcost\\b${lead}${amount}`, 'i'));
+  if (plain === undefined) return {};
+  return taskStatus === 'COMPLETED' ? { actualCostUsd: plain } : { estimatedCostUsd: plain };
 }
 
 export function maintenanceUpdateServiceCategory(message: string): ServiceCategory | undefined {
@@ -698,6 +723,7 @@ export async function maintenanceTaskUpdateResult(userId: string, propertyId: st
         : /\bmedium(?: priority)?\b/i.test(message) ? MaintenanceTaskPriority.MEDIUM : undefined;
   const recurrence = outcomeDriven ? null : maintenanceUpdateRecurrence(message);
   const serviceCategory = outcomeDriven ? undefined : maintenanceUpdateServiceCategory(message);
+  const costs = outcomeDriven ? {} : maintenanceUpdateCosts(message, match.status);
   const snoozedUntil = outcomeDriven ? undefined : maintenanceSnoozedUntil(message);
   const assigneeText = message.match(/\bassign\b.{0,20}\bto\s+([^,.;]+)/i)?.[1]?.trim().toLowerCase();
   const assignee = action === 'ASSIGN' && assigneeText
@@ -706,7 +732,7 @@ export async function maintenanceTaskUpdateResult(userId: string, propertyId: st
     : null;
   // A reschedule with no date goes straight to the review card, whose New due date
   // field is an empty date picker (Confirm is blocked until one is chosen).
-  if ((action === 'ASSIGN' && !assignee) || (action === 'SNOOZE' && !snoozedUntil) || (action === 'EDIT' && !priority && !recurrence && !serviceCategory)) {
+  if ((action === 'ASSIGN' && !assignee) || (action === 'SNOOZE' && !snoozedUntil) || (action === 'EDIT' && !priority && !recurrence && !serviceCategory && !Object.keys(costs).length)) {
     return {
       status: 'NEEDS_CLARIFICATION', reasonCode: 'MAINTENANCE_UPDATE_VALUE_REQUIRED',
       ...durableFreeTextClarification('MAINTENANCE_TASK_UPDATE', `What should change for ${match.title}?`),
@@ -717,7 +743,7 @@ export async function maintenanceTaskUpdateResult(userId: string, propertyId: st
   const parsed = MaintenanceTaskUpdateInputSchema.parse({
     taskId: match.id, action,
     ...(dueDate ? { nextDueDate: dueDate } : {}), ...(priority ? { priority } : {}),
-    ...(recurrence ? recurrence : {}), ...(serviceCategory ? { serviceCategory } : {}),
+    ...(recurrence ? recurrence : {}), ...(serviceCategory ? { serviceCategory } : {}), ...(action === 'EDIT' ? costs : {}),
     ...(action === 'ASSIGN' ? { assigneeUserId: assignee!.userId } : {}),
     ...(action === 'UNASSIGN' ? { assigneeUserId: null } : {}),
     ...(action === 'SNOOZE' ? { snoozedUntil } : {}),
@@ -751,6 +777,8 @@ export async function maintenanceTaskUpdateResult(userId: string, propertyId: st
         ...(priority ? [{ label: 'New priority', value: priority }] : []),
         ...(recurrence ? [{ label: 'New recurrence', value: recurrence.isRecurring && recurrence.frequency ? recurrence.frequency.toLowerCase().replace(/_/g, ' ') : 'One-time' }] : []),
         ...(serviceCategory ? [{ label: 'New service category', value: serviceCategory.toLowerCase().replace(/_/g, ' ') }] : []),
+        ...(action === 'EDIT' && costs.estimatedCostUsd !== undefined ? [{ label: 'Estimated cost', value: `${maintenanceMoney(match.estimatedCost) ?? 'Not recorded'} → ${maintenanceMoney(costs.estimatedCostUsd)}` }] : []),
+        ...(action === 'EDIT' && costs.actualCostUsd !== undefined ? [{ label: 'Actual cost', value: `${maintenanceMoney(match.actualCost) ?? 'Not recorded'} → ${maintenanceMoney(costs.actualCostUsd)}` }] : []),
         ...(action === 'SNOOZE' && snoozedUntil ? [{ label: 'Reminders resume', value: snoozedUntil }, { label: 'Due date', value: humanDate(match.nextDueDate) ?? 'Not scheduled (unchanged)' }] : []),
         ...(action === 'UNSNOOZE' ? [{ label: 'Reminder suppression', value: 'Remove now' }] : []),
         ...(action === 'RESCHEDULE' && match.isRecurring && match.frequency
