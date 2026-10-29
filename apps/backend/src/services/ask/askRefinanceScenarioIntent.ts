@@ -24,3 +24,24 @@ export function matchesRefinanceScenarioAnswerContract(result: AskOperationResul
   const hasSummary = result.blocks.some((block) => block.type === 'SUMMARY' && block.id === 'refinance-scenario-summary');
   return hasSummary && result.blocks.every((block) => AUXILIARY_BLOCK_IDS.has(block.id) || REFINANCE_SCENARIO_BLOCK_TYPES[block.id] === block.type);
 }
+
+
+// The default refinance answer ("Is refinancing worth reviewing now?"): the radar's analysis, built by the same handler. Its blocks carry the same kind of
+// per-home figures (rates, gap, break-even), so word overlap with the operation's examples is not a dependable relevance signal either, and a correct answer
+// lost to the rate monitor ("monitor mortgage rates") and was replaced by "Let's make sure I answer the right home question". Accept only the envelope
+// this branch itself produces, led by its own summary; the closed-radar answer is the same without the missed-window block.
+const REFINANCE_ANALYSIS_BLOCK_TYPES: Readonly<Record<string, string>> = {
+  'refinance-analysis-summary': 'SUMMARY',
+  'refinance-scenario-planner': 'SUMMARY',
+  'refinance-analysis-table': 'TABLE',
+  'refinance-missed-window': 'SUMMARY',
+  'refinance-more-tools': 'SUMMARY',
+  'refinance-evidence': 'EVIDENCE',
+  'refinance-boundary': 'BOUNDARY',
+};
+
+export function matchesRefinanceAnalysisAnswerContract(result: AskOperationResult): boolean {
+  if (!['ANSWERED', 'READY_WITH_LIMITATIONS'].includes(result.status)) return false;
+  const hasSummary = result.blocks.some((block) => block.type === 'SUMMARY' && block.id === 'refinance-analysis-summary');
+  return hasSummary && result.blocks.every((block) => AUXILIARY_BLOCK_IDS.has(block.id) || REFINANCE_ANALYSIS_BLOCK_TYPES[block.id] === block.type);
+}
