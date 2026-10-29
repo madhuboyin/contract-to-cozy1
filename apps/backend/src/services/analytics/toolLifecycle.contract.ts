@@ -17,6 +17,7 @@ export type ToolLifecycleStage = typeof TOOL_LIFECYCLE_STAGES[number];
 
 const DISCOVERABLE_TOOL_IDS = new Set([
   'emergency',
+  'community',
   'documents',
   // The canonical PropertyRecord-based Home Records tool — distinct from
   // 'documents' above (the legacy quick-scan tool, matching that id's

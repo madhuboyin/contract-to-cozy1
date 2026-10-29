@@ -136,6 +136,7 @@ const ROLLOUT_KEY_BY_TOOL_ID: Record<string, string> = {
   energy: 'ENERGY_AUDIT',
   oracle: 'APPLIANCE_ORACLE',
   appreciation: 'VALUE_TRACKER',
+  community: 'COMMUNITY',
   'home-event-radar': 'HOME_EVENT_RADAR',
   'home-risk-replay': 'HOME_RISK_REPLAY',
   'service-price-radar': 'SERVICE_PRICE_RADAR',

@@ -117,3 +117,38 @@ test('the operation reads the property\'s city, and a home with no city is asked
     assert.equal(result.reasonCode, 'COMMUNITY_LOCATION_REQUIRED');
   } finally { prismaModule.prisma = saved; }
 });
+
+// ── "this weekend" (FRD v1.481) ──────────────────────────────────────────────────────────────────────
+const { communityDateWindow } = require('../../src/services/ask/support/communityUpdates.ts');
+
+test('a span of days is read in the home\'s own time zone, across a daylight-saving change, with the weekend under way kept', () => {
+  const tz = 'America/New_York';
+  const span = (now, message) => { const w = communityDateWindow(message, new Date(now), tz); return w && [w.key, w.start.toISOString(), w.end.toISOString()]; };
+  // Wed 28 Oct 2026: the weekend is Sat 31 Oct (EDT) through Sun 1 Nov, the day daylight saving ends, so the span ends at Mon 2 Nov midnight EST.
+  assert.deepEqual(span('2026-10-28T16:00:00Z', 'community events this weekend'), ['THIS_WEEKEND', '2026-10-31T04:00:00.000Z', '2026-11-02T05:00:00.000Z']);
+  assert.deepEqual(span('2026-10-31T16:00:00Z', 'events this weekend'), ['THIS_WEEKEND', '2026-10-31T04:00:00.000Z', '2026-11-02T05:00:00.000Z']);
+  assert.deepEqual(span('2026-11-01T17:00:00Z', 'events this weekend'), ['THIS_WEEKEND', '2026-11-01T04:00:00.000Z', '2026-11-02T05:00:00.000Z'], 'Sunday keeps the weekend that is under way');
+  assert.deepEqual(span('2026-11-02T17:00:00Z', 'events this weekend'), ['THIS_WEEKEND', '2026-11-07T05:00:00.000Z', '2026-11-09T05:00:00.000Z'], 'Monday looks to the coming one');
+  assert.deepEqual(span('2026-10-28T16:00:00Z', 'events next weekend'), ['NEXT_WEEKEND', '2026-11-07T05:00:00.000Z', '2026-11-09T05:00:00.000Z']);
+  assert.deepEqual(span('2026-10-28T16:00:00Z', 'events tomorrow'), ['TOMORROW', '2026-10-29T04:00:00.000Z', '2026-10-30T04:00:00.000Z']);
+  assert.deepEqual(span('2026-10-28T16:00:00Z', 'events this week'), ['THIS_WEEK', '2026-10-28T04:00:00.000Z', '2026-11-02T05:00:00.000Z']);
+  assert.deepEqual(span('2026-11-02T17:00:00Z', 'events next week'), ['NEXT_WEEK', '2026-11-09T05:00:00.000Z', '2026-11-16T05:00:00.000Z']);
+  assert.equal(span('2026-10-28T16:00:00Z', 'community events near me'), null);
+  assert.ok(communityDateWindow('events this weekend', new Date('2026-10-28T16:00:00Z'), 'Not/AZone'), 'an invalid zone falls back to UTC instead of failing');
+});
+
+test('events outside the span are left out, and a span with none says so with the span named; alerts and trash are not narrowed', async () => {
+  reader.clearCommunityReaderCache();
+  const win = { start: new Date('2026-10-31T04:00:00.000Z'), end: new Date('2026-11-02T05:00:00.000Z') };
+  const service = { getCommunityEventsByCity: async ({ limit }) => { assert.equal(limit, 100, 'the nearest events are read so the span can be found among them'); return [event('1', { startTime: '2026-10-30T20:00:00.000Z' }), event('2', { startTime: '2026-10-31T23:00:00.000Z' }), event('3', { startTime: '2026-11-01T15:00:00.000Z' }), event('4', { startTime: '2026-11-03T01:00:00.000Z' })]; } };
+  const inSpan = await reader.readCommunityEvents(service, 'Princeton', 'NJ', 5, win);
+  assert.deepEqual(inSpan.items.map((item) => item.externalId), ['2', '3']);
+  reader.clearCommunityReaderCache();
+  const none = await reader.readCommunityEvents(service, 'Princeton', 'NJ', 5, { start: new Date('2026-12-01T00:00:00.000Z'), end: new Date('2026-12-03T00:00:00.000Z') });
+  assert.equal(none.status, 'NONE');
+  const answer = communityFromSections('EVENTS', 'Princeton', 'NJ', { events: none, alerts: null, trash: null }, 'this weekend');
+  assert.match(answer.blocks.find((block) => block.type === 'LIMITATION').title, /No upcoming events found near Princeton this weekend/);
+  assert.match(answer.blocks[0].title, /Community events near Princeton, NJ, this weekend/);
+  const ready = communityFromSections('EVENTS', 'Princeton', 'NJ', { events: sec('READY', inSpan.items), alerts: null, trash: null }, 'this weekend');
+  assert.equal(ready.blocks.find((block) => block.type === 'GROUPED_LIST').title, 'Community events, this weekend');
+});

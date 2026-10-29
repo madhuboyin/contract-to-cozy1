@@ -6,6 +6,7 @@
 // definition belong to the capability registry; availability, audience, authorization, safety and launch behaviour belong to the Ask
 // operation registry; and operation-to-capability ownership is the validated skill guidance bridge. askExplorerRegistry.ts derives the rest
 // and rejects any binding that restates it.
+import { COMMUNITY_MESSAGES } from './support/communityUpdates';
 import type { AskTargetSelectorId } from '../../productFramework/ask/askTargetSelection.contract';
 import { DIY_TEMPLATE_BROWSE_ACTION } from '../diy/projectGuide';
 import type { AskOperationId } from './askOperationRegistry';
@@ -229,6 +230,10 @@ export const ASK_DISCOVERY_BINDINGS: readonly AskCapabilityBinding[] = Object.fr
   read('protect-coverage-review', 'coverage-intelligence', 'COVERAGE_REVIEW_STATUS', 'What questions should I ask my insurer?', 'Review my policy questions'),
   read('protect-warranties', 'coverage-intelligence', 'WARRANTY_LOOKUP', 'Show my warranties', 'Review and manage my warranties'),
   read('protect-insurance-policies', 'coverage-intelligence', 'COVERAGE_GAPS', 'Show my insurance policies', 'Review and manage my insurance policies'),
+  // Community (FRD v1.481): the three things the Community page shows for the home's city, each a reviewed read of the same operation.
+  read('protect-community-events', 'community', 'COMMUNITY_UPDATES', COMMUNITY_MESSAGES.EVENTS, 'Find community events near me'),
+  read('protect-community-alerts', 'community', 'COMMUNITY_UPDATES', COMMUNITY_MESSAGES.ALERTS, 'Check city alerts for my area'),
+  read('protect-community-trash', 'community', 'COMMUNITY_UPDATES', COMMUNITY_MESSAGES.TRASH, 'Check trash and recycling pickup'),
   read('protect-coverage-compare', 'coverage-intelligence', 'COVERAGE_COMPARISON_STATUS', 'Compare my current insurance policy against alternatives', 'Compare my coverage choices'),
   read('protect-changes', 'home-briefing', 'HOME_CHANGE_SUMMARY', 'What changed recently for this home?', 'What changed recently for this home?'),
 

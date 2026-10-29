@@ -16,13 +16,13 @@
 | AI catalog entries | 30 |
 | Home catalog entries | 34 |
 | Overlapping entries | 20 |
-| Distinct capabilities | 50 |
-| Canonical routes verified | 50 |
+| Distinct capabilities | 51 |
+| Canonical routes verified | 51 |
 | Canonical explicit-relationship coverage | 31 |
 | Canonical contextual capabilities | 26 |
 | Workflow-only | 1 |
-| Backend lifecycle canonicalized | 50 |
-| Canonical catalog-only capabilities | 23 |
+| Backend lifecycle canonicalized | 51 |
+| Canonical catalog-only capabilities | 24 |
 
 ## Capability Matrix
 
@@ -34,6 +34,7 @@
 | buyer-closing | Buyer & Closing Plan | backend | `/dashboard/properties/[id]/buyer-plan` | Verified | PLAN_BUDGET | ACTIVE | MATERIAL_FINANCIAL | ACTION_COMPLETED | Canonical | Yes | CONTEXTUAL_CANONICAL |
 | capital-timeline | Home Capital Timeline | home, ai | `/dashboard/properties/[id]/tools/capital-timeline` | Verified | PLAN_BUDGET | ACTIVE | MATERIAL_FINANCIAL | PLAN_CREATED | Canonical | Yes | CONTEXTUAL_CANONICAL |
 | claims | Claims | backend | `/dashboard/properties/[id]/claims` | Verified | PROTECT_MONITOR | ACTIVE | REGULATED_COVERAGE | OUTPUT_VIEWED | Canonical | Yes | CONTEXTUAL_CANONICAL |
+| community | Community | backend | `/dashboard/community-events` | Verified | PROTECT_MONITOR | ACTIVE | LOW_CONSEQUENCE | OUTPUT_VIEWED | Canonical | No | CATALOG_ONLY |
 | coverage-intelligence | Coverage & Premium Review | ai | `/dashboard/properties/[id]/tools/coverage-intelligence` | Verified | DECIDE_COMPARE | BETA | REGULATED_COVERAGE | DECISION_RECORDED | Canonical; real-user launch gate remains fail-closed pending technical evidence, rollback drill, and human approvals | No | CATALOG_ONLY |
 | diy | DIY Project Center | home | `/dashboard/properties/[id]/tools/diy` | Verified | PLAN_BUDGET | ACTIVE | LOW_CONSEQUENCE | DECISION_RECORDED | Canonical | No | CONTEXTUAL_CANONICAL |
 | do-nothing-simulator | Do-Nothing Simulator | ai | `/dashboard/do-nothing-simulator` | Verified | DECIDE_COMPARE | ACTIVE | MATERIAL_FINANCIAL | DECISION_RECORDED | Canonical | No | CATALOG_ONLY |

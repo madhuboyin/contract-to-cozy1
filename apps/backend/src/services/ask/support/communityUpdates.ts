@@ -35,3 +35,58 @@ export function communityViewFor(message: string): CommunityView {
   if (/\b(?:trash|garbage|recycling|rubbish|yard waste|pick ?-?up|collection)\b/i.test(message)) wants.push('TRASH');
   return wants.length === 1 ? wants[0] : 'ALL';
 }
+
+// ── When: "this weekend", "tomorrow", "next week" ────────────────────────────────────────────────
+export type CommunityWindowKey = 'TODAY' | 'TOMORROW' | 'THIS_WEEKEND' | 'NEXT_WEEKEND' | 'THIS_WEEK' | 'NEXT_WEEK';
+export interface CommunityWindow { key: CommunityWindowKey; label: string; start: Date; end: Date }
+
+const WINDOW_WORDS: ReadonlyArray<{ key: CommunityWindowKey; label: string; test: RegExp }> = [
+  { key: 'NEXT_WEEKEND', label: 'next weekend', test: /\bnext weekend\b/i },
+  { key: 'THIS_WEEKEND', label: 'this weekend', test: /\b(?:this|the) weekend\b|\bweekend\b/i },
+  { key: 'NEXT_WEEK', label: 'next week', test: /\bnext week\b/i },
+  { key: 'THIS_WEEK', label: 'this week', test: /\bthis week\b/i },
+  { key: 'TOMORROW', label: 'tomorrow', test: /\btomorrow\b/i },
+  { key: 'TODAY', label: 'today', test: /\btoday\b|\btonight\b/i },
+];
+
+/** The offset of a time zone from UTC at an instant, in milliseconds. */
+function zoneOffsetMs(instant: number, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone, hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric' }).formatToParts(new Date(instant));
+  const value = (type: string) => Number(parts.find((part) => part.type === type)?.value ?? 0);
+  return Date.UTC(value('year'), value('month') - 1, value('day'), value('hour'), value('minute'), value('second')) - Math.floor(instant / 1000) * 1000;
+}
+/** The instant a calendar day begins in a time zone (a daylight-saving change within the day is re-checked). */
+function zonedMidnight(year: number, month: number, day: number, timeZone: string): Date {
+  const guess = Date.UTC(year, month - 1, day);
+  let result = guess - zoneOffsetMs(guess, timeZone);
+  const second = guess - zoneOffsetMs(result, timeZone);
+  if (second !== result) result = second;
+  return new Date(result);
+}
+
+/**
+ * The span of days a question names, in the home's own time zone, or null when it names none. A weekend is Saturday and Sunday (the one under way if it is
+ * already the weekend); a week runs from today to the end of Sunday, "next week" the Monday to Sunday after. A zone that is not valid falls back to UTC.
+ */
+export function communityDateWindow(message: string, now: Date, timeZone: string): CommunityWindow | null {
+  const word = WINDOW_WORDS.find((candidate) => candidate.test.test(message));
+  if (!word) return null;
+  let zone = timeZone || 'UTC';
+  try { new Intl.DateTimeFormat('en-US', { timeZone: zone }); } catch { zone = 'UTC'; }
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: zone, year: 'numeric', month: 'numeric', day: 'numeric', weekday: 'short' }).formatToParts(now);
+  const year = Number(parts.find((part) => part.type === 'year')?.value); const month = Number(parts.find((part) => part.type === 'month')?.value); const day = Number(parts.find((part) => part.type === 'day')?.value);
+  const weekday = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(parts.find((part) => part.type === 'weekday')?.value ?? 'Sun');
+  const at = (offsetDays: number) => { const base = new Date(Date.UTC(year, month - 1, day + offsetDays)); return zonedMidnight(base.getUTCFullYear(), base.getUTCMonth() + 1, base.getUTCDate(), zone); };
+  const untilSaturday = (weekday + 1) % 7 === 0 ? 0 : (6 - weekday + 7) % 7; // days from today to the coming Saturday (0 on a Saturday)
+  const untilMonday = ((1 - weekday) + 7) % 7 || 7; // days to the next Monday (a full week on a Monday)
+  const spans: Record<CommunityWindowKey, [Date, Date]> = {
+    TODAY: [at(0), at(1)],
+    TOMORROW: [at(1), at(2)],
+    THIS_WEEKEND: weekday === 0 ? [at(0), at(1)] : [at(untilSaturday), at(untilSaturday + 2)],
+    NEXT_WEEKEND: weekday === 0 ? [at(6), at(8)] : [at(untilSaturday + 7), at(untilSaturday + 9)],
+    THIS_WEEK: [at(0), at(untilMonday)],
+    NEXT_WEEK: [at(untilMonday), at(untilMonday + 7)],
+  };
+  const [start, end] = spans[word.key];
+  return { key: word.key, label: word.label, start, end };
+}

@@ -74,6 +74,8 @@ const OPERATIONS_BY_CAPABILITY: Record<string, readonly AskOperationId[]> = {
   'home-timeline': ['HOME_TIMELINE_EVENTS'],
   'material-specs': ['MATERIAL_SPECS_LIST', 'DOCUMENT_PROMOTION_REVIEW', 'DOCUMENT_PROMOTION_CONFIRM'],
   'environment-report': ['ENVIRONMENT_REPORT', 'ENVIRONMENT_REPORT_COMMAND'],
+  // Community (FRD v1.481): events, city alerts and trash and recycling.
+  community: ['COMMUNITY_UPDATES'],
 };
 
 /**

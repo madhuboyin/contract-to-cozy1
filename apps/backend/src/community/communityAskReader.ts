@@ -25,9 +25,15 @@ export const clearCommunityReaderCache = () => cache.clear();
 
 const supportedCity = (city: string, state: string) => { try { return resolveCityKey(city, state); } catch { return null; } };
 
-export async function readCommunityEvents(service: CommunityEventsSource, city: string, state: string, limit: number): Promise<CommunitySection<CommunityEvent>> {
+/**
+ * `window` narrows the events to a span of days ("this weekend"): the nearest events are read in date order (up to 100) and those that start in the span are kept,
+ * so an event further out than the first 100 upcoming ones is not searched.
+ */
+export async function readCommunityEvents(service: CommunityEventsSource, city: string, state: string, limit: number, window?: { start: Date; end: Date } | null): Promise<CommunitySection<CommunityEvent>> {
   try {
-    const items = await remember(`events|${city}|${state}|${limit}`, 60_000, () => service.getCommunityEventsByCity({ city, state, limit }));
+    const fetchLimit = window ? 100 : limit;
+    const all = await remember(`events|${city}|${state}|${fetchLimit}`, 60_000, () => service.getCommunityEventsByCity({ city, state, limit: fetchLimit }));
+    const items = (window ? all.filter((event) => { const at = new Date(event.startTime).getTime(); return at >= window.start.getTime() && at < window.end.getTime(); }) : all).slice(0, limit);
     return { status: items.length ? 'READY' : 'NONE', items, sourceNames: ['Ticketmaster'], fetchedAt: new Date().toISOString() };
   } catch {
     // A missing key, a rate limit and an outage all land here: the answer says the source did not answer, never that there are no events.

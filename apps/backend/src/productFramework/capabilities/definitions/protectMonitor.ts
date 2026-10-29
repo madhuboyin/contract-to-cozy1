@@ -15,6 +15,21 @@ const INTENT_ALIASES_BY_ID: Record<string, string[]> = {
     'climate',
     'environmental hazards',
   ],
+  // Community (FRD v1.481): events, city alerts and trash and recycling for the home's city. Noun phrases only, and none shared with the Home Event
+  // Radar ("local alerts", "weather") or Environment Report, so a hazard question does not pull this up.
+  community: [
+    'community',
+    'community events',
+    'local events',
+    'events near me',
+    'city alerts',
+    'municipal alerts',
+    'trash pickup',
+    'trash schedule',
+    'recycling pickup',
+    'garbage collection',
+    'farmers market',
+  ],
   'home-event-radar': [
     'home event radar',
     'weather',
@@ -32,6 +47,7 @@ const INTENT_ALIASES_BY_ID: Record<string, string[]> = {
 export const PROTECT_MONITOR_CAPABILITIES = buildCapabilityDefinitions(([
   ['appreciation', 'Value Tracker', 'Monitor home value and trendlines.', '/dashboard/appreciation', 'VALUE_TRACKER', 'ACTIVE', 'LOW_CONSEQUENCE', 'CATALOG_ONLY'],
   ['claims', 'Claims', 'Review the status of filed insurance and incident claims for this home.', '/dashboard/properties/[id]/claims', 'CLAIMS', 'ACTIVE', 'REGULATED_COVERAGE', 'CONTEXTUAL'],
+  ['community', 'Community', 'See nearby events, city alerts, and trash and recycling information for the city this home is in.', '/dashboard/community-events', 'COMMUNITY', 'ACTIVE', 'LOW_CONSEQUENCE', 'CATALOG_ONLY'],
   ['energy', 'Energy Audit', 'Review efficiency and utility optimization opportunities.', '/dashboard/energy', 'ENERGY_AUDIT', 'BETA', 'LOW_CONSEQUENCE', 'CATALOG_ONLY'],
   ['environment-report', 'Environment Report', 'Check current weather, air quality, flood, drought, radon, hazard, and climate conditions for this home.', '/dashboard/properties/[id]/environment-report', 'ENVIRONMENT_REPORT', 'ACTIVE', 'LOW_CONSEQUENCE', 'CATALOG_ONLY'],
   ['guidance-overview', 'Guidance Overview', 'Work through an active home decision step by step.', '/dashboard/properties/[id]/tools/guidance-overview', 'GUIDANCE_OVERVIEW', 'ACTIVE', 'LOW_CONSEQUENCE', 'CATALOG_ONLY'],

@@ -244,3 +244,11 @@ test('inventory, rooms, warranties and expenses each have a reviewed READ entry 
   }
   assert.deepEqual(validateAskExplorerRegistry(), []);
 });
+
+// FRD 1.481: Community is a canonical capability, so its three reads are discoverable under Protect.
+test('community has a canonical capability and three reviewed READ entries', () => {
+  const entries = ASK_EXPLORER_ENTRIES.filter((entry) => entry.capabilityId === 'community');
+  assert.deepEqual(entries.map((entry) => entry.id).sort(), ['protect-community-alerts', 'protect-community-events', 'protect-community-trash']);
+  for (const entry of entries) { assert.equal(entry.operationId, 'COMMUNITY_UPDATES'); assert.equal(entry.kind, 'READ'); assert.equal(entry.groupId, 'PROTECT'); assert.equal(entry.launch, 'MESSAGE'); }
+  assert.deepEqual(validateAskExplorerRegistry(), []);
+});

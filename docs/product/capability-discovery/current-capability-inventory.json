@@ -4,6 +4,7 @@
     "apps/frontend/src/features/tools/toolDiscoveryRegistry.ts",
     "apps/backend/src/productFramework/capabilities/definitions/capabilityDefinitionFactory.ts",
     "apps/backend/src/productFramework/capabilities/definitions/decideCompare.ts",
+    "apps/backend/src/productFramework/capabilities/definitions/discoveryIntentAliases.ts",
     "apps/backend/src/productFramework/capabilities/definitions/maintainPrevent.ts",
     "apps/backend/src/productFramework/capabilities/definitions/planBudget.ts",
     "apps/backend/src/productFramework/capabilities/definitions/protectMonitor.ts",
@@ -17,13 +18,13 @@
     "aiCatalogEntries": 30,
     "homeCatalogEntries": 34,
     "overlappingEntries": 20,
-    "distinctCapabilities": 50,
-    "routeVerified": 50,
+    "distinctCapabilities": 51,
+    "routeVerified": 51,
     "canonicalRelationshipCoverage": 31,
     "contextualCapabilities": 26,
     "workflowOnly": 1,
-    "lifecycleCanonicalized": 50,
-    "catalogOnlyCapabilities": 23
+    "lifecycleCanonicalized": 51,
+    "catalogOnlyCapabilities": 24
   },
   "capabilities": [
     {
@@ -135,6 +136,24 @@
       "lifecycleCanonicalized": true,
       "canonicalRelationshipCoverage": true,
       "recommendationDisposition": "CONTEXTUAL_CANONICAL"
+    },
+    {
+      "id": "community",
+      "label": "Community",
+      "sources": [
+        "backend"
+      ],
+      "canonicalRoute": "/dashboard/community-events",
+      "routeVerified": true,
+      "workflowOnly": false,
+      "outcomeCategory": "PROTECT_MONITOR",
+      "rolloutKey": "COMMUNITY",
+      "releaseStage": "ACTIVE",
+      "safetyTier": "LOW_CONSEQUENCE",
+      "completionKind": "OUTPUT_VIEWED",
+      "lifecycleCanonicalized": true,
+      "canonicalRelationshipCoverage": false,
+      "recommendationDisposition": "CATALOG_ONLY"
     },
     {
       "id": "coverage-intelligence",
