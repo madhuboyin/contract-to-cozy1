@@ -43,6 +43,34 @@ const GUIDES: Readonly<Record<HomeBasicsFocus, BasicsGuide>> = {
   },
 };
 
+const MONTHLY_WALKTHROUGH_TITLE = 'Monthly home walkthrough';
+const MONTHLY_WALKTHROUGH_DESCRIPTION = 'Walk every room; check sinks and fixtures for moisture; test smoke and carbon monoxide alarms; check HVAC filters; inspect drainage, downspouts, siding, railings and steps.';
+
+const monthlyRoutineActions = () => [{
+  id: 'home-basics-start-monthly-check',
+  label: 'Start this month\'s check',
+  interactionType: 'START_WORKFLOW' as const,
+  message: `Create a maintenance task titled ${MONTHLY_WALKTHROUGH_TITLE} due today. Description: ${MONTHLY_WALKTHROUGH_DESCRIPTION}`,
+  operationId: 'MAINTENANCE_TASK_CREATE',
+  style: 'PRIMARY' as const,
+}, {
+  id: 'home-basics-make-monthly-routine',
+  label: 'Make this a monthly routine',
+  interactionType: 'START_WORKFLOW' as const,
+  message: `Create a monthly recurring maintenance task titled ${MONTHLY_WALKTHROUGH_TITLE}. Description: ${MONTHLY_WALKTHROUGH_DESCRIPTION}`,
+  operationId: 'MAINTENANCE_TASK_CREATE',
+  style: 'SECONDARY' as const,
+}];
+
+const problemAction = (item: BasicsItem) => ({
+  id: `home-basics-report-${item.id}`,
+  label: 'I found a problem',
+  message: `Create a maintenance task titled Investigate: ${item.title} and describe what I found.`,
+  style: 'SECONDARY' as const,
+  interactionType: 'MUTATE_RECORD' as const,
+  operationId: 'MAINTENANCE_TASK_CREATE',
+});
+
 export function homeBasicsFocus(message: string): HomeBasicsFocus {
   return /\bmonth(?:ly)?\b|\beach month\b|\bevery month\b/i.test(message) ? 'MONTHLY_ROUTINE' : 'SAFETY_BASICS';
 }
@@ -54,8 +82,9 @@ const gasEmergencyBoundary = (): AskPresentationBlock => ({
   severity: 'EMERGENCY', suggestions: [],
 });
 
-export function buildHomeBasicsResult(focus: HomeBasicsFocus): AskOperationResult {
+export function buildHomeBasicsResult(focus: HomeBasicsFocus, canChangeHome = false): AskOperationResult {
   const guide = GUIDES[focus];
+  const actionableMonthlyRoutine = focus === 'MONTHLY_ROUTINE' && canChangeHome;
   const boundary: AskPresentationBlock = {
     type: 'BOUNDARY', id: 'home-basics-boundary', title: 'General guidance',
     body: 'This is general guidance, not an assessment of your home, and it does not use anything recorded about it. Follow your manufacturers\' instructions, local codes and your utilities\' advice, and call a licensed professional or emergency services when in doubt.',
@@ -64,13 +93,21 @@ export function buildHomeBasicsResult(focus: HomeBasicsFocus): AskOperationResul
   return {
     status: 'ANSWERED', reasonCode: 'HOME_BASICS_READY',
     blocks: [{
-      type: 'SUMMARY', id: 'home-basics-summary', title: guide.title, body: guide.intro, tone: 'DEFAULT', actions: [],
+      type: 'SUMMARY', id: 'home-basics-summary', title: guide.title,
+      body: actionableMonthlyRoutine
+        ? `${guide.intro} Start a trackable check now, or add it to your recurring maintenance. Nothing is saved until you review and confirm.`
+        : guide.intro,
+      tone: 'DEFAULT', actions: actionableMonthlyRoutine ? monthlyRoutineActions() : [],
     }, {
       type: 'GROUPED_LIST', id: 'home-basics-items', title: guide.title, actions: [], filters: [],
       sections: [{
         id: `home-basics-${focus.toLowerCase()}`, title: guide.sectionTitle, count: guide.items.length,
         ...(guide.initialVisibleCount ? { initialVisibleCount: guide.initialVisibleCount } : {}),
-        items: guide.items.map((item, index) => ({ id: item.id, title: item.title, description: item.description, condition: null, meta: [], status: null, href: null, countLabel: String(index + 1) })),
+        items: guide.items.map((item, index) => ({
+          id: item.id, title: item.title, description: item.description, condition: null, meta: [], status: null, href: null,
+          countLabel: String(index + 1),
+          ...(actionableMonthlyRoutine ? { entityType: 'HOME_BASICS_CHECK', actions: [problemAction(item)] } : {}),
+        })),
       }],
     },
     ...(focus === 'SAFETY_BASICS' ? [gasEmergencyBoundary()] : []),

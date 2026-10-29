@@ -45,8 +45,9 @@ test('no message resolves to the new operation (routing is untouched)', () => {
 test('EXECUTED through the registered canonical call: both starter messages return distinct authored content, valid blocks, a boundary, and no property data', async () => {
   const handler = captured['home-basics.guide'];
   assert.equal(typeof handler, 'function');
-  const safety = await handler({ userId: 'u1', propertyId: 'p1', message: HOME_BASICS_SAFETY_MESSAGE });
-  const monthly = await handler({ userId: 'u1', propertyId: 'p1', message: HOME_BASICS_MONTHLY_MESSAGE });
+  const deps = { propertyAccess: { role: 'OWNER' } };
+  const safety = await handler({ userId: 'u1', propertyId: 'p1', message: HOME_BASICS_SAFETY_MESSAGE }, deps);
+  const monthly = await handler({ userId: 'u1', propertyId: 'p1', message: HOME_BASICS_MONTHLY_MESSAGE }, deps);
   for (const result of [safety, monthly]) {
     assert.equal(result.status, 'ANSWERED');
     assert.equal(result.blocks[0].type, 'SUMMARY');
@@ -59,6 +60,26 @@ test('EXECUTED through the registered canonical call: both starter messages retu
   assert.notDeepEqual(safety.blocks[1].sections[0].items.map((i) => i.id), monthly.blocks[1].sections[0].items.map((i) => i.id));
   assert.equal(homeBasicsFocus(HOME_BASICS_SAFETY_MESSAGE), 'SAFETY_BASICS');
   assert.equal(homeBasicsFocus(HOME_BASICS_MONTHLY_MESSAGE), 'MONTHLY_ROUTINE');
+});
+
+test('the monthly routine offers confirmation-gated maintenance actions to contributors while viewers keep read-only guidance', () => {
+  const actionable = buildHomeBasicsResult('MONTHLY_ROUTINE', true);
+  const summary = actionable.blocks.find((block) => block.id === 'home-basics-summary');
+  const list = actionable.blocks.find((block) => block.id === 'home-basics-items');
+  assert.deepEqual(summary.actions.map((action) => action.label), ['Start this month\'s check', 'Make this a monthly routine']);
+  assert.ok(summary.actions.every((action) => action.operationId === 'MAINTENANCE_TASK_CREATE'));
+  assert.match(summary.body, /Nothing is saved until you review and confirm/);
+  for (const item of list.sections[0].items) {
+    assert.equal(item.entityType, 'HOME_BASICS_CHECK');
+    assert.deepEqual(item.actions.map((action) => action.label), ['I found a problem']);
+    assert.equal(item.actions[0].operationId, 'MAINTENANCE_TASK_CREATE');
+    assert.equal(item.actions[0].interactionType, 'MUTATE_RECORD');
+  }
+  for (const block of actionable.blocks) assert.doesNotThrow(() => AskPresentationBlockSchema.parse(block), block.id);
+
+  const viewer = buildHomeBasicsResult('MONTHLY_ROUTINE', false);
+  assert.deepEqual(viewer.blocks.find((block) => block.id === 'home-basics-summary').actions, []);
+  assert.ok(viewer.blocks.find((block) => block.id === 'home-basics-items').sections[0].items.every((item) => item.actions === undefined));
 });
 
 test('the authored content makes no claim about the home and defers to manufacturers, codes and utilities', () => {

@@ -39,6 +39,24 @@ const renderCard = (ask = jest.fn()) => ({
   ),
 });
 
+const monthlyExecution = (): AskExecutionResponse => ({
+  ...execution(),
+  question: 'What should I check around my home each month?',
+  blocks: [{
+    type: 'SUMMARY', id: 'home-basics-summary', title: 'A simple monthly home routine',
+    body: 'Start a trackable check now. Nothing is saved until you review and confirm.', tone: 'DEFAULT',
+    actions: [{ id: 'home-basics-start-monthly-check', label: 'Start this month\'s check', interactionType: 'START_WORKFLOW', message: 'Create a maintenance task titled Monthly home walkthrough due today.', operationId: 'MAINTENANCE_TASK_CREATE', style: 'PRIMARY' }],
+  }, {
+    type: 'GROUPED_LIST', id: 'home-basics-items', title: 'A simple monthly home routine', actions: [], filters: [],
+    sections: [{ id: 'home-basics-monthly_routine', title: 'Once a month', count: 1, items: [{
+      id: 'leaks', title: 'Check under sinks and around fixtures', description: 'Look and feel for moisture.', condition: null, meta: [], status: null, href: null,
+      entityType: 'HOME_BASICS_CHECK', countLabel: '1', actions: [{ id: 'home-basics-report-leaks', label: 'I found a problem', message: 'Create a maintenance task titled Investigate: Check under sinks and around fixtures and describe what I found.', style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId: 'MAINTENANCE_TASK_CREATE' }],
+    }] }],
+  }, {
+    type: 'BOUNDARY', id: 'home-basics-boundary', title: 'General guidance', body: 'This is general guidance, not an assessment of your home.', severity: 'INFO', suggestions: [],
+  }] as unknown as AskPresentationBlock[],
+});
+
 describe('home safety basics presentation', () => {
   it('shows the three most important items first and reveals the other three on request', () => {
     const { view } = renderCard();
@@ -65,5 +83,28 @@ describe('home safety basics presentation', () => {
     expect(next.querySelectorAll('a')).toHaveLength(0);
     fireEvent.click(within(next).getByRole('button', { name: 'Home care for this season' }));
     expect(ask).toHaveBeenLastCalledWith('What home care should I do this season?', undefined, expect.objectContaining({ operationId: 'SEASONAL_HOME_CARE' }));
+  });
+});
+
+describe('monthly home routine actions', () => {
+  it('starts a trackable walkthrough and offers an issue follow-up on each check', () => {
+    const ask = jest.fn();
+    const view = render(
+      <ExecutionCard execution={monthlyExecution()} isSuperseded={false} justUpdatedExecutionId={null} updateExecution={jest.fn()} loading={false} ask={ask} selectedPropertyId="home"
+        setInput={jest.fn()} visibleSuggestions={[]} activeSessionRef={{ current: 'session' }} refreshResult={jest.fn()} refreshPending={false} onAccessLost={jest.fn()}
+        contextOpen={false} onOpenContext={jest.fn()} />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start this month\'s check' }));
+    expect(ask).toHaveBeenLastCalledWith('Create a maintenance task titled Monthly home walkthrough due today.', undefined, expect.objectContaining({ operationId: 'MAINTENANCE_TASK_CREATE' }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'I found a problem' }));
+    expect(ask).toHaveBeenLastCalledWith(
+      'Create a maintenance task titled Investigate: Check under sinks and around fixtures and describe what I found.',
+      undefined,
+      expect.objectContaining({ operationId: 'MAINTENANCE_TASK_CREATE', entityType: 'HOME_BASICS_CHECK', entityId: 'leaks' }),
+      { presentInConversation: true },
+    );
+    expect(view.container.querySelector('[data-seasonal-task="leaks"]')).toBeInTheDocument();
   });
 });

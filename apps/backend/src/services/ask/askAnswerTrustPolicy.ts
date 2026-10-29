@@ -188,8 +188,16 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   // The answer's next steps (each opens a confirmation, an inline answer, or the home-record check) and the walkthrough's way on and back.
   SEASONAL_HOME_CARE: new Set(['seasonal-add-tasks', 'seasonal-walkthrough', 'seasonal-show-checklist', 'seasonal-update-home-details', 'seasonal-next-task', 'seasonal-back-to-plan']),
   SEASONAL_CHECKLIST_SETUP: new Set(['seasonal-show-checklist', 'seasonal-update-home-details']),
-  // Home Basics deliberately has no local continuation carousel; the governed exact-four footer owns onward navigation.
-  HOME_BASICS_GUIDE: new Set(),
+  // Home Basics has no local continuation carousel; its monthly routine may launch governed maintenance workflows while the exact-four footer owns onward navigation.
+  HOME_BASICS_GUIDE: new Set([
+    'home-basics-start-monthly-check',
+    'home-basics-make-monthly-routine',
+    'home-basics-report-walkthrough',
+    'home-basics-report-leaks',
+    'home-basics-report-alarm-test',
+    'home-basics-report-filters',
+    'home-basics-report-outside',
+  ]),
   // The attached-document receipt: an inventory item opens inline in Ask; a warranty keeps its page link.
   CAPTURE_EVIDENCE_CONFIRM: new Set(['view-inventory-item', 'open-attached-record']),
   DO_NOTHING_SIMULATION: new Set(['run-do-nothing', 'do-nothing-scenario-create', 'do-nothing-scenario-edit', 'do-nothing-scenario-delete']),
