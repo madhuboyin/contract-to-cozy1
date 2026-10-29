@@ -12,11 +12,12 @@ export interface NycAlertItem {
 const NYCEM_DATASET = '8vv7-7wx3';
 const BASE = `https://data.cityofnewyork.us/resource/${NYCEM_DATASET}.json`;
 
-export async function fetchNycEmergencyNotifications(opts: {
+/** The same read with a failure thrown, for a caller that must tell an unreachable source from an empty one (Ask's Community answer). */
+export async function fetchNycEmergencyNotificationsStrict(opts: {
   limit: number;
   appToken?: string;
 }): Promise<NycAlertItem[]> {
-  try {
+  {
     logger.info({ limit: opts.limit }, 'Fetching NYC alerts');
     
     const url = new URL(BASE);
@@ -63,7 +64,15 @@ export async function fetchNycEmergencyNotifications(opts: {
 
     logger.info(`✅ Returning ${mapped.length} mapped alerts`);
     return mapped;
-    
+  }
+}
+
+export async function fetchNycEmergencyNotifications(opts: {
+  limit: number;
+  appToken?: string;
+}): Promise<NycAlertItem[]> {
+  try {
+    return await fetchNycEmergencyNotificationsStrict(opts);
   } catch (error) {
     logger.error({ err: error }, '❌ NYC Open Data API failed');
     logger.error({ err: error }, 'Error details');

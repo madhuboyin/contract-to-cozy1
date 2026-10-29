@@ -59,8 +59,12 @@ function sanitizeLink(input: string | null): string | null {
   }
 }
 
-export async function fetchRssItems(feedUrl: string, limit = 20): Promise<RssItem[]> {
-  try {
+/**
+ * The feed read, with a failure thrown: a caller that must tell an unreachable feed from an empty one (Ask's Community answer) uses this.
+ * fetchRssItems below keeps the page's behaviour exactly: any failure is logged and read as no items.
+ */
+export async function fetchRssItemsStrict(feedUrl: string, limit = 20): Promise<RssItem[]> {
+  {
     await assertSafeUrl(feedUrl);
 
     const controller = new AbortController();
@@ -98,6 +102,12 @@ export async function fetchRssItems(feedUrl: string, limit = 20): Promise<RssIte
     }
 
     return items;
+  }
+}
+
+export async function fetchRssItems(feedUrl: string, limit = 20): Promise<RssItem[]> {
+  try {
+    return await fetchRssItemsStrict(feedUrl, limit);
   } catch (error) {
     logger.error({ err: error }, `RSS feed failed for ${feedUrl}`);
     return [];

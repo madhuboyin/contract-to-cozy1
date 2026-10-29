@@ -175,6 +175,7 @@ const POLICIES: readonly AskAudiencePolicy[] = [
   definePolicy('PERMIT_TRACKER_COMMAND', KNOWN_MODES),
   definePolicy('FINANCING_OVERVIEW', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('PERMIT_TRACKER_STATUS', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
+  definePolicy('COMMUNITY_UPDATES', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('NEGOTIATION_SHIELD_BUYER_COMMAND', KNOWN_MODES),
   definePolicy('PRICE_FINALIZATION_COMMAND', KNOWN_MODES),
   definePolicy('QUOTE_COMPARISON_COMMAND', KNOWN_MODES),

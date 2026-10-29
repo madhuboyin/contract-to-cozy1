@@ -154,6 +154,8 @@ const CERTIFICATION_ROWS: ReadonlyArray<Omit<AskRoutingCertificationFixture, 'fi
   { operationId: 'RISK_MITIGATION_PLAN', message: 'What loss-prevention work matters most?', category: 'PARAPHRASE' },
   // Refinance radar parity (REFINANCE_COMMAND). Appended at the END: the fixtureId is positional.
   { operationId: 'REFINANCE_COMMAND', message: 'Remember the refinance scenario I just ran', category: 'PARAPHRASE' },
+  // Community (FRD v1.479). Appended at the END: the fixtureId is positional.
+  { operationId: 'COMMUNITY_UPDATES', message: 'What community events are coming up near me?', category: 'PARAPHRASE' },
 ];
 
 export const ASK_ROUTING_CERTIFICATION_FIXTURES: readonly AskRoutingCertificationFixture[] = Object.freeze(
@@ -378,6 +380,7 @@ export const ASK_CERTIFIED_DIRECT_ANSWERS: Readonly<Record<AskOperationId, strin
   PERMIT_TRACKER_COMMAND: 'Your permit change is shown and saved only after you confirm; the official status is not changed and nothing is filed or sent.',
   FINANCING_OVERVIEW: 'Your financing options for upgrades: your equity and mortgage details are shown, and a named project cost is compared across ways to pay using illustrative national average rates.',
   PERMIT_TRACKER_STATUS: 'Your recorded permits are listed with their official status, open inspections and any flags for work that may have needed a permit.',
+  COMMUNITY_UPDATES: 'Three community events are listed near your home, with no current city alerts and a note that your city publishes no public trash feed.',
   NEGOTIATION_SHIELD_BUYER_COMMAND: 'Your negotiation step is shown, with what it will change, and saved only after you confirm; nothing is sent to the seller.',
   PRICE_FINALIZATION_COMMAND: 'Your price record change is shown and saved only after you confirm; nothing is booked, paid or sent to a vendor.',
   QUOTE_COMPARISON_COMMAND: 'Your proposal change is shown and saved only after you confirm; nothing is accepted, booked or sent to a provider.',

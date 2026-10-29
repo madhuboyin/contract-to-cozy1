@@ -57,6 +57,7 @@ const OPERATION_BOUNDARIES: Partial<Record<AskOperationId, ReadonlySet<string>>>
   HOA_COMPLIANCE_STATUS: new Set(['hoa-compliance-boundary']),
   PRICE_FINALIZATIONS_LIST: new Set(['price-finalization-boundary']),
   PERMIT_TRACKER_STATUS: new Set(['permit-tracker-boundary']),
+  COMMUNITY_UPDATES: new Set(['community-boundary']),
   COVERAGE_REVIEW_STATUS: new Set(['coverage-review-boundary']),
   RISK_MITIGATION_PLAN: new Set(['risk-mitigation-boundary']),
   FINANCING_OVERVIEW: new Set(['financing-boundary']),
@@ -370,6 +371,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   // The status board's next steps (FRD v1.319): refresh the board, correct one item; the install-date capture kept from the earlier slice.
   HOME_STATUS_BOARD: new Set(['status-board-refresh', 'status-board-correct', 'correct-installedOn', 'status-board-hidden', 'status-board-back-to-board']),
   PERMIT_TRACKER_STATUS: new Set(['permit-tracker-add', 'permit-tracker-edit', 'permit-tracker-remove']),
+  COMMUNITY_UPDATES: new Set(['community-show-all', 'community-show-events', 'community-show-alerts', 'community-show-trash']),
   // The comparison answer offers Start a comparison / Record my decision, and the review answer offers Review my coverage, to a contributor or owner.
   COVERAGE_COMPARISON_STATUS: new Set(['coverage-start-comparison', 'coverage-record-decision', 'coverage-add-quote']),
   COVERAGE_REVIEW_STATUS: new Set(['coverage-generate-review']),

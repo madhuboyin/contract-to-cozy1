@@ -8,6 +8,8 @@ const SETTINGS_WORDS = /\b(?:settings?|preferences?|mute|unmute|snooze|quiet hou
 /** "What's new?", "show my notifications", "any alerts?", "my unread notifications". Settings questions are another operation's. */
 export const isNotificationsOverviewRequest = (message: string): boolean => {
   if (SETTINGS_WORDS.test(message)) return false;
+  // "City alerts" are the municipality's notices (the Community answer), not the person's own notifications.
+  if (/\b(?:city|municipal|town|community)\s+(?:alerts?|notices?|notifications?)\b/i.test(message)) return false;
   return /^\s*(?:what(?:'s| is) new|any (?:news|alerts?|notifications?|updates?)(?: for me)?|anything new)\s*\??\s*$/i.test(message)
     || /\b(?:show|list|see|open|check|read)\b.{0,24}\b(?:my\s+|the\s+)?(?:notifications?|alerts|inbox)\b/i.test(message)
     || /\b(?:unread|new|dismissed)\b.{0,16}\b(?:notifications?|alerts)\b|\b(?:notifications?|alerts)\b.{0,16}\b(?:unread|dismissed)\b/i.test(message);

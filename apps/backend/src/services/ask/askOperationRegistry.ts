@@ -6,6 +6,7 @@ import type { SuggestedNextActionCandidate } from './suggestedActions/suggestedN
 import { createAskOperationSemanticContract, validateAskSemanticContract, type AskOperationSemanticContract } from './askTrust.contract';
 import { validateAskOperationSemanticPackages } from './askOperationSemanticPackages';
 import { insurancePoliciesOtherIntentPattern, insurancePoliciesPattern } from './support/insurancePolicyCommand';
+import { communityOtherIntentPattern, communityPattern } from './support/communityUpdates';
 import { parseReserveFundMessage } from './support/reserveFundMessage';
 import { isNegotiationShieldStartRequest } from './support/negotiationShieldStart';
 import { isRenovationCaseStartRequest } from './support/renovationCaseStart';
@@ -246,6 +247,7 @@ export type AskOperationId =
   | 'FINANCING_OVERVIEW'
   // Read the home's permit records, inspections and unpermitted-work flags, keeping the authority's official status apart from what the household reported (register P0 Permits, slice PM-A). Read-only; no write.
   | 'PERMIT_TRACKER_STATUS'
+  | 'COMMUNITY_UPDATES'
   // Buyer-mode Negotiation Shield (register P0): start negotiating an inspection finding with the seller and record the seller's response and outcome. Confirmation-gated, declared-action only; never by fuzzy retrieval.
   | 'NEGOTIATION_SHIELD_BUYER_COMMAND'
   // Record, change and finalize an accepted price (register P0 Price Finalization): from a Negotiation Shield review, a selected quote proposal or by hand. Confirmation-gated, declared-action only; never by fuzzy retrieval.
@@ -922,6 +924,7 @@ export const ASK_OPERATION_DEFINITIONS: Readonly<Record<AskOperationId, AskOpera
   PERMIT_TRACKER_COMMAND: definition('PERMIT_TRACKER_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'permits.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   FINANCING_OVERVIEW: definition('FINANCING_OVERVIEW', 'DECISION_ANALYSIS', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'financing.overview', ['SUMMARY', 'GROUPED_LIST', 'EVIDENCE', 'LIMITATION', 'BOUNDARY']),
   PERMIT_TRACKER_STATUS: definition('PERMIT_TRACKER_STATUS', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'permits.status', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
+  COMMUNITY_UPDATES: definition('COMMUNITY_UPDATES', 'RECORD_QUERY', true, 'DETERMINISTIC', 'STANDARD', 'VIEWER', 'community.updates', ['SUMMARY', 'GROUPED_LIST', 'LIMITATION', 'BOUNDARY']),
   NEGOTIATION_SHIELD_BUYER_COMMAND: definition('NEGOTIATION_SHIELD_BUYER_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'negotiation-shield.buyer', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   PRICE_FINALIZATION_COMMAND: definition('PRICE_FINALIZATION_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'price-finalization.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
   QUOTE_COMPARISON_COMMAND: definition('QUOTE_COMPARISON_COMMAND', 'COMMAND', true, 'DETERMINISTIC', 'MATERIAL_DECISION', 'CONTRIBUTOR', 'quote-comparison.command', ['SUMMARY', 'WORKFLOW_PROGRESS', 'LIMITATION', 'BOUNDARY']),
@@ -1865,6 +1868,10 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   }
   if (explicitCapabilityPattern.test(message) || capabilityPattern.test(message)) {
     return resolved('CAPABILITY_DISCOVERY', 0.88);
+  }
+  // Community (FRD v1.479): events, city alerts and trash pickup for the home's city. Last before the fallback, so every more specific route above wins.
+  if (communityPattern.test(message) && !communityOtherIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
+    return resolved('COMMUNITY_UPDATES', 0.95);
   }
   return resolved('GROUNDED_GUIDANCE', 0.55);
 }
