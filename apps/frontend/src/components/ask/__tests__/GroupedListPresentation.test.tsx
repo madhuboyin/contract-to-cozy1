@@ -107,6 +107,35 @@ test('producer-declared dense rows use two-line records and remove repeated sect
   expect(row?.querySelector('[data-dense-row-content]')).toContainElement(screen.getByRole('button', { name: 'Correct this item' }));
 });
 
+test('the upgrade planner renders one wide system workspace with aligned results, row actions, and collapsed archived options', () => {
+  const onItemAction = jest.fn();
+  const planner: GroupedList = {
+    type: 'GROUPED_LIST', id: 'home-upgrade-options', title: 'Upgrade planner options', description: 'Compare and manage saved options.', filters: [], actions: [], listDensity: 'DENSE',
+    sections: [
+      { id: 'home-upgrade-roof', title: 'Roof', count: 1, items: [{
+        id: 'roof-repair', entityType: 'HOME_UPGRADE_SCENARIO', title: 'Repair Roof', status: 'Ready', meta: ['Repair'],
+        attributes: [{ label: 'Upfront cost', value: '$2,500' }, { label: 'Annual savings', value: 'Not calculated' }, { label: 'Payback', value: 'Not calculated' }],
+        actions: [
+          { id: 'calculate', label: 'Calculate', message: 'Calculate it', operationId: 'HOME_UPGRADE_COMMAND', interactionType: 'MUTATE_RECORD', style: 'PRIMARY' },
+          { id: 'rename', label: 'Rename', message: 'Rename it', operationId: 'HOME_UPGRADE_COMMAND', interactionType: 'MUTATE_RECORD', style: 'SECONDARY' },
+        ],
+      }] },
+      { id: 'home-upgrade-manage-archived', title: 'Archived', count: 1, items: [{ id: 'old-roof', entityType: 'HOME_UPGRADE_SCENARIO', title: 'Old roof plan', status: 'Archived', meta: ['Replace Component'], attributes: [], actions: [] }] },
+    ],
+  };
+  const view = render(<GenericGroupedListBlock block={planner} executionId="execution" propertyId="home" onItemAction={onItemAction} itemActionsDisabled={false} onFilterClick={() => undefined} onCollectionPage={() => undefined} onAccessLost={() => undefined} />);
+
+  expect(view.container.querySelector('[data-home-upgrade-planner]')).toBeInTheDocument();
+  expect(screen.getByText('Roof')).toBeInTheDocument();
+  expect(screen.getByText('$2,500')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Calculate' })).toBeInTheDocument();
+  expect(screen.queryByText('Old roof plan')).not.toBeVisible();
+  fireEvent.click(screen.getByText(/Archived options/));
+  expect(screen.getByText('Old roof plan')).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Calculate' }));
+  expect(onItemAction).toHaveBeenCalledWith('HOME_UPGRADE_SCENARIO', 'roof-repair', 'Calculate it', 'HOME_UPGRADE_COMMAND', 'MUTATE_RECORD');
+});
+
 test('Home Operations marks overdue rows and reserves More for three or more actions', () => {
   const dense: GroupedList = {
     ...block,

@@ -89,13 +89,14 @@ test('options are grouped by system in the page\'s order, with the page\'s label
   assert.equal(result.blocks[0].title, '4 saved upgrade options across 3 systems');
   assert.equal(result.blocks[0].body, '2 with results ready, 1 selected. 1 has results that are out of date because the home\'s records changed; a contributor or owner can recalculate them.');
   assert.equal(result.reasonCode, 'HOME_UPGRADE_RESULTS_STALE');
-  // FRD v1.89: the system with two options is a strip; the systems with one option stay in the list, in the page's order.
+  // FRD v1.89: the system with two options is a strip; the unified planner still carries one canonical row per option.
   const list = result.blocks.find((block) => block.id === 'home-upgrade-options');
   assert.equal(list.listDensity, 'DENSE');
   const strip = result.blocks.find((block) => block.id === 'home-upgrade-options-wh');
   assert.deepEqual(result.blocks.map((block) => block.id), ['home-upgrade-summary', 'home-upgrade-options-wh', 'home-upgrade-options', 'home-upgrade-boundary']);
   // Selected first, then a calculation in progress (pinned), then the newest.
   assert.deepEqual(list.sections.map((section) => [section.title, section.items.map((row) => row.title)]), [
+    ['Basement water heater', ['Heat pump water heater', 'Option repair']],
     ['Whole-home plans', ['Add solar']],
     ['Electrical Panel', ['Panel upgrade']],
   ]);
@@ -108,9 +109,10 @@ test('options are grouped by system in the page\'s order, with the page\'s label
   assert.equal(heatPump.summary, 'Replace Component');
   assert.deepEqual(attributes(repair), { 'Upfront cost': '$400–$700', 'Annual savings': 'Not calculated yet', Payback: 'Not calculated yet', Results: 'Results Ready' });
   assert.equal(repair.badges, undefined);
-  assert.equal(list.sections[0].items[0].status, 'Calculating');
-  assert.deepEqual(list.sections[0].items[0].meta, ['Add Feature', 'Pinned']);
-  assert.equal(list.sections[1].items[0].status, 'Results out of date');
+  assert.equal(list.sections[1].items[0].status, 'Calculating');
+  assert.deepEqual(list.sections[1].items[0].meta, ['Add Feature', 'Pinned']);
+  assert.deepEqual(Object.fromEntries(list.sections[0].items[0].attributes.map((attribute) => [attribute.label, attribute.value])), { 'Upfront cost': '$2,800–$4,200', 'Annual savings': '$450 / year', Payback: '6 years' });
+  assert.equal(list.sections[2].items[0].status, 'Results out of date');
   assert.equal(JSON.stringify(result).includes('secret assumptions'), false);
   assert.match(result.blocks.at(-1).body, new RegExp(`${ELECTRICAL_NOTE}$`));
 });
@@ -199,7 +201,7 @@ test('one option, or five and more, for a system stay in the list', () => {
   assert.equal(homeUpgradeComparison('wh', 'Water heater', ['a', 'b', 'c', 'd', 'e'].map((id) => scenario(id)), noRun), null);
 });
 
-test('several systems each get their own strip in the page\'s order, and a system too big for a strip stays listed', () => {
+test('several systems each get their own strip in the page\'s order and all systems stay in the unified planner', () => {
   const wh = { id: 'wh', componentType: 'WATER_HEATER', label: 'Water heater' };
   const roof = { id: 'roof', componentType: 'ROOF', label: 'Roof' };
   const rows = [
@@ -209,7 +211,7 @@ test('several systems each get their own strip in the page\'s order, and a syste
   ];
   const result = homeUpgradeScenariosFromView(rows, 'p1', NOW);
   assert.deepEqual(result.blocks.map((block) => block.id), ['home-upgrade-summary', 'home-upgrade-options-roof', 'home-upgrade-options-wh', 'home-upgrade-options', 'home-upgrade-boundary']);
-  assert.deepEqual(result.blocks.find((block) => block.id === 'home-upgrade-options').sections.map((section) => section.title), ['HVAC']);
+  assert.deepEqual(result.blocks.find((block) => block.id === 'home-upgrade-options').sections.map((section) => section.title), ['Roof', 'Water heater', 'HVAC']);
 });
 
 test('the real handler keeps a strip answer through the answer checker with answer relevance on', async () => {

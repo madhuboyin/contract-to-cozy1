@@ -269,6 +269,67 @@ function OwnershipCostNotificationsBlock({ block, disabled, onItemAction }: {
   );
 }
 
+function HomeUpgradePlannerList({ block, disabled, onItemAction }: {
+  block: Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>;
+  disabled: boolean;
+  onItemAction: Parameters<AskBlockRenderer<'GROUPED_LIST'>>[0]['onItemAction'];
+}) {
+  const activeSections = block.sections.filter((section) => section.id !== 'home-upgrade-manage-archived');
+  const archived = block.sections.find((section) => section.id === 'home-upgrade-manage-archived');
+  const run = (
+    item: Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>['sections'][number]['items'][number],
+    action: NonNullable<Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>['sections'][number]['items'][number]['actions']>[number],
+  ) => onItemAction(action.entityType ?? item.entityType, action.entityId ?? item.id, action.message, action.operationId, action.interactionType);
+  const optionRow = (item: (typeof activeSections)[number]['items'][number], archivedRow = false) => {
+    const attributes = Object.fromEntries((item.attributes ?? []).map((attribute) => [attribute.label, attribute.value]));
+    const actions = item.actions ?? [];
+    const primary = actions.find((action) => action.style === 'PRIMARY') ?? actions[0];
+    const overflow = actions.filter((action) => action !== primary);
+    return (
+      <li key={item.id} data-ask-task-id={item.id} className="grid gap-3 px-4 py-3.5 transition-colors hover:bg-slate-50/70 lg:grid-cols-[minmax(13rem,1.5fr)_repeat(3,minmax(7rem,.7fr))_minmax(11rem,auto)] lg:items-center lg:px-5">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="font-semibold text-slate-950">{item.title}</p>
+            {item.status && <span className={cn('rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide', /out of date|failed/i.test(item.status) ? 'border-amber-200 bg-amber-50 text-amber-800' : /calculating|queued/i.test(item.status) ? 'border-sky-200 bg-sky-50 text-sky-800' : archivedRow ? 'border-slate-200 bg-slate-100 text-slate-600' : 'border-emerald-200 bg-emerald-50 text-emerald-800')}>{item.status}</span>}
+          </div>
+          {item.meta.length > 0 && <p className="mt-1 text-xs text-slate-500">{item.meta.join(' · ')}</p>}
+        </div>
+        {['Upfront cost', 'Annual savings', 'Payback'].map((label) => <div key={label} className="flex items-baseline justify-between gap-3 lg:block"><span className="text-[10px] font-bold uppercase tracking-wide text-slate-400 lg:hidden">{label}</span><span className={cn('text-sm font-medium tabular-nums', attributes[label] === 'Not calculated' ? 'text-slate-400' : 'text-slate-800')}>{attributes[label] ?? '—'}</span></div>)}
+        {actions.length > 0 ? <div className="flex items-center justify-start gap-2 lg:justify-end">
+          {primary && <button type="button" disabled={disabled} onClick={() => run(item, primary)} className={itemActionClass(primary.style)}>{primary.label}</button>}
+          {overflow.length > 0 && <details className="relative">
+            <summary className="flex min-h-8 cursor-pointer list-none items-center rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50">More<span className="sr-only"> actions for {item.title}</span></summary>
+            <div className="absolute right-0 z-20 mt-1 min-w-44 space-y-1 rounded-lg border border-slate-200 bg-white p-1.5 shadow-lg">
+              {overflow.map((action) => <button key={action.id} type="button" disabled={disabled} onClick={() => run(item, action)} className="block min-h-8 w-full rounded-md px-2.5 py-1 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">{action.label}</button>)}
+            </div>
+          </details>}
+        </div> : <span className="hidden text-right text-xs text-slate-400 lg:block">View only</span>}
+      </li>
+    );
+  };
+  return (
+    <section className="w-full overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm" data-home-upgrade-planner="">
+      <div className="border-b border-slate-200 bg-gradient-to-r from-slate-50 via-white to-teal-50/40 px-4 py-4 sm:px-5">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+          <div><h3 className="text-base font-bold tracking-tight text-slate-950 sm:text-lg">{block.title}</h3>{block.description && <p className="mt-1 max-w-3xl text-xs leading-5 text-slate-600">{block.description}</p>}</div>
+          <span className="shrink-0 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-600">{activeSections.reduce((sum, section) => sum + section.items.length, 0)} active</span>
+        </div>
+      </div>
+      <div className="divide-y divide-slate-200">
+        {activeSections.map((section) => <section key={section.id} aria-labelledby={`${section.id}-title`}>
+          <div className="flex items-center justify-between bg-slate-50/60 px-4 py-2.5 sm:px-5"><h4 id={`${section.id}-title`} className="text-xs font-bold uppercase tracking-wider text-slate-700">{section.title}</h4><span className="text-xs font-semibold text-slate-500">{section.count} {section.count === 1 ? 'option' : 'options'}</span></div>
+          <div className="hidden grid-cols-[minmax(13rem,1.5fr)_repeat(3,minmax(7rem,.7fr))_minmax(11rem,auto)] gap-3 border-y border-slate-100 px-5 py-2 text-[10px] font-bold uppercase tracking-wide text-slate-400 lg:grid"><span>Option</span><span>Upfront cost</span><span>Annual savings</span><span>Payback</span><span className="text-right">Actions</span></div>
+          <ul className="divide-y divide-slate-100">{section.items.map((item) => optionRow(item))}</ul>
+        </section>)}
+      </div>
+      {archived && <details className="border-t border-slate-200 bg-slate-50/40">
+        <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between px-4 py-3 text-sm font-semibold text-slate-800 hover:bg-slate-50 sm:px-5"><span>Archived options</span><span className="text-xs font-medium text-slate-500">{archived.count} · Show</span></summary>
+        <ul className="divide-y divide-slate-100 border-t border-slate-200 bg-white">{archived.items.map((item) => optionRow(item, true))}</ul>
+      </details>}
+    </section>
+  );
+}
+
 export function GenericGroupedListBlock({ block, executionId, propertyId, onItemAction, itemActionsDisabled, onFilterClick, onCollectionPage }: Parameters<AskBlockRenderer<'GROUPED_LIST'>>[0]) {
   const controls = useContext(ResultViewContext);
   const workflowControls = useContext(AskBlockActionContext);
@@ -279,6 +340,7 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
   if (block.id === 'reserve-planning-controls') return <ReservePlanningControls block={block} disabled={itemActionsDisabled} onItemAction={onItemAction} />;
   if (block.id === 'ownership-cost-views') return <OwnershipCostViewsBlock block={block} disabled={itemActionsDisabled} onItemAction={onItemAction} />;
   if (block.id === 'ownership-cost-notifications') return <OwnershipCostNotificationsBlock block={block} disabled={itemActionsDisabled} onItemAction={onItemAction} />;
+  if (block.id === 'home-upgrade-options') return <HomeUpgradePlannerList block={block} disabled={itemActionsDisabled} onItemAction={onItemAction} />;
   if (block.id === 'focused-home-action-guidance') {
     const next = block.sections.find((section) => section.id === 'next-step');
     const why = block.sections.find((section) => section.id === 'why-it-matters')?.items[0];

@@ -153,16 +153,19 @@ const view = (over = {}) => ({
   component: { label: 'HVAC', componentType: 'HVAC' }, impacts: [], latestRun: null, updatedAt: new Date('2026-10-01'), safetyBoundary: null, ...over,
 });
 
-test('the upgrade answer offers a contributor Manage options (decide, calculate, rename, archive; restore and delete for archived) and a viewer nothing; ids are allowlisted', () => {
+test('the unified upgrade planner gives a contributor row actions, archived rows, and a viewer the same rows without actions; ids are allowlisted', () => {
   const owner = homeUpgradeScenariosFromView([view()], 'prop-1', new Date(), { canChange: true, archived: [view({ id: 's-2', name: 'Old plan', isArchived: true })] });
-  const manage = owner.blocks.find((b) => b.id === 'home-upgrade-manage');
-  assert.equal(manage.listDensity, 'DENSE');
-  const items = Object.fromEntries(manage.sections.flatMap((s) => s.items).map((i) => [i.id, i]));
-  assert.deepEqual(items['s-1'].actions.map((a) => a.id), ['home-upgrade-decide', 'home-upgrade-compute', 'home-upgrade-rename', 'home-upgrade-archive']);
+  const planner = owner.blocks.find((b) => b.id === 'home-upgrade-options');
+  assert.equal(planner.title, 'Upgrade planner options');
+  assert.equal(planner.listDensity, 'DENSE');
+  assert.equal(owner.blocks.some((b) => b.id === 'home-upgrade-manage'), false);
+  const items = Object.fromEntries(planner.sections.flatMap((s) => s.items).map((i) => [i.id, i]));
+  assert.deepEqual(items['s-1'].actions.map((a) => a.id), ['home-upgrade-compute', 'home-upgrade-decide', 'home-upgrade-rename', 'home-upgrade-archive']);
   assert.equal(items['s-1'].entityType, command.UPGRADE_SCENARIO_ENTITY_TYPE);
+  assert.deepEqual(items['s-1'].attributes.map((a) => [a.label, a.value]), [['Upfront cost', 'Not calculated'], ['Annual savings', 'Not calculated'], ['Payback', 'Not calculated']]);
   assert.deepEqual(items['s-2'].actions.map((a) => a.id), ['home-upgrade-restore', 'home-upgrade-delete']);
   const viewer = homeUpgradeScenariosFromView([view()], 'prop-1');
-  assert.equal(viewer.blocks.some((b) => b.id === 'home-upgrade-manage'), false);
+  assert.equal(viewer.blocks.find((b) => b.id === 'home-upgrade-options').sections[0].items[0].actions.length, 0);
   const stale = homeUpgradeScenariosFromView([view({ staleAt: new Date() })], 'prop-1', new Date(), { canChange: true, archived: [] });
   assert.match(stale.blocks[0].body, /use Recalculate on an option to refresh it/);
   const applicable = (id, operationId) => isAskActionApplicable({
