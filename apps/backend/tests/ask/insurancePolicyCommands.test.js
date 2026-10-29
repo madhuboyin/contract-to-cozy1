@@ -75,9 +75,16 @@ test('the list shows only the caller\'s policies with a masked number, Add on th
   const viewer = await insurancePoliciesResult('u1', 'p1');
   assert.deepEqual(viewer.blocks[0].actions, []);
   assert.equal(viewer.blocks.find((block) => block.type === 'GROUPED_LIST').sections[0].items[0].actions, undefined);
+  role = 'CONTRIBUTOR';
   rows = [];
   const none = await insurancePoliciesResult('u1', 'p1');
   assert.equal(none.reasonCode, 'INSURANCE_POLICIES_NONE');
+  assert.equal(none.blocks[0].type, 'EMPTY_STATE');
+  assert.equal(none.blocks[0].actions[0].id, 'insurance-policy-add');
+  assert.equal(none.blocks[0].actions[0].style, 'PRIMARY');
+  role = 'VIEWER';
+  const viewerNone = await insurancePoliciesResult('u1', 'p1');
+  assert.deepEqual(viewerNone.blocks[0].actions, []);
 });
 
 test('add: a form first, then a review that writes nothing, then the canonical create under the caller\'s profile on confirm', async () => {

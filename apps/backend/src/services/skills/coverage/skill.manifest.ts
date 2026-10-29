@@ -79,6 +79,7 @@ export const COVERAGE_SKILL = Object.freeze({
     "COMPARISON",
     "EVIDENCE",
     "CAPABILITY_LIST",
+    "EMPTY_STATE",
     "BOUNDARY"
   ],
   "dependencies": [

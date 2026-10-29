@@ -47,14 +47,20 @@ export async function insurancePoliciesResult(userId: string, propertyId: string
   const contextVersion = sha(JSON.stringify(rows.map((row) => [row.id, row.updatedAt.toISOString()])));
   const summary = {
     type: 'SUMMARY' as const, id: 'insurance-policies-summary',
-    title: rows.length ? `${rows.length} insurance ${rows.length === 1 ? 'policy' : 'policies'} recorded under your profile` : 'No insurance policy recorded under your profile',
-    body: rows.length
-      ? `${rows.filter((row) => status(row) === 'EXPIRING').length} expiring within 60 days. Policies other household members recorded are not shown here.`
-      : canWrite ? 'Add the policy to track its renewal, premium and documents. Nothing is saved until you confirm.' : 'A contributor or owner can add a policy.',
+    title: `${rows.length} insurance ${rows.length === 1 ? 'policy' : 'policies'} recorded under your profile`,
+    body: `${rows.filter((row) => status(row) === 'EXPIRING').length} expiring within 60 days. Policies other household members recorded are not shown here.`,
     tone: rows.some((row) => status(row) === 'EXPIRING' || status(row) === 'EXPIRED') ? 'CAUTION' as const : 'DEFAULT' as const,
-    actions: canWrite ? [addAction(rows.length ? 'SECONDARY' : 'PRIMARY')] : [],
+    actions: canWrite ? [addAction('SECONDARY')] : [],
   };
-  if (!rows.length) return { status: 'ANSWERED', reasonCode: 'INSURANCE_POLICIES_NONE', contextVersion, blocks: [summary], suggestions: [] };
+  if (!rows.length) return {
+    status: 'ANSWERED', reasonCode: 'INSURANCE_POLICIES_NONE', contextVersion,
+    blocks: [{
+      type: 'EMPTY_STATE', id: 'insurance-policies-empty', title: 'No insurance policy recorded under your profile',
+      body: canWrite ? 'Add a policy to track its renewal, premium and documents. Nothing is saved until you confirm.' : 'A contributor or owner can add a policy.',
+      actions: canWrite ? [addAction()] : [],
+    }],
+    suggestions: [],
+  };
   const rowAction = (id: string, label: string, message: string) => ({ id, label, message, style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'COVERAGE_COMMAND' as const });
   const sections = [{
     id: 'insurance-policies', title: 'Insurance policies', count: rows.length,
