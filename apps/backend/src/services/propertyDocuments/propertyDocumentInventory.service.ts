@@ -101,9 +101,11 @@ export async function listPropertyDocuments(input: {
 
   let fromLegacy: PropertyDocument[] = [];
   if (input.includeLegacy && lifecycle === 'ACTIVE') {
+    const notInRecords = await legacyNotYetInRecords(input.propertyId);
     const rows = await prisma.document.findMany({
       where: {
         deletedAt: null,
+        ...(notInRecords ? { AND: [notInRecords] } : {}),
         ...(input.includeInventoryLinkedLegacy
           ? { OR: [{ propertyId: input.propertyId }, { inventoryItem: { propertyId: input.propertyId } }] }
           : { propertyId: input.propertyId }),
@@ -132,6 +134,16 @@ export async function listPropertyDocuments(input: {
 // count every active Home Record regardless of the caller's role, exactly as the property's other counts do, and never return a row.
 const LINKED_ENTITY_TYPES = ['INVENTORY_ITEM', 'WARRANTY', 'INSURANCE_POLICY'] as const;
 
+/**
+ * A legacy document whose exact file is already a Home Record in this property (same SHA-256) is that record's older copy (scripts/copy-legacy-documents-to-home-records.ts
+ * makes them), so it is not listed or counted a second time. A legacy row with no checksum is never hidden. Returns the extra where-clause, or null when nothing is hidden.
+ */
+async function legacyNotYetInRecords(propertyId: string): Promise<Record<string, unknown> | null> {
+  const versions = await prisma.propertyRecordVersion.findMany({ where: { record: { propertyId } }, select: { sha256: true } });
+  const hashes = [...new Set(versions.map((version) => version.sha256))];
+  return hashes.length ? { OR: [{ sha256: null }, { sha256: { notIn: hashes } }] } : null;
+}
+
 export async function countPropertyDocuments(input: {
   propertyId: string;
   /** The transitional legacy branch, named so a caller opts in knowingly. */
@@ -149,11 +161,13 @@ export async function countPropertyDocuments(input: {
       ...(input.linkedToOtherRecords ? { links: { some: { entityType: { in: [...LINKED_ENTITY_TYPES] } } } } : {}),
     },
   });
+  const notInRecords = input.includeLegacy ? await legacyNotYetInRecords(input.propertyId) : null;
   const legacy = input.includeLegacy
     ? await prisma.document.count({
       where: {
         propertyId: input.propertyId,
         deletedAt: null,
+        ...(notInRecords ? { AND: [notInRecords] } : {}),
         ...(input.verifiedOnly ? { verificationStatus: 'VERIFIED' as const } : {}),
         ...(input.linkedToOtherRecords ? { OR: [{ inventoryItemId: { not: null } }, { warrantyId: { not: null } }, { policyId: { not: null } }] } : {}),
       },

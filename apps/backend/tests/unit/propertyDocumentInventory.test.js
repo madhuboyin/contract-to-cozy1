@@ -27,6 +27,8 @@ function install(records = [], legacyDocs = []) {
   prismaModule.prisma = new Proxy({}, { get(_t, model) {
     if (model === 'then') return undefined;
     if (model === 'document') return { findMany: async (args) => { documentQueries.push(args); return legacyRows; } };
+    // The legacy branch leaves out documents already copied into Home Records, by checksum; none are copies in these homes.
+    if (model === 'propertyRecordVersion') return { findMany: async () => [] };
     throw new Error(`Unexpected prisma.${String(model)} access`);
   } });
 }
@@ -89,6 +91,7 @@ function installSignals({ recordCount = 0, legacyCount = 0, recordLatest = null,
     if (model === 'then') return undefined;
     if (model === 'propertyRecord') return { count: async (args) => { calls.recordCount.push(args); return recordCount; }, findFirst: async (args) => { calls.recordFind.push(args); return recordLatest; } };
     if (model === 'document') return { count: async (args) => { calls.documentCount.push(args); return legacyCount; }, findFirst: async (args) => { calls.documentFind.push(args); return legacyLatest; } };
+    if (model === 'propertyRecordVersion') return { findMany: async () => [] };
     throw new Error(`Unexpected prisma.${String(model)} access`);
   } });
   return calls;
