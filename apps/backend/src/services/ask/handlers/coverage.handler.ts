@@ -12,6 +12,7 @@ import { findCoverageComparison } from '../../coverageComparison.service';
 import { COVERAGE_COMMAND_ACTION_IDS, COVERAGE_COMMAND_MESSAGES, COVERAGE_COMPARISON_ENTITY_TYPE, COVERAGE_PROPERTY_ENTITY_TYPE } from '../support/coverageCommand';
 import { type AskOperationResult } from '../askOperationRegistry';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
+import { COVERAGE_ITEM_ANALYSIS_ACTION_ID, COVERAGE_ITEM_ANALYSIS_MESSAGE } from '../support/coverageAnalysisRun';
 import { evaluateFeatureContext } from '../../../modules/propertyContext/application/evaluateFeatureContext';
 import { APIError } from '../../../middleware/error.middleware';
 import { humanDate, money } from '../askFormatting';
@@ -119,7 +120,10 @@ async function coverageResult(userId: string, propertyId: string, message: strin
           style: 'PRIMARY' as const,
           interactionType: 'MUTATE_RECORD' as const,
           operationId: 'COVERAGE_GAPS' as const,
-        }],
+        }, ...(group === 'NO_COVERAGE' || group === 'EXPIRED' || group === 'EXPIRING_SOON' ? [{
+          id: COVERAGE_ITEM_ANALYSIS_ACTION_ID, label: 'Is coverage worth it?', message: COVERAGE_ITEM_ANALYSIS_MESSAGE, style: 'SECONDARY' as const, interactionType: 'MUTATE_RECORD' as const,
+          operationId: 'COVERAGE_ANALYSIS_RUN' as const, actionId: COVERAGE_ITEM_ANALYSIS_ACTION_ID, entityType: 'INVENTORY_ITEM', entityId: item.inventoryItemId,
+        }] : [])],
       })),
     }];
   });

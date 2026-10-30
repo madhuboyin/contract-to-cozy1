@@ -233,3 +233,55 @@ test('the coverage answer shows the latest saved analysis as text with the run a
     assert.equal(isAskActionApplicable({ action: { id, label: 'x', interactionType: 'START_WORKFLOW', message: 'm', operationId: 'COVERAGE_ANALYSIS_RUN', style: 'SECONDARY' }, operationId, propertyId: 'p1', householdRole: 'CONTRIBUTOR', authoritativeSourceAvailable: true }), true, id);
   }
 });
+
+test('item coverage comparison (FRD v1.492): the form, a review of exactly the numbers entered, the page\'s item analysis with only those overrides, the gates\' own words, and a stale item refused', async () => {
+  const s = require('../../src/services/ask/support/coverageAnalysisRun.ts');
+  const { itemAnalysisResult } = require('../../src/services/ask/handlers/coverageAnalysisRun.handler.ts');
+  let item = { id: 'item-1', name: 'Water heater', coverageState: 'MISSING', updatedAt: new Date('2026-10-01T00:00:00Z') };
+  prisma.inventoryItem = { findFirst: async (args) => (args.where.id === item.id ? item : null) };
+  prisma.coverageAnalysis = { findFirst: async () => null };
+  CoverageIntelligenceService.prototype.runItemAnalysis = async function (...args) { runs.push(['item', ...args]); return { ...ANALYSIS, id: 'an-item', warranty: { expectedNetImpactUsd: -120, expectedAnnualRepairRiskUsd: 180, breakEvenMonths: 18.4, planningState: 'COMPARE_COST_INPUTS' } }; };
+  const own = (over = {}) => ({ surface: 'ASK_PAGE', operationId: OP, actionId: s.COVERAGE_ITEM_ANALYSIS_ACTION_ID, entityType: 'INVENTORY_ITEM', entityId: 'item-1', ...over });
+  try {
+    const form = await propose(own(), s.COVERAGE_ITEM_ANALYSIS_MESSAGE);
+    assert.equal(form.status, 'NEEDS_CONTEXT');
+    assert.equal(form.captureRequests[0].captureKey, s.COVERAGE_ITEM_ANALYSIS_CAPTURE_KEY);
+    assert.equal(runs.length, 0);
+    assert.equal((await itemAnalysisResult('u1', 'p1', own(), { coverageType: 'NOPE', riskTolerance: 'MEDIUM' })).reasonCode, 'COVERAGE_ITEM_ANALYSIS_INPUT_INVALID');
+    assert.equal((await itemAnalysisResult('u1', 'p1', own(), { coverageType: 'WARRANTY', riskTolerance: 'MEDIUM', annualCostUsd: -5 })).reasonCode, 'COVERAGE_ITEM_ANALYSIS_INPUT_INVALID');
+    const review = await itemAnalysisResult('u1', 'p1', own(), { coverageType: 'WARRANTY', riskTolerance: 'LOW', annualCostUsd: '450', serviceFeeUsd: '', expectedRemainingYears: 6 });
+    assert.equal(review.status, 'NEEDS_CONFIRMATION');
+    assert.deepEqual(review.confirmation.fields.slice(0, 4).map((f) => f.value), ['Water heater', 'A warranty', '$450', 'From your home records']);
+    assert.match(review.confirmation.description, /does not buy coverage/);
+    assert.equal(runs.length, 0);
+    const done = await confirmCapabilityInvoke(OP, ctx(review.parameters));
+    assert.deepEqual(runs[0].slice(0, 3), ['item', 'p1', 'item-1']);
+    assert.deepEqual(runs[0][4], { coverageType: 'WARRANTY', riskTolerance: 'LOW', annualCostUsd: 450, expectedRemainingYears: 6 });
+    assert.equal(done.artifactType, 'COVERAGE_ITEM_ANALYSIS');
+    assert.ok(done.result.blocks[0].details.some((d) => d.value === '-$120'));
+    assert.ok(done.result.blocks[0].details.some((d) => d.label === 'Months to break even' && d.value === '18'));
+    assert.deepEqual(reports, [], 'no journey step is touched');
+    item = { ...item, updatedAt: new Date('2026-10-20T00:00:00Z') };
+    await assert.rejects(() => confirmCapabilityInvoke(OP, ctx(review.parameters)), (e) => e.code === 'ASK_CONTEXT_VERSION_CONFLICT');
+    // Not ready, missing, a viewer, a typed request and another action do not start it.
+    item = { ...item, coverageState: 'MANAGED_ELSEWHERE' };
+    assert.equal((await propose(own(), s.COVERAGE_ITEM_ANALYSIS_MESSAGE)).reasonCode, 'COVERAGE_ITEM_NOT_READY');
+    item = { ...item, coverageState: 'MISSING' };
+    assert.equal((await propose(own({ entityId: 'nope' }), s.COVERAGE_ITEM_ANALYSIS_MESSAGE)).reasonCode, 'COVERAGE_ITEM_NOT_FOUND');
+    assert.equal((await propose(own(), 'Is coverage worth it?')).reasonCode, 'COVERAGE_ANALYSIS_STEP_REQUIRED');
+    role = 'VIEWER';
+    assert.match((await propose(own(), s.COVERAGE_ITEM_ANALYSIS_MESSAGE)).reasonCode, /PERMISSION_REQUIRED/);
+    role = 'CONTRIBUTOR';
+    // The page's own gate refuses (an incomplete item): the household gets its words.
+    featureContext.evaluateFeatureContext = async () => ({ canExecute: false });
+    const refused = await itemAnalysisResult('u1', 'p1', own(), { coverageType: 'SERVICE_PLAN', riskTolerance: 'MEDIUM' });
+    await assert.rejects(() => confirmCapabilityInvoke(OP, ctx(refused.parameters)), (e) => /Complete the item coverage information/.test(e.message) && e.code === 'ASK_CONFIRMATION_NOT_ACTIVE');
+  } finally { prisma.coverageAnalysis = undefined; }
+});
+
+test('the coverage gap cards offer "Is coverage worth it?" only to a contributor or owner and only where coverage is missing or ending', () => {
+  const source = fs.readFileSync(require.resolve('../../src/services/ask/handlers/coverage.handler.ts'), 'utf8');
+  assert.match(source, /access\.role === HouseholdRole\.VIEWER \? undefined/);
+  assert.match(source, /group === 'NO_COVERAGE' \|\| group === 'EXPIRED' \|\| group === 'EXPIRING_SOON'/);
+  assert.match(source, /operationId: 'COVERAGE_ANALYSIS_RUN' as const, actionId: COVERAGE_ITEM_ANALYSIS_ACTION_ID, entityType: 'INVENTORY_ITEM', entityId: item\.inventoryItemId/);
+});

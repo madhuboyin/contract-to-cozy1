@@ -75,6 +75,8 @@ import { priceCommandResult } from '../handlers/priceFinalizationCommands.handle
 import { buyerNegotiationResult } from '../handlers/negotiationShieldBuyerCommands.handler';
 import { permitCommandResult } from '../handlers/permitTrackerCommands.handler';
 import { permitExtraCommandResult } from '../handlers/permitTrackerExtraCommands.handler';
+import { itemAnalysisResult } from '../handlers/coverageAnalysisRun.handler';
+import { COVERAGE_ITEM_ANALYSIS_ACTION_ID, COVERAGE_ITEM_ANALYSIS_CAPTURE_KEY } from '../support/coverageAnalysisRun';
 import { PERMIT_EXTRA_CAPTURE_KEY, isPermitExtraActionId, type PermitExtraActionId } from '../support/permitTrackerExtra';
 import { upgradeCommandResult } from '../handlers/homeUpgradeCommands.handler';
 import { coverageCommandResult } from '../handlers/coverageCommands.handler';
@@ -1516,6 +1518,19 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     captureId = input.idempotencyKey;
     capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
     canonicalOwner = 'NegotiationShieldBuyer';
+  } else if (execution.operationId === 'COVERAGE_ANALYSIS_RUN' && input.captureKey === COVERAGE_ITEM_ANALYSIS_CAPTURE_KEY) {
+    // The item coverage comparison's numbers (FRD v1.492), for the item the stored launch named.
+    const storedParameters = execution.parametersJson && typeof execution.parametersJson === 'object' && !Array.isArray(execution.parametersJson) ? execution.parametersJson as Record<string, unknown> : {};
+    const itemLaunch = storedParameters.coverageItemLaunch && typeof storedParameters.coverageItemLaunch === 'object' && !Array.isArray(storedParameters.coverageItemLaunch)
+      ? storedParameters.coverageItemLaunch as { entityId?: unknown; sourceExecutionId?: unknown } : null;
+    if (!itemLaunch || typeof itemLaunch.entityId !== 'string') throw Object.assign(new Error('This form is no longer active. Choose the action again.'), { code: 'ASK_CAPTURE_NOT_ACTIVE' });
+    result = await itemAnalysisResult(userId, execution.propertyId, {
+      surface: 'ASK_PAGE', operationId: 'COVERAGE_ANALYSIS_RUN', actionId: COVERAGE_ITEM_ANALYSIS_ACTION_ID, entityType: 'INVENTORY_ITEM', entityId: itemLaunch.entityId,
+      sourceExecutionId: typeof itemLaunch.sourceExecutionId === 'string' ? itemLaunch.sourceExecutionId : undefined,
+    } as never, input.answer);
+    captureId = input.idempotencyKey;
+    capturedContextVersion = typeof result.contextVersion === 'string' ? result.contextVersion : input.expectedContextVersion;
+    canonicalOwner = 'CoverageIntelligence';
   } else if (execution.operationId === 'PERMIT_TRACKER_COMMAND' && input.captureKey === PERMIT_EXTRA_CAPTURE_KEY) {
     // The extra permit steps' forms (record work, add or update an inspection step; FRD v1.488), chosen by the stored launch's action.
     const access = await ensurePropertyAccess(userId, execution.propertyId);
