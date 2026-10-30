@@ -87,3 +87,15 @@ export function renovationExploreServiceInput(form: RenovationExploreForm, idemp
   };
 }
 export const exploreGoalLabels = (form: RenovationExploreForm) => selectedGoalIds(form).map(goalLabel);
+
+// Side by side (FRD v1.493): Desktop lets the household tick up to three ideas to compare. Ask's cards have no multi-select, so the shortlist is the ideas the household
+// saved: up to three, saved ones first, then new ones, never set-aside ideas or ideas that already have a plan. Pure; a read that writes nothing.
+export const RENOVATION_IDEAS_COMPARE_ACTION_ID = 'renovation-ideas-compare';
+export const RENOVATION_IDEAS_COMPARE_MESSAGE = 'Compare my upgrade ideas side by side.';
+export const RENOVATION_COMPARE_LIMIT = 3;
+export function pickIdeasToCompare<T extends { status: string; position?: number }>(options: readonly T[]): { picked: T[]; savedCount: number; activeCount: number } {
+  const byPosition = (a: T, b: T) => (a.position ?? 0) - (b.position ?? 0);
+  const saved = options.filter((option) => option.status === 'SAVED').sort(byPosition);
+  const fresh = options.filter((option) => option.status === 'GENERATED').sort(byPosition);
+  return { picked: [...saved, ...fresh].slice(0, RENOVATION_COMPARE_LIMIT), savedCount: saved.length, activeCount: saved.length + fresh.length };
+}

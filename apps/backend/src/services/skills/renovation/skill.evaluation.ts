@@ -143,7 +143,8 @@ export const RENOVATION_SKILL_EVALUATION = deepFreezeSkillPackage({
     "PROGRESS",
     "EVIDENCE",
     "BOUNDARY",
-    "CAPABILITY_LIST"
+    "CAPABILITY_LIST",
+    "COMPARISON"
   ],
   "expectedCanonicalCalls": [
     {

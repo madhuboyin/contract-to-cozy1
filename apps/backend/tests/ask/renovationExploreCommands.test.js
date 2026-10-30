@@ -207,3 +207,43 @@ test('the same goal twice is refused, and what is missing from the home record i
     assert.ok(!JSON.stringify(blocks[1]).includes('/dashboard'));
   } finally { s.restore(); }
 });
+
+test('side by side (FRD v1.493): the saved ideas first, then new ones, at most three, never set-aside or planned ideas; a read with no link; offered only with two to compare', async () => {
+  const { renovationIdeasCompareResult } = require('../../src/services/ask/handlers/renovationExploreCommands.handler.ts');
+  const { capabilityInvoke: invokeCap } = require('../../src/services/ask/capabilityHandlerRegistry.ts');
+  const o = (id, position, status, over = {}) => ({ id, position, title: `Idea ${id}`, description: `About ${id}`, status, costMinCents: 100000 * (position + 1), costMaxCents: 200000 * (position + 1), timeline: '2 weeks', whyThisFits: `Fits ${id}`, professionalToConsult: 'Contractor', permitGuidance: 'Likely', evidenceSource: 'AI_ESTIMATE', confidence: 'LOW', benefits: [], renovationCaseId: null, ...over });
+  const exploration = { id: 'exp-1', goals: ['x'], missingFacts: [], options: [o('a', 0, 'GENERATED'), o('b', 1, 'SAVED'), o('c', 2, 'REJECTED'), o('d', 3, 'SELECTED'), o('e', 4, 'SAVED'), o('f', 5, 'GENERATED'), o('g', 6, 'GENERATED')] };
+  const picked = command.pickIdeasToCompare(exploration.options);
+  assert.deepEqual(picked.picked.map((x) => x.id), ['b', 'e', 'a']);
+  assert.equal(picked.savedCount, 2); assert.equal(picked.activeCount, 5);
+  let s = stubs({ exploration });
+  try {
+    const out = await renovationIdeasCompareResult('prop-1');
+    assert.equal(out.status, 'ANSWERED');
+    assert.match(out.blocks[0].body, /2 more ideas are not shown: save the ones you want side by side/);
+    const comparison = out.blocks[1];
+    assert.equal(comparison.type, 'COMPARISON');
+    assert.deepEqual(comparison.options.map((x) => x.label), ['Idea b', 'Idea e', 'Idea a']);
+    assert.deepEqual(comparison.options[0].attributes.map((x) => x.label), ['Status', 'Estimated cost', 'Timeline', 'Talk to', 'Permits', 'Why it fits', 'Source']);
+    assert.equal(comparison.options[0].attributes[1].value, '$2,000 to $4,000');
+    assert.equal(comparison.options[0].attributes[6].tone, 'CAUTION');
+    assert.ok(comparison.options.every((x) => x.badge === null), 'no idea is ranked');
+    assert.ok(!JSON.stringify(out).includes('/dashboard'));
+    // The header offers it (to a viewer too: it is a read) and the declared message reaches it through the readiness op.
+    const [viewerBlock] = await renovationExploreBlocks('prop-1', false);
+    assert.deepEqual(viewerBlock.actions.map((a) => a.id), [command.RENOVATION_IDEAS_COMPARE_ACTION_ID]);
+    const [ownerBlock] = await renovationExploreBlocks('prop-1', true);
+    assert.deepEqual(ownerBlock.actions.map((a) => a.id), [command.RENOVATION_IDEAS_COMPARE_ACTION_ID, IDS.START]);
+    const viaOp = await invokeCap('RENOVATION_PERMIT_READINESS', { userId: 'user-1', propertyId: 'prop-1', message: command.RENOVATION_IDEAS_COMPARE_MESSAGE }, { propertyAccess: { role: 'VIEWER' } });
+    assert.equal(viaOp.blocks[1].type, 'COMPARISON');
+    assert.equal(isAskActionApplicable({ action: { id: command.RENOVATION_IDEAS_COMPARE_ACTION_ID, label: 'x', interactionType: 'START_WORKFLOW', message: 'm', operationId: 'RENOVATION_PERMIT_READINESS', style: 'SECONDARY' }, operationId: 'RENOVATION_PERMIT_READINESS', propertyId: 'prop-1', householdRole: 'VIEWER', authoritativeSourceAvailable: true }), true);
+  } finally { s.restore(); }
+  s = stubs({ exploration: { ...exploration, options: [o('a', 0, 'SAVED'), o('c', 1, 'REJECTED')] } });
+  try {
+    assert.equal((await renovationIdeasCompareResult('prop-1')).reasonCode, 'RENOVATION_IDEAS_COMPARE_NOT_ENOUGH');
+    const [block] = await renovationExploreBlocks('prop-1', true);
+    assert.deepEqual(block.actions.map((a) => a.id), [IDS.START], 'one idea cannot be compared');
+  } finally { s.restore(); }
+  s = stubs({ exploration: null });
+  try { assert.equal((await renovationIdeasCompareResult('prop-1')).reasonCode, 'RENOVATION_IDEAS_COMPARE_NOT_ENOUGH'); } finally { s.restore(); }
+});

@@ -15,7 +15,7 @@ import { logger } from '../../../lib/logger';
 import { convertOptionToCase, createExploration, updateOptionDisposition } from '../../renovationExplore.service';
 import {
   exploreGoalLabels, optionEntityId, parseOptionEntityId, parseRenovationExploreAnswer, RENOVATION_EXPLORE_ACTION_IDS, RENOVATION_EXPLORE_CAPTURE_KEY, RENOVATION_EXPLORE_MESSAGES,
-  RENOVATION_EXPLORE_RESPONSIBILITIES, RENOVATION_GOALS, RENOVATION_OPTION_ENTITY_TYPE, RENOVATION_OPTION_STATUS_LABELS, renovationExploreServiceInput,
+  RENOVATION_EXPLORE_RESPONSIBILITIES, RENOVATION_IDEAS_COMPARE_ACTION_ID, RENOVATION_IDEAS_COMPARE_MESSAGE, pickIdeasToCompare, RENOVATION_GOALS, RENOVATION_OPTION_ENTITY_TYPE, RENOVATION_OPTION_STATUS_LABELS, renovationExploreServiceInput,
   type RenovationExploreActionId, type RenovationExploreForm,
 } from '../support/renovationExploreCommand';
 import { RENOVATION_RESPONSIBILITY_LABELS } from '../support/renovationCaseStart';
@@ -202,6 +202,55 @@ export async function confirmRenovationExploreCommand(ctx: ConfirmCapabilityCont
   return { result, artifactType, artifactId, refreshedExecutions: refresh.refreshedExecutions };
 }
 
+const SOURCE_LABELS: Record<string, string> = { AI_ESTIMATE: 'AI estimate', BASELINE_HEURISTIC: 'Baseline estimate' };
+const clip = (text: string, max: number) => (text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text);
+
+/** The saved (then new) ideas side by side, from what is stored (a read; nothing is generated). Desktop's comparison shows title, cost range, timeline and why it fits; Ask adds who to talk to and permits. */
+export async function renovationIdeasCompareResult(propertyId: string): Promise<AskOperationResult> {
+  const back = { ...ideasAction, style: 'SECONDARY' as const };
+  let exploration: any = null;
+  try {
+    exploration = await database.renovationExploration.findFirst({
+      where: { propertyId, archivedAt: null }, orderBy: { createdAt: 'desc' },
+      select: { id: true, options: { orderBy: { position: 'asc' }, select: { id: true, position: true, title: true, description: true, status: true, costMinCents: true, costMaxCents: true, timeline: true, whyThisFits: true, professionalToConsult: true, permitGuidance: true, evidenceSource: true, confidence: true } } },
+    });
+  } catch { exploration = null; }
+  const { picked, savedCount, activeCount } = pickIdeasToCompare((exploration?.options ?? []) as Array<{ status: string; position: number } & Record<string, any>>);
+  if (picked.length < 2) {
+    return {
+      status: 'NOT_APPLICABLE', reasonCode: 'RENOVATION_IDEAS_COMPARE_NOT_ENOUGH',
+      blocks: [{ type: 'SUMMARY', id: 'renovation-ideas-compare-empty', title: 'Two ideas are needed to compare', body: activeCount ? 'Only one idea is on your list. Explore more ideas, then ask to compare them.' : 'There are no upgrade ideas to compare yet. Explore some first; then save the ones you want side by side.', tone: 'DEFAULT', actions: [back] }],
+      suggestions: [],
+    };
+  }
+  const options = picked.map((option) => {
+    const lowConfidence = String(option.confidence ?? '').toUpperCase() === 'LOW';
+    return {
+      id: option.id, label: option.title, summary: clip(String(option.description ?? ''), 200), badge: null, actions: [],
+      attributes: [
+        { label: 'Status', value: RENOVATION_OPTION_STATUS_LABELS[option.status] ?? option.status, tone: 'DEFAULT' as const },
+        { label: 'Estimated cost', value: range(option.costMinCents, option.costMaxCents) ?? 'Not estimated', tone: 'DEFAULT' as const },
+        { label: 'Timeline', value: option.timeline || 'Not estimated', tone: 'DEFAULT' as const },
+        { label: 'Talk to', value: option.professionalToConsult || 'Not stated', tone: 'DEFAULT' as const },
+        { label: 'Permits', value: option.permitGuidance || 'Not stated', tone: 'DEFAULT' as const },
+        { label: 'Why it fits', value: clip(String(option.whyThisFits ?? ''), 220) || 'Not stated', tone: 'DEFAULT' as const },
+        { label: 'Source', value: `${SOURCE_LABELS[String(option.evidenceSource)] ?? 'Estimate'}${option.confidence ? `, ${String(option.confidence).toLowerCase()} confidence` : ''}`, tone: lowConfidence ? 'CAUTION' as const : 'DEFAULT' as const },
+      ],
+    };
+  });
+  const more = activeCount - picked.length;
+  return {
+    status: 'ANSWERED',
+    blocks: [
+      { type: 'SUMMARY', id: 'renovation-ideas-compare-summary', title: `Comparing ${picked.length} upgrade ideas`,
+        body: `${savedCount >= 2 ? 'These are the ideas you saved.' : 'Saved ideas come first, then new ones.'}${more > 0 ? ` ${more} more ${more === 1 ? 'idea is' : 'ideas are'} not shown: save the ones you want side by side.` : ''} Costs and timelines are estimates and starting points, not advice or quotes.`,
+        tone: 'DEFAULT', actions: [back] },
+      { type: 'COMPARISON', id: 'renovation-ideas-compare', title: 'Side by side', description: 'No idea is ranked: which fits depends on your goals, budget and timing.', options, actions: [] },
+    ],
+    suggestions: [],
+  };
+}
+
 const OPTION_ACTION_LABELS = { SAVE: 'Save this idea', SET_ASIDE: 'Set aside', CREATE_PLAN: 'Create a plan' } as const;
 const range = (min: number | null, max: number | null) => (min === null || max === null ? null : min === max ? money(min / 100) : `${money(min / 100)} to ${money(max / 100)}`);
 
@@ -221,6 +270,11 @@ export async function renovationExploreBlocks(propertyId: string, canChange: boo
   }] : [];
   const options: any[] = exploration?.options ?? [];
   if (!options.length && !exploreAction.length) return [];
+  // A read, offered to anyone who can see the ideas, once there are two to compare.
+  const compareAction = pickIdeasToCompare(options).picked.length >= 2 ? [{
+    id: RENOVATION_IDEAS_COMPARE_ACTION_ID, label: 'Compare ideas side by side', interactionType: 'START_WORKFLOW' as const, message: RENOVATION_IDEAS_COMPARE_MESSAGE,
+    operationId: 'RENOVATION_PERMIT_READINESS' as const, style: 'SECONDARY' as const,
+  }] : [];
   const missing = options.length && Array.isArray(exploration?.missingFacts)
     ? [...new Set((exploration.missingFacts as Array<{ factKey?: unknown }>).map((fact) => (typeof fact.factKey === 'string' ? factLabel(fact.factKey) : '')).filter(Boolean))].slice(0, 6)
     : [];
@@ -251,6 +305,6 @@ export async function renovationExploreBlocks(propertyId: string, canChange: boo
         })),
       })),
     }] : [],
-    actions: exploreAction,
+    actions: [...compareAction, ...exploreAction],
   }, ...missingBlock];
 }

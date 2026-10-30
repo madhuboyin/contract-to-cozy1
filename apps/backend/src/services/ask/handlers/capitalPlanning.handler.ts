@@ -18,7 +18,8 @@ import { inventoryAddItemAction } from './inventoryAskActions';
 import { askCaptureRequest, capabilityResult, ensurePropertyAccess, isCapitalTimelineAnalysisStale, parseCapitalTimelineHorizonRequest } from '../askHandlerSupport';
 import { HomeCapitalTimelineService } from '../../homeCapitalTimeline.service';
 import { propertyTaxActionBlocks } from './propertyTaxActionCommands.handler';
-import { renovationExploreBlocks } from './renovationExploreCommands.handler';
+import { renovationExploreBlocks, renovationIdeasCompareResult } from './renovationExploreCommands.handler';
+import { RENOVATION_IDEAS_COMPARE_MESSAGE } from '../support/renovationExploreCommand';
 import { propertyTaxAppealReadinessService } from '../../propertyTax/propertyTaxAppealReadiness.service';
 import { propertyTaxAppealCaseService } from '../../propertyTax/propertyTaxAppealCase.service';
 import {
@@ -652,6 +653,7 @@ registerCapabilityHandler('property-tax.appeal-readiness', async (envelope) => p
 registerCapabilityHandler('renovation-permit.readiness', async (envelope, deps) => {
   const access = deps.propertyAccess ?? await ensurePropertyAccess(envelope.userId, envelope.propertyId!);
   const canChange = access.role !== HouseholdRole.VIEWER;
+  if (envelope.message === RENOVATION_IDEAS_COMPARE_MESSAGE) return renovationIdeasCompareResult(envelope.propertyId!);
   const result = await renovationPermitReadinessResult(envelope.propertyId!, envelope.message, canChange, access.role === HouseholdRole.OWNER);
   // FRD v1.487: the upgrade ideas explored for this home sit beside the readiness answer (a read; nothing is generated here).
   if (Array.isArray(result.blocks) && result.blocks.length) result.blocks.push(...await renovationExploreBlocks(envelope.propertyId!, canChange) as AskPresentationBlock[]);

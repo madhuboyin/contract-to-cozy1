@@ -66,7 +66,8 @@ export const RENOVATION_SKILL = Object.freeze({
     "PROGRESS",
     "EVIDENCE",
     "BOUNDARY",
-    "CAPABILITY_LIST"
+    "CAPABILITY_LIST",
+    "COMPARISON"
   ],
   "dependencies": [
     { "type": "CONTEXT_PROVIDER", "id": PROPERTY_IDENTITY_CONTEXT_PROVIDER.id, "version": PROPERTY_IDENTITY_CONTEXT_PROVIDER.version, "required": true },
