@@ -42,6 +42,7 @@ import type { AskBlockRenderer } from './types';
 import { AskCollection, AskCollectionState } from '../presentation/AskLayoutPrimitives';
 import { AttachEvidenceControl, EVIDENCE_ATTACH_MESSAGES } from '../AttachEvidenceControl';
 import { FinancingNumbers, FinancingOptions, FinancingPlanner, FinancingScenarios } from '../FinancingOverviewResult';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
 // Blocks whose items carry longer text revealed on demand (`item.detail`). The Negotiation Shield draft is collapsed by default so a long
 // message does not push the analysis down; the producer sets the id, the client only implements the expand/collapse.
@@ -297,12 +298,12 @@ function HomeUpgradePlannerList({ block, disabled, onItemAction }: {
         {['Upfront cost', 'Annual savings', 'Payback'].map((label) => <div key={label} className="flex items-baseline justify-between gap-3 lg:block"><span className="text-[10px] font-bold uppercase tracking-wide text-slate-400 lg:hidden">{label}</span><span className={cn('text-sm font-medium tabular-nums', attributes[label] === 'Not calculated' ? 'text-slate-400' : 'text-slate-800')}>{attributes[label] ?? '—'}</span></div>)}
         {actions.length > 0 ? <div className="flex items-center justify-start gap-2 lg:justify-end">
           {primary && <button type="button" disabled={disabled} onClick={() => run(item, primary)} className={itemActionClass(primary.style)}>{primary.label}</button>}
-          {overflow.length > 0 && <details className="relative">
-            <summary className="flex min-h-8 cursor-pointer list-none items-center rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50">More<span className="sr-only"> actions for {item.title}</span></summary>
-            <div className="absolute right-0 z-20 mt-1 min-w-44 space-y-1 rounded-lg border border-slate-200 bg-white p-1.5 shadow-lg">
-              {overflow.map((action) => <button key={action.id} type="button" disabled={disabled} onClick={() => run(item, action)} className="block min-h-8 w-full rounded-md px-2.5 py-1 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">{action.label}</button>)}
-            </div>
-          </details>}
+          {overflow.length > 0 && <DropdownMenu modal={false}>
+            <DropdownMenuTrigger asChild><button type="button" disabled={disabled} aria-label={`More actions for ${item.title}`} className="flex min-h-8 items-center rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">More</button></DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-44">
+              {overflow.map((action) => <DropdownMenuItem key={action.id} disabled={disabled} onSelect={() => run(item, action)} className="min-h-8 text-xs font-semibold text-slate-700">{action.label}</DropdownMenuItem>)}
+            </DropdownMenuContent>
+          </DropdownMenu>}
         </div> : <span className="hidden text-right text-xs text-slate-400 lg:block">View only</span>}
       </li>
     );

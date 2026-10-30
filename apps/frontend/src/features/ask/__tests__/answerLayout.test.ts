@@ -57,3 +57,9 @@ test('keeps the room map aligned with Home Actions instead of widening for its p
   expect(askAnswerWidth([summary, rooms])).toBe('STANDARD');
   expect(askAnswerWidthClass(askAnswerWidth([summary, rooms]))).toContain('max-w-[960px]');
 });
+
+test('keeps the upgrade planner aligned with the standard Home Actions measure', () => {
+  const planner: AskPresentationBlock = { type: 'GROUPED_LIST', id: 'home-upgrade-options', title: 'Upgrade planner options', sections: [], filters: [], actions: [] };
+  expect(askAnswerWidth([summary, planner])).toBe('STANDARD');
+  expect(askAnswerWidthClass(askAnswerWidth([summary, planner]))).toContain('max-w-[960px]');
+});

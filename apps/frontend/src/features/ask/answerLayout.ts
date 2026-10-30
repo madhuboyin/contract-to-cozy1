@@ -37,8 +37,9 @@ export function askAnswerWidth(blocks: AskPresentationBlock[]): AskAnswerWidth {
   // aligned metadata, state and action columns, so give the list the wider
   // workspace measure while retaining the ordinary single-column mobile flow.
   if (blocks.some((block) => block.id === 'home-work-items')) return 'WIDE';
-  // The upgrade planner is a scan-heavy decision workspace with aligned cost, savings, payback and action columns.
-  if (blocks.some((block) => block.id === 'home-upgrade-options')) return 'WIDE';
+  // The upgrade planner's responsive columns fit the ordinary conversation measure. Keep it aligned with Home Actions instead of widening
+  // the whole turn, especially before any option has calculated results.
+  if (blocks.some((block) => block.id === 'home-upgrade-options')) return 'STANDARD';
   // Recurring costs are a four-way comparison and setup workspace. Its dedicated
   // responsive grid uses the extra desktop measure while remaining stacked on mobile.
   if (blocks.some((block) => block.id === 'savings-recurring-setup')) return 'WIDE';
