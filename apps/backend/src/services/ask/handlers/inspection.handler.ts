@@ -81,13 +81,45 @@ async function inspectionFindingsResult(userId: string, propertyId: string, mess
     prisma.inspectionFinding.count({ where }),
   ]);
   const findingActions = inspectionFindingItemActions(access.role);
-  if (findings.length === 0) return {
-    status: 'ANSWERED', reasonCode: 'NO_OPEN_INSPECTION_FINDINGS',
-    blocks: [{ type: 'EMPTY_STATE', id: 'inspection-findings-empty', title: filters.label ? `No open ${filters.label} inspection findings` : 'No open confirmed inspection findings', body: filters.label ? `Ask found no unresolved ${filters.label} findings from a homeowner-confirmed inspection report.` : 'Ask found no unresolved findings from a homeowner-confirmed inspection report.', actions: [] }], suggestions: [],
-  };
+  // Contributors and owners can add a report (the upload endpoint needs CONTRIBUTOR); viewers get no upload action.
+  const uploadActions = access.role === HouseholdRole.VIEWER ? [] : [{ id: 'inspection-report-upload', label: 'Upload inspection report', interactionType: 'OPEN_FILE_INTAKE' as const, style: 'PRIMARY' as const }];
+  if (findings.length === 0) {
+    const [reports, unfilteredOpen] = await Promise.all([
+      prisma.inspectionReport.findMany({ where: { propertyId, status: { not: 'ARCHIVED' } }, select: { status: true } }),
+      filters.label ? prisma.inspectionFinding.count({ where: { propertyId, status: { in: ['OPEN', 'ACCEPTED_AS_IS'] }, report: { status: 'CONFIRMED' } } }) : Promise.resolve(0),
+    ]);
+    const has = (status: string) => reports.some((report) => report.status === status);
+    const filtered = Boolean(filters.label) && unfilteredOpen > 0;
+    const seeReports = (style: 'PRIMARY' | 'SECONDARY', label = 'Review inspection reports') => ({ id: 'inspection-reports-open', label, interactionType: 'START_WORKFLOW' as const, message: 'Show my inspection reports', operationId: 'INSPECTION_REPORTS' as const, style });
+    const clearFilters = { id: 'inspection-findings-clear-filters', label: 'Clear filters', interactionType: 'START_WORKFLOW' as const, message: 'Show my open inspection findings', operationId: 'INSPECTION_FINDINGS' as const, style: 'PRIMARY' as const };
+    const upload = (style: 'PRIMARY' | 'SECONDARY') => uploadActions.map((action) => ({ ...action, style }));
+    let title: string; let body: string; let actions: Array<Record<string, unknown>>;
+    if (filtered) {
+      title = `No open ${filters.label} inspection findings`;
+      body = `Your other open findings are not ${filters.label}. Clear the filter to see all ${unfilteredOpen}.`;
+      actions = [clearFilters];
+    } else if (reports.length === 0) {
+      title = 'No inspection report yet';
+      body = access.role === HouseholdRole.VIEWER ? 'No inspection report has been added for this home. A contributor or owner can upload one.' : 'No inspection report has been added for this home. Upload a PDF (up to 10 MB), review what Cozy reads from it, and the findings you accept are listed here.';
+      actions = upload('PRIMARY');
+    } else if (has('PROCESSING') && !has('CONFIRMED') && !has('REVIEW_PENDING')) {
+      title = 'Your report is still processing';
+      body = 'Findings are listed here once the report has been read and you have confirmed it.';
+      actions = [seeReports('PRIMARY')];
+    } else if (has('REVIEW_PENDING') && !has('CONFIRMED')) {
+      title = 'A report is waiting for your review';
+      body = 'Findings are listed here after you confirm the report. Nothing from it is counted until then.';
+      actions = [seeReports('PRIMARY'), ...upload('SECONDARY')];
+    } else {
+      title = filters.label ? `No open ${filters.label} inspection findings` : 'No open findings';
+      body = filters.label ? `Ask found no unresolved ${filters.label} findings from a homeowner-confirmed inspection report.` : 'Every finding from your confirmed inspection reports is resolved or dismissed.';
+      actions = [seeReports('SECONDARY', 'See my inspection reports'), ...upload('SECONDARY')];
+    }
+    return { status: 'ANSWERED', reasonCode: 'NO_OPEN_INSPECTION_FINDINGS', blocks: [{ type: 'EMPTY_STATE', id: 'inspection-findings-empty', title, body, actions: actions as never }], suggestions: [] };
+  }
   return {
     status: 'ANSWERED', reasonCode: 'INSPECTION_FINDINGS_FOUND',
-    blocks: [{ type: 'GROUPED_LIST', filters: [], ...(findingActions.length ? { presentation: INSPECTION_FINDING_DECK_PRESENTATION } : {}), id: 'inspection-findings', title: filters.label ? `Open ${filters.label} inspection findings` : 'Open inspection findings', description: 'These findings come only from confirmed inspection reports. Open a finding to accept it as work, dismiss it, or mark it resolved.', sections: [{ id: 'open', title: 'Needs review', count: sourceTotal, items: findings.map((finding) => ({ id: finding.id, title: `${finding.homeSystem}: ${finding.inspectorDescription}`, description: `${String(finding.severity).toLowerCase()} · ${finding.report.inspectorName ?? 'Inspector'} · ${humanDate(finding.report.inspectionDate) ?? 'date unavailable'}`, meta: [`Disposition: ${String(finding.workDisposition).toLowerCase().replace(/_/g, ' ')}`], status: String(finding.status), href: null, entityType: 'INSPECTION_FINDING', parentId: finding.reportId, actions: inspectionFindingItemActionsFor(access.role, finding), ...inspectionFindingDeckFacts(finding, humanDate(finding.report.inspectionDate) ?? null) })) }], collection: collectionDescriptor({ sourceTotal, fetchedCount: findings.length, sections: [{ items: findings }], nextPageAvailable: false }), actions: [] }],
+    blocks: [{ type: 'GROUPED_LIST', filters: [], ...(findingActions.length ? { presentation: INSPECTION_FINDING_DECK_PRESENTATION } : {}), id: 'inspection-findings', title: filters.label ? `Open ${filters.label} inspection findings` : 'Open inspection findings', description: 'These findings come only from confirmed inspection reports. Open a finding to accept it as work, dismiss it, or mark it resolved.', sections: [{ id: 'open', title: 'Needs review', count: sourceTotal, items: findings.map((finding) => ({ id: finding.id, title: `${finding.homeSystem}: ${finding.inspectorDescription}`, description: `${String(finding.severity).toLowerCase()} · ${finding.report.inspectorName ?? 'Inspector'} · ${humanDate(finding.report.inspectionDate) ?? 'date unavailable'}`, meta: [`Disposition: ${String(finding.workDisposition).toLowerCase().replace(/_/g, ' ')}`], status: String(finding.status), href: null, entityType: 'INSPECTION_FINDING', parentId: finding.reportId, actions: inspectionFindingItemActionsFor(access.role, finding), ...inspectionFindingDeckFacts(finding, humanDate(finding.report.inspectionDate) ?? null) })) }], collection: collectionDescriptor({ sourceTotal, fetchedCount: findings.length, sections: [{ items: findings }], nextPageAvailable: false }), actions: uploadActions.map((action) => ({ ...action, style: 'SECONDARY' as const })) }],
     // No chips: the deck's own Accept / Dismiss / Resolve controls are the actions, and a chip here showed a raw finding id and reached viewers.
     suggestions: [],
   };

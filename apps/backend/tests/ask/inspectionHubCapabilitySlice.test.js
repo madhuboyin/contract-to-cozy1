@@ -26,16 +26,21 @@ const UPDATED_AT = new Date('2026-09-20T00:00:00.000Z');
 let accessRole;
 let finding;
 let calls;
+let reportRows;
+let openList;
+let openCount;
 
 function install() {
   accessRole = 'CONTRIBUTOR';
   finding = { id: 'finding-1', reportId: 'report-1', propertyId: 'p1', homeSystem: 'ROOF', inspectorDescription: 'Missing shingles on the north slope', severity: 'MAJOR', status: 'OPEN', workDisposition: 'PENDING_REVIEW', updatedAt: UPDATED_AT, report: { inspectionDate: new Date('2026-09-01'), inspectorName: 'Pat' } };
   calls = { resolve: [], accept: [], dismiss: [] };
+  reportRows = [{ status: 'CONFIRMED' }]; openList = null; openCount = null;
   const models = {
     askExecution: { findMany: async () => [] },
+    inspectionReport: { findMany: async () => reportRows },
     inspectionFinding: {
-      findMany: async () => [finding],
-      count: async () => 1,
+      findMany: async () => openList ?? [finding],
+      count: async () => openCount ?? 1,
       findFirst: async ({ where }) => (where.id === finding.id ? finding : null),
     },
   };
@@ -119,11 +124,47 @@ test('finding rows carry identity, their report, a working report link and every
   assert.equal(row.parentId, 'report-1');
   assert.equal(row.href, null, 'Ask links to no desktop Inspection Hub page');
   assert.deepEqual(row.actions.map((action) => action.id), ['finding-accept', 'finding-dismiss', 'finding-resolve']);
-  assert.deepEqual(contributor.actions, [], 'no desktop Inspection Hub link action');
+  assert.deepEqual(contributor.actions.map((action) => [action.id, action.interactionType]), [['inspection-report-upload', 'OPEN_FILE_INTAKE']], 'upload stays in the list header; no desktop Inspection Hub link action');
   assert.ok(!JSON.stringify(contributor).includes('/dashboard/'));
   assert.ok(!JSON.stringify(contributor).includes('/inspection"') && !JSON.stringify(contributor).includes('/inspection?'), 'no link to the nonexistent /inspection route');
   accessRole = 'VIEWER';
-  assert.deepEqual((await list()).sections[0].items[0].actions, []);
+  const viewer = await list();
+  assert.deepEqual(viewer.sections[0].items[0].actions, []);
+  assert.deepEqual(viewer.actions, [], 'viewers get no upload action');
+});
+
+test('an empty findings list says why and offers the matching next step', async () => {
+  const empty = async (message = 'Show my open inspection findings') => (await capabilityInvoke('INSPECTION_FINDINGS', { userId: 'u1', propertyId: 'p1', message })).blocks[0];
+  const ids = (block) => block.actions.map((action) => `${action.id}:${action.interactionType}:${action.operationId ?? ''}`);
+  openList = []; openCount = 0;
+  reportRows = [];
+  let block = await empty();
+  assert.equal(block.title, 'No inspection report yet');
+  assert.deepEqual(ids(block), ['inspection-report-upload:OPEN_FILE_INTAKE:']);
+  assert.equal(block.actions[0].style, 'PRIMARY');
+  accessRole = 'VIEWER';
+  block = await empty();
+  assert.deepEqual(block.actions, [], 'a viewer is told to ask a contributor, with no upload action');
+  assert.match(block.body, /contributor or owner/);
+  accessRole = 'CONTRIBUTOR';
+  reportRows = [{ status: 'PROCESSING' }];
+  block = await empty();
+  assert.equal(block.title, 'Your report is still processing');
+  assert.deepEqual(ids(block), ['inspection-reports-open:START_WORKFLOW:INSPECTION_REPORTS']);
+  reportRows = [{ status: 'REVIEW_PENDING' }];
+  block = await empty();
+  assert.equal(block.title, 'A report is waiting for your review');
+  assert.equal(ids(block)[0], 'inspection-reports-open:START_WORKFLOW:INSPECTION_REPORTS');
+  reportRows = [{ status: 'CONFIRMED' }];
+  block = await empty();
+  assert.equal(block.title, 'No open findings');
+  assert.match(block.body, /resolved or dismissed/);
+  assert.ok(ids(block).includes('inspection-report-upload:OPEN_FILE_INTAKE:'));
+  openCount = 4;
+  block = await empty('Show my open safety inspection findings');
+  assert.equal(block.actions[0].id, 'inspection-findings-clear-filters');
+  assert.equal(block.actions[0].operationId, 'INSPECTION_FINDINGS');
+  assert.match(block.body, /all 4/);
 });
 
 test('the typed finding actions are whitelisted and the desktop hub link is not', () => {
