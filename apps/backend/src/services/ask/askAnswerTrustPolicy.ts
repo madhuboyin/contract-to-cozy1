@@ -355,7 +355,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   // Manage a saved Home Upgrade Planner option (register P0 Home Digital Twin / Upgrade Planner): record the decision, rename, archive or restore, recalculate (queued job) and delete an archived option. Confirmation-gated, declared-action only; never by fuzzy retrieval.
   HOME_UPGRADE_COMMAND: new Set(['home-upgrade-back']),
   // Add, change and remove a permit record (register P0 Permits, slice PM-B). Records the REPORTED status; the official status is the authority's and is not set here. Confirmation-gated, declared-action only; never by fuzzy retrieval.
-  PERMIT_TRACKER_COMMAND: new Set(['permit-tracker-back']),
+  PERMIT_TRACKER_COMMAND: new Set(['permit-tracker-back', 'permit-fetch-status', 'permit-disclosure-status', 'document-add-first']),
   // Buyer-mode Negotiation Shield (register P0): start negotiating an inspection finding with the seller and record the seller's response and outcome. Confirmation-gated, declared-action only; never by fuzzy retrieval.
   NEGOTIATION_SHIELD_BUYER_COMMAND: new Set(['buyer-negotiation-back', 'buyer-negotiation-outcome']),
   // Record, change and finalize an accepted price (register P0 Price Finalization): from a Negotiation Shield review, a selected quote proposal or by hand. Confirmation-gated, declared-action only; never by fuzzy retrieval.
@@ -379,7 +379,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   // The permit list offers Add a permit (a SUMMARY action) and Change / Remove on a row to a contributor or owner.
   // The status board's next steps (FRD v1.319): refresh the board, correct one item; the install-date capture kept from the earlier slice.
   HOME_STATUS_BOARD: new Set(['status-board-refresh', 'status-board-correct', 'correct-installedOn', 'status-board-hidden', 'status-board-back-to-board']),
-  PERMIT_TRACKER_STATUS: new Set(['permit-tracker-add', 'permit-tracker-edit', 'permit-tracker-remove', 'permit-fetch-records', 'permit-flags-scan', 'permit-flag-add', 'permit-flag-research', 'permit-flag-remediate', 'permit-inspection-add', 'permit-inspection-update', 'permit-inspection-remove']),
+  PERMIT_TRACKER_STATUS: new Set(['permit-tracker-add', 'permit-tracker-edit', 'permit-tracker-remove', 'permit-fetch-records', 'permit-flags-scan', 'permit-flag-add', 'permit-flag-research', 'permit-flag-remediate', 'permit-inspection-add', 'permit-inspection-update', 'permit-inspection-remove', 'permit-flag-resolve', 'permit-official-status', 'permit-fetch-status', 'permit-disclosure-export', 'permit-disclosure-status']),
   COMMUNITY_UPDATES: new Set(['community-show-all', 'community-show-events', 'community-show-alerts', 'community-show-trash']),
   // The comparison answer offers Start a comparison / Record my decision, and the review answer offers Review my coverage, to a contributor or owner.
   COVERAGE_COMPARISON_STATUS: new Set(['coverage-start-comparison', 'coverage-record-decision', 'coverage-add-quote']),

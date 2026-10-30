@@ -15,6 +15,7 @@ import { CalmAnswerContext, CalmChromeContext, CalmReceiptContext, CalmSecondary
 import { BlockSequence, BlockView } from '../blocks/registry';
 import { ExportDownloadStrip } from '../ExportDownloadStrip';
 import { MaterialExportDownloadStrip } from '../MaterialExportDownloadStrip';
+import { PermitDisclosureDownloadStrip } from '../PermitDisclosureDownloadStrip';
 import { ResultViewContext, useResultView } from '@/features/ask/useResultView';
 import { canFoldResult, resultHeadline } from '@/features/ask/conversationView';
 import { askAnswerWidth, askAnswerWidthClass } from '@/features/ask/answerLayout';
@@ -352,6 +353,7 @@ export function ExecutionCard({
           {itemActionIssue && <p role="alert" className="text-xs font-semibold text-red-700">{itemActionIssue}</p>}
           <ExportDownloadStrip execution={execution} />
           <MaterialExportDownloadStrip execution={execution} />
+          <PermitDisclosureDownloadStrip execution={execution} />
         </div>
         {execution.status === 'NEEDS_PROPERTY' && <PropertySelectionCard executionId={execution.executionId} onCompleted={updateExecution} autoFocus={isJustUpdated} />}
         {execution.correctionCapabilities.retryResponse && <div><button type="button" disabled={loading} onClick={() => void (retryExecution ? retryExecution(execution) : ask(execution.question))} className="min-h-11 rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Try again with current records</button></div>}

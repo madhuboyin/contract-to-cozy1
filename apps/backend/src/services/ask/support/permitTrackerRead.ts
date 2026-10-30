@@ -29,5 +29,5 @@ export const PERMIT_OPEN_FLAG_STATUSES = ['UNKNOWN', 'FLAGGED', 'INVESTIGATING']
 
 // "show my permits", "what permits do I have", "list permit records", "open permit inspections", "unpermitted work", "do I have a permit for the roof".
 // Narrow on purpose: "do I need a permit for this?" and "is my renovation ready" are the readiness question, which keeps its route.
-const readPattern = /\b(?:show|list|see|view|review|what|which)\b.{0,25}\bpermits?\b(?!.{0,30}\b(?:need|require|required|ready|readiness|renovation|remodel|project|start|apply|file)\b)|\bmy permits\b|\bpermit (?:records?|history|list|inspections?)\b|\bunpermitted (?:work|flags?|items?)\b|\bdo i have (?:a |any )?(?:open )?permits?\b|\bopen permits?\b/i;
+const readPattern = /\b(?:show|list|see|view|review|what|which)\b.{0,25}\bpermits?\b(?!.{0,30}\b(?:need|require|required|ready|readiness|renovation|remodel|project|start|apply|file)\b)|\bmy permits\b|\bpermit (?:records?|history|list|inspections?)\b|\bunpermitted (?:work|flags?|items?)\b|\bdo i have (?:a |any )?(?:open )?permits?\b|\bopen permits?\b|\bpermit-record search\b|\bcheck on my permit disclosure report\b/i;
 export const isPermitTrackerReadRequest = (message: string): boolean => readPattern.test(message);
