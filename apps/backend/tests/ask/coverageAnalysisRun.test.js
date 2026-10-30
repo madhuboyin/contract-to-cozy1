@@ -178,3 +178,58 @@ test('the page\'s run routes call the same shared service and accept the step as
   assert.match(fs.readFileSync(require.resolve('../../src/routes/coverageAnalysis.routes.ts'), 'utf8'), /guidanceStepId: z\.string\(\)\.uuid\(\)\.optional\(\)/);
   assert.match(fs.readFileSync(require.resolve('../../src/routes/inventory.routes.ts'), 'utf8'), /guidanceStepId: z\.string\(\)\.uuid\(\)\.optional\(\)/);
 });
+
+test('on-demand run from the coverage answer (FRD v1.491): the whole home, reviewed then run through the shared service with no journey step, refused if another run landed meanwhile', async () => {
+  const { COVERAGE_PROPERTY_ANALYSIS_MESSAGE, COVERAGE_PROPERTY_ANALYSIS_ACTION_ID } = require('../../src/services/ask/support/coverageAnalysisRun.ts');
+  let latest = { id: 'an-0', computedAt: new Date('2026-10-01T00:00:00Z') };
+  prisma.coverageAnalysis = { findFirst: async () => latest };
+  const own = (over = {}) => ({ surface: 'ASK_PAGE', operationId: OP, actionId: COVERAGE_PROPERTY_ANALYSIS_ACTION_ID, entityType: 'COVERAGE_PROPERTY', entityId: 'p1', ...over });
+  try {
+    const review = await propose(own(), COVERAGE_PROPERTY_ANALYSIS_MESSAGE);
+    assert.equal(review.status, 'NEEDS_CONFIRMATION');
+    assert.equal(review.confirmation.fields[0].value, 'The whole home');
+    assert.match(review.confirmation.description, /says nothing about what a claim would pay/);
+    assert.equal(runs.length, 0);
+    const done = await confirmCapabilityInvoke(OP, ctx(review.parameters));
+    assert.equal(runs.length, 1);
+    assert.deepEqual(runs[0].slice(0, 2), ['property', 'p1']);
+    assert.deepEqual(tracked, ['run_analysis']);
+    assert.equal(reports.length, 0, 'no journey step is touched');
+    assert.equal(done.artifactType, 'COVERAGE_ANALYSIS');
+    assert.equal(done.result.blocks[0].title, 'Coverage analysis saved');
+    latest = { id: 'an-1', computedAt: new Date('2026-10-24T00:00:00Z') };
+    await assert.rejects(() => confirmCapabilityInvoke(OP, ctx(review.parameters)), (e) => e.code === 'ASK_CONTEXT_VERSION_CONFLICT');
+    assert.equal(runs.length, 1);
+    // Only the declared action starts it: a typed request, another property or a refresh does not.
+    for (const bad of [[own(), 'Run a coverage analysis.'], [own({ entityId: 'other' }), COVERAGE_PROPERTY_ANALYSIS_MESSAGE], [own({ surface: 'ASK_REFRESH' }), COVERAGE_PROPERTY_ANALYSIS_MESSAGE], [own({ actionId: 'x' }), COVERAGE_PROPERTY_ANALYSIS_MESSAGE]]) {
+      assert.equal((await propose(bad[0], bad[1])).reasonCode, 'COVERAGE_ANALYSIS_STEP_REQUIRED');
+    }
+    role = 'VIEWER';
+    assert.match((await propose(own(), COVERAGE_PROPERTY_ANALYSIS_MESSAGE)).reasonCode, /PERMISSION_REQUIRED/);
+    role = 'CONTRIBUTOR';
+    CoverageIntelligenceService.prototype.run = async function () { throw new APIError('Complete the policy record first.', 409, 'PROPERTY_CONTEXT_REQUIRED'); };
+    const refused = await propose(own(), COVERAGE_PROPERTY_ANALYSIS_MESSAGE);
+    await assert.rejects(() => confirmCapabilityInvoke(OP, ctx(refused.parameters)), (e) => e.message === 'Complete the policy record first.' && e.code === 'ASK_CONFIRMATION_NOT_ACTIVE');
+  } finally { prisma.coverageAnalysis = undefined; }
+});
+
+test('the coverage answer shows the latest saved analysis as text with the run action only for a contributor or owner; stale is said; no link', () => {
+  const { coverageAnalysisBlocks } = require('../../src/services/ask/handlers/coverageReview.handler.ts');
+  const { isAskActionApplicable } = require('../../src/services/ask/askAnswerTrustPolicy.ts');
+  const read = { exists: true, analysis: { id: 'an-1', status: 'STALE', computedAt: '2026-10-24T12:00:00.000Z', confidence: 'MEDIUM', scenarioState: 'COSTS_ARE_CLOSE', insuranceReviewState: 'POLICY_RECORD_INCOMPLETE', summary: 'The warranty roughly breaks even.',
+    nextSteps: [{ title: 'Confirm your deductible', detail: 'It changes the result.' }] } };
+  const own = coverageAnalysisBlocks(read, true, 'p1');
+  assert.match(own[0].title, /Coverage analysis · /);
+  assert.match(own[0].body, /roughly breaks even.*close.*Confidence: medium.*not advice/);
+  assert.equal(own[0].actions[0].label, 'Run a new analysis');
+  assert.equal(own[0].actions[0].entityId, 'p1');
+  assert.equal(own[1].id, 'coverage-analysis-stale');
+  assert.equal(own[2].sections[0].items[0].href, null);
+  assert.deepEqual(coverageAnalysisBlocks(read, false, 'p1')[0].actions, []);
+  assert.equal(coverageAnalysisBlocks({ exists: false }, true, 'p1')[0].actions[0].label, 'Run a coverage analysis');
+  assert.deepEqual(coverageAnalysisBlocks(null, true, 'p1'), []);
+  assert.ok(!JSON.stringify(own).includes('/dashboard'));
+  for (const [id, operationId] of [['coverage-analysis-run-property', 'COVERAGE_REVIEW_STATUS'], ['coverage-analysis-see', 'COVERAGE_ANALYSIS_RUN']]) {
+    assert.equal(isAskActionApplicable({ action: { id, label: 'x', interactionType: 'START_WORKFLOW', message: 'm', operationId: 'COVERAGE_ANALYSIS_RUN', style: 'SECONDARY' }, operationId, propertyId: 'p1', householdRole: 'CONTRIBUTOR', authoritativeSourceAvailable: true }), true, id);
+  }
+});

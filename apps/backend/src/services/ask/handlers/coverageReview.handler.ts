@@ -9,6 +9,8 @@ import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { humanDate } from '../askFormatting';
 import { ensurePropertyAccess } from '../askHandlerSupport';
 import { findCurrentCoverageReview } from '../../coverageReview.service';
+import { CoverageIntelligenceService } from '../../coverageAnalysis.service';
+import { COVERAGE_PROPERTY_ANALYSIS_ACTION_ID, COVERAGE_PROPERTY_ANALYSIS_MESSAGE } from '../support/coverageAnalysisRun';
 import { COVERAGE_COMMAND_ACTION_IDS, COVERAGE_COMMAND_MESSAGES, COVERAGE_PROPERTY_ENTITY_TYPE } from '../support/coverageCommand';
 
 type ReviewResult = Awaited<ReturnType<typeof findCurrentCoverageReview>>;
@@ -86,8 +88,47 @@ export function coverageReviewFromView(read: ReviewResult, canGenerate: boolean,
   return { status: read.isCurrent ? 'ANSWERED' : 'READY_WITH_LIMITATIONS', reasonCode: read.isCurrent ? undefined : 'COVERAGE_REVIEW_OUT_OF_DATE', blocks, suggestions: [] };
 }
 
+const ANALYSIS_STATE_LABELS: Record<string, string> = {
+  COST_EXPOSURE_EXCEEDS_PLAN_COST: 'The modeled repair cost is more than the plan costs', COSTS_ARE_CLOSE: 'The plan cost and the modeled repair cost are close',
+  PLAN_COST_EXCEEDS_MODELED_EXPOSURE: 'The plan costs more than the modeled repairs', INSUFFICIENT_DATA: 'Not enough recorded to compare',
+};
+type AnalysisRead = { exists: false } | { exists: true; analysis: { id: string; status: string; computedAt: string; confidence: string; scenarioState: string; summary?: string; insuranceReviewState: string; nextSteps?: Array<{ title: string; detail?: string }> } };
+
+/** Pure: the latest saved whole-home analysis beside the review (Desktop's Coverage Intelligence page), with the on-demand run for a contributor or owner. Text only; no link. */
+export function coverageAnalysisBlocks(read: AnalysisRead | null, canRun: boolean, propertyId: string): AskPresentationBlock[] {
+  const run = canRun ? [{
+    id: COVERAGE_PROPERTY_ANALYSIS_ACTION_ID, label: read?.exists ? 'Run a new analysis' : 'Run a coverage analysis', interactionType: 'START_WORKFLOW' as const, message: COVERAGE_PROPERTY_ANALYSIS_MESSAGE,
+    operationId: 'COVERAGE_ANALYSIS_RUN' as const, actionId: COVERAGE_PROPERTY_ANALYSIS_ACTION_ID, entityType: COVERAGE_PROPERTY_ENTITY_TYPE, entityId: propertyId, style: 'SECONDARY' as const,
+  }] : [];
+  if (!read) return [];
+  if (!read.exists) {
+    return [{ type: 'SUMMARY', id: 'coverage-analysis-summary', title: 'No coverage analysis has been run', body: 'An analysis compares the cost of your warranty and insurance with the modeled cost of repairs, from what is recorded. It is an estimate.', tone: 'DEFAULT', actions: run }];
+  }
+  const a = read.analysis;
+  const computed = humanDate(new Date(a.computedAt));
+  const stale = a.status === 'STALE';
+  const blocks: AskPresentationBlock[] = [{
+    type: 'SUMMARY', id: 'coverage-analysis-summary', title: `Coverage analysis${computed ? ` · ${computed}` : ''}`,
+    body: [a.summary, `${ANALYSIS_STATE_LABELS[a.scenarioState] ?? 'Not enough recorded to compare'}. Confidence: ${String(a.confidence).toLowerCase()}. It is an estimate from what is recorded, not advice.`].filter(Boolean).join(' '),
+    tone: stale ? 'CAUTION' : 'DEFAULT', actions: run,
+  }];
+  if (stale) blocks.push({ type: 'LIMITATION', id: 'coverage-analysis-stale', severity: 'CAUTION', title: 'Your records have changed since this ran', body: 'Run a new analysis to include what changed.' });
+  const steps = (a.nextSteps ?? []).slice(0, 4);
+  if (steps.length) {
+    blocks.push({ type: 'GROUPED_LIST', filters: [], id: 'coverage-analysis-next-steps', title: 'What the analysis suggests', description: null,
+      sections: [{ id: 'coverage-analysis-steps', title: 'Next steps', count: steps.length, items: steps.map((step, index) => ({ id: `coverage-analysis-step-${index}`, title: step.title, description: step.detail ?? null, meta: [], status: null, href: null })) }], actions: [] });
+  }
+  return blocks;
+}
+
 registerCapabilityHandler('coverage.review-status', async (envelope, deps) => {
   const propertyId = envelope.propertyId!;
   const access = deps.propertyAccess ?? await ensurePropertyAccess(envelope.userId, propertyId);
-  return coverageReviewFromView(await findCurrentCoverageReview(propertyId, envelope.userId), access.role !== 'VIEWER', propertyId);
+  const result = coverageReviewFromView(await findCurrentCoverageReview(propertyId, envelope.userId), access.role !== 'VIEWER', propertyId);
+  // The saved analysis is an addition to the review answer; if it cannot be read (for example a policy conflict the review already explains), the answer is given without it.
+  const analysis = await new CoverageIntelligenceService().getLatest(propertyId, envelope.userId).catch(() => null) as AnalysisRead | null;
+  const extra = coverageAnalysisBlocks(analysis, access.role !== 'VIEWER', propertyId);
+  if (!extra.length) return result;
+  const last = result.blocks[result.blocks.length - 1];
+  return last?.type === 'BOUNDARY' ? { ...result, blocks: [...result.blocks.slice(0, -1), ...extra, last] } : { ...result, blocks: [...result.blocks, ...extra] };
 });
