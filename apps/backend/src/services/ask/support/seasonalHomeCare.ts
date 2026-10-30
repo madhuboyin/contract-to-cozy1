@@ -8,6 +8,7 @@ import seasonalTemplates from '../../../data/seasonalTaskTemplates.json';
 import { type AskPresentationBlock } from '../../../productFramework/ask/ask.contract';
 import { type AskOperationResult } from '../askOperationRegistry';
 import { getSeasonStartDate, resolveCurrentSeasonWindow, resolveUpcomingSeasonWindow, type Season } from '../../seasonal/seasonWindow';
+import { SEASONAL_ITEM_ACTION_IDS, SEASONAL_ITEM_ENTITY_TYPE, SEASONAL_ITEM_MESSAGES, seasonalItemKinds, type SeasonalItemKind } from './seasonalItemCommand';
 
 /** The two stored starter messages. The launch's message, not a routing guess, selects this or next season (see the handler). */
 export const SEASONAL_HOME_CARE_THIS_SEASON_MESSAGE = 'What home care should I do this season?';
@@ -54,7 +55,13 @@ export function seasonalAssetFreeTasks(season: Season, region: SeasonalClimateRe
 export interface SeasonalSetupContext {
   /** An owner of an existing home, with automatic checklists on: the only case the generator will run for. */
   canSetUp: boolean;
-  checklist: { totalTasks: number; tasksAdded: number } | null;
+  checklist: {
+    totalTasks: number;
+    tasksAdded: number;
+    items?: Array<{ id: string; taskKey: string; status: string; priority: string; maintenanceTaskId: string | null; completed: boolean }>;
+  } | null;
+  canManage?: boolean;
+  isPrimaryHolder?: boolean;
 }
 
 export interface SeasonalHomeCareInput {
@@ -151,6 +158,10 @@ const updateHomeDetailsAction = () => ({
   message: 'How complete is my home record?', operationId: 'PROPERTY_SUMMARY', style: 'SECONDARY' as const,
 });
 
+const ITEM_LABELS: Record<SeasonalItemKind, string> = {
+  ADD: 'Add to maintenance', REMOVE: 'Remove from maintenance', SNOOZE: 'Snooze', DISMISS: 'Set aside', RESTORE: 'Bring back',
+};
+
 function regionNoteFor(region: SeasonalClimateRegion, source: ClimateRegionSource): string {
   return source === 'NATIONAL_DEFAULT'
     ? ` I could not map this zip code to a climate region, so this uses the national default (${REGION_WORDS[region]}); the seasonal settings page lets you change it.`
@@ -221,14 +232,29 @@ export function buildSeasonalHomeCareResult(input: SeasonalHomeCareInput): AskOp
   });
   const truncated = tasks.length > shown.length ? ` I am showing the top ${shown.length} of ${tasks.length}.` : '';
   const relation = input.focus === 'NEXT_SEASON' ? 'the next' : 'the current';
+  const setup = input.setup ?? null;
+  const checklist = setup?.checklist ?? null;
+  const setupAction = setup?.canSetUp ? {
+    id: 'seasonal-add-tasks', label: 'Set up checklist to manage', interactionType: 'START_WORKFLOW' as const, message: seasonalSetupMessage(season),
+    operationId: 'SEASONAL_CHECKLIST_SETUP', entityType: SEASONAL_PLAN_ENTITY_TYPE, entityId: seasonalPlanEntityId(season, year), style: 'PRIMARY' as const,
+  } : null;
+  const planAction = checklist ? showChecklistAction(season, 'PRIMARY') : setupAction;
   let number = 0;
   const timingContext = { now: input.now, year };
   const toItem = (task: SeasonalTemplate, urgent: boolean) => {
     number += 1;
+    const recorded = checklist?.items?.find((item) => item.taskKey === task.taskKey);
+    const kinds = recorded ? seasonalItemKinds(recorded, { canManage: Boolean(setup?.canManage), isPrimaryHolder: Boolean(setup?.isPrimaryHolder) }) : [];
+    const actions = recorded ? kinds.map((kind) => ({
+      id: SEASONAL_ITEM_ACTION_IDS[kind], label: ITEM_LABELS[kind], message: SEASONAL_ITEM_MESSAGES[kind],
+      interactionType: 'MUTATE_RECORD' as const, operationId: 'SEASONAL_ITEM_COMMAND' as const, entityType: SEASONAL_ITEM_ENTITY_TYPE,
+      entityId: recorded.id, style: kind === 'ADD' ? 'PRIMARY' as const : 'QUIET' as const,
+    })) : setupAction ? [{ ...setupAction, interactionType: 'MUTATE_RECORD' as const, style: 'SECONDARY' as const }] : [];
     return {
       id: task.taskKey, title: task.title, description: task.whyItMatters, condition: null, entityType: SEASONAL_TASK_ENTITY_TYPE,
       meta: [PRIORITY_LABELS[task.priority] ?? 'Optional', task.isDiyPossible ? 'DIY' : 'Usually a pro'],
       detail: seasonalDetail(task, timingContext), tone: urgent ? 'CAUTION' as const : 'DEFAULT' as const, status: null, href: null, countLabel: String(number),
+      ...(actions.length ? { actions } : {}),
     };
   };
   const sections = [
@@ -236,17 +262,7 @@ export function buildSeasonalHomeCareResult(input: SeasonalHomeCareInput): AskOp
     later.length ? { id: 'seasonal-wait', title: 'Can wait', caption: 'Useful checks to keep your home in good shape.', count: later.length, items: later.map((task) => toItem(task, false)) } : null,
   ].filter((section): section is NonNullable<typeof section> => Boolean(section));
 
-  const setup = input.setup ?? null;
-  const checklist = setup?.checklist ?? null;
   const next = [
-    ...(checklist
-      ? [showChecklistAction(season, 'PRIMARY')]
-      : setup?.canSetUp
-        ? [{
-          id: 'seasonal-add-tasks', label: 'Add these to my tasks', interactionType: 'START_WORKFLOW' as const, message: seasonalSetupMessage(season),
-          operationId: 'SEASONAL_CHECKLIST_SETUP', entityType: SEASONAL_PLAN_ENTITY_TYPE, entityId: seasonalPlanEntityId(season, year), style: 'PRIMARY' as const,
-        }]
-        : []),
     {
       id: 'seasonal-walkthrough', label: 'Walk me through the first task', interactionType: 'START_WORKFLOW' as const,
       message: `Walk me through "${shown[0].title}".`, operationId: 'SEASONAL_HOME_CARE', entityType: SEASONAL_TASK_ENTITY_TYPE,
@@ -273,7 +289,7 @@ export function buildSeasonalHomeCareResult(input: SeasonalHomeCareInput): AskOp
           { label: 'Can wait', body: `${later.length} ${later.length === 1 ? 'task can' : 'tasks can'} wait until you have time.` },
           { label: 'Plan basis', body: `${capitalize(seasonWord)} is ${relation} season for your area.${regionNote}` },
         ],
-        tone: 'DEFAULT', actions: [],
+        tone: 'DEFAULT', actions: planAction ? [planAction] : [],
       },
       {
         type: 'GROUPED_LIST', id: 'seasonal-home-care-tasks', title: `${capitalize(seasonWord)} tasks`, actions: [], filters: [], sections,

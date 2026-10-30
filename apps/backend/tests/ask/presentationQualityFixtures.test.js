@@ -207,8 +207,9 @@ test('3D: the seasonal plan is compact, declares what it left out, and keeps set
   assert.ok(shown <= 8, 'at most eight tasks are shown');
   assert.equal(list.collection.deliveredCount, shown);
   assert.equal(list.collection.nextPageAvailable, false);
+  const summary = result.blocks.find((block) => block.id === 'seasonal-home-care-summary');
   const next = result.blocks.find((block) => block.id === 'seasonal-home-care-next');
-  const add = next.actions.find((action) => action.id === 'seasonal-add-tasks');
+  const add = summary.actions.find((action) => action.id === 'seasonal-add-tasks');
   assert.deepEqual([add.operationId, add.style], ['SEASONAL_CHECKLIST_SETUP', 'PRIMARY']);
   assert.match(next.body, /review exactly what it adds before anything changes/);
 });
@@ -216,15 +217,16 @@ test('3D: the seasonal plan is compact, declares what it left out, and keeps set
 test('3D: a home that already has its checklist is told so, and is not offered setup again', () => {
   const result = buildSeasonalHomeCareResult({ zipCode: '60601', now: NOW, focus: 'THIS_SEASON', setup: { canSetUp: true, checklist: { totalTasks: 9, tasksAdded: 6 } } });
   const next = result.blocks.find((block) => block.id === 'seasonal-home-care-next');
+  const summary = result.blocks.find((block) => block.id === 'seasonal-home-care-summary');
   assert.match(next.body, /already set up with 9 tasks, 6 in Maintenance/);
-  assert.equal(next.actions.some((action) => action.id === 'seasonal-add-tasks'), false);
-  assert.equal(next.actions.filter((action) => action.style === 'PRIMARY').length, 1);
+  assert.equal(summary.actions.some((action) => action.id === 'seasonal-add-tasks'), false);
+  assert.deepEqual(summary.actions.map((action) => action.id), ['seasonal-show-checklist']);
 });
 
 test('3D: missing location context is said, not guessed: the national default is named and the page to change it is pointed at', () => {
   const result = buildSeasonalHomeCareResult({ zipCode: '00000', now: NOW, focus: 'THIS_SEASON' });
   assert.match(result.blocks[0].body, /could not map this zip code to a climate region, so this uses the national default/);
-  assert.equal(result.blocks.find((block) => block.id === 'seasonal-home-care-next').actions.some((action) => action.id === 'seasonal-add-tasks'), false, 'no write is offered without setup context');
+  assert.equal(result.blocks.find((block) => block.id === 'seasonal-home-care-summary').actions.some((action) => action.id === 'seasonal-add-tasks'), false, 'no write is offered without setup context');
 });
 
 test('3D: general guidance is labelled general and the walkthrough invents no progress', () => {

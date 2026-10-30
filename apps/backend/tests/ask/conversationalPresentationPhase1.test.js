@@ -43,9 +43,11 @@ test('winter plan: personalization says what it is based on, what it does not us
   assert.match(about.body, /intentionally includes only tasks that apply without checking your recorded systems/);
   assert.match(about.body, /seasonal checklist is the personalized view.*systems already recorded/);
   assert.doesNotMatch(about.body, /Once your home record lists them/);
-  const setup = plan.blocks.at(-1).actions.find((action) => action.id === 'seasonal-add-tasks');
+  const setup = plan.blocks[0].actions.find((action) => action.id === 'seasonal-add-tasks');
   assert.equal(setup.operationId, 'SEASONAL_CHECKLIST_SETUP', 'adding tasks opens the confirmed setup operation, it is not a write here');
-  assert.equal(JSON.stringify(plan).includes('"interactionType":"MUTATE'), false);
+  const rowSetup = plan.blocks[1].sections[0].items[0].actions[0];
+  assert.equal(rowSetup.operationId, 'SEASONAL_CHECKLIST_SETUP', 'the row launches the same confirmed setup; the plan itself writes nothing');
+  assert.equal(plan.confirmation ?? null, null);
 });
 
 test('winter plan: the soon/can-wait grouping still comes from the template priority, and a one-task case reads naturally', () => {

@@ -82,18 +82,40 @@ test('a saved climate region wins over the zip, a tropical home gets content in 
   assert.equal(missing.reasonCode, 'SEASONAL_HOME_CARE_PROPERTY_NOT_FOUND');
 });
 
-const OWNED = { zipCode: '78701', climateSetting: null, onboarding: { entryPath: 'EXISTING_HOME_OWNER', ownershipState: 'OWNER' } };
+const OWNED = { zipCode: '78701', climateSetting: null, onboarding: { entryPath: 'EXISTING_HOME_OWNER', ownershipState: 'OWNER' }, homeownerProfile: { userId: 'u1' } };
 const nextActions = (result) => result.blocks.find((block) => block.id === 'seasonal-home-care-next').actions.map((action) => action.id);
+const summaryActions = (result) => result.blocks.find((block) => block.id === 'seasonal-home-care-summary').actions.map((action) => action.id);
 
 test('the offered next steps follow who the caller is and whether this season\'s checklist exists', async () => {
   const next = handlerModule.SEASONAL_HOME_CARE_NEXT_SEASON_MESSAGE;
-  assert.deepEqual(nextActions(await run(OWNED, next)), ['seasonal-add-tasks', 'seasonal-walkthrough', 'seasonal-update-home-details']);
+  const noChecklist = await run(OWNED, next);
+  assert.deepEqual(summaryActions(noChecklist), ['seasonal-add-tasks']);
+  assert.deepEqual(nextActions(noChecklist), ['seasonal-walkthrough', 'seasonal-update-home-details']);
+  const firstGeneralItem = noChecklist.blocks.find((block) => block.id === 'seasonal-home-care-tasks').sections[0].items[0];
+  assert.deepEqual(firstGeneralItem.actions.map((action) => action.label), ['Set up checklist to manage']);
+  assert.equal(firstGeneralItem.actions[0].entityType, 'SEASONAL_PLAN');
   assert.deepEqual(nextActions(await run(OWNED, next, { role: 'CONTRIBUTOR' })), ['seasonal-walkthrough', 'seasonal-update-home-details'], 'only the owner may set it up');
   assert.deepEqual(nextActions(await run({ ...OWNED, climateSetting: { climateRegion: 'COLD', autoGenerateChecklists: false } }, next)), ['seasonal-walkthrough', 'seasonal-update-home-details'], 'automatic checklists off');
   assert.deepEqual(nextActions(await run({ ...OWNED, onboarding: { entryPath: 'EXPLORATION', ownershipState: 'SHOPPING' } }, next)), ['seasonal-walkthrough', 'seasonal-update-home-details'], 'not an owned home');
   const existing = await run(OWNED, next, { checklist: { totalTasks: 6, tasksAdded: 5 } });
-  assert.deepEqual(nextActions(existing), ['seasonal-show-checklist', 'seasonal-walkthrough', 'seasonal-update-home-details']);
+  assert.deepEqual(summaryActions(existing), ['seasonal-show-checklist']);
+  assert.deepEqual(nextActions(existing), ['seasonal-walkthrough', 'seasonal-update-home-details']);
   assert.match(existing.blocks.find((block) => block.id === 'seasonal-home-care-next').body, /already set up with 6 tasks, 5 in Maintenance/);
+});
+
+test('a general-plan row mapped to a persisted checklist item exposes the existing confirmation-gated item command', async () => {
+  const next = handlerModule.SEASONAL_HOME_CARE_NEXT_SEASON_MESSAGE;
+  const baseline = await run(OWNED, next);
+  const task = baseline.blocks.find((block) => block.id === 'seasonal-home-care-tasks').sections[0].items[0];
+  const result = await run(OWNED, next, { checklist: {
+    totalTasks: 1, tasksAdded: 0,
+    items: [{ id: 'seasonal-item-1', taskKey: task.id, status: 'RECOMMENDED', priority: 'CRITICAL', maintenanceTask: null }],
+  } });
+  const mapped = result.blocks.find((block) => block.id === 'seasonal-home-care-tasks').sections[0].items[0];
+  assert.equal(mapped.actions[0].label, 'Add to maintenance');
+  assert.equal(mapped.actions[0].operationId, 'SEASONAL_ITEM_COMMAND');
+  assert.equal(mapped.actions[0].entityType, 'SEASONAL_ITEM');
+  assert.equal(mapped.actions[0].entityId, 'seasonal-item-1');
 });
 
 test('"Walk me through" a task launches this same operation with the task\'s entity and returns that task, then the next, then back', async () => {

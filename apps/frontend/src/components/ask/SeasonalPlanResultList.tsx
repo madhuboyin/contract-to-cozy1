@@ -56,7 +56,7 @@ function PlanTask({ item, urgent, onItemAction, disabled }: { item: AskGroupedLi
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
           {primary && onItemAction && (
-            <button type="button" disabled={disabled} onClick={() => onItemAction(item.entityType, item.id, primary.message, primary.operationId, primary.interactionType)}
+            <button type="button" disabled={disabled} onClick={() => onItemAction(primary.entityType ?? item.entityType, primary.entityId ?? item.id, primary.message, primary.operationId, primary.interactionType)}
               className="inline-flex min-h-9 items-center rounded-full border border-slate-200 bg-white px-3 text-xs font-semibold text-teal-800 hover:bg-slate-50 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600">
               {primary.label}
             </button>

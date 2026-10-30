@@ -152,7 +152,7 @@ test('J3 seasonal: the first task\'s walkthrough is the leading task, keeps the 
   const back = guide.blocks[0].actions.find((action) => action.id === 'seasonal-back-to-plan');
   assert.equal(back.operationId, 'SEASONAL_HOME_CARE', 'the guide returns to the same plan');
 
-  const add = next.actions.find((action) => action.id === 'seasonal-add-tasks');
+  const add = plan.blocks.find((block) => block.id === 'seasonal-home-care-summary').actions.find((action) => action.id === 'seasonal-add-tasks');
   assert.equal(add.operationId, 'SEASONAL_CHECKLIST_SETUP');
   const plan_ = seasonal.parseSeasonalPlanEntityId(add.entityId);
   assert.deepEqual([plan_.season, typeof plan_.year], ['FALL', 'number']);

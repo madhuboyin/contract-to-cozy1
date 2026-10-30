@@ -62,6 +62,18 @@ describe('SeasonalPlanResultList', () => {
     const { container } = render(<SeasonalPlanResultList block={plan()} />);
     expect(container.querySelectorAll('a')).toHaveLength(0);
   });
+
+  it('uses an action\'s typed target instead of the general template row target', () => {
+    const block = plan();
+    block.sections[0].items[0].actions = [{
+      id: 'seasonal-item-add', label: 'Add to maintenance', message: 'Add this seasonal task to my maintenance.',
+      operationId: 'SEASONAL_ITEM_COMMAND', interactionType: 'MUTATE_RECORD', entityType: 'SEASONAL_ITEM', entityId: 'persisted-item-1', style: 'PRIMARY',
+    }];
+    const onItemAction = jest.fn();
+    render(<SeasonalPlanResultList block={block} onItemAction={onItemAction} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add to maintenance' }));
+    expect(onItemAction).toHaveBeenCalledWith('SEASONAL_ITEM', 'persisted-item-1', 'Add this seasonal task to my maintenance.', 'SEASONAL_ITEM_COMMAND', 'MUTATE_RECORD');
+  });
 });
 
 const answer = (): AskExecutionResponse => ({
@@ -77,14 +89,15 @@ const answer = (): AskExecutionResponse => ({
         { label: 'Can wait', body: '1 task can wait until you have time.' },
         { label: 'Plan basis', body: 'Winter is the next season for your area.' },
       ],
-      tone: 'DEFAULT', actions: [],
+      tone: 'DEFAULT', actions: [
+        { id: 'seasonal-add-tasks', label: 'Set up checklist to manage', interactionType: 'START_WORKFLOW', message: 'Set up my winter checklist.', operationId: 'SEASONAL_CHECKLIST_SETUP', entityType: 'SEASONAL_PLAN', entityId: 'WINTER:2026', style: 'PRIMARY' },
+      ],
     },
     plan(),
     { type: 'BOUNDARY', id: 'seasonal-home-care-boundary', title: 'About this recommendation', body: 'These are general seasonal tasks for the climate region, not an assessment of this home.', severity: 'INFO', suggestions: [] },
     {
       type: 'SUMMARY', id: 'seasonal-home-care-next', title: 'What would you like to do next?', body: 'Adding tasks sets up your winter checklist for this home.', tone: 'DEFAULT',
       actions: [
-        { id: 'seasonal-add-tasks', label: 'Add these to my tasks', interactionType: 'START_WORKFLOW', message: 'Set up my winter checklist.', operationId: 'SEASONAL_CHECKLIST_SETUP', entityType: 'SEASONAL_PLAN', entityId: 'WINTER:2026', style: 'PRIMARY' },
         { id: 'seasonal-walkthrough', label: 'Walk me through the first task', interactionType: 'START_WORKFLOW', message: 'Walk me through "Replace furnace filters monthly".', operationId: 'SEASONAL_HOME_CARE', entityType: 'SEASONAL_TASK', entityId: 'NEXT_SEASON:WINTER_FURNACE_FILTER_CHANGE', style: 'SECONDARY' },
         { id: 'seasonal-update-home-details', label: 'Update home details', interactionType: 'START_WORKFLOW', message: 'How complete is my home record?', operationId: 'PROPERTY_SUMMARY', style: 'SECONDARY' },
       ],
@@ -116,13 +129,14 @@ describe('seasonal answer in the workspace', () => {
     expect(intro).toHaveTextContent('Do soon: 2 priority tasks are listed first.');
     expect(intro).not.toHaveTextContent('Here are 3 things to focus on.');
     expect(intro.querySelector('svg')).not.toBeNull();
-    expect(view.container.querySelectorAll('[data-seasonal-next-steps] button')).toHaveLength(3);
+    expect(within(intro).getByRole('button', { name: 'Set up checklist to manage' })).toBeInTheDocument();
+    expect(view.container.querySelectorAll('[data-seasonal-next-steps] button')).toHaveLength(2);
     expect(view.container.querySelector('[data-seasonal-about]')).toHaveTextContent('not an assessment of this home');
   });
 
   it('each next step asks inside the conversation with its own operation and entity', () => {
     const { ask } = card();
-    fireEvent.click(screen.getByRole('button', { name: /Add these to my tasks/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Set up checklist to manage/ }));
     expect(ask).toHaveBeenLastCalledWith('Set up my winter checklist.', undefined, expect.objectContaining({ operationId: 'SEASONAL_CHECKLIST_SETUP', entityType: 'SEASONAL_PLAN', entityId: 'WINTER:2026', sourceExecutionId: 'exec-plan' }));
     fireEvent.click(screen.getByRole('button', { name: /Walk me through the first task/ }));
     expect(ask).toHaveBeenLastCalledWith('Walk me through "Replace furnace filters monthly".', undefined, expect.objectContaining({ operationId: 'SEASONAL_HOME_CARE', entityType: 'SEASONAL_TASK', entityId: 'NEXT_SEASON:WINTER_FURNACE_FILTER_CHANGE' }));

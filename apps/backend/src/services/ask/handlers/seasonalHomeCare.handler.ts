@@ -28,18 +28,31 @@ export function seasonalHomeCareFocus(message: string): SeasonalHomeCareFocus {
 async function seasonalSetupContext(
   userId: string,
   propertyId: string,
-  property: { onboarding?: { entryPath?: string | null; ownershipState?: string | null } | null; climateSetting?: { autoGenerateChecklists?: boolean | null } | null },
+  property: { onboarding?: { entryPath?: string | null; ownershipState?: string | null } | null; climateSetting?: { autoGenerateChecklists?: boolean | null } | null; homeownerProfile?: { userId: string } | null },
   plan: { season: Season; year: number },
 ): Promise<SeasonalSetupContext> {
   const access = await ensurePropertyAccess(userId, propertyId);
   const checklist = await prisma.seasonalChecklist.findUnique({
     where: { propertyId_season_year: { propertyId, season: plan.season, year: plan.year } },
-    select: { totalTasks: true, tasksAdded: true },
+    select: {
+      totalTasks: true, tasksAdded: true,
+      items: { select: { id: true, taskKey: true, status: true, priority: true, maintenanceTask: { select: { id: true, status: true } } } },
+    },
   });
   const ownershipCare = supportsOwnershipCare({ entryPath: property.onboarding?.entryPath, ownershipState: property.onboarding?.ownershipState });
   return {
     canSetUp: access.role === HouseholdRole.OWNER && ownershipCare && property.climateSetting?.autoGenerateChecklists !== false,
-    checklist: checklist ? { totalTasks: checklist.totalTasks, tasksAdded: checklist.tasksAdded } : null,
+    checklist: checklist ? {
+      totalTasks: checklist.totalTasks,
+      tasksAdded: checklist.tasksAdded,
+      items: (checklist.items ?? []).map((item) => ({
+        id: item.id, taskKey: item.taskKey, status: item.status, priority: item.priority,
+        maintenanceTaskId: item.maintenanceTask?.id ?? null,
+        completed: item.status === 'COMPLETED' || item.maintenanceTask?.status === 'COMPLETED',
+      })),
+    } : null,
+    canManage: access.role !== HouseholdRole.VIEWER,
+    isPrimaryHolder: property.homeownerProfile?.userId === userId,
   };
 }
 
@@ -50,6 +63,7 @@ async function seasonalHomeCareResult(userId: string, propertyId: string, messag
       zipCode: true,
       climateSetting: { select: { climateRegion: true, autoGenerateChecklists: true } },
       onboarding: { select: { entryPath: true, ownershipState: true } },
+      homeownerProfile: { select: { userId: true } },
     },
   });
   if (!property) {
