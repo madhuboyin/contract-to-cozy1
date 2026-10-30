@@ -177,7 +177,7 @@ export { oracleApplianceLabel, oracleLifespanItem, applianceFailureRiskFromView,
 export { neighborhoodChangeFeedFromView } from './handlers/aroundYourHome.handler';
 export { buyerTaskConflictDescription, buyerFindingConflictDescription, buyerJourneyStageLabel, parseBuyerDeadlineLaneFilter, selectBuyerDeadlineMilestones, buildBuyerDeadlinesViewState, BUYER_TASK_ITEM_ACTIONS, buyerTaskItemActions, buyerDeadlineTaskRow, buyerTaskVersion, buyerClosingDayProgress } from './handlers/buyerPlan.handler';
 export { capitalTimelineBlock, renovationReadinessProgress } from './handlers/capitalPlanning.handler';
-export { claimConflictDescription, CLAIM_TYPE_PATTERNS, ClaimFileWorkflowInputSchema, claimFileResult, incidentContinuationFromRecords, CLAIM_TRANSITION_ACTIONS, claimItemActions } from './handlers/claims.handler';
+export { claimConflictDescription, CLAIM_TYPE_PATTERNS, ClaimFileWorkflowInputSchema, claimFileResult, CLAIM_TRANSITION_ACTIONS, claimItemActions } from './handlers/claims.handler';
 export { coverageComparisonStrip } from './handlers/coverage.handler';
 export { DIY_ACTIVE_STATUSES, diyProjectsFromView } from './handlers/diyProjectCenter.handler';
 export { diyProjectGuideResult } from './handlers/diyProjectGuide.handler';

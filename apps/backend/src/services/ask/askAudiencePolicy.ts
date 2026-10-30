@@ -88,7 +88,8 @@ const POLICIES: readonly AskAudiencePolicy[] = [
   definePolicy('INCIDENT_CLAIM_STATUS', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('CLAIM_FILE', ALL_MODES),
   definePolicy('CLAIM_TRANSITION', ALL_MODES),
-  definePolicy('INCIDENT_CONTINUATION', ALL_MODES),
+  // Emergency follow-up already carries explicit safety and record-scope framing. Lifecycle copy dilutes that hierarchy.
+  definePolicy('INCIDENT_CONTINUATION', ALL_MODES, { journeyPresentation: 'NEUTRAL' }),
   definePolicy('SAVINGS_OPPORTUNITIES', ALL_MODES),
   // This is a factual read of costs recorded against the selected home. An
   // unknown buying/owning/selling stage may change framing, but not whether

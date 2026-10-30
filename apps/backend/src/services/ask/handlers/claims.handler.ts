@@ -9,7 +9,7 @@ import { type AskPresentationBlock, type CreateAskExecutionRequest } from '../..
 import { type AskOperationResult } from '../askOperationRegistry';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { CLAIM_CHECKLIST_ACTION_ID, CLAIM_CHECKLIST_MESSAGE } from '../support/claimActivityCommand';
-import { humanDate, readableCode } from '../askFormatting';
+import { humanDate } from '../askFormatting';
 import { ensurePropertyAccess, exactEntityMatch } from '../askHandlerSupport';
 import { type AskViewState } from '../support/executionState';
 import { containsFilterContinuation } from '../askFollowUpContext';
@@ -174,34 +174,12 @@ export const CLAIM_FILE_START_ACTION = {
   message: 'Start a claim', operationId: 'CLAIM_FILE', style: 'SECONDARY' as const,
 };
 
-export function incidentContinuationFromRecords(
-  _propertyId: string,
-  incidents: readonly { id: string; title: string; status: string; updatedAt?: Date | string }[],
-  claims: readonly { id: string; title: string; status: string; updatedAt?: Date | string }[],
-  canStartClaim = true,
-): AskOperationResult {
-  const observedAt = (value: Date | string | undefined) => value instanceof Date ? value.toISOString() : value ?? null;
-  return { status: 'ANSWERED', reasonCode: 'INCIDENT_CONTINUATION_READY', blocks: [
-    { type: 'SUMMARY', id: 'incident-continuation-summary', title: incidents.length || claims.length ? 'Continue from a recorded incident or claim' : 'No incident or claim follow-up is recorded yet', body: incidents.length || claims.length ? `${incidents.length} incident${incidents.length === 1 ? '' : 's'} and ${claims.length} claim${claims.length === 1 ? '' : 's'} are available below. Choose the existing record that owns the next step.` : 'You can start a draft claim after immediate danger has passed. Nothing is filed with an insurer from this screen.', tone: 'DEFAULT', actions: [] },
-    { type: 'BOUNDARY', id: 'incident-continuation-boundary', title: 'Continue only after immediate danger has passed', severity: 'CAUTION', body: 'If anyone may still be in danger, contact emergency responders or the appropriate utility first. This workflow records what happened; it is not emergency response.', suggestions: [] },
-    { type: 'GROUPED_LIST', filters: [], id: 'incident-continuation-records', title: 'Recorded incident and claim follow-up', description: 'Use an existing record or start a draft claim. Filing with an insurer remains a separate provider action. The Emergency Help AI troubleshooter is not currently available in Ask.', sections: [
-      { id: 'incidents', title: 'Incidents', count: incidents.length, items: incidents.map((row) => ({ id: row.id, title: row.title, description: readableCode(String(row.status)), meta: [], status: String(row.status), href: null })) },
-      { id: 'claims', title: 'Claims', count: claims.length, items: claims.map((row) => ({ id: row.id, title: row.title, description: readableCode(String(row.status)), meta: [], status: String(row.status), href: null })) },
-    ], actions: canStartClaim ? [{ ...CLAIM_FILE_START_ACTION, style: 'PRIMARY' as const }] : [] },
-    ...(incidents.length || claims.length ? [{ type: 'EVIDENCE' as const, id: 'incident-continuation-evidence', title: 'Record freshness', items: [
-      ...incidents.map((row) => ({ label: row.title, source: 'Canonical Incident record', observedAt: observedAt(row.updatedAt) })),
-      ...claims.map((row) => ({ label: row.title, source: 'Canonical Claim record', observedAt: observedAt(row.updatedAt) })),
-    ] }] : []),
-  ], suggestions: [] };
-}
-
-async function incidentContinuationResult(propertyId: string, role: HouseholdRole): Promise<AskOperationResult> {
-  const [incidents, claims] = await Promise.all([
-    prisma.incident.findMany({ where: { propertyId, isSuppressed: false }, orderBy: { updatedAt: 'desc' }, take: 10, select: { id: true, title: true, status: true, updatedAt: true } }),
-    prisma.claim.findMany({ where: { propertyId }, orderBy: { updatedAt: 'desc' }, take: 10, select: { id: true, title: true, status: true, updatedAt: true } }),
-  ]);
-  return incidentContinuationFromRecords(propertyId, incidents, claims, role !== HouseholdRole.VIEWER);
-}
+const INCIDENT_CONTINUATION_BOUNDARY: AskPresentationBlock = {
+  type: 'BOUNDARY', id: 'incident-continuation-boundary', title: 'Continue only after immediate danger has passed',
+  severity: 'CAUTION',
+  body: 'If anyone may still be in danger, call 911 or local emergency services now. For a utility hazard such as a gas leak, leave the area and contact the utility emergency line. This workflow manages records after the emergency; it is not emergency response or live troubleshooting.',
+  suggestions: [],
+};
 
 // Claims capability-card slice (FRD v1.42). Every legal status change a claim can take, as declared item actions on
 // each claim row. The inline claim detail (ClaimResultList) shows only the ones legal from the claim's LIVE status,
@@ -325,8 +303,15 @@ async function loadClaimsViewState(sourceExecutionId: string | null | undefined,
 
 const CLAIMS_BUCKET_LIMITS = { activeIncidents: 12, resolvedIncidents: 8, openClaims: 12, closedClaims: 8 } as const;
 
-async function incidentClaimStatusResult(userId: string, propertyId: string, message: string, priorViewState?: AskViewState | null): Promise<AskOperationResult> {
-  const access = await ensurePropertyAccess(userId, propertyId);
+async function incidentClaimStatusResult(
+  userId: string,
+  propertyId: string,
+  message: string,
+  priorViewState?: AskViewState | null,
+  options: { emergencyFollowUp?: boolean; access?: Awaited<ReturnType<typeof ensurePropertyAccess>> } = {},
+): Promise<AskOperationResult> {
+  const access = options.access ?? await ensurePropertyAccess(userId, propertyId);
+  const emergencyFollowUp = options.emergencyFollowUp === true;
   const claimActions = claimItemActions(access.role);
   const refinement = resolveClaimsRefinement(message, priorViewState);
   const scope: ClaimsScope = refinement ? refinement.scope : claimsScopeFromWords(message);
@@ -361,13 +346,14 @@ async function incidentClaimStatusResult(userId: string, propertyId: string, mes
   const canStartClaim = access.role !== HouseholdRole.VIEWER;
   const humanizeEnum = (value: string) => value.toLowerCase().replace(/_/g, ' ');
 
-  type Section = { id: string; title: string; count: number; items: Array<{ id: string; title: string; description: string | null; meta: string[]; status: string | null; href: string | null; entityType?: string; actions?: ReturnType<typeof claimItemActions> }> };
+  type Section = Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>['sections'][number];
   const sections: Section[] = [];
   const incidentRow = (incident: (typeof activeIncidents)[number], dateLabel: string, date: Date | null) => ({
     id: incident.id, title: incident.title,
     description: incident.summary ?? humanizeEnum(incident.typeKey),
     meta: [humanizeEnum(incident.status), ...(dateLabel === 'Opened' && incident.severity ? [humanizeEnum(incident.severity)] : []), humanDate(date) ? `${dateLabel} ${humanDate(date)}` : null].filter((value): value is string => Boolean(value)),
-    status: incident.status, href: null,
+    status: incident.status, href: null, entityType: 'INCIDENT',
+    actions: canStartClaim ? [{ ...CLAIM_FILE_START_ACTION, label: 'Start a claim for this incident', interactionType: 'CONVERSATION_CONTINUE' as const }] : [],
   });
   const claimRow = (claim: (typeof activeClaims)[number], dateLabel: string, date: Date | null) => ({
     id: claim.id, title: claim.title,
@@ -384,9 +370,10 @@ async function incidentClaimStatusResult(userId: string, propertyId: string, mes
   const totalRecords = activeIncidentTotal + resolvedIncidentTotal + openClaimTotal + closedClaimTotal;
   const viewState = buildClaimsViewState(priorViewState, scope, state);
   const chips = claimsFilterChips(scope, state);
-  // No list-level action: Ask never navigates to a desktop page, and a populated status answer stays calm (a claim row carries its own
-  // status actions). Starting a claim is offered only where the answer would otherwise be a dead end: the empty state.
-  const listActions: never[] = [];
+  // Ordinary status stays calm. Emergency follow-up promotes the governed draft-claim workflow beside the record heading.
+  const listActions: Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>['actions'] = emergencyFollowUp && canStartClaim
+    ? [{ ...CLAIM_FILE_START_ACTION, style: 'PRIMARY' as const }]
+    : [];
 
   if (totalRecords === 0 && refinement) {
     // A filter that matches nothing still continues the result and keeps every chip, so it can be widened or cleared.
@@ -404,7 +391,7 @@ async function incidentClaimStatusResult(userId: string, propertyId: string, mes
   if (totalRecords === 0) {
     return {
       status: 'ANSWERED', reasonCode: 'INCIDENT_CLAIM_NONE_RECORDED',
-      blocks: [{
+      blocks: [...(emergencyFollowUp ? [INCIDENT_CONTINUATION_BOUNDARY] : []), {
         type: 'EMPTY_STATE', id: 'incident-claim-empty',
         title: claimFocus ? 'No claims are recorded for this home' : incidentFocus ? 'No incidents are recorded for this home' : 'No incidents or claims are recorded for this home',
         body: 'This reflects what has been logged in the home record; it is not confirmation that nothing has ever happened at this property.',
@@ -420,17 +407,20 @@ async function incidentClaimStatusResult(userId: string, propertyId: string, mes
     status: 'ANSWERED', reasonCode: totalActive > 0 ? 'INCIDENT_CLAIM_ACTIVE' : 'INCIDENT_CLAIM_HISTORICAL',
     parameters: { viewState },
     blocks: [
+      ...(emergencyFollowUp ? [INCIDENT_CONTINUATION_BOUNDARY] : []),
       {
         type: 'SUMMARY', id: 'incident-claim-summary',
-        title: totalActive > 0 ? `${totalActive} active ${totalActive === 1 ? 'item needs' : 'items need'} attention` : 'No active incidents or claims right now',
+        title: emergencyFollowUp ? 'Continue from a recorded incident or claim' : totalActive > 0 ? `${totalActive} active ${totalActive === 1 ? 'item needs' : 'items need'} attention` : 'No active incidents or claims right now',
         body: `${totals.incidents} recorded incident${totals.incidents === 1 ? '' : 's'} and ${totals.claims} recorded claim${totals.claims === 1 ? '' : 's'} match this request.`,
         tone: totalActive > 0 ? 'CAUTION' : 'DEFAULT',
         ...claimsCalmCopy({ focus: scope, activeIncidents: activeIncidentTotal, resolvedIncidents: resolvedIncidentTotal, openClaims: openClaimTotal, closedClaims: closedClaimTotal, truncated }),
-        actions: [],
+        actions: emergencyFollowUp && canStartClaim ? [{ ...CLAIM_FILE_START_ACTION, style: 'PRIMARY' as const }] : [],
       },
-      // The calm answer carries no filled step: status changes are declared row actions behind their own confirmation flow, and starting
-      // a claim is the one list-level action. There are no links to the Claims or Incidents pages.
-      { type: 'GROUPED_LIST', filters: chips, id: 'incident-claim-list', title: claimFocus ? 'Claims' : incidentFocus ? 'Incidents' : 'Incidents and claims', sections,
+      // Status changes remain row actions behind confirmation. Emergency follow-up alone promotes Start a claim in the list header.
+      // There are no links to the Claims or Incidents pages.
+      { type: 'GROUPED_LIST', filters: chips, id: 'incident-claim-list', title: emergencyFollowUp ? 'Recorded incident and claim follow-up' : claimFocus ? 'Claims' : incidentFocus ? 'Incidents' : 'Incidents and claims',
+        description: emergencyFollowUp ? 'Select a record to review its details and available next steps. Filing with an insurer remains a separate provider action; live emergency troubleshooting is not available in Ask.' : undefined,
+        sections,
         collection: collectionDescriptor({ sourceTotal: totalRecords, fetchedCount: activeIncidents.length + resolvedIncidents.length + activeClaims.length + closedClaims.length, sections, nextPageAvailable: false }), actions: listActions },
       {
         type: 'EVIDENCE', id: 'incident-claim-evidence', title: 'Record freshness',
@@ -457,5 +447,5 @@ registerCapabilityHandler('incident-claim.transition', async (envelope) => claim
 registerCapabilityHandler('incident-claim.continuation', async (envelope, deps) => {
   // The orchestrator passes the access it already resolved for this user and property; resolve it only when a caller did not.
   const access = deps.propertyAccess ?? await ensurePropertyAccess(envelope.userId, envelope.propertyId!);
-  return incidentContinuationResult(envelope.propertyId!, access.role);
+  return incidentClaimStatusResult(envelope.userId, envelope.propertyId!, 'Show my incidents and claims', null, { emergencyFollowUp: true, access });
 });

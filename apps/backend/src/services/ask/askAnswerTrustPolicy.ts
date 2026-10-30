@@ -75,7 +75,7 @@ const OPERATION_BOUNDARIES: Partial<Record<AskOperationId, ReadonlySet<string>>>
   MAINTENANCE_BUDGET_FORECAST: new Set(['budget-forecast-boundary']),
   // FRD v1.64: the safety-first boundary was never declared, so the validator removed it and then withheld every
   // INCIDENT_CONTINUATION answer for having no direct answer ("I couldn't verify this answer").
-  INCIDENT_CONTINUATION: new Set(['incident-continuation-boundary']),
+  INCIDENT_CONTINUATION: new Set(['incident-continuation-boundary', 'claim-status-boundary']),
   QUOTE_COMPARISON_REVIEW: new Set(['quote-review-boundary']),
   CAPITAL_RESERVE_PLAN: new Set(['capital-plan-boundary']),
   HOME_EVENT_RADAR_FEED: new Set(['home-event-radar-partial', 'radar-feed-boundary']),

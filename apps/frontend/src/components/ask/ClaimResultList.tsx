@@ -8,6 +8,7 @@ import { getClaim } from '@/app/(dashboard)/dashboard/properties/[id]/claims/cla
 import type { ClaimDTO, ClaimStatus } from '@/types/claims.types';
 import { cn } from '@/lib/utils';
 import { useCalmAnswer } from './blocks/calmContext';
+import { ActionLink } from './blocks/context';
 
 type Block = Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>;
 type Item = Block['sections'][number]['items'][number];
@@ -172,8 +173,38 @@ function ClaimDetail({ claimId, expectedPropertyId, fallbackItem, disabled, onAc
   );
 }
 
+function IncidentDetail({ item, disabled, onAction, onClose }: {
+  item: Item;
+  disabled?: boolean;
+  onAction?: OnAction;
+  onClose: () => void;
+}) {
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  useEffect(() => { headingRef.current?.focus(); }, []);
+  return (
+    <aside className="border-t border-amber-100 bg-amber-50/40 p-4" aria-labelledby={`incident-detail-${item.id}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-amber-800">Incident detail</p>
+          <h4 ref={headingRef} tabIndex={-1} id={`incident-detail-${item.id}`} className="mt-1 text-lg font-semibold text-slate-950 outline-none">{item.title}</h4>
+        </div>
+        <button type="button" onClick={onClose} className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-xl text-slate-600 hover:bg-white" aria-label={`Close incident detail for ${item.title}`}><X className="h-4 w-4" /></button>
+      </div>
+      {item.description && <p className="mt-3 text-sm leading-6 text-slate-700">{item.description}</p>}
+      <dl className="mt-4 grid gap-x-5 gap-y-3 rounded-xl border border-slate-200 bg-white p-4 text-sm sm:grid-cols-2">
+        <div><dt className="text-xs text-slate-500">Status</dt><dd className="mt-0.5 font-medium text-slate-900">{label(item.status)}</dd></div>
+        {item.meta.filter((value) => label(value) !== label(item.status)).map((value, index) => <div key={`${value}-${index}`}><dt className="text-xs text-slate-500">Recorded detail</dt><dd className="mt-0.5 font-medium text-slate-900">{label(value)}</dd></div>)}
+      </dl>
+      {item.actions && item.actions.length > 0 && <div className="mt-4 flex flex-wrap gap-2">{item.actions.map((action) => <button key={action.id} type="button" disabled={disabled}
+        className="min-h-10 rounded-xl bg-teal-700 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+        onClick={() => onAction?.(item.entityType, item.id, action.message, action.operationId, action.interactionType)}>{action.label}</button>)}</div>}
+      <p className="mt-3 text-xs text-slate-500">This is the recorded incident summary. Ask does not provide live emergency troubleshooting.</p>
+    </aside>
+  );
+}
+
 // Claims capability-card slice (FRD v1.42): renders INCIDENT_CLAIM_STATUS's incident-claim-list. Claim rows open the
-// canonical claim inline; incident rows keep their link, since incidents are outside this slice.
+// canonical claim inline; emergency-follow-up incident rows open their recorded summary and governed next step inline.
 export function ClaimResultList({ block, propertyId, disabled, onAction, onFilter, onAccessLost, link }: {
   block: Block;
   propertyId?: string;
@@ -191,7 +222,7 @@ export function ClaimResultList({ block, propertyId, disabled, onAction, onFilte
   const calm = useCalmAnswer();
   const [localDetailId, setLocalDetailId] = useState<string | null>(null);
   const detailId = controls ? controls.detailIdFor(block.id) : localDetailId;
-  const detailItem = block.sections.flatMap((section) => section.items).find((item) => item.id === detailId && item.entityType === 'CLAIM');
+  const detailItem = block.sections.flatMap((section) => section.items).find((item) => item.id === detailId && (item.entityType === 'CLAIM' || item.entityType === 'INCIDENT'));
   const openDetail = (item: Item) => {
     if (controls) controls.openDetail(block.id, item.id);
     else setLocalDetailId(item.id);
@@ -207,6 +238,7 @@ export function ClaimResultList({ block, propertyId, disabled, onAction, onFilte
     <div className="border-b border-slate-100 p-4">
       <h3 className="font-semibold text-slate-950">{block.title}</h3>
       {block.description && <p className="mt-1 text-xs text-slate-500">{block.description}</p>}
+      {block.actions.length > 0 && <div className="mt-3 flex flex-wrap gap-2">{block.actions.map((action) => <ActionLink key={action.id} action={action} />)}</div>}
       {block.filters.length > 0 && (calm
         // C-2: the two filter dimensions (scope, state) and the way back are separate quiet groups, so it is clear which chip replaces which.
         ? <div className="mt-2 space-y-1" data-claim-filters="">
@@ -228,8 +260,8 @@ export function ClaimResultList({ block, propertyId, disabled, onAction, onFilte
       <ul className="mt-3 space-y-3">
         {section.items.map((item) => <li key={item.id} className={cn('rounded-xl border p-3', detailId === item.id ? 'border-teal-600 bg-teal-50' : 'border-transparent bg-slate-50')}>
           <div className="flex flex-wrap items-center justify-between gap-2">
-            {item.entityType === 'CLAIM'
-              ? <button type="button" data-claim-detail-trigger={item.id} data-ask-detail-trigger={item.id} data-ask-detail-block={block.id} aria-expanded={detailId === item.id} aria-controls={`claim-detail-${item.id}`} onClick={() => openDetail(item)} className="min-h-10 text-left font-medium text-slate-950 underline-offset-4 hover:text-teal-800 hover:underline">{item.title}</button>
+            {item.entityType === 'CLAIM' || item.entityType === 'INCIDENT'
+              ? <button type="button" data-claim-detail-trigger={item.id} data-ask-detail-trigger={item.id} data-ask-detail-block={block.id} aria-expanded={detailId === item.id} aria-controls={`${item.entityType === 'CLAIM' ? 'claim' : 'incident'}-detail-${item.id}`} onClick={() => openDetail(item)} className="min-h-10 text-left font-medium text-slate-950 underline-offset-4 hover:text-teal-800 hover:underline">{item.title}</button>
               : item.href ? <span className="inline-flex min-h-10 items-center font-medium text-slate-950">{link(item.href, item.title)}</span> : <span className="font-medium text-slate-950">{item.title}</span>}
             {item.status && <span className="text-xs text-slate-600">{item.status.replace(/_/g, ' ').toLowerCase()}</span>}
           </div>
@@ -239,7 +271,7 @@ export function ClaimResultList({ block, propertyId, disabled, onAction, onFilte
       </ul>
       {section.count > section.items.length && <p className="mt-3 text-sm text-slate-500">+{section.count - section.items.length} more are available on the full page.</p>}
     </div>)}
-    {detailId && detailItem && <ClaimDetail key={detailId} claimId={detailId} expectedPropertyId={propertyId} fallbackItem={detailItem} disabled={disabled} onAction={onAction} onAccessLost={onAccessLost} onClose={closeDetail} link={link} />}
-    {calm && block.actions.some((action) => action.href) && <div data-ask-action-footer="" className="flex flex-wrap gap-2 px-4 py-3 text-sm font-semibold text-teal-800">{block.actions.filter((action) => action.href).map((action) => <span key={action.id}>{link(action.href!, <>{action.label}<ExternalLink className="ml-1 inline h-3.5 w-3.5" aria-hidden="true" /></>)}</span>)}</div>}
+    {detailId && detailItem?.entityType === 'CLAIM' && <ClaimDetail key={detailId} claimId={detailId} expectedPropertyId={propertyId} fallbackItem={detailItem} disabled={disabled} onAction={onAction} onAccessLost={onAccessLost} onClose={closeDetail} link={link} />}
+    {detailId && detailItem?.entityType === 'INCIDENT' && <IncidentDetail key={detailId} item={detailItem} disabled={disabled} onAction={onAction} onClose={closeDetail} />}
   </section>;
 }

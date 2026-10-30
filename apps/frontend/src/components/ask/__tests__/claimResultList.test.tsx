@@ -21,7 +21,7 @@ const CLAIM_ACTIONS = [
 const block = (actions = CLAIM_ACTIONS): Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }> => ({
   type: 'GROUPED_LIST', id: 'incident-claim-list', title: 'Incidents and claims', filters: [], actions: [],
   sections: [
-    { id: 'active-incidents', title: 'Active incidents', count: 1, items: [{ id: 'incident-1', title: 'Basement flooding', meta: [], description: null, status: 'ACTIVE', href: '/dashboard/properties/home/incidents/incident-1' }] },
+    { id: 'active-incidents', title: 'Active incidents', count: 1, items: [{ id: 'incident-1', title: 'Basement flooding', meta: ['high', 'Opened Oct 20'], description: 'Water entered the basement.', status: 'ACTIVE', href: null, entityType: 'INCIDENT', actions: [{ id: 'claim-file-start', label: 'Start a claim for this incident', message: 'Start a claim', style: 'PRIMARY', interactionType: 'CONVERSATION_CONTINUE', operationId: 'CLAIM_FILE' }] }] },
     { id: 'active-claims', title: 'Open claims', count: 1, items: [{ id: 'claim-1', title: 'Kitchen leak', meta: ['draft'], description: 'Acme · water damage', status: 'DRAFT', href: '/dashboard/properties/home/claims/claim-1', entityType: 'CLAIM', actions }] },
   ],
 });
@@ -61,14 +61,23 @@ test('the legal next statuses come from the canonical lifecycle', () => {
   expect(ids('CLOSED')).toEqual([]);
 });
 
-test('a claim row opens canonical detail inline; an incident row keeps its link', async () => {
+test('a claim row opens canonical detail inline', async () => {
   await open(claim());
   expect(mockedGetClaim).toHaveBeenCalledWith('home', 'claim-1');
-  expect(screen.getByRole('link', { name: 'Basement flooding' })).toHaveAttribute('href', '/dashboard/properties/home/incidents/incident-1');
   expect(screen.getByText('Acme Insurance')).toBeInTheDocument();
   expect(screen.getByText(/Checklist: 1 of 2 done \(50%\)/)).toBeInTheDocument();
   expect(screen.getByText(/Called insurer/)).toBeInTheDocument();
   expect(screen.getByRole('link', { name: /Open this claim/ })).toHaveAttribute('href', '/dashboard/properties/home/claims/claim-1');
+});
+
+test('an incident row opens its recorded summary inline and starts a governed claim follow-up', () => {
+  const onAction = jest.fn();
+  render(<ClaimResultList block={block()} propertyId="home" onAction={onAction} onAccessLost={() => {}} link={link} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Basement flooding' }));
+  expect(screen.getAllByText('Water entered the basement.')).toHaveLength(2);
+  expect(screen.getByText(/Ask does not provide live emergency troubleshooting/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Start a claim for this incident' }));
+  expect(onAction).toHaveBeenCalledWith('INCIDENT', 'incident-1', 'Start a claim', 'CLAIM_FILE', 'CONVERSATION_CONTINUE');
 });
 
 test('actions follow the LIVE status, not the (possibly stale) row, and dispatch the exact claim and canned message', async () => {
