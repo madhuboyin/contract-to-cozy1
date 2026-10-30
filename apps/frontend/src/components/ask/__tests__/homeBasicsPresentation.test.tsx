@@ -45,7 +45,7 @@ const monthlyExecution = (): AskExecutionResponse => ({
   blocks: [{
     type: 'SUMMARY', id: 'home-basics-summary', title: 'A simple monthly home routine',
     body: 'Start a trackable check now. Nothing is saved until you review and confirm.', tone: 'DEFAULT',
-    actions: [{ id: 'home-basics-start-monthly-check', label: 'Start this month\'s check', interactionType: 'START_WORKFLOW', message: 'Create a maintenance task titled Monthly home walkthrough due today.', operationId: 'MAINTENANCE_TASK_CREATE', style: 'PRIMARY' }],
+    actions: [{ id: 'home-basics-start-monthly-check', label: 'Add this month\'s walkthrough', interactionType: 'START_WORKFLOW', message: 'Add this month\'s home walkthrough to my maintenance tasks.', operationId: 'MAINTENANCE_TASK_CREATE', entityType: 'HOME_BASICS_ROUTINE', entityId: 'MONTHLY_WALKTHROUGH_ONE_TIME', style: 'PRIMARY' }],
   }, {
     type: 'GROUPED_LIST', id: 'home-basics-items', title: 'A simple monthly home routine', actions: [], filters: [],
     sections: [{ id: 'home-basics-monthly_routine', title: 'Once a month', count: 1, items: [{
@@ -95,8 +95,12 @@ describe('monthly home routine actions', () => {
         contextOpen={false} onOpenContext={jest.fn()} />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Start this month\'s check' }));
-    expect(ask).toHaveBeenLastCalledWith('Create a maintenance task titled Monthly home walkthrough due today.', undefined, expect.objectContaining({ operationId: 'MAINTENANCE_TASK_CREATE' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add this month\'s walkthrough' }));
+    expect(ask).toHaveBeenLastCalledWith(
+      'Add this month\'s home walkthrough to my maintenance tasks.',
+      undefined,
+      expect.objectContaining({ operationId: 'MAINTENANCE_TASK_CREATE', entityType: 'HOME_BASICS_ROUTINE', entityId: 'MONTHLY_WALKTHROUGH_ONE_TIME' }),
+    );
 
     fireEvent.click(screen.getByRole('button', { name: 'I found a problem' }));
     expect(ask).toHaveBeenLastCalledWith(

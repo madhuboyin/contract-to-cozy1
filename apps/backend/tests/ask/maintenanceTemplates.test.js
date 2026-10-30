@@ -14,6 +14,7 @@ const { getAskDomainCommandByOperation } = require('../../src/services/ask/askDo
 const { maintenanceTemplatesFromView } = require('../../src/services/ask/handlers/maintenanceTemplates.handler.ts');
 const { maintenanceTaskCreateResult } = require('../../src/services/ask/handlers/maintenance.handler.ts');
 const { MAINTENANCE_TEMPLATES_BROWSE_ACTION, MAINTENANCE_TEMPLATE_ADD_ACTION } = require('../../src/services/ask/support/maintenanceTemplateConstants.ts');
+const { HOME_BASICS_ROUTINE_ENTITY_TYPE, HOME_BASICS_ROUTINE_ONE_TIME_ID, HOME_BASICS_ROUTINE_RECURRING_ID, MONTHLY_WALKTHROUGH_DESCRIPTION } = require('../../src/services/ask/support/homeBasicsGuide.ts');
 const { AskPresentationBlockSchema } = require('../../src/productFramework/ask/ask.contract.ts');
 const { MaintenanceService } = require('../../src/services/maintenance.service.ts');
 const { PropertyMaintenanceTaskService } = require('../../src/services/PropertyMaintenanceTask.service.ts');
@@ -65,6 +66,26 @@ test.afterEach(() => {
 const browse = (launchContext = { surface: 'ASK_WORKSPACE', operationId: 'MAINTENANCE_TEMPLATES_BROWSE' }) =>
   capabilityInvoke('MAINTENANCE_TEMPLATES_BROWSE', { userId: 'u1', propertyId: 'p1', message: MAINTENANCE_TEMPLATES_BROWSE_ACTION.message, launchContext });
 const section = (result, id) => result.blocks.find((block) => block.id === 'maintenance-templates-list').sections.find((candidate) => candidate.id === id);
+
+test('typed monthly-walkthrough launches keep friendly transcript copy while preserving the complete task details', async () => {
+  const invoke = (entityId, message) => capabilityInvoke('MAINTENANCE_TASK_CREATE', {
+    userId: 'u1', propertyId: 'p1', message,
+    launchContext: { surface: 'ASK_WORKSPACE', operationId: 'MAINTENANCE_TASK_CREATE', entityType: HOME_BASICS_ROUTINE_ENTITY_TYPE, entityId },
+  });
+
+  const oneTime = await invoke(HOME_BASICS_ROUTINE_ONE_TIME_ID, 'Add this month\'s home walkthrough to my maintenance tasks.');
+  assert.equal(oneTime.reasonCode, 'MAINTENANCE_TASK_CONFIRMATION_REQUIRED');
+  assert.equal(oneTime.parameters.maintenanceTitle, 'Monthly home walkthrough');
+  assert.equal(oneTime.parameters.maintenanceDescription, MONTHLY_WALKTHROUGH_DESCRIPTION);
+  assert.match(oneTime.parameters.maintenanceNextDueDate, /^\d{4}-\d{2}-\d{2}$/);
+  assert.equal(oneTime.parameters.maintenanceIsRecurring, false);
+
+  const recurring = await invoke(HOME_BASICS_ROUTINE_RECURRING_ID, 'Add a monthly home walkthrough to my recurring maintenance.');
+  assert.equal(recurring.parameters.maintenanceDescription, MONTHLY_WALKTHROUGH_DESCRIPTION);
+  assert.equal(recurring.parameters.maintenanceNextDueDate, null);
+  assert.equal(recurring.parameters.maintenanceIsRecurring, true);
+  assert.equal(recurring.parameters.maintenanceFrequency, 'MONTHLY');
+});
 
 test('the list separates what can be added, what is already on the list and what needs a home detail, and leaves out what does not apply', async () => {
   const result = await browse();

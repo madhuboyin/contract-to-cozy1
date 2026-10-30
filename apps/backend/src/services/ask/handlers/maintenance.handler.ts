@@ -30,6 +30,7 @@ import { formatAskMaintenanceDescription, formatAskMaintenanceScope, formatAskMa
 import { extractMaintenanceTaskTitle } from '../askMaintenanceTaskInput';
 import { buildSeasonalMaintenanceResult, parseSeasonalMaintenanceIntent } from '../askSeasonalMaintenance';
 import { collectionDescriptor } from '../support/collectionDescriptor';
+import { HOME_BASICS_ROUTINE_ENTITY_TYPE, HOME_BASICS_ROUTINE_ONE_TIME_ID, HOME_BASICS_ROUTINE_RECURRING_ID, MONTHLY_WALKTHROUGH_DESCRIPTION, MONTHLY_WALKTHROUGH_TITLE } from '../support/homeBasicsGuide';
 
 type MaintenanceTimeframe = {
   label: string;
@@ -251,6 +252,9 @@ export async function maintenanceTaskCreateResult(
   template?: { id: string; prefill?: Partial<MaintenanceTaskWorkflowInput> } | null,
   // The journey step this task is created for (compliance task step). Re-read here and again at the confirmation; the task is linked to it only if it still fits.
   journeyStepId?: string | null,
+  // Server-owned values for a typed launch whose homeowner-facing message should stay conversational.
+  // These values still enter the ordinary review and confirmation flow; they are never written directly.
+  launchPrefill?: Partial<MaintenanceTaskWorkflowInput> | null,
 ): Promise<AskOperationResult> {
   const access = await ensurePropertyAccess(userId, propertyId);
   if (access.role === HouseholdRole.VIEWER) {
@@ -273,7 +277,8 @@ export async function maintenanceTaskCreateResult(
   const linkedStepId = stepBinding?.ok ? journeyStepId! : null;
   const stepLabel = linkedStepId ? (await prisma.guidanceJourneyStep.findFirst({ where: { id: linkedStepId }, select: { label: true } }))?.label ?? 'Guided journey step' : null;
   const templatePrefill = !suppliedInput && template?.prefill ? template.prefill : null;
-  const candidate = suppliedInput ?? templatePrefill ?? extractMaintenanceTaskInput(message, new Date(), safeTimezone(property?.timezone));
+  const extractedInput = extractMaintenanceTaskInput(message, new Date(), safeTimezone(property?.timezone));
+  const candidate = suppliedInput ?? templatePrefill ?? (launchPrefill ? { ...extractedInput, ...launchPrefill } : extractedInput);
   const parsed = MaintenanceTaskWorkflowInputSchema.safeParse(candidate);
   // A template opens the form with its values even when they would already pass, so the due date and cost can be set before review.
   if (!parsed.success || templatePrefill) {
@@ -1377,7 +1382,21 @@ registerCapabilityHandler('maintenance.create', async (envelope) => {
     && envelope.message === MAINTENANCE_TEMPLATE_ADD_ACTION.message;
   // Started from a journey step ("Create the task"): the step id travels to the confirmation, which links the new task to it.
   const journeyStepId = envelope.launchContext?.operationId === 'MAINTENANCE_TASK_CREATE' ? launchedGuidanceStepId(envelope.launchContext) : null;
-  if (!fromTemplate) return maintenanceTaskCreateResult(envelope.userId, envelope.propertyId!, envelope.message, undefined, sourceExecutionId, null, journeyStepId);
+  const homeBasicsRoutineId = envelope.launchContext?.entityType === HOME_BASICS_ROUTINE_ENTITY_TYPE
+    ? envelope.launchContext.entityId
+    : null;
+  if (!fromTemplate) {
+    const recurring = homeBasicsRoutineId === HOME_BASICS_ROUTINE_RECURRING_ID;
+    const launchPrefill = homeBasicsRoutineId === HOME_BASICS_ROUTINE_ONE_TIME_ID || recurring ? {
+      title: MONTHLY_WALKTHROUGH_TITLE,
+      description: MONTHLY_WALKTHROUGH_DESCRIPTION,
+      priority: MaintenanceTaskPriority.MEDIUM,
+      nextDueDate: recurring ? undefined : localDateKey(new Date(), safeTimezone((await prisma.property.findUnique({ where: { id: envelope.propertyId! }, select: { timezone: true } }))?.timezone)),
+      isRecurring: recurring,
+      frequency: recurring ? RecurrenceFrequency.MONTHLY : undefined,
+    } : null;
+    return maintenanceTaskCreateResult(envelope.userId, envelope.propertyId!, envelope.message, undefined, sourceExecutionId, null, journeyStepId, launchPrefill);
+  }
   const templateId = envelope.launchContext!.entityId as string;
   const templates = await MaintenanceService.getMaintenanceTemplates(envelope.userId, envelope.propertyId!);
   const template = (templates as Array<{ id: string; title: string; description: string | null; defaultFrequency: RecurrenceFrequency; applicability?: { status?: string } }>)

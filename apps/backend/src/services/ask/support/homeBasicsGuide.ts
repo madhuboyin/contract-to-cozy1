@@ -43,22 +43,29 @@ const GUIDES: Readonly<Record<HomeBasicsFocus, BasicsGuide>> = {
   },
 };
 
-const MONTHLY_WALKTHROUGH_TITLE = 'Monthly home walkthrough';
-const MONTHLY_WALKTHROUGH_DESCRIPTION = 'Walk every room; check sinks and fixtures for moisture; test smoke and carbon monoxide alarms; check HVAC filters; inspect drainage, downspouts, siding, railings and steps.';
+export const MONTHLY_WALKTHROUGH_TITLE = 'Monthly home walkthrough';
+export const MONTHLY_WALKTHROUGH_DESCRIPTION = 'Walk every room; check sinks and fixtures for moisture; test smoke and carbon monoxide alarms; check HVAC filters; inspect drainage, downspouts, siding, railings and steps.';
+export const HOME_BASICS_ROUTINE_ENTITY_TYPE = 'HOME_BASICS_ROUTINE';
+export const HOME_BASICS_ROUTINE_ONE_TIME_ID = 'MONTHLY_WALKTHROUGH_ONE_TIME';
+export const HOME_BASICS_ROUTINE_RECURRING_ID = 'MONTHLY_WALKTHROUGH_RECURRING';
 
 const monthlyRoutineActions = () => [{
   id: 'home-basics-start-monthly-check',
-  label: 'Start this month\'s check',
+  label: 'Add this month\'s walkthrough',
   interactionType: 'START_WORKFLOW' as const,
-  message: `Create a maintenance task titled ${MONTHLY_WALKTHROUGH_TITLE} due today. Description: ${MONTHLY_WALKTHROUGH_DESCRIPTION}`,
+  message: 'Add this month\'s home walkthrough to my maintenance tasks.',
   operationId: 'MAINTENANCE_TASK_CREATE',
+  entityType: HOME_BASICS_ROUTINE_ENTITY_TYPE,
+  entityId: HOME_BASICS_ROUTINE_ONE_TIME_ID,
   style: 'PRIMARY' as const,
 }, {
   id: 'home-basics-make-monthly-routine',
   label: 'Make this a monthly routine',
   interactionType: 'START_WORKFLOW' as const,
-  message: `Create a monthly recurring maintenance task titled ${MONTHLY_WALKTHROUGH_TITLE}. Description: ${MONTHLY_WALKTHROUGH_DESCRIPTION}`,
+  message: 'Add a monthly home walkthrough to my recurring maintenance.',
   operationId: 'MAINTENANCE_TASK_CREATE',
+  entityType: HOME_BASICS_ROUTINE_ENTITY_TYPE,
+  entityId: HOME_BASICS_ROUTINE_RECURRING_ID,
   style: 'SECONDARY' as const,
 }];
 

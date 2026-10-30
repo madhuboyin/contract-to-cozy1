@@ -66,8 +66,13 @@ test('the monthly routine offers confirmation-gated maintenance actions to contr
   const actionable = buildHomeBasicsResult('MONTHLY_ROUTINE', true);
   const summary = actionable.blocks.find((block) => block.id === 'home-basics-summary');
   const list = actionable.blocks.find((block) => block.id === 'home-basics-items');
-  assert.deepEqual(summary.actions.map((action) => action.label), ['Start this month\'s check', 'Make this a monthly routine']);
+  assert.deepEqual(summary.actions.map((action) => action.label), ['Add this month\'s walkthrough', 'Make this a monthly routine']);
   assert.ok(summary.actions.every((action) => action.operationId === 'MAINTENANCE_TASK_CREATE'));
+  assert.deepEqual(summary.actions.map((action) => action.message), [
+    'Add this month\'s home walkthrough to my maintenance tasks.',
+    'Add a monthly home walkthrough to my recurring maintenance.',
+  ]);
+  assert.ok(summary.actions.every((action) => action.entityType === 'HOME_BASICS_ROUTINE'));
   assert.match(summary.body, /Nothing is saved until you review and confirm/);
   for (const item of list.sections[0].items) {
     assert.equal(item.entityType, 'HOME_BASICS_CHECK');
