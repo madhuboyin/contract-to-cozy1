@@ -298,7 +298,8 @@ export function claimsFilterChips(scope: ClaimsScope, state: ClaimsState) {
 async function loadClaimsViewState(sourceExecutionId: string | null | undefined, userId: string): Promise<AskViewState | null> {
   if (!sourceExecutionId) return null;
   const source = await prisma.askExecution.findFirst({ where: { id: sourceExecutionId, userId }, select: { operationId: true } });
-  return source?.operationId === 'INCIDENT_CLAIM_STATUS' ? loadAskViewState(sourceExecutionId, userId) : null;
+  // The emergency follow-up (INCIDENT_CONTINUATION) renders the same list and the same chips, so its view state is this domain's too.
+  return source?.operationId === 'INCIDENT_CLAIM_STATUS' || source?.operationId === 'INCIDENT_CONTINUATION' ? loadAskViewState(sourceExecutionId, userId) : null;
 }
 
 const CLAIMS_BUCKET_LIMITS = { activeIncidents: 12, resolvedIncidents: 8, openClaims: 12, closedClaims: 8 } as const;
@@ -447,5 +448,8 @@ registerCapabilityHandler('incident-claim.transition', async (envelope) => claim
 registerCapabilityHandler('incident-claim.continuation', async (envelope, deps) => {
   // The orchestrator passes the access it already resolved for this user and property; resolve it only when a caller did not.
   const access = deps.propertyAccess ?? await ensurePropertyAccess(envelope.userId, envelope.propertyId!);
-  return incidentClaimStatusResult(envelope.userId, envelope.propertyId!, 'Show my incidents and claims', null, { emergencyFollowUp: true, access });
+  // Its own filter chips refine this list (the emergency framing stays); anything else opens the unfiltered follow-up.
+  const prior = await loadClaimsViewState(envelope.launchContext?.sourceExecutionId, envelope.userId);
+  const refining = Boolean(resolveClaimsRefinement(envelope.message, prior));
+  return incidentClaimStatusResult(envelope.userId, envelope.propertyId!, refining ? envelope.message : 'Show my incidents and claims', refining ? prior : null, { emergencyFollowUp: true, access });
 });

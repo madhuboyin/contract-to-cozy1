@@ -164,3 +164,25 @@ test('every declared chip is recognised as a filter continuation, round-trips to
     assert.equal(resolution.effectiveMessage, chip.message, `${chip.label}: the chip wording is a complete specification`);
   }
 });
+
+// The emergency follow-up opens the same list from its own operation (INCIDENT_CONTINUATION). Its handler used to re-run the unfiltered list
+// whatever was asked, so Claims / Incidents / Open / Closed on that answer showed everything with no filter applied.
+test('the emergency follow-up list applies its own filter chips (scope and state) and keeps the emergency framing', async () => {
+  install();
+  const cont = (message, sourceExecutionId) => capabilityInvoke('INCIDENT_CONTINUATION', { userId: 'u1', propertyId: 'p1', message, launchContext: sourceExecutionId ? { surface: 'ASK_WORKSPACE', sourceExecutionId, operationId: 'INCIDENT_CONTINUATION' } : undefined });
+  priorOperation = 'INCIDENT_CONTINUATION'; priorViewState = view('BOTH', 'ALL', 1);
+  const fresh = await cont('Show my incidents and claims');
+  assert.deepEqual(ids(fresh), ['c-closed', 'c-draft', 'c-open', 'i-active', 'i-resolved'].sort(), 'unfiltered when asked fresh');
+  const claimsOnly = await cont('Only show claims', 'exec-1');
+  assert.deepEqual(ids(claimsOnly), ['c-closed', 'c-draft', 'c-open'], 'Only show claims');
+  assert.ok(active(claimsOnly).includes('scope-claims'));
+  assert.ok(claimsOnly.blocks.some((block) => block.id !== 'incident-claim-list' && /immediate danger/i.test(JSON.stringify(block))), 'the emergency boundary stays');
+  const incidentsOnly = await cont('Only show incidents', 'exec-1');
+  assert.deepEqual(ids(incidentsOnly), ['i-active', 'i-resolved']);
+  priorViewState = view('CLAIMS', 'ALL', 2);
+  const open = await cont('Only show open records', 'exec-1');
+  assert.deepEqual(ids(open), ['c-draft', 'c-open'], 'a state chip keeps the scope');
+  priorOperation = 'MAINTENANCE_STATUS';
+  const foreign = await cont('Only show claims', 'exec-1');
+  assert.equal(ids(foreign).length, 5, 'another domain\'s view state is never continued');
+});
