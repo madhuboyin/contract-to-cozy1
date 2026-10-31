@@ -218,6 +218,25 @@ async function findRecentPriorExecution(sessionId: string, propertyId: string | 
   return row;
 }
 
+/**
+ * Whether a follow-up's (or declared action's) operation replaces what routing chose. A filter refinement ("Only show claims") always stays on the list it
+ * refines, even when the prior question prepended to it routes locally elsewhere or to a clarification; every other source keeps the earlier rule
+ * (never over a clarification, and for follow-ups only when routing found nothing).
+ */
+export function shouldForceAskOperation(input: {
+  forcedOperationId: string | null;
+  routingStage: string;
+  routingRequiresClarification: boolean;
+  routedOperationId: string;
+  isFilterRefinement: boolean;
+  declaredItemAction: boolean;
+  contextual: boolean;
+}): boolean {
+  if (!input.forcedOperationId || input.routingStage === 'SAFETY' || input.routedOperationId === input.forcedOperationId) return false;
+  if (input.isFilterRefinement) return true;
+  return !input.routingRequiresClarification && (input.declaredItemAction || input.contextual || input.routingStage === 'REMOTE_FALLBACK');
+}
+
 // Rewrites a bare follow-up ("Now complete it.", "Only show the urgent
 // ones.") into an effective message that carries enough of the prior turn's
 // typed context for the existing deterministic routing/parsing regexes to

@@ -15,7 +15,7 @@ import { asInputJson, askFailureBlocks, askFailureStatus, assertSkillResultBlock
 import { executeOperation } from '../execution/executeOperation';
 import { classifyLaunchedOutcome, recordHandoffOutcome, resolveHandoffAttribution, type AskHandoffAttribution } from './askHandoffTelemetry';
 import { propertyScopeForAskRouting, resolveAskRoutingCascade, type AskRoutingDecision } from '../askRoutingCascade';
-import { resolveAskFollowUpMessage } from '../askFollowUpContext';
+import { resolveAskFollowUpMessage, shouldForceAskOperation } from '../askFollowUpContext';
 import { getSkillDefinition, getSkillForOperation, resolveEffectiveSkillOperationPolicy } from '../../skills/skillRegistry';
 import { ASK_CAPABILITY_UNIQUE_OPERATION } from '../../intelligence/capabilitySkillGuidanceBridge.registry';
 import { resolveHierarchicalSkillRouting, type SkillRoutingOutcome } from '../../skills/skillRouter';
@@ -401,11 +401,11 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
       entityResolution: resolveAskEntityState({ message: routingMessage, operationId: declaredOperation.operationId, propertyId: executionPropertyId, launchEntityId: input.launchContext?.entityId, requiresProperty: declaredOperation.requiresProperty }),
     };
   }
-  const shouldForceOperation = Boolean(forcedOperationId)
-    && routingDecision.stage !== 'SAFETY'
-    && !routingDecision.requiresClarification
-    && routingDecision.operation.operationId !== forcedOperationId
-    && (Boolean(declaredItemActionOperationId) || Boolean(contextualOperationId) || routingDecision.stage === 'REMOTE_FALLBACK');
+  const shouldForceOperation = shouldForceAskOperation({
+    forcedOperationId, routingStage: routingDecision.stage, routingRequiresClarification: routingDecision.requiresClarification,
+    routedOperationId: routingDecision.operation.operationId, isFilterRefinement: followUp.isFilterRefinement && !declaredItemActionOperationId && forcedOperationId === followUp.forcedOperationId,
+    declaredItemAction: Boolean(declaredItemActionOperationId), contextual: Boolean(contextualOperationId),
+  });
   const operation = shouldForceOperation
     ? { ...getAskOperationDefinition(forcedOperationId as AskOperationId), confidence: 1 }
     : routingDecision.operation;
