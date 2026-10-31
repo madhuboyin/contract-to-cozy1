@@ -36,8 +36,12 @@ test('registered as a non-routable, skill-less, deterministic, viewer-floor, sta
   assert.deepEqual(validateAskInteractionCoverageMatrix(), []);
 });
 
-test('no message resolves to the new operation (routing is untouched)', () => {
-  for (const message of [HOME_BASICS_SAFETY_MESSAGE, HOME_BASICS_MONTHLY_MESSAGE, 'home safety basics', 'monthly home routine', 'What should I check at home?']) {
+test('only the two canonical starters, typed by hand or closely reworded, resolve to the guide; vague wording still does not', () => {
+  // Typed, "What should I check around my home each month?" fell into a three-way clarification (HOME_EVENT_RADAR_FEED, HOME_ACTIONS, ...).
+  for (const message of [HOME_BASICS_SAFETY_MESSAGE, HOME_BASICS_MONTHLY_MESSAGE, 'What should I check around my home each month', 'what should I check each month around my house', 'What do I need to check monthly around the house?', 'A simple monthly routine']) {
+    assert.equal(resolveAskOperation(message).operationId, 'HOME_BASICS_GUIDE', message);
+  }
+  for (const message of ['home safety basics', 'monthly home routine', 'What should I check at home?', 'Show my maintenance tasks due this month', 'What is on my recorded monthly checklist?']) {
     assert.notEqual(resolveAskOperation(message).operationId, 'HOME_BASICS_GUIDE', message);
   }
 });

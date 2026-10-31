@@ -1131,6 +1131,9 @@ const maintenancePattern = /\b(maintenance|maintain|task|tasks|overdue|due soon|
 // General climate-region seasonal guidance. This intentionally excludes the homeowner's recorded checklist/task language, which remains
 // MAINTENANCE_STATUS. The canonical starters must also work when typed or resent without their original discovery launch context.
 const seasonalHomeCarePattern = /\b(?:what home care should (?:i|we) do (?:for |in )?(?:this|the current|next|the next|coming|upcoming) season|what should (?:i|we) do to get ready for (?:the )?(?:next|coming|upcoming) season|(?:how (?:do|should) (?:i|we)|what should (?:i|we) do to) prepare (?:my |our |the )?home for (?:the )?(?:next|coming|upcoming) season|get(?:ting)? ready for (?:the )?(?:next|coming|upcoming) season)\b/i;
+// HOME_BASICS_GUIDE stays out of fuzzy retrieval (it is a stored starter's typed launch), but its two canonical starters typed by hand, and
+// the same questions worded closely, reach it: otherwise the typed starter text fell into a multi-way clarification.
+const homeBasicsGuidePattern = /\b(?:what (?:home )?safety basics (?:should|do) (?:i|we) (?:know|need to know)|what (?:should|do) (?:i|we) (?:check|need to check|look at) (?:around|in|at) (?:my|our|the) (?:home|house)(?: (?:each|every) month| monthly)|what (?:should|do) (?:i|we) (?:need to )?(?:check|look at) (?:each month|every month|monthly) (?:around|in) (?:my|our|the) (?:home|house)|(?:a )?simple monthly (?:home )?routine(?: for (?:my|our|the) (?:home|house))?)\b/i;
 const seasonalHomeCareRecordedIntentPattern = /\b(?:checklist|recorded|pending|completed|overdue|my tasks|our tasks|task status)\b/i;
 const maintenanceCreatePattern = /\b(?:create|add|schedule|set up)\b.{0,80}\b(?:maintenance(?: task)?|tasks?|gutter (?:cleaning|inspection)|clean(?:ing)? (?:the )?gutters?|filter change|(?:hvac|furnace|boiler|roof|water heater) (?:service|inspection|cleaning|repair|replacement))\b|\b(?:remind me to|put on my maintenance list)\b/i;
 // Deliberately checked before the very broad maintenancePattern below
@@ -1841,6 +1844,9 @@ export function resolveAskOperation(message: string): AskOperationResolution {
   }
   if (seasonalHomeCarePattern.test(message) && !seasonalHomeCareRecordedIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('SEASONAL_HOME_CARE', 0.98);
+  }
+  if (homeBasicsGuidePattern.test(message) && !seasonalHomeCareRecordedIntentPattern.test(message) && !explicitCapabilityPattern.test(message)) {
+    return resolved('HOME_BASICS_GUIDE', 0.97);
   }
   if (maintenancePattern.test(message) && !explicitCapabilityPattern.test(message)) {
     return resolved('MAINTENANCE_STATUS', 0.94);
