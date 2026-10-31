@@ -80,6 +80,8 @@ test('the list offers confirm to a contributor on a report waiting for review, a
   assert.deepEqual(viewer[R1], ['inspection-report-findings'], 'a viewer can read the findings, with no edit action');
   assert.deepEqual(viewer[R2], ['inspection-report-findings', 'inspection-report-compare']);
   assert.equal(inspectionReportsFromRows([], true).reasonCode, 'NO_INSPECTION_REPORTS');
+  assert.deepEqual(inspectionReportsFromRows([], true).blocks[0].actions.map((a) => [a.id, a.interactionType]), [['inspection-report-upload', 'OPEN_FILE_INTAKE']]);
+  assert.deepEqual(inspectionReportsFromRows([], false).blocks[0].actions, [], 'a viewer gets no upload action');
 });
 
 test('review shows what confirming writes back and the findings by severity; nothing is written; viewers, a refresh and non-reviewable reports are refused', async () => {

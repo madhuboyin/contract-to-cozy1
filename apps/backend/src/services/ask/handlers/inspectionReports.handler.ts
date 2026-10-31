@@ -31,7 +31,7 @@ export function inspectionReportsFromRows(rows: ReportRow[], canChange: boolean,
   if (reports.length === 0) {
     return {
       status: 'ANSWERED', reasonCode: 'NO_INSPECTION_REPORTS',
-      blocks: [{ type: 'EMPTY_STATE', id: 'inspection-reports-empty', title: 'No inspection reports yet', body: 'No inspection report has been added for this home. A report is read and its findings are listed here once it has been uploaded.', actions: [] }],
+      blocks: [{ type: 'EMPTY_STATE', id: 'inspection-reports-empty', title: 'No inspection reports yet', body: 'No inspection report has been added for this home. A report is read and its findings are listed here once it has been uploaded.', actions: canChange ? [{ id: 'inspection-report-upload', label: 'Upload inspection report', interactionType: 'OPEN_FILE_INTAKE' as const, style: 'PRIMARY' as const }] : [] }],
       suggestions: [],
     };
   }
