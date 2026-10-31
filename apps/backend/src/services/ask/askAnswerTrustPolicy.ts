@@ -113,7 +113,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   // + the claim transition item actions (FRD v1.42); the inline claim detail shows only those legal from the live status.
   // FRD v1.43: INSPECTION_FINDINGS had no entry, so even its "Open Inspection Hub" link was stripped; the finding
   // actions are shown in the inline detail only when the live state allows them.
-  INSPECTION_FINDINGS: new Set(['finding-accept', 'finding-dismiss', 'finding-resolve']),
+  INSPECTION_FINDINGS: new Set(['finding-accept', 'finding-dismiss', 'finding-resolve', 'inspection-report-upload', 'inspection-reports-open', 'inspection-findings-clear-filters']),
   RECALL_REVIEW: new Set(['recall-confirm', 'recall-dismiss', 'recall-resolve']),
   // The Open Documents link was never declared, so the validator removed it from the answer and from its empty state (found in Documents D-1).
   INCIDENT_CLAIM_STATUS: new Set(['claim-file-start', 'claim-start', 'claim-submit', 'claim-under-review', 'claim-approve', 'claim-deny', 'claim-close', 'claim-checklist']),
@@ -294,7 +294,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   // Compare a confirmed inspection report with the confirmed one before it (register P2 Inspection Hub). Read-only; launched from a report row.
   INSPECTION_REPORT_COMPARE: new Set(['inspection-reports-back']),
   // List the home's inspection reports with their state and what can be done next (register P2 Inspection Hub). Read-only.
-  INSPECTION_REPORTS: new Set(['inspection-reports-back', 'inspection-report-confirm', 'inspection-report-compare', 'inspection-report-findings', 'inspection-report-negotiation', 'inspection-report-archive']),
+  INSPECTION_REPORTS: new Set(['inspection-reports-back', 'inspection-report-upload', 'inspection-report-confirm', 'inspection-report-compare', 'inspection-report-findings', 'inspection-report-negotiation', 'inspection-report-archive']),
   // Start the sale case, set its target dates and prep budget range, and record its stage (register P2 Seller Prep). Confirmation-gated, declared-action only; lists, contracts or closes nothing.
   SELLER_PREP_CASE_COMMAND: new Set(['seller-prep-back']),
   // Mark a claim checklist item done, not applicable or open again, and add a note to a claim's timeline (register P2 Claims). Confirmation-gated, declared-action only.

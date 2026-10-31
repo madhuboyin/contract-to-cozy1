@@ -21,6 +21,8 @@ require('../../src/services/ask/askOrchestrator.service.ts');
 const hubService = require('../../src/services/inspectionHub.service.ts');
 const writeBack = require('../../src/services/inspectionWriteBack.service.ts');
 const command = require('../../src/services/ask/support/inspectionReportCommand.ts');
+const { validateAskAnswerTrust } = require('../../src/services/ask/askAnswerTrustValidator.ts');
+const { attachAskAuthoritativeSourceEvidence, completedAskAuthoritativeSourceEvidence } = require('../../src/services/ask/askAnswerTrustPolicy.ts');
 const { inspectionReportsFromRows } = require('../../src/services/ask/handlers/inspectionReports.handler.ts');
 
 const CMD = 'INSPECTION_REPORT_COMMAND';
@@ -82,6 +84,8 @@ test('the list offers confirm to a contributor on a report waiting for review, a
   assert.equal(inspectionReportsFromRows([], true).reasonCode, 'NO_INSPECTION_REPORTS');
   assert.deepEqual(inspectionReportsFromRows([], true).blocks[0].actions.map((a) => [a.id, a.interactionType]), [['inspection-report-upload', 'OPEN_FILE_INTAKE']]);
   assert.deepEqual(inspectionReportsFromRows([], false).blocks[0].actions, [], 'a viewer gets no upload action');
+  const trusted = validateAskAnswerTrust({ question: 'Show my inspection reports', operationId: 'INSPECTION_REPORTS', result: attachAskAuthoritativeSourceEvidence(inspectionReportsFromRows([], true), [completedAskAuthoritativeSourceEvidence('INSPECTION_REPORTS')]), propertyId: 'p1' }).result;
+  assert.deepEqual(trusted.blocks[0].actions.map((a) => a.id), ['inspection-report-upload'], 'the upload action survives answer-trust filtering');
 });
 
 test('review shows what confirming writes back and the findings by severity; nothing is written; viewers, a refresh and non-reviewable reports are refused', async () => {

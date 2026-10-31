@@ -14,6 +14,8 @@ const {
 const { capabilityInvoke } = require('../../src/services/ask/capabilityHandlerRegistry.ts');
 const { confirmCapabilityInvoke } = require('../../src/services/ask/confirmCapabilityHandlerRegistry.ts');
 const { getAskDomainCommandByOperation } = require('../../src/services/ask/askDomainCommandRegistry.ts');
+const { validateAskAnswerTrust } = require('../../src/services/ask/askAnswerTrustValidator.ts');
+const { attachAskAuthoritativeSourceEvidence, completedAskAuthoritativeSourceEvidence } = require('../../src/services/ask/askAnswerTrustPolicy.ts');
 const { isAskActionApplicable } = require('../../src/services/ask/askAnswerTrustPolicy.ts');
 const { capabilityCardLaunch } = require('../../src/services/ask/askCapabilityCardLaunch.ts');
 const { ResolveFindingSchema } = require('../../src/validators/inspectionHub.validators.ts');
@@ -165,6 +167,25 @@ test('an empty findings list says why and offers the matching next step', async 
   assert.equal(block.actions[0].id, 'inspection-findings-clear-filters');
   assert.equal(block.actions[0].operationId, 'INSPECTION_FINDINGS');
   assert.match(block.body, /all 4/);
+});
+
+test('the upload and report actions survive answer-trust filtering, on the empty state and the populated list', async () => {
+  const ids = async (operationId, message) => {
+    const raw = await capabilityInvoke(operationId, { userId: 'u1', propertyId: 'p1', message });
+    // Finalization puts the direct-answer summary before a list; the validator judges the whole answer.
+    const withSummary = raw.blocks[0].type === 'EMPTY_STATE' ? raw : { ...raw, blocks: [{ type: 'SUMMARY', id: 'direct-answer', title: 'Open inspection findings', body: 'These are your open inspection findings.', tone: 'DEFAULT', actions: [] }, ...raw.blocks] };
+    const result = attachAskAuthoritativeSourceEvidence(withSummary, [completedAskAuthoritativeSourceEvidence(operationId)]);
+    const { result: validated } = validateAskAnswerTrust({ question: message, operationId, result, propertyId: 'p1' });
+    return validated.blocks.flatMap((block) => (block.actions ?? []).map((action) => action.id));
+  };
+  openList = []; openCount = 0; reportRows = [];
+  assert.deepEqual(await ids('INSPECTION_FINDINGS', 'Show my open inspection findings'), ['inspection-report-upload']);
+  reportRows = [{ status: 'REVIEW_PENDING' }];
+  assert.deepEqual(await ids('INSPECTION_FINDINGS', 'Show my open inspection findings'), ['inspection-reports-open', 'inspection-report-upload']);
+  reportRows = [{ status: 'CONFIRMED' }]; openCount = 4;
+  assert.ok((await ids('INSPECTION_FINDINGS', 'Show my open safety inspection findings')).includes('inspection-findings-clear-filters'));
+  openList = null; openCount = null;
+  assert.ok((await ids('INSPECTION_FINDINGS', 'Show my open inspection findings')).includes('inspection-report-upload'));
 });
 
 test('the typed finding actions are whitelisted and the desktop hub link is not', () => {
