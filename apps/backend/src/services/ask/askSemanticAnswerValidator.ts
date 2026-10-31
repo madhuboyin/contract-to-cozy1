@@ -37,6 +37,12 @@ export interface AskSemanticAnswerRelevanceResult {
 
 const SUCCESS_STATUSES = new Set(['ANSWERED', 'COMPLETED', 'READY_WITH_LIMITATIONS']);
 
+const AUTHORED_GUIDE_RESULT_CODES: Partial<Record<AskOperationId, readonly string[]>> = {
+  HOME_BASICS_GUIDE: ['HOME_BASICS_READY'],
+  SEASONAL_HOME_CARE: ['SEASONAL_HOME_CARE_READY', 'SEASONAL_HOME_CARE_NO_GENERAL_TASKS'],
+  HIRING_GUIDE: ['HIRING_GUIDE_READY'],
+};
+
 export function validateAskSemanticAnswerRelevance(input: {
   question: string;
   operationId: AskOperationId;
@@ -209,6 +215,15 @@ export function validateAskSemanticAnswerRelevance(input: {
   }
   if (input.operationId === 'ENVIRONMENT_REPORT'
     && input.result.blocks.some((block) => block.type === 'ENVIRONMENT_REPORT')) {
+    return finish({
+      outcome: 'PASS', selectedOperationId: input.operationId, competingOperationId: null,
+      selectedOperationScore: 1, competingOperationScore: 0, questionAnswerScore: 1,
+      reasonCodes: ['CANONICAL_TYPED_ANSWER_CONTRACT_MATCH'],
+    });
+  }
+  // Authored guide operations are reached by their own narrow deterministic wording (or a starter's launch), and their text is evergreen
+  // guidance that shares little vocabulary with the question, so word similarity cannot confirm it. Their own canonical result is the match.
+  if (AUTHORED_GUIDE_RESULT_CODES[input.operationId]?.includes(input.result.reasonCode ?? '')) {
     return finish({
       outcome: 'PASS', selectedOperationId: input.operationId, competingOperationId: null,
       selectedOperationScore: 1, competingOperationScore: 0, questionAnswerScore: 1,

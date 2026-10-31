@@ -15,6 +15,7 @@ registry.registerCapabilityHandler = originalRegister;
 
 const { buildHomeBasicsResult, homeBasicsFocus, HOME_BASICS_SAFETY_MESSAGE, HOME_BASICS_MONTHLY_MESSAGE } = require('../../src/services/ask/support/homeBasicsGuide.ts');
 const { ASK_OPERATION_DEFINITIONS, resolveAskOperation } = require('../../src/services/ask/askOperationRegistry.ts');
+const { validateAskSemanticAnswerRelevance } = require('../../src/services/ask/askSemanticAnswerValidator.ts');
 const { getAskAudiencePolicy } = require('../../src/services/ask/askAudiencePolicy.ts');
 const { KNOWN_UNGOVERNED_OPERATIONS, validateSkillOperationGovernanceCoverage } = require('../../src/services/intelligence/skillOperationGovernance.contract.ts');
 const { validateAskInteractionCoverageMatrix } = require('../../src/services/ask/askInteractionCoverageMatrix.ts');
@@ -38,12 +39,25 @@ test('registered as a non-routable, skill-less, deterministic, viewer-floor, sta
 
 test('only the two canonical starters, typed by hand or closely reworded, resolve to the guide; vague wording still does not', () => {
   // Typed, "What should I check around my home each month?" fell into a three-way clarification (HOME_EVENT_RADAR_FEED, HOME_ACTIONS, ...).
-  for (const message of [HOME_BASICS_SAFETY_MESSAGE, HOME_BASICS_MONTHLY_MESSAGE, 'What should I check around my home each month', 'what should I check each month around my house', 'What do I need to check monthly around the house?', 'A simple monthly routine']) {
+  for (const message of [HOME_BASICS_SAFETY_MESSAGE, HOME_BASICS_MONTHLY_MESSAGE, 'What should I check around my home each month', 'what should I check each month around my house', 'What do I need to check monthly around the house?', 'A simple monthly routine', 'Start my monthly home walkthrough', 'Start this month\'s check', 'do my monthly home walkthrough', 'Start this month’s check', 'Begin this month\'s home walkthrough']) {
     assert.equal(resolveAskOperation(message).operationId, 'HOME_BASICS_GUIDE', message);
   }
   for (const message of ['home safety basics', 'monthly home routine', 'What should I check at home?', 'Show my maintenance tasks due this month', 'What is on my recorded monthly checklist?']) {
     assert.notEqual(resolveAskOperation(message).operationId, 'HOME_BASICS_GUIDE', message);
   }
+});
+
+test('the typed starters pass answer relevance (typed, they were rejected as "I need one detail to verify this answer")', () => {
+  const cases = [['MONTHLY_ROUTINE', 'What should I check around my home each month'], ['MONTHLY_ROUTINE', 'What should I check around my home each month?'], ['SAFETY_BASICS', 'What home safety basics should I know?'], ['MONTHLY_ROUTINE', 'A simple monthly routine']];
+  for (const [focus, question] of cases) {
+    const outcome = validateAskSemanticAnswerRelevance({ question, operationId: 'HOME_BASICS_GUIDE', result: buildHomeBasicsResult(focus, true) }).outcome;
+    assert.equal(outcome, 'PASS', question);
+  }
+  const guide = (operationId, reasonCode) => validateAskSemanticAnswerRelevance({ question: 'What should I do to get ready for next season', operationId, result: { status: 'ANSWERED', reasonCode, blocks: [{ type: 'SUMMARY', id: 's', title: 'This fall', body: 'Clear gutters.', tone: 'DEFAULT', actions: [] }], suggestions: [] } }).outcome;
+  assert.equal(guide('SEASONAL_HOME_CARE', 'SEASONAL_HOME_CARE_READY'), 'PASS', 'seasonal care typed question');
+  assert.notEqual(guide('SEASONAL_HOME_CARE', 'SEASONAL_HOME_CARE_PROPERTY_NOT_FOUND'), 'PASS', 'an error result is not a canonical answer');
+  const unrelated = { status: 'ANSWERED', reasonCode: 'OTHER', blocks: [{ type: 'SUMMARY', id: 'other', title: 'Home summary', body: 'Your home was built in 1999.', tone: 'DEFAULT', actions: [] }], suggestions: [] };
+  assert.notEqual(validateAskSemanticAnswerRelevance({ question: 'What should I check around my home each month?', operationId: 'HOME_BASICS_GUIDE', result: unrelated }).outcome, 'PASS', 'only the guide\'s own blocks count');
 });
 
 test('EXECUTED through the registered canonical call: both starter messages return distinct authored content, valid blocks, a boundary, and no property data', async () => {
