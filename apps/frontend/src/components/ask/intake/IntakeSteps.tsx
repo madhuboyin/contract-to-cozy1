@@ -60,14 +60,14 @@ export function IntakePicker({ config, busy, onFile, problem }: { config: AskInt
 }
 
 /** Step 2: say what the file is and agree to it being read. The one question asked is the one the server could not answer. */
-export function IntakeReadStep({ view, config, busy, onRead, onKeep, onDiscard }: {
-  view: AskIntakeView; config: AskIntakeConfig; busy: boolean;
+export function IntakeReadStep({ view, config, busy, onRead, onKeep, onDiscard, presetKind }: {
+  presetKind?: AskIntakeKind; view: AskIntakeView; config: AskIntakeConfig; busy: boolean;
   onRead: (kind: AskIntakeKind | 'AUTO', acknowledged: boolean, inspection?: { reportType: string; inspectionDate: string }) => void; onKeep: () => void; onDiscard: () => void;
 }) {
   const isPdf = view.provenance.original.mimeType === 'application/pdf';
   const fixed = view.choice?.options.map((option) => option.kind);
   const options = config.kinds.filter((option) => (fixed ? fixed.includes(option.kind) : isPdf ? option.kind !== 'APPLIANCE_LABEL' : option.acceptsImages));
-  const [kind, setKind] = useState<AskIntakeKind | 'AUTO'>(view.needsDetails ? 'INSPECTION_REPORT' : fixed ? options[0]?.kind ?? 'AUTO' : 'AUTO');
+  const [kind, setKind] = useState<AskIntakeKind | 'AUTO'>(view.needsDetails ? 'INSPECTION_REPORT' : fixed ? options[0]?.kind ?? 'AUTO' : presetKind && options.some((option) => option.kind === presetKind) ? presetKind : 'AUTO');
   const [acknowledged, setAcknowledged] = useState(false);
   const [reportType, setReportType] = useState('GENERAL');
   const [inspectionDate, setInspectionDate] = useState('');

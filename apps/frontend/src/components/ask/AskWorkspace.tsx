@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 import { VoiceInputButton } from './VoiceInputButton';
 import { ComposerIntakeButton } from './intake/ComposerIntakeButton';
 import { AskIntakeDialog } from './intake/AskIntakeDialog';
-import type { AskCapabilityPrompt, AskExecutionResponse, AskPendingWorkItem, AskRecentSessionSummary, AskSessionChange } from '@/features/ask/types';
+import type { AskAction, AskCapabilityPrompt, AskExecutionResponse, AskPendingWorkItem, AskRecentSessionSummary, AskSessionChange } from '@/features/ask/types';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { track } from '@/lib/analytics/events';
 import { buildAskWorkspaceHref, type AskWorkspaceHrefInput } from '@/lib/navigation/askNavigation';
@@ -121,7 +121,9 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const activeSessionRef = useRef('');
   const { refreshIssues, setRefreshIssues, refreshRequests, setRefreshRequests, redactAccessLostResult, refreshResult, updateExecution } = useResultRefresh({ executions, activeSessionRef, requests, deniedProperties, setExecutions, setPendingWork, setJustUpdatedExecutionId });
-  const openFileIntake = useCallback((opener: HTMLElement, sourceExecution: AskExecutionResponse | null = null) => {
+  const [intakePresetKind, setIntakePresetKind] = useState<AskAction['intakeKind']>(undefined);
+  const openFileIntake = useCallback((opener: HTMLElement, sourceExecution: AskExecutionResponse | null = null, presetKind?: AskAction['intakeKind']) => {
+    setIntakePresetKind(presetKind);
     intakeOpenerRef.current = opener;
     intakeSourceExecutionRef.current = sourceExecution;
     setIntakeOpen(true);
@@ -388,7 +390,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
 
   return (
     <AskInlineContext.Provider value={inlineApi}>
-    <AskIntakeDialog open={intakeOpen} onOpenChange={setIntakeOpen} propertyId={selectedPropertyId} returnFocusRef={intakeOpenerRef} onRecordChanged={refreshIntakeSource} />
+    <AskIntakeDialog open={intakeOpen} onOpenChange={setIntakeOpen} presetKind={intakePresetKind} propertyId={selectedPropertyId} returnFocusRef={intakeOpenerRef} onRecordChanged={refreshIntakeSource} />
     <div data-ask-layout={mode === 'page' ? 'full-window' : 'panel'} className={cn('flex min-h-0 flex-col', mode === 'page' ? 'h-full bg-white' : 'h-full bg-slate-50', calm && 'ask-calm')}>
       {/* Safe-area padding only changes anything on the mobile full-screen
           sheet (mode="panel" below the lg breakpoint, where this header sits
@@ -519,7 +521,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
                   onAccessLost={redactAccessLostResult}
                   contextOpen={contextExecutionId === execution.executionId}
                   onOpenContext={(trigger) => openResponseContext(execution, trigger)}
-                  onOpenFileIntake={(sourceExecution, opener) => openFileIntake(opener, sourceExecution)}
+                  onOpenFileIntake={(sourceExecution, opener, intakeKind) => openFileIntake(opener, sourceExecution, intakeKind)}
                   folded={conversationView.view.folded.includes(execution.executionId)}
                   pinned={conversationView.view.pinned.includes(execution.executionId)}
                   onToggleFold={() => conversationView.toggleFold(execution.executionId)}

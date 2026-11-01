@@ -285,3 +285,57 @@ test('the coverage gap cards offer "Is coverage worth it?" only to a contributor
   assert.match(source, /group === 'NO_COVERAGE' \|\| group === 'EXPIRED' \|\| group === 'EXPIRING_SOON'/);
   assert.match(source, /operationId: 'COVERAGE_ANALYSIS_RUN' as const, actionId: COVERAGE_ITEM_ANALYSIS_ACTION_ID, entityType: 'INVENTORY_ITEM', entityId: item\.inventoryItemId/);
 });
+
+test('the analysis next step that says to add the policy carries Ask\'s own Add button (owner of the home record only), and the checker keeps it', () => {
+  const { coverageAnalysisBlocks } = require('../../src/services/ask/handlers/coverageReview.handler.ts');
+  const { validateAskAnswerTrustPipeline } = require('../../src/services/ask/askAnswerTrustValidator.ts');
+  const { attachAskAuthoritativeSourceEvidence, completedAskAuthoritativeSourceEvidence } = require('../../src/services/ask/askAnswerTrustPolicy.ts');
+  const read = { exists: true, analysis: { id: 'a', status: 'READY', computedAt: '2026-11-01T00:00:00Z', confidence: 'HIGH', scenarioState: 'X', insuranceReviewState: 'X', nextSteps: [{ title: 'Add your primary homeowner policy details', detail: 'Store premium.', action: { targetTool: 'insurance' } }] } };
+  const item = (blocks) => blocks.find((block) => block.id === 'coverage-analysis-next-steps').sections[0].items[0];
+  assert.deepEqual(item(coverageAnalysisBlocks(read, true, 'p1', true)).actions.map((action) => action.id), ['insurance-policy-add']);
+  assert.equal(item(coverageAnalysisBlocks(read, true, 'p1', false)).actions, undefined, 'not offered to a member the add would refuse');
+  const checked = validateAskAnswerTrustPipeline({
+    question: 'Show my coverage analysis', operationId: 'COVERAGE_REVIEW_STATUS', propertyId: 'p1', householdRole: 'OWNER',
+    result: attachAskAuthoritativeSourceEvidence({ status: 'ANSWERED', reasonCode: 'X', blocks: coverageAnalysisBlocks(read, true, 'p1', true), suggestions: [] }, [completedAskAuthoritativeSourceEvidence('COVERAGE_REVIEW_STATUS')]),
+  });
+  assert.deepEqual(item(checked.result.blocks).actions?.map((action) => action.id), ['insurance-policy-add'], JSON.stringify(checked.trust.reasonCodes));
+});
+
+test('the "add or confirm the declarations page" review question carries the Add policy button for the home-record owner only, and the checker keeps it', () => {
+  const { coverageReviewFromView } = require('../../src/services/ask/handlers/coverageReview.handler.ts');
+  const { validateAskAnswerTrustPipeline } = require('../../src/services/ask/askAnswerTrustValidator.ts');
+  const { attachAskAuthoritativeSourceEvidence, completedAskAuthoritativeSourceEvidence } = require('../../src/services/ask/askAnswerTrustPolicy.ts');
+  const read = { isCurrent: true, review: { overallState: 'NEEDS_EVIDENCE', scopeStatus: 'UNSUPPORTED', generatedAt: new Date('2026-10-26T00:00:00Z'), policyTerm: null, questions: [{ id: 'q1', plainLanguageQuestion: 'Can you add or confirm the current declarations page?', whyItMatters: 'A current policy term is needed.', priority: 1, questionType: 'GENERAL', missingEvidenceJson: [], professionalBoundary: 'Ask a professional.' }] } };
+  const item = (result) => result.blocks.find((block) => block.id === 'coverage-review-questions').sections[0].items[0];
+  assert.deepEqual(item(coverageReviewFromView(read, true, 'p1', true)).actions.map((action) => action.id), ['insurance-policy-add']);
+  assert.equal(item(coverageReviewFromView(read, true, 'p1', false)).actions, undefined);
+  const checked = validateAskAnswerTrustPipeline({
+    question: 'What questions should I ask my insurer?', operationId: 'COVERAGE_REVIEW_STATUS', propertyId: 'p1', householdRole: 'OWNER',
+    result: attachAskAuthoritativeSourceEvidence(coverageReviewFromView(read, true, 'p1', true), [completedAskAuthoritativeSourceEvidence('COVERAGE_REVIEW_STATUS')]),
+  });
+  assert.deepEqual(item(checked.result).actions?.map((action) => action.id), ['insurance-policy-add'], JSON.stringify(checked.trust.reasonCodes));
+});
+
+test('with no policy term on file the review offers the declarations-page upload (preselected to a policy) to the home-record owner only, and the checker keeps it', () => {
+  const { coverageReviewFromView } = require('../../src/services/ask/handlers/coverageReview.handler.ts');
+  const { AskPresentationBlockSchema } = require('../../src/productFramework/ask/ask.contract.ts');
+  const { validateAskAnswerTrustPipeline } = require('../../src/services/ask/askAnswerTrustValidator.ts');
+  const { attachAskAuthoritativeSourceEvidence, completedAskAuthoritativeSourceEvidence } = require('../../src/services/ask/askAnswerTrustPolicy.ts');
+  const q = { id: 'q1', plainLanguageQuestion: 'Can you add or confirm the current declarations page?', whyItMatters: 'A current policy term is needed.', priority: 1, questionType: 'GENERAL', missingEvidenceJson: [], professionalBoundary: 'Ask a professional.' };
+  const read = (policyTerm) => ({ isCurrent: true, review: { overallState: 'NEEDS_EVIDENCE', scopeStatus: 'UNSUPPORTED', generatedAt: new Date('2026-10-26T00:00:00Z'), policyTerm, questions: [q] } });
+  const summary = (result) => result.blocks.find((block) => block.id === 'coverage-review-summary');
+  const owner = coverageReviewFromView(read(null), true, 'p1', true);
+  assert.deepEqual(summary(owner).actions.map((action) => [action.id, action.interactionType, action.intakeKind, action.style]), [
+    ['coverage-policy-upload', 'OPEN_FILE_INTAKE', 'INSURANCE_POLICY', 'PRIMARY'], ['coverage-generate-review', 'START_WORKFLOW', undefined, 'SECONDARY'],
+  ]);
+  for (const block of owner.blocks) AskPresentationBlockSchema.parse(block);
+  assert.deepEqual(summary(coverageReviewFromView(read(null), true, 'p1', false)).actions.map((action) => action.id), ['coverage-generate-review'], 'not offered where the add would be refused');
+  const withTerm = { insurancePolicy: { carrierName: 'State Farm', policyNumber: 'SF-1' }, sourceDocument: null };
+  assert.deepEqual(summary(coverageReviewFromView(read(withTerm), true, 'p1', true)).actions.map((action) => action.id), ['coverage-generate-review'], 'a policy term is already on file');
+  const checked = validateAskAnswerTrustPipeline({
+    question: 'What questions should I ask my insurer?', operationId: 'COVERAGE_REVIEW_STATUS', propertyId: 'p1', householdRole: 'OWNER',
+    result: attachAskAuthoritativeSourceEvidence(owner, [completedAskAuthoritativeSourceEvidence('COVERAGE_REVIEW_STATUS')]),
+  });
+  assert.deepEqual(summary(checked.result).actions.map((action) => action.id), ['coverage-policy-upload', 'coverage-generate-review'], JSON.stringify(checked.trust.reasonCodes));
+  assert.throws(() => AskPresentationBlockSchema.parse({ type: 'SUMMARY', id: 'x', title: 't', body: 'b', tone: 'DEFAULT', actions: [{ id: 'a', label: 'l', intakeKind: 'INSURANCE_POLICY' }] }), 'intakeKind needs OPEN_FILE_INTAKE');
+});

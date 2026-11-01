@@ -3,12 +3,15 @@
 // Reads what GET /coverage-review reads (findCurrentCoverageReview, strictly read-only since FRD v1.308): the questions worth asking about the confirmed
 // facts on the household's policy, with the evidence each rests on and what is missing. It never generates a review (that is the explicit, confirmed
 // action) and never reaches a conclusion about what a claim would pay. Open to every household member, as the service and the route are. Ask links to no page.
+import { prisma } from '../../../lib/prisma';
+import { INSURANCE_POLICY_ACTION_IDS, INSURANCE_POLICY_MESSAGES } from '../support/insurancePolicyCommand';
 import { type AskPresentationBlock } from '../../../productFramework/ask/ask.contract';
 import { type AskOperationResult } from '../askOperationRegistry';
 import { registerCapabilityHandler } from '../capabilityHandlerRegistry';
 import { humanDate } from '../askFormatting';
 import { ensurePropertyAccess } from '../askHandlerSupport';
 import { findCurrentCoverageReview } from '../../coverageReview.service';
+import { ADD_POLICY_TERM_QUESTION } from '../../coverageReviewRules';
 import { CoverageIntelligenceService } from '../../coverageAnalysis.service';
 import { COVERAGE_PROPERTY_ANALYSIS_ACTION_ID, COVERAGE_PROPERTY_ANALYSIS_MESSAGE } from '../support/coverageAnalysisRun';
 import { COVERAGE_COMMAND_ACTION_IDS, COVERAGE_COMMAND_MESSAGES, COVERAGE_PROPERTY_ENTITY_TYPE } from '../support/coverageCommand';
@@ -21,8 +24,12 @@ const BOUNDARY: AskPresentationBlock = {
   severity: 'INFO', suggestions: [],
 };
 
+export const COVERAGE_POLICY_UPLOAD_ACTION_ID = 'coverage-policy-upload';
+export const COVERAGE_PENDING_FACTS_ACTION_ID = 'coverage-review-pending-facts';
+const addPolicyAction = () => ({ id: INSURANCE_POLICY_ACTION_IDS.ADD, label: 'Add an insurance policy', message: INSURANCE_POLICY_MESSAGES.ADD, style: 'PRIMARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'COVERAGE_COMMAND' as const });
+
 /** Pure: the answer from the read, exported for tests. */
-export function coverageReviewFromView(read: ReviewResult, canGenerate: boolean, propertyId: string): AskOperationResult {
+export function coverageReviewFromView(read: ReviewResult, canGenerate: boolean, propertyId: string, canAddPolicy = false, pendingFactCount = 0): AskOperationResult {
   const review = read.review as null | {
     overallState: string; scopeStatus: string; generatedAt: Date | string;
     policyTerm: { insurancePolicy: { carrierName: string; policyNumber: string }; sourceDocument: { title: string } | null } | null;
@@ -59,9 +66,16 @@ export function coverageReviewFromView(read: ReviewResult, canGenerate: boolean,
             : 'The available record does not support a determination within this limited reviewed field set.',
       review.policyTerm ? `${review.policyTerm.insurancePolicy.carrierName}, policy ${review.policyTerm.insurancePolicy.policyNumber}${review.policyTerm.sourceDocument?.title ? `, from ${review.policyTerm.sourceDocument.title}` : ', no source document linked'}.` : null,
       `Prepared ${humanDate(new Date(review.generatedAt))}${read.isCurrent ? '' : ', and out of date: the policy facts have changed since'}.`,
+      pendingFactCount > 0 ? `${pendingFactCount} ${pendingFactCount === 1 ? 'detail' : 'details'} read from your policy ${pendingFactCount === 1 ? 'is' : 'are'} waiting for you to confirm; the review uses only confirmed details.` : null,
     ].filter(Boolean).join(' '),
     tone: review.overallState === 'CONFLICTED' || !read.isCurrent ? 'CAUTION' : 'DEFAULT',
-    actions: generate,
+    // With no policy term on file the review is waiting for the declarations page itself: Ask's own file intake, preselected to a policy, is the way to supply it
+    // (home-record owner only: the staged term is recorded under that profile). Refreshing before then would only repeat the same answer.
+    actions: canGenerate && pendingFactCount > 0
+      ? [{ id: COVERAGE_PENDING_FACTS_ACTION_ID, label: `Confirm ${pendingFactCount === 1 ? 'the detail' : `${pendingFactCount} details`} from your policy`, interactionType: 'START_WORKFLOW' as const, message: 'Show document facts waiting for review', operationId: 'DOCUMENT_PROMOTION_REVIEW' as const, style: 'PRIMARY' as const }, ...generate.map((action) => ({ ...action, style: 'SECONDARY' as const }))]
+      : canAddPolicy && !review.policyTerm && review.overallState !== 'CONFLICTED'
+      ? [{ id: COVERAGE_POLICY_UPLOAD_ACTION_ID, label: 'Upload a declarations page', interactionType: 'OPEN_FILE_INTAKE' as const, intakeKind: 'INSURANCE_POLICY' as const, style: 'PRIMARY' as const }, ...generate.map((action) => ({ ...action, style: 'SECONDARY' as const }))]
+      : generate,
   }];
   if (review.overallState === 'HEALTHY_SCOPED') {
     blocks.push({ type: 'LIMITATION', id: 'coverage-review-healthy', severity: 'INFO', title: 'Healthy within the limited scope', body: 'No question was raised for the limited confirmed fields. This does not mean the policy has no gaps or that a claim would be covered.' });
@@ -78,6 +92,8 @@ export function coverageReviewFromView(read: ReviewResult, canGenerate: boolean,
             id: question.id, title: question.plainLanguageQuestion, description: question.whyItMatters,
             meta: [question.questionType === 'GENERAL' ? 'General question' : 'About a confirmed fact', ...(missing.length ? [`Missing: ${missing.join(', ')}`] : []), question.professionalBoundary].slice(0, 4),
             status: null, href: null,
+            // With no policy term on file the question asks for the policy itself; Ask's own Add flow is the way to supply it (home-record owner only).
+            ...(canAddPolicy && question.plainLanguageQuestion === ADD_POLICY_TERM_QUESTION ? { actions: [addPolicyAction()] } : {}),
           };
         }),
       }],
@@ -92,10 +108,10 @@ const ANALYSIS_STATE_LABELS: Record<string, string> = {
   COST_EXPOSURE_EXCEEDS_PLAN_COST: 'The modeled repair cost is more than the plan costs', COSTS_ARE_CLOSE: 'The plan cost and the modeled repair cost are close',
   PLAN_COST_EXCEEDS_MODELED_EXPOSURE: 'The plan costs more than the modeled repairs', INSUFFICIENT_DATA: 'Not enough recorded to compare',
 };
-type AnalysisRead = { exists: false } | { exists: true; analysis: { id: string; status: string; computedAt: string; confidence: string; scenarioState: string; summary?: string; insuranceReviewState: string; nextSteps?: Array<{ title: string; detail?: string }> } };
+type AnalysisRead = { exists: false } | { exists: true; analysis: { id: string; status: string; computedAt: string; confidence: string; scenarioState: string; summary?: string; insuranceReviewState: string; nextSteps?: Array<{ title: string; detail?: string; action?: { targetTool?: string } }> } };
 
 /** Pure: the latest saved whole-home analysis beside the review (Desktop's Coverage Intelligence page), with the on-demand run for a contributor or owner. Text only; no link. */
-export function coverageAnalysisBlocks(read: AnalysisRead | null, canRun: boolean, propertyId: string): AskPresentationBlock[] {
+export function coverageAnalysisBlocks(read: AnalysisRead | null, canRun: boolean, propertyId: string, canAddPolicy = false): AskPresentationBlock[] {
   const run = canRun ? [{
     id: COVERAGE_PROPERTY_ANALYSIS_ACTION_ID, label: read?.exists ? 'Run a new analysis' : 'Run a coverage analysis', interactionType: 'START_WORKFLOW' as const, message: COVERAGE_PROPERTY_ANALYSIS_MESSAGE,
     operationId: 'COVERAGE_ANALYSIS_RUN' as const, actionId: COVERAGE_PROPERTY_ANALYSIS_ACTION_ID, entityType: COVERAGE_PROPERTY_ENTITY_TYPE, entityId: propertyId, style: 'SECONDARY' as const,
@@ -116,7 +132,9 @@ export function coverageAnalysisBlocks(read: AnalysisRead | null, canRun: boolea
   const steps = (a.nextSteps ?? []).slice(0, 4);
   if (steps.length) {
     blocks.push({ type: 'GROUPED_LIST', filters: [], id: 'coverage-analysis-next-steps', title: 'What the analysis suggests', description: null,
-      sections: [{ id: 'coverage-analysis-steps', title: 'Next steps', count: steps.length, items: steps.map((step, index) => ({ id: `coverage-analysis-step-${index}`, title: step.title, description: step.detail ?? null, meta: [], status: null, href: null })) }], actions: [] });
+      sections: [{ id: 'coverage-analysis-steps', title: 'Next steps', count: steps.length, items: steps.map((step, index) => ({ id: `coverage-analysis-step-${index}`, title: step.title, description: step.detail ?? null, meta: [], status: null, href: null,
+        // The service points this step at the Insurance page; Ask offers its own Add flow instead (owner of the home record only, as the add refuses anyone else).
+        ...(canAddPolicy && step.action?.targetTool === 'insurance' ? { actions: [addPolicyAction()] } : {}) })) }], actions: [] });
   }
   return blocks;
 }
@@ -124,10 +142,13 @@ export function coverageAnalysisBlocks(read: AnalysisRead | null, canRun: boolea
 registerCapabilityHandler('coverage.review-status', async (envelope, deps) => {
   const propertyId = envelope.propertyId!;
   const access = deps.propertyAccess ?? await ensurePropertyAccess(envelope.userId, propertyId);
-  const result = coverageReviewFromView(await findCurrentCoverageReview(propertyId, envelope.userId), access.role !== 'VIEWER', propertyId);
+  const canWrite = access.role !== 'VIEWER';
+  const canAddPolicy = canWrite && Boolean(await prisma.property.findFirst({ where: { id: propertyId, homeownerProfile: { userId: envelope.userId } }, select: { id: true } }).catch(() => null));
+  const pendingFactCount = await prisma.insurancePolicyFact.count({ where: { confirmationStatus: 'PENDING', policyTerm: { propertyId } } }).catch(() => 0);
+  const result = coverageReviewFromView(await findCurrentCoverageReview(propertyId, envelope.userId), canWrite, propertyId, canAddPolicy, pendingFactCount);
   // The saved analysis is an addition to the review answer; if it cannot be read (for example a policy conflict the review already explains), the answer is given without it.
   const analysis = await new CoverageIntelligenceService().getLatest(propertyId, envelope.userId).catch(() => null) as AnalysisRead | null;
-  const extra = coverageAnalysisBlocks(analysis, access.role !== 'VIEWER', propertyId);
+  const extra = coverageAnalysisBlocks(analysis, canWrite, propertyId, canAddPolicy);
   if (!extra.length) return result;
   const last = result.blocks[result.blocks.length - 1];
   return last?.type === 'BOUNDARY' ? { ...result, blocks: [...result.blocks.slice(0, -1), ...extra, last] } : { ...result, blocks: [...result.blocks, ...extra] };

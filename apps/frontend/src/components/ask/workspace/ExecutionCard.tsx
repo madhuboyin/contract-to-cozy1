@@ -136,7 +136,7 @@ export function ExecutionCard({
   onAccessLost: (execution: Pick<AskExecutionResponse, 'sessionId' | 'property' | 'executionId'>) => void;
   contextOpen: boolean;
   onOpenContext: (trigger: HTMLButtonElement) => void;
-  onOpenFileIntake?: (execution: AskExecutionResponse, opener: HTMLButtonElement) => void;
+  onOpenFileIntake?: (execution: AskExecutionResponse, opener: HTMLButtonElement, intakeKind?: AskAction['intakeKind']) => void;
   // IW-PRES-021 (FRD v1.95): folding and pinning only change what is shown; they never re-run the request.
   folded?: boolean;
   pinned?: boolean;
@@ -218,7 +218,7 @@ export function ExecutionCard({
     setItemActionIssue(null);
     if (action.interactionType === 'OPEN_FILE_INTAKE') {
       const opener = document.activeElement instanceof HTMLButtonElement ? document.activeElement : null;
-      if (opener && onOpenFileIntake) onOpenFileIntake(execution, opener);
+      if (opener && onOpenFileIntake) onOpenFileIntake(execution, opener, action.intakeKind);
       else setItemActionIssue('Adding a file is not available here right now.');
       return;
     }

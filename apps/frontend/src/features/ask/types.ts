@@ -10,6 +10,8 @@ export interface AskAction {
   label: string;
   href?: string;
   interactionType?: 'START_WORKFLOW' | 'OPEN_FILE_INTAKE';
+  /** OPEN_FILE_INTAKE only: the kind the file dialog preselects. */
+  intakeKind?: 'WARRANTY' | 'RECEIPT' | 'INSURANCE_POLICY' | 'APPLIANCE_LABEL' | 'INSPECTION_REPORT';
   message?: string;
   operationId?: string;
   /** Registered semantic outcome used by the server to deduplicate richer and compact action surfaces. */

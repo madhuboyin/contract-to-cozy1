@@ -36,6 +36,8 @@ const AskActionSchema = z.object({
   // path as row actions. OPEN_FILE_INTAKE launches the existing local intake
   // dialog, while legacy destinations remain ordinary hrefs.
   interactionType: z.enum(['START_WORKFLOW', 'OPEN_FILE_INTAKE']).optional(),
+  // OPEN_FILE_INTAKE only: which kind of file the dialog should expect, so the person is not asked what a declarations page is. A preselection, not a guarantee: they can still change it.
+  intakeKind: z.enum(['WARRANTY', 'RECEIPT', 'INSURANCE_POLICY', 'APPLIANCE_LABEL', 'INSPECTION_REPORT']).optional(),
   message: z.string().trim().min(1).max(300).optional(),
   operationId: z.string().trim().min(1).max(120).optional(),
   // A rich response action may target the same registered outcome as a compact
@@ -54,10 +56,13 @@ const AskActionSchema = z.object({
     if (!action.message) ctx.addIssue({ code: 'custom', path: ['message'], message: 'START_WORKFLOW actions require a message.' });
     if (!action.operationId) ctx.addIssue({ code: 'custom', path: ['operationId'], message: 'START_WORKFLOW actions require an operationId.' });
     if (action.href) ctx.addIssue({ code: 'custom', path: ['href'], message: 'START_WORKFLOW actions must not also navigate.' });
+    if (action.intakeKind) ctx.addIssue({ code: 'custom', path: ['intakeKind'], message: 'intakeKind requires interactionType OPEN_FILE_INTAKE.' });
   } else if (action.interactionType === 'OPEN_FILE_INTAKE') {
     if (action.href || action.message || action.operationId || action.outcomeKey || action.entityType || action.entityId || action.actionId || action.guidanceStepId) {
       ctx.addIssue({ code: 'custom', path: ['interactionType'], message: 'OPEN_FILE_INTAKE actions must not navigate or carry workflow metadata.' });
     }
+  } else if (action.intakeKind) {
+    ctx.addIssue({ code: 'custom', path: ['intakeKind'], message: 'intakeKind requires interactionType OPEN_FILE_INTAKE.' });
   } else if (action.message || action.operationId || action.outcomeKey || action.entityType || action.entityId || action.actionId || action.guidanceStepId) {
     ctx.addIssue({ code: 'custom', path: ['interactionType'], message: 'Workflow metadata requires interactionType START_WORKFLOW.' });
   }

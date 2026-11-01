@@ -47,10 +47,17 @@ async function pendingDocumentPromotionSourceTotal(propertyId: string): Promise<
   return totals.reduce((sum, total) => sum + total, 0);
 }
 
-async function documentPromotionReviewResult(propertyId: string): Promise<AskOperationResult> {
+async function documentPromotionReviewResult(propertyId: string, canDecide = false): Promise<AskOperationResult> {
   const [candidates, sourceTotal] = await Promise.all([pendingDocumentPromotionCandidates(propertyId), pendingDocumentPromotionSourceTotal(propertyId)]);
   if (candidates.length === 0) return { status: 'ANSWERED', reasonCode: 'NO_DOCUMENT_PROMOTIONS_PENDING', blocks: [{ type: 'EMPTY_STATE', id: 'document-promotion-empty', title: 'No document-derived records await review', body: 'Ask found no pending material extraction or inspection-report promotion gate.', actions: [] }], suggestions: [] };
-  const sections = [{ id: 'pending', title: 'Needs homeowner review', count: candidates.length, items: candidates.map((candidate) => ({ id: candidate.id, title: candidate.title, description: candidate.description, meta: [`Source kind: ${candidate.kind.toLowerCase().replace(/_/g, ' ')}`], status: 'NEEDS_REVIEW', href: null })) }];
+  const sections = [{ id: 'pending', title: 'Needs homeowner review', count: candidates.length, items: candidates.map((candidate) => ({
+    id: candidate.id, title: candidate.title, description: candidate.description, meta: [`Source kind: ${candidate.kind.toLowerCase().replace(/_/g, ' ')}`], status: 'NEEDS_REVIEW', href: null,
+    // A policy fact read from a declarations page can be confirmed or rejected from its own row (a contributor or owner; the confirmation card still follows, nothing is saved by the tap).
+    ...(canDecide && candidate.kind === 'INSURANCE_POLICY_FACT' ? { entityType: 'INSURANCE_POLICY_FACT', actions: [
+      { id: 'document-promotion-confirm', label: 'Confirm', message: `Confirm ${candidate.title}`, style: 'PRIMARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'DOCUMENT_PROMOTION_CONFIRM' as const },
+      { id: 'document-promotion-reject', label: 'Reject', message: `Reject ${candidate.title}`, style: 'QUIET' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'DOCUMENT_PROMOTION_CONFIRM' as const },
+    ] } : {}),
+  })) }];
   return { status: 'ANSWERED', reasonCode: 'DOCUMENT_PROMOTIONS_PENDING', blocks: [{ type: 'GROUPED_LIST', filters: [], id: 'document-promotions', title: 'Document-derived records awaiting review', description: 'Nothing listed here becomes trusted canonical data until you confirm the exact candidate.', sections, collection: collectionDescriptor({ sourceTotal, fetchedCount: candidates.length, sections, nextPageAvailable: false }), actions: [] }, { type: 'EVIDENCE', id: 'document-promotion-provenance', title: 'Promotion boundary', items: [{ label: 'Review gate', source: 'Canonical domain-specific review records', observedAt: new Date().toISOString() }] }], suggestions: [] };
 }
 
@@ -419,7 +426,10 @@ async function documentLookupResult(userId: string, propertyId: string, message:
   };
 }
 
-registerCapabilityHandler('document-promotion.review', async (envelope) => documentPromotionReviewResult(envelope.propertyId!));
+registerCapabilityHandler('document-promotion.review', async (envelope, deps) => {
+  const access = deps.propertyAccess ?? await ensurePropertyAccess(envelope.userId, envelope.propertyId!);
+  return documentPromotionReviewResult(envelope.propertyId!, access.role !== 'VIEWER');
+});
 
 registerCapabilityHandler('document-promotion.confirm', async (envelope) => documentPromotionConfirmResult(envelope.propertyId!, envelope.message, envelope.launchContext));
 

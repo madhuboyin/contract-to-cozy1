@@ -141,7 +141,7 @@ export function evaluateCoverageReview(
           questionKey: 'ADD_POLICY_TERM',
           category: 'EVIDENCE',
           priority: 'HIGH',
-          question: 'Can you add or confirm the current declarations page?',
+          question: ADD_POLICY_TERM_QUESTION,
           why: 'A current policy term is needed before ContractToCozy can ask evidence-based coverage questions.',
           missingFactKeys: [...REVIEWED_FACT_KEYS],
         }),
@@ -283,3 +283,6 @@ export function evaluateCoverageReview(
         : null,
   };
 }
+
+/** The question asked when no policy term is on file; Ask keys the "add the policy" button on this exact text. */
+export const ADD_POLICY_TERM_QUESTION = 'Can you add or confirm the current declarations page?';

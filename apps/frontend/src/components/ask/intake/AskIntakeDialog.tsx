@@ -6,6 +6,7 @@ import { IntakeCandidates, IntakeLabelReview, IntakePicker, IntakeProvenance, In
 import { RESULT_COPY, intakeResultQuestion, originalQuestion, pickSingleFile } from './intakePresentation';
 import { useAskInline } from '../inline/AskInlineContext';
 import { useAskIntake } from './useAskIntake';
+import type { AskIntakeKind } from '@/features/ask/types';
 
 const LINK = 'inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700';
 const PRIMARY_LINK = 'inline-flex min-h-11 items-center justify-center rounded-xl bg-emerald-950 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700';
@@ -15,7 +16,7 @@ const PRIMARY_LINK = 'inline-flex min-h-11 items-center justify-center rounded-x
  * involves, then each proposed detail is accepted, edited, rejected or left for later. Nothing reaches the home without "Add to my home" or
  * "Add to inventory". Every step has a keyboard and form path: the camera, drop and paste are shortcuts to the same file chooser.
  */
-export function AskIntakeDialog({ open, onOpenChange, propertyId, returnFocusRef, onRecordChanged }: { open: boolean; onOpenChange: (open: boolean) => void; propertyId: string | undefined; returnFocusRef?: React.RefObject<HTMLElement | null>; onRecordChanged?: () => void }) {
+export function AskIntakeDialog({ open, onOpenChange, propertyId, returnFocusRef, onRecordChanged, presetKind }: { presetKind?: AskIntakeKind; open: boolean; onOpenChange: (open: boolean) => void; propertyId: string | undefined; returnFocusRef?: React.RefObject<HTMLElement | null>; onRecordChanged?: () => void }) {
   const intake = useAskIntake(propertyId, open);
   const { view, config, busy, error } = intake;
   const [kept, setKept] = useState(false);
@@ -60,7 +61,7 @@ export function AskIntakeDialog({ open, onOpenChange, propertyId, returnFocusRef
       <div className="flex flex-wrap gap-2"><button type="button" className={PRIMARY_LINK} onClick={() => askAbout(originalQuestion())}>Show it in my documents</button><button type="button" className={LINK} onClick={startOver}>Add another file</button></div></div>
   );
   else if (view.state === 'UPLOADED') body = (
-    <IntakeReadStep key={`${view.recordId}:${view.choice?.reason ?? ''}:${Boolean(view.needsDetails)}`} view={view} config={config} busy={busy === 'READING' || busy === 'SAVING'}
+    <IntakeReadStep presetKind={presetKind} key={`${view.recordId}:${view.choice?.reason ?? ''}:${Boolean(view.needsDetails)}`} view={view} config={config} busy={busy === 'READING' || busy === 'SAVING'}
       onRead={(kind, acknowledged, inspection) => void intake.read(kind, acknowledged, inspection)} onKeep={() => setKept(true)} onDiscard={() => void intake.discard()} />
   );
   else if (view.state === 'REVIEW' && view.labelDraft) body = (

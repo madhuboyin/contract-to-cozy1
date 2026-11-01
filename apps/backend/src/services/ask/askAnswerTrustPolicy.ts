@@ -385,7 +385,9 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   COMMUNITY_UPDATES: new Set(['community-show-all', 'community-show-events', 'community-show-alerts', 'community-show-trash']),
   // The comparison answer offers Start a comparison / Record my decision, and the review answer offers Review my coverage, to a contributor or owner.
   COVERAGE_COMPARISON_STATUS: new Set(['coverage-start-comparison', 'coverage-record-decision', 'coverage-add-quote']),
-  COVERAGE_REVIEW_STATUS: new Set(['coverage-generate-review', 'coverage-analysis-run-property']),
+  COVERAGE_REVIEW_STATUS: new Set(['coverage-generate-review', 'coverage-analysis-run-property', 'insurance-policy-add', 'coverage-policy-upload', 'coverage-review-pending-facts']),
+  // Confirm / Reject on a policy fact read from a declarations page; the confirmation card still follows.
+  DOCUMENT_PROMOTION_REVIEW: new Set(['document-promotion-confirm', 'document-promotion-reject']),
   // The coverage-conflict state points at the coverage review.
   RISK_MITIGATION_PLAN: new Set(['risk-plan-see-coverage-review']),
   // The upgrade options answer's Manage options rows offer these to a contributor or owner.

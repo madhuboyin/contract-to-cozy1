@@ -96,6 +96,17 @@ describe('AskIntakeDialog', () => {
     expect(await screen.findByText(/Check each detail/)).toBeInTheDocument();
   });
 
+  it('a button that names the kind of file preselects it, so the declarations page is read as a policy, not guessed', async () => {
+    mocks.uploadAskIntakeFile.mockResolvedValue(ok(view()));
+    mocks.analyzeAskIntake.mockResolvedValue(ok(view({ state: 'REVIEW', kind: 'INSURANCE_POLICY', candidates: [candidate({})] })));
+    render(<AskInlineContext.Provider value={{ launch, openExecution: jest.fn() }}><AskIntakeDialog open onOpenChange={jest.fn()} propertyId="home-1" presetKind="INSURANCE_POLICY" /></AskInlineContext.Provider>);
+    await upload();
+    expect(await screen.findByRole('radio', { name: /An insurance policy/ })).toBeChecked();
+    fireEvent.click(screen.getByLabelText(/I understand this file will be sent to an AI service/));
+    fireEvent.click(screen.getByRole('button', { name: 'Read this file' }));
+    await waitFor(() => expect(mocks.analyzeAskIntake).toHaveBeenCalledWith('home-1', 'rec-1', { kind: 'INSURANCE_POLICY', acknowledgedProcessing: true, inspection: undefined }));
+  });
+
   it('reports once when the uploaded original becomes a Home Record', async () => {
     const onRecordChanged = jest.fn();
     mocks.uploadAskIntakeFile.mockResolvedValue(ok(view()));
