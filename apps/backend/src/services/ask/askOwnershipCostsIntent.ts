@@ -14,6 +14,7 @@ export function matchesOwnershipCostsAnswerContract(result: AskOperationResult):
   if (!hasCanonicalSummary) return false;
   return result.blocks.every((block) => [
     'ownership-costs-summary',
+    'ownership-expenses-summary',
     'ownership-cost-categories',
     'ownership-cost-missing',
     'ownership-cost-expenses',

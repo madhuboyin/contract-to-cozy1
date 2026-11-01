@@ -579,7 +579,12 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
   }
   const preference = controls?.view.groupedListModes[block.id] ?? 'AUTO';
   const dense = block.listDensity === 'DENSE';
-  const decision = dense ? { mode: 'COMPACT_LIST' as const, offersChoice: false } : resolveGroupedListView(block, preference);
+  // Coverage gaps are a short remediation checklist, not an alternate-view
+  // workspace. A stable compact layout keeps the next actions scannable and
+  // avoids asking homeowners to choose between equivalent List/Card views.
+  const decision = dense || block.id === 'ownership-cost-missing'
+    ? { mode: 'COMPACT_LIST' as const, offersChoice: false }
+    : resolveGroupedListView(block, preference);
   const presentation = decision.mode;
   const setPreference = (mode: GroupedListPresentationPreference) => controls?.change((view) => ({
     ...view, groupedListModes: { ...view.groupedListModes, [block.id]: mode },
@@ -717,7 +722,8 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
               <AskCollection id={listId} className={cn(
                 block.id === 'project-detail-records' && 'grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3',
                 block.id === 'coverage-groups' && 'grid grid-cols-1 gap-2.5 sm:grid-cols-2',
-                block.id !== 'project-detail-records' && block.id !== 'coverage-groups' && (dense ? 'divide-y divide-slate-100' : presentation === 'COMPACT_LIST' ? 'space-y-1' : isOwnershipCostList || isServicePriceRadarList || isCoverageGroupsList || isPlantCareList ? 'space-y-2' : 'space-y-3'),
+                block.id === 'ownership-cost-missing' && 'grid grid-cols-1 gap-2 sm:grid-cols-2',
+                block.id !== 'project-detail-records' && block.id !== 'coverage-groups' && block.id !== 'ownership-cost-missing' && (dense ? 'divide-y divide-slate-100' : presentation === 'COMPACT_LIST' ? 'space-y-1' : isOwnershipCostList || isServicePriceRadarList || isCoverageGroupsList || isPlantCareList ? 'space-y-2' : 'space-y-3'),
               )} data-project-record-grid={block.id === 'project-detail-records' ? '' : undefined} data-coverage-groups-grid={block.id === 'coverage-groups' ? '' : undefined} data-plant-care-grid={isPlantCareList ? '' : undefined}>
                 {visibleItems.map((sourceItem) => {
                   const item = block.id === 'maintenance-groups' ? formatLegacyAskMaintenanceItem(sourceItem) : sourceItem;
@@ -759,7 +765,7 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
                   const coverageOtherMeta = (isCoverageGapItem || isPlantCareList)
                     ? item.meta.slice(1).filter((m) => m !== coverageExposureMeta)
                     : [];
-                  return <li key={item.id} data-ask-task-id={item.id} tabIndex={-1} className={cn('border outline-offset-2', dense ? 'border-b-0 border-r-0 border-t-0 px-2 py-2' : 'rounded-xl', dense && (overdueWorkItem ? 'border-l-4 border-l-rose-400 bg-rose-50/70' : sellHoldRentDriversList && impactLevel === 'HIGH' ? 'border-l-4 border-l-amber-400 bg-amber-50/30 py-2.5' : sellHoldRentDriversList ? 'border-l-4 border-l-teal-500/60 py-2.5' : 'border-l-0'), !dense && (presentation === 'COMPACT_LIST' ? 'px-3 py-2' : isCoverageGapItem || isPlantCareList ? 'px-3.5 py-2.5' : isOwnershipCostList || isServicePriceRadarList ? 'px-3 py-2.5' : 'p-3'), selected ? 'border-teal-600 bg-teal-50' : !dense && (isConfirmedGapItem || isPlantCareNowItem ? 'border-rose-200/85 border-l-4 border-l-rose-500 bg-gradient-to-br from-rose-50/35 via-white to-white shadow-2xs' : isUnclearGapItem || isPlantCareSoonItem ? 'border-amber-200/85 border-l-4 border-l-amber-500 bg-gradient-to-br from-amber-50/35 via-white to-white shadow-2xs' : isPlantCareRoutineItem ? 'border-emerald-200/85 border-l-4 border-l-emerald-500 bg-gradient-to-br from-emerald-50/30 via-white to-white shadow-2xs' : isEvidenceGapItem ? 'border-slate-200/90 border-l-4 border-l-sky-500 bg-slate-50/50' : presentation === 'COMPACT_LIST' ? 'border-transparent bg-white' : isOwnershipCostList || isServicePriceRadarList || isCoverageGroupsList || isPlantCareList ? 'border-slate-200/80 bg-slate-50/55' : 'border-transparent bg-slate-50'))}>
+                  return <li key={item.id} data-ask-task-id={item.id} tabIndex={-1} className={cn('border outline-offset-2', dense ? 'border-b-0 border-r-0 border-t-0 px-2 py-2' : 'rounded-xl', dense && (overdueWorkItem ? 'border-l-4 border-l-rose-400 bg-rose-50/70' : sellHoldRentDriversList && impactLevel === 'HIGH' ? 'border-l-4 border-l-amber-400 bg-amber-50/30 py-2.5' : sellHoldRentDriversList ? 'border-l-4 border-l-teal-500/60 py-2.5' : 'border-l-0'), !dense && (presentation === 'COMPACT_LIST' ? 'px-3 py-2' : isCoverageGapItem || isPlantCareList ? 'px-3.5 py-2.5' : isOwnershipCostList || isServicePriceRadarList ? 'px-3 py-2.5' : 'p-3'), selected ? 'border-teal-600 bg-teal-50' : !dense && (isConfirmedGapItem || isPlantCareNowItem ? 'border-rose-200/85 border-l-4 border-l-rose-500 bg-gradient-to-br from-rose-50/35 via-white to-white shadow-2xs' : isUnclearGapItem || isPlantCareSoonItem ? 'border-amber-200/85 border-l-4 border-l-amber-500 bg-gradient-to-br from-amber-50/35 via-white to-white shadow-2xs' : isPlantCareRoutineItem ? 'border-emerald-200/85 border-l-4 border-l-emerald-500 bg-gradient-to-br from-emerald-50/30 via-white to-white shadow-2xs' : isEvidenceGapItem ? 'border-slate-200/90 border-l-4 border-l-sky-500 bg-slate-50/50' : presentation === 'COMPACT_LIST' && block.id !== 'ownership-cost-missing' ? 'border-transparent bg-white' : isOwnershipCostList || isServicePriceRadarList || isCoverageGroupsList || isPlantCareList ? 'border-slate-200/80 bg-slate-50/55' : 'border-transparent bg-slate-50'))}>
                     {dense ? <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3" data-dense-row-content="">
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-baseline gap-x-2" data-dense-primary-line="">

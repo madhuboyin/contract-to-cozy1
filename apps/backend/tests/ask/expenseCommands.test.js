@@ -221,9 +221,22 @@ test('a missing category an expense feeds offers Add an expense with that catego
   assert.equal(JSON.stringify(viewer.blocks).includes(A.ADD), false, 'a viewer is offered no expense action');
 });
 
-test('asking for the expenses leads with how many were recorded, and the Add action is on the list', async () => {
+test('asking for expenses leads with the recorded-expense workflow and keeps estimates as supporting context', async () => {
   installOwnership();
   const result = await ask('Show my expenses');
+  assert.deepEqual(result.blocks.slice(0, 4).map((answerBlock) => answerBlock.id), [
+    'ownership-expenses-summary', 'ownership-cost-expenses', 'ownership-costs-summary', 'ownership-cost-categories',
+  ]);
   assert.equal(result.blocks[0].title, 'You recorded 2 expenses for this home');
+  assert.match(block(result, 'ownership-costs-summary').title, /^Estimated ownership costs/);
   assert.deepEqual(block(result, 'ownership-cost-expenses').actions.map((a) => a.id), [A.ADD]);
+  const utilityActions = block(result, 'ownership-cost-missing').sections[0].items.find((item) => item.id === 'UTILITIES').actions;
+  assert.deepEqual(utilityActions.map((action) => [action.id, action.style]), [[utilityActions[0].id, 'QUIET'], [A.ADD, 'PRIMARY']]);
+
+  db.rows = [];
+  const empty = await ask('Show my expenses');
+  assert.equal(empty.blocks[0].title, 'No expenses recorded yet');
+  assert.match(empty.blocks[0].body, /Add utility bills, HOA payments, property taxes, repairs/);
+  assert.equal(empty.blocks[1].id, 'ownership-cost-expenses');
+  assert.deepEqual(empty.blocks[1].actions.map((action) => [action.id, action.style]), [[A.ADD, 'PRIMARY']]);
 });

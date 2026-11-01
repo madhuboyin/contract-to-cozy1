@@ -14,14 +14,14 @@ const block: GroupedList = {
   })) }],
 };
 
-function Harness() {
+function Harness({ list = block }: { list?: GroupedList }) {
   const response = useMemo(() => ({
     sessionId: 'session', executionId: 'execution', property: { id: 'home', label: 'Home' },
-    viewState: { resultId: 'result', revision: 1 }, blocks: [block],
-  } as AskExecutionResponse), []);
+    viewState: { resultId: 'result', revision: 1 }, blocks: [list],
+  } as AskExecutionResponse), [list]);
   const controls = useResultView(response);
   return <ResultViewContext.Provider value={controls}>
-    <GenericGroupedListBlock block={block} executionId="execution" propertyId="home" onItemAction={() => undefined} itemActionsDisabled={false} onFilterClick={() => undefined} onCollectionPage={() => undefined} onAccessLost={() => undefined} />
+    <GenericGroupedListBlock block={list} executionId="execution" propertyId="home" onItemAction={() => undefined} itemActionsDisabled={false} onFilterClick={() => undefined} onCollectionPage={() => undefined} onAccessLost={() => undefined} />
   </ResultViewContext.Provider>;
 }
 
@@ -39,6 +39,20 @@ test('Cards/List choice persists without dropping item identity or status', asyn
   const restored = render(<Harness />);
   await waitFor(() => expect(screen.getByRole('button', { name: 'Cards' })).toHaveAttribute('aria-pressed', 'true'));
   expect(restored.container.querySelectorAll('[data-ask-task-id]')).toHaveLength(5);
+});
+
+test('ownership-cost gaps use a fixed compact responsive grid without presentation controls', () => {
+  const gaps: GroupedList = {
+    type: 'GROUPED_LIST', id: 'ownership-cost-missing', title: 'Improve this estimate', description: 'Add missing details.', filters: [], actions: [],
+    sections: [{ id: 'missing', title: 'Missing categories', count: 5, items: Array.from({ length: 5 }, (_, index) => ({
+      id: `gap-${index}`, title: `Category ${index}`, description: 'No usable current amount is recorded.', meta: [], status: 'MISSING',
+    })) }],
+  };
+  const view = render(<Harness list={gaps} />);
+  expect(screen.queryByRole('button', { name: 'Auto' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Cards' })).not.toBeInTheDocument();
+  expect(view.container.querySelector('[data-grouped-list-presentation="compact_list"]')).toBeInTheDocument();
+  expect(view.container.querySelector('ul.grid')).toHaveClass('sm:grid-cols-2');
 });
 
 test('maintenance recommendations use a fixed responsive catalogue with explicit states and a primary review action', () => {

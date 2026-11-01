@@ -771,10 +771,11 @@ async function ownershipCostsResult(userId: string, propertyId: string, message:
     || missing.length > 0;
   const permissionLimited = Boolean(activeRequirement && !canImproveContext);
 
-  const blocks: AskPresentationBlock[] = [{
+  const expenseBlock = ownershipExpensesBlock(expenses, canChange);
+  const ownershipSummary: AskPresentationBlock = {
     type: 'SUMMARY', id: 'ownership-costs-summary',
     title: expenseFocus
-      ? `You recorded ${expenses.total} expense${expenses.total === 1 ? '' : 's'} for this home`
+      ? `Estimated ownership costs are about ${monthly} per month`
       : categoryFocus && largestCategory?.monthlyAmountCents != null
       ? `${largestCategory.label} is the largest recorded category at about ${money(largestCategory.monthlyAmountCents / 100)} per month`
       : `This home’s recorded ${lensLabel} is about ${monthly} per month`,
@@ -783,7 +784,8 @@ async function ownershipCostsResult(userId: string, propertyId: string, message:
     // This answer already contains the current canonical ownership-cost
     // review. Do not duplicate it with a desktop navigation CTA.
     actions: [],
-  }, {
+  };
+  const categoriesTable: AskPresentationBlock = {
     type: 'TABLE', id: 'ownership-cost-categories', title: 'Cost by category',
     description: `Categories included in the ${lensLabel} lens, ordered by annual amount.`,
     preferredPresentation: 'TABLE',
@@ -799,11 +801,21 @@ async function ownershipCostsResult(userId: string, propertyId: string, message:
     })),
     totalCount: included.length,
     actions: [],
-  }];
+  };
+  const blocks: AskPresentationBlock[] = expenseFocus ? [{
+    type: 'SUMMARY', id: 'ownership-expenses-summary',
+    title: expenses.total
+      ? `You recorded ${expenses.total} expense${expenses.total === 1 ? '' : 's'} for this home`
+      : 'No expenses recorded yet',
+    body: expenses.total
+      ? 'Review the expenses you recorded below, or add another home expense.'
+      : 'Add utility bills, HOA payments, property taxes, repairs, or other home expenses to improve your totals.',
+    tone: 'DEFAULT', actions: [],
+  }, ...(expenseBlock ? [expenseBlock] : []), ownershipSummary, categoriesTable] : [ownershipSummary, categoriesTable];
 
   if (missing.length) {
     blocks.push({
-      type: 'GROUPED_LIST', id: 'ownership-cost-missing', title: 'Information that could improve this total',
+      type: 'GROUPED_LIST', id: 'ownership-cost-missing', title: expenseFocus ? 'Improve this estimate' : 'Information that could improve this total',
       description: 'These categories are applicable or unresolved, but no amount is currently included.',
       filters: [], sections: [{ id: 'missing-cost-categories', title: 'Missing categories', count: missing.length, items: missing.map((category) => {
         const review = categoryReview[category.category];
@@ -811,9 +823,9 @@ async function ownershipCostsResult(userId: string, propertyId: string, message:
           id: category.category, entityType: 'OWNERSHIP_COST_CATEGORY', title: category.label,
           description: category.missingDependencies.length ? category.missingDependencies.join(' · ') : 'No usable current amount is recorded.',
           status: 'MISSING', meta: [],
-          actions: [{ id: `ownership-cost-review-${category.category.toLowerCase()}`, label: review.label, interactionType: 'CONVERSATION_CONTINUE', message: review.message, operationId: review.operationId, style: 'PRIMARY' },
+          actions: [{ id: `ownership-cost-review-${category.category.toLowerCase()}`, label: review.label, interactionType: 'CONVERSATION_CONTINUE', message: review.message, operationId: review.operationId, style: expenseFocus ? 'QUIET' : 'PRIMARY' },
             // The correction for a category an expense feeds (FRD v1.467): record the expense here, in Ask, with that category already chosen.
-            ...(canChange && EXPENSE_CATEGORY_FOR_OWNERSHIP_CATEGORY[category.category] ? [ownershipCommandAction(EXPENSE_ACTION_IDS.ADD, EXPENSE_ADD_LABELS[category.category], EXPENSE_CATEGORY_FOR_OWNERSHIP_CATEGORY[category.category]!)] : [])],
+            ...(canChange && EXPENSE_CATEGORY_FOR_OWNERSHIP_CATEGORY[category.category] ? [ownershipCommandAction(EXPENSE_ACTION_IDS.ADD, EXPENSE_ADD_LABELS[category.category], EXPENSE_CATEGORY_FOR_OWNERSHIP_CATEGORY[category.category]!, expenseFocus ? 'PRIMARY' : 'SECONDARY')] : [])],
         };
       }) }], actions: [],
     });
@@ -831,8 +843,7 @@ async function ownershipCostsResult(userId: string, propertyId: string, message:
       text: `${category.label}: ${category.monthlyAmountCents == null ? 'monthly amount unknown' : `${money(category.monthlyAmountCents / 100)} per month`} and ${category.amountCents == null ? 'annual amount unknown' : `${money(category.amountCents / 100)} per year`}.`,
     },
   }));
-  const expensesBlock = ownershipExpensesBlock(expenses, canChange);
-  if (expensesBlock) blocks.push(expensesBlock);
+  if (!expenseFocus && expenseBlock) blocks.push(expenseBlock);
   if (evidence.length) blocks.push({ type: 'EVIDENCE', id: 'ownership-cost-evidence', title: 'Sources and periods', items: evidence });
   blocks.push(ownershipViewSwitcher('current'));
   blocks.push({
