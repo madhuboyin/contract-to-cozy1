@@ -79,6 +79,10 @@ test('Appliance Oracle: lifespan bars labelled with the Oracle\'s risk level, no
     ['item-fridge', 'Refrigerator', 4, { min: 11, max: 15 }, 'WITHIN_RANGE', 'Low · 3% failure risk', 'INVENTORY_ITEM'],
   ]);
   assert.deepEqual(lifespan.items[0].meta, ['Past its expected life', 'Replacement about $800', 'Replace immediately to avoid emergency failure and higher costs']);
+  assert.deepEqual(lifespan.items.map((item) => item.actions.map((action) => [action.id, action.operationId, action.entityType, action.entityId, action.style])), [
+    [['review-replacement', 'REPLACEMENT_GUIDANCE', 'INVENTORY_ITEM', 'item-dishwasher', 'PRIMARY']],
+    [['review-replacement', 'REPLACEMENT_GUIDANCE', 'INVENTORY_ITEM', 'item-fridge', 'SECONDARY']],
+  ], 'every appliance row has its own entity-scoped replacement action');
   assert.equal(lifespan.missingAgeTitle, 'No purchase date yet for this appliance');
   assert.deepEqual(lifespan.collection, { sourceTotal: 3, fetchedCount: 3, deliveredCount: 3, nextPageAvailable: false, deliveryTruncated: false });
   assert.deepEqual(lifespan.missingAge.map((item) => [item.id, item.label, item.entityType, item.actions.map((action) => [action.id, action.label, action.operationId, action.interactionType])]), [

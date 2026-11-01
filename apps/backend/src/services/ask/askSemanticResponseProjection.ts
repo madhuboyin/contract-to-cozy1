@@ -34,7 +34,9 @@ export function projectAskSemanticResponse(
       return;
     }
     if (Array.isArray(value)) {
-      value.forEach((item) => visit(item, key));
+      // A follow-up button ("Review replacement options") is the next step, not part of the answer being judged for relevance.
+      const items = key === 'actions' ? value.filter((item) => (item as { interactionType?: unknown } | null)?.interactionType !== 'CONVERSATION_CONTINUE') : value;
+      items.forEach((item) => visit(item, key));
       return;
     }
     if (value && typeof value === 'object') {

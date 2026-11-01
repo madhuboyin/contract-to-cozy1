@@ -42,6 +42,13 @@ export function oracleLifespanItem(prediction: OracleReportView['predictions'][n
     status,
     statusLabel: `${level} · ${prediction.failureRisk}% failure risk`,
     ...(prediction.inventoryItemId ? { entityType: 'INVENTORY_ITEM' } : {}),
+    // Every appliance row gets its own onward path (entity-scoped, so it is never the generic "which system?" prompt);
+    // the riskier ones lead with it.
+    ...(prediction.inventoryItemId ? { actions: [{
+      id: 'review-replacement', label: 'Review replacement options', message: `Should I repair or replace my ${oracleApplianceLabel(prediction.applianceName).slice(0, 80)}?`,
+      style: (prediction.urgency === 'CRITICAL' || prediction.urgency === 'HIGH' ? 'PRIMARY' : 'SECONDARY') as 'PRIMARY' | 'SECONDARY',
+      interactionType: 'CONVERSATION_CONTINUE' as const, operationId: 'REPLACEMENT_GUIDANCE', entityType: 'INVENTORY_ITEM', entityId: prediction.inventoryItemId,
+    }] } : {}),
     meta: [
       prediction.remainingLife > 0 ? `About ${prediction.remainingLife} year${prediction.remainingLife === 1 ? '' : 's'} left, around ${new Intl.DateTimeFormat('en-US', { month: 'short', year: 'numeric', timeZone: getAskPropertyTimezone() }).format(new Date(prediction.estimatedFailureDate))}` : 'Past its expected life',
       `Replacement about ${wholeDollars(prediction.replacementCost)}`,

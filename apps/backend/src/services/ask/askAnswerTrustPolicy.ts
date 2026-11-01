@@ -203,7 +203,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   DO_NOTHING_SIMULATION: new Set(['run-do-nothing', 'do-nothing-scenario-create', 'do-nothing-scenario-edit', 'do-nothing-scenario-delete']),
   WARRANTY_LOOKUP: new Set(['add-warranty', 'warranty-item-repair-replace', 'warranty-show-all']),
   // FRD v1.78: plus the inline "Add purchase date" capture on appliances with no age.
-  APPLIANCE_FAILURE_RISK: new Set(['correct-purchasedOn']),
+  APPLIANCE_FAILURE_RISK: new Set(['correct-purchasedOn', 'review-replacement']),
   // FRD v1.64 gave INCIDENT_CONTINUATION two page links; Ask no longer links to desktop pages, so it offers starting a claim instead.
   INCIDENT_CONTINUATION: new Set(['claim-file-start']),
   // The row's Review action (opens one case's analysis and draft) and the review's way back to the list; the draft itself is text, not an action.
