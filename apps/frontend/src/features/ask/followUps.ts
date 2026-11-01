@@ -67,7 +67,8 @@ export function followUpItems(
   const items: FollowUpItem[] = [];
   for (const action of typed) {
     if (seen.has(action.id)) continue;
-    if (askedKeys.has(keyOf(action.message))) continue;
+    // Typed actions already passed the server's history, repeatability, cooldown and current-outcome policy. Reapplying raw-message
+    // history here erased valid repeatable actions in longer conversations (including every Budget Planner continuation).
     const expiresAt = Date.parse(action.expiresAt);
     if (Number.isFinite(expiresAt) && expiresAt <= now) continue;
     seen.add(action.id);

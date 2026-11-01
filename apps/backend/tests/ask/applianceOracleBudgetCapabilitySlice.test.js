@@ -24,6 +24,9 @@ const { applianceOracleService } = require('../../src/services/applianceOracle.s
 const { budgetForecasterService } = require('../../src/services/budgetForecaster.service.ts');
 const protectionContext = require('../../src/services/protection/context.ts');
 const applianceInventory = require('../../src/services/propertyApplianceInventory.service.ts');
+const { finalizeSuggestedNextActionsWithReport } = require('../../src/services/ask/suggestedActions/finalizeSuggestedNextActions.ts');
+const { operationSpecificContinuationProducer, starterProducers } = require('../../src/services/ask/suggestedActions/suggestedNextActionProducers.ts');
+const { ASK_OPERATION_DEFINITIONS } = require('../../src/services/ask/askOperationRegistry.ts');
 
 const YEAR = new Date().getFullYear();
 const originals = {
@@ -194,6 +197,28 @@ test('Budget Planner: the calculated yearly and monthly forecast by category and
   assert.equal(typeof list.sections[0].items[0].proportionPercent, 'number');
   assert.equal(list.sections[1].count, 12);
   assert.equal(result.blocks.at(-1).title, 'A typical-cost estimate, not your spending');
+});
+
+test('Budget Planner: a completed property-scoped answer is finalized with four persisted Suggested Next Actions', async () => {
+  const raw = await invoke('MAINTENANCE_BUDGET_FORECAST', 'Show my budget planner');
+  const now = new Date('2026-11-01T12:00:00.000Z');
+  const { result, report } = await finalizeSuggestedNextActionsWithReport({
+    result: raw, executionId: 'budget-exec', userId: 'u1', sessionId: 's1', propertyId: 'p1',
+    operationId: 'MAINTENANCE_BUDGET_FORECAST', message: 'Show my budget planner', completedSemanticKeyHashes: new Set(),
+  }, {
+    producers: [operationSpecificContinuationProducer, ...starterProducers], clock: { now: () => now },
+    loadOperationAvailability: async () => new Map(Object.keys(ASK_OPERATION_DEFINITIONS).map((id) => [id, null])),
+    loadExecutionExpiresAt: async () => new Date(now.getTime() + 24 * 3600_000),
+    loadCurrentOutcomeKeyHashes: async () => new Set(),
+    loadLifecycleState: async () => ({ cooldownKeys: new Set(), completedKeys: new Set(), lastOfferedAtMs: new Map(), ok: true }),
+    recordOffers: async () => ({ attempted: 4, ok: true }), recordImpressions: () => undefined, recordSuppression: () => undefined,
+    loadActionableCompleteness: async () => ({ fraction: 1, audienceUncertain: false }),
+  });
+  assert.equal(report.exactFour.applicability, 'EXACT_FOUR');
+  assert.equal(report.exactFour.shortage, 0);
+  assert.deepEqual(result.suggestedNextActionsStatus, { state: 'READY', shownCount: 4, expectedCount: 4, reasonCodes: [] });
+  assert.equal(result.suggestedNextActions.length, 4);
+  assert.deepEqual(result.suggestedNextActions.slice(0, 2).map((action) => action.label), ['Review the maintenance forecast', 'Review pending maintenance']);
 });
 
 test('Budget Planner: an assumed home age is disclosed; a non-owner is told who can see it', async () => {
