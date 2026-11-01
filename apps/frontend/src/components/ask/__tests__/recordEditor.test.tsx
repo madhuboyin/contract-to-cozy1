@@ -423,14 +423,15 @@ const financingWorkflowRequest = {
   requirementId: 'financing-profile-update-inputs', captureKey: 'FINANCING_PROFILE_UPDATE', classification: 'WORKFLOW_INPUT', state: 'UNKNOWN', presentation: 'FORM',
   title: 'Your mortgage and purchase details', question: 'What should change?', helpText: 'Change only what is wrong. Nothing is saved until you confirm.',
   allowNotSure: false, sensitivity: 'FINANCIAL', destinationLabel: 'Used to prepare this change', confirmationText: 'I’m ready to review changes to these recorded financial details.', expectedContextVersion: 'finance-v1',
-  currentAnswer: { mortgageStatus: 'MORTGAGED', mortgageType: 'FIXED_30', purchasePrice: 452000, currentBalance: 320000, hasSecondMortgage: 'NO' },
+  currentAnswer: { mortgageStatus: 'MORTGAGED', mortgageType: 'FIXED_30', purchasePrice: 452000, purchaseDate: { precision: 'EXACT_DATE', value: '2019-06-01' }, currentBalance: 320000, hasSecondMortgage: 'NO' },
   inputSchema: { type: 'GROUP', groups: [
-    { id: 'purchase', title: 'Purchase and mortgage', fieldKeys: ['mortgageStatus', 'purchasePrice'] },
+    { id: 'purchase', title: 'Purchase and mortgage', fieldKeys: ['mortgageStatus', 'purchasePrice', 'purchaseDate'] },
     { id: 'loan', title: 'Primary mortgage', fieldKeys: ['mortgageType', 'currentBalance'] },
     { id: 'more', title: 'Additional loans and costs', fieldKeys: ['hasSecondMortgage', 'secondBalance'] },
   ], fields: [
     { key: 'mortgageStatus', label: 'Mortgage', required: false, inputSchema: { type: 'SINGLE_SELECT', options: [{ label: 'I have a mortgage', value: 'MORTGAGED' }, { label: 'I have no mortgage', value: 'NO_MORTGAGE' }] } },
     { key: 'purchasePrice', label: 'Purchase price ($)', required: false, inputSchema: { type: 'NUMBER', min: 0, max: 10000000 } },
+    { key: 'purchaseDate', label: 'Purchase date', required: false, inputSchema: { type: 'APPROXIMATE_DATE', allowedPrecisions: ['EXACT_DATE'], allowFuture: false } },
     { key: 'mortgageType', label: 'Mortgage type', required: false, when: { fieldKey: 'mortgageStatus', operator: 'EQUALS', value: 'MORTGAGED' }, inputSchema: { type: 'SINGLE_SELECT', options: [{ label: '30-year fixed', value: 'FIXED_30' }] } },
     { key: 'currentBalance', label: 'Current balance ($)', required: false, when: { fieldKey: 'mortgageStatus', operator: 'EQUALS', value: 'MORTGAGED' }, inputSchema: { type: 'NUMBER', min: 0, max: 10000000 } },
     { key: 'hasSecondMortgage', label: 'Second mortgage', required: false, when: { fieldKey: 'mortgageStatus', operator: 'EQUALS', value: 'MORTGAGED' }, inputSchema: { type: 'SINGLE_SELECT', options: [{ label: 'Yes', value: 'YES' }, { label: 'No', value: 'NO' }] } },
@@ -447,6 +448,7 @@ test('Sell/Hold/Rent financing uses a progressive editor, hides inapplicable loa
   expect(screen.getByText('No changes yet')).toBeVisible();
   expect(screen.getByLabelText('Purchase price ($)').parentElement).toHaveClass('w-56');
   expect(screen.getByLabelText('Purchase price ($)').parentElement).toHaveTextContent('$');
+  expect(screen.getByLabelText('Purchase date value')).toHaveValue('2019-06-01');
   expect(view.container.querySelector('[data-decision-input-workflow="FINANCING_PROFILE_UPDATE"]')).toHaveClass('max-w-[900px]');
   expect(view.container.querySelector('[data-compact-capture="financing-profile"]')).not.toHaveClass('grid');
   fireEvent.change(screen.getByLabelText('Purchase price ($)'), { target: { value: '460000' } });

@@ -1,5 +1,7 @@
 # Ask Cozy — Inline Workspace Product Requirements Document
 
+**Revision 1.496 — Financing purchase-date capture contract (2026-11-01; correction to 1.333):** `Update my mortgage and purchase details` now seeds Purchase date and Balance as of using the structured exact-date value required by the shared `APPROXIMATE_DATE` control. Previously the backend sent a plain `YYYY-MM-DD` string; the browser treated that recorded value as empty whenever the form reopened, making a successfully persisted purchase date appear unsaved. Submission and confirmation already accepted the structured value and the canonical financing writer already persisted it. Focused backend tests pin the initial seed, review, and canonical writer payload; frontend coverage pins the recorded date in the native date input.
+
 **Revision 1.489 — Sale Readiness width alignment (2026-11-01):** `Check my sale readiness` uses Ask's standard 960px Home Actions measure instead of widening the entire response to 1,140px merely because its checklist supports an optional shelves presentation. The progress summary and responsive checklist rows remain unchanged, including the homeowner's list/shelves choice; only the outer conversational measure changes. A focused answer-layout assertion pins the Sale Readiness block combination to the standard width.
 
 **Version:** 1.427

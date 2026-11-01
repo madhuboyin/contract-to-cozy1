@@ -60,12 +60,14 @@ function formCapture(contextVersion: string, current: Record<string, unknown>, e
   const money$ = (key: string, label: string) => ({ key, label, required: false, inputSchema: { type: 'NUMBER' as const, min: 0, max: 1_000_000_000 } });
   const date$ = (key: string, label: string) => ({ key, label, required: false, inputSchema: { type: 'APPROXIMATE_DATE' as const, allowedPrecisions: ['EXACT_DATE'], allowFuture: false } });
   const yesNo = (key: string, label: string) => ({ key, label, required: false, inputSchema: { type: 'SINGLE_SELECT' as const, options: [{ label: 'Yes', value: 'YES' }, { label: 'No', value: 'NO' }] } });
-  const iso = (value: unknown) => (value instanceof Date ? value.toISOString().slice(0, 10) : null);
+  // APPROXIMATE_DATE controls consume the structured capture value, even when only exact dates are allowed. Returning a
+  // plain YYYY-MM-DD string makes the browser treat a recorded date as empty when this form is opened again.
+  const exactDay = (value: unknown) => (value instanceof Date ? { precision: 'EXACT_DATE' as const, value: value.toISOString().slice(0, 10) } : null);
   const seed = entered ?? {
     mortgageStatus: current.mortgageStatus, mortgageType: current.mortgageType,
-    purchasePrice: typeof current.purchasePriceCents === 'number' ? current.purchasePriceCents / 100 : null, purchaseDate: iso(current.purchaseDate),
+    purchasePrice: typeof current.purchasePriceCents === 'number' ? current.purchasePriceCents / 100 : null, purchaseDate: exactDay(current.purchaseDate),
     originalBalance: typeof current.originalMortgageBalanceCents === 'number' ? current.originalMortgageBalanceCents / 100 : null,
-    currentBalance: typeof current.currentMortgageBalanceCents === 'number' ? current.currentMortgageBalanceCents / 100 : null, balanceAsOf: iso(current.mortgageBalanceAsOfDate),
+    currentBalance: typeof current.currentMortgageBalanceCents === 'number' ? current.currentMortgageBalanceCents / 100 : null, balanceAsOf: exactDay(current.mortgageBalanceAsOfDate),
     ratePct: typeof current.interestRateBps === 'number' ? current.interestRateBps / 100 : null,
     remainingYears: typeof current.remainingTermMonths === 'number' ? Number((current.remainingTermMonths / 12).toFixed(2)) : null,
     monthlyPayment: typeof current.monthlyPaymentCents === 'number' ? current.monthlyPaymentCents / 100 : null,

@@ -75,6 +75,7 @@ test('owner floor, declared-action only; a contributor is refused and the form i
     assert.equal(seed.ratePct, 6.5);
     assert.equal(seed.remainingYears, 25);
     assert.equal(seed.currentBalance, 280000);
+    assert.deepEqual(seed.purchaseDate, { precision: 'EXACT_DATE', value: '2019-06-01' });
     assert.deepEqual(form.captureRequests[0].inputSchema.groups.map((group) => group.title), ['Purchase and mortgage', 'Primary mortgage', 'Additional loans and costs']);
     assert.equal(form.captureRequests[0].inputSchema.fields.find((field) => field.key === 'mortgageType').when.value, 'MORTGAGED');
     assert.equal(form.captureRequests[0].inputSchema.fields.find((field) => field.key === 'secondBalance').when.fieldKey, 'hasSecondMortgage');
@@ -92,6 +93,10 @@ test('the review shows the exact before and after, states the balance caution, a
     assert.deepEqual(rate.confirmation.fields, [{ label: 'Interest rate', value: '6.5% → 6%' }]);
     assert.equal(rate.parameters.financingProfileExpectedUpdatedAt, T.toISOString());
     assert.equal(rate.parameters.financingProfileBalanceAcknowledged, false);
+
+    const purchaseDate = await handler.financingProfileCommandResult('user-1', 'prop-1', { entityId: 'prop-1', sourceExecutionId: null }, { purchaseDate: { precision: 'EXACT_DATE', value: '2020-07-04' } });
+    assert.deepEqual(purchaseDate.confirmation.fields, [{ label: 'Purchase date', value: 'Jun 1, 2019 → Jul 4, 2020' }]);
+    assert.deepEqual(purchaseDate.parameters.financingProfileForm.purchaseDate, { precision: 'EXACT_DATE', value: '2020-07-04' });
 
     const caution = await handler.financingProfileCommandResult('user-1', 'prop-1', { entityId: 'prop-1', sourceExecutionId: null }, { currentBalance: 330000 });
     assert.match(caution.confirmation.description, /Caution: the current balance is higher than the original balance/);
@@ -124,7 +129,7 @@ test('confirming calls the canonical writer bound to the version shown; the rece
   executeOperation.reconcileAskExecutionSideEffects = async () => ({ attemptedAndFailed: false, refreshedExecutions: [] });
   try {
     const out = await confirmCapabilityInvoke(OP, ctx({
-      financingProfileForm: { ratePct: 6, currentBalance: 330000 }, financingProfileCommand: { entityId: 'prop-1' }, financingProfileContextVersion: version,
+      financingProfileForm: { ratePct: 6, currentBalance: 330000, purchaseDate: { precision: 'EXACT_DATE', value: '2020-07-04' } }, financingProfileCommand: { entityId: 'prop-1' }, financingProfileContextVersion: version,
       financingProfileExpectedUpdatedAt: T.toISOString(), financingProfileBalanceAcknowledged: true,
     }));
     assert.equal(calls[0].surface, 'ASK');
@@ -132,6 +137,7 @@ test('confirming calls the canonical writer bound to the version shown; the rece
     assert.equal(calls[0].expectedUpdatedAt, T.toISOString());
     assert.equal(calls[0].acknowledgeBalanceExceedsOriginal, true);
     assert.equal(calls[0].changes.interestRateBps, 600);
+    assert.equal(calls[0].changes.purchaseDate.toISOString(), '2020-07-04T12:00:00.000Z');
     const receipt = JSON.stringify(out.result.blocks[0]);
     assert.match(receipt, /Interest rate, Current balance/);
     assert.doesNotMatch(receipt, /600|330|6\.0|\$/);
