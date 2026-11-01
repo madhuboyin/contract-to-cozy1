@@ -204,6 +204,8 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   WARRANTY_LOOKUP: new Set(['add-warranty', 'warranty-item-repair-replace', 'warranty-show-all']),
   // FRD v1.78: plus the inline "Add purchase date" capture on appliances with no age.
   APPLIANCE_FAILURE_RISK: new Set(['correct-purchasedOn', 'review-replacement']),
+  // "Show my insurance policies" is served under COVERAGE_GAPS: its Add button (also the empty state's only way forward) and the owner's own Edit/Delete rows.
+  COVERAGE_GAPS: new Set(['insurance-policy-add', 'insurance-policy-edit', 'insurance-policy-delete']),
   // FRD v1.64 gave INCIDENT_CONTINUATION two page links; Ask no longer links to desktop pages, so it offers starting a claim instead.
   INCIDENT_CONTINUATION: new Set(['claim-file-start']),
   // The row's Review action (opens one case's analysis and draft) and the review's way back to the list; the draft itself is text, not an action.

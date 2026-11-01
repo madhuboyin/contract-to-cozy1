@@ -101,6 +101,14 @@ test('a contributor whose profile does not own the home is never offered Add, on
   const owner = await insurancePoliciesResult('u1', 'p1');
   assert.equal(owner.blocks[0].actions[0].id, 'insurance-policy-add');
   assert.equal(owner.blocks[0].actions[0].style, 'PRIMARY');
+  // The answer checker must keep the buttons (an action id missing from the operation's allowlist is silently stripped).
+  const { validateAskAnswerTrustPipeline } = require('../../src/services/ask/askAnswerTrustValidator.ts');
+  const { attachAskAuthoritativeSourceEvidence, completedAskAuthoritativeSourceEvidence } = require('../../src/services/ask/askAnswerTrustPolicy.ts');
+  const checked = validateAskAnswerTrustPipeline({
+    question: 'Show my insurance policies', operationId: 'COVERAGE_GAPS', propertyId: 'p1', householdRole: 'OWNER',
+    result: attachAskAuthoritativeSourceEvidence(owner, [completedAskAuthoritativeSourceEvidence('COVERAGE_GAPS')]),
+  });
+  assert.deepEqual(checked.result.blocks[0].actions.map((action) => action.id), ['insurance-policy-add'], JSON.stringify(checked.trust.reasonCodes));
   role = 'VIEWER';
   const viewerNone = await insurancePoliciesResult('u1', 'p1');
   assert.deepEqual(viewerNone.blocks[0].actions, []);
