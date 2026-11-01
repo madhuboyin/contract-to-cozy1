@@ -8,6 +8,7 @@ import { applianceOracleService } from '../../applianceOracle.service';
 import { budgetForecasterService } from '../../budgetForecaster.service';
 import { getAskPropertyTimezone } from '../askExecutionContext';
 import { collectionDescriptor } from '../support/collectionDescriptor';
+import { DEFAULT_CANDIDATE_SIGNALS, DEFAULT_CANDIDATE_TRAITS, type SuggestedNextActionCandidate } from '../suggestedActions/suggestedNextActionCandidate';
 
 // Appliance Oracle and Budget Planner (FRD v1.70, product decision option A for the Gemini-backed tools): Ask shows only
 // the calculated part of each page, with the services' Gemini recommendations switched off, and links to the page for the
@@ -47,6 +48,26 @@ export function oracleLifespanItem(prediction: OracleReportView['predictions'][n
       prediction.maintenanceImpact,
     ].filter((value) => value.length <= 80),
   };
+}
+
+// REPLACEMENT_GUIDANCE targets one inventory item, so the generic "repair or replace a major system" prompt is always
+// rejected by Suggested Next Actions (ENTITY_REQUIRED). The continuation names the highest-risk appliance instead; when
+// nothing is at CRITICAL or HIGH risk there is nothing to replace and the other continuations carry the answer.
+export function applianceReplacementCandidates(report: OracleReportView, propertyId: string): SuggestedNextActionCandidate[] {
+  const riskiest = report.predictions
+    .filter((prediction) => prediction.inventoryItemId && (prediction.urgency === 'CRITICAL' || prediction.urgency === 'HIGH'))
+    .sort((a, b) => b.failureRisk - a.failureRisk)[0];
+  if (!riskiest?.inventoryItemId) return [];
+  const label = oracleApplianceLabel(riskiest.applianceName);
+  const shortLabel = (label.length > 40 ? `${label.slice(0, 39)}…` : label).toLowerCase();
+  return [{
+    source: 'OPERATION_RESULT', sourceOperationId: 'APPLIANCE_FAILURE_RISK',
+    label: `Review ${shortLabel} replacement options`, message: `Should I repair or replace my ${label.slice(0, 80)}?`,
+    operationId: 'REPLACEMENT_GUIDANCE', interactionType: 'CONVERSATION_CONTINUE', outcomeKey: 'REVIEW_REPLACEMENT',
+    entityContext: { propertyId, entityType: 'INVENTORY_ITEM', entityId: riskiest.inventoryItemId, contextVersion: null },
+    tier: 'CONTINUE', slotClass: 'CONTINUE_WORK', requiredFacts: [], reasonCodes: ['APPLIANCE_RISK_REVIEW_REPLACEMENT'],
+    signals: { ...DEFAULT_CANDIDATE_SIGNALS, exactEntityMatch: true, currentResultOwnership: true, sourceConfidence: 1 }, traits: { ...DEFAULT_CANDIDATE_TRAITS },
+  }];
 }
 
 export function applianceFailureRiskFromView(report: OracleReportView | 'PRIMARY_OWNER_ONLY', propertyId: string): AskOperationResult {
@@ -118,7 +139,8 @@ export function applianceFailureRiskFromView(report: OracleReportView | 'PRIMARY
   }];
   if (skippedBlock) blocks.push(skippedBlock);
   blocks.push(lifespan(report.predictions), boundary);
-  return { status: 'ANSWERED', reasonCode: 'APPLIANCE_ORACLE_READY', blocks, suggestions: [] };
+  const suggestedNextActionCandidates = applianceReplacementCandidates(report, propertyId);
+  return { status: 'ANSWERED', reasonCode: 'APPLIANCE_ORACLE_READY', blocks, suggestions: [], ...(suggestedNextActionCandidates.length ? { suggestedNextActionCandidates } : {}) };
 }
 
 async function applianceFailureRiskResult(propertyId: string, userId: string): Promise<AskOperationResult> {

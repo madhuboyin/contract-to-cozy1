@@ -25,7 +25,8 @@ const { budgetForecasterService } = require('../../src/services/budgetForecaster
 const protectionContext = require('../../src/services/protection/context.ts');
 const applianceInventory = require('../../src/services/propertyApplianceInventory.service.ts');
 const { finalizeSuggestedNextActionsWithReport } = require('../../src/services/ask/suggestedActions/finalizeSuggestedNextActions.ts');
-const { operationSpecificContinuationProducer, starterProducers } = require('../../src/services/ask/suggestedActions/suggestedNextActionProducers.ts');
+const { resultCandidatesProducer, operationSpecificContinuationProducer, starterProducers } = require('../../src/services/ask/suggestedActions/suggestedNextActionProducers.ts');
+require('../../src/services/ask/suggestedActions/entityValidators/registerAll.ts');
 const { ASK_OPERATION_DEFINITIONS } = require('../../src/services/ask/askOperationRegistry.ts');
 
 const YEAR = new Date().getFullYear();
@@ -46,6 +47,7 @@ function install({ owner = true, yearBuilt = 1996, appliances } = {}) {
     { id: 'item-dryer', assetType: 'Dryer', installationYear: null },
   ];
   prismaModule.prisma = {
+    inventoryItem: { findMany: async ({ where }) => (where.id?.in ?? []).map((id) => ({ id, propertyId: 'p1', updatedAt: new Date('2026-10-01T00:00:00Z') })) },
     property: { findFirst: async () => (owner ? { id: 'p1', address: '1 Main St', yearBuilt, dwellingType: 'SINGLE_FAMILY', homeownerProfile: {}, inventoryItems: [{}, {}] } : null) },
   };
 }
@@ -85,6 +87,30 @@ test('Appliance Oracle: lifespan bars labelled with the Oracle\'s risk level, no
   assert.equal(result.blocks.some((block) => block.id === 'appliance-oracle-skipped'), false);
   assert.match(result.blocks.at(-1).body, /educational estimates/i);
   for (const block of result.blocks) AskPresentationBlockSchema.parse(block);
+});
+
+test('Appliance Oracle: a completed property-scoped answer is finalized with four persisted Suggested Next Actions', async () => {
+  const raw = await invoke('APPLIANCE_FAILURE_RISK', 'Show my appliance oracle');
+  const now = new Date('2026-11-01T12:00:00.000Z');
+  const { result, report } = await finalizeSuggestedNextActionsWithReport({
+    result: raw, executionId: 'oracle-exec', userId: 'u1', sessionId: 's1', propertyId: 'p1',
+    operationId: 'APPLIANCE_FAILURE_RISK', message: 'Show my appliance oracle', completedSemanticKeyHashes: new Set(),
+  }, {
+    producers: [resultCandidatesProducer, operationSpecificContinuationProducer, ...starterProducers], clock: { now: () => now },
+    loadOperationAvailability: async () => new Map(Object.keys(ASK_OPERATION_DEFINITIONS).map((id) => [id, null])),
+    loadExecutionExpiresAt: async () => new Date(now.getTime() + 24 * 3600_000),
+    loadCurrentOutcomeKeyHashes: async () => new Set(),
+    loadLifecycleState: async () => ({ cooldownKeys: new Set(), completedKeys: new Set(), lastOfferedAtMs: new Map(), ok: true }),
+    recordOffers: async () => ({ attempted: 4, ok: true }), recordImpressions: () => undefined, recordSuppression: () => undefined,
+    loadActionableCompleteness: async () => ({ fraction: 1, audienceUncertain: false }),
+  });
+  assert.equal(report.exactFour.applicability, 'EXACT_FOUR');
+  assert.equal(report.exactFour.shortage, 0);
+  assert.deepEqual(result.suggestedNextActionsStatus, { state: 'READY', shownCount: 4, expectedCount: 4, reasonCodes: [] });
+  assert.equal(result.suggestedNextActions.length, 4);
+  const replacement = result.suggestedNextActions.find((action) => action.operationId === 'REPLACEMENT_GUIDANCE');
+  assert.ok(replacement, 'the riskiest appliance gets an entity-scoped replacement action');
+  assert.equal(replacement.label, 'Review dishwasher replacement options');
 });
 
 test('Appliance Oracle: nothing with an age is not an all-clear and still offers the capture; a non-owner is told who can see it', async () => {

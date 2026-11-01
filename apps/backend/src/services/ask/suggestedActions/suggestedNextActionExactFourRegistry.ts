@@ -416,7 +416,8 @@ export const RESULT_OWNERSHIP_RELATIONSHIPS: Readonly<Record<string, readonly st
   HOME_WORK_ITEM_COMMAND: operationSpecificContinuationOutcomeKeys('HOME_WORK_ITEM_COMMAND'),
   PROPERTY_SUMMARY: operationSpecificContinuationOutcomeKeys('PROPERTY_SUMMARY'),
   HOME_DEADLINE_MONITOR: operationSpecificContinuationOutcomeKeys('HOME_DEADLINE_MONITOR'),
-  APPLIANCE_FAILURE_RISK: operationSpecificContinuationOutcomeKeys('APPLIANCE_FAILURE_RISK'),
+  // REVIEW_REPLACEMENT is emitted by the handler for the riskiest appliance (entity-scoped); the recipes carry the generic rows.
+  APPLIANCE_FAILURE_RISK: ['REPLACEMENT_GUIDANCE:REVIEW_REPLACEMENT', ...operationSpecificContinuationOutcomeKeys('APPLIANCE_FAILURE_RISK')],
   BREAK_EVEN_ANALYSIS: operationSpecificContinuationOutcomeKeys('BREAK_EVEN_ANALYSIS'),
   CAPTURE_EVIDENCE_CONFIRM: operationSpecificContinuationOutcomeKeys('CAPTURE_EVIDENCE_CONFIRM'),
   CAPTURE_FACT_CONFIRM: operationSpecificContinuationOutcomeKeys('CAPTURE_FACT_CONFIRM'),

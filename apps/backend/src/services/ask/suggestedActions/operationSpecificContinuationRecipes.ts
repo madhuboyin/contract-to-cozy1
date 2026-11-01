@@ -656,8 +656,8 @@ export const OPERATION_SPECIFIC_CONTINUATION_RECIPES: Readonly<Partial<Record<As
     recipe('Review pending maintenance', 'What maintenance is pending?', 'MAINTENANCE_STATUS', 'REVIEW_MAINTENANCE_STATUS', 'HOME_DEADLINE_REVIEW_MAINTENANCE'),
   ],
   APPLIANCE_FAILURE_RISK: [
-    recipe('Review replacement guidance', 'Should I repair or replace a major home system?', 'REPLACEMENT_GUIDANCE', 'REVIEW_REPLACEMENT', 'APPLIANCE_RISK_REVIEW_REPLACEMENT'),
     recipe('Review the status board', 'Show my status board', 'HOME_STATUS_BOARD', 'REVIEW_STATUS_BOARD', 'APPLIANCE_RISK_REVIEW_STATUS'),
+    recipe('Review the maintenance budget', 'Show my budget planner', 'MAINTENANCE_BUDGET_FORECAST', 'REVIEW_MAINTENANCE_BUDGET', 'APPLIANCE_RISK_REVIEW_BUDGET'),
   ],
   BREAK_EVEN_ANALYSIS: [
     recipe('Review ownership costs', 'Show my home ownership costs', 'OWNERSHIP_COSTS', 'REVIEW_OWNERSHIP_COSTS', 'BREAK_EVEN_REVIEW_COSTS'),
