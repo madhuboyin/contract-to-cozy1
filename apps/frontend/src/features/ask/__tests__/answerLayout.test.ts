@@ -43,6 +43,13 @@ test('keeps the reserve-fund decision answer at the Home Actions measure despite
   expect(askAnswerWidth([summary, progress, timeline])).toBe('STANDARD');
 });
 
+test('keeps Sale Readiness at the Home Actions measure despite its optional shelves presentation', () => {
+  const progress: AskPresentationBlock = { type: 'PROGRESS', id: 'seller-prep-progress', title: 'Sale readiness', percent: 5, basis: '3 of 56 must-address items resolved or disclosed', metrics: [], nextSteps: [], actions: [] };
+  const checklist: AskPresentationBlock = { type: 'GROUPED_LIST', id: 'seller-prep-open-items', title: 'Open items', sections: [], filters: [], actions: [], presentation: { pattern: 'SHELVES' } };
+  expect(askAnswerWidth([summary, progress, checklist])).toBe('STANDARD');
+  expect(askAnswerWidthClass(askAnswerWidth([summary, progress, checklist]))).toContain('max-w-[960px]');
+});
+
 test('keeps property completeness and its summary at the Home Actions measure', () => {
   const progress: AskPresentationBlock = { type: 'PROGRESS', id: 'property-completeness-progress', title: 'Property details completeness', percent: 100, basis: '66 of 66 applicable facts known', metrics: [], nextSteps: [], actions: [] };
   const facts: AskPresentationBlock = { type: 'GROUPED_LIST', id: 'property-summary-facts', title: 'Home record summary', sections: [], filters: [], actions: [] };

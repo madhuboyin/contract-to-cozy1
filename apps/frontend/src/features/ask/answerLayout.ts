@@ -33,6 +33,10 @@ export function askAnswerWidth(blocks: AskPresentationBlock[]): AskAnswerWidth {
   if (blocks.some((block) => block.type === 'TREND_CHART' || block.id.startsWith('break-even-'))) return 'STANDARD';
   // Sell / Hold / Rent, Ownership Costs, Coverage Reviews, and the Do-Nothing Simulator are the same kind of decision answer (summary, scenario cards, short tables), so they share that measure.
   if (blocks.some((block) => block.id.startsWith('sell-hold-rent-') || block.id.startsWith('do-nothing-') || block.id.startsWith('ownership-cost') || block.id.startsWith('coverage-'))) return 'STANDARD';
+  // Sale Readiness is a conversational progress summary followed by responsive checklist rows. The checklist advertises
+  // an optional shelves presentation, but that capability must not widen the whole answer when the homeowner is reading
+  // the ordinary list. Keep the turn aligned with Home Actions; the checklist remains responsive inside this measure.
+  if (blocks.some((block) => block.id === 'seller-prep-progress' || block.id === 'seller-prep-open-items')) return 'STANDARD';
   // Home Operations is a scan-heavy operational artifact. Its desktop rows use
   // aligned metadata, state and action columns, so give the list the wider
   // workspace measure while retaining the ordinary single-column mobile flow.
