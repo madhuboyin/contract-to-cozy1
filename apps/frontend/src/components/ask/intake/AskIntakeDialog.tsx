@@ -73,7 +73,7 @@ export function AskIntakeDialog({ open, onOpenChange, propertyId, returnFocusRef
       <div className="flex flex-wrap gap-2">{resultQuestion && <button type="button" className={PRIMARY_LINK} onClick={() => askAbout(resultQuestion)}>Review the findings</button>}<button type="button" className={LINK} onClick={startOver}>Add another file</button></div>
     </div>
   );
-  else if (view.state === 'REVIEW') body = <IntakeCandidates view={view} busy={busy === 'SAVING'} onReview={(id, action, value) => void intake.reviewCandidate(id, action, value)} onAdd={() => void intake.addToHome()} onDiscard={() => void intake.discard()} />;
+  else if (view.state === 'REVIEW') body = <IntakeCandidates view={view} busy={busy === 'SAVING'} onReview={(id, action, value) => void intake.reviewCandidate(id, action, value)} onSupply={(fieldKey, value) => void intake.supplyDetail(fieldKey, value)} onAdd={() => void intake.addToHome()} onDiscard={() => void intake.discard()} />;
   else body = (
     <div className="space-y-3" data-intake-done>
       <p className="text-sm text-slate-800" role="status">{view.result ? RESULT_COPY[view.result.entityType].done : 'Rejected. Nothing was added to your home. The original is still in your Home Records.'}</p>

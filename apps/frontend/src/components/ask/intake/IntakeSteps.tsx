@@ -175,7 +175,24 @@ function CandidateRow({ candidate, busy, editable, onReview }: { candidate: AskI
 }
 
 /** Step 3 (documents): every proposed detail can be accepted, edited, rejected, or left for later. Nothing is added until "Add to my home". */
-export function IntakeCandidates({ view, busy, onReview, onAdd, onDiscard }: { view: AskIntakeView; busy: boolean; onReview: (id: string, action: 'CONFIRM' | 'CORRECT' | 'REJECT', value?: string) => void; onAdd: () => void; onDiscard: () => void }) {
+/** A required detail the reader found nothing for has no row to edit, so it is typed in here (the person's own entry, reviewed like any other). */
+function MissingDetailRow({ label, busy, onSupply }: { label: string; busy: boolean; onSupply: (value: string) => void }) {
+  const [value, setValue] = useState('');
+  return (
+    <li className="px-3 py-2" data-intake-missing-detail={label}>
+      <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">{label} (needed)</span>
+      <p className="mt-0.5 text-sm text-slate-700">Cozy could not find this in the file. Type it in from the document.</p>
+      <form className="mt-1 flex flex-wrap items-center gap-2" onSubmit={(event) => { event.preventDefault(); if (value.trim()) onSupply(value.trim()); }}>
+        <label className="sr-only" htmlFor={`ask-intake-supply-${label}`}>{label}</label>
+        <input id={`ask-intake-supply-${label}`} value={value} maxLength={2000} onChange={(event) => setValue(event.target.value)} className="min-h-11 min-w-0 flex-1 rounded-xl border border-slate-300 px-3 text-sm" />
+        <button type="submit" className={PRIMARY} disabled={busy || !value.trim()}>Add {label.toLowerCase()}</button>
+      </form>
+    </li>
+  );
+}
+
+export function IntakeCandidates({ view, busy, onReview, onSupply, onAdd, onDiscard }: { view: AskIntakeView; busy: boolean; onReview: (id: string, action: 'CONFIRM' | 'CORRECT' | 'REJECT', value?: string) => void; onSupply?: (fieldKey: string, value: string) => void; onAdd: () => void; onDiscard: () => void }) {
+  const typedIn = onSupply ? (view.missingRequiredFields ?? []).filter((field) => !field.hasRow) : [];
   const allowed = canAddToHome(view);
   const inspection = view.kind === 'INSPECTION_REPORT';
   const accepted = view.candidates.filter((candidate) => candidate.reviewStatus === 'CONFIRMED').length;
@@ -186,8 +203,9 @@ export function IntakeCandidates({ view, busy, onReview, onAdd, onDiscard }: { v
       {view.candidates.length === 0 && <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950" role="note" data-intake-empty>{inspection ? 'No findings could be read from this report, so there is nothing to add.' : 'Nothing could be read from this file.'}</p>}
       <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200">
         {view.candidates.map((candidate) => <CandidateRow key={`${candidate.id}:${candidate.reviewStatus}:${candidate.effectiveValue}`} candidate={candidate} busy={busy} editable={!inspection} onReview={(action, value) => onReview(candidate.id, action, value)} />)}
+        {typedIn.map((field) => <MissingDetailRow key={field.fieldKey} label={field.label} busy={busy} onSupply={(value) => onSupply?.(field.fieldKey, value)} />)}
       </ul>
-      {view.missingRequired.length > 0 && <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950" role="note" data-intake-missing>Still needed before this can be added: {view.missingRequired.join(', ')}. Edit a detail to fill it in.</p>}
+      {view.missingRequired.length > 0 && <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950" role="note" data-intake-missing>Still needed before this can be added: {view.missingRequired.join(', ')}. {typedIn.length > 0 ? 'Type in what Cozy could not find above.' : 'Edit a detail to fill it in.'}</p>}
       {!inspection && view.missingRequired.length === 0 && !allowed && <p className="text-sm text-slate-600" role="note">Accept or edit the details marked “needed” to continue. Others can stay undecided.</p>}
       {inspection && view.candidates.length > 0 && <p className="text-sm text-slate-600" role="status" data-intake-tally>{accepted} accepted · {undecided} undecided · {view.candidates.length - accepted - undecided} rejected</p>}
       <div className="flex flex-wrap gap-2">

@@ -9,7 +9,7 @@ import type { AskIntakeCandidate, AskIntakeConfig, AskIntakeView } from '@/featu
 
 jest.mock('@/lib/api/client', () => ({ api: {
   getAskIntakeConfig: jest.fn(), uploadAskIntakeFile: jest.fn(), getAskIntake: jest.fn(), analyzeAskIntake: jest.fn(), reviewAskIntakeCandidate: jest.fn(), promoteAskIntake: jest.fn(),
-  updateAskIntakeLabel: jest.fn(), confirmAskIntakeLabel: jest.fn(), dismissAskIntakeLabel: jest.fn(), discardAskIntake: jest.fn(),
+  updateAskIntakeLabel: jest.fn(), supplyAskIntakeDetail: jest.fn(), confirmAskIntakeLabel: jest.fn(), dismissAskIntakeLabel: jest.fn(), discardAskIntake: jest.fn(),
 } }));
 const mocks = api as unknown as Record<string, jest.Mock>;
 
@@ -105,6 +105,26 @@ describe('AskIntakeDialog', () => {
     fireEvent.click(screen.getByLabelText(/I understand this file will be sent to an AI service/));
     fireEvent.click(screen.getByRole('button', { name: 'Read this file' }));
     await waitFor(() => expect(mocks.analyzeAskIntake).toHaveBeenCalledWith('home-1', 'rec-1', { kind: 'INSURANCE_POLICY', acknowledgedProcessing: true, inspection: undefined }));
+  });
+
+  it('a required detail the reader did not find is typed in on its own row, saved as the person\'s entry, and a detail that has a row is edited instead', async () => {
+    const carrier = candidate({ id: 'c-carrier', fieldKey: 'carrierName', label: 'Carrier', proposedValue: 'State Farm', effectiveValue: 'State Farm', reviewStatus: 'CONFIRMED', required: true });
+    const missing = { fieldKey: 'policyNumber', label: 'Policy number', hasRow: false };
+    mocks.uploadAskIntakeFile.mockResolvedValue(ok(view()));
+    mocks.analyzeAskIntake.mockResolvedValue(ok(view({ state: 'REVIEW', kind: 'INSURANCE_POLICY', candidates: [carrier], missingRequired: ['Policy number'], missingRequiredFields: [missing] })));
+    mocks.supplyAskIntakeDetail.mockResolvedValue(ok(view({ state: 'REVIEW', kind: 'INSURANCE_POLICY', candidates: [carrier, candidate({ id: 'c-number', fieldKey: 'policyNumber', label: 'Policy number', proposedValue: 'SF-123456', effectiveValue: 'SF-123456', reviewStatus: 'CORRECTED', required: true })], missingRequired: [], missingRequiredFields: [] })));
+    renderDialog();
+    await upload();
+    fireEvent.click(await screen.findByLabelText(/I understand this file will be sent to an AI service/));
+    fireEvent.click(screen.getByRole('button', { name: 'Read this file' }));
+    expect(await screen.findByText(/Type in what Cozy could not find above/)).toBeInTheDocument();
+    const add = screen.getByRole('button', { name: 'Add policy number' });
+    expect(add).toBeDisabled();
+    fireEvent.change(screen.getByLabelText('Policy number'), { target: { value: '  SF-123456 ' } });
+    fireEvent.click(add);
+    await waitFor(() => expect(mocks.supplyAskIntakeDetail).toHaveBeenCalledWith('home-1', 'rec-1', { fieldKey: 'policyNumber', value: 'SF-123456' }));
+    await waitFor(() => expect(screen.queryByText(/Type in what Cozy could not find above/)).not.toBeInTheDocument());
+    expect(screen.getByRole('button', { name: 'Add to my home' })).toBeEnabled();
   });
 
   it('reports once when the uploaded original becomes a Home Record', async () => {

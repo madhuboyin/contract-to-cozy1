@@ -6,7 +6,7 @@ import {
   ASK_INTAKE_ACCEPTED_TYPES, ASK_INTAKE_CONTRACT_VERSION, ASK_INTAKE_DISCLOSURES, ASK_INTAKE_INSPECTION_REPORT_TYPES, ASK_INTAKE_KIND_OPTIONS, ASK_INTAKE_MAX_BYTES, ASK_INTAKE_SENSITIVITIES,
 } from '../services/ask/askIntake.contract';
 import {
-  analyzeAskIntake, confirmAskIntakeLabel, discardAskIntake, dismissAskIntakeLabel, getAskIntake, promoteAskIntake, reviewAskIntakeCandidate, stageAskIntakeFile, updateAskIntakeLabel,
+  analyzeAskIntake, supplyAskIntakeDetail, confirmAskIntakeLabel, discardAskIntake, dismissAskIntakeLabel, getAskIntake, promoteAskIntake, reviewAskIntakeCandidate, stageAskIntakeFile, updateAskIntakeLabel,
   type AskIntakeContext,
 } from '../services/ask/askIntake.service';
 
@@ -18,6 +18,7 @@ const analyzeSchema = z.object({
   inspection: z.object({ reportType: z.enum(ASK_INTAKE_INSPECTION_REPORT_TYPES), inspectionDate: z.string().trim().min(8).max(40) }).optional(),
 });
 const reviewSchema = z.object({ action: z.enum(['CONFIRM', 'CORRECT', 'REJECT']), value: z.string().trim().min(1).max(2000).optional() }).refine((v) => v.action !== 'CORRECT' || Boolean(v.value), 'A corrected value is required.');
+const detailSchema = z.object({ fieldKey: z.string().trim().min(1).max(60), value: z.string().trim().min(1, 'Enter a value.').max(2000) });
 const labelPatchSchema = z.object({
   name: z.string().max(160).nullable().optional(), manufacturer: z.string().max(160).nullable().optional(), modelNumber: z.string().max(160).nullable().optional(),
   serialNumber: z.string().max(160).nullable().optional(), upc: z.string().max(160).nullable().optional(), sku: z.string().max(160).nullable().optional(),
@@ -66,6 +67,14 @@ export async function postAskIntakeCandidateReview(req: CustomRequest, res: Resp
     const input = reviewSchema.safeParse(req.body ?? {});
     if (!input.success) return badRequest(res, input.error.issues[0]?.message ?? 'Choose confirm, correct or reject.');
     return res.status(200).json({ success: true, data: await reviewAskIntakeCandidate(context(req), req.params.recordId, req.params.candidateId, input.data) });
+  } catch (error) { return next(error); }
+}
+
+export async function postAskIntakeDetail(req: CustomRequest, res: Response, next: NextFunction) {
+  try {
+    const input = detailSchema.safeParse(req.body ?? {});
+    if (!input.success) return badRequest(res, input.error.issues[0]?.message ?? 'Enter a value.');
+    return res.status(201).json({ success: true, data: await supplyAskIntakeDetail(context(req), req.params.recordId, input.data) });
   } catch (error) { return next(error); }
 }
 

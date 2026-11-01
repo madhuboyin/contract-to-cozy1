@@ -1513,6 +1513,8 @@ export interface AskIntakeView {
   classification: { kind: AskIntakeKind | null; modelLabel: string | null; confidence: number } | null;
   candidates: AskIntakeCandidate[];
   missingRequired: string[];
+  /** Required details still missing; `hasRow` false means the reader found nothing, so the person types it in. */
+  missingRequiredFields?: Array<{ fieldKey: string; label: string; hasRow: boolean }>;
   labelDraft: { id: string; status: 'DRAFT' | 'CONFIRMED' | 'DISMISSED'; fields: Array<{ key: string; label: string; value: string | null; confidence: number | null }>; itemId: string | null } | null;
   inspection: { reportId: string; status: string; findingCount: number } | null;
   result: { entityType: 'WARRANTY' | 'EXPENSE' | 'INSURANCE_POLICY' | 'INVENTORY_ITEM'; entityId: string } | null;

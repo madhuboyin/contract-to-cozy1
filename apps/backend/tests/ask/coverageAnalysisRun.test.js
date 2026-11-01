@@ -316,7 +316,7 @@ test('the "add or confirm the declarations page" review question carries the Add
   assert.deepEqual(item(checked.result).actions?.map((action) => action.id), ['insurance-policy-add'], JSON.stringify(checked.trust.reasonCodes));
 });
 
-test('with no policy term on file the review offers the declarations-page upload (preselected to a policy) to a contributor or owner, not a viewer, and the checker keeps it', () => {
+test('with no policy term on file the review offers the declarations-page upload (preselected to a policy) to the home-record owner only, and the checker keeps it', () => {
   const { coverageReviewFromView } = require('../../src/services/ask/handlers/coverageReview.handler.ts');
   const { AskPresentationBlockSchema } = require('../../src/productFramework/ask/ask.contract.ts');
   const { validateAskAnswerTrustPipeline } = require('../../src/services/ask/askAnswerTrustValidator.ts');
@@ -329,7 +329,7 @@ test('with no policy term on file the review offers the declarations-page upload
     ['coverage-policy-upload', 'OPEN_FILE_INTAKE', 'INSURANCE_POLICY', 'PRIMARY'], ['coverage-generate-review', 'START_WORKFLOW', undefined, 'SECONDARY'],
   ]);
   for (const block of owner.blocks) AskPresentationBlockSchema.parse(block);
-  assert.deepEqual(summary(coverageReviewFromView(read(null), true, 'p1', false)).actions.map((action) => action.id), ['coverage-policy-upload', 'coverage-generate-review'], 'a contributor who does not own the home record may still upload: promotion records the term under the canonical owner');
+  assert.deepEqual(summary(coverageReviewFromView(read(null), true, 'p1', false)).actions.map((action) => action.id), ['coverage-generate-review'], 'owner-only for now: a contributor is not offered the upload');
   assert.deepEqual(summary(coverageReviewFromView(read(null), false, 'p1', false)).actions, [], 'a viewer is offered nothing');
   const withTerm = { insurancePolicy: { carrierName: 'State Farm', policyNumber: 'SF-1' }, sourceDocument: null };
   assert.deepEqual(summary(coverageReviewFromView(read(withTerm), true, 'p1', true)).actions.map((action) => action.id), ['coverage-generate-review'], 'a policy term is already on file');

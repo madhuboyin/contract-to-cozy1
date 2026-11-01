@@ -8,7 +8,7 @@ import { uploadRateLimiter } from '../middleware/rateLimiter.middleware';
 import { validateDocumentUpload } from '../utils/documentValidator.util';
 import { scanIntakeUpload } from '../services/contentScan.service';
 import { ASK_INTAKE_ACCEPTED_TYPES, ASK_INTAKE_MAX_BYTES } from '../services/ask/askIntake.contract';
-import { getAskIntakeConfigHandler, getAskIntakeHandler, patchAskIntakeLabel, postAskIntakeAnalyze, postAskIntakeCandidateReview, postAskIntakeDiscard, postAskIntakeFile, postAskIntakeLabelConfirm, postAskIntakeLabelDismiss, postAskIntakePromote } from '../controllers/askIntake.controller';
+import { getAskIntakeConfigHandler, getAskIntakeHandler, patchAskIntakeLabel, postAskIntakeAnalyze, postAskIntakeCandidateReview, postAskIntakeDetail, postAskIntakeDiscard, postAskIntakeFile, postAskIntakeLabelConfirm, postAskIntakeLabelDismiss, postAskIntakePromote } from '../controllers/askIntake.controller';
 
 const router = Router();
 
@@ -45,6 +45,7 @@ router.post('/ask/properties/:propertyId/intake/files', ...intakeContributor, up
 router.get('/ask/properties/:propertyId/intake/:recordId', ...intakeContributor, getAskIntakeHandler);
 router.post('/ask/properties/:propertyId/intake/:recordId/analyze', ...intakeContributor, postAskIntakeAnalyze);
 router.post('/ask/properties/:propertyId/intake/:recordId/candidates/:candidateId/review', ...intakeContributor, postAskIntakeCandidateReview);
+router.post('/ask/properties/:propertyId/intake/:recordId/details', ...intakeContributor, postAskIntakeDetail);
 router.post('/ask/properties/:propertyId/intake/:recordId/promote', ...intakeContributor, postAskIntakePromote);
 router.patch('/ask/properties/:propertyId/intake/:recordId/label', ...intakeContributor, patchAskIntakeLabel);
 router.post('/ask/properties/:propertyId/intake/:recordId/label/confirm', ...intakeContributor, postAskIntakeLabelConfirm);

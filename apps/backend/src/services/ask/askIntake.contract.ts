@@ -104,6 +104,8 @@ export interface AskIntakeView {
   candidates: AskIntakeCandidate[];
   /** Required details that are missing or rejected, so confirming is blocked and the person can see why. */
   missingRequired: string[];
+  /** The same details with their field keys; `hasRow` is false when the reader found nothing, so there is no row to edit and the person types it in. */
+  missingRequiredFields: Array<{ fieldKey: string; label: string; hasRow: boolean }>;
   /** The draft inventory item when the file is a label. Not an inventory item until confirmed. */
   labelDraft: { id: string; status: 'DRAFT' | 'CONFIRMED' | 'DISMISSED'; fields: Array<{ key: string; label: string; value: string | null; confidence: number | null }>; itemId: string | null } | null;
   /** The inspection report created from the file. Its findings are reviewed in Ask; none is added to the home before that. */

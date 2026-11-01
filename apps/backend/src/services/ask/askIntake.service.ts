@@ -140,8 +140,11 @@ export async function getAskIntake(ctx: AskIntakeContext, recordId: string): Pro
   const candidates = facts.filter((row) => !INFORMATIONAL_KEYS.has(row.fieldKey)).map((row) => candidateView(row, required));
   const inspectionRead = facts.some((row) => row.fieldKey === INSPECTION_DETAILS_KEY);
   const missingRequired = documentKind && candidates.length > 0
-    ? required.filter((key) => !candidates.some((candidate) => candidate.fieldKey === key && candidate.effectiveValue)).map((key) => FIELD_LABELS[key] ?? key)
+    ? required.filter((key) => !candidates.some((candidate) => candidate.fieldKey === key && candidate.effectiveValue))
     : [];
+  // A required detail the reader found nothing for has no row to edit, so the person is offered a field to type it into (see supplyAskIntakeDetail);
+  // one that was read but rejected has a row, and is fixed by editing that row.
+  const missingRequiredFields = missingRequired.map((key) => ({ fieldKey: key, label: FIELD_LABELS[key] ?? key, hasRow: candidates.some((candidate) => candidate.fieldKey === key) }));
   const promoted = candidates.find((candidate) => candidate.promoted);
   const promotedRow = facts.find((row) => row.promotedEntityId);
 
@@ -169,7 +172,7 @@ export async function getAskIntake(ctx: AskIntakeContext, recordId: string): Pro
     state, kind,
     choice: null, needsDetails: null,
     classification: classificationRow ? { kind, modelLabel: classificationRow.proposedValue, confidence: classificationRow.confidence } : null,
-    candidates, missingRequired, labelDraft,
+    candidates, missingRequired: missingRequired.map((key) => FIELD_LABELS[key] ?? key), missingRequiredFields, labelDraft,
     inspection: report ? { reportId: report.id, status: report.status, findingCount: report.totalFindings } : null,
     result: promoted && promotedRow?.promotedEntityId && documentKind ? { entityType: RESULT_ENTITY_FOR_KIND[documentKind], entityId: promotedRow.promotedEntityId }
       : labelItem ? { entityType: 'INVENTORY_ITEM', entityId: labelItem.id } : null,
@@ -302,6 +305,27 @@ export async function reviewAskIntakeCandidate(ctx: AskIntakeContext, recordId: 
   await homeRecordsExtractionService.reviewCandidate({
     propertyId: ctx.propertyId, recordId, candidateId, userId: ctx.userId, role: ctx.role, action: input.action, reviewedValue: input.value ?? null,
   });
+  return getAskIntake(ctx, recordId);
+}
+
+/**
+ * A required detail the reader found nothing for (it read the carrier but not the policy number) has no row to accept or edit, which left the person with
+ * "Edit a detail to fill it in" and nothing to edit. This adds the detail as the person's own entry: a candidate row marked as entered by them and corrected through
+ * the same review the other rows use, so it is audited and promoted like any other confirmed detail. Only a required detail of the file's kind with no row yet.
+ */
+export async function supplyAskIntakeDetail(ctx: AskIntakeContext, recordId: string, input: { fieldKey: string; value: string }): Promise<AskIntakeView> {
+  const { record, version } = await loadRecord(ctx, recordId);
+  const kind = kindFromRecord(record.recordType, false);
+  const documentKind = kind === 'WARRANTY' || kind === 'RECEIPT' || kind === 'INSURANCE_POLICY' ? kind : null;
+  if (!documentKind) throw new APIError('Read the file as a warranty, receipt or insurance policy first.', 409, 'ASK_INTAKE_NOT_READ');
+  if (!REQUIRED_FOR_KIND[documentKind].includes(input.fieldKey)) throw invalid('That detail cannot be added by hand here.', 'ASK_INTAKE_DETAIL_NOT_ALLOWED');
+  if (version.extractedFacts.some((row) => row.fieldKey === input.fieldKey)) throw invalid('That detail is already listed. Edit it instead.', 'ASK_INTAKE_DETAIL_EXISTS');
+  const value = input.value.trim();
+  if (!value) throw invalid('Enter a value.', 'ASK_INTAKE_DETAIL_REQUIRED');
+  const created = await prisma.extractedFactCandidate.create({
+    data: { propertyRecordVersionId: version.id, targetDomain: DOMAIN_FOR_KIND[documentKind], fieldKey: input.fieldKey, proposedValue: value, sourceCitation: 'Entered by you', confidence: 1 },
+  });
+  await homeRecordsExtractionService.reviewCandidate({ propertyId: ctx.propertyId, recordId, candidateId: created.id, userId: ctx.userId, role: ctx.role, action: 'CORRECT', reviewedValue: value });
   return getAskIntake(ctx, recordId);
 }
 

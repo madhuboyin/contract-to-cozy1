@@ -56,6 +56,12 @@ function install(initial = {}) {
     findMany: async () => state.record.currentVersion.extractedFacts,
     update: async ({ where, data }) => { calls.push(['candidate.update', where.id, data]); const row = state.record.currentVersion.extractedFacts.find((fact) => fact.id === where.id); Object.assign(row, data); return row; },
   };
+  prisma.extractedFactCandidate.create = async ({ data }) => {
+    calls.push(['candidate.create', data]);
+    const row = { id: `new-${data.fieldKey}`, reviewedValue: null, reviewStatus: 'PENDING', promotedEntityId: null, promotedEntityType: null, sourcePage: null, sourceRegionJson: null, sourceExcerptHash: null, ...data };
+    state.record.currentVersion.extractedFacts.push(row);
+    return row;
+  };
   prisma.inventoryItem = { findFirst: async () => state.item };
   storage.downloadObjectBuffer = async () => { calls.push(['download']); return Buffer.from('%PDF-1.4'); };
   process.env.S3_BUCKET = 'bucket';
@@ -349,10 +355,40 @@ test('every kind is declared with how it is read, and the disclosures cover rete
 test('every intake route is property-scoped behind a contributor floor, and the upload is validated before it is stored', () => {
   const routes = fs.readFileSync(path.join(__dirname, '../../src/routes/ask.routes.ts'), 'utf8');
   const lines = routes.split('\n').filter((line) => line.includes('/properties/:propertyId/intake/'));
-  assert.equal(lines.length, 9);
+  assert.equal(lines.length, 10, 'nine plus the typed-in detail route');
   for (const line of lines) assert.match(line, /\.\.\.intakeContributor/, line);
   const upload = lines.find((line) => line.includes('/intake/files'));
   assert.ok(upload.indexOf('uploadRateLimiter') < upload.indexOf('intakeUpload.single') && upload.indexOf('intakeUpload.single') < upload.indexOf('validateDocumentUpload') && upload.indexOf('validateDocumentUpload') < upload.indexOf('postAskIntakeFile'));
   assert.ok(upload.indexOf('validateDocumentUpload') < upload.indexOf('scanIntakeUpload') && upload.indexOf('scanIntakeUpload') < upload.indexOf('postAskIntakeFile'), 'the malware scan runs after validation and before anything is stored');
   assert.match(routes, /const intakeContributor = \[propertyAuthMiddleware, requireHouseholdRole\('CONTRIBUTOR'\)\]/);
+});
+
+test('a required detail the reader did not find can be typed in: it becomes the person\'s own entry, reviewed like any other, and is no longer missing', async () => {
+  install({ record: { recordType: 'INSURANCE_POLICY', currentVersion: version({ extractedFacts: [fact('carrierName', 'State Farm')] }) } });
+  // The reader found the carrier but not the policy number: there is no row to edit.
+  const before = await intake.getAskIntake(ctx, 'r1');
+  assert.deepEqual(before.missingRequiredFields, [{ fieldKey: 'policyNumber', label: 'Policy number', hasRow: false }]);
+  assert.deepEqual(before.missingRequired, ['Policy number']);
+  homeRecordsExtractionService.reviewCandidate = async (args) => {
+    calls.push(['review', args]);
+    const row = state.record.currentVersion.extractedFacts.find((fact) => fact.id === args.candidateId);
+    Object.assign(row, { reviewStatus: 'CORRECTED', reviewedValue: args.reviewedValue });
+  };
+  const after = await intake.supplyAskIntakeDetail(ctx, 'r1', { fieldKey: 'policyNumber', value: '  SF-123456 ' });
+  const created = calls.find((call) => call[0] === 'candidate.create')[1];
+  assert.deepEqual([created.targetDomain, created.fieldKey, created.proposedValue, created.sourceCitation], ['INSURANCE_POLICY', 'policyNumber', 'SF-123456', 'Entered by you']);
+  const review = calls.find((call) => call[0] === 'review')[1];
+  assert.deepEqual([review.action, review.reviewedValue, review.userId], ['CORRECT', 'SF-123456', 'u1']);
+  assert.deepEqual(after.missingRequiredFields, []);
+  assert.equal(after.candidates.find((candidate) => candidate.fieldKey === 'policyNumber').effectiveValue, 'SF-123456');
+});
+
+test('typing in a detail refuses what the file\'s kind does not need, a detail that already has a row, a blank value and a file that was not read', async () => {
+  install({ record: { recordType: 'INSURANCE_POLICY', currentVersion: version({ extractedFacts: [fact('carrierName', 'State Farm')] }) } });
+  await assert.rejects(() => intake.supplyAskIntakeDetail(ctx, 'r1', { fieldKey: 'amount', value: '10' }), (error) => error.code === 'ASK_INTAKE_DETAIL_NOT_ALLOWED');
+  await assert.rejects(() => intake.supplyAskIntakeDetail(ctx, 'r1', { fieldKey: 'carrierName', value: 'Allstate' }), (error) => error.code === 'ASK_INTAKE_DETAIL_EXISTS');
+  await assert.rejects(() => intake.supplyAskIntakeDetail(ctx, 'r1', { fieldKey: 'policyNumber', value: '   ' }), (error) => error.code === 'ASK_INTAKE_DETAIL_REQUIRED');
+  install({ record: { recordType: 'OTHER' } });
+  await assert.rejects(() => intake.supplyAskIntakeDetail(ctx, 'r1', { fieldKey: 'policyNumber', value: 'X' }), (error) => error.code === 'ASK_INTAKE_NOT_READ');
+  assert.equal(calls.some((call) => call[0] === 'candidate.create'), false, 'nothing was written by a refused request');
 });

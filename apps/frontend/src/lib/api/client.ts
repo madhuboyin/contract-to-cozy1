@@ -1174,6 +1174,9 @@ class APIClient {
   async reviewAskIntakeCandidate(propertyId: string, recordId: string, candidateId: string, body: { action: 'CONFIRM' | 'CORRECT' | 'REJECT'; value?: string }): Promise<APIResponse<import('@/features/ask/types').AskIntakeView>> {
     return this.request(`/api/ask/properties/${encodeURIComponent(propertyId)}/intake/${encodeURIComponent(recordId)}/candidates/${encodeURIComponent(candidateId)}/review`, { method: 'POST', body });
   }
+  async supplyAskIntakeDetail(propertyId: string, recordId: string, body: { fieldKey: string; value: string }): Promise<APIResponse<import('@/features/ask/types').AskIntakeView>> {
+    return this.request(`/api/ask/properties/${encodeURIComponent(propertyId)}/intake/${encodeURIComponent(recordId)}/details`, { method: 'POST', body });
+  }
   async promoteAskIntake(propertyId: string, recordId: string): Promise<APIResponse<import('@/features/ask/types').AskIntakeView>> {
     return this.request(`/api/ask/properties/${encodeURIComponent(propertyId)}/intake/${encodeURIComponent(recordId)}/promote`, { method: 'POST' });
   }

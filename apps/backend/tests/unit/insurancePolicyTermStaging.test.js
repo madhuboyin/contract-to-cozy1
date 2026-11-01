@@ -17,7 +17,7 @@ function fakeDb() {
   const tx = {
     property: { findFirst: async () => ({ id: 'p1' }) },
     insurancePolicy: {
-      findFirst: async ({ where }) => db.policies.find((p) => p.policyNumber === where.policyNumber && p.propertyId === where.propertyId) ?? null,
+      findMany: async ({ where }) => db.policies.filter((p) => p.policyNumber === where.policyNumber && p.propertyId === where.propertyId),
       create: async ({ data }) => { const row = { id: `pol-${db.policies.length + 1}`, ...data }; db.policies.push(row); return row; },
     },
     insurancePolicyTerm: {
@@ -58,4 +58,23 @@ test('a later declarations page for the same policy stages a term of its own, wi
   assert.equal(second.term.sourceDocumentId, 'rec-2');
   assert.equal(second.term.facts.find((fact) => fact.factKey === 'ALL_PERIL_DEDUCTIBLE').amountValue, 5000, 'the new page\'s value, not the older one\'s');
   assert.equal(db.reviewsStaled, 2);
+});
+
+test('the same policy number from another carrier is a different policy; a differently written carrier name is the same one', async () => {
+  const db = fakeDb();
+  const first = await stageExtractedPolicyTerm(input({ carrierName: 'State Farm' }));
+  const reworded = await stageExtractedPolicyTerm(input({ carrierName: 'STATE FARM Insurance Co.', sourceDocumentId: 'rec-2' }));
+  assert.equal(db.policies.length, 1, 'a reworded carrier name is not a new policy');
+  assert.equal(reworded.policy.id, first.policy.id);
+  const other = await stageExtractedPolicyTerm(input({ carrierName: 'Allstate', sourceDocumentId: 'rec-3' }));
+  assert.equal(db.policies.length, 2, 'the same number from another carrier must not attach to the first policy');
+  assert.notEqual(other.policy.id, first.policy.id);
+  assert.equal(other.policy.carrierName, 'Allstate');
+});
+
+test('normalizeCarrierName ignores case, punctuation and corporate suffixes only', () => {
+  const { normalizeCarrierName } = require('../../src/services/insurancePolicyRecord.service.ts');
+  assert.equal(normalizeCarrierName('State Farm'), normalizeCarrierName('state-farm Insurance Company'));
+  assert.notEqual(normalizeCarrierName('State Farm'), normalizeCarrierName('Farmers'));
+  assert.notEqual(normalizeCarrierName('Liberty Mutual'), normalizeCarrierName('Liberty Mutual Auto'));
 });

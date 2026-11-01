@@ -35,6 +35,11 @@ export interface ExtractedPolicyTermInput {
   sourceDocumentId?: string;
 }
 
+/** "State Farm", "STATE FARM Insurance Co." and "state-farm" are one carrier; a different carrier is not, even on the same number. */
+export function normalizeCarrierName(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').split(/\s+/).filter((word) => word && !['insurance', 'company', 'co', 'inc', 'corp', 'corporation', 'group', 'the'].includes(word)).join('');
+}
+
 const excerptHash = (text?: string) =>
   text ? createHash('sha256').update(text).digest('hex') : undefined;
 
@@ -127,14 +132,14 @@ export async function stageExtractedPolicyTerm(input: ExtractedPolicyTermInput) 
     });
     if (!property) throw new APIError('Property not found', 404, 'PROPERTY_NOT_FOUND');
 
+    // A policy is identified by its number AND its carrier: the same number from another carrier is a different policy, not a new term on this one.
+    const sameNumber = await tx.insurancePolicy.findMany({
+      where: { homeownerProfileId: input.homeownerProfileId, propertyId: input.propertyId, policyNumber: input.policyNumber },
+      orderBy: { createdAt: 'asc' },
+    });
+    const carrierKey = normalizeCarrierName(input.carrierName);
     const policy =
-      (await tx.insurancePolicy.findFirst({
-        where: {
-          homeownerProfileId: input.homeownerProfileId,
-          propertyId: input.propertyId,
-          policyNumber: input.policyNumber,
-        },
-      })) ??
+      sameNumber.find((candidate) => normalizeCarrierName(candidate.carrierName) === carrierKey) ??
       (await tx.insurancePolicy.create({
         data: {
           homeownerProfileId: input.homeownerProfileId,

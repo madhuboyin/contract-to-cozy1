@@ -59,6 +59,10 @@ export function useAskIntake(propertyId: string | undefined, enabled: boolean) {
     ? run('SAVING', 'That decision could not be saved. Try again.', () => api.reviewAskIntakeCandidate(propertyId, view.recordId, candidateId, { action, value }))
     : Promise.resolve(null), [propertyId, view, run]);
 
+  const supplyDetail = useCallback((fieldKey: string, value: string) => (propertyId && view)
+    ? run('SAVING', 'That detail could not be saved. Try again.', () => api.supplyAskIntakeDetail(propertyId, view.recordId, { fieldKey, value }))
+    : Promise.resolve(null), [propertyId, view, run]);
+
   const addToHome = useCallback(() => (propertyId && view)
     ? run('SAVING', 'It could not be added. Nothing was changed.', () => api.promoteAskIntake(propertyId, view.recordId))
     : Promise.resolve(null), [propertyId, view, run]);
@@ -81,5 +85,5 @@ export function useAskIntake(propertyId: string | undefined, enabled: boolean) {
 
   const reset = useCallback(() => { setView(null); setError(null); setBusy(null); }, []);
 
-  return { config, configFailed, view, busy, error, paused, upload, read, reviewCandidate, addToHome, saveLabel, confirmLabel, rejectLabel, discard, reset, clearError: () => setError(null), setError };
+  return { config, configFailed, view, busy, error, paused, upload, read, reviewCandidate, supplyDetail, addToHome, saveLabel, confirmLabel, rejectLabel, discard, reset, clearError: () => setError(null), setError };
 }
