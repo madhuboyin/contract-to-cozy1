@@ -670,6 +670,10 @@ const InsightBoardBlockSchema = z.object({
       badge: z.object({ label: z.string().trim().min(1).max(40), tone: AskDisplayToneSchema.default('DEFAULT') }).nullable().optional(),
       valueLabel: z.string().trim().min(1).max(60).nullable().optional(),
       range: z.object({ min: z.number().finite().min(0), max: z.number().finite().min(0) }).refine((range) => range.min <= range.max, { message: 'A range minimum must not exceed its maximum.' }).nullable().optional(),
+      // Recommendations may continue into an existing governed Ask workflow. The action carries the canonical
+      // target when it differs from this presentation-only item's id; legacy informational findings omit it.
+      entityType: z.string().trim().min(1).max(120).nullable().optional(),
+      actions: z.array(GroupedListItemActionSchema).max(2).optional(),
     })).min(1).max(100),
   })).min(1).max(6),
 });

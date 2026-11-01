@@ -104,7 +104,7 @@ export type DoNothingRunDTO = {
     }>;
   };
 
-  nextSteps: Array<{ title: string; detail?: string; priority: 'LOW' | 'MEDIUM' | 'HIGH' }>;
+  nextSteps: NextStep[];
   decisionTrace: Array<{ label: string; detail?: string; impact: 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL' }>;
 
   computedAt: string;
@@ -119,7 +119,16 @@ type AvoidableLoss = {
   estCostCentsMax?: number;
 };
 
-type NextStep = { title: string; detail?: string; priority: Severity };
+type NextStepAction = {
+  id: string;
+  label: string;
+  message: string;
+  operationId: string;
+  interactionType: 'CONVERSATION_CONTINUE' | 'MUTATE_RECORD';
+  entityType: 'PROPERTY' | 'INVENTORY_ITEM';
+  entityId: string;
+};
+type NextStep = { title: string; detail?: string; priority: Severity; action?: NextStepAction };
 type DecisionTrace = { label: string; detail?: string; impact: Impact };
 
 const HORIZON_CHOICES = new Set([6, 12, 24, 36]);
@@ -1233,6 +1242,7 @@ export class DoNothingSimulatorService {
         title: 'Complete one critical overdue maintenance task this month',
         detail: `Prioritize ${criticalOverdue.length > 0 ? 'high-priority' : 'oldest'} overdue tasks to reduce short-term incident risk quickly.`,
         priority: criticalOverdue.length > 0 ? 'HIGH' : 'MEDIUM',
+        action: { id: 'review-overdue-maintenance', label: 'Review overdue tasks', message: 'Show my overdue maintenance tasks', operationId: 'MAINTENANCE_STATUS', interactionType: 'CONVERSATION_CONTINUE', entityType: 'PROPERTY', entityId: propertyId },
       });
     }
 
@@ -1241,6 +1251,7 @@ export class DoNothingSimulatorService {
         title: 'Add leak detection at highest-risk points',
         detail: 'Start with water heater, kitchen sink, and laundry to reduce the largest avoidable loss driver.',
         priority: 'HIGH',
+        action: { id: 'add-leak-detection-task', label: 'Add leak-detection task', message: 'Create a maintenance task to add leak detection at the water heater, kitchen sink, and laundry', operationId: 'MAINTENANCE_TASK_CREATE', interactionType: 'MUTATE_RECORD', entityType: 'PROPERTY', entityId: propertyId },
       });
     }
 
@@ -1249,6 +1260,7 @@ export class DoNothingSimulatorService {
         title: 'Schedule a roof condition inspection',
         detail: 'A documented roof check can reduce uncertainty and prevent weather-driven escalation.',
         priority: 'MEDIUM',
+        action: { id: 'add-roof-inspection-task', label: 'Add roof inspection task', message: 'Create a maintenance task to schedule a roof condition inspection', operationId: 'MAINTENANCE_TASK_CREATE', interactionType: 'MUTATE_RECORD', entityType: 'PROPERTY', entityId: propertyId },
       });
     }
 
@@ -1258,6 +1270,7 @@ export class DoNothingSimulatorService {
         title: `Plan replacement for ${firstCriticalEol.name} in the next 6-12 months`,
         detail: 'Replacing one near end-of-life system usually removes a large share of projected downside.',
         priority: criticalEolItems.length > 0 ? 'HIGH' : 'MEDIUM',
+        action: { id: 'review-repair-replace', label: 'Review repair vs. replace', message: `Should I repair or replace ${firstCriticalEol.name}?`, operationId: 'REPLACEMENT_GUIDANCE', interactionType: 'CONVERSATION_CONTINUE', entityType: 'INVENTORY_ITEM', entityId: firstCriticalEol.id },
       });
     }
 
@@ -1268,6 +1281,7 @@ export class DoNothingSimulatorService {
           title: 'Rebalance deductible with available cash buffer',
           detail: 'Keep deductible exposure within a manageable range for out-of-pocket resilience.',
           priority: ratio > 0.4 ? 'HIGH' : 'MEDIUM',
+          action: { id: 'review-coverage-gaps', label: 'Review coverage', message: 'Show my current coverage gaps', operationId: 'COVERAGE_GAPS', interactionType: 'CONVERSATION_CONTINUE', entityType: 'PROPERTY', entityId: propertyId },
         });
       }
     }
@@ -1277,6 +1291,7 @@ export class DoNothingSimulatorService {
         title: 'Run a focused quarterly maintenance check',
         detail: 'A light recurring maintenance rhythm keeps the downside range contained.',
         priority: 'LOW',
+        action: { id: 'add-quarterly-maintenance-check', label: 'Add recurring check', message: 'Create a quarterly home maintenance check task', operationId: 'MAINTENANCE_TASK_CREATE', interactionType: 'MUTATE_RECORD', entityType: 'PROPERTY', entityId: propertyId },
       });
     }
 

@@ -44,7 +44,7 @@ export function ItemActionButtons({ item, actions, onItemAction, disabled, onDis
           type="button"
           disabled={disabled}
           onClick={() => {
-            onItemAction(item.entityType, item.id, action.message, action.operationId, action.interactionType);
+            onItemAction(action.entityType ?? item.entityType, action.entityId ?? item.id, action.message, action.operationId, action.interactionType);
             onDispatched?.(action);
           }}
           className={cn(

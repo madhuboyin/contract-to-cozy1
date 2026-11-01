@@ -677,7 +677,6 @@ export const OPERATION_SPECIFIC_CONTINUATION_RECIPES: Readonly<Partial<Record<As
   ],
   DO_NOTHING_SIMULATION: [
     recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'DO_NOTHING_REVIEW_ACTIONS'),
-    recipe('Review ownership costs', 'Show my home ownership costs', 'OWNERSHIP_COSTS', 'REVIEW_OWNERSHIP_COSTS', 'DO_NOTHING_REVIEW_COSTS'),
   ],
   DO_NOTHING_SIMULATION_RUN: [
     recipe('Review the do-nothing simulation', 'Show my do-nothing simulation', 'DO_NOTHING_SIMULATION', 'REVIEW_DO_NOTHING_SIMULATION', 'DO_NOTHING_RUN_REVIEW_SIMULATION'),

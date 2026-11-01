@@ -31,11 +31,14 @@ const run = (overrides = {}) => ({
   summary: 'Deferred upkeep raises risk.', riskScoreDelta: 14, expectedCostDeltaCentsMin: 320000, expectedCostDeltaCentsMax: 780000, incidentLikelihood: 'HIGH',
   // Stored as outputsSnapshot on the run row; the service's mapper turns it into the DTO's outputs.
   outputsSnapshot: {
-    topRiskDrivers: [{ code: 'ROOF', title: 'Aging roof', detail: 'Past typical life', severity: 'HIGH' }],
+    topRiskDrivers: [{ code: 'AGING_SYSTEMS', title: 'Aging roof', detail: 'Past typical life', severity: 'HIGH' }],
     topCostDrivers: [{ code: 'WH', title: 'Water heater failure', detail: 'Tank age 14 years', severity: 'MEDIUM' }],
     biggestAvoidableLosses: [{ title: 'Leak damage', detail: 'From a failed tank', estCostCentsMin: 150000, estCostCentsMax: 400000 }],
   },
-  nextSteps: [{ title: 'Schedule a roof inspection', detail: 'Before winter', priority: 'HIGH' }],
+  nextSteps: [{
+    title: 'Plan replacement for Oven Range in the next 6-12 months', detail: 'Before winter', priority: 'HIGH',
+    action: { id: 'review-repair-replace', label: 'Review repair vs. replace', message: 'Should I repair or replace Oven Range?', operationId: 'REPLACEMENT_GUIDANCE', interactionType: 'CONVERSATION_CONTINUE', entityType: 'INVENTORY_ITEM', entityId: 'oven-1' },
+  }],
   decisionTrace: [{ label: 'Baseline', detail: 'Modeled 12 months of inaction.', impact: 'NEUTRAL' }, { label: 'Skipped maintenance', impact: 'NEGATIVE' }], computedAt: new Date('2026-09-15T12:00:00.000Z'), createdAt: new Date('2026-09-15T12:00:00.000Z'), ...overrides,
 });
 
@@ -94,15 +97,23 @@ test('the latest run is summarized with cost range, risk change, likelihood, con
     ['Biggest avoidable losses', 'BARS', ['Leak damage']],
     ['Top risk drivers', 'CARDS', ['Aging roof']],
     ['Top cost drivers', 'CARDS', ['Water heater failure']],
-    ['Minimum actions to avoid most downside', 'STEPS', ['Schedule a roof inspection']],
+    ['Minimum actions to avoid most downside', 'STEPS', ['Plan replacement for Oven Range in the next 6-12 months']],
     ['Why this changed', 'DISCLOSURE', ['Skipped maintenance']],
   ]);
   const loss = board.sections[0].items[0];
   assert.equal(loss.valueLabel, '$1,500 to $4,000');
   assert.deepEqual(loss.range, { min: 1500, max: 4000 });
   assert.deepEqual(board.sections[1].items[0].badge, { label: 'High severity', tone: 'CRITICAL' });
+  assert.deepEqual(board.sections[1].items[0].actions, [{
+    id: 'review-aging-items', label: 'Review aging items', message: 'Show my appliance failure risks', operationId: 'APPLIANCE_FAILURE_RISK',
+    interactionType: 'CONVERSATION_CONTINUE', entityType: 'PROPERTY', entityId: 'p1', style: 'SECONDARY',
+  }]);
   assert.deepEqual(board.sections[2].items[0].badge, { label: 'Medium severity', tone: 'CAUTION' });
   assert.deepEqual(board.sections[3].items[0].badge, { label: 'High priority', tone: 'CRITICAL' });
+  assert.deepEqual(board.sections[3].items[0].actions, [{
+    id: 'review-repair-replace', label: 'Review repair vs. replace', message: 'Should I repair or replace Oven Range?',
+    operationId: 'REPLACEMENT_GUIDANCE', interactionType: 'CONVERSATION_CONTINUE', entityType: 'INVENTORY_ITEM', entityId: 'oven-1', style: 'SECONDARY',
+  }]);
   assert.equal(board.sections[4].summary, '1 step moved the estimate; 1 more had no effect.');
   assert.deepEqual(board.sections[4].items[0].badge, { label: 'Raises the estimate', tone: 'CAUTION' });
   assert.equal(list.id, 'do-nothing-items');
@@ -162,6 +173,11 @@ test('the complete and oversized legacy-shaped presentations satisfy the saved b
   assert.ok(list.sections.every((section) => section.items.length <= 100));
   const board = oversized.blocks.find((block) => block.id === 'do-nothing-board');
   assert.ok(board.sections.every((section) => section.items.length <= 100));
+});
+
+test('a read-only presentation keeps recommendations informational', () => {
+  const board = doNothingSimulationFromView({ run: dto(), scenarios: [] }, 'p1', false).blocks.find((block) => block.id === 'do-nothing-board');
+  assert.equal(board.sections.find((section) => section.id === 'do-nothing-next').items[0].actions, undefined);
 });
 
 test('cost-of-waiting questions route here; running or editing a simulation and one item\'s decision are not claimed', () => {

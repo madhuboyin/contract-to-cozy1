@@ -126,6 +126,27 @@ describe('choice grid', () => {
   });
 });
 
+describe('insight board actions', () => {
+  test('a recommendation dispatches its declared canonical target instead of its presentation id', () => {
+    const onItemAction = jest.fn();
+    const block: Extract<AskPresentationBlock, { type: 'INSIGHT_BOARD' }> = {
+      type: 'INSIGHT_BOARD', id: 'do-nothing-board', title: 'What drives the estimate',
+      sections: [{ id: 'drivers', title: 'Top risk drivers', layout: 'CARDS', items: [{
+        id: 'risk-0', title: 'Aging systems', entityType: 'PROPERTY',
+        actions: [{ id: 'review-aging', label: 'Review aging items', message: 'Show my appliance failure risks', style: 'SECONDARY', interactionType: 'CONVERSATION_CONTINUE', operationId: 'APPLIANCE_FAILURE_RISK', entityType: 'PROPERTY', entityId: 'home' }],
+      }] }, { id: 'minimum-actions', title: 'Minimum actions', layout: 'STEPS', items: [{
+        id: 'step-0', title: 'Plan replacement for Oven Range', entityType: 'INVENTORY_ITEM',
+        actions: [{ id: 'review-replacement', label: 'Review repair vs. replace', message: 'Should I repair or replace Oven Range?', style: 'SECONDARY', interactionType: 'CONVERSATION_CONTINUE', operationId: 'REPLACEMENT_GUIDANCE', entityType: 'INVENTORY_ITEM', entityId: 'oven-1' }],
+      }] }],
+    };
+    render(<Harness block={block} onItemAction={onItemAction} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Review aging items' }));
+    expect(onItemAction).toHaveBeenCalledWith('PROPERTY', 'home', 'Show my appliance failure risks', 'APPLIANCE_FAILURE_RISK', 'CONVERSATION_CONTINUE');
+    fireEvent.click(screen.getByRole('button', { name: 'Review repair vs. replace' }));
+    expect(onItemAction).toHaveBeenCalledWith('INVENTORY_ITEM', 'oven-1', 'Should I repair or replace Oven Range?', 'REPLACEMENT_GUIDANCE', 'CONVERSATION_CONTINUE');
+  });
+});
+
 describe('budget breakdown', () => {
   const budget = list({
     title: 'Where the upkeep budget goes', description: 'Estimated annual upkeep by category.', presentation: {

@@ -153,9 +153,22 @@ export function doNothingSimulationFromView(
     label: `${DO_NOTHING_SEVERITY_LABELS[value ?? ''] ?? displayText(value) ?? 'Unknown'} ${suffix}`,
     tone: value === 'HIGH' ? 'CRITICAL' : value === 'MEDIUM' ? 'CAUTION' : 'DEFAULT',
   });
+  const nextStepOperationIds = new Set(run.nextSteps.map((step) => step.action?.operationId).filter(Boolean));
+  const driverAction = (code: string) => {
+    const action = code === 'AGING_SYSTEMS' || code === 'AGING_REPAIR_COST'
+      ? { id: 'review-aging-items', label: 'Review aging items', message: 'Show my appliance failure risks', operationId: 'APPLIANCE_FAILURE_RISK' }
+      : code === 'COVERAGE_GAP_SIGNAL' || code === 'COVERAGE_GAP_COST' || code === 'DEDUCTIBLE_PRESSURE'
+        ? { id: 'review-coverage-gaps', label: 'Review coverage gaps', message: 'Show my current coverage gaps', operationId: 'COVERAGE_GAPS' }
+        : code === 'MAINTENANCE_DEFERRAL' || code === 'MAINT_ADHERENCE_SIGNAL' || code === 'DEFERRED_MAINTENANCE_COST'
+          ? { id: 'review-overdue-maintenance', label: 'Review maintenance', message: 'Show my overdue maintenance tasks', operationId: 'MAINTENANCE_STATUS' }
+          : null;
+    if (!action || nextStepOperationIds.has(action.operationId)) return [];
+    return [{ ...action, interactionType: 'CONVERSATION_CONTINUE' as const, entityType: 'PROPERTY', entityId: propertyId, style: 'SECONDARY' as const }];
+  };
   const driverCards = (drivers: readonly { code: string; title: string; detail: string; severity: string }[], prefix: string) => drivers.flatMap((driver, index) => {
     const title = displayText(driver?.title);
-    return title ? [{ id: `${prefix}-${index}`, title, detail: displayText(driver.detail), badge: severityBadge(driver.severity, 'severity') }] : [];
+    const actions = canChange ? driverAction(driver.code) : [];
+    return title ? [{ id: `${prefix}-${index}`, title, detail: displayText(driver.detail), badge: severityBadge(driver.severity, 'severity'), entityType: actions.length ? 'PROPERTY' : undefined, actions: actions.length ? actions : undefined }] : [];
   }).slice(0, DO_NOTHING_SECTION_ITEM_LIMIT);
   const lossBars = run.outputs.biggestAvoidableLosses.flatMap((loss, index) => {
     const title = displayText(loss?.title);
@@ -172,7 +185,17 @@ export function doNothingSimulationFromView(
   }).slice(0, DO_NOTHING_SECTION_ITEM_LIMIT);
   const stepItems = run.nextSteps.flatMap((step, index) => {
     const title = displayText(step?.title);
-    return title ? [{ id: `step-${index}`, title, detail: displayText(step.detail), badge: severityBadge(step.priority, 'priority') }] : [];
+    const action = step.action;
+    return title ? [{
+      id: `step-${index}`, title, detail: displayText(step.detail), badge: severityBadge(step.priority, 'priority'),
+      ...(action && canChange ? {
+        entityType: action.entityType,
+        actions: [{
+          id: action.id, label: action.label, message: action.message, operationId: action.operationId,
+          interactionType: action.interactionType, entityType: action.entityType, entityId: action.entityId, style: 'SECONDARY' as const,
+        }],
+      } : {}),
+    }] : [];
   }).slice(0, DO_NOTHING_SECTION_ITEM_LIMIT);
   // The trace lists every input the model looked at; only the steps that moved the estimate are shown, and the rest are counted.
   const traceEntries = run.decisionTrace.flatMap((entry, index) => {

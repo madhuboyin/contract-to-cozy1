@@ -3,6 +3,7 @@
 import { cn } from '@/lib/utils';
 import type { AskBlockRenderer } from '../blocks/types';
 import type { AskDisplayTone } from '@/features/ask/types';
+import { ItemActionButtons } from './PatternParts';
 
 // FRD v1.405. A visual board of grouped findings. Each section declares its layout: proportional cost bars, tone-accented cards,
 // numbered steps, or a collapsed list. Labels, badges, ranges and tones are the producer's; this renderer only scales and colours them.
@@ -57,7 +58,7 @@ function Bars({ section }: { section: Section }) {
   );
 }
 
-function Cards({ section }: { section: Section }) {
+function Cards({ section, onItemAction, disabled }: { section: Section; onItemAction: Parameters<AskBlockRenderer<'INSIGHT_BOARD'>>[0]['onItemAction']; disabled: boolean }) {
   return (
     <ul className="grid gap-2.5 sm:grid-cols-2">
       {section.items.map((item) => (
@@ -67,13 +68,14 @@ function Cards({ section }: { section: Section }) {
             <Badge item={item} />
           </div>
           {item.detail && <p className="text-xs leading-5 text-slate-600">{item.detail}</p>}
+          <ItemActionButtons item={item} actions={item.actions} onItemAction={onItemAction} disabled={disabled} className="mt-auto pt-1" />
         </li>
       ))}
     </ul>
   );
 }
 
-function Steps({ section }: { section: Section }) {
+function Steps({ section, onItemAction, disabled }: { section: Section; onItemAction: Parameters<AskBlockRenderer<'INSIGHT_BOARD'>>[0]['onItemAction']; disabled: boolean }) {
   return (
     <ol className="space-y-2.5">
       {section.items.map((item, index) => (
@@ -85,6 +87,7 @@ function Steps({ section }: { section: Section }) {
               <Badge item={item} />
             </div>
             {item.detail && <p className="mt-1 text-xs leading-5 text-slate-600">{item.detail}</p>}
+            <ItemActionButtons item={item} actions={item.actions} onItemAction={onItemAction} disabled={disabled} className="mt-2" />
           </div>
         </li>
       ))}
@@ -115,7 +118,7 @@ function Disclosure({ section }: { section: Section }) {
   );
 }
 
-export const InsightBoardBlock: AskBlockRenderer<'INSIGHT_BOARD'> = ({ block }) => (
+export const InsightBoardBlock: AskBlockRenderer<'INSIGHT_BOARD'> = ({ block, onItemAction, itemActionsDisabled }) => (
   <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5" data-display-pattern="insight-board">
     <h3 className="text-base font-semibold text-slate-950">{block.title}</h3>
     {block.description && <p className="mt-1 text-sm text-slate-600">{block.description}</p>}
@@ -128,8 +131,8 @@ export const InsightBoardBlock: AskBlockRenderer<'INSIGHT_BOARD'> = ({ block }) 
             {section.layout !== 'DISCLOSURE' && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">{section.items.length}</span>}
           </div>
           {section.layout === 'BARS' && <Bars section={section} />}
-          {section.layout === 'CARDS' && <Cards section={section} />}
-          {section.layout === 'STEPS' && <Steps section={section} />}
+          {section.layout === 'CARDS' && <Cards section={section} onItemAction={onItemAction} disabled={itemActionsDisabled} />}
+          {section.layout === 'STEPS' && <Steps section={section} onItemAction={onItemAction} disabled={itemActionsDisabled} />}
           {section.layout === 'DISCLOSURE' && <Disclosure section={section} />}
         </div>
       ))}
