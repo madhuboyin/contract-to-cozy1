@@ -83,20 +83,21 @@ export function maintenanceTemplatesFromView(
   const shown = ready.length + onList.length + unknown.length;
   const blocks: AskPresentationBlock[] = [{
     type: 'SUMMARY', id: 'maintenance-templates-summary',
-    title: ready.length
-      ? `${ready.length} recommended task${ready.length === 1 ? '' : 's'} you can add`
+    title: shown
+      ? `${shown} maintenance recommendation${shown === 1 ? '' : 's'}`
       : 'Every recommended task that fits is already on your list',
     body: [
-      canAdd ? 'Choose one to review its details; nothing is added until you confirm.' : 'A contributor or owner of this home can add one. Nothing is added by viewing this list.',
+      canAdd ? `${ready.length} ${ready.length === 1 ? 'is' : 'are'} ready to review and add.` : 'A contributor or owner of this home can add one. Nothing is added by viewing this list.',
       onList.length ? `${onList.length} ${onList.length === 1 ? 'is' : 'are'} already on your list.` : null,
-      unknown.length ? `${unknown.length} need${unknown.length === 1 ? 's' : ''} a detail about the home first.` : null,
+      unknown.length ? `${unknown.length} need${unknown.length === 1 ? 's' : ''} home details first.` : null,
       left > 0 ? `${left} that do not apply to this home ${left === 1 ? 'is' : 'are'} left out.` : null,
+      'Nothing is added until you confirm.',
     ].filter(Boolean).join(' '),
     tone: 'DEFAULT', actions: [],
   }];
   const listSections = sections.map((section) => ({ id: section.id, title: section.title, count: section.rows.length, items: section.rows }));
   blocks.push({
-    type: 'GROUPED_LIST', filters: [], id: 'maintenance-templates-list', title: 'Recommended maintenance tasks', description: `${shown} task${shown === 1 ? '' : 's'}, in the order the catalogue lists them.`,
+    type: 'GROUPED_LIST', filters: [], id: 'maintenance-templates-list', title: 'Maintenance recommendations', description: `${ready.length} ready to add${onList.length ? ` · ${onList.length} already added` : ''}${unknown.length ? ` · ${unknown.length} need home details` : ''}.`,
     sections: listSections,
     collection: collectionDescriptor({ sourceTotal, fetchedCount: templates.length, sections: listSections, nextPageAvailable: false }),
     actions: [],

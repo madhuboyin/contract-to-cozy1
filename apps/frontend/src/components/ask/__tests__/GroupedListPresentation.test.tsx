@@ -41,6 +41,33 @@ test('Cards/List choice persists without dropping item identity or status', asyn
   expect(restored.container.querySelectorAll('[data-ask-task-id]')).toHaveLength(5);
 });
 
+test('maintenance recommendations use a fixed responsive catalogue with explicit states and a primary review action', () => {
+  const onItemAction = jest.fn();
+  const maintenance: GroupedList = {
+    type: 'GROUPED_LIST', id: 'maintenance-templates-list', title: 'Maintenance recommendations', description: '1 ready to add · 1 already added · 1 needs home details.', filters: [], actions: [],
+    sections: [
+      { id: 'maintenance-templates-ready', title: 'You can add now', count: 1, items: [{
+        id: 'flush', entityType: 'MAINTENANCE_TEMPLATE', title: 'Water heater flush', description: 'Flush sediment from the tank.', meta: ['Every year', 'Plumbing'],
+        actions: [{ id: 'add', label: 'Review & add', message: 'Add this recommended task to my maintenance.', operationId: 'MAINTENANCE_TASK_CREATE', interactionType: 'MUTATE_RECORD', style: 'SECONDARY' }],
+      }] },
+      { id: 'maintenance-templates-on-list', title: 'Already on your list', count: 1, items: [{ id: 'gutters', title: 'Gutter cleaning', description: 'Clear leaves and debris.', meta: ['Every year', 'Exterior'], status: 'Already on your list' }] },
+      { id: 'maintenance-templates-needs-detail', title: 'Needs a home detail first', count: 1, items: [{ id: 'smoke', title: 'Smoke detector testing', description: 'Confirm smoke detectors first.', meta: ['Every 6 months', 'Safety'], status: 'Needs a home detail' }] },
+    ],
+  };
+  const view = render(<GenericGroupedListBlock block={maintenance} executionId="execution" propertyId="home" onItemAction={onItemAction} itemActionsDisabled={false} onFilterClick={() => undefined} onCollectionPage={() => undefined} onAccessLost={() => undefined} />);
+
+  expect(view.container.querySelector('[data-maintenance-template-catalogue]')).toBeInTheDocument();
+  expect(screen.getByText('3 maintenance recommendations')).toBeInTheDocument();
+  expect(screen.getByText('1 ready to add')).toBeInTheDocument();
+  expect(screen.getByText('1 already added')).toBeInTheDocument();
+  expect(screen.getByText('1 need home details')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Auto' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Cards' })).not.toBeInTheDocument();
+  expect(view.container.querySelector('ul.grid')).toHaveClass('lg:grid-cols-2');
+  fireEvent.click(screen.getByRole('button', { name: 'Review & add' }));
+  expect(onItemAction).toHaveBeenCalledWith('MAINTENANCE_TEMPLATE', 'flush', 'Add this recommended task to my maintenance.', 'MAINTENANCE_TASK_CREATE', 'MUTATE_RECORD');
+});
+
 test('each section independently honors its declared initial visible count', () => {
   const bounded: GroupedList = {
     ...block,

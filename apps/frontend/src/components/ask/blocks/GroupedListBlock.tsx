@@ -43,6 +43,7 @@ import { AskCollection, AskCollectionState } from '../presentation/AskLayoutPrim
 import { AttachEvidenceControl, EVIDENCE_ATTACH_MESSAGES } from '../AttachEvidenceControl';
 import { FinancingNumbers, FinancingOptions, FinancingPlanner, FinancingScenarios } from '../FinancingOverviewResult';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { CalendarDays, CheckCircle2, CircleHelp, ShieldCheck, Wrench } from 'lucide-react';
 
 // Blocks whose items carry longer text revealed on demand (`item.detail`). The Negotiation Shield draft is collapsed by default so a long
 // message does not push the analysis down; the producer sets the id, the client only implements the expand/collapse.
@@ -81,6 +82,89 @@ function ItemActionRow({ item, disabled, onItemAction, className }: {
         </div>
       </details>}
     </div>
+  );
+}
+
+function MaintenanceTemplateCatalogue({ block, disabled, onItemAction }: {
+  block: Extract<AskPresentationBlock, { type: 'GROUPED_LIST' }>;
+  disabled: boolean;
+  onItemAction: Parameters<AskBlockRenderer<'GROUPED_LIST'>>[0]['onItemAction'];
+}) {
+  const total = block.sections.reduce((count, section) => count + section.items.length, 0);
+  const readySection = block.sections.find((section) => section.id === 'maintenance-templates-ready');
+  const onListSection = block.sections.find((section) => section.id === 'maintenance-templates-on-list');
+  const needsDetailSection = block.sections.find((section) => section.id === 'maintenance-templates-needs-detail');
+  const statusChips = [
+    readySection && { label: `${readySection.count} ready to add`, tone: 'border-teal-200 bg-teal-50 text-teal-800' },
+    onListSection && { label: `${onListSection.count} already added`, tone: 'border-emerald-200 bg-emerald-50 text-emerald-800' },
+    needsDetailSection && { label: `${needsDetailSection.count} need home details`, tone: 'border-amber-200 bg-amber-50 text-amber-800' },
+  ].filter(Boolean) as Array<{ label: string; tone: string }>;
+  const categoryIcon = (meta: string[]) => {
+    const category = meta.at(-1)?.toLowerCase() ?? '';
+    if (category.includes('insurance') || category.includes('warranty')) return ShieldCheck;
+    if (category.includes('inspection') || category.includes('record')) return CircleHelp;
+    return Wrench;
+  };
+
+  return (
+    <section className="w-full overflow-hidden rounded-2xl border border-slate-200/90 bg-slate-50/45 shadow-2xs" data-maintenance-template-catalogue="">
+      <div className="border-b border-slate-200/80 bg-gradient-to-r from-white via-white to-teal-50/60 px-4 py-4 sm:px-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-5">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-teal-700">Maintenance setup</p>
+            <h3 className="mt-1 text-lg font-bold tracking-tight text-slate-950">{total} maintenance recommendations</h3>
+            <p className="mt-1 max-w-2xl text-sm leading-5 text-slate-600">Choose a task to review. Nothing is added until you confirm its details.</p>
+          </div>
+          <span className="inline-flex w-fit shrink-0 items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold tabular-nums text-slate-600">{total} total</span>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-2" aria-label="Recommendation status">
+          {statusChips.map((chip) => <span key={chip.label} className={cn('rounded-full border px-2.5 py-1 text-xs font-semibold', chip.tone)}>{chip.label}</span>)}
+        </div>
+      </div>
+      <div className="space-y-5 p-3 sm:p-4">
+        {block.sections.map((section) => {
+          const ready = section.id === 'maintenance-templates-ready';
+          const alreadyAdded = section.id === 'maintenance-templates-on-list';
+          return (
+            <section key={section.id} aria-labelledby={`${section.id}-heading`}>
+              <div className="mb-2.5 flex items-center gap-2 px-1">
+                <h4 id={`${section.id}-heading`} className="text-xs font-bold uppercase tracking-[0.12em] text-slate-600">{section.title}</h4>
+                <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-bold tabular-nums text-slate-500 shadow-xs">{section.count}</span>
+              </div>
+              <ul className="grid grid-cols-1 gap-2.5 lg:grid-cols-2">
+                {section.items.map((item) => {
+                  const Icon = categoryIcon(item.meta);
+                  const [cadence, category] = item.meta;
+                  const action = ready ? item.actions?.[0] : undefined;
+                  return (
+                    <li key={item.id} data-ask-task-id={item.id} className={cn('flex min-h-36 flex-col rounded-xl border bg-white p-3.5 transition-colors', ready ? 'border-slate-200 hover:border-teal-300 hover:bg-teal-50/20' : alreadyAdded ? 'border-emerald-200/80 bg-emerald-50/25' : 'border-amber-200/80 bg-amber-50/25')}>
+                      <div className="flex items-start gap-3">
+                        <span className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-lg', ready ? 'bg-teal-50 text-teal-700' : alreadyAdded ? 'bg-emerald-100/70 text-emerald-700' : 'bg-amber-100/70 text-amber-700')} aria-hidden="true"><Icon className="h-[18px] w-[18px]" /></span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="text-sm font-semibold leading-5 text-slate-950">{item.title}</p>
+                            {alreadyAdded && <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" aria-label="Already added" />}
+                          </div>
+                          {item.description && <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-600">{item.description}</p>}
+                        </div>
+                      </div>
+                      <div className="mt-auto flex flex-wrap items-end justify-between gap-2 pt-3">
+                        <div className="flex flex-wrap gap-1.5">
+                          {cadence && <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-600"><CalendarDays className="h-3 w-3" aria-hidden="true" />{cadence}</span>}
+                          {category && <span className="rounded-md bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-600">{category}</span>}
+                          {!ready && item.status && <span className={cn('rounded-md px-2 py-1 text-[11px] font-semibold', alreadyAdded ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800')}>{item.status}</span>}
+                        </div>
+                        {action && <button type="button" disabled={disabled} onClick={() => onItemAction(action.entityType ?? item.entityType, action.entityId ?? item.id, action.message, action.operationId, action.interactionType)} className="min-h-9 rounded-lg bg-teal-700 px-3 py-1.5 text-xs font-bold text-white shadow-xs transition-colors hover:bg-teal-800 disabled:opacity-50">{action.label}</button>}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
@@ -337,6 +421,7 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
   const [focusedDisclosure, setFocusedDisclosure] = useState<'DETAILS' | 'SNOOZE' | null>(null);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
+  if (block.id === 'maintenance-templates-list') return <MaintenanceTemplateCatalogue block={block} disabled={itemActionsDisabled} onItemAction={onItemAction} />;
   if (block.id === 'savings-recurring-setup') return <RecurringCostsGrid block={block} disabled={itemActionsDisabled} onItemAction={onItemAction} />;
   if (block.id === 'reserve-planning-controls') return <ReservePlanningControls block={block} disabled={itemActionsDisabled} onItemAction={onItemAction} />;
   if (block.id === 'ownership-cost-views') return <OwnershipCostViewsBlock block={block} disabled={itemActionsDisabled} onItemAction={onItemAction} />;

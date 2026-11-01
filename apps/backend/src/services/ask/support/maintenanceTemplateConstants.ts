@@ -12,6 +12,6 @@ export const MAINTENANCE_TEMPLATES_BROWSE_ACTION = {
 export const MAINTENANCE_TEMPLATE_ENTITY_TYPE = 'MAINTENANCE_TEMPLATE';
 export const MAINTENANCE_TEMPLATE_ADD_ACTION = {
   id: 'maintenance-template-add',
-  label: 'Add to my maintenance',
+  label: 'Review & add',
   message: 'Add this recommended task to my maintenance.',
 } as const;
