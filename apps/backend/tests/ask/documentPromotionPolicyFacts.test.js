@@ -28,7 +28,7 @@ const install = () => {
 const invoke = (role) => capabilityInvoke('DOCUMENT_PROMOTION_REVIEW', { userId: 'u1', propertyId: 'p1', message: 'Show document facts waiting for review' }, { propertyAccess: { role, userId: 'u1', propertyId: 'p1' } });
 const rowOf = (result) => result.blocks.find((block) => block.id === 'document-promotions').sections[0].items[0];
 
-test('a pending policy fact row carries Confirm and Reject for a contributor or owner, and none for a viewer; the allowlist keeps them', async () => {
+test('a pending policy fact row carries Confirm and Reject for a contributor or owner, and none for a viewer; the answer checker keeps them', async () => {
   install();
   const owner = await invoke('OWNER');
   assert.deepEqual(rowOf(owner).actions.map((action) => [action.id, action.operationId, action.message.startsWith('Confirm ') || action.message.startsWith('Reject ')]), [
@@ -37,14 +37,15 @@ test('a pending policy fact row carries Confirm and Reject for a contributor or 
   assert.equal(rowOf(owner).entityType, 'INSURANCE_POLICY_FACT');
   for (const block of owner.blocks) AskPresentationBlockSchema.parse(block);
   assert.equal(rowOf(await invoke('VIEWER')).actions, undefined);
+  // Through the real answer checker, as production runs it: it rejects a result whose first block is a bare list, so the answer opens with a summary.
+  assert.equal(owner.blocks[0].type, 'SUMMARY');
+  assert.match(owner.blocks[0].title, /1 item is waiting for your review/);
   const checked = validateAskAnswerTrustPipeline({
     question: 'Show document facts waiting for review', operationId: 'DOCUMENT_PROMOTION_REVIEW', propertyId: 'p1', householdRole: 'OWNER',
     result: attachAskAuthoritativeSourceEvidence(owner, [completedAskAuthoritativeSourceEvidence('DOCUMENT_PROMOTION_REVIEW')]),
   });
-  // The full pipeline is not used here: it judges the answer's first block, which is not what this test is about. The action allowlist is the unit that strips buttons.
-  for (const action of rowOf(owner).actions) {
-    assert.equal(isAskActionApplicable({ action, operationId: 'DOCUMENT_PROMOTION_REVIEW', propertyId: 'p1', householdRole: 'OWNER', authoritativeSourceAvailable: true }), true, action.id);
-  }
+  assert.equal(checked.result.status, 'ANSWERED', JSON.stringify(checked.trust.reasonCodes));
+  assert.deepEqual(rowOf(checked.result).actions?.map((action) => action.id), ['document-promotion-confirm', 'document-promotion-reject'], JSON.stringify(checked.trust.reasonCodes));
 });
 
 test('the coverage review says how many policy details wait, offers to go through them first, and does not ask for the upload again', () => {

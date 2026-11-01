@@ -940,6 +940,7 @@ export class HomeRecordsExtractionService {
       termStart: dateField('termStart'),
       termEnd: dateField('termEnd'),
       sourceText: `Reviewed in Home Records from "${version.originalFileName}"`,
+      sourceDocumentId: input.recordId,
     });
 
     await prisma.$transaction(async (tx) => {

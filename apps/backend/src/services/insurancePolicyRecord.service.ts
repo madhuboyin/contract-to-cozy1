@@ -30,6 +30,9 @@ export interface ExtractedPolicyTermInput {
   confidence?: number;
   sourcePage?: number;
   sourceText?: string;
+  /** The Home Record (PropertyRecord) the term was read from. A term is identified by its policy AND its source, so a retry of the same upload reuses its own term while a later
+   *  declarations page for the same policy stages a term of its own instead of silently returning an older one. */
+  sourceDocumentId?: string;
 }
 
 const excerptHash = (text?: string) =>
@@ -38,6 +41,7 @@ const excerptHash = (text?: string) =>
 function extractedFacts(input: ExtractedPolicyTermInput) {
   const common = {
     sourcePage: input.sourcePage,
+    sourceDocumentId: input.sourceDocumentId,
     sourceExcerptHash: excerptHash(input.sourceText),
     extractionMethod: 'DOCUMENT_AI',
     confidence: input.confidence,
@@ -146,7 +150,7 @@ export async function stageExtractedPolicyTerm(input: ExtractedPolicyTermInput) 
       }));
 
     const existingTerm = await tx.insurancePolicyTerm.findFirst({
-      where: { insurancePolicyId: policy.id, sourceDocumentId: null },
+      where: { insurancePolicyId: policy.id, sourceDocumentId: input.sourceDocumentId ?? null },
       include: { facts: true },
     });
     if (existingTerm) return { policy, term: existingTerm };
@@ -158,6 +162,7 @@ export async function stageExtractedPolicyTerm(input: ExtractedPolicyTermInput) 
         termStart: input.termStart,
         termEnd: input.termEnd,
         annualPremium: input.premiumAmount,
+        sourceDocumentId: input.sourceDocumentId ?? null,
         status: 'PENDING_CONFIRMATION',
         verificationStatus: 'UNVERIFIED',
         facts: { create: extractedFacts(input) },

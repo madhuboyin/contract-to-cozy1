@@ -69,11 +69,12 @@ export function coverageReviewFromView(read: ReviewResult, canGenerate: boolean,
       pendingFactCount > 0 ? `${pendingFactCount} ${pendingFactCount === 1 ? 'detail' : 'details'} read from your policy ${pendingFactCount === 1 ? 'is' : 'are'} waiting for you to confirm; the review uses only confirmed details.` : null,
     ].filter(Boolean).join(' '),
     tone: review.overallState === 'CONFLICTED' || !read.isCurrent ? 'CAUTION' : 'DEFAULT',
-    // With no policy term on file the review is waiting for the declarations page itself: Ask's own file intake, preselected to a policy, is the way to supply it
-    // (home-record owner only: the staged term is recorded under that profile). Refreshing before then would only repeat the same answer.
+    // With no policy term on file the review is waiting for the declarations page itself: Ask's own file intake, preselected to a policy, is the way to supply it.
+    // A contributor or owner may upload: every intake route needs CONTRIBUTOR and the staged term is recorded under the home's canonical owner profile, not the caller's
+    // (unlike a manually typed policy, which belongs to the caller's profile and so stays owner-only). Refreshing before then would only repeat the same answer.
     actions: canGenerate && pendingFactCount > 0
       ? [{ id: COVERAGE_PENDING_FACTS_ACTION_ID, label: `Confirm ${pendingFactCount === 1 ? 'the detail' : `${pendingFactCount} details`} from your policy`, interactionType: 'START_WORKFLOW' as const, message: 'Show document facts waiting for review', operationId: 'DOCUMENT_PROMOTION_REVIEW' as const, style: 'PRIMARY' as const }, ...generate.map((action) => ({ ...action, style: 'SECONDARY' as const }))]
-      : canAddPolicy && !review.policyTerm && review.overallState !== 'CONFLICTED'
+      : canGenerate && !review.policyTerm && review.overallState !== 'CONFLICTED'
       ? [{ id: COVERAGE_POLICY_UPLOAD_ACTION_ID, label: 'Upload a declarations page', interactionType: 'OPEN_FILE_INTAKE' as const, intakeKind: 'INSURANCE_POLICY' as const, style: 'PRIMARY' as const }, ...generate.map((action) => ({ ...action, style: 'SECONDARY' as const }))]
       : generate,
   }];

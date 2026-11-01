@@ -58,7 +58,11 @@ async function documentPromotionReviewResult(propertyId: string, canDecide = fal
       { id: 'document-promotion-reject', label: 'Reject', message: `Reject ${candidate.title}`, style: 'QUIET' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'DOCUMENT_PROMOTION_CONFIRM' as const },
     ] } : {}),
   })) }];
-  return { status: 'ANSWERED', reasonCode: 'DOCUMENT_PROMOTIONS_PENDING', blocks: [{ type: 'GROUPED_LIST', filters: [], id: 'document-promotions', title: 'Document-derived records awaiting review', description: 'Nothing listed here becomes trusted canonical data until you confirm the exact candidate.', sections, collection: collectionDescriptor({ sourceTotal, fetchedCount: candidates.length, sections, nextPageAvailable: false }), actions: [] }, { type: 'EVIDENCE', id: 'document-promotion-provenance', title: 'Promotion boundary', items: [{ label: 'Review gate', source: 'Canonical domain-specific review records', observedAt: new Date().toISOString() }] }], suggestions: [] };
+  return { status: 'ANSWERED', reasonCode: 'DOCUMENT_PROMOTIONS_PENDING', blocks: [{
+    // The answer opens with the count, as every other list answer does; the answer checker rejects a result whose first block is a bare list.
+    type: 'SUMMARY', id: 'document-promotions-summary', title: `${sourceTotal} ${sourceTotal === 1 ? 'item is' : 'items are'} waiting for your review`,
+    body: 'These were read from your documents. Nothing here is added to your home record until you confirm it.', tone: 'DEFAULT', actions: [],
+  }, { type: 'GROUPED_LIST', filters: [], id: 'document-promotions', title: 'Document-derived records awaiting review', description: 'Nothing listed here becomes trusted canonical data until you confirm the exact candidate.', sections, collection: collectionDescriptor({ sourceTotal, fetchedCount: candidates.length, sections, nextPageAvailable: false }), actions: [] }, { type: 'EVIDENCE', id: 'document-promotion-provenance', title: 'Promotion boundary', items: [{ label: 'Review gate', source: 'Canonical domain-specific review records', observedAt: new Date().toISOString() }] }], suggestions: [] };
 }
 
 async function documentPromotionConfirmResult(propertyId: string, message: string, launchContext?: CreateAskExecutionRequest['launchContext']): Promise<AskOperationResult> {
