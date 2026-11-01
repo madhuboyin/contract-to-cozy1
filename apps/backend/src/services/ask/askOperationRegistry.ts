@@ -1,6 +1,6 @@
 import { isNotificationSettingsCommandRequest, isNotificationSettingsOverviewRequest, isNotificationsOverviewRequest } from './support/notificationConversation';
 import { isHomeRecordExportRequest, isHomeRecordExportShareRequest, isHomeRecordExportStatusRequest } from './support/homeRecordExport';
-import type { AskCaptureRequest, AskClarification, AskConfirmation, AskExecutionStatus, AskPresentationBlock, SuggestedNextAction } from '../../productFramework/ask/ask.contract';
+import type { AskCaptureRequest, AskClarification, AskConfirmation, AskExecutionStatus, AskPresentationBlock, SuggestedNextAction, SuggestedNextActionsStatus } from '../../productFramework/ask/ask.contract';
 import type { AskFollowUpNomination, SkillHandoffSuggestion } from '../skills/skillHandoff';
 import type { SuggestedNextActionCandidate } from './suggestedActions/suggestedNextActionCandidate';
 import { createAskOperationSemanticContract, validateAskSemanticContract, type AskOperationSemanticContract } from './askTrust.contract';
@@ -632,6 +632,8 @@ export interface AskOperationResult {
   suggestedNextActions?: SuggestedNextAction[];
   /** Marks a newly finalized result so clients never revive its legacy string suggestions when the typed row is empty. */
   suggestedNextActionsGoverned?: boolean;
+  /** Bounded persisted finalizer state; contains no homeowner text or entity identity. */
+  suggestedNextActionsStatus?: SuggestedNextActionsStatus;
   /**
    * Typed nominations a handler attaches for the shared finalizer (plan §5). Never persisted: the finalizer validates, evaluates,
    * ranks and deduplicates them into `suggestedNextActions` and clears this field.

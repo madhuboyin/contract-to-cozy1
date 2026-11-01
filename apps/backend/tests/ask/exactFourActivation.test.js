@@ -74,7 +74,7 @@ test('the registry is populated for activation: all four starter producers are r
   assert.deepEqual(SUGGESTED_NEXT_ACTION_PRODUCERS.map((p) => p.id), ['operation-result.candidates', operationSpecificContinuationProducer.id, skillHandoffProducer.id, ...starterProducers.map((p) => p.id), urgentWorkProducer.id, activePlanProducer.id, capabilityRecommendationProducer.id, actionableProfileProducer.id, homeOpportunityProducer.id]);
   assert.equal(CURATED_STARTER_OUTCOME_KEYS.length, 7);
   for (const key of CURATED_STARTER_OUTCOME_KEYS) { assert.ok(REPEATABLE_OUTCOMES.has(key), key); assert.ok(PROMPT_HISTORY_EXEMPT_OUTCOMES.has(key), key); }
-  for (const producer of starterProducers) assert.equal(producer.essential, false, 'starters remain optional when the deadline was already exhausted');
+  for (const producer of starterProducers) assert.equal(producer.essential, true, 'static starters remain available after optional enrichment consumes the budget');
 });
 
 test('EMPTY-HOME VIEWER, typed question: the settled answer shows exactly four distinct approved starters, and every offer is recorded', async () => {
@@ -82,6 +82,7 @@ test('EMPTY-HOME VIEWER, typed question: the settled answer shows exactly four d
   assertFour(r, 'viewer x unknown mode');
   assert.equal(r.offers.length, 1);
   assert.equal(r.offers[0].offers.length, 4);
+  assert.deepEqual(r.result.suggestedNextActionsStatus, { state: 'READY', shownCount: 4, expectedCount: 4, reasonCodes: [] });
   assert.ok(r.offers[0].offers.every((o) => o.slotClass === 'CURATED_STARTER' && o.currentResultOwnership === false));
   assert.equal(r.calls.completeness, 0, 'a starters-only turn never loads actionable completeness');
 });
@@ -104,6 +105,7 @@ test('a settled answer with declared contextual workflow controls does not get a
   });
   assert.equal(r.calls.lifecycle, 0, 'contextual results do not load starter lifecycle state');
   assert.equal(r.offers.length, 0, 'no starter offers are recorded when the rich result owns the next action');
+  assert.deepEqual(r.result.suggestedNextActionsStatus, { state: 'EXEMPT', shownCount: 0, expectedCount: 0, reasonCodes: ['CONTEXTUAL_ACTIONS_IN_RESULT'] });
 });
 
 test('nested record controls do not suppress the answer-level governed continuation row', async () => {
@@ -288,16 +290,14 @@ test('SLOW OPTIONAL ENRICHMENT cannot consume the budget before static exact-fou
   assertFour(r, 'slow enrichment after starters');
 });
 
-test('BOUNDED DIAGNOSTIC: when the starters themselves are dropped for budget, nothing is invented: zero actions and the approved shortage diagnostic naming the cause', async () => {
+test('static starter fallbacks survive an already exhausted optional-producer budget', async () => {
   let ticks = 0;
   const nowMs = () => { ticks += 1; return ticks === 1 ? 0 : SUGGESTED_NEXT_ACTION_BUDGET.pipelineMs + 1; };
   const r = await run({ nowMs });
-  assert.equal(r.shown.length, 0);
-  assert.equal(r.report.droppedProducers.length, starterProducers.length + 5);
+  assertFour(r, 'budget exhausted before optional enrichment');
+  assert.equal(r.report.droppedProducers.length, 5);
   assert.ok(r.report.droppedProducers.every((d) => d.reason === 'BUDGET'));
-  assert.equal(r.report.exactFour.applicability, 'EXACT_FOUR');
-  assert.equal(r.report.exactFour.shortage, 4);
-  assert.deepEqual(r.report.exactFour.shortageReasons, ['NO_CANDIDATES', 'PRODUCER_DROPPED']);
+  assert.equal(r.result.suggestedNextActionsStatus.state, 'READY');
 });
 
 test('BOUNDED DIAGNOSTIC: all seven starters in cooldown is a degraded row with the approved reason (COOLDOWN_SUPPRESSED), not a silent short row', async () => {
@@ -306,6 +306,7 @@ test('BOUNDED DIAGNOSTIC: all seven starters in cooldown is a degraded row with 
   assert.equal(r.report.exactFour.applicability, 'EXACT_FOUR');
   assert.equal(r.report.exactFour.shortage, 4);
   assert.ok(r.report.exactFour.shortageReasons.includes('COOLDOWN_SUPPRESSED'));
+  assert.deepEqual(r.result.suggestedNextActionsStatus, { state: 'DEGRADED', shownCount: 0, expectedCount: 4, reasonCodes: r.report.exactFour.shortageReasons });
 });
 
 test('LIFECYCLE OUTAGE fails open: the row still reaches four, and the offer is recorded best effort', async () => {

@@ -153,9 +153,11 @@ test('finalizer: both completed Home Basics guides use four governed footer acti
   const safety = await run(buildHomeBasicsResult('SAFETY_BASICS'), 'HOME_BASICS_GUIDE');
   assert.equal(safety.report.mode, 'NORMAL');
   assert.equal(safety.result.suggestedNextActions.length, 4);
+  assert.equal(safety.result.suggestedNextActionsStatus.state, 'READY');
   assert.equal(safety.result.blocks.some((block) => block.id === 'home-basics-next'), false);
   const routine = await run(buildHomeBasicsResult('MONTHLY_ROUTINE'), 'HOME_BASICS_GUIDE');
   assert.equal(routine.report.mode, 'NORMAL');
   assert.equal(routine.result.suggestedNextActions.length, 4);
+  assert.equal(routine.result.suggestedNextActionsStatus.state, 'READY');
   assert.equal(routine.report.exactFour.applicability, 'EXACT_FOUR');
 });

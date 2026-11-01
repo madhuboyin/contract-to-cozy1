@@ -14,17 +14,20 @@ export type FollowUpDismissReason = 'NOT_NOW' | 'NOT_RELEVANT';
 // disabled and shows it is pending; the others stay visible but inert (`aria-disabled`), because the workspace runs one request
 // at a time and a click on them would otherwise be a silent no-op. The row remembers which chip was picked; the key is dropped
 // as soon as no request is running, so a pick that never started one cannot mark a later, unrelated request.
-export function FollowUpRow({ items, busy, onPick, onDismiss }: {
+export function FollowUpRow({ items, busy, onPick, onDismiss, status }: {
   items: FollowUpItem[]; busy: boolean; onPick: (item: FollowUpItem) => void;
+  status?: { state: 'READY' | 'EXEMPT' | 'DEGRADED'; shownCount: number; expectedCount: number };
   /** Optional. When given, a curated starter shows a small control to put it off or mark it not relevant; the caller reports the outcome. */
   onDismiss?: (item: Extract<FollowUpItem, { kind: 'ACTION' }>, reason: FollowUpDismissReason) => void;
 }) {
   const [pendingKey, setPendingKey] = useState<string | null>(null);
   const [menuKey, setMenuKey] = useState<string | null>(null);
   useEffect(() => { if (!busy && pendingKey) setPendingKey(null); }, [busy, pendingKey]);
-  if (items.length === 0) return null;
+  const degraded = status?.state === 'DEGRADED';
+  if (items.length === 0 && !degraded) return null;
   return (
-    <div role="group" aria-label="Suggested follow-ups" data-follow-up-row="" className="mx-auto mb-2 flex w-full max-w-[1140px] gap-2 overflow-x-auto pb-1 [scrollbar-width:none]">
+    <div role="group" aria-label="Suggested follow-ups" data-follow-up-row="" className="mx-auto mb-2 flex w-full max-w-[1140px] items-center gap-2 overflow-x-auto pb-1 [scrollbar-width:none]">
+      {degraded && <p role="status" className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-900">{items.length ? 'Some suggested next actions are temporarily unavailable.' : 'Suggested next actions are temporarily unavailable. You can still ask a follow-up.'}</p>}
       {items.map((item) => {
         const pending = busy && pendingKey === item.key;
         const inert = busy && !pending;

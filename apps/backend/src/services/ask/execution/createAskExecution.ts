@@ -562,7 +562,7 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
         // at this point), so continuesExecutionId is a fresh assignment
         // from this turn's own follow-up resolution, not a preserved value
         // -- only originalResponse comes from the shared history policy.
-        resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: result.captureRequests ?? [], confirmation: result.confirmation ?? null, clarification: result.clarification ?? null, suggestions: result.suggestions, suggestedNextActionsGoverned: result.suggestedNextActionsGoverned === true, suggestedNextActions: result.suggestedNextActions ?? [], skillHandoff: result.skillHandoff ?? null, continuesExecutionId: followUp.isFilterRefinement ? followUp.sourceExecutionId : null, originalResponse: preservedExecutionHistory(execution.resultJson, result.blocks).originalResponse }),
+        resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: result.captureRequests ?? [], confirmation: result.confirmation ?? null, clarification: result.clarification ?? null, suggestions: result.suggestions, suggestedNextActionsGoverned: result.suggestedNextActionsGoverned === true, suggestedNextActionsStatus: result.suggestedNextActionsStatus, suggestedNextActions: result.suggestedNextActions ?? [], skillHandoff: result.skillHandoff ?? null, continuesExecutionId: followUp.isFilterRefinement ? followUp.sourceExecutionId : null, originalResponse: preservedExecutionHistory(execution.resultJson, result.blocks).originalResponse }),
         completedAt,
       },
     });

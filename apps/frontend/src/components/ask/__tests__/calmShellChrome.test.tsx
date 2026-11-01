@@ -114,6 +114,12 @@ describe('CalmLanding', () => {
 const textItems = (...texts: string[]): FollowUpItem[] => texts.map((text) => ({ kind: 'TEXT', key: `text:${text}`, label: text, text }));
 
 describe('FollowUpRow', () => {
+  test('explains a governed degraded row instead of silently disappearing', () => {
+    const { rerender } = render(<FollowUpRow items={[]} busy={false} onPick={jest.fn()} status={{ state: 'DEGRADED', shownCount: 0, expectedCount: 4 }} />);
+    expect(screen.getByRole('status')).toHaveTextContent('Suggested next actions are temporarily unavailable');
+    rerender(<FollowUpRow items={[]} busy={false} onPick={jest.fn()} status={{ state: 'EXEMPT', shownCount: 0, expectedCount: 0 }} />);
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
   it('renders a typed action by its label and hands the whole item back, so the transcript message is not the chip text', () => {
     const onPick = jest.fn();
     const item: FollowUpItem = { kind: 'ACTION', key: 'action:v1.abc', label: 'Add the microwave brand', action: { id: 'v1.abcdefghijklmnop', message: 'What brand is the microwave?' } as never };

@@ -180,7 +180,7 @@ async function submitAskClarificationCore(userId: string, executionId: string, i
         reasonCode: result.reasonCode,
         contextVersion: result.contextVersion,
         parametersJson: asInputJson(nextParameters),
-        resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: result.captureRequests ?? [], confirmation: result.confirmation ?? null, clarification: result.clarification ?? null, suggestions: result.suggestions, suggestedNextActionsGoverned: result.suggestedNextActionsGoverned === true, suggestedNextActions: result.suggestedNextActions ?? [], skillHandoff: result.skillHandoff ?? null, ...preservedExecutionHistory(execution.resultJson, result.blocks) }),
+        resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: result.captureRequests ?? [], confirmation: result.confirmation ?? null, clarification: result.clarification ?? null, suggestions: result.suggestions, suggestedNextActionsGoverned: result.suggestedNextActionsGoverned === true, suggestedNextActionsStatus: result.suggestedNextActionsStatus, suggestedNextActions: result.suggestedNextActions ?? [], skillHandoff: result.skillHandoff ?? null, ...preservedExecutionHistory(execution.resultJson, result.blocks) }),
         completedAt: terminalStatus(result.status) ? new Date() : null,
       },
     });
@@ -274,7 +274,7 @@ async function resolveAskExecutionPropertyCore(userId: string, executionId: stri
         reasonCode: result.reasonCode,
         contextVersion: result.contextVersion,
         parametersJson: result.parameters ? asInputJson(result.parameters) : undefined,
-        resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: result.captureRequests ?? [], confirmation: result.confirmation ?? null, clarification: result.clarification ?? null, suggestions: result.suggestions, suggestedNextActionsGoverned: result.suggestedNextActionsGoverned === true, suggestedNextActions: result.suggestedNextActions ?? [], skillHandoff: result.skillHandoff ?? null, ...preservedExecutionHistory(execution.resultJson, result.blocks) }),
+        resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: result.captureRequests ?? [], confirmation: result.confirmation ?? null, clarification: result.clarification ?? null, suggestions: result.suggestions, suggestedNextActionsGoverned: result.suggestedNextActionsGoverned === true, suggestedNextActionsStatus: result.suggestedNextActionsStatus, suggestedNextActions: result.suggestedNextActions ?? [], skillHandoff: result.skillHandoff ?? null, ...preservedExecutionHistory(execution.resultJson, result.blocks) }),
         completedAt: terminalStatus(result.status) ? new Date() : null,
       },
     });

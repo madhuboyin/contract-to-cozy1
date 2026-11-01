@@ -99,10 +99,11 @@ test('the persisted governed marker reaches the API response so non-calm clients
     id: 'exec-1', sessionId: 'session-1', message: 'Mark this step done.', status: 'COMPLETED', reasonCode: 'DIY_STEP_COMPLETED',
     propertyId: 'prop-1', operationId: 'DIY_STEP_UPDATE', operationVersion: '1.0', intentFamily: 'COMMAND', contextVersion: null,
     launchContextJson: { surface: 'ASK_PAGE', operationId: 'DIY_STEP_UPDATE' },
-    resultJson: { schemaVersion: '1.0', blocks: [], captureRequests: [], confirmation: null, clarification: null, suggestions: [], suggestedNextActionsGoverned: true, suggestedNextActions: [action()] },
+    resultJson: { schemaVersion: '1.0', blocks: [], captureRequests: [], confirmation: null, clarification: null, suggestions: [], suggestedNextActionsGoverned: true, suggestedNextActionsStatus: { state: 'READY', shownCount: 1, expectedCount: 4, reasonCodes: [] }, suggestedNextActions: [action()] },
     createdAt: now, updatedAt: now,
   }, { id: 'prop-1', label: '94 Ashford Dr' });
   assert.equal(mapped.suggestedNextActionsGoverned, true);
+  assert.deepEqual(mapped.suggestedNextActionsStatus, { state: 'READY', shownCount: 1, expectedCount: 4, reasonCodes: [] });
   assert.equal(mapped.declaredOperationId, 'DIY_STEP_UPDATE');
   assert.deepEqual(mapped.suggestedNextActions.map((entry) => entry.id), [action().id]);
 
@@ -110,10 +111,11 @@ test('the persisted governed marker reaches the API response so non-calm clients
     id: 'exec-2', sessionId: 'session-1', message: 'What needs attention?', status: 'ANSWERED', reasonCode: null,
     propertyId: 'prop-1', operationId: 'HOME_ACTIONS', operationVersion: '1.0', intentFamily: 'STATUS_SUMMARY', contextVersion: null,
     launchContextJson: { surface: 'ASK_PAGE', operationId: 'MAINTENANCE_STATUS' },
-    resultJson: { schemaVersion: '1.0', blocks: [], captureRequests: [], confirmation: null, clarification: null, suggestions: [] },
+    resultJson: { schemaVersion: '1.0', blocks: [], captureRequests: [], confirmation: null, clarification: null, suggestions: [], suggestedNextActionsStatus: { state: 'BROKEN', shownCount: 99 } },
     createdAt: now, updatedAt: now,
   }, { id: 'prop-1', label: '94 Ashford Dr' });
   assert.equal(inferred.declaredOperationId, null, 'a mismatched or inferred operation is never exposed as a declaration');
+  assert.equal(inferred.suggestedNextActionsStatus, undefined, 'a corrupt status is dropped without hiding an otherwise valid saved answer');
 });
 
 test('an action expiry is capped at the source execution expiry, and an unparseable expiry is already expired', () => {

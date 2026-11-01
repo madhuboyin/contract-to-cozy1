@@ -80,7 +80,8 @@ export const operationSpecificContinuationProducer: SuggestedNextActionProducer 
  * turn and reads nothing: the candidates are static, and the shared finalizer's eligibility, lifecycle and policy decide visibility.
  */
 const starterProducer = (id: string, nominate: (propertyId: string) => readonly unknown[]): SuggestedNextActionProducer => ({
-  id, source: 'CAPABILITY_RECOMMENDATION', essential: false,
+  // Static and synchronous: these preserve exact-four when optional enrichment has consumed the budget without adding latency.
+  id, source: 'CAPABILITY_RECOMMENDATION', essential: true,
   nominate: ({ propertyId }) => (propertyId ? nominate(propertyId) : []),
 });
 export const starterProducers: readonly SuggestedNextActionProducer[] = [

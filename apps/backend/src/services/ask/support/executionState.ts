@@ -1,6 +1,6 @@
 // Ask handler support: executionState. Moved out of askHandlerSupport.ts unchanged (FRD v1.110); that file re-exports these modules.
 import { staleMarkerFor } from './askReconciliation';
-import { ASK_RESPONSE_SCHEMA_VERSION, AskExecutionResponseSchema, AskPresentationBlockSchema, type AskExecutionResponse, type AskPresentationBlock } from '../../../productFramework/ask/ask.contract';
+import { ASK_RESPONSE_SCHEMA_VERSION, AskExecutionResponseSchema, AskPresentationBlockSchema, SuggestedNextActionsStatusSchema, type AskExecutionResponse, type AskPresentationBlock } from '../../../productFramework/ask/ask.contract';
 import { AskExecution, AskExecutionStatus, Prisma } from '@prisma/client';
 import { ASK_OPERATION_DEFINITIONS, getAskOperationDefinition, type AskOperationId, type AskOperationResult } from '../askOperationRegistry';
 import { prisma } from '../../../lib/prisma';
@@ -146,7 +146,7 @@ export function mapPersistedExecution(execution: {
       ? { id: currentSkill.id, version: currentSkill.version, domain: currentSkill.domain }
       : null;
   const stored = execution.resultJson && typeof execution.resultJson === 'object' && !Array.isArray(execution.resultJson)
-    ? execution.resultJson as { schemaVersion?: unknown; blocks?: unknown; captureRequests?: unknown; confirmation?: unknown; clarification?: unknown; suggestions?: unknown; suggestedNextActionsGoverned?: unknown; skillHandoff?: unknown; continuesExecutionId?: unknown; originalResponse?: unknown }
+    ? execution.resultJson as { schemaVersion?: unknown; blocks?: unknown; captureRequests?: unknown; confirmation?: unknown; clarification?: unknown; suggestions?: unknown; suggestedNextActionsGoverned?: unknown; suggestedNextActionsStatus?: unknown; skillHandoff?: unknown; continuesExecutionId?: unknown; originalResponse?: unknown }
     : {};
   // ASK_COZY_INTERACTION_MODEL_UI_FRD RES-001-005: viewState lives in
   // parametersJson (stamped by maintenanceResult), not resultJson.
@@ -158,6 +158,7 @@ export function mapPersistedExecution(execution: {
     ? rawViewState as AskViewState
     : null;
   const storedSchemaVersion = typeof stored.schemaVersion === 'string' ? stored.schemaVersion : ASK_RESPONSE_SCHEMA_VERSION;
+  const storedSuggestedNextActionsStatus = SuggestedNextActionsStatusSchema.safeParse(stored.suggestedNextActionsStatus);
   const operationDefinition = operationId ? getAskOperationDefinition(operationId) : null;
   const storedLaunch = execution.launchContextJson && typeof execution.launchContextJson === 'object' && !Array.isArray(execution.launchContextJson)
     ? execution.launchContextJson as { operationId?: unknown }
@@ -209,6 +210,9 @@ export function mapPersistedExecution(execution: {
     // This marker is the compatibility boundary between historical raw strings and newly governed typed actions.
     // Omitting it here made the non-calm frontend treat every mapped governed execution as historical and hide its typed row.
     ...(stored.suggestedNextActionsGoverned === true ? { suggestedNextActionsGoverned: true } : {}),
+    ...(storedSuggestedNextActionsStatus.success
+      ? { suggestedNextActionsStatus: storedSuggestedNextActionsStatus.data }
+      : {}),
     // Dropped entry-by-entry when invalid, so a corrupt ledger can never blank an otherwise valid saved answer.
     suggestedNextActions: readStoredSuggestedNextActions(execution.resultJson),
     createdAt: execution.createdAt.toISOString(),

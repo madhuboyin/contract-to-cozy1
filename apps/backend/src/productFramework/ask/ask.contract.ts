@@ -1389,6 +1389,13 @@ export const SUGGESTED_NEXT_ACTIONS_MAX = 4;
 export const SUGGESTED_NEXT_ACTION_ID_PATTERN = /^v[0-9]{1,3}\.[A-Za-z0-9_-]{16,64}$/;
 const SUGGESTED_NEXT_ACTION_TOKEN_PATTERN = /^[A-Z][A-Z0-9_]{2,79}$/;
 
+export const SuggestedNextActionsStatusSchema = z.object({
+  state: z.enum(['READY', 'EXEMPT', 'DEGRADED']),
+  shownCount: z.number().int().min(0).max(SUGGESTED_NEXT_ACTIONS_MAX),
+  expectedCount: z.number().int().min(0).max(SUGGESTED_NEXT_ACTIONS_MAX),
+  reasonCodes: z.array(z.string().regex(SUGGESTED_NEXT_ACTION_TOKEN_PATTERN)).max(8),
+}).strict();
+
 export const SuggestedNextActionSchema = z.object({
   id: z.string().regex(SUGGESTED_NEXT_ACTION_ID_PATTERN),
   outcomeKey: z.string().regex(SUGGESTED_NEXT_ACTION_TOKEN_PATTERN),
@@ -1599,6 +1606,8 @@ const AskExecutionResponseBaseSchema = z.object({
   // Present on every result that passed through the governed Suggested Next Action finalizer. Historical
   // executions predate this marker and may still render their string suggestions; governed results never do.
   suggestedNextActionsGoverned: z.boolean().optional(),
+  // Text-free finalizer outcome. Historical executions omit it; new results distinguish an intentional exemption from a degraded row.
+  suggestedNextActionsStatus: SuggestedNextActionsStatusSchema.optional(),
   // Plan §4 (Phase 1): absent on executions persisted before the typed contract, which keep rendering from `suggestions`.
   suggestedNextActions: z.array(SuggestedNextActionSchema).max(SUGGESTED_NEXT_ACTIONS_MAX).default([]),
   createdAt: z.string().datetime(),
@@ -1729,3 +1738,4 @@ export type AskRecentSessionPage = z.infer<typeof AskRecentSessionPageSchema>;
 export type AskSessionUpdateRequest = z.infer<typeof AskSessionUpdateRequestSchema>;
 export type SubmitAskClarification = z.infer<typeof SubmitAskClarificationSchema>;
 export type AskExecutionResponse = z.infer<typeof AskExecutionResponseSchema>;
+export type SuggestedNextActionsStatus = z.infer<typeof SuggestedNextActionsStatusSchema>;

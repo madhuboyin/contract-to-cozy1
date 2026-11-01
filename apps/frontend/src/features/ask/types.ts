@@ -452,6 +452,12 @@ export interface AskExecutionResponse {
   suggestions: string[];
   /** True when this result passed through the server-governed action finalizer; string suggestions are historical-only thereafter. */
   suggestedNextActionsGoverned?: boolean;
+  suggestedNextActionsStatus?: {
+    state: 'READY' | 'EXEMPT' | 'DEGRADED';
+    shownCount: number;
+    expectedCount: number;
+    reasonCodes: string[];
+  };
   /** Absent on executions persisted before the typed contract; those keep rendering from `suggestions`. */
   suggestedNextActions?: SuggestedNextAction[];
   createdAt: string;

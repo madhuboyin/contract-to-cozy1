@@ -181,9 +181,28 @@ export async function finalizeSuggestedNextActionsWithReport(
     suggestedNextActions: actions,
   });
   const finish = (result: AskOperationResult) => {
+    const shownCount = result.suggestedNextActions?.length ?? 0;
+    const exactFour = report.exactFour;
+    const pending = Boolean(input.result.clarification || input.result.confirmation
+      || (!optionalEscapeRoutes && (input.result.captureRequests?.length ?? 0) > 0));
+    const suggestedNextActionsStatus = exactFour?.applicability === 'EXEMPT'
+      ? { state: 'EXEMPT' as const, shownCount, expectedCount: 0, reasonCodes: [exactFour.exemptReason] }
+      : exactFour?.applicability === 'EXACT_FOUR' && exactFour.shortage > 0
+        ? { state: 'DEGRADED' as const, shownCount, expectedCount: 4, reasonCodes: exactFour.shortageReasons.slice(0, 8) }
+        : report.contextFailed
+          ? { state: 'DEGRADED' as const, shownCount, expectedCount: 4, reasonCodes: ['CONTEXT_FAILED'] }
+          : mode !== 'NORMAL'
+            ? { state: 'EXEMPT' as const, shownCount, expectedCount: 0, reasonCodes: ['SAFE_RECOVERY_ONLY'] }
+            : !input.propertyId
+              ? { state: 'EXEMPT' as const, shownCount, expectedCount: 0, reasonCodes: ['NO_PROPERTY'] }
+              : pending
+                ? { state: 'EXEMPT' as const, shownCount, expectedCount: 0, reasonCodes: ['PENDING_INTERACTION'] }
+                : shownCount < 4
+                  ? { state: 'DEGRADED' as const, shownCount, expectedCount: 4, reasonCodes: ['NO_CANDIDATES'] }
+                  : { state: 'READY' as const, shownCount, expectedCount: 4, reasonCodes: [] };
     report.durationMs = nowMs() - startedAt;
     askSuggestedActionsPipelineDurationSeconds.observe({ mode }, report.durationMs / 1000);
-    return { result, report };
+    return { result: { ...result, suggestedNextActionsStatus }, report };
   };
 
   // 1. Nominations, each producer isolated and budget-checked (nonessential producers are the first to go).
