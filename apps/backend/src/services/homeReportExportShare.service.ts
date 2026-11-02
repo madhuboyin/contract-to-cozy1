@@ -11,7 +11,7 @@ export const HOME_REPORT_SHARE_MAX_DAYS = 30;
 
 export type ShareRuleFailure = { kind: 'NOT_FOUND' } | { kind: 'FORBIDDEN' } | { kind: 'NOT_CONTRIBUTOR' } | { kind: 'DELETED' };
 
-async function loadOwnedExport(exportId: string, userId: string) {
+export async function loadOwnedExport(exportId: string, userId: string) {
   const exp = await prisma.homeReportExport.findUnique({ where: { id: exportId } });
   if (!exp) return { failure: { kind: 'NOT_FOUND' } as ShareRuleFailure };
   if (exp.userId !== userId) return { failure: { kind: 'FORBIDDEN' } as ShareRuleFailure };

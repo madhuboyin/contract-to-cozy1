@@ -1,11 +1,9 @@
 // apps/backend/src/controllers/homeReportExport.controller.ts
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
-import { createExportAndGeneratePdf, buildShareToken, prepareShareArtifacts } from '../services/homeReportExport.service';
+import { buildShareToken, prepareShareArtifacts } from '../services/homeReportExport.service';
 import { checkReportWorkerContext } from '../services/planningContext/reportSnapshot';
 import { presignGetObject } from '../services/storage/presign';
-import { getS3Client } from '../services/storage/s3Client';
-import { DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { logger } from '../lib/logger';
 import { analyticsEmitter, AnalyticsEvent, AnalyticsModule, AnalyticsFeature } from '../services/analytics';
 import { resolvePropertyAccess, ROLE_RANK } from '../services/propertyAccess.service';
@@ -13,6 +11,7 @@ import { getAggregationContextEnvelope } from '../services/aggregationContext/co
 import { InvalidExportSelectionError } from '../services/ask/askRecordExportSelection';
 import { createHomeReportExportRecord } from '../services/homeReportExportCreate.service';
 import { createShareLinkRecord, revokeShareLinkRecord } from '../services/homeReportExportShare.service';
+import { regenerateHomeReportExportRecord, deleteHomeReportExportRecord } from '../services/homeReportExportManage.service';
 
 async function canMutateReport(propertyId: string, userId: string): Promise<boolean> {
   const access = await resolvePropertyAccess(userId, propertyId);
@@ -304,77 +303,17 @@ export async function downloadHomeReportByShareToken(req: Request, res: Response
 
 export async function regenerateHomeReportExport(req: Request, res: Response) {
   try {
-    const exportId = req.params.exportId;
     const userId = (req as any).user?.userId as string;
-
-    const existing = await prisma.homeReportExport.findUnique({
-      where: { id: exportId },
-    });
-
-    if (!existing) {
-      return res.status(404).json({ success: false, message: 'Report export not found' });
+    // The rules (ownership, contributor role, not deleted, one export at a time, section choice, 30-day keep) live in the shared service,
+    // which the Ask command uses too. The worker prepares the PDF from the new PENDING row.
+    const outcome = await regenerateHomeReportExportRecord({ exportId: req.params.exportId, userId, locale: req.headers['accept-language']?.toString() });
+    if (outcome.kind === 'CONTEXT_NOT_READY') return res.status(409).json({ success: false, message: 'Report context is not ready.', data: { propertyContext: outcome.propertyContext } });
+    if (outcome.kind === 'IN_FLIGHT') return res.status(409).json({ success: false, message: 'A report export is already in progress for this property.', data: { exportId: outcome.exportId } });
+    if (outcome.kind !== 'CREATED') {
+      const failure = SHARE_FAILURE[outcome.kind];
+      return res.status(outcome.kind === 'DELETED' ? 409 : failure.status).json({ success: false, message: failure.message });
     }
-
-    if (existing.userId !== userId) {
-      return res.status(403).json({ success: false, message: 'Forbidden' });
-    }
-
-    if (!(await canMutateReport(existing.propertyId, userId))) {
-      return res.status(403).json({ success: false, message: 'Report changes require CONTRIBUTOR access.' });
-    }
-
-    if (existing.deletedAt) {
-      return res.status(409).json({ success: false, message: 'Report was deleted' });
-    }
-
-    // Create a NEW export (keep history)
-    const exp = await prisma.homeReportExport.create({
-      data: {
-        userId,
-        propertyId: existing.propertyId,
-        type: existing.type,
-        status: 'PENDING',
-        sections: existing.sections ?? undefined,
-        templateVersion: existing.templateVersion ?? 1,
-        dataVersion: existing.dataVersion ?? 1,
-        timezone: existing.timezone ?? 'America/New_York',
-        locale: existing.locale ?? 'en-US',
-        expiresAt: existing.expiresAt ?? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-
-        regeneratedFromId: existing.id,
-      },
-    });
-
-    await prisma.homeReportExportEvent.create({
-      data: { reportId: exp.id, type: 'CREATED', meta: { regeneratedFromId: existing.id } },
-    });
-
-    // Queue the PDF generation (same service you already use)
-    await createExportAndGeneratePdf({
-      userId: exp.userId,
-      propertyId: exp.propertyId,
-      type: exp.type,
-      sections: exp.sections as any,
-      locale: exp.locale ?? undefined,
-      timezone: exp.timezone ?? undefined,
-    });
-
-    analyticsEmitter.track({
-      eventType: AnalyticsEvent.ACTION_COMPLETED,
-      userId,
-      propertyId: exp.propertyId,
-      moduleKey: AnalyticsModule.DASHBOARD,
-      featureKey: AnalyticsFeature.HOME_REPORT_EXPORT,
-      metadataJson: { actionType: 'regenerate', regeneratedFromId: existing.id },
-    });
-
-    return res.status(202).json({
-      success: true,
-      data: {
-        exportId: exp.id,
-        status: exp.status,
-      },
-    });
+    return res.status(202).json({ success: true, data: { exportId: outcome.export.id, status: outcome.export.status } });
   } catch (error: any) {
     logger.error({ err: error }, '[regenerateHomeReportExport] Error');
     return res.status(500).json({
@@ -386,68 +325,12 @@ export async function regenerateHomeReportExport(req: Request, res: Response) {
 
 export async function deleteHomeReportExport(req: Request, res: Response) {
   try {
-    const exportId = req.params.exportId;
     const userId = (req as any).user?.userId as string;
-
-    const exp = await prisma.homeReportExport.findUnique({
-      where: { id: exportId },
-    });
-
-    if (!exp) {
-      return res.status(404).json({ success: false, message: 'Report export not found' });
+    const outcome = await deleteHomeReportExportRecord({ exportId: req.params.exportId, userId });
+    if (outcome.kind !== 'DELETED') {
+      const failure = SHARE_FAILURE[outcome.kind];
+      return res.status(failure.status).json({ success: false, message: failure.message });
     }
-
-    if (exp.userId !== userId) {
-      return res.status(403).json({ success: false, message: 'Forbidden' });
-    }
-
-    if (!(await canMutateReport(exp.propertyId, userId))) {
-      return res.status(403).json({ success: false, message: 'Report changes require CONTRIBUTOR access.' });
-    }
-
-    // Idempotent delete
-    if (exp.status === 'DELETED') {
-      return res.json({ success: true, data: { ok: true } });
-    }
-
-    // Optional: prevent delete while generating
-    // if (exp.status === 'PENDING' || exp.status === 'GENERATING') {
-    //   return res.status(409).json({ success: false, message: 'Report is still generating' });
-    // }
-
-    // Best-effort S3 delete
-    if (exp.storageBucket && exp.storageKey) {
-      try {
-        const s3 = getS3Client();
-        await s3.send(
-          new DeleteObjectCommand({
-            Bucket: exp.storageBucket,
-            Key: exp.storageKey,
-          })
-        );
-      } catch (err) {
-        // Never fail deletion due to S3 cleanup issues
-        logger.warn({ err }, '[deleteHomeReportExport] S3 delete failed');
-      }
-    }
-
-    await prisma.homeReportExport.update({
-      where: { id: exportId },
-      data: {
-        status: 'DELETED',
-        deletedAt: new Date(),
-        deletedByUserId: userId,
-
-        // Immediately invalidate share links
-        shareRevokedAt: new Date(),
-        shareExpiresAt: new Date(),
-      },
-    });
-
-    await prisma.homeReportExportEvent.create({
-      data: { reportId: exportId, type: 'DELETED', meta: { by: 'OWNER' } },
-    });
-
     return res.json({ success: true, data: { ok: true } });
   } catch (error: any) {
     logger.error({ err: error }, '[deleteHomeReportExport] Error');
@@ -457,4 +340,3 @@ export async function deleteHomeReportExport(req: Request, res: Response) {
     });
   }
 }
-

@@ -152,12 +152,95 @@ test('the status answer offers Share a link, Replace the link and Stop sharing o
   const rows = [row({ id: 'a' }), row({ id: 'b', shareToken: 'tok', shareExpiresAt: day(5) }), row({ id: 'c', status: 'GENERATING' })];
   const result = homeRecordExportStatusFromRows(rows, NOW, true);
   const items = result.blocks.find((block) => block.id === 'home-record-export-status-list').sections[0].items;
-  assert.deepEqual(items[0].actions.map((a) => a.label), ['Share a link']);
-  assert.deepEqual(items[1].actions.map((a) => a.label), ['Replace the link', 'Stop sharing']);
+  assert.deepEqual(items[0].actions.map((a) => a.label), ['Share a link', 'Make a fresh copy', 'Delete']);
+  assert.deepEqual(items[1].actions.map((a) => a.label), ['Replace the link', 'Stop sharing', 'Make a fresh copy', 'Delete']);
   assert.ok(items[1].meta.some((m) => m.startsWith('Shared until')));
-  assert.deepEqual(items[2].actions, []);
+  assert.deepEqual(items[2].actions.map((a) => a.label), ['Delete']);
   assert.ok(items[0].actions.every((a) => a.operationId === OP && a.interactionType === 'MUTATE_RECORD'));
   assert.deepEqual(homeRecordExportStatusFromRows(rows, NOW, false).blocks.find((b) => b.id === 'home-record-export-status-list').sections[0].items.map((i) => i.actions.length), [0, 0, 0]);
   assert.equal(JSON.stringify(result).includes('tok'), false);
   for (const block of result.blocks) AskPresentationBlockSchema.parse(block);
+});
+
+// FRD v1.508: make a fresh copy of an export, and delete one. Same operation, same confirmation, the routes' own rules.
+const manageService = require('../../src/services/homeReportExportManage.service.ts');
+function installManage(role, rows) {
+  const w = install(role, rows);
+  const saved = { regen: manageService.regenerateHomeReportExportRecord, del: manageService.deleteHomeReportExportRecord };
+  manageService.regenerateHomeReportExportRecord = async (input) => { w.calls.push(['regenerate', input]); return { kind: 'CREATED', export: { id: 'new-1' } }; };
+  manageService.deleteHomeReportExportRecord = async (input) => { w.calls.push(['delete', input]); return { kind: 'DELETED' }; };
+  const restore = w.restore;
+  w.restore = () => { restore(); manageService.regenerateHomeReportExportRecord = saved.regen; manageService.deleteHomeReportExportRecord = saved.del; };
+  return w;
+}
+
+test('the grammar: fresh copy and delete need the export named; the home record, other exports and share links are left alone', () => {
+  assert.equal(support.homeRecordExportShareKind('Delete my export'), 'DELETE');
+  assert.equal(support.homeRecordExportShareKind('Delete my home record export'), 'DELETE');
+  assert.equal(support.homeRecordExportShareKind('Regenerate my home record export'), 'REGENERATE');
+  assert.equal(support.homeRecordExportShareKind('Make a fresh copy of my export'), 'REGENERATE');
+  assert.equal(support.homeRecordExportShareKind('Delete the share link for my export'), 'REVOKE');
+  for (const message of ['Delete my home record', 'Delete my warranties', 'Delete my material specs export', 'Regenerate my permit disclosure export', 'Delete my chat export']) assert.equal(support.homeRecordExportShareKind(message), null, message);
+  assert.equal(support.shareKindFromMessage(support.shareMessage('DELETE', 'Home record export · Oct 19')), 'DELETE');
+  assert.equal(support.shareKindFromMessage(support.shareMessage('REGENERATE', 'Home record export · Oct 19')), 'REGENERATE');
+  assert.equal(route('Delete my export'), OP);
+  assert.equal(route('Regenerate my home record export'), OP);
+});
+
+test('delete: reviewed first, removes nothing until confirmed, then deletes once and says it cannot be undone from Ask', async () => {
+  const w = installManage('CONTRIBUTOR', [row({ shareToken: 'tok', shareExpiresAt: day(5) })]);
+  try {
+    const proposal = await propose('Delete my export');
+    assert.equal(proposal.status, 'NEEDS_CONFIRMATION');
+    assert.equal(proposal.confirmation.title, 'Delete this export?');
+    assert.equal(field(proposal, 'The share link'), 'Stops working now');
+    assert.match(field(proposal, 'You can'), /cannot be undone from Ask/);
+    AskConfirmationSchema.parse(proposal.confirmation);
+    assert.equal(w.calls.length, 0);
+    const done = await confirmCapabilityInvoke(OP, ctx(proposal.parameters));
+    assert.deepEqual(w.calls, [['delete', { exportId: 'exp-1', userId: 'u1' }]]);
+    assert.equal(done.result.blocks[0].id, 'home-record-export-delete-exp-1');
+    assert.equal(done.result.blocks[0].title, 'Export deleted');
+    for (const block of done.result.blocks) AskPresentationBlockSchema.parse(block);
+  } finally { w.restore(); }
+});
+
+test('a fresh copy: same sections, the earlier export stays, nothing is made until confirmed, and the receipt points at the new one', async () => {
+  const w = installManage('CONTRIBUTOR', [row({ status: 'FAILED' })]);
+  try {
+    const proposal = await propose('Make a fresh copy of my export');
+    assert.equal(proposal.status, 'NEEDS_CONFIRMATION');
+    assert.equal(field(proposal, 'This export'), 'Stays as it is');
+    assert.equal(field(proposal, 'Kept for'), '30 days from now');
+    AskConfirmationSchema.parse(proposal.confirmation);
+    assert.equal(w.calls.length, 0);
+    const done = await confirmCapabilityInvoke(OP, ctx(proposal.parameters));
+    assert.deepEqual(w.calls, [['regenerate', { exportId: 'exp-1', userId: 'u1' }]]);
+    assert.equal(done.artifactId, 'new-1');
+    assert.equal(done.result.blocks[0].id, 'home-record-export-regenerate-new-1');
+    for (const block of done.result.blocks) AskPresentationBlockSchema.parse(block);
+  } finally { w.restore(); }
+});
+
+test('a fresh copy is refused while an export is being prepared, a viewer changes nothing, and a stale confirmation is rejected', async () => {
+  let w = installManage('CONTRIBUTOR', [row({ id: 'g', status: 'GENERATING' })]);
+  try {
+    assert.equal((await propose('Make a fresh copy of my export')).reasonCode, 'HOME_RECORD_EXPORT_REGENERATE_IN_FLIGHT');
+    assert.equal((await propose('Delete my export')).status, 'NEEDS_CONFIRMATION'); // a stuck export can still be deleted
+    assert.equal(w.calls.length, 0);
+  } finally { w.restore(); }
+  w = installManage('VIEWER', [row()]);
+  try {
+    const result = await propose('Delete my export');
+    assert.equal(result.reasonCode, 'ASK_PERMISSION_REQUIRED');
+  } finally { w.restore(); }
+  w = installManage('CONTRIBUTOR', [row()]);
+  try {
+    const proposal = await propose('Delete my export');
+    await assert.rejects(confirmCapabilityInvoke(OP, ctx({ ...proposal.parameters, exportShareContextVersion: 'old' })), (error) => error.code === 'ASK_CONTEXT_VERSION_CONFLICT');
+    await assert.rejects(confirmCapabilityInvoke(OP, ctx(proposal.parameters, 'VIEWER')), (error) => error.code === 'ASK_PERMISSION_REQUIRED');
+    assert.equal(w.calls.length, 0);
+  } finally { w.restore(); }
+  w = installManage('CONTRIBUTOR', []);
+  try { assert.equal((await propose('Delete my export')).reasonCode, 'HOME_RECORD_EXPORT_NONE_TO_CHANGE'); } finally { w.restore(); }
 });

@@ -54,19 +54,31 @@ export function parseExportSections(message: string): AskRecordSectionId[] | nul
 // Sharing an export by link (FRD v1.6). A share request names the export (or the home record export) and a share verb; "share my briefing" or
 // "share this property brief" are other operations' questions, so the word "export" or "home record" is required.
 export const HOME_RECORD_EXPORT_SHARE_ENTITY_TYPE = HOME_RECORD_EXPORT_ENTITY_TYPE;
-export const HOME_RECORD_EXPORT_SHARE_MESSAGES = { SHARE: 'Create a share link for this export', REVOKE: 'Stop sharing this export' } as const;
+export const HOME_RECORD_EXPORT_SHARE_MESSAGES = { SHARE: 'Create a share link for this export', REVOKE: 'Stop sharing this export', REGENERATE: 'Make a fresh copy of this export', DELETE: 'Delete this export' } as const;
 export type HomeRecordExportShareKind = keyof typeof HOME_RECORD_EXPORT_SHARE_MESSAGES;
-export const HOME_RECORD_EXPORT_SHARE_ACTION_IDS = { SHARE: 'home-record-export-share', REVOKE: 'home-record-export-unshare' } as const;
+export const HOME_RECORD_EXPORT_SHARE_ACTION_IDS = { SHARE: 'home-record-export-share', REVOKE: 'home-record-export-unshare', REGENERATE: 'home-record-export-regenerate', DELETE: 'home-record-export-delete' } as const;
 export const HOME_RECORD_SHARE_DEFAULT_DAYS = 14;
 export const HOME_RECORD_SHARE_MAX_DAYS = 30;
 
 const SHARE_OBJECT = /\b(?:export|home record|home report|record pdf|pdf)\b/i;
 const REVOKE_PATTERN = /\b(?:stop sharing|unshare|revoke|disable|turn off|cancel|remove|delete)\b.{0,30}\b(?:share|sharing|shared|link)\b|\bstop sharing\b/i;
 const SHARE_VERB = /\b(?:share|send)\b|\b(?:create|make|get|generate)\b.{0,24}\b(?:share|shareable|sharing)\b.{0,12}\blink\b|\blink\b.{0,24}\b(?:to|for)\b.{0,16}\b(?:share|send)\b/i;
+const MANAGE_OBJECT = /\b(?:(?:home record|home report|report pack|record)\s+(?:export|pack)|(?:my|our|the|this|that|an?|old|latest|last)\s+(?:\w+\s+)?(?:export|report pack)s?)\b/i;
+const OTHER_EXPORT = /\b(?:material|spec|permit|disclosure|inspection|claim|briefing|brief|chat|conversation|account)\b/i;
+const SHARE_OBJECT_ONLY_LINK = /\b(?:share|sharing|shared|link)\b/i;
+const MANAGE_DELETE = /\b(?:delete|remove|erase|get rid of|trash)\b/i;
+const MANAGE_REGENERATE = /\b(?:regenerate|re-?generate|redo|re-?create|rebuild|(?:make|create|get|generate)\b.{0,12}\b(?:a\s+)?(?:fresh|new|updated)\s+(?:copy|version|one))\b/i;
 const NOT_OTHER_SHARE = /\b(?:briefing|property brief|brief)\b/i;
 /** The kind of share request a message is, or null: "share my home record export", "stop sharing my export". */
 export function homeRecordExportShareKind(message: string): HomeRecordExportShareKind | null {
-  if (NOT_OTHER_SHARE.test(message) || !SHARE_OBJECT.test(message)) return null;
+  if (NOT_OTHER_SHARE.test(message)) return null;
+  // Fresh copy and delete (FRD v1.506) need the export itself named: "delete my home record" is not this, and other exports (material specs,
+  // permit disclosure) are other operations'.
+  if (MANAGE_OBJECT.test(message) && !OTHER_EXPORT.test(message) && !SHARE_OBJECT_ONLY_LINK.test(message)) {
+    if (MANAGE_DELETE.test(message) && !REVOKE_PATTERN.test(message)) return 'DELETE';
+    if (MANAGE_REGENERATE.test(message)) return 'REGENERATE';
+  }
+  if (!SHARE_OBJECT.test(message)) return null;
   if (REVOKE_PATTERN.test(message)) return 'REVOKE';
   return SHARE_VERB.test(message) ? 'SHARE' : null;
 }

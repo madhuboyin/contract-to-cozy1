@@ -269,7 +269,7 @@ const OPERATION_ACTION_IDS: Readonly<Partial<Record<AskOperationId, ReadonlySet<
   HOME_RECORD_EXPORT: new Set(['home-record-export-status']),
   // Share an export by link, or stop sharing it (FRD v1.6). Confirmation-gated; the receipt and the unavailable answers offer the status check.
   HOME_RECORD_EXPORT_SHARE: new Set(['home-record-export-status']),
-  HOME_RECORD_EXPORT_STATUS: new Set(['home-record-export-status', 'home-record-export-start']),
+  HOME_RECORD_EXPORT_STATUS: new Set(['home-record-export-status', 'home-record-export-start', 'home-record-export-share', 'home-record-export-unshare', 'home-record-export-regenerate', 'home-record-export-delete']),
   WORK_OVERVIEW: new Set(),
   SAVED_RESULTS: new Set(),
   NOTIFICATIONS_OVERVIEW: new Set(),

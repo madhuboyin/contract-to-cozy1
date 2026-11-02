@@ -225,14 +225,20 @@ export function homeRecordExportStatusFromRows(input: readonly ExportRow[], now:
     const status = STATUS_COPY[row.status] ?? { label: row.status.toLowerCase(), line: '' };
     const count = includedCount(row.sections);
     const shared = shareIsActive({ shareToken: row.shareToken ?? null, shareRevokedAt: row.shareRevokedAt ?? null, shareExpiresAt: row.shareExpiresAt ?? null }, now);
+    const title = `Home record export · ${humanDate(row.requestedAt) ?? 'recent'}`;
     return {
-      id: row.id, title: `Home record export · ${humanDate(row.requestedAt) ?? 'recent'}`, description: row.status === 'FAILED' ? (row.errorMessage ?? 'The export could not be generated.') : null,
+      id: row.id, title, description: row.status === 'FAILED' ? (row.errorMessage ?? 'The export could not be generated.') : null,
       status: status.label, entityType: HOME_RECORD_EXPORT_ENTITY_TYPE, href: null,
       meta: [count != null ? `${count} ${count === 1 ? 'section' : 'sections'}` : null, row.status === 'READY' && row.expiresAt ? `Download until ${humanDate(row.expiresAt)}` : null, shared ? `Shared until ${humanDate(row.shareExpiresAt)}` : null].filter((value): value is string => Boolean(value)),
-      // Share and Stop sharing act on this export and confirm first; only someone who can share is offered them, and only for a file that is ready.
-      actions: canShare && row.status === 'READY' ? [
-        { id: HOME_RECORD_EXPORT_SHARE_ACTION_IDS.SHARE, label: shared ? 'Replace the link' : 'Share a link', message: shareMessage('SHARE', `Home record export · ${humanDate(row.requestedAt) ?? 'recent'}`), interactionType: 'MUTATE_RECORD' as const, operationId: 'HOME_RECORD_EXPORT_SHARE', style: 'SECONDARY' as const },
-        ...(shared ? [{ id: HOME_RECORD_EXPORT_SHARE_ACTION_IDS.REVOKE, label: 'Stop sharing', message: shareMessage('REVOKE', `Home record export · ${humanDate(row.requestedAt) ?? 'recent'}`), interactionType: 'MUTATE_RECORD' as const, operationId: 'HOME_RECORD_EXPORT_SHARE', style: 'QUIET' as const }] : []),
+      // Share, Stop sharing, Make a fresh copy and Delete act on this export and confirm first; only someone who can change exports is offered
+      // them. Sharing needs a file that is ready; a fresh copy needs nothing being prepared; delete is offered for any export.
+      actions: canShare ? [
+        ...(row.status === 'READY' ? [
+          { id: HOME_RECORD_EXPORT_SHARE_ACTION_IDS.SHARE, label: shared ? 'Replace the link' : 'Share a link', message: shareMessage('SHARE', title), interactionType: 'MUTATE_RECORD' as const, operationId: 'HOME_RECORD_EXPORT_SHARE', style: 'SECONDARY' as const },
+          ...(shared ? [{ id: HOME_RECORD_EXPORT_SHARE_ACTION_IDS.REVOKE, label: 'Stop sharing', message: shareMessage('REVOKE', title), interactionType: 'MUTATE_RECORD' as const, operationId: 'HOME_RECORD_EXPORT_SHARE', style: 'QUIET' as const }] : []),
+        ] : []),
+        ...(row.status !== 'PENDING' && row.status !== 'GENERATING' ? [{ id: HOME_RECORD_EXPORT_SHARE_ACTION_IDS.REGENERATE, label: 'Make a fresh copy', message: shareMessage('REGENERATE', title), interactionType: 'MUTATE_RECORD' as const, operationId: 'HOME_RECORD_EXPORT_SHARE', style: 'QUIET' as const }] : []),
+        { id: HOME_RECORD_EXPORT_SHARE_ACTION_IDS.DELETE, label: 'Delete', message: shareMessage('DELETE', title), interactionType: 'MUTATE_RECORD' as const, operationId: 'HOME_RECORD_EXPORT_SHARE', style: 'QUIET' as const },
       ] : [],
     };
   });

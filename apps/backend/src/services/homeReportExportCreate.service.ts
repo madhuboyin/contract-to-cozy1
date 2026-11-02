@@ -26,6 +26,8 @@ export async function createHomeReportExportRecord(input: {
   type?: string;
   sections?: unknown;
   locale?: string;
+  /** Set when this export is a fresh copy of an earlier one; the earlier one stays. */
+  regeneratedFromId?: string;
 }): Promise<CreateHomeReportExportResult> {
   const { userId, propertyId } = input;
   const type = input.type ?? 'HOME_REPORT_PACK';
@@ -44,12 +46,13 @@ export async function createHomeReportExportRecord(input: {
       userId, propertyId, type: type as HomeReportExportType, status: 'PENDING', sections: selection as unknown as object, templateVersion: 1, dataVersion: 1,
       timezone: 'America/New_York', locale: input.locale || 'en-US', // Kept for 30 days (a shared link has its own, shorter default).
       expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      ...(input.regeneratedFromId ? { regeneratedFromId: input.regeneratedFromId } : {}),
     },
   });
-  await prisma.homeReportExportEvent.create({ data: { reportId: created.id, type: 'CREATED' } });
+  await prisma.homeReportExportEvent.create({ data: { reportId: created.id, type: 'CREATED', ...(input.regeneratedFromId ? { meta: { regeneratedFromId: input.regeneratedFromId } } : {}) } });
   analyticsEmitter.track({
     eventType: AnalyticsEvent.ACTION_COMPLETED, userId, propertyId, moduleKey: AnalyticsModule.DASHBOARD, featureKey: AnalyticsFeature.HOME_REPORT_EXPORT,
-    metadataJson: { actionType: 'create_export', type: created.type },
+    metadataJson: input.regeneratedFromId ? { actionType: 'regenerate', regeneratedFromId: input.regeneratedFromId } : { actionType: 'create_export', type: created.type },
   });
   return { kind: 'CREATED', export: created, selection, propertyContext };
 }
