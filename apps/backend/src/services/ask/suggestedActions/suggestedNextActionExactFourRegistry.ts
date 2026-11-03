@@ -163,6 +163,8 @@ export const COOLDOWN_MS = {
   unrelatedOpportunityOffer: 7 * 24 * HOUR_MS,
   /** After a missing-profile chip is OFFERED. */
   profileOffer: 24 * HOUR_MS,
+  /** Recurring hub reads (audit F2): re-offer window from the later of the last offer and the last selection, in every slot class. */
+  recurringHubReoffer: 24 * HOUR_MS,
   /** After an explicit "Not now". "Not relevant" has no duration: it lasts until the material-state fingerprint changes. */
   notNow: 30 * 24 * HOUR_MS,
 } as const;

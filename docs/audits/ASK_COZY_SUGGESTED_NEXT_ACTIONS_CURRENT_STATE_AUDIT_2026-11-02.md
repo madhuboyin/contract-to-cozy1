@@ -9,10 +9,10 @@
 
 Ask Cozy's Suggested Next Actions implementation is substantially healthier than the earlier audit described. The earlier two P0 entity-governance failures are resolved in commit `11102124`: property-wide outcomes have an explicit allowlist, HVAC continuation recipes carry an active decision-thread identity, and `DECISION_THREAD` and `GUIDANCE_JOURNEY` are present in the freshness matrix. The focused entity-eligibility suite passes.
 
-The current system nevertheless has eleven findings (F1-F5, F9 and F10 are P1; F6-F8 and F11 are P2). F10 is fixed and pushed; F1, F3-F11 are fixed in the working tree (F10 and the earlier F4/F9/F11 work are pushed); only F2 remains open, blocked on an owner ruling:
+The current system nevertheless has eleven findings (F1-F5, F9 and F10 are P1; F6-F8 and F11 are P2). F10 is fixed and pushed; All eleven findings are fixed (F2 per the owner ruling below); F1, F3-F8 and F2 are in the working tree, the rest pushed:
 
 1. **F1 (P1, fixed in working tree)** — The continuation-coverage completion gate is red. The operation registry changed without updating its reviewed hash, and `COMMUNITY_UPDATES` is the sole remaining `MIGRATION_REQUIRED` operation.
-2. **F2 (P1, OPEN — owner decision)** — Completion semantics suppress most read/navigation outcomes after one successful use. Of 95 registered outcomes on read, status, decision-analysis, and guidance operations, 84 are non-repeatable. Changing this is a product-policy ruling, not a bug fix.
+2. **F2 (P1, fixed in working tree per owner ruling)** — Completion semantics suppress most read/navigation outcomes after one successful use. Of 95 registered outcomes on read, status, decision-analysis, and guidance operations, 84 are non-repeatable. Changing this is a product-policy ruling, not a bug fix.
 3. **F3 (P1, fixed in working tree)** — Ten continuation recipes target an operation with a higher role floor than their source operation. `QUOTE_COMPARISON_REVIEW` loses both of its domain recipes for a viewer.
 4. **F4 (P1, fixed in working tree)** — State-aware gating was limited to `HOME_ACTIONS`. Multiple operations can offer `MAINTENANCE_FORECAST` on a property with no verified forecastable system, producing a `NOT_APPLICABLE` answer with no recovery chip.
 5. **F5 (P1, fixed in working tree)** — Presentation ownership is broader than the reviewed contextual-operation registry. A single receipt button can turn into an exact-four exemption.
@@ -154,7 +154,18 @@ Examples include `MAINTENANCE_STATUS:REVIEW_MAINTENANCE_STATUS`, `HOME_ACTIONS:R
 
 A user who follows a hub or list continuation once may never see that semantically identical navigation action again on the same property, even after the underlying records materially change. This is especially risky for recurring home-management surfaces such as maintenance, work, documents, buyer readiness, and status boards.
 
-**Status: OPEN, deliberately not changed.** This needs an owner ruling on which outcome classes may repeat; the recommended option (recurring read/list/status outcomes repeatable, mutations/captures/one-time steps/decision analyses one-shot) was put to the owner and not answered.
+**Owner ruling (2026-11-02): reviewed recurring hub reads with a 24-hour re-offer cooldown.** Recurring hub/list/status outcomes may be offered again; mutations, captures, decision analyses and guided workflow steps stay one-shot; "Not now" / "Not relevant" behavior is unchanged.
+
+**Fix (working tree).**
+
+- `RECURRING_HUB_OUTCOMES` (`suggestedNextActionRegistry.ts`) holds the 15 reviewed hubs, separate from `REPEATABLE_OUTCOMES`: `HOME_ACTIONS` (`REVIEW_HOME_ACTIONS`, `REVIEW_URGENT_HOME_ACTIONS`), `MAINTENANCE_STATUS`, `DOCUMENT_LOOKUP`, `GUIDANCE_JOURNEYS_LIST`, `OWNERSHIP_COSTS`, `BUYER_PLAN_STATUS`, `HOME_EVENT_RADAR_FEED`, `INSPECTION_FINDINGS`, `INVENTORY_LOOKUP` (`REVIEW_HOME_INVENTORY`), `WARRANTY_LOOKUP` (`REVIEW_WARRANTIES`), `HOME_TIMELINE_EVENTS`, `DIY_PROJECTS`, `HOME_STATUS_BOARD`, `WORK_OVERVIEW`. `validateSuggestedNextActionRegistry` requires each to be registered, a `RECORD_QUERY`/`STATUS_SUMMARY` operation, property-scoped, standard or material-decision (never a boundary), not record-bound unless a reviewed property-wide outcome, and not also in `REPEATABLE_OUTCOMES`.
+- Completion no longer retires a hub (`isCompletionRepeatable`, used by both the durable lifecycle and the session eligibility rule).
+- The window: `loadLifecycleState` returns `hubCooldownKeys` for hub rows whose later of `lastOfferedAt` and `selectedAt` is within `COOLDOWN_MS.recurringHubReoffer` (24 h), across sessions. The exact-four policy applies it to EVERY slot class, including `CONTINUE_WORK`, so it does not inherit `COOLDOWN_EXEMPT_SLOT_CLASSES`. Only shown offers and selections write those timestamps, so a nominated-but-suppressed candidate never resets or extends the window (covered by a finalizer test that checks no offer is recorded).
+- Bypass: a result-owned return-to-list right after a successful mutation skips the window. It is judged from the trusted current operation (a command that registers the hub as its own continuation, destination a read), not a candidate claim (`isTrustedPostMutationReturn`).
+- Independent safeguards unchanged: current-outcome exclusion, the recent-prompt rule, dismissals.
+- Correction: earlier drafts of this audit and advice cited a "3-turn re-offer cooldown" (`REOFFER_COOLDOWN_TURNS`); that does not exist. The 24-hour hub window is the new, only re-offer control for these outcomes.
+- Tests: `recurringHubOutcomes.test.js`, additions to `askSuggestedActionLifecycle.test.js` and `exactFourActivation.test.js`.
+- Not live-verified; no schema change was needed (`lastOfferedAt` and `selectedAt` already exist).
 
 **Assessment**
 

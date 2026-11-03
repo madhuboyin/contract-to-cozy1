@@ -315,3 +315,36 @@ test('selection and completion report success only when exactly one row was upda
   assert.equal(await svc.recordSuggestedActionCompleted('u1', 'p1', id(), NOW, failing.db), false);
   assert.equal(count('COMPLETED'), 1, 'a thrown failure is not counted as a missing row');
 });
+
+// ---- recurring hub reads (audit F2, owner ruling 2026-11-02) ---------------------------------------------------------------------------------
+
+const hubIdentity = { operationId: 'MAINTENANCE_STATUS', outcomeKey: 'REVIEW_MAINTENANCE_STATUS', entityType: null, entityId: null };
+const hubKey = () => reg.lifecycleKey(hubIdentity);
+const load = (db, now) => svc.loadLifecycleState({ userId: 'u1', propertyId: 'p1', now }, db);
+
+test('RECURRING HUB: completing a hub does not retire it; a 24-hour cooldown from the later of last offer and selection holds it in every class', async () => {
+  const { db } = fakeDb();
+  await svc.recordSuggestedActionOffers({ userId: 'u1', propertyId: 'p1', now: NOW, offers: [{ ...hubIdentity, slotClass: 'CONTINUE_WORK', currentResultOwnership: true }] }, db);
+  await svc.recordSuggestedActionSelected('u1', 'p1', hubIdentity, later(2 * HOUR), db);
+  await svc.recordSuggestedActionCompleted('u1', 'p1', hubIdentity, later(2 * HOUR), db);
+
+  const soon = await load(db, later(3 * HOUR));
+  assert.ok(soon.hubCooldownKeys.has(hubKey()), 'inside the window');
+  assert.ok(!soon.completedKeys.has(hubKey()), 'completion does not retire a recurring hub');
+  assert.ok(!soon.cooldownKeys.has(hubKey()), 'CONTINUE_WORK is cooldown-exempt; the hub window is a separate set');
+
+  const edgeInside = await load(db, later(2 * HOUR + 24 * HOUR - 1));
+  const edgeOutside = await load(db, later(2 * HOUR + 24 * HOUR + 1));
+  assert.ok(edgeInside.hubCooldownKeys.has(hubKey()), 'selection at +2h extends the window past the +0h offer');
+  assert.ok(!edgeOutside.hubCooldownKeys.has(hubKey()), 'and it ends 24h after the LATER timestamp');
+});
+
+test('RECURRING HUB: a non-hub completed outcome is still retired, and a hub is not suppressed by an old offer alone', async () => {
+  const { db } = fakeDb();
+  const mutation = { operationId: 'INVENTORY_ITEM_CORRECT', outcomeKey: 'ADD_BRAND', entityType: 'INVENTORY_ITEM', entityId: 'item-1' };
+  await svc.recordSuggestedActionOffers({ userId: 'u1', propertyId: 'p1', now: NOW, offers: [{ ...mutation, slotClass: 'EXACT_RECORD', currentResultOwnership: true }, { ...hubIdentity, slotClass: 'CONTINUE_WORK', currentResultOwnership: true }] }, db);
+  await svc.recordSuggestedActionCompleted('u1', 'p1', mutation, later(HOUR), db);
+  const state = await load(db, later(3 * DAY));
+  assert.ok(state.completedKeys.has(reg.lifecycleKey(mutation)), 'one-shot mutation stays retired');
+  assert.ok(!state.hubCooldownKeys.has(hubKey()), 'three days later the hub is offerable again');
+});

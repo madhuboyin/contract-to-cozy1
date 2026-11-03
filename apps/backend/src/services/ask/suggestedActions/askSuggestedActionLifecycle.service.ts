@@ -14,7 +14,7 @@ import { prisma } from '../../../lib/prisma';
 import { COOLDOWN_MS, SUPPORTED_DISMISSALS_PER_PROPERTY, lifecycleKey, offerCooldownMs, type LifecycleIdentity, type SuggestedNextActionSlotClass } from './suggestedNextActionExactFourRegistry';
 import type { ExactFourEvaluation } from './suggestedNextActionExactFourPolicy';
 import type { SelectedCandidate } from './suggestedNextActionPolicy';
-import { isRepeatableOutcome } from './suggestedNextActionRegistry';
+import { isCompletionRepeatable, isRecurringHubOutcome } from './suggestedNextActionRegistry';
 
 export type LifecycleDismissalReason = 'NOT_NOW' | 'NOT_RELEVANT';
 
@@ -24,6 +24,7 @@ export interface LifecycleRow {
   entityType: string;
   entityId: string;
   lastOfferedAt?: Date;
+  selectedAt?: Date | null;
   completedAt: Date | null;
   dismissalReason: LifecycleDismissalReason | null;
   suppressedUntil: Date | null;
@@ -47,7 +48,17 @@ export function isCooldownOrDismissalActive(row: LifecycleRow, now: Date, curren
 
 /** A completed outcome is suppressed in every slot class unless the operation registry declares it repeatable (pure). */
 export function isCompletionSuppressing(row: LifecycleRow): boolean {
-  return row.completedAt !== null && !isRepeatableOutcome(row.operationId, row.outcomeKey);
+  return row.completedAt !== null && !isCompletionRepeatable(row.operationId, row.outcomeKey);
+}
+
+/**
+ * Recurring hub re-offer window (pure): true while the later of the last offer and the last selection is within 24 hours. Only offers that
+ * were actually shown or selections move either timestamp, so a nominated-but-suppressed candidate never resets or extends the window.
+ */
+export function isRecurringHubCooldownActive(row: LifecycleRow, now: Date): boolean {
+  if (!isRecurringHubOutcome(row.operationId, row.outcomeKey)) return false;
+  const last = Math.max(row.lastOfferedAt?.getTime() ?? Number.NEGATIVE_INFINITY, row.selectedAt?.getTime() ?? Number.NEGATIVE_INFINITY);
+  return last + COOLDOWN_MS.recurringHubReoffer > now.getTime();
 }
 
 /** Either reason (pure). */
@@ -247,6 +258,8 @@ export interface LifecycleState {
   cooldownKeys: Set<string>;
   /** Completed, non-repeatable outcomes. The policy applies these to EVERY class. */
   completedKeys: Set<string>;
+  /** Recurring hubs inside their 24-hour re-offer window. The policy applies these to EVERY class (including cooldown-exempt ones). */
+  hubCooldownKeys?: Set<string>;
   /** Last offer time (ms) for each returned row, for starter rotation. */
   lastOfferedAtMs: Map<string, number>;
   ok: boolean;
@@ -260,22 +273,29 @@ export async function loadLifecycleState(input: LoadLifecycleStateInput, db: Lif
   const empty: LifecycleState = { cooldownKeys: new Set(), completedKeys: new Set(), lastOfferedAtMs: new Map(), ok: false };
   try {
     const rotation = (input.rotationIdentities ?? []).map((identity) => scope(identity));
+    const hubSince = new Date(input.now.getTime() - COOLDOWN_MS.recurringHubReoffer);
     const rows = await db.askSuggestedActionLifecycle.findMany({
       where: {
         userId: input.userId, propertyId: input.propertyId,
-        OR: [{ suppressedUntil: { gt: input.now } }, { dismissalReason: 'NOT_RELEVANT' }, { completedAt: { not: null } }, ...rotation],
+        OR: [
+          { suppressedUntil: { gt: input.now } }, { dismissalReason: 'NOT_RELEVANT' }, { completedAt: { not: null } },
+          // Rows offered or selected inside the recurring-hub window (filtered to hub outcomes below).
+          { lastOfferedAt: { gt: hubSince } }, { selectedAt: { gt: hubSince } },
+          ...rotation,
+        ],
       },
       select: {
-        operationId: true, outcomeKey: true, entityType: true, entityId: true, lastOfferedAt: true, completedAt: true, dismissalReason: true,
+        operationId: true, outcomeKey: true, entityType: true, entityId: true, lastOfferedAt: true, selectedAt: true, completedAt: true, dismissalReason: true,
         suppressedUntil: true, contextFingerprint: true,
       },
     });
-    const state: LifecycleState = { cooldownKeys: new Set(), completedKeys: new Set(), lastOfferedAtMs: new Map(), ok: true };
+    const state: LifecycleState = { cooldownKeys: new Set(), completedKeys: new Set(), hubCooldownKeys: new Set(), lastOfferedAtMs: new Map(), ok: true };
     for (const row of rows) {
       const key = lifecycleKey({ operationId: row.operationId, outcomeKey: row.outcomeKey, entityType: row.entityType, entityId: row.entityId });
       if (row.lastOfferedAt) state.lastOfferedAtMs.set(key, row.lastOfferedAt.getTime());
       if (isCooldownOrDismissalActive(row, input.now, input.currentFingerprints?.get(key) ?? null)) state.cooldownKeys.add(key);
       if (isCompletionSuppressing(row)) state.completedKeys.add(key);
+      if (isRecurringHubCooldownActive(row, input.now)) state.hubCooldownKeys!.add(key);
     }
     return state;
   } catch (error) {

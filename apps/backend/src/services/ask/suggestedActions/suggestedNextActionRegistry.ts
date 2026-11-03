@@ -277,6 +277,40 @@ export function isRepeatableOutcome(operationId: string, outcomeKey: string): bo
 }
 
 /**
+ * Recurring hub reads (owner ruling 2026-11-02, audit F2): read/list/status destinations a homeowner legitimately returns to as the
+ * underlying records change. Completing one does NOT retire it; instead a 24-hour re-offer cooldown (`COOLDOWN_MS.recurringHubReoffer`,
+ * measured from the later of the last offer and the last selection, across sessions, in every slot class) keeps it from repeating.
+ * Deliberately separate from `REPEATABLE_OUTCOMES`: those have no cooldown. Mutations, captures, decision analyses and guided steps are
+ * never listed. Additions need explicit review and must pass `validateSuggestedNextActionRegistry`.
+ */
+export const RECURRING_HUB_OUTCOMES: ReadonlySet<string> = new Set<string>([
+  'HOME_ACTIONS:REVIEW_HOME_ACTIONS',
+  'HOME_ACTIONS:REVIEW_URGENT_HOME_ACTIONS',
+  'MAINTENANCE_STATUS:REVIEW_MAINTENANCE_STATUS',
+  'DOCUMENT_LOOKUP:REVIEW_DOCUMENTS',
+  'GUIDANCE_JOURNEYS_LIST:REVIEW_GUIDANCE_JOURNEYS',
+  'OWNERSHIP_COSTS:REVIEW_OWNERSHIP_COSTS',
+  'BUYER_PLAN_STATUS:REVIEW_BUYER_PLAN',
+  'HOME_EVENT_RADAR_FEED:REVIEW_RADAR_FEED',
+  'INSPECTION_FINDINGS:REVIEW_INSPECTION_FINDINGS',
+  'INVENTORY_LOOKUP:REVIEW_HOME_INVENTORY',
+  'WARRANTY_LOOKUP:REVIEW_WARRANTIES',
+  'HOME_TIMELINE_EVENTS:REVIEW_HOME_TIMELINE',
+  'DIY_PROJECTS:REVIEW_DIY_PROJECTS',
+  'HOME_STATUS_BOARD:REVIEW_STATUS_BOARD',
+  'WORK_OVERVIEW:REVIEW_WORK',
+]);
+
+export function isRecurringHubOutcome(operationId: string, outcomeKey: string): boolean {
+  return RECURRING_HUB_OUTCOMES.has(`${operationId}:${outcomeKey}`);
+}
+
+/** Completion does not retire the outcome: registry-repeatable, or a recurring hub (which is governed by the re-offer cooldown instead). */
+export function isCompletionRepeatable(operationId: string, outcomeKey: string): boolean {
+  return isRepeatableOutcome(operationId, outcomeKey) || isRecurringHubOutcome(operationId, outcomeKey);
+}
+
+/**
  * Outcomes whose identical stored prompt MAY be offered again even though it was asked in the recent-history window (owner decision
  * D-O10). This is deliberately a SEPARATE property from `REPEATABLE_OUTCOMES`: repeatable completion ("this may be done again") and
  * recent-prompt deduplication ("this exact text was just asked") are different concepts, and tying the second to the first would also
@@ -422,6 +456,17 @@ export function validateSuggestedNextActionRegistry(): string[] {
   for (const key of PROPERTY_WIDE_OUTCOMES) {
     const [operationId, outcomeKey] = key.split(':');
     if (!operationId || !outcomeKey || !isRegisteredOutcome(operationId, outcomeKey)) problems.push(`property-wide: ${key} is not a registered outcome`);
+  }
+  const HUB_FAMILIES = new Set(['RECORD_QUERY', 'STATUS_SUMMARY']);
+  for (const key of RECURRING_HUB_OUTCOMES) {
+    const [operationId, outcomeKey] = key.split(':');
+    const definition = operationId ? ASK_OPERATION_DEFINITIONS[operationId as AskOperationId] : undefined;
+    if (!operationId || !outcomeKey || !definition || !isRegisteredOutcome(operationId, outcomeKey)) { problems.push(`recurring hub: ${key} is not a registered outcome`); continue; }
+    if (!HUB_FAMILIES.has(definition.family)) problems.push(`recurring hub: ${key} must be a read-only RECORD_QUERY or STATUS_SUMMARY operation (found ${definition.family})`);
+    if (!definition.requiresProperty) problems.push(`recurring hub: ${key} must be property-scoped`);
+    if (definition.safetyClass !== 'STANDARD' && definition.safetyClass !== 'MATERIAL_DECISION') problems.push(`recurring hub: ${key} must not be a boundary or restricted operation`);
+    if (requiredAskTargetEntity(operationId as AskOperationId) && !isPropertyWideOutcome(operationId, outcomeKey)) problems.push(`recurring hub: ${key} targets one record and is not a reviewed property-wide outcome`);
+    if (REPEATABLE_OUTCOMES.has(key)) problems.push(`recurring hub: ${key} must not also be in REPEATABLE_OUTCOMES (that set has no cooldown)`);
   }
   for (const key of REPEATABLE_OUTCOMES) {
     const [operationId, outcomeKey] = key.split(':');

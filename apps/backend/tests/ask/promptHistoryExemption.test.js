@@ -105,7 +105,7 @@ test('registry validation: an exempt entry must be a registered outcome of a rea
 
 test('the exemption is consulted only by the prompt-history rule: completed semantic history and repeatability code paths are untouched', () => {
   const source = fs.readFileSync(path.join(__dirname, '../../src/services/ask/suggestedActions/suggestedNextActionEligibility.ts'), 'utf8');
-  assert.ok(/ctx\.completedSemanticKeyHashes\.has\(hash\) && !isRepeatableOutcome\(operationId, candidate\.outcomeKey\)/.test(source), 'completion still keys on repeatability');
+  assert.ok(/ctx\.completedSemanticKeyHashes\.has\(hash\) && !isCompletionRepeatable\(operationId, candidate\.outcomeKey\)/.test(source), 'completion keys on repeatability (registry-repeatable or a recurring hub governed by its own cooldown)');
   assert.ok(/ctx\.askedMessageKeys\.has\(ctx\.messageKey\(candidate\.message\)\) && !isPromptHistoryExemptOutcome\(operationId, candidate\.outcomeKey\)/.test(source), 'prompt history keys on the separate exemption');
   assert.equal((source.match(/isPromptHistoryExemptOutcome\(/g) ?? []).length, 1, 'used in exactly one rule');
 });

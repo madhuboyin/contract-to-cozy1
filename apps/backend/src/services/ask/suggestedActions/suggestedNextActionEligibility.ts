@@ -8,7 +8,7 @@ import { candidateIdentityFields } from './suggestedNextActionCandidate';
 import { suggestedNextActionSemanticKeyHash } from './suggestedNextActionIdentity';
 import { ASK_OPERATION_DEFINITIONS, type AskOperationId } from '../askOperationRegistry';
 import { currentOperationOwnsOutcome } from './suggestedNextActionExactFourRegistry';
-import { DOMAIN_FRESHNESS_MATRIX, isPromptHistoryExemptOutcome, isPropertyWideOutcome, isRegisteredOutcome, isRepeatableOutcome, missingFactCaptureFor } from './suggestedNextActionRegistry';
+import { DOMAIN_FRESHNESS_MATRIX, isPromptHistoryExemptOutcome, isPropertyWideOutcome, isRegisteredOutcome, isCompletionRepeatable, missingFactCaptureFor } from './suggestedNextActionRegistry';
 
 export type SuggestedNextActionMode = 'NORMAL' | 'SAFE_RECOVERY_ONLY';
 
@@ -77,12 +77,25 @@ const AVAILABILITY_RULE: Record<AskOperationUnavailableReason, { rule: Eligibili
  * continuation, and the destination is a read/status operation reached by plain navigation. Starters keep their separate exemption.
  */
 function isPostMutationReturnToRead(candidate: SuggestedNextActionCandidate): boolean {
-  if (candidate.source !== 'OPERATION_RESULT' || candidate.interactionType !== 'CONVERSATION_CONTINUE' || !candidate.sourceOperationId) return false;
-  const source = ASK_OPERATION_DEFINITIONS[candidate.sourceOperationId as AskOperationId];
+  if (candidate.source !== 'OPERATION_RESULT' || !candidate.sourceOperationId) return false;
+  return isTrustedPostMutationReturn(candidate.sourceOperationId, candidate);
+}
+
+/**
+ * The same relationship judged against a TRUSTED source operation (the finalizer's own current operation, not a candidate claim):
+ * the operation that just ran is a command that registers the destination outcome as its own result-owned continuation, and the
+ * destination is a read/status operation reached by plain navigation. Also lets a recurring hub bypass its re-offer cooldown once.
+ */
+export function isTrustedPostMutationReturn(
+  currentOperationId: string | null | undefined,
+  candidate: Pick<SuggestedNextActionCandidate, 'operationId' | 'outcomeKey' | 'interactionType'>,
+): boolean {
+  if (!currentOperationId || candidate.interactionType !== 'CONVERSATION_CONTINUE') return false;
+  const source = ASK_OPERATION_DEFINITIONS[currentOperationId as AskOperationId];
   const destination = ASK_OPERATION_DEFINITIONS[candidate.operationId as AskOperationId];
   if (!source || !destination || source.family !== 'COMMAND') return false;
   if (destination.family !== 'RECORD_QUERY' && destination.family !== 'STATUS_SUMMARY') return false;
-  return currentOperationOwnsOutcome(candidate.sourceOperationId, candidate);
+  return currentOperationOwnsOutcome(currentOperationId, candidate);
 }
 
 /** Runs the plan §6 rules in order and returns the first failing verdict, or ELIGIBLE / NEEDS_CONTEXT. */
@@ -142,7 +155,7 @@ export function evaluateSuggestedNextActionEligibility(candidate: SuggestedNextA
   // 10. History: the outcome the source just produced, an equivalent outcome already completed, or an equivalent prompt already asked.
   const hash = suggestedNextActionSemanticKeyHash(candidateIdentityFields(candidate));
   if (ctx.currentOutcomeKeyHashes.has(hash)) return suppressed('HISTORY', 'CURRENT_OUTCOME');
-  if (ctx.completedSemanticKeyHashes.has(hash) && !isRepeatableOutcome(operationId, candidate.outcomeKey)) return suppressed('HISTORY', 'EQUIVALENT_COMPLETED');
+  if (ctx.completedSemanticKeyHashes.has(hash) && !isCompletionRepeatable(operationId, candidate.outcomeKey)) return suppressed('HISTORY', 'EQUIVALENT_COMPLETED');
   // A recently asked identical prompt is suppressed unless this outcome is explicitly registered as prompt-history exempt (starters only,
   // D-O10). Repeatable COMPLETION is a different concept and does not exempt a prompt.
   if (ctx.askedMessageKeys.has(ctx.messageKey(candidate.message)) && !isPromptHistoryExemptOutcome(operationId, candidate.outcomeKey)

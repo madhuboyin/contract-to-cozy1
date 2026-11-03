@@ -8,6 +8,7 @@ import {
   type PolicyDiagnostics, type PolicyInput, type PolicyResult, type SelectedCandidate,
 } from './suggestedNextActionPolicy';
 import { compareRanked } from './suggestedNextActionRanking';
+import { isTrustedPostMutationReturn } from './suggestedNextActionEligibility';
 import {
   COOLDOWN_EXEMPT_SLOT_CLASSES, EXACT_FOUR, lifecycleKey, EXACT_FOUR_SHORTAGE_REASONS, STARTER_ROTATION_MS, currentOperationOwnsOutcome, evaluateSignalClaims, grantForProducer, OPPORTUNITY_SLOT_CLASSES, SUGGESTED_NEXT_ACTION_EXACT_FOUR_POLICY_VERSION,
   SUGGESTED_NEXT_ACTION_SLOT_CLASSES, PRODUCER_SLOT_GRANTS, REGISTERED_WHY_NOW_REASONS, resolveGrantedSlotClass,
@@ -42,6 +43,12 @@ export interface ExactFourInput extends PolicyInput {
    * this applies to EVERY slot class, including the cooldown-exempt ones: a completed action is not offered again.
    */
   completedLifecycleKeys?: ReadonlySet<string>;
+  /**
+   * Recurring hub lifecycle keys inside their 24-hour re-offer window (`loadLifecycleState().hubCooldownKeys`). Applies to EVERY slot class,
+   * including CONTINUE_WORK: it deliberately does not inherit COOLDOWN_EXEMPT_SLOT_CLASSES. The single bypass is a result-owned
+   * return-to-list continuation right after a successful mutation, judged against the trusted `currentOperationId`.
+   */
+  hubCooldownLifecycleKeys?: ReadonlySet<string>;
   /** Last offer time per lifecycle key (`loadLifecycleState().lastOfferedAtMs`), used only to rotate curated starters. */
   starterLastOfferedAtMs?: ReadonlyMap<string, number>;
   /** Clock for the starter rotation window; the policy itself never reads one. Without it no rotation diagnostic is produced. */
@@ -144,6 +151,7 @@ export function selectExactFourSuggestedNextActions(input: ExactFourInput): Exac
   const grantedClass = (candidate: SuggestedNextActionCandidate, producerId: string) => resolveGrantedSlotClass(candidate, producerId, grants);
   const cooldown = input.cooldownLifecycleKeys ?? new Set<string>();
   const completed = input.completedLifecycleKeys ?? new Set<string>();
+  const hubCooldown = input.hubCooldownLifecycleKeys ?? new Set<string>();
   const keyOf = (candidate: SuggestedNextActionCandidate) => lifecycleKey({
     operationId: candidate.operationId, outcomeKey: candidate.outcomeKey, entityType: candidate.entityContext.entityType, entityId: candidate.entityContext.entityId,
   });
@@ -151,6 +159,7 @@ export function selectExactFourSuggestedNextActions(input: ExactFourInput): Exac
     const key = keyOf(candidate);
     // A completed outcome is not offered again in ANY class; an offer cooldown spares the current answer, urgent work and the exact record.
     if (completed.size > 0 && completed.has(key)) return EXACT_FOUR_COMPLETED_REJECTION;
+    if (hubCooldown.size > 0 && hubCooldown.has(key) && !isTrustedPostMutationReturn(input.currentOperationId, candidate)) return EXACT_FOUR_COOLDOWN_REJECTION;
     if (cooldown.size === 0 || COOLDOWN_EXEMPT_SLOT_CLASSES.has(grantedClass(candidate, producerId).slotClass)) return null;
     return cooldown.has(key) ? EXACT_FOUR_COOLDOWN_REJECTION : null;
   });

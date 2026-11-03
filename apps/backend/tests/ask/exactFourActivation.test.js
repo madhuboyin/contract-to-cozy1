@@ -366,3 +366,36 @@ test('RECEIPTS: every receipt operation owns a state-free CONTINUE_WORK continua
     assert.ok(candidates.every((candidate) => candidate.slotClass === 'CONTINUE_WORK'), operationId);
   }
 });
+
+// ---- recurring hub reads (audit F2) ---------------------------------------------------------------------------------------------------------
+
+test('RECURRING HUB: inside the 24-hour window a hub is not offered even as CONTINUE_WORK, a suppressed nomination records nothing, and after the window it returns', async () => {
+  const { lifecycleKey: keyFor } = require('../../src/services/ask/suggestedActions/suggestedNextActionExactFourRegistry.ts');
+  const hubKeys = new Set(['MAINTENANCE_STATUS:REVIEW_MAINTENANCE_STATUS', 'HOME_ACTIONS:REVIEW_HOME_ACTIONS'].map((pair) => {
+    const [operationId, outcomeKey] = pair.split(':');
+    return keyFor({ operationId, outcomeKey, entityType: null, entityId: null });
+  }));
+  const producers = [SUGGESTED_NEXT_ACTION_PRODUCERS[0], operationSpecificContinuationProducer, ...starterProducers];
+  // A READ source (the forecast) owns both hubs as CONTINUE_WORK recipes.
+  const open = await run({ operationId: 'MAINTENANCE_BUDGET_FORECAST', producers });
+  assert.ok(keysShown(open).includes('MAINTENANCE_STATUS:REVIEW_MAINTENANCE_STATUS'), 'baseline: the hub is offered');
+
+  const cooling = await run({ operationId: 'MAINTENANCE_BUDGET_FORECAST', producers, lifecycle: okLifecycle({ hubCooldownKeys: hubKeys }) });
+  assert.ok(!keysShown(cooling).includes('MAINTENANCE_STATUS:REVIEW_MAINTENANCE_STATUS'), 'inside the window the hub is held back even in CONTINUE_WORK');
+  assert.ok(!keysShown(cooling).includes('HOME_ACTIONS:REVIEW_HOME_ACTIONS'));
+  const recorded = cooling.offers.flatMap((call) => call.offers.map((offer) => `${offer.operationId}:${offer.outcomeKey}`));
+  assert.ok(!recorded.includes('MAINTENANCE_STATUS:REVIEW_MAINTENANCE_STATUS'), 'a suppressed nomination is never recorded as an offer, so it cannot extend the window');
+
+  const after = await run({ operationId: 'MAINTENANCE_BUDGET_FORECAST', producers, lifecycle: okLifecycle({ hubCooldownKeys: new Set() }) });
+  assert.ok(keysShown(after).includes('MAINTENANCE_STATUS:REVIEW_MAINTENANCE_STATUS'), 'once the window has passed the hub returns');
+});
+
+test('RECURRING HUB: a result-owned return-to-list right after a successful mutation bypasses the window; an unowned hub does not', async () => {
+  const { lifecycleKey: keyFor } = require('../../src/services/ask/suggestedActions/suggestedNextActionExactFourRegistry.ts');
+  const hubKeys = new Set([['MAINTENANCE_STATUS', 'REVIEW_MAINTENANCE_STATUS'], ['HOME_ACTIONS', 'REVIEW_HOME_ACTIONS']].map(([operationId, outcomeKey]) => keyFor({ operationId, outcomeKey, entityType: null, entityId: null })));
+  const producers = [SUGGESTED_NEXT_ACTION_PRODUCERS[0], operationSpecificContinuationProducer, ...starterProducers];
+  const afterCommand = await run({ operationId: 'MAINTENANCE_TASK_COMPLETE', status: 'COMPLETED', producers, lifecycle: okLifecycle({ hubCooldownKeys: hubKeys }) });
+  assert.ok(keysShown(afterCommand).includes('MAINTENANCE_STATUS:REVIEW_MAINTENANCE_STATUS'), 'the refreshed parent list may be offered once more after the mutation');
+  const afterRead = await run({ operationId: 'MAINTENANCE_BUDGET_FORECAST', producers, lifecycle: okLifecycle({ hubCooldownKeys: hubKeys }) });
+  assert.ok(!keysShown(afterRead).includes('MAINTENANCE_STATUS:REVIEW_MAINTENANCE_STATUS'), 'after a read there is no bypass');
+});

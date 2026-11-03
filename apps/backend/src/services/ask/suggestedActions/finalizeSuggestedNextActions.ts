@@ -401,6 +401,7 @@ export async function finalizeSuggestedNextActionsWithReport(
     audienceUncertain,
     cooldownLifecycleKeys: lifecycle?.cooldownKeys,
     completedLifecycleKeys: lifecycle?.completedKeys,
+    hubCooldownLifecycleKeys: lifecycle?.hubCooldownKeys,
     starterLastOfferedAtMs: lifecycle?.lastOfferedAtMs,
     rotationNowMs: clock.now().getTime(),
     currentOperationId: input.operationId,
