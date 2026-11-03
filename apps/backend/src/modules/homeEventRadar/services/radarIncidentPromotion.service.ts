@@ -33,6 +33,7 @@ export type RadarIncidentPromotionInput = {
     providerRevision?: string | null;
     canonicalUrl?: string | null;
     observedAt?: Date | string | null;
+    endAt?: Date | string | null;
   };
   match: {
     id: string;
@@ -177,6 +178,25 @@ function incidentTypeKey(eventType: string): string {
   return `RADAR_${eventType.toUpperCase().replace(/[^A-Z0-9]+/g, '_')}`;
 }
 
+function isOfficialNwsAlert(event: RadarIncidentPromotionInput['event']): boolean {
+  try {
+    if (event.canonicalUrl && new URL(event.canonicalUrl).hostname.toLowerCase() === 'api.weather.gov') return true;
+  } catch {
+    // An invalid provider URL is not authoritative NWS evidence.
+  }
+  return event.providerEventId?.startsWith('urn:oid:') === true;
+}
+
+function nwsHazardFamily(event: RadarIncidentPromotionInput['event']): string {
+  const title = event.title.toLowerCase();
+  if (event.eventType === 'flood_risk' || /flood/.test(title)) return 'FLOOD';
+  if (event.eventType === 'heat_wave' || /heat/.test(title)) return 'HEATWAVE';
+  if (/hurricane|tropical storm/.test(title)) return 'HURRICANE';
+  if (/wildfire|fire weather|smoke/.test(title)) return 'WILDFIRE';
+  if (/snow|blizzard|winter|ice|freeze|frost/.test(title)) return 'SNOW';
+  return 'STORM';
+}
+
 const WEATHER_EVENT_TYPES = new Set([
   'weather',
   'flood_risk',
@@ -288,7 +308,10 @@ export class RadarIncidentPromotionService {
       input.match.impactLevel,
       input.match.confidence,
     );
-    const typeKey = incidentTypeKey(input.event.eventType);
+    const officialNwsAlert = isOfficialNwsAlert(input.event);
+    const typeKey = officialNwsAlert
+      ? 'SEVERE_WEATHER_ALERT'
+      : incidentTypeKey(input.event.eventType);
     const revisionSourceRunId =
       input.revision?.sourceRunId ?? input.event.sourceRunId ?? null;
     const revisionSourceDefinitionId =
@@ -297,7 +320,12 @@ export class RadarIncidentPromotionService {
       propertyId: input.propertyId,
       propertyRadarMatchId: input.match.id,
       userId: null,
-      sourceType: IncidentSourceType.RADAR_EVENT,
+      // NWS alerts must retain the canonical Incident identity consumed by
+      // Unified Home. Generic forecasts and other Radar domains remain
+      // RADAR_EVENT incidents.
+      sourceType: officialNwsAlert
+        ? IncidentSourceType.WEATHER
+        : IncidentSourceType.RADAR_EVENT,
       typeKey,
       category: input.event.eventType.toUpperCase(),
       title: input.event.title,
@@ -320,6 +348,11 @@ export class RadarIncidentPromotionService {
         eventStatus: input.event.status,
         eventObservedAt: input.event.observedAt ?? null,
         canonicalUrl: input.event.canonicalUrl ?? null,
+        ...(officialNwsAlert ? {
+          hazardFamily: nwsHazardFamily(input.event),
+          expires: input.event.endAt ?? null,
+          source: 'National Weather Service',
+        } : {}),
         matchScore: decimalToNumber(input.match.matchScore),
         impactLevel: input.match.impactLevel,
         confidence: input.match.confidence ?? null,

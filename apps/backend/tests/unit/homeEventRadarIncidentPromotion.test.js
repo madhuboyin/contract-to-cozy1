@@ -25,10 +25,11 @@ function input(overrides = {}) {
       dedupeKey: 'source:weather:provider:event-1',
       sourceDefinitionId: 'source-1',
       sourceRunId: 'run-1',
-      providerEventId: 'provider-event-1',
+      providerEventId: 'open-meteo:freeze-risk:property-1',
       providerRevision: 'provider-revision-1',
-      canonicalUrl: 'https://api.weather.gov/alerts/provider-event-1',
+      canonicalUrl: 'https://api.open-meteo.com/v1/forecast',
       observedAt: new Date('2026-07-26T15:00:00Z'),
+      endAt: new Date('2026-07-27T15:00:00Z'),
     },
     match: {
       id: 'match-1',
@@ -90,7 +91,7 @@ test('creates one match-linked Incident with complete revision/source provenance
   assert.equal(incident.details.radarEventRevisionId, 'revision-1');
   assert.equal(incident.details.sourceDefinitionId, 'source-1');
   assert.equal(incident.details.sourceRunId, 'run-1');
-  assert.equal(incident.details.providerEventId, 'provider-event-1');
+  assert.equal(incident.details.providerEventId, 'open-meteo:freeze-risk:property-1');
   assert.equal(incident.details.providerRevision, 'provider-revision-1');
   assert.equal(incident.details.matcherVersion, 'rules-v1');
   assert.equal(calls.upsert[0].signals.length, 1);
@@ -106,6 +107,28 @@ test('updates the same open match linkage without creating a second identity', a
   assert.equal(calls.upsert.length, 1);
   assert.equal(calls.upsert[0].value.propertyRadarMatchId, 'match-1');
   assert.equal(calls.setStatus.length, 0);
+});
+
+test('preserves the canonical severe-weather identity needed by Unified Home for NWS alerts', async () => {
+  const { service, calls } = harness();
+  await service.project(input({
+    event: {
+      ...input().event,
+      eventType: 'flood_risk',
+      title: 'Flash Flood Warning',
+      providerEventId: 'urn:oid:2.49.0.1.840.0.alert-1',
+      canonicalUrl: 'https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.alert-1',
+      endAt: new Date('2026-07-27T18:00:00Z'),
+    },
+  }));
+
+  const incident = calls.upsert[0].value;
+  assert.equal(incident.sourceType, 'WEATHER');
+  assert.equal(incident.typeKey, 'SEVERE_WEATHER_ALERT');
+  assert.equal(incident.details.hazardFamily, 'FLOOD');
+  assert.equal(incident.details.expires.toISOString(), '2026-07-27T18:00:00.000Z');
+  assert.equal(incident.details.source, 'National Weather Service');
+  assert.equal(calls.upsert[0].signals[0].signalType, 'WEATHER_ALERT_NWS');
 });
 
 test('terminal Radar lifecycle resolves or expires only through IncidentService.setStatus', async () => {
