@@ -7,7 +7,8 @@
 // Self-contained on purpose: it must not import handlers (import-graph guardrail), so domain field names are plain strings that
 // a test cross-checks against the handlers' own exports.
 import type { SuggestedNextAction } from '../../../productFramework/ask/ask.contract';
-import { ASK_OPERATION_DEFINITIONS } from '../askOperationRegistry';
+import { ASK_OPERATION_DEFINITIONS, type AskOperationId } from '../askOperationRegistry';
+import { requiredAskTargetEntity } from '../askEntityResolution';
 
 export type SuggestedNextActionTier = SuggestedNextAction['priority']['tier'];
 export type SuggestedNextActionSource = SuggestedNextAction['provenance']['source'];
@@ -15,8 +16,12 @@ export const CAPABILITY_RECOMMENDATION_OUTCOME = 'REVIEW_RECOMMENDED_CAPABILITY'
 const SAFE_CAPABILITY_READ_FAMILIES = new Set(['RECORD_QUERY', 'STATUS_SUMMARY']);
 export function isSafeCapabilityRecommendationOperation(operationId: string): boolean {
   const definition = ASK_OPERATION_DEFINITIONS[operationId as keyof typeof ASK_OPERATION_DEFINITIONS];
-  return Boolean(definition && definition.requiresProperty && definition.propertyRoleFloor === 'VIEWER'
-    && definition.safetyClass === 'STANDARD' && SAFE_CAPABILITY_READ_FAMILIES.has(definition.family));
+  if (!definition || !definition.requiresProperty || definition.propertyRoleFloor !== 'VIEWER'
+    || definition.safetyClass !== 'STANDARD' || !SAFE_CAPABILITY_READ_FAMILIES.has(definition.family)) return false;
+  // A generic capability recommendation carries no entity. An operation that targets one record is eligible for it only when its
+  // capability launch is a reviewed property-wide mode; otherwise (e.g. a decision-thread outcome) the candidate could never pass
+  // the entity rule and is not a valid generic recommendation.
+  return !requiredAskTargetEntity(operationId as AskOperationId) || isPropertyWideOutcome(operationId, CAPABILITY_RECOMMENDATION_OUTCOME);
 }
 
 // ---- limits (plan §3.3, §7.3, §7.4) ---------------------------------------------------------------------------------------
@@ -381,6 +386,8 @@ export const PROPERTY_WIDE_OUTCOMES: ReadonlySet<string> = new Set<string>([
   'INVENTORY_LOOKUP:REVIEW_HOME_INVENTORY',
   'QUOTE_COMPARISON_REVIEW:REVIEW_QUOTES',
   'REPLACEMENT_GUIDANCE:REVIEW_REPLACEMENT',
+  // The inventory capability card launches the property-wide inventory list; HVAC_DECISION_OUTCOME_VIEW is deliberately absent (thread-specific).
+  `INVENTORY_LOOKUP:${CAPABILITY_RECOMMENDATION_OUTCOME}`,
 ]);
 
 export function isPropertyWideOutcome(operationId: string, outcomeKey: string): boolean {

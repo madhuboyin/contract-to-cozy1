@@ -9,7 +9,7 @@
 
 Ask Cozy's Suggested Next Actions implementation is substantially healthier than the earlier audit described. The earlier two P0 entity-governance failures are resolved in commit `11102124`: property-wide outcomes have an explicit allowlist, HVAC continuation recipes carry an active decision-thread identity, and `DECISION_THREAD` and `GUIDANCE_JOURNEY` are present in the freshness matrix. The focused entity-eligibility suite passes.
 
-The current system nevertheless has eleven findings (F1-F5, F9 and F10 are P1; F6-F8 and F11 are P2). F10 is fixed and pushed; F9 is fixed in the working tree (see their sections); the rest are open:
+The current system nevertheless has eleven findings (F1-F5, F9 and F10 are P1; F6-F8 and F11 are P2). F10 is fixed and pushed; F9 and F11 are fixed in the working tree (see their sections); the rest are open:
 
 1. **F1 (P1)** — The continuation-coverage completion gate is red. The operation registry changed without updating its reviewed hash, and `COMMUNITY_UPDATES` is the sole remaining `MIGRATION_REQUIRED` operation.
 2. **F2 (P1, owner decision)** — Completion semantics suppress most read/navigation outcomes after one successful use. Of 95 registered outcomes on read, status, decision-analysis, and guidance operations, 84 are non-repeatable. Changing this is a product-policy ruling, not a bug fix.
@@ -21,7 +21,7 @@ The current system nevertheless has eleven findings (F1-F5, F9 and F10 are P1; F
 8. **F8 (P2)** — Architecture documentation and executable inventories have drifted.
 9. **F9 (P1, fixed in working tree)** — HVAC continuation candidates were eligible but not necessarily executable on the intended decision thread.
 10. **F10 (P1, fixed)** — Status-only interactive results (`NEEDS_ENTITY` and siblings with no clarification/confirmation/capture payload) could enter exact-four.
-11. **F11 (P2)** — Generic capability-recommendation conversion conflicts with target-entity requirements for `INVENTORY_LOOKUP` and `HVAC_DECISION_OUTCOME_VIEW`.
+11. **F11 (P2, fixed in working tree)** — Generic capability-recommendation conversion conflicted with target-entity requirements for `INVENTORY_LOOKUP` and `HVAC_DECISION_OUTCOME_VIEW`.
 
 The frontend contract itself is sound: governed typed actions render whenever present, including degraded and exempt rows, and legacy string suggestions are not revived for a governed result.
 
@@ -366,7 +366,7 @@ Such a result looked settled to the finalizer, so it could carry up to four unre
 
 `resultOwnsPendingInteraction` now treats any status in the new `INTERACTIVE_ASK_EXECUTION_STATUSES` (defined in `ask.contract.ts`; `INTERACTIVE_ASK_STATUSES` in `askSessions.ts` is derived from it, so there is one list) as a pending interaction, in addition to the existing payload checks. All three call sites use it. The optional-escape-route exception is unaffected because it applies only to `ANSWERED` and `READY_WITH_LIMITATIONS`. Test: `exactFourActivation.test.js`, "STATUS-ONLY INTERACTIVE RESULTS own the turn" (fails without the fix, passes with it).
 
-### [P2] F11 — Generic capability conversion conflicts with target-entity requirements
+### [P2] F11 — Generic capability conversion conflicts with target-entity requirements (fixed in working tree)
 
 **Evidence**
 
@@ -377,6 +377,12 @@ Such a result looked settled to the finalizer, so it could carry up to four unre
 **Recommendation**
 
 Do not add a blanket property-wide exemption for the generic outcome. `INVENTORY_LOOKUP` plausibly has a property-wide mode and can be reviewed for that. `HVAC_DECISION_OUTCOME_VIEW` is thread-specific and should be excluded from generic capability conversion unless a thread identity is supplied.
+
+**Fix (working tree, not yet committed)**
+
+- `INVENTORY_LOOKUP:REVIEW_RECOMMENDED_CAPABILITY` is added to `PROPERTY_WIDE_OUTCOMES` (the capability launch is the property-wide inventory list).
+- `isSafeCapabilityRecommendationOperation` now rejects an entity-targeted operation unless its generic capability outcome is a reviewed property-wide outcome, so `HVAC_DECISION_OUTCOME_VIEW` is no longer converted. The check is generic: any future entity-bound read that appears in a capability card stays excluded until reviewed.
+- Test (`operationSpecificContinuationEligibility.test.js`): the inventory capability is eligible, the HVAC outcome capability produces no candidate, and every safe capability operation passes the entity rule with a null entity.
 
 ## 5. Entry-surface assessment
 

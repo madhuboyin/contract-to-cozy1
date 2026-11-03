@@ -77,7 +77,7 @@ test('a stale thread version is still rejected (supplied entities remain fully v
 
 test('property-wide outcomes are an explicit reviewed allowlist; other entity-bound operations still require an entity', () => {
   assert.deepEqual([...registry.PROPERTY_WIDE_OUTCOMES].sort(), [
-    'INVENTORY_LOOKUP:REVIEW_HOME_INVENTORY', 'QUOTE_COMPARISON_REVIEW:REVIEW_QUOTES', 'REPLACEMENT_GUIDANCE:REVIEW_REPLACEMENT',
+    'INVENTORY_LOOKUP:REVIEW_HOME_INVENTORY', 'INVENTORY_LOOKUP:REVIEW_RECOMMENDED_CAPABILITY', 'QUOTE_COMPARISON_REVIEW:REVIEW_QUOTES', 'REPLACEMENT_GUIDANCE:REVIEW_REPLACEMENT',
   ]);
   const itemBound = {
     source: 'OPERATION_RESULT', sourceOperationId: 'WARRANTY_LOOKUP', label: 'x', message: 'Show this item', operationId: 'INVENTORY_LOOKUP',
@@ -105,4 +105,19 @@ test('active HVAC decisions and guidance journeys survive the freshness matrix',
   });
   for (const candidate of candidates) assert.equal(evaluateSuggestedNextActionEligibility(candidate, ctx).state, 'ELIGIBLE', candidate.operationId);
   assert.ok('DECISION_THREAD' in registry.DOMAIN_FRESHNESS_MATRIX && 'GUIDANCE_JOURNEY' in registry.DOMAIN_FRESHNESS_MATRIX);
+});
+
+test('generic capability recommendations: the inventory list is eligible, thread-specific operations are not converted', () => {
+  const { capabilityRecommendationCandidates } = require('../../src/services/ask/suggestedActions/capabilityRecommendationCandidates.ts');
+  const capability = (id, operationId) => ({ id, label: id, inlineLaunch: { operationId, message: `Open ${id}` } });
+  const result = { status: 'ANSWERED', blocks: [{ type: 'CAPABILITY_LIST', capabilities: [capability('inventory', 'INVENTORY_LOOKUP'), capability('outcome', 'HVAC_DECISION_OUTCOME_VIEW'), capability('summary', 'PROPERTY_SUMMARY')] }] };
+  const candidates = capabilityRecommendationCandidates(result, PROPERTY_ID);
+  assert.deepEqual(candidates.map((candidate) => candidate.operationId), ['INVENTORY_LOOKUP', 'PROPERTY_SUMMARY']);
+  for (const candidate of candidates) assert.equal(evaluateSuggestedNextActionEligibility(candidate, eligibilityContext()).state, 'ELIGIBLE', candidate.operationId);
+  // Every safe capability operation, entity-bound or not, must be able to pass the entity rule with a null entity.
+  for (const operationId of Object.keys(ASK_OPERATION_DEFINITIONS)) {
+    if (!registry.isSafeCapabilityRecommendationOperation(operationId)) continue;
+    const candidate = capabilityRecommendationCandidates({ status: 'ANSWERED', blocks: [{ type: 'CAPABILITY_LIST', capabilities: [capability('x', operationId)] }] }, PROPERTY_ID)[0];
+    assert.equal(evaluateSuggestedNextActionEligibility(candidate, eligibilityContext()).state, 'ELIGIBLE', operationId);
+  }
 });
