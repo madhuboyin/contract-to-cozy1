@@ -13,14 +13,15 @@ import { askTopicTokens } from './askPromptMinimization';
 import { logger } from '../../lib/logger';
 
 // Existing scalar capture payloads remain readable; new cards use canonical schemas.
-export const NEXT_ACTION_MISSING_FACT_CAPTURE_KEY = 'NEXT_ACTION_MISSING_FACT';
+// The capture-key constants live in the dependency-free optionalNextActionCapture module (shared with the finalizer and completion code).
+export { NEXT_ACTION_MISSING_FACT_CAPTURE_KEY, NEXT_ACTION_CONTEXT_PREFIX } from './suggestedActions/optionalNextActionCapture';
+import { NEXT_ACTION_MISSING_FACT_CAPTURE_KEY, NEXT_ACTION_CONTEXT_PREFIX } from './suggestedActions/optionalNextActionCapture';
 
 export const NEXT_ACTION_FACT_QUESTIONS = Object.fromEntries(
   CONTEXT_CAPTURE_DEFINITIONS.filter((definition) => definition.mode === 'SCALAR')
     .flatMap((definition) => definition.factKeys.map((key) => [key, { question: definition.question, inputSchema: definition.inputSchema }]))
 );
 
-export const NEXT_ACTION_CONTEXT_PREFIX = 'NEXT_ACTION_CONTEXT:';
 export const nextActionContextOperation = (factKey: string) => factKey.replace(/[^a-zA-Z0-9]/g, '_').toUpperCase();
 
 export async function buildNextActionContextCapture(propertyId: string, userId: string, factKey: string): Promise<AskCaptureRequest | null> {

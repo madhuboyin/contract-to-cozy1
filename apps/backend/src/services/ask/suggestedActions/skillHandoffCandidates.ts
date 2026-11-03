@@ -10,11 +10,14 @@ import {
 
 export const SKILL_HANDOFF_PRODUCER_ID = 'handoff.skill';
 
+// A handoff opens the same destination as the canonical read, so it uses the canonical outcome key: the same semantic identity then
+// de-duplicates it against an equivalent recipe or starter chip, and the same lifecycle (recurring hub window, ownership) applies.
+// Where the chip came from stays in its provenance (`source: SKILL_HANDOFF`), not in a separate outcome.
 const OUTCOME_BY_TARGET: Readonly<Record<string, string>> = {
-  MAINTENANCE_STATUS: 'HANDOFF_REVIEW_MAINTENANCE',
-  PROPERTY_SUMMARY: 'HANDOFF_REVIEW_PROPERTY',
-  COVERAGE_GAPS: 'HANDOFF_REVIEW_COVERAGE',
-  HOME_ACTIONS: 'HANDOFF_REVIEW_HOME_ACTIONS',
+  MAINTENANCE_STATUS: 'REVIEW_MAINTENANCE_STATUS',
+  PROPERTY_SUMMARY: 'REVIEW_HOME_SUMMARY',
+  COVERAGE_GAPS: 'REVIEW_COVERAGE_GAPS',
+  HOME_ACTIONS: 'REVIEW_HOME_ACTIONS',
 };
 
 const promptForGoal = (goal: string) => goal.replace(/[-_]+/g, ' ').replace(/^\w/, (letter) => letter.toUpperCase());

@@ -17,7 +17,7 @@ test('a verified Skill handoff becomes one deterministic typed target', () => {
   assert.equal(candidates.length, 1);
   assert.equal(SuggestedNextActionCandidateSchema.safeParse(candidates[0]).success, true);
   assert.equal(candidates[0].operationId, 'MAINTENANCE_STATUS');
-  assert.equal(candidates[0].outcomeKey, 'HANDOFF_REVIEW_MAINTENANCE');
+  assert.equal(candidates[0].outcomeKey, 'REVIEW_MAINTENANCE_STATUS');
   assert.equal(candidates[0].message, 'Understand maintenance status');
   assert.equal(candidates[0].slotClass, 'GOVERNED_CAPABILITY');
 });

@@ -39,7 +39,7 @@ import { RADAR_PREFERENCES_CAPTURE_KEY, RADAR_TASK_CAPTURE_KEY, radarCaptureErro
 import { executeOperation } from '../execution/executeOperation';
 import { finalizeSuggestedNextActions } from '../suggestedActions/finalizeSuggestedNextActions';
 import { isSettledForCompletion, recordSelectedSuggestedActionCompletion } from '../suggestedActions/suggestedActionCompletion';
-import { loadCompletedSuggestedActionKeyHashes, loadRecentCompletedMessages } from '../suggestedActions/suggestedNextActionHistory';
+import { loadCompletedSuggestedActionKeyHashes, loadRecentCompletedMessages, loadRecentCompletedTurns } from '../suggestedActions/suggestedNextActionHistory';
 import { homeJourneyContextVersion, homeJourneyResult, purchaseDateContextVersion, purchaseDateResult } from '../handlers/homeSettingsWrites.handler';
 import { HOME_JOURNEY_CAPTURE_KEY, PURCHASE_DATE_CAPTURE_KEY } from '../support/homeSettingsConstants';
 import { HOME_PLANT_CAPTURE_KEY, MATERIAL_SPEC_CAPTURE_KEY } from '../support/homeRecordAddConstants';
@@ -232,7 +232,7 @@ async function submitNextActionMissingFactCapture(
     throw error;
   }
   const stored = execution.resultJson && typeof execution.resultJson === 'object' && !Array.isArray(execution.resultJson)
-    ? execution.resultJson as { schemaVersion?: unknown; blocks?: unknown[]; captureRequests?: Array<{ requirementId?: unknown; captureKey?: unknown }>; confirmation?: unknown; clarification?: unknown; suggestions?: unknown[]; skillHandoff?: unknown }
+    ? execution.resultJson as { schemaVersion?: unknown; blocks?: unknown[]; captureRequests?: Array<{ requirementId?: unknown; captureKey?: unknown }>; confirmation?: unknown; clarification?: unknown; suggestions?: unknown[]; skillHandoff?: unknown; suggestedNextActionsGoverned?: unknown; suggestedNextActionsStatus?: unknown }
     : {};
   const captureIdempotencyKey = 'ask-next:' + createHash('sha256').update(JSON.stringify([execution.id, input.captureKey, input.idempotencyKey])).digest('hex');
   const previous = registryCapture ? await prisma.propertyContextCaptureReceipt.findUnique({
@@ -289,12 +289,7 @@ async function submitNextActionMissingFactCapture(
   let refreshedCaptureRequests = (stored.captureRequests ?? []).filter((request) => request.requirementId !== input.requirementId);
   try {
     if (execution.operationId && execution.operationId in ASK_OPERATION_DEFINITIONS) {
-      const recent = await prisma.askExecution.findMany({
-        where: { sessionId: execution.sessionId, userId, id: { not: execution.id }, status: { in: ['ANSWERED', 'COMPLETED', 'READY_WITH_LIMITATIONS'] } },
-        orderBy: { updatedAt: 'desc' },
-        take: 5,
-        select: { operationId: true },
-      });
+      const recent = await loadRecentCompletedTurns({ sessionId: execution.sessionId, userId, excludeExecutionId: execution.id });
       const recentCompletedCapabilityIds = new Set(
         recent
           .map((item) => (item.operationId ? ASK_OPERATION_CAPABILITY[item.operationId as AskOperationId] : undefined))
@@ -343,6 +338,9 @@ async function submitNextActionMissingFactCapture(
         confirmation: stored.confirmation ?? null,
         clarification: stored.clarification ?? null,
         suggestions: stored.suggestions ?? [],
+        // The governance marker and status travel with the preserved actions: the shell shows typed actions only for a governed result.
+        suggestedNextActionsGoverned: stored.suggestedNextActionsGoverned === true,
+        ...(stored.suggestedNextActionsStatus !== undefined ? { suggestedNextActionsStatus: stored.suggestedNextActionsStatus } : {}),
         suggestedNextActions: readStoredSuggestedNextActions(execution.resultJson),
         skillHandoff: stored.skillHandoff ?? null,
         ...preservedExecutionHistory(execution.resultJson, refreshedBlocks as AskPresentationBlock[]),

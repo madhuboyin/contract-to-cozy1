@@ -57,19 +57,29 @@ export async function loadCompletedSuggestedActionKeyHashes(input: { executionId
 }
 
 /**
- * The messages of this session's most recent completed turns (excluding the current execution), for the recent-prompt rule. Shared by
- * the execution, confirmation and capture finalizers so they suppress an identical just-asked prompt the same way. Failure yields [].
+ * This session's most recent completed turns (excluding the current execution), for the recent-prompt rule and recent-capability
+ * suppression. A READY_WITH_LIMITATIONS turn that still has a blocking capture prompt is an unfinished request, so it is left out
+ * (consistent with `loadCompletedSuggestedActionKeyHashes`). Rows are filtered BEFORE the limit, so unfinished turns do not shrink the
+ * window. Shared by the execution, confirmation and capture finalizers. Failure yields [].
  */
-export async function loadRecentCompletedMessages(input: { sessionId: string; userId: string; excludeExecutionId: string; take?: number }): Promise<string[]> {
+export async function loadRecentCompletedTurns(input: { sessionId: string; userId: string; excludeExecutionId: string; take?: number }): Promise<Array<{ message: string; operationId: string | null }>> {
+  const take = input.take ?? 5;
   try {
-    const recent = await prisma.askExecution.findMany({
+    const rows = await prisma.askExecution.findMany({
       where: { sessionId: input.sessionId, userId: input.userId, id: { not: input.excludeExecutionId }, status: { in: [...COMPLETED_STATUSES] } },
       orderBy: { updatedAt: 'desc' },
-      take: input.take ?? 5,
-      select: { message: true },
+      take: take * 4,
+      select: { message: true, operationId: true, status: true, resultJson: true },
     });
-    return recent.map((execution) => execution.message);
+    return rows
+      .filter((row) => !(row.status === 'READY_WITH_LIMITATIONS' && storedResultHasOpenCaptureRequests(row.resultJson)))
+      .slice(0, take)
+      .map((row) => ({ message: row.message, operationId: row.operationId }));
   } catch {
     return [];
   }
+}
+
+export async function loadRecentCompletedMessages(input: { sessionId: string; userId: string; excludeExecutionId: string; take?: number }): Promise<string[]> {
+  return (await loadRecentCompletedTurns(input)).map((turn) => turn.message);
 }

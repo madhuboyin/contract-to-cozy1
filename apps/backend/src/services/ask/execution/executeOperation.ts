@@ -21,7 +21,7 @@ import { buildAskNextActionsBlock } from '../askNextActions';
 import { asInputJson, audienceApplicabilityResult, audienceTelemetryFor, ensurePropertyAccess, expireIfSkillBindingChanged, journeyContextFrom, mapPersistedExecution, preservedExecutionHistory, propertySummary, recordAskAnswerTrustMetrics, terminalStatus } from '../askHandlerSupport';
 import { getAskDomainCommandByOperation } from '../askDomainCommandRegistry';
 import { finalizeSuggestedNextActions } from '../suggestedActions/finalizeSuggestedNextActions';
-import { loadCompletedSuggestedActionKeyHashes } from '../suggestedActions/suggestedNextActionHistory';
+import { loadCompletedSuggestedActionKeyHashes, loadRecentCompletedTurns } from '../suggestedActions/suggestedNextActionHistory';
 import { getSkillForOperation, resolveEffectiveSkillOperationPolicy } from '../../skills/skillRegistry';
 import { ASK_OPERATION_CAPABILITY } from '../../intelligence/capabilitySkillGuidanceBridge.registry';
 import { getSkillAdapter } from '../../skills/adapters/skillAdapterRegistry';
@@ -408,17 +408,7 @@ export async function executeOperation(input: { userId: string; sessionId: strin
   let recentCompletedCapabilityIds: ReadonlySet<string> = new Set();
   let recentCompletedOperationIds: ReadonlySet<string> = new Set();
   try {
-    const recent = await prisma.askExecution.findMany({
-      where: {
-        sessionId: input.sessionId,
-        userId: input.userId,
-        id: { not: input.executionId },
-        status: { in: ['ANSWERED', 'COMPLETED', 'READY_WITH_LIMITATIONS'] },
-      },
-      orderBy: { updatedAt: 'desc' },
-      take: 5,
-      select: { message: true, operationId: true },
-    });
+    const recent = await loadRecentCompletedTurns({ sessionId: input.sessionId, userId: input.userId, excludeExecutionId: input.executionId });
     recentCompletedMessages = recent.map((execution) => execution.message);
     recentCompletedOperationIds = new Set(recent.map((execution) => execution.operationId).filter((operationId): operationId is string => Boolean(operationId)));
     recentCompletedCapabilityIds = new Set(

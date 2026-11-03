@@ -119,6 +119,13 @@ function diff(current, baseline) {
     const now = current[file]?.sites ?? 0;
     const before = baseline[file]?.sites ?? 0;
     if (now !== before) problems.push(`${file}: ${before} -> ${now} persisted-result site(s)`);
+    // The reviewed classification is part of the baseline: reclassifying a file (for example VIA_EXECUTE_OPERATION to WIRED) must be
+    // reflected in the checked-in baseline, not only in this script.
+    const nowClass = current[file] ? (FINALIZER_CLASSIFICATION[file]?.finalizer ?? 'UNCLASSIFIED') : null;
+    const beforeClass = baseline[file]?.finalizer ?? null;
+    if (nowClass && beforeClass && nowClass !== beforeClass) problems.push(`${file}: finalizer classification ${beforeClass} -> ${nowClass}`);
+    const nowNote = current[file] ? (FINALIZER_CLASSIFICATION[file]?.note ?? '') : null;
+    if (nowNote !== null && baseline[file] && nowNote !== baseline[file].note) problems.push(`${file}: finalizer note changed; regenerate the baseline`);
   }
   return problems;
 }

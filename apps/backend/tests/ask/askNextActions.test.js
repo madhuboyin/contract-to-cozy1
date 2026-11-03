@@ -323,18 +323,18 @@ test('executeOperation calls buildAskNextActionsBlock inside a try/catch so a ne
 
 test('executeOperation computes recentCompletedCapabilityIds from the same session-recency query as recentCompletedMessages, once, before finalize -- not a second DB round trip', () => {
   const idx = orchestratorSource.indexOf('async function executeOperation(');
-  const queryIdx = orchestratorSource.indexOf('await prisma.askExecution.findMany(', idx);
+  // The query now lives in the shared loader (loadRecentCompletedTurns), which also drops unfinished captures before applying the limit.
+  const queryIdx = orchestratorSource.indexOf('await loadRecentCompletedTurns(', idx);
   assert.ok(queryIdx > idx);
   const finalizeIdx = orchestratorSource.indexOf('const finalize = async ()', idx);
   assert.ok(queryIdx < finalizeIdx, 'expected the recency query to be hoisted above finalize, not run inside it');
   const queryBlock = orchestratorSource.slice(queryIdx, orchestratorSource.indexOf('} catch {', queryIdx));
-  assert.match(queryBlock, /select: \{ message: true, operationId: true \}/);
+  assert.match(queryBlock, /recentCompletedMessages = recent\.map/);
   assert.match(queryBlock, /recentCompletedCapabilityIds = new Set\(/);
-  // Only ever one findMany for this purpose in the function -- not a
-  // second, duplicated query inside finalize for the message-only case.
-  const secondQueryIdx = orchestratorSource.indexOf('await prisma.askExecution.findMany(', queryIdx + 1);
+  // Only ever one recency load in the function -- not a second, duplicated query inside finalize for the message-only case.
   const nextFunctionIdx = orchestratorSource.indexOf('\nfunction captureFallbackHref(', idx);
-  assert.ok(secondQueryIdx === -1 || secondQueryIdx > nextFunctionIdx, 'expected no second askExecution.findMany call inside executeOperation for this purpose');
+  const body = orchestratorSource.slice(idx, nextFunctionIdx === -1 ? undefined : nextFunctionIdx);
+  assert.equal((body.match(/loadRecentCompletedTurns\(/g) ?? []).length, 1, 'a single recency load serves messages, operations and capabilities');
 });
 
 // External review, Phase 6 [P1] (FRD §8.5/§21): an active long-lived goal

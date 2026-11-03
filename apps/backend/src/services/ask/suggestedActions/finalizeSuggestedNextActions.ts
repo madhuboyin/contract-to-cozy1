@@ -48,6 +48,7 @@ import { removeSelectedCapabilityDuplicates } from './capabilityRecommendationCa
 import { loadSuggestedActionSharedPropertyState } from './suggestedActionSharedPropertyState';
 import { loadOperationSpecificContinuationState } from './operationSpecificContinuationState';
 import { isReviewedCompleteActionSurface } from './operationSpecificContinuationCoverage';
+import { hasBlockingCaptureRequests } from './optionalNextActionCapture';
 
 const RECOVERY_STATUSES: ReadonlySet<string> = new Set([
   'UNAVAILABLE', 'EXPIRED', 'CANCELLED', 'BLOCKED', 'FAILED_RETRYABLE', 'FAILED_TERMINAL', 'OUT_OF_SCOPE', 'NEEDS_PROPERTY', 'NOT_APPLICABLE',
@@ -68,7 +69,8 @@ export function resultOwnsPendingInteraction(
 ): boolean {
   return Boolean((INTERACTIVE_ASK_EXECUTION_STATUSES as readonly string[]).includes(result.status)
     || result.clarification || result.confirmation
-    || (!optionalEscapeRoutes && (result.captureRequests?.length ?? 0) > 0));
+    // Optional next-action prompts (a missing fact the homeowner may fill in later) do not make the answer a pending interaction.
+    || (!optionalEscapeRoutes && hasBlockingCaptureRequests(result.captureRequests)));
 }
 
 /** Emergency, restricted, unavailable, expired, cancelled and similar results keep only safe recovery actions (plan §6). */

@@ -8,6 +8,7 @@ import type { SuggestedNextAction } from '../../../productFramework/ask/ask.cont
 import { recordSuggestedActionCompleted } from './askSuggestedActionLifecycle.service';
 import { recordSuggestedActionOutcomeAnalytics } from './suggestedActionAnalytics';
 import { readStoredSuggestedNextActions } from './suggestedNextAction.contract';
+import { hasBlockingCaptureRequests } from './optionalNextActionCapture';
 
 interface SettledResultShape {
   status: string;
@@ -24,14 +25,14 @@ interface SettledResultShape {
 export function isSettledForCompletion(result: SettledResultShape): boolean {
   if (result.status === 'ANSWERED' || result.status === 'COMPLETED') return true;
   return result.status === 'READY_WITH_LIMITATIONS'
-    && !(result.captureRequests?.length) && !result.clarification && !result.confirmation;
+    && !hasBlockingCaptureRequests(result.captureRequests as readonly { captureKey?: unknown }[] | null | undefined) && !result.clarification && !result.confirmation;
 }
 
-/** The persisted result's open capture prompts (used to keep an unfinished capture out of completed history). */
+/** The persisted result's blocking capture prompts (optional next-action prompts do not count); keeps an unfinished capture out of completed history. */
 export function storedResultHasOpenCaptureRequests(resultJson: unknown): boolean {
   if (!resultJson || typeof resultJson !== 'object' || Array.isArray(resultJson)) return false;
   const captures = (resultJson as { captureRequests?: unknown }).captureRequests;
-  return Array.isArray(captures) && captures.length > 0;
+  return Array.isArray(captures) && hasBlockingCaptureRequests(captures as readonly { captureKey?: unknown }[]);
 }
 
 /** The action a SUGGESTED_ACTION_SELECTED event verified for this execution, read back from the source execution's stored ledger. */

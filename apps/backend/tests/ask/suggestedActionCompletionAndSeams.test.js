@@ -89,7 +89,7 @@ test('recent completed messages come from the session, excluding the current exe
     assert.deepEqual(await history.loadRecentCompletedMessages({ sessionId: 's1', userId: 'u1', excludeExecutionId: 'now' }), ['What maintenance is pending?']);
     assert.equal(seen.where.id.not, 'now');
     assert.equal(seen.where.sessionId, 's1');
-    assert.equal(seen.take, 5);
+    assert.ok(seen.take >= 5, 'fetches at least the window (more, so filtering can replenish it)');
   } finally { restore(); }
   restore = stub(prisma.askExecution, 'findMany', async () => { throw new Error('db down'); });
   try { assert.deepEqual(await history.loadRecentCompletedMessages({ sessionId: 's1', userId: 'u1', excludeExecutionId: 'now' }), []); } finally { restore(); }

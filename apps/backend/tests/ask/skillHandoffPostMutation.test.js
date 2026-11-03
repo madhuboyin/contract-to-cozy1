@@ -8,6 +8,7 @@ const { suggestionKey } = require('../../src/services/ask/askSuggestionPolicy.ts
 const { SKILL_HANDOFF_DEFINITIONS } = require('../../src/services/skills/skillHandoff.ts');
 const { skillHandoffCandidates } = require('../../src/services/ask/suggestedActions/skillHandoffCandidates.ts');
 const { currentOperationOwnsOutcome } = require('../../src/services/ask/suggestedActions/suggestedNextActionExactFourRegistry.ts');
+const { isPromptHistoryExemptOutcome } = require('../../src/services/ask/suggestedActions/suggestedNextActionRegistry.ts');
 const { evaluateSuggestedNextActionEligibility } = require('../../src/services/ask/suggestedActions/suggestedNextActionEligibility.ts');
 
 const PROPERTY = '11111111-1111-4111-8111-111111111111';
@@ -28,7 +29,7 @@ const context = (asked) => ({
   completedSemanticKeyHashes: new Set(), askedMessageKeys: new Set(asked.map(suggestionKey)), messageKey: suggestionKey, currentOutcomeKeyHashes: new Set(),
 });
 
-test('every command-sourced skill handoff owns its read destination; read-sourced handoffs own nothing and get no post-mutation exemption', () => {
+test('every command-sourced skill handoff owns its read destination; read-sourced handoffs get no post-mutation exemption', () => {
   let commandHandoffs = 0;
   let readHandoffs = 0;
   for (const definition of SKILL_HANDOFF_DEFINITIONS) {
@@ -42,8 +43,9 @@ test('every command-sourced skill handoff owns its read destination; read-source
       assert.equal(verdict.state, 'ELIGIBLE', `${definition.sourceOperationId} handoff is exempt from the recent-prompt rule`);
     } else {
       readHandoffs += 1;
-      assert.equal(currentOperationOwnsOutcome(definition.sourceOperationId, candidate), false, `${definition.sourceOperationId} is a read and owns no handoff outcome`);
-      assert.deepEqual(verdict.reasonCodes, ['EQUIVALENT_PROMPT_ASKED'], `${definition.sourceOperationId} keeps the recent-prompt rule`);
+      // A read source may own the canonical destination through its recipes; what matters is that a read is never a post-mutation return.
+      // A canonical outcome that is a curated starter is separately prompt-history exempt; every other read-sourced handoff keeps the rule.
+      if (!isPromptHistoryExemptOutcome(candidate.operationId, candidate.outcomeKey)) assert.deepEqual(verdict.reasonCodes, ['EQUIVALENT_PROMPT_ASKED'], `${definition.sourceOperationId} keeps the recent-prompt rule`);
     }
   }
   assert.ok(commandHandoffs >= 5 && readHandoffs >= 4, `expected the 5 command and 4 read handoffs, saw ${commandHandoffs}/${readHandoffs}`);

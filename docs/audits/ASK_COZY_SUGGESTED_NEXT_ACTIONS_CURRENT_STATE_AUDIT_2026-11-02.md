@@ -84,7 +84,7 @@ An independent review of the remediation raised five gaps. Each was checked agai
 - On a multi-thread home, thread-bound recipes use the thread the current result itself resolved and reported (`parameters.focusedDecisionThreadId`, set on the focused-continue result) when it is one of the active threads; otherwise they are still dropped, never chosen by recency. Settled start, unfocused continue and outcome-view results do not expose their thread, so they are unchanged.
 - Skipped on purpose: an `outcomeKey` on the HVAC warranty action. The correct value would be `REVIEW_WARRANTIES`, but that action is a per-item question carrying an item entity and no equivalent chip is ever nominated for it, so it could not de-duplicate anything and would label a per-item question as the list outcome.
 
-**Gap 5 fix.** Skill handoffs from the five command sources (`CLAIM_FILE`, `CLAIM_TRANSITION`, `INSPECTION_FINDING_UPDATE`, `DOCUMENT_PROMOTION_CONFIRM`, `BUYER_LIFECYCLE_UPDATE`) now own their `HANDOFF_REVIEW_*` read destination in `RESULT_OWNERSHIP_RELATIONSHIPS`, and the post-mutation exemption accepts the `SKILL_HANDOFF` source as well as `OPERATION_RESULT`. The four read-sourced handoffs own nothing and keep the recent-prompt rule. `skillHandoffPostMutation.test.js` checks every handoff definition against both rules, so a new command handoff cannot drift out of the ownership list.
+**Gap 5 fix** (superseded in part by the second review below: handoffs now use the canonical outcome keys, so the `HANDOFF_REVIEW_*` vocabulary no longer exists). Skill handoffs from the five command sources (`CLAIM_FILE`, `CLAIM_TRANSITION`, `INSPECTION_FINDING_UPDATE`, `DOCUMENT_PROMOTION_CONFIRM`, `BUYER_LIFECYCLE_UPDATE`) now own their `HANDOFF_REVIEW_*` read destination in `RESULT_OWNERSHIP_RELATIONSHIPS`, and the post-mutation exemption accepts the `SKILL_HANDOFF` source as well as `OPERATION_RESULT`. The four read-sourced handoffs own nothing and keep the recent-prompt rule. `skillHandoffPostMutation.test.js` checks every handoff definition against both rules, so a new command handoff cannot drift out of the ownership list.
 
 **Gap 3 fix.**
 
@@ -92,6 +92,20 @@ An independent review of the remediation raised five gaps. Each was checked agai
 - `askConfirm` now passes recent completed messages, via a shared `loadRecentCompletedMessages`.
 - The persistence-sites registry entry for `askCapture` is corrected to `WIRED` with an accurate note.
 - Tests: `suggestedActionCompletionAndSeams.test.js` (8 tests), `hvacContinuationRefinements.test.js` (4) and `skillHandoffPostMutation.test.js` (1). The full chunked Ask suite shows no new failures against the pre-change baseline; the typecheck is clean. Not verified against a database or browser.
+
+### Second review round: residual findings (November 2, 2026)
+
+A second review of the follow-up commits raised five findings. All five were verified in code and fixed.
+
+| Finding | Verdict | Fix |
+|---|---|---|
+| P1: optional next-action capture prompts suppress the row and make limited answers look unfinished | Valid; the finalizer rule predates this work, and my completion and history code inherited the same loose test | One dependency-free predicate (`optionalNextActionCapture.ts`: `NEXT_ACTION_MISSING_FACT` and `NEXT_ACTION_CONTEXT:*`) used by the finalizer's pending-interaction test, `isSettledForCompletion`, and the stored-result check. An answer carrying only such a prompt keeps its governed row; a blocking capture prompt still owns the turn |
+| P1: exact-four can select two chips for one destination | Valid: two reachable cases (`HOME_ACTIONS` handoff to `MAINTENANCE_STATUS` plus the recipe; `INSPECTION_FINDING_UPDATE` handoff to `HOME_ACTIONS` plus the recipe). Deduping by operation alone would be too broad (`REVIEW_URGENT_HOME_ACTIONS` and `REVIEW_HOME_ACTIONS` are different views) | Skill handoffs now emit the canonical outcome keys, so the existing semantic identity de-duplicates them and the same hub lifecycle applies; provenance still records `SKILL_HANDOFF`. The `HANDOFF_REVIEW_*` outcomes were removed and the command-handoff ownership entries re-pointed to the canonical outcomes. Stored actions from before the change still resolve (selection reads the stored action) |
+| P2: unfinished `READY_WITH_LIMITATIONS` turns count as recent prompts | Valid but low value | `loadRecentCompletedTurns` drops them before applying the five-turn limit (it fetches extra rows so the window is replenished); the duplicate queries in `executeOperation` and the capture refresh now use it |
+| P2: governed marker dropped by the inline capture refresh; clarification completion never recorded | Both valid; the first predates this work | The refresh preserves `suggestedNextActionsGoverned` and `suggestedNextActionsStatus`; both clarification success paths call `recordSelectedSuggestedActionCompletion` |
+| P3: persistence-sites baseline drift | Valid | Baseline JSON regenerated (`askCapture.ts` is `WIRED`), and the checker now compares the reviewed finalizer classification and note, not only site counts |
+
+Tests: `reviewResidualsFollowUp.test.js` (8) plus an optional-prompt case in `exactFourActivation.test.js`; several existing tests that pinned the old query or outcome names were updated. The governed-marker and clarification-completion checks are wiring checks over the source, not behavioral runs. Full chunked Ask suite compared with the baseline: no new failures; typecheck clean. Not verified against a database or browser.
 
 ### Rulings on the remaining open questions (November 2, 2026)
 

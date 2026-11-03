@@ -16,8 +16,8 @@
     "src/services/ask/execution/askCapture.ts": {
       "category": "EXECUTION_LIFECYCLE",
       "sites": 4,
-      "finalizer": "VIA_EXECUTE_OPERATION",
-      "note": "capture/replay results come from executeOperation; ledger preserved on refresh; unavailable branch persists no compact strings (C.13)"
+      "finalizer": "WIRED",
+      "note": "results from executeOperation are already governed; every direct-handler capture branch is governed by ensureGovernedCaptureResult before the single persistence transaction; the missing-fact capture path preserves the stored ledger on refresh; unavailable branch persists no compact strings (C.13)"
     },
     "src/services/ask/execution/askClarification.ts": {
       "category": "EXECUTION_LIFECYCLE",

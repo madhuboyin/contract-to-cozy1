@@ -418,3 +418,12 @@ test('RECURRING HUB telemetry: a hub held back by the window is counted per hub 
   assert.ok(!r.report.exactFour.shortageReasons.includes('INELIGIBLE'), 'not reported as ineligible');
   assert.equal(await read(hub), before + 1, 'counted once for the hub that was held back');
 });
+
+test('an answer with only an optional next-action prompt still gets the governed row; a blocking capture prompt still owns the turn', async () => {
+  const optionalOnly = await run({ result: { captureRequests: [{ captureKey: 'NEXT_ACTION_MISSING_FACT', requirementId: 'r1' }] } });
+  assert.equal(optionalOnly.report.exactFour.applicability, 'EXACT_FOUR', JSON.stringify(optionalOnly.report.exactFour));
+  assert.equal(optionalOnly.shown.length, 4, keysShown(optionalOnly).join(','));
+  const blocking = await run({ result: { captureRequests: [{ captureKey: 'PROPERTY_CONTEXT_AREA_CAPTURE', requirementId: 'r3' }] } });
+  assert.equal(blocking.report.exactFour.exemptReason, 'PENDING_INTERACTION');
+  assert.equal(blocking.shown.length, 0);
+});

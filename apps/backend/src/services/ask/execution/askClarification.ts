@@ -9,6 +9,7 @@ import { readAskOperationalControls } from '../../../config/askOperationalContro
 import { getAskOperationDefinition, type AskOperationId, type AskOperationResolution } from '../askOperationRegistry';
 import { asInputJson, askFailureBlocks, askFailureStatus, assertSkillResultBlocksAllowed, discoverableAskOperationIds, ensurePropertyAccess, enterAskPropertyTimezoneContext, expireIfSkillBindingChanged, mapPersistedExecution, maybeSynthesizeDeterministicResult, preservedExecutionHistory, propertySummary, recordAskAnswerTrustMetrics, terminalStatus, withAskTimeout } from '../askHandlerSupport';
 import { executeOperation } from '../execution/executeOperation';
+import { isSettledForCompletion, recordSelectedSuggestedActionCompletion } from '../suggestedActions/suggestedActionCompletion';
 import { propertyScopeForAskRouting, resolveAskRoutingCascade } from '../askRoutingCascade';
 import { getSkillForOperation } from '../../skills/skillRegistry';
 import { buildSkillExecutionBinding } from '../../skills/skillExecutionBinding';
@@ -186,6 +187,8 @@ async function submitAskClarificationCore(userId: string, executionId: string, i
     });
     await prisma.askExecutionEvent.create({ data: { executionId, eventType: 'CLARIFICATION_SUBMITTED', metadataJson: asInputJson({ operationId: operation.operationId }) } });
     await prisma.askExecutionEvent.create({ data: { executionId, eventType: 'ANSWER_TRUST_VALIDATED', metadataJson: asInputJson({ ...validation.trust, semantic: validation.semantic, repaired: validation.repaired }) } });
+    // The chip that led to this clarification completes when the answered request settles, not when it asked its question.
+    if (isSettledForCompletion(result)) await recordSelectedSuggestedActionCompletion({ userId, executionId, status: result.status, reasonCode: result.reasonCode });
     return mapPersistedExecution(saved, await propertySummary(clarifiedPropertyId));
   } catch (caught) {
     const failureStatus = askFailureStatus(caught);
@@ -280,6 +283,7 @@ async function resolveAskExecutionPropertyCore(userId: string, executionId: stri
     });
     await prisma.askExecutionEvent.create({ data: { executionId, eventType: result.status, metadataJson: asInputJson({ operationId: operation.operationId, stage: 'PROPERTY_RESUME' }) } });
     await prisma.askExecutionEvent.create({ data: { executionId, eventType: 'ANSWER_TRUST_VALIDATED', metadataJson: asInputJson({ ...validation.trust, semantic: validation.semantic, repaired: validation.repaired }) } });
+    if (isSettledForCompletion(result)) await recordSelectedSuggestedActionCompletion({ userId, executionId, status: result.status, reasonCode: result.reasonCode });
     return mapPersistedExecution(saved, await propertySummary(input.propertyId));
   } catch (caught) {
     const failureStatus = askFailureStatus(caught);
