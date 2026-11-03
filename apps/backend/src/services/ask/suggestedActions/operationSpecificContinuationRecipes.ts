@@ -439,7 +439,7 @@ export const OPERATION_SPECIFIC_CONTINUATION_RECIPES: Readonly<Partial<Record<As
     recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'HVAC_STARTED_REVIEW_HOME_ACTIONS'),
   ],
   HVAC_DECISION_CONTINUE: [
-    recipe('Compare an HVAC scenario', 'Show an HVAC repair-or-replace scenario', 'HVAC_DECISION_SCENARIO', 'REVIEW_HVAC_SCENARIO', 'HVAC_CONTINUE_REVIEW_SCENARIO'),
+    // No scenario recipe: HVAC_DECISION_SCENARIO needs a quoted amount and vendor, which a compact chip cannot supply.
     recipe('Review recorded HVAC outcome', 'Show my recorded HVAC decision outcome', 'HVAC_DECISION_OUTCOME_VIEW', 'REVIEW_HVAC_OUTCOME', 'HVAC_CONTINUE_REVIEW_OUTCOME'),
   ],
   HVAC_SPECIALIST_ENGAGE: [

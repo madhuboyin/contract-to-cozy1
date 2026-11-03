@@ -9,7 +9,7 @@
 
 Ask Cozy's Suggested Next Actions implementation is substantially healthier than the earlier audit described. The earlier two P0 entity-governance failures are resolved in commit `11102124`: property-wide outcomes have an explicit allowlist, HVAC continuation recipes carry an active decision-thread identity, and `DECISION_THREAD` and `GUIDANCE_JOURNEY` are present in the freshness matrix. The focused entity-eligibility suite passes.
 
-The current system nevertheless has eleven findings (F1-F5, F9 and F10 are P1; F6-F8 and F11 are P2). F10 has since been fixed in the working tree (see its section); the rest are open:
+The current system nevertheless has eleven findings (F1-F5, F9 and F10 are P1; F6-F8 and F11 are P2). F10 is fixed and pushed; F9 is fixed in the working tree (see their sections); the rest are open:
 
 1. **F1 (P1)** — The continuation-coverage completion gate is red. The operation registry changed without updating its reviewed hash, and `COMMUNITY_UPDATES` is the sole remaining `MIGRATION_REQUIRED` operation.
 2. **F2 (P1, owner decision)** — Completion semantics suppress most read/navigation outcomes after one successful use. Of 95 registered outcomes on read, status, decision-analysis, and guidance operations, 84 are non-repeatable. Changing this is a product-policy ruling, not a bug fix.
@@ -19,8 +19,8 @@ The current system nevertheless has eleven findings (F1-F5, F9 and F10 are P1; F
 6. **F6 (P2)** — Many block actions omit `outcomeKey`, which prevents cross-surface semantic deduplication (duplicate chips, not broken behavior).
 7. **F7 (P2)** — Recent-prompt suppression can block return-to-list actions after a mutation.
 8. **F8 (P2)** — Architecture documentation and executable inventories have drifted.
-9. **F9 (P1)** — HVAC continuation candidates are eligible but not necessarily executable on the intended decision thread.
-10. **F10 (P1, fixed in working tree)** — Status-only interactive results (`NEEDS_ENTITY` and siblings with no clarification/confirmation/capture payload) could enter exact-four.
+9. **F9 (P1, fixed in working tree)** — HVAC continuation candidates were eligible but not necessarily executable on the intended decision thread.
+10. **F10 (P1, fixed)** — Status-only interactive results (`NEEDS_ENTITY` and siblings with no clarification/confirmation/capture payload) could enter exact-four.
 11. **F11 (P2)** — Generic capability-recommendation conversion conflicts with target-entity requirements for `INVENTORY_LOOKUP` and `HVAC_DECISION_OUTCOME_VIEW`.
 
 The frontend contract itself is sound: governed typed actions render whenever present, including degraded and exempt rows, and legacy string suggestions are not revived for a governed result.
@@ -323,7 +323,7 @@ Reviewers can reach incorrect conclusions from the document without running the 
 
 Update section 17 from generated registry output after fixing coverage. Add a small checked-in audit command or test helper that reports operations, outcomes, repeatability, recipes, coverage classes, and role-floor mismatches so future audits do not rely on hand-maintained totals.
 
-### [P1] F9 — HVAC candidate eligibility does not guarantee executable thread continuity
+### [P1] F9 — HVAC candidate eligibility does not guarantee executable thread continuity (fixed in working tree)
 
 **Evidence**
 
@@ -344,7 +344,15 @@ The follow-up clarification itself is a pending interaction (those handlers use 
 
 Bind each thread-bound destination to the supplied `DECISION_THREAD` entity in its handler, as `continue` already does. Nominate thread-bound recipes only when exactly one active HVAC thread exists; with several, drop the recipe instead of choosing. Give the scenario recipe a message the destination can execute, or drop it. Add a handler-level test per destination proving the launch entity is honored.
 
-### [P1] F10 — Status-only interactive results could enter exact-four (fixed in working tree)
+**Fix (working tree, not yet committed)**
+
+- `hvacDecision.handler.ts`: new `focusedHvacThreadItem` resolves a `DECISION_THREAD` launch context to that thread's HVAC item (active, same property, HVAC definition). The scenario, abandon, outcome-report, outcome-view and outcome-unlink handlers now pass it to `findHvacItemForMessage` instead of relying on message text, and return `HVAC_DECISION_SUBJECT_NOT_ACTIVE` when the launch thread is no longer active (never a substitute thread). Capability registrations pass `envelope.launchContext`.
+- Producer: thread-bound recipes are nominated only when exactly one HVAC decision is active; with several, none are (previously `hvacThreads[0]`).
+- Recipes: the `HVAC_DECISION_CONTINUE` -> `HVAC_DECISION_SCENARIO` recipe is removed (the scenario needs a quoted amount and vendor). This also removes one of the F3 role-floor edges.
+- Tests: `hvacThreadFocusedLaunch.test.js` (launch thread honored; inactive thread never substituted; exactly-one-thread nomination; no scenario recipe).
+- Remaining limits: a focused thread still resolves through its item, so two active threads on the *same* item produce the existing ambiguity clarification rather than an exact-thread bind. With several active HVAC threads on different systems, the HVAC continuation chips are dropped entirely. With no active thread, HVAC sources fall back to `HOME_ACTIONS` where a recipe exists. `HVAC_DECISION_ABANDON` and the two outcome-report/unlink handlers received the same change but have no recipe-driven chip, so only outcome-view is covered by a test.
+
+### [P1] F10 — Status-only interactive results could enter exact-four (fixed, `454bdb35`)
 
 **Evidence**
 
@@ -354,7 +362,7 @@ Bind each thread-bound destination to the supplied `DECISION_THREAD` entity in i
 
 Such a result looked settled to the finalizer, so it could carry up to four unrelated chips beneath a question that was waiting on the homeowner.
 
-**Fix (working tree, not yet committed)**
+**Fix**
 
 `resultOwnsPendingInteraction` now treats any status in the new `INTERACTIVE_ASK_EXECUTION_STATUSES` (defined in `ask.contract.ts`; `INTERACTIVE_ASK_STATUSES` in `askSessions.ts` is derived from it, so there is one list) as a pending interaction, in addition to the existing payload checks. All three call sites use it. The optional-escape-route exception is unaffected because it applies only to `ANSWERED` and `READY_WITH_LIMITATIONS`. Test: `exactFourActivation.test.js`, "STATUS-ONLY INTERACTIVE RESULTS own the turn" (fails without the fix, passes with it).
 

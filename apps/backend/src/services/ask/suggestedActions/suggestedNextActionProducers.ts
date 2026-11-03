@@ -71,10 +71,12 @@ export const operationSpecificContinuationProducer: SuggestedNextActionProducer 
     const recipes = OPERATION_SPECIFIC_CONTINUATION_RECIPES[sourceOperationId as AskOperationId] ?? [];
     const needsRecordState = sourceOperationId === 'HOME_ACTIONS' && recipes.length > 0;
     const state = needsRecordState ? await loadState(propertyId) : undefined;
-    // Thread-bound HVAC destinations need the property's most recent active HVAC decision (list is ordered updatedAt desc).
-    const hvacThread = recipes.some((entry) => recipeTargetsDecisionThread(entry.operationId))
-      ? (await loadPlan({ propertyId })).hvacThreads?.[0] ?? null
-      : null;
+    // Thread-bound HVAC destinations are nominated only when exactly one HVAC decision is active. With several, choosing by recency
+    // would guess which system the homeowner means, so the recipe is dropped instead (Decision Thread contract).
+    const hvacThreads = recipes.some((entry) => recipeTargetsDecisionThread(entry.operationId))
+      ? (await loadPlan({ propertyId })).hvacThreads ?? []
+      : [];
+    const hvacThread = hvacThreads.length === 1 ? hvacThreads[0] : null;
     return operationSpecificContinuationCandidates(sourceOperationId, propertyId, state, hvacThread);
   },
 };

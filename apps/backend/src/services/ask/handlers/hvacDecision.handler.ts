@@ -78,6 +78,40 @@ async function findHvacItemForMessage(propertyId: string, message: string, focus
   return { items, item };
 }
 
+type HvacLaunchContext = CreateAskExecutionRequest['launchContext'];
+
+/**
+ * A chip launched from a specific decision thread carries that thread as `launchContext`. Resolve it to the thread's HVAC item so the
+ * destination operates on that system instead of re-resolving from the message text. `null` = no thread focus; `INACTIVE` = the
+ * focused thread is no longer an active HVAC decision on this property (never substitute a different one).
+ */
+export async function focusedHvacThreadItem(propertyId: string, launchContext?: HvacLaunchContext): Promise<{ inventoryItemId: string } | 'INACTIVE' | null> {
+  if (launchContext?.entityType !== 'DECISION_THREAD' || !launchContext.entityId) return null;
+  const thread = await prisma.decisionThread.findFirst({
+    where: {
+      id: launchContext.entityId, propertyId, decisionDefinitionId: 'HVAC_REPAIR_REPLACE', primaryEntityType: 'InventoryItem',
+      lifecycleStatus: { in: [...decisionThreadService.ACTIVE_LIFECYCLE_STATUSES] },
+    },
+    select: { primaryEntityId: true },
+  });
+  return thread?.primaryEntityId ? { inventoryItemId: thread.primaryEntityId } : 'INACTIVE';
+}
+
+function hvacFocusedThreadInactiveResult(): AskOperationResult {
+  return {
+    status: 'NOT_APPLICABLE',
+    reasonCode: 'HVAC_DECISION_SUBJECT_NOT_ACTIVE',
+    blocks: [{
+      type: 'EMPTY_STATE',
+      id: 'hvac-decision-subject-not-active',
+      title: 'This decision is no longer active',
+      body: 'The selected decision thread is not active for this home. Ask will not substitute a different decision based on title or recency.',
+      actions: [],
+    }],
+    suggestions: [],
+  };
+}
+
 export function hvacDecisionThreadAmbiguousResult(operationId: AskOperationId, candidates: { id: string; title: string; lifecycleStatus: string }[]): AskOperationResult {
   const sections = [{ id: 'threads', title: 'Threads', count: candidates.length, items: candidates.map((candidate) => ({ id: candidate.id, title: candidate.title, description: candidate.lifecycleStatus, meta: [], status: candidate.lifecycleStatus, href: null })) }];
   return {
@@ -246,8 +280,10 @@ async function hvacDecisionContinueResult(userId: string, propertyId: string, me
   };
 }
 
-async function hvacDecisionScenarioResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
-  const { item } = await findHvacItemForMessage(propertyId, message);
+export async function hvacDecisionScenarioResult(userId: string, propertyId: string, message: string, launchContext?: HvacLaunchContext): Promise<AskOperationResult> {
+  const focus = await focusedHvacThreadItem(propertyId, launchContext);
+  if (focus === 'INACTIVE') return hvacFocusedThreadInactiveResult();
+  const { item } = await findHvacItemForMessage(propertyId, message, focus?.inventoryItemId ?? null);
   if (!item) {
     return {
       status: 'NEEDS_ENTITY', reasonCode: 'HVAC_DECISION_ITEM_REQUIRED',
@@ -302,8 +338,10 @@ async function hvacDecisionScenarioResult(userId: string, propertyId: string, me
   };
 }
 
-async function hvacDecisionAbandonResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
-  const { item } = await findHvacItemForMessage(propertyId, message);
+async function hvacDecisionAbandonResult(userId: string, propertyId: string, message: string, launchContext?: HvacLaunchContext): Promise<AskOperationResult> {
+  const focus = await focusedHvacThreadItem(propertyId, launchContext);
+  if (focus === 'INACTIVE') return hvacFocusedThreadInactiveResult();
+  const { item } = await findHvacItemForMessage(propertyId, message, focus?.inventoryItemId ?? null);
   if (!item) {
     return {
       status: 'NEEDS_ENTITY', reasonCode: 'HVAC_DECISION_ITEM_REQUIRED',
@@ -343,8 +381,10 @@ async function hvacDecisionAbandonResult(userId: string, propertyId: string, mes
 // outcome never derives verificationStatus from the message -- see
 // outcomeObservationService.recordHomeownerReportedOutcome, which always
 // writes REPORTED regardless of what this function parses.
-async function hvacDecisionOutcomeReportResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
-  const { item } = await findHvacItemForMessage(propertyId, message);
+async function hvacDecisionOutcomeReportResult(userId: string, propertyId: string, message: string, launchContext?: HvacLaunchContext): Promise<AskOperationResult> {
+  const focus = await focusedHvacThreadItem(propertyId, launchContext);
+  if (focus === 'INACTIVE') return hvacFocusedThreadInactiveResult();
+  const { item } = await findHvacItemForMessage(propertyId, message, focus?.inventoryItemId ?? null);
   if (!item) {
     return {
       status: 'NEEDS_ENTITY', reasonCode: 'HVAC_DECISION_ITEM_REQUIRED',
@@ -395,8 +435,10 @@ async function hvacDecisionOutcomeReportResult(userId: string, propertyId: strin
   };
 }
 
-async function hvacDecisionOutcomeViewResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
-  const { item } = await findHvacItemForMessage(propertyId, message);
+export async function hvacDecisionOutcomeViewResult(userId: string, propertyId: string, message: string, launchContext?: HvacLaunchContext): Promise<AskOperationResult> {
+  const focus = await focusedHvacThreadItem(propertyId, launchContext);
+  if (focus === 'INACTIVE') return hvacFocusedThreadInactiveResult();
+  const { item } = await findHvacItemForMessage(propertyId, message, focus?.inventoryItemId ?? null);
   if (!item) {
     return {
       status: 'NEEDS_ENTITY', reasonCode: 'HVAC_DECISION_ITEM_REQUIRED',
@@ -430,8 +472,10 @@ async function hvacDecisionOutcomeViewResult(userId: string, propertyId: string,
   };
 }
 
-async function hvacDecisionOutcomeUnlinkResult(userId: string, propertyId: string, message: string): Promise<AskOperationResult> {
-  const { item } = await findHvacItemForMessage(propertyId, message);
+async function hvacDecisionOutcomeUnlinkResult(userId: string, propertyId: string, message: string, launchContext?: HvacLaunchContext): Promise<AskOperationResult> {
+  const focus = await focusedHvacThreadItem(propertyId, launchContext);
+  if (focus === 'INACTIVE') return hvacFocusedThreadInactiveResult();
+  const { item } = await findHvacItemForMessage(propertyId, message, focus?.inventoryItemId ?? null);
   if (!item) {
     return {
       status: 'NEEDS_ENTITY', reasonCode: 'HVAC_DECISION_ITEM_REQUIRED',
@@ -974,16 +1018,16 @@ registerCapabilityHandler('decision-platform.hvac.continue', async (envelope) =>
   envelope.launchContext?.entityType === 'DECISION_THREAD' ? envelope.launchContext.entityId : null,
 ));
 
-registerCapabilityHandler('decision-platform.hvac.scenario', async (envelope) => hvacDecisionScenarioResult(envelope.userId, envelope.propertyId!, envelope.message));
+registerCapabilityHandler('decision-platform.hvac.scenario', async (envelope) => hvacDecisionScenarioResult(envelope.userId, envelope.propertyId!, envelope.message, envelope.launchContext));
 
-registerCapabilityHandler('decision-platform.hvac.abandon', async (envelope) => hvacDecisionAbandonResult(envelope.userId, envelope.propertyId!, envelope.message));
+registerCapabilityHandler('decision-platform.hvac.abandon', async (envelope) => hvacDecisionAbandonResult(envelope.userId, envelope.propertyId!, envelope.message, envelope.launchContext));
 
 registerCapabilityHandler('decision-platform.hvac.preference.save', async (envelope) => hvacPreferenceSaveResult(envelope.userId, envelope.propertyId!, envelope.message));
 
 registerCapabilityHandler('decision-platform.hvac.preference.forget', async (envelope) => hvacPreferenceForgetResult(envelope.userId, envelope.propertyId!, envelope.message));
 
-registerCapabilityHandler('decision-platform.hvac.outcome.report', async (envelope) => hvacDecisionOutcomeReportResult(envelope.userId, envelope.propertyId!, envelope.message));
+registerCapabilityHandler('decision-platform.hvac.outcome.report', async (envelope) => hvacDecisionOutcomeReportResult(envelope.userId, envelope.propertyId!, envelope.message, envelope.launchContext));
 
-registerCapabilityHandler('decision-platform.hvac.outcome.view', async (envelope) => hvacDecisionOutcomeViewResult(envelope.userId, envelope.propertyId!, envelope.message));
+registerCapabilityHandler('decision-platform.hvac.outcome.view', async (envelope) => hvacDecisionOutcomeViewResult(envelope.userId, envelope.propertyId!, envelope.message, envelope.launchContext));
 
-registerCapabilityHandler('decision-platform.hvac.outcome.unlink', async (envelope) => hvacDecisionOutcomeUnlinkResult(envelope.userId, envelope.propertyId!, envelope.message));
+registerCapabilityHandler('decision-platform.hvac.outcome.unlink', async (envelope) => hvacDecisionOutcomeUnlinkResult(envelope.userId, envelope.propertyId!, envelope.message, envelope.launchContext));
