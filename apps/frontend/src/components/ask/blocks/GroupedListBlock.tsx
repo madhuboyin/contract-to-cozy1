@@ -44,6 +44,7 @@ import { AttachEvidenceControl, EVIDENCE_ATTACH_MESSAGES } from '../AttachEviden
 import { FinancingNumbers, FinancingOptions, FinancingPlanner, FinancingScenarios } from '../FinancingOverviewResult';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { CalendarDays, CheckCircle2, CircleHelp, ShieldCheck, Wrench } from 'lucide-react';
+import { WorkOverviewResultList } from '../WorkOverviewResultList';
 
 // Blocks whose items carry longer text revealed on demand (`item.detail`). The Negotiation Shield draft is collapsed by default so a long
 // message does not push the analysis down; the producer sets the id, the client only implements the expand/collapse.
@@ -1104,6 +1105,9 @@ export const GroupedListBlock: AskBlockRenderer<'GROUPED_LIST'> = (props) => {
 
 const DeclaredListBlock: AskBlockRenderer<'GROUPED_LIST'> = (props) => {
   const { block, propertyId, itemActionsDisabled, onFilterClick, onCollectionPage, onItemAction, onAccessLost } = props;
+  if (block.id === 'work-overview-results') {
+    return <WorkOverviewResultList {...props} />;
+  }
   if (INVENTORY_ITEM_DETAIL_BLOCK_IDS.has(block.id)) {
     return <NotedInventoryResultList block={block} propertyId={propertyId} disabled={itemActionsDisabled} onAction={onItemAction} onFilter={onFilterClick} onPage={onCollectionPage} onAccessLost={onAccessLost}
       link={(href, label) => <AskContextLink href={href}>{label}</AskContextLink>} />;
