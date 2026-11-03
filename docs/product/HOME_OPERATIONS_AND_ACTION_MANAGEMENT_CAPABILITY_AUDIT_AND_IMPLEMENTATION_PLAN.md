@@ -18,6 +18,8 @@ capability level<br>
 consequence through material financial and safety/emergency<br>
 **Primary outcome family:** Home Operations and Action Management
 
+**Major-appliance duplicate remediation (November 2, 2026):** Repeated replacement candidates were traced past the Work identity resolver: `(propertyId, workKey)` uniqueness and race retry were working, but XLSX inventory import and OCR draft confirmation could create multiple `InventoryItem` rows for the same one-per-property major appliance without claiming the canonical `property_appliance::<TYPE>` source hash. Each inventory id then correctly produced a different work key. Major-appliance identity is now centralized in `majorApplianceIdentityForCreate` and applied to bulk import, single/bulk OCR confirmation, and Property Context inline creation; the existing database uniqueness constraint on `(propertyId, sourceHash)` is therefore the final concurrency guard for every path. `npm run repair:duplicate-major-appliance-work` is dry-run by default and identifies historical groups; `--apply` assigns the canonical hash to the deterministic winner and records reversible supersession decisions for duplicate candidate work items without deleting inventory records or accepted work.
+
 ---
 
 ## 1. Executive Decision

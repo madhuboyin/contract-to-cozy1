@@ -21,6 +21,8 @@ const lifespanRecalcCalls = [];
 
 const txMock = {
   inventoryItem: {
+    findMany: async () => [],
+    findUnique: async () => null,
     create: async (args) => {
       itemCreateCalls.push(args.data);
       return { id: `item-${itemCreateCalls.length}`, ...args.data };

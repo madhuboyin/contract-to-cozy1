@@ -6,6 +6,7 @@ import {
   Prisma,
   WarrantyCategory,
 } from '@prisma/client';
+import { majorApplianceIdentityForCreate } from '../../../services/majorAppliance.util';
 import { prisma } from '../../../lib/prisma';
 import { visibleInventoryItemWhere } from '../../../services/riskAssetApplicability';
 import type {
@@ -505,10 +506,14 @@ async function createInventoryItem(
   }
   const candidates = await tx.inventoryItem.findMany({
     where: { propertyId, category: category as InventoryItemCategory },
-    select: { id: true, name: true },
+    select: { id: true, name: true, sourceHash: true },
   });
   const duplicate = candidates.find((item) => normalized(item.name) === normalized(name));
   if (duplicate) throw new Error('A matching inventory item already exists. Select it instead of adding a duplicate.');
+  const applianceIdentity = majorApplianceIdentityForCreate({ name, category: String(category) });
+  if (applianceIdentity && candidates.some((item) => item.sourceHash === applianceIdentity.sourceHash)) {
+    throw new Error('A matching major appliance already exists. Select it instead of adding a duplicate.');
+  }
   const item = await tx.inventoryItem.create({
     data: {
       propertyId,
@@ -518,6 +523,8 @@ async function createInventoryItem(
       roomId,
       sourceType: 'MANUAL',
       verificationSource: 'PROPERTY_CONTEXT_INLINE',
+      sourceHash: applianceIdentity?.sourceHash ?? null,
+      tags: applianceIdentity?.tags ?? [],
     },
     select: { id: true },
   });

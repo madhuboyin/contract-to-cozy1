@@ -13,6 +13,7 @@ import {
   inferMajorApplianceType,
   classifiedApplianceType,
   planApplianceIdentityTags,
+  majorApplianceIdentityForCreate,
   APPLIANCE_TYPE_TAG_PREFIX,
   PROPERTY_APPLIANCE_SOURCE_HASH_PREFIX,
 } from './majorAppliance.util';
@@ -371,11 +372,12 @@ export class InventoryService {
     let enforcedTags: string[] = [];
   
     if (String(data.category) === 'APPLIANCE') {
-      const inferredType = inferMajorApplianceType(data.name);
+      const identity = majorApplianceIdentityForCreate({ name: data.name, category: data.category, tags: data.tags });
+      const inferredType = identity?.type ?? null;
       
-      if (inferredType) {
-        sourceHash = `${PROPERTY_APPLIANCE_SOURCE_HASH_PREFIX}${inferredType}`;
-        enforcedTags = [TAG_PROPERTY_APPLIANCE, `APPLIANCE_TYPE:${inferredType}`];
+      if (identity) {
+        sourceHash = identity.sourceHash;
+        enforcedTags = identity.tags.filter((tag) => !(data.tags ?? []).includes(tag));
   
         // Check if this major appliance already exists
         const existingCanonical = await prisma.inventoryItem.findFirst({

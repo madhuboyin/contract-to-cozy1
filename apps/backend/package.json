@@ -56,6 +56,7 @@
     "reconcile:ask-pending:dev": "ts-node src/scripts/askPendingExpiryReconcile.ts",
     "report:service-price-benchmarks": "ts-node src/scripts/reportServicePriceBenchmarkHealth.ts",
     "backfill:property-activation": "ts-node scripts/backfill-property-activation.ts",
+    "repair:duplicate-major-appliance-work": "ts-node scripts/repair-duplicate-major-appliance-work.ts",
     "bootstrap:admin-capabilities": "ts-node scripts/adminCapabilityBootstrap.ts"
   },
   "prisma": {

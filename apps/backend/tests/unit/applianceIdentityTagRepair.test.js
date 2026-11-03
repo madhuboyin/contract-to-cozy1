@@ -35,13 +35,23 @@ mockModule('../../src/services/JobQueue.service.ts', { __esModule: true, default
 mockModule('../../src/services/decisionPlatform/decisionThreadService.ts', { markThreadStaleOnFactCorrection: async () => undefined });
 
 const { InventoryService } = require('../../src/services/inventory.service.ts');
-const { planApplianceIdentityTags } = require('../../src/services/majorAppliance.util.ts');
+const { majorApplianceIdentityForCreate, planApplianceIdentityTags } = require('../../src/services/majorAppliance.util.ts');
 const service = new InventoryService();
 
 const HASH = 'property_appliance::FRIDGE';
 const VERSION = new Date('2026-09-01T00:00:00.000Z');
 const row = (overrides = {}) => ({ id: 'item-1', category: 'APPLIANCE', tags: [], sourceHash: HASH, updatedAt: VERSION, ...overrides });
 function reset(item, count = 1) { existingItem = item; updateManyCount = count; updateManyCalls.length = 0; emitted.length = 0; }
+
+test('every creation path can claim the same durable major-appliance identity', () => {
+  assert.deepEqual(majorApplianceIdentityForCreate({ name: 'Kitchen dishwasher', category: 'APPLIANCE', tags: ['IMPORTED'] }), {
+    type: 'DISHWASHER',
+    sourceHash: 'property_appliance::DISHWASHER',
+    tags: ['IMPORTED', 'PROPERTY_APPLIANCE', 'APPLIANCE_TYPE:DISHWASHER'],
+  });
+  assert.equal(majorApplianceIdentityForCreate({ name: 'Kitchen dishwasher', category: 'OTHER' }), null);
+  assert.equal(majorApplianceIdentityForCreate({ name: 'Coffee grinder', category: 'APPLIANCE' }), null);
+});
 
 test('the plan restores only the missing identity tags, in place, and never removes anything', () => {
   assert.deepEqual(planApplianceIdentityTags(row({ tags: [] })), { action: 'RESTORE', type: 'FRIDGE', tags: ['PROPERTY_APPLIANCE', 'APPLIANCE_TYPE:FRIDGE'], added: ['PROPERTY_APPLIANCE', 'APPLIANCE_TYPE:FRIDGE'] });

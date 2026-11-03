@@ -8,6 +8,7 @@ import {
 } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
+import { majorApplianceIdentityForCreate } from './majorAppliance.util';
 
 const HEADERS = [
   'Room',
@@ -171,6 +172,10 @@ export class InventoryImportService {
 
     const allowedCategories = Object.values(InventoryItemCategory) as any;
     const allowedConditions = Object.values(InventoryItemCondition) as any;
+    const claimedMajorApplianceHashes = new Set((await prisma.inventoryItem.findMany({
+      where: { propertyId: args.propertyId, sourceHash: { startsWith: 'property_appliance::' } },
+      select: { sourceHash: true },
+    })).flatMap((item) => item.sourceHash ? [item.sourceHash] : []));
 
     // Iterate data rows (skip row 1 = header)
     ws.eachRow((row, rowNumber) => {
@@ -277,6 +282,13 @@ export class InventoryImportService {
       const model = asString(r['Model']);
       const serialNo = asString(r['Serial No']);
 
+      const applianceIdentity = majorApplianceIdentityForCreate({ name, category, tags });
+      if (applianceIdentity && claimedMajorApplianceHashes.has(applianceIdentity.sourceHash)) {
+        errors.push({ row: excelRowNumber, field: 'Item Name', message: `A ${applianceIdentity.type.toLowerCase().replace(/_/g, ' ')} already exists for this property.` });
+        continue;
+      }
+      if (applianceIdentity) claimedMajorApplianceHashes.add(applianceIdentity.sourceHash);
+
       resolved.push({
         propertyId: args.propertyId,
         roomId,
@@ -292,7 +304,8 @@ export class InventoryImportService {
         purchaseCostCents,
         replacementCostCents,
         currency,
-        tags,
+        tags: applianceIdentity?.tags ?? tags,
+        sourceHash: applianceIdentity?.sourceHash ?? null,
         notes,
         source: InventoryItemSource.BULK_UPLOAD,
         sourceBatchId: batchId,

@@ -3,6 +3,7 @@ import { prisma } from '../lib/prisma';
 import { APIError } from '../middleware/error.middleware';
 import { applianceOracleService } from './applianceOracle.service';
 import { logger } from '../lib/logger';
+import { majorApplianceIdentityForCreate } from './majorAppliance.util';
 import { emitPropertyChangeWithTransaction } from '../propertyChanges/propertyChange.service';
 import type { Prisma } from '@prisma/client';
 
@@ -107,6 +108,8 @@ export class InventoryDraftService {
     if (d.sku) technicalSpecs.sku = d.sku;
 
     const hasTechSpecs = Object.keys(technicalSpecs).length > 0;
+    const itemName = d.name || d.modelNumber || d.manufacturer || 'New item';
+    const applianceIdentity = majorApplianceIdentityForCreate({ name: itemName, category: d.category });
 
     // HI-DOC-003/005 promotion-adapter hardening: transactional (the item
     // create and draft-status transition previously ran as two independent
@@ -115,10 +118,17 @@ export class InventoryDraftService {
     // durable OCR provenance (sourceOcrSessionId) and a PropertyChange
     // emission so dependent recommendations recompute.
     const item = await prisma.$transaction(async (tx) => {
+      if (applianceIdentity) {
+        const existing = await tx.inventoryItem.findUnique({
+          where: { propertyId_sourceHash: { propertyId, sourceHash: applianceIdentity.sourceHash } },
+          select: { id: true },
+        });
+        if (existing) throw new APIError('A matching major appliance already exists for this property.', 409, 'APPLIANCE_ALREADY_EXISTS');
+      }
       const created = await tx.inventoryItem.create({
         data: {
           propertyId,
-          name: d.name || d.modelNumber || d.manufacturer || 'New item',
+          name: itemName,
           category: d.category || 'OTHER',
           condition: d.condition || 'UNKNOWN',
           brand: d.brand || null,
@@ -138,6 +148,8 @@ export class InventoryDraftService {
           isVerified: true,
           verificationSource: 'OCR_LABEL',
           sourceOcrSessionId: d.sessionId ?? null,
+          sourceHash: applianceIdentity?.sourceHash ?? null,
+          tags: applianceIdentity?.tags ?? [],
           ...(hasTechSpecs ? { technicalSpecs } : {}),
         },
       });
@@ -201,6 +213,10 @@ export class InventoryDraftService {
       });
 
       const created: string[] = [];
+      const claimedMajorApplianceHashes = new Set((await tx.inventoryItem.findMany({
+        where: { propertyId, sourceHash: { startsWith: 'property_appliance::' } },
+        select: { sourceHash: true },
+      })).flatMap((item) => item.sourceHash ? [item.sourceHash] : []));
 
       for (const d of drafts) {
         const technicalSpecs: Record<string, string | null> = {};
@@ -210,13 +226,19 @@ export class InventoryDraftService {
         if (d.upc) technicalSpecs.upc = d.upc;
         if (d.sku) technicalSpecs.sku = d.sku;
         const hasTechSpecs = Object.keys(technicalSpecs).length > 0;
+        const itemName = d.name || d.modelNumber || d.manufacturer || 'New item';
+        const applianceIdentity = majorApplianceIdentityForCreate({ name: itemName, category: d.category });
+        if (applianceIdentity && claimedMajorApplianceHashes.has(applianceIdentity.sourceHash)) {
+          throw new APIError('A matching major appliance already exists for this property.', 409, 'APPLIANCE_ALREADY_EXISTS');
+        }
+        if (applianceIdentity) claimedMajorApplianceHashes.add(applianceIdentity.sourceHash);
 
         const item = await tx.inventoryItem.create({
           data: {
             propertyId,
             roomId: d.roomId || null,
 
-            name: d.name || d.modelNumber || d.manufacturer || 'New item',
+            name: itemName,
             category: d.category || 'OTHER',
             condition: d.condition || 'UNKNOWN',
 
@@ -239,6 +261,8 @@ export class InventoryDraftService {
             isVerified: true,
             verificationSource: 'OCR_LABEL',
             sourceOcrSessionId: d.sessionId ?? null,
+            sourceHash: applianceIdentity?.sourceHash ?? null,
+            tags: applianceIdentity?.tags ?? [],
             ...(hasTechSpecs ? { technicalSpecs } : {}),
           },
           select: { id: true },

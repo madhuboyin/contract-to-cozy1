@@ -59,6 +59,27 @@ export const APPLIANCE_TYPE_TAG_PREFIX = 'APPLIANCE_TYPE:';
 export const PROPERTY_APPLIANCE_TAG = 'PROPERTY_APPLIANCE';
 
 /**
+ * Canonical create-time identity for the one-per-property major appliances.
+ * Every inventory ingestion path must use this instead of inventing its own
+ * sourceHash/tags rules; otherwise two records for one physical appliance
+ * become two valid downstream work identities.
+ */
+export function majorApplianceIdentityForCreate(input: {
+  name: string | null | undefined;
+  category: string | null | undefined;
+  tags?: readonly string[] | null;
+}): { type: MajorApplianceType; sourceHash: string; tags: string[] } | null {
+  if (String(input.category) !== 'APPLIANCE') return null;
+  const type = inferMajorApplianceType(input.name);
+  if (!type) return null;
+  return {
+    type,
+    sourceHash: `${PROPERTY_APPLIANCE_SOURCE_HASH_PREFIX}${type}`,
+    tags: [...new Set([...(input.tags ?? []), PROPERTY_APPLIANCE_TAG, `${APPLIANCE_TYPE_TAG_PREFIX}${type}`])],
+  };
+}
+
+/**
  * The major-appliance classification an inventory item already carries, if any.
  *
  * The canonical source hash is the durable record of the classification (it is what duplicate prevention keys on and
