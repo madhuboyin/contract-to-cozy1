@@ -77,7 +77,8 @@ const AVAILABILITY_RULE: Record<AskOperationUnavailableReason, { rule: Eligibili
  * continuation, and the destination is a read/status operation reached by plain navigation. Starters keep their separate exemption.
  */
 function isPostMutationReturnToRead(candidate: SuggestedNextActionCandidate): boolean {
-  if (candidate.source !== 'OPERATION_RESULT' || !candidate.sourceOperationId) return false;
+  // Both result-owned continuation producers: recipes (OPERATION_RESULT) and governed skill handoffs (SKILL_HANDOFF).
+  if ((candidate.source !== 'OPERATION_RESULT' && candidate.source !== 'SKILL_HANDOFF') || !candidate.sourceOperationId) return false;
   return isTrustedPostMutationReturn(candidate.sourceOperationId, candidate);
 }
 

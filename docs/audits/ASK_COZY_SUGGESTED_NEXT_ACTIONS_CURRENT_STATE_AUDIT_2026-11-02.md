@@ -67,8 +67,8 @@ An independent review of the remediation raised five gaps. Each was checked agai
 | Gap 1: the 24-hour hub window counts unclicked offers, so a hub shown once is held back even in `CONTINUE_WORK` | Behavior real, but it is the owner's ruling as written ("most recent offer or selection", every slot class). Not a regression | **Kept as is** by owner decision. Revisit only if hubs prove to disappear too eagerly |
 | Gap 2: completion recorded only at execution creation | Confirmed: one call site, `ANSWERED`/`COMPLETED` only | **Fixed** (below) |
 | Gap 3: `askCapture` direct-handler branches skip the finalizer; `askConfirm` omits recent messages | Confirmed (11 `executeOperation` calls, many direct branches; the sites registry note overstated it) | **Fixed** (below) |
-| Gap 4: HVAC extras (start to continue duplicate, unconditional outcome view, one missing `outcomeKey`) | Partly valid, low impact; the suggested `outcomeKey` value was the wrong format and would not de-duplicate | Not changed |
-| Gap 5: `SKILL_HANDOFF` excluded from the post-mutation exemption | Valid in principle, unverified impact | Not changed |
+| Gap 4: HVAC extras (start to continue duplicate, unconditional outcome view, multi-thread binding, one missing `outcomeKey`) | Partly valid. Duplicate chip and unconditional outcome view valid; multi-thread claim mostly not (only one settled result exposes its thread); the `outcomeKey` item has no effect (see below) | **Fixed** for the three valid parts (below); the `outcomeKey` item deliberately skipped |
+| Gap 5: `SKILL_HANDOFF` excluded from the post-mutation exemption | Valid, but the one-line fix proposed would not have worked: handoff outcomes (`HANDOFF_REVIEW_*`) were not in any ownership entry. Practical impact is small (the handoff prompt text must equal a recently asked message) | **Fixed** (below) |
 
 **Gap 2 fix.**
 
@@ -77,12 +77,21 @@ An independent review of the remediation raised five gaps. Each was checked agai
 - `isSettledForCompletion`: `ANSWERED`, `COMPLETED`, or `READY_WITH_LIMITATIONS` with no open capture prompt, clarification or confirmation. An unfinished `READY_WITH_LIMITATIONS` is not complete.
 - Session history (`loadCompletedSuggestedActionKeyHashes`) no longer counts a `READY_WITH_LIMITATIONS` execution that still has open capture requests as completed (the current execution's own selection still counts).
 
+**Gap 4 fix.**
+
+- `HVAC_DECISION_START` no longer offers `HVAC_DECISION_CONTINUE` when its result is `HVAC_DECISION_ALREADY_ACTIVE` (that result already continued the decision). Mechanism: an optional `omitWhenResultReason` on a recipe.
+- `HVAC_DECISION_OUTCOME_VIEW` is offered only when the decision has a recorded outcome. `hasRecordedOutcomeForThread` is a side-effect-free check (it does not run the maintenance corroboration that viewing does, so an outcome only that step would create is not counted); an unknown or failed check keeps the chip.
+- On a multi-thread home, thread-bound recipes use the thread the current result itself resolved and reported (`parameters.focusedDecisionThreadId`, set on the focused-continue result) when it is one of the active threads; otherwise they are still dropped, never chosen by recency. Settled start, unfocused continue and outcome-view results do not expose their thread, so they are unchanged.
+- Skipped on purpose: an `outcomeKey` on the HVAC warranty action. The correct value would be `REVIEW_WARRANTIES`, but that action is a per-item question carrying an item entity and no equivalent chip is ever nominated for it, so it could not de-duplicate anything and would label a per-item question as the list outcome.
+
+**Gap 5 fix.** Skill handoffs from the five command sources (`CLAIM_FILE`, `CLAIM_TRANSITION`, `INSPECTION_FINDING_UPDATE`, `DOCUMENT_PROMOTION_CONFIRM`, `BUYER_LIFECYCLE_UPDATE`) now own their `HANDOFF_REVIEW_*` read destination in `RESULT_OWNERSHIP_RELATIONSHIPS`, and the post-mutation exemption accepts the `SKILL_HANDOFF` source as well as `OPERATION_RESULT`. The four read-sourced handoffs own nothing and keep the recent-prompt rule. `skillHandoffPostMutation.test.js` checks every handoff definition against both rules, so a new command handoff cannot drift out of the ownership list.
+
 **Gap 3 fix.**
 
 - `ensureGovernedCaptureResult` runs the shared finalizer on any capture result that is not already governed, immediately before the single persistence transaction. Handler-attached candidates are no longer discarded, offers are recorded, and a result waiting on the homeowner gets no unrelated chips. A finalizer failure keeps the original result.
 - `askConfirm` now passes recent completed messages, via a shared `loadRecentCompletedMessages`.
 - The persistence-sites registry entry for `askCapture` is corrected to `WIRED` with an accurate note.
-- Tests: `suggestedActionCompletionAndSeams.test.js` (8 tests). The full chunked Ask suite shows no new failures against the pre-change baseline; the typecheck is clean. Not verified against a database or browser.
+- Tests: `suggestedActionCompletionAndSeams.test.js` (8 tests), `hvacContinuationRefinements.test.js` (4) and `skillHandoffPostMutation.test.js` (1). The full chunked Ask suite shows no new failures against the pre-change baseline; the typecheck is clean. Not verified against a database or browser.
 
 ## 2. Method and evidence
 

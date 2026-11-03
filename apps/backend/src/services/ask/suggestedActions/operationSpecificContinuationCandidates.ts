@@ -18,12 +18,16 @@ export function operationSpecificContinuationCandidates(
   propertyId: string | null,
   state?: OperationSpecificContinuationState,
   activeHvacThread?: ActiveDecisionThreadRef | null,
+  resultReasonCode?: string | null,
 ): SuggestedNextActionCandidate[] {
   if (!sourceOperationId || !propertyId) return [];
   const recipes = OPERATION_SPECIFIC_CONTINUATION_RECIPES[sourceOperationId as AskOperationId] ?? [];
   return recipes.filter((entry) => {
     // A thread-bound destination is only nominated against a real active thread; without one the row would open nothing.
     if (recipeTargetsDecisionThread(entry.operationId) && !activeHvacThread) return false;
+    if (resultReasonCode && entry.omitWhenResultReason?.includes(resultReasonCode)) return false;
+    // Reviewing the outcome of a decision that has none recorded opens an empty view.
+    if (entry.operationId === 'HVAC_DECISION_OUTCOME_VIEW' && state?.hasRecordedHvacOutcome === false) return false;
     if (!state) return true;
     // The forecast needs a verified forecastable system on every source; without one it answers NOT_APPLICABLE with nothing to do.
     if (entry.operationId === 'MAINTENANCE_FORECAST' && state.hasForecastableSystem === false) return false;

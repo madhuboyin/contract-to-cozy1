@@ -6,6 +6,8 @@ export interface OperationSpecificContinuationRecipe {
   operationId: AskOperationId;
   outcomeKey: string;
   reasonCode: string;
+  /** Omit this recipe when the source result carries one of these reason codes (the result already shows what the recipe would open). */
+  omitWhenResultReason?: readonly string[];
 }
 const recipe = (
   label: string,
@@ -473,7 +475,8 @@ export const OPERATION_SPECIFIC_CONTINUATION_RECIPES: Readonly<Partial<Record<As
     recipe('Review home summary', 'Show my home summary', 'PROPERTY_SUMMARY', 'REVIEW_HOME_SUMMARY', 'MAJOR_EVENT_REVIEW_HOME'),
   ],
   HVAC_DECISION_START: [
-    recipe('Continue the HVAC decision', 'Continue my HVAC repair-or-replace decision', 'HVAC_DECISION_CONTINUE', 'CONTINUE_ACTIVE_HVAC_DECISION', 'HVAC_STARTED_CONTINUE'),
+    // An already-active decision is answered by continuing it right here, so a second "continue" would repeat the same answer.
+    { ...recipe('Continue the HVAC decision', 'Continue my HVAC repair-or-replace decision', 'HVAC_DECISION_CONTINUE', 'CONTINUE_ACTIVE_HVAC_DECISION', 'HVAC_STARTED_CONTINUE'), omitWhenResultReason: ['HVAC_DECISION_ALREADY_ACTIVE'] },
     recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'HVAC_STARTED_REVIEW_HOME_ACTIONS'),
   ],
   HVAC_DECISION_CONTINUE: [

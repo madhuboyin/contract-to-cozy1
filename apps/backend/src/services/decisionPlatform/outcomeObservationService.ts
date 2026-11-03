@@ -595,6 +595,19 @@ export async function getOutcomeSummaryForThread(decisionThreadId: string, prope
   return attributions.map((attribution) => ({ attribution, observation: attribution.outcomeObservation }));
 }
 
+/**
+ * Whether a thread has any recorded outcome row (a side-effect-free check for gating a "review the outcome" chip). Unlike
+ * getOutcomeSummaryForThread it does not first corroborate a completed maintenance record, so an outcome that only that step would
+ * create is not counted; the homeowner can still ask for the outcome directly.
+ */
+export async function hasRecordedOutcomeForThread(decisionThreadId: string, propertyId: string): Promise<boolean> {
+  const thread = await prisma.decisionThread.findFirst({ where: { id: decisionThreadId, propertyId }, select: { id: true } });
+  if (!thread) return false;
+  const snapshotIds = (await prisma.recommendationSnapshot.findMany({ where: { decisionThreadId }, select: { id: true } })).map((s) => s.id);
+  if (!snapshotIds.length) return false;
+  return (await prisma.recommendationAttribution.count({ where: { recommendationSnapshotId: { in: snapshotIds } } })) > 0;
+}
+
 // FRD §21.5 "unlink" control. Marks the observation REJECTED (a dispute, not
 // a replacement -- SUPERSEDED is reserved for recordHomeownerReportedOutcome's
 // correction-by-resubmission path) and every attribution referencing it
