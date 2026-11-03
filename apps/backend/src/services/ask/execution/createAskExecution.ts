@@ -27,6 +27,7 @@ import { resolveAskEntityState } from '../askEntityResolution';
 import { askOperationSemanticIndexVersion, normalizeAskMessage } from '../askSemanticRouter';
 import { reclaimOrphanedRunningExecution } from '../execution/askSessions';
 import { finalizeSuggestedNextActions } from '../suggestedActions/finalizeSuggestedNextActions';
+import { isSettledForCompletion } from '../suggestedActions/suggestedActionCompletion';
 import { suggestedNextActionSemanticKeyHash } from '../suggestedActions/suggestedNextActionIdentity';
 import { recordSuggestedActionCompleted, recordSuggestedActionSelected } from '../suggestedActions/askSuggestedActionLifecycle.service';
 import { recordSuggestedActionOutcomeAnalytics, recordSuggestedActionSelectedAnalytics } from '../suggestedActions/suggestedActionAnalytics';
@@ -567,7 +568,7 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
       },
     });
     // A verified starter or action whose answer completed is a completed outcome (non-repeatable ones then stop being offered; repeatable starters rotate).
-    if (suggestionResolution?.kind === 'VERIFIED' && (result.status === 'ANSWERED' || result.status === 'COMPLETED') && suggestionResolution.action.entityContext.propertyId) {
+    if (suggestionResolution?.kind === 'VERIFIED' && isSettledForCompletion(result) && suggestionResolution.action.entityContext.propertyId) {
       const done = suggestionResolution.action;
       await recordSuggestedActionCompleted(userId, done.entityContext.propertyId!, {
         operationId: done.operationId, outcomeKey: done.outcomeKey, entityType: done.entityContext.entityType, entityId: done.entityContext.entityId,

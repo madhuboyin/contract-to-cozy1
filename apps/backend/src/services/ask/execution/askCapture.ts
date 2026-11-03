@@ -37,6 +37,9 @@ import { INVENTORY_COMPLETE_DETAILS_CAPTURE_KEY, INVENTORY_CREATE_CAPTURE_KEY, i
 import { claimFileResult, ClaimFileWorkflowInputSchema } from '../handlers/claims.handler';
 import { RADAR_PREFERENCES_CAPTURE_KEY, RADAR_TASK_CAPTURE_KEY, radarCaptureError, radarPreferencesBodyFromAnswer, radarPreferencesContextVersion, radarPreferencesFormResult, radarTaskContextVersion, radarTaskFormResult } from '../handlers/homeEventRadar.handler';
 import { executeOperation } from '../execution/executeOperation';
+import { finalizeSuggestedNextActions } from '../suggestedActions/finalizeSuggestedNextActions';
+import { isSettledForCompletion, recordSelectedSuggestedActionCompletion } from '../suggestedActions/suggestedActionCompletion';
+import { loadCompletedSuggestedActionKeyHashes, loadRecentCompletedMessages } from '../suggestedActions/suggestedNextActionHistory';
 import { homeJourneyContextVersion, homeJourneyResult, purchaseDateContextVersion, purchaseDateResult } from '../handlers/homeSettingsWrites.handler';
 import { HOME_JOURNEY_CAPTURE_KEY, PURCHASE_DATE_CAPTURE_KEY } from '../support/homeSettingsConstants';
 import { HOME_PLANT_CAPTURE_KEY, MATERIAL_SPEC_CAPTURE_KEY } from '../support/homeRecordAddConstants';
@@ -351,6 +354,31 @@ async function submitNextActionMissingFactCapture(
   });
   askInlineCapturesTotal.inc({ operation: execution.operationId ?? 'UNKNOWN', outcome: 'RESUMED' });
   return mapPersistedExecution(saved, await propertySummary(propertyId));
+}
+
+/**
+ * Most capture branches call a domain handler directly instead of executeOperation, so their result reaches persistence without the shared
+ * finalizer: no governed next actions, and any candidates the handler attached were silently dropped. Run the finalizer for those results
+ * (executeOperation results are already governed). Never throws: a finalizer failure leaves the result as the handler returned it.
+ */
+export async function ensureGovernedCaptureResult(
+  userId: string,
+  execution: { id: string; sessionId: string; propertyId: string | null; operationId: string | null; message: string },
+  result: AskOperationResult,
+  deps?: Parameters<typeof finalizeSuggestedNextActions>[1],
+): Promise<AskOperationResult> {
+  if (result.suggestedNextActionsGoverned === true) return result;
+  try {
+    return await finalizeSuggestedNextActions({
+      result, executionId: execution.id, userId, sessionId: execution.sessionId, propertyId: execution.propertyId,
+      operationId: execution.operationId, message: execution.message,
+      completedSemanticKeyHashes: () => loadCompletedSuggestedActionKeyHashes({ executionId: execution.id, sessionId: execution.sessionId, userId }),
+      recentCompletedMessages: await loadRecentCompletedMessages({ sessionId: execution.sessionId, userId, excludeExecutionId: execution.id }),
+    }, deps);
+  } catch (error) {
+    logger.warn({ err: error, executionId: execution.id }, '[ask-capture] suggested next actions could not be governed; result kept as returned');
+    return result;
+  }
 }
 
 // Capability discovery lifecycle (IW-SHELL-021): a continuation that finishes with delivered output counts for the discovery-launched turn it continues.
@@ -2740,6 +2768,7 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
   // function, not an unconditional update. If the guard doesn't match,
   // something else already moved this execution past the status this
   // request expected -- fail closed rather than overwrite it.
+  result = await ensureGovernedCaptureResult(userId, execution, result);
   const saved = await prisma.$transaction(async (tx) => {
     const updated = await tx.askExecution.updateMany({
       where: { id: execution.id, status: execution.status },
@@ -2774,6 +2803,8 @@ async function submitAskCaptureCore(userId: string, executionId: string, input: 
     });
     return tx.askExecution.findUniqueOrThrow({ where: { id: execution.id } });
   });
+  // The chip that led to this capture completes when the capture finishes the request, not when it was first prompted.
+  if (isSettledForCompletion(result)) await recordSelectedSuggestedActionCompletion({ userId, executionId: execution.id, status: result.status, reasonCode: result.reasonCode });
   askInlineCapturesTotal.inc({ operation: execution.operationId ?? 'UNKNOWN', outcome: 'RESUMED' });
   if (result.captureRequests?.some((request) => request.captureKey === input.captureKey)) {
     askInlineCapturesTotal.inc({ operation: execution.operationId ?? 'UNKNOWN', outcome: 'REPEATED_PROMPT' });

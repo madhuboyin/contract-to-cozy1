@@ -3,7 +3,8 @@
 // re-exports the names below so existing imports keep working.
 import { finalizeRecoveryActions, restartAfterExpiryCandidates, reviewCurrentInventoryItemCandidates } from '../suggestedActions/recoveryCandidates';
 import { finalizeSuggestedNextActions } from '../suggestedActions/finalizeSuggestedNextActions';
-import { loadCompletedSuggestedActionKeyHashes } from '../suggestedActions/suggestedNextActionHistory';
+import { loadCompletedSuggestedActionKeyHashes, loadRecentCompletedMessages } from '../suggestedActions/suggestedNextActionHistory';
+import { isSettledForCompletion, recordSelectedSuggestedActionCompletion } from '../suggestedActions/suggestedActionCompletion';
 import { AskExecution, Prisma } from '@prisma/client';
 import { createHash } from 'node:crypto';
 import { prisma } from '../../../lib/prisma';
@@ -403,6 +404,7 @@ export async function confirmAskExecution(userId: string, executionId: string, i
     result, executionId: execution.id, userId, sessionId: execution.sessionId, propertyId: execution.propertyId,
     operationId: confirmedOperationId, message: execution.message,
     completedSemanticKeyHashes: () => loadCompletedSuggestedActionKeyHashes({ executionId: execution.id, sessionId: execution.sessionId, userId }),
+    recentCompletedMessages: await loadRecentCompletedMessages({ sessionId: execution.sessionId, userId, excludeExecutionId: execution.id }),
   });
   const confirmedValidation = validateAskConfirmedCompletion({
     question: execution.message,
@@ -467,6 +469,8 @@ export async function confirmAskExecution(userId: string, executionId: string, i
     saved = completed;
   }
   void recordAskCapabilityLifecycle(executionId, 'CONFIRMED');
+  // The chip that led to this confirmation completes only now, not when the confirmation was requested.
+  if (isSettledForCompletion({ status: saved.status })) await recordSelectedSuggestedActionCompletion({ userId, executionId, status: saved.status, reasonCode: saved.reasonCode });
   const response = mapPersistedExecution(saved, await propertySummary(execution.propertyId), refreshedExecutions);
   return reconciliationScope ? { ...response, reconciliation: { staleExecutionIds: [...reconciliationScope.staleExecutionIds].slice(0, 50), markedElsewhere: reconciliationScope.markedElsewhere } } : response;
 }

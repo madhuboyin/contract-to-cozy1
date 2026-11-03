@@ -1,6 +1,7 @@
 // Plan §6 rule 10: semantic-key hashes of suggested outcomes this session already completed (the current execution's own
 // selection included). One bounded read, shared by the read path and the confirmation path so both suppress the same way.
 import { prisma } from '../../../lib/prisma';
+import { storedResultHasOpenCaptureRequests } from './suggestedActionCompletion';
 
 const COMPLETED_STATUSES = ['ANSWERED', 'COMPLETED', 'READY_WITH_LIMITATIONS'] as const;
 const HISTORY_EVENT_LIMIT = 50;
@@ -39,14 +40,36 @@ export async function loadCompletedSuggestedActionKeyHashes(input: { executionId
       },
       orderBy: { createdAt: 'desc' },
       take: HISTORY_EVENT_LIMIT,
-      select: { metadataJson: true },
+      select: { executionId: true, metadataJson: true, execution: { select: { status: true, resultJson: true } } },
     });
     return new Set(events.flatMap((event) => {
+      // READY_WITH_LIMITATIONS that still has an open capture prompt is an unfinished request, not a completed one (the current
+      // execution's own selection always counts: it is the outcome this turn is producing).
+      if (event.executionId !== input.executionId && event.execution?.status === 'READY_WITH_LIMITATIONS'
+        && storedResultHasOpenCaptureRequests(event.execution.resultJson)) return [];
       const hash = (event.metadataJson as { semanticKeyHash?: unknown } | null)?.semanticKeyHash;
       return typeof hash === 'string' ? [hash] : [];
     }));
   } catch {
     // Typed-action history is optional; losing it only means a completed outcome may be offered again.
     return new Set();
+  }
+}
+
+/**
+ * The messages of this session's most recent completed turns (excluding the current execution), for the recent-prompt rule. Shared by
+ * the execution, confirmation and capture finalizers so they suppress an identical just-asked prompt the same way. Failure yields [].
+ */
+export async function loadRecentCompletedMessages(input: { sessionId: string; userId: string; excludeExecutionId: string; take?: number }): Promise<string[]> {
+  try {
+    const recent = await prisma.askExecution.findMany({
+      where: { sessionId: input.sessionId, userId: input.userId, id: { not: input.excludeExecutionId }, status: { in: [...COMPLETED_STATUSES] } },
+      orderBy: { updatedAt: 'desc' },
+      take: input.take ?? 5,
+      select: { message: true },
+    });
+    return recent.map((execution) => execution.message);
+  } catch {
+    return [];
   }
 }

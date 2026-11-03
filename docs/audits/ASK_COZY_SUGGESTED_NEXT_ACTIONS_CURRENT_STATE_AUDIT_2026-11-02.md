@@ -58,6 +58,32 @@ The frontend contract itself is sound: governed typed actions render whenever pr
 - F2: the other 80 read-oriented outcomes stay one-shot; the 24-hour window applies only to the 15 hubs, and the older 14 `REPEATABLE_OUTCOMES` still have no cooldown.
 - Pre-existing failures unrelated to this audit remain (for example `suggestedNextActionsInventory` "Documents" action, `maintenanceTemplates`, `claimsCalmAnswer`, `confirmCapabilityHandlerRegistry`, and others in the Ask suite baseline).
 
+## Post-audit review follow-up (November 2, 2026)
+
+An independent review of the remediation raised five gaps. Each was checked against the code; its verification table also misdescribed several of the fixes, so only claims confirmed in code were acted on.
+
+| Gap | Verdict | Action |
+|---|---|---|
+| Gap 1: the 24-hour hub window counts unclicked offers, so a hub shown once is held back even in `CONTINUE_WORK` | Behavior real, but it is the owner's ruling as written ("most recent offer or selection", every slot class). Not a regression | **Kept as is** by owner decision. Revisit only if hubs prove to disappear too eagerly |
+| Gap 2: completion recorded only at execution creation | Confirmed: one call site, `ANSWERED`/`COMPLETED` only | **Fixed** (below) |
+| Gap 3: `askCapture` direct-handler branches skip the finalizer; `askConfirm` omits recent messages | Confirmed (11 `executeOperation` calls, many direct branches; the sites registry note overstated it) | **Fixed** (below) |
+| Gap 4: HVAC extras (start to continue duplicate, unconditional outcome view, one missing `outcomeKey`) | Partly valid, low impact; the suggested `outcomeKey` value was the wrong format and would not de-duplicate | Not changed |
+| Gap 5: `SKILL_HANDOFF` excluded from the post-mutation exemption | Valid in principle, unverified impact | Not changed |
+
+**Gap 2 fix.**
+
+- New `suggestedActionCompletion.ts`: `recordSelectedSuggestedActionCompletion` resolves the chip that launched an execution from the persisted `SUGGESTED_ACTION_SELECTED` event and the source execution's stored ledger (user-scoped, never client input), then marks its lifecycle row completed. Fail open.
+- Called after a successful confirmation (`askConfirm`) and after a capture settles the request (`askCapture`); `createAskExecution` now uses the same rule.
+- `isSettledForCompletion`: `ANSWERED`, `COMPLETED`, or `READY_WITH_LIMITATIONS` with no open capture prompt, clarification or confirmation. An unfinished `READY_WITH_LIMITATIONS` is not complete.
+- Session history (`loadCompletedSuggestedActionKeyHashes`) no longer counts a `READY_WITH_LIMITATIONS` execution that still has open capture requests as completed (the current execution's own selection still counts).
+
+**Gap 3 fix.**
+
+- `ensureGovernedCaptureResult` runs the shared finalizer on any capture result that is not already governed, immediately before the single persistence transaction. Handler-attached candidates are no longer discarded, offers are recorded, and a result waiting on the homeowner gets no unrelated chips. A finalizer failure keeps the original result.
+- `askConfirm` now passes recent completed messages, via a shared `loadRecentCompletedMessages`.
+- The persistence-sites registry entry for `askCapture` is corrected to `WIRED` with an accurate note.
+- Tests: `suggestedActionCompletionAndSeams.test.js` (8 tests). The full chunked Ask suite shows no new failures against the pre-change baseline; the typecheck is clean. Not verified against a database or browser.
+
 ## 2. Method and evidence
 
 ### 2.1 Authoritative inputs
