@@ -93,6 +93,18 @@ An independent review of the remediation raised five gaps. Each was checked agai
 - The persistence-sites registry entry for `askCapture` is corrected to `WIRED` with an accurate note.
 - Tests: `suggestedActionCompletionAndSeams.test.js` (8 tests), `hvacContinuationRefinements.test.js` (4) and `skillHandoffPostMutation.test.js` (1). The full chunked Ask suite shows no new failures against the pre-change baseline; the typecheck is clean. Not verified against a database or browser.
 
+### Rulings on the remaining open questions (November 2, 2026)
+
+| Question | Ruling | Rationale |
+|---|---|---|
+| Give the 14 older repeatable outcomes a re-offer window? | **No blanket change.** Review per subgroup only if visible repetition emerges | `REPEATABLE_OUTCOMES` only shares "completion does not retire it". It mixes seven starters (which already rotate), restart-after-expiry actions (which may be needed immediately), `INVENTORY_LOOKUP:REVIEW_CURRENT_RECORD`, and three opportunities that already have a 7-day offer cooldown. A uniform 24 hours would add overlapping or unwanted suppression |
+| Add more recurring hubs? | **No additions yet** | Recipe count measures connectivity, not whether the destination needs revisiting. The buyer reads I floated (`BUYER_DEADLINES`, `BUYER_CLOSING_DAY_READINESS`) would fragment a journey that `BUYER_PLAN_STATUS:REVIEW_BUYER_PLAN` already covers. Add a hub only with evidence that its state changes without a user command, that revisiting shows different information, that the aggregate hub does not cover it, that it will not displace more actionable chips, and that its empty, completed and restricted states remain useful |
+| Keep DIY on the normal four-chip row? | **Yes** | The complete-surface exception is unproven for DIY (empty, active, viewer, contributor, browse vs continue, completed or abandoned). The normal pipeline already leads with DIY's exact handler-authored candidate |
+| Bind the remaining HVAC paths? | **Leave fail-closed** | Bind only when the current result declares the exact decision thread; otherwise drop the chip. No recency fallback. Two active decisions on the same item is a separate identity-model question. Revisit when each result can authoritatively report its resolved thread |
+| Keep the offer-based hub window? | **Yes, with telemetry** | A reasonable initial anti-repetition rule; suppression of an unclicked hub needs measurement before any change |
+
+**Telemetry added for the hub window.** Hub holds now use their own rejection reason (`RECURRING_HUB:REOFFER_WINDOW`) and their own exact-four shortage reason (`HUB_REOFFER_WINDOW`), so they are no longer indistinguishable from ordinary offer cooldowns or dismissals, and a new counter `ask_suggested_actions_hub_reoffer_suppressed_total{hub}` counts holds per hub (the label is the reviewed 15-hub allowlist). Hub impressions and selections were already available per `outcomeKey` through the existing impression and selection events. To measure on the Pi build: impressions versus selections per hub, hold counts per hub, time from first offer to first selection, exact-four rows degraded with `HUB_REOFFER_WINDOW`, and sessions where a held hub is followed by the user typing the equivalent request (answered from the existing events, not instrumented in code). A future policy, if needed, should not be "selection-only for everything": keep offer-based suppression for passive slots and anchor longer suppression to selection only for high-intent continuation slots.
+
 ## 2. Method and evidence
 
 ### 2.1 Authoritative inputs

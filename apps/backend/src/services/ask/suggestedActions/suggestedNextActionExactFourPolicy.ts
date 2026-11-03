@@ -17,6 +17,8 @@ import {
 
 export const EXACT_FOUR_COOLDOWN_REJECTION = 'COOLDOWN:SUPPRESSED';
 export const EXACT_FOUR_COMPLETED_REJECTION = 'COMPLETED:SUPPRESSED';
+/** A recurring hub inside its 24-hour re-offer window (distinct from an offer cooldown or dismissal so it can be measured on its own). */
+export const EXACT_FOUR_HUB_REOFFER_REJECTION = 'RECURRING_HUB:REOFFER_WINDOW';
 
 export interface ExactFourInput extends PolicyInput {
   /** The answer already renders declared workflow controls; curated starter padding would compete with that contextual surface. */
@@ -101,6 +103,8 @@ export interface ExactFourResult extends PolicyResult {
   exactFour: ExactFourDiagnostics;
   /** Aligned with `selected` (same index). Lifecycle persistence must use these evaluated values, never the raw candidate claims. */
   evaluated: ExactFourEvaluation[];
+  /** `operation:outcome` of each recurring hub candidate held back by the re-offer window this turn (telemetry only; bounded allowlist). */
+  hubReofferSuppressed: string[];
 }
 
 export function resolveExactFourExemption(
@@ -135,6 +139,7 @@ export function selectExactFourSuggestedNextActions(input: ExactFourInput): Exac
     return {
       ...legacy,
       exactFour: { policyVersion: SUGGESTED_NEXT_ACTION_EXACT_FOUR_POLICY_VERSION, applicability: 'EXEMPT', exemptReason },
+      hubReofferSuppressed: [],
       evaluated: legacy.selected.map((entry) => {
         const granted = resolveGrantedSlotClass(entry.candidate, entry.producerId, grants);
         const signals = evaluateSignalClaims(entry.candidate.signals, grantForProducer(entry.producerId, grants), {
@@ -152,6 +157,7 @@ export function selectExactFourSuggestedNextActions(input: ExactFourInput): Exac
   const cooldown = input.cooldownLifecycleKeys ?? new Set<string>();
   const completed = input.completedLifecycleKeys ?? new Set<string>();
   const hubCooldown = input.hubCooldownLifecycleKeys ?? new Set<string>();
+  const hubReofferSuppressed: string[] = [];
   const keyOf = (candidate: SuggestedNextActionCandidate) => lifecycleKey({
     operationId: candidate.operationId, outcomeKey: candidate.outcomeKey, entityType: candidate.entityContext.entityType, entityId: candidate.entityContext.entityId,
   });
@@ -159,7 +165,10 @@ export function selectExactFourSuggestedNextActions(input: ExactFourInput): Exac
     const key = keyOf(candidate);
     // A completed outcome is not offered again in ANY class; an offer cooldown spares the current answer, urgent work and the exact record.
     if (completed.size > 0 && completed.has(key)) return EXACT_FOUR_COMPLETED_REJECTION;
-    if (hubCooldown.size > 0 && hubCooldown.has(key) && !isTrustedPostMutationReturn(input.currentOperationId, candidate)) return EXACT_FOUR_COOLDOWN_REJECTION;
+    if (hubCooldown.size > 0 && hubCooldown.has(key) && !isTrustedPostMutationReturn(input.currentOperationId, candidate)) {
+      hubReofferSuppressed.push(`${candidate.operationId}:${candidate.outcomeKey}`);
+      return EXACT_FOUR_HUB_REOFFER_REJECTION;
+    }
     if (cooldown.size === 0 || COOLDOWN_EXEMPT_SLOT_CLASSES.has(grantedClass(candidate, producerId).slotClass)) return null;
     return cooldown.has(key) ? EXACT_FOUR_COOLDOWN_REJECTION : null;
   });
@@ -263,8 +272,9 @@ export function selectExactFourSuggestedNextActions(input: ExactFourInput): Exac
     if (diagnostics.nominated === 0) reasons.add('NO_CANDIDATES');
     if (diagnostics.invalidCandidates > 0) reasons.add('INVALID_CANDIDATES');
     const lifecycleRejection = (key: string) => key === EXACT_FOUR_COOLDOWN_REJECTION || key === EXACT_FOUR_COMPLETED_REJECTION;
-    if (rejected.some(([key]) => !lifecycleRejection(key))) reasons.add('INELIGIBLE');
+    if (rejected.some(([key]) => !lifecycleRejection(key) && key !== EXACT_FOUR_HUB_REOFFER_REJECTION)) reasons.add('INELIGIBLE');
     if (rejected.some(([key]) => lifecycleRejection(key))) reasons.add('COOLDOWN_SUPPRESSED');
+    if (rejected.some(([key]) => key === EXACT_FOUR_HUB_REOFFER_REJECTION)) reasons.add('HUB_REOFFER_WINDOW');
     if (diagnostics.suppressedByPresentation > 0) reasons.add('PRESENTATION_DUPLICATE');
     if (opportunityCapHits > 0) reasons.add('OPPORTUNITY_CAP');
     for (const reason of input.upstreamShortageReasons ?? []) reasons.add(reason);
@@ -279,5 +289,6 @@ export function selectExactFourSuggestedNextActions(input: ExactFourInput): Exac
       selectedBySlot, belowCompletenessThreshold: below, completenessUnknown, audienceUncertain, slotClassDenied, signalClaimsDenied, startersWithinRotationWindow, opportunityReserved,
     },
     evaluated: chosen.map((entry) => ({ slotClass: entry.slotClass, currentResultOwnership: entry.currentResultOwnership, activeGoalMatch: entry.activeGoalMatch })),
+    hubReofferSuppressed,
   };
 }

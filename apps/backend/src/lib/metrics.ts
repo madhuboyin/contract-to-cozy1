@@ -147,6 +147,13 @@ export const askSuggestedActionsExactFourReasonsTotal = new Counter({
   registers: [register],
 });
 
+export const askSuggestedActionsHubReofferSuppressedTotal = new Counter({
+  name: 'ask_suggested_actions_hub_reoffer_suppressed_total',
+  help: 'Recurring-hub candidates held back by the 24-hour re-offer window, by hub (a bounded, reviewed operation:outcome allowlist); never homeowner text or ids',
+  labelNames: ['hub'] as const,
+  registers: [register],
+});
+
 export const askSuggestedActionsLifecycleMissingRowTotal = new Counter({
   name: 'ask_suggested_actions_lifecycle_missing_row_total',
   help: 'Lifecycle selection or completion updates that matched no row (a failed offer write or a wrong lifecycle identity) by bounded event (SELECTED, COMPLETED)',

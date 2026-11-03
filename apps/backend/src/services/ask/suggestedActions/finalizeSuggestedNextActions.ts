@@ -11,7 +11,7 @@ import { logger } from '../../../lib/logger';
 import { readAskOperationalControls } from '../../../config/askOperationalControls';
 import { prisma } from '../../../lib/prisma';
 import {
-  askSuggestedActionsCandidatesTotal, askSuggestedActionsPipelineDurationSeconds, askSuggestedActionsProducerFailuresTotal,
+  askSuggestedActionsCandidatesTotal, askSuggestedActionsHubReofferSuppressedTotal, askSuggestedActionsPipelineDurationSeconds, askSuggestedActionsProducerFailuresTotal,
 } from '../../../lib/metrics';
 import { INTERACTIVE_ASK_EXECUTION_STATUSES, type SuggestedNextAction } from '../../../productFramework/ask/ask.contract';
 import { ASK_OPERATION_DEFINITIONS, getAskOperationDefinition, type AskOperationId, type AskOperationResult } from '../askOperationRegistry';
@@ -412,6 +412,7 @@ export async function finalizeSuggestedNextActionsWithReport(
   report.exactFour = policy.exactFour;
   recordExactFourDiagnostics(policy.exactFour);
   report.diagnostics = policy.diagnostics;
+  for (const hub of policy.hubReofferSuppressed) askSuggestedActionsHubReofferSuppressedTotal.inc({ hub });
   askSuggestedActionsCandidatesTotal.inc({ stage: 'invalid', mode }, policy.diagnostics.invalidCandidates);
   askSuggestedActionsCandidatesTotal.inc({ stage: 'eligible', mode }, policy.diagnostics.eligible);
   askSuggestedActionsCandidatesTotal.inc({ stage: 'rejected', mode }, Object.values(policy.diagnostics.rejections).reduce((a, b) => a + b, 0));

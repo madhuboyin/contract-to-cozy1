@@ -399,3 +399,22 @@ test('RECURRING HUB: a result-owned return-to-list right after a successful muta
   const afterRead = await run({ operationId: 'MAINTENANCE_BUDGET_FORECAST', producers, lifecycle: okLifecycle({ hubCooldownKeys: hubKeys }) });
   assert.ok(!keysShown(afterRead).includes('MAINTENANCE_STATUS:REVIEW_MAINTENANCE_STATUS'), 'after a read there is no bypass');
 });
+
+test('RECURRING HUB telemetry: a hub held back by the window is counted per hub and reported as its own shortage reason, not as an ordinary cooldown or ineligibility', async () => {
+  const { askSuggestedActionsHubReofferSuppressedTotal } = require('../../src/lib/metrics.ts');
+  const { lifecycleKey: keyFor, EXACT_FOUR_SHORTAGE_REASONS } = require('../../src/services/ask/suggestedActions/suggestedNextActionExactFourRegistry.ts');
+  assert.ok(EXACT_FOUR_SHORTAGE_REASONS.includes('HUB_REOFFER_WINDOW'));
+  const read = async (hub) => ((await askSuggestedActionsHubReofferSuppressedTotal.get()).values.find((value) => value.labels.hub === hub)?.value ?? 0);
+  const hub = 'MAINTENANCE_STATUS:REVIEW_MAINTENANCE_STATUS';
+  const before = await read(hub);
+  const cooled = new Set(['MAINTENANCE_STATUS:REVIEW_MAINTENANCE_STATUS', 'HOME_ACTIONS:REVIEW_HOME_ACTIONS'].map((pair) => {
+    const [operationId, outcomeKey] = pair.split(':');
+    return keyFor({ operationId, outcomeKey, entityType: null, entityId: null });
+  }));
+  // Only the operation-specific recipes are nominated, so with both hubs cooled nothing is left and the row is short.
+  const r = await run({ operationId: 'MAINTENANCE_BUDGET_FORECAST', producers: [operationSpecificContinuationProducer], lifecycle: okLifecycle({ hubCooldownKeys: cooled }) });
+  assert.ok(r.report.exactFour.shortageReasons.includes('HUB_REOFFER_WINDOW'), JSON.stringify(r.report.exactFour.shortageReasons));
+  assert.ok(!r.report.exactFour.shortageReasons.includes('COOLDOWN_SUPPRESSED'), 'not reported as an ordinary cooldown');
+  assert.ok(!r.report.exactFour.shortageReasons.includes('INELIGIBLE'), 'not reported as ineligible');
+  assert.equal(await read(hub), before + 1, 'counted once for the hub that was held back');
+});
