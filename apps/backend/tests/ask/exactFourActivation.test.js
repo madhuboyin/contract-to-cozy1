@@ -427,3 +427,25 @@ test('an answer with only an optional next-action prompt still gets the governed
   assert.equal(blocking.report.exactFour.exemptReason, 'PENDING_INTERACTION');
   assert.equal(blocking.shown.length, 0);
 });
+
+test('CANCEL: a homeowner-initiated cancellation or dismissal still gets the governed row; a system cancellation stays recovery-only', async () => {
+  for (const reasonCode of ['USER_DISMISSED_PENDING_REQUEST', 'USER_CANCELLED']) {
+    const r = await run({ role: 'OWNER', status: 'CANCELLED', operationId: 'INVENTORY_ITEM_CORRECT', message: 'Edit this inventory item.', result: { reasonCode } });
+    assert.equal(r.report.exactFour.applicability, 'EXACT_FOUR', `${reasonCode}: ${JSON.stringify(r.report.exactFour)}`);
+    assert.equal(r.shown.length, 4, `${reasonCode}: ${keysShown(r).join(',')}`);
+    assert.equal(r.result.suggestedNextActionsGoverned, true);
+  }
+  const system = await run({ role: 'OWNER', status: 'CANCELLED', operationId: 'INVENTORY_ITEM_CORRECT', message: 'Edit this inventory item.', result: { reasonCode: 'SYSTEM_CANCELLED' } });
+  assert.equal(system.report.exactFour.exemptReason, 'SAFE_RECOVERY_ONLY');
+  assert.equal(system.shown.length, 0);
+  const expired = await run({ role: 'OWNER', status: 'EXPIRED', operationId: 'INVENTORY_ITEM_CORRECT', message: 'Edit this inventory item.', result: { reasonCode: 'USER_CANCELLED' } });
+  assert.equal(expired.report.exactFour.exemptReason, 'SAFE_RECOVERY_ONLY', 'only CANCELLED is affected, never expiry or failure');
+});
+
+test('CANCEL wiring: both cancel branches govern the result before persisting it and store the governed fields', () => {
+  const source = require('node:fs').readFileSync(require('node:path').join(__dirname, '../../src/services/ask/execution/askConfirm.ts'), 'utf8');
+  const cancel = source.slice(source.indexOf('export async function cancelAskExecution'));
+  assert.equal((cancel.match(/await governedCancelResult\(userId, execution,/g) ?? []).length, 2, 'dismissal and confirmation cancel');
+  assert.equal((cancel.match(/\.\.\.governedFields\(/g) ?? []).length, 2);
+  for (const needle of ['governedCancelResult(userId, execution, { status: \'CANCELLED\', reasonCode: \'USER_DISMISSED_PENDING_REQUEST\'', 'governedCancelResult(userId, execution, { status: \'CANCELLED\', reasonCode: \'USER_CANCELLED\'']) assert.ok(cancel.includes(needle), needle);
+});

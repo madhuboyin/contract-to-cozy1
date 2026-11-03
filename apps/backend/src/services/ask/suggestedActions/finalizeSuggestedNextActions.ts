@@ -74,8 +74,16 @@ export function resultOwnsPendingInteraction(
 }
 
 /** Emergency, restricted, unavailable, expired, cancelled and similar results keep only safe recovery actions (plan §6). */
-export function resolveSuggestedNextActionMode(result: Pick<AskOperationResult, 'status' | 'blocks'>, operationId: string | null): SuggestedNextActionMode {
-  if (RECOVERY_STATUSES.has(result.status)) return 'SAFE_RECOVERY_ONLY';
+/**
+ * A cancellation the homeowner chose (dismissing a pending request, or cancelling before a confirmation) is not a failure: nothing
+ * went wrong and nothing is unsafe, so it takes the normal governed row instead of leaving the turn without next actions. A
+ * system-driven cancellation keeps the recovery-only mode.
+ */
+const USER_INITIATED_CANCEL_REASONS: ReadonlySet<string> = new Set(['USER_CANCELLED', 'USER_DISMISSED_PENDING_REQUEST']);
+
+export function resolveSuggestedNextActionMode(result: Pick<AskOperationResult, 'status' | 'blocks' | 'reasonCode'>, operationId: string | null): SuggestedNextActionMode {
+  const userInitiatedCancel = result.status === 'CANCELLED' && USER_INITIATED_CANCEL_REASONS.has(result.reasonCode ?? '');
+  if (RECOVERY_STATUSES.has(result.status) && !userInitiatedCancel) return 'SAFE_RECOVERY_ONLY';
   const definition = operationId && operationId in ASK_OPERATION_DEFINITIONS ? getAskOperationDefinition(operationId as AskOperationId) : null;
   if (definition?.family === 'UNSAFE_OR_RESTRICTED') return 'SAFE_RECOVERY_ONLY';
   if (!INFORMATIONAL_EMERGENCY_BOUNDARY_OPERATIONS.has(operationId ?? '')

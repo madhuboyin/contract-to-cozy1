@@ -13,7 +13,7 @@ const { fixedSuggestedNextActionClock } = require('../../src/services/ask/sugges
 const { operationalUnavailableResult } = require('../../src/services/ask/capabilityHandlerRegistry.ts');
 const { ASK_OPERATION_DEFINITIONS } = require('../../src/services/ask/askOperationRegistry.ts');
 
-// Plan C.13 (Phase 4): platform recovery. Restart after expiry is registry-bound; retryable failure, cancel and unavailable get no chip.
+// Plan C.13 (Phase 4): platform recovery. Restart after expiry is registry-bound; retryable failure and unavailable get no chip. (A homeowner-initiated cancel or dismissal now takes the normal governed row; see exactFourActivation.test.js.)
 
 const src = (file) => readFileSync(resolve(__dirname, '../../src/services/ask', file), 'utf8');
 const stored = (over = {}) => ({ operationId: 'MAINTENANCE_TASK_CREATE', message: 'Add a task to clean the gutters in May', propertyId: 'prop-1', launchContextJson: { surface: 'ASK_PAGE' }, ...over });

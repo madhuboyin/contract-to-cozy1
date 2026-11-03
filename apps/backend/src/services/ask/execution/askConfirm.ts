@@ -537,6 +537,31 @@ const EDIT_CONFIRMATION_HANDLERS: Partial<Record<AskOperationId, (
   BUYER_TASK_UPDATE: editBuyerTaskUpdateConfirmation,
 };
 
+/**
+ * A cancelled or dismissed request persisted without the shared finalizer, so the turn ended with no next actions. Govern it like any
+ * other settled result (the finalizer treats a homeowner-initiated cancellation as a normal turn). Never throws: on failure the result
+ * keeps no chips, exactly as before.
+ */
+async function governedCancelResult(userId: string, execution: { id: string; sessionId: string; propertyId: string | null; operationId: string | null; message: string }, result: AskOperationResult): Promise<AskOperationResult> {
+  try {
+    return await finalizeSuggestedNextActions({
+      result, executionId: execution.id, userId, sessionId: execution.sessionId, propertyId: execution.propertyId,
+      operationId: execution.operationId, message: execution.message,
+      completedSemanticKeyHashes: () => loadCompletedSuggestedActionKeyHashes({ executionId: execution.id, sessionId: execution.sessionId, userId }),
+      recentCompletedMessages: await loadRecentCompletedMessages({ sessionId: execution.sessionId, userId, excludeExecutionId: execution.id }),
+    });
+  } catch {
+    return result;
+  }
+}
+
+/** The persisted governance fields of a governed result, spread into a stored resultJson ahead of the preserved history. */
+const governedFields = (result: AskOperationResult) => ({
+  suggestedNextActionsGoverned: result.suggestedNextActionsGoverned === true,
+  ...(result.suggestedNextActionsStatus ? { suggestedNextActionsStatus: result.suggestedNextActionsStatus } : {}),
+  suggestedNextActions: result.suggestedNextActions ?? [],
+});
+
 export async function cancelAskExecution(userId: string, executionId: string): Promise<AskExecutionResponse> {
   const execution = await prisma.askExecution.findFirst({ where: { id: executionId, userId } });
   if (!execution) {
@@ -548,17 +573,20 @@ export async function cancelAskExecution(userId: string, executionId: string): P
   await prisma.askSession.update({ where: { id: execution.sessionId }, data: { lastActiveAt: new Date() } });
   if (execution.status !== 'NEEDS_CONFIRMATION') {
     if (!INTERACTIVE_ASK_STATUSES.includes(execution.status)) return mapPersistedExecution(execution, await propertySummary(execution.propertyId));
+    const dismissedBlocks: AskPresentationBlock[] = [{
+      type: 'SUMMARY', id: 'pending-request-dismissed', title: 'Pending request dismissed',
+      body: 'No action was performed. You can ask the question again whenever you are ready.', tone: 'DEFAULT', actions: [],
+    }];
+    const dismissed = await governedCancelResult(userId, execution, { status: 'CANCELLED', reasonCode: 'USER_DISMISSED_PENDING_REQUEST', blocks: dismissedBlocks, suggestions: [] });
     const cancelled = await prisma.askExecution.updateMany({
       where: { id: execution.id, userId, status: execution.status },
       data: {
         status: 'CANCELLED', reasonCode: 'USER_DISMISSED_PENDING_REQUEST',
         resultJson: asInputJson({
           schemaVersion: ASK_RESPONSE_SCHEMA_VERSION,
-          blocks: [{
-            type: 'SUMMARY', id: 'pending-request-dismissed', title: 'Pending request dismissed',
-            body: 'No action was performed. You can ask the question again whenever you are ready.', tone: 'DEFAULT', actions: [],
-          }],
+          blocks: dismissedBlocks,
           captureRequests: [], confirmation: null, clarification: null, suggestions: [],
+          ...governedFields(dismissed),
           ...preservedExecutionHistory(execution.resultJson, [{ type: 'SUMMARY', id: 'pending-request-dismissed', title: 'Pending request dismissed', body: 'No action was performed.', tone: 'DEFAULT', actions: [] }]),
         }),
         completedAt: new Date(),
@@ -585,6 +613,7 @@ export async function cancelAskExecution(userId: string, executionId: string): P
     body: command.cancellation.body,
     tone: 'DEFAULT', actions: [],
   }];
+  const cancelledResult = await governedCancelResult(userId, execution, { status: 'CANCELLED', reasonCode: 'USER_CANCELLED', blocks, suggestions: [] });
   const cancelled = await prisma.askExecution.updateMany({
     where: { id: execution.id, userId, status: 'NEEDS_CONFIRMATION' },
     data: {
@@ -596,6 +625,7 @@ export async function cancelAskExecution(userId: string, executionId: string): P
         confirmation: null,
         clarification: null,
         suggestions: [],
+        ...governedFields(cancelledResult),
         ...preservedExecutionHistory(execution.resultJson, blocks),
       }),
       completedAt: new Date(),

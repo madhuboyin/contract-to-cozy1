@@ -29,7 +29,7 @@
       "category": "EXECUTION_LIFECYCLE",
       "sites": 7,
       "finalizer": "WIRED",
-      "note": "confirmed result calls the finalizer; expiry and conflict branches build typed recovery chips through finalizeRecoveryActions (C.13); cancel/unavailable persist no compact strings"
+      "note": "confirmed result calls the finalizer; expiry and conflict branches build typed recovery chips through finalizeRecoveryActions (C.13); cancel and pending-request dismissal are governed through the finalizer (a homeowner-initiated cancellation takes the normal row); unavailable persists no compact strings"
     },
     "src/services/ask/execution/askFeedback.ts": {
       "category": "EXECUTION_LIFECYCLE",
