@@ -2,6 +2,7 @@
 // docs/architecture/ASK_ORCHESTRATOR_DECOMPOSITION_REVIEW.md). The handler registers itself, and the orchestrator
 // re-exports the names below so existing imports keep working.
 import { finalizeRecoveryActions, restartAfterExpiryCandidates, reviewCurrentInventoryItemCandidates } from '../suggestedActions/recoveryCandidates';
+import { mergeConfirmedParameters } from './mergeConfirmedParameters';
 import { finalizeSuggestedNextActions } from '../suggestedActions/finalizeSuggestedNextActions';
 import { loadCompletedSuggestedActionKeyHashes, loadRecentCompletedMessages } from '../suggestedActions/suggestedNextActionHistory';
 import { isSettledForCompletion, recordSelectedSuggestedActionCompletion } from '../suggestedActions/suggestedActionCompletion';
@@ -420,7 +421,7 @@ export async function confirmAskExecution(userId: string, executionId: string, i
     saved = await prisma.$transaction(async (tx) => {
       const updated = await tx.askExecution.update({
         where: { id: execution.id },
-        data: { status: result.status, reasonCode: result.reasonCode, contextVersion: result.contextVersion, parametersJson: result.parameters ? asInputJson(result.parameters) : undefined, resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: [], confirmation: null, clarification: null, suggestions: result.suggestions, suggestedNextActionsGoverned: result.suggestedNextActionsGoverned === true, suggestedNextActionsStatus: result.suggestedNextActionsStatus, suggestedNextActions: result.suggestedNextActions ?? [], skillHandoff: result.skillHandoff ?? null, ...preservedExecutionHistory(execution.resultJson, result.blocks) }), completedAt: new Date() },
+        data: { status: result.status, reasonCode: result.reasonCode, contextVersion: result.contextVersion, parametersJson: result.parameters ? asInputJson(mergeConfirmedParameters(parameters, result.parameters)!) : undefined, resultJson: asInputJson({ schemaVersion: ASK_RESPONSE_SCHEMA_VERSION, blocks: result.blocks, captureRequests: [], confirmation: null, clarification: null, suggestions: result.suggestions, suggestedNextActionsGoverned: result.suggestedNextActionsGoverned === true, suggestedNextActionsStatus: result.suggestedNextActionsStatus, suggestedNextActions: result.suggestedNextActions ?? [], skillHandoff: result.skillHandoff ?? null, ...preservedExecutionHistory(execution.resultJson, result.blocks) }), completedAt: new Date() },
       });
       // Settling an unknown outcome: record that and how it was reconciled, in the same transaction as the completion.
       if (previous?.outcomeUnknownAt) {

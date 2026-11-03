@@ -104,6 +104,7 @@ async function confirmHvacDecisionStart(ctx: ConfirmCapabilityContext): Promise<
     });
     result = {
       status: 'COMPLETED', reasonCode: 'HVAC_DECISION_START_CREATED',
+      parameters: { focusedDecisionThreadId: createdThread.id },
       blocks: [
         decisionProgressBlock('hvac-decision-created', 'Decision thread started', createdThread, createdSnapshot, []),
         whyNowBlock('hvac-decision-why-now', createdSnapshot, []),
@@ -153,6 +154,7 @@ async function confirmHvacDecisionScenario(ctx: ConfirmCapabilityContext): Promi
     });
     result = {
       status: 'COMPLETED', reasonCode: 'HVAC_DECISION_SCENARIO_CREATED',
+      parameters: { focusedDecisionThreadId: scenarioThread.id },
       blocks: [
         scenarioComparisonBlock(
           'hvac-scenario-comparison', `Scenario: ${candidate.data.vendorLabel}`, scenarioThread.id, scenario.id,
@@ -250,6 +252,7 @@ async function confirmHvacDecisionOutcomeReport(ctx: ConfirmCapabilityContext): 
     const reportedRows = await outcomeObservationService.getOutcomeSummaryForThread(candidate.data.decisionThreadId, execution.propertyId);
     result = {
       status: 'COMPLETED', reasonCode: 'HVAC_DECISION_OUTCOME_RECORDED',
+      parameters: { focusedDecisionThreadId: candidate.data.decisionThreadId },
       blocks: [outcomeSummaryBlock('hvac-outcome-recorded', candidate.data.decisionThreadId, reportedRows)],
       confirmation: null, suggestions: [],
     };
@@ -287,6 +290,7 @@ async function confirmHvacDecisionOutcomeUnlink(ctx: ConfirmCapabilityContext): 
     const disputed = await outcomeObservationService.disputeOutcomeObservation(candidate.data.outcomeObservationId, execution.propertyId);
     result = {
       status: 'COMPLETED', reasonCode: 'HVAC_DECISION_OUTCOME_DISPUTED',
+      parameters: { focusedDecisionThreadId: candidate.data.decisionThreadId },
       blocks: [{ type: 'WORKFLOW_PROGRESS', id: `hvac-outcome-disputed-${disputed.id}`, title: 'Outcome disputed', status: 'COMPLETED', description: 'The reported outcome is now marked as disputed. It was not deleted.', details: [], actions: [] }],
       confirmation: null, suggestions: [],
     };

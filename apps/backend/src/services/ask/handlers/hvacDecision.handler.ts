@@ -275,6 +275,8 @@ async function hvacDecisionContinueResult(userId: string, propertyId: string, me
   blocks.push(...await hvacDecisionDisclosureBlocks('hvac-decision', thread.currentRecommendationSnapshot, item));
   return {
     status: 'ANSWERED', reasonCode: 'HVAC_DECISION_RESUMED',
+    // selectHvacDecisionThread returned UNIQUE for this item, so this result resolved exactly one thread.
+    parameters: { focusedDecisionThreadId: thread.id },
     blocks,
     suggestions: [],
   };
@@ -460,6 +462,7 @@ export async function hvacDecisionOutcomeViewResult(userId: string, propertyId: 
   if (!rows.length) {
     return {
       status: 'ANSWERED', reasonCode: 'HVAC_DECISION_OUTCOME_NONE',
+      parameters: { focusedDecisionThreadId: selection.thread.id },
       blocks: [{ type: 'EMPTY_STATE', id: 'hvac-outcome-view-empty', title: 'No outcome recorded yet', body: `Once ${item.name} is repaired or replaced, tell Ask what happened to record the outcome.`, actions: [] }],
       suggestions: [],
     };
@@ -467,6 +470,7 @@ export async function hvacDecisionOutcomeViewResult(userId: string, propertyId: 
   const disputable = rows.some((row) => (['REPORTED', 'CORROBORATED', 'VERIFIED'] as string[]).includes(row.observation.verificationStatus));
   return {
     status: 'ANSWERED', reasonCode: 'HVAC_DECISION_OUTCOME_FOUND',
+    parameters: { focusedDecisionThreadId: selection.thread.id },
     blocks: [outcomeSummaryBlock('hvac-outcome-summary', selection.thread.id, rows)],
     suggestions: [],
   };
@@ -953,7 +957,8 @@ export async function hvacSpecialistEngageResult(
         ? (mutated ? 'HVAC_SPECIALIST_RECOMMENDATION_READY' : 'HVAC_SPECIALIST_RECOMMENDATION_EXISTING')
         : `HVAC_SPECIALIST_${projection.phase}`,
       contextVersion: origin.contextVersion,
-      parameters: projection.decisionThreadId ? { decisionThreadId: projection.decisionThreadId } : undefined,
+      // The runtime's own decision thread for the flagged action; `focusedDecisionThreadId` is the key the continuation producer binds on.
+      parameters: projection.decisionThreadId ? { decisionThreadId: projection.decisionThreadId, focusedDecisionThreadId: projection.decisionThreadId } : undefined,
       blocks,
       suggestions: [],
     };

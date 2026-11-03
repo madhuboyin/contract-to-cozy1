@@ -379,7 +379,9 @@ async function warrantiesResult(userId: string, propertyId: string, message: str
     : new Set<string>();
   // Only a writer can act on a conflict, so a viewer's answer costs no extra query.
   const conflictedIds = canWrite ? new Set((await getConflictedWarrantyGroups(propertyId, prisma)).flatMap((group) => group.warranties.map((row) => row.id))) : new Set<string>();
-  return warrantiesFromRecords({ message, propertyId, records: rows, canWrite, ownedIds, conflictedIds, priorViewState });
+  const result = warrantiesFromRecords({ message, propertyId, records: rows, canWrite, ownedIds, conflictedIds, priorViewState });
+  const reminder = await warrantyListReminderCandidates({ records: rows, shownIds: shownWarrantyIds(result), propertyId, canWrite, conflictedIds });
+  return reminder.length ? { ...result, suggestedNextActionCandidates: reminder } : result;
 }
 
 // Presentation Quality 4: a warranty question asked about one recorded item (launched from its repair-or-replace answer with the
@@ -454,6 +456,15 @@ registerCapabilityHandler('warranty.lookup', async (envelope) => {
 /** The reminder task id the deadline monitor keys on, shared with `confirmHomeDeadlineMonitor` so "already set up" means the same thing. */
 export const warrantyReminderActionKey = (warrantyId: string): string => `ask-deadline:WARRANTY:${warrantyId}`;
 
+/** True when an active reminder task already exists at the due date the monitor would set for this expiry (so offering it again would only duplicate). */
+export function warrantyReminderIsCurrent(
+  existing: { status: string; nextDueDate: Date | null } | null | undefined,
+  expiryDate: Date,
+): boolean {
+  const due = new Date(expiryDate.getTime() - HOME_DEADLINE_DEFAULT_LEAD_DAYS * 86_400_000).toISOString().slice(0, 10);
+  return Boolean(existing && existing.status !== 'CANCELLED' && existing.status !== 'COMPLETED' && existing.nextDueDate?.toISOString().slice(0, 10) === due);
+}
+
 /**
  * Typed next-action candidate for "remind me before this warranty expires". Offered only while the expiry is still ahead, and not
  * when an active reminder already exists for this warranty at the date the monitor would set. The reminder deadline is driven by
@@ -473,8 +484,7 @@ export async function warrantyExpiryReminderCandidates(
         where: { propertyId_actionKey: { propertyId: context.propertyId, actionKey: warrantyReminderActionKey(warranty.id) } },
         select: { status: true, nextDueDate: true },
       });
-      const due = new Date(warranty.expiryDate.getTime() - HOME_DEADLINE_DEFAULT_LEAD_DAYS * 86_400_000).toISOString().slice(0, 10);
-      if (existing && existing.status !== 'CANCELLED' && existing.status !== 'COMPLETED' && existing.nextDueDate?.toISOString().slice(0, 10) === due) return [];
+      if (warrantyReminderIsCurrent(existing, warranty.expiryDate)) return [];
     }
     const provider = warranty.providerName.length > 40 ? `${warranty.providerName.slice(0, 39)}…` : warranty.providerName;
     return [{
@@ -495,4 +505,53 @@ export async function warrantyExpiryReminderCandidates(
   } catch {
     return [];
   }
+}
+
+type ReminderTaskRow = { actionKey: string; status: string; nextDueDate: Date | null };
+const MAX_REMINDER_STATE_LOOKUPS = 10;
+
+/**
+ * Read-side reminder nomination for the warranty list (Phase 5). The warranty must be on screen in the answer, expiring (started, within
+ * `WARRANTY_EXPIRING_DAYS`), not in a coverage conflict (the monitor refuses those), and the caller must be able to write. Monitor state is
+ * not loaded by the list, so ONE batched lookup over at most MAX_REMINDER_STATE_LOOKUPS on-screen expiring warranties decides which already
+ * has a current reminder; none of them costs no query. At most one candidate is returned: the soonest-expiring warranty still without a
+ * reminder. The entity, version and outcome are the same ones the write-side receipt uses, so the destination and validator are unchanged.
+ */
+export async function warrantyListReminderCandidates(input: {
+  records: readonly WarrantyRecord[];
+  shownIds: ReadonlySet<string>;
+  propertyId: string;
+  canWrite: boolean;
+  conflictedIds: ReadonlySet<string>;
+  now?: Date;
+  loadReminderTasks?: (propertyId: string, actionKeys: readonly string[]) => Promise<readonly ReminderTaskRow[]>;
+}): Promise<SuggestedNextActionCandidate[]> {
+  if (!input.canWrite) return [];
+  const now = input.now ?? new Date();
+  const expiring = input.records
+    .filter((record) => input.shownIds.has(record.id) && !input.conflictedIds.has(record.id) && warrantyStatus(record, input.propertyId, now).key === 'EXPIRING')
+    .sort((left, right) => left.expiryDate.getTime() - right.expiryDate.getTime() || left.id.localeCompare(right.id))
+    .slice(0, MAX_REMINDER_STATE_LOOKUPS);
+  if (!expiring.length) return [];
+  try {
+    const load = input.loadReminderTasks ?? ((propertyId, actionKeys) => prisma.propertyMaintenanceTask.findMany({
+      where: { propertyId, actionKey: { in: [...actionKeys] } }, select: { actionKey: true, status: true, nextDueDate: true },
+    }) as Promise<readonly ReminderTaskRow[]>);
+    const tasks = new Map((await load(input.propertyId, expiring.map((record) => warrantyReminderActionKey(record.id)))).map((task) => [task.actionKey, task]));
+    const pending = expiring.find((record) => !warrantyReminderIsCurrent(tasks.get(warrantyReminderActionKey(record.id)), record.expiryDate));
+    if (!pending) return [];
+    return await warrantyExpiryReminderCandidates(pending, { propertyId: input.propertyId, sourceOperationId: 'WARRANTY_LOOKUP', checkExistingReminder: false, now });
+  } catch {
+    // A suggestion never costs the answer: if monitor state cannot be read, nothing is offered rather than a possible duplicate.
+    return [];
+  }
+}
+
+export function shownWarrantyIds(result: AskOperationResult): Set<string> {
+  const ids = new Set<string>();
+  for (const block of result.blocks) {
+    if (block.type !== 'GROUPED_LIST') continue;
+    for (const section of block.sections) for (const item of section.items) if (item.entityType === 'WARRANTY') ids.add(item.id);
+  }
+  return ids;
 }

@@ -8,6 +8,7 @@ import {
   type PolicyDiagnostics, type PolicyInput, type PolicyResult, type SelectedCandidate,
 } from './suggestedNextActionPolicy';
 import { compareRanked } from './suggestedNextActionRanking';
+import { domainAffinity } from './suggestedActionDomainAffinity';
 import { isTrustedPostMutationReturn } from './suggestedNextActionEligibility';
 import {
   COOLDOWN_EXEMPT_SLOT_CLASSES, EXACT_FOUR, lifecycleKey, EXACT_FOUR_SHORTAGE_REASONS, STARTER_ROTATION_MS, currentOperationOwnsOutcome, evaluateSignalClaims, grantForProducer, OPPORTUNITY_SLOT_CLASSES, SUGGESTED_NEXT_ACTION_EXACT_FOUR_POLICY_VERSION,
@@ -191,16 +192,23 @@ export function selectExactFourSuggestedNextActions(input: ExactFourInput): Exac
   });
   const byClass = new Map<SuggestedNextActionSlotClass, PoolEntry[]>(SUGGESTED_NEXT_ACTION_SLOT_CLASSES.map((slotClass) => [slotClass, []]));
   for (const entry of pool) byClass.get(entry.slotClass)!.push(entry);
-  // Curated starters rotate softly: least recently offered first (never offered sorts first), then the shared deterministic order.
+  const rankedOrder = (a: PoolEntry, b: PoolEntry) => compareRanked({ candidate: a.candidate, score: a.score }, { candidate: b.candidate, score: b.score });
+  const affinityOf = (entry: PoolEntry) => domainAffinity(input.currentOperationId, entry.candidate);
+  // Curated starters rotate softly: least recently offered first (never offered sorts first). Domain affinity only separates starters
+  // with EQUAL offer times, so rotation always outranks it; then the shared deterministic order.
   const starterOfferedAt = (entry: PoolEntry) => input.starterLastOfferedAtMs?.get(keyOf(entry.candidate)) ?? Number.NEGATIVE_INFINITY;
   byClass.get('CURATED_STARTER')!.sort((a, b) => {
     const left = starterOfferedAt(a);
     const right = starterOfferedAt(b);
-    return (left === right ? 0 : left < right ? -1 : 1) || compareRanked({ candidate: a.candidate, score: a.score }, { candidate: b.candidate, score: b.score });
+    return (left === right ? 0 : left < right ? -1 : 1) || (affinityOf(b) - affinityOf(a)) || rankedOrder(a, b);
   });
-  // Highest-value profile details first (materiality), then the shared deterministic order.
+  // Highest-value profile details first (materiality), then domain affinity to the current operation, then the shared deterministic order.
   byClass.get('PROFILE_GAP')!.sort((a, b) => (b.candidate.signals.materiality - a.candidate.signals.materiality)
-    || compareRanked({ candidate: a.candidate, score: a.score }, { candidate: b.candidate, score: b.score }));
+    || (affinityOf(b) - affinityOf(a)) || rankedOrder(a, b));
+  // Home opportunities: granted ownership of the current result, granted active goal, domain affinity, materiality, then shared order.
+  byClass.get('HOME_OPPORTUNITY')!.sort((a, b) => (Number(b.currentResultOwnership) - Number(a.currentResultOwnership))
+    || (Number(b.activeGoalMatch) - Number(a.activeGoalMatch)) || (affinityOf(b) - affinityOf(a))
+    || (b.candidate.signals.materiality - a.candidate.signals.materiality) || rankedOrder(a, b));
 
   const chosen: PoolEntry[] = [];
   const chosenSet = new Set<PoolEntry>();

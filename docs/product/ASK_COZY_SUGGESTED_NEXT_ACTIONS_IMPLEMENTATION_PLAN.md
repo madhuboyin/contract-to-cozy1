@@ -1200,3 +1200,187 @@ Implementation sequence:
 **Step 8, specialist and remaining workflows (October 16, 2026).** The final thirty appliance-risk, break-even, do-nothing simulation, HOA, home-basics, hiring, home-continuity, upgrade, material-spec, neighborhood, hazard, Property Brief, reserve-fund, record-state, property-context, capture, household, and operational-work operations now author tailored continuations. Command receipts return to their owning read surface; analysis and guide results continue to directly related governed tools. Broad capture/setup receipts use safe property-level destinations and do not invent exact entity identity. The strict completion validator now passes with 190 `CUSTOM_GOVERNED`, 2 `CUSTOM_CONTEXTUAL`, 5 `EXEMPT`, and zero `MIGRATION_REQUIRED` operations.
 
 **Current inventory (generated, November 2, 2026).** The step counts above are a historical log of the migration, not the current state. Current totals come from `node scripts/ask-suggested-actions-inventory.js` (run from `apps/backend`): 226 operations; 128 registered outcomes (14 repeatable, 4 property-wide, 7 prompt-history exempt; 15 recurring hubs; 95 on read-oriented operations, of which 69 are retired by completion); 215 recipe source operations with 421 recipes; coverage 219 `CUSTOM_GOVERNED`, 2 `CUSTOM_CONTEXTUAL`, 5 `EXEMPT`, zero `MIGRATION_REQUIRED` (`COMMUNITY_UPDATES`, added after the October hash review, is now covered); 9 reviewed supplemental higher-role-floor recipe edges (`operationSpecificContinuationRoleFloor.test.js`). Recurring hub reads (owner ruling 2026-11-02): 15 reviewed read/list/status outcomes in `RECURRING_HUB_OUTCOMES` are not retired by completion and are held back by a 24-hour re-offer window (later of last offer and last selection, every slot class, with a one-time bypass for a result-owned return-to-list after a successful mutation); the generated totals above count them separately from the 14 `REPEATABLE_OUTCOMES`. Contextual exemption from exact-four (`CONTEXTUAL_ACTIONS_IN_RESULT`) applies only to operations in `REVIEWED_CONTEXTUAL_CONTINUATION_OPERATIONS` (reviewed complete action surfaces); every other result, including ordinary receipts with a top-level button, takes the normal exact-four pipeline and its buttons de-duplicate equivalent chips through registered `outcomeKey` identities.
+
+## Baseline reset for the candidate-quality proposal (November 2, 2026)
+
+Commit: `479e171bc9f57b46989c7e51bcb3b44e24b0ce05` (HEAD at the time of writing; not the historical `58f5acfd` snapshot). Documentation correction only: no product behavior change. Counting rule: every number below comes from an executable registry (`node scripts/ask-suggested-actions-inventory.js --json`, or the one-off registry reads named per table), never from hand counts. Statements marked *code-traced* were read from source and not executed.
+
+### Generated inventory (HEAD above)
+
+| Metric | Value |
+|---|---|
+| Registered operations | 226 |
+| Registered outcomes | 124 (14 repeatable, 4 property-wide, 7 prompt-history-exempt, 15 recurring hubs) |
+| Read-oriented outcomes | 91 (65 non-repeatable) |
+| Recipe source operations / recipes | 215 / 417 |
+| Coverage classes | 219 CUSTOM_GOVERNED, 2 CUSTOM_CONTEXTUAL, 5 EXEMPT, 0 MIGRATION_REQUIRED |
+| Recipe edges to a higher role floor | 9 |
+| Recipes that gate on a result reason (`omitWhenResultReason`) | 1 (`HVAC_DECISION_START` → `HVAC_DECISION_CONTINUE`, reason `HVAC_DECISION_ALREADY_ACTIVE`) |
+
+### Real candidate pools (what the proposal's ordering ideas apply to)
+
+**PROFILE_GAP.** One operation, `PROPERTY_CONTEXT_AREA_CAPTURE`, distinguished by outcome key (`PROFILE_AREA_OUTCOMES`). Candidate materiality is the maximum over that area's *unresolved* facts, so it varies per property. Registry read of `ACTIONABLE_PROFILE_FACTS` (51 facts):
+
+| Area | Outcome key | Facts | Fact materiality values | Audiences |
+|---|---|---|---|---|
+| CORE | CAPTURE_CORE_DETAILS | 8 | 1, 2 | ALL, SELLER |
+| LOCATION | CAPTURE_LOCATION_DETAILS | **0** | none | none |
+| STRUCTURE | CAPTURE_STRUCTURE_DETAILS | 6 | 1, 2, 3 | ALL, BUYER |
+| EXTERIOR | CAPTURE_EXTERIOR_DETAILS | 10 | 2 | ALL |
+| RESPONSIBILITY | CAPTURE_RESPONSIBILITY_DETAILS | 12 | 2, 3 | ALL |
+| SYSTEMS | CAPTURE_SYSTEMS_DETAILS | 9 | 2, 3 | ALL, BUYER |
+| SAFETY | CAPTURE_SAFETY_DETAILS | 6 | 2, 3 | ALL |
+
+Observation: LOCATION has an outcome but no registered facts, so it can never be nominated from this registry (location context is captured through a separate path). Ties on materiality are common (EXTERIOR is always 2; most areas reach 2 or 3), which is the case where a domain-affinity tiebreak would matter.
+
+**HOME_OPPORTUNITY.** Exactly three candidates, all `materiality: 2`, produced by `homeOpportunityCandidates.ts`:
+
+| Operation | Outcome key | Condition |
+|---|---|---|
+| CAPITAL_RESERVE_PLAN | REVIEW_CAPITAL_OUTLOOK | a capital exposure window overlaps the next 24 months |
+| WARRANTY_LOOKUP | REVIEW_EXPIRING_WARRANTIES | a started warranty expires within `WARRANTY_EXPIRING_DAYS` |
+| INSPECTION_FINDINGS | REVIEW_OPEN_FINDINGS | at least one open inspection finding |
+
+**CURATED_STARTER.** Seven outcomes in `starterCandidates.ts`, four producers:
+
+| Producer | Operation | Outcome keys |
+|---|---|---|
+| starter.seasonal-home-care | SEASONAL_HOME_CARE | REVIEW_THIS_SEASON, PREPARE_NEXT_SEASON |
+| starter.home-basics | HOME_BASICS_GUIDE | REVIEW_SAFETY_BASICS, REVIEW_MONTHLY_ROUTINE |
+| starter.hiring-guide | HIRING_GUIDE | REVIEW_HIRING_CHECKLIST |
+| starter.property-summary | PROPERTY_SUMMARY | REVIEW_HOME_SUMMARY, REVIEW_COMPLETENESS |
+
+### HVAC settled results and thread availability (code-traced)
+
+Today exactly **one** branch stamps `parameters.focusedDecisionThreadId`: `hvacDecisionContinueResult` when launched with a focused thread (`HVAC_DECISION_RESUMED`). The producer binds a thread-bound recipe when the property has exactly one active HVAC thread, or when the result's stamped id matches one of several active threads; otherwise it drops the recipe.
+
+| Result (reason code) | Handler holds exactly one resolved thread? | Stamped today | Classification under the approved rule |
+|---|---|---|---|
+| CONTINUE, focused, `HVAC_DECISION_RESUMED` | yes (looked up by id, active only) | **yes** | authoritative single thread: keep |
+| CONTINUE, by item, `HVAC_DECISION_RESUMED` | yes (`selection.kind === UNIQUE`, `selection.thread`) | no | **candidate to stamp** (Phase 4) |
+| START, `HVAC_DECISION_ALREADY_ACTIVE` | yes (the existing active thread) | no | candidate to stamp; its continue recipe is already omitted |
+| START / CONTINUE / SCENARIO / ABANDON / OUTCOME_* `HVAC_DECISION_THREAD_AMBIGUOUS` | no (several) | no | fail-closed |
+| `HVAC_DECISION_ITEM_REQUIRED`, `_ITEM_AMBIGUOUS`, `_NOT_STARTED` | no (none or unresolved) | no | fail-closed |
+| `HVAC_DECISION_SUBJECT_NOT_ACTIVE`, `_ITEM_UNAVAILABLE` | thread inactive or record missing | no | no active continuation |
+| OUTCOME_VIEW `HVAC_DECISION_OUTCOME_FOUND` / `_NONE` | yes (`selection.kind === UNIQUE`) | no | candidate to stamp |
+| OUTCOME_UNLINK `HVAC_DECISION_OUTCOME_NONE` | yes (UNIQUE), but nothing to unlink | no | candidate to stamp |
+| Confirm: `HVAC_DECISION_START_CREATED` | yes (`createdThread.id`) | no | candidate to stamp |
+| Confirm: `HVAC_DECISION_SCENARIO_CREATED` | yes (`scenarioThread`) | no | candidate to stamp |
+| Confirm: `HVAC_DECISION_OUTCOME_RECORDED`, `_OUTCOME_DISPUTED` | yes (`decisionThreadId` from the verified candidate) | no | candidate to stamp |
+| Confirm: `HVAC_DECISION_ABANDONED` | thread now abandoned | no | must not produce an active continuation |
+| Preference save / forget, specialist engage | not read in this pass | no | **unclassified; Phase 4 must read them before any change** |
+| `NEEDS_CONFIRMATION` and `NEEDS_ENTITY` states | n/a | no | interactive states keep their existing exact-four exemption |
+
+Whether confirm-handler results reach `operationSpecificContinuationProducer` with `result.parameters` intact was not traced; Phase 4 must confirm it before stamping confirm branches.
+
+### Approved HVAC rule
+
+Stamp `focusedDecisionThreadId` only where the handler authoritatively holds exactly one resolved thread. Remain fail-closed for ambiguous, unresolved, multiple-thread, inactive or abandoned cases. Never infer a thread from recency or title. This is consistent with the November 2 audit decision ("bind only when the result declares the exact decision thread"); it widens which branches declare one, it does not add a fallback.
+
+### Requirement reconciliation
+
+- Ordering stays **materiality first, then domain affinity, then the existing deterministic fallback** (owner ruling, November 2, 2026). The FRD requirement is unchanged.
+- `NEEDS_CONTEXT` actions may be shown only when every missing fact resolves through a registered fact-to-capture-to-operation mapping (FRD, "Only eligible actions…"). Phase 3's structured missing facts must satisfy this.
+- Recipe count measures connectivity, not value (audit decision on recurring hubs); Phase 1 therefore does not require every settled result to keep a domain recipe.
+
+### Phase 1 status (governance plus one confirmed gate)
+
+The proposal's "add `omitWhenResultReason`" is already present in HEAD with one consumer (`HVAC_DECISION_START` → `HVAC_DECISION_CONTINUE`). Of the three proposed contradictions, **one is confirmed and two are not**:
+
+1. **Confirmed: `INSPECTION_FINDING_UPDATE` → Home Actions.** `confirmInspectionFindingUpdate` (`workflowConfirm.handler.ts`) settles with `INSPECTION_FINDING_ACCEPTED`, `INSPECTION_FINDING_DISMISSED` or `INSPECTION_FINDING_RESOLVED`, and confirmed results reach the shared finalizer with `reasonCode` intact (`askConfirm.ts`). Accepting a finding creates work that Home Actions lists; dismissing or resolving one creates none, yet the `HOME_ACTIONS:REVIEW_HOME_ACTIONS` recipe offered "Review all home priorities" after all three. That recipe is now omitted for dismissed and resolved results and kept for accepted. `INSPECTION_FINDINGS:REVIEW_INSPECTION_FINDINGS` ("review remaining findings") is valid after all three and is not gated. The batch path settles with `INSPECTION_FINDING_BATCH_UPDATED` (mixed actions), which is deliberately not gated.
+   An earlier pass of this audit checked `INSPECTION_FINDING_DECISION_COMMAND` (whose recipes only offer "review findings/reports") instead of `INSPECTION_FINDING_UPDATE` and wrongly concluded no contradiction existed; that recipe set is unaffected.
+2. **Not confirmed: `HVAC_DECISION_OUTCOME_NONE` offers dispute or unlink.** No `HVAC_DECISION_OUTCOME_VIEW` recipe targets unlink; it offers continue and replacement guidance. The dispute control lives in the outcome summary block, emitted only for `_FOUND`.
+3. **Not confirmed: empty-state reads should pivot to setup.** The proposal named no operation. Reopen only with a named operation and a registered destination.
+
+Built: a source-operation-scoped registry of gateable result reasons (`operationSpecificContinuationResultReasons.ts`), a strict validator that every `omitWhenResultReason` names a reason registered for its own source, and the inspection gate above with focused candidate tests (accepted keeps Home Actions; dismissed and resolved omit it; remaining-findings survives all three). The registry's emission tests are *source-level*: they confirm a registered reason is spelled in the emitting handler file and do not execute the handler. `onlyWhenResultReason` was deliberately not added: no consumer.
+
+### Registry asymmetry recorded: LOCATION profile area
+
+`PROFILE_AREA_OUTCOMES` registers `LOCATION` / `CAPTURE_LOCATION_DETAILS`, but `ACTIONABLE_PROFILE_FACTS` holds no LOCATION facts, so the actionable-profile producer can never nominate it. The registry deliberately excludes location identity fields from actionable completeness (they have separate correction paths), so this is an intentional but unresolved asymmetry, not a defect to fix inside ordering work. Ordering changes make no LOCATION behavior change and invent no LOCATION affinity. Cleanup (remove the outcome, or define what LOCATION captures) is a separate requirements item for the owner.
+
+### Change 2 status: domain-aware ordering (November 2, 2026; FRD 1.509)
+
+Built on the real pools above, not on nonexistent candidates. `suggestedActionDomainAffinity.ts` holds a reviewed operation → domain table (eight domains; one domain per operation; unlisted operations have none) and a profile area → domains table (LOCATION deliberately absent). `domainAffinity(currentOperationId, candidate)` returns 1 only when the trusted current operation's domain matches; the current operation comes from the finalizer, never from a candidate.
+
+| Class | Order |
+|---|---|
+| PROFILE_GAP | materiality ↓, affinity ↓, shared deterministic order |
+| HOME_OPPORTUNITY | granted current-result ownership ↓, granted active goal ↓, affinity ↓, materiality ↓, shared order (previously ordered by score, which folds the same signals together, then the shared order) |
+| CURATED_STARTER | least recently offered ↑, affinity ↓, shared order |
+
+Notes for review. (1) The exact-four policy version string was not bumped; the affinity table carries its own version. (2) The HOME_OPPORTUNITY cap admits one *unrelated* opportunity, so with only unowned candidates the affinity-first candidate is the single one shown; an owned candidate does not count against the cap. (3) The domain assignments (for example SYSTEMS → MAINTENANCE and FINANCE, RESPONSIBILITY → MAINTENANCE and COVERAGE) are judgment calls pending owner review; each is a one-line change in the table.
+
+### Change 3 inventory: fixable result limitations (November 3, 2026; no code change)
+
+The proposal assumed a settled `READY_WITH_LIMITATIONS` answer exposes a homeowner-correctable missing fact with no way to act on it. Read against HEAD, the three handlers the owner ruling named as likely first slices already have one or more of three existing mechanisms, so a new `fixableMissingFacts` contract would add nothing visible for them. *Code-traced, not executed.*
+
+| Handler (operation) | Missing fact it computes | Existing treatment | Does a new chip add anything? |
+|---|---|---|---|
+| `replacementGuidanceResult` (`REPLACEMENT_GUIDANCE`) | first unmet `REPAIR_REPLACE` requirement via `evaluateFeatureContext` | emitted as an inline `captureRequests` prompt; a non-optional capture makes the result own a pending interaction (`resultOwnsPendingInteraction`), which exempts it from the chip row | No. Viewers and what-if runs get no capture, but a viewer cannot fix the record and a what-if saves nothing by design |
+| `applianceFailureRiskFromView` (`APPLIANCE_FAILURE_RISK`) | appliances with no purchase date, each with its exact `inventoryItemId` | per-item inline "Add purchase date" action declaring `INVENTORY_ITEM_CORRECT:ADD_PURCHASE_DATE`; that outcome key is published as a presentation identity, so an equivalent chip is de-duplicated away | No: the chip would be removed as a duplicate of the inline control |
+| `maintenanceForecastResult` (`MAINTENANCE_FORECAST`) | no verified HVAC, roof or water-heater item | `NOT_APPLICABLE` with `forecastSetupRecoveryCandidates` ("Review home inventory"); "verified" is a homeowner review action, not a single correctable field on a known entity | No: a recovery candidate already exists |
+| `capitalPlanning.handler` plan result (`CAPITAL_PLAN_CONTEXT_OPTIONAL`) | optional context facts | inline `captureRequests` | No, same pending-interaction path as replacement |
+| `maintenanceResult` (`MAINTENANCE_STATUS`) | property purchase date for "since I bought" scopes | top-level `add-purchase-date` action, which exempts the result from exact-four (`CONTEXTUAL_ACTIONS_IN_RESULT`) | No |
+
+Existing machinery the proposal did not account for: handlers can already attach typed candidates (`suggestedNextActionCandidates`, 13 handler sites); a registered fact-to-capture-to-operation table exists (`MISSING_FACT_CAPTURES`); inline `captureRequests` and block actions already carry the fix; and presentation-identity de-duplication already removes a chip that duplicates an inline control.
+
+Census of all 74 `READY_WITH_LIMITATIONS` result sites in 29 handler files (heuristic: a ±14-line window around each site, so a false "none" is possible): 11 carry `captureRequests`, 1 attaches candidates, 7 carry an inline action, and 58 carry none of the three in the window. The 58 are dominated by buyer-plan state results (covered by registered domain continuations), external-feed or source limitations, permission or restricted views, stale-data states, and warranty-not-recorded (all excluded from the first slice by the owner ruling), plus `COMMUNITY_LOCATION_REQUIRED`, which depends on the LOCATION asymmetry recorded above. No site in the 58 was found that has an exact correctable field, an authoritative entity, a registered capture destination, and no inline control or existing candidate. That is a window-limited search, not a proof of absence.
+
+Status: **Phase 3 is rejected as designed** (owner ruling, November 3, 2026): the fix is already presented by an inline capture, a per-item action with a published identity, or an existing recovery candidate, and handlers can already attach typed candidates directly. No `fixableMissingFacts` field and no `currentResultBlockingGap` signal were built.
+
+### Change 4 status: HVAC thread propagation and entity-scoped read candidates (November 3, 2026; FRD 1.510)
+
+**Phase 4, HVAC thread propagation (implemented).** The approved rule was applied branch by branch. A result stamps `focusedDecisionThreadId` only where its handler holds exactly one resolved thread. The producer was not changed; the specialist handler keeps its existing `decisionThreadId` (read by `executeOperation`) and now also stamps the key the producer binds on.
+
+| Result | Stamped | Why |
+|---|---|---|
+| CONTINUE by item (`HVAC_DECISION_RESUMED`) | yes | `selectHvacDecisionThread` returned UNIQUE |
+| CONTINUE with a focused thread | yes (already) | looked up by id, active only |
+| OUTCOME_VIEW `_FOUND`, `_NONE` | yes | UNIQUE selection |
+| Specialist engage with a runtime thread | yes | the runtime's own decision thread; unset when none |
+| Confirm `HVAC_DECISION_START_CREATED` | yes | `createdThread.id` |
+| Confirm `HVAC_DECISION_SCENARIO_CREATED` | yes | the verified `scenarioThread` |
+| Confirm `HVAC_DECISION_OUTCOME_RECORDED`, `_OUTCOME_DISPUTED` | yes | the version-checked `candidate.data.decisionThreadId` |
+| START `HVAC_DECISION_ALREADY_ACTIVE` | no | its only thread-bound recipe is already omitted, so a stamp changes nothing |
+| OUTCOME_UNLINK `_OUTCOME_NONE`, `_NOT_STARTED` | no | `NOT_APPLICABLE` recovery results keep only recovery-trait actions |
+| `HVAC_DECISION_THREAD_AMBIGUOUS`, `_ITEM_REQUIRED`, `_ITEM_AMBIGUOUS` | no | ambiguous or unresolved: fail-closed |
+| `HVAC_DECISION_SUBJECT_NOT_ACTIVE`, `_ITEM_UNAVAILABLE` | no | inactive thread or missing record |
+| Confirm `HVAC_DECISION_ABANDONED` | no | the thread is no longer active |
+| Confirm preference save / forget | no | a preference is not scoped to one thread |
+
+Executability: both thread-bound destinations consume the launch context the chip carries: `HVAC_DECISION_CONTINUE` through its focused-thread branch and `HVAC_DECISION_OUTCOME_VIEW` through `focusedHvacThreadItem`, each rejecting an inactive thread rather than substituting another.
+Persistence change needed by the confirm branches: `askConfirm` previously replaced the stored `parametersJson` with `result.parameters` whenever a confirmed result had any, which would have dropped `sourceExecutionId` that replay reconciliation reads. It now merges (`mergeConfirmedParameters`); a result without parameters still writes nothing.
+
+**Phase 5, entity-scoped read candidates (narrowed to one).** Preflight (target accepts the entity type; handler holds the exact id; meaningful for the record; authorization and freshness exist; registered outcome; no free-text reparse):
+
+| Candidate | Result | Reason |
+|---|---|---|
+| Expiring warranty → reminder | **implemented** | `WARRANTY` entity validator, `MONITOR_WARRANTY_EXPIRY` outcome, destination and version helper already exist from the write-side receipt |
+| Inspection finding → update action | deferred | no `INSPECTION_FINDING` entity validator, no registered outcomes for `INSPECTION_FINDING_UPDATE`, each finding row already carries accept/dismiss/resolve, and a mutation chip for a finding the homeowner has not chosen has no why-now basis |
+| Open claim → checklist or detail | deferred | no `CLAIM` entity validator or freshness entry; an earlier decision (recipes comment) found a property-level chip cannot carry the claim, so the claims list is the way in |
+
+Warranty reminder behavior: offered after the warranty list to a contributor or owner for the soonest-expiring warranty that is on screen, started, within `WARRANTY_EXPIRING_DAYS`, not in a coverage conflict, and without a current reminder at the due date the monitor would set. `INVENTORY_ITEM_CREATE` is not used as an entity action. The ownership relationship `WARRANTY_LOOKUP → HOME_DEADLINE_MONITOR:MONITOR_WARRANTY_EXPIRY` was registered (a governance-registry change; boot validation was run).
+
+### Database cost per touched handler
+
+| Handler | Added queries |
+|---|---|
+| `warrantiesResult` (warranty list) | 0 for a viewer, or when no expiring warranty is on screen; otherwise **1** batched `propertyMaintenanceTask.findMany` over at most 10 action keys |
+| HVAC continue / outcome view / scenario / outcome receipts | 0 (the thread id was already loaded) |
+| Specialist engage | 0 |
+| `confirmAskExecution` | 0 (merge happens in memory over the already-loaded execution) |
+| Domain-affinity ordering, reason-code gate | 0 (pure) |
+
+### Recommendation disposition
+
+| Recommendation | Disposition |
+|---|---|
+| Phase 0 baseline and corrected inventory | implemented |
+| Phase 1 reason-code governance and gate | narrowed: registry, validator and one confirmed gate (`INSPECTION_FINDING_UPDATE`); the HVAC outcome and empty-state examples were not confirmed; `onlyWhenResultReason` not built |
+| Phase 2 domain-aware ordering | implemented on the three real pools; LOCATION left unmapped |
+| Phase 3 fixable missing facts | rejected as designed (existing mechanisms already cover the named handlers) |
+| Phase 4 HVAC propagation | implemented for single-thread branches; ambiguous and abandoned branches stay fail-closed |
+| Phase 5 entity-scoped read candidates | narrowed to the warranty reminder; inspection finding and claim deferred |
+| Nonexistent catalogs, operations and materiality values in the original proposal | removed from this plan; the real inventories are above |
+
+Open owner items: the LOCATION asymmetry (separate requirements item); the domain assignments in `suggestedActionDomainAffinity.ts`; whether inspection-finding and claim chips are wanted at all (each would need its own validator, outcomes and freshness entry); the batch inspection receipt still offers Home Actions after dismissals.

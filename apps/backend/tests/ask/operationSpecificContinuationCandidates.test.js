@@ -262,3 +262,19 @@ test('remaining specialist, record, simulation, and setup operations all have ta
     assert.ok(candidates.every((candidate) => candidate.sourceOperationId === operationId), operationId);
   }
 });
+
+test('INSPECTION_FINDING_UPDATE: Home Actions follows an accepted finding only; reviewing remaining findings survives every result', () => {
+  const targets = (reasonCode) => operationSpecificContinuationCandidates('INSPECTION_FINDING_UPDATE', PROPERTY_ID, undefined, null, reasonCode)
+    .map((candidate) => `${candidate.operationId}:${candidate.outcomeKey}`);
+  const REMAINING = 'INSPECTION_FINDINGS:REVIEW_INSPECTION_FINDINGS';
+  const HOME_ACTIONS = 'HOME_ACTIONS:REVIEW_HOME_ACTIONS';
+  assert.ok(targets('INSPECTION_FINDING_ACCEPTED').includes(HOME_ACTIONS), 'accepted keeps Home Actions (new work exists)');
+  assert.ok(!targets('INSPECTION_FINDING_DISMISSED').includes(HOME_ACTIONS), 'dismissed omits Home Actions');
+  assert.ok(!targets('INSPECTION_FINDING_RESOLVED').includes(HOME_ACTIONS), 'resolved omits Home Actions');
+  for (const reason of ['INSPECTION_FINDING_ACCEPTED', 'INSPECTION_FINDING_DISMISSED', 'INSPECTION_FINDING_RESOLVED']) {
+    assert.ok(targets(reason).includes(REMAINING), `${reason} keeps the remaining-findings review`);
+  }
+  // Unknown or absent reasons (including the batch receipt) keep the full recipe set.
+  assert.ok(targets('INSPECTION_FINDING_BATCH_UPDATED').includes(HOME_ACTIONS));
+  assert.ok(targets(null).includes(HOME_ACTIONS));
+});

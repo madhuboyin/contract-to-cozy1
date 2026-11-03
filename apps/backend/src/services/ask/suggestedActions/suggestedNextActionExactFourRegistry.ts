@@ -257,7 +257,8 @@ export const RESULT_OWNERSHIP_RELATIONSHIPS: Readonly<Record<string, readonly st
   MAINTENANCE_BUDGET_FORECAST: operationSpecificContinuationOutcomeKeys('MAINTENANCE_BUDGET_FORECAST'),
   MAINTENANCE_TEMPLATES_BROWSE: operationSpecificContinuationOutcomeKeys('MAINTENANCE_TEMPLATES_BROWSE'),
   HOME_ACTIONS: operationSpecificContinuationOutcomeKeys('HOME_ACTIONS'),
-  WARRANTY_LOOKUP: operationSpecificContinuationOutcomeKeys('WARRANTY_LOOKUP'),
+  // The warranty list also owns the reminder for an expiring warranty it shows (read-side nomination, warranties.handler.ts).
+  WARRANTY_LOOKUP: [...WARRANTY_REMINDER, ...operationSpecificContinuationOutcomeKeys('WARRANTY_LOOKUP')],
   DOCUMENT_LOOKUP: operationSpecificContinuationOutcomeKeys('DOCUMENT_LOOKUP'),
   DOCUMENT_PROMOTION_REVIEW: operationSpecificContinuationOutcomeKeys('DOCUMENT_PROMOTION_REVIEW'),
   RECALL_REVIEW: operationSpecificContinuationOutcomeKeys('RECALL_REVIEW'),
