@@ -118,9 +118,10 @@ export const OPERATION_SPECIFIC_CONTINUATION_RECIPES: Readonly<Partial<Record<As
     recipe('Review supporting documents', 'Show my home documents', 'DOCUMENT_LOOKUP', 'REVIEW_DOCUMENTS', 'CLAIMS_RELATED_DOCUMENTS'),
     recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'CLAIMS_RELATED_HOME_ACTIONS'),
   ],
+  // No recipe targets CLAIM_CHECKLIST_VIEW: it opens only from a specific claim (exact launch message plus a claim entity), which a
+  // property-level chip cannot carry, so every such chip landed on "Choose a claim first". The claims list is the way in.
   INCIDENT_CONTINUATION: [
     recipe('Review claim status', 'Show my recorded claims', 'INCIDENT_CLAIM_STATUS', 'REVIEW_CLAIM_STATUS', 'INCIDENT_WORK_REVIEW_STATUS'),
-    recipe('Review the claim checklist', 'Show the checklist for my active claim', 'CLAIM_CHECKLIST_VIEW', 'REVIEW_CLAIM_CHECKLIST', 'INCIDENT_WORK_REVIEW_CHECKLIST'),
   ],
   CLAIM_CHECKLIST_VIEW: [
     recipe('Review claim status', 'Show my recorded claims', 'INCIDENT_CLAIM_STATUS', 'REVIEW_CLAIM_STATUS', 'CLAIM_CHECKLIST_REVIEW_STATUS'),
@@ -128,15 +129,12 @@ export const OPERATION_SPECIFIC_CONTINUATION_RECIPES: Readonly<Partial<Record<As
   ],
   CLAIM_FILE: [
     recipe('Review recorded claims', 'Show my recorded claims', 'INCIDENT_CLAIM_STATUS', 'REVIEW_CLAIM_STATUS', 'CLAIM_FILED_REVIEW_STATUS'),
-    recipe('Review the claim checklist', 'Show the checklist for my active claim', 'CLAIM_CHECKLIST_VIEW', 'REVIEW_CLAIM_CHECKLIST', 'CLAIM_FILED_REVIEW_CHECKLIST'),
   ],
   CLAIM_TRANSITION: [
     recipe('Review claim status', 'Show my recorded claims', 'INCIDENT_CLAIM_STATUS', 'REVIEW_CLAIM_STATUS', 'CLAIM_TRANSITIONED_REVIEW_STATUS'),
-    recipe('Review the claim checklist', 'Show the checklist for my active claim', 'CLAIM_CHECKLIST_VIEW', 'REVIEW_CLAIM_CHECKLIST', 'CLAIM_TRANSITIONED_REVIEW_CHECKLIST'),
   ],
   CLAIM_ACTIVITY_COMMAND: [
     recipe('Review claim status', 'Show my recorded claims', 'INCIDENT_CLAIM_STATUS', 'REVIEW_CLAIM_STATUS', 'CLAIM_ACTIVITY_REVIEW_STATUS'),
-    recipe('Continue the claim checklist', 'Show the checklist for my active claim', 'CLAIM_CHECKLIST_VIEW', 'REVIEW_CLAIM_CHECKLIST', 'CLAIM_ACTIVITY_REVIEW_CHECKLIST'),
   ],
   SEASONAL_CHECKLIST_SETUP: [
     recipe('Review this season', 'What should I take care of around my home this season?', 'SEASONAL_HOME_CARE', 'REVIEW_THIS_SEASON', 'SEASONAL_SETUP_REVIEW_CURRENT'),
@@ -229,6 +227,44 @@ export const OPERATION_SPECIFIC_CONTINUATION_RECIPES: Readonly<Partial<Record<As
   PERMIT_TRACKER_COMMAND: [
     recipe('Review permit status', 'Show my permit tracker status', 'PERMIT_TRACKER_STATUS', 'REVIEW_PERMITS', 'PERMIT_UPDATED_REVIEW_STATUS'),
     recipe('Review renovation readiness', 'Show my renovation permit readiness', 'RENOVATION_PERMIT_READINESS', 'REVIEW_RENOVATION_READINESS', 'PERMIT_UPDATED_REVIEW_READINESS'),
+  ],
+  // Receipt fallbacks (F5 precondition): handler-attached receipt candidates are conditional on what changed, so each receipt operation
+  // also owns a state-free domain continuation. Without it a receipt whose conditional candidate does not fire would have none.
+  WARRANTY_UPDATE: [
+    recipe('Review recorded warranties', 'Show my recorded warranties', 'WARRANTY_LOOKUP', 'REVIEW_WARRANTIES', 'WARRANTY_UPDATED_REVIEW_WARRANTIES'),
+    recipe('Review coverage gaps', 'Show coverage gaps for my recorded items', 'COVERAGE_GAPS', 'REVIEW_COVERAGE_GAPS', 'WARRANTY_UPDATED_REVIEW_COVERAGE'),
+  ],
+  CAPTURE_WARRANTY_CONFIRM: [
+    recipe('Review recorded warranties', 'Show my recorded warranties', 'WARRANTY_LOOKUP', 'REVIEW_WARRANTIES', 'WARRANTY_CAPTURED_REVIEW_WARRANTIES'),
+    recipe('Review coverage gaps', 'Show coverage gaps for my recorded items', 'COVERAGE_GAPS', 'REVIEW_COVERAGE_GAPS', 'WARRANTY_CAPTURED_REVIEW_COVERAGE'),
+  ],
+  MAINTENANCE_TASK_UPDATE: [
+    recipe('Review pending maintenance', 'What maintenance is pending?', 'MAINTENANCE_STATUS', 'REVIEW_MAINTENANCE_STATUS', 'TASK_UPDATED_REVIEW_MAINTENANCE'),
+    recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'TASK_UPDATED_REVIEW_HOME_ACTIONS'),
+  ],
+  HOME_EVENT_CORRECT: [
+    recipe('Review the home timeline', 'Open my home timeline', 'HOME_TIMELINE_EVENTS', 'REVIEW_HOME_TIMELINE', 'EVENT_CORRECTED_REVIEW_TIMELINE'),
+    recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'EVENT_CORRECTED_REVIEW_HOME_ACTIONS'),
+  ],
+  HOME_EVENT_UPDATE: [
+    recipe('Review the home timeline', 'Open my home timeline', 'HOME_TIMELINE_EVENTS', 'REVIEW_HOME_TIMELINE', 'EVENT_UPDATED_REVIEW_TIMELINE'),
+    recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'EVENT_UPDATED_REVIEW_HOME_ACTIONS'),
+  ],
+  CAPTURE_EVENT_CONFIRM: [
+    recipe('Review the home timeline', 'Open my home timeline', 'HOME_TIMELINE_EVENTS', 'REVIEW_HOME_TIMELINE', 'EVENT_CAPTURED_REVIEW_TIMELINE'),
+    recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'EVENT_CAPTURED_REVIEW_HOME_ACTIONS'),
+  ],
+  INVENTORY_ITEM_CORRECT: [
+    recipe('Review home inventory', 'Show my home inventory', 'INVENTORY_LOOKUP', 'REVIEW_HOME_INVENTORY', 'ITEM_CORRECTED_REVIEW_INVENTORY'),
+    recipe('Review recorded warranties', 'Show my recorded warranties', 'WARRANTY_LOOKUP', 'REVIEW_WARRANTIES', 'ITEM_CORRECTED_REVIEW_WARRANTIES'),
+  ],
+  INVENTORY_ITEM_CREATE: [
+    recipe('Review home inventory', 'Show my home inventory', 'INVENTORY_LOOKUP', 'REVIEW_HOME_INVENTORY', 'ITEM_CREATED_REVIEW_INVENTORY'),
+    recipe('Review recorded warranties', 'Show my recorded warranties', 'WARRANTY_LOOKUP', 'REVIEW_WARRANTIES', 'ITEM_CREATED_REVIEW_WARRANTIES'),
+  ],
+  COMMUNITY_UPDATES: [
+    recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'COMMUNITY_UPDATES_REVIEW_HOME_ACTIONS'),
+    recipe('Review the home timeline', 'Open my home timeline', 'HOME_TIMELINE_EVENTS', 'REVIEW_HOME_TIMELINE', 'COMMUNITY_UPDATES_REVIEW_TIMELINE'),
   ],
   PERMIT_TRACKER_STATUS: [
     recipe('Review renovation readiness', 'Show my renovation permit readiness', 'RENOVATION_PERMIT_READINESS', 'REVIEW_RENOVATION_READINESS', 'PERMIT_STATUS_REVIEW_READINESS'),
@@ -345,6 +381,8 @@ export const OPERATION_SPECIFIC_CONTINUATION_RECIPES: Readonly<Partial<Record<As
   QUOTE_COMPARISON_REVIEW: [
     recipe('Review service price checks', 'Show my service price checks', 'SERVICE_PRICE_CHECKS', 'REVIEW_SERVICE_PRICES', 'QUOTES_REVIEW_SERVICE_PRICES'),
     recipe('Review finalized prices', 'Show my finalized service prices', 'PRICE_FINALIZATIONS_LIST', 'REVIEW_PRICE_FINALIZATIONS', 'QUOTES_REVIEW_FINALIZED_PRICES'),
+    // Viewer-floor baseline: the two owner-only rows above are supplemental, so a viewer still has a continuation.
+    recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'QUOTES_REVIEW_HOME_ACTIONS'),
   ],
   QUOTE_COMPARISON_COMMAND: [
     recipe('Review quote comparisons', 'Show my quote comparisons', 'QUOTE_COMPARISON_REVIEW', 'REVIEW_QUOTES', 'QUOTE_UPDATED_REVIEW_QUOTES'),

@@ -92,7 +92,7 @@ export function diyProjectsFromView(view: DiyProjectListView, propertyId: string
         actions: [
           ...(item.templateId && !item.aiGuideId && item.templateRevisionId ? [{
             id: 'guide-diy-project', label: 'Guide me through this project', message: 'Guide me through this project.', style: 'SECONDARY' as const,
-            interactionType: 'CONVERSATION_CONTINUE' as const, operationId: 'DIY_PROJECT_GUIDE' as const,
+            interactionType: 'CONVERSATION_CONTINUE' as const, operationId: 'DIY_PROJECT_GUIDE' as const, outcomeKey: 'CONTINUE_REVIEWED_PROJECT',
           }] : []),
           ...(canChange && diyProjectTakesNote(item.status) ? [{
             id: DIY_NOTE_ACTION_ID, label: 'Add a note', message: DIY_NOTE_MESSAGE, style: 'QUIET' as const,

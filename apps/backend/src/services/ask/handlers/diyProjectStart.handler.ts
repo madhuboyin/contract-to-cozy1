@@ -104,14 +104,14 @@ export function diyTemplateBrowseFromItems(view: { items: StartableTemplate[]; h
       status: item.openProjectId ? 'Already started' : null,
       entityType: item.openProjectId ? DIY_PROJECT_ENTITY_TYPE : DIY_TEMPLATE_ENTITY_TYPE,
       ...(item.openProjectId
-        ? { actions: [{ id: 'guide-diy-project', label: 'Guide me through this project', message: 'Guide me through this project.', style: 'SECONDARY' as const, interactionType: 'CONVERSATION_CONTINUE' as const, operationId: 'DIY_PROJECT_GUIDE' as const }] }
+        ? { actions: [{ id: 'guide-diy-project', label: 'Guide me through this project', message: 'Guide me through this project.', style: 'SECONDARY' as const, interactionType: 'CONVERSATION_CONTINUE' as const, operationId: 'DIY_PROJECT_GUIDE' as const, outcomeKey: 'CONTINUE_REVIEWED_PROJECT' as const }] }
         : canStart ? {
           actions: [{
             id: DIY_ASSESS_ACTION.id, label: DIY_ASSESS_ACTION.label, message: DIY_ASSESS_ACTION.message, style: 'QUIET' as const,
             interactionType: 'CONVERSATION_CONTINUE' as const, operationId: 'DIY_TEMPLATE_BROWSE' as const,
           }, {
             id: DIY_PROJECT_START_ACTION.id, label: DIY_PROJECT_START_ACTION.label, message: DIY_PROJECT_START_ACTION.message, style: 'SECONDARY' as const,
-            interactionType: 'MUTATE_RECORD' as const, operationId: 'DIY_PROJECT_START' as const,
+            interactionType: 'MUTATE_RECORD' as const, operationId: 'DIY_PROJECT_START' as const, outcomeKey: 'START_REVIEWED_PROJECT',
           }],
         } : {}),
     })),

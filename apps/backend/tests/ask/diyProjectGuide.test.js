@@ -345,7 +345,7 @@ test('DIY_PROJECTS rows: only a project started from a reviewed template version
   const result = diyProjectsFromView({ items: [item('reviewed'), item('ai', { aiGuideId: 'g1' }), item('legacy', { templateRevisionId: null }), item('custom', { templateId: null, templateRevisionId: null })], nextCursor: undefined }, 'prop-1');
   const rows = result.blocks.find((b) => b.type === 'GROUPED_LIST').sections[0].items;
   const byId = Object.fromEntries(rows.map((row) => [row.id, row]));
-  assert.deepEqual(byId.reviewed.actions, [{ id: 'guide-diy-project', label: 'Guide me through this project', message: 'Guide me through this project.', style: 'SECONDARY', interactionType: 'CONVERSATION_CONTINUE', operationId: 'DIY_PROJECT_GUIDE' }]);
+  assert.deepEqual(byId.reviewed.actions, [{ id: 'guide-diy-project', label: 'Guide me through this project', message: 'Guide me through this project.', style: 'SECONDARY', interactionType: 'CONVERSATION_CONTINUE', operationId: 'DIY_PROJECT_GUIDE', outcomeKey: 'CONTINUE_REVIEWED_PROJECT' }]);
   assert.equal(byId.reviewed.entityType, 'DIY_PROJECT');
   assert.deepEqual(result.suggestedNextActionCandidates.map((candidate) => [candidate.label, candidate.operationId, candidate.outcomeKey, candidate.entityContext.entityId]), [
     ['Continue reviewed', 'DIY_PROJECT_GUIDE', 'CONTINUE_REVIEWED_PROJECT', 'reviewed'],

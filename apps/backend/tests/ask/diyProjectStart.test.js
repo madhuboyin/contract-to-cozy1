@@ -111,7 +111,7 @@ test('browse lists a governed, applicable template with the start action for a c
   assert.deepEqual(collectionOf(result), { sourceTotal: 1, fetchedCount: 1, deliveredCount: 1, nextPageAvailable: false, deliveryTruncated: false });
   const [row] = rowsOf(result);
   assert.deepEqual([row.id, row.title, row.entityType, row.status ?? null], ['t1', 'Repaint a hallway', 'DIY_TEMPLATE', null]);
-  assert.deepEqual(row.actions, [{ id: 'diy-template-assess', label: 'Should I do this myself?', message: 'Should I do this project myself?', style: 'QUIET', interactionType: 'CONVERSATION_CONTINUE', operationId: 'DIY_TEMPLATE_BROWSE' }, { id: 'diy-template-start', label: 'Start this project', message: 'Start this project.', style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId: 'DIY_PROJECT_START' }]);
+  assert.deepEqual(row.actions, [{ id: 'diy-template-assess', label: 'Should I do this myself?', message: 'Should I do this project myself?', style: 'QUIET', interactionType: 'CONVERSATION_CONTINUE', operationId: 'DIY_TEMPLATE_BROWSE' }, { id: 'diy-template-start', label: 'Start this project', message: 'Start this project.', style: 'SECONDARY', interactionType: 'MUTATE_RECORD', operationId: 'DIY_PROJECT_START', outcomeKey: 'START_REVIEWED_PROJECT' }]);
   assert.deepEqual(result.suggestedNextActionCandidates.map((candidate) => [candidate.label, candidate.operationId, candidate.outcomeKey, candidate.entityContext.entityType, candidate.entityContext.entityId]), [
     ['Start Repaint a hallway', 'DIY_PROJECT_START', 'START_REVIEWED_PROJECT', 'DIY_TEMPLATE', 't1'],
   ], 'the sticky composer gets the exact reviewed project action, not a generic starter');

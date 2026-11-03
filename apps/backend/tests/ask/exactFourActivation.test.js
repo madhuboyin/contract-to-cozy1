@@ -87,8 +87,9 @@ test('EMPTY-HOME VIEWER, typed question: the settled answer shows exactly four d
   assert.equal(r.calls.completeness, 0, 'a starters-only turn never loads actionable completeness');
 });
 
-test('a settled answer with declared contextual workflow controls does not get an unrelated curated-starter footer', async () => {
+test('a reviewed complete-surface result with declared contextual controls does not get an unrelated curated-starter footer', async () => {
   const r = await run({
+    operationId: 'SEASONAL_HOME_CARE',
     result: {
       blocks: [{
         type: 'LIST',
@@ -163,7 +164,7 @@ test('optional Property Summary capture and seller-prep controls retain four gov
   assert.equal(sellerPrep.report.exactFour.applicability, 'EXACT_FOUR');
 });
 
-test('a declared DIY result candidate survives the contextual exemption and becomes the sticky footer action', async () => {
+test('a declared DIY result candidate leads the governed row (DIY is not a reviewed complete surface, so the normal pipeline applies)', async () => {
   const candidate = diyTemplateStartCandidate({ propertyId: PROPERTY, templateId: 'template-1', revisionId: 'revision-1', title: 'Touch up a scuffed wall' });
   const r = await run({
     role: 'CONTRIBUTOR',
@@ -175,10 +176,9 @@ test('a declared DIY result candidate survives the contextual exemption and beco
     producers: [SUGGESTED_NEXT_ACTION_PRODUCERS[0], ...starterProducers],
     entityValidatorFor: (entityType) => entityType === 'DIY_TEMPLATE' ? async () => new Map([['template-1', { exists: true, propertyId: null, currentContextVersion: 'revision-1' }]]) : undefined,
   });
-  assert.deepEqual(r.shown.map((action) => [action.label, action.operationId, action.outcomeKey, action.entityContext.entityId]), [
-    ['Start Touch up a scuffed wall', 'DIY_PROJECT_START', 'START_REVIEWED_PROJECT', 'template-1'],
-  ]);
-  assert.equal(r.report.exactFour.exemptReason, 'CONTEXTUAL_ACTIONS_IN_RESULT');
+  assert.equal(r.shown.length, 4, keysShown(r).join(','));
+  assert.deepEqual([r.shown[0].label, r.shown[0].operationId, r.shown[0].outcomeKey, r.shown[0].entityContext.entityId], ['Start Touch up a scuffed wall', 'DIY_PROJECT_START', 'START_REVIEWED_PROJECT', 'template-1']);
+  assert.equal(r.report.exactFour.applicability, 'EXACT_FOUR');
 });
 
 test('the real finalizer shares one Property Context-backed state across profile, opportunity and completeness consumers', async () => {
@@ -343,4 +343,26 @@ test('a forecast with no verified systems (NOT_APPLICABLE) keeps one recovery ch
   assert.deepEqual(keysShown(recovered), ['INVENTORY_LOOKUP:REVIEW_HOME_INVENTORY']);
   const bare = await run({ status: 'NOT_APPLICABLE', operationId: 'MAINTENANCE_FORECAST' });
   assert.deepEqual(keysShown(bare), []);
+});
+
+test('RECEIPTS: a plain receipt with one top-level button takes the normal governed row, de-duplicated against its own button', async () => {
+  const { receiptFollowUpAction } = require('../../src/services/ask/support/receiptFollowUps.ts');
+  const r = await run({
+    role: 'CONTRIBUTOR', operationId: 'WARRANTY_UPDATE', message: 'Update my warranty expiry',
+    result: { status: 'COMPLETED', blocks: [{ type: 'WORKFLOW_PROGRESS', id: 'receipt', actions: [receiptFollowUpAction('WARRANTIES')] }] },
+    producers: [SUGGESTED_NEXT_ACTION_PRODUCERS[0], operationSpecificContinuationProducer, ...starterProducers],
+  });
+  assert.equal(r.report.exactFour.applicability, 'EXACT_FOUR', JSON.stringify(r.report.exactFour));
+  assert.equal(r.shown.length, 4, keysShown(r).join(','));
+  assert.ok(keysShown(r).includes('COVERAGE_GAPS:REVIEW_COVERAGE_GAPS'), 'the receipt owns a state-free domain continuation');
+  assert.ok(!keysShown(r).includes('WARRANTY_LOOKUP:REVIEW_WARRANTIES'), 'the button already covers this destination, so the chip is not repeated');
+});
+
+test('RECEIPTS: every receipt operation owns a state-free CONTINUE_WORK continuation, so no conditional branch leaves it empty', () => {
+  const { operationSpecificContinuationCandidates } = require('../../src/services/ask/suggestedActions/operationSpecificContinuationCandidates.ts');
+  for (const operationId of ['WARRANTY_UPDATE', 'CAPTURE_WARRANTY_CONFIRM', 'MAINTENANCE_TASK_UPDATE', 'HOME_EVENT_CORRECT', 'HOME_EVENT_UPDATE', 'CAPTURE_EVENT_CONFIRM', 'INVENTORY_ITEM_CORRECT', 'INVENTORY_ITEM_CREATE']) {
+    const candidates = operationSpecificContinuationCandidates(operationId, PROPERTY);
+    assert.ok(candidates.length >= 1, `${operationId}: no state-free continuation`);
+    assert.ok(candidates.every((candidate) => candidate.slotClass === 'CONTINUE_WORK'), operationId);
+  }
 });

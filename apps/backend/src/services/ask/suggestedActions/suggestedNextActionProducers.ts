@@ -90,7 +90,8 @@ export const operationSpecificContinuationProducer: SuggestedNextActionProducer 
 
 /**
  * The curated starters (exact-four, inventory D-O4): one registered producer per starter source, so each has its own server-owned grant
- * (CURATED_STARTER only). They are NONESSENTIAL: the first dropped when the pipeline budget is exceeded. Each nominates only for a property-scoped
+ * (CURATED_STARTER only). They are ESSENTIAL (static and synchronous, so they preserve exact-four when optional enrichment has used the
+ * budget and are never dropped for it). Each nominates only for a property-scoped
  * turn and reads nothing: the candidates are static, and the shared finalizer's eligibility, lifecycle and policy decide visibility.
  */
 const starterProducer = (id: string, nominate: (propertyId: string) => readonly unknown[]): SuggestedNextActionProducer => ({
@@ -154,9 +155,8 @@ export const capabilityRecommendationProducer: SuggestedNextActionProducer = {
 };
 
 export const SUGGESTED_NEXT_ACTION_PRODUCERS: readonly SuggestedNextActionProducer[] = [
-  // Static starters are deliberately nominated before database-backed enrichment. They are still nonessential and may be
-  // dropped when the deadline was already exhausted, but a slow optional read must not consume the entire budget before the
-  // exact-four fallback inventory has even been collected.
+  // Static starters are deliberately nominated before database-backed enrichment. They are essential (synchronous, no reads), so a
+  // slow optional read can neither consume the budget before the exact-four fallback inventory has been collected nor drop them.
   resultCandidatesProducer, operationSpecificContinuationProducer, skillHandoffProducer, ...starterProducers,
   urgentWorkProducer, activePlanProducer, capabilityRecommendationProducer, actionableProfileProducer, homeOpportunityProducer,
 ];

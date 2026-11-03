@@ -47,7 +47,7 @@ export function oracleLifespanItem(prediction: OracleReportView['predictions'][n
     ...(prediction.inventoryItemId ? { actions: [{
       id: 'review-replacement', label: 'Review replacement options', message: `Should I repair or replace my ${oracleApplianceLabel(prediction.applianceName).slice(0, 80)}?`,
       style: (prediction.urgency === 'CRITICAL' || prediction.urgency === 'HIGH' ? 'PRIMARY' : 'SECONDARY') as 'PRIMARY' | 'SECONDARY',
-      interactionType: 'CONVERSATION_CONTINUE' as const, operationId: 'REPLACEMENT_GUIDANCE', entityType: 'INVENTORY_ITEM', entityId: prediction.inventoryItemId,
+      interactionType: 'CONVERSATION_CONTINUE' as const, operationId: 'REPLACEMENT_GUIDANCE', outcomeKey: 'REVIEW_REPLACEMENT', entityType: 'INVENTORY_ITEM', entityId: prediction.inventoryItemId,
     }] } : {}),
     meta: [
       prediction.remainingLife > 0 ? `About ${prediction.remainingLife} year${prediction.remainingLife === 1 ? '' : 's'} left, around ${new Intl.DateTimeFormat('en-US', { month: 'short', year: 'numeric', timeZone: getAskPropertyTimezone() }).format(new Date(prediction.estimatedFailureDate))}` : 'Past its expected life',
@@ -109,7 +109,7 @@ export function applianceFailureRiskFromView(report: OracleReportView | 'PRIMARY
     items: shownPredictions.map((prediction, index) => oracleLifespanItem(prediction, index)),
     missingAge: shownMissing.map((item) => ({
       id: item.inventoryItemId, label: oracleApplianceLabel(item.applianceName), entityType: 'INVENTORY_ITEM',
-      actions: [{ id: 'correct-purchasedOn', label: 'Add purchase date', message: 'Correct the purchase date of this inventory item.', style: 'PRIMARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'INVENTORY_ITEM_CORRECT' }],
+      actions: [{ id: 'correct-purchasedOn', label: 'Add purchase date', message: 'Correct the purchase date of this inventory item.', style: 'PRIMARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId: 'INVENTORY_ITEM_CORRECT', outcomeKey: 'ADD_PURCHASE_DATE' }],
     })),
     missingAgeTitle: missing.length ? `No purchase date yet for ${missing.length === 1 ? 'this appliance' : `these ${missing.length} appliances`}` : null,
     collection: collectionDescriptor({

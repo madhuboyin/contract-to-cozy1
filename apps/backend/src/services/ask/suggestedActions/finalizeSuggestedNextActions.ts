@@ -47,6 +47,7 @@ import { loadActivePlanState } from './activePlanCandidates';
 import { removeSelectedCapabilityDuplicates } from './capabilityRecommendationCandidates';
 import { loadSuggestedActionSharedPropertyState } from './suggestedActionSharedPropertyState';
 import { loadOperationSpecificContinuationState } from './operationSpecificContinuationState';
+import { isReviewedCompleteActionSurface } from './operationSpecificContinuationCoverage';
 
 const RECOVERY_STATUSES: ReadonlySet<string> = new Set([
   'UNAVAILABLE', 'EXPIRED', 'CANCELLED', 'BLOCKED', 'FAILED_RETRYABLE', 'FAILED_TERMINAL', 'OUT_OF_SCOPE', 'NEEDS_PROPERTY', 'NOT_APPLICABLE',
@@ -162,7 +163,8 @@ export async function finalizeSuggestedNextActionsWithReport(
   const clock = deps.clock ?? systemSuggestedNextActionClock;
   const mode = resolveSuggestedNextActionMode(input.result, input.operationId);
   const optionalEscapeRoutes = allowsOptionalResultEscapeRoutes(input.operationId, input.result.status);
-  const contextualPresentationActions = hasContextualPresentationActions(input.result.blocks) && !optionalEscapeRoutes;
+  const contextualPresentationActions = hasContextualPresentationActions(input.result.blocks) && !optionalEscapeRoutes
+    && isReviewedCompleteActionSurface(input.operationId);
   const report: FinalizeSuggestedNextActionsReport = { mode, durationMs: 0, droppedProducers: [], diagnostics: null, exactFour: null, contextFailed: false };
   let sharedPropertyStatePromise: ReturnType<typeof loadSuggestedActionSharedPropertyState> | undefined;
   const sharedPropertyState = () => {

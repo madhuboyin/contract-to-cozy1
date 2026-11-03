@@ -17,7 +17,8 @@ const {
   validateOperationSpecificContinuationCoverage,
 } = require('../../src/services/ask/suggestedActions/operationSpecificContinuationCoverage.ts');
 
-const REVIEWED_OPERATION_REGISTRY_HASH = '174f1057fd2f37a12b70e914b50bc36597583fe177e24806370f6470d35c192a';
+// Reviewed 2026-11-02: the only operation added since the previous hash (commit a9c7f710) is COMMUNITY_UPDATES, now covered by recipes.
+const REVIEWED_OPERATION_REGISTRY_HASH = '2661bf5cbde31c0a6ff5a4a5b128b2d03e9246055fe6da71302120ddf819b2d4';
 const registryIds = () => Object.keys(ASK_OPERATION_DEFINITIONS).sort();
 const registryHash = () => createHash('sha256').update(registryIds().join('\n')).digest('hex');
 

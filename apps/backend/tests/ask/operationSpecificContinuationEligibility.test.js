@@ -121,3 +121,13 @@ test('generic capability recommendations: the inventory list is eligible, thread
     assert.equal(evaluateSuggestedNextActionEligibility(candidate, eligibilityContext()).state, 'ELIGIBLE', operationId);
   }
 });
+
+test('no recipe offers a destination that can only open from a specific launched record the chip cannot carry (claim checklist)', () => {
+  for (const [source, recipes] of Object.entries(OPERATION_SPECIFIC_CONTINUATION_RECIPES)) {
+    if (source === 'CLAIM_CHECKLIST_VIEW') continue;
+    assert.ok(!recipes.some((recipe) => recipe.operationId === 'CLAIM_CHECKLIST_VIEW' && !recipe.reasonCode.startsWith('CLAIM_CHECKLIST_')), `${source} must not chip to the claim checklist without a claim`);
+  }
+  for (const source of ['INCIDENT_CONTINUATION', 'CLAIM_FILE', 'CLAIM_TRANSITION', 'CLAIM_ACTIVITY_COMMAND']) {
+    assert.ok(OPERATION_SPECIFIC_CONTINUATION_RECIPES[source].some((recipe) => recipe.operationId === 'INCIDENT_CLAIM_STATUS'), `${source} keeps the claims-list continuation`);
+  }
+});

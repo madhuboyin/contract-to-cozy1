@@ -6,6 +6,8 @@ import type { AskOperationUnavailableReason } from '../support/answerGuards';
 import type { SuggestedNextActionCandidate } from './suggestedNextActionCandidate';
 import { candidateIdentityFields } from './suggestedNextActionCandidate';
 import { suggestedNextActionSemanticKeyHash } from './suggestedNextActionIdentity';
+import { ASK_OPERATION_DEFINITIONS, type AskOperationId } from '../askOperationRegistry';
+import { currentOperationOwnsOutcome } from './suggestedNextActionExactFourRegistry';
 import { DOMAIN_FRESHNESS_MATRIX, isPromptHistoryExemptOutcome, isPropertyWideOutcome, isRegisteredOutcome, isRepeatableOutcome, missingFactCaptureFor } from './suggestedNextActionRegistry';
 
 export type SuggestedNextActionMode = 'NORMAL' | 'SAFE_RECOVERY_ONLY';
@@ -68,6 +70,21 @@ const AVAILABILITY_RULE: Record<AskOperationUnavailableReason, { rule: Eligibili
   AUDIENCE: { rule: 'AUDIENCE', code: 'AUDIENCE_INAPPLICABLE' },
 };
 
+/**
+ * A completed command's owned "go back and look at the refreshed list" continuation. The list prompt was typically asked a turn or two
+ * earlier, before the mutation changed what it shows, so the recent-prompt rule must not suppress it. Established from trusted registry
+ * facts only (never message text): the SOURCE operation is a command, it registers the destination outcome as its own result-owned
+ * continuation, and the destination is a read/status operation reached by plain navigation. Starters keep their separate exemption.
+ */
+function isPostMutationReturnToRead(candidate: SuggestedNextActionCandidate): boolean {
+  if (candidate.source !== 'OPERATION_RESULT' || candidate.interactionType !== 'CONVERSATION_CONTINUE' || !candidate.sourceOperationId) return false;
+  const source = ASK_OPERATION_DEFINITIONS[candidate.sourceOperationId as AskOperationId];
+  const destination = ASK_OPERATION_DEFINITIONS[candidate.operationId as AskOperationId];
+  if (!source || !destination || source.family !== 'COMMAND') return false;
+  if (destination.family !== 'RECORD_QUERY' && destination.family !== 'STATUS_SUMMARY') return false;
+  return currentOperationOwnsOutcome(candidate.sourceOperationId, candidate);
+}
+
 /** Runs the plan §6 rules in order and returns the first failing verdict, or ELIGIBLE / NEEDS_CONTEXT. */
 export function evaluateSuggestedNextActionEligibility(candidate: SuggestedNextActionCandidate, ctx: EligibilityContext): EligibilityVerdict {
   const { operationId, entityContext } = candidate;
@@ -128,7 +145,8 @@ export function evaluateSuggestedNextActionEligibility(candidate: SuggestedNextA
   if (ctx.completedSemanticKeyHashes.has(hash) && !isRepeatableOutcome(operationId, candidate.outcomeKey)) return suppressed('HISTORY', 'EQUIVALENT_COMPLETED');
   // A recently asked identical prompt is suppressed unless this outcome is explicitly registered as prompt-history exempt (starters only,
   // D-O10). Repeatable COMPLETION is a different concept and does not exempt a prompt.
-  if (ctx.askedMessageKeys.has(ctx.messageKey(candidate.message)) && !isPromptHistoryExemptOutcome(operationId, candidate.outcomeKey)) return suppressed('HISTORY', 'EQUIVALENT_PROMPT_ASKED');
+  if (ctx.askedMessageKeys.has(ctx.messageKey(candidate.message)) && !isPromptHistoryExemptOutcome(operationId, candidate.outcomeKey)
+    && !isPostMutationReturnToRead(candidate)) return suppressed('HISTORY', 'EQUIVALENT_PROMPT_ASKED');
 
   // 11. Safety/boundary: in recovery mode only recovery-trait, non-promotional candidates survive.
   if (ctx.mode === 'SAFE_RECOVERY_ONLY' && (!candidate.traits.recovery || candidate.traits.promotional)) return suppressed('SAFETY_BOUNDARY', 'SAFE_RECOVERY_ONLY');

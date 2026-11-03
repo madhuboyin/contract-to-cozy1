@@ -29,6 +29,17 @@ export const REVIEWED_CONTEXTUAL_CONTINUATION_OPERATIONS: Readonly<Record<string
   HOME_HABITS: 'home-habits-next owns exact habit workflow actions and is pinned by the Home Habits presentation tests',
 });
 
+/**
+ * Reviewed complete-surface exemption: the only operations whose top-level result controls exempt the result from exact-four
+ * (`CONTEXTUAL_ACTIONS_IN_RESULT`). A top-level button alone is NOT enough; the operation's authored controls must be reviewed and
+ * tested as the complete continuation experience. Every other result takes the normal exact-four pipeline, and its buttons only
+ * de-duplicate equivalent chips through their registered `outcomeKey` identities. An operation is added here only with state-complete
+ * (empty, active, viewer, contributor) test evidence, never as a broad category.
+ */
+export function isReviewedCompleteActionSurface(operationId: string | null | undefined): boolean {
+  return Boolean(operationId && Object.prototype.hasOwnProperty.call(REVIEWED_CONTEXTUAL_CONTINUATION_OPERATIONS, operationId));
+}
+
 /** Only state/scope categories for which operation-specific property continuation is not meaningful. */
 export const OPERATION_SPECIFIC_CONTINUATION_EXEMPTIONS: Readonly<Record<string, string>> = Object.freeze({
   CAPABILITY_DISCOVERY: 'Property-less capability discovery is itself the navigation surface.',

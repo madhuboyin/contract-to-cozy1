@@ -13,6 +13,16 @@ export interface DedupResult {
 }
 
 /**
+ * CONVERSATION_CONTINUE and START_WORKFLOW both only navigate to the same registered operation:outcome, so a block button of one kind
+ * and a compact chip of the other are the same destination. MUTATE_RECORD is a different act and has no twin.
+ */
+function navigationTwinKey(candidate: SuggestedNextActionCandidate): string {
+  const fields = candidateIdentityFields(candidate);
+  if (fields.interactionType === 'MUTATE_RECORD') return suggestedNextActionSemanticKey(fields);
+  return suggestedNextActionSemanticKey({ ...fields, interactionType: fields.interactionType === 'START_WORKFLOW' ? 'CONVERSATION_CONTINUE' : 'START_WORKFLOW' });
+}
+
+/**
  * `presentationIdentities` are the semantic keys (`suggestedNextActionSemanticKey`) that result cards/blocks already publish.
  * Rich actions keep their own contract; they only suppress the compact duplicate.
  */
@@ -24,7 +34,7 @@ export function deduplicateSuggestedNextActions(
   let suppressedByPresentation = 0;
   for (const entry of ranked) {
     const key = suggestedNextActionSemanticKey(candidateIdentityFields(entry.candidate));
-    if (presentationIdentities.has(key)) { suppressedByPresentation += 1; continue; }
+    if (presentationIdentities.has(key) || presentationIdentities.has(navigationTwinKey(entry.candidate))) { suppressedByPresentation += 1; continue; }
     const group = groups.get(key);
     if (group) group.push(entry);
     else groups.set(key, [entry]);

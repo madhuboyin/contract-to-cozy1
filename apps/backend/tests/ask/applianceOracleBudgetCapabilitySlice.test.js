@@ -112,9 +112,11 @@ test('Appliance Oracle: a completed property-scoped answer is finalized with fou
   assert.equal(report.exactFour.shortage, 0);
   assert.deepEqual(result.suggestedNextActionsStatus, { state: 'READY', shownCount: 4, expectedCount: 4, reasonCodes: [] });
   assert.equal(result.suggestedNextActions.length, 4);
-  const replacement = result.suggestedNextActions.find((action) => action.operationId === 'REPLACEMENT_GUIDANCE');
-  assert.ok(replacement, 'the riskiest appliance gets an entity-scoped replacement action');
-  assert.equal(replacement.label, 'Review dishwasher replacement options');
+  // The riskiest appliance's replacement action is already a button on its own card row, and that row publishes the same registered
+  // identity (REPLACEMENT_GUIDANCE:REVIEW_REPLACEMENT for the item), so the footer must not repeat it.
+  assert.equal(result.suggestedNextActions.some((action) => action.operationId === 'REPLACEMENT_GUIDANCE'), false, 'the card button and the footer chip are not duplicated');
+  const lifespanCard = raw.blocks.find((block) => block.id === 'appliance-lifespan') ?? raw.blocks.find((block) => JSON.stringify(block).includes('review-replacement'));
+  assert.match(JSON.stringify(lifespanCard), /"outcomeKey":"REVIEW_REPLACEMENT"/, 'the card row declares the registered outcome');
 });
 
 test('Appliance Oracle: nothing with an age is not an all-clear and still offers the capture; a non-owner is told who can see it', async () => {
@@ -242,6 +244,7 @@ test('Budget Planner: a completed property-scoped answer is finalized with four 
     loadCurrentOutcomeKeyHashes: async () => new Set(),
     loadLifecycleState: async () => ({ cooldownKeys: new Set(), completedKeys: new Set(), lastOfferedAtMs: new Map(), ok: true }),
     recordOffers: async () => ({ attempted: 4, ok: true }), recordImpressions: () => undefined, recordSuppression: () => undefined,
+    loadOperationSpecificContinuationState: async () => ({ hasPendingMaintenance: true, hasOpenInspectionFindings: true, hasUnresolvedRecallMatches: true, hasForecastableSystem: true }),
     loadActionableCompleteness: async () => ({ fraction: 1, audienceUncertain: false }),
   });
   assert.equal(report.exactFour.applicability, 'EXACT_FOUR');

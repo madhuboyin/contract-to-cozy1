@@ -27,12 +27,31 @@ export const RECEIPT_FOLLOW_UPS = {
 } as const;
 export type ReceiptFollowUpKey = keyof typeof RECEIPT_FOLLOW_UPS;
 
+/**
+ * The registered Suggested Next Actions outcome each receipt button is the same destination as, so an equivalent compact chip is
+ * de-duplicated against it. A key absent here has no registered equivalent outcome and is presentation-only (never inferred from text).
+ */
+export const RECEIPT_FOLLOW_UP_OUTCOME_KEYS: Readonly<Partial<Record<ReceiptFollowUpKey, string>>> = {
+  TIMELINE: 'REVIEW_HOME_TIMELINE',
+  WARRANTIES: 'REVIEW_WARRANTIES',
+  INVENTORY: 'REVIEW_HOME_INVENTORY',
+  DOCUMENTS: 'REVIEW_DOCUMENTS',
+  MAINTENANCE: 'REVIEW_MAINTENANCE_STATUS',
+  HOME_ACTIONS: 'REVIEW_HOME_ACTIONS',
+  BUYER_PLAN: 'REVIEW_BUYER_PLAN',
+  INSPECTION_FINDINGS: 'REVIEW_INSPECTION_FINDINGS',
+  RECALLS: 'REVIEW_RECALLS',
+  QUOTES: 'REVIEW_QUOTES',
+};
+
 /** The typed in-Ask action a receipt carries in place of a link: it starts the ordinary read question for the record the receipt is about. */
 export function receiptFollowUpAction(key: ReceiptFollowUpKey) {
   const entry = RECEIPT_FOLLOW_UPS[key];
+  const outcomeKey = RECEIPT_FOLLOW_UP_OUTCOME_KEYS[key];
   return {
     id: `receipt-show-${key.toLowerCase().replace(/_/g, '-')}`, label: entry.label, interactionType: 'START_WORKFLOW' as const,
     message: entry.message, operationId: entry.operationId, style: 'SECONDARY' as const,
+    ...(outcomeKey ? { outcomeKey } : {}),
   };
 }
 
