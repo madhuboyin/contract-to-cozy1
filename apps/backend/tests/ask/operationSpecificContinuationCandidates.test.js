@@ -23,6 +23,7 @@ const {
 } = require('../../src/services/ask/suggestedActions/suggestedNextActionProducers.ts');
 
 const PROPERTY_ID = '11111111-1111-4111-8111-111111111111';
+const ACTIVE_HVAC_THREAD = { id: 'thread-1', contextVersion: '2026-01-01T00:00:00.000Z' };
 
 test('every continuation recipe has a registered typed target and current-result ownership', () => {
   for (const [sourceOperationId, recipes] of Object.entries(OPERATION_SPECIFIC_CONTINUATION_RECIPES)) {
@@ -39,7 +40,7 @@ test('every continuation recipe has a registered typed target and current-result
 
 test('recipe candidates are property-scoped governed continuations', () => {
   for (const sourceOperationId of Object.keys(OPERATION_SPECIFIC_CONTINUATION_RECIPES)) {
-    const candidates = operationSpecificContinuationCandidates(sourceOperationId, PROPERTY_ID);
+    const candidates = operationSpecificContinuationCandidates(sourceOperationId, PROPERTY_ID, undefined, ACTIVE_HVAC_THREAD);
     assert.equal(candidates.length, OPERATION_SPECIFIC_CONTINUATION_RECIPES[sourceOperationId].length);
     for (const candidate of candidates) {
       assert.equal(candidate.source, 'OPERATION_RESULT');
@@ -166,7 +167,7 @@ test('projects, DIY, plants, habits, seasonal, renovation, and permit operations
     'PERMIT_TRACKER_COMMAND', 'PERMIT_TRACKER_STATUS',
   ];
   for (const operationId of migratedOperations) {
-    const candidates = operationSpecificContinuationCandidates(operationId, PROPERTY_ID);
+    const candidates = operationSpecificContinuationCandidates(operationId, PROPERTY_ID, undefined, ACTIVE_HVAC_THREAD);
     assert.ok(candidates.length >= 1, `${operationId}: missing tailored continuation`);
     assert.ok(candidates.every((candidate) => candidate.sourceOperationId === operationId), operationId);
   }
@@ -184,7 +185,7 @@ test('general financial reads and receipts all have tailored continuations', () 
     'PRICE_FINALIZATIONS_LIST', 'PRICE_FINALIZATION_COMMAND',
   ];
   for (const operationId of migratedOperations) {
-    const candidates = operationSpecificContinuationCandidates(operationId, PROPERTY_ID);
+    const candidates = operationSpecificContinuationCandidates(operationId, PROPERTY_ID, undefined, ACTIVE_HVAC_THREAD);
     assert.ok(candidates.length >= 1, `${operationId}: missing tailored continuation`);
     assert.ok(candidates.every((candidate) => candidate.sourceOperationId === operationId), operationId);
   }
@@ -204,7 +205,7 @@ test('guidance, seller, negotiation, major-event, and HVAC operations all have t
     'HVAC_DECISION_OUTCOME_REPORT', 'HVAC_DECISION_OUTCOME_VIEW', 'HVAC_DECISION_OUTCOME_UNLINK',
   ];
   for (const operationId of migratedOperations) {
-    const candidates = operationSpecificContinuationCandidates(operationId, PROPERTY_ID);
+    const candidates = operationSpecificContinuationCandidates(operationId, PROPERTY_ID, undefined, ACTIVE_HVAC_THREAD);
     assert.ok(candidates.length >= 1, `${operationId}: missing tailored continuation`);
     assert.ok(candidates.every((candidate) => candidate.sourceOperationId === operationId), operationId);
   }
@@ -222,7 +223,7 @@ test('buyer lifecycle reads and command receipts all have tailored closing conti
     'BUYER_TASK_UPDATE', 'BUYER_FINDING_DISPOSITION', 'BUYER_LIFECYCLE_UPDATE',
   ];
   for (const operationId of migratedOperations) {
-    const candidates = operationSpecificContinuationCandidates(operationId, PROPERTY_ID);
+    const candidates = operationSpecificContinuationCandidates(operationId, PROPERTY_ID, undefined, ACTIVE_HVAC_THREAD);
     assert.ok(candidates.length >= 1, `${operationId}: missing tailored continuation`);
     assert.ok(candidates.every((candidate) => candidate.sourceOperationId === operationId), operationId);
     assert.ok(candidates.every((candidate) => candidate.operationId.startsWith('BUYER_')), `${operationId}: buyer flow escaped its closing journey`);
@@ -238,7 +239,7 @@ test('home intelligence reads and command receipts all have tailored continuatio
     'HOME_WORK_ITEMS', 'HOME_WORK_ITEM_COMMAND', 'PROPERTY_SUMMARY', 'HOME_DEADLINE_MONITOR',
   ];
   for (const operationId of migratedOperations) {
-    const candidates = operationSpecificContinuationCandidates(operationId, PROPERTY_ID);
+    const candidates = operationSpecificContinuationCandidates(operationId, PROPERTY_ID, undefined, ACTIVE_HVAC_THREAD);
     assert.ok(candidates.length >= 1, `${operationId}: missing tailored continuation`);
     assert.ok(candidates.every((candidate) => candidate.sourceOperationId === operationId), operationId);
   }
@@ -256,7 +257,7 @@ test('remaining specialist, record, simulation, and setup operations all have ta
     'PROPERTY_CONTEXT_AREA_CAPTURE', 'PROPERTY_PURCHASE_DATE_SET', 'RESERVE_FUND_COMMAND',
   ];
   for (const operationId of migratedOperations) {
-    const candidates = operationSpecificContinuationCandidates(operationId, PROPERTY_ID);
+    const candidates = operationSpecificContinuationCandidates(operationId, PROPERTY_ID, undefined, ACTIVE_HVAC_THREAD);
     assert.ok(candidates.length >= 1, `${operationId}: missing tailored continuation`);
     assert.ok(candidates.every((candidate) => candidate.sourceOperationId === operationId), operationId);
   }

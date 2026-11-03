@@ -6,7 +6,7 @@ import type { AskOperationUnavailableReason } from '../support/answerGuards';
 import type { SuggestedNextActionCandidate } from './suggestedNextActionCandidate';
 import { candidateIdentityFields } from './suggestedNextActionCandidate';
 import { suggestedNextActionSemanticKeyHash } from './suggestedNextActionIdentity';
-import { DOMAIN_FRESHNESS_MATRIX, isPromptHistoryExemptOutcome, isRegisteredOutcome, isRepeatableOutcome, missingFactCaptureFor } from './suggestedNextActionRegistry';
+import { DOMAIN_FRESHNESS_MATRIX, isPromptHistoryExemptOutcome, isPropertyWideOutcome, isRegisteredOutcome, isRepeatableOutcome, missingFactCaptureFor } from './suggestedNextActionRegistry';
 
 export type SuggestedNextActionMode = 'NORMAL' | 'SAFE_RECOVERY_ONLY';
 
@@ -98,7 +98,7 @@ export function evaluateSuggestedNextActionEligibility(candidate: SuggestedNextA
     const record = ctx.entities.get(`${entityContext.entityType}:${entityContext.entityId}`);
     if (!record || !record.exists) return unavailable('ENTITY', 'ENTITY_NOT_FOUND');
     if (record.propertyId !== null && record.propertyId !== entityContext.propertyId) return unavailable('ENTITY', 'ENTITY_PROPERTY_MISMATCH');
-  } else if (target) {
+  } else if (target && !isPropertyWideOutcome(operationId, candidate.outcomeKey)) {
     return unavailable('ENTITY', 'ENTITY_REQUIRED');
   }
 

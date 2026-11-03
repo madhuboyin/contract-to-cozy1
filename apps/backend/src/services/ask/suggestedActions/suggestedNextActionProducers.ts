@@ -21,6 +21,7 @@ import { CAPABILITY_RECOMMENDATION_PRODUCER_ID, capabilityRecommendationCandidat
 import {
   OPERATION_SPECIFIC_CONTINUATION_PRODUCER_ID,
   operationSpecificContinuationCandidates,
+  recipeTargetsDecisionThread,
 } from './operationSpecificContinuationCandidates';
 import { loadOperationSpecificContinuationState } from './operationSpecificContinuationState';
 import { OPERATION_SPECIFIC_CONTINUATION_RECIPES } from './operationSpecificContinuationRecipes';
@@ -61,7 +62,7 @@ export const operationSpecificContinuationProducer: SuggestedNextActionProducer 
   id: OPERATION_SPECIFIC_CONTINUATION_PRODUCER_ID,
   source: 'OPERATION_RESULT',
   essential: true,
-  nominate: async ({ sourceOperationId, propertyId, loadOperationSpecificContinuationState: loadState }) => {
+  nominate: async ({ sourceOperationId, propertyId, loadOperationSpecificContinuationState: loadState, loadActivePlanState: loadPlan }) => {
     if (!sourceOperationId || !propertyId) return [];
     // HOME_ACTIONS is a ranked feed of real work. Its related row must not imply that empty
     // maintenance, inspection, or recall collections contain records. Other operation recipes
@@ -70,7 +71,11 @@ export const operationSpecificContinuationProducer: SuggestedNextActionProducer 
     const recipes = OPERATION_SPECIFIC_CONTINUATION_RECIPES[sourceOperationId as AskOperationId] ?? [];
     const needsRecordState = sourceOperationId === 'HOME_ACTIONS' && recipes.length > 0;
     const state = needsRecordState ? await loadState(propertyId) : undefined;
-    return operationSpecificContinuationCandidates(sourceOperationId, propertyId, state);
+    // Thread-bound HVAC destinations need the property's most recent active HVAC decision (list is ordered updatedAt desc).
+    const hvacThread = recipes.some((entry) => recipeTargetsDecisionThread(entry.operationId))
+      ? (await loadPlan({ propertyId })).hvacThreads?.[0] ?? null
+      : null;
+    return operationSpecificContinuationCandidates(sourceOperationId, propertyId, state, hvacThread);
   },
 };
 

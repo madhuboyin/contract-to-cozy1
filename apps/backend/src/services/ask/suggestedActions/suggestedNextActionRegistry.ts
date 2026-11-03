@@ -368,7 +368,24 @@ export const DOMAIN_FRESHNESS_MATRIX: Readonly<Record<string, FreshnessStrategy>
   INSPECTION_FINDING: { kind: 'CONTEXT_VERSION', versionFunction: 'inspectionFindingVersion', derivedFrom: 'finding record' },
   DIY_TEMPLATE: { kind: 'REQUERY', rule: 'Requery the template published head; the validator exposes publishedRevisionId as the current version for comparison.' },
   DIY_PROJECT: { kind: 'REQUERY', rule: 'Requery the property-scoped open project; the validator exposes updatedAt as the current progress version for comparison.' },
+  DECISION_THREAD: { kind: 'REQUERY', rule: 'Requery the active property-scoped decision thread; the validator exposes updatedAt (ISO) as the current version for comparison.' },
+  GUIDANCE_JOURNEY: { kind: 'REQUERY', rule: 'Requery the active property-scoped guidance journey; the validator exposes updatedAt (ISO) as the current version for comparison.' },
 };
+
+/**
+ * Outcomes of an entity-targeted operation that are deliberately property-wide: the destination handler runs without an entity
+ * (inventory list mode, latest quote comparison, appliance selection list), so the entity-required eligibility rule does not apply.
+ * Adding an entry is an explicit, reviewed registry change; an entity that IS supplied is still fully validated.
+ */
+export const PROPERTY_WIDE_OUTCOMES: ReadonlySet<string> = new Set<string>([
+  'INVENTORY_LOOKUP:REVIEW_HOME_INVENTORY',
+  'QUOTE_COMPARISON_REVIEW:REVIEW_QUOTES',
+  'REPLACEMENT_GUIDANCE:REVIEW_REPLACEMENT',
+]);
+
+export function isPropertyWideOutcome(operationId: string, outcomeKey: string): boolean {
+  return PROPERTY_WIDE_OUTCOMES.has(`${operationId}:${outcomeKey}`);
+}
 
 // ---- static validation (CI/tests only) --------------------------------------------------------------------------------------
 
@@ -394,6 +411,10 @@ export function validateSuggestedNextActionRegistry(): string[] {
     if (!/^[A-Z][A-Z0-9_]{2,79}$/.test(mapping.missingFactKey)) problems.push(`capture: ${mapping.missingFactKey} is not a bounded token`);
     if (!(mapping.operationId in ASK_OPERATION_DEFINITIONS)) problems.push(`capture: ${mapping.missingFactKey} -> unknown operation ${mapping.operationId}`);
     if (!isRegisteredOutcome(mapping.operationId, mapping.outcomeKey)) problems.push(`capture: ${mapping.missingFactKey} -> outcome ${mapping.outcomeKey} not declared on ${mapping.operationId}`);
+  }
+  for (const key of PROPERTY_WIDE_OUTCOMES) {
+    const [operationId, outcomeKey] = key.split(':');
+    if (!operationId || !outcomeKey || !isRegisteredOutcome(operationId, outcomeKey)) problems.push(`property-wide: ${key} is not a registered outcome`);
   }
   for (const key of REPEATABLE_OUTCOMES) {
     const [operationId, outcomeKey] = key.split(':');
