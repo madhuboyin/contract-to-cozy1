@@ -25,6 +25,10 @@ export function operationSpecificContinuationCandidates(
     // A thread-bound destination is only nominated against a real active thread; without one the row would open nothing.
     if (recipeTargetsDecisionThread(entry.operationId) && !activeHvacThread) return false;
     if (!state) return true;
+    // The forecast needs a verified forecastable system on every source; without one it answers NOT_APPLICABLE with nothing to do.
+    if (entry.operationId === 'MAINTENANCE_FORECAST' && state.hasForecastableSystem === false) return false;
+    // Record-existence gating is HOME_ACTIONS-only: other sources' links are intentional domain navigation.
+    if (sourceOperationId !== 'HOME_ACTIONS') return true;
     if (entry.operationId === 'MAINTENANCE_STATUS') return state.hasPendingMaintenance;
     if (entry.operationId === 'INSPECTION_FINDINGS') return state.hasOpenInspectionFindings;
     if (entry.operationId === 'RECALL_REVIEW') return state.hasUnresolvedRecallMatches;

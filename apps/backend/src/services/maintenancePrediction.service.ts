@@ -525,6 +525,15 @@ async function generateForecastInternal(propertyId: string): Promise<ForecastGen
   };
 }
 
+/**
+ * True when the property has at least one verified item the rule-based forecast can predict for (the same predicate generation uses).
+ * Cheap readiness check for callers that would otherwise send a homeowner to an empty forecast.
+ */
+export async function hasForecastableInventory(propertyId: string): Promise<boolean> {
+  const items = await prisma.inventoryItem.findMany({ where: { propertyId }, select: { category: true, name: true, isVerified: true } });
+  return items.some((item) => resolveRuleGroup(item) !== null);
+}
+
 export async function generateForecast(propertyId: string): Promise<ForecastGenerationResult> {
   const inFlight = forecastGenerationInFlight.get(propertyId);
   if (inFlight) return inFlight;

@@ -9,12 +9,12 @@
 
 Ask Cozy's Suggested Next Actions implementation is substantially healthier than the earlier audit described. The earlier two P0 entity-governance failures are resolved in commit `11102124`: property-wide outcomes have an explicit allowlist, HVAC continuation recipes carry an active decision-thread identity, and `DECISION_THREAD` and `GUIDANCE_JOURNEY` are present in the freshness matrix. The focused entity-eligibility suite passes.
 
-The current system nevertheless has eleven findings (F1-F5, F9 and F10 are P1; F6-F8 and F11 are P2). F10 is fixed and pushed; F9 and F11 are fixed in the working tree (see their sections); the rest are open:
+The current system nevertheless has eleven findings (F1-F5, F9 and F10 are P1; F6-F8 and F11 are P2). F10 is fixed and pushed; F4, F9 and F11 are fixed in the working tree (see their sections); the rest are open:
 
 1. **F1 (P1)** — The continuation-coverage completion gate is red. The operation registry changed without updating its reviewed hash, and `COMMUNITY_UPDATES` is the sole remaining `MIGRATION_REQUIRED` operation.
 2. **F2 (P1, owner decision)** — Completion semantics suppress most read/navigation outcomes after one successful use. Of 95 registered outcomes on read, status, decision-analysis, and guidance operations, 84 are non-repeatable. Changing this is a product-policy ruling, not a bug fix.
 3. **F3 (P1)** — Ten continuation recipes target an operation with a higher role floor than their source operation. `QUOTE_COMPARISON_REVIEW` loses both of its domain recipes for a viewer.
-4. **F4 (P1)** — State-aware gating remains limited to `HOME_ACTIONS`. Multiple operations can offer `MAINTENANCE_FORECAST` on a property with no verified forecastable system, producing a `NOT_APPLICABLE` answer with no recovery chip.
+4. **F4 (P1, fixed in working tree)** — State-aware gating was limited to `HOME_ACTIONS`. Multiple operations can offer `MAINTENANCE_FORECAST` on a property with no verified forecastable system, producing a `NOT_APPLICABLE` answer with no recovery chip.
 5. **F5 (P1)** — Presentation ownership is broader than the reviewed contextual-operation registry. A single receipt button can turn into an exact-four exemption.
 6. **F6 (P2)** — Many block actions omit `outcomeKey`, which prevents cross-surface semantic deduplication (duplicate chips, not broken behavior).
 7. **F7 (P2)** — Recent-prompt suppression can block return-to-list actions after a mutation.
@@ -197,7 +197,7 @@ Add a registry test that evaluates every recipe at the source operation's minimu
 
 For `QUOTE_COMPARISON_REVIEW`, add at least one viewer-floor destination or raise the source floor only if product requirements truly prohibit viewers from the result itself.
 
-### [P1] F4 — State-unaware recipes can send users into an empty `NOT_APPLICABLE` recovery dead end
+### [P1] F4 — State-unaware recipes can send users into an empty `NOT_APPLICABLE` recovery dead end (fixed in working tree for `MAINTENANCE_FORECAST`)
 
 **Evidence**
 
@@ -225,6 +225,14 @@ Extend continuation-state loading based on destination requirements, not only `s
 - permit deliberate navigation-to-empty-state recipes only when the empty result itself has a useful, authorized setup action.
 
 Add a precise recovery candidate for `MAINTENANCE_FORECAST_NO_VERIFIED_SYSTEMS`, such as reviewing home inventory or starting the governed inventory setup path. Keep it recovery-traited and authorization-checked.
+
+**Fix (working tree, not yet committed) — `MAINTENANCE_FORECAST` only**
+
+- `hasForecastableInventory` (`maintenancePrediction.service.ts`) reuses the forecast generator's own `resolveRuleGroup` predicate (verified HVAC, roof or water-heater item), so readiness matches generation.
+- `loadOperationSpecificContinuationState` takes `{ records, forecast }`; the producer loads forecast readiness for every source whose recipes include `MAINTENANCE_FORECAST` (previously `HOME_ACTIONS` only), and drops the recipe when readiness is `false`. A failed read keeps the recipe (readiness is an optimisation). Record-existence gating stays `HOME_ACTIONS`-only: other sources' links to `MAINTENANCE_STATUS` etc. remain intentional navigation.
+- The `NOT_APPLICABLE` result now attaches a recovery-trait candidate to `INVENTORY_LOOKUP:REVIEW_HOME_INVENTORY` (the forecast result owns it in `RESULT_OWNERSHIP_RELATIONSHIPS`), covering the case where a verified system exists but nothing falls in the forecast window.
+- Tests: `maintenanceForecastReadiness.test.js` and an `exactFourActivation.test.js` case (recovery chip survives `SAFE_RECOVERY_ONLY`; a bare `NOT_APPLICABLE` still shows none).
+- **Not done:** the other empty-collection destinations named above (inspection findings, document promotions, claims/checklists, incident continuations) still need behavior-level verification of what their empty states offer; they were deliberately left unchanged.
 
 ### [P1] F5 — Top-level action presence and reviewed contextual ownership are inconsistent
 

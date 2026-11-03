@@ -1266,6 +1266,18 @@ const MAINTENANCE_FORECAST_PRIORITY_LABELS: Record<number, string> = {
   5: 'Critical', 4: 'High', 3: 'Medium', 2: 'Low', 1: 'Monitor',
 };
 
+export function forecastSetupRecoveryCandidates(propertyId: string): SuggestedNextActionCandidate[] {
+  return [{
+    source: 'PLATFORM_STATE', sourceOperationId: 'MAINTENANCE_FORECAST',
+    label: 'Review home inventory', message: 'Show my home inventory',
+    operationId: 'INVENTORY_LOOKUP', interactionType: 'CONVERSATION_CONTINUE', outcomeKey: 'REVIEW_HOME_INVENTORY',
+    entityContext: { propertyId, entityType: null, entityId: null, contextVersion: null },
+    tier: 'CONTINUE', requiredFacts: [], reasonCodes: ['FORECAST_NO_VERIFIED_SYSTEMS'],
+    signals: { ...DEFAULT_CANDIDATE_SIGNALS, currentResultOwnership: true },
+    traits: { ...DEFAULT_CANDIDATE_TRAITS, recovery: true },
+  }];
+}
+
 async function maintenanceForecastResult(userId: string, propertyId: string): Promise<AskOperationResult> {
   await ensurePropertyAccess(userId, propertyId);
 
@@ -1287,6 +1299,8 @@ async function maintenanceForecastResult(userId: string, propertyId: string): Pr
         actions: [],
       }],
       suggestions: [],
+      // A NOT_APPLICABLE result keeps only recovery-trait actions; the setup path is the inventory where those items are verified.
+      suggestedNextActionCandidates: forecastSetupRecoveryCandidates(propertyId),
     };
   }
 

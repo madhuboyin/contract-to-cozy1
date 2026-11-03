@@ -70,7 +70,14 @@ export const operationSpecificContinuationProducer: SuggestedNextActionProducer 
     // receipts rather than claims that a collection is non-empty.
     const recipes = OPERATION_SPECIFIC_CONTINUATION_RECIPES[sourceOperationId as AskOperationId] ?? [];
     const needsRecordState = sourceOperationId === 'HOME_ACTIONS' && recipes.length > 0;
-    const state = needsRecordState ? await loadState(propertyId) : undefined;
+    const needsForecastState = recipes.some((entry) => entry.operationId === 'MAINTENANCE_FORECAST');
+    let state: Awaited<ReturnType<typeof loadState>> | undefined;
+    if (needsRecordState) {
+      state = await loadState(propertyId, { records: true, forecast: needsForecastState });
+    } else if (needsForecastState) {
+      // Forecast readiness is an optimisation: if the read fails the recipe stays (the destination's own recovery chip covers it).
+      state = await loadState(propertyId, { records: false, forecast: true }).catch(() => undefined);
+    }
     // Thread-bound HVAC destinations are nominated only when exactly one HVAC decision is active. With several, choosing by recency
     // would guess which system the homeowner means, so the recipe is dropped instead (Decision Thread contract).
     const hvacThreads = recipes.some((entry) => recipeTargetsDecisionThread(entry.operationId))

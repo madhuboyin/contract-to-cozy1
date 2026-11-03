@@ -336,3 +336,11 @@ test('STATUS-ONLY INTERACTIVE RESULTS own the turn: a bare NEEDS_ENTITY/NEEDS_CO
   const settled = await run({ status: 'ANSWERED' });
   assert.equal(settled.report.exactFour.applicability, 'EXACT_FOUR', 'a settled answer is unaffected');
 });
+
+test('a forecast with no verified systems (NOT_APPLICABLE) keeps one recovery chip to the home inventory; an ordinary NOT_APPLICABLE result still shows none', async () => {
+  const { forecastSetupRecoveryCandidates } = require('../../src/services/ask/handlers/maintenance.handler.ts');
+  const recovered = await run({ status: 'NOT_APPLICABLE', operationId: 'MAINTENANCE_FORECAST', result: { suggestedNextActionCandidates: forecastSetupRecoveryCandidates(PROPERTY) } });
+  assert.deepEqual(keysShown(recovered), ['INVENTORY_LOOKUP:REVIEW_HOME_INVENTORY']);
+  const bare = await run({ status: 'NOT_APPLICABLE', operationId: 'MAINTENANCE_FORECAST' });
+  assert.deepEqual(keysShown(bare), []);
+});

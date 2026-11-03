@@ -249,7 +249,8 @@ export const RESULT_OWNERSHIP_RELATIONSHIPS: Readonly<Record<string, readonly st
   DIY_TEMPLATE_BROWSE: ['DIY_PROJECT_START:START_REVIEWED_PROJECT', 'DIY_PROJECT_GUIDE:CONTINUE_REVIEWED_PROJECT'],
   DIY_PROJECTS: ['DIY_PROJECT_GUIDE:CONTINUE_REVIEWED_PROJECT'],
   MAINTENANCE_STATUS: operationSpecificContinuationOutcomeKeys('MAINTENANCE_STATUS'),
-  MAINTENANCE_FORECAST: operationSpecificContinuationOutcomeKeys('MAINTENANCE_FORECAST'),
+  // The no-verified-systems result owns a recovery chip to the property-wide inventory list (maintenance.handler.ts).
+  MAINTENANCE_FORECAST: [...operationSpecificContinuationOutcomeKeys('MAINTENANCE_FORECAST'), 'INVENTORY_LOOKUP:REVIEW_HOME_INVENTORY'],
   MAINTENANCE_BUDGET_FORECAST: operationSpecificContinuationOutcomeKeys('MAINTENANCE_BUDGET_FORECAST'),
   MAINTENANCE_TEMPLATES_BROWSE: operationSpecificContinuationOutcomeKeys('MAINTENANCE_TEMPLATES_BROWSE'),
   HOME_ACTIONS: operationSpecificContinuationOutcomeKeys('HOME_ACTIONS'),
