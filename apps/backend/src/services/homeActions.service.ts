@@ -90,6 +90,7 @@ import {
 import { getSuppressedHomeActionIds } from './decisionPlatform/homeActionUsefulnessFeedback.service';
 import { REPAIR_REPLACE_PROFILES } from './agents/repairReplaceProfileCatalog';
 import { projectHomeActionDashboardSections } from './homeActionDashboardProjection';
+import { recordDuplicateDecision } from '../modules/homeOperations/application/recordDuplicateDecision.usecase';
 export { capabilityRecommendationsEnabled } from './capabilityPromotionPolicy.service';
 
 export const HOME_ACTION_COMMANDS = [
@@ -856,6 +857,38 @@ export async function linkWorkItemsAndReconcile(propertyId: string, actions: Ran
       return { action, workItem: null as HomeActionWorkItemLink | null };
     }
   }));
+
+  // Before the rain insight adopted a stable family-level work key, each
+  // forecast-date revision minted a separate candidate. Once the canonical
+  // rolling candidate exists, durably supersede only those unaccepted legacy
+  // candidates. Accepted work is a homeowner commitment and is deliberately
+  // never rewritten by this source-side repair.
+  const canonicalRain = resolved.find(({ action, workItem }) =>
+    Boolean(workItem) &&
+    action.presentation?.variant === 'ENVIRONMENT_PREPARATION' &&
+    action.presentation.subject?.id === 'heavy-rain-active-window');
+  if (canonicalRain?.workItem) {
+    try {
+      const legacyRainCandidates = await prisma.operationalWorkItem.findMany({
+        where: {
+          propertyId,
+          state: 'CANDIDATE',
+          acceptanceState: 'PROPOSED',
+          supersededByWorkItemId: null,
+          id: { not: canonicalRain.workItem.id },
+          workKey: { contains: ':maintenance-heavy-rain-' },
+        },
+        select: { id: true },
+      });
+      await Promise.all(legacyRainCandidates.map((legacy) => recordDuplicateDecision({
+        workItemId: legacy.id,
+        supersededByWorkItemId: canonicalRain.workItem!.id,
+        idempotencyKey: `weather-revision-superseded:${canonicalRain.workItem!.id}`,
+      })));
+    } catch (error) {
+      logger.warn({ err: error, propertyId, workItemId: canonicalRain.workItem.id }, 'Legacy weather candidate reconciliation failed; canonical action remains available');
+    }
+  }
 
   const byKey = new Map<string, { winner: RankedHomeAction; workItem: HomeActionWorkItemLink | null; mergedIds: string[] }>();
   for (const { action, workItem } of resolved) {

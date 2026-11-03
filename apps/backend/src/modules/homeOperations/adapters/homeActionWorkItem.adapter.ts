@@ -128,6 +128,13 @@ function resolveObligation(action: HomeAction): { obligationType: OperationalObl
     return { obligationType: 'DECISION', obligationSlug: `guidance-${action.relatedJourneyId ?? action.source.entityId}` };
   }
   if (action.source.kind === 'MAINTENANCE') {
+    if (action.presentation?.variant === 'ENVIRONMENT_PREPARATION') {
+      const subjectId = action.presentation.subject?.id.trim().toLowerCase() ?? '';
+      const family = subjectId.match(/^([a-z][a-z_-]*?)(?:-active-window|-\d{4}-\d{2}-\d{2})(?:$|[-:])/i)?.[1];
+      if (family) {
+        return { obligationType: 'MAINTENANCE_TASK', obligationSlug: `weather-preparation-${family}` };
+      }
+    }
     return { obligationType: 'MAINTENANCE_TASK', obligationSlug: `maintenance-${action.source.entityId}` };
   }
   if (action.source.kind === 'INCIDENT') {

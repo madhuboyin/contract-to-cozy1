@@ -238,9 +238,19 @@ export function deriveEnvironmentInsights(
   if (weather) {
     const recentRain = recentRainContext(weather);
     const recentHeat = recentHeatContext(weather);
-    const rainDay = weather.tenDayForecast.find(day => day.precipitationSumIn >= 1);
+    const rainDays = weather.tenDayForecast
+      .filter(day => day.precipitationSumIn >= 1)
+      .sort((left, right) => left.date.localeCompare(right.date));
+    const rainDay = rainDays[0];
     if (rainDay) {
-      const insightId = `heavy-rain-${rainDay.date}`;
+      // This is one rolling preparation obligation, not one obligation per
+      // forecast date. Forecast providers routinely move the expected rain
+      // by a day as the model refreshes; a stable insight id lets Home
+      // Operations refresh the existing candidate instead of accumulating
+      // dated "Heavy rain expected …" recommendations.
+      const insightId = 'heavy-rain-active-window';
+      const rainWindowEnd = rainDays[rainDays.length - 1];
+      const forecastRainTotal = rainDays.reduce((sum, day) => sum + day.precipitationSumIn, 0);
       const elevatedPropertyRisk = Boolean(property.hasDrainageIssues || isFloodZone(flood?.femaFloodZone ?? null));
       const saturatedGroundRisk = recentRain.totalInches >= 2.5;
       const reasons = [
@@ -254,7 +264,7 @@ export function deriveEnvironmentInsights(
         severity: elevatedPropertyRisk || saturatedGroundRisk || rainDay.precipitationSumIn >= 2 ? 'action' : 'watch',
         title: `Heavy rain expected ${dayLabel(rainDay.date)}`,
         summary: [
-          `About ${rainDay.precipitationSumIn.toFixed(1)} inches of rain is forecast for this area.`,
+          `About ${forecastRainTotal.toFixed(1)} inches of rain is forecast for this area${rainDays.length > 1 ? ` across ${rainDays.length} days` : ''}.`,
           recentRain.sentence,
         ].filter(Boolean).join(' '),
         homeImplication: elevatedPropertyRisk || saturatedGroundRisk
@@ -262,7 +272,7 @@ export function deriveEnvironmentInsights(
           : rainHomeImplication(property.foundationType),
         timeframe: dayLabel(rainDay.date),
         effectiveFrom: rainDay.date,
-        effectiveTo: rainDay.date,
+        effectiveTo: rainWindowEnd.date,
         affectedSystems: ['Gutters', 'Drainage', rainAreaLabel(property.foundationType)],
         recommendedActions: [
           exteriorManagedElsewhere(property)

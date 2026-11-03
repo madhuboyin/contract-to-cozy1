@@ -182,6 +182,20 @@ test('MAINTENANCE, INCIDENT, and RECALL all resolve to a PROPERTY subject with a
   assert.equal(recall.occurrence.obligationSlug, 'recall-rec-1');
 });
 
+test('weather preparation forecast revisions share one family-level maintenance obligation', () => {
+  const proposal = proposeWorkItemFromHomeAction(actionFixture({
+    id: 'environment:heavy-rain-active-window',
+    source: { kind: 'MAINTENANCE', entityId: 'heavy-rain-active-window', version: 'environment-v1' },
+    presentation: {
+      variant: 'ENVIRONMENT_PREPARATION',
+      subject: { kind: 'CHECKLIST', id: 'heavy-rain-active-window', label: 'Heavy rain preparation' },
+    },
+  }), 'property-1');
+
+  assert.equal(proposal.obligationType, 'MAINTENANCE_TASK');
+  assert.equal(proposal.occurrence.obligationSlug, 'weather-preparation-heavy-rain');
+});
+
 test('presentation fields are copied straight from the HomeAction, not re-derived', () => {
   const action = actionFixture({
     signal: 'Custom title',

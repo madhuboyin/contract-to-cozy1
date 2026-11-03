@@ -89,9 +89,25 @@ test('turns heavy rain into a property-aware action when flood exposure is prese
   assert.match(insights[0].homeImplication, /FEMA flood zone AE/);
   assert.equal(
     insights[0].actions[0].href,
-    '/dashboard/properties/property-1/environment-report/preparation?insightId=heavy-rain-2026-07-14',
+    '/dashboard/properties/property-1/environment-report/preparation?insightId=heavy-rain-active-window',
   );
   assert.equal(insights[0].actions[1].label, 'Check weather coverage');
+});
+
+test('combines multiple heavy-rain forecast days into one stable rolling preparation window', () => {
+  const input = sections();
+  input.floodElevation.data.femaFloodZone = 'AE';
+  input.weather.data.tenDayForecast.push(
+    { date: '2026-07-14', tempMaxF: 78, tempMinF: 66, precipitationSumIn: 1.4, weatherCode: 65 },
+    { date: '2026-07-15', tempMaxF: 76, tempMinF: 64, precipitationSumIn: 1.2, weatherCode: 65 },
+  );
+
+  const rain = deriveEnvironmentInsights(property, input).filter((insight) => insight.category === 'rain');
+  assert.equal(rain.length, 1);
+  assert.equal(rain[0].id, 'heavy-rain-active-window');
+  assert.equal(rain[0].effectiveFrom, '2026-07-14');
+  assert.equal(rain[0].effectiveTo, '2026-07-15');
+  assert.match(rain[0].summary, /2\.6 inches.*across 2 days/i);
 });
 
 test('turns owner work into coordination steps when exterior responsibility is managed elsewhere', () => {

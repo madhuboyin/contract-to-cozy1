@@ -22,6 +22,8 @@ Seasonal maintenance is no longer discoverable only through a notification:
 
 Critical weather follows the same persistent-discovery principle but remains a separate safety action. Active severe-weather events surface on Home with urgent priority, NWS source/instructions, expiry context, and no ordinary complete/dismiss controls. Lower-value incident-derived weather guidance is suppressed when it represents the same canonical event.
 
+Forecast-based heavy-rain preparation uses one rolling Home Operations obligation for the active forecast window. Consecutive qualifying rain days are combined into that window, forecast-date revisions refresh its timing and copy, and older unaccepted date-keyed candidates are superseded when the canonical candidate is observed. Accepted work is never superseded by this automatic source reconciliation.
+
 Current product boundary:
 
 - **Unified Home:** limited, ranked seasonal and weather actions requiring attention.
