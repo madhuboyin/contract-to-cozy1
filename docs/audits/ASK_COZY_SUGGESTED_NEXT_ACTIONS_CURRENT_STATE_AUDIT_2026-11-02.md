@@ -1,29 +1,62 @@
 # Ask Cozy Suggested Next Actions — Current-State Audit
 
 **Audit date:** November 2, 2026  
-**Repository baseline:** `main` at `11102124209fd0c78e4754512ae2010c015b75d0` The two earlier entity-governance fixes are included in this commit. The only uncommitted files during review (`AGENTS.md`, `docs/product/ASK_COZY_INLINE_WORKSPACE_FRD.md`) are unrelated to Suggested Next Actions code.  
+**Repository baseline:** reviewed at `main` `11102124209fd0c78e4754512ae2010c015b75d0` (which already contained the two earlier entity-governance fixes); final state at `main` `6fdef051`. The only files left uncommitted throughout (`AGENTS.md`, `docs/product/ASK_COZY_INLINE_WORKSPACE_FRD.md`) are unrelated to Suggested Next Actions code.  
 **Scope:** governed compact follow-up actions (`suggestedNextActions`), exact-four selection, operation-specific continuations, lifecycle/history suppression, contextual result actions, recovery, and frontend rendering  
-**Status:** code-read plus focused environment-independent execution; no database, services, browser, or production data used
+**Status:** FINAL (November 2, 2026). All eleven findings are fixed and pushed (commits in the final-status table below). The findings were produced by code-read plus focused environment-independent execution, and the fixes were verified the same way: unit and registry tests, the backend typecheck, and the full chunked Ask suite compared with a pre-change baseline. No database, services, browser, or production data was used, so nothing here is live-verified or deployed.
 
 ## 1. Executive summary
 
 Ask Cozy's Suggested Next Actions implementation is substantially healthier than the earlier audit described. The earlier two P0 entity-governance failures are resolved in commit `11102124`: property-wide outcomes have an explicit allowlist, HVAC continuation recipes carry an active decision-thread identity, and `DECISION_THREAD` and `GUIDANCE_JOURNEY` are present in the freshness matrix. The focused entity-eligibility suite passes.
 
-The current system nevertheless has eleven findings (F1-F5, F9 and F10 are P1; F6-F8 and F11 are P2). F10 is fixed and pushed; All eleven findings are fixed (F2 per the owner ruling below); F1, F3-F8 and F2 are in the working tree, the rest pushed:
+At the time of review the system had eleven findings (F1-F5, F9 and F10 are P1; F6-F8 and F11 are P2). All eleven are now fixed and pushed (F2 and F5 per owner rulings). Summary of what each was and its final state; the table in "Final status" below gives commits and residual limits:
 
-1. **F1 (P1, fixed in working tree)** — The continuation-coverage completion gate is red. The operation registry changed without updating its reviewed hash, and `COMMUNITY_UPDATES` is the sole remaining `MIGRATION_REQUIRED` operation.
-2. **F2 (P1, fixed in working tree per owner ruling)** — Completion semantics suppress most read/navigation outcomes after one successful use. Of 95 registered outcomes on read, status, decision-analysis, and guidance operations, 84 are non-repeatable. Changing this is a product-policy ruling, not a bug fix.
-3. **F3 (P1, fixed in working tree)** — Ten continuation recipes target an operation with a higher role floor than their source operation. `QUOTE_COMPARISON_REVIEW` loses both of its domain recipes for a viewer.
-4. **F4 (P1, fixed in working tree)** — State-aware gating was limited to `HOME_ACTIONS`. Multiple operations can offer `MAINTENANCE_FORECAST` on a property with no verified forecastable system, producing a `NOT_APPLICABLE` answer with no recovery chip.
-5. **F5 (P1, fixed in working tree)** — Presentation ownership is broader than the reviewed contextual-operation registry. A single receipt button can turn into an exact-four exemption.
-6. **F6 (P2, fixed in working tree)** — Many block actions omit `outcomeKey`, which prevents cross-surface semantic deduplication (duplicate chips, not broken behavior).
-7. **F7 (P2, fixed in working tree)** — Recent-prompt suppression can block return-to-list actions after a mutation.
-8. **F8 (P2, fixed in working tree)** — Architecture documentation and executable inventories have drifted.
-9. **F9 (P1, fixed in working tree)** — HVAC continuation candidates were eligible but not necessarily executable on the intended decision thread.
+1. **F1 (P1, fixed)** — The continuation-coverage completion gate was red. The operation registry changed without updating its reviewed hash, and `COMMUNITY_UPDATES` is the sole remaining `MIGRATION_REQUIRED` operation.
+2. **F2 (P1, fixed per owner ruling)** — Completion semantics suppress most read/navigation outcomes after one successful use. Of 95 registered outcomes on read, status, decision-analysis, and guidance operations, 84 are non-repeatable. Changing this is a product-policy ruling, not a bug fix.
+3. **F3 (P1, fixed)** — Ten continuation recipes target an operation with a higher role floor than their source operation. `QUOTE_COMPARISON_REVIEW` loses both of its domain recipes for a viewer.
+4. **F4 (P1, fixed)** — State-aware gating was limited to `HOME_ACTIONS`. Multiple operations can offer `MAINTENANCE_FORECAST` on a property with no verified forecastable system, producing a `NOT_APPLICABLE` answer with no recovery chip.
+5. **F5 (P1, fixed)** — Presentation ownership is broader than the reviewed contextual-operation registry. A single receipt button can turn into an exact-four exemption.
+6. **F6 (P2, fixed)** — Many block actions omit `outcomeKey`, which prevents cross-surface semantic deduplication (duplicate chips, not broken behavior).
+7. **F7 (P2, fixed)** — Recent-prompt suppression can block return-to-list actions after a mutation.
+8. **F8 (P2, fixed)** — Architecture documentation and executable inventories have drifted.
+9. **F9 (P1, fixed)** — HVAC continuation candidates were eligible but not necessarily executable on the intended decision thread.
 10. **F10 (P1, fixed)** — Status-only interactive results (`NEEDS_ENTITY` and siblings with no clarification/confirmation/capture payload) could enter exact-four.
-11. **F11 (P2, fixed in working tree)** — Generic capability-recommendation conversion conflicted with target-entity requirements for `INVENTORY_LOOKUP` and `HVAC_DECISION_OUTCOME_VIEW`.
+11. **F11 (P2, fixed)** — Generic capability-recommendation conversion conflicted with target-entity requirements for `INVENTORY_LOOKUP` and `HVAC_DECISION_OUTCOME_VIEW`.
 
 The frontend contract itself is sound: governed typed actions render whenever present, including degraded and exempt rows, and legacy string suggestions are not revived for a governed result.
+
+## Final status (November 2, 2026)
+
+| Finding | Priority | Final state | Commit |
+|---|---|---|---|
+| Earlier P0s: `ENTITY_REQUIRED` recipes; `DECISION_THREAD` / `GUIDANCE_JOURNEY` freshness | P0 | Fixed | `11102124` |
+| F10 Status-only interactive results entering exact-four | P1 | Fixed | `454bdb35` |
+| F9 HVAC chips not bound to the launched decision thread | P1 | Fixed | `c7105a1d` |
+| F11 Generic capability conversion vs target-entity requirement | P2 | Fixed | `9eaf5391` |
+| F4 `MAINTENANCE_FORECAST` dead end | P1 | Fixed (forecast gating + recovery chip) | `dd10fc84` |
+| F1 Coverage gate (`COMMUNITY_UPDATES`, stale hash) | P1 | Fixed | `caa8450a` |
+| F3 Role-floor edges / total loss for viewers | P1 | Fixed | `caa8450a` |
+| F4 (rest) Other empty destinations; claim-checklist dead end | P1 | Fixed (4 recipes removed; others verified answered) | `caa8450a` |
+| F5 Contextual exemption vs reviewed ownership | P1 | Fixed per owner decision (reviewed complete surface) | `caa8450a` |
+| F6 Missing `outcomeKey` / duplicate chips | P2 | Fixed | `caa8450a` |
+| F7 Post-mutation return-to-list suppression | P2 | Fixed | `caa8450a` |
+| F8 Documentation / inventory drift | P2 | Fixed | `caa8450a` |
+| F2 Permanent suppression of read/navigation outcomes | P1 | Fixed per owner ruling (15 hubs, 24-hour window) | `6fdef051` |
+
+**Current inventory (generated by `scripts/ask-suggested-actions-inventory.js`):** 226 operations; 128 registered outcomes (14 repeatable, 15 recurring hubs, 4 property-wide, 7 prompt-history exempt); 95 read-oriented outcomes of which 69 are retired by completion (was 84); 215 recipe sources with 421 recipes; coverage 219 governed / 2 contextual / 5 exempt / 0 missing; 9 reviewed supplemental higher-role-floor recipe edges.
+
+**Verification performed.** Focused unit and registry tests per finding (each new test was shown to fail without its fix where practical); `npm run typecheck` clean after each change; the full chunked Ask suite (`npm run test:ask:chunked`) compared with a pre-change baseline after the batch fixes, with no new failures other than one source-text pin that was updated for F2. Two corrections made along the way: the first draft cited a nonexistent "3-turn re-offer cooldown", and the F4 forecast gating briefly broke the Budget Planner test (found and fixed in the next batch).
+
+**Not verified.** No database, browser, or production run: lifecycle persistence (the F2 window, offers and selections), the HVAC thread lookup, the forecast readiness read, and all rendered chip rows are code-traced and unit-tested only. Nothing is deployed.
+
+**Known residual limits.**
+
+- F9: a launched thread still resolves through its HVAC item, so two active threads on the same item produce the existing clarification instead of an exact-thread bind; with several active HVAC threads the HVAC chips are dropped.
+- F4: only `MAINTENANCE_FORECAST` and the claim-checklist recipes were changed; other destinations were verified by reading handlers, not by running them.
+- F5: DIY is not a reviewed complete surface (not yet proven across empty, active, viewer and contributor states), so DIY results now take the normal row. Add it to the reviewed list only with that evidence.
+- F6: the outcome-key check covers the shared builders and the named handler outputs, not every action literal in the codebase.
+- F2: the other 80 read-oriented outcomes stay one-shot; the 24-hour window applies only to the 15 hubs, and the older 14 `REPEATABLE_OUTCOMES` still have no cooldown.
+- Pre-existing failures unrelated to this audit remain (for example `suggestedNextActionsInventory` "Documents" action, `maintenanceTemplates`, `claimsCalmAnswer`, `confirmCapabilityHandlerRegistry`, and others in the Ask suite baseline).
 
 ## 2. Method and evidence
 
@@ -90,7 +123,9 @@ DIY actions are handler-attached result candidates, not a separate global produc
 
 The frontend renders server-ordered typed actions whenever `suggestedNextActions` is non-empty, subject only to expiry, duplicate action ID, and the display limit. `suggestedNextActionsGoverned === true` prevents fallback to historical raw strings when the governed row is empty. Rendering is not restricted to an `EXACT_FOUR` status; `READY`, `DEGRADED`, and `EXEMPT` results may all carry typed actions.
 
-### 3.4 Current inventory
+### 3.4 Inventory at the time of review (pre-remediation)
+
+This table is the snapshot the findings were written against. Current totals come from `node scripts/ask-suggested-actions-inventory.js` and are summarised under "Final status".
 
 | Inventory | Current count | Notes |
 |---|---:|---|
@@ -128,7 +163,7 @@ Add reviewed, registered continuations for `COMMUNITY_UPDATES`, using destinatio
 
 Do not merely bless `COMMUNITY_UPDATES` as exempt: it is an ordinary property-scoped read with legitimate onward paths.
 
-**Fix (working tree).** `COMMUNITY_UPDATES` now has two recipes (`HOME_ACTIONS:REVIEW_HOME_ACTIONS`, `HOME_TIMELINE_EVENTS:REVIEW_HOME_TIMELINE`) and an ownership entry. The reviewed hash was bumped only after diffing the operation registry against the commit that set the previous hash (`a9c7f710`): exactly one operation was added since (`COMMUNITY_UPDATES`) and none removed. Coverage is now 219 `CUSTOM_GOVERNED`, 2 `CUSTOM_CONTEXTUAL`, 5 `EXEMPT`, zero `MIGRATION_REQUIRED`; all four coverage tests pass.
+**Fix.** `COMMUNITY_UPDATES` now has two recipes (`HOME_ACTIONS:REVIEW_HOME_ACTIONS`, `HOME_TIMELINE_EVENTS:REVIEW_HOME_TIMELINE`) and an ownership entry. The reviewed hash was bumped only after diffing the operation registry against the commit that set the previous hash (`a9c7f710`): exactly one operation was added since (`COMMUNITY_UPDATES`) and none removed. Coverage is now 219 `CUSTOM_GOVERNED`, 2 `CUSTOM_CONTEXTUAL`, 5 `EXEMPT`, zero `MIGRATION_REQUIRED`; all four coverage tests pass.
 
 ### [P1] F2 — Successful read/navigation outcomes are usually exhausted permanently
 
@@ -156,7 +191,7 @@ A user who follows a hub or list continuation once may never see that semantical
 
 **Owner ruling (2026-11-02): reviewed recurring hub reads with a 24-hour re-offer cooldown.** Recurring hub/list/status outcomes may be offered again; mutations, captures, decision analyses and guided workflow steps stay one-shot; "Not now" / "Not relevant" behavior is unchanged.
 
-**Fix (working tree).**
+**Fix.**
 
 - `RECURRING_HUB_OUTCOMES` (`suggestedNextActionRegistry.ts`) holds the 15 reviewed hubs, separate from `REPEATABLE_OUTCOMES`: `HOME_ACTIONS` (`REVIEW_HOME_ACTIONS`, `REVIEW_URGENT_HOME_ACTIONS`), `MAINTENANCE_STATUS`, `DOCUMENT_LOOKUP`, `GUIDANCE_JOURNEYS_LIST`, `OWNERSHIP_COSTS`, `BUYER_PLAN_STATUS`, `HOME_EVENT_RADAR_FEED`, `INSPECTION_FINDINGS`, `INVENTORY_LOOKUP` (`REVIEW_HOME_INVENTORY`), `WARRANTY_LOOKUP` (`REVIEW_WARRANTIES`), `HOME_TIMELINE_EVENTS`, `DIY_PROJECTS`, `HOME_STATUS_BOARD`, `WORK_OVERVIEW`. `validateSuggestedNextActionRegistry` requires each to be registered, a `RECORD_QUERY`/`STATUS_SUMMARY` operation, property-scoped, standard or material-decision (never a boundary), not record-bound unless a reviewed property-wide outcome, and not also in `REPEATABLE_OUTCOMES`.
 - Completion no longer retires a hub (`isCompletionRepeatable`, used by both the durable lifecycle and the session eligibility rule).
@@ -212,9 +247,9 @@ Add a registry test that evaluates every recipe at the source operation's minimu
 
 For `QUOTE_COMPARISON_REVIEW`, add at least one viewer-floor destination or raise the source floor only if product requirements truly prohibit viewers from the result itself.
 
-**Fix (working tree).** `QUOTE_COMPARISON_REVIEW` gained a viewer-floor `HOME_ACTIONS` recipe (the only total-loss source). `HVAC_DECISION_CONTINUE` -> scenario was removed under F9. The remaining 9 higher-floor edges are listed with reasons in `operationSpecificContinuationRoleFloor.test.js`; a new unreviewed edge, or a source with no recipe usable at its own minimum role, fails that test.
+**Fix.** `QUOTE_COMPARISON_REVIEW` gained a viewer-floor `HOME_ACTIONS` recipe (the only total-loss source). `HVAC_DECISION_CONTINUE` -> scenario was removed under F9. The remaining 9 higher-floor edges are listed with reasons in `operationSpecificContinuationRoleFloor.test.js`; a new unreviewed edge, or a source with no recipe usable at its own minimum role, fails that test.
 
-### [P1] F4 — State-unaware recipes can send users into an empty `NOT_APPLICABLE` recovery dead end (fixed in working tree for `MAINTENANCE_FORECAST`)
+### [P1] F4 — State-unaware recipes can send users into an empty `NOT_APPLICABLE` recovery dead end (fixed)
 
 **Evidence**
 
@@ -243,7 +278,7 @@ Extend continuation-state loading based on destination requirements, not only `s
 
 Add a precise recovery candidate for `MAINTENANCE_FORECAST_NO_VERIFIED_SYSTEMS`, such as reviewing home inventory or starting the governed inventory setup path. Keep it recovery-traited and authorization-checked.
 
-**Fix (working tree, not yet committed) — `MAINTENANCE_FORECAST` only**
+**Fix — `MAINTENANCE_FORECAST` only**
 
 - `hasForecastableInventory` (`maintenancePrediction.service.ts`) reuses the forecast generator's own `resolveRuleGroup` predicate (verified HVAC, roof or water-heater item), so readiness matches generation.
 - `loadOperationSpecificContinuationState` takes `{ records, forecast }`; the producer loads forecast readiness for every source whose recipes include `MAINTENANCE_FORECAST` (previously `HOME_ACTIONS` only), and drops the recipe when readiness is `false`. A failed read keeps the recipe (readiness is an optimisation). Record-existence gating stays `HOME_ACTIONS`-only: other sources' links to `MAINTENANCE_STATUS` etc. remain intentional navigation.
@@ -284,7 +319,7 @@ A receipt with a single “View this item” or “Review warranties” button c
 
 Receipt escape buttons should normally participate in semantic deduplication without automatically owning the entire footer.
 
-**Fix (working tree).** (1) Receipt and DIY/oracle block actions now declare registered `outcomeKey`s (F6). (2) The eight conditional receipt operations (`WARRANTY_UPDATE`, `CAPTURE_WARRANTY_CONFIRM`, `MAINTENANCE_TASK_UPDATE`, `HOME_EVENT_CORRECT`, `HOME_EVENT_UPDATE`, `CAPTURE_EVENT_CONFIRM`, `INVENTORY_ITEM_CORRECT`, `INVENTORY_ITEM_CREATE`) each gained two state-free recipes and ownership, so every branch keeps at least one `CONTINUE_WORK` candidate. (3) `finalizeSuggestedNextActions` now applies `CONTEXTUAL_ACTIONS_IN_RESULT` only when `isReviewedCompleteActionSurface(operationId)` (today `SEASONAL_HOME_CARE` and `HOME_HABITS`). DIY was not added: its top-level actions are not yet proven across empty/active/viewer/contributor states, so DIY results now take the normal pipeline (the DIY result candidate leads the row). Pending, recovery and safety states are unchanged. Tests: `exactFourActivation.test.js` (reviewed surface keeps the exemption; plain receipt gets a full row de-duplicated against its button; every receipt operation has a state-free continuation).
+**Fix.** (1) Receipt and DIY/oracle block actions now declare registered `outcomeKey`s (F6). (2) The eight conditional receipt operations (`WARRANTY_UPDATE`, `CAPTURE_WARRANTY_CONFIRM`, `MAINTENANCE_TASK_UPDATE`, `HOME_EVENT_CORRECT`, `HOME_EVENT_UPDATE`, `CAPTURE_EVENT_CONFIRM`, `INVENTORY_ITEM_CORRECT`, `INVENTORY_ITEM_CREATE`) each gained two state-free recipes and ownership, so every branch keeps at least one `CONTINUE_WORK` candidate. (3) `finalizeSuggestedNextActions` now applies `CONTEXTUAL_ACTIONS_IN_RESULT` only when `isReviewedCompleteActionSurface(operationId)` (today `SEASONAL_HOME_CARE` and `HOME_HABITS`). DIY was not added: its top-level actions are not yet proven across empty/active/viewer/contributor states, so DIY results now take the normal pipeline (the DIY result candidate leads the row). Pending, recovery and safety states are unchanged. Tests: `exactFourActivation.test.js` (reviewed surface keeps the exemption; plain receipt gets a full row de-duplicated against its button; every receipt operation has a state-free continuation).
 
 **Precondition before changing the exemption (now satisfied): path-complete receipt coverage.** Registry ownership proves an operation *may* own an outcome, not that a candidate is nominated on every receipt path. If ordinary receipts stop being exempt, each affected operation needs at least one candidate that survives every normal receipt state, or the row becomes shorter than it is today. Verify these conditional paths explicitly first: `WARRANTY_UPDATE` (expiry date unchanged), `MAINTENANCE_TASK_UPDATE` (plain update vs archive/snooze), `HOME_EVENT_CORRECT` and `HOME_EVENT_UPDATE` (non-repair events, no linked item), `INVENTORY_ITEM_CORRECT` and `INVENTORY_ITEM_CREATE` (manufacturer, model and install date already populated). `ROOM_CREATE` and `ROOM_RENAME` need no work: both own `INVENTORY_ITEM_CREATE:ADD_ITEM_TO_ROOM` and attach `roomAddItemCandidates` unconditionally (`recordConfirm.handler.ts:646,699`).
 
@@ -311,7 +346,7 @@ Add registered outcomes to block actions whenever they semantically match a gove
 
 Do not loosen the identity collector to infer outcomes from text.
 
-**Fix (working tree).** `outcomeKey` added to the appliance-oracle row and missing-age actions, the DIY guide and start row actions, and every receipt follow-up button that has a registered equivalent (`RECEIPT_FOLLOW_UP_OUTCOME_KEYS`; the rest are explicitly presentation-only). Because a receipt button is `START_WORKFLOW` and the matching chip `CONVERSATION_CONTINUE`, the deduplicator now treats those two navigation types as twins (`MUTATE_RECORD` has none). The appliance-oracle footer no longer repeats its card's replacement button. Test: `presentationOutcomeKeys.test.js`. The governance check is a runtime check over the shared builders and the named handler outputs, not a source scan of every action literal in the codebase.
+**Fix.** `outcomeKey` added to the appliance-oracle row and missing-age actions, the DIY guide and start row actions, and every receipt follow-up button that has a registered equivalent (`RECEIPT_FOLLOW_UP_OUTCOME_KEYS`; the rest are explicitly presentation-only). Because a receipt button is `START_WORKFLOW` and the matching chip `CONVERSATION_CONTINUE`, the deduplicator now treats those two navigation types as twins (`MUTATE_RECORD` has none). The appliance-oracle footer no longer repeats its card's replacement button. Test: `presentationOutcomeKeys.test.js`. The governance check is a runtime check over the shared builders and the named handler outputs, not a source scan of every action literal in the codebase.
 
 ### [P2] F7 — Recent-prompt suppression can block return-to-list actions after a mutation
 
@@ -333,7 +368,7 @@ That return action can be suppressed as `EQUIVALENT_PROMPT_ASKED`, even though t
 
 **Recommendation**
 
-**Fix (working tree).** `isPostMutationReturnToRead` in `suggestedNextActionEligibility.ts` exempts a candidate from `EQUIVALENT_PROMPT_ASKED` only when its source operation is a `COMMAND`, it registers the destination outcome as its own result-owned continuation, the destination is a read/status operation, and it is plain navigation; message text is never consulted. Test: `postMutationReturnToList.test.js` (every command -> read recipe edge is exempt; the same prompt after a read source is still suppressed).
+**Fix.** `isPostMutationReturnToRead` in `suggestedNextActionEligibility.ts` exempts a candidate from `EQUIVALENT_PROMPT_ASKED` only when its source operation is a `COMMAND`, it registers the destination outcome as its own result-owned continuation, the destination is a read/status operation, and it is plain navigation; message text is never consulted. Test: `postMutationReturnToList.test.js` (every command -> read recipe edge is exempt; the same prompt after a read source is still suppressed).
 
 Do not globally exempt repeatable outcomes from prompt history; the architecture intentionally separates those policies. Instead, add a narrow, reviewed exemption for post-mutation result-owned return-to-parent-list outcomes, using trusted source-operation family and ownership relationship—not message text—to establish the case. Add tests for maintenance, buyer-plan, project/work, inventory, and warranty receipts.
 
@@ -354,9 +389,9 @@ Reviewers can reach incorrect conclusions from the document without running the 
 
 Update section 17 from generated registry output after fixing coverage. Add a small checked-in audit command or test helper that reports operations, outcomes, repeatability, recipes, coverage classes, and role-floor mismatches so future audits do not rely on hand-maintained totals.
 
-**Fix (working tree).** `apps/backend/scripts/ask-suggested-actions-inventory.js` prints those totals from the executable registries (`--json` available). The implementation plan's section 17 now ends with a generated "Current inventory" paragraph (226 operations, 128 outcomes, 215 recipe sources / 421 recipes, zero `MIGRATION_REQUIRED`) and states the current contextual-exemption rule; the step-by-step counts above it are labelled a historical log. The stale "nonessential starter" producer comments were corrected (starters are essential).
+**Fix.** `apps/backend/scripts/ask-suggested-actions-inventory.js` prints those totals from the executable registries (`--json` available). The implementation plan's section 17 now ends with a generated "Current inventory" paragraph (226 operations, 128 outcomes, 215 recipe sources / 421 recipes, zero `MIGRATION_REQUIRED`) and states the current contextual-exemption rule; the step-by-step counts above it are labelled a historical log. The stale "nonessential starter" producer comments were corrected (starters are essential).
 
-### [P1] F9 — HVAC candidate eligibility does not guarantee executable thread continuity (fixed in working tree)
+### [P1] F9 — HVAC candidate eligibility does not guarantee executable thread continuity (fixed)
 
 **Evidence**
 
@@ -377,7 +412,7 @@ The follow-up clarification itself is a pending interaction (those handlers use 
 
 Bind each thread-bound destination to the supplied `DECISION_THREAD` entity in its handler, as `continue` already does. Nominate thread-bound recipes only when exactly one active HVAC thread exists; with several, drop the recipe instead of choosing. Give the scenario recipe a message the destination can execute, or drop it. Add a handler-level test per destination proving the launch entity is honored.
 
-**Fix (working tree, not yet committed)**
+**Fix**
 
 - `hvacDecision.handler.ts`: new `focusedHvacThreadItem` resolves a `DECISION_THREAD` launch context to that thread's HVAC item (active, same property, HVAC definition). The scenario, abandon, outcome-report, outcome-view and outcome-unlink handlers now pass it to `findHvacItemForMessage` instead of relying on message text, and return `HVAC_DECISION_SUBJECT_NOT_ACTIVE` when the launch thread is no longer active (never a substitute thread). Capability registrations pass `envelope.launchContext`.
 - Producer: thread-bound recipes are nominated only when exactly one HVAC decision is active; with several, none are (previously `hvacThreads[0]`).
@@ -399,7 +434,7 @@ Such a result looked settled to the finalizer, so it could carry up to four unre
 
 `resultOwnsPendingInteraction` now treats any status in the new `INTERACTIVE_ASK_EXECUTION_STATUSES` (defined in `ask.contract.ts`; `INTERACTIVE_ASK_STATUSES` in `askSessions.ts` is derived from it, so there is one list) as a pending interaction, in addition to the existing payload checks. All three call sites use it. The optional-escape-route exception is unaffected because it applies only to `ANSWERED` and `READY_WITH_LIMITATIONS`. Test: `exactFourActivation.test.js`, "STATUS-ONLY INTERACTIVE RESULTS own the turn" (fails without the fix, passes with it).
 
-### [P2] F11 — Generic capability conversion conflicts with target-entity requirements (fixed in working tree)
+### [P2] F11 — Generic capability conversion conflicts with target-entity requirements (fixed)
 
 **Evidence**
 
@@ -411,7 +446,7 @@ Such a result looked settled to the finalizer, so it could carry up to four unre
 
 Do not add a blanket property-wide exemption for the generic outcome. `INVENTORY_LOOKUP` plausibly has a property-wide mode and can be reviewed for that. `HVAC_DECISION_OUTCOME_VIEW` is thread-specific and should be excluded from generic capability conversion unless a thread identity is supplied.
 
-**Fix (working tree, not yet committed)**
+**Fix**
 
 - `INVENTORY_LOOKUP:REVIEW_RECOMMENDED_CAPABILITY` is added to `PROPERTY_WIDE_OUTCOMES` (the capability launch is the property-wide inventory list).
 - `isSafeCapabilityRecommendationOperation` now rejects an entity-targeted operation unless its generic capability outcome is a reviewed property-wide outcome, so `HVAC_DECISION_OUTCOME_VIEW` is no longer converted. The check is generic: any future entity-bound read that appears in a capability card stays excluded until reviewed.
@@ -449,20 +484,20 @@ The prior claim that all listed write operations lack governed ownership is no l
 
 ### Phase 1 — Restore executable governance (done)
 
-0. **Done in working tree:** F10 status-derived pending interaction.
+0. **Done:** F10 status-derived pending interaction.
 1. Add reviewed `COMMUNITY_UPDATES` continuation coverage.
 2. Update the reviewed operation-registry hash after review.
 3. Make the focused coverage suite green.
 4. Update section 17 counts from executable output.
 
-### Phase 2 — Close deterministic dead ends
+### Phase 2 — Close deterministic dead ends (done)
 
 1. Gate `MAINTENANCE_FORECAST` recipes on verified forecastable systems.
 2. Add a precise inventory/setup recovery action for `MAINTENANCE_FORECAST_NO_VERIFIED_SYSTEMS`.
 3. Review other data-dependent destination recipes using canonical readiness state.
 4. Add fixtures proving every retained empty-state destination has a useful authorized next action or is deliberately terminal.
 
-### Phase 3 — Align roles and contextual ownership
+### Phase 3 — Align roles and contextual ownership (done)
 
 0. Fix F9 (HVAC thread binding) and F11 (capability conversion for the two entity-bound operations).
 0b. Verify path-complete receipt coverage (F5 precondition) before changing the contextual exemption.
@@ -472,12 +507,11 @@ The prior claim that all listed write operations lack governed ownership is no l
 3. Unify contextual exemption with the reviewed ownership registry or an explicit complete-surface declaration.
 4. Add registered `outcomeKey` metadata to semantically governed block actions.
 
-### Phase 4 — Review lifecycle product policy (blocked on owner ruling)
+### Phase 4 — Review lifecycle product policy (done; owner ruling 2026-11-02)
 
-1. Classify all 128 outcomes by repeatability semantics.
-2. Approve recurring read/navigation outcomes individually or by a tightly validated registry rule.
-3. Add narrow post-mutation return-to-list prompt-history exemptions.
-4. Preserve cooldown, dismissal, current-outcome, and prompt-history policies as distinct controls.
+1. Recurring read/navigation outcomes approved individually (15 reviewed hubs, `RECURRING_HUB_OUTCOMES`) with a validated registry rule and a 24-hour re-offer window. The other 80 registered read-oriented outcomes were not individually reclassified; they keep the existing one-shot behavior, and additions to the hub list need explicit review.
+2. Narrow post-mutation return-to-list prompt-history exemption added (F7).
+3. Cooldown, dismissal, current-outcome, and prompt-history policies preserved as distinct controls.
 
 ## 7. Required validation after remediation
 
@@ -509,12 +543,14 @@ The following prior claims were rechecked and are not current findings:
 3. **All HVAC follow-on operations lose every continuation.** Partly retired: the `ENTITY_REQUIRED` failure is closed and thread-bound recipes carry the latest active thread when one exists. Still open: with no active thread, five HVAC sources can lose all domain recipes, and the carried thread is honored only by `HVAC_DECISION_CONTINUE` (F9).
 4. **Inventory/quote/replacement property-wide recipe destinations are categorically invalid.** Their three specific outcomes are explicitly reviewed property-wide exceptions; other outcomes on those operations still require an entity.
 5. **The frontend renders typed actions only for exact-four/available statuses.** The frontend renders governed typed actions whenever supplied and does not gate on the status state.
-6. **`NEEDS_INPUT` can enter exact-four without capture or clarification.** `NEEDS_INPUT` itself is not a valid Ask execution status, so that wording is obsolete. The underlying concern was correct for the real interactive statuses, however: `NEEDS_ENTITY` and siblings could enter exact-four with no payload. That is now F10 (fixed in working tree).
+6. **`NEEDS_INPUT` can enter exact-four without capture or clarification.** `NEEDS_INPUT` itself is not a valid Ask execution status, so that wording is obsolete. The underlying concern was correct for the real interactive statuses, however: `NEEDS_ENTITY` and siblings could enter exact-four with no payload. That is now F10 (fixed).
 7. **DIY has no governed continuation candidates.** DIY list/template handlers now nominate exact reviewed project/template actions.
 8. **The listed confirmed-write operations have no governed ownership at all.** They now have registered result-owned outcomes and/or handler candidates; F5 and F6 capture the narrower remaining problems.
 
 ## 9. Final assessment
 
-Suggested Next Actions has a coherent governance core: entity rules fail closed, operation availability is centralized, selection is deterministic, lifecycle state is durable, and the frontend respects the governed server result. The most dangerous earlier entity failures are resolved.
+Suggested Next Actions has a coherent governance core: entity rules fail closed, operation availability is centralized, selection is deterministic, lifecycle state is durable, and the frontend respects the governed server result. Every finding in this audit, including the two earlier P0 entity failures, has been fixed and pushed (see "Final status").
 
-The next work should not add more generic fallback inventory. It should restore the red coverage gate, prevent known data-state dead ends, ensure continuations remain usable at the source operation's minimum role, align contextual exemption with reviewed ownership, and make an explicit product decision about recurring navigation outcomes. Those changes address the remaining gaps without weakening authorization, entity integrity, recovery safety, or the distinction between completion repeatability and prompt-history policy.
+The remediation tightened the system without weakening authorization, entity integrity, recovery safety, or the separation between completion repeatability and prompt-history policy: chips are now executable on the record they were launched from, interactive and recovery states own the turn, continuations are usable at the source operation's minimum role, contextual exemption is an explicit reviewed list, and recurring hub reads can return on a bounded schedule.
+
+What remains is verification, not code: the changes have not been exercised against a real database or in a browser, nothing is deployed, and the residual limits above (notably the HVAC same-item case, DIY as a reviewed surface, and the hubs beyond the initial 15) are the places a future audit should look first. Regenerate the inventory with `scripts/ask-suggested-actions-inventory.js` before relying on any count in this document.
