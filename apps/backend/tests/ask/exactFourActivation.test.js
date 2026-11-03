@@ -325,3 +325,14 @@ test('EXEMPT STATES keep the starters out: a recovery status, a pending clarific
   assert.equal(noProperty.shown.length, 0);
   assert.equal(noProperty.calls.lifecycle, 0, 'a property-less turn loads no lifecycle');
 });
+
+test('STATUS-ONLY INTERACTIVE RESULTS own the turn: a bare NEEDS_ENTITY/NEEDS_CONTEXT/NEEDS_CLARIFICATION/NEEDS_CONFIRMATION (a pick-a-record list with no clarification, confirmation or capture payload) shows no follow-up chips', async () => {
+  for (const status of ['NEEDS_ENTITY', 'NEEDS_CONTEXT', 'NEEDS_CLARIFICATION', 'NEEDS_CONFIRMATION']) {
+    const r = await run({ status });
+    assert.equal(r.report.exactFour.applicability, 'EXEMPT', status);
+    assert.equal(r.report.exactFour.exemptReason, 'PENDING_INTERACTION', status);
+    assert.equal(r.shown.length, 0, `${status}: no unrelated chips beneath a result that is waiting on the homeowner`);
+  }
+  const settled = await run({ status: 'ANSWERED' });
+  assert.equal(settled.report.exactFour.applicability, 'EXACT_FOUR', 'a settled answer is unaffected');
+});

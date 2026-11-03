@@ -5,7 +5,7 @@ import { recordAskCapabilityLifecycle } from '../askCapabilityLifecycle';
 import { finalizeRecoveryActions, restartAfterExpiryCandidates } from '../suggestedActions/recoveryCandidates';
 import { AskExecution, AskExecutionStatus, Prisma } from '@prisma/client';
 import { prisma } from '../../../lib/prisma';
-import { ASK_RESPONSE_SCHEMA_VERSION, type AskExecutionResponse, type AskPendingWorkItem, type AskRecentSessionPage, type AskRecentSessionSummary, type AskSessionUpdateRequest, type ContinueAskExecution } from '../../../productFramework/ask/ask.contract';
+import { ASK_RESPONSE_SCHEMA_VERSION, INTERACTIVE_ASK_EXECUTION_STATUSES, type AskExecutionResponse, type AskPendingWorkItem, type AskRecentSessionPage, type AskRecentSessionSummary, type AskSessionUpdateRequest, type ContinueAskExecution } from '../../../productFramework/ask/ask.contract';
 import { readAskOperationalControls } from '../../../config/askOperationalControls';
 import { ASK_SESSION_HISTORY_PAGE_SIZE, askHistoryAccessiblePropertyWhere, askSessionHistoryWhere, decodeAskSessionHistoryCursor, encodeAskSessionHistoryCursor } from '../askSessionHistoryPagination';
 import { resolvePropertyAccess } from '../../propertyAccess.service';
@@ -163,7 +163,7 @@ export async function getAskExecution(userId: string, executionId: string): Prom
   return mapPersistedExecution(execution, await propertySummary(execution.propertyId));
 }
 
-export const INTERACTIVE_ASK_STATUSES: AskExecutionStatus[] = ['NEEDS_PROPERTY', 'NEEDS_ENTITY', 'NEEDS_CLARIFICATION', 'NEEDS_CONTEXT', 'NEEDS_CONFIRMATION'];
+export const INTERACTIVE_ASK_STATUSES: AskExecutionStatus[] = [...INTERACTIVE_ASK_EXECUTION_STATUSES];
 
 const CONTINUABLE_ASK_STATUSES: AskExecutionStatus[] = [...INTERACTIVE_ASK_STATUSES, 'RUNNING', 'OUTCOME_UNKNOWN'];
 

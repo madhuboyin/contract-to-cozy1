@@ -13,7 +13,7 @@ import { prisma } from '../../../lib/prisma';
 import {
   askSuggestedActionsCandidatesTotal, askSuggestedActionsPipelineDurationSeconds, askSuggestedActionsProducerFailuresTotal,
 } from '../../../lib/metrics';
-import type { SuggestedNextAction } from '../../../productFramework/ask/ask.contract';
+import { INTERACTIVE_ASK_EXECUTION_STATUSES, type SuggestedNextAction } from '../../../productFramework/ask/ask.contract';
 import { ASK_OPERATION_DEFINITIONS, getAskOperationDefinition, type AskOperationId, type AskOperationResult } from '../askOperationRegistry';
 import { requiredAskTargetEntity } from '../askEntityResolution';
 import { evaluateAskOperationAvailability } from '../support/answerGuards';
@@ -55,6 +55,20 @@ const RECOVERY_STATUSES: ReadonlySet<string> = new Set([
 // HOME_BASICS_GUIDE contains a conditional "If you smell gas" emergency disclosure in otherwise general authored education. It is
 // not evidence that the homeowner is reporting an active emergency, so it must not disable the normal governed escape routes.
 const INFORMATIONAL_EMERGENCY_BOUNDARY_OPERATIONS: ReadonlySet<string> = new Set(['HOME_BASICS_GUIDE']);
+
+/**
+ * True while the homeowner owes the next input. Derived from the execution status as well as the attached clarification, confirmation
+ * and capture payloads: several handlers return a bare NEEDS_ENTITY (a pick-a-record list) with none of those fields, and a turn that is
+ * waiting on the homeowner must not also carry unrelated follow-up chips.
+ */
+export function resultOwnsPendingInteraction(
+  result: Pick<AskOperationResult, 'status' | 'clarification' | 'confirmation' | 'captureRequests'>,
+  optionalEscapeRoutes: boolean,
+): boolean {
+  return Boolean((INTERACTIVE_ASK_EXECUTION_STATUSES as readonly string[]).includes(result.status)
+    || result.clarification || result.confirmation
+    || (!optionalEscapeRoutes && (result.captureRequests?.length ?? 0) > 0));
+}
 
 /** Emergency, restricted, unavailable, expired, cancelled and similar results keep only safe recovery actions (plan §6). */
 export function resolveSuggestedNextActionMode(result: Pick<AskOperationResult, 'status' | 'blocks'>, operationId: string | null): SuggestedNextActionMode {
@@ -183,8 +197,7 @@ export async function finalizeSuggestedNextActionsWithReport(
   const finish = (result: AskOperationResult) => {
     const shownCount = result.suggestedNextActions?.length ?? 0;
     const exactFour = report.exactFour;
-    const pending = Boolean(input.result.clarification || input.result.confirmation
-      || (!optionalEscapeRoutes && (input.result.captureRequests?.length ?? 0) > 0));
+    const pending = resultOwnsPendingInteraction(input.result, optionalEscapeRoutes);
     const suggestedNextActionsStatus = exactFour?.applicability === 'EXEMPT'
       ? { state: 'EXEMPT' as const, shownCount, expectedCount: 0, reasonCodes: [exactFour.exemptReason] }
       : exactFour?.applicability === 'EXACT_FOUR' && exactFour.shortage > 0
@@ -271,8 +284,7 @@ export async function finalizeSuggestedNextActionsWithReport(
       recordExactFourDiagnostics(report.exactFour);
       return finish(passthrough([]));
     }
-    const pending = Boolean(input.result.clarification || input.result.confirmation
-      || (!optionalEscapeRoutes && (input.result.captureRequests?.length ?? 0) > 0));
+    const pending = resultOwnsPendingInteraction(input.result, optionalEscapeRoutes);
     if (mode === 'NORMAL' && input.propertyId && !pending) {
       const shortageReasons: Array<'NO_CANDIDATES' | 'PRODUCER_DROPPED'> = ['NO_CANDIDATES'];
       if (report.droppedProducers.length > 0) shortageReasons.push('PRODUCER_DROPPED');
@@ -326,8 +338,7 @@ export async function finalizeSuggestedNextActionsWithReport(
       validatedEntityTypes,
       // READY_WITH_LIMITATIONS capture prompts on the two registered read surfaces are optional CTAs. They do not become an active,
       // focus-owning interaction until the homeowner launches the capture operation; the footer remains an escape route meanwhile.
-      pendingInteractionActive: Boolean(result.clarification || result.confirmation
-        || (!optionalEscapeRoutes && (result.captureRequests?.length ?? 0) > 0)),
+      pendingInteractionActive: resultOwnsPendingInteraction(result, optionalEscapeRoutes),
       completedSemanticKeyHashes: typeof input.completedSemanticKeyHashes === 'function' ? await input.completedSemanticKeyHashes() : (input.completedSemanticKeyHashes ?? new Set()),
       askedMessageKeys: new Set([input.message, ...(input.recentCompletedMessages ?? [])].map(suggestionKey).filter(Boolean)),
       messageKey: suggestionKey,

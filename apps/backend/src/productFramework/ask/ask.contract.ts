@@ -28,6 +28,9 @@ export const ASK_EXECUTION_STATUSES = [
 
 export const AskExecutionStatusSchema = z.enum(ASK_EXECUTION_STATUSES);
 
+/** Statuses in which the homeowner owes the next input (a pick, a confirmation, a missing fact); the result owns the whole turn. */
+export const INTERACTIVE_ASK_EXECUTION_STATUSES: readonly (typeof ASK_EXECUTION_STATUSES)[number][] = ['NEEDS_PROPERTY', 'NEEDS_ENTITY', 'NEEDS_CLARIFICATION', 'NEEDS_CONTEXT', 'NEEDS_CONFIRMATION'];
+
 const AskActionSchema = z.object({
   id: z.string().trim().min(1).max(120),
   label: z.string().trim().min(1).max(160),
