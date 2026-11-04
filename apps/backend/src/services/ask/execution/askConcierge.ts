@@ -77,7 +77,7 @@ export async function getConciergeHome(userId: string, propertyId: string, accou
       const suppressedHomeActionIds = await getSuppressedHomeActionIds({
         userId, propertyId, homeActionIds: projectedActions.map((action) => action.id),
       }).catch(() => new Set<string>());
-      const view = buildPriorityListView({ ...feed, actions: projectedActions }, 'CONCIERGE_HOME', { suppressedHomeActionIds });
+      const view = buildPriorityListView({ ...feed, actions: projectedActions }, 'CONCIERGE_HOME', { suppressedHomeActionIds, excludeSuppressed: true });
       const sourceActions = new Map(feed.actions.map((action) => [action.id, action]));
       return {
         state: view.items.length ? 'AVAILABLE' : 'NO_ACTION',

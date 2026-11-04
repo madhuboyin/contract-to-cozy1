@@ -226,7 +226,7 @@ test('promotes guidance, incident, recall, coverage, project, and seasonal recor
   assert.equal(actions.find((action) => action.source.kind === 'INCIDENT').primaryCta.kind, 'ESCALATE');
   const seasonal = actions.find((action) => action.id === 'seasonal-checklist:seasonal-1');
   assert.equal(seasonal.primaryCta.label, 'See 1 priority task');
-  assert.equal(seasonal.presentation.headline, '1 summer task needs attention');
+  assert.equal(seasonal.presentation.headline, 'Test the sump pump');
   assert.equal(seasonal.presentation.keyFacts.find((fact) => fact.label === 'Critical tasks').value, 'Test the sump pump');
   // "Next task" surfaces a task not already listed under "Critical tasks".
   assert.equal(seasonal.presentation.keyFacts.find((fact) => fact.label === 'Next task').value, 'Clean the outdoor condenser');
@@ -684,7 +684,7 @@ test('accepted seasonal work remains summarized by the grouped checklist action'
   const result = await getPromotedHomeActions('property-1', db);
   const seasonal = result.actions.find((action) => action.id === 'seasonal-checklist:seasonal-mixed');
   assert.ok(seasonal);
-  assert.equal(seasonal.presentation.headline, '1 summer task needs attention');
+  assert.equal(seasonal.presentation.headline, 'Replace AC filters monthly');
   assert.equal(seasonal.presentation.keyFacts.find((f) => f.label === 'Critical tasks').value, 'Replace AC filters monthly');
   assert.equal(seasonal.presentation.keyFacts.find((f) => f.label === 'Next task').value, 'Clean the gutters');
 });

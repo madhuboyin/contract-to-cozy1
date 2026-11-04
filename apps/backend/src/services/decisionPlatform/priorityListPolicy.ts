@@ -162,10 +162,15 @@ export type PriorityListChannel = keyof typeof PRIORITY_LIST_CHANNEL_DISPLAY_LIM
 export function buildPriorityListView(
   feed: { propertyId: string; generatedAt: string; actions: RankedHomeAction[] },
   channel: PriorityListChannel,
-  options: { suppressedHomeActionIds?: ReadonlySet<string> } = {},
+  options: { suppressedHomeActionIds?: ReadonlySet<string>; excludeSuppressed?: boolean } = {},
 ): PriorityListView {
   const displayLimit = PRIORITY_LIST_CHANNEL_DISPLAY_LIMITS[channel];
-  const ordered = feed.actions;
+  // Suppression is useful in diagnostic/admin projections, but homeowner-facing
+  // priority lists must not present a suppressed record as an active recommendation.
+  // Filter before applying the channel cap so a hidden row cannot consume a slot.
+  const ordered = options.excludeSuppressed
+    ? feed.actions.filter((action) => !derivePriorityListItemState(action, options.suppressedHomeActionIds?.has(action.id)).suppressed)
+    : feed.actions;
   const visible = ordered.slice(0, displayLimit);
 
   const items = visible.map((action, index) => {

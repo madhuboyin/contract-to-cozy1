@@ -631,6 +631,15 @@ individual accepted-work cards are suppressed while represented by the grouped
 seasonal action. This restores the current seasonal handoff requirement without
 double-counting cards.
 
+The grouped action must still name the homeowner's work. When exactly one critical
+seasonal task remains, its title is the Home Action headline; multiple critical
+tasks use an imperative checklist headline, and non-critical preparation uses an
+imperative planning headline. Count-only copy such as "1 fall task needs attention"
+is not a valid action title. Homeowner priority projections also remove suppressed
+actions before applying display limits or counts. Default rows show timing and a
+concrete verification need; comparative ranking rationale is available only behind
+"Why this appeared", and confidence labels are not shown as raw scoring metadata.
+
 ### 14.5 Future work
 
 - **Un-aggregate seasonal work** (the parent plan's "Slice 3"): once each seasonal

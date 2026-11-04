@@ -131,6 +131,18 @@ test('buildPriorityListView marks items in the suppressedHomeActionIds set as su
   assert.equal(view.items.find((item) => item.homeActionId === 'b').suppressed, false);
 });
 
+test('buildPriorityListView can exclude suppressed homeowner rows before applying the channel limit', () => {
+  const actions = Array.from({ length: PRIORITY_LIST_CHANNEL_DISPLAY_LIMITS.CONCIERGE_HOME + 1 }, (_, index) => rankedAction({ id: `action-${index}` }));
+  const view = buildPriorityListView(
+    { propertyId: 'prop-1', generatedAt: '2026-08-01T00:00:00.000Z', actions },
+    'CONCIERGE_HOME',
+    { suppressedHomeActionIds: new Set(['action-0']), excludeSuppressed: true },
+  );
+  assert.equal(view.items.some((item) => item.homeActionId === 'action-0'), false);
+  assert.equal(view.items.length, PRIORITY_LIST_CHANNEL_DISPLAY_LIMITS.CONCIERGE_HOME);
+  assert.equal(view.items.at(-1).homeActionId, `action-${PRIORITY_LIST_CHANNEL_DISPLAY_LIMITS.CONCIERGE_HOME}`);
+});
+
 test('buildPriorityListView never reorders the already-ranked feed and stamps the current policy version', () => {
   const actions = [rankedAction({ id: 'a' }), rankedAction({ id: 'b' }), rankedAction({ id: 'c' })];
   const view = buildPriorityListView({ propertyId: 'prop-1', generatedAt: '2026-08-01T00:00:00.000Z', actions }, 'ASK');

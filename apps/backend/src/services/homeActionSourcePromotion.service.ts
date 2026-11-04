@@ -1335,8 +1335,10 @@ async function loadSeasonalChecklistActions(propertyId: string, db: HomeActionSo
     const seasonalHeadline = contextReviewOnly
       ? `Review home details for ${displaySeason.toLowerCase()} preparation`
       : criticalCount > 0
-      ? `${criticalCount} ${displaySeason.toLowerCase()} task${criticalCount === 1 ? ' needs' : 's need'} attention`
-      : `${pendingItems.length} ${displaySeason.toLowerCase()} task${pendingItems.length === 1 ? '' : 's'} to plan`;
+      ? criticalCount === 1
+        ? priorityTasks[0].title
+        : `Review ${criticalCount} priority tasks in your ${displaySeason.toLowerCase()} checklist`
+      : `Plan ${pendingItems.length} ${displaySeason.toLowerCase()} home-care task${pendingItems.length === 1 ? '' : 's'}`;
     const seasonalSummary = contextReviewOnly
       ? 'A few home details are needed before Cozy can determine which seasonal tasks apply.'
       : criticalCount > 0

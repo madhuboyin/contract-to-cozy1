@@ -121,15 +121,14 @@ export const PriorityListBlock: AskBlockRenderer<'PRIORITY_LIST'> = ({ block, ex
         <ol className={calm ? 'divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200 bg-white' : 'mt-4 space-y-3'}>
           {block.items.map((item, index) => {
             const lifecycle = [
-              item.unavailable && 'Unavailable',
-              item.stale && 'Stale',
+              item.unavailable && 'Details temporarily unavailable',
+              item.stale && 'May need refresh',
               item.completed && 'Completed',
-              item.suppressed && 'Suppressed',
             ].filter((label): label is string => Boolean(label));
             const reason = priorityReason(item.comparativeReasonCodes);
             const compactMeta = [
               ...lifecycle,
-              item.confidenceLabel ? `${item.confidenceLabel.toLowerCase()} confidence` : null,
+              item.confidenceLabel === 'LOW' ? 'Confirm home details' : null,
               item.deadlineAt ? `Due ${formatAskDateOnly(item.deadlineAt)}` : null,
             ].filter((label): label is string => Boolean(label)).join(' · ');
             return (
@@ -142,8 +141,9 @@ export const PriorityListBlock: AskBlockRenderer<'PRIORITY_LIST'> = ({ block, ex
                       <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide', categoryBadge[item.consumerPriority])}>{item.rawPriority ? bucketLabel[item.rawPriority] : categoryLabel[item.consumerPriority]}</span>
                       <h4 className="min-w-0 break-words text-sm font-semibold text-slate-900">{item.title}</h4>
                     </div>
-                    {index === 0 && (reason ?? item.watchState) && <p className="text-xs text-slate-600">{reason ?? item.watchState}</p>}
+                    {item.watchState && <p className="text-xs text-slate-600">{item.watchState}</p>}
                     {compactMeta && <p className="text-xs text-slate-500">{compactMeta}</p>}
+                    {reason && <details className="text-xs text-slate-500"><summary className="w-fit cursor-pointer rounded-md font-medium hover:text-teal-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600">Why this appeared</summary><p className="mt-1">{reason}.</p></details>}
                   </div>
                   <div className="flex items-center gap-1">
                     {item.inlineLaunch ? <button type="button" disabled={itemActionsDisabled} onClick={() => onItemAction('HOME_ACTION', item.homeActionId, item.inlineLaunch!.message, item.inlineLaunch!.operationId, item.inlineLaunch!.interactionType, undefined, item.homeActionId)} className={reviewButtonClass}>Review in Ask</button> : item.cta ? <ActionLink action={item.cta} /> : item.watchState && <p className="text-sm text-slate-700">{item.watchState}</p>}
