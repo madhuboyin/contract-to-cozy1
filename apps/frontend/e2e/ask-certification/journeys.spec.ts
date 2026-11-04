@@ -76,13 +76,19 @@ test.describe('journey 7: search across records, work, saved items, conversation
     await expect(opener).toBeFocused();
   });
 
-  test('choosing a result goes to the exact place it lives', async ({ page }) => {
+  test('choosing a result asks its declared question in the conversation already on screen', async ({ page }) => {
     await installDestinationApi(page);
     await page.goto(`/dashboard/ask/work?${home}`);
     await page.getByRole('button', { name: /Search your home/ }).first().click();
     await page.getByRole('dialog').getByRole('combobox').fill('furnace');
-    await page.getByRole('dialog').getByRole('option', { name: /Furnace manual/ }).first().click();
-    await expect(page).toHaveURL(/\/dashboard\/ask\/record\?propertyId=ask-property-fixture&section=documents&recordId=/);
+    const option = page.getByRole('dialog').getByRole('option', { name: /Furnace manual/ }).first();
+    await expect(option).toBeVisible({ timeout: 15000 });
+    // Everything is inline now: Work opens as a conversation, and a record result asks the question the server declared in it (no page change).
+    await page.evaluate(() => { (window as unknown as { __asked: unknown[] }).__asked = []; window.addEventListener('ask:ask-question', (event) => (window as unknown as { __asked: unknown[] }).__asked.push((event as CustomEvent).detail)); });
+    await option.click();
+    await expect(page.getByRole('dialog')).toBeHidden();
+    const asked = await page.evaluate(() => (window as unknown as { __asked: Array<{ propertyId: string; question: string; from: string }> }).__asked);
+    expect(asked).toEqual([{ propertyId, question: 'Show me my manuals.', from: 'search' }]);
   });
 
   test('a search with no match says so instead of staying blank', async ({ page }) => {
