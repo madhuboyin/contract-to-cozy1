@@ -70,10 +70,19 @@ describe('calm review and unknown outcome', () => {
     expect(screen.getByRole('button', { name: 'Create task' })).toBeDisabled();
   });
 
-  it('lays review fields out as a compact two-column grid on wider screens', () => {
+  it('expands field-heavy reviews to a three-column desktop panel', () => {
     const fields = Array.from({ length: 6 }, (_, index) => ({ label: `Field ${index + 1}`, value: `Value ${index + 1}` }));
     const { container } = card(execution({ status: 'NEEDS_CONFIRMATION', confirmation: { ...confirmation, fields }, blocks: [] } as Partial<AskExecutionResponse>));
-    expect(container.querySelector('[data-confirmation-fields]')).toHaveClass('sm:grid-cols-2');
+    expect(container.querySelector('[data-conversational-review]')).toHaveClass('w-full', 'max-w-[880px]');
+    expect(container.querySelector('[data-conversational-review]')).toHaveAttribute('data-review-density', 'field-heavy');
+    expect(container.querySelector('[data-confirmation-fields]')).toHaveClass('sm:grid-cols-2', 'lg:grid-cols-3');
+  });
+
+  it('keeps short confirmations at the compact reading width', () => {
+    const { container } = card(execution({ status: 'NEEDS_CONFIRMATION', confirmation, blocks: [] } as Partial<AskExecutionResponse>));
+    expect(container.querySelector('[data-conversational-review]')).toHaveClass('w-full', 'max-w-[680px]');
+    expect(container.querySelector('[data-conversational-review]')).toHaveAttribute('data-review-density', 'compact');
+    expect(container.querySelector('[data-confirmation-fields]')).not.toHaveClass('lg:grid-cols-3');
   });
 
   it('a reschedule with no date opens its date picker and blocks Confirm until a date is saved', () => {

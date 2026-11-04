@@ -17,6 +17,13 @@ import { PLANT_ADVISOR_WORKFLOW_WIDTH_CLASS } from '../plantAdvisorLayout';
 import { PushNotificationSetting } from '@/components/system/PushNotificationSetting';
 import { ACCESS_LOST_CODES, FOCUSABLE_SELECTOR, askFailureCode, captureDraftStorageKey, capturePolicy, confirmationAttemptStorageKey, newId, useAutoFocusFirstControl } from './support';
 
+// Pending conversational panels share one responsive measure policy:
+// compact prompts remain easy to scan, while field-heavy reviews can use the
+// desktop workspace instead of wrapping into a tall, narrow card.
+const COMPACT_PENDING_PANEL = 'w-full max-w-[680px]';
+const FIELD_HEAVY_REVIEW_PANEL = 'w-full max-w-[880px]';
+const FIELD_HEAVY_REVIEW_MIN_FIELDS = 6;
+
 /** The one rule the warranty forms share: the expiration date must be after the start date (the server enforces it too). */
 const warrantyDateOrder = (values: Record<string, string>): Record<string, string> => (
   values.startDate && values.expiryDate && values.expiryDate <= values.startDate ? { expiryDate: 'The expiration date must be after the start date.' } : {}
@@ -90,7 +97,7 @@ export function PropertySelectionCard({ executionId, onCompleted, autoFocus = fa
   if (properties.length === 0) return null;
 
   return (
-    <section ref={containerRef} className="rounded-2xl border border-teal-200 bg-teal-50/60 p-4" aria-busy={Boolean(selecting)}>
+    <section ref={containerRef} className={cn(COMPACT_PENDING_PANEL, 'rounded-2xl border border-teal-200 bg-teal-50/60 p-4')} aria-busy={Boolean(selecting)} data-pending-panel="property-selection">
       <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-teal-800">Select a home</p>
       <div className="mt-3 flex flex-wrap gap-2">
         {properties.map((property) => (
@@ -129,7 +136,7 @@ export function ClarificationCard({ executionId, clarification, onCompleted, aut
   };
 
   return (
-    <section ref={containerRef} className="rounded-2xl border border-indigo-200 bg-indigo-50/70 p-4" aria-busy={saving}>
+    <section ref={containerRef} className={cn(COMPACT_PENDING_PANEL, 'rounded-2xl border border-indigo-200 bg-indigo-50/70 p-4')} aria-busy={saving} data-pending-panel="clarification">
       <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-indigo-800">One detail needed</p>
       <h3 className="mt-1 font-semibold text-slate-950">{clarification.question}</h3>
       <div className="mt-4 flex flex-wrap gap-2">
@@ -185,6 +192,8 @@ export function editableFieldDisplay(field: AskConfirmationEditableField, value:
 
 export function ConfirmationCard({ executionId, confirmation, onCompleted, autoFocus = false, onAccessLost }: { executionId: string; confirmation: AskConfirmation; onCompleted: (execution: AskExecutionResponse) => void; autoFocus?: boolean; onAccessLost: () => void }) {
   const calm = useCalmAnswers();
+  const fieldCount = confirmation.fields.length + confirmation.editableFields.length;
+  const fieldHeavy = fieldCount >= FIELD_HEAVY_REVIEW_MIN_FIELDS;
   const containerRef = useAutoFocusFirstControl<HTMLElement>(autoFocus);
   const [consent, setConsent] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -294,7 +303,7 @@ export function ConfirmationCard({ executionId, confirmation, onCompleted, autoF
     finally { setSaving(false); }
   };
   return (
-    <section ref={containerRef} data-conversational-review={calm ? '' : undefined} className={calm ? 'w-full max-w-[680px] space-y-3 rounded-2xl border border-slate-200/90 bg-white p-4 shadow-2xs sm:p-5' : 'rounded-2xl border border-violet-200 bg-violet-50/70 p-4'}>
+    <section ref={containerRef} data-conversational-review={calm ? '' : undefined} data-review-density={fieldHeavy ? 'field-heavy' : 'compact'} className={calm ? cn(fieldHeavy ? FIELD_HEAVY_REVIEW_PANEL : COMPACT_PENDING_PANEL, 'space-y-3 rounded-2xl border border-slate-200/90 bg-white p-4 shadow-2xs sm:p-5') : 'rounded-2xl border border-violet-200 bg-violet-50/70 p-4'}>
       {!calm && <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-violet-800">Confirmation required</p>}
       {/* ACUI-005: the stage in plain words. The consent box and the confirm button below are the "Confirm" step. */}
       {calm && (
@@ -309,7 +318,7 @@ export function ConfirmationCard({ executionId, confirmation, onCompleted, autoF
         <h3 className={calm ? 'text-base font-bold leading-snug tracking-tight text-slate-950 sm:text-lg' : 'mt-1 font-semibold text-slate-950'}>{confirmation.title}</h3>
         <p className={calm ? 'mt-0.5 text-xs leading-5 text-slate-600 sm:text-sm' : 'mt-1 text-sm leading-5 text-slate-700'}>{confirmation.description}</p>
       </div>
-      <dl data-confirmation-fields="" className={cn('grid gap-x-5 sm:grid-cols-2', calm ? 'rounded-xl border border-slate-200/80 bg-slate-50/60 px-3.5 py-1' : 'mt-4 rounded-xl border border-violet-100 bg-white px-3')}>
+      <dl data-confirmation-fields="" className={cn('grid gap-x-5 sm:grid-cols-2', fieldHeavy && 'lg:grid-cols-3', calm ? 'rounded-xl border border-slate-200/80 bg-slate-50/60 px-3.5 py-1' : 'mt-4 rounded-xl border border-violet-100 bg-white px-3')}>
         {confirmation.fields.map((field) => <div key={field.label} className="min-w-0 border-b border-slate-200/70 py-2.5 text-sm last:border-b-0 sm:[&:nth-last-child(-n+2)]:border-b-0"><dt className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{field.label}</dt><dd className="mt-0.5 whitespace-pre-wrap font-semibold text-slate-900">{field.value}</dd></div>)}
         {confirmation.editableFields.map((field) => (
           <div key={field.key} className="min-w-0 border-b border-slate-200/70 py-2.5 text-sm last:border-b-0 sm:col-span-2">
