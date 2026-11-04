@@ -501,6 +501,26 @@ function environmentInsightExpiry(insight: EnvironmentInsight): Date | null {
   return boundary;
 }
 
+const WEATHER_PREPARATION_NOW_WINDOW_MS = 72 * 60 * 60 * 1000;
+
+/**
+ * Action-level weather guidance becomes immediate while there is still time
+ * to protect the home. Waiting until the forecast window starts would make a
+ * preparation action urgent only after its useful preparation window closed.
+ * Drought remains a slower-moving planning concern even when its observation
+ * window is current.
+ */
+function environmentInsightPriority(
+  insight: EnvironmentInsight,
+  evaluatedAt: Date,
+  windowStart: Date | null,
+): HomeAction['priority'] {
+  if (insight.category === 'drought' || !windowStart) return 'SOON';
+  return windowStart.getTime() - evaluatedAt.getTime() <= WEATHER_PREPARATION_NOW_WINDOW_MS
+    ? 'NOW'
+    : 'SOON';
+}
+
 const WEATHER_PREPARATION_LINEAGE_PREFIX = 'weather-preparation:';
 
 function weatherPreparationInsightId(action: Pick<HomeAction, 'lineageId' | 'presentation' | 'primaryCta'>): string | null {
@@ -542,7 +562,6 @@ export function adaptEnvironmentInsightsToHomeActions(
       .filter((insightId): insightId is string => Boolean(insightId)),
   );
   const evaluatedAtIso = evaluatedAt.toISOString();
-  const today = evaluatedAtIso.slice(0, 10);
 
   return insights
     .filter((insight) => insight.severity === 'action')
@@ -570,7 +589,7 @@ export function adaptEnvironmentInsightsToHomeActions(
         sourceEntityId: insight.id,
         sourceVersion: 'environment-v1',
         state: 'OPEN',
-        priority: insight.category !== 'drought' && insight.effectiveFrom.slice(0, 10) <= today ? 'NOW' : 'SOON',
+        priority: environmentInsightPriority(insight, evaluatedAt, windowStart),
         signal: insight.title,
         whyItMatters: `${insight.summary} ${insight.homeImplication}`.trim(),
         recommendedAction: insight.recommendedActions[0] ?? primary?.label ?? 'Review the environment outlook',

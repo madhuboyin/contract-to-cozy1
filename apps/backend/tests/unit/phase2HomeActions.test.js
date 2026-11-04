@@ -167,6 +167,33 @@ test('NOW and SOON actions always precede PLAN and CONSIDER regardless of score'
   assert.deepEqual(result.map(action => action.id), ['soon', 'planned-high-score']);
 });
 
+test('near-term weather preparation ranks ahead of appliance replacement planning', () => {
+  const heavyRain = actionFixture('environment:heavy-rain', {
+    priority: 'NOW',
+    signal: 'Heavy rain expected Friday, Nov 6',
+    job: 'STAY_AHEAD',
+  });
+  heavyRain.governance.safetyTier = 'LOW_CONSEQUENCE';
+
+  const dishwasher = actionFixture('home-capital-timeline-window:dishwasher', {
+    priority: 'SOON',
+    signal: 'Dishwasher replacement window is approaching',
+    job: 'MAJOR_MOMENT',
+  });
+  dishwasher.governance.safetyTier = 'MATERIAL_FINANCIAL';
+
+  const refrigerator = actionFixture('home-capital-timeline-window:refrigerator', {
+    priority: 'SOON',
+    signal: 'Refrigerator replacement window is approaching',
+    job: 'MAJOR_MOMENT',
+  });
+  refrigerator.governance.safetyTier = 'MATERIAL_FINANCIAL';
+
+  const result = rankAndDeduplicateHomeActions([dishwasher, refrigerator, heavyRain]);
+
+  assert.equal(result[0].id, 'environment:heavy-rain');
+});
+
 test('exploratory onboarding does not manufacture a high-priority setup action', () => {
   assert.equal(activationPriorityForTrigger('NONE_EXPLORING'), 'CONSIDER');
   assert.equal(activationPriorityForTrigger('REPAIR'), 'NOW');

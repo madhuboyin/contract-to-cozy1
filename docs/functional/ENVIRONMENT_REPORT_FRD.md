@@ -353,6 +353,7 @@ Every insight must support:
 - FR-12.6: Property setup remains a secondary refinement prompt and must not replace a grounded outlook.
 - FR-12.7: Exploratory onboarding with `NONE_EXPLORING` must not manufacture a high-priority setup action.
 - FR-12.8: Environment action reminders must stay inside the effective weather window; a fixed seven-day reminder must not outlive the condition.
+- FR-12.9: An `action`-severity weather insight must become a canonical `NOW` Home Action when its forecast window starts within 72 hours, so damage-prevention preparation ranks ahead of `SOON` planning work. Slow-moving drought guidance remains `SOON`; this promotion does not relabel a computed forecast as an official emergency alert.
 
 ---
 

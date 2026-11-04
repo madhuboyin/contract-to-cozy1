@@ -35,7 +35,7 @@ function environmentInsight(overrides = {}) {
   };
 }
 
-test('promotes only current action-severity environment insights and caps the Home list at two', () => {
+test('promotes only current action-severity environment insights, opens the 72-hour preparation window, and caps the Home list at two', () => {
   const actions = adaptEnvironmentInsightsToHomeActions('property-1', [
     environmentInsight(),
     environmentInsight({ id: 'watch-1', severity: 'watch' }),
@@ -46,13 +46,21 @@ test('promotes only current action-severity environment insights and caps the Ho
 
   assert.deepEqual(actions.map((action) => action.id), ['environment:heat-2026-07-20', 'environment:storm-1']);
   assert.equal(actions[0].source.kind, 'MAINTENANCE');
-  assert.equal(actions[0].priority, 'SOON');
+  assert.equal(actions[0].priority, 'NOW');
   assert.equal(actions[0].primaryCta.kind, 'START');
   assert.equal(actions[0].primaryCta.label, 'Start preparation');
   assert.deepEqual(actions[0].presentation.factGroups[0].facts.map((fact) => fact.value), [
     'Inspect the HVAC filter before the heat arrives.',
   ]);
   assert.equal(actions[0].timing.windowEnd, '2026-07-21T23:59:59.999Z');
+});
+
+test('keeps actionable weather outside the 72-hour preparation window at SOON', () => {
+  const [action] = adaptEnvironmentInsightsToHomeActions('property-1', [
+    environmentInsight({ effectiveFrom: '2026-07-23', effectiveTo: '2026-07-24' }),
+  ], [], NOW);
+
+  assert.equal(action.priority, 'SOON');
 });
 
 test('promotes an environment insight to NOW when its forecast window has started', () => {
