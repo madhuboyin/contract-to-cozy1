@@ -7,7 +7,7 @@ import { AskExecution, AskExecutionStatus, HouseholdRole } from '@prisma/client'
 import { prisma } from '../../../lib/prisma';
 import { ASK_RESPONSE_SCHEMA_VERSION, AskPresentationBlockSchema, type AskExecutionResponse, type CreateAskExecutionRequest } from '../../../productFramework/ask/ask.contract';
 import { readAskOperationalControls } from '../../../config/askOperationalControls';
-import { askInlineCapturesTotal, askRemoteGenerationTotal, askSkillAdapterExecutionDurationSeconds, askSkillAdapterExecutionsTotal, askSkillAdapterResolutionDurationSeconds, askSkillCanonicalOperationDurationSeconds, askSkillExecutionDurationSeconds, askSkillExecutionsTotal, askSkillHandoffsTotal } from '../../../lib/metrics';
+import { askInlineCapturesTotal, askTurnStageDurationSeconds, askRemoteGenerationTotal, askSkillAdapterExecutionDurationSeconds, askSkillAdapterExecutionsTotal, askSkillAdapterResolutionDurationSeconds, askSkillCanonicalOperationDurationSeconds, askSkillExecutionDurationSeconds, askSkillExecutionsTotal, askSkillHandoffsTotal } from '../../../lib/metrics';
 import { type PropertyAccess } from '../../propertyAccess.service';
 import { composeSkillContext } from '../../skills/context/skillContextComposer';
 import { skillContextProviderKey } from '../../skills/context/skillContextProviderRegistry';
@@ -422,12 +422,15 @@ export async function executeOperation(input: { userId: string; sessionId: strin
   const finalize = async (): Promise<AskOperationResult> => {
     const controls = readAskOperationalControls();
     const skillHandoff = resolveAskSkillHandoff({ operationId: input.operation.operationId, result, propertyId: input.propertyId, launchContext: input.launchContext, recentCompletedOperationIds });
+    // Phase 0 measurement: the real suggested-next-action finalization for ordinary answers runs here, inside ROUTE_AND_EXECUTE, so it is timed on its own.
+    const finalizeStartedAt = Date.now();
     const suggestionAwareResult = await finalizeSuggestedNextActions({
       result: { ...result, skillHandoff }, executionId: input.executionId, userId: input.userId, sessionId: input.sessionId,
       propertyId: input.propertyId ?? null, operationId: input.operation.operationId, message: input.message,
       completedSemanticKeyHashes: () => loadCompletedSuggestedActionKeyHashes({ executionId: input.executionId, sessionId: input.sessionId, userId: input.userId }),
       recentCompletedMessages,
     });
+    askTurnStageDurationSeconds.observe({ stage: 'SUGGESTION_FINALIZE', operation: input.operation.operationId }, (Date.now() - finalizeStartedAt) / 1000);
     const validation = validateAskAnswerTrustPipeline({
       question: input.message,
       operationId: input.operation.operationId,

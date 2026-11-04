@@ -62,7 +62,7 @@ export const askExecutionDurationSeconds = new Histogram({
 // UX-01 (consolidated plan Phase 0): where one Ask turn's time goes, so latency work is guided by measurement. `stage` is a fixed set,
 // `operation` comes from the registry; no homeowner text or extracted value is ever a label. DURABLE_BASE_RESULT is the time from
 // execution start until the validated base result is persisted, as distinct from the whole API turn (TURN_TOTAL).
-export const ASK_TURN_STAGES = ['ROUTE_AND_EXECUTE', 'SYNTHESIS', 'ACTIONS_FINALIZE', 'TRUST_VALIDATION', 'PERSIST_BASE', 'DURABLE_BASE_RESULT', 'POST_PERSIST_EVENTS', 'PROPERTY_SUMMARY', 'INLINE_EXTRACTION', 'TURN_TOTAL'] as const;
+export const ASK_TURN_STAGES = ['ROUTE_AND_EXECUTE', 'SYNTHESIS', 'ACTIONS_FINALIZE', 'SUGGESTION_FINALIZE', 'TRUST_VALIDATION', 'PERSIST_BASE', 'DURABLE_BASE_RESULT', 'POST_PERSIST_EVENTS', 'PROPERTY_SUMMARY', 'INLINE_EXTRACTION', 'TURN_TOTAL'] as const;
 export type AskTurnStage = typeof ASK_TURN_STAGES[number];
 export const askTurnStageDurationSeconds = new Histogram({
   name: 'ask_turn_stage_duration_seconds',
