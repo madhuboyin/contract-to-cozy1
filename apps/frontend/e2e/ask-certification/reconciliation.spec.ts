@@ -207,7 +207,7 @@ test.describe('journey 8: a viewer can read, and every write is refused in words
 });
 
 test.describe('journey 9: the model path is down, and everything deterministic still works', () => {
-  test('asking fails in words and keeps the question, while Record, Work, Saved, Search and Notifications all still load', async ({ page }) => {
+  test('asking fails in words and keeps the question, while the old destination addresses still route into Ask and home search still works', async ({ page }) => {
     await installAskApi(page);
     const api = await installDestinationApi(page, { catchAll: false });
     const modelCalls: string[] = [];
@@ -222,17 +222,29 @@ test.describe('journey 9: the model path is down, and everything deterministic s
     await expect(box).toHaveValue('What needs my attention this week?');
     expect(modelCalls.length).toBeGreaterThan(0);
 
+    // Record, Work, Saved and Notifications are answers in the conversation now, so their old addresses are redirects that ask a question in Ask.
+    // Each old address lands in Ask for the same home with that question already asked (the model refusal then shows in the conversation, as above).
+    const redirects = [
+      ['record', 'Browse my home record'], ['work', 'What needs me?'], ['saved', 'Show my saved results'], ['notifications', "What's new?"],
+    ] as const;
+    for (const [view, question] of redirects) {
+      await page.goto(`/dashboard/ask/${view}?${home}`);
+      await page.waitForURL(/\/dashboard\/ask\?/, { timeout: 20000 });
+      const location = new URL(page.url());
+      expect(location.pathname).toBe('/dashboard/ask');
+      expect(location.searchParams.get('propertyId')).toBe(propertyId);
+      expect(location.searchParams.get('question')).toBe(question);
+    }
+
+    // Home search is deterministic: with the model path refused it still finds the record, and opening the search asks the model for nothing.
+    await page.goto(`/dashboard/ask?${home}`);
+    await expect(page.getByRole('button', { name: /Search your home/ }).first()).toBeVisible({ timeout: 20000 });
+    await page.waitForLoadState('networkidle');
     const before = modelCalls.length;
-    await page.goto(`/dashboard/ask/record?${home}&section=documents`);
-    await expect(page.getByText('Furnace manual').first()).toBeVisible({ timeout: 20000 });
-    await page.goto(`/dashboard/ask/work?${home}`);
-    await expect.poll(() => api.calls.includes('work'), { timeout: 20000 }).toBe(true);
-    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
-    await page.goto(`/dashboard/ask/saved?${home}`);
-    await expect(page.getByText('Home reference brief').first()).toBeVisible({ timeout: 20000 });
-    await page.goto(`/dashboard/ask/notifications?${home}`);
-    await expect.poll(() => api.calls.includes('notifications'), { timeout: 20000 }).toBe(true);
-    // None of those reads asked the model path for anything.
+    await page.getByRole('button', { name: /Search your home/ }).first().click();
+    await page.getByRole('dialog').getByRole('combobox').fill('furnace');
+    await expect(page.getByRole('dialog').getByText('Furnace manual').first()).toBeVisible({ timeout: 20000 });
+    expect(api.calls).toContain('search');
     expect(modelCalls.length).toBe(before);
   });
 });
