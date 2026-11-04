@@ -550,7 +550,11 @@ async function homeActionsResult(userId: string, propertyId: string, message: st
       type: 'PRIORITY_LIST',
       id: 'home-actions-priority-list',
       title: 'What matters now',
-      ...buildPriorityListView({ ...feed, actions: priorityActions }, 'ASK', { suppressedHomeActionIds, excludeSuppressed: true }),
+      ...buildPriorityListView({ ...feed, actions: priorityActions }, 'ASK', {
+        suppressedHomeActionIds,
+        excludeSuppressed: true,
+        includeControls: access.role !== HouseholdRole.VIEWER,
+      }),
       // Counts come from the whole visible governed feed (Consider included), never from the 8 cards shown.
       ...(dashboardSection ? {} : { filters: homeActionTimingFilters(visibleBuckets, priorityFilter) }),
     });

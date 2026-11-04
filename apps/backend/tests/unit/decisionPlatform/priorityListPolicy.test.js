@@ -11,6 +11,7 @@ const {
   derivePriorityListItemState,
   buildPriorityListView,
 } = require('../../../src/services/decisionPlatform/priorityListPolicy.ts');
+const { AskPresentationBlockSchema } = require('../../../src/productFramework/ask/ask.contract.ts');
 
 function rankedAction(overrides = {}) {
   const {
@@ -34,7 +35,13 @@ function rankedAction(overrides = {}) {
     state,
     signal: `Signal for ${id}`,
     recommendedAction: `Do the thing for ${id}`,
-    presentation: { headline: `Headline for ${id}`, summary: `Homeowner summary for ${id}`, whyNow: `Homeowner reason for ${id}` },
+    whyItMatters: `Why ${id} matters`,
+    expectedOutcome: `Expected outcome for ${id}`,
+    presentation: {
+      variant: 'GENERIC_ACTION', eyebrow: 'Home action', headline: `Headline for ${id}`,
+      summary: `Homeowner summary for ${id}`, whyNow: `Homeowner reason for ${id}`,
+      keyFacts: [], factGroups: [], subject: null, detailLabel: 'Review details', group: null,
+    },
     timing: { dueAt, windowStart: null, windowEnd: null, rationale: 'because' },
     evidence: [{ id: `${id}-evidence`, freshness, label: 'Evidence', source: 'test', observedAt: null, confidence: null }],
     confidence: { score: 0.8, label: 'HIGH', missing: [] },
@@ -51,6 +58,7 @@ function rankedAction(overrides = {}) {
     governance: { safetyTier },
     primaryCta: { kind: 'REVIEW', label: ctaLabel, href: ctaHref },
     secondaryCtas: [],
+    feedbackControls: ['ACKNOWLEDGE'],
     relatedJourneyId,
     workItem,
     ranking: { rank: 1, score: 0, explanation: '', components },
@@ -106,14 +114,19 @@ test('comparativeReasonCodes is empty for the last visible item (no "next" to co
 test('priority list carries governed homeowner copy separately from comparative ranking codes', () => {
   const action = rankedAction({ id: 'chimney' });
   action.presentation = {
+    variant: 'SEASONAL_CHECKLIST', eyebrow: 'Fall checklist',
     headline: 'Fall checklist: Chimney cleaning and inspection',
     summary: 'This is a fall checklist task. Can help prevent chimney fires and carbon monoxide hazards.',
     whyNow: 'This is a fall checklist task. Can help prevent chimney fires and carbon monoxide hazards.',
+    keyFacts: [{ label: 'Season', value: 'Fall' }, { label: 'Progress', value: '3 of 8 complete' }],
+    factGroups: [], subject: null, detailLabel: 'Review checklist', group: { kind: 'SEASONAL_CHECKLIST', itemCount: 8 },
   };
 
   const view = buildPriorityListView({ propertyId: 'property-1', generatedAt: '2026-11-04T12:00:00.000Z', actions: [action, rankedAction({ id: 'next' })] }, 'ASK');
 
   assert.equal(view.items[0].whyThisAppeared, 'This is a fall checklist task. Can help prevent chimney fires and carbon monoxide hazards.');
+  assert.equal(view.items[0].presentation.kind, 'SEASONAL');
+  assert.deepEqual(view.items[0].presentation.keyFacts, [{ label: 'Season', value: 'Fall' }, { label: 'Progress', value: '3 of 8 complete' }]);
   assert.ok(view.items[0].comparativeReasonCodes.length > 0, 'audit codes remain available without becoming homeowner copy');
 });
 
@@ -169,7 +182,64 @@ test('buildPriorityListView never reorders the already-ranked feed and stamps th
     interactionType: 'CONVERSATION_CONTINUE',
     operationId: 'HOME_ACTIONS',
     message: 'What should I do next for “Headline for a”?',
+    label: 'Review details',
   });
+});
+
+test('weather presentation preserves impact, preparation, forecast window, source, and reversible controls', () => {
+  const action = rankedAction({ id: 'heavy-rain', ctaLabel: 'Start preparation' });
+  action.presentation = {
+    variant: 'ENVIRONMENT_PREPARATION', eyebrow: 'Environment action recommended',
+    headline: 'Heavy rain expected Friday, Nov 6', summary: 'About 2.3 inches of rain is forecast.',
+    whyNow: 'Heavy rain can overwhelm exterior drainage.',
+    keyFacts: [{ label: 'Forecast window', value: 'Nov 5–Nov 6' }], factGroups: [], subject: null,
+    detailLabel: 'Preparation steps', group: null,
+  };
+  action.whyItMatters = 'Heavy rain can overwhelm gutters and cause water intrusion.';
+  action.recommendedAction = 'Clear gutters and exterior drains before rain begins.';
+  action.expectedOutcome = 'Reduce avoidable water intrusion.';
+  action.timing = { dueAt: '2026-11-06T00:00:00.000Z', windowStart: '2026-11-05T00:00:00.000Z', windowEnd: '2026-11-06T23:59:59.999Z', rationale: 'Prepare before the rain begins.' };
+  action.evidence = [{ id: 'rain-source', freshness: 'CURRENT', label: 'Heavy rain', source: 'Open-Meteo forecast and property profile', observedAt: '2026-11-04T12:00:00.000Z', confidence: 0.9 }];
+  action.feedbackControls = ['ACKNOWLEDGE', 'SNOOZE', 'NOT_RELEVANT'];
+
+  const [item] = buildPriorityListView({ propertyId: 'property-1', generatedAt: '2026-11-04T12:00:00.000Z', actions: [action] }, 'ASK').items;
+
+  assert.equal(item.presentation.kind, 'WEATHER');
+  assert.equal(item.presentation.whyItMatters, action.whyItMatters);
+  assert.equal(item.presentation.recommendedAction, action.recommendedAction);
+  assert.equal(item.presentation.timing.windowEnd, action.timing.windowEnd);
+  assert.equal(item.presentation.source.label, 'Open-Meteo forecast and property profile');
+  assert.deepEqual(item.presentation.controls, [
+    { command: 'ACKNOWLEDGE', label: 'Acknowledge' },
+    { command: 'SNOOZE', label: 'Remind tomorrow' },
+  ]);
+  assert.equal(item.inlineLaunch.label, 'View preparation steps');
+});
+
+test('priority projection removes mutation controls for a read-only viewer without removing context', () => {
+  const action = rankedAction({ id: 'viewer-action' });
+  action.feedbackControls = ['ACKNOWLEDGE', 'SNOOZE'];
+  const [item] = buildPriorityListView(
+    { propertyId: 'property-1', generatedAt: '2026-11-04T12:00:00.000Z', actions: [action] },
+    'ASK',
+    { includeControls: false },
+  ).items;
+  assert.deepEqual(item.presentation.controls, []);
+  assert.equal(item.presentation.summary, 'Homeowner summary for viewer-action');
+});
+
+test('priority-list schema accepts the enriched projection and defaults legacy stored rows', () => {
+  const view = buildPriorityListView(
+    { propertyId: 'property-1', generatedAt: '2026-11-04T12:00:00.000Z', actions: [rankedAction()] },
+    'ASK',
+  );
+  const enriched = AskPresentationBlockSchema.parse({ type: 'PRIORITY_LIST', id: 'home-actions-priority-list', title: 'What matters now', ...view });
+  assert.equal(enriched.items[0].presentation.kind, 'GENERIC');
+
+  const legacyItem = { ...view.items[0], presentation: undefined, inlineLaunch: { ...view.items[0].inlineLaunch, label: undefined } };
+  const legacy = AskPresentationBlockSchema.parse({ type: 'PRIORITY_LIST', id: 'legacy', title: 'What matters now', ...view, items: [legacyItem] });
+  assert.equal(legacy.items[0].presentation, null);
+  assert.equal(legacy.items[0].inlineLaunch.label, 'Review details');
 });
 
 test('only the Ask channel declares an inline Home Action continuation', () => {

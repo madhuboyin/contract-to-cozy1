@@ -17,7 +17,7 @@
 
 import type { RankedHomeAction } from '../homeActions.service';
 
-export const PRIORITY_LIST_POLICY_VERSION = 'priority-list-policy-v1' as const;
+export const PRIORITY_LIST_POLICY_VERSION = 'priority-list-policy-v2' as const;
 
 export const CONSUMER_PRIORITY_CATEGORIES = ['DO_NOW', 'PLAN_SOON', 'WATCH', 'OPTIONAL', 'NO_ACTION'] as const;
 export type ConsumerPriorityCategory = typeof CONSUMER_PRIORITY_CATEGORIES[number];
@@ -130,7 +130,21 @@ export interface PriorityListItemView {
   deadlineAt: string | null;
   dependencyRefs: string[];
   cta: { id: string; label: string; href: string; style: 'PRIMARY' | 'SECONDARY' | 'QUIET' } | null;
-  inlineLaunch: { interactionType: 'CONVERSATION_CONTINUE'; operationId: 'HOME_ACTIONS'; message: string } | null;
+  inlineLaunch: { interactionType: 'CONVERSATION_CONTINUE'; operationId: 'HOME_ACTIONS'; message: string; label: string } | null;
+  presentation: {
+    kind: 'WEATHER' | 'SEASONAL' | 'GENERIC';
+    variant: NonNullable<RankedHomeAction['presentation']>['variant'];
+    eyebrow: string | null;
+    summary: string;
+    whyItMatters: string;
+    recommendedAction: string;
+    expectedOutcome: string;
+    detailLabel: string;
+    timing: { windowStart: string | null; windowEnd: string | null; rationale: string };
+    keyFacts: Array<{ label: string; value: string }>;
+    source: { label: string; observedAt: string | null; freshness: string } | null;
+    controls: Array<{ command: 'ACKNOWLEDGE' | 'DEFER' | 'SNOOZE'; label: string }>;
+  } | null;
   watchState: string | null;
   suppressed: boolean;
   completed: boolean;
@@ -163,7 +177,7 @@ export type PriorityListChannel = keyof typeof PRIORITY_LIST_CHANNEL_DISPLAY_LIM
 export function buildPriorityListView(
   feed: { propertyId: string; generatedAt: string; actions: RankedHomeAction[] },
   channel: PriorityListChannel,
-  options: { suppressedHomeActionIds?: ReadonlySet<string>; excludeSuppressed?: boolean } = {},
+  options: { suppressedHomeActionIds?: ReadonlySet<string>; excludeSuppressed?: boolean; includeControls?: boolean } = {},
 ): PriorityListView {
   const displayLimit = PRIORITY_LIST_CHANNEL_DISPLAY_LIMITS[channel];
   // Suppression is useful in diagnostic/admin projections, but homeowner-facing
@@ -180,6 +194,20 @@ export function buildPriorityListView(
     const cta = !state.unavailable && action.primaryCta.href && action.primaryCta.label
       ? { id: action.id, label: action.primaryCta.label, href: action.primaryCta.href, style: 'PRIMARY' as const }
       : null;
+    const presentationKind = action.presentation?.variant === 'ENVIRONMENT_PREPARATION' || action.presentation?.variant === 'WEATHER_ALERT'
+      ? 'WEATHER' as const
+      : action.presentation?.variant === 'SEASONAL_CHECKLIST' || action.presentation?.group?.kind === 'SEASONAL_CHECKLIST'
+        ? 'SEASONAL' as const
+        : 'GENERIC' as const;
+    const remindCommand = action.feedbackControls.includes('DEFER')
+      ? 'DEFER' as const
+      : action.feedbackControls.includes('SNOOZE')
+        ? 'SNOOZE' as const
+        : null;
+    const controls: Array<{ command: 'ACKNOWLEDGE' | 'DEFER' | 'SNOOZE'; label: string }> = options.includeControls === false || state.unavailable || state.completed ? [] : [
+      ...(action.feedbackControls.includes('ACKNOWLEDGE') ? [{ command: 'ACKNOWLEDGE' as const, label: 'Acknowledge' }] : []),
+      ...(remindCommand ? [{ command: remindCommand, label: presentationKind === 'WEATHER' ? 'Remind tomorrow' : 'Remind me later' }] : []),
+    ];
     return {
       homeActionId: action.id,
       title: action.presentation?.headline ?? action.recommendedAction,
@@ -194,11 +222,38 @@ export function buildPriorityListView(
       deadlineAt: action.timing.dueAt,
       dependencyRefs: action.relatedJourneyId ? [action.relatedJourneyId] : [],
       cta,
+      presentation: action.presentation ? {
+        kind: presentationKind,
+        variant: action.presentation.variant,
+        eyebrow: action.presentation.eyebrow,
+        summary: action.presentation.summary,
+        whyItMatters: action.whyItMatters,
+        recommendedAction: action.recommendedAction,
+        expectedOutcome: action.expectedOutcome,
+        detailLabel: action.presentation.detailLabel,
+        timing: {
+          windowStart: action.timing.windowStart,
+          windowEnd: action.timing.windowEnd,
+          rationale: action.timing.rationale,
+        },
+        keyFacts: action.presentation.keyFacts.slice(0, 8),
+        source: action.evidence[0] ? {
+          label: action.evidence[0].source,
+          observedAt: action.evidence[0].observedAt ?? null,
+          freshness: action.evidence[0].freshness,
+        } : null,
+        controls,
+      } : null,
       inlineLaunch: channel === 'ASK'
         ? {
             interactionType: 'CONVERSATION_CONTINUE' as const,
             operationId: 'HOME_ACTIONS' as const,
             message: `What should I do next for “${action.presentation?.headline ?? action.recommendedAction}”?`.slice(0, 300),
+            label: presentationKind === 'WEATHER'
+              ? 'View preparation steps'
+              : presentationKind === 'SEASONAL'
+                ? 'Review checklist'
+                : action.presentation?.detailLabel ?? 'Review details',
           }
         : null,
       watchState: cta ? null : action.recommendationResponse.safeNextAction,
