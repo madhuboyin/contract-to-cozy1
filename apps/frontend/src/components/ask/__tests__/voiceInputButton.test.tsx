@@ -57,13 +57,18 @@ describe('VoiceInputButton', () => {
     const rec = FakeRecognition.instances[0];
     expect(rec.started).toBe(true);
     expect(rec.interimResults).toBe(true);
-    expect(rec.continuous).toBe(false);
+    expect(rec.continuous).toBe(true);
     expect(screen.getByRole('button', { name: 'Stop dictation' })).toHaveAttribute('aria-pressed', 'true');
     act(() => rec.hear(['furnace', false]));
     expect(screen.getByTestId('box').textContent).toBe('Is my furnace');
     act(() => rec.hear(['furnace still', true]));
     expect(screen.getByTestId('box').textContent).toBe('Is my furnace still');
+    // The browser ending a continuous session by itself does not end dictation; the person's stop does.
     act(() => rec.onend?.());
+    expect(screen.getByRole('button', { name: 'Stop dictation' })).toBeInTheDocument();
+    expect(FakeRecognition.instances).toHaveLength(2);
+    fireEvent.click(screen.getByRole('button', { name: 'Stop dictation' }));
+    act(() => FakeRecognition.instances[1].onend?.());
     expect(screen.getByRole('button', { name: 'Dictate your question' })).toBeInTheDocument();
     expect(screen.getByTestId('box').textContent).toBe('Is my furnace still');
   });

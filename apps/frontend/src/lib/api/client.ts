@@ -1245,7 +1245,7 @@ class APIClient {
   async resolveAskExecutionProperty(executionId: string, propertyId: string): Promise<APIResponse<AskExecutionResponse>> {
     return this.request<AskExecutionResponse>(`/api/ask/executions/${encodeURIComponent(executionId)}/property`, { method: 'POST', body: { propertyId } });
   }
-  async requestAskCorrection(executionId: string, kind: 'HOME_RECORD' | 'RETRY_RESPONSE' | 'INTENT' | 'ENTITY'): Promise<APIResponse<{ executionId: string; href: string }>> {
+  async requestAskCorrection(executionId: string, kind: 'HOME_RECORD' | 'RETRY_RESPONSE' | 'INTENT' | 'ENTITY'): Promise<APIResponse<{ executionId: string; href: string; execution?: AskExecutionResponse }>> {
     return this.request(`/api/ask/executions/${encodeURIComponent(executionId)}/corrections`, { method: 'POST', body: { kind } });
   }
   async submitAskCapture(executionId: string, payload: SubmitAskCapturePayload): Promise<APIResponse<AskExecutionResponse>> {

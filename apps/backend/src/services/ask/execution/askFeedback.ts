@@ -2,17 +2,27 @@
 // docs/architecture/ASK_ORCHESTRATOR_DECOMPOSITION_REVIEW.md). The handler registers itself, and the orchestrator
 // re-exports the names below so existing imports keep working.
 import { prisma } from '../../../lib/prisma';
-import { ASK_RESPONSE_SCHEMA_VERSION, type RequestAskCorrection, type SubmitAskFeedback, type SubmitHomeActionUsefulnessFeedback } from '../../../productFramework/ask/ask.contract';
+import { ASK_RESPONSE_SCHEMA_VERSION, type AskExecutionResponse, type RequestAskCorrection, type SubmitAskFeedback, type SubmitHomeActionUsefulnessFeedback } from '../../../productFramework/ask/ask.contract';
 import { readAskOperationalControls } from '../../../config/askOperationalControls';
 import { askCorrectionsTotal, askFeedbackTotal } from '../../../lib/metrics';
 import { ASK_OPERATION_DEFINITIONS, getAskOperationDefinition, type AskOperationId } from '../askOperationRegistry';
-import { asInputJson, captureFallbackHref, discoverableAskOperationIds, ensurePropertyAccess, preservedExecutionHistory } from '../askHandlerSupport';
+import { asInputJson, captureFallbackHref, discoverableAskOperationIds, ensurePropertyAccess, mapPersistedExecution, preservedExecutionHistory, propertySummary } from '../askHandlerSupport';
 import { recordHomeActionUsefulnessFeedback } from '../../decisionPlatform/homeActionUsefulnessFeedback.service';
 import { recordTypedFeedback } from '../../feedback/typedFeedback.service';
 import type { FeedbackReasonCode } from '../../feedback/feedbackContract';
 import { retrieveAskOperationCandidates } from '../askSemanticRouter';
 
-export async function requestAskCorrection(userId: string, executionId: string, input: RequestAskCorrection): Promise<{ executionId: string; href: string }> {
+// AskClarificationSchema caps an option label at 160 characters and several registered operations describe their first job in more; an
+// over-long label made the saved correction turn fail schema validation and render as an unavailable answer.
+const CLARIFICATION_LABEL_MAX = 160;
+export function clampClarificationLabel(label: string): string {
+  if (label.length <= CLARIFICATION_LABEL_MAX) return label;
+  const cut = label.slice(0, CLARIFICATION_LABEL_MAX - 1);
+  const wordEnd = cut.lastIndexOf(' ');
+  return `${(wordEnd > 80 ? cut.slice(0, wordEnd) : cut).trimEnd()}…`;
+}
+
+export async function requestAskCorrection(userId: string, executionId: string, input: RequestAskCorrection): Promise<{ executionId: string; href: string; execution?: AskExecutionResponse }> {
   const execution = await prisma.askExecution.findFirst({ where: { id: executionId, userId } });
   if (!execution) {
     const error = new Error('Ask execution not found.');
@@ -51,7 +61,7 @@ export async function requestAskCorrection(userId: string, executionId: string, 
         : 'What did you want Ask Cozy to help with?',
       options: input.kind === 'ENTITY' ? [] : candidateOperationIds.map((operationId) => ({
         operationId,
-        label: getAskOperationDefinition(operationId).semantic.supportedJobs[0],
+        label: clampClarificationLabel(getAskOperationDefinition(operationId).semantic.supportedJobs[0]),
       })),
       allowFreeText: true,
       expiresAt,
@@ -86,7 +96,12 @@ export async function requestAskCorrection(userId: string, executionId: string, 
     await prisma.askExecutionEvent.create({ data: { executionId, eventType: 'CORRECTION_REQUESTED', metadataJson: asInputJson({ kind: input.kind, correctionExecutionId: correction.id }) } });
     await prisma.askExecutionEvent.create({ data: { executionId: correction.id, eventType: 'CORRECTION_STARTED', metadataJson: asInputJson({ kind: input.kind, correctionOfExecutionId: execution.id, candidateOperationIds }) } });
     askCorrectionsTotal.inc({ kind: input.kind, outcome: 'started' });
-    return { executionId: correction.id, href: `/dashboard/ask?sessionId=${encodeURIComponent(execution.sessionId)}&executionId=${encodeURIComponent(correction.id)}` };
+    // UX-05 (consolidated plan 1A): the created clarification rides along so the workspace merges it in place; `href` stays for reload/deep-link/failure recovery.
+    // The correction row is already durable: a failed auxiliary property read must not turn that into an API failure (a retry would create a second
+    // correction), so the response simply omits the inline execution and the client falls back to `href`.
+    let inlineExecution: AskExecutionResponse | undefined;
+    try { inlineExecution = mapPersistedExecution(correction, await propertySummary(correction.propertyId)); } catch { inlineExecution = undefined; }
+    return { executionId: correction.id, ...(inlineExecution ? { execution: inlineExecution } : {}), href: `/dashboard/ask?sessionId=${encodeURIComponent(execution.sessionId)}&executionId=${encodeURIComponent(correction.id)}` };
   }
   const href = input.kind === 'RETRY_RESPONSE'
     ? `/dashboard/ask?retryExecutionId=${encodeURIComponent(execution.id)}`

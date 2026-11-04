@@ -1575,6 +1575,10 @@ const AskExecutionResponseBaseSchema = z.object({
   // second full response. Never set for a mutation, entity-pronoun, or
   // pagination continuation -- those are legitimately separate turns.
   continuesExecutionId: z.string().nullable().default(null),
+  // UX-12 (consolidated plan 2B): set when this execution exists only because a result control was used (a next/previous page, or a filter
+  // chip on the result already on screen). The workspace shows such a turn as the updated result, not as a new user message. Derived from the
+  // stored launch context, so it survives reload; typed questions are never marked.
+  viewContinuation: z.enum(['PAGE', 'FILTER']).nullable().default(null),
   // ASK_COZY_INTERACTION_MODEL_UI_FRD RES-001: the three-layer model's
   // "original response" -- frozen the first time this execution's result
   // was ever computed, and never overwritten by a later refresh/confirm/

@@ -8,7 +8,10 @@ import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { cn } from '@/lib/utils';
 import { VoiceInputButton } from './VoiceInputButton';
 import { ComposerIntakeButton } from './intake/ComposerIntakeButton';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { AskIntakeDialog } from './intake/AskIntakeDialog';
+import { RouteContextStarter } from './RouteContextStarter';
+import type { RouteAskContext } from '@/features/ask/routeContext';
 import type { AskAction, AskCapabilityPrompt, AskExecutionResponse, AskPendingWorkItem, AskRecentSessionSummary, AskSessionChange } from '@/features/ask/types';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { track } from '@/lib/analytics/events';
@@ -59,7 +62,7 @@ export { BlockView };
 // The history rail and the draft key moved to ./workspace/; re-exported for existing imports.
 export { ConversationHistoryNav } from './workspace/ConversationHistoryNav';
 export { draftStorageKey } from './workspace/support';
-export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, initialQuestion = '', initialSessionId = '', initialExecutionId = '', initialPropertyId = '', initialBackTo = '', initialBackLabel = 'Back to previous page', initialHistoryOpen = false, launchSurface = '', launchCapabilityId = '', launchRecord }: { mode?: 'page' | 'panel'; onClose?: () => void; onPendingStateChange?: (pending: boolean) => void; initialQuestion?: string; initialSessionId?: string; initialExecutionId?: string; initialPropertyId?: string; initialBackTo?: string; initialBackLabel?: string; initialHistoryOpen?: boolean; launchSurface?: string; launchCapabilityId?: string; launchRecord?: { operationId: string; entityType: string; entityId: string; actionId?: string; decisionThreadId?: string; workItemId?: string; journeyId?: string; contextVersion?: string } }) {
+export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, initialQuestion = '', initialSessionId = '', initialExecutionId = '', initialPropertyId = '', initialBackTo = '', initialBackLabel = 'Back to previous page', initialHistoryOpen = false, launchSurface = '', launchCapabilityId = '', launchRecord, routeContext = null }: { routeContext?: RouteAskContext | null; mode?: 'page' | 'panel'; onClose?: () => void; onPendingStateChange?: (pending: boolean) => void; initialQuestion?: string; initialSessionId?: string; initialExecutionId?: string; initialPropertyId?: string; initialBackTo?: string; initialBackLabel?: string; initialHistoryOpen?: boolean; launchSurface?: string; launchCapabilityId?: string; launchRecord?: { operationId: string; entityType: string; entityId: string; actionId?: string; decisionThreadId?: string; workItemId?: string; journeyId?: string; contextVersion?: string } }) {
   const { accountName, accountEmail, loggingOut, handleLogout } = useAskAccount();
   const { selectedPropertyId, setSelectedPropertyId } = usePropertyContext();
   // A notification deep link carries the answer's property, but the globally-selected property
@@ -88,6 +91,8 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   const [historyLoading, setHistoryLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
+  // UX-10: the page's soft context is cleared by dismissing it or by starting another conversation.
+  const [routeContextDismissed, setRouteContextDismissed] = useState(false);
   const [serviceUnavailable, setServiceUnavailable] = useState(false);
   const [availabilityEpoch, setAvailabilityEpoch] = useState(0);
   const [recentSessionsEpoch, setRecentSessionsEpoch] = useState(0);
@@ -128,6 +133,12 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
     intakeSourceExecutionRef.current = sourceExecution;
     setIntakeOpen(true);
   }, []);
+  // UX-07 (consolidated plan 1C): a file dropped on the workspace or pasted into the composer seeds the existing intake dialog.
+  const [intakeSeedFiles, setIntakeSeedFiles] = useState<File[] | null>(null);
+  const seedFileIntake = (files: FileList | File[], opener: HTMLElement | null) => {
+    setIntakeSeedFiles(Array.from(files));
+    openFileIntake(opener ?? textareaRef.current ?? document.body);
+  };
   const refreshIntakeSource = useCallback(() => {
     const source = intakeSourceExecutionRef.current;
     if (source) void refreshResult(source);
@@ -153,6 +164,8 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   }, [setRecentSessions, setPinnedSessions, setRecentSessionsNextCursor, setRecentSessionsIssue, setSearchSessions, setSearchNextCursor, setSearchIssue, setPendingWork]);
   accessLostRef.current = redactHistoryAccessLoss;
   const landingVisible = executions.length === 0;
+  // Once any conversation exists (a turn was sent, or an earlier one opened) the page's starter has served its purpose; a new conversation does not bring it back.
+  useEffect(() => { if (executions.length > 0) setRouteContextDismissed(true); }, [executions.length]);
   // FRD v1.111 §11.11: the calm shell (one slim header, no helper copy, state strip, docked follow-ups). Off unless chosen.
   const calm = useCalmAnswers();
   // IW-CONV-006 (FRD v1.112): from the moment a question is sent, its turn is on screen: the question, then a status line in the answer's place.
@@ -373,7 +386,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
       {error && <div className="mb-2 flex items-center gap-2 rounded-xl bg-red-50 px-3 py-2 text-xs text-red-700" role="alert"><AlertTriangle className="h-4 w-4 shrink-0" /><span className="min-w-0 flex-1">{error}</span>
         {input.trim() && !loading && sessionId && <button type="button" onClick={() => void ask(input)} className="shrink-0 rounded-lg border border-red-200 bg-white px-2 py-1 font-semibold text-red-800 hover:bg-red-100">Try again</button>}</div>}
       <div className={cn('flex gap-2 border border-slate-300 bg-white p-2 shadow-sm transition focus-within:border-emerald-700 focus-within:ring-2 focus-within:ring-emerald-100', placement === 'hero' ? cn('rounded-2xl p-3 shadow-[0_12px_28px_-20px_rgba(15,23,42,0.45)]', calm && (input.includes('\n') ? 'min-h-16 items-end rounded-3xl border-stone-300 px-4 py-2 shadow-[0_4px_16px_-8px_rgba(15,23,42,0.35)] sm:px-5' : 'min-h-16 items-center rounded-full border-stone-300 px-4 py-2 shadow-[0_4px_16px_-8px_rgba(15,23,42,0.35)] max-sm:flex-wrap max-sm:justify-end max-sm:rounded-3xl sm:px-5')) : 'items-end rounded-2xl')}>
-        <textarea ref={textareaRef} value={input} onChange={(event) => { setInput(event.target.value); if (sessionId) window.localStorage.setItem(draftStorageKey(selectedPropertyId, sessionId), event.target.value); }} onKeyDown={keyDown} onCompositionStart={() => { isComposingRef.current = true; }} onCompositionEnd={() => { isComposingRef.current = false; }} rows={1} maxLength={4000} placeholder={calm && placement === 'hero' && propertyLabel ? `Ask anything about ${propertyLabel}…` : placement === 'footer' && phoneWidth ? 'Ask a follow-up…' : 'Ask anything about your home…'} className={cn('max-h-48 flex-1 resize-none bg-transparent px-1 text-slate-900 outline-none placeholder:text-slate-500', placement === 'hero' ? (calm ? 'min-h-10 py-2 text-base leading-6 max-sm:basis-full' : 'min-h-11 py-2.5 text-base leading-6') : 'min-h-10 py-2 text-sm')} />
+        <textarea ref={textareaRef} onPaste={(event) => { if (event.clipboardData?.files?.length) { event.preventDefault(); if (!loading) seedFileIntake(event.clipboardData.files, event.currentTarget); } }} value={input} onChange={(event) => { setInput(event.target.value); if (sessionId) window.localStorage.setItem(draftStorageKey(selectedPropertyId, sessionId), event.target.value); }} onKeyDown={keyDown} onCompositionStart={() => { isComposingRef.current = true; }} onCompositionEnd={() => { isComposingRef.current = false; }} rows={1} maxLength={4000} placeholder={calm && placement === 'hero' && propertyLabel ? `Ask anything about ${propertyLabel}…` : placement === 'footer' && phoneWidth ? 'Ask a follow-up…' : 'Ask anything about your home…'} className={cn('max-h-48 flex-1 resize-none bg-transparent px-1 text-slate-900 outline-none placeholder:text-slate-500', placement === 'hero' ? (calm ? 'min-h-10 py-2 text-base leading-6 max-sm:basis-full' : 'min-h-11 py-2.5 text-base leading-6') : 'min-h-10 py-2 text-sm')} />
         {latestExecution && composerAffordances.map((affordance) => <AttachEvidenceControl key={affordance.id} variant="composer" label={affordance.label}
           event={{ entityType: affordance.target.entityType, id: affordance.target.id, title: affordance.target.title }} propertyId={selectedPropertyId} disabled={loading || !sessionId}
           onAttached={(documentId) => void ask(affordance.target.message, undefined, { entityType: affordance.target.entityType, entityId: affordance.target.id, sourceExecutionId: latestExecution.executionId, operationId: 'CAPTURE_EVIDENCE_CONFIRM', documentId })} />)}
@@ -381,7 +394,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
         <VoiceInputButton large={placement === 'hero' && !calm} embedded={placement === 'hero' && calm} disabled={loading || !sessionId} getValue={() => inputRef.current}
           onChange={(value) => { setInput(value); if (sessionId) window.localStorage.setItem(draftStorageKey(selectedPropertyId, sessionId), value); }} />
         {loading && inFlight.current
-          ? <button key="stop" type="button" onClick={stopAsking} aria-label="Stop" className={cn('grid shrink-0 place-items-center bg-slate-800 text-white transition hover:bg-slate-900', placement === 'hero' ? 'h-10 w-10 rounded-xl' : 'h-10 w-10 rounded-xl')}><Square className="h-4 w-4" /></button>
+          ? <button key="stop" type="button" onClick={stopAsking} aria-label="Stop" title="Stop waiting. Your question returns to the box; Cozy may still finish, and that answer would be in your history." className={cn('grid shrink-0 place-items-center bg-slate-800 text-white transition hover:bg-slate-900', placement === 'hero' ? 'h-10 w-10 rounded-xl' : 'h-10 w-10 rounded-xl')}><Square className="h-4 w-4" /></button>
           : <button key="send" type="submit" disabled={!input.trim() || loading || !sessionId} aria-label="Send question" className={cn('grid h-10 w-10 shrink-0 place-items-center bg-emerald-900 text-white transition hover:bg-emerald-950 disabled:cursor-not-allowed disabled:opacity-40', placement === 'hero' && calm ? 'rounded-full' : 'rounded-xl')}><Send className="h-4 w-4" /></button>}
       </div>
       {calm ? (input.includes('\n') && <p className="mt-1.5 hidden px-1 text-[11px] text-slate-400 group-focus-within:block">Shift+Enter for a new line</p>) : <div className="mt-2 flex flex-wrap items-center justify-between gap-2 px-1 text-[11px] text-slate-400"><span>Enter to send · Shift+Enter for a new line</span><span className="flex items-center gap-1"><CheckCircle2 className="h-3 w-3" />Record-based when available</span></div>}
@@ -390,8 +403,8 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
 
   return (
     <AskInlineContext.Provider value={inlineApi}>
-    <AskIntakeDialog open={intakeOpen} onOpenChange={setIntakeOpen} presetKind={intakePresetKind} propertyId={selectedPropertyId} returnFocusRef={intakeOpenerRef} onRecordChanged={refreshIntakeSource} />
-    <div data-ask-layout={mode === 'page' ? 'full-window' : 'panel'} className={cn('flex min-h-0 flex-col', mode === 'page' ? 'h-full bg-white' : 'h-full bg-slate-50', calm && 'ask-calm')}>
+    <AskIntakeDialog open={intakeOpen} onOpenChange={setIntakeOpen} presetKind={intakePresetKind} propertyId={selectedPropertyId} returnFocusRef={intakeOpenerRef} onRecordChanged={refreshIntakeSource} seedFiles={intakeSeedFiles} onSeedConsumed={() => setIntakeSeedFiles(null)} />
+    <div data-ask-layout={mode === 'page' ? 'full-window' : 'panel'} onDragOver={(event) => { if (event.dataTransfer?.types?.includes('Files')) event.preventDefault(); }} onDrop={(event) => { if (!event.dataTransfer?.files?.length) return; event.preventDefault(); if (!loading) seedFileIntake(event.dataTransfer.files, null); }} className={cn('flex min-h-0 flex-col', mode === 'page' ? 'h-full bg-white' : 'h-full bg-slate-50', calm && 'ask-calm')}>
       {/* Safe-area padding only changes anything on the mobile full-screen
           sheet (mode="panel" below the lg breakpoint, where this header sits
           flush against the device's actual top edge/notch); env() resolves
@@ -404,6 +417,20 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
           {selectedPropertyId && <IntelligenceRefreshStatus propertyId={selectedPropertyId} compact={calm} />}
           {mode === 'page' && !askUnavailable && <button type="button" aria-label="Open conversation history" onClick={() => setHistoryDrawerOpen(true)} className="inline-flex min-h-10 items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 lg:hidden"><History className="h-4 w-4" /><span className="hidden sm:inline">Conversations</span></button>}
           {mode === 'page' && executions.length > 0 && !askUnavailable && <><button type="button" aria-label="New Ask Cozy session" onClick={startNewSession} className="inline-flex min-h-10 items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-teal-700 hover:bg-teal-50 lg:hidden"><Sparkles className="h-4 w-4" /><span className="hidden sm:inline">New conversation</span></button><button type="button" aria-label="Delete current conversation" onClick={() => setConfirmClear(true)} className="inline-flex min-h-10 items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100"><Trash2 className="h-4 w-4" />{!calm && <span className="hidden md:inline">Delete</span>}</button></>}
+          {/* UX-10 (consolidated plan 1B): the panel reaches the same session lifecycle as the page without leaving the host route. */}
+          {mode === 'panel' && !askUnavailable && <>
+            {executions.length > 0 && <button type="button" aria-label="New Ask Cozy session" disabled={loading} onClick={startNewSession} className="inline-flex min-h-10 items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-teal-700 hover:bg-teal-50 disabled:opacity-50"><Sparkles className="h-4 w-4" aria-hidden="true" /><span className="hidden sm:inline">New</span></button>}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild><button type="button" aria-label="Recent conversations" className="inline-flex min-h-10 items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"><History className="h-4 w-4" aria-hidden="true" /><span className="hidden sm:inline">Recent</span></button></DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="max-h-80 w-72 overflow-y-auto">
+                <DropdownMenuLabel className="text-xs font-normal text-slate-500">Recent conversations</DropdownMenuLabel>
+                {recentSessionsLoading && visibleRecentSessions.length === 0 ? <DropdownMenuItem disabled>Loading…</DropdownMenuItem>
+                  : visibleRecentSessions.length === 0 ? <DropdownMenuItem disabled>No other conversations yet</DropdownMenuItem>
+                  : visibleRecentSessions.slice(0, 8).map((recent) => <DropdownMenuItem key={recent.sessionId} disabled={loading || Boolean(openingRecentSessionId)} onSelect={() => void openRecentSession(recent)}><span className="truncate">{recent.title}</span></DropdownMenuItem>)}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            {executions.length > 0 && <button type="button" aria-label="Delete current conversation" onClick={() => setConfirmClear(true)} className="inline-flex min-h-10 items-center rounded-xl px-3 py-2 text-slate-600 hover:bg-slate-100"><Trash2 className="h-4 w-4" aria-hidden="true" /></button>}
+          </>}
           {mode === 'panel' && <Link href={fullWorkspaceHref} className="inline-flex min-h-10 items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-teal-700 hover:bg-teal-50"><Maximize2 className="h-4 w-4" />Full workspace</Link>}
           {onClose && <button onClick={onClose} className="rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100">Close</button>}
         </div>
@@ -464,6 +491,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
           </section>
         ) : showLanding ? (
           <div className={cn('mx-auto w-full', calm ? 'max-w-[1140px] sm:pt-[2vh]' : 'max-w-4xl')}>
+            {mode === 'panel' && routeContext && !routeContextDismissed && routeContext.propertyId === selectedPropertyId && <RouteContextStarter context={routeContext} disabled={loading} onDismiss={() => setRouteContextDismissed(true)} onStart={(context) => { setRouteContextDismissed(true); void ask(context.starterQuestion, undefined, { entityType: context.entityType, entityId: context.entityId, operationId: context.operationId }); }} />}
             {/* The date, the address and the subhead are gone: the address is in the property selector and the placeholder, and the one line
                 below is the state of the home. The composer is the centre of the page. */}
             {calm ? <h2 className="mb-7 text-[26px] font-semibold leading-tight tracking-[-0.02em] text-[#17231d] sm:mb-9 sm:text-[32px]" data-calm-headline={landingOpening ? 'state' : 'generic'}>{landingOpening ?? 'How can I help with your home?'}</h2>

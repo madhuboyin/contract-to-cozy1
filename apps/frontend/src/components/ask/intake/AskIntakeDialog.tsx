@@ -16,7 +16,9 @@ const PRIMARY_LINK = 'inline-flex min-h-11 items-center justify-center rounded-x
  * involves, then each proposed detail is accepted, edited, rejected or left for later. Nothing reaches the home without "Add to my home" or
  * "Add to inventory". Every step has a keyboard and form path: the camera, drop and paste are shortcuts to the same file chooser.
  */
-export function AskIntakeDialog({ open, onOpenChange, propertyId, returnFocusRef, onRecordChanged, presetKind }: { presetKind?: AskIntakeKind; open: boolean; onOpenChange: (open: boolean) => void; propertyId: string | undefined; returnFocusRef?: React.RefObject<HTMLElement | null>; onRecordChanged?: () => void }) {
+export function AskIntakeDialog({ open, onOpenChange, propertyId, returnFocusRef, onRecordChanged, presetKind, seedFiles, onSeedConsumed }: { presetKind?: AskIntakeKind;
+  // UX-07: files dropped or pasted on the workspace/composer arrive here and take the same one-file path as the dialog's own drop; nothing uploads before the dialog opens.
+  seedFiles?: File[] | null; onSeedConsumed?: () => void; open: boolean; onOpenChange: (open: boolean) => void; propertyId: string | undefined; returnFocusRef?: React.RefObject<HTMLElement | null>; onRecordChanged?: () => void }) {
   const intake = useAskIntake(propertyId, open);
   const { view, config, busy, error } = intake;
   const [kept, setKept] = useState(false);
@@ -38,6 +40,11 @@ export function AskIntakeDialog({ open, onOpenChange, propertyId, returnFocusRef
     setProblem(issue);
     if (file) void intake.upload(file, sensitivity);
   };
+  useEffect(() => {
+    if (!open || !seedFiles || !config || view || busy) return;
+    accept(seedFiles);
+    onSeedConsumed?.();
+  }, [open, seedFiles, config, view, busy]); // eslint-disable-line react-hooks/exhaustive-deps
   const onDrop = (event: DragEvent) => { event.preventDefault(); setDragging(false); accept(event.dataTransfer?.files); };
   const onPaste = (event: ClipboardEvent) => { if (event.clipboardData?.files?.length) { event.preventDefault(); accept(event.clipboardData.files); } };
   const startOver = () => { intake.reset(); setKept(false); setProblem(null); };

@@ -27,7 +27,9 @@ import { ClarificationCard, ConfirmationCard, InlineCaptureCard, PendingOutcomeC
 // list's own section dividers stay, so no answer is a card holding cards.
 const FRAMELESS_LISTS = '[&>section.overflow-hidden]:rounded-none [&>section.overflow-hidden]:border-0 [&>section.overflow-hidden]:bg-transparent [&>section.overflow-hidden>div]:px-0 [&>section.overflow-hidden>div:first-child>h3:first-child]:sr-only [&_section.overflow-hidden_h4]:text-xs [&_section.overflow-hidden_h4]:font-semibold [&_section.overflow-hidden_h4]:uppercase [&_section.overflow-hidden_h4]:tracking-wide [&_section.overflow-hidden_h4]:text-slate-500';
 
-export function ExecutionFeedback({ executionId, propertyId, capabilities, calm = false, leading }: {
+export function ExecutionFeedback({ executionId, propertyId, capabilities, calm = false, leading, onCorrectionExecution }: {
+  // UX-05: same-session intent/entity corrections arrive as an execution and merge in place; without this (or without an execution in the reply) the fallback `href` navigates as before.
+  onCorrectionExecution?: (execution: AskExecutionResponse) => void;
   executionId: string;
   propertyId?: string;
   // IW-CONV-009 (FRD v1.112): the sources chip sits in this row, with the ratings and the corrections menu, as one quiet meta line.
@@ -58,6 +60,11 @@ export function ExecutionFeedback({ executionId, propertyId, capabilities, calm 
     try {
       const response = await api.requestAskCorrection(executionId, kind);
       if (!response.success || !response.data) throw new Error(response.message || 'Could not open the correction workflow.');
+      if (kind !== 'HOME_RECORD' && response.data.execution && onCorrectionExecution) {
+        onCorrectionExecution(response.data.execution);
+        setCorrecting(false);
+        return;
+      }
       window.location.assign(response.data.href);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Could not open the correction workflow.');
@@ -267,12 +274,14 @@ export function ExecutionCard({
   if (refreshAccessLost) return <ResultRevalidationBoundary executionId={execution.executionId} issue={refreshIssue}>{null}</ResultRevalidationBoundary>;
 
   if (isSuperseded) {
+    // UX-12: an older page/filter state of a result is not a conversation turn of its own; only the first answer keeps its earlier-version stub.
+    if (execution.viewContinuation) return null;
     // IW-CONV-003/008 (FRD v1.112): in the calm shell an older version is a one-line stub that opens the same calm presentation,
     // in reduced emphasis and without a frame; it is never a second full copy of the previous look.
     return (
       <CalmChromeContext.Provider value={calmChrome}><CalmAnswerContext.Provider value={calm}>
         <article id={`ask-execution-${execution.executionId}`} data-answer-width={answerWidth.toLowerCase()} className="group mx-auto w-full max-w-[1140px] scroll-mt-28 space-y-3 lg:scroll-mt-32">
-          <div className="ml-auto w-fit max-w-[88%] rounded-2xl rounded-br-md bg-slate-900 px-4 py-3 text-sm leading-6 text-white">{execution.question}</div>
+          {!execution.viewContinuation && <div className="ml-auto w-fit max-w-[88%] rounded-2xl rounded-br-md bg-slate-900 px-4 py-3 text-sm leading-6 text-white">{execution.question}</div>}
           <details className={calmChrome ? undefined : 'rounded-2xl border border-slate-200 bg-slate-50/70 p-3'}>
             <summary className={calmChrome ? 'w-fit cursor-pointer list-none rounded-md px-1 text-xs text-slate-500 hover:text-slate-800 [&::-webkit-details-marker]:hidden' : 'cursor-pointer text-xs font-semibold text-slate-500'}>{calmChrome ? 'Earlier version of this answer · show' : 'Superseded by a refinement below · view original response'}</summary>
             <div className={cn('mr-auto mt-3 w-full space-y-3 opacity-75', askAnswerWidthClass(answerWidth), calmChrome && FRAMELESS_LISTS)}>
@@ -293,8 +302,8 @@ export function ExecutionCard({
       const scrollOffset = event.currentTarget.getBoundingClientRect().top;
       controls.change((view) => ({ ...view, scrollOffset, selectedTaskId: url.searchParams.get('taskId') ?? view.selectedTaskId }));
     }}>
-      <div className="ml-auto w-fit max-w-[88%] rounded-2xl rounded-br-md bg-slate-900 px-4 py-3 text-sm leading-6 text-white">{execution.question}</div>
-      {onEditQuestion && <div className="flex justify-end"><button type="button" disabled={loading} onClick={() => onEditQuestion(execution)} aria-label="Change and resend this question" className="rounded-lg px-2 py-1 text-xs font-semibold text-slate-500 opacity-0 transition hover:bg-slate-100 hover:opacity-100 focus:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 max-lg:opacity-100">Change and resend</button></div>}
+      {!execution.viewContinuation && <div className="ml-auto w-fit max-w-[88%] rounded-2xl rounded-br-md bg-slate-900 px-4 py-3 text-sm leading-6 text-white">{execution.question}</div>}
+      {onEditQuestion && !execution.viewContinuation && <div className="flex justify-end"><button type="button" disabled={loading} onClick={() => onEditQuestion(execution)} aria-label="Change and resend this question" className="rounded-lg px-2 py-1 text-xs font-semibold text-slate-500 opacity-0 transition hover:bg-slate-100 hover:opacity-100 focus:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 max-lg:opacity-100">Change and resend</button></div>}
       <div className={cn('mr-auto w-full', askAnswerWidthClass(answerWidth), calmChrome ? 'space-y-3' : 'space-y-3 rounded-3xl border border-slate-200 bg-white/60 p-3 shadow-sm sm:p-4')}>
         {calmChrome ? <div className="flex items-center justify-between gap-2">
           <h2 ref={headingRef} tabIndex={-1} className="flex items-center gap-2 text-xs font-semibold text-teal-800 focus:outline-none"><span aria-hidden="true" className="grid h-6 w-6 place-items-center rounded-full bg-teal-700 text-[11px] font-bold text-white">C</span><span>Cozy<span className="sr-only"> response</span></span></h2>
@@ -373,7 +382,7 @@ export function ExecutionCard({
           return <div className="w-full max-w-[960px] rounded-2xl border border-teal-200 bg-teal-50/70 p-3"><p className="text-xs font-semibold uppercase tracking-wide text-teal-800">Suggested next step</p><button type="button" disabled={loading} onClick={() => void ask(prompt, undefined, { handoffFromExecutionId: execution.executionId, propertyId: continuity.propertyId ?? undefined, entityType: continuity.sourceEntityType ?? undefined, entityId: continuity.sourceEntityId ?? undefined, actionId: continuity.sourceHomeActionId ?? undefined, decisionThreadId: continuity.decisionThreadId ?? undefined, workItemId: continuity.workItemId ?? undefined, journeyId: continuity.journeyId ?? undefined, contextVersion: continuity.contextVersion ?? undefined, returnTo: continuity.returnDestination ?? undefined })} className="mt-2 min-h-10 rounded-xl border border-teal-300 bg-white px-3 py-2 text-left text-sm font-semibold text-teal-900 hover:border-teal-500 disabled:opacity-50">{label}</button><p className="mt-2 text-xs text-teal-800">Ask will check access, availability, and current home context again before continuing.</p></div>;
         })()}
         {shownSuggestions.length > 0 && <div className="flex flex-wrap gap-2 pt-1">{shownSuggestions.map((suggestion) => <button key={suggestion} onClick={() => { setInput(suggestion); window.localStorage.setItem(draftStorageKey(selectedPropertyId, execution.sessionId), suggestion); }} className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-teal-300 hover:text-teal-800">{suggestion}</button>)}</div>}
-        <ExecutionFeedback executionId={execution.executionId} propertyId={execution.property?.id} capabilities={execution.correctionCapabilities} calm={calmChrome} />
+        <ExecutionFeedback executionId={execution.executionId} propertyId={execution.property?.id} capabilities={execution.correctionCapabilities} calm={calmChrome} onCorrectionExecution={updateExecution} />
         </div>
       </div>
     </article></CalmAnswerContext.Provider></CalmChromeContext.Provider></ResultViewContext.Provider></ResultRevalidationBoundary>

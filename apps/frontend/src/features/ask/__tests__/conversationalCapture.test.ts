@@ -1,4 +1,4 @@
-import { answerLabel, canAskConversationally, hasAnswer, nextStepIndex, stepQuestion } from '../conversationalCapture';
+import { answerLabel, canAskConversationally, dateShortcuts, hasAnswer, nextStepIndex, stepQuestion } from '../conversationalCapture';
 import type { StructuredCaptureField } from '@/components/property-context/featureContextTypes';
 import type { AskCaptureRequest } from '../types';
 
@@ -16,10 +16,19 @@ describe('canAskConversationally', () => {
     expect(canAskConversationally(request({ sensitivity: 'SECURITY' }))).toBe(false);
     expect(canAskConversationally(request({ classification: 'REQUIRED_CALCULATION' }))).toBe(false);
     expect(canAskConversationally(request({ inputSchema: { type: 'SINGLE_SELECT', options: [] } }))).toBe(false);
-    expect(canAskConversationally(request({ inputSchema: { type: 'GROUP', fields: [{ ...cost, inputSchema: { type: 'APPROXIMATE_DATE' } }] } }))).toBe(false);
+    expect(canAskConversationally(request({ inputSchema: { type: 'GROUP', fields: [{ ...cost, inputSchema: { type: 'LONG_TEXT', maxLength: 500 } }] } }))).toBe(false);
+    expect(canAskConversationally(request({ inputSchema: { type: 'GROUP', fields: [{ ...cost, inputSchema: { type: 'DOCUMENT_MULTI_SELECT', options: [{ label: 'A', value: 'a' }] } }] } }))).toBe(false);
     expect(canAskConversationally(request({ inputSchema: { type: 'GROUP', fields: [] } }))).toBe(false);
     // A long group (for example creating a task with six fields) stays one form until grouped/adaptive capture exists (ACUI-007).
-    expect(canAskConversationally(request({ inputSchema: { type: 'GROUP', fields: [task, cost, { ...cost, key: 'a' }, { ...cost, key: 'b' }] } }))).toBe(false);
+    expect(canAskConversationally(request({ inputSchema: { type: 'GROUP', fields: [task, cost, { ...cost, key: 'a' }, { ...cost, key: 'b' }, { ...cost, key: 'c' }, { ...cost, key: 'd' }] } }))).toBe(false);
+    // UX-04: up to five fields, and approximate dates and bounded multi-selects, can be asked one at a time.
+    expect(canAskConversationally(request({ inputSchema: { type: 'GROUP', fields: [task, cost, { ...cost, key: 'a' }, { ...cost, key: 'b' }, { ...cost, key: 'c' }] } }))).toBe(true);
+    expect(canAskConversationally(request({ inputSchema: { type: 'GROUP', fields: [{ ...cost, inputSchema: { type: 'APPROXIMATE_DATE' } }] } }))).toBe(true);
+    expect(canAskConversationally(request({ inputSchema: { type: 'GROUP', fields: [{ ...cost, inputSchema: { type: 'MULTI_SELECT', options: [{ label: 'A', value: 'a' }], maxItems: 2 } }] } }))).toBe(true);
+    expect(canAskConversationally(request({ inputSchema: { type: 'GROUP', fields: [{ ...cost, inputSchema: { type: 'MULTI_SELECT', options: Array.from({ length: 9 }, (_, i) => ({ label: `o${i}`, value: `o${i}` })) } }] } }))).toBe(false);
+    // A capture with a purpose-built layout keeps the original rules.
+    expect(canAskConversationally({ ...request({ inputSchema: { type: 'GROUP', fields: [{ ...cost, inputSchema: { type: 'APPROXIMATE_DATE' } }] } }), captureKey: 'CAPTURE_EVENT_ADD' })).toBe(false);
+    expect(canAskConversationally({ ...request({ inputSchema: { type: 'GROUP', fields: [task, cost, { ...cost, key: 'a' }, { ...cost, key: 'b' }] } }), captureKey: 'SERVICE_PRICE_CHECK_INPUTS' })).toBe(false);
     expect(canAskConversationally(request({ inputSchema: { type: 'GROUP', fields: [task, cost, { ...cost, key: 'a' }] } }))).toBe(true);
   });
 });
@@ -53,5 +62,34 @@ describe('wording', () => {
     expect(answerLabel({ ...cost, inputSchema: { type: 'INTEGER', unit: 'years' } }, 3)).toBe('3 years');
     expect(answerLabel({ ...task, inputSchema: { type: 'BOOLEAN', trueLabel: 'Yes', falseLabel: 'No' } }, false)).toBe('No');
     expect(answerLabel(cost, undefined)).toBeNull();
+  });
+});
+
+describe('UX-04 approximate dates and multi-selects', () => {
+  const when: StructuredCaptureField = { key: 'when', label: 'When', required: true, inputSchema: { type: 'APPROXIMATE_DATE' } };
+  const which: StructuredCaptureField = { key: 'which', label: 'Which', required: true, inputSchema: { type: 'MULTI_SELECT', options: [{ label: 'Roof', value: 'roof' }, { label: 'Gutters', value: 'gutters' }], maxItems: 2 } };
+  it('treats an approximate date as answered only when it carries a value for its precision, or is explicitly unknown', () => {
+    expect(hasAnswer({ precision: 'EXACT_DATE' })).toBe(false);
+    expect(hasAnswer({ precision: 'YEAR', value: '2023' })).toBe(true);
+    expect(hasAnswer({ precision: 'RANGE', value: '2020-01-01' })).toBe(false);
+    expect(hasAnswer({ precision: 'RANGE', value: '2020-01-01', rangeEnd: '2022-12-31' })).toBe(true);
+    expect(hasAnswer({ precision: 'UNKNOWN' })).toBe(true);
+    expect(hasAnswer([])).toBe(false);
+    expect(hasAnswer(['roof'])).toBe(true);
+  });
+  it('reads answers back without claiming more precision than was given', () => {
+    expect(answerLabel(when, { precision: 'YEAR', value: '2023' })).toBe('2023');
+    expect(answerLabel(when, { precision: 'UNKNOWN' })).toBe('Not sure');
+    expect(answerLabel(when, { precision: 'RANGE', value: '2020-01-01', rangeEnd: '2022-12-31' })).toBe('2020-01-01 to 2022-12-31');
+    expect(answerLabel(which, ['roof', 'gutters'])).toBe('Roof, Gutters');
+  });
+  it('offers only shortcuts the field schema permits, and never a future or exact invented date', () => {
+    const now = new Date('2026-11-03T12:00:00');
+    expect(dateShortcuts({}, true, now).map((item) => item.label)).toEqual(['This year', '3–5 years ago', 'Not sure']);
+    expect(dateShortcuts({}, false, now).map((item) => item.label)).toEqual(['This year', '3–5 years ago']);
+    expect(dateShortcuts({ allowedPrecisions: ['EXACT_DATE', 'MONTH'] }, true, now)).toEqual([]);
+    const range = dateShortcuts({}, true, now).find((item) => item.id === 'years-3-5')!.value;
+    expect(range).toEqual({ precision: 'RANGE', value: '2021-01-01', rangeEnd: '2023-12-31' });
+    expect(dateShortcuts({ allowedPrecisions: ['YEAR'] }, true, now).map((item) => item.value.precision)).toEqual(['YEAR']);
   });
 });

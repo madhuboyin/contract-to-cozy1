@@ -7,7 +7,7 @@ import { logger } from '../../../lib/logger';
 import { recordAskCapabilityLifecycle } from '../askCapabilityLifecycle';
 import { ASK_RESPONSE_SCHEMA_VERSION, type AskExecutionResponse, type CreateAskExecutionRequest } from '../../../productFramework/ask/ask.contract';
 import { readAskOperationalControls } from '../../../config/askOperationalControls';
-import { askExecutionDurationSeconds, askExecutionsTotal, askInlineCapturesTotal, askRoutingDecisionsTotal, askSkillRoutingDecisionsTotal, askSkillRoutingDurationSeconds } from '../../../lib/metrics';
+import { askTurnStageDurationSeconds, type AskTurnStage, askExecutionDurationSeconds, askExecutionsTotal, askInlineCapturesTotal, askRoutingDecisionsTotal, askSkillRoutingDecisionsTotal, askSkillRoutingDurationSeconds } from '../../../lib/metrics';
 import { type AskAccountRole } from '../askAccountEligibility';
 import { ASK_OPERATION_DEFINITIONS, getAskOperationDefinition, type AskOperationId, type AskOperationResult } from '../askOperationRegistry';
 import { runConversationalCaptureForTurn } from '../conversationalUnderstanding/conversationalCapture';
@@ -473,6 +473,9 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
     });
   }
   const startedAt = Date.now();
+  let stageMark = startedAt;
+  // UX-01: records the time since the previous mark under a bounded stage label (no homeowner text is ever a label).
+  const markStage = (stage: AskTurnStage, operationId: string) => { const now = Date.now(); askTurnStageDurationSeconds.observe({ stage, operation: operationId }, (now - stageMark) / 1000); stageMark = now; };
   // A clarification-in-progress execution hasn't actually resolved to
   // `operation` yet — that's just the routing cascade's placeholder/best
   // guess among ambiguous candidates. Recording its family here would
@@ -526,9 +529,11 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
         : executeOperation({ userId, sessionId: session.id, executionId: execution.id, message: routingMessage, propertyId: executionPropertyId, operation, launchContext: effectiveLaunchContext, continuationCursor: followUp.continuationCursor, suppliedInput: followUp.suppliedInput, deferSemanticValidation: true }, skillTelemetryTrace),
       controls.executionTimeoutMs,
     );
+    markStage('ROUTE_AND_EXECUTE', operation.operationId);
     const synthesizedResult = operationDefinition.executionMode === 'DETERMINISTIC' && !routingDecision.requiresClarification
       ? await maybeSynthesizeDeterministicResult(operation.operationId, rawResult, controls.resultSynthesisEnabled && controls.remoteGenerationEnabled, skillTelemetryTrace)
       : rawResult;
+    markStage('SYNTHESIS', operation.operationId);
     // A routing clarification is built here rather than in executeOperation, so it needs the shared finalizer itself (plan §7.4).
     const presentedResult = routingDecision.requiresClarification
       ? await finalizeSuggestedNextActions({
@@ -536,6 +541,7 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
         operationId: null, message: routingMessage,
       })
       : synthesizedResult;
+    markStage('ACTIONS_FINALIZE', operation.operationId);
     // The semantic layer guards against routing the wrong operation from free
     // text; a declared item action named its operation explicitly, so a
     // competing-operation score must not turn the clicked control into a
@@ -545,6 +551,7 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
       ? null
       : validateAskAnswerTrustPipeline({ question: routingMessage, operationId: operation.operationId, result: presentedResult, propertyId: executionPropertyId, semanticEnabled: controls.semanticResponseValidatorEnabled && !declaredOperationRan, language: routingDecision.language });
     const result = validation?.result ?? presentedResult;
+    markStage('TRUST_VALIDATION', operation.operationId);
     if (validation) recordAskAnswerTrustMetrics(operation.operationId, validation);
     assertSkillResultBlocksAllowed(operation.operationId, result, skillTelemetryTrace);
     const completedAt = terminalStatus(result.status) ? new Date() : undefined;
@@ -567,6 +574,8 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
         completedAt,
       },
     });
+    markStage('PERSIST_BASE', operation.operationId);
+    askTurnStageDurationSeconds.observe({ stage: 'DURABLE_BASE_RESULT', operation: operation.operationId }, (Date.now() - startedAt) / 1000);
     // A verified starter or action whose answer completed is a completed outcome (non-repeatable ones then stop being offered; repeatable starters rotate).
     if (suggestionResolution?.kind === 'VERIFIED' && isSettledForCompletion(result) && suggestionResolution.action.entityContext.propertyId) {
       const done = suggestionResolution.action;
@@ -606,7 +615,11 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
       if (launchedOutcome) recordHandoffOutcome(launchedOutcome, handoffAttribution);
     }
     askExecutionDurationSeconds.observe({ operation: operation.operationId, generation_mode: generationMode }, (Date.now() - startedAt) / 1000);
-    const resolvedProperty = await propertySummary(executionPropertyId);
+    markStage('POST_PERSIST_EVENTS', operation.operationId);
+    // UX-01 / plan 7A: the property label read only needs the property id (access was already verified at the top of this turn), so it runs
+    // alongside inline extraction instead of before it. Nothing durable depends on it; it is awaited before the response is mapped.
+    const resolvedPropertyPromise = propertySummary(executionPropertyId);
+    resolvedPropertyPromise.catch(() => undefined);
     // Ask Cozy Stage 3, Phase 3 (implementation plan §9's extraction-trigger
     // call site; FRD §10 Turn Processing Contract steps 7-8). Independent of
     // the routed answer above (FRD §10: "Steps 6 and 8 are independent --
@@ -623,6 +636,8 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
     // The only remaining gate is executionPropertyId, since extraction needs
     // a property to write facts/events to.
     let childExecutionResponses: AskExecutionResponse[] = [];
+    // Consolidated plan 3B: set when extraction filled this turn's routed event form instead of proposing the same event a second time.
+    let reconciledParent: typeof saved | null = null;
     if (executionPropertyId) {
       try {
         const capturedChildren = await runConversationalCaptureForTurn({
@@ -633,13 +648,19 @@ export async function createAskExecution(userId: string, requestInput: CreateAsk
           message: input.message,
           contextVersion: result.contextVersion ?? saved.contextVersion,
           skipDueToRoutedCapture: operationDefinition.safetyClass === 'MATERIAL_DECISION' && result.status === 'COMPLETED',
+          onRoutedCaptureReconciled: (parent) => { reconciledParent = parent; },
         });
-        childExecutionResponses = capturedChildren.map((child) => mapPersistedExecution(child, resolvedProperty));
+        const childProperty = await resolvedPropertyPromise;
+        childExecutionResponses = capturedChildren.map((child) => mapPersistedExecution(child, childProperty));
       } catch (error) {
         logger.warn({ error, executionId: execution.id }, "[ask-conversational-capture] failed to attach captured children to this turn's response");
       }
     }
-    return mapPersistedExecution(saved, resolvedProperty, childExecutionResponses);
+    markStage('INLINE_EXTRACTION', operation.operationId);
+    const resolvedProperty = await resolvedPropertyPromise;
+    markStage('PROPERTY_SUMMARY', operation.operationId);
+    askTurnStageDurationSeconds.observe({ stage: 'TURN_TOTAL', operation: operation.operationId }, (Date.now() - startedAt) / 1000);
+    return mapPersistedExecution(reconciledParent ?? saved, resolvedProperty, childExecutionResponses);
   } catch (caught) {
     const failureStatus = askFailureStatus(caught);
     const retryable = failureStatus === 'FAILED_RETRYABLE';

@@ -433,6 +433,8 @@ export interface AskExecutionResponse {
   // ASK_COZY_INTERACTION_MODEL_UI_FRD RES-003/MAINT-003: set only for a bare
   // filter refinement of an existing read result (e.g. "only show urgent").
   continuesExecutionId?: string | null;
+  // UX-12: a result-control turn (page or filter chip); shown as the updated result with no new user message.
+  viewContinuation?: 'PAGE' | 'FILTER' | null;
   // ASK_COZY_INTERACTION_MODEL_UI_FRD RES-001: frozen the first time this
   // execution's result was computed; `blocks` above is always current data.
   originalResponse?: { blocks: AskPresentationBlock[]; observedAt: string } | null;

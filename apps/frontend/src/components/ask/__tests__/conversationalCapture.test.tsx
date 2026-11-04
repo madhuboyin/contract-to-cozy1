@@ -339,3 +339,58 @@ describe('grouped workflow capture', () => {
     expect(screen.getByRole('button', { name: 'Review change' })).toBeInTheDocument();
   });
 });
+
+// UX-04 (consolidated plan 3A): approximate dates, bounded multi-selects, and the switch to the full form.
+describe('ConversationalCapture extended steps', () => {
+  const when: StructuredCaptureField = { key: 'installed', label: 'When was it installed?', required: true, inputSchema: { type: 'APPROXIMATE_DATE', allowedPrecisions: ['EXACT_DATE', 'YEAR', 'RANGE', 'UNKNOWN'] } };
+  const areas: StructuredCaptureField = { key: 'areas', label: 'Which areas?', required: true, inputSchema: { type: 'MULTI_SELECT', options: [{ label: 'Roof', value: 'roof' }, { label: 'Gutters', value: 'gutters' }, { label: 'Siding', value: 'siding' }], maxItems: 2 } };
+  const notSureRequest = { ...request, allowNotSure: true } as AskCaptureRequest;
+
+  it('answers an approximate date with a shortcut and stores it as a year, not an invented exact date', () => {
+    const onSubmit = jest.fn();
+    function Local() {
+      const [values, setValues] = useState<Record<string, unknown>>({});
+      return <ConversationalCapture request={notSureRequest} fields={[when]} values={values} saving={false} error={null} onChange={(key, value) => setValues((current) => ({ ...current, [key]: value }))} onSubmit={onSubmit} />;
+    }
+    render(<Local />);
+    fireEvent.click(screen.getByRole('button', { name: 'This year' }));
+    expect(onSubmit).toHaveBeenCalledWith({ installed: { precision: 'YEAR', value: String(new Date().getFullYear()) } });
+  });
+
+  it('records "Not sure" as an unknown date', () => {
+    const onSubmit = jest.fn();
+    function Local() {
+      const [values, setValues] = useState<Record<string, unknown>>({});
+      return <ConversationalCapture request={notSureRequest} fields={[when]} values={values} saving={false} error={null} onChange={(key, value) => setValues((current) => ({ ...current, [key]: value }))} onSubmit={onSubmit} />;
+    }
+    render(<Local />);
+    fireEvent.click(screen.getByRole('button', { name: 'Not sure' }));
+    expect(onSubmit).toHaveBeenCalledWith({ installed: { precision: 'UNKNOWN' } });
+  });
+
+  it('toggles bounded multi-select choices with pressed state, enforces the limit, and submits the set', () => {
+    const onSubmit = jest.fn();
+    render(<Harness fields={[areas]} onSubmit={onSubmit} />);
+    const roof = screen.getByRole('button', { name: 'Roof' });
+    expect(roof).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled();
+    fireEvent.click(roof);
+    fireEvent.click(screen.getByRole('button', { name: 'Gutters' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Siding' }));
+    expect(screen.getByRole('button', { name: 'Siding' })).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(roof);
+    expect(roof).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(screen.getByRole('button', { name: 'Siding' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    expect(onSubmit).toHaveBeenCalledWith({ areas: ['gutters', 'siding'] });
+  });
+
+  it('offers Switch to full form while a question is open, and never submits by switching', () => {
+    const onSwitch = jest.fn();
+    const onSubmit = jest.fn();
+    render(<ConversationalCapture request={request} fields={[task]} values={{}} saving={false} error={null} onChange={() => undefined} onSubmit={onSubmit} onSwitchToForm={onSwitch} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Switch to full form' }));
+    expect(onSwitch).toHaveBeenCalledTimes(1);
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+});

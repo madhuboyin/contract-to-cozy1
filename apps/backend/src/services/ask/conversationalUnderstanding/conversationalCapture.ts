@@ -28,6 +28,7 @@ import type { AskCaptureRequest, AskPresentationBlock } from '../../../productFr
 import type { AskOperationResult } from '../askOperationRegistry';
 import { WARRANTY_CATEGORY_OPTIONS } from '../support/warrantyEditor';
 import { editorToGroupSchema, readEditorAnswer } from '../recordEditor/recordEditor.contract';
+import { applyEventPrefill, eventPrefillFromCandidate, reconcilableEventCandidate, routedEventAddCapture } from './captureReconciliation';
 import { decodeApproxDate, EVENT_ADD_DEFAULTS, EVENT_ADD_EDITOR_SECTIONS, eventAddAnswerFromEditor, eventAddEditorFields, eventAddEditorValues, type EventAddOptions } from '../support/homeEventAddEditor';
 import { HOME_EVENT_IMPORTANCE_OPTIONS } from '../support/homeEventCorrection';
 import { evaluateExtractionPreFilter } from './extractionPreFilter';
@@ -74,6 +75,9 @@ export interface ConversationalCaptureInput {
   // implementation plan's Phase 3 status section for what this narrower
   // rule deliberately does not cover.
   skipDueToRoutedCapture: boolean;
+  // Consolidated plan 3B: called when extraction filled this turn's own routed event form instead of creating a second proposal, with the
+  // updated parent row so the turn's response shows the prefilled form.
+  onRoutedCaptureReconciled?: (parent: PersistedCaptureExecution) => void;
 }
 
 function confirmationExpiry(now: Date): Date {
@@ -1915,7 +1919,7 @@ async function persistCandidates(
   rawCandidates: ExtractionCandidate[],
   input: ConversationalCaptureInput,
   recentDocuments: readonly RecentDocumentContext[] = [],
-): Promise<{ executions: PersistedCaptureExecution[]; notificationEventId: string | null }> {
+): Promise<{ executions: PersistedCaptureExecution[]; notificationEventId: string | null; reconciledParent: PersistedCaptureExecution | null }> {
   const validCandidates = filterValidCandidates(rawCandidates);
   // Ask Cozy Stage 3, Phase 6: GOAL candidates are split out here, before
   // the transaction below, and given their own durable
@@ -1930,7 +1934,9 @@ async function persistCandidates(
   // below actually iterates -- a plain filter would silently break that
   // index if a GOAL candidate happened to sit before a WARRANTY/EVENT pair
   // in the same extraction batch.
-  const { nonGoalCandidates: candidates, goalCandidates: rawGoalCandidates } = splitGoalCandidates(validCandidates);
+  const { nonGoalCandidates: splitCandidates, goalCandidates: rawGoalCandidates } = splitGoalCandidates(validCandidates);
+  // Consolidated plan 3B: read the property's timezone once, outside the transaction, only when a routed event form might need it.
+  const propertyTimezone = (await prisma.property.findUnique({ where: { id: input.propertyId }, select: { timezone: true } }))?.timezone || 'UTC';
   // Ask Cozy Stage 3, Phase 6: a second, dedicated flag on top of
   // askConversationalCaptureEnabled (already gating this whole pipeline's
   // entry point, runConversationalCaptureForTurn, below) -- GOAL processing
@@ -1942,11 +1948,46 @@ async function persistCandidates(
   // at either call site individually.
   const goalCandidates = readAskOperationalControls().askGoalCaptureEnabled ? rawGoalCandidates : [];
   const now = new Date();
-  const { created, goalAttachEvents, notificationEvent } = await prisma.$transaction(async (tx) => {
+  const { created, goalAttachEvents, notificationEvent, reconciledParent } = await prisma.$transaction(async (tx) => {
     // Applied even for zero candidates (code review finding, 2026-09-13):
     // a stale attempt whose claim was already reclaimed must not mark the
     // event PROCESSED out from under the attempt that reclaimed it.
     await verifyClaimStillOwned(tx, domainEventId, claimedAttempts);
+    // Consolidated plan 3B. If this turn's own routed "add a timeline event" form is waiting and the message yielded exactly that one event, fill
+    // the form from the message instead of also proposing the event: one path, and the same transaction means a retry or the worker fallback
+    // finds the form already filled (and the event no longer a separate candidate) rather than creating a duplicate.
+    let candidates = splitCandidates;
+    let reconciledParent: PersistedCaptureExecution | null = null;
+    const parent = splitCandidates.length > 0
+      ? await tx.askExecution.findUnique({ where: { id: input.parentExecutionId } })
+      : null;
+    const parentResult = parent && parent.status === 'NEEDS_CONTEXT' && parent.resultJson && typeof parent.resultJson === 'object' && !Array.isArray(parent.resultJson)
+      ? parent.resultJson as Record<string, unknown>
+      : null;
+    const routed = parentResult ? routedEventAddCapture(parentResult.captureRequests) : null;
+    const match = routed ? reconcilableEventCandidate(splitCandidates) : null;
+    if (parent && parentResult && routed && match) {
+      const existing = routed.currentAnswer && typeof routed.currentAnswer === 'object' && !Array.isArray(routed.currentAnswer)
+        ? Object.fromEntries(Object.entries(routed.currentAnswer as Record<string, unknown>).map(([key, value]) => [key, typeof value === 'string' ? value : ''])) as Record<string, string>
+        : {};
+      const prefill = eventPrefillFromCandidate(match.candidate, existing, propertyTimezone, now);
+      if (prefill.inferredKeys.length > 0) {
+        const nextRequests = (parentResult.captureRequests as unknown[]).map((request) => (request === routed ? applyEventPrefill(routed, prefill) : request));
+        // Compare-and-set: only write while the parent is still the NEEDS_CONTEXT row (same updatedAt) this transaction read. If the homeowner
+        // submitted the form meanwhile, the parent has advanced; leave it alone and let the event proceed as an ordinary candidate.
+        const written = await tx.askExecution.updateMany({
+          where: { id: parent.id, status: 'NEEDS_CONTEXT', updatedAt: parent.updatedAt },
+          data: { resultJson: { ...parentResult, captureRequests: nextRequests } as Prisma.InputJsonValue },
+        });
+        if (written.count === 1) {
+          reconciledParent = await tx.askExecution.findUnique({ where: { id: parent.id } });
+          candidates = match.remaining as typeof splitCandidates;
+        }
+      } else if (prefill.conflictKeys.length === 0 && prefill.heldKeys.length > 0) {
+        // Replay (retry or worker fallback): the form already holds every value this event carries, so the event is not a separate candidate.
+        candidates = match.remaining as typeof splitCandidates;
+      }
+    }
     const created: PersistedCaptureExecution[] = [];
     for (const [index, candidate] of candidates.entries()) {
       // filterValidCandidates has already remapped linkedEventCandidateIndex
@@ -2005,7 +2046,7 @@ async function persistCandidates(
         payload: { processingOutcome: { candidateCount: created.length + goalAttachEvents.length } },
       },
     });
-    return { created, goalAttachEvents, notificationEvent };
+    return { created, goalAttachEvents, notificationEvent, reconciledParent };
   });
 
   // Outside the transaction above, deliberately (see processGoalCandidate's
@@ -2024,7 +2065,7 @@ async function persistCandidates(
     const execution = await claimAndProcessGoalAttachEvent(event.id);
     if (execution) goalExecutions.push(execution);
   }
-  return { executions: [...created, ...goalExecutions], notificationEventId: notificationEvent?.id ?? null };
+  return { executions: [...created, ...goalExecutions], notificationEventId: notificationEvent?.id ?? null, reconciledParent };
 }
 
 /**
@@ -2056,10 +2097,13 @@ export async function runConversationalCaptureForTurn(input: ConversationalCaptu
   // moment a worker retry happens to run, which would silently shift what
   // "yesterday"/"last summer" mean for a message that was actually sent
   // hours or days earlier. See runStructuredExtraction's own header comment.
-  const parentMessage = await prisma.askExecution.findUnique({ where: { id: input.parentExecutionId }, select: { createdAt: true } });
+  // Consolidated plan 7A: the two reads are independent, so they run together.
+  const [parentMessage, property] = await Promise.all([
+    prisma.askExecution.findUnique({ where: { id: input.parentExecutionId }, select: { createdAt: true } }),
+    prisma.property.findUnique({ where: { id: input.propertyId }, select: { timezone: true } }),
+  ]);
   if (!parentMessage) return [];
   let referenceDate = parentMessage.createdAt.toISOString();
-  const property = await prisma.property.findUnique({ where: { id: input.propertyId }, select: { timezone: true } });
   let referenceTimezone = property?.timezone || 'UTC';
   let domainEventId: string;
   try {
@@ -2121,7 +2165,9 @@ export async function runConversationalCaptureForTurn(input: ConversationalCaptu
         fetchRecentDocumentContext(input.propertyId),
       ]);
       const { candidates } = await runStructuredExtraction(input.message, recentHomeEvents, recentDocuments, activeDecisionThread, referenceDate, referenceTimezone);
-      const { executions: created, notificationEventId } = await persistCandidates(domainEventId, claimedAttempts, candidates, input, recentDocuments);
+      const { executions: created, notificationEventId, reconciledParent } = await persistCandidates(domainEventId, claimedAttempts, candidates, input, recentDocuments);
+      // Only the inline path can hand the filled form back in this turn's response; if the budget already expired the form is simply filled when the turn is next read.
+      if (reconciledParent && !timedOut) input.onRoutedCaptureReconciled?.(reconciledParent);
       // External review, 2026-09-14: the durable notification-intent event
       // (requestCaptureNotification, inside persistCandidates's own
       // transaction) always exists now if there's anything to notify about --

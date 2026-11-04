@@ -5,7 +5,7 @@ import { Pencil } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { CaptureFieldControl } from '@/components/property-context/CaptureFieldControl';
 import type { ScalarCaptureInputSchema, StructuredCaptureField } from '@/components/property-context/featureContextTypes';
-import { QUICK_REPLY_LIMIT, answerLabel, hasAnswer, isFieldActive, nextStepIndex, stepQuestion } from '@/features/ask/conversationalCapture';
+import { QUICK_REPLY_LIMIT, answerLabel, dateShortcuts, hasAnswer, isFieldActive, nextStepIndex, stepQuestion } from '@/features/ask/conversationalCapture';
 import type { AskCaptureRequest } from '@/features/ask/types';
 import { AskContextLink } from '../blocks/context';
 
@@ -13,7 +13,9 @@ import { AskContextLink } from '../blocks/context';
 // a time; a bounded choice is answered with one tap and moves on; an optional question can be skipped; any earlier answer can be
 // changed. When every question is answered or skipped the same single request is submitted, and the review that follows is the
 // existing confirmation. Nothing is written by this component.
-export function ConversationalCapture({ request, fields, values, saving, error, autoFocus = false, onChange, onSubmit, onCancel, cancelling = false }: {
+export function ConversationalCapture({ request, fields, values, saving, error, autoFocus = false, onChange, onSubmit, onCancel, cancelling = false, onSwitchToForm }: {
+  /** UX-04: offered so the homeowner can see every question at once; the values entered so far are kept (they live with the caller). */
+  onSwitchToForm?: () => void;
   request: AskCaptureRequest;
   fields: StructuredCaptureField[];
   values: Record<string, unknown>;
@@ -97,6 +99,7 @@ export function ConversationalCapture({ request, fields, values, saving, error, 
       {error && <p className="text-sm text-red-700" role="alert">{error}</p>}
       {request.destinationLabel && <p className="text-xs text-slate-500">{request.destinationLabel}.</p>}
       {onCancel && step && <button type="button" disabled={saving || cancelling} onClick={onCancel} className="min-h-9 rounded-lg px-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-50">{cancelling ? 'Cancelling…' : 'Cancel'}</button>}
+      {onSwitchToForm && step && <button type="button" disabled={saving} onClick={onSwitchToForm} className="min-h-9 rounded-lg px-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-50">Switch to full form</button>}
       {request.fallbackHref && <AskContextLink href={request.fallbackHref} className="inline-flex text-sm font-medium text-teal-800 hover:underline">Open the full form instead</AskContextLink>}
     </section>
   );
@@ -133,6 +136,38 @@ function StepInput({ step, value, saving, allowNotSure, onAnswer, onSkip }: {
         </select>
         <ContinueButton disabled={saving || !hasAnswer(draft)} onClick={() => onAnswer(draft)} />
         {onSkip && <SkipButton onSkip={onSkip} saving={saving} />}
+      </div>
+    );
+  }
+  if (schema.type === 'MULTI_SELECT') {
+    // Bounded toggles with real pressed state; Continue sends the chosen set. maxItems is enforced the same way the full form enforces it.
+    const chosen = Array.isArray(draft) ? draft.filter((item): item is string => typeof item === 'string') : [];
+    return (
+      <div className="space-y-2">
+        <div role="group" aria-label={step.label} className="flex flex-wrap gap-2">
+          {schema.options.map((option) => {
+            const selected = chosen.includes(option.value);
+            return <button key={option.value} type="button" aria-pressed={selected} disabled={saving} onClick={() => setDraft(selected ? chosen.filter((item) => item !== option.value) : [...chosen, option.value].slice(0, schema.maxItems))} className={cn('min-h-10 max-w-full rounded-full border px-3.5 py-2 text-left text-sm transition disabled:opacity-50', selected ? 'border-teal-700 bg-teal-700 text-white' : 'border-slate-200 bg-white text-slate-800 hover:border-teal-400 hover:bg-teal-50')}>{option.label}</button>;
+          })}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <ContinueButton disabled={saving || chosen.length === 0} onClick={() => onAnswer(chosen)} />
+          {schema.maxItems ? <span className="text-xs text-slate-500">Choose up to {schema.maxItems}</span> : null}
+          {onSkip && <SkipButton onSkip={onSkip} saving={saving} />}
+        </div>
+      </div>
+    );
+  }
+  if (schema.type === 'APPROXIMATE_DATE') {
+    const shortcuts = dateShortcuts(schema, allowNotSure);
+    return (
+      <div className="space-y-2">
+        {shortcuts.length > 0 && <div className="flex flex-wrap gap-2" aria-label={`${step.label} shortcuts`} role="group">{shortcuts.map((shortcut) => chip(shortcut.label, shortcut.value, shortcut.id))}</div>}
+        <form onSubmit={(event) => { event.preventDefault(); if (hasAnswer(draft)) onAnswer(draft); }} className="flex flex-wrap items-center gap-2">
+          <CaptureFieldControl bare field={{ key: step.key, label: step.label, required: step.required, inputSchema: schema }} value={draft} disabled={saving} allowNotSure={allowNotSure} onChange={setDraft} />
+          <ContinueButton type="submit" disabled={saving || !hasAnswer(draft)} />
+          {onSkip && <SkipButton onSkip={onSkip} saving={saving} />}
+        </form>
       </div>
     );
   }

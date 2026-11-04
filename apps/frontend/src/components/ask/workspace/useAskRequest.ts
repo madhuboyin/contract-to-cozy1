@@ -191,7 +191,8 @@ export function useAskRequest({ sessionId, loading, executions, selectedProperty
     setLoading(false);
     setInput(pending.message);
     if (sessionId) window.localStorage.setItem(draftStorageKey(selectedPropertyId, sessionId), pending.message);
-    setError(null);
+    // UX-02 / D-01 ("Stop waiting"): say plainly that only the waiting stopped. Nothing is recalled or reversed on the server.
+    setError('Stopped. Your question is back in the box. Cozy may still finish it, and if it does the answer will be in your conversation history.');
     window.setTimeout(() => textareaRef.current?.focus(), 0);
   };
   // FRD v1.96: bring an earlier question back into the composer to change and send again. The earlier answer stays.

@@ -59,6 +59,19 @@ export const askExecutionDurationSeconds = new Histogram({
   registers: [register],
 });
 
+// UX-01 (consolidated plan Phase 0): where one Ask turn's time goes, so latency work is guided by measurement. `stage` is a fixed set,
+// `operation` comes from the registry; no homeowner text or extracted value is ever a label. DURABLE_BASE_RESULT is the time from
+// execution start until the validated base result is persisted, as distinct from the whole API turn (TURN_TOTAL).
+export const ASK_TURN_STAGES = ['ROUTE_AND_EXECUTE', 'SYNTHESIS', 'ACTIONS_FINALIZE', 'TRUST_VALIDATION', 'PERSIST_BASE', 'DURABLE_BASE_RESULT', 'POST_PERSIST_EVENTS', 'PROPERTY_SUMMARY', 'INLINE_EXTRACTION', 'TURN_TOTAL'] as const;
+export type AskTurnStage = typeof ASK_TURN_STAGES[number];
+export const askTurnStageDurationSeconds = new Histogram({
+  name: 'ask_turn_stage_duration_seconds',
+  help: 'Ask turn duration by bounded stage and registered operation',
+  labelNames: ['stage', 'operation'] as const,
+  buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30],
+  registers: [register],
+});
+
 export const askSkillExecutionsTotal = new Counter({
   name: 'ask_skill_executions_total',
   help: 'Skill-backed Ask operation invocations by immutable Skill version, operation, and result status',

@@ -421,6 +421,8 @@ export function InlineCaptureCard({
   const schema = request.inputSchema;
   const policy = capturePolicy[request.classification];
   const scalarCapture = schema.type !== 'RELATIONAL_UPDATE' && schema.type !== 'RELATIONAL_SELECT_CREATE' && schema.type !== 'GROUP';
+  // UX-04: the homeowner can leave the one-question-at-a-time flow for the full form (and back); the entered values live above both.
+  const [fullFormChosen, setFullFormChosen] = useState(false);
   const [values, setValues] = useState<Record<string, unknown>>(() => {
     const canonical = schema.type === 'RELATIONAL_UPDATE'
       ? schema.currentValues
@@ -867,13 +869,14 @@ export function InlineCaptureCard({
   }
 
   // FRD §11.12 IW-CONV-004: a plain workflow group is asked one question at a time, then submitted as the same single request.
-  if (calm && request.presentation !== 'FORM' && canAskConversationally(request) && schema.type === 'GROUP') {
-    return <ConversationalCapture request={request} fields={schema.fields} values={values} saving={saving} error={error} autoFocus={autoFocus}
+  if (calm && request.presentation !== 'FORM' && !fullFormChosen && canAskConversationally(request) && schema.type === 'GROUP') {
+    return <ConversationalCapture request={request} fields={schema.fields} values={values} saving={saving} error={error} autoFocus={autoFocus} onSwitchToForm={() => setFullFormChosen(true)}
       onChange={(key, value) => setValues((current) => ({ ...current, [key]: value }))} onSubmit={(final) => void save(null, false, final)}
       onCancel={workItemForm ? () => void cancelContinuityWorkflow() : undefined} cancelling={cancelling} />;
   }
 
-  return (
+  return (<>
+    {fullFormChosen && calm && request.presentation !== 'FORM' && canAskConversationally(request) && <div className="mb-2"><button type="button" disabled={saving} onClick={() => setFullFormChosen(false)} className="min-h-9 rounded-lg px-2 text-sm font-semibold text-teal-800 hover:bg-teal-50 disabled:opacity-50">Ask one at a time</button></div>}
     <form ref={containerRef as unknown as Ref<HTMLFormElement>} onSubmit={save} className={cn('rounded-2xl border', decisionInputWorkflow ? cn('mx-auto mb-24 w-full border-slate-200 bg-white p-4 shadow-sm sm:p-5', sellHoldRentAssumptions ? 'max-w-[760px]' : 'max-w-[900px]') : refinanceScenario ? 'mx-auto w-full max-w-[820px] border-teal-200/80 bg-gradient-to-br from-white via-white to-teal-50/50 p-4 shadow-sm sm:p-5' : compactContinuityPlan ? 'mx-auto w-full max-w-[820px] border-slate-200 bg-white p-4 shadow-sm sm:p-5' : compactPlantAdvisor ? cn(PLANT_ADVISOR_WORKFLOW_WIDTH_CLASS, 'border-slate-200/90 bg-white p-4 shadow-2xs sm:p-5') : compactServicePriceCheck ? 'w-full max-w-[680px] border-slate-200/90 bg-white p-4 shadow-2xs sm:p-5' : compactWorkItemReschedule ? 'mx-auto w-full max-w-[680px] border-sky-200 bg-sky-50/80 p-4 sm:p-5' : compactEventAdd ? 'border-slate-200 bg-white p-4 shadow-sm sm:p-5' : compactProjectCreate ? 'p-3 sm:p-4' : 'p-4', !decisionInputWorkflow && !refinanceScenario && !compactContinuityPlan && !compactPlantAdvisor && !compactServicePriceCheck && !compactWorkItemReschedule && !compactEventAdd && policy.border)} aria-busy={saving || cancelling} aria-label={request.title} data-refinance-scenario-planner={refinanceScenario ? '' : undefined} data-home-continuity-capture={compactContinuityPlan ? '' : undefined} data-work-item-reschedule={compactWorkItemReschedule ? '' : undefined} data-service-price-check-capture={compactServicePriceCheck ? '' : undefined} data-plant-advisor-capture={compactPlantAdvisor ? '' : undefined} data-decision-input-workflow={decisionInputWorkflow ? request.captureKey : undefined}>
       {compactWorkItemReschedule ? (
         <div>
@@ -1088,5 +1091,6 @@ export function InlineCaptureCard({
         </div>
       </div>
     </form>
+  </>
   );
 }

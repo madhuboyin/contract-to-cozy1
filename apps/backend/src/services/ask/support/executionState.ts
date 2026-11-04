@@ -161,9 +161,13 @@ export function mapPersistedExecution(execution: {
   const storedSuggestedNextActionsStatus = SuggestedNextActionsStatusSchema.safeParse(stored.suggestedNextActionsStatus);
   const operationDefinition = operationId ? getAskOperationDefinition(operationId) : null;
   const storedLaunch = execution.launchContextJson && typeof execution.launchContextJson === 'object' && !Array.isArray(execution.launchContextJson)
-    ? execution.launchContextJson as { operationId?: unknown }
+    ? execution.launchContextJson as { operationId?: unknown; actionId?: unknown; entityType?: unknown; sourceExecutionId?: unknown }
     : null;
   const declaredOperationId = operationId && storedLaunch?.operationId === operationId ? operationId : null;
+  const storedContinuesExecutionId = typeof stored.continuesExecutionId === 'string' ? stored.continuesExecutionId : null;
+  const viewContinuation: 'PAGE' | 'FILTER' | null = storedLaunch?.entityType === 'ASK_COLLECTION_SECTION' && (storedLaunch.actionId === 'NEXT_PAGE' || storedLaunch.actionId === 'PREVIOUS_PAGE')
+    ? 'PAGE'
+    : storedContinuesExecutionId && typeof storedLaunch?.sourceExecutionId === 'string' ? 'FILTER' : null;
   const successfulAnswer = ['ANSWERED', 'READY_WITH_LIMITATIONS'].includes(execution.status);
   const correctionCapabilities = {
     intent: successfulAnswer,
@@ -185,7 +189,8 @@ export function mapPersistedExecution(execution: {
     skillHandoff: stored.skillHandoff ?? null,
     operation: execution.operationId ? { id: execution.operationId, version: execution.operationVersion ?? '1.0', family: execution.intentFamily ?? 'UNKNOWN' } : null,
     declaredOperationId,
-    continuesExecutionId: typeof stored.continuesExecutionId === 'string' ? stored.continuesExecutionId : null,
+    continuesExecutionId: storedContinuesExecutionId,
+    viewContinuation,
     originalResponse: stored.originalResponse && typeof stored.originalResponse === 'object' && !Array.isArray(stored.originalResponse)
       ? stored.originalResponse
       : null,

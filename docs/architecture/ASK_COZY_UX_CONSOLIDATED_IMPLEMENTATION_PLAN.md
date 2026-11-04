@@ -2,7 +2,7 @@
 
 **Date:** November 3, 2026
 
-**Status:** Proposed implementation plan; product decisions in §5 must be approved before their dependent slices begin
+**Status:** Phases 0, 1, 2, 3, 4, 5 (foundation), 7A and the first step of 8 implemented November 3, 2026 (see §12); product decisions in §5 are still required for the remaining slices
 
 **Scope:** Ask Cozy page and floating panel, turn delivery, conversation continuity, capture, confirmation, search/discovery, composer input, and collection interaction
 **Inputs consolidated:** the external twelve-gap UX review; repository verification performed November 3, 2026; `ASK_COZY_INLINE_WORKSPACE_FRD.md`; `ASK_COZY_INTERACTION_MODEL_UI_FRD.md`; `ASK_COZY_CONVERSATIONAL_PRESENTATION_QUALITY_STANDARDIZATION_FRD.md`; `ASK_COZY_CONVERSATIONAL_PRESENTATION_IMPLEMENTATION_PLAN.md`; and `ASK_COZY_CONVERSATIONAL_PRESENTATION_QUALITY_IMPLEMENTATION_PLAN.md`
@@ -392,3 +392,33 @@ Begin with a low-risk packet that does not depend on unresolved product decision
 5. Phase 2B classification and cleanup of local filter controls already intended to remain outside history.
 
 In parallel with review of that packet, obtain decisions D-01 through D-04 and produce the capture-control and calm-anatomy designs. Do not begin the staged-delivery protocol or alter confirmation consent semantics merely to accelerate the first packet.
+
+## 12. Implementation status (November 3, 2026)
+
+Validation was code reading plus focused tests; no browser, database or worker ran. Details and the revision entry are in `ASK_COZY_INLINE_WORKSPACE_FRD.md` revision 1.512.
+
+| Slice | Status | Notes |
+|---|---|---|
+| Phase 0 timing | Built | `ask_turn_stage_duration_seconds{stage,operation}`; stages in `ASK_TURN_STAGES`; no text in labels |
+| Phase 0 ledger | Built | `node apps/frontend/scripts/calm-adoption-ledger.js [--check]` writes `ASK_COZY_CALM_ADOPTION_LEDGER.md` |
+| 1A in-place correction | Built | also fixed an over-long clarification label that made saved corrections unreadable |
+| 1B panel session controls | Built | New, Recent, Delete current |
+| 1C file drop / paste | Built | one file; several get the existing message |
+| 2A soft entity reference | Withdrawn | title-only rewrite is not exact identity; needs a verified entity id on results |
+| 2B view-control turns | Built for PAGE and FILTER | persisted marker `viewContinuation` |
+| 3A stepped capture | Built | designed-layout captures keep the old rules |
+| 3B reconciliation | Pilot (CAS-guarded; no real-DB test) for the routed timeline-event form | other routed captures (warranty add) are not reconciled |
+| 3C single-press edit | Withdrawn | contradicts consent invalidation; needs D-02 |
+| 4A route context | Built for the inventory item route only | see open items |
+| 4B voice | Built | |
+| 5 anatomy | Contract and ledger only | domain migration not started |
+| 6 unified search | Not built | needs D-04 |
+| 7A parallelization | Built (two overlaps) | measure with the new histogram before any more |
+| 7B staged delivery | Not built | needs D-03 |
+| 8 stop / discard / cancel | Wording only | needs D-01 |
+
+### Phase 0 inventories
+
+**Correction kinds** (`requestAskCorrection`): `INTENT` and `ENTITY` create a same-session clarification execution and now merge in place. `RETRY_RESPONSE` and `HOME_RECORD` return a navigation `href` only and still navigate (retry is handled by the card's own retry button in the workspace; home-record correction leaves Ask by design until its destination and ownership are verified).
+
+**Result controls**: expand/collapse, fold, pin, layout and sort are view state and create no turn. Filter chips (`onFilterClick`) and next/previous page (`onCollectionPage`) create an execution carrying the source execution id and are now marked `viewContinuation`. Item actions, batch actions and typed refinements remain conversation turns.
