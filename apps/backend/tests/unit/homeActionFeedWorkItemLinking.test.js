@@ -54,8 +54,13 @@ let failNextResolve = false;
 
 const acceptedWorkRows = [];
 const guidanceJourneys = [];
+const maintenanceTasks = [];
 
 const prismaMock = {
+  propertyMaintenanceTask: {
+    findMany: async ({ where }) => maintenanceTasks.filter((task) =>
+      task.propertyId === where.propertyId && task.isSeasonal && where.id.in.includes(task.id)),
+  },
   guidanceJourney: {
     findMany: async ({ where }) => guidanceJourneys.filter((journey) =>
       journey.propertyId === where.propertyId && where.id.in.includes(journey.id)),
@@ -151,6 +156,7 @@ function reset() {
   workEvents.clear();
   failNextResolve = false;
   guidanceJourneys.length = 0;
+  maintenanceTasks.length = 0;
 }
 
 test('accepted operational work shows its task identity instead of a legacy completed outcome', () => {
@@ -289,6 +295,43 @@ test('accepted guidance work recovers its inventory subject from its durable sou
 
   assert.deepEqual(projected.presentation.subject, { kind: 'INVENTORY_ITEM', id: 'hvac-1', label: 'HVAC Furnace' });
   guidanceJourneys.length = 0;
+  acceptedWorkRows.length = 0;
+});
+
+test('accepted seasonal maintenance preserves checklist provenance and homeowner impact', async () => {
+  acceptedWorkRows.length = 0;
+  maintenanceTasks.length = 0;
+  maintenanceTasks.push({
+    id: 'task-chimney',
+    propertyId: 'property-1',
+    isSeasonal: true,
+    season: 'FALL',
+    seasonalChecklistItem: {
+      description: 'Inspect before using the fireplace.',
+      seasonalTaskTemplate: {
+        description: 'Inspect before using the fireplace.',
+        whyItMatters: 'Prevents chimney fires and carbon monoxide hazards. Required for insurance.',
+      },
+    },
+  });
+  acceptedWorkRows.push(acceptedRow('wi-chimney', 'Chimney cleaning and inspection', new Date('2026-10-31T00:00:00.000Z'), {
+    homeownerReason: 'This home priority needs attention now.',
+    executions: [{ executionType: 'MAINTENANCE_TASK', executionEntityId: 'task-chimney', role: 'PRIMARY' }],
+  }));
+
+  const [projected] = await appendAcceptedOperationalWork('property-1', []);
+
+  assert.equal(projected.presentation.variant, 'ACCEPTED_WORK');
+  assert.equal(projected.presentation.eyebrow, 'Fall checklist');
+  assert.deepEqual(projected.presentation.group, { kind: 'SEASONAL_CHECKLIST', itemCount: 1 });
+  assert.match(projected.whyItMatters, /help prevent chimney fires and carbon monoxide hazards/i);
+  assert.match(projected.presentation.summary, /fall checklist task/i);
+  assert.doesNotMatch(projected.presentation.summary, /insurance|required/i);
+  assert.deepEqual(
+    projected.presentation.keyFacts.find((fact) => fact.label === 'Source'),
+    { label: 'Source', value: 'Fall checklist' },
+  );
+  maintenanceTasks.length = 0;
   acceptedWorkRows.length = 0;
 });
 

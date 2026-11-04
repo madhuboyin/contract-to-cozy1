@@ -77,6 +77,7 @@ import {
   UnsupportedWorkItemCompletionError,
 } from './homeActionCompletion.service';
 import { countPropertyDocuments } from './propertyDocuments/propertyDocumentInventory.service';
+import { seasonalDisplayLabel, seasonalImpactCopy } from './seasonal/seasonalImpactCopy';
 import { COMPLETION_EVIDENCE_POLICY } from './intelligence/completionEvidencePolicy.registry';
 import {
   resolveDecisionFamilyRef,
@@ -1140,6 +1141,28 @@ export async function appendAcceptedOperationalWork(
       select: { id: true, inventoryItemId: true },
     })
     : []).flatMap((journey) => journey.inventoryItemId ? [[journey.id, journey.inventoryItemId] as const] : []));
+  // Accepted seasonal work remains a maintenance execution, but its checklist
+  // relationship is still the authoritative provenance for homeowner copy.
+  // Resolve that relationship on read so existing accepted rows also regain
+  // their season and template impact without a data migration or title match.
+  const maintenanceTaskIds = [...new Set(items.flatMap((item) => item.executions
+    .filter((execution) => execution.executionType === 'MAINTENANCE_TASK')
+    .map((execution) => execution.executionEntityId)))];
+  const seasonalTaskById = new Map((maintenanceTaskIds.length > 0
+    ? await prisma.propertyMaintenanceTask.findMany({
+      where: { id: { in: maintenanceTaskIds }, propertyId, isSeasonal: true },
+      select: {
+        id: true,
+        season: true,
+        seasonalChecklistItem: {
+          select: {
+            description: true,
+            seasonalTaskTemplate: { select: { description: true, whyItMatters: true } },
+          },
+        },
+      },
+    })
+    : []).flatMap((task) => task.seasonalChecklistItem ? [[task.id, task] as const] : []));
   const projected: RankedHomeAction[] = [];
   for (const item of items) {
     if (represented.has(item.id)) continue;
@@ -1192,6 +1215,19 @@ export async function appendAcceptedOperationalWork(
         ? null
         : completionEvidencePolicy?.attestation === 'INSUFFICIENT' ? 'EVIDENCE_REQUIRED' : 'LINKED_WORKFLOW',
     });
+    const seasonalTask = primaryExecution?.executionType === 'MAINTENANCE_TASK'
+      ? seasonalTaskById.get(primaryExecution.executionEntityId) ?? null
+      : null;
+    const seasonalItem = seasonalTask?.seasonalChecklistItem ?? null;
+    const seasonalImpact = seasonalImpactCopy(
+      seasonalItem?.seasonalTaskTemplate?.whyItMatters
+        ?? seasonalItem?.description
+        ?? seasonalItem?.seasonalTaskTemplate?.description,
+    );
+    const displaySeason = seasonalTask?.season ? seasonalDisplayLabel(seasonalTask.season) : null;
+    const seasonalSummary = displaySeason
+      ? `This is a ${displaySeason.toLowerCase()} checklist task.${seasonalImpact ? ` ${seasonalImpact}` : ''}`
+      : null;
     const now = new Date().toISOString();
     const homeAction = adaptHomeActionSource(sourceKind, {
       id: `operational-work:${item.id}`,
@@ -1202,7 +1238,7 @@ export async function appendAcceptedOperationalWork(
       state: item.state === 'DEFERRED' ? 'DEFERRED' : item.state === 'IN_PROGRESS' || item.state === 'IN_PROJECT' || item.state === 'IN_GUIDANCE' ? 'IN_PROGRESS' : 'OPEN',
       priority: item.priority,
       signal: displayTitle,
-      whyItMatters: item.homeownerReason,
+      whyItMatters: seasonalImpact ?? item.homeownerReason,
       recommendedAction: displayCopy.recommendedAction,
       // Work with no confidence score (a maintenance task is a commitment, not a model recommendation) and no named
       // gaps is not "data unavailable"; only a stored low score or named missing context degrades it.
@@ -1212,12 +1248,13 @@ export async function appendAcceptedOperationalWork(
       expectedOutcome: displayCopy.expectedOutcome,
       presentation: {
         variant: 'ACCEPTED_WORK',
-        eyebrow: item.state === 'REPORTED_COMPLETE' ? 'Completion reported' : 'Accepted work',
+        eyebrow: displaySeason ? `${displaySeason} checklist` : item.state === 'REPORTED_COMPLETE' ? 'Completion reported' : 'Accepted work',
         headline: displayCopy.recommendedAction.slice(0, 180),
-        summary: item.homeownerReason.slice(0, 320),
-        whyNow: item.homeownerReason.slice(0, 500),
+        summary: (seasonalSummary ?? item.homeownerReason).slice(0, 320),
+        whyNow: (seasonalSummary ?? item.homeownerReason).slice(0, 500),
         keyFacts: [
           { label: 'Task', value: displayTitle.slice(0, 240) },
+          ...(displaySeason ? [{ label: 'Source', value: `${displaySeason} checklist` }] : []),
           { label: 'Work state', value: String(item.state).toLowerCase().replace(/_/g, ' ') },
           {
             label: 'Due',
@@ -1237,7 +1274,7 @@ export async function appendAcceptedOperationalWork(
           ? { kind: 'INVENTORY_ITEM', id: inventoryItemId, label: displayTitle.slice(0, 180) }
           : { kind: 'WORK_ITEM', id: item.id, label: displayTitle.slice(0, 180) },
         detailLabel: 'Why this work?',
-        group: null,
+        group: displaySeason ? { kind: 'SEASONAL_CHECKLIST', itemCount: 1 } : null,
       },
       timing: {
         dueAt: item.dueAt?.toISOString() ?? null,

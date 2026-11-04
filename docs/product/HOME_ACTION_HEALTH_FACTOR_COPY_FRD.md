@@ -650,6 +650,15 @@ insurance claims are omitted unless supported by policy evidence. For a grouped 
 action, the earliest critical task's recommended date is the Home Action due date rather
 than the checklist's season-end date, keeping Home Actions and Recent Changes aligned.
 
+That seasonal meaning must also survive acceptance. An accepted maintenance task keeps
+the `ACCEPTED_WORK` presentation and execution controls, while its structured
+`PropertyMaintenanceTask -> SeasonalChecklistItem -> SeasonalTaskTemplate` relation
+supplies the checklist label and reviewed homeowner impact. The projection marks this
+provenance with `presentation.group.kind = SEASONAL_CHECKLIST`; Recent Changes reads that
+marker for both grouped checklist actions and accepted work. Titles are never used to
+infer seasonal provenance, and existing linked tasks are enriched on read without a
+data migration.
+
 ### 14.5 Future work
 
 - **Un-aggregate seasonal work** (the parent plan's "Slice 3"): once each seasonal

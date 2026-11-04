@@ -562,7 +562,11 @@ async function homeChangeSummaryResult(userId: string, propertyId: string): Prom
       const [detail] = await decisionPreferenceService.getPreferenceReferenceDetails([change.sourceRevision]);
       detailOverride = detail?.summary ?? null;
     }
-    const seasonalPresentation = liveAction?.presentation?.variant === 'SEASONAL_CHECKLIST' ? liveAction.presentation : null;
+    // Accepted checklist tasks keep ACCEPTED_WORK behavior, while the group
+    // marker carries their seasonal provenance into Recent Changes.
+    const seasonalPresentation = liveAction?.presentation?.group?.kind === 'SEASONAL_CHECKLIST'
+      ? liveAction.presentation
+      : null;
     const source = seasonalPresentation?.eyebrow ?? sourceTypeLabel(change.sourceType);
     const fallbackWorkItem = fallbackWorkItems.get(change.sourceEntityId);
     const title = homeChangeDisplayTitle({ sourceType: change.sourceType, canonicalActionTitle: change.canonicalAction?.title ?? fallbackWorkItem?.title, canonicalEventTitle: change.canonicalEvent?.title });

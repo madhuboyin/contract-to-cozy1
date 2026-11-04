@@ -39,6 +39,7 @@ import { hasGovernedPlanGuidance } from './riskPremiumOptimizer.service';
 import { getConflictedInsurancePolicyTerms, getConflictedWarrantyGroups } from './coverageConflict.service';
 import { createHash } from 'node:crypto';
 import { ACTIVE_LIFECYCLE_STATUSES } from './decisionPlatform/decisionThreadService';
+import { seasonalImpactCopy } from './seasonal/seasonalImpactCopy';
 
 const DEFAULT_FEEDBACK: HomeAction['feedbackControls'] = [
   'COMPLETE', 'DEFER', 'SNOOZE', 'DISMISS', 'ALREADY_DONE', 'NOT_RELEVANT', 'CORRECT_FACT',
@@ -1338,14 +1339,7 @@ async function loadSeasonalChecklistActions(propertyId: string, db: HomeActionSo
     // Template copy can contain absolute or policy-specific claims. Home Actions
     // may explain the general maintenance consequence, but must not assert that a
     // particular insurance policy requires the task without policy evidence.
-    const seasonalImpact = rawSeasonalImpact
-      ? rawSeasonalImpact
-          .split(/(?<=[.!?])\s+/)
-          .filter((sentence) => !/\binsurance\b|\brequired\b/i.test(sentence))
-          .join(' ')
-          .replace(/^Prevents\b/i, 'Can help prevent')
-          .trim()
-      : null;
+    const seasonalImpact = seasonalImpactCopy(rawSeasonalImpact);
     // "Next task" should add information, not repeat a critical task already
     // listed above — surface the first pending task that isn't shown there.
     const shownCriticalTitles = new Set(priorityTasks.slice(0, 2).map((item) => item.title));
