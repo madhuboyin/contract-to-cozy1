@@ -1336,7 +1336,7 @@ async function loadSeasonalChecklistActions(propertyId: string, db: HomeActionSo
       ? `Review home details for ${displaySeason.toLowerCase()} preparation`
       : criticalCount > 0
       ? criticalCount === 1
-        ? priorityTasks[0].title
+        ? `${displaySeason} checklist: ${priorityTasks[0].title}`
         : `Review ${criticalCount} priority tasks in your ${displaySeason.toLowerCase()} checklist`
       : `Plan ${pendingItems.length} ${displaySeason.toLowerCase()} home-care task${pendingItems.length === 1 ? '' : 's'}`;
     const seasonalSummary = contextReviewOnly

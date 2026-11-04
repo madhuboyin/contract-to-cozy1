@@ -632,7 +632,8 @@ seasonal action. This restores the current seasonal handoff requirement without
 double-counting cards.
 
 The grouped action must still name the homeowner's work. When exactly one critical
-seasonal task remains, its title is the Home Action headline; multiple critical
+seasonal task remains, the Home Action headline identifies both the seasonal checklist
+and the task (for example, "Fall checklist: Clean and inspect the chimney"); multiple critical
 tasks use an imperative checklist headline, and non-critical preparation uses an
 imperative planning headline. Count-only copy such as "1 fall task needs attention"
 is not a valid action title. Homeowner priority projections also remove suppressed
