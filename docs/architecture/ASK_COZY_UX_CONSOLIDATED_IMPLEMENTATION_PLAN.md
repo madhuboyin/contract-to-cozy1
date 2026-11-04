@@ -414,7 +414,7 @@ Validation was code reading plus focused tests; no browser, database or worker r
 | 5 anatomy | Contract and ledger only | domain migration not started |
 | 6 unified search | Built (D-04 approved 2026-11-03) | one Cmd/Ctrl+K dialog: federated home search groups above pages/commands/tools; `AskSearchDialog` and the header's second search button removed; history rail filter untouched; not browser-verified |
 | 7A parallelization | Built (two overlaps) | measure with the new histogram before any more |
-| 7B staged delivery | Not built | needs D-03 |
+| 7B staged delivery | Not built | D-03 stage contract drafted in `ASK_COZY_STAGED_DELIVERY_CONTRACT_DESIGN.md`; awaiting owner approval and timing data |
 | 8 stop / discard / cancel | Wording only | needs D-01 |
 
 ### Phase 0 inventories
