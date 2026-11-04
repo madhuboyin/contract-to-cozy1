@@ -74,7 +74,7 @@ export async function installDestinationApi(page: Page, options: DestinationApiO
     await page.route(`${apiOrigin}/api/properties/${propertyId}/intelligence-refresh-state**`, (route) => ok(route, { state: 'CURRENT', capabilities: [] }));
     await page.route(`${apiOrigin}/api/ask/pending**`, (route) => ok(route, { items: [] }));
     await page.route(`${apiOrigin}/api/ask/sessions/recent**`, (route) => ok(route, { sessions: [], nextCursor: null }));
-    await page.route(`${apiOrigin}/api/ask/concierge-home**`, (route) => ok(route, { available: false }));
+    await page.route(`${apiOrigin}/api/ask/concierge-home**`, (route) => json(route, { success: false, message: 'Home overview is not part of this fixture.' }, 503));
     await page.route(`${apiOrigin}/api/ask/executions**`, (route) => ok(route, {}));
   }
 

@@ -3,7 +3,7 @@
 import React from 'react';
 import { usePathname } from 'next/navigation';
 import { useRouter } from 'next/navigation';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Search } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
@@ -124,6 +124,8 @@ export default function DashboardCommandPalette({ propertyId }: DashboardCommand
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState('');
   const [highlighted, setHighlighted] = React.useState('');
+  // The palette opens from a shortcut or an event, so it has no trigger of its own: remember what had focus and give it back on close.
+  const openerRef = React.useRef<HTMLElement | null>(null);
   const [recentActions, setRecentActions] = React.useState<Array<{ id: string; label: string }>>([]);
   const isAdminNav = user?.role === 'ADMIN';
   const catalogContext = resolveDashboardCommandPaletteCatalog({
@@ -144,7 +146,7 @@ export default function DashboardCommandPalette({ propertyId }: DashboardCommand
 
   React.useEffect(() => {
     setRecentActions(readRecentActions());
-    if (!open) setQuery('');
+    if (open) { if (document.activeElement instanceof HTMLElement && document.activeElement !== document.body) openerRef.current = document.activeElement; } else setQuery('');
   }, [open]);
 
   React.useEffect(() => {
@@ -287,7 +289,9 @@ export default function DashboardCommandPalette({ propertyId }: DashboardCommand
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="max-w-xl p-0">
+      <DialogContent className="max-w-xl p-0" aria-describedby="command-palette-description" onCloseAutoFocus={(event) => { if (openerRef.current?.isConnected) { event.preventDefault(); openerRef.current.focus(); } }}>
+        <DialogTitle className="sr-only">Search your home, pages, and tools</DialogTitle>
+        <DialogDescription id="command-palette-description" className="sr-only">Type to search your home record, work, saved results, conversations, pages and tools. Use the arrow keys to move and Enter to open.</DialogDescription>
         <Command
           label="Dashboard Command Palette"
           value={highlighted}

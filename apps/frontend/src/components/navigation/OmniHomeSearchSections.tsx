@@ -37,14 +37,17 @@ export function OmniHomeSearchSections({ propertyId, query, enabled, onChoose, o
           {response.partial && gaps.length > 0 && (
             <div className="mx-2 mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950" role="note" data-search-partial>
               <p className="font-semibold">Some places could not be searched, so home results may be incomplete.</p>
-              <ul className="mt-1 list-disc pl-4">{gaps.map((provider) => <li key={provider.providerId}><span className="font-semibold">{provider.label}:</span> {provider.reason ?? 'Not available right now.'}</li>)}</ul>
+              <details className="mt-1">
+                <summary className="cursor-pointer font-semibold">Which ones</summary>
+                <ul className="mt-1 list-disc pl-4">{gaps.map((provider) => <li key={provider.providerId}><span className="font-semibold">{provider.label}:</span> {provider.reason ?? 'Not available right now.'}</li>)}</ul>
+              </details>
             </div>
           )}
           {groups.length === 0 && (
             <p className="px-2 pt-2 text-xs text-gray-600" role="status">{response.partial ? 'Nothing was found in the places that could be searched, but this is not a confirmed empty home search.' : 'No home matches.'}</p>
           )}
           {groups.map((group) => (
-            <Command.Group key={group.group} heading={GROUP_HEADINGS[group.group]} className="pt-2" data-search-group={group.group}>
+            <Command.Group key={group.group} forceMount heading={GROUP_HEADINGS[group.group]} className="pt-2" data-search-group={group.group}>
               {group.results.map((result) => {
                 const detail = [result.typeLabel, result.status, result.freshness, formatSearchDate(result.asOf)].filter(Boolean).join(' · ');
                 return (
