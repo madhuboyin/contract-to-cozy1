@@ -34,7 +34,7 @@ function rankedAction(overrides = {}) {
     state,
     signal: `Signal for ${id}`,
     recommendedAction: `Do the thing for ${id}`,
-    presentation: { headline: `Headline for ${id}` },
+    presentation: { headline: `Headline for ${id}`, summary: `Homeowner summary for ${id}`, whyNow: `Homeowner reason for ${id}` },
     timing: { dueAt, windowStart: null, windowEnd: null, rationale: 'because' },
     evidence: [{ id: `${id}-evidence`, freshness, label: 'Evidence', source: 'test', observedAt: null, confidence: null }],
     confidence: { score: 0.8, label: 'HIGH', missing: [] },
@@ -101,6 +101,20 @@ test('comparativeReasonCodes falls back to STABLE_TIE_BREAK for identical compon
 
 test('comparativeReasonCodes is empty for the last visible item (no "next" to compare against)', () => {
   assert.deepEqual(comparativeReasonCodes(rankedAction(), null), []);
+});
+
+test('priority list carries governed homeowner copy separately from comparative ranking codes', () => {
+  const action = rankedAction({ id: 'chimney' });
+  action.presentation = {
+    headline: 'Fall checklist: Chimney cleaning and inspection',
+    summary: 'This is a fall checklist task. Can help prevent chimney fires and carbon monoxide hazards.',
+    whyNow: 'This is a fall checklist task. Can help prevent chimney fires and carbon monoxide hazards.',
+  };
+
+  const view = buildPriorityListView({ propertyId: 'property-1', generatedAt: '2026-11-04T12:00:00.000Z', actions: [action, rankedAction({ id: 'next' })] }, 'ASK');
+
+  assert.equal(view.items[0].whyThisAppeared, 'This is a fall checklist task. Can help prevent chimney fires and carbon monoxide hazards.');
+  assert.ok(view.items[0].comparativeReasonCodes.length > 0, 'audit codes remain available without becoming homeowner copy');
 });
 
 test('derivePriorityListItemState surfaces suppression, completion, unavailable, and stale flags', () => {

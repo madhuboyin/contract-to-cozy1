@@ -858,6 +858,10 @@ const PriorityListItemSchema = z.object({
   // The feed bucket (the same one the filter counts use), so a row's badge and the chips never disagree.
   rawPriority: z.enum(['NOW', 'SOON', 'PLAN', 'CONSIDER']).optional(),
   comparativeReasonCodes: z.array(z.string()).max(8),
+  // Governed homeowner copy from the canonical Home Action presentation.
+  // Comparative reason codes remain available for ranking audit, but the
+  // calm UI must not translate those internal comparisons into user copy.
+  whyThisAppeared: z.string().trim().min(1).max(500).nullable().default(null),
   confidenceLabel: z.enum(['LOW', 'MEDIUM', 'HIGH']),
   deadlineAt: z.string().nullable(),
   dependencyRefs: z.array(z.string()).max(10).default([]),

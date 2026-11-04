@@ -9,21 +9,6 @@ import { useCalmAnswer } from './calmContext';
 import type { AskBlockRenderer } from './types';
 import { formatAskDateOnly } from '@/features/ask/dateFormatting';
 
-const PRIORITY_REASON_TEXT: Record<string, string> = {
-  SAFETY_FLOOR: 'Safety comes first',
-  HIGHER_CONSEQUENCE: 'More important if left unresolved',
-  HIGHER_URGENCY: 'Needs attention sooner',
-  HIGHER_CONFIDENCE: 'Supported more strongly by your home record',
-  HIGHER_HOUSEHOLD_RELEVANCE: 'More relevant to your household',
-  MORE_ACTIONABLE: 'Ready for you to act on',
-  FEWER_MISSING_CONTEXT_ITEMS: 'Based on more complete home details',
-};
-
-function priorityReason(codes: string[]): string | null {
-  const reasons = codes.map((code) => PRIORITY_REASON_TEXT[code]).filter((reason): reason is string => Boolean(reason));
-  return reasons.length ? reasons.join(' · ') : null;
-}
-
 // Ask Intelligence FRD §22.1/Phase 9B "usefulness feedback" deliverable —
 // per-PRIORITY_LIST-item rating, distinct from ExecutionFeedback's
 // whole-response UP/DOWN thumbs.
@@ -125,7 +110,7 @@ export const PriorityListBlock: AskBlockRenderer<'PRIORITY_LIST'> = ({ block, ex
               item.stale && 'May need refresh',
               item.completed && 'Completed',
             ].filter((label): label is string => Boolean(label));
-            const reason = priorityReason(item.comparativeReasonCodes);
+            const reason = item.whyThisAppeared?.trim() || null;
             const compactMeta = [
               ...lifecycle,
               item.confidenceLabel === 'LOW' ? 'Confirm home details' : null,
@@ -143,7 +128,7 @@ export const PriorityListBlock: AskBlockRenderer<'PRIORITY_LIST'> = ({ block, ex
                     </div>
                     {item.watchState && <p className="text-xs text-slate-600">{item.watchState}</p>}
                     {compactMeta && <p className="text-xs text-slate-500">{compactMeta}</p>}
-                    {reason && <details className="text-xs text-slate-500"><summary className="w-fit cursor-pointer rounded-md font-medium hover:text-teal-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600">Why this appeared</summary><p className="mt-1">{reason}.</p></details>}
+                    {reason && <details className="text-xs text-slate-500"><summary className="w-fit cursor-pointer rounded-md font-medium hover:text-teal-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600">Why this appeared</summary><p className="mt-1">{/[.!?]$/.test(reason) ? reason : `${reason}.`}</p></details>}
                   </div>
                   <div className="flex items-center gap-1">
                     {item.inlineLaunch ? <button type="button" disabled={itemActionsDisabled} onClick={() => onItemAction('HOME_ACTION', item.homeActionId, item.inlineLaunch!.message, item.inlineLaunch!.operationId, item.inlineLaunch!.interactionType, undefined, item.homeActionId)} className={reviewButtonClass}>Review in Ask</button> : item.cta ? <ActionLink action={item.cta} /> : item.watchState && <p className="text-sm text-slate-700">{item.watchState}</p>}
@@ -160,7 +145,7 @@ export const PriorityListBlock: AskBlockRenderer<'PRIORITY_LIST'> = ({ block, ex
                 {item.unavailable && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-600">Unavailable</span>}
                 {item.stale && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-600">Stale</span>}
               </div>
-              {reason && <p className="mt-2 text-xs text-slate-600">{reason}.</p>}
+              {reason && <p className="mt-2 text-xs text-slate-600">{/[.!?]$/.test(reason) ? reason : `${reason}.`}</p>}
               <p className="mt-1 text-xs text-slate-500">
                 {item.confidenceLabel.toLowerCase()} confidence
                 {item.deadlineAt && ` · Due ${formatAskDateOnly(item.deadlineAt)}`}

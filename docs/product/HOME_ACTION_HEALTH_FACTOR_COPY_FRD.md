@@ -659,6 +659,13 @@ marker for both grouped checklist actions and accepted work. Titles are never us
 infer seasonal provenance, and existing linked tasks are enriched on read without a
 data migration.
 
+The collapsed **Why this appeared** disclosure uses the canonical Home Action's
+homeowner-facing `whyNow`, `summary`, or `whyItMatters` copy. Comparative ranking reason
+codes remain in the typed priority-list projection for auditability, but the calm UI must
+not translate them into phrases such as "supported more strongly" or "more actionable."
+For seasonal accepted work, the disclosure therefore states the season and concrete home
+impact rather than describing the ranking algorithm.
+
 ### 14.5 Future work
 
 - **Un-aggregate seasonal work** (the parent plan's "Slice 3"): once each seasonal

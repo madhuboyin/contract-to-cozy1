@@ -125,6 +125,7 @@ export interface PriorityListItemView {
   rawPriority: RankedHomeAction['priority'];
   consumerPriority: ConsumerPriorityCategory;
   comparativeReasonCodes: ComparativeReasonCode[];
+  whyThisAppeared: string | null;
   confidenceLabel: 'LOW' | 'MEDIUM' | 'HIGH';
   deadlineAt: string | null;
   dependencyRefs: string[];
@@ -185,6 +186,10 @@ export function buildPriorityListView(
       rawPriority: action.priority,
       consumerPriority: mapConsumerPriorityCategory(action),
       comparativeReasonCodes: comparativeReasonCodes(action, next),
+      whyThisAppeared: action.presentation?.whyNow
+        ?? action.presentation?.summary
+        ?? action.whyItMatters
+        ?? null,
       confidenceLabel: action.confidence.label,
       deadlineAt: action.timing.dueAt,
       dependencyRefs: action.relatedJourneyId ? [action.relatedJourneyId] : [],
