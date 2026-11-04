@@ -21,5 +21,6 @@ describe('Ask presentation contracts', () => {
 
   it('declares responsive priorities, honest states, and acceptance criteria without registry issues', () => {
     expect(validateRegisteredAskPresentationContracts()).toEqual([]);
+    expect(ASK_SPECIALIZED_RESULT_CONTRACTS.PRIORITY_LIST.version).toBe(2);
   });
 });

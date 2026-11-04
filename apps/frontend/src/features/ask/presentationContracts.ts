@@ -6,7 +6,7 @@ export type AskPresentationState = 'LOADING' | 'EMPTY' | 'PARTIAL' | 'SUCCESS' |
 
 export interface AskPresentationContract {
   id: string;
-  version: 1;
+  version: number;
   homeownerJob: string;
   family: AskPresentationFamily;
   essentialRegions: readonly string[];
@@ -53,6 +53,7 @@ export function validateAskPresentationContracts(contracts: readonly AskPresenta
   for (const contract of contracts) {
     if (ids.has(contract.id)) issues.push(`Duplicate presentation contract id: ${contract.id}`);
     ids.add(contract.id);
+    if (!Number.isInteger(contract.version) || contract.version < 1) issues.push(`${contract.id} has an invalid version`);
     if (!contract.homeownerJob.trim()) issues.push(`${contract.id} has no homeowner job`);
     if (contract.essentialRegions.length === 0) issues.push(`${contract.id} has no essential regions`);
     if (contract.desktopPriority.length === 0 || contract.mobilePriority.length === 0) issues.push(`${contract.id} has no responsive priorities`);
