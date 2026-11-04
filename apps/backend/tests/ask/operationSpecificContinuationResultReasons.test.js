@@ -45,6 +45,19 @@ test('source check: every reason registered for HVAC_DECISION_START is spelled i
 
 test('source check: every reason registered for INSPECTION_FINDING_UPDATE is spelled in the confirm handler', () => {
   const source = fs.readFileSync(path.join(__dirname, '../../src/services/ask/handlers/workflowConfirm.handler.ts'), 'utf8');
-  const confirm = source.slice(source.indexOf('async function confirmInspectionFindingUpdate'), source.indexOf('async function confirmRecallMatchUpdate'));
-  for (const reason of GATEABLE_RESULT_REASONS.INSPECTION_FINDING_UPDATE) assert.ok(confirm.includes(`'${reason}'`), `${reason} is not spelled in confirmInspectionFindingUpdate`);
+  const single = source.slice(source.indexOf('async function confirmInspectionFindingUpdate'), source.indexOf('async function confirmRecallMatchUpdate'));
+  const batchStart = source.indexOf('async function confirmInspectionFindingBatch');
+  assert.ok(batchStart >= 0, 'confirmInspectionFindingBatch not found');
+  const batch = source.slice(batchStart, source.indexOf('async function confirmInspectionFindingUpdate'));
+  assert.ok(batch.length > 0 && batchStart < source.indexOf('async function confirmInspectionFindingUpdate'), 'batch emitter must precede the single-finding emitter');
+  // Each reason is owned by exactly one emitter; the two are checked independently.
+  const BATCH_REASONS = ['INSPECTION_FINDING_BATCH_UPDATED'];
+  for (const reason of GATEABLE_RESULT_REASONS.INSPECTION_FINDING_UPDATE) {
+    if (BATCH_REASONS.includes(reason)) {
+      assert.ok(batch.includes(`'${reason}'`), `${reason} is not spelled in confirmInspectionFindingBatch`);
+      assert.ok(!single.includes(`'${reason}'`), `${reason} must not be emitted by confirmInspectionFindingUpdate`);
+    } else {
+      assert.ok(single.includes(`'${reason}'`), `${reason} is not spelled in confirmInspectionFindingUpdate`);
+    }
+  }
 });

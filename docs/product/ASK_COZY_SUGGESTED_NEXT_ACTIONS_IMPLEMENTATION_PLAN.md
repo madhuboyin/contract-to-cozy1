@@ -1287,7 +1287,7 @@ Stamp `focusedDecisionThreadId` only where the handler authoritatively holds exa
 
 The proposal's "add `omitWhenResultReason`" is already present in HEAD with one consumer (`HVAC_DECISION_START` → `HVAC_DECISION_CONTINUE`). Of the three proposed contradictions, **one is confirmed and two are not**:
 
-1. **Confirmed: `INSPECTION_FINDING_UPDATE` → Home Actions.** `confirmInspectionFindingUpdate` (`workflowConfirm.handler.ts`) settles with `INSPECTION_FINDING_ACCEPTED`, `INSPECTION_FINDING_DISMISSED` or `INSPECTION_FINDING_RESOLVED`, and confirmed results reach the shared finalizer with `reasonCode` intact (`askConfirm.ts`). Accepting a finding creates work that Home Actions lists; dismissing or resolving one creates none, yet the `HOME_ACTIONS:REVIEW_HOME_ACTIONS` recipe offered "Review all home priorities" after all three. That recipe is now omitted for dismissed and resolved results and kept for accepted. `INSPECTION_FINDINGS:REVIEW_INSPECTION_FINDINGS` ("review remaining findings") is valid after all three and is not gated. The batch path settles with `INSPECTION_FINDING_BATCH_UPDATED` (mixed actions), which is deliberately not gated.
+1. **Confirmed: `INSPECTION_FINDING_UPDATE` → Home Actions.** `confirmInspectionFindingUpdate` (`workflowConfirm.handler.ts`) settles with `INSPECTION_FINDING_ACCEPTED`, `INSPECTION_FINDING_DISMISSED` or `INSPECTION_FINDING_RESOLVED`, and confirmed results reach the shared finalizer with `reasonCode` intact (`askConfirm.ts`). Accepting a finding creates work that Home Actions lists; dismissing or resolving one creates none, yet the `HOME_ACTIONS:REVIEW_HOME_ACTIONS` recipe offered "Review all home priorities" after all three. That recipe is now omitted for dismissed and resolved results and kept for accepted. `INSPECTION_FINDINGS:REVIEW_INSPECTION_FINDINGS` ("review remaining findings") is valid after all three and is not gated. The batch path settles with `INSPECTION_FINDING_BATCH_UPDATED` (possibly all-dismiss); as of `4bb942d3` the static Home Actions recipe omits that reason too, and the parameter-aware skill handoff restores Home Actions when the batch contains at least one ACCEPT (tested for all-dismiss, all-accept and mixed).
    An earlier pass of this audit checked `INSPECTION_FINDING_DECISION_COMMAND` (whose recipes only offer "review findings/reports") instead of `INSPECTION_FINDING_UPDATE` and wrongly concluded no contradiction existed; that recipe set is unaffected.
 2. **Not confirmed: `HVAC_DECISION_OUTCOME_NONE` offers dispute or unlink.** No `HVAC_DECISION_OUTCOME_VIEW` recipe targets unlink; it offers continue and replacement guidance. The dispute control lives in the outcome summary block, emitted only for `_FOUND`.
 3. **Not confirmed: empty-state reads should pivot to setup.** The proposal named no operation. Reopen only with a named operation and a registered destination.
@@ -1300,7 +1300,7 @@ Built: a source-operation-scoped registry of gateable result reasons (`operation
 
 ### Change 2 status: domain-aware ordering (November 2, 2026; FRD 1.509)
 
-Built on the real pools above, not on nonexistent candidates. `suggestedActionDomainAffinity.ts` holds a reviewed operation → domain table (eight domains; one domain per operation; unlisted operations have none) and a profile area → domains table (LOCATION deliberately absent). `domainAffinity(currentOperationId, candidate)` returns 1 only when the trusted current operation's domain matches; the current operation comes from the finalizer, never from a candidate.
+Built on the real pools above, not on nonexistent candidates. `suggestedActionDomainAffinity.ts` holds a reviewed operation → domain table (eight domains; since `4bb942d3`, `sna-domain-affinity-2`, each operation has a base domain plus reviewed extras from `EXTRA_OPERATION_DOMAINS`; unlisted operations have none) and a profile area → domains table (LOCATION deliberately absent). `domainAffinity(currentOperationId, candidate)` returns 1 only when any of the trusted current operation's domains overlaps the candidate's; the current operation comes from the finalizer, never from a candidate.
 
 | Class | Order |
 |---|---|
@@ -1308,7 +1308,7 @@ Built on the real pools above, not on nonexistent candidates. `suggestedActionDo
 | HOME_OPPORTUNITY | granted current-result ownership ↓, granted active goal ↓, affinity ↓, materiality ↓, shared order (previously ordered by score, which folds the same signals together, then the shared order) |
 | CURATED_STARTER | least recently offered ↑, affinity ↓, shared order |
 
-Notes for review. (1) The exact-four policy version string was not bumped; the affinity table carries its own version. (2) The HOME_OPPORTUNITY cap admits one *unrelated* opportunity, so with only unowned candidates the affinity-first candidate is the single one shown; an owned candidate does not count against the cap. (3) The domain assignments (for example SYSTEMS → MAINTENANCE and FINANCE, RESPONSIBILITY → MAINTENANCE and COVERAGE) are judgment calls pending owner review; each is a one-line change in the table.
+Notes for review. (1) The exact-four policy version was bumped to `sna-exact-four-2` in `4bb942d3`, because affinity changes observable selection order and the policy version is what diagnostics and persisted results carry; the affinity table keeps its own version. (2) The HOME_OPPORTUNITY cap admits one *unrelated* opportunity, so with only unowned candidates the affinity-first candidate is the single one shown; an owned candidate does not count against the cap. (3) The domain assignments (for example SYSTEMS → MAINTENANCE and FINANCE, RESPONSIBILITY → MAINTENANCE and COVERAGE) are judgment calls pending owner review (this includes the multi-domain extras added in `4bb942d3`); each is a one-line change in the table. **The table is not owner-approved policy.**
 
 ### Change 3 inventory: fixable result limitations (November 3, 2026; no code change)
 
@@ -1384,3 +1384,17 @@ Warranty reminder behavior: offered after the warranty list to a contributor or 
 | Nonexistent catalogs, operations and materiality values in the original proposal | removed from this plan; the real inventories are above |
 
 Open owner items: the LOCATION asymmetry (separate requirements item); the domain assignments in `suggestedActionDomainAffinity.ts`; whether inspection-finding and claim chips are wanted at all (each would need its own validator, outcomes and freshness entry); the batch inspection receipt still offers Home Actions after dismissals.
+
+### Final validation record (November 3, 2026; after the post-`4bb942d3` review fixes)
+
+**Run (executed):**
+- `npx tsc --noEmit` in `apps/backend`: clean (no output).
+- `node --test --test-concurrency=2` over eight explicit files: `warrantyListReminderCandidates`, `suggestedNextActionsWarranties`, `operationSpecificContinuationResultReasons`, `operationSpecificContinuationCandidates`, `suggestedActionDomainAffinity`, `skillHandoff`, `exactFourActivation`, `startupRegistryValidation`. Result: 97 tests, 97 pass, 0 fail.
+
+**Review fixes covered by those runs:** a warranty reminder is nominated only while its reminder date (expiry minus the monitor's default lead) is still ahead, with boundary tests at 1, 10, 20, 29, 30 and 31 days; the reminder-state lookup is one query over every on-screen expiring warranty (no ten-record cap); the result-reason source check inspects the batch and single-finding emitters independently.
+
+**Not run:** the full `tests/ask` suite (`npm run test:ask:chunked`) and the full backend suite; any DB-bound test (`suggestedNextActionsInventory` failed on the prior pass for lack of a local DB and was not rerun); frontend tests; browser or live-backend verification; the graphify update.
+
+**Known failures:** none in the files run. Unrun suites may carry the pre-existing failures recorded in `BACKEND_TEST_SUITE_TRIAGE.md`.
+
+**Still open (owner):** approval of the domain table including the multi-domain extras; the LOCATION asymmetry; whether inspection-finding and claim chips are wanted. Phase 7 is therefore complete only for the code under test, not for owner sign-off or live verification.

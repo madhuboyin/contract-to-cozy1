@@ -34,7 +34,7 @@ const current = (id, expiresInDays) => ({
 });
 
 test('an expiring on-screen warranty yields one schema-valid, exact-entity reminder candidate with a registered outcome', async () => {
-  const records = [warranty('w1', 20)];
+  const records = [warranty('w1', 45)];
   const { load, calls } = loader();
   const [candidate, ...rest] = await warrantyListReminderCandidates(base(records, { loadReminderTasks: load }));
   assert.equal(rest.length, 0);
@@ -56,7 +56,7 @@ test('the warranty list owns this outcome (registered relationship), so the owne
 test('role floor: the destination needs the same write access the nomination requires', async () => {
   assert.notEqual(ASK_OPERATION_DEFINITIONS.HOME_DEADLINE_MONITOR.propertyRoleFloor, 'VIEWER');
   const { load, calls } = loader();
-  assert.deepEqual(await warrantyListReminderCandidates(base([warranty('w1', 20)], { canWrite: false, loadReminderTasks: load })), []);
+  assert.deepEqual(await warrantyListReminderCandidates(base([warranty('w1', 45)], { canWrite: false, loadReminderTasks: load })), []);
   assert.equal(calls.length, 0, 'a viewer costs no query');
 });
 
@@ -64,9 +64,9 @@ test('nothing expiring, not on screen, expired, not started or in conflict: no c
   const cases = [
     base([warranty('far', 200)]),
     base([warranty('gone', -3)]),
-    base([warranty('later', 20, { startDate: day(10) })]),
-    base([warranty('hidden', 20)], { shownIds: new Set(['other']) }),
-    base([warranty('conflict', 20)], { conflictedIds: new Set(['conflict']) }),
+    base([warranty('later', 45, { startDate: day(10) })]),
+    base([warranty('hidden', 45)], { shownIds: new Set(['other']) }),
+    base([warranty('conflict', 45)], { conflictedIds: new Set(['conflict']) }),
   ];
   for (const input of cases) {
     const { load, calls } = loader();
@@ -76,19 +76,19 @@ test('nothing expiring, not on screen, expired, not started or in conflict: no c
 });
 
 test('monitor state: a current reminder suppresses that warranty; the next soonest without one is offered; one batched query', async () => {
-  const records = [warranty('soon', 10), warranty('later', 30), warranty('latest', 50)];
-  const { load, calls } = loader([current('soon', 10)]);
+  const records = [warranty('soon', 35), warranty('later', 45), warranty('latest', 58)];
+  const { load, calls } = loader([current('soon', 35)]);
   const result = await warrantyListReminderCandidates(base(records, { loadReminderTasks: load }));
   assert.deepEqual(result.map((candidate) => candidate.entityContext.entityId), ['later']);
   assert.equal(calls.length, 1);
   assert.deepEqual(calls[0].keys, ['soon', 'later', 'latest'].map(warrantyReminderActionKey));
 
-  const all = loader(records.map((record, index) => current(record.id, [10, 30, 50][index])));
+  const all = loader(records.map((record, index) => current(record.id, [35, 45, 58][index])));
   assert.deepEqual(await warrantyListReminderCandidates(base(records, { loadReminderTasks: all.load })), []);
 });
 
 test('a cancelled, completed or differently-dated reminder does not count as current', () => {
-  const expiry = day(20);
+  const expiry = day(45);
   const due = new Date(expiry.getTime() - 30 * 86_400_000);
   assert.equal(warrantyReminderIsCurrent({ status: 'PENDING', nextDueDate: due }, expiry), true);
   assert.equal(warrantyReminderIsCurrent({ status: 'CANCELLED', nextDueDate: due }, expiry), false);
@@ -99,14 +99,37 @@ test('a cancelled, completed or differently-dated reminder does not count as cur
 
 test('a monitor-state lookup failure offers nothing rather than a possible duplicate', async () => {
   const failing = async () => { throw new Error('db down'); };
-  assert.deepEqual(await warrantyListReminderCandidates(base([warranty('w1', 20)], { loadReminderTasks: failing })), []);
+  assert.deepEqual(await warrantyListReminderCandidates(base([warranty('w1', 45)], { loadReminderTasks: failing })), []);
 });
 
-test('the lookup is bounded', async () => {
-  const records = Array.from({ length: 25 }, (_, i) => warranty(`w${String(i).padStart(2, '0')}`, 5 + i));
+test('a warranty expiring inside the monitor lead window is not nominated: its reminder date would already be past', async () => {
+  for (const days of [1, 10, 20, 29, 30]) {
+    const { load, calls } = loader();
+    assert.deepEqual(await warrantyListReminderCandidates(base([warranty('near', days)], { loadReminderTasks: load })), [], `${days} days`);
+    assert.equal(calls.length, 0, `${days} days must not query`);
+  }
+  const { load } = loader();
+  assert.equal((await warrantyListReminderCandidates(base([warranty('ok', 31)], { loadReminderTasks: load }))).length, 1, '31 days is the first nominated day');
+  // A near-expiry warranty never hides a later one that is still eligible.
+  const mixed = await warrantyListReminderCandidates(base([warranty('near', 10), warranty('ok', 40)], { loadReminderTasks: loader().load }));
+  assert.deepEqual(mixed.map((candidate) => candidate.entityContext.entityId), ['ok']);
+});
+
+test('the on-screen list is not truncated: an eligible warranty after many already-reminded ones is still offered, in one query', async () => {
+  const records = Array.from({ length: 15 }, (_, i) => warranty(`w${String(i).padStart(2, '0')}`, 31 + i));
+  const { load, calls } = loader(records.slice(0, 14).map((record, i) => current(record.id, 31 + i)));
+  const result = await warrantyListReminderCandidates(base(records, { loadReminderTasks: load }));
+  assert.deepEqual(result.map((candidate) => candidate.entityContext.entityId), ['w14']);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].keys.length, 15);
+});
+
+test('the lookup is one query over the displayed set', async () => {
+  const records = Array.from({ length: 25 }, (_, i) => warranty(`w${String(i).padStart(2, '0')}`, 31 + i));
   const { load, calls } = loader();
   await warrantyListReminderCandidates(base(records, { loadReminderTasks: load }));
-  assert.ok(calls[0].keys.length <= 10);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].keys.length, 25);
 });
 
 test('on-screen ids come from the real list result, so a filtered view only nominates what it shows', () => {

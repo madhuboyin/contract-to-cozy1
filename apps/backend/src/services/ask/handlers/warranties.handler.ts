@@ -456,6 +456,9 @@ registerCapabilityHandler('warranty.lookup', async (envelope) => {
 /** The reminder task id the deadline monitor keys on, shared with `confirmHomeDeadlineMonitor` so "already set up" means the same thing. */
 export const warrantyReminderActionKey = (warrantyId: string): string => `ask-deadline:WARRANTY:${warrantyId}`;
 
+/** The monitor dates a reminder `HOME_DEADLINE_DEFAULT_LEAD_DAYS` before expiry; offering it is only sensible while that date is still ahead. */
+export const warrantyReminderDateIsAhead = (expiryDate: Date, now: Date): boolean => expiryDate.getTime() - HOME_DEADLINE_DEFAULT_LEAD_DAYS * 86_400_000 > now.getTime();
+
 /** True when an active reminder task already exists at the due date the monitor would set for this expiry (so offering it again would only duplicate). */
 export function warrantyReminderIsCurrent(
   existing: { status: string; nextDueDate: Date | null } | null | undefined,
@@ -466,7 +469,7 @@ export function warrantyReminderIsCurrent(
 }
 
 /**
- * Typed next-action candidate for "remind me before this warranty expires". Offered only while the expiry is still ahead, and not
+ * Typed next-action candidate for "remind me before this warranty expires". Offered only while the reminder date (expiry minus the monitor's default lead) is still ahead, and not
  * when an active reminder already exists for this warranty at the date the monitor would set. The reminder deadline is driven by
  * the expiry date alone, so the corrected-receipt caller passes this only after an expiry-date change. The candidate carries the exact
  * warranty and its version; the monitor operation targets that warranty and never falls back to another.
@@ -478,7 +481,9 @@ export async function warrantyExpiryReminderCandidates(
   // The warranty is already saved when a receipt calls this, so a failed lookup must cost only the suggestion, never the receipt.
   try {
     const now = context.now ?? new Date();
-    if (!(warranty.expiryDate instanceof Date) || warranty.expiryDate.getTime() <= now.getTime()) return [];
+    if (!(warranty.expiryDate instanceof Date)) return [];
+    // The monitor dates the reminder HOME_DEADLINE_DEFAULT_LEAD_DAYS before expiry, so a warranty expiring inside that window would get a reminder dated in the past.
+    if (!warrantyReminderDateIsAhead(warranty.expiryDate, now)) return [];
     if (context.checkExistingReminder) {
       const existing = await prisma.propertyMaintenanceTask.findUnique({
         where: { propertyId_actionKey: { propertyId: context.propertyId, actionKey: warrantyReminderActionKey(warranty.id) } },
@@ -508,12 +513,11 @@ export async function warrantyExpiryReminderCandidates(
 }
 
 type ReminderTaskRow = { actionKey: string; status: string; nextDueDate: Date | null };
-const MAX_REMINDER_STATE_LOOKUPS = 10;
 
 /**
  * Read-side reminder nomination for the warranty list (Phase 5). The warranty must be on screen in the answer, expiring (started, within
- * `WARRANTY_EXPIRING_DAYS`), not in a coverage conflict (the monitor refuses those), and the caller must be able to write. Monitor state is
- * not loaded by the list, so ONE batched lookup over at most MAX_REMINDER_STATE_LOOKUPS on-screen expiring warranties decides which already
+ * `WARRANTY_EXPIRING_DAYS`, and far enough out that the reminder date is still ahead), not in a coverage conflict (the monitor refuses those), and the caller must be able to write. Monitor state is
+ * not loaded by the list, so ONE batched lookup over every on-screen expiring warranty (the list is already bounded) decides which already
  * has a current reminder; none of them costs no query. At most one candidate is returned: the soonest-expiring warranty still without a
  * reminder. The entity, version and outcome are the same ones the write-side receipt uses, so the destination and validator are unchanged.
  */
@@ -529,9 +533,8 @@ export async function warrantyListReminderCandidates(input: {
   if (!input.canWrite) return [];
   const now = input.now ?? new Date();
   const expiring = input.records
-    .filter((record) => input.shownIds.has(record.id) && !input.conflictedIds.has(record.id) && warrantyStatus(record, input.propertyId, now).key === 'EXPIRING')
-    .sort((left, right) => left.expiryDate.getTime() - right.expiryDate.getTime() || left.id.localeCompare(right.id))
-    .slice(0, MAX_REMINDER_STATE_LOOKUPS);
+    .filter((record) => input.shownIds.has(record.id) && !input.conflictedIds.has(record.id) && warrantyStatus(record, input.propertyId, now).key === 'EXPIRING' && warrantyReminderDateIsAhead(record.expiryDate, now))
+    .sort((left, right) => left.expiryDate.getTime() - right.expiryDate.getTime() || left.id.localeCompare(right.id));
   if (!expiring.length) return [];
   try {
     const load = input.loadReminderTasks ?? ((propertyId, actionKeys) => prisma.propertyMaintenanceTask.findMany({
