@@ -67,7 +67,7 @@ test.describe('journey 7: search across records, work, saved items, conversation
     await page.keyboard.press('Enter');
     const dialog = page.getByRole('dialog');
     await expect(dialog).toBeVisible();
-    await expect(dialog.getByRole('searchbox')).toBeFocused();
+    await expect(dialog.getByRole('combobox')).toBeFocused();
     await page.keyboard.type('furnace');
     await expect(dialog.getByText('Furnace manual').first()).toBeVisible({ timeout: 15000 });
     expect(Object.keys(api.bodies.search.at(-1) as object).sort()).toEqual(['propertyId', 'query']);
@@ -80,8 +80,8 @@ test.describe('journey 7: search across records, work, saved items, conversation
     await installDestinationApi(page);
     await page.goto(`/dashboard/ask/work?${home}`);
     await page.getByRole('button', { name: /Search your home/ }).first().click();
-    await page.getByRole('dialog').getByRole('searchbox').fill('furnace');
-    await page.getByRole('dialog').getByRole('button', { name: /Furnace manual/ }).first().click();
+    await page.getByRole('dialog').getByRole('combobox').fill('furnace');
+    await page.getByRole('dialog').getByRole('option', { name: /Furnace manual/ }).first().click();
     await expect(page).toHaveURL(/\/dashboard\/ask\/record\?propertyId=ask-property-fixture&section=documents&recordId=/);
   });
 
@@ -89,8 +89,8 @@ test.describe('journey 7: search across records, work, saved items, conversation
     await installDestinationApi(page);
     await page.goto(`/dashboard/ask/work?${home}`);
     await page.getByRole('button', { name: /Search your home/ }).first().click();
-    await page.getByRole('dialog').getByRole('searchbox').fill('zebra');
-    await expect(page.getByRole('dialog').getByText(/No matches|not a confirmed empty result/)).toBeVisible({ timeout: 15000 });
+    await page.getByRole('dialog').getByRole('combobox').fill('zebra');
+    await expect(page.getByRole('dialog').getByText(/No home matches|not a confirmed empty/)).toBeVisible({ timeout: 15000 });
   });
 });
 

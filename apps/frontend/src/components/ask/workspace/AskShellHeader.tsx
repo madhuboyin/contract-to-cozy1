@@ -2,8 +2,7 @@
 
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { useState, useRef } from 'react';
-import { Bell, Command, Loader2, LogOut, Search, Settings, Sparkles, UserRound } from 'lucide-react';
+import { Bell, Loader2, LogOut, Search, Settings, Sparkles, UserRound } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { CtcPropertySelector } from '@/components/layout/CtcPropertySelector';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -11,7 +10,6 @@ import { api } from '@/lib/api/client';
 import { useNotifications } from '@/lib/notifications/NotificationContext';
 import { usePropertyContext } from '@/lib/property/PropertyContext';
 import { useAskAccount } from './useAskAccount';
-import { AskSearchDialog } from '../search/AskSearchDialog';
 import { askQuestionHref, requestAskQuestion } from '../inline/askViewBridge';
 
 const WHATS_NEW = "What's new?";
@@ -36,8 +34,6 @@ export function AskShellHeader() {
   const selected = properties.find((property) => property.id === selectedPropertyId);
   const address = selected?.address?.trim() || selected?.name?.trim() || 'Select a home';
   const accountLabel = accountName || accountEmail || 'Account';
-  const [searchOpen, setSearchOpen] = useState(false);
-  const searchOpenerRef = useRef<HTMLButtonElement>(null);
 
   // Notifications are answers in the conversation: on the Ask page the question becomes the next turn; from anywhere else it opens Ask with the question asked.
   const askCozy = (question: string) => {
@@ -75,11 +71,8 @@ export function AskShellHeader() {
       />
 
       <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-2">
-        <button ref={searchOpenerRef} type="button" onClick={() => setSearchOpen(true)} aria-label="Search your home" aria-haspopup="dialog" className="grid h-11 w-11 place-items-center rounded-xl text-slate-600 hover:bg-stone-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700 focus-visible:ring-offset-2">
+        <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('ctc-command-palette-open'))} aria-label="Search your home, pages, and tools" aria-keyshortcuts="Control+K Meta+K" className="grid h-11 w-11 place-items-center rounded-xl text-slate-600 hover:bg-stone-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700 focus-visible:ring-offset-2">
           <Search className="h-5 w-5" aria-hidden="true" />
-        </button>
-        <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('ctc-command-palette-open'))} aria-label="Search pages, actions, and tools" className="grid h-11 w-11 place-items-center rounded-xl text-slate-600 hover:bg-stone-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700 focus-visible:ring-offset-2">
-          <Command className="h-5 w-5" aria-hidden="true" />
         </button>
         <button type="button" onClick={() => askCozy(WHATS_NEW)} aria-label={unreadCount > 0 ? `Notifications (${unreadCount} unread)` : 'Notifications'} className="relative grid h-11 w-11 place-items-center rounded-xl text-slate-600 hover:bg-stone-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700 focus-visible:ring-offset-2">
           <Bell className="h-5 w-5" aria-hidden="true" />
@@ -108,7 +101,6 @@ export function AskShellHeader() {
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-      <AskSearchDialog open={searchOpen} onOpenChange={setSearchOpen} propertyId={selectedPropertyId ?? undefined} returnFocusRef={searchOpenerRef} />
     </header>
   );
 }

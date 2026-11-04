@@ -31,8 +31,6 @@ jest.mock('../workspace/useAskAccount', () => ({
   useAskAccount: () => ({ accountName: 'Ada Homeowner', accountEmail: 'ada@example.com', loggingOut: false, handleLogout: logout }),
 }));
 
-jest.mock('../search/AskSearchDialog', () => ({ AskSearchDialog: ({ open }: { open: boolean }) => (open ? <div role="dialog" aria-label="Search your home" /> : null) }));
-
 jest.mock('@/components/layout/CtcPropertySelector', () => ({
   CtcPropertySelector: ({ onPropertySelect }: { onPropertySelect: (propertyId: string) => void }) => (
     <button type="button" onClick={() => onPropertySelect('home-2')}>Choose Lake House</button>
@@ -50,7 +48,7 @@ describe('AskShellHeader', () => {
 
     expect(screen.getByRole('link', { name: 'Ask Cozy Home' })).toHaveAttribute('href', '/dashboard/ask');
     expect(screen.getByRole('button', { name: 'Notifications (12 unread)' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Search pages, actions, and tools' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Search your home, pages, and tools' }));
     expect(opened).toHaveBeenCalledTimes(1);
     await user.click(screen.getByRole('button', { name: 'Open settings for Ada Homeowner' }));
     expect(await screen.findByRole('menuitem', { name: 'Profile, privacy & settings' })).toHaveAttribute('href', '/dashboard/profile');
@@ -59,11 +57,10 @@ describe('AskShellHeader', () => {
     expect(logout).toHaveBeenCalledTimes(1);
   });
 
-  it('opens the federated home search from its own button, separate from the pages-and-tools palette', () => {
+  it('has one search entry: the home search button is gone, the single button opens the unified dialog', () => {
     render(<AskShellHeader />);
-    expect(screen.queryByRole('dialog', { name: 'Search your home' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Search your home' }));
-    expect(screen.getByRole('dialog', { name: 'Search your home' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Search your home' })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /^Search / })).toHaveLength(1);
   });
 
   it('keeps the current destination but clears the old property conversation when switching homes', () => {

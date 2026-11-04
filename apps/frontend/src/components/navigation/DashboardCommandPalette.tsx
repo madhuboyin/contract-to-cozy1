@@ -18,6 +18,10 @@ import {
 } from '@/features/tools/capabilityCatalog';
 import { useCapabilityImpression } from '@/features/tools/useCapabilityImpression';
 import { resolveDashboardCommandPaletteCatalog } from './dashboardCommandPaletteCatalog';
+import { HOME_SEARCH_VALUE_PREFIX, OmniHomeSearchSections } from './OmniHomeSearchSections';
+import { searchResultAsk, searchResultHref } from '@/components/ask/search/searchPresentation';
+import { requestAskQuestion } from '@/components/ask/inline/askViewBridge';
+import type { AskSearchResult } from '@/features/ask/types';
 
 type CommandItem = {
   id: string;
@@ -119,6 +123,7 @@ export default function DashboardCommandPalette({ propertyId }: DashboardCommand
   const { selectedPropertyId } = usePropertyContext();
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState('');
+  const [highlighted, setHighlighted] = React.useState('');
   const [recentActions, setRecentActions] = React.useState<Array<{ id: string; label: string }>>([]);
   const isAdminNav = user?.role === 'ADMIN';
   const catalogContext = resolveDashboardCommandPaletteCatalog({
@@ -139,6 +144,7 @@ export default function DashboardCommandPalette({ propertyId }: DashboardCommand
 
   React.useEffect(() => {
     setRecentActions(readRecentActions());
+    if (!open) setQuery('');
   }, [open]);
 
   React.useEffect(() => {
@@ -255,6 +261,17 @@ export default function DashboardCommandPalette({ propertyId }: DashboardCommand
 
   const groups: Array<CommandItem['group']> = ['Navigation', 'Recent Actions', 'Quick Shortcuts', 'Tools'];
 
+  // Choosing a home-search result: ask its question in the conversation already on screen, otherwise the same deep link. Access is rechecked by
+  // Ask itself when the question runs; the typed destination comes from the server, never a URL it sent.
+  const onChooseHomeResult = (result: AskSearchResult) => {
+    const home = result.propertyId || resolvedPropertyId || '';
+    setOpen(false);
+    setQuery('');
+    const ask = searchResultAsk(result, home);
+    if (ask && pathname === '/dashboard/ask') requestAskQuestion(ask);
+    else router.push(searchResultHref(result, home));
+  };
+
   const onSelect = (item: CommandItem) => {
     if (item.toolId) {
       track('tool_discovery_clicked', {
@@ -273,8 +290,12 @@ export default function DashboardCommandPalette({ propertyId }: DashboardCommand
       <DialogContent className="max-w-xl p-0">
         <Command
           label="Dashboard Command Palette"
+          value={highlighted}
+          onValueChange={setHighlighted}
           className="overflow-hidden rounded-lg"
           filter={(value, search, keywords) => {
+            // Home-search results were already ranked and matched by the server.
+            if (value.startsWith(HOME_SEARCH_VALUE_PREFIX)) return 1;
             const combined = [value, ...(keywords ?? [])].join(' ');
             return fuzzyScore(combined, search);
           }}
@@ -286,15 +307,16 @@ export default function DashboardCommandPalette({ propertyId }: DashboardCommand
                 autoFocus
                 value={query}
                 onValueChange={setQuery}
-                placeholder="Search pages, actions, shortcuts, and tools..."
+                placeholder="Search your home, pages, actions, and tools..."
                 className="h-10 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               />
             </div>
           </div>
 
           <Command.List className="max-h-[420px] overflow-y-auto px-3 pb-3 [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:pb-1 [&_[cmdk-group-heading]]:text-[11px] [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:[&_[cmdk-group-heading]]:tracking-normal [&_[cmdk-group-heading]]:text-gray-400">
+            <OmniHomeSearchSections propertyId={resolvedPropertyId} query={query} enabled={open && !isAdminNav} onChoose={onChooseHomeResult} onTopResult={(value) => { if (value) setHighlighted(value); }} />
             <Command.Empty className="px-2 py-8 text-center text-sm text-gray-500">
-              No matching commands.
+              No matching pages or commands.
             </Command.Empty>
 
             {groups.map((group) => {
