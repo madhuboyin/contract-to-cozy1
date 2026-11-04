@@ -9,15 +9,14 @@ import type { AskOperationId } from '../askOperationRegistry';
 import type { SuggestedNextActionCandidate } from './suggestedNextActionCandidate';
 import { profileAreaForOutcome, type ProfileArea } from './actionableProfileRegistry';
 
-export const SUGGESTED_ACTION_DOMAIN_AFFINITY_VERSION = 'sna-domain-affinity-1';
+export const SUGGESTED_ACTION_DOMAIN_AFFINITY_VERSION = 'sna-domain-affinity-2';
 
 export const SUGGESTED_ACTION_DOMAINS = ['MAINTENANCE', 'INSPECTION', 'COVERAGE', 'FINANCE', 'SAFETY', 'HOME_RECORD', 'SEASONAL', 'GUIDANCE'] as const;
 export type SuggestedActionDomain = typeof SUGGESTED_ACTION_DOMAINS[number];
 
 const group = (domain: SuggestedActionDomain, operations: readonly AskOperationId[]): [AskOperationId, SuggestedActionDomain][] => operations.map((operation) => [operation, domain]);
 
-/** The domain an operation belongs to, for both the CURRENT operation and a candidate's destination operation. One domain per operation. */
-export const OPERATION_DOMAINS: Readonly<Partial<Record<AskOperationId, SuggestedActionDomain>>> = Object.freeze(Object.fromEntries([
+const BASE_OPERATION_DOMAIN: Readonly<Partial<Record<AskOperationId, SuggestedActionDomain>>> = Object.freeze(Object.fromEntries([
   ...group('MAINTENANCE', [
     'MAINTENANCE_BUDGET_FORECAST', 'MAINTENANCE_EVIDENCE_ATTACH', 'MAINTENANCE_FORECAST', 'MAINTENANCE_STATUS', 'MAINTENANCE_TASK_COMPLETE',
     'MAINTENANCE_TASK_CREATE', 'MAINTENANCE_TASK_UPDATE', 'MAINTENANCE_TEMPLATES_BROWSE', 'APPLIANCE_FAILURE_RISK', 'REPLACEMENT_GUIDANCE',
@@ -50,6 +49,39 @@ export const OPERATION_DOMAINS: Readonly<Partial<Record<AskOperationId, Suggeste
 ] as [string, SuggestedActionDomain][]));
 
 /**
+ * Reviewed ADDITIONAL domains for operations that genuinely span more than one (inventory, replacement guidance, cross-domain hubs, price/quote
+ * tools). Product policy: each row is a deliberate claim that the operation is relevant to those domains, not a convenience. An operation's
+ * domains are its base domain plus any extras listed here. Anything absent from both tables stays neutral.
+ */
+const EXTRA_OPERATION_DOMAINS: Readonly<Partial<Record<AskOperationId, readonly SuggestedActionDomain[]>>> = Object.freeze({
+  INVENTORY_LOOKUP: ['COVERAGE', 'HOME_RECORD'],
+  INVENTORY_ITEM_CORRECT: ['HOME_RECORD'],
+  INVENTORY_ITEM_CREATE: ['HOME_RECORD'],
+  REPLACEMENT_GUIDANCE: ['FINANCE', 'COVERAGE'],
+  APPLIANCE_FAILURE_RISK: ['COVERAGE', 'SAFETY'],
+  HVAC_DECISION_SCENARIO: ['FINANCE'],
+  HVAC_DECISION_START: ['FINANCE'],
+  HVAC_DECISION_CONTINUE: ['FINANCE'],
+  PROPERTY_SUMMARY: ['MAINTENANCE', 'FINANCE'],
+  DOCUMENT_LOOKUP: ['COVERAGE', 'INSPECTION'],
+  CAPTURE_WARRANTY_CONFIRM: ['HOME_RECORD'],
+  INSPECTION_NEGOTIATION_PACKAGE: ['FINANCE'],
+  QUOTE_COMPARISON_COMMAND: ['MAINTENANCE'],
+  QUOTE_COMPARISON_CREATE: ['MAINTENANCE'],
+  QUOTE_COMPARISON_REVIEW: ['MAINTENANCE'],
+  SERVICE_PRICE_CHECKS: ['MAINTENANCE'],
+  SERVICE_PRICE_CHECK_RUN: ['MAINTENANCE'],
+  RISK_MITIGATION_PLAN: ['MAINTENANCE'],
+  RECALL_MATCH_UPDATE: ['COVERAGE'],
+  RECALL_REVIEW: ['COVERAGE', 'MAINTENANCE'],
+});
+
+/** The domains an operation belongs to, for both the CURRENT operation and a candidate's destination operation. Affinity is any overlap. */
+export const OPERATION_DOMAINS: Readonly<Partial<Record<AskOperationId, readonly SuggestedActionDomain[]>>> = Object.freeze(Object.fromEntries(
+  Object.entries(BASE_OPERATION_DOMAIN).map(([operation, base]) => [operation, Object.freeze([...new Set([base as SuggestedActionDomain, ...(EXTRA_OPERATION_DOMAINS[operation as AskOperationId] ?? [])])])]),
+));
+
+/**
  * Domains in which a current result makes a profile-area capture more relevant. PROPERTY_CONTEXT_AREA_CAPTURE is one operation, so
  * its candidates are told apart by area (outcomeKey), not by operation. LOCATION is intentionally unmapped.
  */
@@ -63,17 +95,19 @@ export const PROFILE_AREA_DOMAINS: Readonly<Partial<Record<ProfileArea, readonly
 });
 
 /**
- * 1 when the trusted current operation's domain matches the candidate, else 0. A profile-area capture matches through its area's
+ * 1 when any of the trusted current operation's domains overlaps the candidate's, else 0. A profile-area capture matches through its area's
  * domains; any other candidate (home opportunity, curated starter) matches through its destination operation's own domain.
  * The current operation comes from the finalizer's trusted execution, never from a candidate.
  */
 export function domainAffinity(currentOperationId: string | null | undefined, candidate: SuggestedNextActionCandidate): 0 | 1 {
   if (!currentOperationId) return 0;
   const current = OPERATION_DOMAINS[currentOperationId as AskOperationId];
-  if (!current) return 0;
+  if (!current?.length) return 0;
   if (candidate.operationId === 'PROPERTY_CONTEXT_AREA_CAPTURE') {
     const area = profileAreaForOutcome(candidate.outcomeKey);
-    return area && PROFILE_AREA_DOMAINS[area]?.includes(current) ? 1 : 0;
+    const areaDomains = area ? PROFILE_AREA_DOMAINS[area] : undefined;
+    return areaDomains && current.some((domain) => areaDomains.includes(domain)) ? 1 : 0;
   }
-  return OPERATION_DOMAINS[candidate.operationId as AskOperationId] === current ? 1 : 0;
+  const destination = OPERATION_DOMAINS[candidate.operationId as AskOperationId];
+  return destination && current.some((domain) => destination.includes(domain)) ? 1 : 0;
 }

@@ -4,7 +4,7 @@ import type { SuggestedNextAction } from '../../../productFramework/ask/ask.cont
 import { SUGGESTED_ACTION_OUTCOMES } from './suggestedNextActionRegistry';
 import { operationSpecificContinuationOutcomeKeys } from './operationSpecificContinuationRecipes';
 
-export const SUGGESTED_NEXT_ACTION_EXACT_FOUR_POLICY_VERSION = 'sna-exact-four-1';
+export const SUGGESTED_NEXT_ACTION_EXACT_FOUR_POLICY_VERSION = 'sna-exact-four-2';
 
 /** Selection-order classes (plan C.15 "Selection order", positions 1-7). */
 export const SUGGESTED_NEXT_ACTION_SLOT_CLASSES = [

@@ -130,6 +130,7 @@ test('inspection-finding handoff only fires when work was actually created (acce
   assert.equal(go(completed('INSPECTION_FINDING_DISMISSED')), null);
   assert.equal(go(completed('INSPECTION_FINDING_RESOLVED')), null);
   assert.equal(go(completed('INSPECTION_FINDING_BATCH_UPDATED'), { inspectionFindingBatch: [{ action: 'DISMISS' }] }), null);
+  assert.equal(go(completed('INSPECTION_FINDING_BATCH_UPDATED'), { inspectionFindingBatch: [{ action: 'ACCEPT' }, { action: 'ACCEPT' }] })?.suggestedGoal, 'review-home-actions-feed');
   assert.equal(go(completed('INSPECTION_FINDING_BATCH_UPDATED'), { inspectionFindingBatch: [{ action: 'DISMISS' }, { action: 'ACCEPT' }] })?.suggestedGoal, 'review-home-actions-feed');
 });
 

@@ -52,14 +52,14 @@ const lifecycleKeyOf = (c) => registry.lifecycleKey({ operationId: c.operationId
 
 test('affinity registry: only registered operations, no LOCATION mapping, and every real candidate destination has a domain', () => {
   for (const operationId of Object.keys(affinity.OPERATION_DOMAINS)) assert.ok(ASK_OPERATION_DEFINITIONS[operationId], `${operationId} is not a registered operation`);
-  for (const domain of Object.values(affinity.OPERATION_DOMAINS)) assert.ok(affinity.SUGGESTED_ACTION_DOMAINS.includes(domain));
+  for (const domains of Object.values(affinity.OPERATION_DOMAINS)) assert.ok(domains.length > 0 && domains.every((domain) => affinity.SUGGESTED_ACTION_DOMAINS.includes(domain)));
   for (const [area, domains] of Object.entries(affinity.PROFILE_AREA_DOMAINS)) {
     assert.ok(PROFILE_AREAS.includes(area));
     assert.ok(domains.length > 0 && domains.every((domain) => affinity.SUGGESTED_ACTION_DOMAINS.includes(domain)));
   }
   assert.equal(affinity.PROFILE_AREA_DOMAINS.LOCATION, undefined, 'LOCATION is an unresolved registry asymmetry: no affinity is invented');
   const destinations = [...Object.values(OPPORTUNITIES).map((entry) => entry.operationId), 'SEASONAL_HOME_CARE', 'HOME_BASICS_GUIDE', 'HIRING_GUIDE', 'PROPERTY_SUMMARY'];
-  for (const operationId of destinations) assert.ok(affinity.OPERATION_DOMAINS[operationId], `${operationId} has no domain`);
+  for (const operationId of destinations) assert.ok(affinity.OPERATION_DOMAINS[operationId]?.length, `${operationId} has no domain`);
 });
 
 test('domainAffinity: unknown or missing current operation earns nothing, and LOCATION never matches', () => {
@@ -149,4 +149,15 @@ test('CURATED_STARTER: least-recently-offered rotation outranks affinity', () =>
   const chosen = outcomes(starterRun('SEASONAL_ITEM_COMMAND', lastOffered));
   assert.ok(!chosen.includes('REVIEW_THIS_SEASON') && !chosen.includes('PREPARE_NEXT_SEASON'),
     'recently offered seasonal starters rotate out even though the current operation is seasonal');
+});
+
+test('multi-domain: affinity is any overlap; extras are reviewed and unmapped operations stay neutral', () => {
+  assert.deepEqual([...affinity.OPERATION_DOMAINS.INVENTORY_LOOKUP].sort(), ['COVERAGE', 'HOME_RECORD', 'MAINTENANCE']);
+  assert.ok(affinity.OPERATION_DOMAINS.REPLACEMENT_GUIDANCE.includes('FINANCE'));
+  // Inventory lookup now earns affinity with both a warranty (COVERAGE) and a capital (via none) candidate only where domains overlap.
+  assert.equal(affinity.domainAffinity('INVENTORY_LOOKUP', opportunity('warranty')), 1);
+  assert.equal(affinity.domainAffinity('INVENTORY_LOOKUP', opportunity('capital')), 0);
+  assert.equal(affinity.domainAffinity('REPLACEMENT_GUIDANCE', opportunity('capital')), 1);
+  assert.equal(affinity.domainAffinity('REPLACEMENT_GUIDANCE', opportunity('inspection')), 0);
+  assert.equal(affinity.domainAffinity('HOME_ACTIONS', opportunity('capital')), 0);
 });

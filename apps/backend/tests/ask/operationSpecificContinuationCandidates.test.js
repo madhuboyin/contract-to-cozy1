@@ -274,7 +274,9 @@ test('INSPECTION_FINDING_UPDATE: Home Actions follows an accepted finding only; 
   for (const reason of ['INSPECTION_FINDING_ACCEPTED', 'INSPECTION_FINDING_DISMISSED', 'INSPECTION_FINDING_RESOLVED']) {
     assert.ok(targets(reason).includes(REMAINING), `${reason} keeps the remaining-findings review`);
   }
-  // Unknown or absent reasons (including the batch receipt) keep the full recipe set.
-  assert.ok(targets('INSPECTION_FINDING_BATCH_UPDATED').includes(HOME_ACTIONS));
+  // The batch receipt may be all-dismiss, so the static recipe omits Home Actions; the parameter-aware skill handoff restores it for batches with an ACCEPT.
+  assert.ok(!targets('INSPECTION_FINDING_BATCH_UPDATED').includes(HOME_ACTIONS));
+  assert.ok(targets('INSPECTION_FINDING_BATCH_UPDATED').includes(REMAINING));
+  // Absent reasons keep the full recipe set.
   assert.ok(targets(null).includes(HOME_ACTIONS));
 });

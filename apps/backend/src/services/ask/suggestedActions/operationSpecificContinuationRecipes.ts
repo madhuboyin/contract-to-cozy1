@@ -89,8 +89,8 @@ export const OPERATION_SPECIFIC_CONTINUATION_RECIPES: Readonly<Partial<Record<As
   ],
   INSPECTION_FINDING_UPDATE: [
     recipe('Review remaining findings', 'Show my open inspection findings', 'INSPECTION_FINDINGS', 'REVIEW_INSPECTION_FINDINGS', 'FINDING_UPDATED_REVIEW_REMAINING'),
-    // Accepting a finding creates work that Home Actions then lists; dismissing or resolving one creates none, so the row would imply new work.
-    { ...recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'FINDING_UPDATED_REVIEW_HOME_ACTIONS'), omitWhenResultReason: ['INSPECTION_FINDING_DISMISSED', 'INSPECTION_FINDING_RESOLVED'] },
+    // Accepting a finding creates work that Home Actions then lists; dismissing or resolving one creates none, so the row would imply new work. A batch is gated statically (it may be all-dismiss); the parameter-aware skill handoff restores Home Actions when the batch contains an ACCEPT.
+    { ...recipe('Review all home priorities', 'What needs my attention around the home?', 'HOME_ACTIONS', 'REVIEW_HOME_ACTIONS', 'FINDING_UPDATED_REVIEW_HOME_ACTIONS'), omitWhenResultReason: ['INSPECTION_FINDING_DISMISSED', 'INSPECTION_FINDING_RESOLVED', 'INSPECTION_FINDING_BATCH_UPDATED'] },
   ],
   INSPECTION_FINDING_DECISION_COMMAND: [
     recipe('Review inspection findings', 'Show my inspection findings', 'INSPECTION_FINDINGS', 'REVIEW_INSPECTION_FINDINGS', 'FINDING_DECISION_REVIEW_FINDINGS'),

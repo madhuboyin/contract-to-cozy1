@@ -102,7 +102,7 @@ test('a reviewed complete-surface result with declared contextual controls does 
   });
   assert.equal(r.shown.length, 0);
   assert.deepEqual(r.report.exactFour, {
-    policyVersion: 'sna-exact-four-1', applicability: 'EXEMPT', exemptReason: 'CONTEXTUAL_ACTIONS_IN_RESULT',
+    policyVersion: 'sna-exact-four-2', applicability: 'EXEMPT', exemptReason: 'CONTEXTUAL_ACTIONS_IN_RESULT',
   });
   assert.equal(r.calls.lifecycle, 0, 'contextual results do not load starter lifecycle state');
   assert.equal(r.offers.length, 0, 'no starter offers are recorded when the rich result owns the next action');

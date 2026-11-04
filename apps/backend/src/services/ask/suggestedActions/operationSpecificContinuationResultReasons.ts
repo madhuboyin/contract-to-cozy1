@@ -16,11 +16,12 @@ export const GATEABLE_RESULT_REASONS: Readonly<Partial<Record<AskOperationId, re
     'HVAC_DECISION_ALREADY_ACTIVE',
     'HVAC_DECISION_START_CONFIRMATION_REQUIRED',
   ]),
-  // Emitted by confirmInspectionFindingUpdate (workflowConfirm.handler.ts). The batch path emits INSPECTION_FINDING_BATCH_UPDATED, which is not gated.
+  // Emitted by confirmInspectionFindingUpdate (workflowConfirm.handler.ts). The batch path emits INSPECTION_FINDING_BATCH_UPDATED, gated on the static Home Actions recipe (the skill handoff restores it when the batch has an ACCEPT).
   INSPECTION_FINDING_UPDATE: Object.freeze([
     'INSPECTION_FINDING_ACCEPTED',
     'INSPECTION_FINDING_DISMISSED',
     'INSPECTION_FINDING_RESOLVED',
+    'INSPECTION_FINDING_BATCH_UPDATED',
   ]),
 });
 
