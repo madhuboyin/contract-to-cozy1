@@ -1,0 +1,199 @@
+{
+  "schemaVersion": "1.0",
+  "executionId": "execution-conversation-saved-stale",
+  "sessionId": "ask-acceptance-session",
+  "question": "Show my saved results",
+  "status": "READY_WITH_LIMITATIONS",
+  "property": {
+    "id": "ask-property-fixture",
+    "label": "Acceptance Home"
+  },
+  "skill": null,
+  "skillHandoff": null,
+  "operation": {
+    "id": "SAVED_RESULTS",
+    "version": "1.0",
+    "family": "STATUS_SUMMARY"
+  },
+  "declaredOperationId": null,
+  "continuesExecutionId": null,
+  "viewContinuation": null,
+  "originalResponse": null,
+  "viewState": {
+    "resultId": "result-execution-conversation-saved-stale",
+    "domainScopePhrase": null,
+    "dateScopePhrase": "10",
+    "statusFilter": "ACTIVE",
+    "selectedTaskId": null,
+    "revision": 1
+  },
+  "contextVersion": "conversation-certification-v1",
+  "blocks": [
+    {
+      "type": "SUMMARY",
+      "id": "saved-results-summary",
+      "title": "1 shown so far; some kinds could not be read, so this may not be everything",
+      "body": "1 shown so far; some kinds could not be read, so this may not be everything. Showing saved · newest first.",
+      "tone": "CAUTION",
+      "actions": [],
+      "headline": "1 shown so far; some kinds could not be read, so this may not be everything.",
+      "supportLine": "Showing saved · newest first."
+    },
+    {
+      "type": "GROUPED_LIST",
+      "id": "saved-results-list",
+      "title": "Saved",
+      "sections": [
+        {
+          "id": "saved",
+          "title": "Saved results",
+          "count": 1,
+          "items": [
+            {
+              "id": "thread-hvac",
+              "title": "HVAC quote comparison",
+              "description": "3 quotes compared",
+              "meta": [
+                "Out of date",
+                "Version 1",
+                "Facts as of Oct 20, 2026",
+                "A quote changed after this was compared.",
+                "Sensitive"
+              ],
+              "status": "Out of date",
+              "href": null,
+              "entityType": "DECISION_THREAD",
+              "actions": [
+                {
+                  "id": "saved-open",
+                  "label": "Open and review",
+                  "message": "Open HVAC quote comparison",
+                  "style": "PRIMARY",
+                  "interactionType": "CONVERSATION_CONTINUE",
+                  "operationId": "QUOTE_COMPARISON"
+                },
+                {
+                  "id": "saved-archive",
+                  "label": "Archive",
+                  "message": "Archive this saved result: HVAC quote comparison",
+                  "style": "QUIET",
+                  "interactionType": "MUTATE_RECORD",
+                  "operationId": "SAVED_ARCHIVE_COMMAND",
+                  "entityType": "SAVED_ARTIFACT",
+                  "entityId": "quote-comparison:thread-hvac-v1"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "actions": [],
+      "filters": [
+        {
+          "id": "fresh-current",
+          "label": "Current",
+          "message": "Only show current saved results",
+          "active": false
+        },
+        {
+          "id": "fresh-stale",
+          "label": "Out of date",
+          "message": "Only show out of date saved results",
+          "active": false
+        },
+        {
+          "id": "fresh-expired",
+          "label": "Expired",
+          "message": "Only show expired saved results",
+          "active": false
+        },
+        {
+          "id": "fresh-superseded",
+          "label": "Replaced by a newer version",
+          "message": "Only show replaced saved results",
+          "active": false
+        },
+        {
+          "id": "type-home_report_export",
+          "label": "Home reports",
+          "message": "Only show home reports",
+          "active": false
+        },
+        {
+          "id": "type-quote_comparison",
+          "label": "Quote comparisons",
+          "message": "Only show quote comparisons",
+          "active": false
+        },
+        {
+          "id": "type-decision_recommendation",
+          "label": "Decision recommendations",
+          "message": "Only show decision recommendations",
+          "active": false
+        },
+        {
+          "id": "type-property_brief",
+          "label": "Property briefs",
+          "message": "Only show property briefs",
+          "active": false
+        },
+        {
+          "id": "type-seasonal_checklist",
+          "label": "Seasonal checklists",
+          "message": "Only show seasonal checklists",
+          "active": false
+        },
+        {
+          "id": "type-sell_hold_rent_analysis",
+          "label": "Sell, hold or rent analyses",
+          "message": "Only show sell, hold or rent analyses",
+          "active": false
+        },
+        {
+          "id": "show-archived",
+          "label": "Archived",
+          "message": "Only show archived saved results",
+          "active": false
+        }
+      ],
+      "collection": {
+        "sourceTotal": null,
+        "fetchedCount": 1,
+        "deliveredCount": 1,
+        "nextPageAvailable": false,
+        "deliveryTruncated": false
+      }
+    },
+    {
+      "type": "BOUNDARY",
+      "id": "saved-results-partial",
+      "title": "Some saved results could not be shown",
+      "body": "Negotiation analyses: Negotiation analyses belong to a buyer case; the case's visibility rule has not been connected to Saved.; Buyer workspaces: Buyer workspaces apply only to a purchase in progress; their lifecycle gate has not been connected to Saved.; Seller prep plans: The seller prep plan is a per-person preference record without versions; it needs its own Saved identity before it is projected.; Moving plans: Moving plans have no Ask read operation to govern visibility.; Home digital will: The digital will holds sensitive estate content and needs its own visibility and sharing rules before it is projected.; Room and plant checklists: Room and plant checklists have no read operation of their own to govern visibility.; Renovation compliance checklists: Compliance checklists are part of a renovation case and need that case's visibility rule before they are projected.; Annotated images: No annotated-image record exists yet, so there is nothing to project.. Nothing here is treated as zero or complete for those.",
+      "severity": "CAUTION",
+      "suggestions": []
+    },
+    {
+      "type": "BOUNDARY",
+      "id": "saved-results-boundary",
+      "title": "Saved only finds and reopens",
+      "body": "Each result stays where it is kept; this lists it and reopens it at its current version. Nothing is copied. Pinning a result in a conversation is separate and saves nothing.",
+      "severity": "INFO",
+      "suggestions": []
+    }
+  ],
+  "captureRequests": [],
+  "clarification": null,
+  "confirmation": null,
+  "correctionCapabilities": {
+    "intent": true,
+    "entity": false,
+    "homeRecord": true,
+    "retryResponse": false
+  },
+  "suggestions": [],
+  "suggestedNextActions": [],
+  "createdAt": "2026-10-20T00:20:00.000Z",
+  "updatedAt": "2026-10-20T00:20:00.000Z",
+  "staleSince": null,
+  "childExecutions": []
+}

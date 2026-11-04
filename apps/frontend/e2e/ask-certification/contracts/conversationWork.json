@@ -1,0 +1,206 @@
+{
+  "schemaVersion": "1.0",
+  "executionId": "execution-conversation-work",
+  "sessionId": "ask-acceptance-session",
+  "question": "What needs me?",
+  "status": "ANSWERED",
+  "property": {
+    "id": "ask-property-fixture",
+    "label": "Acceptance Home"
+  },
+  "skill": null,
+  "skillHandoff": null,
+  "operation": {
+    "id": "WORK_OVERVIEW",
+    "version": "1.0",
+    "family": "STATUS_SUMMARY"
+  },
+  "declaredOperationId": null,
+  "continuesExecutionId": null,
+  "viewContinuation": null,
+  "originalResponse": null,
+  "viewState": {
+    "resultId": "result-execution-conversation-work",
+    "domainScopePhrase": null,
+    "dateScopePhrase": "10",
+    "statusFilter": "NEEDS_YOU",
+    "selectedTaskId": null,
+    "revision": 1
+  },
+  "contextVersion": "conversation-certification-v1",
+  "blocks": [
+    {
+      "type": "SUMMARY",
+      "id": "work-overview-summary",
+      "title": "2 things need you",
+      "body": "2 things need you. Showing needs you · all kinds of work · most recently updated first.",
+      "tone": "CAUTION",
+      "actions": [],
+      "headline": "2 things need you.",
+      "supportLine": "Showing needs you · all kinds of work · most recently updated first."
+    },
+    {
+      "type": "GROUPED_LIST",
+      "id": "work-overview-results",
+      "title": "Needs you",
+      "sections": [
+        {
+          "id": "work",
+          "title": "Needs you work",
+          "count": 2,
+          "items": [
+            {
+              "id": "34cad369-0bde-4ae7-b626-35b2dc5d1218",
+              "title": "Clean the gutters",
+              "description": "Keeps the home safe and efficient.",
+              "meta": [
+                "Home tasks",
+                "Next: Start or schedule this"
+              ],
+              "status": "Accepted",
+              "href": null,
+              "entityType": "OperationalWorkItem",
+              "actions": [
+                {
+                  "id": "work-continue",
+                  "label": "Start or schedule this",
+                  "message": "Continue: Clean the gutters",
+                  "style": "PRIMARY",
+                  "interactionType": "CONVERSATION_CONTINUE",
+                  "operationId": "HOME_WORK_ITEMS"
+                }
+              ]
+            },
+            {
+              "id": "e66aecad-6a86-414d-a832-05f365152339",
+              "title": "Replace furnace filter",
+              "description": "Keeps the home safe and efficient.",
+              "meta": [
+                "Home tasks",
+                "Next: Start or schedule this"
+              ],
+              "status": "Accepted",
+              "href": null,
+              "entityType": "OperationalWorkItem",
+              "actions": [
+                {
+                  "id": "work-continue",
+                  "label": "Start or schedule this",
+                  "message": "Continue: Replace furnace filter",
+                  "style": "PRIMARY",
+                  "interactionType": "CONVERSATION_CONTINUE",
+                  "operationId": "HOME_WORK_ITEMS"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "actions": [],
+      "filters": [
+        {
+          "id": "view-needs_you",
+          "label": "Needs you · 2",
+          "message": "Only show work that needs me",
+          "active": true
+        },
+        {
+          "id": "view-active",
+          "label": "Active",
+          "message": "Only show active work",
+          "active": false
+        },
+        {
+          "id": "view-waiting",
+          "label": "Waiting",
+          "message": "Only show work that is waiting",
+          "active": false
+        },
+        {
+          "id": "view-scheduled",
+          "label": "Scheduled",
+          "message": "Only show scheduled work",
+          "active": false
+        },
+        {
+          "id": "view-completed",
+          "label": "Completed · 0",
+          "message": "Only show completed work",
+          "active": false
+        },
+        {
+          "id": "view-archived",
+          "label": "Archived · 0",
+          "message": "Only show archived work",
+          "active": false
+        },
+        {
+          "id": "kind-pending_execution",
+          "label": "Pending requests",
+          "message": "Only show pending request work",
+          "active": false
+        },
+        {
+          "id": "kind-decision_thread",
+          "label": "Decisions",
+          "message": "Only show decision work",
+          "active": false
+        },
+        {
+          "id": "kind-incident",
+          "label": "Incidents",
+          "message": "Only show incident work",
+          "active": false
+        },
+        {
+          "id": "kind-claim",
+          "label": "Claims",
+          "message": "Only show claim work",
+          "active": false
+        },
+        {
+          "id": "kind-project",
+          "label": "Projects",
+          "message": "Only show project work",
+          "active": false
+        },
+        {
+          "id": "kind-guidance_journey",
+          "label": "Guided plans",
+          "message": "Only show guided plan work",
+          "active": false
+        }
+      ],
+      "collection": {
+        "sourceTotal": 2,
+        "fetchedCount": 2,
+        "deliveredCount": 2,
+        "nextPageAvailable": false,
+        "deliveryTruncated": false
+      }
+    },
+    {
+      "type": "BOUNDARY",
+      "id": "work-overview-boundary",
+      "title": "Each item stays with its own record",
+      "body": "This lists work from each area of your home record. Opening an item continues it where it is kept; nothing is copied or changed here.",
+      "severity": "INFO",
+      "suggestions": []
+    }
+  ],
+  "captureRequests": [],
+  "clarification": null,
+  "confirmation": null,
+  "correctionCapabilities": {
+    "intent": true,
+    "entity": false,
+    "homeRecord": true,
+    "retryResponse": false
+  },
+  "suggestions": [],
+  "suggestedNextActions": [],
+  "createdAt": "2026-10-20T00:20:00.000Z",
+  "updatedAt": "2026-10-20T00:20:00.000Z",
+  "staleSince": null,
+  "childExecutions": []
+}

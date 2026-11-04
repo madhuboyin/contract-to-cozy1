@@ -1,0 +1,196 @@
+{
+  "schemaVersion": "1.0",
+  "executionId": "execution-conversation-notifications-dismissed",
+  "sessionId": "ask-acceptance-session",
+  "question": "Show dismissed notifications",
+  "status": "ANSWERED",
+  "property": {
+    "id": "ask-property-fixture",
+    "label": "Acceptance Home"
+  },
+  "skill": null,
+  "skillHandoff": null,
+  "operation": {
+    "id": "NOTIFICATIONS_OVERVIEW",
+    "version": "1.0",
+    "family": "STATUS_SUMMARY"
+  },
+  "declaredOperationId": null,
+  "continuesExecutionId": null,
+  "viewContinuation": null,
+  "originalResponse": null,
+  "viewState": {
+    "resultId": "result-execution-conversation-notifications-dismissed",
+    "domainScopePhrase": null,
+    "dateScopePhrase": "10",
+    "statusFilter": "DISMISSED",
+    "selectedTaskId": null,
+    "revision": 1
+  },
+  "contextVersion": "conversation-certification-v1",
+  "blocks": [
+    {
+      "type": "SUMMARY",
+      "id": "notifications-summary",
+      "title": "1 dismissed or set-aside notification",
+      "body": "1 dismissed or set-aside notification. Showing dismissed or set aside · newest first.",
+      "tone": "DEFAULT",
+      "actions": [],
+      "headline": "1 dismissed or set-aside notification.",
+      "supportLine": "Showing dismissed or set aside · newest first."
+    },
+    {
+      "type": "GROUPED_LIST",
+      "id": "notifications-list",
+      "title": "Dismissed and set aside",
+      "sections": [
+        {
+          "id": "notifications",
+          "title": "Dismissed and set-aside notifications",
+          "count": 1,
+          "items": [
+            {
+              "id": "62b9e12e-d0d4-4015-85ee-6c633cbee766",
+              "title": "An old notice",
+              "description": "Something changed.",
+              "meta": [
+                "Your requests and claims",
+                "1 Main St, Testville",
+                "Oct 20, 2026",
+                "Unread"
+              ],
+              "status": "Unread",
+              "href": null,
+              "entityType": null,
+              "actions": [
+                {
+                  "id": "notification-restore",
+                  "label": "Bring back",
+                  "message": "Bring this notification back: An old notice",
+                  "style": "QUIET",
+                  "interactionType": "MUTATE_RECORD",
+                  "operationId": "NOTIFICATION_COMMAND",
+                  "entityType": "ASK_NOTIFICATION",
+                  "entityId": "62b9e12e-d0d4-4015-85ee-6c633cbee766"
+                },
+                {
+                  "id": "notification-read",
+                  "label": "Mark read",
+                  "message": "Mark this notification read: An old notice",
+                  "style": "QUIET",
+                  "interactionType": "MUTATE_RECORD",
+                  "operationId": "NOTIFICATION_COMMAND",
+                  "entityType": "ASK_NOTIFICATION",
+                  "entityId": "62b9e12e-d0d4-4015-85ee-6c633cbee766"
+                },
+                {
+                  "id": "notification-feedback",
+                  "label": "Give feedback",
+                  "message": "Give feedback on this notification: An old notice",
+                  "style": "QUIET",
+                  "interactionType": "MUTATE_RECORD",
+                  "operationId": "NOTIFICATION_COMMAND",
+                  "entityType": "ASK_NOTIFICATION",
+                  "entityId": "62b9e12e-d0d4-4015-85ee-6c633cbee766"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "actions": [],
+      "filters": [
+        {
+          "id": "unread",
+          "label": "Unread · 4",
+          "message": "Only show unread notifications",
+          "active": false
+        },
+        {
+          "id": "category-safety",
+          "label": "Safety",
+          "message": "Only show safety notifications",
+          "active": false
+        },
+        {
+          "id": "category-active_damage",
+          "label": "Active damage",
+          "message": "Only show active damage notifications",
+          "active": false
+        },
+        {
+          "id": "category-material_deadline",
+          "label": "Deadlines",
+          "message": "Only show deadlines notifications",
+          "active": false
+        },
+        {
+          "id": "category-workflow",
+          "label": "Your requests and claims",
+          "message": "Only show your requests and claims notifications",
+          "active": false
+        },
+        {
+          "id": "category-maintenance",
+          "label": "Maintenance",
+          "message": "Only show maintenance notifications",
+          "active": false
+        },
+        {
+          "id": "category-coverage",
+          "label": "Coverage",
+          "message": "Only show coverage notifications",
+          "active": false
+        },
+        {
+          "id": "category-project",
+          "label": "Projects",
+          "message": "Only show projects notifications",
+          "active": false
+        },
+        {
+          "id": "category-recall",
+          "label": "Recalls",
+          "message": "Only show recalls notifications",
+          "active": false
+        },
+        {
+          "id": "show-inbox",
+          "label": "Not dismissed",
+          "message": "Now show notifications that are not dismissed",
+          "active": false
+        }
+      ],
+      "collection": {
+        "sourceTotal": 1,
+        "fetchedCount": 1,
+        "deliveredCount": 1,
+        "nextPageAvailable": false,
+        "deliveryTruncated": false
+      }
+    },
+    {
+      "type": "BOUNDARY",
+      "id": "notifications-boundary",
+      "title": "Dismissing only tidies your inbox",
+      "body": "Dismissing or marking read changes only what you see here. Marking one not relevant or already handled also tells Cozy what is useful to you. The notification, its history and its delivery are untouched, and you can bring a dismissed or set-aside one back.",
+      "severity": "INFO",
+      "suggestions": []
+    }
+  ],
+  "captureRequests": [],
+  "clarification": null,
+  "confirmation": null,
+  "correctionCapabilities": {
+    "intent": true,
+    "entity": false,
+    "homeRecord": true,
+    "retryResponse": false
+  },
+  "suggestions": [],
+  "suggestedNextActions": [],
+  "createdAt": "2026-10-20T00:20:00.000Z",
+  "updatedAt": "2026-10-20T00:20:00.000Z",
+  "staleSince": null,
+  "childExecutions": []
+}

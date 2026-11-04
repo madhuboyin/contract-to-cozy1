@@ -160,7 +160,7 @@ function ViewShortcuts({ onAsk, onAfterOpen }: { onAsk: (question: string) => vo
       {QUESTION_SHORTCUTS.map(({ question, label, hint, Icon }) => (
         <li key={question}>
           <button type="button" onClick={() => { onAsk(question); onAfterOpen?.(); }} className="flex min-h-10 w-full items-center gap-2 rounded-xl px-3 py-1.5 text-left text-sm text-slate-700 transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600">
-            <Icon className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden="true" /><span className="min-w-0 flex-1">{label}</span><span className="text-xs text-slate-400">{hint}</span>
+            <Icon className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden="true" /><span className="min-w-0 flex-1">{label}</span><span className="text-xs text-slate-600">{hint}</span>
           </button>
         </li>
       ))}
@@ -169,8 +169,8 @@ function ViewShortcuts({ onAsk, onAfterOpen }: { onAsk: (question: string) => vo
 }
 
 function ExploreStatus({ state }: { state: ExploreState }) {
-  if (state.loading && !state.topics.length) return <p className="px-3 py-2 text-xs text-slate-400" role="status">Loading ideas…</p>;
-  if (!state.topics.length) return <p className="px-3 py-2 text-xs text-slate-500" role="status">{state.failed ? 'Ideas are unavailable right now. You can still ask anything.' : 'No ideas to suggest right now.'}</p>;
+  if (state.loading && !state.topics.length) return <p className="px-3 py-2 text-xs text-slate-600" role="status">Loading ideas…</p>;
+  if (!state.topics.length) return <p className="px-3 py-2 text-xs text-slate-700" role="status">{state.failed ? 'Ideas are unavailable right now. You can still ask anything.' : 'No ideas to suggest right now.'}</p>;
   return null;
 }
 
@@ -187,7 +187,7 @@ export function ExploreRailGroup({ state, activeTopicId, onOpen, onAskShortcut, 
   const ref = useVisibleOnce<HTMLElement>(state.topics.length ? 'topics' : 'none', state.topics.length ? onVisible : undefined);
   return (
     <section ref={ref} className="mt-3 border-y border-stone-200 py-3" aria-labelledby="ask-explore-rail-title" data-ask-explore="rail">
-      <h3 id="ask-explore-rail-title" className="px-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Explore with Cozy</h3>
+      <h3 id="ask-explore-rail-title" className="px-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-700">Explore with Cozy</h3>
       <div className="mt-1">
         <ExploreStatus state={state} />
         {state.topics.length > 0 && <TopicButtons topics={state.topics} activeTopicId={activeTopicId} onOpen={onOpen} moreIdeas={moreIdeas} />}
@@ -300,7 +300,7 @@ export function ExploreTargetPicker({ selector, topicLabel, busy, onChoose, onCa
 }) {
   const back = <button type="button" onClick={onCancel} className="mt-3 min-h-10 rounded-xl px-3 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600">Back to {topicLabel}</button>;
   const heading = <h3 id="ask-explore-picker-title" className="mt-4 text-base font-semibold text-slate-900">{selector.status === 'ready' ? selector.selection.title : selector.starter.label}</h3>;
-  if (selector.status === 'loading') return <section aria-labelledby="ask-explore-picker-title" data-ask-explore="picker">{heading}<p className="mt-2 text-sm text-slate-500" role="status">Checking your home…</p>{back}</section>;
+  if (selector.status === 'loading') return <section aria-labelledby="ask-explore-picker-title" data-ask-explore="picker">{heading}<p className="mt-2 text-sm text-slate-600" role="status">Checking your home…</p>{back}</section>;
   const unreadable = selector.status === 'failed' || selector.selection.state === 'UNAVAILABLE';
   if (unreadable) {
     return (

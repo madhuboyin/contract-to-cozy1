@@ -125,7 +125,7 @@ export function ConversationHistoryNav({ items, pinnedItems = [], view = 'RECENT
       <div data-history-rail-scroll="" className="min-h-0 flex-1 overflow-y-auto pr-1">
       {!calm && <div className="mb-4 flex items-center gap-2 px-1">
         <span className="grid h-8 w-8 place-items-center rounded-xl bg-teal-700 text-white"><Sparkles className="h-4 w-4" aria-hidden="true" /></span>
-        <div><p className="text-sm font-semibold text-slate-950">Ask Cozy</p><p className="text-[11px] text-slate-500">Your home assistant</p></div>
+        <div><p className="text-sm font-semibold text-slate-950">Ask Cozy</p><p className="text-[11px] text-slate-700">Your home assistant</p></div>
       </div>}
       <div className="flex items-center gap-1">
         <button type="button" aria-label="New Ask Cozy session" onClick={onNew} className="flex min-h-11 min-w-0 flex-1 items-center gap-2 whitespace-nowrap rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 transition hover:bg-white hover:shadow-sm">
@@ -150,13 +150,13 @@ export function ConversationHistoryNav({ items, pinnedItems = [], view = 'RECENT
       </label>}
       <div className="mt-4">
         {issue && <p className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900" role="status">{issue}</p>}
-        {loading && <p className="px-2 py-3 text-xs text-slate-400" role="status">{archivedView ? 'Loading archived conversations…' : query.trim() ? 'Searching conversations…' : 'Loading recent conversations…'}</p>}
+        {loading && <p className="px-2 py-3 text-xs text-slate-600" role="status">{archivedView ? 'Loading archived conversations…' : query.trim() ? 'Searching conversations…' : 'Loading recent conversations…'}</p>}
         {grouped.length === 0 && !loading ? (
           // IW-CALM-008: with no history, no search and no error there is nothing to say, so the calm rail shows nothing.
           calm && !archivedView && !query.trim() && !issue ? null : <p className="rounded-xl bg-slate-50 px-3 py-4 text-sm text-slate-500">{archivedView ? issue ? 'Archived conversations are unavailable right now.' : 'No archived conversations.' : query.trim() ? issue ? 'Search results are unavailable right now.' : 'No conversations match this search.' : issue ? 'No conversations are available to show right now.' : 'Your recent conversations will appear here.'}</p>
         ) : grouped.map((group) => (
           <section key={group.label} className="mb-5" aria-labelledby={`ask-history-${group.label.replace(/\s+/g, '-').toLowerCase()}`}>
-            <h3 id={`ask-history-${group.label.replace(/\s+/g, '-').toLowerCase()}`} className="px-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">{group.label}</h3>
+            <h3 id={`ask-history-${group.label.replace(/\s+/g, '-').toLowerCase()}`} className="px-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-700">{group.label}</h3>
             <ul className="mt-1 space-y-1">
               {group.items.map((session) => (
                 <li key={session.sessionId}>
@@ -182,11 +182,11 @@ export function ConversationHistoryNav({ items, pinnedItems = [], view = 'RECENT
       </div>
       <div className="border-t border-slate-200 pt-3">
         {backHref && <Link href={backHref} className="flex min-h-10 items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-white hover:text-slate-950"><ArrowLeft className="h-4 w-4" />{backLabel || 'Back to Home'}</Link>}
-        {!calm && <p className="mt-2 px-3 text-[11px] leading-4 text-slate-400">{scope === 'ALL_HOMES' ? 'Conversations across homes you can access.' : 'Recent conversations for the selected home.'} ContractToCozy navigation remains available above.</p>}
+        {!calm && <p className="mt-2 px-3 text-[11px] leading-4 text-slate-600">{scope === 'ALL_HOMES' ? 'Conversations across homes you can access.' : 'Recent conversations for the selected home.'} ContractToCozy navigation remains available above.</p>}
         {(accountName || accountEmail || onLogout) && <div className="mt-2 border-t border-slate-200 pt-3" aria-label="Account">
           <div className="flex items-center gap-2 px-3 py-1.5">
             <UserRound className="h-4 w-4 shrink-0 text-slate-500" aria-hidden="true" />
-            <div className="min-w-0"><p className="truncate text-xs font-semibold text-slate-800">{accountName || 'Signed in'}</p>{accountEmail && <p className="truncate text-[11px] text-slate-500">{accountEmail}</p>}</div>
+            <div className="min-w-0"><p className="truncate text-xs font-semibold text-slate-800">{accountName || 'Signed in'}</p>{accountEmail && <p className="truncate text-[11px] text-slate-600">{accountEmail}</p>}</div>
           </div>
           {onLogout && <button type="button" disabled={loggingOut} onClick={onLogout} className="mt-1 flex min-h-10 w-full items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-red-50 hover:text-red-700 disabled:opacity-60"><LogOut className="h-4 w-4" aria-hidden="true" />{loggingOut ? 'Logging out…' : 'Log out'}</button>}
         </div>}

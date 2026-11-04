@@ -8,7 +8,7 @@ Sole Homeowner Interface, Phase 9. How to run the certification checks, what the
 | --- | --- | --- | --- |
 | Backend contracts and drills | `cd apps/backend && node --test tests/ask/askPhase9Drills.test.js tests/ask/askMutationImpactRegistry.test.js tests/ask/askIntake*.test.js` | nothing | provider time limits, model-independence of every destination, reconciliation rules |
 | Production-like database | `cd apps/backend && scripts/certification/scratch-db.sh start`, then `ASK_CERT_DATABASE_URL=... npm run certify:ask-db` | local PostgreSQL 15 | authorization, paging, reconciliation, export, retention, intake and notifications against real SQL; latency and payload budgets |
-| Browser: accessibility, journeys, offline | `cd apps/frontend && npm run test:ask-certification:e2e` | Chromium and WebKit installed by Playwright | WCAG 2.2 AA rules (axe), reflow at 200% and 400%, reduced motion, keyboard reach, dialog focus, announced failures, the notification, search, record, viewer, add-a-file and offline journeys |
+| Browser: accessibility, journeys, offline | `cd apps/frontend && npm run test:ask-certification:e2e` | Chromium and WebKit installed by Playwright | WCAG 2.2 AA rules (axe), reflow at 200% and 400%, reduced motion, keyboard reach, dialog focus and announced failures on the Ask page and on the Work, Saved (current and out of date) and Notifications (inbox and dismissed) answers; the search, add-a-file, viewer-refusal, model-down and offline journeys. The conversation answers come from `apps/backend/scripts/certification/deriveConversationContracts.js` (real answer builders over the captured pages; `--check` fails when they are out of date). WebKit audits the Ask page only: Playwright WebKit cannot be served an answer sent after load, so the answers are audited on Chromium and by the manual real-device pass. Record browsing, row detail and the export review page no longer exist as pages; their rules are tested server-side and in `exportDownloadStrip.test.tsx` |
 
 The scratch database script never touches another database: the certification tests refuse any URL that is not a local database whose name contains `cert`. Stop it with `scripts/certification/scratch-db.sh stop`.
 
@@ -24,7 +24,7 @@ Budgets live in `apps/backend/src/services/ask/governance/askPerformanceBudgets.
 2. `ASK_CERT_DATABASE_URL=... ASK_CERT_RUNS=50 npm run certify:ask-db` prints p50, p95 and payload per destination.
 3. If the Pi misses a budget, either raise the budget deliberately (and say why) or fix the read. `ASK_CERT_BUDGET_FACTOR=2` scales latency budgets for a slower machine; use it only to find out by how much a budget is missed, never to certify.
 
-Browser budget: destination chrome (header and navigation) must not wait for slow data; `journeys.spec.ts` serves a 3-second data delay and asserts the chrome appears within the budget and a loading state is announced.
+Browser budget: the Ask header and composer must not wait for a slow answer; `conversations.spec.ts` delays the answer by 3 seconds on each old destination address and asserts the chrome appears within the budget.
 
 ## 3. Manual pass (optional, whenever convenient)
 

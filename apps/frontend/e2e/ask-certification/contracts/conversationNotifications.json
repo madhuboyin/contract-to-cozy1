@@ -1,0 +1,350 @@
+{
+  "schemaVersion": "1.0",
+  "executionId": "execution-conversation-notifications",
+  "sessionId": "ask-acceptance-session",
+  "question": "What's new?",
+  "status": "ANSWERED",
+  "property": {
+    "id": "ask-property-fixture",
+    "label": "Acceptance Home"
+  },
+  "skill": null,
+  "skillHandoff": null,
+  "operation": {
+    "id": "NOTIFICATIONS_OVERVIEW",
+    "version": "1.0",
+    "family": "STATUS_SUMMARY"
+  },
+  "declaredOperationId": null,
+  "continuesExecutionId": null,
+  "viewContinuation": null,
+  "originalResponse": null,
+  "viewState": {
+    "resultId": "result-execution-conversation-notifications",
+    "domainScopePhrase": null,
+    "dateScopePhrase": "10",
+    "statusFilter": "INBOX",
+    "selectedTaskId": null,
+    "revision": 1
+  },
+  "contextVersion": "conversation-certification-v1",
+  "blocks": [
+    {
+      "type": "SUMMARY",
+      "id": "notifications-summary",
+      "title": "4 notifications, 4 unread",
+      "body": "4 notifications, 4 unread. Showing in your inbox · newest first.",
+      "tone": "DEFAULT",
+      "actions": [],
+      "headline": "4 notifications, 4 unread.",
+      "supportLine": "Showing in your inbox · newest first."
+    },
+    {
+      "type": "GROUPED_LIST",
+      "id": "notifications-list",
+      "title": "Notifications",
+      "sections": [
+        {
+          "id": "notifications",
+          "title": "Notifications",
+          "count": 4,
+          "items": [
+            {
+              "id": "4e3b6017-c5ad-42d9-bec7-1936e03476bc",
+              "title": "General update",
+              "description": "Something changed.",
+              "meta": [
+                "General",
+                "1 Main St, Testville",
+                "Oct 20, 2026",
+                "Unread"
+              ],
+              "status": "Unread",
+              "href": null,
+              "entityType": null,
+              "actions": [
+                {
+                  "id": "notification-dismiss",
+                  "label": "Dismiss",
+                  "message": "Dismiss this notification: General update",
+                  "style": "QUIET",
+                  "interactionType": "MUTATE_RECORD",
+                  "operationId": "NOTIFICATION_COMMAND",
+                  "entityType": "ASK_NOTIFICATION",
+                  "entityId": "4e3b6017-c5ad-42d9-bec7-1936e03476bc"
+                },
+                {
+                  "id": "notification-read",
+                  "label": "Mark read",
+                  "message": "Mark this notification read: General update",
+                  "style": "QUIET",
+                  "interactionType": "MUTATE_RECORD",
+                  "operationId": "NOTIFICATION_COMMAND",
+                  "entityType": "ASK_NOTIFICATION",
+                  "entityId": "4e3b6017-c5ad-42d9-bec7-1936e03476bc"
+                },
+                {
+                  "id": "notification-feedback",
+                  "label": "Give feedback",
+                  "message": "Give feedback on this notification: General update",
+                  "style": "QUIET",
+                  "interactionType": "MUTATE_RECORD",
+                  "operationId": "NOTIFICATION_COMMAND",
+                  "entityType": "ASK_NOTIFICATION",
+                  "entityId": "4e3b6017-c5ad-42d9-bec7-1936e03476bc"
+                }
+              ]
+            },
+            {
+              "id": "6c23e3f3-4aff-4d62-9db3-6422433ebae0",
+              "title": "Your claim was submitted",
+              "description": "Something changed.",
+              "meta": [
+                "Your requests and claims",
+                "1 Main St, Testville",
+                "Oct 20, 2026",
+                "Unread"
+              ],
+              "status": "Unread",
+              "href": null,
+              "entityType": null,
+              "actions": [
+                {
+                  "id": "notification-open",
+                  "label": "Open",
+                  "message": "What needs me?",
+                  "style": "PRIMARY",
+                  "interactionType": "CONVERSATION_CONTINUE",
+                  "operationId": "WORK_OVERVIEW"
+                },
+                {
+                  "id": "notification-dismiss",
+                  "label": "Dismiss",
+                  "message": "Dismiss this notification: Your claim was submitted",
+                  "style": "QUIET",
+                  "interactionType": "MUTATE_RECORD",
+                  "operationId": "NOTIFICATION_COMMAND",
+                  "entityType": "ASK_NOTIFICATION",
+                  "entityId": "6c23e3f3-4aff-4d62-9db3-6422433ebae0"
+                },
+                {
+                  "id": "notification-read",
+                  "label": "Mark read",
+                  "message": "Mark this notification read: Your claim was submitted",
+                  "style": "QUIET",
+                  "interactionType": "MUTATE_RECORD",
+                  "operationId": "NOTIFICATION_COMMAND",
+                  "entityType": "ASK_NOTIFICATION",
+                  "entityId": "6c23e3f3-4aff-4d62-9db3-6422433ebae0"
+                },
+                {
+                  "id": "notification-feedback",
+                  "label": "Give feedback",
+                  "message": "Give feedback on this notification: Your claim was submitted",
+                  "style": "QUIET",
+                  "interactionType": "MUTATE_RECORD",
+                  "operationId": "NOTIFICATION_COMMAND",
+                  "entityType": "ASK_NOTIFICATION",
+                  "entityId": "6c23e3f3-4aff-4d62-9db3-6422433ebae0"
+                }
+              ]
+            },
+            {
+              "id": "e451cfee-b802-40a0-a6ed-e9a4cce9d5e0",
+              "title": "A claim on a former home",
+              "description": "Something changed.",
+              "meta": [
+                "Your requests and claims",
+                "Oct 20, 2026",
+                "Unread",
+                "You no longer have access to this home"
+              ],
+              "status": "Unread",
+              "href": null,
+              "entityType": null,
+              "actions": [
+                {
+                  "id": "notification-dismiss",
+                  "label": "Dismiss",
+                  "message": "Dismiss this notification: A claim on a former home",
+                  "style": "QUIET",
+                  "interactionType": "MUTATE_RECORD",
+                  "operationId": "NOTIFICATION_COMMAND",
+                  "entityType": "ASK_NOTIFICATION",
+                  "entityId": "e451cfee-b802-40a0-a6ed-e9a4cce9d5e0"
+                },
+                {
+                  "id": "notification-read",
+                  "label": "Mark read",
+                  "message": "Mark this notification read: A claim on a former home",
+                  "style": "QUIET",
+                  "interactionType": "MUTATE_RECORD",
+                  "operationId": "NOTIFICATION_COMMAND",
+                  "entityType": "ASK_NOTIFICATION",
+                  "entityId": "e451cfee-b802-40a0-a6ed-e9a4cce9d5e0"
+                },
+                {
+                  "id": "notification-feedback",
+                  "label": "Give feedback",
+                  "message": "Give feedback on this notification: A claim on a former home",
+                  "style": "QUIET",
+                  "interactionType": "MUTATE_RECORD",
+                  "operationId": "NOTIFICATION_COMMAND",
+                  "entityType": "ASK_NOTIFICATION",
+                  "entityId": "e451cfee-b802-40a0-a6ed-e9a4cce9d5e0"
+                }
+              ]
+            },
+            {
+              "id": "475d16e2-d026-4e66-8ab9-6f61e210ecde",
+              "title": "Your winter checklist is ready",
+              "description": "Something changed.",
+              "meta": [
+                "Maintenance",
+                "1 Main St, Testville",
+                "Oct 20, 2026",
+                "Unread"
+              ],
+              "status": "Unread",
+              "href": null,
+              "entityType": null,
+              "actions": [
+                {
+                  "id": "notification-open",
+                  "label": "Open",
+                  "message": "Show my saved results",
+                  "style": "PRIMARY",
+                  "interactionType": "CONVERSATION_CONTINUE",
+                  "operationId": "SAVED_RESULTS"
+                },
+                {
+                  "id": "notification-dismiss",
+                  "label": "Dismiss",
+                  "message": "Dismiss this notification: Your winter checklist is ready",
+                  "style": "QUIET",
+                  "interactionType": "MUTATE_RECORD",
+                  "operationId": "NOTIFICATION_COMMAND",
+                  "entityType": "ASK_NOTIFICATION",
+                  "entityId": "475d16e2-d026-4e66-8ab9-6f61e210ecde"
+                },
+                {
+                  "id": "notification-read",
+                  "label": "Mark read",
+                  "message": "Mark this notification read: Your winter checklist is ready",
+                  "style": "QUIET",
+                  "interactionType": "MUTATE_RECORD",
+                  "operationId": "NOTIFICATION_COMMAND",
+                  "entityType": "ASK_NOTIFICATION",
+                  "entityId": "475d16e2-d026-4e66-8ab9-6f61e210ecde"
+                },
+                {
+                  "id": "notification-feedback",
+                  "label": "Give feedback",
+                  "message": "Give feedback on this notification: Your winter checklist is ready",
+                  "style": "QUIET",
+                  "interactionType": "MUTATE_RECORD",
+                  "operationId": "NOTIFICATION_COMMAND",
+                  "entityType": "ASK_NOTIFICATION",
+                  "entityId": "475d16e2-d026-4e66-8ab9-6f61e210ecde"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "actions": [],
+      "filters": [
+        {
+          "id": "unread",
+          "label": "Unread · 4",
+          "message": "Only show unread notifications",
+          "active": false
+        },
+        {
+          "id": "category-safety",
+          "label": "Safety",
+          "message": "Only show safety notifications",
+          "active": false
+        },
+        {
+          "id": "category-active_damage",
+          "label": "Active damage",
+          "message": "Only show active damage notifications",
+          "active": false
+        },
+        {
+          "id": "category-material_deadline",
+          "label": "Deadlines",
+          "message": "Only show deadlines notifications",
+          "active": false
+        },
+        {
+          "id": "category-workflow",
+          "label": "Your requests and claims",
+          "message": "Only show your requests and claims notifications",
+          "active": false
+        },
+        {
+          "id": "category-maintenance",
+          "label": "Maintenance",
+          "message": "Only show maintenance notifications",
+          "active": false
+        },
+        {
+          "id": "category-coverage",
+          "label": "Coverage",
+          "message": "Only show coverage notifications",
+          "active": false
+        },
+        {
+          "id": "category-project",
+          "label": "Projects",
+          "message": "Only show projects notifications",
+          "active": false
+        },
+        {
+          "id": "category-recall",
+          "label": "Recalls",
+          "message": "Only show recalls notifications",
+          "active": false
+        },
+        {
+          "id": "show-dismissed",
+          "label": "Dismissed or set aside · 1",
+          "message": "Only show dismissed notifications",
+          "active": false
+        }
+      ],
+      "collection": {
+        "sourceTotal": 4,
+        "fetchedCount": 4,
+        "deliveredCount": 4,
+        "nextPageAvailable": false,
+        "deliveryTruncated": false
+      }
+    },
+    {
+      "type": "BOUNDARY",
+      "id": "notifications-boundary",
+      "title": "Dismissing only tidies your inbox",
+      "body": "Dismissing or marking read changes only what you see here. Marking one not relevant or already handled also tells Cozy what is useful to you. The notification, its history and its delivery are untouched, and you can bring a dismissed or set-aside one back.",
+      "severity": "INFO",
+      "suggestions": []
+    }
+  ],
+  "captureRequests": [],
+  "clarification": null,
+  "confirmation": null,
+  "correctionCapabilities": {
+    "intent": true,
+    "entity": false,
+    "homeRecord": true,
+    "retryResponse": false
+  },
+  "suggestions": [],
+  "suggestedNextActions": [],
+  "createdAt": "2026-10-20T00:20:00.000Z",
+  "updatedAt": "2026-10-20T00:20:00.000Z",
+  "staleSince": null,
+  "childExecutions": []
+}

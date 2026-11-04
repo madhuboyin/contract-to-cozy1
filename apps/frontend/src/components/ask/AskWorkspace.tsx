@@ -118,7 +118,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
   const stoppedRequests = useRef(new Set<number>());
   const inFlight = useRef<{ key: string; token: number; message: string } | null>(null);
   const deniedProperties = useRef(new Set<string>());
-  const conversationScrollRef = useRef<HTMLElement>(null);
+  const conversationScrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   // The footer composer shares a phone-width row with three buttons, so its hint is short there; the hero composer wraps instead.
   const phoneWidth = useMediaQuery('(max-width: 639px)');
@@ -397,7 +397,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
           ? <button key="stop" type="button" onClick={stopAsking} aria-label="Stop" title="Stop waiting. Your question returns to the box; Cozy may still finish, and that answer would be in your history." className={cn('grid shrink-0 place-items-center bg-slate-800 text-white transition hover:bg-slate-900', placement === 'hero' ? 'h-10 w-10 rounded-xl' : 'h-10 w-10 rounded-xl')}><Square className="h-4 w-4" /></button>
           : <button key="send" type="submit" disabled={!input.trim() || loading || !sessionId} aria-label="Send question" className={cn('grid h-10 w-10 shrink-0 place-items-center bg-emerald-900 text-white transition hover:bg-emerald-950 disabled:cursor-not-allowed disabled:opacity-40', placement === 'hero' && calm ? 'rounded-full' : 'rounded-xl')}><Send className="h-4 w-4" /></button>}
       </div>
-      {calm ? (input.includes('\n') && <p className="mt-1.5 hidden px-1 text-[11px] text-slate-400 group-focus-within:block">Shift+Enter for a new line</p>) : <div className="mt-2 flex flex-wrap items-center justify-between gap-2 px-1 text-[11px] text-slate-400"><span>Enter to send · Shift+Enter for a new line</span><span className="flex items-center gap-1"><CheckCircle2 className="h-3 w-3" />Record-based when available</span></div>}
+      {calm ? (input.includes('\n') && <p className="mt-1.5 hidden px-1 text-[11px] text-slate-600 group-focus-within:block">Shift+Enter for a new line</p>) : <div className="mt-2 flex flex-wrap items-center justify-between gap-2 px-1 text-[11px] text-slate-600"><span>Enter to send · Shift+Enter for a new line</span><span className="flex items-center gap-1"><CheckCircle2 className="h-3 w-3" />Record-based when available</span></div>}
     </form>
   );
 
@@ -476,7 +476,8 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
         )}
         <div className="relative flex min-w-0 flex-1 flex-col">
       {mode === 'page' && !askUnavailable && <ExploreDisclosure state={explore.state} activeTopicId={explore.focus} onOpen={explore.openFrom('DISCLOSURE')} onAskShortcut={(question) => { if (explore.focus) explore.close(); void ask(question); }} moreIdeas={moreIdeas} onPanelVisible={explore.topicsVisible('DISCLOSURE')} />}
-      <main ref={conversationScrollRef} style={{ scrollPaddingBottom: composerMeasure.height ? composerMeasure.height + 16 : undefined }} onScroll={(event) => { const node = event.currentTarget; setShowJumpToLatest(node.scrollHeight - node.scrollTop - node.clientHeight > node.clientHeight); }} data-ask-scroll-container="" data-composer-measured-height={composerMeasure.height || undefined} className={cn('min-h-0 flex-1 overflow-y-auto overscroll-contain', calm && mode === 'page' && 'bg-[#faf9f6]', mode === 'page' ? (calm ? 'px-4 pb-6 pt-5 sm:px-6 lg:px-10 lg:pt-8' : 'px-4 pb-8 pt-8 sm:px-6 lg:px-10 lg:pt-12') : 'px-4 py-5 sm:px-5')}>
+      {/* A region, not a second <main>: in page mode the dashboard layout already provides the page's one main landmark. */}
+      <div role="region" aria-label="Conversation" ref={conversationScrollRef} style={{ scrollPaddingBottom: composerMeasure.height ? composerMeasure.height + 16 : undefined }} onScroll={(event) => { const node = event.currentTarget; setShowJumpToLatest(node.scrollHeight - node.scrollTop - node.clientHeight > node.clientHeight); }} data-ask-scroll-container="" data-composer-measured-height={composerMeasure.height || undefined} className={cn('min-h-0 flex-1 overflow-y-auto overscroll-contain', calm && mode === 'page' && 'bg-[#faf9f6]', mode === 'page' ? (calm ? 'px-4 pb-6 pt-5 sm:px-6 lg:px-10 lg:pt-8' : 'px-4 pb-8 pt-8 sm:px-6 lg:px-10 lg:pt-12') : 'px-4 py-5 sm:px-5')}>
         {explore.focus && <ExploreFocusedView topics={explore.state.topics} topicId={explore.focus} busy={loading || !sessionId} onSelectTopic={explore.openFrom('FOCUSED_VIEW')} onStart={explore.start} onClose={explore.close} onStartersVisible={explore.startersVisible} selector={explore.selector} onChooseTarget={explore.chooseTarget} onCancelSelector={explore.cancelSelector} onRetrySelector={explore.retrySelector} />}
         <div className={explore.focus ? 'hidden' : 'contents'}>
         {calm && mode === 'page' && <h1 className="sr-only hidden lg:block">Ask Cozy</h1>}
@@ -503,13 +504,13 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
               {explorer}
             </section>}
             <div className={calm ? 'mt-5' : 'mt-8'}><PendingWorkInbox items={visiblePendingWork} loadingId={continuingId} dismissingId={dismissingPendingId} onResume={(item) => void resumePendingWork(item)} onDismiss={(item) => void dismissPendingWork(item)} calm={calm} onViewWork={() => void ask('What needs me?')} /></div>
-            {pendingLoading && <p className="mt-4 text-xs text-slate-400" role="status">Checking for pending Ask requests…</p>}
+            {pendingLoading && <p className="mt-4 text-xs text-slate-600" role="status">Checking for pending Ask requests…</p>}
             {!calm && <ConciergeHome propertyId={selectedPropertyId} view={concierge.view} loading={concierge.loading} failed={concierge.failed} onAsk={(prompt, source) => runPrompt(prompt, source)} />}
           </div>
         ) : (
           <div className={cn('mx-auto', calm ? 'max-w-[1140px] space-y-5' : 'max-w-3xl space-y-7')}>
             <PendingWorkInbox items={visiblePendingWork} loadingId={continuingId} dismissingId={dismissingPendingId} onResume={(item) => void resumePendingWork(item)} onDismiss={(item) => void dismissPendingWork(item)} calm={calm} onViewWork={() => void ask('What needs me?')} />
-            {pendingLoading && <p className="text-xs text-slate-400" role="status">Checking for pending Ask requests…</p>}
+            {pendingLoading && <p className="text-xs text-slate-600" role="status">Checking for pending Ask requests…</p>}
             {/* ASK_COZY_INTERACTION_MODEL_UI_FRD RES-001/RES-003/MAINT-003: a
                 bare filter refinement ("only show urgent") creates its own
                 execution row (a fresh authoritative query is unavoidable --
@@ -562,7 +563,7 @@ export function AskWorkspace({ mode = 'page', onClose, onPendingStateChange, ini
           </div>
         )}
         </div>
-      </main>
+      </div>
 
       {showJumpToLatest && !continuityWorkflowActive && <button type="button" style={{ bottom: composerMeasure.height + 16 }} onClick={() => { const node = conversationScrollRef.current; node?.scrollTo({ top: node.scrollHeight, behavior: prefersReducedMotion() ? 'auto' : 'smooth' }); setShowJumpToLatest(false); }} className="absolute right-5 z-20 inline-flex min-h-10 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-lg hover:bg-slate-50"><ChevronDown className="h-4 w-4" aria-hidden="true" />Jump to latest</button>}
 
