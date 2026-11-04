@@ -189,7 +189,7 @@ function stubSources({
       status: 'IN_PROGRESS', totalTasks: 3, tasksCompleted: 0,
       seasonStartDate: NOW, seasonEndDate: LATER, createdAt: NOW, updatedAt: NOW,
       items: [
-        { id: 'seasonal-item-1', title: 'Test the sump pump', priority: 'CRITICAL', status: 'RECOMMENDED', snoozedUntil: null, recommendedDate: NOW, updatedAt: NOW },
+        { id: 'seasonal-item-1', title: 'Test the sump pump', description: 'Confirm safe operation before seasonal storms', priority: 'CRITICAL', status: 'RECOMMENDED', snoozedUntil: null, recommendedDate: NOW, updatedAt: NOW, seasonalTaskTemplate: { description: 'Confirm safe operation before seasonal storms', whyItMatters: 'Prevents flooding damage. Required for insurance.' } },
         { id: 'seasonal-item-2', title: 'Clean the outdoor condenser', priority: 'RECOMMENDED', status: 'RECOMMENDED', snoozedUntil: null, recommendedDate: NOW, updatedAt: NOW },
         { id: 'seasonal-item-3', title: 'Inspect exterior drainage', priority: 'RECOMMENDED', status: 'RECOMMENDED', snoozedUntil: null, recommendedDate: NOW, updatedAt: NOW },
       ],
@@ -227,6 +227,10 @@ test('promotes guidance, incident, recall, coverage, project, and seasonal recor
   const seasonal = actions.find((action) => action.id === 'seasonal-checklist:seasonal-1');
   assert.equal(seasonal.primaryCta.label, 'See 1 priority task');
   assert.equal(seasonal.presentation.headline, 'Summer checklist: Test the sump pump');
+  assert.equal(seasonal.presentation.summary, 'This is a critical summer checklist task. Can help prevent flooding damage.');
+  assert.match(seasonal.whyItMatters, /Can help prevent flooding damage/);
+  assert.doesNotMatch(seasonal.whyItMatters, /insurance|required/i);
+  assert.equal(seasonal.timing.dueAt, NOW.toISOString());
   assert.equal(seasonal.presentation.keyFacts.find((fact) => fact.label === 'Critical tasks').value, 'Test the sump pump');
   // "Next task" surfaces a task not already listed under "Critical tasks".
   assert.equal(seasonal.presentation.keyFacts.find((fact) => fact.label === 'Next task').value, 'Clean the outdoor condenser');

@@ -641,6 +641,15 @@ actions before applying display limits or counts. Default rows show timing and a
 concrete verification need; comparative ranking rationale is available only behind
 "Why this appeared", and confidence labels are not shown as raw scoring metadata.
 
+Recent Changes preserves the same seasonal meaning instead of reducing a due task to
+"The due date is approaching." It compares calendar-only due dates without a local-time
+shift, distinguishes overdue, due today, and due soon, names the season/checklist, and
+uses the reviewed task impact for **Why this matters**. Template impact is bounded on
+read: absolute prevention language becomes "can help prevent", and policy-specific
+insurance claims are omitted unless supported by policy evidence. For a grouped seasonal
+action, the earliest critical task's recommended date is the Home Action due date rather
+than the checklist's season-end date, keeping Home Actions and Recent Changes aligned.
+
 ### 14.5 Future work
 
 - **Un-aggregate seasonal work** (the parent plan's "Slice 3"): once each seasonal

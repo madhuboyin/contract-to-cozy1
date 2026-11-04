@@ -1281,7 +1281,10 @@ async function loadSeasonalChecklistActions(propertyId: string, db: HomeActionSo
     include: {
       items: {
         orderBy: [{ priority: 'asc' }, { recommendedDate: 'asc' }],
-        include: { maintenanceTask: { select: { id: true } } },
+        include: {
+          maintenanceTask: { select: { id: true } },
+          seasonalTaskTemplate: { select: { description: true, whyItMatters: true } },
+        },
       },
     },
   });
@@ -1327,6 +1330,22 @@ async function loadSeasonalChecklistActions(propertyId: string, db: HomeActionSo
       ? `${daysRemaining} day${daysRemaining === 1 ? '' : 's'} remain in ${displaySeason.toLowerCase()}.`
       : `${displaySeason} starts in ${daysUntilStart} day${daysUntilStart === 1 ? '' : 's'}.`;
     const priorityTasks = pendingItems.filter((item) => item.priority === 'CRITICAL');
+    const primaryPriorityTask = priorityTasks[0];
+    const rawSeasonalImpact = primaryPriorityTask?.seasonalTaskTemplate?.whyItMatters
+      ?? primaryPriorityTask?.description
+      ?? primaryPriorityTask?.seasonalTaskTemplate?.description
+      ?? null;
+    // Template copy can contain absolute or policy-specific claims. Home Actions
+    // may explain the general maintenance consequence, but must not assert that a
+    // particular insurance policy requires the task without policy evidence.
+    const seasonalImpact = rawSeasonalImpact
+      ? rawSeasonalImpact
+          .split(/(?<=[.!?])\s+/)
+          .filter((sentence) => !/\binsurance\b|\brequired\b/i.test(sentence))
+          .join(' ')
+          .replace(/^Prevents\b/i, 'Can help prevent')
+          .trim()
+      : null;
     // "Next task" should add information, not repeat a critical task already
     // listed above — surface the first pending task that isn't shown there.
     const shownCriticalTitles = new Set(priorityTasks.slice(0, 2).map((item) => item.title));
@@ -1342,8 +1361,9 @@ async function loadSeasonalChecklistActions(propertyId: string, db: HomeActionSo
     const seasonalSummary = contextReviewOnly
       ? 'A few home details are needed before Cozy can determine which seasonal tasks apply.'
       : criticalCount > 0
-      ? `You have ${pendingItems.length} task${pendingItems.length === 1 ? '' : 's'} left, but only ${criticalCount} ${criticalCount === 1 ? 'needs' : 'need'} attention now.`
+      ? `${criticalCount === 1 ? `This is a critical ${displaySeason.toLowerCase()} checklist task.` : `${criticalCount} critical ${displaySeason.toLowerCase()} checklist tasks need attention.`}${seasonalImpact ? ` ${seasonalImpact}` : ''}`
       : `A few timely tasks can help keep this home ready for ${displaySeason.toLowerCase()}.`;
+    const seasonalDueAt = primaryPriorityTask?.recommendedDate ?? checklist.seasonEndDate;
 
     return adaptHomeActionSource('MAINTENANCE', {
       id: `seasonal-checklist:${checklist.id}`,
@@ -1354,7 +1374,7 @@ async function loadSeasonalChecklistActions(propertyId: string, db: HomeActionSo
       state: checklist.status === 'IN_PROGRESS' ? 'IN_PROGRESS' : 'OPEN',
       priority,
       signal: contextReviewOnly ? `${displaySeason} preparation needs home details` : `${displaySeason} seasonal checklist: ${pendingItems.length} task${pendingItems.length === 1 ? '' : 's'} remaining`,
-      whyItMatters: contextReviewOnly ? `${timingSummary} Confirming the missing home details prevents irrelevant maintenance recommendations.` : `${progress}. ${criticalCount > 0 ? `${criticalCount} critical task${criticalCount === 1 ? '' : 's'} still need attention. ` : ''}${timingSummary}`,
+      whyItMatters: contextReviewOnly ? `${timingSummary} Confirming the missing home details prevents irrelevant maintenance recommendations.` : `${progress}. ${seasonalImpact ? `${seasonalImpact} ` : ''}${criticalCount > 0 ? `${criticalCount} critical task${criticalCount === 1 ? '' : 's'} still need attention. ` : ''}${timingSummary}`,
       recommendedAction: contextReviewOnly ? 'Review the home details needed for seasonal planning' : `Review the ${displaySeason} seasonal checklist`,
       expectedOutcome: `Complete or deliberately manage the remaining ${displaySeason.toLowerCase()} preparation tasks before the seasonal window closes.`,
       presentation: {
@@ -1377,7 +1397,7 @@ async function loadSeasonalChecklistActions(propertyId: string, db: HomeActionSo
         group: contextReviewOnly ? null : { kind: 'SEASONAL_CHECKLIST', itemCount: pendingItems.length },
       },
       timing: {
-        dueAt: checklist.seasonEndDate.toISOString(),
+        dueAt: seasonalDueAt.toISOString(),
         windowStart: checklist.seasonStartDate.toISOString(),
         windowEnd: checklist.seasonEndDate.toISOString(),
         rationale: timingSummary,

@@ -30,7 +30,7 @@ import { hvacDecisionStartResult } from '../handlers/hvacDecision.handler';
 import { extractMaintenanceCompletionInput, maintenanceCompletionMatch, maintenanceMonitorSubject, maintenanceTaskCompleteResult, maintenanceTaskUpdateResult, maintenanceTaskVersion, maintenanceWorkflowVersion } from '../handlers/maintenance.handler';
 import * as decisionPreferenceService from '../../decisionPlatform/decisionPreferenceService';
 import { listPropertyChanges } from '../../../propertyChanges/propertyChange.service';
-import { buildChangeSummaryText, hasSpecificHomeChangeContent, homeActionStateChangeSummary, homeChangeCanonicalIdentity, homeChangeDateLabel, homeChangeDisplayTitle, homeChangeInlineReviewAction, homeChangeLinkedAction, homeChangeWhyItMatters, liveHomeChangeCanonicalIdentity, resolveLiveHomeChangeAction, selectUniqueHomeChanges, shouldIncludeHomeChange, sourceTypeLabel } from '../../decisionPlatform/homeChangeSummaryMapping';
+import { buildChangeSummaryText, hasSpecificHomeChangeContent, homeActionStateChangeSummary, homeChangeCanonicalIdentity, homeChangeDateLabel, homeChangeDisplayTitle, homeChangeDueStatus, homeChangeInlineReviewAction, homeChangeLinkedAction, homeChangeWhyItMatters, liveHomeChangeCanonicalIdentity, resolveLiveHomeChangeAction, selectUniqueHomeChanges, shouldIncludeHomeChange, sourceTypeLabel } from '../../decisionPlatform/homeChangeSummaryMapping';
 import { getHomeActionFeed } from '../../homeActions.service';
 import { type SkillExecutionTimingTrace } from '../../skills/skillExecutionTelemetry';
 import { resolveAskEnvelopeQueryScope } from '../askEnvelopeQueryScope';
@@ -562,11 +562,12 @@ async function homeChangeSummaryResult(userId: string, propertyId: string): Prom
       const [detail] = await decisionPreferenceService.getPreferenceReferenceDetails([change.sourceRevision]);
       detailOverride = detail?.summary ?? null;
     }
-    const source = sourceTypeLabel(change.sourceType);
+    const seasonalPresentation = liveAction?.presentation?.variant === 'SEASONAL_CHECKLIST' ? liveAction.presentation : null;
+    const source = seasonalPresentation?.eyebrow ?? sourceTypeLabel(change.sourceType);
     const fallbackWorkItem = fallbackWorkItems.get(change.sourceEntityId);
     const title = homeChangeDisplayTitle({ sourceType: change.sourceType, canonicalActionTitle: change.canonicalAction?.title ?? fallbackWorkItem?.title, canonicalEventTitle: change.canonicalEvent?.title });
-    if (!detailOverride && change.canonicalAction?.title && change.sourceType === 'OPERATIONAL_WORK_DUE') {
-      detailOverride = 'The due date is approaching.';
+    if (!detailOverride && (change.canonicalAction?.title || fallbackWorkItem?.title) && change.sourceType === 'OPERATIONAL_WORK_DUE') {
+      detailOverride = `${seasonalPresentation?.eyebrow ? `${seasonalPresentation.eyebrow} · ` : ''}${homeChangeDueStatus(change.occurredAt ?? change.detectedAt)}`;
     } else if (!detailOverride && change.canonicalAction?.title && change.changeType === 'OUTCOME_CONFIRMED') {
       detailOverride = 'Completion was verified.';
     } else if (!detailOverride && change.canonicalAction?.title && change.changeType === 'SOURCE_RECORD_CREATED') {
@@ -594,7 +595,7 @@ async function homeChangeSummaryResult(userId: string, propertyId: string): Prom
       detectedAt: change.detectedAt.toISOString(),
       materiality: change.materiality,
       materialityReasonCodes: change.materialityReasonCodes,
-      whyItMatters: homeChangeWhyItMatters(change.materialityReasonCodes, change.materiality),
+      whyItMatters: seasonalPresentation?.summary ?? homeChangeWhyItMatters(change.materialityReasonCodes, change.materiality),
       dateLabel: homeChangeDateLabel(change.sourceType),
       confidence: change.confidence,
       linkedAction,

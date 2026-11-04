@@ -54,7 +54,7 @@ test('renders canonical titles as conversational action cards with exact work-it
   expect(disclosure).toHaveAttribute('aria-expanded', 'true');
   expect(within(firstCard as HTMLElement).getByText('Why this matters')).toBeInTheDocument();
   expect(within(firstCard as HTMLElement).getByText('This home priority should be reviewed soon.')).toBeInTheDocument();
-  expect(within(firstCard as HTMLElement).queryByText('Home action')).toBeNull();
+  expect(within(firstCard as HTMLElement).getByText('Home action')).toBeInTheDocument();
   expect(within(firstCard as HTMLElement).queryByText(/Detected|effective|canonical action/i)).toBeNull();
   fireEvent.click(within(firstCard as HTMLElement).getByRole('button', { name: 'Review in Ask' }));
   expect(invoke).toHaveBeenCalledWith(expect.objectContaining({ entityType: 'HOME_ACTION', entityId: 'work-1', operationId: 'HOME_ACTIONS' }));
@@ -76,4 +76,25 @@ test('the response sequence groups adjacent change blocks into one conversationa
   expect(screen.getAllByTestId('change-summary-list')).toHaveLength(1);
   expect(screen.getByText('Chimney cleaning and inspection')).toBeInTheDocument();
   expect(screen.getByText('Replace the aging water heater')).toBeInTheDocument();
+});
+
+test('an overdue seasonal task names its checklist, consequence, source, and UTC calendar date', () => {
+  const seasonal = change('seasonal-work', 'Chimney cleaning and inspection', '2026-10-31T00:00:00.000Z', {
+    source: 'Fall checklist',
+    summary: 'Fall checklist · This task is overdue.',
+    whyItMatters: 'This is a critical fall checklist task. Cleaning and inspection can help reduce chimney-fire and carbon-monoxide risk.',
+    dateLabel: 'Due',
+    materiality: 'URGENT',
+  });
+  render(<ChangeSummaryList blocks={[seasonal]} />);
+
+  const card = screen.getByText('Chimney cleaning and inspection').closest('article')!;
+  expect(within(card).getByText('Fall checklist · This task is overdue.')).toBeInTheDocument();
+  expect(within(card).getAllByText(/Due Oct 31/)).toHaveLength(2);
+  expect(within(card).getByText('Overdue')).toBeInTheDocument();
+  expect(within(card).queryByText('urgent')).toBeNull();
+  fireEvent.click(within(card).getByRole('button', { name: /Chimney cleaning and inspection/ }));
+  expect(within(card).getByText(/Cleaning and inspection can help reduce chimney-fire/)).toBeInTheDocument();
+  expect(within(card).getByText('Fall checklist')).toBeInTheDocument();
+  expect(within(card).getByText(/Due 10\/31\/2026/)).toBeInTheDocument();
 });

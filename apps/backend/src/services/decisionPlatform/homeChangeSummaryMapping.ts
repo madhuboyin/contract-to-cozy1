@@ -111,6 +111,16 @@ export function homeChangeDateLabel(sourceType: string): 'Changed' | 'Due' | 'Re
   return 'Recorded';
 }
 
+/** Calendar-day timing for due-date change rows. Due dates are stored at UTC
+ * midnight, so comparisons use UTC date components and never local offsets. */
+export function homeChangeDueStatus(dueAt: Date, now: Date = new Date()): string {
+  const dueDay = Date.UTC(dueAt.getUTCFullYear(), dueAt.getUTCMonth(), dueAt.getUTCDate());
+  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  if (dueDay < today) return 'This task is overdue.';
+  if (dueDay === today) return 'This task is due today.';
+  return 'This task is due soon.';
+}
+
 /**
  * A recent-change item must tell the homeowner something beyond the source
  * category. Category-only fallbacks such as "Property record updated" are

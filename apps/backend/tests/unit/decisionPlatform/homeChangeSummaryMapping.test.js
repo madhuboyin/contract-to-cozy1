@@ -7,6 +7,7 @@ const {
   sourceTypeLabel,
   buildChangeSummaryText,
   homeChangeDisplayTitle,
+  homeChangeDueStatus,
   homeActionStateChangeSummary,
   homeChangeWhyItMatters,
   homeChangeDateLabel,
@@ -83,6 +84,13 @@ test('home-action states and materiality reasons use homeowner-facing language',
   assert.equal(homeChangeWhyItMatters(['UNKNOWN_INTERNAL_CODE'], 'IMPORTANT'), 'This change is worth reviewing soon.');
   assert.equal(homeChangeDateLabel('OPERATIONAL_WORK_DUE'), 'Due');
   assert.equal(homeChangeDateLabel('OPERATIONAL_WORK_EVENT'), 'Changed');
+});
+
+test('due timing distinguishes overdue, due today, and due soon by UTC calendar day', () => {
+  const today = new Date('2026-11-04T15:30:00.000Z');
+  assert.equal(homeChangeDueStatus(new Date('2026-10-31T00:00:00.000Z'), today), 'This task is overdue.');
+  assert.equal(homeChangeDueStatus(new Date('2026-11-04T00:00:00.000Z'), today), 'This task is due today.');
+  assert.equal(homeChangeDueStatus(new Date('2026-11-06T00:00:00.000Z'), today), 'This task is due soon.');
 });
 
 test('linked changes deep-link to their exact canonical work item or event', () => {

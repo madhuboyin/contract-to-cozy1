@@ -5,6 +5,7 @@ import { useState } from 'react';
 import type { AskPresentationBlock } from '@/features/ask/types';
 import { ActionLink, AskContextLink } from './context';
 import type { AskBlockRenderer } from './types';
+import { formatAskDateOnly } from '@/features/ask/dateFormatting';
 
 export const DecisionTraceBlock: AskBlockRenderer<'DECISION_TRACE'> = ({ block }) => (
   <details className="rounded-2xl border border-slate-200 bg-white p-4">
@@ -154,18 +155,27 @@ function changeDate(block: ChangeSummary): Date {
 function dateHeading(block: ChangeSummary): string {
   const date = changeDate(block);
   const today = new Date();
-  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  const target = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  const daysAgo = Math.round((start.getTime() - target.getTime()) / 86_400_000);
+  const start = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
+  const target = block.dateLabel === 'Due'
+    ? Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())
+    : Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());
+  const daysAgo = Math.round((start - target) / 86_400_000);
   if (daysAgo === 0) return 'Today';
   if (daysAgo === 1) return 'Yesterday';
-  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: date.getFullYear() === today.getFullYear() ? undefined : 'numeric' });
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: (block.dateLabel === 'Due' ? date.getUTCFullYear() : date.getFullYear()) === today.getFullYear() ? undefined : 'numeric', ...(block.dateLabel === 'Due' ? { timeZone: 'UTC' } : {}) });
 }
 
 function ChangeSummaryCard({ block }: { block: ChangeSummary }) {
   const [expanded, setExpanded] = useState(false);
-  const materialityBadge = block.materiality === 'URGENT' ? 'bg-red-100 text-red-800'
-    : block.materiality === 'IMPORTANT' ? 'bg-amber-100 text-amber-900'
+  const dueStatus = block.dateLabel === 'Due'
+    ? /\boverdue\b/i.test(block.summary) ? 'Overdue'
+      : /\bdue today\b/i.test(block.summary) ? 'Due today'
+        : /\bdue soon\b/i.test(block.summary) ? 'Due soon'
+          : null
+    : null;
+  const badgeLabel = dueStatus ?? block.materiality.toLowerCase();
+  const materialityBadge = dueStatus === 'Overdue' || dueStatus === 'Due today' || (!dueStatus && block.materiality === 'URGENT') ? 'bg-red-100 text-red-800'
+    : dueStatus === 'Due soon' || block.materiality === 'IMPORTANT' ? 'bg-amber-100 text-amber-900'
       : block.materiality === 'MEANINGFUL' ? 'bg-teal-50 text-teal-800'
         : 'bg-slate-100 text-slate-600';
   const detailsId = `${block.id}-details`;
@@ -185,7 +195,7 @@ function ChangeSummaryCard({ block }: { block: ChangeSummary }) {
         <span className="min-w-0">
           <span className="flex flex-wrap items-center gap-2">
             <span className="font-semibold text-slate-950">{block.title}</span>
-            <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide', materialityBadge)}>{block.materiality.toLowerCase()}</span>
+            <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide', materialityBadge)}>{badgeLabel}</span>
           </span>
           <span className="mt-1 block text-sm leading-5 text-slate-700">{block.summary}</span>
           <span className="mt-1 inline-flex items-center gap-1.5 text-xs text-slate-500 sm:hidden">
@@ -198,7 +208,8 @@ function ChangeSummaryCard({ block }: { block: ChangeSummary }) {
         <div id={detailsId} className="pb-4 pl-1 pr-8 sm:ml-[7.75rem] sm:pl-3 sm:pr-12">
           <dl className="grid gap-x-6 gap-y-2 text-xs text-slate-600 sm:grid-cols-2">
             <div className="sm:col-span-2"><dt className="font-semibold text-slate-500">Why this matters</dt><dd className="mt-0.5 text-slate-800">{block.whyItMatters}</dd></div>
-            <div><dt className="font-semibold text-slate-500">When</dt><dd className="mt-0.5 text-slate-800">{block.dateLabel} {displayDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</dd></div>
+            <div><dt className="font-semibold text-slate-500">When</dt><dd className="mt-0.5 text-slate-800">{block.dateLabel} {block.dateLabel === 'Due' ? formatAskDateOnly(displayDate) : displayDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</dd></div>
+            <div><dt className="font-semibold text-slate-500">Source</dt><dd className="mt-0.5 text-slate-800">{block.source}</dd></div>
           </dl>
           {(block.reviewAction || block.linkedAction) && <div className="mt-3 flex flex-wrap items-center gap-3">
             {block.reviewAction && <ActionLink action={block.reviewAction} />}
