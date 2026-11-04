@@ -2,7 +2,7 @@
 //
 // Live severe weather alerts from the National Weather Service (NWS) —
 // api.weather.gov, free and keyless. This is the authoritative source for
-// flood, severe-storm, heatwave, and snow/winter-storm incidents (distinct
+// flood, severe-storm, heatwave, snow/winter-storm, and visibility incidents (distinct
 // from the OpenWeatherMap-based freeze/heavy-rain heuristics in
 // weather.service.ts, which stay as-is).
 
@@ -13,7 +13,7 @@ import { logger } from '../lib/logger';
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type HazardFamily = 'FLOOD' | 'STORM' | 'HURRICANE' | 'HEATWAVE' | 'SNOW' | 'WILDFIRE';
+export type HazardFamily = 'FLOOD' | 'STORM' | 'HURRICANE' | 'HEATWAVE' | 'SNOW' | 'WILDFIRE' | 'VISIBILITY';
 
 export type NwsSeverity = 'Extreme' | 'Severe' | 'Moderate' | 'Minor' | 'Unknown';
 
@@ -135,6 +135,11 @@ const EVENT_TO_HAZARD_FAMILY: Record<string, HazardFamily> = {
   'Blizzard Warning': 'SNOW',
   'Winter Weather Advisory': 'SNOW',
   'Winter Storm Watch': 'SNOW',
+  // Dense fog is a short-lived travel/visibility hazard rather than property
+  // maintenance. Freezing fog remains in the snow/freeze family because it
+  // can create icy roads, steps, and other exposed surfaces.
+  'Dense Fog Advisory': 'VISIBILITY',
+  'Freezing Fog Advisory': 'SNOW',
 
   // Distinct from STORM: the guidance journey already declares a separate
   // `wildfire_risk` signal intent family. NWS's fire-weather products (not

@@ -647,7 +647,7 @@ test('prefers an active seasonal checklist over an earlier actionable upcoming r
   assert.equal(result.actions.some((action) => action.id === 'seasonal-checklist:seasonal-upcoming'), false);
 });
 
-test('an ADDED seasonal item is in the plan and no longer counted by the "needs attention" aggregate', async () => {
+test('ADDED seasonal tasks stay represented by one grouped seasonal Home Action', async () => {
   const db = stubSources();
   const start = new Date(Date.now() - 5 * 86_400_000);
   const end = new Date(Date.now() + 20 * 86_400_000);
@@ -662,10 +662,13 @@ test('an ADDED seasonal item is in the plan and no longer counted by the "needs 
   }];
 
   const result = await getPromotedHomeActions('property-1', db);
-  assert.equal(result.actions.some((action) => action.id === 'seasonal-checklist:seasonal-added'), false);
+  const seasonal = result.actions.find((action) => action.id === 'seasonal-checklist:seasonal-added');
+  assert.ok(seasonal);
+  assert.equal(seasonal.presentation.group.itemCount, 2);
+  assert.deepEqual(seasonal.evidence.map((entry) => entry.id), ['task-a', 'task-b']);
 });
 
-test('a seasonal item with an accepted operational work item is dropped from the aggregate count', async () => {
+test('accepted seasonal work remains summarized by the grouped checklist action', async () => {
   const db = stubSources();
   const start = new Date(Date.now() - 5 * 86_400_000);
   const end = new Date(Date.now() + 20 * 86_400_000);
@@ -678,20 +681,31 @@ test('a seasonal item with an accepted operational work item is dropped from the
       { id: 'still-pending', title: 'Clean the gutters', priority: 'RECOMMENDED', status: 'RECOMMENDED', snoozedUntil: null, recommendedDate: NOW, updatedAt: NOW, maintenanceTask: { id: 'task-pending' } },
     ],
   }];
-  db.operationalWorkItem = {
-    findMany: async (args) => {
-      assert.equal(args.where.acceptanceState, 'ACCEPTED');
-      return [{ executions: [{ executionEntityId: 'task-accepted' }] }];
-    },
-  };
-
   const result = await getPromotedHomeActions('property-1', db);
   const seasonal = result.actions.find((action) => action.id === 'seasonal-checklist:seasonal-mixed');
-  assert.ok(seasonal, 'the still-pending non-critical task keeps the card alive');
-  // The accepted critical task is no longer counted — headline drops to the "to plan" form.
-  assert.equal(seasonal.presentation.headline, '1 summer task to plan');
-  assert.equal(seasonal.presentation.keyFacts.find((f) => f.label === 'Critical tasks').value, 'None currently');
+  assert.ok(seasonal);
+  assert.equal(seasonal.presentation.headline, '1 summer task needs attention');
+  assert.equal(seasonal.presentation.keyFacts.find((f) => f.label === 'Critical tasks').value, 'Replace AC filters monthly');
   assert.equal(seasonal.presentation.keyFacts.find((f) => f.label === 'Next task').value, 'Clean the gutters');
+});
+
+test('a review-only seasonal checklist becomes a bounded missing-context Home Action', async () => {
+  const db = stubSources();
+  const start = new Date(Date.now() + 20 * 86_400_000);
+  const end = new Date(Date.now() + 100 * 86_400_000);
+  db.seasonalChecklist.findMany = async () => [{
+    id: 'seasonal-review', propertyId: 'property-1', season: 'WINTER', year: 2026,
+    status: 'PENDING', totalTasks: 0, tasksCompleted: 0,
+    missingContext: ['exterior.hasOutdoorFaucets', 'responsibility.snowIce'],
+    seasonStartDate: start, seasonEndDate: end, createdAt: NOW, updatedAt: NOW, items: [],
+  }];
+
+  const result = await getPromotedHomeActions('property-1', db);
+  const seasonal = result.actions.find((action) => action.id === 'seasonal-checklist:seasonal-review');
+  assert.ok(seasonal);
+  assert.equal(seasonal.presentation.headline, 'Review home details for winter preparation');
+  assert.equal(seasonal.primaryCta.label, 'Update home details');
+  assert.deepEqual(seasonal.confidence.missing, ['exterior.hasOutdoorFaucets', 'responsibility.snowIce']);
 });
 
 test('normalizes legacy guidance percentages before trust evaluation and Home Action validation', async () => {

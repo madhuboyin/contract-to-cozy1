@@ -529,7 +529,7 @@ label belongs.
 
 ## 13. Cross-producer replacement duplication ("What needs attention")
 
-Status: fix shipped
+Status: superseded November 4, 2026 by grouped seasonal-summary ownership
 
 ### 13.1 Problem
 
@@ -622,7 +622,16 @@ so no dedup pass reconciles it against its own promoted items.
 | **`Next task` fact no longer repeats a critical task.** It surfaces the first pending item not already shown under `Critical tasks` (falls back to the first pending item only when all pending items are critical). | `homeActionSourcePromotion.service.ts` |
 | Tests | `phase2SourcePromotion.test.js` (+2, 2 fixtures updated to `RECOMMENDED`) |
 
-### 14.4 Future work (not in this change)
+### 14.4 November 4, 2026 direction
+
+Unified Home now deliberately retains one grouped seasonal preparation action,
+including automatically promoted `ADDED` tasks. Those tasks remain canonical
+`PropertyMaintenanceTask` / `OperationalWorkItem` execution records, but their
+individual accepted-work cards are suppressed while represented by the grouped
+seasonal action. This restores the current seasonal handoff requirement without
+double-counting cards.
+
+### 14.5 Future work
 
 - **Un-aggregate seasonal work** (the parent plan's "Slice 3"): once each seasonal
   task is its own canonical work item, the `SEASONAL_CHECKLIST` aggregate card can be

@@ -56,6 +56,8 @@ function eventType(alert: SevereWeatherAlert): CanonicalRadarObservation['eventT
       return 'weather';
     case 'WILDFIRE':
       return 'weather';
+    case 'VISIBILITY':
+      return 'weather';
     case 'HURRICANE':
       return alert.event.includes('Wind') ? 'wind' : 'weather';
     case 'STORM':

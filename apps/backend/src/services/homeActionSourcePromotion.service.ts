@@ -1286,48 +1286,23 @@ async function loadSeasonalChecklistActions(propertyId: string, db: HomeActionSo
     },
   });
 
-  // A seasonal item that has been accepted into the operational work plan is
-  // shown as its own "Accepted work" card (appendAcceptedOperationalWork) and
-  // must not also be counted here as a task that "needs attention". `ADDED`
-  // means a PropertyMaintenanceTask was created for it (seasonalChecklist
-  // Integration.service.ts); an accepted OperationalWorkItem is the stronger
-  // signal that it is actively in the plan.
-  // See docs/product/HOME_ACTION_HEALTH_FACTOR_COPY_FRD.md §14.
-  const seasonalTaskIds = checklists.flatMap((checklist) =>
-    checklist.items.map((item) => (item as { maintenanceTask?: { id: string } | null }).maintenanceTask?.id)
-      .filter((id): id is string => Boolean(id)));
-  const acceptedTaskIds = new Set<string>();
-  if (db.operationalWorkItem && seasonalTaskIds.length > 0) {
-    const acceptedWork = await db.operationalWorkItem.findMany({
-      where: {
-        propertyId,
-        acceptanceState: 'ACCEPTED',
-        state: { notIn: ['VERIFIED', 'CLOSED'] },
-        supersededByWorkItemId: null,
-        executions: { some: { executionType: 'MAINTENANCE_TASK', executionEntityId: { in: seasonalTaskIds } } },
-      },
-      select: { executions: { where: { executionType: 'MAINTENANCE_TASK' }, select: { executionEntityId: true } } },
-    });
-    for (const workItem of acceptedWork) {
-      for (const execution of workItem.executions) acceptedTaskIds.add(execution.executionEntityId);
-    }
-  }
-  const isInPlan = (item: { status: string; maintenanceTask?: { id: string } | null }): boolean =>
-    item.status === 'ADDED' || Boolean(item.maintenanceTask && acceptedTaskIds.has(item.maintenanceTask.id));
-
+  // Seasonal tasks remain canonical maintenance/work records, but Home owns
+  // the attention summary at checklist level. The feed suppresses their
+  // individual accepted-work cards while this grouped action is present.
   // Generation may prepare the next season before the current one closes.
   // Select only after removing empty/stale candidates so one checklist with
   // no actionable items cannot hide a later applicable checklist. Prefer the
   // active checklist, then the nearest upcoming checklist.
   const actionableChecklists = checklists.map((checklist) => {
     const pendingItems = checklist.items.filter((item) =>
-      !isInPlan(item as { status: string; maintenanceTask?: { id: string } | null }) && (
-        item.status === 'RECOMMENDED' ||
+      (
+        item.status === 'RECOMMENDED' || item.status === 'ADDED' ||
         (item.status === 'SNOOZED' && (!item.snoozedUntil || item.snoozedUntil <= now))
       ),
     );
-    return { checklist, pendingItems };
-  }).filter(({ pendingItems }) => pendingItems.length > 0)
+    const missingContext = (checklist as { missingContext?: string[] }).missingContext ?? [];
+    return { checklist, pendingItems, missingContext };
+  }).filter(({ pendingItems, missingContext }) => pendingItems.length > 0 || missingContext.length > 0)
     .sort((a, b) => {
       const aActive = a.checklist.seasonStartDate <= now && a.checklist.seasonEndDate >= now;
       const bActive = b.checklist.seasonStartDate <= now && b.checklist.seasonEndDate >= now;
@@ -1335,7 +1310,7 @@ async function loadSeasonalChecklistActions(propertyId: string, db: HomeActionSo
       return a.checklist.seasonStartDate.getTime() - b.checklist.seasonStartDate.getTime();
     });
 
-  return actionableChecklists.slice(0, 1).map(({ checklist, pendingItems }) => {
+  return actionableChecklists.slice(0, 1).map(({ checklist, pendingItems, missingContext }) => {
 
     const criticalCount = pendingItems.filter((item) => item.priority === 'CRITICAL').length;
     const active = checklist.seasonStartDate <= now && checklist.seasonEndDate >= now;
@@ -1356,10 +1331,15 @@ async function loadSeasonalChecklistActions(propertyId: string, db: HomeActionSo
     // listed above — surface the first pending task that isn't shown there.
     const shownCriticalTitles = new Set(priorityTasks.slice(0, 2).map((item) => item.title));
     const nextTask = pendingItems.find((item) => !shownCriticalTitles.has(item.title)) ?? pendingItems[0];
-    const seasonalHeadline = criticalCount > 0
+    const contextReviewOnly = pendingItems.length === 0 && missingContext.length > 0;
+    const seasonalHeadline = contextReviewOnly
+      ? `Review home details for ${displaySeason.toLowerCase()} preparation`
+      : criticalCount > 0
       ? `${criticalCount} ${displaySeason.toLowerCase()} task${criticalCount === 1 ? ' needs' : 's need'} attention`
       : `${pendingItems.length} ${displaySeason.toLowerCase()} task${pendingItems.length === 1 ? '' : 's'} to plan`;
-    const seasonalSummary = criticalCount > 0
+    const seasonalSummary = contextReviewOnly
+      ? 'A few home details are needed before Cozy can determine which seasonal tasks apply.'
+      : criticalCount > 0
       ? `You have ${pendingItems.length} task${pendingItems.length === 1 ? '' : 's'} left, but only ${criticalCount} ${criticalCount === 1 ? 'needs' : 'need'} attention now.`
       : `A few timely tasks can help keep this home ready for ${displaySeason.toLowerCase()}.`;
 
@@ -1371,9 +1351,9 @@ async function loadSeasonalChecklistActions(propertyId: string, db: HomeActionSo
       sourceVersion: checklist.updatedAt.toISOString(),
       state: checklist.status === 'IN_PROGRESS' ? 'IN_PROGRESS' : 'OPEN',
       priority,
-      signal: `${displaySeason} seasonal checklist: ${pendingItems.length} task${pendingItems.length === 1 ? '' : 's'} remaining`,
-      whyItMatters: `${progress}. ${criticalCount > 0 ? `${criticalCount} critical task${criticalCount === 1 ? '' : 's'} still need attention. ` : ''}${timingSummary}`,
-      recommendedAction: `Review the ${displaySeason} seasonal checklist`,
+      signal: contextReviewOnly ? `${displaySeason} preparation needs home details` : `${displaySeason} seasonal checklist: ${pendingItems.length} task${pendingItems.length === 1 ? '' : 's'} remaining`,
+      whyItMatters: contextReviewOnly ? `${timingSummary} Confirming the missing home details prevents irrelevant maintenance recommendations.` : `${progress}. ${criticalCount > 0 ? `${criticalCount} critical task${criticalCount === 1 ? '' : 's'} still need attention. ` : ''}${timingSummary}`,
+      recommendedAction: contextReviewOnly ? 'Review the home details needed for seasonal planning' : `Review the ${displaySeason} seasonal checklist`,
       expectedOutcome: `Complete or deliberately manage the remaining ${displaySeason.toLowerCase()} preparation tasks before the seasonal window closes.`,
       presentation: {
         variant: 'SEASONAL_CHECKLIST',
@@ -1386,12 +1366,13 @@ async function loadSeasonalChecklistActions(propertyId: string, db: HomeActionSo
           { label: 'Progress', value: progress },
           { label: 'Time remaining', value: active ? `${daysRemaining} days` : `Starts in ${daysUntilStart} days` },
           { label: 'Critical tasks', value: criticalCount > 0 ? priorityTasks.slice(0, 2).map((item) => item.title).join(' · ').slice(0, 240) : 'None currently' },
-          { label: 'Next task', value: nextTask.title.slice(0, 240) },
+          { label: 'Next task', value: contextReviewOnly ? 'Confirm home and responsibility details' : nextTask.title.slice(0, 240) },
+          ...(missingContext.length > 0 ? [{ label: 'Details needed', value: missingContext.slice(0, 4).map((key) => key.replace(/^[^.]+\./, '').replace(/([A-Z])/g, ' $1').toLowerCase()).join(' · ').slice(0, 240) }] : []),
         ],
         factGroups: [],
         subject: { kind: 'CHECKLIST', id: checklist.id, label: `${displaySeason} checklist` },
         detailLabel: 'Why these tasks?',
-        group: { kind: 'SEASONAL_CHECKLIST', itemCount: pendingItems.length },
+        group: contextReviewOnly ? null : { kind: 'SEASONAL_CHECKLIST', itemCount: pendingItems.length },
       },
       timing: {
         dueAt: checklist.seasonEndDate.toISOString(),
@@ -1399,8 +1380,16 @@ async function loadSeasonalChecklistActions(propertyId: string, db: HomeActionSo
         windowEnd: checklist.seasonEndDate.toISOString(),
         rationale: timingSummary,
       },
-      evidence: pendingItems.slice(0, 50).map((item) => ({
-        id: item.id,
+      evidence: contextReviewOnly ? [{
+        id: checklist.id,
+        type: 'SYSTEM_DERIVATION' as const,
+        label: `${displaySeason} seasonal applicability review`,
+        source: `${displaySeason} seasonal checklist`,
+        observedAt: checklist.updatedAt.toISOString(),
+        freshness: 'CURRENT' as const,
+        confidence: null,
+      }] : pendingItems.slice(0, 50).map((item) => ({
+        id: (item as { maintenanceTask?: { id: string } | null }).maintenanceTask?.id ?? item.id,
         type: 'SYSTEM_DERIVATION' as const,
         label: item.title,
         source: `${displaySeason} seasonal checklist`,
@@ -1411,11 +1400,13 @@ async function loadSeasonalChecklistActions(propertyId: string, db: HomeActionSo
       assumptions: [],
       options: [],
       tradeoffs: [],
-      confidence: { score: 1, label: 'HIGH', missing: [] },
+      confidence: { score: contextReviewOnly ? null : 1, label: contextReviewOnly ? 'LOW' : 'HIGH', missing: missingContext },
       governance: lowConsequenceGovernance('phase2-seasonal-v1'),
       primaryCta: {
         kind: 'REVIEW',
-        label: criticalCount > 0
+        label: contextReviewOnly
+          ? 'Update home details'
+          : criticalCount > 0
           ? `See ${criticalCount} priority task${criticalCount === 1 ? '' : 's'}`
           : `View ${displaySeason.toLowerCase()} tasks`,
         href: `/dashboard/seasonal?propertyId=${encodeURIComponent(propertyId)}`,

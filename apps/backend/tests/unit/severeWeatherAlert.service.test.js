@@ -108,6 +108,22 @@ test('maps coastal flood and wind advisory events, and reports events outside th
   assert.deepEqual(ignored, ['Rip Current Statement']);
 });
 
+test('maps dense fog to visibility and freezing fog to snow while generic statements stay ignored', async () => {
+  mockFetch({
+    features: [
+      alertFeature({ id: 'urn:oid:fog-1', event: 'Dense Fog Advisory' }),
+      alertFeature({ id: 'urn:oid:fog-2', event: 'Freezing Fog Advisory' }),
+      alertFeature({ id: 'urn:oid:sws-1', event: 'Special Weather Statement' }),
+    ],
+  });
+  const ignored = [];
+  const alerts = await severeWeatherAlertService.getActiveAlerts(40.0, -75.0, undefined, (event) => ignored.push(event));
+  assert.equal(alerts.length, 2);
+  assert.equal(alerts.find(a => a.event === 'Dense Fog Advisory').hazardFamily, 'VISIBILITY');
+  assert.equal(alerts.find(a => a.event === 'Freezing Fog Advisory').hazardFamily, 'SNOW');
+  assert.deepEqual(ignored, ['Special Weather Statement']);
+});
+
 test('maps hurricane/tropical/storm-surge events to the HURRICANE hazard family', async () => {
   mockFetch({
     features: [

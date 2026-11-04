@@ -117,7 +117,7 @@ test('summaryFor: falls back to a generic "in effect" message when both are miss
 });
 
 test('HAZARD_INTENT_FAMILY and HAZARD_CATEGORY cover every hazard family', () => {
-  for (const family of ['FLOOD', 'STORM', 'HURRICANE', 'HEATWAVE', 'SNOW', 'WILDFIRE']) {
+  for (const family of ['FLOOD', 'STORM', 'HURRICANE', 'HEATWAVE', 'SNOW', 'WILDFIRE', 'VISIBILITY']) {
     assert.ok(HAZARD_INTENT_FAMILY[family], `missing intent family for ${family}`);
     assert.ok(HAZARD_CATEGORY[family], `missing category for ${family}`);
   }
@@ -125,6 +125,8 @@ test('HAZARD_INTENT_FAMILY and HAZARD_CATEGORY cover every hazard family', () =>
   assert.equal(HAZARD_INTENT_FAMILY.HURRICANE, 'hurricane_risk');
   assert.equal(HAZARD_INTENT_FAMILY.WILDFIRE, 'wildfire_risk');
   assert.equal(HAZARD_CATEGORY.HEATWAVE, 'HVAC');
+  assert.equal(HAZARD_INTENT_FAMILY.VISIBILITY, 'weather');
+  assert.equal(scoringInputsFor({ hazardFamily: 'VISIBILITY', severity: 'Moderate', expires: null }).exposureUsd, 125);
 });
 
 test('scoringInputsFor: hurricane and wildfire use their own higher exposure defaults', () => {

@@ -20,6 +20,15 @@ Seasonal maintenance is no longer discoverable only through a notification:
 - the notification remains a delivery signal and links into the same property context; and
 - repeated checklist records are collapsed into one homeowner action so Home does not become a duplicate task list.
 
+Seasonal preparation uses a lead window rather than waiting for the astronomical
+season boundary: `EARLY`, `STANDARD`, and `LATE` settings prepare the next
+checklist 75, 60, and 45 days ahead respectively. Automatically promoted
+maintenance tasks remain the execution authority, while Unified Home shows one
+grouped checklist action and suppresses duplicate accepted-work cards. When
+applicability depends on missing or conflicted home facts, the checklist stores
+those fact keys and Home shows a bounded details-review action instead of
+silently presenting no seasonal care.
+
 Critical weather follows the same persistent-discovery principle but remains a separate safety action. Active severe-weather events surface on Home with urgent priority, NWS source/instructions, expiry context, and no ordinary complete/dismiss controls. Lower-value incident-derived weather guidance is suppressed when it represents the same canonical event.
 
 Forecast-based heavy-rain preparation uses one rolling Home Operations obligation for the active forecast window. Consecutive qualifying rain days are combined into that window, forecast-date revisions refresh its timing and copy, and older unaccepted date-keyed candidates are superseded when the canonical candidate is observed. Accepted work is never superseded by this automatic source reconciliation.

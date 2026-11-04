@@ -7234,6 +7234,11 @@ model SeasonalChecklist {
   totalTasks         Int                     @default(0) @map("total_tasks")
   tasksAdded         Int                     @default(0) @map("tasks_added")
   tasksCompleted     Int                     @default(0) @map("tasks_completed")
+  // Facts needed to decide whether asset- or responsibility-specific seasonal
+  // work applies. Keeping these on the checklist lets Home show one bounded
+  // "review your home details" action instead of silently withholding every
+  // recommendation when the property record is incomplete.
+  missingContext     String[]                @default([]) @map("missing_context")
   generatedAt        DateTime                @default(now()) @map("generated_at")
   firstViewedAt      DateTime?               @map("first_viewed_at")
   notificationSentAt DateTime?               @map("notification_sent_at")

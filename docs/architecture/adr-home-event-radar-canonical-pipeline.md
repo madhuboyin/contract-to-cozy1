@@ -110,4 +110,6 @@ maintaining two canonical models or adding migration compatibility code.
 - Added Coastal Flood and Lakeshore Flood Warning/Watch/Advisory (`FLOOD`) and Wind Advisory (`STORM`).
 - Dropped events are now counted (`nws_ignored_event_total{event}`) and recorded per run in
   `radar_source_runs.metadataJson.ignoredEvents`, so an allowlist gap is visible instead of looking like an
-  empty NWS response. Other NWS products (High Surf, Rip Current, Special Weather Statement) remain out of scope.
+  empty NWS response. Dense Fog Advisory is now ingested as the non-property-maintenance
+  `VISIBILITY` family, while Freezing Fog Advisory uses `SNOW` because exposed surfaces
+  can ice. Other NWS products (High Surf, Rip Current, Special Weather Statement) remain out of scope.

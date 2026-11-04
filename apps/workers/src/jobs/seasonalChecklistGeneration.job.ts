@@ -53,6 +53,12 @@ type SeasonalTaskTemplate = {
   requiredAssetCheck: string | null;
 };
 
+type SeasonalApplicabilityDecision = {
+  status: 'APPLICABLE' | 'NOT_APPLICABLE' | 'UNKNOWN';
+  missingFactKeys?: string[];
+  conflictedFactKeys?: string[];
+};
+
 function contextFact(key: string, value: unknown) {
   return {
     key,
@@ -217,7 +223,9 @@ export async function generateSeasonalChecklists(
         const climateRegion = climateSetting.climateRegion;
         const notificationTiming = climateSetting.notificationTiming || 'STANDARD';
         
-        // Calculate notification offset days
+        // Calculate the preparation lead. Seasonal maintenance needs to be
+        // actionable before the astronomical season starts (winterization in
+        // particular cannot wait until mid-December).
         const offsetDays = getNotificationOffsetDays(notificationTiming);
         
         // Current and upcoming season windows; a season's `year` is the year
@@ -387,18 +395,31 @@ async function generateChecklistForProperty(
     return !excludedTaskKeys.includes(template.taskKey);
   });
   const propertyContext = buildSeasonalPropertyContext(property);
-  const filteredTemplates = includedTemplates.filter((template: SeasonalTaskTemplate) =>
-    evaluateSeasonalTemplateApplicability(propertyContext, template).status === 'APPLICABLE',
-  );
+  const evaluatedTemplates: Array<{
+    template: SeasonalTaskTemplate;
+    decision: SeasonalApplicabilityDecision;
+  }> = includedTemplates.map((template: SeasonalTaskTemplate) => ({
+    template,
+    decision: evaluateSeasonalTemplateApplicability(propertyContext, template) as SeasonalApplicabilityDecision,
+  }));
+  const filteredTemplates = evaluatedTemplates
+    .filter(({ decision }) => decision.status === 'APPLICABLE')
+    .map(({ template }) => template);
+  const missingContext = [...new Set(evaluatedTemplates
+    .filter(({ decision }) => decision.status === 'UNKNOWN')
+    .flatMap(({ decision }) => [...(decision.missingFactKeys ?? []), ...(decision.conflictedFactKeys ?? [])]))]
+    .sort();
 
   logger.info(
     `[SEASONAL] After filtering: ${filteredTemplates.length} tasks ` +
     `(excluded or inapplicable ${templates.length - filteredTemplates.length})`
   );
 
-  // UNKNOWN Property Context is not an empty checklist. Withhold the
-  // recommendation until enough facts exist to establish applicability.
-  if (filteredTemplates.length === 0) {
+  // A catalog with no applicable task and no unresolved context is genuinely
+  // empty. UNKNOWN context is different: persist a review-only checklist so
+  // Home can explain which facts are needed without recommending work that may
+  // not apply.
+  if (filteredTemplates.length === 0 && missingContext.length === 0) {
     logger.info(
       `[SEASONAL] No applicable ${season} ${year} tasks for property ${propertyId.substring(0, 8)}; checklist withheld`,
     );
@@ -423,6 +444,7 @@ async function generateChecklistForProperty(
       totalTasks: filteredTemplates.length,
       tasksAdded: 0,
       tasksCompleted: 0,
+      missingContext,
       generatedAt: new Date(),
     },
   });
@@ -560,12 +582,12 @@ function detectClimateRegionFallback(zipCode: string, state: string): string {
 function getNotificationOffsetDays(timing: NotificationTiming): number {
   switch (timing) {
     case 'EARLY':
-      return 21; // 3 weeks before
+      return 75;
     case 'STANDARD':
-      return 14; // 2 weeks before
+      return 60;
     case 'LATE':
-      return 7; // 1 week before
+      return 45;
     default:
-      return 14;
+      return 60;
   }
 }

@@ -157,11 +157,11 @@ test('skips a property with autoGenerateChecklists=false without generating anyt
   assert.equal(calls.checklistCreates.length, 0);
 });
 
-test('generates the upcoming-season checklist when within the notification offset window', async () => {
+test('generates the upcoming-season checklist inside the 60-day standard preparation window', async () => {
   const { deps, calls } = fakeDeps({
     properties: [propertyFixture()],
     climateSetting: { climateRegion: 'MODERATE', notificationTiming: 'STANDARD', autoGenerateChecklists: true, excludedTaskKeys: [] },
-    daysUntilNextSeason: 5, // within STANDARD's 14-day offset
+    daysUntilNextSeason: 50,
     templates: [{ id: 'template-1', taskKey: 'clean-gutters', title: 'Clean gutters', description: null, priority: 'MEDIUM' }],
   });
 
@@ -169,6 +169,26 @@ test('generates the upcoming-season checklist when within the notification offse
 
   assert.equal(calls.checklistCreates.length, 1);
   assert.equal(calls.checklistCreates[0].data.season, 'FALL');
+});
+
+test('late timing waits until the 45-day preparation window', async () => {
+  const outside = fakeDeps({
+    properties: [propertyFixture()],
+    climateSetting: { climateRegion: 'MODERATE', notificationTiming: 'LATE', autoGenerateChecklists: true, excludedTaskKeys: [] },
+    daysUntilNextSeason: 50,
+    existingChecklistForCurrent: { id: 'current' },
+  });
+  await generateSeasonalChecklists(undefined, outside.deps);
+  assert.equal(outside.calls.checklistCreates.length, 0);
+
+  const inside = fakeDeps({
+    properties: [propertyFixture()],
+    climateSetting: { climateRegion: 'MODERATE', notificationTiming: 'LATE', autoGenerateChecklists: true, excludedTaskKeys: [] },
+    daysUntilNextSeason: 45,
+    templates: [{ id: 'template-1', taskKey: 'winterize', title: 'Prepare for winter', description: null, priority: 'HIGH' }],
+  });
+  await generateSeasonalChecklists(undefined, inside.deps);
+  assert.equal(inside.calls.checklistCreates.length, 1);
 });
 
 test('does not regenerate an upcoming-season checklist that already exists', async () => {
@@ -236,7 +256,7 @@ test('excludes templates listed in excludedTaskKeys', async () => {
   assert.equal(calls.itemCreates[0].data.taskKey, 'check-furnace');
 });
 
-test('excludes templates the applicability policy marks NOT_APPLICABLE', async () => {
+test('does not create a checklist when every template is NOT_APPLICABLE', async () => {
   const { deps, calls } = fakeDeps({
     properties: [propertyFixture()],
     climateSetting: { climateRegion: 'MODERATE', notificationTiming: 'STANDARD', autoGenerateChecklists: true, excludedTaskKeys: [] },
@@ -249,6 +269,26 @@ test('excludes templates the applicability policy marks NOT_APPLICABLE', async (
 
   assert.equal(calls.itemCreates.length, 0);
   assert.equal(calls.checklistCreates.length, 0, 'unknown or inapplicable context must not create an empty checklist');
+});
+
+test('persists a review-only checklist when applicability is UNKNOWN because home facts are missing', async () => {
+  const { deps, calls } = fakeDeps({
+    properties: [propertyFixture()],
+    climateSetting: { climateRegion: 'MODERATE', notificationTiming: 'STANDARD', autoGenerateChecklists: true, excludedTaskKeys: [] },
+    daysUntilNextSeason: 50,
+    templates: [{ id: 'template-1', taskKey: 'outdoor-faucet', title: 'Winterize outdoor faucets', description: null, priority: 'HIGH' }],
+    applicabilityResult: () => ({
+      status: 'UNKNOWN', reasonCodes: ['OUTDOOR_FAUCET_PRESENCE_UNKNOWN'],
+      missingFactKeys: ['exterior.hasOutdoorFaucets'], conflictedFactKeys: [],
+    }),
+  });
+
+  await generateSeasonalChecklists(undefined, deps);
+
+  assert.equal(calls.checklistCreates.length, 1);
+  assert.deepEqual(calls.checklistCreates[0].data.missingContext, ['exterior.hasOutdoorFaucets']);
+  assert.equal(calls.itemCreates.length, 0);
+  assert.equal(calls.promotions.length, 0);
 });
 
 test('promotes each checklist item to a canonical maintenance task and records tasksAdded', async () => {

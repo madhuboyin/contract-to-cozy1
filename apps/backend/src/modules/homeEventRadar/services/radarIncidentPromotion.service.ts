@@ -194,6 +194,7 @@ function nwsHazardFamily(event: RadarIncidentPromotionInput['event']): string {
   if (/hurricane|tropical storm/.test(title)) return 'HURRICANE';
   if (/wildfire|fire weather|smoke/.test(title)) return 'WILDFIRE';
   if (/snow|blizzard|winter|ice|freeze|frost/.test(title)) return 'SNOW';
+  if (/fog|dense visibility/.test(title)) return 'VISIBILITY';
   return 'STORM';
 }
 

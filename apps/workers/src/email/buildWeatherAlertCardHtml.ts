@@ -15,7 +15,7 @@
 // HTML collapses all of that whitespace into one dense run-on paragraph.
 import { escapeHtml } from './buildDigestHtml';
 
-export type WeatherCardHazardFamily = 'FLOOD' | 'STORM' | 'HURRICANE' | 'HEATWAVE' | 'SNOW' | 'WILDFIRE';
+export type WeatherCardHazardFamily = 'FLOOD' | 'STORM' | 'HURRICANE' | 'HEATWAVE' | 'SNOW' | 'WILDFIRE' | 'VISIBILITY';
 
 export interface WeatherCardMetadata {
   hazardFamily: string;
@@ -33,6 +33,7 @@ const HAZARD_EMOJI: Record<string, string> = {
   HEATWAVE: '🥵',
   SNOW: '❄️',
   WILDFIRE: '🔥',
+  VISIBILITY: '🌫️',
 };
 
 const HAZARD_ACCENT_COLOR: Record<string, string> = {
@@ -42,6 +43,7 @@ const HAZARD_ACCENT_COLOR: Record<string, string> = {
   HEATWAVE: '#b91c1c',
   SNOW: '#0e7490',
   WILDFIRE: '#c2410c',
+  VISIBILITY: '#475569',
 };
 
 const DEFAULT_EMOJI = '⚠️';

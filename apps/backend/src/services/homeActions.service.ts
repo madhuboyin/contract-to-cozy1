@@ -1110,6 +1110,7 @@ export function collapseDuplicateAcceptedWork(projected: RankedHomeAction[]): Ra
 export async function appendAcceptedOperationalWork(
   propertyId: string,
   actions: RankedHomeAction[],
+  groupedSeasonalTaskIds: ReadonlySet<string> = new Set(),
 ): Promise<RankedHomeAction[]> {
   const represented = new Set(actions.flatMap((action) => action.workItem ? [action.workItem.id] : []));
   const items = await prisma.operationalWorkItem.findMany({
@@ -1143,6 +1144,12 @@ export async function appendAcceptedOperationalWork(
   for (const item of items) {
     if (represented.has(item.id)) continue;
     const primaryExecution = item.executions.find((entry) => entry.role === 'PRIMARY') ?? item.executions[0];
+    // Home shows seasonal preparation as one bounded checklist summary. The
+    // maintenance task remains the canonical execution record and is linked
+    // from that summary, but is not repeated as a second card in the same feed.
+    if (primaryExecution?.executionType === 'MAINTENANCE_TASK' && groupedSeasonalTaskIds.has(primaryExecution.executionEntityId)) {
+      continue;
+    }
     const guidanceJourneyId = primaryExecution?.executionType === 'GUIDANCE'
       ? primaryExecution.executionEntityId
       : item.sources.find((source) => source.active && source.sourceType === 'GUIDANCE')?.sourceEntityId ?? null;
@@ -1430,7 +1437,10 @@ export async function getHomeActionFeed(propertyId: string, userId: string) {
 
   const linkedActions = await linkWorkItemsAndReconcile(propertyId, rankAndDeduplicateHomeActions(candidates));
   const actionsWithDecisions = await linkDecisionLineage(propertyId, linkedActions);
-  const actionsWithAcceptedWork = await appendAcceptedOperationalWork(propertyId, actionsWithDecisions);
+  const groupedSeasonalTaskIds = new Set(actionsWithDecisions
+    .filter((action) => action.presentation?.variant === 'SEASONAL_CHECKLIST')
+    .flatMap((action) => action.evidence.map((evidence) => evidence.id)));
+  const actionsWithAcceptedWork = await appendAcceptedOperationalWork(propertyId, actionsWithDecisions, groupedSeasonalTaskIds);
   const actionsWithContinuity = addHomeActionLaunchContinuity(
     actionsWithAcceptedWork,
     orchestration.aggregationContext?.contextVersion ?? null,
