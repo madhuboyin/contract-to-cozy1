@@ -66,8 +66,11 @@ describe('Home Action shelves', () => {
     </CalmAnswerContext.Provider></CalmChromeContext.Provider>);
     expect(screen.queryByRole('link', { name: 'Open Maintenance' })).toBeNull();
     expect(screen.queryByText('Needs attention sooner')).toBeNull();
-    expect(screen.getByText('Why this appeared')).toBeInTheDocument();
-    fireEvent.click(screen.getByText('Why this appeared'));
+    expect(screen.getByText(/Start with Fall checklist: Chimney cleaning and inspection/).closest('[data-home-actions-intro]')).toHaveTextContent('Can help prevent chimney fires and carbon monoxide hazards.');
+    const details = screen.getByText('Details & source').closest('details');
+    expect(details).not.toHaveAttribute('open');
+    fireEvent.click(screen.getByText('Details & source'));
+    expect(details).toHaveAttribute('open');
     expect(screen.getByText('This is a fall checklist task. Can help prevent chimney fires and carbon monoxide hazards.')).toBeInTheDocument();
     expect(screen.queryByText(/Needs attention sooner|Supported more strongly by your home record/)).toBeNull();
     expect(screen.getByText(/Due 10\/31\/2026/)).toBeInTheDocument();
@@ -151,10 +154,16 @@ describe('Home Action shelves', () => {
     </CalmAnswerContext.Provider></CalmChromeContext.Provider>);
 
     expect(screen.getByText('About 2.3 inches of rain is forecast for this area.')).toBeInTheDocument();
-    expect(screen.getByText('Heavy rain may cause water intrusion around the foundation.')).toBeInTheDocument();
+    expect(screen.getByText(/Start with Heavy rain expected Friday, Nov 6/).closest('[data-home-actions-intro]')).toHaveTextContent('Heavy rain may cause water intrusion around the foundation.');
     expect(screen.getByText('Clear gutters and exterior drains before rain begins.')).toBeInTheDocument();
+    const details = screen.getByText('Details & source').closest('details');
+    expect(details).not.toHaveAttribute('open');
+    fireEvent.click(screen.getByText('Details & source'));
+    expect(details).toHaveAttribute('open');
     expect(screen.getByText('Nov 5–Nov 6')).toBeInTheDocument();
     expect(screen.getByText('Source: Open-Meteo forecast and property profile')).toBeInTheDocument();
+    expect(screen.getByText('Also worth planning')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Ask about this' })).toHaveLength(2);
     expect(screen.queryByRole('button', { name: /not relevant/i })).toBeNull();
     expect(container.querySelectorAll('[data-home-action-row]')).toHaveLength(3);
     fireEvent.click(screen.getByRole('button', { name: 'Show 1 more action' }));

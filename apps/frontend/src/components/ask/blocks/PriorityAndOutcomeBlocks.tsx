@@ -129,6 +129,17 @@ export const PriorityListBlock: AskBlockRenderer<'PRIORITY_LIST'> = ({ block, ex
       {block.items.length === 0 ? (
         <p className="mt-2 text-sm text-slate-600">No ranked item is currently available on this channel. This does not mean the home needs no attention — it means the governed feed has nothing eligible to show right now.</p>
       ) : (
+        <>
+        {calm && (() => {
+          const lead = block.items[0];
+          const leadContext = lead.presentation?.whyItMatters || lead.presentation?.summary || lead.whyThisAppeared;
+          return (
+            <div className="max-w-3xl space-y-1 text-sm leading-6 text-slate-700" data-home-actions-intro="">
+              <p><span className="font-semibold text-slate-950">Start with {lead.title.replace(/[.]$/, '')}.</span>{leadContext ? ` ${leadContext}` : ''}</p>
+              {block.items.length > 1 && <p className="text-slate-600">It is ranked first in your current Home Actions. The next priorities are summarized below, with supporting details available when you want them.</p>}
+            </div>
+          );
+        })()}
         <ol className={calm ? 'space-y-3' : 'mt-4 space-y-3'}>
           {visibleItems.map((item, index) => {
             const lifecycle = [
@@ -161,8 +172,13 @@ export const PriorityListBlock: AskBlockRenderer<'PRIORITY_LIST'> = ({ block, ex
                 const controls = presentation?.controls.filter((control) =>
                   control.command === 'ACKNOWLEDGE' || Number.isNaN(windowEndMs) || windowEndMs > Date.now() + 2 * 60 * 60 * 1000,
                 ) ?? [];
+                const visibleReminder = rich ? controls.find((control) => control.command === 'DEFER' || control.command === 'SNOOZE') : undefined;
+                const disclosedControls = controls.filter((control) => control !== visibleReminder);
+                const detailLabel = presentation?.source ? 'Details & source' : 'Show details';
                 return (
-                  <article className={cn('rounded-2xl border p-4 shadow-sm', rich && 'border-2 p-5', tone)} data-home-action-row={rich ? 'start' : 'enriched'}>
+                  <>
+                  {!rich && index === 1 && <p className="mb-2 text-sm font-semibold text-slate-950">Also worth planning</p>}
+                  <article className={cn('rounded-2xl border', rich ? cn('border-l-4 p-5', tone) : 'border-slate-200 bg-white p-4')} data-home-action-row={rich ? 'start' : 'enriched'}>
                     {rich && <p className={cn('mb-3 text-[11px] font-bold uppercase tracking-wide', weather ? 'text-amber-800' : seasonal ? 'text-emerald-800' : 'text-teal-800')}>Start here</p>}
                     <div className="flex items-start gap-3">
                       <div className={cn('hidden rounded-xl p-2.5 sm:block', iconTone)}>
@@ -175,46 +191,58 @@ export const PriorityListBlock: AskBlockRenderer<'PRIORITY_LIST'> = ({ block, ex
                           {compactMeta && <span className="text-xs text-slate-500">{compactMeta}</span>}
                         </div>
                         <h4 className={cn('mt-2 break-words font-semibold text-slate-950', rich ? 'text-lg' : 'text-base')}>{item.title}</h4>
-                        {presentation?.summary && <p className="mt-1 text-sm leading-6 text-slate-700">{presentation.summary}</p>}
-                        {rich && presentation?.whyItMatters && presentation.whyItMatters !== presentation.summary && (
-                          <p className="mt-2 text-sm leading-6 text-slate-700"><span className="font-semibold">Why it matters:</span> {presentation.whyItMatters}</p>
-                        )}
+                        {presentation?.summary && (!rich || presentation.summary !== presentation.whyItMatters) && <p className="mt-1 text-sm leading-6 text-slate-700">{presentation.summary}</p>}
                         {!presentation && item.watchState && <p className="mt-1 text-sm text-slate-600">{item.watchState}</p>}
 
-                        {presentation && (rich || weather || seasonal) && (
+                        {presentation && rich && (
                           <div className={cn('mt-3 rounded-xl border bg-white/80 p-3', weather ? 'border-amber-200' : seasonal ? 'border-emerald-200' : 'border-slate-200')}>
                             <p className={cn('text-xs font-semibold uppercase tracking-wide', weather ? 'text-amber-800' : seasonal ? 'text-emerald-800' : 'text-slate-600')}>{weather ? 'Recommended preparation' : seasonal ? 'Next seasonal step' : 'Recommended next step'}</p>
                             <p className="mt-1 text-sm font-medium leading-6 text-slate-800">{presentation.recommendedAction}</p>
                           </div>
                         )}
 
-                        {facts.length > 0 && (
-                          <dl className={cn('mt-3 grid gap-2', rich ? 'sm:grid-cols-2 lg:grid-cols-3' : 'sm:grid-cols-2')}>
-                            {facts.slice(0, rich ? 6 : 3).map((fact) => (
-                              <div key={`${fact.label}-${fact.value}`} className="rounded-lg border border-white/80 bg-white/70 px-3 py-2">
-                                <dt className="text-[10px] font-bold uppercase tracking-wide text-slate-500">{fact.label}</dt>
-                                <dd className="mt-0.5 text-xs font-medium text-slate-800">{fact.value}</dd>
-                              </div>
-                            ))}
-                          </dl>
+                        {(facts.length > 0 || presentation?.source || presentation?.expectedOutcome || presentation?.timing.rationale || reason || (!rich && (presentation?.whyItMatters || presentation?.recommendedAction)) || disclosedControls.length > 0) && (
+                          <details className="mt-3 rounded-xl border border-slate-200 bg-white/70 px-3 py-2 text-sm text-slate-600">
+                            <summary className="w-fit cursor-pointer font-semibold text-teal-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600">{detailLabel}</summary>
+                            {!rich && presentation?.whyItMatters && presentation.whyItMatters !== presentation.summary && <p className="mt-3"><span className="font-semibold text-slate-800">Why it matters:</span> {presentation.whyItMatters}</p>}
+                            {!rich && presentation?.recommendedAction && <p className="mt-3"><span className="font-semibold text-slate-800">Recommended next step:</span> {presentation.recommendedAction}</p>}
+                            {presentation?.expectedOutcome && <p className="mt-2"><span className="font-semibold text-slate-800">Expected outcome:</span> {presentation.expectedOutcome}</p>}
+                            {presentation?.timing.rationale && <p className="mt-2"><span className="font-semibold text-slate-800">Timing:</span> {presentation.timing.rationale}</p>}
+                            {facts.length > 0 && (
+                              <dl className="mt-3 flex flex-wrap gap-x-5 gap-y-2">
+                                {facts.map((fact) => (
+                                  <div key={`${fact.label}-${fact.value}`} className="min-w-[9rem]">
+                                    <dt className="text-[10px] font-bold uppercase tracking-wide text-slate-500">{fact.label}</dt>
+                                    <dd className="mt-0.5 text-xs font-medium text-slate-800">{fact.value}</dd>
+                                  </div>
+                                ))}
+                              </dl>
+                            )}
+                            {presentation?.source && <p className="mt-3 text-xs text-slate-500">Source: {presentation.source.label}</p>}
+                            {reason && <p className="mt-2 text-xs"><span className="font-semibold text-slate-700">Why this appeared:</span> {/[.!?]$/.test(reason) ? reason : `${reason}.`}</p>}
+                            {disclosedControls.length > 0 && <div className="mt-3 flex flex-wrap gap-2">{disclosedControls.map((control) => (
+                              <button key={control.command} type="button" disabled={itemActionsDisabled || actionState === 'SAVING' || actionState === 'ACKNOWLEDGED' || actionState === 'REMINDER_SET'} onClick={() => void executeInlineCommand(item, control.command)} className="min-h-9 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:border-teal-300 hover:bg-teal-50 disabled:opacity-50">
+                                {control.command === 'ACKNOWLEDGE' ? <Check className="mr-1 inline h-3.5 w-3.5" aria-hidden="true" /> : <Clock3 className="mr-1 inline h-3.5 w-3.5" aria-hidden="true" />}{control.label}
+                              </button>
+                            ))}</div>}
+                          </details>
                         )}
 
-                        {(rich || weather) && presentation?.source && <p className="mt-3 text-xs text-slate-500">Source: {presentation.source.label}</p>}
-                        {reason && <details className="mt-2 text-xs text-slate-600"><summary className="w-fit cursor-pointer rounded-md font-semibold hover:text-teal-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600">Why this appeared</summary><p className="mt-1 max-w-3xl">{/[.!?]$/.test(reason) ? reason : `${reason}.`}</p></details>}
-
-                        <div className="mt-4 flex flex-wrap items-center gap-2">
-                          {item.inlineLaunch ? <button type="button" disabled={itemActionsDisabled} onClick={() => onItemAction('HOME_ACTION', item.homeActionId, item.inlineLaunch!.message, item.inlineLaunch!.operationId, item.inlineLaunch!.interactionType, undefined, item.homeActionId)} className={cn(reviewButtonClass, rich && weather && 'border-amber-700 bg-amber-700 text-white hover:bg-amber-800 hover:text-white', rich && seasonal && 'border-emerald-700 bg-emerald-700 text-white hover:bg-emerald-800 hover:text-white')}>{item.inlineLaunch.label ?? presentation?.detailLabel ?? 'Review details'}</button> : item.cta ? <ActionLink action={item.cta} /> : null}
-                          {controls.map((control) => (
-                            <button key={control.command} type="button" disabled={itemActionsDisabled || actionState === 'SAVING' || actionState === 'ACKNOWLEDGED' || actionState === 'REMINDER_SET'} onClick={() => void executeInlineCommand(item, control.command)} className="min-h-9 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:border-teal-300 hover:bg-teal-50 disabled:opacity-50">
-                              {control.command === 'ACKNOWLEDGE' ? <Check className="mr-1 inline h-3.5 w-3.5" aria-hidden="true" /> : <Clock3 className="mr-1 inline h-3.5 w-3.5" aria-hidden="true" />}{control.label}
+                        <div className="mt-3 flex flex-wrap items-center gap-2">
+                          {item.inlineLaunch ? <button type="button" disabled={itemActionsDisabled} onClick={() => onItemAction('HOME_ACTION', item.homeActionId, item.inlineLaunch!.message, item.inlineLaunch!.operationId, item.inlineLaunch!.interactionType, undefined, item.homeActionId)} className={cn(reviewButtonClass, rich && weather && 'border-amber-700 bg-amber-700 text-white hover:bg-amber-800 hover:text-white', rich && seasonal && 'border-emerald-700 bg-emerald-700 text-white hover:bg-emerald-800 hover:text-white')}>{rich ? (item.inlineLaunch.label ?? presentation?.detailLabel ?? 'Review details') : 'Ask about this'}</button> : item.cta ? <ActionLink action={item.cta} /> : null}
+                          {visibleReminder && (
+                            <button type="button" disabled={itemActionsDisabled || actionState === 'SAVING' || actionState === 'ACKNOWLEDGED' || actionState === 'REMINDER_SET'} onClick={() => void executeInlineCommand(item, visibleReminder.command)} className="min-h-9 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:border-teal-300 hover:bg-teal-50 disabled:opacity-50">
+                              <Clock3 className="mr-1 inline h-3.5 w-3.5" aria-hidden="true" />{visibleReminder.label}
                             </button>
-                          ))}
+                          )}
+                          {!rich && controls.length === 0 && !item.inlineLaunch && presentation?.detailLabel && <span className="text-xs text-slate-500">Ask Cozy for {presentation.detailLabel.toLowerCase()}.</span>}
                           <HomeActionOverflow executionId={executionId} homeActionId={item.homeActionId} />
                         </div>
                         {actionState && actionState !== 'SAVING' && <p role="status" className={cn('mt-2 text-xs font-medium', actionState === 'ERROR' ? 'text-red-700' : 'text-emerald-700')}>{actionState === 'ACKNOWLEDGED' ? 'Acknowledged.' : actionState === 'REMINDER_SET' ? 'Reminder updated.' : 'Unable to update this action. Try again.'}</p>}
                       </div>
                     </div>
                   </article>
+                  </>
                 );
               })() : <>
               <div className="flex flex-wrap items-center gap-2">
@@ -240,6 +268,7 @@ export const PriorityListBlock: AskBlockRenderer<'PRIORITY_LIST'> = ({ block, ex
             );
           })}
         </ol>
+        </>
       )}
       {calm && block.items.length > 3 && (
         <button type="button" onClick={() => setShowAll((current) => !current)} className="flex min-h-10 w-full items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 hover:border-teal-300 hover:bg-teal-50" aria-expanded={showAll}>
