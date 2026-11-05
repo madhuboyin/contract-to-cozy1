@@ -12,6 +12,7 @@ const FEED_BLOCK_IDS = new Set([
   'home-actions-list',
   'home-actions-evidence',
   'home-actions-boundary',
+  'home-actions-producer-unavailable',
   'related-capabilities',
   'ask-next-actions',
 ]);

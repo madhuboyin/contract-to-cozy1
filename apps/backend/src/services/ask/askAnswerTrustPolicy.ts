@@ -13,7 +13,7 @@ const OPERATION_BOUNDARIES: Partial<Record<AskOperationId, ReadonlySet<string>>>
   MAINTENANCE_STATUS: new Set(['maintenance-purchase-date-missing', 'maintenance-record-boundary']),
   COVERAGE_GAPS: new Set(['coverage-boundary', 'insurance-policy-add']),
   OWNERSHIP_COSTS: new Set(['ownership-cost-lens-boundary', 'ownership-cost-change-boundary', 'ownership-cost-forecast-boundary', 'ownership-cost-buffer-boundary']),
-  HOME_ACTIONS: new Set(['home-actions-boundary', 'focused-home-action-boundary']),
+  HOME_ACTIONS: new Set(['home-actions-boundary', 'home-actions-producer-unavailable', 'focused-home-action-boundary']),
   REPLACEMENT_GUIDANCE: new Set(['repair-replace-boundary']),
   REFINANCE_ANALYSIS: new Set(['refinance-boundary']),
   SELL_HOLD_RENT_ANALYSIS: new Set(['sell-hold-rent-boundary']),

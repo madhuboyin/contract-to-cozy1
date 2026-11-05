@@ -13,7 +13,7 @@ const {
 
 const QUESTION = 'Which home actions should I plan for next?';
 
-function homeActionsResult(status = 'ANSWERED', populated = true) {
+function homeActionsResult(status = 'ANSWERED', populated = true, producerUnavailable = false) {
   const blocks = [{
     type: 'SUMMARY', id: 'home-actions-summary',
     title: populated ? '2 governed Home Actions are ready to review' : 'No active Home Action is currently surfaced',
@@ -27,6 +27,12 @@ function homeActionsResult(status = 'ANSWERED', populated = true) {
       id: 'action-1', title: 'Plan for the water heater', description: 'The recorded system is aging.',
       meta: ['plan'], status: 'OPEN', href: '/dashboard',
     }] }], actions: [],
+  });
+  if (producerUnavailable) blocks.push({
+    type: 'BOUNDARY', id: 'home-actions-producer-unavailable',
+    title: 'Some Home Action sources were unavailable',
+    body: 'Weather coverage was unavailable when this feed was generated. The planning actions still reflect every other source.',
+    severity: 'INFO', suggestions: ['Ask again to retry'],
   });
   return { status, blocks, suggestions: ['What should I plan?'] };
 }
@@ -70,6 +76,30 @@ test('populated and empty canonical Home Actions pass initial and clarified trus
       }
     }
   }
+});
+
+test('the Plan ahead answer preserves actions and its partial-source disclosure when one producer is unavailable', () => {
+  const question = 'Show me what I should plan ahead for';
+  const result = homeActionsResult('READY_WITH_LIMITATIONS', true, true);
+  assert.equal(matchesHomeActionsAnswerContract(result), true);
+
+  const validation = validateAskAnswerTrustPipeline({
+    question,
+    operationId: 'HOME_ACTIONS', propertyId: 'property-1', semanticEnabled: true,
+    recoveryAttempted: false,
+    operationConfirmedByUser: false,
+    result: attachAskAuthoritativeSourceEvidence(
+      result,
+      [completedAskAuthoritativeSourceEvidence('HOME_ACTIONS')],
+    ),
+  });
+
+  assert.equal(validation.semantic.outcome, 'PASS');
+  assert.equal(validation.result.status, 'READY_WITH_LIMITATIONS');
+  assert.equal(validation.result.reasonCode, undefined);
+  assert.equal(validation.result.blocks.some((block) => block.id === 'home-actions-list'), true);
+  assert.equal(validation.result.blocks.some((block) => block.id === 'home-actions-producer-unavailable'), true);
+  assert.equal(validation.result.blocks.some((block) => block.id === 'answer-trust-failed'), false);
 });
 
 test('focused canonical Home Action guidance passes the same contract', () => {
