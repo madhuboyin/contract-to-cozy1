@@ -6,7 +6,7 @@
 
 **Planning basis:** code snapshot `61126057bbb063cd4a452c039289620952380655`, with the source review finalized through `79ed68fc`
 
-**Status:** Phases 0-2 implemented (see §14-§16); Phase 3 instrumentation and measurement contract built, measurements not yet taken (§17); Phase 6 audit complete, three defects demonstrated and designs awaiting owner rulings (§18); owner decisions AI-GOV-1 and AI-HEALTH-1 still open; Phases 4-5 not started
+**Status:** Phases 0-2 implemented (see §14-§16); Phase 3 instrumentation and measurement contract built, measurements not yet taken (§17); Phase 6 audit complete, three defects demonstrated and designs awaiting owner rulings (§18); owner decisions AI-GOV-1 and AI-HEALTH-1 answered 2026-11-05; Phase 5A and 5B built (§19), 5C waiting on one owner confirmation; Phase 4 not started
 
 ## 1. Purpose and evidence boundary
 
@@ -444,10 +444,10 @@ Two consequences for Phase 1 that the review did not state: the carve-out list c
 
 | Id | Question | Recommendation in §4 | Accountable owner | Status |
 |---|---|---|---|---|
-| AI-GOV-1 | Redis-outage behavior for governed-AI rate, circuit, and probe state | Short-lived, stricter, bounded per-process fallback with degraded-mode telemetry; aggregate enforcement not preserved while active | Repository owner (to confirm) | OPEN: awaiting owner answer |
-| AI-HEALTH-1 | Provider health representation | One global/provider state resolved while assembling source health; publication machinery only as a conditional fallback | Repository owner (to confirm) | OPEN: awaiting owner answer |
+| AI-GOV-1 | Redis-outage behavior for governed-AI rate, circuit, and probe state | Short-lived, stricter, bounded per-process fallback with degraded-mode telemetry; aggregate enforcement not preserved while active | Repository owner | **DECIDED 2026-11-05: recommendation accepted.** Rationale: AI is optional and deterministic Ask stays available either way, so a brief Redis failure should not switch optional AI off; the lost cross-process limit during fallback is disclosed, not hidden |
+| AI-HEALTH-1 | Provider health representation | One global/provider state resolved while assembling source health; publication machinery only as a conditional fallback | Repository owner | **DECIDED 2026-11-05: recommendation accepted, with its stated precondition.** The recommendation applies "if the Phase 5 consumer trace confirms that no durable property-specific event is required"; the trace is in §19 and found one consequence that needs the owner's confirmation before 5C is built |
 
-These two are not decided by this change; recording a recommendation is not an approval.
+Both decisions were answered by the owner on 2026-11-05 ("accept both recommendations"). The AI-HEALTH-1 acceptance is conditional on its own precondition (see §19).
 
 **Out-of-scope record.** Progressive streaming, multi-capability read planning, learned or dense embeddings and hybrid RAG, provider-neutral LLM abstraction, and offline mutation sync are outside the approved remediation scope. Each needs separate authorization under §11.
 
@@ -568,3 +568,37 @@ Six further findings are recorded (non-atomic event evidence attach, the growing
 **A claim downgraded by the adversarial pass.** The report export snapshot builds entity documents from the legacy relations only, but the PDF never prints them and sharing strips them, so it is recorded as a stored-snapshot gap and not a finding.
 
 **Not done.** No implementation, no data repair, no migration. A read-only diagnostic query for F6-1 is written in the trace for the owner to run.
+
+## 19. Phase 5 implementation record (5A and 5B built; 5C not started)
+
+**Decisions applied.** AI-GOV-1 (2026-11-05): a short-lived, stricter, bounded per-process fallback with degraded-mode telemetry. AI-HEALTH-1 (2026-11-05): the global read-time representation, with its own precondition (see 5C below).
+
+### 5A and 5B delivered
+
+- `apps/backend/src/lib/aiGovernanceStore.ts`: the storage port (`AIGovernanceStore`); the circuit rules as two pure functions (`transitionAcquire`, `transitionRecord`); an in-memory store (the test double and the local fallback); a Redis store using three Lua scripts (an atomic fixed-window increment with expiry on the first request; circuit acquire; circuit record), all using Redis `TIME`; and `ResilientAIGovernanceStore`, which applies AI-GOV-1.
+- `aiRequestGovernance.service.ts`: admission is now `await store.incrementRateWindow(...)` against the route's shared window; the circuit is the shared circuit (`runThroughCircuit`). The retry loop, error codes, timeouts, metrics and the per-process health snapshot are unchanged. State is shared when `REDIS_HOST` is set and the run is not a test; otherwise per-process, as before. No new switch was added; rollback is a code revert.
+- **Circuit rules.** CLOSED counts failures to the threshold; OPEN denies until the open period ends; then exactly one request holds a half-open probe lease with a TTL (a dead probe owner frees the slot); a probe result is applied only if its token is still the lease holder; a success closes and resets; a failure reopens. The key expires on its own (at least an hour idle). One deliberate deviation from the old per-process breaker: a request admitted while the circuit was closed whose result arrives after it opened is ignored, where the old breaker let a late success close an open circuit.
+- **AI-GOV-1 behaviour.** A shared-store error or a call over `AI_GOVERNANCE_STORE_TIMEOUT_MS` (300) switches that process to the fallback for `AI_GOVERNANCE_STORE_RETRY_MS` (5000), then retries Redis. The fallback rate limit is the normal limit times 0.5 (`AI_GOVERNANCE_FALLBACK_LIMIT_FRACTION`), at least 1 and never above normal. A permit is recorded only to the store that granted it, so a local probe finishing after recovery cannot change shared state. `ai_governance_degraded_total{component,reason}` counts it. Cross-process limits and probe exclusivity are not claimed while it is active.
+- **Not changed.** The `AICircuitBreaker` instances in `gemini.service.ts` and `documentIntelligence.service.ts` keep their local behaviour (plan 5B step 1); they were inventoried and left alone.
+
+### Evidence, by kind
+
+| Claim | Evidence | Kind |
+|---|---|---|
+| Rate window, circuit transitions, single probe winner, lease expiry, stale-claimant rejection, outage fallback, timeout cut-off, permit routing, stricter limit, bounded labels | `tests/unit/aiGovernanceStore.test.js`, 15 tests | **Executed** (in-memory and doubles) |
+| The Redis scripts make the same decisions as the TypeScript state machine over a 23-step sequence, count 1-2-3, set the window expiry once, and are valid Lua | `tests/unit/aiGovernanceLuaParity.test.js`, 3 tests, under a Lua 5.4 interpreter with a faked `redis.call` | **Executed**, script logic only |
+| Existing governance behaviour unchanged | `phase7IntelligenceGovernance`, `aiResilience`, `extractionContract` (32 tests) | **Executed** |
+| Redis atomicity, a real single-winner probe under concurrency, lease expiry and cross-client sharing on a real server | `tests/integration/aiGovernanceRedis.test.js`, 6 tests | **Authored only. Skipped** without `AI_GOVERNANCE_TEST_REDIS_URL`; no Redis or Docker was available. This is not evidence |
+
+The owner has not yet said who runs the Redis integration tests. Until someone does, atomicity and cross-pod behaviour are unproven, and the runbook says so.
+
+### 5C: not started, and what the consumer trace found
+
+AI-HEALTH-1 was accepted "if the Phase 5 consumer trace confirms that no durable property-specific event is required." The trace (code-traced) found:
+
+- `publishRouteHealthIfChanged` emits one `SOURCE_HEALTH_CHANGED` property change per property for each AI route transition, and each replica repeats it.
+- Two intelligence consumers declare `AI_SOURCE` health: `home-actions` and `capability-suggestions`. A transition makes the recompute service re-run `getHomeActionFeed` and `getCapabilitySuggestions` for every property and write an `IntelligenceConsumerCurrentness` row for each (STALE when the route is not CURRENT, CURRENT again after recovery). Neither consumer reads the AI route's health itself.
+- The only reader of those rows is `feedbackQualityAggregates.service.ts`, which counts stale and unavailable consumer outputs per capability version for the quality report. No user-facing surface reads them.
+- A registry-parity test (`phase7IntelligenceGovernance.test.js`) asserts that `AI_SOURCE` maps to those two consumers.
+
+**Consequence of the preferred branch.** Removing the per-property publication means AI incidents stop adding stale-output counts to that quality report, and any rows already marked STALE by past incidents stay until some other trigger recomputes the consumer. Nothing user-facing changes. This needs the owner's confirmation before 5C is built; see the question put to the owner with this record.

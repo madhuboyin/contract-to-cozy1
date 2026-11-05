@@ -14,3 +14,33 @@ All Gemini-backed capabilities are registered in `sourceRegistry.ts` and must ex
 When disabled, rate-limited, timed out, circuit-open, or structurally invalid, the owning capability must use the fallback and homeowner-facing degradation message declared in the source registry. Extraction routes fail closed and must never promote fields from an unstructured response.
 
 Review `ai_request_total`, `ai_request_duration_seconds`, `ai_request_tokens_total`, and `ai_request_estimated_cost_usd_total` by route/model/outcome. Restore a route only after the provider is healthy and a deterministic/evaluation smoke check passes.
+
+## Shared state across processes (Findings Implementation Plan, Phase 5)
+
+Per-route request counts and circuit state are shared by every backend and worker process through Redis, so one limit and one circuit apply to the whole deployment instead of one per process. This follows configuration, not a feature flag: when `REDIS_HOST` is set the state is shared; when it is not (and in every test run) state is per-process, as before.
+
+- **Keys.** `ai:gov:v1:rate:<routeId>` (a fixed window that starts at the route's first request and expires on its own) and `ai:gov:v1:circuit:<routeId>` (a hash with a stale-key expiry of at least an hour). A route id is a registered id such as `ai:ask`. No user, property, message, prompt or credential is in a key or a metric label.
+- **Clock.** Circuit decisions use Redis `TIME`, so host clock skew between pods cannot hold a circuit open or closed.
+- **Half-open probe.** When the open period ends, exactly one request across all processes is granted the probe. The grant is a lease (`AI_CIRCUIT_PROBE_TTL_MS`, default the larger of 30 s and twice the request timeout), so a probe whose process died frees the slot after the lease expires. A probe result is applied only if its token is still the lease holder; a slow, reclaimed probe cannot overwrite the current one. A request admitted while the circuit was closed whose result arrives after it opened is ignored (the old per-process breaker let a late success close an open circuit).
+- **Provider failure is availability only.** It never authorizes a request and never changes canonical records.
+
+### When Redis is unavailable (owner decision AI-GOV-1, 2026-11-05)
+
+If a shared-state call errors or takes longer than `AI_GOVERNANCE_STORE_TIMEOUT_MS` (default 300), the process serves requests from a short-lived, **stricter** per-process fallback and retries Redis after `AI_GOVERNANCE_STORE_RETRY_MS` (default 5000).
+
+- The fallback rate limit is the normal limit times `AI_GOVERNANCE_FALLBACK_LIMIT_FRACTION` (default 0.5, never above 1, never below one request).
+- **While the fallback is active, the limit across processes is not enforced and probe exclusivity across processes is not preserved.** Each process sees only its own traffic. This is accepted and disclosed, not hidden.
+- Deterministic Ask operations do not call this layer and are unaffected.
+- A probe granted by one store is recorded only to that store, so a local probe finishing after Redis recovers cannot change the shared circuit.
+
+Watch `ai_governance_degraded_total{component="rate"|"circuit", reason="ERROR"|"TIMEOUT"|"FALLBACK_ACTIVE"}`. A sustained non-zero rate means the shared state is not being used. If it is non-zero from the first deploy, check that `REDIS_HOST` is reachable from the pod and that the scripts load (`tests/unit/aiGovernanceLuaParity.test.js` checks them with a Lua interpreter).
+
+A command that times out may still be queued by the Redis client and run after reconnect, so a recovery can briefly over-count the first window. During an outage at most one shared call per component is attempted per retry interval, which bounds this.
+
+### Rollback
+
+Rollback is a reviewed code revert to the prior per-process implementation. There is no permanent dual-mode switch and no compatibility layer.
+
+### What is and is not verified
+
+The state machine and the outage behavior are covered by unit tests; the Redis scripts' decision logic is checked by executing the script text under a Lua interpreter against the TypeScript state machine. Redis atomicity, the concurrent single-winner probe, lease expiry on a real server and cross-pod behavior are covered only by `tests/integration/aiGovernanceRedis.test.js`, which runs when `AI_GOVERNANCE_TEST_REDIS_URL` names a disposable Redis. Until someone runs it, those properties are authored, not proven.
