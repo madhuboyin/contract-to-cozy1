@@ -652,7 +652,7 @@ Plan §10 step 6 gates implementation on a focused design. Two of the audit's de
 
 The owner accepted the three recommendations on 2026-11-05 and asked that role handling stay minimal (most households have one owner). Detail is in `ASK_COZY_PROVENANCE_EVIDENCE_IMPACT_TRACE.md` §10.
 
-- **OD-6.1 (F6-1).** A correction now moves the event's Home Record links to the new revision. A data-repair script for corrections already made is provided and was executed on a scratch PostgreSQL 15 database (5 links found, 4 repairable; 2 moved, 2 duplicates removed; a second run changed nothing). It has not been run against any real database; the owner runs it.
+- **OD-6.1 (F6-1).** A correction now moves the event's Home Record links to the new revision. A data-repair script for corrections already made is provided and was executed on a scratch PostgreSQL 15 database (5 links found, 4 repairable; 2 moved, 2 duplicates removed; a second run changed nothing). Production check by the owner on 2026-11-05: Step 1 returned 0, 0, 0 (no links on superseded events), so nothing needed repair; the defect had not yet affected production data.
 - **OD-6.3 (F6-3, inventory items).** A read-only bridge shows linked Home Records in the inventory drawer, counts them with legacy documents, and makes the `hasDocuments` filter agree. Warranties, insurance and claims are the same pattern and are not bridged.
 - **OD-6.2 (link-time rule).** Not built: it only matters with several differently-privileged members, and the read-time filter already closes the exposure.
 - **Verification.** 25 backend and 8 frontend tests; mutation checks show the F6-1 tests fail without the fix. Not verified: Prisma SQL, a real database, or the screen in a browser.
