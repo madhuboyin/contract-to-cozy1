@@ -252,11 +252,21 @@ Enforce one aggregate rate window, one circuit state, and one health-transition 
 - `apps/backend/src/services/intelligence/sourceHealthImpact.service.ts`
 - worker-side governed AI callers and startup health checks
 
+### Phase-wide Redis outage contract
+
+AI-GOV-1 applies to every Redis-dependent part of Phase 5, not only rate counters. Before implementation, document one coherent outage matrix covering:
+
+- **Rate windows:** use the approved bounded per-process fallback or fail closed for optional remote AI; never claim that the aggregate limit remains enforced during local fallback.
+- **Circuit state and half-open probes:** use the approved bounded local circuit behavior or fail closed for optional remote AI; never claim cross-process probe exclusivity while Redis is unavailable.
+- **Health state and publication claims:** retain any durable publication intent and retry after Redis recovery rather than performing an uncoordinated fan-out. For health reads, explicitly choose `UNKNOWN`, a freshness-labelled last-known value, or another approved degraded representation.
+
+In every outage mode, deterministic Ask capabilities remain available, metrics identify the degraded mode with bounded labels, and recovery reconciles shared state without allowing a stale local claimant to commit.
+
 ### Work package 5A — Shared rate windows
 
 1. Introduce a narrow storage port for governed-AI counters so policy logic is testable without Redis.
 2. Implement an atomic Redis increment/expiry operation using a versioned namespace and route identifier. Preserve fixed-window behavior explicitly: this provides aggregate cross-process parity with the current window semantics, including the possible boundary burst; it is not a sliding-window improvement. Do not place user text, property IDs, or credentials in keys.
-3. Apply the approved AI-GOV-1 Redis-outage behavior. A local fallback must be explicitly identified as per-process and bounded; fail-closed behavior must return the existing transparent AI-unavailable degradation rather than break deterministic capabilities.
+3. Apply the Phase-wide approved AI-GOV-1 Redis-outage behavior. A local fallback must be explicitly identified as per-process and bounded; fail-closed behavior must return the existing transparent AI-unavailable degradation rather than break deterministic capabilities.
 4. Add concurrency tests against a storage test double for policy behavior. Add a Redis integration test for the actual atomic increment/expiry primitive; execute it only when the existing environment is available, and distinguish authored coverage from executed evidence.
 
 ### Work package 5B — Shared circuit state
@@ -270,22 +280,33 @@ Enforce one aggregate rate window, one circuit state, and one health-transition 
 
 ### Work package 5C — Health publication without all-property fan-out per replica
 
-1. Implement the approved AI-HEALTH-1 representation:
-   - preferred when compatible with existing consumers: one global/provider health state resolved while assembling source health; or
-   - publish only to properties deterministically known to depend on the route, using an affected-property query rather than `allPropertyIds()`.
-2. If publication remains necessary, persist publication intent durably before fan-out, using the existing `DomainEvent` outbox only if its delivery, ordering, retry, and idempotency contract fits this event. Otherwise define an equally durable job/outbox record; an in-memory retry or a cursor written after publication is insufficient.
+Implement only the branch selected by AI-HEALTH-1. The global read-time representation is the recommended and default design; the publication machinery below is a conditional fallback, not work that accompanies the preferred branch.
+
+#### Preferred branch — global health resolved at read time
+
+1. Persist or expose one global/provider health state and resolve it while assembling source health, after tracing consumers to confirm that no durable property-specific event is required.
+2. Define freshness and Redis-outage behavior for the read path, including the approved `UNKNOWN` or freshness-labelled last-known representation.
+3. Add read-path consumer-parity, freshness, recovery, and authorization tests.
+4. Remove `allPropertyIds()` and the per-property route-health transition publication path after parity is proven. Do not build a publication claim, outbox, or retry worker for this branch.
+
+#### Conditional fallback branch — property-specific publication
+
+Use this branch only if consumer tracing proves that a durable property-specific event is required and the accountable owner rejects the preferred global representation with a recorded rationale.
+
+1. Publish only to properties deterministically known to depend on the route, using an affected-property query rather than `allPropertyIds()`.
+2. Persist publication intent durably before fan-out, using the existing `DomainEvent` outbox only if its delivery, ordering, retry, and idempotency contract fits this event. Otherwise define an equally durable job/outbox record; an in-memory retry or a cursor written after publication is insufficient.
 3. Have publishers/workers compete for one expiring shared claim keyed by provider transition/version. Claim acquisition must be atomic, carry a unique token, and verify that token in the same commit that marks publication complete so an expired slow claimant cannot overwrite a newer owner.
-4. Define an explicit retry trigger and retry/backoff/dead-letter behavior. Failed publication must retain its durable intent, release or expire the claim, and must not advance the published-version cursor.
+4. Define an explicit retry trigger and retry/backoff/dead-letter behavior. Failed publication must retain its durable intent, release or expire the claim, and must not advance the published-version cursor. During a Redis outage, retain the intent and wait for coordinated recovery rather than fan out locally.
 5. Add a Redis integration test against the actual claim primitive proving one publisher wins and a stale claimant cannot complete. Add outbox/job tests proving a pre-publish crash remains retryable and repeated delivery is idempotent.
-6. Remove `allPropertyIds()` from the AI route-health transition path after consumer parity is proven.
+6. Remove `allPropertyIds()` from the transition path after affected-property parity is proven.
 
 ### Acceptance criteria
 
 - Two simulated policy clients share one aggregate rate limit and one circuit transition in storage-port tests.
-- Executed Redis integration tests—not a storage test double—prove exactly one half-open probe and, when publication is retained, one active publication claimant per transition version.
-- A dead half-open probe owner recovers after the claim TTL, and a stale owner cannot commit after its token is superseded.
-- A durable health-publication intent exists before fan-out, survives a pre-publication crash, retries explicitly, and completes idempotently.
-- Redis failure follows the documented AI-GOV-1 behavior and leaves deterministic Ask operations usable.
+- Redis integration tests for the actual rate and half-open-probe primitives are authored and reviewed; when an existing Redis environment is available, their executed results are reported. A storage test double is not presented as evidence of Redis atomicity.
+- The half-open-probe test covers one winner, recovery after the claim TTL, and rejection of a stale owner's completion.
+- The selected AI-HEALTH-1 branch satisfies its own acceptance contract: the preferred branch proves global read-path parity, freshness, outage, and recovery behavior without publication machinery; the conditional fallback branch proves durable pre-fan-out intent, one active publication claimant, explicit retry, stale-token rejection, and idempotent completion.
+- Redis failure follows the documented Phase-wide AI-GOV-1 matrix for rate, circuit/probe, and health/publication state while leaving deterministic Ask operations usable.
 - No route-health transition enumerates all properties unless the approved design explicitly proves that every property is affected.
 - No secret, prompt, message, property ID, or user ID appears in shared governance keys or metric labels.
 - Rollback is a reviewed code revert to the prior local-only implementation. Do not add a permanent dual-mode feature flag or compatibility layer solely for rollout.
@@ -387,7 +408,7 @@ Each phase should be its own reviewable change. Do not combine registry restruct
 | 2 | bootstrap idempotency/completeness and manifest/registration parity tests; import-graph and decomposition guardrails; `npm run typecheck`; `npm run test:ask:chunked` | server/worker startup in deployed topology |
 | 3 | metric-definition tests; bounded-label review; static stage tracing | p50/p95, query counts, or user-perceived latency |
 | 4 | routing calibration, paraphrase, hard-negative, multi-intent, and safety-overlap tests | open-ended language quality beyond the corpus |
-| 5 | storage-port/state-machine tests; durable-intent/idempotency tests; authored Redis integration tests for rate, probe lease/token, and publication claim primitives; executed results only when an existing Redis environment is available | real multi-pod failover, production provider outage behavior, or Redis atomicity when the integration tests could not execute |
+| 5 | storage-port/state-machine tests; authored Redis integration tests for rate and probe lease/token primitives; global read-path parity/freshness/outage tests for the preferred health branch, or durable-intent/idempotency plus publication-claim tests only for the conditional fallback branch; executed Redis results only when an existing environment is available | real multi-pod failover, production provider outage behavior, or Redis atomicity when the integration tests could not execute |
 | 6 | consumer/journey trace and contract/schema review; focused pure mapping tests if a design follows | migrated data or runtime interoperability without a database |
 
 Final reporting for each phase must state what was code-traced, what was executed, what could not run, and whether any owner decision remains open. An unavailable runtime environment is not a blocker to completing static implementation work, but it must never be described as executed validation.
