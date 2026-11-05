@@ -6,7 +6,7 @@
 
 **Planning basis:** code snapshot `61126057bbb063cd4a452c039289620952380655`, with the source review finalized through `79ed68fc`
 
-**Status:** Phase 0 implemented (see §14); owner decisions AI-GOV-1 and AI-HEALTH-1 still open; Phases 1-6 not started
+**Status:** Phases 0 and 1 implemented (see §14, §15); owner decisions AI-GOV-1 and AI-HEALTH-1 still open; Phases 2-6 not started
 
 ## 1. Purpose and evidence boundary
 
@@ -94,7 +94,7 @@ Replace the flat `KNOWN_UNGOVERNED_OPERATIONS` carve-out with an auditable excep
 ### Work
 
 1. Introduce a structured exception definition keyed by `AskOperationId` with:
-   - classification: `INTENTIONAL_PLATFORM`, `INTERNAL_CAPTURE`, `LAUNCH_ONLY`, or `TEMPORARY_GAP`;
+   - classification: `INTENTIONAL_PLATFORM`, `INTERNAL_CAPTURE`, `LAUNCH_ONLY`, `DETERMINISTIC_TYPED_READ`, `GOVERNED_INTERNAL_COMMAND` (with an explicit `allowedEntryPaths` set), or `TEMPORARY_GAP` (taxonomy ruling, 2026-11-05; see §15);
    - reason and governing requirement/design reference;
    - allowed entry path;
    - equivalent controls that still apply (operation kill-switch, role floor, capability guard, declared-action verification, confirmation where applicable);
@@ -458,3 +458,31 @@ These two are not decided by this change; recording a recommendation is not an a
 - One command reproduces the inventory without network, database, Redis, or model access: met (executed).
 - It reads authoritative registries and AST structures, not grep call-site counts: met.
 - Phase 5 decisions explicit before shared-governance code: recorded as OPEN above; Phase 5 stays blocked.
+
+## 15. Phase 1 implementation record
+
+**Rulings applied (owner, 2026-11-05).** The 69 `INTERNAL_COMMAND` operations are a permanent governed class, not temporary gaps and not platform operations. The three message-routable commands and the 20 message-routable reads are `TEMPORARY_GAP` with the removal condition "assign exactly one owning Skill, or make the operation non-message-routable through an approved deterministic entry-path classification" and the operation's canonical owner. The two notification overviews are `DETERMINISTIC_TYPED_READ`, not `LAUNCH_ONLY`, because `resolveAskOperation` reaches them from a deterministic pattern. The broader `GOVERNED_INTERNAL_COMMAND` class with explicit entry paths was chosen over a separate typed-command class, so the validator can reject any entry path a record does not declare.
+
+**Delivered (one change, validator tightened only after every entry was classified)**
+
+- `apps/backend/src/services/intelligence/skillGovernanceExceptions.contract.ts`: the structured registry (`SKILL_GOVERNANCE_EXCEPTIONS`), one record per Skill-less operation with classification, reason, governing reference, allowed entry paths, equivalent controls, and (gaps and typed reads) owner and (gaps) removal condition. Duplicate registrations are reported, not thrown.
+- `skillOperationGovernance.contract.ts`: `validateSkillOperationGovernanceCoverage` now enforces the per-class rules listed in the audit document. `KNOWN_UNGOVERNED_OPERATIONS` is derived from the registry (99 entries, unchanged) for existing consumers; there is no second source. The signature gained an optional third argument so tests can inject records.
+- `askArchitectureInventory.ts`: adds `deterministicMessageRouteOperationIds()` (reads the `resolveAskOperation` AST), and reports each Skill-less row's exception class and route reachability.
+- `tests/ask/skillGovernanceExceptions.test.js` (15 tests): registry boots clean; one record per Skill-less operation; the reviewed class counts; the derived list; every record's declared typed route equals source reachability; each validator rejection (undocumented, stale, unknown, routable internal, non-routable gap, missing owner or removal condition, missing command or confirmation or declared action, read-only with a command, wrong entry path for the class, platform with a floor).
+- `ASK_COZY_SKILL_LESS_OPERATION_GOVERNANCE_AUDIT.md`: the generated audit table and the findings below.
+
+**Final counts (executed)**
+
+| Class | Count |
+|---|---|
+| `TEMPORARY_GAP` | 23 (20 reads, 3 commands) |
+| `GOVERNED_INTERNAL_COMMAND` | 65 (60 declared-action only, 5 declared action or typed pattern) |
+| `DETERMINISTIC_TYPED_READ` | 4 |
+| `LAUNCH_ONLY` | 2 |
+| `INTERNAL_CAPTURE` | 5 |
+| `INTENTIONAL_PLATFORM` | 5 |
+| Total Skill-less | 104 |
+
+**Corrections to earlier counts.** The typed-route recheck moved `HOME_BASICS_GUIDE` and `SEASONAL_HOME_CARE` from launch-only to typed reads (the earlier direction listed four launch-only reads; two are). The four `CAPTURE_*_CONFIRM` operations are `INTERNAL_CAPTURE` rather than declared-action commands, which leaves 65 governed commands, not 69.
+
+**Not done / not claimed.** No Skill was written and no operation was made non-routable; the 23 gaps remain. Entry-path claims for the governed commands are code-traced from the coverage matrix and registries, not from live requests. The matrix's `INTERNAL_CAPTURE` label on the two notification overviews is left for a separate cleanup.

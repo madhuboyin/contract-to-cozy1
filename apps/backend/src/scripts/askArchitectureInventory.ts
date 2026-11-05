@@ -31,13 +31,14 @@ import { validateCapabilityHandlerRegistry } from '../services/ask/capabilityHan
 import { validateConfirmCapabilityHandlerRegistry } from '../services/ask/confirmCapabilityHandlerRegistry';
 import { SKILL_DEFINITIONS, getSkillForOperation, validateSkillDefinitions } from '../services/skills/skillRegistry';
 import { validateSkillAdapterDefinitions } from '../services/skills/adapters/skillAdapterRegistry';
-import { KNOWN_UNGOVERNED_OPERATIONS, validateSkillOperationGovernanceCoverage } from '../services/intelligence/skillOperationGovernance.contract';
+import { KNOWN_UNGOVERNED_OPERATIONS, SKILL_GOVERNANCE_EXCEPTIONS, validateSkillOperationGovernanceCoverage } from '../services/intelligence/skillOperationGovernance.contract';
 import { AskPresentationBlockSchema } from '../productFramework/ask/ask.contract';
 import { SUGGESTED_NEXT_ACTION_PRODUCERS } from '../services/ask/suggestedActions/suggestedNextActionProducers';
 import { ELIGIBILITY_RULE_ORDER } from '../services/ask/suggestedActions/suggestedNextActionEligibility';
 
 const BACKEND_ROOT = resolve(__dirname, '../..');
 const HANDLER_DIRECTORY = join(BACKEND_ROOT, 'src/services/ask/handlers');
+const OPERATION_REGISTRY_FILE = join(BACKEND_ROOT, 'src/services/ask/askOperationRegistry.ts');
 const RENDERER_REGISTRY_FILE = resolve(BACKEND_ROOT, '../frontend/src/components/ask/blocks/registry.tsx');
 
 /** Existing-metadata classification only. UNCLASSIFIED means "no authoritative metadata decides this" and is resolved in Phase 1. */
@@ -58,12 +59,17 @@ export interface SkilllessOperationRow {
   executionMode: string;
   metadataClassification: MetadataClassification;
   classificationBasis: string;
+  /** The structured exception record's classification (Phase 1), or null when the operation has no record. */
+  exceptionClass: string | null;
+  /** True when resolveAskOperation can return this operation from a deterministic typed pattern (read from the source AST). */
+  deterministicRouteReachable: boolean;
 }
 
 export interface AskArchitectureInventory {
   counts: Record<string, number>;
   skilllessOperations: SkilllessOperationRow[];
   skilllessByClassification: Record<string, number>;
+  skilllessByExceptionClass: Record<string, number>;
   /** Property-scoped skill-less operations that are neither Skill-owned nor listed in KNOWN_UNGOVERNED_OPERATIONS, and the reverse. */
   governanceDrift: { skilllessUnlisted: AskOperationId[]; listedButSkillOwned: AskOperationId[]; listedButUnknown: string[] };
   validatorIssues: Record<string, string[]>;
@@ -86,6 +92,30 @@ function classify(operationId: AskOperationId): Pick<SkilllessOperationRow, 'met
     return { metadataClassification: 'MESSAGE_ROUTABLE_COMMAND', classificationBasis: 'message-routable with a domain command registry entry' };
   }
   return { metadataClassification: 'UNCLASSIFIED', classificationBasis: 'message-routable, property-scoped, no domain command; no registry field states whether it is a read, a launch, or something else' };
+}
+
+/**
+ * Operation ids that resolveAskOperation can return, read from the `resolved('<ID>', n)` calls in its body. Every return in that function goes
+ * through `resolved`, so this is the complete set of operations reachable by a deterministic typed route. It is source analysis, not a runtime
+ * dependency: the boot validator never calls it.
+ */
+export function deterministicMessageRouteOperationIds(sourceText: string = readFileSync(OPERATION_REGISTRY_FILE, 'utf8')): Set<string> {
+  const file = ts.createSourceFile('askOperationRegistry.ts', sourceText, ts.ScriptTarget.ES2020, true);
+  let resolver: ts.FunctionDeclaration | undefined;
+  const find = (node: ts.Node): void => {
+    if (ts.isFunctionDeclaration(node) && node.name?.text === 'resolveAskOperation') resolver = node;
+    else ts.forEachChild(node, find);
+  };
+  find(file);
+  if (!resolver) throw new Error('resolveAskOperation not found in askOperationRegistry.ts');
+  const ids = new Set<string>();
+  const collect = (node: ts.Node): void => {
+    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'resolved'
+      && node.arguments[0] && ts.isStringLiteral(node.arguments[0])) ids.add(node.arguments[0].text);
+    ts.forEachChild(node, collect);
+  };
+  collect(resolver);
+  return ids;
 }
 
 export function countRendererKeysFromSource(sourceText: string): number {
@@ -124,6 +154,7 @@ export function buildAskArchitectureInventory(): AskArchitectureInventory {
   };
 
   const known = new Set<string>(KNOWN_UNGOVERNED_OPERATIONS);
+  const deterministicRoutes = deterministicMessageRouteOperationIds();
   const skilllessOperations = operationIds
     .filter((operationId) => !getSkillForOperation(operationId))
     .sort()
@@ -138,6 +169,8 @@ export function buildAskArchitectureInventory(): AskArchitectureInventory {
         domainCommandId: getAskDomainCommandByOperation(operationId)?.id ?? null,
         executionMode: definition.executionMode,
         ...classify(operationId),
+        exceptionClass: SKILL_GOVERNANCE_EXCEPTIONS[operationId]?.classification ?? null,
+        deterministicRouteReachable: deterministicRoutes.has(operationId),
       };
     });
 
@@ -145,10 +178,15 @@ export function buildAskArchitectureInventory(): AskArchitectureInventory {
   for (const row of skilllessOperations) {
     skilllessByClassification[row.metadataClassification] = (skilllessByClassification[row.metadataClassification] ?? 0) + 1;
   }
+  const skilllessByExceptionClass: Record<string, number> = {};
+  for (const row of skilllessOperations) {
+    const key = row.exceptionClass ?? 'NO_RECORD';
+    skilllessByExceptionClass[key] = (skilllessByExceptionClass[key] ?? 0) + 1;
+  }
   counts.skilllessOperations = skilllessOperations.length;
 
   const governanceDrift = {
-    skilllessUnlisted: skilllessOperations.filter((row) => row.propertyRoleFloor !== null && !row.inKnownUngovernedList).map((row) => row.operationId),
+    skilllessUnlisted: skilllessOperations.filter((row) => row.exceptionClass === null).map((row) => row.operationId),
     listedButSkillOwned: operationIds.filter((operationId) => known.has(operationId) && getSkillForOperation(operationId)),
     listedButUnknown: [...known].filter((operationId) => !(operationId in ASK_OPERATION_DEFINITIONS)),
   };
@@ -166,7 +204,7 @@ export function buildAskArchitectureInventory(): AskArchitectureInventory {
     }),
   };
 
-  return { counts, skilllessOperations, skilllessByClassification, governanceDrift, validatorIssues };
+  return { counts, skilllessOperations, skilllessByClassification, skilllessByExceptionClass, governanceDrift, validatorIssues };
 }
 
 function main(): void {

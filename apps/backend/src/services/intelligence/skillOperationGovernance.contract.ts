@@ -1,4 +1,17 @@
 import { ASK_OPERATION_DEFINITIONS, type AskOperationId } from '../ask/askOperationRegistry';
+import { getAskDomainCommandByOperation, type AskDomainCommandDefinition } from '../ask/askDomainCommandRegistry';
+import {
+  SKILL_GOVERNANCE_ALLOWED_ENTRY_PATHS,
+  SKILL_GOVERNANCE_EXCEPTIONS,
+  SKILL_GOVERNANCE_EXCEPTION_REGISTRATION_ISSUES,
+  type SkillGovernanceException,
+} from './skillGovernanceExceptions.contract';
+
+export {
+  SKILL_GOVERNANCE_EXCEPTIONS,
+  type SkillGovernanceException,
+  type SkillGovernanceExceptionClass,
+} from './skillGovernanceExceptions.contract';
 
 /**
  * Home Intelligence Functional Completeness FRD Phase 6 (HI-SKL-002 /
@@ -41,173 +54,123 @@ import { ASK_OPERATION_DEFINITIONS, type AskOperationId } from '../ask/askOperat
  * real follow-up work, not attempted under incident pressure. Do not let
  * this become stale: the second check below fires the moment any of these
  * three IS given a Skill, forcing this carve-out to be removed then.
+ *
+ * Findings Implementation Plan, Phase 1: the flat carve-out list was replaced by the structured SKILL_GOVERNANCE_EXCEPTIONS registry
+ * (skillGovernanceExceptions.contract.ts), which classifies every Skill-less operation by entry path and governance. The list below
+ * is derived from it and kept only for existing consumers; it is not a second source.
  */
-export const KNOWN_UNGOVERNED_OPERATIONS: readonly AskOperationId[] = [
-  'CAPTURE_FACT_CONFIRM',
-  'CAPTURE_EVENT_CONFIRM',
-  'CAPTURE_WARRANTY_CONFIRM',
-  // Ask Cozy Stage 3, Phase 2 external review (implementation plan §8/§4.2;
-  // FRD §23's UPLOAD_EVIDENCE resolution). Same non-Skill-executed shape as
-  // the three capture operations above -- carved out proactively before
-  // ever deploying, learning directly from the production incident
-  // documented above rather than repeating it.
-  'CAPTURE_EVIDENCE_CONFIRM',
-  // Ask Cozy Stage 3, Phase 6 (implementation plan §12; FRD §21). Same shape
-  // as the three capture operations above -- learned directly from the
-  // production incident documented above, not repeated blind: carved out
-  // here PROACTIVELY, before ever deploying, rather than discovering this
-  // gap in production again. Only ever created programmatically by
-  // conversationalCapture.ts's GOAL candidate processing, never proposed
-  // from a raw homeowner message.
-  'SELL_HOLD_RENT_GOAL_CAPTURE',
-  // Ask Cozy conversational UI gap audit, Group B (FRD v1.162-v1.163).
-  // RECALL_REVIEW (commit bbcb06c2) and RECALL_MATCH_UPDATE (commit b93ab08a)
-  // are deliberately skill-less, same precedent as CAPTURE_FACT_CONFIRM:
-  // read/confirmation-gated operations with no Skill package. Missing from
-  // this list crash-looped production at boot (2026-09-29).
-  'RECALL_REVIEW',
-  'RECALL_MATCH_UPDATE',
-  // Exact-four starter source (inventory D-O4/D-O16): a non-routable, launch-only, data-independent read. Deliberately skill-less, the
-  // same precedent as RECALL_REVIEW above; it must stay in this list or the boot-time governance check fails.
-  'SEASONAL_HOME_CARE',
-  // Home Habit Coach review actions (add to routine, mark done, snooze, skip, dismiss): confirmation-gated, non-routable, declared-action only.
-  // Deliberately skill-less, the same precedent as RECALL_MATCH_UPDATE above (the home-habit-coach skill stays a READ skill); it must stay in
-  // this list or the boot-time governance check fails.
-  'HOME_HABIT_UPDATE',
-  // Seasonal checklist setup (owner-only, confirmation-gated, declared-action only): skill-less like SEASONAL_HOME_CARE, which launches it.
-  // It must stay in this list or the boot-time governance check fails.
-  'SEASONAL_CHECKLIST_SETUP',
-  // Property settings written inside Ask (the purchase date, the home journey): owner-declared actions, confirmation-gated, skill-less. They must
-  // stay in this list or the boot-time governance check fails.
-  'PROPERTY_PURCHASE_DATE_SET',
-  // Recommended maintenance tasks (launch-only read, skill-less like the other declared-action reads). It must stay in this list or the boot check fails.
-  'MAINTENANCE_TEMPLATES_BROWSE',
-  'HOME_JOURNEY_SET',
-  // Material and plant adds written inside Ask (declared-action, confirmation-gated, skill-less).
-  'MATERIAL_SPEC_ADD',
-  'MATERIAL_SPEC_UPDATE',
-  'HOME_PLANT_ADD',
-  // Negotiation Shield review start (declared-action, confirmation-gated, skill-less; the negotiation-shield skill stays a READ skill, the same
-  // precedent as HOME_HABIT_UPDATE above). It must stay in this list or the boot-time governance check fails.
-  'NEGOTIATION_SHIELD_CASE_START',
-  // Negotiation Shield analysis run (declared-action, confirmation-gated, skill-less like the start above). It must stay in this list or the boot check fails.
-  'NEGOTIATION_SHIELD_CASE_ANALYZE',
-  // Negotiation Shield saved-details edit (declared-action, confirmation-gated, skill-less like the two above). It must stay in this list or the boot check fails.
-  'NEGOTIATION_SHIELD_CASE_UPDATE',
-  // Negotiation Shield document attach (declared-action, confirmation-gated, skill-less like the three above). It must stay in this list or the boot check fails.
-  'NEGOTIATION_SHIELD_CASE_ATTACH',
-  // Renovation case start (declared-action or typed, confirmation-gated, skill-less like the readiness read's neighbours). It must stay in this list or the boot check fails.
-  'RENOVATION_CASE_START',
-  'HOME_RECORD_STATE_COMMAND',
-  'BUYER_CONTRACT_COMMAND',
-  'BUYER_CLOSING_DISCLOSURE_COMMAND',
-  'BUYER_LOAN_ESTIMATE_COMMAND',
-  'BUYER_PLAN_SETUP_COMMAND',
-  'BUYER_LOAN_ESTIMATES',
-  'BUYER_INSURANCE_COMMAND',
-  'BUYER_INSURANCE_READINESS',
-  'BUYER_CLOSING_ITEM_COMMAND',
-  'BUYER_WALKTHROUGH_COMMAND',
-  'DIY_PROJECT_NOTE_COMMAND',
-  'DIY_SKILL_PROFILE_COMMAND',
-  'WORK_REQUEST_COMMAND',
-  'SAVED_ARCHIVE_COMMAND',
-  'NOTIFICATIONS_OVERVIEW',
-  'NOTIFICATION_COMMAND',
-  'NOTIFICATION_SETTINGS_OVERVIEW',
-  'NOTIFICATION_SETTINGS_COMMAND',
-  'SEASONAL_ITEM_COMMAND',
-  'HOME_WORK_ITEM_COMMAND',
-  'HOME_WORK_ITEMS',
-  'WORK_OVERVIEW',
-  'HOME_RECORD_EXPORT',
-  'HOME_RECORD_EXPORT_SHARE',
-  'HOME_RECORD_EXPORT_STATUS',
-  'SAVED_RESULTS',
-  'INSPECTION_NEGOTIATION_PACKAGE',
-  'INSPECTION_FINDING_DECISION_COMMAND',
-  'INSPECTION_REPORT_FINDINGS',
-  'INSPECTION_REPORT_COMMAND',
-  'INSPECTION_REPORT_COMPARE',
-  'INSPECTION_REPORTS',
-  'SELLER_PREP_CASE_COMMAND',
-  'CLAIM_ACTIVITY_COMMAND',
-  'CLAIM_CHECKLIST_VIEW',
-  'DO_NOTHING_SCENARIO_COMMAND',
-  'HOME_HABIT_PREFERENCES_COMMAND',
-  'FINANCING_PROFILE_COMMAND',
-  'HOME_BRIEFING_SHARE_COMMAND',
-  'HOA_COMPLIANCE_COMMAND',
-  'HOME_BRIEFING_COMMAND',
-  'HOME_BRIEFING_VIEW',
-  'NEIGHBORHOOD_INTERACTION_COMMAND',
-  'PAST_HAZARD_OUTCOME_COMMAND',
-  'RENOVATION_READINESS_COMMAND',
-  'SAVINGS_BENEFIT_COMMAND',
-  'PROPERTY_TAX_APPEAL_COMMAND',
-  'PROPERTY_TAX_COMPARABLE_COMMAND',
-  'STATUS_BOARD_COMMAND',
-  'CAPITAL_TIMELINE_COMMAND',
-  'COVERAGE_COMMAND',
-  'COVERAGE_ANALYSIS_RUN',
-  'INSPECTION_REPORT_REVIEW',
-  'GUIDANCE_STEP_DECLARE',
-  'INSPECTION_FINDINGS_CHECK',
-  'COVERAGE_RECORD_CHECK',
-  'COVERAGE_TERM_REVIEW',
-  'MAINTENANCE_EVIDENCE_ATTACH',
-  'COVERAGE_REVIEW_STATUS',
-  'RISK_MITIGATION_PLAN',
-  'HOME_UPGRADE_COMMAND',
-  'PERMIT_TRACKER_COMMAND',
-  'FINANCING_OVERVIEW',
-  'PERMIT_TRACKER_STATUS',
-  'COMMUNITY_UPDATES',
-  'NEGOTIATION_SHIELD_BUYER_COMMAND',
-  'PRICE_FINALIZATION_COMMAND',
-  'QUOTE_COMPARISON_COMMAND',
-  'ENVIRONMENT_REPORT',
-  'ENVIRONMENT_REPORT_COMMAND',
-  // Household access summary (Sole Homeowner Interface FR-REC-002): a read-only, skill-less answer over the household member list. Same
-  // precedent as RECALL_REVIEW above; it must stay in this list or the boot-time governance check fails.
-  'HOUSEHOLD_ACCESS_SUMMARY',
-  'ROOM_PLANT_RECOMMENDATIONS',
-  'OWNERSHIP_COST_COMMAND',
-  // Tool starts written inside Ask (declared-action, confirmation-gated, skill-less): suggest habits, run the simulation, check a quote.
-  'HOME_HABITS_GENERATE',
-  'DO_NOTHING_SIMULATION_RUN',
-  'SERVICE_PRICE_CHECK_RUN',
-  // Exact-four starter source (inventory D-O4): authored, non-routable, launch-only; skill-less like SEASONAL_HOME_CARE.
-  'HOME_BASICS_GUIDE',
-  // Exact-four starter source (inventory D-O4): authored, non-routable, launch-only; skill-less like the two above.
-  'HIRING_GUIDE',
-];
+export const KNOWN_UNGOVERNED_OPERATIONS: readonly AskOperationId[] = (Object.keys(SKILL_GOVERNANCE_EXCEPTIONS) as AskOperationId[])
+  .filter((operationId) => ASK_OPERATION_DEFINITIONS[operationId]?.propertyRoleFloor !== null)
+  .sort();
 
 export interface SkillOperationGovernanceContext {
   skillCoversOperation: (operationId: AskOperationId) => boolean;
 }
 
+export interface SkillOperationGovernanceOptions {
+  exceptions?: Readonly<Partial<Record<AskOperationId, SkillGovernanceException>>>;
+  commandForOperation?: (operationId: string) => AskDomainCommandDefinition | null;
+  registrationIssues?: readonly string[];
+}
+
+type OperationShape = {
+  propertyRoleFloor: unknown;
+  messageRoutable: boolean;
+  executionMode: string;
+};
+
+const nonEmpty = (value: string | undefined): boolean => typeof value === 'string' && value.trim().length > 0;
+
 export function validateSkillOperationGovernanceCoverage(
   context: SkillOperationGovernanceContext,
   operations: typeof ASK_OPERATION_DEFINITIONS = ASK_OPERATION_DEFINITIONS,
+  options: SkillOperationGovernanceOptions = {},
+): string[] {
+  const exceptions = options.exceptions ?? SKILL_GOVERNANCE_EXCEPTIONS;
+  const commandForOperation = options.commandForOperation ?? getAskDomainCommandByOperation;
+  const issues: string[] = [...(options.registrationIssues ?? SKILL_GOVERNANCE_EXCEPTION_REGISTRATION_ISSUES)];
+
+  for (const [operationId, definition] of Object.entries(operations) as [AskOperationId, OperationShape][]) {
+    const covered = context.skillCoversOperation(operationId);
+    const record = exceptions[operationId];
+    if (!covered && !record) {
+      issues.push(`Ask operation "${operationId}" has no owning Skill and no skill governance exception record in SKILL_GOVERNANCE_EXCEPTIONS.`);
+    }
+    if (covered && record) {
+      issues.push(`Ask operation "${operationId}" has a skill governance exception record but is now covered by a Skill -- remove the record.`);
+    }
+    if (!covered && record) issues.push(...validateExceptionRecord(operationId, definition, record, commandForOperation));
+  }
+
+  for (const operationId of Object.keys(exceptions)) {
+    if (!(operationId in operations)) issues.push(`SKILL_GOVERNANCE_EXCEPTIONS references unknown Ask operation "${operationId}".`);
+  }
+
+  return issues;
+}
+
+function validateExceptionRecord(
+  operationId: AskOperationId,
+  definition: OperationShape,
+  record: SkillGovernanceException,
+  commandForOperation: (operationId: string) => AskDomainCommandDefinition | null,
 ): string[] {
   const issues: string[] = [];
-  const knownGaps = new Set<AskOperationId>(KNOWN_UNGOVERNED_OPERATIONS);
+  const label = `Ask operation "${operationId}" (${record.classification})`;
+  const command = commandForOperation(operationId);
+  const hasFloor = definition.propertyRoleFloor !== null;
 
-  for (const [operationId, definition] of Object.entries(operations) as [AskOperationId, { propertyRoleFloor: unknown }][]) {
-    if (definition.propertyRoleFloor === null) continue;
-    const covered = context.skillCoversOperation(operationId);
-    if (!covered && !knownGaps.has(operationId)) {
-      issues.push(`Ask operation "${operationId}" has a property role floor but no owning Skill and is not a documented governance gap in KNOWN_UNGOVERNED_OPERATIONS.`);
-    }
-    if (covered && knownGaps.has(operationId)) {
-      issues.push(`Ask operation "${operationId}" is listed in KNOWN_UNGOVERNED_OPERATIONS but is now covered by a Skill — remove it from the carve-out list.`);
-    }
+  if (!nonEmpty(record.reason)) issues.push(`${label}: exception record has no reason.`);
+  if (!nonEmpty(record.governingReference)) issues.push(`${label}: exception record has no governing reference.`);
+  if (record.allowedEntryPaths.length === 0) issues.push(`${label}: exception record declares no allowed entry path.`);
+  if (record.equivalentControls.length === 0) issues.push(`${label}: exception record declares no equivalent controls.`);
+  const classPaths = SKILL_GOVERNANCE_ALLOWED_ENTRY_PATHS[record.classification];
+  if (!classPaths) {
+    issues.push(`${label}: unknown exception classification.`);
+    return issues;
+  }
+  for (const entryPath of record.allowedEntryPaths) {
+    if (!classPaths.includes(entryPath)) issues.push(`${label}: entry path ${entryPath} is not allowed for this classification.`);
   }
 
-  for (const operationId of knownGaps) {
-    if (!(operationId in operations)) issues.push(`KNOWN_UNGOVERNED_OPERATIONS references unknown Ask operation "${operationId}".`);
+  if (record.classification === 'INTENTIONAL_PLATFORM') {
+    if (hasFloor) issues.push(`${label}: only an operation with no property role floor can be an intentional platform exception.`);
+    return issues;
   }
 
+  if (!hasFloor) issues.push(`${label}: an operation with no property role floor is a platform boundary, not ${record.classification}.`);
+
+  if (record.classification === 'TEMPORARY_GAP') {
+    if (!definition.messageRoutable) issues.push(`${label}: a non-message-routable operation is not a temporary gap; classify its actual entry path.`);
+    if (!nonEmpty(record.owner)) issues.push(`${label}: a temporary gap needs an owner.`);
+    if (!nonEmpty(record.removalCondition)) issues.push(`${label}: a temporary gap needs a removal condition.`);
+    if (command && !record.equivalentControls.includes('CONFIRMATION')) issues.push(`${label}: a command exception must declare its confirmation control.`);
+    return issues;
+  }
+
+  if (definition.messageRoutable) {
+    issues.push(`${label}: an internal, launch-only, or capture exception must not be message-routable; reclassify it or add an owning Skill.`);
+  }
+
+  if (record.classification === 'GOVERNED_INTERNAL_COMMAND') {
+    if (!command) issues.push(`${label}: a governed internal command needs exactly one ASK_DOMAIN_COMMAND_REGISTRY entry.`);
+    if (!record.equivalentControls.includes('CONFIRMATION')) issues.push(`${label}: a governed internal command must declare its confirmation control.`);
+    if (!record.allowedEntryPaths.includes('DECLARED_ACTION')) issues.push(`${label}: a governed internal command must declare DECLARED_ACTION as an entry path.`);
+  } else if (record.classification === 'INTERNAL_CAPTURE') {
+    if (!record.allowedEntryPaths.includes('PROGRAMMATIC_CAPTURE')) issues.push(`${label}: a capture exception must declare PROGRAMMATIC_CAPTURE.`);
+    if (command && !record.equivalentControls.includes('CONFIRMATION')) issues.push(`${label}: a capture operation with a domain command must declare its confirmation control.`);
+  } else {
+    // LAUNCH_ONLY and DETERMINISTIC_TYPED_READ are reads: no domain command, no confirmation adapter.
+    if (command) issues.push(`${label}: a read-only exception must not have a domain command.`);
+    if (record.equivalentControls.includes('CONFIRMATION')) issues.push(`${label}: a read-only exception must not declare a confirmation control.`);
+    if (record.classification === 'LAUNCH_ONLY' && record.allowedEntryPaths.some((entryPath) => entryPath !== 'LAUNCH_CONTEXT')) {
+      issues.push(`${label}: launch-only means LAUNCH_CONTEXT is the only entry path; a typed route needs DETERMINISTIC_TYPED_READ.`);
+    }
+    if (record.classification === 'DETERMINISTIC_TYPED_READ') {
+      if (!record.allowedEntryPaths.includes('DETERMINISTIC_TYPED_ROUTE')) issues.push(`${label}: a deterministic typed read must declare DETERMINISTIC_TYPED_ROUTE.`);
+      if (definition.executionMode !== 'DETERMINISTIC') issues.push(`${label}: a deterministic typed read must have a DETERMINISTIC execution mode.`);
+      if (!nonEmpty(record.owner)) issues.push(`${label}: a deterministic typed read needs an explicit canonical owner.`);
+    }
+  }
   return issues;
 }
