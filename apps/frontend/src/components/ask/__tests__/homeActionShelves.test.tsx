@@ -234,4 +234,33 @@ describe('Home Action shelves', () => {
     expect(enriched).toHaveClass('border-l-sky-600');
     expect(enriched).toHaveTextContent('Next: Next move refi');
   });
+
+  test('suppresses duplicate next-step copy when recommendedAction repeats the card title', () => {
+    const duplicateItem = (id: string, title: string, recommendedAction: string) => ({
+      homeActionId: id, title, rawPriority: 'NOW' as const, consumerPriority: 'DO_NOW' as const,
+      comparativeReasonCodes: [], confidenceLabel: 'HIGH' as const, deadlineAt: null, dependencyRefs: [], cta: null,
+      inlineLaunch: { interactionType: 'CONVERSATION_CONTINUE' as const, operationId: 'HOME_ACTIONS' as const, message: `Review ${id}`, label: 'Why this work?' },
+      presentation: {
+        kind: 'GENERIC' as const, tone: 'NEUTRAL' as const, variant: 'ACCEPTED_WORK' as const, eyebrow: 'Accepted work',
+        summary: `Summary for ${id}`, whyItMatters: `Why ${id} matters`, recommendedAction,
+        expectedOutcome: 'Outcome', detailLabel: 'Why this work?', timing: { windowStart: null, windowEnd: null, rationale: 'Because' },
+        keyFacts: [], source: null, controls: [],
+      },
+      watchState: null, suppressed: false, completed: false, unavailable: false, stale: false,
+    });
+    const priority: AskPresentationBlock = {
+      type: 'PRIORITY_LIST', id: 'home-actions-priority-list', title: 'What matters now', propertyId: 'home',
+      rankingPolicyVersion: 'priority-list-policy-v2', generatedAt: '2026-11-04T12:00:00.000Z', sourceFreshnessAt: null, truncated: false,
+      items: [
+        duplicateItem('lead-dup', 'Review the sell, hold, and rent scenarios for this property', 'Review the sell, hold, and rent scenarios for this property.'),
+        duplicateItem('secondary-dup', 'Test GFCI outlets', 'Test GFCI outlets'),
+      ],
+    };
+    const { container } = render(<CalmChromeContext.Provider value><CalmAnswerContext.Provider value>
+      <BlockView block={priority} executionId="e" propertyId="home" onItemAction={jest.fn()} itemActionsDisabled={false} onFilterClick={() => undefined} onCollectionPage={() => undefined} onAccessLost={() => undefined} />
+    </CalmAnswerContext.Provider></CalmChromeContext.Provider>);
+    expect(container.querySelectorAll('[data-home-action-next]')).toHaveLength(0);
+    expect(container.querySelector('[data-home-action-row="enriched"]')).not.toHaveTextContent('Next: Test GFCI outlets');
+    expect(container.querySelector('[data-home-action-icon="completed"]')).toBeNull();
+  });
 });

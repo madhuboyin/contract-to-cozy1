@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { AlertTriangle, CalendarCheck2, CalendarClock, Check, ClipboardList, ChevronDown, Clock3, MoreHorizontal, ThumbsDown, ThumbsUp } from 'lucide-react';
+import { AlertTriangle, ArrowRight, CalendarCheck2, CalendarClock, Check, ClipboardList, ChevronDown, Clock3, MoreHorizontal, ThumbsDown, ThumbsUp } from 'lucide-react';
 import { api } from '@/lib/api/client';
 import { cn } from '@/lib/utils';
 import { ActionLink } from './context';
@@ -74,6 +74,16 @@ function HomeActionOverflow({ executionId, homeActionId }: { executionId: string
 
 const reviewButtonClass = 'min-h-9 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-teal-800 hover:border-teal-300 hover:bg-teal-50 disabled:opacity-50';
 
+function normalizeCopy(value: string | null | undefined): string {
+  return (value ?? '').trim().toLowerCase().replace(/[.!?]+$/g, '').replace(/\s+/g, ' ');
+}
+
+function isDistinctCopy(candidate: string | null | undefined, ...existing: Array<string | null | undefined>): boolean {
+  const normalized = normalizeCopy(candidate);
+  if (!normalized) return false;
+  return existing.every((other) => normalizeCopy(other) !== normalized);
+}
+
 type PriorityTone = 'EMERGENCY' | 'TIME_BOUND' | 'MAINTENANCE' | 'PLANNING' | 'NEUTRAL';
 // Color identifies meaning, never rank alone; the eyebrow text and icon carry the same meaning for accessibility.
 const PRIORITY_TONE_STYLES: Record<PriorityTone, { card: string; accent: string; icon: string; badge: string; kicker: string; box: string; primary: string }> = {
@@ -81,7 +91,7 @@ const PRIORITY_TONE_STYLES: Record<PriorityTone, { card: string; accent: string;
   TIME_BOUND: { card: 'border-amber-300 bg-gradient-to-br from-amber-50 to-orange-50/70', accent: 'border-l-amber-500', icon: 'bg-amber-100 text-amber-700', badge: 'bg-amber-700 text-white', kicker: 'text-amber-800', box: 'border-amber-200', primary: 'border-amber-700 bg-amber-700 text-white hover:bg-amber-800 hover:text-white' },
   MAINTENANCE: { card: 'border-emerald-200 bg-gradient-to-br from-emerald-50/80 to-teal-50/60', accent: 'border-l-emerald-600', icon: 'bg-emerald-100 text-emerald-700', badge: 'bg-emerald-700 text-white', kicker: 'text-emerald-800', box: 'border-emerald-200', primary: 'border-emerald-700 bg-emerald-700 text-white hover:bg-emerald-800 hover:text-white' },
   PLANNING: { card: 'border-sky-200 bg-gradient-to-br from-sky-50/80 to-slate-50', accent: 'border-l-sky-600', icon: 'bg-sky-100 text-sky-700', badge: 'bg-sky-700 text-white', kicker: 'text-sky-800', box: 'border-sky-200', primary: 'border-sky-700 bg-sky-700 text-white hover:bg-sky-800 hover:text-white' },
-  NEUTRAL: { card: 'border-slate-200 bg-white', accent: 'border-l-slate-300', icon: 'bg-slate-100 text-slate-700', badge: 'bg-slate-100 text-slate-700', kicker: 'text-teal-800', box: 'border-slate-200', primary: '' },
+  NEUTRAL: { card: 'border-slate-200 bg-gradient-to-br from-slate-50/80 to-white', accent: 'border-l-slate-300', icon: 'bg-slate-100 text-slate-700', badge: 'bg-slate-100 text-slate-700', kicker: 'text-teal-800', box: 'border-slate-200', primary: 'border-teal-700 bg-teal-700 text-white hover:bg-teal-800 hover:text-white' },
 };
 
 function formatForecastWindow(start: string | null, end: string | null): string | null {
@@ -155,11 +165,18 @@ export const PriorityListBlock: AskBlockRenderer<'PRIORITY_LIST'> = ({ block, ex
         <>
         {calm && (() => {
           const lead = block.items[0];
-          const leadContext = lead.presentation?.whyItMatters || lead.presentation?.summary || lead.whyThisAppeared;
+          const leadContext = [lead.presentation?.whyItMatters, lead.presentation?.summary, lead.whyThisAppeared]
+            .find((text) => isDistinctCopy(text, lead.title)) ?? null;
           return (
-            <div className="max-w-3xl space-y-1 text-sm leading-6 text-slate-700" data-home-actions-intro="">
-              <p>{leadContext ?? `Start with ${lead.title.replace(/[.]$/, '')}.`}</p>
-              {block.items.length > 1 && <p className="text-slate-600"><span className="sm:hidden">Ranked first in your Home Actions.</span><span className="hidden sm:inline">It is ranked first in your current Home Actions. The next priorities are summarized below, with supporting details available when you want them.</span></p>}
+            <div className="max-w-3xl rounded-xl border border-slate-200/80 bg-slate-50/70 px-3.5 py-2.5 text-sm leading-6 text-slate-700" data-home-actions-intro="">
+              {leadContext ? (
+                <p>
+                  <span className="font-semibold text-slate-900">Why this comes first: </span>
+                  <span>{leadContext}</span>
+                </p>
+              ) : (
+                <p>Start with your top priority below, then work through the next items when you are ready.</p>
+              )}
             </div>
           );
         })()}
@@ -187,7 +204,7 @@ export const PriorityListBlock: AskBlockRenderer<'PRIORITY_LIST'> = ({ block, ex
                 const toneStyle = PRIORITY_TONE_STYLES[toneKey];
                 const urgentTone = toneKey === 'EMERGENCY' || toneKey === 'TIME_BOUND';
                 const forecastWindow = weather && presentation ? formatForecastWindow(presentation.timing.windowStart, presentation.timing.windowEnd) : null;
-                const ToneIcon = urgentTone ? AlertTriangle : toneKey === 'MAINTENANCE' ? CalendarCheck2 : toneKey === 'PLANNING' ? ClipboardList : Check;
+                const ToneIcon = item.completed ? Check : urgentTone ? AlertTriangle : toneKey === 'MAINTENANCE' ? CalendarCheck2 : ClipboardList;
                 const actionState = commandState[item.homeActionId];
                 const facts = presentation?.keyFacts ?? [];
                 const windowEndMs = presentation?.timing.windowEnd ? Date.parse(presentation.timing.windowEnd) : Number.NaN;
@@ -197,13 +214,18 @@ export const PriorityListBlock: AskBlockRenderer<'PRIORITY_LIST'> = ({ block, ex
                 const visibleReminder = rich ? controls.find((control) => control.command === 'DEFER' || control.command === 'SNOOZE') : undefined;
                 const disclosedControls = controls.filter((control) => control !== visibleReminder);
                 const detailLabel = presentation?.source ? 'Details & source' : 'Show details';
+                const hasDistinctSummary = Boolean(presentation?.summary && !rich && isDistinctCopy(presentation.summary, item.title));
+                const hasDistinctNextStep = Boolean(
+                  presentation?.recommendedAction &&
+                  isDistinctCopy(presentation.recommendedAction, item.title, !rich ? presentation.summary : null),
+                );
                 return (
                   <>
                   {!rich && index === 1 && <p className="mb-2 text-sm font-semibold text-slate-950">Also worth planning</p>}
-                  <article className={cn('rounded-2xl border', rich ? cn('border-l-4 p-5', toneStyle.card, toneStyle.accent) : cn('border-l-4 bg-white p-4', toneKey === 'NEUTRAL' ? 'border-slate-200' : toneStyle.box, toneStyle.accent))} data-home-action-row={rich ? 'start' : 'enriched'}>
+                  <article className={cn('rounded-2xl border transition-colors', rich ? cn('border-l-4 p-5 shadow-sm', toneStyle.card, toneStyle.accent) : cn('border-l-4 bg-white p-4', toneKey === 'NEUTRAL' ? 'border-slate-200' : toneStyle.box, toneStyle.accent))} data-home-action-row={rich ? 'start' : 'enriched'}>
                     {rich && <p className={cn('mb-3 text-[11px] font-bold uppercase tracking-wide', toneStyle.kicker)}>Start here</p>}
                     <div className="flex items-start gap-3">
-                      <div className={cn('hidden rounded-xl p-2.5 sm:block', toneStyle.icon)}>
+                      <div className={cn('hidden rounded-xl p-2.5 sm:block', toneStyle.icon)} data-home-action-icon={item.completed ? 'completed' : toneKey.toLowerCase()}>
                         <ToneIcon className="h-5 w-5" aria-hidden="true" />
                       </div>
                       <div className="min-w-0 flex-1">
@@ -213,47 +235,51 @@ export const PriorityListBlock: AskBlockRenderer<'PRIORITY_LIST'> = ({ block, ex
                           {compactMeta && <span className="text-xs text-slate-500">{compactMeta}</span>}
                         </div>
                         <h4 className={cn('mt-2 break-words font-semibold text-slate-950', rich ? 'text-lg' : 'text-base')}>{item.title}</h4>
-                        {presentation?.summary && !rich && <p className="mt-1 text-sm leading-6 text-slate-700">{presentation.summary}</p>}
+                        {hasDistinctSummary && <p className="mt-1 text-sm leading-6 text-slate-700">{presentation!.summary}</p>}
                         {forecastWindow && <p className="mt-2 flex items-center gap-1.5 text-sm font-medium text-slate-800" data-forecast-window=""><CalendarClock className="h-4 w-4 shrink-0 text-slate-500" aria-hidden="true" /><span><span className="text-slate-600">Forecast window:</span> {forecastWindow}</span></p>}
-                        {presentation && !rich && presentation.recommendedAction && <p className="mt-2 text-sm leading-6 text-slate-800"><span className="font-semibold">Next:</span> {presentation.recommendedAction}</p>}
+                        {!rich && hasDistinctNextStep && <p className="mt-2 text-sm leading-6 text-slate-800" data-home-action-next=""><span className="font-semibold">Next:</span> {presentation!.recommendedAction}</p>}
                         {!presentation && item.watchState && <p className="mt-1 text-sm text-slate-600">{item.watchState}</p>}
 
-                        {presentation && rich && (
-                          <div className={cn('mt-3 rounded-xl border bg-white/80 p-3', toneStyle.box)}>
-                            <p className={cn('text-xs font-semibold uppercase tracking-wide', toneStyle.kicker)}>{weather ? 'Recommended preparation' : seasonal ? 'Next seasonal step' : 'Recommended next step'}</p>
-                            <p className="mt-1 text-sm font-medium leading-6 text-slate-800">{presentation.recommendedAction}</p>
+                        {rich && hasDistinctNextStep && (
+                          <div className={cn('mt-3 rounded-xl border bg-white/85 px-3.5 py-2.5', toneStyle.box)} data-home-action-next="">
+                            <p className={cn('text-[11px] font-semibold uppercase tracking-wide', toneStyle.kicker)}>{weather ? 'Recommended preparation' : seasonal ? 'Next seasonal step' : 'Recommended next step'}</p>
+                            <p className="mt-0.5 text-sm font-medium leading-6 text-slate-800">{presentation!.recommendedAction}</p>
                           </div>
                         )}
 
                         {(facts.length > 0 || presentation?.source || presentation?.expectedOutcome || presentation?.timing.rationale || reason || (!rich && presentation?.whyItMatters) || disclosedControls.length > 0) && (
-                          <details className="mt-3 rounded-xl border border-slate-200 bg-white/70 px-3 py-2 text-sm text-slate-600">
-                            <summary className="w-fit cursor-pointer font-semibold text-teal-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600">{detailLabel}</summary>
-                            {!rich && presentation?.whyItMatters && presentation.whyItMatters !== presentation.summary && <p className="mt-3"><span className="font-semibold text-slate-800">Why it matters:</span> {presentation.whyItMatters}</p>}
-                            
-                            {presentation?.expectedOutcome && <p className="mt-2"><span className="font-semibold text-slate-800">Expected outcome:</span> {presentation.expectedOutcome}</p>}
-                            {presentation?.timing.rationale && <p className="mt-2"><span className="font-semibold text-slate-800">Timing:</span> {presentation.timing.rationale}</p>}
-                            {facts.length > 0 && (
-                              <dl className="mt-3 flex flex-wrap gap-x-5 gap-y-2">
-                                {facts.map((fact) => (
-                                  <div key={`${fact.label}-${fact.value}`} className="min-w-[9rem]">
-                                    <dt className="text-[10px] font-bold uppercase tracking-wide text-slate-500">{fact.label}</dt>
-                                    <dd className="mt-0.5 text-xs font-medium text-slate-800">{fact.value}</dd>
-                                  </div>
-                                ))}
-                              </dl>
-                            )}
-                            {presentation?.source && <p className="mt-3 text-xs text-slate-500">Source: {presentation.source.label}</p>}
-                            {reason && <p className="mt-2 text-xs"><span className="font-semibold text-slate-700">Why this appeared:</span> {/[.!?]$/.test(reason) ? reason : `${reason}.`}</p>}
-                            {disclosedControls.length > 0 && <div className="mt-3 flex flex-wrap gap-2">{disclosedControls.map((control) => (
-                              <button key={control.command} type="button" disabled={itemActionsDisabled || actionState === 'SAVING' || actionState === 'ACKNOWLEDGED' || actionState === 'REMINDER_SET'} onClick={() => void executeInlineCommand(item, control.command)} className="min-h-9 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:border-teal-300 hover:bg-teal-50 disabled:opacity-50">
-                                {control.command === 'ACKNOWLEDGE' ? <Check className="mr-1 inline h-3.5 w-3.5" aria-hidden="true" /> : <Clock3 className="mr-1 inline h-3.5 w-3.5" aria-hidden="true" />}{control.label}
-                              </button>
-                            ))}</div>}
+                          <details className="group mt-2.5 text-sm text-slate-600">
+                            <summary className="inline-flex w-fit cursor-pointer list-none items-center gap-1 rounded-md py-1 text-xs font-semibold text-slate-600 transition-colors hover:text-teal-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 [&::-webkit-details-marker]:hidden">
+                              <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform group-open:rotate-180 group-open:text-teal-700" aria-hidden="true" />
+                              <span>{detailLabel}</span>
+                            </summary>
+                            <div className="mt-2 rounded-xl border border-slate-200/80 bg-white/80 p-3 text-sm text-slate-600">
+                              {!rich && presentation?.whyItMatters && isDistinctCopy(presentation.whyItMatters, presentation.summary, item.title) && <p className="mb-2"><span className="font-semibold text-slate-800">Why it matters:</span> {presentation.whyItMatters}</p>}
+                              {presentation?.expectedOutcome && <p className="mt-1"><span className="font-semibold text-slate-800">Expected outcome:</span> {presentation.expectedOutcome}</p>}
+                              {presentation?.timing.rationale && <p className="mt-2"><span className="font-semibold text-slate-800">Timing:</span> {presentation.timing.rationale}</p>}
+                              {facts.length > 0 && (
+                                <dl className="mt-3 flex flex-wrap gap-x-5 gap-y-2">
+                                  {facts.map((fact) => (
+                                    <div key={`${fact.label}-${fact.value}`} className="min-w-[9rem]">
+                                      <dt className="text-[10px] font-bold uppercase tracking-wide text-slate-500">{fact.label}</dt>
+                                      <dd className="mt-0.5 text-xs font-medium text-slate-800">{fact.value}</dd>
+                                    </div>
+                                  ))}
+                                </dl>
+                              )}
+                              {presentation?.source && <p className="mt-3 text-xs text-slate-500">Source: {presentation.source.label}</p>}
+                              {reason && <p className="mt-2 text-xs"><span className="font-semibold text-slate-700">Why this appeared:</span> {/[.!?]$/.test(reason) ? reason : `${reason}.`}</p>}
+                              {disclosedControls.length > 0 && <div className="mt-3 flex flex-wrap gap-2">{disclosedControls.map((control) => (
+                                <button key={control.command} type="button" disabled={itemActionsDisabled || actionState === 'SAVING' || actionState === 'ACKNOWLEDGED' || actionState === 'REMINDER_SET'} onClick={() => void executeInlineCommand(item, control.command)} className="min-h-9 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:border-teal-300 hover:bg-teal-50 disabled:opacity-50">
+                                  {control.command === 'ACKNOWLEDGE' ? <Check className="mr-1 inline h-3.5 w-3.5" aria-hidden="true" /> : <Clock3 className="mr-1 inline h-3.5 w-3.5" aria-hidden="true" />}{control.label}
+                                </button>
+                              ))}</div>}
+                            </div>
                           </details>
                         )}
 
                         <div className="mt-3 flex flex-wrap items-center gap-2">
-                          {item.inlineLaunch ? <button type="button" disabled={itemActionsDisabled} onClick={() => onItemAction('HOME_ACTION', item.homeActionId, item.inlineLaunch!.message, item.inlineLaunch!.operationId, item.inlineLaunch!.interactionType, undefined, item.homeActionId)} className={cn(reviewButtonClass, rich && toneStyle.primary)}>{item.inlineLaunch.label ?? presentation?.detailLabel ?? 'Review details'}</button> : item.cta ? <ActionLink action={item.cta} /> : null}
+                          {item.inlineLaunch ? <button type="button" disabled={itemActionsDisabled} onClick={() => onItemAction('HOME_ACTION', item.homeActionId, item.inlineLaunch!.message, item.inlineLaunch!.operationId, item.inlineLaunch!.interactionType, undefined, item.homeActionId)} className={cn(reviewButtonClass, 'inline-flex items-center gap-1.5', rich && toneStyle.primary)}><span>{item.inlineLaunch.label ?? presentation?.detailLabel ?? 'Review details'}</span><ArrowRight className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /></button> : item.cta ? <ActionLink action={item.cta} /> : null}
                           {visibleReminder && (
                             <button type="button" disabled={itemActionsDisabled || actionState === 'SAVING' || actionState === 'ACKNOWLEDGED' || actionState === 'REMINDER_SET'} onClick={() => void executeInlineCommand(item, visibleReminder.command)} className="min-h-9 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:border-teal-300 hover:bg-teal-50 disabled:opacity-50">
                               <Clock3 className="mr-1 inline h-3.5 w-3.5" aria-hidden="true" />{visibleReminder.label}

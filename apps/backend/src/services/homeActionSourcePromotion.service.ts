@@ -1396,7 +1396,7 @@ async function loadSeasonalChecklistActions(propertyId: string, db: HomeActionSo
       state: checklist.status === 'IN_PROGRESS' ? 'IN_PROGRESS' : 'OPEN',
       priority,
       signal: contextReviewOnly ? `${displaySeason} preparation needs home details` : `${displaySeason} seasonal checklist: ${pendingItems.length} task${pendingItems.length === 1 ? '' : 's'} remaining`,
-      whyItMatters: contextReviewOnly ? `${timingSummary} Confirming the missing home details prevents irrelevant maintenance recommendations.` : `${progress}. ${seasonalImpact ? `${seasonalImpact} ` : ''}${criticalCount > 0 ? `${criticalCount} critical task${criticalCount === 1 ? '' : 's'} still need attention. ` : ''}${timingSummary}`,
+      whyItMatters: contextReviewOnly ? `${timingSummary} Confirming the missing home details prevents irrelevant maintenance recommendations.` : `${progress}. ${seasonalImpact ? `${seasonalImpact} ` : ''}${criticalCount > 0 ? `${criticalCount} critical task${criticalCount === 1 ? ' still needs' : 's still need'} attention. ` : ''}${timingSummary}`,
       recommendedAction: contextReviewOnly ? 'Review the home details needed for seasonal planning' : `Review the ${displaySeason} seasonal checklist`,
       expectedOutcome: `Complete or deliberately manage the remaining ${displaySeason.toLowerCase()} preparation tasks before the seasonal window closes.`,
       presentation: {
@@ -1404,7 +1404,7 @@ async function loadSeasonalChecklistActions(propertyId: string, db: HomeActionSo
         eyebrow: `${displaySeason} checklist`,
         headline: seasonalHeadline,
         summary: seasonalSummary,
-        whyNow: `${timingSummary}${criticalCount > 0 ? ` ${criticalCount} critical task${criticalCount === 1 ? '' : 's'} remain.` : ''}`,
+        whyNow: `${timingSummary}${criticalCount > 0 ? ` ${criticalCount} critical task${criticalCount === 1 ? ' remains' : 's remain'}.` : ''}`,
         keyFacts: [
           { label: 'Season', value: displaySeason },
           { label: 'Progress', value: progress },
@@ -5015,8 +5015,24 @@ export async function loadSellHoldRentActions(propertyId: string, db: HomeAction
     priority: 'PLAN',
     signal: `Over ${analysis.years} years, ${winnerLabel.toLowerCase()} comes out ahead in our modeled comparison.`,
     whyItMatters: rationale[0] ?? `A ${analysis.years}-year sell/hold/rent comparison for this property currently favors ${winnerLabel.toLowerCase()}.`,
-    recommendedAction: 'Review the sell, hold, and rent scenarios for this property',
+    recommendedAction: 'Compare the modeled sell, hold, and rent outcomes and assumptions',
     expectedOutcome: 'A documented sell/hold/rent decision, with the modeled numbers behind it.',
+    presentation: {
+      variant: 'GENERIC_ACTION' as const,
+      eyebrow: 'Sell, hold, or rent',
+      headline: 'Review the sell, hold, and rent scenarios for this property',
+      summary: `Over ${analysis.years} years, ${winnerLabel.toLowerCase()} comes out ahead in our modeled comparison.`,
+      whyNow: rationale[0] ?? `A ${analysis.years}-year sell/hold/rent comparison for this property currently favors ${winnerLabel.toLowerCase()}.`,
+      keyFacts: [
+        { label: 'Leading scenario', value: winnerLabel },
+        { label: 'Horizon', value: `${analysis.years} years` },
+        { label: 'Confidence', value: analysis.confidence.toLowerCase() },
+      ],
+      factGroups: [],
+      subject: { kind: 'PROPERTY' as const, id: propertyId, label: `${analysis.years}-year sell/hold/rent comparison` },
+      detailLabel: 'Compare scenarios',
+      group: null,
+    },
     timing: {
       dueAt: null,
       windowStart: null,

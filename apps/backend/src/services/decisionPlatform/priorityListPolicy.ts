@@ -174,6 +174,7 @@ export const PRIORITY_LIST_CHANNEL_DISPLAY_LIMITS = {
   EXTERNAL_PROACTIVE: 1,
 } as const;
 const PLANNING_TONE_VARIANTS: ReadonlySet<string> = new Set(['COVERAGE_REVIEW', 'FINANCIAL_EXPOSURE', 'SALE_PREPARATION', 'ASSET_LIFECYCLE']);
+const PLANNING_ACTION_ID_PREFIXES = ['sell-hold-rent:', 'repair-replace:', 'refinance:', 'capital-timeline:'] as const;
 
 export type PriorityListChannel = keyof typeof PRIORITY_LIST_CHANNEL_DISPLAY_LIMITS;
 
@@ -209,7 +210,10 @@ export function buildPriorityListView(
       ? (action.governance.safetyTier === 'SAFETY_EMERGENCY' ? 'EMERGENCY' as const : 'TIME_BOUND' as const)
       : presentationKind === 'SEASONAL'
         ? 'MAINTENANCE' as const
-        : action.presentation && PLANNING_TONE_VARIANTS.has(action.presentation.variant)
+        : action.presentation && (
+          PLANNING_TONE_VARIANTS.has(action.presentation.variant) ||
+          PLANNING_ACTION_ID_PREFIXES.some((prefix) => action.id.startsWith(prefix))
+        )
           ? 'PLANNING' as const
           : 'NEUTRAL' as const;
     const remindCommand = action.feedbackControls.includes('DEFER')

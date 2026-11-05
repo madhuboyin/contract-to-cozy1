@@ -511,18 +511,32 @@ async function homeActionsResult(userId: string, propertyId: string, message: st
         ? `No ${priorityFilter?.map((value) => value.toLowerCase()).join(' or ')} Home Action is currently surfaced`
         : selectedActions.length === 1
           ? selectedActions[0].presentation?.headline ?? selectedActions[0].recommendedAction
-          : matchingActions.length > selectedActions.length
-            ? `${matchingActions.length} Home Actions to review; the top ${selectedActions.length} are shown.`
-            : `${matchingActions.length} Home Actions are ready to review.`),
+          : dashboardSection === 'attention'
+            ? `${matchingActions.length} ${matchingActions.length === 1 ? 'action needs' : 'actions need'} attention now or soon.`
+            : dashboardSection === 'planAhead'
+              ? `${matchingActions.length} ${matchingActions.length === 1 ? 'action is' : 'actions are'} worth planning ahead for.`
+              : matchingActions.length > selectedActions.length
+                ? `${matchingActions.length} Home Actions to review; the top ${selectedActions.length} are shown.`
+                : `${matchingActions.length} Home Actions are ready to review.`),
     supportLine: empty?.body
       ?? (filteredEmpty
         ? `${feed.actions.length} active action${feed.actions.length === 1 ? '' : 's'} remain in the full governed feed.`
-        : 'Start with the highest-ranked item; each review stays in Ask Cozy.'),
+        : dashboardSection === 'attention'
+          ? 'Start with the top priority below — each step can be reviewed right here in Ask Cozy.'
+          : dashboardSection === 'planAhead'
+            ? 'Start with the highest-impact planning item below, then work through the rest when you are ready.'
+            : 'Start with the highest-ranked item; each review stays in Ask Cozy.'),
     chips: selectedActions.length && !dashboardSection ? [
       { label: `${visibleBuckets.NOW.length} now`, tone: visibleBuckets.NOW.length ? 'CRITICAL' : 'DEFAULT' },
       { label: `${visibleBuckets.SOON.length} soon`, tone: visibleBuckets.SOON.length ? 'CAUTION' : 'DEFAULT' },
       { label: `${visibleBuckets.PLAN.length} to plan`, tone: 'DEFAULT' },
       { label: `${visibleBuckets.CONSIDER.length} to consider`, tone: 'DEFAULT' },
+    ] : selectedActions.length && dashboardSection === 'attention' ? [
+      { label: `${matchingActions.filter((action) => action.priority === 'NOW').length} now`, tone: matchingActions.some((action) => action.priority === 'NOW') ? 'CRITICAL' : 'DEFAULT' },
+      { label: `${matchingActions.filter((action) => action.priority === 'SOON').length} soon`, tone: matchingActions.some((action) => action.priority === 'SOON') ? 'CAUTION' : 'DEFAULT' },
+    ] : selectedActions.length && dashboardSection === 'planAhead' ? [
+      { label: `${matchingActions.filter((action) => action.priority === 'PLAN').length} to plan`, tone: 'DEFAULT' },
+      { label: `${matchingActions.filter((action) => action.priority === 'CONSIDER').length} to consider`, tone: 'DEFAULT' },
     ] : undefined,
     actions: [],
   }];
