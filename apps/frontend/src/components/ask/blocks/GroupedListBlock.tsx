@@ -909,7 +909,7 @@ export function GenericGroupedListBlock({ block, executionId, propertyId, onItem
                 onClick={() => setExpandedSections((current) => ({ ...current, [section.id]: !expanded }))}
                 className="mt-3 inline-flex min-h-9 items-center rounded-full border border-slate-200 bg-white px-3 text-xs font-semibold text-teal-800 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600"
               >
-                {expanded ? 'Show fewer' : `Show ${hiddenItemCount} more`}
+                {expanded ? 'Show fewer' : block.id === 'property-completeness' ? 'Show all areas' : `Show ${hiddenItemCount} more`}
               </button>
             )}
             {/* Presentation Quality 5: keyed on the section's own declared window, not on one block id. Blocks with their own list component never reach this renderer. */}

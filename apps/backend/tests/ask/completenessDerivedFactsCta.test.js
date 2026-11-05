@@ -81,7 +81,7 @@ test('an area with something the homeowner can answer keeps the button and no de
   install(factsFor('LOCATION', ['location.city', 'location.county']));
   const result = await invoke();
   const row = rowOf(result, 'LOCATION');
-  assert.deepEqual(row.actions.map((action) => action.label), ['Fill in missing details']);
+  assert.deepEqual(row.actions.map((action) => action.label), ['Add details']);
   assert.doesNotMatch(row.description, /Not something to answer here/);
 });
 

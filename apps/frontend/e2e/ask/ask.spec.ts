@@ -473,7 +473,7 @@ test('a contributor fills in a missing area detail inline: the row action opens 
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const response = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Areas that can improve', exact: true }) });
-  await response.getByRole('button', { name: 'Fill in missing details' }).click();
+  await response.getByRole('button', { name: 'Add details' }).click();
   await expect.poll(() => api.executionBodies.some((body) => body.message === 'Fill in the missing structure details.'
     && (body.launchContext as { operationId?: string; entityType?: string; entityId?: string } | undefined)?.operationId === 'PROPERTY_CONTEXT_AREA_CAPTURE'
     && (body.launchContext as { entityType?: string } | undefined)?.entityType === 'PROPERTY_CONTEXT_AREA'
@@ -506,7 +506,7 @@ test('"Skip for now" on an area question sends only the skip marker, saves nothi
   await page.getByPlaceholder(/^Ask anything about /).fill('Give me a correctable summary of my home record.');
   await page.getByRole('button', { name: 'Send question' }).click();
   const response = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Areas that can improve', exact: true }) });
-  await response.getByRole('button', { name: 'Fill in missing details' }).click();
+  await response.getByRole('button', { name: 'Add details' }).click();
   const form = page.locator('#ask-execution-execution-area-add');
   // Skipping needs no answer: the required fields are still empty.
   await form.getByRole('button', { name: 'Skip for now' }).click();
@@ -1832,7 +1832,7 @@ test('on a phone, the sale readiness ring, tiles and next steps fit the screen (
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
-test('the home record answers with a completeness ring, its own missing, conflicted and stale counts, and the least complete areas with their capture action (FRD v1.91)', async ({ page }) => {
+test('the home record answers with a completeness ring and one compact, progressively disclosed remediation list', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const api = await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
@@ -1842,16 +1842,20 @@ test('the home record answers with a completeness ring, its own missing, conflic
   const ring = page.locator('#ask-execution-execution-property-completeness-ring [data-display-pattern="progress"]');
   await expect(ring.getByRole('img', { name: '62% ready. 31 of 50 applicable facts known across 9 areas' })).toBeVisible();
   await expect(ring.locator('dl > div')).toHaveText(['Missing9', 'Conflicted1', 'Stale2']);
-  await expect(ring.locator('[data-ask-progress-step]')).toHaveCount(3);
-  const core = ring.locator('[data-ask-progress-step="CORE"]');
-  await expect(core).toContainText('4 of 10 facts known');
-  await expect(core.getByRole('link', { name: 'Open Core details' })).toHaveAttribute('href', /\/edit/);
-  await core.getByRole('button', { name: 'Fill in missing details' }).click();
+  await expect(ring.locator('[data-ask-progress-step]')).toHaveCount(0);
+  const improvements = page.locator('#ask-execution-execution-property-completeness-ring [data-list-density="dense"]');
+  await expect(improvements.getByRole('button', { name: 'Auto' })).toHaveCount(0);
+  await expect(improvements.locator('[data-ask-task-id]')).toHaveCount(3);
+  const core = improvements.locator('[data-ask-task-id="CORE"]');
+  await expect(core).toContainText('4 of 10 complete');
+  await expect(core).toContainText('6 needed');
+  await core.getByRole('button', { name: 'Add details' }).click();
   await expect.poll(() => api.executionBodies.some((body) => body.message === 'Fill in the missing core property details.')).toBe(true);
-  await expect(ring.locator('[data-ask-progress-step="EXTERIOR"]').getByRole('button')).toHaveCount(0);
+  await improvements.getByRole('button', { name: 'Show all areas' }).click();
+  await expect(improvements.locator('[data-ask-task-id]')).toHaveCount(4);
 });
 
-test('on a phone, the completeness ring, tiles and next steps fit the screen (FRD v1.91)', async ({ page }) => {
+test('on a phone, the completeness ring, tiles and compact improvement rows fit the screen', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await installAskApi(page);
   await page.goto(`/acceptance/ask?propertyId=${propertyId}`);
@@ -1859,8 +1863,9 @@ test('on a phone, the completeness ring, tiles and next steps fit the screen (FR
   await page.getByRole('button', { name: 'Send question' }).click();
 
   const ring = page.locator('#ask-execution-execution-property-completeness-ring [data-display-pattern="progress"]');
+  const improvements = page.locator('#ask-execution-execution-property-completeness-ring [data-list-density="dense"]');
   await expect(ring.getByRole('img', { name: /^62% ready/ })).toBeVisible();
-  for (const element of [...await ring.locator('dl > div').all(), ...await ring.locator('[data-ask-progress-step]').all()]) {
+  for (const element of [...await ring.locator('dl > div').all(), ...await improvements.locator('[data-ask-task-id]').all()]) {
     const box = await element.boundingBox();
     expect(box && box.x >= 0 && box.x + box.width <= 390).toBe(true);
   }

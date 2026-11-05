@@ -64,17 +64,15 @@ test('the ring is the domain\'s own percent, with its own missing, conflicted an
   AskPresentationBlockSchema.parse(ring);
 });
 
-test('next steps are the three least complete areas with the same capture actions and links as the list; viewers get none', async () => {
+test('the score leaves remediation to one compact, progressively disclosed list', async () => {
   install({});
   const owner = ringOf(await invoke());
   const list = (await invoke()).blocks.find((block) => block.id === 'property-completeness');
-  assert.equal(owner.nextSteps.length, 3);
-  assert.deepEqual(owner.nextSteps.map((step) => step.id), list.sections[0].items.slice(0, 3).map((row) => row.id));
-  assert.deepEqual(owner.nextSteps.map((step) => step.href), list.sections[0].items.slice(0, 3).map((row) => row.href));
-  assert.ok(owner.nextSteps.some((step) => (step.actions ?? []).length > 0), 'an owner is offered the capture actions');
-  install({}, 'VIEWER');
-  const viewer = ringOf(await invoke('How complete is my home record?', 'VIEWER'));
-  assert.ok(viewer.nextSteps.every((step) => (step.actions ?? []).length === 0));
+  assert.deepEqual(owner.nextSteps, []);
+  assert.equal(list.listDensity, 'DENSE');
+  assert.equal(list.sections[0].initialVisibleCount, 3);
+  assert.ok(list.sections[0].items.some((row) => (row.actions ?? []).length > 0), 'an owner is offered capture actions in the list');
+  assert.ok(list.sections[0].items.every((row) => row.meta.every((value) => !/^0 /.test(value))), 'zero-valued exception counts are suppressed');
 });
 
 test('no applicable facts means no ring', () => {

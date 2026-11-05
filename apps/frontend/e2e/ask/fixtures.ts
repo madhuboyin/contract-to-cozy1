@@ -596,11 +596,11 @@ function correctableSummaryExecution() {
   }, {
     // What the real Property Summary emits for an incomplete area: a row whose id is the area, with the declared area action.
     type: 'GROUPED_LIST', id: 'property-completeness', title: 'Areas that can improve', filters: [],
-    description: 'Open the property record or answer the inline prompt to add canonical information.',
-    sections: [{ id: 'incomplete-scopes', title: 'Property Context completeness', count: 1, items: [{
-      id: 'STRUCTURE', title: 'Structure', description: '4 of 7 facts known', meta: ['3 missing', '0 conflicted', '0 stale'], status: '57% COMPLETE',
+    description: 'Add missing or outdated details to make your home record more useful.', listDensity: 'DENSE',
+    sections: [{ id: 'incomplete-scopes', title: 'Home details', count: 1, items: [{
+      id: 'STRUCTURE', title: 'Structure', description: '4 of 7 complete', meta: ['3 needed'], status: '57% COMPLETE',
       href: `/dashboard/properties/${propertyId}/edit#structure`, entityType: 'PROPERTY_CONTEXT_AREA',
-      actions: [action('fill-area-structure', 'Fill in missing details', 'Fill in the missing structure details.', 'PROPERTY_CONTEXT_AREA_CAPTURE')],
+      actions: [action('fill-area-structure', 'Add details', 'Fill in the missing structure details.', 'PROPERTY_CONTEXT_AREA_CAPTURE')],
     }] }],
     actions: [],
   }, {
@@ -2383,10 +2383,9 @@ function capitalTimelineTrackExecution() {
   };
 }
 
-// ASK_COZY_INLINE_WORKSPACE_FRD §11.10 (FRD v1.91): the Property Context's own completeness as a ring, with the three
-// least complete areas as next steps (the first with its capture action).
+// The Property Context's own completeness ring followed by one compact, progressively disclosed remediation list.
 function propertyCompletenessRingExecution() {
-  const fill = { id: 'fill-area-core', label: 'Fill in missing details', message: 'Fill in the missing core property details.', style: 'PRIMARY', interactionType: 'MUTATE_RECORD', operationId: 'PROPERTY_CONTEXT_AREA_CAPTURE' };
+  const fill = { id: 'fill-area-core', label: 'Add details', message: 'Fill in the missing core property details.', style: 'PRIMARY', interactionType: 'MUTATE_RECORD', operationId: 'PROPERTY_CONTEXT_AREA_CAPTURE' };
   const step = (id: string, title: string, description: string, status: string, actions?: unknown[]) => ({ id, title, description, meta: [], status, href: `/dashboard/properties/${propertyId}/edit`, entityType: 'PROPERTY_CONTEXT_AREA', ...(actions ? { actions } : {}) });
   return {
     schemaVersion: '1.0', executionId: 'execution-property-completeness-ring', sessionId: 'ask-acceptance-session',
@@ -2400,13 +2399,14 @@ function propertyCompletenessRingExecution() {
         description: 'Counts the governed property facts that apply to this home and are known. Facts that are missing, conflicted or out of date are not counted as known.',
         percent: 62, basis: '31 of 50 applicable facts known across 9 areas',
         metrics: [{ label: 'Missing', value: '9', tone: 'CAUTION' }, { label: 'Conflicted', value: '1', tone: 'CAUTION' }, { label: 'Stale', value: '2', tone: 'CAUTION' }],
-        nextSteps: [
-          step('CORE', 'Core details', '4 of 10 facts known', '40% COMPLETE', [fill]),
-          step('EXTERIOR', 'Exterior', '6 of 11 facts known', '55% COMPLETE'),
-          step('SAFETY', 'Safety', '4 of 6 facts known', '67% COMPLETE'),
-        ], actions: [] },
-      { type: 'GROUPED_LIST', filters: [], id: 'property-completeness', title: 'Areas that can improve', description: 'Internal fact keys are intentionally hidden.',
-        sections: [{ id: 'incomplete-scopes', title: 'Property Context completeness', count: 1, items: [step('CORE', 'Core details', '4 of 10 facts known', '40% COMPLETE')] }], actions: [] },
+        nextSteps: [], actions: [] },
+      { type: 'GROUPED_LIST', filters: [], id: 'property-completeness', title: 'Areas that can improve', listDensity: 'DENSE', description: 'Add missing or outdated details to make your home record more useful.',
+        sections: [{ id: 'incomplete-scopes', title: 'Home details', count: 4, initialVisibleCount: 3, items: [
+          { ...step('CORE', 'Core details', '4 of 10 complete', '40% COMPLETE', [fill]), meta: ['6 needed'] },
+          { ...step('EXTERIOR', 'Exterior', '6 of 11 complete', '55% COMPLETE'), meta: ['5 needed'] },
+          { ...step('SAFETY', 'Safety', '4 of 6 complete', '67% COMPLETE'), meta: ['2 needed'] },
+          { ...step('LOCATION', 'Location', '8 of 10 complete', '80% COMPLETE'), meta: ['2 needed'] },
+        ] }], actions: [] },
     ],
     skill: null, skillHandoff: null, captureRequests: [], confirmation: null, clarification: null, childExecutions: [], originalResponse: null,
     correctionCapabilities: { intent: false, entity: false, homeRecord: false, retryResponse: false }, suggestions: [],

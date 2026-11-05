@@ -149,6 +149,29 @@ test('producer-declared dense rows use two-line records and remove repeated sect
   expect(row?.querySelector('[data-dense-row-content]')).toContainElement(screen.getByRole('button', { name: 'Correct this item' }));
 });
 
+test('property completeness is a fixed compact list with local disclosure', () => {
+  const completeness: GroupedList = {
+    ...block,
+    id: 'property-completeness',
+    title: 'Areas that can improve',
+    listDensity: 'DENSE',
+    sections: [{
+      id: 'incomplete-scopes', title: 'Home details', count: 4, initialVisibleCount: 3,
+      items: Array.from({ length: 4 }, (_, index) => ({
+        id: `area-${index}`, title: `Area ${index}`, description: `0 of ${index + 4} complete`, meta: [`${index + 4} needed`],
+      })),
+    }],
+  };
+  const view = render(<Harness list={completeness} />);
+
+  expect(view.container.querySelector('[data-list-density="dense"]')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Auto' })).not.toBeInTheDocument();
+  expect(view.container.querySelectorAll('[data-ask-task-id]')).toHaveLength(3);
+  fireEvent.click(screen.getByRole('button', { name: 'Show all areas' }));
+  expect(view.container.querySelectorAll('[data-ask-task-id]')).toHaveLength(4);
+  expect(screen.getByRole('button', { name: 'Show fewer' })).toBeInTheDocument();
+});
+
 test('the upgrade planner renders one standard-width system workspace with aligned results, closing row menus, and collapsed archived options', async () => {
   const user = userEvent.setup();
   const onItemAction = jest.fn();

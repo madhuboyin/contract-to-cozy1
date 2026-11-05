@@ -26,8 +26,8 @@ import { collectionDescriptor } from '../support/collectionDescriptor';
 
 // IW-PRES-020 (FRD v1.91): the Property Context's own completeness as a ring. The percent is the domain's
 // (`completenessPercent`, known facts of all applicable facts across the areas); the basis says exactly that. The tiles are
-// the domain's own counts of missing, conflicted and stale facts, and the next steps are the three least complete areas
-// with the capture actions the list below already declares. Nothing is recomputed here beyond the sums of what the
+// the domain's own counts of missing, conflicted and stale facts. Remediation is kept in the compact improvement list
+// below rather than duplicated as progress-card next steps. Nothing is recomputed here beyond the sums of what the
 // domain reports; with no applicable facts there is no ring.
 type CompletenessScopeRow = { scope: string; knownFacts: number; totalFacts: number; missingFactKeys: readonly string[]; conflictedFactKeys: readonly string[]; staleFactKeys: readonly string[] };
 const unmetFactKeys = (row: CompletenessScopeRow) => [...row.missingFactKeys, ...row.conflictedFactKeys, ...row.staleFactKeys];
@@ -35,7 +35,7 @@ const unmetFactKeys = (row: CompletenessScopeRow) => [...row.missingFactKeys, ..
 const answerableUnmetCount = (row: CompletenessScopeRow) => answerableUnmetFacts(row.scope, unmetFactKeys(row)).answerable.length;
 // When nothing in an area can be answered here, say why instead of leaving a button that leads to a dead end.
 function completenessRowDescription(row: CompletenessScopeRow): string {
-  const base = `${row.knownFacts} of ${row.totalFacts} facts known`;
+  const base = `${row.knownFacts} of ${row.totalFacts} complete`;
   const { answerable, derived } = answerableUnmetFacts(row.scope, unmetFactKeys(row));
   const note = answerable.length === 0 ? derivedFactsNote(derived) : null;
   return note ? `${base}. ${note}` : base;
@@ -62,13 +62,9 @@ export function propertyCompletenessProgress(
       metric('Conflicted', sum((scope) => scope.conflictedFactKeys.length)),
       metric('Stale', sum((scope) => scope.staleFactKeys.length)),
     ],
-    nextSteps: incompleteScopes.slice(0, 3).map((scope) => ({
-      id: scope.scope, title: PROPERTY_SCOPE_LABELS[scope.scope] ?? readablePropertyValue(scope.scope),
-      description: completenessRowDescription(scope),
-      meta: [], status: `${scope.completenessPercent}% COMPLETE`, href: null,
-      entityType: 'PROPERTY_CONTEXT_AREA',
-      actions: areaCaptureRowActions(scope.scope, canManage, answerableUnmetCount(scope)),
-    })),
+    // The compact improvement list directly below the score owns the next actions. Keeping a second
+    // three-card copy here made the same areas and capture buttons appear twice in one answer.
+    nextSteps: [],
     actions: [],
   };
 }
@@ -385,14 +381,19 @@ async function propertySummaryResult(userId: string, propertyId: string, message
 
   if (completenessFocus && incompleteScopes.length) {
     blocks.push({
-      type: 'GROUPED_LIST', filters: [], id: 'property-completeness', title: 'Areas that can improve',
-      description: 'Internal fact keys are intentionally hidden. Open the property record or answer the inline prompt to add canonical information.',
+      type: 'GROUPED_LIST', filters: [], id: 'property-completeness', title: 'Areas that can improve', listDensity: 'DENSE',
+      description: 'Add missing or outdated details to make your home record more useful.',
       sections: [{
-        id: 'incomplete-scopes', title: 'Property Context completeness', count: incompleteScopes.length,
+        id: 'incomplete-scopes', title: 'Home details', count: incompleteScopes.length,
+        ...(incompleteScopes.length > 3 ? { initialVisibleCount: 3 } : {}),
         items: incompleteScopes.map((scope) => ({
           id: scope.scope, title: PROPERTY_SCOPE_LABELS[scope.scope] ?? readablePropertyValue(scope.scope),
           description: completenessRowDescription(scope),
-          meta: [`${scope.missingFactKeys.length} missing`, `${scope.conflictedFactKeys.length} conflicted`, `${scope.staleFactKeys.length} stale`],
+          meta: [
+            scope.missingFactKeys.length ? `${scope.missingFactKeys.length} needed` : null,
+            scope.conflictedFactKeys.length ? `${scope.conflictedFactKeys.length} conflicted` : null,
+            scope.staleFactKeys.length ? `${scope.staleFactKeys.length} outdated` : null,
+          ].filter((value): value is string => value !== null),
           status: `${scope.completenessPercent}% COMPLETE`, href: null,
           entityType: 'PROPERTY_CONTEXT_AREA',
           actions: areaCaptureRowActions(scope.scope, canImproveContext, answerableUnmetCount(scope)),
@@ -450,7 +451,7 @@ const AREA_CAPTURE_MAX_SKIPPED = 200;
 export function areaCaptureRowActions(scope: string, canManage: boolean, unmetCount: number) {
   if (!canManage || unmetCount === 0) return undefined;
   const action = (id: string, label: string, message: string, operationId: string) => ({ id, label, message, style: 'PRIMARY' as const, interactionType: 'MUTATE_RECORD' as const, operationId });
-  if (isAreaCaptureScope(scope)) return [action(`fill-area-${scope.toLowerCase()}`, 'Fill in missing details', AREA_CAPTURE_MESSAGES[scope], 'PROPERTY_CONTEXT_AREA_CAPTURE')];
+  if (isAreaCaptureScope(scope)) return [action(`fill-area-${scope.toLowerCase()}`, 'Add details', AREA_CAPTURE_MESSAGES[scope], 'PROPERTY_CONTEXT_AREA_CAPTURE')];
   if (scope === 'ROOMS') return [action('add-room-from-completeness', 'Add a room', ROOM_ADD_MESSAGE, 'ROOM_CREATE')];
   if (scope === 'INVENTORY') return [action('add-item-from-completeness', 'Add an item', INVENTORY_ADD_MESSAGE, 'INVENTORY_ITEM_CREATE')];
   return undefined;
