@@ -133,6 +133,7 @@ export interface PriorityListItemView {
   inlineLaunch: { interactionType: 'CONVERSATION_CONTINUE'; operationId: 'HOME_ACTIONS'; message: string; label: string } | null;
   presentation: {
     kind: 'WEATHER' | 'SEASONAL' | 'GENERIC';
+    tone: 'EMERGENCY' | 'TIME_BOUND' | 'MAINTENANCE' | 'PLANNING' | 'NEUTRAL';
     variant: NonNullable<RankedHomeAction['presentation']>['variant'];
     eyebrow: string | null;
     summary: string;
@@ -172,6 +173,8 @@ export const PRIORITY_LIST_CHANNEL_DISPLAY_LIMITS = {
   // the first eligible item" design.
   EXTERNAL_PROACTIVE: 1,
 } as const;
+const PLANNING_TONE_VARIANTS: ReadonlySet<string> = new Set(['COVERAGE_REVIEW', 'FINANCIAL_EXPOSURE', 'SALE_PREPARATION', 'ASSET_LIFECYCLE']);
+
 export type PriorityListChannel = keyof typeof PRIORITY_LIST_CHANNEL_DISPLAY_LIMITS;
 
 export function buildPriorityListView(
@@ -199,6 +202,16 @@ export function buildPriorityListView(
       : action.presentation?.variant === 'SEASONAL_CHECKLIST' || action.presentation?.group?.kind === 'SEASONAL_CHECKLIST'
         ? 'SEASONAL' as const
         : 'GENERIC' as const;
+    // Server-owned semantic tone: the client never infers urgency or authority. Red is reserved for
+    // safety-emergency weather (critical official incidents); other weather is amber, seasonal upkeep is
+    // green, and planning/financial decisions are blue-slate.
+    const tone = presentationKind === 'WEATHER'
+      ? (action.governance.safetyTier === 'SAFETY_EMERGENCY' ? 'EMERGENCY' as const : 'TIME_BOUND' as const)
+      : presentationKind === 'SEASONAL'
+        ? 'MAINTENANCE' as const
+        : action.presentation && PLANNING_TONE_VARIANTS.has(action.presentation.variant)
+          ? 'PLANNING' as const
+          : 'NEUTRAL' as const;
     const remindCommand = action.feedbackControls.includes('DEFER')
       ? 'DEFER' as const
       : action.feedbackControls.includes('SNOOZE')
@@ -224,6 +237,7 @@ export function buildPriorityListView(
       cta,
       presentation: action.presentation ? {
         kind: presentationKind,
+        tone,
         variant: action.presentation.variant,
         eyebrow: action.presentation.eyebrow,
         summary: action.presentation.summary,

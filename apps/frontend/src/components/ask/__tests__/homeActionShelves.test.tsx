@@ -61,12 +61,12 @@ describe('Home Action shelves', () => {
         watchState: null, suppressed: false, completed: false, unavailable: true, stale: true,
       }],
     };
-    render(<CalmChromeContext.Provider value><CalmAnswerContext.Provider value>
+    const { container: stayContainer } = render(<CalmChromeContext.Provider value><CalmAnswerContext.Provider value>
       <BlockView block={priority} executionId="e" propertyId="home" onItemAction={onItemAction} itemActionsDisabled={false} onFilterClick={() => undefined} onCollectionPage={() => undefined} onAccessLost={() => undefined} />
     </CalmAnswerContext.Provider></CalmChromeContext.Provider>);
     expect(screen.queryByRole('link', { name: 'Open Maintenance' })).toBeNull();
     expect(screen.queryByText('Needs attention sooner')).toBeNull();
-    expect(screen.getByText(/Start with Fall checklist: Chimney cleaning and inspection/).closest('[data-home-actions-intro]')).toHaveTextContent('Can help prevent chimney fires and carbon monoxide hazards.');
+    expect(stayContainer.querySelector('[data-home-actions-intro]')).toHaveTextContent('Can help prevent chimney fires and carbon monoxide hazards.');
     const details = screen.getByText('Details & source').closest('details');
     expect(details).not.toHaveAttribute('open');
     fireEvent.click(screen.getByText('Details & source'));
@@ -77,7 +77,7 @@ describe('Home Action shelves', () => {
     expect(screen.queryByText(/Ranked here because|stable tie break/i)).not.toBeInTheDocument();
     expect(screen.getByText(/Details temporarily unavailable · May need refresh · Confirm home details/)).toBeInTheDocument();
     expect(screen.queryByText(/low confidence|high confidence/i)).toBeNull();
-    expect(screen.getByText('This is a critical fall task.')).toBeInTheDocument();
+    expect(screen.queryByText('This is a critical fall task.')).toBeNull();
     expect(screen.getByText('3 of 8 complete')).toBeInTheDocument();
     const review = screen.getByRole('button', { name: 'Review checklist' });
     expect(review).toHaveClass('border-emerald-700', 'bg-emerald-700', 'text-white');
@@ -139,7 +139,7 @@ describe('Home Action shelves', () => {
         ...compactItem('rain'), homeActionId: 'rain', title: 'Heavy rain expected Friday, Nov 6', rawPriority: 'NOW', consumerPriority: 'DO_NOW', deadlineAt: '2026-11-06T00:00:00.000Z',
         inlineLaunch: { interactionType: 'CONVERSATION_CONTINUE', operationId: 'HOME_ACTIONS', message: 'How should I prepare?', label: 'View preparation steps' },
         presentation: {
-          kind: 'WEATHER', variant: 'ENVIRONMENT_PREPARATION', eyebrow: 'Environment action recommended',
+          kind: 'WEATHER', tone: 'TIME_BOUND', variant: 'ENVIRONMENT_PREPARATION', eyebrow: 'Environment action recommended',
           summary: 'About 2.3 inches of rain is forecast for this area.', whyItMatters: 'Heavy rain may cause water intrusion around the foundation.',
           recommendedAction: 'Clear gutters and exterior drains before rain begins.', expectedOutcome: 'Reduce avoidable water intrusion.', detailLabel: 'Preparation steps',
           timing: { windowStart: '2026-11-05T00:00:00.000Z', windowEnd: '2026-11-06T23:59:59.999Z', rationale: 'Prepare before rain begins.' },
@@ -153,8 +153,12 @@ describe('Home Action shelves', () => {
       <BlockView block={priority} executionId="e" propertyId="home" onItemAction={onItemAction} itemActionsDisabled={false} onFilterClick={() => undefined} onCollectionPage={() => undefined} onAccessLost={() => undefined} />
     </CalmAnswerContext.Provider></CalmChromeContext.Provider>);
 
-    expect(screen.getByText('About 2.3 inches of rain is forecast for this area.')).toBeInTheDocument();
-    expect(screen.getByText(/Start with Heavy rain expected Friday, Nov 6/).closest('[data-home-actions-intro]')).toHaveTextContent('Heavy rain may cause water intrusion around the foundation.');
+    // Impact is stated once, in the introduction; the lead card does not repeat it as a summary.
+    expect(container.querySelector('[data-home-actions-intro]')).toHaveTextContent('Heavy rain may cause water intrusion around the foundation.');
+    expect(screen.queryByText('About 2.3 inches of rain is forecast for this area.')).toBeNull();
+    // The forecast window is visible without opening details.
+    expect(container.querySelector('[data-forecast-window]')).toHaveTextContent(/Forecast window:.*Nov 4.*Nov 6|Forecast window:.*Nov 5.*Nov 6/);
+    expect(container.querySelector('[data-home-action-row="start"]')).toHaveClass('border-l-amber-500');
     expect(screen.getByText('Clear gutters and exterior drains before rain begins.')).toBeInTheDocument();
     const details = screen.getByText('Details & source').closest('details');
     expect(details).not.toHaveAttribute('open');
@@ -163,7 +167,7 @@ describe('Home Action shelves', () => {
     expect(screen.getByText('Nov 5–Nov 6')).toBeInTheDocument();
     expect(screen.getByText('Source: Open-Meteo forecast and property profile')).toBeInTheDocument();
     expect(screen.getByText('Also worth planning')).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'Ask about this' })).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: 'Review details' })).toHaveLength(2);
     expect(screen.queryByRole('button', { name: /not relevant/i })).toBeNull();
     expect(container.querySelectorAll('[data-home-action-row]')).toHaveLength(3);
     fireEvent.click(screen.getByRole('button', { name: 'Show 1 more action' }));
@@ -203,5 +207,31 @@ describe('Home Action shelves', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Consider · 6' }));
     expect(onItemAction).toHaveBeenCalledWith('HOME_ACTION_FILTER', '', 'What home actions are worth a look to consider?', 'HOME_ACTIONS', 'CONVERSATION_CONTINUE');
     expect(container.querySelector('.overflow-x-auto, .min-w-\\[')).toBeNull();
+  });
+
+  test('tone is server-owned: emergency is red, planning is blue, and enriched cards show their next move', () => {
+    const base = (id: string, tone: 'EMERGENCY' | 'PLANNING', kind: 'WEATHER' | 'GENERIC', variant: 'WEATHER_ALERT' | 'FINANCIAL_EXPOSURE') => ({
+      homeActionId: id, title: `Action ${id}`, rawPriority: 'NOW' as const, consumerPriority: 'DO_NOW' as const,
+      comparativeReasonCodes: [], confidenceLabel: 'HIGH' as const, deadlineAt: null, dependencyRefs: [], cta: null,
+      inlineLaunch: { interactionType: 'CONVERSATION_CONTINUE' as const, operationId: 'HOME_ACTIONS' as const, message: `Review ${id}`, label: 'Review details' },
+      presentation: {
+        kind, tone, variant, eyebrow: null, summary: `Summary ${id}`, whyItMatters: `Why ${id}`, recommendedAction: `Next move ${id}`,
+        expectedOutcome: 'Outcome', detailLabel: 'Details', timing: { windowStart: null, windowEnd: null, rationale: 'Because' },
+        keyFacts: [], source: null, controls: [],
+      },
+      watchState: null, suppressed: false, completed: false, unavailable: false, stale: false,
+    });
+    const priority: AskPresentationBlock = {
+      type: 'PRIORITY_LIST', id: 'home-actions-priority-list', title: 'What matters now', propertyId: 'home',
+      rankingPolicyVersion: 'priority-list-policy-v2', generatedAt: '2026-11-04T12:00:00.000Z', sourceFreshnessAt: null, truncated: false,
+      items: [base('tornado', 'EMERGENCY', 'WEATHER', 'WEATHER_ALERT'), base('refi', 'PLANNING', 'GENERIC', 'FINANCIAL_EXPOSURE')],
+    };
+    const { container } = render(<CalmChromeContext.Provider value><CalmAnswerContext.Provider value>
+      <BlockView block={priority} executionId="e" propertyId="home" onItemAction={jest.fn()} itemActionsDisabled={false} onFilterClick={() => undefined} onCollectionPage={() => undefined} onAccessLost={() => undefined} />
+    </CalmAnswerContext.Provider></CalmChromeContext.Provider>);
+    expect(container.querySelector('[data-home-action-row="start"]')).toHaveClass('border-l-red-600');
+    const enriched = container.querySelector('[data-home-action-row="enriched"]');
+    expect(enriched).toHaveClass('border-l-sky-600');
+    expect(enriched).toHaveTextContent('Next: Next move refi');
   });
 });

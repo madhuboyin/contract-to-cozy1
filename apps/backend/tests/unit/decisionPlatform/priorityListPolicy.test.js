@@ -205,6 +205,7 @@ test('weather presentation preserves impact, preparation, forecast window, sourc
   const [item] = buildPriorityListView({ propertyId: 'property-1', generatedAt: '2026-11-04T12:00:00.000Z', actions: [action] }, 'ASK').items;
 
   assert.equal(item.presentation.kind, 'WEATHER');
+  assert.equal(item.presentation.tone, 'TIME_BOUND');
   assert.equal(item.presentation.whyItMatters, action.whyItMatters);
   assert.equal(item.presentation.recommendedAction, action.recommendedAction);
   assert.equal(item.presentation.timing.windowEnd, action.timing.windowEnd);
@@ -267,4 +268,20 @@ test('buildPriorityListView never invents an action: it only maps items already 
   const view = buildPriorityListView({ propertyId: 'prop-1', generatedAt: '2026-08-01T00:00:00.000Z', actions: [] }, 'ASK');
   assert.deepEqual(view.items, []);
   assert.equal(view.truncated, false);
+});
+
+test('semantic tone is server-owned: red only for safety-emergency weather, green seasonal, blue planning, neutral otherwise', () => {
+  const toneFor = (variant, safetyTier = 'ROUTINE_MAINTENANCE', group = null) => {
+    const action = rankedAction({ id: `tone-${variant}-${safetyTier}` });
+    action.presentation = { variant, eyebrow: null, headline: 'H', summary: 'S', whyNow: null, keyFacts: [], factGroups: [], subject: null, detailLabel: 'Details', group };
+    action.governance = { ...action.governance, safetyTier };
+    return buildPriorityListView({ propertyId: 'property-1', generatedAt: '2026-11-04T12:00:00.000Z', actions: [action] }, 'ASK').items[0].presentation.tone;
+  };
+  assert.equal(toneFor('WEATHER_ALERT', 'SAFETY_EMERGENCY'), 'EMERGENCY');
+  assert.equal(toneFor('WEATHER_ALERT'), 'TIME_BOUND');
+  assert.equal(toneFor('ENVIRONMENT_PREPARATION'), 'TIME_BOUND');
+  assert.equal(toneFor('SEASONAL_CHECKLIST'), 'MAINTENANCE');
+  assert.equal(toneFor('FINANCIAL_EXPOSURE'), 'PLANNING');
+  assert.equal(toneFor('COVERAGE_REVIEW'), 'PLANNING');
+  assert.equal(toneFor('GENERIC_ACTION'), 'NEUTRAL');
 });

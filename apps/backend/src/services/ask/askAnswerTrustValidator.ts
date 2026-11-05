@@ -99,13 +99,22 @@ function authoredPresentationText(block: AskPresentationBlock): string {
   if (block.type === 'ENVIRONMENT_REPORT') {
     return [block.title, block.summary].filter(Boolean).join(' ');
   }
-  // Priority-list items are canonical Home Actions. Their titles, homeowner
-  // summaries, facts, evidence-source labels and presentation metadata may
-  // legitimately contain identifier-like recorded values (for example,
-  // OPEN_METEO). Only the list framing and filter labels are authored by Ask.
+  // Priority-list item titles, key-fact values and evidence-source labels are canonical recorded values that may
+  // resemble an enum (for example, OPEN_METEO) and are exempt. The sentences shown to the homeowner (summary, impact,
+  // recommended action, expected outcome, timing rationale, watch state) are still checked, as is Ask's own framing.
   if (block.type === 'PRIORITY_LIST') {
-    return [block.title, ...(block.filters ?? []).map((filter) => filter.label)]
-      .filter(Boolean).join(' ');
+    return [
+      block.title,
+      ...(block.filters ?? []).map((filter) => filter.label),
+      ...block.items.flatMap((item) => [
+        item.watchState,
+        item.presentation?.summary,
+        item.presentation?.whyItMatters,
+        item.presentation?.recommendedAction,
+        item.presentation?.expectedOutcome,
+        item.presentation?.timing.rationale,
+      ]),
+    ].filter(Boolean).join(' ');
   }
   return visibleText(block);
 }

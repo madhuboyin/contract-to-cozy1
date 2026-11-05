@@ -168,3 +168,19 @@ test('Home Actions contract rejects unrelated operation blocks', () => {
     blocks: [{ type: 'SUMMARY', id: 'property-summary', title: 'Home record', body: 'Summary.', tone: 'DEFAULT', actions: [] }],
   }), false);
 });
+
+test('Priority List homeowner sentences are still checked for internal tokens', () => {
+  const result = homeActionsResult('ANSWERED', true, false);
+  const list = productionShapedPriorityList();
+  list.items[0].presentation.recommendedAction = 'Resolve OPERATIONAL_WORK_DUE before the rain begins.';
+  result.blocks.splice(1, 0, list);
+
+  const validation = validateAskAnswerTrustPipeline({
+    question: 'Show me what I should plan ahead for',
+    operationId: 'HOME_ACTIONS', propertyId: 'property-1', semanticEnabled: true,
+    recoveryAttempted: false, operationConfirmedByUser: false,
+    result: attachAskAuthoritativeSourceEvidence(result, [completedAskAuthoritativeSourceEvidence('HOME_ACTIONS')]),
+  });
+
+  assert.equal(validation.trust.reasonCodes.includes('INTERNAL_PRESENTATION_TOKEN'), true);
+});

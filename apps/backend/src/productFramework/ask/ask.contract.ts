@@ -874,6 +874,7 @@ const PriorityListItemSchema = z.object({
   }).nullable().default(null),
   presentation: z.object({
     kind: z.enum(['WEATHER', 'SEASONAL', 'GENERIC']),
+    tone: z.enum(['EMERGENCY', 'TIME_BOUND', 'MAINTENANCE', 'PLANNING', 'NEUTRAL']).default('NEUTRAL'),
     variant: z.enum(['ASSET_LIFECYCLE', 'SEASONAL_CHECKLIST', 'WEATHER_ALERT', 'ENVIRONMENT_PREPARATION', 'COVERAGE_REVIEW', 'FINANCIAL_EXPOSURE', 'SALE_PREPARATION', 'HOME_FACT_REVIEW', 'HEALTH_FACTOR_REVIEW', 'ACCEPTED_WORK', 'GENERIC_ACTION']),
     eyebrow: z.string().trim().min(1).max(80).nullable(),
     summary: z.string().trim().min(1).max(320),

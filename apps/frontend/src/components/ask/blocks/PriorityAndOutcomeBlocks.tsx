@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { AlertTriangle, CalendarCheck2, Check, ChevronDown, Clock3, MoreHorizontal, ThumbsDown, ThumbsUp } from 'lucide-react';
+import { AlertTriangle, CalendarCheck2, CalendarClock, Check, ClipboardList, ChevronDown, Clock3, MoreHorizontal, ThumbsDown, ThumbsUp } from 'lucide-react';
 import { api } from '@/lib/api/client';
 import { cn } from '@/lib/utils';
 import { ActionLink } from './context';
@@ -74,6 +74,29 @@ function HomeActionOverflow({ executionId, homeActionId }: { executionId: string
 
 const reviewButtonClass = 'min-h-9 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-teal-800 hover:border-teal-300 hover:bg-teal-50 disabled:opacity-50';
 
+type PriorityTone = 'EMERGENCY' | 'TIME_BOUND' | 'MAINTENANCE' | 'PLANNING' | 'NEUTRAL';
+// Color identifies meaning, never rank alone; the eyebrow text and icon carry the same meaning for accessibility.
+const PRIORITY_TONE_STYLES: Record<PriorityTone, { card: string; accent: string; icon: string; badge: string; kicker: string; box: string; primary: string }> = {
+  EMERGENCY: { card: 'border-red-300 bg-gradient-to-br from-red-50 to-rose-50/70', accent: 'border-l-red-600', icon: 'bg-red-100 text-red-700', badge: 'bg-red-700 text-white', kicker: 'text-red-800', box: 'border-red-200', primary: 'border-red-700 bg-red-700 text-white hover:bg-red-800 hover:text-white' },
+  TIME_BOUND: { card: 'border-amber-300 bg-gradient-to-br from-amber-50 to-orange-50/70', accent: 'border-l-amber-500', icon: 'bg-amber-100 text-amber-700', badge: 'bg-amber-600 text-white', kicker: 'text-amber-800', box: 'border-amber-200', primary: 'border-amber-700 bg-amber-700 text-white hover:bg-amber-800 hover:text-white' },
+  MAINTENANCE: { card: 'border-emerald-200 bg-gradient-to-br from-emerald-50/80 to-teal-50/60', accent: 'border-l-emerald-600', icon: 'bg-emerald-100 text-emerald-700', badge: 'bg-emerald-700 text-white', kicker: 'text-emerald-800', box: 'border-emerald-200', primary: 'border-emerald-700 bg-emerald-700 text-white hover:bg-emerald-800 hover:text-white' },
+  PLANNING: { card: 'border-sky-200 bg-gradient-to-br from-sky-50/80 to-slate-50', accent: 'border-l-sky-600', icon: 'bg-sky-100 text-sky-700', badge: 'bg-sky-700 text-white', kicker: 'text-sky-800', box: 'border-sky-200', primary: 'border-sky-700 bg-sky-700 text-white hover:bg-sky-800 hover:text-white' },
+  NEUTRAL: { card: 'border-slate-200 bg-white', accent: 'border-l-slate-300', icon: 'bg-slate-100 text-slate-700', badge: 'bg-slate-100 text-slate-700', kicker: 'text-teal-800', box: 'border-slate-200', primary: '' },
+};
+
+function formatForecastWindow(start: string | null, end: string | null): string | null {
+  const format = (value: string | null) => {
+    if (!value) return null;
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  };
+  const from = format(start);
+  const to = format(end);
+  if (from && to) return from === to ? from : `${from} – ${to}`;
+  if (to) return `Through ${to}`;
+  return from ? `From ${from}` : null;
+}
+
 export const PriorityListBlock: AskBlockRenderer<'PRIORITY_LIST'> = ({ block, executionId, onItemAction, itemActionsDisabled }) => {
   const calm = useCalmAnswer();
   const [showAll, setShowAll] = useState(false);
@@ -135,7 +158,7 @@ export const PriorityListBlock: AskBlockRenderer<'PRIORITY_LIST'> = ({ block, ex
           const leadContext = lead.presentation?.whyItMatters || lead.presentation?.summary || lead.whyThisAppeared;
           return (
             <div className="max-w-3xl space-y-1 text-sm leading-6 text-slate-700" data-home-actions-intro="">
-              <p><span className="font-semibold text-slate-950">Start with {lead.title.replace(/[.]$/, '')}.</span>{leadContext ? ` ${leadContext}` : ''}</p>
+              <p>{leadContext ?? `Start with ${lead.title.replace(/[.]$/, '')}.`}</p>
               {block.items.length > 1 && <p className="text-slate-600">It is ranked first in your current Home Actions. The next priorities are summarized below, with supporting details available when you want them.</p>}
             </div>
           );
@@ -160,12 +183,11 @@ export const PriorityListBlock: AskBlockRenderer<'PRIORITY_LIST'> = ({ block, ex
                 const rich = index === 0;
                 const weather = presentation?.kind === 'WEATHER';
                 const seasonal = presentation?.kind === 'SEASONAL';
-                const tone = weather
-                  ? 'border-amber-300 bg-gradient-to-br from-amber-50 to-orange-50/70'
-                  : seasonal
-                    ? 'border-emerald-200 bg-gradient-to-br from-emerald-50/80 to-teal-50/60'
-                    : 'border-slate-200 bg-white';
-                const iconTone = weather ? 'bg-amber-100 text-amber-700' : seasonal ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-700';
+                const toneKey: PriorityTone = presentation?.tone ?? (weather ? 'TIME_BOUND' : seasonal ? 'MAINTENANCE' : 'NEUTRAL');
+                const toneStyle = PRIORITY_TONE_STYLES[toneKey];
+                const urgentTone = toneKey === 'EMERGENCY' || toneKey === 'TIME_BOUND';
+                const forecastWindow = weather && presentation ? formatForecastWindow(presentation.timing.windowStart, presentation.timing.windowEnd) : null;
+                const ToneIcon = urgentTone ? AlertTriangle : toneKey === 'MAINTENANCE' ? CalendarCheck2 : toneKey === 'PLANNING' ? ClipboardList : Check;
                 const actionState = commandState[item.homeActionId];
                 const facts = presentation?.keyFacts ?? [];
                 const windowEndMs = presentation?.timing.windowEnd ? Date.parse(presentation.timing.windowEnd) : Number.NaN;
@@ -178,34 +200,36 @@ export const PriorityListBlock: AskBlockRenderer<'PRIORITY_LIST'> = ({ block, ex
                 return (
                   <>
                   {!rich && index === 1 && <p className="mb-2 text-sm font-semibold text-slate-950">Also worth planning</p>}
-                  <article className={cn('rounded-2xl border', rich ? cn('border-l-4 p-5', tone) : 'border-slate-200 bg-white p-4')} data-home-action-row={rich ? 'start' : 'enriched'}>
-                    {rich && <p className={cn('mb-3 text-[11px] font-bold uppercase tracking-wide', weather ? 'text-amber-800' : seasonal ? 'text-emerald-800' : 'text-teal-800')}>Start here</p>}
+                  <article className={cn('rounded-2xl border', rich ? cn('border-l-4 p-5', toneStyle.card, toneStyle.accent) : cn('border-l-4 bg-white p-4', toneKey === 'NEUTRAL' ? 'border-slate-200' : toneStyle.box, toneStyle.accent))} data-home-action-row={rich ? 'start' : 'enriched'}>
+                    {rich && <p className={cn('mb-3 text-[11px] font-bold uppercase tracking-wide', toneStyle.kicker)}>Start here</p>}
                     <div className="flex items-start gap-3">
-                      <div className={cn('hidden rounded-xl p-2.5 sm:block', iconTone)}>
-                        {weather ? <AlertTriangle className="h-5 w-5" aria-hidden="true" /> : seasonal ? <CalendarCheck2 className="h-5 w-5" aria-hidden="true" /> : <Check className="h-5 w-5" aria-hidden="true" />}
+                      <div className={cn('hidden rounded-xl p-2.5 sm:block', toneStyle.icon)}>
+                        <ToneIcon className="h-5 w-5" aria-hidden="true" />
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
-                          {presentation?.eyebrow && <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide', weather ? 'bg-amber-600 text-white' : seasonal ? 'bg-emerald-700 text-white' : 'bg-slate-100 text-slate-700')}>{presentation.eyebrow}</span>}
+                          {presentation?.eyebrow && <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide', toneStyle.badge)}>{presentation.eyebrow}</span>}
                           <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide', categoryBadge[item.consumerPriority])}>{item.rawPriority ? bucketLabel[item.rawPriority] : categoryLabel[item.consumerPriority]}</span>
                           {compactMeta && <span className="text-xs text-slate-500">{compactMeta}</span>}
                         </div>
                         <h4 className={cn('mt-2 break-words font-semibold text-slate-950', rich ? 'text-lg' : 'text-base')}>{item.title}</h4>
-                        {presentation?.summary && (!rich || presentation.summary !== presentation.whyItMatters) && <p className="mt-1 text-sm leading-6 text-slate-700">{presentation.summary}</p>}
+                        {presentation?.summary && !rich && <p className="mt-1 text-sm leading-6 text-slate-700">{presentation.summary}</p>}
+                        {forecastWindow && <p className="mt-2 flex items-center gap-1.5 text-sm font-medium text-slate-800" data-forecast-window=""><CalendarClock className="h-4 w-4 shrink-0 text-slate-500" aria-hidden="true" /><span><span className="text-slate-600">Forecast window:</span> {forecastWindow}</span></p>}
+                        {presentation && !rich && presentation.recommendedAction && <p className="mt-2 text-sm leading-6 text-slate-800"><span className="font-semibold">Next:</span> {presentation.recommendedAction}</p>}
                         {!presentation && item.watchState && <p className="mt-1 text-sm text-slate-600">{item.watchState}</p>}
 
                         {presentation && rich && (
-                          <div className={cn('mt-3 rounded-xl border bg-white/80 p-3', weather ? 'border-amber-200' : seasonal ? 'border-emerald-200' : 'border-slate-200')}>
-                            <p className={cn('text-xs font-semibold uppercase tracking-wide', weather ? 'text-amber-800' : seasonal ? 'text-emerald-800' : 'text-slate-600')}>{weather ? 'Recommended preparation' : seasonal ? 'Next seasonal step' : 'Recommended next step'}</p>
+                          <div className={cn('mt-3 rounded-xl border bg-white/80 p-3', toneStyle.box)}>
+                            <p className={cn('text-xs font-semibold uppercase tracking-wide', toneStyle.kicker)}>{weather ? 'Recommended preparation' : seasonal ? 'Next seasonal step' : 'Recommended next step'}</p>
                             <p className="mt-1 text-sm font-medium leading-6 text-slate-800">{presentation.recommendedAction}</p>
                           </div>
                         )}
 
-                        {(facts.length > 0 || presentation?.source || presentation?.expectedOutcome || presentation?.timing.rationale || reason || (!rich && (presentation?.whyItMatters || presentation?.recommendedAction)) || disclosedControls.length > 0) && (
+                        {(facts.length > 0 || presentation?.source || presentation?.expectedOutcome || presentation?.timing.rationale || reason || (!rich && presentation?.whyItMatters) || disclosedControls.length > 0) && (
                           <details className="mt-3 rounded-xl border border-slate-200 bg-white/70 px-3 py-2 text-sm text-slate-600">
                             <summary className="w-fit cursor-pointer font-semibold text-teal-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600">{detailLabel}</summary>
                             {!rich && presentation?.whyItMatters && presentation.whyItMatters !== presentation.summary && <p className="mt-3"><span className="font-semibold text-slate-800">Why it matters:</span> {presentation.whyItMatters}</p>}
-                            {!rich && presentation?.recommendedAction && <p className="mt-3"><span className="font-semibold text-slate-800">Recommended next step:</span> {presentation.recommendedAction}</p>}
+                            
                             {presentation?.expectedOutcome && <p className="mt-2"><span className="font-semibold text-slate-800">Expected outcome:</span> {presentation.expectedOutcome}</p>}
                             {presentation?.timing.rationale && <p className="mt-2"><span className="font-semibold text-slate-800">Timing:</span> {presentation.timing.rationale}</p>}
                             {facts.length > 0 && (
@@ -229,7 +253,7 @@ export const PriorityListBlock: AskBlockRenderer<'PRIORITY_LIST'> = ({ block, ex
                         )}
 
                         <div className="mt-3 flex flex-wrap items-center gap-2">
-                          {item.inlineLaunch ? <button type="button" disabled={itemActionsDisabled} onClick={() => onItemAction('HOME_ACTION', item.homeActionId, item.inlineLaunch!.message, item.inlineLaunch!.operationId, item.inlineLaunch!.interactionType, undefined, item.homeActionId)} className={cn(reviewButtonClass, rich && weather && 'border-amber-700 bg-amber-700 text-white hover:bg-amber-800 hover:text-white', rich && seasonal && 'border-emerald-700 bg-emerald-700 text-white hover:bg-emerald-800 hover:text-white')}>{rich ? (item.inlineLaunch.label ?? presentation?.detailLabel ?? 'Review details') : 'Ask about this'}</button> : item.cta ? <ActionLink action={item.cta} /> : null}
+                          {item.inlineLaunch ? <button type="button" disabled={itemActionsDisabled} onClick={() => onItemAction('HOME_ACTION', item.homeActionId, item.inlineLaunch!.message, item.inlineLaunch!.operationId, item.inlineLaunch!.interactionType, undefined, item.homeActionId)} className={cn(reviewButtonClass, rich && toneStyle.primary)}>{item.inlineLaunch.label ?? presentation?.detailLabel ?? 'Review details'}</button> : item.cta ? <ActionLink action={item.cta} /> : null}
                           {visibleReminder && (
                             <button type="button" disabled={itemActionsDisabled || actionState === 'SAVING' || actionState === 'ACKNOWLEDGED' || actionState === 'REMINDER_SET'} onClick={() => void executeInlineCommand(item, visibleReminder.command)} className="min-h-9 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:border-teal-300 hover:bg-teal-50 disabled:opacity-50">
                               <Clock3 className="mr-1 inline h-3.5 w-3.5" aria-hidden="true" />{visibleReminder.label}
